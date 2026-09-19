@@ -1,9 +1,5 @@
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
-import type {
-  GameTitleResponse,
-  MapMasterResponse,
-  SeasonMasterResponse,
-} from "@/shared/api/masters";
+import type { GameTitleResponse, SeasonMasterResponse } from "@/shared/api/masters";
 import type { MatchSummaryResponse } from "@/shared/api/matches";
 import type { DraftStatusLabel, DraftStatusOrUnknown } from "@/shared/domain/draftStatus";
 import type { PaginationState } from "@/shared/lib/pagination";
@@ -116,13 +112,6 @@ export type MatchListSummaryCounts = {
   needsReviewCount: number;
   ocrRunningCount: number;
   preConfirmCount: number;
-};
-
-export type MatchListLookupMaps = {
-  gameTitlesById: Map<string, GameTitleResponse>;
-  heldEventsById: Map<string, HeldEventResponse>;
-  mapsById: Map<string, MapMasterResponse>;
-  seasonsById: Map<string, SeasonMasterResponse>;
 };
 
 export type MatchListSourceItem = MatchSummaryResponse;

@@ -8,7 +8,7 @@ use tracing::{info, warn};
 use crate::{
     notifications::{NotificationSink, log_skip},
     outbox::{PostCommitSink, PostCommitSinkClosed},
-    postgres,
+    postgres, stream_connection,
 };
 
 use super::{
@@ -147,10 +147,7 @@ impl OcrConsumerConfig {
         timing: OcrConsumerTiming,
     ) -> Result<Self, OcrConsumerError> {
         let worker_identity_matches = queue.consumer() == control.worker_id();
-        if database_url.trim().is_empty()
-            || redis_url.trim().is_empty()
-            || !worker_identity_matches
-            || queue.block() > timing.heartbeat_interval
+        if database_url.trim().is_empty() || redis_url.trim().is_empty() || !worker_identity_matches
         {
             return Err(OcrConsumerError::InvalidConfiguration);
         }
@@ -196,7 +193,9 @@ impl OcrConsumerConfig {
     /// Returns the longest configured OCR dependency or heartbeat operation that can already be
     /// in progress when the process-level supervisor requests shutdown.
     pub(crate) fn shutdown_dependency_or_heartbeat_bound(&self) -> Duration {
-        self.object_download_timeout.max(self.heartbeat_interval)
+        self.object_download_timeout
+            .max(self.heartbeat_interval)
+            .max(stream_connection::RESPONSE_TIMEOUT)
     }
 
     /// Returns the existing durable-finalization bound for process-level shutdown composition.
@@ -340,8 +339,7 @@ pub(crate) async fn run<L: OcrChildLauncher>(
         .map_err(|error| OcrConsumerError::Database(error.kind()))?;
     let redis_client = redis::Client::open(config.redis_url.as_str())
         .map_err(|_error| OcrConsumerError::Queue("ocr_redis_configuration"))?;
-    let mut redis = redis_client
-        .get_connection_manager()
+    let mut redis = stream_connection::connect(&redis_client)
         .await
         .map_err(|_error| OcrConsumerError::Queue("ocr_redis_connect"))?;
     ensure_consumer_group(&mut redis, &config.queue).await?;

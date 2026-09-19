@@ -1,21 +1,27 @@
 package momo.api.codec
 
+import java.nio.charset.StandardCharsets
+
 import io.circe.syntax.*
-import io.circe.{Codec, Decoder, DecodingFailure, Encoder, HCursor, Json, JsonObject}
+import io.circe.{Codec, Decoder, DecodingFailure, Encoder, HCursor, Json, JsonObject, Printer}
 
 import momo.api.domain.ids.MemberId
 import momo.api.domain.{OcrJobHints, PlayerAliasHint}
 
-/**
- * Wire-format codec for OCR hint payloads.
- *
- * Lives in a neutral boundary package so both the endpoints layer (Tapir/JSON request bodies)
- * and the repositories layer (Redis queue payload) can depend on it without forming a reverse
- * SDP arrow. The on-wire JSON shape (field names and order) must stay byte-identical to what
- * the OCR worker and the web client expect, so this object only exposes derived `Codec`s over
- * the case class declarations themselves.
- */
+/** Shared hint JSON boundary for HTTP acceptance and durable queue encoding. */
 object OcrHintsCodec:
+  val MaxUtf8Bytes = 8192
+  private val printer = Printer.noSpaces.copy(dropNullValues = true, sortKeys = true)
+
+  def encode(hints: OcrJobHints): String = printer.print(hints.asJson.deepDropNullValues)
+
+  def validate(hints: OcrJobHints): Either[String, Unit] =
+    val errors = OcrJobHints.validationErrors(hints)
+    if errors.nonEmpty then Left(errors.mkString(" "))
+    else if encode(hints).getBytes(StandardCharsets.UTF_8).length > MaxUtf8Bytes then
+      Left(s"ocrHintsJson must be $MaxUtf8Bytes UTF-8 bytes or shorter")
+    else Right(())
+
   given Encoder.AsObject[PlayerAliasHint] with
     override def encodeObject(hint: PlayerAliasHint): JsonObject = JsonObject(
       "memberId" -> Json.fromString(hint.memberId.value),

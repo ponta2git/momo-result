@@ -58,7 +58,6 @@ private[bootstrap] object PostgresApiRuntime:
       PostgresOcrJobCreationStore[F](transactor)
     val ocrQueueOutbox = PostgresOcrQueueOutboxRepository[F](transactor)
     val analysisOutboxNotifier = PostgresSeriesAnalysisOutboxNotifier[F](transactor)
-    val analysisHistoryMaintenance = PostgresSeriesAnalysisHistoryMaintenance[F](transactor)
     val heldEvents: HeldEventsRepository[F] = PostgresHeldEventsRepository[F](transactor)
     val heldEventDeletion: HeldEventDeletionRepository[F] =
       PostgresHeldEventDeletionRepository[F](transactor)
@@ -91,8 +90,8 @@ private[bootstrap] object PostgresApiRuntime:
     val ocrMaintenance: OcrJobMaintenanceRepository[F] =
       PostgresOcrJobMaintenanceRepository[F](transactor)
     val ocrAdmissionGuard = OcrAdmissionGuard.from[F](
-      ocrQueueOutbox,
-      infrastructure.queueHealth,
+      ocrQueueOutbox.backlogSnapshot,
+      infrastructure.queueHealth.deadLetterLength,
       ApiApp.ocrAdmissionGuardConfig(config.resourceLimits),
     )
     val health = RuntimeHealthDetails.build[F](
@@ -152,7 +151,6 @@ private[bootstrap] object PostgresApiRuntime:
           ocrMaintenance = ocrMaintenance,
           appSessions = appSessions,
           idempotency = idempotency,
-          seriesAnalysisHistory = Some(analysisHistoryMaintenance),
           now = Clock[F].realTimeInstant,
         ).evalMap { _ =>
           for
@@ -182,11 +180,15 @@ private[bootstrap] object PostgresApiRuntime:
                 jobs = jobs,
                 drafts = drafts,
                 heldEvents = heldEvents,
+                heldEventDetails = PostgresHeldEventDetailReadModel[F](transactor),
+                heldEventList = PostgresHeldEventListReadModel[F](transactor),
                 heldEventDeletion = heldEventDeletion,
                 matches = matches,
+                matchDetails = PostgresMatchDetailReadModel[F](transactor),
                 matchNotes = matchNotes,
                 matchExports = matchExports,
                 matchDrafts = matchDrafts,
+                matchDraftReviews = PostgresMatchDraftReviewReadModel[F](transactor),
                 matchDraftCancellation = matchDraftCancellation,
                 matchList = matchList,
                 seriesAnalysis = wakingSeriesAnalysis,

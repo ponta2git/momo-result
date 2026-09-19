@@ -3,8 +3,14 @@ import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import type { OcrSubmissionInput } from "@/features/ocrCapture/ocrSubmissionPlan";
 import { setupSchema } from "@/features/ocrCapture/schema";
 import { pickOcrTargets, toUploadingSlot } from "@/features/ocrCapture/slotPolicy";
+import type { IdempotencyRequestOptions } from "@/shared/api/client";
+import { createIdempotencyKey } from "@/shared/api/idempotency";
 import type { CreateMatchDraftRequest, MatchDraftResponse } from "@/shared/api/matchDrafts";
-import type { OcrJobHintsRequest } from "@/shared/api/ocrJobs";
+import type {
+  CreateOcrJobRequest,
+  CreateOcrJobResponse,
+  OcrJobHintsRequest,
+} from "@/shared/api/ocrJobs";
 import { normalizeDisplayApiError } from "@/shared/api/problemDetails";
 import { parseOcrJobStatus } from "@/shared/domain/ocr";
 import type { SlotKind } from "@/shared/domain/ocr";
@@ -13,8 +19,7 @@ export type OcrSubmissionResult =
   | { status: "empty" }
   | { message: string; status: "invalid" }
   | { error: unknown; status: "draft_create_failed" }
-  | { cleanupError?: undefined; status: "failed_and_cancelled" }
-  | { cleanupError: unknown; matchDraftId: string; status: "failed_cleanup_failed" }
+  | { matchDraftId: string; status: "submission_failed" }
   | { createdJobCount: number; failedJobCount: number; status: "started" | "partial_started" };
 
 export type OcrSubmissionProgress =
@@ -22,27 +27,50 @@ export type OcrSubmissionProgress =
   | { current: number; phase: "submitting_image"; slotKind: SlotKind; total: number }
   | { completed: number; phase: "finalizing"; total: number };
 
+/** Checkpoints belong to the immutable confirmation plan, including uncertain HTTP outcomes. */
+export type OcrSubmissionState = {
+  draftKey: string;
+  draft?: MatchDraftResponse;
+  slots: Partial<
+    Record<
+      SlotKind,
+      {
+        key: string;
+        upload?: { imageId: string };
+        job?: CreateOcrJobResponse;
+      }
+    >
+  >;
+};
+
+export function createOcrSubmissionState(): OcrSubmissionState {
+  return { draftKey: createIdempotencyKey(), slots: {} };
+}
+
 export type OcrSubmissionWorkflowParams = OcrSubmissionInput & {
-  cancelDraft: (matchDraftId: string) => Promise<unknown>;
-  createDraft: (request: CreateMatchDraftRequest) => Promise<MatchDraftResponse>;
-  createPlayedAtIso: () => string;
-  createUploadJob: (params: {
-    file: File;
-    matchDraftId: string;
-    slot: CaptureSlotState;
-  }) => Promise<{
-    job: { draftId?: string; jobId: string; status: string };
-    upload: { imageId: string };
-  }>;
+  createDraft: (
+    request: CreateMatchDraftRequest,
+    options: IdempotencyRequestOptions,
+  ) => Promise<MatchDraftResponse>;
+  createJob: (
+    request: CreateOcrJobRequest,
+    options: IdempotencyRequestOptions,
+  ) => Promise<CreateOcrJobResponse>;
+  uploadImage: (file: File, options: IdempotencyRequestOptions) => Promise<{ imageId: string }>;
+  hints: OcrJobHintsRequest;
+  playedAt: string;
+  state: OcrSubmissionState;
   onProgress?: ((progress: OcrSubmissionProgress) => void) | undefined;
   updateSlot: (slot: CaptureSlotState) => void;
 };
 
 export async function runOcrSubmissionWorkflow({
-  cancelDraft,
   createDraft,
-  createPlayedAtIso,
-  createUploadJob,
+  createJob,
+  uploadImage,
+  hints,
+  playedAt,
+  state,
   onProgress,
   selectedGameTitle,
   selectedHeldEvent,
@@ -69,18 +97,26 @@ export async function runOcrSubmissionWorkflow({
 
   let matchDraftId: string | null;
   try {
-    const matchDraft = await createDraft({
-      gameTitleId: setup.gameTitleId,
-      ...(setup.heldEventId && setup.matchNoInEvent
-        ? { heldEventId: setup.heldEventId, matchNoInEvent: setup.matchNoInEvent }
-        : {}),
-      ...(selectedGameTitle?.layoutFamily ? { layoutFamily: selectedGameTitle.layoutFamily } : {}),
-      mapMasterId: setup.mapMasterId,
-      ownerMemberId: setup.ownerMemberId,
-      playedAt: selectedHeldEvent?.heldAt ?? createPlayedAtIso(),
-      seasonMasterId: setup.seasonMasterId,
-      status: "ocr_running",
-    });
+    const matchDraft =
+      state.draft ??
+      (await createDraft(
+        {
+          gameTitleId: setup.gameTitleId,
+          ...(setup.heldEventId && setup.matchNoInEvent
+            ? { heldEventId: setup.heldEventId, matchNoInEvent: setup.matchNoInEvent }
+            : {}),
+          ...(selectedGameTitle?.layoutFamily
+            ? { layoutFamily: selectedGameTitle.layoutFamily }
+            : {}),
+          mapMasterId: setup.mapMasterId,
+          ownerMemberId: setup.ownerMemberId,
+          playedAt,
+          seasonMasterId: setup.seasonMasterId,
+          status: "ocr_running",
+        },
+        { idempotencyKey: state.draftKey },
+      ));
+    state.draft = matchDraft;
     matchDraftId = matchDraft.matchDraftId;
   } catch (error) {
     return { error, status: "draft_create_failed" };
@@ -102,11 +138,13 @@ export async function runOcrSubmissionWorkflow({
     const uploadingSlot = toUploadingSlot(slot);
     updateSlot(uploadingSlot);
     try {
-      const { upload, job } = await createUploadJob({
-        matchDraftId,
-        slot: uploadingSlot,
-        file: slot.file,
-      });
+      const checkpoint = (state.slots[slot.kind] ??= { key: createIdempotencyKey() });
+      const options = { idempotencyKey: checkpoint.key };
+      const upload = (checkpoint.upload ??= await uploadImage(slot.file, options));
+      const job = (checkpoint.job ??= await createJob(
+        ocrJobRequestForSlot(matchDraftId, slot, upload.imageId, hints),
+        options,
+      ));
       const status = parseOcrJobStatus(job.status);
       updateSlot({
         ...uploadingSlot,
@@ -140,12 +178,9 @@ export async function runOcrSubmissionWorkflow({
     };
   }
 
-  try {
-    await cancelDraft(matchDraftId);
-    return { status: "failed_and_cancelled" };
-  } catch (cleanupError) {
-    return { cleanupError, matchDraftId, status: "failed_cleanup_failed" };
-  }
+  // A lost response cannot prove that registration failed. Keep the same draft and keys
+  // so an explicit retry can recover accepted writes without cancelling live work.
+  return { matchDraftId, status: "submission_failed" };
 }
 
 export function ocrJobRequestForSlot(

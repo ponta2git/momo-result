@@ -17,8 +17,8 @@ use crate::{
     ocr::{
         contract::{ValidatedOcrDelivery, parse_validated_delivery},
         queue::{
-            OcrQueueConfig, OcrQueueDeliveryBody, PendingRecoveryCursor, acknowledge,
-            dead_letter_and_acknowledge, ensure_consumer_group, read_new_delivery,
+            OcrQueueConfig, OcrQueueDelivery, OcrQueueDeliveryBody, PendingRecoveryCursor,
+            acknowledge, dead_letter_and_acknowledge, ensure_consumer_group, read_new_delivery,
             recover_cold_page,
         },
     },
@@ -488,7 +488,7 @@ async fn verify_transient_requeue_preserves_pending(
         .arg("2026-08-12T00:00:00Z")
         .query_async(redis)
         .await?;
-    let transient = read_new_delivery(redis, queue)
+    let transient = read_new_delivery(redis, queue, queue.block())
         .await?
         .ok_or_else(|| smoke_error("transient OCR delivery was not read"))?;
     let OcrQueueDeliveryBody::Job(transient_payload) = &transient.body else {
@@ -538,7 +538,7 @@ async fn verify_redis_failure_order(primary: &mut Client, redis_url: &str) -> Sm
         .arg(MALFORMED.job_id)
         .query_async(&mut redis)
         .await?;
-    let malformed = read_new_delivery(&mut redis, &queue)
+    let malformed = read_new_delivery(&mut redis, &queue, queue.block())
         .await?
         .ok_or_else(|| smoke_error("malformed OCR delivery was not read"))?;
     assert!(matches!(
@@ -571,7 +571,7 @@ async fn verify_redis_failure_order(primary: &mut Client, redis_url: &str) -> Sm
         .arg("must-not-enter-dlq")
         .query_async(&mut redis)
         .await?;
-    let poison = read_new_delivery(&mut redis, &queue)
+    let poison = read_new_delivery(&mut redis, &queue, queue.block())
         .await?
         .ok_or_else(|| smoke_error("poison OCR delivery was not read"))?;
     assert!(matches!(
@@ -602,12 +602,43 @@ async fn verify_redis_failure_order(primary: &mut Client, redis_url: &str) -> Sm
         exhausted.body,
         OcrQueueDeliveryBody::MaximumAttempts { .. }
     ));
-    dead_letter_and_acknowledge(&mut redis, &queue, &exhausted).await?;
+    verify_dead_letter_failure_order(&mut redis, &queue, &exhausted, stream, group, dead).await?;
+    let _: usize = redis.del(&[stream, dead]).await?;
+    Ok(())
+}
+
+async fn verify_dead_letter_failure_order(
+    redis: &mut redis::aio::ConnectionManager,
+    queue: &OcrQueueConfig,
+    exhausted: &OcrQueueDelivery,
+    stream: &str,
+    group: &str,
+    dead: &str,
+) -> SmokeResult {
+    let _: () = redis.set(dead, "wrong-type-fixture").await?;
+    assert!(
+        dead_letter_and_acknowledge(redis, queue, exhausted)
+            .await
+            .is_err()
+    );
+    let pending_after_failure: StreamPendingReply = redis.xpending(stream, group).await?;
+    assert_eq!(
+        pending_after_failure.count(),
+        1,
+        "failed DLQ publication must leave the source pending"
+    );
+    let _: usize = redis.del(dead).await?;
+    dead_letter_and_acknowledge(redis, queue, exhausted).await?;
     let pending_after_dlq: StreamPendingReply = redis.xpending(stream, group).await?;
     assert_eq!(pending_after_dlq.count(), 0);
+    assert!(
+        dead_letter_and_acknowledge(redis, queue, exhausted)
+            .await
+            .is_err(),
+        "an already-acknowledged delivery must not append a duplicate diagnostic"
+    );
     let dead_letters: StreamRangeReply = redis.xrange_all(dead).await?;
-    assert_dead_letter_fields(only_dead_letter(&dead_letters)?, &poison.message_id);
-    let _: usize = redis.del(&[stream, dead]).await?;
+    assert_dead_letter_fields(only_dead_letter(&dead_letters)?, &exhausted.message_id);
     Ok(())
 }
 

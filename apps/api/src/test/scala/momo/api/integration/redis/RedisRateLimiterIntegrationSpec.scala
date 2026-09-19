@@ -11,7 +11,7 @@ import dev.profunktor.redis4cats.Redis
 import dev.profunktor.redis4cats.data.RedisCodec
 import dev.profunktor.redis4cats.effect.Log.NoOp.*
 
-import momo.api.auth.{RedisOAuthProviderBackoff, RedisRateLimiter}
+import momo.api.adapters.redis.{RedisOAuthProviderBackoff, RedisRateLimiter}
 import momo.api.errors.AppError
 
 final class RedisRateLimiterIntegrationSpec extends RedisIntegrationSuite:

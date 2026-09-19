@@ -6,7 +6,6 @@ import { http, HttpResponse } from "msw";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { masterQueryKeys } from "@/features/masters/masterQueries";
 import { MastersPage } from "@/features/masters/MastersPage";
 import { masterKeys } from "@/shared/api/queryKeys";
 import { authQueryOptions } from "@/shared/auth/authQueries";
@@ -346,7 +345,7 @@ describe("MastersPage", () => {
     expect(screen.getByLabelText("current location")).toHaveTextContent("returnTo=");
   });
 
-  it("starts independent master directory requests in parallel", async () => {
+  it("loads only visited tabs, allowing independent tabs to start while another is pending", async () => {
     setDevUser();
     const responseGate = createDeferred();
     const requested = new Set<string>();
@@ -370,6 +369,10 @@ describe("MastersPage", () => {
 
     renderPage();
 
+    await waitFor(() => expect(requested).toEqual(new Set(["game-titles"])));
+    await user.click(screen.getByRole("tab", { name: "メンバー名寄せ" }));
+    await waitFor(() => expect(requested).toEqual(new Set(["game-titles", "member-aliases"])));
+    await user.click(screen.getByRole("tab", { name: "事件簿" }));
     await waitFor(() =>
       expect(requested).toEqual(new Set(["game-titles", "incident-masters", "member-aliases"])),
     );
@@ -435,10 +438,7 @@ describe("MastersPage", () => {
 
   it("keeps cached empty scoped masters visible while retrying stale data", async () => {
     setDevUser();
-    queryClient.setQueryData(
-      masterQueryKeys.mapMasters(testDevUserAccountId, "gt_momotetsu_2"),
-      [],
-    );
+    queryClient.setQueryData(masterKeys.mapMasters.list("gt_momotetsu_2"), { items: [] });
     let attempts = 0;
     let shouldFail = true;
     server.use(
@@ -474,15 +474,27 @@ describe("MastersPage", () => {
     setDevUser();
     await queryClient.fetchQuery(authQueryOptions(testDevUserAccountId));
     const staleUpdatedAt = Date.now() - 2_000;
-    queryClient.setQueryData(masterQueryKeys.gameTitles(testDevUserAccountId), [], {
-      updatedAt: staleUpdatedAt,
-    });
-    queryClient.setQueryData(masterQueryKeys.incidentMasters(testDevUserAccountId), [], {
-      updatedAt: staleUpdatedAt,
-    });
-    queryClient.setQueryData(masterQueryKeys.memberAliases(testDevUserAccountId), [], {
-      updatedAt: staleUpdatedAt,
-    });
+    queryClient.setQueryData(
+      masterKeys.gameTitles.list(),
+      { items: [] },
+      {
+        updatedAt: staleUpdatedAt,
+      },
+    );
+    queryClient.setQueryData(
+      masterKeys.incidentMasters.list(),
+      { items: [] },
+      {
+        updatedAt: staleUpdatedAt,
+      },
+    );
+    queryClient.setQueryData(
+      masterKeys.memberAliases.list(),
+      { items: [] },
+      {
+        updatedAt: staleUpdatedAt,
+      },
+    );
     let shouldFail = true;
     const attempts = {
       aliases: 0,
@@ -512,11 +524,11 @@ describe("MastersPage", () => {
 
     renderPage();
 
-    await waitFor(() => expect(attempts).toEqual({ aliases: 1, gameTitles: 1, incidents: 1 }));
+    await waitFor(() => expect(attempts).toEqual({ aliases: 0, gameTitles: 1, incidents: 0 }));
     await waitFor(() =>
-      expect(
-        queryClient.getQueryState(masterQueryKeys.gameTitles(testDevUserAccountId)),
-      ).toMatchObject({ status: "error" }),
+      expect(queryClient.getQueryState(masterKeys.gameTitles.list())).toMatchObject({
+        status: "error",
+      }),
     );
 
     expect(await screen.findByText("最新の作品を取得できません")).toBeInTheDocument();
@@ -796,7 +808,7 @@ describe("MastersPage", () => {
     expect(submissions[1]).toEqual(submissions[0]);
   });
 
-  it("invalidates consumer-facing master caches after creating a game title", async () => {
+  it("shares the created game title response with consumer screens", async () => {
     setDevUser();
     queryClient.setQueryData(masterKeys.gameTitles.list(), { items: [] });
     renderPage();
@@ -808,7 +820,9 @@ describe("MastersPage", () => {
     await user.click(within(dialog).getByRole("button", { name: "追加" }));
 
     await waitFor(() => {
-      expect(queryClient.getQueryState(masterKeys.gameTitles.list())?.isInvalidated).toBe(true);
+      expect(queryClient.getQueryData(masterKeys.gameTitles.list())).toMatchObject({
+        items: expect.arrayContaining([expect.objectContaining({ name: "桃太郎電鉄ワールド" })]),
+      });
     });
   });
 
@@ -1096,7 +1110,7 @@ describe("MastersPage", () => {
     await queryClient.fetchQuery(authQueryOptions(testDevUserAccountId));
     await queryClient
       .fetchQuery({
-        queryKey: masterQueryKeys.gameTitles("account_ponta"),
+        queryKey: masterKeys.gameTitles.list(),
         queryFn: async () => {
           throw new Error("cached load error");
         },

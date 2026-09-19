@@ -7,8 +7,8 @@ use momo_analysis_core::contract::{ARTIFACT_SCHEMA_VERSION, ARTIFACT_VALIDATION_
 
 use super::{ALGORITHM_VERSION, ControlError};
 
-pub(crate) const CAPABILITY_FRESH_SECONDS: i64 = 60;
-const IDLE_REFRESH_INTERVAL: Duration = Duration::from_secs(20);
+pub(crate) const CAPABILITY_FRESH_SECONDS: i64 = 180;
+const IDLE_REFRESH_INTERVAL: Duration = Duration::from_mins(1);
 
 /// Schedules idle capability refreshes from the last successful UPSERT.
 ///
@@ -27,7 +27,12 @@ impl IdleRefreshSchedule {
 
     #[must_use]
     pub(crate) fn is_due_at(&self, now: Instant) -> bool {
-        now.saturating_duration_since(self.last_success_at) >= IDLE_REFRESH_INTERVAL
+        self.next_due_in(now).is_zero()
+    }
+
+    #[must_use]
+    pub(crate) fn next_due_in(&self, now: Instant) -> Duration {
+        IDLE_REFRESH_INTERVAL.saturating_sub(now.saturating_duration_since(self.last_success_at))
     }
 
     pub(crate) const fn record_success_at(&mut self, refreshed_at: Instant) {
@@ -120,8 +125,7 @@ mod tests {
         let registered_at = Instant::now();
         let cases = [
             (Duration::ZERO, false),
-            (Duration::from_secs(19), false),
-            (Duration::from_secs(20), true),
+            (Duration::from_secs(59), false),
             (Duration::from_mins(1), true),
             (Duration::from_hours(1), true),
         ];
@@ -139,17 +143,17 @@ mod tests {
     #[test]
     fn successful_idle_refresh_restarts_the_cadence() {
         let registered_at = Instant::now();
-        let refreshed_at = registered_at + Duration::from_secs(20);
+        let refreshed_at = registered_at + Duration::from_mins(1);
         let mut schedule = IdleRefreshSchedule::after_success(registered_at);
 
         schedule.record_success_at(refreshed_at);
 
         assert!(
-            !schedule.is_due_at(refreshed_at + Duration::from_secs(19)),
+            !schedule.is_due_at(refreshed_at + Duration::from_secs(59)),
             "a recent successful UPSERT must suppress an early refresh"
         );
         assert!(
-            schedule.is_due_at(refreshed_at + Duration::from_secs(20)),
+            schedule.is_due_at(refreshed_at + Duration::from_mins(1)),
             "the next refresh must become due at the bounded cadence"
         );
     }

@@ -90,7 +90,7 @@ cleanup() {
   trap - EXIT
   set +e
   if [[ -n "${worker_pid}" ]]; then
-    docker stop --timeout 5 "${worker_container}" >/dev/null 2>&1 || status=1
+    docker stop --timeout 60 "${worker_container}" >/dev/null 2>&1 || status=1
     wait "${worker_pid}" 2>/dev/null || status=1
   fi
   redis_ci DEL "${redis_stream}" >/dev/null 2>&1 || status=1
@@ -306,6 +306,19 @@ COMMIT;
 SQL
 }
 
+# Startup retention must run in the worker process without an API maintenance task.
+psql_ci <<'SQL'
+INSERT INTO series_analysis_jobs (
+  id, game_title_id, input_revision, algorithm_version, artifact_schema_version,
+  status, trigger, requested_at, available_at, finished_at
+)
+SELECT 'ci-analysis-expired-history', game_title_id, input_revision, algorithm_version,
+       artifact_schema_version, 'succeeded', 'manual',
+       clock_timestamp() - interval '46 days', clock_timestamp() - interval '46 days',
+       clock_timestamp() - interval '46 days'
+FROM series_analysis_title_states WHERE game_title_id = 'title-release-smoke-a';
+SQL
+
 worker_environment=(
   "DATABASE_URL=${worker_database_url}"
   "MOMO_ANALYSIS_OUTBOX_LISTENER_DATABASE_URL=${worker_database_url}"
@@ -329,7 +342,7 @@ worker_environment=(
   "MOMO_ANALYSIS_LEASE_DURATION_MS=60000"
   "MOMO_ANALYSIS_HEARTBEAT_INTERVAL_MS=1000"
   "MOMO_ANALYSIS_CHILD_STOP_GRACE_MS=1000"
-  "MOMO_ANALYSIS_REDIS_BLOCK_MS=200"
+  "MOMO_ANALYSIS_REDIS_BLOCK_MS=10000"
   "MOMO_ANALYSIS_PEL_RECOVERY_INTERVAL_MS=300000"
   "MOMO_OCR_V2_CONSUMER_MODE=disabled"
   "MOMO_LOG_FORMAT=json"
@@ -359,6 +372,10 @@ wait_for_sql_value "1" "
     AND validation_contract_ids = jsonb_build_array('${validation_contract_id}')
     AND draining = false;
 " "worker capability registration"
+
+wait_for_sql_value "0" "
+  SELECT COUNT(*)::int FROM series_analysis_jobs WHERE id = 'ci-analysis-expired-history';
+" "worker-owned terminal history retention"
 
 wait_for_sql_value "2|0" "
   SELECT
@@ -703,7 +720,7 @@ residue="$(docker exec "${worker_container}" find /var/lib/momo-analysis -mindep
 if [[ -n "${residue}" ]]; then
   fail_with_worker_log "Worker left temporary attempt data behind."
 fi
-docker stop --timeout 5 "${worker_container}" >/dev/null
+docker stop --timeout 60 "${worker_container}" >/dev/null
 if ! wait "${worker_pid}"; then
   worker_pid=""
   fail_with_worker_log "Worker did not drain cleanly."

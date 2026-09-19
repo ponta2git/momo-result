@@ -475,7 +475,7 @@ describe("OcrCapturePage", () => {
           ],
         }),
       ),
-      http.get("/api/held-events/:heldEventId", ({ params }) =>
+      http.get("/api/held-events/:heldEventId/summary", ({ params }) =>
         HttpResponse.json({
           draftCount: 1,
           drafts: [],
@@ -707,7 +707,7 @@ describe("OcrCapturePage", () => {
     expect(
       await screen.findByRole("dialog", { name: "一部の読み取りを開始しました" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("1件を開始・1件は未開始")).toBeInTheDocument();
+    expect(screen.getByText("1件を開始・1件は受付未確認")).toBeInTheDocument();
     expect(screen.queryByText("matches-page")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "ダイアログを閉じる" })).not.toBeInTheDocument();
 
@@ -751,12 +751,12 @@ describe("OcrCapturePage", () => {
       );
       await startOcrAllowingPartialTray();
       expect(
-        await screen.findByRole("dialog", { name: "試合一覧で状態を確認してください" }),
+        await screen.findByRole("dialog", { name: "読み取りの受付を確認できませんでした" }),
       ).toBeInTheDocument();
       await user.click(screen.getByRole("button", { name: "試合一覧で確認" }));
       await waitFor(() => expect(destinationStarted).toBe(true));
       expect(screen.getByRole("button", { name: "移動中…" })).toBeDisabled();
-      expect(screen.getByRole("dialog")).toHaveTextContent("後処理を完了できませんでした");
+      expect(screen.getByRole("dialog")).toHaveTextContent("送信を完了できませんでした");
       const beforeUnload = new Event("beforeunload", { cancelable: true });
       window.dispatchEvent(beforeUnload);
       expect(beforeUnload.defaultPrevented).toBe(false);
@@ -766,23 +766,33 @@ describe("OcrCapturePage", () => {
     },
   );
 
-  it("cancels the created match draft when no OCR job is created", async () => {
+  it("preserves the draft when OCR acceptance cannot be confirmed", async () => {
     setDevUser();
     const cancelledDraftIds: string[] = [];
+    const jobKeys: Array<string | null> = [];
+    let uploads = 0;
+    let draftCreates = 0;
 
     server.use(
-      http.post("/api/ocr-jobs", async () =>
-        HttpResponse.json(
-          {
-            type: "about:blank",
-            title: "OCR job creation failed",
-            status: 500,
-            detail: "worker queue unavailable",
-            code: "OCR_JOB_FAILED",
-          },
-          { status: 500 },
-        ),
-      ),
+      http.post("/api/match-drafts", () => {
+        draftCreates += 1;
+        return HttpResponse.json({
+          matchDraftId: "draft-created-1",
+          status: "ocr_running",
+          createdAt: "2026-01-01T00:00:00Z",
+          updatedAt: "2026-01-01T00:00:00Z",
+        });
+      }),
+      http.post("/api/uploads/images", () => {
+        uploads += 1;
+        return HttpResponse.json({ imageId: "image-1", mediaType: "image/png", sizeBytes: 100 });
+      }),
+      http.post("/api/ocr-jobs", ({ request }) => {
+        jobKeys.push(request.headers.get("Idempotency-Key"));
+        return jobKeys.length === 1
+          ? HttpResponse.error()
+          : HttpResponse.json({ draftId: "draft-1", jobId: "job-1", status: "queued" });
+      }),
       http.post("/api/match-drafts/:draftId/cancel", ({ params }) => {
         cancelledDraftIds.push(String(params["draftId"]));
         return HttpResponse.json({
@@ -801,11 +811,19 @@ describe("OcrCapturePage", () => {
     await user.upload(input, new File(["image"], "assets.png", { type: "image/png" }));
     await startOcrAllowingPartialTray();
 
-    await waitFor(() => expect(cancelledDraftIds).toEqual(["draft-created-1"]));
+    expect(cancelledDraftIds).toEqual([]);
     expect(screen.queryByText("matches-page")).not.toBeInTheDocument();
     expect(
-      await screen.findByRole("dialog", { name: "読み取りを開始できませんでした" }),
+      await screen.findByRole("dialog", { name: "読み取りの受付を確認できませんでした" }),
     ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "もう一度試す" }));
+    expect(await screen.findByText("matches-page")).toBeInTheDocument();
+    expect(draftCreates).toBe(1);
+    expect(uploads).toBe(1);
+    expect(jobKeys).toHaveLength(2);
+    expect(jobKeys[0]).toBeTruthy();
+    expect(jobKeys[0]).toBe(jobKeys[1]);
+    expect(cancelledDraftIds).toEqual([]);
   });
 
   it("does not expose a direct review action for OCR-running drafts", async () => {

@@ -2,15 +2,16 @@
  * 横断的に使用される TanStack Query のキーを集約する。
  *
  * Query key は API resource だけでなく、cache に保存する runtime shape も含める。
- * 例えば master の管理画面は配列を保存し、通常画面は API response object を保存するため、
- * 同じ resource でも `adminList` と `list` を別 key にする。
- * 同じ runtime shape の参照系 master は画面をまたいで 1 つの cache を共有する。
+ * master は API response を保存し、管理画面の並べ替えは select で行う。
+ * 認証主体の切替時には cache 全体を破棄し、画面間で同じ response を共有する。
  */
 export const heldEventKeys = {
   all: () => ["held-events"] as const,
   list: (params: unknown) => ["held-events", "list-response", params] as const,
-  directory: () => ["held-events", "list-response"] as const,
+  listRoot: () => ["held-events", "list-response"] as const,
   detailRoot: () => ["held-events", "detail"] as const,
+  summary: (heldEventId: string | undefined) =>
+    ["held-events", "detail", heldEventId, "summary"] as const,
   detail: (heldEventId: string | undefined) => ["held-events", "detail", heldEventId] as const,
 };
 
@@ -37,31 +38,23 @@ export const masterKeys = {
   all: () => ["masters"] as const,
   gameTitles: {
     all: () => ["masters", "game-titles"] as const,
-    adminList: (authScope: string) => ["masters", "game-titles", "admin-list", authScope] as const,
     list: () => ["masters", "game-titles", "list-response"] as const,
   },
   incidentMasters: {
     all: () => ["masters", "incident-masters"] as const,
-    adminList: (authScope: string) =>
-      ["masters", "incident-masters", "admin-list", authScope] as const,
+    list: () => ["masters", "incident-masters", "list-response"] as const,
   },
   mapMasters: {
     all: () => ["masters", "map-masters"] as const,
-    adminList: (authScope: string, gameTitleId: string) =>
-      ["masters", "map-masters", "admin-list", authScope, gameTitleId || "none"] as const,
     list: (gameTitleId: string | undefined = undefined) =>
       ["masters", "map-masters", "list-response", gameTitleId || "all"] as const,
   },
   memberAliases: {
     all: () => ["masters", "member-aliases"] as const,
-    adminList: (authScope: string) =>
-      ["masters", "member-aliases", "admin-list", authScope] as const,
     list: () => ["masters", "member-aliases", "list-response"] as const,
   },
   seasonMasters: {
     all: () => ["masters", "season-masters"] as const,
-    adminList: (authScope: string, gameTitleId: string) =>
-      ["masters", "season-masters", "admin-list", authScope, gameTitleId || "none"] as const,
     list: (gameTitleId: string | undefined = undefined) =>
       ["masters", "season-masters", "list-response", gameTitleId || "all"] as const,
   },
@@ -73,11 +66,13 @@ export const matchKeys = {
   summary: (params: unknown) => ["matches", "collections", "summary", params] as const,
   exports: (params: unknown) => ["matches", "collections", "exports", params] as const,
   detailRoot: () => ["matches", "detail"] as const,
+  identity: (matchId: string | undefined) => ["matches", "detail", matchId, "identity"] as const,
   detail: (matchId: string | undefined) => ["matches", "detail", matchId] as const,
   draft: {
     all: () => ["match-drafts"] as const,
     detailRoot: () => ["match-drafts", "detail"] as const,
     detail: (matchDraftId: string | undefined) => ["match-drafts", "detail", matchDraftId] as const,
+    review: (matchDraftId: string | undefined) => ["match-drafts", "review", matchDraftId] as const,
     sourceImagesRoot: () => ["match-drafts", "source-images"] as const,
     sourceImages: (matchDraftId: string | undefined) =>
       ["match-drafts", "source-images", matchDraftId] as const,
@@ -111,6 +106,7 @@ export const seriesAnalysisKeys = {
   review: (params: unknown) => ["series-analysis", "artifact", "v3", "review", params] as const,
   drilldown: (params: unknown) =>
     ["series-analysis", "artifact", "v3", "drilldown", params] as const,
+  matchContextRoot: () => ["series-analysis", "artifact", "v3", "match-context"] as const,
   matchContext: (params: unknown) =>
     ["series-analysis", "artifact", "v3", "match-context", params] as const,
   adminRoot: () => ["series-analysis", "admin", "overview"] as const,

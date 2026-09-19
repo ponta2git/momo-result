@@ -81,6 +81,14 @@ object MatchesEndpoints:
       .out(jsonBody[MatchDetailResponse])
       .tag("matches")
 
+  val identity: CommonEndpoint.SecuredRead[String, MatchIdentityResponse] = endpoint
+    .get
+    .in("api" / "matches" / path[String]("matchId") / "identity")
+    .securityIn(CommonEndpoint.accountHeader)
+    .errorOut(CommonEndpoint.errorOut)
+    .out(jsonBody[MatchIdentityResponse])
+    .tag("matches")
+
   type UpdateInput = (String, Option[String], UpdateMatchRequest)
 
   val update: CommonEndpoint.SecuredMutation[UpdateInput, UpdateMatchResponse] = endpoint

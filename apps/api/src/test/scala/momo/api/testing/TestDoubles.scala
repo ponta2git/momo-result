@@ -295,17 +295,6 @@ final case class StaticOcrJobQueueHealthCheck(deadLetterLengthValue: Long = 0L)
   override def ping: IO[Unit] = IO.unit
   override def deadLetterLength: IO[Long] = IO.pure(deadLetterLengthValue)
 
-final case class FailingOcrJobQueueHealthCheck(
-    pingError: Option[Throwable],
-    deadLetterLengthError: Option[Throwable],
-) extends OcrJobQueueHealthCheck[IO]:
-  override def ping: IO[Unit] = pingError match
-    case None => IO.unit
-    case Some(error) => IO.raiseError(error)
-  override def deadLetterLength: IO[Long] = deadLetterLengthError match
-    case None => IO.pure(0L)
-    case Some(error) => IO.raiseError(error)
-
 final case class SuccessfulDiscordOAuthClient(userId: String) extends DiscordOAuthClient[IO]:
   override def authorizationUrl(state: String, prompt: Option[String]): IO[String] =
     val _ = prompt

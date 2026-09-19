@@ -225,6 +225,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/held-events/{heldEventId}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getApiHeld-eventsHeldeventidSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/match-drafts": {
         parameters: {
             query?: never;
@@ -255,6 +271,22 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["patchApiMatch-draftsDraftid"];
+        trace?: never;
+    };
+    "/api/match-drafts/{draftId}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getApiMatch-draftsDraftidReview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/match-drafts/{draftId}/cancel": {
@@ -369,6 +401,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/matches/{matchId}/identity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getApiMatchesMatchidIdentity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/matches/{matchId}/note": {
         parameters: {
             query?: never;
@@ -378,70 +426,6 @@ export interface paths {
         };
         get?: never;
         put: operations["putApiMatchesMatchidNote"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/analytics/series-comparison/options": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["getApiAnalyticsSeries-comparisonOptions"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/analytics/series-comparison": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["getApiAnalyticsSeries-comparison"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/analytics/series-comparison/review": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["getApiAnalyticsSeries-comparisonReview"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/analytics/series-comparison/drilldown": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["getApiAnalyticsSeries-comparisonDrilldown"];
-        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -978,6 +962,9 @@ export interface components {
             mapMasterId?: string;
             playedAt?: string;
             updatedAt: string;
+            gameTitleName?: string;
+            seasonName?: string;
+            mapName?: string;
         };
         /** HeldEventListResponse */
         HeldEventListResponse: {
@@ -998,6 +985,9 @@ export interface components {
             playedAt: string;
             players?: components["schemas"]["HeldEventPlayerResultResponse"][];
             noteBody?: string;
+            gameTitleName?: string;
+            seasonName?: string;
+            mapName?: string;
         };
         /** HeldEventPlayerResultResponse */
         HeldEventPlayerResultResponse: {
@@ -1029,6 +1019,17 @@ export interface components {
             gameTitleName?: string;
             seasonMasterId?: string;
             seasonName?: string;
+        };
+        /** HeldEventSummaryResponse */
+        HeldEventSummaryResponse: {
+            id: string;
+            heldAt: string;
+            /** Format: int32 */
+            matchCount: number;
+            /** Format: int32 */
+            draftCount: number;
+            /** Format: int32 */
+            nextMatchNo: number;
         };
         /** IncidentCountsRequest */
         IncidentCountsRequest: {
@@ -1120,6 +1121,10 @@ export interface components {
             createdByMemberId?: string;
             createdAt: string;
             note: components["schemas"]["MatchNoteResponse"];
+            heldAt?: string;
+            gameTitleName?: string;
+            seasonName?: string;
+            mapName?: string;
         };
         /** MatchDraftDetailResponse */
         MatchDraftDetailResponse: {
@@ -1151,6 +1156,12 @@ export interface components {
             createdAt: string;
             updatedAt: string;
         };
+        /** MatchDraftReviewResponse */
+        MatchDraftReviewResponse: {
+            draft: components["schemas"]["MatchDraftDetailResponse"];
+            ocrDrafts?: components["schemas"]["OcrDraftResponse"][];
+            sourceImages?: components["schemas"]["MatchDraftSourceImageResponse"][];
+        };
         /** MatchDraftSourceImageListResponse */
         MatchDraftSourceImageListResponse: {
             items?: components["schemas"]["MatchDraftSourceImageResponse"][];
@@ -1161,6 +1172,15 @@ export interface components {
             contentType?: string;
             createdAt: string;
             imageUrl: string;
+        };
+        /** MatchIdentityResponse */
+        MatchIdentityResponse: {
+            matchId: string;
+            /** Format: int32 */
+            matchNoInEvent: number;
+            playedAt: string;
+            gameTitleName?: string;
+            seasonName?: string;
         };
         /** MatchListPaginationResponse */
         MatchListPaginationResponse: {
@@ -1228,6 +1248,10 @@ export interface components {
             updatedAt: string;
             ranks?: components["schemas"]["MatchRankEntry"][];
             hasNote?: boolean;
+            heldAt?: string;
+            gameTitleName?: string;
+            seasonName?: string;
+            mapName?: string;
         };
         /** MemberAliasListResponse */
         MemberAliasListResponse: {
@@ -4952,6 +4976,38 @@ export interface operations {
             };
         };
     };
+    "getApiHeld-eventsHeldeventidSummary": {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Momo-Account-Id"?: string;
+            };
+            path: {
+                heldEventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HeldEventSummaryResponse"];
+                };
+            };
+            default: {
+                headers: {
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     "postApiMatch-drafts": {
         parameters: {
             query?: never;
@@ -5076,6 +5132,38 @@ export interface operations {
             };
         };
     };
+    "getApiMatch-draftsDraftidReview": {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Momo-Account-Id"?: string;
+            };
+            path: {
+                draftId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatchDraftReviewResponse"];
+                };
+            };
+            default: {
+                headers: {
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     "postApiMatch-draftsDraftidCancel": {
         parameters: {
             query?: never;
@@ -5144,7 +5232,9 @@ export interface operations {
     };
     "getApiMatch-draftsDraftidSource-images.zip": {
         parameters: {
-            query?: never;
+            query?: {
+                updatedAt?: string;
+            };
             header?: {
                 "X-Momo-Account-Id"?: string;
                 "X-Request-Id"?: string;
@@ -5181,7 +5271,9 @@ export interface operations {
     };
     "getApiMatch-draftsDraftidSource-imagesKind": {
         parameters: {
-            query?: never;
+            query?: {
+                imageId?: string;
+            };
             header?: {
                 "X-Momo-Account-Id"?: string;
                 "X-Request-Id"?: string;
@@ -5459,6 +5551,38 @@ export interface operations {
             };
         };
     };
+    getApiMatchesMatchidIdentity: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Momo-Account-Id"?: string;
+            };
+            path: {
+                matchId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatchIdentityResponse"];
+                };
+            };
+            default: {
+                headers: {
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     putApiMatchesMatchidNote: {
         parameters: {
             query?: never;
@@ -5494,118 +5618,6 @@ export interface operations {
                 content: {
                     "text/plain": string;
                 };
-            };
-            default: {
-                headers: {
-                    "Retry-After"?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    "getApiAnalyticsSeries-comparisonOptions": {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-Momo-Account-Id"?: string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            default: {
-                headers: {
-                    "Retry-After"?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    "getApiAnalyticsSeries-comparison": {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-Momo-Account-Id"?: string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            default: {
-                headers: {
-                    "Retry-After"?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    "getApiAnalyticsSeries-comparisonReview": {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-Momo-Account-Id"?: string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            default: {
-                headers: {
-                    "Retry-After"?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    "getApiAnalyticsSeries-comparisonDrilldown": {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-Momo-Account-Id"?: string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             default: {
                 headers: {

@@ -108,21 +108,30 @@ final class PostgresSeriesAnalysisRepository[F[_]: Async] private (
       gameTitleId: GameTitleId,
       requestedBy: AccountId,
       idempotencyKeyHash: String,
-  ): F[Either[AppError, SeriesAnalysisRecalculationAccepted]] = freshIds(4).flatMap { ids =>
-    PostgresSeriesAnalysisTitleRequestOps
-      .requestTitle(gameTitleId, requestedBy, idempotencyKeyHash, ids).transact(transactor)
-  }
+  ): F[Either[AppError, SeriesAnalysisRecalculationAccepted]] =
+    (freshId, freshId, freshId, freshId).tupled.flatMap {
+      case (operationId, requestId, jobId, outboxId) =>
+        PostgresSeriesAnalysisTitleRequestOps.requestTitle(
+          gameTitleId,
+          requestedBy,
+          idempotencyKeyHash,
+          operationId,
+          requestId,
+          jobId,
+          outboxId,
+        ).transact(transactor)
+    }
 
   override def requestAllRecalculation(
       requestedBy: AccountId,
       idempotencyKeyHash: String,
-  ): F[Either[AppError, SeriesAnalysisRecalculationAccepted]] = freshIds(2).flatMap { ids =>
-    PostgresSeriesAnalysisCampaignRequestOps
-      .requestAll(requestedBy, idempotencyKeyHash, ids).transact(transactor)
-  }
+  ): F[Either[AppError, SeriesAnalysisRecalculationAccepted]] =
+    (freshId, freshId).tupled.flatMap { case (operationId, campaignId) =>
+      PostgresSeriesAnalysisCampaignRequestOps
+        .requestAll(requestedBy, idempotencyKeyHash, operationId, campaignId).transact(transactor)
+    }
 
-  private def freshIds(count: Int): F[List[String]] = List
-    .fill(count)(Async[F].delay(UUID.randomUUID().toString)).sequence
+  private def freshId: F[String] = Async[F].delay(UUID.randomUUID().toString)
 
 object PostgresSeriesAnalysisRepository:
   private val QueryCanceledSqlState = "57014"

@@ -5,7 +5,7 @@ import doobie.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.SeriesAnalysisScope
-import momo.api.domain.ids.{GameTitleId, MapMasterId, SeasonMasterId}
+import momo.api.domain.ids.GameTitleId
 
 private[postgres] object PostgresSeriesAnalysisScopeOps:
   def exists(
@@ -58,16 +58,5 @@ private[postgres] object PostgresSeriesAnalysisScopeOps:
           AND s.id = $seasonId
           AND m.id = $mapId)
       """
-
-  def contains(
-      scope: SeriesAnalysisScope,
-      seasonMasterId: SeasonMasterId,
-      mapMasterId: MapMasterId,
-  ): Boolean = scope match
-    case SeriesAnalysisScope.Overall => true
-    case SeriesAnalysisScope.Season(id) => id == seasonMasterId
-    case SeriesAnalysisScope.Map(id) => id == mapMasterId
-    case SeriesAnalysisScope.SeasonMap(seasonId, mapId) =>
-      seasonId == seasonMasterId && mapId == mapMasterId
 
 end PostgresSeriesAnalysisScopeOps

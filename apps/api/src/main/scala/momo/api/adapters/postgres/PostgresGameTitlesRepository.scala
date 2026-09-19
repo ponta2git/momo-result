@@ -43,18 +43,12 @@ object PostgresGameTitles:
 
     override def createWithNextDisplayOrder(title: GameTitle): ConnectionIO[GameTitle] =
       val lockKey = "momo:game_titles:display_order"
-      sql"""
-        WITH display_order_lock AS (
-          SELECT pg_advisory_xact_lock(hashtext($lockKey)::bigint)
-        ),
-        next_order AS (
-          SELECT COALESCE(MAX(display_order), 0) + 1 AS display_order
-          FROM game_titles
-        )
+      // The allocation needs a new READ COMMITTED snapshot after any lock wait.
+      sql"SELECT pg_advisory_xact_lock(hashtext($lockKey)::bigint)".query[Unit].unique *> sql"""
         INSERT INTO game_titles (id, name, layout_family, display_order, created_at)
-        SELECT ${title.id}, ${title.name}, ${title.layoutFamily}, next_order.display_order, ${title
+        SELECT ${title.id}, ${title.name}, ${title.layoutFamily}, COALESCE(MAX(display_order), 0) + 1, ${title
           .createdAt}
-        FROM display_order_lock, next_order
+        FROM game_titles
         RETURNING id, name, layout_family, display_order, created_at
       """.query[GameTitleRow].unique.map(fromRow).exceptSomeSqlState {
         case state if isUniqueViolation(state) =>
@@ -112,7 +106,7 @@ object PostgresGameTitles:
           AND status NOT IN ('succeeded', 'failed', 'skipped_title_deleted')
         RETURNING campaign_id
       """.query[String].to[List]
-      _ <- affectedCampaigns.distinct.traverse_(campaignId =>
+      _ <- affectedCampaigns.distinct.sorted.traverse_(campaignId =>
         PostgresSeriesAnalysisCampaignStatusOps.refresh(campaignId, now)
       )
       _ <- sql"""

@@ -81,34 +81,28 @@ describe("held event detail view model", () => {
   });
 
   it("resolves scope names without exposing unknown internal ids", () => {
-    const names = {
-      gameTitles: new Map([["game-1", "桃太郎電鉄2"]]),
-      maps: new Map<string, string>(),
-      seasons: new Map([["season-1", "今シーズン"]]),
-    };
-
-    expect(heldEventScopeLabel(match(1, 1, 2), names)).toBe(
-      "桃太郎電鉄2・今シーズン・マップ名未取得",
-    );
     expect(
-      heldEventDraftScopeLabel(
-        {
-          gameTitleId: "game-1",
-          seasonMasterId: "season-1",
-        },
-        names,
-      ),
+      heldEventScopeLabel({
+        ...match(1, 1, 2),
+        gameTitleName: "桃太郎電鉄2",
+        seasonName: "今シーズン",
+      }),
+    ).toBe("桃太郎電鉄2・今シーズン・マップ名未取得");
+    expect(
+      heldEventDraftScopeLabel({
+        gameTitleId: "game-1",
+        gameTitleName: "桃太郎電鉄2",
+        seasonName: "今シーズン",
+        seasonMasterId: "season-1",
+      }),
     ).toBe("桃太郎電鉄2・今シーズン");
 
     expect(
-      heldEventDraftScopeLabel(
-        {
-          gameTitleId: "gt_missing",
-          mapMasterId: "map_missing",
-          seasonMasterId: "season_missing",
-        },
-        names,
-      ),
+      heldEventDraftScopeLabel({
+        gameTitleId: "gt_missing",
+        mapMasterId: "map_missing",
+        seasonMasterId: "season_missing",
+      }),
     ).toBe("作品名未取得・シーズン名未取得・マップ名未取得");
   });
 });

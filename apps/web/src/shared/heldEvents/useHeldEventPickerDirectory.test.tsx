@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import type { HeldEventListResponse, HeldEventResponse } from "@/shared/api/heldEvents";
 import { heldEventKeys } from "@/shared/api/queryKeys";
-import { heldEventDetailQueryOptions, heldEventsQueryOptions } from "@/shared/api/queryOptions";
+import { heldEventSummaryQueryOptions, heldEventsQueryOptions } from "@/shared/api/queryOptions";
 import {
   heldEventPickerPageSize,
   useHeldEventPickerDirectory,
@@ -50,7 +50,7 @@ describe("useHeldEventPickerDirectory", () => {
       pageResponse([secondPageEvent], 2, 63),
     );
     queryClient.setQueryData(
-      heldEventDetailQueryOptions(firstSelection.id).queryKey,
+      heldEventSummaryQueryOptions(firstSelection.id).queryKey,
       firstSelection,
     );
     const wrapper = ({ children }: { children: ReactNode }) => (
@@ -74,7 +74,7 @@ describe("useHeldEventPickerDirectory", () => {
     const refreshedSelection = { ...firstSelection, matchCount: 5 };
     act(() => {
       queryClient.setQueryData(
-        heldEventDetailQueryOptions(firstSelection.id).queryKey,
+        heldEventSummaryQueryOptions(firstSelection.id).queryKey,
         refreshedSelection,
       );
     });

@@ -17,17 +17,11 @@ import { withReturnTo } from "@/shared/navigation/returnTo";
 export function useConfirmedDraftRedirect({
   notify,
   onBeforeRedirect,
-  onStatusCheckError,
-  onStatusCheckStart,
   returnTo,
-  useSampleDrafts,
 }: {
   notify: (message: string, tone?: WorkspaceNoticeTone) => void;
   onBeforeRedirect?: () => void;
-  onStatusCheckError: (message: string) => void;
-  onStatusCheckStart: () => void;
   returnTo?: string | undefined;
-  useSampleDrafts: boolean;
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -78,33 +72,8 @@ export function useConfirmedDraftRedirect({
     [fetchLatestDraftDetail, redirectConfirmedDraft],
   );
 
-  const ensureDraftIsOpenForConfirm = useCallback(
-    async (draftId: string | undefined): Promise<boolean> => {
-      if (!draftId || useSampleDrafts) {
-        return true;
-      }
-
-      onStatusCheckStart();
-      try {
-        const detail = await fetchLatestDraftDetail(draftId);
-        return !redirectConfirmedDraft(detail, confirmedDraftMessages.confirmConflict);
-      } catch {
-        onStatusCheckError(confirmedDraftMessages.statusCheckFailed);
-        return false;
-      }
-    },
-    [
-      fetchLatestDraftDetail,
-      onStatusCheckError,
-      onStatusCheckStart,
-      redirectConfirmedDraft,
-      useSampleDrafts,
-    ],
-  );
-
   return {
     confirmedDraftRedirecting,
-    ensureDraftIsOpenForConfirm,
     handleConfirmConflict,
     redirectConfirmedDraft,
   };

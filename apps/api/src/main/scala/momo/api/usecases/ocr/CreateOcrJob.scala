@@ -7,7 +7,7 @@ import cats.data.EitherT
 import cats.syntax.all.*
 import org.typelevel.log4cats.LoggerFactory
 
-import momo.api.contracts.ocrworker.OcrWorkerJobMessageV2
+import momo.api.codec.OcrHintsCodec
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
@@ -16,7 +16,6 @@ import momo.api.ports.storage.ImageStorage
 import momo.api.repositories.OcrJobCreationStore.OcrJobCreationRejection
 import momo.api.repositories.{
   MatchDraftsRepository,
-  MemberAliasesRepository,
   OcrJobCreationPlan,
   OcrJobCreationStore,
   OcrJobDraftAttachment,
@@ -42,7 +41,7 @@ final class CreateOcrJob[F[_]: MonadThrow](
     now: F[Instant],
     nextJobId: F[OcrJobId],
     nextDraftId: F[OcrDraftId],
-    memberAliases: MemberAliasesRepository[F],
+    aliasSnapshot: F[Map[MemberId, List[String]]],
     activeJobLimit: Int,
 )(using LoggerFactory[F]):
   import CreateOcrJob.*
@@ -58,8 +57,8 @@ final class CreateOcrJob[F[_]: MonadThrow](
     )
     _ <- EitherT.fromEither[F](validateOcrHints(command.ocrHints))
     _ <- EitherT(admissionGuard.ensureAvailable)
-    aliases <- EitherT.liftF(memberAliases.list(None))
-    enrichedHints = OcrHintEnrichment(command.ocrHints, aliases.groupMap(_.memberId)(_.alias))
+    aliases <- EitherT.liftF(aliasSnapshot)
+    enrichedHints = OcrHintEnrichment(command.ocrHints, aliases)
     _ <- EitherT.fromEither[F](validateOcrHints(enrichedHints))
     draftForMatch <- matchDrafts.find(command.matchDraftId)
       .orNotFound("match draft", command.matchDraftId.value).flatMap { draft =>
@@ -131,7 +130,7 @@ object CreateOcrJob:
     else Right(())
 
   private def validateOcrHints(hints: OcrJobHints): Either[AppError, Unit] =
-    OcrWorkerJobMessageV2.validateHints(hints).left.map(AppError.ValidationFailed.apply)
+    OcrHintsCodec.validate(hints).left.map(AppError.ValidationFailed.apply)
 
   private def initialDraft(
       draftId: OcrDraftId,

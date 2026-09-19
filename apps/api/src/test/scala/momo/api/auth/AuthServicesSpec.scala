@@ -6,15 +6,24 @@ import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.util.Optional
-import java.util.concurrent.{CompletableFuture, CountDownLatch, Executor, Flow, TimeUnit}
+import java.util.concurrent.{
+  CompletableFuture,
+  ConcurrentLinkedQueue,
+  CountDownLatch,
+  Executor,
+  Flow,
+  TimeUnit
+}
 import javax.net.ssl.{SSLContext, SSLParameters, SSLSession}
 
 import scala.concurrent.duration.*
+import scala.jdk.CollectionConverters.*
 import scala.util.Failure
 
 import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
+import momo.api.adapters.discord.JavaDiscordOAuthClient
 import momo.api.adapters.inmemory.InMemoryLoginAccountsRepository
 import momo.api.config.{AppEnv, AuthConfig}
 import momo.api.domain.LoginAccount
@@ -49,7 +58,11 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
 
   test("OAuthStateCodec accepts signed state before expiry and rejects tampering") {
     val now = IO.pure(Instant.parse("2026-01-01T00:00:00Z"))
-    val codec = OAuthStateCodec[IO](config, now)
+    val codec = OAuthStateCodec[IO](
+      config.stateSigningKey.getOrElse("test-signing-key"),
+      config.stateTtl,
+      now
+    )
     for
       state <- codec.create(silent = true, redirectPath = None)
       valid <- codec.validate(state)
@@ -62,15 +75,27 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
   test("OAuthStateCodec rejects expired state") {
     val createdAt = Instant.parse("2026-01-01T00:00:00Z")
     for
-      state <- OAuthStateCodec[IO](config, IO.pure(createdAt))
+      state <- OAuthStateCodec[IO](
+        config.stateSigningKey.getOrElse("test-signing-key"),
+        config.stateTtl,
+        IO.pure(createdAt)
+      )
         .create(silent = false, redirectPath = None)
-      valid <- OAuthStateCodec[IO](config, IO.pure(createdAt.plusSeconds(301))).validate(state)
+      valid <- OAuthStateCodec[IO](
+        config.stateSigningKey.getOrElse("test-signing-key"),
+        config.stateTtl,
+        IO.pure(createdAt.plusSeconds(301))
+      ).validate(state)
     yield assertEquals(valid, None)
   }
 
   test("OAuthStateCodec preserves only safe root-relative redirect paths") {
     val now = IO.pure(Instant.parse("2026-01-01T00:00:00Z"))
-    val codec = OAuthStateCodec[IO](config, now)
+    val codec = OAuthStateCodec[IO](
+      config.stateSigningKey.getOrElse("test-signing-key"),
+      config.stateTtl,
+      now
+    )
     for
       state <- codec.create(silent = true, redirectPath = Some("/exports?format=tsv#latest"))
       valid <- codec.validate(state)
@@ -89,7 +114,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
       backoff <- InMemoryOAuthProviderBackoff.create[IO](1, 60.seconds, IO.pure(instant))
-      sessions = SessionService[IO](repo, accounts, config, IO.pure(instant))
+      sessions = SessionService[IO](repo, accounts, config.sessionTtl, IO.pure(instant))
       service = CompleteOAuthLogin[IO](
         SuccessfulDiscordOAuthClient(account.discordUserId.value),
         sessions,
@@ -112,7 +137,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](Nil)
       backoff <- InMemoryOAuthProviderBackoff.create[IO](1, 60.seconds, IO.pure(instant))
-      sessions = SessionService[IO](repo, accounts, config, IO.pure(instant))
+      sessions = SessionService[IO](repo, accounts, config.sessionTtl, IO.pure(instant))
       service = CompleteOAuthLogin[IO](
         SuccessfulDiscordOAuthClient("223456789012345678"),
         sessions,
@@ -132,7 +157,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       oauth <- RecordingDiscordOAuthClient
         .create(Left(AppError.DependencyFailed("Discord OAuth provider request failed.")))
       backoff <- InMemoryOAuthProviderBackoff.create[IO](1, 60.seconds, IO.pure(instant))
-      sessions = SessionService[IO](repo, accounts, config, IO.pure(instant))
+      sessions = SessionService[IO](repo, accounts, config.sessionTtl, IO.pure(instant))
       service = CompleteOAuthLogin[IO](oauth, sessions, accounts, backoff)
       first <- service.run("first")
       second <- service.run("second")
@@ -145,10 +170,11 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
 
   test("JavaDiscordOAuthClient maps token exchange transport failures to dependency errors") {
     val client = JavaDiscordOAuthClient[IO](
-      config.copy(
-        discordClientId = Some("client-id"),
-        discordClientSecret = Some("client-secret"),
-        discordRedirectUri = Some("https://example.com/api/auth/callback"),
+      JavaDiscordOAuthClient.Config(
+        "client-id",
+        "client-secret",
+        "https://example.com/api/auth/callback",
+        "identify",
       ),
       ThrowingHttpClient(RuntimeException("discord unavailable")),
     )
@@ -162,10 +188,11 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
 
   test("JavaDiscordOAuthClient maps provider 429 token exchange responses to dependency errors") {
     val client = JavaDiscordOAuthClient[IO](
-      config.copy(
-        discordClientId = Some("client-id"),
-        discordClientSecret = Some("client-secret"),
-        discordRedirectUri = Some("https://example.com/api/auth/callback"),
+      JavaDiscordOAuthClient.Config(
+        "client-id",
+        "client-secret",
+        "https://example.com/api/auth/callback",
+        "identify",
       ),
       StaticHttpClient(429, "{}"),
     )
@@ -179,10 +206,11 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
 
   test("JavaDiscordOAuthClient maps provider 400 token exchange responses to forbidden errors") {
     val client = JavaDiscordOAuthClient[IO](
-      config.copy(
-        discordClientId = Some("client-id"),
-        discordClientSecret = Some("client-secret"),
-        discordRedirectUri = Some("https://example.com/api/auth/callback"),
+      JavaDiscordOAuthClient.Config(
+        "client-id",
+        "client-secret",
+        "https://example.com/api/auth/callback",
+        "identify",
       ),
       StaticHttpClient(400, "{}"),
     )
@@ -194,14 +222,74 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
     }
   }
 
+  private def userLookupResponses: List[(String, Int, String, Either[AppError, DiscordUser])] =
+    List(
+      (
+        "valid user",
+        200,
+        """{"id":"123456789012345678"}""",
+        Right(DiscordUser(account.discordUserId.value))
+      ),
+      ("forbidden user", 401, "{}", Left(AppError.Forbidden("Discord user lookup failed."))),
+      (
+        "rate limited provider",
+        429,
+        "{}",
+        Left(AppError.DependencyFailed("Discord OAuth provider request failed."))
+      ),
+      (
+        "invalid user response",
+        200,
+        "{}",
+        Left(AppError.DependencyFailed("Discord user response is invalid."))
+      ),
+    )
+
+  userLookupResponses.foreach { case (label, status, body, expected) =>
+    test(s"JavaDiscordOAuthClient exchanges a token then handles $label") {
+      val requests = ConcurrentLinkedQueue[HttpRequest]()
+      val http = StaticHttpClient { request =>
+        val _ = requests.add(request)
+        if request.uri().getPath == "/api/oauth2/token" then
+          (200, """{"access_token":"test-access-token"}""")
+        else (status, body)
+      }
+      val client = JavaDiscordOAuthClient[IO](
+        JavaDiscordOAuthClient.Config(
+          "client-id",
+          "client-secret",
+          "https://example.com/api/auth/callback",
+          "identify",
+        ),
+        http,
+      )
+      client.fetchUser("code").map { result =>
+        assertEquals(result, expected)
+        val sent = requests.iterator().asScala.toList
+        assertEquals(
+          sent.map(request => request.method() -> request.uri().toString),
+          List(
+            "POST" -> "https://discord.com/api/oauth2/token",
+            "GET" -> "https://discord.com/api/users/@me",
+          ),
+        )
+        assertEquals(
+          sent.map(_.headers().firstValue("Authorization").orElse("")),
+          List("", "Bearer test-access-token"),
+        )
+      }
+    }
+  }
+
   test("JavaDiscordOAuthClient interrupts a blocking provider request when canceled") {
     val entered = CountDownLatch(1)
     val interrupted = CountDownLatch(1)
     val client = JavaDiscordOAuthClient[IO](
-      config.copy(
-        discordClientId = Some("client-id"),
-        discordClientSecret = Some("client-secret"),
-        discordRedirectUri = Some("https://example.com/api/auth/callback"),
+      JavaDiscordOAuthClient.Config(
+        "client-id",
+        "client-secret",
+        "https://example.com/api/auth/callback",
+        "identify",
       ),
       InterruptibleHttpClient(entered, interrupted),
     )
@@ -238,7 +326,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
     for
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
-      service = SessionService[IO](repo, accounts, config, IO.pure(instant))
+      service = SessionService[IO](repo, accounts, config.sessionTtl, IO.pure(instant))
       created <- service.create(account)
       tokens = SessionCookieCodec.decode(created.cookieValue).getOrElse(fail("cookie decode"))
       snapshot <- repo.snapshot
@@ -257,7 +345,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
     for
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
-      service = SessionService[IO](repo, accounts, config, IO.pure(instant))
+      service = SessionService[IO](repo, accounts, config.sessionTtl, IO.pure(instant))
       result <- service.authenticate(Some("legacy-session-id"))
     yield assertEquals(result, Left(momo.api.errors.AppError.Unauthorized()))
 
@@ -266,7 +354,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
       nowRef <- IO.ref(instant)
-      service = SessionService[IO](repo, accounts, config, nowRef.get)
+      service = SessionService[IO](repo, accounts, config.sessionTtl, nowRef.get)
       created <- service.create(account)
       _ <- nowRef.set(instant.plusSeconds(4.minutes.toSeconds))
       result <- service.authenticate(Some(created.cookieValue))
@@ -280,7 +368,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
       nowRef <- IO.ref(instant)
-      service = SessionService[IO](repo, accounts, config, nowRef.get)
+      service = SessionService[IO](repo, accounts, config.sessionTtl, nowRef.get)
       created <- service.create(account)
       _ <- nowRef.set(instant.plusSeconds(6.minutes.toSeconds))
       result <- service.authenticate(Some(created.cookieValue))
@@ -297,7 +385,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
       nowRef <- IO.ref(instant)
-      service = SessionService[IO](repo, accounts, config, nowRef.get)
+      service = SessionService[IO](repo, accounts, config.sessionTtl, nowRef.get)
       created <- service.create(account)
       before <- repo.snapshot
       stored = before.sessions.values.headOption.getOrElse(fail("session not stored"))
@@ -314,7 +402,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
     for
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(disabled))
-      service = SessionService[IO](repo, accounts, config, IO.pure(instant))
+      service = SessionService[IO](repo, accounts, config.sessionTtl, IO.pure(instant))
       created <- service.create(disabled)
       before <- repo.snapshot
       stored = before.sessions.values.headOption.getOrElse(fail("session not stored"))
@@ -410,7 +498,8 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
         pushPromiseHandler: HttpResponse.PushPromiseHandler[T],
     ): CompletableFuture[HttpResponse[T]] = CompletableFuture.failedFuture(error)
 
-  private final case class StaticHttpClient(status: Int, responseBody: String) extends HttpClient:
+  private final case class StaticHttpClient(respond: HttpRequest => (Int, String))
+      extends HttpClient:
     override def cookieHandler(): Optional[CookieHandler] = Optional.empty()
     override def connectTimeout(): Optional[java.time.Duration] = Optional.empty()
     override def followRedirects(): HttpClient.Redirect = HttpClient.Redirect.NEVER
@@ -424,6 +513,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
         request: HttpRequest,
         responseBodyHandler: HttpResponse.BodyHandler[T],
     ): HttpResponse[T] =
+      val (status, responseBody) = respond(request)
       val responseInfo = StaticResponseInfo(status)
       val subscriber = responseBodyHandler(responseInfo)
       subscriber.onSubscribe(
@@ -449,6 +539,10 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
     ): CompletableFuture[HttpResponse[T]] =
       val _ = pushPromiseHandler
       CompletableFuture.completedFuture(send(request, responseBodyHandler))
+
+  private object StaticHttpClient:
+    def apply(status: Int, responseBody: String): StaticHttpClient =
+      new StaticHttpClient(_ => (status, responseBody))
 
   private final case class InterruptibleHttpClient(
       entered: CountDownLatch,

@@ -1266,7 +1266,7 @@ mod tests {
                    worker_id, algorithm_versions, artifact_schema_versions, validation_contract_ids,\x20\
                    draining, started_at, heartbeat_at\x20\
                  ) VALUES\x20\
-                   ('analysis-release-capability-smoke-compatible', $1, $2, $3, false, clock_timestamp(), clock_timestamp()),\x20\
+                   ('analysis-release-capability-smoke-compatible', $1, $2, $3, false, clock_timestamp(), clock_timestamp() - interval '150 seconds'),\x20\
                    ('analysis-release-capability-smoke-no-contract', $1, $2, '[]'::jsonb, false, clock_timestamp(), clock_timestamp()),\x20\
                    ('analysis-release-capability-smoke-unknown-contract', $1, $2, $4, false, clock_timestamp(), clock_timestamp()),\x20\
                    ('analysis-release-capability-smoke-unknown-algorithm', $5, $2, $3, false, clock_timestamp(), clock_timestamp()),\x20\
@@ -1275,7 +1275,7 @@ mod tests {
                    ('analysis-release-capability-smoke-extra-schema', $1, $8, $3, false, clock_timestamp(), clock_timestamp()),\x20\
                    ('analysis-release-capability-smoke-extra-contract', $1, $2, $9, false, clock_timestamp(), clock_timestamp()),\x20\
                    ('analysis-release-capability-smoke-draining', $1, $2, $3, true, clock_timestamp(), clock_timestamp()),\x20\
-                   ('analysis-release-capability-smoke-stale', $1, $2, $3, false, clock_timestamp(), clock_timestamp() - interval '10 minutes')",
+                   ('analysis-release-capability-smoke-stale', $1, $2, $3, false, clock_timestamp(), clock_timestamp() - interval '210 seconds')",
                 &[
                     &algorithms,
                     &schemas,
@@ -1295,14 +1295,14 @@ mod tests {
                    reader_id, artifact_schema_versions, validation_contract_ids, draining,\x20\
                    started_at, heartbeat_at\x20\
                  ) VALUES\x20\
-                   ('analysis-release-capability-smoke-reader-compatible', $1, $2, false, clock_timestamp(), clock_timestamp()),\x20\
+                   ('analysis-release-capability-smoke-reader-compatible', $1, $2, false, clock_timestamp(), clock_timestamp() - interval '150 seconds'),\x20\
                    ('analysis-release-capability-smoke-reader-no-contract', $1, '[]'::jsonb, false, clock_timestamp(), clock_timestamp()),\x20\
                    ('analysis-release-capability-smoke-reader-unknown-contract', $1, $3, false, clock_timestamp(), clock_timestamp()),\x20\
                    ('analysis-release-capability-smoke-reader-unknown-schema', $4, $2, false, clock_timestamp(), clock_timestamp()),\x20\
                    ('analysis-release-capability-smoke-reader-extra-schema', $5, $2, false, clock_timestamp(), clock_timestamp()),\x20\
                    ('analysis-release-capability-smoke-reader-extra-contract', $1, $6, false, clock_timestamp(), clock_timestamp()),\x20\
                    ('analysis-release-capability-smoke-reader-draining', $1, $2, true, clock_timestamp(), clock_timestamp()),\x20\
-                   ('analysis-release-capability-smoke-reader-stale', $1, $2, false, clock_timestamp(), clock_timestamp() - interval '10 minutes')",
+                   ('analysis-release-capability-smoke-reader-stale', $1, $2, false, clock_timestamp(), clock_timestamp() - interval '210 seconds')",
                 &[
                     &reader_schema_versions(),
                     &reader_validation_contract_ids(),
@@ -1314,6 +1314,8 @@ mod tests {
             )
             .await?;
 
+        // Exercise both sides of the 180-second window without depending on exact clock equality.
+        // The 150-second capabilities also detect a regression to the former 60-second cutoff.
         let worker_counts = worker_capabilities(&transaction).await?;
         let reader_counts = reader_capabilities(&transaction).await?;
 

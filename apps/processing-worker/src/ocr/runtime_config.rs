@@ -268,6 +268,18 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn idle_read_block_is_independent_of_active_heartbeats_and_remains_bounded() {
+        let mut values = complete_values();
+        values.insert("MOMO_OCR_V2_REDIS_BLOCK_MS", "10000");
+        assert!(matches!(
+            build(&values),
+            Ok(OcrConsumerRuntimeConfig::Enabled(_))
+        ));
+        values.insert("MOMO_OCR_V2_REDIS_BLOCK_MS", "10001");
+        assert!(build(&values).is_err());
+    }
+
     fn build(
         values: &BTreeMap<&'static str, &'static str>,
     ) -> Result<OcrConsumerRuntimeConfig, OcrRuntimeConfigError> {

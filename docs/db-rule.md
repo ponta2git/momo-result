@@ -33,11 +33,14 @@
 
 - 大容量 staging は長い control lock から分離し、短い fenced transaction で完全性を再検証してから公開する。
 - 分析 publication の lock 順は execution slot、title state、job、request / artifact とし、複数 title state は作品ID順に取得する。試合 mutation と campaign 展開は execution slot を取得しない。
+- campaign集計はtarget更新と同じREAD COMMITTED transactionに置き、campaign行をID順の `FOR NO KEY UPDATE` で取得してから別statementで再集計する。lock待ちを含む集計UPDATE単独では待機前のsnapshotを使うため、別作品のcommitを取りこぼす。FK挿入のKEY SHAREとは競合させない。
 - 分析release promotionはrelease advisory lock、reader capability registry、worker capability registry、release singleton、作品ID順のtitle stateの順でlockする。capability registryは判定後の登録・heartbeat割込みをcommitまで遮断し、singleton更新と既存title更新を同じtransactionで確定する。
 - DB row は adapter 境界で失敗可能に decode し、不正値や SQL 例外を domain / application failure へ正規化する。
 - dynamic SQL は列挙された fragment から選び、外部入力を SQL text へ連結しない。
+- 複数statementで一つの読み取り結果を組み立てるrepositoryは、read-only / repeatable-readのsnapshotを所有する。読み取り専用の設定をwrite transactionからも呼ばれる共通SQL部品に埋め込まない。
 - keyset pagination は filter と同じ query に stable tie-breaker を含める。exact count を引き継ぐ場合は snapshot 値であることを契約化する。
 - `LISTEN` など session state を持つ consumer は、session-capable 接続を通常 query 接続から分離する。
+- transaction poolerを通るqueryはtransactionを越えるsession設定やsession advisory lockへ依存しない。timeoutなどの設定と排他は必要なtransaction内で完結させる。pool接続の再利用、session-capable接続、通知の機能round tripを別の契約として検証する。
 - 通知の業務判断と更新単位はアプリが所有し、通知用stored function・triggerへ委ねない。`PostgresResultNotificationCancellation`を全source writeの末尾で合成し、別transactionで後追い取消しない。確定・取消・試合削除に加え、マスター・開催削除時の古い下書き清掃も対象とする。
 - 通知設定はAPIから共有DBへ直接保存し、SummitへのHTTPに依存しない。`PostgresNotificationSettings`は共通gate取得後の最新2行を`NotificationSettings.change`へ渡し、両方の期待世代の一致を確認してから変更対象だけを書き込む。ON/OFFが変わる種類だけ世代を進め、OFFへの変更と対象通知の未開始部分取消を一つのtransactionへ合成する。競合時は両方とも変更しない。
 - 通知gateはsource rowの更新後に取得する。通知側はgate取得後にsource row lockを取らず、READ COMMITTEDでcommit済み状態を読む。この順序で受付先行・対象変更先行の双方を収束させる。gate取得後に追加の業務write・外部I/Oを行わない。

@@ -91,9 +91,7 @@ impl WorkerRuntimePlan {
         // shutdown, then must stop its child and durably finalize. Compose those already-validated
         // bounds once here so callers cannot configure an independent supervisor timeout.
         let analysis_shutdown_timeout = composed_shutdown_drain_timeout(
-            series_analysis
-                .redis_block
-                .max(series_analysis.heartbeat_interval),
+            crate::stream_connection::RESPONSE_TIMEOUT.max(series_analysis.heartbeat_interval),
             series_analysis.child_stop_grace,
             series_analysis.execution_limits.finalization_timeout,
         )?;

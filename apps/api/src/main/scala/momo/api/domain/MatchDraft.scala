@@ -267,4 +267,6 @@ final case class MatchListItem(
     updatedAt: Instant,
     ranks: List[MatchListRankEntry],
     hasNote: Option[Boolean] = None,
+    heldAt: Option[Instant] = None,
+    labels: MatchLabels = MatchLabels.empty,
 )

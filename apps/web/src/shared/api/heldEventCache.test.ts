@@ -5,7 +5,6 @@ import {
   mergeHeldEventItems,
   syncHeldEventCreatedCache,
   syncHeldEventDeletedCache,
-  upsertHeldEventList,
 } from "@/shared/api/heldEventCache";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { heldEventKeys } from "@/shared/api/queryKeys";
@@ -35,64 +34,45 @@ describe("held event cache contract", () => {
     ]);
   });
 
-  it("upserts held events in newest-first order without duplicates", () => {
-    const result = upsertHeldEventList(
-      { items: [olderEvent, { ...newerEvent, matchCount: 2 }] },
-      newerEvent,
-    );
-
-    expect(result.items).toEqual([newerEvent, olderEvent]);
-  });
-
-  it("updates the shared directory and invalidates page-list caches after create", async () => {
+  it("seeds the created event summary while leaving page membership to the server", async () => {
     const queryClient = createTestQueryClient();
     const pageListKey = heldEventKeys.list({ page: 1, pageSize: 25 });
     const pageList = { items: [olderEvent] };
-    queryClient.setQueryData(heldEventKeys.directory(), { items: [olderEvent] });
+    queryClient.setQueryData(heldEventKeys.summary(olderEvent.id), olderEvent);
     queryClient.setQueryData(pageListKey, pageList);
 
     await syncHeldEventCreatedCache(queryClient, newerEvent);
 
-    expect(queryClient.getQueryData(heldEventKeys.directory())).toEqual({
-      items: [newerEvent, olderEvent],
-      pagination: {
-        hasNextPage: false,
-        hasPreviousPage: false,
-        page: 1,
-        pageSize: 2,
-        totalItems: 2,
-        totalPages: 1,
-      },
-      totalMatchCount: 1,
-    });
+    expect(queryClient.getQueryData(heldEventKeys.summary(newerEvent.id))).toEqual(newerEvent);
+    expect(queryClient.getQueryData(heldEventKeys.detail(newerEvent.id))).toBeUndefined();
     expect(queryClient.getQueryData(pageListKey)).toBe(pageList);
-    expect(queryClient.getQueryState(heldEventKeys.directory())?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(heldEventKeys.summary(newerEvent.id))?.isInvalidated).toBe(
+      false,
+    );
+    expect(queryClient.getQueryState(heldEventKeys.summary(olderEvent.id))?.isInvalidated).toBe(
+      false,
+    );
     expect(queryClient.getQueryState(pageListKey)?.isInvalidated).toBe(true);
   });
 
-  it("updates the shared directory and invalidates page-list caches after delete", async () => {
+  it("evicts the deleted event's detail and summary and invalidates list pages", async () => {
     const queryClient = createTestQueryClient();
     const pageListKey = heldEventKeys.list({ page: 2, pageSize: 25 });
     const pageList = { items: [newerEvent] };
-    queryClient.setQueryData(heldEventKeys.directory(), { items: [newerEvent, olderEvent] });
+    queryClient.setQueryData(heldEventKeys.detail(newerEvent.id), newerEvent);
+    queryClient.setQueryData(heldEventKeys.summary(newerEvent.id), newerEvent);
+    queryClient.setQueryData(heldEventKeys.summary(olderEvent.id), olderEvent);
     queryClient.setQueryData(pageListKey, pageList);
 
     await syncHeldEventDeletedCache(queryClient, newerEvent.id);
 
-    expect(queryClient.getQueryData(heldEventKeys.directory())).toEqual({
-      items: [olderEvent],
-      pagination: {
-        hasNextPage: false,
-        hasPreviousPage: false,
-        page: 1,
-        pageSize: 1,
-        totalItems: 1,
-        totalPages: 1,
-      },
-      totalMatchCount: 1,
-    });
+    expect(queryClient.getQueryData(heldEventKeys.detail(newerEvent.id))).toBeUndefined();
+    expect(queryClient.getQueryData(heldEventKeys.summary(newerEvent.id))).toBeUndefined();
+    expect(queryClient.getQueryData(heldEventKeys.summary(olderEvent.id))).toEqual(olderEvent);
     expect(queryClient.getQueryData(pageListKey)).toBe(pageList);
-    expect(queryClient.getQueryState(heldEventKeys.directory())?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(heldEventKeys.summary(olderEvent.id))?.isInvalidated).toBe(
+      false,
+    );
     expect(queryClient.getQueryState(pageListKey)?.isInvalidated).toBe(true);
   });
 });

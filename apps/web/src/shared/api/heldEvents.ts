@@ -4,6 +4,7 @@ import type { components } from "@/shared/api/generated";
 
 export type HeldEventResponse = components["schemas"]["HeldEventResponse"];
 export type HeldEventListResponse = components["schemas"]["HeldEventListResponse"];
+export type HeldEventSummaryResponse = components["schemas"]["HeldEventSummaryResponse"];
 export type HeldEventDetailResponse = components["schemas"]["HeldEventDetailResponse"];
 export type HeldEventMatchResponse = components["schemas"]["HeldEventMatchResponse"];
 export type HeldEventDraftResponse = components["schemas"]["HeldEventDraftResponse"];
@@ -64,5 +65,12 @@ export async function deleteHeldEvent(
       method: "DELETE",
       idempotency: { key: options.idempotencyKey },
     },
+  );
+}
+
+export function getHeldEventSummary(heldEventId: string, options: ApiSignalOptions = {}) {
+  return apiRequest<HeldEventSummaryResponse>(
+    `/api/held-events/${encodeURIComponent(heldEventId)}/summary`,
+    options,
   );
 }

@@ -6,7 +6,6 @@ import {
   createMapMasterId,
   createSeasonMasterId,
 } from "@/features/masters/masterId";
-import { masterQueryKeys } from "@/features/masters/masterQueries";
 import {
   cacheCreatedMaster,
   invalidateMasterResourceCaches,
@@ -27,6 +26,7 @@ import {
   createSeasonMaster,
 } from "@/shared/api/masters";
 import { formatApiError } from "@/shared/api/problemDetails";
+import { masterKeys } from "@/shared/api/queryKeys";
 
 export type CreateState = { error?: string | undefined; version: number };
 
@@ -37,7 +37,6 @@ export function useMasterCreateActions(input: {
   addOptimisticGameTitle: (item: OptimisticGameTitle) => void;
   addOptimisticMapMaster: (item: OptimisticMapMaster) => void;
   addOptimisticSeasonMaster: (item: OptimisticSeasonMaster) => void;
-  authScope: string;
   idempotencyKeys: IdempotencyKeyStore;
   nowIsoFactory: () => string;
   optimisticGameTitleCount: number;
@@ -81,16 +80,9 @@ export function useMasterCreateActions(input: {
       const created = await runIdempotentOperationAttempt(attempt, (options) =>
         createGameTitle(request, options),
       );
-      await cacheCreatedMaster(
-        input.queryClient,
-        masterQueryKeys.gameTitles(input.authScope),
-        created,
-      );
+      await cacheCreatedMaster(input.queryClient, masterKeys.gameTitles.list(), created);
       input.setSelectedGameTitleId(created.id);
-      await invalidateMasterResourceCaches(input.queryClient, {
-        authScope: input.authScope,
-        resource: "game-titles",
-      });
+      await invalidateMasterResourceCaches(input.queryClient, "game-titles");
       input.onFeedback("gameTitle", "", "作品を追加しました");
       return { error: undefined, version: prev.version + 1 };
     } catch (error) {
@@ -129,14 +121,10 @@ export function useMasterCreateActions(input: {
         );
         await cacheCreatedMaster(
           input.queryClient,
-          masterQueryKeys.mapMasters(input.authScope, gameTitleId),
+          masterKeys.mapMasters.list(gameTitleId),
           created,
         );
-        await invalidateMasterResourceCaches(input.queryClient, {
-          authScope: input.authScope,
-          gameTitleId,
-          resource: "map-masters",
-        });
+        await invalidateMasterResourceCaches(input.queryClient, "map-masters");
         input.onFeedback("map", gameTitleId, "マップを追加しました");
         return { error: undefined, version: prev.version + 1 };
       } catch (error) {
@@ -179,14 +167,10 @@ export function useMasterCreateActions(input: {
       );
       await cacheCreatedMaster(
         input.queryClient,
-        masterQueryKeys.seasonMasters(input.authScope, gameTitleId),
+        masterKeys.seasonMasters.list(gameTitleId),
         created,
       );
-      await invalidateMasterResourceCaches(input.queryClient, {
-        authScope: input.authScope,
-        gameTitleId,
-        resource: "season-masters",
-      });
+      await invalidateMasterResourceCaches(input.queryClient, "season-masters");
       input.onFeedback("season", gameTitleId, "シーズンを追加しました");
       return { error: undefined, version: prev.version + 1 };
     } catch (error) {
@@ -212,12 +196,8 @@ export function useMasterCreateActions(input: {
         request,
         (options) => createMemberAlias(request, options),
       );
-      await cacheCreatedMaster(
-        input.queryClient,
-        masterQueryKeys.memberAliases(input.authScope),
-        created,
-      );
-      await invalidateMemberAliasCaches(input.queryClient, input.authScope);
+      await cacheCreatedMaster(input.queryClient, masterKeys.memberAliases.list(), created);
+      await invalidateMemberAliasCaches(input.queryClient);
       input.onFeedback("aliases", "", "別名を追加しました");
       return { error: undefined, version: prev.version + 1 };
     } catch (error) {

@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
@@ -47,9 +47,14 @@ function SetupOptionsHarness({ initialValue }: { initialValue: SetupFormValues }
   });
 
   return (
-    <output aria-label="setup value" data-error={options.heldEventsError ?? ""}>
-      {JSON.stringify(value)}
-    </output>
+    <>
+      <output aria-label="setup value" data-error={options.heldEventsError ?? ""}>
+        {JSON.stringify(value)}
+      </output>
+      <button type="button" onClick={options.retry}>
+        選択肢を再取得
+      </button>
+    </>
   );
 }
 
@@ -72,6 +77,44 @@ describe("useOcrSetupOptions", () => {
     expect(resolveHeldEventContext({ ...base, detailErrorStatus: 500 })).toBe("failed");
   });
 
+  it("shares the first picker page and retries a failed request only once", async () => {
+    const requests: URLSearchParams[] = [];
+    server.use(
+      http.get("/api/held-events", ({ request }) => {
+        requests.push(new URL(request.url).searchParams);
+        return requests.length === 1 ? HttpResponse.error() : HttpResponse.json({ items: [] });
+      }),
+    );
+    const queryClient = createTestQueryClient();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SetupOptionsHarness
+          initialValue={{
+            gameTitleId: gameTitle.id,
+            mapMasterId: mapMaster.id,
+            ownerMemberId: "member_ponta",
+            seasonMasterId: seasonMaster.id,
+          }}
+        />
+      </QueryClientProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText("setup value")).toHaveAttribute(
+        "data-error",
+        "応答を受け取れませんでした。",
+      ),
+    );
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.get("page")).toBe("1");
+    expect(requests[0]?.get("pageSize")).toBe("20");
+    expect(requests[0]?.has("limit")).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "選択肢を再取得" }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("setup value")).toHaveAttribute("data-error", ""),
+    );
+    expect(requests).toHaveLength(2);
+  });
+
   it("applies map and season fallbacks in one state transition", async () => {
     const queryClient = createTestQueryClient();
     queryClient.setQueryDefaults(masterKeys.all(), {
@@ -84,7 +127,7 @@ describe("useOcrSetupOptions", () => {
     queryClient.setQueryData(masterKeys.seasonMasters.list(gameTitle.id), {
       items: [seasonMaster],
     });
-    queryClient.setQueryData(heldEventKeys.directory(), { items: [] });
+    queryClient.setQueryData(heldEventKeys.list({ page: 1, pageSize: 20 }), { items: [] });
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -119,7 +162,7 @@ describe("useOcrSetupOptions", () => {
     queryClient.setQueryData(masterKeys.seasonMasters.list(gameTitle.id), {
       items: [seasonMaster],
     });
-    queryClient.setQueryData(heldEventKeys.directory(), {
+    queryClient.setQueryData(heldEventKeys.list({ page: 1, pageSize: 20 }), {
       items: [
         {
           draftCount: 2,
@@ -167,9 +210,9 @@ describe("useOcrSetupOptions", () => {
     queryClient.setQueryData(masterKeys.seasonMasters.list(gameTitle.id), {
       items: [seasonMaster],
     });
-    queryClient.setQueryData(heldEventKeys.directory(), { items: [] });
+    queryClient.setQueryData(heldEventKeys.list({ page: 1, pageSize: 20 }), { items: [] });
     server.use(
-      http.get("/api/held-events/held-requested", () =>
+      http.get("/api/held-events/held-requested/summary", () =>
         HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 }),
       ),
     );
@@ -211,9 +254,9 @@ describe("useOcrSetupOptions", () => {
     queryClient.setQueryData(masterKeys.seasonMasters.list(gameTitle.id), {
       items: [seasonMaster],
     });
-    queryClient.setQueryData(heldEventKeys.directory(), { items: [] });
+    queryClient.setQueryData(heldEventKeys.list({ page: 1, pageSize: 20 }), { items: [] });
     server.use(
-      http.get("/api/held-events/held-missing", () =>
+      http.get("/api/held-events/held-missing/summary", () =>
         HttpResponse.json({ detail: "not found" }, { status: 404 }),
       ),
     );

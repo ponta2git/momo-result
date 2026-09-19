@@ -9,14 +9,16 @@ import dev.profunktor.redis4cats.data.RedisCodec
 import dev.profunktor.redis4cats.effect.Log.NoOp.*
 
 import momo.api.adapters.inmemory.InMemoryOcrJobQueuePublisher
-import momo.api.adapters.redis.RedisOcrJobQueuePublisher
+import momo.api.adapters.redis.{
+  RedisOAuthProviderBackoff,
+  RedisOcrJobQueuePublisher,
+  RedisRateLimiter
+}
 import momo.api.auth.{
   InMemoryOAuthProviderBackoff,
   LoginRateLimiter,
   OAuthProviderBackoff,
   RateLimiter,
-  RedisOAuthProviderBackoff,
-  RedisRateLimiter,
   ResilientRateLimiter
 }
 import momo.api.config.AppConfig

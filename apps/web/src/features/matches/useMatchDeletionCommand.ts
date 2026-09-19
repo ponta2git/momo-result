@@ -71,7 +71,7 @@ export function useMatchDeletionCommand(options: MatchDeletionCommandOptions): M
       if (mountedRef.current) setErrorMessage(formatApiError(error, "削除に失敗しました"));
     },
     onSuccess: async (_response, command) => {
-      const invalidation = invalidateAfterMatchDeleted(queryClient);
+      const invalidation = invalidateAfterMatchDeleted(queryClient, command.targetMatchId);
       if (mountedRef.current) {
         showToast({ title: "試合を削除しました", tone: "success" });
         navigate(command.destination, { flushSync: true, replace: true });

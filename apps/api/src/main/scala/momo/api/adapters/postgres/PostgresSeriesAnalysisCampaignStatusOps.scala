@@ -9,6 +9,10 @@ import doobie.postgres.implicits.*
 private[postgres] object PostgresSeriesAnalysisCampaignStatusOps:
   def refresh(campaignId: String, now: Instant): ConnectionIO[Unit] =
     for
+      // A waiting aggregate UPDATE keeps its old snapshot. Lock first, then count committed targets.
+      _ <- sql"""
+        SELECT id FROM series_analysis_campaigns WHERE id = $campaignId FOR NO KEY UPDATE
+      """.query[String].option
       _ <- sql"""
         WITH counts AS (
           SELECT

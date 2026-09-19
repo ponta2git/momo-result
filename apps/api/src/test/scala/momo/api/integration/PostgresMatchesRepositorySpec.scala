@@ -209,6 +209,204 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       assertEquals(list.map(_.id.value), List("match_a", "match_b"))
       assertEquals(list.map(_.matchNoInEvent.value), List(1, 2))
 
+  test(
+    "held-event detail reads ordered results, notes and active drafts in one read-only snapshot"
+  ):
+    val detail = new PostgresHeldEventDetailReadModel[IO](transactor)
+    val absentId = HeldEventId.unsafeFromString("held_absent")
+    val otherId = HeldEventId.unsafeFromString("held_other")
+    val body = MatchNoteBody.fromRequiredString("開催内の試合メモ\n2行目").toOption.get
+    for
+      _ <- seedPrereqs
+      absent <- detail.find(absentId)
+      empty <- detail.find(heldEventId)
+      missingSummary <- detail.summary(absentId)
+      emptySummary <- detail.summary(heldEventId)
+      _ <- heldEvents.create(HeldEvent(otherId, now))
+      _ <- createMatch(sampleMatch("detail-second", 2))
+      _ <- createMatch(sampleMatch("detail-first", 1))
+      _ <- createMatch(sampleMatch("detail-other", 9).copy(heldEventId = otherId))
+      _ <- matchNotes.replace(
+        MatchId.unsafeFromString("detail-first"),
+        MatchNoteVersion.Initial,
+        Some(body),
+        AccountId.unsafeFromString("account_ponta"),
+        now.plusSeconds(1),
+      )
+      _ <- sql"""
+        INSERT INTO match_drafts (
+          id, held_event_id, match_no_in_event, status,
+          created_by_account_id, created_by_member_id, created_at, updated_at
+        ) VALUES
+          ('detail-ready', $heldEventId, 4, 'draft_ready', 'account_ponta', 'member_ponta', $now, $now),
+          ('detail-review', $heldEventId, 3, 'needs_review', 'account_ponta', 'member_ponta', $now, $now),
+          ('detail-unnumbered', $heldEventId, NULL, 'ocr_running', 'account_ponta', 'member_ponta', $now, $now),
+          ('detail-cancelled', $heldEventId, 90, 'cancelled', 'account_ponta', 'member_ponta', $now, $now),
+          ('detail-confirmed', $heldEventId, 91, 'confirmed', 'account_ponta', 'member_ponta', $now, $now),
+          ('detail-outside', $otherId, 92, 'draft_ready', 'account_ponta', 'member_ponta', $now, $now)
+      """.update.run.transact(transactor)
+      summary <- detail.summary(heldEventId)
+      snapshot <- (for
+        result <- PostgresHeldEventDetail.find(heldEventId)
+        isolation <- sql"SHOW transaction_isolation".query[String].unique
+        readOnly <- sql"SHOW transaction_read_only".query[String].unique
+      yield (result, isolation, readOnly)).transact(transactor)
+    yield
+      assertEquals(absent, None)
+      assertEquals(missingSummary, None)
+      assertEquals(emptySummary, Some(HeldEventSummary(HeldEvent(heldEventId, now), 0, 0, 1)))
+      assertEquals(summary, Some(HeldEventSummary(HeldEvent(heldEventId, now), 2, 3, 5)))
+      assertEquals(empty.map(_.nextMatchNo), Some(1))
+      assertEquals(empty.map(_.matches), Some(Nil))
+      assertEquals(empty.map(_.drafts), Some(Nil))
+      val result = snapshot._1.getOrElse(fail("held-event detail missing"))
+      assertEquals(result.event, HeldEvent(heldEventId, now))
+      assertEquals(result.matches.map(_.id.value), List("detail-first", "detail-second"))
+      assertEquals(result.matches.map(_.noteBody), List(Some(body.value), None))
+      assertEquals(result.matches.head.players.map(_.playOrder.value), List(1, 2, 3, 4))
+      assertEquals(
+        result.matches.head.players.map(_.totalAssetsManYen.value),
+        List(12000, 9000, 6500, 4000)
+      )
+      assertEquals(
+        result.drafts.map(_.id.value),
+        List("detail-review", "detail-ready", "detail-unnumbered")
+      )
+      assertEquals(
+        result.drafts.map(_.status),
+        List(MatchDraftStatus.NeedsReview, MatchDraftStatus.DraftReady, MatchDraftStatus.OcrRunning)
+      )
+      assertEquals(
+        result.matches.head.labels,
+        MatchLabels(Some("桃太郎電鉄ワールド"), Some("2024-spring"), Some("東日本編"))
+      )
+      assertEquals(result.drafts.head.labels, MatchLabels.empty)
+      assertEquals(result.nextMatchNo, 5)
+      assertEquals(snapshot._2, "repeatable read")
+      assertEquals(snapshot._3, "on")
+
+  test("match display metadata and note attribution belong to the result snapshot"):
+    val record = sampleMatch("display-snapshot", 1).copy(playedAt = now.plusSeconds(3600))
+    val details = new PostgresMatchDetailReadModel[IO](transactor)
+    for
+      _ <- seedPrereqs
+      _ <- createMatch(record)
+      _ <- matchNotes.replace(
+        record.id,
+        MatchNoteVersion.Initial,
+        MatchNoteBody.fromRequiredString("note").toOption,
+        AccountId.unsafeFromString("account_ponta"),
+        now.plusSeconds(1)
+      )
+      identity <- details.identity(record.id)
+      missing <- details.identity(MatchId.unsafeFromString("missing-identity"))
+      snapshot <- (for
+        result <- PostgresMatchDetail.find(record.id)
+        isolation <- sql"SHOW transaction_isolation".query[String].unique
+        readOnly <- sql"SHOW transaction_read_only".query[String].unique
+      yield (result, isolation, readOnly)).transact(transactor)
+    yield
+      val detail = snapshot._1.getOrElse(fail("match detail missing"))
+      assertEquals(detail.heldAt, Some(now))
+      assertEquals(detail.record.playedAt, now.plusSeconds(3600))
+      assertEquals(detail.labels, MatchLabels(Some("桃太郎電鉄ワールド"), Some("2024-spring"), Some("東日本編")))
+      assert(detail.noteUpdatedByDisplayName.nonEmpty)
+      assertEquals(
+        identity,
+        Some(MatchIdentity(
+          record.id,
+          record.matchNoInEvent,
+          record.playedAt,
+          Some("桃太郎電鉄ワールド"),
+          Some("2024-spring")
+        ))
+      )
+      assertEquals(missing, None)
+      assertEquals(snapshot._2, "repeatable read")
+      assertEquals(snapshot._3, "on")
+
+  test("held-event pages project only their scopes while totals cover all matching events"):
+    val latestId = HeldEventId.unsafeFromString("held_latest")
+    val emptyId = HeldEventId.unsafeFromString("held_empty")
+    val reader = new PostgresHeldEventListReadModel[IO](transactor)
+    for
+      _ <- seedPrereqs
+      _ <- seedSecondTitle
+      _ <- heldEvents.create(HeldEvent(latestId, now.plusSeconds(7200)))
+      _ <- heldEvents.create(HeldEvent(emptyId, now.plusSeconds(3600)))
+      _ <- createMatch(sampleMatch("held-list-first", 1))
+      _ <- createMatch(sampleMatch("held-list-third", 3))
+      _ <- createMatch(sampleMatch("held-list-other", 1).copy(
+        heldEventId = latestId,
+        gameTitleId = secondGameTitleId,
+        seasonMasterId = secondSeasonMasterId,
+        mapMasterId = secondMapMasterId,
+      ))
+      _ <- sql"""
+        INSERT INTO match_drafts (
+          id, held_event_id, match_no_in_event, status, game_title_id, season_master_id,
+          created_by_account_id, created_at, updated_at
+        ) VALUES
+          ('held-list-ready', $heldEventId, 7, 'draft_ready', $gameTitleId, $seasonMasterId, 'account_ponta', $now, $now),
+          ('held-list-partial', $heldEventId, 5, 'needs_review', $gameTitleId, NULL, 'account_ponta', $now, $now),
+          ('held-list-no-scope', $heldEventId, 9, 'draft_ready', NULL, NULL, 'account_ponta', $now, $now),
+          ('held-list-no-number', $heldEventId, NULL, 'ocr_running', NULL, NULL, 'account_ponta', $now, $now),
+          ('held-list-cancelled', $heldEventId, 99, 'cancelled', $gameTitleId, $seasonMasterId, 'account_ponta', $now, $now),
+          ('held-list-confirmed', $heldEventId, 100, 'confirmed', $gameTitleId, $seasonMasterId, 'account_ponta', $now, $now)
+      """.update.run.transact(transactor)
+      latest <- reader.list(None, PageRequest(1, 1))
+      empty <- reader.list(None, PageRequest(2, 1))
+      beyond <- reader.list(None, PageRequest(4, 1))
+      filtered <- reader.list(Some(" HELD_2026 "), PageRequest(1, 20))
+      missing <- reader.list(Some("absent"), PageRequest(1, 20))
+      snapshot <- (for
+        result <- PostgresHeldEventList.list(None, PageRequest(3, 1))
+        isolation <- sql"SHOW transaction_isolation".query[String].unique
+        readOnly <- sql"SHOW transaction_read_only".query[String].unique
+      yield (result, isolation, readOnly)).transact(transactor)
+    yield
+      assertEquals(latest.page.totalItems, 3)
+      assertEquals(latest.totalMatchCount, 3)
+      assertEquals(latest.page.items.map(_.event.id), List(latestId))
+      assertEquals(
+        latest.page.items.flatMap(_.scopes).map(_.gameTitleName),
+        List(Some("桃太郎電鉄ワールド2"))
+      )
+      assertEquals(
+        empty.page.items.map(item => (item.matchCount, item.draftCount, item.nextMatchNo)),
+        List((0, 0, 1))
+      )
+      assertEquals(beyond.page.items, Nil)
+      assertEquals(beyond.totalMatchCount, 3)
+      assertEquals(filtered.page.totalItems, 1)
+      assertEquals(filtered.totalMatchCount, 2)
+      assertEquals(missing.page.items, Nil)
+      assertEquals(missing.totalMatchCount, 0)
+      val current = snapshot._1.page.items.headOption.getOrElse(fail("held event missing"))
+      assertEquals(current.event.id, heldEventId)
+      assertEquals((current.matchCount, current.draftCount, current.nextMatchNo), (2, 4, 10))
+      assertEquals(current.scopes.map(_.gameTitleName), List(Some("桃太郎電鉄ワールド"), Some("桃太郎電鉄ワールド")))
+      assertEquals(current.scopes.map(_.seasonName), List(None, Some("2024-spring")))
+      assertEquals(snapshot._2, "repeatable read")
+      assertEquals(snapshot._3, "on")
+
+  test("held-event detail rejects missing players instead of emitting a partial lineup"):
+    val record = sampleMatch("detail-missing-player", 1)
+    for
+      _ <- seedPrereqs
+      _ <- createMatch(record)
+      _ <- sql"DELETE FROM match_incidents WHERE match_id = ${record.id}".update.run.transact(
+        transactor
+      )
+      _ <-
+        sql"DELETE FROM match_players WHERE match_id = ${record.id} AND play_order = 4".update.run.transact(
+          transactor
+        )
+      result <- new PostgresHeldEventDetailReadModel[IO](transactor).find(heldEventId).attempt
+    yield result match
+      case Left(_: PostgresDataIntegrityException) => ()
+      case other => fail(s"expected data integrity failure, got $other")
+
   test("note replacement is versioned without advancing analysis state or outbox"):
     val record = sampleMatch("match_note_versioned", 1)
     val accountId = AccountId.unsafeFromString("account_ponta")
@@ -327,18 +525,34 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       recent <- matchExports.project(
         MatchExportsRepository.Selection(limit = 2)
       )
+      snapshot <- (for
+        rows <- PostgresMatchExports.alg.project(MatchExportsRepository.Selection(
+          matchId = Some(records.last.id),
+          limit = 2
+        ))
+        isolation <- sql"SHOW transaction_isolation".query[String].unique
+        readOnly <- sql"SHOW transaction_read_only".query[String].unique
+      yield (rows, isolation, readOnly)).transact(transactor)
     yield
-      assertEquals(other.map(row => row.seasonSequence -> row.gameTitleSequence), List(1 -> 1))
+      assertEquals(other.map(row => row.seasonNo -> row.gameTitleMatchNo), List.fill(4)(1 -> 1))
       assertEquals(absent, Nil)
-      assertEquals(single.map(_.id), List(records.last.id))
-      assertEquals(single.map(_.seasonSequence), List(2))
-      assertEquals(single.map(_.gameTitleSequence), List(4))
-      assertEquals(single.flatMap(_.players.byPlayOrder).size, 4)
-      assertEquals(sameMillisecond.map(_.seasonSequence), List(2))
-      assertEquals(sameMillisecond.map(_.gameTitleSequence), List(2))
-      assertEquals(recent.map(_.id), records.takeRight(2).map(_.id))
-      assertEquals(recent.map(_.seasonSequence), List(1, 2))
-      assertEquals(recent.map(_.gameTitleSequence), List(3, 4))
+      assertEquals(single.map(_.playedAt).distinct, List(records.last.playedAt))
+      assertEquals(single.map(_.seasonNo), List.fill(4)(2))
+      assertEquals(single.map(_.gameTitleMatchNo), List.fill(4)(4))
+      assertEquals(single.map(_.playOrder), List(1, 2, 3, 4))
+      assertEquals(single.map(_.seasonName).distinct, List("2024-later"))
+      assertEquals(single.map(_.mapName).distinct, List("東日本編"))
+      assertEquals(single.map(_.ownerName).distinct, List("ぽんた"))
+      assertEquals(single.head.playerName, "ぽんた")
+      assertEquals(single.head.incidents.destination.value, 5)
+      assertEquals(sameMillisecond.map(_.seasonNo), List.fill(4)(2))
+      assertEquals(sameMillisecond.map(_.gameTitleMatchNo), List.fill(4)(2))
+      assertEquals(recent.map(_.playedAt).distinct, records.takeRight(2).map(_.playedAt))
+      assertEquals(recent.map(_.seasonNo), List.fill(4)(1) ++ List.fill(4)(2))
+      assertEquals(recent.map(_.gameTitleMatchNo), List.fill(4)(3) ++ List.fill(4)(4))
+      assertEquals(snapshot._1, single)
+      assertEquals(snapshot._2, "repeatable read")
+      assertEquals(snapshot._3, "on")
 
   test("existsMatchNo reflects inserted rows"):
     for

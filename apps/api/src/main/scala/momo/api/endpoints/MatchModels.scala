@@ -5,8 +5,13 @@ import java.time.format.DateTimeFormatter
 import io.circe.Codec
 import sttp.tapir.Schema
 
-import momo.api.domain.{HeldEvent, MatchListItem, MatchListSummary, PagedResult}
-import momo.api.usecases.heldevents.HeldEventScopeSummary
+import momo.api.domain.{
+  HeldEvent,
+  HeldEventScopeSummary,
+  MatchListItem,
+  MatchListSummary,
+  PagedResult
+}
 
 final case class PaginationResponse(
     page: Int,
@@ -176,6 +181,10 @@ final case class MatchSummaryResponse(
     updatedAt: String,
     ranks: List[MatchRankEntry],
     hasNote: Option[Boolean],
+    heldAt: Option[String] = None,
+    gameTitleName: Option[String] = None,
+    seasonName: Option[String] = None,
+    mapName: Option[String] = None,
 ) derives Codec.AsObject
 
 final case class MatchNoteResponse(
@@ -237,6 +246,10 @@ final case class MatchDetailResponse(
     createdByMemberId: Option[String],
     createdAt: String,
     note: MatchNoteResponse,
+    heldAt: Option[String] = None,
+    gameTitleName: Option[String] = None,
+    seasonName: Option[String] = None,
+    mapName: Option[String] = None,
 ) derives Codec.AsObject
 
 final case class UpdateMatchResponse(
@@ -275,11 +288,15 @@ object MatchSummaryResponse:
       )
     ),
     hasNote = item.hasNote,
+    heldAt = item.heldAt.map(DateTimeFormatter.ISO_INSTANT.format),
+    gameTitleName = item.labels.gameTitleName,
+    seasonName = item.labels.seasonName,
+    mapName = item.labels.mapName,
   )
 
 object MatchDetailResponse:
   import momo.api.domain.MatchRecord
-  import momo.api.usecases.matches.MatchDetail
+  import momo.api.domain.MatchDetail
   def from(record: MatchRecord): MatchDetailResponse = from(MatchDetail(record, None))
   def from(detail: MatchDetail): MatchDetailResponse =
     val r = detail.record
@@ -316,6 +333,10 @@ object MatchDetailResponse:
       createdByAccountId = r.createdByAccountId.value,
       createdByMemberId = r.createdByMemberId.map(_.value),
       createdAt = DateTimeFormatter.ISO_INSTANT.format(r.createdAt),
+      heldAt = detail.heldAt.map(DateTimeFormatter.ISO_INSTANT.format),
+      gameTitleName = detail.labels.gameTitleName,
+      seasonName = detail.labels.seasonName,
+      mapName = detail.labels.mapName,
       note = MatchNoteResponse(
         body = r.note.body.map(_.value),
         version = r.note.version.value.toString,
@@ -327,3 +348,20 @@ object MatchDetailResponse:
 final case class DeleteMatchResponse(matchId: String, deleted: Boolean) derives Codec.AsObject
 
 final case class OcrDraftListResponse(items: List[OcrDraftResponse]) derives Codec.AsObject
+
+final case class MatchIdentityResponse(
+    matchId: String,
+    matchNoInEvent: Int,
+    playedAt: String,
+    gameTitleName: Option[String],
+    seasonName: Option[String],
+) derives Codec.AsObject
+
+object MatchIdentityResponse:
+  def from(identity: momo.api.domain.MatchIdentity): MatchIdentityResponse = MatchIdentityResponse(
+    identity.id.value,
+    identity.matchNoInEvent.value,
+    DateTimeFormatter.ISO_INSTANT.format(identity.playedAt),
+    identity.gameTitleName,
+    identity.seasonName,
+  )

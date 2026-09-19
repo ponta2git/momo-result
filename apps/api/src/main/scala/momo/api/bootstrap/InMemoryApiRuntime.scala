@@ -12,6 +12,7 @@ import momo.api.auth.{DiscordOAuthClient, MemberRoster}
 import momo.api.config.AppConfig
 import momo.api.domain.{LoginAccount, Member}
 import momo.api.ports.queue.OcrJobQueuePublisher
+import momo.api.ports.storage.ImageStorage
 import momo.api.repositories.{
   ImageReferenceRepository,
   MatchNotesRepository,
@@ -40,7 +41,7 @@ private[bootstrap] object InMemoryApiRuntime:
       given LoggerFactory[F] = Slf4jFactory.create[F]
       val imageStore = LocalFsImageStore[F](config.imageTmpDir)
 
-      Resource.eval(createParts[F](config, infrastructure.queue)).flatMap { parts =>
+      Resource.eval(createParts[F](config, infrastructure.queue, imageStore)).flatMap { parts =>
         val imageCleaner = SourceImageOrphanReaper.referenceAwareCleaner(
           imageStore,
           parts.imageReferences,
@@ -64,7 +65,6 @@ private[bootstrap] object InMemoryApiRuntime:
           ocrMaintenance = parts.ocrMaintenance,
           appSessions = parts.repositories.appSessions,
           idempotency = parts.repositories.idempotency,
-          seriesAnalysisHistory = None,
           now = Clock[F].realTimeInstant,
         ).evalMap { _ =>
           UseCaseWiring.assemble(
@@ -92,6 +92,7 @@ private[bootstrap] object InMemoryApiRuntime:
   private def createParts[F[_]: Async: LoggerFactory](
       config: AppConfig,
       queue: OcrJobQueuePublisher[F],
+      imageStore: ImageStorage[F],
   ): F[RuntimeParts[F]] =
     for
       matchDrafts <- InMemoryMatchDraftsRepository.create[F]
@@ -104,8 +105,6 @@ private[bootstrap] object InMemoryApiRuntime:
       matches = InMemoryMatchesRepository
         .withConfirmedDraftCleanup[F](matchesBase, matchDrafts)
       matchNotes: MatchNotesRepository[F] = matchesBase
-      matchExports = matchesBase
-      matchList = InMemoryMatchListReadModel[F](matches, matchDrafts)
       matchConfirmation = InMemoryMatchConfirmationRepository[F](
         matches,
         matchesBase.create,
@@ -166,6 +165,8 @@ private[bootstrap] object InMemoryApiRuntime:
       incidentMasters <- InMemoryIncidentMastersRepository.create[F]
       memberAliases <- InMemoryMemberAliasesRepository.create[F]
       idempotency <- InMemoryIdempotencyRepository.create[F]
+      metadata = InMemoryMatchMetadata[F](heldEvents, gameTitles, seasonMasters, mapMasters)
+      matchList = InMemoryMatchListReadModel[F](matches, matchDrafts, metadata)
       notificationSettings <- InMemoryNotificationSettingsRepository.create[F]
       ocrJobCreationStore = InMemoryOcrJobCreationStore[F](
         drafts,
@@ -184,11 +185,23 @@ private[bootstrap] object InMemoryApiRuntime:
         jobs = jobs,
         drafts = drafts,
         heldEvents = heldEvents,
+        heldEventList = InMemoryHeldEventListReadModel[F](
+          heldEvents,
+          matches,
+          matchDrafts,
+          gameTitles,
+          seasonMasters,
+        ),
+        heldEventDetails =
+          InMemoryHeldEventDetailReadModel[F](heldEvents, matches, matchList, metadata),
         heldEventDeletion = heldEventDeletion,
         matches = matches,
+        matchDetails = InMemoryMatchDetailReadModel[F](matches, loginAccounts, metadata),
         matchNotes = matchNotes,
-        matchExports = matchExports,
+        matchExports =
+          InMemoryMatchExportsRepository[F](matches, members, mapMasters, seasonMasters),
         matchDrafts = matchDrafts,
+        matchDraftReviews = InMemoryMatchDraftReviewReadModel[F](matchDrafts, drafts, imageStore),
         matchDraftCancellation = matchDraftCancellation,
         matchList = matchList,
         seriesAnalysis = seriesAnalysis,

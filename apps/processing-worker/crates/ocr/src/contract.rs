@@ -116,9 +116,14 @@ impl OcrHints {
         &self.known_player_aliases
     }
 
-    #[must_use]
-    pub(crate) fn computer_player_aliases(&self) -> &[String] {
-        &self.computer_player_aliases
+    pub(crate) fn computer_player_aliases(&self) -> impl Iterator<Item = &str> {
+        self.computer_player_aliases
+            .iter()
+            .map(String::as_str)
+            .chain(
+                (self.computer_player_aliases.is_empty() && self.layout_family() == Some("reiwa"))
+                    .then_some("さくま"),
+            )
     }
 
     /// Validates bounded hint values after transport decoding.
@@ -237,4 +242,30 @@ fn valid_hint_text(value: &str) -> bool {
 
 fn valid_bounded_text(value: &str, maximum_characters: usize) -> bool {
     !value.is_empty() && value.chars().count() <= maximum_characters
+}
+
+#[cfg(test)]
+mod tests {
+    use super::OcrHints;
+
+    #[test]
+    fn computer_player_defaults_belong_to_recognition_and_preserve_explicit_aliases() {
+        for (layout, supplied, expected) in [
+            ("reiwa", vec![], vec!["さくま"]),
+            ("world", vec![], vec![]),
+            ("momotetsu_2", vec![], vec![]),
+            ("reiwa", vec!["えんま"], vec!["えんま"]),
+            ("reiwa", vec!["さくま"], vec!["さくま"]),
+        ] {
+            let hints = OcrHints {
+                layout_family: Some(String::from(layout)),
+                computer_player_aliases: supplied.into_iter().map(String::from).collect(),
+                ..OcrHints::default()
+            };
+            assert_eq!(
+                hints.computer_player_aliases().collect::<Vec<_>>(),
+                expected
+            );
+        }
+    }
 }

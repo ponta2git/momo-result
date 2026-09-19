@@ -14,7 +14,9 @@ import org.typelevel.log4cats.LoggerFactory
 import momo.api.logging.SafeLog
 
 private[api] object PostgresSeriesAnalysisReaderCapability:
-  private val HeartbeatInterval = 20.seconds
+  // Keep this below the worker release gate's capability freshness window, including one retry.
+  // This advertises reader compatibility; it is independent of an active job's lease heartbeat.
+  private val HeartbeatInterval = 60.seconds
 
   def resource[F[_]: Async: LoggerFactory](transactor: Transactor[F]): Resource[F, Unit] =
     Resource.eval(Async[F].delay(SeriesAnalysisPayloadValidator.ensureReady())) *>

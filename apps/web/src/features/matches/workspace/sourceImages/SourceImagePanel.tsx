@@ -106,6 +106,12 @@ function SourceImagePanelContent({
             {panel.archiveError}
           </p>
         ) : null}
+        {panel.sourceImagesChanged ? (
+          <p className="mt-1 text-sm text-[var(--color-danger)]" role="alert">
+            元画像または記録が更新されています。入力内容はこの画面に保持されています。
+            未保存の入力を控えてから画面を再読み込みし、最新の画像と読み取り結果を確認してください。
+          </p>
+        ) : null}
       </div>
 
       <TabsRoot
@@ -160,6 +166,12 @@ function SourceImagePanelContent({
                         元画像を再読み込み
                       </Button>
                     </div>
+                  ) : null}
+
+                  {!loading && panel.activeImage?.status === "replaced" ? (
+                    <p className={contentText.body}>
+                      元画像が差し替えられたため、この画面では表示できません。
+                    </p>
                   ) : null}
 
                   {!loading && panel.activeState?.status === "available" && panel.displayUrl ? (

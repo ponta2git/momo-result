@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
-import { heldEventDetailQueryOptions, heldEventsQueryOptions } from "@/shared/api/queryOptions";
+import { heldEventSummaryQueryOptions, heldEventsQueryOptions } from "@/shared/api/queryOptions";
 import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 export const heldEventPickerPageSize = 20;
@@ -41,27 +41,27 @@ export function useHeldEventPickerDirectory({
   const heldEvents = directoryQuery.data?.items ?? [];
   const selectedOnPage = heldEvents.find((event) => event.id === selectedId);
   const suppliedSelection = selectedEvent?.id === selectedId ? selectedEvent : undefined;
-  const resolvedWithoutDetail = selectedOnPage ?? suppliedSelection;
-  const selectedDetailQuery = useQuery(
-    heldEventDetailQueryOptions(
+  const resolvedWithoutSummary = selectedOnPage ?? suppliedSelection;
+  const selectedSummaryQuery = useQuery(
+    heldEventSummaryQueryOptions(
       selectedId,
-      enabled && Boolean(selectedId) && !resolvedWithoutDetail,
+      enabled && Boolean(selectedId) && !resolvedWithoutSummary,
     ),
   );
-  const resolvedSelection = resolvedWithoutDetail ?? selectedDetailQuery.data;
+  const resolvedSelection = resolvedWithoutSummary ?? selectedSummaryQuery.data;
   const scopeChanging = Boolean(directoryQuery.isPlaceholderData && directoryQuery.isFetching);
 
   const directoryFailed = shouldShowQueryError(directoryQuery);
   const selectionFailed = Boolean(
-    selectedId && !resolvedSelection && shouldShowQueryError(selectedDetailQuery),
+    selectedId && !resolvedSelection && shouldShowQueryError(selectedSummaryQuery),
   );
   const error = useRetryNotice(
     directoryFailed
       ? pickerErrorMessage(directoryQuery.error)
       : selectionFailed
-        ? pickerErrorMessage(selectedDetailQuery.error)
+        ? pickerErrorMessage(selectedSummaryQuery.error)
         : undefined,
-    directoryQuery.isFetching || selectedDetailQuery.isFetching,
+    directoryQuery.isFetching || selectedSummaryQuery.isFetching,
     `${page}:${selectedId}`,
   );
 
@@ -71,10 +71,10 @@ export function useHeldEventPickerDirectory({
     pagination: directoryQuery.data?.pagination,
     pending:
       directoryQuery.isFetching ||
-      Boolean(selectedId && !resolvedSelection && selectedDetailQuery.isFetching),
+      Boolean(selectedId && !resolvedSelection && selectedSummaryQuery.isFetching),
     refetch: async (options?: HeldEventPickerRefetchOptions) => {
-      await directoryQuery.refetch(options);
-      if (selectionFailed) await selectedDetailQuery.refetch(options);
+      await directoryQuery.refetch({ cancelRefetch: false, ...options });
+      if (selectionFailed) await selectedSummaryQuery.refetch({ cancelRefetch: false, ...options });
     },
     selectedHeldEvent: resolvedSelection,
     onPageChange: (nextPage: number) => {

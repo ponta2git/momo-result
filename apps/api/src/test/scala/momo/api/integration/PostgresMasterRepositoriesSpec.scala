@@ -2,7 +2,7 @@ package momo.api.integration
 
 import java.time.Instant
 
-import cats.effect.IO
+import cats.effect.{Deferred, IO, Resource}
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
@@ -36,6 +36,68 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
       _ <- seasonMasters
         .createWithNextDisplayOrder(SeasonMaster(seasonId, titleId, "テスト期間", 1, now))
     yield ()
+
+  List("title", "map", "season").foreach { kind =>
+    test(s"$kind display order allocation observes a concurrent creator after its lock wait") {
+      val (lockKey, firstInsert, createSecond) = kind match
+        case "title" => (
+            "momo:game_titles:display_order",
+            """INSERT INTO game_titles (id, name, layout_family, display_order, created_at)
+              |SELECT 'title-concurrent-first', 'First concurrent title', 'world',
+              |       COALESCE(MAX(display_order), 0) + 1, now() FROM game_titles
+              |RETURNING display_order""".stripMargin,
+            gameTitles.createWithNextDisplayOrder(GameTitle(
+              GameTitleId.unsafeFromString("title-concurrent-second"),
+              "Second concurrent title",
+              "world",
+              1,
+              now
+            )).map(_.map(_.displayOrder)),
+          )
+        case "map" => (
+            s"momo:map_masters:${titleId.value}:display_order",
+            """INSERT INTO map_masters (id, game_title_id, name, display_order, created_at)
+              |SELECT 'map-concurrent-first', 'title_test', 'First concurrent map',
+              |       COALESCE(MAX(display_order), 0) + 1, now()
+              |FROM map_masters WHERE game_title_id = 'title_test'
+              |RETURNING display_order""".stripMargin,
+            mapMasters.createWithNextDisplayOrder(MapMaster(
+              MapMasterId.unsafeFromString("map-concurrent-second"),
+              titleId,
+              "Second concurrent map",
+              1,
+              now
+            )).map(_.map(_.displayOrder)),
+          )
+        case _ => (
+            s"momo:season_masters:${titleId.value}:display_order",
+            """INSERT INTO season_masters (id, game_title_id, name, display_order, created_at)
+              |SELECT 'season-concurrent-first', 'title_test', 'First concurrent season',
+              |       COALESCE(MAX(display_order), 0) + 1, now()
+              |FROM season_masters WHERE game_title_id = 'title_test'
+              |RETURNING display_order""".stripMargin,
+            seasonMasters.createWithNextDisplayOrder(SeasonMaster(
+              SeasonMasterId.unsafeFromString("season-concurrent-second"),
+              titleId,
+              "Second concurrent season",
+              1,
+              now
+            )).map(_.map(_.displayOrder)),
+          )
+      for
+        _ <- seedTitle
+        locked <- Deferred[IO, (Int, Int)]
+        release <- Deferred[IO, Unit]
+        first <- holdDisplayOrderAllocation(lockKey, firstInsert, locked, release).start
+        observed <- locked.get
+        (backend, firstOrder) = observed
+        second <- createSecond.start
+        result <-
+        (awaitBackendBlockedBy(backend) *> release.complete(()) *>
+          first.joinWithNever *> second.joinWithNever).guarantee(release.complete(()).void)
+      yield assertEquals(result, Right(firstOrder + 1))
+    }
+  }
 
   test("game titles update and delete unused rows"):
     val update = new UpdateGameTitle[IO](gameTitles)
@@ -304,5 +366,39 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
       duplicate,
       Left(AppError.Conflict("member alias already exists: ポン太社長")),
     )
+
+  private def holdDisplayOrderAllocation(
+      lockKey: String,
+      insertSql: String,
+      locked: Deferred[IO, (Int, Int)],
+      release: Deferred[IO, Unit],
+  ): IO[Unit] =
+    Resource.fromAutoCloseable(IO.blocking(dataSource.getConnection)).use { connection =>
+      val insert = IO.blocking {
+        connection.setAutoCommit(false)
+        val lock = connection.prepareStatement(
+          "SELECT pg_advisory_xact_lock(hashtext(?)::bigint), pg_backend_pid()"
+        )
+        val backend = try
+          lock.setString(1, lockKey)
+          val rows = lock.executeQuery()
+          try
+            if !rows.next() then fail("advisory lock did not return a backend")
+            rows.getInt(2)
+          finally rows.close()
+        finally lock.close()
+        val statement = connection.createStatement()
+        val order = try
+          val rows = statement.executeQuery(insertSql)
+          try
+            if !rows.next() then fail("concurrent creator did not insert a master")
+            rows.getInt(1)
+          finally rows.close()
+        finally statement.close()
+        (backend, order)
+      }
+      (insert.flatMap(locked.complete) *> release.get *> IO.blocking(connection.commit()))
+        .onError(_ => IO.blocking(connection.rollback()))
+    }
 
 end PostgresMasterRepositoriesSpec

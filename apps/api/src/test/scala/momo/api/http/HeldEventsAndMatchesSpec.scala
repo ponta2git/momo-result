@@ -524,6 +524,18 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
         accountId = "account_eu",
       ))
       sourceImageListBody <- sourceImageListRes.as[Json]
+      items = jsonField[List[Json]](sourceImageListBody, "items")
+      descriptorUrl = jsonField[String](items.head, "imageUrl")
+      pinnedImageRes <- httpApp.run(readGet(Uri.unsafeFromString(descriptorUrl)))
+      pinnedBody <- pinnedImageRes.as[Array[Byte]]
+      mismatchRes <- httpApp.run(readGet(Uri.unsafeFromString(
+        s"/api/match-drafts/$matchDraftId/source-images/total_assets?imageId=other-image"
+      )))
+      _ <- assertProblem(mismatchRes, Status.Conflict, "CONFLICT", "Source image changed")
+      invalidRes <- httpApp.run(readGet(Uri.unsafeFromString(
+        s"/api/match-drafts/$matchDraftId/source-images/total_assets?imageId=%20"
+      )))
+      _ <- assertProblem(invalidRes, Status.UnprocessableContent, "VALIDATION_FAILED", "imageId")
       sourceImageRes <- httpApp.run(readGet(
         Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/source-images/total_assets"),
         accountId = "account_eu",
@@ -531,8 +543,13 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
       body <- sourceImageRes.as[Array[Byte]]
     yield
       assertEquals(sourceImageListRes.status, Status.Ok)
-      val items = jsonField[List[Json]](sourceImageListBody, "items")
       assertEquals(items.map(item => jsonField[String](item, "kind")), List("total_assets"))
+      assertEquals(
+        descriptorUrl,
+        s"/api/match-drafts/$matchDraftId/source-images/total_assets?imageId=$imageId"
+      )
+      assertEquals(pinnedImageRes.status, Status.Ok)
+      assertEquals(pinnedBody.toVector, pngBytes.toVector)
       assertEquals(sourceImageRes.status, Status.Ok)
       assertEquals(optionalHeaderValue(sourceImageRes, CIString("Content-Type")), Some("image/png"))
       assertEquals(body.toVector, pngBytes.toVector)
@@ -562,12 +579,40 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
             .createOcrJob(incidentLogImageId, "incident_log", matchDraftId),
         ))
         _ = assertEquals(incidentLogJobRes.status, Status.Ok)
+        reviewRes <-
+          httpApp.run(readGet(Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/review")))
+        review <- reviewRes.as[Json]
+        image = jsonField[List[Json]](review, "sourceImages").head
+        revision = jsonField[String](image, "createdAt")
+        pinnedArchiveRes <- httpApp.run(readGet(
+          Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/source-images.zip")
+            .withQueryParam("updatedAt", revision)
+        ))
+        pinnedBody <- pinnedArchiveRes.as[Array[Byte]]
+        staleRes <- httpApp.run(readGet(
+          Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/source-images.zip")
+            .withQueryParam("updatedAt", "2000-01-01T00:00:00Z")
+        ))
+        _ <- assertProblem(staleRes, Status.Conflict, "CONFLICT", "Draft changed")
+        invalidRes <- httpApp.run(readGet(
+          Uri.unsafeFromString(
+            s"/api/match-drafts/$matchDraftId/source-images.zip?updatedAt=invalid"
+          )
+        ))
+        _ <-
+          assertProblem(invalidRes, Status.UnprocessableContent, "VALIDATION_FAILED", "updatedAt")
         archiveRes <- httpApp.run(readGet(
           Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/source-images.zip"),
           accountId = "account_eu",
         ))
         body <- archiveRes.as[Array[Byte]]
       yield
+        assertEquals(pinnedArchiveRes.status, Status.Ok)
+        assertEquals(zipEntryNames(pinnedBody), zipEntryNames(body))
+        assertEquals(
+          jsonField[String](image, "imageUrl"),
+          s"/api/match-drafts/$matchDraftId/source-images/total_assets?imageId=$totalAssetsImageId"
+        )
         assertEquals(archiveRes.status, Status.Ok)
         assertEquals(
           optionalHeaderValue(archiveRes, CIString("Content-Type")),

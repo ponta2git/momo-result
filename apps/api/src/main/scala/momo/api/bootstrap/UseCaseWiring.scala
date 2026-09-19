@@ -7,6 +7,9 @@ import cats.syntax.all.*
 import org.typelevel.log4cats.LoggerFactory
 
 import momo.api.auth.{
+  AccountAccess,
+  CompleteOAuthCallback,
+  CompleteOAuthLogin,
   CsrfTokenService,
   DiscordOAuthClient,
   MemberRoster,
@@ -38,21 +41,14 @@ private[bootstrap] object UseCaseWiring:
 
   private[bootstrap] object RuntimeIds:
     def fresh[F[_]: Apply: Random]: RuntimeIds[F] =
-      val nextOcrJobId = OcrJobId.fresh[F]
-      val nextOcrDraftId = OcrDraftId.fresh[F]
-      val nextHeldEventId = HeldEventId.fresh[F]
-      val nextMatchDraftId = MatchDraftId.fresh[F]
-      val nextMatchId = MatchId.fresh[F]
-      val nextMemberAliasId = MemberAliasId.fresh[F]
-      val nextLoginAccountId = AccountId.fresh[F]
       RuntimeIds(
-        nextOcrJobId = nextOcrJobId,
-        nextOcrDraftId = nextOcrDraftId,
-        nextHeldEventId = nextHeldEventId,
-        nextMatchDraftId = nextMatchDraftId,
-        nextMatchId = nextMatchId,
-        nextMemberAliasId = nextMemberAliasId,
-        nextLoginAccountId = nextLoginAccountId,
+        nextOcrJobId = OcrJobId.fresh[F],
+        nextOcrDraftId = OcrDraftId.fresh[F],
+        nextHeldEventId = HeldEventId.fresh[F],
+        nextMatchDraftId = MatchDraftId.fresh[F],
+        nextMatchId = MatchId.fresh[F],
+        nextMemberAliasId = MemberAliasId.fresh[F],
+        nextLoginAccountId = AccountId.fresh[F],
       )
 
   private[bootstrap] final case class RuntimeAuthServices[F[_]](
@@ -68,9 +64,13 @@ private[bootstrap] object UseCaseWiring:
         config: AuthConfig,
         now: F[java.time.Instant],
     ): RuntimeAuthServices[F] = RuntimeAuthServices(
-      sessionService = SessionService[F](sessions, config, now, sessionAccounts),
+      sessionService = SessionService[F](sessions, config.sessionTtl, now, sessionAccounts),
       csrfTokenService = CsrfTokenService(),
-      oauthStateCodec = OAuthStateCodec[F](config, now),
+      oauthStateCodec = OAuthStateCodec[F](
+        config.stateSigningKey.getOrElse("development-only-oauth-state-signing-key"),
+        config.stateTtl,
+        now,
+      ),
     )
 
   private[bootstrap] def imageStorageAdmissionConfig(
@@ -96,11 +96,15 @@ private[bootstrap] object UseCaseWiring:
       jobs: OcrJobsRepository[F],
       drafts: OcrDraftsRepository[F],
       heldEvents: HeldEventsRepository[F],
+      heldEventDetails: HeldEventDetailReadModel[F],
+      heldEventList: HeldEventListReadModel[F],
       heldEventDeletion: HeldEventDeletionRepository[F],
       matches: MatchesRepository[F],
+      matchDetails: MatchDetailReadModel[F],
       matchNotes: MatchNotesRepository[F],
       matchExports: MatchExportsRepository[F],
       matchDrafts: MatchDraftsRepository[F],
+      matchDraftReviews: MatchDraftReviewReadModel[F],
       matchDraftCancellation: MatchDraftCancellationRepository[F],
       matchList: MatchListReadModel[F],
       seriesAnalysis: SeriesAnalysisRepository[F],
@@ -158,14 +162,23 @@ private[bootstrap] object UseCaseWiring:
       .liftTo[F].map { roster =>
         val authDependencies = HttpRoutes.AuthDependencies(
           roster = roster,
-          loginAccounts = repositories.loginAccounts,
+          accountAccess = AccountAccess[F](repositories.loginAccounts),
           oauthClient = services.oauthClient,
           sessionService = authServices.sessionService,
           csrfTokenService = authServices.csrfTokenService,
           oauthStateCodec = authServices.oauthStateCodec,
           loginRateLimiter = services.loginRateLimiter,
-          authCallbackStateRateLimiter = services.authCallbackStateRateLimiter,
-          oauthProviderBackoff = services.oauthProviderBackoff,
+          completeOAuthCallback = CompleteOAuthCallback[F](
+            authServices.oauthStateCodec,
+            CompleteOAuthLogin[F](
+              services.oauthClient,
+              authServices.sessionService,
+              repositories.loginAccounts,
+              services.oauthProviderBackoff
+            ),
+            services.authCallbackStateRateLimiter,
+            config.auth.callbackRedirectPath,
+          ),
         )
         val (app, registeredEndpoints) = HttpRoutes.routesWithEndpoints(HttpRoutes.Dependencies(
           config = config,

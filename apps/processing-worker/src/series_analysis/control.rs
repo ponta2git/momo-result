@@ -10,6 +10,7 @@ pub(crate) const ALGORITHM_VERSION: &str = "series-analysis-v5";
 mod capability;
 mod claim;
 mod completion;
+mod history;
 mod lifecycle;
 mod publication;
 mod recovery;
@@ -25,6 +26,7 @@ pub(crate) use capability::{
 };
 pub(crate) use claim::claim_job;
 pub(crate) use completion::publish;
+pub(crate) use history::{HISTORY_CLEANUP_INTERVAL, cleanup_history};
 pub(crate) use lifecycle::{
     finish_failure, heartbeat, requeue_interrupted, retry_transient_failure, supersede,
 };

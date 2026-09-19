@@ -15,6 +15,7 @@ export type OcrSubmissionInput = {
 
 export type OcrSubmissionPlan = OcrSubmissionInput & {
   hints: OcrJobHintsRequest;
+  playedAt: string;
   selectedSlotLabels: string[];
   setupSummary: {
     gameTitle: string;
@@ -51,6 +52,7 @@ export function buildOcrSubmissionPlan({
   const { selectedGameTitle, selectedHeldEvent } = setupOptions;
   const layoutFamily = parseLayoutFamily(selectedGameTitle?.layoutFamily);
   return {
+    playedAt: selectedHeldEvent?.heldAt ?? new Date().toISOString(),
     hints: {
       knownPlayerAliases: [],
       computerPlayerAliases: [],

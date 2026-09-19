@@ -1,21 +1,16 @@
 package momo.api.repositories
 
-import java.time.Instant
-
 import cats.~>
 
-import momo.api.domain.FourPlayers
+import momo.api.domain.MatchExportRow
 import momo.api.domain.ids.*
 
 trait MatchExportsAlg[F0[_]]:
   /**
-   * Returns at most `selection.limit` recent matches, ordered by the stable export order. Sequence
-   * values are evaluated against all matches in the corresponding season and game title before
-   * the selection is applied.
+   * Projects at most `selection.limit` recent matches in stable export order, four rows each.
+   * Sequence numbers include full season/title history; names and results share one snapshot.
    */
-  def project(
-      selection: MatchExportsRepository.Selection
-  ): F0[List[MatchExportsRepository.ProjectedMatch]]
+  def project(selection: MatchExportsRepository.Selection): F0[List[MatchExportRow]]
 
 trait MatchExportsRepository[F[_]] extends MatchExportsAlg[F]
 
@@ -27,26 +22,9 @@ object MatchExportsRepository:
       limit: Int,
   )
 
-  /**
-   * Export-only read model. It deliberately excludes creation metadata and OCR draft references;
-   * adapters materialize player and incident children only for these selected parents.
-   */
-  final case class ProjectedMatch(
-      id: MatchId,
-      seasonMasterId: SeasonMasterId,
-      ownerMemberId: MemberId,
-      mapMasterId: MapMasterId,
-      playedAt: Instant,
-      seasonSequence: Int,
-      gameTitleSequence: Int,
-      players: FourPlayers,
-  )
-
   def fromAlg[F0[_], F[_]](
       alg: MatchExportsAlg[F0],
       liftK: F0 ~> F,
   ): MatchExportsRepository[F] = new MatchExportsRepository[F]:
-    override def project(selection: Selection): F[List[ProjectedMatch]] =
+    override def project(selection: Selection): F[List[MatchExportRow]] =
       liftK(alg.project(selection))
-
-end MatchExportsRepository

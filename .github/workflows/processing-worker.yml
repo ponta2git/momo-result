@@ -133,6 +133,7 @@ jobs:
         env:
           OCR_CONTROL_SMOKE_DATABASE_URL: ${{ env.DATABASE_URL }}
           OCR_CONTROL_SMOKE_REDIS_URL: ${{ env.REDIS_URL }}
+          ANALYSIS_SMOKE_SERVICES_ARE_ISOLATED: "true"
         run: ../../scripts/ci/ocr-rust-control-plane-smoke.sh
 
   runtime-image:

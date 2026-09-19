@@ -117,6 +117,22 @@ final class PostgresMatchListReadModelSpec extends IntegrationSuite:
     updatedAt = updatedAt,
   ).getOrElse(fail("invalid draft fixture"))
 
+  test("list carries event time and only the referenced master names"):
+    for
+      _ <- seedPrereqs
+      _ <- createMatch(sampleMatch("display-list", 1, baseTime.plusSeconds(3600)))
+      _ <- drafts.create(sampleDraft("display-draft", MatchDraftStatus.DraftReady, baseTime))
+      page <- matchList.list(MatchListReadModel.Filter())
+    yield
+      assertEquals(page.items.size, 2)
+      assert(page.items.forall(_.heldAt.contains(baseTime)))
+      page.items.foreach(item =>
+        assertEquals(
+          item.labels,
+          MatchLabels(Some("桃太郎電鉄ワールド"), Some("2024-spring"), Some("東日本編"))
+        )
+      )
+
   test("default list returns confirmed matches and active drafts without union SQL errors"):
     for
       _ <- seedPrereqs
@@ -450,12 +466,27 @@ final class PostgresMatchListReadModelSpec extends IntegrationSuite:
         MatchDraftStatus.NeedsReview,
         Instant.parse("2026-04-30T03:00:00Z"),
       ))
-      summary <- matchList.summarize(MatchListReadModel.SummaryFilter())
+      _ <- drafts.create(sampleDraft("draft_running", MatchDraftStatus.OcrRunning, baseTime))
+      _ <- drafts.create(sampleDraft("draft_failed", MatchDraftStatus.OcrFailed, baseTime))
+      _ <- drafts.create(sampleDraft("draft_cancelled", MatchDraftStatus.Cancelled, baseTime))
+      _ <- drafts.create(MatchDraft.Confirmed(
+        sampleDraft("draft_confirmed", MatchDraftStatus.DraftReady, baseTime).common,
+        MatchId.unsafeFromString("match_confirmed"),
+      ))
+      _ <- drafts.create(sampleDraft("draft_outside", MatchDraftStatus.NeedsReview, baseTime)
+        .withCommon(_.copy(heldEventId = None, gameTitleId = None, seasonMasterId = None)))
+      summary <- matchList.summarize(MatchListReadModel.SummaryFilter(
+        heldEventId = Some(heldEventId),
+        gameTitleId = Some(gameTitleId),
+        seasonMasterId = Some(seasonMasterId),
+      ))
+      all <- matchList.summarize(MatchListReadModel.SummaryFilter())
     yield
-      assertEquals(summary.incompleteCount, 2)
-      assertEquals(summary.ocrRunningCount, 0)
-      assertEquals(summary.preConfirmCount, 2)
+      assertEquals(summary.incompleteCount, 4)
+      assertEquals(summary.ocrRunningCount, 1)
+      assertEquals(summary.preConfirmCount, 3)
       assertEquals(summary.needsReviewCount, 1)
+      assertEquals(all, MatchListSummary(5, 1, 4, 2))
 
   test("lists all active drafts for one held event in match-number order"):
     val fourth = sampleDraft(

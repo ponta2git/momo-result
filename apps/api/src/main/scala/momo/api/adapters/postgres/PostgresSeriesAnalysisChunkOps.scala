@@ -159,8 +159,7 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
             val exclusion =
               if current.gameTitleId != request.gameTitleId then
                 Some(SeriesAnalysisMatchContextExclusion.MatchChangedSinceArtifact)
-              else if !PostgresSeriesAnalysisScopeOps.contains(
-                  request.scope,
+              else if !request.scope.contains(
                   current.seasonMasterId,
                   current.mapMasterId,
                 )

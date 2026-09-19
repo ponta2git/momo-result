@@ -1,12 +1,11 @@
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
 import {
-  fetchGameTitles,
-  fetchIncidentMasters,
-  fetchMapMasters,
-  fetchMemberAliases,
-  fetchSeasonMasters,
-  masterQueryKeys,
+  selectGameTitles,
+  selectIncidentMasters,
+  selectMapMasters,
+  selectMemberAliases,
+  selectSeasonMasters,
 } from "@/features/masters/masterQueries";
 import type {
   GameTitleResponse,
@@ -15,6 +14,13 @@ import type {
   MemberAliasResponse,
   SeasonMasterResponse,
 } from "@/shared/api/masters";
+import {
+  gameTitlesQueryOptions,
+  incidentMastersQueryOptions,
+  mapMastersQueryOptions,
+  memberAliasesQueryOptions,
+  seasonMastersQueryOptions,
+} from "@/shared/api/queryOptions";
 
 const noGameTitles: GameTitleResponse[] = [];
 const noIncidentMasters: IncidentMasterResponse[] = [];
@@ -23,28 +29,23 @@ const noMemberAliases: MemberAliasResponse[] = [];
 const noSeasonMasters: SeasonMasterResponse[] = [];
 
 export function useMasterResourceQueries(
-  authScope: string,
   selectedGameTitleId: string,
-  enabled: boolean,
+  enabled: { catalog: boolean; aliases: boolean; incidents: boolean },
 ) {
-  const [gameTitlesQuery, incidentMastersQuery, memberAliasesQuery] = useQueries({
-    queries: [
-      {
-        queryKey: masterQueryKeys.gameTitles(authScope),
-        queryFn: ({ signal }) => fetchGameTitles({ signal }),
-        enabled,
-      },
-      {
-        queryKey: masterQueryKeys.incidentMasters(authScope),
-        queryFn: ({ signal }) => fetchIncidentMasters({ signal }),
-        enabled,
-      },
-      {
-        queryKey: masterQueryKeys.memberAliases(authScope),
-        queryFn: ({ signal }) => fetchMemberAliases({ signal }),
-        enabled,
-      },
-    ],
+  const gameTitlesQuery = useQuery({
+    ...gameTitlesQueryOptions(),
+    select: selectGameTitles,
+    enabled: enabled.catalog,
+  });
+  const incidentMastersQuery = useQuery({
+    ...incidentMastersQueryOptions(),
+    select: selectIncidentMasters,
+    enabled: enabled.incidents,
+  });
+  const memberAliasesQuery = useQuery({
+    ...memberAliasesQueryOptions(),
+    select: selectMemberAliases,
+    enabled: enabled.aliases,
   });
   const gameTitles = gameTitlesQuery.data ?? noGameTitles;
   const effectiveSelectedGameTitleId = gameTitles.some(
@@ -54,15 +55,19 @@ export function useMasterResourceQueries(
     : (gameTitles[0]?.id ?? "");
 
   const mapMastersQuery = useQuery({
-    queryKey: masterQueryKeys.mapMasters(authScope, effectiveSelectedGameTitleId),
-    queryFn: ({ signal }) => fetchMapMasters(effectiveSelectedGameTitleId, { signal }),
-    enabled: enabled && Boolean(effectiveSelectedGameTitleId),
+    ...mapMastersQueryOptions(
+      effectiveSelectedGameTitleId,
+      enabled.catalog && Boolean(effectiveSelectedGameTitleId),
+    ),
+    select: selectMapMasters,
   });
 
   const seasonMastersQuery = useQuery({
-    queryKey: masterQueryKeys.seasonMasters(authScope, effectiveSelectedGameTitleId),
-    queryFn: ({ signal }) => fetchSeasonMasters(effectiveSelectedGameTitleId, { signal }),
-    enabled: enabled && Boolean(effectiveSelectedGameTitleId),
+    ...seasonMastersQueryOptions(
+      effectiveSelectedGameTitleId,
+      enabled.catalog && Boolean(effectiveSelectedGameTitleId),
+    ),
+    select: selectSeasonMasters,
   });
 
   return {

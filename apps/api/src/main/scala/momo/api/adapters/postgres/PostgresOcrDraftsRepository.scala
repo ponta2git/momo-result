@@ -17,7 +17,7 @@ import momo.api.repositories.{OcrDraftsAlg, OcrDraftsRepository}
 
 object PostgresOcrDrafts:
 
-  private final case class Row(
+  private[postgres] final case class Row(
       id: OcrDraftId,
       jobId: OcrJobId,
       requestedScreenType: ScreenType,
@@ -30,7 +30,7 @@ object PostgresOcrDrafts:
       updatedAt: Instant,
   )
 
-  private def toDraft(r: Row): OcrDraft = OcrDraft(
+  private[postgres] def toDraft(r: Row): OcrDraft = OcrDraft(
     id = r.id,
     jobId = r.jobId,
     requestedScreenType = r.requestedScreenType,

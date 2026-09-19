@@ -101,9 +101,6 @@ object PostgresLoginAccounts:
       data: UpdateLoginAccountData,
   ): ConnectionIO[Option[LoginAccount]] =
     (sql"""
-        WITH admin_guard AS (
-          SELECT pg_advisory_xact_lock(hashtext('momo:login_accounts:admin_guard'))
-        )
         UPDATE momo_login_accounts
         SET display_name = COALESCE(${data.displayName}, display_name),
             player_member_id =
@@ -114,7 +111,6 @@ object PostgresLoginAccounts:
             login_enabled = COALESCE(${data.loginEnabled}, login_enabled),
             is_admin = COALESCE(${data.isAdmin}, is_admin),
             updated_at = ${data.updatedAt}
-        FROM admin_guard
         WHERE id = $id
           AND NOT (
             login_enabled = true
@@ -139,6 +135,10 @@ object PostgresLoginAccountAdministration:
       data: UpdateLoginAccountData,
   ): ConnectionIO[LoginAccountAdministrationUpdateResult] =
     for
+      // Acquire before reading either the account or the administrator count: a waiting command
+      // must use a fresh READ COMMITTED snapshot when deciding updates and session revocation.
+      _ <- sql"SELECT pg_advisory_xact_lock(hashtext('momo:login_accounts:admin_guard'))"
+        .query[Unit].unique
       existing <- PostgresLoginAccounts.alg.find(id)
       result <- existing match
         case None => LoginAccountAdministrationUpdateResult.NotFound.pure[ConnectionIO]

@@ -17,7 +17,6 @@ export const exportScopes = [
 
 export type ExportCandidateSupportIssue = {
   directory?: "load-failed" | "refresh-failed" | undefined;
-  names?: "load-failed" | "refresh-failed" | undefined;
   selectedTarget?: "refresh-failed" | undefined;
 };
 
@@ -25,8 +24,6 @@ export function buildCandidateSupportIssue(input: {
   directoryBlocking: boolean;
   directoryError: boolean;
   hasCurrentDirectoryData: boolean;
-  namesError: boolean;
-  namesLoadFailed: boolean;
   selectedTargetRefreshFailed: boolean;
 }): ExportCandidateSupportIssue | undefined {
   const directory =
@@ -35,15 +32,9 @@ export function buildCandidateSupportIssue(input: {
         ? "refresh-failed"
         : "load-failed"
       : undefined;
-  const names = input.namesError
-    ? input.namesLoadFailed
-      ? "load-failed"
-      : "refresh-failed"
-    : undefined;
-  if (!directory && !names && !input.selectedTargetRefreshFailed) return undefined;
+  if (!directory && !input.selectedTargetRefreshFailed) return undefined;
   return {
     directory,
-    names,
     selectedTarget: input.selectedTargetRefreshFailed ? "refresh-failed" : undefined,
   };
 }

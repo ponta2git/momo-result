@@ -2,7 +2,7 @@ package momo.api.integration
 
 import java.time.Instant
 
-import cats.effect.IO
+import cats.effect.{IO, Resource}
 import cats.syntax.all.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
@@ -71,6 +71,50 @@ final class PostgresLoginAccountAdministrationRepositorySpec extends Integration
         assertEquals(foundSession, Some(session))
         assertEquals(foundAccount.map(_.loginEnabled), Some(true))
 
+    program.guarantee(resetLoginAccountState)
+
+  test("a waiting account update preserves the administrator left by the preceding commit"):
+    val program =
+      for
+        _ <- resetLoginAccountState
+        _ <- accounts.create(backupAdminData)
+        session <- buildSession("concurrent-admin-session", "concurrent-admin-csrf")
+        _ <- sessions.upsert(session)
+        result <- Resource.fromAutoCloseable(IO.blocking(dataSource.getConnection)).use {
+          connection =>
+            for
+              blocker <- IO.blocking {
+                connection.setAutoCommit(false)
+                val statement = connection.createStatement()
+                try
+                  val rows = statement.executeQuery(
+                    "SELECT pg_backend_pid(), pg_advisory_xact_lock(hashtext('momo:login_accounts:admin_guard'))"
+                  )
+                  val pid = try
+                    assert(rows.next())
+                    rows.getInt(1)
+                  finally rows.close()
+                  val changed = statement.executeUpdate(
+                    "UPDATE momo_login_accounts SET login_enabled = false WHERE id = 'account_atomic_backup_admin'"
+                  )
+                  assertEquals(changed, 1)
+                  pid
+                finally statement.close()
+              }
+              result <-
+                administration.updateAndRevokeSessionsWhenDisabled(primaryAdminId, disableLogin)
+                  .background.use { completion =>
+                    awaitBackendBlockedBy(blocker) *> IO.blocking(connection.commit()) *>
+                      completion.flatMap(_.embedNever)
+                  }
+            yield result
+        }
+        found <- accounts.find(primaryAdminId)
+        keptSession <- sessions.find(session.idHash)
+      yield
+        assertEquals(result, LoginAccountAdministrationUpdateResult.LastEnabledAdmin)
+        assertEquals(found.map(_.loginEnabled), Some(true))
+        assertEquals(keptSession, Some(session))
     program.guarantee(resetLoginAccountState)
 
   private def backupAdminData: CreateLoginAccountData = CreateLoginAccountData(

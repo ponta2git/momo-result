@@ -1,4 +1,4 @@
-package momo.api.auth
+package momo.api.adapters.redis
 
 import java.time.Instant
 
@@ -7,6 +7,7 @@ import cats.syntax.all.*
 import dev.profunktor.redis4cats.RedisCommands
 import dev.profunktor.redis4cats.effects.ScriptOutputType
 
+import momo.api.auth.OAuthProviderBackoff
 import momo.api.errors.AppError
 
 final class RedisOAuthProviderBackoff[F[_]: Sync] private (

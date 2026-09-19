@@ -2,8 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
 import {
-  candidateFromHeldEventDetail,
-  candidateFromMatchDetail,
+  candidateFromHeldEventSummary,
+  candidateFromMatchIdentity,
   resolveExportCandidate,
   toHeldEventCandidates,
   toMatchCandidates,
@@ -14,11 +14,10 @@ import { buildCandidateSupportIssue, buildCandidateView } from "@/features/expor
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 import {
-  gameTitlesQueryOptions,
-  heldEventDetailQueryOptions,
+  heldEventSummaryQueryOptions,
   heldEventsQueryOptions,
   matchExportCandidatesQueryOptions,
-  matchDetailQueryOptions,
+  matchIdentityQueryOptions,
   seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
 import { cursorForPage } from "@/shared/lib/cursorPagination";
@@ -40,13 +39,7 @@ export function useExportCandidates({
     scope: ExportScope;
   } | null>(null);
 
-  const seasonsQuery = useQuery(
-    seasonMastersQueryOptions(undefined, scope === "season" || scope === "match"),
-  );
-  const gameTitlesQuery = useQuery({
-    ...gameTitlesQueryOptions(),
-    enabled: scope === "match",
-  });
+  const seasonsQuery = useQuery(seasonMastersQueryOptions(undefined, scope === "season"));
   const heldEventsOptions = heldEventsQueryOptions({
     page: heldEventPage,
     pageSize: CANDIDATE_PAGE_SIZE,
@@ -71,7 +64,6 @@ export function useExportCandidates({
     heldEventsQuery.data !== undefined && !heldEventsQuery.isPlaceholderData;
   const hasCurrentMatchData = matchesQuery.data !== undefined && !matchesQuery.isPlaceholderData;
   const seasons = seasonsQuery.data?.items ?? [];
-  const gameTitles = gameTitlesQuery.data?.items ?? [];
   const heldEvents =
     hasCurrentHeldEventData || !shouldShowQueryError(heldEventsQuery)
       ? (heldEventsQuery.data?.items ?? [])
@@ -86,7 +78,7 @@ export function useExportCandidates({
       : scope === "heldEvent"
         ? toHeldEventCandidates(heldEvents)
         : scope === "match"
-          ? toMatchCandidates(matches, gameTitles, seasons)
+          ? toMatchCandidates(matches)
           : [];
   const selectedOnCurrentPage = candidates.find((candidate) => candidate.value === selectedId);
   const selectedIsOnCurrentPage = selectedOnCurrentPage !== undefined;
@@ -94,24 +86,28 @@ export function useExportCandidates({
     scope === "heldEvent" && Boolean(selectedId) && !selectedIsOnCurrentPage;
   const shouldResolveMatch = scope === "match" && Boolean(selectedId) && !selectedIsOnCurrentPage;
 
-  const heldEventDetailQuery = useQuery(
-    heldEventDetailQueryOptions(
+  const heldEventSummaryQuery = useQuery(
+    heldEventSummaryQueryOptions(
       scope === "heldEvent" ? selectedId : undefined,
       shouldResolveHeldEvent,
     ),
   );
-  const matchDetailQuery = useQuery(
-    matchDetailQueryOptions(scope === "match" ? selectedId : undefined, shouldResolveMatch),
+  const matchIdentityQuery = useQuery(
+    matchIdentityQueryOptions(scope === "match" ? selectedId : undefined, shouldResolveMatch),
   );
   const canonicalResolvedCandidate =
     selectedOnCurrentPage ??
     (scope === "heldEvent"
-      ? candidateFromHeldEventDetail(heldEventDetailQuery.data)
+      ? candidateFromHeldEventSummary(heldEventSummaryQuery.data)
       : scope === "match"
-        ? candidateFromMatchDetail(matchDetailQuery.data, gameTitles, seasons)
+        ? candidateFromMatchIdentity(matchIdentityQuery.data)
         : undefined);
   const selectedDetailQuery =
-    scope === "heldEvent" ? heldEventDetailQuery : scope === "match" ? matchDetailQuery : undefined;
+    scope === "heldEvent"
+      ? heldEventSummaryQuery
+      : scope === "match"
+        ? matchIdentityQuery
+        : undefined;
   const shouldResolveSelectedTarget = shouldResolveHeldEvent || shouldResolveMatch;
   const selectedDetailFailure =
     shouldResolveSelectedTarget && selectedDetailQuery && shouldShowQueryError(selectedDetailQuery)
@@ -163,8 +159,7 @@ export function useExportCandidates({
       : scope === "heldEvent"
         ? heldEventsQuery.isLoading && !hasResolvedTarget
         : scope === "match"
-          ? !hasResolvedTarget &&
-            (seasonsQuery.isLoading || gameTitlesQuery.isLoading || matchesQuery.isLoading)
+          ? !hasResolvedTarget && matchesQuery.isLoading
           : false;
   const refreshing =
     scope === "season"
@@ -172,18 +167,11 @@ export function useExportCandidates({
       : scope === "heldEvent"
         ? heldEventsQuery.isFetching && (!heldEventsQuery.isLoading || hasResolvedTarget)
         : scope === "match"
-          ? [seasonsQuery, gameTitlesQuery, matchesQuery].some(
-              (query) => query.isFetching && (!query.isLoading || hasResolvedTarget),
-            )
+          ? matchesQuery.isFetching && (!matchesQuery.isLoading || hasResolvedTarget)
           : false;
   const seasonError = useRetryNotice(
     shouldShowQueryError(seasonsQuery),
     seasonsQuery.isFetching,
-    scope,
-  );
-  const gameTitleError = useRetryNotice(
-    shouldShowQueryError(gameTitlesQuery),
-    gameTitlesQuery.isFetching,
     scope,
   );
   const heldEventError = useRetryNotice(
@@ -216,30 +204,10 @@ export function useExportCandidates({
           ? hasCurrentMatchData
           : true;
   const error = directoryError && !hasCurrentDirectoryData && !hasResolvedTarget;
-  const referencesGameTitle =
-    scope === "match" &&
-    (Boolean(matchDetailQuery.data?.gameTitleId) ||
-      matches.some(
-        (match) =>
-          match.kind === "match" && match.status === "confirmed" && Boolean(match.gameTitleId),
-      ));
-  const referencesSeason =
-    scope === "match" &&
-    (Boolean(matchDetailQuery.data?.seasonMasterId) ||
-      matches.some(
-        (match) =>
-          match.kind === "match" && match.status === "confirmed" && Boolean(match.seasonMasterId),
-      ));
-  const relevantGameTitleError = gameTitleError && referencesGameTitle;
-  const relevantSeasonError = seasonError && referencesSeason;
   const supportIssue = buildCandidateSupportIssue({
     directoryBlocking: error,
     directoryError,
     hasCurrentDirectoryData,
-    namesError: relevantGameTitleError || relevantSeasonError,
-    namesLoadFailed:
-      (relevantGameTitleError && gameTitlesQuery.data === undefined) ||
-      (relevantSeasonError && seasonsQuery.data === undefined),
     selectedTargetRefreshFailed: selectedDetailRefreshFailed,
   });
   const view = buildCandidateView({
@@ -292,24 +260,20 @@ export function useExportCandidates({
       if (scope === "season") void seasonsQuery.refetch();
       if (scope === "heldEvent") {
         void heldEventsQuery.refetch();
-        if (shouldResolveHeldEvent && shouldShowQueryError(heldEventDetailQuery)) {
-          void heldEventDetailQuery.refetch();
+        if (shouldResolveHeldEvent && shouldShowQueryError(heldEventSummaryQuery)) {
+          void heldEventSummaryQuery.refetch();
         }
       }
       if (scope === "match") {
-        void Promise.all([
-          seasonsQuery.refetch(),
-          gameTitlesQuery.refetch(),
-          matchesQuery.refetch(),
-        ]);
-        if (shouldResolveMatch && shouldShowQueryError(matchDetailQuery)) {
-          void matchDetailQuery.refetch();
+        void matchesQuery.refetch();
+        if (shouldResolveMatch && shouldShowQueryError(matchIdentityQuery)) {
+          void matchIdentityQuery.refetch();
         }
       }
     },
     retrySelectedCandidate: () => {
-      if (shouldResolveHeldEvent) void heldEventDetailQuery.refetch();
-      if (shouldResolveMatch) void matchDetailQuery.refetch();
+      if (shouldResolveHeldEvent) void heldEventSummaryQuery.refetch();
+      if (shouldResolveMatch) void matchIdentityQuery.refetch();
     },
     view,
   };

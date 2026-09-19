@@ -34,9 +34,9 @@ object MatchDraftSourceImageKind:
 
 final case class MatchDraftSourceImage(
     kind: MatchDraftSourceImageKind,
+    imageId: ImageId,
     contentType: Option[String],
     createdAt: Instant,
-    imageUrl: String,
 )
 
 final case class MatchDraftSourceImageBinary[F[_]](
@@ -74,9 +74,9 @@ final class GetMatchDraftSourceImages[F[_]: Async](
                   case None => Option.empty[MatchDraftSourceImage]
                   case Some(image) => Some(MatchDraftSourceImage(
                       kind = kind,
+                      imageId = image.imageId,
                       contentType = Some(image.mediaType),
                       createdAt = draft.updatedAt,
-                      imageUrl = s"/api/match-drafts/${draftId.value}/source-images/${kind.wire}",
                     ))
                 }
             }
@@ -86,6 +86,7 @@ final class GetMatchDraftSourceImages[F[_]: Async](
   def stream(
       draftId: MatchDraftId,
       kind: MatchDraftSourceImageKind,
+      expectedImageId: Option[ImageId],
   ): F[Either[AppError, MatchDraftSourceImageBinary[F]]] = (for
     draft <- EitherT(loadDraft(draftId))
     _ <- EitherT.cond[F](
@@ -96,6 +97,11 @@ final class GetMatchDraftSourceImages[F[_]: Async](
     imageId <- EitherT.fromEither[F](sourceImageId(draft, kind).toRight(
       AppError.NotFound("source image", s"${draftId.value}:${kind.wire}")
     ))
+    _ <- EitherT.cond[F](
+      expectedImageId.forall(_ == imageId),
+      (),
+      AppError.Conflict("Source image changed. Reload the draft to review the current image."),
+    )
     image <- imageStore.find(imageId).orNotFound("source image", s"${draftId.value}:${kind.wire}")
   yield MatchDraftSourceImageBinary(
     contentType = image.mediaType,
@@ -106,12 +112,18 @@ final class GetMatchDraftSourceImages[F[_]: Async](
   def archive(
       draftId: MatchDraftId,
       accountId: AccountId,
+      expectedUpdatedAt: Option[Instant],
   ): F[Either[AppError, MatchDraftSourceImageArchive[F]]] = (for
     draft <- EitherT(loadDraft(draftId))
     _ <- EitherT.cond[F](
       draft.sourceImagesDeletedAt.isEmpty,
       (),
       AppError.NotFound("source images", draftId.value),
+    )
+    _ <- EitherT.cond[F](
+      expectedUpdatedAt.forall(_.equals(draft.updatedAt)),
+      (),
+      AppError.Conflict("Draft changed. Reload it before downloading source images."),
     )
     sources <- EitherT.liftF(archiveSources(draft))
     _ <- EitherT.cond[F](sources.nonEmpty, (), AppError.NotFound("source images", draftId.value))

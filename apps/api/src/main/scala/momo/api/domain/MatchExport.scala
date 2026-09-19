@@ -38,6 +38,30 @@ object MatchExportScope:
       case "" => "scope"
       case _ => safe
 
+/** Match facts shared by its four export rows. */
+final case class MatchExportContext(
+    seasonName: String,
+    seasonNo: Int,
+    ownerName: String,
+    mapName: String,
+    playedAt: Instant,
+    gameTitleMatchNo: Int,
+):
+  def row(player: PlayerResult, playerName: String): MatchExportRow = MatchExportRow(
+    seasonName,
+    seasonNo,
+    ownerName,
+    mapName,
+    playedAt,
+    gameTitleMatchNo,
+    player.playOrder.value,
+    playerName,
+    player.rank.value,
+    player.totalAssetsManYen.value,
+    player.revenueManYen.value,
+    player.incidents,
+  )
+
 final case class MatchExportRow(
     seasonName: String,
     seasonNo: Int,

@@ -18,6 +18,8 @@ if [[ "${ANALYSIS_SMOKE_SERVICES_ARE_ISOLATED:-}" != "true" ]]; then
 fi
 
 tests=(
+  "series_analysis::campaign::tests::real_postgres_campaign_refresh_counts_concurrent_target_commits"
+  "series_analysis::control::history::tests::real_postgres_retention_preserves_active_jobs_and_readable_artifacts"
   "series_analysis::control::capability::tests::real_postgres_registration_replaces_the_generation_capability_set"
   "series_analysis::control::claim::tests::real_postgres_keeps_exact_jobs_queued_when_an_old_binary_omits_the_lease_contract"
   "series_analysis::control::integration_tests::real_postgres_keeps_staging_separate_from_fenced_publication"

@@ -8,15 +8,6 @@ import type { NormalizedApiError } from "@/shared/api/problemDetails";
 import { slotKinds } from "@/shared/domain/ocr";
 import { bySlot } from "@/shared/domain/slotMap";
 import type { SlotMap } from "@/shared/domain/slotMap";
-import { trimSearchParam } from "@/shared/lib/searchParams";
-
-export function draftIdsFromParams(searchParams: URLSearchParams): SlotMap<string> {
-  return bySlot([
-    ["total_assets", trimSearchParam(searchParams.get("totalAssets"))],
-    ["revenue", trimSearchParam(searchParams.get("revenue"))],
-    ["incident_log", trimSearchParam(searchParams.get("incidentLog"))],
-  ]);
-}
 
 export function draftsByKind(
   ids: SlotMap<string>,

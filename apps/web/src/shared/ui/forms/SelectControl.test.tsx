@@ -1,11 +1,13 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createRef, useState } from "react";
+import { createRef, useOptimistic, useState, useTransition } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { Button } from "@/shared/ui/actions/Button";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { SelectControl } from "@/shared/ui/forms/SelectControl";
+import { createDeferred } from "@/test/deferred";
+import { selectOption } from "@/test/selectOption";
 
 const options = [
   { label: "すべて", value: "" },
@@ -15,6 +17,44 @@ const options = [
 ];
 
 describe("SelectControl", () => {
+  it("allows another selection while an optimistic action is pending", async () => {
+    const user = userEvent.setup();
+    const gate = createDeferred<void>();
+    function AsyncSelection() {
+      const [value, setValue] = useState("spring");
+      const [optimistic, setOptimistic] = useOptimistic(value);
+      const [pending, startTransition] = useTransition();
+      return (
+        <>
+          <SelectControl
+            aria-label="対象"
+            value={optimistic}
+            options={options}
+            onValueChange={(next) => {
+              startTransition(async () => {
+                setOptimistic(next);
+                await gate.promise;
+                startTransition(() => setValue(next));
+              });
+            }}
+          />
+          <output aria-label="保存状態">{pending ? "保存中" : value}</output>
+        </>
+      );
+    }
+    render(<AsyncSelection />);
+    const trigger = screen.getByRole("combobox", { name: "対象" });
+    await selectOption(user, trigger, "autumn");
+    expect(trigger).toHaveTextContent("秋");
+    expect(screen.getByLabelText("保存状態")).toHaveTextContent("保存中");
+    await selectOption(user, trigger, "spring");
+    expect(trigger).toHaveTextContent("春");
+    expect(trigger).toHaveFocus();
+    await act(async () => gate.resolve());
+    expect(screen.getByLabelText("保存状態")).toHaveTextContent("spring");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  });
+
   it("retains closed-field typeahead without opening or selecting a disabled match", async () => {
     const user = userEvent.setup();
     render(

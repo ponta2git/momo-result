@@ -40,6 +40,7 @@ export function useSourceImageResource({
     snapshot?.descriptor?.contentType === descriptor?.contentType;
 
   return {
+    hasReplacedImage: Object.values(images).some((image) => image.status === "replaced"),
     activeImage: isCurrent ? snapshot : undefined,
     displayUrl: isCurrent ? snapshot?.displayUrl : undefined,
     handleActiveImageRetry: resource.retry,

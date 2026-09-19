@@ -13,6 +13,7 @@ import momo.api.endpoints.{
   HeldEventDetailResponse,
   HeldEventListResponse,
   HeldEventResponse,
+  HeldEventSummaryResponse,
   HeldEventsEndpoints,
   PaginationResponse
 }
@@ -42,7 +43,7 @@ object HeldEventModule:
         pageSize = input.pageSize,
       ))(result =>
         HeldEventListResponse(
-          items = result.items.map(item =>
+          items = result.page.items.map(item =>
             HeldEventResponse.from(
               item.event,
               item.matchCount,
@@ -51,7 +52,7 @@ object HeldEventModule:
               item.scopes,
             )
           ),
-          pagination = PaginationResponse.from(result.pagination),
+          pagination = PaginationResponse.from(result.page),
           totalMatchCount = result.totalMatchCount,
         )
       )
@@ -62,6 +63,11 @@ object HeldEventModule:
         heldEventId,
       )(HeldEventId.fromString))(id =>
         security.respond(getHeldEventDetail.run(id))(HeldEventDetailResponse.from)
+      )
+    },
+    SecuredEndpoint.readLogic(security, HeldEventsEndpoints.summary) { _ => heldEventId =>
+      security.decode(BoundaryId.required("heldEventId", heldEventId)(HeldEventId.fromString))(id =>
+        security.respond(getHeldEventDetail.summary(id))(HeldEventSummaryResponse.from)
       )
     },
     SecuredEndpoint.mutationLogic(security, HeldEventsEndpoints.create) { member =>

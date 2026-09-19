@@ -100,11 +100,11 @@ export function useMastersPageModel() {
   // Keep visited resources mounted and enabled: switching tabs must not become a reload.
   const notifications = useNotificationSettingsModel(openedTabs.includes("notifications"));
   const accounts = useAccountSettingsModel(openedTabs.includes("accounts"));
-  const resourceQueries = useMasterResourceQueries(
-    authScope,
-    selectedGameTitleId,
-    openedTabs.some((tab) => tab === "catalog" || tab === "aliases" || tab === "incidents"),
-  );
+  const resourceQueries = useMasterResourceQueries(selectedGameTitleId, {
+    catalog: openedTabs.includes("catalog"),
+    aliases: openedTabs.includes("aliases"),
+    incidents: openedTabs.includes("incidents"),
+  });
   const { gameTitles, mapMasters, seasonMasters } = resourceQueries;
   const optimisticCatalog = useMasterOptimisticCatalog({
     fallbackSelectedGameTitleId: resourceQueries.selectedGameTitleId,
@@ -120,7 +120,6 @@ export function useMastersPageModel() {
     addOptimisticGameTitle: optimisticCatalog.addOptimisticGameTitle,
     addOptimisticMapMaster: optimisticCatalog.addOptimisticMapMaster,
     addOptimisticSeasonMaster: optimisticCatalog.addOptimisticSeasonMaster,
-    authScope,
     idempotencyKeys,
     nowIsoFactory,
     optimisticGameTitleCount: optimisticCatalog.optimisticGameTitles.length,
@@ -133,7 +132,6 @@ export function useMastersPageModel() {
 
   const editCommands = useMasterEditCommands({
     onFeedback,
-    authScope,
     idempotencyKeys,
     queryClient,
     selectedGameTitleId: viewModel.selectedGameTitleId,

@@ -43,8 +43,8 @@ export function HeldEventDetailPage() {
 }
 
 function HeldEventDetailReadyContent({ page }: { page: HeldEventDetailReadyPageModel }) {
-  const { enrichment, event, freshness, navigation, refresh } = page;
-  const { detail, drafts, emphasizeNewMatch, masterNames, matches, playerRecaps } = event;
+  const { event, freshness, navigation, refresh } = page;
+  const { detail, drafts, emphasizeNewMatch, matches, playerRecaps } = event;
 
   return (
     <PageFrame className="min-w-0" width="wide">
@@ -90,28 +90,6 @@ function HeldEventDetailReadyContent({ page }: { page: HeldEventDetailReadyPageM
           </Notice>
         ) : null}
 
-        {enrichment.kind === "warning" ? (
-          <Notice
-            tone="warning"
-            title="表示名を取得できませんでした"
-            action={
-              <Button
-                pending={enrichment.refresh.pending}
-                disabled={enrichment.refresh.disabled}
-                pendingLabel="再取得中"
-                size="sm"
-                variant="secondary"
-                onClick={enrichment.refresh.run}
-              >
-                表示名を再取得
-              </Button>
-            }
-          >
-            {enrichment.fields.join("・")}
-            を更新できませんでした。取得済みの表示名はそのまま使い、取得できない箇所だけ「未取得」と表示しています。
-          </Notice>
-        ) : null}
-
         <section aria-labelledby="held-event-next-match-heading" className="grid gap-4">
           <h2 className={contentText.heading} id="held-event-next-match-heading">
             {formatMatchNoInEvent(detail.nextMatchNo)}を記録
@@ -134,17 +112,9 @@ function HeldEventDetailReadyContent({ page }: { page: HeldEventDetailReadyPageM
           </div>
         </section>
 
-        <HeldEventDraftsSection
-          drafts={drafts}
-          masterNames={masterNames}
-          returnTo={navigation.returnTo}
-        />
+        <HeldEventDraftsSection drafts={drafts} returnTo={navigation.returnTo} />
         <HeldEventPlayerRecap recaps={playerRecaps} />
-        <HeldEventMatchTimeline
-          masterNames={masterNames}
-          matches={matches}
-          returnTo={navigation.returnTo}
-        />
+        <HeldEventMatchTimeline matches={matches} returnTo={navigation.returnTo} />
       </PageContentSurface>
     </PageFrame>
   );

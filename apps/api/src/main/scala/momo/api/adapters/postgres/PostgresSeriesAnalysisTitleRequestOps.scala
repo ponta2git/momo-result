@@ -18,25 +18,23 @@ private[postgres] object PostgresSeriesAnalysisTitleRequestOps:
       gameTitleId: GameTitleId,
       requestedBy: AccountId,
       idempotencyKeyHash: String,
-      ids: List[String],
-  ): ConnectionIO[Either[AppError, SeriesAnalysisRecalculationAccepted]] = ids match
-    case operationId :: requestId :: jobId :: outboxId :: Nil =>
-      for
-        existing <- existingOperation(requestedBy, "title", idempotencyKeyHash)
-        result <- existing match
-          case Some(value) => acceptedForExisting(value, gameTitleId)
-          case None => create(
-              gameTitleId,
-              requestedBy,
-              idempotencyKeyHash,
-              operationId,
-              requestId,
-              jobId,
-              outboxId,
-            )
-      yield result
-    case _ => AppError.Internal("Failed to allocate analysis request identifiers.").asLeft
-        .pure[ConnectionIO]
+      operationId: String,
+      requestId: String,
+      jobId: String,
+      outboxId: String,
+  ): ConnectionIO[Either[AppError, SeriesAnalysisRecalculationAccepted]] =
+    existingOperation(requestedBy, "title", idempotencyKeyHash).flatMap {
+      case Some(value) => acceptedForExisting(value, gameTitleId)
+      case None => create(
+          gameTitleId,
+          requestedBy,
+          idempotencyKeyHash,
+          operationId,
+          requestId,
+          jobId,
+          outboxId,
+        )
+    }
 
   private def acceptedForExisting(
       operation: OperationRow,

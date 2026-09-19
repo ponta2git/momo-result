@@ -1,4 +1,4 @@
-package momo.api.auth
+package momo.api.adapters.redis
 
 import java.time.Instant
 
@@ -6,6 +6,8 @@ import cats.effect.Sync
 import cats.syntax.all.*
 import dev.profunktor.redis4cats.RedisCommands
 import dev.profunktor.redis4cats.effects.ScriptOutputType
+
+import momo.api.auth.RateLimiter
 
 final class RedisRateLimiter[F[_]: Sync] private (
     commands: RedisCommands[F, String, String],

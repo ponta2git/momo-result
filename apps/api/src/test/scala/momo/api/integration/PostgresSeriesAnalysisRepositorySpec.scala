@@ -5,14 +5,19 @@ import java.nio.file.Files
 import java.security.MessageDigest
 import java.time.Instant
 
-import cats.effect.IO
+import cats.effect.{Deferred, IO, Resource}
 import cats.syntax.all.*
+import doobie.Transactor
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 import io.circe.{parser, Json}
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.adapters.postgres.{PostgresGameTitlesRepository, PostgresSeriesAnalysisRepository}
+import momo.api.adapters.postgres.{
+  PostgresGameTitles,
+  PostgresGameTitlesRepository,
+  PostgresSeriesAnalysisRepository
+}
 import momo.api.config.SeriesAnalysisReadConfig
 import momo.api.domain.ids.{AccountId, GameTitleId, MatchId, SeasonMasterId}
 import momo.api.domain.{
@@ -178,14 +183,29 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
       first <- repo.requestTitleRecalculation(titleId, accountId, "audit-first")
       second <- repo.requestTitleRecalculation(titleId, accountId, "audit-second")
       other <- repo.requestTitleRecalculation(otherTitleId, accountId, "audit-other")
+      firstJobId = first.toOption.flatMap(_.target.flatMap(_.jobId))
+        .getOrElse(fail("first title request did not create a job"))
+      _ <- sql"""
+        INSERT INTO series_analysis_job_requests (
+          id, game_title_id, input_revision, algorithm_version, artifact_schema_version,
+          trigger, status, assigned_job_id, accepted_at
+        )
+        SELECT 'audit-coalesced-' || n, $titleId, 0, 'series-analysis-v3', 2,
+               CASE WHEN n = 2001 THEN 'match_mutation' ELSE 'manual' END,
+               'pending', $firstJobId, $now
+        FROM generate_series(1, 2001) n
+      """.update.run.transact(transactor)
       overview <- repo.adminOverview(Some(titleId))
     yield
       assert(first.isRight && second.isRight && other.isRight)
       overview match
         case Right(value) =>
           val byTitle = value.recentJobs.map(job => job.gameTitleId -> job).toMap
-          assertEquals(byTitle(titleId).manualRequestCount, 2)
+          assertEquals(byTitle(titleId).manualRequestCount, 2002)
+          assertEquals(byTitle(titleId).requestedBy, "mixed")
+          assertEquals(byTitle(titleId).coalescedTriggers, List("manual", "match_mutation"))
           assertEquals(byTitle(otherTitleId).manualRequestCount, 1)
+          assertEquals(byTitle(otherTitleId).requestedBy, "administrator")
           value.recentJobs.foreach(job =>
             assertEquals(job.firstManualRequester.map(_.accountId), Some(accountId))
           )
@@ -448,6 +468,19 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         ),
       )
 
+  test("all-title request with no eligible titles does not create partial control state"):
+    for
+      repo <- repository
+      result <- repo.requestAllRecalculation(accountId, "hash-no-titles")
+      counts <- sql"""
+        SELECT (SELECT COUNT(*)::int FROM series_analysis_operation_requests),
+               (SELECT COUNT(*)::int FROM series_analysis_campaigns),
+               (SELECT COUNT(*)::int FROM series_analysis_campaign_targets)
+      """.query[(Int, Int, Int)].unique.transact(transactor)
+    yield
+      assertEquals(result, Left(AppError.AnalysisNoEligibleTitles()))
+      assertEquals(counts, (0, 0, 0))
+
   test("all-title request snapshots zero-match titles and is idempotent in the control store"):
     val secondId = GameTitleId.unsafeFromString("title-analysis-contract-2")
     for
@@ -576,6 +609,42 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
       state,
       ("skipped_title_deleted", "terminal", 1, 1, "terminal", 0, 0, 0, 0),
     )
+
+  test("concurrent title deletion counts both campaign targets after a campaign lock wait"):
+    val otherTitleId = GameTitleId.unsafeFromString("title-concurrent-campaign")
+    val titles = new PostgresGameTitlesRepository[IO](transactor)
+    for
+      _ <- seedTitle
+      _ <- titles.createWithNextDisplayOrder(
+        GameTitle(otherTitleId, "並行削除作品", "momotetsu2", 2, now)
+      )
+      analysis <- repository
+      _ <- analysis.requestAllRecalculation(accountId, "hash-concurrent-delete-campaign")
+      locked <- Deferred[IO, Int]
+      release <- Deferred[IO, Unit]
+      holder <-
+        Resource.fromAutoCloseable(IO.blocking(dataSource.getConnection)).use { connection =>
+          val xa = Transactor.fromConnection[IO](connection, None)
+          (for
+            _ <- IO.blocking(connection.setAutoCommit(false))
+            _ <- xa.rawTrans.apply(PostgresGameTitles.alg.delete(titleId))
+            pid <- xa.rawTrans.apply(sql"SELECT pg_backend_pid()".query[Int].unique)
+            _ <- locked.complete(pid)
+            _ <- release.get
+            _ <- IO.blocking(connection.commit())
+          yield ()).onError(_ => IO.blocking(connection.rollback()))
+        }.start
+      pid <- locked.get
+      waiter <- titles.delete(otherTitleId).start
+      _ <- awaitBackendBlockedBy(pid).guarantee(release.complete(()).void)
+      _ <- holder.joinWithNever
+      _ <- waiter.joinWithNever
+      state <- sql"""
+        SELECT c.status, c.expanded_count, c.terminal_count, c.skipped_count, o.status
+        FROM series_analysis_campaigns c
+        JOIN series_analysis_operation_requests o ON o.id = c.operation_request_id
+      """.query[(String, Int, Int, Int, String)].unique.transact(transactor)
+    yield assertEquals(state, ("terminal", 2, 2, 2, "terminal"))
 
   test("aggregate reader accepts only current or previous bounded checksummed chunk"):
     val payload = Files.readAllBytes(

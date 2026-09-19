@@ -17,7 +17,7 @@ import momo.api.adapters.inmemory.{
   InMemoryOcrJobsRepository
 }
 import momo.api.adapters.storage.local.LocalFsImageStore
-import momo.api.contracts.ocrworker.OcrWorkerJobMessageV2
+import momo.api.codec.OcrHintsCodec
 import momo.api.domain.ids.{
   AccountId,
   ImageId,
@@ -174,30 +174,29 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
     }
   }
 
-  List("reiwa" -> List("さくま"), "world" -> Nil, "momotetsu_2" -> Nil).foreach {
-    case (layout, expectedAliases) =>
-      test(s"enriches empty computer aliases from the $layout layout before enqueue") {
-        inMemoryQueueFixture("momo-ocr-layout-hints", List("job-1", "draft-1"), None, 12)
-          .use { fixture =>
-            for
-              image <- fixture.savePng
-              usecase <- fixture.usecase
-              _ <- usecase.run(
-                CreateOcrJobCommand(
-                  image.imageId,
-                  ScreenType.TotalAssets,
-                  OcrJobHints.empty.copy(gameTitle = Some("桃太郎電鉄"), layoutFamily = Some(layout)),
-                  defaultMatchDraftId,
-                ),
-                None,
-              ).flatMap(fromAppEither)
-              published <- fixture.queue.published
-            yield
-              assertEquals(published.head.hints.gameTitle, Some("桃太郎電鉄"))
-              assertEquals(published.head.hints.layoutFamily, Some(layout))
-              assertEquals(published.head.hints.computerPlayerAliases, expectedAliases)
-          }
-      }
+  List("reiwa", "world", "momotetsu_2").foreach { layout =>
+    test(s"preserves $layout hints without applying worker computer-player defaults") {
+      inMemoryQueueFixture("momo-ocr-layout-hints", List("job-1", "draft-1"), None, 12)
+        .use { fixture =>
+          for
+            image <- fixture.savePng
+            usecase <- fixture.usecase
+            _ <- usecase.run(
+              CreateOcrJobCommand(
+                image.imageId,
+                ScreenType.TotalAssets,
+                OcrJobHints.empty.copy(gameTitle = Some("桃太郎電鉄"), layoutFamily = Some(layout)),
+                defaultMatchDraftId,
+              ),
+              None,
+            ).flatMap(fromAppEither)
+            published <- fixture.queue.published
+          yield
+            assertEquals(published.head.hints.gameTitle, Some("桃太郎電鉄"))
+            assertEquals(published.head.hints.layoutFamily, Some(layout))
+            assertEquals(published.head.hints.computerPlayerAliases, Nil)
+        }
+    }
   }
 
   test("normalizes persisted aliases after defaults and bounds the queued player hints") {
@@ -341,7 +340,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
           draft <- fixture.drafts.find(OcrDraftId.unsafeFromString("draft-1"))
           published <- fixture.queue.published
         yield
-          assertEquals(OcrWorkerJobMessageV2.validateHints(hints), Right(()))
+          assertEquals(OcrHintsCodec.validate(hints), Right(()))
           result match
             case Left(AppError.ValidationFailed(detail)) => assert(detail.contains("UTF-8 bytes"))
             case other => fail(s"expected encoded hints validation failure, got $other")
@@ -606,7 +605,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
             case head :: tail => tail -> OcrDraftId.unsafeFromString(head)
             case Nil => Nil -> OcrDraftId.unsafeFromString("unexpected-draft")
           },
-          memberAliases = memberAliases,
+          aliasSnapshot = memberAliases.list(None).map(_.groupMap(_.memberId)(_.alias)),
           activeJobLimit = activeJobLimit,
         )
       }

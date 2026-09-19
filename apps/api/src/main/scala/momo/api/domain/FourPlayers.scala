@@ -42,24 +42,30 @@ object FourPlayers:
       players: List[PlayerResult],
       allowedMemberIds: Set[MemberId],
   ): EitherNec[MatchValidationError, FourPlayers] =
+    validate(players, allowedMemberIds)(_.memberId, _.playOrder, _.rank).flatMap { _ =>
+      players match
+        case a :: b :: c :: d :: Nil => Right(FourPlayers(a, b, c, d))
+        case _ => MatchValidationError.PlayerCountMismatch(players.length).leftNec
+    }
+
+  /** The same lineup invariants apply to full results and read projections without incidents. */
+  def validate[A](players: List[A], allowedMemberIds: Set[MemberId])(
+      memberId: A => MemberId,
+      playOrder: A => PlayOrder,
+      rank: A => Rank,
+  ): EitherNec[MatchValidationError, Unit] =
     if players.length != 4 then MatchValidationError.PlayerCountMismatch(players.length).leftNec
     else
-      val memberSet = players.iterator.map(_.memberId).toSet
-      val playOrders = players.iterator.map(_.playOrder.value).toSet
-      val ranks = players.iterator.map(_.rank.value).toSet
+      val memberSet = players.iterator.map(memberId).toSet
+      val playOrders = players.iterator.map(player => playOrder(player).value).toSet
+      val ranks = players.iterator.map(player => rank(player).value).toSet
       val errs = List.newBuilder[MatchValidationError]
       if memberSet.size != 4 then errs += MatchValidationError.PlayerMemberIdsNotUnique
       if memberSet.size == 4 && !memberSet.subsetOf(allowedMemberIds) then
         errs += MatchValidationError.PlayerMemberIdsNotAllowed(memberSet, allowedMemberIds)
       if playOrders != RequiredOrdinals then errs += MatchValidationError.PlayOrdersNotPermutation
       if ranks != RequiredOrdinals then errs += MatchValidationError.RanksNotPermutation
-
-      val errors = errs.result()
-      NonEmptyChain.fromSeq(errors) match
-        case Some(chain) => chain.asLeft
-        case None => players match
-            case a :: b :: c :: d :: Nil => Right(FourPlayers(a, b, c, d))
-            case _ => MatchValidationError.PlayerCountMismatch(players.length).leftNec
+      NonEmptyChain.fromSeq(errs.result()).toLeft(())
 
   /**
    * Internal reconstruction from a trusted source (DB row). Returns a `Right` only if the row

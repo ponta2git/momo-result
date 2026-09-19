@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useDeferredValue, useMemo, useState } from "react";
 
 import {
@@ -47,6 +47,7 @@ export function useSeriesAnalysisResource({
   deferredState: SeriesAnalysisUrlState;
   state: SeriesAnalysisUrlState;
 }) {
+  const queryClient = useQueryClient();
   const [lastSuccessfulBundle, setLastSuccessfulBundle] = useState<
     SeriesAnalysisDisplayBundle | undefined
   >();
@@ -218,15 +219,41 @@ export function useSeriesAnalysisResource({
     visibleBundle?.kind === "review" ? visibleBundle.review : visibleBundle?.aggregate;
 
   const refresh = useCallback(() => {
-    void refetchStatus();
-    if (activeQueryParams) void refetchActive();
-    if (matchContextQueryParams) void refetchMatchContext();
+    if (!state.gameTitleId) return;
+    void refetchStatus({ cancelRefetch: false }).then((result) => {
+      if (result.isError || result.data?.currentArtifact?.artifactId !== publishedArtifactId)
+        return;
+      // A new publication selects its own queries. Only refresh the same publication's live
+      // overlays, using explicit active keys so navigation/unmount cannot retarget this continuation.
+      const keys = [
+        activeQueryParams
+          ? activeView === "review"
+            ? seriesAnalysisKeys.review(activeQueryParams)
+            : seriesAnalysisKeys.aggregate(activeQueryParams)
+          : undefined,
+        matchContextQueryParams
+          ? seriesAnalysisKeys.matchContext(matchContextQueryParams)
+          : undefined,
+      ];
+      return Promise.all(
+        keys.map((queryKey) =>
+          queryKey
+            ? queryClient.refetchQueries(
+                { queryKey, exact: true, type: "active" },
+                { cancelRefetch: false },
+              )
+            : undefined,
+        ),
+      );
+    });
   }, [
     activeQueryParams,
+    activeView,
     matchContextQueryParams,
-    refetchActive,
-    refetchMatchContext,
+    publishedArtifactId,
+    queryClient,
     refetchStatus,
+    state.gameTitleId,
   ]);
 
   const resourceFailed = useRetryNotice(

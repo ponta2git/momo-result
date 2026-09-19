@@ -187,20 +187,21 @@ export function useOcrJobSlotResource(
   }, [resolution.draftLoadError, resolution.draftLoadErrorKey]);
 
   const manualRefreshPendingRef = useRef(false);
-  const refetch = job.refetch;
+  const fetching = job.isFetching || draft.isFetching;
+  const refetch = expectedDraftId && resolution.draftLoadError ? draft.refetch : job.refetch;
   const refresh = useCallback(() => {
-    if (!slot.jobId || job.isFetching || manualRefreshPendingRef.current) return;
+    if (!slot.jobId || fetching || manualRefreshPendingRef.current) return;
 
     manualRefreshPendingRef.current = true;
     void refetch().finally(() => {
       manualRefreshPendingRef.current = false;
     });
-  }, [job.isFetching, refetch, slot.jobId]);
+  }, [fetching, refetch, slot.jobId]);
 
   return {
     draft: resolution.draft,
     refresh,
-    refreshing: Boolean(slot.jobId && job.isFetching),
+    refreshing: Boolean(slot.jobId && fetching),
     slot: resolution.slot,
   };
 }

@@ -20,6 +20,63 @@ final class GetMatchDraftSourceImagesSpec extends MomoCatsEffectSuite:
   private val createdAt = Instant.parse("2026-05-17T23:59:00Z")
   private val playedAt = Instant.parse("2026-05-17T23:30:00Z")
 
+  test("pinned downloads reject replaced images while legacy downloads use the current slot") {
+    tempDirectory("momo-api-source-image-versions").use { dir =>
+      for
+        imageStore <- IO.pure(LocalFsImageStore[IO](dir))
+        original <- saveImage(imageStore, TestImages.png1x1, "image/png")
+        replacementBytes = TestImages.jpeg(1, 1)
+        replacement <- saveImage(imageStore, replacementBytes, "image/jpeg")
+        matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
+        draft = draftWithImages(Some(original.imageId), None, None, None, None, None)
+        _ <- matchDrafts.create(draft)
+        service = GetMatchDraftSourceImages[IO](matchDrafts, imageStore)
+        kind = MatchDraftSourceImageKind.TotalAssets
+        before <- service.list(draft.id)
+        pinned <- service.stream(draft.id, kind, Some(original.imageId))
+        replaced = draft.withCommon(_.copy(totalAssetsImageId = Some(replacement.imageId)))
+        _ <- matchDrafts.update(replaced, createdAt.plusSeconds(1))
+        stale <- service.stream(draft.id, kind, Some(original.imageId))
+        current <- service.stream(draft.id, kind, Some(replacement.imageId))
+        legacy <- service.stream(draft.id, kind, None)
+        originalBody <- expectImage(pinned).flatMap(_.body.compile.toVector)
+        currentBody <- expectImage(current).flatMap(_.body.compile.toVector)
+        legacyBody <- expectImage(legacy).flatMap(_.body.compile.toVector)
+        staleArchive <- service.archive(draft.id, accountId, Some(createdAt))
+        currentArchive <- service.archive(draft.id, accountId, Some(createdAt.plusSeconds(1)))
+        archiveBody <- expectArchive(currentArchive).flatMap(_.body.compile.to(Array))
+      yield
+        assertEquals(before.map(_.map(_.imageId)), Right(List(original.imageId)))
+        assertEquals(stale.swap.toOption.map(_.code), Some("CONFLICT"))
+        assertEquals(originalBody, TestImages.png1x1.toVector)
+        assertEquals(currentBody, replacementBytes.toVector)
+        assertEquals(legacyBody, replacementBytes.toVector)
+        assertEquals(staleArchive.swap.toOption.map(_.code), Some("CONFLICT"))
+        assertEquals(
+          zipEntries(archiveBody),
+          Map("01-total-assets.jpg" -> replacementBytes.toVector)
+        )
+    }
+  }
+
+  test("image version pins do not bypass closed retention or missing slots") {
+    val imageId = ImageId.unsafeFromString("retained-image")
+    val imageStore = NoReadImageStore(NoReadImageStore.storedPng(imageId, sizeBytes = 1L))
+    for
+      matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
+      draft = draftWithImages(Some(imageId), None, None, None, None, Some(createdAt))
+      _ <- matchDrafts.create(draft)
+      service = GetMatchDraftSourceImages[IO](matchDrafts, imageStore)
+      closed <- service.stream(draft.id, MatchDraftSourceImageKind.TotalAssets, Some(imageId))
+      archive <- service.archive(draft.id, accountId, Some(createdAt))
+      _ <- matchDrafts.update(draft.withCommon(_.copy(sourceImagesDeletedAt = None)), createdAt)
+      missing <- service.stream(draft.id, MatchDraftSourceImageKind.Revenue, Some(imageId))
+    yield
+      assertEquals(closed.swap.toOption.map(_.code), Some("NOT_FOUND"))
+      assertEquals(archive.swap.toOption.map(_.code), Some("NOT_FOUND"))
+      assertEquals(missing.swap.toOption.map(_.code), Some("NOT_FOUND"))
+  }
+
   test("archives all available source images with stable public names") {
     tempDirectory("momo-api-source-image-archive-all").use { dir =>
       for
@@ -40,7 +97,7 @@ final class GetMatchDraftSourceImagesSpec extends MomoCatsEffectSuite:
         )
         _ <- matchDrafts.create(draft)
         service = GetMatchDraftSourceImages[IO](matchDrafts, imageStore)
-        archive <- service.archive(draft.id, accountId)
+        archive <- service.archive(draft.id, accountId, None)
         file <- expectArchive(archive)
         bytes <- file.body.compile.to(Array)
       yield
@@ -76,7 +133,7 @@ final class GetMatchDraftSourceImagesSpec extends MomoCatsEffectSuite:
         )
         _ <- matchDrafts.create(draft)
         service = GetMatchDraftSourceImages[IO](matchDrafts, imageStore)
-        archive <- service.archive(draft.id, accountId)
+        archive <- service.archive(draft.id, accountId, None)
         file <- expectArchive(archive)
         bytes <- file.body.compile.to(Array)
       yield
@@ -106,7 +163,7 @@ final class GetMatchDraftSourceImagesSpec extends MomoCatsEffectSuite:
       _ <- matchDrafts.create(draft)
       service =
         GetMatchDraftSourceImages[IO](matchDrafts, imageStore, sourceImageArchiveMaxBytes = 1L)
-      archive <- service.archive(draft.id, accountId)
+      archive <- service.archive(draft.id, accountId, None)
     yield archive match
       case Left(error: AppError.PayloadTooLarge) =>
         assert(error.detail.contains("archive is too large"))
@@ -133,7 +190,7 @@ final class GetMatchDraftSourceImagesSpec extends MomoCatsEffectSuite:
           imageStore,
           sourceImageArchiveMaxBytes = totalAssets.sizeBytes,
         )
-        archive <- service.archive(draft.id, accountId)
+        archive <- service.archive(draft.id, accountId, None)
       yield archive match
         case Left(error: AppError.PayloadTooLarge) =>
           assert(error.detail.contains("archive is too large"))
@@ -157,7 +214,7 @@ final class GetMatchDraftSourceImagesSpec extends MomoCatsEffectSuite:
         )
         _ <- matchDrafts.create(draft)
         service = GetMatchDraftSourceImages[IO](matchDrafts, imageStore)
-        archive <- service.archive(draft.id, accountId)
+        archive <- service.archive(draft.id, accountId, None)
       yield archive match
         case Left(AppError.NotFound(_, _)) => ()
         case other => fail(s"expected source images not found, got $other")
@@ -180,7 +237,7 @@ final class GetMatchDraftSourceImagesSpec extends MomoCatsEffectSuite:
         )
         _ <- matchDrafts.create(draft)
         service = GetMatchDraftSourceImages[IO](matchDrafts, imageStore)
-        archive <- service.archive(draft.id, otherAccountId)
+        archive <- service.archive(draft.id, otherAccountId, None)
         file <- expectArchive(archive)
       yield assertEquals(file.imageCount, 1)
     }
@@ -249,3 +306,9 @@ final class GetMatchDraftSourceImagesSpec extends MomoCatsEffectSuite:
   ): IO[MatchDraftSourceImageArchive[IO]] = result match
     case Right(file) => IO.pure(file)
     case Left(error) => fail(s"expected archive: $error")
+
+  private def expectImage(
+      result: Either[AppError, MatchDraftSourceImageBinary[IO]]
+  ): IO[MatchDraftSourceImageBinary[IO]] = result match
+    case Right(image) => IO.pure(image)
+    case Left(error) => fail(s"expected image: $error")

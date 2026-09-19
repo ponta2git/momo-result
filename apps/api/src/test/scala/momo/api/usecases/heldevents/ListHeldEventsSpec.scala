@@ -7,6 +7,7 @@ import munit.CatsEffectSuite
 
 import momo.api.adapters.inmemory.{
   InMemoryGameTitlesRepository,
+  InMemoryHeldEventListReadModel,
   InMemoryHeldEventsRepository,
   InMemoryMatchDraftsRepository,
   InMemoryMatchesRepository,
@@ -72,11 +73,13 @@ final class ListHeldEventsSpec extends CatsEffectSuite:
       _ <- drafts.create(activeDraft(2, Some(GameTitleId.unsafeFromString("title-world")), None))
       _ <- drafts.create(activeDraft(1, None, None))
       result <-
-        ListHeldEvents[IO](events, matches, drafts, titles, seasons).run(None, None, None, None)
+        ListHeldEvents[IO](InMemoryHeldEventListReadModel(events, matches, drafts, titles, seasons))
+          .run(None, None, None, None)
     yield result match
       case Left(error) => fail(s"unexpected error: $error")
-      case Right(page) =>
-        assertEquals(page.totalMatchCount, 1)
+      case Right(result) =>
+        val page = result.page
+        assertEquals(result.totalMatchCount, 1)
         assertEquals(page.items.map(_.matchCount), List(1))
         assertEquals(page.items.map(_.draftCount), List(3))
         assertEquals(page.items.map(_.nextMatchNo), List(6))

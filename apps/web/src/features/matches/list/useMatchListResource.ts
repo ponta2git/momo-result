@@ -20,14 +20,14 @@ import {
   shouldShowStaleShield,
 } from "@/shared/api/queryErrorState";
 import {
-  heldEventDirectoryQueryOptions,
+  gameTitlesQueryOptions,
+  seasonMastersQueryOptions,
   matchListQueryOptions,
   matchListSummaryQueryOptions,
 } from "@/shared/api/queryOptions";
 import { useHeldEventPickerDirectory } from "@/shared/heldEvents/useHeldEventPickerDirectory";
 import type { PaginationState } from "@/shared/lib/pagination";
 import { useRetryNotice } from "@/shared/lib/useRetryNotice";
-import { useMasterNameDirectory } from "@/shared/masters/useMasterNameDirectory";
 
 const matchListStaleTimeMs = 10_000;
 
@@ -76,7 +76,7 @@ type ManualRefreshFailure = {
 };
 
 /**
- * Owns the six list resources, lookup joins, placeholder shielding, and coordinated manual refresh.
+ * Owns list resources and filter candidates, placeholder shielding, and coordinated manual refresh.
  * Callers receive display-ready data and refresh intent rather than TanStack Query results.
  */
 export function useMatchListResource({
@@ -100,15 +100,9 @@ export function useMatchListResource({
   const manualRefreshingRef = useRef(false);
   const lifecycleGenerationRef = useRef(0);
 
-  const heldEventsQuery = useQuery(heldEventDirectoryQueryOptions());
-  const selectedHeldEvent = (heldEventsQuery.data?.items ?? []).find(
-    (event) => event.id === currentSearch.heldEventId,
-  );
-  const heldEventPicker = useHeldEventPickerDirectory({
-    selectedEvent: selectedHeldEvent,
-    selectedId: currentSearch.heldEventId,
-  });
-  const masters = useMasterNameDirectory();
+  const heldEventPicker = useHeldEventPickerDirectory({ selectedId: currentSearch.heldEventId });
+  const gameTitlesQuery = useQuery(gameTitlesQueryOptions());
+  const seasonsQuery = useQuery(seasonMastersQueryOptions(currentSearch.gameTitleId || undefined));
   const matchesQuery = useQuery({
     ...matchListQueryOptions(buildMatchListApiQuery(deferredSearch)),
     staleTime: matchListStaleTimeMs,
@@ -136,21 +130,12 @@ export function useMatchListResource({
     };
   }, []);
 
-  const lookupMaps = useMemo(
-    () => ({
-      gameTitlesById: new Map(masters.items.gameTitles.map((item) => [item.id, item])),
-      heldEventsById: new Map((heldEventsQuery.data?.items ?? []).map((item) => [item.id, item])),
-      mapsById: new Map(masters.items.maps.map((item) => [item.id, item])),
-      seasonsById: new Map(masters.items.seasons.map((item) => [item.id, item])),
-    }),
-    [heldEventsQuery.data, masters.items.gameTitles, masters.items.maps, masters.items.seasons],
-  );
   const items = useMemo(
     () =>
-      toMatchListItemViews(matchesQuery.data?.items ?? [], lookupMaps).map((item) =>
+      toMatchListItemViews(matchesQuery.data?.items ?? []).map((item) =>
         addMatchListReturnTo(item, listReturnTo),
       ),
-    [listReturnTo, lookupMaps, matchesQuery.data],
+    [listReturnTo, matchesQuery.data],
   );
 
   const initialLoading = isInitialQueryLoading(matchesQuery);
@@ -178,10 +163,10 @@ export function useMatchListResource({
     JSON.stringify(buildMatchListSummaryQuery(currentSearch)),
   );
   const filtersFailed = useRetryNotice(
-    shouldShowBlockingQueryError(heldEventsQuery) ||
-      masters.blockingLoadFailed ||
+    shouldShowBlockingQueryError(gameTitlesQuery) ||
+      shouldShowBlockingQueryError(seasonsQuery) ||
       Boolean(heldEventPicker.error),
-    heldEventsQuery.isFetching || masters.refreshing || heldEventPicker.pending,
+    gameTitlesQuery.isFetching || seasonsQuery.isFetching || heldEventPicker.pending,
   );
   const refreshFailed = useRetryNotice(
     manualRefreshFailed || matchesQuery.isRefetchError || summaryQuery.isRefetchError,
@@ -237,8 +222,15 @@ export function useMatchListResource({
   return {
     filters: {
       candidates: {
-        gameTitles: masters.items.gameTitles,
-        heldEvents: heldEventsQuery.data?.items ?? [],
+        gameTitles: gameTitlesQuery.data?.items ?? [],
+        heldEvents: heldEventPicker.selectedHeldEvent
+          ? [
+              heldEventPicker.selectedHeldEvent,
+              ...heldEventPicker.heldEvents.filter(
+                (event) => event.id !== heldEventPicker.selectedHeldEvent?.id,
+              ),
+            ]
+          : heldEventPicker.heldEvents,
         heldEventPicker: {
           error: heldEventPicker.error,
           heldEvents: heldEventPicker.heldEvents,
@@ -248,15 +240,15 @@ export function useMatchListResource({
           selectedHeldEvent: heldEventPicker.selectedHeldEvent,
           onPageChange: heldEventPicker.onPageChange,
         },
-        seasons: masters.items.seasons,
+        seasons: seasonsQuery.data?.items ?? [],
       },
       loadFailed: filtersFailed,
       refresh: {
-        pending: heldEventsQuery.isFetching || heldEventPicker.pending || masters.refreshing,
+        pending: gameTitlesQuery.isFetching || seasonsQuery.isFetching || heldEventPicker.pending,
         run: () => {
-          if (shouldShowBlockingQueryError(heldEventsQuery)) void heldEventsQuery.refetch();
+          if (shouldShowBlockingQueryError(gameTitlesQuery)) void gameTitlesQuery.refetch();
+          if (shouldShowBlockingQueryError(seasonsQuery)) void seasonsQuery.refetch();
           if (heldEventPicker.error) void heldEventPicker.refetch();
-          void masters.retryFailed();
         },
       },
     },

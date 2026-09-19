@@ -9,10 +9,11 @@ import sttp.tapir.server.ServerEndpoint
 import sttp.tapir.server.http4s.{Http4sServerInterpreter, Http4sServerOptions}
 
 import momo.api.auth.{
+  AccountAccess,
+  CompleteOAuthCallback,
   CsrfTokenService,
   DiscordOAuthClient,
   MemberRoster,
-  OAuthProviderBackoff,
   OAuthStateCodec,
   RateLimiter,
   SessionService
@@ -33,7 +34,7 @@ import momo.api.http.modules.{
   SeriesAnalysisModule,
   UploadModule
 }
-import momo.api.repositories.{IdempotencyRepository, LoginAccountsRepository}
+import momo.api.repositories.IdempotencyRepository
 import momo.api.usecases.admin.*
 import momo.api.usecases.exports.*
 import momo.api.usecases.heldevents.*
@@ -54,14 +55,13 @@ object HttpRoutes:
 
   final case class AuthDependencies[F[_]](
       roster: MemberRoster,
-      loginAccounts: LoginAccountsRepository[F],
+      accountAccess: AccountAccess[F],
       oauthClient: DiscordOAuthClient[F],
       sessionService: SessionService[F],
       csrfTokenService: CsrfTokenService,
       oauthStateCodec: OAuthStateCodec[F],
       loginRateLimiter: RateLimiter[F],
-      authCallbackStateRateLimiter: RateLimiter[F],
-      oauthProviderBackoff: OAuthProviderBackoff[F],
+      completeOAuthCallback: CompleteOAuthCallback[F],
   )
 
   final case class UploadUseCases[F[_]](uploadImage: UploadImage[F])
@@ -84,6 +84,7 @@ object HttpRoutes:
   final case class MatchDraftUseCases[F[_]](
       createMatchDraft: CreateMatchDraft[F],
       getMatchDraft: GetMatchDraft[F],
+      getMatchDraftReview: GetMatchDraftReview[F],
       updateMatchDraft: UpdateMatchDraft[F],
       cancelMatchDraft: CancelMatchDraft[F],
       getMatchDraftSourceImages: GetMatchDraftSourceImages[F],
@@ -166,7 +167,7 @@ object HttpRoutes:
       EndpointSecurity[F](AuthPolicy[F](
         deps.config,
         deps.auth.roster,
-        deps.auth.loginAccounts,
+        deps.auth.accountAccess,
         deps.auth.sessionService,
         deps.auth.csrfTokenService,
       ))
@@ -210,6 +211,7 @@ object HttpRoutes:
       MatchDraftModule.routes[F](
         deps.matchDrafts.createMatchDraft,
         deps.matchDrafts.getMatchDraft,
+        deps.matchDrafts.getMatchDraftReview,
         deps.matchDrafts.updateMatchDraft,
         deps.matchDrafts.cancelMatchDraft,
         deps.matchDrafts.getMatchDraftSourceImages,
@@ -303,10 +305,9 @@ object HttpRoutes:
       stateCodec = deps.auth.oauthStateCodec,
       sessions = deps.auth.sessionService,
       csrf = deps.auth.csrfTokenService,
-      accounts = deps.auth.loginAccounts,
+      accounts = deps.auth.accountAccess,
       rateLimiter = deps.auth.loginRateLimiter,
-      callbackStateRateLimiter = deps.auth.authCallbackStateRateLimiter,
-      providerBackoff = deps.auth.oauthProviderBackoff,
+      completeOAuthCallback = deps.auth.completeOAuthCallback,
     )
     val authRoutes = interpreter.toRoutes(authEndpoints)
 

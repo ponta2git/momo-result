@@ -16,11 +16,11 @@ import momo.api.usecases.matchdrafts.{
 
 /** DTO ↔ usecase command conversions for `MatchDraftEndpoints`. */
 object MatchDraftCodec:
-  def parseInstantOption(value: Option[String]): Either[AppError, Option[Instant]] =
+  def parseInstantOption(field: String, value: Option[String]): Either[AppError, Option[Instant]] =
     value match
       case None => Right(None)
       case Some(raw) => Either.catchOnly[Exception](Instant.parse(raw))
-          .leftMap(_ => AppError.ValidationFailed("playedAt must be ISO8601 instant.")).map(Some(_))
+          .leftMap(_ => AppError.ValidationFailed(s"$field must be ISO8601 instant.")).map(Some(_))
 
   private def parseStatusOption(value: Option[String]): Either[AppError, Option[MatchDraftStatus]] =
     value match

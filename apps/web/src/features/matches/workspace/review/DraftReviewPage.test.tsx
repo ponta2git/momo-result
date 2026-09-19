@@ -22,6 +22,7 @@ import {
   makeMatchWorkspaceMasterHandoffValues,
   makeFourReviewPlayerInputs,
 } from "@/test/factories";
+import { makeMatchDraftReviewResponse } from "@/test/factories/matchDraftReview";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
@@ -193,9 +194,9 @@ describe("DraftReviewPage", () => {
   it("redirects to the confirmed match when the draft is already confirmed on load", async () => {
     setDevUser();
     server.use(
-      http.get("/api/match-drafts/:draftId", ({ params }) =>
+      http.get("/api/match-drafts/:draftId/review", ({ params }) =>
         HttpResponse.json(
-          matchDraftDetailResponse(String(params["draftId"]), {
+          makeMatchDraftReviewResponse(String(params["draftId"]), {
             confirmedMatchId: "match-confirmed-1",
             status: "confirmed",
           }),
@@ -224,43 +225,42 @@ describe("DraftReviewPage", () => {
     expect(await screen.findAllByText(confirmedDraftMessages.loadRedirect)).toHaveLength(1);
   });
 
-  it("checks the latest draft before confirmation and skips POST when already confirmed", async () => {
+  it("loads one review snapshot and confirms without separate detail, OCR, or image-list reads", async () => {
     setDevUser();
     queryClient.setDefaultOptions({ queries: { retry: false, staleTime: 10_000 } });
-    let draftDetailRequests = 0;
-    let postCalled = false;
+    let reviewReads = 0;
+    let separateReads = 0;
+    let postCount = 0;
     server.use(
-      http.get("/api/match-drafts/:draftId", ({ params }) => {
-        draftDetailRequests += 1;
-        const draftId = String(params["draftId"]);
-        return HttpResponse.json(
-          matchDraftDetailResponse(
-            draftId,
-            draftDetailRequests >= 2
-              ? {
-                  confirmedMatchId: "match-confirmed-before-submit",
-                  status: "confirmed",
-                }
-              : {},
-          ),
-        );
+      http.get("/api/match-drafts/:draftId/review", ({ params }) => {
+        reviewReads += 1;
+        return HttpResponse.json(makeMatchDraftReviewResponse(String(params["draftId"])));
       }),
-      http.post("/api/matches", async () => {
-        postCalled = true;
+      http.get("/api/match-drafts/:draftId", () => {
+        separateReads += 1;
+        return HttpResponse.error();
+      }),
+      http.get("/api/ocr-drafts", () => {
+        separateReads += 1;
+        return HttpResponse.error();
+      }),
+      http.get("/api/match-drafts/:draftId/source-images", () => {
+        separateReads += 1;
+        return HttpResponse.error();
+      }),
+      http.post("/api/matches", () => {
+        postCount += 1;
         return HttpResponse.json({
-          createdAt: "2026-01-01T00:00:00.000Z",
+          createdAt: "2026-01-01T00:00:00Z",
           heldEventId: "held-1",
-          matchId: "unexpected-match",
+          matchId: "match-confirmed",
           matchNoInEvent: 3,
         });
       }),
     );
-
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/review/draft-race-before-submit"]}>
-          <ToastHost />
-          <LocationProbe />
+        <MemoryRouter initialEntries={["/review/snapshot"]}>
           <Routes>
             <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
             <Route path="/matches/:matchId" element={<p>試合詳細</p>} />
@@ -268,48 +268,43 @@ describe("DraftReviewPage", () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
-
     await waitForReviewWorkspaceReady();
+    expect(reviewReads).toBe(1);
+    expect(separateReads).toBe(0);
     await user.click(screen.getByRole("button", { name: "確定前の確認へ進む" }));
     await user.click(await screen.findByRole("button", { name: "確定する" }));
-
-    await waitFor(() =>
-      expect(screen.getByLabelText("current location")).toHaveTextContent(
-        "/matches/match-confirmed-before-submit",
-      ),
-    );
-    expect(postCalled).toBe(false);
-    expect(await screen.findAllByText(confirmedDraftMessages.confirmConflict)).toHaveLength(1);
+    expect(await screen.findByText("試合詳細")).toBeInTheDocument();
+    expect(postCount).toBe(1);
+    expect(separateReads).toBe(0);
   });
 
-  it("keeps the confirmation dialog busy while the latest draft status is unresolved", async () => {
+  it("keeps input and the same mutation key when a confirmation response is lost", async () => {
     setDevUser();
     queryClient.setDefaultOptions({ queries: { retry: false, staleTime: 10_000 } });
-    const preflightStarted = createDeferred();
-    const preflightGate = createDeferred();
-    let draftDetailRequests = 0;
+    const keys: Array<string | null> = [];
+    const requests: unknown[] = [];
+    let recoveryReads = 0;
     server.use(
-      http.get("/api/match-drafts/:draftId", async ({ params }) => {
-        draftDetailRequests += 1;
-        if (draftDetailRequests >= 2) {
-          preflightStarted.resolve();
-          await preflightGate.promise;
-        }
-        return HttpResponse.json(matchDraftDetailResponse(String(params["draftId"])));
+      http.get("/api/match-drafts/:draftId", () => {
+        recoveryReads += 1;
+        return HttpResponse.error();
       }),
-      http.post("/api/matches", () =>
-        HttpResponse.json({
-          createdAt: "2026-01-01T00:00:00.000Z",
-          heldEventId: "held-1",
-          matchId: "match-after-preflight",
-          matchNoInEvent: 3,
-        }),
-      ),
+      http.post("/api/matches", async ({ request }) => {
+        keys.push(request.headers.get("Idempotency-Key"));
+        requests.push(await request.json());
+        return keys.length === 1
+          ? HttpResponse.error()
+          : HttpResponse.json({
+              createdAt: "2026-01-01T00:00:00Z",
+              heldEventId: "held-1",
+              matchId: "match-replayed",
+              matchNoInEvent: 3,
+            });
+      }),
     );
-
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/review/draft-pending-preflight"]}>
+        <MemoryRouter initialEntries={["/review/confirm-response-lost"]}>
           <Routes>
             <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
             <Route path="/matches/:matchId" element={<p>試合詳細</p>} />
@@ -317,25 +312,25 @@ describe("DraftReviewPage", () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
-
     await waitForReviewWorkspaceReady();
-    await user.click(screen.getByRole("button", { name: "確定前の確認へ進む" }));
-    const dialog = await screen.findByRole("dialog", { name: "この内容で確定しますか？" });
-    await user.click(within(dialog).getByRole("button", { name: "確定する" }));
-    await preflightStarted.promise;
-
-    expect(within(dialog).getByRole("button", { name: "戻って修正" })).toBeDisabled();
-    const pendingConfirmButton = within(dialog).getByRole("button", { name: "確定中…" });
-    expect(pendingConfirmButton).toBeDisabled();
-    expect(pendingConfirmButton).toHaveAttribute("aria-busy", "true");
-    expect(
-      within(dialog).queryByRole("button", { name: "ダイアログを閉じる" }),
-    ).not.toBeInTheDocument();
-    await user.keyboard("{Escape}");
-    expect(dialog).toBeInTheDocument();
-
-    preflightGate.resolve();
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const continueButton = await screen.findByRole("button", { name: "確定前の確認へ進む" });
+      await waitFor(() => expect(continueButton).toBeEnabled());
+      await user.click(continueButton);
+      await user.click(await screen.findByRole("button", { name: "確定する" }));
+      if (attempt === 0)
+        await waitFor(() =>
+          expect(
+            screen.queryByRole("dialog", { name: "この内容で確定しますか？" }),
+          ).not.toBeInTheDocument(),
+        );
+    }
     expect(await screen.findByText("試合詳細")).toBeInTheDocument();
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).toBeTruthy();
+    expect(keys[0]).toEqual(keys[1]);
+    expect(requests[0]).toEqual(requests[1]);
+    expect(recoveryReads).toBe(0);
   });
 
   it("redirects after a confirm conflict when the draft was confirmed concurrently", async () => {
@@ -350,7 +345,7 @@ describe("DraftReviewPage", () => {
         return HttpResponse.json(
           matchDraftDetailResponse(
             draftId,
-            draftDetailRequests >= 3
+            draftDetailRequests >= 1
               ? {
                   confirmedMatchId: "match-confirmed-after-conflict",
                   status: "confirmed",
@@ -398,57 +393,6 @@ describe("DraftReviewPage", () => {
     );
     expect(postCalled).toBe(true);
     expect(await screen.findAllByText(confirmedDraftMessages.confirmConflict)).toHaveLength(1);
-  });
-
-  it("returns status check failures to persistent execution feedback", async () => {
-    setDevUser();
-    queryClient.setDefaultOptions({ queries: { retry: false, staleTime: 10_000 } });
-    let draftDetailRequests = 0;
-    server.use(
-      http.get("/api/match-drafts/:draftId", ({ params }) => {
-        draftDetailRequests += 1;
-        if (draftDetailRequests >= 2) {
-          return HttpResponse.json(
-            {
-              code: "INTERNAL_SERVER_ERROR",
-              status: 500,
-              title: "Internal Server Error",
-              type: "about:blank",
-            },
-            { status: 500 },
-          );
-        }
-        return HttpResponse.json(matchDraftDetailResponse(String(params["draftId"])));
-      }),
-    );
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/review/draft-status-check-fails"]}>
-          <Routes>
-            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-
-    await waitForReviewWorkspaceReady();
-    await user.click(screen.getByRole("button", { name: "確定前の確認へ進む" }));
-    const dialog = await screen.findByRole("dialog", { name: "この内容で確定しますか？" });
-    await user.click(within(dialog).getByRole("button", { name: "確定する" }));
-
-    await waitFor(() =>
-      expect(
-        screen.queryByRole("dialog", { name: "この内容で確定しますか？" }),
-      ).not.toBeInTheDocument(),
-    );
-    const executionArea = screen.getByRole("region", { name: "入力内容の確定" });
-    expect(within(executionArea).getByRole("alert")).toHaveTextContent(
-      confirmedDraftMessages.statusCheckFailed,
-    );
-    expect(within(executionArea).getByRole("alert")).toHaveTextContent(
-      "もう一度確定を実行してください",
-    );
   });
 
   it("returns a confirmation API failure to persistent execution feedback", async () => {
@@ -530,28 +474,30 @@ describe("DraftReviewPage", () => {
     setDevUser();
     const responseGate = createDeferred();
     server.use(
-      http.get("/api/match-drafts/:draftId", async ({ params }) => {
+      http.get("/api/match-drafts/:draftId/review", async ({ params }) => {
         await responseGate.promise;
         const draftId = String(params["draftId"]);
-        return HttpResponse.json({
-          createdAt: "2026-01-01T00:00:00.000Z",
-          gameTitleId: "gt_momotetsu_2",
-          heldEventId: "held-1",
-          incidentLogDraftId: `${draftId}-incident`,
-          incidentLogImageId: `${draftId}-img-incident`,
-          mapMasterId: "map_east",
-          matchDraftId: draftId,
-          matchNoInEvent: 3,
-          ownerMemberId: "member_ponta",
-          playedAt: "2026-01-01T00:00:00.000Z",
-          revenueDraftId: `${draftId}-revenue`,
-          revenueImageId: `${draftId}-img-revenue`,
-          seasonMasterId: "season_current",
-          status: "needs_review",
-          totalAssetsDraftId: `${draftId}-total`,
-          totalAssetsImageId: `${draftId}-img-total`,
-          updatedAt: "2026-01-01T00:00:00.000Z",
-        });
+        return HttpResponse.json(
+          makeMatchDraftReviewResponse(draftId, {
+            createdAt: "2026-01-01T00:00:00.000Z",
+            gameTitleId: "gt_momotetsu_2",
+            heldEventId: "held-1",
+            incidentLogDraftId: `${draftId}-incident`,
+            incidentLogImageId: `${draftId}-img-incident`,
+            mapMasterId: "map_east",
+            matchDraftId: draftId,
+            matchNoInEvent: 3,
+            ownerMemberId: "member_ponta",
+            playedAt: "2026-01-01T00:00:00.000Z",
+            revenueDraftId: `${draftId}-revenue`,
+            revenueImageId: `${draftId}-img-revenue`,
+            seasonMasterId: "season_current",
+            status: "needs_review",
+            totalAssetsDraftId: `${draftId}-total`,
+            totalAssetsImageId: `${draftId}-img-total`,
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          }),
+        );
       }),
     );
 
@@ -582,30 +528,32 @@ describe("DraftReviewPage", () => {
     setDevUser();
     const responseGate = createDeferred();
     server.use(
-      http.get("/api/match-drafts/:draftId", async ({ params }) => {
+      http.get("/api/match-drafts/:draftId/review", async ({ params }) => {
         const draftId = String(params["draftId"]);
         if (draftId === "session-next") {
           await responseGate.promise;
         }
-        return HttpResponse.json({
-          createdAt: "2026-01-01T00:00:00.000Z",
-          gameTitleId: "gt_momotetsu_2",
-          heldEventId: "held-1",
-          incidentLogDraftId: `${draftId}-incident`,
-          incidentLogImageId: `${draftId}-img-incident`,
-          mapMasterId: "map_east",
-          matchDraftId: draftId,
-          matchNoInEvent: 3,
-          ownerMemberId: "member_ponta",
-          playedAt: "2026-01-01T00:00:00.000Z",
-          revenueDraftId: `${draftId}-revenue`,
-          revenueImageId: `${draftId}-img-revenue`,
-          seasonMasterId: "season_current",
-          status: "needs_review",
-          totalAssetsDraftId: `${draftId}-total`,
-          totalAssetsImageId: `${draftId}-img-total`,
-          updatedAt: "2026-01-01T00:00:00.000Z",
-        });
+        return HttpResponse.json(
+          makeMatchDraftReviewResponse(draftId, {
+            createdAt: "2026-01-01T00:00:00.000Z",
+            gameTitleId: "gt_momotetsu_2",
+            heldEventId: "held-1",
+            incidentLogDraftId: `${draftId}-incident`,
+            incidentLogImageId: `${draftId}-img-incident`,
+            mapMasterId: "map_east",
+            matchDraftId: draftId,
+            matchNoInEvent: 3,
+            ownerMemberId: "member_ponta",
+            playedAt: "2026-01-01T00:00:00.000Z",
+            revenueDraftId: `${draftId}-revenue`,
+            revenueImageId: `${draftId}-img-revenue`,
+            seasonMasterId: "season_current",
+            status: "needs_review",
+            totalAssetsDraftId: `${draftId}-total`,
+            totalAssetsImageId: `${draftId}-img-total`,
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          }),
+        );
       }),
     );
 

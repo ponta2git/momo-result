@@ -80,7 +80,6 @@ export function useMatchWorkspacePageModel({
     matchId,
     mode,
     preferredHeldEventId,
-    searchParams,
     useSampleDrafts,
   });
   const {
@@ -174,7 +173,6 @@ export function useMatchWorkspacePageModel({
     setOperationError: local.setOperationError,
     setValidationMessage: local.setValidationMessage,
     returnTo: contextualReturnTo,
-    useSampleDrafts,
     values: state.values,
   });
   const {

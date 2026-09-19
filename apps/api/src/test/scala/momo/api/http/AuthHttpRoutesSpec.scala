@@ -14,6 +14,9 @@ import sttp.tapir.server.http4s.Http4sServerInterpreter
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.inmemory.{InMemoryAppSessionsRepository, InMemoryLoginAccountsRepository}
 import momo.api.auth.{
+  AccountAccess,
+  CompleteOAuthCallback,
+  CompleteOAuthLogin,
   CsrfTokenService,
   DiscordOAuthClient,
   DiscordUser,
@@ -222,18 +225,27 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
             authConfigValue.providerBackoff,
             IO.pure(now),
           )
-          sessions = SessionService[IO](sessionsRepo, accounts, authConfigValue, IO.pure(now))
-          stateCodec = OAuthStateCodec[IO](authConfigValue, IO.pure(now))
+          sessions =
+            SessionService[IO](sessionsRepo, accounts, authConfigValue.sessionTtl, IO.pure(now))
+          stateCodec = OAuthStateCodec[IO](
+            authConfigValue.stateSigningKey.getOrElse("test-signing-key"),
+            authConfigValue.stateTtl,
+            IO.pure(now)
+          )
         yield Http4sServerInterpreter[IO]().toRoutes(AuthModule.routes[IO](
           config = configFor(imageTmpDir, authConfigValue),
           oauth = oauth,
           stateCodec = stateCodec,
           sessions = sessions,
           csrf = CsrfTokenService(),
-          accounts = accounts,
+          accounts = AccountAccess[IO](accounts),
           rateLimiter = limiter,
-          callbackStateRateLimiter = callbackStateLimiter,
-          providerBackoff = providerBackoff,
+          completeOAuthCallback = CompleteOAuthCallback[IO](
+            stateCodec,
+            CompleteOAuthLogin[IO](oauth, sessions, accounts, providerBackoff),
+            callbackStateLimiter,
+            authConfigValue.callbackRedirectPath,
+          ),
         )).orNotFound
       }
     }

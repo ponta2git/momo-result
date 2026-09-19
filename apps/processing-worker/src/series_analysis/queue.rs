@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use momo_analysis_core::contract::{QUEUE_SCHEMA_VERSION, QueuePayload};
 use redis::{
     AsyncCommands, RedisError,
@@ -65,12 +67,15 @@ pub(super) async fn ensure_consumer_group(
 pub(super) async fn read_new_delivery(
     redis: &mut ConnectionManager,
     config: &AnalysisConsumerConfig,
+    block: Duration,
 ) -> Result<Option<StreamId>, ConsumerError> {
-    let block = usize::try_from(config.redis_block.as_millis())?;
-    let options = StreamReadOptions::default()
+    let block = usize::try_from(block.as_millis())?;
+    let mut options = StreamReadOptions::default()
         .group(&config.redis_group, &config.worker_id)
-        .count(1)
-        .block(block);
+        .count(1);
+    if block > 0 {
+        options = options.block(block);
+    }
     let reply: Option<StreamReadReply> = redis
         .xread_options(&[&config.redis_stream], &[">"], &options)
         .await?;
@@ -82,6 +87,14 @@ pub(super) async fn recover_cold_page(
     config: &AnalysisConsumerConfig,
     recovery_cursor: &mut AutoClaimCursor,
 ) -> Result<ColdRecoveryPage, ConsumerError> {
+    if recovery_cursor.current() == AUTO_CLAIM_START {
+        crate::stream_retention::trim_acknowledged_prefix(
+            redis,
+            &config.redis_stream,
+            &config.redis_group,
+        )
+        .await?;
+    }
     let minimum_idle = usize::try_from(config.lease_duration.as_millis())?;
     let claimed: StreamAutoClaimReply = redis
         .xautoclaim_options(

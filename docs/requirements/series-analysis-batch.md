@@ -130,7 +130,7 @@ DB lock順とstaging transactionの規則は `docs/db-rule.md`、process責務�
 - Rust parentは全resourceのcanonical bytes、個別意味、resource集合、相互参照を検証したopaque artifactだけにvalidation contract IDを付けて公開する。readerは同じ意味規則を再実装せず、exact contract IDとartifact schemaの組をallowlistする。
 - published headerとchild resourceはDBで改変不能とし、staging中の差し替えと、参照されないparentの正規cleanupだけを許可する。child payloadと同じrowのchecksumだけをpublication provenanceの代用にしない。
 
-各作品はcurrentとpreviousの成功artifactを保持する。terminal jobは終了後45日保持し、`queued` / `running` を履歴cleanupしない。管理画面の直近10件という表示上限をDB保持条件に使わない。
+各作品はcurrentとpreviousの成功artifactを保持する。terminal jobは終了後45日保持し、`queued` / `running` を履歴cleanupしない。管理画面の直近10件という表示上限をDB保持条件に使わない。整理はWorkerが起動時と定期的にbounded transactionで実行し、attempt実行中は完了後まで待つ。未参照のstagingと期限を過ぎたpublished artifactも同じ整理対象とし、current / previousは残す。失敗は次の周期で再試行し、APIの起動やリクエストを前提にしない。
 
 ## 6. API / Web / Admin
 
@@ -180,6 +180,7 @@ OCR同居を有効化する場合は、共通parent-child境界、単一slot、�
 - validation contractを導入・更新する場合は、published rowのimmutabilityを先に適用し、exact contractをadvertiseするworker世代だけで再計算する。Rustで検証済みの新規publicationまたは明示的な再検証だけをattestedとし、既存artifactをSQLだけで盲目的にattestしない。最初のattested publicationで未証明previous pointerを外し、current / previousの双方を監査してからexact contractを要求するreaderへ切り替える。
 - validation contractのreader-first配置は、validator初期化完了後にだけexact capabilityをadvertiseする。移行中readerはcontractなしartifactを従来のfull semantic validation付きで読み、contractなしdesiredに対するexact artifactも互換なcurrentとして扱う。exact desiredはcontractなしartifactをcurrentとして扱わない。
 - release promotionはfreshな全reader / workerのcapability集合をtransaction内で凍結して完全一致を確認し、release singleton、既存titleのdesired tuple、campaignを原子的に進める。登録作品0件のinitial backfillもtarget 0のterminal operationとして確定し、その後の新規作品はsingletonを継承する。
+- idle capabilityの更新間隔はactive jobのlease heartbeatと分離し、freshness期限に失敗・遅延の余裕を残す。間隔とfreshnessはAPI / worker / release controllerで一体に変更し、両consumer更新後のcontrollerでpromotionする。長周期化による停止世代の排除待ち時間を許容範囲に保ち、reader-firstの配置順は維持する。
 - 自動保守は稼働世代と singleton の exact tuple 差分を昇格対象とし、既知の過去世代への自動復帰を拒否する。差分がない場合は初回未処理の必要性と既存 campaign の進捗を確認する。preview と apply の間で対象作品・input revision・世代が変われば適用しない。自動・手動の再実行は同じ durable operation を参照する。
 - release 完了は受理 snapshot の target が公開済みまたは作品削除で終端したことと整合性監査で判定する。後続の通常入力更新による pending work は別に扱い、全 queue の停止を通常 release の完了条件にしない。failed target や構造的不整合は要対応とする。
 - promotion後はattested workerで再計算し、current / previous双方のexact contract、pending work、failed outboxをrelease auditで確認する。監査完了後にだけreaderのlegacy semantic validatorとcontractなしread経路を除く。内部の`validation_contract_update` triggerは既存HTTP vocabularyの`artifact_schema_update`へprojectionし、storage rolloutだけでpublic wire enumを増やさない。

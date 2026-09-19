@@ -1,13 +1,19 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import { createInitialSlot } from "@/features/ocrCapture/captureState";
 import { OcrStartDialog } from "@/features/ocrCapture/OcrStartDialog";
 import type { OcrSubmissionPlan } from "@/features/ocrCapture/ocrSubmissionPlan";
+import type { OcrSubmissionResult } from "@/features/ocrCapture/ocrSubmissionWorkflow";
+import type { OcrCaptureMutations } from "@/features/ocrCapture/useOcrCaptureMutations";
+import { useOcrStartFlow } from "@/features/ocrCapture/useOcrStartFlow";
 import type { OcrStartDialogState } from "@/features/ocrCapture/useOcrStartFlow";
 
 const plan: OcrSubmissionPlan = {
   hints: {},
+  playedAt: "2026-01-01T00:00:00Z",
   selectedGameTitle: undefined,
   selectedHeldEvent: undefined,
   selectedSlotLabels: ["総資産", "収益", "事件簿"],
@@ -38,7 +44,75 @@ function renderSubmitting(state: Extract<OcrStartDialogState, { status: "submitt
   );
 }
 
+function FlowHarness({ submit }: { submit: OcrCaptureMutations["submit"] }) {
+  const flow = useOcrStartFlow({
+    submission: { isSubmitting: false, submit },
+    updateSlot: vi.fn(),
+  });
+  return (
+    <>
+      <button type="button" onClick={() => flow.open(plan)}>
+        読み取りの確認
+      </button>
+      <OcrStartDialog
+        state={flow.state}
+        onClose={flow.close}
+        onConfirm={flow.confirm}
+        onViewMatches={flow.viewMatches}
+      />
+    </>
+  );
+}
+
+async function submitResult(...results: OcrSubmissionResult[]) {
+  const submit = vi.fn<OcrCaptureMutations["submit"]>();
+  for (const result of results) submit.mockResolvedValueOnce(result);
+  const router = createMemoryRouter([{ path: "/", element: <FlowHarness submit={submit} /> }]);
+  render(<RouterProvider router={router} />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "読み取りの確認" }));
+  await user.click(screen.getByRole("button", { name: "3件で読み取りを開始" }));
+  return { submit, user };
+}
+
 describe("OcrStartDialog", () => {
+  it.each<OcrSubmissionResult>([
+    { status: "empty" },
+    { status: "invalid", message: "設定を確認してください" },
+    { status: "draft_create_failed", error: { kind: "api", status: 400 } },
+    { status: "draft_create_failed", error: { kind: "api", status: 404 } },
+  ])("returns to the retained inputs after a definite rejection: $status", async (result) => {
+    const { user } = await submitResult(result);
+    await user.click(await screen.findByRole("button", { name: "戻って確認" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "読み取りの確認" })).toBeInTheDocument();
+  });
+
+  it.each<OcrSubmissionResult>([
+    { status: "draft_create_failed", error: new Error("connection lost") },
+    { status: "draft_create_failed", error: { kind: "api", status: 408 } },
+    { status: "draft_create_failed", error: { kind: "api", status: 409 } },
+    { status: "draft_create_failed", error: { kind: "api", status: 429 } },
+    { status: "submission_failed", matchDraftId: "draft-1" },
+  ])("retains the same plan while acceptance may be uncertain: $status", async (result) => {
+    const { user } = await submitResult(result);
+    await screen.findByRole("button", { name: "もう一度試す" });
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "戻って確認" })).not.toBeInTheDocument();
+  });
+
+  it("does not release an uncertain plan when a later retry is rejected", async () => {
+    const { submit, user } = await submitResult(
+      { status: "draft_create_failed", error: new Error("connection lost") },
+      { status: "draft_create_failed", error: { kind: "api", status: 404 } },
+    );
+    await user.click(await screen.findByRole("button", { name: "もう一度試す" }));
+    expect(submit).toHaveBeenCalledTimes(2);
+    expect(submit.mock.calls[0]?.[0].plan).toBe(submit.mock.calls[1]?.[0].plan);
+    expect(screen.queryByRole("button", { name: "戻って確認" })).not.toBeInTheDocument();
+  });
+
   it("shows indeterminate feedback while preparing the draft", () => {
     renderSubmitting({
       plan,

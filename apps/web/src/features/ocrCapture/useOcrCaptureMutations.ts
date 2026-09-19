@@ -1,25 +1,26 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRef } from "react";
 
+import type { OcrSubmissionPlan } from "@/features/ocrCapture/ocrSubmissionPlan";
 import {
-  ocrJobRequestForSlot,
+  createOcrSubmissionState,
   runOcrSubmissionWorkflow,
 } from "@/features/ocrCapture/ocrSubmissionWorkflow";
 import type {
+  OcrSubmissionState,
   OcrSubmissionResult,
   OcrSubmissionWorkflowParams,
 } from "@/features/ocrCapture/ocrSubmissionWorkflow";
 import { invalidateAfterOcrSubmissionStarted } from "@/shared/api/cacheInvalidation";
-import { runIdempotentMutation } from "@/shared/api/idempotency";
-import { cancelMatchDraft, createMatchDraft } from "@/shared/api/matchDrafts";
+import { createMatchDraft } from "@/shared/api/matchDrafts";
 import { createOcrJob, uploadImage } from "@/shared/api/ocrJobs";
-import type { OcrJobHintsRequest } from "@/shared/api/ocrJobs";
-import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 
 export type OcrCaptureSubmitParams = Pick<
   OcrSubmissionWorkflowParams,
-  "onProgress" | "selectedGameTitle" | "selectedHeldEvent" | "setup" | "slots" | "updateSlot"
-> & { hints: OcrJobHintsRequest };
+  "onProgress" | "updateSlot"
+> & {
+  plan: OcrSubmissionPlan;
+};
 
 export type OcrCaptureMutations = {
   isSubmitting: boolean;
@@ -29,53 +30,26 @@ export type OcrCaptureMutations = {
 /** One mutation owns the entire draft/upload/job workflow, including cache reconciliation. */
 export function useOcrCaptureMutations(): OcrCaptureMutations {
   const queryClient = useQueryClient();
-  const idempotencyKeys = useIdempotencyKeyStore();
+  const checkpoints = useRef(new WeakMap<OcrSubmissionPlan, OcrSubmissionState>());
   const inFlightRef = useRef(false);
   const submission = useMutation({
-    mutationFn: ({ hints, ...params }: OcrCaptureSubmitParams) =>
-      runOcrSubmissionWorkflow({
+    mutationFn: ({ plan, ...params }: OcrCaptureSubmitParams) => {
+      const state = checkpoints.current.get(plan) ?? createOcrSubmissionState();
+      checkpoints.current.set(plan, state);
+      return runOcrSubmissionWorkflow({
+        ...plan,
         ...params,
-        cancelDraft: (matchDraftId) =>
-          runIdempotentMutation(
-            idempotencyKeys,
-            "ocrCapture.cancelMatchDraft",
-            { matchDraftId },
-            (options) => cancelMatchDraft(matchDraftId, options),
-          ),
-        createDraft: (request) =>
-          runIdempotentMutation(
-            idempotencyKeys,
-            "ocrCapture.createMatchDraft",
-            request,
-            (options) => createMatchDraft(request, options),
-          ),
-        createPlayedAtIso: () => new Date().toISOString(),
-        createUploadJob: async ({ file, matchDraftId, slot }) => {
-          const attempt = idempotencyKeys.begin("ocrCapture.createUploadJob", {
-            file: {
-              lastModified: file.lastModified,
-              name: file.name,
-              size: file.size,
-              type: file.type,
-            },
-            matchDraftId,
-            slotKind: slot.kind,
-          });
-          const options = { idempotencyKey: attempt.key };
-          const upload = await uploadImage(file, options);
-          const job = await createOcrJob(
-            ocrJobRequestForSlot(matchDraftId, slot, upload.imageId, hints),
-            options,
-          );
-          attempt.complete();
-          return { upload, job };
-        },
-      }),
+        state,
+        createDraft: createMatchDraft,
+        uploadImage,
+        createJob: createOcrJob,
+      });
+    },
     onSuccess: async (result) => {
       if (
         result.status === "started" ||
         result.status === "partial_started" ||
-        result.status === "failed_cleanup_failed"
+        result.status === "submission_failed"
       ) {
         await invalidateAfterOcrSubmissionStarted(queryClient).catch(() => undefined);
       }

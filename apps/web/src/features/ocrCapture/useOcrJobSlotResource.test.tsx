@@ -289,6 +289,38 @@ describe("useOcrJobSlotResource", () => {
     );
   });
 
+  it("retries only the failed draft and deduplicates refresh until it completes", async () => {
+    const gate = createDeferred<void>();
+    let jobReads = 0;
+    let draftReads = 0;
+    server.use(
+      http.get("/api/ocr-jobs/:jobId", () => {
+        jobReads += 1;
+        return HttpResponse.json(succeededJobResponse());
+      }),
+      http.get("/api/ocr-drafts/:draftId", async () => {
+        draftReads += 1;
+        if (draftReads === 1) return HttpResponse.error();
+        await gate.promise;
+        return HttpResponse.json(ocrDraftResponse());
+      }),
+    );
+    const view = renderResource({ slot: runningSlot });
+    await waitFor(() => expect(view.result.current.slot.status).toBe("failed"));
+    act(() => {
+      view.result.current.refresh();
+      view.result.current.refresh();
+    });
+    await waitFor(() => expect(draftReads).toBe(2));
+    expect(view.result.current.refreshing).toBe(true);
+    expect(jobReads).toBe(1);
+    act(() => gate.resolve());
+    await waitFor(() => expect(view.result.current.draft?.draftId).toBe("draft-1"));
+    expect(view.result.current.slot.status).toBe("succeeded");
+    expect(view.result.current.refreshing).toBe(false);
+    expect(view.result.current.slot.transportError).toBeUndefined();
+  });
+
   it("keeps the job succeeded while its draft loads, then aborts cleanly on unmount", async () => {
     const draftGate = createDeferred<OcrDraftResponse>();
     let draftSignal: AbortSignal | undefined;

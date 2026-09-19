@@ -2,7 +2,7 @@ package momo.api.domain
 
 import momo.api.domain.ids.MemberId
 
-/** OCR recognition policy shared by every producer, independent of request or repository IO. */
+/** Bounded player-alias snapshot fixed when a job is accepted; recognition belongs to the worker. */
 object OcrHintEnrichment:
   private val defaultPlayers = List(
     "member_ponta" -> List("ぽんた"),
@@ -35,8 +35,4 @@ object OcrHintEnrichment:
             }.filter(_.nonEmpty).distinct.take(OcrJobHints.MaxAliasesPerPlayer)
           Option.when(aliases.nonEmpty)(PlayerAliasHint(memberId, aliases))
         }
-    val computerAliases =
-      if hints.computerPlayerAliases.isEmpty && hints.layoutFamily.contains("reiwa") then
-        List("さくま")
-      else hints.computerPlayerAliases
-    hints.copy(knownPlayerAliases = players, computerPlayerAliases = computerAliases)
+    hints.copy(knownPlayerAliases = players)

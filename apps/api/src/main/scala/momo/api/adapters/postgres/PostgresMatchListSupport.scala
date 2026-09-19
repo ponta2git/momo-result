@@ -13,6 +13,7 @@ import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.ids.*
 import momo.api.domain.{
   MatchDraftStatus,
+  MatchLabels,
   MatchListItem,
   MatchListItemKind,
   MatchListRankEntry,
@@ -42,56 +43,24 @@ private[postgres] trait PostgresMatchListSupport:
       updatedAt: Instant,
       hasNote: Option[Boolean],
       heldAtSort: Instant,
+      heldAt: Option[Instant],
   )
 
   protected final case class CursorRow(
-      kind: String,
-      id: String,
-      matchId: Option[MatchId],
-      matchDraftId: Option[MatchDraftId],
-      status: String,
-      heldEventId: Option[HeldEventId],
-      matchNoInEvent: Option[MatchNoInEvent],
-      gameTitleId: Option[GameTitleId],
-      seasonMasterId: Option[SeasonMasterId],
-      mapMasterId: Option[MapMasterId],
-      ownerMemberId: Option[MemberId],
-      playedAt: Option[Instant],
-      createdAt: Instant,
-      updatedAt: Instant,
-      hasNote: Option[Boolean],
-      heldAtSort: Instant,
+      row: Row,
       statusPriority: Int,
       matchNoIsNull: Boolean,
       matchNoSort: Int,
+      labels: MatchLabels,
   ):
-    def row: Row = Row(
-      kind = kind,
-      id = id,
-      matchId = matchId,
-      matchDraftId = matchDraftId,
-      status = status,
-      heldEventId = heldEventId,
-      matchNoInEvent = matchNoInEvent,
-      gameTitleId = gameTitleId,
-      seasonMasterId = seasonMasterId,
-      mapMasterId = mapMasterId,
-      ownerMemberId = ownerMemberId,
-      playedAt = playedAt,
-      createdAt = createdAt,
-      updatedAt = updatedAt,
-      hasNote = hasNote,
-      heldAtSort = heldAtSort,
-    )
-
     def position: MatchListReadModel.CursorPosition = MatchListReadModel.CursorPosition(
       statusPriority = statusPriority,
-      updatedAt = updatedAt,
-      heldAt = heldAtSort,
+      updatedAt = row.updatedAt,
+      heldAt = row.heldAtSort,
       matchNoIsNull = matchNoIsNull,
       matchNoSort = matchNoSort,
-      kind = kind,
-      id = id,
+      kind = row.kind,
+      id = row.id,
     )
 
   protected final case class RankRow(
@@ -115,10 +84,6 @@ private[postgres] trait PostgresMatchListSupport:
       needsReviewCount = needsReviewCount,
     )
 
-  protected enum StatusColumn(val fragment: Fragment):
-    case DraftPersisted extends StatusColumn(fr"d.status")
-    case CombinedStatus extends StatusColumn(fr"combined.status")
-
   protected val confirmedBase = fr"""SELECT
     'match' AS kind,
     m.id AS id,
@@ -135,7 +100,8 @@ private[postgres] trait PostgresMatchListSupport:
     m.created_at,
     m.updated_at,
     (m.note_body IS NOT NULL) AS has_note,
-    COALESCE(he.start_at, m.played_at, m.updated_at) AS held_at_sort
+    COALESCE(he.start_at, m.played_at, m.updated_at) AS held_at_sort,
+    he.start_at
   FROM matches m
   LEFT JOIN held_events he ON he.id = m.held_event_id"""
 
@@ -155,9 +121,18 @@ private[postgres] trait PostgresMatchListSupport:
     d.created_at,
     d.updated_at,
     NULL::boolean AS has_note,
-    COALESCE(he.start_at, d.played_at, d.updated_at) AS held_at_sort
+    COALESCE(he.start_at, d.played_at, d.updated_at) AS held_at_sort,
+    he.start_at
   FROM match_drafts d
   LEFT JOIN held_events he ON he.id = d.held_event_id"""
+
+  /** Decorate after selection so master joins are bounded by the displayed page. */
+  protected final def withLabels(select: Fragment): Fragment =
+    fr"SELECT sortable.*, gt.name, season.name, map.name FROM (" ++ select ++ fr""") sortable
+      LEFT JOIN game_titles gt ON gt.id = sortable.game_title_id
+      LEFT JOIN season_masters season ON season.id = sortable.season_master_id
+      LEFT JOIN map_masters map ON map.id = sortable.map_master_id
+    """
 
   protected final def sortable(select: Fragment): Fragment =
     fr"""SELECT
@@ -261,6 +236,7 @@ private[postgres] trait PostgresMatchListSupport:
 
   protected final def toItem(
       row: Row,
+      labels: MatchLabels,
       getRanks: MatchId => List[MatchListRankEntry]
   ): MatchListItem =
     val kind = MatchListItemKind.fromWire(row.kind).getOrElse(MatchListItemKind.Match)
@@ -282,33 +258,10 @@ private[postgres] trait PostgresMatchListSupport:
       updatedAt = row.updatedAt,
       ranks = ranks,
       hasNote = row.hasNote,
+      heldAt = row.heldAt,
+      labels = labels,
     )
 
-  protected final def statusIn(column: StatusColumn, statuses: Set[MatchDraftStatus]): Fragment =
+  protected final def statusIn(statuses: Set[MatchDraftStatus]): Fragment =
     val nonEmpty = NonEmptyList.fromListUnsafe(statuses.toList)
-    fragments.in(column.fragment, nonEmpty)
-
-  protected final def orderBy(sort: MatchListSort): Fragment =
-    val tieBreaker = fr", combined.kind ASC, combined.id ASC"
-    sort match
-      case MatchListSort.StatusPriority =>
-        fr"""ORDER BY
-          CASE combined.status
-            WHEN 'ocr_running' THEN 0
-            WHEN 'needs_review' THEN 1
-            WHEN 'draft_ready' THEN 2
-            WHEN 'ocr_failed' THEN 4
-            WHEN 'confirmed' THEN 5
-            ELSE 3
-          END ASC,
-          combined.updated_at DESC""" ++ tieBreaker
-      case MatchListSort.UpdatedDesc => fr"ORDER BY combined.updated_at DESC" ++ tieBreaker
-      case MatchListSort.HeldDesc =>
-        fr"ORDER BY combined.held_at_sort DESC, combined.updated_at DESC" ++ tieBreaker
-      case MatchListSort.HeldAsc =>
-        fr"ORDER BY combined.held_at_sort ASC, combined.updated_at DESC" ++ tieBreaker
-      case MatchListSort.MatchNoAsc =>
-        fr"""ORDER BY
-          combined.match_no_in_event IS NULL ASC,
-          combined.match_no_in_event ASC,
-          combined.updated_at DESC""" ++ tieBreaker
+    fragments.in(fr"d.status", nonEmpty)

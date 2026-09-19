@@ -1,5 +1,6 @@
 import { http, HttpResponse } from "msw";
 
+import { makeMatchDraftReviewResponse } from "@/test/factories/matchDraftReview";
 import { makeMatchDraftSourceImageResponses } from "@/test/factories/sourceImages";
 import { mswState, now } from "@/test/msw/fixtures";
 
@@ -19,6 +20,9 @@ function pagination(page: number, pageSize: number, totalItems: number) {
 }
 
 export const matchHandlers = [
+  http.get("/api/match-drafts/:draftId/review", ({ params }) =>
+    HttpResponse.json(makeMatchDraftReviewResponse(String(params["draftId"]))),
+  ),
   http.post("/api/match-drafts", async () =>
     HttpResponse.json({
       createdAt: now,
@@ -115,7 +119,14 @@ export const matchHandlers = [
 
     const offset = (page - 1) * pageSize;
     return HttpResponse.json({
-      items: items.slice(offset, offset + pageSize),
+      items: items.slice(offset, offset + pageSize).map((item) => ({
+        ...item,
+        heldAt: item.heldEventId === "held-1" ? now : item.playedAt,
+        gameTitleName: mswState.gameTitles.find((title) => title.id === item.gameTitleId)?.name,
+        seasonName: mswState.seasonMasters.find((season) => season.id === item.seasonMasterId)
+          ?.name,
+        mapName: mswState.mapMasters.find((map) => map.id === item.mapMasterId)?.name,
+      })),
       pagination: pagination(page, pageSize, items.length),
     });
   }),
@@ -139,6 +150,15 @@ export const matchHandlers = [
       ).length,
     });
   }),
+  http.get("/api/matches/:matchId/identity", ({ params }) =>
+    HttpResponse.json({
+      matchId: String(params["matchId"]),
+      matchNoInEvent: 1,
+      playedAt: now,
+      gameTitleName: "桃太郎電鉄2",
+      seasonName: "今シーズン",
+    }),
+  ),
   http.get("/api/matches/:matchId", ({ params }) =>
     HttpResponse.json({
       createdAt: now,
@@ -146,6 +166,10 @@ export const matchHandlers = [
       gameTitleId: "gt_momotetsu_2",
       heldEventId: "held-1",
       layoutFamily: "momotetsu_2",
+      heldAt: now,
+      gameTitleName: "桃太郎電鉄2",
+      seasonName: "今シーズン",
+      mapName: "東日本編",
       mapMasterId: "map_east",
       matchId: params["matchId"],
       matchNoInEvent: 1,
@@ -223,6 +247,10 @@ export const matchHandlers = [
       gameTitleId: "gt_momotetsu_2",
       heldEventId: "held-1",
       layoutFamily: "momotetsu_2",
+      heldAt: now,
+      gameTitleName: "桃太郎電鉄2",
+      seasonName: "今シーズン",
+      mapName: "東日本編",
       mapMasterId: "map_east",
       matchId: params["matchId"],
       matchNoInEvent: 1,

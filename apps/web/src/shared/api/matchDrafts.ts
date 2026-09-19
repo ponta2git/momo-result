@@ -3,6 +3,7 @@ import type { ApiSignalOptions, IdempotencyRequestOptions } from "@/shared/api/c
 import type { components } from "@/shared/api/generated";
 
 export type CreateMatchDraftRequest = components["schemas"]["CreateMatchDraftRequest"];
+export type MatchDraftReviewResponse = components["schemas"]["MatchDraftReviewResponse"];
 export type MatchDraftResponse = components["schemas"]["MatchDraftResponse"];
 export type MatchDraftDetailResponse = components["schemas"]["MatchDraftDetailResponse"];
 export type MatchDraftSourceImageListResponse =
@@ -31,16 +32,6 @@ export async function getMatchDraftDetail(
   );
 }
 
-export async function listMatchDraftSourceImages(
-  draftId: string,
-  options: ApiSignalOptions = {},
-): Promise<MatchDraftSourceImageListResponse> {
-  return apiRequest<MatchDraftSourceImageListResponse>(
-    `/api/match-drafts/${encodeURIComponent(draftId)}/source-images`,
-    options,
-  );
-}
-
 export async function downloadMatchDraftSourceImage(
   imageUrl: string,
   signal?: AbortSignal,
@@ -49,9 +40,14 @@ export async function downloadMatchDraftSourceImage(
   return result.blob;
 }
 
-export async function downloadMatchDraftSourceImagesArchive(draftId: string, signal?: AbortSignal) {
+export async function downloadMatchDraftSourceImagesArchive(
+  draftId: string,
+  updatedAt: string,
+  signal?: AbortSignal,
+) {
+  const params = new URLSearchParams({ updatedAt });
   return apiDownload(
-    `/api/match-drafts/${encodeURIComponent(draftId)}/source-images.zip`,
+    `/api/match-drafts/${encodeURIComponent(draftId)}/source-images.zip?${params.toString()}`,
     signal ? { signal } : {},
   );
 }
@@ -66,5 +62,15 @@ export async function cancelMatchDraft(
       method: "POST",
       idempotency: { key: options.idempotencyKey },
     },
+  );
+}
+
+export async function getMatchDraftReview(
+  draftId: string,
+  options: ApiSignalOptions = {},
+): Promise<MatchDraftReviewResponse> {
+  return apiRequest<MatchDraftReviewResponse>(
+    `/api/match-drafts/${encodeURIComponent(draftId)}/review`,
+    options,
   );
 }

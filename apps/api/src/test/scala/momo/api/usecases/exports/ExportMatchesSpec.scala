@@ -9,6 +9,7 @@ import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.inmemory.{
   InMemoryGameTitlesRepository,
   InMemoryMapMastersRepository,
+  InMemoryMatchExportsRepository,
   InMemoryMatchesRepository,
   InMemoryMembersRepository,
   InMemorySeasonMastersRepository
@@ -99,7 +100,10 @@ final class ExportMatchesSpec extends MomoCatsEffectSuite:
       seasons <- InMemorySeasonMastersRepository.create[IO]
       _ <- MatchFixtures.seedWorldMasters(gameTitles, maps, seasons, titleId, mapId, seasonId, now)
       _ <- (1 to count).toList.traverse_(index => matches.create(matchRecord(index)))
-    yield ExportMatches[IO](matches, members, maps, seasons, limits)
+    yield ExportMatches[IO](
+      new InMemoryMatchExportsRepository(matches, members, maps, seasons),
+      limits
+    )
 
   private def matchRecord(index: Int): MatchRecord = MatchFixtures.matchRecord(
     id = MatchId.unsafeFromString(s"match-$index"),

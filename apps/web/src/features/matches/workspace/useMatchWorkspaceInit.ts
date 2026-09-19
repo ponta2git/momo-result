@@ -14,14 +14,13 @@ import {
 } from "@/features/matches/workspace/workspaceDerivations";
 import type { getMatchDraftDetail } from "@/shared/api/matchDrafts";
 import type { getMatch } from "@/shared/api/matches";
-import type { getOcrDraftsBulk } from "@/shared/api/ocrDrafts";
+import type { OcrDraftListResponse } from "@/shared/api/ocrDrafts";
 import { buildMemberAliasDirectory } from "@/shared/domain/memberDirectory";
 import type { MemberAliasRecord } from "@/shared/domain/memberDirectory";
 import type { SlotMap } from "@/shared/domain/slotMap";
 
 type MatchDetail = Awaited<ReturnType<typeof getMatch>>;
 type DraftDetail = Awaited<ReturnType<typeof getMatchDraftDetail>>;
-type OcrDraftBulk = Awaited<ReturnType<typeof getOcrDraftsBulk>>;
 
 export type MatchWorkspaceInitParams = {
   draftDetail: DraftDetail | undefined;
@@ -29,7 +28,7 @@ export type MatchWorkspaceInitParams = {
   matchDraftId: string | undefined;
   memberAliases: readonly MemberAliasRecord[];
   mode: WorkspaceMode;
-  ocrDrafts: OcrDraftBulk | undefined;
+  ocrDrafts: OcrDraftListResponse | undefined;
   onInitialize: (values: MatchFormValues, workspaceData: MatchWorkspaceInitialData | null) => void;
   reviewDraftIdList: readonly string[];
   reviewDraftIds: SlotMap<string>;

@@ -11,8 +11,8 @@ import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.matchlist.MatchListProjection
 import momo.api.domain.{
   MatchDraftStatus,
+  MatchLabels,
   MatchListItem,
-  MatchListSort,
   MatchListStatusFilter,
   MatchListSummary
 }
@@ -48,11 +48,10 @@ object PostgresMatchList extends PostgresMatchListSupport:
       val draftStatusCondition = filter.status match
         case MatchListStatusFilter.All => None
         case MatchListStatusFilter.Incomplete =>
-          Some(statusIn(StatusColumn.DraftPersisted, MatchListStatusFilter.incompleteStatuses))
+          Some(statusIn(MatchListStatusFilter.incompleteStatuses))
         case MatchListStatusFilter.OcrRunning =>
           Some(fr"d.status = ${MatchDraftStatus.OcrRunning}")
         case MatchListStatusFilter.PreConfirm => Some(statusIn(
-            StatusColumn.DraftPersisted,
             MatchListProjection.preConfirmStatuses,
           ))
         case MatchListStatusFilter.NeedsReview =>
@@ -99,19 +98,23 @@ object PostgresMatchList extends PostgresMatchListSupport:
             boundary = filter.page.cursor.flatMap(cursorBoundary(filter.sort, _))
             ordered = fr"SELECT sortable.* FROM (" ++ sortable(selectQuery) ++
               fr") AS sortable" ++ fragments.whereAndOpt(boundary.toList) ++
-              cursorOrderBy(filter.sort, direction) ++ fr"LIMIT ${targetSize + 1}"
+              cursorOrderBy(filter.sort, direction) ++ fr"LIMIT $targetSize"
             fetched <-
               if targetSize == 0 then List.empty[CursorRow].pure[ConnectionIO]
-              else ordered.query[CursorRow].to[List]
-            selected = fetched.take(targetSize)
+              else
+                (withLabels(
+                  ordered
+                ) ++ cursorOrderBy(filter.sort, direction)).query[CursorRow].to[List]
             pageRows = direction match
-              case MatchListReadModel.CursorDirection.After => selected
-              case MatchListReadModel.CursorDirection.Before => selected.reverse
+              case MatchListReadModel.CursorDirection.After => fetched
+              case MatchListReadModel.CursorDirection.Before => fetched.reverse
             rows = pageRows.map(_.row)
             matchIds = rows.flatMap(_.matchId).distinct
             ranks <- loadRanks(matchIds)
           yield MatchListReadModel.CursorPage(
-            items = rows.map(row => toItem(row, matchId => ranks.getOrElse(matchId, Nil))),
+            items = pageRows.map(cursor =>
+              toItem(cursor.row, cursor.labels, matchId => ranks.getOrElse(matchId, Nil))
+            ),
             pageSize = filter.page.pageSize,
             totalItems = total,
             page = page,
@@ -146,9 +149,12 @@ object PostgresMatchList extends PostgresMatchListSupport:
         fr"d.status <> ${MatchDraftStatus.Cancelled}",
         fr"d.status <> ${MatchDraftStatus.Confirmed}",
       )
-      (fr"SELECT combined.* FROM (" ++ selected ++ fr") AS combined" ++ orderBy(
-        MatchListSort.MatchNoAsc
-      )).query[Row].to[List].map(_.map(row => toItem(row, _ => Nil)))
+      (withLabels(selected) ++ fr"""
+        ORDER BY sortable.match_no_in_event ASC NULLS LAST, sortable.updated_at DESC,
+                 sortable.kind ASC, sortable.id ASC
+      """).query[(Row, MatchLabels)].to[List].map(_.map { case (row, labels) =>
+        toItem(row, labels, _ => Nil)
+      })
 
     override def summarize(
         filter: MatchListReadModel.SummaryFilter
@@ -160,17 +166,16 @@ object PostgresMatchList extends PostgresMatchListSupport:
         Some(fr"d.status <> ${MatchDraftStatus.Cancelled}"),
         Some(fr"d.status <> ${MatchDraftStatus.Confirmed}"),
       ).flatten
-      val draftSelect = draftBase ++ fragments.whereAndOpt(draftConditionsCommon)
       val incompleteCondition =
-        statusIn(StatusColumn.CombinedStatus, MatchListStatusFilter.incompleteStatuses)
+        statusIn(MatchListStatusFilter.incompleteStatuses)
       val preConfirmCondition =
-        statusIn(StatusColumn.CombinedStatus, MatchListProjection.preConfirmStatuses)
+        statusIn(MatchListProjection.preConfirmStatuses)
       val query =
         fr"SELECT COUNT(*) FILTER (WHERE" ++ incompleteCondition ++ fr""")::int AS incomplete_count,
-          COUNT(*) FILTER (WHERE combined.status = 'ocr_running')::int AS ocr_running_count,
+          COUNT(*) FILTER (WHERE d.status = 'ocr_running')::int AS ocr_running_count,
           COUNT(*) FILTER (WHERE""" ++ preConfirmCondition ++ fr""")::int AS pre_confirm_count,
-          COUNT(*) FILTER (WHERE combined.status = 'needs_review')::int AS needs_review_count
-        FROM (""" ++ draftSelect ++ fr") AS combined"
+          COUNT(*) FILTER (WHERE d.status = 'needs_review')::int AS needs_review_count
+        FROM match_drafts d""" ++ fragments.whereAndOpt(draftConditionsCommon)
       query.query[SummaryRow].unique.map(_.toSummary)
 
     private def pageCount(totalItems: Int, pageSize: Int): Int =

@@ -1,7 +1,5 @@
 package momo.api.bootstrap
 
-import java.time.temporal.ChronoUnit
-
 import cats.effect.{Async, Resource}
 import cats.syntax.all.*
 import org.typelevel.log4cats.LoggerFactory
@@ -11,8 +9,7 @@ import momo.api.ports.storage.ImageOrphanCleaner
 import momo.api.repositories.{
   AppSessionsRepository,
   IdempotencyRepository,
-  OcrJobMaintenanceRepository,
-  SeriesAnalysisHistoryMaintenance
+  OcrJobMaintenanceRepository
 }
 import momo.api.usecases.maintenance.{
   ExpiredSessionPruner,
@@ -28,7 +25,6 @@ private[bootstrap] object RuntimeMaintenance:
       ocrMaintenance: OcrJobMaintenanceRepository[F],
       appSessions: AppSessionsRepository[F],
       idempotency: IdempotencyRepository[F],
-      seriesAnalysisHistory: Option[SeriesAnalysisHistoryMaintenance[F]],
       now: F[java.time.Instant],
   ): Resource[F, Unit] =
     val logger = LoggerFactory[F].getLogger
@@ -54,23 +50,4 @@ private[bootstrap] object RuntimeMaintenance:
       now.flatMap(idempotency.cleanup)
         .flatMap(deleted => logger.info(s"idempotency_key_pruner deleted=${deleted.toString}"))
     )
-    val seriesAnalysisHistoryPruner = seriesAnalysisHistory.fold(Resource.unit[F]) {
-      maintenance =>
-        PeriodicMaintenance.resource(
-          "series_analysis_history_pruner",
-          config.resourceLimits.sessionPruneInterval,
-        )(
-          now.flatMap(current =>
-            maintenance.cleanupHistory(
-              current.minus(45, ChronoUnit.DAYS),
-              current.minus(1, ChronoUnit.DAYS),
-              limitPerTable = 500,
-            )
-          ).flatMap(counts =>
-            logger.info(s"series_analysis_history_pruner deleted=${counts.total.toString}")
-          )
-        )
-    }
-
-    imageOrphanReaper *> staleOcrJobReaper *> expiredSessionPruner *> idempotencyKeyPruner *>
-      seriesAnalysisHistoryPruner
+    imageOrphanReaper *> staleOcrJobReaper *> expiredSessionPruner *> idempotencyKeyPruner

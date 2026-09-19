@@ -1,23 +1,16 @@
 package momo.api.usecases.matches
 
-import cats.Monad
+import cats.Functor
 import cats.syntax.all.*
 
-import momo.api.domain.MatchRecord
-import momo.api.domain.ids.*
+import momo.api.domain.ids.MatchId
+import momo.api.domain.{MatchDetail, MatchIdentity}
 import momo.api.errors.AppError
-import momo.api.repositories.{LoginAccountsRepository, MatchesRepository}
-import momo.api.usecases.syntax.UseCaseSyntax.*
+import momo.api.repositories.MatchDetailReadModel
 
-final case class MatchDetail(record: MatchRecord, noteUpdatedByDisplayName: Option[String])
-
-final class GetMatch[F[_]: Monad](
-    matches: MatchesRepository[F],
-    loginAccounts: LoginAccountsRepository[F],
-):
+final class GetMatch[F[_]: Functor](matches: MatchDetailReadModel[F]):
   def run(id: MatchId): F[Either[AppError, MatchDetail]] = matches.find(id)
-    .orNotFound("match", id.value).semiflatMap { record =>
-      record.note.updatedByAccountId.traverse(loginAccounts.find).map(accounts =>
-        MatchDetail(record, accounts.flatten.map(_.displayName))
-      )
-    }.value
+    .map(_.toRight(AppError.NotFound("match", id.value)))
+
+  def identity(id: MatchId): F[Either[AppError, MatchIdentity]] = matches.identity(id)
+    .map(_.toRight(AppError.NotFound("match", id.value)))

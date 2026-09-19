@@ -133,7 +133,7 @@ cleanup() {
   set +e
   release_input_lock
   if [[ -n "${worker_pid}" ]]; then
-    docker stop --timeout 5 "${worker_container}" >/dev/null 2>&1 || status=1
+    docker stop --timeout 60 "${worker_container}" >/dev/null 2>&1 || status=1
     wait "${worker_pid}" 2>/dev/null || status=1
   fi
   redis_ci DEL "${analysis_stream}" "${ocr_stream}" "${ocr_dead_stream}" >/dev/null 2>&1 \
@@ -322,7 +322,7 @@ docker run --rm --name "${worker_container}" --privileged --cgroupns private \
   --env MOMO_ANALYSIS_LEASE_DURATION_MS=10000 \
   --env MOMO_ANALYSIS_HEARTBEAT_INTERVAL_MS=200 \
   --env MOMO_ANALYSIS_CHILD_STOP_GRACE_MS=1000 \
-  --env MOMO_ANALYSIS_REDIS_BLOCK_MS=50 \
+  --env MOMO_ANALYSIS_REDIS_BLOCK_MS=10000 \
   --env MOMO_ANALYSIS_PEL_RECOVERY_INTERVAL_MS=300000 \
   --env MOMO_HEAVY_CGROUP_V2_VALIDATED=true \
   --env MOMO_OCR_V2_CONSUMER_MODE=enabled \
@@ -340,8 +340,8 @@ docker run --rm --name "${worker_container}" --privileged --cgroupns private \
   --env MOMO_OCR_V2_LEASE_DURATION_MS=5000 \
   --env MOMO_OCR_V2_HEARTBEAT_INTERVAL_MS=200 \
   --env MOMO_OCR_V2_FINALIZATION_TIMEOUT_MS=1000 \
-  --env MOMO_OCR_V2_RETRY_DELAY_MS=1000 \
-  --env MOMO_OCR_V2_REDIS_BLOCK_MS=50 \
+  --env MOMO_OCR_V2_RETRY_DELAY_MS=60000 \
+  --env MOMO_OCR_V2_REDIS_BLOCK_MS=10000 \
   --env MOMO_OCR_V2_PEL_RECOVERY_INTERVAL_MS=300000 \
   --env MOMO_OCR_V2_CLAIM_IDLE_MS=15000 \
   --env MOMO_OCR_V2_TIMEOUT_MS=5000 \
@@ -402,14 +402,14 @@ redis_ci XADD "${ocr_stream}" '*' \
   attempt 1 \
   enqueuedAt 2026-08-12T00:00:00Z >/dev/null
 
-wait_for_sql_value "queued|1|0|true|1" "
-  SELECT job.status || '|' || job.attempt_count || '|' || job.transient_retry_count || '|' ||
-         (job.safe_failure_code IS NULL)::text || '|' ||
+wait_for_sql_value "true|0|true|1" "
+  SELECT (job.status IN ('queued', 'running'))::text || '|' ||
+         job.transient_retry_count || '|' || (job.safe_failure_code IS NULL)::text || '|' ||
          COUNT(*) FILTER (WHERE attempt.outcome = 'preempted')::text
   FROM series_analysis_jobs job
   JOIN series_analysis_job_attempts attempt ON attempt.job_id = job.id
   WHERE job.id = 'ci-preemption-analysis-job'
-  GROUP BY job.status, job.attempt_count, job.transient_retry_count, job.safe_failure_code;
+  GROUP BY job.status, job.transient_retry_count, job.safe_failure_code;
 " "analysis preemption without failure accounting"
 wait_for_log '"reason":"preempted"' "the analysis preemption requeue event"
 echo "OCR priority preempted and requeued analysis without a failure."
@@ -419,18 +419,20 @@ wait_for_sql_value "queued|1|true" "
   FROM ocr_jobs WHERE id = 'ci-preemption-ocr-job';
 " "the transient R2 failure requeue"
 wait_for_sql_value "true" "
-  SELECT (owner IS NULL AND preempt_requested_by IS NULL)::text
+  SELECT (owner IS DISTINCT FROM 'ci-preemption-ocr-worker'
+          AND preempt_requested_by IS NULL)::text
   FROM worker_execution_slots WHERE slot_key = 'shared-heavy-work';
-" "the released shared execution slot"
+" "the released OCR execution slot"
 
+# Durable outbox delivery may already have restarted analysis behind the input lock.
+# Verify that the interrupted child was reaped, independently of its replacement.
 if docker exec --user 10001:10001 "${worker_container}" \
-  pgrep -f '^/usr/local/bin/momo-processing-worker child-compute ' >/dev/null
+  sh -c 'kill -0 "$1"' -- "${analysis_child}" 2>/dev/null
 then
   fail_with_log "The preempted analysis process group was not reaped."
 fi
 
 release_input_lock
-redis_ci XADD "${analysis_stream}" '*' schemaVersion 1 jobId "${analysis_job}" >/dev/null
 wait_for_sql_value "succeeded|2|1|1" "
   SELECT job.status || '|' || job.attempt_count || '|' ||
          COUNT(*) FILTER (WHERE attempt.outcome = 'preempted')::text || '|' ||

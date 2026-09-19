@@ -9,6 +9,8 @@ use redis::{
 };
 use thiserror::Error;
 
+use crate::pel_recovery::MAXIMUM_READ_BLOCK;
+
 use super::contract::{
     OcrQueueContractError, ValidatedOcrDelivery, parse_validated_delivery, recoverable_job_id,
 };
@@ -53,7 +55,9 @@ impl OcrQueueConfig {
         .into_iter()
         .any(|value| !valid_identifier(value))
             || claim_idle.is_zero()
+            || stream == dead_letter_stream
             || block.is_zero()
+            || block > MAXIMUM_READ_BLOCK
             || !(1..=MAXIMUM_DELIVERY_ATTEMPTS).contains(&maximum_delivery_attempts)
             || !(1..=MAXIMUM_PENDING_SCAN_COUNT).contains(&pending_scan_count)
         {
@@ -202,12 +206,15 @@ pub(crate) async fn ensure_consumer_group(
 pub(crate) async fn read_new_delivery(
     redis: &mut ConnectionManager,
     config: &OcrQueueConfig,
+    block: Duration,
 ) -> Result<Option<OcrQueueDelivery>, OcrQueueError> {
-    let block = duration_milliseconds(config.block)?;
-    let options = StreamReadOptions::default()
+    let block = duration_milliseconds(block)?;
+    let mut options = StreamReadOptions::default()
         .group(&config.group, &config.consumer)
-        .count(1)
-        .block(block);
+        .count(1);
+    if block > 0 {
+        options = options.block(block);
+    }
     let reply: Option<StreamReadReply> = redis
         .xread_options(&[&config.stream], &[">"], &options)
         .await?;
@@ -218,7 +225,7 @@ pub(crate) async fn read_new_delivery(
 
 /// Scans at most one configured `XPENDING` page and claims at most one eligible delivery.
 ///
-/// The caller interleaves pages with a normal blocking read, and caps the number of pages in a
+/// The caller interleaves pages with a new-entry read, and caps the number of pages in a
 /// sweep. Young entries become bounded local target-time checks so a graceful restart does not
 /// unnecessarily defer a transient retry to the next cold scan.
 pub(crate) async fn recover_cold_page(
@@ -226,6 +233,10 @@ pub(crate) async fn recover_cold_page(
     config: &OcrQueueConfig,
     cursor: &mut PendingRecoveryCursor,
 ) -> Result<ColdRecoveryPage, OcrQueueError> {
+    if cursor.current() == PENDING_CURSOR_START {
+        crate::stream_retention::trim_acknowledged_prefix(redis, &config.stream, &config.group)
+            .await?;
+    }
     let pending: StreamPendingCountReply = redis
         .xpending_count(
             &config.stream,
@@ -397,22 +408,18 @@ pub(crate) async fn dead_letter_and_acknowledge(
     delivery: &OcrQueueDelivery,
 ) -> Result<(), OcrQueueError> {
     let fields = dead_letter_fields(delivery);
-    let mut transaction = redis::pipe();
-    transaction.atomic();
-    transaction
-        .cmd("XADD")
-        .arg(&config.dead_letter_stream)
-        .arg("*");
-    for (name, value) in fields {
-        transaction.arg(name).arg(value);
-    }
-    transaction
-        .ignore()
-        .cmd("XACK")
+    let mut command = redis::cmd("EVAL");
+    command
+        .arg(include_str!("dead_letter_and_acknowledge.lua"))
+        .arg(2)
         .arg(&config.stream)
+        .arg(&config.dead_letter_stream)
         .arg(&config.group)
         .arg(&delivery.message_id);
-    let (acknowledged,): (usize,) = transaction.query_async(redis).await?;
+    for (name, value) in fields {
+        command.arg(name).arg(value);
+    }
+    let acknowledged: usize = command.query_async(redis).await?;
     if acknowledged != 1 {
         return Err(OcrQueueError::DeadLetterTransaction);
     }
@@ -482,24 +489,126 @@ mod tests {
 
     use super::*;
 
+    #[tokio::test]
+    #[ignore = "requires an isolated STREAM_WAIT_SMOKE_REDIS_URL"]
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "integration assertions report protocol violations while dependency failures use Result"
+    )]
+    async fn real_redis_preserves_wake_recovery_and_new_delivery_fairness()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let redis_url = std::env::var("STREAM_WAIT_SMOKE_REDIS_URL")?;
+        let client = redis::Client::open(redis_url)?;
+        let mut redis = crate::stream_connection::connect(&client).await?;
+        let mut publisher = client.get_connection_manager().await?;
+        let mut queue = config(2, 10)?;
+        queue.stream = format!("momo:stream-wait-smoke:{}", std::process::id());
+        queue.claim_idle = Duration::from_millis(250);
+        ensure_consumer_group(&mut redis, &queue).await?;
+
+        assert!(
+            tokio::time::timeout(
+                Duration::from_secs(1),
+                read_new_delivery(&mut redis, &queue, Duration::ZERO)
+            )
+            .await??
+            .is_none(),
+            "an immediate recovery deadline must omit BLOCK instead of waiting forever"
+        );
+        let publish = async {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            let sent_at = std::time::Instant::now();
+            let id: String = publisher
+                .xadd(&queue.stream, "*", &[("jobId", "wake")])
+                .await?;
+            Ok::<_, RedisError>((sent_at, id))
+        };
+        let (delivery, sent) = tokio::join!(
+            read_new_delivery(&mut redis, &queue, MAXIMUM_READ_BLOCK),
+            publish
+        );
+        let (sent_at, message_id) = sent?;
+        assert_eq!(
+            delivery?.map(|delivery| delivery.message_id),
+            Some(message_id.clone())
+        );
+        assert!(
+            sent_at.elapsed() < Duration::from_secs(1),
+            "a long BLOCK must wake immediately when an entry arrives"
+        );
+
+        let now = std::time::Instant::now();
+        let due_at = now + queue.claim_idle;
+        let mut schedule =
+            crate::pel_recovery::PelRecoverySchedule::new(now, Duration::from_mins(5));
+        assert!(schedule.record_cold_page(now, true));
+        assert!(schedule.schedule_target(message_id.clone(), due_at));
+        let block = schedule.read_block(now, MAXIMUM_READ_BLOCK);
+        assert_eq!(block, queue.claim_idle);
+        assert!(
+            read_new_delivery(&mut redis, &queue, block)
+                .await?
+                .is_none()
+        );
+        assert!(
+            now.elapsed() < Duration::from_secs(2),
+            "known pending work must not wait for the full idle block"
+        );
+        schedule.record_new_delivery_read();
+        assert_eq!(
+            schedule.due_action(std::time::Instant::now()),
+            Some(crate::pel_recovery::RecoveryAction::Targeted(
+                message_id.clone()
+            ))
+        );
+        assert!(matches!(
+            recover_targeted_delivery(&mut redis, &queue, &message_id).await?,
+            TargetedRecovery::Delivery(_)
+        ));
+        schedule.record_target_attempt(&message_id);
+
+        let next_id: String = publisher
+            .xadd(&queue.stream, "*", &[("jobId", "next")])
+            .await?;
+        assert!(schedule.schedule_target(String::from("0-0"), now));
+        assert_eq!(schedule.due_action(std::time::Instant::now()), None);
+        let fairness_block = schedule.read_block(std::time::Instant::now(), MAXIMUM_READ_BLOCK);
+        assert_eq!(fairness_block, Duration::ZERO);
+        assert_eq!(
+            read_new_delivery(&mut redis, &queue, fairness_block)
+                .await?
+                .map(|next| next.message_id),
+            Some(next_id)
+        );
+        schedule.record_new_delivery_read();
+        assert!(
+            schedule.due_action(std::time::Instant::now()).is_some(),
+            "new delivery reads must interleave pending recovery"
+        );
+        let _: usize = publisher.del(&queue.stream).await?;
+        Ok(())
+    }
+
     #[test]
     fn queue_configuration_is_fully_bounded() {
         assert!(config(1, 10).is_ok());
         assert!(config(0, 10).is_err());
         assert!(config(1, 0).is_err());
-        assert!(
-            OcrQueueConfig::new(
-                String::from("unsafe stream"),
-                String::from("group"),
-                String::from("dead"),
-                String::from("consumer"),
-                Duration::from_secs(1),
-                Duration::from_secs(1),
-                1,
-                10,
-            )
-            .is_err()
-        );
+        for (stream, dead) in [("unsafe stream", "dead"), ("same", "same")] {
+            assert!(
+                OcrQueueConfig::new(
+                    String::from(stream),
+                    String::from("group"),
+                    String::from(dead),
+                    String::from("consumer"),
+                    Duration::from_secs(1),
+                    Duration::from_secs(1),
+                    1,
+                    10,
+                )
+                .is_err()
+            );
+        }
     }
 
     #[test]
@@ -576,7 +685,7 @@ mod tests {
             String::from("momo:ocr:v2:jobs:dead"),
             String::from("ocr-worker-1"),
             Duration::from_mins(5),
-            Duration::from_secs(30),
+            MAXIMUM_READ_BLOCK,
             maximum_delivery_attempts,
             pending_scan_count,
         )

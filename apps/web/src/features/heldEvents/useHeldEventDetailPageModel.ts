@@ -1,12 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { useLocation, useParams, useSearchParams } from "react-router-dom";
 
 import { buildHeldEventPlayerRecaps } from "@/features/heldEvents/heldEventDetailViewModel";
-import type {
-  HeldEventMasterNames,
-  HeldEventPlayerRecap,
-} from "@/features/heldEvents/heldEventDetailViewModel";
+import type { HeldEventPlayerRecap } from "@/features/heldEvents/heldEventDetailViewModel";
 import { heldEventOcrCaptureHref } from "@/features/heldEvents/heldEventNavigation";
 import type {
   HeldEventDetailResponse,
@@ -21,7 +18,6 @@ import {
 } from "@/shared/api/queryErrorState";
 import { heldEventDetailQueryOptions } from "@/shared/api/queryOptions";
 import { useRetryNotice } from "@/shared/lib/useRetryNotice";
-import { useMasterNameDirectory } from "@/shared/masters/useMasterNameDirectory";
 import {
   currentInternalLocation,
   sanitizeReturnTo,
@@ -34,24 +30,13 @@ type RefreshModel = {
   run: () => void;
 };
 
-type HeldEventDetailEnrichmentModel =
-  | { kind: "complete" }
-  | { kind: "pending" }
-  | {
-      fields: string[];
-      kind: "warning";
-      refresh: RefreshModel;
-    };
-
 type HeldEventDetailFreshnessModel = { kind: "current" } | { kind: "stale"; refresh: RefreshModel };
 
 export type HeldEventDetailReadyPageModel = {
-  enrichment: HeldEventDetailEnrichmentModel;
   event: {
     detail: HeldEventDetailResponse;
     drafts: HeldEventDraftResponse[];
     emphasizeNewMatch: boolean;
-    masterNames: HeldEventMasterNames;
     matches: HeldEventMatchResponse[];
     playerRecaps: HeldEventPlayerRecap[];
   };
@@ -82,9 +67,8 @@ export type HeldEventDetailPageModel =
     }
   | HeldEventDetailReadyPageModel;
 
-/** Maps the held-event resource and optional master-name enrichment into one screen contract. */
+/** Maps the held-event snapshot into one screen contract. */
 export function useHeldEventDetailPageModel(): HeldEventDetailPageModel {
-  const [refreshingAll, setRefreshingAll] = useState(false);
   const { heldEventId = "" } = useParams<{ heldEventId: string }>();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -101,8 +85,6 @@ export function useHeldEventDetailPageModel(): HeldEventDetailPageModel {
   const detailQuery = useQuery(
     heldEventDetailQueryOptions(heldEventId, heldEventId.trim().length > 0),
   );
-  const masters = useMasterNameDirectory();
-  const refreshMasters = masters.refresh;
 
   const {
     data: detail,
@@ -127,23 +109,15 @@ export function useHeldEventDetailPageModel(): HeldEventDetailPageModel {
       ),
     [detail?.drafts],
   );
-  const masterNames: HeldEventMasterNames = masters.names;
   const playerRecaps = useMemo(() => buildHeldEventPlayerRecaps(matches), [matches]);
   const detailFailed = useRetryNotice(
     shouldShowQueryError({ error: detailError, isFetching: detailIsFetching }),
     detailIsFetching,
     heldEventId,
   );
-  const failedMasterNameFields = [
-    masters.failed.gameTitles ? "作品名" : undefined,
-    masters.failed.seasons ? "シーズン名" : undefined,
-    masters.failed.maps ? "マップ名" : undefined,
-  ].filter((field): field is string => Boolean(field));
-  const refreshing = detailIsFetching || masters.refreshing;
   const refresh = useCallback(() => {
-    setRefreshingAll(true);
-    void Promise.all([refetchDetail(), refreshMasters()]).finally(() => setRefreshingAll(false));
-  }, [refetchDetail, refreshMasters]);
+    void refetchDetail();
+  }, [refetchDetail]);
   const retryDetail = useCallback(() => {
     void refetchDetail();
   }, [refetchDetail]);
@@ -181,28 +155,11 @@ export function useHeldEventDetailPageModel(): HeldEventDetailPageModel {
   }
 
   const encodedHeldEventId = encodeURIComponent(detail.id);
-  const enrichment: HeldEventDetailEnrichmentModel =
-    failedMasterNameFields.length > 0
-      ? {
-          fields: failedMasterNameFields,
-          kind: "warning",
-          refresh: {
-            disabled: masters.refreshing,
-            pending: masters.refreshing && !refreshingAll,
-            run: masters.retryFailed,
-          },
-        }
-      : masters.initialPending
-        ? { kind: "pending" }
-        : { kind: "complete" };
-
   return {
-    enrichment,
     event: {
       detail,
       drafts,
       emphasizeNewMatch: drafts.length === 0 && matches.length === 0,
-      masterNames,
       matches,
       playerRecaps,
     },
@@ -211,7 +168,7 @@ export function useHeldEventDetailPageModel(): HeldEventDetailPageModel {
           kind: "stale",
           refresh: {
             disabled: detailIsFetching,
-            pending: detailIsFetching && !refreshingAll,
+            pending: detailIsFetching,
             run: retryDetail,
           },
         }
@@ -225,13 +182,8 @@ export function useHeldEventDetailPageModel(): HeldEventDetailPageModel {
       returnTo,
     },
     refresh: {
-      disabled: refreshing,
-      pending:
-        refreshingAll ||
-        (refreshing &&
-          !detailFailed &&
-          failedMasterNameFields.length === 0 &&
-          !masters.initialPending),
+      disabled: detailIsFetching,
+      pending: detailIsFetching,
       run: refresh,
     },
   };

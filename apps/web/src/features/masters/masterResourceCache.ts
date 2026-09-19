@@ -1,7 +1,6 @@
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 
-import { masterQueryKeys } from "@/features/masters/masterQueries";
-import { masterKeys, seriesAnalysisKeys } from "@/shared/api/queryKeys";
+import { heldEventKeys, masterKeys, matchKeys, seriesAnalysisKeys } from "@/shared/api/queryKeys";
 
 /** Transfer a confirmed creation to the cache before its optimistic Action ends. */
 export async function cacheCreatedMaster<Item extends { id: string }>(
@@ -10,30 +9,39 @@ export async function cacheCreatedMaster<Item extends { id: string }>(
   created: Item,
 ) {
   await queryClient.cancelQueries({ queryKey, exact: true });
-  queryClient.setQueryData<Item[]>(queryKey, (items) => {
-    if (!items) return items;
-    return items.some((item) => item.id === created.id)
-      ? items.map((item) => (item.id === created.id ? created : item))
-      : [...items, created];
+  queryClient.setQueryData<{ items?: Item[] }>(queryKey, (response) => {
+    if (!response) return response;
+    const items = response.items ?? [];
+    return {
+      ...response,
+      items: items.some((item) => item.id === created.id)
+        ? items.map((item) => (item.id === created.id ? created : item))
+        : [...items, created],
+    };
   });
 }
 
-type MasterResourceKind = "game-titles" | "map-masters" | "season-masters";
-
-type MasterResourceInvalidationTarget =
-  | { authScope: string; resource: "game-titles" }
-  | { authScope: string; gameTitleId: string; resource: "map-masters" }
-  | { authScope: string; gameTitleId: string; resource: "season-masters" };
-
-function adminResourceKey(target: MasterResourceInvalidationTarget) {
-  if (target.resource === "game-titles") {
-    return masterQueryKeys.gameTitles(target.authScope);
-  }
-  if (target.resource === "map-masters") {
-    return masterQueryKeys.mapMasters(target.authScope, target.gameTitleId);
-  }
-  return masterQueryKeys.seasonMasters(target.authScope, target.gameTitleId);
+/** Reflect the committed result in every loaded scope, even if the following refresh fails. */
+export async function cacheMasterUpdate<Item extends { id: string }>(
+  queryClient: QueryClient,
+  queryKey: QueryKey,
+  id: string,
+  updated: Item | null,
+) {
+  await queryClient.cancelQueries({ queryKey });
+  queryClient.setQueriesData<{ items?: Item[] }>(
+    { queryKey },
+    (response) =>
+      response && {
+        ...response,
+        items: (response.items ?? []).flatMap((item) =>
+          item.id === id ? (updated ? [updated] : []) : [item],
+        ),
+      },
+  );
 }
+
+type MasterResourceKind = "game-titles" | "map-masters" | "season-masters";
 
 function consumerResourceKey(resource: MasterResourceKind) {
   if (resource === "game-titles") {
@@ -47,20 +55,20 @@ function consumerResourceKey(resource: MasterResourceKind) {
 
 export async function invalidateMasterResourceCaches(
   queryClient: QueryClient,
-  target: MasterResourceInvalidationTarget,
+  resource: MasterResourceKind,
 ) {
   await Promise.all([
-    queryClient.invalidateQueries({ queryKey: adminResourceKey(target) }),
-    queryClient.invalidateQueries({ queryKey: consumerResourceKey(target.resource) }),
+    queryClient.invalidateQueries({ queryKey: consumerResourceKey(resource) }),
+    queryClient.invalidateQueries({ queryKey: matchKeys.collections() }),
+    queryClient.invalidateQueries({ queryKey: matchKeys.detailRoot() }),
+    queryClient.invalidateQueries({ queryKey: heldEventKeys.all() }),
+    queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.artifactRoot() }),
     queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.options() }),
     queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.statusRoot() }),
     queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.adminRoot() }),
   ]);
 }
 
-export async function invalidateMemberAliasCaches(queryClient: QueryClient, authScope: string) {
-  await Promise.all([
-    queryClient.invalidateQueries({ queryKey: masterQueryKeys.memberAliases(authScope) }),
-    queryClient.invalidateQueries({ queryKey: masterKeys.memberAliases.all() }),
-  ]);
+export async function invalidateMemberAliasCaches(queryClient: QueryClient) {
+  await queryClient.invalidateQueries({ queryKey: masterKeys.memberAliases.all() });
 }

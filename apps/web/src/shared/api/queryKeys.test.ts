@@ -17,8 +17,6 @@ import {
   seriesAnalysisKeys,
 } from "@/shared/api/queryKeys";
 import {
-  heldEventDirectoryQueryOptions,
-  heldEventDirectorySuspenseQueryOptions,
   heldEventsQueryOptions,
   matchListQueryOptions,
   memberAliasesQueryOptions,
@@ -44,21 +42,6 @@ describe("shared query keys", () => {
     );
   });
 
-  it("keeps directory and paginated held-event list identities distinct", () => {
-    const pageListQuery = { page: 2, pageSize: 25 };
-    expect(heldEventDirectoryQueryOptions().queryKey).toEqual(
-      heldEventDirectorySuspenseQueryOptions().queryKey,
-    );
-    expect(heldEventDirectoryQueryOptions().queryKey).toEqual(heldEventKeys.directory());
-    expect(heldEventKeys.directory()).toEqual(["held-events", "list-response"]);
-    expect(heldEventKeys.list(pageListQuery)).toEqual([
-      "held-events",
-      "list-response",
-      pageListQuery,
-    ]);
-    expect(heldEventKeys.list(pageListQuery)).not.toEqual(heldEventKeys.directory());
-  });
-
   it("uses the unfiltered member-alias directory key", () => {
     expect(memberAliasesQueryOptions().queryKey).toEqual(masterKeys.memberAliases.list());
   });
@@ -77,7 +60,7 @@ describe("shared query keys", () => {
     queryClient.setQueryData(matchKeys.draft.sourceImages("draft-1"), { items: [] });
     queryClient.setQueryData(ocrDraftKeys.bulk(["ocr-draft-1"]), { items: [] });
     queryClient.setQueryData(ocrDraftKeys.detail("ocr-draft-1"), { draftId: "ocr-draft-1" });
-    queryClient.setQueryData(heldEventKeys.directory(), { items: [] });
+    queryClient.setQueryData(heldEventKeys.list({ page: 1, pageSize: 20 }), { items: [] });
     queryClient.setQueryData(seriesAnalysisKeys.options(), { titles: [] });
     queryClient.setQueryData(seriesAnalysisKeys.status("gt-1"), { gameTitleId: "gt-1" });
     queryClient.setQueryData(seriesAnalysisKeys.adminOverview("gt-1"), { recentJobs: [] });
@@ -99,7 +82,9 @@ describe("shared query keys", () => {
     );
     expect(queryClient.getQueryState(ocrDraftKeys.bulk(["ocr-draft-1"]))?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(ocrDraftKeys.detail("ocr-draft-1"))?.isInvalidated).toBe(true);
-    expect(queryClient.getQueryState(heldEventKeys.directory())?.isInvalidated).toBe(true);
+    expect(
+      queryClient.getQueryState(heldEventKeys.list({ page: 1, pageSize: 20 }))?.isInvalidated,
+    ).toBe(true);
     expect(queryClient.getQueryState(seriesAnalysisKeys.options())?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(seriesAnalysisKeys.status("gt-1"))?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(seriesAnalysisKeys.adminOverview("gt-1"))?.isInvalidated).toBe(
@@ -115,6 +100,8 @@ describe("shared query keys", () => {
     const queryClient = createTestQueryClient();
     queryClient.setQueryData(matchKeys.detail("match-1"), { matchId: "match-1" });
     queryClient.setQueryData(matchKeys.detail("match-2"), { matchId: "match-2" });
+    queryClient.setQueryData(matchKeys.identity("match-1"), { matchId: "match-1" });
+    queryClient.setQueryData(matchKeys.identity("match-2"), { matchId: "match-2" });
     queryClient.setQueryData(matchKeys.summary({ status: "confirmed" }), { total: 2 });
     queryClient.setQueryData(seriesAnalysisKeys.status("gt-1"), { gameTitleId: "gt-1" });
     queryClient.setQueryData(seriesAnalysisKeys.aggregate({ artifactId: "artifact-1" }), {
@@ -125,6 +112,8 @@ describe("shared query keys", () => {
 
     expect(queryClient.getQueryState(matchKeys.detail("match-1"))?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(matchKeys.detail("match-2"))?.isInvalidated).toBe(false);
+    expect(queryClient.getQueryState(matchKeys.identity("match-1"))?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(matchKeys.identity("match-2"))?.isInvalidated).toBe(false);
     expect(
       queryClient.getQueryState(matchKeys.summary({ status: "confirmed" }))?.isInvalidated,
     ).toBe(true);
@@ -135,10 +124,37 @@ describe("shared query keys", () => {
     ).toBe(false);
   });
 
+  it.each(["updated", "deleted"] as const)(
+    "clears only the %s match's live contexts while retaining calculated artifacts",
+    async (mutation) => {
+      const queryClient = createTestQueryClient();
+      const params = { artifactId: "artifact-1", gameTitleId: "gt-1", matchId: "match-1" };
+      const contextKeys = [
+        seriesAnalysisKeys.matchContext(params),
+        seriesAnalysisKeys.matchContext({ ...params, seasonMasterId: "season-1" }),
+      ];
+      const otherContextKey = seriesAnalysisKeys.matchContext({ ...params, matchId: "match-2" });
+      const aggregateKey = seriesAnalysisKeys.aggregate(params);
+      for (const key of [...contextKeys, otherContextKey, aggregateKey]) {
+        queryClient.setQueryData(key, { inclusion: { status: "included" } });
+      }
+
+      if (mutation === "updated") await invalidateAfterMatchUpdated(queryClient, "match-1");
+      else await invalidateAfterMatchDeleted(queryClient, "match-1");
+
+      for (const key of contextKeys) expect(queryClient.getQueryData(key)).toBeUndefined();
+      expect(queryClient.getQueryData(otherContextKey)).toBeDefined();
+      expect(queryClient.getQueryData(aggregateKey)).toBeDefined();
+      expect(queryClient.getQueryState(aggregateKey)?.isInvalidated).toBe(false);
+    },
+  );
+
   it("keeps detail stable during delete invalidation, then evicts only the deleted match", async () => {
     const queryClient = createTestQueryClient();
     queryClient.setQueryData(matchKeys.detail("match-1"), { matchId: "match-1" });
     queryClient.setQueryData(matchKeys.detail("match-2"), { matchId: "match-2" });
+    queryClient.setQueryData(matchKeys.identity("match-1"), { matchId: "match-1" });
+    queryClient.setQueryData(matchKeys.identity("match-2"), { matchId: "match-2" });
     queryClient.setQueryData(matchKeys.list({ status: "confirmed" }), { items: [] });
 
     await invalidateAfterMatchDeleted(queryClient);
@@ -153,6 +169,8 @@ describe("shared query keys", () => {
 
     expect(queryClient.getQueryState(matchKeys.detail("match-1"))).toBeUndefined();
     expect(queryClient.getQueryState(matchKeys.detail("match-2"))?.isInvalidated).toBe(false);
+    expect(queryClient.getQueryState(matchKeys.identity("match-1"))).toBeUndefined();
+    expect(queryClient.getQueryState(matchKeys.identity("match-2"))?.isInvalidated).toBe(false);
   });
 
   it("does not invalidate analysis when OCR drafts start or are cancelled", async () => {

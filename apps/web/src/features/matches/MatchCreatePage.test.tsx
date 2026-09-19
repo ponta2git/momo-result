@@ -25,6 +25,7 @@ import {
 import { setDevUser, testDevUserAccountId } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { makeMatchWorkspaceMasterHandoffValues } from "@/test/factories/draftReview";
+import { makeMatchDraftReviewResponse } from "@/test/factories/matchDraftReview";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
@@ -49,6 +50,50 @@ describe("MatchCreatePage", () => {
   beforeEach(() => {
     queryClient = createTestQueryClient();
     user = userEvent.setup();
+  });
+
+  it("initializes from the latest picker page without fetching a second directory", async () => {
+    setDevUser();
+    queryClient.setDefaultOptions({ queries: { retry: false, staleTime: 10_000 } });
+    const requests: URLSearchParams[] = [];
+    server.use(
+      http.get("/api/held-events", ({ request }) => {
+        requests.push(new URL(request.url).searchParams);
+        return HttpResponse.json({
+          items: [
+            {
+              id: "held-latest",
+              heldAt: "2026-06-01T00:00:00Z",
+              matchCount: 8,
+              draftCount: 0,
+              nextMatchNo: 9,
+            },
+            {
+              id: "held-older",
+              heldAt: "2026-01-01T00:00:00Z",
+              matchCount: 2,
+              draftCount: 0,
+              nextMatchNo: 3,
+            },
+          ],
+        });
+      }),
+    );
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/new"]}>
+          <Routes>
+            <Route path="/matches/new" element={<MatchCreatePage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    await waitForMatchCreateReady();
+    await waitFor(() => expect(screen.getByLabelText("試合番号")).toHaveValue("9"));
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.get("page")).toBe("1");
+    expect(requests[0]?.get("pageSize")).toBe("20");
+    expect(requests[0]?.has("limit")).toBe(false);
   });
 
   it("opens master management from manual creation with return handoff", async () => {
@@ -180,7 +225,7 @@ describe("MatchCreatePage", () => {
           ],
         }),
       ),
-      http.get("/api/held-events/:heldEventId", ({ params }) =>
+      http.get("/api/held-events/:heldEventId/summary", ({ params }) =>
         HttpResponse.json({
           draftCount: 2,
           drafts: [],
@@ -295,14 +340,9 @@ describe("MatchCreatePage", () => {
     setDevUser();
     let requestedDraftId = "";
     server.use(
-      http.get("/api/match-drafts/:draftId", ({ params }) => {
+      http.get("/api/match-drafts/:draftId/review", ({ params }) => {
         requestedDraftId = String(params["draftId"]);
-        return HttpResponse.json({
-          createdAt: "2026-01-01T00:00:00.000Z",
-          matchDraftId: requestedDraftId,
-          status: "needs_review",
-          updatedAt: "2026-01-01T00:00:00.000Z",
-        });
+        return HttpResponse.json(makeMatchDraftReviewResponse(requestedDraftId));
       }),
     );
 
@@ -324,22 +364,10 @@ describe("MatchCreatePage", () => {
     setDevUser();
     let failDraftDetail = true;
     server.use(
-      http.get("/api/match-drafts/draft-retry", () =>
+      http.get("/api/match-drafts/draft-retry/review", () =>
         failDraftDetail
           ? HttpResponse.json({ detail: "draft unavailable" }, { status: 500 })
-          : HttpResponse.json({
-              createdAt: "2026-01-01T00:00:00.000Z",
-              gameTitleId: "gt_momotetsu_2",
-              heldEventId: "held-1",
-              mapMasterId: "map_east",
-              matchDraftId: "draft-retry",
-              matchNoInEvent: 7,
-              ownerMemberId: "member_ponta",
-              playedAt: "2026-01-01T00:00:00.000Z",
-              seasonMasterId: "season_current",
-              status: "needs_review",
-              updatedAt: "2026-01-01T00:00:00.000Z",
-            }),
+          : HttpResponse.json(makeMatchDraftReviewResponse("draft-retry", { matchNoInEvent: 7 })),
       ),
     );
 

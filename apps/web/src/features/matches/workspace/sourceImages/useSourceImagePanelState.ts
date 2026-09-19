@@ -43,35 +43,44 @@ export function useSourceImagePanelState({
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
   const [archiveSaving, setArchiveSaving] = useState(false);
   const [archiveError, setArchiveError] = useState("");
+  const [conflictingArchiveRevision, setConflictingArchiveRevision] = useState<string>();
   const [archiveDownloaded, setArchiveDownloaded] = useState(false);
   const previewTriggerRef = useRef<HTMLElement | null>(null);
   const activeKind =
     selection.mode === "fixed" ? selection.kind : (preferredKind ?? "total_assets");
   const activeState = states.find((state) => state.kind === activeKind);
-  const { activeImage, displayUrl, handleActiveImageRetry } = useSourceImageResource({
-    accountId,
-    matchDraftId,
-    loading,
-    activeKind,
-    sourceImages,
-  });
+  const { activeImage, displayUrl, handleActiveImageRetry, hasReplacedImage } =
+    useSourceImageResource({
+      accountId,
+      matchDraftId,
+      loading,
+      activeKind,
+      sourceImages,
+    });
   const previewKind = previewDialog?.kind ?? null;
   const previewUrl = previewKind === activeKind ? displayUrl : undefined;
   const availableImageCount = states.filter((state) => state.status === "available").length;
   const expectedImageCount = sourceImageKinds.length;
-  const archiveSaveDisabled = loading || archiveSaving || availableImageCount === 0;
+  const archiveRevision = sourceImages?.[0]?.createdAt;
+  const sourceImagesChanged =
+    hasReplacedImage || Boolean(archiveRevision && conflictingArchiveRevision === archiveRevision);
+  const archiveSaveDisabled =
+    loading || archiveSaving || availableImageCount === 0 || sourceImagesChanged;
 
   const saveArchive = useCallback(async () => {
+    if (!archiveRevision || sourceImagesChanged) return;
     setArchiveError("");
     setArchiveSaving(true);
     setArchiveDownloaded(false);
     try {
-      const result = await downloadMatchDraftSourceImagesArchive(matchDraftId);
+      const result = await downloadMatchDraftSourceImagesArchive(matchDraftId, archiveRevision);
       triggerBrowserDownload(result);
       setArchiveDownloaded(true);
     } catch (error) {
       const normalized = normalizeUnknownApiError(error);
-      if (normalized.status === 429 || normalized.code === "TOO_MANY_REQUESTS") {
+      if (normalized.status === 409) {
+        setConflictingArchiveRevision(archiveRevision);
+      } else if (normalized.status === 429 || normalized.code === "TOO_MANY_REQUESTS") {
         setArchiveError(archiveRateLimitError);
       } else if (normalized.category === "payload_too_large") {
         setArchiveError(archiveTooLargeError);
@@ -81,7 +90,7 @@ export function useSourceImagePanelState({
     } finally {
       setArchiveSaving(false);
     }
-  }, [matchDraftId]);
+  }, [archiveRevision, matchDraftId, sourceImagesChanged]);
 
   const handleArchiveSaveRequest = useCallback(() => {
     setArchiveError("");
@@ -148,5 +157,6 @@ export function useSourceImagePanelState({
     previewKind,
     previewOpen: previewDialog?.open ?? false,
     previewUrl,
+    sourceImagesChanged,
   };
 }

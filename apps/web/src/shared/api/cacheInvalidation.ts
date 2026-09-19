@@ -26,16 +26,20 @@ export async function invalidateAfterMatchConfirmed(queryClient: QueryClient): P
   ]);
 }
 
-export async function invalidateAfterMatchDeleted(queryClient: QueryClient): Promise<void> {
+export async function invalidateAfterMatchDeleted(
+  queryClient: QueryClient,
+  matchId?: string,
+): Promise<void> {
   await Promise.all([
     invalidateMatchCollections(queryClient),
     invalidateAnalysisState(queryClient),
+    resetMatchContexts(queryClient, matchId),
     queryClient.invalidateQueries({ queryKey: heldEventKeys.all() }),
   ]);
 }
 
 export function evictDeletedMatchDetail(queryClient: QueryClient, matchId: string): void {
-  queryClient.removeQueries({ exact: true, queryKey: matchKeys.detail(matchId) });
+  queryClient.removeQueries({ queryKey: matchKeys.detail(matchId) });
 }
 
 export async function invalidateAfterDraftCancelled(queryClient: QueryClient): Promise<void> {
@@ -57,10 +61,11 @@ export async function invalidateAfterMatchUpdated(
   matchId: string,
 ): Promise<void> {
   await Promise.all([
-    queryClient.invalidateQueries({ exact: true, queryKey: matchKeys.detail(matchId) }),
+    queryClient.invalidateQueries({ queryKey: matchKeys.detail(matchId) }),
     queryClient.invalidateQueries({ queryKey: matchKeys.collections() }),
     queryClient.invalidateQueries({ queryKey: heldEventKeys.all() }),
     invalidateAnalysisState(queryClient),
+    resetMatchContexts(queryClient, matchId),
   ]);
 }
 
@@ -73,4 +78,21 @@ export async function invalidateAfterMatchNoteReplaced(
     queryClient.invalidateQueries({ queryKey: matchKeys.collections() }),
     queryClient.invalidateQueries({ queryKey: heldEventKeys.detailRoot() }),
   ]);
+}
+
+/** Live match inclusion must be revalidated after a revision change, including cached exclusions. */
+function resetMatchContexts(queryClient: QueryClient, matchId: string | undefined): Promise<void> {
+  return queryClient.resetQueries({
+    queryKey: seriesAnalysisKeys.matchContextRoot(),
+    predicate: ({ queryKey }) => {
+      const params = queryKey.at(-1);
+      return (
+        matchId === undefined ||
+        (typeof params === "object" &&
+          params !== null &&
+          "matchId" in params &&
+          params.matchId === matchId)
+      );
+    },
+  });
 }

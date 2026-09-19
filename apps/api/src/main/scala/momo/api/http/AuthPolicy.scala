@@ -6,6 +6,7 @@ import sttp.model.headers.Cookie
 import sttp.tapir.model.ServerRequest
 
 import momo.api.auth.{
+  AccountAccess,
   AuthenticatedAccount,
   AuthenticatedSession,
   CsrfTokenService,
@@ -13,10 +14,8 @@ import momo.api.auth.{
   SessionService
 }
 import momo.api.config.{AppConfig, AppEnv}
-import momo.api.domain.ids.AccountId
 import momo.api.endpoints.ProblemDetails
 import momo.api.errors.AppError
-import momo.api.repositories.LoginAccountsRepository
 
 /**
  * Pluggable authentication / CSRF policy bound to the runtime environment.
@@ -42,7 +41,7 @@ object AuthPolicy:
   def apply[F[_]: Async](
       config: AppConfig,
       roster: MemberRoster,
-      accounts: LoginAccountsRepository[F],
+      accounts: AccountAccess[F],
       sessions: SessionService[F],
       csrf: CsrfTokenService,
   ): AuthPolicy[F] = config.appEnv match
@@ -66,7 +65,7 @@ private final class ProductionAuthPolicy[F[_]: Async](
 private final class DevAuthPolicy[F[_]: Async](
     config: AppConfig,
     roster: MemberRoster,
-    accounts: LoginAccountsRepository[F],
+    accounts: AccountAccess[F],
     sessions: SessionService[F],
     csrf: CsrfTokenService,
 ) extends AuthPolicy[F]:
@@ -75,24 +74,10 @@ private final class DevAuthPolicy[F[_]: Async](
   ): F[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]] = context.accountHeader match
     case Some(value) => roster.find(value) match
         case Some(account) => authorizeAccount(account, context)
-        case None => AccountId.fromString(value) match
-            case Left(_) => forbiddenUnknownAccount.pure[F]
-            case Right(accountId) => accounts.find(accountId).flatMap {
-                case Some(account) if account.loginEnabled =>
-                  authorizeAccount(
-                    AuthenticatedAccount(
-                      account.id,
-                      account.displayName,
-                      account.isAdmin,
-                      account.playerMemberId,
-                    ),
-                    context,
-                  )
-                case Some(_) => Left(problem(
-                    AppError.Forbidden("This account is not allowed to log in.")
-                  )).pure[F]
-                case None => forbiddenUnknownAccount.pure[F]
-              }
+        case None => accounts.find(value).flatMap {
+            case Left(error) => Left(problem(error)).pure[F]
+            case Right(account) => authorizeAccount(account, context)
+          }
     case None => authenticateSession(config, sessions, csrf, context).map(_.map(_.account))
 
   private def authorizeAccount(
@@ -100,11 +85,6 @@ private final class DevAuthPolicy[F[_]: Async](
       context: AuthRequestContext,
   ): F[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]] =
     verifyDevelopmentCsrf(context).map(_ => account).leftMap(problem).pure[F]
-
-  private def forbiddenUnknownAccount
-      : Either[ProblemDetails.ProblemResponse, AuthenticatedAccount] = Left(problem(
-    AppError.Forbidden("Account header is not one of the allowed accounts.")
-  ))
 
 private def authenticateSession[F[_]: Async](
     config: AppConfig,

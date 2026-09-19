@@ -131,7 +131,8 @@ async fn next_delivery(
             }
         }
         None => {
-            let delivery = queue::read_new_delivery(redis, &config.queue).await?;
+            let block = recovery_schedule.read_block(Instant::now(), config.queue.block());
+            let delivery = queue::read_new_delivery(redis, &config.queue, block).await?;
             recovery_schedule.record_new_delivery_read();
             Ok(delivery)
         }

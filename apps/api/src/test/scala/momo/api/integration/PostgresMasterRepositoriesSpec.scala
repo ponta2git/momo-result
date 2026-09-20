@@ -37,6 +37,15 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
         .createWithNextDisplayOrder(SeasonMaster(seasonId, titleId, "テスト期間", 1, now))
     yield ()
 
+  test("new game titles record a known empty notification baseline atomically"):
+    for
+      _ <- seedTitle
+      baseline <- sql"""
+        SELECT notification_baseline_state, notification_baseline_artifact_id
+        FROM series_analysis_title_states WHERE game_title_id = $titleId
+      """.query[(String, Option[String])].unique.transact(transactor)
+    yield assertEquals(baseline, ("initial", None))
+
   List("title", "map", "season").foreach { kind =>
     test(s"$kind display order allocation observes a concurrent creator after its lock wait") {
       val (lockKey, firstInsert, createSecond) = kind match

@@ -50,7 +50,18 @@ object PostgresGameTitles:
           .createdAt}
         FROM game_titles
         RETURNING id, name, layout_family, display_order, created_at
-      """.query[GameTitleRow].unique.map(fromRow).exceptSomeSqlState {
+      """.query[GameTitleRow].unique.flatTap { row =>
+        // Only this creation transaction can prove there was no earlier analysis input.
+        sql"""
+          UPDATE series_analysis_title_states
+          SET notification_baseline_state = 'initial'
+          WHERE game_title_id = ${row.id}
+        """.update.run.flatMap {
+          case 1 => ().pure[ConnectionIO]
+          case _ => new IllegalStateException("new game title analysis state is missing")
+              .raiseError[ConnectionIO, Unit]
+        }
+      }.map(fromRow).exceptSomeSqlState {
         case state if isUniqueViolation(state) =>
           conflict(s"game_title already exists: ${title.id.value} or ${title.name}")
       }
@@ -124,6 +135,8 @@ object PostgresGameTitles:
         UPDATE series_analysis_title_states
         SET current_artifact_id = NULL,
             previous_artifact_id = NULL,
+            notification_baseline_state = 'unknown',
+            notification_baseline_artifact_id = NULL,
             pending_work = false,
             pending_forced_run_count = 0,
             updated_at = $now

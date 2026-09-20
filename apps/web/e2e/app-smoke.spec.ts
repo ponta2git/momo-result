@@ -237,7 +237,7 @@ test("creates a held event and completes OCR intake and review", async ({
     await page.getByRole("button", { name: "確定する" }).click();
 
     const response = await confirmResponse;
-    expect(response.ok()).toBe(true);
+    await expectOk(response, "confirm reviewed match");
     const body = (await response.json()) as { matchId?: string };
     matchId = expectGeneratedId(body.matchId, "match ID");
     e2eRun.trackMatch(matchId);
@@ -782,13 +782,23 @@ test("inspects saved analysis and handles explicit refresh states", async ({
     await expectNoHorizontalPageOverflow(page);
 
     const evidenceLink = firstPlayerSection
-      .getByRole("link", { name: "いーゆーの詳しい分析" })
-      .nth(1);
+      .getByRole("article")
+      .filter({
+        has: page.getByRole("heading", {
+          exact: true,
+          name: expandedReviewHypothesis.actionHypothesis,
+        }),
+      })
+      .getByRole("link", { exact: true, name: "目的地の根拠を見る" });
+    await expect(evidenceLink).toHaveAttribute(
+      "href",
+      /[?&]view=drivers(?:&[^#]*)?#metric-destination-outcome$/u,
+    );
     await evidenceLink.scrollIntoViewIfNeeded();
     const reviewUrl = page.url();
     const reviewScroll = await page.evaluate(() => window.scrollY);
     await evidenceLink.click();
-    const evidenceHeading = page.getByRole("heading", { name: "物件収益と最終順位", exact: true });
+    const evidenceHeading = page.getByRole("heading", { name: "目的地到着と順位", exact: true });
     await expect(evidenceHeading).toBeFocused();
     await expectPageTargetInView(evidenceHeading);
     await page.goBack();

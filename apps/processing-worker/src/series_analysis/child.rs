@@ -178,7 +178,9 @@ const fn map_postgres_failure(error: &PostgresError) -> ChildFailure {
         PostgresError::InvalidConfiguration(_) | PostgresError::TlsConfiguration(_) => {
             ChildFailure::CalculationFailed
         }
-        PostgresError::Postgres(_) => ChildFailure::DependencyFailed,
+        PostgresError::Postgres(_) | PostgresError::ConnectionTimeout => {
+            ChildFailure::DependencyFailed
+        }
     }
 }
 

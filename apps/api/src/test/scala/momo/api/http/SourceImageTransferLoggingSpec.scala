@@ -37,7 +37,7 @@ final class SourceImageTransferLoggingSpec extends MomoCatsEffectSuite:
     }
 
   test("logs error and cancellation as warnings without exception messages"):
-    val failure = new RuntimeException("secret failure detail")
+    val failure = new IllegalStateException("secret failure detail")
     val errored = Stream.emit[IO, Byte](1) ++ Stream.raiseError[IO](failure)
 
     captureLogs { events =>
@@ -54,11 +54,15 @@ final class SourceImageTransferLoggingSpec extends MomoCatsEffectSuite:
         _ <- fiber.cancel
         captured <- events
       yield
-        assertEquals(erroredResult, Left(failure))
+        val error = erroredResult.swap.toOption.getOrElse(fail("expected a transfer failure"))
+        assertEquals(error.getMessage, "Source image transfer failed.")
+        assertEquals(Option(error.getCause), None)
+        assertEquals(error.getSuppressed.toList, Nil)
         assertEquals(captured.size, 2)
         assertEquals(captured.map(_.getLevel), Vector.fill(2)(Level.WARN))
         val messages = captured.map(_.getFormattedMessage)
         assert(messages.exists(_.contains("outcome=errored bodyBytes=1")))
+        assert(messages.exists(_.contains(s"errorClass=${failure.getClass.getName}")))
         assert(messages.exists(_.contains("outcome=canceled bodyBytes=0")))
         assert(messages.forall(!_.contains(failure.getMessage)))
         assert(captured.forall(_.getMDCPropertyMap.get("request_id") == context.requestId))

@@ -180,7 +180,7 @@ object MatchDraftModule:
                                 fields =
                                   s"accountId=${member.accountId.value} draftId=${id.value} " +
                                     s"imageCount=${archive.imageCount.toString} " +
-                                    s"expectedArchiveBytes=${archive.archiveBytes.toString}",
+                                    s"sourceBytes=${archive.sourceBytes.toString}",
                               ),
                             ),
                           )

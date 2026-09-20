@@ -18,6 +18,8 @@ const archiveRateLimitError =
   "元画像の保存が短時間に集中しています。少し待ってから再度お試しください。";
 const archiveTooLargeError =
   "元画像ZIPのサイズが上限を超えています。必要な画像を個別に保存してください。";
+const archiveTransferError =
+  "元画像ZIPを最後まで受信できませんでした。もう一度お試しください。繰り返し失敗する場合は、画像を個別に保存してください。";
 
 type SourceImageSelection = { mode: "auto" } | { kind: SourceImageKind; mode: "fixed" };
 
@@ -84,6 +86,8 @@ export function useSourceImagePanelState({
         setArchiveError(archiveRateLimitError);
       } else if (normalized.category === "payload_too_large") {
         setArchiveError(archiveTooLargeError);
+      } else if (normalized.status === undefined) {
+        setArchiveError(archiveTransferError);
       } else {
         setArchiveError(archiveDownloadError);
       }

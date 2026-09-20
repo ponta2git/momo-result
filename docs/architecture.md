@@ -53,6 +53,7 @@
 - ページ一覧の表示名JOINは対象ページを確定した後に行う。開催一覧もページ外のscopeを転送せず、全体件数はscalar集計として同じsnapshotで読む。ページングの前後で必要な条件・順序・cursorを変えない。
 - 下書きreviewは現在の下書き、参照中のOCR結果、保持中の画像descriptorを一つのsnapshotとして読む。Webが複数responseの世代を突き合わせる責任を負わず、画像本体は選択したdescriptorから別途取得する。確定前の先行GETを整合性保証にせず、atomicな確定commandと競合responseを正本にする。
 - 元画像の取得はdescriptorが指す画像ID、ZIP取得は下書きの更新時刻を前提条件にする。差替え後の別画像を古いOCR結果と組み合わせず、世代不一致は再確認を求める。未保存の入力へ新しいOCR結果を自動で混入させない。
+- ZIPはresponse bodyの評価scope内で生成し、一時ファイルや全量bufferをHTTP応答へ引き渡さない。事前に画像metadataの合計サイズを検証し、生成中も実際のZIPサイズを制限する。送信中の読取・生成失敗や上限超過は転送を中断し、Webはbody全体の取得成功後にだけファイル保存を開始する。
 - 新しいread endpointや必須response情報にWebを移すときは、APIを先に配備する。旧Webが使う有効なendpointは移行期間中維持し、廃止済みrouteの固定error応答を有効な契約として生成clientへ残さない。
 - 集約結果だけが必要な一覧はDBで集約し、表示しない監査履歴を全件転送しない。DB内で完結するsnapshotの複製は `INSERT ... SELECT` で表し、JVMを経由するread/write往復を増やさない。単純化とquery costの両方を、実行計画と境界のテストで確認する。
 - 通常制御フローは型で返し、予期しない不整合や外部I/O失敗と区別する。

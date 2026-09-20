@@ -896,6 +896,73 @@ describe("SourceImagePanel", () => {
     );
   });
 
+  it("never saves a truncated archive and allows an explicit retry after a body failure", async () => {
+    const user = userEvent.setup();
+    const anchorClick = installAnchorClickMock();
+    const urls = installObjectUrlMock({
+      createObjectURL: (value) =>
+        value instanceof Blob && value.type === "application/zip"
+          ? "blob:zip"
+          : "blob:source-image",
+    });
+    const bodyStarted = createDeferred<void>();
+    const failBody = createDeferred<void>();
+    let archiveRequests = 0;
+    server.use(
+      http.get("/api/match-drafts/:draftId/source-images.zip", () => {
+        archiveRequests += 1;
+        if (archiveRequests > 1) return archiveResponse();
+        return new HttpResponse(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new Uint8Array([0x50, 0x4b, 0x03, 0x04]));
+            },
+            async pull(controller) {
+              bodyStarted.resolve();
+              await failBody.promise;
+              controller.error(new TypeError("Archive transfer interrupted"));
+            },
+          }),
+          { headers: { "Content-Type": "application/zip" } },
+        );
+      }),
+    );
+    render(
+      <SourceImagePanel
+        loading={false}
+        matchDraftId={draftId}
+        preferredKind="total_assets"
+        sourceImages={sourceImages}
+      />,
+    );
+    await screen.findByRole("img", { name: "総資産の元画像" });
+    await user.click(screen.getByRole("button", { name: "元画像を保存" }));
+    await bodyStarted.promise;
+    expect(anchorClick.click).not.toHaveBeenCalled();
+
+    await act(async () => failBody.resolve());
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "元画像ZIPを最後まで受信できませんでした。もう一度お試しください。繰り返し失敗する場合は、画像を個別に保存してください。",
+    );
+    expect(screen.queryByText("ダウンロードを開始しました")).not.toBeInTheDocument();
+    expect(anchorClick.click).not.toHaveBeenCalled();
+    expect(urls.createObjectURL).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "application/zip" }),
+    );
+    expect(archiveRequests).toBe(1);
+    const save = screen.getByRole("button", { name: "元画像を保存" });
+    expect(save).toBeEnabled();
+    await user.click(save);
+
+    await waitFor(() => expect(anchorClick.click).toHaveBeenCalledTimes(1));
+    expect(anchorClick.clickedAnchors[0]?.getAttribute("href")).toBe("blob:zip");
+    expect(anchorClick.clickedAnchors[0]?.download).toBe("momo-ocr-images-20260518.zip");
+    expect(screen.getByText("ダウンロードを開始しました")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(archiveRequests).toBe(2);
+  });
+
   it("pins archive downloads to the review snapshot and stops retrying a changed archive", async () => {
     const user = userEvent.setup();
     const anchorClick = installAnchorClickMock();

@@ -22,6 +22,8 @@ pub(crate) enum PostgresError {
     InvalidConfiguration(#[source] tokio_postgres::Error),
     #[error("PostgreSQL TLS configuration failed")]
     TlsConfiguration(#[source] ErrorStack),
+    #[error("PostgreSQL connection deadline elapsed")]
+    ConnectionTimeout,
     #[error("PostgreSQL operation failed")]
     Postgres(#[from] tokio_postgres::Error),
 }
@@ -32,6 +34,7 @@ impl PostgresError {
         match self {
             Self::InvalidConfiguration(_) => "postgres_configuration",
             Self::TlsConfiguration(_) => "postgres_tls_configuration",
+            Self::ConnectionTimeout => "postgres_connection_timeout",
             Self::Postgres(_) => "postgres_operation",
         }
     }
@@ -61,9 +64,18 @@ pub(crate) async fn connect(database_url: &str) -> Result<Client, PostgresError>
 pub(crate) type Driver = Connection<Socket, TlsStream<Socket>>;
 
 pub(crate) async fn open(database_url: &str) -> Result<(Client, Driver), PostgresError> {
-    Ok(connection_config(database_url)?
-        .connect(native_tls_connector()?)
-        .await?)
+    let config = connection_config(database_url)?;
+    let timeout = config
+        .get_connect_timeout()
+        .copied()
+        .unwrap_or(DEFAULT_CONNECT_TIMEOUT);
+    // The driver's connect_timeout only bounds each socket connect. DNS, SSL negotiation and
+    // authentication also need a deadline; TCP_USER_TIMEOUT does not bound an acknowledged read.
+    Ok(
+        tokio::time::timeout(timeout, config.connect(native_tls_connector()?))
+            .await
+            .map_err(|_elapsed| PostgresError::ConnectionTimeout)??,
+    )
 }
 
 fn connection_config(database_url: &str) -> Result<Config, PostgresError> {
@@ -139,6 +151,47 @@ mod tests {
         certificate: X509,
         private_key: PKey<Private>,
         ca_certificate: X509,
+    }
+
+    #[tokio::test]
+    async fn connection_deadline_covers_ssl_and_startup_and_closes_the_socket()
+    -> Result<(), TestError> {
+        use tokio::io::AsyncReadExt as _;
+
+        for ssl_mode in ["require", "disable"] {
+            let listener = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await?;
+            let address = listener.local_addr()?;
+            let configuration = format!(
+                "host=127.0.0.1 port={} user=test dbname=test sslmode={ssl_mode} connect_timeout=1",
+                address.port()
+            );
+            let peer = async {
+                let (mut socket, _) = listener.accept().await?;
+                let mut header = [0_u8; 8];
+                socket.read_exact(&mut header).await?;
+                // Accept and read, but never answer SSL negotiation or startup. TCP user timeout
+                // cannot help while all sent bytes have been acknowledged by the peer.
+                tokio::io::copy(&mut socket, &mut tokio::io::sink()).await?;
+                Ok::<_, io::Error>(header)
+            };
+            let (connection, header) = tokio::time::timeout(Duration::from_secs(3), async {
+                tokio::join!(super::open(&configuration), peer)
+            })
+            .await?;
+            let header = header?;
+            let error = connection
+                .err()
+                .ok_or("silent peer unexpectedly connected")?;
+            if error.kind() != "postgres_connection_timeout" {
+                return Err(
+                    io::Error::other("connection failed without its total deadline").into(),
+                );
+            }
+            if (header == SSL_REQUEST) != (ssl_mode == "require") {
+                return Err(io::Error::other("expected connection phase was not reached").into());
+            }
+        }
+        Ok(())
     }
 
     #[tokio::test]

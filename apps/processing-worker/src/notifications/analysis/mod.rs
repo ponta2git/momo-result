@@ -1,6 +1,6 @@
 //! Compare published artifacts, then freeze display metadata at the final success boundary.
 
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use tokio::time::{Instant, timeout};
 use tokio_postgres::{Client, Transaction};
@@ -36,13 +36,13 @@ pub(crate) struct AnalysisSource<'a> {
     pub(crate) artifact_schema_version: i32,
 }
 
-/// Owns the reserved capacity and immutable comparison until finalization. Reuse shares one
-/// artifact between both sides. Preparation checks the independent input baseline before freezing
-/// metadata; only the caller's confirmed success COMMIT may authorize dispatch.
+/// Owns reserved capacity and the immutable input comparison until finalization. Preparation
+/// checks the independent baseline; only the caller's confirmed publication COMMIT may dispatch.
+/// One Box keeps both retained snapshots out of the enclosing async frames.
 pub(crate) struct Comparison {
     reservation: NotificationReservation,
     previous: Baseline,
-    current: Arc<Artifact>,
+    current: Artifact,
     changes: comparison::Changes,
 }
 
@@ -51,9 +51,8 @@ pub(crate) async fn load(
     database_url: &str,
     source: AnalysisSource<'_>,
     candidate_id: &str,
-    staged: bool,
     deadline: Instant,
-) -> Option<(Client, Option<Comparison>)> {
+) -> Option<(Client, Option<Box<Comparison>>)> {
     let started = Instant::now();
     let attempt = async {
         let reservation = sink.reserve(
@@ -81,7 +80,7 @@ pub(crate) async fn load(
             return Ok((client, None));
         }
         let (previous, current) =
-            artifacts::load(&mut client, source.game_title_id, candidate_id, staged).await?;
+            artifacts::load(&mut client, source.game_title_id, candidate_id).await?;
         if current.identity.input_revision != source.input_revision.to_string()
             || current.identity.algorithm_version != source.algorithm_version
             || current.identity.artifact_schema_version != source.artifact_schema_version
@@ -102,12 +101,12 @@ pub(crate) async fn load(
         );
         Ok((
             client,
-            Some(Comparison {
+            Some(Box::new(Comparison {
                 reservation,
                 previous,
                 current,
                 changes,
-            }),
+            })),
         ))
     };
     // Connection setup and the complete MVCC read share this allowance. Keep most of the
@@ -135,11 +134,10 @@ pub(crate) async fn load(
 
 impl Comparison {
     pub(crate) async fn prepare(
-        self,
+        self: Box<Self>,
         transaction: &Transaction<'_>,
         source: AnalysisSource<'_>,
         baseline: &BaselinePointer,
-        reused: bool,
         deadline: Instant,
     ) -> Result<Option<PreparedNotification>, tokio_postgres::Error> {
         if *baseline != self.previous.pointer() {
@@ -152,7 +150,7 @@ impl Comparison {
             if !intent::has_match_mutation(transaction, source, "fulfilled").await? {
                 return Ok(Err(SkipReason::NoMatchMutation));
             }
-            snapshot::prepare(transaction, source, self, reused).await
+            snapshot::prepare(transaction, source, self).await
         })
         .await
     }

@@ -56,7 +56,6 @@ pub(super) fn ranks(
     before: Option<&Artifact>,
     after: &Artifact,
     scope: Option<&str>,
-    reused: bool,
 ) -> Result<[RankComparison; 4], SkipReason> {
     let key = scope.map(str::to_owned);
     let previous = before.and_then(|artifact| artifact.scopes.as_ref()?.get(&key));
@@ -82,7 +81,7 @@ pub(super) fn ranks(
                 .and_then(|samples| samples.get(id))
                 .copied()
                 .unwrap_or(RankSample::EMPTY);
-            let (comparison, delta) = compare(before_sample, after_sample, compatible, reused);
+            let (comparison, delta) = compare(before_sample, after_sample, compatible);
             RankComparison {
                 member_id: id.clone(),
                 display_name: name.clone(),
@@ -101,11 +100,7 @@ fn compare(
     before: Option<RankSample>,
     after: RankSample,
     compatible: bool,
-    reused: bool,
 ) -> (&'static str, Option<f64>) {
-    if reused {
-        return ("reused", after.average_rank.map(|_average| 0.0));
-    }
     if !compatible {
         return ("incomparable", None);
     }

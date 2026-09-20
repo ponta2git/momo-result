@@ -1,6 +1,6 @@
 //! Immutable resources are read before publication locks, from one cleanup-safe MVCC snapshot.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 
 use futures_util::TryStreamExt;
 use momo_analysis_core::{
@@ -25,8 +25,7 @@ pub(super) async fn load(
     client: &mut Client,
     title_id: &str,
     candidate_id: &str,
-    staged: bool,
-) -> Result<(Baseline, Arc<Artifact>), SkipReason> {
+) -> Result<(Baseline, Artifact), SkipReason> {
     let transaction = client
         .build_transaction()
         .isolation_level(IsolationLevel::RepeatableRead)
@@ -40,7 +39,7 @@ pub(super) async fn load(
         .map_err(database_error)?;
     let row = transaction
         .query_typed_one(
-            "SELECT notification_baseline_state, notification_baseline_artifact_id, current_artifact_id \
+            "SELECT notification_baseline_state, notification_baseline_artifact_id \
              FROM series_analysis_title_states WHERE game_title_id = $1",
             &[(&title_id, Type::TEXT)],
         )
@@ -53,29 +52,11 @@ pub(super) async fn load(
     let previous = match pointer {
         BaselinePointer::Initial => Baseline::Initial,
         BaselinePointer::Artifact(id) => {
-            Baseline::Artifact(Arc::new(read(&transaction, title_id, &id, false).await?))
+            Baseline::Artifact(read(&transaction, title_id, &id, false).await?)
         }
         BaselinePointer::Unknown => return Err(SkipReason::MissingBaseline),
     };
-    let current = if staged {
-        Arc::new(read(&transaction, title_id, candidate_id, true).await?)
-    } else {
-        let current_id: Option<String> = row.try_get(2).map_err(database_error)?;
-        let current_id = current_id.ok_or(SkipReason::InvalidSnapshot)?;
-        // Publication reuse refers to the current public artifact, not the new manifest ID.
-        // Share its immutable resources only when it is also the input comparison baseline.
-        match &previous {
-            Baseline::Artifact(artifact) if artifact.identity.artifact_id == current_id => {
-                Arc::clone(artifact)
-            }
-            Baseline::Initial | Baseline::Artifact(_) => {
-                Arc::new(read(&transaction, title_id, &current_id, false).await?)
-            }
-        }
-    };
-    if current.scopes.is_none() {
-        return Err(SkipReason::InvalidSnapshot);
-    }
+    let current = read(&transaction, title_id, candidate_id, true).await?;
     transaction.commit().await.map_err(database_error)?;
     Ok((previous, current))
 }
@@ -84,7 +65,7 @@ async fn read(
     transaction: &Transaction<'_>,
     title_id: &str,
     artifact_id: &str,
-    staged: bool,
+    candidate: bool,
 ) -> Result<Artifact, SkipReason> {
     let header = transaction
         .query_typed_one(
@@ -100,15 +81,16 @@ async fn read(
         artifact_schema_version: header.try_get(3).map_err(database_error)?,
         validation_contract_id: header.try_get(4).map_err(database_error)?,
     };
+    // Preparation reads immutable inputs; the fenced publication validator owns the candidate's
+    // staging transition. A baseline must already have completed publication.
+    let status: &str = header.try_get("status").map_err(database_error)?;
     if [&identity.artifact_id, &identity.algorithm_version]
         .into_iter()
         .any(|id| !valid_id(id))
         || identity.artifact_schema_version < 1
-        || (staged && !current_publication(&identity))
-        || header
-            .try_get::<_, &str>("status")
-            .map_err(database_error)?
-            != if staged { "staging" } else { "published" }
+        || (candidate && !current_publication(&identity))
+        || !matches!(status, "staging" | "published")
+        || (!candidate && status != "published")
     {
         return Err(SkipReason::InvalidSnapshot);
     }

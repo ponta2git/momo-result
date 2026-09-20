@@ -6,7 +6,6 @@
 use super::*;
 use crate::notifications::analysis::artifacts::decode_ranks;
 use crate::notifications::analysis::types::AnalysisIdentity;
-use std::sync::Arc;
 
 fn artifact(artifact_id: &str, entries: &[(&str, &str, &str, &str)]) -> Artifact {
     Artifact {
@@ -47,7 +46,7 @@ fn artifact(artifact_id: &str, entries: &[(&str, &str, &str, &str)]) -> Artifact
 #[test]
 fn changed_revisions_moves_additions_and_deletions_select_affected_seasons()
 -> Result<(), SkipReason> {
-    let before = Baseline::Artifact(Arc::new(artifact(
+    let before = Baseline::Artifact(artifact(
         "old",
         &[
             ("untouched", "1", "quiet", "map"),
@@ -55,8 +54,8 @@ fn changed_revisions_moves_additions_and_deletions_select_affected_seasons()
             ("moved", "1", "old-season", "map"),
             ("deleted", "1", "deleted-season", "map"),
         ],
-    )));
-    let after = Arc::new(artifact(
+    ));
+    let after = artifact(
         "new",
         &[
             ("untouched", "1", "quiet", "map"),
@@ -64,7 +63,7 @@ fn changed_revisions_moves_additions_and_deletions_select_affected_seasons()
             ("moved", "2", "new-season", "other-map"),
             ("backdated", "1", "b", "map"),
         ],
-    ));
+    );
     let diff = changes(&before, &after)?;
     assert_eq!(
         diff.matches.keys().map(String::as_str).collect::<Vec<_>>(),
@@ -86,7 +85,12 @@ fn changed_revisions_moves_additions_and_deletions_select_affected_seasons()
         !deletion.seasons.contains("quiet"),
         "deletion-only is not an unchanged recalculation"
     );
-    let unchanged = changes(&Baseline::Artifact(Arc::clone(&after)), &after)?;
+    assert_eq!(changes(&Baseline::Initial, &after)?.matches.len(), 4);
+    let after = Baseline::Artifact(after);
+    let unchanged = changes(
+        &after,
+        after.as_artifact().ok_or(SkipReason::InvalidSnapshot)?,
+    )?;
     assert!(
         unchanged.matches.is_empty(),
         "manual reuse has no added/changed matches"
@@ -95,7 +99,6 @@ fn changed_revisions_moves_additions_and_deletions_select_affected_seasons()
         unchanged.is_empty(),
         "identical inputs do not produce a notification"
     );
-    assert_eq!(changes(&Baseline::Initial, &after)?.matches.len(), 4);
     assert!(
         !deletion.is_empty(),
         "deletion-only input changes still notify affected aggregates"
@@ -123,30 +126,16 @@ fn rank_comparisons_use_unrounded_artifact_values_and_typed_absence() {
         match_count: 3,
         average_rank: Some(7.0 / 3.0),
     };
-    let (state, delta) = compare(before, after, true, false);
+    let (state, delta) = compare(before, after, true);
     assert_eq!(state, "comparable");
     assert!(
         delta.is_some_and(|value| (value - 1.0 / 3.0).abs() < 1e-12),
         "hand-computed average difference"
     );
-    assert_eq!(compare(None, after, true, false), ("initial", None));
-    assert_eq!(
-        compare(before, RankSample::EMPTY, true, false),
-        ("empty", None)
-    );
-    assert_eq!(compare(before, after, false, false), ("incomparable", None));
-    assert_eq!(
-        compare(Some(after), after, true, true),
-        ("reused", Some(0.0))
-    );
-    assert_eq!(
-        compare(Some(RankSample::EMPTY), RankSample::EMPTY, true, true),
-        ("reused", None)
-    );
-    assert_eq!(
-        compare(Some(after), after, true, false),
-        ("comparable", Some(0.0))
-    );
+    assert_eq!(compare(None, after, true), ("initial", None));
+    assert_eq!(compare(before, RankSample::EMPTY, true), ("empty", None));
+    assert_eq!(compare(before, after, false), ("incomparable", None));
+    assert_eq!(compare(Some(after), after, true), ("comparable", Some(0.0)));
     assert!(
         compare(
             before,
@@ -154,8 +143,7 @@ fn rank_comparisons_use_unrounded_artifact_values_and_typed_absence() {
                 match_count: 10_000,
                 average_rank: Some(1.9999)
             },
-            true,
-            false
+            true
         )
         .1
         .is_some_and(|small_delta| small_delta < 0.0 && small_delta.abs() < 0.01),
@@ -200,8 +188,11 @@ fn oversized_changes_skip_the_whole_listing_but_unchanged_history_is_allowed()
         ),
         "an over-capacity initial publication must not yield a truncated listing"
     );
-    let after = Arc::new(after);
-    let unchanged = changes(&Baseline::Artifact(Arc::clone(&after)), &after)?;
+    let after = Baseline::Artifact(after);
+    let unchanged = changes(
+        &after,
+        after.as_artifact().ok_or(SkipReason::InvalidSnapshot)?,
+    )?;
     assert!(unchanged.matches.is_empty());
     assert!(
         unchanged.is_empty(),
@@ -217,7 +208,7 @@ fn empty_artifacts_keep_four_members_without_inventing_zero_averages() -> Result
         .collect();
     let empty = artifact("empty", &[]);
     let comparisons =
-        ranks(&members, None, &empty, None, false).map_err(|reason| format!("{reason:?}"))?;
+        ranks(&members, None, &empty, None).map_err(|reason| format!("{reason:?}"))?;
     assert!(
         comparisons.iter().all(|rank| rank.before.is_none()
             && rank.after == RankSample::EMPTY
@@ -257,8 +248,8 @@ fn aggregate_projection_keeps_hand_computed_means_and_rejects_cross_version_delt
         None,
         samples(3, [7.0 / 3.0, 5.0 / 3.0, 8.0 / 3.0, 10.0 / 3.0])?,
     );
-    let compared = ranks(&members, Some(&previous), &current, None, false)
-        .map_err(|reason| format!("{reason:?}"))?;
+    let compared =
+        ranks(&members, Some(&previous), &current, None).map_err(|reason| format!("{reason:?}"))?;
     let first = compared.first().ok_or("four comparisons")?;
     assert_eq!(first.before.map(|sample| sample.match_count), Some(2));
     assert_eq!(first.after.match_count, 3);
@@ -270,8 +261,8 @@ fn aggregate_projection_keeps_hand_computed_means_and_rejects_cross_version_delt
         "preserve the unrounded hand-computed delta"
     );
     previous.identity.validation_contract_id = None;
-    let incomparable = ranks(&members, Some(&previous), &current, None, false)
-        .map_err(|reason| format!("{reason:?}"))?;
+    let incomparable =
+        ranks(&members, Some(&previous), &current, None).map_err(|reason| format!("{reason:?}"))?;
     assert!(
         incomparable
             .iter()
@@ -290,7 +281,7 @@ fn old_format_metadata_identifies_only_changes_without_decoding_previous_ranks()
     previous.identity.artifact_schema_version = 1;
     previous.identity.validation_contract_id = None;
     previous.scopes = None;
-    let baseline = Baseline::Artifact(Arc::new(previous));
+    let baseline = Baseline::Artifact(previous);
     let current = artifact(
         "current",
         &[
@@ -310,7 +301,7 @@ fn old_format_metadata_identifies_only_changes_without_decoding_previous_ranks()
     let members = (1..=4)
         .map(|id| (format!("m{id}"), format!("Player {id}")))
         .collect();
-    let compared = ranks(&members, baseline.as_artifact(), &current, None, false)?;
+    let compared = ranks(&members, baseline.as_artifact(), &current, None)?;
     assert!(
         compared.iter().all(|rank| rank.comparison == "incomparable"
             && rank.before.is_none()
@@ -323,7 +314,7 @@ fn old_format_metadata_identifies_only_changes_without_decoding_previous_ranks()
 #[test]
 fn distinct_artifacts_with_identical_input_are_not_changes() -> Result<(), SkipReason> {
     let entries = [("same", "1", "season", "map")];
-    let before = Baseline::Artifact(Arc::new(artifact("before", &entries)));
+    let before = Baseline::Artifact(artifact("before", &entries));
     let after = artifact("after", &entries);
     assert!(
         changes(&before, &after)?.is_empty(),

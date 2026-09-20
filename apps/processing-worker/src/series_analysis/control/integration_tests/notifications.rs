@@ -170,7 +170,6 @@ async fn verify_delayed_database(
         &proxy.url,
         notification_source(claim),
         &artifact_id,
-        false,
         deadline,
     )
     .await
@@ -183,7 +182,6 @@ async fn verify_delayed_database(
             &transaction,
             notification_source(claim),
             &analysis::BaselinePointer::Initial,
-            false,
             deadline,
         )
         .await?
@@ -211,7 +209,6 @@ async fn verify_preparation_boundaries(
             &config.database_url,
             notification_source(claim),
             &artifact_id,
-            false,
             deadline,
         )
         .await
@@ -232,7 +229,6 @@ async fn verify_preparation_boundaries(
                 &transaction,
                 notification_source(claim),
                 &analysis::BaselinePointer::Initial,
-                false,
                 if scenario == "short" {
                     Instant::now() + Duration::from_millis(50)
                 } else {

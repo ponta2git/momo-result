@@ -25,19 +25,11 @@ struct Snapshot {
 pub(super) async fn prepare(
     transaction: &Transaction<'_>,
     source: AnalysisSource<'_>,
-    comparison: Comparison,
-    reused: bool,
+    comparison: Box<Comparison>,
 ) -> Result<Result<PreparedNotification, SkipReason>, tokio_postgres::Error> {
-    let current = comparison.current.as_ref();
-    if reused
-        && comparison
-            .previous
-            .as_artifact()
-            .is_none_or(|previous| previous.identity != current.identity)
-    {
-        return Ok(Err(SkipReason::InvalidSnapshot));
-    }
-    let changed = comparison.changes;
+    let reservation = comparison.reservation;
+    let current = &comparison.current;
+    let changed = &comparison.changes;
     let match_ids: Vec<_> = changed.matches.keys().collect();
     let season_ids: Vec<_> = changed.seasons.iter().collect();
     let row = transaction
@@ -66,13 +58,12 @@ pub(super) async fn prepare(
             .try_get::<_, Option<Json<Snapshot>>>("body")
             .map_err(|_error| SkipReason::InvalidSnapshot)?
             .ok_or(SkipReason::PayloadBound)?;
-        validate(&snapshot, &changed)?;
+        validate(&snapshot, changed)?;
         let overall = comparison::ranks(
             &snapshot.members,
             comparison.previous.as_artifact(),
             current,
             None,
-            reused,
         )?;
         let seasons = snapshot
             .seasons
@@ -84,7 +75,6 @@ pub(super) async fn prepare(
                         comparison.previous.as_artifact(),
                         current,
                         Some(&id),
-                        reused,
                     )?,
                     season_id: id,
                     season_name: name,
@@ -99,7 +89,7 @@ pub(super) async fn prepare(
             AnalysisData {
                 game_title_id: source.game_title_id,
                 game_title_name: snapshot.game_title_name,
-                disposition: if reused { "reused" } else { "published" },
+                disposition: "published",
                 previous_analysis: comparison
                     .previous
                     .as_artifact()
@@ -110,7 +100,7 @@ pub(super) async fn prepare(
                 seasons,
             },
         );
-        let prepared = comparison.reservation.prepare(&envelope)?;
+        let prepared = reservation.prepare(&envelope)?;
         tracing::info!(event = "analysis_notification_prepared", notification_id = %envelope.notification_id(),
             job_id = %source.job_id, input_revision = source.input_revision,
             previous_artifact_id = ?comparison.previous.as_artifact().map(|artifact| &artifact.identity.artifact_id),

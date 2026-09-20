@@ -1,4 +1,4 @@
-use tokio_postgres::GenericClient;
+use tokio_postgres::{GenericClient, types::Type};
 
 use super::AnalysisSource;
 
@@ -10,17 +10,17 @@ pub(super) async fn has_match_mutation(
     status: &str,
 ) -> Result<bool, tokio_postgres::Error> {
     client
-        .query_one(
+        .query_typed_one(
             "SELECT EXISTS (SELECT 1 FROM series_analysis_job_requests \
              WHERE assigned_attempt_id = $1 AND assigned_job_id = $2 AND game_title_id = $3 \
                AND input_revision <= $4 AND status = $5 AND trigger = $6)",
             &[
-                &source.attempt_id,
-                &source.job_id,
-                &source.game_title_id,
-                &source.input_revision,
-                &status,
-                &"match_mutation",
+                (&source.attempt_id, Type::TEXT),
+                (&source.job_id, Type::TEXT),
+                (&source.game_title_id, Type::TEXT),
+                (&source.input_revision, Type::INT8),
+                (&status, Type::TEXT),
+                (&"match_mutation", Type::TEXT),
             ],
         )
         .await?

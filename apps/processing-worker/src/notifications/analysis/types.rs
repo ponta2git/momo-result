@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 
 use super::SkipReason;
 
@@ -81,11 +81,11 @@ impl BaselinePointer {
 
 pub(super) enum Baseline {
     Initial,
-    Artifact(Arc<Artifact>),
+    Artifact(Artifact),
 }
 
 impl Baseline {
-    pub(super) fn as_artifact(&self) -> Option<&Artifact> {
+    pub(super) const fn as_artifact(&self) -> Option<&Artifact> {
         match self {
             Self::Initial => None,
             Self::Artifact(artifact) => Some(artifact),

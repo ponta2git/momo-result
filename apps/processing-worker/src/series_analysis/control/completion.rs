@@ -24,7 +24,7 @@ use super::{
 mod authoritative_input;
 
 struct PublicationNotification<'a> {
-    comparison: Option<crate::notifications::analysis::Comparison>,
+    comparison: Option<Box<crate::notifications::analysis::Comparison>>,
     baseline: &'a crate::notifications::analysis::BaselinePointer,
     finalization_deadline: tokio::time::Instant,
 }
@@ -62,16 +62,19 @@ pub(crate) async fn publish(
         // A commit error can mean that PostgreSQL committed and then closed the connection before
         // acknowledging it. Always begin B on a new connection after staging/reconciliation so a
         // durable staging artifact is not terminally failed merely because A's client is unusable.
-        let (mut publication_client, notification) = match crate::notifications::analysis::load(
-            &config.notifications,
-            &config.database_url,
-            notification_source(claim),
-            &artifact.manifest().artifact_id,
-            staged,
-            finalization_deadline,
-        )
-        .await
-        {
+        let comparison = if staged {
+            crate::notifications::analysis::load(
+                &config.notifications,
+                &config.database_url,
+                notification_source(claim),
+                &artifact.manifest().artifact_id,
+                finalization_deadline,
+            )
+            .await
+        } else {
+            None
+        };
+        let (mut publication_client, notification) = match comparison {
             Some(prepared) => prepared,
             None => (crate::postgres::connect(&config.database_url).await?, None),
         };
@@ -224,13 +227,14 @@ async fn commit_successful_publication(
         ResultDisposition::Published => PublicationResult::Published,
         ResultDisposition::Reused => PublicationResult::Reused,
     };
-    let prepared = if let Some(comparison) = notification.comparison {
+    let prepared = if let (PublicationResult::Published, Some(comparison)) =
+        (result, notification.comparison)
+    {
         comparison
             .prepare(
                 &transaction,
                 notification_source(claim),
                 notification.baseline,
-                result == PublicationResult::Reused,
                 notification.finalization_deadline,
             )
             .await?

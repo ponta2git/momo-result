@@ -352,6 +352,8 @@ pub(super) async fn finish_success(
                    WHERE a.id = series_analysis_title_states.previous_artifact_id\x20\
                      AND a.status = 'published' AND a.validation_contract_id = $2\x20\
                  ) THEN previous_artifact_id ELSE NULL END,\x20\
+               notification_baseline_state = 'artifact',\x20\
+               notification_baseline_artifact_id = current_artifact_id,\x20\
                pending_work = false, pending_forced_run_count = 0,\x20\
                last_failure_code = NULL, last_failure_at = NULL, updated_at = clock_timestamp()\x20\
              WHERE game_title_id = $1",

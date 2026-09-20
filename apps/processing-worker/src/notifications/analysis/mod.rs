@@ -9,10 +9,12 @@ use super::{
     NotificationKind, NotificationReservation, NotificationSink, PreparedNotification, SkipReason,
     log_skip,
 };
-use types::Artifact;
+pub(crate) use types::BaselinePointer;
+use types::{Artifact, Baseline};
 
 mod artifacts;
 mod comparison;
+mod intent;
 mod snapshot;
 mod types;
 
@@ -27,6 +29,7 @@ const COMPARISON_TIMEOUT: Duration = Duration::from_secs(10);
 #[derive(Clone, Copy)]
 pub(crate) struct AnalysisSource<'a> {
     pub(crate) job_id: &'a str,
+    pub(crate) attempt_id: &'a str,
     pub(crate) game_title_id: &'a str,
     pub(crate) input_revision: i64,
     pub(crate) algorithm_version: &'a str,
@@ -34,11 +37,11 @@ pub(crate) struct AnalysisSource<'a> {
 }
 
 /// Owns the reserved capacity and immutable comparison until finalization. Reuse shares one
-/// artifact between both sides. Preparation checks the final current pointer before freezing
+/// artifact between both sides. Preparation checks the independent input baseline before freezing
 /// metadata; only the caller's confirmed success COMMIT may authorize dispatch.
 pub(crate) struct Comparison {
     reservation: NotificationReservation,
-    previous: Option<Arc<Artifact>>,
+    previous: Baseline,
     current: Arc<Artifact>,
     changes: comparison::Changes,
 }
@@ -50,7 +53,7 @@ pub(crate) async fn load(
     candidate_id: &str,
     staged: bool,
     deadline: Instant,
-) -> Option<(Client, Comparison)> {
+) -> Option<(Client, Option<Comparison>)> {
     let started = Instant::now();
     let attempt = async {
         let reservation = sink.reserve(
@@ -63,6 +66,20 @@ pub(crate) async fn load(
                 source_job_id = %source.job_id, error_kind = error.kind());
                 SkipReason::PreparationFailed
             })?;
+        if !intent::has_match_mutation(&client, source, "assigned")
+            .await
+            .map_err(|error| {
+                tracing::warn!(
+                    event = "result_notification_database_failed",
+                    phase = "intent",
+                    sqlstate = error.code().map(tokio_postgres::error::SqlState::code)
+                );
+                SkipReason::PreparationFailed
+            })?
+        {
+            log_skip(KIND, source.job_id, SkipReason::NoMatchMutation);
+            return Ok((client, None));
+        }
         let (previous, current) =
             artifacts::load(&mut client, source.game_title_id, candidate_id, staged).await?;
         if current.identity.input_revision != source.input_revision.to_string()
@@ -71,15 +88,26 @@ pub(crate) async fn load(
         {
             return Err(SkipReason::InvalidSnapshot);
         }
-        let changes = comparison::changes(previous.as_deref(), &current)?;
+        let changes = comparison::changes(&previous, &current)?;
+        if changes.is_empty() {
+            log_skip(KIND, source.job_id, SkipReason::NoInputChanges);
+            return Ok((client, None));
+        }
+        tracing::info!(
+            event = "result_notification_comparison_ready",
+            kind = KIND,
+            source_job_id = %source.job_id,
+            elapsed_milliseconds = started.elapsed().as_millis(),
+            changed_match_count = changes.matches.len(),
+        );
         Ok((
             client,
-            Comparison {
+            Some(Comparison {
                 reservation,
                 previous,
                 current,
                 changes,
-            },
+            }),
         ))
     };
     // Connection setup and the complete MVCC read share this allowance. Keep most of the
@@ -87,15 +115,8 @@ pub(crate) async fn load(
     let budget = (deadline.saturating_duration_since(started) / 3).min(COMPARISON_TIMEOUT);
     match timeout(budget, attempt).await {
         Ok(Ok((client, comparison))) => {
-            tracing::info!(
-                event = "result_notification_comparison_ready",
-                kind = KIND,
-                source_job_id = %source.job_id,
-                elapsed_milliseconds = started.elapsed().as_millis(),
-                changed_match_count = comparison.changes.matches.len(),
-            );
-            // The read transaction committed successfully. Reuse this fresh connection for
-            // publication; failed or timed-out reads never lend their connection to a writer.
+            // Deliberate skips either started no transaction or committed their read snapshot.
+            // Failed/timed-out reads never lend their connection to a publication writer.
             Some((client, comparison))
         }
         Ok(Err(reason)) => {
@@ -117,20 +138,20 @@ impl Comparison {
         self,
         transaction: &Transaction<'_>,
         source: AnalysisSource<'_>,
-        previous_id: Option<&str>,
+        baseline: &BaselinePointer,
         reused: bool,
         deadline: Instant,
     ) -> Result<Option<PreparedNotification>, tokio_postgres::Error> {
-        if previous_id
-            != self
-                .previous
-                .as_ref()
-                .map(|artifact| artifact.identity.artifact_id.as_str())
-        {
+        if *baseline != self.previous.pointer() {
             log_skip(KIND, source.job_id, SkipReason::InvalidSnapshot);
             return Ok(None);
         }
         super::preparation::recoverable(transaction, KIND, source.job_id, deadline, async {
+            // The final fenced transaction has fulfilled precisely this attempt's requests.
+            // A job's representative trigger can hide coalesced user changes.
+            if !intent::has_match_mutation(transaction, source, "fulfilled").await? {
+                return Ok(Err(SkipReason::NoMatchMutation));
+            }
             snapshot::prepare(transaction, source, self, reused).await
         })
         .await

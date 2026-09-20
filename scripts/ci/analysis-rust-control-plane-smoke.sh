@@ -17,6 +17,11 @@ if [[ "${ANALYSIS_SMOKE_SERVICES_ARE_ISOLATED:-}" != "true" ]]; then
   exit 1
 fi
 
+if [[ "${DATABASE_URL:-}" != "${ANALYSIS_CONTROL_SMOKE_DATABASE_URL}" ]]; then
+  echo "DATABASE_URL must select the same explicitly isolated control-plane database." >&2
+  exit 1
+fi
+
 tests=(
   "series_analysis::release::promotion_tests::real_postgres_promotion_detaches_obsolete_empty_title_pointers_without_deleting_artifacts"
   "series_analysis::campaign::tests::real_postgres_campaign_refresh_counts_concurrent_target_commits"
@@ -25,6 +30,9 @@ tests=(
   "series_analysis::control::claim::tests::real_postgres_keeps_exact_jobs_queued_when_an_old_binary_omits_the_lease_contract"
   "series_analysis::control::integration_tests::real_postgres_keeps_staging_separate_from_fenced_publication"
   "series_analysis::control::integration_tests::notifications::real_postgres_analysis_notifications_follow_committed_publications"
+  "series_analysis::control::integration_tests::notifications::policy::real_postgres_coalesced_requests_notify_only_actual_match_changes"
+  "series_analysis::control::integration_tests::notifications::policy::real_postgres_notification_baseline_advances_only_with_success"
+  "series_analysis::control::integration_tests::notifications::policy::release::real_postgres_release_detachment_preserves_notification_input_history"
   "series_analysis::release::tests::real_postgres_release_capabilities_require_exact_singleton_arrays"
   "series_analysis::release::tests::real_postgres_promotion_freezes_capability_registration_after_inspection"
   "series_analysis::release::tests::real_postgres_zero_title_backfill_is_terminal_and_updates_the_release_generation"

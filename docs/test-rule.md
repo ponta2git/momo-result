@@ -155,6 +155,7 @@ OCR は schema / screen type、object metadata、parser / postprocess、failure 
 - OCR preemption は一方向、失敗回数非加算、旧 child 回収後の再実行を実 process / DB で確認する。
 - resource / endurance gate は release build、production 相当の上限、代表 data で機能 gate と分けて実行する。
 - 分析通知の通常更新は追加・変更試合数だけでなく、比較対象となる既存履歴の量とDB往復も含めて確認する。有限の設定競合待ち後に通知が成立すること、残時間不足・長期競合では業務成功を保ち通知を省略することを実DBで区別する。
+- 分析通知の対象や比較元を変える場合は、純粋な差分testに加えて要求の合流・releaseの参照切離し・公開成功を通す実DB経路を選ぶ。実送信はローカルreceiverで固定本文とcommit後の状態を観測し、保守処理の抑止や設定・送信結果に依存しない入力基準を確認する。
 - 通知の時間配分やDBアクセスを変える場合は、応答遅延を制御した実DB経路で、前後の成果物比較とOCRの業務確定を含む通知準備を通す。通知の固定内容と業務の成功状態を確認し、低遅延の直接接続だけを期限の根拠にしない。
 
 job、publication、artifact、version の詳細ケースは `docs/requirements/series-analysis-batch.md` を正本とし、この文書へ列挙しない。

@@ -34,7 +34,7 @@ SELECT 'analysis-history-test-' || name, 'analysis-history-test-title',
        CASE WHEN name = 'staging' THEN 'analysis-history-test-attempt' END,
        0, 'series-analysis-v5', 4, 'sha256:' || repeat('0', 64),
        'sha256:' || repeat('1', 64), 'staging', 1, 0, 0, 0, 2, 2, '2099-06-01'
-FROM (VALUES ('staging'), ('current'), ('previous'), ('obsolete')) fixtures(name);
+FROM (VALUES ('staging'), ('current'), ('previous'), ('baseline'), ('obsolete')) fixtures(name);
 INSERT INTO series_analysis_scope_aggregate_artifacts (
   artifact_id, scope_key, scope_kind, payload, encoded_bytes,
   decoded_bytes, item_count, nesting_depth, checksum
@@ -51,5 +51,7 @@ UPDATE series_analysis_title_states
 SET algorithm_version = 'series-analysis-v5', artifact_schema_version = 4,
     validation_contract_id = 'series-analysis-artifact-v4-full-validation-v1',
     current_artifact_id = 'analysis-history-test-current',
-    previous_artifact_id = 'analysis-history-test-previous'
+    previous_artifact_id = 'analysis-history-test-previous',
+    notification_baseline_state = 'artifact',
+    notification_baseline_artifact_id = 'analysis-history-test-baseline'
 WHERE game_title_id = 'analysis-history-test-title';

@@ -6,6 +6,7 @@
 use super::*;
 use crate::notifications::analysis::artifacts::decode_ranks;
 use crate::notifications::analysis::types::AnalysisIdentity;
+use std::sync::Arc;
 
 fn artifact(artifact_id: &str, entries: &[(&str, &str, &str, &str)]) -> Artifact {
     Artifact {
@@ -18,13 +19,15 @@ fn artifact(artifact_id: &str, entries: &[(&str, &str, &str, &str)]) -> Artifact
                 "series-analysis-artifact-v4-full-validation-v1".to_owned(),
             ),
         },
-        scopes: std::iter::once((None, BTreeMap::new()))
-            .chain(
-                entries
-                    .iter()
-                    .map(|(_, _, season, _)| (Some((*season).to_owned()), BTreeMap::new())),
-            )
-            .collect(),
+        scopes: Some(
+            std::iter::once((None, BTreeMap::new()))
+                .chain(
+                    entries
+                        .iter()
+                        .map(|(_, _, season, _)| (Some((*season).to_owned()), BTreeMap::new())),
+                )
+                .collect(),
+        ),
         matches: entries
             .iter()
             .map(|(id, revision, season, map)| {
@@ -44,7 +47,7 @@ fn artifact(artifact_id: &str, entries: &[(&str, &str, &str, &str)]) -> Artifact
 #[test]
 fn changed_revisions_moves_additions_and_deletions_select_affected_seasons()
 -> Result<(), SkipReason> {
-    let before = artifact(
+    let before = Baseline::Artifact(Arc::new(artifact(
         "old",
         &[
             ("untouched", "1", "quiet", "map"),
@@ -52,8 +55,8 @@ fn changed_revisions_moves_additions_and_deletions_select_affected_seasons()
             ("moved", "1", "old-season", "map"),
             ("deleted", "1", "deleted-season", "map"),
         ],
-    );
-    let after = artifact(
+    )));
+    let after = Arc::new(artifact(
         "new",
         &[
             ("untouched", "1", "quiet", "map"),
@@ -61,8 +64,8 @@ fn changed_revisions_moves_additions_and_deletions_select_affected_seasons()
             ("moved", "2", "new-season", "other-map"),
             ("backdated", "1", "b", "map"),
         ],
-    );
-    let diff = changes(Some(&before), &after)?;
+    ));
+    let diff = changes(&before, &after)?;
     assert_eq!(
         diff.matches.keys().map(String::as_str).collect::<Vec<_>>(),
         ["backdated", "edited", "moved"]
@@ -72,7 +75,7 @@ fn changed_revisions_moves_additions_and_deletions_select_affected_seasons()
         ["a", "b", "deleted-season", "new-season", "old-season"]
     );
     let deletion = changes(
-        Some(&before),
+        &before,
         &artifact("new", &[("untouched", "1", "quiet", "map")]),
     )?;
     assert!(
@@ -83,13 +86,30 @@ fn changed_revisions_moves_additions_and_deletions_select_affected_seasons()
         !deletion.seasons.contains("quiet"),
         "deletion-only is not an unchanged recalculation"
     );
-    let unchanged = changes(Some(&after), &after)?;
+    let unchanged = changes(&Baseline::Artifact(Arc::clone(&after)), &after)?;
     assert!(
         unchanged.matches.is_empty(),
         "manual reuse has no added/changed matches"
     );
-    assert_eq!(unchanged.seasons.len(), 4);
-    assert_eq!(changes(None, &after)?.matches.len(), 4);
+    assert!(
+        unchanged.is_empty(),
+        "identical inputs do not produce a notification"
+    );
+    assert_eq!(changes(&Baseline::Initial, &after)?.matches.len(), 4);
+    assert!(
+        !deletion.is_empty(),
+        "deletion-only input changes still notify affected aggregates"
+    );
+    let deleted_all = changes(&before, &artifact("empty", &[]))?;
+    assert!(
+        deleted_all.matches.is_empty(),
+        "removed matches are never listed"
+    );
+    assert_eq!(deleted_all.seasons.len(), 4);
+    assert!(
+        !deleted_all.is_empty(),
+        "deleting the final match still changes aggregates"
+    );
     Ok(())
 }
 
@@ -159,8 +179,12 @@ fn oversized_changes_skip_the_whole_listing_but_unchanged_history_is_allowed()
     }
     after
         .scopes
+        .get_or_insert_default()
         .insert(Some("season".to_owned()), BTreeMap::new());
-    assert_eq!(changes(None, &after)?.matches.len(), MAXIMUM_LISTED_MATCHES);
+    assert_eq!(
+        changes(&Baseline::Initial, &after)?.matches.len(),
+        MAXIMUM_LISTED_MATCHES
+    );
     after.matches.insert(
         "overflow".to_owned(),
         MatchIdentity {
@@ -170,12 +194,19 @@ fn oversized_changes_skip_the_whole_listing_but_unchanged_history_is_allowed()
         },
     );
     assert!(
-        matches!(changes(None, &after), Err(SkipReason::PayloadBound)),
+        matches!(
+            changes(&Baseline::Initial, &after),
+            Err(SkipReason::PayloadBound)
+        ),
         "an over-capacity initial publication must not yield a truncated listing"
     );
-    let unchanged = changes(Some(&after), &after)?;
+    let after = Arc::new(after);
+    let unchanged = changes(&Baseline::Artifact(Arc::clone(&after)), &after)?;
     assert!(unchanged.matches.is_empty());
-    assert_eq!(unchanged.seasons, BTreeSet::from(["season".to_owned()]));
+    assert!(
+        unchanged.is_empty(),
+        "large unchanged histories are still a no-op"
+    );
     Ok(())
 }
 
@@ -219,9 +250,10 @@ fn aggregate_projection_keeps_hand_computed_means_and_rejects_cross_version_delt
     let mut previous = artifact("before", &[]);
     previous
         .scopes
+        .get_or_insert_default()
         .insert(None, samples(2, [2.0, 1.5, 3.5, 3.0])?);
     let mut current = artifact("after", &[]);
-    current.scopes.insert(
+    current.scopes.get_or_insert_default().insert(
         None,
         samples(3, [7.0 / 3.0, 5.0 / 3.0, 8.0 / 3.0, 10.0 / 3.0])?,
     );
@@ -247,6 +279,59 @@ fn aggregate_projection_keeps_hand_computed_means_and_rejects_cross_version_delt
                 && rank.delta.is_none()
                 && rank.before.is_some()),
         "a previous incompatible artifact is distinct from the initial publication"
+    );
+    Ok(())
+}
+
+#[test]
+fn old_format_metadata_identifies_only_changes_without_decoding_previous_ranks()
+-> Result<(), SkipReason> {
+    let mut previous = artifact("old", &[("history", "1", "season", "map")]);
+    previous.identity.artifact_schema_version = 1;
+    previous.identity.validation_contract_id = None;
+    previous.scopes = None;
+    let baseline = Baseline::Artifact(Arc::new(previous));
+    let current = artifact(
+        "current",
+        &[
+            ("history", "1", "season", "map"),
+            ("added", "1", "season", "map"),
+        ],
+    );
+    let changed = changes(&baseline, &current)?;
+    assert_eq!(
+        changed
+            .matches
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+        ["added"]
+    );
+    let members = (1..=4)
+        .map(|id| (format!("m{id}"), format!("Player {id}")))
+        .collect();
+    let compared = ranks(&members, baseline.as_artifact(), &current, None, false)?;
+    assert!(
+        compared.iter().all(|rank| rank.comparison == "incomparable"
+            && rank.before.is_none()
+            && rank.delta.is_none()),
+        "old input metadata must never invent prior aggregate values"
+    );
+    Ok(())
+}
+
+#[test]
+fn distinct_artifacts_with_identical_input_are_not_changes() -> Result<(), SkipReason> {
+    let entries = [("same", "1", "season", "map")];
+    let before = Baseline::Artifact(Arc::new(artifact("before", &entries)));
+    let after = artifact("after", &entries);
+    assert!(
+        changes(&before, &after)?.is_empty(),
+        "publication identity is not a user input change"
+    );
+    assert!(
+        changes(&Baseline::Initial, &artifact("empty", &[]))?.is_empty(),
+        "an empty initial input has no matches or changed aggregates"
     );
     Ok(())
 }

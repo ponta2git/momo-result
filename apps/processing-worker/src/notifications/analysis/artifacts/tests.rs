@@ -78,3 +78,74 @@ fn notification_reader_requires_the_current_attested_format() {
         assert!(!current_publication(&identity));
     }
 }
+
+#[test]
+fn baseline_pointer_never_interprets_missing_history_as_an_initial_input() {
+    assert_eq!(
+        BaselinePointer::from_storage("initial", None),
+        Ok(BaselinePointer::Initial)
+    );
+    assert_eq!(
+        BaselinePointer::from_storage("unknown", None),
+        Ok(BaselinePointer::Unknown)
+    );
+    assert_eq!(
+        BaselinePointer::from_storage("artifact", Some("before".to_owned())),
+        Ok(BaselinePointer::Artifact("before".to_owned()))
+    );
+    for (state, reference) in [
+        ("artifact", None),
+        ("initial", Some("before".to_owned())),
+        ("unknown", Some("before".to_owned())),
+        ("unexpected", None),
+    ] {
+        assert_eq!(
+            BaselinePointer::from_storage(state, reference),
+            Err(SkipReason::InvalidSnapshot)
+        );
+    }
+}
+
+#[test]
+fn input_metadata_is_complete_independently_of_aggregate_json_versions() {
+    let matches = [("a", "first"), ("b", "second")]
+        .into_iter()
+        .map(|(id, season)| {
+            (
+                id.to_owned(),
+                MatchIdentity {
+                    source_revision: "1".to_owned(),
+                    season_id: season.to_owned(),
+                    map_id: "map".to_owned(),
+                },
+            )
+        })
+        .collect();
+    let complete = BTreeMap::from([
+        (None, 8),
+        (Some("first".to_owned()), 4),
+        (Some("second".to_owned()), 4),
+    ]);
+    assert!(
+        validate_input_counts(&complete, &matches).is_ok(),
+        "stable relational counts prove both seasons are represented"
+    );
+    for scopes in [
+        BTreeMap::from([(None, 4)]),
+        BTreeMap::from([(None, 8), (Some("first".to_owned()), 8)]),
+        BTreeMap::from([
+            (Some("first".to_owned()), 4),
+            (Some("second".to_owned()), 4),
+        ]),
+    ] {
+        assert_eq!(
+            validate_input_counts(&scopes, &matches),
+            Err(SkipReason::InvalidSnapshot),
+            "missing matches, seasons or overall counts must not be treated as additions"
+        );
+    }
+    assert!(
+        validate_input_counts(&BTreeMap::from([(None, 0)]), &BTreeMap::new()).is_ok(),
+        "an empty validated input is distinct from missing metadata"
+    );
+}

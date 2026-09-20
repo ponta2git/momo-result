@@ -99,7 +99,8 @@ DELETE FROM ocr_drafts WHERE job_id = 'ci-preemption-ocr-job';
 DELETE FROM ocr_jobs WHERE id = 'ci-preemption-ocr-job';
 DELETE FROM source_images WHERE id = 'ci-preemption-source-image';
 UPDATE series_analysis_title_states
-SET current_artifact_id = NULL, previous_artifact_id = NULL
+SET current_artifact_id = NULL, previous_artifact_id = NULL,
+    notification_baseline_state = 'unknown', notification_baseline_artifact_id = NULL
 WHERE game_title_id = 'ci-preemption-title';
 DELETE FROM series_analysis_artifacts WHERE game_title_id = 'ci-preemption-title';
 DELETE FROM series_analysis_jobs WHERE id = 'ci-preemption-analysis-job';

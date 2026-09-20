@@ -28,22 +28,16 @@ pub(super) async fn prepare(
     comparison: Comparison,
     reused: bool,
 ) -> Result<Result<PreparedNotification, SkipReason>, tokio_postgres::Error> {
-    let current = if reused {
-        comparison.previous.as_deref()
-    } else {
-        Some(comparison.current.as_ref())
-    };
-    let Some(current) = current else {
+    let current = comparison.current.as_ref();
+    if reused
+        && comparison
+            .previous
+            .as_artifact()
+            .is_none_or(|previous| previous.identity != current.identity)
+    {
         return Ok(Err(SkipReason::InvalidSnapshot));
-    };
-    let changed = if reused {
-        match comparison::Changes::unchanged(current) {
-            Ok(changes) => changes,
-            Err(reason) => return Ok(Err(reason)),
-        }
-    } else {
-        comparison.changes
-    };
+    }
+    let changed = comparison.changes;
     let match_ids: Vec<_> = changed.matches.keys().collect();
     let season_ids: Vec<_> = changed.seasons.iter().collect();
     let row = transaction
@@ -75,7 +69,7 @@ pub(super) async fn prepare(
         validate(&snapshot, &changed)?;
         let overall = comparison::ranks(
             &snapshot.members,
-            comparison.previous.as_deref(),
+            comparison.previous.as_artifact(),
             current,
             None,
             reused,
@@ -87,7 +81,7 @@ pub(super) async fn prepare(
                 Ok(SeasonRanks {
                     ranks: comparison::ranks(
                         &snapshot.members,
-                        comparison.previous.as_deref(),
+                        comparison.previous.as_artifact(),
                         current,
                         Some(&id),
                         reused,
@@ -108,7 +102,7 @@ pub(super) async fn prepare(
                 disposition: if reused { "reused" } else { "published" },
                 previous_analysis: comparison
                     .previous
-                    .as_ref()
+                    .as_artifact()
                     .map(|artifact| artifact.identity.clone()),
                 current_analysis: current.identity.clone(),
                 matches: snapshot.matches,
@@ -119,7 +113,7 @@ pub(super) async fn prepare(
         let prepared = comparison.reservation.prepare(&envelope)?;
         tracing::info!(event = "analysis_notification_prepared", notification_id = %envelope.notification_id(),
             job_id = %source.job_id, input_revision = source.input_revision,
-            previous_artifact_id = ?comparison.previous.as_ref().map(|artifact| &artifact.identity.artifact_id),
+            previous_artifact_id = ?comparison.previous.as_artifact().map(|artifact| &artifact.identity.artifact_id),
             current_artifact_id = %current.identity.artifact_id);
         Ok(prepared)
     })();

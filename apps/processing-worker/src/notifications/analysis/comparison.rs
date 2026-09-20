@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use super::{
     MAXIMUM_LISTED_MATCHES, MAXIMUM_SEASONS, SkipReason,
-    types::{Artifact, MatchIdentity, RankComparison, RankSample},
+    types::{Artifact, Baseline, MatchIdentity, RankComparison, RankSample},
 };
 
 pub(super) struct Changes {
@@ -11,30 +11,15 @@ pub(super) struct Changes {
 }
 
 impl Changes {
-    pub(super) fn unchanged(artifact: &Artifact) -> Result<Self, SkipReason> {
-        let seasons: BTreeSet<_> = artifact
-            .scopes
-            .keys()
-            .flatten()
-            .take(MAXIMUM_SEASONS + 1)
-            .cloned()
-            .collect();
-        if seasons.len() > MAXIMUM_SEASONS {
-            return Err(SkipReason::PayloadBound);
-        }
-        Ok(Self {
-            matches: BTreeMap::new(),
-            seasons,
-        })
+    pub(super) fn is_empty(&self) -> bool {
+        self.seasons.is_empty()
     }
 }
 
 /// Compare revisions and membership, stopping before an unpublishable listing is materialized.
 /// Deletions affect season aggregates but never become listed matches.
-pub(super) fn changes(before: Option<&Artifact>, after: &Artifact) -> Result<Changes, SkipReason> {
-    if before.is_some_and(|before| std::ptr::eq(before, after)) {
-        return Changes::unchanged(after);
-    }
+pub(super) fn changes(baseline: &Baseline, after: &Artifact) -> Result<Changes, SkipReason> {
+    let before = baseline.as_artifact();
     let mut matches = BTreeMap::new();
     let mut seasons = BTreeSet::new();
     for (id, current) in &after.matches {
@@ -63,10 +48,6 @@ pub(super) fn changes(before: Option<&Artifact>, after: &Artifact) -> Result<Cha
             }
         }
     }
-    // Deletion-only changes already have affected seasons; do not confuse them with a no-op.
-    if seasons.is_empty() {
-        return Changes::unchanged(after);
-    }
     Ok(Changes { matches, seasons })
 }
 
@@ -78,10 +59,15 @@ pub(super) fn ranks(
     reused: bool,
 ) -> Result<[RankComparison; 4], SkipReason> {
     let key = scope.map(str::to_owned);
-    let previous = before.and_then(|artifact| artifact.scopes.get(&key));
-    let current = after.scopes.get(&key);
-    let compatible =
-        before.is_none_or(|artifact| artifact.identity.comparable_with(&after.identity));
+    let previous = before.and_then(|artifact| artifact.scopes.as_ref()?.get(&key));
+    let current = after
+        .scopes
+        .as_ref()
+        .ok_or(SkipReason::InvalidSnapshot)?
+        .get(&key);
+    let compatible = before.is_none_or(|artifact| {
+        artifact.scopes.is_some() && artifact.identity.comparable_with(&after.identity)
+    });
     for samples in [previous, current].into_iter().flatten() {
         if !samples.is_empty() && samples.keys().ne(members.keys()) {
             return Err(SkipReason::InvalidSnapshot);

@@ -45,7 +45,8 @@
 - 通知設定はAPIから共有DBへ直接保存し、SummitへのHTTPに依存しない。`PostgresNotificationSettings`は共通gate取得後の最新2行を`NotificationSettings.change`へ渡し、両方の期待世代の一致を確認してから変更対象だけを書き込む。ON/OFFが変わる種類だけ世代を進め、OFFへの変更と対象通知の未開始部分取消を一つのtransactionへ合成する。競合時は両方とも変更しない。
 - 通知gateはsource rowの更新後に取得する。通知側はgate取得後にsource row lockを取らず、READ COMMITTEDでcommit済み状態を読む。この順序で受付先行・対象変更先行の双方を収束させる。gate取得後に追加の業務write・外部I/Oを行わない。
 - 取消は送達済み部分と開始済み部分の証跡を保ち、未開始部分だけを取消状態へ進める。開始済み送信が後から完了しても親を復帰させない。物理schema・consumer間の排他契約は`../momo-db/docs/discord-notifications.md`を参照する。
-- 分析通知のimmutable成果物は公開lock前のread-only / repeatable-read snapshotで必要resourceだけを上限付きで読む。最終transactionで比較準備時のcurrent識別と公開revisionを確認し、業務write完了後のSAVEPOINT内でgateを取得する。gate取得と、設定・表示metadataの一括SELECTは別statementとする。通常の準備エラーはSAVEPOINTを復旧して業務commitを継続する。
+- 分析通知のimmutable成果物は公開lock前のread-only / repeatable-read snapshotで必要resourceだけを上限付きで読む。最終transactionで比較準備時の通知用入力基準・公開revision・完了した要求元を確認し、業務write完了後のSAVEPOINT内でgateを取得する。gate取得と、設定・表示metadataの一括SELECTは別statementとする。通常の準備エラーはSAVEPOINTを復旧して業務commitを継続する。
+- 通知用入力基準は初回・成果物参照・不明を区別し、APIの新規作品作成だけが初回を明示する。公開制御は成功と同じtransactionで基準を更新し、通知設定や送信結果に依存させない。releaseは画面用pointerを外してもこの基準を残し、履歴cleanupは参照中の成果物を削除しない。
 
 ## 4. Contract Evidence
 
@@ -58,6 +59,7 @@ test の採用・維持・削除は `docs/test-rule.md` に従う。DB contract 
 - lease、fence、slot、pointer、cleanup 競合は複数接続で stale owner と rollback を直接通す。
 - publication contractを変更した場合は、stagingの更新、published header / childの変更拒否、参照中parentの削除拒否、未参照parentのcascade cleanupを実PostgreSQLで区別して検証する。
 - test が作る row を共通 cleanup の対象へ追加し、並列 test 間で ID、row、stream、file を分離する。
+- 分析通知では実際のrelease promotionと公開成功を通し、画面用参照の切離し後のbackfill抑止、要求合流順に依存しない差分、OFF・送信失敗・公開失敗での入力基準を実PostgreSQLで観測する。比較元の欠落を初回として送るtest oracleを置かない。
 - 通知取消では実際の確認・取消・削除commandと、source更新後のrollback、通知gate待ちのcommit境界、部分配送証跡を実PostgreSQLで観測する。
 - 通知設定ではcleanupが設定を初期化する前のmigration seed、種類ごとの独立性、変更のない保存、両設定と通知取消のrollback、gate待ち後の世代再確認を実PostgreSQLで観測する。consumerとの相互接続は実際の受付・送信開始commandを通し、取消SQLをtestへ写して代用しない。
 - production が pooler / proxy を使う場合、直接 PostgreSQL への接続成功を wire 互換性の証拠にしない。session state を持つ consumer は、対応する接続方式で別接続の commit から機能 round trip を確認する。
@@ -67,6 +69,8 @@ test の採用・維持・削除は `docs/test-rule.md` に従う。DB contract 
 ## 5. Migration / Deployment
 
 後方互換な変更は migration 適用後に consumer を deploy する。
+
+通知用入力基準の導入では、旧writerを停止してから既存成果物を基準へ初期化し、対応するAPI・Workerへ切り替えて再開する。初期化後に基準を更新しない旧Workerが公開すると、古い基準との差分を後続処理で再通知するため、この間の混在稼働を許容しない。切戻しも基準の整合性を保つ組合せで行う。
 
 通知の業務関数・trigger撤去は対応する全consumerとの停止切替を前提とする。新schemaに旧関数を呼ぶconsumerやtrigger依存のwriterを混在させない。停止中の切戻しはDBとconsumerを整合する組合せで行い、再開後は新規データを守る修正を優先する。
 

@@ -81,7 +81,8 @@ SET task_kind = NULL, owner = NULL, job_id = NULL, attempt_id = NULL,
 WHERE slot_key = 'shared-heavy-work'
   AND (owner IS NULL OR owner = 'ci-analysis-worker');
 UPDATE series_analysis_title_states
-SET current_artifact_id = NULL, previous_artifact_id = NULL
+SET current_artifact_id = NULL, previous_artifact_id = NULL,
+    notification_baseline_state = 'unknown', notification_baseline_artifact_id = NULL
 WHERE game_title_id IN ('title-release-smoke-a', 'title-release-smoke-b');
 DELETE FROM series_analysis_artifacts
 WHERE game_title_id IN ('title-release-smoke-a', 'title-release-smoke-b');

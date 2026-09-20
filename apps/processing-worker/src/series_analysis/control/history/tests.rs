@@ -51,7 +51,7 @@ async fn real_postgres_retention_preserves_active_jobs_and_readable_artifacts()
             .await?;
         (row.try_get(0)?, row.try_get(1)?)
     };
-    assert_eq!(artifact_counts, (2, 2));
+    assert_eq!(artifact_counts, (3, 3));
 
     let held = secondary.transaction().await?;
     held.query_one(
@@ -64,6 +64,19 @@ async fn real_postgres_retention_preserves_active_jobs_and_readable_artifacts()
     assert_eq!(
         cleanup_history(&mut primary, now, 1).await?,
         [0, 0, 1, 0, 0]
+    );
+    primary
+        .execute(
+            "UPDATE series_analysis_title_states \
+             SET notification_baseline_artifact_id = current_artifact_id \
+             WHERE game_title_id = 'analysis-history-test-title'",
+            &[],
+        )
+        .await?;
+    assert_eq!(
+        cleanup_history(&mut primary, now, 1).await?,
+        [0, 0, 0, 0, 1],
+        "advancing the baseline makes its old, expired artifact collectible"
     );
     primary
         .execute(

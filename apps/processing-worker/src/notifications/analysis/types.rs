@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 
+use super::SkipReason;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -55,10 +57,56 @@ pub(super) struct MatchIdentity {
 
 pub(super) type Ranks = BTreeMap<String, RankSample>;
 
+/// A missing publication pointer never proves that a title has no prior input.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum BaselinePointer {
+    Initial,
+    Artifact(String),
+    Unknown,
+}
+
+impl BaselinePointer {
+    pub(crate) fn from_storage(
+        state: &str,
+        artifact_id: Option<String>,
+    ) -> Result<Self, SkipReason> {
+        match (state, artifact_id) {
+            ("initial", None) => Ok(Self::Initial),
+            ("artifact", Some(id)) if !id.is_empty() && id.len() <= 200 => Ok(Self::Artifact(id)),
+            ("unknown", None) => Ok(Self::Unknown),
+            _ => Err(SkipReason::InvalidSnapshot),
+        }
+    }
+}
+
+pub(super) enum Baseline {
+    Initial,
+    Artifact(Artifact),
+}
+
+impl Baseline {
+    pub(super) const fn as_artifact(&self) -> Option<&Artifact> {
+        match self {
+            Self::Initial => None,
+            Self::Artifact(artifact) => Some(artifact),
+        }
+    }
+
+    pub(super) fn pointer(&self) -> BaselinePointer {
+        match self {
+            Self::Initial => BaselinePointer::Initial,
+            Self::Artifact(artifact) => {
+                BaselinePointer::Artifact(artifact.identity.artifact_id.clone())
+            }
+        }
+    }
+}
+
 pub(super) struct Artifact {
     pub(super) identity: AnalysisIdentity,
-    // None means overall; a named key is a season across all maps.
-    pub(super) scopes: BTreeMap<Option<String>, Ranks>,
+    // A None map key means overall; a named key is a season across all maps.
+    // Old-format baseline metadata remains usable without decoding its analytical payload.
+    pub(super) scopes: Option<BTreeMap<Option<String>, Ranks>>,
     pub(super) matches: BTreeMap<String, MatchIdentity>,
 }
 

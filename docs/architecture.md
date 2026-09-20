@@ -205,8 +205,9 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 - 公開前のDB照合はtransaction内で行い、全Rowとdecode後の同じ集合を重ねて保持しない。metadataは借用して逐次照合し、入力は必要なshapeへ集約する。順序の違いを許容する照合でも欠落・余剰・重複・値の不一致を拒否する。
 - OCR だけが分析を preempt できる。共有実行枠、再queue、失敗回数、公開の詳細は `docs/requirements/series-analysis-batch.md` を正本とする。
 
-- 分析完了通知は `notifications/analysis` が前後のimmutable成果物を比較し、公開transaction末尾で表示metadataを固定する。通知準備はOCRと同じ回復可能なSAVEPOINT境界を使い、正常commitを確認した経路だけが共通senderへ渡す。分析child・API・Summitに平均計算やproducer送出の責務を移さない。内容と比較範囲は `docs/requirements/series-analysis-batch.md` を参照する。
-- 通知producerへ渡すのは通知に必要なjob・作品・成果物versionの識別情報だけとし、DBのclaim型、lease、fenceや全体設定へ逆依存させない。
+- 分析完了通知は `notifications/analysis` が実行attemptに結び付いた試合変更要求と前後のimmutable入力を照合し、公開transaction末尾で要求の完了を再確認して表示metadataを固定する。入力が変わらない成果物の再利用は公開制御側で通知準備を省略する。通知準備はOCRと同じ回復可能なSAVEPOINT境界を使い、正常commitを確認した経路だけが共通senderへ渡す。分析child・API・Summitに平均計算やproducer送出の責務を移さない。内容と比較範囲は `docs/requirements/series-analysis-batch.md` を参照する。
+- 通知producerへ渡すのは通知に必要なjob・attempt・作品・成果物versionの識別情報だけとし、DBのclaim型、lease、fenceや全体設定へ逆依存させない。
+- 通知の入力基準は画面用current / previousから分離する。公開制御は通知の可否とは独立して、公開・再利用成功と基準の更新を一つのtransactionにする。初回と不明を区別し、読取不能な旧形式でも入力metadataの完全性を確かめた範囲で差分を扱う。旧平均を現行形式として解釈せず、基準不足を全試合の追加に置き換えない。
 - 比較用の成果物取得は通知に必要な保存済みplayer metricsだけを射影し、通知で使わない分析カードを転送しない。元成果物のbyte・件数上限とtyped decode、前後のidentity・scope整合性は維持する。比較準備の時間枠には接続確立と全DB往復を含め、確定transaction内の準備とともに親の絶対期限から業務commit・復旧の余裕を残す。比較read transactionが正常commitした新規接続は続く公開transactionに再利用し、失敗・timeout時は破棄する。
 
 ### OCR Capability / Worker Role

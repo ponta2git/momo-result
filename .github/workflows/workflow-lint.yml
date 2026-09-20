@@ -73,7 +73,9 @@ jobs:
           node-version: 24
       - name: Test workflow policy scripts
         run: |
-          bash -n scripts/ci/*.sh scripts/ops/*.sh
+          for script_path in scripts/ci/*.sh scripts/ops/*.sh; do
+            bash -n "${script_path}"
+          done
           node --test scripts/dev-local.test.mjs
           for test_script in scripts/ci/test-*.sh; do
             "${test_script}"

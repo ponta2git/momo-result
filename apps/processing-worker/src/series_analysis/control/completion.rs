@@ -24,8 +24,8 @@ use super::{
 mod authoritative_input;
 
 struct PublicationNotification<'a> {
-    comparison: Option<crate::notifications::analysis::Comparison>,
-    previous_artifact_id: Option<&'a str>,
+    comparison: Option<Box<crate::notifications::analysis::Comparison>>,
+    baseline: &'a crate::notifications::analysis::BaselinePointer,
     finalization_deadline: tokio::time::Instant,
 }
 
@@ -62,17 +62,20 @@ pub(crate) async fn publish(
         // A commit error can mean that PostgreSQL committed and then closed the connection before
         // acknowledging it. Always begin B on a new connection after staging/reconciliation so a
         // durable staging artifact is not terminally failed merely because A's client is unusable.
-        let (mut publication_client, notification) = match crate::notifications::analysis::load(
-            &config.notifications,
-            &config.database_url,
-            notification_source(claim),
-            &artifact.manifest().artifact_id,
-            staged,
-            finalization_deadline,
-        )
-        .await
-        {
-            Some((fresh_client, comparison)) => (fresh_client, Some(comparison)),
+        let comparison = if staged {
+            crate::notifications::analysis::load(
+                &config.notifications,
+                &config.database_url,
+                notification_source(claim),
+                &artifact.manifest().artifact_id,
+                finalization_deadline,
+            )
+            .await
+        } else {
+            None
+        };
+        let (mut publication_client, notification) = match comparison {
+            Some(prepared) => prepared,
             None => (crate::postgres::connect(&config.database_url).await?, None),
         };
         metrics.observe_worker_peak(current_process_peak_resident_bytes().await);
@@ -95,7 +98,7 @@ pub(crate) async fn publish(
         validate_candidate(&transaction, claim, &artifact, staged).await?;
         let notification = PublicationNotification {
             comparison: notification,
-            previous_artifact_id: desired.current_artifact_id.as_deref(),
+            baseline: &desired.notification_baseline,
             finalization_deadline,
         };
         let disposition = match existing_artifact(
@@ -224,13 +227,14 @@ async fn commit_successful_publication(
         ResultDisposition::Published => PublicationResult::Published,
         ResultDisposition::Reused => PublicationResult::Reused,
     };
-    let prepared = if let Some(comparison) = notification.comparison {
+    let prepared = if let (PublicationResult::Published, Some(comparison)) =
+        (result, notification.comparison)
+    {
         comparison
             .prepare(
                 &transaction,
                 notification_source(claim),
-                notification.previous_artifact_id,
-                result == PublicationResult::Reused,
+                notification.baseline,
                 notification.finalization_deadline,
             )
             .await?
@@ -258,6 +262,7 @@ pub(super) fn notification_source(
 ) -> crate::notifications::analysis::AnalysisSource<'_> {
     crate::notifications::analysis::AnalysisSource {
         job_id: &claim.job_id,
+        attempt_id: &claim.attempt_id,
         game_title_id: &claim.game_title_id,
         input_revision: claim.input_revision,
         algorithm_version: &claim.algorithm_version,
@@ -309,6 +314,7 @@ struct DesiredArtifact {
     artifact_schema_version: i32,
     validation_contract_id: Option<String>,
     current_artifact_id: Option<String>,
+    notification_baseline: crate::notifications::analysis::BaselinePointer,
 }
 
 impl DesiredArtifact {
@@ -327,7 +333,8 @@ async fn desired_artifact(
     let row = transaction
         .query_one(
             "SELECT input_revision, algorithm_version, artifact_schema_version,\x20\
-                    validation_contract_id, current_artifact_id\x20\
+                    validation_contract_id, current_artifact_id, notification_baseline_state,\x20\
+                    notification_baseline_artifact_id\x20\
              FROM series_analysis_title_states WHERE game_title_id = $1",
             &[&claim.game_title_id],
         )
@@ -338,6 +345,11 @@ async fn desired_artifact(
         artifact_schema_version: row.try_get(2)?,
         validation_contract_id: row.try_get(3)?,
         current_artifact_id: row.try_get(4)?,
+        notification_baseline: crate::notifications::analysis::BaselinePointer::from_storage(
+            row.try_get(5)?,
+            row.try_get(6)?,
+        )
+        .unwrap_or(crate::notifications::analysis::BaselinePointer::Unknown),
     })
 }
 
@@ -458,6 +470,7 @@ mod tests {
             artifact_schema_version: claim.artifact_schema_version,
             validation_contract_id: claim.validation_contract_id.clone(),
             current_artifact_id: None,
+            notification_baseline: crate::notifications::analysis::BaselinePointer::Initial,
         };
 
         assert!(desired.matches(&claim));

@@ -15,6 +15,8 @@ use crate::{
     series_analysis::config::{AnalysisConsumerConfig, AnalysisExecutionLimits},
 };
 
+mod policy;
+
 #[tokio::test]
 #[ignore = "requires explicitly isolated ANALYSIS_CONTROL_SMOKE_DATABASE_URL"]
 async fn real_postgres_analysis_notifications_follow_committed_publications() -> SmokeResult {
@@ -22,8 +24,9 @@ async fn real_postgres_analysis_notifications_follow_committed_publications() ->
     let database_url = std::env::var("ANALYSIS_CONTROL_SMOKE_DATABASE_URL")?;
     let mut primary = crate::postgres::connect(&database_url).await?;
     let mut peer = crate::postgres::connect(&database_url).await?;
-    cleanup_database(&primary).await?;
+    policy::cleanup(&primary).await?;
     prepare_owned_attempt(&primary).await?;
+    policy::mark_initial(&primary).await?;
     primary
         .batch_execute("UPDATE discord_notification_settings SET enabled = true, generation = 0")
         .await?;
@@ -40,6 +43,7 @@ async fn real_postgres_analysis_notifications_follow_committed_publications() ->
     let temporary = TempDir::new()?;
     let config = config(&database_url, sink.clone(), temporary.path())?;
     let first = claim(OLD_ATTEMPT_ID, 1, OLD_FENCE)?;
+    policy::requests(&primary, &first, &["match_mutation"]).await?;
 
     // Publication waits for the shared gate. The setting and memo committed before the final
     // SELECT must be included, even though the calculation and comparison were prepared earlier.
@@ -85,6 +89,13 @@ async fn real_postgres_analysis_notifications_follow_committed_publications() ->
         fs::write(path, serde_json::to_vec(&first_body)?)?;
     }
 
+    // Recreate the initial comparison inputs for rollback/deadline checks without dispatch.
+    policy::mark_initial(&primary).await?;
+    primary.execute("UPDATE series_analysis_job_requests SET status='assigned', fulfilled_at=NULL WHERE assigned_attempt_id=$1", &[&first.attempt_id]).await?;
+    verify_preparation_boundaries(&mut primary, &peer, &config, &first).await?;
+    verify_delayed_database(&database_url, &config, &first).await?;
+    primary.execute("UPDATE series_analysis_title_states SET notification_baseline_state='artifact', notification_baseline_artifact_id=$2 WHERE game_title_id=$1", &[&TITLE_ID, &artifact_id_for_attempt(OLD_ATTEMPT_ID)]).await?;
+
     // This is the same terminal-job deletion boundary used by history maintenance. The artifact
     // survives with a null attempt reference, so the next logical job can still compare/reuse it.
     primary
@@ -98,20 +109,9 @@ async fn real_postgres_analysis_notifications_follow_committed_publications() ->
         publish(&mut primary, &config, &reused).await?,
         super::super::PublicationResult::Reused
     );
-    let reused_body = receive(&mut received).await?;
-    assert_eq!(reused_body.get("sourceJobId"), Some(&json!(reused.job_id)));
-    assert_eq!(
-        reused_body.pointer("/data/previousAnalysis"),
-        reused_body.pointer("/data/currentAnalysis")
-    );
-    assert_eq!(reused_body.pointer("/data/matches"), Some(&json!([])));
-    assert_eq!(
-        reused_body.pointer("/data/seasons/0/seasonId"),
-        Some(&json!(SEASON_ID))
-    );
+    // Reuse after manual recalculation is not a user data change, even after job cleanup.
+    policy::assert_baseline(&primary, &artifact_id_for_attempt(OLD_ATTEMPT_ID)).await?;
 
-    verify_preparation_boundaries(&mut primary, &peer, &config, &reused).await?;
-    verify_delayed_database(&database_url, &config, &reused).await?;
     for (label, enabled) in [("off", false), ("contended", true)] {
         let next = next_job(&primary, &reused, label).await?;
         primary.execute("UPDATE discord_notification_settings SET enabled = $1 WHERE kind = 'analysis_completed'", &[&enabled]).await?;
@@ -148,7 +148,7 @@ async fn real_postgres_analysis_notifications_follow_committed_publications() ->
         .await?;
     primary.execute("UPDATE worker_execution_slots SET owner = NULL, task_kind = NULL, job_id = NULL, attempt_id = NULL, \
         holder_preemptible = NULL, lease_expires_at = NULL WHERE job_id = $1", &[&stale.job_id]).await?;
-    cleanup_database(&primary).await?;
+    policy::cleanup(&primary).await?;
     Ok(())
 }
 
@@ -164,24 +164,24 @@ async fn verify_delayed_database(
     .await?;
     let artifact_id = artifact_id_for_attempt(OLD_ATTEMPT_ID);
     let deadline = Instant::now() + Duration::from_secs(45);
-    // Read both sides, as a new publication does, even though this fixture can reuse its data.
+    // Re-read the initial published snapshot over the delayed transport.
     let (mut client, comparison) = analysis::load(
         &config.notifications,
         &proxy.url,
         notification_source(claim),
         &artifact_id,
-        true,
         deadline,
     )
     .await
-    .ok_or("analysis comparison missing on delayed database")?;
+    .ok_or("analysis connection missing on delayed database")?;
+    let comparison = comparison.ok_or("comparison unexpectedly skipped")?;
     let transaction = client.transaction().await?;
+    policy::fulfill(&transaction, claim).await?;
     let prepared = comparison
         .prepare(
             &transaction,
             notification_source(claim),
-            Some(&artifact_id),
-            true,
+            &analysis::BaselinePointer::Initial,
             deadline,
         )
         .await?
@@ -202,19 +202,23 @@ async fn verify_preparation_boundaries(
     claim: &ClaimedJob,
 ) -> SmokeResult {
     let artifact_id = artifact_id_for_attempt(OLD_ATTEMPT_ID);
-    for scenario in ["rollback", "invalid", "short"] {
+    for scenario in ["rollback", "intent", "invalid", "short"] {
         let deadline = Instant::now() + Duration::from_secs(2);
         let (_comparison_client, comparison) = analysis::load(
             &config.notifications,
             &config.database_url,
             notification_source(claim),
             &artifact_id,
-            false,
             deadline,
         )
         .await
-        .ok_or("comparison missing")?;
+        .ok_or("comparison connection missing")?;
+        let comparison = comparison.ok_or("comparison unexpectedly skipped")?;
         let transaction = primary.transaction().await?;
+        policy::fulfill(&transaction, claim).await?;
+        if scenario == "intent" {
+            transaction.execute("UPDATE series_analysis_job_requests SET trigger='manual' WHERE assigned_attempt_id=$1", &[&claim.attempt_id]).await?;
+        }
         if scenario == "invalid" {
             transaction
                 .batch_execute("SET LOCAL search_path = pg_catalog")
@@ -224,8 +228,7 @@ async fn verify_preparation_boundaries(
             .prepare(
                 &transaction,
                 notification_source(claim),
-                Some(&artifact_id),
-                true,
+                &analysis::BaselinePointer::Initial,
                 if scenario == "short" {
                     Instant::now() + Duration::from_millis(50)
                 } else {
@@ -233,15 +236,15 @@ async fn verify_preparation_boundaries(
                 },
             )
             .await?;
-        if matches!(scenario, "invalid" | "short") {
+        if matches!(scenario, "intent" | "invalid" | "short") {
             assert!(
                 prepared.is_none(),
-                "recoverable SQL failure/deadline must skip notification"
+                "changed request intent, recoverable SQL failure or deadline must skip notification"
             );
             drop(prepared);
             transaction.query_one("SELECT 1", &[]).await?;
         } else {
-            let prepared = prepared.ok_or("reused snapshot missing")?;
+            let prepared = prepared.ok_or("initial snapshot missing")?;
             let frozen = prepared.payload()?;
             let member_id = MEMBER_IDS.first().ok_or("member")?;
             let old_name: String = peer
@@ -275,7 +278,31 @@ async fn publish(
     claim: &ClaimedJob,
 ) -> SmokeResult<super::super::PublicationResult> {
     let directory = TempDir::new()?;
-    let artifact = build_manifest(claim, directory.path())?;
+    let input = crate::series_analysis::input_repository::load_analysis_input(
+        primary,
+        &claim.game_title_id,
+        claim.input_revision,
+    )
+    .await?;
+    build_artifact(
+        &input,
+        &ArtifactBuildRequest {
+            artifact_id: artifact_id_for_attempt(&claim.attempt_id),
+            algorithm_version: claim.algorithm_version.clone(),
+            maximum_chunk_bytes: 16 * 1024 * 1024,
+            maximum_chunk_count: 1_000,
+            maximum_total_bytes: 64 * 1024 * 1024,
+            maximum_file_count: 1_001,
+        },
+        directory.path(),
+    )?;
+    let artifact = validate_artifact_directory(
+        directory.path(),
+        1_000,
+        16 * 1024 * 1024,
+        64 * 1024 * 1024,
+        1_001,
+    )?;
     let mut metrics = AttemptMetrics {
         artifact_chunk_count: Some(i64::try_from(artifact.manifest().resources.len())?),
         artifact_encoded_bytes: Some(

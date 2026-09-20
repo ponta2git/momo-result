@@ -75,6 +75,8 @@
     "series_analysis_release_state.validation_contract_id",
     "series_analysis_title_states.current_artifact_id",
     "series_analysis_title_states.input_revision",
+    "series_analysis_title_states.notification_baseline_artifact_id",
+    "series_analysis_title_states.notification_baseline_state",
     "series_analysis_title_states.validation_contract_id",
     "series_analysis_worker_capabilities.algorithm_versions",
     "series_analysis_worker_capabilities.validation_contract_ids",

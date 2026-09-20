@@ -1,5 +1,5 @@
-import type { SlotKind } from "@/shared/api/enums";
 import type { IncidentKey, IncidentLabel } from "@/shared/domain/incidents";
+import type { SlotKind } from "@/shared/domain/ocr";
 
 import type { OcrWarning } from "./ocrDraftPayload";
 

@@ -1,6 +1,6 @@
 import { LogIn } from "lucide-react";
 
-import type { GlobalNavItem } from "@/shared/ui/layout/GlobalNav";
+import type { GlobalNavItem } from "@/shared/navigation/GlobalNav";
 
 export const loginNavItems = [
   { icon: <LogIn />, label: "ログイン", to: "/login" },

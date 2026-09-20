@@ -1,15 +1,15 @@
 use std::time::Duration;
 
-use momo_analysis_core::contract::ARTIFACT_VALIDATION_CONTRACT_ID;
 use thiserror::Error;
 
-use crate::outbox::{ControlOutcome, OutboxKind, PostCommitEffects};
+use crate::outbox::{ControlOutcome, PostCommitEffects};
 
 pub(crate) const ALGORITHM_VERSION: &str = "series-analysis-v5";
 
 mod capability;
 mod claim;
 mod completion;
+mod history;
 mod lifecycle;
 mod publication;
 mod recovery;
@@ -25,6 +25,7 @@ pub(crate) use capability::{
 };
 pub(crate) use claim::claim_job;
 pub(crate) use completion::publish;
+pub(crate) use history::{HISTORY_CLEANUP_INTERVAL, cleanup_history};
 pub(crate) use lifecycle::{
     finish_failure, heartbeat, requeue_interrupted, retry_transient_failure, supersede,
 };
@@ -61,9 +62,9 @@ impl TransactionEffects {
 
     pub(crate) const fn committed<T>(self, value: T) -> ControlOutcome<T> {
         let effects = if self.series_analysis_wake {
-            PostCommitEffects::wake(OutboxKind::SeriesAnalysis)
+            PostCommitEffects::WakeAnalysis
         } else {
-            PostCommitEffects::empty()
+            PostCommitEffects::None
         };
         ControlOutcome::new(value, effects)
     }
@@ -80,17 +81,6 @@ pub(crate) struct ClaimedJob {
     pub(crate) attempt_id: String,
     pub(crate) attempt_no: i32,
     pub(crate) fencing_token: i64,
-}
-
-impl ClaimedJob {
-    /// Legacy jobs without a requested validator may be recalculated by the current validator,
-    /// while a non-null request is an exact contract fence.
-    #[must_use]
-    pub(crate) fn accepts_current_validation_contract(&self) -> bool {
-        self.validation_contract_id
-            .as_deref()
-            .is_none_or(|expected| expected == ARTIFACT_VALIDATION_CONTRACT_ID)
-    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

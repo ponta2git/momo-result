@@ -5,9 +5,7 @@ import type { WorkspaceMode } from "@/features/matches/workspace/matchFormTypes"
 import {
   dedupeWorkspaceErrors,
   draftIdsFromDetail,
-  draftIdsFromParams,
 } from "@/features/matches/workspace/workspaceDerivations";
-import { slotKinds } from "@/shared/api/enums";
 import { mergeHeldEventItems } from "@/shared/api/heldEventCache";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type {
@@ -31,21 +29,22 @@ import {
 } from "@/shared/api/queryErrorState";
 import {
   gameTitlesQueryOptions,
-  heldEventDetailQueryOptions,
-  heldEventDirectorySuspenseQueryOptions,
+  heldEventSummaryQueryOptions,
+  heldEventsQueryOptions,
   mapMastersQueryOptions,
   matchDetailQueryOptions,
-  matchDraftDetailQueryOptions,
-  matchDraftSourceImagesQueryOptions,
+  matchDraftReviewQueryOptions,
   memberAliasesQueryOptions,
-  ocrDraftsBulkQueryOptions,
   seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
-import { useHeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
-import type { HeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
 import { isOcrRunning } from "@/shared/domain/draftStatus";
-import { bySlot } from "@/shared/lib/slotMap";
-import type { SlotMap } from "@/shared/lib/slotMap";
+import { slotKinds } from "@/shared/domain/ocr";
+import type { SlotMap } from "@/shared/domain/slotMap";
+import {
+  heldEventPickerPageSize,
+  useHeldEventPickerDirectory,
+} from "@/shared/heldEvents/useHeldEventPickerDirectory";
+import type { HeldEventPickerDirectory } from "@/shared/heldEvents/useHeldEventPickerDirectory";
 
 type MatchWorkspaceQueriesParams = {
   gameTitleId: string;
@@ -55,7 +54,6 @@ type MatchWorkspaceQueriesParams = {
   matchId: string | undefined;
   mode: WorkspaceMode;
   preferredHeldEventId: string | undefined;
-  searchParams: URLSearchParams;
   useSampleDrafts: boolean;
 };
 
@@ -112,45 +110,48 @@ export function useMatchWorkspaceQueries(
     matchId,
     mode,
     preferredHeldEventId,
-    searchParams,
     useSampleDrafts,
   } = params;
 
-  const legacyIds = useMemo(() => draftIdsFromParams(searchParams), [searchParams]);
-
   const preferredHeldEventQuery = useQuery(
-    heldEventDetailQueryOptions(preferredHeldEventId, Boolean(preferredHeldEventId)),
+    heldEventSummaryQueryOptions(preferredHeldEventId, Boolean(preferredHeldEventId)),
   );
   const mapMastersQuery = useQuery(mapMastersQueryOptions(gameTitleId, Boolean(gameTitleId)));
   const seasonMastersQuery = useQuery(seasonMastersQueryOptions(gameTitleId, Boolean(gameTitleId)));
-  const draftDetailQuery = useQuery(
-    matchDraftDetailQueryOptions(matchDraftId, mode !== "edit" && !useSampleDrafts),
+  const draftReviewQuery = useQuery(
+    matchDraftReviewQueryOptions(
+      matchDraftId ?? matchDraftSourceImagesId,
+      mode !== "edit" && !useSampleDrafts,
+    ),
+  );
+  const draftDetail = draftReviewQuery.data?.draft;
+  const ocrDrafts = useMemo(
+    () => (draftReviewQuery.data ? { items: draftReviewQuery.data.ocrDrafts ?? [] } : undefined),
+    [draftReviewQuery.data],
   );
   const matchDetailQuery = useQuery(matchDetailQueryOptions(matchId, mode === "edit"));
   const [heldEventsQuery, gameTitlesQuery, memberAliasesQuery] = useSuspenseQueries({
     queries: [
-      heldEventDirectorySuspenseQueryOptions(),
+      heldEventsQueryOptions({ page: 1, pageSize: heldEventPickerPageSize }),
       gameTitlesQueryOptions(),
       memberAliasesQueryOptions(),
     ],
   });
-  const heldEventItems = mergeHeldEventItems(
+  const initialHeldEventItems = mergeHeldEventItems(
     heldEventsQuery.data?.items ?? [],
     preferredHeldEventQuery.data,
   );
   const heldEventPicker = useHeldEventPickerDirectory({
-    selectedEvent: heldEventItems.find((event) => event.id === heldEventId),
+    selectedEvent: initialHeldEventItems.find((event) => event.id === heldEventId),
     selectedId: heldEventId,
   });
 
-  const reviewDraftIds = useMemo<SlotMap<string>>(() => {
-    const fromDetail = draftIdsFromDetail(draftDetailQuery.data);
-    return bySlot([
-      ["total_assets", legacyIds.total_assets ?? fromDetail.total_assets],
-      ["revenue", legacyIds.revenue ?? fromDetail.revenue],
-      ["incident_log", legacyIds.incident_log ?? fromDetail.incident_log],
-    ]);
-  }, [draftDetailQuery.data, legacyIds]);
+  const heldEventItems = mergeHeldEventItems(
+    initialHeldEventItems,
+    heldEventPicker.selectedHeldEvent,
+  );
+
+  const reviewDraftIds = useMemo(() => draftIdsFromDetail(draftDetail), [draftDetail]);
 
   const reviewDraftIdList = useMemo(
     () =>
@@ -161,29 +162,14 @@ export function useMatchWorkspaceQueries(
     [reviewDraftIds],
   );
 
-  const ocrDraftsQuery = useQuery(
-    ocrDraftsBulkQueryOptions(
-      reviewDraftIdList,
-      mode === "review" && !useSampleDrafts && reviewDraftIdList.length > 0,
-    ),
-  );
-  const sourceImageQuery = useQuery(
-    matchDraftSourceImagesQueryOptions(
-      matchDraftSourceImagesId,
-      mode !== "edit" && !useSampleDrafts && !isOcrRunning(draftDetailQuery.data?.status),
-    ),
-  );
-
-  const reviewStatus = draftDetailQuery.data?.status;
+  const reviewStatus = draftDetail?.status;
   const isOcrRunningBlocked = mode !== "edit" && isOcrRunning(reviewStatus);
-  const refreshingReviewStatus = draftDetailQuery.isFetching || ocrDraftsQuery.isFetching;
+  const refreshingReviewStatus = draftReviewQuery.isFetching;
   const baseErrors = dedupeWorkspaceErrors(
     [
       mapMastersQuery,
       seasonMastersQuery,
-      draftDetailQuery,
-      ocrDraftsQuery,
-      sourceImageQuery,
+      draftReviewQuery,
       matchDetailQuery,
       preferredHeldEventQuery,
     ]
@@ -194,40 +180,30 @@ export function useMatchWorkspaceQueries(
   const refetchMapMasters = mapMastersQuery.refetch;
   const seasonMastersError = seasonMastersQuery.error;
   const refetchSeasonMasters = seasonMastersQuery.refetch;
-  const draftDetailError = draftDetailQuery.error;
-  const refetchDraftDetail = draftDetailQuery.refetch;
-  const ocrDraftsError = ocrDraftsQuery.error;
-  const refetchOcrDrafts = ocrDraftsQuery.refetch;
-  const sourceImageError = sourceImageQuery.error;
-  const refetchSourceImages = sourceImageQuery.refetch;
+  const draftReviewError = draftReviewQuery.error;
+  const refetchDraftReview = draftReviewQuery.refetch;
   const preferredHeldEventError = preferredHeldEventQuery.error;
   const refetchPreferredHeldEvent = preferredHeldEventQuery.refetch;
   const retryBaseQueries = useCallback(async () => {
     const retries: Array<Promise<unknown>> = [];
     if (mapMastersError) retries.push(refetchMapMasters());
     if (seasonMastersError) retries.push(refetchSeasonMasters());
-    if (draftDetailError) retries.push(refetchDraftDetail());
-    if (ocrDraftsError) retries.push(refetchOcrDrafts());
-    if (sourceImageError) retries.push(refetchSourceImages());
+    if (draftReviewError) retries.push(refetchDraftReview());
     if (preferredHeldEventError) retries.push(refetchPreferredHeldEvent());
     await Promise.all(retries);
   }, [
-    draftDetailError,
+    draftReviewError,
     mapMastersError,
-    ocrDraftsError,
     preferredHeldEventError,
-    refetchDraftDetail,
+    refetchDraftReview,
     refetchMapMasters,
-    refetchOcrDrafts,
     refetchPreferredHeldEvent,
     refetchSeasonMasters,
-    refetchSourceImages,
     seasonMastersError,
-    sourceImageError,
   ]);
   const refreshReviewStatus = useCallback(async () => {
-    await Promise.all([refetchDraftDetail(), refetchOcrDrafts()]);
-  }, [refetchDraftDetail, refetchOcrDrafts]);
+    await refetchDraftReview();
+  }, [refetchDraftReview]);
   const refetchMatchDetail = matchDetailQuery.refetch;
   const retryEdit = useCallback(() => {
     void refetchMatchDetail();
@@ -241,13 +217,9 @@ export function useMatchWorkspaceQueries(
   const initializationFailed =
     mode !== "edit" &&
     !useSampleDrafts &&
-    ((Boolean(matchDraftId) &&
-      draftDetailQuery.data === undefined &&
-      shouldShowQueryError(draftDetailQuery)) ||
-      (mode === "review" &&
-        reviewDraftIdList.length > 0 &&
-        ocrDraftsQuery.data === undefined &&
-        shouldShowQueryError(ocrDraftsQuery)));
+    Boolean(matchDraftId) &&
+    draftReviewQuery.data === undefined &&
+    shouldShowQueryError(draftReviewQuery);
 
   return {
     heldEventPicker,
@@ -257,9 +229,7 @@ export function useMatchWorkspaceQueries(
         retrying:
           mapMastersQuery.isFetching ||
           seasonMastersQuery.isFetching ||
-          draftDetailQuery.isFetching ||
-          ocrDraftsQuery.isFetching ||
-          sourceImageQuery.isFetching ||
+          draftReviewQuery.isFetching ||
           preferredHeldEventQuery.isFetching,
         onRetry: retryBaseQueries,
       },
@@ -273,18 +243,18 @@ export function useMatchWorkspaceQueries(
       preferredHeldEventPending: Boolean(
         preferredHeldEventId && !preferredHeldEventQuery.data && preferredHeldEventQuery.isFetching,
       ),
-      sourceImagesLoading: sourceImageQuery.isLoading,
+      sourceImagesLoading: draftReviewQuery.isLoading,
     },
     resources: {
-      draftDetail: draftDetailQuery.data,
+      draftDetail,
       gameTitleItems: gameTitlesQuery.data.items,
       heldEventItems,
       mapItems: mapMastersQuery.data?.items,
       matchDetail: matchDetailQuery.data,
       memberAliases: memberAliasesQuery.data.items ?? [],
-      ocrDrafts: ocrDraftsQuery.data,
+      ocrDrafts,
       seasonItems: seasonMastersQuery.data?.items,
-      sourceImageItems: sourceImageQuery.data?.items,
+      sourceImageItems: draftReviewQuery.data?.sourceImages,
     },
     review: {
       blocked: isOcrRunningBlocked,

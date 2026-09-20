@@ -1,3 +1,4 @@
+use super::child_process::{AnalysisChildOutcome, AnalysisChildProcessSpec, ManagedAnalysisChild};
 use std::{pin::Pin, time::Instant};
 
 use tokio::{sync::watch, time};
@@ -6,10 +7,7 @@ use tracing::{error, info, warn};
 use crate::{
     outbox::ControlOutcome,
     postgres,
-    process::{
-        AnalysisChildOutcome, AnalysisChildProcessSpec, ManagedAnalysisChild, ProcessError,
-        current_process_peak_resident_bytes,
-    },
+    process::{ProcessError, current_process_peak_resident_bytes},
 };
 
 use super::{

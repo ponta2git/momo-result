@@ -1,10 +1,9 @@
-import type { HeldEventDetailResponse, HeldEventResponse } from "@/shared/api/heldEvents";
-import type { GameTitleResponse, SeasonMasterResponse } from "@/shared/api/masters";
-import type { MatchDetailResponse, MatchSummaryResponse } from "@/shared/api/matches";
+import type { HeldEventSummaryResponse, HeldEventResponse } from "@/shared/api/heldEvents";
+import type { SeasonMasterResponse } from "@/shared/api/masters";
+import type { MatchIdentityResponse, MatchSummaryResponse } from "@/shared/api/matches";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 
 import type { ExportCandidate } from "./exportTypes";
-import { formatDateTime } from "./exportViewModel";
 
 type ExportCandidateResolution = {
   candidate: ExportCandidate | undefined;
@@ -39,19 +38,8 @@ export function resolveExportCandidate(input: {
   };
 }
 
-function matchMetadata(
-  gameTitleId: string | undefined,
-  seasonMasterId: string | undefined,
-  gameTitles: GameTitleResponse[],
-  seasons: SeasonMasterResponse[],
-): string {
-  const gameTitle = gameTitleId
-    ? (gameTitles.find((item) => item.id === gameTitleId)?.name ?? "作品名未取得")
-    : "作品未設定";
-  const season = seasonMasterId
-    ? (seasons.find((item) => item.id === seasonMasterId)?.name ?? "シーズン名未取得")
-    : "シーズン未設定";
-  return `${gameTitle}・${season}`;
+function matchMetadata(gameTitleName: string | undefined, seasonName: string | undefined): string {
+  return `${gameTitleName ?? "作品名未取得"}・${seasonName ?? "シーズン名未取得"}`;
 }
 
 export function toSeasonCandidates(seasons: SeasonMasterResponse[]): ExportCandidate[] {
@@ -66,22 +54,18 @@ export function toHeldEventCandidates(events: HeldEventResponse[]): ExportCandid
   }));
 }
 
-export function toMatchCandidates(
-  matches: MatchSummaryResponse[],
-  gameTitles: GameTitleResponse[],
-  seasons: SeasonMasterResponse[],
-): ExportCandidate[] {
+export function toMatchCandidates(matches: MatchSummaryResponse[]): ExportCandidate[] {
   return matches
     .filter((match) => match.kind === "match" && match.status === "confirmed" && match.matchId)
     .map((match) => ({
-      description: matchMetadata(match.gameTitleId, match.seasonMasterId, gameTitles, seasons),
+      description: matchMetadata(match.gameTitleName, match.seasonName),
       label: `${match.playedAt ? formatDateTime(match.playedAt) : "開催日時未設定"}・${formatMatchNoInEvent(match.matchNoInEvent)}`,
       value: match.matchId ?? "",
     }));
 }
 
-export function candidateFromHeldEventDetail(
-  event: HeldEventDetailResponse | undefined,
+export function candidateFromHeldEventSummary(
+  event: HeldEventSummaryResponse | undefined,
 ): ExportCandidate | undefined {
   return event
     ? {
@@ -92,16 +76,25 @@ export function candidateFromHeldEventDetail(
     : undefined;
 }
 
-export function candidateFromMatchDetail(
-  match: MatchDetailResponse | undefined,
-  gameTitles: GameTitleResponse[],
-  seasons: SeasonMasterResponse[],
+export function candidateFromMatchIdentity(
+  match: MatchIdentityResponse | undefined,
 ): ExportCandidate | undefined {
   return match
     ? {
-        description: matchMetadata(match.gameTitleId, match.seasonMasterId, gameTitles, seasons),
+        description: matchMetadata(match.gameTitleName, match.seasonName),
         label: `${formatDateTime(match.playedAt)}・${formatMatchNoInEvent(match.matchNoInEvent)}`,
         value: match.matchId,
       }
     : undefined;
+}
+
+function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
 }

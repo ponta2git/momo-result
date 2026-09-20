@@ -271,7 +271,7 @@ describe("ExportPage", () => {
           totalMatchCount: allEvents.reduce((sum, event) => sum + event.matchCount, 0),
         });
       }),
-      http.get("/api/held-events/held-1", async () => {
+      http.get("/api/held-events/held-1/summary", async () => {
         detailRequested = true;
         await detailGate.promise;
         return HttpResponse.json(
@@ -359,7 +359,7 @@ describe("ExportPage", () => {
           },
         });
       }),
-      http.get("/api/matches/match-21", () =>
+      http.get("/api/matches/match-21/identity", () =>
         HttpResponse.json({
           createdAt: "2026-01-01T00:00:00.000Z",
           createdByAccountId: "account-1",
@@ -440,7 +440,7 @@ describe("ExportPage", () => {
 
   it.each([
     {
-      detailPath: "/api/held-events/:heldEventId",
+      detailPath: "/api/held-events/:heldEventId/summary",
       downloadName: "この開催をCSVでダウンロード",
       missingId: "opaque-held-event-id",
       path: "/exports?heldEventId=opaque-held-event-id&format=csv",
@@ -448,7 +448,7 @@ describe("ExportPage", () => {
       title: "指定された開催が見つかりません",
     },
     {
-      detailPath: "/api/matches/:matchId",
+      detailPath: "/api/matches/:matchId/identity",
       downloadName: "この試合をCSVでダウンロード",
       missingId: "opaque-match-id",
       path: "/exports?matchId=opaque-match-id&format=csv",
@@ -479,7 +479,7 @@ describe("ExportPage", () => {
   it("retries a transient selected-match lookup failure in place", async () => {
     let attempts = 0;
     server.use(
-      http.get("/api/matches/:matchId", ({ params }) => {
+      http.get("/api/matches/:matchId/identity", ({ params }) => {
         if (params["matchId"] !== "match-retry") {
           return HttpResponse.json(makeMatchDetail({ matchId: String(params["matchId"]) }));
         }
@@ -507,7 +507,7 @@ describe("ExportPage", () => {
   it.each([
     {
       changeName: "開催を変更",
-      detailPath: "/api/held-events/:heldEventId",
+      detailPath: "/api/held-events/:heldEventId/summary",
       detailResponse: makeHeldEventDetailResponse({
         heldAt: "2026-04-04T12:34:56.000Z",
         id: "opaque-held-target",
@@ -542,7 +542,7 @@ describe("ExportPage", () => {
     },
     {
       changeName: "試合を変更",
-      detailPath: "/api/matches/:matchId",
+      detailPath: "/api/matches/:matchId/identity",
       detailResponse: makeMatchDetail({
         matchId: "opaque-match-target",
         matchNoInEvent: 7,
@@ -637,7 +637,7 @@ describe("ExportPage", () => {
     },
   );
 
-  it("marks both master names as unacquired when both master requests fail", async () => {
+  it("uses honest fallback labels if projected names are absent", async () => {
     const gameTitleId = "opaque-game-title-id";
     const seasonMasterId = "opaque-season-id";
     server.use(
@@ -684,14 +684,13 @@ describe("ExportPage", () => {
     expect(
       await screen.findByText(/作品名未取得・シーズン名未取得.*CSVで書き出します。/u),
     ).toBeInTheDocument();
-    expect(screen.getByText("候補の表示名を取得できませんでした")).toBeInTheDocument();
+    expect(screen.queryByText("候補の表示名を取得できませんでした")).not.toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(gameTitleId);
     expect(document.body).not.toHaveTextContent(seasonMasterId);
     expect(screen.getByRole("button", { name: "この試合をCSVでダウンロード" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "出力候補を再取得" })).toBeEnabled();
   });
 
-  it("keeps the acquired master name when only the other master request fails", async () => {
+  it("uses the projected title without requesting a master directory", async () => {
     const gameTitleId = "opaque-game-title-id";
     const seasonMasterId = "opaque-season-id";
     server.use(
@@ -719,6 +718,7 @@ describe("ExportPage", () => {
               gameTitleId,
               heldEventId: "held-1",
               id: "match-one-master-failure",
+              gameTitleName: "桃太郎電鉄2",
               kind: "match",
               matchId: "match-one-master-failure",
               matchNoInEvent: 3,
@@ -748,7 +748,7 @@ describe("ExportPage", () => {
     expect(
       await screen.findByText(/桃太郎電鉄2・シーズン名未取得.*CSVで書き出します。/u),
     ).toBeInTheDocument();
-    expect(screen.getByText("候補の表示名を取得できませんでした")).toBeInTheDocument();
+    expect(screen.queryByText("候補の表示名を取得できませんでした")).not.toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(gameTitleId);
     expect(document.body).not.toHaveTextContent(seasonMasterId);
     expect(screen.getByRole("button", { name: "この試合をCSVでダウンロード" })).toBeEnabled();

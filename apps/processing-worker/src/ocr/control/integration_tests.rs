@@ -17,12 +17,11 @@ use crate::{
     ocr::{
         contract::{ValidatedOcrDelivery, parse_validated_delivery},
         queue::{
-            OcrQueueConfig, OcrQueueDeliveryBody, PendingRecoveryCursor, acknowledge,
-            dead_letter_and_acknowledge, ensure_consumer_group, read_new_delivery,
+            OcrQueueConfig, OcrQueueDelivery, OcrQueueDeliveryBody, PendingRecoveryCursor,
+            acknowledge, dead_letter_and_acknowledge, ensure_consumer_group, read_new_delivery,
             recover_cold_page,
         },
     },
-    outbox::OutboxKind,
     series_analysis::control::ALGORITHM_VERSION,
 };
 
@@ -122,6 +121,7 @@ async fn real_postgres_and_redis_preserve_ocr_fencing_and_delivery_order() -> Sm
         insert_fixture(&primary, fixture).await?;
     }
 
+    verify_candidate_integrity(&mut primary).await?;
     verify_expired_takeover(&mut primary, &mut stale).await?;
     verify_success_and_terminal_duplicate(&mut primary).await?;
     verify_success_with_warnings(&mut primary).await?;
@@ -131,6 +131,37 @@ async fn real_postgres_and_redis_preserve_ocr_fencing_and_delivery_order() -> Sm
     notifications::verify(&mut primary, &mut stale, &database_url).await?;
 
     cleanup_database(&primary).await?;
+    Ok(())
+}
+
+async fn verify_candidate_integrity(primary: &mut Client) -> SmokeResult {
+    for invalid_state in [
+        "DELETE FROM ocr_queue_outbox WHERE job_id = $1",
+        "UPDATE source_images SET status = 'DELETE_PENDING', delete_pending_at = clock_timestamp() \
+         WHERE id = (SELECT source_image_id FROM ocr_jobs WHERE id = $1)",
+    ] {
+        let transaction = primary.transaction().await?;
+        transaction
+            .execute(invalid_state, &[&SUCCESS.job_id])
+            .await?;
+        assert!(
+            matches!(
+                load_candidate(&transaction, SUCCESS.job_id).await?,
+                CandidateResult::InvalidPersistedContract
+            ),
+            "missing immutable delivery or unavailable source must fail before acquiring ownership"
+        );
+        transaction.rollback().await?;
+    }
+    let transaction = primary.transaction().await?;
+    let CandidateResult::Ready(candidate) = load_candidate(&transaction, SUCCESS.job_id).await?
+    else {
+        return Err(
+            smoke_error("restored source and outbox did not yield a ready candidate").into(),
+        );
+    };
+    assert!(candidate.matches(&payload(&SUCCESS)?));
+    transaction.rollback().await?;
     Ok(())
 }
 
@@ -277,11 +308,12 @@ async fn prepare_expired_analysis_holder(primary: &Client) -> SmokeResult {
     primary
         .execute(
             "UPDATE series_analysis_title_states SET input_revision = 1, algorithm_version = $1,\x20\
-               artifact_schema_version = $2, pending_work = true WHERE game_title_id = $3",
+               artifact_schema_version = $2, validation_contract_id = $4, pending_work = true WHERE game_title_id = $3",
             &[
                 &ALGORITHM_VERSION,
                 &schema_version,
                 &EXPIRED_ANALYSIS_TITLE_ID,
+                &momo_analysis_core::contract::ARTIFACT_VALIDATION_CONTRACT_ID,
             ],
         )
         .await?;
@@ -488,7 +520,7 @@ async fn verify_transient_requeue_preserves_pending(
         .arg("2026-08-12T00:00:00Z")
         .query_async(redis)
         .await?;
-    let transient = read_new_delivery(redis, queue)
+    let transient = read_new_delivery(redis, queue, queue.block())
         .await?
         .ok_or_else(|| smoke_error("transient OCR delivery was not read"))?;
     let OcrQueueDeliveryBody::Job(transient_payload) = &transient.body else {
@@ -538,7 +570,7 @@ async fn verify_redis_failure_order(primary: &mut Client, redis_url: &str) -> Sm
         .arg(MALFORMED.job_id)
         .query_async(&mut redis)
         .await?;
-    let malformed = read_new_delivery(&mut redis, &queue)
+    let malformed = read_new_delivery(&mut redis, &queue, queue.block())
         .await?
         .ok_or_else(|| smoke_error("malformed OCR delivery was not read"))?;
     assert!(matches!(
@@ -571,7 +603,7 @@ async fn verify_redis_failure_order(primary: &mut Client, redis_url: &str) -> Sm
         .arg("must-not-enter-dlq")
         .query_async(&mut redis)
         .await?;
-    let poison = read_new_delivery(&mut redis, &queue)
+    let poison = read_new_delivery(&mut redis, &queue, queue.block())
         .await?
         .ok_or_else(|| smoke_error("poison OCR delivery was not read"))?;
     assert!(matches!(
@@ -602,12 +634,43 @@ async fn verify_redis_failure_order(primary: &mut Client, redis_url: &str) -> Sm
         exhausted.body,
         OcrQueueDeliveryBody::MaximumAttempts { .. }
     ));
-    dead_letter_and_acknowledge(&mut redis, &queue, &exhausted).await?;
+    verify_dead_letter_failure_order(&mut redis, &queue, &exhausted, stream, group, dead).await?;
+    let _: usize = redis.del(&[stream, dead]).await?;
+    Ok(())
+}
+
+async fn verify_dead_letter_failure_order(
+    redis: &mut redis::aio::ConnectionManager,
+    queue: &OcrQueueConfig,
+    exhausted: &OcrQueueDelivery,
+    stream: &str,
+    group: &str,
+    dead: &str,
+) -> SmokeResult {
+    let _: () = redis.set(dead, "wrong-type-fixture").await?;
+    assert!(
+        dead_letter_and_acknowledge(redis, queue, exhausted)
+            .await
+            .is_err()
+    );
+    let pending_after_failure: StreamPendingReply = redis.xpending(stream, group).await?;
+    assert_eq!(
+        pending_after_failure.count(),
+        1,
+        "failed DLQ publication must leave the source pending"
+    );
+    let _: usize = redis.del(dead).await?;
+    dead_letter_and_acknowledge(redis, queue, exhausted).await?;
     let pending_after_dlq: StreamPendingReply = redis.xpending(stream, group).await?;
     assert_eq!(pending_after_dlq.count(), 0);
+    assert!(
+        dead_letter_and_acknowledge(redis, queue, exhausted)
+            .await
+            .is_err(),
+        "an already-acknowledged delivery must not append a duplicate diagnostic"
+    );
     let dead_letters: StreamRangeReply = redis.xrange_all(dead).await?;
-    assert_dead_letter_fields(only_dead_letter(&dead_letters)?, &poison.message_id);
-    let _: usize = redis.del(&[stream, dead]).await?;
+    assert_dead_letter_fields(only_dead_letter(&dead_letters)?, &exhausted.message_id);
     Ok(())
 }
 
@@ -848,11 +911,7 @@ fn control_config(worker_id: &str) -> SmokeResult<OcrControlConfig> {
 fn claimed_with_analysis_wake(
     outcome: ControlOutcome<OcrClaimResult>,
 ) -> SmokeResult<ClaimedOcrJob> {
-    if !outcome
-        .effects
-        .outbox_wakes
-        .contains(OutboxKind::SeriesAnalysis)
-    {
+    if outcome.effects != crate::outbox::PostCommitEffects::WakeAnalysis {
         return Err(smoke_error("expired Analysis recovery did not emit its shared wake").into());
     }
     match outcome.value {
@@ -871,11 +930,7 @@ fn claimed_with_analysis_wake(
 }
 
 fn claim_result(outcome: ControlOutcome<OcrClaimResult>) -> SmokeResult<OcrClaimResult> {
-    if outcome
-        .effects
-        .outbox_wakes
-        .contains(OutboxKind::SeriesAnalysis)
-    {
+    if outcome.effects == crate::outbox::PostCommitEffects::WakeAnalysis {
         return Err(smoke_error("normal OCR claim unexpectedly emitted an outbox wake").into());
     }
     Ok(outcome.value)

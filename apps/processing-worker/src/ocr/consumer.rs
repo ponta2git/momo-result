@@ -8,7 +8,7 @@ use tracing::{info, warn};
 use crate::{
     notifications::{NotificationSink, log_skip},
     outbox::{PostCommitSink, PostCommitSinkClosed},
-    postgres,
+    postgres, stream_connection,
 };
 
 use super::{
@@ -84,7 +84,7 @@ pub(crate) trait OcrChildLauncher: Send + Sync {
     /// Returns an opaque runtime category when the process cannot be created safely.
     fn launch(
         &self,
-        image: &VerifiedSourceImage,
+        image: VerifiedSourceImage,
         requested_screen_type: RequestedScreenType,
         hints: &OcrHints,
     ) -> Result<Box<dyn OcrChildHandle>, &'static str>;
@@ -147,10 +147,7 @@ impl OcrConsumerConfig {
         timing: OcrConsumerTiming,
     ) -> Result<Self, OcrConsumerError> {
         let worker_identity_matches = queue.consumer() == control.worker_id();
-        if database_url.trim().is_empty()
-            || redis_url.trim().is_empty()
-            || !worker_identity_matches
-            || queue.block() > timing.heartbeat_interval
+        if database_url.trim().is_empty() || redis_url.trim().is_empty() || !worker_identity_matches
         {
             return Err(OcrConsumerError::InvalidConfiguration);
         }
@@ -196,7 +193,9 @@ impl OcrConsumerConfig {
     /// Returns the longest configured OCR dependency or heartbeat operation that can already be
     /// in progress when the process-level supervisor requests shutdown.
     pub(crate) fn shutdown_dependency_or_heartbeat_bound(&self) -> Duration {
-        self.object_download_timeout.max(self.heartbeat_interval)
+        self.object_download_timeout
+            .max(self.heartbeat_interval)
+            .max(stream_connection::RESPONSE_TIMEOUT)
     }
 
     /// Returns the existing durable-finalization bound for process-level shutdown composition.
@@ -340,8 +339,7 @@ pub(crate) async fn run<L: OcrChildLauncher>(
         .map_err(|error| OcrConsumerError::Database(error.kind()))?;
     let redis_client = redis::Client::open(config.redis_url.as_str())
         .map_err(|_error| OcrConsumerError::Queue("ocr_redis_configuration"))?;
-    let mut redis = redis_client
-        .get_connection_manager()
+    let mut redis = stream_connection::connect(&redis_client)
         .await
         .map_err(|_error| OcrConsumerError::Queue("ocr_redis_connect"))?;
     ensure_consumer_group(&mut redis, &config.queue).await?;
@@ -514,12 +512,8 @@ async fn process_claimed<L: OcrChildLauncher>(
     };
     let ocr_started = time::Instant::now();
     let mut child = launcher
-        .launch(&image, claim.requested_screen_type, hints)
+        .launch(image, claim.requested_screen_type, hints)
         .map_err(OcrConsumerError::ChildProcess)?;
-    // The child handle owns the transport, not the source image. Release the bounded
-    // compressed object before waiting for the child so the parent does not retain up to
-    // the object-size limit for the whole OCR duration.
-    drop(image);
     let child_outcome = supervise_ocr_child(
         child.as_mut(),
         config
@@ -790,7 +784,7 @@ fn elapsed_milliseconds(started: time::Instant) -> i32 {
 mod tests {
     use super::claim_wait::{ClaimAttempt, classify_claim_result, submit_claim_outcome};
     use super::*;
-    use crate::outbox::{ControlOutcome, OutboxKind, PostCommitEffects};
+    use crate::outbox::{ControlOutcome, PostCommitEffects};
 
     #[test]
     fn ocr_failures_have_one_deterministic_control_policy() {
@@ -835,11 +829,11 @@ mod tests {
 
     #[test]
     fn analysis_wake_submission_must_succeed_before_claim_disposition() {
-        let (sink, receiver) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
+        let (sink, receiver) = PostCommitSink::channel();
         drop(receiver);
         let outcome = ControlOutcome::new(
             OcrClaimResult::MissingOrTerminal,
-            PostCommitEffects::wake(OutboxKind::SeriesAnalysis),
+            PostCommitEffects::WakeAnalysis,
         );
 
         assert!(matches!(

@@ -3,7 +3,6 @@ import {
   heldEventDraftAction,
   heldEventDraftScopeLabel,
 } from "@/features/heldEvents/heldEventDetailViewModel";
-import type { HeldEventMasterNames } from "@/features/heldEvents/heldEventDetailViewModel";
 import type { HeldEventDraftResponse } from "@/shared/api/heldEvents";
 import { asDraftStatusOrUnknown, reviewStatusLabel } from "@/shared/domain/draftStatus";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
@@ -17,11 +16,9 @@ import { contentText } from "@/shared/ui/typography";
 
 export function HeldEventDraftsSection({
   drafts,
-  masterNames,
   returnTo,
 }: {
   drafts: HeldEventDraftResponse[];
-  masterNames: HeldEventMasterNames;
   returnTo: string;
 }) {
   if (drafts.length === 0) {
@@ -40,7 +37,7 @@ export function HeldEventDraftsSection({
       <ul className="mt-4 divide-y divide-[var(--color-border)]">
         {drafts.map((draft) => {
           const action = heldEventDraftAction(draft);
-          const scopeLabel = heldEventDraftScopeLabel(draft, masterNames);
+          const scopeLabel = heldEventDraftScopeLabel(draft);
           const updatedAt = formatHeldEventShortDateTime(draft.updatedAt);
           return (
             <li key={draft.matchDraftId} className="py-3">

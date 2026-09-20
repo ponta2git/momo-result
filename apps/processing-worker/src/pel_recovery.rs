@@ -6,6 +6,9 @@
 
 use std::time::{Duration, Instant};
 
+/// Keeps an idle read within the worker's shutdown drain budget, independently of job heartbeats.
+pub(crate) const MAXIMUM_READ_BLOCK: Duration = Duration::from_secs(10);
+
 const MAXIMUM_COLD_PAGES_PER_SWEEP: usize = 100;
 const MAXIMUM_TRACKED_TARGETS: usize = 100;
 
@@ -73,6 +76,21 @@ impl PelRecoverySchedule {
             (Some(target), false) => Some(RecoveryAction::Targeted(target.message_id.clone())),
             (None, false) => None,
         }
+    }
+
+    /// Bounds a new-entry read by the next recovery deadline, including the mandatory read
+    /// between recovery pages. A zero duration means omit `BLOCK`, never Redis's infinite wait.
+    #[must_use]
+    pub(crate) fn read_block(&self, now: Instant, maximum: Duration) -> Duration {
+        if self.cold_sweep_active {
+            return Duration::ZERO;
+        }
+        self.targets
+            .iter()
+            .map(|target| target.due_at)
+            .fold(self.next_cold_at, Instant::min)
+            .saturating_duration_since(now)
+            .min(maximum)
     }
 
     /// Records that one `XREADGROUP ... >` request has completed, even if it returned a delivery.
@@ -160,6 +178,57 @@ mod tests {
     use super::*;
 
     const COLD_INTERVAL: Duration = Duration::from_mins(5);
+
+    #[test]
+    fn idle_reads_wait_until_the_earliest_target_or_cold_deadline() {
+        let now = Instant::now();
+        let mut schedule = PelRecoverySchedule::new(now, COLD_INTERVAL);
+        assert!(schedule.record_cold_page(now, true));
+        assert_eq!(
+            schedule.read_block(now, MAXIMUM_READ_BLOCK),
+            MAXIMUM_READ_BLOCK
+        );
+
+        let target_at = now + Duration::from_secs(3);
+        assert!(schedule.schedule_target(String::from("42-0"), target_at));
+        assert_eq!(
+            schedule.read_block(now, MAXIMUM_READ_BLOCK),
+            Duration::from_secs(3)
+        );
+        assert_eq!(
+            schedule.read_block(target_at, MAXIMUM_READ_BLOCK),
+            Duration::ZERO
+        );
+        schedule.record_target_attempt("42-0");
+        assert_eq!(
+            schedule.read_block(target_at, MAXIMUM_READ_BLOCK),
+            MAXIMUM_READ_BLOCK
+        );
+
+        assert_eq!(
+            schedule.read_block(
+                now + COLD_INTERVAL.saturating_sub(Duration::from_secs(2)),
+                MAXIMUM_READ_BLOCK
+            ),
+            Duration::from_secs(2)
+        );
+    }
+
+    #[test]
+    fn recovery_pages_interleave_a_nonblocking_read_until_the_sweep_finishes() {
+        let now = Instant::now();
+        let mut schedule = PelRecoverySchedule::new(now, COLD_INTERVAL);
+        assert!(schedule.record_cold_page(now, false));
+        assert_eq!(schedule.due_action(now), None);
+        assert_eq!(schedule.read_block(now, MAXIMUM_READ_BLOCK), Duration::ZERO);
+        schedule.record_new_delivery_read();
+        assert_eq!(schedule.due_action(now), Some(RecoveryAction::ColdPage));
+        assert!(schedule.record_cold_page(now, true));
+        assert_eq!(
+            schedule.read_block(now, MAXIMUM_READ_BLOCK),
+            MAXIMUM_READ_BLOCK
+        );
+    }
 
     #[test]
     fn startup_runs_one_cold_page_then_waits_for_the_normal_read_and_interval() {

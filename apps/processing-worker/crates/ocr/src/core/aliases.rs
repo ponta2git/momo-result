@@ -85,7 +85,7 @@ impl AliasResolver {
                 &mut pairs,
                 AliasPair {
                     display_name: String::from("さくま社長"),
-                    surface: alias.clone(),
+                    surface: String::from(alias),
                     member_id: None,
                 },
             );

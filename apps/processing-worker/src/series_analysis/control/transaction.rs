@@ -4,12 +4,9 @@ use momo_analysis_core::{canonical, contract::ScopeRef};
 use sha2::{Digest, Sha256};
 use tokio_postgres::{Client, Transaction};
 
-use crate::{
-    execution_slot::{
-        ExecutionSlotIdentity, ExecutionTaskKind, lock_owned as lock_owned_slot,
-        release_owned as release_owned_slot,
-    },
-    series_analysis::config::AnalysisConsumerConfig,
+use crate::execution_slot::{
+    ExecutionSlotIdentity, ExecutionTaskKind, lock_owned as lock_owned_slot,
+    release_owned as release_owned_slot,
 };
 
 use super::{
@@ -18,14 +15,6 @@ use super::{
 };
 
 pub(super) async fn lock_owned(
-    transaction: &Transaction<'_>,
-    claim: &ClaimedJob,
-    config: &AnalysisConsumerConfig,
-) -> Result<(), ControlError> {
-    lock_owned_by(transaction, claim, &config.worker_id).await
-}
-
-pub(super) async fn lock_owned_by(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
     worker_id: &str,
@@ -242,57 +231,29 @@ pub(super) async fn refresh_operation_projections(
     transaction: &Transaction<'_>,
     attempt_id: &str,
 ) -> Result<(), ControlError> {
-    transaction
-        .execute(
-            "WITH affected_campaigns AS (\x20\
-               SELECT DISTINCT campaign_id FROM series_analysis_job_requests\x20\
-               WHERE assigned_attempt_id = $1 AND campaign_id IS NOT NULL\x20\
-             ), counts AS (\x20\
-               SELECT t.campaign_id,\x20\
-                 COUNT(*) FILTER (WHERE t.status <> 'pending')::int AS expanded_count,\x20\
-                 COUNT(*) FILTER (WHERE t.status IN ('succeeded','failed','skipped_title_deleted'))::int AS terminal_count,\x20\
-                 COUNT(*) FILTER (WHERE t.status = 'failed')::int AS failed_count,\x20\
-                 COUNT(*) FILTER (WHERE t.status = 'skipped_title_deleted')::int AS skipped_count\x20\
-               FROM series_analysis_campaign_targets t\x20\
-               JOIN affected_campaigns a ON a.campaign_id = t.campaign_id\x20\
-               GROUP BY t.campaign_id\x20\
-             )\x20\
-             UPDATE series_analysis_campaigns c SET\x20\
-               expanded_count = counts.expanded_count, terminal_count = counts.terminal_count,\x20\
-               failed_count = counts.failed_count, skipped_count = counts.skipped_count,\x20\
-               status = CASE\x20\
-                 WHEN counts.terminal_count = c.target_count THEN 'terminal'\x20\
-                 WHEN counts.expanded_count = c.target_count THEN 'running'\x20\
-                 ELSE 'expanding'\x20\
-               END,\x20\
-               finished_at = CASE\x20\
-                 WHEN counts.terminal_count = c.target_count\x20\
-                   THEN COALESCE(c.finished_at, clock_timestamp())\x20\
-                 ELSE NULL\x20\
-               END\x20\
-             FROM counts WHERE c.id = counts.campaign_id",
+    let campaign_ids = transaction
+        .query(
+            "SELECT DISTINCT campaign_id FROM series_analysis_job_requests
+             WHERE assigned_attempt_id = $1 AND campaign_id IS NOT NULL",
             &[&attempt_id],
         )
-        .await?;
+        .await?
+        .iter()
+        .map(|row| row.try_get::<_, String>(0))
+        .collect::<Result<Vec<_>, _>>()?;
+    crate::series_analysis::campaign::refresh(transaction, &campaign_ids).await?;
     transaction
         .execute(
             "UPDATE series_analysis_operation_requests o\x20\
              SET status = 'terminal', finished_at = COALESCE(o.finished_at, clock_timestamp())\x20\
-             WHERE o.status <> 'terminal' AND (\x20\
-               (o.scope = 'title' AND EXISTS (\x20\
-                  SELECT 1 FROM series_analysis_job_requests changed\x20\
-                  WHERE changed.operation_request_id = o.id AND changed.assigned_attempt_id = $1\x20\
-                ) AND NOT EXISTS (\x20\
-                  SELECT 1 FROM series_analysis_job_requests pending\x20\
-                  WHERE pending.operation_request_id = o.id AND pending.status <> 'fulfilled'\x20\
-                ))\x20\
-               OR (o.scope = 'all_titles' AND EXISTS (\x20\
-                  SELECT 1 FROM series_analysis_campaigns c\x20\
-                  JOIN series_analysis_job_requests changed ON changed.campaign_id = c.id\x20\
-                  WHERE c.operation_request_id = o.id AND c.status = 'terminal'\x20\
-                    AND changed.assigned_attempt_id = $1\x20\
-                ))\x20\
-             )",
+             WHERE o.status <> 'terminal' AND o.scope = 'title'\x20\
+               AND EXISTS (\x20\
+                 SELECT 1 FROM series_analysis_job_requests changed\x20\
+                 WHERE changed.operation_request_id = o.id AND changed.assigned_attempt_id = $1\x20\
+               ) AND NOT EXISTS (\x20\
+                 SELECT 1 FROM series_analysis_job_requests pending\x20\
+                 WHERE pending.operation_request_id = o.id AND pending.status <> 'fulfilled'\x20\
+               )",
             &[&attempt_id],
         )
         .await?;
@@ -300,14 +261,6 @@ pub(super) async fn refresh_operation_projections(
 }
 
 pub(super) async fn release_slot(
-    transaction: &Transaction<'_>,
-    claim: &ClaimedJob,
-    config: &AnalysisConsumerConfig,
-) -> Result<(), ControlError> {
-    release_slot_by(transaction, claim, &config.worker_id).await
-}
-
-pub(super) async fn release_slot_by(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
     worker_id: &str,

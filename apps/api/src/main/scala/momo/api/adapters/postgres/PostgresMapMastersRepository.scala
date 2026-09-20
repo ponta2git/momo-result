@@ -45,19 +45,12 @@ object PostgresMapMasters:
 
     override def createWithNextDisplayOrder(map: MapMaster): ConnectionIO[MapMaster] =
       val lockKey = s"momo:map_masters:${map.gameTitleId.value}:display_order"
-      sql"""
-        WITH display_order_lock AS (
-          SELECT pg_advisory_xact_lock(hashtext($lockKey)::bigint)
-        ),
-        next_order AS (
-          SELECT COALESCE(MAX(display_order), 0) + 1 AS display_order
-          FROM map_masters
-          WHERE game_title_id = ${map.gameTitleId}
-        )
+      // The allocation needs a new READ COMMITTED snapshot after any lock wait.
+      sql"SELECT pg_advisory_xact_lock(hashtext($lockKey)::bigint)".query[Unit].unique *> sql"""
         INSERT INTO map_masters (id, game_title_id, name, display_order, created_at)
-        SELECT ${map.id}, ${map.gameTitleId}, ${map.name}, next_order.display_order, ${map
+        SELECT ${map.id}, ${map.gameTitleId}, ${map.name}, COALESCE(MAX(display_order), 0) + 1, ${map
           .createdAt}
-        FROM display_order_lock, next_order
+        FROM map_masters WHERE game_title_id = ${map.gameTitleId}
         RETURNING id, game_title_id, name, display_order, created_at
       """.query[MapMasterRow].unique.map(fromRow).exceptSomeSqlState {
         case state if isUniqueViolation(state) =>

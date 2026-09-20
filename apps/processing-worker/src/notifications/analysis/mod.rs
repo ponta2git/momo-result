@@ -9,7 +9,6 @@ use super::{
     NotificationKind, NotificationReservation, NotificationSink, PreparedNotification, SkipReason,
     log_skip,
 };
-use crate::series_analysis::control::ClaimedJob;
 use types::Artifact;
 
 mod artifacts;
@@ -24,6 +23,16 @@ const MAXIMUM_LISTED_MATCHES: usize = 1024;
 const MAXIMUM_SEASONS: usize = 128;
 const COMPARISON_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// Immutable job identity needed to freeze a notification; no lease, fence or runtime settings.
+#[derive(Clone, Copy)]
+pub(crate) struct AnalysisSource<'a> {
+    pub(crate) job_id: &'a str,
+    pub(crate) game_title_id: &'a str,
+    pub(crate) input_revision: i64,
+    pub(crate) algorithm_version: &'a str,
+    pub(crate) artifact_schema_version: i32,
+}
+
 /// Owns the reserved capacity and immutable comparison until finalization. Reuse shares one
 /// artifact between both sides. Preparation checks the final current pointer before freezing
 /// metadata; only the caller's confirmed success COMMIT may authorize dispatch.
@@ -37,7 +46,7 @@ pub(crate) struct Comparison {
 pub(crate) async fn load(
     sink: &NotificationSink,
     database_url: &str,
-    claim: &ClaimedJob,
+    source: AnalysisSource<'_>,
     candidate_id: &str,
     staged: bool,
     deadline: Instant,
@@ -51,14 +60,14 @@ pub(crate) async fn load(
             .await
             .map_err(|error| {
                 tracing::warn!(event = "result_notification_connection_failed", kind = KIND,
-                source_job_id = %claim.job_id, error_kind = error.kind());
+                source_job_id = %source.job_id, error_kind = error.kind());
                 SkipReason::PreparationFailed
             })?;
         let (previous, current) =
-            artifacts::load(&mut client, &claim.game_title_id, candidate_id, staged).await?;
-        if current.identity.input_revision != claim.input_revision.to_string()
-            || current.identity.algorithm_version != claim.algorithm_version
-            || current.identity.artifact_schema_version != claim.artifact_schema_version
+            artifacts::load(&mut client, source.game_title_id, candidate_id, staged).await?;
+        if current.identity.input_revision != source.input_revision.to_string()
+            || current.identity.algorithm_version != source.algorithm_version
+            || current.identity.artifact_schema_version != source.artifact_schema_version
         {
             return Err(SkipReason::InvalidSnapshot);
         }
@@ -81,7 +90,7 @@ pub(crate) async fn load(
             tracing::info!(
                 event = "result_notification_comparison_ready",
                 kind = KIND,
-                source_job_id = %claim.job_id,
+                source_job_id = %source.job_id,
                 elapsed_milliseconds = started.elapsed().as_millis(),
                 changed_match_count = comparison.changes.matches.len(),
             );
@@ -90,14 +99,14 @@ pub(crate) async fn load(
             Some((client, comparison))
         }
         Ok(Err(reason)) => {
-            log_skip(KIND, &claim.job_id, reason);
+            log_skip(KIND, source.job_id, reason);
             None
         }
         Err(_error) => {
             tracing::warn!(event = "result_notification_comparison_timeout", kind = KIND,
-                source_job_id = %claim.job_id, budget_milliseconds = budget.as_millis(),
+                source_job_id = %source.job_id, budget_milliseconds = budget.as_millis(),
                 elapsed_milliseconds = started.elapsed().as_millis());
-            log_skip(KIND, &claim.job_id, SkipReason::ComparisonTimeout);
+            log_skip(KIND, source.job_id, SkipReason::ComparisonTimeout);
             None
         }
     }
@@ -107,7 +116,7 @@ impl Comparison {
     pub(crate) async fn prepare(
         self,
         transaction: &Transaction<'_>,
-        claim: &ClaimedJob,
+        source: AnalysisSource<'_>,
         previous_id: Option<&str>,
         reused: bool,
         deadline: Instant,
@@ -118,11 +127,11 @@ impl Comparison {
                 .as_ref()
                 .map(|artifact| artifact.identity.artifact_id.as_str())
         {
-            log_skip(KIND, &claim.job_id, SkipReason::InvalidSnapshot);
+            log_skip(KIND, source.job_id, SkipReason::InvalidSnapshot);
             return Ok(None);
         }
-        super::preparation::recoverable(transaction, KIND, &claim.job_id, deadline, async {
-            snapshot::prepare(transaction, claim, self, reused).await
+        super::preparation::recoverable(transaction, KIND, source.job_id, deadline, async {
+            snapshot::prepare(transaction, source, self, reused).await
         })
         .await
     }

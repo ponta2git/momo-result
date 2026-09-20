@@ -2,7 +2,6 @@ package momo.api.adapters.postgres
 
 import java.time.Instant
 
-import cats.MonadThrow
 import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
@@ -13,7 +12,6 @@ import momo.api.domain.ids.*
 import momo.api.domain.{
   FourPlayers,
   IncidentCounts,
-  IncidentKind,
   ManYen,
   MatchNoInEvent,
   MatchNote,
@@ -42,7 +40,6 @@ private[postgres] trait PostgresMatchesReadSupport:
       createdByAccountId: AccountId,
       createdByMemberId: Option[MemberId],
       createdAt: Instant,
-      updatedAt: Instant,
       noteBody: Option[String],
       noteVersion: Long,
       noteUpdatedByAccountId: Option[AccountId],
@@ -78,11 +75,14 @@ private[postgres] trait PostgresMatchesReadSupport:
            game_title_id, layout_family, season_master_id,
            owner_member_id, map_master_id, played_at,
            total_assets_draft_id, revenue_draft_id, incident_log_draft_id,
-           created_by_account_id, created_by_member_id, created_at, updated_at,
+           created_by_account_id, created_by_member_id, created_at,
            note_body, note_version, note_updated_by_account_id, note_updated_at
          FROM matches"""
 
-  protected final def toRecord(m: MatchRow, players: FourPlayers): ConnectionIO[MatchRecord] =
+  protected final def toRecord(
+      m: MatchRow,
+      players: FourPlayers,
+  ): Either[PostgresDataIntegrityException, MatchRecord] =
     val decoded =
       for
         body <- m.noteBody.traverse(MatchNoteBody.fromRequiredString)
@@ -110,7 +110,7 @@ private[postgres] trait PostgresMatchesReadSupport:
     decoded.leftMap(message =>
       PostgresDataIntegrityException
         .inconsistentRow("matches", m.id.value, message)
-    ).liftTo[ConnectionIO]
+    )
 
   /**
    * Batch-load all `match_players` and `match_incidents` rows for the given match ids in two SQL
@@ -138,47 +138,36 @@ private[postgres] trait PostgresMatchesReadSupport:
       for
         playerRows <- playersIO
         incidentRows <- incidentsIO
-        result <- assemble(matchIds, playerRows, incidentRows)
+        result <- assemble(matchIds, playerRows, incidentRows).liftTo[ConnectionIO]
       yield result
 
   protected final def assemble(
       matchIds: List[MatchId],
       playerRows: List[PlayerRow],
       incidentRows: List[IncidentRow],
-  ): ConnectionIO[Map[MatchId, FourPlayers]] =
-    val incidentsByMatch: Map[MatchId, Map[MemberId, Map[IncidentKind, Int]]] = incidentRows
-      .groupBy(_.matchId).view.mapValues { rows =>
-        rows.groupBy(_.memberId).view.mapValues { rs =>
-          rs.iterator.flatMap(r => IncidentKindMapping.kindOf(r.incidentMasterId).map(_ -> r.count))
-            .toMap
-        }.toMap
-      }.toMap
-
-    val playersByMatch: Map[MatchId, List[PlayerResult]] = playerRows.groupBy(_.matchId).view
-      .mapValues { rows =>
-        val byMember = incidentsByMatch.getOrElse(rows.head.matchId, Map.empty)
-        rows.map { row =>
-          val ic = byMember.getOrElse(row.memberId, Map.empty)
-          PlayerResult(
-            memberId = row.memberId,
-            playOrder = row.playOrder,
-            rank = row.rank,
-            totalAssetsManYen = row.totalAssets,
-            revenueManYen = row.revenue,
-            incidents = IncidentCounts.fromKindMap(ic),
+  ): Either[PostgresDataIntegrityException, Map[MatchId, FourPlayers]] =
+    val incidents = incidentRows.groupMap(row => (row.matchId, row.memberId))(identity)
+      .view.mapValues(_.flatMap(row =>
+        IncidentKindMapping.kindOf(row.incidentMasterId).map(_ -> row.count)
+      ).toMap).toMap
+    val playersByMatch = playerRows.groupMap(_.matchId) { row =>
+      PlayerResult(
+        memberId = row.memberId,
+        playOrder = row.playOrder,
+        rank = row.rank,
+        totalAssetsManYen = row.totalAssets,
+        revenueManYen = row.revenue,
+        incidents =
+          IncidentCounts.fromKindMap(incidents.getOrElse((row.matchId, row.memberId), Map.empty)),
+      )
+    }
+    matchIds.traverse { id =>
+      FourPlayers.fromTrustedRow(playersByMatch.getOrElse(id, Nil))
+        .leftMap(errors =>
+          PostgresDataIntegrityException.inconsistentRow(
+            "match_players",
+            id.value,
+            errors.toChain.toList.map(_.message).mkString("; "),
           )
-        }
-      }.toMap
-
-    matchIds.traverse { mid =>
-      val players = playersByMatch.getOrElse(mid, Nil)
-      FourPlayers.fromTrustedRow(players) match
-        case Right(fp) => (mid -> fp).pure[ConnectionIO]
-        case Left(errs) => MonadThrow[ConnectionIO]
-            .raiseError[(MatchId, FourPlayers)](PostgresDataIntegrityException
-              .inconsistentRow(
-                "match_players",
-                mid.value,
-                errs.toChain.toList.map(_.message).mkString("; "),
-              ))
+        ).map(id -> _)
     }.map(_.toMap)

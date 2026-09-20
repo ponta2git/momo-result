@@ -9,7 +9,6 @@ import { MatchWorkspaceLoading } from "@/features/matches/workspace/MatchWorkspa
 import { MatchWorkspaceNavigationGuard } from "@/features/matches/workspace/MatchWorkspaceNavigationGuard";
 import { MatchWorkspaceToolbar } from "@/features/matches/workspace/MatchWorkspaceToolbar";
 import { useMatchWorkspacePageModel } from "@/features/matches/workspace/useMatchWorkspacePageModel";
-import { draftIdsFromParams } from "@/features/matches/workspace/workspaceDerivations";
 import { useAuth } from "@/shared/auth/useAuth";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -31,11 +30,8 @@ function matchWorkspaceIdentityKey(
   accountId: string | undefined,
 ): string {
   const useSampleDrafts = props.mode === "review" && searchParams.get("sample") === "1";
-  const legacyDraftIds =
-    props.mode === "review" && !useSampleDrafts ? draftIdsFromParams(searchParams) : {};
   return JSON.stringify({
     accountId: accountId ?? null,
-    legacyDraftIds,
     matchDraftId: props.matchDraftId ?? null,
     matchId: props.matchId ?? null,
     matchSessionId: props.matchSessionId ?? null,

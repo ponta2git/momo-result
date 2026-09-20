@@ -10,67 +10,59 @@ import type {
   OwnerMetricId,
 } from "@/features/seriesComparison/model/seriesAnalysisOwnerMetrics";
 import { formatPercent } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
-import { AnalysisSection } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
-import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
+import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
+import { rankColor } from "@/shared/matches/rankPresentation";
 import { cn } from "@/shared/ui/cn";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import type { DataTableColumn } from "@/shared/ui/data/DataTable";
-import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { SelectControl } from "@/shared/ui/forms/SelectControl";
-import { rankColor } from "@/shared/ui/rank/rankPresentation";
 import { contentText } from "@/shared/ui/typography";
 
 type OwnerRow = OwnerComparison["rows"][number];
 
-/** Narrow the wire union once; no child needs to know the artifact generation. */
 export function SeriesAnalysisOwnerComparison({
-  response,
+  comparison,
+  hasMatches,
   metric = defaultOwnerMetric,
   onMetricChange,
 }: {
-  response: SeriesComparisonAggregate;
+  comparison: OwnerComparison;
+  hasMatches: boolean;
   metric?: OwnerMetricId;
   onMetricChange?: ((metric: OwnerMetricId) => void) | undefined;
 }) {
-  const comparison = response.schemaVersion === 4 ? response.ownerComparison : undefined;
   return (
-    <AnalysisSection id="metric-owner" title="オーナー比較">
-      <div className="grid min-w-0 gap-4">
-        <div className="max-w-sm">
-          <SelectControl
-            aria-label="オーナー比較の指標"
-            value={metric}
-            options={ownerMetricOptions}
-            disabled={!comparison || response.scope.matchCount === 0}
-            onValueChange={(value) => {
-              if (isOwnerMetricId(value)) onMetricChange?.(value);
-            }}
-          />
-        </div>
-        {comparison && response.scope.matchCount === 0 ? (
-          <EmptyState
-            placement="embedded"
-            title="対象の試合がありません"
-            description="作品やシーズン、マップの条件を変えてください。"
-          />
-        ) : comparison ? (
-          <>
-            {comparison.recordedOwnerCount === 1 ? (
-              <p className={cn(contentText.supporting, "max-w-2xl text-pretty")}>
-                この条件では、オーナーの記録は1人分です。
-              </p>
-            ) : null}
-            <OwnerTable comparison={comparison} metric={metric} />
-          </>
-        ) : (
-          <p className={cn(contentText.body, "max-w-2xl text-pretty")}>
-            この分析にはオーナー別の集計がありません。新しい分析が完成すると表示されます。
-          </p>
-        )}
+    <div className="grid min-w-0 gap-4">
+      <div className="max-w-sm">
+        <SelectControl
+          aria-label="オーナー比較の指標"
+          value={metric}
+          options={ownerMetricOptions}
+          disabled={!hasMatches}
+          onValueChange={(value) => {
+            if (isOwnerMetricId(value)) onMetricChange?.(value);
+          }}
+        />
       </div>
-    </AnalysisSection>
+      {hasMatches ? (
+        <>
+          {comparison.recordedOwnerCount === 1 ? (
+            <p className={cn(contentText.supporting, "max-w-2xl text-pretty")}>
+              この条件では、オーナーの記録は1人分です。
+            </p>
+          ) : null}
+          <OwnerTable comparison={comparison} metric={metric} />
+        </>
+      ) : (
+        <EmptyState
+          placement="embedded"
+          title="対象の試合がありません"
+          description="作品やシーズン、マップの条件を変えてください。"
+        />
+      )}
+    </div>
   );
 }
 

@@ -7,22 +7,28 @@ pub(super) fn crown_certainty(
     events: &[EncodedEvent],
     players: &[String],
 ) -> Result<CrownCertainty, ()> {
+    // Bootstrap resamples events, not features: encode each event's observations once and
+    // retain only what fitting consumes. Draw order and the solver's total order stay unchanged.
+    let observations_by_event = events
+        .iter()
+        .map(|event| {
+            pair_records([event])
+                .map(|pair| pair.full)
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    let mut observations = Vec::new();
     let mut iterations = Vec::with_capacity(BOOTSTRAP_ITERATIONS);
-    let mut sample = Vec::with_capacity(events.len());
     for iteration in 0..BOOTSTRAP_ITERATIONS {
-        sample.clear();
+        observations.clear();
         for draw in 0..events.len() {
-            sample.push(
-                events
+            observations.extend_from_slice(
+                observations_by_event
                     .get(draw_index(iteration, draw, events.len())?)
                     .ok_or(())?,
             );
         }
-        let observations = pair_records(sample.iter().copied())?
-            .into_iter()
-            .map(|pair| pair.full)
-            .collect::<Vec<_>>();
-        if let Ok(fit) = fit(observations)
+        if let Ok(fit) = fit(&mut observations)
             && let Ok(iteration_leaders) = leaders(&fit.coefficients, players.len())
         {
             iterations.push(iteration_leaders);

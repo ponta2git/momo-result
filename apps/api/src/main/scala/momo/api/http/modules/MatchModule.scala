@@ -14,6 +14,7 @@ import momo.api.endpoints.{
   ConfirmMatchResponse,
   DeleteMatchResponse,
   MatchDetailResponse,
+  MatchIdentityResponse,
   MatchListPaginationResponse,
   MatchListResponse,
   MatchListSummaryResponse,
@@ -114,6 +115,11 @@ object MatchModule:
       security.decode(
         BoundaryId.required("matchId", matchId)(MatchId.fromString)
       )(id => security.respond(getMatch.run(id))(MatchDetailResponse.from))
+    },
+    SecuredEndpoint.readLogic(security, MatchesEndpoints.identity) { _ => matchId =>
+      security.decode(BoundaryId.required("matchId", matchId)(MatchId.fromString))(id =>
+        security.respond(getMatch.identity(id))(MatchIdentityResponse.from)
+      )
     },
     SecuredEndpoint.mutationLogic(security, MatchesEndpoints.update) { member =>
       {

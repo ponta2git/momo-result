@@ -14,23 +14,13 @@ import {
 } from "@/features/matches/list/matchListStatusPolicy";
 import type {
   MatchListItemView,
-  MatchListLookupMaps,
   MatchListSourceItem,
 } from "@/features/matches/list/matchListTypes";
 import { memberDisplayName } from "@/shared/domain/members";
 import { compact } from "@/shared/lib/compact";
 
-export function toMatchListItemView(
-  item: MatchListSourceItem,
-  lookupMaps: MatchListLookupMaps,
-): MatchListItemView {
+export function toMatchListItemView(item: MatchListSourceItem): MatchListItemView {
   const status = normalizeMatchListStatus(item.status);
-  const heldEvent = item.heldEventId ? lookupMaps.heldEventsById.get(item.heldEventId) : undefined;
-  const gameTitle = item.gameTitleId ? lookupMaps.gameTitlesById.get(item.gameTitleId) : undefined;
-  const season = item.seasonMasterId ? lookupMaps.seasonsById.get(item.seasonMasterId) : undefined;
-  const map = item.mapMasterId ? lookupMaps.mapsById.get(item.mapMasterId) : undefined;
-  const heldAt = heldEvent?.heldAt ?? item.playedAt;
-
   return {
     canCancelOcr: false,
     createdAt: item.createdAt,
@@ -55,25 +45,22 @@ export function toMatchListItemView(
       detailHref: matchListDetailHref(item.matchId),
       exportHref: matchListExportHref(item.matchId),
       gameTitleId: item.gameTitleId || undefined,
-      gameTitleName: gameTitle?.name || undefined,
-      heldAt: heldAt || undefined,
+      gameTitleName: item.gameTitleName || undefined,
+      heldAt: item.heldAt ?? item.playedAt ?? undefined,
       heldEventId: item.heldEventId || undefined,
-      mapName: map?.name || undefined,
+      mapName: item.mapName || undefined,
       matchDraftId: item.matchDraftId || undefined,
       matchId: item.matchId || undefined,
       matchNoInEvent: item.matchNoInEvent || undefined,
       ownerName: item.ownerMemberId ? memberDisplayName(item.ownerMemberId) : undefined,
       reviewHref: matchListReviewHref(item.matchDraftId, status),
       seasonMasterId: item.seasonMasterId || undefined,
-      seasonName: season?.name || undefined,
+      seasonName: item.seasonName || undefined,
       statusDescription: matchListStatusDescription(status),
     }),
   };
 }
 
-export function toMatchListItemViews(
-  items: MatchListSourceItem[],
-  lookupMaps: MatchListLookupMaps,
-): MatchListItemView[] {
-  return items.map((item) => toMatchListItemView(item, lookupMaps));
+export function toMatchListItemViews(items: MatchListSourceItem[]): MatchListItemView[] {
+  return items.map((item) => toMatchListItemView(item));
 }

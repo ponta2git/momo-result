@@ -15,12 +15,13 @@ type Entry = {
   options: ReturnType<typeof sourceImageBlobQueryOptions>;
   foregroundAttempted: boolean;
   backgroundAttempted: boolean;
+  replaced?: boolean;
   objectUrl?: string;
 };
 
 type ImageSnapshot = {
   descriptor: SourceImageItem | undefined;
-  status: "loading" | "error" | "ready";
+  status: "loading" | "error" | "ready" | "replaced";
   displayUrl: string | undefined;
 };
 type Snapshot = Partial<Record<SourceImageKind, ImageSnapshot>>;
@@ -126,7 +127,7 @@ export class SourceImageResource {
   retry = () => {
     if (this.stopped) return;
     const active = this.entries.get(this.activeKind);
-    if (!active || this.running?.entry === active) return;
+    if (!active || active.replaced || this.running?.entry === active) return;
     active.foregroundAttempted = false;
     this.advance();
   };
@@ -143,7 +144,8 @@ export class SourceImageResource {
       this.running.foreground = true;
       active.foregroundAttempted = true;
     }
-    const needsActive = active && !active.objectUrl && !active.foregroundAttempted;
+    const needsActive =
+      active && !active.replaced && !active.objectUrl && !active.foregroundAttempted;
     if (this.running && needsActive) {
       const obsolete = this.running.entry;
       this.running = undefined;
@@ -182,6 +184,7 @@ export class SourceImageResource {
           return;
         }
         const { status } = normalizeUnknownApiError(error);
+        if (status === 409) entry.replaced = true;
         if (status === 401 || status === 403 || status === 429) this.backgroundBlocked = true;
       })
       .finally(() => {
@@ -198,11 +201,13 @@ export class SourceImageResource {
       const state = this.client.getQueryState(entry.options.queryKey);
       next[kind] = {
         descriptor: entry.item,
-        status: entry.objectUrl
-          ? "ready"
-          : state?.status === "error" && entry.foregroundAttempted
-            ? "error"
-            : "loading",
+        status: entry.replaced
+          ? "replaced"
+          : entry.objectUrl
+            ? "ready"
+            : state?.status === "error" && entry.foregroundAttempted
+              ? "error"
+              : "loading",
         displayUrl: entry.objectUrl,
       };
     }

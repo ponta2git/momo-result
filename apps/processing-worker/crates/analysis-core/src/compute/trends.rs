@@ -8,7 +8,7 @@ use crate::{
     stats::{average, percentile_f64, percentile_i32, quality_status, rate},
 };
 
-use super::grouping::MatchGroup;
+use super::{grouping::MatchGroup, presentation::object};
 
 pub(super) fn trends(
     players: &[String],
@@ -34,7 +34,7 @@ pub(super) fn trends(
                         })
                     })
                     .collect::<Vec<_>>();
-                json!({ "kind": kind.wire(), "memberId": member_id, "points": points })
+                object([("kind", kind.wire().into()), ("memberId", member_id.as_str().into()), ("points", points.into())])
             })
         })
         .collect()

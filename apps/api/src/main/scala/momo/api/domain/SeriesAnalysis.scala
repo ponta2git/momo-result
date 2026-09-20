@@ -81,11 +81,56 @@ final case class SeriesAnalysisStatus(
     calculation: Option[SeriesAnalysisCalculation],
 )
 
+object SeriesAnalysisStatus:
+  /** Active work wins over pending intent, which in turn wins over terminal history. */
+  def project(
+      gameTitleId: GameTitleId,
+      desired: SeriesAnalysisDesiredVersion,
+      artifact: Option[SeriesAnalysisArtifactRef],
+      validationContractMatches: Boolean,
+      pendingWork: Boolean,
+      activeOrLatest: Option[SeriesAnalysisCalculation],
+      pending: Option[SeriesAnalysisCalculation],
+  ): Option[SeriesAnalysisStatus] =
+    val freshness = artifact match
+      case None => "unavailable"
+      case Some(value)
+          if value.inputRevision == desired.inputRevision &&
+            value.algorithmVersion == desired.algorithmVersion &&
+            value.artifactSchemaVersion == desired.artifactSchemaVersion &&
+            validationContractMatches => "current"
+      case Some(_) => "stale"
+    val selected = activeOrLatest.filter(value =>
+      value.status == "running" || value.status == "queued"
+    ).orElse(pending).orElse(activeOrLatest)
+    val calculation = selected.flatMap(value =>
+      SeriesAnalysisVocabulary.wireTrigger(value.trigger).map(trigger =>
+        value.copy(trigger = trigger)
+      )
+    )
+    val valid = desired.inputRevision >= 0 && artifact.forall(_.gameTitleId == gameTitleId) &&
+      (activeOrLatest.toList ::: pending.toList).forall(value =>
+        SeriesAnalysisVocabulary.JobStatuses.contains(value.status) &&
+          SeriesAnalysisVocabulary.wireTrigger(value.trigger).nonEmpty
+      )
+    val recoverable = freshness != "stale" || pendingWork || calculation.exists(value =>
+      value.status == "failed" || value.status == "timed_out"
+    )
+    Option.when(valid && recoverable)(
+      SeriesAnalysisStatus(gameTitleId, desired, freshness, artifact, calculation)
+    )
+
 enum SeriesAnalysisScope derives CanEqual:
   case Overall
   case Season(id: SeasonMasterId)
   case Map(id: MapMasterId)
   case SeasonMap(seasonId: SeasonMasterId, mapId: MapMasterId)
+
+  def contains(seasonId: SeasonMasterId, mapId: MapMasterId): Boolean = this match
+    case Overall => true
+    case Season(id) => id == seasonId
+    case Map(id) => id == mapId
+    case SeasonMap(season, map) => season == seasonId && map == mapId
 
   def kind: String = this match
     case Overall => "overall"
@@ -195,6 +240,30 @@ final case class SeriesAnalysisGlobalExecution(
     activeCampaignCount: Int,
     latestActiveCampaign: Option[SeriesAnalysisCampaignSummary],
 )
+final case class SeriesAnalysisRequestAttribution(
+    triggers: List[String],
+    requestedBy: String,
+)
+
+object SeriesAnalysisRequestAttribution:
+  def fromStored(
+      jobTrigger: String,
+      requestTriggers: List[String],
+      manualRequestCount: Int,
+  ): Option[SeriesAnalysisRequestAttribution] =
+    val stored = jobTrigger :: requestTriggers
+    val triggers = SeriesAnalysisVocabulary.StoredTriggersByPriority
+      .filter(stored.contains).flatMap(SeriesAnalysisVocabulary.wireTrigger).distinct
+    val hasManual = manualRequestCount > 0
+    val hasSystem = stored.exists(_ != "manual")
+    val requestedBy =
+      if hasManual && hasSystem then "mixed"
+      else if hasManual then "administrator"
+      else "system"
+    Option.when(stored.forall(SeriesAnalysisVocabulary.wireTrigger(_).nonEmpty))(
+      SeriesAnalysisRequestAttribution(triggers, requestedBy)
+    )
+
 final case class SeriesAnalysisRequester(accountId: AccountId, displayName: String)
 final case class SeriesAnalysisJobSummary(
     jobId: String,

@@ -7,13 +7,11 @@ use tokio_postgres::{
 };
 
 use super::{
-    Comparison, MAXIMUM_SNAPSHOT_BYTES, PreparedNotification, SkipReason, comparison,
+    AnalysisSource, Comparison, MAXIMUM_SNAPSHOT_BYTES, PreparedNotification, SkipReason,
+    comparison,
     types::{AnalysisData, NotificationMatch, SeasonRanks},
 };
-use crate::{
-    notifications::{NotificationEnvelope, NotificationKind},
-    series_analysis::control::ClaimedJob,
-};
+use crate::notifications::{NotificationEnvelope, NotificationKind};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -26,7 +24,7 @@ struct Snapshot {
 
 pub(super) async fn prepare(
     transaction: &Transaction<'_>,
-    claim: &ClaimedJob,
+    source: AnalysisSource<'_>,
     comparison: Comparison,
     reused: bool,
 ) -> Result<Result<PreparedNotification, SkipReason>, tokio_postgres::Error> {
@@ -52,11 +50,11 @@ pub(super) async fn prepare(
         .query_typed_one(
             include_str!("snapshot.sql"),
             &[
-                (&claim.game_title_id, Type::TEXT),
+                (&source.game_title_id, Type::TEXT),
                 (&match_ids, Type::TEXT_ARRAY),
-                (&claim.job_id, Type::TEXT),
+                (&source.job_id, Type::TEXT),
                 (&current.identity.artifact_id, Type::TEXT),
-                (&claim.input_revision, Type::INT8),
+                (&source.input_revision, Type::INT8),
                 (&season_ids, Type::TEXT_ARRAY),
                 (&MAXIMUM_SNAPSHOT_BYTES, Type::INT4),
             ],
@@ -101,11 +99,11 @@ pub(super) async fn prepare(
             .collect::<Result<Vec<_>, SkipReason>>()?;
         let envelope = NotificationEnvelope::new(
             NotificationKind::AnalysisCompleted,
-            &claim.job_id,
+            source.job_id,
             occurred_at.ok_or(SkipReason::InvalidSnapshot)?,
             generation,
             AnalysisData {
-                game_title_id: &claim.game_title_id,
+                game_title_id: source.game_title_id,
                 game_title_name: snapshot.game_title_name,
                 disposition: if reused { "reused" } else { "published" },
                 previous_analysis: comparison
@@ -120,7 +118,7 @@ pub(super) async fn prepare(
         );
         let prepared = comparison.reservation.prepare(&envelope)?;
         tracing::info!(event = "analysis_notification_prepared", notification_id = %envelope.notification_id(),
-            job_id = %claim.job_id, input_revision = claim.input_revision,
+            job_id = %source.job_id, input_revision = source.input_revision,
             previous_artifact_id = ?comparison.previous.as_ref().map(|artifact| &artifact.identity.artifact_id),
             current_artifact_id = %current.identity.artifact_id);
         Ok(prepared)

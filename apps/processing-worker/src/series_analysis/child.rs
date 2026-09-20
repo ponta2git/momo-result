@@ -6,11 +6,12 @@ use std::{
 
 use crate::{
     postgres::{PostgresError, connect},
-    process::{
-        CHILD_ARTIFACT_TOO_LARGE_EXIT_CODE, CHILD_CALCULATION_FAILED_EXIT_CODE,
-        CHILD_DEPENDENCY_FAILED_EXIT_CODE, CHILD_INPUT_INVALID_EXIT_CODE,
-        CHILD_SUPERSEDED_EXIT_CODE, current_process_peak_resident_bytes,
-    },
+    process::{CHILD_DEPENDENCY_FAILED_EXIT_CODE, current_process_peak_resident_bytes},
+};
+
+use super::child_process::{
+    CHILD_ARTIFACT_TOO_LARGE_EXIT_CODE, CHILD_CALCULATION_FAILED_EXIT_CODE,
+    CHILD_INPUT_INVALID_EXIT_CODE, CHILD_SUPERSEDED_EXIT_CODE,
 };
 
 use super::{
@@ -177,7 +178,9 @@ const fn map_postgres_failure(error: &PostgresError) -> ChildFailure {
         PostgresError::InvalidConfiguration(_) | PostgresError::TlsConfiguration(_) => {
             ChildFailure::CalculationFailed
         }
-        PostgresError::Postgres(_) => ChildFailure::DependencyFailed,
+        PostgresError::Postgres(_) | PostgresError::ConnectionTimeout => {
+            ChildFailure::DependencyFailed
+        }
     }
 }
 

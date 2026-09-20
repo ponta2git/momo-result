@@ -1,6 +1,6 @@
 import type { components } from "@/shared/api/generated";
+import type { SeriesComparisonAggregate as Aggregate } from "@/shared/api/seriesAnalysisAggregateTypes";
 
-type Aggregate = components["schemas"]["SeriesAnalysisAggregateResponse"];
 type Drilldown = components["schemas"]["SeriesAnalysisDrilldownResponse"];
 type PlayOrderDrilldown = Extract<
   Drilldown,

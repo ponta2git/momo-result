@@ -64,9 +64,6 @@ pub(super) async fn load_analysis_input(
         .read_only(true)
         .start()
         .await?;
-    transaction
-        .batch_execute("SET LOCAL TIME ZONE 'UTC'")
-        .await?;
     let title = transaction
         .query_opt(
             "SELECT s.input_revision \

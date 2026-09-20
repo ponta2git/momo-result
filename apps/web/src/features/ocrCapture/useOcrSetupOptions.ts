@@ -18,13 +18,16 @@ import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 import {
   gameTitlesQueryOptions,
-  heldEventDetailQueryOptions,
-  heldEventDirectoryQueryOptions,
+  heldEventSummaryQueryOptions,
+  heldEventsQueryOptions,
   mapMastersQueryOptions,
   seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
-import { useHeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
-import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
+import {
+  heldEventPickerPageSize,
+  useHeldEventPickerDirectory,
+} from "@/shared/heldEvents/useHeldEventPickerDirectory";
+import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 type OcrSetupOptionsParams = {
   enabled: boolean;
@@ -76,11 +79,11 @@ function scopedMastersPlaceholder(args: {
 export function useOcrSetupOptions({ enabled, onChange, value }: OcrSetupOptionsParams) {
   const gameTitlesQuery = useQuery({ ...gameTitlesQueryOptions(), enabled });
   const heldEventsQuery = useQuery({
-    ...heldEventDirectoryQueryOptions(),
+    ...heldEventsQueryOptions({ page: 1, pageSize: heldEventPickerPageSize }),
     enabled,
   });
   const preferredHeldEventQuery = useQuery({
-    ...heldEventDetailQueryOptions(value.heldEventId, Boolean(value.heldEventId)),
+    ...heldEventSummaryQueryOptions(value.heldEventId, Boolean(value.heldEventId)),
     enabled: enabled && Boolean(value.heldEventId),
   });
   const mapMastersQuery = useQuery({
@@ -154,9 +157,9 @@ export function useOcrSetupOptions({ enabled, onChange, value }: OcrSetupOptions
   const retry = () => {
     void Promise.all([
       gameTitlesQuery.refetch(),
-      heldEventsQuery.refetch(),
+      heldEventsQuery.refetch({ cancelRefetch: false }),
       heldEventPicker.refetch(),
-      preferredHeldEventQuery.refetch(),
+      ...(value.heldEventId ? [preferredHeldEventQuery.refetch({ cancelRefetch: false })] : []),
       mapMastersQuery.refetch(),
       seasonMastersQuery.refetch(),
     ]);

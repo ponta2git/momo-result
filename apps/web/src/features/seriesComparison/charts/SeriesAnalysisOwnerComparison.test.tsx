@@ -5,10 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SeriesAnalysisOwnerComparison } from "@/features/seriesComparison/charts/SeriesAnalysisOwnerComparison";
 import type { OwnerMetricId } from "@/features/seriesComparison/model/seriesAnalysisOwnerMetrics";
-import {
-  makeOwnerComparisonAggregate,
-  makeSeriesAnalysisAggregate,
-} from "@/test/msw/seriesAnalysisFixtures";
+import { makeOwnerComparisonAggregate } from "@/test/msw/seriesAnalysisFixtures";
 import { selectOption } from "@/test/selectOption";
 
 beforeEach(() => {
@@ -25,7 +22,8 @@ function Harness() {
   const [metric, setMetric] = useState<OwnerMetricId>("rank.average");
   return (
     <SeriesAnalysisOwnerComparison
-      response={makeOwnerComparisonAggregate()}
+      comparison={makeOwnerComparisonAggregate().ownerComparison}
+      hasMatches
       metric={metric}
       onMetricChange={setMetric}
     />
@@ -65,16 +63,11 @@ describe("owner comparison", () => {
     expect(table).toHaveTextContent("（50%）");
   });
 
-  it("explains legacy and empty scopes without presenting zeroes as observed values", () => {
-    const { rerender } = render(
-      <SeriesAnalysisOwnerComparison response={makeSeriesAnalysisAggregate()} />,
-    );
-    expect(screen.getByRole("combobox")).toBeDisabled();
-    expect(screen.getByText(/この分析にはオーナー別の集計がありません/u)).toBeInTheDocument();
+  it("explains empty scopes without presenting zeroes as observed values", () => {
     const empty = makeOwnerComparisonAggregate();
     empty.scope.matchCount = 0;
     empty.ownerComparison = { owners: [], rows: [], recordedOwnerCount: 0 };
-    rerender(<SeriesAnalysisOwnerComparison response={empty} />);
+    render(<SeriesAnalysisOwnerComparison comparison={empty.ownerComparison} hasMatches={false} />);
     expect(screen.getByRole("combobox")).toBeDisabled();
     expect(screen.getByRole("heading", { name: "対象の試合がありません" })).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();

@@ -10,9 +10,9 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/shared/auth/useAuth";
+import { GlobalNav } from "@/shared/navigation/GlobalNav";
+import type { GlobalNavItem } from "@/shared/navigation/GlobalNav";
 import { Button } from "@/shared/ui/actions/Button";
-import { GlobalNav } from "@/shared/ui/layout/GlobalNav";
-import type { GlobalNavItem } from "@/shared/ui/layout/GlobalNav";
 
 const primaryItems = [
   { icon: <Trophy />, label: "試合", to: "/matches" },

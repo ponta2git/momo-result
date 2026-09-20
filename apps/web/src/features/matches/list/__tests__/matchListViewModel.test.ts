@@ -1,52 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
-import type {
-  MatchListLookupMaps,
-  MatchListSourceItem,
-} from "@/features/matches/list/matchListTypes";
+import type { MatchListSourceItem } from "@/features/matches/list/matchListTypes";
 import { toMatchListItemView } from "@/features/matches/list/matchListViewModel";
-import { makeHeldEventResponse } from "@/test/factories";
-
-const lookupMaps: MatchListLookupMaps = {
-  gameTitlesById: new Map([
-    [
-      "game-1",
-      {
-        id: "game-1",
-        name: "桃鉄",
-        layoutFamily: "momotetsu_2",
-        displayOrder: 1,
-        createdAt: "2026-01-01T00:00:00.000Z",
-      },
-    ],
-  ]),
-  heldEventsById: new Map([["held-1", makeHeldEventResponse({ matchCount: 3 })]]),
-  mapsById: new Map([
-    [
-      "map-1",
-      {
-        id: "map-1",
-        gameTitleId: "game-1",
-        name: "日本",
-        displayOrder: 1,
-        createdAt: "2026-01-01T00:00:00.000Z",
-      },
-    ],
-  ]),
-  seasonsById: new Map([
-    [
-      "season-1",
-      {
-        id: "season-1",
-        gameTitleId: "game-1",
-        name: "春",
-        displayOrder: 1,
-        createdAt: "2026-01-01T00:00:00.000Z",
-      },
-    ],
-  ]),
-};
 
 function buildItem(
   overrides: Partial<MatchListSourceItem> & { matchId?: string | undefined },
@@ -54,6 +10,10 @@ function buildItem(
   return {
     createdAt: "2026-01-01T00:00:00.000Z",
     gameTitleId: "game-1",
+    gameTitleName: "桃鉄",
+    seasonName: "春",
+    mapName: "日本",
+    heldAt: "2025-12-31T12:00:00Z",
     heldEventId: "held-1",
     id: "item-1",
     kind: "match",
@@ -82,8 +42,12 @@ function buildDraftItem(
 
 describe("matchListViewModel", () => {
   it("maps the confirmed-note presence marker without exposing note text", () => {
-    const item = toMatchListItemView(buildItem({ hasNote: true }), lookupMaps);
+    const item = toMatchListItemView(buildItem({ hasNote: true }));
     expect(item.hasNote).toBe(true);
+    expect(item.heldAt).toBe("2025-12-31T12:00:00Z");
+    expect(item.mapName).toBe("日本");
+    expect(item.gameTitleName).toBe("桃鉄");
+    expect(item.seasonName).toBe("春");
     expect(item).not.toHaveProperty("noteBody");
   });
 
@@ -94,7 +58,6 @@ describe("matchListViewModel", () => {
         matchDraftId: "draft-1",
         status: "needs_review",
       }),
-      lookupMaps,
     );
 
     expect(item.kind).toBe("match_draft");

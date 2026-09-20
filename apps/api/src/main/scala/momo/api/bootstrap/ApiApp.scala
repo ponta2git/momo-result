@@ -5,7 +5,8 @@ import cats.effect.{Async, Resource}
 import org.http4s.HttpApp as Http4sApp
 import sttp.tapir.AnyEndpoint
 
-import momo.api.auth.{CreatedSession, DiscordOAuthClient, JavaDiscordOAuthClient}
+import momo.api.adapters.discord.JavaDiscordOAuthClient
+import momo.api.auth.{CreatedSession, DiscordOAuthClient}
 import momo.api.config.{AppConfig, ResourceLimitsConfig}
 import momo.api.domain.LoginAccount
 import momo.api.usecases.ocr.OcrAdmissionGuard
@@ -47,7 +48,12 @@ object ApiApp:
       config: AppConfig
   ): Resource[F, WiredRuntime[F]] = Resource
     .eval(SecureRandom.javaSecuritySecureRandom[F]).flatMap { case given SecureRandom[F] =>
-      JavaDiscordOAuthClient.resource[F](config.auth)
+      JavaDiscordOAuthClient.resource[F](JavaDiscordOAuthClient.Config(
+        clientId = config.auth.discordClientId.getOrElse(""),
+        clientSecret = config.auth.discordClientSecret.getOrElse(""),
+        redirectUri = config.auth.discordRedirectUri.getOrElse(""),
+        scope = config.auth.discordScope,
+      ))
         .flatMap(oauthClient => wiredInner[F](config, oauthClient))
     }
 

@@ -34,8 +34,8 @@ export function useMatchWorkspaceHandoffNavigation(input: {
       return;
     }
     onBeforeNavigate?.();
-    startMastersTransition(() => {
-      navigate(route.route);
+    startMastersTransition(async () => {
+      await navigate(route.route);
     });
   }, [
     accountId,

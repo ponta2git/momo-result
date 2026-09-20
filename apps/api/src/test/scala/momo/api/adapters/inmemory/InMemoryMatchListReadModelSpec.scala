@@ -43,7 +43,15 @@ final class InMemoryMatchListReadModelSpec extends MomoCatsEffectSuite:
         incidentLogDraftId = None,
       ))
       _ <- drafts.create(draft(MatchDraftId.unsafeFromString("draft-read-model")))
-      model = InMemoryMatchListReadModel[IO](matches, drafts)
+      events <- InMemoryHeldEventsRepository.create[IO]
+      titles <- InMemoryGameTitlesRepository.create[IO]
+      seasons <- InMemorySeasonMastersRepository.create[IO]
+      maps <- InMemoryMapMastersRepository.create[IO]
+      model = InMemoryMatchListReadModel[IO](
+        matches,
+        drafts,
+        InMemoryMatchMetadata[IO](events, titles, seasons, maps)
+      )
       ocrRunning <- model.list(
         MatchListReadModel
           .Filter(kind = MatchListKindFilter.All, status = MatchListStatusFilter.OcrRunning)
@@ -64,7 +72,15 @@ final class InMemoryMatchListReadModelSpec extends MomoCatsEffectSuite:
       drafts <- InMemoryMatchDraftsRepository.create[IO]
       _ <- drafts.create(draftAt(MatchDraftId.unsafeFromString("draft-a-older"), older))
       _ <- drafts.create(draftAt(MatchDraftId.unsafeFromString("draft-z-newer"), newer))
-      model = InMemoryMatchListReadModel[IO](matches, drafts)
+      events <- InMemoryHeldEventsRepository.create[IO]
+      titles <- InMemoryGameTitlesRepository.create[IO]
+      seasons <- InMemorySeasonMastersRepository.create[IO]
+      maps <- InMemoryMapMastersRepository.create[IO]
+      model = InMemoryMatchListReadModel[IO](
+        matches,
+        drafts,
+        InMemoryMatchMetadata[IO](events, titles, seasons, maps)
+      )
       first <- model.list(MatchListReadModel.Filter(
         kind = MatchListKindFilter.MatchDraft,
         sort = MatchListSort.UpdatedDesc,

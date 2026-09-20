@@ -20,7 +20,6 @@ export function useMatchWorkspaceSubmitFlow({
   setOperationError,
   setValidationMessage,
   returnTo,
-  useSampleDrafts,
   values,
 }: {
   matchId: string | undefined;
@@ -31,24 +30,13 @@ export function useMatchWorkspaceSubmitFlow({
   setOperationError: Dispatch<SetStateAction<MatchWorkspaceOperationError | null>>;
   setValidationMessage: Dispatch<SetStateAction<string>>;
   returnTo?: string | undefined;
-  useSampleDrafts: boolean;
   values: MatchFormValues;
 }) {
-  const handleStatusCheckError = useCallback(
-    (message: string) => {
-      setConfirmOpen(false);
-      setOperationError({ kind: "draftStatus", message });
-    },
-    [setConfirmOpen, setOperationError],
-  );
   const handleOperationStart = useCallback(() => setOperationError(null), [setOperationError]);
   const confirmedDraft = useConfirmedDraftRedirect({
     notify,
     onBeforeRedirect: onPersistedSuccess,
-    onStatusCheckError: handleStatusCheckError,
-    onStatusCheckStart: handleOperationStart,
     returnTo,
-    useSampleDrafts,
   });
   const handleConfirmSuccess = useCallback(() => setConfirmOpen(false), [setConfirmOpen]);
   const handleMutationError = useCallback(
@@ -71,7 +59,6 @@ export function useMatchWorkspaceSubmitFlow({
   });
   const confirmation = useMatchWorkspaceConfirmAction({
     confirmMutation: mutations.confirmMutation,
-    ensureDraftIsOpenForConfirm: confirmedDraft.ensureDraftIsOpenForConfirm,
     values,
   });
   const { cancelDraftMutation } = mutations;

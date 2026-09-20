@@ -425,7 +425,7 @@ async fn run_linux(
         };
         let ocr_started = Instant::now();
         let outcome = crate::ocr::analyze_isolated_local_image_bytes(
-            &loaded.bytes,
+            loaded.bytes,
             image.requested_screen_type,
             &image.hints,
             None,

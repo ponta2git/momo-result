@@ -37,6 +37,14 @@ object HeldEventsEndpoints:
     .out(jsonBody[HeldEventDetailResponse])
     .tag("held-events")
 
+  val summary: CommonEndpoint.SecuredRead[GetInput, HeldEventSummaryResponse] = endpoint
+    .get
+    .in("api" / "held-events" / path[String]("heldEventId") / "summary")
+    .securityIn(CommonEndpoint.accountHeader)
+    .errorOut(CommonEndpoint.errorOut)
+    .out(jsonBody[HeldEventSummaryResponse])
+    .tag("held-events")
+
   type CreateInput = (Option[String], CreateHeldEventRequest)
 
   val create: CommonEndpoint.SecuredMutation[CreateInput, HeldEventResponse] = endpoint

@@ -9,20 +9,13 @@ type ConfirmMutation = {
 
 export function useMatchWorkspaceConfirmAction({
   confirmMutation,
-  ensureDraftIsOpenForConfirm,
   values,
 }: {
   confirmMutation: ConfirmMutation;
-  ensureDraftIsOpenForConfirm: (draftId: string | undefined) => Promise<boolean>;
   values: MatchFormValues;
 }) {
   const [, action, pending] = useActionState<null, FormData>(async () => {
     const request = toConfirmMatchRequest(values);
-    const canConfirm = await ensureDraftIsOpenForConfirm(request.matchDraftId);
-    if (!canConfirm) {
-      return null;
-    }
-
     await confirmMutation.mutateAsync(request).catch(() => undefined);
     return null;
   }, null);

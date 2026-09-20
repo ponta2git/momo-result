@@ -422,10 +422,9 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     )
   }
 
-  app.test("legacy and v2 analysis endpoints are inside the authenticated read surface") {
+  app.test("analysis endpoints are inside the authenticated read surface") {
     httpApp =>
       val requests = List(
-        uri"/api/analytics/series-comparison/options",
         uri"/api/analytics/series-comparison/v2/options",
         uri"/api/analytics/series-comparison/v2/status?gameTitleId=title_momotetsu_2",
       )
@@ -443,8 +442,11 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
       }
   }
 
-  app.test("legacy series comparison endpoints are fixed client-upgrade tombstones") { httpApp =>
+  app.test("removed analysis endpoints have no runtime routes") { httpApp =>
     val requests = List(
+      uri"/api/analytics/series-comparison/v2/aggregate?gameTitleId=title_momotetsu_2&artifactId=old",
+      uri"/api/analytics/series-comparison/v3/aggregate?gameTitleId=title_momotetsu_2&artifactId=old",
+      uri"/api/analytics/series-comparison/v2/review?gameTitleId=title_momotetsu_2&artifactId=old",
       uri"/api/analytics/series-comparison/options",
       uri"/api/analytics/series-comparison?gameTitleId=title_momotetsu_2",
       uri"/api/analytics/series-comparison/review?gameTitleId=title_momotetsu_2",
@@ -452,14 +454,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     )
     requests.foldLeft(IO.unit) { (result, uri) =>
       result.flatMap(_ =>
-        httpApp.run(readGet(uri)).flatMap(response =>
-          assertProblem(
-            response,
-            Status.UpgradeRequired,
-            "ANALYSIS_CLIENT_UPGRADE_REQUIRED",
-            "Reload this page to use the current analysis API.",
-          )
-        )
+        httpApp.run(readGet(uri)).map(response => assertEquals(response.status, Status.NotFound))
       )
     }
   }

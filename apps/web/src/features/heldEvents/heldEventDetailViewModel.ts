@@ -11,12 +11,6 @@ export type HeldEventPlayerRecap = {
   wins: number;
 };
 
-export type HeldEventMasterNames = {
-  gameTitles: ReadonlyMap<string, string>;
-  maps: ReadonlyMap<string, string>;
-  seasons: ReadonlyMap<string, string>;
-};
-
 export type HeldEventDraftAction = {
   href?: string;
   label: string;
@@ -66,26 +60,25 @@ export function heldEventDraftAction(draft: HeldEventDraftResponse): HeldEventDr
 }
 
 export function heldEventScopeLabel(
-  match: Pick<HeldEventMatchResponse, "gameTitleId" | "mapMasterId" | "seasonMasterId">,
-  names: HeldEventMasterNames,
+  match: Pick<HeldEventMatchResponse, "gameTitleName" | "mapName" | "seasonName">,
 ): string {
   return [
-    names.gameTitles.get(match.gameTitleId) ?? "作品名未取得",
-    names.seasons.get(match.seasonMasterId) ?? "シーズン名未取得",
-    names.maps.get(match.mapMasterId) ?? "マップ名未取得",
+    match.gameTitleName ?? "作品名未取得",
+    match.seasonName ?? "シーズン名未取得",
+    match.mapName ?? "マップ名未取得",
   ].join("・");
 }
 
 export function heldEventDraftScopeLabel(
-  draft: Pick<HeldEventDraftResponse, "gameTitleId" | "mapMasterId" | "seasonMasterId">,
-  names: HeldEventMasterNames,
+  draft: Pick<
+    HeldEventDraftResponse,
+    "gameTitleId" | "mapMasterId" | "seasonMasterId" | "gameTitleName" | "mapName" | "seasonName"
+  >,
 ): string | undefined {
   const labels = [
-    draft.gameTitleId ? (names.gameTitles.get(draft.gameTitleId) ?? "作品名未取得") : undefined,
-    draft.seasonMasterId
-      ? (names.seasons.get(draft.seasonMasterId) ?? "シーズン名未取得")
-      : undefined,
-    draft.mapMasterId ? (names.maps.get(draft.mapMasterId) ?? "マップ名未取得") : undefined,
+    draft.gameTitleId ? (draft.gameTitleName ?? "作品名未取得") : undefined,
+    draft.seasonMasterId ? (draft.seasonName ?? "シーズン名未取得") : undefined,
+    draft.mapMasterId ? (draft.mapName ?? "マップ名未取得") : undefined,
   ].filter(Boolean);
   return labels.length > 0 ? labels.join("・") : undefined;
 }

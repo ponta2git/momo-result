@@ -1,7 +1,8 @@
 import { Check } from "lucide-react";
 
 import { slotDefinitions } from "@/features/ocrCapture/captureState";
-import type { OcrStartDialogState, OcrSubmissionPlan } from "@/features/ocrCapture/useOcrStartFlow";
+import type { OcrSubmissionPlan } from "@/features/ocrCapture/ocrSubmissionPlan";
+import type { OcrStartDialogState } from "@/features/ocrCapture/useOcrStartFlow";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { FactList } from "@/shared/ui/data/FactList";
@@ -12,6 +13,7 @@ import { SpinnerIcon } from "@/shared/ui/feedback/Spinner";
 import { contentText } from "@/shared/ui/typography";
 
 type OcrStartDialogProps = {
+  navigationPending?: boolean;
   onClose: () => void;
   onConfirm: () => Promise<void>;
   onViewMatches: () => void;
@@ -127,7 +129,13 @@ function progressView(state: Extract<OcrStartDialogState, { status: "submitting"
   } as const;
 }
 
-export function OcrStartDialog({ onClose, onConfirm, onViewMatches, state }: OcrStartDialogProps) {
+export function OcrStartDialog({
+  navigationPending = false,
+  onClose,
+  onConfirm,
+  onViewMatches,
+  state,
+}: OcrStartDialogProps) {
   if (state.status === "closed") return null;
 
   if (state.status === "submitting") {
@@ -173,38 +181,28 @@ export function OcrStartDialog({ onClose, onConfirm, onViewMatches, state }: Ocr
       <Dialog
         open
         dismissible={false}
-        description="開始できた画像は処理中です。重複送信を避けるため、試合一覧で状態を確認してください。"
+        description="受け付け済みの画像は保持されています。残りを再試行するか、記録を確認できます。"
         title="一部の読み取りを開始しました"
       >
         <div className="grid gap-4">
           <Notice
             tone="warning"
-            title={`${state.createdJobCount}件を開始・${state.failedJobCount}件は未開始`}
+            title={`${state.createdJobCount}件を開始・${state.failedJobCount}件は受付未確認`}
           >
-            <p>未開始の分類は、読み取り完了後の確認画面で手入力できます。</p>
+            <p>
+              同じ内容で再試行すると、受け付け済みの画像を再送せずに続けられます。確認画面で手入力することもできます。
+            </p>
           </Notice>
-          <div className="flex justify-end">
-            <Button onClick={onViewMatches}>{resultDestinationLabel(state.plan)}</Button>
-          </div>
-        </div>
-      </Dialog>
-    );
-  }
-
-  if (state.status === "handoff_required") {
-    return (
-      <Dialog
-        open
-        dismissible={false}
-        description="重複操作を避け、作成された記録の状態を確認してください。"
-        title="試合一覧で状態を確認してください"
-      >
-        <div className="grid gap-4">
-          <Notice tone="warning" title="後処理を完了できませんでした">
-            <p>{state.message}</p>
-          </Notice>
-          <div className="flex justify-end">
-            <Button onClick={onViewMatches}>{resultDestinationLabel(state.plan)}</Button>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="secondary"
+              pending={navigationPending}
+              pendingLabel="移動中…"
+              onClick={onViewMatches}
+            >
+              {resultDestinationLabel(state.plan)}
+            </Button>
+            <Button onClick={() => void onConfirm()}>残りをもう一度試す</Button>
           </div>
         </div>
       </Dialog>
@@ -215,20 +213,38 @@ export function OcrStartDialog({ onClose, onConfirm, onViewMatches, state }: Ocr
     return (
       <Dialog
         open
-        description="画像はこの画面に残っています。内容を確認するか、同じ内容でもう一度試せます。"
-        title="読み取りを開始できませんでした"
+        dismissible={state.canEdit}
         onOpenChange={(open) => {
-          if (!open) onClose();
+          if (!open && state.canEdit) onClose();
         }}
+        description={
+          state.canEdit
+            ? "読み取りは開始されていません。画像を保持したまま、設定を確認してやり直せます。"
+            : "画像と受付状況は保持されています。同じ内容で再試行するか、作成された記録を確認できます。"
+        }
+        title={
+          state.canEdit ? "読み取りを開始できませんでした" : "読み取りの受付を確認できませんでした"
+        }
       >
         <div className="grid gap-4">
           <Notice tone="danger" title="送信を完了できませんでした">
             <p>{state.message}</p>
           </Notice>
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <Button variant="secondary" onClick={onClose}>
-              閉じて画像を確認
-            </Button>
+            {state.canEdit ? (
+              <Button variant="secondary" onClick={onClose}>
+                戻って確認
+              </Button>
+            ) : (
+              <Button
+                variant="secondary"
+                pending={navigationPending}
+                pendingLabel="移動中…"
+                onClick={onViewMatches}
+              >
+                {resultDestinationLabel(state.plan)}
+              </Button>
+            )}
             <Button onClick={() => void onConfirm()}>もう一度試す</Button>
           </div>
         </div>

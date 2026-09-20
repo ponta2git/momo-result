@@ -11,6 +11,7 @@ import io.circe.jawn.JawnParser
 import io.circe.{Json, Printer}
 
 import momo.api.config.SeriesAnalysisReadConfig
+import momo.api.contracts.seriesanalysis.SeriesAnalysisArtifactContract
 import momo.api.domain.*
 import momo.api.domain.ids.{GameTitleId, MatchId}
 import momo.api.errors.AppError
@@ -83,7 +84,7 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
     ).tupled.toRight(AppError.AnalysisScopeNotInArtifact())
     metadata.flatMap { case (scopeKind, payload, encoded, decoded, itemCount, depth, checksum) =>
       val metadataValid =
-        SeriesAnalysisArtifactSupport.supports(
+        SeriesAnalysisArtifactContract.supports(
           row.artifactSchemaVersion,
           row.validationContractId,
         ) &&

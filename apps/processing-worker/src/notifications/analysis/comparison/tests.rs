@@ -12,9 +12,11 @@ fn artifact(artifact_id: &str, entries: &[(&str, &str, &str, &str)]) -> Artifact
         identity: AnalysisIdentity {
             artifact_id: artifact_id.to_owned(),
             input_revision: "1".to_owned(),
-            algorithm_version: "v4".to_owned(),
-            artifact_schema_version: 3,
-            validation_contract_id: Some("validated-v3".to_owned()),
+            algorithm_version: "series-analysis-v5".to_owned(),
+            artifact_schema_version: 4,
+            validation_contract_id: Some(
+                "series-analysis-artifact-v4-full-validation-v1".to_owned(),
+            ),
         },
         scopes: std::iter::once((None, BTreeMap::new()))
             .chain(

@@ -240,7 +240,7 @@ describe("MatchesListPage", () => {
     await user.click(resetButtons[0]!);
 
     await waitFor(() =>
-      expect(screen.getByLabelText("current location")).toHaveTextContent("/matches"),
+      expect(screen.getByLabelText("current location")).toHaveTextContent(/^\/matches$/u),
     );
     expect(screen.getByLabelText("current location")).not.toHaveTextContent(/status=|cursor=/u);
   });
@@ -465,6 +465,7 @@ describe("MatchesListPage", () => {
       id: `match-${number}`,
       kind: "match",
       mapMasterId: "map_east",
+      mapName: "東日本編",
       matchId: `match-${number}`,
       matchNoInEvent: number,
       ownerMemberId: "member_ponta",
@@ -512,18 +513,28 @@ describe("MatchesListPage", () => {
 
     expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
     expect(requestedCursors.at(-1)).toBeNull();
+    const listRegion = screen.getByRole("region", { name: "登録済みの試合" });
 
     await user.click(await screen.findByRole("button", { name: "次のページへ" }));
     await waitFor(() => expect(requestedCursors.at(-1)).toBe("next-token"));
-    expect(screen.getByLabelText("current location")).toHaveTextContent("cursor=next-token");
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).toHaveTextContent("cursor=next-token"),
+    );
+    await waitFor(() => expect(listRegion).not.toHaveAttribute("aria-busy"));
 
     await user.click(screen.getByRole("button", { name: "最後のページへ" }));
     await waitFor(() => expect(requestedCursors.at(-1)).toBe("last-token"));
-    expect(screen.getByLabelText("current location")).toHaveTextContent("cursor=last-token");
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).toHaveTextContent("cursor=last-token"),
+    );
+    await waitFor(() => expect(listRegion).not.toHaveAttribute("aria-busy"));
 
     await user.click(screen.getByRole("button", { name: "前のページへ" }));
     await waitFor(() => expect(requestedCursors.at(-1)).toBe("prev-token"));
-    expect(screen.getByLabelText("current location")).toHaveTextContent("cursor=prev-token");
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).toHaveTextContent("cursor=prev-token"),
+    );
+    await waitFor(() => expect(listRegion).not.toHaveAttribute("aria-busy"));
 
     const requestsBeforeFirstPage = requestedCursors.length;
     await user.click(screen.getByRole("button", { name: "先頭ページへ" }));
@@ -550,6 +561,7 @@ describe("MatchesListPage", () => {
         id: "draft-review-1",
         kind: "match_draft",
         mapMasterId: "map_east",
+        mapName: "東日本編",
         matchDraftId: "draft-review-1",
         matchNoInEvent: 3,
         ownerMemberId: "member_ponta",
@@ -566,6 +578,7 @@ describe("MatchesListPage", () => {
         id: "match-1",
         kind: "match",
         mapMasterId: "map_east",
+        mapName: "東日本編",
         matchId: "match-1",
         matchNoInEvent: 1,
         ownerMemberId: "member_ponta",
@@ -661,6 +674,7 @@ describe("MatchesListPage", () => {
           id: "match-refresh-safe",
           kind: "match" as const,
           mapMasterId: "map_east",
+          mapName: "東日本編",
           matchId: "match-refresh-safe",
           matchNoInEvent: 1,
           ownerMemberId: "member_ponta",
@@ -759,6 +773,7 @@ describe("MatchesListPage", () => {
                 id: "match-cursor-reset",
                 kind: "match",
                 mapMasterId: "map_east",
+                mapName: "東日本編",
                 matchId: "match-cursor-reset",
                 matchNoInEvent: 2,
                 ownerMemberId: "member_ponta",
@@ -788,6 +803,7 @@ describe("MatchesListPage", () => {
               id: "match-cursor-refresh",
               kind: "match",
               mapMasterId: "map_east",
+              mapName: "東日本編",
               matchId: "match-cursor-refresh",
               matchNoInEvent: 1,
               ownerMemberId: "member_ponta",
@@ -883,6 +899,7 @@ describe("MatchesListPage", () => {
               id: "match-refresh-race",
               kind: "match",
               mapMasterId: "map_east",
+              mapName: "東日本編",
               matchId: "match-refresh-race",
               matchNoInEvent: 1,
               ownerMemberId: "member_ponta",
@@ -958,6 +975,7 @@ describe("MatchesListPage", () => {
               id: "match-unmounted-refresh",
               kind: "match",
               mapMasterId: "map_east",
+              mapName: "東日本編",
               matchId: "match-unmounted-refresh",
               matchNoInEvent: 1,
               ownerMemberId: "member_ponta",
@@ -1124,6 +1142,7 @@ describe("MatchesListPage", () => {
               id: "draft-review-stale",
               kind: "match_draft",
               mapMasterId: "map_east",
+              mapName: "東日本編",
               matchDraftId: "draft-review-stale",
               matchNoInEvent: 3,
               ownerMemberId: "member_ponta",
@@ -1192,6 +1211,7 @@ describe("MatchesListPage", () => {
             id: draftId,
             kind: "match_draft",
             mapMasterId: "map_east",
+            mapName: "東日本編",
             matchDraftId: draftId,
             matchNoInEvent: index + 1,
             ownerMemberId: "member_ponta",

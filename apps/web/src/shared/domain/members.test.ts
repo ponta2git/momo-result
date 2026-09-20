@@ -7,7 +7,6 @@ import {
   defaultOwnerMemberId,
   fixedMemberIds,
   fixedMemberRegistry,
-  fixedMembers,
   isFixedMemberId,
   memberDisplayName,
   orderFixedMembers,
@@ -35,7 +34,6 @@ describe("fixed member contracts", () => {
       "member_otaka",
     ]);
     expect(defaultOwnerMemberId).toBe("member_ponta");
-    expect(fixedMembers.map((member) => member.memberId)).toEqual(workspaceInputMemberIds);
     expect(canonicalResultMembers.map((member) => member.memberId)).toEqual(
       canonicalResultMemberIds,
     );

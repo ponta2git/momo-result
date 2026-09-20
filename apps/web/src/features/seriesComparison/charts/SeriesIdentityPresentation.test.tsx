@@ -17,7 +17,12 @@ const reversedCanonicalPlayers = [
 describe("series artifact presentation", () => {
   it("preserves the player order supplied by the artifact", () => {
     const response = makeSeriesAnalysisAggregate();
-    render(<CrownShareBars response={{ ...response, players: reversedCanonicalPlayers }} />);
+    render(
+      <CrownShareBars
+        players={reversedCanonicalPlayers}
+        shares={response.rankAnalysis.crownCertainty.shares}
+      />,
+    );
 
     expect(screen.getAllByRole("term").map((item) => item.textContent)).toEqual([
       "おーたか",
@@ -47,7 +52,9 @@ describe("series artifact presentation", () => {
       { ...sourceEntry, category: "additional", matchNoInEvent: 2 },
     ];
 
-    render(<MatchNoInEventMatrix response={response} />);
+    render(
+      <MatchNoInEventMatrix entries={response.matchNoInEvent.entries} players={response.players} />,
+    );
 
     const regular = screen.getByRole("table", { name: "通常試合の開催内順別傾向" });
     expect(within(regular).getByText("第5試合")).toBeInTheDocument();
@@ -64,7 +71,9 @@ describe("series artifact presentation", () => {
     if (!sourceEntry) throw new Error("match-number fixture is missing");
     response.players = [{ displayName: "いーゆー", memberId: "member_eu" }, ...response.players];
 
-    render(<MatchNoInEventMatrix response={response} />);
+    render(
+      <MatchNoInEventMatrix entries={response.matchNoInEvent.entries} players={response.players} />,
+    );
 
     const regular = screen.getByRole("table", { name: "通常試合の開催内順別傾向" });
     expect(within(regular).getAllByRole("cell")).toHaveLength(sourceEntry.players.length);

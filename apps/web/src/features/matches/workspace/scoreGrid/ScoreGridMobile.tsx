@@ -16,10 +16,10 @@ import type {
   ScoreGridNumericHandlers,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
 import { memberDisplayName } from "@/shared/domain/members";
+import { PlayOrderMark } from "@/shared/matches/PlayOrderMark";
+import { RankBadge } from "@/shared/matches/RankBadge";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
-import { PlayOrderMark } from "@/shared/ui/data/PlayOrderMark";
-import { RankBadge } from "@/shared/ui/rank/RankBadge";
 import { contentText } from "@/shared/ui/typography";
 
 type ScoreGridMobileCardsProps = ScoreGridData &

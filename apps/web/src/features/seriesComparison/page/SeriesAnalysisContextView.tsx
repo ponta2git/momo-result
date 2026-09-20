@@ -1,8 +1,10 @@
+import { memo } from "react";
+
 import {
   CardShopDestinationQuadrants,
   PlayOrderMatrix,
 } from "@/features/seriesComparison/charts/SeriesAnalysisContextCharts";
-import { GinjiCumulativeChart } from "@/features/seriesComparison/charts/SeriesAnalysisFlowCharts";
+import { SeriesTrendCharts } from "@/features/seriesComparison/charts/SeriesAnalysisFlowCharts";
 import { SeriesAnalysisOwnerComparison } from "@/features/seriesComparison/charts/SeriesAnalysisOwnerComparison";
 import type { OwnerMetricId } from "@/features/seriesComparison/model/seriesAnalysisOwnerMetrics";
 import {
@@ -10,7 +12,7 @@ import {
   formatManYen,
   formatPercent,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
-import type { AnalysisViewProps } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
+import type { AnalysisViewProps } from "@/features/seriesComparison/model/seriesAnalysisViewTypes";
 import {
   AnalysisSection,
   AnalysisSubsection,
@@ -21,12 +23,12 @@ import {
   analysisTabId,
   AnalysisTableOfContents,
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
+import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
-import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { contentText } from "@/shared/ui/typography";
 
-export function ContextView({
+export const ContextView = memo(function ContextView({
   focusedItemIds,
   response,
   onDrilldown,
@@ -45,7 +47,7 @@ export function ContextView({
     >
       <AnalysisTableOfContents view="context" />
       <AnalysisSection id="metric-play-order" title="番手比較">
-        <PlayOrderMatrix focusedItemIds={focusedItemIds} response={response} />
+        <PlayOrderMatrix focusedItemIds={focusedItemIds} entries={response.playOrderComparison} />
         <div className="mt-3 flex flex-wrap gap-2">
           {response.playOrderComparison.map((entry) => (
             <Button
@@ -63,13 +65,19 @@ export function ContextView({
           ))}
         </div>
       </AnalysisSection>
-      <SeriesAnalysisOwnerComparison
-        response={response}
-        metric={ownerMetric}
-        onMetricChange={onOwnerMetricChange}
-      />
+      <AnalysisSection id="metric-owner" title="オーナー比較">
+        <SeriesAnalysisOwnerComparison
+          comparison={response.ownerComparison}
+          hasMatches={response.scope.matchCount > 0}
+          metric={ownerMetric}
+          onMetricChange={onOwnerMetricChange}
+        />
+      </AnalysisSection>
       <AnalysisSection id="metric-card-shop-destination" title="カード売り場と目的地">
-        <CardShopDestinationQuadrants focusedItemIds={focusedItemIds} response={response} />
+        <CardShopDestinationQuadrants
+          focusedItemIds={focusedItemIds}
+          entries={response.cardShopDestination}
+        />
       </AnalysisSection>
       <AnalysisSection id="metric-ginji" title="スリの銀次">
         <div className="grid gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
@@ -111,10 +119,15 @@ export function ContextView({
         </div>
         <div className="mt-6">
           <AnalysisSubsection id="metric-ginji-cumulative" title="累計遭遇回数">
-            <GinjiCumulativeChart focusedItemIds={focusedItemIds} response={response} />
+            <SeriesTrendCharts
+              focusedItemIds={focusedItemIds}
+              players={response.players}
+              trends={response.trends}
+              variant="ginji"
+            />
           </AnalysisSubsection>
         </div>
       </AnalysisSection>
     </div>
   );
-}
+});

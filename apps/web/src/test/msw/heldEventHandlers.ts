@@ -33,6 +33,9 @@ export const heldEventHandlers = [
   http.post("/api/held-events", async () =>
     HttpResponse.json(makeHeldEventResponse({ heldAt: now, id: "held-created" })),
   ),
+  http.get("/api/held-events/:heldEventId/summary", ({ params }) =>
+    HttpResponse.json(makeHeldEventResponse({ heldAt: now, id: String(params["heldEventId"]) })),
+  ),
   http.get("/api/held-events/:heldEventId", ({ params }) =>
     HttpResponse.json(
       makeHeldEventDetailResponse({

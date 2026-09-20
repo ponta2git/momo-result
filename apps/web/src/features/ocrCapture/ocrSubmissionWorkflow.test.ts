@@ -2,226 +2,136 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
+import {
+  createOcrSubmissionState,
+  runOcrSubmissionWorkflow,
+} from "@/features/ocrCapture/ocrSubmissionWorkflow";
 import type { OcrSubmissionWorkflowParams } from "@/features/ocrCapture/ocrSubmissionWorkflow";
-import { runOcrSubmissionWorkflow } from "@/features/ocrCapture/ocrSubmissionWorkflow";
-import type { SlotKind } from "@/shared/api/enums";
+import type { SlotKind } from "@/shared/domain/ocr";
 
-const validSetup = {
-  gameTitleId: "gt_momotetsu_2",
-  mapMasterId: "map_east",
-  ownerMemberId: "member_ponta",
-  seasonMasterId: "season_current",
-};
+function selectedSlot(kind: SlotKind): CaptureSlotState {
+  return { file: new File([kind], `${kind}.png`, { type: "image/png" }), kind, status: "selected" };
+}
 
-function selectedSlot(kind: SlotKind = "total_assets", fileName = "assets.png"): CaptureSlotState {
+function submission(): OcrSubmissionWorkflowParams {
   return {
-    file: new File(["image"], fileName, { type: "image/png" }),
-    kind,
-    previewUrl: "blob:assets",
-    source: "upload",
-    status: "selected",
+    createDraft: vi.fn(async () => ({
+      matchDraftId: "draft-1",
+      status: "ocr_running",
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+    })),
+    uploadImage: vi.fn(async (file) => ({ imageId: file.name })),
+    createJob: vi.fn(async (request) => ({
+      jobId: `job-${request.imageId}`,
+      draftId: `ocr-${request.imageId}`,
+      status: "queued",
+    })),
+    hints: {},
+    playedAt: "2026-02-03T04:05:06.000Z",
+    state: createOcrSubmissionState(),
+    selectedGameTitle: { id: "gt_momotetsu_2", layoutFamily: "momotetsu_2" },
+    setup: {
+      gameTitleId: "gt_momotetsu_2",
+      mapMasterId: "map_east",
+      ownerMemberId: "member_ponta",
+      seasonMasterId: "season_current",
+    },
+    slots: [selectedSlot("total_assets"), selectedSlot("revenue")],
+    updateSlot: vi.fn(),
+    onProgress: vi.fn(),
   };
 }
 
 describe("runOcrSubmissionWorkflow", () => {
-  it("creates a draft with the supplied playedAt timestamp before starting OCR jobs", async () => {
-    const createDraftRequests: Array<Parameters<OcrSubmissionWorkflowParams["createDraft"]>[0]> =
-      [];
-    const slotUpdates: CaptureSlotState[] = [];
-    const onProgress = vi.fn();
-    const slot = selectedSlot();
-
-    const result = await runOcrSubmissionWorkflow({
-      cancelDraft: vi.fn(),
-      createDraft: async (request) => {
-        createDraftRequests.push(request);
-        return {
-          createdAt: "2026-01-01T00:00:00.000Z",
-          matchDraftId: "draft-created-1",
-          status: "ocr_running",
-          updatedAt: "2026-01-01T00:00:00.000Z",
-        };
-      },
-      createPlayedAtIso: () => "2026-02-03T04:05:06.000Z",
-      createUploadJob: async ({ file, matchDraftId, slot: uploadingSlot }) => {
-        expect(file).toBe(slot.file);
-        expect(matchDraftId).toBe("draft-created-1");
-        expect(uploadingSlot.status).toBe("uploading");
-        return {
-          job: { draftId: "draft-1", jobId: "job-1", status: "queued" },
-          upload: { imageId: "image-1" },
-        };
-      },
-      onProgress,
-      selectedGameTitle: { id: "gt_momotetsu_2", layoutFamily: "momotetsu_2" },
-      setup: validSetup,
-      slots: [slot],
-      updateSlot: (nextSlot) => slotUpdates.push(nextSlot),
+  it("uses the confirmation timestamp and explicit screen hints for the complete draft", async () => {
+    const input = submission();
+    expect(await runOcrSubmissionWorkflow(input)).toEqual({
+      status: "started",
+      createdJobCount: 2,
+      failedJobCount: 0,
     });
-
-    expect(onProgress.mock.calls.map(([progress]) => progress)).toEqual([
-      { phase: "creating_draft", total: 1 },
-      { current: 1, phase: "submitting_image", slotKind: "total_assets", total: 1 },
-      { completed: 1, phase: "finalizing", total: 1 },
-    ]);
-    expect(createDraftRequests).toEqual([
-      {
-        gameTitleId: "gt_momotetsu_2",
-        layoutFamily: "momotetsu_2",
-        mapMasterId: "map_east",
-        ownerMemberId: "member_ponta",
-        playedAt: "2026-02-03T04:05:06.000Z",
-        seasonMasterId: "season_current",
-        status: "ocr_running",
-      },
-    ]);
-    expect(slotUpdates.map((nextSlot) => nextSlot.status)).toEqual(["uploading", "queued"]);
-    expect(slotUpdates.at(-1)).toMatchObject({
-      draftId: "draft-1",
-      imageId: "image-1",
-      jobId: "job-1",
-      status: "queued",
-    });
-    expect(result).toEqual({ createdJobCount: 1, failedJobCount: 0, status: "started" });
-  });
-
-  it("creates the draft inside the selected held event using its suggested match number", async () => {
-    const createDraft = vi.fn(async () => ({
-      createdAt: "2026-02-03T04:05:06.000Z",
-      matchDraftId: "draft-held-1",
-      status: "ocr_running",
-      updatedAt: "2026-02-03T04:05:06.000Z",
-    }));
-
-    const result = await runOcrSubmissionWorkflow({
-      cancelDraft: vi.fn(),
-      createDraft,
-      createPlayedAtIso: () => "2026-09-09T09:09:09.000Z",
-      createUploadJob: async () => ({
-        job: { draftId: "ocr-draft-1", jobId: "job-1", status: "queued" },
-        upload: { imageId: "image-1" },
-      }),
-      selectedGameTitle: { id: "gt_momotetsu_2" },
-      selectedHeldEvent: {
-        heldAt: "2026-02-03T04:05:06.000Z",
-        id: "held-1",
-      },
-      setup: {
-        ...validSetup,
-        heldEventId: "held-1",
-        matchNoInEvent: 7,
-      },
-      slots: [selectedSlot()],
-      updateSlot: vi.fn(),
-    });
-
-    expect(createDraft).toHaveBeenCalledWith(
-      expect.objectContaining({
-        heldEventId: "held-1",
-        matchNoInEvent: 7,
-        playedAt: "2026-02-03T04:05:06.000Z",
-      }),
+    expect(input.createDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ playedAt: input.playedAt, status: "ocr_running" }),
+      { idempotencyKey: input.state.draftKey },
     );
-    expect(result).toEqual({ createdJobCount: 1, failedJobCount: 0, status: "started" });
+    expect(input.createJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        matchDraftId: "draft-1",
+        requestedScreenType: "revenue",
+        imageId: "revenue.png",
+      }),
+      expect.anything(),
+    );
   });
 
-  it("reports ordered progress and a partial result when one image cannot be registered", async () => {
-    const updates: CaptureSlotState[] = [];
-    const progress = vi.fn();
-    const cancelDraft = vi.fn();
-    const slots = [selectedSlot(), selectedSlot("revenue", "revenue.png")];
-
-    const result = await runOcrSubmissionWorkflow({
-      cancelDraft,
-      createDraft: async () => ({
-        createdAt: "2026-01-01T00:00:00.000Z",
-        matchDraftId: "draft-created-1",
-        status: "ocr_running",
-        updatedAt: "2026-01-01T00:00:00.000Z",
-      }),
-      createPlayedAtIso: () => "2026-02-03T04:05:06.000Z",
-      createUploadJob: async ({ slot }) => {
-        if (slot.kind === "revenue") throw new Error("queue unavailable");
-        return {
-          job: { draftId: "draft-1", jobId: "job-1", status: "queued" },
-          upload: { imageId: "image-1" },
-        };
-      },
-      onProgress: progress,
-      selectedGameTitle: { id: "gt_momotetsu_2", layoutFamily: "momotetsu_2" },
-      setup: validSetup,
-      slots,
-      updateSlot: (slot) => updates.push(slot),
-    });
-
-    expect(result).toEqual({ createdJobCount: 1, failedJobCount: 1, status: "partial_started" });
-    expect(cancelDraft).not.toHaveBeenCalled();
-    expect(updates.map((slot) => slot.status)).toEqual([
-      "uploading",
-      "queued",
-      "uploading",
-      "failed",
-    ]);
-    expect(progress.mock.calls.map(([value]) => value)).toEqual([
-      { phase: "creating_draft", total: 2 },
-      { current: 1, phase: "submitting_image", slotKind: "total_assets", total: 2 },
-      { current: 2, phase: "submitting_image", slotKind: "revenue", total: 2 },
-      { completed: 2, phase: "finalizing", total: 2 },
-    ]);
+  it("replays the identical draft request after its response is lost", async () => {
+    const input = submission();
+    const accepted = await input.createDraft({}, { idempotencyKey: "fixture" });
+    input.createDraft = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("response lost"))
+      .mockResolvedValue(accepted);
+    expect((await runOcrSubmissionWorkflow(input)).status).toBe("draft_create_failed");
+    expect((await runOcrSubmissionWorkflow(input)).status).toBe("started");
+    const calls = vi.mocked(input.createDraft).mock.calls;
+    expect(calls[0]).toEqual(calls[1]);
+    expect(input.uploadImage).toHaveBeenCalledTimes(2);
   });
 
-  it("cancels the draft when every image submission fails", async () => {
-    const cancelDraft = vi.fn(async () => undefined);
-
-    const result = await runOcrSubmissionWorkflow({
-      cancelDraft,
-      createDraft: async () => ({
-        createdAt: "2026-01-01T00:00:00.000Z",
-        matchDraftId: "draft-created-1",
-        status: "ocr_running",
-        updatedAt: "2026-01-01T00:00:00.000Z",
-      }),
-      createPlayedAtIso: () => "2026-02-03T04:05:06.000Z",
-      createUploadJob: async () => {
-        throw new Error("upload failed");
-      },
-      selectedGameTitle: { id: "gt_momotetsu_2" },
-      setup: validSetup,
-      slots: [selectedSlot()],
-      updateSlot: vi.fn(),
+  it("reuses accepted uploads and job keys after a job response is lost without cancelling the draft", async () => {
+    const input = submission();
+    const keys: string[] = [];
+    input.createJob = vi.fn(async (request, options) => {
+      keys.push(options.idempotencyKey);
+      if (keys.length <= 2) throw new Error("response lost after commit");
+      return { jobId: request.imageId, draftId: request.imageId, status: "queued" };
     });
-
-    expect(cancelDraft).toHaveBeenCalledWith("draft-created-1");
-    expect(result).toEqual({ status: "failed_and_cancelled" });
+    expect(await runOcrSubmissionWorkflow(input)).toEqual({
+      status: "submission_failed",
+      matchDraftId: "draft-1",
+    });
+    expect((await runOcrSubmissionWorkflow(input)).status).toBe("started");
+    expect(input.createDraft).toHaveBeenCalledTimes(1);
+    expect(input.uploadImage).toHaveBeenCalledTimes(2);
+    expect(keys.slice(0, 2)).toEqual(keys.slice(2));
   });
 
-  it("returns the orphaned draft identity when submission and cleanup both fail", async () => {
-    const cleanupError = new Error("draft cleanup unavailable");
-
-    const result = await runOcrSubmissionWorkflow({
-      cancelDraft: async () => {
-        throw cleanupError;
-      },
-      createDraft: async () => ({
-        createdAt: "2026-01-01T00:00:00.000Z",
-        matchDraftId: "draft-orphaned-1",
-        status: "ocr_running",
-        updatedAt: "2026-01-01T00:00:00.000Z",
-      }),
-      createPlayedAtIso: () => "2026-02-03T04:05:06.000Z",
-      createUploadJob: async () => {
-        throw new Error("upload failed");
-      },
-      selectedGameTitle: { id: "gt_momotetsu_2" },
-      setup: validSetup,
-      slots: [selectedSlot()],
-      updateSlot: vi.fn(),
+  it("retries only incomplete stages after partial registration", async () => {
+    const input = submission();
+    let revenueAttempts = 0;
+    input.createJob = vi.fn(async (request) => {
+      if (request.requestedScreenType === "revenue" && revenueAttempts++ === 0)
+        throw new Error("unavailable");
+      return { jobId: request.imageId, draftId: request.imageId, status: "queued" };
     });
-
-    expect(result).toEqual({
-      cleanupError,
-      matchDraftId: "draft-orphaned-1",
-      status: "failed_cleanup_failed",
+    expect(await runOcrSubmissionWorkflow(input)).toEqual({
+      status: "partial_started",
+      createdJobCount: 1,
+      failedJobCount: 1,
     });
+    expect(await runOcrSubmissionWorkflow(input)).toEqual({
+      status: "started",
+      createdJobCount: 2,
+      failedJobCount: 0,
+    });
+    expect(input.createDraft).toHaveBeenCalledTimes(1);
+    expect(input.uploadImage).toHaveBeenCalledTimes(2);
+    expect(input.createJob).toHaveBeenCalledTimes(3);
+  });
+
+  it("keeps the upload idempotency key when an upload response is lost", async () => {
+    const input = submission();
+    input.slots = [selectedSlot("total_assets")];
+    input.uploadImage = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("response lost"))
+      .mockResolvedValue({ imageId: "image-1" });
+    expect((await runOcrSubmissionWorkflow(input)).status).toBe("submission_failed");
+    expect((await runOcrSubmissionWorkflow(input)).status).toBe("started");
+    const calls = vi.mocked(input.uploadImage).mock.calls;
+    expect(calls[0]).toEqual(calls[1]);
+    expect(input.createDraft).toHaveBeenCalledTimes(1);
+    expect(input.createJob).toHaveBeenCalledTimes(1);
   });
 });

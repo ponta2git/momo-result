@@ -17,8 +17,8 @@ use super::{
         asset_style_profiles, card_shop_destination, head_to_head, momentum_switch,
         performance_profiles,
     },
-    presentation::{member_ref_json, scope_summary_json},
-    quality::{data_quality, highlights, metric_definitions, quality_summary},
+    presentation::{member_ref_json, object, scope_summary_json},
+    quality::{data_quality, highlights, quality_summary},
     signals::rank_spread_signal,
     trends::{asset_histogram, match_digest, match_no_in_event, revenue_histogram, trends},
 };
@@ -59,42 +59,76 @@ pub(super) fn aggregate(
     let quality_summary = quality_summary(&quality_items);
     let (leader_member_ids, rank_spread) = leader_summary(players, player_matches_by_member);
 
-    json!({
-        "schemaVersion": 4,
-        "scope": scope_summary_json(scope, groups.len()),
-        "players": players.iter().map(|member_id| member_ref_json(member_id)).collect::<Vec<_>>(),
-        "summary": {
-            "leaderMemberIds": leader_member_ids,
-            "averageRankSpread": rank_spread,
-            "rankSpreadSignal": rank_spread_signal(rank_spread, groups.len()),
-            "totalGinjiCount": rows.iter().map(|row| i64::from(row.incidents.suri_no_ginji)).sum::<i64>(),
-            "quality": quality_summary,
-        },
-        "metricsByPlayer": metrics,
-        "rankDistribution": rank_distribution,
-        "recentRanks": recent_ranks,
-        "strategyScatter": strategy_scatter(groups, &revenue_ranks, &asset_ranks),
-        "playOrderComparison": play_order_comparison(players, player_matches_by_member),
-        "ownerComparison": super::owner::build(rows, players),
-        "revenueRankConversion": revenue_rank_conversion(players, player_matches_by_member, &revenue_ranks),
-        "trends": trends,
-        "histograms": {
-            "assets": asset_histogram(rows, players, |row| row.total_assets_man_yen),
-            "revenue": revenue_histogram(rows, players, |row| row.revenue_man_yen),
-        },
-        "headToHead": head_to_head,
-        "momentumSwitch": momentum,
-        "performanceProfiles": performance,
-        "assetStyleProfiles": asset_styles,
-        "cardShopDestination": card_shop_destination(players, player_matches_by_member),
-        "matchDigest": match_digest,
-        "matchNoInEvent": match_no_in_event(players, rows),
-        "rankAnalysis": outcome_model.aggregate_json(),
-        "highlights": highlights(players, player_matches_by_member),
-        "dataQuality": { "items": quality_items, "summary": quality_summary },
-        "metricDefinitions": metric_definitions(),
-        "source": {
-            "gameTitleId": game_title_id,
-        },
-    })
+    object([
+        ("schemaVersion", 5.into()),
+        ("scope", scope_summary_json(scope, groups.len())),
+        (
+            "players",
+            players
+                .iter()
+                .map(|member_id| member_ref_json(member_id))
+                .collect::<Vec<_>>()
+                .into(),
+        ),
+        (
+            "summary",
+            json!({
+                "leaderMemberIds": leader_member_ids,
+                "averageRankSpread": rank_spread,
+                "rankSpreadSignal": rank_spread_signal(rank_spread, groups.len()),
+                "totalGinjiCount": rows.iter().map(|row| i64::from(row.incidents.suri_no_ginji)).sum::<i64>(),
+                "quality": quality_summary,
+            }),
+        ),
+        ("metricsByPlayer", metrics.into()),
+        ("rankDistribution", rank_distribution.into()),
+        ("recentRanks", recent_ranks.into()),
+        (
+            "strategyScatter",
+            strategy_scatter(groups, &revenue_ranks, &asset_ranks),
+        ),
+        (
+            "playOrderComparison",
+            play_order_comparison(players, player_matches_by_member).into(),
+        ),
+        (
+            "ownerComparison",
+            super::owner::build(rows, players).unwrap_or(Value::Null),
+        ),
+        (
+            "revenueRankConversion",
+            revenue_rank_conversion(players, player_matches_by_member, &revenue_ranks).into(),
+        ),
+        ("trends", trends.into()),
+        (
+            "histograms",
+            json!({
+                "assets": asset_histogram(rows, players, |row| row.total_assets_man_yen),
+                "revenue": revenue_histogram(rows, players, |row| row.revenue_man_yen),
+            }),
+        ),
+        ("headToHead", head_to_head),
+        ("momentumSwitch", momentum.into()),
+        ("performanceProfiles", performance),
+        ("assetStyleProfiles", asset_styles),
+        (
+            "cardShopDestination",
+            card_shop_destination(players, player_matches_by_member).into(),
+        ),
+        ("matchDigest", match_digest),
+        ("matchNoInEvent", match_no_in_event(players, rows)),
+        ("rankAnalysis", outcome_model.aggregate_json()),
+        (
+            "highlights",
+            highlights(players, player_matches_by_member).into(),
+        ),
+        (
+            "dataQuality",
+            object([
+                ("items", quality_items.into()),
+                ("summary", quality_summary),
+            ]),
+        ),
+        ("source", json!({ "gameTitleId": game_title_id })),
+    ])
 }

@@ -5,10 +5,9 @@ import { seriesAnalysisFocusExclusionNotice } from "@/features/seriesComparison/
 import { buildSeriesAnalysisFilterOptions } from "@/features/seriesComparison/model/seriesAnalysisFilterOptions";
 import { useSeriesAnalysisLocationState } from "@/features/seriesComparison/navigation/useSeriesAnalysisLocationState";
 import { useSeriesAnalysisResource } from "@/features/seriesComparison/page/useSeriesAnalysisResource";
-import { isAnalysisClientUpgradeRequired } from "@/shared/api/problemDetails";
 import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { seriesAnalysisOptionsQueryOptions } from "@/shared/api/seriesAnalysisQueryOptions";
-import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
+import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 /** Composes location, option, and artifact owners into the display-ready page contract. */
 export function useSeriesComparisonPageModel() {
@@ -79,10 +78,7 @@ export function useSeriesComparisonPageModel() {
       clearScope,
       focusMatch,
       refresh,
-      reloadClient: () => window.location.reload(),
     },
-    clientUpgradeRequired:
-      isAnalysisClientUpgradeRequired(optionsError) || analysis.clientUpgradeRequired,
     filters: {
       activeView: location.activeView,
       confirmedMatchCount: filterOptions.confirmedMatchCount,

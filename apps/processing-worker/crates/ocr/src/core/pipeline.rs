@@ -97,7 +97,7 @@ fn analyze_core(
         }
     })?;
 
-    let mut warnings = player_order.warnings.clone();
+    let mut warnings = player_order.warnings;
     warnings.extend(parsed.warnings);
     let profile_id = requested_screen_type.expected_profile_id();
     let warnings_json = serde_json::to_value(&warnings).map_err(|_error| CoreOcrError::Parser)?;

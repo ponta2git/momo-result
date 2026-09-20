@@ -296,53 +296,14 @@ describe("HeldEventDetailPage", () => {
     expect(screen.queryByRole("link", { name: "OCR取り込み" })).not.toBeInTheDocument();
   });
 
-  it("uses honest fallback labels and retries failed auxiliary master names in place", async () => {
-    let shouldFail = true;
+  it("uses snapshot labels without loading unrelated master directories", async () => {
+    const extraRequests: string[] = [];
     server.use(
-      http.get("/api/game-titles", () =>
-        shouldFail
-          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
-          : HttpResponse.json({
-              items: [
-                {
-                  createdAt: "2026-01-01T00:00:00.000Z",
-                  displayOrder: 1,
-                  id: "gt_momotetsu_2",
-                  layoutFamily: "momotetsu_2",
-                  name: "桃太郎電鉄2",
-                },
-              ],
-            }),
-      ),
-      http.get("/api/season-masters", () =>
-        shouldFail
-          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
-          : HttpResponse.json({
-              items: [
-                {
-                  createdAt: "2026-01-01T00:00:00.000Z",
-                  displayOrder: 1,
-                  gameTitleId: "gt_momotetsu_2",
-                  id: "season_current",
-                  name: "今シーズン",
-                },
-              ],
-            }),
-      ),
-      http.get("/api/map-masters", () =>
-        shouldFail
-          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
-          : HttpResponse.json({
-              items: [
-                {
-                  createdAt: "2026-01-01T00:00:00.000Z",
-                  displayOrder: 1,
-                  gameTitleId: "gt_momotetsu_2",
-                  id: "map_east",
-                  name: "東日本編",
-                },
-              ],
-            }),
+      ...["game-titles", "season-masters", "map-masters"].map((resource) =>
+        http.get(`/api/${resource}`, () => {
+          extraRequests.push(resource);
+          return HttpResponse.json({ detail: "unavailable" }, { status: 500 });
+        }),
       ),
       http.get("/api/held-events/:heldEventId", () =>
         HttpResponse.json(
@@ -351,38 +312,25 @@ describe("HeldEventDetailPage", () => {
             matches: [
               {
                 gameTitleId: "gt_momotetsu_2",
+                gameTitleName: "対象作品",
                 mapMasterId: "map_east",
+                mapName: "対象マップ",
+                seasonMasterId: "season_current",
+                seasonName: "対象シーズン",
                 matchId: "match-1",
                 matchNoInEvent: 1,
                 ownerMemberId: "member_ponta",
                 playedAt: "2026-01-01T00:00:00.000Z",
                 players: [],
-                seasonMasterId: "season_current",
               },
             ],
           }),
         ),
       ),
     );
-
     renderPage();
-
-    expect(await screen.findByText("表示名を取得できませんでした")).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        /取得済みの表示名はそのまま使い、取得できない箇所だけ「未取得」と表示しています。/u,
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByText("作品名未取得・シーズン名未取得・マップ名未取得")).toBeInTheDocument();
-    expect(document.body.textContent).not.toMatch(/gt_|season_|map_/u);
+    expect(await screen.findByText("対象作品・対象シーズン・対象マップ")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "第1試合の結果を見る" })).toBeInTheDocument();
-
-    shouldFail = false;
-    await user.click(screen.getByRole("button", { name: "表示名を再取得" }));
-
-    expect(await screen.findByText("桃太郎電鉄2・今シーズン・東日本編")).toBeInTheDocument();
-    await waitFor(() =>
-      expect(screen.queryByText("表示名を取得できませんでした")).not.toBeInTheDocument(),
-    );
+    expect(extraRequests).toEqual([]);
   });
 });

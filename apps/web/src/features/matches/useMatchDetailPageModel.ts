@@ -2,11 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { useLocation, useParams, useSearchParams } from "react-router-dom";
 
-import { resolvedEnrichmentName } from "@/features/matches/matchDetailPageModel";
-import type {
-  MatchDetailEnrichmentModel,
-  MatchDetailPageModel,
-} from "@/features/matches/matchDetailPageModel";
+import type { MatchDetailPageModel } from "@/features/matches/matchDetailPageModel";
 import { seriesComparisonHrefForMatch } from "@/features/matches/matchDetailViewModel";
 import { useMatchDeletionCommand } from "@/features/matches/useMatchDeletionCommand";
 import { useMatchFeatureAnalysis } from "@/features/matches/useMatchFeatureAnalysis";
@@ -16,16 +12,15 @@ import {
   shouldShowBlockingQueryError,
   shouldShowQueryError,
 } from "@/shared/api/queryErrorState";
-import { heldEventDirectoryQueryOptions, matchDetailQueryOptions } from "@/shared/api/queryOptions";
-import { useMasterNameDirectory } from "@/shared/api/useMasterNameDirectory";
+import { matchDetailQueryOptions } from "@/shared/api/queryOptions";
+import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 import {
   currentInternalLocation,
   sanitizeReturnTo,
   withReturnTo,
 } from "@/shared/navigation/returnTo";
-import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
 
-/** Owns the primary match resource and optional display enrichment for the detail screen. */
+/** Owns the match snapshot and its independent analysis resource. */
 export function useMatchDetailPageModel(): MatchDetailPageModel {
   const { matchId = "" } = useParams<{ matchId: string }>();
   const location = useLocation();
@@ -35,10 +30,6 @@ export function useMatchDetailPageModel(): MatchDetailPageModel {
   const detailReturnTo = currentInternalLocation(location);
 
   const matchQuery = useQuery(matchDetailQueryOptions(matchId, matchId.trim().length > 0));
-  const heldEventsQuery = useQuery(heldEventDirectoryQueryOptions());
-  const masters = useMasterNameDirectory();
-  const retryFailedMasters = masters.retryFailed;
-
   const {
     data: match,
     error: matchError,
@@ -47,13 +38,6 @@ export function useMatchDetailPageModel(): MatchDetailPageModel {
     isLoading: matchIsLoading,
     refetch: refetchMatch,
   } = matchQuery;
-  const {
-    data: heldEventsData,
-    error: heldEventsError,
-    isFetching: heldEventsIsFetching,
-    refetch: refetchHeldEvents,
-  } = heldEventsQuery;
-
   const analysis = useMatchFeatureAnalysis(match);
   const deletion = useMatchDeletionCommand({
     contextualReturnTo,
@@ -67,28 +51,6 @@ export function useMatchDetailPageModel(): MatchDetailPageModel {
     matchIsFetching,
     matchId,
   );
-  const heldEventsFailed = useRetryNotice(
-    shouldShowQueryError({
-      error: heldEventsError,
-      isFetching: heldEventsIsFetching,
-    }),
-    heldEventsIsFetching,
-  );
-  const failedEnrichmentFields = [
-    heldEventsFailed ? "開催日" : undefined,
-    masters.failed.gameTitles ? "作品名" : undefined,
-    masters.failed.seasons ? "シーズン名" : undefined,
-    masters.failed.maps ? "マップ名" : undefined,
-  ].filter((field): field is string => Boolean(field));
-  const enrichmentPending =
-    (heldEventsData === undefined && heldEventsIsFetching) || masters.initialPending;
-  const enrichmentRefreshing = heldEventsIsFetching || masters.refreshing;
-  const retryEnrichment = useCallback(() => {
-    const retries: Array<Promise<unknown>> = [];
-    if (heldEventsFailed) retries.push(refetchHeldEvents());
-    retries.push(retryFailedMasters());
-    void Promise.all(retries);
-  }, [heldEventsFailed, refetchHeldEvents, retryFailedMasters]);
   const retryPrimary = useCallback(() => {
     void refetchMatch();
   }, [refetchMatch]);
@@ -125,20 +87,6 @@ export function useMatchDetailPageModel(): MatchDetailPageModel {
     };
   }
 
-  const heldEvent = (heldEventsData?.items ?? []).find((event) => event.id === match.heldEventId);
-  const gameTitle = masters.items.gameTitles.find((item) => item.id === match.gameTitleId);
-  const season = masters.items.seasons.find((item) => item.id === match.seasonMasterId);
-  const map = masters.items.maps.find((item) => item.id === match.mapMasterId);
-  const enrichment: MatchDetailEnrichmentModel =
-    failedEnrichmentFields.length > 0
-      ? {
-          fields: failedEnrichmentFields,
-          kind: "warning",
-          refresh: { pending: enrichmentRefreshing, run: retryEnrichment },
-        }
-      : enrichmentPending
-        ? { kind: "pending" }
-        : { kind: "complete" };
   const backHref = contextualReturnTo ?? `/held-events/${encodeURIComponent(match.heldEventId)}`;
 
   return {
@@ -148,24 +96,11 @@ export function useMatchDetailPageModel(): MatchDetailPageModel {
       performanceContext: analysis.performanceContext,
     },
     deletion,
-    enrichment,
     identity: {
-      gameTitle: resolvedEnrichmentName({
-        failed: masters.failed.gameTitles,
-        loading: masters.pending.gameTitles,
-        name: gameTitle?.name,
-      }),
-      heldAt: heldEvent?.heldAt ?? match.playedAt,
-      map: resolvedEnrichmentName({
-        failed: masters.failed.maps,
-        loading: masters.pending.maps,
-        name: map?.name,
-      }),
-      season: resolvedEnrichmentName({
-        failed: masters.failed.seasons,
-        loading: masters.pending.seasons,
-        name: season?.name,
-      }),
+      gameTitle: match.gameTitleName ?? "未取得",
+      heldAt: match.heldAt ?? match.playedAt,
+      map: match.mapName ?? "未取得",
+      season: match.seasonName ?? "未取得",
     },
     kind: "ready",
     match,

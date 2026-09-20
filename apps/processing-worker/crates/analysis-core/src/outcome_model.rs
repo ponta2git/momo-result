@@ -263,7 +263,8 @@ struct EncodedMatch {
     match_id: Arc<str>,
     match_no_in_event: i32,
     played_at: Arc<str>,
-    rows: Vec<EncodedRow>,
+    // Canonical member order makes every per-member projection a checked fixed-size lookup.
+    rows: [EncodedRow; PLAYER_COUNT],
 }
 
 #[derive(Clone, Debug)]
@@ -300,9 +301,9 @@ struct Fit<const N: usize> {
 }
 
 #[derive(Clone, Debug)]
-struct FoldEvaluation {
+struct FoldEvaluation<'a> {
     score: FoldScore,
-    test_events: Vec<EncodedEvent>,
+    test_events: Vec<&'a EncodedEvent>,
     test_pairs: Vec<PairRecord>,
     full_fit: Fit<FULL_FEATURE_COUNT>,
 }

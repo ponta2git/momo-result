@@ -75,25 +75,19 @@ pub(super) async fn load_candidate(
     };
     let source = transaction
         .query_opt(
-            "SELECT status, object_key, sha256_hex, byte_length, media_type, width, height\x20\
-             FROM source_images WHERE id = $1 FOR UPDATE",
-            &[&source_image_id],
+            "SELECT image.status, image.object_key, image.sha256_hex, image.byte_length,\x20\
+                    image.media_type, image.width, image.height, outbox.stream_payload\x20\
+             FROM source_images image\x20\
+             JOIN ocr_queue_outbox outbox ON outbox.id = 'ocr-outbox-' || $2\x20\
+               AND outbox.job_id = $2 AND outbox.schema_version = 2\x20\
+             WHERE image.id = $1 FOR UPDATE OF image",
+            &[&source_image_id, &job_id],
         )
         .await?;
     let Some(source) = source else {
         return Ok(CandidateResult::InvalidPersistedContract);
     };
-    let outbox = transaction
-        .query_opt(
-            "SELECT stream_payload FROM ocr_queue_outbox\x20\
-             WHERE id = 'ocr-outbox-' || $1 AND job_id = $1 AND schema_version = 2",
-            &[&job_id],
-        )
-        .await?;
-    let Some(outbox) = outbox else {
-        return Ok(CandidateResult::InvalidPersistedContract);
-    };
-    let outbox_payload = outbox.try_get::<_, serde_json::Value>(0)?;
+    let outbox_payload = source.try_get::<_, serde_json::Value>(7)?;
     let Ok(authoritative_delivery) = parse_persisted_payload(&outbox_payload) else {
         return Ok(CandidateResult::InvalidPersistedContract);
     };

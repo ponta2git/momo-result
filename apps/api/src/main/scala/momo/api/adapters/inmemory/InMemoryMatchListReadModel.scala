@@ -22,6 +22,7 @@ import momo.api.repositories.{MatchDraftsRepository, MatchListReadModel, Matches
 final class InMemoryMatchListReadModel[F[_]: Monad](
     matches: MatchesRepository[F],
     matchDrafts: MatchDraftsRepository[F],
+    metadata: InMemoryMatchMetadata[F],
 ) extends MatchListReadModel[F]:
   override def list(
       filter: MatchListReadModel.Filter
@@ -31,7 +32,12 @@ final class InMemoryMatchListReadModel[F[_]: Monad](
     seasonMasterId = filter.seasonMasterId,
     statusFilter = filter.status,
     kind = filter.kind,
-  ).map { combined =>
+  ).flatMap(_.traverse { item =>
+    for
+      heldAt <- metadata.heldAt(item.heldEventId)
+      labels <- metadata.labels(item.gameTitleId, item.seasonMasterId, item.mapMasterId)
+    yield item.copy(heldAt = heldAt, labels = labels)
+  }).map { combined =>
     val positioned = combined.map(item => (item, position(item))).sortWith {
       case ((_, left), (_, right)) => comparePositions(left, right, filter.sort) < 0
     }
@@ -104,7 +110,10 @@ final class InMemoryMatchListReadModel[F[_]: Monad](
     seasonMasterId = None,
     statusFilter = MatchListStatusFilter.All,
     kind = MatchListKindFilter.MatchDraft,
-  ).map(items => MatchListProjection.sortItems(items, MatchListSort.MatchNoAsc))
+  ).flatMap(_.traverse { item =>
+    metadata.labels(item.gameTitleId, item.seasonMasterId, item.mapMasterId)
+      .map(labels => item.copy(labels = labels))
+  }).map(items => MatchListProjection.sortItems(items, MatchListSort.MatchNoAsc))
 
   private def listItems(
       heldEventId: Option[HeldEventId],
@@ -189,7 +198,8 @@ final class InMemoryMatchListReadModel[F[_]: Monad](
     MatchListReadModel.CursorPosition(
       statusPriority = statusPriority,
       updatedAt = item.updatedAt.truncatedTo(ChronoUnit.MICROS),
-      heldAt = item.playedAt.getOrElse(item.updatedAt).truncatedTo(ChronoUnit.MICROS),
+      heldAt =
+        item.heldAt.orElse(item.playedAt).getOrElse(item.updatedAt).truncatedTo(ChronoUnit.MICROS),
       matchNoIsNull = item.matchNoInEvent.isEmpty,
       matchNoSort = item.matchNoInEvent.map(_.value).getOrElse(Int.MaxValue),
       kind = item.kind.wire,

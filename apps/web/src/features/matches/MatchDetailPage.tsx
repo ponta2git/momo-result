@@ -14,11 +14,9 @@ import { useMatchDetailPageModel } from "@/features/matches/useMatchDetailPageMo
 import { incidentColumns } from "@/shared/domain/incidents";
 import { formatMatchNoInEvent, formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { memberDisplayName } from "@/shared/domain/members";
-import { Button } from "@/shared/ui/actions/Button";
+import { MatchResultLedger } from "@/shared/matches/MatchResultLedger";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
-import { MatchResultLedger } from "@/shared/ui/data/MatchResultLedger";
-import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
@@ -54,7 +52,7 @@ function MatchDetailScreen() {
 }
 
 function MatchDetailReadyContent({ page }: { page: MatchDetailReadyPageModel }) {
-  const { analysis, deletion, enrichment, identity, match, navigation, note } = page;
+  const { analysis, deletion, identity, match, navigation, note } = page;
   const ledgerRows = (
     analysis.performanceContext?.rows ??
     (match.players ?? []).map((player) => ({
@@ -114,27 +112,6 @@ function MatchDetailReadyContent({ page }: { page: MatchDetailReadyPageModel }) 
       />
 
       <PageContentSurface className="grid gap-6">
-        {enrichment.kind === "warning" ? (
-          <Notice
-            action={
-              <Button
-                pending={enrichment.refresh.pending}
-                pendingLabel="再取得中"
-                size="sm"
-                variant="secondary"
-                onClick={enrichment.refresh.run}
-              >
-                開催条件を再取得
-              </Button>
-            }
-            tone="warning"
-            title="開催条件を取得できませんでした"
-          >
-            {enrichment.fields.join("・")}
-            を取得できませんでした。試合結果はそのまま表示し、取得できない項目だけ「未取得」と表示しています。
-          </Notice>
-        ) : null}
-
         <div className="grid gap-4">
           <MatchDetailIdentity
             gameTitle={identity.gameTitle}

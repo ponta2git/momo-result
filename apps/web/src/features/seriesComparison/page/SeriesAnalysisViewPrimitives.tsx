@@ -1,8 +1,6 @@
 import { BookOpenText } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownContent";
-import type { SeriesAnalysisPlayer, SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
@@ -12,7 +10,7 @@ import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { contentText } from "@/shared/ui/typography";
 
-export function MetricDefinitions({ response }: { response: SeriesComparisonAggregate }) {
+export function MetricDefinitions() {
   return (
     <Dialog
       description="分析に共通する指標の比べ方を示します。"
@@ -23,25 +21,10 @@ export function MetricDefinitions({ response }: { response: SeriesComparisonAggr
         </Button>
       }
     >
-      <FactList
-        ariaLabel="指標ごとの比べ方"
-        columns={2}
-        items={response.metricDefinitions.map((definition) => ({
-          id: definition.metricId,
-          label: definition.label,
-          value: metricReadingCue(definition),
-        }))}
-        layout="plain"
-      />
+      <FactList ariaLabel="指標ごとの比べ方" columns={2} items={metricReadings} layout="plain" />
     </Dialog>
   );
 }
-
-export type AnalysisViewProps = {
-  focusedItemIds: readonly string[];
-  response: SeriesComparisonAggregate;
-  onDrilldown: (selection: SeriesAnalysisDrilldownSelection) => void;
-};
 
 export function AnalysisSection({
   children,
@@ -130,43 +113,53 @@ export function MetricValue({ label, value }: { label: string; value: string }) 
   );
 }
 
-export function playerName(players: SeriesAnalysisPlayer[], memberId: string): string {
-  return (
-    players.find((player) => player.memberId === memberId)?.displayName ?? "プレーヤー名未取得"
-  );
-}
-
-export function memberNames(players: SeriesAnalysisPlayer[], memberIds: string[]): string {
-  return memberIds.map((memberId) => playerName(players, memberId)).join("、") || "—";
-}
-
-function metricReadingCue(
-  definition: SeriesComparisonAggregate["metricDefinitions"][number],
-): string {
-  const cue = metricReadingCues[definition.metricId];
-  if (cue) return cue;
-  switch (definition.preferredDirection) {
-    case "higher":
-      return "対象件数を確認し、他のプレーヤーより大きいかを比べます。";
-    case "lower":
-      return "対象件数を確認し、他のプレーヤーより小さいかを比べます。";
-    case "contextual":
-      return "単独で良し悪しを決めず、同じ区画の分布や条件差と合わせて見ます。";
-  }
-}
-
-const metricReadingCues: Readonly<Partial<Record<string, string>>> = {
-  "assets.average": "4人の金額差と分布を比べ、資産をどの水準で残したかを確認します。",
-  "destination.average":
-    "目的地への到着回数を対象戦数で割った回数（回/試合）です。オーナー比較では列の対象戦数を使います。",
-  "ginji.average":
-    "銀次の合計遭遇回数を対象戦数で割った回数（回/試合）です。同じ試合での複数回遭遇も含みます。",
-  "destination.conversionDelta":
-    "目的地順位と最終順位のずれを比べ、到着回数が順位へつながったかを確認します。",
-  "ginji.encounterRate":
-    "対象試合のうち、1回以上銀次に遭遇した試合の割合です。1試合平均の遭遇回数とは異なります。",
-  "podium.rate": "1〜2位で終えた割合です。対象戦数と下位率を一緒に比べます。",
-  "rank.average": "1位に近いほど上位です。順位分布と合わせ、平均に隠れた波を確認します。",
-  "rank.distribution": "1〜4位の内訳から、平均順位だけでは見えない安定と波を確認します。",
-  "revenue.average": "物件収益順位と最終順位を一緒に見て、収益額の大きさだけで勝因を決めません。",
-};
+const metricReadings = [
+  {
+    id: "rank.average",
+    label: "平均順位",
+    value: "1位に近いほど上位です。順位分布と合わせ、平均に隠れた波を確認します。",
+  },
+  {
+    id: "rank.distribution",
+    label: "順位分布",
+    value: "1〜4位の内訳から、平均順位だけでは見えない安定と波を確認します。",
+  },
+  {
+    id: "assets.average",
+    label: "平均総資産",
+    value: "4人の金額差と分布を比べ、資産をどの水準で残したかを確認します。",
+  },
+  {
+    id: "revenue.average",
+    label: "平均物件収益",
+    value: "物件収益順位と最終順位を一緒に見て、収益額の大きさだけで勝因を決めません。",
+  },
+  {
+    id: "podium.rate",
+    label: "入賞率",
+    value: "1〜2位で終えた割合です。対象戦数と下位率を一緒に比べます。",
+  },
+  {
+    id: "ginji.encounterRate",
+    label: "銀次遭遇率",
+    value:
+      "対象試合のうち、1回以上銀次に遭遇した試合の割合です。1試合平均の遭遇回数とは異なります。",
+  },
+  {
+    id: "destination.average",
+    label: "目的地到着回数（1試合平均）",
+    value:
+      "目的地への到着回数を対象戦数で割った回数（回/試合）です。オーナー比較では列の対象戦数を使います。",
+  },
+  {
+    id: "ginji.average",
+    label: "銀次遭遇回数（1試合平均）",
+    value:
+      "銀次の合計遭遇回数を対象戦数で割った回数（回/試合）です。同じ試合での複数回遭遇も含みます。",
+  },
+  {
+    id: "destination.conversionDelta",
+    label: "目的地順位と最終順位の差",
+    value: "目的地順位と最終順位のずれを比べ、到着回数が順位へつながったかを確認します。",
+  },
+];

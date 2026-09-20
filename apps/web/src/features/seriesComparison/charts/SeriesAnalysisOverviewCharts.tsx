@@ -1,5 +1,6 @@
 import { useId } from "react";
 
+import { dataVizSeriesPresentation } from "@/features/seriesComparison/charts/dataViz/seriesPresentation";
 import {
   AnalysisMatrix,
   MatrixAxisHeader,
@@ -13,22 +14,23 @@ import {
   headToHeadSignalLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { RelativeIntensity, SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
+import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
+import { colorMix, rankColor } from "@/shared/matches/rankPresentation";
 import { cn } from "@/shared/ui/cn";
-import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
-import { dataVizSeriesPresentation } from "@/shared/ui/dataViz/seriesPresentation";
-import { colorMix, rankColor } from "@/shared/ui/rank/rankPresentation";
 import { contentText } from "@/shared/ui/typography";
-
-type OverviewChartProps = {
-  focusedItemIds: readonly string[];
-  response: SeriesComparisonAggregate;
-};
 
 const STACKED_SEGMENT_SEPARATOR = "inset 1px 0 var(--color-chart-segment-separator)";
 
-export function RankDistributionBars({ focusedItemIds, response }: OverviewChartProps) {
+export function RankDistributionBars({
+  focusedItemIds,
+  players,
+  rankDistribution,
+}: {
+  focusedItemIds: readonly string[];
+  players: SeriesComparisonAggregate["players"];
+  rankDistribution: SeriesComparisonAggregate["rankDistribution"];
+}) {
   const titleId = useId();
-  const players = response.players;
   return (
     <section aria-labelledby={titleId} className="grid gap-2">
       <h3 className={contentText.heading} id={titleId}>
@@ -48,7 +50,7 @@ export function RankDistributionBars({ focusedItemIds, response }: OverviewChart
       </div>
       <div className="grid gap-4">
         {players.map((player) => {
-          const entry = response.rankDistribution.find(
+          const entry = rankDistribution.find(
             (candidate) => candidate.memberId === player.memberId,
           );
           return (
@@ -117,11 +119,14 @@ function rankCountSummary(
     .join("・");
 }
 
-export function CrownShareBars({ response }: { response: SeriesComparisonAggregate }) {
-  const players = response.players;
-  const shareByMemberId = new Map(
-    response.rankAnalysis.crownCertainty.shares.map((entry) => [entry.memberId, entry.share]),
-  );
+export function CrownShareBars({
+  players,
+  shares,
+}: {
+  players: SeriesComparisonAggregate["players"];
+  shares: SeriesComparisonAggregate["rankAnalysis"]["crownCertainty"]["shares"];
+}) {
+  const shareByMemberId = new Map(shares.map((entry) => [entry.memberId, entry.share]));
   const chartLabel = players
     .map((player) => `${player.displayName} ${formatPercent(shareByMemberId.get(player.memberId))}`)
     .join("、");
@@ -174,8 +179,13 @@ export function CrownShareBars({ response }: { response: SeriesComparisonAggrega
   );
 }
 
-export function HeadToHeadMatrix({ response }: { response: SeriesComparisonAggregate }) {
-  const players = response.players;
+export function HeadToHeadMatrix({
+  players,
+  entries,
+}: {
+  players: SeriesComparisonAggregate["players"];
+  entries: SeriesComparisonAggregate["headToHead"]["entries"];
+}) {
   return (
     <AnalysisMatrix ariaLabel="直接対決" className="min-w-[42rem] table-fixed">
       <thead>
@@ -201,7 +211,7 @@ export function HeadToHeadMatrix({ response }: { response: SeriesComparisonAggre
               </MemberSequenceLabel>
             </MatrixRowHeader>
             {players.map((opponent) => {
-              const entry = response.headToHead.entries.find(
+              const entry = entries.find(
                 (candidate) =>
                   candidate.subjectMemberId === subject.memberId &&
                   candidate.opponentMemberId === opponent.memberId,

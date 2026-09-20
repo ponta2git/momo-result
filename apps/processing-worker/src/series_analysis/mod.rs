@@ -1,4 +1,4 @@
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use momo_analysis_core::contract::{
     ARTIFACT_SCHEMA_VERSION, ARTIFACT_VALIDATION_CONTRACT_ID, QueuePayload,
@@ -10,6 +10,7 @@ use tracing::{Instrument, error, info, info_span, warn};
 
 pub(crate) mod artifact;
 pub(crate) mod child;
+mod child_process;
 pub(crate) mod child_report;
 pub(crate) mod config;
 pub(crate) mod control;
@@ -34,6 +35,7 @@ use self::{
 
 mod attempt;
 mod attempt_directory;
+mod campaign;
 mod input_repository;
 mod metrics;
 mod policy;
@@ -127,6 +129,58 @@ enum AttemptInterruption {
 struct MaintenanceSchedules {
     capability_refresh: IdleRefreshSchedule,
     stale_attempt_cleanup_due: Option<Instant>,
+    history_cleanup_due: Instant,
+}
+
+impl MaintenanceSchedules {
+    fn next_due_in(&self, now: Instant) -> Duration {
+        let cleanup_due = self
+            .stale_attempt_cleanup_due
+            .map_or(self.history_cleanup_due, |due_at| {
+                due_at.min(self.history_cleanup_due)
+            });
+        self.capability_refresh
+            .next_due_in(now)
+            .min(cleanup_due.saturating_duration_since(now))
+    }
+
+    async fn run_due(
+        &mut self,
+        control_client: &mut tokio_postgres::Client,
+        heartbeat_client: &tokio_postgres::Client,
+        config: &AnalysisConsumerConfig,
+    ) -> Result<(), ConsumerError> {
+        // Retention runs between attempts; a busy worker delays it until that bounded attempt ends.
+        if Instant::now() >= self.history_cleanup_due {
+            match control::cleanup_history(control_client, SystemTime::now(), 500).await {
+                Ok(counts) => info!(
+                    event = "analysis_history_pruned",
+                    deleted = counts.iter().sum::<u64>(),
+                    "expired analysis history was pruned"
+                ),
+                Err(error) => warn!(
+                    event = "analysis_history_prune_failed",
+                    error_kind = error.kind(),
+                    "analysis history cleanup will retry at its next scheduled pass"
+                ),
+            }
+            self.history_cleanup_due = Instant::now() + control::HISTORY_CLEANUP_INTERVAL;
+        }
+        // A young stale directory contributes its own one-shot maturity deadline. Rechecking at
+        // the bounded delivery-loop cadence avoids both a permanent startup skip and a hot poll.
+        if self
+            .stale_attempt_cleanup_due
+            .is_some_and(|due_at| due_at <= Instant::now())
+        {
+            self.stale_attempt_cleanup_due =
+                cleanup_stale_attempt_directories(config, control_client).await?;
+        }
+        if self.capability_refresh.is_due_at(Instant::now()) {
+            register_capability(heartbeat_client, &config.worker_id).await?;
+            self.capability_refresh.record_success_at(Instant::now());
+        }
+        Ok(())
+    }
 }
 
 impl AttemptInterruption {
@@ -152,7 +206,7 @@ pub(crate) async fn run(
     post_commit_sink: PostCommitSink,
     mut shutdown: watch::Receiver<bool>,
 ) -> Result<(), ConsumerError> {
-    if !crate::process::managed_analysis_runtime_supported() {
+    if !child_process::managed_analysis_runtime_supported() {
         let error = ConsumerError::Process(ProcessError::UnsupportedPlatform);
         log_startup_failure("platform_contract", &error);
         return Err(error);
@@ -199,13 +253,15 @@ pub(crate) async fn run(
     let maintenance = MaintenanceSchedules {
         capability_refresh: IdleRefreshSchedule::after_success(Instant::now()),
         stale_attempt_cleanup_due,
+        history_cleanup_due: Instant::now(),
     };
 
     let redis_client = startup_result(
         redis::Client::open(config.redis_url.as_str()),
         "queue_configuration",
     )?;
-    let mut redis = startup_result(redis_client.get_connection_manager().await, "queue_connect")?;
+    let connection = crate::stream_connection::connect(&redis_client).await;
+    let mut redis = startup_result(connection, "queue_connect")?;
     startup_result(
         ensure_consumer_group(&mut redis, &config).await,
         "queue_consumer_group",
@@ -279,27 +335,16 @@ async fn consume_deliveries(
     redis: &mut ConnectionManager,
     config: &AnalysisConsumerConfig,
     post_commit_sink: &PostCommitSink,
-    maintenance: MaintenanceSchedules,
+    mut maintenance: MaintenanceSchedules,
     shutdown: &mut watch::Receiver<bool>,
 ) -> Result<(), ConsumerError> {
-    let MaintenanceSchedules {
-        mut capability_refresh,
-        mut stale_attempt_cleanup_due,
-    } = maintenance;
     let mut recovery_cursor = AutoClaimCursor::start();
     let mut recovery_schedule =
         PelRecoverySchedule::new(Instant::now(), config.pel_recovery_interval);
     while !*shutdown.borrow() {
-        // A young stale directory contributes its own one-shot maturity deadline. Rechecking at
-        // the bounded delivery-loop cadence avoids both a permanent startup skip and a hot poll.
-        if stale_attempt_cleanup_due.is_some_and(|due_at| due_at <= Instant::now()) {
-            stale_attempt_cleanup_due =
-                cleanup_stale_attempt_directories(config, control_client).await?;
-        }
-        if capability_refresh.is_due_at(Instant::now()) {
-            register_capability(heartbeat_client, &config.worker_id).await?;
-            capability_refresh.record_success_at(Instant::now());
-        }
+        maintenance
+            .run_due(control_client, heartbeat_client, config)
+            .await?;
         let delivery = match recovery_schedule.due_action(Instant::now()) {
             Some(RecoveryAction::ColdPage) => {
                 let page = recover_cold_page(redis, config, &mut recovery_cursor).await?;
@@ -314,11 +359,18 @@ async fn consume_deliveries(
                 delivery
             }
             None => {
-                let delivery = read_new_delivery(redis, config).await?;
+                let now = Instant::now();
+                let block = recovery_schedule
+                    .read_block(now, config.redis_block)
+                    .min(maintenance.next_due_in(now));
+                let delivery = read_new_delivery(redis, config, block).await?;
                 recovery_schedule.record_new_delivery_read();
                 delivery
             }
         };
+        if *shutdown.borrow() {
+            break;
+        }
         let Some(delivery) = delivery else {
             continue;
         };
@@ -459,7 +511,7 @@ async fn process_delivery(
                 reason = "unsupported_version",
                 job_algorithm_version = %version.algorithm_version,
                 job_artifact_schema_version = version.artifact_schema_version,
-                job_validation_contract_id = version.validation_contract_id.as_deref().unwrap_or("legacy-null"),
+                job_validation_contract_id = version.validation_contract_id.as_deref().unwrap_or("missing"),
                 supported_algorithm_version = ALGORITHM_VERSION,
                 supported_artifact_schema_version = ARTIFACT_SCHEMA_VERSION,
                 supported_validation_contract_id = ARTIFACT_VALIDATION_CONTRACT_ID,
@@ -485,7 +537,7 @@ async fn process_delivery(
         input_revision = claim.input_revision,
         algorithm_version = %claim.algorithm_version,
         artifact_schema_version = claim.artifact_schema_version,
-        validation_contract_id = claim.validation_contract_id.as_deref().unwrap_or("legacy-null"),
+        validation_contract_id = claim.validation_contract_id.as_deref().unwrap_or("missing"),
         fencing_token = claim.fencing_token,
     );
     async {
@@ -617,18 +669,37 @@ mod tests {
     use std::error::Error as StdError;
 
     use super::*;
-    use crate::outbox::{OutboxKind, PostCommitEffects};
+    use crate::outbox::PostCommitEffects;
+
+    #[test]
+    fn idle_reads_preserve_capability_and_cleanup_deadlines() {
+        let now = Instant::now();
+        let mut maintenance = MaintenanceSchedules {
+            capability_refresh: IdleRefreshSchedule::after_success(now),
+            stale_attempt_cleanup_due: None,
+            history_cleanup_due: now + Duration::from_hours(1),
+        };
+        assert_eq!(maintenance.next_due_in(now), Duration::from_mins(1));
+        maintenance.stale_attempt_cleanup_due = Some(now + Duration::from_secs(3));
+        assert_eq!(maintenance.next_due_in(now), Duration::from_secs(3));
+        maintenance.history_cleanup_due = now + Duration::from_secs(2);
+        assert_eq!(maintenance.next_due_in(now), Duration::from_secs(2));
+        assert_eq!(
+            maintenance.next_due_in(now + Duration::from_secs(2)),
+            Duration::ZERO
+        );
+    }
 
     #[test]
     fn closed_sink_blocks_a_committed_queue_disposition() {
-        let (sink, receiver) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
+        let (sink, receiver) = PostCommitSink::channel();
         drop(receiver);
 
         let result = submit_control_outcome(
             &sink,
             ControlOutcome::new(
                 DeliveryDisposition::Acknowledge,
-                PostCommitEffects::wake(OutboxKind::SeriesAnalysis),
+                PostCommitEffects::WakeAnalysis,
             ),
         );
 
@@ -672,14 +743,14 @@ mod tests {
 
     #[test]
     fn recovery_ack_cannot_pass_a_required_post_commit_effect() {
-        let (sink, receiver) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
+        let (sink, receiver) = PostCommitSink::channel();
         drop(receiver);
 
         let result = submit_control_outcome(
             &sink,
             ControlOutcome::new(
                 ClaimResult::RecoveredCurrentJob,
-                PostCommitEffects::wake(OutboxKind::SeriesAnalysis),
+                PostCommitEffects::WakeAnalysis,
             ),
         );
 

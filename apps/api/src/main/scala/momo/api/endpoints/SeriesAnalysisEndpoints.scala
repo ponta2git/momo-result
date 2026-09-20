@@ -86,12 +86,10 @@ object SeriesAnalysisEndpoints:
     .and(query[Option[String]]("mapMasterId"))
     .mapTo[MatchContextInput]
 
-  val aggregate: SecuredRead[ScopedArtifactInput, Array[Byte]] =
-    artifactEndpoint(SeriesAnalysisResponseSchemas.aggregate, "v2")
-  val aggregateV3: SecuredRead[ScopedArtifactInput, Array[Byte]] =
-    artifactEndpoint(SeriesAnalysisResponseSchemas.aggregateV3, "v3")
-  val review: SecuredRead[ScopedArtifactInput, Array[Byte]] =
-    artifactEndpoint(SeriesAnalysisResponseSchemas.review, "v2")
+  val aggregateV4: SecuredRead[ScopedArtifactInput, Array[Byte]] =
+    artifactEndpoint(SeriesAnalysisResponseSchemas.aggregateV4, "v4")
+  val reviewV3: SecuredRead[ScopedArtifactInput, Array[Byte]] =
+    artifactEndpoint(SeriesAnalysisResponseSchemas.reviewV3, "v3")
 
   private val drilldownContract = SeriesAnalysisResponseSchemas.drilldown
   val drilldown: SecuredRead[DrilldownInput, Array[Byte]] = endpoint

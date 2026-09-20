@@ -1,5 +1,7 @@
 //! Durable Series Analysis outbox delivery for the processing runtime.
 
+pub(crate) mod runtime;
+
 use std::{
     future::Future,
     time::{Duration, SystemTime},
@@ -120,7 +122,17 @@ impl SeriesAnalysisOutboxDriver {
         for claim in claims {
             match self.publish_claim(&claim).await? {
                 PublishResult::Delivered => delivered = delivered.saturating_add(1),
-                PublishResult::Retried => retried = retried.saturating_add(1),
+                PublishResult::Deferred { retry_scheduled } => {
+                    if retry_scheduled {
+                        retried = retried.saturating_add(1);
+                    } else {
+                        stale = stale.saturating_add(1);
+                    }
+                    // A dependency failure affects the route, not this payload. Leave the rest
+                    // of the bounded batch under its durable claim deadline; spending another
+                    // response timeout per item could outlive the supervisor's drain budget.
+                    break;
+                }
                 PublishResult::Stale => stale = stale.saturating_add(1),
             }
         }
@@ -347,14 +359,15 @@ impl SeriesAnalysisOutboxDriver {
                         error_kind = QUEUE_PUBLISH_ERROR_CLASS,
                         "analysis queue publication moved to its durable retry deadline"
                     );
-                    Ok(PublishResult::Retried)
                 } else {
                     warn!(
                         event = "analysis_outbox_stale_retry_release",
                         "analysis outbox retry release lost its claim fence"
                     );
-                    Ok(PublishResult::Stale)
                 }
+                Ok(PublishResult::Deferred {
+                    retry_scheduled: released,
+                })
             }
         }
     }
@@ -867,7 +880,9 @@ async fn materialize_campaign_target(
             )
             .await?;
     }
-    refresh_campaign(transaction, &target.campaign_id).await
+    super::campaign::refresh(transaction, std::slice::from_ref(&target.campaign_id))
+        .await
+        .map_err(Into::into)
 }
 
 async fn assign_campaign_target(
@@ -986,7 +1001,9 @@ async fn skip_deleted_campaign_title(
             &[&target.campaign_id, &target.game_title_id],
         )
         .await?;
-    refresh_campaign(transaction, &target.campaign_id).await
+    super::campaign::refresh(transaction, std::slice::from_ref(&target.campaign_id))
+        .await
+        .map_err(Into::into)
 }
 
 fn campaign_stable_id(prefix: &str, target: &CampaignTarget) -> String {
@@ -1147,7 +1164,7 @@ struct DeliveryFailure {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum PublishResult {
     Delivered,
-    Retried,
+    Deferred { retry_scheduled: bool },
     Stale,
 }
 
@@ -1257,18 +1274,14 @@ async fn fail_undeliverable_job(
             &[&job_id],
         )
         .await?;
-    let mut campaign_ids = campaign_rows
+    let campaign_ids = campaign_rows
         .iter()
         .map(|row| {
             row.try_get("campaign_id")
                 .map_err(SeriesAnalysisOutboxError::InvalidRecord)
         })
         .collect::<Result<Vec<String>, _>>()?;
-    campaign_ids.sort();
-    campaign_ids.dedup();
-    for campaign_id in campaign_ids {
-        refresh_campaign(transaction, &campaign_id).await?;
-    }
+    super::campaign::refresh(transaction, &campaign_ids).await?;
     transaction
         .execute(
             r"
@@ -1334,65 +1347,6 @@ async fn mark_undeliverable_job(
                 .map_err(SeriesAnalysisOutboxError::InvalidRecord)
         })
         .transpose()
-}
-
-async fn refresh_campaign(
-    transaction: &Transaction<'_>,
-    campaign_id: &str,
-) -> Result<(), SeriesAnalysisOutboxError> {
-    transaction
-        .execute(
-            r"
-            WITH counts AS (
-              SELECT
-                COUNT(*) FILTER (WHERE status <> 'pending')::int AS expanded_count,
-                COUNT(*) FILTER (
-                  WHERE status IN ('succeeded', 'failed', 'skipped_title_deleted')
-                )::int AS terminal_count,
-                COUNT(*) FILTER (WHERE status = 'failed')::int AS failed_count,
-                COUNT(*) FILTER (WHERE status = 'skipped_title_deleted')::int AS skipped_count
-              FROM series_analysis_campaign_targets
-              WHERE campaign_id = $1
-            )
-            UPDATE series_analysis_campaigns c
-            SET expanded_count = counts.expanded_count,
-                terminal_count = counts.terminal_count,
-                failed_count = counts.failed_count,
-                skipped_count = counts.skipped_count,
-                status = CASE
-                  WHEN counts.terminal_count = c.target_count THEN 'terminal'
-                  WHEN counts.expanded_count = c.target_count THEN 'running'
-                  ELSE 'expanding'
-                END,
-                finished_at = CASE
-                  WHEN counts.terminal_count = c.target_count
-                    THEN COALESCE(c.finished_at, clock_timestamp())
-                  ELSE NULL
-                END
-            FROM counts
-            WHERE c.id = $1
-            ",
-            &[&campaign_id],
-        )
-        .await?;
-    transaction
-        .execute(
-            r"
-            UPDATE series_analysis_operation_requests o
-            SET status = CASE WHEN c.status = 'terminal' THEN 'terminal' ELSE 'running' END,
-                finished_at = CASE
-                  WHEN c.status = 'terminal'
-                    THEN COALESCE(o.finished_at, c.finished_at, clock_timestamp())
-                  ELSE NULL
-                END
-            FROM series_analysis_campaigns c
-            WHERE c.id = $1
-              AND o.id = c.operation_request_id
-            ",
-            &[&campaign_id],
-        )
-        .await?;
-    Ok(())
 }
 
 #[cfg(test)]

@@ -1,4 +1,7 @@
-import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
+import type {
+  MatchFormValues,
+  MatchSetupValues,
+} from "@/features/matches/workspace/matchFormTypes";
 import type { MatchWorkspaceOperationErrorView } from "@/features/matches/workspace/matchWorkspaceOperationError";
 import type {
   ScoreGridActions,
@@ -16,7 +19,7 @@ import type {
   SeasonMasterResponse,
 } from "@/shared/api/masters";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
-import type { HeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
+import type { HeldEventPickerDirectory } from "@/shared/heldEvents/useHeldEventPickerDirectory";
 
 export type MatchWorkspaceMastersNavigationModel = {
   pending: boolean;
@@ -57,7 +60,7 @@ type MatchWorkspaceLoadingModel = {
 export type MatchWorkspaceSetupFieldsModel = {
   actions: {
     onGameTitleChange: (gameTitleId: string) => void;
-    onPatchRoot: (patch: Partial<MatchFormValues>) => void;
+    onPatchRoot: (patch: Partial<MatchSetupValues>) => void;
   };
   options: {
     gameTitleItems: GameTitleResponse[];
@@ -67,7 +70,7 @@ export type MatchWorkspaceSetupFieldsModel = {
     seasonItems: SeasonMasterResponse[];
   };
   validation: { errorPathSet: Set<string> };
-  values: MatchFormValues;
+  values: MatchSetupValues;
 };
 
 export type MatchWorkspaceSetupSectionModel = {

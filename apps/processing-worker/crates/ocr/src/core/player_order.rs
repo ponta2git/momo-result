@@ -110,10 +110,9 @@ fn recognize_slot_name(
     {
         return Ok((Some(candidate.name.clone()), candidate.confidence));
     }
-    let variants = prepare_slot_name_variants(image);
     let mut candidates = raw_candidates;
-    for variant in &variants {
-        candidates.extend(recognize_name_variant(variant, aliases, recognition)?);
+    for variant in prepare_slot_name_variants(image) {
+        candidates.extend(recognize_name_variant(&variant, aliases, recognition)?);
     }
     Ok(candidates
         .into_iter()

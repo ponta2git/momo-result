@@ -53,3 +53,28 @@ fn scope_counts_require_complete_seasons_and_exact_denominators() {
         "even an empty artifact requires its overall aggregate"
     );
 }
+
+#[test]
+fn notification_reader_requires_the_current_attested_format() {
+    let mut identity = AnalysisIdentity {
+        artifact_id: "artifact".to_owned(),
+        input_revision: "1".to_owned(),
+        algorithm_version: "series-analysis-v5".to_owned(),
+        artifact_schema_version: i32::try_from(ARTIFACT_SCHEMA_VERSION).unwrap_or_default(),
+        validation_contract_id: Some(ARTIFACT_VALIDATION_CONTRACT_ID.to_owned()),
+    };
+    assert!(current_publication(&identity));
+    for version in [1, 2, 3, 5] {
+        identity.artifact_schema_version = version;
+        assert!(!current_publication(&identity));
+    }
+    identity.artifact_schema_version = i32::try_from(ARTIFACT_SCHEMA_VERSION).unwrap_or_default();
+    for contract in [
+        None,
+        Some("series-analysis-artifact-v3-full-validation-v1"),
+        Some("unknown"),
+    ] {
+        identity.validation_contract_id = contract.map(str::to_owned);
+        assert!(!current_publication(&identity));
+    }
+}

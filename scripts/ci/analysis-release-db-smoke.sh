@@ -19,8 +19,8 @@ validation_contract_id="$(jq -er '
   .validationContractId |
   select(type == "string" and test("^[a-z0-9][a-z0-9._-]{0,127}$"))
 ' "${publication_contract}")"
-reader_schemas="$(jq -ce '[.readableContracts[].artifactSchemaVersion]' "${publication_contract}")"
-reader_contracts="$(jq -ce '[.readableContracts[].validationContractId]' "${publication_contract}")"
+reader_schemas="$(jq -ce '[.artifactSchemaVersion]' "${publication_contract}")"
+reader_contracts="$(jq -ce '[.validationContractId]' "${publication_contract}")"
 release_worker_id="worker-release-smoke"
 release_capability_id="${release_worker_id}@${algorithm_version}@${artifact_schema_version}@${validation_contract_id}"
 
@@ -236,9 +236,24 @@ if run_release_command release-promote \
   exit 1
 fi
 
+# A reader advertising only obsolete formats must block promotion.
 psql_ci -c "
   UPDATE series_analysis_reader_capabilities
-  SET validation_contract_ids = '${reader_contracts}'::jsonb
+  SET artifact_schema_versions = '[2,3]'::jsonb,
+      validation_contract_ids = '[\"series-analysis-artifact-v2-full-validation-v1\",\"series-analysis-artifact-v3-full-validation-v1\"]'::jsonb
+  WHERE reader_id = 'reader-release-smoke';
+"
+if run_release_command release-promote \
+  --trigger artifact-schema-update \
+  --operation-key "${operation_key}"; then
+  echo "release promotion accepted a reader limited to legacy publication formats." >&2
+  exit 1
+fi
+
+psql_ci -c "
+  UPDATE series_analysis_reader_capabilities
+  SET artifact_schema_versions = '${reader_schemas}'::jsonb,
+      validation_contract_ids = '${reader_contracts}'::jsonb
   WHERE reader_id = 'reader-release-smoke';
 "
 
@@ -248,10 +263,26 @@ dry_run="$(run_release_command release-promote \
 grep -q '"mode":"dry_run"' <<<"${dry_run}"
 grep -q '"targetCount":2' <<<"${dry_run}"
 
+maintenance_exit_status=0
 maintenance_preview="$(run_release_command release-reconcile \
-  --operation backfill --release-id 0123456789abcdef0123456789abcdef01234567)"
-jq -e '.status == "planned" and .action == "initial_backfill" and .targetCount == 1' \
-  <<< "${maintenance_preview}" > /dev/null
+  --operation backfill --release-id 0123456789abcdef0123456789abcdef01234567)" \
+  || maintenance_exit_status=$?
+# attention_required deliberately exits 1 and adds a diagnostic on stdout. Require one report
+# and verify its expected exit status so a dependency/CLI error cannot masquerade as the guard.
+if ! jq -es --argjson exitStatus "${maintenance_exit_status}" '
+  [.[] | select(has("schemaVersion") and has("planDigest"))] |
+  select(length == 1) | .[0] |
+  if .current == .target then
+    $exitStatus == 0 and .status == "planned" and
+      .action == "initial_backfill" and .targetCount == 1
+  else
+    $exitStatus == 1 and .status == "attention_required" and
+      .reason == "promote_before_backfill"
+  end
+' <<< "${maintenance_preview}" > /dev/null; then
+  echo "backfill preview did not match the release generation or expected exit status." >&2
+  exit 1
+fi
 
 dry_counts="$(psql_ci -At -c "
   SELECT

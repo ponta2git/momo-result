@@ -120,6 +120,7 @@
 - shared UI は、意味に対応する構造、keyboard / focus、accessible name、hit target、disabled / pending、局所 feedback、component 内部の responsive arrangement を所有する。feature は業務語彙、URL / query / cache、権限、入力変換、副作用、業務状態遷移を所有し、app は route と画面 composition、shared domain は横断する業務 identity、順序、formatter を所有する。
 - shared UI へ切り出すのは、複数の現在用途を一つの小さい契約で覆える場合、または単独用途でも accessibility、制約、feedback、状態同期の重要な判断を隠せる場合に限る。名前を付けただけの wrapper、呼び出し元の判断を props へ移すだけの万能 component、将来用途だけを見込んだ schema は作らない。
 - primitive、操作 pattern、feature composition の三層で考える。feature は shared UI を組み合わせて文脈固有の操作を作り、shared UI は feature の業務 enum、API DTO、query key、文言一覧を知らない。
+- 複数画面で共有する業務 UI は `shared/matches` や `shared/heldEvents` などに置き、`shared/ui` の汎用部品へ接続する。共有されることと業務非依存であることを区別する。分析チャートのメンバー対応・分析用語は分析 feature が所有し、汎用部品にするためだけの設定 props や転送 wrapper を増やさない。依存方向は architecture の Web / Layering を参照する。
 - button、link、form control、status、notice、dialog、disclosure は shared UI とアクセシブルな primitive を優先し、機能ごとに同じ keyboard / focus / pending 挙動を手作りしない。
 - component を置く親 composition は、grid / flex 内の位置、並び順、外側の幅・高さ・余白、sibling 間の gap / divider、画面幅に応じた伸縮と積み替えを所有する。再利用 component は、内容または親が定めた slot に従って縮小・伸長できることを既定とし、特定の利用箇所だけを理由に autonomous な固定幅、固定高、外 margin、隣接 separator を持たない。page frame、dialog viewport、局所 scroll viewport など、利用可能領域を定義すること自体が責務の layout primitive はこの限りではない。
 - shared UI は、keyboard / focus と一体の最小 hit target、control の内部 padding / line-height、icon・marker の寸法、画像・図表で意味を保つ aspect ratio、内部 content scroller など、部品の契約を壊さない intrinsic constraint を所有する。`w-full` / `h-full` は親が定めた slot を消費する指定として使ってよいが、それだけで親の寸法責務を部品へ戻したとは扱わない。consumer は原則として外側 container で寸法を指定し、`className` による上書きで intrinsic constraint や internal boundary を壊さない。
@@ -143,6 +144,7 @@
 - filter の見た目と操作契約は横断化してよいが、URL、query、cache、cursor、候補間の依存、既定値、更新文言は feature が所有する。横断 component に filter schema や query 実装を持たせない。
 - sort、page、selection、filter は現在状態が読み取れ、影響領域へ持続的に反映されること。選択中 control の再実行で duplicate load や flicker を起こさず、表示範囲を変えても対象 identity と戻り先を失わせない。
 - 取得済み内容を保持したまま filter、sort、page を変える場合は、表示中の scope と要求中の scope を区別して知らせる。同じ scope の更新では安全な操作を保ち、scope 変更により対象を誤認する領域だけを一時的に制約する。見た目だけを残して支援技術から無条件に隠すことを「保持」としない。
+- 描画を遅延する場合も入力・選択の反応は即時に返し、表示中の内容と見出し・対象を一致させる。待機は共通の pending / stale 表示へ接続し、単なる描画の追従に専用のアニメーション、固定待機時間、成功通知を加えない。新たな取得や重い描画を伴う tab は focus 移動と activation を分け、矢印で移動し Enter / Space で選択する。
 
 ### 3.3 移動・実行・確定
 

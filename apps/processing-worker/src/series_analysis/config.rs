@@ -7,7 +7,7 @@ use std::{
 
 use thiserror::Error;
 
-use crate::cgroup::ChildCgroup;
+use crate::{cgroup::ChildCgroup, pel_recovery::MAXIMUM_READ_BLOCK};
 
 const PUBLICATION_MODE_ENV: &str = "MOMO_ANALYSIS_PUBLICATION_MODE";
 const OUTBOX_LISTENER_DATABASE_URL_ENV: &str = "MOMO_ANALYSIS_OUTBOX_LISTENER_DATABASE_URL";
@@ -75,6 +75,8 @@ pub(crate) enum AnalysisConfigError {
     MissingRuntime { name: &'static str },
     #[error("analysis worker lease, heartbeat, and shutdown intervals are unsafe")]
     UnsafeLeaseRelationship,
+    #[error("analysis Redis read block exceeds the shutdown wait bound")]
+    UnsafeRedisBlock,
     #[error("{name} contains an unsafe runtime identifier")]
     UnsafeRuntimeIdentifier { name: &'static str },
     #[error("analysis temporary root must be a dedicated absolute path")]
@@ -178,8 +180,8 @@ impl AnalysisConsumerConfig {
         if required_margin.is_none_or(|required| required >= lease_duration) {
             return Err(AnalysisConfigError::UnsafeLeaseRelationship);
         }
-        if redis_block > heartbeat_interval {
-            return Err(AnalysisConfigError::UnsafeLeaseRelationship);
+        if redis_block > MAXIMUM_READ_BLOCK {
+            return Err(AnalysisConfigError::UnsafeRedisBlock);
         }
         let redis_stream = env::var("MOMO_REDIS_ANALYSIS_STREAM")
             .unwrap_or_else(|_| String::from("momo:analysis:jobs"));

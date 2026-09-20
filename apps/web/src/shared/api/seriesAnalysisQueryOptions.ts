@@ -16,7 +16,7 @@ import type {
   SeriesAnalysisQuery,
 } from "@/shared/api/seriesAnalysis";
 
-// Artifact IDs address immutable payloads; explicit refresh still bypasses staleTime.
+// Cache the immutable calculation payloads until explicit refresh or display-metadata invalidation.
 const immutableArtifactStaleTime = Number.POSITIVE_INFINITY;
 
 export function seriesAnalysisOptionsQueryOptions() {
@@ -96,7 +96,8 @@ export function seriesAnalysisMatchContextQueryOptions(
     },
     enabled: enabled && query !== undefined,
     retry: false,
-    staleTime: immutableArtifactStaleTime,
+    // Inclusion also depends on the current match revision/scope, even when the artifact is unchanged.
+    // Use the live-query freshness policy; match writes reset this resource explicitly.
   });
 }
 

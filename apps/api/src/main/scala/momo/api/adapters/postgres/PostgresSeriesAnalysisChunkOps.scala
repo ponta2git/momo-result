@@ -7,6 +7,7 @@ import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.config.SeriesAnalysisReadConfig
+import momo.api.contracts.seriesanalysis.SeriesAnalysisArtifactContract
 import momo.api.domain.*
 import momo.api.domain.ids.{GameTitleId, MapMasterId, MatchId, SeasonMasterId}
 import momo.api.errors.AppError
@@ -113,10 +114,10 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
      AND a.id IN (s.current_artifact_id, s.previous_artifact_id)
   """
 
-  private val readableContract: Fragment = fr"(" ++
-    SeriesAnalysisArtifactSupport.ReadableContracts.toList.map { case (version, id) =>
-      fr"(a.artifact_schema_version = $version AND a.validation_contract_id = $id)"
-    }.intercalate(fr"OR") ++ fr")"
+  private val readableContract: Fragment = fr"""
+    a.artifact_schema_version = ${SeriesAnalysisArtifactContract.ArtifactSchemaVersion}
+    AND a.validation_contract_id = ${SeriesAnalysisArtifactContract.ValidationContractId}
+  """
 
   private def chunkJoin(request: SeriesAnalysisChunkRequest): Fragment = request.kind match
     case SeriesAnalysisChunkKind.Aggregate => fr"""
@@ -159,8 +160,7 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
             val exclusion =
               if current.gameTitleId != request.gameTitleId then
                 Some(SeriesAnalysisMatchContextExclusion.MatchChangedSinceArtifact)
-              else if !PostgresSeriesAnalysisScopeOps.contains(
-                  request.scope,
+              else if !request.scope.contains(
                   current.seasonMasterId,
                   current.mapMasterId,
                 )

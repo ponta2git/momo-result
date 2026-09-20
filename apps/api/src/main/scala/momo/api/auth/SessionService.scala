@@ -2,12 +2,13 @@ package momo.api.auth
 
 import java.time.Instant
 
+import scala.concurrent.duration.FiniteDuration
+
 import cats.data.EitherT
 import cats.effect.Sync
 import cats.effect.std.SecureRandom
 import cats.syntax.all.*
 
-import momo.api.config.AuthConfig
 import momo.api.domain.LoginAccount
 import momo.api.errors.AppError
 import momo.api.repositories.{
@@ -27,16 +28,16 @@ final case class AuthenticatedSession(
 
 final class SessionService[F[_]: Sync: SecureRandom](
     sessions: AppSessionsRepository[F],
-    config: AuthConfig,
+    sessionTtl: FiniteDuration,
     now: F[Instant],
     sessionAccounts: SessionAccountLookup[F],
 ):
   def this(
       sessions: AppSessionsRepository[F],
       accounts: LoginAccountsRepository[F],
-      config: AuthConfig,
+      sessionTtl: FiniteDuration,
       now: F[Instant],
-  ) = this(sessions, config, now, SessionAccountLookup.fromRepositories(sessions, accounts))
+  ) = this(sessions, sessionTtl, now, SessionAccountLookup.fromRepositories(sessions, accounts))
 
   def create(account: LoginAccount): F[CreatedSession] =
     for
@@ -52,7 +53,7 @@ final class SessionService[F[_]: Sync: SecureRandom](
         csrfSecretHash = csrfHash,
         createdAt = current,
         lastSeenAt = current,
-        expiresAt = current.plusSeconds(config.sessionTtl.toSeconds),
+        expiresAt = current.plusSeconds(sessionTtl.toSeconds),
       )
       _ <- sessions.upsert(session)
     yield CreatedSession(SessionCookieCodec.encode(SessionCookieTokens(id, csrf)))
@@ -72,7 +73,7 @@ final class SessionService[F[_]: Sync: SecureRandom](
       )
       _ <- EitherT(rejectExpired(session, current))
       _ <- EitherT.cond[F](csrfMatches, (), AppError.Unauthorized())
-      account <- EitherT(loadEnabledAccount(session, sessionAccount.account.some))
+      account <- EitherT(requireEnabledAccount(session, sessionAccount.account))
       authenticated <-
         EitherT.liftF(completeAuthentication(session, account, tokens.csrfToken, current))
     yield authenticated).value
@@ -83,15 +84,14 @@ final class SessionService[F[_]: Sync: SecureRandom](
     if session.expiresAt.isAfter(current) then ().asRight[AppError].pure[F]
     else sessions.delete(session.idHash).as(AppError.Unauthorized("Session has expired.").asLeft)
 
-  private def loadEnabledAccount(
+  private def requireEnabledAccount(
       session: AppSession,
-      loadedAccount: Option[LoginAccount],
-  ): F[Either[AppError, LoginAccount]] = loadedAccount match
-    case None => sessions.delete(session.idHash).as(AppError.Unauthorized().asLeft)
-    case Some(account) if !account.loginEnabled =>
+      account: LoginAccount,
+  ): F[Either[AppError, LoginAccount]] =
+    if account.loginEnabled then account.asRight[AppError].pure[F]
+    else
       sessions.delete(session.idHash)
         .as(AppError.Forbidden("This account is not allowed to log in.").asLeft)
-    case Some(account) => account.asRight[AppError].pure[F]
 
   private def completeAuthentication(
       session: AppSession,
@@ -99,23 +99,15 @@ final class SessionService[F[_]: Sync: SecureRandom](
       csrfToken: String,
       current: Instant,
   ): F[AuthenticatedSession] =
-    val accountAuth = authenticatedAccount(account)
+    val accountAuth = AuthenticatedAccount.from(account)
     if shouldRenew(session, current) then
       val renewed = session.copy(
         lastSeenAt = current,
-        expiresAt = current.plusSeconds(config.sessionTtl.toSeconds),
+        expiresAt = current.plusSeconds(sessionTtl.toSeconds),
       )
       sessions.renew(renewed.idHash, renewed.lastSeenAt, renewed.expiresAt)
         .as(AuthenticatedSession(accountAuth, renewed, csrfToken))
     else AuthenticatedSession(accountAuth, session, csrfToken).pure[F]
 
-  private def authenticatedAccount(account: LoginAccount): AuthenticatedAccount =
-    AuthenticatedAccount(
-      account.id,
-      account.displayName,
-      account.isAdmin,
-      account.playerMemberId,
-    )
-
   private def shouldRenew(session: AppSession, current: Instant): Boolean = current
-    .isAfter(session.expiresAt.minusSeconds(config.sessionTtl.toSeconds / 2L))
+    .isAfter(session.expiresAt.minusSeconds(sessionTtl.toSeconds / 2L))

@@ -1,38 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useBeforeUnload, useBlocker, useNavigate } from "react-router-dom";
 
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
+import type { OcrSubmissionPlan } from "@/features/ocrCapture/ocrSubmissionPlan";
 import type {
   OcrSubmissionProgress,
   OcrSubmissionResult,
 } from "@/features/ocrCapture/ocrSubmissionWorkflow";
-import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import type { OcrCaptureMutations } from "@/features/ocrCapture/useOcrCaptureMutations";
-import type { HeldEventResponse } from "@/shared/api/heldEvents";
-import { formatApiError } from "@/shared/api/problemDetails";
+import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { showToast } from "@/shared/ui/feedback/Toast";
-
-type SelectedGameTitle = {
-  id: string;
-  layoutFamily?: string | null;
-  name?: string;
-};
-
-export type OcrSubmissionPlan = {
-  selectedGameTitle: SelectedGameTitle | undefined;
-  selectedHeldEvent: HeldEventResponse | undefined;
-  selectedSlotLabels: string[];
-  setup: SetupFormValues;
-  setupSummary: {
-    gameTitle: string;
-    heldEvent: string;
-    map: string;
-    matchNo: string;
-    owner: string;
-    season: string;
-  };
-  slots: CaptureSlotState[];
-};
 
 export type OcrStartDialogState =
   | { status: "closed" }
@@ -48,8 +25,7 @@ export type OcrStartDialogState =
       plan: OcrSubmissionPlan;
       status: "partial_result";
     }
-  | { message: string; plan: OcrSubmissionPlan; status: "recoverable_failure" }
-  | { message: string; plan: OcrSubmissionPlan; status: "handoff_required" };
+  | { canEdit: boolean; message: string; plan: OcrSubmissionPlan; status: "recoverable_failure" };
 
 const incompleteMatchesUrl = "/matches?status=incomplete&sort=updated_desc";
 
@@ -67,9 +43,10 @@ export function useOcrStartFlow({
   updateSlot: (slot: CaptureSlotState) => void;
 }) {
   const navigate = useNavigate();
+  const [isNavigating, startNavigation] = useTransition();
   const [state, setState] = useState<OcrStartDialogState>({ status: "closed" });
   const intentionalNavigationRef = useRef(false);
-  const locked = state.status === "submitting";
+  const locked = state.status === "submitting" || isNavigating;
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
       locked &&
@@ -80,7 +57,7 @@ export function useOcrStartFlow({
   useBeforeUnload(
     useCallback(
       (event) => {
-        if (!locked) return;
+        if (!locked || intentionalNavigationRef.current) return;
         event.preventDefault();
         event.returnValue = "";
       },
@@ -94,26 +71,24 @@ export function useOcrStartFlow({
     }
   }, [blocker, locked]);
 
-  async function submitPlan(plan: OcrSubmissionPlan) {
+  async function submitPlan(plan: OcrSubmissionPlan, noUncertainAcceptance: boolean) {
     intentionalNavigationRef.current = false;
     setState({ plan, progress: null, status: "submitting" });
 
     let result: OcrSubmissionResult | undefined;
     try {
       result = await submission.submit({
+        plan,
         onProgress: (progress) => {
           setState((current) =>
             current.status === "submitting" ? { ...current, progress } : current,
           );
         },
-        selectedGameTitle: plan.selectedGameTitle,
-        selectedHeldEvent: plan.selectedHeldEvent,
-        setup: plan.setup,
-        slots: plan.slots,
         updateSlot,
       });
     } catch (error) {
       setState({
+        canEdit: false,
         message: formatApiError(error, "読み取りの準備中に問題が発生しました"),
         plan,
         status: "recoverable_failure",
@@ -122,21 +97,20 @@ export function useOcrStartFlow({
     }
 
     if (!result) return;
-    handleResult(plan, result);
+    handleResult(plan, result, noUncertainAcceptance);
   }
 
-  function handleResult(plan: OcrSubmissionPlan, result: OcrSubmissionResult) {
+  function handleResult(
+    plan: OcrSubmissionPlan,
+    result: OcrSubmissionResult,
+    noUncertainAcceptance: boolean,
+  ) {
     if (result.status === "started") {
-      intentionalNavigationRef.current = true;
-      if (blocker.state === "blocked") {
-        blocker.reset();
-      }
-      setState({ status: "closed" });
       showToast({
         title: `${result.createdJobCount}件の読み取りを開始しました。`,
         tone: "success",
       });
-      navigate(ocrResultDestination(plan), { replace: true });
+      navigateToResult(ocrResultDestination(plan));
       return;
     }
     if (result.status === "partial_started") {
@@ -148,17 +122,6 @@ export function useOcrStartFlow({
       });
       return;
     }
-    if (result.status === "failed_cleanup_failed") {
-      setState({
-        message: formatApiError(
-          result.cleanupError,
-          "確定前の記録を取り消せませんでした。重複操作を避け、試合一覧で状態を確認してください",
-        ),
-        plan,
-        status: "handoff_required",
-      });
-      return;
-    }
 
     const message =
       result.status === "draft_create_failed"
@@ -167,37 +130,73 @@ export function useOcrStartFlow({
           ? result.message
           : result.status === "empty"
             ? "読み取る画像がありません。画像を確認してから、もう一度お試しください。"
-            : "画像を送信できませんでした。確定前の記録は取り消しました。";
-    setState({ message, plan, status: "recoverable_failure" });
+            : "送信の完了を確認できませんでした。同じ内容で再試行すると、受け付け済みの処理から再開します。";
+    const canEdit =
+      noUncertainAcceptance &&
+      (result.status === "invalid" ||
+        result.status === "empty" ||
+        (result.status === "draft_create_failed" && isDefinitiveRejection(result.error)));
+    setState({ canEdit, message, plan, status: "recoverable_failure" });
   }
 
   async function confirm() {
-    if (state.status !== "confirming" && state.status !== "recoverable_failure") return;
-    await submitPlan(state.plan);
+    if (
+      state.status !== "confirming" &&
+      state.status !== "recoverable_failure" &&
+      state.status !== "partial_result"
+    )
+      return;
+    // A later rejected retry cannot disprove that an earlier request was accepted.
+    await submitPlan(
+      state.plan,
+      state.status === "confirming" || (state.status === "recoverable_failure" && state.canEdit),
+    );
   }
 
   function close() {
-    if (state.status === "confirming" || state.status === "recoverable_failure") {
+    if (
+      state.status === "confirming" ||
+      (state.status === "recoverable_failure" && state.canEdit)
+    ) {
       setState({ status: "closed" });
     }
   }
 
-  function viewMatches() {
+  function navigateToResult(destination: string) {
+    if (isNavigating) return;
     intentionalNavigationRef.current = true;
     if (blocker.state === "blocked") {
       blocker.reset();
     }
-    const destination = "plan" in state ? ocrResultDestination(state.plan) : incompleteMatchesUrl;
-    setState({ status: "closed" });
-    navigate(destination, { replace: true });
+    startNavigation(async () => {
+      setState({ status: "closed" });
+      await navigate(destination, { replace: true });
+    });
+  }
+
+  function viewMatches() {
+    navigateToResult("plan" in state ? ocrResultDestination(state.plan) : incompleteMatchesUrl);
   }
 
   return {
     close,
     confirm,
     locked,
+    isNavigating,
     open: (plan: OcrSubmissionPlan) => setState({ plan, status: "confirming" }),
     state,
     viewMatches,
   };
+}
+
+function isDefinitiveRejection(error: unknown): boolean {
+  const { status } = normalizeUnknownApiError(error);
+  return (
+    status !== undefined &&
+    status >= 400 &&
+    status < 500 &&
+    status !== 408 &&
+    status !== 409 &&
+    status !== 429
+  );
 }

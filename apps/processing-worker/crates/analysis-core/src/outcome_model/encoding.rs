@@ -46,6 +46,9 @@ pub(super) fn encode(
                 .get(row.member_id.as_str())
                 .copied()
                 .ok_or(())?;
+            if member_index != row_index {
+                return Err(());
+            }
             let member_adjustment = PLAY_ORDER_COUNT.checked_add(member_index).ok_or(())?;
             *adjustments.get_mut(member_adjustment).ok_or(())? = 1.0;
             encoded_rows.push(EncodedRow {
@@ -65,7 +68,7 @@ pub(super) fn encode(
                 match_id: Arc::from(first.match_id.as_str()),
                 match_no_in_event: first.match_no_in_event,
                 played_at: Arc::from(first.played_at.as_str()),
-                rows: encoded_rows,
+                rows: encoded_rows.try_into().map_err(|_invalid_count| ())?,
             });
     }
     let mut events = event_matches
@@ -134,67 +137,67 @@ fn relative_rank(values: &[f64], target_index: usize) -> Result<f64, ()> {
     Ok((2.5 - average_rank) / 1.5)
 }
 
+/// Emits comparisons without retaining a second collection when callers only need observations.
 pub(super) fn pair_records<'a>(
     events: impl IntoIterator<Item = &'a EncodedEvent>,
-) -> Result<Vec<PairRecord>, ()> {
-    pair_records_with(events, |_, _, row, signal_index| {
-        row.signals.get(signal_index).copied().ok_or(())
-    })
+) -> impl Iterator<Item = PairRecord> {
+    events
+        .into_iter()
+        .enumerate()
+        .flat_map(|(event_index, event)| {
+            event
+                .matches
+                .iter()
+                .enumerate()
+                .flat_map(move |(match_index, rank_match)| {
+                    rank_match
+                        .rows
+                        .iter()
+                        .enumerate()
+                        .flat_map(move |(left_index, left)| {
+                            rank_match
+                                .rows
+                                .iter()
+                                .skip(left_index + 1)
+                                .map(move |right| {
+                                    let outcome = f64::from(left.source.rank < right.source.rank);
+                                    PairRecord {
+                                        match_key: MatchKey {
+                                            event_index,
+                                            match_index,
+                                        },
+                                        left_member_index: left.source.member_index,
+                                        right_member_index: right.source.member_index,
+                                        full: Observation {
+                                            features: difference(
+                                                &full_features(left),
+                                                &full_features(right),
+                                            ),
+                                            outcome,
+                                        },
+                                        baseline: Observation {
+                                            features: difference(
+                                                &left.adjustments,
+                                                &right.adjustments,
+                                            ),
+                                            outcome,
+                                        },
+                                    }
+                                })
+                        })
+                })
+        })
 }
 
-pub(super) fn pair_records_with<'a>(
-    events: impl IntoIterator<Item = &'a EncodedEvent>,
-    signal_value: impl Fn(usize, &EncodedMatch, &EncodedRow, usize) -> Result<f64, ()>,
-) -> Result<Vec<PairRecord>, ()> {
-    let mut records = Vec::new();
-    for (event_index, event) in events.into_iter().enumerate() {
-        for (match_index, rank_match) in event.matches.iter().enumerate() {
-            let match_key = MatchKey {
-                event_index,
-                match_index,
-            };
-            for (left_index, left) in rank_match.rows.iter().enumerate() {
-                for right in rank_match.rows.iter().skip(left_index + 1) {
-                    let outcome = f64::from(left.source.rank < right.source.rank);
-                    let left_features =
-                        full_features(event_index, rank_match, left, &signal_value)?;
-                    let right_features =
-                        full_features(event_index, rank_match, right, &signal_value)?;
-                    records.push(PairRecord {
-                        match_key,
-                        left_member_index: left.source.member_index,
-                        right_member_index: right.source.member_index,
-                        full: Observation {
-                            features: difference(&left_features, &right_features),
-                            outcome,
-                        },
-                        baseline: Observation {
-                            features: difference(&left.adjustments, &right.adjustments),
-                            outcome,
-                        },
-                    });
-                }
-            }
-        }
-    }
-    Ok(records)
-}
-
-fn full_features(
-    event_index: usize,
-    rank_match: &EncodedMatch,
-    row: &EncodedRow,
-    signal_value: &impl Fn(usize, &EncodedMatch, &EncodedRow, usize) -> Result<f64, ()>,
-) -> Result<[f64; FULL_FEATURE_COUNT], ()> {
+fn full_features(row: &EncodedRow) -> [f64; FULL_FEATURE_COUNT] {
     let mut features = [0.0; FULL_FEATURE_COUNT];
-    for (index, target) in features.iter_mut().enumerate() {
-        if index < SIGNAL_COUNT {
-            *target = signal_value(event_index, rank_match, row, index)?;
-        } else {
-            *target = *row.adjustments.get(index - SIGNAL_COUNT).ok_or(())?;
-        }
+    for (target, value) in features
+        .iter_mut()
+        .zip(row.signals.iter().chain(&row.adjustments))
+    {
+        *target = *value;
     }
-    Ok(features)
+    features
 }
 
 fn difference<const N: usize>(left: &[f64; N], right: &[f64; N]) -> [f64; N] {

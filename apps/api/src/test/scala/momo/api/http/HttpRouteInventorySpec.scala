@@ -9,7 +9,7 @@ import momo.api.config.{AppConfig, AppEnv}
 import momo.api.endpoints.ApiEndpoints
 
 final class HttpRouteInventorySpec extends MomoCatsEffectSuite:
-  test("each runtime environment registers every documented method and path exactly once"):
+  test("each runtime registers documented endpoints exactly once"):
     for
       _ <- assertRuntimeInventory(AppEnv.Test, "http-route-inventory-test")
       _ <- assertRuntimeInventory(AppEnv.Prod, "http-route-inventory-prod")

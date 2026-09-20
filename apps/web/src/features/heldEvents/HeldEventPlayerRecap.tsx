@@ -1,8 +1,8 @@
 import type { HeldEventPlayerRecap as PlayerRecap } from "@/features/heldEvents/heldEventDetailViewModel";
 import { formatAverageRank } from "@/features/heldEvents/heldEventDetailViewModel";
+import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
+import { RankTrail } from "@/shared/matches/RankBadge";
 import { cn } from "@/shared/ui/cn";
-import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
-import { RankTrail } from "@/shared/ui/rank/RankBadge";
 import { contentText } from "@/shared/ui/typography";
 
 export function HeldEventPlayerRecap({ recaps }: { recaps: PlayerRecap[] }) {

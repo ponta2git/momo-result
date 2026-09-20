@@ -1,5 +1,7 @@
 # オーナー別戦績比較 実装計画
 
+履歴注記（2026-09-19）: 本書は当時の計画・レビュー記録。利用者の判断により世代互換コードは撤去した。現行の契約と単一世代への切替方針は [実装仕様](series-owner-comparison-spec.md) と [分析バッチ](requirements/series-analysis-batch.md) を参照する。
+
 対象: [MOM-3](https://linear.app/ponta/issue/MOM-3)。状態: **実装済み・隔離環境で主要受入を検証済み**（2026-09-18）。公開前に残る確認は7節に記す。
 
 本書は [要求仕様](requirements/series-owner-comparison.md) と [実装仕様](series-owner-comparison-spec.md) を、変更単位・依存関係・完了証拠へ落とし込む。指標の意味と受入条件は要求仕様、payload・URL・移行契約は実装仕様を正本とし、ここで再定義しない。[敵対的レビュー](series-owner-comparison-review.md#5-実装仕様の敵対的レビュー) の指摘も各工程に割り当てる。

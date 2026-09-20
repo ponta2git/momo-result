@@ -99,7 +99,7 @@ object PostgresMatches extends PostgresMatchesReadSupport:
       (selectMatch ++ fr"WHERE id = $id").query[MatchRow].option.flatMap {
         case None => Option.empty[MatchRecord].pure[ConnectionIO]
         case Some(row) => loadPlayersBatch(List(id))
-            .flatMap(byMid => byMid.get(id).traverse(p => toRecord(row, p)))
+            .flatMap(byMid => byMid.get(id).traverse(p => toRecord(row, p).liftTo[ConnectionIO]))
       }
 
     override def list(filter: MatchesRepository.ListFilter): ConnectionIO[List[MatchRecord]] =
@@ -115,7 +115,8 @@ object PostgresMatches extends PostgresMatchesReadSupport:
         rows <- (selectMatch ++ where ++ fr"ORDER BY played_at DESC, created_at DESC" ++ limit)
           .query[MatchRow].to[List]
         byMid <- loadPlayersBatch(rows.map(_.id))
-        records <- rows.traverse(r => byMid.get(r.id).traverse(p => toRecord(r, p)))
+        records <-
+          rows.traverse(r => byMid.get(r.id).traverse(p => toRecord(r, p).liftTo[ConnectionIO]))
       yield records.flatten
 
     override def listByHeldEvent(heldEventId: HeldEventId): ConnectionIO[List[MatchRecord]] =
@@ -124,7 +125,8 @@ object PostgresMatches extends PostgresMatchesReadSupport:
         (selectMatch ++ fr"WHERE held_event_id = $heldEventId" ++ fr"ORDER BY match_no_in_event")
           .query[MatchRow].to[List]
         byMid <- loadPlayersBatch(rows.map(_.id))
-        records <- rows.traverse(r => byMid.get(r.id).traverse(p => toRecord(r, p)))
+        records <-
+          rows.traverse(r => byMid.get(r.id).traverse(p => toRecord(r, p).liftTo[ConnectionIO]))
       yield records.flatten
 
     override def existsMatchNo(
@@ -182,5 +184,18 @@ final class PostgresMatchesRepository[F[_]: MonadCancelThrow](transactor: Transa
   private val delegate: MatchesRepository[F] = MatchesRepository
     .fromAlg(PostgresMatches.alg, transactor.trans)
 
-  export delegate.*
+  export delegate.{update, delete, existsMatchNo, existsMatchNoExcept, statsByHeldEvents}
+
+  override def find(id: MatchId): F[Option[MatchRecord]] =
+    readSnapshot(PostgresMatches.alg.find(id))
+
+  override def list(filter: MatchesRepository.ListFilter): F[List[MatchRecord]] =
+    readSnapshot(PostgresMatches.alg.list(filter))
+
+  override def listByHeldEvent(id: HeldEventId): F[List[MatchRecord]] =
+    readSnapshot(PostgresMatches.alg.listByHeldEvent(id))
+
+  private def readSnapshot[A](read: ConnectionIO[A]): F[A] =
+    (sql"SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY".update.run *> read)
+      .transact(transactor)
 end PostgresMatchesRepository

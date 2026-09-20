@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import { useCallback, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useDeferredValue, useMemo, useState } from "react";
 
 import {
   displaySeriesAnalysisBundleWithoutContext,
@@ -18,7 +18,6 @@ import type {
   SeriesAnalysisViewId,
 } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { seriesAnalysisQueryFromState } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
-import { isAnalysisClientUpgradeRequired } from "@/shared/api/problemDetails";
 import {
   isInitialQueryLoading,
   shouldShowQueryError,
@@ -32,7 +31,7 @@ import {
   seriesAnalysisStatusQueryOptions,
 } from "@/shared/api/seriesAnalysisQueryOptions";
 import { useAnalysisArtifactRecovery } from "@/shared/api/useAnalysisArtifactRecovery";
-import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
+import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 /**
  * Owns the complete artifact lifecycle: active query selection, stale display retention,
@@ -47,6 +46,7 @@ export function useSeriesAnalysisResource({
   deferredState: SeriesAnalysisUrlState;
   state: SeriesAnalysisUrlState;
 }) {
+  const queryClient = useQueryClient();
   const [lastSuccessfulBundle, setLastSuccessfulBundle] = useState<
     SeriesAnalysisDisplayBundle | undefined
   >();
@@ -163,7 +163,13 @@ export function useSeriesAnalysisResource({
     [activeView, refetchAggregate, refetchReview],
   );
   const currentDisplayBundle =
-    bundleResolution.kind === "ready" ? bundleResolution.value : lastSuccessfulBundle;
+    bundleResolution.kind === "ready" &&
+    !sameSeriesAnalysisDisplayBundle(lastSuccessfulBundle, bundleResolution.value)
+      ? bundleResolution.value
+      : lastSuccessfulBundle;
+  // Keep controls urgent while a new immutable artifact/view renders in the background.
+  const displayedBundle = useDeferredValue(currentDisplayBundle);
+  const displaySettling = displayedBundle !== currentDisplayBundle;
 
   useAnalysisArtifactRecovery({
     artifactId: activeQueryParams?.artifactId,
@@ -187,38 +193,66 @@ export function useSeriesAnalysisResource({
     activeFetching || (matchContextQueryParams !== undefined && matchContextFetching);
   const displayMatchesActivePurpose =
     activeView === "review"
-      ? currentDisplayBundle?.kind === "review"
-      : currentDisplayBundle?.kind === "analysis";
+      ? displayedBundle?.kind === "review"
+      : displayedBundle?.kind === "analysis";
   const displayedResource =
-    currentDisplayBundle?.kind === "review"
-      ? currentDisplayBundle.review
-      : currentDisplayBundle?.aggregate;
+    displayedBundle?.kind === "review" ? displayedBundle.review : displayedBundle?.aggregate;
   const displayMatchesCurrentScope = matchesSeriesAnalysisScope(displayedResource, state);
   const scopeSettling =
     seriesAnalysisScopeSignature(state) !== seriesAnalysisScopeSignature(deferredState);
   const visibleBundle =
-    (displayMatchesActivePurpose && displayMatchesCurrentScope) || bundleFetching || scopeSettling
-      ? currentDisplayBundle
+    (displayMatchesActivePurpose && displayMatchesCurrentScope) ||
+    bundleFetching ||
+    scopeSettling ||
+    displaySettling
+      ? displayedBundle
       : undefined;
   const resourceShielded = shouldShowStaleShield({
     hasVisibleData: visibleBundle !== undefined,
     isPlaceholderData: activePlaceholder,
     isRefreshing: bundleFetching && visibleBundle !== undefined,
-    isSettling: scopeSettling || (bundleResolution.kind === "waiting" && bundleFetching),
+    isSettling:
+      displaySettling || scopeSettling || (bundleResolution.kind === "waiting" && bundleFetching),
   });
   const visibleResource =
     visibleBundle?.kind === "review" ? visibleBundle.review : visibleBundle?.aggregate;
 
   const refresh = useCallback(() => {
-    void refetchStatus();
-    if (activeQueryParams) void refetchActive();
-    if (matchContextQueryParams) void refetchMatchContext();
+    if (!state.gameTitleId) return;
+    void refetchStatus({ cancelRefetch: false }).then((result) => {
+      if (result.isError || result.data?.currentArtifact?.artifactId !== publishedArtifactId)
+        return;
+      // A new publication selects its own queries. Only refresh the same publication's live
+      // overlays, using explicit active keys so navigation/unmount cannot retarget this continuation.
+      const keys = [
+        activeQueryParams
+          ? activeView === "review"
+            ? seriesAnalysisKeys.review(activeQueryParams)
+            : seriesAnalysisKeys.aggregate(activeQueryParams)
+          : undefined,
+        matchContextQueryParams
+          ? seriesAnalysisKeys.matchContext(matchContextQueryParams)
+          : undefined,
+      ];
+      return Promise.all(
+        keys.map((queryKey) =>
+          queryKey
+            ? queryClient.refetchQueries(
+                { queryKey, exact: true, type: "active" },
+                { cancelRefetch: false },
+              )
+            : undefined,
+        ),
+      );
+    });
   }, [
     activeQueryParams,
+    activeView,
     matchContextQueryParams,
-    refetchActive,
-    refetchMatchContext,
+    publishedArtifactId,
+    queryClient,
     refetchStatus,
+    state.gameTitleId,
   ]);
 
   const resourceFailed = useRetryNotice(
@@ -234,9 +268,6 @@ export function useSeriesAnalysisResource({
 
   return {
     candidateArtifactId,
-    clientUpgradeRequired: [statusError, activeError, matchContextError].some(
-      isAnalysisClientUpgradeRequired,
-    ),
     focus: {
       data: visibleBundle?.matchContext,
       hasError: matchContextQueryParams !== undefined && matchContextFailed,
@@ -266,7 +297,8 @@ export function useSeriesAnalysisResource({
           isFetching: activeFetching,
           isLoading: activeLoading,
         }) ||
-        (!candidateResource && activeFetching),
+        (!candidateResource && activeFetching) ||
+        (displaySettling && displayedBundle === undefined),
       refreshing: activeFetching && activeData !== undefined,
       shielded: resourceShielded,
     },

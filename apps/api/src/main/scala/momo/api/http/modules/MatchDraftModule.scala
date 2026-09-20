@@ -10,7 +10,7 @@ import sttp.tapir.server.ServerEndpoint
 
 import momo.api.auth.RateLimiter
 import momo.api.domain.RequestId
-import momo.api.domain.ids.MatchDraftId
+import momo.api.domain.ids.{ImageId, MatchDraftId}
 import momo.api.endpoints.codec.{BoundaryId, MatchDraftCodec}
 import momo.api.endpoints.{
   CancelMatchDraftResponse,
@@ -18,6 +18,7 @@ import momo.api.endpoints.{
   MatchDraftDetailResponse,
   MatchDraftEndpoints,
   MatchDraftResponse,
+  MatchDraftReviewResponse,
   MatchDraftSourceImageListResponse,
   MatchDraftSourceImageResponse,
   ProblemDetails,
@@ -36,6 +37,7 @@ import momo.api.usecases.matchdrafts.{
   CancelMatchDraft,
   CreateMatchDraft,
   GetMatchDraft,
+  GetMatchDraftReview,
   GetMatchDraftSourceImages,
   UpdateMatchDraft
 }
@@ -46,6 +48,7 @@ object MatchDraftModule:
   def routes[F[_]: Async](
       createMatchDraft: CreateMatchDraft[F],
       getMatchDraft: GetMatchDraft[F],
+      getMatchDraftReview: GetMatchDraftReview[F],
       updateMatchDraft: UpdateMatchDraft[F],
       cancelMatchDraft: CancelMatchDraft[F],
       getMatchDraftSourceImages: GetMatchDraftSourceImages[F],
@@ -64,7 +67,7 @@ object MatchDraftModule:
             request,
             nowF,
             security.decode(
-              MatchDraftCodec.parseInstantOption(request.playedAt)
+              MatchDraftCodec.parseInstantOption("playedAt", request.playedAt)
                 .flatMap(MatchDraftCodec.toCreateCommand(request, _))
             )(command =>
               security.respond(
@@ -87,7 +90,7 @@ object MatchDraftModule:
             security.decode(
               for
                 id <- BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString)
-                playedAt <- MatchDraftCodec.parseInstantOption(request.playedAt)
+                playedAt <- MatchDraftCodec.parseInstantOption("playedAt", request.playedAt)
                 command <- MatchDraftCodec.toUpdateCommand(request, playedAt)
               yield (id, command)
             ) { case (id, command) =>
@@ -100,6 +103,13 @@ object MatchDraftModule:
       security.decode(
         BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString)
       )(id => security.respond(getMatchDraft.run(id))(MatchDraftDetailResponse.from))
+    },
+    SecuredEndpoint.readLogic(security, MatchDraftEndpoints.review) { _ => draftId =>
+      security.decode(BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString))(id =>
+        security.respond(getMatchDraftReview.run(id).map(_.flatMap(MatchDraftReviewResponse.from)))(
+          identity
+        )
+      )
     },
     SecuredEndpoint.mutationLogic(security, MatchDraftEndpoints.cancel) { member =>
       {
@@ -123,7 +133,7 @@ object MatchDraftModule:
     SecuredEndpoint.readLogic(security, MatchDraftEndpoints.listSourceImages) { _ => draftId =>
       security.decode(BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString))(id =>
         security.respond(getMatchDraftSourceImages.list(id))(items =>
-          MatchDraftSourceImageListResponse(items.map(MatchDraftSourceImageResponse.from))
+          MatchDraftSourceImageListResponse(items.map(MatchDraftSourceImageResponse.from(id, _)))
         )
       )
     },
@@ -135,9 +145,12 @@ object MatchDraftModule:
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Fs2Streams[F], F]] = List(
     SecuredEndpoint.readLogic(security, MatchDraftEndpoints.downloadSourceImagesStream[F]) {
-      member => (draftId, rawRequestId) =>
+      member => (draftId, rawUpdatedAt, rawRequestId) =>
         val requestId = normalizedRequestId(rawRequestId)
-        security.decode(BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString))(id =>
+        security.decode(for
+          id <- BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString)
+          updatedAt <- MatchDraftCodec.parseInstantOption("updatedAt", rawUpdatedAt)
+        yield (id, updatedAt)) { case (id, updatedAt) =>
           sourceImageDownloadRateLimiter.allow(s"source-image-download:${member.accountId.value}")
             .flatMap {
               case false =>
@@ -147,7 +160,8 @@ object MatchDraftModule:
                   draftId = id.value,
                   detail = None,
                 )
-              case true => getMatchDraftSourceImages.archive(id, member.accountId).flatMap {
+              case true =>
+                getMatchDraftSourceImages.archive(id, member.accountId, updatedAt).flatMap {
                   case Left(error) => security.toProblemF(error).map(Left(_))
                   case Right(archive) =>
                     HttpDownloadHeaders.attachment(archive.fileName) match
@@ -166,14 +180,14 @@ object MatchDraftModule:
                                 fields =
                                   s"accountId=${member.accountId.value} draftId=${id.value} " +
                                     s"imageCount=${archive.imageCount.toString} " +
-                                    s"expectedArchiveBytes=${archive.archiveBytes.toString}",
+                                    s"sourceBytes=${archive.sourceBytes.toString}",
                               ),
                             ),
                           )
                         ))
                 }
             }
-        )
+        }
     },
     SecuredEndpoint.readLogic(security, MatchDraftEndpoints.getSourceImageStream[F]) {
       member => input =>
@@ -182,8 +196,9 @@ object MatchDraftModule:
           for
             id <- BoundaryId.required("matchDraftId", input.draftId)(MatchDraftId.fromString)
             parsedKind <- MatchDraftCodec.parseSourceImageKind(input.kind)
-          yield (id, parsedKind)
-        security.decode(decoded) { case (id, parsedKind) =>
+            imageId <- BoundaryId.optional("imageId", input.imageId)(ImageId.fromString)
+          yield (id, parsedKind, imageId)
+        security.decode(decoded) { case (id, parsedKind, imageId) =>
           sourceImageDownloadRateLimiter.allow(s"source-image-download:${member.accountId.value}")
             .flatMap {
               case false => sourceImageRateLimited[F, MatchDraftEndpoints.SourceImageStreamOutput[
@@ -194,7 +209,7 @@ object MatchDraftModule:
                   draftId = id.value,
                   detail = Some(parsedKind.wire),
                 )
-              case true => getMatchDraftSourceImages.stream(id, parsedKind).flatMap {
+              case true => getMatchDraftSourceImages.stream(id, parsedKind, imageId).flatMap {
                   case Left(error) => security.toProblemF(error).map(Left(_))
                   case Right(image) =>
                     Async[F].pure(Right(MatchDraftEndpoints.SourceImageStreamOutput(

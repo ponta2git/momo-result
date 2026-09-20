@@ -29,6 +29,9 @@ private[api] object SourceImageTransferLogging:
         case BodyTransferOutcome.Succeeded => logger.info(message)
         case BodyTransferOutcome.Errored | BodyTransferOutcome.Canceled => logger.warn(message)
     }
+  ).handleErrorWith(_ =>
+    // Ember handles errors after headers have been sent outside HttpErrorMiddleware.
+    Stream.raiseError[F](new RuntimeException("Source image transfer failed."))
   )
 
   private def render(

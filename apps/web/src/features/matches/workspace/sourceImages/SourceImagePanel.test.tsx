@@ -345,6 +345,61 @@ describe("SourceImagePanel", () => {
     expect(revenueRequests).toBe(3);
   });
 
+  it.each(["total_assets", "revenue"] as const)(
+    "stops retrying a replaced %s image and preserves unsaved input",
+    async (replacedKind) => {
+      const user = userEvent.setup();
+      installObjectUrlMock();
+      const requested: Array<{ imageId: string | null; kind: string }> = [];
+      const pinnedImages = sourceImages.map((image) => ({
+        ...image,
+        imageUrl: `${image.imageUrl}?imageId=expected-${image.kind}`,
+      }));
+      server.use(
+        http.get("/api/match-drafts/:draftId/source-images/:kind", ({ params, request }) => {
+          const kind = String(params["kind"]);
+          requested.push({ kind, imageId: new URL(request.url).searchParams.get("imageId") });
+          return kind === replacedKind
+            ? new HttpResponse(null, { status: 409 })
+            : sourceImageResponse();
+        }),
+      );
+      render(
+        <>
+          <input aria-label="未保存の入力" defaultValue="入力中" />
+          <SourceImagePanel
+            loading={false}
+            matchDraftId={draftId}
+            preferredKind="total_assets"
+            sourceImages={pinnedImages}
+          />
+        </>,
+      );
+
+      await user.type(screen.getByRole("textbox", { name: "未保存の入力" }), "の内容");
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "未保存の入力を控えてから画面を再読み込み",
+      );
+      expect(screen.getByRole("textbox", { name: "未保存の入力" })).toHaveValue("入力中の内容");
+      expect(screen.getByRole("button", { name: "元画像を保存" })).toBeDisabled();
+
+      const replacedLabel = replacedKind === "total_assets" ? "総資産" : "収益";
+      const otherLabel = replacedKind === "total_assets" ? "収益" : "総資産";
+      await user.click(screen.getByRole("tab", { name: replacedLabel }));
+      expect(
+        await screen.findByText("元画像が差し替えられたため、この画面では表示できません。"),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "元画像を再読み込み" })).not.toBeInTheDocument();
+      await user.click(screen.getByRole("tab", { name: otherLabel }));
+      await screen.findByRole("img", { name: `${otherLabel}の元画像` });
+      await user.click(screen.getByRole("tab", { name: replacedLabel }));
+      expect(requested.filter((request) => request.kind === replacedKind)).toEqual([
+        { kind: replacedKind, imageId: `expected-${replacedKind}` },
+      ]);
+      expect(screen.getByRole("textbox", { name: "未保存の入力" })).toHaveValue("入力中の内容");
+    },
+  );
+
   it.each([401, 403, 429])("stops remaining prefetches on HTTP %s", async (status) => {
     installObjectUrlMock();
     const requested: string[] = [];
@@ -839,6 +894,106 @@ describe("SourceImagePanel", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "元画像を保存できませんでした。確定または削除により画像が利用できなくなった可能性があります。必要な場合は画像を再アップロードしてください。",
     );
+  });
+
+  it("never saves a truncated archive and allows an explicit retry after a body failure", async () => {
+    const user = userEvent.setup();
+    const anchorClick = installAnchorClickMock();
+    const urls = installObjectUrlMock({
+      createObjectURL: (value) =>
+        value instanceof Blob && value.type === "application/zip"
+          ? "blob:zip"
+          : "blob:source-image",
+    });
+    const bodyStarted = createDeferred<void>();
+    const failBody = createDeferred<void>();
+    let archiveRequests = 0;
+    server.use(
+      http.get("/api/match-drafts/:draftId/source-images.zip", () => {
+        archiveRequests += 1;
+        if (archiveRequests > 1) return archiveResponse();
+        return new HttpResponse(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new Uint8Array([0x50, 0x4b, 0x03, 0x04]));
+            },
+            async pull(controller) {
+              bodyStarted.resolve();
+              await failBody.promise;
+              controller.error(new TypeError("Archive transfer interrupted"));
+            },
+          }),
+          { headers: { "Content-Type": "application/zip" } },
+        );
+      }),
+    );
+    render(
+      <SourceImagePanel
+        loading={false}
+        matchDraftId={draftId}
+        preferredKind="total_assets"
+        sourceImages={sourceImages}
+      />,
+    );
+    await screen.findByRole("img", { name: "総資産の元画像" });
+    await user.click(screen.getByRole("button", { name: "元画像を保存" }));
+    await bodyStarted.promise;
+    expect(anchorClick.click).not.toHaveBeenCalled();
+
+    await act(async () => failBody.resolve());
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "元画像ZIPを最後まで受信できませんでした。もう一度お試しください。繰り返し失敗する場合は、画像を個別に保存してください。",
+    );
+    expect(screen.queryByText("ダウンロードを開始しました")).not.toBeInTheDocument();
+    expect(anchorClick.click).not.toHaveBeenCalled();
+    expect(urls.createObjectURL).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "application/zip" }),
+    );
+    expect(archiveRequests).toBe(1);
+    const save = screen.getByRole("button", { name: "元画像を保存" });
+    expect(save).toBeEnabled();
+    await user.click(save);
+
+    await waitFor(() => expect(anchorClick.click).toHaveBeenCalledTimes(1));
+    expect(anchorClick.clickedAnchors[0]?.getAttribute("href")).toBe("blob:zip");
+    expect(anchorClick.clickedAnchors[0]?.download).toBe("momo-ocr-images-20260518.zip");
+    expect(screen.getByText("ダウンロードを開始しました")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(archiveRequests).toBe(2);
+  });
+
+  it("pins archive downloads to the review snapshot and stops retrying a changed archive", async () => {
+    const user = userEvent.setup();
+    const anchorClick = installAnchorClickMock();
+    installObjectUrlMock();
+    const revisions: Array<string | null> = [];
+    server.use(
+      http.get("/api/match-drafts/:draftId/source-images.zip", ({ request }) => {
+        revisions.push(new URL(request.url).searchParams.get("updatedAt"));
+        return new HttpResponse(null, { status: 409 });
+      }),
+    );
+    render(
+      <SourceImagePanel
+        loading={false}
+        matchDraftId={draftId}
+        preferredKind="total_assets"
+        sourceImages={sourceImages}
+      />,
+    );
+    await screen.findByRole("img", { name: "総資産の元画像" });
+    await user.click(screen.getByRole("button", { name: "元画像を保存" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "元画像または記録が更新されています",
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("未保存の入力を控えてから画面を再読み込み");
+    const save = screen.getByRole("button", { name: "元画像を保存" });
+    expect(save).toBeDisabled();
+    await user.click(save);
+    expect(revisions).toEqual([sourceImages[0]?.createdAt]);
+    expect(anchorClick.click).not.toHaveBeenCalled();
   });
 
   it("shows a retry message when archive download is rate-limited", async () => {

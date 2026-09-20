@@ -9,13 +9,11 @@ import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.*
-import momo.api.domain.ids.{AccountId, GameTitleId}
+import momo.api.domain.ids.GameTitleId
 import momo.api.errors.AppError
 
 private[postgres] object PostgresSeriesAnalysisAdminOps:
-  private val TriggerPriority = SeriesAnalysisVocabulary.StoredTriggersByPriority
   private val AllowedJobStatuses = SeriesAnalysisVocabulary.JobStatuses.toSet
-  private val AllowedTriggers = TriggerPriority.toSet
   private val AllowedResultDispositions = SeriesAnalysisVocabulary.ResultDispositions.toSet
   private val AllowedFailureCodes = SeriesAnalysisVocabulary.SafeFailureCodes.toSet
 
@@ -54,12 +52,12 @@ private[postgres] object PostgresSeriesAnalysisAdminOps:
       resultDisposition: String,
       safeFailureCode: Option[String],
   )
-  private final case class JobRequestAuditRow(
-      jobId: String,
-      trigger: String,
-      requestedByAccountId: Option[AccountId],
-      requesterDisplayName: Option[String],
+  private final case class JobRequestAudit(
+      triggers: List[String],
+      manualRequestCount: Int,
+      firstRequester: Option[SeriesAnalysisRequester],
   )
+  private val EmptyAudit = JobRequestAudit(Nil, 0, None)
 
   def overview(
       selectedId: Option[GameTitleId]
@@ -70,7 +68,7 @@ private[postgres] object PostgresSeriesAnalysisAdminOps:
       latestCampaign <- latestCampaignCio
       jobs <- recentJobsCio
       audit <- jobAuditsCio(jobs.map(_.jobId))
-      summaryResults = jobs.traverse(job => jobSummary(job, audit.getOrElse(job.jobId, Nil)))
+      summaryResults = jobs.traverse(job => jobSummary(job, audit.getOrElse(job.jobId, EmptyAudit)))
       result <- (optionsResult, summaryResults) match
         case (Left(error), _) => error.asLeft[SeriesAnalysisAdminOverview].pure[ConnectionIO]
         case (_, Left(error)) => error.asLeft[SeriesAnalysisAdminOverview].pure[ConnectionIO]
@@ -182,76 +180,72 @@ private[postgres] object PostgresSeriesAnalysisAdminOps:
 
   private def jobAuditsCio(
       jobIds: List[String]
-  ): ConnectionIO[Map[String, List[JobRequestAuditRow]]] =
-    if jobIds.isEmpty then Map.empty[String, List[JobRequestAuditRow]].pure[ConnectionIO]
+  ): ConnectionIO[Map[String, JobRequestAudit]] =
+    if jobIds.isEmpty then Map.empty[String, JobRequestAudit].pure[ConnectionIO]
     else
       val ids = jobIds.toArray
+      // Transfer one summary per displayed job, regardless of how many requests it coalesced.
       sql"""
-    SELECT
-      jr.assigned_job_id,
-      jr.trigger,
-      op.requested_by_account_id,
-      account.display_name
-    FROM series_analysis_job_requests jr
-    LEFT JOIN series_analysis_operation_requests op ON op.id = jr.operation_request_id
-    LEFT JOIN momo_login_accounts account ON account.id = op.requested_by_account_id
-    WHERE jr.assigned_job_id = ANY($ids)
-    ORDER BY jr.accepted_at, jr.id
-  """.query[JobRequestAuditRow].to[List].map(_.groupBy(_.jobId))
+        WITH requesters AS MATERIALIZED (
+          SELECT DISTINCT ON (jr.assigned_job_id)
+                 jr.assigned_job_id AS job_id, account.id AS account_id, account.display_name
+          FROM series_analysis_job_requests jr
+          JOIN series_analysis_operation_requests op ON op.id = jr.operation_request_id
+          JOIN momo_login_accounts account ON account.id = op.requested_by_account_id
+          WHERE jr.assigned_job_id = ANY($ids) AND jr.trigger = 'manual'
+            AND jr.operation_request_id IS NOT NULL AND account.display_name IS NOT NULL
+          ORDER BY jr.assigned_job_id, jr.accepted_at, jr.id
+        )
+        SELECT audit.job_id, audit.triggers, audit.manual_request_count,
+               requesters.account_id, requesters.display_name
+        FROM (
+          SELECT assigned_job_id AS job_id, array_agg(DISTINCT trigger) AS triggers,
+                 (COUNT(*) FILTER (WHERE trigger = 'manual'))::int AS manual_request_count
+          FROM series_analysis_job_requests
+          WHERE assigned_job_id = ANY($ids)
+          GROUP BY assigned_job_id
+        ) audit
+        LEFT JOIN requesters ON requesters.job_id = audit.job_id
+      """.query[(String, JobRequestAudit)].to[List].map(_.toMap)
 
   private def jobSummary(
       job: JobRow,
-      audit: List[JobRequestAuditRow],
+      audit: JobRequestAudit,
   ): Either[AppError, SeriesAnalysisJobSummary] =
-    val coalesced = TriggerPriority.filter(trigger =>
-      trigger == job.trigger || audit.exists(_.trigger == trigger)
+    SeriesAnalysisRequestAttribution.fromStored(
+      job.trigger,
+      audit.triggers,
+      audit.manualRequestCount
     )
-    val wireCoalesced = coalesced.flatMap(SeriesAnalysisVocabulary.wireTrigger).distinct
-    val manual = audit.filter(_.trigger == "manual")
-    val hasSystem = coalesced.exists(_ != "manual")
-    val requestedBy =
-      if manual.nonEmpty && hasSystem then "mixed"
-      else if manual.nonEmpty then "administrator"
-      else "system"
-    val firstRequester = manual.flatMap(row =>
-      row.requestedByAccountId.zip(row.requesterDisplayName).map((accountId, displayName) =>
-        SeriesAnalysisRequester(accountId, displayName)
+      .filter(_ =>
+        AllowedJobStatuses.contains(job.status) &&
+          AllowedResultDispositions.contains(job.resultDisposition) &&
+          job.safeFailureCode.forall(AllowedFailureCodes.contains)
+      ).toRight(AppError.AnalysisStateUnavailable()).map(attribution =>
+        SeriesAnalysisJobSummary(
+          job.jobId,
+          job.gameTitleId,
+          job.gameTitleName,
+          job.status,
+          attribution.triggers.head,
+          attribution.triggers,
+          attribution.requestedBy,
+          audit.manualRequestCount,
+          job.requestedAt,
+          job.startedAt,
+          job.finishedAt,
+          job.elapsedMilliseconds,
+          job.inputRevision,
+          job.algorithmVersion,
+          job.attemptCount,
+          job.transientRetryCount,
+          job.leaseRecoveryCount,
+          job.queueWaitMilliseconds,
+          job.resultDisposition,
+          audit.firstRequester,
+          job.safeFailureCode,
+        )
       )
-    ).headOption
-    val valuesValid =
-      AllowedJobStatuses.contains(job.status) &&
-        AllowedTriggers.contains(job.trigger) &&
-        coalesced.forall(trigger => SeriesAnalysisVocabulary.wireTrigger(trigger).nonEmpty) &&
-        AllowedResultDispositions.contains(job.resultDisposition) &&
-        job.safeFailureCode.forall(AllowedFailureCodes.contains) &&
-        audit.forall(row => AllowedTriggers.contains(row.trigger))
-    Either.cond(
-      valuesValid,
-      SeriesAnalysisJobSummary(
-        job.jobId,
-        job.gameTitleId,
-        job.gameTitleName,
-        job.status,
-        wireCoalesced.headOption.getOrElse(job.trigger),
-        wireCoalesced,
-        requestedBy,
-        manual.size,
-        job.requestedAt,
-        job.startedAt,
-        job.finishedAt,
-        job.elapsedMilliseconds,
-        job.inputRevision,
-        job.algorithmVersion,
-        job.attemptCount,
-        job.transientRetryCount,
-        job.leaseRecoveryCount,
-        job.queueWaitMilliseconds,
-        job.resultDisposition,
-        firstRequester,
-        job.safeFailureCode,
-      ),
-      AppError.AnalysisStateUnavailable(),
-    )
 
   private def pendingManualCio(
       gameTitleId: GameTitleId

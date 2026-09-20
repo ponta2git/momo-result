@@ -14,11 +14,11 @@ import {
   sanitizeAppRedirectPath,
 } from "@/shared/auth/redirectPath";
 import { useAuth } from "@/shared/auth/useAuth";
+import { GlobalNav } from "@/shared/navigation/GlobalNav";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
-import { GlobalNav } from "@/shared/ui/layout/GlobalNav";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import type { PageFrameWidth } from "@/shared/ui/layout/PageFrame";

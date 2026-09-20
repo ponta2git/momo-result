@@ -7,24 +7,21 @@ import sttp.model.headers.{Cookie as SttpCookie, CookieWithMeta}
 import sttp.tapir.server.ServerEndpoint
 
 import momo.api.auth.{
+  AccountAccess,
   AuthenticatedSession,
   CompleteOAuthCallback,
-  CompleteOAuthLogin,
   CsrfTokenService,
   DiscordOAuthClient,
   OAuthCallbackDecision,
   OAuthCallbackInput,
-  OAuthProviderBackoff,
   OAuthStateCodec,
   RateLimiter,
   SessionService
 }
 import momo.api.config.{AppConfig, AppEnv, RedirectPath}
-import momo.api.domain.ids.AccountId
 import momo.api.endpoints.{AuthEndpoints, AuthMeResponse, AuthPaths, ProblemDetails}
 import momo.api.errors.AppError
 import momo.api.http.{AuthPolicy, ClientIp}
-import momo.api.repositories.LoginAccountsRepository
 
 object AuthModule:
   private val logger = LoggerFactory.getLogger("momo.api.http.modules.AuthModule")
@@ -35,18 +32,10 @@ object AuthModule:
       stateCodec: OAuthStateCodec[F],
       sessions: SessionService[F],
       csrf: CsrfTokenService,
-      accounts: LoginAccountsRepository[F],
+      accounts: AccountAccess[F],
       rateLimiter: RateLimiter[F],
-      callbackStateRateLimiter: RateLimiter[F],
-      providerBackoff: OAuthProviderBackoff[F],
+      completeOAuthCallback: CompleteOAuthCallback[F],
   ): List[ServerEndpoint[Any, F]] =
-    val completeOAuthLogin = CompleteOAuthLogin[F](oauth, sessions, accounts, providerBackoff)
-    val completeOAuthCallback = CompleteOAuthCallback[F](
-      stateCodec,
-      completeOAuthLogin,
-      callbackStateRateLimiter,
-      config.auth.callbackRedirectPath,
-    )
     List(
       AuthEndpoints.login.serverLogic { input =>
         login(
@@ -166,36 +155,22 @@ object AuthModule:
       config: AppConfig,
       sessions: SessionService[F],
       csrf: CsrfTokenService,
-      accounts: LoginAccountsRepository[F],
+      accounts: AccountAccess[F],
       accountHeader: Option[String],
       cookies: List[SttpCookie],
   ): F[Either[AuthEndpoints.AuthProblemResponse, AuthMeResponse]] = config.appEnv match
     case AppEnv.Dev | AppEnv.Test => accountHeader match
-        case Some(accountId) => AccountId.fromString(accountId) match
-            case Left(_) =>
-              Async[F].pure(Left(authProblem(
-                AppError.Forbidden("Account header is not one of the allowed accounts."),
-                Nil,
-              )))
-            case Right(parsedAccountId) => accounts.find(parsedAccountId).map {
-                case Some(account) if account.loginEnabled =>
-                  Right(AuthMeResponse(
-                    accountId = account.id.value,
-                    displayName = account.displayName,
-                    isAdmin = account.isAdmin,
-                    memberId = account.playerMemberId.map(_.value),
-                    csrfToken = Some(AuthPolicy.DevelopmentCsrfToken),
-                  ))
-                case Some(_) =>
-                  Left(authProblem(
-                    AppError.Forbidden("This account is not allowed to log in."),
-                    Nil,
-                  ))
-                case None => Left(authProblem(
-                    AppError.Forbidden("Account header is not one of the allowed accounts."),
-                    Nil,
-                  ))
-              }
+        case Some(accountId) => accounts.find(accountId).map {
+            _.leftMap(error => authProblem(error, Nil)).map(account =>
+              AuthMeResponse(
+                accountId = account.accountId.value,
+                displayName = account.displayName,
+                isAdmin = account.isAdmin,
+                memberId = account.playerMemberId.map(_.value),
+                csrfToken = Some(AuthPolicy.DevelopmentCsrfToken),
+              )
+            )
+          }
         case None => sessionAuthMe(config, sessions, csrf, cookies)
     case AppEnv.Prod => sessionAuthMe(config, sessions, csrf, cookies)
 

@@ -2,21 +2,12 @@ import type {
   MatchDraftSummary,
   MatchFormValues,
 } from "@/features/matches/workspace/matchFormTypes";
-import { slotKinds } from "@/shared/api/enums";
 import type { MatchDraftDetailResponse } from "@/shared/api/matchDrafts";
 import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
-import { trimSearchParam } from "@/shared/lib/searchParams";
-import { bySlot } from "@/shared/lib/slotMap";
-import type { SlotMap } from "@/shared/lib/slotMap";
-
-export function draftIdsFromParams(searchParams: URLSearchParams): SlotMap<string> {
-  return bySlot([
-    ["total_assets", trimSearchParam(searchParams.get("totalAssets"))],
-    ["revenue", trimSearchParam(searchParams.get("revenue"))],
-    ["incident_log", trimSearchParam(searchParams.get("incidentLog"))],
-  ]);
-}
+import { slotKinds } from "@/shared/domain/ocr";
+import { bySlot } from "@/shared/domain/slotMap";
+import type { SlotMap } from "@/shared/domain/slotMap";
 
 export function draftsByKind(
   ids: SlotMap<string>,

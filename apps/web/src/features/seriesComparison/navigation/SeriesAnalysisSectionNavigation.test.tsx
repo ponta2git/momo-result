@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode, useEffect, useState } from "react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
@@ -68,7 +68,7 @@ function Harness({ gate }: { gate?: Promise<void> | undefined }) {
   );
 }
 
-function setup({ gate, url = initialUrl }: { gate?: Promise<void>; url?: string } = {}) {
+async function setup({ gate, url = initialUrl }: { gate?: Promise<void>; url?: string } = {}) {
   const router = createMemoryRouter(
     [
       { path: "/matches", element: <p>試合一覧</p> },
@@ -76,20 +76,28 @@ function setup({ gate, url = initialUrl }: { gate?: Promise<void>; url?: string 
     ],
     { initialEntries: ["/matches", url], initialIndex: 1 },
   );
-  render(
-    <StrictMode>
-      <QueryClientProvider client={createTestQueryClient()}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>
-    </StrictMode>,
-  );
+  await act(async () => {
+    render(
+      <StrictMode>
+        <QueryClientProvider client={createTestQueryClient()}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>
+      </StrictMode>,
+    );
+  });
   return router;
+}
+
+function primaryEvidenceLink() {
+  const link = screen.getAllByRole("link", { name: "物件収益の根拠を見る" })[1];
+  if (!link) throw new Error("Ponta's primary hypothesis fixture is required");
+  return link;
 }
 
 describe("series analysis section navigation", () => {
   it("changes the actual owner select without a new arrival or history entry under Strict Mode", async () => {
     const user = userEvent.setup();
-    const router = setup({ url: `${initialUrl}&view=context#metric-play-order` });
+    const router = await setup({ url: `${initialUrl}&view=context#metric-play-order` });
     const select = await screen.findByRole("combobox", { name: "オーナー比較の指標" });
     // Arrive by ordinary scrolling rather than by the owner's table-of-contents link.
     await selectOption(user, select, "ginji.average");
@@ -115,25 +123,26 @@ describe("series analysis section navigation", () => {
   it("reaches evidence and returns to the expanded hypothesis with exactly one history entry", async () => {
     const user = userEvent.setup();
     const restoration = window.history.scrollRestoration;
-    const router = setup();
+    const router = await setup();
     expect(window.history.scrollRestoration).toBe("manual");
     window.dispatchEvent(new Event("pagehide"));
     expect(window.history.scrollRestoration).toBe(restoration);
     window.dispatchEvent(new Event("pageshow"));
     expect(window.history.scrollRestoration).toBe("manual");
     await user.click(screen.getByRole("button", { name: "ぽんたのほかの仮説" }));
-    const link = screen.getAllByRole("link", { name: "ぽんたの詳しい分析" })[1];
-    if (!link) throw new Error("secondary hypothesis fixture is required");
+    const card = screen.getByRole("heading", { name: "ぽんたの補助仮説1。" }).closest("article");
+    if (!card) throw new Error("secondary hypothesis fixture is required");
+    const link = within(card).getByRole("link", { name: "目的地の根拠を見る" });
     const linkId = link.id;
     expect(link).toHaveAttribute(
       "href",
-      "/analytics/series?gameTitleId=gt_momotetsu_2&focusMatchId=match-12&view=drivers&returnTo=%2Fmatches#metric-revenue-outcome",
+      "/analytics/series?gameTitleId=gt_momotetsu_2&focusMatchId=match-12&view=drivers&returnTo=%2Fmatches#metric-destination-outcome",
     );
     await user.click(link);
     await waitFor(() =>
-      expect(screen.getByRole("heading", { name: "物件収益と最終順位" })).toHaveFocus(),
+      expect(screen.getByRole("heading", { name: "目的地到着と順位" })).toHaveFocus(),
     );
-    expect(router.state.location.hash).toBe("#metric-revenue-outcome");
+    expect(router.state.location.hash).toBe("#metric-destination-outcome");
     await act(async () => router.navigate(-1));
     expect(screen.getByRole("button", { name: "ぽんたのほかの仮説" })).toHaveAttribute(
       "aria-expanded",
@@ -149,8 +158,8 @@ describe("series analysis section navigation", () => {
   it("finishes arrival when the current body becomes ready", async () => {
     const user = userEvent.setup();
     const gate = createDeferred<void>();
-    setup({ gate: gate.promise });
-    await user.click(screen.getByRole("link", { name: "ぽんたの詳しい分析" }));
+    await setup({ gate: gate.promise });
+    await user.click(primaryEvidenceLink());
     const heading = await screen.findByRole("heading", { name: "物件収益と最終順位" });
     expect(heading).not.toHaveFocus();
     await act(async () => gate.resolve());
@@ -160,8 +169,8 @@ describe("series analysis section navigation", () => {
   it("waits for the current body and cancels arrival when the user moves to another control", async () => {
     const user = userEvent.setup();
     const gate = createDeferred<void>();
-    setup({ gate: gate.promise });
-    await user.click(screen.getByRole("link", { name: "ぽんたの詳しい分析" }));
+    await setup({ gate: gate.promise });
+    await user.click(primaryEvidenceLink());
     const heading = await screen.findByRole("heading", { name: "物件収益と最終順位" });
     expect(heading).not.toHaveFocus();
     await user.click(screen.getByRole("button", { name: "別の操作" }));
@@ -170,7 +179,9 @@ describe("series analysis section navigation", () => {
   });
 
   it("preserves the section through URL canonicalization on direct entry", async () => {
-    const router = setup({ url: `${initialUrl}&view=drivers&unused=1#metric-revenue-outcome` });
+    const router = await setup({
+      url: `${initialUrl}&view=drivers&unused=1#metric-revenue-outcome`,
+    });
     await waitFor(() =>
       expect(screen.getByRole("heading", { name: "物件収益と最終順位" })).toHaveFocus(),
     );

@@ -26,9 +26,9 @@ import { heldEventsQueryOptions } from "@/shared/api/queryOptions";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { toIsoFromLocalDateTime, toLocalDateTimeInputValue } from "@/shared/lib/dateTime";
 import { parsePositiveIntSearchParam } from "@/shared/lib/searchParams";
+import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 import { withReturnTo } from "@/shared/navigation/returnTo";
 import { showToast } from "@/shared/ui/feedback/Toast";
-import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
 
 const initialCreateHeldEventState = { version: 0 };
 const defaultPagination = { page: 1, pageSize: 10 };
@@ -98,7 +98,8 @@ export function useHeldEventsPageModel(): HeldEventsPageModel {
 
   const heldEventsOptions = heldEventsQueryOptions(paginationSearch);
   const heldEventsQuery = useQuery(heldEventsOptions);
-  const hasCurrentScopeData = queryClient.getQueryData(heldEventsOptions.queryKey) !== undefined;
+  const hasCurrentScopeData =
+    heldEventsQuery.data !== undefined && !heldEventsQuery.isPlaceholderData;
   const {
     data: heldEventsData,
     isFetching: heldEventsIsFetching,

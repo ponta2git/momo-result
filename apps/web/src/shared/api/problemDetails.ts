@@ -8,11 +8,7 @@ export type NormalizedApiError = {
   title: string;
   detail: string;
   code?: string;
-  category?:
-    | "analysis_client_upgrade_required"
-    | "idempotency_in_progress"
-    | "idempotency_payload_mismatch"
-    | "payload_too_large";
+  category?: "idempotency_in_progress" | "idempotency_payload_mismatch" | "payload_too_large";
   problem?: ProblemDetails;
 };
 
@@ -26,7 +22,6 @@ const payloadTooLargeMessage =
 const problemDisplayMessages: Readonly<Record<string, string>> = {
   ANALYSIS_ARTIFACT_EXPIRED:
     "この分析結果は利用できなくなりました。最新の結果を読み込んでください。",
-  ANALYSIS_CLIENT_UPGRADE_REQUIRED: "最新の分析結果を使うため、ページを再読み込みしてください。",
   ANALYSIS_NO_ELIGIBLE_TITLES: "分析できる作品がありません。",
   ANALYSIS_READ_BUSY: "分析結果を読み込めません。少し待ってから、もう一度実行してください。",
   ANALYSIS_SCOPE_NOT_FOUND: "指定された分析対象が見つかりませんでした。",
@@ -112,9 +107,6 @@ function displayMessageForProblem(
 function categorizeProblem(
   problem: Pick<ProblemDetails, "code" | "detail" | "status">,
 ): NormalizedApiError["category"] {
-  if (String(problem.code) === "ANALYSIS_CLIENT_UPGRADE_REQUIRED") {
-    return "analysis_client_upgrade_required";
-  }
   if (problem.status === 413 || problem.code === "PAYLOAD_TOO_LARGE") {
     return "payload_too_large";
   }
@@ -130,10 +122,6 @@ function categorizeProblem(
       : "idempotency_in_progress";
   }
   return undefined;
-}
-
-export function isAnalysisClientUpgradeRequired(error: unknown): boolean {
-  return normalizeUnknownApiError(error).category === "analysis_client_upgrade_required";
 }
 
 export function isAnalysisArtifactExpired(error: unknown): boolean {

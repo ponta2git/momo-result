@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+
 import type {
   MatchListFilterActions,
   MatchListFilterCandidates,
@@ -74,6 +76,17 @@ export function useMatchesListPageModel(): MatchesListPageModel {
   });
   const draftNavigation = useConfirmedDraftNavigationCommand(location.listReturnTo);
 
+  const { checkingIds, errors, run: checkDraftStatus } = draftNavigation;
+  const rowActions = useMemo<MatchListRowActions>(
+    () => ({
+      checkingDraftIds: checkingIds,
+      draftErrors: errors,
+      disabled: resource.list.scopeChanging,
+      onDraftStatusCheckAction: (action) => void checkDraftStatus(action),
+    }),
+    [checkingIds, errors, resource.list.scopeChanging, checkDraftStatus],
+  );
+
   const paginationValue = resource.list.pagination;
   const pagination = paginationValue
     ? {
@@ -89,12 +102,7 @@ export function useMatchesListPageModel(): MatchesListPageModel {
 
   return {
     drafts: {
-      rowActions: {
-        checkingDraftIds: draftNavigation.checkingIds,
-        draftErrors: draftNavigation.errors,
-        disabled: resource.list.scopeChanging,
-        onDraftStatusCheckAction: (action) => void draftNavigation.run(action),
-      },
+      rowActions,
     },
     filters: {
       actions: { onApply: location.apply, onClear: location.clear },

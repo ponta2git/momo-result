@@ -8,7 +8,7 @@ import {
   seriesAnalysisStatusQueryOptions,
 } from "@/shared/api/seriesAnalysisQueryOptions";
 import { useAnalysisArtifactRecovery } from "@/shared/api/useAnalysisArtifactRecovery";
-import { matchPerformanceContextFromArtifact } from "@/shared/domain/matchPerformanceContext";
+import { matchPerformanceContextFromArtifact } from "@/shared/matches/matchPerformanceContext";
 
 export function useMatchFeatureAnalysis(match: MatchDetailResponse | undefined) {
   const statusQuery = useQuery(seriesAnalysisStatusQueryOptions(match?.gameTitleId));

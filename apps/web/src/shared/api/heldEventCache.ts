@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import type { HeldEventListResponse, HeldEventResponse } from "@/shared/api/heldEvents";
+import type { HeldEventResponse, HeldEventSummaryResponse } from "@/shared/api/heldEvents";
 import { heldEventKeys } from "@/shared/api/queryKeys";
 
 export function mergeHeldEventItems(
@@ -12,69 +12,24 @@ export function mergeHeldEventItems(
     : heldEvents;
 }
 
-export function upsertHeldEventList(
-  current: Partial<HeldEventListResponse> | undefined,
-  event: HeldEventResponse,
-): HeldEventListResponse {
-  const existingItems = current?.items ?? [];
-  const withoutDuplicate = existingItems.filter((item) => item.id !== event.id);
-  const items = [event, ...withoutDuplicate].toSorted(
-    (left, right) =>
-      new Date(right.heldAt).getTime() - new Date(left.heldAt).getTime() ||
-      right.id.localeCompare(left.id),
-  );
-  return {
-    items,
-    pagination: current?.pagination ?? fallbackPagination(items.length),
-    totalMatchCount: current?.totalMatchCount ?? totalMatches(items),
-  };
-}
-
-export function removeHeldEventFromList(
-  current: Partial<HeldEventListResponse> | undefined,
-  heldEventId: string,
-): HeldEventListResponse {
-  const items = (current?.items ?? []).filter((item) => item.id !== heldEventId);
-  return {
-    items,
-    pagination: current?.pagination ?? fallbackPagination(items.length),
-    totalMatchCount: current?.totalMatchCount ?? totalMatches(items),
-  };
-}
-
-function fallbackPagination(totalItems: number): HeldEventListResponse["pagination"] {
-  return {
-    hasNextPage: false,
-    hasPreviousPage: false,
-    page: 1,
-    pageSize: Math.max(totalItems, 1),
-    totalItems,
-    totalPages: totalItems === 0 ? 0 : 1,
-  };
-}
-
-function totalMatches(items: HeldEventResponse[]): number {
-  return items.reduce((sum, item) => sum + item.matchCount, 0);
-}
-
-/** Upserts the shared directory; paginated list membership remains server-owned and is invalidated. */
+/** Seed the committed event without inventing membership or counts for a server-owned page. */
 export async function syncHeldEventCreatedCache(
   queryClient: QueryClient,
   event: HeldEventResponse,
 ): Promise<void> {
-  queryClient.setQueryData<HeldEventListResponse>(heldEventKeys.directory(), (current) =>
-    upsertHeldEventList(current, event),
-  );
-  await queryClient.invalidateQueries({ queryKey: heldEventKeys.all() });
+  const queryKey = heldEventKeys.summary(event.id);
+  await queryClient.cancelQueries({ queryKey, exact: true });
+  queryClient.setQueryData<HeldEventSummaryResponse>(queryKey, event);
+  await queryClient.invalidateQueries({ queryKey: heldEventKeys.listRoot() });
 }
 
-/** Removes from the shared directory; paginated list membership remains server-owned and is invalidated. */
+/** Remove every individual view of the deleted event; refetch affected list pages. */
 export async function syncHeldEventDeletedCache(
   queryClient: QueryClient,
   heldEventId: string,
 ): Promise<void> {
-  queryClient.setQueryData<HeldEventListResponse>(heldEventKeys.directory(), (current) =>
-    removeHeldEventFromList(current, heldEventId),
-  );
-  await queryClient.invalidateQueries({ queryKey: heldEventKeys.all() });
+  const queryKey = heldEventKeys.detail(heldEventId);
+  await queryClient.cancelQueries({ queryKey });
+  queryClient.removeQueries({ queryKey });
+  await queryClient.invalidateQueries({ queryKey: heldEventKeys.listRoot() });
 }

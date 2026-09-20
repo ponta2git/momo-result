@@ -27,6 +27,7 @@ Redis は少なくとも1回配送する transport であり、job 状態の正�
 
 - producer は version ごとに専用 stream を使い、異なる schema を同じ stream に混在させない。consumer group は stream が未作成でも初期化できること。
 - 新規 delivery は blocking read、stale PEL は startup と低頻度 recovery で扱う。PEL は bounded page で走査し、page 間に新規 delivery を処理して飢餓と短周期 polling を防ぐ。
+- blocking readは専用の接続を使い、active jobのheartbeat間隔へ結合しない。次のPEL再試行・maintenance期限までに戻る待機時間を選び、期限到達時はBLOCKなしで新規deliveryを一度確認して回収を続ける。clientの応答期限はserverのBLOCKより長く、停止処理を含むruntimeのshutdown予算より短くする。
 - transient retry の既知 PEL entry は claim 可能時刻に個別確認し、process 停止後は PEL recovery が回収する。即時 nack や新規 message による retry へ置き換えない。
 - claim 前に delivery count と idle を再確認し、bounded attempt を超えた entry だけを DLQ 判断へ進める。OCR execution timeout と PEL claim idle を同じ設定にしない。
 - payload field、型、上限、列挙値は v2 schema を正本とし、全 Redis value は string とする。未知 field、非 string value、schema 違反を拒否する。
@@ -34,6 +35,7 @@ Redis は少なくとも1回配送する transport であり、job 状態の正�
 - producer は upload metadata を確定してから enqueue intent を作り、consumer は取得 bytes の length、media type、checksum を OCR 前に再検証する。object key を filesystem path として連結しない。
 - `requestedScreenType` は明示し、legacy decode を除いて `auto` を受理しない。
 - `ocrHintsJson` は hints schema に従う省略可能な補助情報であり、画面種別、player、OCR 結果の正本にしない。
+- API は受付時に不足する既定別名を補い、登録済み別名を統合した後で hints の上限を検証する。CPU 名が未指定または空の場合の作品方式ごとの既定値は Worker の認識処理が補う。明示した CPU 名は変更せず、旧producerが補完済みのpayloadにも重複補完しない。空の別名配列は server の既定補完を使う。明示した client 別名は既存の補助入力として受け取り、Web から DB の別名一覧を送り返す必要はない。補完・統合は純粋な domain 処理、DB 取得と enqueue は usecase が所有する。
 - `requestId` と hints は enqueue 時の値を outbox payload に保持し、retry 時に job row だけから再構築しない。
 
 ## 3. Producer / Outbox
@@ -47,7 +49,9 @@ DELIVERED -> PENDING            (queued jobのsemantic redelivery)
 ```
 
 - job / draft / outbox は同じ transaction で作成し、commit 後にだけ coalescing wake を送る。rollback、受付拒否、既存 row の replay で新規 wake を必須にしない。
+- active job上限はtransaction-scoped lockの取得後、次のstatementで最新件数を確認してから保存する。READ COMMITTEDでlock待機前のsnapshotを使わないよう、lock取得と判定を同じCTEへまとめない。
 - admission guard は Redis 到達不能、due / active outbox、oldest due delay、DLQ backlog を判定し、危険域では row を作らず fail fast する。閾値は runtime 設定を正本とする。
+- admissionはDLQ長の取得でRedisへの到達性も判断する。先行PINGや判定のcacheを追加せず、必要なstream状態とdurable backlogを都度確認する。
 - dispatcher は startup、wake、retry / semantic deadline、cold recovery を待ち、bounded drain する。due work がなければ DB access を止め、固定短周期 polling や row ごとの timer を作らない。
 - due `PENDING` と stale `IN_FLIGHT` は lock を競合回避して claim し、claim ごとに新しい identity を発行する。完了 / retry は同じ claim identity だけが更新できる。
 - claim 後は outbox / job の schema version、job identity、保存済み wire payload の正規形を `XADD` 前に検証する。不整合な未観測 queued job は claim fence 下で outbox を `FAILED`、job を `QUEUE_FAILURE` へ収束させ、running / terminal / v2 PEL retry owner は変更しない。legacy `DELIVERED` + queued row は semantic redelivery せず、同じ invalid claim 経路で回収する。
@@ -72,14 +76,14 @@ DELIVERED -> PENDING            (queued jobのsemantic redelivery)
 | 保存済み契約と配送の不一致 / 保存済み契約の不正 | 対象 queued job の `QUEUE_FAILURE` 確定後に ACK |
 | malformed、bounded-valid `jobId` を回収可能 | 下記の failure write guard に従って処理後に ACK |
 | malformed、`jobId` を回収不能 | ACK せず idle threshold 後の回収へ保留 |
-| attempt 上限、bounded-valid `jobId` を回収可能 | failure write guard に従って処理後、DLQ 追加と ACK を同一 Redis transaction で送る |
-| attempt 上限、`jobId` を回収不能 | DLQ 追加と ACK を同一 Redis transaction で送る |
+| attempt 上限、bounded-valid `jobId` を回収可能 | failure write guard に従って処理後、DLQ handoff の原子操作を実行する |
+| attempt 上限、`jobId` を回収不能 | DLQ handoff の原子操作を実行する |
 | transient OCR failure | job を将来時刻の `queued` へ戻し、ACK せず idle threshold 後の回収へ保留 |
 | ACK 前に必要な DB 更新が失敗 | ACK 処理へ進まず、残った配送を PEL recovery に委ねる |
-| ACK / DLQ transaction の Redis error | error を返す。error だけから ACK 未実行や PEL 残存を推測しない |
+| ACK / DLQ handoff の Redis error | error を返す。応答消失だけから実行済みか未実行かを推測しない |
 
 - malformed / attempt 上限の failure write は、DB に存在する queue schema v2 の queued job だけを `QUEUE_FAILURE` にする。存在しない job、running / terminal、非対応 schema は変更せず、表の ACK / DLQ 処理へ進む。
-- DLQ 追加と ACK の transaction は、DLQ 成功を条件に ACK する分岐ではない。Redis は実行中の command error で他の command を rollback しないため、DLQ 失敗時の ACK 抑止や応答消失時の未実行を保証しない。詳細は [Redis transactions](https://redis.io/docs/latest/develop/using-commands/transactions/#errors-inside-a-transaction) に従う。
+- DLQ handoffはsource PELの存在確認、DLQへの追加、その成功後のACKを短いLuaで原子的に実行する。DLQへの書込みに失敗した場合は元配送をPELへ残す。完了済みhandoffの再実行でDLQへ重複追加しない。業務状態の判定・terminal writeはこの操作へ持ち込まず、DBの確定を先行させる。RedisのMULTI/EXECはcommand error時に他commandをrollbackしないため、この成功依存の順序には使わない。
 - queued job の claim は DB lease / fence で確定し、stale owner の terminal write を拒否する。
 - success は draft upsert と job terminal transition を同じ transaction にする。1 job の再処理は同じ draft を冪等に更新する。
 - transient OCR failure の再試行では元 delivery を使い、新規 outbox、semantic redelivery、outbox wake を作らない。
@@ -90,6 +94,7 @@ DELIVERED -> PENDING            (queued jobのsemantic redelivery)
 ## 5. DB / Delivery Guarantees
 
 - Redis publish は at-least-once とし、consumer は DB 状態、lease、fence、job ID で冪等にする。
+- 通常streamは長期履歴にしない。startupとcold recoveryの開始時に、既知の単一consumer groupの最古PELと最終配信IDより前だけを、上限付きで回収する。未配信・PEL中の本文は保護し、別groupがあれば自動回収を見送る。ACK済みでも古いPELより後は保守的に保持し、無条件のMAXLENや期限だけで切り捨てない。DLQはこの自動回収の対象にしない。
 - outbox の schema version と保存済み payload version は一致させる。
 - message identity と delivery timestamp は最新 cycle を表し、過去 cycle の相関は secret を含まない structured log で行う。
 - draft payload、warning、timing の domain shape は OCR capability が所有する。Redis payload と DB row shape へ同じ型を漏らさない。

@@ -6,41 +6,10 @@ import { createSampleDraft } from "@/features/matches/workspace/review/sampleDra
 import {
   dedupeWorkspaceErrors,
   draftIdsFromDetail,
-  draftIdsFromParams,
   draftsByKind,
   prefillFromDraftSummary,
 } from "@/features/matches/workspace/workspaceDerivations";
 import type { MatchDraftDetailResponse } from "@/shared/api/matchDrafts";
-
-describe("draftIdsFromParams", () => {
-  it("maps URL search params to slot keys", () => {
-    const params = new URLSearchParams(
-      "totalAssets=ta-1&revenue=rev-1&incidentLog=inc-1&unrelated=ignored",
-    );
-
-    expect(draftIdsFromParams(params)).toEqual({
-      total_assets: "ta-1",
-      revenue: "rev-1",
-      incident_log: "inc-1",
-    });
-  });
-
-  it("omits keys whose params are missing", () => {
-    const params = new URLSearchParams("totalAssets=ta-1");
-
-    expect(draftIdsFromParams(params)).toEqual({ total_assets: "ta-1" });
-  });
-
-  it("trims draft id params and omits blank values", () => {
-    const params = new URLSearchParams("totalAssets=%20ta-1%20&revenue=&incidentLog=%20");
-
-    expect(draftIdsFromParams(params)).toEqual({ total_assets: "ta-1" });
-  });
-
-  it("returns an empty SlotMap when no slot params are present", () => {
-    expect(draftIdsFromParams(new URLSearchParams())).toEqual({});
-  });
-});
 
 describe("draftsByKind", () => {
   it("looks up drafts by id and groups them by slot kind", () => {

@@ -128,6 +128,32 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
       assertActiveLimit(result, 0)
       assertEquals(counts, (0L, 0L, 0L))
 
+  test("active admission observes a creator that commits while it waits for the limit lock"):
+    for
+      _ <- prepareMatchDraft
+      _ <- prepareSourceImage
+      locked <- Deferred[IO, Int]
+      release <- Deferred[IO, Unit]
+      competing <- holdOcrReferenceTransaction(
+        locked,
+        release,
+        Some(OcrJobId.unsafeFromString("competing-ocr-job")),
+      ).start
+      backend <- locked.get
+      creation <- repo.store(plan(job, draft, attachment, activeJobLimit = 1)).start
+      _ <- awaitBackendBlockedBy(backend)
+      _ <- release.complete(())
+      _ <- competing.joinWithNever
+      result <- creation.joinWithNever
+      counts <- sql"""
+        SELECT (SELECT count(*) FROM ocr_jobs WHERE status IN ('queued', 'running')),
+               (SELECT count(*) FROM ocr_drafts WHERE id = ${draftId.value}),
+               (SELECT count(*) FROM ocr_queue_outbox WHERE job_id = ${jobId.value})
+      """.query[(Long, Long, Long)].unique.transact(transactor)
+    yield
+      assertActiveLimit(result, 1)
+      assertEquals(counts, (1L, 0L, 0L))
+
   test("store rolls back OCR records when match draft attachment fails"):
     val attachment = OcrJobDraftAttachment(
       draftId = MatchDraftId.unsafeFromString("missing-match-draft"),
@@ -227,7 +253,7 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
       _ <- prepareSourceImage
       sourceLocked <- Deferred[IO, Int]
       releaseJob <- Deferred[IO, Unit]
-      jobTransaction <- holdOcrReferenceTransaction(sourceLocked, releaseJob).start
+      jobTransaction <- holdOcrReferenceTransaction(sourceLocked, releaseJob, None).start
       jobBackend <- sourceLocked.get
       deletionReady <- Deferred[IO, SourceImageDeleteResult]
       deletionFiber <- sourceImages.beginDeleteUnreferenced(imageId, now.plusSeconds(1))
@@ -290,10 +316,18 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
   private def holdOcrReferenceTransaction(
       locked: Deferred[IO, Int],
       release: Deferred[IO, Unit],
+      competingJobId: Option[OcrJobId],
   ): IO[Unit] = Resource.fromAutoCloseable(IO.blocking(dataSource.getConnection)).use {
     connection =>
       val insertReference = IO.blocking {
         connection.setAutoCommit(false)
+        competingJobId.foreach { _ =>
+          val admission = connection.createStatement()
+          try admission.execute(
+              "SELECT pg_advisory_xact_lock(hashtext('momo:ocr_jobs:active_limit')::bigint)"
+            )
+          finally admission.close()
+        }
         val lock = connection.prepareStatement(
           "SELECT status FROM source_images WHERE id = ? FOR UPDATE"
         )
@@ -313,8 +347,8 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
             |) VALUES (?, ?, ?, ?, 2, 'total_assets', 'queued', 0, ?, ?)""".stripMargin
         )
         try
-          insert.setString(1, jobId.value)
-          insert.setString(2, draftId.value)
+          insert.setString(1, competingJobId.getOrElse(jobId).value)
+          insert.setString(2, competingJobId.fold(draftId.value)(id => s"${id.value}-draft"))
           insert.setString(3, imageId.value)
           insert.setString(4, imageId.value)
           insert.setTimestamp(5, java.sql.Timestamp.from(now))

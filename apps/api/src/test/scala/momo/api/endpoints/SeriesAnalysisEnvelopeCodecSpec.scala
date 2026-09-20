@@ -13,7 +13,7 @@ final class SeriesAnalysisEnvelopeCodecSpec extends FunSuite:
     val status = objectValue(SeriesAnalysisStatusResponse(
       1,
       "title-envelope",
-      SeriesAnalysisDesiredResponse("0", "series-analysis-v1", 1),
+      SeriesAnalysisDesiredResponse("0", "series-analysis-v5", 4),
       "unavailable",
       None,
       None,

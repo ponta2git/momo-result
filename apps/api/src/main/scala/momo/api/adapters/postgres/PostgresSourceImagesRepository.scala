@@ -301,11 +301,11 @@ object PostgresSourceImagesRepository:
   """
 
   /**
-   * Builds the live-reference set once inside PostgreSQL. This avoids a correlated full
-   * match_drafts scan for every quota/orphan candidate while keeping the set out of JVM heap.
+   * Keep reference expansion inside SQL so quota/orphan reads can use an anti-join. The CTE has
+   * one consumer; forcing materialization would spool every live reference before filtering.
    */
   private val liveReferencesCte = fr"""
-    WITH live_source_image_references(image_id) AS MATERIALIZED (
+    WITH live_source_image_references(image_id) AS NOT MATERIALIZED (
       SELECT source_image_id
       FROM ocr_jobs
       WHERE status IN (${OcrJobStatus.Queued}, ${OcrJobStatus.Running})

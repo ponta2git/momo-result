@@ -121,9 +121,9 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
             }
           : undefined,
       );
-      startStateTransition(() => {
+      startStateTransition(async () => {
         setOptimisticState(normalized);
-        void navigate(
+        await navigate(
           { pathname: location.pathname, search: `?${params.toString()}`, hash },
           {
             replace: updateOptions.replace ?? true,

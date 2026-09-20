@@ -11,7 +11,7 @@ import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { notificationSettingsKeys } from "@/shared/api/queryKeys";
 import { notificationSettingsQueryOptions } from "@/shared/api/queryOptions";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
-import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
+import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 type Kind = keyof NotificationSettings;
 type Values = Record<Kind, boolean>;

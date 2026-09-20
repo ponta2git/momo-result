@@ -6,6 +6,8 @@ import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { memberDisplayName, orderFixedMembers } from "@/shared/domain/members";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
+import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
+import { RankBadge } from "@/shared/matches/RankBadge";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import {
@@ -15,9 +17,7 @@ import {
   dataTableScrollAreaClassName,
 } from "@/shared/ui/data/DataTable";
 import { FactList } from "@/shared/ui/data/FactList";
-import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
-import { RankBadge } from "@/shared/ui/rank/RankBadge";
 import { contentText } from "@/shared/ui/typography";
 
 type MatchConfirmSummaryProps = {

@@ -1,3 +1,4 @@
+use super::child_process::{AnalysisChildOutcome, AnalysisChildProcessSpec, ManagedAnalysisChild};
 use std::{
     env,
     path::{Path, PathBuf},
@@ -12,10 +13,7 @@ use tokio::time;
 use crate::{
     cgroup::ChildCgroup,
     postgres::{PostgresError, connect},
-    process::{
-        AnalysisChildOutcome, AnalysisChildProcessSpec, ManagedAnalysisChild, ProcessError,
-        current_process_peak_resident_bytes, current_process_resident_bytes,
-    },
+    process::{ProcessError, current_process_peak_resident_bytes, current_process_resident_bytes},
 };
 
 use super::{artifact::validate_artifact_directory, child_report};

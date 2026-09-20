@@ -5,6 +5,7 @@ import type { components } from "@/shared/api/generated";
 export type MatchSummaryResponse = components["schemas"]["MatchSummaryResponse"];
 export type MatchListResponse = components["schemas"]["MatchListResponse"];
 export type MatchListSummaryResponse = components["schemas"]["MatchListSummaryResponse"];
+export type MatchIdentityResponse = components["schemas"]["MatchIdentityResponse"];
 export type MatchDetailResponse = components["schemas"]["MatchDetailResponse"];
 export type UpdateMatchRequest = components["schemas"]["UpdateMatchRequest"];
 export type UpdateMatchResponse = components["schemas"]["UpdateMatchResponse"];
@@ -108,4 +109,11 @@ export async function confirmMatch(
     body: request,
     idempotency: { key: options.idempotencyKey },
   });
+}
+
+export function getMatchIdentity(matchId: string, options: ApiSignalOptions = {}) {
+  return apiRequest<MatchIdentityResponse>(
+    `/api/matches/${encodeURIComponent(matchId)}/identity`,
+    options,
+  );
 }

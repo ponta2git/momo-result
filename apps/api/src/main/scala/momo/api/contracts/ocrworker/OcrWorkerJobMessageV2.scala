@@ -1,13 +1,12 @@
 package momo.api.contracts.ocrworker
 
-import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 
 import cats.syntax.either.*
-import io.circe.syntax.*
-import io.circe.{Json, Printer}
+import io.circe.Json
 
+import momo.api.codec.OcrHintsCodec
 import momo.api.codec.OcrHintsCodec.given
 import momo.api.domain.ids.*
 import momo.api.domain.{OcrJobHints, RequestId, ScreenType, StoredImageLocation}
@@ -56,7 +55,7 @@ object OcrWorkerJobMessageV2:
   val MaxByteLength = 3L * 1024L * 1024L
   val MaxIdLength = 128
   val MaxObjectKeyLength = 512
-  val MaxHintsUtf8Bytes = 8192
+  val MaxHintsUtf8Bytes = OcrHintsCodec.MaxUtf8Bytes
 
   val RequiredKeys: Set[String] = Set(
     SchemaVersionKey,
@@ -75,7 +74,6 @@ object OcrWorkerJobMessageV2:
   private val AllowedMediaTypes = Set("image/png", "image/jpeg", "image/webp")
   private val ObjectKeyCharacters = "^[A-Za-z0-9][A-Za-z0-9._/-]*$".r
   private val Sha256Pattern = "^[0-9a-f]{64}$".r
-  private val printer: Printer = Printer.noSpaces.copy(dropNullValues = true, sortKeys = true)
 
   def fromEnqueueRequest(
       request: OcrJobEnqueueRequest
@@ -130,7 +128,7 @@ object OcrWorkerJobMessageV2:
         "requestedScreenType=auto is not supported by schemaVersion 2",
       )
       _ <- Either.cond(attempt > 0, (), "attempt must be positive")
-      _ <- validateHints(hints)
+      _ <- OcrHintsCodec.validate(hints)
       safeRequestId <- requestId match
         case None => Right(None)
         case Some(value) => RequestId.sanitize(value).toRight(RequestId.Description).map(Some(_))
@@ -165,7 +163,7 @@ object OcrWorkerJobMessageV2:
     )
     val withHints =
       if value.hints.isEmpty then base
-      else base + (HintsKey -> printer.print(value.hints.asJson.deepDropNullValues))
+      else base + (HintsKey -> OcrHintsCodec.encode(value.hints))
     value.requestId.fold(withHints)(id => withHints + (RequestIdKey -> id))
 
   def fieldsAsJson(message: OcrWorkerJobMessageV2): Json = Json
@@ -258,11 +256,3 @@ object OcrWorkerJobMessageV2:
     (),
     s"$name must be 1-$MaxIdLength printable ASCII characters",
   )
-
-  private def validateHints(hints: OcrJobHints): Either[String, Unit] =
-    val encoded = printer.print(hints.asJson.deepDropNullValues).getBytes(StandardCharsets.UTF_8)
-    val errors = OcrJobHints.validationErrors(hints)
-    if errors.nonEmpty then Left(errors.mkString(" "))
-    else if encoded.length > MaxHintsUtf8Bytes then
-      Left(s"ocrHintsJson must be $MaxHintsUtf8Bytes UTF-8 bytes or shorter")
-    else Right(())

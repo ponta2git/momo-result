@@ -186,7 +186,7 @@ highlightは既存指標から決定論的に選び、銀次被害後の成績�
 
 | 領域 | 受入条件 |
 | --- | --- |
-| scope / URL | 無効・削除・追加scope、旧URL正規化、browser back、選択試合解除 |
+| scope / URL | 無効・削除・追加scope、現行URLの正規化、browser back、選択試合解除 |
 | 指標 | 分母、同値、負値、境界、安定順が本文で定めた意味と値を保つ |
 | 高度分析 | solver、fold漏洩なし、決定性、品質境界、局所非採用と予期しない失敗の区別 |
 | artifact連携 | 同一artifact pinning、bounded chunk、revision不一致、latest-wins、fallback禁止 |

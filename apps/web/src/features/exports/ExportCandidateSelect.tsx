@@ -247,23 +247,14 @@ function CandidateSupportNotice({
   const title =
     issue.directory === "load-failed"
       ? "出力候補を読み込めませんでした"
-      : issue.names === "load-failed"
-        ? "候補の表示名を取得できませんでした"
-        : issue.directory === "refresh-failed"
-          ? "出力候補を更新できませんでした"
-          : issue.names === "refresh-failed"
-            ? "候補の表示名を更新できませんでした"
-            : "選択中の出力対象を更新できませんでした";
+      : issue.directory === "refresh-failed"
+        ? "出力候補を更新できませんでした"
+        : "選択中の出力対象を更新できませんでした";
   const details = [
     issue.directory === "load-failed"
       ? "指定された出力対象は確認できているため、このままダウンロードできます。別の対象へ変更するための候補一覧だけ取得できませんでした。"
       : issue.directory === "refresh-failed"
         ? "取得済みの候補と選択内容を保持しています。利用可能な操作はそのまま続けられます。"
-        : undefined,
-    issue.names === "load-failed"
-      ? "取得できなかった名称は「未取得」と表示しています。出力対象とダウンロードはそのまま利用できます。"
-      : issue.names === "refresh-failed"
-        ? "取得済みの名称を保持しています。表示中の出力対象とダウンロードはそのまま利用できます。"
         : undefined,
     issue.selectedTarget === "refresh-failed" ? "確認済みの選択内容を保持しています。" : undefined,
   ].filter((detail): detail is string => Boolean(detail));

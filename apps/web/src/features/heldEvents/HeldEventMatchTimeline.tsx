@@ -1,28 +1,25 @@
 import { BarChart3, Trophy } from "lucide-react";
 
 import { heldEventScopeLabel } from "@/features/heldEvents/heldEventDetailViewModel";
-import type { HeldEventMasterNames } from "@/features/heldEvents/heldEventDetailViewModel";
 import { HeldEventMatchNotePreview } from "@/features/heldEvents/HeldEventMatchNotePreview";
 import type { HeldEventMatchResponse } from "@/shared/api/heldEvents";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { memberDisplayName } from "@/shared/domain/members";
 import { formatManYen } from "@/shared/lib/formatters";
+import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
+import { RankBadge } from "@/shared/matches/RankBadge";
 import { seriesComparisonHrefForMatch } from "@/shared/navigation/matchLinks";
 import { withReturnTo } from "@/shared/navigation/returnTo";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
-import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
-import { RankBadge } from "@/shared/ui/rank/RankBadge";
 import { contentText } from "@/shared/ui/typography";
 
 export function HeldEventMatchTimeline({
-  masterNames,
   matches,
   returnTo,
 }: {
-  masterNames: HeldEventMasterNames;
   matches: HeldEventMatchResponse[];
   returnTo: string;
 }) {
@@ -87,7 +84,7 @@ export function HeldEventMatchTimeline({
                       {formatMatchNoInEvent(match.matchNoInEvent)}
                     </h3>
                     <p className={cn(contentText.body, "mt-1 truncate")}>
-                      {heldEventScopeLabel(match, masterNames)}
+                      {heldEventScopeLabel(match)}
                     </p>
                     <p className={cn(contentText.supporting, "mt-1")}>
                       オーナー <span>{memberDisplayName(match.ownerMemberId)}</span>

@@ -71,7 +71,7 @@ pub(crate) async fn claim_job(
     let timeout_milliseconds = duration_milliseconds(config.execution_limits.calculation_timeout)?;
     let fencing_token = acquire_execution_slot(
         &transaction,
-        config,
+        &config.worker_id,
         job_id,
         &attempt_id,
         lease_milliseconds,
@@ -87,7 +87,13 @@ pub(crate) async fn claim_job(
         lease_milliseconds,
         timeout_milliseconds,
     };
-    persist_claim(&transaction, config, &attempt).await?;
+    persist_claim(
+        &transaction,
+        &config.worker_id,
+        &config.effective_config_version,
+        &attempt,
+    )
+    .await?;
     transaction.commit().await?;
     Ok(effects.committed(ClaimResult::Claimed(ClaimedJob {
         job_id: String::from(job_id),
@@ -216,7 +222,7 @@ fn supports_candidate(candidate: &ClaimCandidate, expected_schema: i32) -> bool 
         && candidate
             .validation_contract_id
             .as_deref()
-            .is_none_or(|contract| contract == ARTIFACT_VALIDATION_CONTRACT_ID)
+            .is_some_and(|contract| contract == ARTIFACT_VALIDATION_CONTRACT_ID)
 }
 
 async fn recovery_resolves_delivery(
@@ -255,7 +261,7 @@ fn recovered_job_state_resolves_delivery(
 
 async fn acquire_execution_slot(
     transaction: &Transaction<'_>,
-    config: &AnalysisConsumerConfig,
+    worker_id: &str,
     job_id: &str,
     attempt_id: &str,
     lease_milliseconds: i64,
@@ -265,7 +271,7 @@ async fn acquire_execution_slot(
         transaction,
         expected_fencing_token,
         NewExecutionSlotHolder {
-            owner: &config.worker_id,
+            owner: worker_id,
             job_id,
             attempt_id,
         },
@@ -290,7 +296,8 @@ struct ClaimAttempt<'a> {
 
 async fn persist_claim(
     transaction: &Transaction<'_>,
-    config: &AnalysisConsumerConfig,
+    worker_id: &str,
+    effective_config_version: &str,
     attempt: &ClaimAttempt<'_>,
 ) -> Result<(), ControlError> {
     let updated = transaction
@@ -303,7 +310,7 @@ async fn persist_claim(
                updated_at = clock_timestamp()\x20\
              WHERE id = $7 AND status = 'queued'",
             &[
-                &config.worker_id,
+                &worker_id,
                 &attempt.attempt_id,
                 &attempt.fencing_token,
                 &attempt.lease_milliseconds,
@@ -327,13 +334,13 @@ async fn persist_claim(
                 &attempt.attempt_id,
                 &attempt.job_id,
                 &attempt.attempt_no,
-                &config.worker_id,
+                &worker_id,
                 &attempt.fencing_token,
                 &attempt.candidate.input_revision,
                 &attempt.candidate.algorithm_version,
                 &attempt.candidate.artifact_schema_version,
                 &attempt.candidate.validation_contract_id,
-                &config.effective_config_version,
+                &effective_config_version,
                 &attempt.timeout_milliseconds,
             ],
         )
@@ -393,10 +400,10 @@ mod tests {
     }
 
     #[test]
-    fn claim_accepts_legacy_null_or_the_exact_validation_contract_only() {
+    fn claim_requires_the_exact_current_publication_contract() {
         let schema = i32::try_from(ARTIFACT_SCHEMA_VERSION).unwrap_or(i32::MAX);
 
-        assert!(supports_candidate(&candidate(None), schema));
+        assert!(!supports_candidate(&candidate(None), schema));
         assert!(supports_candidate(
             &candidate(Some(ARTIFACT_VALIDATION_CONTRACT_ID)),
             schema
@@ -483,28 +490,6 @@ mod tests {
         );
         transaction
             .batch_execute("ROLLBACK TO SAVEPOINT old_binary_claim")
-            .await?;
-
-        transaction.batch_execute("SAVEPOINT legacy_claim").await?;
-        transaction
-            .execute(
-                "UPDATE series_analysis_jobs SET validation_contract_id = NULL WHERE id = $1",
-                &[&JOB_ID],
-            )
-            .await?;
-        let legacy_claimed = transaction
-            .execute(
-                "UPDATE series_analysis_jobs SET status = 'running',\x20\
-                   started_at = clock_timestamp(), lease_owner = 'legacy-worker',\x20\
-                   lease_attempt_id = 'legacy-attempt', lease_fencing_token = 1,\x20\
-                   lease_expires_at = clock_timestamp() + interval '1 minute', attempt_count = 1\x20\
-                 WHERE id = $1 AND status = 'queued'",
-                &[&JOB_ID],
-            )
-            .await?;
-        assert_eq!(legacy_claimed, 1);
-        transaction
-            .batch_execute("ROLLBACK TO SAVEPOINT legacy_claim")
             .await?;
 
         let claimed = transaction

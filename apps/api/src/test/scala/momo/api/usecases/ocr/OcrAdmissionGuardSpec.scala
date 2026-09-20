@@ -12,7 +12,6 @@ import momo.api.MomoCatsEffectSuite
 import momo.api.errors.AppError
 import momo.api.repositories.OcrQueueBacklogSnapshot
 import momo.api.testing.{
-  FailingOcrJobQueueHealthCheck,
   FixedClock,
   RecordingOcrQueueOutboxRepository,
   StaticOcrJobQueueHealthCheck
@@ -53,20 +52,48 @@ final class OcrAdmissionGuardSpec extends MomoCatsEffectSuite:
       assertEquals(result, Right(()))
       assertEquals(health, "ok")
 
-  test("rejects when Redis is unavailable before reading outbox state"):
-    val redisError = RuntimeException("redis://secret-host/down")
+  test("rejects when stream state is unavailable without querying the database"):
+    given Clock[IO] = FixedClock.at(now)
+    val guard = OcrAdmissionGuard.from[IO](
+      _ => IO.raiseError(AssertionError("database must not be queried")),
+      IO.raiseError(RuntimeException("stream unavailable")),
+      config,
+    )
     for
-      repo <- repoWithSnapshot(emptySnapshot)
-      guard = guardAt(
-        repo,
-        FailingOcrJobQueueHealthCheck(Some(redisError), deadLetterLengthError = None),
-        config,
-      )
       result <- guard.ensureAvailable
       health <- guard.healthStatus
     yield
       assertServiceUnavailable(result)
-      assertEquals(health, "degraded:redis_unavailable")
+      assertEquals(health, "degraded:dead_letter_status_unavailable")
+
+  test("checks stream state once without a preliminary connectivity command"):
+    given Clock[IO] = FixedClock.at(now)
+    for
+      reads <- cats.effect.Ref.of[IO, Int](0)
+      guard = OcrAdmissionGuard.from[IO](
+        _ => IO.pure(emptySnapshot),
+        reads.update(_ + 1).as(0L),
+        config,
+      )
+      result <- guard.ensureAvailable
+      count <- reads.get
+    yield
+      assertEquals(result, Right(()))
+      assertEquals(count, 1)
+
+  test("rejects when durable backlog state cannot be read"):
+    given Clock[IO] = FixedClock.at(now)
+    val guard = OcrAdmissionGuard.from[IO](
+      _ => IO.raiseError(RuntimeException("database unavailable")),
+      IO.pure(0L),
+      config,
+    )
+    for
+      result <- guard.ensureAvailable
+      health <- guard.healthStatus
+    yield
+      assertServiceUnavailable(result)
+      assertEquals(health, "degraded:outbox_status_unavailable")
 
   test("rejects when due outbox backlog exceeds the configured limit"):
     for
@@ -117,7 +144,7 @@ final class OcrAdmissionGuardSpec extends MomoCatsEffectSuite:
       config: OcrAdmissionGuard.Config,
   ): OcrAdmissionGuard[IO] =
     given Clock[IO] = FixedClock.at(now)
-    OcrAdmissionGuard.from[IO](repo, queueHealth, config)
+    OcrAdmissionGuard.from[IO](repo.backlogSnapshot, queueHealth.deadLetterLength, config)
 
   private def repoWithSnapshot(
       snapshot: OcrQueueBacklogSnapshot

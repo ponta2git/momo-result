@@ -471,7 +471,7 @@
               "x-momo-maxUtf8Bytes": 4096
             },
             "artifactSchemaVersion": {
-              "minimum": 0,
+              "const": 4,
               "type": "integer"
             },
             "gameTitleId": {
@@ -1052,7 +1052,7 @@
               "x-momo-maxUtf8Bytes": 4096
             },
             "artifactSchemaVersion": {
-              "minimum": 0,
+              "const": 4,
               "type": "integer"
             },
             "gameTitleId": {
@@ -1466,7 +1466,7 @@
               "x-momo-maxUtf8Bytes": 4096
             },
             "artifactSchemaVersion": {
-              "minimum": 0,
+              "const": 4,
               "type": "integer"
             },
             "gameTitleId": {
@@ -1843,7 +1843,7 @@
               "x-momo-maxUtf8Bytes": 4096
             },
             "artifactSchemaVersion": {
-              "minimum": 0,
+              "const": 4,
               "type": "integer"
             },
             "gameTitleId": {

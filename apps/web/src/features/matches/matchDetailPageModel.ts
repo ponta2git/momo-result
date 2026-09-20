@@ -1,20 +1,11 @@
 import type { MatchFeatureBadge } from "@/features/matches/matchDetailViewModel";
 import type { MatchDetailResponse } from "@/shared/api/matches";
-import type { matchPerformanceContextFromArtifact } from "@/shared/domain/matchPerformanceContext";
+import type { matchPerformanceContextFromArtifact } from "@/shared/matches/matchPerformanceContext";
 
 export type MatchDetailRefreshModel = {
   pending: boolean;
   run: () => void;
 };
-
-export type MatchDetailEnrichmentModel =
-  | { kind: "complete" }
-  | { kind: "pending" }
-  | {
-      fields: string[];
-      kind: "warning";
-      refresh: MatchDetailRefreshModel;
-    };
 
 export type MatchDeletionModel = {
   confirm: () => Promise<void>;
@@ -31,7 +22,6 @@ export type MatchDetailReadyPageModel = {
     performanceContext: ReturnType<typeof matchPerformanceContextFromArtifact>;
   };
   deletion: MatchDeletionModel;
-  enrichment: MatchDetailEnrichmentModel;
   identity: {
     gameTitle: string;
     heldAt: string;
@@ -59,14 +49,3 @@ export type MatchDetailPageModel =
       refresh: MatchDetailRefreshModel;
     }
   | MatchDetailReadyPageModel;
-
-export function resolvedEnrichmentName(args: {
-  failed: boolean;
-  loading: boolean;
-  name: string | undefined;
-}): string {
-  if (args.name) return args.name;
-  if (args.loading) return "取得中…";
-  if (args.failed) return "未取得";
-  return "未設定";
-}

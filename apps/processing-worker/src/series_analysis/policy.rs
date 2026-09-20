@@ -1,4 +1,4 @@
-use crate::process::AnalysisChildOutcome;
+use super::child_process::AnalysisChildOutcome;
 
 use super::{
     AttemptInterruption,

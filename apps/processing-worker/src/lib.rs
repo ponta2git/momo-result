@@ -20,6 +20,8 @@ mod postgres;
 mod process;
 mod runtime_identifier;
 mod series_analysis;
+mod stream_connection;
+mod stream_retention;
 mod supervisor;
 
 pub use cli::entrypoint;

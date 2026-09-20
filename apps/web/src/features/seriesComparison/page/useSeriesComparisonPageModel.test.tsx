@@ -4,15 +4,22 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { useEffect } from "react";
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { useSeriesComparisonPageModel } from "@/features/seriesComparison/page/useSeriesComparisonPageModel";
+import { decodeSeriesAnalysisArtifact } from "@/shared/api/seriesAnalysisArtifactDecoder";
 import { setupMsw } from "@/test/msw/lifecycle";
-import { makeSeriesAnalysisExcludedMatchContext } from "@/test/msw/seriesAnalysisFixtures";
+import {
+  makeSeriesAnalysisAggregate,
+  makeSeriesAnalysisExcludedMatchContext,
+} from "@/test/msw/seriesAnalysisFixtures";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 
 setupMsw();
+
+// Query lifecycle is the oracle here; prepare the large generated validator before timed UI waits.
+beforeAll(() => decodeSeriesAnalysisArtifact("aggregateV4", makeSeriesAnalysisAggregate()));
 
 function PageModelHarness({
   onFocusChange,

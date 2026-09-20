@@ -5,7 +5,7 @@ import java.nio.charset.StandardCharsets
 import io.circe.parser.parse
 import io.circe.{Json, JsonObject}
 
-import momo.api.domain.SeriesAnalysisMatchContextExclusion
+import momo.api.domain.{SeriesAnalysisChunkKind, SeriesAnalysisMatchContextExclusion}
 
 private[api] object SeriesAnalysisResponseSchemas:
   private val SchemaResourceDirectory = "/momo/api/series-analysis-schemas"
@@ -21,12 +21,12 @@ private[api] object SeriesAnalysisResponseSchemas:
     "minLength" -> Json.fromInt(1),
     "type" -> Json.fromString("string"),
   )
-  private val ArtifactSchema = objectSchema(
+  private val ArtifactSchema: Json = objectSchema(
     List(
       "algorithmVersion" -> TextSchema,
       "artifactId" -> TextSchema,
       "artifactSchemaVersion" -> Json.obj(
-        "minimum" -> Json.fromInt(0),
+        "const" -> Json.fromInt(SeriesAnalysisArtifactContract.ArtifactSchemaVersion),
         "type" -> Json.fromString("integer"),
       ),
       "gameTitleId" -> TextSchema,
@@ -60,49 +60,37 @@ private[api] object SeriesAnalysisResponseSchemas:
     )
   )
 
-  val aggregate: Resource = Resource(
-    "aggregate",
-    "aggregateV2",
-    "SeriesAnalysisAggregateResponse",
-    "series-analysis-aggregate-v3.schema.json",
-    "series-analysis-aggregate-response-v2.schema.json",
-    matchContext = false,
-  )
-  val aggregateV3: Resource = Resource(
-    "aggregate",
-    "aggregateV3",
-    "SeriesAnalysisAggregateV3Response",
-    "series-analysis-aggregate-v3.schema.json",
-    "series-analysis-aggregate-response-v3.schema.json",
-    matchContext = false,
-    additionalOwnerFile = Some("series-analysis-aggregate-v4.schema.json"),
-  )
   val drilldown: Resource = Resource(
     "drilldown",
     "drilldown",
     "SeriesAnalysisDrilldownResponse",
-    "series-analysis-drilldown-v3.schema.json",
+    SeriesAnalysisChunkKind.Drilldown,
     "series-analysis-drilldown-response-v2.schema.json",
-    matchContext = false,
   )
   val matchContext: Resource = Resource(
     "match-context",
     "matchContext",
     "SeriesAnalysisMatchContextResponse",
-    "series-analysis-match-context-v1.schema.json",
+    SeriesAnalysisChunkKind.MatchContext,
     "series-analysis-match-context-response-v2.schema.json",
-    matchContext = true,
   )
-  val review: Resource = Resource(
+  val aggregateV4: Resource = Resource(
+    "aggregate",
+    "aggregateV4",
+    "SeriesAnalysisAggregateV4Response",
+    SeriesAnalysisChunkKind.Aggregate,
+    "series-analysis-aggregate-response-v4.schema.json",
+  )
+  val reviewV3: Resource = Resource(
     "review",
-    "review",
-    "SeriesAnalysisReviewResponse",
-    "series-analysis-review-v3.schema.json",
-    "series-analysis-review-response-v2.schema.json",
-    matchContext = false,
+    "reviewV3",
+    "SeriesAnalysisReviewV3Response",
+    SeriesAnalysisChunkKind.Review,
+    "series-analysis-review-response-v3.schema.json",
   )
 
-  val resources: List[Resource] = List(aggregate, aggregateV3, drilldown, matchContext, review)
+  val resources: List[Resource] =
+    List(aggregateV4, reviewV3, drilldown, matchContext)
 
   def schemaFor(resource: Resource): Json =
     val registered = resources.find(_.componentName == resource.componentName).getOrElse(
@@ -110,32 +98,26 @@ private[api] object SeriesAnalysisResponseSchemas:
     )
     if registered ne resource then
       sys.error(s"Conflicting series analysis response component: ${resource.componentName}")
-    val owner = resource.additionalOwnerFile match
-      case None => loadSchema(resource.ownerFile)
-      case Some(file) => Json.obj("oneOf" -> Json.arr(
-          loadSchema(
-            resource.ownerFile
-          ).mapObject(_.remove("$id").remove("$schema").remove("$comment")),
-          loadSchema(file).mapObject(_.remove("$id").remove("$schema").remove("$comment")),
-        ))
-    if resource.matchContext then matchContextResponseSchema(owner, resource)
-    else responseSchema(owner, resource)
+    val owner = loadSchema(SeriesAnalysisArtifactContract.OwnerSchemaFiles(resource.chunkKind))
+    val response =
+      if resource.chunkKind == SeriesAnalysisChunkKind.MatchContext then
+        matchContextResponseSchema(owner)
+      else responseSchema(owner)
+    withMetadata(response, resource)
 
   final case class Resource private[seriesanalysis] (
       pathSegment: String,
       kind: String,
       componentName: String,
-      ownerFile: String,
+      chunkKind: SeriesAnalysisChunkKind,
       outputFile: String,
-      matchContext: Boolean,
-      additionalOwnerFile: Option[String] = None,
   )
 
-  private def responseSchema(owner: Json, resource: Resource): Json =
+  private def responseSchema(owner: Json): Json =
     val memberHydrated = addMemberDisplayNames(owner)
-    withMetadata(mapBranches(memberHydrated)(addResponseEnvelope), resource)
+    mapBranches(memberHydrated)(addResponseEnvelope)
 
-  private def matchContextResponseSchema(owner: Json, resource: Resource): Json =
+  private def matchContextResponseSchema(owner: Json): Json =
     val includedBase = owner.mapObject(
       _.remove("$comment").remove("$id").remove("$schema")
     )
@@ -174,10 +156,7 @@ private[api] object SeriesAnalysisResponseSchemas:
         "scope" -> excludedScope,
       )
     )
-    withMetadata(
-      Json.obj("oneOf" -> Json.arr(included, excluded)),
-      resource,
-    )
+    Json.obj("oneOf" -> Json.arr(included, excluded))
 
   private def addMemberDisplayNames(value: Json): Json = value.arrayOrObject(
     value,

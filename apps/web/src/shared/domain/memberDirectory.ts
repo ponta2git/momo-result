@@ -1,7 +1,5 @@
 import { workspaceInputMembers } from "@/shared/domain/members";
 
-const maxAliasesPerPlayerHint = 8;
-
 export type MemberAliasRecord = {
   alias: string;
   memberId: string;
@@ -74,20 +72,10 @@ export function resolveMemberIdByAlias(
   }
 
   for (const [memberId, aliases] of directory.aliasesByMemberId) {
-    if (aliases.some((alias) => normalizedAlias(alias) === normalized)) {
+    if (aliases.includes(normalized)) {
       return memberId;
     }
   }
 
   return undefined;
-}
-
-export function playerAliasHints(directory: MemberAliasDirectory): Array<{
-  aliases: string[];
-  memberId: string;
-}> {
-  return directory.memberIds.map((memberId) => ({
-    memberId,
-    aliases: (directory.aliasesByMemberId.get(memberId) ?? []).slice(0, maxAliasesPerPlayerHint),
-  }));
 }

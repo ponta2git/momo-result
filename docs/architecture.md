@@ -19,23 +19,43 @@
 - DB を状態の正本、Redis Streams を再配送可能な配送路とする。
 - provider 固有値、resource 実測値、secret、運用手順は public docs に置かない。
 
+### Storage / Resource Boundaries
+
+- 業務ルール・再試行方針・集計状態の更新手順はアプリが所有する。DBにはFK、一意性、改変不能性、原子的な条件付き更新を残す。複数consumerの整合性やrollback互換を守るtriggerは、置換する契約と移行順が揃うまで削除しない。
+- Redisへ業務状態や長期履歴を複製しない。Luaはカウンタと期限など小さな原子操作に限定し、業務分岐や無制限の走査を持ち込まない。pipelineによる往復削減とtransactionの原子性を区別する。
+- 接続poolはruntimeで再利用し、取得待ちの実行枠もpool上限へ合わせる。利用しない接続の常時補充やkeepalive queryを避ける一方、requestごとの接続開閉へ置き換えない。
+- 受付判定は必要な外部状態の取得結果から行う。直前のPINGを成功保証とせず、外部状態をcacheしてquotaやfail-closedの意味を弱めない。
+- 処理中のlease heartbeat、待機中のcapability更新、queueのblocking read、再配送期限、履歴保持は別の目的を持つ。閾値は相互の期限・shutdown予算・利用者の待ち時間と合わせて調整し、コマンド数やquery負荷だけで決めない。
+- queryやindexの変更は、開発用data storeと分離した合成fixtureで通常件数・上限付近・上限超過を比較する。実行計画、転送量、buffer利用、応答時間から採否を決め、実験資源を破棄する。接続数・コマンド数の削減を、そのままproviderの稼働時間や請求額の削減と扱わない。
+
 ## 2. API
 
 ### Wire Boundary
 
 - HTTP 契約は Tapir endpoint を正本とする。手書き route が必要でも path / query / header を二重管理しない。
 - 分析artifactのraw response shapeは、Rust所有のartifact schemaとAPI所有のmetadata projectionをTapirのnamed responseへ合成してHTTP契約とする。OpenAPI、Web型、runtime validatorはこの合成結果から生成し、派生物へshapeを手書きしない。
+- 分析結果の分類・根拠はWorkerが所有し、画面内の遷移先、リンク文言、固定の指標説明はWebが所有する。保存成果物へ画面構造を埋め込まず、Webは分類から遷移先を決める。
 - `apps/api/openapi.yaml` は内部 Web codegen 用の追跡する派生物であり、契約や公開 API documentation の正本ではない。Tapir から一時生成した spec を保守された OpenAPI-aware linter で構造検証し、tracked artifact と一致させ、その artifact から Web 型を生成する。手編集で差分を解消しない。
 - OpenAPI lint は unresolved reference、path / parameter、schema、operation identity など構造整合性に限定する。field の公開可否、認証、業務意味は endpoint、DTO、要求・domain 規約で決め、legacy 名や source 断片の文字列検査を契約にしない。
 - HTTP 層は入力・認証・エラー変換に閉じ、DB、Redis、業務分岐を直接持たない。
 - Tapirのserver logicで発生した例外は外側の`HttpErrorMiddleware`へ伝え、共通のProblem Detailsと機密情報を除いたincident logに変換する。Tapirの既定例外応答・例外logと二重に処理しない。mutationの結果不明時に保持するidempotency予約は、このHTTP変換より内側で確定する。
 - raw ID、設定値、wire value は境界で検証済み型へ変換する。usecase へ未検証値や wire DTO を渡さない。
+- 分析は現行の成果物契約とHTTP経路だけを提供する。旧世代のdecoder、互換用route、旧形式からの補完は維持しない。形式を変えるときはAPI・Web・Workerを揃え、必要な再計算を公開再開前に完了する。
 - optional field が mode や副作用を変える場合は discriminator として要件または domain 文書にも意味を残す。
-- 外部依存は port と adapter で隔離し、composition root だけが実装を選ぶ。
+- 依存方向は `http → auth / usecases → domain + ports / repositories`、`adapters → domain + ports / repositories` とする。外部通信・永続化の実装は adapter に置き、`bootstrap` だけが実装を選ぶ。認証の account 判定と callback の組み立ても HTTP module へ戻さない。
+- 外部境界には利用側が必要とする操作・値だけを公開する。セッションには有効期間、OAuth state には署名鍵と有効期間、OCR受付には別名の snapshot を渡し、全体設定や未使用の更新操作を運搬しない。SDK client、SQL、provider wire DTO は adapter 内に閉じる。
 
 ### Usecase / Repository
 
-- usecase は状態遷移、整合性、副作用を所有し、repository は永続化契約に閉じる。
+- domain は不変条件、状態の優先順位、範囲判定、純粋な組み立てを所有する。usecase はそれらを使った手順と副作用を所有し、repository は必要な整合性を保証する永続化操作を公開する。SQL行の型変換とI/O失敗の扱いはadapterに置く。
+- 読み取りは利用目的に合う projection を返す。開催詳細や export のために incident、OCR来歴、監査情報を持つ全 `MatchRecord` を運搬せず、必要な列・名称だけを同じ読み取り snapshot で取得する。複数statementで一つの結果を組むPostgreSQLのreadはread-only / repeatable-readへ閉じ、writeに合成する `ConnectionIO` へread-only設定を埋め込まない。
+- 一覧・詳細の表示名と開催日時は対象rowと同じread snapshotへ含め、Webが全masterや先頭ページの開催一覧を結合して補わない。選択済み対象の確認は軽量なidentity / summaryを使い、試合結果・メモ・OCR来歴を取得しない。絞込み候補と対象の表示情報は用途を分ける。
+- ページ一覧の表示名JOINは対象ページを確定した後に行う。開催一覧もページ外のscopeを転送せず、全体件数はscalar集計として同じsnapshotで読む。ページングの前後で必要な条件・順序・cursorを変えない。
+- 下書きreviewは現在の下書き、参照中のOCR結果、保持中の画像descriptorを一つのsnapshotとして読む。Webが複数responseの世代を突き合わせる責任を負わず、画像本体は選択したdescriptorから別途取得する。確定前の先行GETを整合性保証にせず、atomicな確定commandと競合responseを正本にする。
+- 元画像の取得はdescriptorが指す画像ID、ZIP取得は下書きの更新時刻を前提条件にする。差替え後の別画像を古いOCR結果と組み合わせず、世代不一致は再確認を求める。未保存の入力へ新しいOCR結果を自動で混入させない。
+- ZIPはresponse bodyの評価scope内で生成し、一時ファイルや全量bufferをHTTP応答へ引き渡さない。事前に画像metadataの合計サイズを検証し、生成中も実際のZIPサイズを制限する。送信中の読取・生成失敗や上限超過は転送を中断し、Webはbody全体の取得成功後にだけファイル保存を開始する。
+- 新しいread endpointや必須response情報にWebを移すときは、APIを先に配備する。旧Webが使う有効なendpointは移行期間中維持し、廃止済みrouteの固定error応答を有効な契約として生成clientへ残さない。
+- 集約結果だけが必要な一覧はDBで集約し、表示しない監査履歴を全件転送しない。DB内で完結するsnapshotの複製は `INSERT ... SELECT` で表し、JVMを経由するread/write往復を増やさない。単純化とquery costの両方を、実行計画と境界のテストで確認する。
 - 通常制御フローは型で返し、予期しない不整合や外部I/O失敗と区別する。
 - 部分更新は既存値と入力を合わせた実効状態で検証する。読み取り後の前提を更新に使う場合は、同じ更新条件で再検証する。
 - in-memory adapter は production adapter と同じ状態遷移 guard を持つ。単純化した double を正本にしない。
@@ -43,7 +63,7 @@
 
 ### Transaction / Outbox
 
-- 業務状態と outbox は同じ DB transaction で確定し、Redis publish は transaction の成功条件にしない。
+- 業務状態と outbox は同じ DB transaction で確定し、Redis publish は transaction の成功条件にしない。原子的なcommandは一つのrepository操作として公開し、adapter内で `ConnectionIO` を合成して一度だけcommitする。
 - 下書き・試合の変更に伴うDiscord通知取消も同じsource commandへ含める。transactionの集約単位とlock順はアプリに明示し、通知triggerで暗黙に補完しない。詳細は`docs/db-rule.md`を参照する。
 - 管理者のDiscord通知設定はAPIのapplication commandとして扱う。domainが世代競合と変更・取消対象を決め、PostgreSQL adapterがgate取得、最新状態の読取り、設定と取消の一括保存を行う。DBは永続化と排他を担い、Summitの稼働は設定保存の前提にしない。
 - wake / publish は commit 後に実行する。rollback 時は post-commit effect を返さない。
@@ -57,7 +77,7 @@
 ### Error / Auth
 
 - 業務、認証、権限、入力、外部依存のエラーを区別し、UI が扱える Problem Details へ正規化する。
-- OAuth provider、account、session、provider backoff は auth service に閉じる。HTTP module は cookie / redirect / wire 変換を担う。
+- account、session、provider backoff の判断は auth service に閉じ、Discord HTTP client と Redis実装は adapter に置く。HTTP module は cookie / redirect / wire 変換を担う。
 - 認証主体と試合参加者を混同しない。状態変更 API は CSRF 対策を必須とし、dev/test 認証を本番経路へ混ぜない。
 - UI が回復方法を変える HTTP status を汎用内部エラーへ潰さない。
 
@@ -67,8 +87,19 @@
 
 - `apps/web/src` の依存方向は `app -> features -> shared` とする。逆方向 import と feature 間の実装詳細 import を禁止する。
 - `shared` は横断 API、生成型の facade、query 基盤、共有 UI、共通 domain helper を所有する。画面固有の状態・変換・UI は feature に置く。
+- `shared` 内も依存方向を持つ。下表の基盤から業務別の adapter へ逆依存しない。型だけの import も同じ境界で扱う。
+
+  | モジュール | 所有する判断 | 依存できる shared 基盤 |
+  | --- | --- | --- |
+  | `lib` | 業務に依存しない値変換・局所的な React / browser utility | `lib` |
+  | `domain` | 業務語彙、identity、入力順、純粋な変換 | `domain`、`lib` |
+  | `api` | HTTP、wire decode、query key / cache、idempotency | `api`、`domain`、`lib` |
+  | `ui` | 汎用の構造・操作・アクセシビリティ・表示補間 | `ui`、`lib` |
+
+  `shared/matches`、`heldEvents`、`masters`、`navigation` などの業務別 module はこれらを組み合わせる。順位・メンバー identity を知る結果台帳は `shared/matches`、API の候補を選択部品へ接続する処理は `shared/heldEvents`、分析専用チャートは `features/seriesComparison` が所有する。配置名が shared であることを汎用性の根拠にしない。
 - Page は composition とページ状態に寄せ、取得、mutation、複雑な状態機械、純粋変換を分離する。
 - 複雑な Page は feature 固有の PageModel から resource、command、location、feedback など画面の意味を受け取り、TanStack Query の result や mutation object を直接受け取らない。PageModel 内は lifecycle と変更理由が異なる関心事だけを hook / 純粋変換へ分け、単なる転送層は作らない。
+- hook が計算済みの値を別の builder へ渡し、そのまま同じ画面モデルへ詰め直す層は置かない。子の契約は使用する値・操作だけで表し、設定欄へ全 player 入力、チャートへ全 artifact、command へ全 page model を運ばない。純粋な表示変換・型は hook や page component へ依存せず、consumer と取得処理の共通の下位に置く。
 - ファイル行数は責務混在を見つける signal とし、行数だけを理由に浅い module へ分割しない。
 - 本節を依存方向の正本とする。静的 gate へ投影する場合は `docs/dev-rule.md` の採用基準に従い、module graph から判定できる import 規則だけを syntax-aware な tool で検査する。本番コードから test 専用 module を参照しない。
 
@@ -78,9 +109,33 @@
 - 結果確認の元画像も、取得状態とBlobをTanStack Queryが所有する。画像一覧と画像本体は異なるquery keyを持ち、本体は認証主体・画面scope・下書き・画像descriptorの世代を区別する。Object URLは画面の表示資源として生成・解放し、Blobや取得状態を別のcacheへ複製しない。
 - 元画像の先読みは初回表示または利用者の画像選択に続く有限の処理として許可する。featureの取得処理が表示対象を優先して直列化し、同一取得の引継ぎ、中断、容量、scope終了時のquery破棄を所有する。自動retryや回線復帰による取得再開を起こさず、確定・削除成功時は関連cacheの更新より先に画像の寿命を閉じる。
 - query key は cache 内の runtime data shape まで区別する。backend resource が同じでも raw response と ViewModel を同じ key に置かない。
+- masterの管理と入力候補は同じraw responseを共有し、並べ替えを`select`へ閉じる。設定管理は訪問したtabに必要なqueryだけを有効にし、変更responseをcacheへ反映してから表示名を含む関連readを無効化する。再取得失敗で確定した追加・訂正・削除を巻き戻さない。
+- consumer の射影は `select` または純粋な表示変換で行い、cache は元の server data を保持する。表示中の data が現 query の値か前 scope の placeholder かは query observer の状態から判断し、その判定のために描画時に cache を別途読み直さない。
 - fatal error、再取得、cached data、認証待ち、disabled query を別状態として扱う。mutation 後は表示中の resource と選択候補の cache をともに整合させる。
 - 初回表示、mutation 後の cache 整合、artifact 失効時の bounded recovery、利用者が実行した更新 / 再試行だけが server state の取得を開始する。interval、遅延 timer、window focus、tab visibility、network reconnect を起点に自動再取得しない。この契約は共通 QueryClient に集約し、feature ごとに再実装しない。
+- 分析の計算payloadがimmutableでも、現在の名称や試合revisionに依存するHTTP projectionは可変として扱う。master変更は表示名を含むartifact response、試合訂正・削除はその試合のcontextとidentityを更新する。手動更新はstatusで参照世代を確定してから必要なresourceを読み、新旧artifactを同時に再取得しない。
 - React の concurrent / form API は cache、retry、認証、validation の既存契約を置き換えない範囲で使う。
+
+### React 更新の優先度
+
+- 入力値、選択 intent、focus は即時に反映する。`useDeferredValue` は追従を遅らせてもよい検証表示・一覧・図表に使い、送信時の validation と request は最新値から同期的に組み立てる。
+- 遅延する表示は `memo` と安定した props の境界を組み合わせ、urgent render で前の重い subtree を再描画しない。小さい値の加工へ一律に memo を足さず、state の局所化・不要な依存の削減を先に検討する。deferred value は debounce、通信回数の制限、計算量の削減ではない。
+- 表示 bundle を遅延する場合は data、scope、view の identity を一緒に保つ。要求中の条件を古い図表の見出し・操作へ混ぜず、追従中の表示と操作制限は既存の stale 表示へ接続する。
+- `useOptimistic` の更新は Action 内で行い、操作に属する非同期処理を await する。navigation の Promise は Router の完了境界であり、任意の `React.lazy` subtree の描画完了を保証しない。取得は Query、code readiness は Suspense が引き続き所有する。
+- 作成結果を楽観表示する場合、成功 response を Query cache の確定値へ引き継いでから再取得する。再取得だけに確定を任せず、保存成功後の再取得失敗を作成失敗へ巻き戻さない。失敗した Action は入力を残し、成功時だけ明示的に初期化する。
+
+| 対象 | 採用する更新境界 | 理由 |
+| --- | --- | --- |
+| 試合一覧の条件変更 | 即時の選択 intent、遅延した一覧、古い対象への操作制限 | 続けて条件を変えながら表示を追従させる |
+| 戦績比較の view / scope / artifact | 整合した表示 bundle の遅延、図表の memo 境界 | 大きい図表更新を選択操作と分離する |
+| 試合入力 | 数値入力の局所 draft、遅延検証、score grid の描画境界 | メモ・設定の編集が無関係な grid を再描画しない |
+| マスタ作成 | Action と局所的な楽観行、成功 response の確定反映 | 待ち時間中も追加を示し、失敗時に入力を回復する |
+| 保存・削除・OCR開始・権限/通知変更・再計算・出力 | Action / mutation の pending と確定結果 | 検証、競合、副作用、生成結果を先取りしない |
+| 開催一覧・出力候補のページ取得 | Query の前ページ保持と scope 表示 | ページ単位の取得は既存の待機境界で扱える |
+
+設定管理の訪問済み panel は Base UI の `keepMounted` で入力・DOM を保持する。React `Activity` は hidden subtree の Effects を停止するが、現在の Query / Action owner は panel の外にあるため、主要な取得・描画負荷を移せない。focus / dialog 接続の再作成も伴うので、この構造では追加しない。
+
+API の判断は React の [useDeferredValue](https://react.dev/reference/react/useDeferredValue)、[useTransition](https://react.dev/reference/react/useTransition)、[useOptimistic](https://react.dev/reference/react/useOptimistic) と TanStack Query の [mutation response による更新](https://tanstack.com/query/latest/docs/framework/react/guides/updates-from-mutation-responses) を参照する。効果は不要な render の削減と待機中の操作で確認し、通信速度や処理時間の短縮とは区別する。
 
 ### Client Lifecycle / Suspense / Motion
 
@@ -115,6 +170,8 @@
 
 - event 由来の値は handler 内で同期的に取り出し、request transform で route / prefill / hidden identifier を落とさない。
 - 分析の集計、意味を持つ sort / filter、閾値、統計 fallback は Web で再計算せず、保存済み成果物を表示用に整形する。
+- OCR の開始確認では設定・画像と送信する作品ヒントを同じ snapshot に固定する。API がジョブ受付時に既定のプレーヤー別名と登録済み別名をsnapshot化し、payload 上限を検証する。作品方式ごとの CPU 名の既定値と認識時の名前照合は Worker が所有し、明示した CPU 名を優先する。Web はそのための別名取得・正規化・上限処理を持たない。既存 OCR 結果から編集フォームを復元する名前解決は、入力支援として Web に残す。
+- OCR送信の再試行は日時、下書きID、upload済み画像ID、idempotency keyを同じintent内で保持する。応答消失を未受付と推測して下書きを取消したり、新しい画像・下書きを作り直したりしない。送信前の不備と確定した受付拒否は入力修正へ戻せるようにし、受理不明の再送と区別する。
 
 ### API / UI Boundary
 
@@ -134,22 +191,28 @@
 | 完了 | durable commit、post-commit effect、delivery disposition | job 終端、公開、ACK、outbox を変更しない |
 
 - Analysis / OCR は同じ parent lifecycle を共有し、能力固有の入力 transport と計算だけを分ける。
+- supervisorは稼働するpeerと共通の停止期限を組み立てる。各capabilityが外部接続・driver・listenerの寿命を所有し、汎用PostgreSQL接続層へoutboxや分析の知識を持ち込まない。commit後のwakeは現在の配送先を明示する小さな値とし、用途のない種類の集合やpayloadを運搬しない。
+- 分析のterminal履歴と未参照artifactの保持・整理はWorkerのcontrol処理が所有し、APIの起動に依存しない。保持条件は分析batch要求を正本とし、公開済みcurrent / previousの保護とbounded cleanupを同じDB境界で保証する。
 - capability crate は決定論的な domain / 計算 / version 付き論理契約を所有し、DB、Redis、filesystem、clock、async runtime に依存しない。runtime から capability への一方向依存とする。
-- production の OS FFI と `unsafe` は process adapter に隔離し、他 module へ checked な safe API を公開する。
+- production の OS FFI と `unsafe` は process adapter に隔離し、他 module へ checked な safe API を公開する。TERM・KILL・process groupの回収は共通化し、分析の入力設定・終了分類とOCRのframe・結果decodeは各capabilityのprocess adapterに残す。
 - 子 process の resource 制限は実 runtime の cgroup で保証する。非対応 OS では job claim 前に fail closed にする。
 - 同時実行や publication は DB lease と fencing token で世代をまたいで保証する。process 内 semaphore や台数を正本にしない。
 - 子 process の成果物は上限、path、件数、schema、checksum を親が検証し、失敗時に部分公開しない。
 - 分析worker内のRust validatorをpayload意味、canonical encoding、resource集合・相互参照の単一ownerとする。parentは完全検証を通ったopaque artifactだけをversion付きで公開し、APIはそのimmutable publication attestation、生成schema、reader resource上限、request identityだけを独立に検証する。
 - 分析release controllerはactiveなalgorithm / artifact schema / validation contract singletonと全titleへのpromotionを所有する。API / workerのcapability registryを検査中だけ凍結し、互換判定とdesired-state切替の間へ別世代を割り込ませない。
 - 入力 version、algorithm version、artifact schema version を別の型として扱い、同じ入力と algorithm version では決定論的にする。
+- 計算の中間表現は必要な観測値だけを持ち、fold・bootstrap・permutationごとに識別情報や未使用featureを複製しない。共有できる入力は借用し、計算順序や乱数列に意味がある最適化は出力のcanonical bytesまで比較する。結果の意味を変える場合はalgorithm versionの変更として扱う。
+- 公開前のDB照合はtransaction内で行い、全Rowとdecode後の同じ集合を重ねて保持しない。metadataは借用して逐次照合し、入力は必要なshapeへ集約する。順序の違いを許容する照合でも欠落・余剰・重複・値の不一致を拒否する。
 - OCR だけが分析を preempt できる。共有実行枠、再queue、失敗回数、公開の詳細は `docs/requirements/series-analysis-batch.md` を正本とする。
 
 - 分析完了通知は `notifications/analysis` が前後のimmutable成果物を比較し、公開transaction末尾で表示metadataを固定する。通知準備はOCRと同じ回復可能なSAVEPOINT境界を使い、正常commitを確認した経路だけが共通senderへ渡す。分析child・API・Summitに平均計算やproducer送出の責務を移さない。内容と比較範囲は `docs/requirements/series-analysis-batch.md` を参照する。
+- 通知producerへ渡すのは通知に必要なjob・作品・成果物versionの識別情報だけとし、DBのclaim型、lease、fenceや全体設定へ逆依存させない。
 - 比較用の成果物取得は通知に必要な保存済みplayer metricsだけを射影し、通知で使わない分析カードを転送しない。元成果物のbyte・件数上限とtyped decode、前後のidentity・scope整合性は維持する。比較準備の時間枠には接続確立と全DB往復を含め、確定transaction内の準備とともに親の絶対期限から業務commit・復旧の余裕を残す。比較read transactionが正常commitした新規接続は続く公開transactionに再利用し、失敗・timeout時は破棄する。
 
 ### OCR Capability / Worker Role
 
 - OCR の object / queue / 状態契約は `docs/redis-streams-ocr-contract.md` と schema を正本とし、URL、credential、local path を runtime 間 payload にしない。
+- 検証済み画像はprocess adapterへ所有権を渡し、headerと画像を順に転送するためだけの全量frame複製を作らない。認識fallbackは既存の評価順を保ち、必要になった画像だけ生成する。
 - OCRの不確かな読取値は、必要な警告を保持して要確認結果として保存する。件数の妥当性しきい値を保存拒否の上限に読み替えず、parserと保存前検証で警告条件を一致させる。構造・型・対応関係が壊れた候補や警告の欠落は拒否する。
 - OCR・分析通知のenvelopeは `notifications/envelope` が種類・論理job IDから通知IDとwire versionを一括で構築する。各producerは固定dataと成功時刻・世代を渡し、型ごとにIDやversionを組み立て直さない。送出可否と成功commit後のhandoffは引き続き制御側が所有する。
 - OCR完了通知は画像ごとの検証済み結果から作り、他のslotを含む下書きの投影状態には依存しない。成功transactionの業務更新をすべて終えてから共有result gateと設定を読み、ONの場合だけ成功時点の識別子・文脈・警告有無を固定する。共有wireと排他契約は `../momo-db/docs/discord-notifications.md` を正本とする。

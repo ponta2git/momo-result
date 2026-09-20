@@ -11,11 +11,3 @@ export async function getOcrDraft(
 ): Promise<OcrDraftResponse> {
   return apiRequest<OcrDraftResponse>(`/api/ocr-drafts/${encodeURIComponent(draftId)}`, options);
 }
-
-export async function getOcrDraftsBulk(
-  ids: string[],
-  options: ApiSignalOptions = {},
-): Promise<OcrDraftListResponse> {
-  const params = new URLSearchParams({ ids: ids.join(",") });
-  return apiRequest<OcrDraftListResponse>(`/api/ocr-drafts?${params.toString()}`, options);
-}

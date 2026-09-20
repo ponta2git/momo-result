@@ -244,9 +244,9 @@ final class PostgresSourceImagesRepositorySpec extends IntegrationSuite:
     val insertDraft = sql"""
       INSERT INTO match_drafts (
         id, created_by_account_id, created_by_member_id, status,
-        total_assets_image_id, created_at, updated_at
+        total_assets_image_id, revenue_image_id, incident_log_image_id, created_at, updated_at
       ) VALUES (
-        $draftId, 'account_ponta', 'member_ponta', 'draft_ready', ${candidate.id}, $now, $now
+        $draftId, 'account_ponta', 'member_ponta', 'draft_ready', ${candidate.id}, ${candidate.id}, ${candidate.id}, $now, $now
       )
     """.update.run.transact(transactor)
 
@@ -254,12 +254,16 @@ final class PostgresSourceImagesRepositorySpec extends IntegrationSuite:
       _ <- repository.reserveWithinQuota(candidate, generousQuota)
       _ <- repository.markAvailable(candidate.id, None, now)
       _ <- insertDraft
+      liveCandidates <- repository.orphanCandidates(now.plusSeconds(1), limit = 10)
       guarded <- repository.beginDeleteUnreferenced(candidate.id, now.plusSeconds(1))
       _ <- sql"""
         UPDATE match_drafts SET source_images_deleted_at = ${now.plusSeconds(2)} WHERE id = $draftId
       """.update.run.transact(transactor)
+      releasedCandidates <- repository.orphanCandidates(now.plusSeconds(3), limit = 10)
       pending <- repository.beginDeleteUnreferenced(candidate.id, now.plusSeconds(3))
     yield
+      assertEquals(liveCandidates, Nil)
+      assertEquals(releasedCandidates.map(_.id), List(candidate.id))
       assertEquals(guarded, SourceImageDeleteResult.NotReady(SourceImageStatus.Available))
       assert(isPending(pending))
 

@@ -23,7 +23,7 @@ import type {
   ScoreGridNumericHandlers,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
 import { canonicalResultMembers, memberDisplayName } from "@/shared/domain/members";
-import { PlayOrderMark } from "@/shared/ui/data/PlayOrderMark";
+import { PlayOrderMark } from "@/shared/matches/PlayOrderMark";
 import { SelectControl } from "@/shared/ui/forms/SelectControl";
 
 type ScoreGridDesktopTableProps = ScoreGridData &

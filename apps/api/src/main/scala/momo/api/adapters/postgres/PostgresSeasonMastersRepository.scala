@@ -45,19 +45,12 @@ object PostgresSeasonMasters:
 
     override def createWithNextDisplayOrder(season: SeasonMaster): ConnectionIO[SeasonMaster] =
       val lockKey = s"momo:season_masters:${season.gameTitleId.value}:display_order"
-      sql"""
-        WITH display_order_lock AS (
-          SELECT pg_advisory_xact_lock(hashtext($lockKey)::bigint)
-        ),
-        next_order AS (
-          SELECT COALESCE(MAX(display_order), 0) + 1 AS display_order
-          FROM season_masters
-          WHERE game_title_id = ${season.gameTitleId}
-        )
+      // The allocation needs a new READ COMMITTED snapshot after any lock wait.
+      sql"SELECT pg_advisory_xact_lock(hashtext($lockKey)::bigint)".query[Unit].unique *> sql"""
         INSERT INTO season_masters (id, game_title_id, name, display_order, created_at)
         SELECT ${season.id}, ${season.gameTitleId}, ${season
-          .name}, next_order.display_order, ${season.createdAt}
-        FROM display_order_lock, next_order
+          .name}, COALESCE(MAX(display_order), 0) + 1, ${season.createdAt}
+        FROM season_masters WHERE game_title_id = ${season.gameTitleId}
         RETURNING id, game_title_id, name, display_order, created_at
       """.query[SeasonMasterRow].unique.map(fromRow).exceptSomeSqlState {
         case state if isUniqueViolation(state) =>

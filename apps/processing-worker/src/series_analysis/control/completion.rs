@@ -42,6 +42,10 @@ pub(super) use authoritative_input::validate_manifest as validate_authoritative_
     clippy::significant_drop_tightening,
     reason = "reservations move into the success commit or are explicitly dropped on every other publication branch"
 )]
+#[expect(
+    clippy::too_many_lines,
+    reason = "keep rollback, restaging, reuse and publication branches visible in one atomic protocol"
+)]
 pub(crate) async fn publish(
     client: &mut Client,
     claim: &ClaimedJob,
@@ -52,26 +56,25 @@ pub(crate) async fn publish(
 ) -> Result<ControlOutcome<PublicationResult>, ControlError> {
     let (artifact, mut staged) =
         prepare_staging(client, claim, config, artifact_directory, metrics).await?;
+    let worker_id = config.worker_id.as_str();
 
     loop {
         // A commit error can mean that PostgreSQL committed and then closed the connection before
         // acknowledging it. Always begin B on a new connection after staging/reconciliation so a
         // durable staging artifact is not terminally failed merely because A's client is unusable.
-        let comparison = crate::notifications::analysis::load(
+        let (mut publication_client, notification) = match crate::notifications::analysis::load(
             &config.notifications,
             &config.database_url,
-            claim,
+            notification_source(claim),
             &artifact.manifest().artifact_id,
             staged,
             finalization_deadline,
         )
-        .await;
-        let (mut publication_client, notification) =
-            if let Some((fresh_client, comparison)) = comparison {
-                (fresh_client, Some(comparison))
-            } else {
-                (crate::postgres::connect(&config.database_url).await?, None)
-            };
+        .await
+        {
+            Some((fresh_client, comparison)) => (fresh_client, Some(comparison)),
+            None => (crate::postgres::connect(&config.database_url).await?, None),
+        };
         metrics.observe_worker_peak(current_process_peak_resident_bytes().await);
         let publication_started = Instant::now();
         let transaction = bounded_transaction(
@@ -79,7 +82,7 @@ pub(crate) async fn publish(
             config.execution_limits.finalization_timeout,
         )
         .await?;
-        lock_owned(&transaction, claim, config).await?;
+        lock_owned(&transaction, claim, worker_id).await?;
         let desired = desired_artifact(&transaction, claim).await?;
         if !desired.matches(claim) {
             drop(notification);
@@ -134,15 +137,21 @@ pub(crate) async fn publish(
             ExistingArtifact::IntegrityFailure(failure_code) => {
                 drop(notification);
                 finish_publication_metrics(metrics, publication_started);
-                return commit_integrity_failure(transaction, claim, config, metrics, failure_code)
-                    .await;
+                return commit_integrity_failure(
+                    transaction,
+                    claim,
+                    worker_id,
+                    metrics,
+                    failure_code,
+                )
+                .await;
             }
         };
         finish_publication_metrics(metrics, publication_started);
         return commit_successful_publication(
             transaction,
             claim,
-            config,
+            worker_id,
             metrics,
             &artifact.manifest().root_checksum,
             disposition,
@@ -155,7 +164,7 @@ pub(crate) async fn publish(
 async fn commit_integrity_failure(
     transaction: Transaction<'_>,
     claim: &ClaimedJob,
-    config: &AnalysisConsumerConfig,
+    worker_id: &str,
     metrics: &AttemptMetrics,
     failure_code: super::SafeFailureCode,
 ) -> Result<ControlOutcome<PublicationResult>, ControlError> {
@@ -163,7 +172,7 @@ async fn commit_integrity_failure(
     finish_terminal_failure(
         &transaction,
         claim,
-        config,
+        worker_id,
         AttemptFailure::failed(failure_code),
         metrics,
         &mut effects,
@@ -194,7 +203,7 @@ async fn validate_candidate(
 async fn commit_successful_publication(
     transaction: Transaction<'_>,
     claim: &ClaimedJob,
-    config: &AnalysisConsumerConfig,
+    worker_id: &str,
     metrics: &AttemptMetrics,
     output_checksum: &str,
     disposition: ResultDisposition,
@@ -204,7 +213,7 @@ async fn commit_successful_publication(
     finish_success(
         &transaction,
         claim,
-        &config.worker_id,
+        worker_id,
         metrics,
         output_checksum,
         disposition,
@@ -219,7 +228,7 @@ async fn commit_successful_publication(
         comparison
             .prepare(
                 &transaction,
-                claim,
+                notification_source(claim),
                 notification.previous_artifact_id,
                 result == PublicationResult::Reused,
                 notification.finalization_deadline,
@@ -244,6 +253,18 @@ async fn commit_publication(
     Ok(effects.committed(result))
 }
 
+pub(super) fn notification_source(
+    claim: &ClaimedJob,
+) -> crate::notifications::analysis::AnalysisSource<'_> {
+    crate::notifications::analysis::AnalysisSource {
+        job_id: &claim.job_id,
+        game_title_id: &claim.game_title_id,
+        input_revision: claim.input_revision,
+        algorithm_version: &claim.algorithm_version,
+        artifact_schema_version: claim.artifact_schema_version,
+    }
+}
+
 async fn prepare_staging(
     client: &mut Client,
     claim: &ClaimedJob,
@@ -252,7 +273,7 @@ async fn prepare_staging(
     metrics: &mut AttemptMetrics,
 ) -> Result<(ValidatedArtifact, bool), ControlError> {
     let started = Instant::now();
-    let artifact = validated_artifact(config, claim, artifact_directory).await?;
+    let artifact = validated_artifact(&config.execution_limits, claim, artifact_directory).await?;
     validate_manifest_metrics(metrics, artifact.manifest())?;
     let staged = requires_staging(client, claim, &artifact).await?;
     let result = if staged {
@@ -423,8 +444,10 @@ mod tests {
             game_title_id: String::from("title-1"),
             input_revision: 3,
             algorithm_version: String::from(super::super::ALGORITHM_VERSION),
-            artifact_schema_version: 2,
-            validation_contract_id: None,
+            artifact_schema_version: 4,
+            validation_contract_id: Some(String::from(
+                momo_analysis_core::contract::ARTIFACT_VALIDATION_CONTRACT_ID,
+            )),
             attempt_id: String::from("attempt-1"),
             attempt_no: 1,
             fencing_token: 1,
@@ -433,14 +456,12 @@ mod tests {
             input_revision: claim.input_revision,
             algorithm_version: claim.algorithm_version.clone(),
             artifact_schema_version: claim.artifact_schema_version,
-            validation_contract_id: None,
+            validation_contract_id: claim.validation_contract_id.clone(),
             current_artifact_id: None,
         };
 
         assert!(desired.matches(&claim));
-        desired.validation_contract_id = Some(String::from(
-            momo_analysis_core::contract::ARTIFACT_VALIDATION_CONTRACT_ID,
-        ));
+        desired.validation_contract_id = None;
         assert!(!desired.matches(&claim));
     }
 

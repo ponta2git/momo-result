@@ -4,8 +4,7 @@ import java.time.format.DateTimeFormatter
 
 import io.circe.Codec
 
-import momo.api.domain.{MatchListItem, MatchRecord, PlayerResult}
-import momo.api.usecases.heldevents.HeldEventDetail
+import momo.api.domain.HeldEventDetail
 
 final case class HeldEventPlayerResultResponse(
     memberId: String,
@@ -16,13 +15,14 @@ final case class HeldEventPlayerResultResponse(
 ) derives Codec.AsObject
 
 object HeldEventPlayerResultResponse:
-  def from(player: PlayerResult): HeldEventPlayerResultResponse = HeldEventPlayerResultResponse(
-    memberId = player.memberId.value,
-    playOrder = player.playOrder.value,
-    rank = player.rank.value,
-    totalAssetsManYen = player.totalAssetsManYen.value,
-    revenueManYen = player.revenueManYen.value,
-  )
+  def from(player: HeldEventDetail.Player): HeldEventPlayerResultResponse =
+    HeldEventPlayerResultResponse(
+      memberId = player.memberId.value,
+      playOrder = player.playOrder.value,
+      rank = player.rank.value,
+      totalAssetsManYen = player.totalAssetsManYen.value,
+      revenueManYen = player.revenueManYen.value,
+    )
 
 final case class HeldEventMatchResponse(
     matchId: String,
@@ -34,10 +34,13 @@ final case class HeldEventMatchResponse(
     playedAt: String,
     players: List[HeldEventPlayerResultResponse],
     noteBody: Option[String],
+    gameTitleName: Option[String] = None,
+    seasonName: Option[String] = None,
+    mapName: Option[String] = None,
 ) derives Codec.AsObject
 
 object HeldEventMatchResponse:
-  def from(record: MatchRecord): HeldEventMatchResponse = HeldEventMatchResponse(
+  def from(record: HeldEventDetail.Match): HeldEventMatchResponse = HeldEventMatchResponse(
     matchId = record.id.value,
     matchNoInEvent = record.matchNoInEvent.value,
     gameTitleId = record.gameTitleId.value,
@@ -45,8 +48,11 @@ object HeldEventMatchResponse:
     ownerMemberId = record.ownerMemberId.value,
     mapMasterId = record.mapMasterId.value,
     playedAt = DateTimeFormatter.ISO_INSTANT.format(record.playedAt),
-    players = record.players.byPlayOrder.map(HeldEventPlayerResultResponse.from),
-    noteBody = record.note.body.map(_.value),
+    players = record.players.map(HeldEventPlayerResultResponse.from),
+    noteBody = record.noteBody,
+    gameTitleName = record.labels.gameTitleName,
+    seasonName = record.labels.seasonName,
+    mapName = record.labels.mapName,
   )
 
 final case class HeldEventDraftResponse(
@@ -58,18 +64,24 @@ final case class HeldEventDraftResponse(
     mapMasterId: Option[String],
     playedAt: Option[String],
     updatedAt: String,
+    gameTitleName: Option[String] = None,
+    seasonName: Option[String] = None,
+    mapName: Option[String] = None,
 ) derives Codec.AsObject
 
 object HeldEventDraftResponse:
-  def from(item: MatchListItem): HeldEventDraftResponse = HeldEventDraftResponse(
-    matchDraftId = item.matchDraftId.fold(item.id)(_.value),
-    status = item.status,
+  def from(item: HeldEventDetail.Draft): HeldEventDraftResponse = HeldEventDraftResponse(
+    matchDraftId = item.id.value,
+    status = item.status.wire,
     matchNoInEvent = item.matchNoInEvent.map(_.value),
     gameTitleId = item.gameTitleId.map(_.value),
     seasonMasterId = item.seasonMasterId.map(_.value),
     mapMasterId = item.mapMasterId.map(_.value),
     playedAt = item.playedAt.map(DateTimeFormatter.ISO_INSTANT.format),
     updatedAt = DateTimeFormatter.ISO_INSTANT.format(item.updatedAt),
+    gameTitleName = item.labels.gameTitleName,
+    seasonName = item.labels.seasonName,
+    mapName = item.labels.mapName,
   )
 
 final case class HeldEventDetailResponse(
@@ -92,3 +104,21 @@ object HeldEventDetailResponse:
     matches = detail.matches.map(HeldEventMatchResponse.from),
     drafts = detail.drafts.map(HeldEventDraftResponse.from),
   )
+
+final case class HeldEventSummaryResponse(
+    id: String,
+    heldAt: String,
+    matchCount: Int,
+    draftCount: Int,
+    nextMatchNo: Int,
+) derives Codec.AsObject
+
+object HeldEventSummaryResponse:
+  def from(summary: momo.api.domain.HeldEventSummary): HeldEventSummaryResponse =
+    HeldEventSummaryResponse(
+      summary.event.id.value,
+      DateTimeFormatter.ISO_INSTANT.format(summary.event.heldAt),
+      summary.matchCount,
+      summary.draftCount,
+      summary.nextMatchNo,
+    )

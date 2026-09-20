@@ -441,7 +441,7 @@ async fn run_linux(
 
         let ocr_started = Instant::now();
         let mut child = match launcher.launch(
-            &image,
+            image,
             object.payload.requested_screen_type(),
             object.payload.hints(),
         ) {

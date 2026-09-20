@@ -38,31 +38,10 @@ private[bootstrap] object UseCaseRouteBundles:
       now: F[java.time.Instant],
       ids: UseCaseWiring.RuntimeIds[F],
   ): UseCaseRouteBundles[F] =
-    val imageStorage = storage.imageStorage
-    val imageStorageAdmission = storage.imageStorageAdmission
-    val ocrJobCreationStore = repositories.ocrJobCreationStore
-    val jobs = repositories.jobs
-    val drafts = repositories.drafts
-    val heldEvents = repositories.heldEvents
-    val heldEventDeletion = repositories.heldEventDeletion
-    val matches = repositories.matches
-    val matchNotes = repositories.matchNotes
-    val matchExports = repositories.matchExports
-    val matchDrafts = repositories.matchDrafts
-    val matchDraftCancellation = repositories.matchDraftCancellation
-    val matchList = repositories.matchList
-    val seriesAnalysis = repositories.seriesAnalysis
-    val matchConfirmation = repositories.matchConfirmation
-    val members = repositories.members
-    val loginAccounts = repositories.loginAccounts
-    val loginAccountAdministration = repositories.loginAccountAdministration
-    val gameTitles = repositories.gameTitles
-    val mapMasters = repositories.mapMasters
-    val seasonMasters = repositories.seasonMasters
-    val incidentMasters = repositories.incidentMasters
-    val memberAliases = repositories.memberAliases
-    val ocrQueueSubmitter = services.ocrQueueSubmitter
-    val ocrAdmissionGuard = services.ocrAdmissionGuard
+    import repositories.*
+    import storage.*
+    import services.{ocrAdmissionGuard, ocrQueueSubmitter}
+
     val uploadImage = UploadImage[F](imageStorage, imageStorageAdmission)
     val createOcrJob = CreateOcrJob[F](
       imageStore = imageStorage,
@@ -73,16 +52,15 @@ private[bootstrap] object UseCaseRouteBundles:
       now = now,
       nextJobId = ids.nextOcrJobId,
       nextDraftId = ids.nextOcrDraftId,
-      memberAliases = memberAliases,
+      aliasSnapshot = memberAliases.list(None).map(_.groupMap(_.memberId)(_.alias)),
       activeJobLimit = config.resourceLimits.ocrActiveJobLimit,
     )
     val getOcrJob = GetOcrJob[F](jobs)
     val getOcrDraft = GetOcrDraft[F](drafts)
     val getOcrDraftsBulk = GetOcrDraftsBulk[F](drafts)
     val cancelOcrJob = CancelOcrJob[F](jobs, now)
-    val listHeldEvents =
-      ListHeldEvents[F](heldEvents, matches, matchDrafts, gameTitles, seasonMasters)
-    val getHeldEventDetail = GetHeldEventDetail[F](heldEvents, matches, matchList)
+    val listHeldEvents = ListHeldEvents[F](heldEventList)
+    val getHeldEventDetail = GetHeldEventDetail[F](repositories.heldEventDetails)
     val createHeldEvent = CreateHeldEvent[F](heldEvents, ids.nextHeldEventId)
     val sourceImageRetention = PurgeSourceImages[F](matchDrafts, imageStorage)
     val createMatchDraft = CreateMatchDraft[F](
@@ -95,6 +73,7 @@ private[bootstrap] object UseCaseRouteBundles:
       nextId = ids.nextMatchDraftId,
     )
     val getMatchDraft = GetMatchDraft[F](matchDrafts)
+    val getMatchDraftReview = GetMatchDraftReview[F](matchDraftReviews)
     val updateMatchDraft = UpdateMatchDraft[F](
       heldEvents = heldEvents,
       gameTitles = gameTitles,
@@ -131,12 +110,9 @@ private[bootstrap] object UseCaseRouteBundles:
     val requestSeriesAnalysisRecalculation = RequestSeriesAnalysisRecalculation[F](seriesAnalysis)
     val exportMatches = ExportMatches[F](
       matchExports,
-      members,
-      mapMasters,
-      seasonMasters,
       UseCaseWiring.exportMatchLimits(config.resourceLimits),
     )
-    val getMatch = GetMatch[F](matches, loginAccounts)
+    val getMatch = GetMatch[F](matchDetails)
     val replaceMatchNote = ReplaceMatchNote[F](matchNotes, now)
     val updateMatch = UpdateMatch[F](
       heldEvents = heldEvents,
@@ -190,6 +166,7 @@ private[bootstrap] object UseCaseRouteBundles:
       matchDrafts = HttpRoutes.MatchDraftUseCases(
         createMatchDraft = createMatchDraft,
         getMatchDraft = getMatchDraft,
+        getMatchDraftReview = getMatchDraftReview,
         updateMatchDraft = updateMatchDraft,
         cancelMatchDraft = cancelMatchDraft,
         getMatchDraftSourceImages = getMatchDraftSourceImages,

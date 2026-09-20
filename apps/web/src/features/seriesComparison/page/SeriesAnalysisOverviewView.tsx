@@ -1,4 +1,6 @@
-import { RankTrendCharts } from "@/features/seriesComparison/charts/SeriesAnalysisFlowCharts";
+import { memo } from "react";
+
+import { SeriesTrendCharts } from "@/features/seriesComparison/charts/SeriesAnalysisFlowCharts";
 import {
   CrownShareBars,
   HeadToHeadMatrix,
@@ -9,7 +11,7 @@ import {
   formatManYen,
   formatPercent,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
-import type { AnalysisViewProps } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
+import type { AnalysisViewProps } from "@/features/seriesComparison/model/seriesAnalysisViewTypes";
 import {
   AnalysisReadingGuide,
   AnalysisSection,
@@ -23,13 +25,17 @@ import {
   qualityAdvisoryLabel,
   SeriesAnalysisQualityAdvisory,
 } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
+import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { DataTable } from "@/shared/ui/data/DataTable";
-import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { contentText } from "@/shared/ui/typography";
 
-export function OverviewView({ focusedItemIds, response, onDrilldown }: AnalysisViewProps) {
+export const OverviewView = memo(function OverviewView({
+  focusedItemIds,
+  response,
+  onDrilldown,
+}: AnalysisViewProps) {
   const crownQualityAdvisory = qualityAdvisoryLabel(response.rankAnalysis.crownCertainty.status);
   const leaders = response.players.filter((player) =>
     response.summary.leaderMemberIds.includes(player.memberId),
@@ -142,11 +148,18 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
           rows={playerMetrics}
         />
         <div className="mt-6">
-          <RankDistributionBars focusedItemIds={focusedItemIds} response={response} />
+          <RankDistributionBars
+            focusedItemIds={focusedItemIds}
+            players={response.players}
+            rankDistribution={response.rankDistribution}
+          />
         </div>
       </AnalysisSection>
       <AnalysisSection id="metric-crown-certainty" title="平均順位首位の確からしさ">
-        <CrownShareBars response={response} />
+        <CrownShareBars
+          players={response.players}
+          shares={response.rankAnalysis.crownCertainty.shares}
+        />
         <div
           className={cn(
             contentText.supporting,
@@ -194,11 +207,16 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
         </div>
       </AnalysisSection>
       <AnalysisSection id="metric-head-to-head" title="直接対決">
-        <HeadToHeadMatrix response={response} />
+        <HeadToHeadMatrix players={response.players} entries={response.headToHead.entries} />
       </AnalysisSection>
       <AnalysisSection id="metric-rate" title="順位の安定性">
-        <RankTrendCharts focusedItemIds={focusedItemIds} response={response} />
+        <SeriesTrendCharts
+          focusedItemIds={focusedItemIds}
+          players={response.players}
+          trends={response.trends}
+          variant="rank"
+        />
       </AnalysisSection>
     </div>
   );
-}
+});

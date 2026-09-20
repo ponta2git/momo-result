@@ -95,7 +95,7 @@ pub(crate) async fn supersede(
 ) -> Result<ControlOutcome<()>, ControlError> {
     let transaction =
         bounded_transaction(client, config.execution_limits.finalization_timeout).await?;
-    lock_owned(&transaction, claim, config).await?;
+    lock_owned(&transaction, claim, &config.worker_id).await?;
     let desired = transaction
         .query_one(
             "SELECT input_revision, algorithm_version, artifact_schema_version, validation_contract_id\x20\
@@ -143,7 +143,7 @@ pub(crate) async fn supersede(
         &mut effects,
     )
     .await?;
-    release_slot(&transaction, claim, config).await?;
+    release_slot(&transaction, claim, &config.worker_id).await?;
     transaction.commit().await?;
     Ok(effects.committed(()))
 }
@@ -162,9 +162,17 @@ pub(crate) async fn finish_failure(
 ) -> Result<ControlOutcome<()>, ControlError> {
     let transaction =
         bounded_transaction(client, config.execution_limits.finalization_timeout).await?;
-    lock_owned(&transaction, claim, config).await?;
+    lock_owned(&transaction, claim, &config.worker_id).await?;
     let mut effects = TransactionEffects::empty();
-    finish_terminal_failure(&transaction, claim, config, failure, metrics, &mut effects).await?;
+    finish_terminal_failure(
+        &transaction,
+        claim,
+        &config.worker_id,
+        failure,
+        metrics,
+        &mut effects,
+    )
+    .await?;
     transaction.commit().await?;
     Ok(effects.committed(()))
 }
@@ -172,7 +180,7 @@ pub(crate) async fn finish_failure(
 pub(super) async fn finish_terminal_failure(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
-    config: &AnalysisConsumerConfig,
+    worker_id: &str,
     failure: AttemptFailure,
     metrics: &AttemptMetrics,
     effects: &mut TransactionEffects,
@@ -210,7 +218,7 @@ pub(super) async fn finish_terminal_failure(
     fulfill_requests(transaction, claim, RequestOutcome::Failed).await?;
     schedule_follow_up(transaction, claim, effects).await?;
     refresh_operation_projections(transaction, &claim.attempt_id).await?;
-    release_slot(transaction, claim, config).await?;
+    release_slot(transaction, claim, worker_id).await?;
     Ok(())
 }
 
@@ -227,7 +235,7 @@ pub(crate) async fn retry_transient_failure(
 ) -> Result<ControlOutcome<TransientRetryResult>, ControlError> {
     let transaction =
         bounded_transaction(client, config.execution_limits.finalization_timeout).await?;
-    lock_owned(&transaction, claim, config).await?;
+    lock_owned(&transaction, claim, &config.worker_id).await?;
     let retry_count = transaction
         .query_one(
             "SELECT transient_retry_count FROM series_analysis_jobs WHERE id = $1 FOR UPDATE",
@@ -278,7 +286,7 @@ pub(crate) async fn retry_transient_failure(
             &mut effects,
         )
         .await?;
-        release_slot(&transaction, claim, config).await?;
+        release_slot(&transaction, claim, &config.worker_id).await?;
         transaction.commit().await?;
         return Ok(effects.committed(TransientRetryResult::Requeued));
     }
@@ -286,7 +294,7 @@ pub(crate) async fn retry_transient_failure(
     finish_terminal_failure(
         &transaction,
         claim,
-        config,
+        &config.worker_id,
         AttemptFailure::failed(SafeFailureCode::DependencyRetryExhausted),
         metrics,
         &mut effects,
@@ -310,7 +318,7 @@ pub(crate) async fn requeue_interrupted(
 ) -> Result<ControlOutcome<()>, ControlError> {
     let transaction =
         bounded_transaction(client, config.execution_limits.finalization_timeout).await?;
-    lock_owned(&transaction, claim, config).await?;
+    lock_owned(&transaction, claim, &config.worker_id).await?;
     finish_attempt(&transaction, claim, cause.attempt_outcome(), metrics).await?;
     transaction
         .execute(
@@ -346,7 +354,7 @@ pub(crate) async fn requeue_interrupted(
         &mut effects,
     )
     .await?;
-    release_slot(&transaction, claim, config).await?;
+    release_slot(&transaction, claim, &config.worker_id).await?;
     transaction.commit().await?;
     Ok(effects.committed(()))
 }

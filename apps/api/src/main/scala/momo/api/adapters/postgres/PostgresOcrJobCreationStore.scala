@@ -89,19 +89,20 @@ final class PostgresOcrJobCreationStore[F[_]: MonadCancelThrow](transactor: Tran
 
   private def activeLimitGuard(
       activeJobLimit: Int
-  ): ConnectionIO[Either[OcrJobCreationRejection, Unit]] = sql"""
-        WITH active_limit_lock AS (
-          SELECT pg_advisory_xact_lock(hashtext('momo:ocr_jobs:active_limit')::bigint)
-        )
+  ): ConnectionIO[Either[OcrJobCreationRejection, Unit]] =
+    // READ COMMITTED takes a snapshot per statement. Count only after acquiring the lock,
+    // so a creator that waited sees the preceding creator's committed job.
+    sql"SELECT pg_advisory_xact_lock(hashtext('momo:ocr_jobs:active_limit')::bigint)"
+      .query[Unit].unique *> sql"""
         SELECT COUNT(*)
-        FROM ocr_jobs, active_limit_lock
+        FROM ocr_jobs
         WHERE status = ${OcrJobStatus.Queued}
            OR status = ${OcrJobStatus.Running}
       """.query[Long].unique.flatMap { active =>
-    if active >= activeJobLimit.toLong then
-      OcrJobCreationRejection.ActiveJobLimitExceeded(activeJobLimit).asLeft.pure[ConnectionIO]
-    else ().asRight[OcrJobCreationRejection].pure[ConnectionIO]
-  }
+      if active >= activeJobLimit.toLong then
+        OcrJobCreationRejection.ActiveJobLimitExceeded(activeJobLimit).asLeft.pure[ConnectionIO]
+      else ().asRight[OcrJobCreationRejection].pure[ConnectionIO]
+    }
 
   private def attachmentGuard(
       attachment: OcrJobDraftAttachment

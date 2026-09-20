@@ -298,15 +298,15 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
 
   test("rendered artifact responses satisfy the API-owned schemas"):
     assertHydratedFixture(
-      "aggregate-payload-v3.json",
-      SeriesAnalysisResponseSchemas.aggregate,
+      "aggregate-payload-v5.json",
+      SeriesAnalysisResponseSchemas.aggregateV4,
       request,
       itemCount = 0,
       sourceMatchRevision = None,
     )
     assertHydratedFixture(
-      "review-payload-v3.json",
-      SeriesAnalysisResponseSchemas.review,
+      "review-payload-v4.json",
+      SeriesAnalysisResponseSchemas.reviewV3,
       request.copy(kind = SeriesAnalysisChunkKind.Review),
       itemCount = 1,
       sourceMatchRevision = None,
@@ -363,8 +363,8 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
       artifactGameTitleId = gameTitleId,
       inputRevision = 0,
       algorithmVersion = "series-analysis-v1",
-      artifactSchemaVersion = 2,
-      validationContractId = Some("series-analysis-artifact-v2-full-validation-v1"),
+      artifactSchemaVersion = 4,
+      validationContractId = Some("series-analysis-artifact-v4-full-validation-v1"),
       publishedAt = Instant.parse("2026-08-09T00:00:00Z"),
       scopeKind = Some(scope.kind),
       payload = Some(payload),
@@ -379,8 +379,8 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
     request.artifactId,
     gameTitleId,
     0,
-    "series-analysis-v1",
-    2,
+    "series-analysis-v5",
+    4,
     Instant.parse("2026-08-09T00:00:00Z"),
   )
 
@@ -447,7 +447,7 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
 
   private lazy val aggregateFixture =
     Files.readString(
-      repositoryFile("docs/schemas/fixtures/series-analysis/aggregate-payload-v3.json")
+      repositoryFile("docs/schemas/fixtures/series-analysis/aggregate-payload-v5.json")
     )
 
   private def nestingDepth(text: String): Int =

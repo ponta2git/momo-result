@@ -15,27 +15,29 @@ import {
 } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
+import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
-import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { contentText } from "@/shared/ui/typography";
 
 type MatchNoEntry = SeriesComparisonAggregate["matchNoInEvent"]["entries"][number];
 
-export function MatchNoInEventMatrix({ response }: { response: SeriesComparisonAggregate }) {
-  const regularEntries = response.matchNoInEvent.entries.filter(
-    (entry) => entry.category === "regular",
-  );
-  const additionalEntries = response.matchNoInEvent.entries.filter(
-    (entry) => entry.category === "additional",
-  );
+export function MatchNoInEventMatrix({
+  entries,
+  players,
+}: {
+  entries: MatchNoEntry[];
+  players: SeriesComparisonAggregate["players"];
+}) {
+  const regularEntries = entries.filter((entry) => entry.category === "regular");
+  const additionalEntries = entries.filter((entry) => entry.category === "additional");
 
   return (
     <div className="grid gap-3">
       <MatchNoMatrix
         ariaLabel="通常試合の開催内順別傾向"
         entries={regularEntries}
-        response={response}
+        players={players}
       />
       {additionalEntries.length > 0 ? (
         <Disclosure
@@ -47,7 +49,7 @@ export function MatchNoInEventMatrix({ response }: { response: SeriesComparisonA
           <MatchNoMatrix
             ariaLabel="追加試合の開催内順別傾向"
             entries={additionalEntries}
-            response={response}
+            players={players}
           />
         </Disclosure>
       ) : null}
@@ -58,13 +60,12 @@ export function MatchNoInEventMatrix({ response }: { response: SeriesComparisonA
 function MatchNoMatrix({
   ariaLabel,
   entries,
-  response,
+  players,
 }: {
   ariaLabel: string;
   entries: MatchNoEntry[];
-  response: SeriesComparisonAggregate;
+  players: SeriesComparisonAggregate["players"];
 }) {
-  const players = response.players;
   return (
     <AnalysisMatrix ariaLabel={ariaLabel} className="min-w-[42rem] table-fixed">
       <thead>

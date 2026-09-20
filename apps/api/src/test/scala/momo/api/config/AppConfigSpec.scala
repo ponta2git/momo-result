@@ -5,6 +5,8 @@ import cats.syntax.all.*
 import ciris.{ConfigValue, Effect}
 import munit.CatsEffectSuite
 
+import momo.api.adapters.discord.JavaDiscordOAuthClient
+
 class AppConfigSpec extends CatsEffectSuite:
   private val prodEnv: Map[String, String] = Map(
     "APP_ENV" -> "prod",
@@ -278,6 +280,12 @@ class AppConfigSpec extends CatsEffectSuite:
         config.database.fold("")(_.toString),
         config.redis.fold("")(_.toString),
         config.sourceImageStorage.toString,
+        JavaDiscordOAuthClient.Config(
+          config.auth.discordClientId.getOrElse(""),
+          config.auth.discordClientSecret.getOrElse(""),
+          config.auth.discordRedirectUri.getOrElse(""),
+          config.auth.discordScope,
+        ).toString,
       ).mkString("\n")
 
       List(
@@ -287,6 +295,7 @@ class AppConfigSpec extends CatsEffectSuite:
         "redis.example.com",
         "client-id",
         "client-secret",
+        "https://example.com/api/auth/callback",
         "state-signing-key",
         "example.invalid",
         "momo-test",

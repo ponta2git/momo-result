@@ -32,16 +32,10 @@ object HttpOperation:
   val UpdateMatch = "PUT /api/matches/:id"
   val DeleteMatch = "DELETE /api/matches/:id"
 
-  val GetSeriesComparisonOptions = "GET /api/analytics/series-comparison/options"
-  val GetSeriesComparison = "GET /api/analytics/series-comparison"
-  val GetSeriesComparisonReview = "GET /api/analytics/series-comparison/review"
-  val GetSeriesComparisonDrilldown = "GET /api/analytics/series-comparison/drilldown"
-
   val GetSeriesAnalysisOptions = "GET /api/analytics/series-comparison/v2/options"
   val GetSeriesAnalysisStatus = "GET /api/analytics/series-comparison/v2/status"
-  val GetSeriesAnalysisAggregateV3 = "GET /api/analytics/series-comparison/v3/aggregate"
-  val GetSeriesAnalysisAggregate = "GET /api/analytics/series-comparison/v2/aggregate"
-  val GetSeriesAnalysisReview = "GET /api/analytics/series-comparison/v2/review"
+  val GetSeriesAnalysisAggregateV4 = "GET /api/analytics/series-comparison/v4/aggregate"
+  val GetSeriesAnalysisReviewV3 = "GET /api/analytics/series-comparison/v3/review"
   val GetSeriesAnalysisDrilldown = "GET /api/analytics/series-comparison/v2/drilldown"
   val GetSeriesAnalysisMatchContext = "GET /api/analytics/series-comparison/v2/match-context"
   val GetSeriesAnalysisAdminOverview = "GET /api/admin/series-analysis/overview"

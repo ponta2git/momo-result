@@ -1,9 +1,9 @@
 import { CaptureSlotCard } from "@/features/ocrCapture/CaptureSlotCard";
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import { slotDefinitions } from "@/features/ocrCapture/captureState";
-import type { SlotKind } from "@/shared/api/enums";
 import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
-import type { SlotMap } from "@/shared/lib/slotMap";
+import type { SlotKind } from "@/shared/domain/ocr";
+import type { SlotMap } from "@/shared/domain/slotMap";
 import { cn } from "@/shared/ui/cn";
 
 type CaptureRailProps = {

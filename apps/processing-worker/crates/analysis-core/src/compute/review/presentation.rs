@@ -67,11 +67,6 @@ pub(super) fn candidate_json(candidate: &Candidate) -> Value {
         "qualityStatus": quality,
         "stabilityBand": stability,
         "supportCount": candidate.contrast.positive_count.min(candidate.contrast.negative_count),
-        "anchorTarget": {
-            "view": template.view,
-            "sectionId": template.section_id,
-            "label": template.anchor_label,
-        },
         "actionAdviceScore": candidate.action_advice_score,
     })
 }

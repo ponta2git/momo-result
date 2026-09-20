@@ -49,6 +49,14 @@ object MatchDraftEndpoints:
     .out(jsonBody[CancelMatchDraftResponse])
     .tag("match-drafts")
 
+  val review: CommonEndpoint.SecuredRead[GetInput, MatchDraftReviewResponse] = endpoint
+    .get
+    .in("api" / "match-drafts" / path[String]("draftId") / "review")
+    .securityIn(CommonEndpoint.accountHeader)
+    .errorOut(CommonEndpoint.errorOut)
+    .out(jsonBody[MatchDraftReviewResponse])
+    .tag("match-drafts")
+
   val listSourceImages: CommonEndpoint.SecuredRead[
     String,
     MatchDraftSourceImageListResponse,
@@ -63,6 +71,7 @@ object MatchDraftEndpoints:
   final case class SourceImageInput(
       draftId: String,
       kind: String,
+      imageId: Option[String],
       requestId: Option[String],
   )
 
@@ -75,7 +84,9 @@ object MatchDraftEndpoints:
 
   private val sourceImageInput: EndpointInput[SourceImageInput] = (
     "api" / "match-drafts" / path[String]("draftId") / "source-images" / path[String]("kind")
-  ).and(CommonEndpoint.requestIdHeader).mapTo[SourceImageInput]
+  ).and(query[Option[String]]("imageId"))
+    .and(CommonEndpoint.requestIdHeader)
+    .mapTo[SourceImageInput]
 
   def getSourceImageStream[F[_]]
       : Endpoint[
@@ -108,7 +119,7 @@ object MatchDraftEndpoints:
   def downloadSourceImagesStream[F[_]]
       : Endpoint[
         Option[String],
-        (String, Option[String]),
+        (String, Option[String], Option[String]),
         ProblemDetails.ProblemResponse,
         SourceImageArchiveStreamOutput[F],
         Fs2Streams[F]
@@ -117,6 +128,7 @@ object MatchDraftEndpoints:
       .get
       .in("api" / "match-drafts" / path[String]("draftId") / "source-images.zip")
       .securityIn(CommonEndpoint.accountHeader)
+      .in(query[Option[String]]("updatedAt"))
       .in(CommonEndpoint.requestIdHeader)
       .errorOut(CommonEndpoint.errorOut)
       .out(header[String]("Content-Type"))

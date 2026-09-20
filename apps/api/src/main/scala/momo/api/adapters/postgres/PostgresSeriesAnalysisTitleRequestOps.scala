@@ -9,6 +9,7 @@ import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.adapters.postgres.PostgresSeriesAnalysisRequestSupport.*
+import momo.api.contracts.seriesanalysis.SeriesAnalysisArtifactContract
 import momo.api.domain.ids.{AccountId, GameTitleId}
 import momo.api.domain.{SeriesAnalysisAcceptedTarget, SeriesAnalysisRecalculationAccepted}
 import momo.api.errors.AppError
@@ -18,25 +19,23 @@ private[postgres] object PostgresSeriesAnalysisTitleRequestOps:
       gameTitleId: GameTitleId,
       requestedBy: AccountId,
       idempotencyKeyHash: String,
-      ids: List[String],
-  ): ConnectionIO[Either[AppError, SeriesAnalysisRecalculationAccepted]] = ids match
-    case operationId :: requestId :: jobId :: outboxId :: Nil =>
-      for
-        existing <- existingOperation(requestedBy, "title", idempotencyKeyHash)
-        result <- existing match
-          case Some(value) => acceptedForExisting(value, gameTitleId)
-          case None => create(
-              gameTitleId,
-              requestedBy,
-              idempotencyKeyHash,
-              operationId,
-              requestId,
-              jobId,
-              outboxId,
-            )
-      yield result
-    case _ => AppError.Internal("Failed to allocate analysis request identifiers.").asLeft
-        .pure[ConnectionIO]
+      operationId: String,
+      requestId: String,
+      jobId: String,
+      outboxId: String,
+  ): ConnectionIO[Either[AppError, SeriesAnalysisRecalculationAccepted]] =
+    existingOperation(requestedBy, "title", idempotencyKeyHash).flatMap {
+      case Some(value) => acceptedForExisting(value, gameTitleId)
+      case None => create(
+          gameTitleId,
+          requestedBy,
+          idempotencyKeyHash,
+          operationId,
+          requestId,
+          jobId,
+          outboxId,
+        )
+    }
 
   private def acceptedForExisting(
       operation: OperationRow,
@@ -89,6 +88,14 @@ private[postgres] object PostgresSeriesAnalysisTitleRequestOps:
       result <- desired match
         case None => AppError.NotFound("game title", gameTitleId.value)
             .asLeft[SeriesAnalysisRecalculationAccepted].pure[ConnectionIO]
+        case Some(version)
+            if !SeriesAnalysisArtifactContract.supports(
+              version.artifactSchemaVersion,
+              version.validationContractId
+            ) =>
+          AppError.AnalysisStateUnavailable().asLeft[
+            SeriesAnalysisRecalculationAccepted
+          ].pure[ConnectionIO]
         case Some(version) => createForDesired(
             gameTitleId,
             requestedBy,

@@ -1,7 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useActionState, useState } from "react";
 
-import { invalidateAdminAccountCaches } from "@/features/masters/accounts/adminAccountCache";
+import {
+  cacheSavedAccount,
+  invalidateAdminAccountCaches,
+} from "@/features/masters/accounts/adminAccountCache";
 import { createLoginAccount, updateLoginAccount } from "@/shared/api/adminAccounts";
 import type {
   CreateLoginAccountRequest,
@@ -20,8 +23,8 @@ import { adminLoginAccountsQueryOptions } from "@/shared/api/queryOptions";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { reportSelfAccountDisabled } from "@/shared/auth/accountOperationNotice";
 import { useAuth } from "@/shared/auth/useAuth";
+import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 import { showToast } from "@/shared/ui/feedback/Toast";
-import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
 
 type AccountListRefresh = {
   pending: boolean;
@@ -84,12 +87,13 @@ export function useAccountSettingsModel(queryEnabled = true): AccountSettingsMod
     };
 
     try {
-      await runIdempotentMutation(
+      const created = await runIdempotentMutation(
         idempotencyKeys,
         "adminAccounts.createLoginAccount",
         request,
         (options) => createLoginAccount(request, options),
       );
+      await cacheSavedAccount(queryClient, created);
       await invalidateAdminAccountCaches(queryClient);
       setCreateOpen(false);
       showToast({ title: "アカウントを追加しました", tone: "success" });
@@ -116,9 +120,10 @@ export function useAccountSettingsModel(queryEnabled = true): AccountSettingsMod
         { accountId, request },
         (options) => updateLoginAccount(accountId, request, options),
       ),
-    onSuccess: async (_response, { accountId, request }) => {
+    onSuccess: async (saved, { accountId, request }) => {
       const selfDisabled = accountId === auth.auth?.accountId && request.loginEnabled === false;
       if (selfDisabled) reportSelfAccountDisabled(accountId);
+      await cacheSavedAccount(queryClient, saved);
       await invalidateAdminAccountCaches(queryClient);
       if (!selfDisabled) showToast({ title: "アカウント設定を更新しました", tone: "success" });
     },

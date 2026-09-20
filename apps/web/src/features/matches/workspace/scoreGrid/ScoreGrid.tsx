@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import type { ReviewItem } from "@/features/matches/workspace/review/reviewProgress";
@@ -14,6 +14,8 @@ import type {
 } from "@/features/matches/workspace/scoreGrid/ScoreGridNumericEditor";
 import { ScoreGridReviewToolbar } from "@/features/matches/workspace/scoreGrid/ScoreGridReviewToolbar";
 import type {
+  ScoreGridActions,
+  ScoreGridData,
   ScoreGridKeyboardHandler,
   ScoreGridProps,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
@@ -22,7 +24,30 @@ import { cn } from "@/shared/ui/cn";
 import { revealPageElement } from "@/shared/ui/layout/revealPageElement";
 import { contentText } from "@/shared/ui/typography";
 
+/** Keep unrelated note/setup edits out of the score editor's urgent render. */
 export function ScoreGrid({ actions, data }: ScoreGridProps) {
+  const { acknowledgedCellIds, activeCellId, items } = data.review;
+  const review = useMemo(
+    () => ({ acknowledgedCellIds, activeCellId, items }),
+    [acknowledgedCellIds, activeCellId, items],
+  );
+  return <ScoreGridContent {...actions} {...data} review={review} />;
+}
+
+const ScoreGridContent = memo(function ScoreGridContent({
+  onAcknowledgeReviewCell,
+  onIncidentChange,
+  onPlayerChange,
+  onPlayOrderChange,
+  onPreferImageKindChange,
+  onRequestSubmitFocus,
+  onReviewCellFocus,
+  errorPathSet,
+  lastSyncedPlayerIndex,
+  originalPlayers,
+  players,
+  review,
+}: ScoreGridActions & ScoreGridData) {
   const [expandedMobilePlayer, setExpandedMobilePlayer] = useState(0);
   const [pendingFocus, setPendingFocus] = useState<{
     cellId: string;
@@ -31,22 +56,13 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
   const handledFocus = useRef(pendingFocus);
   const isNarrowViewport = useMediaQuery("(max-width: 1119px)");
   const inputRefs = useRef(new Map<string, HTMLElement>());
-  const {
-    onAcknowledgeReviewCell,
-    onIncidentChange,
-    onPlayerChange,
-    onPlayOrderChange,
-    onPreferImageKindChange,
-    onRequestSubmitFocus,
-    onReviewCellFocus,
-  } = actions;
 
   const originalByPlayOrder = useMemo(() => {
-    if (!data.originalPlayers) {
+    if (!originalPlayers) {
       return new Map();
     }
-    return new Map(data.originalPlayers.map((player) => [player.playOrder, player]));
-  }, [data.originalPlayers]);
+    return new Map(originalPlayers.map((player) => [player.playOrder, player]));
+  }, [originalPlayers]);
 
   const getCellId = useCallback(
     (row: number, col: number) => reviewCellId(row, gridColumns[col] as ReviewFieldKey),
@@ -83,14 +99,12 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
   }, [pendingFocus]);
 
   const acknowledgedCellIdSet = useMemo(
-    () => new Set(data.review.acknowledgedCellIds),
-    [data.review.acknowledgedCellIds],
+    () => new Set(review.acknowledgedCellIds),
+    [review.acknowledgedCellIds],
   );
-  const unresolvedItems = data.review.items.filter(
-    (item) => !acknowledgedCellIdSet.has(item.cellId),
-  );
+  const unresolvedItems = review.items.filter((item) => !acknowledgedCellIdSet.has(item.cellId));
   const activeItem =
-    unresolvedItems.find((item) => item.cellId === data.review.activeCellId) ?? unresolvedItems[0];
+    unresolvedItems.find((item) => item.cellId === review.activeCellId) ?? unresolvedItems[0];
 
   const requestReviewItemFocus = useCallback(
     (item: ReviewItem) => {
@@ -107,9 +121,7 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
       if (unresolvedItems.length === 0) {
         return;
       }
-      const currentIndex = unresolvedItems.findIndex(
-        (item) => item.cellId === data.review.activeCellId,
-      );
+      const currentIndex = unresolvedItems.findIndex((item) => item.cellId === review.activeCellId);
       const startIndex = currentIndex < 0 ? (direction > 0 ? -1 : 0) : currentIndex;
       const nextIndex = (startIndex + direction + unresolvedItems.length) % unresolvedItems.length;
       const next = unresolvedItems[nextIndex];
@@ -117,7 +129,7 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
         requestReviewItemFocus(next);
       }
     },
-    [data.review.activeCellId, requestReviewItemFocus, unresolvedItems],
+    [review.activeCellId, requestReviewItemFocus, unresolvedItems],
   );
 
   const acknowledgeActiveItem = useCallback(() => {
@@ -160,10 +172,10 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
         onRevertCell: args.onRevertCell,
         onSubmitFocus: onRequestSubmitFocus,
         position: { col: args.col, row: args.row },
-        rowCount: data.players.length,
+        rowCount: players.length,
       });
     },
-    [data.players.length, focusCell, getCellId, onRequestSubmitFocus],
+    [players.length, focusCell, getCellId, onRequestSubmitFocus],
   );
 
   const handlePlayerNumericCommit = useCallback<PlayerNumericCommit>(
@@ -202,7 +214,7 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
           activeItem={activeItem}
           activeReviewed={Boolean(activeItem && acknowledgedCellIdSet.has(activeItem.cellId))}
           remainingCount={unresolvedItems.length}
-          totalCount={data.review.items.length}
+          totalCount={review.items.length}
           onAcknowledge={acknowledgeActiveItem}
           onNext={() => navigateReviewItems(1)}
           onPrevious={() => navigateReviewItems(-1)}
@@ -212,16 +224,16 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
       {isNarrowViewport ? null : (
         <div className="mt-4 overflow-x-auto pb-2">
           <ScoreGridDesktopTable
-            errorPathSet={data.errorPathSet}
+            errorPathSet={errorPathSet}
             getCellId={getCellId}
             handleIncidentNumericCommit={handleIncidentNumericCommit}
             handleKeyboard={handleKeyboard}
             handlePlayerNumericCommit={handlePlayerNumericCommit}
-            lastSyncedPlayerIndex={data.lastSyncedPlayerIndex}
+            lastSyncedPlayerIndex={lastSyncedPlayerIndex}
             originalByPlayOrder={originalByPlayOrder}
-            originalPlayers={data.originalPlayers}
-            players={data.players}
-            review={data.review}
+            originalPlayers={originalPlayers}
+            players={players}
+            review={review}
             registerCellRef={registerCellRef}
             onPlayerChange={onPlayerChange}
             onPlayOrderChange={onPlayOrderChange}
@@ -234,14 +246,14 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
       {isNarrowViewport ? (
         <div className="mt-4">
           <ScoreGridMobileCards
-            errorPathSet={data.errorPathSet}
+            errorPathSet={errorPathSet}
             expandedMobilePlayer={expandedMobilePlayer}
             handleIncidentNumericCommit={handleIncidentNumericCommit}
             handlePlayerNumericCommit={handlePlayerNumericCommit}
-            lastSyncedPlayerIndex={data.lastSyncedPlayerIndex}
-            originalPlayers={data.originalPlayers}
-            players={data.players}
-            review={data.review}
+            lastSyncedPlayerIndex={lastSyncedPlayerIndex}
+            originalPlayers={originalPlayers}
+            players={players}
+            review={review}
             getCellId={getCellId}
             registerCellRef={registerCellRef}
             onPlayerChange={onPlayerChange}
@@ -254,4 +266,4 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
       ) : null}
     </section>
   );
-}
+});

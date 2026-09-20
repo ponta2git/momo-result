@@ -52,6 +52,10 @@ export function makeFourPlayerResults(
 
 export function makeMatchDetail(overrides: Partial<MatchDetailResponse> = {}): MatchDetailResponse {
   return {
+    heldAt: "2026-04-04T12:34:56.000Z",
+    gameTitleName: "桃太郎電鉄2",
+    seasonName: "今シーズン",
+    mapName: "東日本編",
     matchId: "match-1",
     heldEventId: "held-1",
     matchNoInEvent: 1,

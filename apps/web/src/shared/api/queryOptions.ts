@@ -1,19 +1,20 @@
 import { keepPreviousData, queryOptions } from "@tanstack/react-query";
 
 import { listLoginAccounts } from "@/shared/api/adminAccounts";
-import { getHeldEventDetail, listHeldEvents } from "@/shared/api/heldEvents";
+import { getHeldEventDetail, getHeldEventSummary, listHeldEvents } from "@/shared/api/heldEvents";
 import type { ListHeldEventsQuery } from "@/shared/api/heldEvents";
 import {
   listGameTitles,
+  listIncidentMasters,
   listMapMasters,
   listMemberAliases,
   listSeasonMasters,
 } from "@/shared/api/masters";
-import { getMatchDraftDetail, listMatchDraftSourceImages } from "@/shared/api/matchDrafts";
-import { getMatch, getMatchListSummary, listMatches } from "@/shared/api/matches";
+import { getMatchDraftDetail, getMatchDraftReview } from "@/shared/api/matchDrafts";
+import { getMatch, getMatchIdentity, getMatchListSummary, listMatches } from "@/shared/api/matches";
 import type { ListMatchesQuery } from "@/shared/api/matches";
 import { getNotificationSettings } from "@/shared/api/notificationSettings";
-import { getOcrDraft, getOcrDraftsBulk } from "@/shared/api/ocrDrafts";
+import { getOcrDraft } from "@/shared/api/ocrDrafts";
 import {
   adminAccountKeys,
   heldEventKeys,
@@ -37,40 +38,12 @@ export function notificationSettingsQueryOptions() {
   });
 }
 
-/** A bounded, unfiltered directory shared by screens that only resolve held-event names. */
-const heldEventDirectoryQuery = { limit: 100 } as const;
-
 export function heldEventsQueryOptions(query: ListHeldEventsQuery) {
-  return queryOptions({
-    ...heldEventsQueryDefinition(query),
-    placeholderData: keepPreviousData,
-  });
-}
-
-export function heldEventDirectoryQueryOptions() {
-  return queryOptions({
-    ...heldEventDirectoryQueryDefinition(),
-    placeholderData: keepPreviousData,
-  });
-}
-
-export function heldEventDirectorySuspenseQueryOptions() {
-  return heldEventDirectoryQueryDefinition();
-}
-
-function heldEventDirectoryQueryDefinition() {
-  return queryOptions({
-    queryKey: heldEventKeys.directory(),
-    queryFn: ({ signal }) => listHeldEvents(heldEventDirectoryQuery, { signal }),
-  });
-}
-
-function heldEventsQueryDefinition(query: ListHeldEventsQuery) {
-  // A single normalized value owns both cache identity and request behavior.
   const normalizedQuery = normalizeHeldEventsQuery(query);
   return queryOptions({
     queryKey: heldEventKeys.list(normalizedQuery),
     queryFn: ({ signal }) => listHeldEvents(normalizedQuery, { signal }),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -124,6 +97,13 @@ export function memberAliasesQueryOptions() {
   return queryOptions({
     queryKey: masterKeys.memberAliases.list(),
     queryFn: ({ signal }) => listMemberAliases({ signal }),
+  });
+}
+
+export function incidentMastersQueryOptions() {
+  return queryOptions({
+    queryKey: masterKeys.incidentMasters.list(),
+    queryFn: ({ signal }) => listIncidentMasters({ signal }),
   });
 }
 
@@ -189,28 +169,6 @@ export function matchDraftDetailQueryOptions(draftId: string | undefined, enable
   });
 }
 
-export function matchDraftSourceImagesQueryOptions(draftId: string | undefined, enabled = true) {
-  return queryOptions({
-    queryKey: matchKeys.draft.sourceImages(draftId),
-    queryFn: ({ signal }) => {
-      if (!draftId) {
-        throw new Error("match draft source images query is not ready");
-      }
-      return listMatchDraftSourceImages(draftId, { signal });
-    },
-    enabled: enabled && Boolean(draftId),
-  });
-}
-
-export function ocrDraftsBulkQueryOptions(draftIds: string[], enabled = true) {
-  return queryOptions({
-    queryKey: ocrDraftKeys.bulk(draftIds),
-    queryFn: ({ signal }) => getOcrDraftsBulk(draftIds, { signal }),
-    enabled: enabled && draftIds.length > 0,
-    retry: false,
-  });
-}
-
 export function ocrDraftDetailQueryOptions(draftId: string | undefined, enabled = true) {
   return queryOptions({
     queryKey: ocrDraftKeys.detail(draftId),
@@ -223,5 +181,39 @@ export function ocrDraftDetailQueryOptions(draftId: string | undefined, enabled 
     enabled: enabled && Boolean(draftId),
     retry: false,
     staleTime: Number.POSITIVE_INFINITY,
+  });
+}
+
+export function heldEventSummaryQueryOptions(heldEventId: string | undefined, enabled = true) {
+  return queryOptions({
+    queryKey: heldEventKeys.summary(heldEventId),
+    queryFn: ({ signal }) => {
+      if (!heldEventId) throw new Error("held event summary query is not ready");
+      return getHeldEventSummary(heldEventId, { signal });
+    },
+    enabled: enabled && Boolean(heldEventId),
+  });
+}
+
+export function matchIdentityQueryOptions(matchId: string | undefined, enabled = true) {
+  return queryOptions({
+    queryKey: matchKeys.identity(matchId),
+    queryFn: ({ signal }) => {
+      if (!matchId) throw new Error("match identity query is not ready");
+      return getMatchIdentity(matchId, { signal });
+    },
+    enabled: enabled && Boolean(matchId),
+  });
+}
+
+export function matchDraftReviewQueryOptions(draftId: string | undefined, enabled = true) {
+  return queryOptions({
+    queryKey: matchKeys.draft.review(draftId),
+    queryFn: ({ signal }) => {
+      if (!draftId) throw new Error("match draft review query is not ready");
+      return getMatchDraftReview(draftId, { signal });
+    },
+    enabled: enabled && Boolean(draftId),
+    retry: false,
   });
 }

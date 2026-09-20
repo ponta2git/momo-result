@@ -7,12 +7,14 @@ import scala.jdk.CollectionConverters.*
 
 import cats.effect.{IO, Resource}
 import cats.syntax.all.*
-import com.zaxxer.hikari.HikariConfig
 import doobie.*
 import doobie.hikari.HikariTransactor
 import doobie.implicits.*
 import org.testcontainers.postgresql.PostgreSQLContainer
 import org.testcontainers.utility.DockerImageName
+
+import momo.api.config.DatabaseConfig
+import momo.api.db.Database
 
 /**
  * Helpers for integration tests that talk to an isolated Postgres Testcontainer migrated with the
@@ -68,18 +70,16 @@ object IntegrationDb:
   def acquire: IO[DbFixture] = IO.blocking(sharedFixture)
 
   /**
-   * Build a HikariCP-backed transactor for tests. Three connections cover a lock holder, waiter,
+   * Use the production pool setup. Three connections cover a lock holder, waiter,
    * and independent lock observer without making contention tests depend on elapsed time.
    */
   private def transactorResource(settings: Settings): Resource[IO, HikariTransactor[IO]] =
-    val cfg = new HikariConfig()
-    cfg.setJdbcUrl(settings.jdbcUrl)
-    cfg.setUsername(settings.user)
-    cfg.setPassword(settings.password)
-    cfg.setMaximumPoolSize(3)
-    cfg.setMinimumIdle(0)
-    cfg.setPoolName("momo-result-it")
-    HikariTransactor.fromHikariConfig[IO](cfg)
+    Database.transactor[IO](DatabaseConfig(
+      settings.jdbcUrl,
+      settings.user,
+      settings.password,
+      poolSize = 3,
+    ))
 
   private def migrate(settings: Settings): Unit =
     val migrations = migrationFiles(migrationsDirectory)
@@ -194,9 +194,9 @@ object IntegrationDb:
       WHERE slot_key = 'shared-heavy-work'
     """.update.run.void *> sql"""
       UPDATE series_analysis_release_state
-      SET algorithm_version = 'series-analysis-v1',
-          artifact_schema_version = 1,
-          validation_contract_id = NULL,
+      SET algorithm_version = 'series-analysis-v5',
+          artifact_schema_version = 4,
+          validation_contract_id = 'series-analysis-artifact-v4-full-validation-v1',
           updated_at = clock_timestamp()
       WHERE singleton_key = 'current'
     """.update.run.void).transact(transactor)

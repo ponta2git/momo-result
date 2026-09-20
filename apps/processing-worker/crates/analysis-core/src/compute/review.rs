@@ -152,7 +152,7 @@ pub(super) fn build(
     }
 
     json!({
-        "schemaVersion": 3,
+        "schemaVersion": 4,
         "scope": scope_value,
         "baseline": {
             "matchCount": match_count,

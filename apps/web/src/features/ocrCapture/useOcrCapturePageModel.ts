@@ -1,95 +1,29 @@
-import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { slotDefinitions } from "@/features/ocrCapture/captureState";
-import type { CaptureSlotState, InputSource } from "@/features/ocrCapture/captureState";
-import { buildOcrHints } from "@/features/ocrCapture/hints";
+import type { InputSource } from "@/features/ocrCapture/captureState";
 import { buildOcrSetupPanelModel } from "@/features/ocrCapture/ocrSetupPanelModel";
-import type { OcrSetupPanelModel } from "@/features/ocrCapture/ocrSetupPanelModel";
 import { buildOcrSubmissionPlan } from "@/features/ocrCapture/ocrSubmissionPlan";
 import { defaultSetupValues, setupSchema } from "@/features/ocrCapture/schema";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import { isWorkingStatus } from "@/features/ocrCapture/slotPolicy";
 import { useOcrCaptureDraftFlow } from "@/features/ocrCapture/useOcrCaptureDraftFlow";
-import type { OcrCaptureDraftFeedback } from "@/features/ocrCapture/useOcrCaptureDraftFlow";
 import { useOcrCaptureMutations } from "@/features/ocrCapture/useOcrCaptureMutations";
-import { useOcrCaptureQueries } from "@/features/ocrCapture/useOcrCaptureQueries";
-import type { OcrCaptureAuthSlice } from "@/features/ocrCapture/useOcrCaptureQueries";
 import { useOcrSetupOptions } from "@/features/ocrCapture/useOcrSetupOptions";
 import { useOcrStartFlow } from "@/features/ocrCapture/useOcrStartFlow";
-import type { OcrStartDialogState } from "@/features/ocrCapture/useOcrStartFlow";
-import { parseLayoutFamily } from "@/shared/api/enums";
-import type { SlotKind } from "@/shared/api/enums";
-import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
-import type { NormalizedApiError } from "@/shared/api/problemDetails";
+import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import { authQueryOptions } from "@/shared/auth/authQueries";
+import { useDevUser } from "@/shared/auth/useDevUser";
+import type { SlotKind } from "@/shared/domain/ocr";
 import { trimSearchParam } from "@/shared/lib/searchParams";
-import type { SlotMap } from "@/shared/lib/slotMap";
 import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
-
-type MemberAliasesFeedback = {
-  error: NormalizedApiError | undefined;
-  refresh: () => void;
-  refreshing: boolean;
-};
-
-export type OcrCapturePageModel = {
-  startError: string | undefined;
-  capture: {
-    camera: {
-      actionVariant: "primary" | "secondary";
-      disabled: boolean;
-      reportValidationError: (message: string) => void;
-      selectImage: (file: File, source: InputSource) => void;
-      target: { label: string };
-    };
-    selectedImageCount: number;
-    totalSlotCount: number;
-    tray: {
-      actionFeedback: string | undefined;
-      captureTargetKind: SlotKind;
-      clear: (kind: SlotKind) => void;
-      drafts: SlotMap<OcrDraftResponse>;
-      drop: (sourceKind: SlotKind, targetKind: SlotKind) => void;
-      move: (kind: SlotKind, direction: -1 | 1) => void;
-      refreshStatus: (kind: SlotKind) => void;
-      reset: () => void;
-      resetDisabled: boolean;
-      selectTarget: (kind: SlotKind) => void;
-      slots: CaptureSlotState[];
-      statusRefreshing: SlotMap<boolean>;
-    };
-  };
-  feedback: {
-    auth: OcrCaptureAuthSlice;
-    memberAliases: MemberAliasesFeedback;
-  };
-  navigation: { returnTo: string | undefined };
-  setup: {
-    choices: { failed: boolean; refresh: () => void; refreshing: boolean };
-    panel: OcrSetupPanelModel;
-  };
-  submission: {
-    dialog: {
-      close: () => void;
-      confirm: () => Promise<void>;
-      state: OcrStartDialogState;
-      viewMatches: () => void;
-    };
-    start: {
-      badgeLabel: string;
-      blockedReason: string | undefined;
-      buttonLabel: string;
-      description: string;
-      disabled: boolean;
-      run: () => void;
-    };
-  };
-};
 
 const readyStatuses = new Set(["selected", "failed", "cancelled"]);
 
 /** Owns OCR capture screen state and exposes only view-ready slices and user intents. */
-export function useOcrCapturePageModel(): OcrCapturePageModel {
+export function useOcrCapturePageModel() {
   const [startError, setStartError] = useState<string>();
   const [searchParams] = useSearchParams();
   const requestedHeldEventId = trimSearchParam(searchParams.get("heldEventId"));
@@ -101,38 +35,26 @@ export function useOcrCapturePageModel(): OcrCapturePageModel {
   const [captureTargetKind, setCaptureTargetKind] = useState<SlotKind>("total_assets");
   const [captureActionFeedback, setCaptureActionFeedback] = useState<string>();
 
-  const referenceData = useOcrCaptureQueries();
+  const { devUser } = useDevUser();
+  const authQuery = useQuery({ ...authQueryOptions(devUser), retry: false });
+  const authReady = authQuery.isSuccess && authQuery.data !== null;
   const setupOptions = useOcrSetupOptions({
-    enabled: referenceData.auth.ready,
+    enabled: authReady,
     onChange: setSetupValue,
     value: setupValue,
   });
-  const hints = useMemo(() => {
-    const input: { gameTitleName?: string; layoutFamily?: "momotetsu_2" | "world" | "reiwa" } = {};
-    if (setupOptions.selectedGameTitle?.name) {
-      input.gameTitleName = setupOptions.selectedGameTitle.name;
-    }
-    const layoutFamily = parseLayoutFamily(setupOptions.selectedGameTitle?.layoutFamily);
-    if (layoutFamily) input.layoutFamily = layoutFamily;
-    return buildOcrHints(input, referenceData.memberAliases.directory);
-  }, [referenceData.memberAliases.directory, setupOptions.selectedGameTitle]);
   const draftFlow = useOcrCaptureDraftFlow({
     onDraftLoadError: (error) => setCaptureActionFeedback(error.detail || error.title),
   });
-  const captureSubmission = useOcrCaptureMutations(hints);
+  const captureSubmission = useOcrCaptureMutations();
   const startFlow = useOcrStartFlow({
     submission: captureSubmission,
     updateSlot: draftFlow.updateSlot,
   });
-  const draftFeedback = useMemo<OcrCaptureDraftFeedback>(
-    () => ({
-      reportFailure: (message) => {
-        setCaptureActionFeedback(message);
-      },
-      reportSuccess: setCaptureActionFeedback,
-    }),
-    [],
-  );
+  const draftFeedback = {
+    reportFailure: setCaptureActionFeedback,
+    reportSuccess: setCaptureActionFeedback,
+  };
 
   const captureTarget = slotDefinitions.find((definition) => definition.kind === captureTargetKind);
   if (!captureTarget) {
@@ -148,7 +70,7 @@ export function useOcrCapturePageModel(): OcrCapturePageModel {
   const cameraDisabled = startFlow.locked || hasWorkingSlot;
   const setupValidation = setupSchema.safeParse(setupValue);
   const setupReady = setupOptions.ready && setupValidation.success;
-  const setupBlockedReason = referenceData.auth.ready
+  const setupBlockedReason = authReady
     ? setupOptions.loading || setupOptions.refreshing
       ? "試合設定の選択肢を確認しています。"
       : setupValidation.success
@@ -208,7 +130,10 @@ export function useOcrCapturePageModel(): OcrCapturePageModel {
     startError,
     capture: {
       camera: {
-        actionVariant: selectedImageCount === slotDefinitions.length ? "secondary" : "primary",
+        actionVariant:
+          selectedImageCount === slotDefinitions.length
+            ? ("secondary" as const)
+            : ("primary" as const),
         disabled: cameraDisabled,
         reportValidationError: draftFeedback.reportFailure,
         selectImage,
@@ -221,11 +146,12 @@ export function useOcrCapturePageModel(): OcrCapturePageModel {
       tray: {
         actionFeedback: captureActionFeedback,
         captureTargetKind,
-        clear: (kind) => draftFlow.handleClear(kind, draftFeedback),
+        clear: (kind: SlotKind) => draftFlow.handleClear(kind, draftFeedback),
         drafts: draftFlow.drafts,
-        drop: (sourceKind, targetKind) =>
+        drop: (sourceKind: SlotKind, targetKind: SlotKind) =>
           draftFlow.handleDropImage(sourceKind, targetKind, draftFeedback),
-        move: (kind, direction) => draftFlow.handleMoveImage(kind, direction, draftFeedback),
+        move: (kind: SlotKind, direction: -1 | 1) =>
+          draftFlow.handleMoveImage(kind, direction, draftFeedback),
         refreshStatus: draftFlow.handleRefreshStatus,
         reset: () => draftFlow.handleResetAll(draftFeedback),
         resetDisabled: selectedImageCount === 0 || cameraDisabled,
@@ -235,8 +161,12 @@ export function useOcrCapturePageModel(): OcrCapturePageModel {
       },
     },
     feedback: {
-      auth: referenceData.auth,
-      memberAliases: referenceData.memberAliases.feedback,
+      auth: {
+        data: authQuery.data,
+        error: authQuery.error ? normalizeUnknownApiError(authQuery.error) : undefined,
+        retry: () => void authQuery.refetch(),
+        retrying: authQuery.isFetching,
+      },
     },
     navigation: { returnTo },
     setup: {
@@ -246,7 +176,7 @@ export function useOcrCapturePageModel(): OcrCapturePageModel {
         refreshing: setupOptions.refreshing,
       },
       panel: buildOcrSetupPanelModel({
-        enabled: referenceData.auth.ready,
+        enabled: authReady,
         options: setupOptions,
         setValue: setSetupValue,
         value: setupValue,
@@ -254,6 +184,7 @@ export function useOcrCapturePageModel(): OcrCapturePageModel {
     },
     submission: {
       dialog: {
+        navigationPending: startFlow.isNavigating,
         close: startFlow.close,
         confirm: startFlow.confirm,
         state: startFlow.state,
@@ -266,6 +197,7 @@ export function useOcrCapturePageModel(): OcrCapturePageModel {
           readySlots.length === 0 ? "読み取りを開始" : `${readySlots.length}件で読み取りを開始`,
         description: selectedDescription,
         disabled:
+          startFlow.locked ||
           readySlots.length === 0 ||
           hasWorkingSlot ||
           captureSubmission.isSubmitting ||

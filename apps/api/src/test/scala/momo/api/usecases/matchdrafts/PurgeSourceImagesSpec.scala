@@ -110,7 +110,7 @@ final class PurgeSourceImagesSpec extends MomoCatsEffectSuite:
         imageAfter <- imageStore.find(totalAssets.imageId)
         sourceImages = GetMatchDraftSourceImages[IO](matchDrafts, imageStore)
         listed <- sourceImages.list(draft.id)
-        streamed <- sourceImages.stream(draft.id, MatchDraftSourceImageKind.TotalAssets)
+        streamed <- sourceImages.stream(draft.id, MatchDraftSourceImageKind.TotalAssets, None)
       yield
         assertEquals(result.swap.toOption, Some(deleteError))
         assertEquals(updatedDraft.flatMap(_.sourceImagesRetainedUntil), Some(finalizedAt))

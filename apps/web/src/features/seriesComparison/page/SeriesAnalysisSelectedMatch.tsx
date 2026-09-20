@@ -7,10 +7,10 @@ import {
 import { SeriesAnalysisMatchLink } from "@/features/seriesComparison/navigation/SeriesAnalysisMatchLink";
 import type { SeriesAnalysisMatchContextV2 } from "@/shared/api/seriesAnalysis";
 import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
-import { matchPerformanceContextFromArtifact } from "@/shared/domain/matchPerformanceContext";
+import { matchPerformanceContextFromArtifact } from "@/shared/matches/matchPerformanceContext";
+import { MatchResultLedger } from "@/shared/matches/MatchResultLedger";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
-import { MatchResultLedger } from "@/shared/ui/data/MatchResultLedger";
 import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
 import { contentText } from "@/shared/ui/typography";
 

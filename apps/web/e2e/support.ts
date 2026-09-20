@@ -231,7 +231,10 @@ export async function postJson(
   return (await response.json()) as Record<string, unknown>;
 }
 
-export async function expectOk(response: APIResponse, label: string): Promise<void> {
+export async function expectOk(
+  response: Pick<APIResponse, "ok" | "status" | "text">,
+  label: string,
+): Promise<void> {
   if (response.ok()) return;
   throw new Error(`${label} failed with ${response.status()}: ${await response.text()}`);
 }

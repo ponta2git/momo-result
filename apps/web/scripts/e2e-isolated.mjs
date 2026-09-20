@@ -197,6 +197,7 @@ async function applyMigrations(postgres) {
       DOCKER_HOST: process.env["DOCKER_HOST"],
       DOCKER_TLS_VERIFY: process.env["DOCKER_TLS_VERIFY"],
       MOMO_DB_BOOTSTRAP_IS_FRESH: "true",
+      MOMO_DB_BOOTSTRAP_PROFILE: "web-e2e",
       MOMO_DB_MIGRATIONS_DIR: migrationsDir,
       POSTGRES_CONTAINER: postgres.getId(),
       POSTGRES_DB,

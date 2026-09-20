@@ -11,6 +11,7 @@
 - worker container へ OAuth など無関係な secret を渡さず、接続値を docs、tracked file、shell history へ書かない。
 - DB を使う前に sibling `momo-db` の migration が接続先へ適用済みであることを確認する。
 - integration / E2E は普段使いの DB、Redis、bucket と分離する。外部依存 gate の未実行は、その wire 動作を未検証として報告する。
+- Web / runtime E2Eのfresh DB bootstrapは `web-e2e` profileで現行の分析公開契約を初期化する。migrationだけのbaselineと区別し、既存DBの正式なpromotionや本番切替を代用しない。
 
 上記の隔離と接続先を確認できるローカル検証は、依頼された変更の検証・失敗修正・影響範囲の再実行まで個別承認なしで進める。任意 target や live provider を使う command にはこの前提を持ち込まず、実際の接続先と副作用を確認する。
 

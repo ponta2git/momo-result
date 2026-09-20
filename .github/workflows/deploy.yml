@@ -177,6 +177,7 @@ jobs:
       - name: Apply momo-db migrations
         env:
           MOMO_DB_BOOTSTRAP_IS_FRESH: "true"
+          MOMO_DB_BOOTSTRAP_PROFILE: web-e2e
         run: scripts/ci/apply-momo-db-migrations.sh
         timeout-minutes: 5
 

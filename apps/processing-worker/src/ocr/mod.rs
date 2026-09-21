@@ -45,6 +45,7 @@ pub(crate) mod object_store;
 )]
 pub(crate) mod queue;
 mod runtime_config;
+pub(crate) mod submissions;
 
 pub(crate) use child_launcher::probe_isolated_child_lifecycle;
 #[cfg(target_os = "linux")]
@@ -54,3 +55,6 @@ pub(crate) use runtime_config::OcrRuntimeConfigError;
 pub(crate) use runtime_config::{
     OcrConsumerMode, OcrConsumerRuntimeConfig, consumer_mode_from_environment,
 };
+
+#[cfg(test)]
+mod e2e_runtime;

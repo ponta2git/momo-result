@@ -382,7 +382,7 @@ fn valid_claim(requested_screen_type: RequestedScreenType) -> ClaimedOcrJob {
     }
 }
 
-pub(super) fn valid_completion(screen: RequestedScreenType) -> OcrDraftCompletion {
+pub(crate) fn valid_completion(screen: RequestedScreenType) -> OcrDraftCompletion {
     let wire = screen.wire();
     let profile = screen.expected_profile_id();
     let player_order = player_order_fixture();
@@ -579,7 +579,7 @@ fn structured_warning() -> JsonValue {
     })
 }
 
-pub(super) fn completion_with_missing_amount_warning() -> OcrDraftCompletion {
+pub(crate) fn completion_with_missing_amount_warning() -> OcrDraftCompletion {
     let mut completion = valid_completion(RequestedScreenType::TotalAssets);
     replace_json_pointer(
         &mut completion.output.payload,

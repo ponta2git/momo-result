@@ -1,4 +1,4 @@
-//! Own the v1 wire identity in one place; callers supply only successful snapshot data.
+//! Bind wire identity and version to the notification kind.
 
 use serde::Serialize;
 
@@ -53,7 +53,10 @@ impl<'a, T> NotificationEnvelope<'a, T> {
         Self {
             notification_id: format!("result:{}:{source_job_id}", kind.as_str()),
             kind: kind.as_str(),
-            schema_version: 1,
+            schema_version: match kind {
+                NotificationKind::OcrCompleted => 2,
+                NotificationKind::AnalysisCompleted => 1,
+            },
             source_job_id,
             occurred_at,
             settings_generation,
@@ -87,7 +90,7 @@ mod tests {
                 serde_json::to_value(envelope)?,
                 serde_json::json!({
                     "notificationId": format!("result:{wire}:logical:job-1"),
-                    "kind": wire, "schemaVersion": 1, "sourceJobId": "logical:job-1",
+                    "kind": wire, "schemaVersion": if wire == "ocr_completed" { 2 } else { 1 }, "sourceJobId": "logical:job-1",
                     "occurredAt": "2026-01-01T00:00:00.000Z",
                     "settingsGeneration": "9007199254740993", "data": null
                 })

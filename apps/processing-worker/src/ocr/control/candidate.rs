@@ -56,6 +56,15 @@ pub(super) async fn load_candidate(
     if matches!(status.as_str(), "succeeded" | "failed" | "cancelled") {
         return Ok(CandidateResult::Rejected(OcrClaimResult::MissingOrTerminal));
     }
+    let grouped = transaction
+        .query_opt(
+            "SELECT 1 FROM ocr_submission_members WHERE job_id = $1 AND status = 'registered' AND screen_type = $2",
+            &[&job_id, &job.try_get::<_, String>(2)?],
+        )
+        .await?;
+    if grouped.is_none() {
+        return Err(OcrControlError::InvalidState);
+    }
     if status == "running" {
         return Ok(CandidateResult::Rejected(OcrClaimResult::AlreadyRunning));
     }

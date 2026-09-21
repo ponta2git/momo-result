@@ -115,6 +115,18 @@ RUN --mount=type=cache,id=analysis-cargo-registry,target=/usr/local/cargo/regist
     cp -L --parents "${library}" /tmp/runtime-root; \
   done < /tmp/runtime-libraries
 
+# Explicit test-only target for the assembled OCR notification E2E. The default target below
+# remains the production runtime and never contains fixture controls or a test executable.
+FROM builder AS e2e-test
+COPY docs/schemas /workspace/docs/schemas
+COPY apps/processing-worker/testdata /workspace/apps/processing-worker/testdata
+RUN --mount=type=cache,id=analysis-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
+  --mount=type=cache,id=analysis-cargo-git,target=/usr/local/cargo/git,sharing=locked \
+  --mount=type=cache,id=analysis-target,target=/workspace/apps/processing-worker/target,sharing=locked \
+  cargo test --locked --lib --no-run --message-format=json > /tmp/momo-test-build.json \
+  && python3 -c "import json,pathlib,shutil; rows=[json.loads(line) for line in pathlib.Path('/tmp/momo-test-build.json').read_text().splitlines()]; executable=next(row['executable'] for row in rows if row.get('reason')=='compiler-artifact' and row.get('executable') and row['target']['name']=='momo_processing_worker'); shutil.copy2(executable,'/usr/local/bin/mom24-worker-test')"
+ENTRYPOINT ["/usr/local/bin/mom24-worker-test"]
+
 FROM ${RUNTIME_IMAGE} AS runtime
 ENV PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/momo-toolbox"
 ENV LD_LIBRARY_PATH="/opt/tesseract/lib"

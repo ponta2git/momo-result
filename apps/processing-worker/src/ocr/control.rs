@@ -10,7 +10,6 @@ use crate::execution_slot::{
     NewExecutionSlotHolder, SlotAcquisition, SlotRenewal, acquire_ocr, lock as lock_execution_slot,
     lock_owned as lock_owned_slot, release_owned, renew_owned, request_analysis_preemption,
 };
-use crate::notifications::{NotificationReservation, PreparedNotification};
 use crate::outbox::ControlOutcome;
 use crate::series_analysis::control::TransactionEffects;
 
@@ -269,6 +268,7 @@ pub(crate) async fn claim_job(
             )
             .await?;
             transaction.commit().await?;
+            super::submissions::wake(client).await;
             return Ok(recovery_effects.committed(OcrClaimResult::QueueContractMismatch));
         }
     };
@@ -281,6 +281,7 @@ pub(crate) async fn claim_job(
         )
         .await?;
         transaction.commit().await?;
+        super::submissions::wake(client).await;
         return Ok(recovery_effects.committed(OcrClaimResult::QueueContractMismatch));
     }
 
@@ -448,25 +449,20 @@ pub(crate) async fn finish_success(
     config: &OcrControlConfig,
     hints: &OcrHints,
     completion: &OcrDraftCompletion,
-    notification: Option<NotificationReservation>,
-) -> Result<Option<PreparedNotification>, OcrControlError> {
+) -> Result<(), OcrControlError> {
     let deadline = Instant::now()
         .checked_add(config.finalization_timeout)
         .ok_or(OcrControlError::NumericBound)?;
-    timeout_at(
+    let result = timeout_at(
         deadline,
-        finish_success_transaction(
-            client,
-            claim,
-            config,
-            hints,
-            completion,
-            notification,
-            deadline,
-        ),
+        finish_success_transaction(client, claim, config, hints, completion),
     )
     .await
-    .map_err(|_elapsed| OcrControlError::FinalizationTimeout)?
+    .map_err(|_elapsed| OcrControlError::FinalizationTimeout)?;
+    if result.is_ok() {
+        super::submissions::wake(client).await;
+    }
+    result
 }
 
 async fn finish_success_transaction(
@@ -475,9 +471,7 @@ async fn finish_success_transaction(
     config: &OcrControlConfig,
     hints: &OcrHints,
     completion: &OcrDraftCompletion,
-    notification: Option<NotificationReservation>,
-    deadline: Instant,
-) -> Result<Option<PreparedNotification>, OcrControlError> {
+) -> Result<(), OcrControlError> {
     validate_completion(claim, hints, completion)?;
     let transaction = bounded_transaction(client, config.finalization_timeout).await?;
     lock_owned_job(&transaction, claim, config).await?;
@@ -532,26 +526,8 @@ async fn finish_success_transaction(
     }
     sync_match_draft_status(&transaction, &claim.job_id).await?;
     release_slot(&transaction, claim, config).await?;
-    let prepared = if let Some(reservation) = notification {
-        crate::notifications::ocr::prepare(
-            &transaction,
-            reservation,
-            &claim.job_id,
-            &claim.draft_id,
-            requested_screen_type,
-            completion
-                .output
-                .warnings
-                .as_array()
-                .is_some_and(|warnings| !warnings.is_empty()),
-            deadline,
-        )
-        .await?
-    } else {
-        None
-    };
     transaction.commit().await?;
-    Ok(prepared)
+    Ok(())
 }
 
 pub(crate) async fn finish_failure(
@@ -570,6 +546,7 @@ pub(crate) async fn finish_failure(
     sync_match_draft_status(&transaction, &claim.job_id).await?;
     release_slot(&transaction, claim, config).await?;
     transaction.commit().await?;
+    super::submissions::wake(client).await;
     Ok(())
 }
 
@@ -607,6 +584,7 @@ pub(crate) async fn requeue_transient(
     }
     release_slot(&transaction, claim, config).await?;
     transaction.commit().await?;
+    super::submissions::wake(client).await;
     Ok(())
 }
 
@@ -635,6 +613,7 @@ pub(crate) async fn record_queue_failure(
     }
     fail_locked_queued_job(&transaction, job_id, OcrFailureCode::QueueFailure, 0).await?;
     transaction.commit().await?;
+    super::submissions::wake(client).await;
     Ok(())
 }
 
@@ -893,4 +872,4 @@ fn duration_milliseconds(duration: Duration) -> Result<i64, OcrControlError> {
 #[cfg(test)]
 mod integration_tests;
 #[cfg(test)]
-mod tests;
+pub(super) mod tests;

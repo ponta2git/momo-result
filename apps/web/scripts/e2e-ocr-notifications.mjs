@@ -131,7 +131,7 @@ async function run() {
   const apiOrigin = `http://127.0.0.1:${apiPort}`;
   const webOrigin = `http://127.0.0.1:${webPort}`;
   const token = randomBytes(32).toString("hex");
-  const recorder = startProcess("pnpm", ["notifications:record:test"], summitDir, {
+  const recorder = startProcess("node", ["scripts/dev/resultNotificationRecorder.ts"], summitDir, {
     TEST_DATABASE_URL: databaseUrl,
     MOM24_RUN_DIR: recorderDir,
     RESULT_NOTIFICATION_TOKEN: token,
@@ -262,7 +262,14 @@ async function run() {
   } else {
     await runOwnedCommand(
       "pnpm",
-      ["exec", "playwright", "test", "--config", "playwright.ocr-notifications.config.ts"],
+      [
+        "exec",
+        "playwright",
+        "test",
+        "--config",
+        "playwright.ocr-notifications.config.ts",
+        ...playwrightArgs,
+      ],
       {
         cwd: webDir,
         env: childEnvironment({

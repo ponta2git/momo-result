@@ -2,7 +2,7 @@ package momo.api.adapters.postgres
 
 import java.time.Instant
 
-import cats.effect.MonadCancelThrow
+import cats.effect.Async
 import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
@@ -13,7 +13,7 @@ import momo.api.domain.ids.{MatchDraftId, OcrDraftId, OcrJobId}
 import momo.api.domain.{FailureCode, MatchDraftStatus, OcrJobStatus}
 import momo.api.repositories.OcrJobMaintenanceRepository
 
-final class PostgresOcrJobMaintenanceRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
+final class PostgresOcrJobMaintenanceRepository[F[_]: Async](transactor: Transactor[F])
     extends OcrJobMaintenanceRepository[F]:
   private final case class StaleJobCandidateRow(jobId: OcrJobId, draftId: OcrDraftId)
 
@@ -114,5 +114,5 @@ final class PostgresOcrJobMaintenanceRepository[F[_]: MonadCancelThrow](transact
       )
     }
 
-    failAll.flatTap(_ => reconcileAll)
+    failAll.flatTap(_ => reconcileAll).flatTap(_ => PostgresOcrSubmissions.wake(transactor))
 end PostgresOcrJobMaintenanceRepository

@@ -304,8 +304,19 @@ object PostgresSourceImagesRepository:
    * Keep reference expansion inside SQL so quota/orphan reads can use an anti-join. The CTE has
    * one consumer; forcing materialization would spool every live reference before filtering.
    */
-  private val liveReferencesCte = fr"""
+  private val liveReferencesCte =
+    fr"""
     WITH live_source_image_references(image_id) AS NOT MATERIALIZED (
+      SELECT image.id
+      FROM ocr_submission_members member
+      JOIN ocr_submissions submission ON submission.id = member.submission_id
+      JOIN source_images image ON image.owner_account_id = submission.owner_account_id
+        AND image.idempotency_key_hash = member.upload_idempotency_key_hash
+        AND image.sha256_hex = member.image_sha256_hex AND image.byte_length = member.image_byte_length
+      WHERE submission.status = 'open'
+        AND (member.status = 'registered' OR
+          (member.status = 'pending' AND submission.admission_deadline > clock_timestamp()))
+      UNION ALL
       SELECT source_image_id
       FROM ocr_jobs
       WHERE status IN (${OcrJobStatus.Queued}, ${OcrJobStatus.Running})
@@ -344,7 +355,17 @@ object PostgresSourceImagesRepository:
     )
   """
 
-  private[postgres] val unreferencedGuard = fr"""
+  private[postgres] val unreferencedGuard =
+    fr"""
+    AND NOT EXISTS (
+      SELECT 1 FROM ocr_submission_members member
+      JOIN ocr_submissions submission ON submission.id = member.submission_id
+      WHERE submission.owner_account_id = candidate.owner_account_id AND submission.status = 'open'
+        AND member.upload_idempotency_key_hash = candidate.idempotency_key_hash
+        AND member.image_sha256_hex = candidate.sha256_hex AND member.image_byte_length = candidate.byte_length
+        AND (member.status = 'registered' OR
+          (member.status = 'pending' AND submission.admission_deadline > clock_timestamp()))
+    )
     AND NOT EXISTS (
       SELECT 1
       FROM ocr_jobs

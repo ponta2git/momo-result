@@ -34,6 +34,7 @@ object UploadModule:
 
   def routes[F[_]: Async](
       uploadImage: UploadImage[F],
+      submissions: momo.api.usecases.ocr.OcrSubmissions[F],
       rateLimiter: RateLimiter[F],
       idempotency: IdempotencyReplay.Guard[F],
       nowF: F[Instant],
@@ -72,7 +73,21 @@ object UploadModule:
                         .run(member.accountId, upload.fileName, upload.contentType, upload.bytes)
                   store
                     .flatMap {
-                      case Left(error) => security.toProblemF(error).map(Left(_))
+                      case Left(error) =>
+                        val finalRejection = error match
+                          case _: AppError.UnsupportedMediaType | _: AppError.PayloadTooLarge =>
+                            true
+                          case _ => false
+                        val close = idempotencyKey.filter(_ => finalRejection).fold(Async[F].unit)(
+                          key =>
+                            submissions.failAdmission(
+                              member.accountId,
+                              SourceImageIdempotencyHash.fromRawKey(key).value,
+                              fingerprint.sha256,
+                              upload.bytes.length
+                            ).attempt.void
+                        )
+                        close *> security.toProblemF(error).map(Left(_))
                       case Right(image) =>
                         val event = s"image_upload_accepted accountId=${member.accountId.value} " +
                           s"imageId=${image.imageId.value} mediaType=${image.mediaType} " +

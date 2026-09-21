@@ -35,7 +35,8 @@ private[postgres] object PostgresResultNotificationCancellation:
       )
 
   def draftsUnavailable(ids: List[MatchDraftId], now: Instant): ConnectionIO[Unit] =
-    cancelTargets("match_draft", ids.map(_.value), "draft_unavailable", now)
+    PostgresOcrSubmissions.abortForDrafts(ids, now) *>
+      cancelTargets("match_draft", ids.map(_.value), "draft_unavailable", now)
 
   def afterDeletion(drafts: List[MatchDraftId], matches: List[MatchId]): ConnectionIO[Unit] =
     if drafts.isEmpty && matches.isEmpty then ().pure[ConnectionIO]

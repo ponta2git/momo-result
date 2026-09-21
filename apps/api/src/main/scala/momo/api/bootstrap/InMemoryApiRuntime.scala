@@ -168,6 +168,7 @@ private[bootstrap] object InMemoryApiRuntime:
       metadata = InMemoryMatchMetadata[F](heldEvents, gameTitles, seasonMasters, mapMasters)
       matchList = InMemoryMatchListReadModel[F](matches, matchDrafts, metadata)
       notificationSettings <- InMemoryNotificationSettingsRepository.create[F]
+      ocrSubmissions <- InMemoryOcrSubmissionsRepository.create[F](matchDrafts)
       ocrJobCreationStore = InMemoryOcrJobCreationStore[F](
         drafts,
         drafts.create,
@@ -175,6 +176,7 @@ private[bootstrap] object InMemoryApiRuntime:
         jobs.create,
         matchDrafts,
         jobs.existsActiveByDraft,
+        ocrSubmissions,
       )
       imageReferences: ImageReferenceRepository[F] =
         InMemoryImageReferenceRepository[F](jobs, matchDrafts)
@@ -182,6 +184,7 @@ private[bootstrap] object InMemoryApiRuntime:
       ocrAdmissionGuard = OcrAdmissionGuard.allowAll[F]
       repositories = UseCaseWiring.RuntimeRepositories(
         ocrJobCreationStore = ocrJobCreationStore,
+        ocrSubmissions = ocrSubmissions,
         jobs = jobs,
         drafts = drafts,
         heldEvents = heldEvents,

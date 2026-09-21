@@ -2,10 +2,11 @@ package momo.api.adapters.postgres
 
 import cats.MonadThrow
 import cats.data.EitherT
-import cats.effect.MonadCancelThrow
+import cats.effect.Async
 import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
+import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.{MatchDraftStatus, OcrJobStatus, ScreenType}
@@ -18,12 +19,15 @@ import momo.api.repositories.{
   OcrJobCreationStore,
   OcrJobDraftAttachment,
   OcrQueueOutboxDraft,
-  SourceImageStatus
+  SourceImageStatus,
+  StoredOcrJob
 }
 
-final class PostgresOcrJobCreationStore[F[_]: MonadCancelThrow](transactor: Transactor[F])
+final class PostgresOcrJobCreationStore[F[_]: Async](transactor: Transactor[F])
     extends OcrJobCreationStore[F]:
   private final case class SourceImageGuardRow(
+      owner: momo.api.domain.ids.AccountId,
+      idempotencyHash: String,
       status: SourceImageStatus,
       objectKey: SourceImageObjectKey,
       sha256: Option[Sha256Hex],
@@ -38,40 +42,105 @@ final class PostgresOcrJobCreationStore[F[_]: MonadCancelThrow](transactor: Tran
       OcrQueueOutboxDraft.forJob(dispatch.jobId, dispatch.enqueueRequest, dispatch.createdAt)
     val program =
       for
-        _ <- EitherT.cond[ConnectionIO](
-          OcrJobCreationPlan.isConsistent(plan),
-          (),
-          OcrJobCreationRejection.InvalidPlan,
-        )
-        _ <- EitherT(activeLimitGuard(plan.activeJobLimit))
-        _ <- EitherT(attachmentGuard(attachment))
-        _ <- EitherT(sourceImageGuard(plan))
-        _ <- EitherT.liftF(PostgresOcrDrafts.alg.create(plan.draft))
-        _ <- EitherT.liftF(PostgresOcrJobs.createV2(plan.job))
-        _ <- EitherT.liftF(attachMatchDraft(attachment))
-        _ <- EitherT.liftF(PostgresOcrQueueOutbox.insertIntent(outbox))
-      yield ()
-    program.value.transact(transactor)
+        _ <-
+          sql"SELECT pg_advisory_xact_lock(hashtext('momo:ocr_jobs:active_limit')::bigint)".query[
+            Unit
+          ].unique
+        _ <- PostgresOcrSubmissions.lockDraft(attachment.draftId)
+        _ <- PostgresOcrSubmissions.lock(plan.submission.submissionId)
+        submission <- PostgresOcrSubmissions.read(plan.submission.submissionId)
+        existing <- submission.flatMap(_.members.find(_.screenType ==
+          attachment.screenType)).flatMap(_.jobId)
+          .traverse(id =>
+            PostgresOcrJobs.alg.find(id).flatMap(_.traverse(job =>
+              PostgresOcrDrafts.alg.find(job.draftId).map(_.map(draft =>
+                StoredOcrJob(job, draft, false)
+              ))
+            )).map(_.flatten)
+          ).map(_.flatten)
+        result <-
+          if !OcrJobCreationPlan.isConsistent(plan) then
+            OcrJobCreationRejection.InvalidPlan.asLeft[StoredOcrJob].pure[ConnectionIO]
+          else if !submission.exists(s =>
+              s.ownerAccountId == plan.submission.ownerAccountId &&
+                s.matchDraftId == attachment.draftId
+            )
+          then
+            OcrJobCreationRejection.SubmissionRejected.asLeft[StoredOcrJob].pure[ConnectionIO]
+          else
+            existing match
+              case Some(saved) if saved.job.imageId == plan.job.imageId =>
+                saved.asRight[OcrJobCreationRejection].pure[ConnectionIO]
+              case Some(_) =>
+                OcrJobCreationRejection.SubmissionRejected.asLeft[StoredOcrJob].pure[ConnectionIO]
+              case None =>
+                val admission = submission.exists(s =>
+                  s.status == "open" &&
+                    s.members.exists(m =>
+                      m.screenType == attachment.screenType && m.status == "pending"
+                    )
+                )
+                (for
+                  currentTime <-
+                    EitherT.liftF(sql"SELECT clock_timestamp()".query[java.time.Instant].unique)
+                  _ <- EitherT.cond[ConnectionIO](
+                    admission && submission.exists(s => currentTime.isBefore(s.admissionDeadline)),
+                    (),
+                    OcrJobCreationRejection.SubmissionRejected
+                  )
+                  _ <- EitherT(activeLimitGuard(plan.activeJobLimit))
+                  _ <- EitherT(attachmentGuard(attachment))
+                  _ <- EitherT(sourceImageGuard(plan))
+                  _ <- EitherT.liftF(PostgresOcrDrafts.alg.create(plan.draft))
+                  _ <- EitherT.liftF(PostgresOcrJobs.createV2(plan.job))
+                  _ <- EitherT.liftF(attachMatchDraft(attachment))
+                  _ <- EitherT.liftF(sql"""UPDATE ocr_submission_members
+                SET status = 'registered', job_id = ${plan.job.id}
+                WHERE submission_id = ${plan.submission.submissionId}
+                  AND screen_type = ${attachment.screenType} AND status = 'pending'""".update.run)
+                  _ <- EitherT.liftF(PostgresOcrQueueOutbox.insertIntent(outbox))
+                yield StoredOcrJob(plan.job, plan.draft, true)).value
+      yield result
+    program.transact(transactor).flatTap(_ => PostgresOcrSubmissions.wake(transactor))
 
   private def sourceImageGuard(
       plan: OcrJobCreationPlan
-  ): ConnectionIO[Either[OcrJobCreationRejection, Unit]] = sql"""
-      SELECT status, object_key, sha256_hex, byte_length::bigint, media_type
+  ): ConnectionIO[Either[OcrJobCreationRejection, Unit]] =
+    sql"""
+      SELECT owner_account_id, idempotency_key_hash, status, object_key, sha256_hex, byte_length::bigint, media_type
       FROM source_images
       WHERE id = ${plan.job.imageId}
       FOR UPDATE
-    """.query[SourceImageGuardRow].option.map {
-    case Some(SourceImageGuardRow(
-          SourceImageStatus.Available,
-          objectKey,
-          Some(sha256),
-          Some(byteLength),
-          Some(mediaType),
-        )) if sourceMetadataMatches(plan, objectKey, sha256, byteLength, mediaType) => Right(())
-    case Some(SourceImageGuardRow(SourceImageStatus.Available, _, _, _, _)) =>
-      Left(OcrJobCreationRejection.InvalidPlan)
-    case _ => Left(OcrJobCreationRejection.SourceImageUnavailable(plan.job.imageId))
-  }
+    """.query[SourceImageGuardRow].option.flatMap {
+      case Some(row) =>
+        PostgresOcrSubmissions.read(plan.submission.submissionId).map { submission =>
+          val matchesMember = submission.flatMap(_.members.find(_.screenType ==
+            plan.job.requestedScreenType)).exists(m =>
+            row.owner == plan.submission.ownerAccountId &&
+              row.idempotencyHash == m.uploadIdempotencyKeyHash &&
+              row.sha256.exists(_.value == m.imageSha256) &&
+              row.byteLength.contains(m.imageByteLength.toLong)
+          )
+          if !matchesMember then Left(OcrJobCreationRejection.SubmissionRejected)
+          else
+            row match
+              case SourceImageGuardRow(
+                    _,
+                    _,
+                    SourceImageStatus.Available,
+                    objectKey,
+                    Some(sha256),
+                    Some(byteLength),
+                    Some(mediaType),
+                  ) if sourceMetadataMatches(plan, objectKey, sha256, byteLength, mediaType) =>
+                Right(())
+              case SourceImageGuardRow(_, _, SourceImageStatus.Available, _, _, _, _) =>
+                Left(OcrJobCreationRejection.InvalidPlan)
+              case _ => Left(OcrJobCreationRejection.SourceImageUnavailable(plan.job.imageId))
+        }
+      case None =>
+        Left(OcrJobCreationRejection.SourceImageUnavailable(plan.job.imageId)).pure[ConnectionIO]
+    }
 
   private def sourceMetadataMatches(
       plan: OcrJobCreationPlan,
@@ -92,8 +161,7 @@ final class PostgresOcrJobCreationStore[F[_]: MonadCancelThrow](transactor: Tran
   ): ConnectionIO[Either[OcrJobCreationRejection, Unit]] =
     // READ COMMITTED takes a snapshot per statement. Count only after acquiring the lock,
     // so a creator that waited sees the preceding creator's committed job.
-    sql"SELECT pg_advisory_xact_lock(hashtext('momo:ocr_jobs:active_limit')::bigint)"
-      .query[Unit].unique *> sql"""
+    sql"""
         SELECT COUNT(*)
         FROM ocr_jobs
         WHERE status = ${OcrJobStatus.Queued}

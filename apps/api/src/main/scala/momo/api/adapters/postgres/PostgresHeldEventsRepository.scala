@@ -13,7 +13,7 @@ import doobie.postgres.sqlstate
 
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.ids.{HeldEventId, MatchDraftId}
-import momo.api.domain.{HeldEvent, MatchDraftStatus, PageRequest, PagedResult}
+import momo.api.domain.{HeldEvent, PageRequest, PagedResult}
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{
   HeldEventDeletionAlg,
@@ -94,19 +94,12 @@ object PostgresHeldEventDeletion:
       deleted: Boolean,
   )
 
-  private def deleteDiscardedDrafts(id: HeldEventId): ConnectionIO[List[MatchDraftId]] = sql"""
-    DELETE FROM match_drafts
-    WHERE held_event_id = $id
-      AND (
-        status = ${MatchDraftStatus.Cancelled}
-        OR (status = ${MatchDraftStatus.Confirmed} AND confirmed_match_id IS NULL)
-      )
-    RETURNING id
-  """.query[MatchDraftId].to[List]
+  private def deleteDiscardedForEvent(id: HeldEventId): ConnectionIO[List[MatchDraftId]] =
+    deleteDiscardedDrafts(fr"held_event_id = $id")
 
   val alg: HeldEventDeletionAlg[ConnectionIO] = new HeldEventDeletionAlg[ConnectionIO]:
     override def deleteIfUnreferenced(id: HeldEventId): ConnectionIO[HeldEventDeletionResult] =
-      deleteDiscardedDrafts(id).flatMap { deletedDrafts =>
+      deleteDiscardedForEvent(id).flatMap { deletedDrafts =>
         sql"""
         WITH target AS (
           SELECT id FROM held_events WHERE id = $id

@@ -87,7 +87,7 @@ object HttpRequestBodies:
     ): Json = CreateOcrJobRequest(
       imageId = imageId,
       requestedScreenType = requestedScreenType,
-      matchDraftId = matchDraftId,
+      submissionId = matchDraftId,
     ).asJson
 
     def defaultIncidentCounts: IncidentCountsRequest = incidentCounts(1, 0, 0, 0, 0, 0)

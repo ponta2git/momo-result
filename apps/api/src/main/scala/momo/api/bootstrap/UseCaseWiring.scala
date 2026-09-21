@@ -93,6 +93,7 @@ private[bootstrap] object UseCaseWiring:
 
   final case class RuntimeRepositories[F[_]](
       ocrJobCreationStore: OcrJobCreationStore[F],
+      ocrSubmissions: OcrSubmissionsRepository[F],
       jobs: OcrJobsRepository[F],
       drafts: OcrDraftsRepository[F],
       heldEvents: HeldEventsRepository[F],

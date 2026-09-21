@@ -529,6 +529,144 @@
         }
       }
     },
+    "/api/ocr-submissions/{submissionId}" : {
+      "get" : {
+        "tags" : [
+          "ocr"
+        ],
+        "operationId" : "getApiOcr-submissionsSubmissionid",
+        "parameters" : [
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "submissionId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OcrSubmissionResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "headers" : {
+              "Retry-After" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put" : {
+        "tags" : [
+          "ocr"
+        ],
+        "operationId" : "putApiOcr-submissionsSubmissionid",
+        "parameters" : [
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "submissionId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PutOcrSubmissionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OcrSubmissionResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "headers" : {
+              "Retry-After" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/ocr-jobs/{jobId}" : {
       "get" : {
         "tags" : [
@@ -5181,7 +5319,7 @@
         "required" : [
           "imageId",
           "requestedScreenType",
-          "matchDraftId"
+          "submissionId"
         ],
         "properties" : {
           "imageId" : {
@@ -5191,12 +5329,9 @@
             "description" : "Must be total_assets, revenue, or incident_log. The legacy auto value is not accepted.",
             "type" : "string"
           },
-          "matchDraftId" : {
-            "description" : "Existing editable match draft to attach this image's OCR result to.",
+          "submissionId" : {
+            "description" : "Previously accepted OCR submission UUID. Reload older clients before submitting.",
             "type" : "string"
-          },
-          "ocrHints" : {
-            "$ref" : "#/components/schemas/OcrJobHintsRequest"
           }
         }
       },
@@ -6584,6 +6719,86 @@
           }
         }
       },
+      "OcrSubmissionMemberRequest" : {
+        "title" : "OcrSubmissionMemberRequest",
+        "type" : "object",
+        "required" : [
+          "screenType",
+          "uploadIdempotencyKey",
+          "imageSha256",
+          "imageByteLength"
+        ],
+        "properties" : {
+          "screenType" : {
+            "type" : "string"
+          },
+          "uploadIdempotencyKey" : {
+            "type" : "string"
+          },
+          "imageSha256" : {
+            "type" : "string"
+          },
+          "imageByteLength" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "OcrSubmissionMemberResponse" : {
+        "title" : "OcrSubmissionMemberResponse",
+        "type" : "object",
+        "required" : [
+          "screenType",
+          "status"
+        ],
+        "properties" : {
+          "screenType" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "jobId" : {
+            "type" : "string"
+          },
+          "failureCode" : {
+            "type" : "string"
+          }
+        }
+      },
+      "OcrSubmissionResponse" : {
+        "title" : "OcrSubmissionResponse",
+        "type" : "object",
+        "required" : [
+          "submissionId",
+          "matchDraftId",
+          "status",
+          "admissionDeadline"
+        ],
+        "properties" : {
+          "submissionId" : {
+            "type" : "string"
+          },
+          "matchDraftId" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "admissionDeadline" : {
+            "type" : "string"
+          },
+          "finishedAt" : {
+            "type" : "string"
+          },
+          "members" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/OcrSubmissionMemberResponse"
+            }
+          }
+        }
+      },
       "PaginationResponse" : {
         "title" : "PaginationResponse",
         "type" : "object",
@@ -6760,6 +6975,27 @@
               "DEPENDENCY_FAILED",
               "INTERNAL_ERROR"
             ]
+          }
+        }
+      },
+      "PutOcrSubmissionRequest" : {
+        "title" : "PutOcrSubmissionRequest",
+        "type" : "object",
+        "required" : [
+          "matchDraftId"
+        ],
+        "properties" : {
+          "matchDraftId" : {
+            "type" : "string"
+          },
+          "members" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/OcrSubmissionMemberRequest"
+            }
+          },
+          "ocrHints" : {
+            "$ref" : "#/components/schemas/OcrJobHintsRequest"
           }
         }
       },

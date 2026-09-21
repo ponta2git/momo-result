@@ -11,6 +11,7 @@
 | 下書き | OCR または手入力から確定前に編集する作業単位。 |
 | OCRドラフト | 画像1枚の解析結果。 |
 | OCRジョブ | 画像受付から OCR 完了 / 失敗までの非同期処理。 |
+| OCR送出 | 1回の読み取り操作で固定した1〜3画像の集合。全体の結果と通知の単位。 |
 | 戦績分析ジョブ | 1作品の有効 scope と表示用途を再計算する非同期処理。 |
 | 戦績分析成果物 | 比較、振り返り、drilldown が共有する version 付き計算結果。 |
 | 試合メモ | 確定済みの1試合に0件または1件だけ付けられ、認可済み利用者全員で共有する自由記述。 |
@@ -40,7 +41,7 @@
 
 | 下書き状態 | 意味 | 編集 | 終端 |
 | --- | --- | --- | --- |
-| `ocr_running` | OCR slot が待機中または処理中 | 不可 | No |
+| `ocr_running` | OCR slot が待機中・処理中、または画像がまだない最初の送出を受付済み | 不可 | No |
 | `ocr_failed` | slot の一部が失敗または cancel | 可 | No |
 | `draft_ready` | 警告なく編集可能 | 可 | No |
 | `needs_review` | OCR 警告の確認が必要 | 可 | No |
@@ -48,7 +49,8 @@
 | `cancelled` | 互換用の中止終端 | 不可 | Yes |
 
 - OCR slot は `total_assets`、`revenue`、`incident_log` を明示する。legacy decode を除き `auto` を受理しない。同じ slot の再取込は最新結果で置き換える。
-- 新規OCRジョブは必ず対戦下書きのslotへ紐づく。下書きIDの欠落・不正、存在しない下書き、終端下書きへの受付ではOCRレコードを作らない。
+- 新規OCRジョブは受付済み送出の固定memberと対戦下書きのslotへ紐づく。送出IDの欠落・不正、未受付member、他主体・内容不一致、存在しない下書き、終端下書きへの新規受付ではOCRレコードを作らない。登録済みmemberの同一再送は既存jobへ収束する。
+- 読み取り用下書きも最初は`draft_ready`で作り、送出の受付前に通信が止まっても編集可能な記録を残す。空の下書きを`ocr_running`へ移すのは送出受付と同じtransactionとし、既存結果slotがある下書きはjob登録までは現在の状態を保つ。初回送出が画像job 0件で終了した場合は`ocr_failed`へ移し、後の送出や結果を上書きしない。
 - 投影状態の優先順は未完了、失敗、警告、ready とする。OCR 失敗後も手入力で続行できる。
 - 未確定下書きの削除は画像保持も閉じる。`confirmed` は試合作成と同じ usecase でだけ到達し、終端状態から再開しない。
 - 画像なしの直接確定は下書きを変更しない。OCR 下書きからの確定は `matchDraftId` で作業単位を閉じ、参照した各 OCR draft が現在 slot と一致することを確認する。
@@ -67,6 +69,12 @@
 - 状態の正本は DB、Redis Streams は配送路とする。
 - claim と terminal 遷移は atomic に行い、terminal は `queued` / `running` からだけ許可する。
 - success は保存した draft と報告値が一致する。non-success は failure metadata を持ち、draft payload を持たない。
+
+### OCR送出
+
+`open`は固定memberの受付または処理終了を待つ状態、`settled`はWorkerが全体を確定した状態、`aborted`は下書きの確定・取消・削除で無効になった状態。終端からopenへ戻さない。
+memberは未登録の`pending`、jobに結び付いた`registered`、登録できず終了した`failed`に分ける。registeredの完了判断は対応jobの不変な終端状態を使い、現在の下書きslotから集合を再構築しない。
+受付期限は画像処理期限と分離し、未登録枠だけを終了させる。一時的な転送・HTTP失敗は受付失敗と断定しない。全体確定後の再読み取りは新しい送出で行う。
 
 ## 6. Series Analysis Job
 

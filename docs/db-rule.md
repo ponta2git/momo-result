@@ -25,7 +25,8 @@
 - 分析成果物は作品単位で原子的に公開し、失敗時は直前の成功成果物を維持する。current / previous の確認と chunk read は cleanup と競合しない read 境界で行う。
 - 分析のpublished artifact headerとchild resourceは改変不能とする。stagingの作成・差し替え、attempt保持cleanupによる許可済みprovenance変更、参照されないparentからのcascade cleanupを、公開内容の単独変更と区別する。
 - terminal job の保持期間と UI の表示件数を別契約として扱い、未完了 job を履歴 cleanup しない。
-- OCR・分析のDiscord通知は成功時点の固定snapshotを持つ。対象下書きの確定・取消・削除、掲載試合の削除と、通知の未開始部分取消は同じ業務commandでcommitする。後日のメモ編集や元jobの整理で通知本文を書き換えない。
+- OCRのDiscord通知は送出全体の確定、分析通知は分析成功時点の固定snapshotを持つ。対象下書きの確定・取消・削除とopen送出のaborted化・通知の未開始部分取消は同じ業務commandでcommitする。掲載試合の削除も未開始通知の取消と同時に扱う。後日のメモ編集や元jobの整理で通知本文を書き換えない。
+- 送出のowner・固定member・受付期限・終端識別を保持し、source下書き削除後も同一操作の照合を可能にする。未確定送出のjobと、受付期限内のupload済み/job未登録画像を保持処理から保護する。保存形・一意性・参照制約はmomo-db、受付・失敗・確定の業務判断はAPI/Workerが所有する。
 
 ## 3. Consumer Contract
 

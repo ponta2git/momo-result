@@ -2,12 +2,12 @@
 
 対象: [MOM-24](https://linear.app/ponta/issue/MOM-24)
 
-状態: 未実装。利用者と確定した要求、およびコードの読取りに基づく設計案。
+状態: 利用者と確定した要求とレビュー判断。実装済みの保存・wireはmomo-db、APIは生成OpenAPIを正本とする。
 導入前提は、利用者の指定によるメンテナンス中の一括切替へ改訂した。旧OCRとの稼働互換は維持しない。
 具体的な実装・停止切替・rollback条件は[実装・検証計画](ocr-submission-notification-plan.md)を参照する。
 本書の状態名・データ項目は論理モデルであり、DDL・API wireの確定稿ではない。
-実装時に要求を `requirements/base.md`、業務状態を `domain-rule.md`、責務を
-`architecture.md`、共有保存・wire契約を各専門正本へ反映する。
+要求は `requirements/base.md`、業務状態は `domain-rule.md`、責務は
+`architecture.md`、共有保存・wire契約は各専門正本へ反映している。検証進捗は実装計画を参照する。
 
 ## 1. 確定した要求
 
@@ -39,13 +39,13 @@
 | 高 | 共有schemaの所有者に合わせ、終了判定・設定判定・payload生成までmomo-dbへ移してしまう。 | momo-dbは構造・型・整合性制約を所有。業務判断・transactionの組立て・SQL queryはconsumerが所有する。 |
 | 中 | 現在の下書きslotから集計すると、後の画像差替えによって別送出の結果が混ざる。 | 不変の送出member→job対応から判定する。下書きslotの現在値を集合の正本にしない。 |
 | 中 | HTTPのidempotency記録だけでは、業務commit後の応答喪失や記録整理後の再送を扱い切れない。 | 送出IDとmemberの一意性を業務保存で守り、送出IDによる状態取得を用意する。 |
-| 中 | 通知schemaのversionを変えても、受付DBのversion列が既定値のまま残る。 | envelope・保存列・validator・rendererを対応させ、分析v1と既存OCR v1を保つ。 |
+| 中 | 通知schemaのversionを変えても、受付DBのversion列が既定値のまま残る。 | envelope・保存列・validator・rendererを対応させる。分析v1を維持し、既存OCR v1は履歴だけを保つ。 |
 | 中 | 集約通知が長い文脈やエラー全文で分割され、利用者には複数投稿として届く。 | 失敗理由を固定の安全な分類へ制限し、最大3件と表示用文脈の上限から1投稿を検証する。 |
 
-根拠となる現行実装:
+レビューの対象となった実装入口（リンク先は変更後の実装）:
 
 - [画像を順番に登録するWeb workflow](../apps/web/src/features/ocrCapture/ocrSubmissionWorkflow.ts)
-- [OCR成功時の通知準備](../apps/processing-worker/src/notifications/ocr.rs)
+- [OCR送出確定時の通知準備](../apps/processing-worker/src/notifications/ocr.rs)
 - [Workerの成功・失敗・内部再試行](../apps/processing-worker/src/ocr/control.rs)
 - [API保守によるOCR最終失敗](../apps/api/src/main/scala/momo/api/adapters/postgres/PostgresOcrJobMaintenanceRepository.scala)
 - [下書きslot状態の投影](../apps/api/src/main/scala/momo/api/adapters/postgres/PostgresMatchDraftStatusSync.scala)

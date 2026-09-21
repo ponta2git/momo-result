@@ -1,8 +1,22 @@
 import { http, HttpResponse } from "msw";
 
+import type { PutOcrSubmissionRequest } from "@/shared/api/ocrSubmissions";
 import { draftPayload, now } from "@/test/msw/fixtures";
 
 export const ocrHandlers = [
+  http.put("/api/ocr-submissions/:submissionId", async ({ params, request }) => {
+    const body = (await request.json()) as PutOcrSubmissionRequest;
+    return HttpResponse.json({
+      submissionId: params["submissionId"],
+      matchDraftId: body.matchDraftId,
+      status: "open",
+      admissionDeadline: "2026-01-01T00:10:00.000Z",
+      members: body.members?.map((member) => ({
+        screenType: member.screenType,
+        status: "pending",
+      })),
+    });
+  }),
   http.post("/api/uploads/images", async () =>
     HttpResponse.json({
       imageId: "image-1",

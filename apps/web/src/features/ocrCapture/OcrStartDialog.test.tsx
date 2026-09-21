@@ -76,6 +76,17 @@ async function submitResult(...results: OcrSubmissionResult[]) {
 }
 
 describe("OcrStartDialog", () => {
+  it("does not offer a restart for an aborted submission", async () => {
+    await submitResult({ status: "submission_closed", canRestart: false });
+    expect(
+      await screen.findByRole("dialog", { name: "この送信の受付は終了しました" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "試合一覧で確認" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "未受付の画像を新しく送信" }),
+    ).not.toBeInTheDocument();
+  });
+
   it.each<OcrSubmissionResult>([
     { status: "empty" },
     { status: "invalid", message: "設定を確認してください" },

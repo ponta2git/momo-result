@@ -61,6 +61,8 @@ export function useOcrCaptureMutations(): OcrCaptureMutations {
       if (
         result.status === "started" ||
         result.status === "partial_started" ||
+        result.status === "submission_closed" ||
+        result.status === "draft_create_failed" ||
         result.status === "submission_failed"
       ) {
         await invalidateAfterOcrSubmissionStarted(queryClient).catch(() => undefined);

@@ -28,7 +28,8 @@ final case class OcrSubmission(
 ):
   def sameRequest(other: OcrSubmission): Boolean =
     ownerAccountId == other.ownerAccountId && matchDraftId == other.matchDraftId &&
-      momo.api.codec.OcrHintsCodec.encode(ocrHints) == momo.api.codec.OcrHintsCodec.encode(other.ocrHints) &&
+      momo.api.codec.OcrHintsCodec.encode(ocrHints) ==
+      momo.api.codec.OcrHintsCodec.encode(other.ocrHints) &&
       members.sortBy(_.screenType.wire).map(m =>
         (m.screenType, m.uploadIdempotencyKeyHash, m.imageSha256, m.imageByteLength)
       ) == other.members.sortBy(_.screenType.wire).map(m =>

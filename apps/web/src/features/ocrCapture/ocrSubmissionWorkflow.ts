@@ -13,7 +13,7 @@ import type {
   OcrJobResponse,
 } from "@/shared/api/ocrJobs";
 import type { OcrSubmissionResponse, PutOcrSubmissionRequest } from "@/shared/api/ocrSubmissions";
-import { normalizeDisplayApiError } from "@/shared/api/problemDetails";
+import { normalizeDisplayApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { parseOcrJobStatus } from "@/shared/domain/ocr";
 import type { SlotKind } from "@/shared/domain/ocr";
 
@@ -155,7 +155,9 @@ export async function runOcrSubmissionWorkflow({
           ownerMemberId: setup.ownerMemberId,
           playedAt,
           seasonMasterId: setup.seasonMasterId,
-          status: "ocr_running",
+          // Admission, not the preceding draft write, owns the running state.
+          // A lost/rejected PUT must leave an editable record even with no header.
+          status: "draft_ready",
         },
         { idempotencyKey: state.draftKey },
       ));
@@ -172,7 +174,11 @@ export async function runOcrSubmissionWorkflow({
   try {
     state.request ??= { matchDraftId, ocrHints: hints, members };
     submission = await putSubmission(state.submissionId, state.request);
-  } catch {
+  } catch (error) {
+    const { status } = normalizeUnknownApiError(error);
+    if (status === 404 || status === 409) {
+      return { status: "submission_closed", canRestart: false };
+    }
     return { matchDraftId, status: "submission_failed" };
   }
   const unregistered = targetSlots.filter((slot) =>

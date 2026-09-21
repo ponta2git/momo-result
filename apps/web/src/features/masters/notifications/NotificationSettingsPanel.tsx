@@ -13,7 +13,11 @@ import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { contentText } from "@/shared/ui/typography";
 
 const settings = [
-  { kind: "ocrCompleted", label: "OCR完了", description: "読取りの成功・要確認で通知します。" },
+  {
+    kind: "ocrCompleted",
+    label: "OCR完了",
+    description: "1回の送信分がすべて終了すると、失敗も含めてまとめて通知します。",
+  },
   {
     kind: "analysisCompleted",
     label: "分析完了",

@@ -399,7 +399,7 @@ describe("OcrCapturePage", () => {
         createdDrafts.push((await request.json()) as MatchDraftRequestBody);
         return HttpResponse.json({
           matchDraftId: "draft-created-1",
-          status: "ocr_running",
+          status: "draft_ready",
           createdAt: "2026-01-01T00:00:00.000Z",
           updatedAt: "2026-01-01T00:00:00.000Z",
         });
@@ -444,7 +444,7 @@ describe("OcrCapturePage", () => {
         mapMasterId: "map_east",
         ownerMemberId: "member_ponta",
         seasonMasterId: "season_current",
-        status: "ocr_running",
+        status: "draft_ready",
       }),
     ]);
     expect(createdJobs).toEqual([
@@ -492,7 +492,7 @@ describe("OcrCapturePage", () => {
         return HttpResponse.json({
           createdAt: "2026-02-03T04:05:06.000Z",
           matchDraftId: "draft-held-scoped",
-          status: "ocr_running",
+          status: "draft_ready",
           updatedAt: "2026-02-03T04:05:06.000Z",
         });
       }),
@@ -535,7 +535,7 @@ describe("OcrCapturePage", () => {
         await draftGate.promise;
         return HttpResponse.json({
           matchDraftId: "draft-created-1",
-          status: "ocr_running",
+          status: "draft_ready",
           createdAt: "2026-01-01T00:00:00.000Z",
           updatedAt: "2026-01-01T00:00:00.000Z",
         });
@@ -847,7 +847,7 @@ describe("OcrCapturePage", () => {
         draftCreates += 1;
         return HttpResponse.json({
           matchDraftId: "draft-created-1",
-          status: "ocr_running",
+          status: "draft_ready",
           createdAt: "2026-01-01T00:00:00Z",
           updatedAt: "2026-01-01T00:00:00Z",
         });

@@ -27,7 +27,7 @@ function submission(): OcrSubmissionWorkflowParams {
     getJob: vi.fn(),
     createDraft: vi.fn(async () => ({
       matchDraftId: "draft-1",
-      status: "ocr_running",
+      status: "draft_ready",
       createdAt: "2026-01-01T00:00:00Z",
       updatedAt: "2026-01-01T00:00:00Z",
     })),
@@ -62,7 +62,7 @@ describe("runOcrSubmissionWorkflow", () => {
       failedJobCount: 0,
     });
     expect(input.createDraft).toHaveBeenCalledWith(
-      expect.objectContaining({ playedAt: input.playedAt, status: "ocr_running" }),
+      expect.objectContaining({ playedAt: input.playedAt, status: "draft_ready" }),
       { idempotencyKey: input.state.draftKey },
     );
     expect(input.createJob).toHaveBeenCalledWith(
@@ -84,6 +84,7 @@ describe("runOcrSubmissionWorkflow", () => {
       .mockImplementation(put);
     expect((await runOcrSubmissionWorkflow(input)).status).toBe("submission_failed");
     expect(input.uploadImage).not.toHaveBeenCalled();
+    expect(input.state.draft?.status).toBe("draft_ready");
     expect((await runOcrSubmissionWorkflow(input)).status).toBe("started");
     expect(vi.mocked(input.putSubmission).mock.calls[0]).toEqual(
       vi.mocked(input.putSubmission).mock.calls[1],
@@ -144,6 +145,17 @@ describe("runOcrSubmissionWorkflow", () => {
     expect((await runOcrSubmissionWorkflow(input)).status).toBe("invalid");
     expect(input.createDraft).not.toHaveBeenCalled();
     expect(input.putSubmission).not.toHaveBeenCalled();
+  });
+
+  it.each([404, 409])("stops retrying an immutable admission rejection (%s)", async (status) => {
+    const input = submission();
+    input.putSubmission = vi.fn().mockRejectedValue({ kind: "api", status });
+    expect(await runOcrSubmissionWorkflow(input)).toEqual({
+      status: "submission_closed",
+      canRestart: false,
+    });
+    expect(input.uploadImage).not.toHaveBeenCalled();
+    expect(input.createJob).not.toHaveBeenCalled();
   });
 
   it("replays the identical draft request after its response is lost", async () => {

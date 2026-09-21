@@ -43,19 +43,34 @@ object OcrSubmissionResponse:
     submission.status,
     submission.admissionDeadline.toString,
     submission.finishedAt.map(_.toString),
-    submission.members.map(m => OcrSubmissionMemberResponse(
-      m.screenType.wire, m.status, m.jobId.map(_.value), m.failureCode,
-    )),
+    submission
+      .members
+      .map(m =>
+        OcrSubmissionMemberResponse(
+          m.screenType.wire,
+          m.status,
+          m.jobId.map(_.value),
+          m.failureCode,
+        )
+      ),
   )
 
 object OcrSubmissionEndpoints:
-  val put: CommonEndpoint.SecuredMutation[(String, PutOcrSubmissionRequest), OcrSubmissionResponse] = endpoint
-    .put.in("api" / "ocr-submissions" / path[String]("submissionId"))
-    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
-    .in(jsonBody[PutOcrSubmissionRequest]).errorOut(CommonEndpoint.errorOut)
-    .out(jsonBody[OcrSubmissionResponse]).tag("ocr")
+  val put
+      : CommonEndpoint.SecuredMutation[(String, PutOcrSubmissionRequest), OcrSubmissionResponse] =
+    endpoint
+      .put
+      .in("api" / "ocr-submissions" / path[String]("submissionId"))
+      .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
+      .in(jsonBody[PutOcrSubmissionRequest])
+      .errorOut(CommonEndpoint.errorOut)
+      .out(jsonBody[OcrSubmissionResponse])
+      .tag("ocr")
 
   val get: CommonEndpoint.SecuredRead[String, OcrSubmissionResponse] = endpoint
-    .get.in("api" / "ocr-submissions" / path[String]("submissionId"))
-    .securityIn(CommonEndpoint.accountHeader).errorOut(CommonEndpoint.errorOut)
-    .out(jsonBody[OcrSubmissionResponse]).tag("ocr")
+    .get
+    .in("api" / "ocr-submissions" / path[String]("submissionId"))
+    .securityIn(CommonEndpoint.accountHeader)
+    .errorOut(CommonEndpoint.errorOut)
+    .out(jsonBody[OcrSubmissionResponse])
+    .tag("ocr")

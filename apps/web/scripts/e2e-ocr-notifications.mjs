@@ -18,13 +18,15 @@ import {
   stopProcessGroup,
   waitForApi,
 } from "./e2e-isolated.mjs";
-import { workerTiming, writeImages } from "./ocr-e2e-fixtures.mjs";
+import { dockerFailure, workerTiming, writeImages } from "./ocr-e2e-fixtures.mjs";
 
 const execute = promisify(execFile);
 const webDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = resolve(webDir, "../..");
 const summitDir = resolve(process.env["MOM24_SUMMIT_DIR"] ?? join(repoRoot, "_deps/summit"));
 const workerImage = process.env["MOM24_WORKER_TEST_IMAGE"];
+const minioClientImage =
+  "quay.io/minio/mc@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727";
 const playwrightArgs = process.argv.slice(2).filter((value) => value !== "--hold");
 if (!workerImage)
   throw new Error("MOM24_WORKER_TEST_IMAGE must identify the controlled Linux image.");
@@ -102,21 +104,30 @@ async function run() {
   remember();
   checkpoint();
   const bucket = "mom24-fixtures";
+  await docker(["pull", minioClientImage], {
+    operation: "MinIO client image",
+    phase: "pull",
+  });
+  checkpoint();
   const clientEnv = join(runDir, "minio-client.env");
   await writeEnvironment(clientEnv, {
     MC_HOST_fixture: `http://${accessKey}:${secretKey}@127.0.0.1:9000`,
   });
-  await docker([
-    "run",
-    "--rm",
-    "--network",
-    `container:${minio.getId()}`,
-    "--env-file",
-    clientEnv,
-    "quay.io/minio/mc@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727",
-    "mb",
-    `fixture/${bucket}`,
-  ]);
+  await docker(
+    [
+      "run",
+      "--rm",
+      "--pull=never",
+      "--network",
+      `container:${minio.getId()}`,
+      "--env-file",
+      clientEnv,
+      minioClientImage,
+      "mb",
+      `fixture/${bucket}`,
+    ],
+    { operation: "MinIO bucket creation", phase: "run" },
+  );
   const r2 = {
     SOURCE_IMAGE_STORAGE_MODE: "r2",
     SOURCE_IMAGE_R2_ENDPOINT: `http://127.0.0.1:${minio.getMappedPort(9000)}`,
@@ -344,11 +355,11 @@ async function writeEnvironment(path, values) {
     { flag: "wx", mode: 0o600 },
   );
 }
-async function docker(args, options = {}) {
+async function docker(args, { operation = args[0], phase = args[0], ...options } = {}) {
   try {
     return await execute("docker", args, options);
-  } catch {
-    throw new Error(`Owned E2E Docker ${args[0]} operation failed.`);
+  } catch (error) {
+    throw dockerFailure(operation, phase, error);
   }
 }
 function cleanup() {

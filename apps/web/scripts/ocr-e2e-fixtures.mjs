@@ -5,6 +5,25 @@ import { deflateSync } from "node:zlib";
 
 export const screens = ["total_assets", "revenue", "incident_log"];
 
+// Child-process errors can contain credentials in command/output/cause fields. Expose only
+// fixed operation labels and bounded process metadata, never the original error object.
+export function dockerFailure(operation, phase, error) {
+  const code =
+    Number.isInteger(error?.code) && error.code >= 0 && error.code <= 255
+      ? error.code
+      : ["ENOENT", "EACCES", "EPERM", "ERR_CHILD_PROCESS_STDIO_MAXBUFFER"].includes(error?.code)
+        ? error.code
+        : "unknown";
+  const signal = ["SIGINT", "SIGTERM", "SIGKILL", "SIGABRT", "SIGSEGV"].includes(error?.signal)
+    ? error.signal
+    : error?.signal == null
+      ? "none"
+      : "unknown";
+  return new Error(
+    `Owned E2E Docker ${operation} failed (phase=${phase}, exit=${code}, signal=${signal}).`,
+  );
+}
+
 // Full HD synthetic inputs exercise the real upload / checksum / image decoder boundary.
 export async function writeImages(directory) {
   const images = {};

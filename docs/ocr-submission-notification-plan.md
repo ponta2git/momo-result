@@ -514,8 +514,8 @@ DB ownerの[停止切替・復元手順](../../momo-db/docs/development.md)を�
 ## 8. 実行記録
 
 実装は[MOM-24](https://linear.app/ponta/issue/MOM-24)とMOM-25〜28で管理する。
-remoteへのpush・PR・merge・本番適用はこの実行記録の完了範囲に含めない。
-ローカルnative gateはDockerfileの固定依存を使ったLinux/arm64で実施し、CI runner側のarchitectureでの実行は未実施である。
+remoteへのpush・PRとCIの結果は以下に追記し、merge・本番適用はこの実行記録の完了範囲に含めない。
+ローカルnative gateはDockerfileの固定依存を使ったLinux/arm64で実施し、PRの初回CIでもWorker image/runtime gateが通過した。
 依存pinは検証したmomo-db / Summitのcommitを指し、公開前に依存commitを先に到達可能にする。
 
 | 境界 | 実行した証拠 |
@@ -541,7 +541,16 @@ job0期限終了の最初のoracleは安全走査周期と同じ長さでtimeout
 PR #52の初回remote CIでは、初回送出受付が入力のナノ秒精度、再送がDB保存後のマイクロ秒精度を返し、
 期限の同値確認が失敗した。固定ナノ秒の回帰testでローカルでも再現し、INSERTのRETURNINGで
 初回応答も保存時刻に揃えた。修正後はquality・OpenAPI freshnessと実DB 199件が通過した。
-この追記時点で修正後のremote CIは未確認であり、本番適用は行っていない。
+初回CI `35586285636` ではWorkerとruntime imageのgate、OCR通知E2Eの4件は通過した。
+時刻精度修正後のCI `35588046892` ではAPIを含む他gateは通過したが、OCR通知E2Eは
+画像保存用fixtureのbucket作成を実行するbootstrapで失敗し、API起動・E1〜E4の実行には進んでいない。
+当時のDocker wrapperは終了code・signalと出力を破棄していたため、image取得とcontainer内の
+bucket作成のどちらで失敗したかは確定できない。製品動作の回帰や一時的なregistry障害とは断定しない。
+fixtureのclient image取得をcredential設定・bucket作成から分離し、後者では追加pullを禁止した。
+診断は固定の操作名・phaseと限定した終了code/signalだけを残し、標準出力・標準エラー・環境値を公開しない。
+この境界の専用Node test 2件をE2E起動とは独立して実行し、隔離fixtureでも分離後のimage取得・
+bucket作成・存在確認を通した。これは元の失敗原因を再現・特定した証拠ではない。
+調査ログと追加fixture資材は回収した。修正後のremote CIは次回runで確認し、本番適用は行っていない。
 
 MCPで通した登録jobありの7送出について、最後のjob終了→送出確定と、確定→受付/配送を分けて採取し、
 走査・受付の時間予算を満たすことを確認した。実測値は公開文書へ転記しない。

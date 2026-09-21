@@ -13,6 +13,8 @@ object ApiEndpoints:
     AuthEndpoints.me,
     UploadEndpoints.uploadImage,
     OcrJobEndpoints.create,
+    OcrSubmissionEndpoints.put,
+    OcrSubmissionEndpoints.get,
     OcrJobEndpoints.get,
     OcrJobEndpoints.cancel,
     OcrDraftEndpoints.get,

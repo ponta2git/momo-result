@@ -1,8 +1,8 @@
 package momo.api.endpoints.codec
 
+import momo.api.domain.ScreenType
 import momo.api.domain.ids.*
-import momo.api.domain.{OcrJobHints, ScreenType}
-import momo.api.endpoints.{CreateOcrJobRequest, CreateOcrJobResponse, OcrJobHintsRequest}
+import momo.api.endpoints.{CreateOcrJobRequest, CreateOcrJobResponse}
 import momo.api.errors.AppError
 import momo.api.usecases.ocr.{CreateOcrJobCommand, CreatedOcrJob}
 
@@ -15,14 +15,17 @@ object OcrJobCodec:
         .toRight(AppError.ValidationFailed(
           "requestedScreenType must be total_assets, revenue, or incident_log."
         ))
-      hints <- request.ocrHints.fold(Right(OcrJobHints.empty))(OcrJobHintsRequest.asDomain)
-      matchDraftId <- BoundaryId
-        .required("matchDraftId", request.matchDraftId)(MatchDraftId.fromString)
+      _ <- Either.cond(
+        momo.api.usecases.ocr.OcrSubmissions.validId(request.submissionId),
+        (),
+        AppError.ValidationFailed(
+          "submissionId is required. Reload the application and start a new reading operation."
+        )
+      )
     yield CreateOcrJobCommand(
       imageId = imageId,
       requestedScreenType = requestedScreenType,
-      ocrHints = hints,
-      matchDraftId = matchDraftId,
+      submissionId = request.submissionId,
     )
 
   def toCreateResponse(created: CreatedOcrJob): CreateOcrJobResponse = CreateOcrJobResponse(

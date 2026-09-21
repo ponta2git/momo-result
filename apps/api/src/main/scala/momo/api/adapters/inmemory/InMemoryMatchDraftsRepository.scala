@@ -95,6 +95,15 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
       case _ => (current, false)
   }
 
+  private[inmemory] def startEmptySubmission(draftId: MatchDraftId, at: Instant): F[Unit] =
+    ref.update(_.updatedWith(draftId)(_.map {
+      case draft: MatchDraft.Editable
+          if draft.sourceImageIds.isEmpty && draft.ocrDraftIds.isEmpty &&
+            draft.status != MatchDraftStatus.OcrRunning =>
+        MatchDraft.OcrRunning(draft.common.copy(updatedAt = at))
+      case draft => draft
+    }))
+
   override def attachOcrArtifacts(
       draftId: MatchDraftId,
       screenType: ScreenType,

@@ -6,7 +6,7 @@ import java.util.UUID
 import scala.concurrent.duration.FiniteDuration
 
 import cats.MonadThrow
-import cats.effect.MonadCancelThrow
+import cats.effect.Async
 import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
@@ -111,7 +111,7 @@ object PostgresOcrQueueOutbox:
       recoverableInvalidCount = recoverableInvalidCount,
     )
 
-final class PostgresOcrQueueOutboxRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
+final class PostgresOcrQueueOutboxRepository[F[_]: Async](transactor: Transactor[F])
     extends OcrQueueOutboxRepository[F]:
   import PostgresOcrQueueOutbox.*
 
@@ -207,7 +207,9 @@ final class PostgresOcrQueueOutboxRepository[F[_]: MonadCancelThrow](transactor:
     _ <-
       if jobUpdated == 1 then PostgresMatchDraftStatusSync.recomputeForJob(claim.jobId, now)
       else ().pure[ConnectionIO]
-  yield outboxUpdated == 1).transact(transactor)
+  yield outboxUpdated == 1).transact(transactor).flatTap(_ =>
+    PostgresOcrSubmissions.wake(transactor)
+  )
 
   override def rearmQueuedForRedelivery(
       now: Instant,

@@ -84,7 +84,9 @@ jobs:
           ref: ${{ steps.momo-db.outputs.ref }}
           path: _deps/momo-db
           token: ${{ github.token }}
-          sparse-checkout: drizzle
+          sparse-checkout: |
+            drizzle
+            docs/examples
           persist-credentials: false
 
       - name: Install Rust toolchain

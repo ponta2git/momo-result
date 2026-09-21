@@ -46,6 +46,9 @@ private[bootstrap] object UseCaseRouteBundles:
     val createOcrJob = CreateOcrJob[F](
       imageStore = imageStorage,
       creationStore = ocrJobCreationStore,
+      submissions = ocrSubmissions,
+      jobs = jobs,
+      drafts = drafts,
       matchDrafts = matchDrafts,
       queueSubmitter = ocrQueueSubmitter,
       admissionGuard = ocrAdmissionGuard,
@@ -152,6 +155,7 @@ private[bootstrap] object UseCaseRouteBundles:
       upload = HttpRoutes.UploadUseCases(uploadImage),
       ocr = HttpRoutes.OcrUseCases(
         createOcrJob = createOcrJob,
+        submissions = OcrSubmissions[F](ocrSubmissions, now),
         getOcrJob = getOcrJob,
         getOcrDraft = getOcrDraft,
         getOcrDraftsBulk = getOcrDraftsBulk,

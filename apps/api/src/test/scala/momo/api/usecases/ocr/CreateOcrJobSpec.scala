@@ -14,7 +14,8 @@ import momo.api.adapters.inmemory.{
   InMemoryOcrDraftsRepository,
   InMemoryOcrJobCreationStore,
   InMemoryOcrJobQueuePublisher,
-  InMemoryOcrJobsRepository
+  InMemoryOcrJobsRepository,
+  InMemoryOcrSubmissionsRepository
 }
 import momo.api.adapters.storage.local.LocalFsImageStore
 import momo.api.codec.OcrHintsCodec
@@ -64,7 +65,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         image <- fixture.savePng
         usecase <- fixture.usecase
         created <- usecase.run(
-          CreateOcrJobCommand(
+          RequestedOcrJob(
             image.imageId,
             ScreenType.TotalAssets,
             OcrJobHints.empty,
@@ -115,7 +116,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
             image <- fixture.savePng
             usecase <- fixture.usecase
             result <- usecase.run(
-              CreateOcrJobCommand(image.imageId, ScreenType.TotalAssets, OcrJobHints.empty, id),
+              RequestedOcrJob(image.imageId, ScreenType.TotalAssets, OcrJobHints.empty, id),
               None,
             )
             job <- fixture.jobs.find(OcrJobId.unsafeFromString("job-guard"))
@@ -150,7 +151,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         ))
         usecase <- fixture.usecase
         _ <- usecase.run(
-          CreateOcrJobCommand(
+          RequestedOcrJob(
             image.imageId,
             ScreenType.TotalAssets,
             OcrJobHints(
@@ -182,7 +183,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
             image <- fixture.savePng
             usecase <- fixture.usecase
             _ <- usecase.run(
-              CreateOcrJobCommand(
+              RequestedOcrJob(
                 image.imageId,
                 ScreenType.TotalAssets,
                 OcrJobHints.empty.copy(gameTitle = Some("桃太郎電鉄"), layoutFamily = Some(layout)),
@@ -222,7 +223,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
           )).flatMap(fromAppEither)
           usecase <- fixture.usecase
           _ <- usecase.run(
-            CreateOcrJobCommand(
+            RequestedOcrJob(
               image.imageId,
               ScreenType.TotalAssets,
               OcrJobHints.empty,
@@ -254,7 +255,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
           )).flatMap(fromAppEither)
           usecase <- fixture.usecase
           result <- usecase.run(
-            CreateOcrJobCommand(
+            RequestedOcrJob(
               ImageId.unsafeFromString("missing-image"),
               ScreenType.TotalAssets,
               OcrJobHints.empty,
@@ -286,7 +287,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       for
         usecase <- fixture.usecase
         result <- usecase.run(
-          CreateOcrJobCommand(
+          RequestedOcrJob(
             ImageId.unsafeFromString("missing-image"),
             ScreenType.TotalAssets,
             OcrJobHints(
@@ -328,7 +329,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
           }
           usecase <- fixture.usecase
           result <- usecase.run(
-            CreateOcrJobCommand(
+            RequestedOcrJob(
               ImageId.unsafeFromString("missing-image"),
               ScreenType.TotalAssets,
               hints,
@@ -368,7 +369,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         image <- fixture.savePng
         usecase <- fixture.usecase
         result <- usecase.run(
-          CreateOcrJobCommand(
+          RequestedOcrJob(
             image.imageId,
             ScreenType.TotalAssets,
             OcrJobHints.empty,
@@ -412,7 +413,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         _ <- fixture.jobs.create(queuedJob(oldJobId, oldDraftId, oldImageId, image.location))
         usecase <- fixture.usecase
         result <- usecase.run(
-          CreateOcrJobCommand(
+          RequestedOcrJob(
             image.imageId,
             ScreenType.TotalAssets,
             OcrJobHints.empty,
@@ -453,7 +454,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         _ <- fixture.jobs.cancelQueued(oldJobId, now)
         usecase <- fixture.usecase
         created <- usecase.run(
-          CreateOcrJobCommand(
+          RequestedOcrJob(
             image.imageId,
             ScreenType.TotalAssets,
             OcrJobHints.empty,
@@ -491,6 +492,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       drafts <- InMemoryOcrDraftsRepository.create[IO]
       matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
       _ <- matchDrafts.create(editableDraft(defaultMatchDraftId))
+      submissions <- InMemoryOcrSubmissionsRepository.create[IO](matchDrafts)
       memberAliases <- InMemoryMemberAliasesRepository.create[IO]
       queue <- InMemoryOcrJobQueuePublisher.create[IO]
       imageStore = LocalFsImageStore[IO](dir)
@@ -499,6 +501,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       jobs,
       drafts,
       matchDrafts,
+      submissions,
       memberAliases,
       queue,
       idSeed,
@@ -566,6 +569,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       jobs: InMemoryOcrJobsRepository[IO],
       drafts: InMemoryOcrDraftsRepository[IO],
       matchDrafts: InMemoryMatchDraftsRepository[IO],
+      submissions: InMemoryOcrSubmissionsRepository[IO],
       memberAliases: InMemoryMemberAliasesRepository[IO],
       queue: InMemoryOcrJobQueuePublisher[IO],
       idSeed: List[String],
@@ -580,7 +584,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       pngBytes,
     ).flatMap(fromAppEither)
 
-    def usecase(using LoggerFactory[IO]): IO[CreateOcrJob[IO]] = IO.ref(idSeed).map { ids =>
+    def usecase(using LoggerFactory[IO]): IO[PreparedOcrJob] = IO.ref(idSeed).map { ids =>
       IO.pure {
         CreateOcrJob[IO](
           imageStore = imageStore,
@@ -592,8 +596,12 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
               jobs.create,
               matchDrafts,
               jobs.existsActiveByDraft,
+              submissions,
             ),
           matchDrafts = matchDrafts,
+          submissions = submissions,
+          jobs = jobs,
+          drafts = drafts,
           queueSubmitter = OcrJobQueueSubmitter.nonDurable[IO](jobs, matchDrafts, queue),
           admissionGuard = admissionGuard,
           now = IO.pure(now),
@@ -609,4 +617,42 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
           activeJobLimit = activeJobLimit,
         )
       }
-    }.flatten
+    }.flatten.map(new PreparedOcrJob(_, submissions))
+
+  private final case class RequestedOcrJob(
+      imageId: ImageId,
+      requestedScreenType: ScreenType,
+      ocrHints: OcrJobHints,
+      matchDraftId: MatchDraftId,
+  )
+
+  /** These image-level cases first admit the same immutable operation as the HTTP workflow. */
+  private final class PreparedOcrJob(
+      delegate: CreateOcrJob[IO],
+      submissions: InMemoryOcrSubmissionsRepository[IO]
+  ):
+    def run(
+        request: RequestedOcrJob,
+        requestId: Option[String]
+    ): IO[Either[AppError, CreatedOcrJob]] =
+      val id = java.util.UUID.randomUUID().toString
+      val owner = AccountId.unsafeFromString("account-1")
+      val command = PutOcrSubmissionCommand(
+        id,
+        request.matchDraftId,
+        request.ocrHints,
+        List(momo.api.domain.OcrSubmissionMember(
+          request.requestedScreenType,
+          "a" * 64,
+          momo.api.ports.storage.Sha256Hex.digest(pngBytes).value,
+          pngBytes.length
+        ))
+      )
+      new OcrSubmissions[IO](submissions, IO.pure(now)).put(command, owner).flatMap {
+        case Left(error) => IO.pure(Left(error))
+        case Right(_) => delegate.run(
+            CreateOcrJobCommand(request.imageId, request.requestedScreenType, id),
+            requestId,
+            owner
+          )
+      }

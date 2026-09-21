@@ -2,4 +2,6 @@ dist/
 coverage/
 .cache/
 playwright-report/
+playwright-report-ocr/
 test-results/
+test-results-ocr/

@@ -11,6 +11,7 @@ object HttpOperation:
   val UpdateLoginAccount = "PATCH /api/admin/login-accounts/:id"
   val UpdateNotificationSettings = "PUT /api/admin/notification-settings"
 
+  val GetOcrSubmission = "GET /api/ocr-submissions/:id"
   val CreateOcrJob = "POST /api/ocr-jobs"
   val UploadImage = "POST /api/uploads/images"
   val GetOcrJob = "GET /api/ocr-jobs/:id"

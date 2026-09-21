@@ -177,6 +177,7 @@ private[bootstrap] object PostgresApiRuntime:
               ),
               repositories = UseCaseWiring.RuntimeRepositories(
                 ocrJobCreationStore = ocrJobCreationStore,
+                ocrSubmissions = PostgresOcrSubmissionsRepository[F](transactor),
                 jobs = jobs,
                 drafts = drafts,
                 heldEvents = heldEvents,

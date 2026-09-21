@@ -38,6 +38,30 @@ final class PostgresOcrJobsRepositorySpec extends IntegrationSuite:
       active <- repo.countActive
     yield assertEquals(active, 2L)
 
+  test("late failure reports cannot rewrite a terminal OCR result"):
+    for
+      _ <- insertOcrDraft("draft-terminal-failure", "job-terminal-failure")
+      _ <- insertOcrJob(
+        "job-terminal-failure",
+        "draft-terminal-failure",
+        "image-terminal-failure",
+        "succeeded"
+      )
+      _ <- repo.markFailed(
+        OcrJobId.unsafeFromString("job-terminal-failure"),
+        momo.api.domain.OcrFailure(
+          momo.api.domain.FailureCode.QueueFailure,
+          "late queue error",
+          false,
+          None
+        ),
+        now
+      )
+      status <- sql"SELECT status FROM ocr_jobs WHERE id = 'job-terminal-failure'".query[
+        String
+      ].unique.transact(transactor)
+    yield assertEquals(status, "succeeded")
+
   test("cancelQueued marks the queued job cancelled and syncs the attached draft to OCR failed"):
     for
       _ <- insertOcrDraft("draft-cancel-one", "job-cancel-one")

@@ -36,7 +36,11 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
 
   test("OCR creation wakes only after an accepted durable result"):
     for
-      result <- Ref.of[IO, OcrJobCreationStore.OcrJobCreationResult](Right(()))
+      result <- Ref.of[IO, OcrJobCreationStore.OcrJobCreationResult](Right(StoredOcrJob(
+        ocrPlan.job,
+        ocrPlan.draft,
+        true
+      )))
       sink <- RecordingSink.create
       closed <- Ref.of[IO, Int](0)
       store = OutboxWakingRepositories.ocrJobCreation(
@@ -49,7 +53,7 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
       rejected <- store.store(ocrPlan)
       effects <- sink.effects
     yield
-      assertEquals(accepted, Right(()))
+      assertEquals(accepted.map(_.created), Right(true))
       assertEquals(rejected, Left(OcrJobCreationRejection.InvalidPlan))
       assertEquals(effects, List(PostCommitEffects.wake(OutboxKind.Ocr)))
 
@@ -118,7 +122,11 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
 
   test("a closed sink escalates runtime failure without changing the committed result"):
     for
-      result <- Ref.of[IO, OcrJobCreationStore.OcrJobCreationResult](Right(()))
+      result <- Ref.of[IO, OcrJobCreationStore.OcrJobCreationResult](Right(StoredOcrJob(
+        ocrPlan.job,
+        ocrPlan.draft,
+        true
+      )))
       sink <- RecordingSink.closed
       closed <- Ref.of[IO, Int](0)
       store = OutboxWakingRepositories.ocrJobCreation(
@@ -129,7 +137,7 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
       actual <- store.store(ocrPlan)
       escalations <- closed.get
     yield
-      assertEquals(actual, Right(()))
+      assertEquals(actual.map(_.created), Right(true))
       assertEquals(escalations, 1)
 
   test("a failed local analysis hint preserves the committed mutation result"):
@@ -336,6 +344,7 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
       None,
     )
     OcrJobCreationPlan(
+      OcrJobSubmissionBinding("00000000-0000-4000-8000-000000000001", accountId),
       draft,
       job,
       OcrJobDraftAttachment(

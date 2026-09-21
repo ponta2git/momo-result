@@ -148,6 +148,36 @@ trait HttpAppTestFixtures:
     )
       .putHeaders(multipart.headers).withEntity(multipart)
 
+  protected def admitOcrSubmission(httpApp: TestHttpApp, matchDraftId: String): IO[String] =
+    admitOcrSubmission(httpApp, matchDraftId, List("total_assets"))
+
+  protected def admitOcrSubmission(
+      httpApp: TestHttpApp,
+      matchDraftId: String,
+      screens: List[String],
+  ): IO[String] =
+    val id = java.util.UUID.randomUUID().toString
+    val bytes = TestImages.png1x1
+    val body = Json.obj(
+      "matchDraftId" -> Json.fromString(matchDraftId),
+      "members" -> Json.fromValues(screens.map(screen =>
+        Json.obj(
+          "screenType" -> Json.fromString(screen),
+          "uploadIdempotencyKey" -> Json.fromString(java.util.UUID.randomUUID().toString),
+          "imageSha256" -> Json.fromString(momo.api.ports.storage.Sha256Hex.digest(bytes).value),
+          "imageByteLength" -> Json.fromInt(bytes.length),
+        )
+      )),
+    )
+    httpApp.run(writeRequest(
+      Method.PUT,
+      Uri.unsafeFromString(s"/api/ocr-submissions/$id")
+    ).withEntity(body))
+      .flatMap { response =>
+        assertEquals(response.status, org.http4s.Status.Ok)
+        response.as[Json].as(id)
+      }
+
   private def httpAppResourceWith(
       prefix: String,
       appEnv: AppEnv,

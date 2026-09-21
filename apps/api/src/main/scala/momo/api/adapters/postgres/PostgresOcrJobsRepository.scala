@@ -1,7 +1,7 @@
 package momo.api.adapters.postgres
 import java.time.Instant
 
-import cats.effect.MonadCancelThrow
+import cats.effect.Async
 import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
@@ -184,7 +184,7 @@ object PostgresOcrJobs:
           failure_user_action = ${failure.userAction},
           finished_at = $now,
           updated_at = $now
-        WHERE id = $jobId
+        WHERE id = $jobId AND status IN (${OcrJobStatus.Queued}, ${OcrJobStatus.Running})
       """.update.run.void >> PostgresMatchDraftStatusSync.recomputeForJob(jobId, now)
 
     override def cancelQueued(jobId: OcrJobId, now: Instant): ConnectionIO[Boolean] =
@@ -233,10 +233,17 @@ object PostgresOcrJobs:
         yield cancelledDraftIds.size
 end PostgresOcrJobs
 
-final class PostgresOcrJobsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
+final class PostgresOcrJobsRepository[F[_]: Async](transactor: Transactor[F])
     extends OcrJobsRepository[F]:
   private val delegate: OcrJobsRepository[F] = OcrJobsRepository
     .fromAlg(PostgresOcrJobs.alg, transactor.trans)
 
-  export delegate.*
+  override def find(jobId: OcrJobId): F[Option[OcrJob]] = delegate.find(jobId)
+  override def countActive: F[Long] = delegate.countActive
+  override def markFailed(jobId: OcrJobId, failure: OcrFailure, now: Instant): F[Unit] =
+    delegate.markFailed(jobId, failure, now).flatTap(_ => PostgresOcrSubmissions.wake(transactor))
+  override def cancelQueued(jobId: OcrJobId, now: Instant): F[Boolean] =
+    delegate.cancelQueued(jobId, now).flatTap(_ => PostgresOcrSubmissions.wake(transactor))
+  override def cancelQueuedByDraftIds(ids: List[OcrDraftId], now: Instant): F[Int] =
+    delegate.cancelQueuedByDraftIds(ids, now).flatTap(_ => PostgresOcrSubmissions.wake(transactor))
 end PostgresOcrJobsRepository

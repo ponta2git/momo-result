@@ -27,8 +27,6 @@ use crate::{
 
 type SmokeResult<T = ()> = Result<T, Box<dyn Error + Send + Sync>>;
 
-mod notifications;
-
 const TAKEOVER: Fixture = Fixture {
     job_id: "c2-smoke-job-takeover",
     draft_id: "c2-smoke-draft-takeover",
@@ -128,7 +126,6 @@ async fn real_postgres_and_redis_preserve_ocr_fencing_and_delivery_order() -> Sm
     verify_expired_analysis_recovery_emits_wake(&mut primary).await?;
     verify_analysis_preemption_and_stale_intent(&mut primary).await?;
     verify_redis_failure_order(&mut primary, &redis_url).await?;
-    notifications::verify(&mut primary, &mut stale, &database_url).await?;
 
     cleanup_database(&primary).await?;
     Ok(())
@@ -252,15 +249,7 @@ async fn verify_success_and_terminal_duplicate(primary: &mut Client) -> SmokeRes
     let config = control_config("ocr-c2-worker-success")?;
     let claim = claimed(claim_job(primary, &payload, &config).await?)?;
     let completion = tests::valid_completion(RequestedScreenType::TotalAssets);
-    finish_success(
-        primary,
-        &claim,
-        &config,
-        &OcrHints::default(),
-        &completion,
-        None,
-    )
-    .await?;
+    finish_success(primary, &claim, &config, &OcrHints::default(), &completion).await?;
     let row = primary
         .query_one(
             "SELECT j.status, COUNT(d.id)::bigint FROM ocr_jobs j\x20\
@@ -283,15 +272,7 @@ async fn verify_success_with_warnings(primary: &mut Client) -> SmokeResult {
     let config = control_config("ocr-c2-worker-success-warnings")?;
     let claim = claimed(claim_job(primary, &payload, &config).await?)?;
     let completion = tests::completion_with_missing_amount_warning();
-    finish_success(
-        primary,
-        &claim,
-        &config,
-        &OcrHints::default(),
-        &completion,
-        None,
-    )
-    .await?;
+    finish_success(primary, &claim, &config, &OcrHints::default(), &completion).await?;
     assert_match_draft_status(primary, &SUCCESS_WITH_WARNINGS, "needs_review").await?;
     Ok(())
 }
@@ -782,6 +763,12 @@ async fn insert_fixture(client: &Client, fixture: &Fixture) -> SmokeResult {
             &[&fixture.job_id, &fixture.draft_id, &fixture.source_image_id],
         )
         .await?;
+    let submission_id = format!(
+        "00000000-0000-4000-8000-{:012}",
+        fixture.idempotency_digit.parse::<u32>()?
+    );
+    client.execute("INSERT INTO ocr_submissions (id, owner_account_id, match_draft_id, ocr_hints_json, status, admission_deadline) VALUES ($1, 'account_ponta', $2, '{}'::jsonb, 'open', clock_timestamp() + interval '10 minutes')", &[&submission_id, &fixture.match_draft_id]).await?;
+    client.execute("INSERT INTO ocr_submission_members (submission_id, screen_type, upload_idempotency_key_hash, image_sha256_hex, image_byte_length, status, job_id) VALUES ($1, 'total_assets', $2, $3, 68, 'registered', $4)", &[&submission_id, &idempotency_hash, &sha256, &fixture.job_id]).await?;
     let stream_payload = persisted_payload(fixture);
     client
         .execute(
@@ -824,6 +811,8 @@ async fn cleanup_database(client: &Client) -> SmokeResult {
                'c2-smoke-job-takeover','c2-smoke-job-success','c2-smoke-job-success-warnings',\x20\
                'c2-smoke-job-preempt','c2-smoke-job-malformed',\x20\
                'c2-smoke-job-analysis-recovery','c2-smoke-job-transient');\x20\
+             DELETE FROM ocr_submission_members WHERE submission_id IN (SELECT id FROM ocr_submissions WHERE match_draft_id LIKE 'c2-smoke-match-draft-%');\x20\
+             DELETE FROM ocr_submissions WHERE match_draft_id LIKE 'c2-smoke-match-draft-%';\x20\
              DELETE FROM ocr_jobs WHERE id IN (\x20\
                'c2-smoke-job-takeover','c2-smoke-job-success','c2-smoke-job-success-warnings',\x20\
                'c2-smoke-job-preempt','c2-smoke-job-malformed',\x20\

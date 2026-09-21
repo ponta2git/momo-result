@@ -85,13 +85,15 @@ final class PostgresOcrSubmissionsRepository[F[_]: Async](transactor: Transactor
               else
                 // A refused PUT must leave the initial draft editable. Existing result slots keep
                 // their status until a new job attaches, including submissions with no accepted job.
-                (insert(submission) *> sql"""UPDATE match_drafts SET status = 'ocr_running',
+                insert(submission).flatTap { _ =>
+                  sql"""UPDATE match_drafts SET status = 'ocr_running',
               updated_at = clock_timestamp()
               WHERE id = ${submission.matchDraftId} AND status <> 'ocr_running'
                 AND total_assets_image_id IS NULL AND revenue_image_id IS NULL
                 AND incident_log_image_id IS NULL AND total_assets_draft_id IS NULL
-                AND revenue_draft_id IS NULL AND incident_log_draft_id IS NULL""".update.run)
-                  .as(Right(submission))
+                AND revenue_draft_id IS NULL AND incident_log_draft_id IS NULL""".update.run
+                }
+                  .map(Right(_))
           yield admitted
     yield result
 
@@ -171,18 +173,22 @@ private[api] object PostgresOcrSubmissions:
   def lock(id: String): ConnectionIO[Unit] =
     sql"SELECT id FROM ocr_submissions WHERE id = $id FOR UPDATE".query[String].option.void
 
-  def insert(submission: OcrSubmission): ConnectionIO[Unit] =
+  def insert(submission: OcrSubmission): ConnectionIO[OcrSubmission] =
     val hints = OcrHintsCodec.encode(submission.ocrHints)
     sql"""INSERT INTO ocr_submissions
       (id, owner_account_id, match_draft_id, ocr_hints_json, status, admission_deadline, created_at)
       VALUES (${submission.id}, ${submission.ownerAccountId}, ${submission.matchDraftId},
-        $hints::jsonb, 'open', ${submission.admissionDeadline}, ${submission.createdAt})""".update.run *>
+        $hints::jsonb, 'open', ${submission.admissionDeadline}, ${submission.createdAt})
+      RETURNING admission_deadline, created_at""".query[(Instant, Instant)].unique.flatTap { _ =>
       submission.members.traverse_ { member =>
         sql"""INSERT INTO ocr_submission_members
           (submission_id, screen_type, upload_idempotency_key_hash, image_sha256_hex, image_byte_length, status)
           VALUES (${submission.id}, ${member.screenType}, ${member.uploadIdempotencyKeyHash},
             ${member.imageSha256}, ${member.imageByteLength}, 'pending')""".update.run.void
       }
+    }.map { case (deadline, createdAt) =>
+      submission.copy(admissionDeadline = deadline, createdAt = createdAt)
+    }
 
   /** The caller already owns every source draft lock; this must precede the notification gate. */
   def abortForDrafts(ids: List[MatchDraftId], now: Instant): ConnectionIO[Unit] =

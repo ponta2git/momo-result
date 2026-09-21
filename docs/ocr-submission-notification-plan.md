@@ -521,7 +521,7 @@ remoteへのpush・PR・merge・本番適用はこの実行記録の完了範囲
 | 境界 | 実行した証拠 |
 | --- | --- |
 | momo-db | build、正規migration生成・履歴check、全履歴fresh適用、実DB制約9件、migration保全10件が通過。0056の復元コピー検証では全既存public tableの行と適用hashを比較した。追加した業務function/triggerはない。 |
-| API | unit 492件、実DB 198件、Redis 6件、互換object storageのadapter 1件、quality・整形・OpenAPI生成とfreshnessが通過。 |
+| API | unit 492件、実DB 199件、Redis 6件、互換object storageのadapter 1件、quality・整形・OpenAPI生成とfreshnessが通過。 |
 | Web | 全体159 file / 946 testが通過。その後の受付失敗時の編集可能性・404/409分類・cache修正は関連43 testで再確認した。型・lint・build・API契約も実施。 |
 | Summit | unit 623件、実DB 90件、typecheck・lint・knip・build・文書/禁止API検査が通過。実DBのDate bind fixtureを初回失敗後に修正し、該当testの再実行を区別して記録した。既存のfile size advisoryは残る。 |
 | Worker | workspace 271 testと追加fixture契約1件、fmt・strict clippy、実DB/RedisのOCR 5 suite・共通分析18 suiteが通過。通常workspaceでignoredの外部境界は各smokeから実行した。Linux/arm64 production image build、image smoke、release DB互換、native分析runtime、OCR preemptionが通過。非root・CA・cgroup制限・child cancellation/reapと所定の脆弱性scanも確認した。 |
@@ -537,6 +537,11 @@ remoteへのpush・PR・merge・本番適用はこの実行記録の完了範囲
 並行runnerのtrace出力衝突は出力先分離、終了後のprocess group判定は生存memberの照合で修正した。
 job0期限終了の最初のoracleは安全走査周期と同じ長さでtimeoutしたため、test側の待機余裕を増やして再実行した。
 これらの失敗attemptと再実行を区別し、最初から全suiteが通ったとは扱わない。
+
+PR #52の初回remote CIでは、初回送出受付が入力のナノ秒精度、再送がDB保存後のマイクロ秒精度を返し、
+期限の同値確認が失敗した。固定ナノ秒の回帰testでローカルでも再現し、INSERTのRETURNINGで
+初回応答も保存時刻に揃えた。修正後はquality・OpenAPI freshnessと実DB 199件が通過した。
+この追記時点で修正後のremote CIは未確認であり、本番適用は行っていない。
 
 MCPで通した登録jobありの7送出について、最後のjob終了→送出確定と、確定→受付/配送を分けて採取し、
 走査・受付の時間予算を満たすことを確認した。実測値は公開文書へ転記しない。

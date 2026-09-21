@@ -1,6 +1,7 @@
 package momo.api.integration
 
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 import cats.effect.{Deferred, IO, Resource}
@@ -126,6 +127,22 @@ final class PostgresOcrSubmissionsRepositorySpec extends IntegrationSuite:
       assert(mismatch.isLeft)
       assertEquals(foreign, None)
       assertEquals(count, 4L)
+  }
+
+  test("initial admission and replay return the persisted timestamp precision") {
+    val now = Instant.now().truncatedTo(ChronoUnit.SECONDS).plusNanos(638316517)
+    val proposed = submission().copy(createdAt = now, admissionDeadline = now.plusSeconds(600))
+    for
+      _ <- seedDraft
+      admitted <- repository.put(proposed)
+      saved <- repository.find(proposed.id, owner)
+      replay <- repository.put(proposed)
+    yield
+      assert(admitted.isRight)
+      assertEquals(admitted.toOption, saved)
+      assertEquals(replay, admitted)
+      assertNotEquals(saved.map(_.createdAt), Some(proposed.createdAt))
+      assertNotEquals(saved.map(_.admissionDeadline), Some(proposed.admissionDeadline))
   }
 
   test(

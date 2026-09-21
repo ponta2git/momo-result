@@ -63,8 +63,24 @@ jobs:
           package_json_file: momo-result/package.json
       - run: test "$(pnpm --version)" = 10.34.5 && pnpm install --frozen-lockfile
       - run: pnpm --filter web exec playwright install --with-deps chromium
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
       - name: Build controlled Linux Worker
-        run: docker build --target e2e-test -f apps/processing-worker/Dockerfile -t mom24-worker-e2e:ci .
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: "false"
+          DOCKER_BUILD_SUMMARY: "false"
+        with:
+          context: ./momo-result
+          file: momo-result/apps/processing-worker/Dockerfile
+          target: e2e-test
+          load: true
+          tags: mom24-worker-e2e:ci
+          cache-from: |
+            type=gha,scope=momo-result-ocr-e2e-v1
+            type=gha,scope=momo-result-analysis-v1
+          cache-to: type=gha,mode=max,scope=momo-result-ocr-e2e-v1,ignore-error=true
+        timeout-minutes: 30
       - name: Exercise browser through real API, storage, queue and notification runtime
         env:
           MOM24_WORKER_TEST_IMAGE: mom24-worker-e2e:ci

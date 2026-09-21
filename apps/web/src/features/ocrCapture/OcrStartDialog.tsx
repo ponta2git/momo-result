@@ -209,6 +209,38 @@ export function OcrStartDialog({
     );
   }
 
+  if (state.status === "submission_closed") {
+    return (
+      <Dialog
+        open
+        dismissible={false}
+        title="この送信の受付は終了しました"
+        description="受け付け済みの読み取りは記録から確認できます。"
+      >
+        <div className="grid gap-4">
+          <p className={contentText.body}>
+            {state.canRestart
+              ? "未受付の画像は、新しい読み取りとして送信できます。完了通知も別になります。"
+              : "この記録への送信は続けられません。記録の状態を確認してください。"}
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="secondary"
+              pending={navigationPending}
+              pendingLabel="移動中…"
+              onClick={onViewMatches}
+            >
+              {resultDestinationLabel(state.plan)}
+            </Button>
+            {state.canRestart ? (
+              <Button onClick={() => void onConfirm()}>未受付の画像を新しく送信</Button>
+            ) : null}
+          </div>
+        </div>
+      </Dialog>
+    );
+  }
+
   if (state.status === "recoverable_failure") {
     return (
       <Dialog

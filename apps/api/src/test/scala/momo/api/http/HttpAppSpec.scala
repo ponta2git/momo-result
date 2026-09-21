@@ -709,7 +709,11 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   ocrAccountRateLimitApp.test("OCR create endpoint applies per-account rate limits") { httpApp =>
     val request = writePost(
       uri"/api/ocr-jobs",
-      HttpRequestBodies.Matches.createOcrJob("image-1", "total_assets", "missing-match-draft"),
+      HttpRequestBodies.Matches.createOcrJob(
+        "image-1",
+        "total_assets",
+        "00000000-0000-4000-8000-000000000099"
+      ),
     )
     httpApp.run(request).flatMap(response =>
       assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "Too many OCR jobs")
@@ -719,7 +723,11 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   ocrGlobalRateLimitApp.test("OCR create endpoint applies global rate limits") { httpApp =>
     val request = writePost(
       uri"/api/ocr-jobs",
-      HttpRequestBodies.Matches.createOcrJob("image-1", "total_assets", "missing-match-draft"),
+      HttpRequestBodies.Matches.createOcrJob(
+        "image-1",
+        "total_assets",
+        "00000000-0000-4000-8000-000000000099"
+      ),
     )
     httpApp.run(request).flatMap(response =>
       assertProblem(
@@ -735,9 +743,10 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     for
       imageId <- uploadPng(httpApp)
       matchDraftId <- createMatchDraft(httpApp)
+      submissionId <- admitOcrSubmission(httpApp, matchDraftId)
       response <- httpApp.run(writePost(
         uri"/api/ocr-jobs",
-        HttpRequestBodies.Matches.createOcrJob(imageId, "total_assets", matchDraftId),
+        HttpRequestBodies.Matches.createOcrJob(imageId, "total_assets", submissionId),
       ))
       _ <- assertProblem(
         response,
@@ -753,9 +762,10 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
       for
         imageId <- uploadPng(httpApp)
         matchDraftId <- createMatchDraft(httpApp)
+        submissionId <- admitOcrSubmission(httpApp, matchDraftId)
         request = writePost(
           uri"/api/ocr-jobs",
-          HttpRequestBodies.Matches.createOcrJob(imageId, "total_assets", matchDraftId),
+          HttpRequestBodies.Matches.createOcrJob(imageId, "total_assets", submissionId),
           idempotencyKey = Some("ocr-replay-key"),
         )
         first <- httpApp.run(request)
@@ -767,6 +777,53 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
         assertEquals(second.status, Status.Ok)
         assertEquals(jsonField[String](secondBody, "jobId"), jsonField[String](firstBody, "jobId"))
     }
+
+  app.test("immutable upload rejection closes only its matching submission member") { httpApp =>
+    val id = java.util.UUID.randomUUID().toString
+    val key = java.util.UUID.randomUUID().toString
+    val bytes = Array[Byte](1, 2, 3)
+    for
+      draftId <- createMatchDraft(httpApp)
+      body = Json.obj(
+        "matchDraftId" -> Json.fromString(draftId),
+        "members" -> Json.arr(Json.obj(
+          "screenType" -> Json.fromString("total_assets"),
+          "uploadIdempotencyKey" -> Json.fromString(key),
+          "imageSha256" -> Json.fromString(momo.api.ports.storage.Sha256Hex.digest(bytes).value),
+          "imageByteLength" -> Json.fromInt(bytes.length),
+        )),
+      )
+      accepted <- httpApp.run(writeRequest(
+        Method.PUT,
+        Uri.unsafeFromString(s"/api/ocr-submissions/$id")
+      ).withEntity(body))
+      _ = assertEquals(accepted.status, Status.Ok)
+      _ <- accepted.as[Json]
+      upload <- uploadPngRequestWithIdempotency(key, bytes)
+      rejected <- httpApp.run(upload)
+      _ = assertEquals(rejected.status, Status.UnsupportedMediaType)
+      _ <- rejected.as[Json]
+      state <-
+        httpApp.run(readGet(Uri.unsafeFromString(s"/api/ocr-submissions/$id"))).flatMap(_.as[Json])
+      foreign <-
+        httpApp.run(readGet(Uri.unsafeFromString(s"/api/ocr-submissions/$id"), "account_eu"))
+      duplicate <- httpApp.run(writeRequest(
+        Method.PUT,
+        Uri.unsafeFromString(s"/api/ocr-submissions/$id")
+      ).withEntity(body))
+      duplicateBody <- duplicate.as[Json]
+    yield
+      val member = jsonField[List[Json]](state, "members").head
+      assertEquals(jsonField[String](member, "status"), "failed")
+      assertEquals(jsonField[String](member, "failureCode"), "admission_failed")
+      assertEquals(jsonField[String](state, "status"), "open")
+      assertEquals(foreign.status, Status.NotFound)
+      assertEquals(duplicate.status, Status.Ok)
+      assertEquals(
+        jsonField[String](duplicateBody, "admissionDeadline"),
+        jsonField[String](state, "admissionDeadline")
+      )
+  }
 
   private def createMatchDraft(httpApp: TestHttpApp): IO[String] = httpApp
     .run(writePost(uri"/api/match-drafts", HttpRequestBodies.Matches.emptyMatchDraft))

@@ -16,18 +16,22 @@ import momo.api.ports.storage.ImageStorage
 import momo.api.repositories.OcrJobCreationStore.OcrJobCreationRejection
 import momo.api.repositories.{
   MatchDraftsRepository,
+  OcrDraftsRepository,
   OcrJobCreationPlan,
   OcrJobCreationStore,
   OcrJobDraftAttachment,
-  OcrQueueDispatchIntent
+  OcrJobSubmissionBinding,
+  OcrJobsRepository,
+  OcrQueueDispatchIntent,
+  OcrSubmissionsRepository,
+  StoredOcrJob
 }
 import momo.api.usecases.syntax.UseCaseSyntax.*
 
 final case class CreateOcrJobCommand(
     imageId: ImageId,
     requestedScreenType: ScreenType,
-    ocrHints: OcrJobHints,
-    matchDraftId: MatchDraftId,
+    submissionId: String,
 )
 
 final case class CreatedOcrJob(job: OcrJob, draft: OcrDraft)
@@ -36,6 +40,9 @@ final class CreateOcrJob[F[_]: MonadThrow](
     imageStore: ImageStorage[F],
     creationStore: OcrJobCreationStore[F],
     matchDrafts: MatchDraftsRepository[F],
+    submissions: OcrSubmissionsRepository[F],
+    jobs: OcrJobsRepository[F],
+    drafts: OcrDraftsRepository[F],
     queueSubmitter: OcrJobQueueSubmitter[F],
     admissionGuard: OcrAdmissionGuard[F],
     now: F[Instant],
@@ -51,17 +58,53 @@ final class CreateOcrJob[F[_]: MonadThrow](
   def run(
       command: CreateOcrJobCommand,
       requestId: Option[String],
+      owner: AccountId,
+  ): F[Either[AppError, CreatedOcrJob]] =
+    submissions.find(command.submissionId, owner).flatMap {
+      case None =>
+        AppError.NotFound("OCR submission", command.submissionId).asLeft[CreatedOcrJob].pure[F]
+      case Some(submission) =>
+        submission.members.find(_.screenType == command.requestedScreenType) match
+          case None => AppError.Conflict(
+              "This image is not a member of the submission."
+            ).asLeft[CreatedOcrJob].pure[F]
+          case Some(member) => member.jobId match
+              case Some(id) => (for
+                  job <- jobs.find(id).orNotFound("OCR job", id.value)
+                  _ <- EitherT.cond[F](
+                    job.imageId == command.imageId,
+                    (),
+                    AppError.Conflict("This member already has another image.")
+                  )
+                  draft <- drafts.find(job.draftId).orNotFound("OCR draft", job.draftId.value)
+                yield CreatedOcrJob(job, draft)).value
+              case None => create(command, requestId, owner, submission, member)
+    }
+
+  private def create(
+      command: CreateOcrJobCommand,
+      requestId: Option[String],
+      owner: AccountId,
+      submission: OcrSubmission,
+      member: OcrSubmissionMember,
   ): F[Either[AppError, CreatedOcrJob]] = (for
     _ <- EitherT.fromEither[F](
       validateNewRequestScreenType(command.requestedScreenType)
     )
-    _ <- EitherT.fromEither[F](validateOcrHints(command.ocrHints))
+    timestamp <- EitherT.liftF(now)
+    _ <- EitherT.cond[F](
+      submission.status == "open" && member.status == "pending" &&
+        timestamp.isBefore(submission.admissionDeadline),
+      (),
+      AppError.Conflict("This OCR submission is closed. Start a new reading operation.")
+    )
+    _ <- EitherT.fromEither[F](validateOcrHints(submission.ocrHints))
     _ <- EitherT(admissionGuard.ensureAvailable)
     aliases <- EitherT.liftF(aliasSnapshot)
-    enrichedHints = OcrHintEnrichment(command.ocrHints, aliases)
+    enrichedHints = OcrHintEnrichment(submission.ocrHints, aliases)
     _ <- EitherT.fromEither[F](validateOcrHints(enrichedHints))
-    draftForMatch <- matchDrafts.find(command.matchDraftId)
-      .orNotFound("match draft", command.matchDraftId.value).flatMap { draft =>
+    draftForMatch <- matchDrafts.find(submission.matchDraftId)
+      .orNotFound("match draft", submission.matchDraftId.value).flatMap { draft =>
         if Set(MatchDraftStatus.Confirmed, MatchDraftStatus.Cancelled).contains(draft.status) then
           EitherT.leftT[F, momo.api.domain.MatchDraft](AppError.Conflict(
             s"match draft in status=${draft.status.wire} cannot start OCR."
@@ -85,41 +128,47 @@ final class CreateOcrJob[F[_]: MonadThrow](
     )
     queueDispatch = OcrQueueDispatchIntent(
       enqueueRequest = enqueueRequest,
-      matchDraftId = command.matchDraftId,
+      matchDraftId = submission.matchDraftId,
     )
     creationPlan = OcrJobCreationPlan(
+      submission = OcrJobSubmissionBinding(submission.id, owner),
       draft = draft,
       job = job,
       matchDraftAttachment = attachment,
       queueDispatch = queueDispatch,
       activeJobLimit = activeJobLimit,
     )
-    _ <- storeDbRecords(creationPlan)
-    _ <- EitherT(queueSubmitter.submit(queueDispatch))
-  yield CreatedOcrJob(job, draft)).value
+    stored <- storeDbRecords(creationPlan)
+    _ <- if stored.created then EitherT(queueSubmitter.submit(queueDispatch))
+    else EitherT.rightT[F, AppError](())
+  yield CreatedOcrJob(stored.job, stored.draft)).value
 
   private def storeDbRecords(
       plan: OcrJobCreationPlan
-  ): EitherT[F, AppError, Unit] = EitherT(creationStore
+  ): EitherT[F, AppError, StoredOcrJob] = EitherT(creationStore
     .store(plan)
     .flatMap {
-      case Right(()) => ().asRight[AppError].pure[F]
+      case Right(stored) => stored.asRight[AppError].pure[F]
       case Left(rejection) => creationRejectionToAppError(rejection)
     })
 
   private def creationRejectionToAppError(
       rejection: OcrJobCreationRejection
-  ): F[Either[AppError, Unit]] = rejection match
+  ): F[Either[AppError, StoredOcrJob]] = rejection match
+    case OcrJobCreationRejection.SubmissionRejected => AppError
+        .Conflict(
+          "This OCR submission member is closed or does not match the image."
+        ).asLeft[StoredOcrJob].pure[F]
     case OcrJobCreationRejection.InvalidPlan => AppError
-        .Internal("OCR job creation plan is inconsistent.").asLeft[Unit].pure[F]
+        .Internal("OCR job creation plan is inconsistent.").asLeft[StoredOcrJob].pure[F]
     case OcrJobCreationRejection.ActiveJobLimitExceeded(limit) => logger.warn(
         s"ocr_job_create_rejected reason=active_job_limit_exceeded limit=$limit"
       ) >> AppError.ServiceUnavailable("OCR queue is currently full. Try again later.")
-        .asLeft[Unit].pure[F]
+        .asLeft[StoredOcrJob].pure[F]
     case OcrJobCreationRejection.MatchDraftAttachmentRejected(_) => AppError
-        .Conflict("match draft could not be attached to the OCR job.").asLeft[Unit].pure[F]
+        .Conflict("match draft could not be attached to the OCR job.").asLeft[StoredOcrJob].pure[F]
     case OcrJobCreationRejection.SourceImageUnavailable(_) => AppError
-        .Conflict("source image is no longer available.").asLeft[Unit].pure[F]
+        .Conflict("source image is no longer available.").asLeft[StoredOcrJob].pure[F]
 
 object CreateOcrJob:
   private def validateNewRequestScreenType(screenType: ScreenType): Either[AppError, Unit] =

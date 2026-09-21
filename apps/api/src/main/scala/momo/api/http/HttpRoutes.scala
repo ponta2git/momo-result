@@ -67,6 +67,7 @@ object HttpRoutes:
 
   final case class OcrUseCases[F[_]](
       createOcrJob: CreateOcrJob[F],
+      submissions: OcrSubmissions[F],
       getOcrJob: GetOcrJob[F],
       getOcrDraft: GetOcrDraft[F],
       getOcrDraftsBulk: GetOcrDraftsBulk[F],
@@ -180,6 +181,7 @@ object HttpRoutes:
       .routes[F](deps.config, deps.healthDetails, security) :::
       UploadModule.routes[F](
         deps.upload.uploadImage,
+        deps.ocr.submissions,
         deps.rateLimiters.upload,
         idempotencyGuard,
         deps.nowF,
@@ -187,6 +189,7 @@ object HttpRoutes:
       ) :::
       OcrModule.routes[F](
         deps.ocr.createOcrJob,
+        deps.ocr.submissions,
         deps.ocr.getOcrJob,
         deps.ocr.cancelOcrJob,
         deps.ocr.getOcrDraft,

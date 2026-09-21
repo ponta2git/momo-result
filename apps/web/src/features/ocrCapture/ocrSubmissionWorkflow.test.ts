@@ -15,9 +15,19 @@ function selectedSlot(kind: SlotKind): CaptureSlotState {
 
 function submission(): OcrSubmissionWorkflowParams {
   return {
+    putSubmission: vi.fn<OcrSubmissionWorkflowParams["putSubmission"]>(async (id, request) => ({
+      submissionId: id,
+      matchDraftId: request.matchDraftId,
+      status: "open",
+      admissionDeadline: "2026-02-03T04:15:06.000Z",
+      members:
+        request.members?.map((member) => ({ screenType: member.screenType, status: "pending" })) ??
+        [],
+    })),
+    getJob: vi.fn(),
     createDraft: vi.fn(async () => ({
       matchDraftId: "draft-1",
-      status: "ocr_running",
+      status: "draft_ready",
       createdAt: "2026-01-01T00:00:00Z",
       updatedAt: "2026-01-01T00:00:00Z",
     })),
@@ -52,17 +62,100 @@ describe("runOcrSubmissionWorkflow", () => {
       failedJobCount: 0,
     });
     expect(input.createDraft).toHaveBeenCalledWith(
-      expect.objectContaining({ playedAt: input.playedAt, status: "ocr_running" }),
+      expect.objectContaining({ playedAt: input.playedAt, status: "draft_ready" }),
       { idempotencyKey: input.state.draftKey },
     );
     expect(input.createJob).toHaveBeenCalledWith(
       expect.objectContaining({
-        matchDraftId: "draft-1",
+        submissionId: input.state.submissionId,
         requestedScreenType: "revenue",
         imageId: "revenue.png",
       }),
       expect.anything(),
     );
+  });
+
+  it("fixes membership and hashes before uploading, and replays an uncertain PUT verbatim", async () => {
+    const input = submission();
+    const put = input.putSubmission;
+    input.putSubmission = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("lost response"))
+      .mockImplementation(put);
+    expect((await runOcrSubmissionWorkflow(input)).status).toBe("submission_failed");
+    expect(input.uploadImage).not.toHaveBeenCalled();
+    expect(input.state.draft?.status).toBe("draft_ready");
+    expect((await runOcrSubmissionWorkflow(input)).status).toBe("started");
+    expect(vi.mocked(input.putSubmission).mock.calls[0]).toEqual(
+      vi.mocked(input.putSubmission).mock.calls[1],
+    );
+    expect(input.state.request?.members).toEqual(
+      input.slots.map((slot) => ({
+        screenType: slot.kind,
+        uploadIdempotencyKey: input.state.slots[slot.kind]?.key,
+        imageSha256: expect.stringMatching(/^[0-9a-f]{64}$/u),
+        imageByteLength: slot.file?.size,
+      })),
+    );
+  });
+
+  it("recovers a registered member after the image response is lost without uploading again", async () => {
+    const input = submission();
+    input.slots = [selectedSlot("total_assets")];
+    input.putSubmission = vi.fn(async (id) => ({
+      submissionId: id,
+      matchDraftId: "draft-1",
+      status: "settled",
+      admissionDeadline: "2026-02-03T04:15:06.000Z",
+      members: [{ screenType: "total_assets", status: "registered", jobId: "accepted-job" }],
+    }));
+    input.getJob = vi
+      .fn()
+      .mockResolvedValue({ jobId: "accepted-job", draftId: "accepted-ocr", status: "succeeded" });
+    expect((await runOcrSubmissionWorkflow(input)).status).toBe("started");
+    expect(input.getJob).toHaveBeenCalledWith("accepted-job");
+    expect(input.uploadImage).not.toHaveBeenCalled();
+    expect(input.createJob).not.toHaveBeenCalled();
+  });
+
+  it("offers an explicit new submission only for definitively unregistered members", async () => {
+    const input = submission();
+    input.putSubmission = vi.fn(async (id) => ({
+      submissionId: id,
+      matchDraftId: "draft-1",
+      status: "settled",
+      admissionDeadline: "2026-02-03T04:15:06.000Z",
+      members: [
+        { screenType: "total_assets", status: "registered", jobId: "accepted-job" },
+        { screenType: "revenue", status: "failed", failureCode: "admission_timeout" },
+      ],
+    }));
+    expect(await runOcrSubmissionWorkflow(input)).toEqual({
+      status: "submission_closed",
+      canRestart: true,
+    });
+    expect(input.state.retryKinds).toEqual(["revenue"]);
+    expect(input.uploadImage).not.toHaveBeenCalled();
+    expect(input.createJob).not.toHaveBeenCalled();
+  });
+
+  it("does not create server resources when an image cannot be read", async () => {
+    const input = submission();
+    vi.spyOn(input.slots[0]!.file!, "arrayBuffer").mockRejectedValue(new Error("unreadable"));
+    expect((await runOcrSubmissionWorkflow(input)).status).toBe("invalid");
+    expect(input.createDraft).not.toHaveBeenCalled();
+    expect(input.putSubmission).not.toHaveBeenCalled();
+  });
+
+  it.each([404, 409])("stops retrying an immutable admission rejection (%s)", async (status) => {
+    const input = submission();
+    input.putSubmission = vi.fn().mockRejectedValue({ kind: "api", status });
+    expect(await runOcrSubmissionWorkflow(input)).toEqual({
+      status: "submission_closed",
+      canRestart: false,
+    });
+    expect(input.uploadImage).not.toHaveBeenCalled();
+    expect(input.createJob).not.toHaveBeenCalled();
   });
 
   it("replays the identical draft request after its response is lost", async () => {

@@ -46,7 +46,11 @@ final class InMemoryOcrJobsRepository[F[_]: Sync] private (
     .map(_.values.exists(job => job.draftId == draftId && isActive(job.status)))
 
   override def markFailed(jobId: OcrJobId, failure: OcrFailure, now: Instant): F[Unit] = ref
-    .update(jobs => jobs.updatedWith(jobId.value)(_.map(toFailed(_, failure, now))))
+    .update(jobs =>
+      jobs.updatedWith(jobId.value)(_.map(job =>
+        if isActive(job.status) then toFailed(job, failure, now) else job
+      ))
+    )
 
   override def cancelQueued(jobId: OcrJobId, now: Instant): F[Boolean] = ref.modify { jobs =>
     jobs.get(jobId.value) match

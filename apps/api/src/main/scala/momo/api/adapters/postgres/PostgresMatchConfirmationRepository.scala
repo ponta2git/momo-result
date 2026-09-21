@@ -68,7 +68,8 @@ final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transact
           """.query[ConfirmedDraftSourceImagesRow].option
           _ <- updatedImages match
             case Some(images) =>
-              PostgresSourceImageLifecycle.stageDeletion(images.imageIds, updatedAt) *>
+              PostgresOcrSubmissions.abortForDrafts(List(expected.draftId), updatedAt) *>
+                PostgresSourceImageLifecycle.stageDeletion(images.imageIds, updatedAt) *>
                 insert(record, updatedAt) *> attachConfirmedMatch(expected, record) *>
                 PostgresResultNotificationCancellation.draftsUnavailable(
                   List(expected.draftId),

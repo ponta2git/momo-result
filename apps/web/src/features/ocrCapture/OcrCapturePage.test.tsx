@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { OcrCapturePage } from "@/features/ocrCapture/OcrCapturePage";
 import type { CreateOcrJobRequest } from "@/shared/api/ocrJobs";
+import type { PutOcrSubmissionRequest } from "@/shared/api/ocrSubmissions";
 import { gameTitlesQueryOptions } from "@/shared/api/queryOptions";
 import { DevUserPicker } from "@/shared/auth/DevUserPicker";
 import { setDevUser } from "@/test/auth";
@@ -398,7 +399,7 @@ describe("OcrCapturePage", () => {
         createdDrafts.push((await request.json()) as MatchDraftRequestBody);
         return HttpResponse.json({
           matchDraftId: "draft-created-1",
-          status: "ocr_running",
+          status: "draft_ready",
           createdAt: "2026-01-01T00:00:00.000Z",
           updatedAt: "2026-01-01T00:00:00.000Z",
         });
@@ -443,13 +444,13 @@ describe("OcrCapturePage", () => {
         mapMasterId: "map_east",
         ownerMemberId: "member_ponta",
         seasonMasterId: "season_current",
-        status: "ocr_running",
+        status: "draft_ready",
       }),
     ]);
     expect(createdJobs).toEqual([
       expect.objectContaining({
         imageId: "image-1",
-        matchDraftId: "draft-created-1",
+        submissionId: expect.any(String),
         requestedScreenType: "total_assets",
       }),
     ]);
@@ -491,7 +492,7 @@ describe("OcrCapturePage", () => {
         return HttpResponse.json({
           createdAt: "2026-02-03T04:05:06.000Z",
           matchDraftId: "draft-held-scoped",
-          status: "ocr_running",
+          status: "draft_ready",
           updatedAt: "2026-02-03T04:05:06.000Z",
         });
       }),
@@ -534,7 +535,7 @@ describe("OcrCapturePage", () => {
         await draftGate.promise;
         return HttpResponse.json({
           matchDraftId: "draft-created-1",
-          status: "ocr_running",
+          status: "draft_ready",
           createdAt: "2026-01-01T00:00:00.000Z",
           updatedAt: "2026-01-01T00:00:00.000Z",
         });
@@ -577,12 +578,27 @@ describe("OcrCapturePage", () => {
   it("submits the reviewed tray and game hints even if reference data refreshes before confirmation", async () => {
     setDevUser();
     const createdJobs: OcrJobRequestBody[] = [];
+    const createdSubmissions: PutOcrSubmissionRequest[] = [];
     installObjectUrlMock({
       createObjectURL: (value) => (value instanceof File ? `blob:${value.name}` : "blob:unknown"),
     });
     let uploadCount = 0;
 
     server.use(
+      http.put("/api/ocr-submissions/:submissionId", async ({ params, request }) => {
+        const body = (await request.json()) as PutOcrSubmissionRequest;
+        createdSubmissions.push(body);
+        return HttpResponse.json({
+          submissionId: params["submissionId"],
+          matchDraftId: body.matchDraftId,
+          status: "open",
+          admissionDeadline: "2026-01-01T00:10:00.000Z",
+          members: body.members?.map((member) => ({
+            screenType: member.screenType,
+            status: "pending",
+          })),
+        });
+      }),
       http.post("/api/uploads/images", async () => {
         uploadCount += 1;
         return HttpResponse.json({
@@ -641,30 +657,83 @@ describe("OcrCapturePage", () => {
     await user.click(screen.getByRole("button", { name: "2件で読み取りを開始" }));
 
     await waitFor(() => expect(createdJobs).toHaveLength(2));
+    expect(createdSubmissions).toEqual([
+      {
+        matchDraftId: "draft-created-1",
+        ocrHints: {
+          knownPlayerAliases: [],
+          computerPlayerAliases: [],
+          gameTitle: "桃太郎電鉄2",
+          layoutFamily: "momotetsu_2",
+        },
+        members: [
+          expect.objectContaining({ screenType: "total_assets", imageByteLength: 6 }),
+          expect.objectContaining({ screenType: "revenue", imageByteLength: 5 }),
+        ],
+      },
+    ]);
     expect(createdJobs).toEqual([
       {
         imageId: "image-1",
-        matchDraftId: "draft-created-1",
+        submissionId: expect.any(String),
         requestedScreenType: "total_assets",
-        ocrHints: {
-          knownPlayerAliases: [],
-          computerPlayerAliases: [],
-          gameTitle: "桃太郎電鉄2",
-          layoutFamily: "momotetsu_2",
-        },
       },
       {
         imageId: "image-2",
-        matchDraftId: "draft-created-1",
+        submissionId: createdJobs[0]?.submissionId,
         requestedScreenType: "revenue",
-        ocrHints: {
-          knownPlayerAliases: [],
-          computerPlayerAliases: [],
-          gameTitle: "桃太郎電鉄2",
-          layoutFamily: "momotetsu_2",
-        },
       },
     ]);
+  });
+
+  it("starts an explicit new operation for expired unregistered images while retaining the draft", async () => {
+    setDevUser();
+    const operations: Array<{ id: string; body: PutOcrSubmissionRequest }> = [];
+    server.use(
+      http.put("/api/ocr-submissions/:submissionId", async ({ params, request }) => {
+        const body = (await request.json()) as PutOcrSubmissionRequest;
+        operations.push({ id: String(params["submissionId"]), body });
+        return HttpResponse.json({
+          submissionId: params["submissionId"],
+          matchDraftId: body.matchDraftId,
+          admissionDeadline: "2026-01-01T00:10:00.000Z",
+          status: operations.length === 1 ? "settled" : "open",
+          members:
+            operations.length === 1
+              ? [
+                  { screenType: "total_assets", status: "registered", jobId: "old-job" },
+                  { screenType: "revenue", status: "failed", failureCode: "admission_timeout" },
+                ]
+              : body.members?.map((member) => ({
+                  screenType: member.screenType,
+                  status: "pending",
+                })),
+        });
+      }),
+    );
+    renderCaptureRoute();
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "作品" })).toHaveTextContent("桃太郎電鉄2"),
+    );
+    const input = screen.getByLabelText("OCRの画像をアップロード");
+    await user.upload(input, new File(["assets"], "assets.png", { type: "image/png" }));
+    await user.upload(input, new File(["revenue"], "revenue.png", { type: "image/png" }));
+    await startOcrAllowingPartialTray();
+    expect(
+      await screen.findByRole("dialog", { name: "この送信の受付は終了しました" }),
+    ).toBeInTheDocument();
+    expect(operations).toHaveLength(1);
+    await user.click(screen.getByRole("button", { name: "未受付の画像を新しく送信" }));
+    expect(await screen.findByText("matches-page")).toBeInTheDocument();
+    expect(operations).toHaveLength(2);
+    expect(operations[1]?.id).not.toBe(operations[0]?.id);
+    expect(operations[1]?.body.matchDraftId).toBe(operations[0]?.body.matchDraftId);
+    expect(operations[1]?.body.members).toEqual([
+      expect.objectContaining({ screenType: "revenue" }),
+    ]);
+    expect(operations[1]?.body.members?.[0]?.uploadIdempotencyKey).not.toBe(
+      operations[0]?.body.members?.[1]?.uploadIdempotencyKey,
+    );
   });
 
   it("keeps a partial submission result visible until the user opens the match list", async () => {
@@ -778,7 +847,7 @@ describe("OcrCapturePage", () => {
         draftCreates += 1;
         return HttpResponse.json({
           matchDraftId: "draft-created-1",
-          status: "ocr_running",
+          status: "draft_ready",
           createdAt: "2026-01-01T00:00:00Z",
           updatedAt: "2026-01-01T00:00:00Z",
         });

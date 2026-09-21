@@ -11,6 +11,8 @@ import momo.api.domain.{
   OcrDraft,
   OcrJob,
   OcrJobHints,
+  OcrSubmission,
+  OcrSubmissionMember,
   ScreenType,
   StoredImageLocation
 }
@@ -20,6 +22,7 @@ import momo.api.repositories.{
   OcrJobCreationPlan,
   OcrJobCreationStore,
   OcrJobDraftAttachment,
+  OcrJobSubmissionBinding,
   OcrQueueDispatchIntent
 }
 import momo.api.testing.AppErrorAssertions.assertAppException
@@ -36,7 +39,6 @@ final class InMemoryOcrJobCreationStoreSpec extends MomoCatsEffectSuite:
       fixture <- newFixture
       draft = ocrDraft("ocr-draft-duplicate", "ocr-job-new")
       job = queuedJob("ocr-job-new", draft.id)
-      _ <- fixture.matchDrafts.create(editableMatchDraft)
       _ <- fixture.drafts.create(draft)
       result <- fixture.store.store(plan(job, draft, attachment(draft.id), 10)).attempt
       matchDraft <- fixture.matchDrafts.find(matchDraftId)
@@ -61,6 +63,7 @@ final class InMemoryOcrJobCreationStoreSpec extends MomoCatsEffectSuite:
   test("store returns match draft attachment rejection without inserting OCR records"):
     for
       fixture <- newFixture
+      _ <- fixture.matchDrafts.cancelUnchecked(matchDraftId)
       draft = ocrDraft("ocr-draft-attach-failed", "ocr-job-attach-failed")
       job = queuedJob("ocr-job-attach-failed", draft.id)
       result <- fixture.store.store(plan(job, draft, attachment(draft.id), 10))
@@ -92,6 +95,19 @@ final class InMemoryOcrJobCreationStoreSpec extends MomoCatsEffectSuite:
       drafts <- InMemoryOcrDraftsRepository.create[IO]
       jobs <- InMemoryOcrJobsRepository.create[IO]
       matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
+      _ <- matchDrafts.create(editableMatchDraft)
+      submissions <- InMemoryOcrSubmissionsRepository.create[IO](matchDrafts)
+      _ <- submissions.put(OcrSubmission(
+        "00000000-0000-4000-8000-000000000001",
+        AccountId.unsafeFromString("account_ponta"),
+        matchDraftId,
+        OcrJobHints.empty,
+        "open",
+        now.plusSeconds(600),
+        now,
+        None,
+        List(OcrSubmissionMember(ScreenType.TotalAssets, "a" * 64, "ab" * 32, 1))
+      ))
       store =
         InMemoryOcrJobCreationStore[IO](
           drafts,
@@ -100,6 +116,7 @@ final class InMemoryOcrJobCreationStoreSpec extends MomoCatsEffectSuite:
           jobs.create,
           matchDrafts,
           jobs.existsActiveByDraft,
+          submissions,
         )
     yield Fixture(drafts, jobs, matchDrafts, store)
 
@@ -188,6 +205,10 @@ final class InMemoryOcrJobCreationStoreSpec extends MomoCatsEffectSuite:
       matchDraftId = attachment.draftId,
     )
     OcrJobCreationPlan(
+      submission = OcrJobSubmissionBinding(
+        "00000000-0000-4000-8000-000000000001",
+        AccountId.unsafeFromString("account_ponta")
+      ),
       draft = draft,
       job = job,
       matchDraftAttachment = attachment,

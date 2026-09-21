@@ -25,7 +25,8 @@ export type OcrStartDialogState =
       plan: OcrSubmissionPlan;
       status: "partial_result";
     }
-  | { canEdit: boolean; message: string; plan: OcrSubmissionPlan; status: "recoverable_failure" };
+  | { canEdit: boolean; message: string; plan: OcrSubmissionPlan; status: "recoverable_failure" }
+  | { canRestart: boolean; plan: OcrSubmissionPlan; status: "submission_closed" };
 
 const incompleteMatchesUrl = "/matches?status=incomplete&sort=updated_desc";
 
@@ -71,7 +72,11 @@ export function useOcrStartFlow({
     }
   }, [blocker, locked]);
 
-  async function submitPlan(plan: OcrSubmissionPlan, noUncertainAcceptance: boolean) {
+  async function submitPlan(
+    plan: OcrSubmissionPlan,
+    noUncertainAcceptance: boolean,
+    restart = false,
+  ) {
     intentionalNavigationRef.current = false;
     setState({ plan, progress: null, status: "submitting" });
 
@@ -79,6 +84,7 @@ export function useOcrStartFlow({
     try {
       result = await submission.submit({
         plan,
+        restart,
         onProgress: (progress) => {
           setState((current) =>
             current.status === "submitting" ? { ...current, progress } : current,
@@ -105,6 +111,10 @@ export function useOcrStartFlow({
     result: OcrSubmissionResult,
     noUncertainAcceptance: boolean,
   ) {
+    if (result.status === "submission_closed") {
+      setState({ status: "submission_closed", plan, canRestart: result.canRestart });
+      return;
+    }
     if (result.status === "started") {
       showToast({
         title: `${result.createdJobCount}件の読み取りを開始しました。`,
@@ -143,13 +153,15 @@ export function useOcrStartFlow({
     if (
       state.status !== "confirming" &&
       state.status !== "recoverable_failure" &&
-      state.status !== "partial_result"
+      state.status !== "partial_result" &&
+      state.status !== "submission_closed"
     )
       return;
     // A later rejected retry cannot disprove that an earlier request was accepted.
     await submitPlan(
       state.plan,
       state.status === "confirming" || (state.status === "recoverable_failure" && state.canEdit),
+      state.status === "submission_closed" && state.canRestart,
     );
   }
 

@@ -3,6 +3,7 @@ import java.sql.Connection
 import java.time.Instant
 
 import cats.effect.{Deferred, IO, Resource}
+import cats.syntax.all.*
 import doobie.implicits.*
 import doobie.postgres.circe.jsonb.implicits.*
 import doobie.postgres.implicits.*
@@ -18,6 +19,7 @@ import momo.api.repositories.{
   OcrJobCreationPlan,
   OcrJobCreationStore,
   OcrJobDraftAttachment,
+  OcrJobSubmissionBinding,
   OcrQueueDispatchIntent,
   SourceImageDeleteResult,
   SourceImageQuota,
@@ -51,7 +53,20 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
   private def prepareMatchDraft: IO[Unit] = sql"""
     INSERT INTO match_drafts (id, created_by_account_id, status, created_at, updated_at)
     VALUES (${matchDraftId.value}, 'account_ponta', 'draft_ready', $now, $now)
-  """.update.run.transact(transactor).void
+  """.update.run.transact(transactor).void *> prepareSubmission
+
+  private def prepareSubmission: IO[Unit] = (
+    sql"""INSERT INTO ocr_submissions
+      (id, owner_account_id, match_draft_id, ocr_hints_json, status, admission_deadline, created_at)
+      VALUES ('00000000-0000-4000-8000-000000000001', 'account_ponta', ${matchDraftId.value},
+        '{"knownPlayerAliases":[],"computerPlayerAliases":[]}'::jsonb, 'open', clock_timestamp() + interval '10 minutes', $now)""".update.run *>
+      sql"""INSERT INTO ocr_submission_members
+      (submission_id, screen_type, upload_idempotency_key_hash, image_sha256_hex, image_byte_length, status)
+      VALUES ('00000000-0000-4000-8000-000000000001', 'total_assets',
+        ${SourceImageIdempotencyHash.uniqueFor(
+          imageId
+        ).value}, $imageSha256, 128, 'pending')""".update.run
+  ).transact(transactor).void
 
   private def draft: OcrDraft = OcrDraft(
     id = draftId,
@@ -108,7 +123,7 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
         WHERE job_id = ${jobId.value}
       """.query[(String, Int, String, String, Json)].unique.transact(transactor)
     yield
-      assertEquals(result, Right(()))
+      assertEquals(result.map(_.created), Right(true))
       assertEquals(row._1, "PENDING")
       assertEquals(row._2, 0)
       assertEquals(row._3, jobId.value)
@@ -154,7 +169,7 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
       assertActiveLimit(result, 1)
       assertEquals(counts, (1L, 0L, 0L))
 
-  test("store rolls back OCR records when match draft attachment fails"):
+  test("store rejects a member attachment to another draft before inserting OCR records"):
     val attachment = OcrJobDraftAttachment(
       draftId = MatchDraftId.unsafeFromString("missing-match-draft"),
       screenType = ScreenType.TotalAssets,
@@ -171,7 +186,7 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
           (SELECT count(*) FROM ocr_queue_outbox WHERE job_id = ${jobId.value})
       """.query[(Long, Long, Long)].unique.transact(transactor)
     yield
-      assertAttachFailed(result, attachment.draftId)
+      assertEquals(result, Left(OcrJobCreationRejection.SubmissionRejected))
       assertEquals(counts, (0L, 0L, 0L))
 
   test("store rejects invalid draft JSON before inserting related rows"):
@@ -266,6 +281,32 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
     yield
       assertEquals(beforeCommit, None)
       assertEquals(deletion, SourceImageDeleteResult.NotReady(SourceImageStatus.Available))
+
+  test("a lost response replays the same member job after settlement without consuming quota"):
+    for
+      first <- store(plan(job, draft, attachment, activeJobLimit = 12))
+      _ <- sql"""UPDATE ocr_submissions SET status = 'settled', finished_at = clock_timestamp()
+        WHERE id = '00000000-0000-4000-8000-000000000001'""".update.run.transact(transactor)
+      replay <- repo.store(plan(job, draft, attachment, activeJobLimit = 0))
+      counts <- sql"SELECT (SELECT count(*) FROM ocr_jobs), (SELECT count(*) FROM ocr_queue_outbox)"
+        .query[(Long, Long)].unique.transact(transactor)
+    yield
+      assertEquals(first.map(_.created), Right(true))
+      assertEquals(replay.map(_.created), Right(false))
+      assertEquals(replay.map(_.job.id), first.map(_.job.id))
+      assertEquals(counts, (1L, 1L))
+
+  test("an expired pending member cannot register a late image job"):
+    for
+      _ <- prepareMatchDraft
+      _ <- prepareSourceImage
+      _ <- sql"""UPDATE ocr_submissions SET admission_deadline = created_at + interval '1 second'
+        WHERE id = '00000000-0000-4000-8000-000000000001'""".update.run.transact(transactor)
+      result <- repo.store(plan(job, draft, attachment, activeJobLimit = 12))
+      count <- sql"SELECT count(*) FROM ocr_jobs".query[Long].unique.transact(transactor)
+    yield
+      assertEquals(result, Left(OcrJobCreationRejection.SubmissionRejected))
+      assertEquals(count, 0L)
 
   private def store(
       creationPlan: OcrJobCreationPlan
@@ -381,14 +422,6 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
       assertEquals(actualLimit, limit)
     case other => fail(s"expected active limit rejection, got $other")
 
-  private def assertAttachFailed(
-      result: OcrJobCreationStore.OcrJobCreationResult,
-      draftId: MatchDraftId,
-  ): Unit = result match
-    case Left(OcrJobCreationRejection.MatchDraftAttachmentRejected(actualDraftId)) =>
-      assertEquals(actualDraftId, draftId)
-    case other => fail(s"expected match draft attachment rejection, got $other")
-
   private def assertSourceImageUnavailable(
       result: OcrJobCreationStore.OcrJobCreationResult,
       expectedImageId: ImageId,
@@ -408,6 +441,10 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
       matchDraftId = attachment.draftId,
     )
     OcrJobCreationPlan(
+      submission = OcrJobSubmissionBinding(
+        "00000000-0000-4000-8000-000000000001",
+        AccountId.unsafeFromString("account_ponta")
+      ),
       draft = draft,
       job = job,
       matchDraftAttachment = attachment,

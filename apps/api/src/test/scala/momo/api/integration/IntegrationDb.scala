@@ -165,6 +165,8 @@ object IntegrationDb:
         match_players,
         match_drafts,
         matches,
+        ocr_submission_members,
+        ocr_submissions,
         ocr_queue_outbox,
         ocr_jobs,
         ocr_drafts,

@@ -2,6 +2,7 @@ package momo.api.adapters.inmemory
 
 import cats.MonadThrow
 import cats.data.EitherT
+import cats.effect.Async
 import cats.syntax.all.*
 
 import momo.api.domain.ids.OcrDraftId
@@ -15,18 +16,53 @@ import momo.api.repositories.{
   OcrJobCreationPlan,
   OcrJobCreationStore,
   OcrJobDraftAttachment,
-  OcrJobsRepository
+  OcrJobsRepository,
+  StoredOcrJob
 }
 
-final class InMemoryOcrJobCreationStore[F[_]: MonadThrow](
+final class InMemoryOcrJobCreationStore[F[_]: Async](
     drafts: OcrDraftsRepository[F],
     createDraft: OcrDraft => F[Unit],
     jobs: OcrJobsRepository[F],
     createJob: OcrJob => F[Unit],
     matchDrafts: MatchDraftsRepository[F],
     activeJobForDraft: OcrDraftId => F[Boolean],
+    submissions: InMemoryOcrSubmissionsRepository[F],
 ) extends OcrJobCreationStore[F]:
   override def store(plan: OcrJobCreationPlan): F[OcrJobCreationStore.OcrJobCreationResult] =
+    submissions.serialized(storeSerialized(plan))
+
+  private def storeSerialized(plan: OcrJobCreationPlan)
+      : F[OcrJobCreationStore.OcrJobCreationResult] =
+    submissions.find(plan.submission.submissionId, plan.submission.ownerAccountId).flatMap {
+      case None => OcrJobCreationRejection.SubmissionRejected.asLeft[StoredOcrJob].pure[F]
+      case Some(submission) =>
+        submission.members.find(_.screenType == plan.job.requestedScreenType) match
+          case Some(member) if member.jobId.nonEmpty =>
+            (for
+              job <- EitherT(
+                jobs.find(member.jobId.get).map(_.toRight(OcrJobCreationRejection.InvalidPlan))
+              )
+              draft <- EitherT(
+                drafts.find(job.draftId).map(_.toRight(OcrJobCreationRejection.InvalidPlan))
+              )
+              _ <- EitherT.cond[F](
+                job.imageId == plan.job.imageId,
+                (),
+                OcrJobCreationRejection.SubmissionRejected
+              )
+            yield StoredOcrJob(job, draft, false)).value
+          case Some(member)
+              if submission.status == "open" && member.status == "pending" &&
+                submission.matchDraftId == plan.matchDraftAttachment.draftId &&
+                plan.job.createdAt.isBefore(submission.admissionDeadline) &&
+                member.imageSha256 == plan.queueDispatch.enqueueRequest.imageSha256 &&
+                member.imageByteLength.toLong ==
+                plan.queueDispatch.enqueueRequest.imageByteLength => create(plan)
+          case _ => OcrJobCreationRejection.SubmissionRejected.asLeft[StoredOcrJob].pure[F]
+    }
+
+  private def create(plan: OcrJobCreationPlan): F[OcrJobCreationStore.OcrJobCreationResult] =
     val draft = plan.draft
     val job = plan.job
     val attachment = plan.matchDraftAttachment
@@ -42,7 +78,12 @@ final class InMemoryOcrJobCreationStore[F[_]: MonadThrow](
       _ <- EitherT(attachMatchDraft(attachment))
       _ <- EitherT.liftF(createDraft(draft))
       _ <- EitherT.liftF(createJob(job))
-    yield ()).value
+      _ <- EitherT.liftF(submissions.register(
+        plan.submission.submissionId,
+        job.requestedScreenType,
+        job.id
+      ))
+    yield StoredOcrJob(job, draft, true)).value
 
   private def activeLimitGuard(
       activeJobLimit: Int

@@ -22,7 +22,12 @@ final case class OcrQueueDispatchIntent(
   def draftId: OcrDraftId = enqueueRequest.draftId
   def createdAt: Instant = enqueueRequest.enqueuedAt
 
+final case class OcrJobSubmissionBinding(submissionId: String, ownerAccountId: AccountId)
+
+final case class StoredOcrJob(job: OcrJob, draft: OcrDraft, created: Boolean)
+
 final case class OcrJobCreationPlan(
+    submission: OcrJobSubmissionBinding,
     draft: OcrDraft,
     job: OcrJob,
     matchDraftAttachment: OcrJobDraftAttachment,
@@ -54,10 +59,11 @@ trait OcrJobCreationStore[F[_]]:
   def store(plan: OcrJobCreationPlan): F[OcrJobCreationStore.OcrJobCreationResult]
 
 object OcrJobCreationStore:
-  type OcrJobCreationResult = Either[OcrJobCreationRejection, Unit]
+  type OcrJobCreationResult = Either[OcrJobCreationRejection, StoredOcrJob]
 
   enum OcrJobCreationRejection derives CanEqual:
     case InvalidPlan
+    case SubmissionRejected
     case ActiveJobLimitExceeded(limit: Int)
     case MatchDraftAttachmentRejected(draftId: MatchDraftId)
     case SourceImageUnavailable(imageId: ImageId)

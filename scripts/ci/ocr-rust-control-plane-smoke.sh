@@ -11,8 +11,16 @@ if [[ "${ANALYSIS_SMOKE_SERVICES_ARE_ISOLATED:-}" != "true" ]]; then
   exit 1
 fi
 
+migrations_dir="${MOMO_DB_MIGRATIONS_DIR:-${repo_root}/_deps/momo-db/drizzle}"
+shared_fixture="${migrations_dir%/drizzle}/docs/examples/ocr-completed-v2.json"
+if ! cmp -s "${shared_fixture}" "${repo_root}/apps/processing-worker/testdata/ocr-submission-v2.json"; then
+  echo "OCR v2 producer fixture must match the momo-db shared wire contract." >&2
+  exit 1
+fi
+
 export STREAM_WAIT_SMOKE_REDIS_URL="${OCR_CONTROL_SMOKE_REDIS_URL}"
 tests=(
+  "ocr::submissions::runtime::integration_tests::real_postgres_preserves_submission_finalization_and_recovery"
   "ocr::control::integration_tests::real_postgres_and_redis_preserve_ocr_fencing_and_delivery_order"
   "ocr::queue::tests::real_redis_preserves_wake_recovery_and_new_delivery_fairness"
   "stream_retention::tests::real_redis_trim_preserves_pending_unread_and_other_groups"

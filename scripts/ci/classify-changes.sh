@@ -127,7 +127,7 @@ while IFS= read -r -d '' path; do
     .github/workflows/api.yml)
       api=true
       ;;
-    .github/workflows/web.yml)
+    .summit-ref | .github/workflows/ocr-notifications.yml | .github/workflows/web.yml)
       web=true
       ;;
     .github/workflows/processing-worker.yml)

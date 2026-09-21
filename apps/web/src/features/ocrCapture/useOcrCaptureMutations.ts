@@ -13,13 +13,15 @@ import type {
 } from "@/features/ocrCapture/ocrSubmissionWorkflow";
 import { invalidateAfterOcrSubmissionStarted } from "@/shared/api/cacheInvalidation";
 import { createMatchDraft } from "@/shared/api/matchDrafts";
-import { createOcrJob, uploadImage } from "@/shared/api/ocrJobs";
+import { createOcrJob, getOcrJob, uploadImage } from "@/shared/api/ocrJobs";
+import { putOcrSubmission } from "@/shared/api/ocrSubmissions";
 
 export type OcrCaptureSubmitParams = Pick<
   OcrSubmissionWorkflowParams,
   "onProgress" | "updateSlot"
 > & {
   plan: OcrSubmissionPlan;
+  restart?: boolean;
 };
 
 export type OcrCaptureMutations = {
@@ -33,8 +35,16 @@ export function useOcrCaptureMutations(): OcrCaptureMutations {
   const checkpoints = useRef(new WeakMap<OcrSubmissionPlan, OcrSubmissionState>());
   const inFlightRef = useRef(false);
   const submission = useMutation({
-    mutationFn: ({ plan, ...params }: OcrCaptureSubmitParams) => {
-      const state = checkpoints.current.get(plan) ?? createOcrSubmissionState();
+    mutationFn: ({ plan, restart, ...params }: OcrCaptureSubmitParams) => {
+      let state = checkpoints.current.get(plan) ?? createOcrSubmissionState();
+      if (restart && state.retryKinds?.length && state.draft) {
+        state = {
+          ...createOcrSubmissionState(),
+          draftKey: state.draftKey,
+          draft: state.draft,
+          targetKinds: state.retryKinds,
+        };
+      }
       checkpoints.current.set(plan, state);
       return runOcrSubmissionWorkflow({
         ...plan,
@@ -43,12 +53,16 @@ export function useOcrCaptureMutations(): OcrCaptureMutations {
         createDraft: createMatchDraft,
         uploadImage,
         createJob: createOcrJob,
+        getJob: getOcrJob,
+        putSubmission: putOcrSubmission,
       });
     },
     onSuccess: async (result) => {
       if (
         result.status === "started" ||
         result.status === "partial_started" ||
+        result.status === "submission_closed" ||
+        result.status === "draft_create_failed" ||
         result.status === "submission_failed"
       ) {
         await invalidateAfterOcrSubmissionStarted(queryClient).catch(() => undefined);

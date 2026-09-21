@@ -6,7 +6,6 @@ use tokio::{sync::watch, time};
 use tracing::{info, warn};
 
 use crate::{
-    notifications::{NotificationSink, log_skip},
     outbox::{PostCommitSink, PostCommitSinkClosed},
     postgres, stream_connection,
 };
@@ -108,7 +107,6 @@ pub(crate) const fn domain_failure_is_retryable(failure: OcrFailure) -> bool {
 
 #[derive(Clone)]
 pub(crate) struct OcrConsumerConfig {
-    notifications: NotificationSink,
     database_url: String,
     redis_url: String,
     queue: OcrQueueConfig,
@@ -128,10 +126,6 @@ impl std::fmt::Debug for OcrConsumerConfig {
 }
 
 impl OcrConsumerConfig {
-    pub(crate) fn with_notifications(mut self, notifications: NotificationSink) -> Self {
-        self.notifications = notifications;
-        self
-    }
     /// Builds a bounded Rust OCR v2 runtime with closed topology and timing bounds.
     ///
     /// # Errors
@@ -176,7 +170,6 @@ impl OcrConsumerConfig {
             return Err(OcrConsumerError::InvalidConfiguration);
         }
         Ok(Self {
-            notifications: NotificationSink::default(),
             database_url,
             redis_url,
             queue,
@@ -540,27 +533,7 @@ async fn finish_ocr_attempt(
     match child_outcome {
         OcrChildOutcome::Completed(Ok(output)) => {
             let completion = draft_completion(output, elapsed_milliseconds(started));
-            let reservation = match config
-                .notifications
-                .reserve(crate::notifications::ocr::MAXIMUM_SNAPSHOT_BYTES)
-            {
-                Ok(reservation) => Some(reservation),
-                Err(reason) => {
-                    log_skip("ocr_completed", &claim.job_id, reason);
-                    None
-                }
-            };
-            finish_success(
-                control_client,
-                claim,
-                &config.control,
-                hints,
-                &completion,
-                reservation,
-            )
-            .await?
-            .into_iter()
-            .for_each(crate::notifications::PreparedNotification::dispatch);
+            finish_success(control_client, claim, &config.control, hints, &completion).await?;
             Ok(DeliveryDisposition::Acknowledge)
         }
         OcrChildOutcome::Completed(Err(failure)) if domain_failure_is_retryable(failure) => {

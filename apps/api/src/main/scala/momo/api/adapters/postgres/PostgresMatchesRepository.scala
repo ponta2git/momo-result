@@ -83,6 +83,8 @@ object PostgresMatches extends PostgresMatchesReadSupport:
           WHERE id = $id
           FOR UPDATE
         """.query[GameTitleId].option
+        _ <- sql"SELECT id FROM match_drafts WHERE confirmed_match_id = $id ORDER BY id FOR UPDATE"
+          .query[MatchDraftId].to[List]
         deletedDrafts <- sql"DELETE FROM match_drafts WHERE confirmed_match_id = $id RETURNING id"
           .query[MatchDraftId].to[List]
         deleted <- sql"DELETE FROM matches WHERE id = $id".update.run.map(_ > 0)

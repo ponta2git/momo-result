@@ -129,6 +129,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ocr-submissions/{submissionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getApiOcr-submissionsSubmissionid"];
+        put: operations["putApiOcr-submissionsSubmissionid"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ocr-jobs/{jobId}": {
         parameters: {
             query?: never;
@@ -867,9 +883,8 @@ export interface components {
             imageId: string;
             /** @description Must be total_assets, revenue, or incident_log. The legacy auto value is not accepted. */
             requestedScreenType: string;
-            /** @description Existing editable match draft to attach this image's OCR result to. */
-            matchDraftId: string;
-            ocrHints?: components["schemas"]["OcrJobHintsRequest"];
+            /** @description Previously accepted OCR submission UUID. Reload older clients before submitting. */
+            submissionId: string;
         };
         /** CreateOcrJobResponse */
         CreateOcrJobResponse: {
@@ -1313,6 +1328,30 @@ export interface components {
             createdAt: string;
             updatedAt: string;
         };
+        /** OcrSubmissionMemberRequest */
+        OcrSubmissionMemberRequest: {
+            screenType: string;
+            uploadIdempotencyKey: string;
+            imageSha256: string;
+            /** Format: int32 */
+            imageByteLength: number;
+        };
+        /** OcrSubmissionMemberResponse */
+        OcrSubmissionMemberResponse: {
+            screenType: string;
+            status: string;
+            jobId?: string;
+            failureCode?: string;
+        };
+        /** OcrSubmissionResponse */
+        OcrSubmissionResponse: {
+            submissionId: string;
+            matchDraftId: string;
+            status: string;
+            admissionDeadline: string;
+            finishedAt?: string;
+            members?: components["schemas"]["OcrSubmissionMemberResponse"][];
+        };
         /** PaginationResponse */
         PaginationResponse: {
             /** Format: int32 */
@@ -1366,6 +1405,12 @@ export interface components {
             detail: string;
             /** @enum {string} */
             code: "BAD_REQUEST" | "UNAUTHORIZED" | "FORBIDDEN" | "NOT_FOUND" | "VALIDATION_FAILED" | "UNSUPPORTED_MEDIA_TYPE" | "PAYLOAD_TOO_LARGE" | "CONFLICT" | "MATCH_NOTE_VERSION_CONFLICT" | "NOTIFICATION_SETTINGS_VERSION_CONFLICT" | "IDEMPOTENCY_IN_PROGRESS" | "IDEMPOTENCY_PAYLOAD_MISMATCH" | "TOO_MANY_REQUESTS" | "SERVICE_UNAVAILABLE" | "ANALYSIS_ARTIFACT_EXPIRED" | "ANALYSIS_SCOPE_NOT_FOUND" | "ANALYSIS_SCOPE_NOT_IN_ARTIFACT" | "ANALYSIS_READ_BUSY" | "ANALYSIS_STATE_UNAVAILABLE" | "ANALYSIS_NO_ELIGIBLE_TITLES" | "DEPENDENCY_FAILED" | "INTERNAL_ERROR";
+        };
+        /** PutOcrSubmissionRequest */
+        PutOcrSubmissionRequest: {
+            matchDraftId: string;
+            members?: components["schemas"]["OcrSubmissionMemberRequest"][];
+            ocrHints?: components["schemas"]["OcrJobHintsRequest"];
         };
         /** ReplaceMatchNoteRequest */
         ReplaceMatchNoteRequest: {
@@ -3251,6 +3296,84 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CreateOcrJobResponse"];
+                };
+            };
+            /** @description Invalid value for: body */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            default: {
+                headers: {
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    "getApiOcr-submissionsSubmissionid": {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Momo-Account-Id"?: string;
+            };
+            path: {
+                submissionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OcrSubmissionResponse"];
+                };
+            };
+            default: {
+                headers: {
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    "putApiOcr-submissionsSubmissionid": {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Momo-Account-Id"?: string;
+                "X-CSRF-Token"?: string;
+            };
+            path: {
+                submissionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutOcrSubmissionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OcrSubmissionResponse"];
                 };
             };
             /** @description Invalid value for: body */

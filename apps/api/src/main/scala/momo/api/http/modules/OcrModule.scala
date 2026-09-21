@@ -19,6 +19,8 @@ import momo.api.endpoints.{
   OcrDraftResponse,
   OcrJobEndpoints,
   OcrJobResponse,
+  OcrSubmissionEndpoints,
+  OcrSubmissionResponse,
   ProblemDetails
 }
 import momo.api.errors.AppError
@@ -29,7 +31,8 @@ import momo.api.usecases.ocr.{
   CreatedOcrJob,
   GetOcrDraft,
   GetOcrDraftsBulk,
-  GetOcrJob
+  GetOcrJob,
+  OcrSubmissions
 }
 
 object OcrModule:
@@ -37,6 +40,7 @@ object OcrModule:
 
   def routes[F[_]: Async](
       createOcrJob: CreateOcrJob[F],
+      submissions: OcrSubmissions[F],
       getOcrJob: GetOcrJob[F],
       cancelOcrJob: CancelOcrJob[F],
       getOcrDraft: GetOcrDraft[F],
@@ -48,6 +52,34 @@ object OcrModule:
       nowF: F[Instant],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(
+    SecuredEndpoint.mutationLogic(security, OcrSubmissionEndpoints.put) { member =>
+      { case (id, request) =>
+        createRateLimiter.allow(s"ocr-submission-create:${member.accountId.value}").flatMap {
+          case false => ocrCreateRateLimited(
+              "account",
+              member.accountId.value,
+              "Too many reading operations. Try again later."
+            )
+          case true =>
+            security.decode(momo.api.endpoints.codec.OcrSubmissionCodec.command(id, request))(
+              command =>
+                security.respond(submissions.put(
+                  command,
+                  member.accountId
+                ))(OcrSubmissionResponse.from)
+            )
+        }
+      }
+    },
+    SecuredEndpoint.readLogic(security, OcrSubmissionEndpoints.get) { member => id =>
+      ReadRateLimit.enforce(
+        readRateLimiter,
+        member.accountId.value,
+        HttpOperation.GetOcrSubmission
+      ) {
+        security.respond(submissions.get(id, member.accountId))(OcrSubmissionResponse.from)
+      }
+    },
     SecuredEndpoint.mutationLogic(security, OcrJobEndpoints.create) { member => input =>
       IdempotencyReplay.wrap[F, CreateOcrJobRequest, CreateOcrJobResponse](
         idempotency,
@@ -70,7 +102,7 @@ object OcrModule:
                     detail = "Too many OCR jobs are being created. Try again later.",
                   )
                 case true => respondCreate(
-                    createOcrJob.run(command, input.requestId),
+                    createOcrJob.run(command, input.requestId, member.accountId),
                     accountId = member.accountId.value,
                     request = input.request,
                     requestId = input.requestId,
@@ -134,11 +166,11 @@ object OcrModule:
     case Left(error) => security.toProblemF(error).map(Left(_))
     case Right(created) =>
       val response = OcrJobCodec.toCreateResponse(created)
-      val matchDraftId = request.matchDraftId
+      val submissionId = request.submissionId
       val requestIdValue = requestId.getOrElse("none")
       val event = s"ocr_job_accepted accountId=$accountId jobId=${created.job.id.value} " +
         s"draftId=${created.draft.id.value} imageId=${request.imageId} " +
-        s"requestedScreenType=${request.requestedScreenType} matchDraftId=$matchDraftId " +
+        s"requestedScreenType=${request.requestedScreenType} submissionId=$submissionId " +
         s"requestId=$requestIdValue"
       Async[F].delay(logger.info(event)) *> Async[F].pure(Right(response))
   }

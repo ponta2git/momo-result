@@ -143,4 +143,9 @@ assert_case shared-schema "${all}" docs/schemas/series-analysis-v1.json
 assert_case orchestrator "${orchestrator}" .github/workflows/pr.yml
 assert_case unknown-path "${all}" config/unknown-release-input.toml
 
+assert_case 'Summit contract pin selects assembled Web gate' "${web_only}" '.summit-ref'
+assert_case 'OCR notification workflow selects its gate' \
+  "$(expected false true false false false false true true false false)" \
+  '.github/workflows/ocr-notifications.yml'
+
 echo "Change classifier tests passed."

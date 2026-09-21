@@ -138,11 +138,27 @@ pub(crate) async fn run(
     let outbox_config = analysis_outbox::RuntimeConfig::from(&series_analysis);
     let (sink, wake) = PostCommitSink::channel();
     let (shutdown_sender, shutdown) = watch::channel(false);
-    let mut peers = Vec::with_capacity(3);
+    let mut peers = Vec::with_capacity(4);
     if let OcrConsumerRuntimeConfig::Enabled(ocr) = ocr {
+        let submission_config = crate::ocr::submissions::runtime::Config {
+            database_url: series_analysis.database_url.clone(),
+            listener_database_url: series_analysis.outbox_listener_database_url.clone(),
+            finalization_timeout: ocr.shutdown_finalization_bound(),
+        };
+        let submission_sink = notification_sink.clone();
+        let submission_shutdown = shutdown.clone();
+        peers.push(runtime_peer("ocr_submissions", async move {
+            crate::ocr::submissions::runtime::run(
+                submission_config,
+                submission_sink,
+                submission_shutdown,
+            )
+            .await
+            .map_err(SupervisorError::OcrSubmissions)
+        }));
         peers.push(ocr_peer(
             &series_analysis,
-            ocr.with_notifications(notification_sink.clone()),
+            *ocr,
             sink.clone(),
             shutdown.clone(),
         )?);
@@ -359,6 +375,8 @@ pub(crate) enum SupervisorError {
     Ocr(crate::ocr::consumer::OcrConsumerError),
     #[error("series-analysis outbox runtime failed: {0}")]
     AnalysisOutbox(#[source] series_analysis::outbox::runtime::RuntimeError),
+    #[error("OCR submission coordinator failed: {0}")]
+    OcrSubmissions(#[source] crate::ocr::submissions::runtime::RuntimeError),
     #[error("{peer} runtime peer exited without a shutdown request")]
     UnexpectedExit { peer: &'static str },
     #[error("runtime shutdown drain budget exceeds a supported bound")]

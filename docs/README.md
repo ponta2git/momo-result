@@ -42,6 +42,10 @@
 
 実施記録: [オーナー別戦績比較の実装計画・検証結果](series-owner-comparison-plan.md)。変更箇所、依存順序、各工程の受入証拠、公開前に残る作業を記録する。
 
+検討記録: [MOM-24 OCR送出単位通知のレビュー・改訂仕様案](ocr-submission-notification-spec.md)。合意した通知要件、送出の終了・再試行、momo-dbとconsumerの責務、停止切替と受入条件を扱う。未実装の提案である。
+
+実装計画: [MOM-24 OCR送出単位通知の実装・検証計画](ocr-submission-notification-plan.md)。敵対的レビュー、工程の依存順、実DB・Playwright MCPを含む検証、検証資材の回収、メンテナンス中の一括導入・rollback条件を扱う。未実施の計画である。
+
 ## 2. 正本と証拠
 
 - 要求は利用者の目的、適用範囲、正常・失敗時の結果、受入条件を定める。順序自体が成功条件なら残し、コマンドや provider 固有手順は実行側へ置く。

@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-import { spawn } from "node:child_process";
-import { once } from "node:events";
+import { execFile, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 configureDockerHost();
 const { GenericContainer, Wait } = await import("testcontainers");
@@ -98,19 +98,21 @@ const resources = {
 };
 let cleanupStarted = false;
 
-for (const signal of ["SIGINT", "SIGTERM"]) {
-  process.once(signal, () => {
-    void cleanup().finally(() => {
-      process.exit(signal === "SIGINT" ? 130 : 143);
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  for (const signal of ["SIGINT", "SIGTERM"]) {
+    process.once(signal, () => {
+      void cleanup().finally(() => {
+        process.exit(signal === "SIGINT" ? 130 : 143);
+      });
     });
-  });
-}
+  }
 
-try {
-  const exitCode = await run();
-  process.exitCode = exitCode;
-} finally {
-  await cleanup();
+  try {
+    const exitCode = await run();
+    process.exitCode = exitCode;
+  } finally {
+    await cleanup();
+  }
 }
 
 async function run() {
@@ -163,10 +165,10 @@ async function startDependencies() {
   }
 }
 
-async function startPostgres() {
+export async function startPostgres(databaseName = POSTGRES_DB) {
   return new GenericContainer(POSTGRES_IMAGE)
     .withEnvironment({
-      POSTGRES_DB,
+      POSTGRES_DB: databaseName,
       POSTGRES_PASSWORD,
       POSTGRES_USER,
     })
@@ -176,7 +178,7 @@ async function startPostgres() {
     .start();
 }
 
-async function startRedis() {
+export async function startRedis() {
   return new GenericContainer(REDIS_IMAGE)
     .withExposedPorts(6379)
     .withStartupTimeout(120_000)
@@ -184,12 +186,12 @@ async function startRedis() {
     .start();
 }
 
-async function applyMigrations(postgres) {
+export async function applyMigrations(postgres, databaseName = POSTGRES_DB) {
   const migrationsDir = await resolveMigrationsDir();
   await runCommand(migrationScript, [], {
     cwd: repoRoot,
     env: childEnvironment({
-      DATABASE_URL: `postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB}`,
+      DATABASE_URL: `postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${databaseName}`,
       DOCKER_API_VERSION: process.env["DOCKER_API_VERSION"],
       DOCKER_CERT_PATH: process.env["DOCKER_CERT_PATH"],
       DOCKER_CONFIG: process.env["DOCKER_CONFIG"],
@@ -200,7 +202,7 @@ async function applyMigrations(postgres) {
       MOMO_DB_BOOTSTRAP_PROFILE: "web-e2e",
       MOMO_DB_MIGRATIONS_DIR: migrationsDir,
       POSTGRES_CONTAINER: postgres.getId(),
-      POSTGRES_DB,
+      POSTGRES_DB: databaseName,
       POSTGRES_USER,
     }),
     label: "momo-db migrations",
@@ -235,7 +237,7 @@ async function resolveMigrationsDir() {
   );
 }
 
-function startApi({ apiPort, databaseUrl, imageTmpDir, redisUrl }) {
+export function startApi({ apiPort, databaseUrl, imageTmpDir, redisUrl, environment = {} }) {
   const logs = createRingBuffer(240);
   const child = spawn("sbt", ["run"], {
     cwd: apiDir,
@@ -251,6 +253,7 @@ function startApi({ apiPort, databaseUrl, imageTmpDir, redisUrl }) {
       MOMO_LOG_FORMAT: process.env["MOMO_LOG_FORMAT"] ?? "text",
       MUTATION_RATE_LIMIT_PER_MINUTE: E2E_MUTATION_RATE_LIMIT_PER_MINUTE,
       REDIS_URL: redisUrl,
+      ...environment,
     }),
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -270,10 +273,11 @@ function startApi({ apiPort, databaseUrl, imageTmpDir, redisUrl }) {
   return child;
 }
 
-async function waitForApi(apiProcess, url) {
+export async function waitForApi(apiProcess, url, checkpoint = () => {}) {
   const deadline = Date.now() + API_START_TIMEOUT_MS;
 
   while (Date.now() < deadline) {
+    checkpoint();
     if (apiProcess.e2eState.code !== undefined || apiProcess.e2eState.signal !== undefined) {
       throw new Error(
         `API process exited before becoming healthy.\n${apiProcess.e2eLogs.toString()}`,
@@ -323,57 +327,56 @@ async function cleanup() {
   }
   cleanupStarted = true;
 
-  await stopProcessGroup(resources.apiProcess);
-  await Promise.all([
-    stopContainer(resources.redis),
-    stopContainer(resources.postgres),
+  const processCleanup = await Promise.allSettled([stopProcessGroup(resources.apiProcess)]);
+  const dependencyCleanup = await Promise.allSettled([
+    resources.redis?.stop(),
+    resources.postgres?.stop(),
     resources.imageTmpDir
       ? rm(resources.imageTmpDir, { force: true, recursive: true })
       : Promise.resolve(),
   ]);
+  const failures = [...processCleanup, ...dependencyCleanup].filter(
+    (result) => result.status === "rejected",
+  );
+  if (failures.length > 0)
+    throw new AggregateError(
+      failures.map((result) => result.reason),
+      "Standard E2E cleanup failed.",
+    );
 }
 
-async function stopContainer(container) {
-  if (!container) {
-    return;
-  }
-  await container.stop().catch((error) => {
-    console.error(`Failed to stop Testcontainer ${container.getId()}: ${String(error)}`);
-  });
-}
-
-async function stopProcessGroup(child) {
-  if (!child || child.exitCode !== null || child.signalCode !== null || !child.pid) {
-    return;
-  }
-
-  try {
-    if (process.platform === "win32") {
-      child.kill("SIGTERM");
-    } else {
-      process.kill(-child.pid, "SIGTERM");
+export async function stopProcessGroup(child) {
+  if (!child?.pid) return;
+  const target = process.platform === "win32" ? child.pid : -child.pid;
+  const alive = async () => {
+    if (process.platform === "win32") return child.exitCode === null && child.signalCode === null;
+    // macOS can report EPERM for kill(-pgid, 0) after the last live member exits.
+    // Observe only the owned group; zombies have already stopped executing.
+    const { stdout } = await promisify(execFile)("ps", ["-e", "-o", "pgid=,stat="]);
+    return stdout.split("\n").some((line) => {
+      const [group, state] = line.trim().split(/\s+/u);
+      return Number(group) === child.pid && state && !state.startsWith("Z");
+    });
+  };
+  const signal = async (value) => {
+    try {
+      process.kill(target, value);
+    } catch (error) {
+      if (error.code === "ESRCH") return;
+      if (error.code === "EPERM" && !(await alive())) return;
+      throw error;
     }
-  } catch {
-    return;
-  }
-
-  const exited = await Promise.race([
-    once(child, "exit").then(() => true),
-    delay(PROCESS_STOP_TIMEOUT_MS).then(() => false),
-  ]);
-  if (exited) {
-    return;
-  }
-
-  try {
-    if (process.platform === "win32") {
-      child.kill("SIGKILL");
-    } else {
-      process.kill(-child.pid, "SIGKILL");
-    }
-  } catch {
-    // The process may have exited between the timeout and forced kill.
-  }
+  };
+  // A finished launcher can leave a forked API / browser child in its owned group.
+  if (!(await alive())) return;
+  await signal("SIGTERM");
+  const deadline = Date.now() + PROCESS_STOP_TIMEOUT_MS;
+  while ((await alive()) && Date.now() < deadline) await delay(100);
+  if (!(await alive())) return;
+  await signal("SIGKILL");
+  const killDeadline = Date.now() + 2_000;
+  while ((await alive()) && Date.now() < killDeadline) await delay(100);
+  if (await alive()) throw new Error("An owned E2E process group did not stop.");
 }
 
 function createRingBuffer(limit) {
@@ -395,7 +398,7 @@ function createRingBuffer(limit) {
   };
 }
 
-function findFreePort() {
+export function findFreePort() {
   return new Promise((resolvePort, reject) => {
     const server = createServer();
     server.unref();
@@ -419,7 +422,7 @@ function delay(ms) {
   });
 }
 
-function childEnvironment(additions) {
+export function childEnvironment(additions) {
   const environment = {};
   for (const name of toolEnvironmentNames) {
     const value = process.env[name];
@@ -431,7 +434,7 @@ function childEnvironment(additions) {
   return environment;
 }
 
-function runCommand(command, args, { cwd, env, label }) {
+export function runCommand(command, args, { cwd, env, label }) {
   return new Promise((resolveCommand, rejectCommand) => {
     const child = spawn(command, args, { cwd, env, stdio: "inherit" });
     child.once("error", rejectCommand);

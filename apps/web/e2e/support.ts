@@ -257,7 +257,7 @@ export function e2eAuthHeaders(
   request: Request,
   accountId: string = devAccountId,
 ): Record<string, string> {
-  const headers = {
+  const headers: Record<string, string> = {
     ...request.headers(),
     "X-Momo-Account-Id": accountId,
   };

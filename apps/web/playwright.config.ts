@@ -26,6 +26,7 @@ function resolveWorkers(value: string | undefined): number | string | undefined 
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: "ocr-submission-notifications.spec.ts",
   fullyParallel: true,
   retries: process.env["CI"] ? 1 : 0,
   workers,

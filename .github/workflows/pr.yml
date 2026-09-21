@@ -113,6 +113,12 @@ jobs:
     if: github.event.pull_request.base.ref != 'master' && needs.classify.outputs.runtime == 'true'
     uses: ./.github/workflows/deploy.yml
 
+  ocr-notifications:
+    name: OCR notification E2E
+    needs: classify
+    if: github.event.pull_request.base.ref != 'master' && (needs.classify.outputs.api == 'true' || needs.classify.outputs.web == 'true' || needs.classify.outputs.analysis == 'true')
+    uses: ./.github/workflows/ocr-notifications.yml
+
   pr-ready:
     name: pr-ready
     if: always()
@@ -125,6 +131,7 @@ jobs:
       - web
       - analysis
       - runtime
+      - ocr-notifications
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -148,3 +155,8 @@ jobs:
           RUNTIME_EXPECTED: ${{ needs.classify.outputs.runtime }}
           RUNTIME_RESULT: ${{ needs.runtime.result }}
         run: scripts/ci/check-pr-ready.sh
+      - name: Confirm assembled OCR notification gate
+        if: github.event.pull_request.base.ref != 'master' && (needs.classify.outputs.api == 'true' || needs.classify.outputs.web == 'true' || needs.classify.outputs.analysis == 'true')
+        env:
+          OCR_RESULT: ${{ needs.ocr-notifications.result }}
+        run: test "${OCR_RESULT}" = success

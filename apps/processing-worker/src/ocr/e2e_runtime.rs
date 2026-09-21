@@ -127,6 +127,7 @@ struct Child {
     screen: RequestedScreenType,
     cancelled: Arc<AtomicBool>,
     image: VerifiedSourceImage,
+    hints: OcrHints,
 }
 struct Liveness;
 
@@ -141,7 +142,7 @@ impl OcrChildLauncher for Launcher {
         &self,
         image: VerifiedSourceImage,
         screen: RequestedScreenType,
-        _hints: &OcrHints,
+        hints: &OcrHints,
     ) -> Result<Box<dyn OcrChildHandle>, &'static str> {
         let sequence = self.sequence.fetch_add(1, Ordering::Relaxed) + 1;
         std::fs::write(
@@ -154,6 +155,7 @@ impl OcrChildLauncher for Launcher {
             screen,
             cancelled: Arc::new(AtomicBool::new(false)),
             image,
+            hints: hints.clone(),
         }))
     }
 }
@@ -195,15 +197,7 @@ impl OcrChildHandle for Child {
             match outcome {
                 "failed" => Ok(Err(momo_ocr::OcrFailure::ParserFailed)),
                 "success" | "needs_review" => {
-                    let mut completion = if outcome == "needs_review"
-                        && self.screen == RequestedScreenType::TotalAssets
-                    {
-                        super::control::tests::completion_with_missing_amount_warning()
-                    } else {
-                        super::control::tests::valid_completion(self.screen)
-                    };
-                    completion.output.timings_milliseconds = serde_json::json!({"decode":0.0,"engine_initialization":0.0,"detect_player_order":0.0,"parse":0.0,"total":0.0});
-                    Ok(Ok(completion.output))
+                    Ok(Ok(fixture_output(self.screen, outcome, &self.hints)?))
                 }
                 _ => Err(OcrChildProcessFailure::ProcessBoundary(
                     "fixture_outcome_invalid",
@@ -216,4 +210,60 @@ impl OcrChildHandle for Child {
         self.cancelled.store(true, Ordering::Relaxed);
         Box::pin(async { Ok(()) })
     }
+}
+
+fn fixture_output(
+    screen: RequestedScreenType,
+    outcome: &str,
+    hints: &OcrHints,
+) -> Result<momo_ocr::OcrOutput, OcrChildProcessFailure> {
+    let mut completion = if outcome == "needs_review" && screen == RequestedScreenType::TotalAssets
+    {
+        super::control::tests::completion_with_missing_amount_warning()
+    } else {
+        super::control::tests::valid_completion(screen)
+    };
+    completion.output.timings_milliseconds = serde_json::json!({"decode":0.0,"engine_initialization":0.0,"detect_player_order":0.0,"parse":0.0,"total":0.0});
+    if screen == RequestedScreenType::IncidentLog
+        && !completion.output.satisfies_contract(screen, hints, 0)
+    {
+        let profile = completion
+            .output
+            .payload
+            .pointer_mut("/category_payload/layout_profile_id")
+            .ok_or(OcrChildProcessFailure::ProcessBoundary(
+                "fixture_layout_missing",
+            ))?;
+        *profile = serde_json::json!("full-hd-incident-log-compact-v1");
+    }
+    if !completion.output.satisfies_contract(screen, hints, 0) {
+        return Err(OcrChildProcessFailure::ProcessBoundary(
+            "fixture_completion_contract",
+        ));
+    }
+    Ok(completion.output)
+}
+
+#[test]
+fn controlled_outputs_follow_saved_layout_hints() -> TestResult {
+    for layout in ["world", "reiwa", "momotetsu2"] {
+        let hints = serde_json::from_value(serde_json::json!({"layoutFamily":layout}))?;
+        for screen in [
+            RequestedScreenType::TotalAssets,
+            RequestedScreenType::Revenue,
+            RequestedScreenType::IncidentLog,
+        ] {
+            let output = fixture_output(screen, "success", &hints)
+                .map_err(|_error| "controlled success output must satisfy the real contract")?;
+            if !output.satisfies_contract(screen, &hints, 0) {
+                return Err("controlled success output violates the real contract".into());
+            }
+        }
+        let output = fixture_output(RequestedScreenType::TotalAssets, "needs_review", &hints)
+            .map_err(|_error| "controlled review output must satisfy the real contract")?;
+        if output.warnings.as_array().is_none_or(Vec::is_empty) {
+            return Err("controlled review output requires warnings".into());
+        }
+    }
+    Ok(())
 }

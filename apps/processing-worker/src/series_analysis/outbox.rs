@@ -331,6 +331,7 @@ impl SeriesAnalysisOutboxDriver {
         Ok(claims)
     }
 
+    #[tracing::instrument(name = "analysis_outbox_delivery", skip_all, fields(job_id = %claim.job_id))]
     async fn publish_claim(
         &mut self,
         claim: &OutboxClaim,

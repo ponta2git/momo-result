@@ -97,6 +97,9 @@ queued 中の新 revision は最新版へ集約する。running attempt の終�
 - attempt開始は execution slot、title state、job、version capability を同じDB整合性境界で確認し、slotとjobへ同じowner / fence / leaseを保存する。
 - heartbeat、terminal遷移、publication、slot解放はowner / job / attempt / fence / lease / target versionの一致を必須にする。stale ownerは正しいcandidateでも公開できない。
 - leaseはDB clock、process timeoutはmonotonic clockで判断する。lease維持不能を検知したparentはchildを停止しpublicationしない。
+- heartbeatの周期と通信全体の期限は独立した必須設定とする。更新完了から次の周期を開始し、更新の重複・追い付き実行をしない。両者の最大値を基にchild livenessと停止・公開を含むlease余白を検証する。
+- 更新の期限超過・通信失敗はowner喪失の確定と区別する。結果不明の接続はdriverごと破棄し、そのattemptは公開・ACKせずdurable recoveryへ渡す。COMMITの成否をFutureの破棄から推測しない。
+- child成功後は短時間の計算でも公開前にleaseとpreemptionを再確認し、確定した更新後にfinalization期限を開始する。
 - OCR preempt intentはDBへ保存する。分析childを回収しjobを `queued` へ戻してslotを解放した後にOCRを開始する。publicationの短いcommit区間はpreemptしない。
 - childはread-onlyで一貫した入力を読み、boundedで非authoritativeなcandidate / manifestだけを返す。外部I/O、ACK、outbox、current pointerを変更しない。
 - parentはpath、schema、件数、byte数、深さ、checksum、参照整合性を検証し、失敗・timeout・preemption・owner喪失で部分公開しない。
@@ -165,7 +168,10 @@ DB lock順とstaging transactionの規則は `docs/db-rule.md`、process責務�
 - 管理画面は1作品runを主操作、全作品runを明示的な確認付き操作とする。一般利用者へ管理導線を出さない。
 - 作品候補は確定試合0件を含む全登録作品とし、登録作品0件では操作を拒否する。
 - overviewは選択作品のstatus、未充足手動run、slot / queue / campaign要約、全作品横断の直近10件を表示する。
-- 履歴は作品、状態、要求元、時刻、処理時間、version、attempt / recovery、safe failure codeを安全な範囲で示す。内部例外、接続先、artifact本文を返さない。
+- 履歴は作品、状態、要求元、時刻、経過時間、version、attempt / recovery、safe failure codeを安全な範囲で示す。内部例外、接続先、artifact本文を返さない。
+- admin履歴の`elapsedMilliseconds`はterminal jobのDB記録の`finished_at - started_at`とし、「最終試行の経過」と表示する。phase別計測の保存値とは区別し、最終COMMIT応答や後処理まで含む実時間を保証しない。未開始・未終了はnullで、0やbrowser時計による推定値に置換しない。
+- `queueWaitMilliseconds`は`started_at - requested_at`とし、「受付から開始まで」と表示する。配送・claim・再試行を含み、他jobだけの待機時間ではない。未開始はnullとする。
+- 診断logの時間は単調時計で測り、claim、child、更新、検証、staging、公開、commit、cleanupを分離する。全体と部分区間は加算しない。通常のheartbeatはattempt単位に集約し、SQL・parameter・成果物本文は記録しない。
 
 ## 7. Correctness / Resource / OCR
 

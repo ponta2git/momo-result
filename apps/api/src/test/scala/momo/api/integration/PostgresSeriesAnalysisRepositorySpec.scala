@@ -250,6 +250,42 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         )
       case Left(error) => fail(s"expected admin overview, got $error")
 
+  test("admin elapsed time uses the last recorded attempt and preserves unfinished times"):
+    for
+      _ <- seedTitle
+      _ <- sql"""
+        INSERT INTO series_analysis_jobs (
+          id, game_title_id, input_revision, algorithm_version, artifact_schema_version,
+          status, trigger, requested_at, started_at, finished_at, elapsed_milliseconds,
+          attempt_count, transient_retry_count, lease_owner, lease_attempt_id, lease_fencing_token,
+          lease_expires_at
+        ) VALUES (
+          'timing-finished', $titleId, 0, 'series-analysis-v5', 4,
+          'failed', 'manual', $now, ${now.plusSeconds(7)}, ${now.plusSeconds(
+          26
+        )}, 1234, 2, 1, NULL, NULL, NULL, NULL
+        ), (
+          'timing-unstarted', $titleId, 0, 'series-analysis-v5', 4,
+          'failed', 'manual', $now, NULL, ${now.plusSeconds(26)}, 123, 0, 0, NULL, NULL, NULL, NULL
+        ), (
+          'timing-running', $titleId, 0, 'series-analysis-v5', 4,
+          'running', 'manual', $now, ${now.plusSeconds(
+          9
+        )}, NULL, 456, 2, 1, 'timing-worker', 'timing-attempt', 1, ${now.plusSeconds(70)}
+        )
+      """.update.run.transact(transactor)
+      repo <- repository
+      result <- repo.adminOverview(Some(titleId))
+    yield result match
+      case Right(overview) =>
+        val times = overview.recentJobs.map(job =>
+          job.jobId -> (job.elapsedMilliseconds, job.queueWaitMilliseconds)
+        ).toMap
+        assertEquals(times("timing-finished"), (Some(19000L), Some(7000L)))
+        assertEquals(times("timing-unstarted"), (None, None))
+        assertEquals(times("timing-running"), (None, Some(9000L)))
+      case Left(error) => fail(s"expected admin timing, got $error")
+
   test("validation-contract promotion stays exact in storage and stable on the public wire"):
     val jobId = "job-validation-contract-update"
     for

@@ -100,8 +100,16 @@ object SeriesAnalysisApiSchemas:
     .modify(_.requestedBy)(_.validate(closedString(SeriesAnalysisVocabulary.RequestedBy)))
     .modify(_.startedAt)(requiredNullable)
     .modify(_.finishedAt)(requiredNullable)
-    .modify(_.elapsedMilliseconds)(requiredNullable)
-    .modify(_.queueWaitMilliseconds)(requiredNullable)
+    .modify(_.elapsedMilliseconds)(schema =>
+      requiredNullable(schema).description(
+        "Last terminal attempt: recorded finish minus start in milliseconds; null until finished."
+      )
+    )
+    .modify(_.queueWaitMilliseconds)(schema =>
+      requiredNullable(schema).description(
+        "Acceptance to latest attempt start, including delivery and retries; null until started."
+      )
+    )
     .modify(_.resultDisposition)(
       _.validate(closedString(SeriesAnalysisVocabulary.ResultDispositions))
     )

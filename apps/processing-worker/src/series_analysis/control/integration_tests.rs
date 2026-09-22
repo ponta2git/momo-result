@@ -33,6 +33,7 @@ use crate::series_analysis::artifact::{
 
 type SmokeResult<T = ()> = Result<T, Box<dyn Error + Send + Sync>>;
 
+mod heartbeat;
 mod notifications;
 
 const TITLE_ID: &str = "analysis-stage-smoke-title";

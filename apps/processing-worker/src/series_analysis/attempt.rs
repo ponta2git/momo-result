@@ -15,9 +15,10 @@ use super::{
     config::AnalysisConsumerConfig,
     control::{
         AttemptFailure, AttemptMetrics, ClaimedJob, ControlError, HeartbeatResult,
-        PublicationResult, SafeFailureCode, artifact_id_for_attempt, finish_failure, heartbeat,
-        publish, requeue_interrupted, retry_transient_failure, supersede,
+        PublicationResult, SafeFailureCode, artifact_id_for_attempt, finish_failure, publish,
+        requeue_interrupted, retry_transient_failure, supersede,
     },
+    heartbeat::{HeartbeatConnection, HeartbeatFailure},
     metrics::{elapsed_metrics, signed_optional_quantity, signed_quantity},
     policy::{ChildAction, InterruptionAction, child_action, interruption_action},
 };
@@ -52,7 +53,7 @@ pub(super) fn child_spec(
     attempt_directory: &std::path::Path,
 ) -> Result<AnalysisChildProcessSpec, ConsumerError> {
     let parent_liveness_timeout = config
-        .heartbeat_interval
+        .renewal_window()
         .checked_mul(2)
         .ok_or(ConsumerError::DurationBound)?;
     Ok(AnalysisChildProcessSpec {
@@ -194,7 +195,7 @@ async fn finish_interruption(
         }
         InterruptionAction::LeavePending => {
             warn!(
-                event = "analysis_attempt_owner_lost",
+                event = "analysis_attempt_lease_unconfirmed",
                 phase = "heartbeat",
                 reason = interruption.wire(),
                 elapsed_milliseconds = metrics.elapsed_milliseconds,
@@ -207,7 +208,7 @@ async fn finish_interruption(
 }
 
 pub(super) async fn run_claimed_child(
-    heartbeat_client: &mut tokio_postgres::Client,
+    heartbeat_client: &mut HeartbeatConnection,
     config: &AnalysisConsumerConfig,
     claim: &ClaimedJob,
     child_spec: &AnalysisChildProcessSpec,
@@ -220,9 +221,8 @@ pub(super) async fn run_claimed_child(
     if let Some(result) = refresh_child_liveness(&mut child, started, config).await? {
         return Ok(finalize_child_result(child_spec, result));
     }
-    let mut heartbeat_interval = time::interval(config.heartbeat_interval);
-    heartbeat_interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
-    heartbeat_interval.tick().await;
+    let heartbeat_due = time::sleep(config.heartbeat_interval);
+    tokio::pin!(heartbeat_due);
     let mut sample_interval = time::interval(time::Duration::from_millis(100));
     sample_interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
     sample_interval.tick().await;
@@ -273,7 +273,7 @@ pub(super) async fn run_claimed_child(
                     }
                 }
             }
-            _ = heartbeat_interval.tick() => {
+            () = &mut heartbeat_due => {
                 if let Some(result) = supervise_child_heartbeat(
                     heartbeat_client,
                     config,
@@ -285,6 +285,7 @@ pub(super) async fn run_claimed_child(
                 ).await? {
                     return Ok(finalize_child_result(child_spec, result));
                 }
+                heartbeat_due.as_mut().reset(time::Instant::now() + config.heartbeat_interval);
             }
             () = &mut deadline => {
                 return Err(terminate_for(
@@ -344,10 +345,65 @@ async fn spawn_claimed_child(
         })
 }
 
-type HeartbeatOperationResult = Result<Result<HeartbeatResult, ControlError>, time::error::Elapsed>;
+type HeartbeatOperationResult = Result<HeartbeatResult, HeartbeatFailure>;
+
+const fn heartbeat_failure_reason(failure: &HeartbeatFailure) -> &'static str {
+    match failure {
+        HeartbeatFailure::Deadline => "deadline",
+        HeartbeatFailure::Dependency(_) => "dependency_error",
+        HeartbeatFailure::ConnectionClosed => "connection_closed",
+    }
+}
+
+pub(super) async fn renew_before_publication(
+    connection: &mut HeartbeatConnection,
+    config: &AnalysisConsumerConfig,
+    claim: &ClaimedJob,
+    shutdown: &mut watch::Receiver<bool>,
+    result: Result<(AnalysisChildOutcome, AttemptMetrics), ChildSupervisionFailure>,
+) -> Result<(AnalysisChildOutcome, AttemptMetrics), ChildSupervisionFailure> {
+    if !matches!(&result, Ok((AnalysisChildOutcome::Succeeded, _))) {
+        return result;
+    }
+    // The child has already exited and been reaped. Confirm a fresh lease even if it finished
+    // before the first periodic renewal or claim COMMIT consumed most of the original lease.
+    if *shutdown.borrow() {
+        return Err(ChildSupervisionFailure::Interrupted(
+            AttemptInterruption::Shutdown,
+        ));
+    }
+    let renewal = connection.renew(claim, config);
+    tokio::pin!(renewal);
+    let renewed = loop {
+        tokio::select! {
+            biased;
+            changed = shutdown.changed() => {
+                if changed.is_err() || *shutdown.borrow() {
+                    return Err(ChildSupervisionFailure::Interrupted(AttemptInterruption::Shutdown));
+                }
+            }
+            renewed = &mut renewal => break renewed,
+        }
+    };
+    let interruption = match renewed {
+        Ok(HeartbeatResult::Continue) => return result,
+        Ok(HeartbeatResult::PreemptRequested) => AttemptInterruption::Preempted,
+        Ok(HeartbeatResult::OwnerLost) => AttemptInterruption::OwnerLost,
+        Err(failure) => {
+            warn!(
+                event = "analysis_heartbeat_failed",
+                phase = "before_publication",
+                reason = heartbeat_failure_reason(&failure),
+                "analysis publication requires a confirmed lease renewal"
+            );
+            AttemptInterruption::HeartbeatUncertain
+        }
+    };
+    Err(ChildSupervisionFailure::Interrupted(interruption))
+}
 
 async fn supervise_child_heartbeat(
-    heartbeat_client: &mut tokio_postgres::Client,
+    heartbeat_client: &mut HeartbeatConnection,
     config: &AnalysisConsumerConfig,
     claim: &ClaimedJob,
     child: &mut ManagedAnalysisChild,
@@ -366,16 +422,13 @@ async fn supervise_child_heartbeat(
 }
 
 async fn supervise_heartbeat(
-    heartbeat_client: &mut tokio_postgres::Client,
+    heartbeat_client: &mut HeartbeatConnection,
     claim: &ClaimedJob,
     config: &AnalysisConsumerConfig,
     shutdown: &mut watch::Receiver<bool>,
     mut deadline: Pin<&mut time::Sleep>,
 ) -> Result<HeartbeatOperationResult, AttemptInterruption> {
-    let heartbeat_operation = time::timeout(
-        config.heartbeat_interval,
-        heartbeat(heartbeat_client, claim, config),
-    );
+    let heartbeat_operation = heartbeat_client.renew(claim, config);
     tokio::pin!(heartbeat_operation);
     loop {
         tokio::select! {
@@ -477,14 +530,14 @@ async fn handle_heartbeat_result(
     started: Instant,
 ) -> Result<Option<(AnalysisChildOutcome, AttemptMetrics)>, ChildSupervisionFailure> {
     match heartbeat_result {
-        Ok(Ok(HeartbeatResult::Continue)) => refresh_child_liveness(child, started, config).await,
-        Ok(Ok(HeartbeatResult::PreemptRequested)) => Err(terminate_for(
+        Ok(HeartbeatResult::Continue) => refresh_child_liveness(child, started, config).await,
+        Ok(HeartbeatResult::PreemptRequested) => Err(terminate_for(
             child,
             config.child_stop_grace,
             AttemptInterruption::Preempted,
         )
         .await),
-        Ok(Ok(HeartbeatResult::OwnerLost)) => {
+        Ok(HeartbeatResult::OwnerLost) => {
             warn!(
                 event = "analysis_heartbeat_rejected",
                 phase = "heartbeat",
@@ -498,7 +551,7 @@ async fn handle_heartbeat_result(
             )
             .await)
         }
-        Ok(Err(error)) => {
+        Err(HeartbeatFailure::Dependency(error)) => {
             warn!(
                 event = "analysis_heartbeat_failed",
                 phase = "heartbeat",
@@ -509,21 +562,21 @@ async fn handle_heartbeat_result(
             Err(terminate_for(
                 child,
                 config.child_stop_grace,
-                AttemptInterruption::OwnerLost,
+                AttemptInterruption::HeartbeatUncertain,
             )
             .await)
         }
-        Err(_elapsed) => {
+        Err(failure @ (HeartbeatFailure::Deadline | HeartbeatFailure::ConnectionClosed)) => {
             warn!(
                 event = "analysis_heartbeat_failed",
                 phase = "heartbeat",
-                reason = "timeout",
+                reason = heartbeat_failure_reason(&failure),
                 "analysis attempt heartbeat timed out"
             );
             Err(terminate_for(
                 child,
                 config.child_stop_grace,
-                AttemptInterruption::OwnerLost,
+                AttemptInterruption::HeartbeatUncertain,
             )
             .await)
         }
@@ -542,8 +595,8 @@ async fn refresh_child_liveness(
                 return Err(terminate_for(child, config.child_stop_grace, interruption).await);
             }
         };
-    // One heartbeat interval fits the existing lease margin; cleanup retains its full stop grace.
-    let exit_grace = config.heartbeat_interval.min(remaining);
+    // The renewal window fits the lease margin; cleanup retains its full stop grace.
+    let exit_grace = config.renewal_window().min(remaining);
     match child.refresh_liveness(exit_grace).await {
         Ok(outcome) => Ok(outcome.map(|outcome| {
             (

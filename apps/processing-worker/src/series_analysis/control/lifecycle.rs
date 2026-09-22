@@ -1,4 +1,4 @@
-use tokio_postgres::{Client, Transaction};
+use tokio_postgres::{Client, Transaction, types::Type};
 
 use crate::{
     execution_slot::{
@@ -32,7 +32,7 @@ pub(crate) async fn heartbeat(
     claim: &ClaimedJob,
     config: &AnalysisConsumerConfig,
 ) -> Result<HeartbeatResult, ControlError> {
-    let transaction = bounded_transaction(client, config.heartbeat_interval).await?;
+    let transaction = bounded_transaction(client, config.heartbeat_timeout).await?;
     let lease_milliseconds = duration_milliseconds(config.lease_duration)?;
     let slot_renewal = renew_slot(
         &transaction,
@@ -51,7 +51,7 @@ pub(crate) async fn heartbeat(
         return Ok(HeartbeatResult::OwnerLost);
     }
     let updated = transaction
-        .execute(
+        .execute_typed(
             "UPDATE series_analysis_jobs SET\x20\
                lease_expires_at = clock_timestamp() + ($1::bigint * interval '1 millisecond'),\x20\
                updated_at = clock_timestamp()\x20\
@@ -60,12 +60,12 @@ pub(crate) async fn heartbeat(
                AND lease_validation_contract_id IS NOT DISTINCT FROM $6\x20\
                AND lease_expires_at > clock_timestamp()",
             &[
-                &lease_milliseconds,
-                &claim.job_id,
-                &config.worker_id,
-                &claim.attempt_id,
-                &claim.fencing_token,
-                &claim.validation_contract_id,
+                (&lease_milliseconds, Type::INT8),
+                (&claim.job_id, Type::TEXT),
+                (&config.worker_id, Type::TEXT),
+                (&claim.attempt_id, Type::TEXT),
+                (&claim.fencing_token, Type::INT8),
+                (&claim.validation_contract_id, Type::TEXT),
             ],
         )
         .await?;

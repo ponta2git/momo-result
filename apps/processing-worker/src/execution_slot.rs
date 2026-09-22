@@ -264,7 +264,7 @@ pub(crate) async fn renew_owned(
 ) -> Result<SlotRenewal, ExecutionSlotError> {
     let task_kind = identity.task_kind.wire();
     let row = transaction
-        .query_opt(
+        .query_typed_opt(
             "UPDATE worker_execution_slots SET\x20\
                lease_expires_at = clock_timestamp() + ($1::bigint * interval '1 millisecond'),\x20\
                updated_at = clock_timestamp()\x20\
@@ -272,13 +272,13 @@ pub(crate) async fn renew_owned(
                AND attempt_id = $6 AND fencing_token = $7\x20\
                AND lease_expires_at > clock_timestamp() RETURNING preempt_requested_by",
             &[
-                &lease_milliseconds,
-                &SLOT_KEY,
-                &task_kind,
-                &identity.owner,
-                &identity.job_id,
-                &identity.attempt_id,
-                &identity.fencing_token,
+                (&lease_milliseconds, tokio_postgres::types::Type::INT8),
+                (&SLOT_KEY, tokio_postgres::types::Type::TEXT),
+                (&task_kind, tokio_postgres::types::Type::TEXT),
+                (&identity.owner, tokio_postgres::types::Type::TEXT),
+                (&identity.job_id, tokio_postgres::types::Type::TEXT),
+                (&identity.attempt_id, tokio_postgres::types::Type::TEXT),
+                (&identity.fencing_token, tokio_postgres::types::Type::INT8),
             ],
         )
         .await?;

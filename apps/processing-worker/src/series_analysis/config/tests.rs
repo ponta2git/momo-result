@@ -3,7 +3,7 @@ use std::{ffi::OsString, sync::Mutex};
 use super::*;
 
 static ENV_LOCK: Mutex<()> = Mutex::new(());
-const ENVIRONMENT_NAMES: [&str; 27] = [
+const ENVIRONMENT_NAMES: [&str; 28] = [
     PUBLICATION_MODE_ENV,
     "MOMO_ANALYSIS_RUNTIME_MEMORY_LIMIT_BYTES",
     "MOMO_ANALYSIS_CHILD_MEMORY_LIMIT_BYTES",
@@ -25,6 +25,7 @@ const ENVIRONMENT_NAMES: [&str; 27] = [
     "MOMO_ANALYSIS_CONFIG_VERSION",
     "MOMO_ANALYSIS_LEASE_DURATION_MS",
     "MOMO_ANALYSIS_HEARTBEAT_INTERVAL_MS",
+    "MOMO_ANALYSIS_HEARTBEAT_TIMEOUT_MS",
     "MOMO_ANALYSIS_CHILD_STOP_GRACE_MS",
     "MOMO_ANALYSIS_REDIS_BLOCK_MS",
     "MOMO_ANALYSIS_PEL_RECOVERY_INTERVAL_MS",
@@ -119,6 +120,7 @@ fn valid_runtime_environment() -> tempfile::TempDir {
     EnvironmentGuard::set("MOMO_ANALYSIS_CONFIG_VERSION", "config-v1");
     EnvironmentGuard::set("MOMO_ANALYSIS_LEASE_DURATION_MS", "60000");
     EnvironmentGuard::set("MOMO_ANALYSIS_HEARTBEAT_INTERVAL_MS", "5000");
+    EnvironmentGuard::set("MOMO_ANALYSIS_HEARTBEAT_TIMEOUT_MS", "5000");
     EnvironmentGuard::set("MOMO_ANALYSIS_CHILD_STOP_GRACE_MS", "5000");
     EnvironmentGuard::set("MOMO_ANALYSIS_REDIS_BLOCK_MS", "5000");
     EnvironmentGuard::set("MOMO_ANALYSIS_PEL_RECOVERY_INTERVAL_MS", "300000");
@@ -247,6 +249,55 @@ fn temporary_root_must_be_a_dedicated_absolute_path() {
     assert!(!dedicated_absolute_path(Path::new(
         "relative/momo-analysis"
     )));
+}
+
+#[test]
+fn renewal_deadline_is_required_and_independent_of_cadence() {
+    with_isolated_environment(|| {
+        valid_enabled_environment();
+        let _cgroup = valid_runtime_environment();
+        EnvironmentGuard::set("MOMO_ANALYSIS_HEARTBEAT_INTERVAL_MS", "1000");
+        EnvironmentGuard::set("MOMO_ANALYSIS_CHILD_STOP_GRACE_MS", "1000");
+        EnvironmentGuard::set("MOMO_ANALYSIS_FINALIZATION_TIMEOUT_MS", "45000");
+        let activation = AnalysisActivationConfig::from_environment().expect("valid limits");
+        for lease in ["60000", "61000"] {
+            EnvironmentGuard::set("MOMO_ANALYSIS_LEASE_DURATION_MS", lease);
+            assert_eq!(
+                AnalysisConsumerConfig::from_environment(&activation).err(),
+                Some(AnalysisConfigError::UnsafeLeaseRelationship),
+                "lease must exceed the full renewal/liveness/finalization budget"
+            );
+        }
+        EnvironmentGuard::set("MOMO_ANALYSIS_LEASE_DURATION_MS", "70000");
+        for cadence in ["1000", "5000"] {
+            EnvironmentGuard::set("MOMO_ANALYSIS_HEARTBEAT_INTERVAL_MS", cadence);
+            let config = AnalysisConsumerConfig::from_environment(&activation).expect("safe lease");
+            assert_eq!(config.heartbeat_timeout, Duration::from_secs(5));
+            assert_eq!(config.renewal_window() * 2, Duration::from_secs(10));
+            drop(config);
+        }
+        for invalid in ["0", "18446744073709551616", "-1"] {
+            EnvironmentGuard::set("MOMO_ANALYSIS_HEARTBEAT_TIMEOUT_MS", invalid);
+            assert_eq!(
+                AnalysisConsumerConfig::from_environment(&activation).err(),
+                Some(AnalysisConfigError::InvalidPositiveInteger {
+                    name: "MOMO_ANALYSIS_HEARTBEAT_TIMEOUT_MS",
+                })
+            );
+        }
+        EnvironmentGuard::set("MOMO_ANALYSIS_HEARTBEAT_TIMEOUT_MS", "18446744073709551615");
+        assert_eq!(
+            AnalysisConsumerConfig::from_environment(&activation).err(),
+            Some(AnalysisConfigError::UnsafeLeaseRelationship)
+        );
+        EnvironmentGuard::remove("MOMO_ANALYSIS_HEARTBEAT_TIMEOUT_MS");
+        assert_eq!(
+            AnalysisConsumerConfig::from_environment(&activation).err(),
+            Some(AnalysisConfigError::Missing {
+                name: "MOMO_ANALYSIS_HEARTBEAT_TIMEOUT_MS"
+            })
+        );
+    });
 }
 
 #[test]

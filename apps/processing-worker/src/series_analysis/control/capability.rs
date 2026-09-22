@@ -96,10 +96,10 @@ where
 {
     let capability_id = capability_row_id(worker_id);
     client
-        .execute(
+        .execute_typed(
             "UPDATE series_analysis_worker_capabilities\x20\
              SET heartbeat_at = clock_timestamp() WHERE worker_id = $1",
-            &[&capability_id],
+            &[(&capability_id, tokio_postgres::types::Type::TEXT)],
         )
         .await?;
     Ok(())

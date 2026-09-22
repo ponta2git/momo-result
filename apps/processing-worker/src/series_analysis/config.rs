@@ -51,6 +51,7 @@ pub(crate) struct AnalysisConsumerConfig {
     pub(crate) effective_config_version: String,
     pub(crate) lease_duration: Duration,
     pub(crate) heartbeat_interval: Duration,
+    pub(crate) heartbeat_timeout: Duration,
     pub(crate) child_stop_grace: Duration,
     pub(crate) redis_block: Duration,
     pub(crate) pel_recovery_interval: Duration,
@@ -144,6 +145,11 @@ impl AnalysisActivationConfig {
 }
 
 impl AnalysisConsumerConfig {
+    /// One delayed renewal and one parent-liveness window must fit before finalization.
+    pub(crate) fn renewal_window(&self) -> Duration {
+        self.heartbeat_interval.max(self.heartbeat_timeout)
+    }
+
     pub(crate) fn with_notifications(
         mut self,
         notifications: crate::notifications::NotificationSink,
@@ -170,10 +176,12 @@ impl AnalysisConsumerConfig {
                 })?;
         let lease_duration = duration_millis("MOMO_ANALYSIS_LEASE_DURATION_MS")?;
         let heartbeat_interval = duration_millis("MOMO_ANALYSIS_HEARTBEAT_INTERVAL_MS")?;
+        let heartbeat_timeout = duration_millis("MOMO_ANALYSIS_HEARTBEAT_TIMEOUT_MS")?;
         let child_stop_grace = duration_millis("MOMO_ANALYSIS_CHILD_STOP_GRACE_MS")?;
         let redis_block = duration_millis("MOMO_ANALYSIS_REDIS_BLOCK_MS")?;
         let pel_recovery_interval = duration_millis("MOMO_ANALYSIS_PEL_RECOVERY_INTERVAL_MS")?;
         let required_margin = heartbeat_interval
+            .max(heartbeat_timeout)
             .checked_mul(3)
             .and_then(|value| value.checked_add(child_stop_grace))
             .and_then(|value| value.checked_add(execution_limits.finalization_timeout));
@@ -220,6 +228,7 @@ impl AnalysisConsumerConfig {
             effective_config_version,
             lease_duration,
             heartbeat_interval,
+            heartbeat_timeout,
             child_stop_grace,
             redis_block,
             pel_recovery_interval,

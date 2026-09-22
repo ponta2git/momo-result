@@ -17,6 +17,8 @@ use tracing::{info, warn};
 
 use crate::outbox::coordinator::{DrainBatch, DriverFailureKind, OutboxDriver};
 
+use super::metrics::measure;
+
 const MAXIMUM_BATCH_SIZE: usize = 100;
 const MAXIMUM_DELIVERY_ATTEMPTS: i32 = 3;
 const QUEUE_PUBLISH_ERROR_CLASS: &str = "redis_operation";
@@ -114,7 +116,7 @@ impl SeriesAnalysisOutboxDriver {
     async fn drain_once(&mut self) -> Result<DrainBatch, SeriesAnalysisOutboxError> {
         let expanded = self.expand_pending_campaign_targets().await?;
         let reconciled = self.reconcile_queued().await?;
-        let claims = self.claim_due().await?;
+        let claims = measure("outbox_claim", self.claim_due()).await?;
         let claimed = claims.len();
         let mut delivered = 0_usize;
         let mut retried = 0_usize;
@@ -334,11 +336,18 @@ impl SeriesAnalysisOutboxDriver {
         claim: &OutboxClaim,
     ) -> Result<PublishResult, SeriesAnalysisOutboxError> {
         let fields = queue_fields(&claim.job_id);
-        let published: Result<String, RedisError> =
-            self.redis.xadd(&self.config.stream, "*", &fields).await;
+        let published: Result<String, RedisError> = measure(
+            "outbox_redis_append",
+            self.redis.xadd(&self.config.stream, "*", &fields),
+        )
+        .await;
         match published {
             Ok(message_id) => {
-                let delivered = self.mark_delivered(claim, &message_id).await?;
+                let delivered = measure(
+                    "outbox_delivery_commit",
+                    self.mark_delivered(claim, &message_id),
+                )
+                .await?;
                 if delivered {
                     Ok(PublishResult::Delivered)
                 } else {

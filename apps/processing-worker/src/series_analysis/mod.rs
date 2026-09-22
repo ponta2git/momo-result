@@ -47,7 +47,7 @@ use attempt::{child_spec, finish_attempt_result, run_claimed_child};
 use attempt_directory::{
     cleanup_stale_attempt_directories, create_attempt_directory, validate_temporary_root,
 };
-use metrics::elapsed_metrics;
+use metrics::{PhaseTimer, elapsed_metrics, measure};
 use queue::{
     AutoClaimCursor, acknowledge, ensure_consumer_group, payload_from_delivery, read_new_delivery,
     recover_cold_page, recover_targeted_delivery,
@@ -478,7 +478,11 @@ async fn process_delivery(
 ) -> Result<DeliveryDisposition, ConsumerError> {
     let claim = submit_control_outcome(
         post_commit_sink,
-        claim_job(control_client, &payload.job_id, config).await?,
+        measure(
+            "job_claim",
+            claim_job(control_client, &payload.job_id, config),
+        )
+        .await?,
     )?;
     let claim = match claim {
         ClaimResult::Claimed(claim) => claim,
@@ -599,6 +603,7 @@ async fn process_claimed_delivery(
         "analysis attempt claimed"
     );
 
+    let attempt_timer = PhaseTimer::start("attempt_after_claim");
     let started = Instant::now();
     let attempt_directory = match create_attempt_directory(config, claim).await {
         Ok(directory) => directory,
@@ -644,7 +649,16 @@ async fn process_claimed_delivery(
         submit_control_outcome(post_commit_sink, outcome)
     }
     .await;
-    cleanup_attempt_directory(&attempt_directory, attempt_result).await
+    heartbeat_client.finish_attempt();
+    let result = measure(
+        "attempt_cleanup",
+        cleanup_attempt_directory(&attempt_directory, attempt_result),
+    )
+    .await;
+    if result.is_ok() {
+        attempt_timer.complete();
+    }
+    result
 }
 
 /// Removes a completed attempt's non-authoritative files without hiding its control-plane result.

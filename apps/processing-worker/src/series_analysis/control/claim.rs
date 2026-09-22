@@ -1,3 +1,5 @@
+use crate::series_analysis::metrics::measure;
+
 use tokio_postgres::{Client, Transaction};
 
 use momo_analysis_core::contract::{ARTIFACT_SCHEMA_VERSION, ARTIFACT_VALIDATION_CONTRACT_ID};
@@ -32,14 +34,18 @@ pub(crate) async fn claim_job(
     let transaction =
         bounded_transaction(client, config.execution_limits.finalization_timeout).await?;
     let lease_milliseconds = duration_milliseconds(config.lease_duration)?;
-    let (candidate, effects) = match prepare_claim(&transaction, job_id, lease_milliseconds).await?
+    let (candidate, effects) = match measure(
+        "claim_lock_and_recovery",
+        prepare_claim(&transaction, job_id, lease_milliseconds),
+    )
+    .await?
     {
         ClaimPreparation::Ready { candidate, effects } => (candidate, effects),
         ClaimPreparation::RecoveredExpiredHolder {
             effects,
             current_delivery_resolved,
         } => {
-            transaction.commit().await?;
+            measure("claim_commit", transaction.commit()).await?;
             let result = if current_delivery_resolved {
                 ClaimResult::RecoveredCurrentJob
             } else {
@@ -94,7 +100,7 @@ pub(crate) async fn claim_job(
         &attempt,
     )
     .await?;
-    transaction.commit().await?;
+    measure("claim_commit", transaction.commit()).await?;
     Ok(effects.committed(ClaimResult::Claimed(ClaimedJob {
         job_id: String::from(job_id),
         game_title_id: candidate.game_title_id,

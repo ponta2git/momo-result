@@ -372,7 +372,10 @@ pub(super) async fn renew_before_publication(
             AttemptInterruption::Shutdown,
         ));
     }
-    let renewal = connection.renew(claim, config);
+    let renewal = super::metrics::measure(
+        "before_publication_renewal",
+        connection.renew(claim, config),
+    );
     tokio::pin!(renewal);
     let renewed = loop {
         tokio::select! {

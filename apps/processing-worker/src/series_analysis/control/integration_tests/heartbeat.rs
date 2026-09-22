@@ -1,6 +1,9 @@
 use super::*;
 use crate::{
-    notifications::{NotificationSink, test_support::DelayedDatabase},
+    notifications::{
+        NotificationSink,
+        test_support::{CommitFault, DelayedDatabase},
+    },
     series_analysis::{
         control::HeartbeatResult,
         heartbeat::{HeartbeatConnection, HeartbeatFailure},
@@ -59,6 +62,31 @@ async fn real_postgres_heartbeat_owns_deadline_and_connection() -> SmokeResult {
         connection.renew(&stale, &config).await,
         Ok(HeartbeatResult::OwnerLost)
     ));
+    for (fault, committed) in [
+        (CommitFault::BeforeCommit, false),
+        (CommitFault::LostReply, true),
+    ] {
+        // Give the old lease a distinct value. Independently read durable state after disconnect.
+        primary.execute("UPDATE series_analysis_jobs SET lease_expires_at = clock_timestamp() + interval '10 minutes' WHERE id = $1", &[&claim.job_id]).await?;
+        let proxy = DelayedDatabase::commit_fault(&database_url, fault).await?;
+        config.database_url.clone_from(&proxy.url);
+        let mut uncertain = HeartbeatConnection::connect(&config.database_url).await?;
+        assert!(
+            uncertain.renew(&claim, &config).await.is_err(),
+            "a lost COMMIT result must not authorize publication"
+        );
+        let committed_result: bool = primary.query_one("SELECT lease_expires_at < clock_timestamp() + interval '2 minutes' FROM series_analysis_jobs WHERE id = $1", &[&claim.job_id]).await?.try_get(0)?;
+        assert_eq!(committed_result, committed);
+        assert_current(&primary, None).await?;
+        config.database_url.clone_from(&database_url);
+        assert!(
+            matches!(
+                uncertain.renew(&claim, &config).await,
+                Ok(HeartbeatResult::Continue)
+            ),
+            "both commit outcomes converge through a fresh guarded update"
+        );
+    }
     drop(config);
     assert_current(&primary, None).await?;
     drop(connection);

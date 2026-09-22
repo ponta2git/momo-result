@@ -18,6 +18,7 @@ use tracing::{error, info};
 
 use super::super::transaction::scope_columns;
 use super::{ArtifactTotals, ControlError};
+use crate::series_analysis::metrics::measure;
 
 pub(super) async fn copy_artifact_resources(
     transaction: &Transaction<'_>,
@@ -25,28 +26,41 @@ pub(super) async fn copy_artifact_resources(
     directory: &Path,
     totals: &ArtifactTotals,
 ) -> Result<(), ControlError> {
-    copy_scope_resources(
-        transaction,
-        manifest,
-        directory,
-        ScopeResourceKind::Aggregate,
-        totals.counts.aggregates,
+    measure(
+        "staging_copy_aggregate",
+        copy_scope_resources(
+            transaction,
+            manifest,
+            directory,
+            ScopeResourceKind::Aggregate,
+            totals.counts.aggregates,
+        ),
     )
     .await?;
-    copy_scope_resources(
-        transaction,
-        manifest,
-        directory,
-        ScopeResourceKind::Review,
-        totals.counts.reviews,
+    measure(
+        "staging_copy_review",
+        copy_scope_resources(
+            transaction,
+            manifest,
+            directory,
+            ScopeResourceKind::Review,
+            totals.counts.reviews,
+        ),
     )
     .await?;
-    copy_drilldown_resources(transaction, manifest, directory, totals.counts.drilldowns).await?;
-    copy_match_context_resources(
-        transaction,
-        manifest,
-        directory,
-        totals.counts.match_contexts,
+    measure(
+        "staging_copy_drilldown",
+        copy_drilldown_resources(transaction, manifest, directory, totals.counts.drilldowns),
+    )
+    .await?;
+    measure(
+        "staging_copy_match_context",
+        copy_match_context_resources(
+            transaction,
+            manifest,
+            directory,
+            totals.counts.match_contexts,
+        ),
     )
     .await?;
     Ok(())

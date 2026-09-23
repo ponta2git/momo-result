@@ -183,14 +183,13 @@ wait_for_sql_value() {
   local expected="$1"
   local query="$2"
   local description="$3"
-  local attempts=0
+  local deadline=$((SECONDS + ${4:-60}))
   local actual=""
-  while (( attempts < 200 )); do
+  while (( SECONDS < deadline )); do
     actual="$(psql_ci -At -c "${query}")"
     if [[ "${actual}" == "${expected}" ]]; then
       return 0
     fi
-    attempts=$((attempts + 1))
     sleep 0.1
   done
   fail_with_log "Timed out waiting for ${description}; expected ${expected}, got ${actual}."
@@ -455,6 +454,8 @@ then
 fi
 
 release_input_lock
+# A redelivery received while OCR owns the slot is recovered only after the analysis lease's
+# 70-second Redis idle threshold. Allow that real recovery path plus bounded processing time.
 wait_for_sql_value "succeeded|2|1|1" "
   SELECT job.status || '|' || job.attempt_count || '|' ||
          COUNT(*) FILTER (WHERE attempt.outcome = 'preempted')::text || '|' ||
@@ -463,7 +464,7 @@ wait_for_sql_value "succeeded|2|1|1" "
   JOIN series_analysis_job_attempts attempt ON attempt.job_id = job.id
   WHERE job.id = 'ci-preemption-analysis-job'
   GROUP BY job.status, job.attempt_count;
-" "same-cgroup analysis recovery after preemption"
+" "same-cgroup analysis recovery after preemption" 100
 
 publication_contract_shape="$(psql_ci -At -c "
   SELECT

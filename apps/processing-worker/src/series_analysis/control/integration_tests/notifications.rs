@@ -423,7 +423,7 @@ async fn capture(
     }
 }
 
-fn config(
+pub(super) fn config(
     database_url: &str,
     notifications: NotificationSink,
     directory: &Path,
@@ -451,6 +451,7 @@ fn config(
         effective_config_version: "notification-test".to_owned(),
         lease_duration: Duration::from_mins(1),
         heartbeat_interval: Duration::from_secs(1),
+        heartbeat_timeout: Duration::from_secs(5),
         child_stop_grace: Duration::from_secs(1),
         redis_block: Duration::from_millis(100),
         pel_recovery_interval: Duration::from_secs(5),

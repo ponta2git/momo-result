@@ -162,7 +162,9 @@ private[postgres] object PostgresSeriesAnalysisAdminOps:
       j.requested_at,
       j.started_at,
       j.finished_at,
-      j.elapsed_milliseconds,
+      CASE WHEN j.status NOT IN ('succeeded', 'failed', 'timed_out')
+                     OR j.started_at IS NULL OR j.finished_at IS NULL THEN NULL
+           ELSE (EXTRACT(EPOCH FROM (j.finished_at - j.started_at)) * 1000)::bigint END,
       j.input_revision,
       j.algorithm_version,
       j.attempt_count,

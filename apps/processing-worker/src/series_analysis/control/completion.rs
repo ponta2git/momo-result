@@ -21,6 +21,8 @@ use super::{
     transaction::{bounded_transaction, lock_owned},
 };
 
+use crate::series_analysis::metrics::{PhaseTimer, measure};
+
 mod authoritative_input;
 
 struct PublicationNotification<'a> {
@@ -62,6 +64,7 @@ pub(crate) async fn publish(
         // A commit error can mean that PostgreSQL committed and then closed the connection before
         // acknowledging it. Always begin B on a new connection after staging/reconciliation so a
         // durable staging artifact is not terminally failed merely because A's client is unusable.
+        let comparison_timer = PhaseTimer::start("publication_connect_and_notification_comparison");
         let comparison = if staged {
             crate::notifications::analysis::load(
                 &config.notifications,
@@ -78,6 +81,7 @@ pub(crate) async fn publish(
             Some(prepared) => prepared,
             None => (crate::postgres::connect(&config.database_url).await?, None),
         };
+        comparison_timer.complete();
         metrics.observe_worker_peak(current_process_peak_resident_bytes().await);
         let publication_started = Instant::now();
         let transaction = bounded_transaction(
@@ -85,7 +89,11 @@ pub(crate) async fn publish(
             config.execution_limits.finalization_timeout,
         )
         .await?;
-        lock_owned(&transaction, claim, worker_id).await?;
+        measure(
+            "publication_locks",
+            lock_owned(&transaction, claim, worker_id),
+        )
+        .await?;
         let desired = desired_artifact(&transaction, claim).await?;
         if !desired.matches(claim) {
             drop(notification);
@@ -95,7 +103,11 @@ pub(crate) async fn publish(
                 .await
                 .map(|outcome| outcome.map(|()| PublicationResult::Superseded));
         }
-        validate_candidate(&transaction, claim, &artifact, staged).await?;
+        measure(
+            "publication_validation",
+            validate_candidate(&transaction, claim, &artifact, staged),
+        )
+        .await?;
         let notification = PublicationNotification {
             comparison: notification,
             baseline: &desired.notification_baseline,
@@ -128,7 +140,11 @@ pub(crate) async fn publish(
                 continue;
             }
             ExistingArtifact::DifferentVersion => {
-                publish_staged_artifact(&transaction, claim, &artifact).await?;
+                measure(
+                    "publication_pointer",
+                    publish_staged_artifact(&transaction, claim, &artifact),
+                )
+                .await?;
                 ResultDisposition::Published
             }
             ExistingArtifact::Reusable => {
@@ -213,6 +229,7 @@ async fn commit_successful_publication(
     notification: PublicationNotification<'_>,
 ) -> Result<ControlOutcome<PublicationResult>, ControlError> {
     let mut effects = TransactionEffects::empty();
+    let job_timer = PhaseTimer::start("publication_job_updates");
     finish_success(
         &transaction,
         claim,
@@ -223,10 +240,12 @@ async fn commit_successful_publication(
         &mut effects,
     )
     .await?;
+    job_timer.complete();
     let result = match disposition {
         ResultDisposition::Published => PublicationResult::Published,
         ResultDisposition::Reused => PublicationResult::Reused,
     };
+    let notification_timer = PhaseTimer::start("publication_notification_prepare");
     let prepared = if let (PublicationResult::Published, Some(comparison)) =
         (result, notification.comparison)
     {
@@ -241,6 +260,7 @@ async fn commit_successful_publication(
     } else {
         None
     };
+    notification_timer.complete();
     let outcome = commit_publication(transaction, effects, result).await?;
     prepared
         .into_iter()
@@ -253,7 +273,7 @@ async fn commit_publication(
     effects: TransactionEffects,
     result: PublicationResult,
 ) -> Result<ControlOutcome<PublicationResult>, ControlError> {
-    transaction.commit().await?;
+    measure("publication_commit", transaction.commit()).await?;
     Ok(effects.committed(result))
 }
 
@@ -278,9 +298,17 @@ async fn prepare_staging(
     metrics: &mut AttemptMetrics,
 ) -> Result<(ValidatedArtifact, bool), ControlError> {
     let started = Instant::now();
-    let artifact = validated_artifact(&config.execution_limits, claim, artifact_directory).await?;
+    let artifact = measure(
+        "staging_local_validation",
+        validated_artifact(&config.execution_limits, claim, artifact_directory),
+    )
+    .await?;
     validate_manifest_metrics(metrics, artifact.manifest())?;
-    let staged = requires_staging(client, claim, &artifact).await?;
+    let staged = measure(
+        "staging_required_query",
+        requires_staging(client, claim, &artifact),
+    )
+    .await?;
     let result = if staged {
         stage(client, claim, config, &artifact, artifact_directory).await
     } else {
@@ -363,15 +391,18 @@ async fn stage(
     let transaction =
         bounded_transaction(client, config.execution_limits.finalization_timeout).await?;
     stage_artifact(&transaction, claim, artifact, artifact_directory).await?;
-    match transaction.commit().await {
+    match measure("staging_commit", transaction.commit()).await {
         Ok(()) => Ok(()),
         Err(_ambiguous_commit) => {
-            reconcile_staging(
-                &config.database_url,
-                config.execution_limits.finalization_timeout,
-                claim,
-                artifact,
-                artifact_directory,
+            measure(
+                "staging_reconcile",
+                reconcile_staging(
+                    &config.database_url,
+                    config.execution_limits.finalization_timeout,
+                    claim,
+                    artifact,
+                    artifact_directory,
+                ),
             )
             .await
         }

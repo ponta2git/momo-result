@@ -1,4 +1,4 @@
-use std::{future::Future, pin::Pin, time::Duration};
+use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
 
 use futures_util::{StreamExt, stream::FuturesUnordered};
 use thiserror::Error;
@@ -64,7 +64,7 @@ impl WorkerRuntimePlan {
         // shutdown, then must stop its child and durably finalize. Compose those already-validated
         // bounds once here so callers cannot configure an independent supervisor timeout.
         let analysis_shutdown_timeout = composed_shutdown_drain_timeout(
-            crate::stream_connection::RESPONSE_TIMEOUT.max(series_analysis.heartbeat_interval),
+            crate::stream_connection::RESPONSE_TIMEOUT.max(series_analysis.renewal_window()),
             series_analysis.child_stop_grace,
             series_analysis.execution_limits.finalization_timeout,
         )?;
@@ -138,6 +138,8 @@ pub(crate) async fn run(
     let outbox_config = analysis_outbox::RuntimeConfig::from(&series_analysis);
     let (sink, wake) = PostCommitSink::channel();
     let (shutdown_sender, shutdown) = watch::channel(false);
+    let (outbox_shutdown_sender, outbox_shutdown) = watch::channel(false);
+    let outbox_producers = Arc::new(OutboxShutdownAfterProducers(outbox_shutdown_sender));
     let mut peers = Vec::with_capacity(4);
     if let OcrConsumerRuntimeConfig::Enabled(ocr) = ocr {
         let submission_config = crate::ocr::submissions::runtime::Config {
@@ -156,26 +158,27 @@ pub(crate) async fn run(
             .await
             .map_err(SupervisorError::OcrSubmissions)
         }));
-        peers.push(ocr_peer(
-            &series_analysis,
-            *ocr,
-            sink.clone(),
-            shutdown.clone(),
-        )?);
+        peers.push(outbox_producer(
+            ocr_peer(&series_analysis, *ocr, sink.clone(), shutdown.clone())?,
+            Arc::clone(&outbox_producers),
+        ));
     }
     let analysis_sink = sink.clone();
     let analysis_shutdown = shutdown.clone();
-    peers.push(runtime_peer("analysis", async move {
-        series_analysis::run(
-            series_analysis.with_notifications(notification_sink),
-            analysis_sink,
-            analysis_shutdown,
-        )
-        .await
-        .map_err(SupervisorError::SeriesAnalysis)
-    }));
+    peers.push(outbox_producer(
+        runtime_peer("analysis", async move {
+            series_analysis::run(
+                series_analysis.with_notifications(notification_sink),
+                analysis_sink,
+                analysis_shutdown,
+            )
+            .await
+            .map_err(SupervisorError::SeriesAnalysis)
+        }),
+        outbox_producers,
+    ));
     peers.push(runtime_peer("analysis_outbox", async move {
-        analysis_outbox::run(outbox_config, wake, sink, shutdown)
+        analysis_outbox::run(outbox_config, wake, sink, outbox_shutdown)
             .await
             .map_err(SupervisorError::AnalysisOutbox)
     }));
@@ -225,6 +228,25 @@ fn ocr_peer(
 
 type RuntimePeer =
     Pin<Box<dyn Future<Output = (&'static str, Result<(), SupervisorError>)> + Send>>;
+
+// Consumers can commit a final requeue after receiving shutdown. Keep the outbox sink alive
+// until every producer has finished that transition, then stop its listener and coordinator.
+// The supervisor's existing common deadline still bounds the entire drain.
+struct OutboxShutdownAfterProducers(watch::Sender<bool>);
+
+impl Drop for OutboxShutdownAfterProducers {
+    fn drop(&mut self) {
+        signal_shutdown(&self.0);
+    }
+}
+
+fn outbox_producer(peer: RuntimePeer, lifetime: Arc<OutboxShutdownAfterProducers>) -> RuntimePeer {
+    Box::pin(async move {
+        let result = peer.await;
+        drop(lifetime);
+        result
+    })
+}
 
 fn runtime_peer(
     name: &'static str,
@@ -414,6 +436,62 @@ mod tests {
     use super::*;
 
     const TEST_SHUTDOWN_DRAIN_TIMEOUT: Duration = Duration::from_secs(1);
+
+    #[tokio::test]
+    async fn shutdown_keeps_outbox_open_for_the_last_producers_committed_requeue() {
+        let (_external_sender, external_shutdown) = watch::channel(true);
+        let (shutdown_sender, mut producer_shutdown) = watch::channel(false);
+        let (outbox_shutdown_sender, mut outbox_shutdown) = watch::channel(false);
+        let lifetime = Arc::new(OutboxShutdownAfterProducers(outbox_shutdown_sender));
+        let (sink, mut wake) = PostCommitSink::channel();
+        let (first_stopped, first_observed) = oneshot::channel();
+        let first = outbox_producer(
+            runtime_peer(
+                "ocr",
+                stop_on_shutdown(producer_shutdown.clone(), first_stopped),
+            ),
+            Arc::clone(&lifetime),
+        );
+        let last = outbox_producer(
+            runtime_peer("analysis", async move {
+                producer_shutdown
+                    .changed()
+                    .await
+                    .map_err(|_error| SupervisorError::ShutdownDrainBudgetBound)?;
+                first_observed
+                    .await
+                    .map_err(|_error| SupervisorError::ShutdownDrainBudgetBound)?;
+                // Give the coordinator a chance to observe a premature shutdown before the
+                // still-running producer commits its final durable requeue and submits its wake.
+                tokio::task::yield_now().await;
+                sink.submit(crate::outbox::PostCommitEffects::WakeAnalysis)
+                    .map_err(SeriesAnalysisConsumerError::PostCommitSink)
+                    .map_err(SupervisorError::SeriesAnalysis)
+            }),
+            lifetime,
+        );
+        let coordinator = runtime_peer("analysis_outbox", async move {
+            outbox_shutdown
+                .changed()
+                .await
+                .map_err(|_error| SupervisorError::ShutdownDrainBudgetBound)?;
+            assert!(*outbox_shutdown.borrow());
+            assert_eq!(wake.try_recv(), Ok(()));
+            Ok(())
+        });
+        let result = supervise_peers(
+            [first, last, coordinator],
+            shutdown_sender,
+            external_shutdown,
+            TEST_SHUTDOWN_DRAIN_TIMEOUT,
+            NotificationDriver::disabled(),
+        )
+        .await;
+        assert!(
+            result.is_ok(),
+            "last committed wake must survive shutdown: {result:?}"
+        );
+    }
 
     #[tokio::test]
     async fn last_committed_notification_is_admitted_and_cannot_fail_business_shutdown()

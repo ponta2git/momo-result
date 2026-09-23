@@ -370,10 +370,10 @@ pub(super) async fn bounded_transaction(
     let transaction = client.transaction().await?;
     let timeout = format!("{}ms", duration_milliseconds(timeout)?);
     transaction
-        .query_one(
+        .query_typed_one(
             "SELECT set_config('statement_timeout', $1, true),\
                     set_config('lock_timeout', $1, true)",
-            &[&timeout],
+            &[(&timeout, tokio_postgres::types::Type::TEXT)],
         )
         .await?;
     Ok(transaction)

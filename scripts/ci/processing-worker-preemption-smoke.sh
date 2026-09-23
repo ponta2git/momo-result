@@ -183,14 +183,13 @@ wait_for_sql_value() {
   local expected="$1"
   local query="$2"
   local description="$3"
-  local attempts=0
+  local deadline=$((SECONDS + ${4:-60}))
   local actual=""
-  while (( attempts < 200 )); do
+  while (( SECONDS < deadline )); do
     actual="$(psql_ci -At -c "${query}")"
     if [[ "${actual}" == "${expected}" ]]; then
       return 0
     fi
-    attempts=$((attempts + 1))
     sleep 0.1
   done
   fail_with_log "Timed out waiting for ${description}; expected ${expected}, got ${actual}."
@@ -318,7 +317,7 @@ docker run --rm --name "${worker_container}" --privileged --cgroupns private \
   --env MOMO_ANALYSIS_CHILD_MEMORY_LIMIT_BYTES=201326592 \
   --env MOMO_ANALYSIS_PARENT_HEADROOM_BYTES=67108864 \
   --env MOMO_ANALYSIS_CALCULATION_TIMEOUT_MS=30000 \
-  --env MOMO_ANALYSIS_FINALIZATION_TIMEOUT_MS=1000 \
+  --env MOMO_ANALYSIS_FINALIZATION_TIMEOUT_MS=45000 \
   --env MOMO_ANALYSIS_TEMPORARY_MAX_BYTES=67108864 \
   --env MOMO_ANALYSIS_CHUNK_MAX_BYTES=8388608 \
   --env MOMO_ANALYSIS_CHUNK_COUNT_MAX=4096 \
@@ -329,8 +328,9 @@ docker run --rm --name "${worker_container}" --privileged --cgroupns private \
   --env "MOMO_ANALYSIS_WORKER_ID=${analysis_worker_id}" \
   --env MOMO_ANALYSIS_TEMPORARY_ROOT=/var/lib/momo-analysis \
   --env MOMO_ANALYSIS_CONFIG_VERSION=ci-preemption-v1 \
-  --env MOMO_ANALYSIS_LEASE_DURATION_MS=10000 \
-  --env MOMO_ANALYSIS_HEARTBEAT_INTERVAL_MS=200 \
+  --env MOMO_ANALYSIS_LEASE_DURATION_MS=70000 \
+  --env MOMO_ANALYSIS_HEARTBEAT_INTERVAL_MS=1000 \
+  --env MOMO_ANALYSIS_HEARTBEAT_TIMEOUT_MS=5000 \
   --env MOMO_ANALYSIS_CHILD_STOP_GRACE_MS=1000 \
   --env MOMO_ANALYSIS_REDIS_BLOCK_MS=10000 \
   --env MOMO_ANALYSIS_PEL_RECOVERY_INTERVAL_MS=300000 \
@@ -399,6 +399,17 @@ if [[ ! "${analysis_child}" =~ ^[0-9]+$ ]]; then
 fi
 echo "Analysis child is blocked inside the bounded process group."
 
+# Observe two distinct committed renewals while the real child is still blocked. A short child
+# that exits before its first heartbeat cannot prove the renewal supervision contract.
+for renewal in 1 2; do
+  previous_lease="$(psql_ci -At -c "SELECT lease_expires_at FROM series_analysis_jobs WHERE id = '${analysis_job}';")"
+  wait_for_sql_value "true" "
+    SELECT (lease_expires_at > TIMESTAMPTZ '${previous_lease}')::text
+    FROM series_analysis_jobs WHERE id = '${analysis_job}' AND status = 'running';
+  " "committed analysis renewal ${renewal} with the child alive"
+done
+echo "Long-running analysis survived multiple committed renewals."
+
 redis_ci XADD "${ocr_stream}" '*' \
   schemaVersion 2 \
   jobId "${ocr_job}" \
@@ -443,6 +454,8 @@ then
 fi
 
 release_input_lock
+# A redelivery received while OCR owns the slot is recovered only after the analysis lease's
+# 70-second Redis idle threshold. Allow that real recovery path plus bounded processing time.
 wait_for_sql_value "succeeded|2|1|1" "
   SELECT job.status || '|' || job.attempt_count || '|' ||
          COUNT(*) FILTER (WHERE attempt.outcome = 'preempted')::text || '|' ||
@@ -451,7 +464,7 @@ wait_for_sql_value "succeeded|2|1|1" "
   JOIN series_analysis_job_attempts attempt ON attempt.job_id = job.id
   WHERE job.id = 'ci-preemption-analysis-job'
   GROUP BY job.status, job.attempt_count;
-" "same-cgroup analysis recovery after preemption"
+" "same-cgroup analysis recovery after preemption" 100
 
 publication_contract_shape="$(psql_ci -At -c "
   SELECT

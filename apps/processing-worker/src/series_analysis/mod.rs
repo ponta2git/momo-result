@@ -36,7 +36,9 @@ use self::{
 mod attempt;
 mod attempt_directory;
 mod campaign;
+mod heartbeat;
 mod input_repository;
+use heartbeat::HeartbeatConnection;
 mod metrics;
 mod policy;
 mod queue;
@@ -45,7 +47,7 @@ use attempt::{child_spec, finish_attempt_result, run_claimed_child};
 use attempt_directory::{
     cleanup_stale_attempt_directories, create_attempt_directory, validate_temporary_root,
 };
-use metrics::elapsed_metrics;
+use metrics::{PhaseTimer, elapsed_metrics, measure};
 use queue::{
     AutoClaimCursor, acknowledge, ensure_consumer_group, payload_from_delivery, read_new_delivery,
     recover_cold_page, recover_targeted_delivery,
@@ -123,6 +125,7 @@ enum AttemptInterruption {
     Preempted,
     Shutdown,
     OwnerLost,
+    HeartbeatUncertain,
     WorkerCrashed,
 }
 
@@ -147,7 +150,6 @@ impl MaintenanceSchedules {
     async fn run_due(
         &mut self,
         control_client: &mut tokio_postgres::Client,
-        heartbeat_client: &tokio_postgres::Client,
         config: &AnalysisConsumerConfig,
     ) -> Result<(), ConsumerError> {
         // Retention runs between attempts; a busy worker delays it until that bounded attempt ends.
@@ -176,7 +178,7 @@ impl MaintenanceSchedules {
                 cleanup_stale_attempt_directories(config, control_client).await?;
         }
         if self.capability_refresh.is_due_at(Instant::now()) {
-            register_capability(heartbeat_client, &config.worker_id).await?;
+            register_capability(control_client, &config.worker_id).await?;
             self.capability_refresh.record_success_at(Instant::now());
         }
         Ok(())
@@ -190,6 +192,7 @@ impl AttemptInterruption {
             Self::Preempted => "preempted",
             Self::Shutdown => "shutdown",
             Self::OwnerLost => "owner_lost",
+            Self::HeartbeatUncertain => "heartbeat_uncertain",
             Self::WorkerCrashed => "worker_crashed",
         }
     }
@@ -232,7 +235,7 @@ pub(crate) async fn run(
         "control_database_connect",
     )?;
     let mut heartbeat_client = startup_result(
-        postgres::connect(&config.database_url).await,
+        HeartbeatConnection::connect(&config.database_url).await,
         "heartbeat_database_connect",
     )?;
     let read_client = startup_result(
@@ -247,7 +250,7 @@ pub(crate) async fn run(
         "temporary_storage_recovery",
     )?;
     startup_result(
-        register_capability(&heartbeat_client, &config.worker_id).await,
+        register_capability(&control_client, &config.worker_id).await,
         "capability_registration",
     )?;
     let maintenance = MaintenanceSchedules {
@@ -331,7 +334,7 @@ fn log_startup_failure(phase: &'static str, error: &ConsumerError) {
 
 async fn consume_deliveries(
     control_client: &mut tokio_postgres::Client,
-    heartbeat_client: &mut tokio_postgres::Client,
+    heartbeat_client: &mut HeartbeatConnection,
     redis: &mut ConnectionManager,
     config: &AnalysisConsumerConfig,
     post_commit_sink: &PostCommitSink,
@@ -342,9 +345,7 @@ async fn consume_deliveries(
     let mut recovery_schedule =
         PelRecoverySchedule::new(Instant::now(), config.pel_recovery_interval);
     while !*shutdown.borrow() {
-        maintenance
-            .run_due(control_client, heartbeat_client, config)
-            .await?;
+        maintenance.run_due(control_client, config).await?;
         let delivery = match recovery_schedule.due_action(Instant::now()) {
             Some(RecoveryAction::ColdPage) => {
                 let page = recover_cold_page(redis, config, &mut recovery_cursor).await?;
@@ -468,7 +469,7 @@ fn schedule_pending_recovery(
 
 async fn process_delivery(
     control_client: &mut tokio_postgres::Client,
-    heartbeat_client: &mut tokio_postgres::Client,
+    heartbeat_client: &mut HeartbeatConnection,
     config: &AnalysisConsumerConfig,
     post_commit_sink: &PostCommitSink,
     message_id: &str,
@@ -477,7 +478,11 @@ async fn process_delivery(
 ) -> Result<DeliveryDisposition, ConsumerError> {
     let claim = submit_control_outcome(
         post_commit_sink,
-        claim_job(control_client, &payload.job_id, config).await?,
+        measure(
+            "job_claim",
+            claim_job(control_client, &payload.job_id, config),
+        )
+        .await?,
     )?;
     let claim = match claim {
         ClaimResult::Claimed(claim) => claim,
@@ -585,7 +590,7 @@ fn targeted_recovery_due_at(
 
 async fn process_claimed_delivery(
     control_client: &mut tokio_postgres::Client,
-    heartbeat_client: &mut tokio_postgres::Client,
+    heartbeat_client: &mut HeartbeatConnection,
     config: &AnalysisConsumerConfig,
     post_commit_sink: &PostCommitSink,
     claim: &control::ClaimedJob,
@@ -598,6 +603,7 @@ async fn process_claimed_delivery(
         "analysis attempt claimed"
     );
 
+    let attempt_timer = PhaseTimer::start("attempt_after_claim");
     let started = Instant::now();
     let attempt_directory = match create_attempt_directory(config, claim).await {
         Ok(directory) => directory,
@@ -628,6 +634,9 @@ async fn process_claimed_delivery(
             started,
         )
         .await;
+        let result =
+            attempt::renew_before_publication(heartbeat_client, config, claim, shutdown, result)
+                .await;
         let outcome = finish_attempt_result(
             control_client,
             config,
@@ -640,7 +649,16 @@ async fn process_claimed_delivery(
         submit_control_outcome(post_commit_sink, outcome)
     }
     .await;
-    cleanup_attempt_directory(&attempt_directory, attempt_result).await
+    heartbeat_client.finish_attempt();
+    let result = measure(
+        "attempt_cleanup",
+        cleanup_attempt_directory(&attempt_directory, attempt_result),
+    )
+    .await;
+    if result.is_ok() {
+        attempt_timer.complete();
+    }
+    result
 }
 
 /// Removes a completed attempt's non-authoritative files without hiding its control-plane result.

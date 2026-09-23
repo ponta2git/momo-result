@@ -112,6 +112,7 @@ export function RecentJobs({ jobs }: { jobs: SeriesAnalysisAdminOverview["recent
         <h2 className={contentText.heading}>直近10件</h2>
         <p className={cn(contentText.supporting, "mt-1")}>
           全作品を横断した新しい順です。履歴は45日保持します。
+          「最終試行の経過」は最後の開始から終了まで、「受付から開始まで」は再試行の待ち時間も含みます。
         </p>
       </header>
       {jobs.length === 0 ? (
@@ -279,13 +280,13 @@ const recentJobColumns = [
   },
   {
     tabular: true,
-    header: "所要",
+    header: "最終試行の経過",
     key: "elapsed",
     renderCell: (job) => formatDuration(job.elapsedMilliseconds),
   },
   {
     tabular: true,
-    header: "待機",
+    header: "受付から開始まで",
     key: "queue-wait",
     renderCell: (job) => formatDuration(job.queueWaitMilliseconds),
   },

@@ -56,4 +56,32 @@ describe("SeriesAnalysisAdminStatus", () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
+
+  it("distinguishes final-attempt elapsed time from acceptance-to-start and preserves missing times", () => {
+    const job = makeSeriesAnalysisAdminOverview().recentJobs[0];
+    if (!job) throw new Error("Expected a recent job fixture");
+    render(
+      <RecentJobs
+        jobs={[
+          { ...job, jobId: "finished", elapsedMilliseconds: 19000, queueWaitMilliseconds: 7000 },
+          {
+            ...job,
+            jobId: "queued",
+            status: "queued",
+            elapsedMilliseconds: null,
+            queueWaitMilliseconds: null,
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByRole("columnheader", { name: "最終試行の経過" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "受付から開始まで" })).toBeInTheDocument();
+    expect(screen.getByText("19,000 ms")).toBeInTheDocument();
+    expect(screen.getByText("7,000 ms")).toBeInTheDocument();
+    const rows = screen.getAllByRole("row");
+    const queued = rows.at(-1);
+    if (!queued) throw new Error("Expected the queued row");
+    expect(within(queued).queryByText("0 ms")).not.toBeInTheDocument();
+    expect(within(queued).getAllByText("—").length).toBeGreaterThanOrEqual(2);
+  });
 });

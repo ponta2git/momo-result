@@ -189,7 +189,14 @@ fn submit_outbox_notification(
     if channel != CHANNEL || !payload.is_empty() {
         return Err(ListenerError::InvalidNotification);
     }
+    let received_at = std::time::Instant::now();
     sink.submit(PostCommitEffects::WakeAnalysis)?;
+    tracing::info!(
+        event = "analysis_outbox_wake_received",
+        admission_microseconds =
+            u64::try_from(received_at.elapsed().as_micros()).unwrap_or(u64::MAX),
+        "analysis commit hint admitted to the local coordinator"
+    );
     Ok(())
 }
 

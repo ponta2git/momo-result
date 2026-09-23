@@ -57,7 +57,9 @@ pub(super) const fn interruption_action(interruption: AttemptInterruption) -> In
             cause: RequeueCause::GracefulStop,
             stop_consumer: true,
         },
-        AttemptInterruption::OwnerLost => InterruptionAction::LeavePending,
+        AttemptInterruption::OwnerLost | AttemptInterruption::HeartbeatUncertain => {
+            InterruptionAction::LeavePending
+        }
         AttemptInterruption::WorkerCrashed => {
             InterruptionAction::Fail(AttemptFailure::failed(SafeFailureCode::WorkerCrashed))
         }

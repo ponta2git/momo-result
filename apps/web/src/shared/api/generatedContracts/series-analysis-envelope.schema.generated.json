@@ -239,6 +239,7 @@
           "type": ["string", "null"]
         },
         "elapsedMilliseconds": {
+          "description": "Last terminal attempt: recorded finish minus start in milliseconds; null until finished.",
           "type": ["integer", "null"]
         },
         "inputRevision": {
@@ -257,6 +258,7 @@
           "type": "integer"
         },
         "queueWaitMilliseconds": {
+          "description": "Acceptance to latest attempt start, including delivery and retries; null until started.",
           "type": ["integer", "null"]
         },
         "resultDisposition": {

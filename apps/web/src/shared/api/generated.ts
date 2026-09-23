@@ -2544,7 +2544,10 @@ export interface components {
             requestedAt: string;
             startedAt: string | null;
             finishedAt: string | null;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Last terminal attempt: recorded finish minus start in milliseconds; null until finished.
+             */
             elapsedMilliseconds: number | null;
             inputRevision: string;
             algorithmVersion: string;
@@ -2554,7 +2557,10 @@ export interface components {
             transientRetryCount: number;
             /** Format: int32 */
             leaseRecoveryCount: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Acceptance to latest attempt start, including delivery and retries; null until started.
+             */
             queueWaitMilliseconds: number | null;
             /** @enum {string} */
             resultDisposition: "none" | "published" | "reused";

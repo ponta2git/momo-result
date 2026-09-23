@@ -20,6 +20,8 @@ use super::{
     },
 };
 
+use crate::series_analysis::metrics::measure;
+
 mod resource_copy;
 
 use resource_copy::copy_artifact_resources;
@@ -160,15 +162,27 @@ pub(super) async fn stage_artifact(
 ) -> Result<(), ControlError> {
     let manifest = artifact.manifest();
     let totals = artifact_totals(manifest)?;
-    let inserted = insert_artifact_header(transaction, claim, artifact, &totals).await?;
+    let inserted = measure(
+        "staging_header",
+        insert_artifact_header(transaction, claim, artifact, &totals),
+    )
+    .await?;
     match inserted {
         1 => {}
         0 => replace_staged_artifact(transaction, claim, artifact, &totals).await?,
         _ => return Err(ControlError::PublicationRowCount),
     }
     copy_artifact_resources(transaction, manifest, artifact_directory, &totals).await?;
-    validate_staged_artifact_shape(transaction, claim, artifact, &totals, None).await?;
-    attest_staged_artifact(transaction, claim, artifact).await
+    measure(
+        "staging_metadata_shape",
+        validate_staged_artifact_shape(transaction, claim, artifact, &totals, None),
+    )
+    .await?;
+    measure(
+        "staging_attestation",
+        attest_staged_artifact(transaction, claim, artifact),
+    )
+    .await
 }
 
 pub(super) async fn validate_staged_artifact(

@@ -1,7 +1,7 @@
-# MOM-22 オーナー比較の選択試合ハイライト実施計画
+# MOM-22 オーナー比較の選択試合ハイライト実施計画・結果
 
 対象: [MOM-22](https://linear.app/ponta/issue/MOM-22)「試合結果から戦績比較へ移動した際にオーナー比較もハイライトする」。
-調査基準: 2026-09-24、`develop` の `a32e0cc9`。チケット本文、関連MOM-3、既存コード・schema・規約を確認した。チケットにコメントはない。本書は合意済みの表示範囲とレビュー結果を統合した実施計画であり、機能は未実装。
+調査基準: 2026-09-24、`develop` の `a32e0cc9`。チケット本文、関連MOM-3、既存コード・schema・規約を確認した。本書は合意済みの表示範囲とレビュー結果を統合した計画と実施記録である。同日に実装・ローカル検証を完了した。2〜6節は調査時点の事実と採用計画を示し、実施結果・保証範囲は8節に記録する。本番への反映は別工程。
 
 ## 1. 目的・範囲・受入条件
 
@@ -182,9 +182,39 @@ rollbackは対応するAPI/Webの組で戻す。本件はDBと保存artifactを�
 
 通常PRのbaseは `develop`、本文に `Fixes MOM-22` を記載する。releaseは[Git規約](dev-rule.md#8-git)に従い、対象PRと利用者向けRelease notes、対象issueを記載する。実装完了、release準備、本番反映を混同しない。
 
-## 8. 現在の実施状況
+## 8. 実施結果（2026-09-24）
 
-- 完了: チケット・関連要求・現行経路の調査、利用者による表示範囲の決定、敵対的レビューの指摘を契約・手順・証拠へ統合した本計画の整理。
-- 実行済みの技術確認: 現行生成HTTP validatorによる互換性probe。既存応答は受理、owner field追加は拒否されることを確認した。
-- 未実施: 機能実装、実DBの訂正経路・snapshot検証、cached errorの実行時再現、実描画・操作検証、release切替。これらは5〜7節の実施・完了条件に含む。
-- 現在の変更範囲: 本計画と文書索引のみ。機能コード、本番、Linearは変更していない。利用者へ確認が必要だった表示範囲は解決済みで、計画整理のために保留中の質問はない。
+### 実装と検証で見つかった修正
+
+APIはrevision検査と同じSELECTで取得したownerを型付きsnapshotで運び、保存chunkのdecode・checksum検証後にHTTP v3へ付加した。保存形式・Worker・DB schema・algorithmは維持した。両Web consumer、生成契約とquery keyも一体で移行した。
+
+列強調は共通表の任意指定として実装し、同じ表示bundleから全7指標のowner見出しと4セルへ接続した。輪郭と「この試合のオーナー」を併用し、数値・戦数・品質表示は集計値を維持する。
+
+検証により、次の2点を修正した。
+
+- 成功済みcontextの再取得で404/410を受けた後、保持中のbundleや後続の一時失敗から古い選択情報が復活し得た。両consumerの共通取得境界に無効化結果を保持し、比較画面ではdeferred描画が追いつくまで旧contextを遮断する。aggregate取得が遅延・失敗した場合も、選択表示とowner・番手の強調を同時に外す。
+- 実browserで指標変更時に操作領域が一時的にinertになり、focusが失われた。同じ内容のbundleを再利用して不要なdeferを防ぎ、実pageの回帰testとbrowserでfocus・局所scroll・URL・選択情報の保持、追加通信がないことを確認した。
+
+### 受入証拠
+
+| 条件 | 実施した証拠と結果 |
+| --- | --- |
+| A1・A2 | owner componentで全7指標、4人分の値、戦数・品質、同ownerの別試合・別owner・解除・不明・0戦・欠損を確認。共通表のopt-inとnative見出しも通過 |
+| A3・A4 | 実resourceと表示componentでA→Bの遅延応答、解除、初回失敗、一時失敗、404/410、aggregate更新待ち・失敗からの無効化と復帰を確認。試合結果画面の通算平均順位・前後差・注目点と保存済み本体の保持も通過 |
+| A3・A6 | 実PostgreSQLとproductionの試合更新経路でowner訂正後のrevision不一致・除外を確認。独立した実API・現行Worker環境では、訂正前のowner列、訂正後の旧context除外・全強調解除、通常計算による新artifact公開、再訪・明示更新後の訂正先owner列をPlaywright MCPで確認 |
+| A4・A5 | production buildで広幅・狭幅、固定見出し、hover、局所横scroll、keyboard、指標変更時のfocus保持を目視・操作確認。主要導線E2Eで試合結果からの遷移、戻る・browser back、解除とURLを確認。ページ全体の横overflowなし |
+| A6 | v3 schema・実応答・生成validator、旧routeの不在、新旧query shapeの分離、共通prefix reset・末尾paramsを確認。対応API/Webの切替・rollback条件は7節に記載 |
+
+Worker生成の2試合は当初別ownerとし、選択列が最左でないことと非選択の0戦列を確認した。訂正後は同ownerの2戦となり、4人の平均順位が全員2.5位の集計値を保ったまま、そのowner列だけに見出しと4セルの強調が移った。公開済みpayloadの直接変更は行っていない。CLIの主要導線E2Eは分析応答を制御するtestであり、実Worker経路の証拠とは区別する。
+
+SQLは隔離した合成データの通常・上限付近・上限超過で変更前後を比較し、単一試合のindex accessとbounded read、過大payloadの拒否を維持することを確認した。本番相当の性能保証には拡張しない。
+
+### gateと残る境界
+
+- API: `sbt apiQuality`、`sbt test`、`sbt apiDbQuality`が成功。DB gateは200 testsを通過した。
+- Web: `format:check`、`lint`、`contract:check`、`typecheck`、`test:run`、`build`が成功。最終sourceで160 suites / 968 testsを通過した。lint・buildの既存warningは残る。
+- 生成: `sbt apiOpenApi` と `pnpm --filter web generate:api` による正規生成、構造lint・freshnessを確認した。
+- UI: 変更した主要導線のPlaywright testが成功。Playwright MCPでproduction buildと実API・Worker経路を確認した。
+- 公開文書: `git diff --check`、`pnpm public:safety:check`が成功。
+
+実screen readerの読み上げ、本番環境での性能、release切替は未検証。別端末の訂正を応答後に自動検出するpollingは追加しておらず、既存の明示更新・再訪で確認する。実装完了と本番反映を分け、対応API/Webの一括切替・旧Webの再読込・組でのrollbackをrelease時に確認する。Linearには受入条件と実施タスク、検証結果・PRを記録し、merge前にrelease完了扱いにはしない。

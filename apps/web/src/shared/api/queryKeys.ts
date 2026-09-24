@@ -108,7 +108,7 @@ export const seriesAnalysisKeys = {
     ["series-analysis", "artifact", "v3", "drilldown", params] as const,
   matchContextRoot: () => ["series-analysis", "artifact", "v3", "match-context"] as const,
   matchContext: (params: unknown) =>
-    ["series-analysis", "artifact", "v3", "match-context", params] as const,
+    ["series-analysis", "artifact", "v3", "match-context", "http-v3", params] as const,
   adminRoot: () => ["series-analysis", "admin", "overview"] as const,
   adminOverview: (gameTitleId: string | undefined) =>
     ["series-analysis", "admin", "overview", gameTitleId ?? "default"] as const,

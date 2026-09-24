@@ -30,11 +30,13 @@ import { contentText } from "@/shared/ui/typography";
 
 export const ContextView = memo(function ContextView({
   focusedItemIds,
+  focusedOwnerMemberId,
   response,
   onDrilldown,
   ownerMetric,
   onOwnerMetricChange,
 }: AnalysisViewProps & {
+  focusedOwnerMemberId?: string | undefined;
   ownerMetric: OwnerMetricId;
   onOwnerMetricChange: ((metric: OwnerMetricId) => void) | undefined;
 }) {
@@ -68,6 +70,7 @@ export const ContextView = memo(function ContextView({
       <AnalysisSection id="metric-owner" title="オーナー比較">
         <SeriesAnalysisOwnerComparison
           comparison={response.ownerComparison}
+          focusedOwnerMemberId={focusedOwnerMemberId}
           hasMatches={response.scope.matchCount > 0}
           metric={ownerMetric}
           onMetricChange={onOwnerMetricChange}

@@ -13,8 +13,14 @@ import io.circe.{Json, Printer}
 import momo.api.config.SeriesAnalysisReadConfig
 import momo.api.contracts.seriesanalysis.SeriesAnalysisArtifactContract
 import momo.api.domain.*
-import momo.api.domain.ids.{GameTitleId, MatchId}
+import momo.api.domain.ids.{GameTitleId, MatchId, MemberId}
 import momo.api.errors.AppError
+
+/** Owner and revision were read in the same statement snapshot as the pinned chunk. */
+private[postgres] final case class SeriesAnalysisMatchSnapshot(
+    sourceMatchRevision: Long,
+    ownerMemberId: MemberId,
+)
 
 private[postgres] final case class SeriesAnalysisStoredChunk(
     artifactId: String,
@@ -159,20 +165,38 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
 
   def includedContext(
       chunk: DecodedSeriesAnalysisChunk,
-      sourceMatchRevision: Long,
-  ): DecodedSeriesAnalysisChunk = chunk.copy(
-    payload = chunk.payload.mapObject(
-      _.remove("sourceMatchRevision").add(
-        "inclusion",
-        Json.obj(
-          "status" -> Json.fromString("included"),
-          "sourceMatchRevision" -> Json.fromString(sourceMatchRevision.toString),
+      snapshot: SeriesAnalysisMatchSnapshot,
+  ): Either[AppError, DecodedSeriesAnalysisChunk] =
+    val owner = snapshot.ownerMemberId.value
+    val matched = chunk.payload.hcursor.downField("match").focus
+    val players = matched.flatMap(_.hcursor.downField("players").focus).flatMap(_.asArray)
+    val ownerIsPlayer = players.exists(values =>
+      values.size <= MaximumMemberCount &&
+        values.exists(_.hcursor.get[String]("memberId").contains(owner))
+    )
+    Either.cond(
+      owner.nonEmpty && owner.length <= 4096 &&
+        owner.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 4096 && ownerIsPlayer,
+      chunk.copy(
+        payload = chunk.payload.mapObject(fields =>
+          fields.remove("sourceMatchRevision").add(
+            "inclusion",
+            Json.obj(
+              "status" -> Json.fromString("included"),
+              "sourceMatchRevision" -> Json.fromString(snapshot.sourceMatchRevision.toString),
+            ),
+          ).add(
+            "match",
+            matched.getOrElse(Json.Null).mapObject(
+              _.add("ownerMemberId", Json.fromString(owner))
+            ),
+          )
         ),
-      )
-    ),
-    // The stored revision string moves under `inclusion`; only its wrapper and status add nodes.
-    nodeCount = chunk.nodeCount + 2,
-  )
+        // Revision moves under inclusion; its wrapper, status and owner add three nodes.
+        nodeCount = chunk.nodeCount + 3,
+      ),
+      AppError.Internal("Analysis match owner is not a valid participant."),
+    )
 
   def excludedContext(
       artifact: SeriesAnalysisArtifactRef,

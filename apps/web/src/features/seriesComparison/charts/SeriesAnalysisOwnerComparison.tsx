@@ -24,11 +24,13 @@ type OwnerRow = OwnerComparison["rows"][number];
 
 export function SeriesAnalysisOwnerComparison({
   comparison,
+  focusedOwnerMemberId,
   hasMatches,
   metric = defaultOwnerMetric,
   onMetricChange,
 }: {
   comparison: OwnerComparison;
+  focusedOwnerMemberId?: string | undefined;
   hasMatches: boolean;
   metric?: OwnerMetricId;
   onMetricChange?: ((metric: OwnerMetricId) => void) | undefined;
@@ -53,7 +55,11 @@ export function SeriesAnalysisOwnerComparison({
               この条件では、オーナーの記録は1人分です。
             </p>
           ) : null}
-          <OwnerTable comparison={comparison} metric={metric} />
+          <OwnerTable
+            comparison={comparison}
+            focusedOwnerMemberId={focusedOwnerMemberId}
+            metric={metric}
+          />
         </>
       ) : (
         <EmptyState
@@ -68,12 +74,27 @@ export function SeriesAnalysisOwnerComparison({
 
 function OwnerTable({
   comparison,
+  focusedOwnerMemberId,
   metric,
 }: {
   comparison: OwnerComparison;
+  focusedOwnerMemberId: string | undefined;
   metric: OwnerMetricId;
 }) {
   const definition = ownerMetricPresentation(metric);
+  const focusedOwners = comparison.owners.filter(
+    (owner) => owner.memberId === focusedOwnerMemberId,
+  );
+  const highlightedOwnerMemberId =
+    focusedOwners.length === 1 &&
+    (focusedOwners[0]?.targetCount ?? 0) > 0 &&
+    comparison.rows.length === 4 &&
+    new Set(comparison.rows.map((row) => row.memberId)).size === 4 &&
+    comparison.rows.every(
+      (row) => row.cells.filter((cell) => cell.ownerMemberId === focusedOwnerMemberId).length === 1,
+    )
+      ? focusedOwnerMemberId
+      : undefined;
   const columns: Array<DataTableColumn<OwnerRow>> = [
     {
       key: "player",
@@ -89,6 +110,7 @@ function OwnerTable({
     },
     ...comparison.owners.map((owner): DataTableColumn<OwnerRow> => ({
       key: owner.memberId,
+      highlighted: owner.memberId === highlightedOwnerMemberId,
       minWidth: "9rem",
       align: "right",
       tabular: true,
@@ -96,6 +118,9 @@ function OwnerTable({
         <div className="grid gap-1">
           <span className="wrap-anywhere">{owner.displayName}</span>
           <span>{owner.targetCount}戦</span>
+          {owner.memberId === highlightedOwnerMemberId ? (
+            <span className={contentText.supporting}>この試合のオーナー</span>
+          ) : null}
           {owner.qualityStatus === "ok" ? null : (
             <span className="flex justify-end">
               <SeriesAnalysisQualityAdvisory status={owner.qualityStatus} />

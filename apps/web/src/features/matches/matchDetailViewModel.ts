@@ -1,4 +1,4 @@
-import type { SeriesAnalysisMatchContextV2 } from "@/shared/api/seriesAnalysis";
+import type { SeriesAnalysisMatchContextV3 } from "@/shared/api/seriesAnalysis";
 import { matchFeatureDefinition } from "@/shared/domain/matchFeatures";
 import type { MatchFeatureDefinition } from "@/shared/domain/matchFeatures";
 import { formatDateOnly, formatDateTimeLong } from "@/shared/lib/dateTime";
@@ -7,7 +7,7 @@ export { seriesComparisonHrefForMatch } from "@/shared/navigation/matchLinks";
 export type MatchFeatureBadge = MatchFeatureDefinition & {
   tone: AnalysisFeature["tone"];
 };
-type AnalysisFeature = NonNullable<SeriesAnalysisMatchContextV2["match"]>["features"][number];
+type AnalysisFeature = NonNullable<SeriesAnalysisMatchContextV3["match"]>["features"][number];
 
 export function formatMatchDetailDate(iso: string): string {
   return formatDateTimeLong(iso);

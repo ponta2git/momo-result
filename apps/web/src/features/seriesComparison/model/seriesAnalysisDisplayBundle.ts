@@ -3,7 +3,7 @@ import type {
   SeriesAnalysisViewId,
 } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import type {
-  SeriesAnalysisMatchContextV2,
+  SeriesAnalysisMatchContextV3,
   SeriesAnalysisScope,
   SeriesComparisonAggregate,
   SeriesComparisonReviewV3,
@@ -15,12 +15,12 @@ export type SeriesAnalysisDisplayBundle =
   | {
       aggregate: SeriesComparisonAggregate;
       kind: "analysis";
-      matchContext: SeriesAnalysisMatchContextV2 | undefined;
+      matchContext: SeriesAnalysisMatchContextV3 | undefined;
       view: SeriesAnalysisAnalysisViewId;
     }
   | {
       kind: "review";
-      matchContext: SeriesAnalysisMatchContextV2 | undefined;
+      matchContext: SeriesAnalysisMatchContextV3 | undefined;
       review: SeriesComparisonReviewV3;
       view: "review";
     };
@@ -28,7 +28,7 @@ export type SeriesAnalysisDisplayBundle =
 export type SeriesAnalysisBundleResolution =
   | {
       kind: "excluded";
-      status: Exclude<SeriesAnalysisMatchContextV2["inclusion"]["status"], "included">;
+      status: Exclude<SeriesAnalysisMatchContextV3["inclusion"]["status"], "included">;
     }
   | { kind: "ready"; value: SeriesAnalysisDisplayBundle }
   | { kind: "waiting" };
@@ -81,7 +81,7 @@ export function seriesAnalysisScopeSignature(state: SeriesAnalysisUrlState): str
 
 type ArtifactScopedResource = {
   artifact: { artifactId: string; gameTitleId: string };
-  scope: SeriesAnalysisScope | SeriesAnalysisMatchContextV2["scope"];
+  scope: SeriesAnalysisScope | SeriesAnalysisMatchContextV3["scope"];
 };
 
 function scopeSeasonMasterId(scope: ArtifactScopedResource["scope"]): string | undefined {
@@ -122,7 +122,7 @@ function readyBundle(
   activeView: SeriesAnalysisViewId,
   aggregate: SeriesComparisonAggregate | undefined,
   review: SeriesComparisonReviewV3 | undefined,
-  matchContext: SeriesAnalysisMatchContextV2 | undefined,
+  matchContext: SeriesAnalysisMatchContextV3 | undefined,
 ): SeriesAnalysisBundleResolution {
   if (activeView === "review") {
     return review
@@ -151,7 +151,7 @@ export function resolveSeriesAnalysisDisplayBundle({
   activeView: SeriesAnalysisViewId;
   aggregate: SeriesComparisonAggregate | undefined;
   artifactId: string | undefined;
-  matchContext: SeriesAnalysisMatchContextV2 | undefined;
+  matchContext: SeriesAnalysisMatchContextV3 | undefined;
   review: SeriesComparisonReviewV3 | undefined;
   state: SeriesAnalysisUrlState;
 }): SeriesAnalysisBundleResolution {

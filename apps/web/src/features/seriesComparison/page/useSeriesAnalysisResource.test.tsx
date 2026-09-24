@@ -36,6 +36,112 @@ beforeAll(() =>
 );
 
 describe("useSeriesAnalysisResource", () => {
+  it.each([
+    [404, "NOT_FOUND"],
+    [410, "ANALYSIS_ARTIFACT_EXPIRED"],
+  ] as const)(
+    "removes retained context after a definitive %s while the next aggregate is unavailable",
+    async (status, code) => {
+      setDevUser();
+      const queryClient = createTestQueryClient();
+      const aggregateGate = createDeferred();
+      const contextGate = createDeferred();
+      const nextArtifact = {
+        ...analysisArtifact,
+        artifactId: "artifact-next",
+        inputRevision: "13",
+      };
+      let nextPublication = false;
+      let aggregateAvailable = false;
+      let requestedNextMatch = false;
+      server.use(
+        http.get("/api/analytics/series-comparison/v2/status", () =>
+          HttpResponse.json(
+            makeSeriesAnalysisStatus({
+              currentArtifact: nextPublication ? nextArtifact : analysisArtifact,
+            }),
+          ),
+        ),
+        http.get("/api/analytics/series-comparison/v4/aggregate", async ({ request }) => {
+          if (new URL(request.url).searchParams.get("artifactId") !== nextArtifact.artifactId)
+            return HttpResponse.json(makeSeriesAnalysisAggregate());
+          await aggregateGate.promise;
+          return aggregateAvailable
+            ? HttpResponse.json(makeSeriesAnalysisAggregate(nextArtifact))
+            : HttpResponse.json({ title: "Unavailable" }, { status: 503 });
+        }),
+        http.get("/api/analytics/series-comparison/v3/match-context", async ({ request }) => {
+          const params = new URL(request.url).searchParams;
+          if (params.get("artifactId") !== nextArtifact.artifactId)
+            return HttpResponse.json(makeSeriesAnalysisMatchContext());
+          if (params.get("matchId") === "match-12")
+            return HttpResponse.json(
+              { type: "about:blank", title: "Unavailable", detail: "Unavailable", status, code },
+              { status },
+            );
+          requestedNextMatch = true;
+          await contextGate.promise;
+          return HttpResponse.json({
+            ...makeSeriesAnalysisMatchContext(),
+            artifact: nextArtifact,
+            matchId: "match-13",
+          });
+        }),
+      );
+      const initialState: SeriesAnalysisUrlState = {
+        gameTitleId: analysisArtifact.gameTitleId,
+        focusMatchId: "match-12",
+        view: "overview",
+      };
+      const { result, rerender } = renderHook(
+        (state: SeriesAnalysisUrlState) =>
+          useSeriesAnalysisResource({ activeView: "overview", deferredState: state, state }),
+        {
+          initialProps: initialState,
+          wrapper: ({ children }: { children: ReactNode }) => (
+            <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+          ),
+        },
+      );
+      await waitFor(() => expect(result.current.focus.data?.matchId).toBe("match-12"));
+      nextPublication = true;
+      act(() => result.current.refresh());
+      await waitFor(() =>
+        expect(
+          queryClient.getQueryData(
+            seriesAnalysisKeys.matchContext({
+              artifactId: nextArtifact.artifactId,
+              gameTitleId: analysisArtifact.gameTitleId,
+              mapMasterId: undefined,
+              seasonMasterId: undefined,
+              matchId: "match-12",
+            }),
+          ),
+        ).toMatchObject({ kind: "unavailable" }),
+      );
+      await waitFor(() => expect(result.current.focus.data).toBeUndefined());
+      expect(result.current.resource.data?.artifact.artifactId).toBe(analysisArtifact.artifactId);
+      expect(result.current.resource.bundle?.matchContext).toBeUndefined();
+      expect(result.current.candidateArtifactId).toBeUndefined();
+
+      await act(async () => aggregateGate.resolve());
+      await waitFor(() => expect(result.current.resource.hasError).toBe(true));
+      expect(result.current.resource.bundle?.matchContext).toBeUndefined();
+      rerender({ ...initialState, focusMatchId: "match-13" });
+      await waitFor(() => expect(requestedNextMatch).toBe(true));
+      expect(result.current.focus.data).toBeUndefined();
+      expect(result.current.resource.bundle?.matchContext).toBeUndefined();
+
+      aggregateAvailable = true;
+      act(() => result.current.refresh());
+      await act(async () => contextGate.resolve());
+      await waitFor(() => {
+        expect(result.current.resource.data?.artifact.artifactId).toBe(nextArtifact.artifactId);
+        expect(result.current.focus.data?.matchId).toBe("match-13");
+      });
+    },
+  );
+
   it("keeps the previous analysis visible and shielded until deferred rendering is ready", async () => {
     const user = userEvent.setup();
     const queryClient = createTestQueryClient();
@@ -144,7 +250,7 @@ describe("useSeriesAnalysisResource", () => {
             ),
           );
         }),
-        http.get("/api/analytics/series-comparison/v2/match-context", ({ request }) => {
+        http.get("/api/analytics/series-comparison/v3/match-context", ({ request }) => {
           const id = new URL(request.url).searchParams.get("artifactId") ?? "";
           contexts.push(id);
           return HttpResponse.json({
@@ -241,7 +347,7 @@ describe("useSeriesAnalysisResource", () => {
         aggregateReads += 1;
         return HttpResponse.json(makeSeriesAnalysisAggregate());
       }),
-      http.get("/api/analytics/series-comparison/v2/match-context", () => {
+      http.get("/api/analytics/series-comparison/v3/match-context", () => {
         contextReads += 1;
         return HttpResponse.json(
           corrected

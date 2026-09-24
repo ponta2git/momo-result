@@ -5,10 +5,10 @@ import {
   buildMatchFeatureBadges,
   seriesComparisonHrefForMatch,
 } from "@/features/matches/matchDetailViewModel";
-import type { SeriesAnalysisMatchContextV2 } from "@/shared/api/seriesAnalysis";
+import type { SeriesAnalysisMatchContextV3 } from "@/shared/api/seriesAnalysis";
 import { makeMatchDetail } from "@/test/factories";
 
-type AnalysisFeature = NonNullable<SeriesAnalysisMatchContextV2["match"]>["features"][number];
+type AnalysisFeature = NonNullable<SeriesAnalysisMatchContextV3["match"]>["features"][number];
 
 function feature(
   featureCode: AnalysisFeature["featureCode"],

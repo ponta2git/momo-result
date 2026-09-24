@@ -24,6 +24,12 @@ import {
 import { createTestQueryClient } from "@/test/queryClient";
 
 describe("shared query keys", () => {
+  it("partitions match contexts by HTTP shape while keeping the reset prefix and final params", () => {
+    const params = { artifactId: "artifact-1", gameTitleId: "gt-1", matchId: "match-1" };
+    const key = seriesAnalysisKeys.matchContext(params);
+    expect(key).toEqual([...seriesAnalysisKeys.matchContextRoot(), "http-v3", params]);
+    expect(key).not.toEqual([...seriesAnalysisKeys.matchContextRoot(), params]);
+  });
   it("normalizes held-event search before using it in the query key", () => {
     expect(
       heldEventsQueryOptions({ limit: 25, page: 2, pageSize: 10, q: "  tournament  " }).queryKey,

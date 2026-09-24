@@ -18,6 +18,8 @@ export type DataTableCaption = {
 type DataTableColumnBase<Row> = {
   align?: DataTableAlign;
   header: ReactNode;
+  /** Non-interactive emphasis shared by this column's header and every body cell. */
+  highlighted?: boolean;
   key: string;
   minWidth?: string;
   width?: string;
@@ -90,6 +92,8 @@ export const dataTableHeaderCellClassName = cn(
 export const dataTableBodyCellClassName = "px-3 py-2 align-middle";
 
 export const dataTableScrollAreaClassName = "min-w-0 overflow-x-auto bg-[var(--color-surface)]";
+
+const highlightedColumnClassName = "outline-2 -outline-offset-2 outline-[var(--color-action)]";
 
 export function DataTableBodyRow({
   ...props
@@ -206,6 +210,7 @@ export function DataTable<Row>({
               {columns.map((column) => (
                 <th
                   key={column.key}
+                  data-highlighted={column.highlighted || undefined}
                   aria-sort={
                     column.sortable
                       ? column.sortDirection === "asc"
@@ -223,6 +228,7 @@ export function DataTable<Row>({
                     stickyRowHeader && "z-[var(--z-sticky)]",
                     stickyRowHeader && column.rowHeader && "left-0 z-[var(--z-sticky-raised)]",
                     alignClass[column.align ?? "left"],
+                    column.highlighted && highlightedColumnClassName,
                   )}
                   scope="col"
                   style={columnStyleByKey.get(column.key)}
@@ -254,6 +260,7 @@ export function DataTable<Row>({
                   return (
                     <Cell
                       key={column.key}
+                      data-highlighted={column.highlighted || undefined}
                       className={cn(
                         "text-[var(--color-text-primary)]",
                         densityClass[density],
@@ -261,6 +268,7 @@ export function DataTable<Row>({
                         verticalAlignClass[verticalAlign],
                         "font-plain",
                         column.tabular ? "tabular-nums" : "",
+                        column.highlighted && highlightedColumnClassName,
                         stickyRowHeader &&
                           column.rowHeader &&
                           "sticky left-0 z-[var(--z-base)] bg-inherit",

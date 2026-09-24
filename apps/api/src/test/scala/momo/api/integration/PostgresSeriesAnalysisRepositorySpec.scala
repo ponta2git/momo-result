@@ -16,10 +16,11 @@ import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.adapters.postgres.{
   PostgresGameTitles,
   PostgresGameTitlesRepository,
+  PostgresMatchesRepository,
   PostgresSeriesAnalysisRepository
 }
 import momo.api.config.SeriesAnalysisReadConfig
-import momo.api.domain.ids.{AccountId, GameTitleId, MatchId, SeasonMasterId}
+import momo.api.domain.ids.{AccountId, GameTitleId, MatchId, MemberId, SeasonMasterId}
 import momo.api.domain.{
   GameTitle,
   SeriesAnalysisChunkKind,
@@ -893,8 +894,15 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
           SeasonMasterId.unsafeFromString("context-season")
         )
       ))
-      _ <- sql"UPDATE matches SET analysis_revision = analysis_revision + 1 WHERE id = 'match-1'"
-        .update.run.transact(transactor)
+      matches = new PostgresMatchesRepository[IO](transactor)
+      saved <- matches.find(MatchId.unsafeFromString("match-1"))
+      record = saved.getOrElse(fail("seeded match is missing"))
+      _ <- matches.update(
+        record.copy(ownerMemberId = MemberId.unsafeFromString("member_eu")),
+        now.plusSeconds(1)
+      )
+      revised <- sql"SELECT owner_member_id, analysis_revision FROM matches WHERE id = 'match-1'"
+        .query[(String, Long)].unique.transact(transactor)
       changed <- repo.chunk(request)
     yield
       assertEquals(inclusion(included), Right("included"))
@@ -903,6 +911,22 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
       assertEquals(inclusion(outside), Right("not_in_scope"))
       assertEquals(inclusion(noChunk), Right("not_in_artifact"))
       assertEquals(inclusion(changed), Right("match_changed_since_artifact"))
+      assertEquals(revised, ("member_eu", 2L))
+      val includedJson = included.toOption.flatMap(chunk =>
+        parser.parse(new String(chunk.payload, StandardCharsets.UTF_8)).toOption
+      ).get
+      assertEquals(
+        includedJson.hcursor.downField("match").get[String]("ownerMemberId"),
+        Right("member_ponta")
+      )
+      val changedJson = changed.toOption.flatMap(chunk =>
+        parser.parse(new String(chunk.payload, StandardCharsets.UTF_8)).toOption
+      ).get
+      assertEquals(changedJson.hcursor.downField("match").focus, Some(Json.Null))
+      assertEquals(
+        changedJson.hcursor.downField("match").get[String]("ownerMemberId").toOption,
+        None
+      )
 
   test("exact reader fails closed when the active release still points to a legacy artifact"):
     val payload = Files.readAllBytes(

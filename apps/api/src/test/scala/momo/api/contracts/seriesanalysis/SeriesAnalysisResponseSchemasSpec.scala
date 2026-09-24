@@ -42,6 +42,10 @@ final class SeriesAnalysisResponseSchemasSpec extends FunSuite with JsonSchemaAs
     val stored = fixture("match-context-payload-v1.json")
     val included = stored.mapObject(fields =>
       fields.remove("sourceMatchRevision").add(
+        "match",
+        fields("match").getOrElse(fail("missing match"))
+          .mapObject(_.add("ownerMemberId", Json.fromString("member-1"))),
+      ).add(
         "inclusion",
         Json.obj(
           "status" -> Json.fromString("included"),
@@ -57,6 +61,16 @@ final class SeriesAnalysisResponseSchemasSpec extends FunSuite with JsonSchemaAs
       "inclusion" -> Json.obj("status" -> Json.fromString("not_in_artifact")),
       "match" -> Json.Null,
     )
+    val missingOwner = included.mapObject(fields =>
+      fields.add(
+        "match",
+        fields("match").get.mapObject(_.remove("ownerMemberId"))
+      )
+    )
+    assertResponse(schema, missingOwner, 4, false)
+    val extraOwnerOnExcluded =
+      excluded.mapObject(_.add("ownerMemberId", Json.fromString("member-1")))
+    assertResponse(schema, extraOwnerOnExcluded, 4, false)
     List(included, excluded).foreach { payload =>
       versions.foreach(version => assertResponse(schema, payload, version, version == 4))
     }

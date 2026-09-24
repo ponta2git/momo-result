@@ -106,7 +106,7 @@ object SeriesAnalysisEndpoints:
   val matchContext: SecuredRead[MatchContextInput, Array[Byte]] = endpoint
     .securityIn(CommonEndpoint.accountHeader)
     .get
-    .in("api" / "analytics" / "series-comparison" / "v2" / matchContextContract.pathSegment)
+    .in("api" / "analytics" / "series-comparison" / "v3" / matchContextContract.pathSegment)
     .in(matchContextInput)
     .errorOut(CommonEndpoint.errorOut)
     .out(rawJsonBody(matchContextContract))

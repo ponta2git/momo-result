@@ -260,6 +260,7 @@ function AnalysisViewContent({
         ) : null}
         {bundle.view === "context" ? (
           <ContextView
+            focusedOwnerMemberId={bundle.matchContext?.match?.ownerMemberId}
             ownerMetric={ownerMetric}
             onOwnerMetricChange={onOwnerMetricChange}
             focusedItemIds={focusedItemIds}

@@ -53,6 +53,11 @@ function includedMatchContextResponse(): Record<string, unknown> {
   const sourceMatchRevision = response["sourceMatchRevision"];
   delete response["sourceMatchRevision"];
   response["inclusion"] = { sourceMatchRevision, status: "included" };
+  const match = response["match"];
+  if (!isObject(match) || !Array.isArray(match["players"]) || !isObject(match["players"][0])) {
+    throw new Error("Missing match context players.");
+  }
+  match["ownerMemberId"] = match["players"][0]["memberId"];
   return response;
 }
 

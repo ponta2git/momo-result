@@ -5,7 +5,6 @@ import {
   getSeriesAnalysisAdminOverview,
   getSeriesAnalysisAggregate,
   getSeriesAnalysisDrilldown,
-  getSeriesAnalysisMatchContext,
   getSeriesAnalysisOptions,
   getSeriesAnalysisReview,
   getSeriesAnalysisStatus,
@@ -15,6 +14,7 @@ import type {
   SeriesAnalysisMatchContextQuery,
   SeriesAnalysisQuery,
 } from "@/shared/api/seriesAnalysis";
+import { loadSeriesAnalysisMatchContext } from "@/shared/api/seriesAnalysisMatchContextState";
 
 // Cache the immutable calculation payloads until explicit refresh or display-metadata invalidation.
 const immutableArtifactStaleTime = Number.POSITIVE_INFINITY;
@@ -92,7 +92,7 @@ export function seriesAnalysisMatchContextQueryOptions(
     queryKey: seriesAnalysisKeys.matchContext(query),
     queryFn: ({ signal }) => {
       if (!query) throw new Error("series analysis match context query is not ready");
-      return getSeriesAnalysisMatchContext(query, { signal });
+      return loadSeriesAnalysisMatchContext(query, { signal });
     },
     enabled: enabled && query !== undefined,
     retry: false,

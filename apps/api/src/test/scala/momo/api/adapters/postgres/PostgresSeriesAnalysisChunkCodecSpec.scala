@@ -275,26 +275,64 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
       List("match_changed_since_artifact", "not_in_artifact", "not_in_scope"),
     )
 
-  test("moves the included match revision into the public inclusion envelope"):
-    val original = DecodedSeriesAnalysisChunk(
-      artifact = artifact,
-      scope = scope,
-      payload = Json.obj(
-        "schemaVersion" -> Json.fromInt(1),
-        "sourceMatchRevision" -> Json.fromString("7"),
-      ),
-      memberIds = Nil,
-      nodeCount = 3,
-    )
-
-    val included = PostgresSeriesAnalysisChunkCodec.includedContext(original, 7)
+  test("included context adds only HTTP owner metadata and retains stored values"):
+    val original = decodedMatchContext()
+    val included = PostgresSeriesAnalysisChunkCodec.includedContext(
+      original,
+      SeriesAnalysisMatchSnapshot(1, MemberId.unsafeFromString("member-1")),
+    ).fold(error => fail(s"invalid included context: $error"), identity)
 
     assertEquals(included.payload.hcursor.get[String]("sourceMatchRevision").toOption, None)
     assertEquals(
       included.payload.hcursor.downField("inclusion").get[String]("sourceMatchRevision"),
-      Right("7"),
+      Right("1"),
     )
-    assertEquals(included.nodeCount, 5)
+    assertEquals(
+      included.payload.hcursor.downField("match").get[String]("ownerMemberId"),
+      Right("member-1")
+    )
+    assertEquals(
+      included.payload.hcursor.downField("match").focus.map(_.mapObject(_.remove("ownerMemberId"))),
+      original.payload.hcursor.downField("match").focus,
+    )
+    assertEquals(
+      original.payload.hcursor.downField("match").get[String]("ownerMemberId").toOption,
+      None
+    )
+    assertEquals(included.nodeCount, original.nodeCount + 3)
+    val names = included.memberIds.map(id => id -> id).toMap
+    val bounded = SeriesAnalysisReadConfig.defaults.copy(maxJsonNodes = included.nodeCount - 1)
+    assertInternal(
+      PostgresSeriesAnalysisChunkCodec.hydrateAndRender(included, names, Some("総合"), bounded),
+      "Analysis artifact exceeds the JSON node bound.",
+    )
+    val rendered = PostgresSeriesAnalysisChunkCodec.hydrateAndRender(
+      included,
+      names,
+      Some("総合"),
+      SeriesAnalysisReadConfig.defaults,
+    ).fold(error => fail(s"invalid rendered context: $error"), identity)
+    assertInternal(
+      PostgresSeriesAnalysisChunkCodec.hydrateAndRender(
+        included,
+        names,
+        Some("総合"),
+        SeriesAnalysisReadConfig.defaults.copy(maxResponseBytes = rendered.payload.length - 1),
+      ),
+      "Analysis response exceeds the configured bound.",
+    )
+
+  test("included context rejects an owner outside the decoded match participants"):
+    val original = decodedMatchContext()
+    List("", "missing-owner", "x" * 4097).foreach { owner =>
+      assertInternal(
+        PostgresSeriesAnalysisChunkCodec.includedContext(
+          original,
+          SeriesAnalysisMatchSnapshot(1, MemberId.unsafeFromString(owner)),
+        ),
+        "Analysis match owner is not a valid participant.",
+      )
+    }
 
   test("rendered artifact responses satisfy the API-owned schemas"):
     assertHydratedFixture(
@@ -395,6 +433,20 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
       )
       .fold(error => fail(s"invalid decoded aggregate fixture: $error"), identity)
 
+  private def decodedMatchContext(): DecodedSeriesAnalysisChunk =
+    val text = Files.readString(repositoryFile(
+      "docs/schemas/fixtures/series-analysis/match-context-payload-v1.json"
+    ))
+    PostgresSeriesAnalysisChunkCodec.decode(
+      stored(text.getBytes(StandardCharsets.UTF_8), nestingDepth(text)).copy(itemCount = Some(4)),
+      request.copy(
+        kind = SeriesAnalysisChunkKind.MatchContext,
+        matchId = Some(MatchId.unsafeFromString("match-1"))
+      ),
+      SeriesAnalysisReadConfig.defaults,
+      Some(1),
+    ).fold(error => fail(s"invalid stored match context: $error"), identity)
+
   private def assertHydratedFixture(
       fixtureName: String,
       resource: SeriesAnalysisResponseSchemas.Resource,
@@ -416,7 +468,10 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
       )
       .fold(error => fail(s"failed to decode $fixtureName: $error"), identity)
     val publicChunk = sourceMatchRevision.fold(decoded)(revision =>
-      PostgresSeriesAnalysisChunkCodec.includedContext(decoded, revision)
+      PostgresSeriesAnalysisChunkCodec.includedContext(
+        decoded,
+        SeriesAnalysisMatchSnapshot(revision, MemberId.unsafeFromString("member-1")),
+      ).fold(error => fail(s"failed to project $fixtureName: $error"), identity)
     )
     val memberNames = publicChunk.memberIds.map(id => id -> s"name-$id").toMap
     val rendered = PostgresSeriesAnalysisChunkCodec

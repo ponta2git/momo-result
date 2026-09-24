@@ -55,7 +55,7 @@ describe("useSeriesComparisonPageModel", () => {
       if (matchId) observedFocusMatches.push(matchId);
     };
     server.use(
-      http.get("/api/analytics/series-comparison/v2/match-context", ({ request }) => {
+      http.get("/api/analytics/series-comparison/v3/match-context", ({ request }) => {
         return HttpResponse.json(
           makeSeriesAnalysisExcludedMatchContext(
             "not_in_scope",

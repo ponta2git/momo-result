@@ -529,14 +529,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/analytics/series-comparison/v2/match-context": {
+    "/api/analytics/series-comparison/v3/match-context": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["getApiAnalyticsSeries-comparisonV2Match-context"];
+        get: operations["getApiAnalyticsSeries-comparisonV3Match-context"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2615,6 +2615,7 @@ export interface components {
                     totalAssetsManYen: number;
                     displayName: string;
                 }[];
+                ownerMemberId: string;
             };
             matchId: string;
             /** @constant */
@@ -4610,7 +4611,7 @@ export interface operations {
             };
         };
     };
-    "getApiAnalyticsSeries-comparisonV2Match-context": {
+    "getApiAnalyticsSeries-comparisonV3Match-context": {
         parameters: {
             query: {
                 gameTitleId: string;

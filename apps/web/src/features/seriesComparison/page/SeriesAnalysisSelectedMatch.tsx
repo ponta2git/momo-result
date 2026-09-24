@@ -5,7 +5,7 @@ import {
   matchFeatureLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import { SeriesAnalysisMatchLink } from "@/features/seriesComparison/navigation/SeriesAnalysisMatchLink";
-import type { SeriesAnalysisMatchContextV2 } from "@/shared/api/seriesAnalysis";
+import type { SeriesAnalysisMatchContextV3 } from "@/shared/api/seriesAnalysis";
 import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { matchPerformanceContextFromArtifact } from "@/shared/matches/matchPerformanceContext";
 import { MatchResultLedger } from "@/shared/matches/MatchResultLedger";
@@ -18,7 +18,7 @@ export function SeriesAnalysisSelectedMatch({
   context,
   onClear,
 }: {
-  context: SeriesAnalysisMatchContextV2;
+  context: SeriesAnalysisMatchContextV3;
   onClear: () => void;
 }) {
   const performance = matchPerformanceContextFromArtifact(context);

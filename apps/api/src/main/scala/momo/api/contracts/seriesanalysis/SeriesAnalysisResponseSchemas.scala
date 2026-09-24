@@ -72,7 +72,7 @@ private[api] object SeriesAnalysisResponseSchemas:
     "matchContext",
     "SeriesAnalysisMatchContextResponse",
     SeriesAnalysisChunkKind.MatchContext,
-    "series-analysis-match-context-response-v2.schema.json",
+    "series-analysis-match-context-response-v3.schema.json",
   )
   val aggregateV4: Resource = Resource(
     "aggregate",
@@ -127,8 +127,15 @@ private[api] object SeriesAnalysisResponseSchemas:
       "sourceMatchRevision",
       "included match context",
     )
-    val included = addProperty(
+    val matchSchema = requiredProperty(withoutRevision, "match", "included match context")
+    val withOwner = replaceProperty(
       withoutRevision,
+      "match",
+      addProperty(matchSchema, "ownerMemberId", TextSchema, "included match"),
+      "included match context",
+    )
+    val included = addProperty(
+      withOwner,
       "inclusion",
       IncludedSchema,
       "included match context",

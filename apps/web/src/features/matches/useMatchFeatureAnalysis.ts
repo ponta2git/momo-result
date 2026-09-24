@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { buildMatchFeatureBadges } from "@/features/matches/matchDetailViewModel";
 import type { MatchDetailResponse } from "@/shared/api/matches";
 import { seriesAnalysisKeys } from "@/shared/api/queryKeys";
+import { readSeriesAnalysisMatchContext } from "@/shared/api/seriesAnalysisMatchContextState";
 import {
   seriesAnalysisMatchContextQueryOptions,
   seriesAnalysisStatusQueryOptions,
@@ -31,12 +32,12 @@ export function useMatchFeatureAnalysis(match: MatchDetailResponse | undefined) 
       : undefined;
   const contextQuery = useQuery(seriesAnalysisMatchContextQueryOptions(contextQueryParams));
   const {
-    data: contextData,
-    error: contextError,
     isFetching: contextIsFetching,
     isPending: contextIsPending,
     refetch: refetchContext,
   } = contextQuery;
+  const { context: contextData, error: contextError } =
+    readSeriesAnalysisMatchContext(contextQuery);
   const context =
     match &&
     contextData &&

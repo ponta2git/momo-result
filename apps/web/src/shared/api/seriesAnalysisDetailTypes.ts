@@ -19,5 +19,5 @@ export type SeriesAnalysisDrilldownV3 = components["schemas"]["SeriesAnalysisDri
 
 export type SeriesAnalysisMatchContextQuery = SeriesAnalysisQuery & { matchId: string };
 
-export type SeriesAnalysisMatchContextV2 =
+export type SeriesAnalysisMatchContextV3 =
   components["schemas"]["SeriesAnalysisMatchContextResponse"];

@@ -9,6 +9,7 @@ final case class HeldEventDetail(
     event: HeldEvent,
     matches: List[HeldEventDetail.Match],
     drafts: List[HeldEventDetail.Draft],
+    navigation: RecordNavigation[HeldEvent],
 ):
   def nextMatchNo: Int =
     (matches.iterator.map(_.matchNoInEvent.value) ++

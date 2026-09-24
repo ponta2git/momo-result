@@ -12,12 +12,14 @@ import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.ids.*
 import momo.api.domain.{
   FourPlayers,
+  HeldEvent,
   HeldEventDetail,
   HeldEventSummary,
   MatchDraftStatus,
   MatchLabels,
   MatchNoInEvent,
-  MatchNoteBody
+  MatchNoteBody,
+  RecordNavigation
 }
 import momo.api.repositories.HeldEventDetailReadModel
 
@@ -104,9 +106,19 @@ object PostgresHeldEventDetail:
           byMatch = players.groupMap(_._1)(_._2)
           confirmed <-
             matches.traverse(m => m.withPlayers(byMatch.getOrElse(m.id, Nil))).liftTo[ConnectionIO]
-        yield HeldEventDetail(heldEvent, confirmed, drafts)
+          previous <- adjacent(heldEvent, previous = true)
+          next <- adjacent(heldEvent, previous = false)
+        yield HeldEventDetail(heldEvent, confirmed, drafts, RecordNavigation(previous, next))
       }
     yield detail
+
+  private def adjacent(event: HeldEvent, previous: Boolean): ConnectionIO[Option[HeldEvent]] =
+    val comparison = if previous then fr"<" else fr">"
+    val order = if previous then fr"""ORDER BY start_at DESC, id COLLATE "C" DESC"""
+    else fr"""ORDER BY start_at ASC, id COLLATE "C" ASC"""
+    (fr"""SELECT id, start_at FROM held_events WHERE (start_at, id COLLATE "C")""" ++
+      comparison ++ fr"(${event.heldAt}, ${event.id})" ++ order ++ fr"LIMIT 1")
+      .query[HeldEvent].option
 
   def summary(id: HeldEventId): ConnectionIO[Option[HeldEventSummary]] = sql"""
     SELECT he.id, he.start_at, confirmed.count, draft.count,

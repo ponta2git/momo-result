@@ -46,7 +46,7 @@ object PostgresHeldEventList:
       counts <- totals.query[(Int, Int)].unique
       events <-
       (fr"SELECT he.id, he.start_at FROM held_events he" ++ where ++
-        fr"ORDER BY he.start_at DESC, he.id DESC LIMIT ${page.pageSize} OFFSET ${page.offset}")
+        fr"""ORDER BY he.start_at DESC, he.id COLLATE "C" DESC LIMIT ${page.pageSize} OFFSET ${page.offset}""")
         .query[HeldEvent].to[List]
       stats <- scopeStats(events.map(_.id))
       byEvent = stats.groupMap(_.heldEventId)(identity)

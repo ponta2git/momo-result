@@ -173,7 +173,11 @@ export function useSeriesAnalysisResource({
     () => (activeView === "review" ? refetchReview() : refetchAggregate()),
     [activeView, refetchAggregate, refetchReview],
   );
-  const currentDisplayBundle = nextSuccessfulBundle ?? lastSuccessfulBundle;
+  const currentDisplayBundle =
+    nextSuccessfulBundle &&
+    !sameSeriesAnalysisDisplayBundle(lastSuccessfulBundle, nextSuccessfulBundle)
+      ? nextSuccessfulBundle
+      : lastSuccessfulBundle;
   // Keep controls urgent while a new immutable artifact/view renders in the background.
   const deferredBundle = useDeferredValue(currentDisplayBundle);
   // Do not defer a definitive invalidation. Keep this fence until rendering catches up, so

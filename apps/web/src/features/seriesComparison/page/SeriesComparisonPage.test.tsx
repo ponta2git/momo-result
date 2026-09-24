@@ -2,21 +2,112 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { MemoryRouter } from "react-router-dom";
-import { beforeAll, describe, expect, it } from "vitest";
+import { createMemoryRouter, MemoryRouter, RouterProvider } from "react-router-dom";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SeriesComparisonPage } from "@/features/seriesComparison/page/SeriesComparisonPage";
 import { decodeSeriesAnalysisArtifact } from "@/shared/api/seriesAnalysisArtifactDecoder";
 import { createDeferred } from "@/test/deferred";
 import { setupMsw } from "@/test/msw/lifecycle";
-import { makeSeriesAnalysisAggregate } from "@/test/msw/seriesAnalysisFixtures";
+import {
+  makeFourPlayerSeriesAnalysisMatchContext,
+  makeOwnerComparisonAggregate,
+  makeSeriesAnalysisAggregate,
+} from "@/test/msw/seriesAnalysisFixtures";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
+import { selectOption } from "@/test/selectOption";
 
 setupMsw();
 beforeAll(() => decodeSeriesAnalysisArtifact("aggregateV4", makeSeriesAnalysisAggregate()));
+beforeEach(() => {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+});
 
 describe("SeriesComparisonPage", () => {
+  it("changes owner metrics without making the focused control inert or refetching analysis", async () => {
+    const user = userEvent.setup();
+    let aggregateReads = 0;
+    let contextReads = 0;
+    server.use(
+      http.get("/api/analytics/series-comparison/v4/aggregate", () => {
+        aggregateReads += 1;
+        return HttpResponse.json(makeOwnerComparisonAggregate());
+      }),
+      http.get("/api/analytics/series-comparison/v3/match-context", () => {
+        contextReads += 1;
+        return HttpResponse.json(
+          makeFourPlayerSeriesAnalysisMatchContext({ ownerMemberId: "member_akane_mami" }),
+        );
+      }),
+    );
+    const router = createMemoryRouter(
+      [{ path: "/analytics/series", element: <SeriesComparisonPage /> }],
+      {
+        initialEntries: [
+          "/analytics/series?gameTitleId=gt_momotetsu_2&view=context&focusMatchId=match-12",
+        ],
+      },
+    );
+    render(
+      <QueryClientProvider client={createTestQueryClient()}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    const select = await screen.findByRole("combobox", { name: "オーナー比較の指標" });
+    await waitFor(() => expect(select.closest("[inert]")).toBeNull());
+    const scroller = screen.getByRole("region", { name: "オーナー別の平均順位の表" });
+    scroller.scrollLeft = 123;
+    let blockedOwnerControl = false;
+    const observer = new MutationObserver((records) => {
+      blockedOwnerControl ||= records.some(
+        (record) =>
+          record.oldValue === null &&
+          record.target instanceof HTMLElement &&
+          record.target.contains(select),
+      );
+    });
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["inert"],
+      attributeOldValue: true,
+      subtree: true,
+    });
+    try {
+      for (const [metric, label] of [
+        ["rank.distribution", "順位分布"],
+        ["assets.average", "平均総資産"],
+      ] as const) {
+        await selectOption(user, select, metric);
+        await screen.findByRole("table", { name: `オーナー別の${label}` });
+        expect(screen.getByRole("combobox", { name: "オーナー比較の指標" })).toBe(select);
+        expect(select).toHaveFocus();
+        expect(blockedOwnerControl).toBe(false);
+        expect(screen.getByRole("region", { name: `オーナー別の${label}の表` })).toBe(scroller);
+        expect(scroller.scrollLeft).toBe(123);
+        expect(
+          screen.getByRole("columnheader", { name: /あかねまみ.*この試合のオーナー/u }),
+        ).toHaveAttribute("data-highlighted", "true");
+        expect(new URLSearchParams(router.state.location.search).get("ownerMetric")).toBe(metric);
+        expect(new URLSearchParams(router.state.location.search).get("focusMatchId")).toBe(
+          "match-12",
+        );
+        expect(router.state.location.hash).toBe("#metric-owner");
+      }
+      expect(aggregateReads).toBe(1);
+      expect(contextReads).toBe(1);
+    } finally {
+      observer.disconnect();
+    }
+  });
+
   it("keeps purpose tabs, analysis tabs, and the metric guide outside stale results", async () => {
     const user = userEvent.setup();
     const aggregate = makeSeriesAnalysisAggregate();

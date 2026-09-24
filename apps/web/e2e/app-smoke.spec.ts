@@ -5,6 +5,7 @@ import { withReturnTo } from "../src/shared/navigation/returnTo";
 import {
   analysisArtifact,
   makeFourPlayerSeriesAnalysisReview,
+  makeOwnerComparisonAggregate,
   makeSeriesAnalysisAggregate,
   makeSeriesAnalysisDrilldown,
   makeSeriesAnalysisMatchContext,
@@ -330,6 +331,7 @@ test("inspects saved analysis and handles explicit refresh states", async ({
     ];
     const aggregateFixture = makeSeriesAnalysisAggregate(artifact);
     aggregateFixture.scope = analysisScope;
+    aggregateFixture.ownerComparison = makeOwnerComparisonAggregate().ownerComparison;
     const recentMatch = aggregateFixture.matchDigest.recent[0];
     if (!recentMatch) throw new Error("analysis aggregate fixture requires a recent match");
     Object.assign(recentMatch, {
@@ -469,7 +471,7 @@ test("inspects saved analysis and handles explicit refresh states", async ({
       },
     );
     await page.route(
-      /\/api\/analytics\/series-comparison\/v2\/match-context(?:\?.*)?$/u,
+      /\/api\/analytics\/series-comparison\/v3\/match-context(?:\?.*)?$/u,
       async (route) => route.fulfill({ json: matchContextFixture }),
     );
 
@@ -654,6 +656,56 @@ test("inspects saved analysis and handles explicit refresh states", async ({
 
     await page.getByRole("tab", { name: "条件別" }).click();
     await expect(page.getByRole("table", { name: "番手別成績" })).toBeVisible();
+    const ownerMetric = page.getByRole("combobox", { name: "オーナー比較の指標" });
+    const averageOwnerTable = page.getByRole("table", { name: "オーナー別の平均順位" });
+    await expectOwnerColumn(page, averageOwnerTable, "ぽんた", ["2位", "1.5位", "3.5位", "3位"]);
+    await expect(averageOwnerTable.getByRole("columnheader", { name: /ぽんた/u })).toContainText(
+      "2戦",
+    );
+    await expect(averageOwnerTable.getByRole("columnheader", { name: /ぽんた/u })).toContainText(
+      "参考値",
+    );
+    await expect(averageOwnerTable.getByRole("columnheader", { name: /おたか/u })).toContainText(
+      "対象なし",
+    );
+    await page.setViewportSize({ height: 844, width: 390 });
+    const ownerScroller = page.getByRole("region", { name: "オーナー別の平均順位の表" });
+    await ownerScroller.focus();
+    await ownerScroller.press("ArrowRight");
+    let ownerScrollLeft = 0;
+    await expect
+      .poll(async () => {
+        const current = await ownerScroller.evaluate((element) => element.scrollLeft);
+        const settled = current > 0 && current === ownerScrollLeft;
+        ownerScrollLeft = current;
+        return settled;
+      })
+      .toBe(true);
+    await selectControlOption(page, ownerMetric, "rank.distribution");
+    await expect(ownerMetric).toBeFocused();
+    await expect(page).toHaveURL(/ownerMetric=rank.distribution/u);
+    await expect(page).toHaveURL(new RegExp(`focusMatchId=${encodeURIComponent(matchId)}`, "u"));
+    const distributionOwnerTable = page.getByRole("table", { name: "オーナー別の順位分布" });
+    await expectOwnerColumn(page, distributionOwnerTable, "ぽんた");
+    await expect(distributionOwnerTable.getByRole("listitem").first()).toContainText("1位 1回");
+    await expect
+      .poll(() =>
+        page
+          .getByRole("region", { name: "オーナー別の順位分布の表" })
+          .evaluate((element) => element.scrollLeft),
+      )
+      .toBe(ownerScrollLeft);
+    await expectNoHorizontalPageOverflow(page);
+    await page.setViewportSize({ height: 900, width: 1280 });
+    await expectOwnerColumn(page, distributionOwnerTable, "ぽんた");
+    await expectNoHorizontalPageOverflow(page);
+    const ownerComparisonUrl = page.url();
+    await selectedMatch.getByRole("link", { name: "第1戦の試合結果を見る" }).click();
+    await expect(page.getByRole("link", { name: "前後の戦績を見る" })).toBeVisible();
+    await page.goBack();
+    await expect(page).toHaveURL(ownerComparisonUrl);
+    await expectOwnerColumn(page, distributionOwnerTable, "ぽんた");
+    await expect(selectedMatch).toBeVisible();
 
     await page.getByRole("tab", { name: "勝因候補" }).click();
     await expect(page.getByRole("table", { name: "ぽんたの物件収益順位と最終順位" })).toBeVisible();
@@ -829,6 +881,11 @@ test("inspects saved analysis and handles explicit refresh states", async ({
     await selectedMatch.getByRole("button", { name: "この試合の選択を解除" }).click();
     await expect(selectedMatch).toHaveCount(0);
     await expect(page).not.toHaveURL(/focusMatchId=/u);
+    await purposeTabs.getByRole("tab", { name: "分析する" }).click();
+    await page.getByRole("tab", { name: "条件別" }).click();
+    await expect(distributionOwnerTable).toBeVisible();
+    await expect(distributionOwnerTable.getByText("この試合のオーナー")).toHaveCount(0);
+    await expect(distributionOwnerTable.locator('[data-highlighted="true"]')).toHaveCount(0);
 
     if (desktopViewport) await page.setViewportSize(desktopViewport);
   });
@@ -1029,6 +1086,36 @@ type ReviewPlayerGeometry = {
   disclosureTop: number;
   primaryActionTop: number;
 };
+
+async function expectOwnerColumn(
+  page: Page,
+  table: Locator,
+  ownerName: string,
+  values?: readonly string[],
+): Promise<void> {
+  const header = table.getByRole("columnheader", { name: new RegExp(ownerName, "u") });
+  await expect(header).toContainText("この試合のオーナー");
+  await expect(header).toHaveCSS("outline-style", "solid");
+  await expect(header).not.toHaveCSS("outline-width", "0px");
+  const columnIndex = await header.evaluate(
+    (element) => (element as HTMLTableCellElement).cellIndex,
+  );
+  for (const [index, playerName] of ["ぽんた", "あかねまみ", "おたか", "EU"].entries()) {
+    const row = table
+      .getByRole("row")
+      .filter({ has: page.getByRole("rowheader", { exact: true, name: playerName }) });
+    const cell = row.getByRole("cell").nth(columnIndex - 1);
+    await expect(cell).toHaveAttribute("data-highlighted", "true");
+    await expect(cell).toHaveCSS("outline-style", "solid");
+    await expect(cell).not.toHaveCSS("outline-width", "0px");
+    if (values) {
+      const expectedValue = values[index];
+      if (expectedValue === undefined) throw new Error(`Missing owner value for ${playerName}`);
+      await expect(cell).toHaveText(expectedValue);
+    }
+  }
+  await expect(table.getByText("この試合のオーナー", { exact: true })).toHaveCount(1);
+}
 
 async function locatorPageTop(locator: Locator): Promise<number> {
   return locator.evaluate((element) => element.getBoundingClientRect().top + window.scrollY);

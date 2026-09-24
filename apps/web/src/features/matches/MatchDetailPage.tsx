@@ -1,6 +1,8 @@
 import { ArrowLeft } from "lucide-react";
+import type { Ref } from "react";
 import { useParams } from "react-router-dom";
 
+import { MatchDetailAdjacentNavigation } from "@/features/matches/MatchDetailAdjacentNavigation";
 import { MatchDetailIdentity } from "@/features/matches/MatchDetailIdentity";
 import type { MatchDetailReadyPageModel } from "@/features/matches/matchDetailPageModel";
 import {
@@ -8,13 +10,21 @@ import {
   MatchDetailLoading,
 } from "@/features/matches/MatchDetailStatusViews";
 import { MatchFeatureSection } from "@/features/matches/MatchFeatureSection";
-import { MatchNoteSection } from "@/features/matches/MatchNoteSection";
+import {
+  MatchNoteSection,
+  MatchNoteNavigationGuard,
+  MatchNoteRecovery,
+} from "@/features/matches/MatchNoteSection";
 import { MatchRecordMetadata } from "@/features/matches/MatchRecordMetadata";
 import { useMatchDetailPageModel } from "@/features/matches/useMatchDetailPageModel";
+import { useMatchNoteEditor } from "@/features/matches/useMatchNoteEditor";
+import type { MatchNoteEditor } from "@/features/matches/useMatchNoteEditor";
 import { incidentColumns } from "@/shared/domain/incidents";
 import { formatMatchNoInEvent, formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { memberDisplayName } from "@/shared/domain/members";
+import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { MatchResultLedger } from "@/shared/matches/MatchResultLedger";
+import { useAdjacentNavigationFocus } from "@/shared/navigation/useAdjacentNavigationFocus";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
@@ -29,30 +39,46 @@ export function MatchDetailPage() {
 
 function MatchDetailScreen() {
   const page = useMatchDetailPageModel();
+  const editor = useMatchNoteEditor({
+    matchId: page.matchId,
+    match: page.kind === "ready" ? page.match : undefined,
+    ...page.note,
+  });
+  const titleRef = useAdjacentNavigationFocus(page.kind !== "loading");
 
-  if (page.kind === "loading") {
-    return <MatchDetailLoading />;
-  }
-
-  if (page.kind === "notFound") {
-    return <MatchDetailLoadFailed backHref={page.navigation.backHref} notFound />;
-  }
-
-  if (page.kind === "loadFailed") {
-    return (
-      <MatchDetailLoadFailed
-        backHref={page.navigation.backHref}
-        retrying={page.refresh.pending}
-        onRetry={page.refresh.run}
-      />
-    );
-  }
-
-  return <MatchDetailReadyContent page={page} />;
+  return (
+    <>
+      <MatchNoteNavigationGuard editor={editor} />
+      {page.kind === "loading" ? (
+        <MatchDetailLoading />
+      ) : page.kind === "ready" ? (
+        <MatchDetailReadyContent page={page} editor={editor} titleRef={titleRef} />
+      ) : (
+        <MatchDetailLoadFailed
+          backHref={page.navigation.backHref}
+          backLabel={page.navigation.backLabel}
+          backNotice={page.navigation.fallbackReason}
+          notFound={page.kind === "notFound"}
+          retrying={page.refresh.pending}
+          onRetry={page.refresh.run}
+          titleRef={titleRef}
+          recovery={editor.dirty ? <MatchNoteRecovery editor={editor} /> : undefined}
+        />
+      )}
+    </>
+  );
 }
 
-function MatchDetailReadyContent({ page }: { page: MatchDetailReadyPageModel }) {
-  const { analysis, deletion, identity, match, navigation, note } = page;
+function MatchDetailReadyContent({
+  page,
+  editor,
+  titleRef,
+}: {
+  page: MatchDetailReadyPageModel;
+  editor: MatchNoteEditor;
+  titleRef: Ref<HTMLHeadingElement>;
+}) {
+  const { analysis, deletion, identity, match, navigation } = page;
   const ledgerRows = (
     analysis.performanceContext?.rows ??
     (match.players ?? []).map((player) => ({
@@ -96,20 +122,35 @@ function MatchDetailReadyContent({ page }: { page: MatchDetailReadyPageModel }) 
         >
           {navigation.backLabel}
         </LinkButton>
+        {navigation.currentHeldEventHref ? (
+          <LinkButton to={navigation.currentHeldEventHref} size="sm" variant="quiet">
+            この試合の開催を見る
+          </LinkButton>
+        ) : null}
+        {navigation.fallbackReason ? (
+          <p className={contentText.supporting}>{navigation.fallbackReason}</p>
+        ) : null}
       </div>
       <PageHeader
         title={`${formatMatchNoInEvent(match.matchNoInEvent)}の結果`}
+        titleRef={titleRef}
+        titleDescriptionId="match-current-datetime"
+        description={
+          <span id="match-current-datetime">対戦日時 {formatDateTimeLong(match.playedAt)}</span>
+        }
         actions={
           <>
             <LinkButton to={navigation.exportHref} variant="secondary">
               この試合を出力
             </LinkButton>
             <LinkButton to={navigation.editHref} variant="secondary">
-              編集
+              試合結果を編集
             </LinkButton>
           </>
         }
       />
+
+      <MatchDetailAdjacentNavigation page={page} />
 
       <PageContentSurface className="grid gap-6">
         <div className="grid gap-4">
@@ -148,10 +189,17 @@ function MatchDetailReadyContent({ page }: { page: MatchDetailReadyPageModel }) 
           </div>
         </section>
 
-        <MatchNoteSection match={match} refetchMatch={note.refetchMatch} />
+        <MatchNoteSection match={match} editor={editor} />
 
         <MatchRecordMetadata
           confirmDelete={deletion.confirm}
+          deleteDisabledReason={
+            editor.pending
+              ? "メモの保存・削除が完了するまで、試合は削除できません。"
+              : editor.dirty
+                ? "メモを保存するか、編集をキャンセルすると試合を削除できます。"
+                : undefined
+          }
           errorMessage={deletion.errorMessage}
           isDeletePending={deletion.pending}
           match={match}

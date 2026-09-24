@@ -300,11 +300,20 @@ describe("MatchDetailPage", () => {
     expect(extraRequests).toEqual([]);
   });
 
-  it("does not offer retry for a missing match", async () => {
+  it("shows confirmed absence and a safe return for a missing match", async () => {
     setDevUser();
     server.use(
       http.get("/api/matches/:matchId", () =>
-        HttpResponse.json({ detail: "not found" }, { status: 404 }),
+        HttpResponse.json(
+          {
+            type: "about:blank",
+            title: "Not Found",
+            detail: "not found",
+            status: 404,
+            code: "NOT_FOUND",
+          },
+          { status: 404 },
+        ),
       ),
     );
 
@@ -494,7 +503,7 @@ describe("MatchDetailPage", () => {
     expect(screen.queryByLabelText("試合詳細を読み込み中")).not.toBeInTheDocument();
     await waitFor(() =>
       expect(removeQueries).toHaveBeenCalledWith({
-        queryKey: matchKeys.detail("match-1"),
+        queryKey: matchKeys.resource("match-1"),
       }),
     );
     await waitFor(() =>

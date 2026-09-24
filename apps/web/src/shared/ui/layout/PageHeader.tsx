@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 
 import {
   responsiveActionGroupClass,
@@ -22,6 +22,8 @@ type PageHeaderProps = {
   eyebrow?: ReactNode;
   meta?: ReactNode;
   title: ReactNode;
+  titleRef?: Ref<HTMLHeadingElement> | undefined;
+  titleDescriptionId?: string | undefined;
 };
 
 /** Keeps multi-action headers two-column and predictable until inline labels have enough room. */
@@ -37,12 +39,17 @@ export function PageHeader({
   eyebrow,
   meta,
   title,
+  titleRef,
+  titleDescriptionId,
 }: PageHeaderProps) {
   return (
     <header className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
       <div className="min-w-0">
         {eyebrow ? <p className={contentText.supporting}>{eyebrow}</p> : null}
         <h1
+          ref={titleRef}
+          aria-describedby={titleDescriptionId}
+          tabIndex={titleRef ? -1 : undefined}
           className={cn(
             "momo-heading text-2xl font-structure text-balance text-[var(--color-text-primary)] md:text-3xl",
             eyebrow ? "mt-1" : "",

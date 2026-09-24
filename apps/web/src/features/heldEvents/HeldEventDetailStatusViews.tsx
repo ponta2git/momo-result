@@ -1,4 +1,7 @@
+import type { Ref } from "react";
+
 import { HeldEventDetailHeaderActions } from "@/features/heldEvents/HeldEventDetailHeaderActions";
+import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { ResourcePageState } from "@/shared/ui/feedback/ResourcePageState";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
@@ -29,6 +32,10 @@ export function HeldEventDetailLoading() {
         eyebrow="開催記録"
         title="開催の記録を読み込み中"
       />
+      <div aria-hidden="true" className="grid min-w-0 gap-3 sm:grid-cols-2">
+        <Skeleton className="h-20 w-full rounded-sm" />
+        <Skeleton className="h-20 w-full rounded-sm" />
+      </div>
       <PageContentSurface
         aria-label="開催内容"
         className="grid grid-cols-[minmax(0,1fr)] gap-8"
@@ -78,40 +85,59 @@ export function HeldEventDetailLoading() {
 
 export function HeldEventDetailUnavailable({
   backHref = "/held-events",
+  backLabel = "開催履歴へ戻る",
+  backNotice,
   exportHref,
   notFound = false,
   onRetry,
   retrying = false,
+  titleRef,
 }: {
   backHref?: string;
+  backLabel?: string;
+  backNotice?: string | undefined;
   exportHref: string;
   notFound?: boolean;
   onRetry?: (() => void) | undefined;
   retrying?: boolean;
+  titleRef?: Ref<HTMLHeadingElement> | undefined;
 }) {
+  const headerActions = (
+    <>
+      <HeldEventDetailHeaderActions exportHref={exportHref} />
+      {backHref === "/held-events" ? null : (
+        <LinkButton size="sm" to="/held-events" variant="quiet">
+          開催履歴を開く
+        </LinkButton>
+      )}
+    </>
+  );
+  const headerDescription = `試合数・下書き数は未取得です。${backNotice ?? ""}`;
   return notFound ? (
     <ResourcePageState
       backHref={backHref}
-      backLabel="開催履歴へ戻る"
+      backLabel={backLabel}
       description="指定された開催は削除されたか、存在しません。開催履歴から別の開催を選んでください。"
       eyebrow="開催記録"
-      headerActions={<HeldEventDetailHeaderActions exportHref={exportHref} />}
-      headerDescription="試合数・下書き数は未取得です。"
+      headerActions={headerActions}
+      headerDescription={headerDescription}
       kind="not-found"
       title="開催が見つかりません"
+      titleRef={titleRef}
     />
   ) : onRetry ? (
     <ResourcePageState
       backHref={backHref}
-      backLabel="開催履歴へ戻る"
+      backLabel={backLabel}
       description="通信状態を確認して、もう一度お試しください。"
       eyebrow="開催記録"
-      headerActions={<HeldEventDetailHeaderActions exportHref={exportHref} />}
-      headerDescription="試合数・下書き数は未取得です。"
+      headerActions={headerActions}
+      headerDescription={headerDescription}
       kind="error"
       retryLabel="開催詳細を再読み込み"
       retrying={retrying}
       title="開催詳細を読み込めませんでした"
+      titleRef={titleRef}
       onRetry={onRetry}
     />
   ) : null;

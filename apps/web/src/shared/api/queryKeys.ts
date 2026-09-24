@@ -12,7 +12,9 @@ export const heldEventKeys = {
   detailRoot: () => ["held-events", "detail"] as const,
   summary: (heldEventId: string | undefined) =>
     ["held-events", "detail", heldEventId, "summary"] as const,
-  detail: (heldEventId: string | undefined) => ["held-events", "detail", heldEventId] as const,
+  resource: (heldEventId: string | undefined) => ["held-events", "detail", heldEventId] as const,
+  detail: (heldEventId: string | undefined) =>
+    ["held-events", "detail", heldEventId, "read-result"] as const,
 };
 
 export const adminAccountKeys = {
@@ -67,7 +69,8 @@ export const matchKeys = {
   exports: (params: unknown) => ["matches", "collections", "exports", params] as const,
   detailRoot: () => ["matches", "detail"] as const,
   identity: (matchId: string | undefined) => ["matches", "detail", matchId, "identity"] as const,
-  detail: (matchId: string | undefined) => ["matches", "detail", matchId] as const,
+  resource: (matchId: string | undefined) => ["matches", "detail", matchId] as const,
+  detail: (matchId: string | undefined) => ["matches", "detail", matchId, "read-result"] as const,
   draft: {
     all: () => ["match-drafts"] as const,
     detailRoot: () => ["match-drafts", "detail"] as const,

@@ -4,11 +4,18 @@ import {
   formatDateOnly,
   formatDateTimeCompact,
   formatDateTimeLong,
+  formatNavigationDateTime,
   toIsoFromLocalDateTime,
   toLocalDateTimeInputValue,
 } from "@/shared/lib/dateTime";
 
 describe("shared date-time formatting", () => {
+  it("distinguishes adjacent timestamps without discarding submillisecond precision", () => {
+    const values = ["2026-01-01T00:00:00.000001Z", "2026-01-01T00:00:00.000002Z"];
+    expect(formatNavigationDateTime(values[0]!, values)).toBe("2026/01/01 09:00:00.000001");
+    expect(formatNavigationDateTime(values[1]!, values)).toBe("2026/01/01 09:00:00.000002");
+    expect(formatNavigationDateTime("2026-01-01T00:00:00Z")).toBe("2026/01/01 09:00");
+  });
   it("uses one long, compact, and date-only Japanese format in Japan time", () => {
     const absoluteDate = new Date("2026-01-01T18:04:00.000Z");
 

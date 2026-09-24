@@ -14,6 +14,7 @@ import { contentText } from "@/shared/ui/typography";
 
 export function MatchRecordMetadata({
   confirmDelete,
+  deleteDisabledReason,
   errorMessage,
   isDeletePending,
   match,
@@ -21,6 +22,7 @@ export function MatchRecordMetadata({
   showConfirm,
 }: {
   confirmDelete: () => Promise<void>;
+  deleteDisabledReason?: string | undefined;
   errorMessage: string | null;
   isDeletePending: boolean;
   match: MatchDetailResponse;
@@ -43,23 +45,39 @@ export function MatchRecordMetadata({
       ) : null}
       <ContentWithActions
         actions={
-          <AlertDialog
-            cancelLabel="キャンセル"
-            confirmLabel="削除する"
-            pendingLabel="削除中…"
-            formatError={(error) => formatApiError(error, "削除に失敗しました")}
-            pending={isDeletePending}
-            description={`${formatMatchNoInEvent(match.matchNoInEvent)}を完全に削除します。この操作は取り消せません。`}
-            open={showConfirm}
-            title="試合を削除しますか？"
-            trigger={
-              <Button size="sm" variant="danger" onClick={openDeleteDialog}>
-                削除
-              </Button>
-            }
-            onConfirm={handleDeleteConfirm}
-            onOpenChange={setShowConfirm}
-          />
+          <div className="grid gap-2">
+            <AlertDialog
+              cancelLabel="キャンセル"
+              confirmDisabled={Boolean(deleteDisabledReason)}
+              confirmLabel="削除する"
+              pendingLabel="削除中…"
+              formatError={(error) => formatApiError(error, "削除に失敗しました")}
+              pending={isDeletePending}
+              description={`${formatMatchNoInEvent(match.matchNoInEvent)}を完全に削除します。この操作は取り消せません。${deleteDisabledReason ?? ""}`}
+              open={showConfirm}
+              title="試合を削除しますか？"
+              trigger={
+                <Button
+                  aria-describedby={
+                    deleteDisabledReason ? "match-delete-disabled-reason" : undefined
+                  }
+                  disabled={Boolean(deleteDisabledReason)}
+                  size="sm"
+                  variant="danger"
+                  onClick={openDeleteDialog}
+                >
+                  削除
+                </Button>
+              }
+              onConfirm={handleDeleteConfirm}
+              onOpenChange={setShowConfirm}
+            />
+            {deleteDisabledReason ? (
+              <p className={contentText.supporting} id="match-delete-disabled-reason">
+                {deleteDisabledReason}
+              </p>
+            ) : null}
+          </div>
         }
       >
         <div className="grid min-w-0 gap-2">

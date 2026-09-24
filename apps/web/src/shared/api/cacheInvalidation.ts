@@ -22,6 +22,10 @@ export async function invalidateAfterMatchConfirmed(queryClient: QueryClient): P
   await Promise.all([
     invalidateMatchCollections(queryClient),
     invalidateAnalysisState(queryClient),
+    queryClient.invalidateQueries({
+      queryKey: matchKeys.detailRoot(),
+      predicate: ({ queryKey }) => queryKey.at(-1) === "read-result",
+    }),
     queryClient.invalidateQueries({ queryKey: heldEventKeys.all() }),
   ]);
 }
@@ -30,16 +34,21 @@ export async function invalidateAfterMatchDeleted(
   queryClient: QueryClient,
   matchId?: string,
 ): Promise<void> {
+  if (matchId) await queryClient.cancelQueries({ queryKey: matchKeys.resource(matchId) });
   await Promise.all([
     invalidateMatchCollections(queryClient),
     invalidateAnalysisState(queryClient),
     resetMatchContexts(queryClient, matchId),
+    queryClient.invalidateQueries({
+      queryKey: matchKeys.detailRoot(),
+      predicate: ({ queryKey }) => queryKey[2] !== matchId && queryKey.at(-1) === "read-result",
+    }),
     queryClient.invalidateQueries({ queryKey: heldEventKeys.all() }),
   ]);
 }
 
 export function evictDeletedMatchDetail(queryClient: QueryClient, matchId: string): void {
-  queryClient.removeQueries({ queryKey: matchKeys.detail(matchId) });
+  queryClient.removeQueries({ queryKey: matchKeys.resource(matchId) });
 }
 
 export async function invalidateAfterDraftCancelled(queryClient: QueryClient): Promise<void> {
@@ -61,7 +70,11 @@ export async function invalidateAfterMatchUpdated(
   matchId: string,
 ): Promise<void> {
   await Promise.all([
-    queryClient.invalidateQueries({ queryKey: matchKeys.detail(matchId) }),
+    queryClient.invalidateQueries({
+      queryKey: matchKeys.detailRoot(),
+      predicate: ({ queryKey }) => queryKey.at(-1) === "read-result",
+    }),
+    queryClient.invalidateQueries({ queryKey: matchKeys.identity(matchId), exact: true }),
     queryClient.invalidateQueries({ queryKey: matchKeys.collections() }),
     queryClient.invalidateQueries({ queryKey: heldEventKeys.all() }),
     invalidateAnalysisState(queryClient),
@@ -74,7 +87,12 @@ export async function invalidateAfterMatchNoteReplaced(
   matchId: string,
 ): Promise<void> {
   await Promise.all([
-    queryClient.invalidateQueries({ exact: true, queryKey: matchKeys.detail(matchId) }),
+    // The editor owns the fresh detail read and its separate post-save failure state.
+    queryClient.invalidateQueries({
+      exact: true,
+      queryKey: matchKeys.detail(matchId),
+      refetchType: "none",
+    }),
     queryClient.invalidateQueries({ queryKey: matchKeys.collections() }),
     queryClient.invalidateQueries({ queryKey: heldEventKeys.detailRoot() }),
   ]);

@@ -26,6 +26,7 @@ export function makeHeldEventDetailResponse(
     id: "held-1",
     matchCount: 0,
     nextMatchNo: 1,
+    navigation: {},
     ...overrides,
     matches: (overrides.matches ?? []).map((match) => ({
       ...compact({

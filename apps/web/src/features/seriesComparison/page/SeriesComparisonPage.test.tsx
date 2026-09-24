@@ -6,10 +6,18 @@ import { createMemoryRouter, MemoryRouter, RouterProvider } from "react-router-d
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SeriesComparisonPage } from "@/features/seriesComparison/page/SeriesComparisonPage";
+import { seriesAnalysisKeys } from "@/shared/api/queryKeys";
 import { decodeSeriesAnalysisArtifact } from "@/shared/api/seriesAnalysisArtifactDecoder";
+import {
+  seriesAnalysisAggregateQueryOptions,
+  seriesAnalysisMatchContextQueryOptions,
+  seriesAnalysisOptionsQueryOptions,
+  seriesAnalysisStatusQueryOptions,
+} from "@/shared/api/seriesAnalysisQueryOptions";
 import { createDeferred } from "@/test/deferred";
 import { setupMsw } from "@/test/msw/lifecycle";
 import {
+  analysisArtifact,
   makeFourPlayerSeriesAnalysisMatchContext,
   makeOwnerComparisonAggregate,
   makeSeriesAnalysisAggregate,
@@ -48,6 +56,23 @@ describe("SeriesComparisonPage", () => {
         );
       }),
     );
+    const queryClient = createTestQueryClient();
+    // This regression starts from a loaded, fresh snapshot. Await the real queries (including
+    // their generated decoders) and lazy view before timing UI interactions under coverage.
+    queryClient.setQueryDefaults(seriesAnalysisKeys.all(), { staleTime: Infinity });
+    const query = {
+      artifactId: analysisArtifact.artifactId,
+      gameTitleId: analysisArtifact.gameTitleId,
+    };
+    await Promise.all([
+      queryClient.fetchQuery(seriesAnalysisOptionsQueryOptions()),
+      queryClient.fetchQuery(seriesAnalysisStatusQueryOptions(query.gameTitleId)),
+      queryClient.fetchQuery(seriesAnalysisAggregateQueryOptions(query)),
+      queryClient.fetchQuery(
+        seriesAnalysisMatchContextQueryOptions({ ...query, matchId: "match-12" }),
+      ),
+      import("@/features/seriesComparison/page/SeriesAnalysisContextView"),
+    ]);
     const router = createMemoryRouter(
       [{ path: "/analytics/series", element: <SeriesComparisonPage /> }],
       {
@@ -56,13 +81,18 @@ describe("SeriesComparisonPage", () => {
         ],
       },
     );
-    render(
-      <QueryClientProvider client={createTestQueryClient()}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>,
-    );
-    const select = await screen.findByRole("combobox", { name: "オーナー比較の指標" });
-    await waitFor(() => expect(select.closest("[inert]")).toBeNull());
+    await act(async () => {
+      render(
+        <QueryClientProvider client={queryClient}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>,
+      );
+    });
+    const select = screen.getByRole("combobox", { name: "オーナー比較の指標" });
+    expect(select.closest("[inert]")).toBeNull();
+    expect(
+      screen.getByRole("columnheader", { name: /あかねまみ.*この試合のオーナー/u }),
+    ).toHaveAttribute("data-highlighted", "true");
     const scroller = screen.getByRole("region", { name: "オーナー別の平均順位の表" });
     scroller.scrollLeft = 123;
     let blockedOwnerControl = false;

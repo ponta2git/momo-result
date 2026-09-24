@@ -1095,8 +1095,7 @@ async function expectOwnerColumn(
 ): Promise<void> {
   const header = table.getByRole("columnheader", { name: new RegExp(ownerName, "u") });
   await expect(header).toContainText("この試合のオーナー");
-  await expect(header).toHaveCSS("outline-style", "solid");
-  await expect(header).not.toHaveCSS("outline-width", "0px");
+  await expectOwnerBorder(header, ["2px", "2px", "2px", "2px"]);
   const columnIndex = await header.evaluate(
     (element) => (element as HTMLTableCellElement).cellIndex,
   );
@@ -1106,8 +1105,7 @@ async function expectOwnerColumn(
       .filter({ has: page.getByRole("rowheader", { exact: true, name: playerName }) });
     const cell = row.getByRole("cell").nth(columnIndex - 1);
     await expect(cell).toHaveAttribute("data-highlighted", "true");
-    await expect(cell).toHaveCSS("outline-style", "solid");
-    await expect(cell).not.toHaveCSS("outline-width", "0px");
+    await expectOwnerBorder(cell, ["0px", "2px", "2px", "2px"]);
     if (values) {
       const expectedValue = values[index];
       if (expectedValue === undefined) throw new Error(`Missing owner value for ${playerName}`);
@@ -1115,6 +1113,25 @@ async function expectOwnerColumn(
     }
   }
   await expect(table.getByText("この試合のオーナー", { exact: true })).toHaveCount(1);
+}
+
+async function expectOwnerBorder(cell: Locator, widths: readonly string[]): Promise<void> {
+  const border = await cell.evaluate((element) => {
+    const style = getComputedStyle(element, "::after");
+    return {
+      widths: [
+        style.borderTopWidth,
+        style.borderRightWidth,
+        style.borderBottomWidth,
+        style.borderLeftWidth,
+      ],
+      content: style.content,
+      pointerEvents: style.pointerEvents,
+    };
+  });
+  expect(border.widths).toEqual(widths);
+  expect(border.content).not.toBe("none");
+  expect(border.pointerEvents).toBe("none");
 }
 
 async function locatorPageTop(locator: Locator): Promise<number> {

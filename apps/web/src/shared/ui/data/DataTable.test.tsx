@@ -36,7 +36,6 @@ describe("DataTable", () => {
     const cells = screen.getAllByRole("cell");
     for (const cell of [header, ...cells]) {
       expect(cell).toHaveAttribute("data-highlighted", "true");
-      expect(cell).toHaveClass("outline-2", "-outline-offset-2");
       expect(cell).not.toHaveAttribute("aria-selected");
       expect(cell).not.toHaveAttribute("tabindex");
     }
@@ -54,7 +53,6 @@ describe("DataTable", () => {
     rendered.rerender(table(false));
     for (const cell of [header, ...cells]) {
       expect(cell).not.toHaveAttribute("data-highlighted");
-      expect(cell).not.toHaveClass("outline-2");
     }
   });
 

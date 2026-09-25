@@ -133,6 +133,7 @@ function HeldEventDetailReadyContent({
 
       <AdjacentNavigation
         label="開催の前後移動"
+        alignment="outward"
         previous={navigation.adjacent.previous}
         next={navigation.adjacent.next}
         disabled={navigation.adjacent.disabled}

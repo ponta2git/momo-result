@@ -3,6 +3,7 @@
 import { waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { createDeferred } from "@/test/deferred";
 import { installAnchorClickMock, installFetchMock, installObjectUrlMock } from "@/test/doubles/dom";
 
 import { downloadExportMatches } from "./exportDownload";
@@ -55,5 +56,23 @@ describe("exportDownload", () => {
       kind: "timeout",
       title: "出力が完了しませんでした",
     });
+  });
+
+  it("does not start a browser download if cancellation wins before the response arrives", async () => {
+    const response = createDeferred<Response>();
+    const controller = new AbortController();
+    const anchorClick = installAnchorClickMock();
+    // A transport may finish despite cancellation; the download side effect still needs ownership.
+    installFetchMock(() => response.promise);
+
+    const result = downloadExportMatches(
+      { format: "csv", scope: "all" },
+      { signal: controller.signal },
+    );
+    controller.abort();
+    response.resolve(new Response("csv", { headers: { "Content-Type": "text/csv" } }));
+
+    await expect(result).resolves.toEqual({ kind: "cancelled" });
+    expect(anchorClick.click).not.toHaveBeenCalled();
   });
 });

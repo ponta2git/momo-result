@@ -24,6 +24,7 @@ import {
   notificationSettingsKeys,
   ocrDraftKeys,
 } from "@/shared/api/queryKeys";
+import { loadResourceReadResult } from "@/shared/api/resourceReadResult";
 
 export function adminLoginAccountsQueryOptions() {
   return queryOptions({
@@ -202,6 +203,28 @@ export function matchIdentityQueryOptions(matchId: string | undefined, enabled =
     queryFn: ({ signal }) => {
       if (!matchId) throw new Error("match identity query is not ready");
       return getMatchIdentity(matchId, { signal });
+    },
+    enabled: enabled && Boolean(matchId),
+  });
+}
+
+export function heldEventSummaryReadQueryOptions(heldEventId: string | undefined, enabled = true) {
+  return queryOptions({
+    queryKey: heldEventKeys.summaryRead(heldEventId),
+    queryFn: ({ signal }) => {
+      if (!heldEventId) throw new Error("held event summary read query is not ready");
+      return loadResourceReadResult(() => getHeldEventSummary(heldEventId, { signal }));
+    },
+    enabled: enabled && Boolean(heldEventId),
+  });
+}
+
+export function matchIdentityReadQueryOptions(matchId: string | undefined, enabled = true) {
+  return queryOptions({
+    queryKey: matchKeys.identityRead(matchId),
+    queryFn: ({ signal }) => {
+      if (!matchId) throw new Error("match identity read query is not ready");
+      return loadResourceReadResult(() => getMatchIdentity(matchId, { signal }));
     },
     enabled: enabled && Boolean(matchId),
   });

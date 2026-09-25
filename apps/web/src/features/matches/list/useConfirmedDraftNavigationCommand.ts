@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import {
@@ -40,7 +40,7 @@ export function useConfirmedDraftNavigationCommand(
   const [presentation, setPresentation] = useState(() => emptyPresentation(scope));
   if (presentation.scope !== scope) setPresentation(emptyPresentation(scope));
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const owner: NavigationOwner = { active: true, checkingIds: new Set(), latestIntent: 0, scope };
     ownerRef.current = owner;
     return () => {

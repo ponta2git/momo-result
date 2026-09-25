@@ -11,13 +11,12 @@ import {
 } from "@/features/exports/exportCandidateData";
 import type { ExportCandidate, ExportScope } from "@/features/exports/exportTypes";
 import { buildCandidateSupportIssue, buildCandidateView } from "@/features/exports/exportViewModel";
-import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 import {
-  heldEventSummaryQueryOptions,
+  heldEventSummaryReadQueryOptions,
   heldEventsQueryOptions,
   matchExportCandidatesQueryOptions,
-  matchIdentityQueryOptions,
+  matchIdentityReadQueryOptions,
   seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
 import { cursorForPage } from "@/shared/lib/cursorPagination";
@@ -86,21 +85,31 @@ export function useExportCandidates({
     scope === "heldEvent" && Boolean(selectedId) && !selectedIsOnCurrentPage;
   const shouldResolveMatch = scope === "match" && Boolean(selectedId) && !selectedIsOnCurrentPage;
 
-  const heldEventSummaryQuery = useQuery(
-    heldEventSummaryQueryOptions(
-      scope === "heldEvent" ? selectedId : undefined,
-      shouldResolveHeldEvent,
-    ),
-  );
-  const matchIdentityQuery = useQuery(
-    matchIdentityQueryOptions(scope === "match" ? selectedId : undefined, shouldResolveMatch),
-  );
+  // A cached directory row cannot disable revalidation of a target already confirmed absent.
+  const heldEventSummaryQuery = useQuery({
+    ...heldEventSummaryReadQueryOptions(scope === "heldEvent" ? selectedId : undefined),
+    enabled: (query) =>
+      shouldResolveHeldEvent ||
+      (scope === "heldEvent" && Boolean(selectedId) && query.state.data?.kind === "notFound"),
+  });
+  const matchIdentityQuery = useQuery({
+    ...matchIdentityReadQueryOptions(scope === "match" ? selectedId : undefined),
+    enabled: (query) =>
+      shouldResolveMatch ||
+      (scope === "match" && Boolean(selectedId) && query.state.data?.kind === "notFound"),
+  });
   const canonicalResolvedCandidate =
     selectedOnCurrentPage ??
     (scope === "heldEvent"
-      ? candidateFromHeldEventSummary(heldEventSummaryQuery.data)
+      ? candidateFromHeldEventSummary(
+          heldEventSummaryQuery.data?.kind === "found"
+            ? heldEventSummaryQuery.data.value
+            : undefined,
+        )
       : scope === "match"
-        ? candidateFromMatchIdentity(matchIdentityQuery.data)
+        ? candidateFromMatchIdentity(
+            matchIdentityQuery.data?.kind === "found" ? matchIdentityQuery.data.value : undefined,
+          )
         : undefined);
   const selectedDetailQuery =
     scope === "heldEvent"
@@ -110,11 +119,13 @@ export function useExportCandidates({
         : undefined;
   const shouldResolveSelectedTarget = shouldResolveHeldEvent || shouldResolveMatch;
   const selectedDetailFailure =
-    shouldResolveSelectedTarget && selectedDetailQuery && shouldShowQueryError(selectedDetailQuery)
-      ? normalizeUnknownApiError(selectedDetailQuery.error).status === 404
-        ? ("not-found" as const)
-        : ("load-failed" as const)
-      : null;
+    selectedDetailQuery?.data?.kind === "notFound"
+      ? ("not-found" as const)
+      : shouldResolveSelectedTarget &&
+          selectedDetailQuery &&
+          shouldShowQueryError(selectedDetailQuery)
+        ? ("load-failed" as const)
+        : null;
   const snapshotCandidate =
     selectionSnapshot?.scope === scope && selectionSnapshot.candidate.value === selectedId
       ? selectionSnapshot.candidate
@@ -135,11 +146,13 @@ export function useExportCandidates({
           snapshotCandidate,
         });
   const resolvedCandidate = selected.candidate;
-  const selectedResolution = useRetryNotice(
-    selected.state,
+  const retrySelectionFailed = useRetryNotice(
+    selected.state === "load-failed",
     selectedDetailQuery?.isFetching === true,
     `${scope}:${selectedId}`,
   );
+  const selectedResolution =
+    selected.state === "resolving" && retrySelectionFailed ? "load-failed" : selected.state;
   const hasResolvedTarget = Boolean(selectedId && resolvedCandidate?.value === selectedId);
   const scopeChanging =
     scope === "heldEvent"
@@ -211,7 +224,10 @@ export function useExportCandidates({
     selectedTargetRefreshFailed: selectedDetailRefreshFailed,
   });
   const view = buildCandidateView({
-    candidates,
+    candidates:
+      selectedDetailFailure === "not-found"
+        ? candidates.filter((candidate) => candidate.value !== selectedId)
+        : candidates,
     error,
     loading: loading && !error,
     pagination,

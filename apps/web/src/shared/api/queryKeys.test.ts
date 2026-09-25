@@ -161,6 +161,14 @@ describe("shared query keys", () => {
     queryClient.setQueryData(matchKeys.detail("match-2"), { matchId: "match-2" });
     queryClient.setQueryData(matchKeys.identity("match-1"), { matchId: "match-1" });
     queryClient.setQueryData(matchKeys.identity("match-2"), { matchId: "match-2" });
+    queryClient.setQueryData(matchKeys.identityRead("match-1"), {
+      kind: "found",
+      value: { matchId: "match-1" },
+    });
+    queryClient.setQueryData(matchKeys.identityRead("match-2"), {
+      kind: "found",
+      value: { matchId: "match-2" },
+    });
     queryClient.setQueryData(matchKeys.list({ status: "confirmed" }), { items: [] });
 
     await invalidateAfterMatchDeleted(queryClient, "match-1");
@@ -176,6 +184,11 @@ describe("shared query keys", () => {
     expect(queryClient.getQueryState(matchKeys.detail("match-1"))).toBeUndefined();
     expect(queryClient.getQueryState(matchKeys.detail("match-2"))?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(matchKeys.identity("match-1"))).toBeUndefined();
+    expect(queryClient.getQueryData(matchKeys.identityRead("match-1"))).toBeUndefined();
+    expect(queryClient.getQueryData(matchKeys.identityRead("match-2"))).toEqual({
+      kind: "found",
+      value: { matchId: "match-2" },
+    });
     expect(queryClient.getQueryState(matchKeys.identity("match-2"))?.isInvalidated).toBe(false);
   });
 

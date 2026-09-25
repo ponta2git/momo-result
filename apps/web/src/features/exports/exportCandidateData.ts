@@ -18,11 +18,11 @@ export function resolveExportCandidate(input: {
   shouldResolve: boolean;
   snapshotCandidate: ExportCandidate | undefined;
 }): ExportCandidateResolution {
-  if (!input.shouldResolve) {
-    return { candidate: input.canonicalCandidate, state: "resolved" };
-  }
   if (input.detailFailure === "not-found") {
     return { candidate: undefined, state: "not-found" };
+  }
+  if (!input.shouldResolve) {
+    return { candidate: input.canonicalCandidate, state: "resolved" };
   }
 
   const candidate = input.canonicalCandidate ?? input.snapshotCandidate;

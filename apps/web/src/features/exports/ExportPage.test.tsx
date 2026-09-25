@@ -3,11 +3,19 @@ import type { QueryClient } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import {
+  createMemoryRouter,
+  MemoryRouter,
+  Route,
+  RouterProvider,
+  Routes,
+  useLocation,
+} from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ExportPage } from "@/features/exports/ExportPage";
-import { matchKeys } from "@/shared/api/queryKeys";
+import type { ProblemDetails } from "@/shared/api/problemDetails";
+import { heldEventKeys, matchKeys } from "@/shared/api/queryKeys";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { installAnchorClickMock } from "@/test/doubles/dom";
@@ -17,6 +25,14 @@ import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 
 setupMsw();
+
+const notFoundProblem = {
+  type: "about:blank",
+  title: "Not Found",
+  status: 404,
+  detail: "The selected resource does not exist.",
+  code: "NOT_FOUND",
+} satisfies ProblemDetails;
 
 type RenderOptions = {
   downloadTimeoutMs?: number;
@@ -57,6 +73,23 @@ function renderPage({ downloadTimeoutMs, path = "/exports", slowThresholdMs }: R
   );
 }
 
+function renderExportHistory(previous: string) {
+  setDevUser();
+  const router = createMemoryRouter(
+    [
+      { path: "/exports", element: <ExportPage /> },
+      { path: "/matches", element: <p>matches</p> },
+    ],
+    { initialEntries: [previous, "/exports?format=csv"] },
+  );
+  render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  );
+  return router;
+}
+
 function expectSingleCandidateScrollRegion(label: "開催" | "試合") {
   const dialog = screen.getByRole("dialog", { name: `${label}を選択` });
   expect(dialog).toHaveClass("overflow-y-hidden");
@@ -77,6 +110,25 @@ describe("ExportPage", () => {
     queryClient = createTestQueryClient();
     user = userEvent.setup();
     anchorClick = installAnchorClickMock();
+  });
+
+  it("announces initial candidate loading before showing an empty directory", async () => {
+    const gate = createDeferred();
+    server.use(
+      http.get("/api/held-events", async () => {
+        await gate.promise;
+        return HttpResponse.json({ items: [] });
+      }),
+    );
+    renderPage({ path: "/exports?heldEventId=" });
+
+    expect(screen.getByRole("status", { name: "開催候補を読み込み中" })).toHaveTextContent(
+      "候補を読み込んでいます。",
+    );
+    expect(screen.queryByText("開催候補がありません")).not.toBeInTheDocument();
+    await act(async () => gate.resolve());
+    expect(await screen.findByText("開催候補がありません")).toBeInTheDocument();
+    expect(screen.queryByRole("status", { name: "開催候補を読み込み中" })).not.toBeInTheDocument();
   });
 
   it("downloads all matches as CSV by default", async () => {
@@ -103,6 +155,81 @@ describe("ExportPage", () => {
     expect(screen.getByText("momo-results-all.csv")).toBeInTheDocument();
     expect(anchorClick.clickedAnchors[0]?.download).toBe("momo-results-all.csv");
   });
+
+  it.each(["success", "failure"])(
+    "does not show an earlier %s under conditions restored from browser history",
+    async (outcome) => {
+      server.use(
+        http.get("/api/exports/matches", () =>
+          outcome === "success"
+            ? new HttpResponse("csv", {
+                headers: {
+                  "Content-Disposition": 'attachment; filename="earlier.csv"',
+                  "Content-Type": "text/csv",
+                },
+              })
+            : HttpResponse.json({ detail: "unavailable" }, { status: 500 }),
+        ),
+      );
+      const router = renderExportHistory("/exports?format=tsv");
+      await user.click(screen.getByRole("button", { name: "全試合をCSVでダウンロード" }));
+      await screen.findByText(
+        outcome === "success" ? "ダウンロードを開始しました" : "ダウンロードに失敗しました",
+      );
+
+      await act(async () => router.navigate(-1));
+      expect(
+        await screen.findByRole("button", { name: "全試合をTSVでダウンロード" }),
+      ).toBeEnabled();
+      expect(screen.queryByText("ダウンロードを開始しました")).not.toBeInTheDocument();
+      expect(screen.queryByText("ダウンロードに失敗しました")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "もう一度試す" })).not.toBeInTheDocument();
+    },
+  );
+
+  it.each([
+    { destination: "/exports?format=tsv", action: "全試合をTSVでダウンロード" },
+    { destination: "/exports?matchId=match-1&format=csv", action: "この試合をCSVでダウンロード" },
+    { destination: "/matches", action: undefined },
+  ])(
+    "cancels a pending export when history moves to $destination",
+    async ({ destination, action }) => {
+      const gate = createDeferred();
+      let exportSignal: AbortSignal | undefined;
+      server.use(
+        http.get("/api/exports/matches", async ({ request }) => {
+          exportSignal = request.signal;
+          await gate.promise;
+          return new HttpResponse("csv", {
+            headers: {
+              "Content-Disposition": 'attachment; filename="abandoned.csv"',
+              "Content-Type": "text/csv",
+            },
+          });
+        }),
+      );
+      const router = renderExportHistory(destination);
+      await user.click(screen.getByRole("button", { name: "全試合をCSVでダウンロード" }));
+      await waitFor(() => expect(exportSignal).toBeDefined());
+      expect(screen.getByRole("button", { name: "作成中…" })).toBeDisabled();
+
+      await act(async () => router.navigate(-1));
+      await waitFor(() => expect(exportSignal?.aborted).toBe(true));
+      await act(async () => gate.resolve());
+      await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+      expect(anchorClick.click).not.toHaveBeenCalled();
+      expect(screen.queryByText("ダウンロードを開始しました")).not.toBeInTheDocument();
+      expect(screen.queryByText("ダウンロードに失敗しました")).not.toBeInTheDocument();
+      if (action) {
+        expect(await screen.findByRole("button", { name: action })).toBeEnabled();
+        await user.click(screen.getByRole("button", { name: action }));
+        await screen.findByText("ダウンロードを開始しました");
+        expect(anchorClick.click).toHaveBeenCalledTimes(1);
+      } else {
+        expect(router.state.location.pathname).toBe("/matches");
+      }
+    },
+  );
 
   it("keeps the exclusion notice visible for every export scope", async () => {
     renderPage();
@@ -463,14 +590,7 @@ describe("ExportPage", () => {
   ])(
     "keeps a missing scoped deep link non-downloadable without exposing its opaque ID ($title)",
     async ({ detailPath, downloadName, missingId, path, recoveryName, title }) => {
-      server.use(
-        http.get(detailPath, () =>
-          HttpResponse.json(
-            { detail: "not found", status: 404, title: "Not Found" },
-            { status: 404 },
-          ),
-        ),
-      );
+      server.use(http.get(detailPath, () => HttpResponse.json(notFoundProblem, { status: 404 })));
 
       renderPage({ path });
 
@@ -507,6 +627,139 @@ describe("ExportPage", () => {
     expect(await screen.findByText(/第7試合.*CSVで書き出します。/u)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "この試合をCSVでダウンロード" })).toBeEnabled();
     expect(attempts).toBe(2);
+  });
+
+  it.each([
+    {
+      scope: "match",
+      directoryPath: "/api/matches",
+      detailPath: "/api/matches/absent-target/identity",
+      queryKey: matchKeys.resource("absent-target"),
+      response: makeMatchDetail({ matchId: "absent-target", matchNoInEvent: 7 }),
+      path: "/exports?matchId=absent-target",
+      missingTitle: "指定された試合が見つかりません",
+      action: "この試合をCSVでダウンロード",
+    },
+    {
+      scope: "heldEvent",
+      directoryPath: "/api/held-events",
+      detailPath: "/api/held-events/absent-target/summary",
+      queryKey: heldEventKeys.resource("absent-target"),
+      response: makeHeldEventDetailResponse({ id: "absent-target" }),
+      path: "/exports?heldEventId=absent-target",
+      missingTitle: "指定された開催が見つかりません",
+      action: "この開催をCSVでダウンロード",
+    },
+  ])(
+    "keeps a confirmed missing $scope target absent during later failed revalidation",
+    async ({
+      action,
+      detailPath,
+      directoryPath,
+      missingTitle,
+      path,
+      queryKey,
+      response,
+      scope,
+    }) => {
+      let phase: "found" | "missing" | "failed" = "found";
+      const failureGate = createDeferred();
+      let failureRequested = false;
+      server.use(
+        http.get(directoryPath, () =>
+          HttpResponse.json({
+            items:
+              phase === "found"
+                ? []
+                : [
+                    scope === "match"
+                      ? { ...response, id: "absent-target", kind: "match", status: "confirmed" }
+                      : response,
+                  ],
+          }),
+        ),
+        http.get(detailPath, async () => {
+          if (phase === "missing") return HttpResponse.json(notFoundProblem, { status: 404 });
+          if (phase === "failed") {
+            failureRequested = true;
+            await failureGate.promise;
+            return HttpResponse.json({ detail: "unavailable" }, { status: 503 });
+          }
+          return HttpResponse.json(response);
+        }),
+      );
+      renderPage({ path });
+      expect(await screen.findByRole("button", { name: action })).toBeEnabled();
+
+      phase = "missing";
+      await act(async () => queryClient.invalidateQueries({ queryKey }));
+      expect(await screen.findByText(missingTitle)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: action })).not.toBeInTheDocument();
+
+      // An older list snapshot cannot override the selected target's confirmed absence.
+      await act(async () =>
+        queryClient.invalidateQueries({
+          queryKey: scope === "match" ? matchKeys.collections() : heldEventKeys.listRoot(),
+        }),
+      );
+      expect(await screen.findByText(missingTitle)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: action })).not.toBeInTheDocument();
+
+      phase = "failed";
+      const refresh = queryClient.invalidateQueries({ queryKey });
+      await waitFor(() => expect(failureRequested).toBe(true));
+      expect(await screen.findByText(missingTitle)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: action })).not.toBeInTheDocument();
+      await act(async () => {
+        failureGate.resolve();
+        await refresh;
+      });
+      expect(await screen.findByText(missingTitle)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: action })).not.toBeInTheDocument();
+
+      phase = "found";
+      await act(async () => queryClient.invalidateQueries({ queryKey }));
+      expect(await screen.findByRole("button", { name: action })).toBeEnabled();
+    },
+  );
+
+  it("never lets a retained retry notice override a newly confirmed missing target", async () => {
+    const gate = createDeferred();
+    let revalidating = false;
+    let requestStarted = false;
+    server.use(
+      http.get("/api/matches", () => HttpResponse.json({ items: [] })),
+      http.get("/api/matches/match-1/identity", async () => {
+        if (!revalidating) return HttpResponse.json(makeMatchDetail());
+        requestStarted = true;
+        await gate.promise;
+        return new HttpResponse(null, { status: 503 });
+      }),
+    );
+    renderPage({ path: "/exports?matchId=match-1" });
+    expect(
+      await screen.findByRole("button", { name: "この試合をCSVでダウンロード" }),
+    ).toBeEnabled();
+
+    let refresh: Promise<void> | undefined;
+    act(() => {
+      // Cache changes may coalesce before React presents an intermediate settled state.
+      queryClient.setQueryData(matchKeys.identityRead("match-1"), { kind: "notFound" });
+      revalidating = true;
+      refresh = queryClient.invalidateQueries({ queryKey: matchKeys.identityRead("match-1") });
+    });
+    await waitFor(() => expect(requestStarted).toBe(true));
+    try {
+      expect(await screen.findByText("指定された試合が見つかりません")).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "この試合をCSVでダウンロード" }),
+      ).not.toBeInTheDocument();
+    } finally {
+      await act(async () => {
+        gate.resolve();
+        await refresh;
+      });
+    }
   });
 
   it.each([

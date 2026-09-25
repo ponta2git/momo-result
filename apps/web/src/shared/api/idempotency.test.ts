@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   createIdempotencyKey,
@@ -9,11 +9,6 @@ import {
 } from "@/shared/api/idempotency";
 
 describe("idempotency key store", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-    vi.unstubAllGlobals();
-  });
-
   it("reuses the same key for the same operation and JSON payload", () => {
     const store = createIdempotencyKeyStore();
     const first = store.begin("matchWorkspace.confirmMatch", { b: 2, a: 1 }).key;

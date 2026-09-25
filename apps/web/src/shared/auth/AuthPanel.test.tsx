@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { AuthPanel } from "@/shared/auth/AuthPanel";
 
@@ -8,10 +8,6 @@ function preventDocumentNavigation(event: MouseEvent) {
 }
 
 describe("AuthPanel", () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
   it("keeps modified navigation available and restores a pending login after browser back", () => {
     vi.stubEnv("DEV", false);
     // Cancel jsdom navigation after React has handled the native click.

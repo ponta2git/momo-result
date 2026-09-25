@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 
 import {
@@ -34,7 +35,7 @@ describe("shared date-time formatting", () => {
     const iso = toIsoFromLocalDateTime("2026-01-01T09:00");
 
     expect(toLocalDateTimeInputValue(localDate)).toBe("2026-01-02T03:04");
-    expect(new Date(iso).toISOString()).toBe(iso);
+    expect(iso).toBe(new Date(2026, 0, 1, 9, 0).toISOString());
     expect(toIsoFromLocalDateTime("2026-01-01T09:00:00.000Z")).toBe("2026-01-01T09:00:00.000Z");
     expect(toIsoFromLocalDateTime("invalid-date")).toBe("invalid-date");
   });

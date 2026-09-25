@@ -4,20 +4,20 @@ import { describe, expect, it } from "vitest";
 import { buildExportMatchesPath } from "@/shared/api/exports";
 
 describe("exports API facade", () => {
-  it("builds all match export query", () => {
-    expect(buildExportMatchesPath({ format: "csv", scope: "all" })).toBe(
-      "/api/exports/matches?format=csv",
-    );
-  });
-
-  it("passes only the active scope id", () => {
+  it.each([
+    ["all", "format=tsv"],
+    ["season", "format=tsv&seasonMasterId=season-1"],
+    ["heldEvent", "format=tsv&heldEventId=held-1"],
+    ["match", "format=tsv&matchId=match-1"],
+  ] as const)("exports only the selected %s scope even when other IDs remain in input", (scope, query) => {
     expect(
       buildExportMatchesPath({
         format: "tsv",
+        seasonMasterId: "season-1",
         heldEventId: "held-1",
         matchId: "match-1",
-        scope: "match",
+        scope,
       }),
-    ).toBe("/api/exports/matches?format=tsv&matchId=match-1");
+    ).toBe(`/api/exports/matches?${query}`);
   });
 });

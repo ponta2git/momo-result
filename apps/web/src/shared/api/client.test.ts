@@ -192,18 +192,36 @@ describe("apiRequest", () => {
     expect(logoutHeaders.has("Idempotency-Key")).toBe(false);
   });
 
-  it("uses caller-provided idempotency key for manual retries", async () => {
-    const fetchMock = installFetchMock(async () => Response.json({ ok: true }));
-
-    await apiRequest("/api/matches", {
+  it("preserves the request and caller's key on explicit retry without retrying a mutation automatically", async () => {
+    const fetchMock = installFetchMock()
+      .mockRejectedValueOnce(new TypeError("response lost"))
+      .mockResolvedValueOnce(Response.json({ matchId: "match-1" }));
+    const signal = new AbortController().signal;
+    const options = {
       method: "POST",
       body: { matchNoInEvent: 1 },
       idempotency: { key: "submit-key-1" },
+      signal,
+    } as const;
+
+    await expect(apiRequest("/api/matches", options)).rejects.toMatchObject({
+      detail: "応答を受け取れませんでした。",
     });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await expect(apiRequest("/api/matches", options)).resolves.toEqual({ matchId: "match-1" });
 
     const calls = fetchCallsOf(fetchMock);
-    const headers = requireInit(calls[0]?.[1]).headers as Headers;
-    expect(headers.get("Idempotency-Key")).toBe("submit-key-1");
+    expect(calls).toHaveLength(2);
+    for (const [path, init] of calls) {
+      expect(path).toBe("/api/matches");
+      expect(init).toMatchObject({
+        method: "POST",
+        body: '{"matchNoInEvent":1}',
+        credentials: "include",
+        signal,
+      });
+      expect(new Headers(init?.headers).get("Idempotency-Key")).toBe("submit-key-1");
+    }
   });
 
   it("attaches an explicit idempotency key to multipart mutations without setting Content-Type", async () => {
@@ -219,20 +237,6 @@ describe("apiRequest", () => {
     const headers = requireInit(calls[0]?.[1]).headers as Headers;
     expect(headers.get("Idempotency-Key")).toBe("upload-key-1");
     expect(headers.has("Content-Type")).toBe(false);
-  });
-
-  it("attaches caller-provided idempotency key to any JSON mutation", async () => {
-    const fetchMock = installFetchMock(async () => Response.json({ ok: true }));
-
-    await apiRequest("/api/custom-mutation", {
-      method: "POST",
-      body: { ok: true },
-      idempotency: { key: "custom-key-1" },
-    });
-
-    const calls = fetchCallsOf(fetchMock);
-    const headers = requireInit(calls[0]?.[1]).headers as Headers;
-    expect(headers.get("Idempotency-Key")).toBe("custom-key-1");
   });
 
   it("sends OCR cancellation to the encoded job resource", async () => {

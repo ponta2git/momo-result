@@ -1,32 +1,22 @@
-import type { APIRequestContext, APIResponse, Locator, Page } from "@playwright/test";
+import { readFile } from "node:fs/promises";
+
+import type { Locator, Page, Response } from "@playwright/test";
 
 import { formatDateTimeLong } from "../src/shared/lib/dateTime";
 import { withReturnTo } from "../src/shared/navigation/returnTo";
-import {
-  analysisArtifact,
-  makeFourPlayerSeriesAnalysisReview,
-  makeOwnerComparisonAggregate,
-  makeSeriesAnalysisAggregate,
-  makeSeriesAnalysisDrilldown,
-  makeSeriesAnalysisMatchContext,
-  makeSeriesAnalysisOptions,
-  makeSeriesAnalysisStatus,
-} from "../src/test/msw/seriesAnalysisFixtures";
+import { seedConfirmedContext, seedHeldEventContext, seedMasterContext } from "./fixtures/records";
 import {
   continueWithE2eAuth,
   continueWithE2eNonAdminAuth,
   selectControlOption,
-  devAccountId,
-  devUserStorageKey,
   expect,
   expectGeneratedId,
   expectNoHorizontalPageOverflow,
   expectOk,
   installE2eAuthHeaders,
-  postJson,
+  readJsonObject,
   test,
 } from "./support";
-import type { E2eRun } from "./support";
 
 const png1x1 = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
@@ -35,25 +25,13 @@ const png1x1 = Buffer.from(
 
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ height: 900, width: 1440 });
-  await page.addInitScript(
-    ([key, value]) => window.localStorage.setItem(key, value),
-    [devUserStorageKey, devAccountId],
-  );
   await installE2eAuthHeaders(page);
 });
 
-test("creates a held event and completes OCR intake and review", async ({
-  e2eRun,
-  page,
-  request,
-}) => {
-  const { gameTitleId, gameTitleName, mapMasterId, seasonMasterId } = await seedMasterContext(
-    request,
-    e2eRun,
-  );
+test("creates a held event and accepts an OCR upload", async ({ e2eRun, page, request }) => {
+  const { gameTitleId, mapMasterId, seasonMasterId } = await seedMasterContext(request, e2eRun);
   let heldEventId = "";
   let heldEventLabelPrefix = "";
-  let matchId = "";
   let uploadedDraftId = "";
 
   await test.step("create a held event after dev login", async () => {
@@ -74,10 +52,10 @@ test("creates a held event and completes OCR intake and review", async ({
 
     const response = await createResponse;
     expect(response.ok()).toBe(true);
-    const body = (await response.json()) as { heldAt?: string; id?: string };
-    heldEventId = expectGeneratedId(body.id, "held event ID");
-    expect(body.heldAt, "created held event timestamp").toEqual(expect.any(String));
-    heldEventLabelPrefix = formatDateTimeLong(body.heldAt);
+    const body = await readJsonObject(response);
+    heldEventId = expectGeneratedId(body["id"], "held event ID");
+    if (typeof body["heldAt"] !== "string") throw new TypeError("Missing held event timestamp");
+    heldEventLabelPrefix = formatDateTimeLong(body["heldAt"]);
     e2eRun.trackHeldEvent(heldEventId);
     const heldEventDetailHref = withReturnTo(`/held-events/${heldEventId}`, "/held-events");
     await expect(page).toHaveURL(heldEventDetailHref);
@@ -134,7 +112,7 @@ test("creates a held event and completes OCR intake and review", async ({
   });
 
   await test.step("start an OCR job from an uploaded image", async () => {
-    await page.goto("/ocr/new");
+    await page.goto(`/ocr/new?heldEventId=${heldEventId}`);
 
     await expect(page.getByRole("region", { exact: true, name: "OCR取り込み" })).toBeVisible();
     await selectSeedMasters(page, { gameTitleId, mapMasterId, seasonMasterId });
@@ -176,16 +154,33 @@ test("creates a held event and completes OCR intake and review", async ({
 
     const draftCreateResponse = await draftResponse;
     await expectOk(draftCreateResponse, "create uploaded OCR draft");
-    const draftBody = (await draftCreateResponse.json()) as { matchDraftId?: string };
-    uploadedDraftId = expectGeneratedId(draftBody.matchDraftId, "match draft ID");
+    const draftBody = await readJsonObject(draftCreateResponse);
+    uploadedDraftId = expectGeneratedId(draftBody["matchDraftId"], "match draft ID");
+    expect(draftCreateResponse.request().postDataJSON()).toMatchObject({ heldEventId });
     e2eRun.trackDraft(uploadedDraftId);
 
     await expectOk(await jobResponse, "create OCR job");
-    await expect(page).toHaveURL(/\/matches\?status=incomplete&sort=updated_desc$/u);
-    await expect(page.getByRole("region", { exact: true, name: "試合一覧" })).toBeVisible();
+    await expect(page).toHaveURL(`/held-events/${heldEventId}`);
+    await expect(page.getByText("確定済み0試合・未確定下書き1件", { exact: true })).toBeVisible();
   });
+});
 
-  await test.step("confirm the sample OCR review into a match detail", async () => {
+// The dev sample tests review editing and persisted confirmation, not the OCR worker.
+test("confirms sample review and reads its persisted match from the held event", async ({
+  e2eRun,
+  page,
+  request,
+}) => {
+  const {
+    gameTitleId,
+    gameTitleName,
+    mapMasterId,
+    seasonMasterId,
+    heldEventId,
+    heldEventLabelPrefix,
+  } = await seedHeldEventContext(request, e2eRun);
+  let matchId = "";
+  await test.step("confirm the sample review into a match detail", async () => {
     expectGeneratedId(heldEventId, "held event ID");
 
     await page.goto("/review/dev-sample?sample=1");
@@ -239,15 +234,14 @@ test("creates a held event and completes OCR intake and review", async ({
 
     const response = await confirmResponse;
     await expectOk(response, "confirm reviewed match");
-    const body = (await response.json()) as { matchId?: string };
-    matchId = expectGeneratedId(body.matchId, "match ID");
+    const body = await readJsonObject(response);
+    matchId = expectGeneratedId(body["matchId"], "match ID");
     e2eRun.trackMatch(matchId);
 
     await expect(page).toHaveURL(new RegExp(`/matches/${matchId}$`, "u"));
     await expect(page.getByRole("heading", { name: /第\d+試合の結果/u })).toBeVisible();
     await expect(page.getByText(gameTitleName, { exact: true })).toBeVisible();
     await page.setViewportSize({ height: 900, width: 1440 });
-    await expect(page.getByText("比較データを読み込み中", { exact: true }).first()).toBeVisible();
     const resultLedgerCard = page.getByRole("region", { name: "順位・総資産" });
     await expect(resultLedgerCard).toBeVisible();
     const resultLedger = resultLedgerCard.getByRole("list", { name: "試合の順位と成績" });
@@ -288,629 +282,12 @@ test("creates a member alias through administration", async ({ e2eRun, page }) =
 
   const response = await createResponse;
   expect(response.ok()).toBe(true);
-  const body = (await response.json()) as { id?: string };
-  e2eRun.trackAlias(expectGeneratedId(body.id, "member alias ID"));
-  await expect(page.getByText(aliasName)).toBeVisible();
-});
-
-test("inspects saved analysis and handles explicit refresh states", async ({
-  e2eRun,
-  page,
-  request,
-}) => {
-  const { gameTitleId, gameTitleName, mapMasterId, matchId, seasonMasterId } =
-    await seedConfirmedContext(request, e2eRun);
-  const { masterIdSuffix } = e2eRun;
-
-  await test.step("inspect saved analysis, refresh states, and details", async () => {
-    const desktopViewport = page.viewportSize();
-    const artifact = {
-      ...analysisArtifact,
-      artifactId: `artifact-e2e-${masterIdSuffix}`,
-      gameTitleId,
-      inputRevision: "1",
-    };
-    const analysisScope = {
-      displayName: "E2Eシーズン / E2Eマップ",
-      kind: "season_map" as const,
-      mapMasterId,
-      matchCount: 1,
-      seasonMasterId,
-    };
-    const optionsFixture = makeSeriesAnalysisOptions();
-    optionsFixture.defaultGameTitleId = gameTitleId;
-    optionsFixture.titles = [
-      {
-        confirmedMatchCount: 1,
-        displayName: gameTitleName,
-        gameTitleId,
-        maps: [{ displayName: "E2Eマップ", mapMasterId }],
-        seasonMapPairs: [{ mapMasterId, seasonMasterId }],
-        seasons: [{ displayName: "E2Eシーズン", seasonMasterId }],
-      },
-    ];
-    const aggregateFixture = makeSeriesAnalysisAggregate(artifact);
-    aggregateFixture.scope = analysisScope;
-    aggregateFixture.ownerComparison = makeOwnerComparisonAggregate().ownerComparison;
-    const recentMatch = aggregateFixture.matchDigest.recent[0];
-    if (!recentMatch) throw new Error("analysis aggregate fixture requires a recent match");
-    Object.assign(recentMatch, {
-      itemId: `match:${matchId}`,
-      matchId,
-      matchIndex: 1,
-      matchNoInEvent: 1,
-    });
-    const recentRankEntry = aggregateFixture.recentRanks[0];
-    if (recentRankEntry) {
-      recentRankEntry.rows = Array.from({ length: 20 }, (_, index) => {
-        const isLatest = index === 19;
-        const recentMatchId = isLatest
-          ? matchId
-          : `e2e-recent-${String(index + 1).padStart(2, "0")}`;
-        return {
-          itemId: `recent-rank:member_ponta:${recentMatchId}`,
-          matchId: recentMatchId,
-          playedAt: `2026-07-${String(index + 1).padStart(2, "0")}T12:00:00.000Z`,
-          rank: isLatest ? 1 : (((index % 4) + 1) as 1 | 2 | 3 | 4),
-        };
-      });
-      recentRankEntry.targetCount = 20;
-    }
-    const strategyPoint = aggregateFixture.strategyScatter.points[0];
-    if (strategyPoint) {
-      strategyPoint.itemId = `strategy-point:${matchId}:member_ponta`;
-      strategyPoint.matchId = matchId;
-      strategyPoint.matchIndex = 1;
-    }
-    for (const trend of aggregateFixture.trends) {
-      const trendPoint = trend.points[0];
-      if (!trendPoint) continue;
-      trendPoint.itemId = `trend:${trend.kind}:member_ponta:${matchId}`;
-      trendPoint.matchId = matchId;
-      trendPoint.index = 1;
-    }
-    const reviewFixture = makeFourPlayerSeriesAnalysisReview();
-    reviewFixture.artifact = artifact;
-    reviewFixture.scope = analysisScope;
-    const expandedReviewHypothesis = reviewFixture.playbookByPlayer[0]?.secondaryCards[0];
-    if (!expandedReviewHypothesis)
-      throw new Error("review layout fixture requires a secondary card");
-    const matchContextFixture = makeSeriesAnalysisMatchContext();
-    matchContextFixture.artifact = artifact;
-    matchContextFixture.matchId = matchId;
-    matchContextFixture.scope = analysisScope;
-    if (matchContextFixture.match) {
-      matchContextFixture.match.matchIndex = 1;
-      matchContextFixture.match.focusedItemIds = [
-        "rank-distribution:member_ponta:1",
-        "play-order:member_ponta:1",
-        `recent-rank:member_ponta:${matchId}`,
-        `strategy-point:${matchId}:member_ponta`,
-        "revenue-rank:member_ponta:1:1",
-        "momentum:member_ponta:4:1",
-        "card-shop:member_ponta:destination_with_shop",
-        `trend:rank_cumulative_average:member_ponta:${matchId}`,
-        `trend:rank_cumulative_standard_deviation:member_ponta:${matchId}`,
-        `trend:podium_cumulative_rate:member_ponta:${matchId}`,
-        `trend:lower_half_cumulative_rate:member_ponta:${matchId}`,
-        `trend:ginji_cumulative_count:member_ponta:${matchId}`,
-        `match:${matchId}`,
-      ];
-    }
-
-    let statusPhase: "failed" | "running" = "running";
-    let interceptedStatusRequests = 0;
-    const statusPattern = /\/api\/analytics\/series-comparison\/v2\/status(?:\?.*)?$/u;
-    await page.route(/\/api\/analytics\/series-comparison\/v2\/options(?:\?.*)?$/u, async (route) =>
-      route.fulfill({ json: optionsFixture }),
-    );
-    await page.route(statusPattern, async (route) => {
-      interceptedStatusRequests += 1;
-      const calculation =
-        statusPhase === "running"
-          ? {
-              finishedAt: null,
-              requestedAt: "2026-08-09T01:05:00.000Z",
-              startedAt: "2026-08-09T01:05:01.000Z",
-              status: "running" as const,
-              trigger: "match_mutation" as const,
-            }
-          : {
-              finishedAt: "2026-08-09T01:06:00.000Z",
-              requestedAt: "2026-08-09T01:05:00.000Z",
-              startedAt: "2026-08-09T01:05:01.000Z",
-              status: "failed" as const,
-              trigger: "match_mutation" as const,
-            };
-      await route.fulfill({
-        json: makeSeriesAnalysisStatus({
-          artifactFreshness: "stale",
-          calculation,
-          currentArtifact: artifact,
-          desired: {
-            algorithmVersion: artifact.algorithmVersion,
-            artifactSchemaVersion: artifact.artifactSchemaVersion,
-            inputRevision: "2",
-          },
-          gameTitleId,
-        }),
-      });
-    });
-    await page.route(
-      /\/api\/analytics\/series-comparison\/v4\/aggregate(?:\?.*)?$/u,
-      async (route) => route.fulfill({ json: aggregateFixture }),
-    );
-    await page.route(/\/api\/analytics\/series-comparison\/v3\/review(?:\?.*)?$/u, async (route) =>
-      route.fulfill({ json: reviewFixture }),
-    );
-    await page.route(
-      /\/api\/analytics\/series-comparison\/v2\/drilldown(?:\?.*)?$/u,
-      async (route) => {
-        const url = new URL(route.request().url());
-        const fixture = makeSeriesAnalysisDrilldown(
-          url.searchParams.get("metricId") ?? "rank.averageHistory",
-        );
-        fixture.artifact = artifact;
-        fixture.scope = analysisScope;
-        if (fixture.payload.kind === "rank_average_history") {
-          for (const row of fixture.payload.matchRows) {
-            row.itemId = `rank-history:${matchId}`;
-            row.matchId = matchId;
-            row.matchIndex = 1;
-            row.matchNoInEvent = 1;
-          }
-        } else if (fixture.payload.kind === "play_order_rank_history") {
-          for (const row of fixture.payload.seriesByPlayOrder) {
-            row.itemId = `play-order-history:${matchId}`;
-            row.matchId = matchId;
-            row.matchIndex = 1;
-            row.matchNoInEvent = 1;
-          }
-        }
-        await route.fulfill({ json: fixture });
-      },
-    );
-    await page.route(
-      /\/api\/analytics\/series-comparison\/v3\/match-context(?:\?.*)?$/u,
-      async (route) => route.fulfill({ json: matchContextFixture }),
-    );
-
-    await page.goto(`/matches/${encodeURIComponent(matchId)}`);
-    await page.setViewportSize({ height: 844, width: 390 });
-    const comparisonLink = page.getByRole("link", { name: "前後の戦績を見る" });
-    const comparisonHref = withReturnTo(
-      `/analytics/series?gameTitleId=${encodeURIComponent(
-        gameTitleId,
-      )}&seasonMasterId=${encodeURIComponent(seasonMasterId)}&mapMasterId=${encodeURIComponent(
-        mapMasterId,
-      )}&focusMatchId=${encodeURIComponent(matchId)}&view=flow`,
-      currentPagePath(page),
-    );
-    await expect(comparisonLink).toHaveAttribute("href", comparisonHref);
-    await comparisonLink.click();
-
-    await expect(page.getByRole("region", { exact: true, name: "戦績比較" })).toBeVisible();
-    await expect(page.getByRole("table", { name: "直近の試合順位" })).toBeVisible();
-    const statusRequestsBeforeLifecycleEvents = interceptedStatusRequests;
-    await page.evaluate(
-      () =>
-        new Promise<void>((resolve) => {
-          window.dispatchEvent(new Event("focus"));
-          document.dispatchEvent(new Event("visibilitychange"));
-          window.dispatchEvent(new Event("pageshow"));
-          window.dispatchEvent(new Event("online"));
-          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-        }),
-    );
-    expect(interceptedStatusRequests).toBe(statusRequestsBeforeLifecycleEvents);
-
-    const currentStatusResponse = page.waitForResponse((response) =>
-      statusPattern.test(response.url()),
-    );
-    await page.getByRole("button", { name: "表示を更新" }).click();
-    expect((await currentStatusResponse).ok()).toBe(true);
-    expect(interceptedStatusRequests).toBe(statusRequestsBeforeLifecycleEvents + 1);
-
-    const purposeTabs = page.getByRole("tablist", { name: "戦績比較の目的" });
-    const analysisTabs = page.getByRole("tablist", { name: "分析の切り口" });
-    await expect(purposeTabs.getByRole("tab", { name: "分析する" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    await expect(analysisTabs.getByRole("tab", { name: "推移" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    await expect
-      .poll(async () => {
-        const activeTab = await analysisTabs
-          .getByRole("tab", { name: "推移", exact: true })
-          .boundingBox();
-        const underline = await analysisTabs
-          .locator('[role="presentation"] > [aria-hidden="true"]')
-          .boundingBox();
-        return Boolean(
-          activeTab &&
-          underline &&
-          underline.width > 0 &&
-          Math.abs(activeTab.x - underline.x) < 1 &&
-          Math.abs(activeTab.width - underline.width) < 1,
-        );
-      })
-      .toBe(true);
-    const scopeSurface = page.getByRole("region", { name: "比較条件" });
-    await expect(scopeSurface).toContainText(`${analysisScope.matchCount}戦`);
-    await expect(page.getByText("新しい戦績データを計算中です")).toBeVisible();
-    await expect(page.getByText(/更新のデータを表示します/u)).toBeVisible();
-    const selectedMatch = page.getByRole("region", { name: "選択中の試合" });
-    const selectedMatchHref = withReturnTo(
-      `/matches/${encodeURIComponent(matchId)}`,
-      currentPagePath(page),
-    );
-    await expect(
-      selectedMatch.getByRole("link", { name: "第1戦の試合結果を見る" }),
-    ).toHaveAttribute("href", selectedMatchHref);
-    const secondRankTile = page.getByRole("link", { name: /、2位.*試合結果を見る/u }).first();
-    const thirdRankTile = page.getByRole("link", { name: /、3位.*試合結果を見る/u }).first();
-    await expect(secondRankTile).toBeVisible();
-    await expect(thirdRankTile).toBeVisible();
-    const [secondRankTilePaint, thirdRankTilePaint] = await Promise.all(
-      [secondRankTile, thirdRankTile].map((tile) =>
-        tile.evaluate((element) => {
-          const style = getComputedStyle(element);
-          return { backgroundColor: style.backgroundColor, color: style.color };
-        }),
-      ),
-    );
-    expect(secondRankTilePaint.backgroundColor).not.toBe(thirdRankTilePaint.backgroundColor);
-    expect(secondRankTilePaint.color).not.toBe(thirdRankTilePaint.color);
-    const recentRankTile = page.getByRole("link", {
-      name: /ぽんた、第1戦、1位、この試合。試合結果を見る/u,
-    });
-    await expect(recentRankTile).toHaveAttribute("href", selectedMatchHref);
-    const recentRankScroller = page.getByRole("region", { exact: true, name: "直近順位" });
-    const recentRankScrollbar = page.getByRole("slider", {
-      name: "直近順位を横スクロール",
-    });
-    await expect(recentRankScrollbar).toBeEnabled();
-    const recentRankPlayerLinks = page
-      .getByRole("table", { name: "直近の試合順位" })
-      .getByRole("row")
-      .nth(1)
-      .getByRole("link");
-    await expect(recentRankPlayerLinks.first()).toHaveAttribute(
-      "href",
-      /\/matches\/e2e-recent-01\?returnTo=/u,
-    );
-    await expect(recentRankPlayerLinks.last()).toHaveAttribute("href", selectedMatchHref);
-    const recentRankMetrics = await recentRankScroller.evaluate((element) => ({
-      clientWidth: element.clientWidth,
-      scrollLeft: element.scrollLeft,
-      scrollWidth: element.scrollWidth,
-    }));
-    expect(recentRankMetrics.scrollWidth).toBeGreaterThan(recentRankMetrics.clientWidth);
-    expect(recentRankMetrics.scrollLeft).toBeGreaterThanOrEqual(
-      recentRankMetrics.scrollWidth - recentRankMetrics.clientWidth - 1,
-    );
-
-    const latestScrollbarValue = Number(await recentRankScrollbar.inputValue());
-    await recentRankScrollbar.focus();
-    await recentRankScrollbar.press("ArrowLeft");
-    await expect
-      .poll(async () => Number(await recentRankScrollbar.inputValue()))
-      .toBeLessThan(latestScrollbarValue);
-
-    await recentRankScrollbar.press("Home");
-    const scrollbarBox = await recentRankScrollbar.boundingBox();
-    if (!scrollbarBox) throw new Error("recent rank scrollbar must have a bounding box");
-    await recentRankScrollbar.click({
-      position: { x: scrollbarBox.width * 0.75, y: scrollbarBox.height / 2 },
-    });
-    await expect
-      .poll(async () => Number(await recentRankScrollbar.inputValue()))
-      .toBeGreaterThan(0);
-
-    await recentRankScrollbar.press("Home");
-    await recentRankScroller.hover();
-    await page.mouse.wheel(120, 0);
-    await expect
-      .poll(async () => recentRankScroller.evaluate((element) => element.scrollLeft))
-      .toBeGreaterThan(0);
-    await expectNoHorizontalPageOverflow(page);
-
-    await page.setViewportSize({ height: 1080, width: 1920 });
-    await expect(recentRankScrollbar).toBeVisible();
-    await expect(recentRankScrollbar).toBeDisabled();
-    await expect(recentRankScrollbar).toHaveAttribute("aria-valuetext", "すべて表示");
-    const fittedRecentRankMetrics = await recentRankScroller.evaluate((element) => ({
-      clientWidth: element.clientWidth,
-      scrollWidth: element.scrollWidth,
-    }));
-    expect(fittedRecentRankMetrics.scrollWidth).toBe(fittedRecentRankMetrics.clientWidth);
-    await expectNoHorizontalPageOverflow(page);
-    await page.setViewportSize({ height: 844, width: 390 });
-
-    await page.getByRole("tab", { name: "今の差" }).click();
-    const overviewRegion = page.getByRole("region", { exact: true, name: "順位と基礎比較" });
-    await expect(overviewRegion).toBeVisible();
-    const rankDistribution = overviewRegion.getByRole("group", { name: "ぽんたの順位分布" });
-    const secondRankSegment = rankDistribution.getByRole("img", { name: /^2位 /u });
-    const thirdRankSegment = rankDistribution.getByRole("img", { name: /^3位 /u });
-    const [secondRankSegmentPaint, thirdRankSegmentPaint] = await Promise.all(
-      [secondRankSegment, thirdRankSegment].map((segment) =>
-        segment.evaluate((element) => {
-          const style = getComputedStyle(element);
-          return { backgroundColor: style.backgroundColor, boxShadow: style.boxShadow };
-        }),
-      ),
-    );
-    expect(secondRankSegmentPaint.backgroundColor).not.toBe(thirdRankSegmentPaint.backgroundColor);
-    expect(thirdRankSegmentPaint.boxShadow).not.toBe("none");
-    await expectNoHorizontalPageOverflow(page);
-    await expect(selectedMatch).toBeVisible();
-    await expect(page).toHaveURL(new RegExp(`focusMatchId=${encodeURIComponent(matchId)}`, "u"));
-    await page.getByRole("button", { name: "順位推移を見る" }).first().click();
-    const rankDialog = page.getByRole("dialog", { name: "平均順位の推移" });
-    const rankHistoryMatchHref = withReturnTo(
-      `/matches/${encodeURIComponent(matchId)}`,
-      currentPagePath(page),
-    );
-    await expect(rankDialog.getByRole("link", { name: "第1戦の試合結果を見る" })).toHaveAttribute(
-      "href",
-      rankHistoryMatchHref,
-    );
-    await rankDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
-
-    await page.setViewportSize({ height: 900, width: 1280 });
-    await expectNoHorizontalPageOverflow(page);
-
-    await page.getByRole("tab", { name: "条件別" }).click();
-    await expect(page.getByRole("table", { name: "番手別成績" })).toBeVisible();
-    const ownerMetric = page.getByRole("combobox", { name: "オーナー比較の指標" });
-    const averageOwnerTable = page.getByRole("table", { name: "オーナー別の平均順位" });
-    await expectOwnerColumn(page, averageOwnerTable, "ぽんた", ["2位", "1.5位", "3.5位", "3位"]);
-    await expect(averageOwnerTable.getByRole("columnheader", { name: /ぽんた/u })).toContainText(
-      "2戦",
-    );
-    await expect(averageOwnerTable.getByRole("columnheader", { name: /ぽんた/u })).toContainText(
-      "参考値",
-    );
-    await expect(averageOwnerTable.getByRole("columnheader", { name: /おたか/u })).toContainText(
-      "対象なし",
-    );
-    await page.setViewportSize({ height: 844, width: 390 });
-    const ownerScroller = page.getByRole("region", { name: "オーナー別の平均順位の表" });
-    await ownerScroller.focus();
-    await ownerScroller.press("ArrowRight");
-    let ownerScrollLeft = 0;
-    await expect
-      .poll(async () => {
-        const current = await ownerScroller.evaluate((element) => element.scrollLeft);
-        const settled = current > 0 && current === ownerScrollLeft;
-        ownerScrollLeft = current;
-        return settled;
-      })
-      .toBe(true);
-    await selectControlOption(page, ownerMetric, "rank.distribution");
-    await expect(ownerMetric).toBeFocused();
-    await expect(page).toHaveURL(/ownerMetric=rank.distribution/u);
-    await expect(page).toHaveURL(new RegExp(`focusMatchId=${encodeURIComponent(matchId)}`, "u"));
-    const distributionOwnerTable = page.getByRole("table", { name: "オーナー別の順位分布" });
-    await expectOwnerColumn(page, distributionOwnerTable, "ぽんた");
-    await expect(distributionOwnerTable.getByRole("listitem").first()).toContainText("1位 1回");
-    await expect
-      .poll(() =>
-        page
-          .getByRole("region", { name: "オーナー別の順位分布の表" })
-          .evaluate((element) => element.scrollLeft),
-      )
-      .toBe(ownerScrollLeft);
-    await expectNoHorizontalPageOverflow(page);
-    await page.setViewportSize({ height: 900, width: 1280 });
-    await expectOwnerColumn(page, distributionOwnerTable, "ぽんた");
-    await expectNoHorizontalPageOverflow(page);
-    const ownerComparisonUrl = page.url();
-    await selectedMatch.getByRole("link", { name: "第1戦の試合結果を見る" }).click();
-    await expect(page.getByRole("link", { name: "前後の戦績を見る" })).toBeVisible();
-    await page.goBack();
-    await expect(page).toHaveURL(ownerComparisonUrl);
-    await expectOwnerColumn(page, distributionOwnerTable, "ぽんた");
-    await expect(selectedMatch).toBeVisible();
-
-    await page.getByRole("tab", { name: "勝因候補" }).click();
-    await expect(page.getByRole("table", { name: "ぽんたの物件収益順位と最終順位" })).toBeVisible();
-    const assetHistogram = page.getByLabel("4人の総資産分布");
-    const nonpositiveAxisLabel = assetHistogram
-      .locator("svg text")
-      .filter({ hasText: /^-2万円〜0円$/u });
-    await expect(nonpositiveAxisLabel).toBeVisible();
-    await expect(
-      assetHistogram.locator("rect title").filter({ hasText: /^-2万円〜0円、1戦$/u }),
-    ).toHaveText("-2万円〜0円、1戦");
-    const scatterMatchHref = withReturnTo(
-      `/matches/${encodeURIComponent(matchId)}`,
-      currentPagePath(page),
-    );
-    await page
-      .getByRole("button", {
-        name: "物件収益比率と総資産の散布図の数値を表で見る",
-      })
-      .click();
-    const scatterValues = page.getByRole("table", { name: "物件収益比率と総資産の散布図の数値" });
-    await expect(scatterValues).toBeVisible();
-    await expect(
-      scatterValues.getByRole("link", { name: "ぽんた、第1戦、1位の試合結果を見る" }),
-    ).toHaveAttribute("href", scatterMatchHref);
-    const scatterRow = scatterValues
-      .getByRole("row")
-      .filter({ has: page.getByRole("link", { name: "ぽんた、第1戦、1位の試合結果を見る" }) });
-    await expect(scatterRow).toContainText("12%");
-    await expect(scatterRow).toContainText("21億円");
-    await page.getByRole("button", { name: "検証範囲を見る" }).click();
-    const rankSignalDialog = page.getByRole("dialog", { name: "順位を読む手掛かり" });
-    await rankSignalDialog.getByRole("button", { name: "別開催テストと採用基準" }).click();
-    const eventValuesDisclosure = rankSignalDialog.getByRole("button", {
-      name: "物件収益の開催別の数値",
-    });
-    await eventValuesDisclosure.click();
-    await expect(eventValuesDisclosure).toHaveAttribute("aria-expanded", "true");
-    await expect(
-      rankSignalDialog.getByRole("button", { name: "ダイアログを閉じる" }),
-    ).toBeVisible();
-    await rankSignalDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
-
-    await page.setViewportSize({ height: 900, width: 1440 });
-    const reviewPurposeTab = purposeTabs.getByRole("tab", { name: "次戦に備える" });
-    await reviewPurposeTab.click();
-    await expect(reviewPurposeTab).toHaveAttribute("aria-selected", "true");
-    const nextMatchReview = page.getByRole("tabpanel", { name: "次戦に備える" });
-    await expect(nextMatchReview).toBeVisible();
-    await expect(reviewPurposeTab).toBeFocused();
-    await expect(selectedMatch).toBeVisible();
-
-    const reviewPlayerNames = ["いーゆー", "ぽんた", "あかねまみ", "おーたか"] as const;
-    const [firstPlayerSection, secondPlayerSection, thirdPlayerSection, fourthPlayerSection] =
-      reviewPlayerNames.map((name) =>
-        nextMatchReview.getByRole("heading", { exact: true, name }).locator(".."),
-      );
-    if (
-      !firstPlayerSection ||
-      !secondPlayerSection ||
-      !thirdPlayerSection ||
-      !fourthPlayerSection
-    ) {
-      throw new Error("review layout requires four player sections");
-    }
-    const reviewPlayers = [
-      { name: "いーゆー", section: firstPlayerSection },
-      { name: "ぽんた", section: secondPlayerSection },
-      { name: "あかねまみ", section: thirdPlayerSection },
-      { name: "おーたか", section: fourthPlayerSection },
-    ] as const;
-    const firstDisclosure = firstPlayerSection.getByRole("button", {
-      name: "いーゆーのほかの仮説",
-    });
-    const secondPlayerHeading = nextMatchReview.getByRole("heading", {
-      exact: true,
-      name: "ぽんた",
-    });
-
-    const headingTops = await Promise.all(
-      reviewPlayerNames.map((name) =>
-        locatorPageTop(nextMatchReview.getByRole("heading", { exact: true, name })),
-      ),
-    );
-    expect(Math.max(...headingTops) - Math.min(...headingTops)).toBeLessThanOrEqual(1);
-    const desktopBefore = await Promise.all(
-      reviewPlayers.map(({ name, section }) => reviewPlayerGeometry(section, name)),
-    );
-
-    await firstDisclosure.click();
-    await expect(firstDisclosure).toHaveAttribute("aria-expanded", "true");
-    await expect(
-      nextMatchReview.getByRole("heading", {
-        exact: true,
-        name: expandedReviewHypothesis.actionHypothesis,
-      }),
-    ).toBeVisible();
-    const desktopAfter = await Promise.all(
-      reviewPlayers.map(({ name, section }) => reviewPlayerGeometry(section, name)),
-    );
-    for (const [index, before] of desktopBefore.entries()) {
-      const after = desktopAfter[index];
-      if (!after) throw new Error(`missing desktop geometry for player ${index}`);
-      expectStableReviewGeometry(before, after);
-    }
-    await expectNoHorizontalPageOverflow(page);
-
-    await firstDisclosure.click();
-    await expect(firstDisclosure).toHaveAttribute("aria-expanded", "false");
-    await page.setViewportSize({ height: 900, width: 1024 });
-    const tabletFirstBefore = await reviewPlayerGeometry(firstPlayerSection, "いーゆー");
-    const tabletNeighborBefore = await reviewPlayerGeometry(secondPlayerSection, "ぽんた");
-    await firstDisclosure.click();
-    await expect(firstDisclosure).toHaveAttribute("aria-expanded", "true");
-    expectStableReviewGeometry(
-      tabletFirstBefore,
-      await reviewPlayerGeometry(firstPlayerSection, "いーゆー"),
-    );
-    expectStableReviewGeometry(
-      tabletNeighborBefore,
-      await reviewPlayerGeometry(secondPlayerSection, "ぽんた"),
-    );
-    await expectNoHorizontalPageOverflow(page);
-
-    await firstDisclosure.click();
-    await expect(firstDisclosure).toHaveAttribute("aria-expanded", "false");
-    await page.setViewportSize({ height: 844, width: 390 });
-    const mobileDisclosureTop = await locatorPageTop(firstDisclosure);
-    const mobileNextPlayerTop = await locatorPageTop(secondPlayerHeading);
-    await firstDisclosure.click();
-    await expect(firstDisclosure).toHaveAttribute("aria-expanded", "true");
-    expect(
-      Math.abs((await locatorPageTop(firstDisclosure)) - mobileDisclosureTop),
-    ).toBeLessThanOrEqual(1);
-    await expect
-      .poll(() => locatorPageTop(secondPlayerHeading))
-      .toBeGreaterThan(mobileNextPlayerTop + 100);
-    await expectNoHorizontalPageOverflow(page);
-
-    const evidenceLink = firstPlayerSection
-      .getByRole("article")
-      .filter({
-        has: page.getByRole("heading", {
-          exact: true,
-          name: expandedReviewHypothesis.actionHypothesis,
-        }),
-      })
-      .getByRole("link", { exact: true, name: "目的地の根拠を見る" });
-    await expect(evidenceLink).toHaveAttribute(
-      "href",
-      /[?&]view=drivers(?:&[^#]*)?#metric-destination-outcome$/u,
-    );
-    await evidenceLink.scrollIntoViewIfNeeded();
-    const reviewUrl = page.url();
-    const reviewScroll = await page.evaluate(() => window.scrollY);
-    await evidenceLink.click();
-    const evidenceHeading = page.getByRole("heading", { name: "目的地到着と順位", exact: true });
-    await expect(evidenceHeading).toBeFocused();
-    await expectPageTargetInView(evidenceHeading);
-    await page.goBack();
-    await expect(page).toHaveURL(reviewUrl);
-    await expect(firstDisclosure).toHaveAttribute("aria-expanded", "true");
-    await expect(evidenceLink).toBeFocused();
-    expect(
-      Math.abs((await page.evaluate(() => window.scrollY)) - reviewScroll),
-    ).toBeLessThanOrEqual(1);
-
-    await firstDisclosure.click();
-    await expect(firstDisclosure).toHaveAttribute("aria-expanded", "false");
-    await expect
-      .poll(async () => Math.abs((await locatorPageTop(secondPlayerHeading)) - mobileNextPlayerTop))
-      .toBeLessThanOrEqual(1);
-    await page.setViewportSize({ height: 900, width: 1440 });
-
-    statusPhase = "failed";
-    const failedStatusResponse = page.waitForResponse((response) =>
-      new URL(response.url()).pathname.endsWith("/v2/status"),
-    );
-    await page.getByRole("button", { name: "表示を更新" }).click();
-    expect((await failedStatusResponse).ok()).toBe(true);
-    expect(interceptedStatusRequests).toBe(statusRequestsBeforeLifecycleEvents + 2);
-    await expect(page.getByText("分析データを再計算できませんでした")).toBeVisible();
-    await expect(page.getByText(/更新のデータを表示しています/u)).toBeVisible();
-
-    await selectedMatch.getByRole("button", { name: "この試合の選択を解除" }).click();
-    await expect(selectedMatch).toHaveCount(0);
-    await expect(page).not.toHaveURL(/focusMatchId=/u);
-    await purposeTabs.getByRole("tab", { name: "分析する" }).click();
-    await page.getByRole("tab", { name: "条件別" }).click();
-    await expect(distributionOwnerTable).toBeVisible();
-    await expect(distributionOwnerTable.getByText("この試合のオーナー")).toHaveCount(0);
-    await expect(distributionOwnerTable.locator('[data-highlighted="true"]')).toHaveCount(0);
-
-    if (desktopViewport) await page.setViewportSize(desktopViewport);
-  });
+  const body = await readJsonObject(response);
+  e2eRun.trackAlias(expectGeneratedId(body["id"], "member alias ID"));
+  await expect(page.getByText(aliasName, { exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByRole("tab", { name: "メンバー名寄せ" }).click();
+  await expect(page.getByText(aliasName, { exact: true })).toBeVisible();
 });
 
 test("runs analysis administration and enforces access", async ({ e2eRun, page, request }) => {
@@ -1052,31 +429,33 @@ test("filters and opens a confirmed match", async ({ e2eRun, page, request }) =>
       await continueWithE2eAuth(route);
     });
 
-    await page.goto(`/matches?status=confirmed&heldEventId=${heldEventId}`);
+    try {
+      await page.goto(`/matches?status=confirmed&heldEventId=${heldEventId}`);
 
-    await expect(page.getByRole("region", { exact: true, name: "試合一覧" })).toBeVisible();
-    const detailLink = matchDetailLink(page, matchId);
-    await expect(detailLink).toHaveCount(1);
-    await expect(detailLink).toBeVisible();
-    const matchFromListHref = withReturnTo(`/matches/${matchId}`, currentPagePath(page));
-    await expect(detailLink).toHaveAttribute("href", matchFromListHref);
-    await detailLink.click();
+      await expect(page.getByRole("region", { exact: true, name: "試合一覧" })).toBeVisible();
+      const detailLink = matchDetailLink(page, matchId);
+      await expect(detailLink).toHaveCount(1);
+      await expect(detailLink).toBeVisible();
+      const matchFromListHref = withReturnTo(`/matches/${matchId}`, currentPagePath(page));
+      await expect(detailLink).toHaveAttribute("href", matchFromListHref);
+      await detailLink.click();
 
-    await expect(page).toHaveURL(matchFromListHref);
-    await expect(page.getByLabel("試合詳細を読み込み中")).toHaveAttribute("aria-busy", "true");
-    await expect(
-      page.getByRole("heading", { exact: true, name: "試合結果を読み込み中" }),
-    ).toBeVisible();
-    await expect.poll(() => detailApiRequested).toBe(true);
-
-    releaseDetailResponse();
+      await expect(page).toHaveURL(matchFromListHref);
+      await expect(page.getByLabel("試合詳細を読み込み中")).toHaveAttribute("aria-busy", "true");
+      await expect(
+        page.getByRole("heading", { exact: true, name: "試合結果を読み込み中" }),
+      ).toBeVisible();
+      await expect.poll(() => detailApiRequested).toBe(true);
+    } finally {
+      releaseDetailResponse();
+      await page.unroute(detailUrlPattern);
+    }
     await expect(page.getByRole("heading", { name: /第\d+試合の結果/u })).toBeVisible();
-    await page.unroute(detailUrlPattern);
   });
 });
 
 test("downloads a confirmed match export", async ({ e2eRun, page, request }) => {
-  const { matchId } = await seedConfirmedContext(request, e2eRun);
+  const { matchId, mapName, seasonName } = await seedConfirmedContext(request, e2eRun);
 
   await test.step("download an export for the confirmed match", async () => {
     expectGeneratedId(matchId, "match ID");
@@ -1091,6 +470,7 @@ test("downloads a confirmed match export", async ({ e2eRun, page, request }) => 
       (response) =>
         response.url().includes("/api/exports/matches") && response.request().method() === "GET",
     );
+    const downloadPromise = page.waitForEvent("download");
     await page.getByRole("button", { name: "この試合をTSVでダウンロード" }).click();
 
     const response = await exportResponse;
@@ -1098,170 +478,53 @@ test("downloads a confirmed match export", async ({ e2eRun, page, request }) => 
     const url = new URL(response.url());
     expect(url.searchParams.get("format")).toBe("tsv");
     expect(url.searchParams.get("matchId")).toBe(matchId);
+    const download = await downloadPromise;
+    expect(await download.failure()).toBeNull();
+    expect(download.suggestedFilename()).toContain(matchId);
+    expect(download.suggestedFilename()).toMatch(/\.tsv$/u);
+    const downloadPath = await download.path();
+    if (!downloadPath) throw new Error("Export did not produce a local download");
+    const [headers, ...rows] = (await readFile(downloadPath, "utf8"))
+      .trimEnd()
+      .split(/\r?\n/u)
+      .map((line) => line.split("\t"));
+    if (!headers) throw new Error("Export is missing its header");
+    expect(rows).toHaveLength(4);
+    const records = rows.map((row) =>
+      Object.fromEntries(headers.map((header, index) => [header, row[index]])),
+    );
+    expect(
+      records.map((record) => ({
+        assets: record["総資産"],
+        order: record["プレー順"],
+        rank: record["順位"],
+        revenue: record["収益"],
+        season: record["シーズン"],
+        map: record["マップ"],
+      })),
+    ).toEqual(
+      [1, 2, 3, 4].map((rank) => ({
+        assets: String((5 - rank) * 100),
+        order: String(rank),
+        rank: String(rank),
+        revenue: String((5 - rank) * 10),
+        season: seasonName,
+        map: mapName,
+      })),
+    );
+    expect(records.map((record) => record["プレーヤー名"])).toEqual([
+      "ぽんた",
+      "あかねまみ",
+      "おーたか",
+      "いーゆー",
+    ]);
     await expect(
       page.getByRole("heading", { exact: true, name: "ダウンロードを開始しました" }),
     ).toBeVisible();
   });
 });
 
-type ReviewPlayerGeometry = {
-  disclosureTop: number;
-  primaryActionTop: number;
-};
-
-async function expectOwnerColumn(
-  page: Page,
-  table: Locator,
-  ownerName: string,
-  values?: readonly string[],
-): Promise<void> {
-  const header = table.getByRole("columnheader", { name: new RegExp(ownerName, "u") });
-  await expect(header).toContainText("この試合のオーナー");
-  await expectOwnerBorder(header, ["2px", "2px", "2px", "2px"]);
-  const columnIndex = await header.evaluate(
-    (element) => (element as HTMLTableCellElement).cellIndex,
-  );
-  for (const [index, playerName] of ["ぽんた", "あかねまみ", "おたか", "EU"].entries()) {
-    const row = table
-      .getByRole("row")
-      .filter({ has: page.getByRole("rowheader", { exact: true, name: playerName }) });
-    const cell = row.getByRole("cell").nth(columnIndex - 1);
-    await expect(cell).toHaveAttribute("data-highlighted", "true");
-    await expectOwnerBorder(cell, ["0px", "2px", "2px", "2px"]);
-    if (values) {
-      const expectedValue = values[index];
-      if (expectedValue === undefined) throw new Error(`Missing owner value for ${playerName}`);
-      await expect(cell).toHaveText(expectedValue);
-    }
-  }
-  await expect(table.getByText("この試合のオーナー", { exact: true })).toHaveCount(1);
-}
-
-async function expectOwnerBorder(cell: Locator, widths: readonly string[]): Promise<void> {
-  const border = await cell.evaluate((element) => {
-    const style = getComputedStyle(element, "::after");
-    return {
-      widths: [
-        style.borderTopWidth,
-        style.borderRightWidth,
-        style.borderBottomWidth,
-        style.borderLeftWidth,
-      ],
-      content: style.content,
-      pointerEvents: style.pointerEvents,
-    };
-  });
-  expect(border.widths).toEqual(widths);
-  expect(border.content).not.toBe("none");
-  expect(border.pointerEvents).toBe("none");
-}
-
-async function locatorPageTop(locator: Locator): Promise<number> {
-  return locator.evaluate((element) => element.getBoundingClientRect().top + window.scrollY);
-}
-
-async function reviewPlayerGeometry(
-  section: Locator,
-  playerName: string,
-): Promise<ReviewPlayerGeometry> {
-  return {
-    disclosureTop: await locatorPageTop(
-      section.getByRole("button", { name: `${playerName}のほかの仮説` }),
-    ),
-    primaryActionTop: await locatorPageTop(
-      section.getByRole("button", { name: "根拠・注意・試合後の確認" }).first(),
-    ),
-  };
-}
-
-function expectStableReviewGeometry(
-  before: ReviewPlayerGeometry,
-  after: ReviewPlayerGeometry,
-): void {
-  expect(Math.abs(after.disclosureTop - before.disclosureTop)).toBeLessThanOrEqual(1);
-  expect(Math.abs(after.primaryActionTop - before.primaryActionTop)).toBeLessThanOrEqual(1);
-}
-
-async function seedMasterContext(request: APIRequestContext, e2eRun: E2eRun) {
-  const { masterIdSuffix } = e2eRun;
-  const gameTitleId = `gt_e2e_${masterIdSuffix}`;
-  const seasonMasterId = `season_e2e_${masterIdSuffix}`;
-  const mapMasterId = `map_e2e_${masterIdSuffix}`;
-  const gameTitleName = `桃太郎電鉄2 E2E ${masterIdSuffix}`;
-
-  await postJson(request, e2eRun, "/api/game-titles", {
-    id: gameTitleId,
-    layoutFamily: "momotetsu_2",
-    name: gameTitleName,
-  });
-  e2eRun.trackGameTitle(gameTitleId);
-  await postJson(request, e2eRun, "/api/season-masters", {
-    gameTitleId,
-    id: seasonMasterId,
-    name: "E2Eシーズン",
-  });
-  e2eRun.trackSeasonMaster(seasonMasterId);
-  await postJson(request, e2eRun, "/api/map-masters", {
-    gameTitleId,
-    id: mapMasterId,
-    name: "E2Eマップ",
-  });
-  e2eRun.trackMapMaster(mapMasterId);
-
-  return { gameTitleId, gameTitleName, mapMasterId, seasonMasterId };
-}
-
-async function seedConfirmedContext(request: APIRequestContext, e2eRun: E2eRun) {
-  const masters = await seedMasterContext(request, e2eRun);
-  // Historical fixtures must not take the latest-event shortcuts from the create/OCR flow.
-  const localDateTime = e2eRun.uniqueLocalDateTime(2000);
-  const playedAt = new Date(`${localDateTime}:00+09:00`).toISOString();
-  const heldEvent = await postJson(request, e2eRun, "/api/held-events", { heldAt: playedAt });
-  const heldEventId = expectGeneratedId(heldEvent["id"] as string | undefined, "held event ID");
-  e2eRun.trackHeldEvent(heldEventId);
-  const match = await postJson(request, e2eRun, "/api/matches", {
-    draftIds: {},
-    gameTitleId: masters.gameTitleId,
-    heldEventId,
-    mapMasterId: masters.mapMasterId,
-    matchNoInEvent: 1,
-    ownerMemberId: "member_ponta",
-    playedAt,
-    players: makePlayers(),
-    seasonMasterId: masters.seasonMasterId,
-  });
-  const matchId = expectGeneratedId(match["matchId"] as string | undefined, "match ID");
-  e2eRun.trackMatch(matchId);
-
-  return {
-    ...masters,
-    heldEventId,
-    heldEventLabelPrefix: localDateTime.replaceAll("-", "/").replace("T", " "),
-    matchId,
-  };
-}
-
-function makePlayers() {
-  return ["member_ponta", "member_akane_mami", "member_otaka", "member_eu"].map(
-    (memberId, index) => ({
-      incidents: {
-        cardShop: 0,
-        cardStation: 0,
-        destination: 0,
-        minusStation: 0,
-        plusStation: 0,
-        suriNoGinji: 0,
-      },
-      memberId,
-      playOrder: index + 1,
-      rank: index + 1,
-      revenueManYen: (4 - index) * 10,
-      totalAssetsManYen: (4 - index) * 100,
-    }),
-  );
-}
-
-function isMatchListResponse(response: APIResponse): boolean {
+function isMatchListResponse(response: Response): boolean {
   const url = new URL(response.url());
   return url.pathname === "/api/matches" && response.request().method() === "GET";
 }

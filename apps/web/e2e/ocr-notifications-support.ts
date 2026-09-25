@@ -1,13 +1,22 @@
 import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { readFile, rm, writeFile } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { promisify } from "node:util";
 
 import type { APIRequestContext, Page } from "@playwright/test";
+import { z } from "zod";
 
 import type { components } from "../src/shared/api/generated";
-import { expect, expectOk, postJson, selectControlOption } from "./support";
+import { seedMasterContext as seedMasters } from "./fixtures/records";
+import {
+  expect,
+  expectGeneratedId,
+  expectOk,
+  readJsonObject,
+  selectControlOption,
+} from "./support";
+export { seedMasters };
 import type { E2eRun } from "./support";
 
 type SubmissionRequest = components["schemas"]["PutOcrSubmissionRequest"];
@@ -17,25 +26,45 @@ export const screens: Screen[] = ["total_assets", "revenue", "incident_log"];
 export const headers = { "X-Momo-Account-Id": "account_ponta", "X-CSRF-Token": "dev" };
 export type CapturedSubmission = { id: string; draftId: string; request: SubmissionRequest };
 type Message = { body: { content: string; nonce: string; allowedMentions: { parse: string[] } } };
-type Runtime = {
-  runDir: string;
-  controlDir: string;
-  messagesFile: string;
-  postgresContainer: string;
-  databaseName: string;
-  webOrigin: string;
-  images: Record<Screen, { path: string; size: number; sha256: string }>;
-};
+const runtimeSchema = z.object({
+  runDir: z.string().min(1),
+  controlDir: z.string().min(1),
+  messagesFile: z.string().min(1),
+  postgresContainer: z.string().regex(/^[0-9a-f]{64}$/u),
+  databaseName: z.literal("mom24_e2e"),
+  webOrigin: z.url(),
+  images: z.record(
+    z.enum(["total_assets", "revenue", "incident_log"]),
+    z.object({
+      path: z.string().min(1),
+      size: z.number().int().positive(),
+      sha256: z.string().regex(/^[0-9a-f]{64}$/u),
+    }),
+  ),
+});
+type Runtime = z.infer<typeof runtimeSchema>;
+const notificationSettingsSchema = z.object({
+  ocrCompleted: z.object({ enabled: z.boolean(), generation: z.string() }),
+  analysisCompleted: z.object({ enabled: z.boolean(), generation: z.string() }),
+});
 const execute = promisify(execFile);
 
 export async function runtime(): Promise<Runtime> {
   const path = process.env["MOM24_E2E_METADATA"];
   if (!path) throw new Error("Use the isolated OCR notification runner.");
-  const result = JSON.parse(await readFile(path, "utf8")) as Runtime;
+  const parsed = runtimeSchema.safeParse(JSON.parse(await readFile(path, "utf8")));
+  if (!parsed.success) throw new Error("Invalid isolated OCR E2E metadata.");
+  const result = parsed.data;
   if (
     !basename(result.runDir).startsWith("mom24_e2e_") ||
     result.databaseName !== "mom24_e2e" ||
-    !/^[0-9a-f]{64}$/u.test(result.postgresContainer)
+    resolve(result.controlDir) !== join(resolve(result.runDir), "control") ||
+    resolve(result.messagesFile) !==
+      join(resolve(result.runDir), "recorder", "summit-messages.jsonl") ||
+    screens.some(
+      (screen) =>
+        resolve(result.images[screen].path) !== join(resolve(result.runDir), `${screen}.png`),
+    )
   ) {
     throw new Error("Only the owned OCR E2E database may be observed or advanced.");
   }
@@ -148,30 +177,25 @@ export async function delivered(request: APIRequestContext, operation: CapturedS
   expect(first.body.content).toContain(`/review/${operation.draftId}`);
   return first.body.content;
 }
-export async function seedMasters(request: APIRequestContext, run: E2eRun) {
-  const gameTitleId = `gt_e2e_${run.masterIdSuffix}`;
-  const seasonMasterId = `season_e2e_${run.masterIdSuffix}`;
-  const mapMasterId = `map_e2e_${run.masterIdSuffix}`;
-  await postJson(request, run, "/api/game-titles", {
-    id: gameTitleId,
-    layoutFamily: "momotetsu_2",
-    name: `桃太郎電鉄2 E2E ${run.masterIdSuffix}`,
-  });
-  run.trackGameTitle(gameTitleId);
-  await postJson(request, run, "/api/season-masters", {
-    id: seasonMasterId,
-    gameTitleId,
-    name: "E2Eシーズン",
-  });
-  run.trackSeasonMaster(seasonMasterId);
-  await postJson(request, run, "/api/map-masters", {
-    id: mapMasterId,
-    gameTitleId,
-    name: "E2Eマップ",
-  });
-  run.trackMapMaster(mapMasterId);
-  return { gameTitleId, seasonMasterId, mapMasterId };
+export async function enableOcrNotifications(request: APIRequestContext) {
+  const response = await request.get("/api/admin/notification-settings", { headers });
+  await expectOk(response, "read notification settings");
+  const current = notificationSettingsSchema.parse(await response.json());
+  await expectOk(
+    await request.put("/api/admin/notification-settings", {
+      headers,
+      data: {
+        ocrCompleted: { enabled: true, expectedGeneration: current.ocrCompleted.generation },
+        analysisCompleted: {
+          enabled: current.analysisCompleted.enabled,
+          expectedGeneration: current.analysisCompleted.generation,
+        },
+      } satisfies components["schemas"]["NotificationSettingsUpdateRequest"],
+    }),
+    "enable this test's OCR notifications",
+  );
 }
+
 export async function prepareRead(
   page: Page,
   masters: Awaited<ReturnType<typeof seedMasters>>,
@@ -212,11 +236,13 @@ export async function startRead(
     .click();
   const result = await response;
   await expectOk(result, "create submission");
-  const body = (await result.json()) as Submission;
-  run.trackDraft(body.matchDraftId);
+  const body = await readJsonObject(result);
+  const draftId = expectGeneratedId(body["matchDraftId"], "OCR match draft ID");
+  const id = expectGeneratedId(body["submissionId"], "OCR submission ID");
+  run.trackDraft(draftId);
   return {
-    id: body.submissionId,
-    draftId: body.matchDraftId,
+    id,
+    draftId,
     request: result.request().postDataJSON() as SubmissionRequest,
   };
 }
@@ -250,7 +276,10 @@ export async function reread(
     },
   });
   await expectOk(uploaded, "upload reread image");
-  const { imageId } = (await uploaded.json()) as { imageId: string };
+  const imageId = expectGeneratedId(
+    (await readJsonObject(uploaded))["imageId"],
+    "uploaded image ID",
+  );
   await expectOk(
     await request.post("/api/ocr-jobs", {
       headers: { ...headers, "Idempotency-Key": key },

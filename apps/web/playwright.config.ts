@@ -29,7 +29,7 @@ export default defineConfig({
   testIgnore: "ocr-submission-notifications.spec.ts",
   fullyParallel: true,
   retries: process.env["CI"] ? 1 : 0,
-  workers,
+  ...(workers === undefined ? {} : { workers }),
   timeout: 45_000,
   expect: {
     timeout: 10_000,
@@ -48,12 +48,14 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
-  webServer: skipWebServer
-    ? undefined
+  ...(skipWebServer
+    ? {}
     : {
-        command: `pnpm dev --host ${webServerHost} --port ${webServerPort} --strictPort`,
-        reuseExistingServer: !process.env["CI"],
-        timeout: 120_000,
-        url: baseURL,
-      },
+        webServer: {
+          command: `pnpm build && pnpm preview --host ${webServerHost} --port ${webServerPort} --strictPort`,
+          reuseExistingServer: false,
+          timeout: 120_000,
+          url: baseURL,
+        },
+      }),
 });

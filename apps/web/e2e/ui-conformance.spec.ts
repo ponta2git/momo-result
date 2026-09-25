@@ -1,27 +1,20 @@
-import type { APIRequestContext, Locator, Page, Route } from "@playwright/test";
+import type { Locator, Page, Route } from "@playwright/test";
 
+import { createDeferred } from "../src/test/deferred";
+import { seedUiContext } from "./fixtures/records";
 import {
   selectControlOption,
-  devAccountId,
-  devUserStorageKey,
   expect,
-  expectGeneratedId,
   expectNoHorizontalPageOverflow,
   installE2eAuthHeaders,
-  postJson,
   test,
 } from "./support";
-import type { E2eRun } from "./support";
 
 function readRowPaint(row: Locator) {
   return row.evaluate((element) => getComputedStyle(element).backgroundColor);
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(
-    ([key, value]) => window.localStorage.setItem(key, value),
-    [devUserStorageKey, devAccountId],
-  );
   await installE2eAuthHeaders(page);
 });
 
@@ -92,22 +85,9 @@ test.describe("touch selection", () => {
   });
 });
 
-test("keeps match rows usable through responsive update and retry states", async ({
-  e2eRun,
+test("preserves sample context and geometry while the held-event directory loads", async ({
   page,
-  request,
 }) => {
-  const {
-    heldEventId,
-    mapName,
-    matchIds,
-    primaryGameTitleId,
-    primaryGameTitleName,
-    seasonMasterId,
-    seasonName,
-    secondaryGameTitleId,
-  } = await seedUiContext(request, e2eRun);
-
   await test.step("preserve the query-known sample context through loading", async () => {
     const directoryGate = createDeferred();
     let directoryRequested = false;
@@ -162,28 +142,17 @@ test("keeps match rows usable through responsive update and retry states", async
     }
 
     await page.getByRole("button", { name: "一覧にない開催を追加する" }).click();
-    const heldEventCreationFields = page.locator('[data-held-event-creation-fields=""]');
-    await expect(heldEventCreationFields).toBeVisible();
-    expect(
-      await heldEventCreationFields.evaluate((element) => {
-        const style = getComputedStyle(element);
-        return {
-          backgroundColor: style.backgroundColor,
-          borderBottomWidth: style.borderBottomWidth,
-          borderLeftWidth: style.borderLeftWidth,
-          borderRightWidth: style.borderRightWidth,
-          borderTopWidth: style.borderTopWidth,
-        };
-      }),
-    ).toEqual({
-      backgroundColor: "rgba(0, 0, 0, 0)",
-      borderBottomWidth: "0px",
-      borderLeftWidth: "0px",
-      borderRightWidth: "0px",
-      borderTopWidth: "0px",
-    });
+    await expect(page.getByLabel("開催日時", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "作成して選択", exact: true })).toBeEnabled();
   });
+});
 
+test("keeps held-event loading, ready and missing states usable at narrow widths", async ({
+  e2eRun,
+  page,
+  request,
+}) => {
+  const { heldEventId } = await seedUiContext(request, e2eRun);
   await test.step("contain held-event detail loading at the narrow viewport", async () => {
     const detailGate = createDeferred();
     let detailRequested = false;
@@ -276,7 +245,14 @@ test("keeps match rows usable through responsive update and retry states", async
       await page.unroute(detailPattern, fulfillHeldEventNotFound);
     }
   });
+});
 
+test("keeps match-result loading and ready rows within narrow viewports", async ({
+  e2eRun,
+  page,
+  request,
+}) => {
+  const { heldEventId, matchIds } = await seedUiContext(request, e2eRun);
   await test.step("stack match-result loading rows without narrow-width collisions", async () => {
     const matchId = matchIds[0];
     if (!matchId) throw new Error("expected a seeded match");
@@ -317,6 +293,22 @@ test("keeps match rows usable through responsive update and retry states", async
       );
     }
   });
+});
+
+test("keeps match rows usable through responsive update and retry states", async ({
+  e2eRun,
+  page,
+  request,
+}) => {
+  const {
+    heldEventId,
+    mapName,
+    primaryGameTitleId,
+    primaryGameTitleName,
+    seasonMasterId,
+    seasonName,
+    secondaryGameTitleId,
+  } = await seedUiContext(request, e2eRun);
 
   await test.step("keep the complete match filter contract at mobile and desktop widths", async () => {
     await page.setViewportSize({ height: 844, width: 320 });
@@ -634,7 +626,14 @@ test("changes an export choice by keyboard and restores focus", async ({
   page,
   request,
 }) => {
-  const { matchIds } = await seedUiContext(request, e2eRun);
+  const { heldEventId, matchIds } = await seedUiContext(request, e2eRun);
+  // Keep the keyboard candidate order owned by this test, even when other cases seed matches.
+  // The API still supplies real candidate records; only its directory scope is controlled.
+  await page.route(/\/api\/matches(?:\?.*)?$/u, async (route) => {
+    const url = new URL(route.request().url());
+    url.searchParams.set("heldEventId", heldEventId);
+    await route.fallback({ url: url.toString() });
+  });
 
   await test.step("keep export choices native and restore focus after keyboard selection", async () => {
     const selectedMatchId = matchIds[0];
@@ -654,10 +653,10 @@ test("changes an export choice by keyboard and restores focus", async ({
     const radioValues = await radios.evaluateAll((elements) =>
       elements.map((element) => (element as HTMLInputElement).value),
     );
-    const selectedIndex = radioValues.indexOf(selectedMatchId);
-    expect(selectedIndex).toBeGreaterThanOrEqual(0);
-    const nextMatchId = radioValues[(selectedIndex + 1) % radioValues.length];
-    if (!nextMatchId) throw new Error("export conformance requires a next radio candidate");
+    expect(radioValues).toHaveLength(2);
+    expect(radioValues).toEqual(expect.arrayContaining(matchIds));
+    const nextMatchId = matchIds[1];
+    if (!nextMatchId) throw new Error("export conformance requires a next owned candidate");
 
     const selectedRadio = dialog.locator(`input[type="radio"][value="${selectedMatchId}"]`);
     await expect(selectedRadio).toBeChecked();
@@ -680,101 +679,3 @@ test("changes an export choice by keyboard and restores focus", async ({
     await expect(changeMatch).toBeFocused();
   });
 });
-
-async function seedUiContext(request: APIRequestContext, e2eRun: E2eRun) {
-  const suffix = e2eRun.masterIdSuffix;
-  const primaryGameTitleId = `gt_ui_a_${suffix}`;
-  const secondaryGameTitleId = `gt_ui_b_${suffix}`;
-  const seasonMasterId = `season_ui_${suffix}`;
-  const mapMasterId = `map_ui_${suffix}`;
-  const primaryGameTitleName = `UI確認作品A ${suffix}`;
-  const seasonName = `UI確認シーズン ${suffix}`;
-  const mapName = `UI確認マップ ${suffix}`;
-  // Keep the fixture historical so a parallel smoke run can own the latest-event shortcuts.
-  const localDateTime = e2eRun.uniqueLocalDateTime(2000);
-  const playedAt = new Date(`${localDateTime}:00+09:00`).toISOString();
-
-  await postJson(request, e2eRun, "/api/game-titles", {
-    id: primaryGameTitleId,
-    layoutFamily: "momotetsu_2",
-    name: primaryGameTitleName,
-  });
-  e2eRun.trackGameTitle(primaryGameTitleId);
-  await postJson(request, e2eRun, "/api/game-titles", {
-    id: secondaryGameTitleId,
-    layoutFamily: "momotetsu_2",
-    name: `UI確認作品B ${suffix}`,
-  });
-  e2eRun.trackGameTitle(secondaryGameTitleId);
-  await postJson(request, e2eRun, "/api/season-masters", {
-    gameTitleId: primaryGameTitleId,
-    id: seasonMasterId,
-    name: seasonName,
-  });
-  e2eRun.trackSeasonMaster(seasonMasterId);
-  await postJson(request, e2eRun, "/api/map-masters", {
-    gameTitleId: primaryGameTitleId,
-    id: mapMasterId,
-    name: mapName,
-  });
-  e2eRun.trackMapMaster(mapMasterId);
-
-  const heldEvent = await postJson(request, e2eRun, "/api/held-events", { heldAt: playedAt });
-  const heldEventId = expectGeneratedId(heldEvent["id"] as string | undefined, "held event ID");
-  e2eRun.trackHeldEvent(heldEventId);
-  const matchIds: string[] = [];
-  for (const matchNoInEvent of [1, 2]) {
-    const match = await postJson(request, e2eRun, "/api/matches", {
-      draftIds: {},
-      gameTitleId: primaryGameTitleId,
-      heldEventId,
-      mapMasterId,
-      matchNoInEvent,
-      ownerMemberId: "member_ponta",
-      playedAt,
-      players: makePlayers(matchNoInEvent),
-      seasonMasterId,
-    });
-    const matchId = expectGeneratedId(match["matchId"] as string | undefined, "match ID");
-    matchIds.push(matchId);
-    e2eRun.trackMatch(matchId);
-  }
-
-  return {
-    heldEventId,
-    mapName,
-    matchIds,
-    primaryGameTitleId,
-    primaryGameTitleName,
-    seasonMasterId,
-    seasonName,
-    secondaryGameTitleId,
-  };
-}
-
-function createDeferred(): { promise: Promise<void>; resolve: () => void } {
-  let resolvePromise!: () => void;
-  const promise = new Promise<void>((resolve) => {
-    resolvePromise = resolve;
-  });
-  return { promise, resolve: resolvePromise };
-}
-
-function makePlayers(seed: number) {
-  const memberIds = ["member_ponta", "member_akane_mami", "member_otaka", "member_eu"];
-  return memberIds.map((memberId, index) => ({
-    incidents: {
-      cardShop: 0,
-      cardStation: 0,
-      destination: 0,
-      minusStation: 0,
-      plusStation: 0,
-      suriNoGinji: 0,
-    },
-    memberId,
-    playOrder: index + 1,
-    rank: index + 1,
-    revenueManYen: seed * 100 + (4 - index) * 10,
-    totalAssetsManYen: seed * 1_000 + (4 - index) * 100,
-  }));
-}

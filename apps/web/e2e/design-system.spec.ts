@@ -1,3 +1,4 @@
+import type { components } from "../src/shared/api/generated";
 import { expect, expectNoHorizontalPageOverflow, installE2eAuthHeaders, test } from "./support";
 
 test("moves skip-link focus into the ready page and resumes keyboard navigation there", async ({
@@ -8,7 +9,8 @@ test("moves skip-link focus into the ready page and resumes keyboard navigation 
   await expect(page.getByRole("heading", { name: "ログインと権限" })).toBeVisible();
 
   const skip = page.getByRole("link", { name: "メインコンテンツへスキップ" });
-  await skip.focus();
+  await page.keyboard.press("Tab");
+  await expect(skip).toBeFocused();
   await page.keyboard.press("Enter");
   const main = page.getByRole("main");
   await expect(main).toBeFocused();
@@ -45,8 +47,13 @@ test("starts document login navigation when its action becomes pending", async (
   await page.route("**/api/auth/me", (route) =>
     route.fulfill({
       status: 401,
-      contentType: "application/problem+json",
-      body: JSON.stringify({ status: 401, title: "Unauthorized" }),
+      json: {
+        type: "about:blank",
+        status: 401,
+        title: "Unauthorized",
+        code: "UNAUTHORIZED",
+        detail: "A signed-in account is required.",
+      } satisfies components["schemas"]["ProblemDetails"],
     }),
   );
   let loginUrl: URL | undefined;

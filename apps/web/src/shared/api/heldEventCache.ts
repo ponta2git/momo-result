@@ -20,7 +20,13 @@ export async function syncHeldEventCreatedCache(
   const queryKey = heldEventKeys.summary(event.id);
   await queryClient.cancelQueries({ queryKey, exact: true });
   queryClient.setQueryData<HeldEventSummaryResponse>(queryKey, event);
-  await queryClient.invalidateQueries({ queryKey: heldEventKeys.listRoot() });
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: heldEventKeys.listRoot() }),
+    queryClient.invalidateQueries({
+      queryKey: heldEventKeys.detailRoot(),
+      predicate: ({ queryKey: key }) => key.at(-1) === "read-result",
+    }),
+  ]);
 }
 
 /** Remove every individual view of the deleted event; refetch affected list pages. */
@@ -28,8 +34,14 @@ export async function syncHeldEventDeletedCache(
   queryClient: QueryClient,
   heldEventId: string,
 ): Promise<void> {
-  const queryKey = heldEventKeys.detail(heldEventId);
+  const queryKey = heldEventKeys.resource(heldEventId);
   await queryClient.cancelQueries({ queryKey });
   queryClient.removeQueries({ queryKey });
-  await queryClient.invalidateQueries({ queryKey: heldEventKeys.listRoot() });
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: heldEventKeys.listRoot() }),
+    queryClient.invalidateQueries({
+      queryKey: heldEventKeys.detailRoot(),
+      predicate: ({ queryKey: key }) => key[2] !== heldEventId && key.at(-1) === "read-result",
+    }),
+  ]);
 }

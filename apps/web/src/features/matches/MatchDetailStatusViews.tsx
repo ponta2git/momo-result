@@ -1,7 +1,11 @@
+import type { ReactNode, Ref } from "react";
+
 import {
   matchResultLedgerGridClass,
   matchResultLedgerRowClass,
 } from "@/shared/matches/MatchResultLedger";
+import { Button } from "@/shared/ui/actions/Button";
+import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { ResourcePageState } from "@/shared/ui/feedback/ResourcePageState";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
@@ -73,11 +77,19 @@ export function MatchDetailLoading() {
 
 export function MatchDetailLoadFailed({
   backHref = "/matches",
+  backLabel = "前の画面へ戻る",
+  backNotice,
   notFound = false,
   onRetry,
   retrying = false,
+  titleRef,
+  recovery,
 }: {
   backHref?: string;
+  backLabel?: string;
+  backNotice?: string | undefined;
+  titleRef?: Ref<HTMLHeadingElement>;
+  recovery?: ReactNode;
   notFound?: boolean;
   onRetry?: (() => void) | undefined;
   retrying?: boolean;
@@ -85,21 +97,50 @@ export function MatchDetailLoadFailed({
   return notFound ? (
     <ResourcePageState
       backHref={backHref}
-      backLabel="前の画面へ戻る"
+      backLabel={backLabel}
+      titleRef={titleRef}
+      headerDescription={backNotice}
+      headerActions={
+        <>
+          {backHref === "/matches" ? null : (
+            <LinkButton to="/matches" variant="secondary">
+              試合一覧へ
+            </LinkButton>
+          )}
+          {onRetry ? (
+            <Button onClick={onRetry} pending={retrying} variant="quiet">
+              再取得
+            </Button>
+          ) : null}
+        </>
+      }
       description="指定された試合は削除されたか、存在しません。前の画面から別の試合を選んでください。"
       kind="not-found"
       title="試合が見つかりません"
-    />
+    >
+      {recovery}
+    </ResourcePageState>
   ) : onRetry ? (
     <ResourcePageState
       backHref={backHref}
-      backLabel="前の画面へ戻る"
+      backLabel={backLabel}
+      titleRef={titleRef}
+      headerDescription={backNotice}
+      headerActions={
+        backHref === "/matches" ? undefined : (
+          <LinkButton to="/matches" variant="secondary">
+            試合一覧へ
+          </LinkButton>
+        )
+      }
       description="通信状態を確認して、もう一度お試しください。"
       kind="error"
       retryLabel="試合詳細を再読み込み"
       retrying={retrying}
       title="試合詳細を読み込めませんでした"
       onRetry={onRetry}
-    />
+    >
+      {recovery}
+    </ResourcePageState>
   ) : null;
 }

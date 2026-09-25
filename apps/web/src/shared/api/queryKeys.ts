@@ -12,7 +12,9 @@ export const heldEventKeys = {
   detailRoot: () => ["held-events", "detail"] as const,
   summary: (heldEventId: string | undefined) =>
     ["held-events", "detail", heldEventId, "summary"] as const,
-  detail: (heldEventId: string | undefined) => ["held-events", "detail", heldEventId] as const,
+  resource: (heldEventId: string | undefined) => ["held-events", "detail", heldEventId] as const,
+  detail: (heldEventId: string | undefined) =>
+    ["held-events", "detail", heldEventId, "read-result"] as const,
 };
 
 export const adminAccountKeys = {
@@ -67,7 +69,8 @@ export const matchKeys = {
   exports: (params: unknown) => ["matches", "collections", "exports", params] as const,
   detailRoot: () => ["matches", "detail"] as const,
   identity: (matchId: string | undefined) => ["matches", "detail", matchId, "identity"] as const,
-  detail: (matchId: string | undefined) => ["matches", "detail", matchId] as const,
+  resource: (matchId: string | undefined) => ["matches", "detail", matchId] as const,
+  detail: (matchId: string | undefined) => ["matches", "detail", matchId, "read-result"] as const,
   draft: {
     all: () => ["match-drafts"] as const,
     detailRoot: () => ["match-drafts", "detail"] as const,
@@ -108,7 +111,7 @@ export const seriesAnalysisKeys = {
     ["series-analysis", "artifact", "v3", "drilldown", params] as const,
   matchContextRoot: () => ["series-analysis", "artifact", "v3", "match-context"] as const,
   matchContext: (params: unknown) =>
-    ["series-analysis", "artifact", "v3", "match-context", params] as const,
+    ["series-analysis", "artifact", "v3", "match-context", "http-v3", params] as const,
   adminRoot: () => ["series-analysis", "admin", "overview"] as const,
   adminOverview: (gameTitleId: string | undefined) =>
     ["series-analysis", "admin", "overview", gameTitleId ?? "default"] as const,

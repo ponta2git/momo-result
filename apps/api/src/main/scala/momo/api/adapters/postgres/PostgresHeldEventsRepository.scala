@@ -56,7 +56,7 @@ object PostgresHeldEvents:
         page: PageRequest,
     ): ConnectionIO[PagedResult[HeldEvent]] =
       val where = whereQuery(query)
-      val order = fr"ORDER BY start_at DESC, id DESC"
+      val order = fr"""ORDER BY start_at DESC, id COLLATE "C" DESC"""
       val pageLimit = fr"LIMIT ${page.pageSize} OFFSET ${page.offset}"
       for
         total <- (fr"SELECT COUNT(*)::int FROM held_events" ++ where).query[Int].unique
@@ -65,7 +65,8 @@ object PostgresHeldEvents:
       yield PagedResult(items, page, total)
 
     override def listIds(query: Option[String]): ConnectionIO[List[HeldEventId]] =
-      (fr"SELECT id FROM held_events" ++ whereQuery(query) ++ fr"ORDER BY start_at DESC, id DESC")
+      (fr"SELECT id FROM held_events" ++ whereQuery(query) ++
+        fr"""ORDER BY start_at DESC, id COLLATE "C" DESC""")
         .query[HeldEventId].to[List]
 
     override def find(id: HeldEventId): ConnectionIO[Option[HeldEvent]] =

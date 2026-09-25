@@ -38,7 +38,7 @@ object HttpOperation:
   val GetSeriesAnalysisAggregateV4 = "GET /api/analytics/series-comparison/v4/aggregate"
   val GetSeriesAnalysisReviewV3 = "GET /api/analytics/series-comparison/v3/review"
   val GetSeriesAnalysisDrilldown = "GET /api/analytics/series-comparison/v2/drilldown"
-  val GetSeriesAnalysisMatchContext = "GET /api/analytics/series-comparison/v2/match-context"
+  val GetSeriesAnalysisMatchContext = "GET /api/analytics/series-comparison/v3/match-context"
   val GetSeriesAnalysisAdminOverview = "GET /api/admin/series-analysis/overview"
   val RequestSeriesAnalysisTitle = "POST /api/admin/series-analysis/recalculations"
   val RequestSeriesAnalysisAll = "POST /api/admin/series-analysis/recalculations/all"

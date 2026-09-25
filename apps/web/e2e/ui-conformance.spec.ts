@@ -546,7 +546,7 @@ async function expectHeldEventActionsUsable(page: Page, refreshAvailable: boolea
 
 async function fulfillHeldEventNotFound(route: Route) {
   await route.fulfill({
-    contentType: "application/problem+json",
+    contentType: "application/json",
     json: {
       code: "NOT_FOUND",
       detail: "E2E held-event terminal layout",

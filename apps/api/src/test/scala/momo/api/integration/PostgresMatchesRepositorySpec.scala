@@ -360,6 +360,91 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       assertEquals(snapshot._2, "repeatable read")
       assertEquals(snapshot._3, "on")
 
+  test("match neighbours follow the complete global order and changed live records"):
+    val details = new PostgresMatchDetailReadModel[IO](transactor)
+    val bmpEvent = HeldEvent(HeldEventId.unsafeFromString("adjacent_\uE000"), now.plusSeconds(90))
+    val supplementaryEvent =
+      HeldEvent(HeldEventId.unsafeFromString("adjacent_\uD800\uDC00"), now.minusSeconds(90))
+    val first = sampleMatch("adjacent-first", 1).copy(heldEventId = supplementaryEvent.id)
+    val second = sampleMatch(
+      "adjacent-second",
+      1
+    ).copy(heldEventId = bmpEvent.id, playedAt = now.plusNanos(1000))
+    val gap = second.copy(
+      id = MatchId.unsafeFromString("adjacent-gap"),
+      matchNoInEvent = MatchNoInEvent.unsafeFromInt(3)
+    )
+    val otherScope = sampleMatch("adjacent-other-scope", 5).copy(
+      heldEventId = supplementaryEvent.id,
+      playedAt = now.plusNanos(1000),
+      gameTitleId = secondGameTitleId,
+      seasonMasterId = secondSeasonMasterId,
+      mapMasterId = secondMapMasterId,
+    )
+    val last = sampleMatch("adjacent-last", 9).copy(playedAt = now.plusNanos(2000))
+    val ordered = List(first, second, gap, otherScope, last)
+    for
+      _ <- seedPrereqs
+      _ <- seedSecondTitle
+      _ <- heldEvents.create(bmpEvent)
+      _ <- heldEvents.create(supplementaryEvent)
+      _ <- createMatch(first)
+      single <- details.find(first.id)
+      _ <- ordered.tail.reverse.traverse_(createMatch)
+      all <- ordered.traverse(record => details.find(record.id))
+      _ <- matches.delete(gap.id)
+      afterDelete <- details.find(second.id)
+      _ <- matches.update(otherScope.copy(playedAt = now.minusNanos(1000)), now)
+      afterMove <- details.find(first.id)
+      missing <- details.find(gap.id)
+    yield
+      assertEquals(single.map(_.navigation), Some(RecordNavigation(None, None)))
+      all.zipWithIndex.foreach { case (detail, index) =>
+        val navigation = detail.getOrElse(fail("match missing")).navigation
+        assertEquals(navigation.previous.map(_.matchId), ordered.lift(index - 1).map(_.id))
+        assertEquals(navigation.next.map(_.matchId), ordered.lift(index + 1).map(_.id))
+      }
+      assertEquals(
+        all.head.flatMap(_.navigation.next),
+        Some(AdjacentMatch(
+          second.id,
+          bmpEvent.id,
+          second.playedAt,
+          bmpEvent.heldAt,
+          second.matchNoInEvent
+        ))
+      )
+      assertEquals(afterDelete.flatMap(_.navigation.next).map(_.matchId), Some(otherScope.id))
+      assertEquals(afterMove.flatMap(_.navigation.previous).map(_.matchId), Some(otherScope.id))
+      assertEquals(missing, None)
+
+  test("held-event neighbours include empty events and agree with both list reads"):
+    val details = new PostgresHeldEventDetailReadModel[IO](transactor)
+    val reader = new PostgresHeldEventListReadModel[IO](transactor)
+    val bmp = HeldEvent(HeldEventId.unsafeFromString("neighbour_\uE000"), now)
+    val supplementary = HeldEvent(HeldEventId.unsafeFromString("neighbour_\uD800\uDC00"), now)
+    val later = HeldEvent(HeldEventId.unsafeFromString("neighbour_A"), now.plusNanos(1000))
+    val ordered = List(bmp, supplementary, later)
+    for
+      _ <- heldEvents.create(bmp)
+      single <- details.find(bmp.id)
+      _ <- heldEvents.create(later)
+      _ <- heldEvents.create(supplementary)
+      all <- ordered.traverse(event => details.find(event.id))
+      list <- reader.list(None, PageRequest(1, 10))
+      ids <- heldEvents.listIds(None)
+    yield
+      assertEquals(single.map(_.navigation), Some(RecordNavigation(None, None)))
+      all.zipWithIndex.foreach { case (detail, index) =>
+        val value = detail.getOrElse(fail("event missing"))
+        assertEquals(value.navigation.previous, ordered.lift(index - 1))
+        assertEquals(value.navigation.next, ordered.lift(index + 1))
+        assertEquals(value.matches, Nil)
+        assertEquals(value.drafts, Nil)
+      }
+      assertEquals(list.page.items.map(_.event.id), ordered.reverse.map(_.id))
+      assertEquals(ids, ordered.reverse.map(_.id))
+
   test("held-event pages project only their scopes while totals cover all matching events"):
     val latestId = HeldEventId.unsafeFromString("held_latest")
     val emptyId = HeldEventId.unsafeFromString("held_empty")

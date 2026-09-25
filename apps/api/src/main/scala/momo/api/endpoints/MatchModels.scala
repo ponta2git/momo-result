@@ -246,10 +246,33 @@ final case class MatchDetailResponse(
     createdByMemberId: Option[String],
     createdAt: String,
     note: MatchNoteResponse,
+    navigation: MatchNavigationResponse,
     heldAt: Option[String] = None,
     gameTitleName: Option[String] = None,
     seasonName: Option[String] = None,
     mapName: Option[String] = None,
+) derives Codec.AsObject
+
+final case class AdjacentMatchResponse(
+    matchId: String,
+    heldEventId: String,
+    playedAt: String,
+    heldAt: String,
+    matchNoInEvent: Int,
+) derives Codec.AsObject
+
+object AdjacentMatchResponse:
+  def from(record: momo.api.domain.AdjacentMatch): AdjacentMatchResponse = AdjacentMatchResponse(
+    record.matchId.value,
+    record.heldEventId.value,
+    DateTimeFormatter.ISO_INSTANT.format(record.playedAt),
+    DateTimeFormatter.ISO_INSTANT.format(record.heldAt),
+    record.matchNoInEvent.value,
+  )
+
+final case class MatchNavigationResponse(
+    previous: Option[AdjacentMatchResponse],
+    next: Option[AdjacentMatchResponse],
 ) derives Codec.AsObject
 
 final case class UpdateMatchResponse(
@@ -295,9 +318,7 @@ object MatchSummaryResponse:
   )
 
 object MatchDetailResponse:
-  import momo.api.domain.MatchRecord
   import momo.api.domain.MatchDetail
-  def from(record: MatchRecord): MatchDetailResponse = from(MatchDetail(record, None))
   def from(detail: MatchDetail): MatchDetailResponse =
     val r = detail.record
     MatchDetailResponse(
@@ -333,6 +354,10 @@ object MatchDetailResponse:
       createdByAccountId = r.createdByAccountId.value,
       createdByMemberId = r.createdByMemberId.map(_.value),
       createdAt = DateTimeFormatter.ISO_INSTANT.format(r.createdAt),
+      navigation = MatchNavigationResponse(
+        detail.navigation.previous.map(AdjacentMatchResponse.from),
+        detail.navigation.next.map(AdjacentMatchResponse.from),
+      ),
       heldAt = detail.heldAt.map(DateTimeFormatter.ISO_INSTANT.format),
       gameTitleName = detail.labels.gameTitleName,
       seasonName = detail.labels.seasonName,

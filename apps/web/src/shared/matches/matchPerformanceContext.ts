@@ -1,4 +1,4 @@
-import type { SeriesAnalysisMatchContextV2 } from "@/shared/api/seriesAnalysis";
+import type { SeriesAnalysisMatchContextV3 } from "@/shared/api/seriesAnalysis";
 
 type MatchPerformanceTrend = "declined" | "firstMatch" | "improved" | "unchanged" | "unavailable";
 
@@ -21,7 +21,7 @@ type MatchPerformanceContext = {
 };
 
 export function matchPerformanceContextFromArtifact(
-  context: SeriesAnalysisMatchContextV2 | undefined,
+  context: SeriesAnalysisMatchContextV3 | undefined,
 ): MatchPerformanceContext | undefined {
   if (context?.inclusion.status !== "included" || !context.match) return undefined;
   return {
@@ -43,7 +43,7 @@ export function matchPerformanceContextFromArtifact(
 
 function performanceTrendFromArtifact(
   direction: NonNullable<
-    SeriesAnalysisMatchContextV2["match"]
+    SeriesAnalysisMatchContextV3["match"]
   >["players"][number]["cumulativeAverageDirection"],
 ): MatchPerformanceTrend {
   switch (direction) {

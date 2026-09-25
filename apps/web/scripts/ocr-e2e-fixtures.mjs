@@ -1,9 +1,65 @@
 import { createHash } from "node:crypto";
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
 
 export const screens = ["total_assets", "revenue", "incident_log"];
+
+// Same releases as the former registry images; official release assets remain available.
+// https://github.com/minio/minio/releases/tag/RELEASE.2025-09-07T16-13-09Z
+// https://github.com/minio/mc/releases/tag/RELEASE.2025-08-13T08-35-41Z
+const minioReleases = [
+  {
+    name: "minio",
+    release: "RELEASE.2025-09-07T16-13-09Z",
+    sha256: {
+      amd64: "7c5bd8512c6e966455b1d198209358b2d191c77a83ab377c4073281065fb855f",
+      arm64: "5c83cd2cf151717ba0243f73e1c7802ff36e272b67144bdd7f1f7d684fd6f03d",
+    },
+  },
+  {
+    name: "mc",
+    release: "RELEASE.2025-08-13T08-35-41Z",
+    sha256: {
+      amd64: "01f866e9c5f9b87c2b09116fa5d7c06695b106242d829a8bb32990c00312e891",
+      arm64: "14c8c9616cfce4636add161304353244e8de383b2e2752c0e9dad01d4c27c12c",
+    },
+  },
+];
+
+export async function writeMinioImageContexts(directory, dockerArchitecture) {
+  const architecture = { x86_64: "amd64", amd64: "amd64", aarch64: "arm64", arm64: "arm64" }[
+    dockerArchitecture
+  ];
+  if (!architecture) throw new Error("Unsupported isolated MinIO Docker architecture.");
+  const contexts = [];
+  for (const { name, release, sha256 } of minioReleases) {
+    let bytes;
+    try {
+      const response = await fetch(
+        `https://github.com/minio/${name}/releases/download/${release}/${name}.linux-${architecture}.${release}`,
+        { signal: AbortSignal.timeout(120_000) },
+      );
+      if (!response.ok) throw new Error("Download rejected.");
+      bytes = Buffer.from(await response.arrayBuffer());
+    } catch {
+      throw new Error(`Owned E2E ${name} release download failed.`);
+    }
+    if (createHash("sha256").update(bytes).digest("hex") !== sha256[architecture])
+      throw new Error(`Owned E2E ${name} release checksum mismatch.`);
+    const context = join(directory, `${name}-image`);
+    await mkdir(context);
+    await writeFile(join(context, name), bytes, { flag: "wx", mode: 0o600 });
+    // These static binaries only communicate over the isolated HTTP network; no shell or CA bundle.
+    await writeFile(
+      join(context, "Dockerfile"),
+      `FROM scratch\nCOPY --chmod=0755 ${name} /usr/bin/${name}\nENTRYPOINT ["/usr/bin/${name}"]\n`,
+      { flag: "wx", mode: 0o600 },
+    );
+    contexts.push({ name, context });
+  }
+  return contexts;
+}
 
 // Child-process errors can contain credentials in command/output/cause fields. Expose only
 // fixed operation labels and bounded process metadata, never the original error object.

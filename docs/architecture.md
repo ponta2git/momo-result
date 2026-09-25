@@ -34,13 +34,14 @@
 
 - HTTP 契約は Tapir endpoint を正本とする。手書き route が必要でも path / query / header を二重管理しない。
 - 分析artifactのraw response shapeは、Rust所有のartifact schemaとAPI所有のmetadata projectionをTapirのnamed responseへ合成してHTTP契約とする。OpenAPI、Web型、runtime validatorはこの合成結果から生成し、派生物へshapeを手書きしない。
+- match-contextのHTTP v3は、保存時のsource revisionとの一致を調べる同じread snapshotからowner属性を付加する。revisionとownerを一つの値として運び、独立した表示名hydrateと混ぜない。保存payloadのchecksum・decode後に付加し、構造・参加者参照・応答上限を検証する。保存schemaとHTTP世代は分離し、APIで分析値を再計算しない。
 - 分析結果の分類・根拠はWorkerが所有し、画面内の遷移先、リンク文言、固定の指標説明はWebが所有する。保存成果物へ画面構造を埋め込まず、Webは分類から遷移先を決める。
 - `apps/api/openapi.yaml` は内部 Web codegen 用の追跡する派生物であり、契約や公開 API documentation の正本ではない。Tapir から一時生成した spec を保守された OpenAPI-aware linter で構造検証し、tracked artifact と一致させ、その artifact から Web 型を生成する。手編集で差分を解消しない。
 - OpenAPI lint は unresolved reference、path / parameter、schema、operation identity など構造整合性に限定する。field の公開可否、認証、業務意味は endpoint、DTO、要求・domain 規約で決め、legacy 名や source 断片の文字列検査を契約にしない。
 - HTTP 層は入力・認証・エラー変換に閉じ、DB、Redis、業務分岐を直接持たない。
 - Tapirのserver logicで発生した例外は外側の`HttpErrorMiddleware`へ伝え、共通のProblem Detailsと機密情報を除いたincident logに変換する。Tapirの既定例外応答・例外logと二重に処理しない。mutationの結果不明時に保持するidempotency予約は、このHTTP変換より内側で確定する。
 - raw ID、設定値、wire value は境界で検証済み型へ変換する。usecase へ未検証値や wire DTO を渡さない。
-- 分析は現行の成果物契約とHTTP経路だけを提供する。旧世代のdecoder、互換用route、旧形式からの補完は維持しない。形式を変えるときはAPI・Web・Workerを揃え、必要な再計算を公開再開前に完了する。
+- 分析は現行の成果物契約とHTTP経路だけを提供する。旧世代のdecoder、互換用route、旧形式からの補完は維持しない。成果物形式を変えるときはAPI・Web・Workerを揃え、必要な再計算を公開再開前に完了する。保存形式を変えないHTTP projectionの変更では対応API/Webを一体で切り替え、Worker変更・再計算を要求しない。
 - optional field が mode や副作用を変える場合は discriminator として要件または domain 文書にも意味を残す。
 - 依存方向は `http → auth / usecases → domain + ports / repositories`、`adapters → domain + ports / repositories` とする。外部通信・永続化の実装は adapter に置き、`bootstrap` だけが実装を選ぶ。認証の account 判定と callback の組み立ても HTTP module へ戻さない。
 - 外部境界には利用側が必要とする操作・値だけを公開する。セッションには有効期間、OAuth state には署名鍵と有効期間、OCR受付には別名の snapshot を渡し、全体設定や未使用の更新操作を運搬しない。SDK client、SQL、provider wire DTO は adapter 内に閉じる。
@@ -114,6 +115,7 @@
 - fatal error、再取得、cached data、認証待ち、disabled query を別状態として扱う。mutation 後は表示中の resource と選択候補の cache をともに整合させる。
 - 初回表示、mutation 後の cache 整合、artifact 失効時の bounded recovery、利用者が実行した更新 / 再試行だけが server state の取得を開始する。interval、遅延 timer、window focus、tab visibility、network reconnect を起点に自動再取得しない。この契約は共通 QueryClient に集約し、feature ごとに再実装しない。
 - 分析の計算payloadがimmutableでも、現在の名称や試合revisionに依存するHTTP projectionは可変として扱う。master変更は表示名を含むartifact response、試合訂正・削除はその試合のcontextとidentityを更新する。手動更新はstatusで参照世代を確定してから必要なresourceを読み、新旧artifactを同時に再取得しない。
+- match-contextの確定した不存在・失効は成功済みcacheの利用を止め、一時的な更新失敗と区別する。比較画面と試合結果画面で共通の利用判定を使い、表示bundleの選択試合と全マーカーを揃える。再取得中の復活を含む状態契約は[分析横断要求](requirements/series-analysis-batch.md#web-state)を正本とする。
 - React の concurrent / form API は cache、retry、認証、validation の既存契約を置き換えない範囲で使う。
 
 ### React 更新の優先度

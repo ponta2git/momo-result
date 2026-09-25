@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useActionState, useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   emptyHeldEvents,
@@ -12,6 +12,7 @@ import type {
   HeldEventsListModel,
   HeldEventsListRefreshModel,
 } from "@/features/heldEvents/heldEventViewModel";
+import { syncHeldEventCreatedCache, syncHeldEventDeletedCache } from "@/shared/api/heldEventCache";
 import { createHeldEvent, deleteHeldEvent } from "@/shared/api/heldEvents";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
@@ -21,13 +22,12 @@ import {
   shouldShowBlockingQueryError,
   shouldShowQueryError,
 } from "@/shared/api/queryErrorState";
-import { heldEventKeys } from "@/shared/api/queryKeys";
 import { heldEventsQueryOptions } from "@/shared/api/queryOptions";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { toIsoFromLocalDateTime, toLocalDateTimeInputValue } from "@/shared/lib/dateTime";
 import { parsePositiveIntSearchParam } from "@/shared/lib/searchParams";
 import { useRetryNotice } from "@/shared/lib/useRetryNotice";
-import { withReturnTo } from "@/shared/navigation/returnTo";
+import { currentInternalLocation, withReturnTo } from "@/shared/navigation/returnTo";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 const initialCreateHeldEventState = { version: 0 };
@@ -61,18 +61,19 @@ function withPaginationParams(
   return params;
 }
 
-function heldEventsReturnTo(params: URLSearchParams): string {
+function heldEventsReturnTo(params: URLSearchParams, hash: string): string {
   const search = params.toString();
-  return `/held-events${search ? `?${search}` : ""}`;
+  return `/held-events${search ? `?${search}` : ""}${hash}`;
 }
 
 /** Owns the complete held-event list screen without exposing query or mutation result objects. */
 export function useHeldEventsPageModel(): HeldEventsPageModel {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const rawSearch = searchParams.toString();
-  const listReturnTo = `/held-events${rawSearch ? `?${rawSearch}` : ""}`;
+  const listReturnTo = currentInternalLocation(location);
   const paginationSearch = useMemo(() => {
     const pageSize = parsePositiveIntSearchParam(
       searchParams.get("pageSize"),
@@ -126,12 +127,7 @@ export function useHeldEventsPageModel(): HeldEventsPageModel {
         (options) => createHeldEvent(request, options),
       );
       updatePagination({ page: 1, pageSize: paginationSearch.pageSize });
-      await queryClient.invalidateQueries({ queryKey: heldEventKeys.all() });
-      queryClient.setQueryData(heldEventKeys.detail(event.id), {
-        ...event,
-        drafts: [],
-        matches: [],
-      });
+      await syncHeldEventCreatedCache(queryClient, event);
       setHeldAtDraft(toLocalDateTimeInputValue());
       setErrorMessage("");
       setCreateOpen(false);
@@ -154,8 +150,8 @@ export function useHeldEventsPageModel(): HeldEventsPageModel {
         (options) => deleteHeldEvent(event.id, options),
       );
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: heldEventKeys.all() });
+    onSuccess: async (_response, event) => {
+      await syncHeldEventDeletedCache(queryClient, event.id);
       setDeleteTarget(null);
       setErrorMessage("");
       showToast({ title: "開催を削除しました。", tone: "success" });
@@ -174,6 +170,7 @@ export function useHeldEventsPageModel(): HeldEventsPageModel {
           page: displayedPage,
           pageSize: displayedPageSize,
         }),
+        location.hash,
       )
     : listReturnTo;
   const pageCorrectionPending = Boolean(

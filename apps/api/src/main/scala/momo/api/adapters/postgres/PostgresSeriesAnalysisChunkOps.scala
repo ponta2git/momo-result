@@ -9,14 +9,17 @@ import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.config.SeriesAnalysisReadConfig
 import momo.api.contracts.seriesanalysis.SeriesAnalysisArtifactContract
 import momo.api.domain.*
-import momo.api.domain.ids.{GameTitleId, MapMasterId, MatchId, SeasonMasterId}
+import momo.api.domain.ids.{GameTitleId, MapMasterId, MatchId, MemberId, SeasonMasterId}
 import momo.api.errors.AppError
 
 private[postgres] object PostgresSeriesAnalysisChunkOps:
   final case class LoadedChunk(request: SeriesAnalysisChunkRequest, material: ChunkMaterial)
 
   enum ChunkMaterial:
-    case Stored(chunk: SeriesAnalysisStoredChunk, sourceMatchRevision: Option[Long])
+    case Stored(
+        chunk: SeriesAnalysisStoredChunk,
+        matchSnapshot: Option[SeriesAnalysisMatchSnapshot]
+    )
     case Excluded(
         artifact: SeriesAnalysisArtifactRef,
         matchId: MatchId,
@@ -30,6 +33,7 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
       seasonMasterId: SeasonMasterId,
       mapMasterId: MapMasterId,
       analysisRevision: Long,
+      ownerMemberId: MemberId,
   )
 
   private final case class MemberDisplayNameRow(id: String, displayName: String)
@@ -148,7 +152,7 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
     case Some(matchId) =>
       val query =
         fr"""
-        SELECT m.game_title_id, m.season_master_id, m.map_master_id, m.analysis_revision,
+        SELECT m.game_title_id, m.season_master_id, m.map_master_id, m.analysis_revision, m.owner_member_id,
       """ ++ storedColumns(config) ++ fr", c.source_match_revision" ++
           readableArtifact(request) ++ chunkJoin(request) ++
           fr"LEFT JOIN matches m ON m.id = $matchId"
@@ -171,9 +175,10 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
                   case Some(value) if value != current.analysisRevision =>
                     Some(SeriesAnalysisMatchContextExclusion.MatchChangedSinceArtifact)
                   case Some(_) => None
-            val material = exclusion.fold[ChunkMaterial](ChunkMaterial.Stored(row, sourceRevision))(
-              reason => ChunkMaterial.Excluded(row.artifact, matchId, reason)
-            )
+            val material = exclusion.fold[ChunkMaterial](ChunkMaterial.Stored(
+              row,
+              sourceRevision.map(SeriesAnalysisMatchSnapshot(_, current.ownerMemberId)),
+            ))(reason => ChunkMaterial.Excluded(row.artifact, matchId, reason))
             LoadedChunk(request, material).asRight
         }
 

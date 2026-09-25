@@ -17,7 +17,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MatchDetailPage } from "@/features/matches/MatchDetailPage";
 import { MatchDetailLoading } from "@/features/matches/MatchDetailStatusViews";
-import { matchKeys } from "@/shared/api/queryKeys";
+import { matchKeys, seriesAnalysisKeys } from "@/shared/api/queryKeys";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { makeFourPlayerResults, makeIncidents, makeMatchDetail } from "@/test/factories";
@@ -300,11 +300,20 @@ describe("MatchDetailPage", () => {
     expect(extraRequests).toEqual([]);
   });
 
-  it("does not offer retry for a missing match", async () => {
+  it("shows confirmed absence and a safe return for a missing match", async () => {
     setDevUser();
     server.use(
       http.get("/api/matches/:matchId", () =>
-        HttpResponse.json({ detail: "not found" }, { status: 404 }),
+        HttpResponse.json(
+          {
+            type: "about:blank",
+            title: "Not Found",
+            detail: "not found",
+            status: 404,
+            code: "NOT_FOUND",
+          },
+          { status: 404 },
+        ),
       ),
     );
 
@@ -494,7 +503,7 @@ describe("MatchDetailPage", () => {
     expect(screen.queryByLabelText("試合詳細を読み込み中")).not.toBeInTheDocument();
     await waitFor(() =>
       expect(removeQueries).toHaveBeenCalledWith({
-        queryKey: matchKeys.detail("match-1"),
+        queryKey: matchKeys.resource("match-1"),
       }),
     );
     await waitFor(() =>
@@ -528,7 +537,7 @@ describe("MatchDetailPage", () => {
           }),
         ),
       ),
-      http.get("/api/analytics/series-comparison/v2/match-context", ({ request }) => {
+      http.get("/api/analytics/series-comparison/v3/match-context", ({ request }) => {
         contextSearches.push(new URL(request.url).search);
         const context = makeSeriesAnalysisMatchContext();
         if (!context.match) throw new Error("fixture must include a match");
@@ -653,7 +662,7 @@ describe("MatchDetailPage", () => {
           }),
         );
       }),
-      http.get("/api/analytics/series-comparison/v2/match-context", ({ request }) => {
+      http.get("/api/analytics/series-comparison/v3/match-context", ({ request }) => {
         const artifactId = new URL(request.url).searchParams.get("artifactId") ?? "";
         contextArtifactIds.push(artifactId);
         if (contextArtifactIds.length === 1) {
@@ -820,7 +829,7 @@ describe("MatchDetailPage", () => {
           }),
         ),
       ),
-      http.get("/api/analytics/series-comparison/v2/match-context", () => {
+      http.get("/api/analytics/series-comparison/v3/match-context", () => {
         contextAttempts += 1;
         return contextAttempts === 1
           ? HttpResponse.json({ title: "series unavailable" }, { status: 500 })
@@ -869,7 +878,7 @@ describe("MatchDetailPage", () => {
   it("keeps primary match rows but hides stale analysis after a match revision mismatch", async () => {
     setDevUser();
     server.use(
-      http.get("/api/analytics/series-comparison/v2/match-context", () => {
+      http.get("/api/analytics/series-comparison/v3/match-context", () => {
         return HttpResponse.json(
           makeSeriesAnalysisExcludedMatchContext("match_changed_since_artifact", "match-1"),
         );
@@ -892,4 +901,76 @@ describe("MatchDetailPage", () => {
     expect(screen.getAllByText("比較データなし")).toHaveLength(4);
     expect(screen.queryByText("1.82 → 1.75")).not.toBeInTheDocument();
   });
+
+  it.each([
+    [404, "NOT_FOUND"],
+    [410, "ANALYSIS_ARTIFACT_EXPIRED"],
+  ] as const)(
+    "removes derived values after a definitive %s while keeping recorded match results",
+    async (status, code) => {
+      setDevUser();
+      let response: "success" | "invalid" | "transient" | "waiting" = "success";
+      const gate = createDeferred();
+      server.use(
+        http.get("/api/analytics/series-comparison/v3/match-context", async () => {
+          if (response === "waiting") await gate.promise;
+          if (response === "invalid" || response === "transient") {
+            const responseStatus = response === "invalid" ? status : 503;
+            return HttpResponse.json(
+              {
+                type: "about:blank",
+                title: "Unavailable",
+                detail: "Unavailable",
+                status: responseStatus,
+                code: response === "invalid" ? code : "SERVICE_UNAVAILABLE",
+              },
+              { status: responseStatus },
+            );
+          }
+          return HttpResponse.json({ ...makeSeriesAnalysisMatchContext(), matchId: "match-1" });
+        }),
+      );
+      render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={["/matches/match-1"]}>
+            <Routes>
+              <Route path="/matches/:matchId" element={<MatchDetailPage />} />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+
+      expect(await screen.findByText("接戦")).toBeInTheDocument();
+      expect(screen.getByText("1.82 → 1.75")).toBeInTheDocument();
+      expect(screen.getByText("0.07改善")).toBeInTheDocument();
+      response = "transient";
+      await act(async () =>
+        queryClient.refetchQueries({ queryKey: seriesAnalysisKeys.matchContextRoot() }),
+      );
+      expect(screen.getByText("1.82 → 1.75")).toBeInTheDocument();
+      response = "invalid";
+      await act(async () =>
+        queryClient.refetchQueries({ queryKey: seriesAnalysisKeys.matchContextRoot() }),
+      );
+      await waitFor(() => {
+        expect(queryClient.isFetching()).toBe(0);
+        expect(screen.queryByText("接戦")).not.toBeInTheDocument();
+        expect(screen.queryByText("1.82 → 1.75")).not.toBeInTheDocument();
+      });
+      expect(screen.getByRole("list", { name: "試合の順位と成績" }).children).toHaveLength(4);
+      response = "waiting";
+      let refetch: Promise<void> | undefined;
+      act(() => {
+        refetch = queryClient.refetchQueries({ queryKey: seriesAnalysisKeys.matchContextRoot() });
+      });
+      await waitFor(() => expect(queryClient.isFetching()).toBeGreaterThan(0));
+      expect(screen.queryByText("1.82 → 1.75")).not.toBeInTheDocument();
+      await act(async () => {
+        gate.resolve();
+        await refetch;
+      });
+      await waitFor(() => expect(screen.getByText("1.82 → 1.75")).toBeInTheDocument());
+      expect(screen.getByText("接戦")).toBeInTheDocument();
+    },
+  );
 });

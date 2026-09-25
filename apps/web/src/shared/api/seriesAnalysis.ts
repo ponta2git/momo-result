@@ -14,7 +14,7 @@ import type {
   SeriesAnalysisDrilldownQuery,
   SeriesAnalysisDrilldownV3,
   SeriesAnalysisMatchContextQuery,
-  SeriesAnalysisMatchContextV2,
+  SeriesAnalysisMatchContextV3,
   SeriesAnalysisQuery,
 } from "@/shared/api/seriesAnalysisDetailTypes";
 import {
@@ -103,10 +103,10 @@ export function getSeriesAnalysisDrilldown(
 export function getSeriesAnalysisMatchContext(
   query: SeriesAnalysisMatchContextQuery,
   options: ApiSignalOptions = {},
-): Promise<SeriesAnalysisMatchContextV2> {
+): Promise<SeriesAnalysisMatchContextV3> {
   const params = scopeParams(query);
   params.set("matchId", query.matchId);
-  return apiRequest(`/api/analytics/series-comparison/v2/match-context?${params.toString()}`, {
+  return apiRequest(`/api/analytics/series-comparison/v3/match-context?${params.toString()}`, {
     ...options,
     decodeResponse: (value) => decodeSeriesAnalysisArtifact("matchContext", value),
   });

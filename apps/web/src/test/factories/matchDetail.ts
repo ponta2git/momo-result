@@ -69,6 +69,7 @@ export function makeMatchDetail(overrides: Partial<MatchDetailResponse> = {}): M
     createdByMemberId: "member_ponta",
     createdAt: "2026-04-04T13:00:00.000Z",
     note: { version: "0" },
+    navigation: {},
     ...overrides,
   };
 }

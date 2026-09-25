@@ -92,6 +92,20 @@ final case class HeldEventDetailResponse(
     nextMatchNo: Int,
     matches: List[HeldEventMatchResponse],
     drafts: List[HeldEventDraftResponse],
+    navigation: HeldEventNavigationResponse,
+) derives Codec.AsObject
+
+final case class AdjacentHeldEventResponse(id: String, heldAt: String) derives Codec.AsObject
+
+object AdjacentHeldEventResponse:
+  def from(event: momo.api.domain.HeldEvent): AdjacentHeldEventResponse = AdjacentHeldEventResponse(
+    event.id.value,
+    DateTimeFormatter.ISO_INSTANT.format(event.heldAt),
+  )
+
+final case class HeldEventNavigationResponse(
+    previous: Option[AdjacentHeldEventResponse],
+    next: Option[AdjacentHeldEventResponse],
 ) derives Codec.AsObject
 
 object HeldEventDetailResponse:
@@ -103,6 +117,10 @@ object HeldEventDetailResponse:
     nextMatchNo = detail.nextMatchNo,
     matches = detail.matches.map(HeldEventMatchResponse.from),
     drafts = detail.drafts.map(HeldEventDraftResponse.from),
+    navigation = HeldEventNavigationResponse(
+      detail.navigation.previous.map(AdjacentHeldEventResponse.from),
+      detail.navigation.next.map(AdjacentHeldEventResponse.from),
+    ),
   )
 
 final case class HeldEventSummaryResponse(

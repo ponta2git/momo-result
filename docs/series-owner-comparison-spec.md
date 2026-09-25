@@ -70,7 +70,7 @@ Rustの計算・full semantic validator・schema exportを一緒に変更する�
 
 ## 4. HTTP・生成型・consumer
 
-aggregateは `GET /api/analytics/series-comparison/v4/aggregate`、reviewは `/api/analytics/series-comparison/v3/review` を使う。options、status、drilldown、match-contextは既存のv2経路を使う。各resourceは現行の成果物契約だけを受理し、廃止した経路や旧世代のdecoderを残さない。
+aggregateは `GET /api/analytics/series-comparison/v4/aggregate`、reviewは `/api/analytics/series-comparison/v3/review`、match-contextは `/api/analytics/series-comparison/v3/match-context` を使う。options、status、drilldownは既存のv2経路を使う。各resourceは現行の成果物契約だけを受理し、廃止した経路や旧世代のdecoderを残さない。
 
 Rustのresource schemaとTapirのHTTP envelope・metadata projectionからOpenAPIとWeb型・decoderを生成する。APIは起動時に現行validatorを初期化し、artifactのschema・validation contract・resource kind・要求identityを検証する。payloadの自己申告versionだけで検証器を選ばず、無関係な世代とpayloadの組合せを拒否する。
 
@@ -79,6 +79,20 @@ API入力へ `ownerMemberId` や選択指標を加えない。全指標は一度
 resource取得は共通のread usecase・repository・decode admissionを使い、endpointごとに別の同時実行枠を作らない。rate limit、短いDB transaction、取得からbounded renderまでのpermit、timeout・失敗・cancel後の解放を維持する。requestごとのschema compileや応答JSONの再parseは行わない。
 
 cache identityはruntime data shapeを表す。resource取得・失効回復・明示更新・mutation後の無効化で同じkey factoryを使う。aggregate、review、drilldownは同一artifactへpinし、異なる成果物の値を混ぜない。
+
+### 選択試合のowner projection
+
+match-context HTTP v3は、includedの `match.ownerMemberId` を必須とする。excludedは `match: null` を維持する。APIは試合所属・現在の `analysis_revision`・指定chunkの `source_match_revision` を読む既存SELECTでownerも取得し、revision一致を確認した同じsnapshotの値だけを付加する。source revisionとownerは型付きの一つの値で運び、別snapshotの表示名hydrateへowner取得を混ぜない。
+
+Workerはownerとrevisionを同じ分析入力snapshotから読み、通常の試合訂正はownerとrevisionを同じUPDATEで変更する。この対応により読取時点の分析所属を確認する。応答後の訂正は既存のmutation reset・明示更新・再訪時取得で反映し、自動監視は追加しない。
+
+保存payloadのchecksum・decode後にHTTP専用fieldを付加し、ID構造とdecode済み参加者への所属、付加後のnode / byte上限を確認する。owner集計を再計算せず、保存match-contextのschemaVersion 1、artifact・validation・algorithmは変えない。HTTP schema、OpenAPI、Web生成契約は同時更新する。
+
+HTTP shapeを分けるquery-key segmentをmatch-contextに加え、既存artifact namespace全体は改名しない。reset用prefixと末尾paramsを維持し、比較画面と試合結果画面の共通factoryを更新する。試合結果の通算平均順位・前後差・注目点も同じcontext利用判定に従う。
+
+共通queryは有効contextと、正規化済みの不存在・失効による利用不可を区別してcacheへ保存する。再取得中や後続の一時失敗で以前の成功contextを復活させず、共通の読取境界から両画面の表示・error・bounded recoveryへ渡す。その他の通信失敗は有効な成功snapshotを維持する既存の失敗経路に従う。
+
+このHTTP変更ではAPI/Webを対応する組で切り替え、rollbackも同じ組で行う。開いたままの旧Webは再読み込みを必要とし、v2互換routeや旧形式decoderを維持しない。保存形式変更時の再計算・promotion・DB復元工程はMOM-22単独には適用しない。
 
 ### 取得状態とオーナー節
 
@@ -102,9 +116,10 @@ cache identityはruntime data shapeを表す。resource取得・失効回復・�
 - 比較表は共通 `DataTable` の行・列見出しとacademic tableの表現を使う。番手比較から再利用するのは行＝プレーヤー・列＝条件の読み方と軸ラベルであり、`AnalysisMatrix` の離れたセル、番手の枠・強度・得意苦手の表現を複製しない。
 - 通常の表は上端・header下端・最終行下端の横罫線で構成し、外枠・縦罫線・セルごとのcard・通常セルの着色を足さない。headerの文字recipeはshared UIに従う。主要値は `contentText.compactPrimary` とtabular numerals、補助回数・品質は共通の補助表現を使い、名前・操作・全説明まで一律に太字にしない。
 - 行見出しは `MemberSequenceLabel`、列はneutralなオーナー名と対象戦数・`SeriesAnalysisQualityAdvisory` を使う。本人がオーナーの対角も通常値とする。列見出しはsort操作を持たず、数値で並び替えない。
-- 横移動中もプレーヤーを識別できるよう行見出しを固定する。縦に長くなる順位分布は同じ表領域で列見出しと戦数を追えるようにする。現行 `DataTable` には行見出し固定と名前付きscroll領域の契約が足りないため、必要なopt-inをshared UIへ追加し、既存consumerの既定動作は維持する。
+- 横移動中もプレーヤーを識別できるよう行見出しを固定する。縦に長くなる順位分布は同じ表領域で列見出しと戦数を追えるようにする。共通 `DataTable` の行見出し固定と名前付きscroll領域を利用し、既存consumerの既定動作は維持する。
 - scroll領域は名前とkeyboardでの到達・離脱を持ち、必要時だけ局所scrollの案内を出す。支援技術にはrow / column headerと品質の対応を伝える。表の高さを制限する場合も画面内に操作可能な領域を確保し、page全体の横scroll、focus trap、sticky見出しによる値の隠蔽を起こさない。
-- 順位分布だけは既存の順位tokenによる100% barを併記し、各順位の回数・率は常時文字で読めるようにする。bar内の狭い領域へ文字を詰めず、0回の順位も文字で残す。barと数値で同じ内容を重複して読み上げない。既存 `RankDistributionBars` の強調用 `itemId` や選択試合のringは持ち込まない。
+- 順位分布だけは既存の順位tokenによる100% barを併記し、各順位の回数・率は常時文字で読めるようにする。bar内の狭い領域へ文字を詰めず、0回の順位も文字で残す。barと数値で同じ内容を重複して読み上げない。順位分布内部へ既存 `RankDistributionBars` の強調用 `itemId` や選択試合のringは持ち込まない。オーナー列全体の対応表示は次項に従う。
+- [要求仕様の選択試合表示](requirements/series-owner-comparison.md#選択試合の対応表示)は、既存の表示bundleから `focusedOwnerMemberId` を導出して条件別viewへ渡す。featureが対象列・4cellの存在と文言を決め、共通 `DataTable` の任意の列強調が同じcolumn keyの見出しとcellを描画する。共通表へownerの業務判定や独自の選択stateを持たせず、通常consumerの既定動作を維持する。
 - 見出し・select・表の順で読み、主要値を縮小して全16cellを一画面へ押し込まない。長い名前・金額・順位内訳と、各layout modeの最小幅を実画面で確認する。
 
 ### 指標とURL

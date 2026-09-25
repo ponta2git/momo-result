@@ -42,6 +42,10 @@
 
 実施記録: [オーナー別戦績比較の実装計画・検証結果](series-owner-comparison-plan.md)。変更箇所、依存順序、各工程の受入証拠、公開前に残る作業を記録する。
 
+実施記録: [MOM-22 オーナー比較の選択試合ハイライト](owner-comparison-focus-plan.md)。合意済みの受入条件、API・表示状態の契約、実装・検証結果と残るリリース条件をまとめる。
+
+検討記録: [MOM-21・MOM-23 詳細画面の前後移動の実施計画](detail-navigation-plan.md)。開催・試合の対象範囲、前後順、戻り先、並列分担、API・cache・UIの検証と確認事項を扱う。
+
 検討記録: [MOM-24 OCR送出単位通知のレビュー・仕様](ocr-submission-notification-spec.md)。合意した通知要件、送出の終了・再試行、momo-dbとconsumerの責務、停止切替と受入条件を扱う。実装契約は要求・domain・architectureと共有DB契約へ反映している。
 
 実装計画: [MOM-24 OCR送出単位通知の実装・検証計画](ocr-submission-notification-plan.md)。工程、実DB・Playwright MCPを含む検証、資材回収、メンテナンス中の一括導入・rollback条件と実行結果を扱う。

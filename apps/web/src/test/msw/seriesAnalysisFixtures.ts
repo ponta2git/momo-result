@@ -1,7 +1,7 @@
 import type {
   SeriesAnalysisAdminOverview,
   SeriesAnalysisDrilldownV3,
-  SeriesAnalysisMatchContextV2,
+  SeriesAnalysisMatchContextV3,
   SeriesAnalysisOptionsResponse,
   SeriesAnalysisStatusResponse,
   SeriesComparisonAggregate,
@@ -893,11 +893,12 @@ export function makeSeriesAnalysisDrilldown(metricId: string): SeriesAnalysisDri
   };
 }
 
-export function makeSeriesAnalysisMatchContext(): SeriesAnalysisMatchContextV2 {
+export function makeSeriesAnalysisMatchContext(): SeriesAnalysisMatchContextV3 {
   return {
     artifact: analysisArtifact,
     inclusion: { sourceMatchRevision: "1", status: "included" },
     match: {
+      ownerMemberId: player.memberId,
       features: [
         {
           evidence: [],
@@ -948,10 +949,37 @@ export function makeSeriesAnalysisMatchContext(): SeriesAnalysisMatchContextV2 {
   };
 }
 
+export function makeFourPlayerSeriesAnalysisMatchContext({
+  matchId = "match-12",
+  matchIndex = 12,
+  ownerMemberId = "member_ponta",
+}: {
+  matchId?: string;
+  matchIndex?: number;
+  ownerMemberId?: string;
+} = {}): SeriesAnalysisMatchContextV3 {
+  const context = makeSeriesAnalysisMatchContext();
+  const match = context.match;
+  const first = match?.players[0];
+  if (!match || !first) throw new Error("Missing match context fixture.");
+  return {
+    ...context,
+    matchId,
+    match: {
+      ...match,
+      matchIndex,
+      ownerMemberId,
+      players: fourPlayerReviewPlayers.map((member, index) =>
+        Object.assign({}, first, member, { rank: index + 1 }),
+      ),
+    },
+  };
+}
+
 export function makeSeriesAnalysisExcludedMatchContext(
   status: "match_changed_since_artifact" | "not_in_artifact" | "not_in_scope",
   matchId = "match-12",
-): SeriesAnalysisMatchContextV2 {
+): SeriesAnalysisMatchContextV3 {
   return {
     artifact: analysisArtifact,
     inclusion: { status },

@@ -1,7 +1,8 @@
 import { keepPreviousData, queryOptions } from "@tanstack/react-query";
 
 import { listLoginAccounts } from "@/shared/api/adminAccounts";
-import { getHeldEventDetail, getHeldEventSummary, listHeldEvents } from "@/shared/api/heldEvents";
+import { loadHeldEventDetail, loadMatchDetail } from "@/shared/api/detailReadResult";
+import { getHeldEventSummary, listHeldEvents } from "@/shared/api/heldEvents";
 import type { ListHeldEventsQuery } from "@/shared/api/heldEvents";
 import {
   listGameTitles,
@@ -11,7 +12,7 @@ import {
   listSeasonMasters,
 } from "@/shared/api/masters";
 import { getMatchDraftDetail, getMatchDraftReview } from "@/shared/api/matchDrafts";
-import { getMatch, getMatchIdentity, getMatchListSummary, listMatches } from "@/shared/api/matches";
+import { getMatchIdentity, getMatchListSummary, listMatches } from "@/shared/api/matches";
 import type { ListMatchesQuery } from "@/shared/api/matches";
 import { getNotificationSettings } from "@/shared/api/notificationSettings";
 import { getOcrDraft } from "@/shared/api/ocrDrafts";
@@ -64,7 +65,7 @@ export function heldEventDetailQueryOptions(heldEventId: string | undefined, ena
       if (!heldEventId) {
         throw new Error("held event detail query is not ready");
       }
-      return getHeldEventDetail(heldEventId, { signal });
+      return loadHeldEventDetail(heldEventId, { signal });
     },
     enabled: enabled && Boolean(heldEventId),
   });
@@ -151,7 +152,7 @@ function matchDetailQueryDefinition(matchId: string | undefined) {
       if (!matchId) {
         throw new Error("match detail query is not ready");
       }
-      return getMatch(matchId, { signal });
+      return loadMatchDetail(matchId, { signal });
     },
   });
 }

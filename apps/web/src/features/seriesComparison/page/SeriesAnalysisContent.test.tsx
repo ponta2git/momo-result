@@ -8,11 +8,15 @@ import type { SeriesAnalysisDisplayBundle } from "@/features/seriesComparison/mo
 import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { SeriesAnalysisNavigation } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
 import { SeriesAnalysisContent } from "@/features/seriesComparison/page/SeriesAnalysisContent";
-import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
+import type {
+  SeriesAnalysisMatchContextV3,
+  SeriesComparisonAggregate,
+} from "@/shared/api/seriesAnalysis";
 import {
   makeFourPlayerSeriesAnalysisReview,
   makeOwnerComparisonAggregate,
   makeSeriesAnalysisAggregate,
+  makeFourPlayerSeriesAnalysisMatchContext,
 } from "@/test/msw/seriesAnalysisFixtures";
 import { createTestQueryClient } from "@/test/queryClient";
 
@@ -37,6 +41,67 @@ function analysisBundle(
 }
 
 describe("SeriesAnalysisContent", () => {
+  it("keeps the same owner's focus when the match changes and when returning to the context view", async () => {
+    const user = userEvent.setup();
+    const aggregate = makeOwnerComparisonAggregate();
+    const context = makeFourPlayerSeriesAnalysisMatchContext({
+      ownerMemberId: "member_akane_mami",
+    });
+    context.scope = aggregate.scope;
+    const nextContext = makeFourPlayerSeriesAnalysisMatchContext({
+      matchId: "match-13",
+      matchIndex: 13,
+      ownerMemberId: "member_akane_mami",
+    });
+    nextContext.scope = aggregate.scope;
+    const queryClient = createTestQueryClient();
+    const props = {
+      onArtifactExpired: vi.fn(),
+      onClearFocusedMatch: vi.fn(),
+      onFocusMatch: vi.fn(),
+      onViewChange: vi.fn(),
+    };
+    const view = (
+      matchContext: SeriesAnalysisMatchContextV3,
+      activeView: AnalysisViewId = "context",
+    ) => (
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <SeriesAnalysisContent
+            {...props}
+            bundle={{ ...analysisBundle(aggregate, activeView), matchContext }}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+    const rendered = render(view(context));
+    expect(
+      await screen.findByRole("columnheader", { name: /あかねまみ.*この試合のオーナー/u }),
+    ).toHaveAttribute("data-highlighted", "true");
+    expect(screen.getByRole("link", { name: "第12戦の試合結果を見る" })).toBeInTheDocument();
+
+    rendered.rerender(view(nextContext));
+    expect(
+      await screen.findByRole("columnheader", { name: /あかねまみ.*この試合のオーナー/u }),
+    ).toHaveAttribute("data-highlighted", "true");
+    expect(screen.getByRole("link", { name: "第13戦の試合結果を見る" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "第12戦の試合結果を見る" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "今の差" }));
+    rendered.rerender(view(nextContext, "overview"));
+    expect(screen.getByRole("tab", { name: "今の差" })).toHaveFocus();
+    expect(screen.queryByText("この試合のオーナー")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "第13戦の試合結果を見る" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "条件別" }));
+    rendered.rerender(view(nextContext));
+    expect(
+      await screen.findByRole("columnheader", { name: /あかねまみ.*この試合のオーナー/u }),
+    ).toHaveAttribute("data-highlighted", "true");
+    expect(screen.getByRole("tab", { name: "条件別" })).toHaveFocus();
+    expect(screen.getByRole("link", { name: "第13戦の試合結果を見る" })).toBeInTheDocument();
+  });
+
   it("keeps owner comparison and the metric guide usable", async () => {
     const user = userEvent.setup();
     render(

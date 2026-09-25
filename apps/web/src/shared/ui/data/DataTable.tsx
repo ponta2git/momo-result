@@ -18,6 +18,8 @@ export type DataTableCaption = {
 type DataTableColumnBase<Row> = {
   align?: DataTableAlign;
   header: ReactNode;
+  /** Non-interactive emphasis shared by this column's header and every body cell. */
+  highlighted?: boolean;
   key: string;
   minWidth?: string;
   width?: string;
@@ -90,6 +92,11 @@ export const dataTableHeaderCellClassName = cn(
 export const dataTableBodyCellClassName = "px-3 py-2 align-middle";
 
 export const dataTableScrollAreaClassName = "min-w-0 overflow-x-auto bg-[var(--color-surface)]";
+
+// Each shared horizontal edge belongs to the cell above it, so it is painted only once.
+// Header/footer offsets cover their existing 1px rules without changing cell dimensions.
+const highlightedColumnClassName =
+  "after:pointer-events-none after:absolute after:inset-0 after:border-x-2 after:border-b-2 after:border-[var(--color-action)]";
 
 export function DataTableBodyRow({
   ...props
@@ -206,6 +213,7 @@ export function DataTable<Row>({
               {columns.map((column) => (
                 <th
                   key={column.key}
+                  data-highlighted={column.highlighted || undefined}
                   aria-sort={
                     column.sortable
                       ? column.sortDirection === "asc"
@@ -223,6 +231,11 @@ export function DataTable<Row>({
                     stickyRowHeader && "z-[var(--z-sticky)]",
                     stickyRowHeader && column.rowHeader && "left-0 z-[var(--z-sticky-raised)]",
                     alignClass[column.align ?? "left"],
+                    column.highlighted && [
+                      highlightedColumnClassName,
+                      "after:-bottom-px after:border-t-2",
+                      caption.visibility === "visible" ? "after:top-0" : "after:-top-px",
+                    ],
                   )}
                   scope="col"
                   style={columnStyleByKey.get(column.key)}
@@ -254,6 +267,7 @@ export function DataTable<Row>({
                   return (
                     <Cell
                       key={column.key}
+                      data-highlighted={column.highlighted || undefined}
                       className={cn(
                         "text-[var(--color-text-primary)]",
                         densityClass[density],
@@ -261,6 +275,11 @@ export function DataTable<Row>({
                         verticalAlignClass[verticalAlign],
                         "font-plain",
                         column.tabular ? "tabular-nums" : "",
+                        column.highlighted && [
+                          "relative",
+                          highlightedColumnClassName,
+                          rowIndex === rows.length - 1 && "after:-bottom-px",
+                        ],
                         stickyRowHeader &&
                           column.rowHeader &&
                           "sticky left-0 z-[var(--z-base)] bg-inherit",

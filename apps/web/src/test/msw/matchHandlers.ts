@@ -161,6 +161,7 @@ export const matchHandlers = [
   ),
   http.get("/api/matches/:matchId", ({ params }) =>
     HttpResponse.json({
+      navigation: {},
       createdAt: now,
       createdByMemberId: "member_ponta",
       gameTitleId: "gt_momotetsu_2",

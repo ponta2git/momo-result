@@ -90,12 +90,12 @@ final class PostgresSeriesAnalysisRepository[F[_]: Async] private (
     case PostgresSeriesAnalysisChunkOps.ChunkMaterial.Excluded(artifact, matchId, reason) =>
       PostgresSeriesAnalysisChunkCodec
         .excludedContext(artifact, loaded.request.scope, matchId, reason).asRight
-    case PostgresSeriesAnalysisChunkOps.ChunkMaterial.Stored(row, sourceMatchRevision) =>
+    case PostgresSeriesAnalysisChunkOps.ChunkMaterial.Stored(row, matchSnapshot) =>
       PostgresSeriesAnalysisChunkCodec
-        .decode(row, loaded.request, readConfig, sourceMatchRevision)
-        .map(chunk =>
-          sourceMatchRevision.fold(chunk)(revision =>
-            PostgresSeriesAnalysisChunkCodec.includedContext(chunk, revision)
+        .decode(row, loaded.request, readConfig, matchSnapshot.map(_.sourceMatchRevision))
+        .flatMap(chunk =>
+          matchSnapshot.fold(chunk.asRight[AppError])(snapshot =>
+            PostgresSeriesAnalysisChunkCodec.includedContext(chunk, snapshot)
           )
         )
 

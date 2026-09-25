@@ -108,6 +108,73 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
     }
   }
 
+  app.test("detail navigation exposes live adjacent identities across held events") { httpApp =>
+    val laterHeldAt = "2024-01-03T00:00:00Z"
+    val firstPlayedAt = "2024-01-02T00:00:00.000001Z"
+    val nextPlayedAt = "2024-01-02T00:00:00.000002Z"
+    for
+      firstEvent <- createEvent(httpApp)
+      nextEventResponse <- httpApp.run(writePost(
+        uri"/api/held-events",
+        HttpRequestBodies.Matches.createHeldEvent(laterHeldAt)
+      ))
+      nextEventBody <- nextEventResponse.as[Json]
+      nextEvent = jsonField[String](nextEventBody, "id")
+      firstResponse <- httpApp.run(writePost(
+        uri"/api/matches",
+        confirmBody(firstEvent, 4)
+          .deepMerge(Json.obj("playedAt" -> Json.fromString(firstPlayedAt)))
+      ))
+      firstBody <- firstResponse.as[Json]
+      firstMatch = jsonField[String](firstBody, "matchId")
+      singleResponse <- httpApp.run(readGet(Uri.unsafeFromString(s"/api/matches/$firstMatch")))
+      single <- singleResponse.as[Json]
+      nextResponse <- httpApp.run(writePost(
+        uri"/api/matches",
+        confirmBody(nextEvent, 1)
+          .deepMerge(Json.obj("playedAt" -> Json.fromString(nextPlayedAt)))
+      ))
+      nextBody <- nextResponse.as[Json]
+      nextMatch = jsonField[String](nextBody, "matchId")
+      firstDetailResponse <- httpApp.run(readGet(Uri.unsafeFromString(s"/api/matches/$firstMatch")))
+      firstDetail <- firstDetailResponse.as[Json]
+      nextDetailResponse <- httpApp.run(readGet(Uri.unsafeFromString(s"/api/matches/$nextMatch")))
+      nextDetail <- nextDetailResponse.as[Json]
+      eventResponse <- httpApp.run(readGet(Uri.unsafeFromString(s"/api/held-events/$firstEvent")))
+      event <- eventResponse.as[Json]
+    yield
+      val singleNavigation = jsonField[Json](single, "navigation")
+      assertEquals(jsonField[Option[Json]](singleNavigation, "previous"), None)
+      assertEquals(jsonField[Option[Json]](singleNavigation, "next"), None)
+      val firstNavigation = jsonField[Json](firstDetail, "navigation")
+      val nextNavigation = jsonField[Json](nextDetail, "navigation")
+      assertEquals(jsonField[Option[Json]](firstNavigation, "previous"), None)
+      assertEquals(
+        jsonField[Json](firstNavigation, "next"),
+        Json.obj(
+          "matchId" -> Json.fromString(nextMatch),
+          "heldEventId" -> Json.fromString(nextEvent),
+          "playedAt" -> Json.fromString(nextPlayedAt),
+          "heldAt" -> Json.fromString(laterHeldAt),
+          "matchNoInEvent" -> Json.fromInt(1),
+        )
+      )
+      assertEquals(
+        jsonField[String](jsonField[Json](nextNavigation, "previous"), "matchId"),
+        firstMatch
+      )
+      assertEquals(jsonField[Option[Json]](nextNavigation, "next"), None)
+      val eventNavigation = jsonField[Json](event, "navigation")
+      assertEquals(jsonField[Option[Json]](eventNavigation, "previous"), None)
+      assertEquals(
+        jsonField[Json](eventNavigation, "next"),
+        Json.obj(
+          "id" -> Json.fromString(nextEvent),
+          "heldAt" -> Json.fromString(laterHeldAt)
+        )
+      )
+  }
+
   app.test("POST /api/held-events with invalid heldAt returns 422") { httpApp =>
     val req =
       writePost(uri"/api/held-events", HttpRequestBodies.Matches.createHeldEvent("not-an-instant"))

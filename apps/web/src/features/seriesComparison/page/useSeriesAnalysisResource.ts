@@ -24,6 +24,7 @@ import {
   shouldShowStaleShield,
 } from "@/shared/api/queryErrorState";
 import { seriesAnalysisKeys } from "@/shared/api/queryKeys";
+import { readSeriesAnalysisMatchContext } from "@/shared/api/seriesAnalysisMatchContextState";
 import {
   seriesAnalysisAggregateQueryOptions,
   seriesAnalysisMatchContextQueryOptions,
@@ -50,6 +51,7 @@ export function useSeriesAnalysisResource({
   const [lastSuccessfulBundle, setLastSuccessfulBundle] = useState<
     SeriesAnalysisDisplayBundle | undefined
   >();
+  const [contextInvalidationPending, setContextInvalidationPending] = useState(false);
   const statusQuery = useQuery(seriesAnalysisStatusQueryOptions(state.gameTitleId));
   const {
     data: statusData,
@@ -113,12 +115,15 @@ export function useSeriesAnalysisResource({
     seriesAnalysisMatchContextQueryOptions(matchContextQueryParams),
   );
   const {
-    data: matchContextData,
-    error: matchContextError,
     isFetching: matchContextFetching,
     isLoading: matchContextLoading,
     refetch: refetchMatchContext,
   } = matchContextQuery;
+  const {
+    context: matchContextData,
+    error: matchContextError,
+    unavailable: matchContextUnavailable,
+  } = readSeriesAnalysisMatchContext(matchContextQuery);
   const matchContextFailed = shouldShowQueryError({
     error: matchContextError,
     isFetching: matchContextFetching,
@@ -136,15 +141,21 @@ export function useSeriesAnalysisResource({
     [activeView, candidateAggregate, candidateReview, matchContextData, publishedArtifactId, state],
   );
 
-  const nextSuccessfulBundle =
+  const resolvedBundle =
     bundleResolution.kind === "ready"
       ? bundleResolution.value
       : candidateResource &&
           bundleResolution.kind === "waiting" &&
           matchContextQueryParams !== undefined &&
-          matchContextFailed
+          (matchContextFailed || matchContextUnavailable)
         ? displaySeriesAnalysisBundleWithoutContext(activeView, candidateAggregate, candidateReview)
         : undefined;
+  // A missing replacement aggregate cannot keep a context that the current read invalidated.
+  const nextSuccessfulBundle =
+    resolvedBundle ??
+    (matchContextUnavailable && lastSuccessfulBundle?.matchContext
+      ? { ...lastSuccessfulBundle, matchContext: undefined }
+      : undefined);
   if (
     nextSuccessfulBundle &&
     !sameSeriesAnalysisDisplayBundle(lastSuccessfulBundle, nextSuccessfulBundle)
@@ -163,13 +174,32 @@ export function useSeriesAnalysisResource({
     [activeView, refetchAggregate, refetchReview],
   );
   const currentDisplayBundle =
-    bundleResolution.kind === "ready" &&
-    !sameSeriesAnalysisDisplayBundle(lastSuccessfulBundle, bundleResolution.value)
-      ? bundleResolution.value
+    nextSuccessfulBundle &&
+    !sameSeriesAnalysisDisplayBundle(lastSuccessfulBundle, nextSuccessfulBundle)
+      ? nextSuccessfulBundle
       : lastSuccessfulBundle;
   // Keep controls urgent while a new immutable artifact/view renders in the background.
-  const displayedBundle = useDeferredValue(currentDisplayBundle);
-  const displaySettling = displayedBundle !== currentDisplayBundle;
+  const deferredBundle = useDeferredValue(currentDisplayBundle);
+  // Do not defer a definitive invalidation. Keep this fence until rendering catches up, so
+  // changing the selected query cannot briefly restore its invalidated predecessor.
+  if (matchContextUnavailable && !contextInvalidationPending) {
+    setContextInvalidationPending(true);
+  } else if (
+    !matchContextUnavailable &&
+    contextInvalidationPending &&
+    deferredBundle === currentDisplayBundle
+  ) {
+    setContextInvalidationPending(false);
+  }
+  const suppressDeferredContext = matchContextUnavailable || contextInvalidationPending;
+  const displayedBundle = useMemo(
+    () =>
+      suppressDeferredContext && deferredBundle?.matchContext
+        ? { ...deferredBundle, matchContext: undefined }
+        : deferredBundle,
+    [deferredBundle, suppressDeferredContext],
+  );
+  const displaySettling = deferredBundle !== currentDisplayBundle;
 
   useAnalysisArtifactRecovery({
     artifactId: activeQueryParams?.artifactId,

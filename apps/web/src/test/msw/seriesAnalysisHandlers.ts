@@ -29,7 +29,7 @@ export const seriesAnalysisHandlers = [
       makeSeriesAnalysisDrilldown(new URL(request.url).searchParams.get("metricId") ?? ""),
     ),
   ),
-  http.get("/api/analytics/series-comparison/v2/match-context", ({ request }) => {
+  http.get("/api/analytics/series-comparison/v3/match-context", ({ request }) => {
     const matchId = new URL(request.url).searchParams.get("matchId") ?? "match-12";
     const context = makeSeriesAnalysisMatchContext();
     return HttpResponse.json({

@@ -1,4 +1,6 @@
 import type { MatchFeatureBadge } from "@/features/matches/matchDetailViewModel";
+import type { MatchNoteCommit, MatchNoteReadResult } from "@/features/matches/useMatchNoteEditor";
+import type { DetailNavigation, MatchNeighbor } from "@/shared/api/detailReadResult";
 import type { MatchDetailResponse } from "@/shared/api/matches";
 import type { matchPerformanceContextFromArtifact } from "@/shared/matches/matchPerformanceContext";
 
@@ -33,19 +35,36 @@ export type MatchDetailReadyPageModel = {
   navigation: {
     backHref: string;
     backLabel: string;
+    returnTo: string | undefined;
     comparisonHref: string;
     editHref: string;
     exportHref: string;
+    currentHeldEventHref: string | undefined;
+    fallbackReason: string | undefined;
+    adjacent: DetailNavigation<MatchNeighbor>;
+    adjacentState: "current" | "pending" | "failed" | "unavailable";
   };
-  note: { refetchMatch: () => Promise<{ data?: MatchDetailResponse | undefined }> };
+  refresh: MatchDetailRefreshModel;
 };
 
-export type MatchDetailPageModel =
+type MatchDetailScreenState =
   | { kind: "loading" }
-  | { kind: "notFound"; navigation: { backHref: string } }
+  | {
+      kind: "notFound";
+      navigation: { backHref: string; backLabel: string; fallbackReason: string | undefined };
+      refresh: MatchDetailRefreshModel;
+    }
   | {
       kind: "loadFailed";
-      navigation: { backHref: string };
+      navigation: { backHref: string; backLabel: string; fallbackReason: string | undefined };
       refresh: MatchDetailRefreshModel;
     }
   | MatchDetailReadyPageModel;
+
+export type MatchDetailPageModel = MatchDetailScreenState & {
+  matchId: string;
+  note: {
+    readLatest: () => Promise<MatchNoteReadResult>;
+    commitSavedNote: (saved: MatchNoteCommit) => Promise<MatchNoteReadResult>;
+  };
+};

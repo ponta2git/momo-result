@@ -2,7 +2,7 @@ package momo.api.domain
 
 import java.time.Instant
 
-import momo.api.domain.ids.MatchId
+import momo.api.domain.ids.{HeldEventId, MatchId}
 
 /** Current display metadata read alongside the records it describes. */
 final case class MatchLabels(
@@ -26,6 +26,15 @@ final case class MatchIdentity(
 final case class MatchDetail(
     record: MatchRecord,
     noteUpdatedByDisplayName: Option[String],
+    navigation: RecordNavigation[AdjacentMatch],
     heldAt: Option[Instant] = None,
     labels: MatchLabels = MatchLabels.empty,
+)
+
+final case class AdjacentMatch(
+    matchId: MatchId,
+    heldEventId: HeldEventId,
+    playedAt: Instant,
+    heldAt: Instant,
+    matchNoInEvent: MatchNoInEvent,
 )

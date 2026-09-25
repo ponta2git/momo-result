@@ -19,6 +19,7 @@ import {
   responsivePageHeaderLeadActionGroupClass,
 } from "@/shared/ui/layout/PageHeader";
 import { StatusBadge } from "@/shared/ui/status/StatusBadge";
+import { contentText } from "@/shared/ui/typography";
 
 type RouteTerminalPageProps = {
   children: ReactNode;
@@ -159,11 +160,12 @@ export function RouteTerminalPage({
       ) : null}
       <PageContentSurface
         aria-label={typeof title === "string" ? title : undefined}
-        className={cn(contentToolbar ? "grid gap-4" : "", contentClassName)}
+        className={cn("grid gap-4", contentClassName)}
         padding={presentation.contentPadding}
         role={typeof title === "string" ? "region" : undefined}
       >
         {contentToolbar}
+        {!presentation.preserveHeader ? <h2 className={contentText.heading}>{title}</h2> : null}
         {children}
       </PageContentSurface>
     </PageFrame>

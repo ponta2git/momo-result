@@ -51,6 +51,73 @@ describe("app routing", () => {
     user = userEvent.setup();
   });
 
+  it.each([false, true])(
+    "keeps unknown URLs recoverable (authenticated: %s)",
+    async (authenticated) => {
+      if (authenticated) setDevUser();
+      const { router } = renderApp("/unknown-page?source=bookmark#section");
+      expect(await screen.findByRole("heading", { name: "ページが見つかりません" })).toBeVisible();
+      const destination = authenticated ? "試合一覧へ戻る" : "ログイン画面へ";
+      expect(await screen.findByRole("link", { name: destination })).toHaveAttribute(
+        "href",
+        authenticated ? "/matches" : "/login",
+      );
+      expect(router.state.location.pathname).toBe("/unknown-page");
+      expect(router.state.location.search).toBe("?source=bookmark");
+      expect(router.state.location.hash).toBe("#section");
+      expect(document.title).toBe("ページが見つかりません | 桃鉄戦績台帳");
+    },
+  );
+
+  it.each(["/", "/login?next=%2Fexports"])(
+    "recovers an unknown session at %s without treating it as signed out",
+    async (entry) => {
+      setDevUser();
+      let attempts = 0;
+      server.use(
+        http.get("/api/auth/me", () => {
+          attempts += 1;
+          return attempts === 1
+            ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 503 })
+            : HttpResponse.json({
+                accountId: "account_ponta",
+                csrfToken: "dev",
+                displayName: "ぽんた",
+                isAdmin: true,
+                memberId: "member_ponta",
+              });
+        }),
+      );
+      const { router } = renderApp(entry);
+      expect(
+        await screen.findByRole("heading", { name: "ログイン状態を確認できません" }),
+      ).toBeVisible();
+      expect(router.state.location.pathname).toBe(entry.split("?")[0]);
+      expect(screen.queryByRole("region", { name: "ログイン" })).not.toBeInTheDocument();
+      expect(attempts).toBe(1);
+      await user.click(screen.getByRole("button", { name: "再試行" }));
+      expect(
+        await screen.findByRole("region", { name: entry === "/" ? "試合一覧" : "出力条件" }),
+      ).toBeVisible();
+      expect(router.state.location.pathname).toBe(entry === "/" ? "/matches" : "/exports");
+    },
+  );
+
+  it("orients a new page, then preserves focus while its conditions change", async () => {
+    setDevUser();
+    renderApp("/matches");
+    expect(await screen.findByRole("region", { name: "試合一覧" })).toBeVisible();
+    expect(document.title).toBe("試合一覧 | 桃鉄戦績台帳");
+    await user.click(screen.getByRole("link", { name: "出力" }));
+    expect(await screen.findByRole("region", { name: "出力条件" })).toBeVisible();
+    expect(document.title).toBe("戦績を出力 | 桃鉄戦績台帳");
+    expect(screen.getByRole("main")).toHaveFocus();
+    const tsv = screen.getByRole("tab", { name: "TSV" });
+    await user.click(tsv);
+    expect(tsv).toHaveFocus();
+    expect(tsv).toHaveAttribute("aria-selected", "true");
+  });
+
   // These flows load cold route chunks under coverage; their total budget must exceed each wait.
   it(
     "selects the analysis tab and shows its loading body before its data arrives",

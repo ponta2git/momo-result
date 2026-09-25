@@ -22,6 +22,7 @@ import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import type { PageFrameWidth } from "@/shared/ui/layout/PageFrame";
+import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 function StandaloneRouteMain({ children }: { children: ReactNode }) {
   return (
@@ -90,6 +91,28 @@ function AuthLoading({ message, standalone = false }: { message: string; standal
   );
 }
 
+function AuthUnavailable({ pending, onRetry }: { pending: boolean; onRetry: () => void }) {
+  const location = useLocation();
+  return (
+    <RouteTerminalPage
+      pathname={location.pathname}
+      search={location.search}
+      title="ログイン状態を確認できません"
+    >
+      <Notice
+        action={
+          <Button pending={pending} pendingLabel="再試行中…" onClick={onRetry}>
+            再試行
+          </Button>
+        }
+        tone="danger"
+      >
+        ログイン状態を確認できないため、この画面の表示を一時停止しています。通信状態を確認して、再試行してください。
+      </Notice>
+    </RouteTerminalPage>
+  );
+}
+
 export function RootRedirect() {
   const auth = useAuth();
 
@@ -103,6 +126,14 @@ export function RootRedirect() {
 
   if (auth.isAuthenticated) {
     return <Navigate to="/matches" replace />;
+  }
+
+  if (auth.error && !auth.isUnauthorized) {
+    return (
+      <StandaloneRouteMain>
+        <AuthUnavailable pending={auth.isRefetching} onRetry={() => void auth.refetch()} />
+      </StandaloneRouteMain>
+    );
   }
 
   return <Navigate to="/login" replace />;
@@ -119,6 +150,14 @@ export function PublicOnlyRoute({ children }: { children: ReactNode }) {
   if (auth.isAuthenticated) {
     const destination = sanitizeAppRedirectPath(searchParams.get("next")) ?? "/matches";
     return <Navigate to={destination} replace />;
+  }
+
+  if (auth.error && !auth.isUnauthorized && !auth.isForbidden) {
+    return (
+      <StandaloneRouteMain>
+        <AuthUnavailable pending={auth.isRefetching} onRetry={() => void auth.refetch()} />
+      </StandaloneRouteMain>
+    );
   }
 
   return <StandaloneRouteMain>{children}</StandaloneRouteMain>;
@@ -156,31 +195,33 @@ export function AuthenticatedRoute({ children }: { children: ReactNode }) {
   if (auth.error) {
     return (
       <ProtectedRouteMain>
-        <RouteTerminalPage
-          pathname={location.pathname}
-          search={location.search}
-          title="ログイン状態を確認できません"
-        >
-          <Notice
-            action={
-              <Button
-                pending={auth.isRefetching}
-                pendingLabel="再試行中…"
-                onClick={() => void auth.refetch()}
-              >
-                再試行
-              </Button>
-            }
-            tone="danger"
-          >
-            ログイン状態を確認できないため、この画面の表示を一時停止しています。通信状態を確認して、再試行してください。
-          </Notice>
-        </RouteTerminalPage>
+        <AuthUnavailable pending={auth.isRefetching} onRetry={() => void auth.refetch()} />
       </ProtectedRouteMain>
     );
   }
 
   return children;
+}
+
+/** Keep an invalid URL inspectable and offer a known destination without silently redirecting. */
+export function NotFoundRoute() {
+  const auth = useAuth();
+  const content = (
+    <PageFrame width="narrow">
+      <PageHeader title="ページが見つかりません" />
+      <PageContentSurface className="grid justify-items-start gap-4">
+        <p>URLを確認するか、以下のリンクから画面を開き直してください。</p>
+        <LinkButton to={auth.isAuthenticated ? "/matches" : "/login"}>
+          {auth.isAuthenticated ? "試合一覧へ戻る" : "ログイン画面へ"}
+        </LinkButton>
+      </PageContentSurface>
+    </PageFrame>
+  );
+  return auth.isAuthenticated ? (
+    <ProtectedRouteMain>{content}</ProtectedRouteMain>
+  ) : (
+    <StandaloneRouteMain>{content}</StandaloneRouteMain>
+  );
 }
 
 export function AdminRoute({ children }: { children: ReactNode }) {

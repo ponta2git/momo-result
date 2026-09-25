@@ -2,7 +2,7 @@
 
 対象: [MOM-21](https://linear.app/ponta/issue/MOM-21)、[MOM-23](https://linear.app/ponta/issue/MOM-23)。
 
-2026-09-24、`develop`の`28ebc7ca`を基準に再構成した。利用者の合意、チケット、現行コード、共有schema、関連規約を根拠とする。初稿をAPI/DB、Webの状態・操作、検証・工程の3方向から敵対的にレビューし、その結果を反映した。要求正本・API・Web・索引migrationの実装とローカルの品質gate、新schemaを接続した代表ブラウザ経路の検証が完了した。**PR作成・DB変更の取り込み・本番反映は未実施**である。証拠と残作業は7節にまとめる。
+2026-09-24、`develop`の`28ebc7ca`を基準に再構成した。利用者の合意、チケット、現行コード、共有schema、関連規約を根拠とする。初稿をAPI/DB、Webの状態・操作、検証・工程の3方向から敵対的にレビューし、その結果を反映した。要求正本・API・Web・索引migrationの実装とローカルの品質gate、新schemaを接続した代表ブラウザ経路の検証が完了した。**DB変更の取り込み・本番反映は未実施**である。証拠と残作業は7節にまとめる。
 
 ## 1. 成果と変更範囲
 
@@ -225,4 +225,4 @@ releaseには`momo-db`の索引migration `0057`を先に適用し、そのrevisi
 
 navigation欠落などの世代差はwire/component境界で検証したが、旧版binaryとの実配備やrollback、本番性能、実支援技術での読み上げは未検証である。比較のscope・対象ID・復帰導線を確認した証拠を、今回変更しない分析値の計算やexport内容の再検証へ拡張しない。
 
-実装と必要なローカル検証は完了。PR作成、DB変更の取り込みと本番適用は未実施で、releaseは6節の依存と運用上の承認境界に従う。DB revisionは専用branchにローカルcommit済みで、consumerのCI実行前に取得可能なremoteへ反映する必要がある。
+実装と必要なローカル検証は完了。PR・CIの進捗はGitHubとLinearで管理する。DB変更の取り込みと本番適用は未実施で、releaseは6節の依存と運用上の承認境界に従う。consumerのCIはpin対象のDB revisionを取得して検証する。

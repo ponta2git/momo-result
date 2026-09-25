@@ -7,14 +7,12 @@ import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import { AppShell } from "@/app/AppShell";
+import { showToast } from "@/shared/ui/feedback/Toast";
+import { createDeferred } from "@/test/deferred";
 import { createTestQueryClient } from "@/test/queryClient";
 
 vi.mock("@/app/AppGlobalNav", () => ({
   AppGlobalNav: () => <nav aria-label="グローバルナビゲーション" />,
-}));
-
-vi.mock("@/shared/ui/feedback/ToastHost", () => ({
-  ToastHost: () => <div data-testid="toast-host" />,
 }));
 
 function StatefulRoute() {
@@ -31,12 +29,24 @@ function BrokenRoute(): ReactNode {
 }
 
 describe("AppShell", () => {
-  it("renders route content without depending on an animation lifecycle", async () => {
+  it("keeps a completion readable and dismissible while the next route suspends", async () => {
+    const user = userEvent.setup();
+    const response = createDeferred<string>();
+    function PendingRoute() {
+      const { data } = useSuspenseQuery({
+        queryKey: ["app-shell", "next-route"],
+        queryFn: () => response.promise,
+      });
+      return <button type="button">{data}</button>;
+    }
     const router = createMemoryRouter(
       [
         {
           element: <AppShell />,
-          children: [{ element: <h1>ルート本文</h1>, index: true }],
+          children: [
+            { element: <h1>保存元のページ</h1>, index: true },
+            { element: <PendingRoute />, path: "next" },
+          ],
           path: "/",
         },
       ],
@@ -49,9 +59,24 @@ describe("AppShell", () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByTestId("toast-host")).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "ルート本文" })).toBeVisible();
-    expect(screen.queryByTestId("blocked-animation-lifecycle")).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "保存元のページ" })).toBeVisible();
+    act(() => {
+      showToast({ title: "試合を保存しました", timeout: 0 });
+    });
+    const notification = screen.getByRole("dialog", { name: "試合を保存しました" });
+    const close = screen.getByRole("button", { name: "通知を閉じる" });
+    act(() => close.focus());
+
+    await act(async () => router.navigate("/next"));
+    expect(screen.getByRole("status")).toHaveTextContent("読み込んでいます");
+    expect(screen.getByRole("dialog", { name: "試合を保存しました" })).toBe(notification);
+    expect(close).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(screen.queryByRole("dialog", { name: "試合を保存しました" })).not.toBeInTheDocument();
+
+    await act(async () => response.resolve("次の操作"));
+    await user.click(await screen.findByRole("button", { name: "次の操作" }));
+    expect(screen.getByRole("button", { name: "次の操作" })).toHaveFocus();
   });
 
   it("resets a cached query error before rendering a newly selected route", async () => {

@@ -44,6 +44,7 @@ describe("ChoiceList", () => {
         legend="作品"
         name="game-title"
         options={[
+          { label: "桃太郎電鉄ワールド", value: "game-1" },
           {
             label: "桃太郎電鉄2",
             trailingAction: (
@@ -51,7 +52,7 @@ describe("ChoiceList", () => {
                 編集
               </Button>
             ),
-            value: "game-1",
+            value: "game-2",
           },
         ]}
         value="game-1"
@@ -62,6 +63,11 @@ describe("ChoiceList", () => {
     await user.click(screen.getByRole("button", { name: "編集" }));
     expect(onEdit).toHaveBeenCalledTimes(1);
     expect(onValueChange).not.toHaveBeenCalled();
+    expect(screen.getByRole("radio", { name: "桃太郎電鉄ワールド" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "桃太郎電鉄2" })).not.toBeChecked();
+
+    await user.click(screen.getByText("桃太郎電鉄2"));
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith("game-2");
   });
 
   it("disables the group while pending and announces the busy state", () => {

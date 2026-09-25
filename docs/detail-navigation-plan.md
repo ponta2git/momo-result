@@ -2,7 +2,7 @@
 
 対象: [MOM-21](https://linear.app/ponta/issue/MOM-21)、[MOM-23](https://linear.app/ponta/issue/MOM-23)。
 
-2026-09-24、`develop`の`28ebc7ca`を基準に再構成した。利用者の合意、チケット、現行コード、共有schema、関連規約を根拠とする。初稿をAPI/DB、Webの状態・操作、検証・工程の3方向から敵対的にレビューし、その結果を反映した。要求正本・API・Web・索引migrationの実装とローカルの品質gate、新schemaを接続した代表ブラウザ経路の検証が完了した。**DB変更の取り込み・本番反映は未実施**である。証拠と残作業は7節にまとめる。
+2026-09-24、`develop`の`28ebc7ca`を基準に再構成した。利用者の合意、チケット、現行コード、共有schema、関連規約を根拠とする。初稿をAPI/DB、Webの状態・操作、検証・工程の3方向から敵対的にレビューし、その結果を反映した。要求正本・API・Web・索引migrationの実装とローカルの品質gate、新schemaを接続した代表ブラウザ経路の検証が完了した。**DB変更はmerge済み、本番適用は未実施**である。証拠と残作業は7節にまとめる。
 
 ## 1. 成果と変更範囲
 
@@ -223,6 +223,8 @@ releaseには`momo-db`の索引migration `0057`を先に適用し、そのrevisi
 
 開催の追加レビューでは、2列表示時の前を左揃え・次を右揃え、狭幅の縦並びを中央揃えに調整した。関連2ファイル・17testとformat・lint・typecheck・buildが成功。Playwright MCPでPCの最初/最後の整列・文字色の一致、モバイルの中央揃え・操作領域・横overflowなし、keyboard移動を確認した。
 
+CIで検出された開催詳細の読み込み前後の配置ずれは、読み込み表示でも前後移動の枠を本文の後へ揃えて解消した。既存の位置安定性の判定は維持し、ビルド済みWebと隔離API/DBを使ったPlaywright MCPで320px・375px幅の本文位置を確認した。関連14test、format・lint・typecheck・buildが成功。PRの最終CI結果はGitHubを正本とする。
+
 navigation欠落などの世代差はwire/component境界で検証したが、旧版binaryとの実配備やrollback、本番性能、実支援技術での読み上げは未検証である。比較のscope・対象ID・復帰導線を確認した証拠を、今回変更しない分析値の計算やexport内容の再検証へ拡張しない。
 
-実装と必要なローカル検証は完了。PR・CIの進捗はGitHubとLinearで管理する。DB変更の取り込みと本番適用は未実施で、releaseは6節の依存と運用上の承認境界に従う。consumerのCIはpin対象のDB revisionを取得して検証する。
+実装と必要なローカル検証は完了。PR・CIの進捗はGitHubとLinearで管理する。DB PR #9はmerge済みで、本番適用の承認は未実施。releaseは6節の依存と運用上の承認境界に従う。consumerのCIはpin対象のDB revisionを取得して検証する。

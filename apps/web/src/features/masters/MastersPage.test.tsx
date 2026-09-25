@@ -7,6 +7,7 @@ import { createMemoryRouter, MemoryRouter, RouterProvider, useLocation } from "r
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { MastersPage } from "@/features/masters/MastersPage";
+import type { GameTitleResponse } from "@/shared/api/masters";
 import { masterKeys } from "@/shared/api/queryKeys";
 import { authQueryOptions } from "@/shared/auth/authQueries";
 import {
@@ -794,21 +795,6 @@ describe("MastersPage", () => {
     );
   });
 
-  it("creates a new game title and selects it", async () => {
-    setDevUser();
-    renderPage();
-
-    expect(await screen.findByRole("radio", { name: "桃太郎電鉄2" })).toBeChecked();
-    expect(screen.queryByPlaceholderText("例: 桃太郎電鉄2")).not.toBeInTheDocument();
-
-    const dialog = await openGameTitleCreateDialog();
-    await user.type(within(dialog).getByPlaceholderText("例: 桃太郎電鉄2"), "桃太郎電鉄ワールド");
-    await user.click(within(dialog).getByRole("button", { name: "追加" }));
-
-    expect(await screen.findByRole("radio", { name: "桃太郎電鉄ワールド" })).toBeChecked();
-    expect(screen.queryByRole("dialog", { name: "作品を追加" })).not.toBeInTheDocument();
-  });
-
   it("rolls back a failed optimistic creation, preserves inputs for retry, and resets after success", async () => {
     setDevUser();
     const failedResponse = createDeferred();
@@ -982,76 +968,14 @@ describe("MastersPage", () => {
     expect(submissions[1]).toEqual(submissions[0]);
   });
 
-  it("shares the created game title response with consumer screens", async () => {
-    setDevUser();
-    queryClient.setQueryData(masterKeys.gameTitles.list(), { items: [] });
-    renderPage();
-
-    expect(await screen.findByRole("radio", { name: "桃太郎電鉄2" })).toBeChecked();
-
-    const dialog = await openGameTitleCreateDialog();
-    await user.type(within(dialog).getByPlaceholderText("例: 桃太郎電鉄2"), "桃太郎電鉄ワールド");
-    await user.click(within(dialog).getByRole("button", { name: "追加" }));
-
-    await waitFor(() => {
-      expect(queryClient.getQueryData(masterKeys.gameTitles.list())).toMatchObject({
-        items: expect.arrayContaining([expect.objectContaining({ name: "桃太郎電鉄ワールド" })]),
-      });
-    });
-  });
-
-  it("shows the new game title optimistically while the server is responding", async () => {
+  it("publishes the confirmed title before refresh finishes and keeps it selected through reconciliation", async () => {
     setDevUser();
     const responseGate = createDeferred();
-    server.use(
-      http.post("/api/game-titles", async ({ request }) => {
-        const body = (await request.json()) as { id: string; name: string; layoutFamily: string };
-        await responseGate.promise;
-        const created = {
-          ...body,
-          displayOrder: 99,
-          createdAt: "2026-01-01T00:00:00.000Z",
-        };
-        return HttpResponse.json(created);
-      }),
-    );
-
-    renderPage();
-    expect(await screen.findByRole("radio", { name: "桃太郎電鉄2" })).toBeChecked();
-
-    const dialog = await openGameTitleCreateDialog();
-    await user.type(within(dialog).getByPlaceholderText("例: 桃太郎電鉄2"), "桃鉄DX");
-    await user.click(within(dialog).getByRole("button", { name: "追加" }));
-
-    expect(await screen.findByText("(追加中…)")).toBeInTheDocument();
-    expect(
-      screen.getByText((_, node) => node?.textContent === "桃鉄DX(追加中…)"),
-    ).toBeInTheDocument();
-    const pendingChoice = screen.getByRole("radio", { name: "桃鉄DX（追加中）", hidden: true });
-    expect(pendingChoice).toBeDisabled();
-    expect(pendingChoice).not.toBeChecked();
-    expect(screen.getByRole("radio", { name: "桃太郎電鉄2", hidden: true })).toBeChecked();
-    expect(within(dialog).getByRole("button", { name: "追加中" })).toBeDisabled();
-
-    responseGate.resolve();
-    await waitFor(() => expect(screen.queryByText("(追加中…)")).not.toBeInTheDocument());
-    await waitFor(() =>
-      expect(screen.queryByRole("dialog", { name: "作品を追加" })).not.toBeInTheDocument(),
-    );
-  });
-
-  it("keeps the created game title selected while its canonical list is reloading", async () => {
-    setDevUser();
     const refreshStarted = createDeferred();
     const refreshGate = createDeferred();
-    const initialGameTitle = {
-      createdAt: "2026-01-01T00:00:00.000Z",
-      displayOrder: 1,
-      id: "gt_momotetsu_2",
-      layoutFamily: "momotetsu_2",
-      name: "桃太郎電鉄2",
-    };
-    let createdGameTitle: typeof initialGameTitle | undefined;
+    const initialGameTitle = mswState.gameTitles[0]!;
+    let createdGameTitle: GameTitleResponse | undefined;
+    queryClient.setQueryData(masterKeys.gameTitles.list(), { items: [initialGameTitle] });
     server.use(
       http.get("/api/game-titles", async () => {
         if (createdGameTitle) {
@@ -1063,13 +987,11 @@ describe("MastersPage", () => {
         });
       }),
       http.post("/api/game-titles", async ({ request }) => {
-        const body = (await request.json()) as {
-          id: string;
-          layoutFamily: string;
-          name: string;
-        };
+        const body = (await request.json()) as { id: string; layoutFamily: string; name: string };
+        await responseGate.promise;
         createdGameTitle = {
           ...body,
+          name: "桃鉄DX（正式名称）",
           createdAt: "2026-01-01T00:00:00.000Z",
           displayOrder: 2,
         };
@@ -1079,19 +1001,38 @@ describe("MastersPage", () => {
 
     renderPage();
     expect(await screen.findByRole("radio", { name: "桃太郎電鉄2" })).toBeChecked();
-
     const dialog = await openGameTitleCreateDialog();
-    await user.type(within(dialog).getByPlaceholderText("例: 桃太郎電鉄2"), "桃鉄DX");
+    await user.type(within(dialog).getByRole("textbox", { name: "作品名" }), "桃鉄DX");
     await user.click(within(dialog).getByRole("button", { name: "追加" }));
 
-    await refreshStarted.promise;
-    expect(screen.getByRole("radio", { name: "桃鉄DX", hidden: true })).toBeChecked();
+    const pendingChoice = await screen.findByRole("radio", {
+      name: "桃鉄DX（追加中）",
+      hidden: true,
+    });
+    expect(pendingChoice).toBeDisabled();
+    expect(pendingChoice).not.toBeChecked();
+    expect(screen.getByRole("radio", { name: "桃太郎電鉄2", hidden: true })).toBeChecked();
+    expect(within(dialog).getByRole("button", { name: "追加中" })).toBeDisabled();
 
-    refreshGate.resolve();
-    expect(await screen.findByRole("radio", { name: "桃鉄DX" })).toBeChecked();
-    await waitFor(() =>
-      expect(screen.queryByRole("dialog", { name: "作品を追加" })).not.toBeInTheDocument(),
-    );
+    await act(async () => {
+      responseGate.resolve();
+      await refreshStarted.promise;
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("radio", { name: "桃鉄DX（正式名称）", hidden: true })).toBeChecked();
+    });
+    expect(queryClient.getQueryData(masterKeys.gameTitles.list())).toEqual({
+      items: [initialGameTitle, createdGameTitle],
+    });
+    expect(
+      screen.queryByRole("radio", { name: "桃鉄DX（追加中）", hidden: true }),
+    ).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "追加中" })).toBeDisabled();
+
+    await act(async () => refreshGate.resolve());
+    expect(await screen.findByRole("radio", { name: "桃鉄DX（正式名称）" })).toBeChecked();
+    expect(screen.getAllByRole("radio")).toHaveLength(2);
+    expect(screen.queryByRole("dialog", { name: "作品を追加" })).not.toBeInTheDocument();
   });
 
   it("shows the six fixed incident masters", async () => {

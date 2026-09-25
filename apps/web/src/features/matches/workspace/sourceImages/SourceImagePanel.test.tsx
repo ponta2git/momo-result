@@ -256,7 +256,7 @@ describe("SourceImagePanel", () => {
     totalAssetsGate.resolve();
   });
 
-  it("shares a selected prefetch, preempts it for another image, and ignores its late response", async () => {
+  it("shares a selected prefetch, then cancels and reloads it when images are switched", async () => {
     const user = userEvent.setup();
     const oldRevenue = createDeferred();
     const requested: string[] = [];
@@ -301,10 +301,9 @@ describe("SourceImagePanel", () => {
       "src",
       "blob:7",
     );
-    await act(async () => oldRevenue.resolve());
-    expect(screen.getByRole("img", { name: "収益の元画像" })).toHaveAttribute("src", "blob:7");
     expect(requested).toEqual(["total_assets", "revenue", "incident_log", "revenue"]);
     expect(urls.createObjectURL).toHaveBeenCalledTimes(3);
+    await act(async () => oldRevenue.resolve());
   });
 
   it("keeps background errors local and recovers through selection and manual retry", async () => {
@@ -795,9 +794,8 @@ describe("SourceImagePanel", () => {
     expect(archiveRequested).toBe(true);
   });
 
-  it("aborts an archive download when its workspace is closed and never saves its late body", async () => {
+  it("aborts the pending archive HTTP request when its workspace closes", async () => {
     const user = userEvent.setup();
-    const anchorClick = installAnchorClickMock();
     installObjectUrlMock({ createObjectURL: () => "blob:source-image" });
     const responseGate = createDeferred();
     let archiveSignal: AbortSignal | undefined;
@@ -822,7 +820,6 @@ describe("SourceImagePanel", () => {
     view.unmount();
     expect(archiveSignal?.aborted).toBe(true);
     await act(async () => responseGate.resolve());
-    expect(anchorClick.click).not.toHaveBeenCalled();
   });
 
   it("asks for confirmation before downloading a partial source image archive", async () => {

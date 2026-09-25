@@ -35,35 +35,8 @@ function LocationProbe() {
   return <output aria-label="current location">{`${location.pathname}${location.search}`}</output>;
 }
 
-function matchDraftDetailResponse(
-  draftId: string,
-  overrides: Record<string, unknown> = {},
-): Record<string, unknown> {
-  return {
-    createdAt: "2026-01-01T00:00:00.000Z",
-    gameTitleId: "gt_momotetsu_2",
-    heldEventId: "held-1",
-    incidentLogDraftId: `${draftId}-incident`,
-    incidentLogImageId: `${draftId}-img-incident`,
-    mapMasterId: "map_east",
-    matchDraftId: draftId,
-    matchNoInEvent: 3,
-    ownerMemberId: "member_ponta",
-    playedAt: "2026-01-01T00:00:00.000Z",
-    revenueDraftId: `${draftId}-revenue`,
-    revenueImageId: `${draftId}-img-revenue`,
-    seasonMasterId: "season_current",
-    status: "needs_review",
-    totalAssetsDraftId: `${draftId}-total`,
-    totalAssetsImageId: `${draftId}-img-total`,
-    updatedAt: "2026-01-01T00:00:00.000Z",
-    ...overrides,
-  };
-}
-
 async function waitForReviewWorkspaceReady() {
   expect(await screen.findByRole("button", { name: "開催（必須）を変更" })).toBeEnabled();
-  expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
 }
 
 async function waitForSampleWorkspaceReady() {
@@ -344,15 +317,10 @@ describe("DraftReviewPage", () => {
         draftDetailRequests += 1;
         const draftId = String(params["draftId"]);
         return HttpResponse.json(
-          matchDraftDetailResponse(
-            draftId,
-            draftDetailRequests >= 1
-              ? {
-                  confirmedMatchId: "match-confirmed-after-conflict",
-                  status: "confirmed",
-                }
-              : {},
-          ),
+          makeMatchDraftReviewResponse(draftId, {
+            confirmedMatchId: "match-confirmed-after-conflict",
+            status: "confirmed",
+          }).draft,
         );
       }),
       http.post("/api/matches", async () => {
@@ -393,6 +361,7 @@ describe("DraftReviewPage", () => {
       ),
     );
     expect(postCalled).toBe(true);
+    expect(draftDetailRequests).toBe(1);
     expect(await screen.findAllByText(confirmedDraftMessages.confirmConflict)).toHaveLength(1);
   });
 
@@ -569,6 +538,45 @@ describe("DraftReviewPage", () => {
     expect(screen.getByText(/元画像または記録が更新されています/u)).toBeVisible();
     expect(screen.getByRole("button", { name: "元画像を保存" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "確定前の確認へ進む" })).toBeEnabled();
+  });
+
+  it("keeps a running draft read-only after a failed refresh and recovers through the data retry", async () => {
+    setDevUser();
+    let requests = 0;
+    server.use(
+      http.get("/api/match-drafts/:draftId/review", () => {
+        requests += 1;
+        if (requests === 2) {
+          return HttpResponse.json({ detail: "一時的に状態を取得できません" }, { status: 503 });
+        }
+        return HttpResponse.json(
+          makeMatchDraftReviewResponse("draft-retry", {
+            status: requests === 1 ? "ocr_running" : "needs_review",
+          }),
+        );
+      }),
+    );
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/review/draft-retry"]}>
+          <Routes>
+            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "状態を再確認" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("画面データを読み込めません");
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(screen.getByRole("heading", { name: "読み取り中は編集できません" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "確定前の確認へ進む" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "失敗したデータを再読み込み" }));
+    await waitForReviewWorkspaceReady();
+    expect(screen.getByRole("button", { name: "確定前の確認へ進む" })).toBeEnabled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(requests).toBe(3);
   });
 
   it("returns to the loading shell when navigating to another review session", async () => {

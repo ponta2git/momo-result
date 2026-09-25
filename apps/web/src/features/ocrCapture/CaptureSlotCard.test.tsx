@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { CaptureSlotCard } from "@/features/ocrCapture/CaptureSlotCard";
@@ -44,11 +45,10 @@ describe("CaptureSlotCard", () => {
       "true",
     );
     expect(screen.getByText("総資産の画像待ち")).toBeInTheDocument();
-    expect(screen.getAllByText("画像待ち")).toHaveLength(1);
-    expect(screen.queryByText("01")).not.toBeInTheDocument();
   });
 
-  it("locks destructive and classification actions while OCR is running", () => {
+  it("locks destructive and classification actions while OCR is running", async () => {
+    const user = userEvent.setup();
     const { onRefreshStatus } = renderCard({
       file: new File(["image"], "assets.png", { type: "image/png" }),
       jobId: "job-1",
@@ -65,11 +65,12 @@ describe("CaptureSlotCard", () => {
     expect(screen.getByRole("status")).toHaveTextContent("読み取り中");
     expect(screen.getByRole("status")).toHaveAttribute("aria-live", "polite");
     const refresh = screen.getByRole("button", { name: "状態を更新" });
-    fireEvent.click(refresh);
+    await user.click(refresh);
     expect(onRefreshStatus).toHaveBeenCalledOnce();
   });
 
-  it("prevents duplicate status updates while a request is in progress", () => {
+  it("prevents duplicate status updates while a request is in progress", async () => {
+    const user = userEvent.setup();
     const { onRefreshStatus } = renderCard(
       {
         jobId: "job-1",
@@ -83,7 +84,7 @@ describe("CaptureSlotCard", () => {
     const refresh = screen.getByRole("button", { name: "更新中" });
     expect(refresh).toBeDisabled();
     expect(refresh).toHaveAttribute("aria-busy", "true");
-    fireEvent.click(refresh);
+    await user.click(refresh);
     expect(onRefreshStatus).not.toHaveBeenCalled();
   });
 

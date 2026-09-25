@@ -14,13 +14,13 @@ import {
 } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { MastersPage } from "@/features/masters/MastersPage";
 import { MatchCreatePage } from "@/features/matches/MatchCreatePage";
 import type { AuthMeResponse } from "@/shared/api/auth";
 import { authMeQueryKeyFor } from "@/shared/auth/authQueries";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import {
   createMatchWorkspaceMasterHandoffPayload,
-  appendHandoffIdToReturnTo,
   saveMasterHandoff,
 } from "@/shared/workflows/matchWorkspaceMasterHandoff";
 import { setDevUser, testDevUserAccountId } from "@/test/auth";
@@ -40,19 +40,8 @@ function LocationProbe() {
   return <output aria-label="current location">{`${location.pathname}${location.search}`}</output>;
 }
 
-function MasterHandoffReturn() {
-  const location = useLocation();
-  const params = new URLSearchParams(location.search);
-  const destination = appendHandoffIdToReturnTo(
-    params.get("returnTo") ?? "/matches/new",
-    params.get("handoffId") ?? "",
-  );
-  return <Link to={destination}>入力へ戻る</Link>;
-}
-
 async function waitForMatchCreateReady() {
   expect(await screen.findByRole("button", { name: "開催（必須）を変更" })).toBeEnabled();
-  expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
 }
 
 describe("MatchCreatePage", () => {
@@ -107,54 +96,12 @@ describe("MatchCreatePage", () => {
     expect(requests[0]?.has("limit")).toBe(false);
   });
 
-  it("opens master management from manual creation with return handoff", async () => {
-    setDevUser();
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/matches/new"]}>
-          <Routes>
-            <Route
-              path="/matches/new"
-              element={
-                <>
-                  <LocationProbe />
-                  <MatchCreatePage />
-                </>
-              }
-            />
-            <Route
-              path="/admin/masters"
-              element={
-                <>
-                  <LocationProbe />
-                  <p>masters</p>
-                </>
-              }
-            />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-
-    await waitForMatchCreateReady();
-    await user.click(screen.getByRole("button", { name: "設定管理へ" }));
-
-    await waitFor(() =>
-      expect(screen.getByLabelText("current location")).toHaveTextContent("/admin/masters"),
-    );
-    expect(screen.getByLabelText("current location")).toHaveTextContent(
-      "returnTo=%2Fmatches%2Fnew",
-    );
-    expect(screen.getByLabelText("current location")).toHaveTextContent("handoffId=");
-  });
-
   it("preserves notes and unfinished numbers through master handoff and still protects unsaved input", async () => {
     setDevUser();
     const router = createMemoryRouter(
       [
         { path: "/matches/new", element: <MatchCreatePage /> },
-        { path: "/admin/masters", element: <MasterHandoffReturn /> },
+        { path: "/admin/masters", element: <MastersPage /> },
         { path: "/outside", element: <p>別の作業</p> },
       ],
       { initialEntries: ["/matches/new"] },
@@ -173,7 +120,12 @@ describe("MatchCreatePage", () => {
     await user.clear(revenue);
     await user.type(revenue, "-");
     await user.click(screen.getByRole("button", { name: "設定管理へ" }));
-    await user.click(await screen.findByRole("link", { name: "入力へ戻る" }));
+    const returnAction = await screen.findByRole("button", { name: "元の入力画面へ戻る" });
+    expect(router.state.location.pathname).toBe("/admin/masters");
+    const returnParams = new URLSearchParams(router.state.location.search);
+    expect(returnParams.get("returnTo")).toBe("/matches/new");
+    expect(returnParams.get("handoffId")).toBeTruthy();
+    await user.click(returnAction);
     await waitForMatchCreateReady();
     expect(screen.getByRole("textbox", { name: "試合メモ（任意）" })).toHaveValue(
       "カード交換を後で確認",

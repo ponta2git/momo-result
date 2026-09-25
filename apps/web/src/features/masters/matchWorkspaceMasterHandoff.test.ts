@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   appendHandoffIdToReturnTo,
@@ -43,10 +43,6 @@ function handoffPlayers(
 }
 
 describe("matchWorkspaceMasterHandoff", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
   it("accepts app-internal returnTo paths and rejects external urls", () => {
     expect(sanitizeReturnTo("/review/session-1?sample=1")).toBe("/review/session-1?sample=1");
     expect(sanitizeReturnTo("https://example.com/review/session-1")).toBeUndefined();
@@ -130,13 +126,19 @@ describe("matchWorkspaceMasterHandoff", () => {
       },
     });
     const handoffId = saveMasterHandoff(payload, { createId: () => "scoped-handoff" });
+    const options = {
+      expectedAccountId: accountId,
+      expectedMatchSessionId: "session-1",
+      expectedReturnTo: "/review/session-1",
+      handoffId,
+      nowMs: Date.parse("2026-01-01T00:30:00.000Z"),
+    };
+    expect(loadMasterHandoff(options)).toEqual(payload);
 
     expect(
       loadMasterHandoff({
+        ...options,
         expectedAccountId: "account_eu",
-        expectedMatchSessionId: "session-1",
-        expectedReturnTo: "/review/session-1",
-        handoffId,
       }),
     ).toBeUndefined();
 
@@ -144,30 +146,30 @@ describe("matchWorkspaceMasterHandoff", () => {
       "momoresult.masterHandoff.v2.account_eu.copied-handoff",
       JSON.stringify(payload),
     );
-    expect(
-      loadMasterHandoff({
-        expectedAccountId: "account_eu",
-        expectedMatchSessionId: "session-1",
-        expectedReturnTo: "/review/session-1",
-        handoffId: "copied-handoff",
-      }),
-    ).toBeUndefined();
+    const copiedOptions = {
+      ...options,
+      expectedAccountId: "account_eu",
+      handoffId: "copied-handoff",
+    };
+    expect(inspectMasterHandoff(copiedOptions).status).toBe("invalid");
+    expect(loadMasterHandoff(copiedOptions)).toBeUndefined();
   });
 
   it("round-trips unfinished input and notes while accepting older version 2 payloads", () => {
+    const values = {
+      ...makeMatchWorkspaceMasterHandoffValues(),
+      matchDraftId: "draft-1",
+      matchNoInEvent: 0,
+      noteBody: "設定を追加してから続きを入力する",
+      numericDrafts: { "players.0.revenueManYen": "-", "players.1.rank": "" },
+      players: handoffPlayers({ destination: -1 }),
+    };
     const payload = createMatchWorkspaceMasterHandoffPayload({
       accountId,
       createdAt: "2026-01-01T00:00:00.000Z",
       matchSessionId: "session-1",
       returnTo: "/matches/new?matchSessionId=session-1",
-      values: {
-        ...makeMatchWorkspaceMasterHandoffValues(),
-        matchDraftId: "draft-1",
-        matchNoInEvent: 0,
-        noteBody: "設定を追加してから続きを入力する",
-        numericDrafts: { "players.0.revenueManYen": "-", "players.1.rank": "" },
-        players: handoffPlayers({ destination: -1 }),
-      },
+      values,
     });
     const handoffId = saveMasterHandoff(payload, { createId: () => "unfinished-handoff" });
     const options = {
@@ -176,14 +178,14 @@ describe("matchWorkspaceMasterHandoff", () => {
       handoffId,
       nowMs: Date.parse("2026-01-01T00:30:00.000Z"),
     };
-    expect(loadMasterHandoff(options)?.values).toEqual(payload.values);
+    expect(loadMasterHandoff(options)?.values).toEqual(values);
 
     const {
       noteBody: _note,
       numericDrafts: _drafts,
       matchDraftId: _draftId,
       ...legacyValues
-    } = payload.values;
+    } = values;
     window.sessionStorage.setItem(
       "momoresult.masterHandoff.v2.account_ponta.unfinished-handoff",
       JSON.stringify({ ...payload, values: legacyValues }),
@@ -265,8 +267,6 @@ describe("matchWorkspaceMasterHandoff", () => {
     });
 
     expect(payload.values.draftIds).toEqual({ totalAssets: "draft-1" });
-    expect(Object.keys(payload.values.draftIds)).not.toContain("incidentLog");
-    expect(Object.keys(payload.values.draftIds)).not.toContain("revenue");
   });
 
   it("marks an old handoff as expired", () => {

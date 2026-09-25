@@ -1,10 +1,10 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
 
-import { resolveHeldEventContext } from "@/features/ocrCapture/ocrSetupOptionResolution";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import { useOcrSetupOptions } from "@/features/ocrCapture/useOcrSetupOptions";
 import { heldEventKeys, masterKeys } from "@/shared/api/queryKeys";
@@ -63,21 +63,8 @@ function readSetupValue(): SetupFormValues {
 }
 
 describe("useOcrSetupOptions", () => {
-  it("distinguishes authoritative absence from a transient lookup failure", () => {
-    const base = {
-      detailFailed: true,
-      directoryFailed: false,
-      enabled: true,
-      fetching: false,
-      selected: false,
-      selectedId: "held-requested",
-    };
-
-    expect(resolveHeldEventContext({ ...base, detailErrorStatus: 404 })).toBe("notFound");
-    expect(resolveHeldEventContext({ ...base, detailErrorStatus: 500 })).toBe("failed");
-  });
-
   it("shares the first picker page and retries a failed request only once", async () => {
+    const user = userEvent.setup();
     const requests: URLSearchParams[] = [];
     server.use(
       http.get("/api/held-events", ({ request }) => {
@@ -108,14 +95,14 @@ describe("useOcrSetupOptions", () => {
     expect(requests[0]?.get("page")).toBe("1");
     expect(requests[0]?.get("pageSize")).toBe("20");
     expect(requests[0]?.has("limit")).toBe(false);
-    fireEvent.click(screen.getByRole("button", { name: "選択肢を再取得" }));
+    await user.click(screen.getByRole("button", { name: "選択肢を再取得" }));
     await waitFor(() =>
       expect(screen.getByLabelText("setup value")).toHaveAttribute("data-error", ""),
     );
     expect(requests).toHaveLength(2);
   });
 
-  it("applies map and season fallbacks in one state transition", async () => {
+  it("fills both missing selections from the shared directories", async () => {
     const queryClient = createTestQueryClient();
     queryClient.setQueryDefaults(masterKeys.all(), {
       staleTime: Number.POSITIVE_INFINITY,

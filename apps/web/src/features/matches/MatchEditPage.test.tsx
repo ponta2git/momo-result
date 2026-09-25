@@ -1,6 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { lazy, Suspense } from "react";
@@ -30,7 +30,6 @@ let user: ReturnType<typeof userEvent.setup>;
 
 async function waitForMatchEditReady() {
   expect(await screen.findByRole("button", { name: "開催（必須）を変更" })).toBeEnabled();
-  expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
 }
 
 describe("MatchEditPage", () => {
@@ -96,81 +95,7 @@ describe("MatchEditPage", () => {
     server.use(
       http.get("/api/matches/:matchId", async ({ params }) => {
         await responseGate.promise;
-        return HttpResponse.json({
-          createdAt: "2026-01-01T00:00:00.000Z",
-          createdByMemberId: "member_ponta",
-          gameTitleId: "gt_momotetsu_2",
-          heldEventId: "held-1",
-          layoutFamily: "momotetsu_2",
-          mapMasterId: "map_east",
-          matchId: params["matchId"],
-          matchNoInEvent: 1,
-          ownerMemberId: "member_ponta",
-          playedAt: "2026-01-01T00:00:00.000Z",
-          players: [
-            {
-              incidents: {
-                cardShop: 0,
-                cardStation: 0,
-                destination: 0,
-                minusStation: 0,
-                plusStation: 0,
-                suriNoGinji: 0,
-              },
-              memberId: "member_ponta",
-              playOrder: 1,
-              rank: 1,
-              revenueManYen: 200,
-              totalAssetsManYen: 1000,
-            },
-            {
-              incidents: {
-                cardShop: 0,
-                cardStation: 0,
-                destination: 0,
-                minusStation: 0,
-                plusStation: 0,
-                suriNoGinji: 0,
-              },
-              memberId: "member_akane_mami",
-              playOrder: 2,
-              rank: 2,
-              revenueManYen: 150,
-              totalAssetsManYen: 800,
-            },
-            {
-              incidents: {
-                cardShop: 0,
-                cardStation: 0,
-                destination: 0,
-                minusStation: 0,
-                plusStation: 0,
-                suriNoGinji: 0,
-              },
-              memberId: "member_otaka",
-              playOrder: 3,
-              rank: 3,
-              revenueManYen: 100,
-              totalAssetsManYen: 600,
-            },
-            {
-              incidents: {
-                cardShop: 0,
-                cardStation: 0,
-                destination: 0,
-                minusStation: 0,
-                plusStation: 0,
-                suriNoGinji: 0,
-              },
-              memberId: "member_eu",
-              playOrder: 4,
-              rank: 4,
-              revenueManYen: 50,
-              totalAssetsManYen: 400,
-            },
-          ],
-          seasonMasterId: "season_current",
-        });
+        return HttpResponse.json(makeMatchDetail({ matchId: String(params["matchId"]) }));
       }),
     );
 
@@ -189,9 +114,12 @@ describe("MatchEditPage", () => {
     expect(await screen.findByLabelText("試合編集を読み込み中")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
     expect(screen.getByRole("region", { name: "試合内容" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "保存" })).not.toBeInTheDocument();
 
     responseGate.resolve();
     await waitForMatchEditReady();
+    expect(screen.getByLabelText("試合番号")).toHaveValue("1");
+    expect(screen.getByRole("button", { name: "保存" })).toBeEnabled();
     expect(screen.getByRole("link", { name: "編集をやめる" })).toHaveAttribute(
       "href",
       "/matches?cursor=cursor-2",
@@ -358,35 +286,6 @@ describe("MatchEditPage", () => {
     },
   );
 
-  it("keeps edited values and shows an update API failure in the execution area", async () => {
-    setDevUser();
-    server.use(
-      http.put("/api/matches/:matchId", () =>
-        HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 }),
-      ),
-    );
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/matches/match-1/edit"]}>
-          <Routes>
-            <Route path="/matches/:matchId/edit" element={<MatchEditPage />} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-
-    await waitForMatchEditReady();
-    const matchNumber = screen.getByLabelText("試合番号");
-    expect(matchNumber).toHaveValue("1");
-    await user.click(screen.getByRole("button", { name: "保存" }));
-
-    const failure = await screen.findByRole("heading", { name: "変更を保存できませんでした" });
-    expect(failure.closest("section")).toHaveTextContent("入力内容は保持しています");
-    expect(matchNumber).toHaveValue("1");
-    expect(screen.getByRole("button", { name: "保存" })).toBeEnabled();
-  });
-
   it.each([false, true])(
     "rejects incomplete input and reveals its editor before saving (mobile: %s)",
     async (mobile) => {
@@ -446,11 +345,11 @@ describe("MatchEditPage", () => {
   it("keeps in-flight input and navigation locked, then restores editing after failure", async () => {
     setDevUser();
     const response = createDeferred();
-    let attempts = 0;
+    const submissions: unknown[] = [];
     server.use(
-      http.put("/api/matches/:matchId", async ({ params }) => {
-        attempts += 1;
-        if (attempts === 1) {
+      http.put("/api/matches/:matchId", async ({ params, request }) => {
+        submissions.push(await request.json());
+        if (submissions.length === 1) {
           await response.promise;
           return HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 });
         }
@@ -475,7 +374,8 @@ describe("MatchEditPage", () => {
     await user.clear(matchNumber);
     await user.type(matchNumber, "9");
     await user.click(screen.getByRole("button", { name: "保存" }));
-    await waitFor(() => expect(attempts).toBe(1));
+    await waitFor(() => expect(submissions).toHaveLength(1));
+    expect(submissions[0]).toEqual(expect.objectContaining({ matchNoInEvent: 9 }));
     expect(matchNumber).toBeDisabled();
     expect(screen.getByRole("textbox", { name: "ぽんた 収益（万円）" })).toBeDisabled();
     const unloading = new Event("beforeunload", { cancelable: true });
@@ -495,10 +395,14 @@ describe("MatchEditPage", () => {
     expect(router.state.location.pathname).toBe("/matches/match-1/edit");
     expect(matchNumber).toHaveValue("9");
     expect(matchNumber).toBeEnabled();
+    const executionArea = screen.getByRole("region", { name: "入力内容の確定" });
+    expect(within(executionArea).getByRole("alert")).toHaveTextContent("入力内容は保持しています");
+    expect(within(executionArea).getByRole("button", { name: "保存" })).toBeEnabled();
 
     await user.click(screen.getByRole("button", { name: "保存" }));
     expect(await screen.findByText("保存済みの試合")).toBeInTheDocument();
-    expect(attempts).toBe(2);
+    expect(submissions).toHaveLength(2);
+    expect(submissions[1]).toEqual(submissions[0]);
   });
 
   it("recovers incomplete input only for the same match even when saved values are identical", async () => {

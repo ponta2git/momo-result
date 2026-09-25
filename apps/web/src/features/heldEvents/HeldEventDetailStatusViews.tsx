@@ -32,10 +32,6 @@ export function HeldEventDetailLoading() {
         eyebrow="開催記録"
         title="開催の記録を読み込み中"
       />
-      <div aria-hidden="true" className="grid min-w-0 gap-3 sm:grid-cols-2">
-        <Skeleton className="h-20 w-full rounded-sm" />
-        <Skeleton className="h-20 w-full rounded-sm" />
-      </div>
       <PageContentSurface
         aria-label="開催内容"
         className="grid grid-cols-[minmax(0,1fr)] gap-8"
@@ -79,6 +75,10 @@ export function HeldEventDetailLoading() {
           </div>
         </section>
       </PageContentSurface>
+      <div aria-hidden="true" className="grid min-w-0 gap-3 sm:grid-cols-2">
+        <Skeleton className="h-20 w-full rounded-sm" />
+        <Skeleton className="h-20 w-full rounded-sm" />
+      </div>
     </PageFrame>
   );
 }

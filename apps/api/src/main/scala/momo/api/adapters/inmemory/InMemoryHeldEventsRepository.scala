@@ -5,7 +5,7 @@ import cats.syntax.all.*
 import cats.{Functor, Monad}
 
 import momo.api.domain.ids.HeldEventId
-import momo.api.domain.{HeldEvent, PageRequest, PagedResult}
+import momo.api.domain.{HeldEvent, PageRequest, PagedResult, RecordNavigationOrder}
 import momo.api.errors.AppError
 import momo.api.repositories.{
   HeldEventDeletionRepository,
@@ -18,6 +18,8 @@ import momo.api.repositories.{
 final class InMemoryHeldEventsRepository[F[_]: Functor] private (
     ref: Ref[F, Map[HeldEventId, HeldEvent]]
 ) extends HeldEventsRepository[F]:
+  private[inmemory] def snapshot: F[List[HeldEvent]] = ref.get.map(_.values.toList)
+
   override def listPage(query: Option[String], page: PageRequest): F[PagedResult[HeldEvent]] = ref
     .get.map { events =>
       val all = InMemoryHeldEventsRepository.filterAndSort(events.values, query)
@@ -72,7 +74,7 @@ object InMemoryHeldEventsRepository:
         val lower = q.toLowerCase
         events.filter(e => e.id.value.toLowerCase.contains(lower))
       case _ => events
-    filtered.toList.sortBy(event => (event.heldAt, event.id.value)).reverse
+    filtered.toList.sorted(using RecordNavigationOrder.heldEvents).reverse
 
   def create[F[_]: Sync]: F[InMemoryHeldEventsRepository[F]] = Ref
     .of[F, Map[HeldEventId, HeldEvent]](Map.empty).map(new InMemoryHeldEventsRepository(_))

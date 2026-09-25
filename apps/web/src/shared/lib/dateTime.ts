@@ -34,6 +34,17 @@ export function formatDateTimeCompact(value: DateTimeValue, fallback = "日時�
   return formatDateValue(value, compactDateTimeFormatter, fallback);
 }
 
+/** Preserve distinguishable timestamps when adjacent records round to the same minute. */
+export function formatNavigationDateTime(value: string, peers: readonly string[] = []): string {
+  const label = formatDateTimeLong(value);
+  if (!peers.some((peer) => peer !== value && formatDateTimeLong(peer) === label)) return label;
+  const date = asValidDate(value);
+  if (!date) return label;
+  const seconds = String(date.getUTCSeconds()).padStart(2, "0");
+  const fraction = value.match(/\.(\d+)(?:Z|[+-]\d{2}:\d{2})$/u)?.[1];
+  return `${label}:${seconds}${fraction ? `.${fraction}` : ""}`;
+}
+
 export function formatDateOnly(value: DateTimeValue, fallback = "日付未設定"): string {
   return formatDateValue(value, dateFormatter, fallback);
 }

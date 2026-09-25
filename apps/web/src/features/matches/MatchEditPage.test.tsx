@@ -264,7 +264,16 @@ describe("MatchEditPage", () => {
     queryClient.setDefaultOptions({ queries: { retry: false } });
     server.use(
       http.get("/api/matches/:matchId", () =>
-        HttpResponse.json({ detail: "match not found" }, { status: 404 }),
+        HttpResponse.json(
+          {
+            type: "about:blank",
+            title: "Not Found",
+            status: 404,
+            code: "NOT_FOUND",
+            detail: "match not found",
+          },
+          { status: 404 },
+        ),
       ),
     );
 

@@ -103,4 +103,20 @@ trait HeldEventsRepositoryContract:
         List("held_ids_2025_c", "held_ids_2026_b", "held_ids_2026_a")
       )
       assertEquals(none, Nil)
+
+  test("same-time events use UTF-8 order without losing timestamp precision"):
+    val bmp = HeldEvent(HeldEventId.unsafeFromString("held_\uE000"), baseInstant)
+    val supplementary = HeldEvent(HeldEventId.unsafeFromString("held_\uD800\uDC00"), baseInstant)
+    val later = HeldEvent(HeldEventId.unsafeFromString("held_A"), baseInstant.plusNanos(1000))
+    for
+      repo <- freshRepo
+      _ <- repo.create(later)
+      _ <- repo.create(bmp)
+      _ <- repo.create(supplementary)
+      page <- repo.listPage(None, PageRequest(1, 10))
+      ids <- repo.listIds(None)
+    yield
+      val expected = List(later.id, supplementary.id, bmp.id)
+      assertEquals(page.items.map(_.id), expected)
+      assertEquals(ids, expected)
 end HeldEventsRepositoryContract

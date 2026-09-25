@@ -6,6 +6,7 @@ import {
   dedupeWorkspaceErrors,
   draftIdsFromDetail,
 } from "@/features/matches/workspace/workspaceDerivations";
+import { readDetailQuery } from "@/shared/api/detailReadResult";
 import { mergeHeldEventItems } from "@/shared/api/heldEventCache";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type {
@@ -130,6 +131,7 @@ export function useMatchWorkspaceQueries(
     [draftReviewQuery.data],
   );
   const matchDetailQuery = useQuery(matchDetailQueryOptions(matchId, mode === "edit"));
+  const matchDetail = readDetailQuery(matchDetailQuery);
   const [heldEventsQuery, gameTitlesQuery, memberAliasesQuery] = useSuspenseQueries({
     queries: [
       heldEventsQueryOptions({ page: 1, pageSize: heldEventPickerPageSize }),
@@ -209,8 +211,8 @@ export function useMatchWorkspaceQueries(
     void refetchMatchDetail();
   }, [refetchMatchDetail]);
   const editLoadFailureKind =
-    mode === "edit" && shouldShowBlockingQueryError(matchDetailQuery)
-      ? normalizeUnknownApiError(matchDetailQuery.error).status === 404
+    mode === "edit" && (matchDetail.notFound || shouldShowBlockingQueryError(matchDetailQuery))
+      ? matchDetail.notFound
         ? ("notFound" as const)
         : ("transient" as const)
       : null;
@@ -250,7 +252,7 @@ export function useMatchWorkspaceQueries(
       gameTitleItems: gameTitlesQuery.data.items,
       heldEventItems,
       mapItems: mapMastersQuery.data?.items,
-      matchDetail: matchDetailQuery.data,
+      matchDetail: matchDetail.detail,
       memberAliases: memberAliasesQuery.data.items ?? [],
       ocrDrafts,
       seasonItems: seasonMastersQuery.data?.items,

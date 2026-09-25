@@ -6,13 +6,15 @@ import { http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { HeldEventDetailPage } from "@/features/heldEvents/HeldEventDetailPage";
 import { HeldEventsPage } from "@/features/heldEvents/HeldEventsPage";
+import { heldEventKeys } from "@/shared/api/queryKeys";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { installMatchMediaController } from "@/test/doubles/dom";
 import type { MatchMediaController } from "@/test/doubles/dom";
-import { makeHeldEventResponse } from "@/test/factories";
+import { makeHeldEventDetailResponse, makeHeldEventResponse } from "@/test/factories";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
@@ -24,7 +26,7 @@ function LocationProbe() {
   return <output aria-label="current location">{`${location.pathname}${location.search}`}</output>;
 }
 
-function renderPage(path = "/held-events") {
+function renderPage(path = "/held-events", realDetails = false) {
   setDevUser();
   render(
     <QueryClientProvider client={queryClient}>
@@ -32,7 +34,10 @@ function renderPage(path = "/held-events") {
         <LocationProbe />
         <Routes>
           <Route element={<HeldEventsPage />} path="/held-events" />
-          <Route element={<p>held event detail</p>} path="/held-events/:heldEventId" />
+          <Route
+            element={realDetails ? <HeldEventDetailPage /> : <p>held event detail</p>}
+            path="/held-events/:heldEventId"
+          />
           <Route element={<p>matches</p>} path="/matches" />
           <Route element={<p>ocr capture</p>} path="/ocr/new" />
           <Route element={<p>exports</p>} path="/exports" />
@@ -435,9 +440,17 @@ describe("HeldEventsPage", () => {
         heldEvents.unshift(created);
         return HttpResponse.json(created);
       }),
+      http.get("/api/held-events/held-created", () =>
+        HttpResponse.json(
+          makeHeldEventDetailResponse({
+            ...created,
+            navigation: { previous: { id: "held-1", heldAt: "2026-01-01T00:00:00.000Z" } },
+          }),
+        ),
+      ),
     );
 
-    renderPage();
+    renderPage("/held-events", true);
 
     expect(await screen.findByRole("link", { name: /の開催詳細$/u })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "開催を作成" }));
@@ -451,11 +464,14 @@ describe("HeldEventsPage", () => {
         "/held-events/held-created",
       ),
     );
-    expect(screen.getByText("held event detail")).toBeInTheDocument();
-    expect(queryClient.getQueryData(["held-events", "detail", "held-created"])).toMatchObject({
-      draftCount: 0,
-      id: "held-created",
-      matches: [],
+    expect(await screen.findByRole("heading", { name: "2026/01/02 12:04" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /前の開催/u })).toHaveAttribute(
+      "href",
+      "/held-events/held-1?returnTo=%2Fheld-events",
+    );
+    expect(queryClient.getQueryData(heldEventKeys.detail("held-created"))).toMatchObject({
+      kind: "found",
+      navigation: { kind: "available", previous: { id: "held-1" } },
     });
   });
 
@@ -539,6 +555,43 @@ describe("HeldEventsPage", () => {
     expect(screen.queryByRole("list")).not.toBeInTheDocument();
     expect(screen.getByText("開催を削除しました。")).toBeInTheDocument();
     expect(idempotencyKey).toMatch(/\S/u);
+  });
+
+  it("updates a previously visited detail after deleting its neighbor through the list", async () => {
+    matchMedia = installMatchMediaController(true);
+    const oldEvent = makeHeldEventResponse({ id: "held-old", heldAt: "2026-01-01T00:00:00Z" });
+    const current = makeHeldEventResponse({ id: "held-current", heldAt: "2026-01-02T00:00:00Z" });
+    let removed = false;
+    server.use(
+      http.get("/api/held-events", () =>
+        HttpResponse.json({ items: removed ? [current] : [current, oldEvent] }),
+      ),
+      http.get("/api/held-events/held-current", () =>
+        HttpResponse.json(
+          makeHeldEventDetailResponse({
+            ...current,
+            navigation: removed ? {} : { previous: { id: oldEvent.id, heldAt: oldEvent.heldAt } },
+          }),
+        ),
+      ),
+      http.delete("/api/held-events/held-old", () => {
+        removed = true;
+        return HttpResponse.json({ deleted: true, heldEventId: oldEvent.id });
+      }),
+    );
+    renderPage("/held-events/held-current", true);
+    expect(await screen.findByRole("link", { name: /前の開催/u })).toHaveAttribute(
+      "href",
+      "/held-events/held-old",
+    );
+    await user.click(screen.getByRole("link", { name: "開催履歴へ戻る" }));
+    await user.click(await screen.findByRole("button", { name: "2026/01/01 09:00を削除" }));
+    await user.click(screen.getByRole("button", { name: "削除する" }));
+    await waitFor(() => expect(screen.queryByText("開催を削除しますか？")).not.toBeInTheDocument());
+    await user.click(screen.getByRole("link", { name: "2026/01/02 09:00の開催詳細" }));
+    expect(await screen.findByText("最初の開催です")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /前の開催/u })).not.toBeInTheDocument();
+    expect(queryClient.getQueryData(heldEventKeys.detail(oldEvent.id))).toBeUndefined();
   });
 
   it("keeps deletion disabled for events with confirmed matches", async () => {

@@ -1,5 +1,5 @@
 import { ArrowLeft } from "lucide-react";
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
@@ -10,6 +10,7 @@ import type { PageFrameWidth } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 type ResourcePageStateBase = {
+  children?: ReactNode;
   backHref: string;
   backLabel: string;
   description: string;
@@ -17,6 +18,7 @@ type ResourcePageStateBase = {
   headerActions?: ReactNode;
   headerDescription?: ReactNode;
   title: string;
+  titleRef?: Ref<HTMLHeadingElement> | undefined;
   width?: PageFrameWidth | undefined;
 };
 
@@ -55,8 +57,9 @@ export function ResourcePageState(props: ResourcePageStateProps) {
         description={props.headerDescription}
         eyebrow={props.eyebrow}
         title={props.title}
+        titleRef={props.titleRef}
       />
-      <PageContentSurface>
+      <PageContentSurface className={props.children ? "grid gap-4" : undefined}>
         <Notice
           action={
             props.kind === "error" ? (
@@ -74,6 +77,7 @@ export function ResourcePageState(props: ResourcePageStateProps) {
         >
           <p>{props.description}</p>
         </Notice>
+        {props.children}
       </PageContentSurface>
     </PageFrame>
   );

@@ -5,7 +5,15 @@ import java.time.Instant
 import munit.FunSuite
 
 import momo.api.domain.ids.*
-import momo.api.domain.{FourPlayers, IncidentCounts, MatchNoInEvent, MatchRecord, PlayerResult}
+import momo.api.domain.{
+  FourPlayers,
+  IncidentCounts,
+  MatchDetail,
+  MatchNoInEvent,
+  MatchRecord,
+  PlayerResult,
+  RecordNavigation
+}
 
 final class MatchDetailResponseSpec extends FunSuite:
   private val playedAt = Instant.parse("2026-04-30T12:00:00Z")
@@ -21,28 +29,32 @@ final class MatchDetailResponseSpec extends FunSuite:
       revenueManYen = 567,
       incidents = IncidentCounts.unsafeFromInts(11, 12, 13, 14, 15, 16),
     )
-    val response = MatchDetailResponse.from(MatchRecord(
-      id = MatchId.unsafeFromString("match_001"),
-      heldEventId = HeldEventId.unsafeFromString("held_2026_04_30"),
-      matchNoInEvent = MatchNoInEvent.unsafeFromInt(1),
-      gameTitleId = GameTitleId.unsafeFromString("title_world"),
-      layoutFamily = "world",
-      seasonMasterId = SeasonMasterId.unsafeFromString("season_2024_spring"),
-      ownerMemberId = MemberId.unsafeFromString("member_a"),
-      mapMasterId = MapMasterId.unsafeFromString("map_east"),
-      playedAt = playedAt,
-      totalAssetsDraftId = Some(OcrDraftId.unsafeFromString("draft_total_assets")),
-      revenueDraftId = None,
-      incidentLogDraftId = None,
-      players = FourPlayers(
-        player("member_b", playOrder = 2, rank = 1),
-        detailedPlayer,
-        player("member_d", playOrder = 4, rank = 3),
-        player("member_c", playOrder = 3, rank = 4),
+    val response = MatchDetailResponse.from(MatchDetail(
+      MatchRecord(
+        id = MatchId.unsafeFromString("match_001"),
+        heldEventId = HeldEventId.unsafeFromString("held_2026_04_30"),
+        matchNoInEvent = MatchNoInEvent.unsafeFromInt(1),
+        gameTitleId = GameTitleId.unsafeFromString("title_world"),
+        layoutFamily = "world",
+        seasonMasterId = SeasonMasterId.unsafeFromString("season_2024_spring"),
+        ownerMemberId = MemberId.unsafeFromString("member_a"),
+        mapMasterId = MapMasterId.unsafeFromString("map_east"),
+        playedAt = playedAt,
+        totalAssetsDraftId = Some(OcrDraftId.unsafeFromString("draft_total_assets")),
+        revenueDraftId = None,
+        incidentLogDraftId = None,
+        players = FourPlayers(
+          player("member_b", playOrder = 2, rank = 1),
+          detailedPlayer,
+          player("member_d", playOrder = 4, rank = 3),
+          player("member_c", playOrder = 3, rank = 4),
+        ),
+        createdByAccountId = AccountId.unsafeFromString("account_a"),
+        createdByMemberId = Some(MemberId.unsafeFromString("member_a")),
+        createdAt = createdAt,
       ),
-      createdByAccountId = AccountId.unsafeFromString("account_a"),
-      createdByMemberId = Some(MemberId.unsafeFromString("member_a")),
-      createdAt = createdAt,
+      None,
+      RecordNavigation(None, None)
     ))
 
     assertEquals(response.matchId, "match_001")

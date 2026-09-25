@@ -1,4 +1,6 @@
-import { useMatchNoteEditor } from "@/features/matches/useMatchNoteEditor";
+import { useEffect, useRef, useState } from "react";
+
+import type { MatchNoteEditor } from "@/features/matches/useMatchNoteEditor";
 import { MatchWorkspaceNavigationGuard } from "@/features/matches/workspace/MatchWorkspaceNavigationGuard";
 import { matchNoteMaximumCharacters } from "@/features/matches/workspace/review/confirmMatchFormSchema";
 import type { MatchDetailResponse } from "@/shared/api/matches";
@@ -14,11 +16,13 @@ import { contentText, fieldText } from "@/shared/ui/typography";
 
 type MatchNoteSectionProps = {
   match: MatchDetailResponse;
-  refetchMatch: () => Promise<{ data?: MatchDetailResponse | undefined }>;
+  editor: MatchNoteEditor;
 };
 
-export function MatchNoteSection({ match, refetchMatch }: MatchNoteSectionProps) {
-  const editor = useMatchNoteEditor({ match, refetchMatch });
+export function MatchNoteSection({ match, editor }: MatchNoteSectionProps) {
+  const editActionRef = useRef<HTMLButtonElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const restoreActionFocus = useRef(false);
   const {
     cancel,
     conflict,
@@ -28,7 +32,6 @@ export function MatchNoteSection({ match, refetchMatch }: MatchNoteSectionProps)
     draft,
     editing,
     errorMessage,
-    navigationAllowedRef,
     normalizedDraft,
     pending,
     remove,
@@ -39,9 +42,18 @@ export function MatchNoteSection({ match, refetchMatch }: MatchNoteSectionProps)
     tooLong,
   } = editor;
 
+  useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
+
+  useEffect(() => {
+    if (!restoreActionFocus.current || deleteOpen || pending || editor.refreshing) return;
+    restoreActionFocus.current = false;
+    if (document.activeElement === document.body) editActionRef.current?.focus();
+  }, [deleteOpen, editor.refreshing, pending]);
+
   return (
     <section aria-labelledby="match-note-heading" className="grid gap-4">
-      <MatchWorkspaceNavigationGuard model={{ dirty, navigationAllowedRef, onDiscard: cancel }} />
       <ContentWithActions
         actions={
           editing ? null : (
@@ -50,11 +62,22 @@ export function MatchNoteSection({ match, refetchMatch }: MatchNoteSectionProps)
               className="flex shrink-0 flex-wrap items-center gap-2"
               role="group"
             >
-              <Button size="sm" variant="secondary" onClick={startEditing}>
+              <Button
+                disabled={pending || editor.refreshing}
+                ref={editActionRef}
+                size="sm"
+                variant="secondary"
+                onClick={startEditing}
+              >
                 {match.note.body ? "編集" : "メモを追加"}
               </Button>
               {match.note.body ? (
-                <Button size="sm" variant="dangerQuiet" onClick={() => setDeleteOpen(true)}>
+                <Button
+                  disabled={pending || editor.refreshing}
+                  size="sm"
+                  variant="dangerQuiet"
+                  onClick={() => setDeleteOpen(true)}
+                >
                   メモを削除
                 </Button>
               ) : null}
@@ -86,6 +109,7 @@ export function MatchNoteSection({ match, refetchMatch }: MatchNoteSectionProps)
                   disabled={pending}
                   invalid={tooLong}
                   minHeight="md"
+                  ref={inputRef}
                   resize="vertical"
                   textFlow="relaxed"
                   value={draft}
@@ -134,6 +158,7 @@ export function MatchNoteSection({ match, refetchMatch }: MatchNoteSectionProps)
                 <Button
                   disabled={
                     pending ||
+                    editor.refreshing ||
                     tooLong ||
                     normalizedDraft.trim().length === 0 ||
                     (!dirty && !conflict)
@@ -174,6 +199,32 @@ export function MatchNoteSection({ match, refetchMatch }: MatchNoteSectionProps)
         {editor.successMessage}
       </p>
 
+      {editor.refreshing ? (
+        <p className={contentText.supporting} role="status">
+          メモの最新表示を確認しています。
+        </p>
+      ) : null}
+      {editor.refreshFailed ? (
+        <Notice
+          action={
+            <Button
+              disabled={editor.refreshing}
+              pending={editor.refreshing}
+              pendingLabel="確認中"
+              size="sm"
+              variant="secondary"
+              onClick={() => void editor.retryDisplayRefresh()}
+            >
+              メモの表示を再取得
+            </Button>
+          }
+          tone="warning"
+          title="保存後の表示を更新できませんでした"
+        >
+          保存は完了しています。更新者と更新日時は、試合詳細を再取得すると確認できます。
+        </Notice>
+      ) : null}
+
       {errorMessage ? (
         <p className={fieldText.error} role="alert">
           {errorMessage}
@@ -183,13 +234,80 @@ export function MatchNoteSection({ match, refetchMatch }: MatchNoteSectionProps)
       <AlertDialog
         confirmLabel="削除する"
         description="試合結果は残したまま、共有されているメモだけを削除します。"
+        finalFocus={editActionRef}
         open={deleteOpen}
         pending={pending}
         title="試合メモを削除しますか？"
         tone="danger"
-        onConfirm={remove}
+        onConfirm={() => {
+          restoreActionFocus.current = true;
+          remove();
+        }}
         onOpenChange={setDeleteOpen}
       />
+    </section>
+  );
+}
+
+/** Mount beside ready/terminal content so a confirmed 404 cannot remove the guard. */
+export function MatchNoteNavigationGuard({ editor }: { editor: MatchNoteEditor }) {
+  return (
+    <MatchWorkspaceNavigationGuard
+      description="入力した試合メモはまだ保存されていません。このページに残れば編集を続けられます。"
+      model={{
+        dirty: editor.dirty,
+        navigationAllowedRef: editor.navigationAllowedRef,
+        onDiscard: editor.cancel,
+      }}
+      pending={editor.pending}
+      pendingDescription="試合メモの処理結果が分かるまで、このページでお待ちください。送信済みの保存や削除を移動操作で取り消すことはできません。"
+    />
+  );
+}
+
+/** Only the local unsaved text survives deletion; the deleted result is not rendered again. */
+export function MatchNoteRecovery({ editor }: { editor: MatchNoteEditor }) {
+  const textRef = useRef<HTMLTextAreaElement>(null);
+  const [copyMessage, setCopyMessage] = useState("");
+  if (!editor.dirty) return null;
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(editor.draft);
+      setCopyMessage("未保存のメモをコピーしました。");
+    } catch {
+      textRef.current?.focus();
+      textRef.current?.select();
+      setCopyMessage("本文を選択しました。コピーして保管してください。");
+    }
+  };
+
+  return (
+    <section aria-labelledby="unsaved-match-note-heading" className="grid gap-4">
+      <h2 className={contentText.heading} id="unsaved-match-note-heading">
+        未保存の試合メモ
+      </h2>
+      <p className={contentText.body}>
+        試合を取得できないため保存できません。入力した本文はこの画面に残しています。
+      </p>
+      <TextareaControl
+        aria-label="退避した未保存の試合メモ"
+        minHeight="md"
+        readOnly
+        ref={textRef}
+        resize="vertical"
+        textFlow="relaxed"
+        value={editor.draft}
+      />
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={() => void copy()} variant="secondary">
+          メモをコピー
+        </Button>
+        <Button disabled={editor.pending} onClick={editor.cancel} variant="dangerQuiet">
+          未保存のメモを破棄
+        </Button>
+      </div>
+      {copyMessage ? <p role="status">{copyMessage}</p> : null}
     </section>
   );
 }

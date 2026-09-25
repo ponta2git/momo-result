@@ -789,6 +789,20 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AdjacentHeldEventResponse */
+        AdjacentHeldEventResponse: {
+            id: string;
+            heldAt: string;
+        };
+        /** AdjacentMatchResponse */
+        AdjacentMatchResponse: {
+            matchId: string;
+            heldEventId: string;
+            playedAt: string;
+            heldAt: string;
+            /** Format: int32 */
+            matchNoInEvent: number;
+        };
         /** AuthMeResponse */
         AuthMeResponse: {
             accountId: string;
@@ -949,6 +963,7 @@ export interface components {
             nextMatchNo: number;
             matches?: components["schemas"]["HeldEventMatchResponse"][];
             drafts?: components["schemas"]["HeldEventDraftResponse"][];
+            navigation: components["schemas"]["HeldEventNavigationResponse"];
         };
         /** HeldEventDraftResponse */
         HeldEventDraftResponse: {
@@ -987,6 +1002,11 @@ export interface components {
             gameTitleName?: string;
             seasonName?: string;
             mapName?: string;
+        };
+        /** HeldEventNavigationResponse */
+        HeldEventNavigationResponse: {
+            previous?: components["schemas"]["AdjacentHeldEventResponse"];
+            next?: components["schemas"]["AdjacentHeldEventResponse"];
         };
         /** HeldEventPlayerResultResponse */
         HeldEventPlayerResultResponse: {
@@ -1120,6 +1140,7 @@ export interface components {
             createdByMemberId?: string;
             createdAt: string;
             note: components["schemas"]["MatchNoteResponse"];
+            navigation: components["schemas"]["MatchNavigationResponse"];
             heldAt?: string;
             gameTitleName?: string;
             seasonName?: string;
@@ -1212,6 +1233,11 @@ export interface components {
             preConfirmCount: number;
             /** Format: int32 */
             needsReviewCount: number;
+        };
+        /** MatchNavigationResponse */
+        MatchNavigationResponse: {
+            previous?: components["schemas"]["AdjacentMatchResponse"];
+            next?: components["schemas"]["AdjacentMatchResponse"];
         };
         /** MatchNoteResponse */
         MatchNoteResponse: {

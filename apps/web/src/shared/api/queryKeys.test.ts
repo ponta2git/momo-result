@@ -80,7 +80,7 @@ describe("shared query keys", () => {
       true,
     );
     expect(queryClient.getQueryState(matchKeys.detail("unrelated-match"))?.isInvalidated).toBe(
-      false,
+      true,
     );
     expect(queryClient.getQueryState(matchKeys.draft.detail("draft-1"))?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(matchKeys.draft.sourceImages("draft-1"))?.isInvalidated).toBe(
@@ -117,7 +117,7 @@ describe("shared query keys", () => {
     await invalidateAfterMatchUpdated(queryClient, "match-1");
 
     expect(queryClient.getQueryState(matchKeys.detail("match-1"))?.isInvalidated).toBe(true);
-    expect(queryClient.getQueryState(matchKeys.detail("match-2"))?.isInvalidated).toBe(false);
+    expect(queryClient.getQueryState(matchKeys.detail("match-2"))?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(matchKeys.identity("match-1"))?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(matchKeys.identity("match-2"))?.isInvalidated).toBe(false);
     expect(
@@ -163,10 +163,10 @@ describe("shared query keys", () => {
     queryClient.setQueryData(matchKeys.identity("match-2"), { matchId: "match-2" });
     queryClient.setQueryData(matchKeys.list({ status: "confirmed" }), { items: [] });
 
-    await invalidateAfterMatchDeleted(queryClient);
+    await invalidateAfterMatchDeleted(queryClient, "match-1");
 
     expect(queryClient.getQueryState(matchKeys.detail("match-1"))?.isInvalidated).toBe(false);
-    expect(queryClient.getQueryState(matchKeys.detail("match-2"))?.isInvalidated).toBe(false);
+    expect(queryClient.getQueryState(matchKeys.detail("match-2"))?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(matchKeys.list({ status: "confirmed" }))?.isInvalidated).toBe(
       true,
     );
@@ -174,7 +174,7 @@ describe("shared query keys", () => {
     evictDeletedMatchDetail(queryClient, "match-1");
 
     expect(queryClient.getQueryState(matchKeys.detail("match-1"))).toBeUndefined();
-    expect(queryClient.getQueryState(matchKeys.detail("match-2"))?.isInvalidated).toBe(false);
+    expect(queryClient.getQueryState(matchKeys.detail("match-2"))?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(matchKeys.identity("match-1"))).toBeUndefined();
     expect(queryClient.getQueryState(matchKeys.identity("match-2"))?.isInvalidated).toBe(false);
   });

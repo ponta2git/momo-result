@@ -18,15 +18,18 @@ import {
   stopProcessGroup,
   waitForApi,
 } from "./e2e-isolated.mjs";
-import { dockerFailure, workerTiming, writeImages } from "./ocr-e2e-fixtures.mjs";
+import {
+  dockerFailure,
+  workerTiming,
+  writeImages,
+  writeMinioImageContexts,
+} from "./ocr-e2e-fixtures.mjs";
 
 const execute = promisify(execFile);
 const webDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = resolve(webDir, "../..");
 const summitDir = resolve(process.env["MOM24_SUMMIT_DIR"] ?? join(repoRoot, "_deps/summit"));
 const workerImage = process.env["MOM24_WORKER_TEST_IMAGE"];
-const minioClientImage =
-  "quay.io/minio/mc@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727";
 const playwrightArgs = process.argv.slice(2).filter((value) => value !== "--hold");
 if (!workerImage)
   throw new Error("MOM24_WORKER_TEST_IMAGE must identify the controlled Linux image.");
@@ -42,6 +45,7 @@ const databaseName = "mom24_e2e";
 const resources = {
   processes: [],
   containers: [],
+  images: [],
   workerId: undefined,
   workerName: `mom24-e2e-${basename(runDir).toLowerCase()}`,
   workerRequested: false,
@@ -71,6 +75,22 @@ function checkpoint() {
 
 async function run() {
   await mkdir(controlDir);
+  const architecture = (await docker(["info", "--format", "{{.Architecture}}"])).stdout.trim();
+  const minioImages = {};
+  for (const { name, context } of await writeMinioImageContexts(runDir, architecture)) {
+    checkpoint();
+    const built = await docker(
+      ["build", "--quiet", "--label", `momo.test.run=${basename(runDir)}`, context],
+      { operation: `${name} fixture image`, phase: "build" },
+    );
+    const imageId = built.stdout.trim();
+    if (!/^sha256:[0-9a-f]{64}$/u.test(imageId))
+      throw new Error("Expected an immutable local MinIO fixture image identity.");
+    resources.images.push(imageId);
+    remember();
+    minioImages[name] = imageId;
+  }
+  const minioClientImage = minioImages.mc;
   const images = await writeImages(runDir);
   checkpoint();
   const postgres = await startPostgres(databaseName);
@@ -88,9 +108,7 @@ async function run() {
   const { GenericContainer, Wait } = await import("testcontainers");
   const accessKey = randomBytes(16).toString("hex");
   const secretKey = randomBytes(32).toString("hex");
-  const minio = await new GenericContainer(
-    "quay.io/minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
-  )
+  const minio = await new GenericContainer(minioImages.minio)
     .withEnvironment({
       MINIO_ROOT_USER: accessKey,
       MINIO_ROOT_PASSWORD: secretKey,
@@ -104,11 +122,6 @@ async function run() {
   remember();
   checkpoint();
   const bucket = "mom24-fixtures";
-  await docker(["pull", minioClientImage], {
-    operation: "MinIO client image",
-    phase: "pull",
-  });
-  checkpoint();
   const clientEnv = join(runDir, "minio-client.env");
   await writeEnvironment(clientEnv, {
     MC_HOST_fixture: `http://${accessKey}:${secretKey}@127.0.0.1:9000`,
@@ -397,6 +410,11 @@ function cleanup() {
       await stopProcessGroup(child).catch((error) => failures.push(error));
     for (const container of resources.containers.toReversed())
       await container.stop().catch((error) => failures.push(error));
+    for (const image of resources.images.toReversed())
+      await docker(["image", "rm", image], {
+        operation: "MinIO fixture image",
+        phase: "remove",
+      }).catch((error) => failures.push(error));
     if (failures.length > 0)
       throw new AggregateError(failures, `E2E cleanup incomplete; ownership metadata: ${runDir}`);
     await rm(runDir, { recursive: true, force: true });
@@ -411,6 +429,7 @@ function remember() {
       runnerPid: process.pid,
       processIds: resources.processes.map((child) => child.pid),
       containerIds: resources.containers.map((container) => container.getId()),
+      imageIds: resources.images,
       workerId: resources.workerId,
       workerName: resources.workerName,
       workerRequested: resources.workerRequested,

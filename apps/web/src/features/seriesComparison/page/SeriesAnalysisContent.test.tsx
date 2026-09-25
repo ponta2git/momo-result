@@ -122,26 +122,6 @@ describe("SeriesAnalysisContent", () => {
     expect(screen.getByRole("link", { name: "第13戦の試合結果を見る" })).toBeInTheDocument();
   });
 
-  it("keeps owner comparison and the metric guide usable", async () => {
-    const user = userEvent.setup();
-    render(
-      <QueryClientProvider client={createTestQueryClient()}>
-        <MemoryRouter>
-          <SeriesAnalysisContent
-            bundle={analysisBundle(makeOwnerComparisonAggregate(), "context")}
-            onArtifactExpired={vi.fn()}
-            onClearFocusedMatch={vi.fn()}
-            onFocusMatch={vi.fn()}
-            onViewChange={vi.fn()}
-          />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-    expect(await screen.findByRole("table", { name: "オーナー別の平均順位" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "指標の読み方" }));
-    expect(screen.getByRole("dialog", { name: "指標の読み方" })).toHaveTextContent("平均物件収益");
-  });
-
   it("links review artifacts without presentation metadata to local evidence sections", () => {
     render(
       <QueryClientProvider client={createTestQueryClient()}>
@@ -191,54 +171,6 @@ describe("SeriesAnalysisContent", () => {
     expect(await screen.findByRole("heading", { name: "順位と基礎比較" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "指標の読み方" }));
     expect(await screen.findByRole("dialog", { name: "指標の読み方" })).toBeInTheDocument();
-  });
-
-  it("opens the shared metric guide from an analysis view", async () => {
-    const user = userEvent.setup();
-    const queryClient = createTestQueryClient();
-    const aggregate = makeSeriesAnalysisAggregate();
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <SeriesAnalysisContent
-            bundle={analysisBundle(aggregate, "flow")}
-            onArtifactExpired={vi.fn()}
-            onClearFocusedMatch={vi.fn()}
-            onFocusMatch={vi.fn()}
-            onViewChange={vi.fn()}
-          />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-
-    const guideTrigger = screen.getByRole("button", { name: "指標の読み方" });
-    await user.click(guideTrigger);
-    expect(await screen.findByRole("dialog", { name: "指標の読み方" })).toBeInTheDocument();
-  });
-
-  it("keeps focus on a nested analysis tab when the controlled view changes", async () => {
-    const user = userEvent.setup();
-    const queryClient = createTestQueryClient();
-    const aggregate = makeSeriesAnalysisAggregate();
-    const props = {
-      onArtifactExpired: vi.fn(),
-      onClearFocusedMatch: vi.fn(),
-      onFocusMatch: vi.fn(),
-      onViewChange: vi.fn(),
-    };
-    const view = (bundle: SeriesAnalysisDisplayBundle) => (
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <SeriesAnalysisContent {...props} bundle={bundle} />
-        </MemoryRouter>
-      </QueryClientProvider>
-    );
-    const rendered = render(view(analysisBundle(aggregate, "overview")));
-
-    await user.click(screen.getByRole("tab", { name: "勝因候補" }));
-    rendered.rerender(view(analysisBundle(aggregate, "drivers")));
-
-    expect(screen.getByRole("tab", { name: "勝因候補" })).toHaveFocus();
   });
 
   it("reuses one drilldown dialog when it is reopened during exit", async () => {

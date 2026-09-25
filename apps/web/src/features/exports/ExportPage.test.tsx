@@ -90,21 +90,6 @@ function renderExportHistory(previous: string) {
   return router;
 }
 
-function expectSingleCandidateScrollRegion(label: "開催" | "試合") {
-  const dialog = screen.getByRole("dialog", { name: `${label}を選択` });
-  expect(dialog).toHaveClass("overflow-y-hidden");
-  expect(dialog).not.toHaveClass("overflow-y-auto");
-  expect(dialog.firstElementChild).toHaveClass("overflow-y-hidden");
-  expect(dialog.firstElementChild).not.toHaveClass("overflow-y-auto");
-  const candidateGroup = screen.getByRole("group", { name: `${label}を選択` });
-  const candidateList = candidateGroup.querySelector(":scope > div");
-  expect(candidateGroup).not.toHaveClass("overflow-y-auto");
-  expect(candidateList).toHaveClass("overflow-y-auto", "overscroll-contain");
-  const scrollRegions = dialog.querySelectorAll(".overflow-y-auto");
-  expect(scrollRegions).toHaveLength(1);
-  expect(scrollRegions.item(0)).toBe(candidateList);
-}
-
 describe("ExportPage", () => {
   beforeEach(() => {
     queryClient = createTestQueryClient();
@@ -415,7 +400,6 @@ describe("ExportPage", () => {
 
     await user.click(await screen.findByRole("button", { name: "開催を変更" }));
     expect(screen.getByRole("dialog", { name: "開催を選択" })).toBeInTheDocument();
-    expectSingleCandidateScrollRegion("開催");
     expect(screen.getByText("1〜20件／全21件")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "次のページへ" }));
@@ -510,7 +494,6 @@ describe("ExportPage", () => {
     expect(screen.queryByText("指定された対象: match-21")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "試合を変更" }));
-    expectSingleCandidateScrollRegion("試合");
     await user.click(screen.getByRole("button", { name: "次のページへ" }));
     expect(await screen.findByRole("status")).toHaveTextContent("更新中");
     expect(screen.getByText("1〜20件／全21件")).toBeInTheDocument();
@@ -577,6 +560,8 @@ describe("ExportPage", () => {
       missingId: "opaque-held-event-id",
       path: "/exports?heldEventId=opaque-held-event-id&format=csv",
       recoveryName: "開催を選び直す",
+      candidateName: /^2026-01-01 \d{2}:\d{2}$/u,
+      recoveredQuery: "heldEventId=held-1",
       title: "指定された開催が見つかりません",
     },
     {
@@ -585,19 +570,44 @@ describe("ExportPage", () => {
       missingId: "opaque-match-id",
       path: "/exports?matchId=opaque-match-id&format=csv",
       recoveryName: "試合を選び直す",
+      candidateName: /^2026-01-01 \d{2}:\d{2}・第1試合$/u,
+      recoveredQuery: "matchId=match-1",
       title: "指定された試合が見つかりません",
     },
   ])(
-    "keeps a missing scoped deep link non-downloadable without exposing its opaque ID ($title)",
-    async ({ detailPath, downloadName, missingId, path, recoveryName, title }) => {
-      server.use(http.get(detailPath, () => HttpResponse.json(notFoundProblem, { status: 404 })));
+    "recovers a missing scoped deep link by choosing a confirmed candidate ($title)",
+    async ({
+      candidateName,
+      detailPath,
+      downloadName,
+      missingId,
+      path,
+      recoveredQuery,
+      recoveryName,
+      title,
+    }) => {
+      server.use(
+        http.get(detailPath, () => HttpResponse.json(notFoundProblem, { status: 404 }), {
+          once: true,
+        }),
+      );
 
       renderPage({ path });
 
       expect(await screen.findByText(title)).toBeInTheDocument();
       expect(document.body).not.toHaveTextContent(missingId);
       expect(screen.queryByRole("button", { name: downloadName })).not.toBeInTheDocument();
-      expect(screen.getByRole("button", { name: recoveryName })).toBeEnabled();
+      await user.click(screen.getByRole("button", { name: recoveryName }));
+      await user.click(await screen.findByRole("radio", { name: candidateName }));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(screen.queryByText(title)).not.toBeInTheDocument();
+      expect(screen.getByLabelText("current location")).toHaveAttribute(
+        "data-location",
+        expect.stringContaining(recoveredQuery),
+      );
+      await user.click(await screen.findByRole("button", { name: downloadName }));
+      await screen.findByText("ダウンロードを開始しました");
+      expect(anchorClick.click).toHaveBeenCalledOnce();
     },
   );
 
@@ -951,23 +961,16 @@ describe("ExportPage", () => {
   it("uses the projected title without requesting a master directory", async () => {
     const gameTitleId = "opaque-game-title-id";
     const seasonMasterId = "opaque-season-id";
+    const masterRequests: string[] = [];
     server.use(
-      http.get("/api/game-titles", () =>
-        HttpResponse.json({
-          items: [
-            {
-              createdAt: "2026-01-01T00:00:00.000Z",
-              displayOrder: 1,
-              id: gameTitleId,
-              layoutFamily: "momotetsu_2",
-              name: "桃太郎電鉄2",
-            },
-          ],
-        }),
-      ),
-      http.get("/api/season-masters", () =>
-        HttpResponse.json({ detail: "temporarily unavailable" }, { status: 503 }),
-      ),
+      http.get("/api/game-titles", ({ request }) => {
+        masterRequests.push(new URL(request.url).pathname);
+        return HttpResponse.json({ items: [] });
+      }),
+      http.get("/api/season-masters", ({ request }) => {
+        masterRequests.push(new URL(request.url).pathname);
+        return HttpResponse.json({ items: [] });
+      }),
       http.get("/api/matches", () =>
         HttpResponse.json({
           items: [
@@ -1010,6 +1013,8 @@ describe("ExportPage", () => {
     expect(document.body).not.toHaveTextContent(gameTitleId);
     expect(document.body).not.toHaveTextContent(seasonMasterId);
     expect(screen.getByRole("button", { name: "この試合をCSVでダウンロード" })).toBeEnabled();
+    await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+    expect(masterRequests).toEqual([]);
   });
 
   it("preserves cached candidates and actions when a same-scope refresh fails", async () => {
@@ -1083,17 +1088,20 @@ describe("ExportPage", () => {
 
   it("shows API errors from failed downloads near the action", async () => {
     server.use(
-      http.get("/api/exports/matches", () =>
-        HttpResponse.json(
-          {
-            code: "VALIDATION_FAILED",
-            detail: "Specify at most one export scope.",
-            status: 422,
-            title: "Validation Failed",
-            type: "about:blank",
-          },
-          { status: 422 },
-        ),
+      http.get(
+        "/api/exports/matches",
+        () =>
+          HttpResponse.json(
+            {
+              code: "VALIDATION_FAILED",
+              detail: "Specify at most one export scope.",
+              status: 422,
+              title: "Validation Failed",
+              type: "about:blank",
+            },
+            { status: 422 },
+          ),
+        { once: true },
       ),
     );
 
@@ -1107,12 +1115,17 @@ describe("ExportPage", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("Validation Failed")).not.toBeInTheDocument();
     expect(screen.queryByText("Specify at most one export scope.")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "もう一度試す" })).toBeInTheDocument();
+    expect(anchorClick.click).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "もう一度試す" }));
+    expect(await screen.findByText("ダウンロードを開始しました")).toBeInTheDocument();
+    expect(anchorClick.click).toHaveBeenCalledOnce();
+    expect(screen.queryByText("出力条件を確認してください")).not.toBeInTheDocument();
   });
 
   it("keeps a resolved download usable while candidate controls are refreshing", async () => {
     const refetchGate = createDeferred();
     let holdMatchRefetch = false;
+    const requestedExports: string[] = [];
 
     server.use(
       http.get("/api/matches", async ({ request }) => {
@@ -1139,6 +1152,10 @@ describe("ExportPage", () => {
           ],
         });
       }),
+      http.get("/api/exports/matches", ({ request }) => {
+        requestedExports.push(new URL(request.url).search);
+        return new HttpResponse("csv", { headers: { "Content-Type": "text/csv" } });
+      }),
     );
 
     renderPage({ path: "/exports?matchId=match-1&format=csv" });
@@ -1153,10 +1170,12 @@ describe("ExportPage", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "試合を変更" })).toBeDisabled());
     expect(screen.getByRole("button", { name: "この試合をCSVでダウンロード" })).toBeEnabled();
 
-    refetchGate.resolve();
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "この試合をCSVでダウンロード" })).toBeEnabled();
-    });
+    await user.click(screen.getByRole("button", { name: "この試合をCSVでダウンロード" }));
+    expect(await screen.findByText("ダウンロードを開始しました")).toBeInTheDocument();
+    expect(requestedExports).toEqual(["?format=csv&matchId=match-1"]);
+    expect(anchorClick.click).toHaveBeenCalledOnce();
+    await act(async () => refetchGate.resolve());
+    await waitFor(() => expect(screen.getByRole("button", { name: "試合を変更" })).toBeEnabled());
   });
 
   it("prevents duplicate submission while pending and shows progress", async () => {

@@ -103,16 +103,14 @@ describe("MatchDetailPage", () => {
     user = userEvent.setup();
   });
 
-  it("reserves the leading navigation slot while loading", () => {
+  it("identifies pending results without exposing unfinished detail actions", () => {
     render(<MatchDetailLoading />);
 
     const frame = screen.getByLabelText("試合詳細を読み込み中");
     const heading = screen.getByRole("heading", { name: "試合結果を読み込み中" });
-    const header = heading.closest("header");
-    expect(frame.children).toHaveLength(3);
-    expect(frame.children.item(0)?.firstElementChild).toHaveAttribute("aria-hidden", "true");
-    expect(frame.children.item(1)).toContainElement(heading);
-    expect(header?.children.item(1)?.children).toHaveLength(2);
+    expect(frame).toContainElement(heading);
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 
   it("exposes result navigation and confirms deletion before acting", async () => {

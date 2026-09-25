@@ -436,6 +436,7 @@ describe("HeldEventsPage", () => {
   });
 
   it("creates a held event in a dialog and continues to its detail page", async () => {
+    const requests: Array<{ body: unknown; idempotencyKey: string | null }> = [];
     const heldEvents = [makeHeldEventResponse()];
     const created = makeHeldEventResponse({
       heldAt: "2026-01-02T03:04:00.000Z",
@@ -443,7 +444,11 @@ describe("HeldEventsPage", () => {
     });
     server.use(
       http.get("/api/held-events", () => HttpResponse.json({ items: heldEvents })),
-      http.post("/api/held-events", () => {
+      http.post("/api/held-events", async ({ request }) => {
+        requests.push({
+          body: await request.json(),
+          idempotencyKey: request.headers.get("Idempotency-Key"),
+        });
         heldEvents.unshift(created);
         return HttpResponse.json(created);
       }),
@@ -472,6 +477,9 @@ describe("HeldEventsPage", () => {
       ),
     );
     expect(await screen.findByRole("heading", { name: "2026/01/02 12:04" })).toBeInTheDocument();
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.body).toEqual({ heldAt: "2026-01-02T03:04:00.000Z" });
+    expect(requests[0]?.idempotencyKey).toMatch(/\S/u);
     expect(screen.getByRole("link", { name: /前の開催/u })).toHaveAttribute(
       "href",
       "/held-events/held-1?returnTo=%2Fheld-events",

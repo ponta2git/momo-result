@@ -4,23 +4,17 @@ import { describe, expect, it } from "vitest";
 import { PageSkeleton } from "@/features/seriesComparison/page/SeriesComparisonSkeletons";
 
 describe("SeriesComparisonSkeletons", () => {
-  it("reserves the query-driven content action while loading", () => {
-    render(<PageSkeleton showReturnAction />);
-
-    const surface = screen.getByRole("region", { name: "戦績比較" });
+  it("announces pending content without exposing unfinished placeholder actions", () => {
+    const { rerender } = render(<PageSkeleton showReturnAction />);
     const status = screen.getByRole("status");
     expect(status).toHaveTextContent("戦績比較を読み込み中");
     expect(status.closest('[aria-busy="true"]')).toBeNull();
-    const toolbar = surface.querySelector('[data-page-content-actions=""]');
-    expect(toolbar?.firstElementChild).toHaveAttribute("aria-hidden", "true");
-    expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
-  });
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
 
-  it("does not invent an action without a return destination", () => {
-    render(<PageSkeleton showReturnAction={false} />);
-
-    const surface = screen.getByRole("region", { name: "戦績比較" });
-    expect(surface.querySelector('[data-page-content-actions=""]')).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
+    rerender(<PageSkeleton showReturnAction={false} />);
+    expect(screen.getByRole("status")).toBe(status);
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 });

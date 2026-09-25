@@ -7,7 +7,6 @@ import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-rou
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { MatchesListPage } from "@/features/matches/list/MatchesListPage";
-import { formatCompactDateTime } from "@/features/matches/list/matchListFormat";
 import { MatchDetailPage } from "@/features/matches/MatchDetailPage";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
@@ -98,13 +97,9 @@ describe("MatchesListPage", () => {
     expect(bulkExport).toHaveAttribute("href", "/exports?returnTo=%2Fmatches");
     const matchInfoCell = screen.getAllByRole("rowheader").find((cell) => {
       const text = cell.textContent ?? "";
-      return [
-        formatCompactDateTime("2026-01-01T00:00:00.000Z"),
-        "桃太郎電鉄2",
-        "今シーズン",
-        "第1試合",
-        "東日本編",
-      ].every((part) => text.includes(part));
+      return ["01/01 09:00", "桃太郎電鉄2", "今シーズン", "第1試合", "東日本編"].every((part) =>
+        text.includes(part),
+      );
     });
     if (!matchInfoCell) {
       throw new Error(
@@ -399,35 +394,6 @@ describe("MatchesListPage", () => {
     );
   });
 
-  it("applies sort changes to the URL search params", async () => {
-    setDevUser();
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/matches"]}>
-          <Routes>
-            <Route
-              path="/matches"
-              element={
-                <>
-                  <LocationProbe />
-                  <MatchesListPage />
-                </>
-              }
-            />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-
-    expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
-    await selectOption(user, screen.getByLabelText("並び順"), "updated_desc");
-
-    await waitFor(() =>
-      expect(screen.getByLabelText("current location")).toHaveTextContent("sort=updated_desc"),
-    );
-  });
-
   it("does not refetch the scope summary for list-only sorting and pagination", async () => {
     setDevUser();
     let summaryRequests = 0;
@@ -462,21 +428,20 @@ describe("MatchesListPage", () => {
     );
 
     expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
-    const listRegion = screen.getByRole("region", { name: "登録済みの試合" });
-    await waitFor(() => expect(listRegion).not.toHaveAttribute("aria-busy"));
+    await waitFor(() => expect(queryClient.isFetching()).toBe(0));
     expect(summaryRequests).toBe(1);
 
     await selectOption(user, screen.getByLabelText("並び順"), "updated_desc");
     await waitFor(() =>
       expect(screen.getByLabelText("current location")).toHaveTextContent("sort=updated_desc"),
     );
-    await waitFor(() => expect(listRegion).not.toHaveAttribute("aria-busy"));
+    await waitFor(() => expect(queryClient.isFetching()).toBe(0));
 
     await selectOption(user, await screen.findByLabelText("表示件数"), "25");
     await waitFor(() =>
       expect(screen.getByLabelText("current location")).toHaveTextContent("pageSize=25"),
     );
-    await waitFor(() => expect(listRegion).not.toHaveAttribute("aria-busy"));
+    await waitFor(() => expect(queryClient.isFetching()).toBe(0));
     expect(summaryRequests).toBe(1);
   });
 
@@ -537,29 +502,38 @@ describe("MatchesListPage", () => {
     );
 
     expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
-    expect(requestedCursors.at(-1)).toBeNull();
     const listRegion = screen.getByRole("region", { name: "登録済みの試合" });
+    const expectPage = async (page: number) => {
+      const result = await within(listRegion).findByRole("link", {
+        name: `第${page}試合 東日本編の試合結果を見る`,
+      });
+      expect(result).toHaveAttribute("href", expect.stringContaining(`/matches/match-${page}?`));
+      expect(within(listRegion).getAllByRole("rowheader")).toHaveLength(1);
+      expect(within(listRegion).getByText(`${page}〜${page}件／全3件`)).toBeInTheDocument();
+    };
+    await expectPage(1);
+    expect(requestedCursors).toEqual([null]);
 
     await user.click(await screen.findByRole("button", { name: "次のページへ" }));
     await waitFor(() => expect(requestedCursors.at(-1)).toBe("next-token"));
     await waitFor(() =>
       expect(screen.getByLabelText("current location")).toHaveTextContent("cursor=next-token"),
     );
-    await waitFor(() => expect(listRegion).not.toHaveAttribute("aria-busy"));
+    await expectPage(2);
 
     await user.click(screen.getByRole("button", { name: "最後のページへ" }));
     await waitFor(() => expect(requestedCursors.at(-1)).toBe("last-token"));
     await waitFor(() =>
       expect(screen.getByLabelText("current location")).toHaveTextContent("cursor=last-token"),
     );
-    await waitFor(() => expect(listRegion).not.toHaveAttribute("aria-busy"));
+    await expectPage(3);
 
     await user.click(screen.getByRole("button", { name: "前のページへ" }));
     await waitFor(() => expect(requestedCursors.at(-1)).toBe("prev-token"));
     await waitFor(() =>
       expect(screen.getByLabelText("current location")).toHaveTextContent("cursor=prev-token"),
     );
-    await waitFor(() => expect(listRegion).not.toHaveAttribute("aria-busy"));
+    await expectPage(2);
 
     const requestsBeforeFirstPage = requestedCursors.length;
     await user.click(screen.getByRole("button", { name: "先頭ページへ" }));
@@ -567,9 +541,7 @@ describe("MatchesListPage", () => {
       expect(screen.getByLabelText("current location")).not.toHaveTextContent("cursor="),
     );
     expect(requestedCursors).toHaveLength(requestsBeforeFirstPage);
-    expect(
-      await screen.findByRole("link", { name: "第1試合 東日本編の試合結果を見る" }),
-    ).toBeInTheDocument();
+    await expectPage(1);
   });
 
   it("keeps filter focus and applies the latest condition when responses finish out of order", async () => {
@@ -756,8 +728,10 @@ describe("MatchesListPage", () => {
       .getAllByRole("link", { name: "第1試合 東日本編の試合結果を見る" })
       .forEach((link) => expect(link).not.toHaveAttribute("aria-disabled", "true"));
 
-    refreshGate.resolve();
-    await waitFor(() => expect(listRegion).not.toHaveAttribute("aria-busy"));
+    await act(async () => refreshGate.resolve());
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "最新情報に更新" })).toBeEnabled(),
+    );
     await user.click(screen.getByRole("button", { name: "最新情報に更新" }));
 
     expect(await screen.findByText("一覧を更新できませんでした")).toBeInTheDocument();
@@ -1223,7 +1197,7 @@ describe("MatchesListPage", () => {
     expect(screen.queryByText("review-page")).not.toBeInTheDocument();
   });
 
-  it("keeps other draft actions usable while one draft status check is pending", async () => {
+  it("opens the latest selected draft when the prior row status check finishes late", async () => {
     setDevUser();
     const firstDraftGate = createDeferred();
     server.use(
@@ -1290,11 +1264,16 @@ describe("MatchesListPage", () => {
       .getAllByRole("button", { name: "確認事項を直す" })
       .forEach((button) => expect(button).toBeEnabled());
 
-    firstDraftGate.resolve();
-    await waitFor(() =>
-      expect(screen.getByLabelText("current location")).toHaveTextContent(
-        "/review/draft-pending-1",
-      ),
+    await user.click(screen.getByRole("button", { name: "確認事項を直す" }));
+    await screen.findByText("review-page");
+    expect(screen.getByLabelText("current location")).toHaveTextContent(
+      /^\/review\/draft-pending-2(?:\?|$)/u,
+    );
+
+    await act(async () => firstDraftGate.resolve());
+    await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+    expect(screen.getByLabelText("current location")).toHaveTextContent(
+      /^\/review\/draft-pending-2(?:\?|$)/u,
     );
   });
 });

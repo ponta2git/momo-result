@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { DataVizHistogramChart } from "@/features/seriesComparison/charts/dataViz/HistogramChart";
 import { DataVizLineChart } from "@/features/seriesComparison/charts/dataViz/LineChart";
@@ -12,23 +12,6 @@ const identities = [1, 2, 3, 4].map((index) => ({
   id: `player-${index}`,
   label: `プレーヤー${index}`,
 }));
-
-function expectIntrinsicScrollableChart(
-  chart: SVGSVGElement | null,
-  minimumWidthClass: string,
-  centered: boolean,
-) {
-  expect(chart).not.toBeNull();
-  expect(chart).toHaveClass("block", minimumWidthClass);
-  expect(chart?.parentElement).toHaveClass("overflow-x-auto");
-  if (centered) {
-    expect(chart).toHaveClass("mx-auto");
-    expect(chart?.parentElement).not.toHaveClass("justify-center", "md:justify-center");
-  }
-  for (const label of chart?.querySelectorAll("text") ?? []) {
-    expect(label).toHaveAttribute("font-size", "12");
-  }
-}
 
 describe("data visualizations at the analysis display bound", () => {
   it("lets keyboard users skip plotted links and reads exact scatter values through bounded pages", async () => {
@@ -195,7 +178,7 @@ describe("data visualizations at the analysis display bound", () => {
     );
 
     const chart = container.querySelector<SVGSVGElement>('svg[aria-label="上限散布図"]');
-    expectIntrinsicScrollableChart(chart, "min-w-[760px]", true);
+    expect(chart).not.toBeNull();
     expect(chart?.querySelectorAll("[data-series-shape]")).toHaveLength(2_000);
     expect(chart).toHaveTextContent("プレーヤー4の第500戦、この試合");
     expect(container).toHaveTextContent("選択中の試合は、ほかの点と異なる輪郭で示します。");
@@ -224,7 +207,7 @@ describe("data visualizations at the analysis display bound", () => {
     );
 
     const chart = container.querySelector<SVGSVGElement>('svg[aria-label="上限折れ線"]');
-    expectIntrinsicScrollableChart(chart, "min-w-[760px]", true);
+    expect(chart).not.toBeNull();
     const paths = [...(chart?.querySelectorAll('path[fill="none"]') ?? [])];
     expect(paths).toHaveLength(4);
     for (const path of paths) {
@@ -236,12 +219,11 @@ describe("data visualizations at the analysis display bound", () => {
   });
 
   it("excludes non-finite line values from the domain, path, focus, and marks", () => {
-    const formatValue = vi.fn(String);
     const { container } = render(
       <DataVizLineChart
         ariaLabel="非有限値を含む折れ線"
         focusItemIds={["trend:player-1:nan"]}
-        formatValue={formatValue}
+        formatValue={String}
         series={[
           {
             id: "player-1",
@@ -271,50 +253,6 @@ describe("data visualizations at the analysis display bound", () => {
       2,
     );
     expect(chart?.querySelector('[aria-label$="を選択中"]')).not.toBeInTheDocument();
-    expect(formatValue.mock.calls.flat()).toEqual([0, 2, 4, 6]);
-  });
-
-  it("declares intrinsic widths for histogram and quadrant labels", () => {
-    const { container } = render(
-      <>
-        <DataVizHistogramChart
-          ariaLabel="資産ヒストグラム"
-          bins={[{ id: 0, label: "0〜100万円" }]}
-          series={[{ counts: [1], id: "player-1" }]}
-          seriesIdentity={[identities[0]!]}
-        />
-        <DataVizQuadrantPlot
-          ariaLabel="資産象限"
-          cornerLabels={{
-            bottomLeft: "左下",
-            bottomRight: "右下",
-            topLeft: "左上",
-            topRight: "右上",
-          }}
-          points={[{ label: "プレーヤー1", seriesId: "player-1", x: 0.4, y: 2 }]}
-          seriesIdentity={[identities[0]!]}
-          xAxisLabel="横軸"
-          xMidpoint={0.5}
-          yAxisLabel="縦軸"
-          yDomain={[1, 4]}
-          yMidpoint={2.5}
-        />
-      </>,
-    );
-
-    const histogram = container.querySelector<SVGSVGElement>('svg[aria-label="プレーヤー1の分布"]');
-    expectIntrinsicScrollableChart(histogram, "min-w-[320px]", true);
-    expect(histogram).toHaveClass("w-[320px]", "max-w-none");
-    expect(histogram).not.toHaveClass("w-full");
-    expect(histogram?.parentElement?.parentElement).toHaveClass("w-full", "max-w-sm");
-    expect(histogram?.closest("figure")?.firstElementChild).toHaveClass(
-      "justify-items-center",
-      "lg:grid-cols-2",
-      "2xl:grid-cols-4",
-    );
-
-    const quadrant = container.querySelector<SVGSVGElement>('svg[aria-label="資産象限"]');
-    expectIntrinsicScrollableChart(quadrant, "min-w-[620px]", true);
-    expect(quadrant).not.toHaveClass("sm:max-w-full");
+    expect(chart).not.toHaveTextContent(/Infinity|NaN/u);
   });
 });

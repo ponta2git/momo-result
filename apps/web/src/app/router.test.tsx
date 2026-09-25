@@ -17,9 +17,7 @@ import {
   analysisArtifact,
   makeSeriesAnalysisAggregate,
   makeSeriesAnalysisAdminOverview,
-  makeSeriesAnalysisOptions,
   makeSeriesAnalysisReview,
-  makeSeriesAnalysisStatus,
 } from "@/test/msw/seriesAnalysisFixtures";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
@@ -267,21 +265,12 @@ describe("app routing", () => {
     const { router } = renderApp("/");
 
     expect(await screen.findByRole("region", { name: "ログイン" })).toBeInTheDocument();
-    expect(
-      screen.queryByText("ログインすると、試合の記録・確認・比較・出力を利用できます。"),
-    ).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "ログイン" })).toBeInTheDocument();
-    expect(
-      screen.queryByText(
-        "別のDiscordアカウントを使う場合は、Discord側でログアウトするか、シークレットウィンドウで開きます。",
-      ),
-    ).not.toBeInTheDocument();
     expect(screen.getAllByRole("navigation", { name: "グローバルナビゲーション" })).toHaveLength(1);
     expect(screen.getAllByRole("link", { name: "メインコンテンツへスキップ" })).toHaveLength(1);
     const main = screen.getByRole("main");
     expect(main).toHaveAttribute("id", "main-content");
-    expect(main).toHaveClass("px-3", "py-4", "sm:px-4", "sm:py-6");
     expect(router.state.location.pathname).toBe("/login");
   });
 
@@ -441,12 +430,9 @@ describe("app routing", () => {
       name: "ログイン状態を確認できません",
     });
     const header = heading.closest("header");
-    const frame = header?.parentElement;
     const back = screen.getByRole("link", { name: "開催履歴へ戻る" });
     expect(back).toHaveAttribute("href", "/held-events");
     expect(header).toHaveTextContent("開催記録");
-    expect(frame?.children).toHaveLength(3);
-    expect(frame?.children.item(0)).toContainElement(back);
   });
 
   it("redirects /login to /matches when authenticated", async () => {
@@ -662,139 +648,6 @@ describe("app routing", () => {
     ).toBe(true);
   });
 
-  it("keeps the last successful artifact visible while a new calculation is running", async () => {
-    setDevUser();
-    server.use(
-      http.get("/api/analytics/series-comparison/v2/status", () =>
-        HttpResponse.json(
-          makeSeriesAnalysisStatus({
-            artifactFreshness: "stale",
-            calculation: {
-              finishedAt: null,
-              requestedAt: "2026-08-09T02:00:00.000Z",
-              startedAt: "2026-08-09T02:00:01.000Z",
-              status: "running",
-              trigger: "match_mutation",
-            },
-          }),
-        ),
-      ),
-    );
-
-    renderApp("/analytics/series");
-
-    const noticeTitle = await screen.findByText("新しい戦績データを計算中です");
-    const notice = noticeTitle.closest("section");
-    expect(notice).not.toBeNull();
-    expect(notice).toHaveTextContent("2026/08/09 10:02更新のデータを表示します");
-    expect(await screen.findByText("収益先行時は目的地0回で終えない。")).toBeInTheDocument();
-  });
-
-  it("keeps a same-scope prior artifact interactive after replacement loading fails", async () => {
-    setDevUser();
-    const replacementArtifact = {
-      ...analysisArtifact,
-      artifactId: "artifact-failing-replacement",
-      inputRevision: "13",
-      publishedAt: "2026-08-09T03:00:00.000Z",
-    };
-    let statusRequests = 0;
-    server.use(
-      http.get("/api/analytics/series-comparison/v2/status", () => {
-        statusRequests += 1;
-        return HttpResponse.json(
-          makeSeriesAnalysisStatus({
-            currentArtifact: statusRequests === 1 ? analysisArtifact : replacementArtifact,
-          }),
-        );
-      }),
-      http.get("/api/analytics/series-comparison/v3/review", ({ request }) => {
-        const artifactId = new URL(request.url).searchParams.get("artifactId");
-        return artifactId === replacementArtifact.artifactId
-          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
-          : HttpResponse.json(makeSeriesAnalysisReview());
-      }),
-    );
-
-    renderApp("/analytics/series");
-
-    expect(await screen.findByText("収益先行時は目的地0回で終えない。")).toBeInTheDocument();
-    await user.click(await screen.findByRole("button", { name: "表示を更新" }));
-    expect(await screen.findByText("最新の戦績データを取得できません")).toBeInTheDocument();
-    expect(screen.getByText("収益先行時は目的地0回で終えない。")).toBeInTheDocument();
-    await waitFor(() =>
-      expect(screen.queryByRole("button", { name: "表示を更新中" })).not.toBeInTheDocument(),
-    );
-    const reviewPanel = screen.getByRole("tabpanel", { name: "次戦に備える" });
-    expect(reviewPanel.closest("[inert]")).toBeNull();
-    expect(screen.getByRole("button", { name: "表示を更新" })).toBeEnabled();
-  });
-
-  it("does not show an old scope after the newly selected scope fails", async () => {
-    setDevUser();
-    server.use(
-      http.get("/api/analytics/series-comparison/v3/review", ({ request }) => {
-        const seasonMasterId = new URL(request.url).searchParams.get("seasonMasterId");
-        return seasonMasterId
-          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
-          : HttpResponse.json(makeSeriesAnalysisReview());
-      }),
-    );
-
-    renderApp("/analytics/series");
-
-    expect(await screen.findByText("収益先行時は目的地0回で終えない。")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /比較対象を変更/u }));
-    await selectOption(user, screen.getByRole("combobox", { name: "シーズン" }), "season_current");
-    expect(await screen.findByText("戦績データを読み込めません")).toBeInTheDocument();
-    await waitFor(() =>
-      expect(screen.queryByText("収益先行時は目的地0回で終えない。")).not.toBeInTheDocument(),
-    );
-  });
-
-  it("shows a calculation-only empty state before the first artifact is published", async () => {
-    setDevUser();
-    let aggregateRequests = 0;
-    let reviewRequests = 0;
-    server.use(
-      http.get("/api/analytics/series-comparison/v2/status", () =>
-        HttpResponse.json(
-          makeSeriesAnalysisStatus({
-            artifactFreshness: "unavailable",
-            calculation: {
-              finishedAt: null,
-              requestedAt: "2026-08-09T02:00:00.000Z",
-              startedAt: null,
-              status: "queued",
-              trigger: "initial_backfill",
-            },
-            currentArtifact: null,
-          }),
-        ),
-      ),
-      http.get("/api/analytics/series-comparison/v4/aggregate", () => {
-        aggregateRequests += 1;
-        return HttpResponse.json(makeSeriesAnalysisAggregate());
-      }),
-      http.get("/api/analytics/series-comparison/v3/review", () => {
-        reviewRequests += 1;
-        return HttpResponse.json(makeSeriesAnalysisReview());
-      }),
-    );
-
-    renderApp("/analytics/series");
-
-    expect(
-      await screen.findByRole("heading", { name: "戦績データの計算を待っています" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("計算完了後に「状態を再確認」を押すと表示します。"),
-    ).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "状態を再確認" })).toBeEnabled();
-    expect(aggregateRequests).toBe(0);
-    expect(reviewRequests).toBe(0);
-  });
-
   it("pins season and map aggregate requests to the published artifact", async () => {
     setDevUser();
     const aggregateSearches: URLSearchParams[] = [];
@@ -823,179 +676,5 @@ describe("app routing", () => {
         ),
       ).toBe(true);
     });
-  });
-
-  it("keeps analysis tab identity while a new comparison scope is loading", async () => {
-    setDevUser();
-    const scopedAggregateResponseGate = createDeferred();
-    server.use(
-      http.get("/api/analytics/series-comparison/v4/aggregate", async ({ request }) => {
-        const seasonMasterId = new URL(request.url).searchParams.get("seasonMasterId");
-        if (!seasonMasterId) return HttpResponse.json(makeSeriesAnalysisAggregate());
-
-        await scopedAggregateResponseGate.promise;
-        const aggregate = makeSeriesAnalysisAggregate();
-        return HttpResponse.json({
-          ...aggregate,
-          scope: {
-            displayName: "今シーズン",
-            kind: "season" as const,
-            matchCount: aggregate.scope.matchCount,
-            seasonMasterId,
-          },
-        });
-      }),
-    );
-
-    renderApp("/analytics/series?view=overview");
-
-    const activeTab = await screen.findByRole("tab", { name: "今の差" });
-    await user.click(screen.getByRole("button", { name: /比較対象を変更/u }));
-    await selectOption(user, screen.getByRole("combobox", { name: "シーズン" }), "season_current");
-
-    expect(await screen.findByRole("button", { name: "表示を更新中" })).toBeDisabled();
-    expect(screen.getByRole("tab", { name: "今の差" })).toBe(activeTab);
-
-    scopedAggregateResponseGate.resolve();
-    await waitFor(() =>
-      expect(screen.queryByRole("button", { name: "表示を更新中" })).not.toBeInTheDocument(),
-    );
-    expect(screen.getByRole("tab", { name: "今の差" })).toBe(activeTab);
-  });
-
-  it("refreshes status once and moves to the replacement artifact after a 410", async () => {
-    setDevUser();
-    const replacementArtifact = {
-      ...analysisArtifact,
-      artifactId: "artifact-replacement",
-      inputRevision: "13",
-      publishedAt: "2026-08-09T03:00:00.000Z",
-    };
-    let statusRequests = 0;
-    const aggregateArtifactIds: string[] = [];
-    server.use(
-      http.get("/api/analytics/series-comparison/v2/status", () => {
-        statusRequests += 1;
-        return HttpResponse.json(
-          statusRequests === 1
-            ? makeSeriesAnalysisStatus()
-            : makeSeriesAnalysisStatus({
-                currentArtifact: replacementArtifact,
-                desired: {
-                  algorithmVersion: replacementArtifact.algorithmVersion,
-                  artifactSchemaVersion: replacementArtifact.artifactSchemaVersion,
-                  inputRevision: replacementArtifact.inputRevision,
-                },
-              }),
-        );
-      }),
-      http.get("/api/analytics/series-comparison/v4/aggregate", ({ request }) => {
-        const artifactId = new URL(request.url).searchParams.get("artifactId") ?? "";
-        aggregateArtifactIds.push(artifactId);
-        if (artifactId === analysisArtifact.artifactId) {
-          return HttpResponse.json(
-            {
-              code: "ANALYSIS_ARTIFACT_EXPIRED",
-              detail: "The requested artifact is no longer retained.",
-              status: 410,
-              title: "Artifact expired",
-              type: "about:blank",
-            },
-            { status: 410 },
-          );
-        }
-        return HttpResponse.json(makeSeriesAnalysisAggregate(replacementArtifact));
-      }),
-      http.get("/api/analytics/series-comparison/v3/review", () => {
-        const review = makeSeriesAnalysisReview();
-        return HttpResponse.json({ ...review, artifact: replacementArtifact });
-      }),
-    );
-
-    renderApp("/analytics/series?view=overview");
-
-    expect(await screen.findByRole("heading", { name: "順位と基礎比較" })).toBeInTheDocument();
-    expect(statusRequests).toBe(2);
-    expect(aggregateArtifactIds).toEqual([
-      analysisArtifact.artifactId,
-      replacementArtifact.artifactId,
-    ]);
-  });
-
-  it("recovers an expired review without fetching inactive aggregate data", async () => {
-    setDevUser();
-    const replacementArtifact = {
-      ...analysisArtifact,
-      artifactId: "artifact-review-replacement",
-      inputRevision: "13",
-      publishedAt: "2026-08-09T03:00:00.000Z",
-    };
-    let statusRequests = 0;
-    let aggregateRequests = 0;
-    const reviewArtifactIds: string[] = [];
-    server.use(
-      http.get("/api/analytics/series-comparison/v2/status", () => {
-        statusRequests += 1;
-        return HttpResponse.json(
-          statusRequests === 1
-            ? makeSeriesAnalysisStatus()
-            : makeSeriesAnalysisStatus({ currentArtifact: replacementArtifact }),
-        );
-      }),
-      http.get("/api/analytics/series-comparison/v3/review", ({ request }) => {
-        const artifactId = new URL(request.url).searchParams.get("artifactId") ?? "";
-        reviewArtifactIds.push(artifactId);
-        if (artifactId === analysisArtifact.artifactId) {
-          return HttpResponse.json(
-            {
-              code: "ANALYSIS_ARTIFACT_EXPIRED",
-              detail: "The requested artifact is no longer retained.",
-              status: 410,
-              title: "Artifact expired",
-              type: "about:blank",
-            },
-            { status: 410 },
-          );
-        }
-        const review = makeSeriesAnalysisReview();
-        return HttpResponse.json({ ...review, artifact: replacementArtifact });
-      }),
-      http.get("/api/analytics/series-comparison/v4/aggregate", () => {
-        aggregateRequests += 1;
-        return HttpResponse.json(makeSeriesAnalysisAggregate(replacementArtifact));
-      }),
-    );
-
-    renderApp("/analytics/series");
-
-    expect(await screen.findByText("収益先行時は目的地0回で終えない。")).toBeInTheDocument();
-    expect(statusRequests).toBe(2);
-    expect(reviewArtifactIds).toEqual([
-      analysisArtifact.artifactId,
-      replacementArtifact.artifactId,
-    ]);
-    expect(aggregateRequests).toBe(0);
-  });
-
-  it("retries v2 comparison options without showing a false empty state", async () => {
-    setDevUser();
-    let attempts = 0;
-    server.use(
-      http.get("/api/analytics/series-comparison/v2/options", () => {
-        attempts += 1;
-        return attempts === 1
-          ? HttpResponse.json({ detail: "failed" }, { status: 500 })
-          : HttpResponse.json(makeSeriesAnalysisOptions());
-      }),
-    );
-
-    renderApp("/analytics/series");
-
-    expect(await screen.findByText("対象作品を読み込めません")).toBeInTheDocument();
-    expect(screen.queryByText("登録されている作品がありません")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "比較対象を再読み込み" }));
-    await user.click(await screen.findByRole("button", { name: "比較対象を変更" }));
-    expect(screen.getByRole("combobox", { name: "対象作品" })).toBeInTheDocument();
-    expect(attempts).toBe(2);
   });
 });

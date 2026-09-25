@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { MatchNoteEditor } from "@/features/matches/useMatchNoteEditor";
-import { MatchWorkspaceNavigationGuard } from "@/features/matches/workspace/MatchWorkspaceNavigationGuard";
 import { matchNoteMaximumCharacters } from "@/features/matches/workspace/review/confirmMatchFormSchema";
 import type { MatchDetailResponse } from "@/shared/api/matches";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
+import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
@@ -252,7 +252,7 @@ export function MatchNoteSection({ match, editor }: MatchNoteSectionProps) {
 /** Mount beside ready/terminal content so a confirmed 404 cannot remove the guard. */
 export function MatchNoteNavigationGuard({ editor }: { editor: MatchNoteEditor }) {
   return (
-    <MatchWorkspaceNavigationGuard
+    <UnsavedChangesGuard
       description="入力した試合メモはまだ保存されていません。このページに残れば編集を続けられます。"
       model={{
         dirty: editor.dirty,

@@ -118,6 +118,7 @@ function HeldEventsLoading() {
       className="grid divide-y divide-[var(--color-border)] overflow-hidden rounded-md border border-[var(--color-border)]"
       role="status"
     >
+      <span className="sr-only">開催履歴を読み込み中</span>
       {["first", "second", "third"].map((id) => (
         <div
           key={id}

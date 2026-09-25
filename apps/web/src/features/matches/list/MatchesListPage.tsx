@@ -22,7 +22,8 @@ import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
 function ListSkeleton({ showDesktopTable }: { showDesktopTable: boolean }) {
   return (
-    <div>
+    <div aria-label="試合一覧を読み込み中" role="status">
+      <span className="sr-only">試合一覧を読み込み中</span>
       {showDesktopTable ? (
         <div className="grid gap-3 border-y border-[var(--color-border-strong)] bg-[var(--color-surface)] p-3">
           <Skeleton className="min-h-10" />

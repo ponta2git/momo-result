@@ -50,6 +50,31 @@ describe("MatchesListPage", () => {
     matchMedia.restore();
   });
 
+  it("exposes the initial list loading state until the first result arrives", async () => {
+    setDevUser();
+    const gate = createDeferred();
+    server.use(
+      http.get("/api/matches", async () => {
+        await gate.promise;
+        return HttpResponse.json({ items: [] });
+      }),
+    );
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <MatchesListPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    const loading = screen.getByRole("status", { name: "試合一覧を読み込み中" });
+    expect(loading).toHaveTextContent("試合一覧を読み込み中");
+    expect(screen.queryByText("試合はまだありません")).not.toBeInTheDocument();
+    await act(async () => gate.resolve());
+    expect(await screen.findByText("試合はまだありません")).toBeInTheDocument();
+    expect(screen.queryByRole("status", { name: "試合一覧を読み込み中" })).not.toBeInTheDocument();
+  });
+
   it("renders matches and links to detail", async () => {
     setDevUser();
 

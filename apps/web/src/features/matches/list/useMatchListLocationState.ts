@@ -7,7 +7,7 @@ import {
   useRef,
   useTransition,
 } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   buildMatchListSearchParams,
@@ -37,6 +37,7 @@ function searchSignature(search: MatchListSearch): string {
 /** Owns parsing, canonical serialization, optimistic display, and updates for the list URL. */
 export function useMatchListLocationState(): MatchListLocationState {
   const [searchParams] = useSearchParams();
+  const { hash } = useLocation();
   const navigate = useNavigate();
   const rawSearch = searchParams.toString();
   const parentReturnTo = sanitizeReturnTo(searchParams.get("returnTo"));
@@ -60,10 +61,10 @@ export function useMatchListLocationState(): MatchListLocationState {
         setOptimisticSearch(nextSearch);
         const nextParams = buildMatchListSearchParams(nextSearch);
         if (parentReturnTo) nextParams.set("returnTo", parentReturnTo);
-        await navigate(`?${nextParams.toString()}`);
+        await navigate({ search: nextParams.toString(), hash });
       });
     },
-    [navigate, parentReturnTo, setOptimisticSearch],
+    [hash, navigate, parentReturnTo, setOptimisticSearch],
   );
   const clear = useCallback(() => apply(defaultMatchListSearch), [apply]);
   const resetCursorIfUnchanged = useCallback(
@@ -86,7 +87,7 @@ export function useMatchListLocationState(): MatchListLocationState {
     current,
     deferred,
     hasFilters: hasMatchListFilters(current),
-    listReturnTo: `/matches${canonicalSearch ? `?${canonicalSearch}` : ""}`,
+    listReturnTo: `/matches${canonicalSearch ? `?${canonicalSearch}` : ""}${hash}`,
     parentReturnTo,
     resetCursorIfUnchanged,
     settling: isTransitionPending || searchSignature(current) !== searchSignature(deferred),

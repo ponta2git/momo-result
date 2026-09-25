@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import {
   confirmedDraftDestination,
@@ -18,35 +18,65 @@ export type ConfirmedDraftNavigationCommand = {
   run: (action: MatchListAction) => Promise<void>;
 };
 
-/** Confirms a possibly stale draft destination before allowing row navigation. */
+type NavigationOwner = {
+  active: boolean;
+  checkingIds: Set<string>;
+  latestIntent: number;
+  scope: string;
+};
+
+function emptyPresentation(scope: string) {
+  return { scope, checkingIds: new Set<string>(), errors: {} as Record<string, string> };
+}
+
+/** A read may finish after navigation; only the latest intent in its original route owns UI effects. */
 export function useConfirmedDraftNavigationCommand(
   listReturnTo: string,
 ): ConfirmedDraftNavigationCommand {
   const navigate = useNavigate();
+  const { key: scope } = useLocation();
   const queryClient = useQueryClient();
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const checkingIdsRef = useRef(new Set<string>());
-  const [checkingIds, setCheckingIds] = useState<ReadonlySet<string>>(() => new Set());
+  const ownerRef = useRef<NavigationOwner | null>(null);
+  const [presentation, setPresentation] = useState(() => emptyPresentation(scope));
+  if (presentation.scope !== scope) setPresentation(emptyPresentation(scope));
 
-  const setChecking = useCallback((draftId: string, checking: boolean) => {
-    const nextIds = new Set(checkingIdsRef.current);
-    if (checking) nextIds.add(draftId);
-    else nextIds.delete(draftId);
-    checkingIdsRef.current = nextIds;
-    setCheckingIds(nextIds);
-  }, []);
+  useEffect(() => {
+    const owner: NavigationOwner = { active: true, checkingIds: new Set(), latestIntent: 0, scope };
+    ownerRef.current = owner;
+    return () => {
+      // Do not cancel the shared cache request: another screen may be using its result.
+      owner.active = false;
+    };
+  }, [scope]);
 
   const run = useCallback(
     async (action: MatchListAction) => {
       const draftId = action.draftStatusCheck?.draftId;
-      if (!draftId || !action.href || checkingIdsRef.current.has(draftId)) return;
+      const owner = ownerRef.current;
+      if (
+        !draftId ||
+        !action.href ||
+        action.disabled ||
+        !owner?.active ||
+        owner.scope !== scope ||
+        owner.checkingIds.has(draftId)
+      )
+        return;
 
-      setChecking(draftId, true);
+      const intent = ++owner.latestIntent;
+      const ownsNavigation = () => owner.active && owner.latestIntent === intent;
+      owner.checkingIds.add(draftId);
+      setPresentation((current) => {
+        const errors = { ...current.errors };
+        delete errors[draftId];
+        return { scope, errors, checkingIds: new Set(owner.checkingIds) };
+      });
       try {
         const detail = await queryClient.fetchQuery({
           ...matchDraftDetailQueryOptions(draftId),
           staleTime: 0,
         });
+        if (!ownsNavigation()) return;
         const destination = confirmedDraftDestination(detail);
         if (destination) {
           void invalidateAfterMatchConfirmed(queryClient);
@@ -56,16 +86,24 @@ export function useConfirmedDraftNavigationCommand(
         }
         navigate(action.href);
       } catch {
-        setErrors((current) => ({
-          ...current,
-          [draftId]: confirmedDraftMessages.statusCheckFailed,
-        }));
+        if (ownsNavigation()) {
+          setPresentation((current) => ({
+            ...current,
+            errors: { ...current.errors, [draftId]: confirmedDraftMessages.statusCheckFailed },
+          }));
+        }
       } finally {
-        setChecking(draftId, false);
+        owner.checkingIds.delete(draftId);
+        if (owner.active) {
+          setPresentation((current) => ({
+            ...current,
+            checkingIds: new Set(owner.checkingIds),
+          }));
+        }
       }
     },
-    [listReturnTo, navigate, queryClient, setChecking],
+    [listReturnTo, navigate, queryClient, scope],
   );
 
-  return { checkingIds, errors, run };
+  return { checkingIds: presentation.checkingIds, errors: presentation.errors, run };
 }

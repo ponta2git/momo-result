@@ -51,7 +51,7 @@ function SelectOptionRow({ option }: { option: SelectOption }) {
       value={option.value}
       className={({ selected }) =>
         cn(
-          "momo-select-option momo-surface flex min-h-11 cursor-default items-center gap-2 rounded-xs px-3 py-2 text-base leading-6 font-plain text-[var(--color-text-primary)] sm:text-sm sm:leading-5 pointer-fine:min-h-10",
+          "momo-select-option momo-surface flex min-h-11 cursor-default items-center gap-2 rounded-xs px-3 py-2 text-base leading-6 font-plain text-[var(--color-text-primary)] data-disabled:cursor-not-allowed data-disabled:text-[var(--color-text-muted)] sm:text-sm sm:leading-5 pointer-fine:min-h-10 forced-colors:data-selected:bg-[Highlight] forced-colors:data-selected:text-[HighlightText] forced-colors:data-selected:forced-color-adjust-none forced-colors:data-disabled:text-[GrayText]",
           selected && "momo-surface-selected",
         )
       }

@@ -25,8 +25,8 @@ const heightClass = {
 
 const textAlignClass = {
   center: "text-center",
-  end: "text-right",
-  start: "text-left",
+  end: "text-end",
+  start: "text-start",
 } as const satisfies Record<ControlTextAlign, string>;
 
 /** Shared outlines for editable fields, grouped choices, and dialog-backed selection fields. */

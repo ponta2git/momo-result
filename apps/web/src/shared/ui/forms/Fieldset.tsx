@@ -23,13 +23,14 @@ export function Fieldset({ children, description, error, legend, ...props }: Fie
     <fieldset
       {...props}
       aria-describedby={buildFieldDescribedBy(descriptionId, errorId, props["aria-describedby"])}
+      aria-invalid={error ? true : props["aria-invalid"]}
       className="min-w-0"
     >
       <legend className={fieldText.label}>{legend}</legend>
       <div
         className={cn(
           "mt-2 flex min-h-11 min-w-0 flex-wrap items-center gap-1 rounded-sm border bg-[var(--color-surface)] px-1 py-1",
-          controlBorderClass.default,
+          error ? controlBorderClass.invalid : controlBorderClass.default,
         )}
       >
         {children}

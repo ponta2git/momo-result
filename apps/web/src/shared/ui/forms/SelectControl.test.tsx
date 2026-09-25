@@ -193,4 +193,69 @@ describe("SelectControl", () => {
     await waitFor(() => expect(screen.queryByRole("listbox")).not.toBeInTheDocument());
     expect(screen.getByRole("combobox")).toHaveTextContent("春");
   });
+
+  it("participates in an external form's required validation, submission and reset", async () => {
+    const user = userEvent.setup();
+    const changed = vi.fn();
+    const submitted = vi.fn();
+    render(
+      <>
+        <form
+          aria-label="保存設定"
+          id="selection-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            submitted(new FormData(event.currentTarget).get("season"));
+          }}
+        >
+          <button type="submit">保存</button>
+          <button type="reset">初期化</button>
+        </form>
+        <SelectControl
+          aria-label="シーズン"
+          defaultValue=""
+          form="selection-form"
+          name="season"
+          options={options}
+          required
+          onValueChange={changed}
+        />
+      </>,
+    );
+
+    const trigger = screen.getByRole("combobox", { name: "シーズン" });
+    expect(trigger).toBeRequired();
+    await user.click(screen.getByRole("button", { name: "保存" }));
+    expect(submitted).not.toHaveBeenCalled();
+
+    await selectOption(user, trigger, "spring");
+    await user.click(screen.getByRole("button", { name: "保存" }));
+    expect(submitted).toHaveBeenCalledExactlyOnceWith("spring");
+    await user.click(screen.getByRole("button", { name: "初期化" }));
+    expect(trigger).toHaveTextContent("すべて");
+    expect(changed).toHaveBeenCalledExactlyOnceWith("spring");
+    await user.click(screen.getByRole("button", { name: "保存" }));
+    expect(submitted).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves the selection when the owning form cancels a reset", async () => {
+    const user = userEvent.setup();
+    render(
+      <form aria-label="保存設定" onReset={(event) => event.preventDefault()}>
+        <SelectControl
+          aria-label="シーズン"
+          defaultValue="spring"
+          name="season"
+          options={options}
+        />
+        <button type="reset">初期化</button>
+      </form>,
+    );
+
+    const trigger = screen.getByRole("combobox", { name: "シーズン" });
+    await selectOption(user, trigger, "autumn");
+    await user.click(screen.getByRole("button", { name: "初期化" }));
+    expect(trigger).toHaveTextContent("秋");
+    expect(new FormData(screen.getByRole("form") as HTMLFormElement).get("season")).toBe("autumn");
+  });
 });

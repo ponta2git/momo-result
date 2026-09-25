@@ -23,11 +23,16 @@ describe("ChoiceList", () => {
     );
 
     expect(screen.getByRole("group", { name: "出力対象" })).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: /第12回/u })).toBeChecked();
+    const selected = screen.getByRole("radio", { name: "第12回" });
+    expect(selected).toBeChecked();
+    expect(selected).toHaveAccessibleDescription("2026年8月開催");
     expect(screen.getByText("選択中")).toBeVisible();
 
     await user.click(screen.getByText("第11回"));
     expect(onValueChange).toHaveBeenCalledWith("event-11");
+
+    await user.click(selected);
+    expect(onValueChange).toHaveBeenCalledTimes(1);
   });
 
   it("keeps a trailing action outside selection behavior", async () => {

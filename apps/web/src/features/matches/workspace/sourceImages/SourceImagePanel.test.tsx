@@ -709,7 +709,7 @@ describe("SourceImagePanel", () => {
     expect(await screen.findByRole("img", { name: "事件簿の元画像" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "収益" }));
-    expect(screen.getByRole("button", { name: "固定" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("radio", { name: "固定" })).toBeChecked();
     expect(await screen.findByRole("img", { name: "収益の元画像" })).toBeInTheDocument();
 
     view.rerender(
@@ -722,7 +722,7 @@ describe("SourceImagePanel", () => {
     );
     expect(screen.getByRole("img", { name: "収益の元画像" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "自動追従" }));
+    await user.click(screen.getByRole("radio", { name: "自動追従" }));
     expect(await screen.findByRole("img", { name: "総資産の元画像" })).toBeInTheDocument();
   });
 

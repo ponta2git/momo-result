@@ -63,4 +63,25 @@ describe("Tabs", () => {
       "hidden",
     );
   });
+
+  it("moves focus without changing the current panel until a manual tab is activated", async () => {
+    const user = userEvent.setup();
+    render(<TabsFixture />);
+    const first = screen.getByRole("tab", { name: "最初" });
+    const second = screen.getByRole("tab", { name: "次" });
+    await user.tab();
+    await user.keyboard("{ArrowRight}");
+    expect(second).toHaveFocus();
+    expect(first).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tabpanel", { name: "最初" })).toBeVisible();
+
+    await user.keyboard("{ArrowRight}{Enter}");
+    expect(screen.getByRole("tab", { name: "無効" })).toHaveFocus();
+    expect(first).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByRole("tabpanel", { name: "無効" })).not.toBeInTheDocument();
+    await user.keyboard("{ArrowLeft}{Enter}");
+    expect(second).toHaveFocus();
+    expect(second).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tabpanel", { name: "次" })).toBeVisible();
+  });
 });

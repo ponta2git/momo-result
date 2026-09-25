@@ -55,9 +55,32 @@ describe("ChoicePickerDialogField", () => {
 
     const trigger = screen.getByRole("button", { name: "開催履歴（必須）を変更" });
     expect(trigger).toHaveAttribute("aria-invalid", "true");
-    expect(
-      document.getElementById(trigger.getAttribute("aria-describedby") ?? ""),
-    ).toHaveTextContent("未入力です");
+    expect(trigger).toHaveAccessibleDescription("未選択 必須 未入力です");
+  });
+
+  it("describes the current value and closes a session when the field becomes unavailable", async () => {
+    const user = userEvent.setup();
+    const props = {
+      label: "開催",
+      name: "event",
+      options: [{ label: "第12回", value: "event-12" }],
+      selectedLabel: "第12回 — 確定3試合",
+      value: "event-12",
+      onValueChange: vi.fn(),
+    };
+    const { rerender } = render(<ChoicePickerDialogField {...props} />);
+    const trigger = screen.getByRole("button", { name: "開催を変更" });
+    expect(trigger).toHaveAccessibleDescription("第12回 — 確定3試合");
+    await user.click(trigger);
+    expect(screen.getByRole("dialog", { name: "開催を選択" })).toBeInTheDocument();
+
+    rerender(<ChoicePickerDialogField {...props} disabled />);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(trigger).toBeDisabled();
+    rerender(<ChoicePickerDialogField {...props} />);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(trigger).toHaveAccessibleDescription("第12回 — 確定3試合");
+    expect(props.onValueChange).not.toHaveBeenCalled();
   });
 
   it("keeps the dialog open while paging descriptive candidates", async () => {

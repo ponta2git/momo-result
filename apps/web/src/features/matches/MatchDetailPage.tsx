@@ -150,8 +150,6 @@ function MatchDetailReadyContent({
         }
       />
 
-      <MatchDetailAdjacentNavigation page={page} />
-
       <PageContentSurface className="grid gap-6">
         <div className="grid gap-4">
           <MatchDetailIdentity
@@ -207,6 +205,8 @@ function MatchDetailReadyContent({
           showConfirm={deletion.open}
         />
       </PageContentSurface>
+
+      <MatchDetailAdjacentNavigation page={page} />
     </PageFrame>
   );
 }

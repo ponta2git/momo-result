@@ -82,29 +82,6 @@ function HeldEventDetailReadyContent({
         titleRef={titleRef}
       />
 
-      <AdjacentNavigation
-        label="開催の前後移動"
-        previous={navigation.adjacent.previous}
-        next={navigation.adjacent.next}
-        disabled={navigation.adjacent.disabled}
-        status={
-          navigation.adjacent.status === "refreshing" ? (
-            <p role="status">前後の開催を確認しています。</p>
-          ) : navigation.adjacent.status === "failed" ? (
-            <p>前後の開催を再確認できません。開催詳細を再取得してください。</p>
-          ) : navigation.adjacent.status === "unavailable" ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <p>
-                前後の開催を利用できません。再取得しても改善しない場合は画面を再読み込みしてください。
-              </p>
-              <Button size="sm" variant="quiet" onClick={refresh.run}>
-                前後の開催を再取得
-              </Button>
-            </div>
-          ) : undefined
-        }
-      />
-
       <PageContentSurface aria-label="開催内容" className="grid gap-8" role="region">
         {freshness.kind === "stale" ? (
           <Notice
@@ -153,6 +130,29 @@ function HeldEventDetailReadyContent({
         <HeldEventPlayerRecap recaps={playerRecaps} />
         <HeldEventMatchTimeline matches={matches} returnTo={navigation.returnTo} />
       </PageContentSurface>
+
+      <AdjacentNavigation
+        label="開催の前後移動"
+        previous={navigation.adjacent.previous}
+        next={navigation.adjacent.next}
+        disabled={navigation.adjacent.disabled}
+        status={
+          navigation.adjacent.status === "refreshing" ? (
+            <p role="status">前後の開催を確認しています。</p>
+          ) : navigation.adjacent.status === "failed" ? (
+            <p>前後の開催を再確認できません。開催詳細を再取得してください。</p>
+          ) : navigation.adjacent.status === "unavailable" ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <p>
+                前後の開催を利用できません。再取得しても改善しない場合は画面を再読み込みしてください。
+              </p>
+              <Button size="sm" variant="quiet" onClick={refresh.run}>
+                前後の開催を再取得
+              </Button>
+            </div>
+          ) : undefined
+        }
+      />
     </PageFrame>
   );
 }

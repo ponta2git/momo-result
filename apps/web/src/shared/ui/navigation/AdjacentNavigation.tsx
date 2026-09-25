@@ -23,6 +23,10 @@ type AdjacentNavigationProps = {
   status?: ReactNode;
 };
 
+// Available destinations and known ends keep the same text, spacing, and center line.
+const destinationClassName =
+  "grid min-h-11 min-w-0 grid-cols-1 content-start justify-items-center gap-1 border border-transparent px-5 py-3 text-center text-base font-plain whitespace-normal break-words text-[var(--color-text-secondary)]";
+
 /** Keeps each direction and its destination together, including known ends and temporary pauses. */
 export function AdjacentNavigation({
   label,
@@ -65,7 +69,7 @@ function Destination({
   );
 
   if (!destination.href) {
-    return <div className="grid min-w-0 content-start gap-1 px-3 py-2">{content}</div>;
+    return <div className={destinationClassName}>{content}</div>;
   }
   return (
     <AdjacentLink disabled={disabled} to={destination.href}>
@@ -93,7 +97,7 @@ function AdjacentLink({
       aria-disabled={disabled || undefined}
       className={cn(
         buttonClassName({ disabled, size: "lg", variant: "quiet" }),
-        "grid content-start justify-items-start gap-1 text-left",
+        destinationClassName,
       )}
       href={disabled ? undefined : href}
       role={disabled ? "link" : undefined}

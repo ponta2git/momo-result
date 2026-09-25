@@ -44,6 +44,15 @@ aggregate coverage は、PR review と推移確認の非 blocking report とす�
 - 分析計算は golden、高精度参照、property を組み合わせる。既存実装の出力だけを正解にしない。
 - performance / endurance の対象量、回数、上限は要求文書と private release gate を正本とし、public な coverage 設計へ複製しない。
 
+### Webの実行境界
+
+- `src`のVitestは値変換とcomponent / hook / MSWの証拠を扱う。appのroute接続とfeatureのresource lifecycleを区別し、後者の詳細をrouter suiteへ集約しない。
+- browserでHTTPを制御するcaseは、実画面のfocus・描画・非同期遷移の証拠。実APIを通るsmokeと区別し、mock応答だけで保存・生成・配送の接続を確認済みにしない。
+- E2E・Playwright設定もWebのtypecheckに含める。runnerとfixtureのNode testはCIで実行し、ブラウザー本体の検証とは区別する。
+- 共通setupはunmount後にQueryClientを解放し、mockを復元してから実storageを清掃する。各suiteには共通cleanupを複製せず、個別に所有する資源の解放と未完了操作の完了待ちを残す。
+
+採用・統合・廃止の具体例とレビュー記録は[Webテストの再設計](web-test-rebuild.md)を参照する。現在のファイル配置・実行対象・並列数・commandは設定とCIが所有する。
+
 ## 4. Cross-System Contract Evidence
 
 | 契約 | 選択時の主な production boundary |

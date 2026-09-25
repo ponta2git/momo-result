@@ -96,20 +96,22 @@ const resources = {
   postgres: undefined,
   redis: undefined,
 };
-let cleanupStarted = false;
+let cleanupPromise;
+const interruption = new AbortController();
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   for (const signal of ["SIGINT", "SIGTERM"]) {
     process.once(signal, () => {
-      void cleanup().finally(() => {
-        process.exit(signal === "SIGINT" ? 130 : 143);
-      });
+      process.exitCode = signal === "SIGINT" ? 130 : 143;
+      interruption.abort(new Error(`E2E interrupted by ${signal}.`));
     });
   }
 
   try {
     const exitCode = await run();
-    process.exitCode = exitCode;
+    if (!interruption.signal.aborted) process.exitCode = exitCode;
+  } catch (error) {
+    if (!interruption.signal.aborted) throw error;
   } finally {
     await cleanup();
   }
@@ -117,12 +119,16 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
 
 async function run() {
   const apiPort = await findFreePort();
-  const webPort = await findFreePort();
+  let webPort = await findFreePort();
+  while (webPort === apiPort) webPort = await findFreePort();
   resources.imageTmpDir = await mkdtemp(join(tmpdir(), "momo-result-e2e-images-"));
 
   console.log("Starting isolated E2E dependencies with Testcontainers.");
+  interruption.signal.throwIfAborted();
   await startDependencies();
-  await applyMigrations(resources.postgres);
+  interruption.signal.throwIfAborted();
+  await applyMigrations(resources.postgres, POSTGRES_DB, interruption.signal);
+  interruption.signal.throwIfAborted();
 
   const databaseUrl = `postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${resources.postgres.getHost()}:${resources.postgres.getMappedPort(
     5432,
@@ -137,7 +143,9 @@ async function run() {
     imageTmpDir: resources.imageTmpDir,
     redisUrl,
   });
-  await waitForApi(resources.apiProcess, `${apiBaseUrl}/healthz/details`);
+  await waitForApi(resources.apiProcess, `${apiBaseUrl}/healthz/details`, () =>
+    interruption.signal.throwIfAborted(),
+  );
 
   return runPlaywright({
     apiBaseUrl,
@@ -186,7 +194,7 @@ export async function startRedis() {
     .start();
 }
 
-export async function applyMigrations(postgres, databaseName = POSTGRES_DB) {
+export async function applyMigrations(postgres, databaseName = POSTGRES_DB, signal) {
   const migrationsDir = await resolveMigrationsDir();
   await runCommand(migrationScript, [], {
     cwd: repoRoot,
@@ -206,6 +214,7 @@ export async function applyMigrations(postgres, databaseName = POSTGRES_DB) {
       POSTGRES_USER,
     }),
     label: "momo-db migrations",
+    signal,
   });
 }
 
@@ -261,7 +270,11 @@ export function startApi({ apiPort, databaseUrl, imageTmpDir, redisUrl, environm
   const state = {
     code: undefined,
     signal: undefined,
+    error: undefined,
   };
+  child.once("error", (error) => {
+    state.error = error;
+  });
   child.stdout?.on("data", (chunk) => logs.push(chunk));
   child.stderr?.on("data", (chunk) => logs.push(chunk));
   child.once("exit", (code, signal) => {
@@ -278,6 +291,9 @@ export async function waitForApi(apiProcess, url, checkpoint = () => {}) {
 
   while (Date.now() < deadline) {
     checkpoint();
+    if (apiProcess.e2eState.error) {
+      throw new Error("API process could not start.", { cause: apiProcess.e2eState.error });
+    }
     if (apiProcess.e2eState.code !== undefined || apiProcess.e2eState.signal !== undefined) {
       throw new Error(
         `API process exited before becoming healthy.\n${apiProcess.e2eLogs.toString()}`,
@@ -300,33 +316,36 @@ export async function waitForApi(apiProcess, url, checkpoint = () => {}) {
   throw new Error(`API did not become healthy in time.\n${apiProcess.e2eLogs.toString()}`);
 }
 
-function runPlaywright({ apiBaseUrl, webBaseUrl }) {
-  return new Promise((resolveRun) => {
-    const child = spawn("pnpm", ["exec", "playwright", "test", ...playwrightArgs], {
-      cwd: webDir,
-      env: childEnvironment({
-        PLAYWRIGHT_BASE_URL: webBaseUrl,
-        PLAYWRIGHT_SKIP_WEB_SERVER: "0",
-        VITE_API_PROXY_TARGET: apiBaseUrl,
-      }),
-      stdio: "inherit",
-    });
-    child.once("exit", (code, signal) => {
-      if (signal) {
-        resolveRun(1);
-        return;
-      }
-      resolveRun(code ?? 1);
-    });
+async function runPlaywright({ apiBaseUrl, webBaseUrl }) {
+  await runPlaywrightCommand(playwrightArgs, {
+    cwd: webDir,
+    env: childEnvironment({
+      PLAYWRIGHT_BASE_URL: webBaseUrl,
+      PLAYWRIGHT_SKIP_WEB_SERVER: "0",
+      VITE_API_PROXY_TARGET: apiBaseUrl,
+    }),
+    label: "Playwright",
+    signal: interruption.signal,
+  });
+  return 0;
+}
+
+export function runPlaywrightCommand(args, options) {
+  // Direct CLI ownership lets SIGINT reach Playwright's teardown without a package-manager
+  // launcher forwarding the same signal a second time.
+  const playwrightCli = fileURLToPath(import.meta.resolve("@playwright/test/cli"));
+  return runCommand(process.execPath, [playwrightCli, "test", ...args], {
+    ...options,
+    interruptSignal: "SIGINT",
   });
 }
 
-async function cleanup() {
-  if (cleanupStarted) {
-    return;
-  }
-  cleanupStarted = true;
+function cleanup() {
+  cleanupPromise ??= cleanupResources();
+  return cleanupPromise;
+}
 
+async function cleanupResources() {
   const processCleanup = await Promise.allSettled([stopProcessGroup(resources.apiProcess)]);
   const dependencyCleanup = await Promise.allSettled([
     resources.redis?.stop(),
@@ -345,7 +364,7 @@ async function cleanup() {
     );
 }
 
-export async function stopProcessGroup(child) {
+export async function stopProcessGroup(child, { signal: initialSignal = "SIGTERM" } = {}) {
   if (!child?.pid) return;
   const target = process.platform === "win32" ? child.pid : -child.pid;
   const alive = async () => {
@@ -367,9 +386,11 @@ export async function stopProcessGroup(child) {
       throw error;
     }
   };
-  // A finished launcher can leave a forked API / browser child in its owned group.
+  // Reap the owned group, including descendants whose launcher has already exited.
+  // Detached groups belong to their launcher: Playwright receives SIGINT to run its teardown.
+  // Arbitrary SIGKILL of that launcher is not covered by this process-group contract.
   if (!(await alive())) return;
-  await signal("SIGTERM");
+  await signal(initialSignal);
   const deadline = Date.now() + PROCESS_STOP_TIMEOUT_MS;
   while ((await alive()) && Date.now() < deadline) await delay(100);
   if (!(await alive())) return;
@@ -434,20 +455,42 @@ export function childEnvironment(additions) {
   return environment;
 }
 
-export function runCommand(command, args, { cwd, env, label }) {
-  return new Promise((resolveCommand, rejectCommand) => {
-    const child = spawn(command, args, { cwd, env, stdio: "inherit" });
-    child.once("error", rejectCommand);
-    child.once("exit", (code, signal) => {
-      if (signal) {
-        rejectCommand(new Error(`${label} exited after signal ${signal}.`));
-      } else if (code === 0) {
-        resolveCommand();
-      } else {
-        rejectCommand(new Error(`${label} exited with code ${code ?? "unknown"}.`));
-      }
-    });
+export async function runCommand(
+  command,
+  args,
+  { cwd, env, label, signal, interruptSignal = "SIGTERM" },
+) {
+  signal?.throwIfAborted();
+  const child = spawn(command, args, {
+    cwd,
+    env,
+    stdio: "inherit",
+    detached: process.platform !== "win32",
   });
+  let stopping;
+  let rejectRun;
+  const interrupt = () => {
+    stopping ??= stopProcessGroup(child, { signal: interruptSignal });
+    void stopping.catch((error) => rejectRun?.(error));
+  };
+  try {
+    await new Promise((resolveCommand, rejectCommand) => {
+      rejectRun = rejectCommand;
+      child.once("error", rejectCommand);
+      child.once("exit", (code, exitSignal) => {
+        if (exitSignal) rejectCommand(new Error(`${label} exited after signal ${exitSignal}.`));
+        else if (code === 0) resolveCommand();
+        else rejectCommand(new Error(`${label} exited with code ${code ?? "unknown"}.`));
+      });
+      signal?.addEventListener("abort", interrupt, { once: true });
+      if (signal?.aborted) interrupt();
+    });
+    signal?.throwIfAborted();
+  } finally {
+    signal?.removeEventListener("abort", interrupt);
+    // A launcher may exit before its browser, server, or other forked child.
+    await (stopping ?? stopProcessGroup(child));
+  }
 }
 
 function configureDockerHost() {

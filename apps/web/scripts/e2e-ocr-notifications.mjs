@@ -12,6 +12,7 @@ import {
   applyMigrations,
   childEnvironment,
   findFreePort,
+  runPlaywrightCommand,
   startApi,
   startPostgres,
   startRedis,
@@ -51,11 +52,13 @@ const resources = {
   workerRequested: false,
 };
 let interrupted;
+const interruption = new AbortController();
 let releaseHold;
 let cleanupPromise;
 remember();
 function interrupt(signal) {
   interrupted = signal;
+  interruption.abort(new Error(`OCR E2E interrupted by ${signal}.`));
   releaseHold?.();
 }
 process.once("SIGINT", () => interrupt("SIGINT"));
@@ -284,16 +287,8 @@ async function run() {
     });
     checkpoint();
   } else {
-    await runOwnedCommand(
-      "pnpm",
-      [
-        "exec",
-        "playwright",
-        "test",
-        "--config",
-        "playwright.ocr-notifications.config.ts",
-        ...playwrightArgs,
-      ],
+    await runPlaywrightCommand(
+      ["--config", "playwright.ocr-notifications.config.ts", ...playwrightArgs],
       {
         cwd: webDir,
         env: childEnvironment({
@@ -302,6 +297,7 @@ async function run() {
           PLAYWRIGHT_SKIP_WEB_SERVER: "1",
         }),
         label: "OCR notification E2E",
+        signal: interruption.signal,
       },
     );
   }

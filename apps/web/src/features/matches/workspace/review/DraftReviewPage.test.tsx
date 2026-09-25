@@ -163,6 +163,7 @@ describe("DraftReviewPage", () => {
         ]),
       }),
     );
+    expect(await screen.findByText("試合詳細")).toBeInTheDocument();
   });
 
   it("redirects to the confirmed match when the draft is already confirmed on load", async () => {

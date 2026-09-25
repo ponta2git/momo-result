@@ -9,15 +9,18 @@ describe("exports API facade", () => {
     ["season", "format=tsv&seasonMasterId=season-1"],
     ["heldEvent", "format=tsv&heldEventId=held-1"],
     ["match", "format=tsv&matchId=match-1"],
-  ] as const)("exports only the selected %s scope even when other IDs remain in input", (scope, query) => {
-    expect(
-      buildExportMatchesPath({
-        format: "tsv",
-        seasonMasterId: "season-1",
-        heldEventId: "held-1",
-        matchId: "match-1",
-        scope,
-      }),
-    ).toBe(`/api/exports/matches?${query}`);
-  });
+  ] as const)(
+    "exports only the selected %s scope even when other IDs remain in input",
+    (scope, query) => {
+      expect(
+        buildExportMatchesPath({
+          format: "tsv",
+          seasonMasterId: "season-1",
+          heldEventId: "held-1",
+          matchId: "match-1",
+          scope,
+        }),
+      ).toBe(`/api/exports/matches?${query}`);
+    },
+  );
 });

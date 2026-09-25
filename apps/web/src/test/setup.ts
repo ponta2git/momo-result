@@ -1,6 +1,8 @@
 import * as matchers from "@testing-library/jest-dom/matchers";
 import { afterEach, beforeEach, expect, vi } from "vitest";
 
+import { resetResizeObservers } from "@/test/resizeObserver";
+
 expect.extend(matchers);
 
 const hasDom = typeof window !== "undefined";
@@ -38,6 +40,7 @@ function formatConsoleArgs(args: unknown[]): string {
 
 beforeEach(() => {
   if (hasDom) {
+    vi.stubGlobal("ResizeObserver", resetResizeObservers());
     vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
   }
   if (hasDom && !window.localStorage) {
@@ -62,6 +65,7 @@ afterEach(() => {
     window.sessionStorage.clear();
   }
   vi.unstubAllGlobals();
+  resetResizeObservers();
   vi.restoreAllMocks();
   vi.useRealTimers();
   if (consoleMessages.length > 0) {

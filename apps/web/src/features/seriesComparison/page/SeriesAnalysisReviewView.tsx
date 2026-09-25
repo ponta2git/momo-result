@@ -124,7 +124,6 @@ export function ReviewView({
                     else navigation?.visit.expandedMembers.delete(entry.player.memberId);
                   }}
                   panelPadding="sm"
-                  presentation="inset"
                   summary={`ほかの仮説（${entry.secondaryCards.length}件）`}
                 >
                   <div className="grid gap-6">

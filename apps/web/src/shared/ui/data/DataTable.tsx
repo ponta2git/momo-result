@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowUp } from "lucide-react";
-import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ComponentPropsWithoutRef, CSSProperties, ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
+import type { ComponentPropsWithRef, CSSProperties, ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
 import { useSurfaceFeedback } from "@/shared/ui/motion/useSurfaceFeedback";
@@ -99,9 +99,10 @@ const highlightedColumnClassName =
   "after:pointer-events-none after:absolute after:inset-0 after:border-x-2 after:border-b-2 after:border-[var(--color-action)]";
 
 export function DataTableBodyRow({
+  ref,
   ...props
-}: Omit<ComponentPropsWithoutRef<"tr">, "className" | "style">) {
-  const surfaceRef = useSurfaceFeedback<HTMLTableRowElement>();
+}: Omit<ComponentPropsWithRef<"tr">, "className" | "style">) {
+  const surfaceRef = useSurfaceFeedback<HTMLTableRowElement>(ref);
   // Keep the row opaque so sticky cells can inherit its complete hover paint.
   return (
     <tr
@@ -127,12 +128,12 @@ export function DataTable<Row>({
   scrollArea,
 }: DataTableProps<Row>) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const captionId = useId();
   const hintId = useId();
   const [overflow, setOverflow] = useState({ horizontal: false, vertical: false });
-  const namedScroll = scrollArea !== undefined;
   useLayoutEffect(() => {
     const area = scrollRef.current;
-    if (!namedScroll || !area) return;
+    if (!area) return;
     const measure = () => {
       const horizontal = area.scrollWidth > area.clientWidth;
       const vertical = area.scrollHeight > area.clientHeight;
@@ -147,22 +148,13 @@ export function DataTable<Row>({
     observer.observe(area);
     if (area.firstElementChild) observer.observe(area.firstElementChild);
     return () => observer.disconnect();
-  }, [namedScroll]);
+  }, []);
   const scrollable = overflow.horizontal || overflow.vertical;
-  const columnStyleByKey = useMemo(() => {
-    return new Map<string, CSSProperties | undefined>(
-      columns.map((column) => [
-        column.key,
-        column.minWidth || column.width
-          ? { minWidth: column.minWidth, width: column.width }
-          : undefined,
-      ]),
-    );
-  }, [columns]);
+  const namedScroll = scrollArea !== undefined || scrollable;
 
   return (
     <div className="min-w-0">
-      {namedScroll && scrollable ? (
+      {scrollable ? (
         <p className={cn(contentText.supporting, "mb-2")} id={hintId}>
           {overflow.horizontal && overflow.vertical
             ? "表は上下左右にスクロールできます。"
@@ -179,8 +171,9 @@ export function DataTable<Row>({
         ref={scrollRef}
         role={namedScroll ? "region" : undefined}
         aria-label={scrollArea?.label}
-        aria-describedby={namedScroll && scrollable ? hintId : undefined}
-        tabIndex={namedScroll && scrollable ? 0 : undefined}
+        aria-labelledby={namedScroll && !scrollArea ? captionId : undefined}
+        aria-describedby={scrollable ? hintId : undefined}
+        tabIndex={scrollable ? 0 : undefined}
         style={scrollArea?.maxHeight ? { maxHeight: scrollArea.maxHeight } : undefined}
       >
         <table
@@ -192,6 +185,7 @@ export function DataTable<Row>({
           style={minWidth ? { minWidth } : undefined}
         >
           <caption
+            id={captionId}
             className={cn(
               caption.visibility === "visible"
                 ? cn(
@@ -205,7 +199,7 @@ export function DataTable<Row>({
           </caption>
           <colgroup>
             {columns.map((column) => (
-              <col key={column.key} style={columnStyleByKey.get(column.key)} />
+              <col key={column.key} style={columnStyle(column)} />
             ))}
           </colgroup>
           <thead>
@@ -220,7 +214,7 @@ export function DataTable<Row>({
                         ? "ascending"
                         : column.sortDirection === "desc"
                           ? "descending"
-                          : "none"
+                          : undefined
                       : undefined
                   }
                   className={cn(
@@ -238,7 +232,7 @@ export function DataTable<Row>({
                     ],
                   )}
                   scope="col"
-                  style={columnStyleByKey.get(column.key)}
+                  style={columnStyle(column)}
                 >
                   {column.sortable ? (
                     <DataTableSortButton
@@ -285,7 +279,7 @@ export function DataTable<Row>({
                           "sticky left-0 z-[var(--z-base)] bg-inherit",
                       )}
                       scope={column.rowHeader ? "row" : undefined}
-                      style={columnStyleByKey.get(column.key)}
+                      style={columnStyle(column)}
                     >
                       <div className="min-w-0">{column.renderCell(row)}</div>
                     </Cell>
@@ -308,6 +302,12 @@ export function DataTable<Row>({
       </div>
     </div>
   );
+}
+
+function columnStyle(column: { minWidth?: string; width?: string }): CSSProperties | undefined {
+  return column.minWidth || column.width
+    ? { minWidth: column.minWidth, width: column.width }
+    : undefined;
 }
 
 function DataTableSortButton({

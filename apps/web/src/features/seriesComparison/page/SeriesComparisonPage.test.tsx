@@ -3,7 +3,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { createMemoryRouter, MemoryRouter, RouterProvider } from "react-router-dom";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { SeriesComparisonPage } from "@/features/seriesComparison/page/SeriesComparisonPage";
 import { seriesAnalysisKeys } from "@/shared/api/queryKeys";
@@ -28,16 +28,6 @@ import { selectOption } from "@/test/selectOption";
 
 setupMsw();
 beforeAll(() => decodeSeriesAnalysisArtifact("aggregateV4", makeSeriesAnalysisAggregate()));
-beforeEach(() => {
-  vi.stubGlobal(
-    "ResizeObserver",
-    class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    },
-  );
-});
 
 describe("SeriesComparisonPage", () => {
   it("changes owner metrics without making the focused control inert or refetching analysis", async () => {

@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { useState } from "react";
 import { MemoryRouter } from "react-router-dom";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import type { SeriesAnalysisUrlState } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { SeriesAnalysisContent } from "@/features/seriesComparison/page/SeriesAnalysisContent";
@@ -33,14 +33,6 @@ beforeAll(() =>
 
 beforeEach(() => {
   setDevUser();
-  vi.stubGlobal(
-    "ResizeObserver",
-    class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    },
-  );
   server.use(
     http.get("/api/analytics/series-comparison/v4/aggregate", () =>
       HttpResponse.json(makeOwnerComparisonAggregate()),

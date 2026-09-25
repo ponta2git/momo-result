@@ -64,7 +64,6 @@ export function MatchSetupSection({
         open={editorOpen}
         panelPadding="none"
         panelSpacing="md"
-        presentation="inset"
         summary={
           <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
             <span className="min-w-0 flex-1">

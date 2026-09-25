@@ -1,10 +1,10 @@
-import type { HTMLAttributes } from "react";
+import type { ComponentPropsWithRef } from "react";
 
 import { cn } from "@/shared/ui/cn";
 
 export type PageFrameWidth = "narrow" | "standard" | "wide" | "workspace";
 
-type PageFrameProps = HTMLAttributes<HTMLDivElement> & {
+type PageFrameProps = ComponentPropsWithRef<"div"> & {
   width?: PageFrameWidth;
 };
 

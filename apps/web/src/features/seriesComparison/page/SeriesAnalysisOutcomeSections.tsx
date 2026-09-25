@@ -57,7 +57,7 @@ export function RevenueOutcomeSection({
               />
             </dl>
             <div className="mt-4">
-              <Disclosure panelPadding="sm" presentation="inset" summary="収益と順位の詳細">
+              <Disclosure panelPadding="sm" summary="収益と順位の詳細">
                 <dl className="grid gap-2">
                   <MetricValue
                     label="収益順位だけでは説明しない順位差"
@@ -115,7 +115,7 @@ export function DestinationOutcomeSection({ response }: { response: Response }) 
               />
             </dl>
             <div className="mt-4">
-              <Disclosure panelPadding="sm" presentation="inset" summary="目的地と順位の詳細">
+              <Disclosure panelPadding="sm" summary="目的地と順位の詳細">
                 <dl className="grid gap-2">
                   <MetricValue
                     label="到着多寡による入賞率差"

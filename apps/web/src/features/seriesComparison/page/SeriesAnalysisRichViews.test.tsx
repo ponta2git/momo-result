@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { ContextView } from "@/features/seriesComparison/page/SeriesAnalysisContextView";
 import { DriversView } from "@/features/seriesComparison/page/SeriesAnalysisDriversView";
@@ -12,17 +12,6 @@ import {
   makeSeriesAnalysisAggregate,
   makeSeriesAnalysisMatchContext,
 } from "@/test/msw/seriesAnalysisFixtures";
-
-beforeEach(() => {
-  vi.stubGlobal(
-    "ResizeObserver",
-    class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    },
-  );
-});
 
 describe("rich series analysis views", () => {
   it("names the overview regions and explains how to use crown evidence", async () => {

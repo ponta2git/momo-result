@@ -8,7 +8,7 @@ import { politeMotionTransition } from "@/shared/ui/motion/transitions";
 import { useSurfaceFeedback } from "@/shared/ui/motion/useSurfaceFeedback";
 
 type DisclosureTriggerVariant = "compact" | "default" | "supporting";
-type DisclosurePresentation = "framed" | "inset" | "plain";
+type DisclosurePresentation = "framed" | "plain";
 type DisclosurePanelSpacing = "none" | "sm" | "md";
 type DisclosurePanelPadding = "none" | "xs" | "sm" | "md";
 type DisclosureTriggerLayout = "compact" | "default" | "flush" | "flush-horizontal" | "section";
@@ -31,10 +31,6 @@ const presentationClass = {
   framed: {
     panel: "border-t border-[var(--color-border)]",
     root: "rounded-sm border border-[var(--color-border)]",
-  },
-  inset: {
-    panel: "",
-    root: "",
   },
   plain: {
     panel: "",
@@ -89,9 +85,9 @@ export function Disclosure({
   const surfaceRef = useSurfaceFeedback<HTMLElement>();
   return (
     <BaseCollapsible.Root
-      aria-label={ariaLabel}
       className={cn("min-w-0", presentationClass[presentation].root)}
       defaultOpen={defaultOpen}
+      disabled={disabled}
       open={open}
       onOpenChange={(nextOpen) => onOpenChange?.(nextOpen)}
     >
@@ -99,12 +95,11 @@ export function Disclosure({
         ref={surfaceRef}
         aria-label={ariaLabel}
         className={cn(
-          "momo-surface momo-surface-press group flex min-h-11 w-full min-w-0 items-center justify-between gap-3 text-left disabled:cursor-default disabled:opacity-70",
+          "momo-surface momo-surface-press group flex min-h-11 w-full min-w-0 items-center justify-between gap-3 text-left data-disabled:cursor-default data-disabled:opacity-70",
           triggerVariantClass[triggerVariant],
           triggerLayoutClass[triggerLayout],
           presentation === "framed" || triggerLayout === "section" ? "rounded-none" : "rounded-sm",
         )}
-        disabled={disabled}
         render={(triggerProps, state) => (
           <button {...triggerProps} type="button">
             <span className="min-w-0 flex-1">{summary}</span>
@@ -127,7 +122,7 @@ export function Disclosure({
           panelPaddingClass[panelPadding],
           // Panel presence may outlive open for a commit. Only the chevron animates here:
           // closing content must leave layout before a sibling receives focus.
-          "mx-2 bg-transparent data-closed:hidden",
+          "min-w-0 bg-transparent data-closed:hidden",
         )}
         keepMounted={keepMounted}
       >

@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { SeriesAnalysisOwnerComparison } from "@/features/seriesComparison/charts/SeriesAnalysisOwnerComparison";
 import type {
@@ -11,16 +11,6 @@ import type {
 import { makeOwnerComparisonAggregate } from "@/test/msw/seriesAnalysisFixtures";
 import { selectOption } from "@/test/selectOption";
 
-beforeEach(() => {
-  vi.stubGlobal(
-    "ResizeObserver",
-    class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    },
-  );
-});
 function Harness({ focusedOwnerMemberId }: { focusedOwnerMemberId?: string }) {
   const [metric, setMetric] = useState<OwnerMetricId>("rank.average");
   return (

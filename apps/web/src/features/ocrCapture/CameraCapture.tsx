@@ -126,7 +126,6 @@ export function CameraCapture({
             keepMounted
             panelPadding="xs"
             panelSpacing="sm"
-            presentation="inset"
             summary="カメラが使えない場合"
           >
             {renderFallback(false)}

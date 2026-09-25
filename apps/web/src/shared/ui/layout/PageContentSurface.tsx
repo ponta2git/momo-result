@@ -1,10 +1,10 @@
-import type { HTMLAttributes } from "react";
+import type { ComponentPropsWithRef } from "react";
 
 import { cn } from "@/shared/ui/cn";
 
 export type PageContentSurfacePadding = "compact" | "default" | "none";
 
-type PageContentSurfaceProps = HTMLAttributes<HTMLDivElement> & {
+type PageContentSurfaceProps = ComponentPropsWithRef<"div"> & {
   padding?: PageContentSurfacePadding | undefined;
 };
 

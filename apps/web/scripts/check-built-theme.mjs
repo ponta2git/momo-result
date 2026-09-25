@@ -22,12 +22,28 @@ const requiredThemeVariables = [
   ...[1, 2, 3, 4].map((rank) => `--color-rank-${rank}-foreground`),
   "--color-chart-segment-separator",
 ];
-const missingThemeVariables = requiredThemeVariables.filter(
-  (name) => !builtCss.includes(`${name}:`),
+// Follow aliases in the emitted asset: retaining a semantic name is insufficient
+// when its reference palette was removed or a dependency graph became cyclic.
+const declarations = new Map(
+  [...builtCss.matchAll(/(--[a-z0-9-]+)\s*:\s*([^;{}]+)(?=[;}])/gu)].map((match) => [
+    match[1],
+    match[2],
+  ]),
 );
 
-if (missingThemeVariables.length > 0) {
-  throw new Error(
-    `Built CSS is missing runtime-referenced theme variables: ${missingThemeVariables.join(", ")}`,
-  );
+function validateThemeVariable(name, path = []) {
+  if (path.includes(name)) {
+    throw new Error(`Built CSS has a cyclic theme reference: ${[...path, name].join(" -> ")}`);
+  }
+  const value = declarations.get(name);
+  if (!value) {
+    throw new Error(
+      `Built CSS is missing a runtime theme dependency: ${[...path, name].join(" -> ")}`,
+    );
+  }
+  for (const match of value.matchAll(/var\(\s*(--[a-z0-9-]+)\s*\)/gu)) {
+    validateThemeVariable(match[1], [...path, name]);
+  }
 }
+
+for (const name of requiredThemeVariables) validateThemeVariable(name);

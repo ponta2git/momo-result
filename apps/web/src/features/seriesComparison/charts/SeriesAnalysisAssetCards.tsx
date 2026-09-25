@@ -147,7 +147,6 @@ export function AssetComparisonCards({
                 ariaLabel={`${entry.displayName}の資産傾向の詳しい根拠`}
                 panelPadding="none"
                 panelSpacing="sm"
-                presentation="inset"
                 summary="詳しい根拠"
                 triggerLayout="flush-horizontal"
                 triggerVariant="supporting"

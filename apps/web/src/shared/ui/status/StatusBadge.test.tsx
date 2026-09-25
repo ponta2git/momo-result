@@ -18,7 +18,7 @@ describe("StatusBadge", () => {
 
     let badge = screen.getByRole("status");
     expect(badge).toHaveAttribute("aria-atomic", "true");
-    expect(badge).toHaveAttribute("aria-busy", "true");
+    expect(badge).not.toHaveAttribute("aria-busy");
     expect(badge).toHaveAttribute("aria-live", "polite");
 
     rerender(<StatusBadge announceChanges label="完了" tone="success" />);

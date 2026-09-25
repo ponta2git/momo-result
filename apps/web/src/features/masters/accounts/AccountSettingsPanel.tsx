@@ -1,19 +1,18 @@
 import { useRef } from "react";
 
+import { AdminAccountActions } from "@/features/masters/accounts/AdminAccountActions";
 import { AdminAccountCreateDialog } from "@/features/masters/accounts/AdminAccountCreateDialog";
-import { AdminAccountRow } from "@/features/masters/accounts/AdminAccountRow";
 import type { AccountSettingsModel } from "@/features/masters/accounts/useAccountSettingsModel";
+import { memberDisplayName } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
-import {
-  dataTableHeaderCellClassName,
-  dataTableScrollAreaClassName,
-} from "@/shared/ui/data/DataTable";
+import { DataTable } from "@/shared/ui/data/DataTable";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
+import { StatusBadge } from "@/shared/ui/status/StatusBadge";
 import { contentText } from "@/shared/ui/typography";
 
 export function AccountSettingsPanel({ model: page }: { model: AccountSettingsModel }) {
@@ -88,53 +87,63 @@ export function AccountSettingsPanel({ model: page }: { model: AccountSettingsMo
               }
             />
           ) : (
-            <div className="min-w-0">
-              <p className={cn(contentText.supporting, "px-3 py-2 md:hidden")}>
-                権限と操作は横にスクロールして確認できます。
-              </p>
-              <div className={dataTableScrollAreaClassName}>
-                <table className={cn(contentText.body, "w-full min-w-[44rem] text-left")}>
-                  <caption className="sr-only">登録アカウントとログイン・管理者権限</caption>
-                  <colgroup>
-                    <col />
-                    <col className="w-56" />
-                    <col />
-                    <col />
-                    <col />
-                  </colgroup>
-                  <thead>
-                    <tr>
-                      <th
-                        className={cn(
-                          dataTableHeaderCellClassName,
-                          "sticky left-0 z-[var(--z-base)]",
-                        )}
-                      >
-                        表示名
-                      </th>
-                      <th className={dataTableHeaderCellClassName}>DiscordユーザーID</th>
-                      <th className={dataTableHeaderCellClassName}>プレーヤー</th>
-                      <th className={dataTableHeaderCellClassName}>権限</th>
-                      <th className={dataTableHeaderCellClassName}>操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {page.list.items.map((account) => {
-                      const pendingRequest = page.update.pendingRequestFor(account.accountId);
-                      return (
-                        <AdminAccountRow
-                          account={account}
-                          isPending={page.pending}
-                          key={account.accountId}
-                          pendingRequest={pendingRequest}
-                          onPatch={(request) => page.update.run(account.accountId, request)}
-                        />
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <DataTable
+              caption={{ content: "登録アカウントとログイン・管理者権限" }}
+              columns={[
+                {
+                  key: "name",
+                  header: "表示名",
+                  rowHeader: true,
+                  renderCell: (account) => account.displayName,
+                },
+                {
+                  key: "discord",
+                  header: "DiscordユーザーID",
+                  width: "14rem",
+                  renderCell: (account) => (
+                    <span className={cn(contentText.supporting, "momo-data")}>
+                      {account.discordUserId}
+                    </span>
+                  ),
+                },
+                {
+                  key: "player",
+                  header: "プレーヤー",
+                  renderCell: (account) => memberDisplayName(account.playerMemberId),
+                },
+                {
+                  key: "permissions",
+                  header: "権限",
+                  renderCell: (account) => (
+                    <div className="flex flex-wrap gap-2">
+                      <StatusBadge label={account.isAdmin ? "管理者" : "一般"} tone="neutral" />
+                      <StatusBadge
+                        label={account.loginEnabled ? "ログイン許可" : "ログイン停止"}
+                        tone={account.loginEnabled ? "success" : "warning"}
+                      />
+                    </div>
+                  ),
+                },
+                {
+                  key: "actions",
+                  header: "操作",
+                  renderCell: (account) => (
+                    <AdminAccountActions
+                      account={account}
+                      isPending={page.pending}
+                      pendingRequest={page.update.pendingRequestFor(account.accountId)}
+                      onPatch={(request) => page.update.run(account.accountId, request)}
+                    />
+                  ),
+                },
+              ]}
+              density="compact"
+              getRowKey={(account) => account.accountId}
+              isRowBusy={(account) => Boolean(page.update.pendingRequestFor(account.accountId))}
+              minWidth="44rem"
+              rows={page.list.items}
+              stickyRowHeader
+            />
           )}
         </div>
       )}

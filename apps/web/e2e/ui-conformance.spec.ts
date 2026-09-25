@@ -37,7 +37,7 @@ test("keeps dialog select navigation and outside presses within their own layer"
   await expect(page.getByRole("option", { selected: true })).toBeFocused();
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Shift+Tab");
-  await expect(dialog.getByRole("textbox", { name: "表示名*", exact: true })).toBeFocused();
+  await expect(dialog.getByRole("textbox", { name: "表示名", exact: true })).toBeFocused();
   await expect(trigger).toHaveText("試合参加者に紐づけない");
 
   await trigger.click();
@@ -385,6 +385,14 @@ test("keeps match rows usable through responsive update and retry states", async
     await action.hover();
     await expect.poll(paint).not.toBe(restingPaint);
     await page.emulateMedia({ reducedMotion: "reduce" });
+    // Media change handlers run at the rendering boundary after the protocol call returns.
+    // Capture the settled paint, not an arbitrary in-flight hover frame.
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        }),
+    );
     const hoverPaint = await paint();
     await expect(action).toHaveCSS("opacity", "1");
     expect(await action.boundingBox()).toEqual(restingBox);
@@ -469,9 +477,17 @@ test("keeps match rows usable through responsive update and retry states", async
         "aria-busy",
         "true",
       );
-      await expect(
-        page.getByRole("region", { name: "登録済みの試合" }).locator("[data-stale]"),
-      ).toHaveAttribute("aria-busy", "true");
+      expect(
+        await visibleMatchRow.evaluate((row) => Boolean(row.closest('[aria-busy="true"]'))),
+      ).toBe(true);
+      const updatingStatus = page
+        .getByRole("region", { name: "登録済みの試合" })
+        .getByRole("status")
+        .filter({ hasText: "一覧を更新中" });
+      await expect(updatingStatus).toBeVisible();
+      expect(
+        await updatingStatus.evaluate((status) => status.closest('[aria-busy="true"]')),
+      ).toBeNull();
       await expect(visibleMatchRow).toBeVisible();
       await expect(page.getByRole("button", { name: "一覧を再読み込み" })).toHaveCount(0);
     } finally {

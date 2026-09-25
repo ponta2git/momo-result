@@ -35,7 +35,6 @@ function heldEventOption(event: HeldEventResponse) {
   const description = heldEventDescription(event);
   const eventLabel = formatDateTimeLong(event.heldAt);
   return {
-    accessibleLabel: `${eventLabel} — ${description}`,
     description,
     label: eventLabel,
     value: event.id,

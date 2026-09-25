@@ -301,7 +301,8 @@ describe("ExportPage", () => {
     expect(screen.queryByText("出力対象を確認しています。")).not.toBeInTheDocument();
     pageGate.resolve();
 
-    const lastEvent = await screen.findByRole("radio", { name: /21試合/u });
+    const lastEvent = await screen.findByRole("radio", { name: /^2026-01-21 \d{2}:\d{2}$/u });
+    expect(lastEvent).toHaveAccessibleDescription("21試合");
     expect(requestedPages).toEqual([1, 2]);
     expect(screen.getByText("21〜21件／全21件")).toBeInTheDocument();
     await waitFor(() => expect(detailRequested).toBe(true));
@@ -393,7 +394,11 @@ describe("ExportPage", () => {
     expect(screen.queryByText("出力対象を確認しています。")).not.toBeInTheDocument();
     pageGate.resolve();
 
-    expect(await screen.findByRole("radio", { name: /第21試合/u })).toBeChecked();
+    const selectedMatch = await screen.findByRole("radio", {
+      name: /^2026-01-01 \d{2}:\d{2}・第21試合$/u,
+    });
+    expect(selectedMatch).toBeChecked();
+    expect(selectedMatch).toHaveAccessibleDescription("作品名未取得・シーズン名未取得");
     expect(requestedCursors).toEqual([null, "candidate-last"]);
   });
 

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { RankBadge, RankTrail } from "@/shared/matches/RankBadge";
@@ -33,8 +33,13 @@ describe("RankBadge", () => {
   });
 
   it("renders an accessible, text-backed rank trail", () => {
-    render(<RankTrail ariaLabel="順位推移 1位、3位" ranks={[1, 3]} />);
+    render(<RankTrail ariaLabel="順位推移" ranks={[1, 3, 1]} />);
 
-    expect(screen.getByLabelText("順位推移 1位、3位")).toHaveTextContent("1位 → 3位");
+    const trail = screen.getByRole("list", { name: "順位推移" });
+    expect(
+      within(trail)
+        .getAllByRole("listitem")
+        .map((entry) => entry.textContent),
+    ).toEqual(["1位", " → 3位", " → 1位"]);
   });
 });

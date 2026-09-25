@@ -505,7 +505,9 @@ describe("OcrCapturePage", () => {
       expect(screen.getByLabelText("試合番号")).toHaveValue(7);
     });
     await user.click(screen.getByRole("button", { name: "開催（任意）を変更" }));
-    expect(screen.getByRole("radio", { name: /確定済み3試合・未確定下書き1件/u })).toBeChecked();
+    const selectedEvent = screen.getByRole("radio", { name: "2026/02/03 13:05" });
+    expect(selectedEvent).toBeChecked();
+    expect(selectedEvent).toHaveAccessibleDescription("確定済み3試合・未確定下書き1件");
     await user.click(screen.getByRole("button", { name: "ダイアログを閉じる" }));
     await user.upload(
       screen.getByLabelText("OCRの画像をアップロード"),

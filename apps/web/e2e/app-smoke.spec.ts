@@ -219,7 +219,7 @@ test("creates a held event and completes OCR intake and review", async ({
     await page.getByRole("button", { name: "開催（必須）を変更" }).click();
     const heldEventDialog = page.getByRole("dialog", { name: "開催を選択" });
     await expect(heldEventDialog.getByRole("group", { name: "開催を選択" })).toBeVisible();
-    await selectDialogRadio(heldEventDialog, new RegExp(`^${heldEventLabelPrefix} —`, "u"));
+    await selectDialogRadio(heldEventDialog, new RegExp(`^${heldEventLabelPrefix}$`, "u"));
     await expect(page.getByText(new RegExp(`^${heldEventLabelPrefix} —`, "u"))).toBeVisible();
     await selectSeedMasters(page, { gameTitleId, mapMasterId, seasonMasterId });
 
@@ -522,12 +522,22 @@ test("inspects saved analysis and handles explicit refresh states", async ({
       "true",
     );
     await expect
-      .poll(async () =>
-        analysisTabs
-          .locator('[role="presentation"]')
-          .evaluate((element) => element.getBoundingClientRect().width),
-      )
-      .toBeGreaterThan(0);
+      .poll(async () => {
+        const activeTab = await analysisTabs
+          .getByRole("tab", { name: "推移", exact: true })
+          .boundingBox();
+        const underline = await analysisTabs
+          .locator('[role="presentation"] > [aria-hidden="true"]')
+          .boundingBox();
+        return Boolean(
+          activeTab &&
+          underline &&
+          underline.width > 0 &&
+          Math.abs(activeTab.x - underline.x) < 1 &&
+          Math.abs(activeTab.width - underline.width) < 1,
+        );
+      })
+      .toBe(true);
     const scopeSurface = page.getByRole("region", { name: "比較条件" });
     await expect(scopeSurface).toContainText(`${analysisScope.matchCount}戦`);
     await expect(page.getByText("新しい戦績データを計算中です")).toBeVisible();
@@ -621,7 +631,7 @@ test("inspects saved analysis and handles explicit refresh states", async ({
     await page.setViewportSize({ height: 844, width: 390 });
 
     await page.getByRole("tab", { name: "今の差" }).click();
-    const overviewRegion = page.getByRole("region", { name: "順位と基礎比較" });
+    const overviewRegion = page.getByRole("region", { exact: true, name: "順位と基礎比較" });
     await expect(overviewRegion).toBeVisible();
     const rankDistribution = overviewRegion.getByRole("group", { name: "ぽんたの順位分布" });
     const secondRankSegment = rankDistribution.getByRole("img", { name: /^2位 /u });
@@ -981,7 +991,7 @@ test("filters and opens a confirmed match", async ({ e2eRun, page, request }) =>
     await heldEventPicker.click();
     await selectDialogRadio(
       page.getByRole("dialog", { name: "開催を選択" }),
-      new RegExp(`^${heldEventLabelPrefix} —`, "u"),
+      new RegExp(`^${heldEventLabelPrefix}$`, "u"),
     );
     expect((await heldEventResponse).ok()).toBe(true);
     await expect(page).toHaveURL(new RegExp(`[?&]heldEventId=${heldEventId}(?:&|$)`, "u"));

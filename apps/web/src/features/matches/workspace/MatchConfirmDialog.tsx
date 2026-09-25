@@ -10,12 +10,7 @@ import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { RankBadge } from "@/shared/matches/RankBadge";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
-import {
-  dataTableBodyCellClassName,
-  DataTableBodyRow,
-  dataTableHeaderCellClassName,
-  dataTableScrollAreaClassName,
-} from "@/shared/ui/data/DataTable";
+import { DataTable } from "@/shared/ui/data/DataTable";
 import { FactList } from "@/shared/ui/data/FactList";
 import { Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
 import { contentText } from "@/shared/ui/typography";
@@ -78,52 +73,45 @@ function MatchConfirmSummary({
 }
 
 function PlayerLedger({ values }: { values: MatchFormValues }) {
-  const orderedPlayers = orderFixedMembers(values.players);
   return (
-    <div className="min-w-0">
-      <p className={cn(contentText.supporting, "mb-2 sm:hidden")}>
-        4人分の結果は横にスクロールして確認できます。
-      </p>
-      <div className={dataTableScrollAreaClassName}>
-        <table className="w-full min-w-[29rem] text-left text-sm">
-          <caption className="sr-only">確定する4人分の結果</caption>
-          <thead>
-            <tr>
-              <th className={dataTableHeaderCellClassName}>順位</th>
-              <th className={dataTableHeaderCellClassName}>メンバー</th>
-              <th className={`${dataTableHeaderCellClassName} text-right`}>総資産（万円）</th>
-              <th className={`${dataTableHeaderCellClassName} text-right`}>収益（万円）</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orderedPlayers.map((player) => (
-              <DataTableBodyRow key={player.memberId}>
-                <td className={dataTableBodyCellClassName}>
-                  <RankBadge rank={player.rank} />
-                </td>
-                <th className={`${dataTableBodyCellClassName} font-plain text-left`} scope="row">
-                  <MemberSequenceLabel memberId={player.memberId}>
-                    {memberDisplayName(player.memberId)}
-                  </MemberSequenceLabel>
-                </th>
-                <td
-                  className={cn(
-                    dataTableBodyCellClassName,
-                    contentText.compactPrimary,
-                    "text-right tabular-nums",
-                  )}
-                >
-                  {player.totalAssetsManYen.toLocaleString()}
-                </td>
-                <td className={`${dataTableBodyCellClassName} text-right tabular-nums`}>
-                  {player.revenueManYen.toLocaleString()}
-                </td>
-              </DataTableBodyRow>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <DataTable
+      caption={{ content: "確定する4人分の結果" }}
+      columns={[
+        { key: "rank", header: "順位", renderCell: (player) => <RankBadge rank={player.rank} /> },
+        {
+          key: "member",
+          header: "メンバー",
+          rowHeader: true,
+          renderCell: (player) => (
+            <MemberSequenceLabel memberId={player.memberId}>
+              {memberDisplayName(player.memberId)}
+            </MemberSequenceLabel>
+          ),
+        },
+        {
+          key: "assets",
+          header: "総資産（万円）",
+          align: "right",
+          tabular: true,
+          renderCell: (player) => (
+            <span className={contentText.compactPrimary}>
+              {player.totalAssetsManYen.toLocaleString("ja-JP")}
+            </span>
+          ),
+        },
+        {
+          key: "revenue",
+          header: "収益（万円）",
+          align: "right",
+          tabular: true,
+          renderCell: (player) => player.revenueManYen.toLocaleString("ja-JP"),
+        },
+      ]}
+      density="compact"
+      getRowKey={(player) => player.memberId}
+      minWidth="29rem"
+      rows={orderFixedMembers(values.players)}
+    />
   );
 }
 

@@ -15,6 +15,27 @@ function render(ui: ReactElement) {
 }
 
 describe("ReviewView", () => {
+  it("identifies the players covered by a common hypothesis before the individual hypotheses", () => {
+    const response = makeFourPlayerSeriesAnalysisReview();
+    response.commonPlaybookTopics = [
+      {
+        category: "revenue",
+        detail: "共通の根拠",
+        heading: "収益先行後の詰め方",
+        playerIds: response.playbookByPlayer.slice(0, 3).map((entry) => entry.player.memberId),
+        topicId: "common:revenue",
+      },
+    ];
+    render(
+      <ReviewView loading={false} response={response} showError={false} onViewChange={vi.fn()} />,
+    );
+    const common = screen.getByRole("region", { name: "複数人共通の行動仮説" });
+    expect(within(common).getByText("3人")).toBeInTheDocument();
+    expect(within(common).getByText("いーゆー、ぽんた、あかねまみ")).toBeInTheDocument();
+    expect(within(common).queryByText("おーたか")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "いーゆー" })).toBeInTheDocument();
+  });
+
   it("shows common hypotheses directly, keeps secondary hypotheses local, and uses help dialogs", async () => {
     const user = userEvent.setup();
     const response = makeFourPlayerSeriesAnalysisReview();

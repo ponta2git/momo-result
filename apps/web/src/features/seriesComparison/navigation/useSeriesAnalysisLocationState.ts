@@ -17,6 +17,7 @@ import {
   compatibleMapIds,
   compatibleSeasonIds,
   defaultSeriesAnalysisView,
+  isSeriesAnalysisViewId,
   normalizeSeriesAnalysisSelection,
   parseSeriesAnalysisSearchParams,
 } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
@@ -58,11 +59,40 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
   const pending = useRef<PendingLocation | undefined>(undefined);
   const operation = useRef(0);
   const [displayIntent, setDisplayIntent] = useState<SeriesAnalysisDisplayIntent>();
-  const [normalizationNotice, setNormalizationNotice] = useState<string>();
+  const [normalization, setNormalization] = useState<{
+    source: string;
+    message: string | undefined;
+  }>();
   const href = `${location.pathname}${location.search}${location.hash}`;
-  const rawMetric = searchParams.get("ownerMetric");
-  if (rawMetric !== null && !isOwnerMetricId(rawMetric) && normalizationNotice === undefined) {
-    setNormalizationNotice("オーナー比較の指標を平均順位に戻しました。");
+  if (options && normalization?.source !== location.key) {
+    const reasons: string[] = [];
+    if (rawState.gameTitleId && rawState.gameTitleId !== urlState.gameTitleId) {
+      reasons.push(
+        urlState.gameTitleId
+          ? "指定された作品は比較できないため、選択可能な作品に切り替えました。"
+          : "指定された作品は比較できないため、作品の選択を解除しました。",
+      );
+    }
+    if (rawState.seasonMasterId && rawState.seasonMasterId !== urlState.seasonMasterId) {
+      reasons.push("指定されたシーズンは比較できないため、全シーズンに戻しました。");
+    }
+    if (rawState.mapMasterId && rawState.mapMasterId !== urlState.mapMasterId) {
+      reasons.push("指定されたマップは現在の比較条件で利用できないため、全マップに戻しました。");
+    }
+    const rawView = searchParams.get("view");
+    if (rawView !== null && !isSeriesAnalysisViewId(rawView.trim())) {
+      reasons.push("指定された表示は利用できないため、振り返りに戻しました。");
+    }
+    const rawMetric = searchParams.get("ownerMetric");
+    if (rawMetric !== null && !isOwnerMetricId(rawMetric)) {
+      reasons.push("オーナー比較の指標を平均順位に戻しました。");
+    }
+    if (rawState.focusMatchId && !urlState.focusMatchId) {
+      reasons.push("比較条件が変わったため、選択試合の強調表示を解除しました。");
+    }
+    if (reasons.length > 0) {
+      setNormalization({ source: location.key, message: reasons.join(" ") });
+    }
   }
 
   useEffect(() => {
@@ -110,6 +140,7 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
       const hash = updateOptions.displayOnly ? "#metric-owner" : (inFlight?.hash ?? location.hash);
       const target = `${location.pathname}?${params.toString()}${hash}`;
       pending.current = { sourceKey: location.key, target, state: normalized, hash };
+      setNormalization({ source: location.key, message: undefined });
       operation.current += 1;
       setDisplayIntent(
         updateOptions.displayOnly
@@ -231,7 +262,7 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
     activeView: state.view ?? defaultSeriesAnalysisView,
     deferredState,
     displayIntent,
-    normalizationNotice,
+    normalizationNotice: normalization?.message,
     returnTo,
     state,
   };

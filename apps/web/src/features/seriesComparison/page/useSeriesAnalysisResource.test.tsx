@@ -36,6 +36,83 @@ beforeAll(() =>
 );
 
 describe("useSeriesAnalysisResource", () => {
+  it("does not retain another selected match or view when a replacement artifact fails", async () => {
+    const queryClient = createTestQueryClient();
+    const nextArtifact = {
+      ...analysisArtifact,
+      artifactId: "artifact-unavailable",
+      inputRevision: "13",
+    };
+    let nextPublication = false;
+    server.use(
+      http.get("/api/analytics/series-comparison/v2/status", () =>
+        HttpResponse.json(
+          makeSeriesAnalysisStatus({
+            currentArtifact: nextPublication ? nextArtifact : analysisArtifact,
+          }),
+        ),
+      ),
+      http.get("/api/analytics/series-comparison/v4/aggregate", ({ request }) =>
+        new URL(request.url).searchParams.get("artifactId") === nextArtifact.artifactId
+          ? HttpResponse.json({ title: "Unavailable" }, { status: 503 })
+          : HttpResponse.json(makeSeriesAnalysisAggregate()),
+      ),
+      http.get("/api/analytics/series-comparison/v3/match-context", ({ request }) => {
+        const params = new URL(request.url).searchParams;
+        return HttpResponse.json({
+          ...makeSeriesAnalysisMatchContext(),
+          artifact:
+            params.get("artifactId") === nextArtifact.artifactId ? nextArtifact : analysisArtifact,
+          matchId: params.get("matchId"),
+        });
+      }),
+    );
+    const initialState: SeriesAnalysisUrlState = {
+      gameTitleId: analysisArtifact.gameTitleId,
+      focusMatchId: "match-12",
+      view: "overview",
+    };
+    const { result, rerender } = renderHook(
+      (state: SeriesAnalysisUrlState) =>
+        useSeriesAnalysisResource({
+          activeView: state.view ?? "overview",
+          deferredState: state,
+          state,
+        }),
+      {
+        initialProps: initialState,
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        ),
+      },
+    );
+    await waitFor(() => expect(result.current.focus.data?.matchId).toBe("match-12"));
+    nextPublication = true;
+    act(() => result.current.refresh());
+    await waitFor(() => expect(result.current.resource.hasError).toBe(true));
+    await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+    expect(result.current.focus.data?.matchId).toBe("match-12");
+
+    rerender({ ...initialState, focusMatchId: "match-13", view: "flow" });
+    await waitFor(() =>
+      expect(
+        queryClient.getQueryData(
+          seriesAnalysisKeys.matchContext({
+            artifactId: nextArtifact.artifactId,
+            gameTitleId: analysisArtifact.gameTitleId,
+            matchId: "match-13",
+          }),
+        ),
+      ).toMatchObject({ kind: "available" }),
+    );
+    await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+    expect(result.current.resource.data?.artifact.artifactId).toBe(analysisArtifact.artifactId);
+    expect(result.current.resource.bundle?.view).toBe("flow");
+    expect(result.current.focus.data).toBeUndefined();
+    expect(result.current.focus.hasError).toBe(true);
+    expect(result.current.resource.shielded).toBe(false);
+  });
+
   it.each([
     [404, "NOT_FOUND"],
     [410, "ANALYSIS_ARTIFACT_EXPIRED"],

@@ -21,6 +21,7 @@ import {
   makeFourPlayerSeriesAnalysisMatchContext,
   makeOwnerComparisonAggregate,
   makeSeriesAnalysisAggregate,
+  makeSeriesAnalysisStatus,
 } from "@/test/msw/seriesAnalysisFixtures";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
@@ -133,11 +134,23 @@ describe("SeriesComparisonPage", () => {
     const aggregate = makeSeriesAnalysisAggregate();
     const refresh = createDeferred();
     let requests = 0;
+    let statusRequests = 0;
+    const nextArtifact = { ...analysisArtifact, artifactId: "artifact-next", inputRevision: "13" };
     server.use(
+      http.get("/api/analytics/series-comparison/v2/status", () => {
+        statusRequests += 1;
+        return HttpResponse.json(
+          makeSeriesAnalysisStatus({
+            currentArtifact: statusRequests === 1 ? analysisArtifact : nextArtifact,
+          }),
+        );
+      }),
       http.get("/api/analytics/series-comparison/v4/aggregate", async () => {
         requests += 1;
         if (requests > 1) await refresh.promise;
-        return HttpResponse.json(aggregate);
+        return HttpResponse.json(
+          requests === 1 ? aggregate : { ...aggregate, artifact: nextArtifact },
+        );
       }),
     );
     await act(async () => {

@@ -30,6 +30,37 @@ function analysisBundle(
 }
 
 describe("SeriesAnalysisContent", () => {
+  it("closes review evidence when its displayed scope changes instead of retargeting an open dialog", async () => {
+    const user = userEvent.setup();
+    const review = makeFourPlayerSeriesAnalysisReview();
+    const callbacks = {
+      onArtifactExpired: vi.fn(),
+      onClearFocusedMatch: vi.fn(),
+      onFocusMatch: vi.fn(),
+      onViewChange: vi.fn(),
+    };
+    const renderBundle = (response: typeof review) => (
+      <MemoryRouter>
+        <SeriesAnalysisContent
+          {...callbacks}
+          bundle={{ kind: "review", view: "review", review: response, matchContext: undefined }}
+        />
+      </MemoryRouter>
+    );
+    const rendered = render(renderBundle(review));
+    const purpose = screen.getByRole("tab", { name: "次戦に備える" });
+    await user.click(screen.getAllByRole("button", { name: "根拠・注意・試合後の確認" })[0]!);
+    expect(screen.getByRole("dialog", { name: "根拠・注意・試合後の確認" })).toBeInTheDocument();
+    rendered.rerender(
+      renderBundle({
+        ...review,
+        scope: { ...review.scope, kind: "season", seasonMasterId: "season-next" },
+      }),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByRole("tab", { name: "次戦に備える" })).toBe(purpose);
+  });
+
   it("keeps the same owner's focus when the match changes and when returning to the context view", async () => {
     const user = userEvent.setup();
     const aggregate = makeOwnerComparisonAggregate();
@@ -236,7 +267,7 @@ describe("SeriesAnalysisContent", () => {
     expect(await screen.findAllByRole("dialog", { name: "平均順位の推移" })).toHaveLength(1);
   });
 
-  it("resets drilldown state when the artifact or analysis view identity changes", async () => {
+  it("resets drilldown state when the artifact, scope, or analysis view identity changes", async () => {
     const user = userEvent.setup();
     const queryClient = createTestQueryClient();
     const aggregate = makeSeriesAnalysisAggregate();
@@ -273,7 +304,25 @@ describe("SeriesAnalysisContent", () => {
     await user.click(await screen.findByRole("button", { name: "順位推移を見る" }));
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
 
-    rendered.rerender(view(analysisBundle(nextAggregate, "drivers")));
+    const seasonAggregate: SeriesComparisonAggregate = {
+      ...nextAggregate,
+      scope: { ...nextAggregate.scope, kind: "season", seasonMasterId: "season_current" },
+    };
+    rendered.rerender(view(analysisBundle(seasonAggregate, "overview")));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await user.click(await screen.findByRole("button", { name: "順位推移を見る" }));
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+
+    const mapAggregate: SeriesComparisonAggregate = {
+      ...nextAggregate,
+      scope: { ...nextAggregate.scope, kind: "map", mapMasterId: "map_japan" },
+    };
+    rendered.rerender(view(analysisBundle(mapAggregate, "overview")));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await user.click(await screen.findByRole("button", { name: "順位推移を見る" }));
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+
+    rendered.rerender(view(analysisBundle(mapAggregate, "drivers")));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 });

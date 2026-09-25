@@ -22,6 +22,10 @@ vi.mock("@/features/seriesComparison/page/SeriesAnalysisFlowView", () => ({
   FlowView: ({ focusedItemIds }: { focusedItemIds: string[] }) => (
     <div aria-label="artifact由来の可視化" role="region">
       {focusedItemIds.length === 0 ? "選択中の試合なし" : focusedItemIds.join(",")}
+      <details>
+        <summary>可視化の補助情報</summary>
+        同じ成果物の補助情報
+      </details>
     </div>
   ),
 }));
@@ -29,6 +33,42 @@ vi.mock("@/features/seriesComparison/page/SeriesAnalysisFlowView", () => ({
 setupMsw();
 
 describe("SeriesComparisonPage manual refresh", () => {
+  it("keeps same-artifact content and its focused disclosure usable during refresh", async () => {
+    const user = userEvent.setup();
+    const aggregateGate = createDeferred();
+    let aggregateRequests = 0;
+    server.use(
+      http.get("/api/analytics/series-comparison/v4/aggregate", async () => {
+        aggregateRequests += 1;
+        if (aggregateRequests > 1) await aggregateGate.promise;
+        return HttpResponse.json(makeSeriesAnalysisAggregate());
+      }),
+    );
+    const queryClient = createTestQueryClient();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/analytics/series?view=flow"]}>
+          <SeriesComparisonPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    const disclosure = await screen.findByText("可視化の補助情報");
+    await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+
+    await user.click(screen.getByRole("button", { name: "表示を更新" }));
+    await waitFor(() => expect(aggregateRequests).toBe(2));
+    expect(screen.getByRole("button", { name: "表示を更新中" })).toBeDisabled();
+    expect(disclosure.closest("[inert]")).toBeNull();
+    await user.click(disclosure);
+    expect(disclosure.closest("details")).toHaveAttribute("open");
+    expect(disclosure).toHaveFocus();
+
+    aggregateGate.resolve();
+    await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+    expect(disclosure).toHaveFocus();
+    expect(disclosure.closest("details")).toHaveAttribute("open");
+  });
+
   it("uses no automatic interval and updates status only after explicit refresh", async () => {
     const user = userEvent.setup();
     const nextStatusResponse = createDeferred();

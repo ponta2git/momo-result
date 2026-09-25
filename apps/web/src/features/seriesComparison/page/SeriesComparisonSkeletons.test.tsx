@@ -8,6 +8,9 @@ describe("SeriesComparisonSkeletons", () => {
     render(<PageSkeleton showReturnAction />);
 
     const surface = screen.getByRole("region", { name: "戦績比較" });
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("戦績比較を読み込み中");
+    expect(status.closest('[aria-busy="true"]')).toBeNull();
     const toolbar = surface.querySelector('[data-page-content-actions=""]');
     expect(toolbar?.firstElementChild).toHaveAttribute("aria-hidden", "true");
     expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();

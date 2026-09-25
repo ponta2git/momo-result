@@ -128,9 +128,15 @@ describe("rich series analysis views", () => {
     expect(screen.getByText("0円")).toBeInTheDocument();
     expect(screen.getByText("1万円〜9999万円")).toBeInTheDocument();
     expect(screen.queryByText("0〜9999")).not.toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "物件収益比率と総資産の散布図の数値を表で見る" }),
+    );
+    const scatterValues = screen.getByRole("table", { name: "物件収益比率と総資産の散布図の数値" });
+    expect(within(scatterValues).getByRole("cell", { name: "12%" })).toBeInTheDocument();
+    expect(within(scatterValues).getByRole("cell", { name: "21億円" })).toBeInTheDocument();
     expect(
-      screen.getByRole("link", {
-        name: /第12戦、12%、21億円、1位の試合結果を見る/u,
+      within(scatterValues).getByRole("link", {
+        name: "ぽんた、第12戦、1位の試合結果を見る",
       }),
     ).toHaveAttribute("href", expect.stringContaining("/matches/match-12?returnTo="));
     expect(

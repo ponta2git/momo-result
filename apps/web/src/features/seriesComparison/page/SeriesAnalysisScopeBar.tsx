@@ -20,6 +20,7 @@ type SeriesAnalysisResourceSummary = Pick<
 
 export function SeriesAnalysisScopeBar({
   canRefresh,
+  loading,
   mapOptions,
   mapValue,
   onMapChange,
@@ -34,6 +35,7 @@ export function SeriesAnalysisScopeBar({
   seriesValue,
 }: {
   canRefresh: boolean;
+  loading: boolean;
   mapOptions: SelectOption[];
   mapValue: string;
   onMapChange: (value: string) => void;
@@ -80,7 +82,11 @@ export function SeriesAnalysisScopeBar({
                 {selectedSeries?.summaryLabel ?? selectedSeries?.label ?? "対象作品を選択"}
               </span>
               <span className={cn(contentText.supporting, "tabular-nums")}>
-                {response ? `${response.scope.matchCount}戦` : "対戦数を確認中"}
+                {response
+                  ? `${response.scope.matchCount}戦`
+                  : loading
+                    ? "対戦数を確認中"
+                    : "対戦数未取得"}
               </span>
               {detailFilterLabels.length > 0 ? (
                 <span className={contentText.supporting}>{detailFilterLabels.join("・")}</span>
@@ -128,7 +134,9 @@ export function SeriesAnalysisScopeBar({
         <span className={cn(contentText.supporting, "tabular-nums")}>
           {response
             ? `最終更新 ${formatDateTimeLong(response.artifact.publishedAt)}`
-            : "分析結果を読み込みます"}
+            : loading
+              ? "分析結果を読み込み中"
+              : "分析結果は未取得です"}
         </span>
         <Button
           disabled={!canRefresh}

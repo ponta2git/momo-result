@@ -9,6 +9,8 @@ import type { DataVizSeriesIdentity } from "@/features/seriesComparison/charts/d
 export function DataVizQuadrantPlot({
   ariaLabel,
   cornerLabels,
+  formatX = String,
+  formatY = String,
   points,
   seriesIdentity,
   xAxisLabel,
@@ -19,6 +21,8 @@ export function DataVizQuadrantPlot({
 }: {
   ariaLabel: string;
   cornerLabels: { bottomLeft: string; bottomRight: string; topLeft: string; topRight: string };
+  formatX?: ((value: number) => string) | undefined;
+  formatY?: ((value: number) => string) | undefined;
   points: Array<{ label: string; seriesId: string; x: number | null; y: number | null }>;
   seriesIdentity: DataVizSeriesIdentity[];
   xAxisLabel: string;
@@ -124,6 +128,30 @@ export function DataVizQuadrantPlot({
         破線は4人の中央値です。近い点は断定せず、同程度として読みます。
       </p>
       <DataVizLegend series={seriesIdentity} />
+      <DataVizTable
+        label={ariaLabel}
+        minWidth="28rem"
+        rows={seriesIdentity.map((identity) => ({
+          ...identity,
+          point: points.find((point) => point.seriesId === identity.id),
+        }))}
+        getRowKey={(row) => row.id}
+        columns={[
+          { key: "player", header: "プレーヤー", rowHeader: true, renderCell: (row) => row.label },
+          {
+            key: "x",
+            header: xAxisLabel,
+            tabular: true,
+            renderCell: (row) => (finiteNumber(row.point?.x) ? formatX(row.point.x) : "—"),
+          },
+          {
+            key: "y",
+            header: yAxisLabel,
+            tabular: true,
+            renderCell: (row) => (finiteNumber(row.point?.y) ? formatY(row.point.y) : "—"),
+          },
+        ]}
+      />
     </figure>
   );
 }
@@ -145,3 +173,4 @@ function CornerLabel({
     </text>
   );
 }
+import { DataVizTable } from "@/features/seriesComparison/charts/dataViz/DataVizTable";

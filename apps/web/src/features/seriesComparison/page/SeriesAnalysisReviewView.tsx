@@ -48,9 +48,12 @@ export function ReviewView({
   const navigation = useSeriesAnalysisNavigation();
   if (loading) {
     return (
-      <div aria-label="次戦の準備を読み込み中" className="grid gap-6">
-        <Skeleton className="min-h-24" />
-        <Skeleton className="min-h-48" />
+      <div aria-labelledby={purposeTabId("review")} id={purposePanelId("review")} role="tabpanel">
+        <div aria-label="次戦の準備を読み込み中" className="grid gap-6" role="status">
+          <span className="sr-only">次戦の準備を読み込み中</span>
+          <Skeleton className="min-h-24" />
+          <Skeleton className="min-h-48" />
+        </div>
       </div>
     );
   }
@@ -89,6 +92,12 @@ export function ReviewView({
               <article className="grid content-start gap-3" key={topic.topicId}>
                 <h3 className={contentText.primary}>{topic.heading}</h3>
                 <span className={contentText.supporting}>{topic.playerIds.length}人</span>
+                <p className={contentText.supporting}>
+                  {playbookByPlayer
+                    .filter((entry) => topic.playerIds.includes(entry.player.memberId))
+                    .map((entry) => entry.player.displayName)
+                    .join("、")}
+                </p>
               </article>
             ))}
           </div>
@@ -97,11 +106,11 @@ export function ReviewView({
       <div className="grid items-start gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
         {playbookByPlayer.map((entry) => (
           <section className="min-w-0" key={entry.player.memberId}>
-            <h3 className={contentText.heading}>
+            <h2 className={contentText.heading}>
               <MemberSequenceLabel memberId={entry.player.memberId}>
                 {entry.player.displayName}
               </MemberSequenceLabel>
-            </h3>
+            </h2>
             {entry.primaryCard ? (
               <div className="mt-2 min-h-0">
                 <PlaybookCard card={entry.primaryCard} emphasis />
@@ -151,9 +160,9 @@ function PlaybookCard({
   return (
     <article className={cn("flex h-full min-w-0 flex-col", emphasis ? "gap-6" : "gap-4 py-1")}>
       <div className="grid gap-3">
-        <h4 className={emphasis ? contentText.primary : contentText.heading}>
+        <h3 className={emphasis ? contentText.primary : contentText.heading}>
           {card.actionHypothesis}
-        </h4>
+        </h3>
         <div className="flex flex-wrap items-center gap-2">
           <span
             className={cn(
@@ -202,7 +211,7 @@ function PlaybookCard({
               layout="plain"
             />
             <div>
-              <h5 className={contentText.supporting}>判断材料</h5>
+              <h3 className={contentText.supporting}>判断材料</h3>
               <div className="mt-1 grid gap-2">
                 {card.evidence.map((evidence) => {
                   const countLabel = evidenceCountLabel(evidence, card.targetCount);

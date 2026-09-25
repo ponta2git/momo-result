@@ -146,7 +146,8 @@ function AnalysisJobStatusBadge({
 
 export function AdminSkeleton() {
   return (
-    <div aria-label="戦績分析管理を読み込み中" className="grid gap-4">
+    <div aria-label="戦績分析管理を読み込み中" className="grid gap-4" role="status">
+      <span className="sr-only">戦績分析管理を読み込み中</span>
       <Skeleton className="min-h-20" />
       <Skeleton className="min-h-28" />
       <Skeleton className="min-h-40" />

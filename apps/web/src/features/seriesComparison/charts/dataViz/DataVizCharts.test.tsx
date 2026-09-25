@@ -1,4 +1,6 @@
-import { render } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import { DataVizHistogramChart } from "@/features/seriesComparison/charts/dataViz/HistogramChart";
@@ -29,6 +31,143 @@ function expectIntrinsicScrollableChart(
 }
 
 describe("data visualizations at the analysis display bound", () => {
+  it("lets keyboard users skip plotted links and reads exact scatter values through bounded pages", async () => {
+    const user = userEvent.setup();
+    const points = Array.from({ length: 53 }, (_, index) => ({
+      href: `/matches/match-${index + 1}`,
+      itemId: `point-${index + 1}`,
+      label: `プレーヤー1の第${index + 1}戦`,
+      seriesId: "player-1",
+      x: index / 100,
+      y: index - 30,
+    }));
+    render(
+      <MemoryRouter>
+        <DataVizScatterPlot
+          ariaLabel="試合の資産"
+          points={points}
+          seriesIdentity={identities}
+          formatX={(value) => `${value * 100}%`}
+          formatY={(value) => `${value}万円`}
+          xAxisLabel="物件収益比率"
+          xMinimumStep={0.1}
+          yAxisLabel="総資産"
+          yMinimumStep={1}
+        />
+        <button type="button">次の節</button>
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    await user.tab();
+    const disclosure = screen.getByRole("button", { name: "試合の資産の数値を表で見る" });
+    expect(disclosure).toHaveFocus();
+    await user.tab();
+    expect(screen.getByRole("button", { name: "次の節" })).toHaveFocus();
+    await user.click(disclosure);
+    const table = screen.getByRole("table", { name: "試合の資産の数値" });
+    expect(within(table).getAllByRole("link")).toHaveLength(25);
+    expect(
+      within(table).getByRole("link", { name: "プレーヤー1の第1戦の試合結果を見る" }),
+    ).toHaveAttribute("href", "/matches/match-1");
+    const first = within(table).getByRole("row", { name: /プレーヤー1の第1戦/u });
+    expect(within(first).getByRole("cell", { name: "0%" })).toBeInTheDocument();
+    expect(within(first).getByRole("cell", { name: "-30万円" })).toBeInTheDocument();
+    const next = screen.getByRole("button", { name: "次のページへ" });
+    await user.click(next);
+    expect(next).toHaveFocus();
+    expect(
+      within(table).queryByRole("link", { name: "プレーヤー1の第1戦の試合結果を見る" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(table).getByRole("link", { name: "プレーヤー1の第26戦の試合結果を見る" }),
+    ).toHaveAttribute("href", "/matches/match-26");
+    expect(screen.getByRole("status")).toHaveTextContent("26〜50件／全53件");
+    await user.click(next);
+    expect(within(table).getAllByRole("link")).toHaveLength(3);
+    expect(next).toBeDisabled();
+  });
+
+  it("pairs line values with the same index and named series without filling missing observations", async () => {
+    const user = userEvent.setup();
+    render(
+      <DataVizLineChart
+        ariaLabel="累積値"
+        focusItemIds={["first-2"]}
+        formatIndex={(index) => `第${index}戦`}
+        formatValue={(value) => `${value}回`}
+        seriesIdentity={identities.slice(0, 2)}
+        series={[
+          {
+            id: "player-1",
+            points: [
+              { index: 1, itemId: "first-1", value: 0 },
+              { index: 2, itemId: "first-2", value: 3 },
+            ],
+          },
+          { id: "player-2", points: [{ index: 2, itemId: "second-2", value: 7 }] },
+        ]}
+        yAxisLabel="累積回数"
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "累積値の数値を表で見る" }));
+    const table = screen.getByRole("table", { name: "累積値の数値" });
+    expect(
+      within(table)
+        .getAllByRole("columnheader")
+        .map((cell) => cell.textContent),
+    ).toEqual(["試合", "プレーヤー1", "プレーヤー2"]);
+    expect(within(table).getByRole("row", { name: "第1戦 0回 —" })).toBeInTheDocument();
+    expect(
+      within(table).getByRole("row", { name: "第2戦（この試合） 3回 7回" }),
+    ).toBeInTheDocument();
+  });
+
+  it("exposes histogram zeros and undefined quadrant coordinates as different values", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <DataVizHistogramChart
+          ariaLabel="金額帯"
+          bins={[
+            { id: 0, label: "0〜100万円" },
+            { id: 1, label: "100〜200万円" },
+          ]}
+          series={[{ id: "player-1", counts: [0, 2] }]}
+          seriesIdentity={[identities[0]!]}
+        />
+        <DataVizQuadrantPlot
+          ariaLabel="収益と順位"
+          cornerLabels={{
+            topLeft: "左上",
+            topRight: "右上",
+            bottomLeft: "左下",
+            bottomRight: "右下",
+          }}
+          points={[{ label: "プレーヤー1", seriesId: "player-1", x: null, y: 2 }]}
+          seriesIdentity={[identities[0]!]}
+          formatX={(value) => `${value * 100}%`}
+          formatY={(value) => `${value}位`}
+          xAxisLabel="収益比率"
+          xMidpoint={null}
+          yAxisLabel="順位"
+          yDomain={[1, 4]}
+          yMidpoint={null}
+        />
+      </>,
+    );
+    await user.click(screen.getByRole("button", { name: "金額帯の数値を表で見る" }));
+    const histogram = screen.getByRole("table", { name: "金額帯の数値" });
+    expect(within(histogram).getByRole("row", { name: "0〜100万円 0戦" })).toBeInTheDocument();
+    expect(within(histogram).getByRole("row", { name: "100〜200万円 2戦" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "収益と順位の数値を表で見る" }));
+    expect(
+      within(screen.getByRole("table", { name: "収益と順位の数値" })).getByRole("row", {
+        name: "プレーヤー1 — 2位",
+      }),
+    ).toBeInTheDocument();
+  });
+
   it("keeps all 2,000 scatter points without browser-side sampling", () => {
     const points = identities.flatMap((identity, playerIndex) =>
       Array.from({ length: 500 }, (_, matchIndex) => ({

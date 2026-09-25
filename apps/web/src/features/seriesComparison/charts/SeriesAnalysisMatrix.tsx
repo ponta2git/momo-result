@@ -1,6 +1,8 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
+import { useId } from "react";
 
 import { cn } from "@/shared/ui/cn";
+import { TableScrollArea } from "@/shared/ui/data/TableScrollArea";
 import { contentText } from "@/shared/ui/typography";
 
 export const SERIES_RANKS = [1, 2, 3, 4] as const;
@@ -14,13 +16,16 @@ export function AnalysisMatrix({
   children: ReactNode;
   className?: string | undefined;
 }) {
+  const captionId = useId();
   return (
-    <div className="overflow-x-auto pb-1">
+    <TableScrollArea labelledBy={captionId}>
       <table className={cn("w-full border-separate border-spacing-1", className)}>
-        <caption className="sr-only">{ariaLabel}</caption>
+        <caption className="sr-only" id={captionId}>
+          {ariaLabel}
+        </caption>
         {children}
       </table>
-    </div>
+    </TableScrollArea>
   );
 }
 

@@ -238,6 +238,75 @@ export function DataVizLineChart({
         </svg>
       </div>
       <DataVizLegend series={seriesIdentity} variant="line" />
+      <LineValues
+        focusItemIds={focusItemIdSet}
+        formatIndex={formatIndex}
+        formatValue={formatValue}
+        label={ariaLabel}
+        series={plottedSeries}
+        seriesIdentity={seriesIdentity}
+        xAxisLabel={xAxisLabel}
+      />
     </figure>
   );
 }
+
+function LineValues({
+  focusItemIds,
+  formatIndex,
+  formatValue,
+  label,
+  series,
+  seriesIdentity,
+  xAxisLabel,
+}: {
+  focusItemIds: ReadonlySet<string>;
+  formatIndex: (value: number) => string;
+  formatValue: (value: number) => string;
+  label: string;
+  series: DataVizLineSeries[];
+  seriesIdentity: DataVizSeriesIdentity[];
+  xAxisLabel: string;
+}) {
+  const byIndex = new Map<number, Map<string, DataVizLineSeries["points"][number]>>();
+  for (const entry of series) {
+    for (const point of entry.points) {
+      const row = byIndex.get(point.index) ?? new Map();
+      row.set(entry.id, point);
+      byIndex.set(point.index, row);
+    }
+  }
+  return (
+    <DataVizTable
+      label={label}
+      minWidth={seriesIdentity.length > 2 ? "36rem" : "24rem"}
+      rows={[...byIndex].toSorted(([first], [second]) => first - second)}
+      getRowKey={([index]) => String(index)}
+      columns={[
+        {
+          key: "index",
+          header: xAxisLabel,
+          rowHeader: true,
+          renderCell: ([index, points]) => (
+            <>
+              {formatIndex(index)}
+              {[...points.values()].some((point) => focusItemIds.has(point.itemId))
+                ? "（この試合）"
+                : ""}
+            </>
+          ),
+        },
+        ...seriesIdentity.map((identity) => ({
+          key: identity.id,
+          header: identity.label,
+          tabular: true,
+          renderCell: ([, points]: [number, Map<string, DataVizLineSeries["points"][number]>]) => {
+            const point = points.get(identity.id);
+            return point ? formatValue(point.value) : "—";
+          },
+        })),
+      ]}
+    />
+  );
+}
+import { DataVizTable } from "@/features/seriesComparison/charts/dataViz/DataVizTable";

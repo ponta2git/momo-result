@@ -9,6 +9,7 @@ import {
   createDataVizSeriesPresentationLookup,
 } from "@/features/seriesComparison/charts/dataViz/seriesPresentation";
 import type { DataVizSeriesIdentity } from "@/features/seriesComparison/charts/dataViz/seriesPresentation";
+import { LinkButton } from "@/shared/ui/actions/LinkButton";
 
 export type DataVizScatterPoint = {
   href?: string | undefined;
@@ -147,15 +148,17 @@ export function DataVizScatterPlot({
                 seriesId={point.seriesId}
                 size={focused ? 5 : 3.5}
               >
-                <title>{`${point.label}${focused ? "、この試合" : ""}`}</title>
+                <title>{`${point.label}${focused ? "、この試合" : ""}、${xAxisLabel}${formatX(point.x)}、${yAxisLabel}${formatY(point.y)}`}</title>
               </DataVizPointMark>
             );
             return point.href ? (
               <a
+                aria-hidden="true"
                 aria-label={`${point.label}の試合結果を見る`}
                 className="min-h-11 min-w-11"
                 href={point.href}
                 key={point.itemId}
+                tabIndex={-1}
               >
                 <circle
                   aria-hidden="true"
@@ -195,6 +198,61 @@ export function DataVizScatterPlot({
         1点は1人が1試合で残した値です。選択中の試合は、ほかの点と異なる輪郭で示します。
       </p>
       <DataVizLegend series={seriesIdentity} />
+      <DataVizTable
+        label={ariaLabel}
+        minWidth="44rem"
+        rows={points}
+        getRowKey={(point) => point.itemId}
+        columns={[
+          {
+            key: "record",
+            header: "記録",
+            rowHeader: true,
+            renderCell: (point) => (
+              <>
+                {point.label}
+                {focusItemIdSet.has(point.itemId) ? "（この試合）" : ""}
+              </>
+            ),
+          },
+          {
+            key: "player",
+            header: "プレーヤー",
+            renderCell: (point) =>
+              seriesIdentity.find((identity) => identity.id === point.seriesId)?.label ?? "—",
+          },
+          {
+            key: "x",
+            header: xAxisLabel,
+            tabular: true,
+            renderCell: (point) => (finiteNumber(point.x) ? formatX(point.x) : "—"),
+          },
+          {
+            key: "y",
+            header: yAxisLabel,
+            tabular: true,
+            renderCell: (point) => (finiteNumber(point.y) ? formatY(point.y) : "—"),
+          },
+          {
+            key: "match",
+            header: "試合結果",
+            renderCell: (point) =>
+              point.href ? (
+                <LinkButton
+                  aria-label={`${point.label}の試合結果を見る`}
+                  size="sm"
+                  to={point.href}
+                  variant="quiet"
+                >
+                  試合結果を見る
+                </LinkButton>
+              ) : (
+                "—"
+              ),
+          },
+        ]}
+      />
     </figure>
   );
 }
+import { DataVizTable } from "@/features/seriesComparison/charts/dataViz/DataVizTable";

@@ -8,6 +8,7 @@ import {
   SelectedTitleStatus,
 } from "@/features/seriesAnalysisAdmin/SeriesAnalysisAdminStatus";
 import { useSeriesAnalysisAdminPageModel } from "@/features/seriesAnalysisAdmin/useSeriesAnalysisAdminPageModel";
+import { formatApiError } from "@/shared/api/problemDetails";
 import { actionRowClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
@@ -99,11 +100,15 @@ export function SeriesAnalysisAdminPage() {
                   onValueChange={(nextValue) => page.actions.selectTitle(nextValue)}
                 />
                 <Button
-                  disabled={!page.selection.gameTitleId || page.recalculation.titleReserved}
+                  disabled={
+                    page.recalculation.titleUnavailable ||
+                    page.recalculation.titleReserved ||
+                    page.recalculation.pending
+                  }
                   icon={<Play />}
                   pending={page.recalculation.titlePending}
-                  pendingLabel="受け付け中"
-                  onClick={() => void page.actions.recalculateTitle()}
+                  pendingLabel={page.recalculation.titlePendingLabel}
+                  onClick={page.actions.recalculateTitle}
                 >
                   {page.recalculation.titleReserved ? "再計算を予約済み" : "この作品を再計算"}
                 </Button>
@@ -112,11 +117,16 @@ export function SeriesAnalysisAdminPage() {
                   onOpenChange={setAllDialogOpen}
                   confirmLabel="全作品を再計算"
                   description={`${data.titleOptions.length}作品を対象として予約します。実行中の作品は完了後に再計算されます。`}
+                  formatError={(error) => formatApiError(error, "再計算を受け付けられません")}
                   pending={page.recalculation.allPending}
                   title="全作品の再計算を予約しますか？"
                   tone="primary"
                   trigger={
-                    <Button icon={<RotateCw />} variant="secondary">
+                    <Button
+                      disabled={page.recalculation.pending}
+                      icon={<RotateCw />}
+                      variant="secondary"
+                    >
                       全作品を再計算
                     </Button>
                   }

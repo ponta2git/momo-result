@@ -234,6 +234,8 @@ export function StrategyProfileQuadrant({
         topLeft: "遊戯王型（カード重視）／上位",
         topRight: "桃鉄型（物件重視）／上位",
       }}
+      formatX={formatPercent}
+      formatY={formatDecimal}
       points={profile.entries.map((entry) => ({
         label: `${entry.displayName}、物件収益比率${formatPercent(entry.averageRevenueAssetRate)}、順位スコア${formatDecimal(entry.averageRankScore)}`,
         seriesId: entry.memberId,

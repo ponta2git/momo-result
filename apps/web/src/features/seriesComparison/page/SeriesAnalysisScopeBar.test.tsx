@@ -8,6 +8,7 @@ import { selectOption } from "@/test/selectOption";
 
 const baseProps = {
   canRefresh: true,
+  loading: false,
   mapOptions: [{ label: "東日本編", value: "map-east" }],
   mapValue: "map-east",
   onMapChange: vi.fn(),
@@ -70,10 +71,20 @@ describe("SeriesAnalysisScopeBar", () => {
     const trigger = screen.getByRole("button", { name: "比較対象を変更" });
     expect(trigger).toHaveTextContent("桃太郎電鉄2");
     expect(trigger).toHaveTextContent("シーズン 今シーズン・マップ 東日本編");
-    expect(trigger).toHaveTextContent("対戦数を確認中");
+    expect(trigger).toHaveTextContent("対戦数未取得");
     expect(trigger).not.toHaveTextContent("99戦");
     expect(trigger).not.toHaveTextContent("0戦");
     expect(screen.getByRole("button", { name: "表示を更新" })).toBeEnabled();
+    expect(screen.getByText("分析結果は未取得です")).toBeInTheDocument();
+  });
+
+  it("describes work as loading only while a result request is pending", () => {
+    render(<SeriesAnalysisScopeBar {...baseProps} loading response={undefined} />);
+
+    expect(screen.getByRole("button", { name: "比較対象を変更" })).toHaveTextContent(
+      "対戦数を確認中",
+    );
+    expect(screen.getByText("分析結果を読み込み中")).toBeInTheDocument();
   });
 
   it("keeps collapsed details out of accessibility and tab order, then allows changes", async () => {

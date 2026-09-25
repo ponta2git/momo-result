@@ -2,6 +2,8 @@
 
 規約の正本は `docs/ui-rule.md`、現在のトークンと寸法の実行正本は `apps/web/src/styles.css` と `apps/web/src/shared/ui/` とする。このファイルは、今後の UI 作業で再利用する設計判断の索引であり、実装値を複製しない。
 
+native / Base UI / React wrapper の責務分担、全 primitive のレビュー結果と検証範囲は [UI システムの再設計と検証](../docs/ui-system-rebuild.md) を参照する。
+
 ## Direction
 
 - 静かな対戦卓に置かれた、作り込まれた試合台帳として設計する。

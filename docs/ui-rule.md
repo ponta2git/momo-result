@@ -127,6 +127,7 @@
 
 - 汎用部品は通常表示を既定とし、主要コンテンツであることが契約に含まれる部品だけが、該当する値・短い文言へ主要強調を持つ。feature composition は画面の主役を選び、同じ文字 recipe をその箇所へ適用する。任意の `fontWeight` を渡す万能 API や親全体の太字指定で補正しない。`th` / `scope` / heading level などの意味構造とウェイトを分離し、子の label・metadata・操作へ太字を継承させない。
 - labelと値を読む表示は、共通の `FactList` がterm / definitionの意味構造、文字recipe、labelと値の近さ、項目間隔、列数に応じた積み替えを所有する。通常の文章・記録情報には周囲の面を共有するplain表示を使い、featureは項目の内容と並びを渡す。入力fieldはlabelとcontrolの対応を持つ別契約とし、この表示用patternへ統合しない。
+- 通常の表は `DataTable` が caption、列見出し、行見出し、overflow の検出と案内を所有する。実際に scroll が必要な場合だけ keyboard の到達点を加え、caption または用途名で scroll 領域を識別する。feature は行の identity、業務 cell、並び順を渡す。
 - 見出しと本文・値・説明からなる読み取り群へ、編集・移動・保存などの補助操作群を横に添える場合は、`ContentWithActions` で内容群と操作群を並べる。見出しとその本文・値・説明は内容群にまとめ、操作の高さで文字同士の距離を増やさない。横方向の群間は16px、折り返した操作との間隔は8pxとし、部品へ割り当てられた幅に収まらなければ内容、操作の読み順で積み替える。画面幅だけで横並びを強制せず、負の余白や重ね配置でhit targetを本文へはみ出させない。内容内部の文字階層と間隔、見出し・region・操作名の意味はfeatureが所有する。page header、labelと入力欄、tab、disclosure、dialogの固定headerと閉じる操作は各primitiveの操作・scroll契約を使い、このpatternへ置き換えない。
 
 ### 3.2 選択・表示切替・表示範囲
@@ -149,6 +150,7 @@
 ### 3.3 移動・実行・確定
 
 - link は場所の移動、button は現在の文脈での実行に使う。icon-only の移動と実行もこの区別を保ち、見た目を共通化しても element の意味を変えない。
+- shared action link は app 内の routing を `to`、document の移動を `href` で区別する。disabled / pending の切替で実要素、ref、説明、focus を作り直さず、activation を制限する。開始した native navigation を pending 表示への切替で取り消さない。
 - 実行操作は影響する対象の近くへ置き、ラベルで対象と予測できる結果を示す。操作前に必要な制約と影響を示し、押下直後、pending、成功、部分成功、失敗のうち該当する状態を同じ操作文脈で返す。
 - form の確定は選択または編集と区別し、pending 中は同じ送信を重複実行させない。取り込み・手入力・OCR確認の最終実行領域は、共通の `taskActionPanelClass` で枠なしの淡色背景と16pxの内余白を持つ操作領域に揃え、可否・結果のfeedbackと実行操作を一群にする。dialog 内の確定操作は一貫した footer、読み順、主要度を持ち、pending 中に不用意に閉じて結果を見失わせない。
 - 不可逆または高コストな操作は、対象と結果を `AlertDialog` で明示する。安全に可逆な操作は即時反映と Undo を優先し、routine な操作へ確認 dialog を増やさない。
@@ -174,7 +176,8 @@
 ## 4. 入力・ワークスペース・アクセシビリティ
 
 - form は可視ラベル、説明、必須、validation error、disabled / pending を同じ field 境界で関連付け、paste を妨げない。checkbox、radio、text input は native semantics を保つ。一行ラベルの単一選択はsharedのBase UI Selectを使い、featureでkeyboard・focus・候補表示を再実装しない。
-- 単一選択は、候補移動と値確定を分ける。現在値はcheckとselected surface、操作位置はfocusで示し、hoverは共通の反応の文法へ接続する。Enter / Spaceで確定し、Escape・外側押下・Tabでは未確定の候補を採用しない。Escapeは欄へ戻り、Tabは次の操作へ進む。閉じた欄のtypeaheadによる値確定は維持し、同じ値の再選択で業務処理を増やさない。
+- 一行Selectは、候補移動と値確定を分ける。現在値はcheckとselected surface、操作位置はfocusで示し、hoverは共通の反応の文法へ接続する。Enter / Spaceで確定し、Escape・外側押下・Tabでは未確定の候補を採用しない。Escapeは欄へ戻り、Tabは次の操作へ進む。閉じた欄のtypeaheadによる値確定は維持し、同じ値の再選択で業務処理を増やさない。
+- radio と segmented control は native radio group の矢印移動・選択と一つの Tab 到達点を保つ。候補の名前は対象を識別する安定した label とし、件数・状態・補足は description、選択状態は checked として関連付ける。同じ説明を名前にも繰り返さない。
 - Selectの可視triggerがlabel・説明・error・外部refの接続先となり、フォーム送信とresetはsharedが所有する。空文字の意味と候補更新時の値変更はfeatureが所有する。popupは既存の寸法・面・境界を使い、viewport内の一つの候補scrollerへ収める。dialog内の候補はowning dialogのfocusとlayerに所属し、本文で切れたり、親dialogの退出後も操作可能なまま残ったりしない。
 - 試合入力表の選択欄もEnter / Space / 上下を選択操作に使う。閉じた選択欄ではTab・左右で欄を移動し、開いた候補の操作を表の移動へ渡さない。数値入力のセル移動・編集取消はその入力契約を維持する。
 - 入力用の文字は `shared/ui/typography.ts` の `fieldText` を `Field` / `Fieldset` と独自入力欄で共有する。可視ラベルは14 / 20px・通常ウェイトの主要文字色、補足は12 / 16px、修正に必要なエラーは14 / 20px・dangerとし、読むための小さなmetadataラベルを入力ラベルやエラーへ流用しない。control自体の入力値・高さ・focus表示は既存のinteractive primitiveが所有する。

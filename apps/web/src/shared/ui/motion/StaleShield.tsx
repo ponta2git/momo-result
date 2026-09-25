@@ -58,12 +58,8 @@ export function StaleShield({
 
   if (strategy !== "replace") {
     return (
-      <div
-        aria-busy={active || undefined}
-        className="relative grid min-h-0 min-w-0"
-        data-stale={active || undefined}
-      >
-        <div className="grid min-h-0 min-w-0" ref={contentRef}>
+      <div className="relative grid min-h-0 min-w-0" data-stale={active || undefined}>
+        <div aria-busy={active || undefined} className="grid min-h-0 min-w-0" ref={contentRef}>
           {children}
         </div>
         {active && statusPlacement !== "external" ? (
@@ -86,7 +82,7 @@ export function StaleShield({
   }
 
   return (
-    <div aria-busy={active || undefined} className="grid min-h-0 min-w-0">
+    <div className="grid min-h-0 min-w-0">
       {active ? (
         <div key="shield" className="grid min-h-0 min-w-0">
           {fallback}

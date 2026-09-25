@@ -1,16 +1,19 @@
-import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
-import type { LinkProps } from "react-router-dom";
+import type { ReactNode, Ref } from "react";
 
+import { ActionLink } from "@/shared/ui/actions/ActionLink";
+import type { ActionLinkProps } from "@/shared/ui/actions/ActionLink";
 import { DecorativeActionIcon, iconActionClassName } from "@/shared/ui/actions/actionRecipes";
 import type { IconActionSize, IconActionVariant } from "@/shared/ui/actions/actionRecipes";
 import { Tooltip } from "@/shared/ui/feedback/Tooltip";
-import { useSurfaceFeedback } from "@/shared/ui/motion/useSurfaceFeedback";
 
-export type IconLinkProps = Omit<LinkProps, "children" | "className" | "style"> & {
+export type IconLinkProps = Omit<
+  Extract<ActionLinkProps, { to: unknown }>,
+  "children" | "className" | "pending" | "style"
+> & {
   "aria-label": string;
   disabled?: boolean | undefined;
   icon: ReactNode;
+  ref?: Ref<HTMLAnchorElement>;
   size?: IconActionSize | undefined;
   tooltip?: ReactNode | undefined;
   variant?: Exclude<IconActionVariant, "danger"> | undefined;
@@ -26,17 +29,12 @@ export function IconLink({
   variant = "secondary",
   ...props
 }: IconLinkProps) {
-  const surfaceRef = useSurfaceFeedback<HTMLAnchorElement>();
   const classes = iconActionClassName({ disabled, size, variant });
   const content = <DecorativeActionIcon iconOnly>{icon}</DecorativeActionIcon>;
-  const control = disabled ? (
-    <span aria-disabled="true" aria-label={ariaLabel} className={classes} role="link">
+  const control = (
+    <ActionLink {...props} aria-label={ariaLabel} className={classes} disabled={disabled}>
       {content}
-    </span>
-  ) : (
-    <Link ref={surfaceRef} aria-label={ariaLabel} className={classes} {...props}>
-      {content}
-    </Link>
+    </ActionLink>
   );
 
   return tooltip ? <Tooltip content={tooltip}>{control}</Tooltip> : control;

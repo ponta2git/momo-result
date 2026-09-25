@@ -41,6 +41,8 @@ describe("StaleShield", () => {
     const preservedContent = screen.getByText("表示中の結果").parentElement;
     expect(preservedContent).toHaveAttribute("inert");
     expect(screen.getByRole("status")).toHaveTextContent("比較条件を更新中");
+    expect(preservedContent).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("status").closest('[aria-busy="true"]')).toBeNull();
   });
 
   it("keeps safe operations interactive during a same-scope refresh", () => {
@@ -58,6 +60,7 @@ describe("StaleShield", () => {
     const button = screen.getByRole("button", { name: "表示中の試合を開く" });
     expect(button.parentElement).not.toHaveAttribute("inert");
     expect(screen.getByRole("status")).toHaveTextContent("一覧を更新中");
+    expect(screen.getByRole("status").closest('[aria-busy="true"]')).toBeNull();
   });
 
   it("restores focus dropped by inert without stealing focus moved outside", () => {

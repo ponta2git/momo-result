@@ -23,7 +23,8 @@ describe("RouteSuspenseFallback", () => {
     render(<RouteSuspenseFallback asMain pathname="/" />);
 
     const main = screen.getByRole("main");
-    expect(main).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("status")).toHaveTextContent("読み込んでいます");
+    expect(screen.getByRole("status").closest('[aria-busy="true"]')).toBeNull();
     expect(main).toHaveAttribute("id", "main-content");
   });
 

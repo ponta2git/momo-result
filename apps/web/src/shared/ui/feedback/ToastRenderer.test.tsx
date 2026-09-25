@@ -13,18 +13,18 @@ describe("ToastRenderer", () => {
         <ToastRenderer />
       </Toast.Provider>,
     );
-    act(() => {
+    await act(async () => {
       for (let index = 0; index < 5; index += 1)
         manager.add({ id: `result-${index}`, title: `結果 ${index}` });
     });
     expect(await screen.findAllByRole("dialog")).toHaveLength(4);
     expect(screen.getAllByRole("button", { name: "通知を閉じる" })).toHaveLength(4);
     expect(screen.queryByRole("dialog", { name: "結果 0" })).not.toBeInTheDocument();
-    act(() => {
+    await act(async () => {
       manager.add({ id: "result-4", title: "保存しました" });
     });
     expect(screen.getAllByRole("dialog", { name: "保存しました" })).toHaveLength(1);
-    act(() => {
+    await act(async () => {
       manager.add({ id: "another-operation", title: "保存しました" });
     });
     expect(screen.getAllByRole("dialog", { name: "保存しました" })).toHaveLength(2);

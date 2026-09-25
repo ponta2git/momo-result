@@ -1,55 +1,51 @@
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
-import type { LinkProps } from "react-router-dom";
 
-import { buttonClassName, DecorativeActionIcon } from "@/shared/ui/actions/actionRecipes";
+import { ActionLink } from "@/shared/ui/actions/ActionLink";
+import type { ActionLinkProps } from "@/shared/ui/actions/ActionLink";
+import { buttonClassName } from "@/shared/ui/actions/actionRecipes";
 import type { ButtonSize, ButtonVariant } from "@/shared/ui/actions/actionRecipes";
-import { useSurfaceFeedback } from "@/shared/ui/motion/useSurfaceFeedback";
+import { PendingActionContent } from "@/shared/ui/actions/PendingActionContent";
 
-export type LinkButtonProps = Omit<LinkProps, "children" | "className" | "style"> & {
+type LinkButtonAppearance = {
+  "aria-busy"?: never;
   children: ReactNode;
-  disabled?: boolean | undefined;
   icon?: ReactNode;
+  pending?: boolean | undefined;
+  pendingLabel?: ReactNode;
   size?: ButtonSize;
   variant?: ButtonVariant;
 };
 
-/** A navigation link presented with the shared text-action recipe. */
+type WithoutVisualOverride<Props> = Props extends unknown
+  ? Omit<Props, "aria-busy" | "children" | "className" | "style"> & LinkButtonAppearance
+  : never;
+
+export type LinkButtonProps = WithoutVisualOverride<ActionLinkProps>;
+
+/** Router or document navigation with the shared text-action and pending contract. */
 export function LinkButton({
   children,
   disabled = false,
   icon,
+  pending = false,
+  pendingLabel,
   size = "md",
   variant = "primary",
   ...props
 }: LinkButtonProps) {
-  const surfaceRef = useSurfaceFeedback<HTMLAnchorElement>();
-  const content = (
-    <>
-      {icon ? <DecorativeActionIcon>{icon}</DecorativeActionIcon> : null}
-      <span>{children}</span>
-    </>
-  );
-
-  if (disabled) {
-    return (
-      <span
-        aria-disabled="true"
-        className={buttonClassName({
-          disabled: true,
-          size,
-          variant,
-        })}
-        role="link"
-      >
-        {content}
-      </span>
-    );
-  }
+  const unavailable = disabled || pending;
 
   return (
-    <Link ref={surfaceRef} className={buttonClassName({ size, variant })} {...props}>
-      {content}
-    </Link>
+    <ActionLink
+      {...props}
+      aria-busy={pending || undefined}
+      className={buttonClassName({ disabled: unavailable, size, variant })}
+      disabled={disabled}
+      pending={pending}
+    >
+      <PendingActionContent icon={icon} pending={pending} pendingLabel={pendingLabel}>
+        {children}
+      </PendingActionContent>
+    </ActionLink>
   );
 }

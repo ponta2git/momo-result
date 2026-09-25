@@ -93,12 +93,11 @@ export function PageLoadingFallback({
   if (asMain) {
     return (
       <main
-        aria-busy="true"
         aria-label={loadingLabel}
-        aria-live="polite"
         className={className}
         data-testid="page-loading-fallback"
         id="main-content"
+        tabIndex={-1}
       >
         {content}
       </main>
@@ -106,13 +105,7 @@ export function PageLoadingFallback({
   }
 
   return (
-    <div
-      aria-busy="true"
-      aria-label={loadingLabel}
-      aria-live="polite"
-      className={className}
-      data-testid="page-loading-fallback"
-    >
+    <div aria-label={loadingLabel} className={className} data-testid="page-loading-fallback">
       {content}
     </div>
   );
@@ -375,5 +368,9 @@ function ActionSkeletonGroup({ shape }: { shape: PageLoadingActionShape }) {
 }
 
 function LoadingLabel({ label }: { label: string }) {
-  return <span className="sr-only">{label}</span>;
+  return (
+    <span className="sr-only" role="status">
+      {label}
+    </span>
+  );
 }

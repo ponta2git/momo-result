@@ -1,12 +1,39 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { showToast } from "@/shared/ui/feedback/Toast";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
+import { AppMotionProvider } from "@/shared/ui/motion/AppMotionProvider";
 
 // The first notification must keep the same action through initial preparation and rerenders.
 describe("ToastHost", () => {
+  it("pauses expiry while being read and removes both content and its exit space afterward", async () => {
+    vi.useFakeTimers();
+    render(
+      <AppMotionProvider>
+        <ToastHost />
+      </AppMotionProvider>,
+    );
+    await act(async () => {
+      showToast({ title: "保存しました", timeout: 1000 });
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    const viewport = screen.getByRole("region", { name: "通知" });
+    expect(screen.getByRole("dialog", { name: "保存しました" })).toBeInTheDocument();
+
+    fireEvent.mouseEnter(viewport);
+    await act(async () => vi.advanceTimersByTimeAsync(2000));
+    expect(screen.getByRole("dialog", { name: "保存しました" })).toBeInTheDocument();
+
+    fireEvent.mouseLeave(viewport);
+    await act(async () => vi.advanceTimersByTimeAsync(1000));
+    expect(screen.queryByRole("dialog", { name: "保存しました" })).not.toBeInTheDocument();
+    await act(async () => vi.advanceTimersByTimeAsync(200));
+    expect(screen.queryByText("保存しました")).not.toBeInTheDocument();
+    expect(viewport).toBeEmptyDOMElement();
+  });
+
   it("keeps the first notification and its focused close action until dismissal", async () => {
     const user = userEvent.setup();
     const { rerender } = render(<ToastHost />);

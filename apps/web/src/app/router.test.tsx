@@ -248,7 +248,8 @@ describe("app routing", () => {
     renderApp("/matches");
 
     const loadingState = await screen.findByLabelText("ログイン状態を確認中…");
-    expect(loadingState).toHaveAttribute("aria-busy", "true");
+    expect(within(loadingState).getByRole("status")).toHaveTextContent("ログイン状態を確認中…");
+    expect(within(loadingState).getByRole("status").closest('[aria-busy="true"]')).toBeNull();
     expect(screen.getByText("ログイン状態を確認中…")).toBeInTheDocument();
     expect(screen.getByText("momo-result")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "ログアウト" })).not.toBeInTheDocument();

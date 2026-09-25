@@ -1,10 +1,9 @@
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import type { ReactNode } from "react";
-import { useHref, useLinkClickHandler } from "react-router-dom";
 
+import { ActionLink } from "@/shared/ui/actions/ActionLink";
 import { buttonClassName, DecorativeActionIcon } from "@/shared/ui/actions/actionRecipes";
 import { cn } from "@/shared/ui/cn";
-import { useSurfaceFeedback } from "@/shared/ui/motion/useSurfaceFeedback";
 import { contentText } from "@/shared/ui/typography";
 
 export const adjacentNavigationState = { adjacentNavigation: true } as const;
@@ -93,41 +92,15 @@ function Destination({
     return <div className={className}>{content}</div>;
   }
   return (
-    <AdjacentLink className={className} disabled={disabled} to={destination.href}>
-      {content}
-    </AdjacentLink>
-  );
-}
-
-/** A paused destination retains its DOM/focus but has no href that could open stale data. */
-function AdjacentLink({
-  children,
-  className,
-  disabled,
-  to,
-}: {
-  children: ReactNode;
-  className: string;
-  disabled: boolean;
-  to: string;
-}) {
-  const href = useHref(to);
-  const handleClick = useLinkClickHandler(to, { state: adjacentNavigationState });
-  const surfaceRef = useSurfaceFeedback<HTMLAnchorElement>();
-  return (
-    <a
-      ref={surfaceRef}
-      aria-disabled={disabled || undefined}
+    <ActionLink
       className={cn(buttonClassName({ disabled, size: "lg", variant: "quiet" }), className)}
-      href={disabled ? undefined : href}
-      role={disabled ? "link" : undefined}
+      disabled={disabled}
+      state={adjacentNavigationState}
+      // A paused destination stays reachable without exposing a stale href.
       tabIndex={disabled ? 0 : undefined}
-      onClick={(event) => {
-        if (disabled) event.preventDefault();
-        else handleClick(event);
-      }}
+      to={destination.href}
     >
-      {children}
-    </a>
+      {content}
+    </ActionLink>
   );
 }

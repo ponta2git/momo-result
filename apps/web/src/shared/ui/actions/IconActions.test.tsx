@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { ArrowRight, RefreshCw } from "lucide-react";
+import { createRef } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
@@ -24,27 +25,40 @@ describe("icon actions", () => {
   });
 
   it("keeps icon navigation as a link and removes navigation when disabled", () => {
+    const ref = createRef<HTMLAnchorElement>();
     const { rerender } = render(
       <MemoryRouter>
         <IconLink
           aria-label="試合結果へ"
           icon={<ArrowRight aria-label="右矢印" />}
+          ref={ref}
           to="/matches/1"
         />
       </MemoryRouter>,
     );
 
     expect(screen.getByRole("link", { name: "試合結果へ" })).toHaveAttribute("href", "/matches/1");
+    expect(ref.current).toBe(screen.getByRole("link", { name: "試合結果へ" }));
 
     rerender(
       <MemoryRouter>
-        <IconLink disabled aria-label="試合結果へ" icon={<ArrowRight />} to="/matches/1" />
+        <p id="result-reason">結果の確定を待っています</p>
+        <IconLink
+          aria-describedby="result-reason"
+          disabled
+          aria-label="試合結果へ"
+          icon={<ArrowRight />}
+          ref={ref}
+          to="/matches/1"
+        />
       </MemoryRouter>,
     );
 
     const disabledLink = screen.getByRole("link", { name: "試合結果へ" });
     expect(disabledLink).toHaveAttribute("aria-disabled", "true");
     expect(disabledLink).not.toHaveAttribute("href");
+    expect(disabledLink).toHaveAccessibleDescription("結果の確定を待っています");
+    expect(ref.current).toBe(disabledLink);
   });
 
   it("keeps derived icon-button state authoritative over unsafely forwarded attributes", () => {

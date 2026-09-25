@@ -197,18 +197,20 @@ export function installObjectUrlMock(
 
 export type MatchMediaController = {
   setMatches: (matches: boolean) => void;
+  setReducedMotion: (matches: boolean) => void;
   restore: () => void;
 };
 
 export function installMatchMediaController(initialMatches: boolean): MatchMediaController {
   const originalMatchMedia = window.matchMedia;
   let matches = initialMatches;
+  let reducedMotion = false;
   const listeners = new Set<{
     listener: (event: MediaQueryListEvent) => void;
     query: string;
   }>();
   const matchesQuery = (query: string) =>
-    query.includes("prefers-reduced-motion") ? false : matches;
+    query.includes("prefers-reduced-motion") ? reducedMotion : matches;
 
   window.matchMedia = vi.fn((query: string) => {
     const addListener = (listener: (event: MediaQueryListEvent) => void) => {
@@ -249,6 +251,13 @@ export function installMatchMediaController(initialMatches: boolean): MatchMedia
       for (const { listener, query } of listeners) {
         if (query.includes("prefers-reduced-motion")) continue;
         listener({ matches, media: query } as MediaQueryListEvent);
+      }
+    },
+    setReducedMotion: (next) => {
+      reducedMotion = next;
+      for (const { listener, query } of listeners) {
+        if (!query.includes("prefers-reduced-motion")) continue;
+        listener({ matches: reducedMotion, media: query } as MediaQueryListEvent);
       }
     },
   };

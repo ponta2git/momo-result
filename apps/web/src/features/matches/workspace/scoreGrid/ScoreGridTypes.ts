@@ -4,6 +4,7 @@ import type {
   MatchFormValues,
   OriginalPlayerSnapshot,
 } from "@/features/matches/workspace/matchFormTypes";
+import type { MatchNumericDrafts } from "@/features/matches/workspace/matchNumericDrafts";
 import type { ReviewItem } from "@/features/matches/workspace/review/reviewProgress";
 import type { ReviewFieldKey } from "@/features/matches/workspace/review/reviewWarningModel";
 import type {
@@ -20,6 +21,8 @@ export type ScoreGridProps = {
 export type ScoreGridData = {
   errorPathSet: Set<string>;
   lastSyncedPlayerIndex: number | null;
+  numericDrafts?: MatchNumericDrafts | undefined;
+  validationFocusRequest?: { path: string; sequence: number } | null | undefined;
   originalPlayers: OriginalPlayerSnapshot[] | undefined;
   players: MatchFormValues["players"];
   review: {
@@ -32,11 +35,17 @@ export type ScoreGridData = {
 export type ScoreGridActions = {
   onAcknowledgeReviewCell: (cellId: string) => void;
   onIncidentChange: (index: number, key: IncidentKey, value: number) => void;
+  onNumericDraftChange?: ((path: string, value: string | undefined) => void) | undefined;
   onPlayerChange: (index: number, patch: Partial<MatchFormValues["players"][number]>) => void;
   onPlayOrderChange: (index: number, playOrder: number) => void;
   onPreferImageKindChange?: (kind: "incident_log" | "revenue" | "total_assets") => void;
   onRequestSubmitFocus: () => void;
   onReviewCellFocus: (row: number, field: ReviewFieldKey) => void;
+};
+
+export type ScoreGridNumericDraftState = {
+  numericDrafts: MatchNumericDrafts;
+  onNumericDraftChange: (path: string, value: string | undefined) => void;
 };
 
 export type ScoreGridKeyboardHandler = (args: {

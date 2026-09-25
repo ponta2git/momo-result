@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLayoutEffect, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
 import type { MatchFormAction } from "@/features/matches/workspace/matchFormReducer";
@@ -23,6 +24,13 @@ export function useWorkspaceHeldEventCreation({
 }) {
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
+  const activeRef = useRef(true);
+  useLayoutEffect(() => {
+    activeRef.current = true;
+    return () => {
+      activeRef.current = false;
+    };
+  }, []);
 
   return useMutation({
     onMutate: () => {
@@ -39,6 +47,7 @@ export function useWorkspaceHeldEventCreation({
     },
     onSuccess: async (event) => {
       await syncHeldEventCreatedCache(queryClient, event);
+      if (!activeRef.current) return;
       dispatch({
         patch: {
           heldEventId: event.id,
@@ -50,6 +59,7 @@ export function useWorkspaceHeldEventCreation({
       notify(`開催（${formatDateTimeLong(event.heldAt)}）を作成して選択しました。`, "success");
     },
     onError: (error) => {
+      if (!activeRef.current) return;
       setOperationError({
         kind: "heldEventCreation",
         message: formatApiError(error, "開催の作成に失敗しました"),

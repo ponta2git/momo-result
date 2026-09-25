@@ -66,7 +66,7 @@ export function useMatchWorkspacePageModel({
   const { dispatch, setValidationFocusRequest, setWorkspaceData, state } = local;
   const useSampleDrafts = mode === "review" && searchParams.get("sample") === "1";
   const hasHandoff = searchParams.has("handoffId");
-  const handoffSessionId = matchSessionId ?? matchDraftId ?? mode;
+  const handoffSessionId = matchSessionId ?? matchDraftId ?? matchId ?? mode;
   const {
     heldEventPicker,
     load,
@@ -107,7 +107,7 @@ export function useMatchWorkspacePageModel({
     },
     [dispatch, setWorkspaceData],
   );
-  const { isInitialized } = useMatchWorkspaceInit({
+  const { isInitialized, initializedSnapshot } = useMatchWorkspaceInit({
     draftDetail,
     emptyFormFactory: local.emptyFormFactory,
     matchDetail,
@@ -119,6 +119,7 @@ export function useMatchWorkspacePageModel({
     nowIsoFactory: local.nowIsoFactory,
     reviewDraftIdList: remoteReview.draftIdList,
     reviewDraftIds: remoteReview.draftIds,
+    sourceImages: sourceImageItems,
     useSampleDrafts,
   });
 
@@ -139,19 +140,12 @@ export function useMatchWorkspacePageModel({
     values: state.values,
   });
   const initialHeldEventPatch =
-    isInitialized &&
-    !hasHandoff &&
-    mode !== "edit" &&
-    !state.values.heldEventId &&
-    !load.preferredHeldEventPending
+    isInitialized && mode !== "edit" && !state.values.heldEventId && !load.preferredHeldEventPending
       ? (heldEventPatchById(view.heldEvents, preferredHeldEventId) ??
         latestHeldEventPatch(view.heldEvents))
       : undefined;
   const draftTrackingEnabled =
-    isInitialized &&
-    !hasHandoff &&
-    !load.preferredHeldEventPending &&
-    initialHeldEventPatch === undefined;
+    isInitialized && !load.preferredHeldEventPending && initialHeldEventPatch === undefined;
   const reviewSession = useMatchWorkspaceReviewSession({
     accountId,
     confirmedDraftLoaded: view.confirmedDraftLoaded,
@@ -160,6 +154,7 @@ export function useMatchWorkspacePageModel({
     mode,
     notify,
     reviewKey: handoffSessionId,
+    recoverStoredDraft: !hasHandoff,
     values: state.values,
     workspaceData: local.workspaceData,
   });
@@ -192,7 +187,7 @@ export function useMatchWorkspacePageModel({
     accountId,
     dispatch,
     handoffSessionId,
-    isInitialized,
+    isInitialized: draftTrackingEnabled,
     mode,
     notify,
     onBeforeNavigate: sessionDraft.allowNavigation,
@@ -201,7 +196,7 @@ export function useMatchWorkspacePageModel({
   });
   const sourceImageDraftId = view.matchDraftIdForImages;
   const sourceImages = sourceImageDraftId
-    ? (sourceImageItems ?? []).flatMap((item) => {
+    ? (initializedSnapshot?.sourceImages ?? []).flatMap((item) => {
         const descriptor = toSourceImageDescriptor(sourceImageDraftId, item);
         return descriptor ? [descriptor] : [];
       })
@@ -234,7 +229,7 @@ export function useMatchWorkspacePageModel({
   const workspaceLoading =
     confirmedDraftRedirecting ||
     view.confirmedDraftLoaded ||
-    (!isInitialized && !load.initializationFailed);
+    (!isInitialized && !remoteReview.blocked && !load.initializationFailed);
   const exitHref =
     contextualReturnTo ??
     (mode === "edit" && matchId
@@ -243,7 +238,7 @@ export function useMatchWorkspacePageModel({
         ? `/held-events/${encodeURIComponent(state.values.heldEventId)}`
         : "/matches");
 
-  const busy = mutations.isMutating || submitFlow.confirmation.pending;
+  const busy = mutations.isMutating || submitFlow.confirmation.pending || masterHandoff.isPending;
   const operationErrorView = local.operationError
     ? toMatchWorkspaceOperationErrorView(local.operationError)
     : null;
@@ -258,6 +253,7 @@ export function useMatchWorkspacePageModel({
 
   return {
     editor: {
+      disabled: busy,
       note:
         mode === "edit"
           ? null
@@ -282,7 +278,7 @@ export function useMatchWorkspacePageModel({
             onConfirm: submitFlow.cancelDraftConfirmed,
             onOpenChange: local.setCancelDraftConfirmOpen,
           },
-          disabled: busy,
+          disabled: busy || createEventMutation.isPending,
           error: local.operationError?.kind === "cancelDraft" ? operationErrorView : null,
           onTrigger: () => local.setCancelDraftConfirmOpen(true),
         },
@@ -299,7 +295,7 @@ export function useMatchWorkspacePageModel({
             onRun: onPrimaryAction,
           },
           availability: {
-            disabled: workspaceLoading || busy,
+            disabled: workspaceLoading || busy || createEventMutation.isPending,
             pending: busy && !local.confirmOpen && !local.cancelDraftConfirmOpen,
           },
           feedback: {
@@ -308,10 +304,12 @@ export function useMatchWorkspacePageModel({
               local.operationError?.kind === "cancelDraft"
                 ? validationErrorView
                 : (operationErrorView ?? validationErrorView),
-            message: validationFeedback(
-              validationState.validation.firstMessage,
-              validationState.validation.success,
-            ),
+            message: createEventMutation.isPending
+              ? "開催の作成が完了すると、入力内容を保存・確定できます。"
+              : validationFeedback(
+                  validationState.validation.firstMessage,
+                  validationState.validation.success,
+                ),
           },
         },
       },
@@ -319,6 +317,7 @@ export function useMatchWorkspacePageModel({
         actions: {
           onAcknowledgeReviewCell: reviewState.acknowledgeCell,
           onIncidentChange: formActions.onIncidentChange,
+          onNumericDraftChange: formActions.onNumericDraftChange,
           onPlayerChange: formActions.onPlayerChange,
           onPlayOrderChange: formActions.onPlayOrderChange,
           onPreferImageKindChange: local.setPreferredImageKind,
@@ -327,6 +326,8 @@ export function useMatchWorkspacePageModel({
         data: {
           errorPathSet: validationState.visibleErrorPathSet,
           lastSyncedPlayerIndex: state.lastSyncedPlayerIndex,
+          numericDrafts: state.values.numericDrafts,
+          validationFocusRequest: local.validationFocusRequest,
           originalPlayers: local.workspaceData?.originalPlayers,
           players: state.values.players,
           review: {
@@ -362,7 +363,10 @@ export function useMatchWorkspacePageModel({
             mapItems: view.mapItems,
             seasonItems: view.seasonItems,
           },
-          validation: { errorPathSet: validationState.visibleErrorPathSet },
+          validation: {
+            errorPathSet: validationState.visibleErrorPathSet,
+            focusRequest: local.validationFocusRequest,
+          },
           values: matchSetupValues(state.values),
         },
       },
@@ -374,6 +378,7 @@ export function useMatchWorkspacePageModel({
               matchDraftId: view.matchDraftIdForImages,
               preferredKind: local.preferredImageKind,
               sourceImages: sourceImages,
+              snapshotChanged: initializedSnapshot?.revision !== draftDetail?.updatedAt,
             }
           : null,
       warnings: local.workspaceData?.warnings ?? [],
@@ -389,6 +394,7 @@ export function useMatchWorkspacePageModel({
       },
     },
     navigation: {
+      pending: busy || createEventMutation.isPending,
       guard: {
         dirty: sessionDraft.dirty,
         navigationAllowedRef: sessionDraft.navigationAllowedRef,

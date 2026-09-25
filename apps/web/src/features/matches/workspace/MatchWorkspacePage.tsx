@@ -1,15 +1,17 @@
 import { useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
+import type { Location } from "react-router-dom";
 
 import { MatchConfirmDialog } from "@/features/matches/workspace/MatchConfirmDialog";
 import type { WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
 import { MatchWorkspaceBlockedNotice } from "@/features/matches/workspace/MatchWorkspaceBlockedNotice";
 import { MatchWorkspaceEditor } from "@/features/matches/workspace/MatchWorkspaceEditor";
 import { MatchWorkspaceLoading } from "@/features/matches/workspace/MatchWorkspaceLoading";
-import { MatchWorkspaceNavigationGuard } from "@/features/matches/workspace/MatchWorkspaceNavigationGuard";
 import { MatchWorkspaceToolbar } from "@/features/matches/workspace/MatchWorkspaceToolbar";
 import { useMatchWorkspacePageModel } from "@/features/matches/workspace/useMatchWorkspacePageModel";
 import { useAuth } from "@/shared/auth/useAuth";
+import { trimSearchParam } from "@/shared/lib/searchParams";
+import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
@@ -38,6 +40,22 @@ function matchWorkspaceIdentityKey(
     mode: props.mode,
     useSampleDrafts,
   });
+}
+
+function preservesWorkspaceInput(mode: WorkspaceMode, current: Location, next: Location): boolean {
+  if (current.pathname !== next.pathname) return false;
+  const currentParams = new URLSearchParams(current.search);
+  const nextParams = new URLSearchParams(next.search);
+  if (mode === "create") {
+    return (
+      trimSearchParam(currentParams.get("matchDraftId")) ===
+      trimSearchParam(nextParams.get("matchDraftId"))
+    );
+  }
+  if (mode === "review") {
+    return (currentParams.get("sample") === "1") === (nextParams.get("sample") === "1");
+  }
+  return true;
 }
 
 export function MatchWorkspacePage(props: MatchWorkspacePageProps) {
@@ -75,7 +93,7 @@ function MatchWorkspacePageContent({
   const { editor, loading, navigation, persistence, review, validationFocusRequest } = pageModel;
 
   useEffect(() => {
-    if (!validationFocusRequest) {
+    if (!validationFocusRequest || validationFocusRequest.path.startsWith("players.")) {
       return;
     }
     const target = document.querySelector<HTMLElement>(
@@ -175,7 +193,11 @@ function MatchWorkspacePageContent({
       </PageContentSurface>
 
       {persistence.confirmation ? <MatchConfirmDialog model={persistence.confirmation} /> : null}
-      <MatchWorkspaceNavigationGuard model={navigation.guard} />
+      <UnsavedChangesGuard
+        model={navigation.guard}
+        pending={navigation.pending}
+        preservesInput={(current, next) => preservesWorkspaceInput(mode, current, next)}
+      />
     </PageFrame>
   );
 }

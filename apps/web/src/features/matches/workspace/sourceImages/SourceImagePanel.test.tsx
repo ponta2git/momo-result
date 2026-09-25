@@ -795,6 +795,36 @@ describe("SourceImagePanel", () => {
     expect(archiveRequested).toBe(true);
   });
 
+  it("aborts an archive download when its workspace is closed and never saves its late body", async () => {
+    const user = userEvent.setup();
+    const anchorClick = installAnchorClickMock();
+    installObjectUrlMock({ createObjectURL: () => "blob:source-image" });
+    const responseGate = createDeferred();
+    let archiveSignal: AbortSignal | undefined;
+    server.use(
+      http.get("/api/match-drafts/:draftId/source-images.zip", async ({ request }) => {
+        archiveSignal = request.signal;
+        await responseGate.promise;
+        return archiveResponse();
+      }),
+    );
+    const view = render(
+      <SourceImagePanel
+        loading={false}
+        matchDraftId={draftId}
+        preferredKind="total_assets"
+        sourceImages={sourceImages}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "元画像を保存" }));
+    await waitFor(() => expect(archiveSignal).toBeDefined());
+    view.unmount();
+    expect(archiveSignal?.aborted).toBe(true);
+    await act(async () => responseGate.resolve());
+    expect(anchorClick.click).not.toHaveBeenCalled();
+  });
+
   it("asks for confirmation before downloading a partial source image archive", async () => {
     const user = userEvent.setup();
     const anchorClick = installAnchorClickMock();

@@ -37,9 +37,17 @@ export function MatchSetupSection({
   const contextComplete = Boolean(
     selectedHeldEvent && selectedGameTitle && selectedSeason && selectedMap && values.playedAt,
   );
-  const hasErrors = model.fields.validation.errorPathSet.size > 0;
+  const hasErrors = Object.keys(values).some((path) =>
+    model.fields.validation.errorPathSet.has(path),
+  );
   const [editorOpen, setEditorOpen] = useState(!contextComplete || hasErrors);
   const [previousHasErrors, setPreviousHasErrors] = useState(hasErrors);
+  const focusRequest = model.fields.validation.focusRequest;
+  const [handledFocusRequest, setHandledFocusRequest] = useState(focusRequest);
+  if (focusRequest && handledFocusRequest !== focusRequest) {
+    setHandledFocusRequest(focusRequest);
+    if (focusRequest.path in values) setEditorOpen(true);
+  }
   if (previousHasErrors !== hasErrors) {
     setPreviousHasErrors(hasErrors);
     if (hasErrors) setEditorOpen(true);

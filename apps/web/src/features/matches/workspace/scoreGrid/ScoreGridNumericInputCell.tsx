@@ -1,4 +1,4 @@
-import { memo, useCallback, useRef, useState } from "react";
+import { memo, useCallback, useRef } from "react";
 import type { ChangeEvent, KeyboardEvent } from "react";
 
 import type { ReviewFieldKey } from "@/features/matches/workspace/review/reviewWarningModel";
@@ -113,6 +113,7 @@ export type NumericInputCellField = {
   controlWidth: "short" | "wide";
   validationPath?: string | undefined;
   value: number;
+  draftValue?: string | undefined;
 };
 
 export type NumericInputCellInteraction = {
@@ -121,6 +122,7 @@ export type NumericInputCellInteraction = {
   registerCellRef?: RegisterCellRef | undefined;
   row: number;
   onCommit: (value: number) => void;
+  onDraftChange: (path: string, value: string | undefined) => void;
   onKeyboard?: NumericKeyboardHandler | undefined;
   onPreferImageKindChange?: ((kind: PreferredImageKind) => void) | undefined;
   onReviewCellFocus?: ((row: number, field: ReviewFieldKey) => void) | undefined;
@@ -146,6 +148,7 @@ export const NumericInputCell = memo(function NumericInputCell({
   cellId,
   col,
   controlWidth,
+  draftValue,
   error = false,
   focusImageKind,
   originalValue,
@@ -159,11 +162,16 @@ export const NumericInputCell = memo(function NumericInputCell({
   validationPath,
   value,
   onCommit,
+  onDraftChange,
   onKeyboard,
   onPreferImageKindChange,
   onReviewCellFocus,
 }: NumericInputCellProps) {
-  const [draftValue, setDraftValue] = useState<string | undefined>(undefined);
+  const draftPath = validationPath ?? cellId;
+  const setDraftValue = useCallback(
+    (next: string | undefined) => onDraftChange(draftPath, next),
+    [draftPath, onDraftChange],
+  );
   const editStartValueRef = useRef<string | null>(null);
   const fallbackValue = Number.isFinite(value) ? String(value) : "";
   const inputValue = draftValue ?? fallbackValue;
@@ -188,22 +196,22 @@ export const NumericInputCell = memo(function NumericInputCell({
     }
     if (parsed !== value) onCommit(parsed);
     setDraftValue(undefined);
-  }, [allowSign, inputValue, onCommit, value]);
+  }, [allowSign, inputValue, onCommit, setDraftValue, value]);
 
   const revertCell = useCallback(() => {
     const before = editStartValueRef.current ?? fallbackValue;
     const parsed = parseNumericValue(before, allowSign);
-    setDraftValue(before);
+    setDraftValue(before === fallbackValue ? undefined : before);
     if (parsed !== undefined && parsed !== value) {
       onCommit(parsed);
     }
-  }, [allowSign, fallbackValue, onCommit, value]);
+  }, [allowSign, fallbackValue, onCommit, setDraftValue, value]);
 
   const handleChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       setDraftValue(normalizeNumericDraft(event.currentTarget.value, allowSign));
     },
-    [allowSign],
+    [allowSign, setDraftValue],
   );
 
   const handleFocus = useCallback(() => {

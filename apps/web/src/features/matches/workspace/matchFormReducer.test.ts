@@ -161,6 +161,29 @@ describe("matchFormReducer", () => {
     });
   });
 
+  it("replaces only the synced incident drafts and preserves unrelated unfinished input", () => {
+    const values = {
+      ...createEmptyMatchForm(baseIso),
+      numericDrafts: {
+        "players.0.incidents.destination": "",
+        "players.0.revenueManYen": "-",
+        "players.1.incidents.destination": "",
+      },
+    };
+    const next = matchFormReducer(createMatchFormReducerState(values), {
+      type: "sync_incidents_from_play_order",
+      index: 0,
+      playOrder: 2,
+      incidentByPlayOrder: new Map([[2, entry({ 目的地: 9 })]]),
+    });
+
+    expect(next.values.players[0]?.incidents.destination).toBe(9);
+    expect(next.values.numericDrafts).toEqual({
+      "players.0.revenueManYen": "-",
+      "players.1.incidents.destination": "",
+    });
+  });
+
   it("subsequent patch_incident on the just-synced index clears lastSyncedPlayerIndex", () => {
     const initial = createMatchFormReducerState(createEmptyMatchForm(baseIso));
     const synced = matchFormReducer(initial, {

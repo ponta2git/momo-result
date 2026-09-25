@@ -6,6 +6,7 @@ import type { MatchFormValues, WorkspaceMode } from "@/features/matches/workspac
 import { useMasterHandoffRestore } from "@/features/matches/workspace/useMasterHandoffRestore";
 import { useMatchWorkspaceHandoffNavigation } from "@/features/matches/workspace/useMatchWorkspaceHandoffNavigation";
 import type { WorkspaceNoticeTone } from "@/features/matches/workspace/useWorkspaceNotice";
+import { compact } from "@/shared/lib/compact";
 import { showToast } from "@/shared/ui/feedback/Toast";
 import type { MasterHandoffPayload } from "@/shared/workflows/matchWorkspaceMasterHandoff";
 
@@ -43,8 +44,8 @@ export function useMatchWorkspaceMasterHandoff({
     (payload: MasterHandoffPayload) => {
       dispatch({
         payload: {
-          ...payload.values,
-          noteBody: values.noteBody,
+          ...compact(payload.values),
+          noteBody: payload.values.noteBody ?? values.noteBody,
           ...(values.matchDraftId ? { matchDraftId: values.matchDraftId } : {}),
         },
         type: "replace",

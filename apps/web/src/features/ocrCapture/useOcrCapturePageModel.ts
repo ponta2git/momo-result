@@ -22,8 +22,24 @@ import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 
 const readyStatuses = new Set(["selected", "failed", "cancelled"]);
 
+/** Authentication remains outside the principal-scoped editor so remounting does not refetch it. */
+export function useOcrCaptureAuth() {
+  const { devUser } = useDevUser();
+  const query = useQuery({ ...authQueryOptions(devUser), retry: false });
+  return {
+    accountId: query.data?.accountId,
+    ready: query.isSuccess && query.data !== null,
+    feedback: {
+      data: query.data,
+      error: query.error ? normalizeUnknownApiError(query.error) : undefined,
+      retry: () => void query.refetch(),
+      retrying: query.isFetching,
+    },
+  };
+}
+
 /** Owns OCR capture screen state and exposes only view-ready slices and user intents. */
-export function useOcrCapturePageModel() {
+export function useOcrCapturePageModel(auth: ReturnType<typeof useOcrCaptureAuth>) {
   const [startError, setStartError] = useState<string>();
   const [searchParams] = useSearchParams();
   const requestedHeldEventId = trimSearchParam(searchParams.get("heldEventId"));
@@ -35,9 +51,7 @@ export function useOcrCapturePageModel() {
   const [captureTargetKind, setCaptureTargetKind] = useState<SlotKind>("total_assets");
   const [captureActionFeedback, setCaptureActionFeedback] = useState<string>();
 
-  const { devUser } = useDevUser();
-  const authQuery = useQuery({ ...authQueryOptions(devUser), retry: false });
-  const authReady = authQuery.isSuccess && authQuery.data !== null;
+  const authReady = auth.ready;
   const setupOptions = useOcrSetupOptions({
     enabled: authReady,
     onChange: setSetupValue,
@@ -161,14 +175,17 @@ export function useOcrCapturePageModel() {
       },
     },
     feedback: {
-      auth: {
-        data: authQuery.data,
-        error: authQuery.error ? normalizeUnknownApiError(authQuery.error) : undefined,
-        retry: () => void authQuery.refetch(),
-        retrying: authQuery.isFetching,
-      },
+      auth: auth.feedback,
     },
-    navigation: { returnTo },
+    navigation: {
+      guard: {
+        dirty: selectedImageCount > 0,
+        navigationAllowedRef: startFlow.navigationAllowedRef,
+        onDiscard: () => undefined,
+      },
+      pending: startFlow.locked,
+      returnTo: returnTo ?? "/matches",
+    },
     setup: {
       choices: {
         failed: setupOptions.hasError,

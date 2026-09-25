@@ -12,6 +12,7 @@ import {
   sanitizeReturnTo,
   saveMasterHandoff,
 } from "@/shared/workflows/matchWorkspaceMasterHandoff";
+import { makeMatchWorkspaceMasterHandoffValues } from "@/test/factories";
 
 const memberIds = ["member_ponta", "member_akane_mami", "member_otaka", "member_eu"] as const;
 const accountId = "account_ponta";
@@ -151,6 +152,68 @@ describe("matchWorkspaceMasterHandoff", () => {
         handoffId: "copied-handoff",
       }),
     ).toBeUndefined();
+  });
+
+  it("round-trips unfinished input and notes while accepting older version 2 payloads", () => {
+    const payload = createMatchWorkspaceMasterHandoffPayload({
+      accountId,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      matchSessionId: "session-1",
+      returnTo: "/matches/new?matchSessionId=session-1",
+      values: {
+        ...makeMatchWorkspaceMasterHandoffValues(),
+        matchDraftId: "draft-1",
+        matchNoInEvent: 0,
+        noteBody: "設定を追加してから続きを入力する",
+        numericDrafts: { "players.0.revenueManYen": "-", "players.1.rank": "" },
+        players: handoffPlayers({ destination: -1 }),
+      },
+    });
+    const handoffId = saveMasterHandoff(payload, { createId: () => "unfinished-handoff" });
+    const options = {
+      expectedAccountId: accountId,
+      expectedReturnTo: payload.returnTo,
+      handoffId,
+      nowMs: Date.parse("2026-01-01T00:30:00.000Z"),
+    };
+    expect(loadMasterHandoff(options)?.values).toEqual(payload.values);
+
+    const {
+      noteBody: _note,
+      numericDrafts: _drafts,
+      matchDraftId: _draftId,
+      ...legacyValues
+    } = payload.values;
+    window.sessionStorage.setItem(
+      "momoresult.masterHandoff.v2.account_ponta.unfinished-handoff",
+      JSON.stringify({ ...payload, values: legacyValues }),
+    );
+    expect(loadMasterHandoff(options)?.values).toEqual(legacyValues);
+  });
+
+  it("rejects malformed numeric draft state without partially restoring its other input", () => {
+    const payload = createMatchWorkspaceMasterHandoffPayload({
+      accountId,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      matchSessionId: "session-1",
+      returnTo: "/review/session-1",
+      values: makeMatchWorkspaceMasterHandoffValues(),
+    });
+    window.sessionStorage.setItem(
+      "momoresult.masterHandoff.v2.account_ponta.malformed-handoff",
+      JSON.stringify({
+        ...payload,
+        values: { ...payload.values, numericDrafts: { "players.0.rank": 2 } },
+      }),
+    );
+    const options = {
+      expectedAccountId: accountId,
+      expectedReturnTo: payload.returnTo,
+      handoffId: "malformed-handoff",
+      nowMs: Date.parse("2026-01-01T00:30:00.000Z"),
+    };
+    expect(inspectMasterHandoff(options).status).toBe("invalid");
+    expect(loadMasterHandoff(options)).toBeUndefined();
   });
 
   it("discards legacy unscoped handoffs without restoring them", () => {

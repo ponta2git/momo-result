@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 
 import type {
@@ -29,12 +29,14 @@ export function useSourceImagePanelState({
   matchDraftId,
   preferredKind,
   sourceImages,
+  snapshotChanged,
 }: {
   accountId: string | undefined;
   loading: boolean;
   matchDraftId: string;
   preferredKind: SourceImageKind | undefined;
   sourceImages: SourceImageItem[] | undefined;
+  snapshotChanged: boolean;
 }) {
   const states = useMemo(() => toSourceImageStates(sourceImages), [sourceImages]);
   const [selection, setSelection] = useState<SourceImageSelection>({ mode: "auto" });
@@ -47,6 +49,14 @@ export function useSourceImagePanelState({
   const [archiveError, setArchiveError] = useState("");
   const [conflictingArchiveRevision, setConflictingArchiveRevision] = useState<string>();
   const [archiveDownloaded, setArchiveDownloaded] = useState(false);
+  const archiveRequestRef = useRef<AbortController | null>(null);
+  useLayoutEffect(
+    () => () => {
+      archiveRequestRef.current?.abort();
+      archiveRequestRef.current = null;
+    },
+    [],
+  );
   const previewTriggerRef = useRef<HTMLElement | null>(null);
   const activeKind =
     selection.mode === "fixed" ? selection.kind : (preferredKind ?? "total_assets");
@@ -65,20 +75,30 @@ export function useSourceImagePanelState({
   const expectedImageCount = sourceImageKinds.length;
   const archiveRevision = sourceImages?.[0]?.createdAt;
   const sourceImagesChanged =
-    hasReplacedImage || Boolean(archiveRevision && conflictingArchiveRevision === archiveRevision);
+    snapshotChanged ||
+    hasReplacedImage ||
+    Boolean(archiveRevision && conflictingArchiveRevision === archiveRevision);
   const archiveSaveDisabled =
     loading || archiveSaving || availableImageCount === 0 || sourceImagesChanged;
 
   const saveArchive = useCallback(async () => {
-    if (!archiveRevision || sourceImagesChanged) return;
+    if (!archiveRevision || sourceImagesChanged || archiveRequestRef.current) return;
+    const controller = new AbortController();
+    archiveRequestRef.current = controller;
     setArchiveError("");
     setArchiveSaving(true);
     setArchiveDownloaded(false);
     try {
-      const result = await downloadMatchDraftSourceImagesArchive(matchDraftId, archiveRevision);
+      const result = await downloadMatchDraftSourceImagesArchive(
+        matchDraftId,
+        archiveRevision,
+        controller.signal,
+      );
+      if (controller.signal.aborted) return;
       triggerBrowserDownload(result);
       setArchiveDownloaded(true);
     } catch (error) {
+      if (controller.signal.aborted) return;
       const normalized = normalizeUnknownApiError(error);
       if (normalized.status === 409) {
         setConflictingArchiveRevision(archiveRevision);
@@ -92,7 +112,10 @@ export function useSourceImagePanelState({
         setArchiveError(archiveDownloadError);
       }
     } finally {
-      setArchiveSaving(false);
+      if (archiveRequestRef.current === controller) {
+        archiveRequestRef.current = null;
+        setArchiveSaving(false);
+      }
     }
   }, [archiveRevision, matchDraftId, sourceImagesChanged]);
 

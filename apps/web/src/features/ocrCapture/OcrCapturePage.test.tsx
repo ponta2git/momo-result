@@ -9,11 +9,13 @@ import { createMemoryRouter, RouterProvider, useLocation } from "react-router-do
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { OcrCapturePage } from "@/features/ocrCapture/OcrCapturePage";
+import type { AuthMeResponse } from "@/shared/api/auth";
 import type { CreateOcrJobRequest } from "@/shared/api/ocrJobs";
 import type { PutOcrSubmissionRequest } from "@/shared/api/ocrSubmissions";
 import { gameTitlesQueryOptions } from "@/shared/api/queryOptions";
+import { authMeQueryKeyFor } from "@/shared/auth/authQueries";
 import { DevUserPicker } from "@/shared/auth/DevUserPicker";
-import { setDevUser } from "@/test/auth";
+import { setDevUser, testDevUserAccountId } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { installObjectUrlMock } from "@/test/doubles/dom";
 import { setupMsw } from "@/test/msw/lifecycle";
@@ -186,6 +188,78 @@ describe("OcrCapturePage", () => {
       "href",
       "/held-events/held-1",
     );
+  });
+
+  it("protects selected images on back navigation until the user explicitly discards them", async () => {
+    setDevUser();
+    const { router } = renderCaptureRoute("/matches");
+    await act(async () => {
+      await router.navigate("/ocr/new");
+    });
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "作品" })).toHaveTextContent("桃太郎電鉄2"),
+    );
+    await user.upload(
+      screen.getByLabelText("OCRの画像をアップロード"),
+      new File(["image"], "assets.png", { type: "image/png" }),
+    );
+    const unloading = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(unloading);
+    expect(unloading.defaultPrevented).toBe(true);
+    act(() => {
+      void router.navigate(-1);
+    });
+    expect(
+      await screen.findByRole("alertdialog", { name: "未保存の変更を破棄しますか？" }),
+    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "キャンセル" }));
+    expect(screen.getByText("配置済み1件／全3件")).toBeVisible();
+    expect(router.state.location.pathname).toBe("/ocr/new");
+    await user.click(screen.getByRole("link", { name: "取り込みをやめる" }));
+    await user.click(await screen.findByRole("button", { name: "破棄して移動" }));
+    expect(await screen.findByText("matches-page")).toBeInTheDocument();
+  });
+
+  it("releases the old principal's capture and ignores its late submission navigation", async () => {
+    setDevUser();
+    const objectUrls = installObjectUrlMock();
+    const draftResponse = createDeferred();
+    let draftStarted = false;
+    server.use(
+      http.post("/api/match-drafts", async () => {
+        draftStarted = true;
+        await draftResponse.promise;
+        return HttpResponse.json({
+          matchDraftId: "draft-old-principal",
+          status: "draft_ready",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        });
+      }),
+    );
+    const { router } = renderCaptureRoute();
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "作品" })).toHaveTextContent("桃太郎電鉄2"),
+    );
+    await user.upload(
+      screen.getByLabelText("OCRの画像をアップロード"),
+      new File(["image"], "assets.png", { type: "image/png" }),
+    );
+    await startOcrAllowingPartialTray();
+    await waitFor(() => expect(draftStarted).toBe(true));
+    act(() => {
+      queryClient.setQueryData<AuthMeResponse>(
+        authMeQueryKeyFor(testDevUserAccountId),
+        (current) => (current ? { ...current, accountId: "account-other" } : current),
+      );
+    });
+    expect(await screen.findByText("配置済み0件／全3件")).toBeVisible();
+    expect(objectUrls.revokeObjectURL).toHaveBeenCalled();
+    draftResponse.resolve();
+    await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+    expect(router.state.location.pathname).toBe("/ocr/new");
+    expect(screen.getByText("配置済み0件／全3件")).toBeVisible();
+    expect(screen.queryByText("matches-page")).not.toBeInTheDocument();
   });
 
   it("uses the selected tray as the capture target and safely replaces its image", async () => {

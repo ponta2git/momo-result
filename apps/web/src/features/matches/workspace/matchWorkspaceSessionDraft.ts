@@ -43,6 +43,7 @@ const matchFormValuesSchema = z.object({
     .length(4),
   seasonMasterId: z.string(),
   noteBody: z.string().default(""),
+  numericDrafts: z.record(z.string(), z.string()).optional(),
 });
 
 const sessionDraftSchema = z.object({

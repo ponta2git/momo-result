@@ -1,4 +1,5 @@
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
+import { matchFormInput } from "@/features/matches/workspace/matchNumericDrafts";
 import { confirmMatchSchema } from "@/features/matches/workspace/review/confirmMatchFormSchema";
 import type { ConfirmMatchRequest, UpdateMatchRequest } from "@/shared/api/matches";
 
@@ -15,7 +16,7 @@ export type MatchUpdateRequest = UpdateMatchRequest;
  * `parse` を使う (検証エラーは UI 側で先に握っている)。
  */
 export function toConfirmMatchRequest(values: MatchFormValues): MatchConfirmRequest {
-  return confirmMatchSchema.parse(values);
+  return confirmMatchSchema.parse(matchFormInput(values));
 }
 
 export function toUpdateMatchRequest(values: MatchFormValues): MatchUpdateRequest {

@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -357,6 +357,23 @@ describe("ScoreGrid", () => {
 
     expect(revenueInput).toHaveValue("-");
     expect(onPlayerChange).not.toHaveBeenCalled();
+  });
+
+  it("retains an uncommitted number when the responsive editor changes", async () => {
+    matchMedia = installMatchMediaController(false);
+    const user = userEvent.setup();
+    const onPlayerChange = vi.fn();
+    render(<ScoreGridHarness onPlayerChange={onPlayerChange} />);
+    const revenue = screen.getByRole("textbox", { name: "ぽんた 収益（万円）" });
+    await user.clear(revenue);
+    await user.type(revenue, "-42");
+    expect(onPlayerChange).not.toHaveBeenCalled();
+    act(() => matchMedia?.setMatches(true));
+    const mobileRevenue = screen.getByRole("textbox", { name: "ぽんた 収益（万円）" });
+    expect(mobileRevenue).toHaveValue("-42");
+    await user.click(mobileRevenue);
+    await user.tab();
+    expect(onPlayerChange).toHaveBeenLastCalledWith(0, { revenueManYen: -42 });
   });
 
   it("moves through OCR warnings without changing the underlying values", async () => {

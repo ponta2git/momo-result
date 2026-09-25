@@ -1,6 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { Link, MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { confirmedDraftMessages } from "@/features/matches/confirmedDraftNavigation";
 import { DraftReviewPage } from "@/features/matches/workspace/DraftReviewPage";
 import { matchWorkspaceSessionDraftKey } from "@/features/matches/workspace/matchWorkspaceSessionDraft";
+import { matchKeys } from "@/shared/api/queryKeys";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import {
@@ -524,6 +525,52 @@ describe("DraftReviewPage", () => {
     expect(screen.getByRole("button", { name: "確定前の確認へ進む" })).toBeEnabled();
   });
 
+  it("initializes from completed OCR and preserves edits when the same review snapshot changes", async () => {
+    setDevUser();
+    let response = makeMatchDraftReviewResponse("draft-running-1");
+    server.use(http.get("/api/match-drafts/:draftId/review", () => HttpResponse.json(response)));
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/review/draft-running-1"]}>
+          <Routes>
+            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    expect(
+      await screen.findByRole("heading", { name: "読み取り中は編集できません" }),
+    ).toBeVisible();
+    expect(screen.queryByRole("button", { name: "確定前の確認へ進む" })).not.toBeInTheDocument();
+    response = makeMatchDraftReviewResponse("draft-running-1", { status: "needs_review" });
+    await user.click(screen.getByRole("button", { name: "状態を再確認" }));
+    await waitForReviewWorkspaceReady();
+    const revenue = screen.getByRole("textbox", { name: "ぽんた 収益（万円）" });
+    await user.clear(revenue);
+    await user.type(revenue, "-");
+    const matchNumber = screen.getByLabelText("試合番号");
+    await user.clear(matchNumber);
+    await user.type(matchNumber, "9");
+
+    act(() => {
+      queryClient.setQueryData(
+        matchKeys.draft.review("draft-running-1"),
+        makeMatchDraftReviewResponse("draft-running-1", {
+          status: "needs_review",
+          revenueDraftId: "replacement-revenue",
+          matchNoInEvent: 4,
+          updatedAt: "2026-02-01T00:00:00.000Z",
+        }),
+      );
+    });
+
+    await waitFor(() => expect(screen.getByLabelText("試合番号")).toHaveValue("9"));
+    expect(screen.getByRole("textbox", { name: "ぽんた 収益（万円）" })).toHaveValue("-");
+    expect(screen.getByText(/元画像または記録が更新されています/u)).toBeVisible();
+    expect(screen.getByRole("button", { name: "元画像を保存" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "確定前の確認へ進む" })).toBeEnabled();
+  });
+
   it("returns to the loading shell when navigating to another review session", async () => {
     setDevUser();
     const responseGate = createDeferred();
@@ -683,9 +730,11 @@ describe("DraftReviewPage", () => {
       heldAt: "2026-01-02T00:00:00.000Z",
       id: "held-created",
     });
+    const creationGate = createDeferred();
     server.use(
       http.get("/api/held-events", () => HttpResponse.json({ items: heldEvents })),
-      http.post("/api/held-events", () => {
+      http.post("/api/held-events", async () => {
+        await creationGate.promise;
         heldEvents.unshift(createdHeldEvent);
         return HttpResponse.json(createdHeldEvent);
       }),
@@ -706,6 +755,14 @@ describe("DraftReviewPage", () => {
     await user.click(screen.getByText("一覧にない開催を追加する"));
     await user.click(screen.getByRole("button", { name: "作成して選択" }));
 
+    expect(screen.getByRole("button", { name: "開催（必須）を変更" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "確定前の確認へ進む" })).toBeDisabled();
+    const revenue = screen.getByRole("textbox", { name: "ぽんた 収益（万円）" });
+    expect(revenue).toBeEnabled();
+    await user.clear(revenue);
+    await user.type(revenue, "42");
+    creationGate.resolve();
+
     await waitFor(() =>
       expect(
         screen.getByText(/2026\/01\/02 09:00 — 確定済み0試合・未確定下書き0件/u),
@@ -718,6 +775,9 @@ describe("DraftReviewPage", () => {
         `開催（${formatDateTimeLong(createdHeldEvent.heldAt)}）を作成して選択しました。`,
       ),
     ).toBeInTheDocument();
+    expect(revenue).toHaveValue("42");
+    await user.click(screen.getByRole("button", { name: "ダイアログを閉じる" }));
+    expect(screen.getByRole("button", { name: "確定前の確認へ進む" })).toBeEnabled();
   });
 
   it("renders the development sample drafts without OCR worker data", async () => {

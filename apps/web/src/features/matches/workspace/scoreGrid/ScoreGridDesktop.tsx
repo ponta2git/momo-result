@@ -21,6 +21,7 @@ import type {
   ScoreGridData,
   ScoreGridKeyboardHandler,
   ScoreGridNumericHandlers,
+  ScoreGridNumericDraftState,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
 import { canonicalResultMembers, memberDisplayName } from "@/shared/domain/members";
 import { PlayOrderMark } from "@/shared/matches/PlayOrderMark";
@@ -28,7 +29,8 @@ import { SelectControl } from "@/shared/ui/forms/SelectControl";
 
 type ScoreGridDesktopTableProps = ScoreGridData &
   ScoreGridCellRegistry &
-  ScoreGridNumericHandlers & {
+  ScoreGridNumericHandlers &
+  ScoreGridNumericDraftState & {
     handleKeyboard: ScoreGridKeyboardHandler;
     onPlayerChange: ScoreGridActions["onPlayerChange"];
     onPlayOrderChange: ScoreGridActions["onPlayOrderChange"];
@@ -44,6 +46,8 @@ export function ScoreGridDesktopTable({
   handleKeyboard,
   handlePlayerNumericCommit,
   lastSyncedPlayerIndex,
+  numericDrafts,
+  onNumericDraftChange,
   onPlayerChange,
   onPlayOrderChange,
   onPreferImageKindChange,
@@ -177,6 +181,8 @@ export function ScoreGridDesktopTable({
               <PlayerNumericDesktopCell
                 col={2}
                 error={errorPathSet.has(keyToPath(rowIndex, "rank"))}
+                draftValue={numericDrafts[keyToPath(rowIndex, "rank")]}
+                onDraftChange={onNumericDraftChange}
                 field="rank"
                 focusImageKind="total_assets"
                 originalValue={originalRow?.rank}
@@ -194,6 +200,8 @@ export function ScoreGridDesktopTable({
                 allowSign
                 col={3}
                 error={errorPathSet.has(keyToPath(rowIndex, "totalAssetsManYen"))}
+                draftValue={numericDrafts[keyToPath(rowIndex, "totalAssetsManYen")]}
+                onDraftChange={onNumericDraftChange}
                 field="totalAssetsManYen"
                 focusImageKind="total_assets"
                 originalValue={originalRow?.totalAssetsManYen}
@@ -212,6 +220,8 @@ export function ScoreGridDesktopTable({
                 allowSign
                 col={4}
                 error={errorPathSet.has(keyToPath(rowIndex, "revenueManYen"))}
+                draftValue={numericDrafts[keyToPath(rowIndex, "revenueManYen")]}
+                onDraftChange={onNumericDraftChange}
                 field="revenueManYen"
                 focusImageKind="revenue"
                 originalValue={originalRow?.revenueManYen}
@@ -240,6 +250,8 @@ export function ScoreGridDesktopTable({
                       cellId={cellId}
                       col={col}
                       commitKind="incident"
+                      draftValue={numericDrafts[keyToPath(rowIndex, `incident.${incidentKey}`)]}
+                      onDraftChange={onNumericDraftChange}
                       error={errorPathSet.has(
                         keyToPath(rowIndex, `incident.${incidentKey}` as GridColumn),
                       )}

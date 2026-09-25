@@ -25,6 +25,7 @@ type SourceImagePanelProps = {
   matchDraftId: string;
   preferredKind: SourceImageKind | undefined;
   sourceImages: SourceImageItem[] | undefined;
+  snapshotChanged?: boolean;
 };
 
 const archivePendingLabel = "保存中…";
@@ -57,6 +58,7 @@ function SourceImagePanelContent({
   matchDraftId,
   preferredKind,
   sourceImages,
+  snapshotChanged = false,
 }: SourceImagePanelProps) {
   const panel = useSourceImagePanelState({
     accountId,
@@ -64,6 +66,7 @@ function SourceImagePanelContent({
     matchDraftId,
     preferredKind,
     sourceImages,
+    snapshotChanged,
   });
 
   return (

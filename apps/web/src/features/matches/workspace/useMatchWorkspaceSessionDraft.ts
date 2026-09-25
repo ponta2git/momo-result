@@ -27,6 +27,7 @@ export function useMatchWorkspaceSessionDraft({
   enabled,
   mode,
   onRestore,
+  recoverStoredDraft = true,
   values,
   workspaceKey,
 }: {
@@ -35,6 +36,7 @@ export function useMatchWorkspaceSessionDraft({
   enabled: boolean;
   mode: WorkspaceMode;
   onRestore: (draft: MatchWorkspaceSessionDraft) => void;
+  recoverStoredDraft?: boolean;
   values: MatchFormValues;
   workspaceKey: string;
 }) {
@@ -54,7 +56,7 @@ export function useMatchWorkspaceSessionDraft({
       mode,
       values,
     });
-    const stored = loadMatchWorkspaceSessionDraft(storageScope);
+    const stored = recoverStoredDraft ? loadMatchWorkspaceSessionDraft(storageScope) : null;
     const recovery =
       stored && stored.baselineFingerprint === baselineValuesFingerprint ? stored : null;
     setSessionState({

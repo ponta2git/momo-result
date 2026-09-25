@@ -1,10 +1,11 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
+import type { MatchNumericDrafts } from "@/features/matches/workspace/matchNumericDrafts";
 import type { ReviewItem } from "@/features/matches/workspace/review/reviewProgress";
 import { reviewCellId } from "@/features/matches/workspace/review/reviewWarningModel";
 import type { ReviewFieldKey } from "@/features/matches/workspace/review/reviewWarningModel";
-import { gridColumns } from "@/features/matches/workspace/scoreGrid/ScoreGridColumns";
+import { gridColumns, keyToPath } from "@/features/matches/workspace/scoreGrid/ScoreGridColumns";
 import { ScoreGridDesktopTable } from "@/features/matches/workspace/scoreGrid/ScoreGridDesktop";
 import { handleScoreGridKeydown } from "@/features/matches/workspace/scoreGrid/ScoreGridKeyboard";
 import { ScoreGridMobileCards } from "@/features/matches/workspace/scoreGrid/ScoreGridMobile";
@@ -17,6 +18,7 @@ import type {
   ScoreGridActions,
   ScoreGridData,
   ScoreGridKeyboardHandler,
+  ScoreGridNumericDraftState,
   ScoreGridProps,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
@@ -26,17 +28,35 @@ import { contentText } from "@/shared/ui/typography";
 
 /** Keep unrelated note/setup edits out of the score editor's urgent render. */
 export function ScoreGrid({ actions, data }: ScoreGridProps) {
+  const [localDrafts, setLocalDrafts] = useState<MatchNumericDrafts>({});
+  const changeLocalDraft = useCallback((path: string, value: string | undefined) => {
+    setLocalDrafts((current) => {
+      const next = { ...current };
+      if (value === undefined) delete next[path];
+      else next[path] = value;
+      return next;
+    });
+  }, []);
   const { acknowledgedCellIds, activeCellId, items } = data.review;
   const review = useMemo(
     () => ({ acknowledgedCellIds, activeCellId, items }),
     [acknowledgedCellIds, activeCellId, items],
   );
-  return <ScoreGridContent {...actions} {...data} review={review} />;
+  return (
+    <ScoreGridContent
+      {...actions}
+      {...data}
+      numericDrafts={data.numericDrafts ?? localDrafts}
+      onNumericDraftChange={actions.onNumericDraftChange ?? changeLocalDraft}
+      review={review}
+    />
+  );
 }
 
 const ScoreGridContent = memo(function ScoreGridContent({
   onAcknowledgeReviewCell,
   onIncidentChange,
+  onNumericDraftChange,
   onPlayerChange,
   onPlayOrderChange,
   onPreferImageKindChange,
@@ -44,15 +64,28 @@ const ScoreGridContent = memo(function ScoreGridContent({
   onReviewCellFocus,
   errorPathSet,
   lastSyncedPlayerIndex,
+  numericDrafts,
   originalPlayers,
   players,
   review,
-}: ScoreGridActions & ScoreGridData) {
+  validationFocusRequest,
+}: ScoreGridActions & ScoreGridData & ScoreGridNumericDraftState) {
   const [expandedMobilePlayer, setExpandedMobilePlayer] = useState(0);
   const [pendingFocus, setPendingFocus] = useState<{
     cellId: string;
     origin: Element | null;
+    force?: boolean;
   } | null>(null);
+  const [handledValidationRequest, setHandledValidationRequest] = useState(validationFocusRequest);
+  if (validationFocusRequest && handledValidationRequest !== validationFocusRequest) {
+    setHandledValidationRequest(validationFocusRequest);
+    const row = Number(/^players\.(\d+)\./u.exec(validationFocusRequest.path)?.[1]);
+    const column = gridColumns.find((item) => keyToPath(row, item) === validationFocusRequest.path);
+    if (Number.isInteger(row) && column) {
+      setExpandedMobilePlayer(row);
+      setPendingFocus({ cellId: reviewCellId(row, column), force: true, origin: null });
+    }
+  }
   const handledFocus = useRef(pendingFocus);
   const isNarrowViewport = useMediaQuery("(max-width: 1119px)");
   const inputRefs = useRef(new Map<string, HTMLElement>());
@@ -91,7 +124,10 @@ const ScoreGridContent = memo(function ScoreGridContent({
     handledFocus.current = pendingFocus;
     const next = inputRefs.current.get(pendingFocus.cellId);
     const current = document.activeElement;
-    if (next && (current === pendingFocus.origin || current === document.body)) {
+    if (
+      next &&
+      (pendingFocus.force || current === pendingFocus.origin || current === document.body)
+    ) {
       next.focus({ preventScroll: true });
       const label = (next as HTMLInputElement | HTMLButtonElement).labels?.[0];
       revealPageElement(label ?? next);
@@ -230,6 +266,8 @@ const ScoreGridContent = memo(function ScoreGridContent({
             handleKeyboard={handleKeyboard}
             handlePlayerNumericCommit={handlePlayerNumericCommit}
             lastSyncedPlayerIndex={lastSyncedPlayerIndex}
+            numericDrafts={numericDrafts}
+            onNumericDraftChange={onNumericDraftChange}
             originalByPlayOrder={originalByPlayOrder}
             originalPlayers={originalPlayers}
             players={players}
@@ -251,6 +289,8 @@ const ScoreGridContent = memo(function ScoreGridContent({
             handleIncidentNumericCommit={handleIncidentNumericCommit}
             handlePlayerNumericCommit={handlePlayerNumericCommit}
             lastSyncedPlayerIndex={lastSyncedPlayerIndex}
+            numericDrafts={numericDrafts}
+            onNumericDraftChange={onNumericDraftChange}
             originalPlayers={originalPlayers}
             players={players}
             review={review}

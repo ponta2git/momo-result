@@ -41,6 +41,7 @@ export const ScoreGridNumericEditor = memo(function ScoreGridNumericEditor({
   ariaLabel,
   cellId,
   col,
+  draftValue,
   error,
   focusImageKind,
   originalValue,
@@ -53,6 +54,7 @@ export const ScoreGridNumericEditor = memo(function ScoreGridNumericEditor({
   validationPath,
   value,
   onIncidentCommit,
+  onDraftChange,
   onKeyboard,
   onPreferImageKindChange,
   onReviewCellFocus,
@@ -79,6 +81,7 @@ export const ScoreGridNumericEditor = memo(function ScoreGridNumericEditor({
       cellId={cellId}
       col={col}
       controlWidth={controlWidth}
+      draftValue={draftValue}
       error={error}
       focusImageKind={focusImageKind}
       originalValue={originalValue}
@@ -92,6 +95,7 @@ export const ScoreGridNumericEditor = memo(function ScoreGridNumericEditor({
       validationPath={validationPath}
       value={value}
       onCommit={commitValue}
+      onDraftChange={onDraftChange}
       onKeyboard={onKeyboard}
       onPreferImageKindChange={onPreferImageKindChange}
       onReviewCellFocus={onReviewCellFocus}

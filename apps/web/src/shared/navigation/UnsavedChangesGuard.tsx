@@ -1,5 +1,6 @@
 import { useCallback, useContext, useEffect, useLayoutEffect, useRef } from "react";
 import { UNSAFE_DataRouterContext, useBlocker } from "react-router-dom";
+import type { Location } from "react-router-dom";
 
 import { Button } from "@/shared/ui/actions/Button";
 import { AlertDialog, Dialog } from "@/shared/ui/feedback/Dialog";
@@ -11,7 +12,8 @@ export type UnsavedChangesGuardModel = {
 };
 
 type UnsavedChangesGuardProps = {
-  allowSamePathChanges?: boolean;
+  /** The owner may exempt context changes that preserve this editor and all of its input. */
+  preservesInput?: (currentLocation: Location, nextLocation: Location) => boolean;
   model: UnsavedChangesGuardModel;
   pending?: boolean;
   showPendingDialog?: boolean;
@@ -20,7 +22,7 @@ type UnsavedChangesGuardProps = {
 };
 
 function UnsavedChangesRouterGuard({
-  allowSamePathChanges = false,
+  preservesInput,
   model,
   pending = false,
   showPendingDialog = true,
@@ -29,19 +31,17 @@ function UnsavedChangesRouterGuard({
 }: UnsavedChangesGuardProps) {
   const { dirty, navigationAllowedRef, onDiscard } = model;
   const blockedWhilePending = useRef(false);
-  const blocker = useBlocker(
-    ({ currentLocation, nextLocation }) => {
-      const shouldBlock =
-        (pending || dirty) &&
-        !navigationAllowedRef.current &&
-        (!allowSamePathChanges || currentLocation.pathname !== nextLocation.pathname) &&
-        `${currentLocation.pathname}${currentLocation.search}${currentLocation.hash}` !==
-          `${nextLocation.pathname}${nextLocation.search}${nextLocation.hash}`;
-      // Capture the decision before an Action can delay the router's blocked render.
-      if (shouldBlock && pending) blockedWhilePending.current = true;
-      return shouldBlock;
-    },
-  );
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => {
+    const shouldBlock =
+      (pending || dirty) &&
+      !navigationAllowedRef.current &&
+      !preservesInput?.(currentLocation, nextLocation) &&
+      `${currentLocation.pathname}${currentLocation.search}${currentLocation.hash}` !==
+        `${nextLocation.pathname}${nextLocation.search}${nextLocation.hash}`;
+    // Capture the decision before an Action can delay the router's blocked render.
+    if (shouldBlock && pending) blockedWhilePending.current = true;
+    return shouldBlock;
+  });
 
   useLayoutEffect(() => {
     if (blocker.state !== "blocked") {

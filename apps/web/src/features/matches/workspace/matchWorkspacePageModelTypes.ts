@@ -20,17 +20,12 @@ import type {
 } from "@/shared/api/masters";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
 import type { HeldEventPickerDirectory } from "@/shared/heldEvents/useHeldEventPickerDirectory";
+import type { UnsavedChangesGuardModel } from "@/shared/navigation/UnsavedChangesGuard";
 
 export type MatchWorkspaceMastersNavigationModel = {
   pending: boolean;
   show: boolean;
   onNavigate: () => void;
-};
-
-export type MatchWorkspaceNavigationGuardModel = {
-  dirty: boolean;
-  navigationAllowedRef: { current: boolean };
-  onDiscard: () => void;
 };
 
 export type MatchWorkspaceToolbarModel = {
@@ -69,7 +64,10 @@ export type MatchWorkspaceSetupFieldsModel = {
     mapItems: MapMasterResponse[];
     seasonItems: SeasonMasterResponse[];
   };
-  validation: { errorPathSet: Set<string> };
+  validation: {
+    errorPathSet: Set<string>;
+    focusRequest?: { path: string; sequence: number } | null;
+  };
   values: MatchSetupValues;
 };
 
@@ -114,6 +112,7 @@ export type MatchWorkspaceSubmitModel = {
 };
 
 export type MatchWorkspaceEditorModel = {
+  disabled?: boolean;
   notice?: WorkspaceNotice | null | undefined;
   note: {
     error: boolean;
@@ -137,6 +136,7 @@ export type MatchWorkspaceEditorModel = {
     matchDraftId: string;
     preferredKind: SourceImageKind;
     sourceImages: SourceImageItem[] | undefined;
+    snapshotChanged: boolean;
   } | null;
   warnings: string[];
 };
@@ -170,7 +170,8 @@ export type MatchWorkspacePageModel = {
   editor: MatchWorkspaceEditorModel;
   loading: MatchWorkspaceLoadingModel;
   navigation: {
-    guard: MatchWorkspaceNavigationGuardModel;
+    pending: boolean;
+    guard: UnsavedChangesGuardModel;
     toolbar: MatchWorkspaceToolbarModel;
   };
   persistence: { confirmation: MatchWorkspaceConfirmationDialogModel | null };

@@ -20,6 +20,7 @@ import { authMeQueryKeyFor } from "@/shared/auth/authQueries";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import {
   createMatchWorkspaceMasterHandoffPayload,
+  appendHandoffIdToReturnTo,
   saveMasterHandoff,
 } from "@/shared/workflows/matchWorkspaceMasterHandoff";
 import { setDevUser, testDevUserAccountId } from "@/test/auth";
@@ -37,6 +38,16 @@ let user: ReturnType<typeof userEvent.setup>;
 function LocationProbe() {
   const location = useLocation();
   return <output aria-label="current location">{`${location.pathname}${location.search}`}</output>;
+}
+
+function MasterHandoffReturn() {
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const destination = appendHandoffIdToReturnTo(
+    params.get("returnTo") ?? "/matches/new",
+    params.get("handoffId") ?? "",
+  );
+  return <Link to={destination}>入力へ戻る</Link>;
 }
 
 async function waitForMatchCreateReady() {
@@ -136,6 +147,47 @@ describe("MatchCreatePage", () => {
       "returnTo=%2Fmatches%2Fnew",
     );
     expect(screen.getByLabelText("current location")).toHaveTextContent("handoffId=");
+  });
+
+  it("preserves notes and unfinished numbers through master handoff and still protects unsaved input", async () => {
+    setDevUser();
+    const router = createMemoryRouter(
+      [
+        { path: "/matches/new", element: <MatchCreatePage /> },
+        { path: "/admin/masters", element: <MasterHandoffReturn /> },
+        { path: "/outside", element: <p>別の作業</p> },
+      ],
+      { initialEntries: ["/matches/new"] },
+    );
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await waitForMatchCreateReady();
+    await user.type(
+      screen.getByRole("textbox", { name: "試合メモ（任意）" }),
+      "カード交換を後で確認",
+    );
+    const revenue = screen.getByRole("textbox", { name: "ぽんた 収益（万円）" });
+    await user.clear(revenue);
+    await user.type(revenue, "-");
+    await user.click(screen.getByRole("button", { name: "設定管理へ" }));
+    await user.click(await screen.findByRole("link", { name: "入力へ戻る" }));
+    await waitForMatchCreateReady();
+    expect(screen.getByRole("textbox", { name: "試合メモ（任意）" })).toHaveValue(
+      "カード交換を後で確認",
+    );
+    expect(screen.getByRole("textbox", { name: "ぽんた 収益（万円）" })).toHaveValue("-");
+    expect(screen.queryByRole("button", { name: "一時保存を復元" })).not.toBeInTheDocument();
+    act(() => {
+      void router.navigate("/outside");
+    });
+    expect(
+      await screen.findByRole("alertdialog", { name: "未保存の変更を破棄しますか？" }),
+    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "キャンセル" }));
+    expect(router.state.location.pathname).toBe("/matches/new");
   });
 
   it("keeps the master handoff pending until the destination loader finishes", async () => {
@@ -257,25 +309,28 @@ describe("MatchCreatePage", () => {
 
   it("preserves user input when only preferred-event and return context change", async () => {
     setDevUser();
-
+    const router = createMemoryRouter(
+      [
+        {
+          path: "/matches/new",
+          element: (
+            <>
+              <Link to="/matches/new?heldEventId=held-requested&returnTo=%2Fmatches">
+                作成コンテキストを更新
+              </Link>
+              <Link to="/matches/new?matchDraftId=another-draft">別の下書きを入力</Link>
+              <LocationProbe />
+              <MatchCreatePage />
+            </>
+          ),
+        },
+        { path: "/matches", element: <p>試合一覧</p> },
+      ],
+      { initialEntries: ["/matches/new"] },
+    );
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/matches/new"]}>
-          <Link to="/matches/new?heldEventId=held-requested&returnTo=%2Fmatches">
-            作成コンテキストを更新
-          </Link>
-          <Routes>
-            <Route
-              path="/matches/new"
-              element={
-                <>
-                  <LocationProbe />
-                  <MatchCreatePage />
-                </>
-              }
-            />
-          </Routes>
-        </MemoryRouter>
+        <RouterProvider router={router} />
       </QueryClientProvider>,
     );
 
@@ -292,6 +347,19 @@ describe("MatchCreatePage", () => {
       ),
     );
     expect(screen.getByLabelText("試合番号")).toHaveValue("9");
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("link", { name: "入力をやめる" }));
+    expect(
+      await screen.findByRole("alertdialog", { name: "未保存の変更を破棄しますか？" }),
+    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "キャンセル" }));
+    await user.click(screen.getByRole("link", { name: "別の下書きを入力" }));
+    expect(
+      await screen.findByRole("alertdialog", { name: "未保存の変更を破棄しますか？" }),
+    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "破棄して移動" }));
+    await waitFor(() => expect(screen.getByLabelText("試合番号")).toHaveValue("3"));
   });
 
   it("keys local form state by authenticated principal identity", async () => {

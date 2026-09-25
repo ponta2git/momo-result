@@ -5,8 +5,12 @@ import { CaptureRail } from "@/features/ocrCapture/CaptureRail";
 import { ImageInput } from "@/features/ocrCapture/ImageInput";
 import { OcrStartDialog } from "@/features/ocrCapture/OcrStartDialog";
 import { SetupPanel } from "@/features/ocrCapture/SetupPanel";
-import { useOcrCapturePageModel } from "@/features/ocrCapture/useOcrCapturePageModel";
+import {
+  useOcrCaptureAuth,
+  useOcrCapturePageModel,
+} from "@/features/ocrCapture/useOcrCapturePageModel";
 import { AuthPanel } from "@/shared/auth/AuthPanel";
+import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
 import { actionRowClass, taskActionPanelClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
@@ -24,7 +28,13 @@ const panelTitleClass = contentText.heading;
 const panelLeadClass = cn(contentText.body, "mt-1");
 
 export function OcrCapturePage() {
-  const { capture, feedback, navigation, setup, submission, startError } = useOcrCapturePageModel();
+  const auth = useOcrCaptureAuth();
+  return <OcrCapturePageContent auth={auth} key={auth.accountId ?? "unresolved"} />;
+}
+
+function OcrCapturePageContent({ auth }: { auth: ReturnType<typeof useOcrCaptureAuth> }) {
+  const { capture, feedback, navigation, setup, submission, startError } =
+    useOcrCapturePageModel(auth);
 
   return (
     <PageFrame>
@@ -244,6 +254,13 @@ export function OcrCapturePage() {
         onClose={submission.dialog.close}
         onConfirm={submission.dialog.confirm}
         onViewMatches={submission.dialog.viewMatches}
+      />
+      <UnsavedChangesGuard
+        preservesInput={(current, next) => current.pathname === next.pathname}
+        description="配置した画像はまだ読み取りを開始していません。移動すると画像の選択は失われ、撮影またはファイル選択が必要になります。"
+        model={navigation.guard}
+        pending={navigation.pending}
+        showPendingDialog={false}
       />
     </PageFrame>
   );

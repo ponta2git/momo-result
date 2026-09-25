@@ -5,6 +5,19 @@ import { describe, expect, it, vi } from "vitest";
 import { ImageInput } from "@/features/ocrCapture/ImageInput";
 
 describe("ImageInput", () => {
+  it("uses the visible file picker button as its only keyboard stop", async () => {
+    const user = userEvent.setup();
+    render(
+      <ImageInput
+        slotLabel="総資産"
+        onSelect={() => undefined}
+        onValidationError={() => undefined}
+      />,
+    );
+    await user.tab();
+    expect(screen.getByRole("button", { name: "ファイルから追加" })).toHaveFocus();
+  });
+
   it("clears the file input after a successful selection so the same file can be selected again", async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();

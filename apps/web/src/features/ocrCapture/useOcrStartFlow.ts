@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { useBeforeUnload, useBlocker, useNavigate } from "react-router-dom";
+import { useLayoutEffect, useRef, useState, useTransition } from "react";
+import { useNavigate } from "react-router-dom";
 
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import type { OcrSubmissionPlan } from "@/features/ocrCapture/ocrSubmissionPlan";
@@ -47,30 +47,14 @@ export function useOcrStartFlow({
   const [isNavigating, startNavigation] = useTransition();
   const [state, setState] = useState<OcrStartDialogState>({ status: "closed" });
   const intentionalNavigationRef = useRef(false);
+  const activeRef = useRef(true);
   const locked = state.status === "submitting" || isNavigating;
-  const blocker = useBlocker(
-    ({ currentLocation, nextLocation }) =>
-      locked &&
-      !intentionalNavigationRef.current &&
-      currentLocation.pathname !== nextLocation.pathname,
-  );
-
-  useBeforeUnload(
-    useCallback(
-      (event) => {
-        if (!locked || intentionalNavigationRef.current) return;
-        event.preventDefault();
-        event.returnValue = "";
-      },
-      [locked],
-    ),
-  );
-
-  useEffect(() => {
-    if (!locked && blocker.state === "blocked") {
-      blocker.reset();
-    }
-  }, [blocker, locked]);
+  useLayoutEffect(() => {
+    activeRef.current = true;
+    return () => {
+      activeRef.current = false;
+    };
+  }, []);
 
   async function submitPlan(
     plan: OcrSubmissionPlan,
@@ -86,13 +70,17 @@ export function useOcrStartFlow({
         plan,
         restart,
         onProgress: (progress) => {
+          if (!activeRef.current) return;
           setState((current) =>
             current.status === "submitting" ? { ...current, progress } : current,
           );
         },
-        updateSlot,
+        updateSlot: (slot) => {
+          if (activeRef.current) updateSlot(slot);
+        },
       });
     } catch (error) {
+      if (!activeRef.current) return;
       setState({
         canEdit: false,
         message: formatApiError(error, "読み取りの準備中に問題が発生しました"),
@@ -102,7 +90,7 @@ export function useOcrStartFlow({
       return;
     }
 
-    if (!result) return;
+    if (!result || !activeRef.current) return;
     handleResult(plan, result, noUncertainAcceptance);
   }
 
@@ -177,9 +165,6 @@ export function useOcrStartFlow({
   function navigateToResult(destination: string) {
     if (isNavigating) return;
     intentionalNavigationRef.current = true;
-    if (blocker.state === "blocked") {
-      blocker.reset();
-    }
     startNavigation(async () => {
       setState({ status: "closed" });
       await navigate(destination, { replace: true });
@@ -194,6 +179,7 @@ export function useOcrStartFlow({
     close,
     confirm,
     locked,
+    navigationAllowedRef: intentionalNavigationRef,
     isNavigating,
     open: (plan: OcrSubmissionPlan) => setState({ plan, status: "confirming" }),
     state,

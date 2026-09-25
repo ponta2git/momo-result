@@ -172,6 +172,7 @@ function GameTitleCreateDialog({
         }}
       >
         <TextField
+          disabled={create.pending}
           error={create.error}
           label="作品名"
           name="name"
@@ -180,6 +181,7 @@ function GameTitleCreateDialog({
         />
 
         <SelectField
+          disabled={create.pending}
           defaultValue={defaultLayoutFamily}
           description="作品ごとの画面構造に合わせて、読み取り方を切り替えます。"
           label="読み取り方式"

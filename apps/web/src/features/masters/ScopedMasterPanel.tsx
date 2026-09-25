@@ -11,6 +11,7 @@ import { contentText } from "@/shared/ui/typography";
 type ScopedMasterItem = (MapMasterResponse | SeasonMasterResponse) & { pending?: boolean };
 
 type MasterCreateBinding = {
+  scopeKey: string;
   action: (formData: FormData) => void | Promise<void>;
   error?: string | undefined;
   formKey?: string | number | undefined;
@@ -165,6 +166,7 @@ export function ScopedMasterPanel({
           }
           error={create.error}
           formKey={create.formKey}
+          scopeKey={create.scopeKey}
           pending={create.pending}
           label="名称"
           submitLabel="追加"

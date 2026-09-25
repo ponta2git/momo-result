@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useOptimistic, useState, useTransition } from "react";
+import { useCallback, useOptimistic, useRef, useState, useTransition } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { useAccountSettingsModel } from "@/features/masters/accounts/useAccountSettingsModel";
@@ -50,6 +50,7 @@ export function useMastersPageModel() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const nowIsoFactory = useCallback(() => new Date().toISOString(), []);
+  const navigationAllowedRef = useRef(false);
   const [isReturnNavigationPending, startReturnTransition] = useTransition();
   const navigateWithTransition = (to: string) => {
     startReturnTransition(() => {
@@ -87,15 +88,6 @@ export function useMastersPageModel() {
   }, []);
   const [operationError, setOperationError] = useState<string>();
   const returnRoute = useMasterReturnRoute(auth.auth?.accountId);
-
-  useEffect(() => {
-    if (!rawTab || isMasterTabId(rawTab)) {
-      return;
-    }
-    const next = new URLSearchParams(searchParams);
-    next.delete("tab");
-    setSearchParams(next, { replace: true });
-  }, [rawTab, searchParams, setSearchParams]);
 
   // Keep visited resources mounted and enabled: switching tabs must not become a reload.
   const notifications = useNotificationSettingsModel(openedTabs.includes("notifications"));
@@ -224,6 +216,7 @@ export function useMastersPageModel() {
       map: {
         completion: completions[`map:${viewModel.selectedGameTitleId}`],
         create: {
+          scopeKey: viewModel.selectedGameTitleId,
           action: createActions.mapCreateAction,
           error: createActions.mapCreateState.error,
           formKey: createActions.mapCreateState.version,
@@ -244,6 +237,7 @@ export function useMastersPageModel() {
       season: {
         completion: completions[`season:${viewModel.selectedGameTitleId}`],
         create: {
+          scopeKey: viewModel.selectedGameTitleId,
           action: createActions.seasonCreateAction,
           error: createActions.seasonCreateState.error,
           formKey: createActions.seasonCreateState.version,
@@ -264,6 +258,7 @@ export function useMastersPageModel() {
     },
     feedback: {
       authError: auth.error,
+      invalidTab: rawTab !== null && !isMasterTabId(rawTab),
       invalidReturnTo: returnRoute.hasInvalidReturnTo,
       operationError,
     },
@@ -298,6 +293,14 @@ export function useMastersPageModel() {
     },
     notifications,
     accounts,
+    guard: {
+      model: {
+        dirty: notifications.dirty,
+        navigationAllowedRef,
+        onDiscard: notifications.reset,
+      },
+      pending: hasPendingMutation || notifications.pending || accounts.pending,
+    },
     tabs: {
       active: activeTab,
       items: masterTabs,

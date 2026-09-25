@@ -6,7 +6,10 @@ import { MasterReturnNotice } from "@/features/masters/MasterReturnNotice";
 import { MemberAliasPanel } from "@/features/masters/MemberAliasPanel";
 import { NotificationSettingsPanel } from "@/features/masters/notifications/NotificationSettingsPanel";
 import { useMastersPageModel } from "@/features/masters/useMastersPageModel";
+import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
+import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { PendingStatus } from "@/shared/ui/feedback/PendingStatus";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
@@ -16,6 +19,13 @@ export function MastersPage() {
 
   return (
     <PageFrame>
+      <UnsavedChangesGuard
+        {...page.guard}
+        allowSamePathChanges
+        showPendingDialog={false}
+        description="変更した通知設定はまだ保存されていません。このページに残れば、設定タブを切り替えても編集を続けられます。"
+        pendingDescription="設定の追加・保存・削除の結果を確認しています。このページでお待ちください。"
+      />
       {page.feedback.authError ? (
         <Notice tone="danger" title={page.feedback.authError.title}>
           {page.feedback.authError.detail}
@@ -33,6 +43,22 @@ export function MastersPage() {
       ) : null}
 
       <PageContentSurface aria-label="設定管理" className="grid gap-6" role="region">
+        <PendingStatus pending={page.guard.pending}>
+          設定の追加・保存・削除の結果を確認しています。完了するまで別の画面への移動をお待ちください。
+        </PendingStatus>
+        {page.feedback.invalidTab ? (
+          <Notice
+            action={
+              <Button size="sm" onClick={() => page.tabs.onChange("catalog")}>
+                設定項目をリセット
+              </Button>
+            }
+            title="指定された設定項目が見つかりません"
+            tone="warning"
+          >
+            作品・マップ・シーズンを表示しています。設定項目を選び直してください。
+          </Notice>
+        ) : null}
         {page.feedback.operationError || page.feedback.invalidReturnTo ? (
           <div className="grid gap-4">
             {page.feedback.operationError ? (

@@ -1,9 +1,9 @@
 import { QueryClientProvider, QueryErrorResetBoundary } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { MemoryRouter, useLocation } from "react-router-dom";
+import { createMemoryRouter, MemoryRouter, RouterProvider, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { MastersPage } from "@/features/masters/MastersPage";
@@ -41,6 +41,22 @@ function renderPage(entry = "/admin/masters") {
       </MemoryRouter>
     </QueryClientProvider>,
   );
+}
+
+function renderRoutedPage(entry: string) {
+  const router = createMemoryRouter(
+    [
+      { path: "/admin/masters", element: <MastersPage /> },
+      { path: "/matches", element: <h1>試合へ移動しました</h1> },
+    ],
+    { initialEntries: ["/matches", entry] },
+  );
+  render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  );
+  return router;
 }
 
 async function openGameTitleCreateDialog() {
@@ -90,6 +106,164 @@ describe("MastersPage", () => {
     expect(screen.getByRole("tab", { name: "通知" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "アカウント" })).toBeInTheDocument();
   });
+
+  it("explains an unknown settings tab and repairs only that URL condition", async () => {
+    setDevUser();
+    renderPage("/admin/masters?tab=unknown&returnTo=%2Fmatches");
+    expect(await screen.findByText("指定された設定項目が見つかりません")).toBeVisible();
+    expect(screen.getByRole("tab", { name: "作品・マップ・シーズン" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await user.click(screen.getByRole("button", { name: "設定項目をリセット" }));
+    expect(screen.queryByText("指定された設定項目が見つかりません")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("current location")).toHaveTextContent(
+      "/admin/masters?returnTo=%2Fmatches",
+    );
+  });
+
+  it("retains unsaved notification choices across tabs and asks before leaving the page", async () => {
+    setDevUser();
+    server.use(
+      http.get("/api/admin/notification-settings", () =>
+        HttpResponse.json({
+          ocrCompleted: { enabled: true, generation: "0" },
+          analysisCompleted: { enabled: true, generation: "0" },
+        }),
+      ),
+    );
+    const router = renderRoutedPage("/admin/masters?tab=notifications");
+    const ocr = await screen.findByRole("checkbox", { name: "OCR完了" });
+    expect(ocr).toBeChecked();
+    await user.click(ocr);
+    await user.click(screen.getByRole("tab", { name: "事件簿" }));
+    expect(await screen.findByRole("heading", { name: "事件簿" })).toBeVisible();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "通知" }));
+    expect(screen.getByRole("checkbox", { name: "OCR完了" })).not.toBeChecked();
+    await act(async () => {
+      await router.navigate("/matches");
+    });
+    expect(
+      await screen.findByRole("alertdialog", { name: "未保存の変更を破棄しますか？" }),
+    ).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "試合へ移動しました" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "破棄して移動" }));
+    expect(await screen.findByRole("heading", { name: "試合へ移動しました" })).toBeVisible();
+  });
+
+  it("protects an in-flight settings creation from browser Back and does not replay the blocked visit", async () => {
+    setDevUser();
+    const response = createDeferred();
+    let requested = false;
+    server.use(
+      http.post("/api/member-aliases", async () => {
+        requested = true;
+        await response.promise;
+        return HttpResponse.json({ detail: "unavailable" }, { status: 503 });
+      }),
+    );
+    const router = renderRoutedPage("/admin/masters?tab=aliases");
+    const alias = await screen.findByRole("textbox", { name: "別名" });
+    await user.type(alias, "保存中の別名");
+    await user.click(screen.getByRole("button", { name: "追加" }));
+    await waitFor(() => expect(requested).toBe(true));
+    expect(alias).toBeDisabled();
+    try {
+      expect(
+        screen.getByText(
+          "設定の追加・保存・削除の結果を確認しています。完了するまで別の画面への移動をお待ちください。",
+          { selector: '[role="status"]' },
+        ),
+      ).toBeVisible();
+      await act(async () => {
+        await router.navigate(-1);
+      });
+      expect(router.state.location.pathname).toBe("/admin/masters");
+    } finally {
+      response.resolve();
+    }
+    await waitFor(() => expect(alias).toBeEnabled());
+    expect(alias).toHaveValue("保存中の別名");
+    expect(
+      screen.queryByRole("dialog", { name: "処理結果を確認しています" }),
+    ).not.toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/admin/masters");
+    expect(screen.queryByRole("heading", { name: "試合へ移動しました" })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    { label: "マップ", path: "map-masters", store: "mapMasters" },
+    { label: "シーズン", path: "season-masters", store: "seasonMasters" },
+  ] as const)(
+    "keeps $label drafts, pending input and results with their own title",
+    async ({ label, path, store }) => {
+      setDevUser();
+      mswState.gameTitles.push({
+        ...mswState.gameTitles[0]!,
+        id: "game-b",
+        name: "別の作品",
+        displayOrder: 1,
+      });
+      let gate = createDeferred();
+      let requests = 0;
+      const scopes: string[] = [];
+      server.use(
+        http.post(`/api/${path}`, async ({ request }) => {
+          const payload = (await request.json()) as {
+            id: string;
+            name: string;
+            gameTitleId: string;
+          };
+          requests += 1;
+          scopes.push(payload.gameTitleId);
+          await gate.promise;
+          if (requests === 1) return HttpResponse.json({ detail: "unavailable" }, { status: 503 });
+          const created = { ...payload, createdAt: "2026-01-01T00:00:00.000Z", displayOrder: 99 };
+          mswState[store].push(created);
+          return HttpResponse.json(created);
+        }),
+      );
+      renderPage();
+      const panel = (await screen.findByRole("heading", { name: label })).closest("section")!;
+      const input = () => within(panel).getByRole("textbox", { name: "名称" });
+      const selectFirst = () =>
+        user.click(screen.getByRole("radio", { name: mswState.gameTitles[0]!.name }));
+      const selectSecond = () => user.click(screen.getByRole("radio", { name: "別の作品" }));
+      await waitFor(() => expect(input()).toBeEnabled());
+      await user.type(input(), "元の作品の入力");
+      await selectSecond();
+      await waitFor(() => expect(input()).toBeEnabled());
+      expect(input()).toHaveValue("");
+      await user.type(input(), "別の作品の入力");
+      await selectFirst();
+      expect(input()).toHaveValue("元の作品の入力");
+      await user.click(within(panel).getByRole("button", { name: "追加" }));
+      await waitFor(() => expect(requests).toBe(1));
+      expect(input()).toBeDisabled();
+      await selectSecond();
+      gate.resolve();
+      await waitFor(() => expect(input()).toBeEnabled());
+      expect(input()).toHaveValue("別の作品の入力");
+      expect(within(panel).queryByRole("alert")).not.toBeInTheDocument();
+      await selectFirst();
+      expect(await within(panel).findByRole("alert")).not.toBeEmptyDOMElement();
+      expect(input()).toHaveValue("元の作品の入力");
+
+      gate = createDeferred();
+      await user.click(within(panel).getByRole("button", { name: "追加" }));
+      await waitFor(() => expect(requests).toBe(2));
+      await selectSecond();
+      gate.resolve();
+      await waitFor(() => expect(input()).toBeEnabled());
+      expect(input()).toHaveValue("別の作品の入力");
+      expect(within(panel).queryByText(`${label}を追加しました`)).not.toBeInTheDocument();
+      await selectFirst();
+      expect(input()).toHaveValue("");
+      expect(within(panel).getByText(`${label}を追加しました`)).toBeInTheDocument();
+      expect(scopes).toEqual(["gt_momotetsu_2", "gt_momotetsu_2"]);
+    },
+  );
 
   it("loads accounts only when visited and retains the list through tab changes", async () => {
     setDevUser();

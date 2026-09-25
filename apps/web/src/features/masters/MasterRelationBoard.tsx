@@ -34,7 +34,7 @@ type GameTitleRelation = {
 
 type ScopedMasterRelation = {
   completion?: string | undefined;
-  create: MasterCreateBinding;
+  create: MasterCreateBinding & { scopeKey: string };
   error?: string | undefined;
   hasData: boolean;
   items: ScopedMasterListItem[];

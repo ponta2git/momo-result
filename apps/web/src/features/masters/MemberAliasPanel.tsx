@@ -1,5 +1,5 @@
 import { Pencil, Trash2 } from "lucide-react";
-import { startTransition, useState } from "react";
+import { startTransition, useRef, useState } from "react";
 
 import { MasterResourceRefreshNotice } from "@/features/masters/MasterResourceRefreshNotice";
 import type { MemberAliasResponse } from "@/shared/api/masters";
@@ -78,6 +78,7 @@ export function MemberAliasPanel({
         }}
       >
         <SelectField
+          disabled={createPending}
           label="プレーヤー"
           layout="subgrid"
           name="memberId"
@@ -88,6 +89,7 @@ export function MemberAliasPanel({
           }))}
         />
         <TextField
+          disabled={createPending}
           error={createError}
           label="別名"
           layout="subgrid"
@@ -162,12 +164,16 @@ function AliasEditDialog({
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
+  const submitting = useRef(false);
 
   return (
     <Dialog
       busy={pending}
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={(next) => {
+        if (next) setError(undefined);
+        setOpen(next);
+      }}
       title="別名を編集"
       trigger={
         <IconButton
@@ -183,6 +189,8 @@ function AliasEditDialog({
         className="grid gap-4"
         onSubmit={async (event) => {
           event.preventDefault();
+          if (submitting.current) return;
+          submitting.current = true;
           setError(undefined);
           setPending(true);
           const formData = new FormData(event.currentTarget);
@@ -195,11 +203,13 @@ function AliasEditDialog({
           } catch (caught) {
             setError(formatApiError(caught, "別名の更新に失敗しました"));
           } finally {
+            submitting.current = false;
             setPending(false);
           }
         }}
       >
         <SelectField
+          disabled={pending}
           defaultValue={alias.memberId}
           label="プレーヤー"
           name="memberId"
@@ -208,7 +218,14 @@ function AliasEditDialog({
             value: member.memberId,
           }))}
         />
-        <TextField defaultValue={alias.alias} error={error} label="別名" name="alias" required />
+        <TextField
+          disabled={pending}
+          defaultValue={alias.alias}
+          error={error}
+          label="別名"
+          name="alias"
+          required
+        />
         <Button disabled={pending} pending={pending} pendingLabel="保存中" type="submit">
           保存
         </Button>

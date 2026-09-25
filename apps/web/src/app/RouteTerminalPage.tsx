@@ -165,7 +165,7 @@ export function RouteTerminalPage({
         role={typeof title === "string" ? "region" : undefined}
       >
         {contentToolbar}
-        {!presentation.preserveHeader ? <h2 className={contentText.heading}>{title}</h2> : null}
+        {presentation.preserveHeader ? null : <h2 className={contentText.heading}>{title}</h2>}
         {children}
       </PageContentSurface>
     </PageFrame>

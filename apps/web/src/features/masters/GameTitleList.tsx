@@ -105,7 +105,7 @@ export function GameTitleList({
         </div>
       </ContentWithActions>
 
-      <p className={contentText.supporting} role="status">
+      <p className={cn(contentText.supporting, "empty:hidden")} role="status">
         {completion}
       </p>
       <div className="empty:hidden">

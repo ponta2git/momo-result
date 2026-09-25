@@ -150,7 +150,7 @@ export function ScopedMasterPanel({
         </div>
       )}
 
-      <p className={contentText.supporting} role="status">
+      <p className={cn(contentText.supporting, "empty:hidden")} role="status">
         {list.completion}
       </p>
       <div>

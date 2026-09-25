@@ -169,9 +169,13 @@ describe("SeriesAnalysisAdminPage", () => {
     expect(titleRequests[0]?.idempotencyKey).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
     );
-    expect(await screen.findByText("現在の計算後に再計算します")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "桃太郎電鉄2は現在の計算後に再計算します" }),
+    ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "全作品を再計算" }));
+    const allTitleAction = screen.getByRole("button", { name: "全作品を再計算" });
+    await waitFor(() => expect(allTitleAction).toBeEnabled());
+    await user.click(allTitleAction);
     const dialog = await screen.findByRole("alertdialog", {
       name: "全作品の再計算を予約しますか？",
     });

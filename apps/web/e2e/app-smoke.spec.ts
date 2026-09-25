@@ -731,9 +731,21 @@ test("inspects saved analysis and handles explicit refresh states", async ({
       `/matches/${encodeURIComponent(matchId)}`,
       currentPagePath(page),
     );
+    await page
+      .getByRole("button", {
+        name: "物件収益比率と総資産の散布図の数値を表で見る",
+      })
+      .click();
+    const scatterValues = page.getByRole("table", { name: "物件収益比率と総資産の散布図の数値" });
+    await expect(scatterValues).toBeVisible();
     await expect(
-      page.getByRole("link", { name: /第1戦、12%、21億円、1位の試合結果を見る/u }),
+      scatterValues.getByRole("link", { name: "ぽんた、第1戦、1位の試合結果を見る" }),
     ).toHaveAttribute("href", scatterMatchHref);
+    const scatterRow = scatterValues
+      .getByRole("row")
+      .filter({ has: page.getByRole("link", { name: "ぽんた、第1戦、1位の試合結果を見る" }) });
+    await expect(scatterRow).toContainText("12%");
+    await expect(scatterRow).toContainText("21億円");
     await page.getByRole("button", { name: "検証範囲を見る" }).click();
     const rankSignalDialog = page.getByRole("dialog", { name: "順位を読む手掛かり" });
     await rankSignalDialog.getByRole("button", { name: "別開催テストと採用基準" }).click();

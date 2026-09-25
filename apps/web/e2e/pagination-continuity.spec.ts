@@ -49,9 +49,16 @@ async function installHeldEventDirectory(page: Page, pageTwoGate: Deferred): Pro
       },
     });
   });
+  await page.route(/\/api\/held-events\/[^/?]+\/summary(?:\?.*)?$/u, async (route) => {
+    const eventId = new URL(route.request().url()).pathname.split("/").at(-2);
+    const event = heldEvents.find((candidate) => candidate.id === eventId);
+    if (!event) throw new Error(`Unknown held-event fixture: ${eventId}`);
+    await route.fulfill({ json: event });
+  });
   await page.route(/\/api\/held-events\/[^/?]+(?:\?.*)?$/u, async (route) => {
     const eventId = new URL(route.request().url()).pathname.split("/").at(-1);
-    const event = heldEvents.find((candidate) => candidate.id === eventId) ?? firstHeldEvent;
+    const event = heldEvents.find((candidate) => candidate.id === eventId);
+    if (!event) throw new Error(`Unknown held-event fixture: ${eventId}`);
     const position = heldEvents.findIndex((candidate) => candidate.id === event.id);
     await route.fulfill({
       json: {

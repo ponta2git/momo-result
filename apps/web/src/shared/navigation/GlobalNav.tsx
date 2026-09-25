@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
-import { Link, NavLink, useLocation } from "react-router-dom";
+import { Link, useLocation, useMatch, useResolvedPath } from "react-router-dom";
 
 import { cn } from "@/shared/ui/cn";
 import { pageViewportGutterClass } from "@/shared/ui/layout/PageFrame";
@@ -8,6 +8,7 @@ import { globalNavigationId } from "@/shared/ui/layout/revealPageElement";
 import { useSurfaceFeedback } from "@/shared/ui/motion/useSurfaceFeedback";
 
 export type GlobalNavItem = {
+  current?: boolean;
   icon: ReactNode;
   label: string;
   to: string;
@@ -27,25 +28,27 @@ type GlobalNavProps = {
 
 function NavItemLink({ item }: { item: GlobalNavItem }) {
   const surfaceRef = useSurfaceFeedback<HTMLAnchorElement>();
+  const destination = useResolvedPath(item.to);
+  const match = useMatch({ path: destination.pathname, end: destination.pathname === "/" });
+  const current = item.current ?? match !== null;
   return (
-    <NavLink
+    <Link
       ref={surfaceRef}
       to={item.to}
       aria-label={item.label}
-      className={({ isActive }) =>
-        cn(
-          "momo-surface momo-surface-press momo-surface-nav inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-sm border px-3 py-2 text-sm font-plain pointer-fine:min-h-9 pointer-fine:min-w-0 pointer-fine:py-1",
-          isActive
-            ? "momo-surface-nav-current border-[var(--color-action)]/60 text-[var(--color-text-primary)]"
-            : "text-[var(--color-text-secondary)]",
-        )
-      }
+      aria-current={current ? "page" : undefined}
+      className={cn(
+        "momo-surface momo-surface-press momo-surface-nav inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-sm border px-3 py-2 text-sm font-plain pointer-fine:min-h-9 pointer-fine:min-w-0 pointer-fine:py-1",
+        current
+          ? "momo-surface-nav-current border-[var(--color-action)]/60 text-[var(--color-text-primary)]"
+          : "text-[var(--color-text-secondary)]",
+      )}
     >
       <span aria-hidden="true" className="[&_svg]:size-4">
         {item.icon}
       </span>
       <span>{item.label}</span>
-    </NavLink>
+    </Link>
   );
 }
 

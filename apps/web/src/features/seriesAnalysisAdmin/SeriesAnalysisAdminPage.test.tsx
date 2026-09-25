@@ -11,6 +11,7 @@ import { setupMsw } from "@/test/msw/lifecycle";
 import { makeSeriesAnalysisAdminOverview } from "@/test/msw/seriesAnalysisFixtures";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
+import { selectOption } from "@/test/selectOption";
 
 setupMsw();
 
@@ -86,66 +87,71 @@ describe("SeriesAnalysisAdminPage", () => {
     await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
   });
 
-  it("keeps the submitted title explicit while selection changes and prevents overlapping commands", async () => {
-    const user = userEvent.setup();
-    const commandGate = createDeferred();
-    const submitted: unknown[] = [];
-    const overview = makeSeriesAnalysisAdminOverview();
-    const selectedTitle = overview.selectedTitle;
-    if (!selectedTitle) throw new Error("Expected a selected title fixture");
-    server.use(
-      http.get("/api/admin/series-analysis/overview", ({ request }) => {
-        const isNext = new URL(request.url).searchParams.get("gameTitleId") === "title-next";
-        return HttpResponse.json({
-          ...overview,
-          titleOptions: [
-            ...overview.titleOptions,
-            { gameTitleId: "title-next", gameTitleName: "次の作品", confirmedMatchCount: 0 },
-          ],
-          selectedTitle: isNext
-            ? { ...selectedTitle, gameTitleId: "title-next", gameTitleName: "次の作品" }
-            : selectedTitle,
-        });
-      }),
-      http.post("/api/admin/series-analysis/recalculations", async ({ request }) => {
-        submitted.push(await request.json());
-        await commandGate.promise;
-        return HttpResponse.json(
-          {
-            acceptedAt: "2026-08-09T02:00:00.000Z",
-            campaign: null,
-            requestId: "request-title",
-            schemaVersion: 1,
-            target: {
-              gameTitleId: "gt_momotetsu_2",
-              jobId: "job-2",
-              requestDisposition: "created_job",
+  it.each([
+    ["created_job", "桃太郎電鉄2の再計算を受け付けました"],
+    ["forced_run_reserved", "桃太郎電鉄2は現在の計算後に再計算します"],
+  ] as const)(
+    "keeps the submitted title explicit for %s while selection changes and prevents overlapping commands",
+    async (requestDisposition, acceptanceTitle) => {
+      const user = userEvent.setup();
+      const commandGate = createDeferred();
+      const submitted: unknown[] = [];
+      const overview = makeSeriesAnalysisAdminOverview();
+      const selectedTitle = overview.selectedTitle;
+      if (!selectedTitle) throw new Error("Expected a selected title fixture");
+      server.use(
+        http.get("/api/admin/series-analysis/overview", ({ request }) => {
+          const isNext = new URL(request.url).searchParams.get("gameTitleId") === "title-next";
+          return HttpResponse.json({
+            ...overview,
+            titleOptions: [
+              ...overview.titleOptions,
+              { gameTitleId: "title-next", gameTitleName: "次の作品", confirmedMatchCount: 0 },
+            ],
+            selectedTitle: isNext
+              ? { ...selectedTitle, gameTitleId: "title-next", gameTitleName: "次の作品" }
+              : selectedTitle,
+          });
+        }),
+        http.post("/api/admin/series-analysis/recalculations", async ({ request }) => {
+          submitted.push(await request.json());
+          await commandGate.promise;
+          return HttpResponse.json(
+            {
+              acceptedAt: "2026-08-09T02:00:00.000Z",
+              campaign: null,
+              requestId: "request-title",
+              schemaVersion: 1,
+              target: {
+                gameTitleId: "gt_momotetsu_2",
+                jobId: requestDisposition === "created_job" ? "job-2" : null,
+                requestDisposition,
+              },
+              targetCount: 1,
             },
-            targetCount: 1,
-          },
-          { status: 202 },
-        );
-      }),
-    );
-    renderPage();
-    await user.click(await screen.findByRole("button", { name: "この作品を再計算" }));
-    await waitFor(() => expect(submitted).toEqual([{ gameTitleId: "gt_momotetsu_2" }]));
-    expect(screen.getByRole("button", { name: "桃太郎電鉄2を受け付け中" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "全作品を再計算" })).toBeDisabled();
+            { status: 202 },
+          );
+        }),
+      );
+      renderPage();
+      await user.click(await screen.findByRole("button", { name: "この作品を再計算" }));
+      await waitFor(() => expect(submitted).toEqual([{ gameTitleId: "gt_momotetsu_2" }]));
+      expect(screen.getByRole("button", { name: "桃太郎電鉄2を受け付け中" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "全作品を再計算" })).toBeDisabled();
 
-    await user.click(screen.getByRole("combobox", { name: "対象作品" }));
-    await user.click(screen.getByRole("option", { name: "次の作品 (0戦)" }));
-    expect(await screen.findByRole("heading", { name: "次の作品" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "桃太郎電鉄2を受け付け中" })).toBeDisabled();
-    commandGate.resolve();
+      await selectOption(user, screen.getByRole("combobox", { name: "対象作品" }), "title-next");
+      expect(await screen.findByRole("heading", { name: "次の作品" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "桃太郎電鉄2を受け付け中" })).toBeDisabled();
+      commandGate.resolve();
 
-    expect(await screen.findByText("桃太郎電鉄2の再計算を受け付けました")).toBeInTheDocument();
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "この作品を再計算" })).toBeEnabled(),
-    );
-    expect(screen.getByRole("heading", { name: "次の作品" })).toBeInTheDocument();
-    expect(submitted).toHaveLength(1);
-  });
+      expect(await screen.findByRole("heading", { name: acceptanceTitle })).toBeInTheDocument();
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: "この作品を再計算" })).toBeEnabled(),
+      );
+      expect(screen.getByRole("heading", { name: "次の作品" })).toBeInTheDocument();
+      expect(submitted).toHaveLength(1);
+    },
+  );
 
   it("announces initial loading and preserves successful content through a failed refresh and retry", async () => {
     const user = userEvent.setup();

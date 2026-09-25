@@ -542,16 +542,19 @@ describe("DraftReviewPage", () => {
 
   it("keeps a running draft read-only after a failed refresh and recovers through the data retry", async () => {
     setDevUser();
+    const recoveryResponse = createDeferred();
     let requests = 0;
     server.use(
-      http.get("/api/match-drafts/:draftId/review", () => {
-        requests += 1;
-        if (requests === 2) {
+      http.get("/api/match-drafts/:draftId/review", async () => {
+        const attempt = ++requests;
+        if (attempt === 2) {
           return HttpResponse.json({ detail: "一時的に状態を取得できません" }, { status: 503 });
         }
+        if (attempt === 3) await recoveryResponse.promise;
         return HttpResponse.json(
           makeMatchDraftReviewResponse("draft-retry", {
-            status: requests === 1 ? "ocr_running" : "needs_review",
+            matchNoInEvent: attempt === 1 ? 3 : 7,
+            status: attempt === 1 ? "ocr_running" : "needs_review",
           }),
         );
       }),
@@ -573,9 +576,25 @@ describe("DraftReviewPage", () => {
     expect(screen.queryByRole("button", { name: "確定前の確認へ進む" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "失敗したデータを再読み込み" }));
-    await waitForReviewWorkspaceReady();
+    await waitFor(() => expect(requests).toBe(3));
+    expect(screen.getByRole("heading", { name: "読み取り中は編集できません" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "確定前の確認へ進む" })).not.toBeInTheDocument();
+
+    await act(async () => recoveryResponse.resolve());
+    await waitFor(() => {
+      expect(queryClient.getQueryState(matchKeys.draft.review("draft-retry"))).toMatchObject({
+        fetchStatus: "idle",
+        status: "success",
+      });
+      expect(screen.getByLabelText("試合番号")).toHaveValue("7");
+      expect(
+        screen.queryByRole("heading", { name: "画面データを読み込めません" }),
+      ).not.toBeInTheDocument();
+    });
     expect(screen.getByRole("button", { name: "確定前の確認へ進む" })).toBeEnabled();
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "読み取り中は編集できません" }),
+    ).not.toBeInTheDocument();
     expect(requests).toBe(3);
   });
 

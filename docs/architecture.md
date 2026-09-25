@@ -110,6 +110,7 @@
 - 結果確認の元画像も、取得状態とBlobをTanStack Queryが所有する。画像一覧と画像本体は異なるquery keyを持ち、本体は認証主体・画面scope・下書き・画像descriptorの世代を区別する。Object URLは画面の表示資源として生成・解放し、Blobや取得状態を別のcacheへ複製しない。
 - 元画像の先読みは初回表示または利用者の画像選択に続く有限の処理として許可する。featureの取得処理が表示対象を優先して直列化し、同一取得の引継ぎ、中断、容量、scope終了時のquery破棄を所有する。自動retryや回線復帰による取得再開を起こさず、確定・削除成功時は関連cacheの更新より先に画像の寿命を閉じる。
 - query key は cache 内の runtime data shape まで区別する。backend resource が同じでも raw response と ViewModel を同じ key に置かない。
+- 対象の確定した不存在を再取得中も保持する read は、domain の `404 / NOT_FOUND` を read-result として扱い、raw response と異なる key に置く。一時的な通信失敗や一般的な HTTP 404 を不存在へ変換しない。mutation 後の cache 整合は両方の key を対象にし、以前の成功表示や候補一覧から不存在を巻き戻さない。
 - masterの管理と入力候補は同じraw responseを共有し、並べ替えを`select`へ閉じる。設定管理は訪問したtabに必要なqueryだけを有効にし、変更responseをcacheへ反映してから表示名を含む関連readを無効化する。再取得失敗で確定した追加・訂正・削除を巻き戻さない。
 - consumer の射影は `select` または純粋な表示変換で行い、cache は元の server data を保持する。表示中の data が現 query の値か前 scope の placeholder かは query observer の状態から判断し、その判定のために描画時に cache を別途読み直さない。
 - fatal error、再取得、cached data、認証待ち、disabled query を別状態として扱う。mutation 後は表示中の resource と選択候補の cache をともに整合させる。
@@ -130,7 +131,7 @@
 | --- | --- | --- |
 | 試合一覧の条件変更 | 即時の選択 intent、遅延した一覧、古い対象への操作制限 | 続けて条件を変えながら表示を追従させる |
 | 戦績比較の view / scope / artifact | 整合した表示 bundle の遅延、図表の memo 境界 | 大きい図表更新を選択操作と分離する |
-| 試合入力 | 数値入力の局所 draft、遅延検証、score grid の描画境界 | メモ・設定の編集が無関係な grid を再描画しない |
+| 試合入力 | workspace が所有する数値文字列、遅延検証、cell 単位の draft 射影 | 表示幅・入力欄の開閉でも未完成の入力を維持し、無関係な cell の描画を抑える |
 | マスタ作成 | Action と局所的な楽観行、成功 response の確定反映 | 待ち時間中も追加を示し、失敗時に入力を回復する |
 | 保存・削除・OCR開始・権限/通知変更・再計算・出力 | Action / mutation の pending と確定結果 | 検証、競合、副作用、生成結果を先取りしない |
 | 開催一覧・出力候補のページ取得 | Query の前ページ保持と scope 表示 | ページ単位の取得は既存の待機境界で扱える |
@@ -171,6 +172,9 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 ### Form / React 19 / API Client
 
 - event 由来の値は handler 内で同期的に取り出し、request transform で route / prefill / hidden identifier を落とさない。
+- 入力の owner は認証主体と作業対象で区切る。同じ作業の補助 query 変更では保持し、別の試合・draft・sample へ持ち越さない。未完成の数値文字列も入力に含め、validation と request は同じ最新値の射影を使う。設定往復と一時保存の schema は、完成済み request の制約と分離して入力途中の値を保持する。
+- 編集可能になった最初の snapshot で入力を初期化し、同じ作業の再取得で入力を上書きしない。OCR の入力値・根拠・元画像 descriptor は同じ世代に固定し、世代変更時には再確認を案内する。保存中は送信対象の編集と離脱を保護し、完了前に遮断した離脱操作を完了後に自動再開しない。
+- navigation、feedback、browser download など画面に属する非同期の完了処理は、開始時の route / 対象 / 最新 intent に対応する場合だけ行う。所有者の commit 境界で古い処理を無効にし、中断可能な read は中断する。確定 mutation の cache 整合は画面に属する副作用と分ける。
 - 分析の集計、意味を持つ sort / filter、閾値、統計 fallback は Web で再計算せず、保存済み成果物を表示用に整形する。
 - OCR の開始確認では設定・画像と送信する作品ヒントを同じ snapshot に固定する。API がジョブ受付時に既定のプレーヤー別名と登録済み別名をsnapshot化し、payload 上限を検証する。作品方式ごとの CPU 名の既定値と認識時の名前照合は Worker が所有し、明示した CPU 名を優先する。Web はそのための別名取得・正規化・上限処理を持たない。既存 OCR 結果から編集フォームを復元する名前解決は、入力支援として Web に残す。
 - OCR送信の再試行は日時、下書きID、upload済み画像ID、idempotency keyを同じintent内で保持する。応答消失を未受付と推測して下書きを取消したり、新しい画像・下書きを作り直したりしない。送信前の不備と確定した受付拒否は入力修正へ戻せるようにし、受理不明の再送と区別する。

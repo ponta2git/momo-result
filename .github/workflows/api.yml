@@ -154,7 +154,7 @@ jobs:
       - name: Test
         if: ${{ github.event_name != 'pull_request' }}
         timeout-minutes: 10
-        run: sbt --server --batch test
+        run: sbt --server --batch testFull
 
       - name: Test with coverage report
         if: ${{ github.event_name == 'pull_request' }}

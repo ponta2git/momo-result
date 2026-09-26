@@ -34,7 +34,7 @@
 | 領域 | 品質 command |
 | --- | --- |
 | Web | `pnpm --filter web format:check`、`lint`、`contract:check`、`typecheck`、`test:run`、`scripts:check`、必要に応じ `build` / `e2e` |
-| API | `sbt apiQuality`、`sbt test`、必要に応じ `apiCoverage` / `apiDbQuality` / `apiRedisQuality` / `apiR2Quality` |
+| API | `sbt --server --batch apiQuality`、`sbt --server --batch testFull`、同じオプションで必要に応じ `apiCoverage` / `apiDbQuality` / `apiRedisQuality` / `apiR2Quality` |
 | Processing Worker | `cargo fmt --all -- --check`、`cargo clippy --locked --workspace --all-targets`、`cargo test --locked --workspace`、production image build |
 | Go tools | `cd scripts/tools && go test ./... && go vet ./...` |
 | Workflow | `pnpm actionlint` |

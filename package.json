@@ -9,7 +9,7 @@
     "api:format:check": "cd apps/api && sbt --server --batch apiFormatCheck",
     "api:lint": "cd apps/api && sbt --server --batch apiLint",
     "api:quality": "cd apps/api && sbt --server --batch apiQuality",
-    "api:test": "cd apps/api && sbt --server --batch test",
+    "api:test": "cd apps/api && sbt --server --batch testFull",
     "api:coverage": "cd apps/api && sbt --server --batch apiCoverage",
     "analysis:format": "cargo fmt --all --manifest-path apps/processing-worker/Cargo.toml",
     "analysis:format:check": "cargo fmt --all --check --manifest-path apps/processing-worker/Cargo.toml",

@@ -48,9 +48,6 @@ RUN SBT_VERSION="$(sed -n 's/^sbt.version=//p' project/build.properties)" \
   && tar -xzf /tmp/sbt.tgz -C /opt \
   && rm -f /tmp/sbt.tgz \
   && ln -s /opt/sbt/bin/sbt /usr/local/bin/sbt
-COPY apps/api/project/plugins.sbt project/plugins.sbt
-COPY apps/api/build.sbt build.sbt
-
 FROM api-deps AS http4s-builder
 ARG HTTP4S_REPOSITORY
 WORKDIR /workspace/http4s
@@ -59,7 +56,10 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 COPY .http4s-ref /workspace/.http4s-ref
 COPY scripts/ci/build-http4s-patch.sh /usr/local/bin/build-http4s-patch
-RUN chmod 0755 /usr/local/bin/build-http4s-patch \
+RUN --mount=type=cache,id=sbt-boot,target=/root/.sbt,sharing=locked \
+  --mount=type=cache,id=coursier-cache,target=/root/.cache/coursier,sharing=locked \
+  --mount=type=cache,id=ivy-cache,target=/root/.ivy2/cache,sharing=locked \
+  chmod 0755 /usr/local/bin/build-http4s-patch \
   && HTTP4S_REPOSITORY="${HTTP4S_REPOSITORY}" \
     HTTP4S_REF_FILE=/workspace/.http4s-ref \
     HTTP4S_SCALA_VERSION=3.3.6 \
@@ -67,6 +67,8 @@ RUN chmod 0755 /usr/local/bin/build-http4s-patch \
     /usr/local/bin/build-http4s-patch
 
 FROM api-deps AS api-builder
+COPY apps/api/project/plugins.sbt project/plugins.sbt
+COPY apps/api/build.sbt build.sbt
 COPY --from=http4s-builder /root/.ivy2/local /root/.ivy2/local
 COPY --from=http4s-builder /opt/http4s-patch /opt/http4s-patch
 COPY docs/schemas/series-analysis-*.schema.json /workspace/docs/schemas/

@@ -11,9 +11,10 @@ addCommandAlias("apiFormat", "scalafmtAll")
 addCommandAlias("apiFormatCheck", "scalafmtCheckAll")
 addCommandAlias("apiLint", "scalafixAll --check")
 addCommandAlias("apiQuality", "apiFormatCheck; apiLint; apiOpenApiCheck")
-addCommandAlias("apiCheck", "apiQuality; test")
+addCommandAlias("apiCheck", "apiQuality; testFull")
 addCommandAlias("apiFullCheck", "apiCheck; apiDbQuality; apiRedisQuality")
-addCommandAlias("apiCoverage", "clean; coverage; test; coverageReport; coverageOff")
+// sbt 2's `test` is incremental/cached; CI and coverage need each test's actual execution.
+addCommandAlias("apiCoverage", "clean; coverage; testFull; coverageReport; coverageOff")
 addCommandAlias(
   "apiRedisQuality",
   "set Test / fork := true; " +
@@ -277,7 +278,7 @@ lazy val root = (project in file("."))
         val expectedText = Files.readString(output.toPath)
         val generatedText = Files.readString(generated)
         if (expectedText != generatedText) {
-          sys.error("openapi.yaml is stale. Run `sbt apiOpenApi` and commit the result.")
+          sys.error("openapi.yaml is stale. Run `sbt --server --batch apiOpenApi` and commit the result.")
         }
       } finally Files.deleteIfExists(generated)
       ()

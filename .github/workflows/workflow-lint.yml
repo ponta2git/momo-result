@@ -49,7 +49,7 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           cache-dependency-path: scripts/tools/go.sum
-          go-version: 1.26.6
+          go-version-file: scripts/tools/go.mod
       - name: Test Go and zero-install diagnostic tools
         run: |
           cd scripts/tools

@@ -15,7 +15,10 @@ import momo.api.repositories.{IdempotencyRepository, IdempotencyResponse}
 final class IdempotencyRecordingSpec extends MomoCatsEffectSuite:
   private val now = java.time.Instant.parse("2026-05-14T00:00:00Z")
   private val account = AuthenticatedAccount(
-    AccountId.unsafeFromString("account_ponta"), "ponta", true, None
+    AccountId.unsafeFromString("account_ponta"),
+    "ponta",
+    true,
+    None
   )
   private val endpoint = "POST /api/testing/recording"
   private val request = Json.obj("value" -> Json.fromString("same"))
@@ -60,7 +63,13 @@ final class IdempotencyRecordingSpec extends MomoCatsEffectSuite:
           guard = IdempotencyReplay.Guard(repository, limiter, 100)
           mutation = attempts.update(_ + 1).as(expected)
           run = IdempotencyReplay.wrap[IO, Json, Json](
-            guard, Some("stalled-recording"), account, endpoint, request, IO.pure(now), mutation
+            guard,
+            Some("stalled-recording"),
+            account,
+            endpoint,
+            request,
+            IO.pure(now),
+            mutation
           )
           before <- IO.monotonic
           fiber <- Resource.make(IO.unit)(_ => released.set(true)).use(_ => run).start
@@ -106,7 +115,12 @@ final class IdempotencyRecordingSpec extends MomoCatsEffectSuite:
         limiter <- LoginRateLimiter.create[IO](100, IO.pure(now))
         guard = IdempotencyReplay.Guard(repository, limiter, 100)
         result <- IdempotencyReplay.wrap[IO, Json, Json](
-          guard, Some("cancelled-recording"), account, endpoint, request, IO.pure(now),
+          guard,
+          Some("cancelled-recording"),
+          account,
+          endpoint,
+          request,
+          IO.pure(now),
           IO.pure(expected)
         )
         pending <- underlying.lookup("cancelled-recording", account.accountId, endpoint)

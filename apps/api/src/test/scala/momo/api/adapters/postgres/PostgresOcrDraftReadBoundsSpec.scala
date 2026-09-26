@@ -42,7 +42,9 @@ final class PostgresOcrDraftReadBoundsSpec extends IntegrationSuite:
     yield ()
   }
 
-  test("the aggregate budget includes every requested occurrence without transferring partial payloads") {
+  test(
+    "the aggregate budget includes every requested occurrence without transferring partial payloads"
+  ) {
     val portion = (PostgresOcrDrafts.MaximumDraftJsonBytes * 3L / 4L).toInt
     val ids = List("budget-a", "budget-b", "budget-c")
     for
@@ -71,7 +73,8 @@ final class PostgresOcrDraftReadBoundsSpec extends IntegrationSuite:
       _ <- normalIds.traverse_(id => insert(id, 16, 8, 4))
       normal <- repo.findMany(normalIds.map(draftId))
       _ <- insert(unicodeId, 0, 0, 0)
-      _ <- sql"""UPDATE ocr_drafts SET payload_json = jsonb_build_object('raw', repeat('あ', $repetitions))
+      _ <-
+        sql"""UPDATE ocr_drafts SET payload_json = jsonb_build_object('raw', repeat('あ', $repetitions))
                   WHERE id = $unicodeId""".update.run.transact(transactor)
       bytes <- storedJsonBytes(unicodeId)
       hidden <- PostgresOcrDrafts.boundedRows(List(draftId(unicodeId))).transact(transactor)
@@ -79,9 +82,15 @@ final class PostgresOcrDraftReadBoundsSpec extends IntegrationSuite:
     yield
       assertEquals(normal.size, 20)
       normal.values.foreach { draft =>
-        assertEquals(parse(draft.payloadJson).toOption.flatMap(_.hcursor.get[String]("raw").toOption), Some("p" * 16))
+        assertEquals(
+          parse(draft.payloadJson).toOption.flatMap(_.hcursor.get[String]("raw").toOption),
+          Some("p" * 16)
+        )
         assertEquals(parse(draft.warningsJson).toOption.flatMap(_.asArray).map(_.size), Some(1))
-        assertEquals(parse(draft.timingsMsJson).toOption.flatMap(_.hcursor.get[String]("value").toOption), Some("t" * 4))
+        assertEquals(
+          parse(draft.timingsMsJson).toOption.flatMap(_.hcursor.get[String]("value").toOption),
+          Some("t" * 4)
+        )
       }
       assert(bytes > PostgresOcrDrafts.MaximumDraftJsonBytes)
       assertEquals(hidden.size, 1)

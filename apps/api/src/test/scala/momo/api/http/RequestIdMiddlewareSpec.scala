@@ -25,7 +25,8 @@ final class RequestIdMiddlewareSpec extends MomoCatsEffectSuite:
             )
           )
         })
-        request = Request[IO]().putHeaders(Header.Raw(RequestIdMiddleware.HeaderName, "request-one"))
+        request =
+          Request[IO]().putHeaders(Header.Raw(RequestIdMiddleware.HeaderName, "request-one"))
         _ <- Resource.make(app.run(request).start)(_.cancel).use { fiber =>
           for
             _ <- entered.get

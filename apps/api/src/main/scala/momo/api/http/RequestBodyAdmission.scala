@@ -22,7 +22,8 @@ final class RequestBodyAdmission[F[_]: Async] private (
   private given CanEqual[Resource.ExitCase, Resource.ExitCase] = CanEqual.derived
 
   def apply(http: HttpApp[F]): HttpApp[F] = Kleisli { request =>
-    if isImageDownload(request) then responseLifetime(downloads, _ => downloads.tryAcquire, http, request)
+    if isImageDownload(request) then
+      responseLifetime(downloads, _ => downloads.tryAcquire, http, request)
     else if isExport(request) then responseLifetime(exports, _ => exports.tryAcquire, http, request)
     else if !HttpMethodPredicates.isMutating(request.method) then
       if isDataRead(request) then read(http, request)
@@ -43,10 +44,16 @@ final class RequestBodyAdmission[F[_]: Async] private (
   private def read(http: HttpApp[F], request: Request[F]): F[Response[F]] =
     // A screen fetches several JSON resources together. Bound the waiters before queueing
     // without allocating response projections, so a normal burst can share the read budget.
-    responseLifetime(reads, poll => waitingReads.tryAcquire.flatMap {
-      case false => Async[F].pure(false)
-      case true => Async[F].guarantee(poll(reads.acquire), waitingReads.release).as(true)
-    }, http, request)
+    responseLifetime(
+      reads,
+      poll =>
+        waitingReads.tryAcquire.flatMap {
+          case false => Async[F].pure(false)
+          case true => Async[F].guarantee(poll(reads.acquire), waitingReads.release).as(true)
+        },
+      http,
+      request
+    )
 
   private def responseLifetime(
       semaphore: Semaphore[F],
@@ -67,10 +74,11 @@ final class RequestBodyAdmission[F[_]: Async] private (
     }
 
   private def isImageDownload(request: Request[F]): Boolean =
-    request.method.name == Method.GET.name && (HttpRequestPaths.segments(request) match
-      case List("api", "match-drafts", _, "source-images", _) => true
-      case List("api", "match-drafts", _, "source-images.zip") => true
-      case _ => false)
+    request.method.name == Method.GET.name &&
+      (HttpRequestPaths.segments(request) match
+        case List("api", "match-drafts", _, "source-images", _) => true
+        case List("api", "match-drafts", _, "source-images.zip") => true
+        case _ => false)
 
   private def isExport(request: Request[F]): Boolean =
     request.method.name == Method.GET.name &&
@@ -102,11 +110,12 @@ object RequestBodyAdmission:
       exportConcurrency <= 0L || readConcurrency <= 0L
     then
       Async[F].raiseError(new IllegalArgumentException("Request body concurrency must be positive"))
-    else (
-      Semaphore[F](uploadConcurrency),
-      Semaphore[F](mutationConcurrency),
-      Semaphore[F](downloadConcurrency),
-      Semaphore[F](exportConcurrency),
-      Semaphore[F](readConcurrency),
-      Semaphore[F](16L),
-    ).mapN(new RequestBodyAdmission(_, _, _, _, _, _))
+    else
+      (
+        Semaphore[F](uploadConcurrency),
+        Semaphore[F](mutationConcurrency),
+        Semaphore[F](downloadConcurrency),
+        Semaphore[F](exportConcurrency),
+        Semaphore[F](readConcurrency),
+        Semaphore[F](16L),
+      ).mapN(new RequestBodyAdmission(_, _, _, _, _, _))

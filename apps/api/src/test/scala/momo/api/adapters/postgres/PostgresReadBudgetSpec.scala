@@ -155,7 +155,8 @@ final class PostgresReadBudgetSpec extends IntegrationSuite:
         VALUES ('budget_alias', 'member_ponta', 'Alias', $now)""".update.run.transact(transactor)
     yield ()
 
-  private def insertDrafts(from: Int, to: Int): IO[Unit] = sql"""
+  private def insertDrafts(from: Int, to: Int): IO[Unit] =
+    sql"""
     INSERT INTO match_drafts (id, created_by_account_id, status, held_event_id, created_at, updated_at)
     SELECT 'budget_draft_' || n, 'account_ponta', 'needs_review', $eventId, $now, $now
     FROM generate_series($from, $to) n

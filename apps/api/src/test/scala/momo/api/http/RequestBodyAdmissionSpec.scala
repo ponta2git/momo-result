@@ -12,9 +12,14 @@ import org.http4s.{Method, Request, Response, Status, Uri}
 import momo.api.MomoCatsEffectSuite
 
 final class RequestBodyAdmissionSpec extends MomoCatsEffectSuite:
-  private def upload: Request[IO] = Request[IO](Method.POST, Uri.unsafeFromString("/api/uploads/images"))
-  private def image: Request[IO] = Request[IO](Method.GET, Uri.unsafeFromString("/api/match-drafts/example/source-images/total_assets"))
-  private def archive: Request[IO] = Request[IO](Method.GET, Uri.unsafeFromString("/api/match-drafts/example/source-images.zip"))
+  private def upload: Request[IO] =
+    Request[IO](Method.POST, Uri.unsafeFromString("/api/uploads/images"))
+  private def image: Request[IO] = Request[IO](
+    Method.GET,
+    Uri.unsafeFromString("/api/match-drafts/example/source-images/total_assets")
+  )
+  private def archive: Request[IO] =
+    Request[IO](Method.GET, Uri.unsafeFromString("/api/match-drafts/example/source-images.zip"))
   private val consumingApp = Kleisli[IO, Request[IO], Response[IO]](request =>
     request.body.compile.drain.as(Response[IO](Status.Ok))
   )
@@ -25,15 +30,17 @@ final class RequestBodyAdmissionSpec extends MomoCatsEffectSuite:
         admission <- RequestBodyAdmission.create[IO](1L, 1L, 1L, 1L, 2L)
         usage <- IO.ref((0, 0))
         app = admission(Kleisli[IO, Request[IO], Response[IO]](_ =>
-          usage.update { (active, peak) => (active + 1, math.max(peak, active + 1)) }.as(
+          usage.update((active, peak) => (active + 1, math.max(peak, active + 1))).as(
             Response[IO](Status.Ok).withBodyStream(
               (Stream.sleep_[IO](1.millis) ++ Stream.emit[IO, Byte](1))
-                .onFinalize(usage.update { (active, peak) => (active - 1, peak) })
+                .onFinalize(usage.update((active, peak) => (active - 1, peak)))
             )
           )
         ))
         statuses <- List.fill(8)(Request[IO](Method.GET, Uri.unsafeFromString("/%61pi/matches")))
-          .parTraverse(request => app.run(request).flatMap(response => response.body.compile.drain.as(response.status)))
+          .parTraverse(request =>
+            app.run(request).flatMap(response => response.body.compile.drain.as(response.status))
+          )
         observed <- usage.get
       yield
         assert(statuses.forall(_.code == Status.Ok.code))
@@ -61,7 +68,9 @@ final class RequestBodyAdmissionSpec extends MomoCatsEffectSuite:
     }
   }
 
-  test("busy uploads reject before body consumption and preserve capacity for reads and ordinary writes") {
+  test(
+    "busy uploads reject before body consumption and preserve capacity for reads and ordinary writes"
+  ) {
     for
       admission <- RequestBodyAdmission.create[IO](1L, 1L, 1L, 1L, 1L)
       started <- Deferred[IO, Unit]
@@ -110,16 +119,21 @@ final class RequestBodyAdmissionSpec extends MomoCatsEffectSuite:
       admission <- RequestBodyAdmission.create[IO](1L, 1L, 1L, 1L, 1L)
       handlers <- IO.ref(0)
       reads <- IO.ref(0)
-      underlying = Kleisli[IO, Request[IO], Response[IO]](_ => handlers.update(_ + 1).as(
-        Response[IO](Status.Ok).withBodyStream(
-          Stream.exec(reads.update(_ + 1)) ++ Stream.emits[IO, Byte](List(1, 2))
+      underlying = Kleisli[IO, Request[IO], Response[IO]](_ =>
+        handlers.update(_ + 1).as(
+          Response[IO](Status.Ok).withBodyStream(
+            Stream.exec(reads.update(_ + 1)) ++ Stream.emits[IO, Byte](List(1, 2))
+          )
         )
-      ))
+      )
       app = admission(underlying)
       first <- app.run(image)
-      encodedArchive = archive.withUri(Uri.unsafeFromString("/%61pi/match-drafts/example/source-images%2ezip"))
+      encodedArchive =
+        archive.withUri(Uri.unsafeFromString("/%61pi/match-drafts/example/source-images%2ezip"))
       busyArchive <- app.run(encodedArchive)
-      encodedImage = image.withUri(Uri.unsafeFromString("/api/match-drafts/example/%73ource-images/total_assets"))
+      encodedImage = image.withUri(
+        Uri.unsafeFromString("/api/match-drafts/example/%73ource-images/total_assets")
+      )
       busyImage <- app.run(encodedImage)
       handlersBefore <- handlers.get
       readsBefore <- reads.get
@@ -143,9 +157,11 @@ final class RequestBodyAdmissionSpec extends MomoCatsEffectSuite:
       admission <- RequestBodyAdmission.create[IO](1L, 1L, 1L, 1L, 1L)
       fail <- IO.ref(true)
       app = admission(Kleisli[IO, Request[IO], Response[IO]](_ =>
-        fail.getAndSet(false).map(shouldFail => Response[IO](Status.Ok).withBodyStream(
-          if shouldFail then Stream.raiseError[IO](error) else Stream.empty
-        ))
+        fail.getAndSet(false).map(shouldFail =>
+          Response[IO](Status.Ok).withBodyStream(
+            if shouldFail then Stream.raiseError[IO](error) else Stream.empty
+          )
+        )
       ))
       response <- app.run(image)
       failure <- response.body.compile.drain.attempt
@@ -159,9 +175,15 @@ final class RequestBodyAdmissionSpec extends MomoCatsEffectSuite:
       assertEquals(next.status, Status.Ok)
   }
 
-  test("exports retain an independent permit until the body completes without blocking images or ordinary reads") {
-    val exportRequest = Request[IO](Method.GET, Uri.unsafeFromString("/api/exports/matches?format=csv"))
-    val encodedExport = Request[IO](Method.GET, Uri.unsafeFromString("/%61pi/exports/%6datches?format=tsv&seasonMasterId=example"))
+  test(
+    "exports retain an independent permit until the body completes without blocking images or ordinary reads"
+  ) {
+    val exportRequest =
+      Request[IO](Method.GET, Uri.unsafeFromString("/api/exports/matches?format=csv"))
+    val encodedExport = Request[IO](
+      Method.GET,
+      Uri.unsafeFromString("/%61pi/exports/%6datches?format=tsv&seasonMasterId=example")
+    )
     for
       admission <- RequestBodyAdmission.create[IO](1L, 1L, 1L, 1L, 1L)
       entered <- IO.ref(List.empty[String])
@@ -194,12 +216,14 @@ final class RequestBodyAdmissionSpec extends MomoCatsEffectSuite:
       admission <- RequestBodyAdmission.create[IO](1L, 1L, 1L, 1L, 1L)
       started <- Deferred[IO, Unit]
       waiting <- IO.ref(true)
-      app = admission(Kleisli[IO, Request[IO], Response[IO]](_ => waiting.get.map { wait =>
-        Response[IO](Status.Ok).withBodyStream(
-          if wait then Stream.exec(started.complete(()).void) ++ Stream.never[IO]
-          else Stream.empty
-        )
-      }))
+      app = admission(Kleisli[IO, Request[IO], Response[IO]](_ =>
+        waiting.get.map { wait =>
+          Response[IO](Status.Ok).withBodyStream(
+            if wait then Stream.exec(started.complete(()).void) ++ Stream.never[IO]
+            else Stream.empty
+          )
+        }
+      ))
       first <- app.run(image)
       busy <- Resource.make(first.body.compile.drain.start)(_.cancel).use { _ =>
         started.get *> app.run(archive)
@@ -221,9 +245,8 @@ final class RequestBodyAdmissionSpec extends MomoCatsEffectSuite:
       app = admission(Kleisli[IO, Request[IO], Response[IO]](_ => behavior.get.flatten))
       failure <- app.run(image).attempt
       _ <- behavior.set(started.complete(()).void *> IO.never[Response[IO]])
-      busy <- Resource.make(app.run(image).start)(_.cancel).use { _ =>
-        started.get *> app.run(archive)
-      }
+      busy <-
+        Resource.make(app.run(image).start)(_.cancel).use(_ => started.get *> app.run(archive))
       _ <- behavior.set(IO.pure(Response[IO](Status.Ok)))
       next <- app.run(archive)
       _ <- next.body.compile.drain

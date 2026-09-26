@@ -88,9 +88,15 @@ assert_case dev-launcher "${policy_only}" scripts/dev-local.mjs
 assert_case policy-fixture "${policy_only}" scripts/ci/test-validate-runtime-deployment.sh
 assert_case release-policy "${policy_only}" scripts/ci/check-pr-branch-policy.sh
 assert_case release-notes-extractor "${policy_only}" scripts/ci/extract-release-notes.sh
-assert_case range-classifier \
+assert_case range-classifier "${policy_only}" scripts/ci/classify-git-range.sh
+assert_case release-notes-renderer "${policy_only}" scripts/ci/runtime-release-notes.sh
+assert_case deployment-validator "${policy_only}" scripts/ci/validate-runtime-deployment.sh
+assert_case image-validator \
+  "$(expected false false false false true false true false false true)" \
+  scripts/ci/validate-runtime-image.sh
+assert_case unknown-validator \
   "$(expected true true true true true false true false false true)" \
-  scripts/ci/classify-git-range.sh
+  scripts/ci/validate-new-boundary.sh
 assert_case coverage-summary \
   "$(expected true true false false false false true false false true)" \
   scripts/ci/write-coverage-summary.py

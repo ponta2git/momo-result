@@ -24,12 +24,14 @@ run_checker() {
 
 expect_rejected_path() {
   local expected_path="$1"
+  local quoted_path
+  printf -v quoted_path '%q' "${expected_path}"
   local output
   if output="$(run_checker 2>&1)"; then
     echo "Public repository safety accepted forbidden content: ${expected_path}" >&2
     exit 1
   fi
-  if ! grep -Fq -- "${expected_path}" <<<"${output}"; then
+  if ! grep -Fq -- "${quoted_path}" <<<"${output}"; then
     echo "Public repository safety did not identify the rejected path: ${expected_path}" >&2
     exit 1
   fi
@@ -58,6 +60,47 @@ mkdir -p "${case_dir}/docs/ops"
 printf '%s\n' 'internal detail' > "${case_dir}/docs/ops/internal.md"
 git -C "${case_dir}" add docs/ops/internal.md
 expect_rejected_path 'docs/ops/internal.md'
+
+start_case quoted-private-path
+unusual_path=$'docs/ops/internal\nnotes.md'
+mkdir -p "${case_dir}/docs/ops"
+printf '%s\n' 'internal detail' > "${case_dir}/${unusual_path}"
+git -C "${case_dir}" add -- "${unusual_path}"
+expect_rejected_path "${unusual_path}"
+
+start_case forbidden-example-in-private-directory
+mkdir -p "${case_dir}/.agents"
+printf '%s\n' 'PLACEHOLDER=value' > "${case_dir}/.agents/.env.example"
+expect_rejected_path '.agents/.env.example'
+
+start_case check-from-subdirectory
+mkdir -p "${case_dir}/docs/ops" "${case_dir}/src"
+printf '%s\n' 'internal detail' > "${case_dir}/docs/ops/internal.md"
+case_dir="${case_dir}/src"
+expect_rejected_path 'docs/ops/internal.md'
+
+case_dir="${test_root}/not-a-repository"
+mkdir -p "${case_dir}"
+if run_checker >/dev/null 2>&1; then
+  echo "Public repository safety accepted a failed Git inspection." >&2
+  exit 1
+fi
+
+start_case failed-content-search
+mkdir -p "${test_root}/bin"
+cat > "${test_root}/bin/git" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" == grep ]]; then
+  exit 2
+fi
+exec "${PUBLIC_SAFETY_TEST_GIT}" "$@"
+EOF
+chmod +x "${test_root}/bin/git"
+if PUBLIC_SAFETY_TEST_GIT="$(command -v git)" PATH="${test_root}/bin:${PATH}" \
+  run_checker >/dev/null 2>&1; then
+  echo "Public repository safety accepted a failed content search." >&2
+  exit 1
+fi
 
 start_case secret-redaction
 mkdir -p "${case_dir}/src"

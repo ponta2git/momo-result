@@ -99,6 +99,10 @@ while IFS= read -r -d '' path; do
       analysis=true
       analysis_image=true
       ;;
+    scripts/ci/check-pr-branch-policy.sh | scripts/ci/check-pr-ready.sh | \
+      scripts/ci/classify-changes.sh | scripts/ci/classify-git-range.sh | \
+      scripts/ci/extract-release-notes.sh | scripts/ci/runtime-release-notes.sh)
+      ;;
     scripts/ci/runtime-* | scripts/ci/start-runtime-container.sh | \
       scripts/ci/summarize-runtime-logs.sh | \
       scripts/ci/validate-runtime-image.sh | scripts/ci/dockerfile-lint.sh)
@@ -109,10 +113,11 @@ while IFS= read -r -d '' path; do
       web=true
       ;;
     scripts/ci/test-* | scripts/ci/canonicalize-artifact-digest.sh | \
-      scripts/ci/check-pr-branch-policy.sh | scripts/ci/check-pr-ready.sh | \
-      scripts/ci/classify-changes.sh | scripts/ci/extract-release-notes.sh | \
-      scripts/ci/load-* | scripts/ci/resolve-* | scripts/ci/sanitize-* | \
-      scripts/ci/validate-*)
+      scripts/ci/load-analysis-candidate.sh | scripts/ci/load-runtime-image-artifact.sh | \
+      scripts/ci/resolve-pushed-runtime-image.sh | scripts/ci/sanitize-analysis-report.sh | \
+      scripts/ci/validate-analysis-candidate.sh | scripts/ci/validate-analysis-worker-readiness.sh | \
+      scripts/ci/validate-runtime-candidate.sh | scripts/ci/validate-runtime-deployment.sh | \
+      scripts/ci/validate-runtime-release-selection.sh)
       ;;
     scripts/ci/actionlint.sh | scripts/ci/install-actionlint.sh | \
       scripts/ci/public-repo-safety-check.sh)

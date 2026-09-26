@@ -151,9 +151,11 @@ pub(crate) fn build_artifact(
 ) -> Result<BuiltArtifact, ArtifactError> {
     let build_started = Instant::now();
     validate_empty_directory(output_directory)?;
-    if input
-        .resource_count()
-        .is_none_or(|count| count > request.maximum_chunk_count)
+    let resource_count = input.resource_count().ok_or(ArtifactError::ResourceBound)?;
+    if resource_count > request.maximum_chunk_count
+        || resource_count
+            .checked_add(1)
+            .is_none_or(|count| count > request.maximum_file_count)
     {
         return Err(ArtifactError::ResourceBound);
     }

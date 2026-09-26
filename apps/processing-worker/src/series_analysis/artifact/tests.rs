@@ -144,6 +144,26 @@ fn rejects_an_impossible_resource_count_before_writing_payloads() {
 }
 
 #[test]
+fn rejects_a_file_limit_that_cannot_fit_the_manifest_before_writing_payloads() {
+    let directory = TempDir::new().unwrap_or_else(|error| panic!("temp directory: {error}"));
+    let input = normalized(input());
+    let mut bounded = request();
+    bounded.maximum_file_count = input
+        .resource_count()
+        .unwrap_or_else(|| panic!("bounded resource count"));
+
+    let result = build_artifact(&input, &bounded, directory.path());
+
+    assert!(matches!(result, Err(ArtifactError::ResourceBound)));
+    assert_eq!(
+        fs::read_dir(directory.path())
+            .unwrap_or_else(|error| panic!("read attempt directory: {error}"))
+            .count(),
+        0
+    );
+}
+
+#[test]
 fn removes_a_partial_chunk_when_streaming_hits_the_byte_bound() {
     let directory = TempDir::new().unwrap_or_else(|error| panic!("temp directory: {error}"));
     let mut bounded = request();

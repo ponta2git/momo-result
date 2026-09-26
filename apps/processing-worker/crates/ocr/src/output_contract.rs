@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 
 use serde::Deserialize;
-use serde_json::Value as JsonValue;
 
 use crate::{
     OcrHints, OcrOutput, RequestedScreenType, core::names_match, result::valid_timing_values,
@@ -87,12 +86,12 @@ struct PlayerCandidate {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct DraftPayloadCandidate {
+struct DraftPayloadCandidate<Category> {
     requested_screen_type: String,
     detected_screen_type: Nullable<String>,
     profile_id: Nullable<String>,
     players: Vec<PlayerCandidate>,
-    category_payload: JsonValue,
+    category_payload: Category,
     warnings: Vec<WarningCandidate>,
     raw_snippets: Nullable<BTreeMap<String, String>>,
 }
@@ -176,33 +175,52 @@ pub(super) fn valid_output(
     let expected_profile = expected_screen.expected_profile_id();
     if output.detected_screen_type != expected_screen
         || output.profile_id.as_deref() != Some(expected_profile)
+        || output.payload.get("warnings") != Some(&output.warnings)
     {
         return false;
     }
-    let Ok(payload) = serde_json::from_value::<DraftPayloadCandidate>(output.payload.clone())
-    else {
+    let Ok(timings) = TimingCandidate::deserialize(&output.timings_milliseconds) else {
         return false;
     };
-    let Ok(warnings) = serde_json::from_value::<Vec<WarningCandidate>>(output.warnings.clone())
-    else {
+    if !valid_timings(&timings, parent_elapsed_milliseconds) {
         return false;
-    };
-    let Ok(timings) =
-        serde_json::from_value::<TimingCandidate>(output.timings_milliseconds.clone())
-    else {
-        return false;
-    };
-    output.payload.get("warnings") == Some(&output.warnings)
-        && valid_payload(&payload, expected_screen, expected_profile, hints)
-        && valid_warnings(&warnings)
-        && valid_timings(&timings, parent_elapsed_milliseconds)
+    }
+    // Deserialize directly from the existing JSON tree into the screen-specific candidate. In
+    // particular, do not clone the whole payload, then clone and decode its category a second time.
+    // The equal top-level warnings are validated once as part of this same candidate.
+    match expected_screen {
+        RequestedScreenType::TotalAssets | RequestedScreenType::Revenue => {
+            DraftPayloadCandidate::<RankedCategoryCandidate>::deserialize(&output.payload)
+                .is_ok_and(|payload| {
+                    valid_payload(&payload, expected_screen, expected_profile)
+                        && valid_ranked_category(
+                            &payload.category_payload,
+                            &payload.players,
+                            expected_screen,
+                            hints,
+                            &payload.warnings,
+                        )
+                })
+        }
+        RequestedScreenType::IncidentLog => {
+            DraftPayloadCandidate::<IncidentCategoryCandidate>::deserialize(&output.payload)
+                .is_ok_and(|payload| {
+                    valid_payload(&payload, expected_screen, expected_profile)
+                        && valid_incident_category(
+                            &payload.category_payload,
+                            &payload.players,
+                            hints,
+                            &payload.warnings,
+                        )
+                })
+        }
+    }
 }
 
-fn valid_payload(
-    payload: &DraftPayloadCandidate,
+fn valid_payload<Category>(
+    payload: &DraftPayloadCandidate<Category>,
     expected_screen: RequestedScreenType,
     expected_profile: &str,
-    hints: &OcrHints,
 ) -> bool {
     let screen = expected_screen.wire();
     payload.requested_screen_type == screen
@@ -211,28 +229,6 @@ fn valid_payload(
         && payload.raw_snippets.is_null()
         && payload.players.len() == 4
         && valid_warnings(&payload.warnings)
-        && match expected_screen {
-            RequestedScreenType::TotalAssets | RequestedScreenType::Revenue => {
-                serde_json::from_value::<RankedCategoryCandidate>(payload.category_payload.clone())
-                    .is_ok_and(|category| {
-                        valid_ranked_category(
-                            &category,
-                            &payload.players,
-                            expected_screen,
-                            hints,
-                            &payload.warnings,
-                        )
-                    })
-            }
-            RequestedScreenType::IncidentLog => {
-                serde_json::from_value::<IncidentCategoryCandidate>(
-                    payload.category_payload.clone(),
-                )
-                .is_ok_and(|category| {
-                    valid_incident_category(&category, &payload.players, hints, &payload.warnings)
-                })
-            }
-        }
 }
 
 fn valid_incident_fields(fields: &BTreeMap<String, OcrFieldCandidate<u32>>) -> bool {

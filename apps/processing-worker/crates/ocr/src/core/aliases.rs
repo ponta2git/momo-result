@@ -95,11 +95,11 @@ impl AliasResolver {
 
     pub(crate) fn extract(&self, text: &str) -> PlayerIdentity {
         let normalized = normalize_name(text);
-        if let Some(pair) = self.pairs.iter().find(|pair| {
-            let surface = normalize_name(&pair.surface);
-            surface.chars().count() >= MINIMUM_SAFE_ALIAS_CHARACTERS
-                && normalized.contains(&surface)
-        }) {
+        if let Some(pair) = self
+            .pairs
+            .iter()
+            .find(|pair| normalized.contains(&pair.surface))
+        {
             return PlayerIdentity {
                 display_name: Some(pair.display_name.clone()),
                 member_id: pair.member_id.clone(),
@@ -122,6 +122,11 @@ pub(crate) fn names_match(left: &str, right: &str) -> bool {
     }
     let left_core = remove_long_vowels(strip_president(&normalized_left));
     let right_core = remove_long_vowels(strip_president(&normalized_right));
+    // A title or OCR punctuation alone cannot identify a player. Every string contains the empty
+    // string, so applying the substring fallback before this check would assign an arbitrary slot.
+    if left_core.is_empty() || right_core.is_empty() {
+        return false;
+    }
     normalized_left.contains(&normalized_right)
         || normalized_right.contains(&normalized_left)
         || normalized_right.contains(strip_president(&normalized_left))
@@ -158,7 +163,11 @@ pub(crate) fn normalize_name(value: &str) -> String {
     cleaned.replace("n011", "no11")
 }
 
-fn append_pair(pairs: &mut Vec<AliasPair>, candidate: AliasPair) {
+fn append_pair(pairs: &mut Vec<AliasPair>, mut candidate: AliasPair) {
+    candidate.surface = normalize_name(&candidate.surface);
+    if candidate.surface.chars().count() < MINIMUM_SAFE_ALIAS_CHARACTERS {
+        return;
+    }
     if !pairs.iter().any(|current| {
         current.display_name == candidate.display_name
             && current.surface == candidate.surface
@@ -212,29 +221,36 @@ fn remove_long_vowels(value: &str) -> String {
 
 #[expect(
     clippy::indexing_slicing,
-    reason = "dynamic-programming rows are right.len() + 1 and enumerate-derived indices are bounded"
+    reason = "the reusable dynamic-programming row is right.len() + 1 and character indices are bounded"
 )]
 fn lcs_ratio(left: &str, right: &str) -> f64 {
-    let left: Vec<char> = left.chars().collect();
-    let right: Vec<char> = right.chars().collect();
-    if left.len() < MINIMUM_MATCH_CHARACTERS || right.len() < MINIMUM_MATCH_CHARACTERS {
+    let left_length = left.chars().count();
+    let right_length = right.chars().count();
+    if left_length < MINIMUM_MATCH_CHARACTERS || right_length < MINIMUM_MATCH_CHARACTERS {
         return 0.0;
     }
-    let mut previous = vec![0_u16; right.len().saturating_add(1)];
-    for left_character in &left {
-        let mut current = vec![0_u16; right.len().saturating_add(1)];
+    let (left, right) = if left_length < right_length {
+        (right, left)
+    } else {
+        (left, right)
+    };
+    let right: Vec<char> = right.chars().collect();
+    let mut row = vec![0_usize; right.len() + 1];
+    for left_character in left.chars() {
+        let mut diagonal = 0;
         for (right_index, right_character) in right.iter().enumerate() {
-            let next = right_index.saturating_add(1);
-            current[next] = if left_character == right_character {
-                previous[right_index].saturating_add(1)
+            let next = right_index + 1;
+            let previous = row[next];
+            row[next] = if left_character == *right_character {
+                diagonal + 1
             } else {
-                current[right_index].max(previous[next])
+                row[right_index].max(previous)
             };
+            diagonal = previous;
         }
-        previous = current;
     }
-    let lcs = previous.last().copied().unwrap_or(0);
-    let denominator = u32::try_from(left.len().saturating_add(right.len())).unwrap_or(u32::MAX);
+    let lcs = u32::try_from(row.last().copied().unwrap_or(0)).unwrap_or(u32::MAX);
+    let denominator = u32::try_from(left_length.saturating_add(right_length)).unwrap_or(u32::MAX);
     (2.0 * f64::from(lcs)) / f64::from(denominator)
 }
 
@@ -256,5 +272,27 @@ mod tests {
         let resolver = AliasResolver::from_hints(&OcrHints::default());
         let identity = resolver.extract("GBs N01 1社長 1億8620万円");
         assert_eq!(identity.display_name.as_deref(), Some("NO11社長"));
+    }
+
+    #[test]
+    fn punctuation_and_titles_cannot_match_an_unrelated_player() {
+        for noise in ["ーーー", "ーーー社長", "___社長", "---社長", "一一一社長", "社長"] {
+            assert!(!names_match(noise, "ぽんた社長"), "noise: {noise}");
+            assert!(!names_match("ぽんた社長", noise), "noise: {noise}");
+        }
+    }
+
+    #[test]
+    fn sequence_similarity_preserves_order_repetitions_and_unicode() {
+        for (left, right, expected) in [
+            ("abcdef", "ace", 2.0 / 3.0),
+            ("aaaa", "aaa", 6.0 / 7.0),
+            ("abc", "cba", 1.0 / 3.0),
+            ("あいうえお", "あえお", 0.75),
+            ("abc", "def", 0.0),
+        ] {
+            assert!((lcs_ratio(left, right) - expected).abs() < f64::EPSILON);
+            assert!((lcs_ratio(right, left) - expected).abs() < f64::EPSILON);
+        }
     }
 }

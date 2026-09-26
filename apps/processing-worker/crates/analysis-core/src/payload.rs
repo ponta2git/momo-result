@@ -34,12 +34,12 @@ pub struct PayloadSetValidator {
     scopes: BTreeMap<ScopeRef, ScopeResources>,
 }
 
-#[derive(Default)]
 struct ScopeResources {
-    aggregate: Option<AggregateReferences>,
-    review_members: Option<BTreeSet<String>>,
+    aggregate: AggregateReferences,
+    review_seen: bool,
     drilldowns: BTreeSet<(String, String)>,
-    contexts: BTreeMap<String, ContextReferences>,
+    context_match_ids: BTreeSet<String>,
+    context_item_count: u64,
 }
 
 struct AggregateReferences {
@@ -75,6 +75,9 @@ impl PayloadSetValidator {
 
     /// Validates and records a freshly computed resource for whole-artifact reference checks.
     ///
+    /// Each scope's aggregate must arrive before its dependent resources, as it does in the
+    /// calculator. References are checked on arrival so per-match payload details can be dropped.
+    ///
     /// # Errors
     ///
     /// Returns an error when the resource is malformed or duplicates an identity in this set.
@@ -84,6 +87,8 @@ impl PayloadSetValidator {
     }
 
     /// Validates and records a re-opened manifest resource for whole-artifact reference checks.
+    ///
+    /// The canonical manifest order places aggregates before all dependent resources.
     ///
     /// # Errors
     ///
@@ -97,21 +102,16 @@ impl PayloadSetValidator {
         self.record(resource_scope(resource).clone(), references)
     }
 
-    /// Closes the artifact validation session and checks all cross-resource references.
+    /// Closes the artifact validation session and checks resource-set completeness.
     ///
     /// # Errors
     ///
-    /// Returns an error when a scope is incomplete or a context points outside its aggregate.
+    /// Returns an error when a scope is incomplete or its context item counts do not balance.
     pub fn finish(self) -> Result<(), PayloadError> {
         for resources in self.scopes.into_values() {
-            let aggregate = resources
-                .aggregate
-                .ok_or(PayloadError::ResourceSetMismatch)?;
-            let review_members = resources
-                .review_members
-                .ok_or(PayloadError::ResourceSetMismatch)?;
-            if review_members != aggregate.member_ids {
-                return Err(PayloadError::ReferenceMismatch);
+            let aggregate = resources.aggregate;
+            if !resources.review_seen {
+                return Err(PayloadError::ResourceSetMismatch);
             }
             let expected_drilldowns = aggregate
                 .member_ids
@@ -123,25 +123,10 @@ impl PayloadSetValidator {
                 })
                 .collect::<BTreeSet<_>>();
             if resources.drilldowns != expected_drilldowns
-                || u64::try_from(resources.contexts.len())? != aggregate.match_count
+                || u64::try_from(resources.context_match_ids.len())? != aggregate.match_count
+                || resources.context_item_count != aggregate.item_count
             {
                 return Err(PayloadError::ResourceSetMismatch);
-            }
-            let context_item_count = resources
-                .contexts
-                .values()
-                .try_fold(0_u64, |total, context| {
-                    total.checked_add(u64::try_from(context.member_ids.len()).ok()?)
-                });
-            if context_item_count != Some(aggregate.item_count) {
-                return Err(PayloadError::ResourceSetMismatch);
-            }
-            for context in resources.contexts.into_values() {
-                if !context.member_ids.is_subset(&aggregate.member_ids)
-                    || !context.focused_item_ids.is_subset(&aggregate.item_ids)
-                {
-                    return Err(PayloadError::ReferenceMismatch);
-                }
             }
         }
         Ok(())
@@ -152,20 +137,54 @@ impl PayloadSetValidator {
         scope: ScopeRef,
         references: ResourceReferences,
     ) -> Result<(), PayloadError> {
-        let scope = self.scopes.entry(scope).or_default();
+        if let ResourceReferences::Aggregate(aggregate) = references {
+            return match self.scopes.entry(scope) {
+                std::collections::btree_map::Entry::Vacant(entry) => {
+                    entry.insert(ScopeResources {
+                        aggregate,
+                        review_seen: false,
+                        drilldowns: BTreeSet::new(),
+                        context_match_ids: BTreeSet::new(),
+                        context_item_count: 0,
+                    });
+                    Ok(())
+                }
+                std::collections::btree_map::Entry::Occupied(_) => {
+                    Err(PayloadError::ResourceSetMismatch)
+                }
+            };
+        }
+        let scope = self
+            .scopes
+            .get_mut(&scope)
+            .ok_or(PayloadError::ResourceSetMismatch)?;
         let inserted = match references {
-            ResourceReferences::Aggregate(references) => {
-                scope.aggregate.replace(references).is_none()
-            }
+            ResourceReferences::Aggregate(_) => return Err(PayloadError::ResourceSetMismatch),
             ResourceReferences::Review(member_ids) => {
-                scope.review_members.replace(member_ids).is_none()
+                if member_ids != scope.aggregate.member_ids {
+                    return Err(PayloadError::ReferenceMismatch);
+                }
+                !std::mem::replace(&mut scope.review_seen, true)
             }
             ResourceReferences::Drilldown {
                 member_id,
                 metric_id,
             } => scope.drilldowns.insert((member_id, metric_id)),
             ResourceReferences::MatchContext { match_id, context } => {
-                scope.contexts.insert(match_id, context).is_none()
+                if !context.member_ids.is_subset(&scope.aggregate.member_ids)
+                    || !context.focused_item_ids.is_subset(&scope.aggregate.item_ids)
+                {
+                    return Err(PayloadError::ReferenceMismatch);
+                }
+                if scope.context_match_ids.contains(&match_id) {
+                    return Err(PayloadError::ResourceSetMismatch);
+                }
+                scope.context_item_count = scope
+                    .context_item_count
+                    .checked_add(u64::try_from(context.member_ids.len())?)
+                    .filter(|count| *count <= scope.aggregate.item_count)
+                    .ok_or(PayloadError::ResourceSetMismatch)?;
+                scope.context_match_ids.insert(match_id)
             }
         };
         inserted
@@ -1506,11 +1525,10 @@ mod tests {
             .unwrap_or_else(|| panic!("focused item")) =
             Value::String(String::from("missing:item"));
         let mut validator = PayloadSetValidator::new();
-        for resource in &resources {
-            assert!(validator.add_computed(resource).is_ok());
-        }
         assert!(matches!(
-            validator.finish(),
+            resources
+                .iter()
+                .try_for_each(|resource| validator.add_computed(resource)),
             Err(PayloadError::ReferenceMismatch)
         ));
 

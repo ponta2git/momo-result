@@ -104,6 +104,13 @@
 - ファイル行数は責務混在を見つける signal とし、行数だけを理由に浅い module へ分割しない。
 - 本節を依存方向の正本とする。静的 gate へ投影する場合は `docs/dev-rule.md` の採用基準に従い、module graph から判定できる import 規則だけを syntax-aware な tool で検査する。本番コードから test 専用 module を参照しない。
 
+### Build / Test Tooling
+
+- `apps/web/scripts` は Web の生成・build 検査・隔離 E2E 起動を所有する Node の開発用境界であり、`src` の実行層ではない。production は生成された型・validator を消費し、script や E2E fixture を import しない。
+- API 生成は Tapir 由来 OpenAPI から型、resource 別の遅延読込 registry、CSP 下で実行できる事前コンパイル済み validator をまとめて導出する。途中の schema は生成処理内に閉じ、consumer のない中間ファイルを追跡しない。
+- build checker は最終 CSS に必要な global theme と参照先が残ることを確認する。CSS cascade や実際の paint の証拠とは区別する。
+- `scripts/e2e` の入口は各 run の資源と後片付けを所有し、共通 runtime は子 process の環境・中断・終了待ちと隔離 service の起動を所有する。入口をライブラリとして import せず、import だけでは Docker 設定や process の状態を変えない。OCR 専用の制御 worker・通知 recorder・画像 fixture は通常 E2E の前提にしない。
+
 ### Server State
 
 - server state は TanStack Query の cache lifecycle に従い、Page/UI component から query 基盤を直接操作しない。

@@ -9,29 +9,33 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import {
+  dockerFailure,
+  workerTiming,
+  writeImages,
+  writeMinioImageContexts,
+} from "./ocr-fixtures.mjs";
+import {
   applyMigrations,
   childEnvironment,
+  configureDockerHost,
+  createInterruptionSignal,
   findFreePort,
+  runCommand,
   runPlaywrightCommand,
   startApi,
   startPostgres,
   startRedis,
   stopProcessGroup,
   waitForApi,
-} from "./e2e-isolated.mjs";
-import {
-  dockerFailure,
-  workerTiming,
-  writeImages,
-  writeMinioImageContexts,
-} from "./ocr-e2e-fixtures.mjs";
+} from "./runtime.mjs";
 
 const execute = promisify(execFile);
-const webDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const webDir = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const repoRoot = resolve(webDir, "../..");
 const summitDir = resolve(process.env["MOM24_SUMMIT_DIR"] ?? join(repoRoot, "_deps/summit"));
 const workerImage = process.env["MOM24_WORKER_TEST_IMAGE"];
 const playwrightArgs = process.argv.slice(2).filter((value) => value !== "--hold");
+configureDockerHost();
 if (!workerImage)
   throw new Error("MOM24_WORKER_TEST_IMAGE must identify the controlled Linux image.");
 const workerImageId = (
@@ -51,29 +55,18 @@ const resources = {
   workerName: `mom24-e2e-${basename(runDir).toLowerCase()}`,
   workerRequested: false,
 };
-let interrupted;
-const interruption = new AbortController();
-let releaseHold;
-let cleanupPromise;
+const interruption = createInterruptionSignal();
 remember();
-function interrupt(signal) {
-  interrupted = signal;
-  interruption.abort(new Error(`OCR E2E interrupted by ${signal}.`));
-  releaseHold?.();
-}
-process.once("SIGINT", () => interrupt("SIGINT"));
-process.once("SIGTERM", () => interrupt("SIGTERM"));
 
 try {
   await run();
 } catch (error) {
-  if (interrupted) process.exitCode = interrupted === "SIGINT" ? 130 : 143;
-  else throw error;
+  if (!interruption.aborted) throw error;
 } finally {
   await cleanup();
 }
 function checkpoint() {
-  if (interrupted) throw new Error("Owned E2E run interrupted.");
+  interruption.throwIfAborted();
 }
 
 async function run() {
@@ -104,7 +97,7 @@ async function run() {
   resources.containers.push(redis);
   remember();
   checkpoint();
-  await applyMigrations(postgres, databaseName);
+  await applyMigrations(postgres, databaseName, interruption);
   checkpoint();
   const databaseUrl = `postgres://postgres:postgres@127.0.0.1:${postgres.getMappedPort(5432)}/${databaseName}`;
   const redisUrl = `redis://127.0.0.1:${redis.getMappedPort(6379)}/0`;
@@ -177,10 +170,11 @@ async function run() {
   remember();
   checkpoint();
   await waitForApi(api, `${apiOrigin}/healthz/details`, checkpoint);
-  await runOwnedCommand("pnpm", ["build"], {
+  await runCommand("pnpm", ["build"], {
     cwd: webDir,
     env: childEnvironment({}),
     label: "Web build",
+    signal: interruption,
   });
   const webBuild = join(runDir, "web-dist");
   await cp(join(webDir, "dist"), webBuild, { recursive: true, force: false, errorOnExist: true });
@@ -200,7 +194,11 @@ async function run() {
     webDir,
     { VITE_API_PROXY_TARGET: apiOrigin },
   );
-  await until(async () => (await fetch(webOrigin)).ok, web, "built Web");
+  await until(
+    async () => (await fetch(webOrigin, { signal: AbortSignal.timeout(2_000) })).ok,
+    web,
+    "built Web",
+  );
 
   const workerEnv = join(runDir, "worker.env");
   const containerHost = process.platform === "linux" ? "127.0.0.1" : "host.docker.internal";
@@ -282,8 +280,8 @@ async function run() {
   console.log(`Isolated OCR notification E2E ready: ${metadataFile}`);
   if (process.argv.includes("--hold")) {
     await new Promise((resolveStop) => {
-      releaseHold = resolveStop;
-      if (interrupted) resolveStop();
+      interruption.addEventListener("abort", resolveStop, { once: true });
+      if (interruption.aborted) resolveStop();
     });
     checkpoint();
   } else {
@@ -297,7 +295,7 @@ async function run() {
           PLAYWRIGHT_SKIP_WEB_SERVER: "1",
         }),
         label: "OCR notification E2E",
-        signal: interruption.signal,
+        signal: interruption,
       },
     );
   }
@@ -371,51 +369,48 @@ async function docker(args, { operation = args[0], phase = args[0], ...options }
     throw dockerFailure(operation, phase, error);
   }
 }
-function cleanup() {
-  cleanupPromise ??= (async () => {
-    const failures = [];
-    if (resources.workerRequested && !resources.workerId) {
-      try {
-        resources.workerId =
-          (
-            await docker([
-              "ps",
-              "--all",
-              "--quiet",
-              "--no-trunc",
-              "--filter",
-              `name=^/${resources.workerName}$`,
-            ])
-          ).stdout.trim() || undefined;
-      } catch (error) {
-        failures.push(error);
-      }
+async function cleanup() {
+  const failures = [];
+  if (resources.workerRequested && !resources.workerId) {
+    try {
+      resources.workerId =
+        (
+          await docker([
+            "ps",
+            "--all",
+            "--quiet",
+            "--no-trunc",
+            "--filter",
+            `name=^/${resources.workerName}$`,
+          ])
+        ).stdout.trim() || undefined;
+    } catch (error) {
+      failures.push(error);
     }
-    if (resources.workerId) {
-      await writeFile(join(controlDir, "stop"), "stop\n").catch((error) => failures.push(error));
-      try {
-        await docker(["wait", resources.workerId], { timeout: 20_000 });
-      } catch {
-        await docker(["stop", "--time", "5", resources.workerId]).catch((error) =>
-          failures.push(error),
-        );
-      }
-      await docker(["rm", resources.workerId]).catch((error) => failures.push(error));
+  }
+  if (resources.workerId) {
+    await writeFile(join(controlDir, "stop"), "stop\n").catch((error) => failures.push(error));
+    try {
+      await docker(["wait", resources.workerId], { timeout: 20_000 });
+    } catch {
+      await docker(["stop", "--time", "5", resources.workerId]).catch((error) =>
+        failures.push(error),
+      );
     }
-    for (const child of resources.processes.toReversed())
-      await stopProcessGroup(child).catch((error) => failures.push(error));
-    for (const container of resources.containers.toReversed())
-      await container.stop().catch((error) => failures.push(error));
-    for (const image of resources.images.toReversed())
-      await docker(["image", "rm", image], {
-        operation: "MinIO fixture image",
-        phase: "remove",
-      }).catch((error) => failures.push(error));
-    if (failures.length > 0)
-      throw new AggregateError(failures, `E2E cleanup incomplete; ownership metadata: ${runDir}`);
-    await rm(runDir, { recursive: true, force: true });
-  })();
-  return cleanupPromise;
+    await docker(["rm", resources.workerId]).catch((error) => failures.push(error));
+  }
+  for (const child of resources.processes.toReversed())
+    await stopProcessGroup(child).catch((error) => failures.push(error));
+  for (const container of resources.containers.toReversed())
+    await container.stop().catch((error) => failures.push(error));
+  for (const image of resources.images.toReversed())
+    await docker(["image", "rm", image], {
+      operation: "MinIO fixture image",
+      phase: "remove",
+    }).catch((error) => failures.push(error));
+  if (failures.length > 0)
+    throw new AggregateError(failures, `E2E cleanup incomplete; ownership metadata: ${runDir}`);
+  await rm(runDir, { recursive: true, force: true });
 }
 
 function remember() {
@@ -432,26 +427,4 @@ function remember() {
     }),
     { mode: 0o600 },
   );
-}
-
-async function runOwnedCommand(command, args, { cwd, env, label }) {
-  checkpoint();
-  const child = spawn(command, args, { cwd, env, detached: true, stdio: "inherit" });
-  resources.processes.push(child);
-  remember();
-  await new Promise((resolveCommand, rejectCommand) => {
-    child.once("error", rejectCommand);
-    child.once("exit", (code) =>
-      code === 0 ? resolveCommand() : rejectCommand(new Error(`${label} failed.`)),
-    );
-    const poll = setInterval(() => {
-      if (interrupted) {
-        clearInterval(poll);
-        rejectCommand(new Error("Run interrupted."));
-      }
-    }, 100);
-    child.once("exit", () => clearInterval(poll));
-    child.once("error", () => clearInterval(poll));
-  });
-  checkpoint();
 }

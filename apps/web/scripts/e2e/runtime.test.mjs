@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
+import { once } from "node:events";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,7 +8,70 @@ import { test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 
-import { runCommand, startApi, stopProcessGroup, waitForApi } from "./e2e-isolated.mjs";
+import { applyMigrations, runCommand, startApi, stopProcessGroup, waitForApi } from "./runtime.mjs";
+
+test(
+  "interruption survives lazy dependency exit hooks and repeated signals until cleanup finishes",
+  { skip: process.platform === "win32", timeout: 15_000 },
+  async () => {
+    const code = `
+import { createInterruptionSignal } from ${JSON.stringify(new URL("./runtime.mjs", import.meta.url).href)};
+import { once } from "node:events";
+const interruption = createInterruptionSignal();
+// Loading the real dependency after the CLI handler registers its signal-exit hook.
+await import(${JSON.stringify(import.meta.resolve("testcontainers"))});
+const release = once(process, "message");
+process.send("ready");
+await new Promise(resolve => interruption.addEventListener("abort", resolve, { once: true }));
+process.send("cleaning");
+await release;
+process.send("cleaned");
+process.disconnect();
+`;
+    const child = spawn(process.execPath, ["--input-type=module", "-e", code], {
+      detached: true,
+      stdio: ["ignore", "ignore", "inherit", "ipc"],
+    });
+    const messages = [];
+    child.on("message", (message) => {
+      messages.push(message);
+      if (message === "ready") child.kill("SIGINT");
+      if (message === "cleaning") {
+        child.kill("SIGINT");
+        child.kill("SIGTERM");
+        child.send("release cleanup");
+      }
+    });
+    try {
+      const [exitCode, signal] = await once(child, "exit");
+      assert.deepEqual(messages, ["ready", "cleaning", "cleaned"]);
+      assert.equal(exitCode, 130, "the first interruption remains the exit status");
+      assert.equal(signal, null, "a dependency must not terminate asynchronous cleanup");
+    } finally {
+      await stopProcessGroup(child);
+    }
+  },
+);
+
+test("an explicit missing migration directory never bootstraps a different schema revision", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "momo-e2e-migrations-"));
+  const previous = process.env["MOMO_DB_MIGRATIONS_DIR"];
+  process.env["MOMO_DB_MIGRATIONS_DIR"] = join(directory, "missing");
+  try {
+    await assert.rejects(
+      applyMigrations({
+        getId() {
+          throw new Error("A fallback must not reach the database bootstrap.");
+        },
+      }),
+      /momo-db migrations directory was not found/u,
+    );
+  } finally {
+    if (previous === undefined) delete process.env["MOMO_DB_MIGRATIONS_DIR"];
+    else process.env["MOMO_DB_MIGRATIONS_DIR"] = previous;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test("a missing command and nonzero exit reject rather than hanging the runner", async () => {
   await assert.rejects(

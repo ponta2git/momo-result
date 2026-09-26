@@ -5,10 +5,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && node ./scripts/check-built-theme.mjs",
-    "e2e": "node ./scripts/e2e-isolated.mjs",
-    "e2e:check": "node --test ./scripts/e2e-isolated.test.mjs ./scripts/playwright-interruption.test.mjs ./scripts/ocr-e2e-fixtures.test.mjs",
-    "e2e:ocr-notifications": "node ./scripts/e2e-ocr-notifications.mjs",
-    "e2e:ocr-notifications:check": "node --test ./scripts/ocr-e2e-fixtures.test.mjs",
+    "e2e": "node ./scripts/e2e/run-isolated.mjs",
+    "scripts:check": "node --test ./scripts/*.test.mjs ./scripts/e2e/*.test.mjs",
+    "e2e:ocr-notifications": "node ./scripts/e2e/run-ocr-notifications.mjs",
     "e2e:target": "playwright test",
     "e2e:runtime": "PLAYWRIGHT_SKIP_WEB_SERVER=1 playwright test",
     "preview": "vite preview",

@@ -46,8 +46,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
         timeout-minutes: 5
-      - name: Validate E2E runner and fixtures
-        run: pnpm --filter web e2e:check
+      - name: Validate Web build checker and E2E runners
+        run: pnpm --filter web scripts:check
         timeout-minutes: 2
       - name: Test
         if: ${{ github.event_name != 'pull_request' }}

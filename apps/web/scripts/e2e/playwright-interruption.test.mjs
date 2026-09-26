@@ -9,10 +9,10 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
-import { childEnvironment, runPlaywrightCommand, stopProcessGroup } from "./e2e-isolated.mjs";
+import { childEnvironment, runPlaywrightCommand, stopProcessGroup } from "./runtime.mjs";
 
 const require = createRequire(import.meta.url);
-const webDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const webDir = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 // This is a runner contract: the installed CLI owns its detached webServer.
 // It does not launch a browser or claim cleanup after arbitrary SIGKILL/launcher crashes.

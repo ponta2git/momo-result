@@ -1,15 +1,11 @@
-#!/usr/bin/env node
 import { execFile, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import { createServer } from "node:net";
-import { homedir, tmpdir } from "node:os";
+import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-
-configureDockerHost();
-const { GenericContainer, Wait } = await import("testcontainers");
 
 const POSTGRES_IMAGE = process.env["MOMO_E2E_POSTGRES_IMAGE"] ?? "postgres:18-alpine";
 const REDIS_IMAGE = process.env["MOMO_E2E_REDIS_IMAGE"] ?? "redis:7-alpine";
@@ -22,11 +18,10 @@ const API_START_TIMEOUT_MS = 240_000;
 const PROCESS_STOP_TIMEOUT_MS = 10_000;
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
-const webDir = resolve(scriptDir, "..");
+const webDir = resolve(scriptDir, "../..");
 const repoRoot = resolve(webDir, "../..");
 const apiDir = resolve(repoRoot, "apps/api");
 const migrationScript = resolve(repoRoot, "scripts/ci/apply-momo-db-migrations.sh");
-const playwrightArgs = process.argv.slice(2);
 
 const toolEnvironmentNames = [
   "ALL_PROXY",
@@ -90,90 +85,23 @@ const toolEnvironmentNames = [
   "npm_config_cafile",
 ];
 
-const resources = {
-  apiProcess: undefined,
-  imageTmpDir: undefined,
-  postgres: undefined,
-  redis: undefined,
-};
-let cleanupPromise;
-const interruption = new AbortController();
-
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+// Install once per CLI run. Keep handlers through asynchronous cleanup: a once listener
+// disappears before invocation, so a later dependency's exit hook can re-send the signal.
+export function createInterruptionSignal() {
+  const controller = new AbortController();
   for (const signal of ["SIGINT", "SIGTERM"]) {
-    process.once(signal, () => {
+    process.on(signal, () => {
+      if (controller.signal.aborted) return;
       process.exitCode = signal === "SIGINT" ? 130 : 143;
-      interruption.abort(new Error(`E2E interrupted by ${signal}.`));
+      controller.abort(new Error(`E2E interrupted by ${signal}.`));
     });
   }
-
-  try {
-    const exitCode = await run();
-    if (!interruption.signal.aborted) process.exitCode = exitCode;
-  } catch (error) {
-    if (!interruption.signal.aborted) throw error;
-  } finally {
-    await cleanup();
-  }
-}
-
-async function run() {
-  const apiPort = await findFreePort();
-  let webPort = await findFreePort();
-  while (webPort === apiPort) webPort = await findFreePort();
-  resources.imageTmpDir = await mkdtemp(join(tmpdir(), "momo-result-e2e-images-"));
-
-  console.log("Starting isolated E2E dependencies with Testcontainers.");
-  interruption.signal.throwIfAborted();
-  await startDependencies();
-  interruption.signal.throwIfAborted();
-  await applyMigrations(resources.postgres, POSTGRES_DB, interruption.signal);
-  interruption.signal.throwIfAborted();
-
-  const databaseUrl = `postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${resources.postgres.getHost()}:${resources.postgres.getMappedPort(
-    5432,
-  )}/${POSTGRES_DB}`;
-  const redisUrl = `redis://${resources.redis.getHost()}:${resources.redis.getMappedPort(6379)}/0`;
-  const apiBaseUrl = `http://127.0.0.1:${apiPort}`;
-  const webBaseUrl = `http://127.0.0.1:${webPort}`;
-
-  resources.apiProcess = startApi({
-    apiPort,
-    databaseUrl,
-    imageTmpDir: resources.imageTmpDir,
-    redisUrl,
-  });
-  await waitForApi(resources.apiProcess, `${apiBaseUrl}/healthz/details`, () =>
-    interruption.signal.throwIfAborted(),
-  );
-
-  return runPlaywright({
-    apiBaseUrl,
-    webBaseUrl,
-  });
-}
-
-async function startDependencies() {
-  const [postgresResult, redisResult] = await Promise.allSettled([startPostgres(), startRedis()]);
-  const failures = [];
-
-  if (postgresResult.status === "fulfilled") {
-    resources.postgres = postgresResult.value;
-  } else {
-    failures.push(postgresResult.reason);
-  }
-  if (redisResult.status === "fulfilled") {
-    resources.redis = redisResult.value;
-  } else {
-    failures.push(redisResult.reason);
-  }
-
-  if (failures.length > 0) {
-    throw new AggregateError(failures, "Failed to start isolated E2E dependencies.");
-  }
+  return controller.signal;
 }
 
 export async function startPostgres(databaseName = POSTGRES_DB) {
+  configureDockerHost();
+  const { GenericContainer, Wait } = await import("testcontainers");
   return new GenericContainer(POSTGRES_IMAGE)
     .withEnvironment({
       POSTGRES_DB: databaseName,
@@ -187,6 +115,8 @@ export async function startPostgres(databaseName = POSTGRES_DB) {
 }
 
 export async function startRedis() {
+  configureDockerHost();
+  const { GenericContainer, Wait } = await import("testcontainers");
   return new GenericContainer(REDIS_IMAGE)
     .withExposedPorts(6379)
     .withStartupTimeout(120_000)
@@ -219,14 +149,11 @@ export async function applyMigrations(postgres, databaseName = POSTGRES_DB, sign
 }
 
 async function resolveMigrationsDir() {
-  const explicit = process.env["MOMO_DB_MIGRATIONS_DIR"]
-    ? [resolve(process.env["MOMO_DB_MIGRATIONS_DIR"])]
-    : [];
-  const candidates = [
-    ...explicit,
-    resolve(repoRoot, "_deps/momo-db/drizzle"),
-    resolve(repoRoot, "../momo-db/drizzle"),
-  ];
+  // An explicit path must not silently fall back to another schema revision.
+  const explicit = process.env["MOMO_DB_MIGRATIONS_DIR"];
+  const candidates = explicit
+    ? [resolve(explicit)]
+    : [resolve(repoRoot, "_deps/momo-db/drizzle"), resolve(repoRoot, "../momo-db/drizzle")];
 
   for (const candidate of candidates) {
     try {
@@ -316,20 +243,6 @@ export async function waitForApi(apiProcess, url, checkpoint = () => {}) {
   throw new Error(`API did not become healthy in time.\n${apiProcess.e2eLogs.toString()}`);
 }
 
-async function runPlaywright({ apiBaseUrl, webBaseUrl }) {
-  await runPlaywrightCommand(playwrightArgs, {
-    cwd: webDir,
-    env: childEnvironment({
-      PLAYWRIGHT_BASE_URL: webBaseUrl,
-      PLAYWRIGHT_SKIP_WEB_SERVER: "0",
-      VITE_API_PROXY_TARGET: apiBaseUrl,
-    }),
-    label: "Playwright",
-    signal: interruption.signal,
-  });
-  return 0;
-}
-
 export function runPlaywrightCommand(args, options) {
   // Direct CLI ownership lets SIGINT reach Playwright's teardown without a package-manager
   // launcher forwarding the same signal a second time.
@@ -338,30 +251,6 @@ export function runPlaywrightCommand(args, options) {
     ...options,
     interruptSignal: "SIGINT",
   });
-}
-
-function cleanup() {
-  cleanupPromise ??= cleanupResources();
-  return cleanupPromise;
-}
-
-async function cleanupResources() {
-  const processCleanup = await Promise.allSettled([stopProcessGroup(resources.apiProcess)]);
-  const dependencyCleanup = await Promise.allSettled([
-    resources.redis?.stop(),
-    resources.postgres?.stop(),
-    resources.imageTmpDir
-      ? rm(resources.imageTmpDir, { force: true, recursive: true })
-      : Promise.resolve(),
-  ]);
-  const failures = [...processCleanup, ...dependencyCleanup].filter(
-    (result) => result.status === "rejected",
-  );
-  if (failures.length > 0)
-    throw new AggregateError(
-      failures.map((result) => result.reason),
-      "Standard E2E cleanup failed.",
-    );
 }
 
 export async function stopProcessGroup(child, { signal: initialSignal = "SIGTERM" } = {}) {
@@ -493,7 +382,7 @@ export async function runCommand(
   }
 }
 
-function configureDockerHost() {
+export function configureDockerHost() {
   if (process.env["DOCKER_HOST"]) {
     return;
   }

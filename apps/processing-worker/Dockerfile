@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1.25.0@sha256:0adf442eae370b6087e08edc7c50b552d80ddf261576f4ebd6421006b2461f12
 
-ARG RUST_IMAGE=rust:1.97-bookworm@sha256:14bc9c5966e7b3a385794b3d5389a8765668342025fbcc7b2e3d2866ac4bd8c3
-ARG RUNTIME_IMAGE=gcr.io/distroless/cc-debian12:latest@sha256:6e1871c34683dc9ee996d13084497783fd98ac0200213d0826625f4e9d4be1d0
-ARG DIAGNOSTICS_IMAGE=gcr.io/distroless/cc-debian12:debug-nonroot@sha256:503933e1c6aa9bcb0e1e007c5d14c7595006dc8ea87d94afcd12f8862ea5a20e
+ARG RUST_IMAGE=rust:1.98.1-bookworm@sha256:93ce27a88655056a51dbdd8f5f2d7ddc071c7b0070fb288a37b5a285fc83971e
+ARG RUNTIME_IMAGE=gcr.io/distroless/cc-debian12:latest@sha256:e5d81ddde149641e2a9ba55be4545bc125c67de07508b03ba4c22e6eb0ded5aa
+ARG DIAGNOSTICS_IMAGE=gcr.io/distroless/cc-debian12:debug-nonroot@sha256:923320b891f20d5f4bd43ed3a72eeee2f3323d481d6f4bd8d0b2c96d1c0758bc
 
 FROM ${DIAGNOSTICS_IMAGE} AS diagnostics
 USER 0:0
@@ -23,8 +23,8 @@ RUN mkdir -p /momo-toolbox \
   && printf '%s\n' 'momo:x:10001:' >> /etc/group
 
 FROM ${RUST_IMAGE} AS native-builder
-ARG TESSERACT_VERSION=5.5.2
-ARG TESSERACT_SHA256=6235ea0dae45ea137f59c09320406f5888383741924d98855bd2ce0d16b54f21
+ARG TESSERACT_VERSION=5.5.3
+ARG TESSERACT_SHA256=9218e62793116d42a9f6d14cd9348518b27f382096eea3d0f2d1a24616bb5884
 ENV LD_LIBRARY_PATH="/opt/tesseract/lib"
 ENV PATH="/opt/tesseract/bin:${PATH}"
 ENV PKG_CONFIG_PATH="/opt/tesseract/lib/pkgconfig"

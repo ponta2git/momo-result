@@ -30,8 +30,8 @@ pub(crate) async fn connect_publisher(client: &Client) -> Result<ConnectionManag
 
 fn config(response_timeout: Duration) -> ConnectionManagerConfig {
     ConnectionManagerConfig::default()
-        .set_connection_timeout(CONNECT_TIMEOUT)
-        .set_response_timeout(response_timeout)
+        .set_connection_timeout(Some(CONNECT_TIMEOUT))
+        .set_response_timeout(Some(response_timeout))
         // Consumers propagate dependency errors and drop their private connection. The process
         // supervisor/coordinator owns retries; connection retries must not extend shutdown budgets.
         .set_number_of_retries(0)

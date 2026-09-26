@@ -331,11 +331,13 @@ where
     // Preserve a final true value even if its sender has already been dropped. An absent
     // supervisor without an explicit stop request is a structural failure, including during
     // a long sequence of successful batches where changed() would never otherwise be polled.
+    // Observe channel closure first: if the sender publishes true and closes concurrently,
+    // the later value read must still take precedence over the closed-channel error.
+    let changed = shutdown.has_changed();
     if *shutdown.borrow() {
         Ok(true)
     } else {
-        shutdown
-            .has_changed()
+        changed
             .map(|_changed| false)
             .map_err(|_closed| CoordinatorError::ShutdownChannelClosed)
     }

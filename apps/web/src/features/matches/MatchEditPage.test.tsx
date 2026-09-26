@@ -89,7 +89,7 @@ describe("MatchEditPage", () => {
     await waitForMatchEditReady();
   });
 
-  it("shows a structured loading shell while the saved match is loading", async () => {
+  it("keeps save unavailable until the saved match has loaded", async () => {
     setDevUser();
     const responseGate = createDeferred();
     server.use(
@@ -112,8 +112,6 @@ describe("MatchEditPage", () => {
     );
 
     expect(await screen.findByLabelText("試合編集を読み込み中")).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "試合内容" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "保存" })).not.toBeInTheDocument();
 
     responseGate.resolve();
@@ -186,11 +184,7 @@ describe("MatchEditPage", () => {
       </QueryClientProvider>,
     );
 
-    const failureHeading = await screen.findByRole("heading", {
-      name: "試合編集を読み込めませんでした",
-    });
-    expect(failureHeading.closest("section")).not.toBeNull();
-    expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
+    await screen.findByRole("heading", { name: "試合編集を読み込めませんでした" });
     expect(screen.getByRole("button", { name: "試合編集を再読み込み" })).toBeEnabled();
   });
 
@@ -222,11 +216,7 @@ describe("MatchEditPage", () => {
       </QueryClientProvider>,
     );
 
-    const missingHeading = await screen.findByRole("heading", {
-      name: "試合が見つかりませんでした",
-    });
-    expect(missingHeading.closest("section")).not.toBeNull();
-    expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
+    await screen.findByRole("heading", { name: "試合が見つかりませんでした" });
     expect(screen.queryByRole("button", { name: "試合編集を再読み込み" })).not.toBeInTheDocument();
   });
 

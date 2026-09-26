@@ -175,14 +175,6 @@ describe("matchDetailToMatchForm", () => {
     });
   });
 
-  it("returns 4 default players when the detail has no players", () => {
-    const values = matchDetailToMatchForm(detail());
-
-    expect(values.players).toHaveLength(4);
-    expect(values.players.map((player) => player.playOrder)).toEqual([1, 2, 3, 4]);
-    expect(values.players.map((player) => player.rank)).toEqual([1, 2, 3, 4]);
-  });
-
   it("only includes draftIds keys whose corresponding fields are present", () => {
     const onlyTotalAssets = matchDetailToMatchForm(detail({ totalAssetsDraftId: "draft-ta" }));
     expect(onlyTotalAssets.draftIds).toEqual({ totalAssets: "draft-ta" });

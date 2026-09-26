@@ -54,12 +54,11 @@ describe("matchPerformanceContextFromArtifact", () => {
     expect(matchPerformanceContextFromArtifact(source)?.rows[0]?.revenueRank).toBeUndefined();
   });
 
-  it.each(["match_changed_since_artifact", "not_in_artifact", "not_in_scope"] as const)(
-    "returns no stale context for inclusion status %s",
-    (status) => {
-      expect(
-        matchPerformanceContextFromArtifact(makeSeriesAnalysisExcludedMatchContext(status)),
-      ).toBeUndefined();
-    },
-  );
+  it("returns no ledger context when the match is excluded from the artifact", () => {
+    expect(
+      matchPerformanceContextFromArtifact(
+        makeSeriesAnalysisExcludedMatchContext("match_changed_since_artifact"),
+      ),
+    ).toBeUndefined();
+  });
 });

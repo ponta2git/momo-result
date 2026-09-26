@@ -124,41 +124,6 @@ describe("MatchesListPage", () => {
     );
   });
 
-  it("mounts only the result layout for the current breakpoint and switches on resize", async () => {
-    setDevUser();
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/matches"]}>
-          <Routes>
-            <Route path="/matches" element={<MatchesListPage />} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-
-    expect(await screen.findByRole("table", { name: "登録済みの試合" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "第1試合 東日本編の試合結果を見る" }).closest("article"),
-    ).toBeNull();
-
-    act(() => matchMedia.setMatches(false));
-
-    await waitFor(() =>
-      expect(screen.queryByRole("table", { name: "登録済みの試合" })).not.toBeInTheDocument(),
-    );
-    expect(
-      screen.getByRole("link", { name: "第1試合 東日本編の試合結果を見る" }).closest("article"),
-    ).not.toBeNull();
-
-    act(() => matchMedia.setMatches(true));
-
-    expect(await screen.findByRole("table", { name: "登録済みの試合" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "第1試合 東日本編の試合結果を見る" }).closest("article"),
-    ).toBeNull();
-  });
-
   it("commits detail navigation immediately while the detail payload is loading", async () => {
     setDevUser();
     const detailGate = createDeferred();

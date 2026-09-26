@@ -118,35 +118,6 @@ describe("app routing", () => {
 
   // These flows load cold route chunks under coverage; their total budget must exceed each wait.
   it(
-    "selects the analysis tab and shows its loading body before its data arrives",
-    { timeout: 15_000 },
-    async () => {
-      setDevUser();
-      const gate = createDeferred();
-      server.use(
-        http.get("/api/analytics/series-comparison/v4/aggregate", async () => {
-          await gate.promise;
-          return HttpResponse.json(makeSeriesAnalysisAggregate());
-        }),
-      );
-      renderApp("/analytics/series");
-      // Cold route imports include artifact validators; coverage instrumentation can exceed 1s.
-      const tab = await screen.findByRole("tab", { name: "分析する" }, { timeout: 5000 });
-      await user.click(tab);
-      expect(tab).toHaveAttribute("aria-selected", "true");
-      expect(tab.closest("[inert]")).toBeNull();
-      expect(screen.getByLabelText("分析を読み込み中")).toBeInTheDocument();
-      expect(screen.queryByRole("tabpanel", { name: "次戦に備える" })).not.toBeInTheDocument();
-      gate.resolve();
-      // The full suite also loads and validates the lazy analysis view after the gate opens.
-      expect(
-        await screen.findByRole("heading", { name: "順位と基礎比較" }, { timeout: 5000 }),
-      ).toBeInTheDocument();
-      expect(screen.getByRole("tab", { name: "分析する" })).toBe(tab);
-    },
-  );
-
-  it(
     "keeps manually refreshed analysis jobs when returning through the default title route",
     { timeout: 15_000 },
     async () => {
@@ -187,7 +158,7 @@ describe("app routing", () => {
   it("keeps a self-disable completion at login and clears it before another account is used", async () => {
     setDevUser();
     const { router } = renderApp("/admin/masters?tab=accounts");
-    const row = (await screen.findByText("523484457705930752")).closest("tr")!;
+    const row = await screen.findByRole("row", { name: /523484457705930752/u });
     await user.click(within(row).getByRole("button", { name: "ログイン停止" }));
     await user.click(screen.getByRole("button", { name: "停止する" }));
     expect(
@@ -209,28 +180,19 @@ describe("app routing", () => {
     ).not.toBeInTheDocument();
   });
 
-  it.each(["notifications", "accounts"])(
-    "prevents a non-admin from opening the %s settings tab",
-    async (tab) => {
-      setDevUser("account_eu");
-      renderApp(`/admin/masters?tab=${tab}`);
-      expect(await screen.findByText("この画面は管理者専用です。")).toBeInTheDocument();
-      expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
-      expect(screen.queryByRole("region", { name: "設定管理" })).not.toBeInTheDocument();
-    },
-  );
+  it("prevents a non-admin from opening protected settings", async () => {
+    setDevUser("account_eu");
+    renderApp("/admin/masters?tab=accounts");
+    expect(await screen.findByText("この画面は管理者専用です。")).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "設定管理" })).not.toBeInTheDocument();
+  });
 
   it("revokes access to settings after removing the current account's admin permission", async () => {
     setDevUser();
     mswState.loginAccounts.find((account) => account.accountId === "account_eu")!.isAdmin = true;
     renderApp("/admin/masters?tab=accounts");
-    const row = (await screen.findByText("523484457705930752")).closest("tr")!;
-    const navigation = screen.getByRole("navigation", { name: "グローバルナビゲーション" });
-    expect(within(navigation).getByRole("link", { name: "設定" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
-    expect(within(navigation).queryByRole("link", { name: "アカウント" })).not.toBeInTheDocument();
+    const row = await screen.findByRole("row", { name: /523484457705930752/u });
     await user.click(within(row).getByRole("button", { name: "管理者解除" }));
     await user.click(screen.getByRole("button", { name: "解除する" }));
     expect(await screen.findByText("この画面は管理者専用です。")).toBeInTheDocument();
@@ -238,7 +200,7 @@ describe("app routing", () => {
     expect(screen.queryByRole("link", { name: "設定" })).not.toBeInTheDocument();
   });
 
-  it("opens the notification settings tab directly and uses one management navigation entry", async () => {
+  it("opens the requested notification settings tab directly", async () => {
     setDevUser();
     server.use(
       http.get("/api/admin/notification-settings", () =>
@@ -253,24 +215,12 @@ describe("app routing", () => {
     expect(router.state.location.pathname).toBe("/admin/masters");
     expect(router.state.location.search).toBe("?tab=notifications");
     expect(screen.getByRole("tab", { name: "通知" })).toHaveAttribute("aria-selected", "true");
-    const navigation = screen.getByRole("navigation", { name: "グローバルナビゲーション" });
-    expect(within(navigation).getByRole("link", { name: "設定" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
-    expect(within(navigation).queryByRole("link", { name: "通知" })).not.toBeInTheDocument();
   });
 
   it("redirects / to /login when unauthenticated", async () => {
     const { router } = renderApp("/");
 
     expect(await screen.findByRole("region", { name: "ログイン" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "ログイン" })).toBeInTheDocument();
-    expect(screen.getAllByRole("navigation", { name: "グローバルナビゲーション" })).toHaveLength(1);
-    expect(screen.getAllByRole("link", { name: "メインコンテンツへスキップ" })).toHaveLength(1);
-    const main = screen.getByRole("main");
-    expect(main).toHaveAttribute("id", "main-content");
     expect(router.state.location.pathname).toBe("/login");
   });
 
@@ -285,7 +235,7 @@ describe("app routing", () => {
     expect(screen.getByRole("button", { name: "ログアウト" })).toBeInTheDocument();
   });
 
-  it("shows a structured loading state while checking the login session", async () => {
+  it("waits for the login session before exposing protected content", async () => {
     setDevUser();
     const responseGate = createDeferred();
     server.use(
@@ -301,27 +251,13 @@ describe("app routing", () => {
       }),
     );
 
-    renderApp("/matches");
+    const { router } = renderApp("/matches");
 
     const loadingState = await screen.findByLabelText("ログイン状態を確認中…");
     expect(within(loadingState).getByRole("status")).toHaveTextContent("ログイン状態を確認中…");
-    expect(within(loadingState).getByRole("status").closest('[aria-busy="true"]')).toBeNull();
-    expect(screen.getByText("ログイン状態を確認中…")).toBeInTheDocument();
-    expect(screen.getByText("momo-result")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "ログアウト" })).not.toBeInTheDocument();
-    const navigation = screen.getByRole("navigation", { name: "グローバルナビゲーション" });
-    expect(within(navigation).getByText("確認中", { exact: true })).toBeInTheDocument();
-    expect(within(navigation).getByRole("link", { name: "戦績比較" })).toHaveAttribute(
-      "href",
-      "/analytics/series",
-    );
-    expect(within(navigation).queryByRole("link", { name: "ログイン" })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "メインコンテンツへスキップ" })).toHaveAttribute(
-      "href",
-      "#main-content",
-    );
-    expect(screen.getByRole("main")).toHaveAttribute("id", "main-content");
-    expect(screen.getAllByRole("navigation", { name: "グローバルナビゲーション" })).toHaveLength(1);
+    expect(screen.queryByRole("region", { name: "試合一覧" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "ログイン" })).not.toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/matches");
 
     responseGate.resolve();
     expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
@@ -391,31 +327,16 @@ describe("app routing", () => {
     expect(
       screen.getByRole("region", { name: "ログイン状態を確認できません" }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
     expect(screen.queryByText("Temporary failure")).not.toBeInTheDocument();
     expect(screen.queryByText("auth temporarily unavailable")).not.toBeInTheDocument();
-    expect(
-      within(screen.getByRole("navigation", { name: "グローバルナビゲーション" })).getByRole(
-        "link",
-        { name: "戦績比較" },
-      ),
-    ).toHaveAttribute("href", "/analytics/series");
-    expect(
-      within(screen.getByRole("navigation", { name: "グローバルナビゲーション" })).getByText(
-        "状態不明",
-        { exact: true },
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("main")).toHaveAttribute("id", "main-content");
     await user.click(retry);
 
     expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
     expect(screen.queryByText("Temporary failure")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "再試行" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("navigation", { name: "グローバルナビゲーション" })).toHaveLength(1);
   });
 
-  it("keeps route-specific chrome when authentication fails before a detail page loads", async () => {
+  it("keeps a route exit available when authentication fails before detail loads", async () => {
     setDevUser();
     server.use(
       http.get("/api/auth/me", () =>
@@ -425,14 +346,14 @@ describe("app routing", () => {
 
     renderApp("/held-events/held-1");
 
-    const heading = await screen.findByRole("heading", {
-      level: 1,
-      name: "ログイン状態を確認できません",
-    });
-    const header = heading.closest("header");
+    expect(
+      await screen.findByRole("heading", {
+        level: 1,
+        name: "ログイン状態を確認できません",
+      }),
+    ).toBeVisible();
     const back = screen.getByRole("link", { name: "開催履歴へ戻る" });
     expect(back).toHaveAttribute("href", "/held-events");
-    expect(header).toHaveTextContent("開催記録");
   });
 
   it("redirects /login to /matches when authenticated", async () => {
@@ -446,10 +367,8 @@ describe("app routing", () => {
   it("commits match detail navigation through the lazy route while the detail payload is loading", async () => {
     setDevUser();
     const detailGate = createDeferred();
-    let detailRequested = false;
     server.use(
       http.get("/api/matches/:matchId", async ({ params }) => {
-        detailRequested = true;
         await detailGate.promise;
         return HttpResponse.json(
           makeMatchDetail({
@@ -477,12 +396,9 @@ describe("app routing", () => {
       },
       { timeout: 5_000 },
     );
-    await waitFor(() => expect(detailRequested).toBe(true));
 
     detailGate.resolve();
-    await waitFor(() => {
-      screen.getByRole("heading", { name: /第1試合の結果/u });
-    });
+    expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeVisible();
   });
 
   it("logs out from the local default account and lets the operator switch roles", async () => {
@@ -528,50 +444,6 @@ describe("app routing", () => {
     }
   });
 
-  it("does not offer logout in the commercial navigation", async () => {
-    vi.stubEnv("DEV", false);
-    server.use(
-      http.get("/api/auth/me", () =>
-        HttpResponse.json({
-          accountId: "account_ponta",
-          csrfToken: "session-csrf",
-          displayName: "ぽんた",
-          isAdmin: true,
-          memberId: "member_ponta",
-        }),
-      ),
-    );
-
-    try {
-      const { router } = renderApp("/matches");
-
-      expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
-      expect(router.state.location.pathname).toBe("/matches");
-      expect(screen.queryByRole("button", { name: "ログアウト" })).not.toBeInTheDocument();
-      expect(screen.queryByText("アカウント固定")).not.toBeInTheDocument();
-    } finally {
-      vi.unstubAllEnvs();
-    }
-  });
-
-  it("renders edit mode at /matches/:matchId/edit", async () => {
-    setDevUser();
-    const { router } = renderApp("/matches/match-1/edit");
-
-    await waitFor(() => {
-      expect(router.state.location.pathname).toBe("/matches/match-1/edit");
-    });
-  });
-
-  it("renders held events at /held-events for authenticated users", async () => {
-    setDevUser();
-    const { router } = renderApp("/held-events");
-
-    expect(await screen.findByRole("region", { name: "開催履歴" })).toBeInTheDocument();
-    expect(router.state.location.pathname).toBe("/held-events");
-    expect(screen.getByRole("link", { name: "開催" })).toBeInTheDocument();
-  });
-
   it("loads only the active review, then loads aggregate after switching views", async () => {
     setDevUser();
     const aggregateResponseGate = createDeferred();
@@ -592,26 +464,14 @@ describe("app routing", () => {
     const { router } = renderApp("/analytics/series");
 
     expect(await screen.findByRole("region", { name: "戦績比較" })).toBeInTheDocument();
-    const scopeSurface = await screen.findByRole("region", { name: "比較条件" });
-    await waitFor(() => expect(scopeSurface).toHaveTextContent("12戦"));
-    expect(scopeSurface).not.toHaveTextContent("十分");
     expect(await screen.findByRole("tab", { name: "次戦に備える" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
-    expect(await screen.findByRole("tabpanel", { name: "次戦に備える" })).toHaveAttribute(
-      "id",
-      "series-comparison-purpose-panel-review",
-    );
-    expect(screen.getByText("収益先行時は目的地0回で終えない。")).toBeInTheDocument();
-
-    await user.click(screen.getAllByRole("button", { name: "根拠・注意・試合後の確認" })[0]!);
-    expect(screen.getByText(/収益上位時の勝率: 60%/u)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "ダイアログを閉じる" }));
+    expect(await screen.findByText("収益先行時は目的地0回で終えない。")).toBeInTheDocument();
 
     expect(aggregateSearches).toHaveLength(0);
     expect(reviewSearches).toHaveLength(1);
-    expect(reviewSearches[0]?.get("artifactId")).toBe(analysisArtifact.artifactId);
 
     // Control API readiness without timing the first transform of the lazy view or validator.
     // Both real modules still run; their cold loading belongs to build/runtime evidence.

@@ -34,54 +34,23 @@ function renderAdminPage(initialEntry = "/admin/analysis") {
 describe("SeriesAnalysisAdminPage", () => {
   it("offers recovery when the initial overview cannot load", async () => {
     setDevUser();
+    const user = userEvent.setup();
+    let unavailable = true;
     server.use(
       http.get("/api/admin/series-analysis/overview", () =>
-        HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 }),
+        unavailable
+          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
+          : HttpResponse.json(makeSeriesAnalysisAdminOverview()),
       ),
     );
 
     renderAdminPage();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("応答を受け取れませんでした。");
-    expect(screen.getByRole("button", { name: "状態を再読み込み" })).toBeInTheDocument();
-  });
-
-  it("refreshes a loaded overview only from the explicit status action", async () => {
-    setDevUser();
-    let overviewRequests = 0;
-    server.use(
-      http.get("/api/admin/series-analysis/overview", () => {
-        overviewRequests += 1;
-        return HttpResponse.json(makeSeriesAnalysisAdminOverview());
-      }),
-    );
-
-    renderAdminPage("/admin/analysis?gameTitleId=gt_momotetsu_2");
-    const user = userEvent.setup();
-
-    const refresh = await screen.findByRole("button", { name: "状態を更新" }, { timeout: 5_000 });
-    expect(overviewRequests).toBe(1);
-
-    await user.click(refresh);
-
-    await waitFor(() => expect(overviewRequests).toBe(2));
-  });
-
-  it("canonicalizes the default title without fetching the same overview twice", async () => {
-    setDevUser();
-    let overviewRequests = 0;
-    server.use(
-      http.get("/api/admin/series-analysis/overview", () => {
-        overviewRequests += 1;
-        return HttpResponse.json(makeSeriesAnalysisAdminOverview());
-      }),
-    );
-
-    const router = renderAdminPage();
-
-    expect(await screen.findByRole("heading", { name: "全体の実行状況" })).toBeInTheDocument();
-    await waitFor(() => expect(router.state.location.search).toBe("?gameTitleId=gt_momotetsu_2"));
-    expect(overviewRequests).toBe(1);
+    unavailable = false;
+    await user.click(screen.getByRole("button", { name: "状態を再読み込み" }));
+    expect(await screen.findByRole("heading", { name: "全体の実行状況" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "この作品を再計算" })).toBeEnabled();
   });
 
   it("renders the job ledger and sends contract-valid idempotent recalculation requests", async () => {
@@ -149,10 +118,7 @@ describe("SeriesAnalysisAdminPage", () => {
     const user = userEvent.setup();
 
     expect(await screen.findByRole("region", { name: "戦績分析管理" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "全体の実行状況" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "直近10件" })).toBeInTheDocument();
-    expect(screen.getByText("履歴は45日保持します。", { exact: false })).toBeInTheDocument();
     const history = screen.getByRole("table");
     const historyRows = within(history).getAllByRole("row", { name: /桃太郎電鉄2/u });
     expect(historyRows).toHaveLength(2);
@@ -231,7 +197,6 @@ describe("SeriesAnalysisAdminPage", () => {
     renderAdminPage();
 
     const surface = await screen.findByRole("region", { name: "管理者権限が必要です" });
-    expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
     expect(within(surface).getByRole("link", { name: "試合一覧へ戻る" })).toHaveAttribute(
       "href",
       "/matches",

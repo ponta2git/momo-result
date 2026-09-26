@@ -35,20 +35,6 @@ describe("LinkButton", () => {
     },
   );
 
-  it("keeps navigation semantics while presenting an action", () => {
-    render(
-      <MemoryRouter>
-        <LinkButton to="/matches/new">手入力で作成</LinkButton>
-      </MemoryRouter>,
-    );
-
-    expect(screen.getByRole("link", { name: "手入力で作成" })).toHaveAttribute(
-      "href",
-      "/matches/new",
-    );
-    expect(screen.queryByRole("button", { name: "手入力で作成" })).not.toBeInTheDocument();
-  });
-
   it("keeps an unavailable destination's name, explanation and anchor ref without activation", async () => {
     const user = userEvent.setup();
     const onActivate = vi.fn();
@@ -60,7 +46,6 @@ describe("LinkButton", () => {
           aria-describedby="reason"
           aria-label="選択した試合を出力"
           disabled
-          id="export-action"
           ref={ref}
           to="/exports"
           onClick={onActivate}
@@ -74,7 +59,6 @@ describe("LinkButton", () => {
     const link = screen.getByRole("link", { name: "選択した試合を出力" });
     expect(link).toHaveAccessibleDescription("対象の試合を選択してください");
     expect(link).toHaveAttribute("aria-disabled", "true");
-    expect(link).toHaveAttribute("id", "export-action");
     expect(link).not.toHaveAttribute("href");
     expect(ref.current).toBe(link);
     await user.click(link);

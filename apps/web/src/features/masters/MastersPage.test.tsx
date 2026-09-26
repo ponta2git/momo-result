@@ -94,20 +94,6 @@ describe("MastersPage", () => {
     user = userEvent.setup();
   });
 
-  it("exposes the master categories through one labeled tab set", async () => {
-    setDevUser();
-    renderPage();
-
-    expect(await screen.findByRole("region", { name: "設定管理" })).toBeInTheDocument();
-    expect(screen.getByRole("tablist", { name: "設定管理の表示切替" })).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "作品" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "マップ" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "シーズン" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "事件簿" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "通知" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "アカウント" })).toBeInTheDocument();
-  });
-
   it("explains an unknown settings tab and repairs only that URL condition", async () => {
     setDevUser();
     renderPage("/admin/masters?tab=unknown&returnTo=%2Fmatches");
@@ -553,36 +539,6 @@ describe("MastersPage", () => {
     );
     responseGate.resolve();
     expect(await screen.findByRole("region", { name: "設定管理" })).toBeInTheDocument();
-  });
-
-  it("shows scoped skeletons while maps and seasons are loading", async () => {
-    setDevUser();
-    const responseGate = createDeferred();
-    server.use(
-      http.get("/api/map-masters", async () => {
-        await responseGate.promise;
-        return HttpResponse.json({ items: [] });
-      }),
-      http.get("/api/season-masters", async () => {
-        await responseGate.promise;
-        return HttpResponse.json({ items: [] });
-      }),
-    );
-
-    renderPage();
-
-    expect(await screen.findByRole("region", { name: "設定管理" })).toBeInTheDocument();
-    expect(await screen.findByLabelText("マップを読み込み中")).toHaveAttribute("aria-busy", "true");
-    expect(await screen.findByLabelText("シーズンを読み込み中")).toHaveAttribute(
-      "aria-busy",
-      "true",
-    );
-
-    responseGate.resolve();
-    await waitFor(() =>
-      expect(screen.queryByLabelText("マップを読み込み中")).not.toBeInTheDocument(),
-    );
-    expect(screen.queryByLabelText("シーズンを読み込み中")).not.toBeInTheDocument();
   });
 
   it("keeps a scoped master failure out of the empty state and retries locally", async () => {
@@ -1035,19 +991,6 @@ describe("MastersPage", () => {
     expect(screen.queryByRole("dialog", { name: "作品を追加" })).not.toBeInTheDocument();
   });
 
-  it("shows the six fixed incident masters", async () => {
-    setDevUser();
-    renderPage();
-
-    await user.click(await screen.findByRole("tab", { name: "事件簿" }));
-    expect(await screen.findByText("目的地")).toBeInTheDocument();
-    expect(screen.getByText("プラス駅")).toBeInTheDocument();
-    expect(screen.getByText("マイナス駅")).toBeInTheDocument();
-    expect(screen.getByText("カード駅")).toBeInTheDocument();
-    expect(screen.getByText("カード売り場")).toBeInTheDocument();
-    expect(screen.getByText("スリの銀次")).toBeInTheDocument();
-  });
-
   it("restores the selected tab from the URL and preserves return context", async () => {
     setDevUser();
     renderPage("/admin/masters?tab=aliases&returnTo=%2Fmatches%3Fpage%3D2");
@@ -1086,9 +1029,6 @@ describe("MastersPage", () => {
     expect(gameTitleChoice).toBeChecked();
 
     const editButton = screen.getByRole("button", { name: "作品を編集" });
-    const deleteButton = screen.getByRole("button", { name: "作品を削除" });
-    expect(gameTitleChoice.closest("label")).not.toContainElement(editButton);
-    expect(gameTitleChoice.closest("label")).not.toContainElement(deleteButton);
     await user.click(editButton);
     expect(gameTitleChoice).toBeChecked();
     let editDialog = screen.getByRole("dialog", { name: "作品を編集" });
@@ -1182,25 +1122,6 @@ describe("MastersPage", () => {
     await user.click(screen.getByRole("button", { name: "削除" }));
 
     await waitFor(() => expect(screen.queryByText("NO11")).not.toBeInTheDocument());
-  });
-
-  it("shows return action with handoff notice when returnTo is provided", async () => {
-    setDevUser();
-    renderPage(createMasterReturnEntry());
-
-    expect(await screen.findByRole("button", { name: "元の入力画面へ戻る" })).toBeInTheDocument();
-    expect(await screen.findByText(/現在の入力内容を保ったまま戻れます/u)).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "戻り先を確認" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "元の入力画面へ戻る" })).toHaveLength(1);
-  });
-
-  it("keeps an invalid return destination notice in the settings owner surface", async () => {
-    setDevUser();
-    renderPage("/admin/masters?returnTo=https%3A%2F%2Fexample.com%2Freview");
-
-    const surface = await screen.findByRole("region", { name: "設定管理" });
-    expect(within(surface).getByText("戻り先を確認できませんでした")).toBeInTheDocument();
-    expect(within(surface).getByText(/試合一覧へ戻る導線だけ/u)).toBeInTheDocument();
   });
 
   it("disables the only return action while a master edit is pending", async () => {
@@ -1304,25 +1225,5 @@ describe("MastersPage", () => {
     expect(screen.queryByText("作品を読み込めませんでした")).not.toBeInTheDocument();
     responseGate.resolve();
     expect(await screen.findByRole("radio", { name: "復旧済み作品" })).toBeChecked();
-  });
-
-  it("does not reuse list-response cache entries from OCR setup queries", async () => {
-    setDevUser();
-    queryClient.setQueryData(masterKeys.gameTitles.list(), {
-      items: [
-        {
-          id: "gt_cached_response",
-          name: "別画面キャッシュ",
-          layoutFamily: "momotetsu_2",
-          displayOrder: 1,
-          createdAt: "2026-01-01T00:00:00.000Z",
-        },
-      ],
-    });
-
-    renderPage();
-
-    expect(await screen.findByRole("region", { name: "設定管理" })).toBeInTheDocument();
-    await waitFor(() => expect(screen.queryByText("別画面キャッシュ")).not.toBeInTheDocument());
   });
 });

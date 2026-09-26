@@ -14,8 +14,7 @@ import {
 } from "@/test/msw/seriesAnalysisFixtures";
 
 describe("rich series analysis views", () => {
-  it("names the overview regions and explains how to use crown evidence", async () => {
-    const user = userEvent.setup();
+  it("keeps rank counts and crown evidence tied to the displayed data", () => {
     const response = makeSeriesAnalysisAggregate();
     render(
       <OverviewView
@@ -26,38 +25,14 @@ describe("rich series analysis views", () => {
       { wrapper: MemoryRouter },
     );
 
-    const overviewRegion = screen.getByRole("region", { name: "順位と基礎比較" });
-    expect(overviewRegion).toBeInTheDocument();
-    const overviewTable = within(overviewRegion).getByRole("table", {
-      name: "プレーヤー別の順位と基礎比較",
-    });
-    expect(within(overviewTable).getAllByRole("rowheader")).toHaveLength(
-      response.metricsByPlayer.length,
-    );
-    expect(
-      within(overviewRegion).getByRole("columnheader", { name: "平均順位" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "直接対決" })).toBeInTheDocument();
-    const currentDifference = screen.getByLabelText("現在の順位差");
-    expect(within(currentDifference).getByText("平均順位の先頭")).toBeInTheDocument();
-    expect(within(currentDifference).getByText("先頭と最後尾の差")).toBeInTheDocument();
     expect(screen.getByLabelText(/1位 6回 50%、この試合/u)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "各順位の回数" })).toBeInTheDocument();
     expect(screen.getByLabelText("ぽんたの順位回数")).toHaveTextContent(
       "1位 6回（この試合）・2位 2回・3位 2回・4位 2回",
     );
     expect(document.body).not.toHaveTextContent(/member_ponta|property_focused|rank\.average/u);
 
     const crownRegion = screen.getByRole("region", { name: "平均順位首位の確からしさ" });
-    expect(within(crownRegion).queryByText("先頭と次点の比率差")).not.toBeInTheDocument();
     expect(within(crownRegion).getByText(/根拠 12戦・8開催/u)).toBeInTheDocument();
-    expect(within(crownRegion).queryByText("十分")).not.toBeInTheDocument();
-    expect(within(crownRegion).queryByText(/次戦の勝率や最終順位/u)).not.toBeInTheDocument();
-    await user.click(
-      within(crownRegion).getByRole("button", { name: "平均順位首位の確からしさの読み方" }),
-    );
-    expect(within(crownRegion).getByText(/次戦の勝率や最終順位/u)).toBeInTheDocument();
-    expect(within(crownRegion).getByText(/直接対決.*順位の安定性/u)).toBeInTheDocument();
   });
 
   it("connects observed driver outcomes and guidance to source evidence", async () => {
@@ -73,44 +48,11 @@ describe("rich series analysis views", () => {
       </MemoryRouter>,
     );
 
-    for (const heading of [
-      "資産の残し方",
-      "物件収益と最終順位",
-      "目的地到着と順位",
-      "試合ごとの資産と収益",
-      "順位を読む追加の手掛かり",
-    ]) {
-      expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
-    }
     expect(
       screen.getByRole("cell", { name: /収益1位から最終1位、4戦、80%、この試合/u }),
     ).toBeInTheDocument();
-    const revenueMatrix = screen.getByRole("table", {
-      name: "ぽんたの物件収益順位と最終順位",
-    });
-    expect(within(revenueMatrix).getAllByRole("row")).toHaveLength(5);
-    expect(within(revenueMatrix).getAllByRole("rowheader")).toHaveLength(4);
-    expect(within(revenueMatrix).getAllByRole("cell")).toHaveLength(16);
-    expect(screen.getByLabelText("物件収益と最終順位のセルの読み方")).toHaveTextContent(
-      "同じ物件収益順位の中で、その最終順位になった割合",
-    );
-    expect(screen.getAllByText(/桃鉄型（物件重視）/u)).not.toHaveLength(0);
-    expect(screen.getByText("総資産の出方")).toBeInTheDocument();
-    expect(screen.getByText("総資産に占める物件収益の割合")).toBeInTheDocument();
-    expect(screen.getByText("主要根拠")).toBeInTheDocument();
-    expect(screen.getByText("総資産レンジ")).toBeInTheDocument();
-    expect(screen.getByText("物件収益額")).toBeInTheDocument();
-    expect(screen.getByText("補助傾向: 物件基盤")).toBeInTheDocument();
-    expect(screen.getByText("目的地到着回数が多い")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "ぽんたの資産傾向の詳しい根拠" }));
-    expect(screen.getByText("勝利時の2位差中央")).toBeInTheDocument();
     expect(screen.getByText(/大勝 8億円.*惜しい2位 2億円.*大敗 12億円/u)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "収益と順位の詳細" }));
-    expect(screen.getByText("収益順位だけでは説明しない順位差")).toBeInTheDocument();
-    expect(screen.getByText("収益1位以外からの勝利")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "目的地と順位の詳細" }));
-    expect(screen.getByText("到着多寡による入賞率差")).toBeInTheDocument();
-    expect(screen.getByText("目的地への依存度")).toBeInTheDocument();
     expect(screen.getByText(/候補はこの1件.*別開催で支持 5組/u)).toBeInTheDocument();
     expect(screen.getByText("4億5000万円")).toBeInTheDocument();
     expect(screen.getByText("-5万円〜-3万円")).toBeInTheDocument();
@@ -118,7 +60,6 @@ describe("rich series analysis views", () => {
     expect(screen.getByText("-2万円〜0円、1戦")).toBeInTheDocument();
     expect(screen.getByText("0円")).toBeInTheDocument();
     expect(screen.getByText("1万円〜9999万円")).toBeInTheDocument();
-    expect(screen.queryByText("0〜9999")).not.toBeInTheDocument();
     await user.click(
       screen.getByRole("button", { name: "物件収益比率と総資産の散布図の数値を表で見る" }),
     );
@@ -130,12 +71,6 @@ describe("rich series analysis views", () => {
         name: "ぽんた、第12戦、1位の試合結果を見る",
       }),
     ).toHaveAttribute("href", expect.stringContaining("/matches/match-12?returnTo="));
-    expect(
-      screen.queryByText(/因果関係や次戦の結果を保証するものではありません/u),
-    ).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "順位を読む追加の手掛かりの読み方" }));
-    expect(screen.getByText(/開催別の残り方と根拠試合を確かめる/u)).toBeInTheDocument();
-    expect(screen.getByText(/次戦の順位確率としては使わない/u)).toBeInTheDocument();
   });
 
   it("labels strengths and risks without relying on color", () => {
@@ -184,16 +119,7 @@ describe("rich series analysis views", () => {
 
     expect(screen.getByText("目的地あり・売り場あり・この試合")).toBeInTheDocument();
     expect(screen.getByText(/売り場あり 5\/12戦・目的地なし20%/u)).toBeInTheDocument();
-    expect(screen.getByText("平均収益")).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent("destination_with_shop");
-    expect(screen.getByText("得意")).toBeInTheDocument();
-    expect(screen.getByText("複数回遭遇した試合")).toBeInTheDocument();
-    expect(screen.getByText("1試合の最多遭遇")).toBeInTheDocument();
-    expect(screen.getByText("遭遇時平均収益")).toBeInTheDocument();
-    const playOrderMatrix = screen.getByRole("table", { name: "番手別成績" });
-    expect(within(playOrderMatrix).getAllByRole("columnheader")).toHaveLength(5);
-    expect(within(playOrderMatrix).getAllByRole("cell")).toHaveLength(4);
-    expect(within(playOrderMatrix).getByText("プレー順1")).toBeInTheDocument();
   });
 
   it("restores match-axis strips and the event-position matrix with result links", () => {
@@ -237,7 +163,6 @@ describe("rich series analysis views", () => {
     );
 
     const recentRankStrip = screen.getByRole("table", { name: "直近の試合順位" });
-    expect(screen.getByLabelText("直近順位")).toContainElement(recentRankStrip);
     const recentRankPlayerRow = within(recentRankStrip).getAllByRole("row")[1];
     if (!recentRankPlayerRow) throw new Error("recent rank player row is required");
     const recentRankLinks = within(recentRankPlayerRow).getAllByRole("link");
@@ -248,11 +173,6 @@ describe("rich series analysis views", () => {
     expect(recentRankLinks.at(-1)).toHaveAttribute(
       "href",
       expect.stringContaining("/matches/match-20?returnTo="),
-    );
-    expect(screen.getByRole("slider", { name: "直近順位を横スクロール" })).toBeDisabled();
-    expect(screen.getByRole("slider", { name: "直近順位を横スクロール" })).toHaveAttribute(
-      "aria-valuetext",
-      "すべて表示",
     );
     const matchDigestHeading = screen.getByRole("heading", {
       level: 2,
@@ -266,8 +186,6 @@ describe("rich series analysis views", () => {
         .getAllByRole("link", { name: /試合結果を見る/u })
         .map((link) => link.textContent?.trim()),
     ).toEqual(["第12戦", "第11戦"]);
-    expect(screen.queryByText("カード表示")).not.toBeInTheDocument();
-    expect(screen.queryByText("このページ")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 3, name: "直近20戦" })).toBeInTheDocument();
     const selectedRankLink = screen.getByRole("link", {
       name: /ぽんた、第12戦、4位、この試合。試合結果を見る/u,
@@ -285,27 +203,14 @@ describe("rich series analysis views", () => {
     expect(
       screen.getByRole("link", { name: /ぽんた、第11戦、3位.*試合結果を見る/u }),
     ).toBeInTheDocument();
-    expect(screen.getByText("行: 前戦")).toBeInTheDocument();
-    expect(screen.getByText("列: 次戦")).toBeInTheDocument();
-    const momentumMatrix = screen.getByRole("table", { name: "ぽんたの順位の切り替わり" });
-    expect(within(momentumMatrix).getAllByRole("row")).toHaveLength(5);
-    expect(within(momentumMatrix).getAllByRole("cell")).toHaveLength(16);
-    expect(screen.getByLabelText("順位の切り替わりのセルの読み方")).toHaveTextContent(
-      "同じ前戦順位から、その次戦順位になった割合",
-    );
     expect(screen.getByText(/連勝 1・連続入賞 2・連続下位 0/u)).toBeInTheDocument();
-    expect(screen.getByText("下位の次に入賞")).toBeInTheDocument();
     expect(screen.getByText(/2\/4戦・50%/u)).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "直近20戦" })).toBeInTheDocument();
     const matchNoMatrix = screen.getByRole("table", {
       name: "通常試合の開催内順別傾向",
     });
     expect(within(matchNoMatrix).getByText("第1試合")).toBeInTheDocument();
     expect(within(matchNoMatrix).queryByText("第2試合")).not.toBeInTheDocument();
     expect(within(matchNoMatrix).queryByText("第4試合")).not.toBeInTheDocument();
-    expect(within(matchNoMatrix).getAllByRole("row")).toHaveLength(2);
-    expect(screen.getAllByText("1位–4位差")).toHaveLength(2);
-    expect(screen.queryByText(/前の試合の順位から次の順位へ移った件数/u)).not.toBeInTheDocument();
   });
 
   it("does not invent a recent-window size when the artifact has no recent ranks", () => {

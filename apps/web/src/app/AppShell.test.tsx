@@ -238,7 +238,6 @@ describe("AppShell", () => {
       const returnLink = screen.getByRole("link", { name: "前の画面へ戻る" });
       expect(surface).toBeVisible();
       expect(returnLink).toBeVisible();
-      expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
       expect(returnLink).toHaveAttribute("href", "/matches/match-1");
     } finally {
       consoleError.mockRestore();

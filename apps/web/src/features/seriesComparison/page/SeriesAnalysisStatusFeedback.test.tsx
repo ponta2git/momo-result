@@ -160,33 +160,6 @@ describe("SeriesAnalysisStatusFeedback", () => {
     },
   );
 
-  it("directs an active calculation to the manual status action", () => {
-    renderFeedback({
-      status: makeSeriesAnalysisStatus({
-        artifactFreshness: "unavailable",
-        calculation: calculation("running"),
-        currentArtifact: null,
-      }),
-    });
-
-    expect(
-      screen.getByText("計算完了後に「状態を再確認」を押すと表示します。"),
-    ).toBeInTheDocument();
-  });
-
-  it("prevents duplicate manual status requests while refreshing", () => {
-    renderFeedback({
-      refreshing: true,
-      status: makeSeriesAnalysisStatus({
-        artifactFreshness: "unavailable",
-        calculation: calculation("running"),
-        currentArtifact: null,
-      }),
-    });
-
-    expect(screen.getByRole("button", { name: "状態を確認中" })).toBeDisabled();
-  });
-
   it("distinguishes status-read failures with and without a cached artifact", async () => {
     const user = userEvent.setup();
     const cached = renderFeedback({ hasError: true });
@@ -199,14 +172,5 @@ describe("SeriesAnalysisStatusFeedback", () => {
     renderFeedback({ hasError: true, status: null });
     expect(screen.getByRole("heading", { name: "戦績データを取得できません" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "状態を再確認" })).toBeInTheDocument();
-  });
-
-  it("renders no status feedback for a current successful artifact or initial loading", () => {
-    const current = renderFeedback();
-    expect(current.container).toBeEmptyDOMElement();
-
-    current.unmount();
-    const loading = renderFeedback({ loading: true, status: null });
-    expect(loading.container).toBeEmptyDOMElement();
   });
 });

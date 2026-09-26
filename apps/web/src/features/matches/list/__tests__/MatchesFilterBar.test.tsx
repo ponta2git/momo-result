@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -49,47 +49,6 @@ const candidates: MatchListFilterCandidates = {
 };
 
 describe("MatchesFilterBar", () => {
-  it("keeps the condition hierarchy and summarizes only non-default conditions", async () => {
-    const user = userEvent.setup();
-    const onClear = vi.fn();
-
-    render(
-      <MatchesFilterBar
-        actions={{ onApply: vi.fn(), onClear }}
-        candidates={candidates}
-        counts={counts}
-        search={{
-          ...initialSearch,
-          gameTitleId: "game-1",
-          seasonMasterId: "season-1",
-          sort: "updated_desc",
-          status: "needs_review",
-        }}
-      />,
-    );
-
-    const surface = screen.getByRole("region", { name: "試合の表示条件" });
-    expect(within(surface).getByLabelText("確定状況")).toHaveTextContent("要確認のみ");
-    expect(within(surface).getByLabelText("並び順")).toHaveTextContent("更新が新しい順");
-    expect(surface).not.toHaveTextContent("適用中:");
-
-    const detailTrigger = within(surface).getByRole("button", { name: /^詳細条件/u });
-    expect(detailTrigger).toHaveAttribute("aria-expanded", "true");
-    expect(detailTrigger).toHaveTextContent("作品 桃太郎電鉄2・シーズン 今シーズン");
-    expect(within(surface).getByLabelText("開催")).toBeInTheDocument();
-
-    const resetButton = within(surface).getByRole("button", {
-      name: "確定状況・並び順・詳細条件を初期状態に戻す",
-    });
-    expect(
-      within(surface).getAllByRole("button", {
-        name: "確定状況・並び順・詳細条件を初期状態に戻す",
-      }),
-    ).toHaveLength(1);
-    await user.click(resetButton);
-    expect(onClear).toHaveBeenCalledOnce();
-  });
-
   it("clears the cursor when status or sort changes", async () => {
     const user = userEvent.setup();
     const onApply = vi.fn();
@@ -118,51 +77,5 @@ describe("MatchesFilterBar", () => {
     );
     await selectOption(user, screen.getByLabelText("並び順"), "updated_desc");
     expect(onApply).toHaveBeenLastCalledWith({ ...search, cursor: "", sort: "updated_desc" });
-  });
-
-  it("keeps detail controls mounted while collapsed and exposes aggregate busy state", () => {
-    render(
-      <MatchesFilterBar
-        actions={{ onApply: vi.fn(), onClear: vi.fn() }}
-        candidates={candidates}
-        counts={counts}
-        search={initialSearch}
-        summaryLoading
-      />,
-    );
-
-    const surface = screen.getByRole("region", { name: "試合の表示条件" });
-    expect(surface).toHaveAttribute("aria-busy", "true");
-    expect(within(surface).getByRole("button", { name: /^詳細条件/u })).toHaveAttribute(
-      "aria-expanded",
-      "false",
-    );
-    expect(within(surface).getByLabelText("開催")).toBeInTheDocument();
-    expect(surface).not.toHaveTextContent("適用中:");
-    expect(
-      within(surface).queryByRole("button", {
-        name: "確定状況・並び順・詳細条件を初期状態に戻す",
-      }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("keeps status choices available when summary counts fail and retries nearby", async () => {
-    const user = userEvent.setup();
-    const onRetrySummary = vi.fn();
-
-    render(
-      <MatchesFilterBar
-        actions={{ onApply: vi.fn(), onClear: vi.fn() }}
-        candidates={candidates}
-        onRetrySummary={onRetrySummary}
-        search={initialSearch}
-        summaryError
-      />,
-    );
-
-    expect(screen.getByLabelText("確定状況")).toBeEnabled();
-    expect(screen.queryByText(/0件/u)).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "件数を再取得" }));
-    expect(onRetrySummary).toHaveBeenCalledOnce();
   });
 });

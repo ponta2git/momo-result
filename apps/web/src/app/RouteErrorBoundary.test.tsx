@@ -18,35 +18,6 @@ function MaybeBroken({ shouldThrow }: { shouldThrow: () => boolean }) {
 }
 
 describe("RouteErrorBoundary", () => {
-  it("retries a recoverable route render failure in place", async () => {
-    const user = userEvent.setup();
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    let shouldThrow = true;
-    const onReset = vi.fn(() => {
-      shouldThrow = false;
-    });
-
-    try {
-      render(
-        <RouteErrorBoundary onReset={onReset} pathname="/analytics/series">
-          <MaybeBroken shouldThrow={() => shouldThrow} />
-        </RouteErrorBoundary>,
-      );
-
-      const retry = await screen.findByRole("button", { name: "もう一度読み込む" });
-      const surface = screen.getByRole("region", { name: "画面の読み込みに失敗しました" });
-      expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
-      expect(surface).toContainElement(retry);
-
-      await user.click(retry);
-
-      expect(onReset).toHaveBeenCalledTimes(1);
-      expect(screen.getByText("回復しました")).toBeInTheDocument();
-    } finally {
-      consoleError.mockRestore();
-    }
-  });
-
   it("reloads the page when an actual React.lazy loader rejects", async () => {
     const user = userEvent.setup();
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);

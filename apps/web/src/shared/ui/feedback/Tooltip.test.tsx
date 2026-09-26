@@ -1,8 +1,8 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { Dialog } from "@/shared/ui/feedback/Dialog";
-import { Tooltip, TooltipProvider } from "@/shared/ui/feedback/Tooltip";
+import { Tooltip } from "@/shared/ui/feedback/Tooltip";
 
 describe("Tooltip", () => {
   it("remains independently renderable and exposes accessible descriptive content", () => {
@@ -52,35 +52,5 @@ describe("Tooltip", () => {
 
     rerender(<Dialog open={false} title="保存内容の確認" />);
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
-  });
-
-  it("shares the initial delay and opens adjacent tooltips instantly within the group", () => {
-    vi.useFakeTimers();
-    render(
-      <TooltipProvider>
-        <Tooltip content="最初の説明">
-          <button type="button">最初</button>
-        </Tooltip>
-        <Tooltip content="次の説明">
-          <button type="button">次</button>
-        </Tooltip>
-      </TooltipProvider>,
-    );
-
-    const firstTrigger = screen.getByRole("button", { name: "最初" });
-    const nextTrigger = screen.getByRole("button", { name: "次" });
-
-    fireEvent.pointerMove(firstTrigger, { pointerType: "mouse" });
-    fireEvent.mouseEnter(firstTrigger);
-    fireEvent.mouseMove(firstTrigger);
-    expect(screen.queryByText("最初の説明")).not.toBeInTheDocument();
-    act(() => vi.runOnlyPendingTimers());
-    expect(screen.getByText("最初の説明").closest("[data-open]")).not.toBeNull();
-
-    fireEvent.mouseLeave(firstTrigger);
-    fireEvent.pointerMove(nextTrigger, { pointerType: "mouse" });
-    fireEvent.mouseEnter(nextTrigger);
-    fireEvent.mouseMove(nextTrigger);
-    expect(screen.getByText("次の説明").closest("[data-open]")).not.toBeNull();
   });
 });

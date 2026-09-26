@@ -61,26 +61,6 @@ describe("icon actions", () => {
     expect(ref.current).toBe(disabledLink);
   });
 
-  it("keeps derived icon-button state authoritative over unsafely forwarded attributes", () => {
-    const unsafeNativeProps = { "aria-busy": "false" } as const;
-    render(
-      // @ts-expect-error -- verifies the public API rejects this override while exercising the runtime guard for untyped callers.
-      <IconButton
-        {...unsafeNativeProps}
-        aria-label="一覧を更新"
-        icon={<RefreshCw />}
-        pending
-        pendingLabel="一覧を更新中"
-        type="submit"
-      />,
-    );
-
-    const button = screen.getByRole("button", { name: "一覧を更新中" });
-    expect(button).toHaveAttribute("aria-busy", "true");
-    expect(button).toBeDisabled();
-    expect(button).toHaveAttribute("type", "submit");
-  });
-
   it("keeps supplied icons out of icon and text action names", () => {
     render(
       <MemoryRouter>

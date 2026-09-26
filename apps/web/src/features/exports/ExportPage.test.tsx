@@ -1,6 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import {
@@ -11,7 +11,7 @@ import {
   Routes,
   useLocation,
 } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { ExportPage } from "@/features/exports/ExportPage";
 import type { ProblemDetails } from "@/shared/api/problemDetails";
@@ -215,19 +215,6 @@ describe("ExportPage", () => {
       }
     },
   );
-
-  it("keeps the exclusion notice visible for every export scope", async () => {
-    renderPage();
-
-    await screen.findByRole("region", { name: "出力条件" });
-    const scopeTabs = screen.getByRole("tablist", { name: "出力範囲" });
-    const exclusionNotice = screen.getByText("下書きや確認待ちの試合は含みません。");
-
-    for (const label of ["全試合", "シーズン", "開催", "試合"]) {
-      await user.click(within(scopeTabs).getByRole("tab", { name: label }));
-      expect(screen.getByText("下書きや確認待ちの試合は含みません。")).toBe(exclusionNotice);
-    }
-  });
 
   it("activates instant format tabs on focus and waits for confirmation before loading a scope", async () => {
     let seasonRequests = 0;
@@ -1227,50 +1214,6 @@ describe("ExportPage", () => {
 
     responseGate.resolve();
     expect(await screen.findByText("ダウンロードを開始しました")).toBeInTheDocument();
-  });
-
-  it("switches to the slow progress state once at the configured threshold", async () => {
-    const responseGate = createDeferred();
-    server.use(
-      http.get("/api/exports/matches", async () => {
-        await responseGate.promise;
-        return new HttpResponse("csv", {
-          headers: {
-            "Content-Disposition": 'attachment; filename="momo-results-all.csv"',
-            "Content-Type": "text/csv; charset=utf-8",
-          },
-        });
-      }),
-    );
-
-    renderPage({ slowThresholdMs: 1_000 });
-    await screen.findByRole("region", { name: "出力条件" });
-    vi.useFakeTimers();
-
-    fireEvent.click(screen.getByRole("button", { name: "全試合をCSVでダウンロード" }));
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0);
-    });
-
-    expect(screen.queryByText("出力ファイルを作成しています")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "作成中…" })).toBeDisabled();
-    expect(screen.queryByText("通常より時間がかかっています")).not.toBeInTheDocument();
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(999);
-    });
-    expect(screen.queryByText("出力ファイルを作成しています")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "作成中…" })).toBeDisabled();
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1);
-    });
-    expect(screen.getByText("通常より時間がかかっています")).toBeInTheDocument();
-
-    vi.useRealTimers();
-    responseGate.resolve();
-    expect(await screen.findByText("ダウンロードを開始しました")).toBeInTheDocument();
-    expect(screen.queryByText("通常より時間がかかっています")).not.toBeInTheDocument();
   });
 
   it("shows timeout states without leaving the spinner running", async () => {

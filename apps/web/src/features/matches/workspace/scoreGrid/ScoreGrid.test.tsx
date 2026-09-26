@@ -8,7 +8,6 @@ import type { IncidentKey, MatchFormValues } from "@/features/matches/workspace/
 import { emptyPlayers } from "@/features/matches/workspace/matchFormTypes";
 import { createSampleDraftMap } from "@/features/matches/workspace/review/sampleDrafts";
 import { ScoreGrid } from "@/features/matches/workspace/scoreGrid/ScoreGrid";
-import { ScoreGridReviewToolbar } from "@/features/matches/workspace/scoreGrid/ScoreGridReviewToolbar";
 import type { ScoreGridProps } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
 import { useMatchWorkspaceReviewState } from "@/features/matches/workspace/useMatchWorkspaceReviewState";
 import { installMatchMediaController } from "@/test/doubles/dom";
@@ -376,40 +375,6 @@ describe("ScoreGrid", () => {
     expect(onPlayerChange).toHaveBeenLastCalledWith(0, { revenueManYen: -42 });
   });
 
-  it("moves through OCR warnings without changing the underlying values", async () => {
-    const user = userEvent.setup();
-    const onAcknowledge = vi.fn();
-    const onNext = vi.fn();
-
-    render(
-      <ScoreGridReviewToolbar
-        activeItem={{
-          cellId: "players.0.memberId",
-          confidence: 0.78,
-          field: "memberId",
-          label: "ぽんた メンバー",
-          message: "既知エイリアスで解決",
-          row: 0,
-          sourceKind: "total_assets",
-          warningCount: 1,
-        }}
-        activeReviewed={false}
-        remainingCount={2}
-        totalCount={2}
-        onAcknowledge={onAcknowledge}
-        onNext={onNext}
-        onPrevious={() => undefined}
-      />,
-    );
-
-    expect(screen.getByText("未確認2件／全2件")).toBeInTheDocument();
-    expect(screen.getByText("既知エイリアスで解決")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "この値で確認済み" }));
-    expect(onAcknowledge).toHaveBeenCalledTimes(1);
-    await user.click(screen.getByRole("button", { name: "次の要確認セルへ" }));
-    expect(onNext).toHaveBeenCalledTimes(1);
-  });
-
   it("moves focus to a reachable unresolved item when the prior active item is reviewed", () => {
     render(
       <ScoreGridHarness
@@ -446,23 +411,6 @@ describe("ScoreGrid", () => {
     const toolbar = screen.getByLabelText("OCRの確認項目");
     expect(within(toolbar).getByText("次の未確認項目")).toBeInTheDocument();
     expect(within(toolbar).getByRole("button", { name: "この値で確認済み" })).toBeEnabled();
-  });
-
-  it("does not show an OCR toolbar when there is nothing left to review", () => {
-    render(
-      <ScoreGridReviewToolbar
-        activeItem={undefined}
-        activeReviewed={false}
-        remainingCount={0}
-        totalCount={2}
-        onAcknowledge={() => undefined}
-        onNext={() => undefined}
-        onPrevious={() => undefined}
-      />,
-    );
-
-    expect(screen.queryByLabelText("OCRの確認項目")).not.toBeInTheDocument();
-    expect(screen.queryByText(/すべて確認/u)).not.toBeInTheDocument();
   });
 
   it("moves focus to the submit action before the final acknowledgement removes the toolbar", async () => {

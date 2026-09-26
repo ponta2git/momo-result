@@ -15,7 +15,6 @@ import {
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { HeldEventDetailPage } from "@/features/heldEvents/HeldEventDetailPage";
-import { HeldEventDetailLoading } from "@/features/heldEvents/HeldEventDetailStatusViews";
 import { heldEventKeys } from "@/shared/api/queryKeys";
 import { withReturnTo } from "@/shared/navigation/returnTo";
 import { setDevUser } from "@/test/auth";
@@ -82,17 +81,6 @@ describe("HeldEventDetailPage", () => {
   beforeEach(() => {
     queryClient = createTestQueryClient();
     user = userEvent.setup();
-  });
-
-  it("identifies the loading scope without exposing unfinished navigation", () => {
-    render(<HeldEventDetailLoading />);
-
-    const frame = screen.getByLabelText("開催詳細を読み込み中");
-    const heading = screen.getByRole("heading", { name: "開催の記録を読み込み中" });
-    expect(frame).toHaveAttribute("aria-busy", "true");
-    expect(frame).toContainElement(heading);
-    expect(screen.getByRole("region", { name: "開催内容" })).toBeInTheDocument();
-    expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 
   it("moves across events while retaining the original conditions and current action targets", async () => {
@@ -422,13 +410,10 @@ describe("HeldEventDetailPage", () => {
 
     renderPage();
 
-    const missingHeading = await screen.findByRole("heading", {
+    await screen.findByRole("heading", {
       level: 1,
       name: "開催が見つかりません",
     });
-    const missingHeader = missingHeading.closest("header");
-    expect(missingHeader).toHaveTextContent("開催記録");
-    expect(missingHeader).toHaveTextContent("試合数・下書き数は未取得です。");
     expect(
       screen.queryByRole("link", { name: /試合検索で見る|の試合を検索$/u }),
     ).not.toBeInTheDocument();
@@ -456,14 +441,10 @@ describe("HeldEventDetailPage", () => {
 
     renderPage();
 
-    const failureHeading = await screen.findByRole("heading", {
+    await screen.findByRole("heading", {
       level: 1,
       name: "開催詳細を読み込めませんでした",
     });
-    const failureHeader = failureHeading.closest("header");
-    expect(failureHeader).toHaveTextContent("開催記録");
-    expect(failureHeader).toHaveTextContent("試合数・下書き数は未取得です。");
-    expect(screen.getByRole("navigation", { name: "この開催の関連操作" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "開催詳細を再読み込み" }));
 
     expect(

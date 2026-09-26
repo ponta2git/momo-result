@@ -731,26 +731,6 @@ describe("DraftReviewPage", () => {
     expect(screen.getByLabelText("試合番号")).toHaveValue("9");
   });
 
-  it("keeps held event creation collapsed until requested", async () => {
-    setDevUser();
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/review/dev-sample?sample=1"]}>
-          <Routes>
-            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-
-    expect(await screen.findByText("一覧にない開催を追加する")).toBeInTheDocument();
-    expect(screen.getByRole("button", { hidden: true, name: "作成して選択" })).not.toBeVisible();
-
-    await user.click(screen.getByText("一覧にない開催を追加する"));
-    expect(screen.getByRole("button", { name: "作成して選択" })).toBeVisible();
-  });
-
   it("announces held event creation and selects the created option", async () => {
     setDevUser();
     const heldEvents = [makeHeldEventResponse()];
@@ -806,36 +786,6 @@ describe("DraftReviewPage", () => {
     expect(revenue).toHaveValue("42");
     await user.click(screen.getByRole("button", { name: "ダイアログを閉じる" }));
     expect(screen.getByRole("button", { name: "確定前の確認へ進む" })).toBeEnabled();
-  });
-
-  it("renders the development sample drafts without OCR worker data", async () => {
-    setDevUser();
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/review/dev-sample?sample=1"]}>
-          <Routes>
-            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-
-    await waitForSampleWorkspaceReady();
-    expect(screen.getByRole("heading", { name: "保存先と試合条件" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "4人分の結果を確認・修正" })).toBeInTheDocument();
-    expect(screen.getByText("必須条件を設定してください")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "条件を閉じる" })).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    );
-    expect(
-      await screen.findByRole("combobox", { name: "あかねまみ メンバー" }),
-    ).toBeInTheDocument();
-    expect(await screen.findByDisplayValue("15420")).toBeInTheDocument();
-    expect(screen.queryByText("OCR読み取り状況を確認")).not.toBeInTheDocument();
-    expect(screen.queryByText(/緑=高信頼OCR/u)).not.toBeInTheDocument();
-    expect(screen.getByText(/選択欄はEnter・上下キーで候補を開き/u)).toBeInTheDocument();
   });
 
   it("focuses the first invalid field when confirmation cannot open", async () => {

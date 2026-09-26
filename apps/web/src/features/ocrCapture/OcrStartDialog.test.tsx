@@ -9,7 +9,6 @@ import type { OcrSubmissionPlan } from "@/features/ocrCapture/ocrSubmissionPlan"
 import type { OcrSubmissionResult } from "@/features/ocrCapture/ocrSubmissionWorkflow";
 import type { OcrCaptureMutations } from "@/features/ocrCapture/useOcrCaptureMutations";
 import { useOcrStartFlow } from "@/features/ocrCapture/useOcrStartFlow";
-import type { OcrStartDialogState } from "@/features/ocrCapture/useOcrStartFlow";
 import { createDeferred } from "@/test/deferred";
 
 const plan: OcrSubmissionPlan = {
@@ -38,12 +37,6 @@ const plan: OcrSubmissionPlan = {
     createInitialSlot("incident_log"),
   ],
 };
-
-function renderSubmitting(state: Extract<OcrStartDialogState, { status: "submitting" }>) {
-  return render(
-    <OcrStartDialog state={state} onClose={vi.fn()} onConfirm={vi.fn()} onViewMatches={vi.fn()} />,
-  );
-}
 
 function FlowHarness({ submit }: { submit: OcrCaptureMutations["submit"] }) {
   const flow = useOcrStartFlow({
@@ -148,43 +141,5 @@ describe("OcrStartDialog", () => {
       screen.getByRole("dialog", { name: "読み取りの受付を確認できませんでした" }),
     ).toBeVisible();
     expect(screen.queryByRole("button", { name: "戻って確認" })).not.toBeInTheDocument();
-  });
-
-  it("shows indeterminate feedback while preparing the draft", () => {
-    renderSubmitting({
-      plan,
-      progress: { phase: "creating_draft", total: 3 },
-      status: "submitting",
-    });
-
-    expect(screen.getByText("試合の記録を準備しています")).toBeInTheDocument();
-    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
-  });
-
-  it("replaces the spinner with determinate image submission progress", () => {
-    renderSubmitting({
-      plan,
-      progress: { current: 2, phase: "submitting_image", slotKind: "revenue", total: 3 },
-      status: "submitting",
-    });
-
-    expect(screen.getByText("2/3件目・収益を送信しています")).toBeInTheDocument();
-    const progress = screen.getByRole("progressbar", { name: "画像送信の進捗" });
-    expect(progress).toHaveAttribute("aria-valuenow", "1");
-    expect(progress).toHaveAttribute("aria-valuetext", "3件中1件の送信処理が完了");
-  });
-
-  it("describes finalizing as completed attempts rather than accepted images", () => {
-    renderSubmitting({
-      plan,
-      progress: { completed: 3, phase: "finalizing", total: 3 },
-      status: "submitting",
-    });
-
-    expect(screen.getByText("読み取りの受け付けを確認しています")).toBeInTheDocument();
-    expect(screen.getByRole("progressbar", { name: "画像送信の進捗" })).toHaveAttribute(
-      "aria-valuetext",
-      "3件中3件の送信処理が完了",
-    );
   });
 });

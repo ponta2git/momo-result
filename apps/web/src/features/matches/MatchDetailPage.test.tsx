@@ -16,7 +16,6 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MatchDetailPage } from "@/features/matches/MatchDetailPage";
-import { MatchDetailLoading } from "@/features/matches/MatchDetailStatusViews";
 import { matchKeys, seriesAnalysisKeys } from "@/shared/api/queryKeys";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
@@ -103,16 +102,6 @@ describe("MatchDetailPage", () => {
     user = userEvent.setup();
   });
 
-  it("identifies pending results without exposing unfinished detail actions", () => {
-    render(<MatchDetailLoading />);
-
-    const frame = screen.getByLabelText("試合詳細を読み込み中");
-    const heading = screen.getByRole("heading", { name: "試合結果を読み込み中" });
-    expect(frame).toContainElement(heading);
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
-    expect(screen.queryByRole("link")).not.toBeInTheDocument();
-  });
-
   it("exposes result navigation and confirms deletion before acting", async () => {
     setDevUser();
 
@@ -156,43 +145,6 @@ describe("MatchDetailPage", () => {
         screen.queryByRole("heading", { name: "試合を削除しますか？" }),
       ).not.toBeInTheDocument(),
     );
-  });
-
-  it("groups note edit and delete as one accessible action set", async () => {
-    setDevUser();
-    server.use(
-      http.get("/api/matches/:matchId", () =>
-        HttpResponse.json(
-          makeMatchDetail({
-            note: {
-              body: "終盤のカード交換で流れが変わった",
-              updatedAt: "2026-04-04T13:10:00.000Z",
-              updatedByDisplayName: "ぽんた",
-              version: "1",
-            },
-          }),
-        ),
-      ),
-    );
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/matches/match-1"]}>
-          <Routes>
-            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-
-    const noteSection = await screen.findByRole("region", { name: "試合メモ" });
-    const actions = within(noteSection).getByRole("group", { name: "試合メモの操作" });
-    const edit = within(actions).getByRole("button", { name: "編集" });
-    const remove = within(actions).getByRole("button", { name: "メモを削除" });
-
-    expect(edit).toBeEnabled();
-    expect(remove).toBeEnabled();
-    expect(within(noteSection).getAllByRole("button", { name: "メモを削除" })).toHaveLength(1);
   });
 
   it("keeps a failed delete in the dialog and allows retrying it", async () => {

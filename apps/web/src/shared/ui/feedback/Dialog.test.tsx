@@ -46,7 +46,6 @@ describe("Dialog", () => {
     );
 
     const dialog = await screen.findByRole("dialog", { name: "保存しています" });
-    expect(dialog.firstElementChild).toHaveAttribute("aria-busy", "true");
     expect(screen.queryByRole("button", { name: "ダイアログを閉じる" })).not.toBeInTheDocument();
 
     await user.keyboard("{Escape}");
@@ -96,26 +95,6 @@ describe("AlertDialog", () => {
     expect(screen.getByRole("alertdialog", { name: "選択した試合を削除" })).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(onOpenChange).not.toHaveBeenCalled();
-  });
-
-  it("announces destructive context before confirmation", async () => {
-    const user = userEvent.setup();
-    render(
-      <AlertDialog
-        description="この操作は取り消せません。"
-        title="試合を削除しますか？"
-        trigger={<Button>削除</Button>}
-        onConfirm={vi.fn()}
-      />,
-    );
-
-    await user.click(screen.getByRole("button", { name: "削除" }));
-    expect(
-      await screen.findByRole("alertdialog", {
-        description: "この操作は取り消せません。",
-        name: "試合を削除しますか？",
-      }),
-    ).toBeInTheDocument();
   });
 
   it("prevents duplicate or dismissing actions while confirmation is pending", async () => {

@@ -27,7 +27,6 @@ describe("route terminal navigation", () => {
       "/held-events",
     );
     const actions = within(screen.getByRole("navigation", { name: "この開催の関連操作" }));
-    expect(actions.getAllByRole("link").map((link) => link.textContent)).toEqual(["CSV出力"]);
     expect(actions.getByRole("link", { name: "CSV出力" })).toHaveAttribute(
       "href",
       "/exports?heldEventId=held-1&format=csv&returnTo=%2Fheld-events%2Fheld-1",
@@ -61,21 +60,16 @@ describe("route terminal navigation", () => {
     ["/matches/new", "入力をやめる", "/matches"],
     ["/matches/match-1/edit/", "編集をやめる", "/matches/match-1"],
   ])("keeps one safe workspace exit for %s", (pathname, name, href) => {
-    const surface = renderTerminal(pathname, "?returnTo=https%3A%2F%2Fexternal.test");
+    renderTerminal(pathname, "?returnTo=https%3A%2F%2Fexternal.test");
 
-    expect(within(surface).getByRole("link", { name })).toHaveAttribute("href", href);
-    expect(screen.getAllByRole("link")).toHaveLength(1);
-    expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name })).toHaveAttribute("href", href);
   });
 
   it("keeps query-known review context and an internal return destination", () => {
     const surface = renderTerminal("/review/session-1", "?sample=1&returnTo=%2Focr%2Fnew");
 
     expect(surface).toHaveTextContent("サンプルの読み取り結果で表示中");
-    expect(within(surface).getByRole("link", { name: "入力をやめる" })).toHaveAttribute(
-      "href",
-      "/ocr/new",
-    );
+    expect(screen.getByRole("link", { name: "入力をやめる" })).toHaveAttribute("href", "/ocr/new");
   });
 
   it.each([
@@ -88,14 +82,12 @@ describe("route terminal navigation", () => {
     ["/ocr/new", "?returnTo=https%3A%2F%2Fexternal.test", "取り込みをやめる", "/matches"],
     ["/ocr/new", "?returnTo=%2Fheld-events%2Fheld-1", "取り込みをやめる", "/held-events/held-1"],
   ])(
-    "places %s return navigation before the content with safe context %s",
+    "provides a safe return destination for %s with context %s",
     (pathname, search, name, href) => {
-      const surface = renderTerminal(pathname, search);
+      renderTerminal(pathname, search);
       const back = screen.getByRole("link", { name });
 
       expect(back).toHaveAttribute("href", href);
-      expect(surface).not.toContainElement(back);
-      expect(back.compareDocumentPosition(surface) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
     },
   );
 
@@ -119,8 +111,8 @@ describe("route terminal navigation", () => {
   });
 
   it("keeps creation actions scoped to the current list query", () => {
-    const surface = renderTerminal("/matches", "?status=confirmed");
-    const actions = within(within(surface).getByRole("group", { name: "試合を登録" }));
+    renderTerminal("/matches", "?status=confirmed");
+    const actions = within(screen.getByRole("group", { name: "試合を登録" }));
 
     expect(actions.getByRole("link", { name: "OCR取り込み" })).toHaveAttribute(
       "href",

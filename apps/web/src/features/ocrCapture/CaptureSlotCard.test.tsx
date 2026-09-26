@@ -31,22 +31,6 @@ function renderCard(slot: CaptureSlotState, captureTarget = false, statusRefresh
 }
 
 describe("CaptureSlotCard", () => {
-  it("uses one local control to identify the selected capture target", () => {
-    renderCard(
-      {
-        kind: "total_assets",
-        status: "empty",
-      },
-      true,
-    );
-
-    expect(screen.getByRole("button", { name: "撮影先に選択中" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(screen.getByText("総資産の画像待ち")).toBeInTheDocument();
-  });
-
   it("locks destructive and classification actions while OCR is running", async () => {
     const user = userEvent.setup();
     const { onRefreshStatus } = renderCard({

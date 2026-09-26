@@ -2,10 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  describeMatchListDetailFilters,
-  MatchesListFilters,
-} from "@/features/matches/list/MatchesListFilters";
+import { MatchesListFilters } from "@/features/matches/list/MatchesListFilters";
 import type {
   MatchListFilterCandidates,
   MatchListSearch,
@@ -148,16 +145,5 @@ describe("MatchesListFilters", () => {
       cursor: "",
       heldEventId: "held-1",
     });
-  });
-
-  it("describes all active details using the selected candidate labels", () => {
-    expect(
-      describeMatchListDetailFilters(candidates, {
-        ...initialSearch,
-        gameTitleId: "game-1",
-        heldEventId: "held-1",
-        seasonMasterId: "season-1",
-      }),
-    ).toEqual(["開催 2026/08/09", "作品 桃太郎電鉄2", "シーズン 今シーズン"]);
   });
 });

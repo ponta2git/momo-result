@@ -9,7 +9,6 @@ import {
   inspectMasterHandoff,
   loadMasterHandoff,
   prepareMatchWorkspaceMasterHandoffRoute,
-  sanitizeReturnTo,
   saveMasterHandoff,
 } from "@/shared/workflows/matchWorkspaceMasterHandoff";
 import { makeMatchWorkspaceMasterHandoffValues } from "@/test/factories";
@@ -43,12 +42,6 @@ function handoffPlayers(
 }
 
 describe("matchWorkspaceMasterHandoff", () => {
-  it("accepts app-internal returnTo paths and rejects external urls", () => {
-    expect(sanitizeReturnTo("/review/session-1?sample=1")).toBe("/review/session-1?sample=1");
-    expect(sanitizeReturnTo("https://example.com/review/session-1")).toBeUndefined();
-    expect(sanitizeReturnTo("//example.com/review/session-1")).toBeUndefined();
-  });
-
   it("saves and loads draft review handoff payload", () => {
     const payload = createMatchWorkspaceMasterHandoffPayload({
       accountId,

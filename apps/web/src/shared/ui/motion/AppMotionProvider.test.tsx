@@ -1,4 +1,5 @@
 import { act, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { useReducedMotionConfig } from "motion/react";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -25,7 +26,8 @@ function MotionConsumer() {
 }
 
 describe("AppMotionProvider", () => {
-  it("updates mounted consumers when motion preferences change without replacing their task", () => {
+  it("preserves edited input and focus when motion preferences change", async () => {
+    const user = userEvent.setup();
     media = installMatchMediaController(false);
     render(
       <AppMotionProvider>
@@ -33,17 +35,22 @@ describe("AppMotionProvider", () => {
       </AppMotionProvider>,
     );
     const input = screen.getByRole("textbox", { name: "編集中の内容" });
-    input.focus();
+    await user.clear(input);
+    await user.type(input, "まだ保存していない内容");
     expect(screen.getByRole("status", { name: "表示の動き" })).toHaveTextContent("補間を表示");
 
     act(() => media?.setReducedMotion(true));
     expect(screen.getByRole("status", { name: "表示の動き" })).toHaveTextContent("補間を省略");
-    expect(screen.getByRole("textbox", { name: "編集中の内容" })).toBe(input);
-    expect(input).toHaveValue("入力を保持");
-    expect(input).toHaveFocus();
+    expect(screen.getByRole("textbox", { name: "編集中の内容" })).toHaveValue(
+      "まだ保存していない内容",
+    );
+    expect(screen.getByRole("textbox", { name: "編集中の内容" })).toHaveFocus();
 
     act(() => media?.setReducedMotion(false));
     expect(screen.getByRole("status", { name: "表示の動き" })).toHaveTextContent("補間を表示");
-    expect(input).toHaveFocus();
+    expect(screen.getByRole("textbox", { name: "編集中の内容" })).toHaveValue(
+      "まだ保存していない内容",
+    );
+    expect(screen.getByRole("textbox", { name: "編集中の内容" })).toHaveFocus();
   });
 });

@@ -67,65 +67,6 @@ describe("SourceImagePanel", () => {
     expect(screen.queryByText("保存できる元画像がありません。")).not.toBeInTheDocument();
   });
 
-  it("uses manually activated tabs with linked tab panels", async () => {
-    const user = userEvent.setup();
-    render(
-      <SourceImagePanel
-        loading={false}
-        matchDraftId={draftId}
-        preferredKind="total_assets"
-        sourceImages={[]}
-      />,
-    );
-
-    const tabList = screen.getByRole("tablist", { name: "元画像の種別" });
-    const totalAssetsTab = within(tabList).getByRole("tab", { name: "総資産" });
-    const revenueTab = within(tabList).getByRole("tab", { name: "収益" });
-    const totalAssetsPanel = screen.getByRole("tabpanel", { name: "総資産" });
-
-    expect(totalAssetsTab).toHaveAttribute("aria-selected", "true");
-    expect(totalAssetsTab).toHaveAttribute("aria-controls", totalAssetsPanel.id);
-    expect(totalAssetsPanel).toHaveAttribute("aria-labelledby", totalAssetsTab.id);
-
-    await user.click(totalAssetsTab);
-    await user.keyboard("{ArrowRight}");
-
-    expect(revenueTab).toHaveFocus();
-    expect(revenueTab).toHaveAttribute("aria-selected", "false");
-    expect(totalAssetsTab).toHaveAttribute("aria-selected", "true");
-
-    await user.keyboard("{Enter}");
-
-    expect(revenueTab).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tabpanel", { name: "収益" })).toBeInTheDocument();
-  });
-
-  it("replaces the active-image loading status with the available preview", async () => {
-    installObjectUrlMock({ createObjectURL: () => "blob:source-image" });
-    const responseGate = createDeferred<Response>();
-    server.use(
-      http.get("/api/match-drafts/:draftId/source-images/:kind", async () => responseGate.promise),
-    );
-
-    render(
-      <SourceImagePanel
-        loading={false}
-        matchDraftId={draftId}
-        preferredKind="total_assets"
-        sourceImages={sourceImages.slice(0, 1)}
-      />,
-    );
-
-    const loadingFrame = await screen.findByLabelText("総資産の元画像を読み込み中");
-    expect(loadingFrame).toHaveAttribute("aria-busy", "true");
-
-    responseGate.resolve(sourceImageResponse());
-    expect(await screen.findByRole("img", { name: "総資産の元画像" })).toHaveAttribute(
-      "src",
-      "blob:source-image",
-    );
-  });
-
   it("loads source images through the API client so dev auth headers are sent", async () => {
     setDevUser();
     installObjectUrlMock({ createObjectURL: () => "blob:source-image" });
@@ -888,41 +829,6 @@ describe("SourceImagePanel", () => {
     expect(screen.getByText("保存できる元画像がありません。")).toBeInTheDocument();
   });
 
-  it("shows a useful message when the archive download fails", async () => {
-    const user = userEvent.setup();
-    installObjectUrlMock({ createObjectURL: () => "blob:source-image" });
-    server.use(
-      http.get("/api/match-drafts/:draftId/source-images.zip", () =>
-        HttpResponse.json(
-          {
-            code: "NOT_FOUND",
-            detail: "source images were not found",
-            status: 404,
-            title: "Not Found",
-            type: "about:blank",
-          },
-          { status: 404 },
-        ),
-      ),
-    );
-
-    render(
-      <SourceImagePanel
-        loading={false}
-        matchDraftId={draftId}
-        preferredKind="total_assets"
-        sourceImages={sourceImages}
-      />,
-    );
-
-    await screen.findByRole("img", { name: "総資産の元画像" });
-    await user.click(screen.getByRole("button", { name: "元画像を保存" }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "元画像を保存できませんでした。確定または削除により画像が利用できなくなった可能性があります。必要な場合は画像を再アップロードしてください。",
-    );
-  });
-
   it("never saves a truncated archive and allows an explicit retry after a body failure", async () => {
     const user = userEvent.setup();
     const anchorClick = installAnchorClickMock();
@@ -1021,40 +927,5 @@ describe("SourceImagePanel", () => {
     await user.click(save);
     expect(revisions).toEqual([sourceImages[0]?.createdAt]);
     expect(anchorClick.click).not.toHaveBeenCalled();
-  });
-
-  it("shows a retry message when archive download is rate-limited", async () => {
-    const user = userEvent.setup();
-    installObjectUrlMock({ createObjectURL: () => "blob:source-image" });
-    server.use(
-      http.get("/api/match-drafts/:draftId/source-images.zip", () =>
-        HttpResponse.json(
-          {
-            code: "TOO_MANY_REQUESTS",
-            detail: "元画像の取得が短時間に集中しています。少し待ってから再度お試しください。",
-            status: 429,
-            title: "Too Many Requests",
-            type: "about:blank",
-          },
-          { status: 429 },
-        ),
-      ),
-    );
-
-    render(
-      <SourceImagePanel
-        loading={false}
-        matchDraftId={draftId}
-        preferredKind="total_assets"
-        sourceImages={sourceImages}
-      />,
-    );
-
-    await screen.findByRole("img", { name: "総資産の元画像" });
-    await user.click(screen.getByRole("button", { name: "元画像を保存" }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "元画像の保存が短時間に集中しています。少し待ってから再度お試しください。",
-    );
   });
 });

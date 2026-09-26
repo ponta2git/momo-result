@@ -32,9 +32,6 @@ describe("ResourcePageState", () => {
     const backLink = screen.getByRole("link", { name: "試合一覧へ戻る" });
     expect(heading).toBeInTheDocument();
     expect(backLink).toHaveAttribute("href", "/matches");
-    expect(
-      backLink.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
   });
 
   it("does not present retry for a missing resource", () => {

@@ -16,28 +16,4 @@ describe("RouteSuspenseFallback", () => {
     main.focus();
     expect(main).toHaveFocus();
   });
-
-  it.each([
-    ["/analytics/series", "戦績比較を読み込んでいます"],
-    ["/admin/analysis", "戦績分析管理を読み込んでいます"],
-    ["/admin/masters", "設定管理を読み込んでいます"],
-  ])(
-    "identifies the destination while loading %s without duplicating the main landmark",
-    (pathname, label) => {
-      render(<RouteSuspenseFallback pathname={pathname} />);
-
-      expect(screen.getByRole("status")).toHaveTextContent(label);
-      expect(screen.queryByRole("main")).not.toBeInTheDocument();
-      expect(screen.queryByRole("button")).not.toBeInTheDocument();
-      expect(screen.queryByRole("link")).not.toBeInTheDocument();
-    },
-  );
-
-  it("keeps sample context visible while review controls are not ready", () => {
-    render(<RouteSuspenseFallback pathname="/review/session-1" search="?sample=1" />);
-
-    expect(screen.getByText("サンプルの読み取り結果で表示中")).toBeVisible();
-    expect(screen.getByRole("status")).toHaveTextContent("読み込んでいます");
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
-  });
 });

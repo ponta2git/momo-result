@@ -23,7 +23,7 @@
 | [AdminAccountRow](../apps/web/src/features/masters/accounts/AdminAccountRow.tsx) | 固定名前セルの独自のsurface色が既存の行hoverを遮っていた。共有行を不透明にし、固定セルがその背景を継承するよう修正済み | 新しい行focusも同じ接続を使う。不透明性を保って横scroll時の内容の透けを防ぐ |
 | focusの表示 | 全体は3px・offset 3px。Tabs、選択label、sort等には2pxまたは内側へ描く指定がある | 太さを一律変更せず、用途と切れ・重複を確認して共通部品側で修正 |
 | [ChoicePickerDialogField](../apps/web/src/shared/ui/forms/ChoicePickerDialogField.tsx) | 値の表示と「変更」buttonを一つの枠で囲むが、枠全体はclickableではない | 外側を入力欄と同じ強さへ機械的に変更しない。実際に押すbuttonの境界を扱う |
-| [色の検証](../apps/web/src/shared/ui/colorContrast.test.ts) | 文字・図表・面の補間は検証しているが、半透明の境界と実背景の合成を検証していない。変換関数はalphaを保持しない | 既存の通過を枠の識別性の保証に使わず、今回の色対と合成経路を検証へ加える |
+| 当時のcontrast自動検証 | 文字・図表・面の補間は検証しているが、半透明の境界と実背景の合成を検証していない。変換関数はalphaを保持しない | 既存の通過を枠の識別性の保証に使わず、当時は色対と合成経路の検証を追加した。後続の[テスト再監査](web-test-rebuild.md#4-2026-09-26-利用者影響と保守費用による再監査)で、独自CSS解析・色計算の恒久suiteは廃止した |
 
 標準の`color-surface`上でsRGBへ変換・alpha合成した計算では、通常枠は約1.27:1、未選択radioの枠は約1.57:1だった。toneの枠も一律には扱えず、action / success / warningの現在の透明度では同じ背景に対して3:1未満になる。これは定義値からの計算であり、全画面・全状態の実測や適合監査ではない。出力の候補dialogでは、独自radioの未選択枠がこの定義を使うことをChromeで確認した。
 

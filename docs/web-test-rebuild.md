@@ -22,18 +22,16 @@
 | 標準runnerは開発サーバー、認証caseは本番挙動を前提 | 実行方法により同じsuiteの受入条件が成立しない | build＋previewで通常E2Eの前提を統一し、外部runtime指定は維持 |
 | E2E runnerの起動失敗・中断・子プロセス所有が不明瞭 | 失敗がreadiness timeoutへ化け、起動した資源が残る | 実プロセスを使うrunner回帰と所有資源の終了処理を追加 |
 
-### 設計上の診断
+### 初回レビューの到達点
 
-初期評価は5/10（8観点中4観点）。不足していたのは「moduleの責務を一文で説明できる」「interfaceが実装より単純」「内部実装を変更しても呼出側へ波及しない」「実装を読まず境界を理解できる」の4観点だった。10/10にするための変更は、それぞれ次のとおり。
+初回は oracle の妥当性と実行境界の整理を中心に、次を改善した。
 
 - 実API smoke、制御したbrowser response、route接続、featureの状態遷移を分け、ケース名に検証する結果を記す。
 - cleanupとQueryClientの所有を共通setupへ集約し、各suiteに復元順序を複製しない。
 - DOM内部・CSS class・生産実装で作った期待値を減らし、利用者が受け取る値と操作をoracleにする。
 - 本書とテストアーキテクチャに境界・残した証拠・廃止理由を記し、fixtureの型検査とrunner gateを通常CIへ接続する。
 
-残る4観点（抽象の意図、設計を含むreview、重要な判断の隠蔽、設計改善への作業配分）は既存の規約・専用double・decoder契約に根拠があり、今回も維持する。この採点は保守構造の診断であり、バグが存在しないことの証明ではない。
-
-再設計後の構造評価は10/10（8観点を充足）。上記4項目の是正に加え、独立reviewで通常Tab到達とPlaywrightの取消方式の抜けを追加検出し、それぞれの所有境界へ戻した。継続的なテストの安定性や外部serviceの正しさは、この構造評価とは別に実行結果で判断する。
+独立reviewで通常Tab到達とPlaywrightの取消方式の抜けも検出し、それぞれの所有境界へ戻した。ただし、正しく検証できることと、その検証を維持する価値があることの区別が不十分だった。jsdom の配置検証を browser へ移すだけでは過剰検証を解消できていなかったため、第4節で採否を見直した。構造の自己採点を必要十分性の根拠にはしない。
 
 ## 2. 再設計した証拠の境界
 
@@ -72,7 +70,7 @@ MSWは未処理requestを失敗させ、suiteごとのhandler/state resetを維�
 
 既存のartifact version/byte bound/排他的状態、CSRF・idempotency・download取消、保存不能なraw numeric、camera stream/object URLの所有、principal切替、未知の保存結果、権限変更、ページをまたぐ選択、キャッシュの世代・失効契約は保持する。これらは独立した故障を検出するため、上位smokeが成功しても削除しない。
 
-CSS contrastの算術検証はtokenの制約、production buildのtheme checkは最終assetの保持、browserは適用後の描画をそれぞれ担当する。coverageは不足箇所を探す補助で、ケース数・行数・率の増減を品質の合否へ置き換えない。
+初回はCSS contrastの算術検証、production buildのtheme check、browserの描画検証を分担していた。CSS source の独自解析と微細な描画測定は第4節の再監査で廃止した。最終assetの保持checkは維持する。coverageは不足箇所を探す補助で、ケース数・行数・率の増減を品質の合否へ置き換えない。
 
 ## 3. 検証
 
@@ -92,3 +90,44 @@ CSS contrastの算術検証はtokenの制約、production buildのtheme checkは
 browserの検証範囲はChromium。実カメラ機器、外部OAuth / 通知provider、制御fixtureに置き換えたworkerの計算・OCR精度、任意SIGKILL後の別process group回収は、このWebテスト再設計の成功から保証しない。
 
 参照した現行API資料はContext7経由の[Vitest](https://vitest.dev/guide/)、[Testing Library user-event](https://testing-library.com/docs/user-event/intro/)、[Playwright](https://playwright.dev/docs/best-practices)。設定・commandの正本はrepository内の実行設定とCIとする。
+
+## 4. 2026-09-26: 利用者影響と保守費用による再監査
+
+OCR退出導線の修正で報告した41件は、関連する既存4 suiteの実行総数だった。新規caseの純増は1件だが、既存caseにも本文の内外・読解順・3幅の座標測定を追加していた。配置の統一という要求から自動回帰testを直接導いた判断を撤回し、これらのassertionを削除した。退出先の安全性と画像の破棄確認・保持は残す。
+
+監査は全165 Vitestファイルを共通UI・app（52）、feature（91）、共通API・domain・lib（22）へ分担し、標準28件と専用OCR4件のE2E、runner / fixture、共通setup、double、型検査、build checker、CIの実行構成も確認した。削除候補は境界をまたいで照合し、単なる件数削減や上位smokeへの一括置換を採用しなかった。アプリ本体、依存version、業務schemaは変更していない。
+
+| 整理した対象 | 判断と残した証拠 |
+| --- | --- |
+| 座標・幅・余白・hover色・animation設定・骨組み | OCR退出、loading / ready位置一致、人工的な親幅、16:9寸法、hover補間、skeleton構造を恒久testから除去。必要な変更時のvisual reviewで扱う |
+| CSSの独自解析と型による装飾prop禁止一覧 | sourceを解析するcontrast計算と全leafのprop一覧を削除。部品の型定義は維持し、動的な識別子がproduction CSSに残るbuild checkerは保持 |
+| ラベル・slot・primitiveの反復 | status / rank / member label、FactList、FilterBar、説明・skeletonの単独suiteとページ上の同義caseを削除。keyboard操作や入力保持は共有primitiveと実flowの所有境界へ絞る |
+| helperと設定の直写し | formatterのprefix / fallback網羅、null除外・assertDefined、query keyの固定配列、poll設定の存在否定、冗長なboolean組合せを除去。日時・金額変換、対象別cache、確定不存在、再送キーは維持 |
+| 分析のE2Eとcomponentの重複 | 指標・全セル・SVG数値の分岐はcomponent側を維持。browserは対象選択、根拠リンク、履歴、keyboardでの到達・続行に絞る |
+| 結果を区別できないoracle | 再送キーの配列位置を落としても通る判定に、位置の異なるpayloadとの非同値を追加。初期値のままだった入力保持検証は実編集へ変更。値を用意せず保持を主張するcaseや、実処理を開始せずOCR処理中と見立てるcaseは廃止 |
+
+OCRのslot→request、開催内番号と分析番号の使い分け、数値入力・一時保存・handoff、権限、競合、未知の保存結果、再試行、downloadのbyte内容、カメラ資源、実processの取消と所有資源回収は残した。標準E2Eと専用OCRの責務も分けたままにする。
+
+削除候補の `createEmptyMatchForm` の初期値検証は独立レビューで維持へ戻した。domain定数の検証だけでは、手入力フォームがmember・playOrder・rank・ownerを保存に使う初期値へ正しく取り込むことを確認できないためである。
+
+規約は、観測可能であることだけを自動化の理由にせず、データ保全・正しい判断・操作続行への影響と独立した検出価値で選ぶ方針へ改訂した。モーションの全条件や補間途中値の検証を一律に要求せず、accessibilityによる操作成立とは区別する。廃止した自動検証を全変更で必須の手動チェックリストへ置き換えず、実行総数と新規追加数も分けて報告する。
+
+### 整理後の検証
+
+| 対象 | 再監査開始時 | 整理後 | 今回の実行結果 |
+| --- | --- | --- | --- |
+| Unit / component | 165ファイル・1,039件 | 140ファイル・855件 | 全件成功 |
+| 標準E2E | 28件 | 22件 | 22件の成功を確認 |
+| 専用OCR E2E | 4件 | 4件 | 今回は再実行せず。変更は共通overflow補助assertionとimportの除去のみ |
+
+削減した184件と6件はcaseの統合による見かけの減少ではなく、低価値または重複するassertion・fixture・helperを除去した結果である。正常な保存・復旧等のcaseをskipへ移していない。
+
+- Vitestは最終状態を一度全件実行し、140ファイル・855件が成功。通常実行とcoverage実行を重ねていない。
+- 標準E2Eは初回21件が成功。整理中に新たに加えた、再openした選択popupのEscape後にtriggerへ必ずfocusを戻す期待が1件失敗したため、その追加条件を撤回した。元からあったkeyboard操作による未確定値の保持と次入力への到達に絞り、影響1件を再実行して成功した。
+- 上記のfocus差は単なる表示待ちではなく、実browserでも再現した。Playwright MCPでpopupの準備完了後を観測し、初回Escapeでは親dialogを閉じず、Tab後の再open / Escapeではfocusが親dialogへ戻ることを区別した。そこからTabで入力・編集・キャンセルを完了できたため、今回のtest整理で新たな厳密な復帰先や製品修正を加えなかった。初回のunit testの成功を、別条件の全focus保証へ広げない。
+- Playwright MCPでは、実APIを使って未完成の数値入力をdesktop→mobileで保持し保存を拒否すること、元の保存値が変わらないこと、正しい数値の保存とreload後の反映、OCR画像破棄のキャンセルによる保持と明示破棄後の退出を確認した。
+- runner / fixtureのNode test 7件、既存ローカル起動runnerの7件は成功。隔離・取消・所有資源の回収を守るため維持した。
+- format / lint / typecheck、public safety、diff checkは成功。lintの既存warning 5件は継続。製品コード・build設定は不変のため、直前に検証したproduction buildをbrowser実行に再利用した。
+- テスト所有のAPI / preview、隔離container、一時runtime directory、MCP tabは回収済み。
+
+専用OCRの4件は受付・部分失敗・同一intent再送・画面閉鎖後の回復を引き続き所有する。その本体・fixture・runtime設定は変えておらず、前回の成功範囲を再利用した。今回新たに専用Workerや外部providerの動作を確認したとはしない。browser実行はChromiumで、実機カメラ・他browser・スクリーンリーダー実機は今回の確認範囲外である。

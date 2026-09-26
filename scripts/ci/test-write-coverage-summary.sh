@@ -37,11 +37,11 @@ class CoverageSummaryTest(unittest.TestCase):
         markdown = (self.output / "summary.md").read_text()
         return summary, markdown
 
-    def api_report(self, version="3.8.4"):
+    def api_report(self, version="3.9.0"):
         # Native root attributes from ScoverageXmlWriter. Branch counts are not
         # provided here; Cobertura maps its line counts to these statement counts.
         return self.write(
-            f"apps/api/target/scala-{version}/scoverage-report/scoverage.xml",
+            f"apps/api/target/out/jvm/scala-{version}/momo-result-api/scoverage-report/scoverage.xml",
             '<scoverage statement-count="3" statements-invoked="1" '
             'statement-rate="33.33" branch-rate="50.00" version="1.0">'
             '<packages/></scoverage>',
@@ -62,7 +62,7 @@ class CoverageSummaryTest(unittest.TestCase):
     def test_api_reports_only_native_metrics(self):
         source = self.api_report()
         self.write(
-            "apps/api/target/scala-3.8.4/coverage-report/cobertura.xml",
+            "apps/api/target/out/jvm/scala-3.9.0/momo-result-api/coverage-report/cobertura.xml",
             '<coverage line-rate="0.33" lines-covered="1" lines-valid="3" '
             'branches-covered="1" branches-valid="2" branch-rate="0.50"/>',
         )
@@ -74,6 +74,8 @@ class CoverageSummaryTest(unittest.TestCase):
             "branches": {"pct": 50.0, "covered": None, "total": None},
         })
         self.assertIn("| branches | 50.0% | - |", markdown)
+        self.assertEqual(len(summary["limitations"]), 1)
+        self.assertIn("omitted from the measured totals", markdown)
 
     def test_multiple_scala_reports_are_ambiguous(self):
         self.api_report("3.8.4")
@@ -94,6 +96,7 @@ class CoverageSummaryTest(unittest.TestCase):
             "lines": {"pct": 100, "covered": 2, "total": 2},
         })
         self.assertIn("| functions | - | 0 / 0 |", markdown)
+        self.assertEqual(summary["limitations"], [])
 
     def test_missing_report_is_not_zero_coverage(self):
         for subsystem in ("api", "web"):

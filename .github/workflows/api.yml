@@ -113,7 +113,7 @@ jobs:
 
       - name: API quality gate
         timeout-minutes: 10
-        run: sbt apiQuality
+        run: sbt --server --batch apiQuality
 
   test:
     name: Test and coverage
@@ -154,12 +154,12 @@ jobs:
       - name: Test
         if: ${{ github.event_name != 'pull_request' }}
         timeout-minutes: 10
-        run: sbt test
+        run: sbt --server --batch test
 
       - name: Test with coverage report
         if: ${{ github.event_name == 'pull_request' }}
         timeout-minutes: 10
-        run: sbt apiCoverage
+        run: sbt --server --batch apiCoverage
 
       - name: Summarize coverage
         if: ${{ always() && github.event_name == 'pull_request' }}
@@ -179,8 +179,8 @@ jobs:
         with:
           name: api-coverage-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            apps/api/target/scala-*/scoverage-report/
-            apps/api/target/scala-*/coverage-report/
+            apps/api/target/out/jvm/scala-*/momo-result-api/scoverage-report/
+            apps/api/target/out/jvm/scala-*/momo-result-api/coverage-report/
             coverage-summary/api/
           if-no-files-found: ignore
           retention-days: 30
@@ -241,4 +241,4 @@ jobs:
 
       - name: External-service quality gates
         timeout-minutes: 15
-        run: sbt apiDbQuality apiRedisQuality
+        run: sbt --server --batch "apiDbQuality; apiRedisQuality"

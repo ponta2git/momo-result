@@ -1,8 +1,11 @@
 import java.nio.file.{Files, Paths}
 
-ThisBuild / scalaVersion := "3.8.4"
-ThisBuild / semanticdbEnabled := true
-ThisBuild / evictionErrorLevel := Level.Warn
+scalaVersion := "3.9.0"
+semanticdbEnabled := true
+evictionErrorLevel := Level.Error
+// SLF4J keeps its client API binary compatible across 1.x and 2.x; Logback supplies the 2.x provider.
+// https://www.slf4j.org/faq.html#compatibility
+libraryDependencySchemes += "org.slf4j" % "slf4j-api" % VersionScheme.Always
 
 addCommandAlias("apiFormat", "scalafmtAll")
 addCommandAlias("apiFormatCheck", "scalafmtCheckAll")
@@ -44,14 +47,15 @@ lazy val http4sPatchedVersion =
     .orElse(sys.env.get("MOMO_HTTP4S_PATCHED_VERSION"))
     .filter(_.nonEmpty)
 lazy val http4sEmberVersion = http4sPatchedVersion.getOrElse(http4sVersion)
-lazy val http4sPatchedOverrides = http4sPatchedVersion.toSeq.flatMap { version =>
-  Seq(
-    "org.http4s" %% "http4s-core" % version,
-    "org.http4s" %% "http4s-server" % version,
-    "org.http4s" %% "http4s-ember-core" % version,
-    "org.http4s" %% "http4s-ember-server" % version,
-  )
-}
+// Keep the reviewed http4s release and fork together even when integrations upgrade transitively.
+lazy val http4sOverrides = Seq(
+  "org.http4s" %% "http4s-core" % http4sEmberVersion,
+  "org.http4s" %% "http4s-server" % http4sEmberVersion,
+  "org.http4s" %% "http4s-ember-core" % http4sEmberVersion,
+  "org.http4s" %% "http4s-ember-server" % http4sEmberVersion,
+  "org.http4s" %% "http4s-circe" % http4sVersion,
+  "org.http4s" %% "http4s-jawn" % http4sVersion,
+)
 lazy val isMacOs =
   sys.props.getOrElse("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("mac")
 
@@ -66,7 +70,8 @@ lazy val macOsNettyDnsResolver: Seq[ModuleID] = {
         sys.error(s"Unsupported macOS architecture for Netty DNS resolver: $unsupported")
     }
     Seq(
-      "io.netty" % "netty-resolver-dns-native-macos" % nettyVersion % Runtime classifier classifier
+      ("io.netty" % "netty-resolver-dns-native-macos" % nettyVersion % Runtime)
+        .classifier(classifier)
     )
   }
 }
@@ -76,6 +81,7 @@ lazy val macOsNettyDnsResolver: Seq[ModuleID] = {
 // Goal: catch as many bugs as possible at compile time, and force AI-generated
 // code to be precise. Each flag is paired with a short rationale.
 lazy val sharedScalacOptions = Seq(
+  "-release:25", // match the JDK API and bytecode used by the production runtime
   "-deprecation", // do not silently use deprecated API
   "-encoding",
   "UTF-8",
@@ -99,10 +105,20 @@ lazy val root = (project in file("."))
     inConfig(OpenApi)(Defaults.compileSettings),
     org.scalafmt.sbt.ScalafmtPlugin.scalafmtConfigSettings(OpenApi),
     scalafixConfigSettings(OpenApi),
-    OpenApi / compile := (OpenApi / compile).dependsOn(Compile / compile).value,
+    OpenApi / compile := Def.uncached((OpenApi / compile).dependsOn(Compile / compile).value),
     name := "momo-result-api",
     organization := "momo",
     scalacOptions ++= sharedScalacOptions,
+    Compile / scalacOptions ++= {
+      // Scala 3.9 skips oversized schema initializers to avoid the JVM's 64 KiB method limit.
+      // Keep that coverage limitation visible without relaxing warnings for application code.
+      // https://github.com/scala/scala3/blob/3.9.0/compiler/src/dotty/tools/dotc/transform/InstrumentCoverage.scala
+      if (coverageEnabled.value) Seq(
+        "-Wconf:msg=^Skipping coverage instrumentation for large value initializer .*" +
+          "&src=.*[\\\\/]momo[\\\\/]api[\\\\/]endpoints[\\\\/].*:i"
+      )
+      else Seq.empty
+    },
     // Keep the REPL usable without -Werror firing on incomplete snippets.
     Compile / console / scalacOptions ~= {
       _.filterNot(_ == "-Werror")
@@ -114,27 +130,29 @@ lazy val root = (project in file("."))
     Compile / packageDoc / publishArtifact := false,
     Compile / mainClass := Some("momo.api.Main"),
     Compile / resourceGenerators += Def.task {
-      val schemaNames = Seq(
-        "series-analysis-aggregate-v5.schema.json",
-        "series-analysis-drilldown-v3.schema.json",
-        "series-analysis-match-context-v1.schema.json",
-        "series-analysis-publication-contract-v2.json",
-        "series-analysis-review-v4.schema.json",
-      )
-      val sourceDirectory = baseDirectory.value / ".." / ".." / "docs" / "schemas"
-      val outputDirectory = (Compile / resourceManaged).value / "momo" / "api" /
-        "series-analysis-schemas"
-      IO.createDirectory(outputDirectory)
-      schemaNames.sorted.map { schemaName =>
-        val source = sourceDirectory / schemaName
-        val output = outputDirectory / schemaName
-        if (!source.isFile) {
-          sys.error(s"Series analysis resource schema is missing: ${source.getAbsolutePath}")
+      Def.uncached {
+        val schemaNames = Seq(
+          "series-analysis-aggregate-v5.schema.json",
+          "series-analysis-drilldown-v3.schema.json",
+          "series-analysis-match-context-v1.schema.json",
+          "series-analysis-publication-contract-v2.json",
+          "series-analysis-review-v4.schema.json",
+        )
+        val sourceDirectory = baseDirectory.value / ".." / ".." / "docs" / "schemas"
+        val outputDirectory = (Compile / resourceManaged).value / "momo" / "api" /
+          "series-analysis-schemas"
+        IO.createDirectory(outputDirectory)
+        schemaNames.sorted.map { schemaName =>
+          val source = sourceDirectory / schemaName
+          val output = outputDirectory / schemaName
+          if (!source.isFile) {
+            sys.error(s"Series analysis resource schema is missing: ${source.getAbsolutePath}")
+          }
+          if (!output.isFile || Files.mismatch(source.toPath, output.toPath) != -1L) {
+            IO.copyFile(source, output)
+          }
+          output
         }
-        if (!output.isFile || Files.mismatch(source.toPath, output.toPath) != -1L) {
-          IO.copyFile(source, output)
-        }
-        output
       }
     }.taskValue,
     Compile / run / fork := true,
@@ -162,22 +180,21 @@ lazy val root = (project in file("."))
       ".*/momo/api/adapters/redis/.*",
     ).mkString(";"),
     libraryDependencies ++= {
-      val catsEffectVersion = "3.7.0"
+      val catsEffectVersion = "3.7.1"
       val apiSpecVersion = "0.11.10"
-      val awsSdkVersion = "2.51.4"
-      val circeVersion = "0.14.15"
-      val cirisVersion = "3.15.0"
+      val awsSdkVersion = "2.55.6"
+      val circeVersion = "0.14.16"
+      val cirisVersion = "3.15.1"
       val doobieVersion = "1.0.0-RC12"
-      val ironVersion = "3.3.1"
-      val logbackVersion = "1.5.34"
+      val ironVersion = "3.3.2"
+      val logbackVersion = "1.6.4"
       val logstashEncoderVersion = "9.0"
-      val janinoVersion = "3.1.12"
-      val jsonSchemaValidatorVersion = "3.0.4"
+      val jsonSchemaValidatorVersion = "3.0.7"
       val log4catsVersion = "2.8.0"
-      val munitCatsEffectVersion = "2.2.0"
-      val munitVersion = "1.3.3"
-      val redis4catsVersion = "2.0.4"
-      val tapirVersion = "1.13.23"
+      val munitCatsEffectVersion = "2.2.1"
+      val munitVersion = "1.3.6"
+      val redis4catsVersion = "2.0.6"
+      val tapirVersion = "1.13.31"
       val testcontainersVersion = "2.0.5"
 
       Seq(
@@ -207,7 +224,6 @@ lazy val root = (project in file("."))
         "dev.profunktor" %% "redis4cats-effects" % redis4catsVersion,
         "ch.qos.logback" % "logback-classic" % logbackVersion,
         "net.logstash.logback" % "logstash-logback-encoder" % logstashEncoderVersion,
-        "org.codehaus.janino" % "janino" % janinoVersion,
         "com.networknt" % "json-schema-validator" % jsonSchemaValidatorVersion,
         "org.scalameta" %% "munit" % munitVersion % Test,
         "org.testcontainers" % "testcontainers-postgresql" % testcontainersVersion % Test,
@@ -217,7 +233,7 @@ lazy val root = (project in file("."))
       ) ++ macOsNettyDnsResolver
     },
     dependencyOverrides ++= {
-      val jacksonVersion = "3.2.0"
+      val jacksonVersion = "3.2.3"
 
       Seq(
         "io.netty" % "netty-buffer" % nettyVersion,
@@ -228,30 +244,32 @@ lazy val root = (project in file("."))
         "io.netty" % "netty-resolver-dns" % nettyVersion,
         "io.netty" % "netty-transport" % nettyVersion,
         "io.netty" % "netty-transport-native-unix-common" % nettyVersion,
-        "org.postgresql" % "postgresql" % "42.7.12",
+        "org.postgresql" % "postgresql" % "42.7.13",
         "tools.jackson.core" % "jackson-core" % jacksonVersion,
         "tools.jackson.core" % "jackson-databind" % jacksonVersion,
-      ) ++ http4sPatchedOverrides
+      ) ++ http4sOverrides
     },
-    apiOpenApi := {
+    apiOpenApi := Def.uncached {
+      val converter = fileConverter.value
       val output = baseDirectory.value / "openapi.yaml"
       val result = (OpenApi / runner).value.run(
         "momo.api.openapi.OpenApiMain",
-        (OpenApi / fullClasspath).value.files,
+        (OpenApi / fullClasspath).value.map(entry => converter.toPath(entry.data)),
         Seq(output.getAbsolutePath),
         streams.value.log
       )
       result.failed.foreach(error => throw error)
       output
     },
-    apiOpenApiCheck := {
+    apiOpenApiCheck := Def.uncached {
+      val converter = fileConverter.value
       val output = baseDirectory.value / "openapi.yaml"
       if (!output.exists()) sys.error(s"OpenAPI file does not exist: ${output.getAbsolutePath}")
       val generated = Files.createTempFile("momo-result-openapi-", ".yaml")
       try {
         val result = (OpenApi / runner).value.run(
           "momo.api.openapi.OpenApiMain",
-          (OpenApi / fullClasspath).value.files,
+          (OpenApi / fullClasspath).value.map(entry => converter.toPath(entry.data)),
           Seq(generated.toAbsolutePath.toString),
           streams.value.log
         )

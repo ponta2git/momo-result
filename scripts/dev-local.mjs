@@ -151,7 +151,7 @@ async function run() {
   }
 
   const apiProcess = startProcess({
-    args: ["run"],
+    args: ["--server", "run"],
     command: "sbt",
     cwd: resolve(repoRoot, "apps/api"),
     env,

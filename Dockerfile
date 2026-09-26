@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1.25.0@sha256:0adf442eae370b6087e08edc7c50b552d80ddf261576f4ebd6421006b2461f12
 
 ARG NODE_IMAGE=node:24-bookworm-slim@sha256:c2d5ade763cacfb03fe9cb8e8af5d1be5041ff331921fa26a9b231ca3a4f780a
-ARG JAVA_JDK_IMAGE=eclipse-temurin:25-jdk-noble@sha256:02aba7518e48cfed96403ac9634e357a40329d6ec9418feb0b32636e43b245a1
-ARG JAVA_JRE_IMAGE=eclipse-temurin:25-jre-noble@sha256:f9bd8815e73632c22985ebb133ec49b9fc4ad5ffe0657594ac02748ad0431ab7
+ARG JAVA_JDK_IMAGE=eclipse-temurin:25-jdk-noble@sha256:5b14970485a676b41faa08f4a7bc8716cc20915daa1d581d7a75f37a8ebaf9a8
+ARG JAVA_JRE_IMAGE=eclipse-temurin:25-jre-noble@sha256:30772b161c319f9a10c82e30fd77b7b6702c6b051e44e0e9f3d7ab5dd389a5ab
 ARG GO_IMAGE=golang:1.27.1-bookworm@sha256:69a7b9788769bec032d238959b61854e9ae87f57be9029ec04e9885fabf99195
 ARG HTTP4S_REPOSITORY=https://github.com/ponta2git/http4s.git
 ARG CADDY_VERSION=v2.11.4
@@ -36,7 +36,7 @@ RUN pnpm --filter web build
 FROM ${JAVA_JDK_IMAGE} AS api-deps
 WORKDIR /workspace/apps/api
 ENV SBT_OPTS="--enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow"
-ARG SBT_SHA256=84c6dd93c094577ce857d3b7ae450ef7ff88fceec099c8feb1cefac3e4b18a32
+ARG SBT_SHA256=351087fb5ad0d8b271f21b4c6f8e4912c8f6dbf81e1d06fe215bb165f14668b3
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl \
   && rm -rf /var/lib/apt/lists/*
@@ -78,7 +78,7 @@ RUN --mount=type=cache,id=sbt-boot,target=/root/.sbt,sharing=locked \
   --mount=type=cache,id=coursier-cache,target=/root/.cache/coursier,sharing=locked \
   --mount=type=cache,id=ivy-cache,target=/root/.ivy2/cache,sharing=locked \
   export HTTP4S_PATCH_VERSION="$(cat /opt/http4s-patch/version.txt)" \
-  && sbt "-Dmomo.http4s.patched.version=${HTTP4S_PATCH_VERSION}" apiOpenApiCheck stage
+  && sbt --server --batch "-Dmomo.http4s.patched.version=${HTTP4S_PATCH_VERSION}" "apiOpenApiCheck; stage"
 
 FROM ${GO_IMAGE} AS runtime-tool-builder
 WORKDIR /workspace/scripts/tools
@@ -159,7 +159,7 @@ RUN apt-get update \
     /tmp/momo-result/uploads \
   && chown -R momo:momo /opt/momo-result /srv/momo-result /tmp/momo-result
 
-COPY --from=api-builder --chown=momo:momo /workspace/apps/api/target/universal/stage /opt/momo-result/api
+COPY --from=api-builder --chown=momo:momo /workspace/apps/api/target/out/jvm/scala-*/momo-result-api/universal/stage /opt/momo-result/api
 COPY --from=web-builder --chown=momo:momo /workspace/apps/web/dist /srv/momo-result/web
 COPY --chown=momo:momo contracts/runtime-db-contract.json /opt/momo-result/contracts/runtime-db-contract.json
 COPY --from=http4s-builder --chown=momo:momo /opt/http4s-patch /opt/momo-result/contracts/http4s-patch

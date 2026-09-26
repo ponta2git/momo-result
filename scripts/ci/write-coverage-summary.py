@@ -82,6 +82,10 @@ def main() -> int:
         "subsystem": args.subsystem,
         "status": status,
         "message": message,
+        "limitations": [
+            "API coverage is diagnostic. Scala may omit oversized endpoint/schema initializers; "
+            "compiler diagnostics identify each initializer omitted from the measured totals."
+        ] if args.subsystem == "api" and status == "ok" else [],
         "sourceReports": [relative_to_or_absolute(path, root) for path in source_reports],
         "metrics": {
             name: {
@@ -141,7 +145,7 @@ def read_api_metrics(root: Path) -> tuple[list[Path], dict[str, Metric]]:
 
 def find_scala_report(root: Path, relative_report: str) -> Path:
     scala_target = root / "apps/api/target"
-    candidates = sorted(scala_target.glob(f"scala-*/{relative_report}"))
+    candidates = sorted(scala_target.glob(f"out/jvm/scala-*/momo-result-api/{relative_report}"))
     if not candidates:
         raise FileNotFoundError(f"Coverage report not found under {scala_target}: {relative_report}")
     if len(candidates) != 1:
@@ -191,6 +195,8 @@ def render_markdown(summary: dict[str, Any]) -> str:
             f"| {name} | {percentage} | {covered_total} |"
         )
     lines.append("")
+    for limitation in summary["limitations"]:
+        lines.extend([limitation, ""])
     return "\n".join(lines)
 
 

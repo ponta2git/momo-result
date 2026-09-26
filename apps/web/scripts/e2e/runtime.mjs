@@ -175,7 +175,7 @@ async function resolveMigrationsDir() {
 
 export function startApi({ apiPort, databaseUrl, imageTmpDir, redisUrl, environment = {} }) {
   const logs = createRingBuffer(240);
-  const child = spawn("sbt", ["run"], {
+  const child = spawn("sbt", ["--server", "--batch", "run"], {
     cwd: apiDir,
     detached: process.platform !== "win32",
     env: childEnvironment({

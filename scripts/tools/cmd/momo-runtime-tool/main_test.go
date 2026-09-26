@@ -164,8 +164,15 @@ func TestCaddyTemplateRequiresEachPlaceholderExactlyOnce(t *testing.T) {
 
 func TestHealthPayloadRejectsTrailingData(t *testing.T) {
 	t.Parallel()
-	if decodeValidHealthPayload(strings.NewReader(`{"status":"ok"}{"status":"ok"}`)) {
-		t.Fatal("health payload with trailing JSON was accepted")
+	payload := `{"status":"ok"}`
+	atLimit := payload + strings.Repeat(" ", 4096-len(payload))
+	if !decodeValidHealthPayload(strings.NewReader(atLimit)) {
+		t.Fatal("complete health payload at the byte limit was rejected")
+	}
+	for _, input := range []string{payload + payload, atLimit + payload} {
+		if decodeValidHealthPayload(strings.NewReader(input)) {
+			t.Fatal("health payload with trailing JSON was accepted")
+		}
 	}
 }
 
@@ -280,6 +287,19 @@ func TestPostdeployEvidenceCLIProducesSafeResult(t *testing.T) {
 	if result.Status != "ok" || result.SchemaVersion != 1 {
 		t.Fatalf("result = %#v", result)
 	}
+	// The entire evidence file must be checked, including bytes beyond the limit.
+	payload += strings.Repeat(" ", 1_048_577-len(payload)) + `{"status":"failed"}`
+	if err := os.WriteFile(path, []byte(payload), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if exitCode := runValidatePostdeployEvidence([]string{path}, &stdout, &stderr); exitCode != 1 || stdout.Len() != 0 {
+		t.Fatalf("oversized evidence exit=%d stdout=%s", exitCode, stdout.String())
+	}
+	if err := json.Unmarshal(stderr.Bytes(), &result); err != nil || result.ErrorKind != "JSONDecodeError" {
+		t.Fatalf("oversized evidence result=%#v err=%v", result, err)
+	}
 }
 
 func TestLogSummaryDropsMessagesAndUnstructuredContent(t *testing.T) {
@@ -311,9 +331,11 @@ func TestRuntimeStopGraceIsBounded(t *testing.T) {
 	if err != nil || grace != 45*time.Second {
 		t.Fatalf("grace=%s err=%v", grace, err)
 	}
-	t.Setenv(stopGraceEnvironmentName, "91")
-	if _, err := runtimeStopGrace(); err == nil {
-		t.Fatal("unsafe stop grace accepted")
+	for _, raw := range []string{"91", "9223372037", "18446744074"} {
+		t.Setenv(stopGraceEnvironmentName, raw)
+		if _, err := runtimeStopGrace(); err == nil {
+			t.Fatalf("unsafe stop grace %q accepted", raw)
+		}
 	}
 }
 

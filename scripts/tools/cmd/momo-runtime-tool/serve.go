@@ -43,10 +43,12 @@ type runningChild struct {
 
 type childExit struct {
 	Name string
-	Err  error
 }
 
 func runServe(ctx context.Context, stdout io.Writer, stderr io.Writer) int {
+	signalContext, cancelSignals := signal.NotifyContext(ctx, syscall.SIGTERM, syscall.SIGINT)
+	defer cancelSignals()
+
 	if err := ensureRuntimeDirectories(); err != nil {
 		writeResult(stderr, failureResult(serveEvent, "RuntimeDirectoryError"))
 		return 1
@@ -56,7 +58,7 @@ func runServe(ctx context.Context, stdout io.Writer, stderr io.Writer) int {
 	}
 	caddyConfig := environmentOrDefault("MOMO_CADDY_OUTPUT_PATH", defaultCaddyOutputPath)
 	caddyCommand := environmentOrDefault("MOMO_RUNTIME_CADDY_COMMAND", defaultCaddyCommand)
-	if err := validateCaddyCommand(ctx, caddyCommand, caddyConfig); err != nil {
+	if err := validateCaddyCommand(signalContext, caddyCommand, caddyConfig); err != nil {
 		writeResult(stderr, failureResult(serveEvent, "CaddyConfigurationError"))
 		return 1
 	}
@@ -77,18 +79,32 @@ func runServe(ctx context.Context, stdout io.Writer, stderr io.Writer) int {
 			Arguments: []string{"run", "--config", caddyConfig, "--adapter", "caddyfile"},
 		},
 	}
+	return superviseChildren(signalContext, specs, stopGrace, stdout, stderr)
+}
 
+// superviseChildren owns each started process group until its leader is reaped.
+// Startup failures, interruption, and unexpected exits all use the same cleanup.
+func superviseChildren(ctx context.Context, specs []childSpec, stopGrace time.Duration, stdout io.Writer, stderr io.Writer) int {
 	running := make(map[string]runningChild, len(specs))
 	exits := make(chan childExit, len(specs))
 	for _, spec := range specs {
+		if ctx.Err() != nil {
+			if !shutdownChildren(running, exits, stopGrace) {
+				writeResult(stderr, failureResult(serveEvent, "ShutdownTimeout"))
+				return 1
+			}
+			return 0
+		}
 		command := exec.Command(spec.Command, spec.Arguments...)
 		command.Dir = spec.Directory
 		command.Stdout = stdout
 		command.Stderr = stderr
+		// Descendants may inherit output pipes when the caller is an io.Writer.
+		// Bound that wait so a dead leader cannot hide behind an orphan's pipe.
+		command.WaitDelay = stopGrace
 		configureChildProcess(command)
 		if err := command.Start(); err != nil {
-			stopChildren(running, syscall.SIGTERM)
-			waitForChildren(running, exits, stopGrace)
+			shutdownChildren(running, exits, stopGrace)
 			result := failureResult(serveEvent, "ChildStartError")
 			result.Component = spec.Name
 			writeResult(stderr, result)
@@ -96,15 +112,18 @@ func runServe(ctx context.Context, stdout io.Writer, stderr io.Writer) int {
 		}
 		child := runningChild{Name: spec.Name, Command: command}
 		running[spec.Name] = child
-		go func() { exits <- childExit{Name: child.Name, Err: child.Command.Wait()} }()
+		go func() {
+			_ = child.Command.Wait()
+			// A leader that exited can no longer supervise any remaining descendants.
+			_ = signalChildProcessGroup(child.Command, syscall.SIGKILL)
+			exits <- childExit{Name: child.Name}
+		}()
 	}
 	writeResult(stdout, successResult(serveEvent))
 
-	signalContext, cancelSignals := signal.NotifyContext(ctx, syscall.SIGTERM, syscall.SIGINT)
-	defer cancelSignals()
 	exitCode := 0
 	select {
-	case <-signalContext.Done():
+	case <-ctx.Done():
 	case exited := <-exits:
 		delete(running, exited.Name)
 		result := failureResult(serveEvent, "ChildExited")
@@ -112,10 +131,7 @@ func runServe(ctx context.Context, stdout io.Writer, stderr io.Writer) int {
 		writeResult(stderr, result)
 		exitCode = 1
 	}
-	stopChildren(running, syscall.SIGTERM)
-	if !waitForChildren(running, exits, stopGrace) {
-		stopChildren(running, syscall.SIGKILL)
-		_ = waitForChildren(running, exits, 5*time.Second)
+	if !shutdownChildren(running, exits, stopGrace) {
 		if exitCode == 0 {
 			writeResult(stderr, failureResult(serveEvent, "ShutdownTimeout"))
 			exitCode = 1
@@ -158,10 +174,20 @@ func runtimeStopGrace() (time.Duration, error) {
 		return defaultStopGrace, nil
 	}
 	seconds, err := strconv.Atoi(raw)
-	if err != nil || seconds < 1 || time.Duration(seconds)*time.Second > maximumStopGrace {
+	if err != nil || seconds < 1 || seconds > int(maximumStopGrace/time.Second) {
 		return 0, errors.New("invalid runtime stop grace")
 	}
 	return time.Duration(seconds) * time.Second, nil
+}
+
+func shutdownChildren(running map[string]runningChild, exits <-chan childExit, stopGrace time.Duration) bool {
+	stopChildren(running, syscall.SIGTERM)
+	if waitForChildren(running, exits, stopGrace) {
+		return true
+	}
+	stopChildren(running, syscall.SIGKILL)
+	_ = waitForChildren(running, exits, 5*time.Second)
+	return false
 }
 
 func stopChildren(running map[string]runningChild, signal syscall.Signal) {

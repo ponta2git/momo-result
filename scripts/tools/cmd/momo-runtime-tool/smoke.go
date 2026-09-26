@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -330,14 +329,9 @@ func requestHTTP2Probe(
 	if response.StatusCode != http.StatusOK {
 		return http2ProbePayload{}, errors.New("upstream HTTP/2 probe returned an unexpected status")
 	}
-	decoder := json.NewDecoder(io.LimitReader(response.Body, 4096))
 	var payload http2ProbePayload
-	if decoder.Decode(&payload) != nil || payload.HTTPVersion != "HTTP/2.0" {
+	if decodeBoundedJSON(response.Body, 4096, &payload) != nil || payload.HTTPVersion != "HTTP/2.0" {
 		return http2ProbePayload{}, errors.New("upstream HTTP/2 probe returned an invalid payload")
-	}
-	var trailing any
-	if !errors.Is(decoder.Decode(&trailing), io.EOF) {
-		return http2ProbePayload{}, errors.New("upstream HTTP/2 probe returned trailing data")
 	}
 	return payload, nil
 }
@@ -403,13 +397,8 @@ func countEstablishedTCPConnections(scanner *bufio.Scanner, port int) (int, erro
 }
 
 func decodeValidHealthPayload(reader io.Reader) bool {
-	decoder := json.NewDecoder(io.LimitReader(reader, 4096))
 	var payload healthPayload
-	if decoder.Decode(&payload) != nil || payload.Status != "ok" {
-		return false
-	}
-	var trailing any
-	return errors.Is(decoder.Decode(&trailing), io.EOF)
+	return decodeBoundedJSON(reader, 4096, &payload) == nil && payload.Status == "ok"
 }
 
 func probeDatabase(ctx context.Context, databaseURL string) error {

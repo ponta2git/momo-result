@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"io"
 	"os"
 	"regexp"
@@ -35,8 +34,8 @@ func runValidatePostdeployEvidence(args []string, stdout io.Writer, stderr io.Wr
 		return 1
 	}
 	defer file.Close()
-	payload, err := decodeOneJSONValue(io.LimitReader(file, 1_048_577))
-	if err != nil {
+	var payload any
+	if err := decodeBoundedJSON(file, 1_048_576, &payload); err != nil {
 		writeEvidenceFailure(stderr, "JSONDecodeError")
 		return 1
 	}
@@ -66,19 +65,6 @@ func parseEvidenceArguments(args []string) (string, []string, string) {
 		index += 2
 	}
 	return path, required, ""
-}
-
-func decodeOneJSONValue(reader io.Reader) (any, error) {
-	decoder := json.NewDecoder(reader)
-	var payload any
-	if err := decoder.Decode(&payload); err != nil {
-		return nil, err
-	}
-	var trailing any
-	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		return nil, errors.New("trailing JSON value")
-	}
-	return payload, nil
 }
 
 func validatePostdeployEvidence(payload any, additionalRequired []string) string {

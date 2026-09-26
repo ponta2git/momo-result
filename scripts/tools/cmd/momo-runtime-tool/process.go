@@ -1,6 +1,9 @@
 package main
 
-import "sort"
+import (
+	"sort"
+	"strings"
+)
 
 var runtimeProcessMarkers = map[string][]string{
 	"api":   {"/opt/java/openjdk/bin/java", "/opt/momo-result/api/lib/", "momo.api.Main"},
@@ -27,21 +30,9 @@ func missingRuntimeProcesses(commandLines []string) []string {
 
 func containsAll(value string, markers []string) bool {
 	for _, marker := range markers {
-		if !contains(value, marker) {
+		if !strings.Contains(value, marker) {
 			return false
 		}
 	}
 	return true
-}
-
-func contains(value string, marker string) bool {
-	if len(marker) > len(value) {
-		return false
-	}
-	for index := 0; index <= len(value)-len(marker); index++ {
-		if value[index:index+len(marker)] == marker {
-			return true
-		}
-	}
-	return false
 }

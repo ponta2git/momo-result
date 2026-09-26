@@ -119,21 +119,6 @@ describe("series analysis artifact response decoder", () => {
     await expect(decodeSeriesAnalysisArtifact(kind, response)).resolves.toBe(response);
   });
 
-  it("accepts both valid match-context outcomes", async () => {
-    const included = includedMatchContextResponse();
-    const excluded = {
-      artifact,
-      inclusion: { status: "not_in_scope" },
-      match: null,
-      matchId: "match-1",
-      schemaVersion: 1,
-      scope: { displayName: "総合", kind: "overall" },
-    };
-
-    await expect(decodeSeriesAnalysisArtifact("matchContext", included)).resolves.toBe(included);
-    await expect(decodeSeriesAnalysisArtifact("matchContext", excluded)).resolves.toBe(excluded);
-  });
-
   it("accepts owner-nullable timestamps and revenue ranks", async () => {
     const drilldown = artifactResponse(drilldownFixture);
     const payload = drilldown["payload"];

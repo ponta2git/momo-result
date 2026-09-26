@@ -282,13 +282,13 @@
 
 ## 9. 検証
 
-本節は UI 変更で検討する evidence catalog であり、全項目を毎回実行する一覧ではない。対象要求と本書から守る利用者価値を特定し、`docs/test-rule.md` に従って静的検査、component test、Playwright、visual review から必要な最小集合を選ぶ。以下の命令形は、その evidence を選んだ場合だけ適用する。
+本節は UI 変更で検討する evidence catalog であり、全項目を毎回実行する一覧ではない。対象要求と本書から守る利用者価値を特定し、`docs/test-rule.md` の「UI の検証を選ぶ基準」に従って静的検査、component test、Playwright、visual review から必要な最小集合を選ぶ。配置や微細な反応の一貫性を設計要求とすることは、その座標・DOM 構造・animation 設定を恒久 test へ固定する理由にはならない。以下の命令形は、その evidence を選んだ場合だけ適用する。
 
 - 静的検査の採用は `docs/dev-rule.md` の Change Gates に従う。UI では未定義 token、禁止 import、構文上確定する依存境界など、違反を一意に判定できる規則だけを候補とし、UI 全体の適合を一つの source checker に集約しない。
 - raw value の有無、一定間隔の倍数、shadow や `z-index` の書式、近似色、表の alignment といった表層規則は、それ単独では blocking gate にしない。本書の意味、階層、操作、アクセシビリティへ実害が現れる場合に、実装規約または visual review で扱う。
-- component test は、shared primitive と利用者価値が現れる component を中心に、選択した state matrix、keyboard、focus、accessible name、local error、pending 中の重複操作、reduced motion 時の挙動を実操作で固定する。rendered size が必要な hit target は代表 flow の browser / visual evidence で確認し、各 component へ同じ case を複製しない。
+- component test は、shared primitive と利用者価値が現れる component を中心に、keyboard での到達・実行、入力保持、pending 中の重複操作、local error からの復旧を実操作で確認する。accessible name や focus はその操作の成立に必要な範囲で判定する。rendered size が必要な hit target は代表 flow の browser / visual evidence で確認し、各 component へ同じ case を複製しない。
 - 固定メンバー、プレー順、状態・意味 token のように複数画面が消費する対応関係は、共通の型・定義を実装上の正本とし、その consumer 契約を unit / component test で代表確認する。各画面の source 文字列を横断走査しない。
-- 主要 flow は Playwright で、変更が影響する layout mode の代表 viewport と主要状態を確認し、URL、request、保存、download、主要結果を主 oracle とする。responsive behavior を変える場合は対応する最小幅を含め、意図しない横 scroll、safe area、focus 復帰、dialog / disclosure の位置変化も確認する。同じ layout mode の近接幅を一律に重複実行しない。
+- 主要 flow の Playwright は URL、request、保存、download、主要結果を主 oracle とする。responsive な切替で入力を失う、必要な操作へ到達できないといった browser 固有の失敗を自動化し、微細な揃え・safe area・dialog の配置は変更時の visual review で確認する。同じ layout mode の近接幅を一律に重複実行しない。
 - screenshot は補助とし、視覚レビューでは hierarchy、読み幅、関係的余白、product specificity、restraint、structural fit を確認する。共通の文字・内容patternを導入するときは、適用する異なる用途の代表画面で、主情報・本文・メタ情報が同じ役割として読め、画面固有の優先順位や必要な注意を失わないことを確認する。component が親 slot に追従していること、狭幅と広幅で intrinsic constraint が保たれること、sibling 間の divider と部品 perimeter が二重にならないことも代表画面で確認する。初見点検と cognitive walkthrough で、目的、現在地、主要操作を説明できるか確認する。
 - ウェイト変更では、通常の label・操作・metadata が主要結果と競合せず、残した主要強調がその画面で読むべき結果や問題に対応することを確認する。500 と 400 が同じ face でも見出しを判別でき、selected / disabled / error と現在地を太字だけに依存せず認識できること、文字幅の変化で折り返しや操作位置が破綻しないことも代表 viewport と状態で確認する。computed weight や太字の個数だけを合格条件にせず、OS ごとの描画を未確認ならその境界を報告する。
 - page 最上部の可視タイトルを省略する変更では、空の header slot や余白が残らず主要 surface が最初の page scope になること、移した action が作用対象の近くにあり loading / terminal / ready で順序が一致すること、global navigation・landmark・section heading・control label から現在地と目的を説明できることを代表 route で確認する。

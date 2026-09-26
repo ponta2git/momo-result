@@ -38,7 +38,7 @@ aggregate coverage は、PR review と推移確認の非 blocking report とす�
 | API | domain、usecase、codec、HTTP mapping | PostgreSQL / Redis / object storage と migration 前提を実 service で確認 |
 | Processing Worker | pure calculation、parser、codec、state machine、decision table | DB / Redis、native OCR、parent / child process、cgroup、preemption、resource を専用 smoke で確認 |
 
-- UI は line coverage より loading / empty / error / success / mutation の scenario coverage を優先する。
+- UI は line coverage や全表示状態の網羅より、入力保持・正しい送信先・保存・復旧・操作続行に関わる独立した scenario を優先する。採否は `docs/test-rule.md` の「UI の検証を選ぶ基準」に従う。
 - DB / queue adapter は coverage 対象へ含めること自体を品質目標にせず、production と同じ wire / transaction を通す。
 - OCR accuracy は version 固定 dataset の項目別 oracle と差分で管理し、code coverage から未知画像への一般化を推測しない。
 - 分析計算は golden、高精度参照、property を組み合わせる。既存実装の出力だけを正解にしない。

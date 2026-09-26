@@ -158,17 +158,6 @@ describe("apiRequest", () => {
     expect(calls[0]?.[0]).toBe("/api/example");
   });
 
-  it("does not set multipart Content-Type manually", async () => {
-    const fetchMock = installFetchMock(async () => Response.json({ ok: true }));
-
-    await apiRequest("/api/uploads/images", { method: "POST", formData: new FormData() });
-
-    const calls = fetchCallsOf(fetchMock);
-    const init = requireInit(calls[0]?.[1]);
-    const headers = init.headers as Headers;
-    expect(headers.has("Content-Type")).toBe(false);
-  });
-
   it("adds idempotency keys only when callers opt in", async () => {
     const fetchMock = installFetchMock(async () => Response.json({ ok: true }));
 

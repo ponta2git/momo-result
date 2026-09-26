@@ -63,6 +63,7 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 | 変更 | 必須 gate |
 | --- | --- |
 | Web production | format、lint、typecheck + 選択した unit / component evidence |
+| Web test のみ | format、lint、typecheck + 変更・統合後の対象 suite。E2E / runner を変える場合はその実行境界も検証 |
 | Web API contract | Web gate + Tapir 由来 OpenAPI の生成・構造 lint・freshness + Web 型生成 / typecheck |
 | Web build / runtime | Web gate + build |
 | login、試合記録、OCR、比較、export の主要 UI flow | Web gate + 影響する利用者契約の Playwright |
@@ -81,6 +82,8 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 
 変更範囲に必要な gate と選択した品質証拠を確認したら、検証を終了する。追加・再実行は、結果を無効にする変更、失敗、具体的な未解決事項が生じた場合に、その影響範囲で行う。
 結果の再利用は、対象コード、依存する schema・設定・環境、観測した経路が今回の判断に適合する場合に限る。必須 gate の実行単位は CI の定義に従い、未実行を通過扱いにしない。
+
+検証結果の件数は、追加・削除した case 数と実行した既存 suite の総数を区別して報告する。suite 単位での実行を、変更にその件数の新規回帰 test が必要だったという根拠にしない。
 
 ## 5. Developer Wait / Parallel Execution
 

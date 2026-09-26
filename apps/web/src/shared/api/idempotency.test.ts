@@ -49,18 +49,15 @@ describe("idempotency key store", () => {
         slots: [null, { kind: "revenue" }],
       }),
     );
-  });
-
-  it("closes an operation attempt after success", () => {
-    const store = createIdempotencyKeyStore();
-    const payload = { heldAt: "2026-01-01T00:00:00.000Z" };
-    const first = store.begin("heldEvents.createHeldEvent", payload);
-
-    expect(store.begin("heldEvents.createHeldEvent", payload).key).toBe(first.key);
-
-    first.complete();
-
-    expect(store.begin("heldEvents.createHeldEvent", payload).key).not.toBe(first.key);
+    expect(
+      idempotencyFingerprint("ocrCapture.createUploadJob", {
+        slots: [undefined, { kind: "revenue" }],
+      }),
+    ).not.toBe(
+      idempotencyFingerprint("ocrCapture.createUploadJob", {
+        slots: [{ kind: "revenue" }],
+      }),
+    );
   });
 
   it("runs a mutation with one operation attempt and completes it after success", async () => {

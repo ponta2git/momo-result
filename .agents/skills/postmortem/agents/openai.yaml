@@ -1,4 +1,4 @@
 interface:
   display_name: "Postmortem"
-  short_description: "Analyze incidents and verify follow-up actions"
-  default_prompt: "Use $postmortem to analyze or review this incident or reassess its follow-up actions, preserving the requested scope and carrying authorized improvements through verification."
+  short_description: "Analyze incidents, review reports, and assess follow-ups"
+  default_prompt: "Use $postmortem to complete the requested incident analysis, review, or follow-up work, grounding conclusions in evidence and preserving the requested scope."

@@ -1,10 +1,12 @@
 # Private Postmortem Template
 
-Use this structure for a new or revised private incident record. Keep only sections that support
-the current analysis. Follow [../SKILL.md](../SKILL.md); when selecting or updating actions, use
-[follow-up-actions.md](follow-up-actions.md) for their lifecycle and tracking.
-The action table is a dated snapshot; the shared tracker owns the current outstanding plan.
-Keep secret values out of this record and publish only abstract lessons.
+Adapt this structure to the requested private record; omit sections that do not support a decision.
+Keep secret values out. Preserve the event and original decisions as dated history; append dated
+corrections when later evidence changes a conclusion instead of silently rewriting what was known.
+
+When selecting or updating actions, use [follow-up-actions.md](follow-up-actions.md). An action
+list here is a dated snapshot when an authorized shared tracker holds the current plan; otherwise
+this record can hold the plan. A tracker is not a prerequisite for completing the analysis.
 
 ````md
 # Postmortem: <short incident title>
@@ -13,13 +15,11 @@ Incident date / period: <date and timezone; mark estimates>
 Scope: <affected system and analysis scope>
 Incident state: <ongoing | mitigated | recovered | unknown>, as of <time>
 Analysis state: <draft | complete for the stated scope>, as of <date>
-Follow-up owner: <known responsible person/role; shared unless an action overrides it>
-Current follow-ups: <tracking file or source section>
 
 ## Summary and Impact
 
-<What failed, what users observed, mitigation, and remaining impact. State the basis and limits of
-impact estimates, including data loss or uncertainty.>
+<What failed, what users observed, mitigation, remaining impact, and the basis and limits of the
+impact estimate. Distinguish unknown impact from verified absence of harm.>
 
 ## Evidence and Timeline
 
@@ -27,64 +27,38 @@ impact estimates, including data loss or uncertainty.>
 |---|---|---|
 | <time and timezone> | <observed event; label estimates> | <safe source reference> |
 
-## Causal Analysis
+## Findings and Uncertainty
 
-<Explain the supported failure mechanism, enabling conditions, and detection/recovery gaps.
-Separate hypotheses from facts. Include conflicting evidence and unknowns that affect decisions.
-Do not infer the incident-time behavior from the current implementation alone.>
+<Explain the supported failure mechanism and contributing conditions, linking evidence. Separate
+facts, hypotheses, conflicting evidence, and unknowns. Include prior measures, information gaps,
+and factors that helped or hindered recovery when they explain a finding or response decision.>
 
-## Prior Measures and Recurrence
+## Response and Verification
 
-<When relevant: link the previous action or safeguard. Was it unimplemented, outside its coverage,
-bypassed, or ineffective? What does that imply for the bounded scope of this response?>
-
-## What Helped or Hindered
-
-<Diagnosis, mitigation, recovery, and the information available at the time. Explain whether
-requirements or guidance were missing, ambiguous, hard to find, or already correct but unenforced,
-only where that contributed.>
-
-## Response Selection
-
-<Connect chosen actions to the findings and expected reduction in likelihood or impact. Explain
-material alternatives, costs, and trade-offs, including why an extra test or rule is unnecessary
-when that is the decision. Route any required specification decision to its owner.>
-
-## Remediation and Verification Performed
+<Connect selected responses to findings and intended outcomes. Explain material alternatives and
+trade-offs. Link any changed durable guidance to its owning source. Record unresolved product or
+operational decisions with their known owner or mark them unassigned; do not present them as
+implementation-ready tasks.>
 
 | Change / action ref | Evidence and result | Verified boundary and remaining limits |
 |---|---|---|
-| <implemented change> | <revision/run/command/manual review reference> | <what it proves and does not prove> |
+| <completed work> | <revision/run/command/manual review reference> | <what it proves and does not prove> |
 
-## Actions at Analysis Completion
+## Follow-ups and Residual Risk
 
-As of: <date>. Current outstanding plans are maintained at <tracker reference>.
-Use source section anchors or local IDs to keep action references stable.
+As of: <date>. Current plan: <authorized tracker or this section>.
+Shared owner, if known: <person/role; override per action when needed>.
 
-| Ref | Priority / status | Action and causal purpose | Target / owner override | Done when | Verification method | Next step / revisit condition |
-|---|---|---|---|---|---|---|
-| <A1> | <priority / status> | <concrete action and intended effect> | <boundary; override shared owner if needed> | <observable acceptance condition> | <suitable evidence> | <next step; reason and trigger if postponed> |
+- <Stable action ID, priority, status>: <action or decision and causal purpose>
+  - Target / owner: <affected boundary; owner override or unassigned>
+  - Completion evidence: <observable acceptance condition and verification method>
+  - Next step: <work needed; reason and revisit date/condition if deferred or blocked>
 
-## Open Questions and Residual Risk
-
-<Unverified behavior, unanswered questions, and their investigation/decision action references.
-For accepted risk, identify who decided, why, and any review condition. A recorded risk is not
-automatically accepted.>
-
-## Durable Guidance Changes
-
-<When needed: link the owning rules and describe the decision they now clarify. An existing
-correct rule may need implementation support instead of another documentation change. Keep
-lessons.md to applicable recall prompts and pointers.>
-
-## Changed Mental Model
-
-<Optional: a supported misconception and the corrected model. Label an inferred misconception
-as a hypothesis; omit this section when the evidence does not support one.>
+<Connect material unknowns and residual risks to these actions. For accepted risk, identify the
+decision-maker, rationale, and any review condition; merely recording a risk is not acceptance.>
 
 ## Dated Follow-up Results
 
-<Append only when later work changes a conclusion, closes an action, or replaces/withdraws it.
-Include the action reference, date, evidence or decision rationale, and replacement if any.
-Preserve the original snapshot rather than silently revising incident history.>
+<When later work changes a conclusion or action, append its date, reference, evidence or decision
+rationale, and replacement if any. Keep the current plan synchronized when an update is authorized.>
 ````

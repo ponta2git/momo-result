@@ -33,7 +33,10 @@ previous_sha="$(jq -r --arg image "${ANALYSIS_IMAGE_REF}" '
     .config.env.MOMO_OCR_V2_CONSUMER_MODE == "enabled" and
     .config.guest.cpu_kind == "shared" and .config.guest.cpus == 1 and
     .config.guest.memory_mb == 256) then
-    .[0].config.env.MOMO_ANALYSIS_CONFIG_VERSION | ltrimstr("series-analysis-v1-")
+    .[0].config.env.MOMO_ANALYSIS_CONFIG_VERSION |
+    if type == "string" and startswith("series-analysis-v1-") then
+      ltrimstr("series-analysis-v1-")
+    else "" end
   else "" end' <<< "${current_state}")"
 if [[ "${previous_sha}" =~ ^[0-9a-f]{40}$ ]] &&
   git merge-base --is-ancestor "${previous_sha}" "${ANALYSIS_RELEASE_SHA}" &&
@@ -46,7 +49,7 @@ if [[ "${previous_sha}" =~ ^[0-9a-f]{40}$ ]] &&
     exit 0
   fi
 fi
-flyctl deploy --config fly.analysis.toml --image "${ANALYSIS_IMAGE_REF}" \
+flyctl deploy --app "${ANALYSIS_APP}" --config fly.analysis.toml --image "${ANALYSIS_IMAGE_REF}" \
   --env MOMO_ANALYSIS_PUBLICATION_MODE=enabled \
   --env MOMO_ANALYSIS_CONFIG_VERSION="series-analysis-v1-${ANALYSIS_RELEASE_SHA}" \
   --env MOMO_ANALYSIS_WORKER_ID="${ANALYSIS_WORKER_ID}" \

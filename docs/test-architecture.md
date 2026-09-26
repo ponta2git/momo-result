@@ -77,6 +77,7 @@ aggregate coverage は、PR review と推移確認の非 blocking report とす�
 
 - workflow は gate の依存関係、権限、service、artifact の受け渡しを所有する。`scripts/ci` はその実行境界の調整と検証を担い、アプリの業務判断は各 subsystem に置く。複数環境で使う型付きの処理や process 管理は `scripts/tools` が所有する。
 - `scripts/ci/test-*.sh` は分類、来歴、結果集約、実行の調整を観測する pipeline-integrity evidence とする。外部 command の double は実 container、DB / queue、provider 接続の成功を保証しない。ローカル候補の起動確認と配備後の公開 edge の確認は、それぞれの対象へ接続する smoke で証拠を取る。
+- shell の contract suite は標準 test runner から独立した process で実行し、一つの失敗で他の結果を失わない。fixture と command double は各 suite が所有し、ローカルと CI は同じ実行入口を使う。変更分類には test 自体に加え、検証される運用 script と実行入口の変更も接続する。
 - coverage artifact は PR review と推移確認の補助であり、integration / smoke の代わりにしない。
 - artifact は raw summary、review 用 summary、必要な HTML / machine-readable report に分け、生成 script と workflow が path / format を所有する。
 - coverage report を有効にした job は test failure を隠さず、artifact upload failure と品質 failure を区別する。

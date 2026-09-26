@@ -37,7 +37,7 @@
 | API | `sbt --server --batch apiQuality`、`sbt --server --batch testFull`、同じオプションで必要に応じ `apiCoverage` / `apiDbQuality` / `apiRedisQuality` / `apiR2Quality` |
 | Processing Worker | `cargo fmt --all -- --check`、`cargo clippy --locked --workspace --all-targets`、`cargo test --locked --workspace`、production image build |
 | Go tools | `cd scripts/tools && go test ./... && go vet ./...` |
-| Workflow | `pnpm actionlint` |
+| Workflow / policy scripts | `pnpm actionlint`、`pnpm test:policy` |
 | Public docs / config | `pnpm public:safety:check` |
 
 OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、coverage の運用は `docs/test-architecture.md` を正本とする。実行 command、lint 設定、smoke の引数は生成 script、build 設定、`scripts/ci/` を実行上の正本とする。文書中の command が実装とずれた場合は実装を直すか、この表を更新し、別名 command を増やさない。

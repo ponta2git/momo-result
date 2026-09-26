@@ -21,7 +21,7 @@ select_all() {
 }
 
 while IFS= read -r -d '' path; do
-  [[ "${path}" == scripts/ci/* ]] && policy_scripts=true
+  [[ "${path}" == scripts/ci/* || "${path}" == scripts/ops/* ]] && policy_scripts=true
   [[ "${path}" == .github/workflows/* || "${path}" == .github/actions/* ]] && actionlint=true
   [[ "${path}" == scripts/tools/* ]] && go_tools=true
 
@@ -90,6 +90,7 @@ while IFS= read -r -d '' path; do
     package.json | pnpm-lock.yaml | pnpm-workspace.yaml)
       web=true
       runtime=true
+      [[ "${path}" != package.json ]] || policy_scripts=true
       ;;
     mise.toml)
       select_all
@@ -112,7 +113,7 @@ while IFS= read -r -d '' path; do
       api=true
       web=true
       ;;
-    scripts/ci/test-* | scripts/ci/canonicalize-artifact-digest.sh | \
+    scripts/ci/test-* | scripts/ci/*.test.mjs | scripts/ci/canonicalize-artifact-digest.sh | \
       scripts/ci/load-analysis-candidate.sh | scripts/ci/load-runtime-image-artifact.sh | \
       scripts/ci/resolve-pushed-runtime-image.sh | scripts/ci/sanitize-analysis-report.sh | \
       scripts/ci/validate-analysis-candidate.sh | scripts/ci/validate-analysis-worker-readiness.sh | \
@@ -128,6 +129,8 @@ while IFS= read -r -d '' path; do
       ;;
     scripts/dev-local.mjs | scripts/dev-local.test.mjs)
       policy_scripts=true
+      ;;
+    scripts/ops/analysis.sh | scripts/ops/analysis-maintain.sh)
       ;;
     .github/workflows/api.yml)
       api=true

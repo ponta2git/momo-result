@@ -4,7 +4,7 @@
   "packageManager": "pnpm@10.34.5",
   "scripts": {
     "dev": "node scripts/dev-local.mjs",
-    "dev:launcher:test": "node --test scripts/dev-local.test.mjs",
+    "test:policy": "node --test scripts/dev-local.test.mjs scripts/ci/*.test.mjs",
     "api:format": "cd apps/api && sbt --server --batch apiFormat",
     "api:format:check": "cd apps/api && sbt --server --batch apiFormatCheck",
     "api:lint": "cd apps/api && sbt --server --batch apiLint",

@@ -19,39 +19,30 @@ assert_case() {
 }
 
 expected() {
-  local expected_api="$1" expected_web="$2" expected_analysis="$3"
-  local expected_analysis_image="$4" expected_runtime="$5" expected_http4s_patch="$6"
-  local expected_workflow="$7" expected_actionlint="$8" expected_go_tools="$9"
-  local expected_policy_scripts="${10}"
-  printf '%s\n' \
-    "api=${expected_api}" \
-    "web=${expected_web}" \
-    "analysis=${expected_analysis}" \
-    "analysis_image=${expected_analysis_image}" \
-    "runtime=${expected_runtime}" \
-    "http4s_patch=${expected_http4s_patch}" \
-    "workflow=${expected_workflow}" \
-    "actionlint=${expected_actionlint}" \
-    "go_tools=${expected_go_tools}" \
-    "policy_scripts=${expected_policy_scripts}"
+  local key value
+  for key in api web analysis analysis_image runtime http4s_patch workflow actionlint go_tools policy_scripts; do
+    value=false
+    case " $* " in *" ${key} "*) value=true ;; esac
+    printf '%s=%s\n' "${key}" "${value}"
+  done
 }
 
-readonly none="$(expected false false false false false false false false false false)"
-readonly api_only="$(expected true false false false false false false false false false)"
-readonly web_only="$(expected false true false false false false false false false false)"
-readonly api_runtime="$(expected true false false false true false false false false false)"
-readonly api_web="$(expected true true false false false false false false false false)"
-readonly analysis_only="$(expected false false true false false false false false false false)"
-readonly analysis_image="$(expected false false true true false false false false false false)"
-readonly runtime_only="$(expected false false false false true false false false false false)"
-readonly runtime_go="$(expected false false false false true false true false true false)"
-readonly go_only="$(expected false false false false false false true false true false)"
-readonly http4s_ref="$(expected true false false false true true false false false false)"
-readonly http4s_builder="$(expected true false false false true true true false false true)"
-readonly all="$(expected true true true true true false false false false false)"
-readonly orchestrator="$(expected true true true true true false true true false false)"
-readonly actionlint_policy="$(expected false false false false false false true true false true)"
-readonly policy_only="$(expected false false false false false false true false false true)"
+readonly none="$(expected)"
+readonly api_only="$(expected api)"
+readonly web_only="$(expected web)"
+readonly api_runtime="$(expected api runtime)"
+readonly api_web="$(expected api web)"
+readonly analysis_only="$(expected analysis)"
+readonly analysis_image="$(expected analysis analysis_image)"
+readonly runtime_only="$(expected runtime)"
+readonly runtime_go="$(expected runtime workflow go_tools)"
+readonly go_only="$(expected workflow go_tools)"
+readonly http4s_ref="$(expected api runtime http4s_patch)"
+readonly http4s_builder="$(expected api runtime http4s_patch workflow policy_scripts)"
+readonly all="$(expected api web analysis analysis_image runtime)"
+readonly orchestrator="$(expected api web analysis analysis_image runtime workflow actionlint)"
+readonly actionlint_policy="$(expected workflow actionlint policy_scripts)"
+readonly policy_only="$(expected workflow policy_scripts)"
 
 test_root="$(mktemp -d)"
 trap 'rm -rf -- "${test_root}"' EXIT
@@ -85,6 +76,14 @@ fi
 assert_case docs-only "${none}" docs/README.md
 assert_case actionlint-only "${actionlint_policy}" scripts/ci/actionlint.sh
 assert_case dev-launcher "${policy_only}" scripts/dev-local.mjs
+assert_case ops-dispatcher "${policy_only}" scripts/ops/analysis.sh
+assert_case ops-orchestration "${policy_only}" scripts/ops/analysis-maintain.sh
+assert_case policy-runner "${policy_only}" scripts/ci/policy.test.mjs
+assert_case package-scripts \
+  "$(expected web runtime workflow policy_scripts)" package.json
+assert_case unknown-ops-script \
+  "$(expected api web analysis analysis_image runtime workflow policy_scripts)" \
+  scripts/ops/new-operation.sh
 assert_case policy-fixture "${policy_only}" scripts/ci/test-validate-runtime-deployment.sh
 assert_case release-policy "${policy_only}" scripts/ci/check-pr-branch-policy.sh
 assert_case release-notes-extractor "${policy_only}" scripts/ci/extract-release-notes.sh
@@ -92,13 +91,13 @@ assert_case range-classifier "${policy_only}" scripts/ci/classify-git-range.sh
 assert_case release-notes-renderer "${policy_only}" scripts/ci/runtime-release-notes.sh
 assert_case deployment-validator "${policy_only}" scripts/ci/validate-runtime-deployment.sh
 assert_case image-validator \
-  "$(expected false false false false true false true false false true)" \
+  "$(expected runtime workflow policy_scripts)" \
   scripts/ci/validate-runtime-image.sh
 assert_case unknown-validator \
-  "$(expected true true true true true false true false false true)" \
+  "$(expected api web analysis analysis_image runtime workflow policy_scripts)" \
   scripts/ci/validate-new-boundary.sh
 assert_case coverage-summary \
-  "$(expected true true false false false false true false false true)" \
+  "$(expected api web workflow policy_scripts)" \
   scripts/ci/write-coverage-summary.py
 assert_case api-source "${api_runtime}" apps/api/src/main/scala/momo/api/Main.scala
 assert_case http4s-ref "${http4s_ref}" .http4s-ref
@@ -113,16 +112,16 @@ assert_case web-lint-config "${web_only}" apps/web/oxlint.config.ts
 assert_case analysis-test "${analysis_only}" apps/processing-worker/tests/parent_liveness.rs
 assert_case analysis-source "${analysis_image}" apps/processing-worker/src/main.rs
 assert_case analysis-production-workflow \
-  "$(expected false false false false false false true true false false)" \
+  "$(expected workflow actionlint)" \
   .github/workflows/analysis-production.yml
 assert_case processing-worker-workflow \
-  "$(expected false false true true false false true true false false)" \
+  "$(expected analysis analysis_image workflow actionlint)" \
   .github/workflows/processing-worker.yml
 assert_case processing-worker-script \
-  "$(expected false false true true false false true false false true)" \
+  "$(expected analysis analysis_image workflow policy_scripts)" \
   scripts/ci/processing-worker-image-smoke.sh
 assert_case series-analysis-script \
-  "$(expected false false true true false false true false false true)" \
+  "$(expected analysis analysis_image workflow policy_scripts)" \
   scripts/ci/series-analysis-control-plane-smoke.sh
 assert_case runtime-tool "${runtime_go}" scripts/tools/cmd/momo-runtime-tool/main.go
 assert_case runtime-tool-go-mod "${runtime_go}" scripts/tools/go.mod
@@ -132,19 +131,19 @@ assert_case runtime-db-contract "${runtime_go}" contracts/runtime-db-contract.js
 assert_case runtime-tool-characterization \
   "${go_only}" contracts/runtime-tool-characterization-v1.json
 assert_case runtime-log-summary \
-  "$(expected false false false false true false true false false true)" \
+  "$(expected runtime workflow policy_scripts)" \
   scripts/ci/summarize-runtime-logs.sh
 assert_case runtime-memory-smoke \
-  "$(expected false false false false true false true false false true)" \
+  "$(expected runtime workflow policy_scripts)" \
   scripts/ci/runtime-memory-smoke.sh
 assert_case runtime-rollback-workflow \
-  "$(expected false false false false false false true true false false)" \
+  "$(expected workflow actionlint)" \
   .github/workflows/runtime-rollback.yml
 assert_case runtime-release-workflow \
-  "$(expected false false false false false false true true false false)" \
+  "$(expected workflow actionlint)" \
   .github/workflows/runtime-release.yml
 assert_case deploy-workflow \
-  "$(expected false false false false true false true true false false)" \
+  "$(expected runtime workflow actionlint)" \
   .github/workflows/deploy.yml
 assert_case shared-schema "${all}" docs/schemas/series-analysis-v1.json
 assert_case orchestrator "${orchestrator}" .github/workflows/pr.yml
@@ -152,7 +151,7 @@ assert_case unknown-path "${all}" config/unknown-release-input.toml
 
 assert_case 'Summit contract pin selects assembled Web gate' "${web_only}" '.summit-ref'
 assert_case 'OCR notification workflow selects its gate' \
-  "$(expected false true false false false false true true false false)" \
+  "$(expected web workflow actionlint)" \
   '.github/workflows/ocr-notifications.yml'
 
 echo "Change classifier tests passed."

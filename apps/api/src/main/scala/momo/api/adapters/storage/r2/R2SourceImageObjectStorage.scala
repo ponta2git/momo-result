@@ -40,12 +40,12 @@ final class R2SourceImageObjectStorage[F[_]: Async] private[r2] (
       mediaType: String,
       bytes: Array[Byte],
       sha256: Sha256Hex,
-  ): F[Either[SourceImageObjectFailure, SourceImageObjectMetadata]] =
-    validatePut(mediaType, bytes, sha256) match
+  ): F[Either[SourceImageObjectFailure, SourceImageObjectMetadata]] = Async[F].defer {
+    validatePut(key, mediaType, bytes, sha256) match
       case Left(failure) => Async[F].pure(Left(failure))
-      case Right(checksumBase64) => run {
+      case Right(checksumBase64) => Async[F].blocking {
           val request = PutObjectRequest.builder().bucket(bucket).key(key.value)
-            .contentType(mediaType).contentLength(bytes.length.toLong)
+            .contentType(mediaType).contentLength(bytes.length.toLong).ifNoneMatch("*")
             .checksumSHA256(checksumBase64).metadata(Map(Sha256MetadataKey -> sha256.value).asJava)
             .build()
           val response = client.putObject(request, RequestBody.fromBytes(bytes))
@@ -60,7 +60,21 @@ final class R2SourceImageObjectStorage[F[_]: Async] private[r2] (
             ),
             SourceImageObjectFailure.IntegrityViolation,
           )
-        }
+        }.recoverWith {
+          // A response can be lost after a successful PUT. Reconcile the actual object on
+          // replay or a concurrent create; never replace another payload at an immutable key.
+          case error: S3Exception if error.statusCode() == 412 || error.statusCode() == 409 =>
+            get(key).map(_.flatMap { existing =>
+              val metadata = existing.metadata
+              Either.cond(
+                metadata.mediaType == mediaType && metadata.sizeBytes == bytes.length.toLong &&
+                  metadata.sha256 == sha256,
+                metadata,
+                SourceImageObjectFailure.IntegrityViolation,
+              )
+            })
+        }.handleError(error => Left(failureFor(error)))
+  }
 
   override def head(
       key: SourceImageObjectKey
@@ -88,14 +102,12 @@ final class R2SourceImageObjectStorage[F[_]: Async] private[r2] (
 
   override def delete(
       key: SourceImageObjectKey
-  ): F[Either[SourceImageObjectFailure, Unit]] = Async[F].blocking {
-    try
-      val _ =
-        client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key.value).build())
-      Right(())
-    catch
-      case error: Throwable if failureFor(error) == SourceImageObjectFailure.NotFound => Right(())
-      case error: Throwable => Left(failureFor(error))
+  ): F[Either[SourceImageObjectFailure, Unit]] = run {
+    val _ = client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key.value).build())
+    Right(())
+  }.map {
+    case Left(SourceImageObjectFailure.NotFound) => Right(())
+    case result => result
   }
 
   private def run[A](operation: => Either[SourceImageObjectFailure, A]): F[Either[
@@ -142,17 +154,21 @@ object R2SourceImageObjectStorage:
       .build()
 
   private def validatePut(
+      key: SourceImageObjectKey,
       mediaType: String,
       bytes: Array[Byte],
       expectedSha256: Sha256Hex,
   ): Either[SourceImageObjectFailure, String] =
-    val actualSha256 = Sha256Hex.digest(bytes)
-    Either.cond(
-      bytes.nonEmpty && bytes.length <= ImageValidation.MaxBytes &&
-        AllowedMediaTypes.contains(mediaType) && actualSha256 == expectedSha256,
-      Base64.getEncoder.encodeToString(hexToBytes(expectedSha256.value)),
-      SourceImageObjectFailure.IntegrityViolation,
-    )
+    ImageValidation.validate(bytes, Some(mediaType))
+      .leftMap(_ => SourceImageObjectFailure.IntegrityViolation).flatMap { validated =>
+        Either.cond(
+          AllowedMediaTypes.contains(mediaType) &&
+            key.value.endsWith(s".${validated.imageType.extension}") &&
+            Sha256Hex.digest(bytes) == expectedSha256,
+          Base64.getEncoder.encodeToString(hexToBytes(expectedSha256.value)),
+          SourceImageObjectFailure.IntegrityViolation,
+        )
+      }
 
   private def metadata(
       key: SourceImageObjectKey,

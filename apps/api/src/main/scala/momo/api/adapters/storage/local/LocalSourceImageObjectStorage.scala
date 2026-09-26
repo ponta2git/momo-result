@@ -43,7 +43,7 @@ final class LocalSourceImageObjectStorage[F[_]: Async](root: Path)
       mediaType: String,
       bytes: Array[Byte],
       sha256: Sha256Hex,
-  ): F[Either[SourceImageObjectFailure, SourceImageObjectMetadata]] =
+  ): F[Either[SourceImageObjectFailure, SourceImageObjectMetadata]] = Async[F].defer {
     expectedMetadata(key, mediaType, bytes, sha256) match
       case Left(failure) => Async[F].pure(Left(failure))
       case Right(expected) => run {
@@ -73,6 +73,7 @@ final class LocalSourceImageObjectStorage[F[_]: Async](root: Path)
             }
           }
         }
+  }
 
   override def head(
       key: SourceImageObjectKey

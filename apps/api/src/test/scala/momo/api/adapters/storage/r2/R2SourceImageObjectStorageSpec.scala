@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import scala.util.Failure
 
 import cats.effect.IO
+import cats.syntax.all.*
 import software.amazon.awssdk.core.ResponseInputStream
 import software.amazon.awssdk.core.sync.RequestBody
 import software.amazon.awssdk.services.s3.S3Client
@@ -55,6 +56,42 @@ final class R2SourceImageObjectStorageSpec extends MomoCatsEffectSuite:
       assertEquals(result, Left(SourceImageObjectFailure.IntegrityViolation))
       assertEquals(client.putCalls, 0)
     }
+
+  test("repeated PUT verifies existing content and never replaces a different image"):
+    val client = StubS3Client()
+    val storage = R2SourceImageObjectStorage.fromClient[IO](client, bucket)
+    val replacement = TestImages.png(2, 1)
+
+    for
+      original <- storage.put(key, "image/png", bytes, sha256)
+      replayed <- storage.put(key, "image/png", bytes, sha256)
+      replaced <- storage.put(key, "image/png", replacement, Sha256Hex.digest(replacement))
+      retained <- storage.get(key)
+    yield
+      assert(original.isRight)
+      assertEquals(replayed, original)
+      assertEquals(replaced, Left(SourceImageObjectFailure.IntegrityViolation))
+      assertEquals(retained.map(_.bytes.toVector), Right(bytes.toVector))
+
+  test("concurrent creates at one key retain exactly one complete payload"):
+    val client = StubS3Client()
+    val storage = R2SourceImageObjectStorage.fromClient[IO](client, bucket)
+    val replacement = TestImages.png(2, 1)
+
+    for
+      results <- (
+        storage.put(key, "image/png", bytes, sha256),
+        storage.put(key, "image/png", replacement, Sha256Hex.digest(replacement)),
+      ).parTupled
+      retained <- storage.get(key)
+    yield
+      val writes = List(results._1, results._2)
+      assertEquals(writes.count(_.isRight), 1)
+      assertEquals(writes.count(_ == Left(SourceImageObjectFailure.IntegrityViolation)), 1)
+      assertEquals(
+        retained.map(_.metadata.sha256).toOption,
+        writes.flatMap(_.toOption).headOption.map(_.sha256)
+      )
 
   test("get rejects content modified after upload"):
     val client = StubS3Client()
@@ -122,6 +159,26 @@ final class R2SourceImageObjectStorageSpec extends MomoCatsEffectSuite:
     assert(!rendered.contains(bucket))
     assert(rendered.contains("[REDACTED]"))
 
+  test("R2 endpoints reject credentials, queries, fragments and missing hosts"):
+    val credentials = R2Credentials.fromStrings("access", "secret").fold(fail(_), identity)
+    List(
+      "https:/",
+      "https://user:secret@example.com",
+      "https://example.com?query=value",
+      "https://example.com#fragment",
+      "https://example.com:99999",
+    ).foreach { endpoint =>
+      assert(R2SourceImageObjectStorageConfig.create(
+        URI.create(endpoint),
+        "auto",
+        bucket,
+        credentials,
+        Duration.ofSeconds(10),
+        Duration.ofSeconds(5),
+        maxAttempts = 2,
+      ).isLeft)
+    }
+
   private final case class StoredObject(
       contentType: String,
       metadata: java.util.Map[String, String],
@@ -151,11 +208,15 @@ final class R2SourceImageObjectStorageSpec extends MomoCatsEffectSuite:
       val input = requestBody.contentStreamProvider().newStream()
       val requestBytes = try input.readAllBytes()
       finally input.close()
-      maybeStored.set(Some(StoredObject(
+      val stored = Some(StoredObject(
         request.contentType(),
         request.metadata(),
         requestBytes,
-      )))
+      ))
+      if Option(request.ifNoneMatch()).contains("*") then
+        if !maybeStored.compareAndSet(None, stored) then
+          val _ = Failure[Unit](S3Exception.builder().statusCode(412).build()).get
+      else maybeStored.set(stored)
       PutObjectResponse.builder().checksumSHA256(request.checksumSHA256()).eTag("etag-1").build()
 
     override def headObject(_request: HeadObjectRequest): HeadObjectResponse =

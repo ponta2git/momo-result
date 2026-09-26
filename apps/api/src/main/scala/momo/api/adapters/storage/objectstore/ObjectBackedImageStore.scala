@@ -75,38 +75,40 @@ final class ObjectBackedImageStore[F[_]: Async](
       contentType: Option[String],
       bytes: Array[Byte],
       idempotencyHash: Option[SourceImageIdempotencyHash],
-  ): F[Either[AppError, StoredImage]] = ImageValidation.validate(bytes, contentType) match
-    case Left(error) => Async[F].pure(Left(error))
-    case Right(validated) => nextImageId.flatMap { imageId =>
-        SourceImageObjectKey.forImage(imageId, validated.imageType.extension) match
-          case Left(_) => Async[F].pure(Left(InternalContractError))
-          case Right(objectKey) => now.flatMap { timestamp =>
-              val reservation = SourceImageReservation(
-                id = imageId,
-                ownerAccountId = ownerAccountId,
-                objectKey = objectKey,
-                idempotencyKeyHash = idempotencyHash
-                  .getOrElse(SourceImageIdempotencyHash.uniqueFor(imageId)),
-                mediaType = validated.imageType.mediaType,
-                sizeBytes = bytes.length.toLong,
-                sha256 = Sha256Hex.digest(bytes),
-                width = validated.dimensions.width.toInt,
-                height = validated.dimensions.height.toInt,
-                now = timestamp,
-              )
-              sourceImages.reserveWithinQuota(reservation, quota).flatMap {
-                case SourceImageReservationResult.Reserved(record) =>
-                  uploadReserved(record, bytes)
-                case SourceImageReservationResult.Existing(record) =>
-                  resolveExisting(record, reservation, bytes)
-                case SourceImageReservationResult.Rejected(rejection) => Async[F]
-                    .delay(logger.warn(
-                      s"image_upload_admission rejected accountId=${ownerAccountId.value} ${rejection
-                          .logFields}"
-                    )).as(Left(QuotaExceeded))
+  ): F[Either[AppError, StoredImage]] = Async[F].defer {
+    ImageValidation.validate(bytes, contentType) match
+      case Left(error) => Async[F].pure(Left(error))
+      case Right(validated) => nextImageId.flatMap { imageId =>
+          SourceImageObjectKey.forImage(imageId, validated.imageType.extension) match
+            case Left(_) => Async[F].pure(Left(InternalContractError))
+            case Right(objectKey) => now.flatMap { timestamp =>
+                val reservation = SourceImageReservation(
+                  id = imageId,
+                  ownerAccountId = ownerAccountId,
+                  objectKey = objectKey,
+                  idempotencyKeyHash = idempotencyHash
+                    .getOrElse(SourceImageIdempotencyHash.uniqueFor(imageId)),
+                  mediaType = validated.imageType.mediaType,
+                  sizeBytes = bytes.length.toLong,
+                  sha256 = Sha256Hex.digest(bytes),
+                  width = validated.dimensions.width.toInt,
+                  height = validated.dimensions.height.toInt,
+                  now = timestamp,
+                )
+                sourceImages.reserveWithinQuota(reservation, quota).flatMap {
+                  case SourceImageReservationResult.Reserved(record) =>
+                    uploadReserved(record, bytes)
+                  case SourceImageReservationResult.Existing(record) =>
+                    resolveExisting(record, reservation, bytes)
+                  case SourceImageReservationResult.Rejected(rejection) => Async[F]
+                      .delay(logger.warn(
+                        s"image_upload_admission rejected accountId=${ownerAccountId.value} ${rejection
+                            .logFields}"
+                      )).as(Left(QuotaExceeded))
+                }
               }
-            }
-      }
+        }
+  }
 
   private def resolveExisting(
       record: SourceImageRecord,

@@ -22,14 +22,15 @@ final class PostgresOutboxNotifierSpec extends IntegrationSuite:
       }
   }
 
-  private def listener(channel: PostgresOutboxNotifier.Channel): Resource[IO, java.sql.Connection] = Resource
-    .fromAutoCloseable(IO.blocking(dataSource.getConnection))
-    .evalTap(connection =>
-      IO.blocking {
-        val statement = connection.createStatement()
-        try statement.execute(s"LISTEN ${channel.value}")
-        finally statement.close()
-      }
-    )
+  private def listener(channel: PostgresOutboxNotifier.Channel): Resource[IO, java.sql.Connection] =
+    Resource
+      .fromAutoCloseable(IO.blocking(dataSource.getConnection))
+      .evalTap(connection =>
+        IO.blocking {
+          val statement = connection.createStatement()
+          try statement.execute(s"LISTEN ${channel.value}")
+          finally statement.close()
+        }
+      )
 
 end PostgresOutboxNotifierSpec

@@ -38,7 +38,14 @@ object PostgresSeasonMasters:
     override def list(gameTitleId: Option[GameTitleId]): ConnectionIO[List[SeasonMaster]] =
       val where = gameTitleId.fold(Fragment.empty)(id => fr"WHERE game_title_id = $id")
       val order = fr"ORDER BY game_title_id, display_order, created_at, id"
-      (selectAll ++ where ++ order).query[SeasonMasterRow].to[List].map(_.map(fromRow))
+      val nameLimit = PostgresReadBudget.NameCodePoints
+      val bounded = fr"""SELECT char_length(name) <= $nameLimit,
+        id, game_title_id, LEFT(name, $nameLimit), display_order, created_at FROM season_masters"""
+      PostgresReadBudget.guardedRows[SeasonMasterRow](
+        bounded ++ where ++ order,
+        PostgresReadBudget.CatalogRows,
+        "Season catalog"
+      ).map(_.map(fromRow))
 
     override def find(id: SeasonMasterId): ConnectionIO[Option[SeasonMaster]] =
       (selectAll ++ fr"WHERE id = $id").query[SeasonMasterRow].option.map(_.map(fromRow))

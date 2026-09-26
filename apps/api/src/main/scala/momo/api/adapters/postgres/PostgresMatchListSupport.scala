@@ -128,7 +128,12 @@ private[postgres] trait PostgresMatchListSupport:
 
   /** Decorate after selection so master joins are bounded by the displayed page. */
   protected final def withLabels(select: Fragment): Fragment =
-    fr"SELECT sortable.*, gt.name, season.name, map.name FROM (" ++ select ++ fr""") sortable
+    val nameLimit = PostgresReadBudget.NameCodePoints
+    fr"""SELECT COALESCE(char_length(gt.name) <= $nameLimit, true)
+        AND COALESCE(char_length(season.name) <= $nameLimit, true)
+        AND COALESCE(char_length(map.name) <= $nameLimit, true),
+        sortable.*, LEFT(gt.name, $nameLimit), LEFT(season.name, $nameLimit),
+        LEFT(map.name, $nameLimit) FROM (""" ++ select ++ fr""") sortable
       LEFT JOIN game_titles gt ON gt.id = sortable.game_title_id
       LEFT JOIN season_masters season ON season.id = sortable.season_master_id
       LEFT JOIN map_masters map ON map.id = sortable.map_master_id

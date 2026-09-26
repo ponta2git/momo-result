@@ -31,7 +31,8 @@ final class PostgresReadSnapshotsSpec extends IntegrationSuite:
       assertEquals(page.hasNextPage, true)
 
   test("analysis overview pins options, job history, audit and selected status to one snapshot"):
-    val title = GameTitle(GameTitleId.unsafeFromString("snapshot-analysis"), "Snapshot", "world", 1, now)
+    val title =
+      GameTitle(GameTitleId.unsafeFromString("snapshot-analysis"), "Snapshot", "world", 1, now)
     for
       _ <- PostgresGameTitlesRepository[IO](transactor).createWithNextDisplayOrder(title)
       result <- assertReadSnapshot(xa =>

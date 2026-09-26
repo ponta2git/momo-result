@@ -66,8 +66,12 @@ object PostgresHeldEventList:
     if ids.isEmpty then List.empty[ScopeStats].pure[ConnectionIO]
     else
       val values = ids.map(_.value).toArray
-      sql"""
-        SELECT scoped.*, gt.name, season.name
+      val nameLimit = PostgresReadBudget.NameCodePoints
+      PostgresReadBudget.guardedRows[ScopeStats](
+        sql"""
+        SELECT COALESCE(char_length(gt.name) <= $nameLimit, true)
+                 AND COALESCE(char_length(season.name) <= $nameLimit, true),
+               scoped.*, LEFT(gt.name, $nameLimit), LEFT(season.name, $nameLimit)
         FROM (
           SELECT held_event_id, true AS confirmed, COUNT(*)::int AS count,
                  MAX(match_no_in_event)::int AS max_no, game_title_id, season_master_id
@@ -82,7 +86,10 @@ object PostgresHeldEventList:
         ) scoped
         LEFT JOIN game_titles gt ON gt.id = scoped.game_title_id
         LEFT JOIN season_masters season ON season.id = scoped.season_master_id
-      """.query[ScopeStats].to[List]
+      """,
+        PostgresReadBudget.ScopeRows,
+        "Held-event scopes"
+      )
 
 final class PostgresHeldEventListReadModel[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends HeldEventListReadModel[F]:

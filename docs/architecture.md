@@ -39,6 +39,8 @@
 - `apps/api/openapi.yaml` は内部 Web codegen 用の追跡する派生物であり、契約や公開 API documentation の正本ではない。Tapir から一時生成した spec を保守された OpenAPI-aware linter で構造検証し、tracked artifact と一致させ、その artifact から Web 型を生成する。手編集で差分を解消しない。
 - OpenAPI lint は unresolved reference、path / parameter、schema、operation identity など構造整合性に限定する。field の公開可否、認証、業務意味は endpoint、DTO、要求・domain 規約で決め、legacy 名や source 断片の文字列検査を契約にしない。
 - HTTP 層は入力・認証・エラー変換に閉じ、DB、Redis、業務分岐を直接持たない。
+- request body はサイズ上限に加えて、decode 前に同時実行数を制限する。画像uploadと通常mutationを分離し、満杯の場合は本文を保持して待機せず再試行可能な応答を返す。
+- JSON readの待機件数も制限し、JSON・画像・exportの応答は転送終了まで同時実行枠を保持する。DB projectionは全量取得後の検査に頼らず、件数・文字数・保存JSONのbyte数を転送前に検証する。
 - Tapirのserver logicで発生した例外は外側の`HttpErrorMiddleware`へ伝え、共通のProblem Detailsと機密情報を除いたincident logに変換する。Tapirの既定例外応答・例外logと二重に処理しない。mutationの結果不明時に保持するidempotency予約は、このHTTP変換より内側で確定する。
 - raw ID、設定値、wire value は境界で検証済み型へ変換する。usecase へ未検証値や wire DTO を渡さない。
 - 分析は現行の成果物契約とHTTP経路だけを提供する。旧世代のdecoder、互換用route、旧形式からの補完は維持しない。成果物形式を変えるときはAPI・Web・Workerを揃え、必要な再計算を公開再開前に完了する。保存形式を変えないHTTP projectionの変更では対応API/Webを一体で切り替え、Worker変更・再計算を要求しない。
@@ -59,6 +61,7 @@
 - 集約結果だけが必要な一覧はDBで集約し、表示しない監査履歴を全件転送しない。DB内で完結するsnapshotの複製は `INSERT ... SELECT` で表し、JVMを経由するread/write往復を増やさない。単純化とquery costの両方を、実行計画と境界のテストで確認する。
 - 通常制御フローは型で返し、予期しない不整合や外部I/O失敗と区別する。
 - 部分更新は既存値と入力を合わせた実効状態で検証する。読み取り後の前提を更新に使う場合は、同じ更新条件で再検証する。
+- 下書きの変更・取消とOCRの受付・取消は、認証主体の所有権をusecaseと原子的な保存操作で確認する。共同編集可能な確定済み試合の契約とは分ける。
 - in-memory adapter は production adapter と同じ状態遷移 guard を持つ。単純化した double を正本にしない。
 - 分析読み取りは保存済み成果物を返すだけにし、関連する読み取りを同じ artifact version へ固定する。詳細は `docs/requirements/series-analysis-batch.md` を正本とする。
 
@@ -72,6 +75,7 @@
 - API の commit 後 handoff は process-local wake までとし、外部通知の I/O は Resource が所有する coordinator で実行する。通知の遅延・失敗で確定済み更新の応答を待たせず、再試行と停止は coordinator、通知喪失後の回収は durable outbox の consumer が所有する。
 - dispatcher は startup recovery、bounded drain、retry deadline、backoff を扱い、無条件の短周期 polling をしない。
 - append 後の DB 更新失敗や重複配送を許容し、claim / fence と冪等な consumer で収束させる。
+- 手動再計算のidempotencyは永続したoperationを正本とし、同じkeyの並行受付を直列化して対象を照合する。HTTP予約の期限切れ後も別対象へのkey流用を受理しない。
 - 分析ではAPIとrelease controllerをdurable intentのwriter、Processing Workerをcampaign展開からRedis append、delivery mark / retryまでの単一dispatcher ownerとする。writerはcommit時にpayloadless hintだけを送り、workerはhint喪失を低頻度のbounded recoveryで収束させる。
 - PostgreSQLのsession stateへ依存する分析outbox listenerは、通常query用のtransaction-pooled接続と設定を分離したsession-capable接続を所有する。workerは別接続からの通知round tripをstartup readiness前に確認し、`LISTEN`文の成功だけを機能成立と扱わない。
 
@@ -80,6 +84,7 @@
 - 業務、認証、権限、入力、外部依存のエラーを区別し、UI が扱える Problem Details へ正規化する。
 - account、session、provider backoff の判断は auth service に閉じ、Discord HTTP client と Redis実装は adapter に置く。HTTP module は cookie / redirect / wire 変換を担う。
 - 認証主体と試合参加者を混同しない。状態変更 API は CSRF 対策を必須とし、dev/test 認証を本番経路へ混ぜない。
+- 認証cookieは形式と重複を検証してから扱い、API応答は共有cacheへ保存しない。OAuth stateは署名・期限・サイズを検証した後に一回限りの使用を確定する。
 - UI が回復方法を変える HTTP status を汎用内部エラーへ潰さない。
 
 ## 3. Web
@@ -241,6 +246,7 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 - secret、session / CSRF token、接続 URL、画像内容、OCR raw text、分析成果物本文をログへ出さない。例外は安全な分類情報へ正規化する。
 - production の DB / Redis は暗号化と相手検証を維持し、接続のために認証要件を暗黙に弱めない。
 - upload は許可形式、byte 数、寸法、内容 fingerprint を完全 decode 前後の境界で検証し、画像実体や長寿命 URL を DB / 公開 DTO に置かない。
+- 画像objectは作成後に上書きせず、再送は保存済みの内容と照合する。localとobject storageで読取上限と整合性検証を共有し、未検証のdescriptorから任意のfileを読まない。
 - health、dependency readiness、機能応答、resource / performance を別の証拠として扱う。
 - stream response は handler 完了ではなく転送終了時に success / error / cancel と byte 数を exactly once 観測する。
 - runtime image は最小権限で動かし、診断手段を残す場合も provider 設定や攻撃面を public docs へ複製しない。

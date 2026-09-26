@@ -38,7 +38,14 @@ object PostgresMapMasters:
     override def list(gameTitleId: Option[GameTitleId]): ConnectionIO[List[MapMaster]] =
       val where = gameTitleId.fold(Fragment.empty)(id => fr"WHERE game_title_id = $id")
       val order = fr"ORDER BY game_title_id, display_order, created_at, id"
-      (selectAll ++ where ++ order).query[MapMasterRow].to[List].map(_.map(fromRow))
+      val nameLimit = PostgresReadBudget.NameCodePoints
+      val bounded = fr"""SELECT char_length(name) <= $nameLimit,
+        id, game_title_id, LEFT(name, $nameLimit), display_order, created_at FROM map_masters"""
+      PostgresReadBudget.guardedRows[MapMasterRow](
+        bounded ++ where ++ order,
+        PostgresReadBudget.CatalogRows,
+        "Map catalog"
+      ).map(_.map(fromRow))
 
     override def find(id: MapMasterId): ConnectionIO[Option[MapMaster]] =
       (selectAll ++ fr"WHERE id = $id").query[MapMasterRow].option.map(_.map(fromRow))

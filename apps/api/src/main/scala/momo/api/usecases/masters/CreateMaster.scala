@@ -19,7 +19,7 @@ final class CreateGameTitle[F[_]: Monad](titles: GameTitlesRepository[F], now: F
     val validated =
       for
         id <- UseCaseField.slug("id", command.id.value)
-        name <- UseCaseField.nonBlank("name", command.name)
+        name <- UseCaseField.name("name", command.name)
         layoutFamily <- UseCaseField.stableKey("layoutFamily", command.layoutFamily)
       yield (GameTitleId.unsafeFromString(id), name, layoutFamily)
 
@@ -49,7 +49,7 @@ final class CreateMapMaster[F[_]: Monad](
       for
         id <- UseCaseField.slug("id", command.id.value)
         gameTitleId <- UseCaseField.slug("gameTitleId", command.gameTitleId.value)
-        name <- UseCaseField.nonBlank("name", command.name)
+        name <- UseCaseField.name("name", command.name)
       yield (MapMasterId.unsafeFromString(id), GameTitleId.unsafeFromString(gameTitleId), name)
 
     validated match
@@ -83,7 +83,7 @@ final class CreateSeasonMaster[F[_]: Monad](
       for
         id <- UseCaseField.slug("id", command.id.value)
         gameTitleId <- UseCaseField.slug("gameTitleId", command.gameTitleId.value)
-        name <- UseCaseField.nonBlank("name", command.name)
+        name <- UseCaseField.name("name", command.name)
       yield (SeasonMasterId.unsafeFromString(id), GameTitleId.unsafeFromString(gameTitleId), name)
 
     validated match

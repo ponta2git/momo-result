@@ -20,8 +20,13 @@ final class PostgresIdempotencyRecordingSpec extends IntegrationSuite:
   private val response = IdempotencyResponse(200, Map.empty, "{}".getBytes.toVector)
 
   private def pending(key: String): IdempotencyRecord = IdempotencyRecord(
-    key, accountId, endpoint, hash, IdempotencyResponse(0, Map.empty, Vector.empty),
-    now, now.plusSeconds(86400)
+    key,
+    accountId,
+    endpoint,
+    hash,
+    IdempotencyResponse(0, Map.empty, Vector.empty),
+    now,
+    now.plusSeconds(86400)
   )
 
   for complete <- List(true, false) do
@@ -36,10 +41,13 @@ final class PostgresIdempotencyRecordingSpec extends IntegrationSuite:
         result <- lockedKey(key).use(_ => write.attempt.timeout(5.seconds))
         saved <- repo.lookup(key, accountId, endpoint)
       yield
-        assert(result.left.exists {
-          case error: SQLException => error.getSQLState == "57014"
-          case _ => false
-        }, "The per-statement deadline must interrupt a real PostgreSQL lock wait.")
+        assert(
+          result.left.exists {
+            case error: SQLException => error.getSQLState == "57014"
+            case _ => false
+          },
+          "The per-statement deadline must interrupt a real PostgreSQL lock wait."
+        )
         assertEquals(saved.map(_.response.status), Some(0))
     }
 

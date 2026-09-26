@@ -15,8 +15,10 @@ import momo.api.errors.AppError
 import momo.api.repositories.{
   MatchConfirmationResult,
   MatchDraftConfirmation,
-  MatchExportsRepository
+  MatchExportsRepository,
+  MatchListReadModel
 }
+import momo.api.testing.AppErrorAssertions.assertAppException
 
 final class PostgresMatchesRepositorySpec extends IntegrationSuite:
 
@@ -673,6 +675,44 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       assertEquals(snapshot._1, single)
       assertEquals(snapshot._2, "repeatable read")
       assertEquals(snapshot._3, "on")
+
+  test("legacy oversized labels reject bounded views but do not block unrelated export selections"):
+    val oversized = sampleMatch("export_budget_a", 1)
+    val bounded = sampleMatch("export_budget_z", 2).copy(
+      gameTitleId = secondGameTitleId,
+      mapMasterId = secondMapMasterId,
+      seasonMasterId = secondSeasonMasterId,
+    )
+    for
+      _ <- seedPrereqs
+      _ <- seedSecondTitle
+      _ <- createMatch(oversized)
+      _ <- createMatch(bounded)
+      _ <- sql"UPDATE season_masters SET name = repeat('x', 4096) WHERE id = $seasonMasterId"
+        .update.run.transact(transactor)
+      rejectedExport <- matchExports.project(
+        MatchExportsRepository.Selection(matchId = Some(oversized.id), limit = 1)
+      ).attempt
+      acceptedExport <- matchExports.project(
+        MatchExportsRepository.Selection(matchId = Some(bounded.id), limit = 1)
+      )
+      // Both timestamps tie. The preflight and materialization must select the same stable row.
+      tiedSelection <- matchExports.project(MatchExportsRepository.Selection(limit = 1))
+      rejectedDetail <- PostgresHeldEventDetailReadModel[IO](transactor).find(heldEventId).attempt
+      rejectedEvents <- PostgresHeldEventListReadModel[IO](transactor)
+        .list(None, PageRequest(1, 20)).attempt
+      rejectedMatches <- PostgresMatchListReadModel[IO](transactor)
+        .list(MatchListReadModel.Filter(heldEventId = Some(heldEventId))).attempt
+      acceptedMatches <- PostgresMatchListReadModel[IO](transactor)
+        .list(MatchListReadModel.Filter(gameTitleId = Some(secondGameTitleId)))
+    yield
+      assertAppException(rejectedExport, "PAYLOAD_TOO_LARGE", "oversized stored text")
+      assertEquals(acceptedExport.size, 4)
+      assertEquals(tiedSelection, acceptedExport)
+      assertAppException(rejectedDetail, "PAYLOAD_TOO_LARGE", "oversized stored text")
+      assertAppException(rejectedEvents, "PAYLOAD_TOO_LARGE", "oversized stored text")
+      assertAppException(rejectedMatches, "PAYLOAD_TOO_LARGE", "oversized stored text")
+      assertEquals(acceptedMatches.items.size, 1)
 
   test("existsMatchNo reflects inserted rows"):
     for

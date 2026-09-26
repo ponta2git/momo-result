@@ -30,11 +30,19 @@ object PostgresIncidentMasters:
   )
 
   val alg: IncidentMastersAlg[ConnectionIO] = new IncidentMastersAlg[ConnectionIO]:
-    override def list: ConnectionIO[List[IncidentMaster]] = sql"""
-        SELECT id, key, display_name, display_order, created_at
+    override def list: ConnectionIO[List[IncidentMaster]] =
+      val nameLimit = PostgresReadBudget.NameCodePoints
+      val keyLimit = PostgresReadBudget.KeyCodePoints
+      PostgresReadBudget.guardedRows[IncidentMasterRow](
+        sql"""
+        SELECT char_length(key) <= $keyLimit AND char_length(display_name) <= $nameLimit,
+               id, LEFT(key, $keyLimit), LEFT(display_name, $nameLimit), display_order, created_at
         FROM incident_masters
         ORDER BY display_order, id
-      """.query[IncidentMasterRow].to[List].map(_.map(fromRow))
+      """,
+        PostgresReadBudget.CatalogRows,
+        "Incident catalog"
+      ).map(_.map(fromRow))
 end PostgresIncidentMasters
 
 final class PostgresIncidentMastersRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])

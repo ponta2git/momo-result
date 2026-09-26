@@ -30,10 +30,13 @@ object PostgresMembers:
   )
 
   val alg: MembersAlg[ConnectionIO] = new MembersAlg[ConnectionIO]:
-    override def list
-        : ConnectionIO[List[Member]] = (selectAll ++ fr"ORDER BY id").query[MemberRow].to[List].map(
-      _.map(fromRow)
-    )
+    override def list: ConnectionIO[List[Member]] =
+      // The schema bounds display_name to varchar(32); only collection size needs a read budget.
+      PostgresReadBudget.rows[MemberRow](
+        selectAll ++ fr"ORDER BY id",
+        PostgresReadBudget.CatalogRows,
+        "Member catalog"
+      ).map(_.map(fromRow))
 
     override def find(id: MemberId): ConnectionIO[Option[Member]] =
       (selectAll ++ fr"WHERE id = $id").query[MemberRow].option.map(_.map(fromRow))

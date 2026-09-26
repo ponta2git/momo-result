@@ -32,10 +32,17 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
   test("concurrent title retries replay the committed operation without adding work"):
     for
       _ <- seedTitle(titleId)
-      repository <- PostgresSeriesAnalysisRepository.create[IO](transactor, SeriesAnalysisReadConfig.defaults)
+      repository <-
+        PostgresSeriesAnalysisRepository.create[IO](transactor, SeriesAnalysisReadConfig.defaults)
       results <- concurrentWithUncommittedFirst(
         PostgresSeriesAnalysisTitleRequestOps.requestTitle(
-          titleId, accountId, "same-key", "operation-one", "request-one", "job-one", "outbox-one",
+          titleId,
+          accountId,
+          "same-key",
+          "operation-one",
+          "request-one",
+          "job-one",
+          "outbox-one",
         ),
         repository.requestTitleRecalculation(titleId, accountId, "same-key"),
       )
@@ -54,10 +61,14 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
   test("concurrent all-title retries share one campaign and target snapshot"):
     for
       _ <- seedTitle(titleId)
-      repository <- PostgresSeriesAnalysisRepository.create[IO](transactor, SeriesAnalysisReadConfig.defaults)
+      repository <-
+        PostgresSeriesAnalysisRepository.create[IO](transactor, SeriesAnalysisReadConfig.defaults)
       results <- concurrentWithUncommittedFirst(
         PostgresSeriesAnalysisCampaignRequestOps.requestAll(
-          accountId, "same-all-key", "operation-all", "campaign-all",
+          accountId,
+          "same-all-key",
+          "operation-all",
+          "campaign-all",
         ),
         repository.requestAllRecalculation(accountId, "same-all-key"),
       )
@@ -76,7 +87,8 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
     for
       _ <- seedTitle(titleId)
       _ <- seedTitle(otherId)
-      repository <- PostgresSeriesAnalysisRepository.create[IO](transactor, SeriesAnalysisReadConfig.defaults)
+      repository <-
+        PostgresSeriesAnalysisRepository.create[IO](transactor, SeriesAnalysisReadConfig.defaults)
       first <- repository.requestTitleRecalculation(titleId, accountId, "scope-key")
       mismatch <- repository.requestTitleRecalculation(otherId, accountId, "scope-key")
       replay <- repository.requestTitleRecalculation(titleId, accountId, "scope-key")

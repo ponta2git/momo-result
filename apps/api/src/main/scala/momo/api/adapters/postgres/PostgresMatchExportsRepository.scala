@@ -25,6 +25,21 @@ private[api] object PostgresMatchExports extends PostgresMatchesReadSupport:
         selection.matchId.map(id => fr"id = $id"),
       ).flatten
       val where = fragments.whereAndOpt(conditions)
+      val selectedIds = fr"SELECT id FROM matches" ++ where ++
+        fr"""ORDER BY played_at DESC, created_at DESC, id COLLATE "C" DESC LIMIT ${selection.limit}"""
+      val nameLimit = PostgresReadBudget.NameCodePoints
+      // Member display names are already bounded by the schema's varchar(32).
+      val validNames = (fr"""
+        SELECT NOT EXISTS (
+          SELECT 1 FROM matches m
+          JOIN season_masters season ON season.id = m.season_master_id
+          JOIN map_masters map ON map.id = m.map_master_id
+          WHERE m.id IN (
+      """ ++ selectedIds ++ fr""") AND (
+            char_length(season.name) > $nameLimit OR char_length(map.name) > $nameLimit
+          )
+        )
+      """).query[Boolean].unique
       // Select the bounded export first, then rank full histories only for its titles. Ranking
       // selected rows alone would reset season/title numbers when exporting a single match.
       val select =
@@ -33,7 +48,7 @@ private[api] object PostgresMatchExports extends PostgresMatchesReadSupport:
           SELECT id, game_title_id
           FROM matches
       """ ++ where ++ fr"""
-          ORDER BY played_at DESC, created_at DESC
+          ORDER BY played_at DESC, created_at DESC, id COLLATE "C" DESC
           LIMIT ${selection.limit}
         ), ranked_matches AS (
           SELECT
@@ -86,6 +101,7 @@ private[api] object PostgresMatchExports extends PostgresMatchesReadSupport:
       for
         // The ranked parent selection and batched children must describe the same match revision.
         _ <- sql"SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY".update.run
+        _ <- PostgresReadBudget.ensureText(validNames, "Match export")
         rows <- select.query[ExportMatchRow].to[List]
         playersByMatch <- loadPlayersBatch(rows.map(_.id))
         memberIds =

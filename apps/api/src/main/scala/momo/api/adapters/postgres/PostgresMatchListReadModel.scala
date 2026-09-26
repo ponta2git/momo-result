@@ -99,9 +99,11 @@ object PostgresMatchList extends PostgresMatchListSupport:
             fetched <-
               if targetSize == 0 then List.empty[CursorRow].pure[ConnectionIO]
               else
-                (withLabels(
-                  ordered
-                ) ++ cursorOrderBy(filter.sort, direction)).query[CursorRow].to[List]
+                PostgresReadBudget.guardedRows[CursorRow](
+                  withLabels(ordered) ++ cursorOrderBy(filter.sort, direction),
+                  PostgresReadBudget.HeldEventRecords,
+                  "Match list",
+                )
             pageRows = direction match
               case MatchListReadModel.CursorDirection.After => fetched
               case MatchListReadModel.CursorDirection.Before => fetched.reverse
@@ -146,10 +148,14 @@ object PostgresMatchList extends PostgresMatchListSupport:
         fr"d.status <> ${MatchDraftStatus.Cancelled}",
         fr"d.status <> ${MatchDraftStatus.Confirmed}",
       )
-      (withLabels(selected) ++ fr"""
+      PostgresReadBudget.guardedRows[(Row, MatchLabels)](
+        withLabels(selected) ++ fr"""
         ORDER BY sortable.match_no_in_event ASC NULLS LAST, sortable.updated_at DESC,
                  sortable.kind ASC, sortable.id ASC
-      """).query[(Row, MatchLabels)].to[List].map(_.map { case (row, labels) =>
+      """,
+        PostgresReadBudget.HeldEventRecords,
+        "Held-event drafts"
+      ).map(_.map { case (row, labels) =>
         toItem(row, labels, _ => Nil)
       })
 

@@ -16,143 +16,78 @@ expected_commit="$4"
 [[ "${expected_run_attempt}" =~ ^[1-9][0-9]*$ ]] || exit 1
 [[ "${expected_commit}" =~ ^[0-9a-f]{40}$ ]] || exit 1
 
-schema_version="$(
-  jq -er '.schemaVersion | select(type == "number" and (. == 1 or . == 2 or . == 3))' \
-    "${metadata_file}"
-)" || {
-  echo "Unsupported runtime deployment metadata schema." >&2
-  exit 1
-}
-if [[ "${schema_version}" == "1" ]]; then
-  source_run_attempt="${expected_run_attempt}"
-else
-  source_run_attempt="$(
-    jq -er '.sourceRunAttempt | select(type == "string" and test("^[1-9][0-9]*$"))' \
-      "${metadata_file}"
-  )" || {
-    echo "Runtime deployment metadata has no valid source candidate attempt." >&2
-    exit 1
-  }
-fi
-
-expected_image_ref="registry.fly.io/momo-result:${expected_commit}-${expected_run_id}-${source_run_attempt}"
-expected_source_name="runtime-image-${expected_run_id}-${source_run_attempt}"
 expected_manifest_name="runtime-image-registry-manifest-${expected_run_id}-${expected_run_attempt}"
 
-jq -e \
+jq -ers \
   --arg commit "${expected_commit}" \
-  --arg imageRef "${expected_image_ref}" \
   --arg manifestName "${expected_manifest_name}" \
   --arg runAttempt "${expected_run_attempt}" \
-  --arg runId "${expected_run_id}" \
-  --arg sourceName "${expected_source_name}" \
-  --arg sourceRunAttempt "${source_run_attempt}" \
-  --argjson schemaVersion "${schema_version}" '
-    type == "object" and
-    (
-      if $schemaVersion == 1 then
-        keys == [
-          "commit",
-          "configSha256",
-          "imageId",
-          "imageRef",
-          "manifestArtifactDigest",
-          "manifestArtifactId",
-          "manifestArtifactName",
-          "manifestSha256",
-          "registryDigest",
-          "registryRef",
-          "runAttempt",
-          "runId",
-          "schemaVersion",
-          "sourceArtifactDigest",
-          "sourceArtifactId",
-          "sourceArtifactName"
-        ]
-      elif $schemaVersion == 2 then
-        keys == [
-          "commit",
-          "configSha256",
-          "imageId",
-          "imageRef",
-          "manifestArtifactDigest",
-          "manifestArtifactId",
-          "manifestArtifactName",
-          "manifestSha256",
-          "registryDigest",
-          "registryRef",
-          "runAttempt",
-          "runId",
-          "schemaVersion",
-          "sourceArtifactDigest",
-          "sourceArtifactId",
-          "sourceArtifactName",
-          "sourceRunAttempt"
-        ]
-      else
-        keys == [
-          "commit",
-          "configSha256",
+  --arg runId "${expected_run_id}" '
+    select(length == 1) | .[0] |
+    select(type == "object") |
+    .schemaVersion as $schemaVersion |
+    select($schemaVersion == 1 or $schemaVersion == 2 or $schemaVersion == 3) |
+    (if $schemaVersion == 1 then $runAttempt else .sourceRunAttempt end) as $sourceRunAttempt |
+    select($sourceRunAttempt | type == "string" and test("^[1-9][0-9]*\\z")) |
+    ([
+      "commit",
+      "configSha256",
+      "imageId",
+      "imageRef",
+      "manifestArtifactDigest",
+      "manifestArtifactId",
+      "manifestArtifactName",
+      "manifestSha256",
+      "registryDigest",
+      "registryRef",
+      "runAttempt",
+      "runId",
+      "schemaVersion",
+      "sourceArtifactDigest",
+      "sourceArtifactId",
+      "sourceArtifactName"
+    ] +
+      (if $schemaVersion >= 2 then ["sourceRunAttempt"] else [] end) +
+      (if $schemaVersion == 3 then [
           "http4sPatchRepository",
           "http4sPatchScalaVersion",
           "http4sPatchSourceSha",
-          "http4sPatchVersion",
-          "imageId",
-          "imageRef",
-          "manifestArtifactDigest",
-          "manifestArtifactId",
-          "manifestArtifactName",
-          "manifestSha256",
-          "registryDigest",
-          "registryRef",
-          "runAttempt",
-          "runId",
-          "schemaVersion",
-          "sourceArtifactDigest",
-          "sourceArtifactId",
-          "sourceArtifactName",
-          "sourceRunAttempt"
-        ]
-      end
-    ) and
-    .schemaVersion == $schemaVersion and
+          "http4sPatchVersion"
+        ] else [] end) | sort) as $expectedKeys |
+    select(keys == $expectedKeys and
     .commit == $commit and
     .runId == $runId and
     .runAttempt == $runAttempt and
-    ($schemaVersion == 1 or .sourceRunAttempt == $sourceRunAttempt) and
-    .imageRef == $imageRef and
+    .imageRef == ("registry.fly.io/momo-result:" + $commit + "-" + $runId + "-" + $sourceRunAttempt) and
     ($schemaVersion != 3 or
       (
         .http4sPatchRepository == "https://github.com/ponta2git/http4s.git" and
         .http4sPatchScalaVersion == "3.3.6" and
-        (.http4sPatchSourceSha | type == "string" and test("^[0-9a-f]{40}$")) and
-        (.http4sPatchVersion | type == "string" and test("^[0-9A-Za-z][0-9A-Za-z.+-]*$"))
+        (.http4sPatchSourceSha | type == "string" and test("^[0-9a-f]{40}\\z")) and
+        (.http4sPatchVersion | type == "string" and test("^[0-9A-Za-z][0-9A-Za-z.+-]*\\z"))
       )) and
-    .sourceArtifactName == $sourceName and
+    .sourceArtifactName == ("runtime-image-" + $runId + "-" + $sourceRunAttempt) and
     .manifestArtifactName == $manifestName and
-    (.imageId | type == "string" and test("^sha256:[0-9a-f]{64}$")) and
-    (.registryDigest | type == "string" and test("^sha256:[0-9a-f]{64}$")) and
+    (.imageId | type == "string" and test("^sha256:[0-9a-f]{64}\\z")) and
+    (.registryDigest | type == "string" and test("^sha256:[0-9a-f]{64}\\z")) and
     .registryRef == ("registry.fly.io/momo-result@" + .registryDigest) and
-    (.configSha256 | type == "string" and test("^[0-9a-f]{64}$")) and
-    (.manifestSha256 | type == "string" and test("^[0-9a-f]{64}$")) and
-    (.sourceArtifactId | type == "string" and test("^[1-9][0-9]*$")) and
-    (.manifestArtifactId | type == "string" and test("^[1-9][0-9]*$")) and
-    (.sourceArtifactDigest | type == "string" and test("^sha256:[0-9a-f]{64}$")) and
-    (.manifestArtifactDigest | type == "string" and test("^sha256:[0-9a-f]{64}$"))
-  ' "${metadata_file}" > /dev/null || {
+    (.configSha256 | type == "string" and test("^[0-9a-f]{64}\\z")) and
+    (.manifestSha256 | type == "string" and test("^[0-9a-f]{64}\\z")) and
+    (.sourceArtifactId | type == "string" and test("^[1-9][0-9]*\\z")) and
+    (.manifestArtifactId | type == "string" and test("^[1-9][0-9]*\\z")) and
+    (.sourceArtifactDigest | type == "string" and test("^sha256:[0-9a-f]{64}\\z")) and
+    (.manifestArtifactDigest | type == "string" and test("^sha256:[0-9a-f]{64}\\z"))) |
+    "candidate_sha=\(.commit)",
+    "source_run_attempt=\($sourceRunAttempt)",
+    "config_sha256=\(.configSha256)",
+    "image_ref=\(.imageRef)",
+    "manifest_artifact_digest=\(.manifestArtifactDigest)",
+    "manifest_artifact_id=\(.manifestArtifactId)",
+    "manifest_artifact_name=\(.manifestArtifactName)",
+    "manifest_sha256=\(.manifestSha256)",
+    "registry_digest=\(.registryDigest)",
+    "registry_ref=\(.registryRef)"
+  ' "${metadata_file}" || {
     echo "Runtime deployment metadata failed its immutable provenance contract." >&2
     exit 1
   }
-
-printf 'candidate_sha=%s\n' "${expected_commit}"
-printf 'source_run_attempt=%s\n' "${source_run_attempt}"
-jq -r '
-  "config_sha256=\(.configSha256)",
-  "image_ref=\(.imageRef)",
-  "manifest_artifact_digest=\(.manifestArtifactDigest)",
-  "manifest_artifact_id=\(.manifestArtifactId)",
-  "manifest_artifact_name=\(.manifestArtifactName)",
-  "manifest_sha256=\(.manifestSha256)",
-  "registry_digest=\(.registryDigest)",
-  "registry_ref=\(.registryRef)"
-' "${metadata_file}"

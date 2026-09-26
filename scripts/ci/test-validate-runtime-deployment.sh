@@ -13,7 +13,8 @@ readonly source_run_attempt=2
 readonly commit=0123456789abcdef0123456789abcdef01234567
 readonly digest=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 readonly artifact_digest="$("${canonicalizer}" "${digest}")"
-readonly http4s_ref="$(tr -d '[:space:]' < "${repo_root}/.http4s-ref")"
+# A rollback target records its own patch revision, not the current checkout revision.
+readonly http4s_ref=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 
 write_valid_metadata_v2() {
   jq -n \
@@ -89,31 +90,50 @@ write_valid_metadata_v3() {
 expect_rejected() {
   local name="$1"
   if "${validator}" "${test_dir}/deployment.json" "${run_id}" "${run_attempt}" "${commit}" \
-    > /dev/null 2>&1; then
+    > "${test_dir}/rejected-output" 2> /dev/null; then
     echo "Invalid runtime deployment was accepted: ${name}" >&2
     exit 1
   fi
+  [[ ! -s "${test_dir}/rejected-output" ]]
 }
 
 write_valid_metadata_v2
 actual="$("${validator}" "${test_dir}/deployment.json" "${run_id}" "${run_attempt}" "${commit}")"
-grep -qx "candidate_sha=${commit}" <<< "${actual}"
-grep -qx "image_ref=registry.fly.io/momo-result:${commit}-${run_id}-${source_run_attempt}" \
-  <<< "${actual}"
-grep -qx "registry_ref=registry.fly.io/momo-result@sha256:${digest}" <<< "${actual}"
-grep -qx "source_run_attempt=${source_run_attempt}" <<< "${actual}"
+expected="$(cat <<EOF
+candidate_sha=${commit}
+source_run_attempt=${source_run_attempt}
+config_sha256=${digest}
+image_ref=registry.fly.io/momo-result:${commit}-${run_id}-${source_run_attempt}
+manifest_artifact_digest=${artifact_digest}
+manifest_artifact_id=222
+manifest_artifact_name=runtime-image-registry-manifest-${run_id}-${run_attempt}
+manifest_sha256=${digest}
+registry_digest=sha256:${digest}
+registry_ref=registry.fly.io/momo-result@sha256:${digest}
+EOF
+)"
+[[ "${actual}" == "${expected}" ]]
 
 write_valid_metadata_v3
 actual="$("${validator}" "${test_dir}/deployment.json" "${run_id}" "${run_attempt}" "${commit}")"
-grep -qx "candidate_sha=${commit}" <<< "${actual}"
-grep -qx "source_run_attempt=${source_run_attempt}" <<< "${actual}"
+[[ "${actual}" == "${expected}" ]]
+
+jq '{}, .' "${test_dir}/deployment.json" > "${test_dir}/tampered.json"
+mv "${test_dir}/tampered.json" "${test_dir}/deployment.json"
+expect_rejected multiple-json-documents
+
+write_valid_metadata_v3
+jq '.configSha256 += "\n"' "${test_dir}/deployment.json" > "${test_dir}/tampered.json"
+mv "${test_dir}/tampered.json" "${test_dir}/deployment.json"
+expect_rejected multiline-config-digest
 
 write_valid_metadata_v3
 jq '.http4sPatchSourceSha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"' \
   "${test_dir}/deployment.json" > "${test_dir}/tampered.json"
 mv "${test_dir}/tampered.json" "${test_dir}/deployment.json"
-expect_rejected mismatched-http4s-patch
+expect_rejected invalid-http4s-patch-ref
 
+write_valid_metadata_v3
 jq '.registryRef = "registry.fly.io/momo-result@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"' \
   "${test_dir}/deployment.json" > "${test_dir}/tampered.json"
 mv "${test_dir}/tampered.json" "${test_dir}/deployment.json"

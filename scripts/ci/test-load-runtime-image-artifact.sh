@@ -12,7 +12,7 @@ readonly current_run_attempt=3
 readonly commit=0123456789abcdef0123456789abcdef01234567
 readonly image_ref="registry.fly.io/momo-result:${commit}-${run_id}-${run_attempt}"
 readonly image_id=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-readonly http4s_ref=23a6bcdadd133c16e4b465fc5d21d32e8753261c
+readonly http4s_ref="$(tr -d '[:space:]' < "${repo_root}/.http4s-ref")"
 readonly http4s_version=0.23.36-5-23a6bcd-SNAPSHOT
 readonly http4s_scala_version=3.3.6
 artifact_dir="${test_dir}/runtime-image-${run_id}-${run_attempt}"
@@ -75,8 +75,8 @@ write_valid_artifact() {
 
 run_loader() {
   (
-    cd "${repo_root}"
-    PATH="${fake_bin}:${PATH}" FAKE_IMAGE_ID="${image_id}" \
+    cd "${test_dir}"
+    PATH="${fake_bin}:${PATH}" FAKE_IMAGE_ID="${1:-${image_id}}" \
       IMAGE_ARTIFACT_NAME="${artifact_dir}" IMAGE_REF="${image_ref}" \
       GITHUB_RUN_ID="${run_id}" GITHUB_RUN_ATTEMPT="${current_run_attempt}" \
       GITHUB_SHA="${commit}" RUNTIME_CANDIDATE_RUN_ATTEMPT="${run_attempt}" \
@@ -84,22 +84,45 @@ run_loader() {
   )
 }
 
+expect_rejected() {
+  local name="$1"
+  shift
+  if run_loader "$@" > /dev/null 2>&1; then
+    echo "Invalid runtime image artifact was accepted: ${name}" >&2
+    exit 1
+  fi
+}
+
 write_valid_artifact
 run_loader
+expect_rejected mismatched-image-id sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 
 printf '%s\n' tampered >> "${artifact_dir}/momo-result-image.tar.gz"
-if run_loader > /dev/null 2>&1; then
-  echo "A tampered runtime image archive was accepted." >&2
-  exit 1
-fi
+expect_rejected tampered-archive
+
+# The digest can match an incomplete producer archive; decompression must still fail.
+write_valid_artifact
+archive="${artifact_dir}/momo-result-image.tar.gz"
+archive_size="$(wc -c < "${archive}")"
+dd if="${archive}" of="${archive}.truncated" bs=1 count="$((archive_size - 8))" 2> /dev/null
+mv "${archive}.truncated" "${archive}"
+tar_sha="$(sha256sum "${archive}" | cut -d ' ' -f 1)"
+printf '%s  %s\n' "${tar_sha}" momo-result-image.tar.gz > "${artifact_dir}/image-tar.sha256"
+jq --arg tarSha256 "${tar_sha}" '.tarSha256 = $tarSha256' \
+  "${artifact_dir}/candidate.json" > "${artifact_dir}/tampered-candidate.json"
+mv "${artifact_dir}/tampered-candidate.json" "${artifact_dir}/candidate.json"
+expect_rejected truncated-gzip
 
 write_valid_artifact
-jq '.sourceSha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"' \
+jq '.sourceSha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"' \
   "${artifact_dir}/http4s-patch.json" > "${artifact_dir}/tampered-patch.json"
 mv "${artifact_dir}/tampered-patch.json" "${artifact_dir}/http4s-patch.json"
-if run_loader > /dev/null 2>&1; then
-  echo "Tampered http4s patch provenance was accepted." >&2
-  exit 1
-fi
+expect_rejected tampered-http4s-patch
+
+write_valid_artifact
+jq '.configSha256 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"' \
+  "${artifact_dir}/candidate.json" > "${artifact_dir}/tampered-candidate.json"
+mv "${artifact_dir}/tampered-candidate.json" "${artifact_dir}/candidate.json"
+expect_rejected mismatched-deploy-config
 
 echo "Runtime candidate image loading tests passed."

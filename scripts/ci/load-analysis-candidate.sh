@@ -30,8 +30,8 @@ for file in "${image_archive}" "${image_id_file}" "${image_ref_file}" "${tar_sha
   }
 done
 
-recorded_ref="$(sed -n '1p' "${image_ref_file}")"
-recorded_id="$(sed -n '1p' "${image_id_file}")"
+recorded_ref="$(< "${image_ref_file}")"
+recorded_id="$(< "${image_id_file}")"
 recorded_tar_sha="$(cut -d ' ' -f 1 "${tar_sha_file}")"
 actual_tar_sha="$(sha256sum "${image_archive}" | cut -d ' ' -f 1)"
 
@@ -52,7 +52,7 @@ actual_tar_sha="$(sha256sum "${image_archive}" | cut -d ' ' -f 1)"
   exit 1
 }
 
-gzip -t "${image_archive}"
+# pipefail also rejects gzip checksum/truncation errors from this single pass.
 gzip -dc "${image_archive}" | docker load
 actual_id="$(docker image inspect "${expected_image_ref}" --format '{{.Id}}')"
 [[ "${actual_id}" == "${recorded_id}" ]] || {

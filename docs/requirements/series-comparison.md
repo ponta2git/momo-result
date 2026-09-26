@@ -8,7 +8,6 @@
 | --- | --- |
 | 本ページのscope、指標の意味、表示上の判断 | 本書 |
 | オーナー別比較の初版範囲、指標、件数・表示 | `docs/requirements/series-owner-comparison.md` |
-| MOM-3の成果物・HTTP・URL・DB変更と移行方針 | [オーナー別戦績比較の実装仕様](../series-owner-comparison-spec.md)（仕様確定・未実装） |
 | 「次戦に備える」の行動プレイブック | `docs/requirements/series-review-playbook.md` |
 | 非同期計算、artifact、状態、管理、公開・復旧 | `docs/requirements/series-analysis-batch.md` |
 | HTTP / artifact shape | Tapir endpoint、JSON Schema |

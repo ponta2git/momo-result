@@ -1,6 +1,6 @@
 # cgroup memory probe
 
-This command is a Stage A feasibility harness for Linux cgroup v1 memory isolation. It is not the
+This command probes Linux cgroup v1 memory isolation. It is not the
 production worker bootstrap.
 
 The coordinator must start as root so it can create one temporary memory cgroup and delegate its
@@ -10,7 +10,7 @@ only then releases it to touch memory beyond the configured limit.
 
 `passed: true` requires all of the following evidence in one run:
 
-- the kernel reads back the requested hard limit;
+- the kernel reads back a positive hard limit no greater than the requested limit;
 - the non-root parent can write the child to `cgroup.procs`;
 - the child is attached before allocation starts;
 - the child receives `SIGKILL` while the non-root parent survives;

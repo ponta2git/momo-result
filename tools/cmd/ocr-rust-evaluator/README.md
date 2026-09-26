@@ -15,7 +15,8 @@ The evaluator:
   a deterministic match-cluster bootstrap for the paired Rust-minus-Python accuracy difference.
 
 The paired result is explicitly a development-pilot result. `releaseDecisionAllowed` always remains
-false; an independent holdout and the remaining Stage C gates are still required.
+false; calibration data cannot establish accuracy on an independent holdout. Release evidence is
+selected under the [test policy](../../../docs/test-rule.md).
 
 Example paths are intentionally omitted because real OCR samples and detailed results are private.
 Run `go run ./cmd/ocr-rust-evaluator -h` from `tools/` for the closed option set.

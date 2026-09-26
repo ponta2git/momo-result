@@ -1,6 +1,7 @@
 # OCR evaluation audit
 
-This Stage A tool prevents two optimistic mistakes in an OCR migration evaluation:
+This tool checks sample independence and estimates sample requirements for paired OCR evaluation.
+It guards against two optimistic mistakes:
 
 1. counting copied image files as independent holdout samples; and
 2. declaring a release-sized holdout from baseline accuracy before observing paired Rust/Python

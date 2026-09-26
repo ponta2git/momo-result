@@ -69,7 +69,7 @@
 - 公開listenerからAPI受信までのprotocol要件は各hopを直接検証し、edge表示から内部hopを推測しない。
 - Processing Workerは利用者向けHTTP入口を持たず、productionと同じOS isolation、cgroup、native dependencyで検証する。
 - runtimeは最小権限で実行し、不要な言語runtime、package manager、debuggerをrelease imageへ含めない。
-- DB migrationはconsumerより先に適用し、破壊的変更は旧新consumerの共存期間を持つ段階migrationにする。
+- DB migrationはconsumerより先に適用する。旧新consumerを併存させる変更は段階migrationにし、非互換の一括切替を選んだ機能は公開停止中に保存状態と全consumerを揃える。対象機能の切替契約に従い、データ保全と復旧条件を確認してから再開する。
 - release候補は一度だけbuildし、immutable identity / provenanceを後続gateとdeployで再利用する。
 - rollbackは同じ承認・排他・provenance検証を通し、health、機能、性能回復を別々に確認する。
 - secretはlocal、CI、productionの各secret storeで管理し、tracked fileやpublic docsへ置かない。
@@ -98,6 +98,7 @@
 - metric labelにaccount、job、作品など高cardinality IDを入れず、安全なopaque IDでlog相関する。
 - DB backup / restoreはDB providerの機能を利用し、復旧可能性を定期的に確認する。アプリの削除確認とprovider backupを混同しない。
 - 外部監視、provider dashboard、alert threshold、個別障害対応はprivate運用文書で管理する。
+- 外部のエラー追跡・分散trace・ログ集約は、既存の構造化ログで原因特定が継続的に難しい場合に導入を検討する。APIとWorkerのrequest / jobを横断して追え、固定4名の運用規模に見合う費用であることを条件とする。7節の機密情報を送信せず、収集・送信の失敗でアプリの起動やOCR処理を失敗させない。
 
 ## 9. Performance / Client Quality
 

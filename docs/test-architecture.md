@@ -51,7 +51,7 @@ aggregate coverage は、PR review と推移確認の非 blocking report とす�
 - E2E・Playwright設定もWebのtypecheckに含める。runnerとfixtureのNode testはCIで実行し、ブラウザー本体の検証とは区別する。
 - 共通setupはunmount後にQueryClientを解放し、mockを復元してから実storageを清掃する。各suiteには共通cleanupを複製せず、個別に所有する資源の解放と未完了操作の完了待ちを残す。
 
-採用・統合・廃止の具体例とレビュー記録は[Webテストの再設計](web-test-rebuild.md)を参照する。現在のファイル配置・実行対象・並列数・commandは設定とCIが所有する。
+採用・統合・廃止の判断は[テスト・品質規約](test-rule.md#2-品質証拠の採用維持削除)を参照する。現在のファイル配置・実行対象・並列数・commandは設定とCIが所有する。
 
 ## 4. Cross-System Contract Evidence
 

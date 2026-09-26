@@ -30,31 +30,11 @@
 
 品質証拠は、要求・契約から守る結果を特定し、test-rule で境界と oracle を選び、必要なら test-architecture で実行設計を決め、dev-rule の gate と command へ割り当てる。既存 test や checker から逆向きに要求を作らない。
 
-実施記録: [操作面の反応を揃える（採用案の観点2）](ui-interaction-plan.md)。表示契約の正本はUI規約とし、記録には方式・時間の選定理由、接続結果、検証範囲を置く。
+ツール固有の入力・結果の意味は、実装に隣接する次の文書を参照する。実行結果や導入進捗は扱わない。
 
-実施記録: [UIシステムの再設計と検証](ui-system-rebuild.md)。primitive、CSS基盤、semantic adapter、画面接続のレビュー結果、責務と品質証拠を扱う。
-
-実施記録: [全ページの再レビューと再構築](page-system-rebuild.md)。ページ単位の入力・表示対象・非同期操作・遷移の責務、全ルートのレビュー結果と回帰検証を扱う。
-
-実施記録: [Webテストの再レビューと再設計](web-test-rebuild.md)。偽陽性、過剰なmock、証拠の重複、E2Eとrunnerを見直した判断と検証結果を扱う。
-
-実施記録: [操作する場所の輪郭を整える（採用案の観点1）](ui-boundary-plan.md)。採用値、共通部品への接続、接続復旧後のE2Eを含む検証結果を整理する。
-
-検討記録: 選択肢表示の共通化の [調査](ui-select-review.md) と [実装計画](ui-select-plan.md)。方式比較、Base UIを使う場合の変更順序・受入条件・確認状況を扱う。未実装の提案であり、表示契約はUI規約を参照する。
-
-検討記録: [オーナー別戦績比較のレビュー](series-owner-comparison-review.md)。提供価値・既存画面との整合に加え、実装仕様・計画を規約、framework、性能効率性・保守性から検討する。採用した変更は要求仕様・実装仕様・計画の該当する正本へ反映する。
-
-実装済み仕様: [オーナー別戦績比較の実装仕様](series-owner-comparison-spec.md)。入力・成果物・HTTP・URL・共有DBの契約、互換性、完了条件を定める。
-
-実施記録: [オーナー別戦績比較の実装計画・検証結果](series-owner-comparison-plan.md)。変更箇所、依存順序、各工程の受入証拠、公開前に残る作業を記録する。
-
-実施記録: [MOM-22 オーナー比較の選択試合ハイライト](owner-comparison-focus-plan.md)。合意済みの受入条件、API・表示状態の契約、実装・検証結果と残るリリース条件をまとめる。
-
-検討記録: [MOM-21・MOM-23 詳細画面の前後移動の実施計画](detail-navigation-plan.md)。開催・試合の対象範囲、前後順、戻り先、並列分担、API・cache・UIの検証と確認事項を扱う。
-
-検討記録: [MOM-24 OCR送出単位通知のレビュー・仕様](ocr-submission-notification-spec.md)。合意した通知要件、送出の終了・再試行、momo-dbとconsumerの責務、停止切替と受入条件を扱う。実装契約は要求・domain・architectureと共有DB契約へ反映している。
-
-実装計画: [MOM-24 OCR送出単位通知の実装・検証計画](ocr-submission-notification-plan.md)。工程、実DB・Playwright MCPを含む検証、資材回収、メンテナンス中の一括導入・rollback条件と実行結果を扱う。
+- [cgroup memory probe](../tools/cmd/cgroup-memory-probe/README.md): 隔離実験の合格条件と適用範囲。
+- [Rust OCR evaluator](../tools/cmd/ocr-rust-evaluator/README.md): 校正用の精度比較と結果の限界。
+- [OCR evaluation audit](../tools/cmd/ocr-evaluation-audit/README.md): 標本の独立性と必要量の見積り。
 
 ## 2. 正本と証拠
 

@@ -41,8 +41,10 @@ pub(crate) async fn run_cgroup_hard_limit_probe(
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
+        .env_clear()
         .kill_on_drop(true)
         .process_group(0);
+    super::preserve_dynamic_runtime_environment(&mut command);
     super::configure_parent_death_signal(&mut command);
     let mut child = command.spawn().map_err(ProcessError::Spawn)?;
     let process_id = child.id().ok_or(ProcessError::MissingProcessId)?;
@@ -119,17 +121,8 @@ async fn terminate_probe_child(
     child: &mut tokio::process::Child,
     process_id: u32,
 ) -> Result<ExitStatus, ProcessError> {
-    use tokio::time;
-
-    if let Some(status) = child.try_wait().map_err(ProcessError::Wait)? {
-        return Ok(status);
-    }
-    super::terminate_process_group(process_id, libc::SIGTERM)?;
-    if let Ok(result) = time::timeout(Duration::from_secs(1), child.wait()).await {
-        return result.map_err(ProcessError::Wait);
-    }
-    super::terminate_process_group(process_id, libc::SIGKILL)?;
-    child.wait().await.map_err(ProcessError::Wait)
+    let deadlines = super::child_stop_deadlines(Duration::from_secs(2))?;
+    super::stop_and_reap_child(child, process_id, deadlines).await
 }
 
 #[cfg(target_os = "linux")]

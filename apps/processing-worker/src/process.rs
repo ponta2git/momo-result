@@ -907,14 +907,12 @@ mod tests {
     }
 
     fn process_is_running(process_id: u32) -> bool {
-        fs::read_to_string(format!("/proc/{process_id}/stat"))
-            .ok()
-            .is_some_and(|status| {
-                status
-                    .split_whitespace()
-                    .nth(2)
-                    .is_some_and(|state| state != "Z")
-            })
+        fs::read_to_string(format!("/proc/{process_id}/stat")).is_ok_and(|status| {
+            status
+                .split_whitespace()
+                .nth(2)
+                .is_some_and(|state| state != "Z")
+        })
     }
 
     fn process_group_id(process_id: u32) -> Option<u32> {

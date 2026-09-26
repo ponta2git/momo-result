@@ -685,8 +685,7 @@ mod tests {
         assert_eq!(sink.submit(PostCommitEffects::WakeAnalysis), Ok(()));
 
         assert!(matches!(
-            wait_for_event::<ScriptedError, _>(&mut wake, &mut shutdown, Some(now), &clock)
-                .await,
+            wait_for_event::<ScriptedError, _>(&mut wake, &mut shutdown, Some(now), &clock).await,
             Ok(WaitEvent::Deadline)
         ));
         assert_eq!(
@@ -706,9 +705,15 @@ mod tests {
 
             let result = run(driver, wake, shutdown).await;
             if requested {
-                assert!(result.is_ok(), "a final shutdown request remains authoritative");
+                assert!(
+                    result.is_ok(),
+                    "a final shutdown request remains authoritative"
+                );
             } else {
-                assert!(matches!(result, Err(CoordinatorError::ShutdownChannelClosed)));
+                assert!(matches!(
+                    result,
+                    Err(CoordinatorError::ShutdownChannelClosed)
+                ));
             }
             assert_eq!(
                 drains.try_recv(),

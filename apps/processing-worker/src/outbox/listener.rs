@@ -11,6 +11,7 @@ use super::{PostCommitEffects, PostCommitSink, PostCommitSinkClosed};
 use crate::postgres::{self, PostgresError};
 
 const ROUTE_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
+const SUBSCRIPTION_TIMEOUT: Duration = Duration::from_secs(10);
 pub(crate) const CHANNEL: &str = "series_analysis_queue_outbox";
 
 #[derive(Debug, Error)]
@@ -21,6 +22,8 @@ pub(crate) enum ListenerError {
     ConnectionClosed,
     #[error("series-analysis outbox notification route probe timed out")]
     RouteProbeTimeout,
+    #[error("series-analysis outbox notification subscription timed out")]
+    SubscriptionTimeout,
     #[error("series-analysis outbox notification violated its payload-free protocol")]
     InvalidNotification,
     #[error("series-analysis outbox notification sink closed unexpectedly")]
@@ -45,6 +48,7 @@ impl ListenerError {
             Self::Postgres(error) => error.kind(),
             Self::ConnectionClosed => "postgres_connection_closed",
             Self::RouteProbeTimeout => "notification_route_probe_timeout",
+            Self::SubscriptionTimeout => "notification_subscription_timeout",
             Self::InvalidNotification => "invalid_notification",
             Self::SinkClosed(_) => "outbox_wake_sink_closed",
             Self::ShutdownChannelClosed => "shutdown_channel_closed",
@@ -67,12 +71,26 @@ pub(crate) async fn subscribe(
     database_url: &str,
     sink: PostCommitSink,
 ) -> Result<Listener, ListenerError> {
-    let (client, mut connection) = postgres::open(database_url).await?;
+    let setup = async {
+        let (client, connection) = postgres::open(database_url).await?;
+        subscribe_connection(client, connection, sink).await
+    };
+    // Socket connection deadlines do not cover the subsequent LISTEN response. Keep setup
+    // bounded as one operation; on expiry this future owns and closes both client and driver.
+    time::timeout(SUBSCRIPTION_TIMEOUT, setup)
+        .await
+        .map_err(|_elapsed| ListenerError::SubscriptionTimeout)?
+}
 
+async fn subscribe_connection(
+    client: Client,
+    mut connection: postgres::Driver,
+    sink: PostCommitSink,
+) -> Result<Listener, ListenerError> {
+    // PostgreSQL identifiers cannot be bind parameters. The interpolated value is a private
+    // compile-time constant, never configuration or request input.
+    let listen_statement = format!("LISTEN {CHANNEL}");
     {
-        // PostgreSQL identifiers cannot be bind parameters. The interpolated value is a private
-        // compile-time constant, never configuration or request input.
-        let listen_statement = format!("LISTEN {CHANNEL}");
         let subscription = client.batch_execute(&listen_statement);
         tokio::pin!(subscription);
         loop {
@@ -88,7 +106,6 @@ pub(crate) async fn subscribe(
             }
         }
     }
-
     Ok(Listener {
         _client: client,
         connection,
@@ -209,6 +226,61 @@ fn require_open_shutdown_channel(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "wire assertions identify the stalled subscription while setup errors propagate"
+    )]
+    async fn stalled_listen_response_expires_and_closes_its_connection()
+    -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let server = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+        let database_url = format!(
+            "host=127.0.0.1 port={} user=test dbname=test sslmode=disable",
+            server.local_addr()?.port()
+        );
+        let (sink, _wake) = PostCommitSink::channel();
+        let peer = async {
+            let (mut socket, _) = server.accept().await?;
+            let startup_length = socket.read_u32().await?;
+            assert!((8..1024).contains(&startup_length));
+            let mut startup = vec![0; usize::try_from(startup_length - 4)?];
+            socket.read_exact(&mut startup).await?;
+            // AuthenticationOk followed by ReadyForQuery completes normal driver startup.
+            // The peer then accepts the simple LISTEN query without ever acknowledging it.
+            socket.write_all(b"R\0\0\0\x08\0\0\0\0Z\0\0\0\x05I").await?;
+            assert_eq!(socket.read_u8().await?, b'Q');
+            let query_length = socket.read_u32().await?;
+            assert!((5..1024).contains(&query_length));
+            let mut query = vec![0; usize::try_from(query_length - 4)?];
+            socket.read_exact(&mut query).await?;
+            assert_eq!(query, format!("LISTEN {CHANNEL}\0").into_bytes());
+            let mut trailing = Vec::new();
+            socket.read_to_end(&mut trailing).await?;
+            Ok::<_, Box<dyn std::error::Error + Send + Sync>>(())
+        };
+        let subscription = async {
+            // Establish the real PostgreSQL wire before starting the short test deadline. TLS
+            // context initialization and concurrent fixture setup cannot consume the allowance
+            // intended to exercise the unanswered LISTEN command.
+            let (client, connection) = postgres::open(&database_url).await?;
+            time::timeout(
+                Duration::from_millis(250),
+                subscribe_connection(client, connection, sink),
+            )
+            .await
+            .map_err(|_elapsed| ListenerError::SubscriptionTimeout)?
+        };
+        let (result, peer) = time::timeout(Duration::from_secs(15), async {
+            tokio::join!(subscription, peer)
+        })
+        .await?;
+        peer?;
+        assert!(matches!(result, Err(ListenerError::SubscriptionTimeout)));
+        Ok(())
+    }
 
     #[test]
     fn analysis_outbox_notifications_are_fixed_and_payload_free() {

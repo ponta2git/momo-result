@@ -1066,7 +1066,7 @@ describe("MastersPage", () => {
     );
   });
 
-  it("updates a game title from the admin controls", async () => {
+  it("discards a cancelled master edit before saving a later change", async () => {
     setDevUser();
     let idempotencyKey: string | null = null;
     server.use(
@@ -1091,7 +1091,16 @@ describe("MastersPage", () => {
     expect(gameTitleChoice.closest("label")).not.toContainElement(deleteButton);
     await user.click(editButton);
     expect(gameTitleChoice).toBeChecked();
-    const editDialog = screen.getByRole("dialog", { name: "作品を編集" });
+    let editDialog = screen.getByRole("dialog", { name: "作品を編集" });
+    await user.type(within(editDialog).getByRole("textbox", { name: "作品名" }), "保存しない変更");
+    await user.click(within(editDialog).getByRole("button", { name: "キャンセル" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(idempotencyKey).toBeNull();
+    expect(gameTitleChoice).toBeChecked();
+    expect(editButton).toHaveFocus();
+
+    await user.click(editButton);
+    editDialog = screen.getByRole("dialog", { name: "作品を編集" });
     const nameInput = screen.getByDisplayValue("桃太郎電鉄2");
     expect(editDialog).toContainElement(nameInput);
     await user.clear(nameInput);
@@ -1156,6 +1165,19 @@ describe("MastersPage", () => {
     if (!no11Row) {
       throw new Error("NO11 alias row was not rendered");
     }
+    const editAliasButton = within(no11Row).getByRole("button", { name: "別名を編集" });
+    await user.click(editAliasButton);
+    let editDialog = screen.getByRole("dialog", { name: "別名を編集" });
+    await user.type(within(editDialog).getByRole("textbox", { name: "別名" }), "保存しない変更");
+    await user.click(within(editDialog).getByRole("button", { name: "キャンセル" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(editAliasButton).toHaveFocus();
+    expect(within(no11Row).getByText("NO11")).toBeInTheDocument();
+    await user.click(editAliasButton);
+    editDialog = screen.getByRole("dialog", { name: "別名を編集" });
+    expect(within(editDialog).getByRole("textbox", { name: "別名" })).toHaveValue("NO11");
+    await user.click(within(editDialog).getByRole("button", { name: "キャンセル" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     await user.click(within(no11Row).getByRole("button", { name: "別名を削除" }));
     await user.click(screen.getByRole("button", { name: "削除" }));
 
@@ -1211,6 +1233,7 @@ describe("MastersPage", () => {
 
     await requestStarted.promise;
     expect(returnButton).toBeDisabled();
+    expect(screen.getByRole("button", { name: "キャンセル" })).toBeDisabled();
     expect(screen.getByText("設定の追加・保存・削除が完了すると戻れます。")).toBeInTheDocument();
 
     responseGate.resolve();

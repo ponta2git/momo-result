@@ -6,7 +6,7 @@ import { layoutFamilies, layoutFamilyLabels } from "@/shared/domain/ocr";
 import type { LayoutFamily } from "@/shared/domain/ocr";
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
-import { AlertDialog, Dialog } from "@/shared/ui/feedback/Dialog";
+import { AlertDialog, Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
 
@@ -97,9 +97,14 @@ export function MasterEditDialog({
             }))}
           />
         ) : null}
-        <Button disabled={pending} pending={pending} pendingLabel="保存中" type="submit">
-          保存
-        </Button>
+        <DialogFooter>
+          <Button disabled={pending} variant="secondary" onClick={() => setOpen(false)}>
+            キャンセル
+          </Button>
+          <Button disabled={pending} pending={pending} pendingLabel="保存中" type="submit">
+            保存
+          </Button>
+        </DialogFooter>
       </form>
     </Dialog>
   );

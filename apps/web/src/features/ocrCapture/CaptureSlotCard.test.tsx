@@ -107,4 +107,18 @@ describe("CaptureSlotCard", () => {
     expect(screen.queryByText("OCR_ENGINE_TIMEOUT")).not.toBeInTheDocument();
     expect(screen.queryByText(/30000ms/u)).not.toBeInTheDocument();
   });
+
+  it("announces a classification mismatch as an alert with the corrective action", () => {
+    renderCard({
+      detectedKind: "revenue",
+      kind: "total_assets",
+      status: "succeeded",
+    });
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("OCR判定は 収益 でした。");
+    expect(alert).toHaveTextContent(
+      "画像を正しい分類へ移動してから、もう一度読み取りを開始してください。",
+    );
+  });
 });

@@ -2,6 +2,7 @@ import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import type { SlotKind } from "@/shared/domain/ocr";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
+import { Notice } from "@/shared/ui/feedback/Notice";
 import { contentText } from "@/shared/ui/typography";
 
 const slotKindLabels = {
@@ -56,19 +57,13 @@ export function CaptureSlotFeedback({
 
 function CaptureMismatchAlert({ detectedKind }: { detectedKind?: SlotKind | undefined }) {
   return (
-    <div
-      className={cn(
-        contentText.body,
-        "rounded-sm border border-[var(--color-warning)]/60 bg-[var(--color-warning)]/20 p-3",
-      )}
-      role="alert"
-    >
+    <Notice presentation="nested" role="alert" tone="warning">
       OCR判定は{" "}
       <strong className={contentText.compactPrimary}>
         {detectedKind ? slotKindLabels[detectedKind] : "別の分類"}
       </strong>{" "}
       でした。画像を正しい分類へ移動してから、もう一度読み取りを開始してください。
-    </div>
+    </Notice>
   );
 }
 
@@ -78,33 +73,19 @@ function CaptureTransportError({
   error: NonNullable<CaptureSlotState["transportError"]>;
 }) {
   return (
-    <div
-      className={cn(
-        contentText.body,
-        "rounded-sm border border-[var(--color-danger)]/45 bg-[var(--color-danger)]/10 p-3",
-      )}
-      role="alert"
-    >
-      <strong className={contentText.compactPrimary}>{error.title}</strong>
-      <p className="mt-1">{error.detail}</p>
-    </div>
+    <Notice presentation="nested" title={error.title} tone="danger">
+      <p>{error.detail}</p>
+    </Notice>
   );
 }
 
 function CaptureJobFailure({ failure }: { failure: NonNullable<CaptureSlotState["jobFailure"]> }) {
   return (
-    <div
-      className={cn(
-        contentText.body,
-        "rounded-sm border border-[var(--color-danger)]/45 bg-[var(--color-danger)]/10 p-3",
-      )}
-      role="alert"
-    >
-      <strong className={contentText.compactPrimary}>画像を読み取れませんでした</strong>
-      <p className="mt-1">この分類の読み取り結果は作成されていません。</p>
+    <Notice presentation="nested" title="画像を読み取れませんでした" tone="danger">
+      <p>この分類の読み取り結果は作成されていません。</p>
       <p className="mt-1">
         {failure.userAction ?? "画像を確認して、もう一度読み取りを開始してください。"}
       </p>
-    </div>
+    </Notice>
   );
 }

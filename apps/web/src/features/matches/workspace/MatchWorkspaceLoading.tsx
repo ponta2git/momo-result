@@ -16,9 +16,13 @@ export function MatchWorkspaceLoading({
   return (
     <PageFrame aria-busy="true" aria-label={loadingLabel} width="workspace">
       <PageContentSurface aria-label="試合内容" className="grid grid-cols-1 gap-6" role="region">
-        <div className={cn(actionRowClass, sample ? "justify-between" : "justify-end")}>
-          {sample ? <StatusBadge {...workspaceSampleStatus} /> : null}
+        <div className={cn(actionRowClass, "justify-between")}>
           <Skeleton className="h-11 w-32 max-w-full rounded-sm pointer-fine:h-9" />
+          {sample ? (
+            <div className="ms-auto">
+              <StatusBadge {...workspaceSampleStatus} />
+            </div>
+          ) : null}
         </div>
         <div className="grid gap-4 md:grid-cols-4">
           <Skeleton className="h-11 pointer-fine:h-10" />

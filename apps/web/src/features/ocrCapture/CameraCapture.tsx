@@ -4,8 +4,8 @@ import type { ReactNode } from "react";
 import type { InputSource } from "@/features/ocrCapture/captureState";
 import { useCameraCaptureSession } from "@/features/ocrCapture/useCameraCaptureSession";
 import { Button } from "@/shared/ui/actions/Button";
-import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
+import { Notice } from "@/shared/ui/feedback/Notice";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { contentText } from "@/shared/ui/typography";
 
@@ -79,16 +79,13 @@ export function CameraCapture({
         <canvas ref={canvasRef} className="hidden" />
       </div>
       {camera.error ? (
-        <div
-          className="grid gap-2 rounded-sm border border-[var(--color-danger)]/45 bg-[var(--color-danger)]/8 p-3"
-          role="alert"
+        <Notice
+          action={renderFallback?.(!useSecondaryActions)}
+          title="カメラを利用できません"
+          tone="danger"
         >
-          <div>
-            <p className={contentText.compactPrimary}>カメラを利用できません</p>
-            <p className={cn(contentText.body, "mt-1")}>{camera.error}</p>
-          </div>
-          {renderFallback?.(!useSecondaryActions)}
-        </div>
+          <p>{camera.error}</p>
+        </Notice>
       ) : null}
       <div className="grid gap-1">
         <div className="flex flex-wrap gap-2">

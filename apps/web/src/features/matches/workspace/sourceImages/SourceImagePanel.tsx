@@ -12,7 +12,7 @@ import type {
 import { useSourceImagePanelState } from "@/features/matches/workspace/sourceImages/useSourceImagePanelState";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
-import { Dialog } from "@/shared/ui/feedback/Dialog";
+import { Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { SegmentedControl } from "@/shared/ui/forms/SegmentedControl";
 import { TabsPanel, TabsRoot } from "@/shared/ui/forms/Tabs";
@@ -219,20 +219,22 @@ function SourceImagePanelContent({
         title="元画像がすべてそろっていません"
         onOpenChange={panel.handleArchiveDialogOpenChange}
       >
-        <p className={cn(contentText.body, "text-pretty")}>
-          {`保存できる元画像は${panel.expectedImageCount}枚中${panel.availableImageCount}枚です。不足している画像はZIPに含まれません。このまま保存しますか？`}
-        </p>
-        <div className="mt-4 flex flex-wrap justify-end gap-2">
-          <Button variant="secondary" onClick={panel.handleArchiveCancel}>
-            キャンセル
-          </Button>
-          <Button
-            pending={panel.archiveSaving}
-            pendingLabel={archivePendingLabel}
-            onClick={panel.handleArchiveSaveConfirmed}
-          >
-            保存する
-          </Button>
+        <div className="grid gap-4">
+          <p className={cn(contentText.body, "text-pretty")}>
+            {`保存できる元画像は${panel.expectedImageCount}枚中${panel.availableImageCount}枚です。不足している画像はZIPに含まれません。このまま保存しますか？`}
+          </p>
+          <DialogFooter>
+            <Button variant="secondary" onClick={panel.handleArchiveCancel}>
+              キャンセル
+            </Button>
+            <Button
+              pending={panel.archiveSaving}
+              pendingLabel={archivePendingLabel}
+              onClick={panel.handleArchiveSaveConfirmed}
+            >
+              保存する
+            </Button>
+          </DialogFooter>
         </div>
       </Dialog>
     </section>

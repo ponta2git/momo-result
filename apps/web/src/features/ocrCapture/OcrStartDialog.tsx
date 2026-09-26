@@ -6,7 +6,7 @@ import type { OcrStartDialogState } from "@/features/ocrCapture/useOcrStartFlow"
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { FactList } from "@/shared/ui/data/FactList";
-import { Dialog } from "@/shared/ui/feedback/Dialog";
+import { Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { ProgressBar } from "@/shared/ui/feedback/ProgressBar";
 import { SpinnerIcon } from "@/shared/ui/feedback/Spinner";
@@ -95,12 +95,12 @@ function ConfirmingContent({
           <p>未配置の分類は読み取られません。あとから確認画面で手入力できます。</p>
         </Notice>
       ) : null}
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+      <DialogFooter>
         <Button variant="secondary" onClick={onClose}>
           戻って確認
         </Button>
         <Button onClick={() => void onConfirm()}>{plan.slots.length}件で読み取りを開始</Button>
-      </div>
+      </DialogFooter>
     </div>
   );
 }
@@ -193,7 +193,7 @@ export function OcrStartDialog({
               同じ内容で再試行すると、受け付け済みの画像を再送せずに続けられます。確認画面で手入力することもできます。
             </p>
           </Notice>
-          <div className="flex justify-end gap-2">
+          <DialogFooter>
             <Button
               variant="secondary"
               pending={navigationPending}
@@ -203,7 +203,7 @@ export function OcrStartDialog({
               {resultDestinationLabel(state.plan)}
             </Button>
             <Button onClick={() => void onConfirm()}>残りをもう一度試す</Button>
-          </div>
+          </DialogFooter>
         </div>
       </Dialog>
     );
@@ -223,7 +223,7 @@ export function OcrStartDialog({
               ? "未受付の画像は、新しい読み取りとして送信できます。完了通知も別になります。"
               : "この記録への送信は続けられません。記録の状態を確認してください。"}
           </p>
-          <div className="flex justify-end gap-2">
+          <DialogFooter>
             <Button
               variant="secondary"
               pending={navigationPending}
@@ -235,7 +235,7 @@ export function OcrStartDialog({
             {state.canRestart ? (
               <Button onClick={() => void onConfirm()}>未受付の画像を新しく送信</Button>
             ) : null}
-          </div>
+          </DialogFooter>
         </div>
       </Dialog>
     );
@@ -262,7 +262,7 @@ export function OcrStartDialog({
           <Notice tone="danger" title="送信を完了できませんでした">
             <p>{state.message}</p>
           </Notice>
-          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <DialogFooter>
             {state.canEdit ? (
               <Button variant="secondary" onClick={onClose}>
                 戻って確認
@@ -278,7 +278,7 @@ export function OcrStartDialog({
               </Button>
             )}
             <Button onClick={() => void onConfirm()}>もう一度試す</Button>
-          </div>
+          </DialogFooter>
         </div>
       </Dialog>
     );

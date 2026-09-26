@@ -43,8 +43,9 @@ source_dir="${tmp_dir}/http4s"
 
 GIT_TERMINAL_PROMPT=0 git init --quiet "${source_dir}"
 GIT_TERMINAL_PROMPT=0 git -C "${source_dir}" remote add origin "${repository}"
-GIT_TERMINAL_PROMPT=0 git -C "${source_dir}" fetch --quiet --tags origin
-GIT_TERMINAL_PROMPT=0 git -C "${source_dir}" fetch --quiet origin "${ref}"
+# Keep the tag history used by dynver, without fetching every branch tip or
+# opening a second connection for the already-pinned commit.
+GIT_TERMINAL_PROMPT=0 git -C "${source_dir}" fetch --quiet --tags origin "${ref}"
 git -C "${source_dir}" checkout --quiet --detach "${ref}"
 actual_ref="$(git -C "${source_dir}" rev-parse HEAD)"
 [[ "${actual_ref}" == "${ref}" ]] || {
@@ -88,15 +89,17 @@ version="$(awk '
 
 (
   cd "${source_dir}"
+  build_commands=("++${scala_version}")
   if [[ "${run_tests}" == "1" ]]; then
-    "${sbt_args[@]}" -batch "++${scala_version}" ember-core/test
+    build_commands+=(ember-core/test)
   fi
-  "${sbt_args[@]}" -batch \
-    "++${scala_version}" \
-    core/publishLocal \
-    server/publishLocal \
-    ember-core/publishLocal \
+  build_commands+=(
+    core/publishLocal
+    server/publishLocal
+    ember-core/publishLocal
     ember-server/publishLocal
+  )
+  "${sbt_args[@]}" -batch "${build_commands[@]}"
 )
 
 mkdir -p "${output_dir}"

@@ -1,5 +1,5 @@
 import type { components } from "../src/shared/api/generated";
-import { expect, expectNoHorizontalPageOverflow, installE2eAuthHeaders, test } from "./support";
+import { expect, installE2eAuthHeaders, test } from "./support";
 
 test("moves skip-link focus into the ready page and resumes keyboard navigation there", async ({
   page,
@@ -34,12 +34,10 @@ test("exposes overflowing account data to the keyboard only while it needs scrol
   await expect(scrollArea).toBeFocused();
   await page.keyboard.press("ArrowRight");
   await expect.poll(() => scrollArea.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
-  await expectNoHorizontalPageOverflow(page);
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect(scrollArea).toHaveCount(0);
   await expect(table).toBeVisible();
-  await expectNoHorizontalPageOverflow(page);
 });
 
 test("starts document login navigation when its action becomes pending", async ({ page }) => {

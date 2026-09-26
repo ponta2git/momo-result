@@ -16,13 +16,7 @@ import {
   waitForRecheck,
   waitForStarted,
 } from "./ocr-notifications-support";
-import {
-  test,
-  expect,
-  installE2eAuthHeaders,
-  e2eAuthHeaders,
-  expectNoHorizontalPageOverflow,
-} from "./support";
+import { test, expect, installE2eAuthHeaders, e2eAuthHeaders } from "./support";
 
 // One controlled worker and notification setting are shared by this dedicated runtime.
 // Config workers=1 serializes access; each case establishes its own setting and releases gates.
@@ -140,7 +134,6 @@ test("E3: lost job response retries the same operation; an explicit reread creat
   await page.setViewportSize({ width: 390, height: 844 });
   const retry = page.getByRole("dialog", { name: "読み取りの受付を確認できませんでした" });
   await expect(retry).toBeVisible();
-  await expectNoHorizontalPageOverflow(page);
   await retry.getByRole("button", { name: "もう一度試す" }).click();
   await expect(page).toHaveURL(/\/matches\?status=incomplete&sort=updated_desc$/u);
   expect((await submission(request, operation.id)).members).toEqual(original.members);

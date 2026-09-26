@@ -3,9 +3,7 @@ import type { Page } from "@playwright/test";
 import {
   analysisArtifact,
   makeFourPlayerSeriesAnalysisReview,
-  makeOwnerComparisonAggregate,
   makeSeriesAnalysisAggregate,
-  makeSeriesAnalysisDrilldown,
   makeSeriesAnalysisMatchContext,
   makeSeriesAnalysisOptions,
   makeSeriesAnalysisStatus,
@@ -45,7 +43,6 @@ export async function installAnalysisResponses(
   ];
   const aggregateFixture = makeSeriesAnalysisAggregate(artifact);
   aggregateFixture.scope = analysisScope;
-  aggregateFixture.ownerComparison = makeOwnerComparisonAggregate().ownerComparison;
   const recentMatch = aggregateFixture.matchDigest.recent[0];
   if (!recentMatch) throw new Error("analysis aggregate fixture requires a recent match");
   Object.assign(recentMatch, {
@@ -68,24 +65,12 @@ export async function installAnalysisResponses(
     });
     recentRankEntry.targetCount = 20;
   }
-  const strategyPoint = aggregateFixture.strategyScatter.points[0];
-  if (strategyPoint) {
-    strategyPoint.itemId = `strategy-point:${matchId}:member_ponta`;
-    strategyPoint.matchId = matchId;
-    strategyPoint.matchIndex = 1;
-  }
-  for (const trend of aggregateFixture.trends) {
-    const trendPoint = trend.points[0];
-    if (!trendPoint) continue;
-    trendPoint.itemId = `trend:${trend.kind}:member_ponta:${matchId}`;
-    trendPoint.matchId = matchId;
-    trendPoint.index = 1;
-  }
   const reviewFixture = makeFourPlayerSeriesAnalysisReview();
   reviewFixture.artifact = artifact;
   reviewFixture.scope = analysisScope;
   const expandedReviewHypothesis = reviewFixture.playbookByPlayer[0]?.secondaryCards[0];
-  if (!expandedReviewHypothesis) throw new Error("review layout fixture requires a secondary card");
+  if (!expandedReviewHypothesis)
+    throw new Error("review navigation fixture requires a secondary card");
   const matchContextFixture = makeSeriesAnalysisMatchContext();
   matchContextFixture.artifact = artifact;
   matchContextFixture.matchId = matchId;
@@ -93,18 +78,7 @@ export async function installAnalysisResponses(
   if (matchContextFixture.match) {
     matchContextFixture.match.matchIndex = 1;
     matchContextFixture.match.focusedItemIds = [
-      "rank-distribution:member_ponta:1",
-      "play-order:member_ponta:1",
       `recent-rank:member_ponta:${matchId}`,
-      `strategy-point:${matchId}:member_ponta`,
-      "revenue-rank:member_ponta:1:1",
-      "momentum:member_ponta:4:1",
-      "card-shop:member_ponta:destination_with_shop",
-      `trend:rank_cumulative_average:member_ponta:${matchId}`,
-      `trend:rank_cumulative_standard_deviation:member_ponta:${matchId}`,
-      `trend:podium_cumulative_rate:member_ponta:${matchId}`,
-      `trend:lower_half_cumulative_rate:member_ponta:${matchId}`,
-      `trend:ginji_cumulative_count:member_ponta:${matchId}`,
       `match:${matchId}`,
     ];
   }
@@ -150,33 +124,6 @@ export async function installAnalysisResponses(
   );
   await page.route(/\/api\/analytics\/series-comparison\/v3\/review(?:\?.*)?$/u, async (route) =>
     route.fulfill({ json: reviewFixture }),
-  );
-  await page.route(
-    /\/api\/analytics\/series-comparison\/v2\/drilldown(?:\?.*)?$/u,
-    async (route) => {
-      const url = new URL(route.request().url());
-      const fixture = makeSeriesAnalysisDrilldown(
-        url.searchParams.get("metricId") ?? "rank.averageHistory",
-      );
-      fixture.artifact = artifact;
-      fixture.scope = analysisScope;
-      if (fixture.payload.kind === "rank_average_history") {
-        for (const row of fixture.payload.matchRows) {
-          row.itemId = `rank-history:${matchId}`;
-          row.matchId = matchId;
-          row.matchIndex = 1;
-          row.matchNoInEvent = 1;
-        }
-      } else if (fixture.payload.kind === "play_order_rank_history") {
-        for (const row of fixture.payload.seriesByPlayOrder) {
-          row.itemId = `play-order-history:${matchId}`;
-          row.matchId = matchId;
-          row.matchIndex = 1;
-          row.matchNoInEvent = 1;
-        }
-      }
-      await route.fulfill({ json: fixture });
-    },
   );
   await page.route(
     /\/api\/analytics\/series-comparison\/v3\/match-context(?:\?.*)?$/u,

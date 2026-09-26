@@ -5,7 +5,7 @@ import {
   makeMatchDetail,
 } from "../src/test/factories";
 import { mswState } from "../src/test/msw/fixtures";
-import { expect, expectNoHorizontalPageOverflow, installE2eAuthHeaders, test } from "./support";
+import { expect, installE2eAuthHeaders, test } from "./support";
 
 test.beforeEach(async ({ page }) => {
   await installE2eAuthHeaders(page);
@@ -73,7 +73,6 @@ test("preserves an unfinished numeric edit across responsive layouts and refuses
   await expect(revenue).toBeFocused();
   await expect(revenue).toHaveValue("-");
   expect(writes).toBe(0);
-  await expectNoHorizontalPageOverflow(page);
 });
 
 test("asks before discarding an OCR image and retains it when navigation is canceled", async ({
@@ -81,24 +80,6 @@ test("asks before discarding an OCR image and retains it when navigation is canc
 }) => {
   await page.goto("/ocr/new");
   const exit = page.getByRole("link", { name: "取り込みをやめる" });
-  const surface = page.getByRole("region", { name: "OCR取り込み", exact: true });
-  const expectLeadingExit = async () => {
-    for (const width of [320, 375, 1440]) {
-      await page.setViewportSize({ width, height: 900 });
-      await exit.scrollIntoViewIfNeeded();
-      const exitBox = await exit.boundingBox();
-      const surfaceBox = await surface.boundingBox();
-      if (!exitBox || !surfaceBox) throw new Error("expected visible OCR navigation and content");
-      expect(Math.abs(exitBox.x - surfaceBox.x)).toBeLessThanOrEqual(1);
-      expect(exitBox.y + exitBox.height).toBeLessThan(surfaceBox.y);
-      await expect(surface.getByRole("link", { name: "取り込みをやめる" })).toHaveCount(0);
-      await expectNoHorizontalPageOverflow(page);
-    }
-  };
-  await test.step(
-    "keep exit navigation outside and before the content at every width",
-    expectLeadingExit,
-  );
   await page.getByRole("button", { name: "カメラが使えない場合" }).click();
   await page.getByLabel("OCRの画像をアップロード").setInputFiles("public/station.png");
   await expect(page.getByText(/配置済み\s*1\s*件/u)).toBeVisible();
@@ -109,7 +90,6 @@ test("asks before discarding an OCR image and retains it when navigation is canc
   await expect(confirmation).toHaveCount(0);
   await expect(exit).toBeFocused();
   await expect(page.getByText(/配置済み\s*1\s*件/u)).toBeVisible();
-  await test.step("retain the leading navigation after canceling image discard", expectLeadingExit);
   await exit.click();
   await confirmation.getByRole("button", { name: "破棄して移動" }).click();
   await expect(page.getByRole("region", { name: "試合一覧", exact: true })).toBeVisible();

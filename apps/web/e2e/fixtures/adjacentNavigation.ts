@@ -35,7 +35,7 @@ const matches = [
 
 const gameTitleId = "gt_navigation_layout";
 
-/** Browser layout/focus fixtures; real API ordering is covered by the wire and API suites. */
+/** Browser navigation fixtures; real API ordering is covered by the wire and API suites. */
 export async function installAdjacentNavigationResponses(page: Page) {
   const eventDetails = heldEvents.map(
     (event, index): components["schemas"]["HeldEventDetailResponse"] => ({

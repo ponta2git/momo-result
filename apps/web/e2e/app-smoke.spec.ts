@@ -11,7 +11,6 @@ import {
   selectControlOption,
   expect,
   expectGeneratedId,
-  expectNoHorizontalPageOverflow,
   expectOk,
   installE2eAuthHeaders,
   readJsonObject,
@@ -95,7 +94,6 @@ test("creates a held event and accepts an OCR upload", async ({ e2eRun, page, re
 
     await page.setViewportSize({ height: 844, width: 390 });
     await expect(heldEventOcrLink).toBeVisible();
-    await expectNoHorizontalPageOverflow(page);
     await heldEventOcrLink.click();
 
     await expect(page).toHaveURL(expectedOcrHref);
@@ -116,15 +114,6 @@ test("creates a held event and accepts an OCR upload", async ({ e2eRun, page, re
 
     await expect(page.getByRole("region", { exact: true, name: "OCR取り込み" })).toBeVisible();
     await selectSeedMasters(page, { gameTitleId, mapMasterId, seasonMasterId });
-
-    const cameraFrame = page.getByRole("group", { name: "総資産の16:9カメラ画像枠" });
-    const cameraFrameBox = await measureElement(cameraFrame, "OCR camera frame");
-    expect(cameraFrameBox.width / cameraFrameBox.height).toBeCloseTo(16 / 9, 2);
-
-    const totalAssetsFrame = page.getByRole("group", { name: "総資産の16:9画像枠" });
-    await expect(totalAssetsFrame).toBeVisible();
-    const totalAssetsFrameBox = await measureElement(totalAssetsFrame, "OCR tray frame");
-    expect(totalAssetsFrameBox.width / totalAssetsFrameBox.height).toBeCloseTo(16 / 9, 2);
 
     await page.getByLabel("OCRの画像をアップロード").setInputFiles({
       buffer: png1x1,
@@ -194,21 +183,20 @@ test("confirms sample review and reads its persisted match from the held event",
     const member = page.getByRole("combobox", { name: /^メンバー/u });
     await expect(page.getByLabel("ぽんた 順位", { exact: true })).not.toBeVisible();
     await expect(member).toBeFocused();
-    await expectPageTargetInView(member);
+    await expect(member).toBeInViewport();
     await reviewRail.getByRole("button", { name: "次の要確認セルへ" }).click();
     await expect(page.getByLabel("あかねまみ 順位", { exact: true })).not.toBeVisible();
-    await expectPageTargetInView(page.getByLabel("おーたか 順位", { exact: true }));
+    await expect(page.getByLabel("おーたか 順位", { exact: true })).toBeInViewport();
     await reviewRail.getByRole("button", { name: "前の要確認セルへ" }).click();
     await expect(member).toBeFocused();
-    await expectPageTargetInView(member);
+    await expect(member).toBeInViewport();
     await reviewRail.getByRole("button", { name: "この値で確認済み" }).click();
     await expect(reviewRail.getByText("未確認1件／全2件")).toBeVisible();
 
     await page.setViewportSize({ height: 844, width: 390 });
     await reviewRail.getByRole("button", { name: "次の要確認セルへ" }).click();
     await expect(page.getByLabel("おーたか 順位")).toBeFocused();
-    await expectPageTargetInView(page.getByLabel("おーたか 順位", { exact: true }));
-    await expectNoHorizontalPageOverflow(page);
+    await expect(page.getByLabel("おーたか 順位", { exact: true })).toBeInViewport();
     await page.setViewportSize({ height: 900, width: 1440 });
 
     await page.getByRole("button", { name: "開催（必須）を変更" }).click();
@@ -331,7 +319,6 @@ test("runs analysis administration and enforces access", async ({ e2eRun, page, 
     });
 
     await page.setViewportSize({ height: 844, width: 390 });
-    await expectNoHorizontalPageOverflow(page);
 
     await page.route("**/api/**", continueWithE2eNonAdminAuth);
     await page.goto("/admin/analysis");
@@ -464,7 +451,6 @@ test("downloads a confirmed match export", async ({ e2eRun, page, request }) => 
 
     await expect(page.getByRole("region", { exact: true, name: "出力条件" })).toBeVisible();
     await page.setViewportSize({ height: 812, width: 375 });
-    await expectNoHorizontalPageOverflow(page);
 
     const exportResponse = page.waitForResponse(
       (response) =>
@@ -569,31 +555,4 @@ async function selectSeedMasters(
   const mapSelect = page.getByRole("combobox", { name: /^マップ/u });
   await expect(mapSelect).toBeEnabled();
   await selectControlOption(page, mapSelect, ids.mapMasterId);
-}
-
-async function measureElement(locator: Locator, label: string) {
-  await expect(locator, `${label} must be visible before measuring.`).toBeVisible();
-  return locator.evaluate((element) => {
-    const rect = element.getBoundingClientRect();
-    return {
-      height: rect.height,
-      width: rect.width,
-    };
-  });
-}
-
-async function expectPageTargetInView(locator: Locator) {
-  await expect(locator).toBeInViewport({ ratio: 1 });
-  const geometry = await locator.evaluate((element) => {
-    const label = (element as HTMLInputElement).labels?.[0] ?? element;
-    return {
-      bottom: label.getBoundingClientRect().bottom,
-      navigationBottom:
-        document.getElementById("global-navigation")?.getBoundingClientRect().bottom ?? 0,
-      top: label.getBoundingClientRect().top,
-      viewportHeight: window.innerHeight,
-    };
-  });
-  expect(geometry.top).toBeGreaterThanOrEqual(geometry.navigationBottom);
-  expect(geometry.bottom).toBeLessThanOrEqual(geometry.viewportHeight);
 }

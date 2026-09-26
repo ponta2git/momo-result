@@ -52,6 +52,23 @@ func TestPlanHoldoutUsesPointAndUncertaintyFloors(t *testing.T) {
 	}
 }
 
+func TestPlanHoldoutRetainsErrorsInLargeBaseline(t *testing.T) {
+	t.Parallel()
+	const total = uint64(1 << 60)
+	plan := planHoldout(options{
+		baselineCorrect:   total - 1,
+		baselineTotal:     total,
+		marginBasisPoints: 50,
+		alphaBasisPoints:  500,
+		powerBasisPoints:  8000,
+		fieldsPerMatch:    36,
+		imagesPerMatch:    3,
+	})
+	if plan.BaselineErrorRate != 1/float64(total) || plan.PointEstimateFloor.IndependentFields != 1 {
+		t.Fatalf("one observed error must not yield a zero-field floor: %+v", plan)
+	}
+}
+
 func TestAuditDetectsCrossDirectoryDuplicateAndDimensionViolation(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
@@ -153,6 +170,42 @@ func TestAuditRejectsIgnoredImageUnlessExplicitlyAllowed(t *testing.T) {
 	}
 	if !audit.Passed {
 		t.Fatalf("explicit historical-data allowance should pass: %+v", audit)
+	}
+}
+
+func TestAuditDoesNotPassWithoutEligibleImages(t *testing.T) {
+	t.Parallel()
+	directory := t.TempDir()
+	writePNG(t, filepath.Join(directory, "unselected.png"), 1, 1)
+	audit, err := auditDataset(options{
+		sampleDirectories: stringList{directory},
+		maximumWidth:      2,
+		maximumHeight:     2,
+		allowIgnored:      true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if audit.Passed || audit.EvaluationEligibleFiles != 0 || audit.IgnoredImageFiles != 1 {
+		t.Fatalf("ignored-only dataset must fail even with allow-ignored: %+v", audit)
+	}
+}
+
+func TestAuditRejectsAliasedSampleDirectories(t *testing.T) {
+	t.Parallel()
+	directory := t.TempDir()
+	writePNG(t, filepath.Join(directory, "game_001_20260811_map_01assets.png"), 1, 1)
+	alias := filepath.Join(t.TempDir(), "alias")
+	if err := os.Symlink(directory, alias); err != nil {
+		t.Fatal(err)
+	}
+	_, err := auditDataset(options{
+		sampleDirectories: stringList{directory, alias},
+		maximumWidth:      2,
+		maximumHeight:     2,
+	})
+	if err == nil {
+		t.Fatal("a directory alias must not be counted as a second sample directory")
 	}
 }
 

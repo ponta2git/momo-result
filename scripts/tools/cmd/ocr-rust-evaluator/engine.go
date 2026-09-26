@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"os/exec"
 	"time"
@@ -35,6 +34,11 @@ func runPilot(options engineOptions, image imageMetadata) (pilotEnvelope, proces
 	ctx, cancel := context.WithTimeout(context.Background(), options.timeout)
 	defer cancel()
 	command := exec.CommandContext(ctx, options.binary, arguments...)
+	// A descendant can retain the output pipes after the pilot exits. Bound that
+	// wait separately from the image deadline and always recover the owned group.
+	command.WaitDelay = time.Second
+	cleanup := isolatePilot(command)
+	defer cleanup()
 	stdout := newBoundedBuffer(maximumPilotOutputBytes)
 	stderr := newBoundedBuffer(maximumPilotOutputBytes)
 	command.Stdout = stdout
@@ -62,7 +66,7 @@ func runPilot(options engineOptions, image imageMetadata) (pilotEnvelope, proces
 		return pilotEnvelope{}, resources, errors.New("pilot_output_trailing_data")
 	}
 	if envelope.DetectedScreenType != image.ScreenType {
-		return pilotEnvelope{}, resources, fmt.Errorf("pilot_screen_mismatch")
+		return pilotEnvelope{}, resources, errors.New("pilot_screen_mismatch")
 	}
 	return envelope, resources, nil
 }

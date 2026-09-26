@@ -1,7 +1,10 @@
 package main
 
 import (
-	"math"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -65,17 +68,80 @@ func TestResolvePlayerUsesTheSameNameFallbackVocabulary(t *testing.T) {
 func TestClusterBootstrapIsDeterministicAndUsesWholeMatches(t *testing.T) {
 	t.Parallel()
 	clusters := map[int]matchCluster{
-		1: {delta: 1, fields: 36},
-		2: {delta: -1, fields: 36},
-		3: {delta: 2, fields: 36},
+		1: {delta: 18, fields: 36},
+		2: {delta: -18, fields: 36},
 	}
 	first := clusterBootstrapLower(clusters, 0.05)
 	second := clusterBootstrapLower(clusters, 0.05)
 	if first == nil || second == nil || *first != *second {
 		t.Fatalf("bootstrap must be deterministic: first=%v second=%v", first, second)
 	}
-	if math.IsNaN(*first) || *first < -1 || *first > 1 {
-		t.Fatalf("bootstrap lower bound is invalid: %f", *first)
+	// Resampling two whole matches yields only -0.5, 0, or 0.5. The lower
+	// quarter of the distribution consists of two draws of the losing match.
+	if *first != -0.5 {
+		t.Fatalf("whole-match lower bound = %f, want -0.5", *first)
+	}
+}
+
+func TestPairedComparisonRequiresOneOfEachScreenPerMatch(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name    string
+		screens []string
+		valid   bool
+	}{
+		{name: "complete", screens: []string{"total_assets", "revenue", "incident_log"}, valid: true},
+		{name: "repeated_revenue", screens: []string{"revenue", "revenue", "revenue", "revenue", "revenue", "revenue", "revenue", "revenue", "revenue"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			answers := make(map[int][]expectedPlayer)
+			var images []imageMetadata
+			var rustResults []imageResult
+			var baseline baselineReport
+			for match := 1; match <= 2; match++ {
+				for order := 1; order <= 4; order++ {
+					answers[match] = append(answers[match], expectedPlayer{PlayOrder: order})
+				}
+				for index, screen := range test.screens {
+					file := fmt.Sprintf("match-%d-image-%d.png", match, index)
+					images = append(images, imageMetadata{File: file, MatchNo: match, ScreenType: screen})
+					result := imageResult{File: file, MatchNo: match, ScreenType: screen}
+					for _, player := range answers[match] {
+						for _, field := range expectedFields(screen, player) {
+							result.Outcomes = append(result.Outcomes, fieldOutcome{PlayOrder: player.PlayOrder, Field: field.name, Correct: true})
+						}
+					}
+					rustResults = append(rustResults, result)
+					baseline.Results = append(baseline.Results, baselineImageResult{
+						File: file, MatchNo: match, ScreenType: screen,
+						FieldTotal: len(result.Outcomes), FieldCorrect: len(result.Outcomes),
+					})
+				}
+			}
+			content, err := json.Marshal(baseline)
+			if err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(t.TempDir(), "baseline.json")
+			if err := os.WriteFile(path, content, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			summary, err := compareWithBaseline(path, images, answers, rustResults, 0.005)
+			if !test.valid {
+				if err == nil {
+					t.Fatal("36 fields from a repeated screen must not establish paired noninferiority")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if summary.Fields != 72 || summary.MatchClusters != 2 || summary.BothCorrect != 72 ||
+				!summary.PilotNoninferioritySupported || summary.ReleaseDecisionAllowed {
+				t.Fatalf("unexpected complete-pilot comparison: %+v", summary)
+			}
+		})
 	}
 }
 

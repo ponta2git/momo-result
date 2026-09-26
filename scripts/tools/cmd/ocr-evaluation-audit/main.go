@@ -191,12 +191,23 @@ func validateOptions(opts options) error {
 
 func auditDataset(opts options) (datasetAudit, error) {
 	contents := make(map[string]*contentRecord)
+	var directories []os.FileInfo
 	audit := datasetAudit{
 		Directories: len(opts.sampleDirectories),
 		Dimensions:  make(map[string]int),
 		Extensions:  make(map[string]int),
 	}
 	for _, directory := range opts.sampleDirectories {
+		info, err := os.Stat(directory)
+		if err != nil {
+			return datasetAudit{}, fmt.Errorf("inspect samples directory: %w", err)
+		}
+		for _, previous := range directories {
+			if os.SameFile(previous, info) {
+				return datasetAudit{}, errors.New("samples-dir refers to the same directory more than once")
+			}
+		}
+		directories = append(directories, info)
 		entries, err := os.ReadDir(directory)
 		if err != nil {
 			return datasetAudit{}, fmt.Errorf("read samples directory: %w", err)
@@ -249,7 +260,8 @@ func auditDataset(opts options) (datasetAudit, error) {
 			audit.OverDimensionUniqueContents++
 		}
 	}
-	audit.Passed = audit.OverDimensionUniqueContents == 0 &&
+	audit.Passed = audit.EvaluationEligibleFiles > 0 &&
+		audit.OverDimensionUniqueContents == 0 &&
 		(opts.allowIgnored || audit.IgnoredImageFiles == 0) &&
 		(!opts.requireUnique || audit.DuplicateFileReferences == 0)
 	return audit, nil
@@ -291,7 +303,9 @@ func supportedImageExtension(name string) bool {
 
 func planHoldout(opts options) holdoutPlan {
 	accuracy := float64(opts.baselineCorrect) / float64(opts.baselineTotal)
-	errorRate := 1 - accuracy
+	// Subtract the integer counts before conversion so a small nonzero error
+	// count is not rounded away when the baseline total exceeds float precision.
+	errorRate := float64(opts.baselineTotal-opts.baselineCorrect) / float64(opts.baselineTotal)
 	alpha := float64(opts.alphaBasisPoints) / 10_000
 	power := float64(opts.powerBasisPoints) / 10_000
 	margin := float64(opts.marginBasisPoints) / 10_000

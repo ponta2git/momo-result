@@ -51,6 +51,9 @@ func compareWithBaseline(
 	rustResults []imageResult,
 	margin float64,
 ) (*pairedSummary, error) {
+	if err := validatePairedImages(images); err != nil {
+		return nil, err
+	}
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read baseline report: %w", err)
@@ -119,6 +122,32 @@ func compareWithBaseline(
 	summary.ClusterBootstrapLower95 = lower
 	summary.PilotNoninferioritySupported = lower != nil && *lower > -margin
 	return summary, nil
+}
+
+// A field count alone cannot distinguish one of each screen from, for example,
+// nine revenue screenshots. Keep the bootstrap unit tied to the selected match.
+func validatePairedImages(images []imageMetadata) error {
+	if len(images) == 0 {
+		return errors.New("paired pilot requires evaluated images")
+	}
+	byMatch := make(map[int]map[string]bool)
+	for _, image := range images {
+		screens := byMatch[image.MatchNo]
+		if screens == nil {
+			screens = make(map[string]bool)
+			byMatch[image.MatchNo] = screens
+		}
+		if expectedFieldCount(image.ScreenType) == 0 || screens[image.ScreenType] {
+			return errors.New("paired pilot requires exactly one of each screen per match")
+		}
+		screens[image.ScreenType] = true
+	}
+	for _, screens := range byMatch {
+		if len(screens) != 3 {
+			return errors.New("paired pilot requires exactly one of each screen per match")
+		}
+	}
+	return nil
 }
 
 func baselineCorrectness(

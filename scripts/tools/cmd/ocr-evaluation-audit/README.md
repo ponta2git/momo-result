@@ -11,6 +11,10 @@ The dataset report first applies the current evaluator filename contract, then h
 content without emitting hashes or filenames. It reports ignored image files, duplicate groups
 across all supplied directories, and unique images above the configured dimensions. JPEG and PNG
 are supported; WebP is recognized as an input extension but fails closed until its decoder is added.
+An audit with no eligible images fails, including when ignored images are explicitly allowed.
+Repeated references to the same directory (including symlink aliases) are rejected rather than
+counted as duplicate samples. Content equality means identical file bytes; different encodings,
+near-duplicate screenshots, and match-level dependence still require separate assessment.
 
 The planning report assumes equal Rust/Python marginal accuracy and disjoint errors, then computes
 a one-sided normal-approximation floor for a paired noninferiority comparison. It emits both a

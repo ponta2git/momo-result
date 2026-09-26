@@ -43,8 +43,8 @@ source_dir="${tmp_dir}/http4s"
 
 GIT_TERMINAL_PROMPT=0 git init --quiet "${source_dir}"
 GIT_TERMINAL_PROMPT=0 git -C "${source_dir}" remote add origin "${repository}"
-# Keep the tag history used by dynver, without fetching every branch tip or
-# opening a second connection for the already-pinned commit.
+# Keep tags for sbt-typelevel MiMa and historical refs. The current fork derives
+# its version from the source SHA; unrelated branch tips are not needed.
 GIT_TERMINAL_PROMPT=0 git -C "${source_dir}" fetch --quiet --tags origin "${ref}"
 git -C "${source_dir}" checkout --quiet --detach "${ref}"
 actual_ref="$(git -C "${source_dir}" rev-parse HEAD)"

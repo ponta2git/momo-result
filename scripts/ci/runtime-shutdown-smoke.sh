@@ -12,6 +12,10 @@ log_file="$(mktemp)"
 message_file="$(mktemp)"
 trap 'rm -f "${log_file}" "${message_file}"' EXIT
 
+[[ "$(docker inspect --format '{{.State.Running}}' "${container_name}")" == "true" ]] || {
+  echo "Runtime container must be running before the shutdown smoke." >&2
+  exit 1
+}
 docker stop --time "${stop_timeout}" "${container_name}" > /dev/null
 exit_code="$(docker inspect "${container_name}" --format '{{.State.ExitCode}}')"
 [[ "${exit_code}" == "0" ]] || {

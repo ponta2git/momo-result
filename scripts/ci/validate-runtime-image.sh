@@ -8,6 +8,17 @@ if ! docker run --rm \
   -e MOMO_ORIGIN_LOCK_TOKEN="${origin_lock_token}" \
   "${image_ref}" \
   /bin/sh -ec '
+    test -d /opt/momo-result/api/lib
+    test -x /opt/java/openjdk/bin/java
+    test -x /usr/bin/caddy
+    test -x /opt/momo-result/bin/momo-runtime-tool
+    for command_name in python python3 pip pip3 uv momo-ocr supervisord; do
+      if command -v "${command_name}" >/dev/null 2>&1; then
+        exit 1
+      fi
+    done
+    test ! -e /opt/momo-result/ocr-worker
+    test ! -e /etc/supervisor
     caddy_config="${MOMO_CADDY_OUTPUT_PATH:-/tmp/momo-result/caddy/Caddyfile}"
     /opt/momo-result/bin/momo-runtime-tool render-caddy >/dev/null
     caddy validate --config "${caddy_config}" --adapter caddyfile >/dev/null
@@ -23,14 +34,9 @@ if ! docker run --rm \
       .encoder.fields.resp_headers.filter == "delete"
     )
   ' > /dev/null; then
-  echo "Runtime Caddy logs must redact request URIs, request headers, and response headers." >&2
+  echo "Runtime image layout or Caddy log redaction validation failed." >&2
   exit 1
 fi
-
-docker run --rm "${image_ref}" test -d /opt/momo-result/api/lib
-docker run --rm "${image_ref}" test -x /opt/java/openjdk/bin/java
-docker run --rm "${image_ref}" test -x /usr/bin/caddy
-docker run --rm "${image_ref}" test -x /opt/momo-result/bin/momo-runtime-tool
 
 caddy_version="$(
   docker run --rm --entrypoint /usr/bin/caddy "${image_ref}" version
@@ -56,17 +62,13 @@ for required_build_dependency in \
 done
 
 "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/runtime-jvm-profile.sh" "${image_ref}"
-if docker run --rm "${image_ref}" \
-  /opt/momo-result/bin/momo-runtime-tool smoke edge invalid_host >/dev/null 2>&1; then
+invalid_host_status=0
+invalid_host_report="$(docker run --rm "${image_ref}" \
+  /opt/momo-result/bin/momo-runtime-tool smoke edge invalid_host 2>&1)" || invalid_host_status=$?
+if [[ "${invalid_host_status}" != "1" ]] || ! jq -es '
+  length == 1 and (.[0] |
+    .event == "runtime_public_edge_smoke" and .status == "failed" and .errorClass == "InvalidConfiguration")
+' <<<"${invalid_host_report}" >/dev/null 2>&1; then
   echo "Runtime tool must reject an invalid public-edge host." >&2
   exit 1
 fi
-docker run --rm "${image_ref}" /bin/sh -ec '
-  for command_name in python python3 pip pip3 uv momo-ocr supervisord; do
-    if command -v "${command_name}" >/dev/null 2>&1; then
-      exit 1
-    fi
-  done
-  test ! -e /opt/momo-result/ocr-worker
-  test ! -e /etc/supervisor
-'

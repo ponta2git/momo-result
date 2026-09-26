@@ -11,12 +11,12 @@ origin_lock_token="${MOMO_ORIGIN_LOCK_TOKEN:?MOMO_ORIGIN_LOCK_TOKEN is required.
 canonical_host="${MOMO_CANONICAL_HOST:-momo-result.ponta.me}"
 container_name="${RUNTIME_CONTAINER_NAME:-momo-result-runtime}"
 
-runtime_limit_args=()
+runtime_args=(--name "${container_name}" --network host)
 if [[ -n "${RUNTIME_MEMORY_LIMIT:-}" ]]; then
-  runtime_limit_args+=(--memory "${RUNTIME_MEMORY_LIMIT}" --memory-swap "${RUNTIME_MEMORY_LIMIT}")
+  runtime_args+=(--memory "${RUNTIME_MEMORY_LIMIT}" --memory-swap "${RUNTIME_MEMORY_LIMIT}")
 fi
 if [[ -n "${RUNTIME_CPU_LIMIT:-}" ]]; then
-  runtime_limit_args+=(--cpus "${RUNTIME_CPU_LIMIT}")
+  runtime_args+=(--cpus "${RUNTIME_CPU_LIMIT}")
 fi
 
 runtime_env_args=(-e APP_ENV=dev)
@@ -31,9 +31,7 @@ if [[ -n "${MUTATION_RATE_LIMIT_PER_MINUTE:-}" ]]; then
 fi
 
 docker run -d \
-  --name "${container_name}" \
-  --network host \
-  "${runtime_limit_args[@]}" \
+  "${runtime_args[@]}" \
   -e DATABASE_URL="${database_url}" \
   -e DEV_MEMBER_IDS="${dev_member_ids}" \
   -e MOMO_CANONICAL_HOST="${canonical_host}" \
@@ -42,13 +40,23 @@ docker run -d \
   "${runtime_env_args[@]}" \
   "${image_ref}"
 
-for _attempt in {1..60}; do
-  if docker exec "${container_name}" /opt/momo-result/bin/momo-runtime-tool smoke local >/dev/null 2>&1; then
+deadline=$((SECONDS + 120))
+while (( SECONDS < deadline )); do
+  if [[ "$(docker inspect --format '{{.State.Running}}' "${container_name}")" != "true" ]]; then
+    echo "Runtime container exited before becoming ready." >&2
+    break
+  fi
+  # CI observes this candidate's local services. Public-edge evidence belongs to deployment.
+  if docker exec -e MOMO_POSTDEPLOY_PUBLIC_EDGE=deferred "${container_name}" \
+    /opt/momo-result/bin/momo-runtime-tool smoke local >/dev/null 2>&1; then
     exit 0
   fi
-  sleep 2
+  if (( SECONDS < deadline )); then
+    sleep 2
+  fi
 done
 
+echo "Runtime container did not become ready." >&2
 docker logs "${container_name}" 2>&1 | \
   IMAGE_REF="${image_ref}" "${repo_root}/scripts/ci/summarize-runtime-logs.sh" >&2
 exit 1

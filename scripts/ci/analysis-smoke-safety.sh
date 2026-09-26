@@ -2,6 +2,18 @@
 
 readonly analysis_smoke_algorithm_version="series-analysis-v5"
 
+analysis_smoke_print_worker_diagnostics() {
+  # Only bounded event/enum fields may reach CI output. Free-form messages and errors can contain
+  # connection URLs, so even a failure that detects a URL must not dump the original log.
+  tail -100 "$1" | jq -Rc '
+    fromjson? | .fields? | select(type == "object") |
+    with_entries(select(
+      (.key | IN("event", "outcome", "reason", "error_kind", "safe_failure_code")) and
+      (.value | type == "string" and test("\\A[a-z][a-z0-9_]{0,95}\\z"))
+    )) | select(length > 0)
+  '
+}
+
 analysis_smoke_require_isolated_services() {
   if [[ "${ANALYSIS_SMOKE_SERVICES_ARE_ISOLATED:-}" != "true" ]]; then
     echo "ANALYSIS_SMOKE_SERVICES_ARE_ISOLATED=true is required." >&2

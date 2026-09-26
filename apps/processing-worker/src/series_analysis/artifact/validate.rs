@@ -5,8 +5,6 @@ use std::{
     path::Path,
 };
 
-use serde_json::Value;
-
 use momo_analysis_core::{
     canonical::{CanonicalError, parse_canonical_json, sha256_prefixed},
     contract::{ARTIFACT_VALIDATION_CONTRACT_ID, ArtifactManifest},
@@ -90,7 +88,9 @@ pub(crate) fn validate_artifact_directory(
             return Err(ArtifactError::UnsafeDirectory);
         }
     }
+    drop(declared);
     let mut total_bytes = u64::try_from(manifest_bytes.len())?;
+    drop(manifest_bytes);
     let mut payloads = payload::PayloadSetValidator::new();
     for resource in &manifest.resources {
         let common = resource_common(resource);
@@ -113,8 +113,8 @@ pub(crate) fn validate_artifact_directory(
         {
             return Err(ArtifactError::ResourceBound);
         }
-        let value: Value = serde_json::from_value(parse_canonical_json(&bytes)?)
-            .map_err(|error| ArtifactError::Canonical(CanonicalError::InvalidJson(error)))?;
+        let value = parse_canonical_json(&bytes)?;
+        drop(bytes);
         if nesting_depth(&value) != common.nesting_depth || common.decoded_bytes != length {
             return Err(ArtifactError::ResourceBound);
         }

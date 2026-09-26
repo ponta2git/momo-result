@@ -49,12 +49,12 @@ struct AggregateReferences {
     match_count: u64,
 }
 
-struct ContextReferences {
-    member_ids: BTreeSet<String>,
-    focused_item_ids: BTreeSet<String>,
+struct ContextReferences<'a> {
+    member_ids: BTreeSet<&'a str>,
+    focused_item_ids: BTreeSet<&'a str>,
 }
 
-enum ResourceReferences {
+enum ResourceReferences<'a> {
     Aggregate(AggregateReferences),
     Review(BTreeSet<String>),
     Drilldown {
@@ -63,7 +63,7 @@ enum ResourceReferences {
     },
     MatchContext {
         match_id: String,
-        context: ContextReferences,
+        context: ContextReferences<'a>,
     },
 }
 
@@ -135,7 +135,7 @@ impl PayloadSetValidator {
     fn record(
         &mut self,
         scope: ScopeRef,
-        references: ResourceReferences,
+        references: ResourceReferences<'_>,
     ) -> Result<(), PayloadError> {
         if let ResourceReferences::Aggregate(aggregate) = references {
             return match self.scopes.entry(scope) {
@@ -171,8 +171,14 @@ impl PayloadSetValidator {
                 metric_id,
             } => scope.drilldowns.insert((member_id, metric_id)),
             ResourceReferences::MatchContext { match_id, context } => {
-                if !context.member_ids.is_subset(&scope.aggregate.member_ids)
-                    || !context.focused_item_ids.is_subset(&scope.aggregate.item_ids)
+                if context
+                    .member_ids
+                    .iter()
+                    .any(|member_id| !scope.aggregate.member_ids.contains(*member_id))
+                    || context
+                        .focused_item_ids
+                        .iter()
+                        .any(|item_id| !scope.aggregate.item_ids.contains(*item_id))
                 {
                     return Err(PayloadError::ReferenceMismatch);
                 }
@@ -211,7 +217,7 @@ pub fn validate_computed(resource: &ComputedResource) -> Result<(), PayloadError
 
 fn validate_computed_resource(
     resource: &ComputedResource,
-) -> Result<ResourceReferences, PayloadError> {
+) -> Result<ResourceReferences<'_>, PayloadError> {
     let item_count = u64::try_from(resource.item_count)?;
     match &resource.kind {
         ComputedResourceKind::Aggregate => {
@@ -249,10 +255,10 @@ pub fn validate_manifest(resource: &ResourceManifest, payload: &Value) -> Result
     validate_manifest_resource(resource, payload).map(|_| ())
 }
 
-fn validate_manifest_resource(
+fn validate_manifest_resource<'a>(
     resource: &ResourceManifest,
-    payload: &Value,
-) -> Result<ResourceReferences, PayloadError> {
+    payload: &'a Value,
+) -> Result<ResourceReferences<'a>, PayloadError> {
     match resource {
         ResourceManifest::Aggregate { common } => {
             validate_aggregate(payload, &common.scope, common.item_count)
@@ -294,11 +300,11 @@ const fn resource_scope(resource: &ResourceManifest) -> &ScopeRef {
     }
 }
 
-fn validate_aggregate(
-    payload: &Value,
+fn validate_aggregate<'a>(
+    payload: &'a Value,
     scope: &ScopeRef,
     item_count: u64,
-) -> Result<ResourceReferences, PayloadError> {
+) -> Result<ResourceReferences<'a>, PayloadError> {
     schema::validate_aggregate(payload)?;
     let object = payload.as_object().ok_or(PayloadError::InvalidSchema)?;
     validate_scope(object.get("scope"), scope)?;
@@ -347,11 +353,11 @@ fn validate_aggregate(
     }))
 }
 
-fn validate_review(
-    payload: &Value,
+fn validate_review<'a>(
+    payload: &'a Value,
     scope: &ScopeRef,
     item_count: u64,
-) -> Result<ResourceReferences, PayloadError> {
+) -> Result<ResourceReferences<'a>, PayloadError> {
     schema::validate_review(payload)?;
     let object = payload.as_object().ok_or(PayloadError::InvalidSchema)?;
     validate_scope(object.get("scope"), scope)?;
@@ -425,13 +431,13 @@ fn validate_card<'a>(
     Ok(())
 }
 
-fn validate_drilldown(
-    payload: &Value,
+fn validate_drilldown<'a>(
+    payload: &'a Value,
     scope: &ScopeRef,
     item_count: u64,
     member_id: &str,
     metric_id: &str,
-) -> Result<ResourceReferences, PayloadError> {
+) -> Result<ResourceReferences<'a>, PayloadError> {
     schema::validate_drilldown(payload, metric_id)?;
     let object = payload.as_object().ok_or(PayloadError::InvalidSchema)?;
     validate_scope(object.get("scope"), scope)?;
@@ -480,13 +486,13 @@ fn validate_drilldown(
     })
 }
 
-fn validate_match_context(
-    payload: &Value,
+fn validate_match_context<'a>(
+    payload: &'a Value,
     scope: &ScopeRef,
     item_count: u64,
     match_id: &str,
     source_match_revision: &str,
-) -> Result<ResourceReferences, PayloadError> {
+) -> Result<ResourceReferences<'a>, PayloadError> {
     schema::validate_match_context(payload)?;
     let object = payload.as_object().ok_or(PayloadError::InvalidSchema)?;
     validate_scope(object.get("scope"), scope)?;
@@ -544,8 +550,8 @@ fn validate_match_context(
     Ok(ResourceReferences::MatchContext {
         match_id: String::from(match_id),
         context: ContextReferences {
-            member_ids: player_ids.into_iter().map(String::from).collect(),
-            focused_item_ids: focused_ids.into_iter().map(String::from).collect(),
+            member_ids: player_ids,
+            focused_item_ids: focused_ids,
         },
     })
 }

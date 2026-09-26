@@ -121,15 +121,14 @@ impl AnalysisInput {
     /// test fixture with the same player matches must produce the same artifact.
     #[cfg(test)]
     #[must_use]
+    #[expect(
+        clippy::panic,
+        reason = "calculation fixtures must satisfy the same input contract as production snapshots"
+    )]
     pub(crate) fn normalized(&self) -> NormalizedAnalysisInput {
-        let mut input = self.clone();
-        input.normalize();
-        let scopes = build_scope_rows(&input);
-        NormalizedAnalysisInput {
-            resource_count: resource_count_for_scopes(&input, &scopes),
-            scopes,
-            input,
-        }
+        self.clone()
+            .try_into_normalized()
+            .unwrap_or_else(|error| panic!("invalid calculation fixture: {error}"))
     }
 
     /// Sorts the owned input in place without duplicating every player match and identifier.

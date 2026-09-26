@@ -178,6 +178,7 @@ mod tests {
             next_stream_id: String::from("42-0"),
             claimed: Vec::new(),
             deleted_ids: Vec::new(),
+            ..StreamAutoClaimReply::default()
         });
         assert!(
             first.delivery.is_none(),
@@ -193,11 +194,13 @@ mod tests {
         let claimed = StreamId {
             id: String::from("84-0"),
             map: HashMap::new(),
+            ..StreamId::default()
         };
         let second = cursor.advance(StreamAutoClaimReply {
             next_stream_id: String::from(AUTO_CLAIM_START),
             claimed: vec![claimed.clone()],
             deleted_ids: Vec::new(),
+            ..StreamAutoClaimReply::default()
         });
         assert_eq!(
             second.delivery.map(|delivery| delivery.id),
@@ -226,6 +229,7 @@ mod tests {
                 ),
                 (String::from("attempt"), Value::Int(2)),
             ]),
+            ..StreamId::default()
         };
 
         assert!(payload_from_delivery(&delivery).is_none());
@@ -242,6 +246,7 @@ mod tests {
                     Value::BulkString(b"analysis-job-1".to_vec()),
                 ),
             ]),
+            ..StreamId::default()
         };
 
         assert!(payload_from_delivery(&delivery).is_none());
@@ -261,6 +266,7 @@ mod tests {
                     Value::BulkString(b"analysis-job-1".to_vec()),
                 ),
             ]),
+            ..StreamId::default()
         };
 
         assert_eq!(

@@ -373,8 +373,14 @@ fn play_order_drilldown_compares_member_against_whole_scope_baseline() {
         .flat_map(|match_index| {
             (1..=4).map(move |player| {
                 let mut value = row(match_index, player);
-                value.play_order = 1;
-                value.rank = if player == 1 { match_index * 2 - 1 } else { 4 };
+                if match_index == 2 {
+                    value.play_order = match player {
+                        1 => 2,
+                        2 => 1,
+                        _ => player,
+                    };
+                    value.rank = player % 4 + 1;
+                }
                 value
             })
         })
@@ -393,11 +399,11 @@ fn play_order_drilldown_compares_member_against_whole_scope_baseline() {
 
     assert_eq!(
         drilldown.and_then(|payload| payload.pointer("/payload/rows/0/baselineRankAverage")),
-        Some(&json!(3.5))
+        Some(&json!(2.0))
     );
     assert_eq!(
         drilldown.and_then(|payload| payload.pointer("/payload/rows/0/baselineDelta")),
-        Some(&json!(-1.5))
+        Some(&json!(-1.0))
     );
     assert_eq!(
         drilldown.and_then(|payload| payload.pointer("/payload/summary/bestPlayOrder")),

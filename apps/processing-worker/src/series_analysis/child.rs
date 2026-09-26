@@ -4,8 +4,10 @@ use std::{
     time::{Duration, Instant},
 };
 
+use momo_analysis_core::{child::AnalysisAttemptIdentity, model::NormalizedAnalysisInput};
+
 use crate::{
-    postgres::{PostgresError, connect},
+    postgres::{PostgresError, open},
     process::{CHILD_DEPENDENCY_FAILED_EXIT_CODE, current_process_peak_resident_bytes},
 };
 
@@ -22,7 +24,7 @@ use super::{
 };
 
 pub(crate) struct AnalysisChildExecutionConfig<'a> {
-    pub(crate) identity: momo_analysis_core::child::AnalysisAttemptIdentity,
+    pub(crate) identity: AnalysisAttemptIdentity,
     pub(crate) output_directory: &'a Path,
     pub(crate) maximum_chunk_bytes: u64,
     pub(crate) maximum_chunk_count: u64,
@@ -107,27 +109,9 @@ async fn execute_inner(
         .ok_or(ChildFailure::CalculationFailed)?;
     telemetry.phase = ChildPhase::InputSnapshot;
     let input_started = Instant::now();
-    let mut client = match connect(&read_database_url).await {
-        Ok(client) => client,
-        Err(error) => {
-            telemetry.metrics.input_milliseconds = milliseconds(input_started.elapsed());
-            return Err(map_postgres_failure(&error));
-        }
-    };
-    let input = match load_analysis_input(
-        &mut client,
-        &config.identity.game_title_id,
-        config.identity.input_revision,
-    )
-    .await
-    {
-        Ok(input) => input,
-        Err(error) => {
-            telemetry.metrics.input_milliseconds = milliseconds(input_started.elapsed());
-            return Err(map_input_repository_failure(&error));
-        }
-    };
+    let input = load_input_snapshot(&read_database_url, &config.identity).await;
     telemetry.metrics.input_milliseconds = milliseconds(input_started.elapsed());
+    let input = input?;
     telemetry.metrics.input_row_count = u64::try_from(input.player_matches().len())
         .map_err(|_error| ChildFailure::CalculationFailed)?;
     if input
@@ -167,6 +151,23 @@ async fn execute_inner(
     telemetry.metrics.artifact_temporary_bytes = artifact.directory_bytes;
     telemetry.phase = ChildPhase::Complete;
     Ok(())
+}
+
+/// Owns the socket and query client only for the snapshot. The connection driver is polled in
+/// this scope and dropped before synchronous calculation can monopolize the child runtime.
+async fn load_input_snapshot(
+    database_url: &str,
+    identity: &AnalysisAttemptIdentity,
+) -> Result<NormalizedAnalysisInput, ChildFailure> {
+    let (mut client, mut connection) = open(database_url)
+        .await
+        .map_err(|error| map_postgres_failure(&error))?;
+    tokio::select! {
+        result = load_analysis_input(&mut client, &identity.game_title_id, identity.input_revision) => {
+            result.map_err(|error| map_input_repository_failure(&error))
+        }
+        _result = &mut connection => Err(ChildFailure::DependencyFailed),
+    }
 }
 
 fn milliseconds(duration: Duration) -> u64 {

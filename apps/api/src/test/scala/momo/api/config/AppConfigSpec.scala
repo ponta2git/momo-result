@@ -10,12 +10,12 @@ import momo.api.adapters.discord.JavaDiscordOAuthClient
 class AppConfigSpec extends CatsEffectSuite:
   private val prodEnv: Map[String, String] = Map(
     "APP_ENV" -> "prod",
-    "DATABASE_URL" -> "postgres://u:p@db.example.com/momo?sslmode=require",
+    "DATABASE_URL" -> "postgres://u:p@db.example.com/momo?sslmode=verify-full",
     "REDIS_URL" -> "rediss://default:secret@redis.example.com:6379",
     "DISCORD_CLIENT_ID" -> "client-id",
     "DISCORD_CLIENT_SECRET" -> "client-secret",
     "DISCORD_REDIRECT_URI" -> "https://example.com/api/auth/callback",
-    "AUTH_STATE_SIGNING_KEY" -> "state-signing-key",
+    "AUTH_STATE_SIGNING_KEY" -> "test-only-state-signing-key-32-bytes",
     "SOURCE_IMAGE_STORAGE_MODE" -> "r2",
     "SOURCE_IMAGE_R2_ENDPOINT" -> "https://example.invalid",
     "SOURCE_IMAGE_R2_BUCKET" -> "momo-test",
@@ -94,10 +94,15 @@ class AppConfigSpec extends CatsEffectSuite:
         assert(!error.toString.contains("secret"))
   }
 
-  test("ensureProdSslMode: appends sslmode=require in prod when missing") {
+  test("ensureProdSslMode: enables certificate and hostname verification in prod when missing") {
     val result =
       DatabaseUrlConfig.ensureProdSslMode("jdbc:postgresql://db.example.com/mydb", AppEnv.Prod)
-    assertEquals(result, Right("jdbc:postgresql://db.example.com/mydb?sslmode=require"))
+    assertEquals(
+      result,
+      Right(
+        "jdbc:postgresql://db.example.com/mydb?sslmode=verify-full&sslfactory=org.postgresql.ssl.DefaultJavaSSLFactory"
+      ),
+    )
   }
 
   test("ensureProdSslMode: preserves existing strict sslmode in prod") {
@@ -107,7 +112,9 @@ class AppConfigSpec extends CatsEffectSuite:
     )
     assertEquals(
       result,
-      Right("jdbc:postgresql://db.example.com/mydb?connectTimeout=10&sslmode=verify-full"),
+      Right(
+        "jdbc:postgresql://db.example.com/mydb?connectTimeout=10&sslmode=verify-full&sslfactory=org.postgresql.ssl.DefaultJavaSSLFactory"
+      ),
     )
   }
 

@@ -152,6 +152,7 @@ object HttpRoutes:
       adminAccounts: AdminAccountUseCases[F],
       notificationSettings: NotificationSettingsUseCases[F],
       rateLimiters: HttpRateLimiters[F],
+      bodyAdmission: RequestBodyAdmission[F],
       idempotency: IdempotencyRepository[F],
       healthDetails: F[momo.api.endpoints.HealthEndpoints.HealthDetailsResponse],
       nowF: F[java.time.Instant],
@@ -317,8 +318,8 @@ object HttpRoutes:
           deps.config.resourceLimits.requestMaxBytes,
           deps.config.resourceLimits.uploadRequestMaxBytes,
         )(
-          Router("/" -> (authRoutes <+> tapirRoutes <+> sourceImageRoutes))
-            .orNotFound
+          deps.bodyAdmission(Router("/" -> (authRoutes <+> tapirRoutes <+> sourceImageRoutes))
+            .orNotFound)
         )
       ))))
     val registeredEndpoints =

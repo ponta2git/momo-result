@@ -78,6 +78,24 @@ final class HttpErrorMiddlewareSpec extends MomoCatsEffectSuite:
       assert(rendered.contains(classOf[AppException].getName))
   }
 
+  test("cyclic exception causes still produce a sanitized problem response") {
+    val error = new IllegalStateException("sensitive outer detail")
+    val cause = new SQLException("sensitive database detail", error)
+    val _ = error.initCause(cause)
+    val app = HttpErrorMiddleware[IO](HttpRoutes.of[IO] { case _ =>
+      IO.raiseError(error)
+    }.orNotFound)
+    for
+      (response, events) <-
+        captureHttpErrorLogs(app.run(Request[IO](uri = Uri.unsafeFromString("/cycle"))))
+      body <- response.as[String]
+    yield
+      assertEquals(response.status, Status.ServiceUnavailable)
+      assert(!body.contains("sensitive"))
+      assertEquals(events.size, 1)
+      assert(!events.head.getFormattedMessage.contains("sensitive"))
+  }
+
   private def captureHttpErrorLogs[A](fa: IO[A]): IO[(A, Vector[ILoggingEvent])] =
     LogbackCapture.withEvents("momo.api.http.HttpErrorMiddleware", Level.ERROR) { events =>
       fa.flatMap(result => events.map(result -> _))

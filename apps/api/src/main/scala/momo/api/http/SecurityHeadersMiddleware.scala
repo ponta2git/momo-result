@@ -27,9 +27,7 @@ import momo.api.config.AppEnv
  *     is an accepted MVP trade-off and is documented in `docs/architecture.md` (security section).
  *     `script-src 'self'` rules out third-party JS entirely.
  *
- * This middleware is intentionally orthogonal to [[RequestIdMiddleware]]: it inspects nothing about
- * the request, it only annotates responses, and any header already set by an inner handler is
- * preserved (so OAuth `Location`, image responses etc. are not clobbered).
+ * Existing headers are preserved except for API caching, which is always private and no-store.
  */
 object SecurityHeadersMiddleware:
   private val Nosniff = Header.Raw(CIString("X-Content-Type-Options"), "nosniff")
@@ -41,6 +39,8 @@ object SecurityHeadersMiddleware:
   )
   private val Hsts = Header
     .Raw(CIString("Strict-Transport-Security"), "max-age=31536000; includeSubDomains")
+  private val PrivateNoStore =
+    Header.Raw(CIString("Cache-Control"), HttpDownloadHeaders.PrivateNoStore)
 
   /**
    * CSP for SPA + API on the same origin. Discord OAuth happens via 302 redirects so it does not
@@ -71,6 +71,9 @@ object SecurityHeadersMiddleware:
       http.run(request).map { response =>
         val present = response.headers.headers.map(_.name).toSet
         val toAdd = headers.filterNot(h => present.contains(h.name))
-        if toAdd.isEmpty then response else response.putHeaders(toAdd.map(Header.ToRaw.rawToRaw)*)
+        val secured =
+          if toAdd.isEmpty then response else response.putHeaders(toAdd.map(Header.ToRaw.rawToRaw)*)
+        if HttpRequestPaths.isApi(request) then secured.putHeaders(PrivateNoStore)
+        else secured
       }
     }

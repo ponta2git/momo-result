@@ -155,6 +155,26 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
     }
   }
 
+  test("OAuth callback rejects duplicate state cookies even when the first state matches") {
+    RecordingDiscordOAuthClient.create(Right(DiscordUser(account.discordUserId.value))).flatMap {
+      oauth =>
+        authAppWith(oauth, authConfig).use { app =>
+          for
+            stateCookie <- loginStateCookie(app, authConfig)
+            request = callbackRequest(stateCookie).putHeaders(Header.Raw(
+              CIString("Cookie"),
+              s"${stateCookie.name}=${stateCookie.content}; ${stateCookie.name}=other-state",
+            ))
+            response <- app.run(request)
+            _ <- assertProblem(response, Status.Forbidden, "FORBIDDEN", "mismatched state")
+            fetchCalls <- oauth.fetchCalls
+          yield
+            assertEquals(fetchCalls, 0)
+            assertStateCookieCleared(response, authConfig)
+        }
+    }
+  }
+
   test("logout clears invalid session cookies") {
     authApp.use { app =>
       val request = Request[IO](Method.POST, uri"/api/auth/logout")

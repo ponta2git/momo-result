@@ -4,7 +4,6 @@ import java.util.UUID
 
 import cats.data.Kleisli
 import cats.effect.Sync
-import cats.effect.syntax.all.*
 import cats.syntax.all.*
 import org.http4s.{Header, HttpApp as Http4sApp, Request, Response}
 import org.slf4j.MDC
@@ -17,18 +16,15 @@ import momo.api.domain.RequestId
  * HTTP request correlation: pick up an inbound `X-Request-Id` header (after validating its shape to
  * prevent log-injection), or mint a fresh UUID, then
  *
- *   - place it in the SLF4J MDC under `request_id` for the duration of the handler so structured
- *     logs emitted on the request fiber are correlated;
  *   - echo it back as a response `X-Request-Id` header so the client can reference it when
  *     reporting issues.
  *
  * The normalized request id is also written back into the request headers before routing, so Tapir
  * endpoints can thread it into background payloads (Redis, DB) without relying on thread-local MDC.
  *
- * MDC is thread-local. cats-effect / Tapir typically execute the request body on the same fiber on
- * which the middleware ran, so synchronous `Sync.delay` calls inside the handler observe the value.
- * Logs emitted on other thread pools (Hikari, etc.) may not carry the MDC; structured cross-system
- * correlation should use the explicit `X-Request-Id` value on request inputs and persisted payloads.
+ * MDC is thread-local, while request fibers can suspend and resume on different threads. Carry the
+ * identifier as request data and install MDC only during a synchronous log call via `logWithMdc`.
+ * A thread-local scope around a request effect leaks identifiers into other concurrent requests.
  */
 object RequestIdMiddleware:
   val HeaderName: CIString = CIString(AuthHeaderNames.RequestId)
@@ -42,7 +38,7 @@ object RequestIdMiddleware:
 
     effect.flatMap { id =>
       val requestWithId = request.putHeaders(Header.Raw(HeaderName, id))
-      runWithMdc(id)(http.run(requestWithId)).map(addHeader(_, id))
+      http.run(requestWithId).map(addHeader(_, id))
     }
   }
 
@@ -52,8 +48,8 @@ object RequestIdMiddleware:
   /**
    * Emits one synchronous log action with an explicit correlation id.
    *
-   * Response bodies are consumed after the handler's MDC scope has ended. Stream finalizers must
-   * therefore carry the request id as data and install it only around the actual log call.
+   * Request handlers and stream finalizers carry the request id as data and install it only around
+   * the actual log call. Installation and restoration happen on the same thread.
    */
   private[http] def logWithMdc[F[_]: Sync](id: String)(log: => Unit): F[Unit] = Sync[F].delay {
     val previous = Option(MDC.get(MdcKey))
@@ -64,12 +60,3 @@ object RequestIdMiddleware:
         case Some(value) => MDC.put(MdcKey, value)
         case None => MDC.remove(MdcKey)
   }
-
-  private def runWithMdc[F[_]: Sync, A](id: String)(fa: F[A]): F[A] = Sync[F]
-    .delay(Option(MDC.get(MdcKey))).flatMap { previous =>
-      Sync[F].delay(MDC.put(MdcKey, id)) *> fa.guarantee(Sync[F].delay {
-        previous match
-          case Some(v) => MDC.put(MdcKey, v)
-          case None => MDC.remove(MdcKey)
-      })
-    }

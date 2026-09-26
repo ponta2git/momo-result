@@ -3,8 +3,11 @@ package momo.api.http
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.time.Instant
+import java.util.concurrent.{CancellationException, TimeoutException}
 
-import cats.effect.Async
+import scala.concurrent.duration.*
+
+import cats.effect.{Async, Outcome}
 import cats.syntax.all.*
 import io.circe.parser.decode as circeDecode
 import io.circe.syntax.*
@@ -36,6 +39,7 @@ private[http] object IdempotencyReplay:
   private val PrinterCanonical: Printer =
     Printer(dropNullValues = false, indent = "", sortKeys = true)
   private val RetentionMillis: Long = 24L * 60L * 60L * 1000L
+  private[http] val RecordingTimeout: FiniteDuration = 1.second
   private val ValidKeyPattern = "^[A-Za-z0-9._:-]{1,128}$".r
 
   final case class Guard[F[_]](
@@ -110,17 +114,21 @@ private[http] object IdempotencyReplay:
       run: F[Either[ProblemDetails.ProblemResponse, Resp]],
   )(reservation: IdempotencyReservation): F[Either[ProblemDetails.ProblemResponse, Resp]] =
     reservation match
-      case IdempotencyReservation.Reserved => run.attempt.flatMap {
-          case Right(result) =>
-            handleFreshResult(guard.repository, key, account, endpoint, requestHash, result)
-          case Left(error) =>
-            // A raised error does not prove that the mutation transaction rolled back: the
-            // connection can fail after PostgreSQL committed. Keep the reservation pending so a
-            // retry cannot duplicate an outcome whose commit status is unknown. Domain failures
-            // returned as Left below are known not to have committed and may be abandoned.
-            logIdempotencyFailure(endpoint, account, key, "run mutation", error) >>
-              Async[F].raiseError(error)
-        }
+      case IdempotencyReservation.Reserved => Async[F].uncancelable { poll =>
+          // A known result gets a bounded recording attempt even if its client disconnects.
+          // Cancellation during the mutation leaves its outcome unknown and the key pending.
+          poll(run).attempt.flatMap {
+            case Right(result) =>
+              recordKnownResult(guard.repository, key, account, endpoint, requestHash, result)
+            case Left(error) =>
+              // A raised error does not prove that the mutation transaction rolled back: the
+              // connection can fail after PostgreSQL committed. Keep the reservation pending so a
+              // retry cannot duplicate an outcome whose commit status is unknown. Domain failures
+              // returned as Left below are known not to have committed and may be abandoned.
+              logIdempotencyFailure(endpoint, account, key, "run mutation", error) >>
+                Async[F].raiseError(error)
+          }
+        }.flatTap(_ => Async[F].cede)
       case IdempotencyReservation.Replay(response) =>
         replayStoredBody[F, Resp](endpoint, account, key, response)
       case IdempotencyReservation.InProgress => Async[F].pure(Left(ProblemDetails.from(
@@ -191,6 +199,42 @@ private[http] object IdempotencyReplay:
           case Left(error) => logIdempotencyFailure(endpoint, account, key, "complete", error)
               .as(right)
         }
+
+  private def recordKnownResult[F[_]: Async, Resp: Encoder](
+      idempotency: IdempotencyRepository[F],
+      key: String,
+      account: AuthenticatedAccount,
+      endpoint: String,
+      requestHash: Vector[Byte],
+      result: Either[ProblemDetails.ProblemResponse, Resp],
+  ): F[Either[ProblemDetails.ProblemResponse, Resp]] =
+    val recording = Async[F].defer(
+      handleFreshResult(idempotency, key, account, endpoint, requestHash, result)
+    )
+    // The racing child starts cancelable even while the handoff is masked. raceOutcome joins
+    // its loser, so no recording fiber escapes the request. A timeout keeps the pending key;
+    // it must never authorize a second execution of a mutation whose result was committed.
+    Async[F].raceOutcome(recording, Async[F].sleep(RecordingTimeout)).flatMap {
+      case Left(Outcome.Succeeded(value)) => value
+      case Left(Outcome.Errored(error)) =>
+        logIdempotencyFailure(endpoint, account, key, "record known result", error).as(result)
+      case Left(Outcome.Canceled()) =>
+        logIdempotencyFailure(
+          endpoint,
+          account,
+          key,
+          "record known result",
+          new CancellationException
+        ).as(result)
+      case Right(_) =>
+        logIdempotencyFailure(
+          endpoint,
+          account,
+          key,
+          "record known result",
+          new TimeoutException
+        ).as(result)
+    }
 
   private def canonicalJsonBytes(json: Json): Array[Byte] = PrinterCanonical.print(json)
     .getBytes(StandardCharsets.UTF_8)

@@ -21,6 +21,7 @@ import scala.jdk.CollectionConverters.*
 import scala.util.Failure
 
 import cats.effect.IO
+import cats.syntax.all.*
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.discord.JavaDiscordOAuthClient
@@ -29,7 +30,7 @@ import momo.api.config.{AppEnv, AuthConfig}
 import momo.api.domain.LoginAccount
 import momo.api.domain.ids.{AccountId, MemberId, UserId}
 import momo.api.errors.AppError
-import momo.api.repositories.AppSession
+import momo.api.repositories.{AppSession, SessionAccountLookup}
 import momo.api.testing.{
   RecordingAppSessionsRepository,
   RecordingDiscordOAuthClient,
@@ -109,6 +110,22 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       assertEquals(external, Some(codec.Payload(silent = true, redirectPath = None)))
   }
 
+  test("OAuthStateCodec bounds redirect UTF-8 bytes so issued state remains a usable cookie") {
+    val codec = OAuthStateCodec[IO]("test-signing-key", config.stateTtl, IO.pure(instant))
+    val boundaryPath = "/" + ("あ" * 341)
+    for
+      state <- codec.create(silent = false, redirectPath = Some(boundaryPath))
+      valid <- codec.validate(state)
+      oversized <- codec.create(silent = false, redirectPath = Some(boundaryPath + "a"))
+      fallback <- codec.validate(oversized)
+      rejected <- codec.validate("a" * 10000)
+    yield
+      assertEquals(valid, Some(codec.Payload(silent = false, redirectPath = Some(boundaryPath))))
+      assert(state.length < 4096)
+      assertEquals(fallback, Some(codec.Payload(silent = false, redirectPath = None)))
+      assertEquals(rejected, None)
+  }
+
   test("CompleteOAuthLogin creates a session for an enabled allow-listed Discord account") {
     for
       repo <- RecordingAppSessionsRepository.create
@@ -168,6 +185,43 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       assertEquals(fetchCalls, 1)
   }
 
+  test("CompleteOAuthCallback validates signatures before reserving state replay quota") {
+    for
+      repo <- RecordingAppSessionsRepository.create
+      accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
+      backoff <- InMemoryOAuthProviderBackoff.create[IO](1, 60.seconds, IO.pure(instant))
+      reservations <- IO.ref(0)
+      limiter = new RateLimiter[IO]:
+        def allow(key: String): IO[Boolean] =
+          val _ = key
+          reservations.update(_ + 1).as(true)
+      sessions = SessionService[IO](repo, accounts, config.sessionTtl, IO.pure(instant))
+      codec = OAuthStateCodec[IO]("test-signing-key", config.stateTtl, IO.pure(instant))
+      service = CompleteOAuthCallback[IO](
+        codec,
+        CompleteOAuthLogin[IO](
+          SuccessfulDiscordOAuthClient(account.discordUserId.value),
+          sessions,
+          accounts,
+          backoff
+        ),
+        limiter,
+        "/",
+      )
+      invalid <- service.run(OAuthCallbackInput(None, Some("forged"), Some("forged"), None))
+      countAfterInvalid <- reservations.get
+      state <- codec.create(silent = false, redirectPath = None)
+      valid <- service.run(OAuthCallbackInput(None, Some(state), Some(state), None))
+      countAfterValid <- reservations.get
+    yield
+      List(invalid, valid).foreach {
+        case OAuthCallbackDecision.Rejected(_, _) => ()
+        case other => fail(s"expected rejected OAuth callback, got $other")
+      }
+      assertEquals(countAfterInvalid, 0)
+      assertEquals(countAfterValid, 1)
+  }
+
   test("JavaDiscordOAuthClient maps token exchange transport failures to dependency errors") {
     val client = JavaDiscordOAuthClient[IO](
       JavaDiscordOAuthClient.Config(
@@ -219,6 +273,30 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       case Left(error: AppError.Forbidden) =>
         assertEquals(error.detail, "Discord OAuth token exchange failed.")
       case other => fail(s"expected forbidden failure, got $other")
+    }
+  }
+
+  test("JavaDiscordOAuthClient bounds provider bodies before decoding or user lookup") {
+    val requests = new ConcurrentLinkedQueue[HttpRequest]()
+    val response = s"""{"access_token":"${"a" * JavaDiscordOAuthClient.MaxResponseBytes.toInt}"}"""
+    val client = JavaDiscordOAuthClient[IO](
+      JavaDiscordOAuthClient.Config(
+        "client-id",
+        "client-secret",
+        "https://example.com/callback",
+        "identify"
+      ),
+      StaticHttpClient { request =>
+        val _ = requests.add(request)
+        (200, response)
+      },
+    )
+    client.fetchUser("code").map { result =>
+      assert(result.left.exists {
+        case _: AppError.DependencyFailed => true
+        case _ => false
+      })
+      assertEquals(requests.size(), 1)
     }
   }
 
@@ -349,6 +427,27 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       result <- service.authenticate(Some("legacy-session-id"))
     yield assertEquals(result, Left(momo.api.errors.AppError.Unauthorized()))
 
+  test("SessionService rejects malformed cookie credentials before accessing persistence"):
+    for
+      repo <- RecordingAppSessionsRepository.create
+      lookups <- IO.ref(0)
+      lookup = new SessionAccountLookup[IO]:
+        def find(idHash: String) =
+          val _ = idHash
+          lookups.update(_ + 1).as(None)
+      service = SessionService[IO](repo, config.sessionTtl, IO.pure(instant), lookup)
+      results <- List(
+        "v1.a.b",
+        s"v1.${"a" * 43}.${"!" * 43}",
+        s"v1.${"a" * 10000}.${"b" * 43}",
+      ).traverse(cookie => service.authenticate(Some(cookie)))
+      lookupCount <- lookups.get
+    yield
+      results.foreach(result =>
+        assertEquals(result.left.toOption.map(_.code), Some("UNAUTHORIZED"))
+      )
+      assertEquals(lookupCount, 0)
+
   test("SessionService skips renewal while more than half the session TTL remains"):
     for
       repo <- RecordingAppSessionsRepository.create
@@ -438,6 +537,40 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
     yield
       assertEquals(countBefore, 2)
       assertEquals(countAfter, 1)
+  }
+
+  test("LoginRateLimiter bounds unique keys without evicting an existing account's quota") {
+    for
+      nowRef <- IO.ref(instant)
+      limiter <- LoginRateLimiter.create[IO](2, nowRef.get, maxKeys = 2)
+      first <- limiter.allow("first")
+      second <- limiter.allow("second")
+      overflow <- limiter.allow("third")
+      existing <- limiter.allow("first")
+      exhausted <- limiter.allow("first")
+      count <- limiter.bucketCount
+      _ <- nowRef.set(instant.plusSeconds(60))
+      nextWindow <- limiter.allow("third")
+      nextCount <- limiter.bucketCount
+    yield
+      assert(first && second && existing && nextWindow)
+      assert(!overflow && !exhausted)
+      assertEquals(count, 2)
+      assertEquals(nextCount, 1)
+  }
+
+  test("LoginRateLimiter does not reopen exhausted quotas when the wall clock moves backwards") {
+    for
+      nowRef <- IO.ref(instant)
+      limiter <- LoginRateLimiter.create[IO](1, nowRef.get)
+      first <- limiter.allow("client")
+      _ <- nowRef.set(instant.minusSeconds(60))
+      backwards <- limiter.allow("client")
+      _ <- nowRef.set(instant.plusSeconds(60))
+      later <- limiter.allow("client")
+    yield
+      assert(first && later)
+      assert(!backwards)
   }
 
   test("InMemoryOAuthProviderBackoff opens after dependency failures and resets after cooldown") {

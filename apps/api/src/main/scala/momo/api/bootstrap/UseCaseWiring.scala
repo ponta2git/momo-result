@@ -21,7 +21,7 @@ import momo.api.auth.{
 import momo.api.config.{AppConfig, AuthConfig, ResourceLimitsConfig}
 import momo.api.domain.ids.*
 import momo.api.endpoints.HealthEndpoints.HealthDetailsResponse
-import momo.api.http.{HttpRateLimiters, HttpRoutes}
+import momo.api.http.{HttpRateLimiters, HttpRoutes, RequestBodyAdmission}
 import momo.api.ports.storage.ImageStorage
 import momo.api.repositories.*
 import momo.api.usecases.exports.*
@@ -159,58 +159,62 @@ private[bootstrap] object UseCaseWiring:
       ids = ids,
     )
 
-    MemberRoster.devFromMemberIds(config.devMemberIds).leftMap(new IllegalArgumentException(_))
-      .liftTo[F].map { roster =>
-        val authDependencies = HttpRoutes.AuthDependencies(
-          roster = roster,
-          accountAccess = AccountAccess[F](repositories.loginAccounts),
-          oauthClient = services.oauthClient,
-          sessionService = authServices.sessionService,
-          csrfTokenService = authServices.csrfTokenService,
-          oauthStateCodec = authServices.oauthStateCodec,
-          loginRateLimiter = services.loginRateLimiter,
-          completeOAuthCallback = CompleteOAuthCallback[F](
-            authServices.oauthStateCodec,
-            CompleteOAuthLogin[F](
-              services.oauthClient,
-              authServices.sessionService,
-              repositories.loginAccounts,
-              services.oauthProviderBackoff
-            ),
-            services.authCallbackStateRateLimiter,
-            config.auth.callbackRedirectPath,
+    (
+      MemberRoster.devFromMemberIds(config.devMemberIds).leftMap(new IllegalArgumentException(_))
+        .liftTo[F],
+      RequestBodyAdmission.create[F]
+    ).mapN { (roster, bodyAdmission) =>
+      val authDependencies = HttpRoutes.AuthDependencies(
+        roster = roster,
+        accountAccess = AccountAccess[F](repositories.loginAccounts),
+        oauthClient = services.oauthClient,
+        sessionService = authServices.sessionService,
+        csrfTokenService = authServices.csrfTokenService,
+        oauthStateCodec = authServices.oauthStateCodec,
+        loginRateLimiter = services.loginRateLimiter,
+        completeOAuthCallback = CompleteOAuthCallback[F](
+          authServices.oauthStateCodec,
+          CompleteOAuthLogin[F](
+            services.oauthClient,
+            authServices.sessionService,
+            repositories.loginAccounts,
+            services.oauthProviderBackoff
           ),
-        )
-        val (app, registeredEndpoints) = HttpRoutes.routesWithEndpoints(HttpRoutes.Dependencies(
-          config = config,
-          auth = authDependencies,
-          upload = routeUseCases.upload,
-          ocr = routeUseCases.ocr,
-          heldEvents = routeUseCases.heldEvents,
-          matchDrafts = routeUseCases.matchDrafts,
-          matches = routeUseCases.matches,
-          exportMatches = routeUseCases.exportMatches,
-          analytics = routeUseCases.analytics,
-          masters = routeUseCases.masters,
-          adminAccounts = routeUseCases.adminAccounts,
-          notificationSettings = routeUseCases.notificationSettings,
-          rateLimiters = services.rateLimiters,
-          idempotency = repositories.idempotency,
-          healthDetails = services.healthDetails,
-          nowF = now,
-        ))
-        ApiApp.WiredRuntime(
-          runtime = ApiApp.Runtime(
-            app = app,
-            backgroundFailure = Async[F].never[Nothing],
-          ),
-          handles = ApiApp.RuntimeHandles(
-            gameTitles = repositories.gameTitles,
-            mapMasters = repositories.mapMasters,
-            seasonMasters = repositories.seasonMasters,
-            loginAccounts = repositories.loginAccounts,
-            createSession = authServices.sessionService.create,
-            registeredEndpoints = registeredEndpoints,
-          ),
-        )
-      }
+          services.authCallbackStateRateLimiter,
+          config.auth.callbackRedirectPath,
+        ),
+      )
+      val (app, registeredEndpoints) = HttpRoutes.routesWithEndpoints(HttpRoutes.Dependencies(
+        config = config,
+        auth = authDependencies,
+        upload = routeUseCases.upload,
+        ocr = routeUseCases.ocr,
+        heldEvents = routeUseCases.heldEvents,
+        matchDrafts = routeUseCases.matchDrafts,
+        matches = routeUseCases.matches,
+        exportMatches = routeUseCases.exportMatches,
+        analytics = routeUseCases.analytics,
+        masters = routeUseCases.masters,
+        adminAccounts = routeUseCases.adminAccounts,
+        notificationSettings = routeUseCases.notificationSettings,
+        rateLimiters = services.rateLimiters,
+        bodyAdmission = bodyAdmission,
+        idempotency = repositories.idempotency,
+        healthDetails = services.healthDetails,
+        nowF = now,
+      ))
+      ApiApp.WiredRuntime(
+        runtime = ApiApp.Runtime(
+          app = app,
+          backgroundFailure = Async[F].never[Nothing],
+        ),
+        handles = ApiApp.RuntimeHandles(
+          gameTitles = repositories.gameTitles,
+          mapMasters = repositories.mapMasters,
+          seasonMasters = repositories.seasonMasters,
+          loginAccounts = repositories.loginAccounts,
+          createSession = authServices.sessionService.create,
+          registeredEndpoints = registeredEndpoints,
+        ),
+      )
+    }

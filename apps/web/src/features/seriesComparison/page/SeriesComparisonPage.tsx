@@ -14,10 +14,9 @@ import {
   PageSkeleton,
 } from "@/features/seriesComparison/page/SeriesComparisonSkeletons";
 import { useSeriesComparisonPageModel } from "@/features/seriesComparison/page/useSeriesComparisonPageModel";
-import { actionRowClass } from "@/shared/ui/actions/actionGroup";
+import { inlineActionGroupClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
-import { cn } from "@/shared/ui/cn";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
@@ -86,16 +85,16 @@ export function SeriesComparisonPage() {
       failed={options.hasError || status.hasError || resource.hasError}
     >
       <PageFrame width="wide">
+        {page.returnTo ? (
+          <nav aria-label="戦績比較の移動" className={inlineActionGroupClass}>
+            {seriesReturnAction(page.returnTo)}
+          </nav>
+        ) : null}
         <PageContentSurface
           aria-label="戦績比較"
           className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4"
           role="region"
         >
-          {page.returnTo ? (
-            <nav aria-label="戦績比較の操作" className={cn(actionRowClass, "justify-end")}>
-              {seriesReturnAction(page.returnTo)}
-            </nav>
-          ) : null}
           {page.normalizationNotice ? (
             <Notice tone="info" title="表示条件を調整しました">
               {page.normalizationNotice}

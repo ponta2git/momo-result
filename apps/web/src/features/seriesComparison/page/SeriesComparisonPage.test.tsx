@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { createMemoryRouter, MemoryRouter, RouterProvider } from "react-router-dom";
@@ -129,7 +129,7 @@ describe("SeriesComparisonPage", () => {
     }
   });
 
-  it("keeps purpose tabs, analysis tabs, and the metric guide outside stale results", async () => {
+  it("keeps return navigation, purpose tabs, analysis tabs, and the metric guide outside stale results", async () => {
     const user = userEvent.setup();
     const aggregate = makeSeriesAnalysisAggregate();
     const refresh = createDeferred();
@@ -157,7 +157,9 @@ describe("SeriesComparisonPage", () => {
       render(
         <QueryClientProvider client={createTestQueryClient()}>
           <MemoryRouter
-            initialEntries={["/analytics/series?gameTitleId=gt_momotetsu_2&view=overview"]}
+            initialEntries={[
+              "/analytics/series?gameTitleId=gt_momotetsu_2&view=overview&returnTo=%2Fmatches%3Fpage%3D2",
+            ]}
           >
             <SeriesComparisonPage />
           </MemoryRouter>
@@ -165,6 +167,14 @@ describe("SeriesComparisonPage", () => {
       );
     });
     const heading = await screen.findByRole("heading", { name: "順位と基礎比較" });
+    const back = within(screen.getByRole("navigation", { name: "戦績比較の移動" })).getByRole(
+      "link",
+      { name: "前の画面へ戻る" },
+    );
+    const results = screen.getByRole("region", { name: "戦績比較" });
+    expect(back).toHaveAttribute("href", "/matches?page=2");
+    expect(results).not.toContainElement(back);
+    expect(back.compareDocumentPosition(results) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
     await user.click(screen.getByRole("button", { name: "表示を更新" }));
     await waitFor(() => expect(requests).toBe(2));
     await waitFor(() => expect(heading.closest("[inert]")).not.toBeNull());
@@ -175,6 +185,7 @@ describe("SeriesComparisonPage", () => {
     expect(flowTab.closest("[inert]")).toBeNull();
     expect(reviewTab.closest("[inert]")).toBeNull();
     expect(metricGuide.closest("[inert]")).toBeNull();
+    expect(back.closest("[inert]")).toBeNull();
     expect(heading).toBeVisible();
 
     await user.click(metricGuide);
@@ -188,6 +199,7 @@ describe("SeriesComparisonPage", () => {
     await act(async () => refresh.resolve());
     const flowHeading = await screen.findByRole("heading", { name: "直近順位と累積推移" });
     await waitFor(() => expect(flowHeading.closest("[inert]")).toBeNull());
+    expect(screen.getByRole("link", { name: "前の画面へ戻る" })).toBe(back);
     expect(flowTab).toHaveFocus();
   });
 });

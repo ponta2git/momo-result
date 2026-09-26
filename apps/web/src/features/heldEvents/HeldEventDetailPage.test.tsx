@@ -260,7 +260,8 @@ describe("HeldEventDetailPage", () => {
       "href",
       "/matches/match-1#note",
     );
-    await user.click(screen.getByRole("link", { name: "開催履歴を開く" }));
+    const recoveryActions = within(screen.getByRole("navigation", { name: "この開催の関連操作" }));
+    await user.click(recoveryActions.getByRole("link", { name: "開催履歴を開く" }));
     phase = "outage";
     await queryClient.invalidateQueries({ queryKey: heldEventKeys.detail("held-1") });
     await act(async () => {

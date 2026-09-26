@@ -18,9 +18,9 @@ export type FactListProps = {
 
 const columnsClass = {
   1: "grid-cols-1",
-  2: "sm:grid-cols-2",
-  3: "sm:grid-cols-3",
-  4: "sm:grid-cols-2 lg:grid-cols-4",
+  2: "@sm/facts:grid-cols-2",
+  3: "@sm/facts:grid-cols-2 @2xl/facts:grid-cols-3",
+  4: "@sm/facts:grid-cols-2 @3xl/facts:grid-cols-4",
 } as const;
 
 /**
@@ -30,39 +30,45 @@ const columnsClass = {
  */
 export function FactList({ ariaLabel, columns = 1, items, layout = "plain" }: FactListProps) {
   return (
-    <dl
-      aria-label={ariaLabel}
-      className={cn("grid min-w-0", columnsClass[columns], layout === "inline" ? "gap-1" : "gap-2")}
-    >
-      {items.map((item) => (
-        <div
-          className={cn(
-            "min-w-0",
-            layout === "inline" && "flex items-baseline justify-between gap-4 py-1",
-          )}
-          key={item.id}
-        >
-          <dt
+    <div className={cn("min-w-0", columns > 1 && "@container/facts")}>
+      <dl
+        aria-label={ariaLabel}
+        className={cn(
+          "grid min-w-0 grid-cols-1",
+          columnsClass[columns],
+          layout === "inline" ? "gap-1" : "gap-2",
+        )}
+      >
+        {items.map((item) => (
+          <div
             className={cn(
               "min-w-0",
-              layout === "plain"
-                ? contentText.supporting
-                : "font-plain text-xs text-[var(--color-text-secondary)]",
+              layout === "inline" && "flex items-baseline justify-between gap-4 py-1",
             )}
+            key={item.id}
           >
-            {item.label}
-          </dt>
-          <dd
-            className={cn(
-              "min-w-0 break-words tabular-nums",
-              layout === "plain" ? contentText.body : "text-sm font-plain",
-              layout === "inline" ? "" : "mt-0.5",
-            )}
-          >
-            {item.value}
-          </dd>
-        </div>
-      ))}
-    </dl>
+            <dt
+              className={cn(
+                "min-w-0",
+                layout === "plain"
+                  ? contentText.supporting
+                  : "font-plain text-xs text-[var(--color-text-secondary)]",
+              )}
+            >
+              {item.label}
+            </dt>
+            <dd
+              className={cn(
+                "min-w-0 break-words tabular-nums",
+                layout === "plain" ? contentText.body : "text-sm font-plain",
+                layout === "inline" ? "" : "mt-0.5",
+              )}
+            >
+              {item.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }

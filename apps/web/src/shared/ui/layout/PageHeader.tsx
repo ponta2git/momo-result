@@ -1,9 +1,5 @@
 import type { ReactNode, Ref } from "react";
 
-import {
-  responsiveActionGroupClass,
-  responsiveLeadActionGroupClass,
-} from "@/shared/ui/actions/actionGroup";
 import { cn } from "@/shared/ui/cn";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { StatusBadge } from "@/shared/ui/status/StatusBadge";
@@ -26,12 +22,6 @@ type PageHeaderProps = {
   titleDescriptionId?: string | undefined;
 };
 
-/** Keeps multi-action headers two-column and predictable until inline labels have enough room. */
-export const responsivePageHeaderActionGroupClass = responsiveActionGroupClass;
-
-/** Gives a mobile header one full-width lead action before the remaining compact actions. */
-export const responsivePageHeaderLeadActionGroupClass = responsiveLeadActionGroupClass;
-
 export function PageHeader({
   actions,
   description,
@@ -43,15 +33,15 @@ export function PageHeader({
   titleDescriptionId,
 }: PageHeaderProps) {
   return (
-    <header className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-      <div className="min-w-0">
+    <header className="@container/page-header flex min-w-0 flex-wrap items-end gap-4">
+      <div className="min-w-0 flex-[1_1_24rem]">
         {eyebrow ? <p className={contentText.supporting}>{eyebrow}</p> : null}
         <h1
           ref={titleRef}
           aria-describedby={titleDescriptionId}
           tabIndex={titleRef ? -1 : undefined}
           className={cn(
-            "momo-heading text-2xl font-structure text-balance text-[var(--color-text-primary)] md:text-3xl",
+            "momo-heading text-2xl font-structure text-balance text-[var(--color-text-primary)] @3xl/page-header:text-3xl",
             eyebrow ? "mt-1" : "",
           )}
         >
@@ -67,8 +57,8 @@ export function PageHeader({
         ) : null}
       </div>
       {meta || actions ? (
-        <div className="flex min-w-0 flex-wrap items-center gap-2 md:justify-end">
-          {meta ? <div className="shrink-0">{meta}</div> : null}
+        <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2">
+          {meta ? <div className="min-w-0">{meta}</div> : null}
           {actions}
         </div>
       ) : null}

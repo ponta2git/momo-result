@@ -136,6 +136,15 @@ describe("MatchDetailPage", () => {
       "href",
       "/held-events/held-1",
     );
+    const relatedActions = within(screen.getByRole("navigation", { name: "この試合の関連操作" }));
+    expect(relatedActions.getByRole("link", { name: "この試合を出力" })).toHaveAttribute(
+      "href",
+      "/exports?matchId=match-1&returnTo=%2Fmatches%2Fmatch-1",
+    );
+    expect(relatedActions.getByRole("link", { name: "試合結果を編集" })).toHaveAttribute(
+      "href",
+      "/matches/match-1/edit?returnTo=%2Fmatches%2Fmatch-1",
+    );
 
     await user.click(screen.getByRole("button", { name: "削除" }));
     expect(screen.getByRole("heading", { name: "試合を削除しますか？" })).toBeInTheDocument();

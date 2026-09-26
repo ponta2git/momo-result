@@ -47,26 +47,26 @@ export function PaginationControls(props: PaginationControlsProps) {
     <nav
       aria-label={ariaLabel}
       className={cn(
-        "grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end",
+        "@container/pagination flex min-w-0 flex-wrap items-end gap-4",
         placement === "standalone"
           ? "rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
           : "bg-transparent",
       )}
     >
-      <p className="font-plain text-sm text-[var(--color-text-secondary)] tabular-nums sm:inline-flex sm:min-h-11 sm:items-center">
+      <p className="font-plain w-full min-w-0 text-sm text-[var(--color-text-secondary)] tabular-nums @2xl/pagination:me-auto @2xl/pagination:inline-flex @2xl/pagination:min-h-11 @2xl/pagination:w-auto @2xl/pagination:items-center">
         {formatPaginationRange(pagination)}
       </p>
 
       <div
         className={cn(
-          "grid gap-3",
+          "grid w-full min-w-0 gap-3 @2xl/pagination:w-auto",
           variant === "full"
-            ? "sm:grid-cols-[auto_auto] sm:items-end"
-            : "sm:items-center sm:justify-end",
+            ? "@2xl/pagination:grid-cols-[auto_auto] @2xl/pagination:items-end"
+            : "@2xl/pagination:items-center @2xl/pagination:justify-end",
         )}
       >
         {props.variant === "compact" ? null : (
-          <div className="sm:min-w-36">
+          <div className="min-w-0 @2xl/pagination:min-w-36">
             <SelectField
               disabled={disabled}
               label="表示件数"
@@ -83,14 +83,14 @@ export function PaginationControls(props: PaginationControlsProps) {
         )}
         <div
           className={cn(
-            "grid w-full items-center gap-2 sm:w-auto sm:justify-end",
+            "grid w-full min-w-0 items-center gap-2 @2xl/pagination:w-auto @2xl/pagination:justify-end",
             variant === "full"
-              ? "grid-cols-4 sm:grid-cols-[2.75rem_2.75rem_minmax(5.5rem,auto)_2.75rem_2.75rem]"
+              ? "grid-cols-4 @2xl/pagination:grid-cols-[2.75rem_2.75rem_minmax(5.5rem,auto)_2.75rem_2.75rem]"
               : "grid-cols-[2.75rem_minmax(5rem,auto)_2.75rem]",
           )}
         >
           {variant === "full" ? (
-            <div className="order-2 grid sm:order-none">
+            <div className="order-2 grid @2xl/pagination:order-none">
               <IconButton
                 aria-label="先頭ページへ"
                 disabled={!canGoPrevious}
@@ -101,7 +101,7 @@ export function PaginationControls(props: PaginationControlsProps) {
               />
             </div>
           ) : null}
-          <div className={variant === "full" ? "order-2 grid sm:order-none" : "grid"}>
+          <div className={variant === "full" ? "order-2 grid @2xl/pagination:order-none" : "grid"}>
             <IconButton
               aria-label="前のページへ"
               disabled={!canGoPrevious}
@@ -113,13 +113,15 @@ export function PaginationControls(props: PaginationControlsProps) {
           </div>
           <span
             className={cn(
-              "inline-flex min-h-11 min-w-0 items-center justify-center rounded-sm border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 text-sm font-plain text-[var(--color-text-secondary)] tabular-nums sm:min-w-22",
-              variant === "full" ? "order-1 col-span-4 sm:order-none sm:col-span-1" : "",
+              "inline-flex min-h-11 min-w-0 items-center justify-center rounded-sm border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 text-sm font-plain text-[var(--color-text-secondary)] tabular-nums @2xl/pagination:min-w-22",
+              variant === "full"
+                ? "order-1 col-span-4 @2xl/pagination:order-none @2xl/pagination:col-span-1"
+                : "",
             )}
           >
             {currentPage.toLocaleString()}／{totalPages.toLocaleString()}
           </span>
-          <div className={variant === "full" ? "order-2 grid sm:order-none" : "grid"}>
+          <div className={variant === "full" ? "order-2 grid @2xl/pagination:order-none" : "grid"}>
             <IconButton
               aria-label="次のページへ"
               disabled={!canGoNext}
@@ -130,7 +132,7 @@ export function PaginationControls(props: PaginationControlsProps) {
             />
           </div>
           {variant === "full" ? (
-            <div className="order-2 grid sm:order-none">
+            <div className="order-2 grid @2xl/pagination:order-none">
               <IconButton
                 aria-label="最後のページへ"
                 disabled={!canGoNext}

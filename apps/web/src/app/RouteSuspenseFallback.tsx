@@ -35,7 +35,7 @@ export type RouteNavigationPresentation = {
 };
 
 export type RouteHeaderActionPresentation = Omit<RouteNavigationPresentation, "icon"> & {
-  icon?: "download" | "filter" | "manual" | "scan" | undefined;
+  icon?: "download" | "manual" | "scan" | undefined;
   size?: "md" | "sm" | undefined;
   variant?: "quiet" | "secondary" | undefined;
 };
@@ -48,12 +48,10 @@ export type RouteHeaderActionsPresentation = RouteHeaderActionsPresentationBase 
   (
     | {
         label: string;
-        layout: "responsive-grid" | "responsive-lead";
         semantics: "navigation";
       }
     | {
         label?: string | undefined;
-        layout?: "inline" | "responsive-grid" | "responsive-lead" | undefined;
         semantics?: "group" | undefined;
       }
   );
@@ -113,7 +111,6 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
     return defineRoutePresentation(
       {
         contentToolbar: {
-          actionLayout: "responsive-grid",
           actionSize: "sm",
           actionSlots: 2,
           actionWidths: ["standard", "wide"],
@@ -139,7 +136,6 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
             },
           ],
           label: "試合を登録",
-          layout: "responsive-grid",
         },
         leadingNavigation: returnTo ? { href: returnTo, label: "前の画面へ戻る" } : undefined,
       },
@@ -155,6 +151,7 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
     return defineRoutePresentation(
       {
         contentToolbar: {
+          actionPlacement: "leading",
           actionSize: "sm",
           actionSlots: 1,
           actionWidths: ["long"],
@@ -176,6 +173,7 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
     return defineRoutePresentation(
       {
         contentToolbar: {
+          actionPlacement: "leading",
           actionSize: "sm",
           actionSlots: 1,
           actionWidths: ["long"],
@@ -197,6 +195,7 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
     return defineRoutePresentation(
       {
         contentToolbar: {
+          actionPlacement: "leading",
           actionSize: "sm",
           actionSlots: 1,
           actionWidths: ["long"],
@@ -215,20 +214,21 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
   if (normalizedPathname === "/ocr/new") {
     return defineRoutePresentation(
       {
-        contentToolbar: hasReturnTo
-          ? {
-              actionSize: "sm",
-              actionSlots: 1,
-              actionWidths: ["wide"],
-            }
-          : undefined,
+        contentToolbar: {
+          actionPlacement: "leading",
+          actionSize: "sm",
+          actionSlots: 1,
+          actionWidths: ["wide"],
+        },
         kind: "workspace",
         width: "standard",
       },
       {
-        headerNavigation: returnTo
-          ? { href: returnTo, icon: "back", label: "取り込みをやめる" }
-          : undefined,
+        headerNavigation: {
+          href: returnTo ?? "/matches",
+          icon: "back",
+          label: "取り込みをやめる",
+        },
       },
     );
   }
@@ -236,10 +236,10 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
     return defineRoutePresentation(
       {
         header: {
-          actionSize: "md",
+          actionSize: "sm",
           actionSlots: 2,
-          actionWidths: ["long", "short"],
-          description: false,
+          actionWidths: ["wide", "wide"],
+          description: true,
           eyebrow: false,
         },
         kind: "detail",
@@ -256,13 +256,20 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
                 }).toString()}`,
                 routeLocation,
               ),
+              icon: "download",
               label: "この試合を出力",
+              size: "sm",
+              variant: "quiet",
             },
             {
               href: withReturnTo(`${normalizedPathname}/edit`, routeLocation),
-              label: "編集",
+              icon: "manual",
+              label: "試合結果を編集",
+              size: "sm",
             },
           ],
+          label: "この試合の関連操作",
+          semantics: "navigation",
         },
         leadingNavigation: {
           href: returnTo ?? "/matches",
@@ -274,15 +281,13 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
   }
   if (/^\/held-events\/[^/]+$/u.test(normalizedPathname)) {
     const heldEventId = decodeRouteSegment(normalizedPathname.slice("/held-events/".length));
-    const matchesParams = new URLSearchParams({ heldEventId, sort: "match_no_asc" });
     const exportParams = new URLSearchParams({ heldEventId, format: "csv" });
     return defineRoutePresentation(
       {
         header: {
-          actionLayout: "responsive-lead",
           actionSize: "sm",
           actionSlots: 2,
-          actionWidths: ["wide", "standard"],
+          actionWidths: ["standard", "compact"],
           description: true,
           eyebrow: true,
         },
@@ -296,13 +301,6 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
         headerActions: {
           items: [
             {
-              href: withReturnTo(`/matches?${matchesParams.toString()}`, routeLocation),
-              icon: "filter",
-              label: "試合検索で見る",
-              size: "sm",
-              variant: "quiet",
-            },
-            {
               href: withReturnTo(`/exports?${exportParams.toString()}`, routeLocation),
               icon: "download",
               label: "CSV出力",
@@ -311,7 +309,6 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
             },
           ],
           label: "この開催の関連操作",
-          layout: "responsive-lead",
           semantics: "navigation",
         },
         leadingNavigation: {
@@ -325,19 +322,13 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
   if (normalizedPathname === "/analytics/series") {
     return defineRoutePresentation(
       {
-        contentToolbar: hasReturnTo
-          ? {
-              actionSize: "sm",
-              actionSlots: 1,
-              actionWidths: ["wide"],
-            }
-          : undefined,
         kind: "comparison",
+        leadingActionSlot: hasReturnTo,
         loadingLabel: "戦績比較を読み込んでいます",
         width: "wide",
       },
       {
-        headerNavigation: returnTo
+        leadingNavigation: returnTo
           ? { href: returnTo, icon: "back", label: "前の画面へ戻る" }
           : undefined,
       },

@@ -27,10 +27,7 @@ describe("route terminal navigation", () => {
       "/held-events",
     );
     const actions = within(screen.getByRole("navigation", { name: "この開催の関連操作" }));
-    expect(actions.getByRole("link", { name: "試合検索で見る" })).toHaveAttribute(
-      "href",
-      "/matches?heldEventId=held-1&sort=match_no_asc&returnTo=%2Fheld-events%2Fheld-1",
-    );
+    expect(actions.getAllByRole("link").map((link) => link.textContent)).toEqual(["CSV出力"]);
     expect(actions.getByRole("link", { name: "CSV出力" })).toHaveAttribute(
       "href",
       "/exports?heldEventId=held-1&format=csv&returnTo=%2Fheld-events%2Fheld-1",
@@ -40,8 +37,9 @@ describe("route terminal navigation", () => {
   it("preserves an encoded match identifier and return context in detail actions", () => {
     renderTerminal("/matches/match%2Fone/", "?returnTo=%2Fmatches%3Fstatus%3Dconfirmed");
 
+    const actions = within(screen.getByRole("navigation", { name: "この試合の関連操作" }));
     const exportUrl = new URL(
-      screen.getByRole("link", { name: "この試合を出力" }).getAttribute("href")!,
+      actions.getByRole("link", { name: "この試合を出力" }).getAttribute("href")!,
       "https://app.test",
     );
     expect(exportUrl.pathname).toBe("/exports");
@@ -49,7 +47,7 @@ describe("route terminal navigation", () => {
     expect(exportUrl.searchParams.get("returnTo")).toBe(
       "/matches/match%2Fone?returnTo=%2Fmatches%3Fstatus%3Dconfirmed",
     );
-    expect(screen.getByRole("link", { name: "編集" })).toHaveAttribute(
+    expect(actions.getByRole("link", { name: "試合結果を編集" })).toHaveAttribute(
       "href",
       "/matches/match%2Fone/edit?returnTo=%2Fmatches%2Fmatch%252Fone%3FreturnTo%3D%252Fmatches%253Fstatus%253Dconfirmed",
     );
@@ -62,6 +60,7 @@ describe("route terminal navigation", () => {
   it.each([
     ["/matches/new", "入力をやめる", "/matches"],
     ["/matches/match-1/edit/", "編集をやめる", "/matches/match-1"],
+    ["/ocr/new", "取り込みをやめる", "/matches"],
   ])("keeps one safe workspace exit for %s", (pathname, name, href) => {
     const surface = renderTerminal(pathname, "?returnTo=https%3A%2F%2Fexternal.test");
 
@@ -78,6 +77,18 @@ describe("route terminal navigation", () => {
       "href",
       "/ocr/new",
     );
+  });
+
+  it("places comparison return navigation before the result surface and preserves its context", () => {
+    const surface = renderTerminal(
+      "/analytics/series",
+      "?returnTo=%2Fmatches%3Fpage%3D2%23records",
+    );
+    const back = screen.getByRole("link", { name: "前の画面へ戻る" });
+
+    expect(back).toHaveAttribute("href", "/matches?page=2#records");
+    expect(surface).not.toContainElement(back);
+    expect(back.compareDocumentPosition(surface) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
   });
 
   it("preserves sample and handoff context when returning from settings", () => {

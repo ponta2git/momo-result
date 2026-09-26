@@ -1,4 +1,4 @@
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Download, PenSquare } from "lucide-react";
 import type { Ref } from "react";
 import { useParams } from "react-router-dom";
 
@@ -25,6 +25,7 @@ import { memberDisplayName } from "@/shared/domain/members";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { MatchResultLedger } from "@/shared/matches/MatchResultLedger";
 import { useAdjacentNavigationFocus } from "@/shared/navigation/useAdjacentNavigationFocus";
+import { inlineActionGroupClass } from "@/shared/ui/actions/actionGroup";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
@@ -113,20 +114,22 @@ function MatchDetailReadyContent({
 
   return (
     <PageFrame className="min-w-0" width="wide">
-      <div>
-        <LinkButton
-          icon={<ArrowLeft aria-hidden="true" />}
-          size="sm"
-          to={navigation.backHref}
-          variant="quiet"
-        >
-          {navigation.backLabel}
-        </LinkButton>
-        {navigation.currentHeldEventHref ? (
-          <LinkButton to={navigation.currentHeldEventHref} size="sm" variant="quiet">
-            この試合の開催を見る
+      <div className="grid gap-2">
+        <nav aria-label="試合詳細の移動" className={inlineActionGroupClass}>
+          <LinkButton
+            icon={<ArrowLeft aria-hidden="true" />}
+            size="sm"
+            to={navigation.backHref}
+            variant="quiet"
+          >
+            {navigation.backLabel}
           </LinkButton>
-        ) : null}
+          {navigation.currentHeldEventHref ? (
+            <LinkButton to={navigation.currentHeldEventHref} size="sm" variant="quiet">
+              この試合の開催を見る
+            </LinkButton>
+          ) : null}
+        </nav>
         {navigation.fallbackReason ? (
           <p className={contentText.supporting}>{navigation.fallbackReason}</p>
         ) : null}
@@ -139,14 +142,24 @@ function MatchDetailReadyContent({
           <span id="match-current-datetime">対戦日時 {formatDateTimeLong(match.playedAt)}</span>
         }
         actions={
-          <>
-            <LinkButton to={navigation.exportHref} variant="secondary">
+          <nav aria-label="この試合の関連操作" className={inlineActionGroupClass}>
+            <LinkButton
+              icon={<Download aria-hidden="true" />}
+              size="sm"
+              to={navigation.exportHref}
+              variant="quiet"
+            >
               この試合を出力
             </LinkButton>
-            <LinkButton to={navigation.editHref} variant="secondary">
+            <LinkButton
+              icon={<PenSquare aria-hidden="true" />}
+              size="sm"
+              to={navigation.editHref}
+              variant="secondary"
+            >
               試合結果を編集
             </LinkButton>
-          </>
+          </nav>
         }
       />
 
@@ -163,8 +176,8 @@ function MatchDetailReadyContent({
         </div>
 
         <section aria-labelledby="match-result-ledger-heading" className="grid w-full gap-4">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-            <div>
+          <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-4 gap-y-2">
+            <div className="min-w-0 flex-[1_1_16rem]">
               <h2 className={contentText.heading} id="match-result-ledger-heading">
                 順位・総資産
               </h2>

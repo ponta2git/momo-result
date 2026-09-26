@@ -147,8 +147,12 @@ describe("MatchDetail adjacent navigation", () => {
     await screen.findByText("開催Bのメモ");
     expect(currentHref(router)).toBe(detailHref(b.matchId));
     expect(screen.queryByText("開催Aのメモ")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "試合一覧へ戻る" })).toHaveAttribute("href", origin);
-    expect(screen.getByRole("link", { name: "この試合の開催を見る" })).toHaveAttribute(
+    const returnNavigation = within(screen.getByRole("navigation", { name: "試合詳細の移動" }));
+    expect(returnNavigation.getByRole("link", { name: "試合一覧へ戻る" })).toHaveAttribute(
+      "href",
+      origin,
+    );
+    expect(returnNavigation.getByRole("link", { name: "この試合の開催を見る" })).toHaveAttribute(
       "href",
       "/held-events/held-b",
     );

@@ -236,7 +236,8 @@ describe("AppShell", () => {
         name: "画面の読み込みに失敗しました",
       });
       const returnLink = screen.getByRole("link", { name: "前の画面へ戻る" });
-      expect(surface).toContainElement(returnLink);
+      expect(surface).toBeVisible();
+      expect(returnLink).toBeVisible();
       expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
       expect(returnLink).toHaveAttribute("href", "/matches/match-1");
     } finally {

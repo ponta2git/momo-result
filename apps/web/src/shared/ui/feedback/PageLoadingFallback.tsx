@@ -9,11 +9,7 @@ import {
   pageViewportGutterClass,
 } from "@/shared/ui/layout/PageFrame";
 import type { PageFrameWidth } from "@/shared/ui/layout/PageFrame";
-import {
-  PageHeader,
-  responsivePageHeaderActionGroupClass,
-  responsivePageHeaderLeadActionGroupClass,
-} from "@/shared/ui/layout/PageHeader";
+import { PageHeader } from "@/shared/ui/layout/PageHeader";
 import type { PageHeaderDescriptionStatus } from "@/shared/ui/layout/PageHeader";
 import { StatusBadge } from "@/shared/ui/status/StatusBadge";
 
@@ -29,7 +25,6 @@ export type PageLoadingKind =
   | "workspace";
 
 type PageLoadingActionShape = {
-  actionLayout?: "inline" | "responsive-grid" | "responsive-lead" | undefined;
   actionSize?: "sm" | "md" | undefined;
   actionSlots?: 0 | 1 | 2 | 3 | undefined;
   actionWidths?: readonly PageLoadingActionWidth[] | undefined;
@@ -43,6 +38,7 @@ export type PageLoadingHeaderShape = PageLoadingActionShape & {
 };
 
 export type PageLoadingContentToolbarShape = PageLoadingActionShape & {
+  actionPlacement?: "leading" | "trailing" | undefined;
   status?: PageHeaderDescriptionStatus | undefined;
 };
 
@@ -308,7 +304,7 @@ function HeaderSkeleton({ shape }: { shape: PageLoadingHeaderShape | undefined }
         }
         descriptionStatus={descriptionStatus}
         eyebrow={eyebrow ? <Skeleton as="span" className="block h-4 w-24" /> : undefined}
-        title={<Skeleton as="span" className="block h-8 w-full max-w-80 md:h-10" />}
+        title={<Skeleton as="span" className="block h-8 w-full max-w-80 @3xl/page-header:h-10" />}
       />
     </div>
   );
@@ -317,32 +313,45 @@ function HeaderSkeleton({ shape }: { shape: PageLoadingHeaderShape | undefined }
 function ContentToolbarSkeleton({ shape }: { shape: PageLoadingContentToolbarShape }) {
   return (
     <div
-      className={cn(actionRowClass, shape.status ? "justify-between" : "justify-end")}
+      className={cn(
+        actionRowClass,
+        shape.status
+          ? "justify-between"
+          : shape.actionPlacement === "leading"
+            ? "justify-start"
+            : "justify-end",
+      )}
       data-page-content-actions=""
     >
-      {shape.status ? <StatusBadge {...shape.status} /> : null}
+      {shape.status && shape.actionPlacement !== "leading" ? (
+        <StatusBadge {...shape.status} />
+      ) : null}
       <ActionSkeletonGroup shape={shape} />
+      {shape.status && shape.actionPlacement === "leading" ? (
+        <div className="ms-auto">
+          <StatusBadge {...shape.status} />
+        </div>
+      ) : null}
     </div>
   );
 }
 
 function ActionSkeletonGroup({ shape }: { shape: PageLoadingActionShape }) {
-  const { actionLayout = "inline", actionSize = "md", actionSlots = 0, actionWidths = [] } = shape;
+  const { actionSize = "md", actionSlots = 0, actionWidths = [] } = shape;
   if (actionSlots === 0) return null;
 
-  const isResponsiveActionLayout = actionLayout !== "inline";
   const actionHeight = actionSize === "sm" ? "pointer-fine:h-9" : "pointer-fine:h-10";
   const widthClasses = {
-    compact: isResponsiveActionLayout ? "w-full sm:w-20" : "w-20",
-    long: isResponsiveActionLayout ? "w-full sm:w-32" : "w-32",
-    short: isResponsiveActionLayout ? "w-full sm:w-16" : "w-16",
-    standard: isResponsiveActionLayout ? "w-full sm:w-28" : "w-28",
-    wide: isResponsiveActionLayout ? "w-full sm:w-36" : "w-36",
+    compact: "w-20",
+    long: "w-32",
+    short: "w-16",
+    standard: "w-28",
+    wide: "w-36",
   } as const;
   const actionSkeletons = Array.from({ length: actionSlots }, (_, index) => (
     <Skeleton
       className={cn(
-        "h-11 rounded-sm",
+        "h-11 max-w-full rounded-sm",
         actionHeight,
         widthClasses[actionWidths[index] ?? "standard"],
       )}
@@ -351,17 +360,7 @@ function ActionSkeletonGroup({ shape }: { shape: PageLoadingActionShape }) {
   ));
 
   return (
-    <div
-      aria-hidden="true"
-      className={
-        actionLayout === "responsive-lead"
-          ? responsivePageHeaderLeadActionGroupClass
-          : actionLayout === "responsive-grid"
-            ? responsivePageHeaderActionGroupClass
-            : inlineActionGroupClass
-      }
-      data-page-header-actions={isResponsiveActionLayout ? actionLayout : undefined}
-    >
+    <div aria-hidden="true" className={inlineActionGroupClass}>
       {actionSkeletons}
     </div>
   );

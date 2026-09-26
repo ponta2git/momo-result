@@ -6,7 +6,7 @@ import { matchListPageSizeOptions } from "@/features/matches/list/matchListSearc
 import { MatchMobileCard } from "@/features/matches/list/MatchMobileCard";
 import { useMatchesListPageModel } from "@/features/matches/list/useMatchesListPageModel";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
-import { responsiveActionGroupClass } from "@/shared/ui/actions/actionGroup";
+import { inlineActionGroupClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
@@ -70,7 +70,7 @@ export function MatchesListPage() {
       <PageContentSurface aria-label="試合一覧" className="grid gap-6" role="region">
         <div
           aria-label="試合を登録"
-          className={cn(responsiveActionGroupClass, "sm:ml-auto")}
+          className={cn(inlineActionGroupClass, "justify-end")}
           role="group"
         >
           <LinkButton

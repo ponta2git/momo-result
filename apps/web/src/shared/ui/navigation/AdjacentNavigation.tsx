@@ -18,39 +18,27 @@ type AdjacentNavigationProps = {
   label: string;
   previous: AdjacentDestination;
   next: AdjacentDestination;
-  alignment?: "center" | "outward";
   disabled?: boolean | undefined;
   status?: ReactNode;
 };
 
 // Available destinations and known ends keep the same text, spacing, and alignment.
 const destinationClassName =
-  "grid min-h-11 min-w-0 grid-cols-1 content-start justify-items-center gap-1 border border-transparent px-5 py-3 text-center text-base font-plain whitespace-normal break-words text-[var(--color-text-secondary)]";
+  "row-span-2 grid min-h-11 min-w-0 grid-cols-1 grid-rows-subgrid items-start gap-1 border border-transparent px-5 py-3 text-base font-plain whitespace-normal break-words text-[var(--color-text-secondary)]";
 
 /** Keeps each direction and its destination together, including known ends and temporary pauses. */
 export function AdjacentNavigation({
   label,
   previous,
   next,
-  alignment = "center",
   disabled = false,
   status,
 }: AdjacentNavigationProps) {
   return (
     <nav aria-label={label} className="grid min-w-0 gap-2">
-      <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-        <Destination
-          destination={previous}
-          direction="previous"
-          alignment={alignment}
-          disabled={disabled}
-        />
-        <Destination
-          destination={next}
-          direction="next"
-          alignment={alignment}
-          disabled={disabled}
-        />
+      <div className="grid min-w-0 grid-flow-col grid-cols-2 grid-rows-[auto_auto] gap-x-3 gap-y-1">
+        <Destination destination={previous} direction="previous" disabled={disabled} />
+        <Destination destination={next} direction="next" disabled={disabled} />
       </div>
       {status ? <div className={contentText.supporting}>{status}</div> : null}
     </nav>
@@ -60,27 +48,23 @@ export function AdjacentNavigation({
 function Destination({
   destination,
   direction,
-  alignment,
   disabled,
 }: {
   destination: AdjacentDestination;
   direction: "previous" | "next";
-  alignment: "center" | "outward";
   disabled: boolean;
 }) {
   const icon = direction === "previous" ? <ArrowLeft /> : <ArrowRight />;
   const className = cn(
     destinationClassName,
-    alignment === "outward" &&
-      (direction === "previous"
-        ? "sm:justify-items-start sm:text-left"
-        : "sm:justify-items-end sm:text-right"),
+    direction === "previous" ? "justify-items-start text-start" : "justify-items-end text-end",
   );
   const content = (
     <>
-      <span className="inline-flex items-center gap-2">
-        <DecorativeActionIcon>{icon}</DecorativeActionIcon>
-        <span>{destination.label}</span>
+      <span className="inline-flex max-w-full min-w-0 items-center gap-2">
+        {direction === "previous" ? <DecorativeActionIcon>{icon}</DecorativeActionIcon> : null}
+        <span className="min-w-0">{destination.label}</span>
+        {direction === "next" ? <DecorativeActionIcon>{icon}</DecorativeActionIcon> : null}
       </span>
       <span className={cn(contentText.supporting, "block text-pretty tabular-nums")}>
         {destination.description}

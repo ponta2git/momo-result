@@ -58,7 +58,7 @@ function HeldEventDetailReadyContent({
 
   return (
     <PageFrame className="min-w-0" width="wide">
-      <div>
+      <div className="grid justify-items-start gap-2">
         <LinkButton
           icon={<ArrowLeft aria-hidden="true" />}
           size="sm"
@@ -133,7 +133,6 @@ function HeldEventDetailReadyContent({
 
       <AdjacentNavigation
         label="開催の前後移動"
-        alignment="outward"
         previous={navigation.adjacent.previous}
         next={navigation.adjacent.next}
         disabled={navigation.adjacent.disabled}

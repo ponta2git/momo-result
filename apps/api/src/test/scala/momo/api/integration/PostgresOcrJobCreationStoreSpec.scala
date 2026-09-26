@@ -143,6 +143,22 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
       assertActiveLimit(result, 0)
       assertEquals(counts, (0L, 0L, 0L))
 
+  test("job creation rechecks the source draft creator while holding its write lock"):
+    for
+      _ <- prepareMatchDraft
+      _ <- prepareSourceImage
+      _ <- sql"""UPDATE match_drafts SET created_by_account_id = 'account_eu'
+        WHERE id = ${matchDraftId.value}""".update.run.transact(transactor)
+      result <- repo.store(plan(job, draft, attachment, activeJobLimit = 12))
+      counts <- sql"""
+        SELECT (SELECT count(*) FROM ocr_jobs WHERE id = ${jobId.value}),
+               (SELECT count(*) FROM ocr_drafts WHERE id = ${draftId.value}),
+               (SELECT count(*) FROM ocr_queue_outbox WHERE job_id = ${jobId.value})
+      """.query[(Long, Long, Long)].unique.transact(transactor)
+    yield
+      assertEquals(result, Left(OcrJobCreationRejection.SubmissionRejected))
+      assertEquals(counts, (0L, 0L, 0L))
+
   test("active admission observes a creator that commits while it waits for the limit lock"):
     for
       _ <- prepareMatchDraft

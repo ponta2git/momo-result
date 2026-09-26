@@ -52,12 +52,15 @@ private[bootstrap] object PostgresApiRuntime:
   ).tupled.flatMap { (transactor, infrastructure) =>
     given LoggerFactory[F] = Slf4jFactory.create[F]
     val queue = infrastructure.queue
-    val jobs: OcrJobsRepository[F] = PostgresOcrJobsRepository[F](transactor)
+    val jobsBase: OcrJobsRepository[F] = PostgresOcrJobsRepository[F](transactor)
     val drafts: OcrDraftsRepository[F] = PostgresOcrDraftsRepository[F](transactor)
     val ocrJobCreationStoreBase: OcrJobCreationStore[F] =
       PostgresOcrJobCreationStore[F](transactor)
     val ocrQueueOutbox = PostgresOcrQueueOutboxRepository[F](transactor)
-    val analysisOutboxNotifier = PostgresSeriesAnalysisOutboxNotifier[F](transactor)
+    val analysisOutboxNotifier =
+      PostgresOutboxNotifier[F](transactor, PostgresOutboxNotifier.Channel.SeriesAnalysis)
+    val submissionNotifier =
+      PostgresOutboxNotifier[F](transactor, PostgresOutboxNotifier.Channel.OcrSubmissions)
     val heldEvents: HeldEventsRepository[F] = PostgresHeldEventsRepository[F](transactor)
     val heldEventDeletion: HeldEventDeletionRepository[F] =
       PostgresHeldEventDeletionRepository[F](transactor)
@@ -87,7 +90,7 @@ private[bootstrap] object PostgresApiRuntime:
       PostgresMemberAliasesRepository[F](transactor)
     val idempotency: IdempotencyRepository[F] = PostgresIdempotencyRepository[F](transactor)
     val sourceImages: SourceImagesRepository[F] = PostgresSourceImagesRepository[F](transactor)
-    val ocrMaintenance: OcrJobMaintenanceRepository[F] =
+    val ocrMaintenanceBase: OcrJobMaintenanceRepository[F] =
       PostgresOcrJobMaintenanceRepository[F](transactor)
     val ocrAdmissionGuard = OcrAdmissionGuard.from[F](
       ocrQueueOutbox.backlogSnapshot,
@@ -103,9 +106,14 @@ private[bootstrap] object PostgresApiRuntime:
     val outboxRuntime = OutboxWakeup.resource[F].flatMap { wakeup =>
       Resource.eval(Deferred[F, Throwable]).flatMap { backgroundFailure =>
         val reportCoordinatorFailure = (error: Throwable) => backgroundFailure.complete(error).void
+        val wakingOcrOutbox = OutboxWakingRepositories.ocrOutbox(
+          ocrQueueOutbox,
+          wakeup,
+          reportCoordinatorFailure(new OutboxWakeRuntimeFailure),
+        )
         (
           OcrQueueOutboxDispatcher.resource[F](
-            ocrQueueOutbox,
+            wakingOcrOutbox,
             queue,
             OcrQueueOutboxDispatcherConfig(
               redeliveryAfter = config.resourceLimits.ocrOutboxSemanticRedeliveryInterval,
@@ -121,6 +129,13 @@ private[bootstrap] object PostgresApiRuntime:
             OutboxWakeCoordinatorConfig(coldRecoveryInterval = None),
             reportCoordinatorFailure,
           ),
+          OutboxWakeCoordinator.resource[F](
+            OutboxKind.OcrSubmissions,
+            wakeup,
+            submissionNotifier,
+            OutboxWakeCoordinatorConfig(coldRecoveryInterval = None),
+            reportCoordinatorFailure,
+          ),
           PostgresSeriesAnalysisReaderCapability.resource[F](transactor),
         ).tupled.as((wakeup, backgroundFailure))
       }
@@ -130,6 +145,21 @@ private[bootstrap] object PostgresApiRuntime:
       outboxRuntime.flatMap { (outboxWakeup, backgroundFailure) =>
         val signalBackgroundFailure = backgroundFailure
           .complete(new OutboxWakeRuntimeFailure).void
+        val jobs = OutboxWakingRepositories.ocrJobs(
+          jobsBase,
+          outboxWakeup,
+          signalBackgroundFailure,
+        )
+        val ocrSubmissions = OutboxWakingRepositories.ocrSubmissions(
+          PostgresOcrSubmissionsRepository[F](transactor),
+          outboxWakeup,
+          signalBackgroundFailure,
+        )
+        val ocrMaintenance = OutboxWakingRepositories.ocrMaintenance(
+          ocrMaintenanceBase,
+          outboxWakeup,
+          signalBackgroundFailure,
+        )
         val ocrJobCreationStore = OutboxWakingRepositories.ocrJobCreation(
           ocrJobCreationStoreBase,
           outboxWakeup,
@@ -177,7 +207,7 @@ private[bootstrap] object PostgresApiRuntime:
               ),
               repositories = UseCaseWiring.RuntimeRepositories(
                 ocrJobCreationStore = ocrJobCreationStore,
-                ocrSubmissions = PostgresOcrSubmissionsRepository[F](transactor),
+                ocrSubmissions = ocrSubmissions,
                 jobs = jobs,
                 drafts = drafts,
                 heldEvents = heldEvents,

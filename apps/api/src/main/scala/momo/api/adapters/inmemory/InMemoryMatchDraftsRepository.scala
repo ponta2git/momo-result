@@ -89,10 +89,17 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
         case _ => (current, MatchDraftOcrFailureResult.NotRunning)
     }
 
-  private[inmemory] def cancelUnchecked(draftId: MatchDraftId): F[Boolean] = ref.modify { current =>
+  private[inmemory] def takeForCancellation(
+      draftId: MatchDraftId,
+      actorAccountId: AccountId,
+  ): F[Either[MatchDraftCancellationResult, MatchDraft]] = ref.modify { current =>
     current.get(draftId) match
-      case Some(_: MatchDraft.Editable) => (current - draftId, true)
-      case _ => (current, false)
+      case None => current -> Left(MatchDraftCancellationResult.NotFound)
+      case Some(draft) if draft.createdByAccountId != actorAccountId =>
+        current -> Left(MatchDraftCancellationResult.Forbidden)
+      case Some(draft) if MatchDraftStatus.nonTerminalStatuses.contains(draft.status) =>
+        (current - draftId) -> Right(draft)
+      case Some(draft) => current -> Left(MatchDraftCancellationResult.NotCancellable(draft.status))
   }
 
   private[inmemory] def startEmptySubmission(draftId: MatchDraftId, at: Instant): F[Unit] =
@@ -173,6 +180,7 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
   private def canApplyUserUpdate(existing: MatchDraft.Editable, draft: MatchDraft): Boolean =
     MatchDraftStatus.userEditableStatuses.contains(existing.status) &&
       MatchDraftStatus.userEditableStatuses.contains(draft.status) &&
+      existing.createdByAccountId == draft.createdByAccountId &&
       existing.updatedAt.equals(draft.updatedAt)
 
   private def deleteDiscarded(matchesScope: MatchDraft => Boolean): F[Int] = ref.modify { current =>

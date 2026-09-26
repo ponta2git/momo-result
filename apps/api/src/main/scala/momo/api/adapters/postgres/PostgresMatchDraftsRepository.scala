@@ -100,6 +100,7 @@ object PostgresMatchDrafts extends PostgresMatchDraftsRowSupport:
         confirmed_match_id = ${draft.confirmedMatchId},
         updated_at = $updatedAt
       WHERE id = ${draft.id}
+        AND created_by_account_id = ${draft.createdByAccountId}
         AND updated_at = ${draft.updatedAt}
         AND status IN (
           ${MatchDraftStatus.OcrFailed},

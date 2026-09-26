@@ -14,7 +14,7 @@ import momo.api.adapters.postgres.{
   PostgresMatchDraftCancellationRepository
 }
 import momo.api.domain.MatchDraftStatus
-import momo.api.domain.ids.{ImageId, MatchDraftId}
+import momo.api.domain.ids.{AccountId, ImageId, MatchDraftId}
 import momo.api.repositories.MatchDraftCancellationResult
 
 final class PostgresMatchDraftCancellationRepositorySpec extends IntegrationSuite:
@@ -22,6 +22,7 @@ final class PostgresMatchDraftCancellationRepositorySpec extends IntegrationSuit
   private val now = Instant.parse("2026-05-20T10:05:00Z")
   private val draftId = MatchDraftId.unsafeFromString("match-draft-cancel-atomic")
   private val imageId = ImageId.unsafeFromString("image-cancel-atomic")
+  private val owner = AccountId.unsafeFromString("account_ponta")
 
   private def repo = PostgresMatchDraftCancellationRepository[IO](transactor)
 
@@ -37,7 +38,7 @@ final class PostgresMatchDraftCancellationRepositorySpec extends IntegrationSuit
         totalAssetsDraftId = Some("ocr-draft-cancel-atomic"),
       )
       _ <- ResultNotificationFixture.seed("match_draft", draftId.value, now).transact(transactor)
-      result <- repo.cancelDraftAndQueuedOcrJobs(draftId, now)
+      result <- repo.cancelDraftAndQueuedOcrJobs(draftId, now, owner)
       draftExists <- matchDraftExists(draftId.value)
       jobStatus <- ocrJobStatus("ocr-job-cancel-atomic")
       sourceStatus <- sourceImageStatus(imageId)
@@ -59,7 +60,7 @@ final class PostgresMatchDraftCancellationRepositorySpec extends IntegrationSuit
         totalAssetsImageId = Some(imageId.value),
         totalAssetsDraftId = Some("ocr-draft-cancel-terminal"),
       )
-      result <- repo.cancelDraftAndQueuedOcrJobs(draftId, now)
+      result <- repo.cancelDraftAndQueuedOcrJobs(draftId, now, owner)
       draftExists <- matchDraftExists(draftId.value)
       jobStatus <- ocrJobStatus("ocr-job-cancel-terminal")
     yield
@@ -67,13 +68,37 @@ final class PostgresMatchDraftCancellationRepositorySpec extends IntegrationSuit
       assertEquals(draftExists, true)
       assertEquals(jobStatus, "queued")
 
+  test(
+    "another account cannot delete a draft, cancel its job, or retire its image and notification"
+  ):
+    for
+      _ <- insertSourceImage(imageId)
+      _ <- insertOcrDraft("ocr-draft-owner", "ocr-job-owner")
+      _ <- insertOcrJob("ocr-job-owner", "ocr-draft-owner", imageId.value)
+      _ <-
+        insertMatchDraft(draftId.value, "ocr_running", Some(imageId.value), Some("ocr-draft-owner"))
+      _ <- ResultNotificationFixture.seed("match_draft", draftId.value, now).transact(transactor)
+      notificationBefore <- ResultNotificationFixture.state(transactor)
+      result <-
+        repo.cancelDraftAndQueuedOcrJobs(draftId, now, AccountId.unsafeFromString("account_eu"))
+      draftExists <- matchDraftExists(draftId.value)
+      jobStatus <- ocrJobStatus("ocr-job-owner")
+      imageStatus <- sourceImageStatus(imageId)
+      notificationAfter <- ResultNotificationFixture.state(transactor)
+    yield
+      assertEquals(result, MatchDraftCancellationResult.Forbidden)
+      assert(draftExists)
+      assertEquals(jobStatus, "queued")
+      assertEquals(imageStatus, "AVAILABLE")
+      assertEquals(notificationAfter, notificationBefore)
+
   test("a failure after cancellation rolls back both the source draft and notification parts"):
     for
       _ <- insertMatchDraft(draftId.value, "draft_ready", None, None)
       _ <- ResultNotificationFixture.seed("match_draft", draftId.value, now).transact(transactor)
       before <- ResultNotificationFixture.state(transactor)
       result <-
-      (PostgresMatchDraftCancellation.cancelDraftAndQueuedOcrJobs(draftId, now) *>
+      (PostgresMatchDraftCancellation.cancelDraftAndQueuedOcrJobs(draftId, now, owner) *>
         new IllegalStateException("abort source command").raiseError[ConnectionIO, Unit])
         .transact(transactor).attempt
       exists <- matchDraftExists(draftId.value)
@@ -93,7 +118,7 @@ final class PostgresMatchDraftCancellationRepositorySpec extends IntegrationSuit
       release <- Deferred[IO, Unit]
       holder <- holdNotificationGate(locked, release).start
       pid <- locked.get
-      cancellation <- repo.cancelDraftAndQueuedOcrJobs(draftId, now).start
+      cancellation <- repo.cancelDraftAndQueuedOcrJobs(draftId, now, owner).start
       before <- (awaitBackendBlockedBy(pid) *> matchDraftExists(draftId.value))
         .guarantee(release.complete(()).void)
       result <- cancellation.joinWithNever

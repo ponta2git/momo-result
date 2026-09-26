@@ -26,6 +26,10 @@ final class InMemoryOcrSubmissionsRepository[F[_]: Async] private (
             (if existing.sameRequest(submission) then Right(existing)
              else Left(AppError.Conflict("This submissionId belongs to another request."))).pure[F]
           case None => drafts.find(submission.matchDraftId).flatMap {
+              case Some(draft) if draft.createdByAccountId != submission.ownerAccountId =>
+                Left(
+                  AppError.Forbidden("Only the creator can add OCR to this match draft.")
+                ).pure[F]
               case Some(draft)
                   if draft.status != MatchDraftStatus.Confirmed &&
                     draft.status != MatchDraftStatus.Cancelled =>

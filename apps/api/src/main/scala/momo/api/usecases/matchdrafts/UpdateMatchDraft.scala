@@ -46,8 +46,14 @@ final class UpdateMatchDraft[F[_]: Monad](
   def run(
       draftId: MatchDraftId,
       command: UpdateMatchDraftCommand,
+      actorAccountId: AccountId,
   ): F[Either[AppError, MatchDraft]] = (for
     existing <- matchDrafts.find(draftId).orNotFound("match draft", draftId.value)
+    _ <- EitherT.cond[F](
+      existing.createdByAccountId == actorAccountId,
+      (),
+      AppError.Forbidden("Only the creator can update this match draft."),
+    )
     _ <- EitherT.fromEither[F](ensureEditable(existing.status))
     matchNoInEvent <- EitherT.fromEither[F](validateMatchNo(command.matchNoInEvent))
     layoutFamily <- EitherT
@@ -79,7 +85,9 @@ final class UpdateMatchDraft[F[_]: Monad](
       case MatchDraftUpdateResult.NotEditableOrChanged =>
         Left(AppError.Conflict(
           "match draft was changed to a terminal status before the update could be saved."
-        )))
+        ))
+      case MatchDraftUpdateResult.PrerequisitesChanged =>
+        Left(AppError.Conflict("Match draft prerequisites changed before the update completed.")))
   yield updated.withCommon(_.copy(updatedAt = at))).value
 
   private def ensureEditable(status: MatchDraftStatus): Either[AppError, Unit] = Either.cond(

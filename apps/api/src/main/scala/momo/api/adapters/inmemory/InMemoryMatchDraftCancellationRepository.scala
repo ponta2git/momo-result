@@ -5,8 +5,7 @@ import java.time.Instant
 import cats.effect.Sync
 import cats.syntax.all.*
 
-import momo.api.domain.MatchDraftStatus
-import momo.api.domain.ids.MatchDraftId
+import momo.api.domain.ids.{AccountId, MatchDraftId}
 import momo.api.repositories.{
   MatchDraftCancellationRepository,
   MatchDraftCancellationResult,
@@ -20,21 +19,13 @@ final class InMemoryMatchDraftCancellationRepository[F[_]: Sync](
   override def cancelDraftAndQueuedOcrJobs(
       draftId: MatchDraftId,
       updatedAt: Instant,
-  ): F[MatchDraftCancellationResult] = matchDrafts.find(draftId).flatMap {
-    case None => MatchDraftCancellationResult.NotFound.pure[F]
-    case Some(draft) if !MatchDraftStatus.nonTerminalStatuses.contains(draft.status) =>
-      MatchDraftCancellationResult.NotCancellable(draft.status).pure[F]
-    case Some(draft) => matchDrafts.cancelUnchecked(draftId).flatMap {
-        case true =>
-          ocrJobs.cancelQueuedByDraftIds(draft.ocrDraftIds, updatedAt)
-            .as(MatchDraftCancellationResult.Cancelled(draft.sourceImageIds))
-        case false => classifyCurrent(draftId)
-      }
-  }
-
-  private def classifyCurrent(draftId: MatchDraftId): F[MatchDraftCancellationResult] = matchDrafts
-    .find(draftId).map {
-      case None => MatchDraftCancellationResult.NotFound
-      case Some(draft) => MatchDraftCancellationResult.NotCancellable(draft.status)
+      actorAccountId: AccountId,
+  ): F[MatchDraftCancellationResult] = Sync[F].uncancelable { _ =>
+    matchDrafts.takeForCancellation(draftId, actorAccountId).flatMap {
+      case Left(result) => result.pure[F]
+      case Right(draft) =>
+        ocrJobs.cancelQueuedByDraftIds(draft.ocrDraftIds, updatedAt)
+          .as(MatchDraftCancellationResult.Cancelled(draft.sourceImageIds))
     }
+  }
 end InMemoryMatchDraftCancellationRepository

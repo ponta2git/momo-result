@@ -202,6 +202,37 @@ object PostgresOcrJobs:
           else ().pure[ConnectionIO]
       yield updated == 1
 
+    override def cancelQueuedOwned(
+        jobId: OcrJobId,
+        owner: AccountId,
+        now: Instant,
+    ): ConnectionIO[momo.api.repositories.OcrJobCancellationResult] =
+      import momo.api.repositories.OcrJobCancellationResult
+      for
+        _ <- PostgresMatchDraftStatusSync.lockForJob(jobId)
+        ownership <- sql"""
+          SELECT EXISTS (
+            SELECT 1 FROM match_drafts draft
+            WHERE draft.created_by_account_id = $owner
+              AND jobs.draft_id IN (
+                draft.total_assets_draft_id, draft.revenue_draft_id, draft.incident_log_draft_id
+              )
+          ) OR EXISTS (
+            SELECT 1 FROM ocr_submission_members member
+            JOIN ocr_submissions submission ON submission.id = member.submission_id
+            WHERE member.job_id = jobs.id AND submission.owner_account_id = $owner
+          )
+          FROM ocr_jobs jobs WHERE jobs.id = $jobId FOR UPDATE OF jobs
+        """.query[Boolean].option
+        result <- ownership match
+          case None => OcrJobCancellationResult.NotFound.pure[ConnectionIO]
+          case Some(false) => OcrJobCancellationResult.Forbidden.pure[ConnectionIO]
+          case Some(true) => cancelQueued(jobId, now).map {
+              case true => OcrJobCancellationResult.Cancelled
+              case false => OcrJobCancellationResult.NotQueued
+            }
+      yield result
+
     override def cancelQueuedByDraftIds(
         draftIds: List[OcrDraftId],
         now: Instant,
@@ -241,9 +272,15 @@ final class PostgresOcrJobsRepository[F[_]: Async](transactor: Transactor[F])
   override def find(jobId: OcrJobId): F[Option[OcrJob]] = delegate.find(jobId)
   override def countActive: F[Long] = delegate.countActive
   override def markFailed(jobId: OcrJobId, failure: OcrFailure, now: Instant): F[Unit] =
-    delegate.markFailed(jobId, failure, now).flatTap(_ => PostgresOcrSubmissions.wake(transactor))
+    delegate.markFailed(jobId, failure, now)
   override def cancelQueued(jobId: OcrJobId, now: Instant): F[Boolean] =
-    delegate.cancelQueued(jobId, now).flatTap(_ => PostgresOcrSubmissions.wake(transactor))
+    delegate.cancelQueued(jobId, now)
+  override def cancelQueuedOwned(
+      jobId: OcrJobId,
+      owner: AccountId,
+      now: Instant,
+  ): F[momo.api.repositories.OcrJobCancellationResult] =
+    delegate.cancelQueuedOwned(jobId, owner, now)
   override def cancelQueuedByDraftIds(ids: List[OcrDraftId], now: Instant): F[Int] =
-    delegate.cancelQueuedByDraftIds(ids, now).flatTap(_ => PostgresOcrSubmissions.wake(transactor))
+    delegate.cancelQueuedByDraftIds(ids, now)
 end PostgresOcrJobsRepository

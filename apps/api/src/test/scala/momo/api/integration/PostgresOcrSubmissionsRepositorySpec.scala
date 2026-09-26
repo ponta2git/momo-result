@@ -86,6 +86,20 @@ final class PostgresOcrSubmissionsRepositorySpec extends IntegrationSuite:
       assertEquals(refusedStatus, "draft_ready")
   }
 
+  test("another account cannot attach an OCR submission to the source draft") {
+    for
+      _ <- seedDraft
+      proposed = submission().copy(ownerAccountId = otherOwner)
+      result <- repository.put(proposed)
+      saved <- repository.find(proposed.id, otherOwner)
+      status <- sql"SELECT status FROM match_drafts WHERE id = ${draft.value}"
+        .query[String].unique.transact(transactor)
+    yield
+      assertEquals(result.left.map(_.code), Left("FORBIDDEN"))
+      assertEquals(saved, None)
+      assertEquals(status, "draft_ready")
+  }
+
   List("draft_ready", "needs_review").foreach { previousStatus =>
     test(s"a later submission preserves $previousStatus when the draft already has result slots") {
       for
@@ -224,7 +238,8 @@ final class PostgresOcrSubmissionsRepositorySpec extends IntegrationSuite:
       _ <- repository.put(proposed)
       _ <- PostgresMatchDraftCancellationRepository[IO](transactor).cancelDraftAndQueuedOcrJobs(
         draft,
-        Instant.now()
+        Instant.now(),
+        owner,
       )
       state <- repository.find(proposed.id, owner)
       replay <- repository.put(proposed)

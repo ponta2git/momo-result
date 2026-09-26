@@ -30,7 +30,11 @@ final class InMemoryOcrJobCreationStore[F[_]: Async](
     submissions: InMemoryOcrSubmissionsRepository[F],
 ) extends OcrJobCreationStore[F]:
   override def store(plan: OcrJobCreationPlan): F[OcrJobCreationStore.OcrJobCreationResult] =
-    submissions.serialized(storeSerialized(plan))
+    submissions.serialized {
+      if !OcrJobCreationPlan.isConsistent(plan) then
+        OcrJobCreationRejection.InvalidPlan.asLeft[StoredOcrJob].pure[F]
+      else storeSerialized(plan)
+    }
 
   private def storeSerialized(plan: OcrJobCreationPlan)
       : F[OcrJobCreationStore.OcrJobCreationResult] =
@@ -58,7 +62,12 @@ final class InMemoryOcrJobCreationStore[F[_]: Async](
                 plan.job.createdAt.isBefore(submission.admissionDeadline) &&
                 member.imageSha256 == plan.queueDispatch.enqueueRequest.imageSha256 &&
                 member.imageByteLength.toLong ==
-                plan.queueDispatch.enqueueRequest.imageByteLength => create(plan)
+                plan.queueDispatch.enqueueRequest.imageByteLength =>
+            matchDrafts.find(plan.matchDraftAttachment.draftId).flatMap {
+              case Some(draft) if draft.createdByAccountId == plan.submission.ownerAccountId =>
+                create(plan)
+              case _ => OcrJobCreationRejection.SubmissionRejected.asLeft[StoredOcrJob].pure[F]
+            }
           case _ => OcrJobCreationRejection.SubmissionRejected.asLeft[StoredOcrJob].pure[F]
     }
 

@@ -58,6 +58,7 @@ trait MatchDraftsRepository[F[_]]:
 enum MatchDraftUpdateResult derives CanEqual:
   case Updated
   case NotEditableOrChanged
+  case PrerequisitesChanged
 
 enum MatchDraftOcrFailureResult derives CanEqual:
   case MarkedFailed
@@ -74,12 +75,14 @@ enum MatchDraftSourceImageRetentionResult derives CanEqual:
 enum MatchDraftCancellationResult derives CanEqual:
   case Cancelled(sourceImageIds: List[ImageId])
   case NotFound
+  case Forbidden
   case NotCancellable(status: MatchDraftStatus)
 
 trait MatchDraftCancellationRepository[F[_]]:
   def cancelDraftAndQueuedOcrJobs(
       draftId: MatchDraftId,
       updatedAt: Instant,
+      actorAccountId: AccountId,
   ): F[MatchDraftCancellationResult]
 
 object MatchDraftsRepository:

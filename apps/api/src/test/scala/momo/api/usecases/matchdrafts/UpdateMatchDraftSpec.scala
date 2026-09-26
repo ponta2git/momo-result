@@ -26,6 +26,7 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
   private val mapId = MapMasterId.unsafeFromString("map_east")
   private val seasonId = SeasonMasterId.unsafeFromString("season_spring")
   private val draftId = MatchDraftId.unsafeFromString("draft-update-1")
+  private val owner = AccountId.unsafeFromString("ponta")
 
   test("updates editable draft fields for the owner and persists the timestamp"):
     for
@@ -45,6 +46,7 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
           playedAt = Some(updatedAt),
           status = Some(MatchDraftStatus.NeedsReview),
         ),
+        owner,
       )
       found <- fixture.matchDrafts.find(draftId)
     yield
@@ -57,26 +59,29 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
       assertEquals(found.map(_.status), Some(MatchDraftStatus.NeedsReview))
       assertEquals(found.map(_.updatedAt), Some(updatedAt))
 
-  test("allows updates from accounts that did not create the draft"):
+  test("rejects another account's update without changing the draft"):
     for
       fixture <- Fixture.create
       _ <- fixture.seedPrereqs()
       _ <- fixture.matchDrafts.create(editingDraft(draftId, MatchDraftStatus.DraftReady))
       result <- fixture.usecase
-        .run(draftId, blankCommand.copy(status = Some(MatchDraftStatus.NeedsReview)))
+        .run(
+          draftId,
+          blankCommand.copy(status = Some(MatchDraftStatus.NeedsReview)),
+          AccountId.unsafeFromString("other-account")
+        )
       found <- fixture.matchDrafts.find(draftId)
     yield
-      val updated = assertRight(result)
-      assertEquals(updated.status, MatchDraftStatus.NeedsReview)
-      assertEquals(found.map(_.status), Some(MatchDraftStatus.NeedsReview))
-      assertEquals(found.map(_.updatedAt), Some(updatedAt))
+      assertAppError(result, "FORBIDDEN", "Only the creator")
+      assertEquals(found.map(_.status), Some(MatchDraftStatus.DraftReady))
+      assertEquals(found.map(_.updatedAt), Some(createdAt))
 
   test("rejects terminal drafts even when the requester owns them"):
     for
       fixture <- Fixture.create
       _ <- fixture.seedPrereqs()
       _ <- fixture.matchDrafts.create(confirmedDraft(draftId))
-      result <- fixture.usecase.run(draftId, blankCommand.copy(matchNoInEvent = Some(2)))
+      result <- fixture.usecase.run(draftId, blankCommand.copy(matchNoInEvent = Some(2)), owner)
       found <- fixture.matchDrafts.find(draftId)
     yield
       assertAppError(result, "CONFLICT", "cannot be edited")
@@ -92,7 +97,7 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
       _ <- fixture.seedPrereqs()
       _ <- fixture.matchDrafts.create(editingDraft(draftId, MatchDraftStatus.DraftReady))
       terminal <- fixture.usecase
-        .run(draftId, blankCommand.copy(status = Some(MatchDraftStatus.Confirmed)))
+        .run(draftId, blankCommand.copy(status = Some(MatchDraftStatus.Confirmed)), owner)
       found <- fixture.matchDrafts.find(draftId)
     yield
       assertAppError(terminal, "CONFLICT", "cannot be set")
@@ -106,7 +111,8 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
         editingDraft(draftId, MatchDraftStatus.DraftReady)
           .withCommon(_.copy(layoutFamily = Some("world")))
       )
-      result <- fixture.usecase.run(draftId, blankCommand.copy(layoutFamily = Some("World DX")))
+      result <-
+        fixture.usecase.run(draftId, blankCommand.copy(layoutFamily = Some("World DX")), owner)
       found <- fixture.matchDrafts.find(draftId)
     yield
       assertAppError(result, "VALIDATION_FAILED", "layoutFamily must match")
@@ -126,6 +132,7 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
           mapMasterId = Some(mapId),
           seasonMasterId = Some(seasonId),
         ),
+        owner,
       )
       found <- fixture.matchDrafts.find(draftId)
     yield
@@ -143,8 +150,9 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
         .createWithNextDisplayOrder(MapMaster(otherMapId, otherTitleId, "西日本編", 2, createdAt))
       _ <- fixture.matchDrafts.create(referencedDraft(draftId))
       titleChange <- fixture.usecase
-        .run(draftId, blankCommand.copy(gameTitleId = Some(otherTitleId)))
-      mapChange <- fixture.usecase.run(draftId, blankCommand.copy(mapMasterId = Some(otherMapId)))
+        .run(draftId, blankCommand.copy(gameTitleId = Some(otherTitleId)), owner)
+      mapChange <-
+        fixture.usecase.run(draftId, blankCommand.copy(mapMasterId = Some(otherMapId)), owner)
       found <- fixture.matchDrafts.find(draftId)
     yield
       assertAppError(titleChange, "VALIDATION_FAILED", "mapMasterId")

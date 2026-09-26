@@ -47,6 +47,9 @@ final class PostgresOcrJobCreationStore[F[_]: Async](transactor: Transactor[F])
             Unit
           ].unique
         _ <- PostgresOcrSubmissions.lockDraft(attachment.draftId)
+        draftOwner <-
+          sql"SELECT created_by_account_id FROM match_drafts WHERE id = ${attachment.draftId}"
+            .query[momo.api.domain.ids.AccountId].option
         _ <- PostgresOcrSubmissions.lock(plan.submission.submissionId)
         submission <- PostgresOcrSubmissions.read(plan.submission.submissionId)
         existing <- submission.flatMap(_.members.find(_.screenType ==
@@ -74,12 +77,13 @@ final class PostgresOcrJobCreationStore[F[_]: Async](transactor: Transactor[F])
               case Some(_) =>
                 OcrJobCreationRejection.SubmissionRejected.asLeft[StoredOcrJob].pure[ConnectionIO]
               case None =>
-                val admission = submission.exists(s =>
-                  s.status == "open" &&
-                    s.members.exists(m =>
-                      m.screenType == attachment.screenType && m.status == "pending"
-                    )
-                )
+                val admission = draftOwner.contains(plan.submission.ownerAccountId) &&
+                  submission.exists(s =>
+                    s.status == "open" &&
+                      s.members.exists(m =>
+                        m.screenType == attachment.screenType && m.status == "pending"
+                      )
+                  )
                 (for
                   currentTime <-
                     EitherT.liftF(sql"SELECT clock_timestamp()".query[java.time.Instant].unique)
@@ -101,7 +105,7 @@ final class PostgresOcrJobCreationStore[F[_]: Async](transactor: Transactor[F])
                   _ <- EitherT.liftF(PostgresOcrQueueOutbox.insertIntent(outbox))
                 yield StoredOcrJob(plan.job, plan.draft, true)).value
       yield result
-    program.transact(transactor).flatTap(_ => PostgresOcrSubmissions.wake(transactor))
+    program.transact(transactor)
 
   private def sourceImageGuard(
       plan: OcrJobCreationPlan

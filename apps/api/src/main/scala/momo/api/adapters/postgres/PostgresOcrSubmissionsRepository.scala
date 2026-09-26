@@ -2,8 +2,6 @@ package momo.api.adapters.postgres
 
 import java.time.Instant
 
-import scala.concurrent.duration.*
-
 import cats.effect.Async
 import cats.syntax.all.*
 import doobie.*
@@ -51,19 +49,24 @@ final class PostgresOcrSubmissionsRepository[F[_]: Async](transactor: Transactor
               ).pure[ConnectionIO]
           case None => admit(submission)
       yield result
-    program.transact(transactor).flatTap(_ => wake(transactor))
+    program.transact(transactor)
 
   private def admit(submission: OcrSubmission): ConnectionIO[Either[AppError, OcrSubmission]] =
     for
       draft <-
-        sql"""SELECT status FROM match_drafts WHERE id = ${submission.matchDraftId} FOR UPDATE"""
-          .query[String].option
+        sql"""SELECT status, created_by_account_id FROM match_drafts WHERE id = ${submission.matchDraftId} FOR UPDATE"""
+          .query[(String, AccountId)].option
       count <- sql"""SELECT COUNT(*) FROM ocr_submissions
       WHERE owner_account_id = ${submission.ownerAccountId} AND status = 'open'""".query[Long].unique
       result <-
         if draft.isEmpty then
           Left(AppError.NotFound("match draft", submission.matchDraftId.value)).pure[ConnectionIO]
-        else if !draft.exists(s => s != "confirmed" && s != "cancelled") then
+        else if !draft.exists(_._2 == submission.ownerAccountId) then
+          Left(
+            AppError.Forbidden("Only the creator can add OCR to this match draft.")
+          ).pure[ConnectionIO]
+        else if !draft.exists { case (status, _) => status != "confirmed" && status != "cancelled" }
+        then
           Left(AppError.Conflict("The match draft cannot accept OCR.")).pure[ConnectionIO]
         else if count >= OcrSubmissions.OpenLimit then
           Left(AppError.TooManyRequests(
@@ -125,7 +128,7 @@ final class PostgresOcrSubmissionsRepository[F[_]: Async](transactor: Transactor
         """.update.run.void
         }
       yield ()
-    program.transact(transactor).flatTap(_ => wake(transactor))
+    program.transact(transactor)
 
 private[api] object PostgresOcrSubmissions:
   private final case class Header(
@@ -203,13 +206,3 @@ private[api] object PostgresOcrSubmissions:
             sql"""UPDATE ocr_submissions SET status = 'aborted', finished_at = GREATEST($now, clock_timestamp(), created_at)
             WHERE id = ANY(${submissions.toArray}) AND status = 'open'""".update.run.void
         }
-
-  /** A lost hint is recovered by the Worker's bounded open-submission scan. */
-  def wake[F[_]: Async](transactor: Transactor[F]): F[Unit] =
-    val warn = Async[F].delay(org.slf4j.LoggerFactory.getLogger("momo.api.ocr.submissions")
-      .warn("ocr_submission_wake_unavailable recovery=bounded_open_scan"))
-    Async[F].timeoutTo(
-      sql"SELECT pg_notify('ocr_submissions', '')".query[Unit].unique.transact(transactor),
-      500.millis,
-      warn,
-    ).handleErrorWith(_ => warn)

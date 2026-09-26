@@ -250,17 +250,15 @@ final class PostgresMatchListReadModelSpec extends IntegrationSuite:
         1,
         Instant.parse("2026-04-30T02:00:00Z"),
       ))
-      result <- (for
-        page <- PostgresMatchList.alg.list(MatchListReadModel.Filter(
+      result <- assertReadSnapshot(xa =>
+        PostgresMatchListReadModel[IO](xa).list(MatchListReadModel.Filter(
           kind = MatchListKindFilter.Match,
           page = MatchListReadModel.CursorPageRequest(pageSize = 1),
         ))
-        isolation <- sql"SHOW transaction_isolation".query[String].unique
-      yield (page, isolation)).transact(transactor)
+      )
     yield
-      assertEquals(result._1.totalItems, 1)
-      assertEquals(result._1.items.map(_.id), List("match-snapshot"))
-      assertEquals(result._2, "repeatable read")
+      assertEquals(result.totalItems, 1)
+      assertEquals(result.items.map(_.id), List("match-snapshot"))
 
   test("keeps the initial total snapshot while navigating forward and back with cursors"):
     for

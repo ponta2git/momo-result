@@ -6,6 +6,7 @@ import cats.syntax.all.*
 
 enum OutboxKind derives CanEqual:
   case Ocr
+  case OcrSubmissions
   case SeriesAnalysis
 
 final case class PostCommitEffects private (

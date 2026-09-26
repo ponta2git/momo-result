@@ -83,9 +83,6 @@ object PostgresMatchList extends PostgresMatchListSupport:
           val countQuery =
             fr"SELECT COUNT(*)::int FROM (" ++ selectQuery ++ fr") AS count_source"
           for
-            // COUNT/page/rank decoration are separate bounded statements. Pin them to one MVCC
-            // snapshot so first-page metadata and rows cannot skew under concurrent writes.
-            _ <- sql"SET TRANSACTION ISOLATION LEVEL REPEATABLE READ".update.run.void
             total <- filter.page.cursor.fold(countQuery.query[Int].unique)(cursor =>
               cursor.totalItems.pure[ConnectionIO]
             )
@@ -198,5 +195,12 @@ final class PostgresMatchListReadModel[F[_]: MonadCancelThrow](transactor: Trans
   private val delegate: MatchListReadModel[F] = MatchListReadModel
     .fromAlg(PostgresMatchList.alg, transactor.trans)
 
-  export delegate.*
+  export delegate.{listDraftsByHeldEvent, summarize}
+
+  override def list(
+      filter: MatchListReadModel.Filter
+  ): F[MatchListReadModel.CursorPage[MatchListItem]] =
+    // The read-only facade owns the snapshot; the algebra remains safe to compose into writes.
+    (sql"SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY".update.run *>
+      PostgresMatchList.alg.list(filter)).transact(transactor)
 end PostgresMatchListReadModel

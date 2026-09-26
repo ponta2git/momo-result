@@ -16,11 +16,12 @@ import momo.api.domain.{
   OcrJobStatus
 }
 import momo.api.errors.{AppError, AppException}
-import momo.api.repositories.{MatchDraftsRepository, OcrJobsRepository}
+import momo.api.repositories.{MatchDraftsRepository, OcrJobCancellationResult, OcrJobsRepository}
 
 final class InMemoryOcrJobsRepository[F[_]: Sync] private (
     ref: Ref[F, Map[String, OcrJob]],
     onQueuedCancel: (OcrJob.Cancelled, List[OcrJob]) => F[Unit],
+    matchDrafts: Option[MatchDraftsRepository[F]],
 ) extends OcrJobsRepository[F]:
   def create(job: OcrJob): F[Unit] = ref.modify { current =>
     if current.contains(job.id.value) then
@@ -98,6 +99,24 @@ final class InMemoryOcrJobsRepository[F[_]: Sync] private (
       cancelled.traverse_(job => onQueuedCancel(job, jobs)).as(cancelled.size)
     }
 
+  override def cancelQueuedOwned(
+      jobId: OcrJobId,
+      owner: AccountId,
+      now: Instant,
+  ): F[OcrJobCancellationResult] = find(jobId).flatMap {
+    case None => OcrJobCancellationResult.NotFound.pure[F]
+    case Some(job) =>
+      matchDrafts.traverse(_.list(MatchDraftsRepository.ListFilter())).map(_.toList.flatten.exists(
+        draft => draft.createdByAccountId == owner && draft.ocrDraftIds.contains(job.draftId)
+      )).flatMap {
+        case false => OcrJobCancellationResult.Forbidden.pure[F]
+        case true => cancelQueued(jobId, now).map {
+            case true => OcrJobCancellationResult.Cancelled
+            case false => OcrJobCancellationResult.NotQueued
+          }
+      }
+  }
+
   private def toFailed(job: OcrJob, failure: OcrFailure, now: Instant): OcrJob.Failed = OcrJob
     .Failed(
       id = job.id,
@@ -122,16 +141,21 @@ final class InMemoryOcrJobsRepository[F[_]: Sync] private (
 object InMemoryOcrJobsRepository:
   def create[F[_]: Sync]: F[InMemoryOcrJobsRepository[F]] = Ref
     .of[F, Map[String, OcrJob]](Map.empty)
-    .map(new InMemoryOcrJobsRepository(_, (_, _) => Sync[F].unit))
+    .map(new InMemoryOcrJobsRepository(_, (_, _) => Sync[F].unit, None))
 
   def createWithCancelSync[F[_]: Sync](
       onQueuedCancel: (OcrJob.Cancelled, List[OcrJob]) => F[Unit]
   ): F[InMemoryOcrJobsRepository[F]] = Ref.of[F, Map[String, OcrJob]](Map.empty)
-    .map(new InMemoryOcrJobsRepository(_, onQueuedCancel))
+    .map(new InMemoryOcrJobsRepository(_, onQueuedCancel, None))
 
   def createWithDraftCancelSync[F[_]: Sync](
       matchDrafts: MatchDraftsRepository[F]
-  ): F[InMemoryOcrJobsRepository[F]] = createWithCancelSync(syncCancelledOcrJob(matchDrafts, _, _))
+  ): F[InMemoryOcrJobsRepository[F]] = Ref.of[F, Map[String, OcrJob]](Map.empty)
+    .map(new InMemoryOcrJobsRepository(
+      _,
+      syncCancelledOcrJob(matchDrafts, _, _),
+      Some(matchDrafts)
+    ))
 
   private def syncCancelledOcrJob[F[_]: Sync](
       matchDrafts: MatchDraftsRepository[F],

@@ -15,14 +15,16 @@ final class CancelMatchDraft[F[_]: MonadThrow](
     sourceImageRetention: PurgeSourceImages[F],
     now: F[Instant],
 ):
-  def run(draftId: MatchDraftId): F[Either[AppError, Unit]] = (for
+  def run(draftId: MatchDraftId, actorAccountId: AccountId): F[Either[AppError, Unit]] = (for
     at <- EitherT.liftF(now)
-    result <- EitherT.liftF(cancellation.cancelDraftAndQueuedOcrJobs(draftId, at))
+    result <- EitherT.liftF(cancellation.cancelDraftAndQueuedOcrJobs(draftId, at, actorAccountId))
     _ <- result match
       case MatchDraftCancellationResult.Cancelled(sourceImageIds) => EitherT
           .liftF(sourceImageRetention.deleteKnownBestEffort(draftId, sourceImageIds))
       case MatchDraftCancellationResult.NotFound => EitherT
           .leftT[F, Unit](AppError.NotFound("match draft", draftId.value))
+      case MatchDraftCancellationResult.Forbidden => EitherT
+          .leftT[F, Unit](AppError.Forbidden("Only the creator can delete this match draft."))
       case MatchDraftCancellationResult.NotCancellable(status) => EitherT
           .leftT[F, Unit](notCancellable(status))
   yield ()).value

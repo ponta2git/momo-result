@@ -94,7 +94,11 @@ object MatchDraftModule:
                 command <- MatchDraftCodec.toUpdateCommand(request, playedAt)
               yield (id, command)
             ) { case (id, command) =>
-              security.respond(updateMatchDraft.run(id, command))(MatchDraftResponse.from)
+              security.respond(updateMatchDraft.run(
+                id,
+                command,
+                member.accountId
+              ))(MatchDraftResponse.from)
             },
           )
       }
@@ -124,7 +128,7 @@ object MatchDraftModule:
             security
               .decode(BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString)) { id =>
                 security.respond(
-                  cancelMatchDraft.run(id)
+                  cancelMatchDraft.run(id, member.accountId)
                 )(_ => CancelMatchDraftResponse(matchDraftId = draftId, status = "cancelled"))
               },
           )

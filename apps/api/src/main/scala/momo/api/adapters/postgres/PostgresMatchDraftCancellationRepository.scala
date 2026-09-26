@@ -30,20 +30,26 @@ object PostgresMatchDraftCancellation:
   def cancelDraftAndQueuedOcrJobs(
       draftId: MatchDraftId,
       updatedAt: Instant,
-  ): ConnectionIO[MatchDraftCancellationResult] = deleteCancellableDraft(draftId).flatMap {
-    case Some(deleted) =>
-      PostgresOcrSubmissions.abortForDrafts(List(draftId), updatedAt) *>
-        PostgresOcrJobs.alg.cancelQueuedByDraftIds(deleted.ocrDraftIds, updatedAt) *>
-        PostgresSourceImageLifecycle.stageDeletion(deleted.sourceImageIds, updatedAt) *>
-        PostgresResultNotificationCancellation.draftsUnavailable(List(draftId), updatedAt)
-          .as(MatchDraftCancellationResult.Cancelled(deleted.sourceImageIds))
-    case None => classifyCurrent(draftId)
-  }
+      actorAccountId: AccountId,
+  ): ConnectionIO[MatchDraftCancellationResult] =
+    deleteCancellableDraft(draftId, actorAccountId).flatMap {
+      case Some(deleted) =>
+        PostgresOcrSubmissions.abortForDrafts(List(draftId), updatedAt) *>
+          PostgresOcrJobs.alg.cancelQueuedByDraftIds(deleted.ocrDraftIds, updatedAt) *>
+          PostgresSourceImageLifecycle.stageDeletion(deleted.sourceImageIds, updatedAt) *>
+          PostgresResultNotificationCancellation.draftsUnavailable(List(draftId), updatedAt)
+            .as(MatchDraftCancellationResult.Cancelled(deleted.sourceImageIds))
+      case None => classifyCurrent(draftId, actorAccountId)
+    }
 
-  private def deleteCancellableDraft(draftId: MatchDraftId): ConnectionIO[Option[DeletedDraft]] =
+  private def deleteCancellableDraft(
+      draftId: MatchDraftId,
+      actorAccountId: AccountId,
+  ): ConnectionIO[Option[DeletedDraft]] =
     sql"""
       DELETE FROM match_drafts
       WHERE id = $draftId
+        AND created_by_account_id = $actorAccountId
         AND status IN (
           ${MatchDraftStatus.OcrRunning},
           ${MatchDraftStatus.OcrFailed},
@@ -55,9 +61,14 @@ object PostgresMatchDraftCancellation:
         total_assets_draft_id, revenue_draft_id, incident_log_draft_id
     """.query[DeletedDraft].option
 
-  private def classifyCurrent(draftId: MatchDraftId): ConnectionIO[MatchDraftCancellationResult] =
+  private def classifyCurrent(
+      draftId: MatchDraftId,
+      actorAccountId: AccountId,
+  ): ConnectionIO[MatchDraftCancellationResult] =
     PostgresMatchDrafts.alg.find(draftId).map {
       case None => MatchDraftCancellationResult.NotFound
+      case Some(draft) if draft.createdByAccountId != actorAccountId =>
+        MatchDraftCancellationResult.Forbidden
       case Some(draft) => MatchDraftCancellationResult.NotCancellable(draft.status)
     }
 end PostgresMatchDraftCancellation
@@ -68,7 +79,8 @@ final class PostgresMatchDraftCancellationRepository[F[_]: MonadCancelThrow](
   override def cancelDraftAndQueuedOcrJobs(
       draftId: MatchDraftId,
       updatedAt: Instant,
+      actorAccountId: AccountId,
   ): F[MatchDraftCancellationResult] =
     PostgresMatchDraftCancellation
-      .cancelDraftAndQueuedOcrJobs(draftId, updatedAt).transact(transactor)
+      .cancelDraftAndQueuedOcrJobs(draftId, updatedAt, actorAccountId).transact(transactor)
 end PostgresMatchDraftCancellationRepository

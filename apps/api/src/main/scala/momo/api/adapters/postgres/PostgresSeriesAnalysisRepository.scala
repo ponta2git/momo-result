@@ -102,7 +102,8 @@ final class PostgresSeriesAnalysisRepository[F[_]: Async] private (
   override def adminOverview(
       gameTitleId: Option[GameTitleId]
   ): F[Either[AppError, SeriesAnalysisAdminOverview]] =
-    PostgresSeriesAnalysisAdminOps.overview(gameTitleId).transact(transactor)
+    (sql"SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY".update.run *>
+      PostgresSeriesAnalysisAdminOps.overview(gameTitleId)).transact(transactor)
 
   override def requestTitleRecalculation(
       gameTitleId: GameTitleId,

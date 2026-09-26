@@ -49,13 +49,19 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
         closed.update(_ + 1),
       )
       accepted <- store.store(ocrPlan)
+      _ <- result.set(Right(StoredOcrJob(ocrPlan.job, ocrPlan.draft, false)))
+      replayed <- store.store(ocrPlan)
       _ <- result.set(Left(OcrJobCreationRejection.InvalidPlan))
       rejected <- store.store(ocrPlan)
       effects <- sink.effects
     yield
       assertEquals(accepted.map(_.created), Right(true))
+      assertEquals(replayed.map(_.created), Right(false))
       assertEquals(rejected, Left(OcrJobCreationRejection.InvalidPlan))
-      assertEquals(effects, List(PostCommitEffects.wake(OutboxKind.Ocr)))
+      assertEquals(
+        effects,
+        List(PostCommitEffects.wakeAll(OutboxKind.Ocr, OutboxKind.OcrSubmissions))
+      )
 
   test("match update and actual deletion wake analysis while false deletion does not"):
     for
@@ -199,6 +205,52 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
     yield
       assert(result.isLeft)
       assertEquals(effects, Nil)
+
+  test("OCR admission returns while the submission notifier stalls and shutdown cancels the relay"):
+    TestControl.executeEmbed {
+      OutboxWakeup.resource[IO].use { wakeup =>
+        for
+          notificationStarted <- Deferred[IO, Unit]
+          notificationCancelled <- Deferred[IO, Unit]
+          notifier = new OutboxWakeDriver[IO]:
+            override def drainBatch: IO[OutboxDrainResult] =
+              (notificationStarted.complete(()).void *> IO.never[OutboxDrainResult])
+                .onCancel(notificationCancelled.complete(()).void)
+          delegate = new OcrSubmissionsRepository[IO]:
+            def find(id: String, owner: AccountId) = IO.pure(None)
+            def put(submission: OcrSubmission) = IO.pure(Right(submission))
+            def failAdmission(owner: AccountId, keyHash: String, sha256: String, byteLength: Int) =
+              IO.unit
+          repository = OutboxWakingRepositories.ocrSubmissions(delegate, wakeup, IO.unit)
+          results <- OutboxWakeCoordinator.resource[IO](
+            OutboxKind.OcrSubmissions,
+            wakeup,
+            notifier,
+            OutboxWakeCoordinatorConfig(coldRecoveryInterval = None),
+            IO.raiseError[Unit],
+          ).use(_ => notificationStarted.get *> repository.put(ocrSubmission).replicateA(32))
+          _ <- notificationCancelled.get
+        yield assertEquals(results, List.fill(32)(Right(ocrSubmission)))
+      }
+    }
+
+  test("a rejected OCR submission emits no notification while a completed admission failure does"):
+    for
+      sink <- RecordingSink.create
+      delegate = new OcrSubmissionsRepository[IO]:
+        def find(id: String, owner: AccountId) = IO.pure(None)
+        def put(submission: OcrSubmission) = IO.pure(Left(AppError.Forbidden("another creator")))
+        def failAdmission(owner: AccountId, keyHash: String, sha256: String, byteLength: Int) =
+          IO.unit
+      repository = OutboxWakingRepositories.ocrSubmissions(delegate, sink, IO.unit)
+      rejected <- repository.put(ocrSubmission)
+      before <- sink.effects
+      _ <- repository.failAdmission(accountId, "key", "digest", 1)
+      after <- sink.effects
+    yield
+      assertEquals(rejected.left.map(_.code), Left("FORBIDDEN"))
+      assertEquals(before, Nil)
+      assertEquals(after, List(PostCommitEffects.wake(OutboxKind.OcrSubmissions)))
 
   private def ocrCreationStore(
       result: Ref[IO, OcrJobCreationStore.OcrJobCreationResult]
@@ -357,6 +409,18 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
       OcrQueueDispatchIntent(request, MatchDraftId.unsafeFromString("match-draft-wake")),
       12,
     )
+
+  private def ocrSubmission = OcrSubmission(
+    ocrPlan.submission.submissionId,
+    accountId,
+    ocrPlan.matchDraftAttachment.draftId,
+    OcrJobHints.empty,
+    "open",
+    now.plusSeconds(600),
+    now,
+    None,
+    List(OcrSubmissionMember(ScreenType.TotalAssets, "b" * 64, "a" * 64, 1)),
+  )
 
   private final class RecordingSink private (
       ref: Ref[IO, List[PostCommitEffects]],

@@ -13,7 +13,8 @@ import doobie.util.log.LogHandler
 
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.adapters.postgres.{PostgresMatchDraftStatusSync, PostgresOcrJobsRepository}
-import momo.api.domain.ids.{OcrDraftId, OcrJobId}
+import momo.api.domain.ids.{AccountId, OcrDraftId, OcrJobId}
+import momo.api.repositories.OcrJobCancellationResult
 
 final class PostgresOcrJobsRepositorySpec extends IntegrationSuite:
 
@@ -87,6 +88,36 @@ final class PostgresOcrJobsRepositorySpec extends IntegrationSuite:
     yield
       assertEquals(cancelled, true)
       assertEquals(row, ("cancelled", now, "ocr_failed"))
+
+  test("owned cancellation fails closed for unrelated accounts and ownerless jobs"):
+    val jobId = OcrJobId.unsafeFromString("job-cancel-owned")
+    val owner = AccountId.unsafeFromString("account_ponta")
+    for
+      missing <- repo.cancelQueuedOwned(jobId, owner, now)
+      _ <- insertOcrDraft("draft-cancel-owned", jobId.value)
+      _ <- insertOcrJob(jobId.value, "draft-cancel-owned", "image-cancel-owned", "queued")
+      orphan <- repo.cancelQueuedOwned(jobId, owner, now)
+      _ <- insertMatchDraft(
+        "match-draft-cancel-owned",
+        "ocr_running",
+        Some("draft-cancel-owned"),
+        None
+      )
+      foreign <- repo.cancelQueuedOwned(jobId, AccountId.unsafeFromString("account_eu"), now)
+      before <- repo.find(jobId)
+      owned <- repo.cancelQueuedOwned(jobId, owner, now)
+      repeated <- repo.cancelQueuedOwned(jobId, owner, now)
+      row <- sql"""SELECT j.status, d.status FROM ocr_jobs j, match_drafts d
+        WHERE j.id = $jobId AND d.id = 'match-draft-cancel-owned'"""
+        .query[(String, String)].unique.transact(transactor)
+    yield
+      assertEquals(missing, OcrJobCancellationResult.NotFound)
+      assertEquals(orphan, OcrJobCancellationResult.Forbidden)
+      assertEquals(foreign, OcrJobCancellationResult.Forbidden)
+      assertEquals(before.map(_.status.wire), Some("queued"))
+      assertEquals(owned, OcrJobCancellationResult.Cancelled)
+      assertEquals(repeated, OcrJobCancellationResult.NotQueued)
+      assertEquals(row, ("cancelled", "ocr_failed"))
 
   test("cancelQueued keeps the draft running while another attached slot is still queued"):
     for

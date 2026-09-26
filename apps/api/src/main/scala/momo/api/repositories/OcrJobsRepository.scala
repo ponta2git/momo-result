@@ -4,7 +4,7 @@ import java.time.Instant
 
 import cats.~>
 
-import momo.api.domain.ids.{OcrDraftId, OcrJobId}
+import momo.api.domain.ids.{AccountId, OcrDraftId, OcrJobId}
 import momo.api.domain.{OcrFailure, OcrJob}
 
 trait OcrJobsAlg[F0[_]]:
@@ -12,9 +12,17 @@ trait OcrJobsAlg[F0[_]]:
   def countActive: F0[Long]
   def markFailed(jobId: OcrJobId, failure: OcrFailure, now: Instant): F0[Unit]
   def cancelQueued(jobId: OcrJobId, now: Instant): F0[Boolean]
+  def cancelQueuedOwned(
+      jobId: OcrJobId,
+      owner: AccountId,
+      now: Instant
+  ): F0[OcrJobCancellationResult]
   def cancelQueuedByDraftIds(draftIds: List[OcrDraftId], now: Instant): F0[Int]
 
 trait OcrJobsRepository[F[_]] extends OcrJobsAlg[F]
+
+enum OcrJobCancellationResult derives CanEqual:
+  case Cancelled, NotFound, Forbidden, NotQueued
 
 object OcrJobsRepository:
   def fromAlg[F0[_], F[_]](alg: OcrJobsAlg[F0], liftK: F0 ~> F): OcrJobsRepository[F] =
@@ -25,6 +33,12 @@ object OcrJobsRepository:
         liftK(alg.markFailed(jobId, failure, now))
       def cancelQueued(jobId: OcrJobId, now: Instant): F[Boolean] =
         liftK(alg.cancelQueued(jobId, now))
+      def cancelQueuedOwned(
+          jobId: OcrJobId,
+          owner: AccountId,
+          now: Instant
+      ): F[OcrJobCancellationResult] =
+        liftK(alg.cancelQueuedOwned(jobId, owner, now))
       def cancelQueuedByDraftIds(draftIds: List[OcrDraftId], now: Instant): F[Int] =
         liftK(alg.cancelQueuedByDraftIds(draftIds, now))
 

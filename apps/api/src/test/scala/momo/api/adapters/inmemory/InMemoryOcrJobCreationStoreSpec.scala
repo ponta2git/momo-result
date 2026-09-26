@@ -60,17 +60,20 @@ final class InMemoryOcrJobCreationStoreSpec extends MomoCatsEffectSuite:
       assertEquals(storedDraft, None)
       assertEquals(storedJob, None)
 
-  test("store returns match draft attachment rejection without inserting OCR records"):
+  test("store refuses a submission whose source draft was deleted without inserting OCR records"):
     for
       fixture <- newFixture
-      _ <- fixture.matchDrafts.cancelUnchecked(matchDraftId)
+      _ <- fixture.matchDrafts.takeForCancellation(
+        matchDraftId,
+        AccountId.unsafeFromString("account_ponta")
+      )
       draft = ocrDraft("ocr-draft-attach-failed", "ocr-job-attach-failed")
       job = queuedJob("ocr-job-attach-failed", draft.id)
       result <- fixture.store.store(plan(job, draft, attachment(draft.id), 10))
       storedDraft <- fixture.drafts.find(draft.id)
       storedJob <- fixture.jobs.find(job.id)
     yield
-      assertAttachFailed(result, matchDraftId)
+      assertEquals(result, Left(OcrJobCreationRejection.SubmissionRejected))
       assertEquals(storedDraft, None)
       assertEquals(storedJob, None)
 
@@ -223,14 +226,6 @@ final class InMemoryOcrJobCreationStoreSpec extends MomoCatsEffectSuite:
     case Left(OcrJobCreationRejection.ActiveJobLimitExceeded(actualLimit)) =>
       assertEquals(actualLimit, limit)
     case other => fail(s"expected active limit rejection, got $other")
-
-  private def assertAttachFailed(
-      result: OcrJobCreationStore.OcrJobCreationResult,
-      draftId: MatchDraftId,
-  ): Unit = result match
-    case Left(OcrJobCreationRejection.MatchDraftAttachmentRejected(actualDraftId)) =>
-      assertEquals(actualDraftId, draftId)
-    case other => fail(s"expected match draft attachment rejection, got $other")
 
   private final case class Fixture(
       drafts: InMemoryOcrDraftsRepository[IO],

@@ -73,6 +73,8 @@ object PostgresMatches extends PostgresMatchesReadSupport:
         case state if isUniqueViolation(state) =>
           conflict[Unit](s"matchNoInEvent ${record.matchNoInEvent.value
               .toString} already exists for held event ${record.heldEventId.value}.")
+        case state if isForeignKeyViolation(state) =>
+          conflict[Unit]("Match prerequisites changed before the update completed.")
       }
 
     override def delete(id: MatchId): ConnectionIO[Boolean] =

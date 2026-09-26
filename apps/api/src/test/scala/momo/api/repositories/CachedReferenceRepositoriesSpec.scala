@@ -174,6 +174,24 @@ final class CachedReferenceRepositoriesSpec extends MomoCatsEffectSuite:
       assertEquals(second, List(alias, secondAlias))
       assertEquals(afterWriteCalls, 2)
 
+  test("a lost write response cannot preserve cached rows from before the commit"):
+    val renamed = title.copy(name = "桃鉄2改")
+    val connectionLost = new java.io.IOException("commit response lost")
+    for
+      rows <- Ref.of[IO, List[GameTitle]](List(title))
+      listCalls <- Ref.of[IO, Int](0)
+      delegate = new CountingGameTitlesRepository(rows, listCalls):
+        override def update(value: GameTitle): IO[Either[AppError, Unit]] =
+          rows.set(List(value)) *> IO.raiseError(connectionLost)
+      cached <- CachedReferenceRepositories.gameTitles[IO](delegate, 1.hour)
+      before <- cached.find(titleId)
+      result <- cached.update(renamed).attempt
+      after <- cached.find(titleId)
+    yield
+      assertEquals(before, Some(title))
+      assertEquals(result, Left(connectionLost))
+      assertEquals(after, Some(renamed))
+
   private final class CountingMembersRepository(
       rows: Ref[IO, List[Member]],
       listCalls: Ref[IO, Int],

@@ -48,6 +48,20 @@ abstract class IntegrationSuite extends CatsEffectSuite:
   protected def transactor: doobie.Transactor[IO] = dbFixture().transactor
   protected def dataSource: javax.sql.DataSource = dbFixture().transactor.kernel
 
+  /** Observe the transaction used by the public read facade before its normal commit. */
+  protected def assertReadSnapshot[A](read: doobie.Transactor[IO] => IO[A]): IO[A] =
+    val after =
+      for
+        isolation <- sql"SHOW transaction_isolation".query[String].unique
+        readOnly <- sql"SHOW transaction_read_only".query[String].unique
+        _ <- doobie.free.connection.delay {
+          assertEquals(isolation, "repeatable read")
+          assertEquals(readOnly, "on")
+        }
+        _ <- doobie.free.connection.commit
+      yield ()
+    read(doobie.Transactor.after.set(transactor, after))
+
   /** Wait until PostgreSQL, rather than elapsed wall time, confirms a backend is lock-blocked. */
   protected def awaitBackendBlockedBy(blockerPid: Int): IO[Unit] =
     val observe = sql"""

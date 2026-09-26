@@ -2,7 +2,7 @@ package momo.api.adapters.postgres
 
 import java.time.Instant
 
-import cats.effect.kernel.MonadCancelThrow
+import cats.effect.{Async, Resource}
 import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
@@ -158,7 +158,11 @@ object PostgresIdempotency:
           AND account_id = $accountId
           AND endpoint = $endpoint
           AND request_hash = $hashArray
-      """.update.run.void
+      """.update.runAlteringExecution(execution =>
+        execution.copy(
+          prep = doobie.free.preparedstatement.setQueryTimeout(1) *> execution.prep
+        )
+      ).void
 
     override def abandon(
         key: String,
@@ -174,7 +178,11 @@ object PostgresIdempotency:
           AND endpoint = $endpoint
           AND request_hash = $hashArray
           AND response_status = 0
-      """.update.run.void
+      """.update.runAlteringExecution(execution =>
+        execution.copy(
+          prep = doobie.free.preparedstatement.setQueryTimeout(1) *> execution.prep
+        )
+      ).void
 
     override def cleanup(now: Instant): ConnectionIO[Int] = sql"""
         DELETE FROM idempotency_keys WHERE expires_at <= $now
@@ -182,10 +190,44 @@ object PostgresIdempotency:
 end PostgresIdempotency
 
 /** Transactor-backed facade for [[IdempotencyRepository]]; each operation runs in a transaction. */
-final class PostgresIdempotencyRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
+final class PostgresIdempotencyRepository[F[_]: Async](transactor: Transactor[F])
     extends IdempotencyRepository[F]:
   private val delegate: IdempotencyRepository[F] = IdempotencyRepository
     .fromAlg(PostgresIdempotency.alg, transactor.trans)
 
-  export delegate.*
+  export delegate.{lookup, reserveWithinAccountLimit, cleanup}
+
+  private val directExecutor: java.util.concurrent.Executor = command => command.run()
+  private val recordingTransactor = transactor.copy(connect0 =
+    kernel =>
+      transactor.connect(kernel).flatMap { connection =>
+        Resource.make(Async[F].blocking(connection.getNetworkTimeout)) { previous =>
+          Async[F].blocking {
+            if !connection.isClosed then connection.setNetworkTimeout(directExecutor, previous)
+          }
+        }.evalTap { previous =>
+          val bounded = if previous > 0 then math.min(previous, 2000) else 2000
+          Async[F].blocking(connection.setNetworkTimeout(directExecutor, bounded))
+        }.as(connection)
+      }
+  )
+
+  // Bound both SQL lock waits and a lost network response, including commit/rollback. The
+  // borrowed connection's original network timeout is restored before it returns to the pool.
+  override def complete(
+      key: String,
+      accountId: AccountId,
+      endpoint: String,
+      requestHash: Vector[Byte],
+      response: IdempotencyResponse,
+  ): F[Unit] = PostgresIdempotency.alg.complete(key, accountId, endpoint, requestHash, response)
+    .transact(recordingTransactor)
+
+  override def abandon(
+      key: String,
+      accountId: AccountId,
+      endpoint: String,
+      requestHash: Vector[Byte],
+  ): F[Unit] = PostgresIdempotency.alg.abandon(key, accountId, endpoint, requestHash)
+    .transact(recordingTransactor)
 end PostgresIdempotencyRepository

@@ -66,7 +66,7 @@ impl AliasResolver {
             let display_name = hint
                 .aliases()
                 .iter()
-                .find(|alias| !alias.is_empty())
+                .find(|alias| identifiable_name(&normalize_name(alias)))
                 .cloned()
                 .unwrap_or_else(|| String::from(hint.member_id()));
             for alias in hint.aliases() {
@@ -115,18 +115,11 @@ impl AliasResolver {
 pub(crate) fn names_match(left: &str, right: &str) -> bool {
     let normalized_left = normalize_name(left);
     let normalized_right = normalize_name(right);
-    if normalized_left.chars().count() < MINIMUM_MATCH_CHARACTERS
-        || normalized_right.chars().count() < MINIMUM_MATCH_CHARACTERS
-    {
+    if !identifiable_name(&normalized_left) || !identifiable_name(&normalized_right) {
         return false;
     }
     let left_core = remove_long_vowels(strip_president(&normalized_left));
     let right_core = remove_long_vowels(strip_president(&normalized_right));
-    // A title or OCR punctuation alone cannot identify a player. Every string contains the empty
-    // string, so applying the substring fallback before this check would assign an arbitrary slot.
-    if left_core.is_empty() || right_core.is_empty() {
-        return false;
-    }
     normalized_left.contains(&normalized_right)
         || normalized_right.contains(&normalized_left)
         || normalized_right.contains(strip_president(&normalized_left))
@@ -165,7 +158,9 @@ pub(crate) fn normalize_name(value: &str) -> String {
 
 fn append_pair(pairs: &mut Vec<AliasPair>, mut candidate: AliasPair) {
     candidate.surface = normalize_name(&candidate.surface);
-    if candidate.surface.chars().count() < MINIMUM_SAFE_ALIAS_CHARACTERS {
+    if candidate.surface.chars().count() < MINIMUM_SAFE_ALIAS_CHARACTERS
+        || !identifiable_name(&candidate.surface)
+    {
         return;
     }
     if !pairs.iter().any(|current| {
@@ -217,6 +212,15 @@ fn strip_president(value: &str) -> &str {
 
 fn remove_long_vowels(value: &str) -> String {
     value.replace('ー', "")
+}
+
+fn identifiable_name(normalized: &str) -> bool {
+    // A title or OCR punctuation alone cannot identify a player. Apply the same condition to
+    // hinted aliases, their display names, and fuzzy matching so generated member IDs remain valid.
+    normalized.chars().count() >= MINIMUM_MATCH_CHARACTERS
+        && strip_president(normalized)
+            .chars()
+            .any(|character| character != 'ー')
 }
 
 #[expect(

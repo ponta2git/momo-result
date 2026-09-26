@@ -4,22 +4,33 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
-const cgroupNamePrefix = "momo-cgroup-probe-"
+const (
+	cgroupNamePrefix = "momo-cgroup-probe-"
+	probeTimeout     = 30 * time.Second
+	allocatorStart   = byte(1)
+)
 
 func runCoordinator(opts options) (report probeReport) {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
+	defer cancel()
 	report = probeReport{
 		SchemaVersion:       1,
 		Hierarchy:           "cgroup_v1_memory",
@@ -31,7 +42,7 @@ func runCoordinator(opts options) (report probeReport) {
 		report.Failure = "coordinator_requires_root"
 		return report
 	}
-	if err := requireRegularControllerFile(filepath.Join(opts.cgroupRoot, "memory.limit_in_bytes")); err != nil {
+	if err := requireMemoryController(opts.cgroupRoot); err != nil {
 		report.Failure = "cgroup_v1_memory_controller_unavailable"
 		return report
 	}
@@ -42,6 +53,12 @@ func runCoordinator(opts options) (report probeReport) {
 		if !created {
 			return
 		}
+		switch ctx.Err() {
+		case context.DeadlineExceeded:
+			report.Failure = "probe_timed_out"
+		case context.Canceled:
+			report.Failure = "probe_interrupted"
+		}
 		if err := os.Remove(cgroupPath); err != nil {
 			report.CleanupSucceeded = false
 			if report.Failure == "" {
@@ -50,7 +67,7 @@ func runCoordinator(opts options) (report probeReport) {
 			return
 		}
 		report.CleanupSucceeded = true
-		report.Passed = report.LimitBytesReadBack > 0 &&
+		report.Passed = report.Failure == "" && report.LimitBytesReadBack > 0 &&
 			report.LimitBytesReadBack <= opts.limitBytes &&
 			report.DelegationWritable &&
 			report.ChildAttached &&
@@ -78,6 +95,11 @@ func runCoordinator(opts options) (report probeReport) {
 		return report
 	}
 	report.LimitBytesReadBack = limitReadBack
+	// Reject an ineffective or rounded-up limit before exposing the host to the allocation.
+	if limitReadBack == 0 || limitReadBack > opts.limitBytes {
+		report.Failure = "cgroup_limit_not_enforced"
+		return report
+	}
 
 	failCountBefore, err := readUintFile(filepath.Join(cgroupPath, "memory.failcnt"))
 	if err != nil {
@@ -96,7 +118,7 @@ func runCoordinator(opts options) (report probeReport) {
 		return report
 	}
 
-	launcher, err := executeLauncher(opts, cgroupPath)
+	launcher, err := executeLauncher(ctx, opts, cgroupPath)
 	if err != nil {
 		report.Failure = "non_root_launcher_failed"
 		return report
@@ -128,12 +150,13 @@ func runCoordinator(opts options) (report probeReport) {
 	return report
 }
 
-func executeLauncher(opts options, cgroupPath string) (launcherResult, error) {
+func executeLauncher(ctx context.Context, opts options, cgroupPath string) (launcherResult, error) {
 	executable, err := os.Executable()
 	if err != nil {
 		return launcherResult{}, fmt.Errorf("resolve executable: %w", err)
 	}
-	command := exec.Command(
+	command := exec.CommandContext(
+		ctx,
 		executable,
 		"--mode", modeLauncher,
 		"--cgroup-path", cgroupPath,
@@ -141,11 +164,29 @@ func executeLauncher(opts options, cgroupPath string) (launcherResult, error) {
 		"--allocation-bytes", strconv.FormatUint(opts.allocationBytes, 10),
 	)
 	command.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true,
 		Credential: &syscall.Credential{
 			Uid: uint32(opts.workerUID),
 			Gid: uint32(opts.workerGID),
 		},
 	}
+	// The allocator inherits this dedicated process group. Killing only the launcher on a
+	// deadline or signal would leave its allocation running and prevent cgroup removal.
+	command.Cancel = func() error {
+		err := syscall.Kill(-command.Process.Pid, syscall.SIGKILL)
+		if errors.Is(err, syscall.ESRCH) {
+			return os.ErrProcessDone
+		}
+		return err
+	}
+	defer func() {
+		// The launcher can fail before the context does. Run returning is not evidence that
+		// its allocator exited, so retire the owned group on every completion path.
+		if command.Process != nil {
+			_ = command.Cancel()
+		}
+	}()
+	command.WaitDelay = time.Second
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	command.Stdout = &stdout
@@ -211,7 +252,7 @@ func runLauncher(opts options) (launcherResult, error) {
 	if !attached {
 		return result, errors.New("allocator was not present in delegated cgroup")
 	}
-	if err := startWriter.Close(); err != nil {
+	if _, err := startWriter.Write([]byte{allocatorStart}); err != nil {
 		return result, fmt.Errorf("release allocator: %w", err)
 	}
 
@@ -242,8 +283,11 @@ func runAllocator(opts options) error {
 	}
 	defer start.Close()
 	var signal [1]byte
-	if _, err := start.Read(signal[:]); err != nil && !errors.Is(err, io.EOF) {
+	if _, err := io.ReadFull(start, signal[:]); err != nil {
 		return fmt.Errorf("wait for cgroup attachment: %w", err)
+	}
+	if signal[0] != allocatorStart {
+		return errors.New("allocator was not released by the launcher")
 	}
 	length, err := strconv.Atoi(strconv.FormatUint(opts.allocationBytes, 10))
 	if err != nil {
@@ -258,8 +302,16 @@ func runAllocator(opts options) error {
 	return nil
 }
 
-func requireRegularControllerFile(path string) error {
-	info, err := os.Stat(path)
+func requireMemoryController(root string) error {
+	var filesystem syscall.Statfs_t
+	if err := syscall.Statfs(root, &filesystem); err != nil {
+		return err
+	}
+	// CGROUP_SUPER_MAGIC from Linux uapi/linux/magic.h; excludes v2 and ordinary directories.
+	if filesystem.Type != 0x27e0eb {
+		return errors.New("controller path is not on a cgroup v1 filesystem")
+	}
+	info, err := os.Stat(filepath.Join(root, "memory.limit_in_bytes"))
 	if err != nil {
 		return err
 	}

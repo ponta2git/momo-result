@@ -41,7 +41,7 @@ lazy val apiOpenApiCheck = taskKey[Unit]("Check that openapi.yaml matches genera
 lazy val OpenApi = config("openapi").hide.extend(Compile)
 
 lazy val nettyVersion = "4.2.18.Final"
-lazy val http4sVersion = "0.23.36"
+lazy val http4sVersion = "0.23.37"
 lazy val http4sPatchedVersion =
   sys.props
     .get("momo.http4s.patched.version")

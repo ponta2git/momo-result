@@ -85,3 +85,42 @@ lint の既存 warning 5件と、生成validatorのchunk-size warning は残っ�
 Playwright MCP では本番ビルドの desktop / mobile 表示を確認した。設定の不要な空白を除き、狭幅の数値表は列を保った水平スクロールへ調整した。数値表の keyboard 到達・矢印scroll、ページ全体の横はみ出し、OCR の破棄キャンセルによる画像保持、ページ遷移と条件操作の focus を確認した。確認した browser console に error / warning はなかった。
 
 実機のカメラ・ファイル選択UI、実際のスクリーンリーダー、外部認証providerの障害は今回の検証範囲外。API / Worker / DB の wire や業務処理は変更しておらず、OCR queue と外部配送の専用E2Eは再実行していない。単体での意味構造・keyboard 検証を、これらの実機検証の代用とはしない。
+
+## 2026-09-26: 配置と操作順の横断レビュー
+
+同じ役割の配置が通常・読み込み・失敗状態や画面間で揃うかを、詳細・一覧・分析とフォーム・OCR・設定に分担して確認し、別担当で相互レビューした。基調となる色・書体、情報の主要度、内容によるページ幅、長い開催記録の章間隔は維持した。
+
+| 検出した不統一 | 再発を防ぐ構成 |
+| --- | --- |
+| 開催だけ前後リンクが外向き、試合は中央。狭幅では両方が中央の縦積み | `AdjacentNavigation` の alignment 選択を廃止。等幅2列、始端・終端揃え、外側の矢印を固定し、row subgrid で label と説明の行を共有 |
+| 試合詳細の戻り先2リンクに間隔がない。分析の戻る操作だけ本文内の右側 | 共通 action recipe の8px間隔と折り返し、始端の戻り先へ統一。分析の loading / terminal も同じ位置に接続 |
+| 詳細の出力操作の大きさと重要度、先頭 action の全幅化が画面で異なる | 見出し操作を同じ intrinsic な action group へ統一。出力は小さい補助操作、編集は小さい secondary。PageHeader は内容幅で折り返す |
+| 項目一覧・ページ送りが広い viewport 内の狭い領域でも多列を強制する | `FactList` と `PaginationControls` に名前付き container query。幅が内容から決まる1列の状態表示には containment を付けない |
+| OCR dialog の見た目と DOM の操作順が逆。設定編集だけ保存が全幅 | `DialogFooter` へ接続し、キャンセル→実行の読解順と折り返しを統一。保存中の制約と閉じた後の focus を保持 |
+| OCR の警告・失敗の面、確認ツールバーの配置を独自実装 | `Notice` と `ContentWithActions` へ接続。警告の alert、対象・本文・回復操作を保持し、操作高で説明文を離さない |
+| 開催 loading に通常表示にはない旧統計欄、試合 loading に日時の欠落 | 不要な slot を除去し、日時・項目一覧・前後2列・見出し操作を同じ primitive へ接続。作業中の戻る操作と sample の順も各状態で一致 |
+
+Tailwind v4 の [container queries](https://tailwindcss.com/docs/responsive-design#container-queries) と [row subgrid](https://tailwindcss.com/docs/grid-template-rows#implementing-a-subgrid) の公式資料を照合した。親が外側の寸法を持ち、部品は割り当てられた幅に対応する。広い画面の中へ置いた狭い部品も検証し、viewport の縮小だけで検証を終えない。最新の標準ブラウザーを対象とする要求に対し、採用した [subgrid の対応範囲](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Grid_layout/Subgrid) を確認した。
+
+新しいブラウザー回帰は、開催・試合の前後移動、既知の端、長い日時説明、遷移後の見出し focus を一連の契約として扱う。配置用の応答 fixture と実 API の並び順検証を区別し、CSS class の存在や画像 snapshot の一致を成功条件にしない。共通部品の移動・無効化、フォームのキャンセル・送信・通知は既存の component evidence を再利用する。
+
+代表画面の視覚診断は次の8項目を確認し、8/8、採用した診断方法では **10/10**。これは確認した表示範囲の評価であり、全機種・全状態の保証とは分ける。
+
+| 診断 | 確認した根拠 |
+| --- | --- |
+| ぼかしても階層が読める | 試合見出し、名前・主要金額、補助操作が異なる強さを保つ |
+| グレースケールでも意味が残る | 順位、プレー順、戻る・前後の向きが文字と配置でも判別できる |
+| 群内外の余白が適切 | 戻り先同士の間隔を復旧し、内容群と操作群の間隔を共有 |
+| ラベルが値と競合しない | FactList の補助ラベルと通常の値、主要金額の文字役割を維持 |
+| 間隔が scale に従う | action group、dialog footer、page・section の所有する間隔を再利用 |
+| 読む文章の幅が抑制される | 局所の読み幅と折り返しを保ち、長い説明を切り捨てない |
+| コントラストが保たれる | 色 token は維持。今回の全体実行で既存の共有色・背景組合せの回帰も成功し、前回の production paint 確認と対応する |
+| 陰影が階層に対応する | 通常の記録面に新しい影を足さず、dialog の既存の階層を維持 |
+
+Web unit / component は165ファイル・1,038件を確認した。全体実行で1,037件が成功し、分析の戻るリンクを旧 DOM 内へ固定していた AppShell の期待値1件を、可視性と安全な復帰先の検証へ修正して該当5件が成功。最後の loading 幅補正後も開催詳細14件が成功した。
+
+Playwright MCP では本番ビルドの開催・試合詳細、通知を320 / 375 / 1440pxで確認し、他の主要画面も375 / 1440pxで点検した。前後2列、全文表示、戻り先の間隔、通知の保存済み状態に潰れ・重なりがなく、ページ全体の横はみ出しもない。標準E2Eは28件が成功。最後の実測で開催詳細の操作欄が loading だけ2段になることを検出し、予約幅を共通 scale 内で補正した。再build・対象E2Eの再実行が成功し、MCPでも両幅の loading / ready が同じ1段になることを確認した。
+
+最終の format / lint / typecheck / build、public safety、diff check は成功。既存の lint warning 5件と生成validatorのchunk-size warning は継続する。検証に使用した一時サービスとブラウザーは回収済み。
+
+今回のブラウザー検証は Chromium。Safari / Firefox・実モバイルOS・スクリーンリーダー実機、実カメラと外部認証は未検証。API / Worker / DB の処理は変更しておらず、OCR queue と外部配送の専用E2Eは今回の配置検証に含めない。

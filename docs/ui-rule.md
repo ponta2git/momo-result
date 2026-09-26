@@ -98,7 +98,7 @@
 - page、data surface、workspace は一貫した外余白の内側で利用可能な横幅を使い、読み幅の制約は prose、単一 field 群など幅を狭める理由がある内容へ局所的に掛ける。長文になり得る page description、help、error、notice、empty state、narrative は、親の面を狭めず文字内容を共通の readable measure `max-w-2xl` 以内へ制限する。短い label、metadata、table、chart、matrix、横比較にはこの measure を一律適用しない。画面全体を文章幅へ縮めず、試合間・プレーヤー間の走査や比較が速くなる表・図表は一貫して密にする。不規則な欠け、根拠のない非対称、任意の値や z-index を追加しない。
 - 縦scrollが不要なpageでは、viewportの右端にscrollbar用の空きを常時予約せず、global navigationとpageが利用可能な幅を使う。必要なscrollbarはブラウザに任せ、dialog / selectのscroll lockと幅補正は共通primitiveに任せる。
 - page 幅は内容形状に応じた少数の共通 variant に収束させる。単一の短い form / prose は `max-w-2xl` の narrow、通常の一覧・管理・取り込みは standard、横比較・詳細分析は wide、source と editor を常時並置する編集 workspace だけは workspace を使う。同等の画面は同じ variant を使い、内部の短い prose や単一 field だけを局所的に狭める。利用可能幅を埋めるためだけに workspace を選ばない。
-- responsive layout は、可変列に `minmax(0, 1fr)`、child に縮小可能な幅を与え、label や操作名が不自然に割れる前に列を積み替える。breakpoint は端末名ではなく内容が保てる幅で決める。page 全体の横 scroll は作らず、table、図表、source image など横方向の関係を保つ必要がある領域だけが、可視の案内とともに局所 scroll を所有してよい。
+- responsive layout は、可変列に `minmax(0, 1fr)`、child に縮小可能な幅を与え、label や操作名が不自然に割れる前に列を積み替える。breakpoint は端末名ではなく内容が保てる幅で決める。再利用部品の内部配置は intrinsic な折り返し、必要なら名前付き container query で割当幅に応じて切り替える。inline-size containment は親が幅を与える境界に置き、内容から幅が決まる badge・status まで一律に適用しない。page 全体の横 scroll は作らず、table、図表、source image など横方向の関係を保つ必要がある領域だけが、可視の案内とともに局所 scroll を所有してよい。
 - 通常文を任意の位置で強制改行しない。ID、URL、外部 error など切れ目のない長い値だけへ局所的な wrap または scroll を指定し、全画面へ `overflow-wrap: anywhere` を継承させない。見出しの balance や本文の pretty wrap も、data label、定義値、control label へ一律適用せず、役割ごとに指定する。
 - 一行として走査する control、status、action cluster、通常の table cell は中央、文字同士の短い label / value 行は baseline、heading と lead や主情報と metadata からなる可変高の複合 record は上端を揃える。field を横に並べる form row は control の下端を揃えてよい。table editor の上端、chart axis の下端など対応関係のための例外は局所的に明示し、画面ごとの任意な offset で調整しない。shared interactive primitive が文字サイズ、行高、responsive な高さを所有し、global element selector の font shorthand で上書きしない。
 - 日時、金額、試合番号、状態名は共通 formatter / ViewModel を使う。件数と比較値には対象、単位、分母または基準を添え、整列する数値には tabular numerals を使う。
@@ -261,6 +261,7 @@
 ## 7. ナビゲーションと有限のタスクループ
 
 - ブラウザー title と主ナビの現在地は route の意味を示す。通常の pathname 遷移は安定した main landmark へ focus を移し、同じページの条件変更、履歴移動、隣接移動の専用 focus を上書きしない。未知の URL は黙って別 URL へ置き換えず、復帰先を示す。
+- 詳細の前後移動は `AdjacentNavigation` が全幅で等幅の2列を所有し、前を始端、次を終端へ揃える。方向の矢印を外側へ置き、label と説明の行を対応させる。説明は省略せず折り返し、既知の端や一時的な無効状態でも方向の位置を残す。戻る・作業をやめる導線は領域の始端に置き、同じ領域内の sample などの補助状態は終端へ分離する。dialog のキャンセルは確定操作と同じ footer 内で、DOM と視覚の両方で確定より先に置く。
 - 一覧、詳細、編集、出力、OCR、管理をまたぐ場合は、必要な filter、sort、page、selection、内部 `returnTo` を保持する。`returnTo` は app 内 path だけを受け入れ、復元不能時は安全な既定導線と理由を示す。
 - 未保存入力は workflow の identity に属する。表示幅や同じ作業の補助 query を変えても保持し、別作業への移動・外部離脱では必要な破棄確認を行う。保存中の入力を送信 snapshot から切り離さず、完了前の離脱操作を結果判明後に勝手に再開しない。
 - 完了・失敗・download は開始時の対象と形式に結びつける。画面や対象を離れた応答は、現在の選択を変えたり、別対象の結果として表示したりしない。中断可能な read/download は所有する画面の終了時に中断する。

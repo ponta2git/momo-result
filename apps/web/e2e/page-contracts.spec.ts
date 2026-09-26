@@ -80,16 +80,37 @@ test("asks before discarding an OCR image and retains it when navigation is canc
   page,
 }) => {
   await page.goto("/ocr/new");
+  const exit = page.getByRole("link", { name: "取り込みをやめる" });
+  const surface = page.getByRole("region", { name: "OCR取り込み", exact: true });
+  const expectLeadingExit = async () => {
+    for (const width of [320, 375, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await exit.scrollIntoViewIfNeeded();
+      const exitBox = await exit.boundingBox();
+      const surfaceBox = await surface.boundingBox();
+      if (!exitBox || !surfaceBox) throw new Error("expected visible OCR navigation and content");
+      expect(Math.abs(exitBox.x - surfaceBox.x)).toBeLessThanOrEqual(1);
+      expect(exitBox.y + exitBox.height).toBeLessThan(surfaceBox.y);
+      await expect(surface.getByRole("link", { name: "取り込みをやめる" })).toHaveCount(0);
+      await expectNoHorizontalPageOverflow(page);
+    }
+  };
+  await test.step(
+    "keep exit navigation outside and before the content at every width",
+    expectLeadingExit,
+  );
   await page.getByRole("button", { name: "カメラが使えない場合" }).click();
   await page.getByLabel("OCRの画像をアップロード").setInputFiles("public/station.png");
   await expect(page.getByText(/配置済み\s*1\s*件/u)).toBeVisible();
-  await page.getByRole("link", { name: "取り込みをやめる" }).click();
+  await exit.click();
   const confirmation = page.getByRole("alertdialog", { name: "未保存の変更を破棄しますか？" });
   await expect(confirmation).toBeVisible();
   await confirmation.getByRole("button", { name: "キャンセル" }).click();
   await expect(confirmation).toHaveCount(0);
+  await expect(exit).toBeFocused();
   await expect(page.getByText(/配置済み\s*1\s*件/u)).toBeVisible();
-  await page.getByRole("link", { name: "取り込みをやめる" }).click();
+  await test.step("retain the leading navigation after canceling image discard", expectLeadingExit);
+  await exit.click();
   await confirmation.getByRole("button", { name: "破棄して移動" }).click();
   await expect(page.getByRole("region", { name: "試合一覧", exact: true })).toBeVisible();
 });

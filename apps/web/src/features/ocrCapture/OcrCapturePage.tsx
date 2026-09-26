@@ -11,7 +11,7 @@ import {
 } from "@/features/ocrCapture/useOcrCapturePageModel";
 import { AuthPanel } from "@/shared/auth/AuthPanel";
 import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
-import { actionRowClass, taskActionPanelClass } from "@/shared/ui/actions/actionGroup";
+import { inlineActionGroupClass, taskActionPanelClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
@@ -38,19 +38,17 @@ function OcrCapturePageContent({ auth }: { auth: ReturnType<typeof useOcrCapture
 
   return (
     <PageFrame>
+      <nav aria-label="OCR取り込みの移動" className={inlineActionGroupClass}>
+        <LinkButton
+          icon={<ArrowLeft aria-hidden="true" />}
+          size="sm"
+          to={navigation.returnTo}
+          variant="quiet"
+        >
+          取り込みをやめる
+        </LinkButton>
+      </nav>
       <PageContentSurface aria-label="OCR取り込み" className="grid gap-6" role="region">
-        {navigation.returnTo ? (
-          <nav aria-label="OCR取り込みの操作" className={actionRowClass}>
-            <LinkButton
-              icon={<ArrowLeft aria-hidden="true" />}
-              size="sm"
-              to={navigation.returnTo}
-              variant="quiet"
-            >
-              取り込みをやめる
-            </LinkButton>
-          </nav>
-        ) : null}
         {feedback.auth.error ? (
           <div className="flex min-w-0 flex-wrap items-center gap-4 rounded-md border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 p-4">
             <div className="min-w-0 flex-[2_1_20rem]">

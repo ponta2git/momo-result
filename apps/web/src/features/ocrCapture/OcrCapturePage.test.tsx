@@ -180,14 +180,15 @@ describe("OcrCapturePage", () => {
     expect(attempts).toBe(2);
   });
 
-  it("offers a contextual way to stop the capture flow", async () => {
+  it("offers a contextual exit before the capture content", async () => {
     setDevUser();
     renderCaptureRoute("/ocr/new?returnTo=%2Fheld-events%2Fheld-1");
 
-    expect(await screen.findByRole("link", { name: "取り込みをやめる" })).toHaveAttribute(
-      "href",
-      "/held-events/held-1",
-    );
+    const exit = await screen.findByRole("link", { name: "取り込みをやめる" });
+    const content = screen.getByRole("region", { name: "OCR取り込み" });
+    expect(exit).toHaveAttribute("href", "/held-events/held-1");
+    expect(content).not.toContainElement(exit);
+    expect(exit.compareDocumentPosition(content) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
   });
 
   it("protects selected images on back navigation until the user explicitly discards them", async () => {

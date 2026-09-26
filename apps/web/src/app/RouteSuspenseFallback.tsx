@@ -214,17 +214,12 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
   if (normalizedPathname === "/ocr/new") {
     return defineRoutePresentation(
       {
-        contentToolbar: {
-          actionPlacement: "leading",
-          actionSize: "sm",
-          actionSlots: 1,
-          actionWidths: ["wide"],
-        },
         kind: "workspace",
+        leadingActionSlot: true,
         width: "standard",
       },
       {
-        headerNavigation: {
+        leadingNavigation: {
           href: returnTo ?? "/matches",
           icon: "back",
           label: "取り込みをやめる",

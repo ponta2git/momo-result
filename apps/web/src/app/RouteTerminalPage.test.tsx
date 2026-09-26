@@ -60,7 +60,6 @@ describe("route terminal navigation", () => {
   it.each([
     ["/matches/new", "入力をやめる", "/matches"],
     ["/matches/match-1/edit/", "編集をやめる", "/matches/match-1"],
-    ["/ocr/new", "取り込みをやめる", "/matches"],
   ])("keeps one safe workspace exit for %s", (pathname, name, href) => {
     const surface = renderTerminal(pathname, "?returnTo=https%3A%2F%2Fexternal.test");
 
@@ -79,17 +78,26 @@ describe("route terminal navigation", () => {
     );
   });
 
-  it("places comparison return navigation before the result surface and preserves its context", () => {
-    const surface = renderTerminal(
+  it.each([
+    [
       "/analytics/series",
       "?returnTo=%2Fmatches%3Fpage%3D2%23records",
-    );
-    const back = screen.getByRole("link", { name: "前の画面へ戻る" });
+      "前の画面へ戻る",
+      "/matches?page=2#records",
+    ],
+    ["/ocr/new", "?returnTo=https%3A%2F%2Fexternal.test", "取り込みをやめる", "/matches"],
+    ["/ocr/new", "?returnTo=%2Fheld-events%2Fheld-1", "取り込みをやめる", "/held-events/held-1"],
+  ])(
+    "places %s return navigation before the content with safe context %s",
+    (pathname, search, name, href) => {
+      const surface = renderTerminal(pathname, search);
+      const back = screen.getByRole("link", { name });
 
-    expect(back).toHaveAttribute("href", "/matches?page=2#records");
-    expect(surface).not.toContainElement(back);
-    expect(back.compareDocumentPosition(surface) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
-  });
+      expect(back).toHaveAttribute("href", href);
+      expect(surface).not.toContainElement(back);
+      expect(back.compareDocumentPosition(surface) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    },
+  );
 
   it("preserves sample and handoff context when returning from settings", () => {
     renderTerminal(

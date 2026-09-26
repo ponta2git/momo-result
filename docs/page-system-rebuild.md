@@ -93,7 +93,7 @@ Playwright MCP では本番ビルドの desktop / mobile 表示を確認した�
 | 検出した不統一 | 再発を防ぐ構成 |
 | --- | --- |
 | 開催だけ前後リンクが外向き、試合は中央。狭幅では両方が中央の縦積み | `AdjacentNavigation` の alignment 選択を廃止。等幅2列、始端・終端揃え、外側の矢印を固定し、row subgrid で label と説明の行を共有 |
-| 試合詳細の戻り先2リンクに間隔がない。分析の戻る操作だけ本文内の右側 | 共通 action recipe の8px間隔と折り返し、始端の戻り先へ統一。分析の loading / terminal も同じ位置に接続 |
+| 試合詳細の戻り先2リンクに間隔がない。分析の戻る操作とOCRの退出導線が本文内にある | 共通 action recipe の8px間隔と折り返し、本文の外側にある始端の戻り先へ統一。分析・OCRの loading / terminal も同じ位置に接続 |
 | 詳細の出力操作の大きさと重要度、先頭 action の全幅化が画面で異なる | 見出し操作を同じ intrinsic な action group へ統一。出力は小さい補助操作、編集は小さい secondary。PageHeader は内容幅で折り返す |
 | 項目一覧・ページ送りが広い viewport 内の狭い領域でも多列を強制する | `FactList` と `PaginationControls` に名前付き container query。幅が内容から決まる1列の状態表示には containment を付けない |
 | OCR dialog の見た目と DOM の操作順が逆。設定編集だけ保存が全幅 | `DialogFooter` へ接続し、キャンセル→実行の読解順と折り返しを統一。保存中の制約と閉じた後の focus を保持 |
@@ -124,3 +124,9 @@ Playwright MCP では本番ビルドの開催・試合詳細、通知を320 / 37
 最終の format / lint / typecheck / build、public safety、diff check は成功。既存の lint warning 5件と生成validatorのchunk-size warning は継続する。検証に使用した一時サービスとブラウザーは回収済み。
 
 今回のブラウザー検証は Chromium。Safari / Firefox・実モバイルOS・スクリーンリーダー実機、実カメラと外部認証は未検証。API / Worker / DB の処理は変更しておらず、OCR queue と外部配送の専用E2Eは今回の配置検証に含めない。
+
+### OCR退出導線の追補
+
+OCRの「取り込みをやめる」は、左揃えだけでなく本文との境界も揃える必要があった。通常表示の退出リンクを `PageContentSurface` の前へ移し、loading の予約領域と terminal の退出リンクも既存の leading navigation へ接続した。安全な復帰先、画像の破棄確認、キャンセル後の画像保持と退出リンクへの focus 復帰は維持する。
+
+関連する4ファイル・41件の unit / component test、`page-contracts.spec.ts` のE2E 3件、format / lint / typecheck / build が成功。Playwright MCPで通常・画像破棄のキャンセル後・loading・terminalを320 / 375 / 1440pxで確認し、退出導線の領域が本文の外側で左端を揃え、横はみ出しがないことを確認した。この追補では全テストの再実行はしていない。検証用の一時サービスとブラウザーは回収済み。

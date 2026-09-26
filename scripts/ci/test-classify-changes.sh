@@ -118,9 +118,10 @@ assert_case processing-worker-script \
 assert_case series-analysis-script \
   "$(expected false false true true false false true false false true)" \
   scripts/ci/series-analysis-control-plane-smoke.sh
-assert_case runtime-tool "${runtime_go}" tools/cmd/momo-runtime-tool/main.go
-assert_case runtime-tool-go-mod "${runtime_go}" tools/go.mod
-assert_case runtime-tool-go-sum "${runtime_go}" tools/go.sum
+assert_case runtime-tool "${runtime_go}" scripts/tools/cmd/momo-runtime-tool/main.go
+assert_case runtime-tool-go-mod "${runtime_go}" scripts/tools/go.mod
+assert_case runtime-tool-go-sum "${runtime_go}" scripts/tools/go.sum
+assert_case development-tool "${go_only}" scripts/tools/cmd/ocr-evaluation-audit/main.go
 assert_case runtime-db-contract "${runtime_go}" contracts/runtime-db-contract.json
 assert_case runtime-tool-characterization \
   "${go_only}" contracts/runtime-tool-characterization-v1.json

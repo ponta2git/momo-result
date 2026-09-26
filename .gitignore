@@ -1,6 +1,6 @@
 samples
 ocr_samples/
-tools/cmd/cgroup-memory-probe/out/
+scripts/tools/cmd/cgroup-memory-probe/out/
 **/.DS_Store
 **/.venv/
 **/__pycache__/

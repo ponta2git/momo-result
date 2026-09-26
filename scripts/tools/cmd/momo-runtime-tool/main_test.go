@@ -319,7 +319,7 @@ func TestRuntimeStopGraceIsBounded(t *testing.T) {
 
 func loadCharacterizationFixture(t *testing.T) characterizationFixture {
 	t.Helper()
-	path := filepath.Join("..", "..", "..", "contracts", "runtime-tool-characterization-v1.json")
+	path := filepath.Join("..", "..", "..", "..", "contracts", "runtime-tool-characterization-v1.json")
 	encoded, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -336,7 +336,7 @@ func loadCharacterizationFixture(t *testing.T) characterizationFixture {
 
 func loadTestContract(t *testing.T) runtimeDBContract {
 	t.Helper()
-	path := filepath.Join("..", "..", "..", "contracts", "runtime-db-contract.json")
+	path := filepath.Join("..", "..", "..", "..", "contracts", "runtime-db-contract.json")
 	contract, err := loadRuntimeDBContract(path)
 	if err != nil {
 		t.Fatal(err)

@@ -255,14 +255,14 @@ jobs:
           flyctl ssh console --app momo-result --pty=false --quiet \
             --command "env MOMO_POSTDEPLOY_PUBLIC_EDGE=deferred /opt/momo-result/bin/momo-runtime-tool smoke local" \
             > runtime-rollback-evidence/postdeploy-smoke.json
-          go run ./tools/cmd/momo-runtime-tool validate-postdeploy-evidence \
-            runtime-rollback-evidence/postdeploy-smoke.json \
+          go -C scripts/tools run ./cmd/momo-runtime-tool validate-postdeploy-evidence \
+            "${GITHUB_WORKSPACE}/runtime-rollback-evidence/postdeploy-smoke.json" \
             > /dev/null
         timeout-minutes: 2
 
       - name: Build current public edge probe
         run: |
-          cd tools
+          cd scripts/tools
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w' \
             -o "${RUNNER_TEMP}/momo-runtime-tool" ./cmd/momo-runtime-tool
 

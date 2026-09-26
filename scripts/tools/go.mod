@@ -1,4 +1,4 @@
-module github.com/ponta2git/momo-result/tools
+module github.com/ponta2git/momo-result/scripts/tools
 
 go 1.26.0
 

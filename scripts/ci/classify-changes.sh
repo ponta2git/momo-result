@@ -23,7 +23,7 @@ select_all() {
 while IFS= read -r -d '' path; do
   [[ "${path}" == scripts/ci/* ]] && policy_scripts=true
   [[ "${path}" == .github/workflows/* || "${path}" == .github/actions/* ]] && actionlint=true
-  [[ "${path}" == tools/* ]] && go_tools=true
+  [[ "${path}" == scripts/tools/* ]] && go_tools=true
 
   case "${path}" in
     apps/api/openapi.yaml)
@@ -65,7 +65,7 @@ while IFS= read -r -d '' path; do
     contracts/runtime-tool-characterization-v1.json)
       go_tools=true
       ;;
-    tools/go.mod | tools/go.sum | tools/cmd/momo-runtime-tool/*)
+    scripts/tools/go.mod | scripts/tools/go.sum | scripts/tools/cmd/momo-runtime-tool/*)
       runtime=true
       ;;
     .dockerignore)
@@ -152,7 +152,7 @@ while IFS= read -r -d '' path; do
       ;;
     .github/workflows/public-safety.yml | .github/actions/*)
       ;;
-    tools/*)
+    scripts/tools/*)
       ;;
     .github/dependabot.yml | docs/* | *.md)
       ;;

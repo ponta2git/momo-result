@@ -32,9 +32,9 @@
 
 ツール固有の入力・結果の意味は、実装に隣接する次の文書を参照する。実行結果や導入進捗は扱わない。
 
-- [cgroup memory probe](../tools/cmd/cgroup-memory-probe/README.md): 隔離実験の合格条件と適用範囲。
-- [Rust OCR evaluator](../tools/cmd/ocr-rust-evaluator/README.md): 校正用の精度比較と結果の限界。
-- [OCR evaluation audit](../tools/cmd/ocr-evaluation-audit/README.md): 標本の独立性と必要量の見積り。
+- [cgroup memory probe](../scripts/tools/cmd/cgroup-memory-probe/README.md): 隔離実験の合格条件と適用範囲。
+- [Rust OCR evaluator](../scripts/tools/cmd/ocr-rust-evaluator/README.md): 校正用の精度比較と結果の限界。
+- [OCR evaluation audit](../scripts/tools/cmd/ocr-evaluation-audit/README.md): 標本の独立性と必要量の見積り。
 
 ## 2. 正本と証拠
 

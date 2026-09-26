@@ -7,7 +7,7 @@ ARG ANALYSIS_IMAGE
 FROM ${ANALYSIS_IMAGE}
 
 COPY --chmod=0755 \
-  tools/cmd/cgroup-memory-probe/out/cgroup-memory-probe \
+  scripts/tools/cmd/cgroup-memory-probe/out/cgroup-memory-probe \
   /usr/local/bin/cgroup-memory-probe
 
 # This disposable probe must create and delegate a cgroup before it launches the non-root worker

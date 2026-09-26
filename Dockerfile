@@ -81,11 +81,11 @@ RUN --mount=type=cache,id=sbt-boot,target=/root/.sbt,sharing=locked \
   && sbt "-Dmomo.http4s.patched.version=${HTTP4S_PATCH_VERSION}" apiOpenApiCheck stage
 
 FROM ${GO_IMAGE} AS runtime-tool-builder
-WORKDIR /workspace/tools
-COPY tools/go.mod tools/go.sum ./
+WORKDIR /workspace/scripts/tools
+COPY scripts/tools/go.mod scripts/tools/go.sum ./
 RUN --mount=type=cache,id=go-mod,target=/go/pkg/mod,sharing=locked \
   go mod download
-COPY tools/cmd/momo-runtime-tool cmd/momo-runtime-tool
+COPY scripts/tools/cmd/momo-runtime-tool cmd/momo-runtime-tool
 RUN --mount=type=cache,id=go-build,target=/root/.cache/go-build,sharing=locked \
   CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' \
     -o /out/momo-runtime-tool ./cmd/momo-runtime-tool

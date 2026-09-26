@@ -24,7 +24,7 @@ evidence exist.
 Run unit checks from the Go tools module:
 
 ```sh
-cd tools
+cd scripts/tools
 go test ./...
 go vet ./...
 ```

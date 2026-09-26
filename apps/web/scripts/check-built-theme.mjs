@@ -2,19 +2,10 @@ import { readdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const assetsDirectory = resolve(root, "dist/assets");
-const assetNames = await readdir(assetsDirectory);
-const cssAssetNames = assetNames.filter((name) => name.endsWith(".css"));
+import { generate, parse, walk } from "css-tree";
 
-if (cssAssetNames.length === 0) {
-  throw new Error("Built CSS asset is missing.");
-}
-
-const builtCss = (
-  await Promise.all(cssAssetNames.map((name) => readFile(resolve(assetsDirectory, name), "utf8")))
-).join("\n");
-const requiredThemeVariables = [
+// Consumer inventory for dynamic sequence/chart paint; exact colors belong to styles.css.
+export const requiredThemeVariables = [
   ...[1, 2, 3, 4].map((sequence) => `--color-member-sequence-${sequence}`),
   ...[1, 2, 3, 4].map((playOrder) => `--color-play-order-${playOrder}`),
   ...[1, 2, 3, 4, 5, 6].map((series) => `--color-series-${series}`),
@@ -22,28 +13,68 @@ const requiredThemeVariables = [
   ...[1, 2, 3, 4].map((rank) => `--color-rank-${rank}-foreground`),
   "--color-chart-segment-separator",
 ];
-// Follow aliases in the emitted asset: retaining a semantic name is insufficient
-// when its reference palette was removed or a dependency graph became cyclic.
-const declarations = new Map(
-  [...builtCss.matchAll(/(--[a-z0-9-]+)\s*:\s*([^;{}]+)(?=[;}])/gu)].map((match) => [
-    match[1],
-    match[2],
-  ]),
-);
 
-function validateThemeVariable(name, path = []) {
-  if (path.includes(name)) {
-    throw new Error(`Built CSS has a cyclic theme reference: ${[...path, name].join(" -> ")}`);
+// This is artifact-retention evidence for the global theme, not a CSS cascade/paint engine.
+// Comments, component-local declarations and conditional rules cannot supply the baseline.
+export function validateBuiltTheme(css) {
+  const declarations = new Map();
+  walk(parse(css, { parseCustomProperty: true }), {
+    enter(node) {
+      if (node.type === "Atrule" && node.name !== "layer") return this.skip;
+      if (node.type !== "Rule") return;
+      if (
+        node.prelude.type === "SelectorList" &&
+        node.prelude.children.some((selector) => generate(selector) === ":root")
+      ) {
+        for (const declaration of node.block.children) {
+          if (declaration.type === "Declaration" && declaration.property.startsWith("--")) {
+            declarations.set(declaration.property, declaration.value);
+          }
+        }
+      }
+      return this.skip;
+    },
+  });
+
+  function validateVariable(name, path = []) {
+    if (path.includes(name)) {
+      throw new Error(`Built CSS has a cyclic theme reference: ${[...path, name].join(" -> ")}`);
+    }
+    const value = declarations.get(name);
+    if (!value || !generate(value).trim()) {
+      throw new Error(
+        `Built CSS is missing a runtime theme dependency: ${[...path, name].join(" -> ")}`,
+      );
+    }
+    validateReferences(value, [...path, name]);
   }
-  const value = declarations.get(name);
-  if (!value) {
-    throw new Error(
-      `Built CSS is missing a runtime theme dependency: ${[...path, name].join(" -> ")}`,
-    );
+
+  function validateReferences(value, path) {
+    walk(value, {
+      visit: "Function",
+      enter(node) {
+        if (node.name !== "var") return;
+        const [reference, , fallback] = node.children;
+        if (declarations.has(reference.name) || !fallback) {
+          validateVariable(reference.name, path);
+        } else {
+          validateReferences(fallback, path);
+        }
+        return this.skip;
+      },
+    });
   }
-  for (const match of value.matchAll(/var\(\s*(--[a-z0-9-]+)\s*\)/gu)) {
-    validateThemeVariable(match[1], [...path, name]);
-  }
+
+  for (const name of requiredThemeVariables) validateVariable(name);
 }
 
-for (const name of requiredThemeVariables) validateThemeVariable(name);
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+  const assetsDirectory = resolve(root, "dist/assets");
+  const cssAssetNames = (await readdir(assetsDirectory)).filter((name) => name.endsWith(".css"));
+  if (cssAssetNames.length === 0) throw new Error("Built CSS asset is missing.");
+  const css = await Promise.all(
+    cssAssetNames.toSorted().map((name) => readFile(resolve(assetsDirectory, name), "utf8")),
+  );
+  validateBuiltTheme(css.join("\n"));
+}

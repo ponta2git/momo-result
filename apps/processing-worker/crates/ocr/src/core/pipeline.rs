@@ -262,7 +262,8 @@ mod tests {
             &OcrHints::default(),
             &mut first_recognizer,
             &mut |event| first_events.push(event),
-        );
+        )
+        .expect("valid ranked screen produces a candidate");
         let mut second_recognizer = DeterministicRecognizer;
         let mut second_events = Vec::new();
         let second = analyze(
@@ -271,7 +272,8 @@ mod tests {
             &OcrHints::default(),
             &mut second_recognizer,
             &mut |event| second_events.push(event),
-        );
+        )
+        .expect("repeated ranked screen produces a candidate");
 
         assert_eq!(
             first, second,
@@ -292,6 +294,14 @@ mod tests {
             "runtime timing receives boundaries without feeding values into output"
         );
         assert_eq!(first_events, second_events);
+        assert!(
+            first
+                .with_timings(
+                    crate::OcrTimings::new(0.0, 0.0, 0.0, 0.0, 1.0).expect("valid timing")
+                )
+                .satisfies_contract(RequestedScreenType::TotalAssets, &OcrHints::default(), 1),
+            "the parser candidate must satisfy the persistence contract"
+        );
     }
 
     #[test]

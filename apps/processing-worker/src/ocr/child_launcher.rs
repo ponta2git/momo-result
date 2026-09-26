@@ -1,5 +1,10 @@
 use std::time::Duration;
 
+#[cfg(any(target_os = "linux", test))]
+use std::io;
+#[cfg(any(target_os = "linux", test))]
+use tokio::task::JoinHandle;
+
 #[cfg(target_os = "linux")]
 use super::contract::{OcrHints, RequestedScreenType};
 
@@ -20,7 +25,7 @@ use super::{
 
 #[cfg(target_os = "linux")]
 use std::{
-    env, io,
+    env,
     os::{fd::AsRawFd, unix::net::UnixStream},
     path::PathBuf,
     process::Stdio,
@@ -29,7 +34,6 @@ use std::{
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     process::Command,
-    task::JoinHandle,
     time,
 };
 
@@ -312,17 +316,21 @@ impl ManagedOcrChild {
     }
 
     async fn finish_writer(&mut self) -> Result<(), &'static str> {
-        let task = self.writer.take().ok_or("ocr_child_input_task")?;
-        task.await
-            .map_err(|_error| "ocr_child_input_task")?
-            .map_err(|_error| "ocr_child_input_write")
+        finish_io_task(
+            &mut self.writer,
+            "ocr_child_input_task",
+            "ocr_child_input_write",
+        )
+        .await
     }
 
     async fn finish_reader(&mut self) -> Result<Vec<u8>, &'static str> {
-        let task = self.reader.take().ok_or("ocr_child_output_task")?;
-        task.await
-            .map_err(|_error| "ocr_child_output_task")?
-            .map_err(|_error| "ocr_child_output_read")
+        finish_io_task(
+            &mut self.reader,
+            "ocr_child_output_task",
+            "ocr_child_output_read",
+        )
+        .await
     }
 
     async fn abort_io_tasks(&mut self) {
@@ -335,6 +343,21 @@ impl ManagedOcrChild {
             drop(reader.await);
         }
     }
+}
+
+#[cfg(any(target_os = "linux", test))]
+async fn finish_io_task<T>(
+    slot: &mut Option<JoinHandle<Result<T, io::Error>>>,
+    task_failure: &'static str,
+    io_failure: &'static str,
+) -> Result<T, &'static str> {
+    // The supervisor can drop this future on timeout, shutdown, or ownership loss. Keep the handle
+    // in the child until the join completes so termination can still abort and reap its I/O task.
+    let result = slot.as_mut().ok_or(task_failure)?.await;
+    drop(slot.take());
+    result
+        .map_err(|_error| task_failure)?
+        .map_err(|_error| io_failure)
 }
 
 #[cfg(target_os = "linux")]
@@ -512,4 +535,47 @@ fn child_cgroup_from_environment(
         .filter(|value| *value > 0)
         .ok_or(configuration_error)?;
     crate::cgroup::ChildCgroup::from_environment(child_limit).map_err(|error| error.kind())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::future::{Future as _, pending, poll_fn};
+    use std::task::Poll;
+
+    use super::finish_io_task;
+
+    #[tokio::test]
+    async fn cancelled_io_join_retains_the_task_for_termination() {
+        let task = tokio::spawn(pending::<Result<(), std::io::Error>>());
+        let mut slot = Some(task);
+        let mut joining = Box::pin(finish_io_task(&mut slot, "task", "io"));
+        poll_fn(|context| {
+            assert!(joining.as_mut().poll(context).is_pending());
+            Poll::Ready(())
+        })
+        .await;
+        drop(joining);
+
+        assert!(
+            slot.is_some(),
+            "cancellation must retain the child-owned task"
+        );
+        if let Some(retained_task) = slot.take() {
+            retained_task.abort();
+            assert!(
+                retained_task.await.is_err_and(|error| error.is_cancelled()),
+                "termination must join the cancelled I/O task"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn completed_io_join_consumes_the_handle_and_preserves_its_result() {
+        let mut slot = Some(tokio::spawn(async { Ok(vec![1_u8, 2, 3]) }));
+        assert_eq!(
+            finish_io_task(&mut slot, "task", "io").await,
+            Ok(vec![1, 2, 3])
+        );
+        assert!(slot.is_none(), "a joined task must not be polled twice");
+    }
 }

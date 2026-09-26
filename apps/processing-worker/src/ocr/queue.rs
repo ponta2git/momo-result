@@ -625,6 +625,7 @@ mod tests {
                     Value::BulkString(b"must-not-be-copied".to_vec()),
                 ),
             ]),
+            ..StreamId::default()
         };
         let decoded = decode_delivery(&delivery, Some(2), 2);
         let fields = dead_letter_fields(&decoded);
@@ -644,6 +645,7 @@ mod tests {
                 String::from("jobId"),
                 Value::BulkString(b"job-safe-1".to_vec()),
             )]),
+            ..StreamId::default()
         };
         assert!(matches!(
             decode_delivery(&delivery, None, 1).body,

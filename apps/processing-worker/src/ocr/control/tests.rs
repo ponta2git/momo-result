@@ -241,6 +241,40 @@ fn completion_requires_closed_bounded_coherent_warnings() {
 }
 
 #[test]
+fn completion_byte_bound_counts_all_columns_and_json_escapes_exactly() {
+    let claim = valid_claim(RequestedScreenType::TotalAssets);
+    let mut completion = valid_completion(RequestedScreenType::TotalAssets);
+    let raw_path = "/players/0/total_assets_man_yen/raw_text";
+    replace_json_pointer(&mut completion.output.payload, raw_path, json!(""));
+    let overhead = [
+        &completion.output.payload,
+        &completion.output.warnings,
+        &completion.output.timings_milliseconds,
+    ]
+    .into_iter()
+    .map(|value| {
+        serde_json::to_vec(value)
+            .expect("fixture JSON encodes")
+            .len()
+    })
+    .sum::<usize>();
+    let available = MAXIMUM_DRAFT_JSON_BYTES - overhead;
+    // Each newline occupies two encoded bytes; Japanese text verifies UTF-8 byte accounting.
+    let mut raw = format!("桃{}", "\n".repeat((available - "桃".len()) / 2));
+    if !(available - "桃".len()).is_multiple_of(2) {
+        raw.push('x');
+    }
+    replace_json_pointer(&mut completion.output.payload, raw_path, json!(&raw));
+    assert!(
+        validate_completion(&claim, &OcrHints::default(), &completion).is_ok(),
+        "a valid candidate exactly at the combined encoded-byte bound must save"
+    );
+    raw.push('x');
+    replace_json_pointer(&mut completion.output.payload, raw_path, json!(&raw));
+    assert_invalid_completion(&claim, &completion);
+}
+
+#[test]
 fn completion_cross_checks_player_order_member_ids_and_warning_references() {
     let claim = valid_claim(RequestedScreenType::TotalAssets);
 

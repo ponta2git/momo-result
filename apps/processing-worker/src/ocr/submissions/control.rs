@@ -63,7 +63,7 @@ async fn settle_transaction(
     else {
         return Ok(Settlement::Closed);
     };
-    let draft_id: String = source.get(0);
+    let draft_id: String = source.try_get(0)?;
     // All source writers lock draft before submission. SKIP LOCKED gives a busy source its next
     // fair turn without blocking other submissions; a separate read distinguishes deletion.
     let draft = transaction
@@ -89,10 +89,14 @@ async fn settle_transaction(
     else {
         return Ok(Settlement::Busy);
     };
-    if header.get::<_, String>(0) != "open" {
+    if header.try_get::<_, &str>(0)? != "open" {
         return Ok(Settlement::Closed);
     }
-    if draft.is_none_or(|row| matches!(row.get::<_, &str>(0), "confirmed" | "cancelled")) {
+    let draft_status = draft
+        .as_ref()
+        .map(|row| row.try_get::<_, &str>(0))
+        .transpose()?;
+    if draft_status.is_none_or(|status| matches!(status, "confirmed" | "cancelled")) {
         transaction.execute("UPDATE ocr_submissions SET status = 'aborted', finished_at = clock_timestamp() WHERE id = $1", &[&id]).await?;
         transaction.commit().await?;
         return Ok(Settlement::Aborted);
@@ -109,12 +113,12 @@ async fn settle_transaction(
     let mut failures = Vec::new();
     let mut open = false;
     for member in members {
-        let screen: String = member.get("screen_type");
-        let status: &str = member.get("status");
-        let failure: Option<&str> = member.get("failure_code");
-        let job: Option<&str> = member.get("job_status");
-        let job_failure: Option<&str> = member.get("job_failure");
-        let job_screen: Option<&str> = member.get("job_screen_type");
+        let screen: String = member.try_get("screen_type")?;
+        let status: &str = member.try_get("status")?;
+        let failure: Option<&str> = member.try_get("failure_code")?;
+        let job: Option<&str> = member.try_get("job_status")?;
+        let job_failure: Option<&str> = member.try_get("job_failure")?;
+        let job_screen: Option<&str> = member.try_get("job_screen_type")?;
         if status == "registered" && job_screen != Some(screen.as_str()) {
             return Err(SubmissionError::InvalidState);
         }

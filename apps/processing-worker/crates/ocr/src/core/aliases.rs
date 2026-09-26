@@ -196,7 +196,7 @@ fn extract_president_name(value: &str) -> Option<String> {
         .rev()
         .collect::<Vec<_>>()
         .join(" ");
-    if cleaned.is_empty() {
+    if remove_long_vowels(&normalize_name(&cleaned)).is_empty() {
         None
     } else {
         Some(format!("{}社長", cleaned.replace('_', "ー")))
@@ -276,9 +276,22 @@ mod tests {
 
     #[test]
     fn punctuation_and_titles_cannot_match_an_unrelated_player() {
-        for noise in ["ーーー", "ーーー社長", "___社長", "---社長", "一一一社長", "社長"] {
+        let resolver = AliasResolver::from_hints(&OcrHints::default());
+        for noise in [
+            "ーーー",
+            "ーーー社長",
+            "___社長",
+            "---社長",
+            "一一一社長",
+            "社長",
+        ] {
             assert!(!names_match(noise, "ぽんた社長"), "noise: {noise}");
             assert!(!names_match("ぽんた社長", noise), "noise: {noise}");
+            assert_eq!(
+                resolver.extract(noise).display_name,
+                None,
+                "unreadable OCR must retain the missing-name warning: {noise}"
+            );
         }
     }
 

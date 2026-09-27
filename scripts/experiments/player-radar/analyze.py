@@ -3,7 +3,6 @@
 
 import argparse
 import bisect
-import collections
 import hashlib
 import itertools
 import json
@@ -67,13 +66,14 @@ AXIS_SETS = {
                'assets_p10', 'assets_median', 'assets_p90'],
 }
 QUANTILE_LEVELS = [.05, .10, .20, .35, .50, .65, .80, .90, .99]
-DIAGNOSTIC_AXIS_SET = 'median4'
+DIAGNOSTIC_AXIS_SET = 'no_destination6'
 MIN_CALIBRATION_MATCHES = 40
 MIN_CALIBRATION_EVENTS = 8
 # These are experimental display policies, not statistical significance thresholds.
 MIN_SCORE_MATCHES = 3
-MIN_RANK_MATCHES = 40
-MIN_RANK_EVENTS = 8
+MIN_FULL_MATCHES = 40
+MIN_FULL_EVENTS = 8
+
 
 
 def quantile(values, probability):
@@ -93,16 +93,6 @@ def mean(values):
 
 def value_rank(value, values):
     return sum(v > value for v in values) + (sum(v == value for v in values) + 1) / 2
-
-
-def rounded_total(value):
-    return math.floor(value * 100 + .5 + 1e-10) / 100
-
-
-def competition_ranks(values):
-    if any(value is None for value in values):
-        return [None] * len(values)
-    return [1 + sum(other > value for other in values) for value in values]
 
 
 def prepare(source):
@@ -246,7 +236,7 @@ def score(value, definition, direction):
     return 1 + bisect.bisect_right(definition['thresholds'], value * direction)
 
 
-def evaluate(matches, ids, baseline, rank_min=MIN_RANK_MATCHES, event_min=MIN_RANK_EVENTS):
+def evaluate(matches, ids, baseline, full_min=MIN_FULL_MATCHES, event_min=MIN_FULL_EVENTS):
     n = len(matches)
     events = len({m['eventId'] for m in matches})
     values = {pid: player_metrics(matches, pid) for pid in ids}
@@ -262,20 +252,12 @@ def evaluate(matches, ids, baseline, rank_min=MIN_RANK_MATCHES, event_min=MIN_RA
             status = ('no_target' if not item['n'] else 'insufficient_sample') if point is None else 'ready'
             if point is None and item['n'] >= MIN_SCORE_MATCHES:
                 status = baseline['axes'][key]['status']
-            if point is not None and (item['n'] < rank_min or events < event_min):
+            if point is not None and (item['n'] < full_min or events < event_min):
                 status = 'reference'
             if point is not None and key in ('assets_max', 'revenue_max') and n != baseline.get('window', n):
                 status = 'reference_opportunity'
             scored[pid][key] = {**item, 'score': point, 'status': status}
-    totals = {}
-    for name, axes in AXIS_SETS.items():
-        total_values = [rounded_total(mean([scored[pid][key]['score'] for key in axes]))
-                        if all(scored[pid][key]['score'] is not None for key in axes) else None for pid in ids]
-        ready = all(scored[pid][key]['status'] == 'ready' for pid in ids for key in axes)
-        ranks = competition_ranks(total_values) if ready else [None] * len(ids)
-        totals[name] = {pid: {'score': total, 'rank': rank, 'status': 'ready' if ready else 'reference' if total is not None else 'unavailable'}
-                        for pid, total, rank in zip(ids, total_values, ranks)}
-    return {'n': n, 'events': events, 'raw': values, 'scores': scored, 'totals': totals}
+    return {'n': n, 'events': events, 'raw': values, 'scores': scored}
 
 
 def combine_baseline(common, per_map, mode):
@@ -309,26 +291,29 @@ def score_change(reference, other, ids, axes):
     return {'compared': len(diffs), 'meanAbsoluteChange': mean(diffs), 'maxChange': max(diffs, default=None)}
 
 
-def perturbation(matches, ids, baseline, axis_set=DIAGNOSTIC_AXIS_SET):
+def perturbation(matches, ids, baseline, axis_set=DIAGNOSTIC_AXIS_SET, detailed=False):
     axes = AXIS_SETS[axis_set]
     original = evaluate(matches, ids, baseline)
     changes = []
-    leaders = collections.Counter()
-    original_values = [original['totals'][axis_set][pid]['score'] for pid in ids]
-    original_ranks = competition_ranks(original_values)
-    rank_changes = 0
+    point_values = {pid: {key: [original['scores'][pid][key]['score']] for key in axes} for pid in ids} if detailed else {}
     for event in sorted({m['eventId'] for m in matches}):
         sample = [m for m in matches if m['eventId'] != event]
         result = evaluate(sample, ids, baseline)
         changes.append(score_change(original, result, ids, axes))
-        ranks = competition_ranks([result['totals'][axis_set][pid]['score'] for pid in ids])
-        rank_changes += ranks != original_ranks
-        for pid, rank in zip(ids, ranks):
-            if rank == 1:
-                leaders[pid] += 1
-    return {'removedEventTrials': len(changes), 'maxPointChange': max((v['maxChange'] or 0 for v in changes), default=None),
-            'meanPointChange': mean([v['meanAbsoluteChange'] for v in changes if v['meanAbsoluteChange'] is not None]),
-            'rankingChangedTrials': rank_changes, 'leadingCountsIncludingTies': dict(leaders)}
+        if detailed:
+            for pid in ids:
+                for key in axes:
+                    point_values[pid][key].append(result['scores'][pid][key]['score'])
+    answer = {'removedEventTrials': len(changes), 'maxPointChange': max((v['maxChange'] for v in changes if v['maxChange'] is not None), default=None),
+            'meanPointChange': mean([v['meanAbsoluteChange'] for v in changes if v['meanAbsoluteChange'] is not None])}
+    if detailed:
+        def extent(values):
+            valid = [v for v in values if v is not None]
+            return {'min': min(valid) if valid else None, 'max': max(valid) if valid else None,
+                    'unavailable': len(values) - len(valid)}
+        answer['includesOriginal'] = True
+        answer['points'] = {pid: {key: extent(vs) for key, vs in point_values[pid].items()} for pid in ids}
+    return answer
 
 
 def review_status(high_players_per_window, events):
@@ -382,12 +367,12 @@ def conditional_window_trial(calibration, holdout, ids, window, method='spread')
 def analyze(source):
     players, matches = prepare(source)
     ids = [p['id'] for p in players]
-    report = {'schemaVersion': 'mom30-report-v1', 'snapshotAt': source['snapshotAt'], 'players': players,
+    report = {'schemaVersion': 'mom30-report-v2', 'snapshotAt': source['snapshotAt'], 'players': players,
               'provenance': source.get('provenance'), 'totalMatchCount': len(matches),
               'metrics': {key: {'label': label, 'direction': direction, 'unit': unit} for key, (label, direction, unit) in METRICS.items()},
               'axisSets': AXIS_SETS, 'diagnosticAxisSet': DIAGNOSTIC_AXIS_SET,
               'policy': {'minimumScoreMatches': MIN_SCORE_MATCHES,
-              'minimumRankMatches': MIN_RANK_MATCHES, 'minimumRankEvents': MIN_RANK_EVENTS,
+              'minimumFullMatches': MIN_FULL_MATCHES, 'minimumFullEvents': MIN_FULL_EVENTS,
               'minimumCalibrationMatches': MIN_CALIBRATION_MATCHES, 'minimumCalibrationEvents': MIN_CALIBRATION_EVENTS,
               'status': 'experimental_not_agreed'}, 'titles': []}
     for title in source['titles']:
@@ -438,7 +423,7 @@ def analyze(source):
             result = evaluate(holdout, ids, candidate)
             variants.append({'window': window, 'stride': stride, 'baselineStatus': candidate['status'],
                              'change': score_change(holdout_eval, result, ids, axes),
-                             'totals': result['totals'][DIAGNOSTIC_AXIS_SET]})
+                             'scores': {pid: {key: result['scores'][pid][key] for key in axes} for pid in ids}})
         # Calibration fragility: leave a whole event out, never holdout data into calibration.
         calibration_changes = []
         for event in sorted({m['eventId'] for m in calibration}):
@@ -472,14 +457,9 @@ def analyze(source):
             correlation.append({'a': a, 'b': b,
                 'observations': sum(v[a]['value'] is not None and v[b]['value'] is not None for v in observations),
                 'r': pearson([v[a]['value'] for v in observations], [v[b]['value'] for v in observations])})
-        weight_trials = []
-        if all(holdout_eval['scores'][pid][key]['score'] is not None for pid in ids for key in axes):
-            for axis, factor in itertools.product(axes, (.5, 1.5)):
-                totals = [rounded_total(sum(holdout_eval['scores'][pid][key]['score'] * (factor if key == axis else 1) for key in axes) / (len(axes) - 1 + factor)) for pid in ids]
-                weight_trials.append({'axis': axis, 'factor': factor, 'totals': dict(zip(ids, totals)), 'ranks': competition_ranks(totals)})
         for scope in scopes:
             selected = [m for m in title_matches if (scope['seasonId'] is None or m['seasonId'] == scope['seasonId']) and (scope['mapId'] is None or m['mapId'] == scope['mapId'])]
-            scope['fixedBaselineEventRemoval'] = perturbation(selected, ids, common)
+            scope['fixedBaselineEventRemoval'] = perturbation(selected, ids, common, detailed=True)
         # A real last-record addition, staged only inside the offline prototype.
         # The candidate uses the snapshot before this record and stays frozen after addition.
         candidate = baselines['candidate|spread|all']
@@ -519,21 +499,22 @@ def analyze(source):
             'calibrationEvents': len({m['eventId'] for m in calibration}), 'holdoutEvents': len({m['eventId'] for m in holdout}),
             'baselines': baselines, 'ginjiBaselines': ginji_baselines,
             'scopes': scopes, 'correlations': correlation, 'correlationObservations': len(observations),
-            'windowSensitivity': variants, 'weightSensitivity': weight_trials, 'mapCalibrationChecks': map_checks, 'adminDemo': admin_demo,
+            'windowSensitivity': variants, 'mapCalibrationChecks': map_checks, 'adminDemo': admin_demo,
             'profileDiagnostics': {name: perturbation(holdout, ids, common, name)
                 for name in ('quantile9', 'profile8', 'no_destination6', 'wins7', 'rebound7')},
+            'diagnosticHoldoutScores': {pid: {key: holdout_eval['scores'][pid][key] for key in axes} for pid in ids},
             'ginjiWindowTrials': [conditional_window_trial(calibration, holdout, ids, window) for window in (3, 5, 8)],
             'sampleSizeChecks': sample_size_checks,
             'reviewIndicator': review,
             'saturation': {'windowMatches': 20, 'disjointWindows': len(high_blocks),
                 'histogram': histogram, 'highPlayersPerWindow': high_blocks},
             'calibrationEventRemoval': {'trials': len(calibration_changes),
-                'maxPointChange': max((v['maxChange'] or 0 for v in calibration_changes), default=None),
+                'maxPointChange': max((v['maxChange'] for v in calibration_changes if v['maxChange'] is not None), default=None),
                 'meanPointChange': mean([v['meanAbsoluteChange'] for v in calibration_changes if v['meanAbsoluteChange'] is not None])}})
     all_scopes = [scope for title in report['titles'] for scope in title['scopes']]
     report['candidateCoverage'] = {
-        key: {'qualifiedScopes': sum(scope['events'] >= MIN_RANK_EVENTS and
-             all(scope['evaluations']['initial|spread|common']['raw'][pid][key]['n'] >= MIN_RANK_MATCHES for pid in ids)
+        key: {'qualifiedScopes': sum(scope['events'] >= MIN_FULL_EVENTS and
+             all(scope['evaluations']['initial|spread|common']['raw'][pid][key]['n'] >= MIN_FULL_MATCHES for pid in ids)
              for scope in all_scopes), 'totalScopes': len(all_scopes)} for key in METRICS}
     return report
 

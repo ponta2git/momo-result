@@ -84,26 +84,25 @@ class Counterexamples(unittest.TestCase):
         self.assertEqual(a.score(1, definition, 1), 10)
         self.assertTrue(all(a < b for a, b in zip(definition['thresholds'], definition['thresholds'][1:])))
 
-    def test_same_visible_total_ties_and_one_missing_prevent_all_ranks(self):
-        values = [a.rounded_total(v) for v in [6.004, 6.001, 5.75, 5]]
-        self.assertEqual(a.competition_ranks(values), [1, 1, 3, 4])
-        self.assertEqual(a.competition_ranks([6, 5, None, 4]), [None] * 4)
-
-    def test_reference_scores_remain_but_ranks_are_withheld(self):
+    def test_axis_scores_have_no_aggregate_and_keep_missing_separate(self):
         players, matches = a.prepare(fixture())
         ids = [p['id'] for p in players]
         baseline = {'axes': {key: {'status': 'ready', 'thresholds': [i / 10 for i in range(1, 10)]}
                              for key, (_, direction, _) in a.METRICS.items() if direction}}
         result = a.evaluate(matches, ids, baseline)
-        self.assertTrue(all(result['totals']['basic4'][pid]['score'] is not None for pid in ids))
-        self.assertTrue(all(result['totals']['basic4'][pid]['rank'] is None for pid in ids))
+        self.assertEqual(set(result), {'n', 'events', 'raw', 'scores'})
+        self.assertEqual(result['scores']['A']['rank_mean']['score'], 1)
+        self.assertEqual(result['scores']['A']['rank_mean']['status'], 'reference')
         self.assertEqual(result['scores']['A']['after_lower_podium']['status'], 'no_target')
-        # Holding the data fixed, ordinary axes can qualify while maxima stay reference:
-        # a maximum over 4 opportunities is not calibrated by maxima over 20.
-        result = a.evaluate(matches, ids, {**baseline, 'window': 20}, rank_min=3, event_min=1)
-        self.assertEqual(result['totals']['median4']['A']['status'], 'ready')
+        self.assertIsNone(result['scores']['A']['after_lower_podium']['score'])
+        # An unavailable conditional axis must not hide another observed axis.
+        self.assertIsNotNone(result['scores']['A']['assets_median']['score'])
+        sensitivity = a.perturbation(matches, ids, baseline, 'no_destination6', detailed=True)
+        self.assertEqual(sensitivity['points']['A']['rank_mean']['unavailable'], 1)
+        self.assertIsNone(sensitivity['maxPointChange'])
+        result = a.evaluate(matches, ids, {**baseline, 'window': 20}, full_min=3, event_min=1)
+        self.assertEqual(result['scores']['A']['rank_mean']['status'], 'ready')
         self.assertEqual(result['scores']['A']['assets_max']['status'], 'reference_opportunity')
-        self.assertTrue(all(result['totals']['reference9'][pid]['rank'] is None for pid in ids))
 
     def test_missing_map_calibration_never_silently_falls_back(self):
         common = {'id': 'common', 'axes': {key: {'thresholds': [1], 'status': 'ready'}

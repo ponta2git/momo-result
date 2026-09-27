@@ -184,19 +184,6 @@
       background: var(--member);
       flex-shrink: 0;
     }
-    .scoreline {
-      display: flex;
-      align-items: baseline;
-      gap: 8px;
-    }
-    .total {
-      font: 500 36px/1.2 var(--data);
-      font-variant-numeric: tabular-nums;
-    }
-    .rank {
-      font-size: 13px;
-      margin-top: 8px;
-    }
     .radar {
       width: 100%;
       height: auto;
@@ -417,9 +404,6 @@
       td {
         padding: 10px 12px;
       }
-      .total {
-        font-size: 34px;
-      }
       h1 {
         font-size: 21px;
       }
@@ -470,7 +454,9 @@
   <main>
     <div class="surface">
       <h1>プレーヤーレーダー</h1>
-      <p class="muted" id="introduction">外側ほど好成績。総合点は各軸の点数の平均です。</p>
+      <p class="muted" id="introduction">
+        各観点の成績と、得点の揃い方を見ます。外側ほど好成績です。
+      </p>
       <p id="data-origin" class="control-copy"></p>
       <details>
         <summary>取得した本番記録の内訳</summary>
@@ -490,14 +476,12 @@
       </div>
       <div id="quality" class="notice" hidden></div>
       <div class="actions" id="current-variants" aria-label="今回の比較案">
-        <button data-axis-preview="no_destination6">目的地なし</button>
-        <button data-axis-preview="wins7">勝率へ替える</button>
-        <button data-axis-preview="rebound7">前戦下位からの入賞へ替える</button>
-        <button data-axis-preview="ginji7">銀次遭遇試合の平均順位を加える</button>
+        <button data-axis-preview="no_destination6">検討を進める案：目的地なし（6軸）</button>
+        <button data-axis-preview="ginji7">銀次を加えた参考案</button>
       </div>
       <div id="players" class="players"></div>
       <p class="footnote">
-        総合評価はこの採点基準での点数順です。平均順位・勝率とは異なる場合があり、小さな点差だけで実力差は断定できません。
+        選んだ観点での万能性を読み取る図です。低い点数で形が揃っているだけでは高評価になりません。図形の面積で強さを順位づけしません。
       </p>
       <details id="numeric">
         <summary>数値で比較・元の成績を確認</summary>
@@ -505,6 +489,39 @@
           <table id="values"></table>
         </div>
       </details>
+
+      <section class="section" id="six-axis-study">
+        <h2>目的地なしの6軸を深める</h2>
+        <p class="control-copy">
+          目的地なしの方向で、各観点の成績と得点の揃い方を確認します。6軸の最終採用と採点方法は、まだ確定していません。
+        </p>
+        <dl class="control-copy">
+          <dt><strong>順位：平均順位</strong></dt>
+          <dd>選択した試合を通じて、どの順位で終えたかを見ます。小さいほど好成績です。</dd>
+          <dt><strong>収益：平均収益・上位収益</strong></dt>
+          <dd>
+            平均は全試合を通した水準、上位収益は大きな収益を得た側の水準（P90）です。似た動きをする可能性があります。
+          </dd>
+          <dt><strong>資産：下位資産・中央値・上位資産</strong></dt>
+          <dd>
+            低い側の水準（P10）、真ん中の水準、大きく残せた側の水準（P90）を読み分けます。下位資産は資産が少なかった試合の値で、3・4位の試合だけを集めた値ではありません。
+          </dd>
+        </dl>
+        <p class="control-copy">
+          P10・P90はそれぞれ小さい方から10%・90%の境目です。その範囲の平均額や、最低額・最高額ではありません。
+        </p>
+        <details>
+          <summary>記録を1開催分除くと、6軸の点数はどれだけ動くか</summary>
+          <p id="six-stability-caption" class="control-copy"></p>
+          <div class="scroll" tabindex="0" aria-label="目的地なし6軸の点数変動">
+            <table class="comparison-table" id="six-stability"></table>
+          </div>
+        </details>
+        <details>
+          <summary>基準を作る試合のまとめ方・軸の重なりを確認する</summary>
+          <div id="six-calibration"></div>
+        </details>
+      </section>
 
       <section class="section" id="ginji-comparison">
         <h2>銀次に遭遇した試合で残した成績</h2>
@@ -530,16 +547,6 @@
         </details>
       </section>
 
-      <section class="section" id="destination-comparison">
-        <h2>目的地を外す・替える案の比較</h2>
-        <p class="control-copy">
-          同じ記録・同じ作品共通基準で比較します。以下3案の銀次は上の補助表に置き、平均点には含めていません。勝率は平均順位と重なり、前戦下位からの入賞は対象件数が減る点も確認します。
-        </p>
-        <div class="scroll" tabindex="0" aria-label="目的地の代案の総合点">
-          <table class="comparison-table" id="destination-values"></table>
-        </div>
-      </section>
-
       <section class="section">
         <h2>採点案を比べる</h2>
         <p class="control-copy">
@@ -548,11 +555,11 @@
         <div class="controls">
           <label
             >評価する観点<select id="axes">
-              <optgroup label="今回の追加案">
+              <optgroup label="目的地なしと追加軸の比較">
                 <option value="no_destination6">目的地なし・銀次は別表（6軸）</option>
                 <option value="wins7">目的地を勝率へ・銀次は別表（7軸）</option>
                 <option value="rebound7">目的地を前戦下位からの入賞へ（7軸）</option>
-                <option value="ginji7">目的地なし・銀次遭遇時の順位を加える（7軸・参考）</option>
+                <option value="ginji7">目的地なし・銀次遭遇試合の順位を加える（7軸・参考）</option>
               </optgroup>
               <optgroup label="以前の比較案">
                 <option value="basic4">A：平均順位・平均資産・収益・目的地</option>
@@ -674,7 +681,7 @@
         <div id="admin-state" class="state" role="status" aria-live="polite"></div>
         <div id="preview" hidden>
           <p id="preview-caption"></p>
-          <div class="scroll" tabindex="0" aria-label="基準変更前後の総合点">
+          <div class="scroll" tabindex="0" aria-label="基準変更前後の各軸点数">
             <table id="preview-values"></table>
           </div>
         </div>
@@ -867,6 +874,110 @@
       const q = new URLSearchParams(state);
       history.replaceState(null, "", "?" + q + location.hash);
     }
+    function renderNoDestination(t, scope) {
+      const head =
+        '<thead><tr><th scope="col">指標</th>' +
+        report.players.map((p) => '<th scope="col">' + esc(p.name) + "</th>").join("") +
+        "</tr></thead>";
+      const row = (label, values) =>
+        '<tr><th scope="row">' +
+        esc(label) +
+        "</th>" +
+        values.map((v) => "<td>" + v + "</td>").join("") +
+        "</tr>";
+      const d = scope.fixedBaselineEventRemoval;
+      byId("six-stability-caption").textContent =
+        "目的地なし6軸を、冬の作品共通基準・分布の幅から満点を延ばす方式で検証しています。上の採点方法・作成期間を変えても、この検証条件は固定です。選択中の" +
+        scope.events +
+        "開催から1開催ずつ除いた" +
+        d.removedEventTrials +
+        "通りと、元の記録を含む各軸点数の範囲を示します。信頼区間ではありません。";
+      const extent = (v) =>
+        '<span class="num">' +
+        (v.min === null ? "—" : v.min + "〜" + v.max) +
+        "</span>" +
+        (v.unavailable ? '<span class="sub">採点不能 ' + v.unavailable + "通り</span>" : "");
+      byId("six-stability").innerHTML =
+        head +
+        "<tbody>" +
+        report.axisSets.no_destination6
+          .map((key) =>
+            row(
+              report.metrics[key].label,
+              report.players.map((p) => extent(d.points[p.id][key])),
+            ),
+          )
+          .join("") +
+        "</tbody>";
+      const correlations = [
+        ["revenue_mean", "revenue_p90"],
+        ["assets_p10", "assets_p90"],
+        ["assets_median", "assets_p90"],
+      ]
+        .map(([a, b]) => {
+          const c = t.correlations.find(
+            (x) => (x.a === a && x.b === b) || (x.a === b && x.b === a),
+          );
+          return (
+            "<li>" +
+            esc(report.metrics[a].label + " × " + report.metrics[b].label) +
+            "：" +
+            (c?.r?.toFixed(2) ?? "算出なし") +
+            "</li>"
+          );
+        })
+        .join("");
+      const variants = t.windowSensitivity
+        .map(
+          (v) =>
+            "<details><summary>" +
+            v.window +
+            "試合の窓" +
+            (v.stride === v.window ? "・重複なし" : "・1試合ずつずらす") +
+            "</summary>" +
+            (v.baselineStatus !== "ready"
+              ? "<p>基準作成の件数が不足しています。この案では窓幅の2倍以上かつ40試合以上・8開催以上を必要とします。</p>"
+              : "") +
+            '<p>現在の20試合窓 → この窓幅の点数です。元の評価対象は同じです。</p><div class="scroll" tabindex="0"><table class="comparison-table">' +
+            head +
+            "<tbody>" +
+            report.axisSets.no_destination6
+              .map((key) =>
+                row(
+                  report.metrics[key].label,
+                  report.players.map(
+                    (p) =>
+                      '<span class="num">' +
+                      (t.diagnosticHoldoutScores[p.id][key].score ?? "—") +
+                      " → " +
+                      (v.scores[p.id][key].score ?? "—") +
+                      '</span><span class="sub">' +
+                      esc(statusLabel[v.scores[p.id][key].status] || "") +
+                      "</span>",
+                  ),
+                ),
+              )
+              .join("") +
+            "</tbody></table></div></details>",
+        )
+        .join("");
+      byId("six-calibration").innerHTML =
+        "<p>以下は冬で基準を作り、その後の全マップを採点した比較です（" +
+        t.calibrationMatches +
+        "試合 → " +
+        t.holdoutMatches +
+        "試合）。上の絞り込みには連動しません。窓幅は基準作成時の集計単位であり、採点対象を直近の試合に限定する設定ではありません。</p>" +
+        variants +
+        "<p>冬の基準作成側から1開催ずつ除いた" +
+        t.calibrationEventRemoval.trials +
+        "通りでは、その後の6軸の各点数は最大" +
+        (t.calibrationEventRemoval.maxPointChange ?? "—") +
+        "点変化しました。</p><p>軸同士の動きの近さ（相関係数）は次の通りです。全シーズンを重ならない20試合の区間に分けた4人分の" +
+        t.correlationObservations +
+        "組を使います。同じ4人の反復であり、独立した人数ではありません。相関だけで採否を決めず、軸の意味と実際の違いを確認します。</p><ul>" +
+        correlations +
+        "</ul>";
+    }
     function renderEvidence(t, scope, evaluation) {
       const japanDate = (date, time = false) =>
         new Date(date).toLocaleString("ja-JP", {
@@ -973,7 +1084,7 @@
           .map((p) => esc(p.name) + " " + gb.conditionalCounts[p.id] + "件")
           .join("、") +
         "です。</p>" +
-        "<p>以下は上で選んだ作成期間・採点方法による仮採点です。窓は重なり、窓の多い人の値が多く入ります。少数例のため採用前の参考値とし、これを含む総合評価順位は出しません。</p>" +
+        "<p>以下は上で選んだ作成期間・採点方法による仮採点です。窓は重なり、窓の多い人の値が多く入ります。少数例のため採用前の参考値として読み、対象件数も確認してください。</p>" +
         '<div class="scroll" tabindex="0"><table class="comparison-table">' +
         head +
         "<tbody>" +
@@ -1033,45 +1144,6 @@
           )
           .join("") +
         "</tbody>";
-      const ce = scope.evaluations[state.period + "|" + state.method + "|common"];
-      const variants = [
-        ["no_destination6", "目的地なし"],
-        ["wins7", "勝率へ置換"],
-        ["rebound7", "前戦下位からの入賞へ置換"],
-      ];
-      byId("destination-values").innerHTML =
-        head +
-        "<tbody>" +
-        variants
-          .map(([name, label]) =>
-            row(
-              '<button data-axis-preview="' + name + '">' + label + "</button>",
-              report.players.map((p) => {
-                const v = ce.totals[name][p.id];
-                return cell(
-                  v.score?.toFixed(2) ?? "—",
-                  v.rank === null ? "参考・順位なし" : v.rank + "位",
-                );
-              }),
-            ),
-          )
-          .join("") +
-        row(
-          "勝率の元の値",
-          report.players.map((p) =>
-            cell(raw(ce.raw[p.id].win_rate.value, "win_rate"), ce.n + "試合"),
-          ),
-        ) +
-        row(
-          "下位後入賞の元の値",
-          report.players.map((p) =>
-            cell(
-              raw(ce.raw[p.id].after_lower_podium.value, "after_lower_podium"),
-              "対象 " + ce.raw[p.id].after_lower_podium.n + "試合",
-            ),
-          ),
-        ) +
-        "</tbody>";
       for (const button of document.querySelectorAll("[data-axis-preview]"))
         button.setAttribute("aria-pressed", String(button.dataset.axisPreview === state.axes));
     }
@@ -1084,9 +1156,10 @@
       byId("current-variants").scrollIntoView({ block: "start" });
     });
     function renderMapComparison(t, scope, axes) {
+      const el = byId("map-comparison-content");
       if (state.axes === "ginji7") {
-        byId("map-comparison-content").innerHTML =
-          "<p>銀次を加えた参考案は作品共通基準だけで試算しています。上のマップ絞り込みは同じ基準で採点します。マップ別基準との比較は、他の軸案を選ぶと確認できます。</p>";
+        el.innerHTML =
+          "<p>銀次を加えた参考案は作品共通基準だけで試算しています。マップ別基準との比較は他の軸案で確認できます。</p>";
         return;
       }
       const controls =
@@ -1104,100 +1177,62 @@
           )
           .join("") +
         "</div>";
-      const el = byId("map-comparison-content");
       if (state.map === "all") {
         el.innerHTML =
-          "<p>マップを選ぶと、上のシーズン・軸・採点方法を揃えたまま、同じ成績を2つの基準で比較できます。全マップ表示は、どの案でも作品共通の基準を使います。</p>" +
+          "<p>マップを選ぶと、同じ成績の各軸点数を作品共通とマップ別の基準で比較できます。採用方針は作品共通です。</p>" +
           controls;
         return;
       }
       const key = state.period + "|" + state.method + "|",
         common = scope.evaluations[key + "common"],
         mapped = scope.evaluations[key + "hybrid"],
-        separate = scope.evaluations[key + "separate"],
         cb = t.baselines[key + "all"],
-        mb = t.baselines[key + state.map],
-        mapName = t.maps.find((m) => m.id === state.map).name;
-      const totalText = (e, pid) => {
-        const v = e.totals[state.axes][pid];
-        return (
-          (v.score?.toFixed(2) ?? "—") +
-          '<span class="sub">' +
-          (v.rank === null
-            ? v.score === null
-              ? "採点できません"
-              : "参考・順位なし"
-            : v.rank + "位") +
-          "</span>"
-        );
-      };
+        mb = t.baselines[key + state.map];
       const head =
         '<thead><tr><th scope="col">指標</th>' +
         report.players.map((p) => '<th scope="col">' + esc(p.name) + "</th>").join("") +
         "</tr></thead>";
       el.innerHTML =
         controls +
-        "<p><strong>" +
-        esc(mapName) +
-        "・" +
+        "<p>" +
         scope.n +
-        "試合</strong>を比較します。元の成績は同じです。マップ別案は平均順位を作品共通に保ち、資産・収益・目的地などをそのマップの記録で採点します。</p>" +
-        '<p class="control-copy">基準作成元：作品共通 ' +
+        "試合の同じ成績を比較します。マップ別案でも平均順位は作品共通に保ちます。基準作成元：作品共通 " +
         cb.n +
         "試合・" +
         cb.events +
-        "開催 ／ " +
-        esc(mapName) +
-        " " +
+        "開催 ／ マップ別 " +
         mb.n +
         "試合・" +
         mb.events +
-        "開催。上で選んだ作成期間と採点方法を使います。</p>" +
-        (mb.status !== "ready"
-          ? '<p class="notice">このマップは基準作成に必要な40試合・8開催を満たしません。共通基準での値は読めますが、マップ別の点数を代わりの値で埋めてはいません。</p>'
-          : "") +
-        '<div class="scroll" tabindex="0" aria-label="共通基準とマップ別基準の点数差"><table class="comparison-table">' +
+        "開催。</p>" +
+        (mb.status !== "ready" ? "<p>このマップは基準作成の件数が不足しています。</p>" : "") +
+        '<div class="scroll" tabindex="0"><table class="comparison-table">' +
         head +
         "<tbody>" +
-        [
-          ["共通の総合点", common],
-          ["マップ別の総合点", mapped],
-        ]
-          .map(
-            ([label, e]) =>
-              '<tr><th scope="row">' +
-              label +
-              "</th>" +
-              report.players
-                .map((p) => '<td><span class="point">' + totalText(e, p.id) + "</span></td>")
-                .join("") +
-              "</tr>",
-          )
-          .join("") +
         axes
           .map(
             (axis) =>
               '<tr><th scope="row">' +
-              esc(axisLabel[axis]) +
+              esc(axisLabel[axis] || report.metrics[axis].label) +
               '<span class="sub">共通 → マップ別</span></th>' +
               report.players
                 .map(
                   (p) =>
-                    '<td><span class="point">' +
+                    '<td><span class="num">' +
                     (common.scores[p.id][axis].score ?? "—") +
                     " → " +
                     (mapped.scores[p.id][axis].score ?? "—") +
                     '</span><span class="sub">' +
                     esc(compact(common.raw[p.id][axis].value, axis)) +
+                    '</span><span class="sub">' +
+                    esc(statusLabel[mapped.scores[p.id][axis].status] || "") +
                     "</span></td>",
                 )
                 .join("") +
               "</tr>",
           )
           .join("") +
-        "</tbody></table></div>" +
-        '<p class="control-copy">共通基準は「作品の中で、どの水準の成績か」、マップ別は「そのマップの中で、どの水準か」を表します。マップ別の同じ点数でも、元の金額・到着回数は同じとは限りません。全マップの総合点は、マップ別の点数を平均した値にはしません。</p>' +
-        '<details><summary>2つのレーダーを並べて見る</summary><div class="players map-players">' +
+        '</tbody></table></div><details><summary>2つのレーダーを並べて見る</summary><div class="players map-players">' +
         report.players
           .map(
             (p, i) =>
@@ -1205,42 +1240,14 @@
               (i + 1) +
               ')"><div class="name">' +
               esc(p.name) +
-              "</div>" +
-              "<p>作品共通 <strong>" +
-              totalText(common, p.id) +
-              "</strong></p>" +
+              "</div><p>作品共通</p>" +
               radar(p, common, axes, i, "・作品共通") +
-              '<p class="comparison-heading">マップ別 <strong>' +
-              totalText(mapped, p.id) +
-              "</strong></p>" +
+              "<p>マップ別</p>" +
               radar(p, mapped, axes, i, "・マップ別") +
               "</article>",
           )
           .join("") +
-        "</div></details>" +
-        '<details><summary>満点の境界と、平均順位もマップ別にした場合</summary><div class="scroll" tabindex="0"><table><thead><tr><th>指標</th><th>作品共通の10点</th><th>マップ別の10点</th></tr></thead><tbody>' +
-        axes
-          .map((axis) => {
-            const mapAxis = axis === "rank_mean" ? cb.axes[axis] : mb.axes[axis];
-            return (
-              "<tr><th>" +
-              esc(axisLabel[axis]) +
-              "</th><td>" +
-              (cb.axes[axis].rawThresholds
-                ? esc(raw(cb.axes[axis].rawThresholds[8], axis, 4))
-                : "基準不足") +
-              "</td><td>" +
-              (mapAxis.rawThresholds ? esc(raw(mapAxis.rawThresholds[8], axis, 4)) : "基準不足") +
-              (axis === "rank_mean" ? "（共通）" : "") +
-              "</td></tr>"
-            );
-          })
-          .join("") +
-        "</tbody></table></div><p>平均順位は小さいほど、それ以外は大きいほど高得点です。上の比較では、平均順位は両案とも同じ基準にしています。</p><p>平均順位も含めて全軸をマップ別にした場合の総合点：</p><ul>" +
-        report.players
-          .map((p) => "<li>" + esc(p.name) + "：" + totalText(separate, p.id) + "</li>")
-          .join("") +
-        "</ul></details>";
+        "</div></details>";
     }
     byId("map-comparison-content").addEventListener("click", (event) => {
       const button = event.target.closest("button[data-compare-map]");
@@ -1310,49 +1317,32 @@
       if (state.axes === "ginji7")
         byId("baseline-caption").textContent += " ／ 銀次軸は遭遇5試合の集計窓で仮採点";
       byId("introduction").textContent =
-        "外側ほど好成績。総合点は" + axes.length + "つの軸の平均です。";
-      const qualified = report.players.every((p) => e.totals[state.axes][p.id].rank !== null);
-      byId("quality").hidden = qualified;
+        "各観点の成績と、得点の揃い方を見ます。外側ほど好成績です。";
+      const scores = report.players.flatMap((p) => axes.map((key) => e.scores[p.id][key]));
+      byId("quality").hidden = scores.every((v) => v.status === "ready");
       byId("quality").textContent =
         base.status !== "ready"
           ? "この条件に対応する基準をまだ作れません。試作では作成元40試合以上・8開催以上を必要としています。"
-          : !report.players.every((p) => e.totals[state.axes][p.id].score !== null)
-            ? "採点できない軸がある人の総合点と、4人の総合評価順位は表示していません。理由は数値表で確認できます。"
-            : axes.some((key) =>
-                  report.players.some(
-                    (p) => e.scores[p.id][key].status === "reference_opportunity",
-                  ),
-                )
-              ? "最高額は、基準作成の20試合と表示対象とで更新機会の数が異なります。点数・平均は比較用の参考値とし、総合順位を出していません。"
-              : state.axes === "ginji7"
-                ? "銀次遭遇試合の成績は少ない記録での仮採点です。各点数と平均を参考表示にし、総合順位は出していません。対象件数と根拠は下の表で確認できます。"
-                : "参考値を含むため、総合評価順位は表示していません。試作の表示下限は各軸40試合以上・8開催以上です。";
+          : scores.some((v) => v.score === null)
+            ? "採点できない軸は空欄にしています。理由と対象件数は数値表で確認できます。ほかの軸はそのまま読めます。"
+            : scores.some((v) => v.status === "reference_opportunity")
+              ? "最高額は基準作成時と集計試合数が異なるため、更新機会が違う参考値です。"
+              : "件数が少ない軸を参考値として表示しています。対象件数は数値表で確認できます。";
       byId("players").innerHTML = report.players
         .map((p, i) => {
-          const total = e.totals[state.axes][p.id],
-            values = e.raw[p.id],
-            score = total.score === null ? "—" : total.score.toFixed(2);
+          const values = e.raw[p.id];
+          const note = axes.some((key) => e.scores[p.id][key].score === null)
+            ? "未採点の軸があります"
+            : axes.some((key) => e.scores[p.id][key].status !== "ready")
+              ? "参考値を含みます"
+              : "";
           return (
             '<article class="player" style="--member:var(--p' +
             (i + 1) +
             ')"><div class="name"><span class="marker" aria-hidden="true"></span>' +
             esc(p.name) +
-            "</div><small>総合点" +
-            (total.status === "reference" ? "（参考）" : "") +
-            '</small><div class="scoreline"><span class="total">' +
-            score +
-            '</span><small>/ 10</small></div><p class="rank">' +
-            (total.rank === null
-              ? "総合順位は表示しません"
-              : "総合評価 " +
-                total.rank +
-                "位" +
-                (report.players.filter(
-                  (other) => e.totals[state.axes][other.id].rank === total.rank,
-                ).length > 1
-                  ? "（同率）"
-                  : "")) +
-            "</p>" +
+            "</div>" +
+            (note ? '<p class="control-copy">' + note + "</p>" : "") +
             radar(p, e, axes, i) +
             '<p class="actual">平均順位 ' +
             raw(values.rank_mean.value, "rank_mean") +
@@ -1450,7 +1440,6 @@
           ? "連続20試合の集計値の中央値と上下10%点の幅から閾値を作り、満点を上位側へ延ばす案です。"
           : "連続20試合の集計値を9つの分位点で区切る案です。満点の境界は99%分位点（下から99%の値）です。") +
         "窓が重なっても試合数が増えたとは扱いません。割合など上限がある指標は満点を到達可能な範囲に収めます。どちらの方式も採用前の候補です。";
-      const moneyAxes = axes.filter((key) => report.metrics[key].unit === "万円").length;
       byId("axes-caption").textContent =
         (state.axes === "no_destination6"
           ? "目的地と銀次非遭遇率をレーダーから外した案です。銀次遭遇試合の成績は補助表で比較します。"
@@ -1459,7 +1448,7 @@
             : state.axes === "rebound7"
               ? "目的地の代わりに、選択条件内の前戦が3・4位だった場合に次戦を1・2位で終えた割合を使う案です。試合中の逆転や心理的な回復を観測した値ではありません。"
               : state.axes === "ginji7"
-                ? "目的地を外し、銀次に遭遇した試合の平均順位を加えた案です。この軸だけは遭遇5試合の集計窓で仮採点し、少数例なので総合点も参考表示にします。"
+                ? "目的地を外し、銀次に遭遇した試合の平均順位を加えた案です。この軸だけは遭遇5試合の集計窓で仮採点し、少数例なのでこの軸は参考表示にします。"
                 : state.axes === "profile8"
                   ? "上位10%点は好成績側、中央値は普段の水準、下位10%点は低い側の水準を表します。最高額の一度きりの突出とは区別します。"
                   : state.axes === "quantile9"
@@ -1467,14 +1456,10 @@
                     : state.axes === "reference9"
                       ? "元画像の観点に近い参考案です。最高額の点数は試合数による更新機会に左右されます。"
                       : "軸を減らして要約する案との比較用です。") +
-        " 現在の総合点は各軸の単純平均で、金額の軸が " +
-        moneyAxes +
-        " / " +
-        axes.length +
-        " を占めます。銀次の遭遇前後の経過は記録していないため、回復量や回復速度は算出しません。";
+        " 各軸をそのまま比較し、合計・平均・総合順位は計算しません。銀次の回復量や回復速度は記録から算出できません。";
       const omit = scope.fixedBaselineEventRemoval;
       byId("sensitivity").innerHTML =
-        "<p>以下は中央値型4軸・冬の作品共通基準で確認した結果です。他の案へ切り替えてもこの診断の条件は変わりません。</p><ul><li>基準作成：" +
+        "<p>以下は目的地なし6軸・冬の作品共通基準で確認した結果です。他の案へ切り替えてもこの診断の条件は変わりません。</p><ul><li>基準作成：" +
         t.calibrationMatches +
         "試合・" +
         t.calibrationEvents +
@@ -1484,18 +1469,15 @@
         t.holdoutEvents +
         "開催。</li><li>この表示対象から1開催ずつ除くと、各軸の最大変化は " +
         omit.maxPointChange +
-        "点。点数順が変わった例は " +
-        omit.rankingChangedTrials +
-        " / " +
-        omit.removedEventTrials +
-        " 通りです。同率の発生・解消も含み、確率や信頼区間ではありません。</li><li>基準を作る記録から1開催ずつ除いた場合、後の期間の点数は最大 " +
+        "点です。基準を作る記録から1開催ずつ除いた場合、後の期間の点数は最大 " +
         t.calibrationEventRemoval.maxPointChange +
         "点変化しました。</li><li>マップ別基準は、記録が不足する場合に作品共通へ自動で置き換えません。全マップ表示には作品共通基準を使います。</li><li>全記録で作り直す例には評価対象の記録も含まれます。新しい時期への検証結果としては扱いません。</li></ul>";
       byId("snapshot").textContent =
         "データ取得：" +
         report.snapshotAt.replace("T", " ").slice(0, 19) +
-        " UTC。実データをローカルで読み取った試作です。作品共通基準を採用し、目的地なし・別指標への置換・銀次遭遇試合の成績を比較中です。採用軸・計算方式・件数条件は未確定です。";
+        " UTC。実データをローカルで読み取った試作です。作品共通基準・目的地なし案を中心に、各観点の成績を比較しています。総合点や総合順位は算出しません。採用軸・計算方式・件数条件は未確定です。";
       renderMapComparison(t, scope, axes);
+      renderNoDestination(t, scope);
       renderEvidence(t, scope, e);
       sync();
       renderAdmin();
@@ -1545,7 +1527,7 @@
         review.matches +
         "試合・" +
         review.events +
-        "開催。ここでは中央値型4軸・冬の作品共通基準を固定して検証しています。下で仮適用する候補の状態を表すものではありません。</p>";
+        "開催。ここでは目的地なし6軸・冬の作品共通基準を固定して検証しています。下で仮適用する候補の状態を表すものではありません。</p>";
       const messages = {
         idle: "適用中：冬の基準。まだ候補を計算していません。",
         running: "候補を計算中です。この画面を離れても、戻って状態を確認できます。",
@@ -1579,45 +1561,38 @@
         const suffix = a.added ? "After" : "Before",
           current = d[(a.phase === "restore" ? "candidate" : "current") + suffix],
           candidate = d[(a.phase === "restore" ? "current" : "candidate") + suffix],
-          axes = "median4";
+          axes = "no_destination6";
         byId("preview-caption").textContent =
           (a.phase === "stale" ? "更新前の比較を表示中。" : "") +
           "春の全マップ " +
           (a.added ? d.afterCount : d.beforeCount) +
-          "試合を、同じ中央値型4軸で採点。候補作成元は " +
+          "試合を、同じ目的地なし6軸で採点。候補作成元は " +
           d.candidate.n +
           "試合。差は基準変更によるものです。";
         byId("preview-values").innerHTML =
-          "<thead><tr><th>プレーヤー</th><th>変更前の基準</th><th>変更後の基準</th><th>各軸：変更前 → 変更後</th></tr></thead><tbody>" +
-          report.players
-            .map((p) => {
-              const old = current.totals[axes][p.id],
-                next = candidate.totals[axes][p.id];
-              return (
-                "<tr><th>" +
-                esc(p.name) +
-                '</th><td class="num">' +
-                (old.score?.toFixed(2) ?? "—") +
-                '<span class="sub">' +
-                (old.rank === null ? "順位なし" : old.rank + "位") +
-                '</span></td><td class="num">' +
-                (next.score?.toFixed(2) ?? "—") +
-                '<span class="sub">' +
-                (next.rank === null ? "順位なし" : next.rank + "位") +
-                "</span></td><td>" +
-                report.axisSets.median4
+          '<thead><tr><th scope="col">指標：変更前 → 変更後</th>' +
+          report.players.map((p) => '<th scope="col">' + esc(p.name) + "</th>").join("") +
+          "</tr></thead><tbody>" +
+          report.axisSets[axes]
+            .map(
+              (key) =>
+                '<tr><th scope="row">' +
+                esc(report.metrics[key].label) +
+                "</th>" +
+                report.players
                   .map(
-                    (k) =>
-                      esc(axisLabel[k]) +
-                      " " +
-                      (current.scores[p.id][k].score ?? "—") +
+                    (p) =>
+                      '<td><span class="num">' +
+                      (current.scores[p.id][key].score ?? "—") +
                       " → " +
-                      (candidate.scores[p.id][k].score ?? "—"),
+                      (candidate.scores[p.id][key].score ?? "—") +
+                      '</span><span class="sub">' +
+                      esc(statusLabel[candidate.scores[p.id][key].status] || "") +
+                      "</span></td>",
                   )
-                  .join("<br>") +
-                "</td></tr>"
-              );
-            })
+                  .join("") +
+                "</tr>",
+            )
             .join("") +
           "</tbody>";
       }
@@ -1654,7 +1629,7 @@
       state.period = a.phase === "restore" ? "initial" : "candidate";
       state.method = "spread";
       state.mode = "common";
-      state.axes = "median4";
+      state.axes = "no_destination6";
       adminSave({ ...a, phase: a.phase === "restore" ? "idle" : "applied" });
       render();
     };

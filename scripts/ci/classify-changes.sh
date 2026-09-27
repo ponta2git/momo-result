@@ -40,6 +40,13 @@ while IFS= read -r -d '' path; do
       api=true
       runtime=true
       ;;
+    apps/web/src/test/factories/* | apps/web/src/test/msw/fixtures.ts | \
+      apps/web/src/test/msw/seriesAnalysisFixtures.ts | apps/web/src/test/deferred.ts)
+      # Playwright imports these fixtures directly. Vitest cannot establish that
+      # the assembled browser scenarios still accept the changed inputs.
+      web=true
+      runtime=true
+      ;;
     apps/web/src/test/* | apps/web/src/*.test.* | apps/web/src/*.spec.* | \
       apps/web/scripts/* | apps/web/oxlint.config.ts | apps/web/vitest.config.*)
       web=true

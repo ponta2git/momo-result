@@ -107,6 +107,14 @@ assert_case openapi "${api_web}" apps/api/openapi.yaml
 assert_case openapi-policy "${web_only}" apps/api/redocly.yaml
 assert_case web-test "${web_only}" apps/web/src/features/events/foo.test.tsx
 assert_case web-test-support "${web_only}" apps/web/src/test/render.tsx
+assert_case browser-shared-factory "$(expected web runtime)" \
+  apps/web/src/test/factories/matchDetail.ts
+assert_case browser-shared-masters "$(expected web runtime)" \
+  apps/web/src/test/msw/fixtures.ts
+assert_case browser-shared-analysis "$(expected web runtime)" \
+  apps/web/src/test/msw/seriesAnalysisFixtures.ts
+assert_case browser-shared-async-control "$(expected web runtime)" \
+  apps/web/src/test/deferred.ts
 assert_case web-quality-script "${web_only}" apps/web/scripts/generate-api.mjs
 assert_case web-lint-config "${web_only}" apps/web/oxlint.config.ts
 assert_case analysis-test "${analysis_only}" apps/processing-worker/tests/parent_liveness.rs

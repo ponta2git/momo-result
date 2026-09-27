@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
@@ -13,12 +13,7 @@ import { createDeferred } from "@/test/deferred";
 import { makeFourPlayerResults, makeMatchDetail } from "@/test/factories";
 import { mswState } from "@/test/msw/fixtures";
 import { setupMsw } from "@/test/msw/lifecycle";
-import {
-  analysisArtifact,
-  makeSeriesAnalysisAggregate,
-  makeSeriesAnalysisAdminOverview,
-  makeSeriesAnalysisReview,
-} from "@/test/msw/seriesAnalysisFixtures";
+import { makeSeriesAnalysisAdminOverview } from "@/test/msw/seriesAnalysisFixtures";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 import { selectOption } from "@/test/selectOption";
@@ -114,6 +109,15 @@ describe("app routing", () => {
     await user.click(tsv);
     expect(tsv).toHaveFocus();
     expect(tsv).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("opens comparison through the protected lazy route from global navigation", async () => {
+    setDevUser();
+    const { router } = renderApp("/matches");
+    expect(await screen.findByRole("region", { name: "試合一覧" })).toBeVisible();
+    await user.click(screen.getByRole("link", { name: "戦績比較" }));
+    expect(await screen.findByText("収益先行時は目的地0回で終えない。")).toBeVisible();
+    expect(router.state.location.pathname).toBe("/analytics/series");
   });
 
   // These flows load cold route chunks under coverage; their total budget must exceed each wait.
@@ -442,99 +446,5 @@ describe("app routing", () => {
     } finally {
       vi.unstubAllEnvs();
     }
-  });
-
-  it("loads only the active review, then loads aggregate after switching views", async () => {
-    setDevUser();
-    const aggregateResponseGate = createDeferred();
-    const aggregateSearches: URLSearchParams[] = [];
-    const reviewSearches: URLSearchParams[] = [];
-    server.use(
-      http.get("/api/analytics/series-comparison/v4/aggregate", async ({ request }) => {
-        aggregateSearches.push(new URL(request.url).searchParams);
-        await aggregateResponseGate.promise;
-        return HttpResponse.json(makeSeriesAnalysisAggregate());
-      }),
-      http.get("/api/analytics/series-comparison/v3/review", ({ request }) => {
-        reviewSearches.push(new URL(request.url).searchParams);
-        return HttpResponse.json(makeSeriesAnalysisReview());
-      }),
-    );
-
-    const { router } = renderApp("/analytics/series");
-
-    expect(await screen.findByRole("region", { name: "戦績比較" })).toBeInTheDocument();
-    expect(await screen.findByRole("tab", { name: "次戦に備える" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    expect(await screen.findByText("収益先行時は目的地0回で終えない。")).toBeInTheDocument();
-
-    expect(aggregateSearches).toHaveLength(0);
-    expect(reviewSearches).toHaveLength(1);
-
-    // Control API readiness without timing the first transform of the lazy view or validator.
-    // Both real modules still run; their cold loading belongs to build/runtime evidence.
-    await Promise.all([
-      import("@/features/seriesComparison/page/SeriesAnalysisOverviewView"),
-      import("@/shared/api/generatedContracts/series-analysis-aggregate-v4-validators.generated"),
-    ]);
-    const analysisPurposeTab = screen.getByRole("tab", { name: "分析する" });
-    await user.click(analysisPurposeTab);
-    expect(screen.getByLabelText("分析を読み込み中")).toBeInTheDocument();
-    expect(analysisPurposeTab).toHaveAttribute("aria-selected", "true");
-    expect(analysisPurposeTab).toHaveFocus();
-    await act(async () => {
-      aggregateResponseGate.resolve();
-    });
-    expect(await screen.findByRole("heading", { name: "順位と基礎比較" })).toBeInTheDocument();
-    expect(screen.getByRole("tabpanel", { name: "今の差" })).toBeInTheDocument();
-    expect(analysisPurposeTab).toHaveFocus();
-    expect(router.state.location.search).toContain("view=overview");
-
-    expect(aggregateSearches).toHaveLength(1);
-    await user.click(screen.getByRole("tab", { name: "次戦に備える" }));
-    expect(await screen.findByRole("tabpanel", { name: "次戦に備える" })).toBeInTheDocument();
-    await user.click(screen.getByRole("tab", { name: "分析する" }));
-    expect(await screen.findByRole("tabpanel", { name: "今の差" })).toBeInTheDocument();
-
-    expect(aggregateSearches).toHaveLength(1);
-    expect(reviewSearches).toHaveLength(1);
-    expect(
-      aggregateSearches.every((params) => params.get("artifactId") === analysisArtifact.artifactId),
-    ).toBe(true);
-    expect(
-      reviewSearches.every((params) => params.get("artifactId") === analysisArtifact.artifactId),
-    ).toBe(true);
-  });
-
-  it("pins season and map aggregate requests to the published artifact", async () => {
-    setDevUser();
-    const aggregateSearches: URLSearchParams[] = [];
-    server.use(
-      http.get("/api/analytics/series-comparison/v4/aggregate", ({ request }) => {
-        aggregateSearches.push(new URL(request.url).searchParams);
-        return HttpResponse.json(makeSeriesAnalysisAggregate());
-      }),
-    );
-    const { router } = renderApp("/analytics/series?view=overview");
-
-    expect(await screen.findByRole("region", { name: "戦績比較" })).toBeInTheDocument();
-    await user.click(await screen.findByRole("button", { name: /比較対象を変更/u }));
-    await selectOption(user, screen.getByRole("combobox", { name: "シーズン" }), "season_current");
-    await selectOption(user, screen.getByRole("combobox", { name: "マップ" }), "map_east");
-
-    await waitFor(() => {
-      expect(router.state.location.search).toContain("seasonMasterId=season_current");
-      expect(router.state.location.search).toContain("mapMasterId=map_east");
-      expect(
-        aggregateSearches.some(
-          (params) =>
-            params.get("artifactId") === analysisArtifact.artifactId &&
-            params.get("seasonMasterId") === "season_current" &&
-            params.get("mapMasterId") === "map_east",
-        ),
-      ).toBe(true);
-    });
   });
 });

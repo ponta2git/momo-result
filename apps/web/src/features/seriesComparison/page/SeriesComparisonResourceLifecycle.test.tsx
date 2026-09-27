@@ -1,12 +1,14 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { SeriesComparisonPage } from "@/features/seriesComparison/page/SeriesComparisonPage";
 import type { ProblemDetails } from "@/shared/api/problemDetails";
+import { decodeSeriesAnalysisArtifact } from "@/shared/api/seriesAnalysisArtifactDecoder";
+import { createDeferred } from "@/test/deferred";
 import { setupMsw } from "@/test/msw/lifecycle";
 import {
   analysisArtifact,
@@ -20,6 +22,16 @@ import { createTestQueryClient } from "@/test/queryClient";
 import { selectOption } from "@/test/selectOption";
 
 setupMsw();
+// This suite controls HTTP readiness, not cold source transformation in the test runner.
+// Keep the real views and validators, loading them before the resource-lifecycle deadlines.
+beforeAll(() =>
+  Promise.all([
+    import("@/features/seriesComparison/page/SeriesAnalysisOverviewView"),
+    import("@/features/seriesComparison/page/SeriesAnalysisReviewView"),
+    decodeSeriesAnalysisArtifact("aggregateV4", makeSeriesAnalysisAggregate()),
+    decodeSeriesAnalysisArtifact("reviewV3", makeSeriesAnalysisReview()),
+  ]),
+);
 
 function renderPage(path = "/analytics/series") {
   const queryClient = createTestQueryClient();
@@ -213,5 +225,93 @@ describe("SeriesComparisonPage resource lifecycle", () => {
     expect(await screen.findByText("収益先行時は目的地0回で終えない。")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "比較対象を再読み込み" })).not.toBeInTheDocument();
     expect(attempts).toBe(2);
+  });
+
+  it("loads only the active review, then loads aggregate after switching views", async () => {
+    const user = userEvent.setup();
+    const aggregateResponseGate = createDeferred();
+    const aggregateSearches: URLSearchParams[] = [];
+    const reviewSearches: URLSearchParams[] = [];
+    server.use(
+      http.get("/api/analytics/series-comparison/v4/aggregate", async ({ request }) => {
+        aggregateSearches.push(new URL(request.url).searchParams);
+        await aggregateResponseGate.promise;
+        return HttpResponse.json(makeSeriesAnalysisAggregate());
+      }),
+      http.get("/api/analytics/series-comparison/v3/review", ({ request }) => {
+        reviewSearches.push(new URL(request.url).searchParams);
+        return HttpResponse.json(makeSeriesAnalysisReview());
+      }),
+    );
+
+    const { router } = renderPage("/analytics/series");
+
+    expect(await screen.findByRole("region", { name: "戦績比較" })).toBeInTheDocument();
+    expect(await screen.findByRole("tab", { name: "次戦に備える" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(await screen.findByText("収益先行時は目的地0回で終えない。")).toBeInTheDocument();
+
+    expect(aggregateSearches).toHaveLength(0);
+    expect(reviewSearches).toHaveLength(1);
+
+    const analysisPurposeTab = screen.getByRole("tab", { name: "分析する" });
+    await user.click(analysisPurposeTab);
+    expect(screen.getByLabelText("分析を読み込み中")).toBeInTheDocument();
+    expect(analysisPurposeTab).toHaveAttribute("aria-selected", "true");
+    expect(analysisPurposeTab).toHaveFocus();
+    await act(async () => {
+      aggregateResponseGate.resolve();
+    });
+    expect(await screen.findByRole("heading", { name: "順位と基礎比較" })).toBeInTheDocument();
+    expect(screen.getByRole("tabpanel", { name: "今の差" })).toBeInTheDocument();
+    expect(analysisPurposeTab).toHaveFocus();
+    expect(router.state.location.search).toContain("view=overview");
+
+    expect(aggregateSearches).toHaveLength(1);
+    await user.click(screen.getByRole("tab", { name: "次戦に備える" }));
+    expect(await screen.findByRole("tabpanel", { name: "次戦に備える" })).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "分析する" }));
+    expect(await screen.findByRole("tabpanel", { name: "今の差" })).toBeInTheDocument();
+
+    expect(aggregateSearches).toHaveLength(1);
+    expect(reviewSearches).toHaveLength(1);
+    expect(
+      aggregateSearches.every((params) => params.get("artifactId") === analysisArtifact.artifactId),
+    ).toBe(true);
+    expect(
+      reviewSearches.every((params) => params.get("artifactId") === analysisArtifact.artifactId),
+    ).toBe(true);
+  });
+
+  it("pins season and map aggregate requests to the published artifact", async () => {
+    const user = userEvent.setup();
+    const aggregateSearches: URLSearchParams[] = [];
+    server.use(
+      http.get("/api/analytics/series-comparison/v4/aggregate", ({ request }) => {
+        aggregateSearches.push(new URL(request.url).searchParams);
+        return HttpResponse.json(makeSeriesAnalysisAggregate());
+      }),
+    );
+    const { router } = renderPage("/analytics/series?view=overview");
+
+    expect(await screen.findByRole("region", { name: "戦績比較" })).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: /比較対象を変更/u }));
+    await selectOption(user, screen.getByRole("combobox", { name: "シーズン" }), "season_current");
+    await selectOption(user, screen.getByRole("combobox", { name: "マップ" }), "map_east");
+
+    await waitFor(() => {
+      expect(router.state.location.search).toContain("seasonMasterId=season_current");
+      expect(router.state.location.search).toContain("mapMasterId=map_east");
+      expect(
+        aggregateSearches.some(
+          (params) =>
+            params.get("artifactId") === analysisArtifact.artifactId &&
+            params.get("seasonMasterId") === "season_current" &&
+            params.get("mapMasterId") === "map_east",
+        ),
+      ).toBe(true);
+    });
   });
 });

@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { decodeSeriesAnalysisArtifact } from "@/shared/api/seriesAnalysisArtifactDecoder";
 import {
   makeOwnerComparisonAggregate,

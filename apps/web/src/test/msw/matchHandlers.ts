@@ -1,5 +1,6 @@
 import { http, HttpResponse } from "msw";
 
+import { makeFourPlayerResults, makeMatchDetail } from "@/test/factories/matchDetail";
 import { makeMatchDraftReviewResponse } from "@/test/factories/matchDraftReview";
 import { makeMatchDraftSourceImageResponses } from "@/test/factories/sourceImages";
 import { mswState, now } from "@/test/msw/fixtures";
@@ -74,14 +75,7 @@ export const matchHandlers = [
         status: 200,
       }),
   ),
-  http.post("/api/matches", async () =>
-    HttpResponse.json({
-      createdAt: now,
-      heldEventId: "held-1",
-      matchId: "match-1",
-      matchNoInEvent: 1,
-    }),
-  ),
+  // Confirmation and update responses belong to each scenario, together with their payload oracle.
   http.get("/api/matches", ({ request }) => {
     const url = new URL(request.url);
     const heldEventId = url.searchParams.get("heldEventId");
@@ -160,106 +154,21 @@ export const matchHandlers = [
     }),
   ),
   http.get("/api/matches/:matchId", ({ params }) =>
-    HttpResponse.json({
-      navigation: {},
-      createdAt: now,
-      createdByMemberId: "member_ponta",
-      gameTitleId: "gt_momotetsu_2",
-      heldEventId: "held-1",
-      layoutFamily: "momotetsu_2",
-      heldAt: now,
-      gameTitleName: "桃太郎電鉄2",
-      seasonName: "今シーズン",
-      mapName: "東日本編",
-      mapMasterId: "map_east",
-      matchId: params["matchId"],
-      matchNoInEvent: 1,
-      ownerMemberId: "member_ponta",
-      playedAt: now,
-      players: [
-        {
-          incidents: {
-            cardShop: 0,
-            cardStation: 0,
-            destination: 0,
-            minusStation: 0,
-            plusStation: 0,
-            suriNoGinji: 0,
-          },
-          memberId: "member_ponta",
-          playOrder: 1,
-          rank: 1,
-          revenueManYen: 200,
-          totalAssetsManYen: 1000,
-        },
-        {
-          incidents: {
-            cardShop: 0,
-            cardStation: 0,
-            destination: 0,
-            minusStation: 0,
-            plusStation: 0,
-            suriNoGinji: 0,
-          },
-          memberId: "member_akane_mami",
-          playOrder: 2,
-          rank: 2,
-          revenueManYen: 150,
-          totalAssetsManYen: 800,
-        },
-        {
-          incidents: {
-            cardShop: 0,
-            cardStation: 0,
-            destination: 0,
-            minusStation: 0,
-            plusStation: 0,
-            suriNoGinji: 0,
-          },
-          memberId: "member_otaka",
-          playOrder: 3,
-          rank: 3,
-          revenueManYen: 100,
-          totalAssetsManYen: 600,
-        },
-        {
-          incidents: {
-            cardShop: 0,
-            cardStation: 0,
-            destination: 0,
-            minusStation: 0,
-            plusStation: 0,
-            suriNoGinji: 0,
-          },
-          memberId: "member_eu",
-          playOrder: 4,
-          rank: 4,
-          revenueManYen: 50,
-          totalAssetsManYen: 400,
-        },
-      ],
-      seasonMasterId: "season_current",
-    }),
-  ),
-  http.put("/api/matches/:matchId", async ({ params }) =>
-    HttpResponse.json({
-      createdAt: now,
-      createdByMemberId: "member_ponta",
-      gameTitleId: "gt_momotetsu_2",
-      heldEventId: "held-1",
-      layoutFamily: "momotetsu_2",
-      heldAt: now,
-      gameTitleName: "桃太郎電鉄2",
-      seasonName: "今シーズン",
-      mapName: "東日本編",
-      mapMasterId: "map_east",
-      matchId: params["matchId"],
-      matchNoInEvent: 1,
-      ownerMemberId: "member_ponta",
-      playedAt: now,
-      players: [],
-      seasonMasterId: "season_current",
-    }),
+    HttpResponse.json(
+      makeMatchDetail({
+        createdAt: now,
+        heldAt: now,
+        playedAt: now,
+        layoutFamily: "momotetsu_2",
+        matchId: String(params["matchId"]),
+        players: makeFourPlayerResults([
+          { revenueManYen: 200, totalAssetsManYen: 1000 },
+          { revenueManYen: 150, totalAssetsManYen: 800 },
+          { revenueManYen: 100, totalAssetsManYen: 600 },
+          { revenueManYen: 50, totalAssetsManYen: 400 },
+        ]),
+      }),
+    ),
   ),
   http.delete("/api/matches/:matchId", ({ params }) =>
     HttpResponse.json({ deleted: true, matchId: params["matchId"] }),

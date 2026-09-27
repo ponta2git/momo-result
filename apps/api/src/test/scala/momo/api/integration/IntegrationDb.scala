@@ -18,10 +18,10 @@ import momo.api.db.Database
 
 /**
  * Helpers for integration tests that talk to an isolated Postgres Testcontainer migrated with the
- * momo-db drizzle SQL files.
+ * momo-db drizzle SQL files selected by the shared pinned-migration resolver.
  *
- * The schema is owned by momo-db; tests must NOT issue DDL. Set `MOMO_DB_MIGRATIONS_DIR` when the
- * momo-db checkout is not discoverable from the current working directory.
+ * The schema is owned by momo-db; tests must NOT issue DDL. Set `MOMO_DB_MIGRATIONS_DIR` when
+ * an explicit migration snapshot is required instead of the pinned checkout.
  */
 // scalafix:off DisableSyntax.noUnsafeRunSync
 // scalafix:off DisableSyntax.throw
@@ -48,12 +48,15 @@ object IntegrationDb:
   private lazy val sharedFixture: DbFixture =
     import cats.effect.unsafe.implicits.global
 
+    val migrations = migrationFiles(migrationsDirectory)
+    if migrations.isEmpty then sys.error("No momo-db migration SQL files found.")
+
     val container = new PostgreSQLContainer(PostgresImage).withDatabaseName(DatabaseName)
       .withUsername(Username).withPassword(Password)
     container.start()
 
     val settings = Settings(container.getJdbcUrl, container.getUsername, container.getPassword)
-    try migrate(settings)
+    try migrate(settings, migrations)
     catch
       case error: Throwable =>
         container.stop()
@@ -81,10 +84,7 @@ object IntegrationDb:
       poolSize = 3,
     ))
 
-  private def migrate(settings: Settings): Unit =
-    val migrations = migrationFiles(migrationsDirectory)
-    if migrations.isEmpty then sys.error("No momo-db migration SQL files found.")
-
+  private def migrate(settings: Settings, migrations: Seq[Path]): Unit =
     val connection = DriverManager.getConnection(settings.jdbcUrl, settings.user, settings.password)
     try
       connection.setAutoCommit(false)
@@ -119,23 +119,30 @@ object IntegrationDb:
     finally stream.close()
 
   private def migrationsDirectory: Path =
-    val explicit = sys.env.get("MOMO_DB_MIGRATIONS_DIR")
-      .map(Paths.get(_).toAbsolutePath.normalize())
-    explicit.getOrElse {
-      val cwd = Paths.get(sys.props("user.dir")).toAbsolutePath.normalize()
-      val candidates = Seq(
-        cwd.resolve("../../_deps/momo-db/drizzle"),
-        cwd.resolve("_deps/momo-db/drizzle"),
-        cwd.resolve("../../../momo-db/drizzle"),
-        cwd.resolve("../momo-db/drizzle"),
-      ).map(_.normalize())
-      candidates.find(Files.isDirectory(_)).getOrElse {
-        val searched = candidates.mkString(", ")
-        throw new IllegalStateException(
-          s"momo-db migrations directory was not found. Set MOMO_DB_MIGRATIONS_DIR. Searched: $searched"
-        )
-      }
-    }
+    val cwd = Paths.get(sys.props("user.dir")).toAbsolutePath.normalize()
+    val resolver = Paths.get("scripts", "ci", "resolve-momo-db-migrations.sh")
+    val root = Seq(cwd, cwd.resolve("../..").normalize())
+      .find(path => Files.isRegularFile(path.resolve(resolver)))
+      .getOrElse(throw new IllegalStateException("momo-db migration resolver was not found."))
+    val process = new ProcessBuilder("bash", root.resolve(resolver).toString)
+      .directory(cwd.toFile)
+      .redirectError(ProcessBuilder.Redirect.INHERIT)
+      .start()
+    val output =
+      val stream = process.getInputStream
+      try new String(stream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
+          .stripSuffix("\n").stripSuffix("\r")
+      finally stream.close()
+    if process.waitFor() != 0 then
+      throw new IllegalStateException(
+        "momo-db migration path resolution failed; see resolver diagnostics."
+      )
+    val directory = Paths.get(output)
+    if !directory.isAbsolute || !Files.isDirectory(directory) then
+      throw new IllegalStateException(
+        "momo-db migration resolver did not return an absolute directory."
+      )
+    directory
 
   /**
    * Wipe all app-owned tables so each test starts from a clean slate. Skips `members` (seeded by

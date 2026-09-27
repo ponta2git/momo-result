@@ -1,14 +1,21 @@
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 
-import { applyMigrations, runCommand, startApi, stopProcessGroup, waitForApi } from "./runtime.mjs";
+import {
+  applyMigrations,
+  resolveMigrationsDir,
+  runCommand,
+  startApi,
+  stopProcessGroup,
+  waitForApi,
+} from "./runtime.mjs";
 
 test(
   "interruption survives lazy dependency exit hooks and repeated signals until cleanup finishes",
@@ -66,6 +73,19 @@ test("an explicit missing migration directory never bootstraps a different schem
       }),
       /momo-db migrations directory was not found/u,
     );
+  } finally {
+    if (previous === undefined) delete process.env["MOMO_DB_MIGRATIONS_DIR"];
+    else process.env["MOMO_DB_MIGRATIONS_DIR"] = previous;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("the shared resolver interprets an explicit relative path from the caller's directory", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "momo explicit migrations "));
+  const previous = process.env["MOMO_DB_MIGRATIONS_DIR"];
+  process.env["MOMO_DB_MIGRATIONS_DIR"] = relative(process.cwd(), directory);
+  try {
+    assert.equal(await realpath(await resolveMigrationsDir()), await realpath(directory));
   } finally {
     if (previous === undefined) delete process.env["MOMO_DB_MIGRATIONS_DIR"];
     else process.env["MOMO_DB_MIGRATIONS_DIR"] = previous;

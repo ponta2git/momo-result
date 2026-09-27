@@ -10,6 +10,7 @@
 - API / worker が root env を自動で読むと仮定しない。起動する process に必要最小限の変数だけを渡す。
 - worker container へ OAuth など無関係な secret を渡さず、接続値を docs、tracked file、shell history へ書かない。
 - DB を使う前に sibling `momo-db` の migration が接続先へ適用済みであることを確認する。
+- 隔離testの既定migration選択は共通resolverで `.momo-db-ref` の内容と照合し、異なるcheckoutや未追跡SQLを拒否する。固定revisionのarchiveや意図したschema実験は `MOMO_DB_MIGRATIONS_DIR` で明示し、検証した前提を区別する。
 - integration / E2E は普段使いの DB、Redis、bucket と分離する。外部依存 gate の未実行は、その wire 動作を未検証として報告する。
 - Web / runtime E2Eのfresh DB bootstrapは `web-e2e` profileで現行の分析公開契約を初期化する。migrationだけのbaselineと区別し、既存DBの正式なpromotionや本番切替を代用しない。
 

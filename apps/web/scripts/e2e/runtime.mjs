@@ -1,6 +1,5 @@
 import { execFile, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { readdir } from "node:fs/promises";
 import { createServer } from "node:net";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -22,6 +21,7 @@ const webDir = resolve(scriptDir, "../..");
 const repoRoot = resolve(webDir, "../..");
 const apiDir = resolve(repoRoot, "apps/api");
 const migrationScript = resolve(repoRoot, "scripts/ci/apply-momo-db-migrations.sh");
+const migrationResolver = resolve(repoRoot, "scripts/ci/resolve-momo-db-migrations.sh");
 
 const toolEnvironmentNames = [
   "ALL_PROXY",
@@ -125,7 +125,7 @@ export async function startRedis() {
 }
 
 export async function applyMigrations(postgres, databaseName = POSTGRES_DB, signal) {
-  const migrationsDir = await resolveMigrationsDir();
+  const migrationsDir = await resolveMigrationsDir(signal);
   await runCommand(migrationScript, [], {
     cwd: repoRoot,
     env: childEnvironment({
@@ -148,29 +148,16 @@ export async function applyMigrations(postgres, databaseName = POSTGRES_DB, sign
   });
 }
 
-async function resolveMigrationsDir() {
-  // An explicit path must not silently fall back to another schema revision.
+export async function resolveMigrationsDir(signal) {
   const explicit = process.env["MOMO_DB_MIGRATIONS_DIR"];
-  const candidates = explicit
-    ? [resolve(explicit)]
-    : [resolve(repoRoot, "_deps/momo-db/drizzle"), resolve(repoRoot, "../momo-db/drizzle")];
-
-  for (const candidate of candidates) {
-    try {
-      await readdir(candidate);
-      return candidate;
-    } catch (error) {
-      if (error?.code !== "ENOENT") {
-        throw error;
-      }
-    }
-  }
-
-  throw new Error(
-    `momo-db migrations directory was not found. Set MOMO_DB_MIGRATIONS_DIR. Searched: ${candidates.join(
-      ", ",
-    )}`,
-  );
+  const { stdout } = await promisify(execFile)(migrationResolver, [], {
+    cwd: repoRoot,
+    env: childEnvironment({
+      MOMO_DB_MIGRATIONS_DIR: explicit ? resolve(explicit) : undefined,
+    }),
+    signal,
+  });
+  return stdout.replace(/\r?\n$/u, "");
 }
 
 export function startApi({ apiPort, databaseUrl, imageTmpDir, redisUrl, environment = {} }) {

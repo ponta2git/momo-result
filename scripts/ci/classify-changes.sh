@@ -80,8 +80,9 @@ while IFS= read -r -d '' path; do
       analysis=true
       analysis_image=true
       ;;
-    .momo-db-ref | scripts/ci/apply-momo-db-migrations.sh)
+    .momo-db-ref | scripts/ci/apply-momo-db-migrations.sh | scripts/ci/resolve-momo-db-migrations.sh)
       api=true
+      web=true
       analysis=true
       analysis_image=true
       runtime=true

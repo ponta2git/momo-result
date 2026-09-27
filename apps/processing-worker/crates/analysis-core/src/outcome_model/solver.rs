@@ -313,3 +313,6 @@ fn dot(left: &[f64], right: &[f64]) -> f64 {
 fn max_absolute(values: &[f64]) -> f64 {
     values.iter().map(|value| value.abs()).fold(0.0, f64::max)
 }
+
+#[cfg(test)]
+mod tests;

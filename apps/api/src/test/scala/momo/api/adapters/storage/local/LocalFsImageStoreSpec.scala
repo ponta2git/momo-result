@@ -8,8 +8,8 @@ import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.storage.ImageValidation
-import momo.api.domain.StoredImage
 import momo.api.domain.ids.{AccountId, ImageId}
+import momo.api.domain.{StoredImage, StoredImageLocation}
 import momo.api.errors.AppError
 import momo.api.testing.TestImages
 
@@ -283,5 +283,60 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
         assertEquals(deleted, 1)
         assert(keptExists)
         assert(!orphanExists)
+    }
+  }
+
+  test("image streams verify the descriptor before emitting replaced content") {
+    tempDirectory("momo-api-image-integrity").use { dir =>
+      val store = LocalFsImageStore[IO](dir)
+      for
+        stored <- store.save(accountId, None, Some("image/png"), pngBytes)
+          .flatMap(_.fold(error => fail(s"save failed: $error"), IO.pure))
+        original <- store.readStream(stored).compile.toVector
+        _ <- IO.blocking(Files.write(pathOf(stored), TestImages.png(2, 1)))
+        replaced <- store.readStream(stored).compile.toVector.attempt
+      yield
+        assertEquals(original, pngBytes.toVector)
+        assert(replaced.isLeft)
+    }
+  }
+
+  test("descriptors cannot read outside the root or follow a symlink") {
+    tempDirectory("momo-api-image-read-boundary").use { dir =>
+      val store = LocalFsImageStore[IO](dir.resolve("uploads"))
+      val outside = dir.resolve("outside.png")
+      for
+        stored <- store.save(accountId, None, Some("image/png"), pngBytes)
+          .flatMap(_.fold(error => fail(s"save failed: $error"), IO.pure))
+        _ <- IO.blocking(Files.write(outside, pngBytes))
+        escaped <- store.readStream(stored.copy(location = StoredImageLocation(outside.toString)))
+          .compile.toVector.attempt
+        _ <- IO.blocking(Files.delete(pathOf(stored)))
+        _ <- IO.blocking(Files.createSymbolicLink(pathOf(stored), outside))
+        linked <- store.readStream(stored).compile.toVector.attempt
+        found <- store.find(stored.imageId)
+        deleted <- store.delete(stored.imageId)
+        outsideBytes <- IO.blocking(Files.readAllBytes(outside))
+      yield
+        assert(escaped.isLeft)
+        assert(linked.isLeft)
+        assertEquals(found, None)
+        assertEquals(deleted, false)
+        assertEquals(outsideBytes.toVector, pngBytes.toVector)
+    }
+  }
+
+  test("lookup rejects a file that grew beyond the upload bound") {
+    tempDirectory("momo-api-image-size-boundary").use { dir =>
+      val store = LocalFsImageStore[IO](dir)
+      for
+        stored <- store.save(accountId, None, Some("image/png"), pngBytes)
+          .flatMap(_.fold(error => fail(s"save failed: $error"), IO.pure))
+        _ <- IO.blocking(Files.write(
+          pathOf(stored),
+          Array.fill[Byte](ImageValidation.MaxBytes + 1)(0)
+        ))
+        found <- store.find(stored.imageId).attempt
+      yield assert(found.isLeft)
     }
   }

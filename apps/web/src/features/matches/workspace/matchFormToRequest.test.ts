@@ -25,9 +25,7 @@ describe("toConfirmMatchRequest", () => {
   it("converts the local datetime input into a UTC ISO string", () => {
     const result = toConfirmMatchRequest(validForm());
 
-    expect(result.playedAt).not.toBe(baseIso);
-    expect(result.playedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/u);
-    expect(new Date(result.playedAt).toISOString()).toBe(result.playedAt);
+    expect(result.playedAt).toBe(new Date(2026, 0, 1, 9, 0).toISOString());
   });
 
   it("preserves an already-ISO datetime through round-tripping", () => {
@@ -46,8 +44,6 @@ describe("toConfirmMatchRequest", () => {
     const result = toConfirmMatchRequest(values);
 
     expect(result.draftIds).toEqual({ totalAssets: "draft-1" });
-    expect(Object.keys(result.draftIds)).not.toContain("revenue");
-    expect(Object.keys(result.draftIds)).not.toContain("incidentLog");
   });
 
   it("returns an empty draftIds object when no draft is attached", () => {
@@ -75,28 +71,45 @@ describe("toConfirmMatchRequest", () => {
     expect(() => toConfirmMatchRequest(values)).toThrow(ZodError);
   });
 
-  it("forwards player rows verbatim into the request payload", () => {
+  it("serializes visible numeric edits and normalizes notes without leaking editor state", () => {
     const values = validForm();
-    values.players[0]!.totalAssetsManYen = 1500;
-    values.players[0]!.revenueManYen = 300;
-    values.players[0]!.incidents.destination = 2;
+    values.numericDrafts = {
+      "players.0.totalAssetsManYen": "1500",
+      "players.0.revenueManYen": "-300",
+      "players.0.incidents.destination": "2",
+    };
+    values.noteBody = "1行目\r\n2行目\r3行目";
 
     const result = toConfirmMatchRequest(values);
 
     expect(result.players![0]!.totalAssetsManYen).toBe(1500);
-    expect(result.players![0]!.revenueManYen).toBe(300);
+    expect(result.players![0]!.revenueManYen).toBe(-300);
     expect(result.players![0]!.incidents.destination).toBe(2);
+    expect(result.noteBody).toBe("1行目\n2行目\n3行目");
+    expect(result).not.toHaveProperty("numericDrafts");
   });
+
+  it.each([toConfirmMatchRequest, toUpdateMatchRequest])(
+    "refuses to serialize unfinished numeric edits (%#)",
+    (toRequest) => {
+      const values = validForm();
+      values.numericDrafts = { "players.0.revenueManYen": "-" };
+
+      expect(() => toRequest(values)).toThrow(ZodError);
+    },
+  );
 });
 
 describe("toUpdateMatchRequest", () => {
-  it("omits matchDraftId because the update endpoint does not accept it", () => {
+  it("omits creation-only draft and note fields from a result update", () => {
     const values = validForm();
     values.matchDraftId = "match-draft-1";
+    values.noteBody = "既存メモは専用の更新操作が所有する";
 
     const result = toUpdateMatchRequest(values);
 
     expect(result).toEqual(expect.objectContaining({ heldEventId: "held-1" }));
-    expect("matchDraftId" in result).toBe(false);
+    expect(result).not.toHaveProperty("matchDraftId");
+    expect(result).not.toHaveProperty("noteBody");
   });
 });

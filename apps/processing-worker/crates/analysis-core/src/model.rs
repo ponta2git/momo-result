@@ -20,6 +20,8 @@ pub enum AnalysisInputError {
     InvalidRow,
     #[error("analysis input violates the fixed four-player match contract")]
     InvalidMatch,
+    #[error("analysis input scopes have ambiguous wire identities")]
+    AmbiguousScope,
 }
 
 impl AnalysisInputError {
@@ -32,6 +34,9 @@ impl AnalysisInputError {
             Self::TooManyRows => "analysis input row count exceeds the numeric safety bound",
             Self::InvalidRow => "analysis input contains an invalid row value",
             Self::InvalidMatch => "match players, ranks, play orders, or metadata are inconsistent",
+            Self::AmbiguousScope => {
+                "analysis scope identifiers do not uniquely encode scope membership"
+            }
         }
     }
 }
@@ -108,6 +113,7 @@ impl AnalysisInput {
         self.validate()?;
         self.normalize();
         let scopes = build_scope_rows(&self);
+        validate_scope_keys(&scopes)?;
         Ok(NormalizedAnalysisInput {
             resource_count: resource_count_for_scopes(&self, &scopes),
             scopes,
@@ -121,15 +127,14 @@ impl AnalysisInput {
     /// test fixture with the same player matches must produce the same artifact.
     #[cfg(test)]
     #[must_use]
+    #[expect(
+        clippy::panic,
+        reason = "calculation fixtures must satisfy the same input contract as production snapshots"
+    )]
     pub(crate) fn normalized(&self) -> NormalizedAnalysisInput {
-        let mut input = self.clone();
-        input.normalize();
-        let scopes = build_scope_rows(&input);
-        NormalizedAnalysisInput {
-            resource_count: resource_count_for_scopes(&input, &scopes),
-            scopes,
-            input,
-        }
+        self.clone()
+            .try_into_normalized()
+            .unwrap_or_else(|error| panic!("invalid calculation fixture: {error}"))
     }
 
     /// Sorts the owned input in place without duplicating every player match and identifier.
@@ -430,6 +435,18 @@ fn resource_count_for_scopes(input: &AnalysisInput, scopes: &[ScopeRows]) -> Opt
     })
 }
 
+fn validate_scope_keys(scopes: &[ScopeRows]) -> Result<(), AnalysisInputError> {
+    // The persisted key format is shared with the API and database. Opaque IDs may contain its
+    // separator, so reject aliasing combinations before computing or writing any resource.
+    let mut keys = std::collections::HashSet::with_capacity(scopes.len());
+    for scope in scopes {
+        if !keys.insert(scope.scope.key()) {
+            return Err(AnalysisInputError::AmbiguousScope);
+        }
+    }
+    Ok(())
+}
+
 #[must_use]
 pub(crate) fn ordered_member_ids(player_matches: &[&PlayerMatchInput]) -> Vec<String> {
     let mut first_match_by_member = BTreeMap::<&str, &PlayerMatchInput>::new();
@@ -673,6 +690,34 @@ mod tests {
             "a row belongs only to overall, season, map, and season-map indexes"
         );
         assert_eq!(normalized.resource_count(), Some(58_018));
+    }
+
+    #[test]
+    fn normalization_rejects_scope_key_aliases_without_restricting_opaque_ids() {
+        let rows_for_scope = |match_id: &str, season_id: &str, map_id: &str| {
+            match_rows()
+                .into_iter()
+                .map(|mut row| {
+                    row.match_id = String::from(match_id);
+                    row.season_master_id = String::from(season_id);
+                    row.map_master_id = String::from(map_id);
+                    row
+                })
+                .collect::<Vec<_>>()
+        };
+        let first = rows_for_scope("match-1", "a:b", "c");
+        assert!(input(first.clone()).try_into_normalized().is_ok());
+
+        let mut distinct = first.clone();
+        distinct.extend(rows_for_scope("match-2", "a", "b:d"));
+        assert!(input(distinct).try_into_normalized().is_ok());
+
+        let mut ambiguous = first;
+        ambiguous.extend(rows_for_scope("match-2", "a", "b:c"));
+        assert_eq!(
+            input(ambiguous).try_into_normalized(),
+            Err(AnalysisInputError::AmbiguousScope)
+        );
     }
     #[test]
     fn owner_must_be_consistent_and_participate_in_the_match() {

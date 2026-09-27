@@ -191,16 +191,12 @@ impl ManagedAnalysisChild {
     ///
     /// Always returns [`ProcessError::UnsupportedPlatform`].
     #[cfg(not(target_os = "linux"))]
-    #[expect(
-        clippy::unused_async,
-        reason = "the cross-platform API remains awaitable while non-Linux runtimes fail closed"
-    )]
-    pub(crate) async fn spawn(
+    pub(crate) fn spawn(
         _spec: &AnalysisChildProcessSpec,
         _cgroup: &ChildCgroup,
         _stop_grace: Duration,
-    ) -> Result<Self, ProcessError> {
-        Err(ProcessError::UnsupportedPlatform)
+    ) -> std::future::Ready<Result<Self, ProcessError>> {
+        std::future::ready(Err(ProcessError::UnsupportedPlatform))
     }
 
     #[must_use]

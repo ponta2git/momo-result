@@ -18,16 +18,43 @@ temp_notes="$(mktemp "${TMPDIR:-/tmp}/momo-release-notes.XXXXXX")"
 trap 'rm -f -- "${temp_notes}"' EXIT
 
 if ! awk '
-  /^## Release notes[[:space:]]*$/ {
+  # PR templates commonly contain hidden editing instructions. They neither
+  # define a section nor count as the public description of a release.
+  function visible_text(line, start, finish, result) {
+    result = ""
+    while (length(line)) {
+      if (in_comment) {
+        finish = index(line, "-->")
+        if (!finish) return result
+        line = substr(line, finish + 3)
+        in_comment = 0
+      } else {
+        start = index(line, "<!--")
+        if (!start) return result line
+        result = result substr(line, 1, start - 1)
+        line = substr(line, start + 4)
+        in_comment = 1
+      }
+    }
+    return result
+  }
+  { visible = visible_text($0) }
+  visible ~ /^## Release notes[[:space:]]*$/ {
     heading_count++
     capture = heading_count == 1
     next
   }
-  capture && /^##[[:space:]]+/ {
+  capture && visible ~ /^##?[[:space:]]+/ {
     capture = 0
   }
   capture {
     lines[++line_count] = $0
+    normalized = tolower(visible)
+    sub(/^[[:space:]]*([-*+]|[0-9]+[.)])[[:space:]]+/, "", normalized)
+    gsub(/[[:space:]`*_]/, "", normalized)
+    if (normalized != "" && normalized !~ /^(n\/a|na|none|なし|tbd|todo)$/) {
+      has_description = 1
+    }
   }
   END {
     if (heading_count != 1) {
@@ -42,7 +69,7 @@ if ! awk '
     while (last >= first && lines[last] !~ /[^[:space:]]/) {
       last--
     }
-    if (first > last) {
+    if (first > last || !has_description) {
       exit 3
     }
 
@@ -51,16 +78,8 @@ if ! awk '
     }
   }
 ' "${body_file}" > "${temp_notes}"; then
-  echo "Release PR must contain exactly one non-empty '## Release notes' section." >&2
+  echo "Release PR must contain exactly one '## Release notes' section with a description, not only comments or placeholders." >&2
   exit 1
 fi
-
-normalized="$(tr '[:upper:]' '[:lower:]' < "${temp_notes}" | tr -d '[:space:]')"
-case "${normalized}" in
-  n/a | na | none | なし)
-    echo "Release PR notes must describe the release; placeholders are not allowed." >&2
-    exit 1
-    ;;
-esac
 
 cp -- "${temp_notes}" "${notes_file}"

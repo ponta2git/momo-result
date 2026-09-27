@@ -360,27 +360,39 @@ mod tests {
     }
 
     #[test]
-    fn outcome_model_is_deterministic_for_input_order() {
+    fn sufficient_sample_exposes_complete_fold_counts_and_normalized_crown_shares() {
         let rows = dataset();
         let forward = rows.iter().collect::<Vec<_>>();
-        let mut reverse = forward.clone();
-        reverse.reverse();
         let players = crate::model::ordered_member_ids(&forward);
-
-        let first = analyze(&forward, &players).aggregate_json();
-        let second = analyze(&reverse, &players).aggregate_json();
-
-        assert_eq!(first, second);
+        let model = analyze(&forward, &players);
         assert_eq!(
-            first.get("modelVersion").and_then(Value::as_str),
-            Some("rank-bt-v1")
+            model.quality,
+            Quality::Reference,
+            "eight complete events permit reference evidence"
         );
         assert_eq!(
-            first
-                .get("foldScores")
-                .and_then(Value::as_array)
-                .map(Vec::len),
-            Some(5)
+            model
+                .fold_scores
+                .iter()
+                .map(|fold| (fold.held_event_count, fold.comparison_count))
+                .collect::<Vec<_>>(),
+            vec![(2, 48), (2, 48), (2, 48), (1, 24), (1, 24)],
+            "each held event contributes all four matches and six pairs per match",
+        );
+        assert_eq!(model.crown.shares.len(), 4);
+        let total = model
+            .crown
+            .shares
+            .iter()
+            .map(|(_, share)| share)
+            .sum::<f64>();
+        assert!((total - 1.0).abs() < 1e-12);
+        assert!(
+            model
+                .crown
+                .shares
+                .iter()
+                .all(|(_, share)| (0.0..=1.0).contains(share))
         );
     }
 

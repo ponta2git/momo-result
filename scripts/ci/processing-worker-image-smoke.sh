@@ -104,9 +104,19 @@ if [[ -n "${special_mode_files}" ]]; then
   exit 1
 fi
 
-if docker run --rm \
+# Exercise publication validation directly: the default bootstrap also rejects missing cgroup
+# settings, before the worker can validate its own bounded execution configuration.
+publication_status=0
+publication_report="$(docker run --rm --user 10001:10001 --entrypoint "${primary_binary}" \
   --env MOMO_ANALYSIS_PUBLICATION_MODE=enabled \
-  "${image_ref}"; then
+  --env MOMO_LOG_FORMAT=json \
+  --env RUST_LOG=error \
+  "${image_ref}" worker 2>&1)" || publication_status=$?
+if [[ "${publication_status}" != "1" ]] || ! jq -es '
+  length == 1 and (.[0].fields |
+    .event == "analysis_command_failed" and
+    .error == "MOMO_ANALYSIS_RUNTIME_MEMORY_LIMIT_BYTES must be set when analysis publication is enabled")
+' <<<"${publication_report}" >/dev/null 2>&1; then
   echo "publication must fail closed when bounded runtime settings are incomplete" >&2
   exit 1
 fi

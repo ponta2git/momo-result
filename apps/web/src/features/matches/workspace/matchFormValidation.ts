@@ -1,4 +1,5 @@
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
+import { matchFormInput } from "@/features/matches/workspace/matchNumericDrafts";
 import { confirmMatchSchema } from "@/features/matches/workspace/review/confirmMatchFormSchema";
 
 type ValidationResult = {
@@ -17,7 +18,7 @@ function pathToKey(path: Array<string | number>): string {
 }
 
 export function validateMatchForm(values: MatchFormValues): ValidationResult {
-  const result = confirmMatchSchema.safeParse(values);
+  const result = confirmMatchSchema.safeParse(matchFormInput(values));
   if (result.success) {
     return {
       messages: [],
@@ -35,7 +36,11 @@ export function validateMatchForm(values: MatchFormValues): ValidationResult {
     ),
   );
   const pathSet = new Set(paths);
-  const messages = result.error.issues.map((issue) => issue.message);
+  const messages = result.error.issues.map((issue, index) =>
+    values.numericDrafts?.[paths[index] ?? ""] !== undefined && issue.code === "invalid_type"
+      ? "数値を入力してください"
+      : issue.message,
+  );
 
   return {
     ...(messages[0] ? { firstMessage: messages[0] } : {}),

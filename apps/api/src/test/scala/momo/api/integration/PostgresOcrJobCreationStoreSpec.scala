@@ -9,12 +9,21 @@ import doobie.postgres.circe.jsonb.implicits.*
 import doobie.postgres.implicits.*
 import io.circe.Json
 
-import momo.api.adapters.postgres.{PostgresOcrJobCreationStore, PostgresSourceImagesRepository}
+import momo.api.adapters.postgres.{
+  PostgresMatchDraftsRepository,
+  PostgresOcrDraftsRepository,
+  PostgresOcrJobCreationStore,
+  PostgresOcrJobsRepository,
+  PostgresOcrSubmissionsRepository,
+  PostgresSourceImagesRepository
+}
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.ports.queue.OcrJobEnqueueRequest
 import momo.api.ports.storage.{Sha256Hex, SourceImageIdempotencyHash, SourceImageObjectKey}
 import momo.api.repositories.OcrJobCreationStore.OcrJobCreationRejection
+import momo.api.repositories.contract.OcrJobCreationStoreContract
+import momo.api.repositories.contract.OcrJobCreationStoreContract.{CreationFixture, CreationState}
 import momo.api.repositories.{
   OcrJobCreationPlan,
   OcrJobCreationStore,
@@ -28,20 +37,41 @@ import momo.api.repositories.{
 }
 import momo.api.testing.JsonSchemaAssertions
 
-final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSchemaAssertions:
+final class PostgresOcrJobCreationStoreSpec
+    extends IntegrationSuite with JsonSchemaAssertions with OcrJobCreationStoreContract:
 
-  private val now = Instant.parse("2026-05-08T10:00:00Z")
-  private val jobId = OcrJobId.unsafeFromString("job-outbox-1")
-  private val draftId = OcrDraftId.unsafeFromString("draft-outbox-1")
-  private val imageId = ImageId.unsafeFromString("img-outbox-1")
-  private val imageSha256 = "a" * 64
-  private val imageObjectKey = SourceImageObjectKey.forImage(imageId, "png")
+  private def now = Instant.parse("2026-05-08T10:00:00Z")
+  private def jobId = OcrJobId.unsafeFromString("job-outbox-1")
+  private def draftId = OcrDraftId.unsafeFromString("draft-outbox-1")
+  private def imageId = ImageId.unsafeFromString("img-outbox-1")
+  private def imageSha256 = "a" * 64
+  private def imageObjectKey = SourceImageObjectKey.forImage(imageId, "png")
     .fold(fail(_), identity)
 
   private def repo = PostgresOcrJobCreationStore[IO](transactor)
   private def sourceImages = PostgresSourceImagesRepository[IO](transactor)
 
-  private val matchDraftId = MatchDraftId.unsafeFromString("match-draft-ocr-create")
+  override protected def freshCreationFixture(admissionDeadline: Instant): IO[CreationFixture] =
+    for
+      _ <- prepareMatchDraft
+      _ <- prepareSourceImage
+      _ <- sql"""UPDATE ocr_submissions SET admission_deadline = $admissionDeadline
+        WHERE id = '00000000-0000-4000-8000-000000000001'""".update.run.transact(transactor)
+    yield CreationFixture(
+      repo,
+      plan(job, draft, attachment, activeJobLimit = 12),
+      for
+        savedJob <- PostgresOcrJobsRepository[IO](transactor).find(jobId)
+        savedDraft <- PostgresOcrDraftsRepository[IO](transactor).find(draftId)
+        sourceDraft <- PostgresMatchDraftsRepository[IO](transactor).find(matchDraftId)
+        submission <- PostgresOcrSubmissionsRepository[IO](transactor).find(
+          "00000000-0000-4000-8000-000000000001",
+          AccountId.unsafeFromString("account_ponta"),
+        )
+      yield CreationState(savedJob, savedDraft, sourceDraft, submission),
+    )
+
+  private def matchDraftId = MatchDraftId.unsafeFromString("match-draft-ocr-create")
   private def attachment: OcrJobDraftAttachment = OcrJobDraftAttachment(
     matchDraftId,
     ScreenType.TotalAssets,
@@ -130,17 +160,20 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
       assertEquals(row._4, "req-outbox-1")
       assertOcrWorkerJobMessageV2SchemaValid(row._5)
 
-  test("store rejects over the active job limit before inserting related rows"):
+  test("job creation rechecks the source draft creator while holding its write lock"):
     for
-      result <- store(plan(job, draft, attachment, activeJobLimit = 0))
+      _ <- prepareMatchDraft
+      _ <- prepareSourceImage
+      _ <- sql"""UPDATE match_drafts SET created_by_account_id = 'account_eu'
+        WHERE id = ${matchDraftId.value}""".update.run.transact(transactor)
+      result <- repo.store(plan(job, draft, attachment, activeJobLimit = 12))
       counts <- sql"""
-        SELECT
-          (SELECT count(*) FROM ocr_drafts WHERE id = ${draftId.value}),
-          (SELECT count(*) FROM ocr_jobs WHERE id = ${jobId.value}),
-          (SELECT count(*) FROM ocr_queue_outbox WHERE job_id = ${jobId.value})
+        SELECT (SELECT count(*) FROM ocr_jobs WHERE id = ${jobId.value}),
+               (SELECT count(*) FROM ocr_drafts WHERE id = ${draftId.value}),
+               (SELECT count(*) FROM ocr_queue_outbox WHERE job_id = ${jobId.value})
       """.query[(Long, Long, Long)].unique.transact(transactor)
     yield
-      assertActiveLimit(result, 0)
+      assertEquals(result, Left(OcrJobCreationRejection.SubmissionRejected))
       assertEquals(counts, (0L, 0L, 0L))
 
   test("active admission observes a creator that commits while it waits for the limit lock"):
@@ -168,26 +201,6 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
     yield
       assertActiveLimit(result, 1)
       assertEquals(counts, (1L, 0L, 0L))
-
-  test("store rejects a member attachment to another draft before inserting OCR records"):
-    val attachment = OcrJobDraftAttachment(
-      draftId = MatchDraftId.unsafeFromString("missing-match-draft"),
-      screenType = ScreenType.TotalAssets,
-      sourceImageId = imageId,
-      ocrDraftId = draftId,
-      updatedAt = now,
-    )
-    for
-      result <- store(plan(job, draft, attachment, activeJobLimit = 12))
-      counts <- sql"""
-        SELECT
-          (SELECT count(*) FROM ocr_drafts WHERE id = ${draftId.value}),
-          (SELECT count(*) FROM ocr_jobs WHERE id = ${jobId.value}),
-          (SELECT count(*) FROM ocr_queue_outbox WHERE job_id = ${jobId.value})
-      """.query[(Long, Long, Long)].unique.transact(transactor)
-    yield
-      assertEquals(result, Left(OcrJobCreationRejection.SubmissionRejected))
-      assertEquals(counts, (0L, 0L, 0L))
 
   test("store rejects invalid draft JSON before inserting related rows"):
     val invalidDraft = draft.copy(payloadJson = "{")
@@ -222,19 +235,6 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
     yield
       assertEquals(result, Left(OcrJobCreationRejection.InvalidPlan))
       assertEquals(counts, (0L, 0L, 0L))
-
-  test("store rejects an attachment that names a different source image"):
-    val inconsistentAttachment = OcrJobDraftAttachment(
-      draftId = MatchDraftId.unsafeFromString("missing-match-draft"),
-      screenType = ScreenType.TotalAssets,
-      sourceImageId = ImageId.unsafeFromString("different-source-image"),
-      ocrDraftId = draftId,
-      updatedAt = now,
-    )
-
-    store(plan(job, draft, inconsistentAttachment, activeJobLimit = 12)).map(result =>
-      assertEquals(result, Left(OcrJobCreationRejection.InvalidPlan))
-    )
 
   test("store waits for a concurrent deletion transition and rejects its committed state"):
     for

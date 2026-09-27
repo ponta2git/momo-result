@@ -5,6 +5,7 @@ base_url="${APP_BASE_URL:-http://127.0.0.1:8080}"
 dev_account="${DEV_ACCOUNT_ID:-account_ponta}"
 canonical_host="${MOMO_CANONICAL_HOST:-momo-result.ponta.me}"
 origin_lock_token="${MOMO_ORIGIN_LOCK_TOKEN:-dev-origin-lock}"
+curl_args=(--silent --show-error --connect-timeout 2 --max-time 5)
 
 expect_status() {
   local method="$1"
@@ -12,7 +13,7 @@ expect_status() {
   local expected="$3"
   local status
 
-  status="$(curl -sS -o /dev/null -w "%{http_code}" -X "${method}" \
+  status="$(curl "${curl_args[@]}" -o /dev/null -w "%{http_code}" -X "${method}" \
     -H "Host: ${canonical_host}" \
     -H "X-Momo-Origin-Lock: ${origin_lock_token}" \
     "${url}")"
@@ -29,7 +30,7 @@ expect_status_with_headers() {
   shift 3
   local status
 
-  status="$(curl -sS -o /dev/null -w "%{http_code}" -X "${method}" "$@" "${url}")"
+  status="$(curl "${curl_args[@]}" -o /dev/null -w "%{http_code}" -X "${method}" "$@" "${url}")"
   if [[ "${status}" != "${expected}" ]]; then
     echo "Expected ${method} ${url} to return ${expected}, got ${status}." >&2
     exit 1
@@ -41,7 +42,7 @@ expect_body_contains() {
   local expected="$2"
   local body
 
-  body="$(curl -fsS \
+  body="$(curl "${curl_args[@]}" --fail \
     -H "Host: ${canonical_host}" \
     -H "X-Momo-Origin-Lock: ${origin_lock_token}" \
     -H "X-Momo-Account-Id: ${dev_account}" \
@@ -56,7 +57,7 @@ expect_http2() {
   local url="$1"
   local result
 
-  result="$(curl --http2-prior-knowledge -sS -o /dev/null -w "%{http_version} %{http_code}" \
+  result="$(curl "${curl_args[@]}" --http2-prior-knowledge -o /dev/null -w "%{http_version} %{http_code}" \
     -H "Host: ${canonical_host}" \
     -H "X-Momo-Origin-Lock: ${origin_lock_token}" \
     "${url}")"
@@ -75,7 +76,7 @@ expect_header() {
   local normalized_headers
   local expected_line
 
-  headers="$(curl -sS -o /dev/null -D - -X "${method}" \
+  headers="$(curl "${curl_args[@]}" -o /dev/null -D - -X "${method}" \
     -H "Host: ${canonical_host}" \
     -H "X-Momo-Origin-Lock: ${origin_lock_token}" \
     -H "X-Momo-Account-Id: ${dev_account}" \
@@ -92,7 +93,7 @@ find_built_asset_path() {
   local body
   local asset_path
 
-  body="$(curl -fsS \
+  body="$(curl "${curl_args[@]}" --fail \
     -H "Host: ${canonical_host}" \
     -H "X-Momo-Origin-Lock: ${origin_lock_token}" \
     "${base_url}/")"

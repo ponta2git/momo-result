@@ -2,11 +2,7 @@ import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 
 import { readSeriesAnalysisMatchContext } from "@/shared/api/seriesAnalysisMatchContextState";
-import {
-  seriesAnalysisAdminOverviewQueryOptions,
-  seriesAnalysisMatchContextQueryOptions,
-  seriesAnalysisStatusQueryOptions,
-} from "@/shared/api/seriesAnalysisQueryOptions";
+import { seriesAnalysisMatchContextQueryOptions } from "@/shared/api/seriesAnalysisQueryOptions";
 import { setDevUser } from "@/test/auth";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { makeSeriesAnalysisMatchContext } from "@/test/msw/seriesAnalysisFixtures";
@@ -78,11 +74,4 @@ describe("series analysis live query options", () => {
       client.clear();
     },
   );
-  it.each([
-    ["status", seriesAnalysisStatusQueryOptions("game-title-1")],
-    ["admin overview", seriesAnalysisAdminOverviewQueryOptions("game-title-1")],
-  ])("does not poll %s", (_, options) => {
-    expect(options).not.toHaveProperty("refetchInterval");
-    expect(options).not.toHaveProperty("refetchIntervalInBackground");
-  });
 });

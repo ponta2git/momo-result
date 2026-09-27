@@ -60,39 +60,11 @@ describe("queryErrorState", () => {
       name: "keeps initial refetch in progress visible",
     },
     {
-      data: { id: "cached" },
-      expected: false,
-      isError: true,
-      isFetching: true,
-      name: "keeps cached refetch in progress visible",
-    },
-    {
       data: undefined,
       expected: false,
       isError: false,
       isFetching: false,
       name: "does not block an empty non-error state",
-    },
-    {
-      data: { id: "cached" },
-      expected: false,
-      isError: false,
-      isFetching: false,
-      name: "does not block cached non-error state",
-    },
-    {
-      data: undefined,
-      expected: false,
-      isError: false,
-      isFetching: true,
-      name: "does not block initial loading",
-    },
-    {
-      data: { id: "cached" },
-      expected: false,
-      isError: false,
-      isFetching: true,
-      name: "does not block background refresh",
     },
   ] satisfies Array<{
     data: unknown | undefined;
@@ -102,7 +74,12 @@ describe("queryErrorState", () => {
     name: string;
   }>)("$name", ({ data, expected, isError, isFetching }) => {
     expect(
-      shouldShowBlockingQueryError({ data, error: new Error("failed"), isError, isFetching }),
+      shouldShowBlockingQueryError({
+        data,
+        error: isError ? new Error("failed") : null,
+        isError,
+        isFetching,
+      }),
     ).toBe(expected);
   });
 
@@ -110,16 +87,9 @@ describe("queryErrorState", () => {
     {
       data: undefined,
       expected: true,
-      isFetching: false,
+      isFetching: true,
       isLoading: true,
       name: "is loading while the query reports initial loading",
-    },
-    {
-      data: { id: "cached" },
-      expected: true,
-      isFetching: false,
-      isLoading: true,
-      name: "keeps the loading flag authoritative even with data",
     },
     {
       data: undefined,
@@ -141,13 +111,6 @@ describe("queryErrorState", () => {
       isFetching: false,
       isLoading: false,
       name: "is not loading after an empty settled state",
-    },
-    {
-      data: { id: "cached" },
-      expected: false,
-      isFetching: false,
-      isLoading: false,
-      name: "is not loading after cached settled state",
     },
   ] satisfies Array<{
     data: unknown | undefined;

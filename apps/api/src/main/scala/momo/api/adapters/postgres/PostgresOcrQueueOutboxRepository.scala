@@ -207,9 +207,7 @@ final class PostgresOcrQueueOutboxRepository[F[_]: Async](transactor: Transactor
     _ <-
       if jobUpdated == 1 then PostgresMatchDraftStatusSync.recomputeForJob(claim.jobId, now)
       else ().pure[ConnectionIO]
-  yield outboxUpdated == 1).transact(transactor).flatTap(_ =>
-    PostgresOcrSubmissions.wake(transactor)
-  )
+  yield outboxUpdated == 1).transact(transactor)
 
   override def rearmQueuedForRedelivery(
       now: Instant,

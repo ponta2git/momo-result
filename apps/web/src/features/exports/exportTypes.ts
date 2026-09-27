@@ -41,6 +41,7 @@ export type ExportDownloadFailed = {
 };
 
 export type ExportDownloadOutcome =
+  | { kind: "cancelled" }
   | ExportDownloadFailed
   | ExportDownloadSuccess
   | ExportDownloadTimeout;

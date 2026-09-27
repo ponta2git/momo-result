@@ -30,8 +30,8 @@ expected_image_ref="registry.fly.io/momo-result:${commit}-${run_id}-${candidate_
   exit 1
 }
 
-canonical_digest="$(scripts/ci/canonicalize-artifact-digest.sh "${artifact_digest}")"
-[[ "${canonical_digest}" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 1
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+"${script_dir}/canonicalize-artifact-digest.sh" "${artifact_digest}" > /dev/null
 
 printf 'artifact_id=%s\n' "${artifact_id}"
 printf 'artifact_name=%s\n' "${artifact_name}"

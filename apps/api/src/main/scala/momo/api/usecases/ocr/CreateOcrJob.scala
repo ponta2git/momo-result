@@ -105,7 +105,12 @@ final class CreateOcrJob[F[_]: MonadThrow](
     _ <- EitherT.fromEither[F](validateOcrHints(enrichedHints))
     draftForMatch <- matchDrafts.find(submission.matchDraftId)
       .orNotFound("match draft", submission.matchDraftId.value).flatMap { draft =>
-        if Set(MatchDraftStatus.Confirmed, MatchDraftStatus.Cancelled).contains(draft.status) then
+        if draft.createdByAccountId != owner then
+          EitherT.leftT[F, momo.api.domain.MatchDraft](AppError.Forbidden(
+            "Only the creator can add OCR to this match draft."
+          ))
+        else if Set(MatchDraftStatus.Confirmed, MatchDraftStatus.Cancelled).contains(draft.status)
+        then
           EitherT.leftT[F, momo.api.domain.MatchDraft](AppError.Conflict(
             s"match draft in status=${draft.status.wire} cannot start OCR."
           ))

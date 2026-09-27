@@ -2,7 +2,11 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-migrations_dir="${MOMO_DB_MIGRATIONS_DIR:-${repo_root}/_deps/momo-db/drizzle}"
+# Keep this bootstrap's existing repository-relative override convention.
+if [[ -n "${MOMO_DB_MIGRATIONS_DIR:-}" && "${MOMO_DB_MIGRATIONS_DIR}" != /* ]]; then
+  export MOMO_DB_MIGRATIONS_DIR="${repo_root}/${MOMO_DB_MIGRATIONS_DIR}"
+fi
+migrations_dir="$("${repo_root}/scripts/ci/resolve-momo-db-migrations.sh")"
 postgres_image="${POSTGRES_IMAGE:-postgres:18-alpine}"
 attestation_file="${MOMO_DB_BOOTSTRAP_ATTESTATION_FILE:-}"
 bootstrap_profile="${MOMO_DB_BOOTSTRAP_PROFILE:-migrations}"
@@ -13,15 +17,6 @@ if [[ -z "${DATABASE_URL:-}" ]]; then
 fi
 if [[ "${MOMO_DB_BOOTSTRAP_IS_FRESH:-}" != "true" ]]; then
   echo "MOMO_DB_BOOTSTRAP_IS_FRESH=true is required for the fresh-database bootstrap." >&2
-  exit 1
-fi
-
-if [[ "${migrations_dir}" != /* ]]; then
-  migrations_dir="${repo_root}/${migrations_dir}"
-fi
-
-if [[ ! -d "${migrations_dir}" ]]; then
-  echo "momo-db migrations directory was not found: ${migrations_dir}" >&2
   exit 1
 fi
 

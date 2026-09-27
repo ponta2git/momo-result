@@ -35,8 +35,17 @@ object PostgresGameTitles:
 
   val alg: GameTitlesAlg[ConnectionIO] = new GameTitlesAlg[ConnectionIO]:
     override def list: ConnectionIO[List[GameTitle]] =
-      (selectAll ++ fr"ORDER BY display_order, created_at, id").query[GameTitleRow].to[List]
-        .map(_.map(fromRow))
+      val nameLimit = PostgresReadBudget.NameCodePoints
+      val keyLimit = PostgresReadBudget.KeyCodePoints
+      PostgresReadBudget.guardedRows[GameTitleRow](
+        sql"""
+        SELECT char_length(name) <= $nameLimit AND char_length(layout_family) <= $keyLimit,
+               id, LEFT(name, $nameLimit), LEFT(layout_family, $keyLimit), display_order, created_at
+        FROM game_titles ORDER BY display_order, created_at, id
+      """,
+        PostgresReadBudget.CatalogRows,
+        "Game-title catalog"
+      ).map(_.map(fromRow))
 
     override def find(id: GameTitleId): ConnectionIO[Option[GameTitle]] =
       (selectAll ++ fr"WHERE id = $id").query[GameTitleRow].option.map(_.map(fromRow))

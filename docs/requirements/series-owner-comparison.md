@@ -2,26 +2,15 @@
 
 目的: 選択した比較範囲の中で、オーナー別に固定4名それぞれの成績・展開を気軽に見比べ、仲間内で話のネタにできるようにする。差が大きい結果だけでなく、近い値や同じ値も会話の材料として扱う。
 
-対象: [MOM-3 戦績比較をオーナー別に集計する](https://linear.app/ponta/issue/MOM-3)。2026-09-17の利用者への確認を反映した要求文書。2026-09-18に実装し、隔離環境で検証した。保証範囲と公開前の残件は [実装計画7節](../series-owner-comparison-plan.md) を参照する。
-
-提供価値の [追加レビュー](../series-owner-comparison-review.md) と利用者の回答を反映した。価値は話のネタを得ること、利用場面は各自の端末を見ながらDiscord越しに話すこととする。過去記録は複数オーナーについて実態に合わせて入力しているとの回答を得た。
-
-既存の戦績比較との整合を再確認し、「条件別」の節構成、プレーヤーを行に置く番手比較、共通の品質表示・数値書式・空状態・URL移動に合わせた。対応理由は [レビュー記録4節](../series-owner-comparison-review.md#4-既存の戦績比較との整合レビュー) に残す。
-
-実装仕様の敵対的レビューも反映し、共通tableの表現、URL変更と節移動の区別、旧成果物の操作状態、説明文の適用範囲を補強した。技術的な互換性・初期化の指摘と修正は [レビュー記録5節](../series-owner-comparison-review.md#5-実装仕様の敵対的レビュー) を参照する。
-
-正本の境界:
+対象: [MOM-3](https://linear.app/ponta/issue/MOM-3)、選択試合の対応表示は [MOM-22](https://linear.app/ponta/issue/MOM-22)。各自の端末を見ながらDiscord越しに話す利用を想定する。
 
 | 関心事 | 正本 |
 | --- | --- |
-| オーナー別比較の目的、対象指標、表示、初版の範囲 | 本書 |
-| MOM-3で変更する入力・成果物・HTTP・URL・version・DBと移行方針 | [確定した実装仕様](../series-owner-comparison-spec.md) |
+| オーナー別比較の目的、指標、表示、入力・成果物・URL固有の契約 | 本書 |
 | 比較ページ全体のscope、順位・金額・同値などの共通定義 | [戦績比較](series-comparison.md) |
 | 事前計算、成果物、更新状態、互換性・公開 | [分析バッチ](series-analysis-batch.md) |
 | 共通UI、品質証拠、必須gate | [UI規約](../ui-rule.md)、[テスト・品質規約](../test-rule.md)、[開発作業規約](../dev-rule.md) |
 | HTTP・成果物の構造、DB schema | Tapir endpoint、JSON Schema、momo-db |
-
-endpoint、成果物構造、URL状態、versionと共有DB変更の要否は実装仕様で確定した。本書は既存の共通契約を複製せず、オーナー別比較で守る結果を定義する。
 
 ## 1. 成功条件
 
@@ -162,19 +151,54 @@ endpoint、成果物構造、URL状態、versionと共有DB変更の要否は実
 
 ## 7. 実装に渡す境界
 
-実際の規約・schema・コードを照合し、以下を [実装仕様](../series-owner-comparison-spec.md) として確定した。実装・DB移行・公開の実施を意味しない。
+### 入力と計算
 
-- **入力と計算**: 保存済みオーナーを分析入力と入力checksumの対象へ加える。同一試合の4人が同じオーナーを共有する整合性を守り、親scopeに試合がある場合は固定メンバーの正本を使って対象0件の枠も用意する。
-- **計算範囲**: 既存の各scope内で、本書の指標だけをオーナー別に事前計算する。オーナーごとの高度分析・振り返り一式を新たに実行しない。
-- **成果物とAPI**: 既存scopeのaggregate payloadに必須の `ownerComparison` を追加し、schema・validator・reader・Webの接続を揃える。値・件数・品質はworkerが確定する。ownerは既存scope内の集計軸とし、ページ全体のscope条件へ追加しない。
-- **表示状態**: 選択指標は表示上の状態としてURLで復元する。指標切替ごとに新しい分析scope・ジョブ・成果物を作らず、同一成果物の保存済み指標を表示する。
-- **選択試合の所属**: match-context HTTP v3が、保存時のrevisionと一致する読取snapshotの `ownerMemberId` を返す。MOM-22の対応表示はHTTP projectionとWebに閉じ、保存artifact・Worker・DB schemaを変更せず、全件再計算を要求しない。初回オーナー集計導入の成果物移行とは区別する。
-- **画面への接続**: 既存の節・行列見出し・メンバー表示・品質表示・formatter・selectを使い、取得状態はページ共通の境界に委ねる。目次のfragmentと指標のURL状態は既存の移動・正規化処理へ接続し、別のnavigation管理を作らない。既存部品の意味が異なる判定・配色・drilldownまでは引き継がない。
-- **通常表示の負荷**: APIとWebは必要な保存済み集計を読み、全試合の取得、試合詳細のN+1、同期集計を行わない。集計の大きさはオーナー4名×プレーヤー4名×固定指標数に収め、試合明細を集計payloadへ追加しない。
-- **DB変更の要否**: オーナーを記録する新しい試合列や、オーナーを表す新しいscopeは不要。共有DBには、新しい成果物のexact検証契約を許可する制約・公開guard・初期versionのforward migrationが必要となる。
-- **互換性と公開**: 指標追加、分析入力、成果物構造に対応するversion・検証契約を更新し、既存作品の再計算を含めて提供する。公開を停止してAPI・Web・Workerを揃え、現行契約での再計算を完了してから再開する。成果物は作品単位で公開し、新しい部分だけを先に公開しない。
+- 同じsnapshotから取得した保存済み `ownerMemberId` を分析入力と入力checksumに含める。同一試合の4行で一致し、参加する固定4名のいずれかであることを検証する。不明・欠落・不一致は作品の計算を失敗させ、別のオーナーへ補正しない。表示名は分類キーやchecksumに使わない。
+- オーナー訂正は通常の試合更新で分析revisionと再計算要求を同時に進める。4人分が一緒に所属を移り、親scopeの指標は変わらない。専用の再計算経路や保存済み試合の再入力を要求しない。
+- 既存の各scope内で4節の指標だけを一度の走査で事前計算する。集計用の領域と追加payloadは4オーナー×4プレーヤー×固定指標数に収め、オーナーごとの高度分析・振り返り・試合明細を追加しない。
 
-DB schema・migrationの変更に進む場合は、[DB利用規約](../db-rule.md) とリポジトリの `AGENTS.md` に従い、先に `../momo-db/docs/development.md` 全文を確認する。
+### 成果物
+
+aggregateの必須 `ownerComparison` に列、行、全7指標を保存する。構造は [aggregate schema](../schemas/series-analysis-aggregate-v5.schema.json)、計算は [owner集計](../../apps/processing-worker/crates/analysis-core/src/compute/owner.rs)、意味検証は [owner validator](../../apps/processing-worker/crates/analysis-core/src/payload/owner.rs) を確認する。
+
+- 親scopeに試合があれば、`owners` と `rows` は既存 `players` と同じ固定4名・同じ順序とし、各行の `cells` もオーナー順の4要素にする。対象0戦の列も含め、重複・欠落・未知参照・順序違いを拒否する。
+- 親scopeが0戦なら `owners: []`、`rows: []`、`recordedOwnerCount: 0` とし、必須fieldを省略しない。Webは共通の空状態を表示する。
+- `owners[].targetCount` は `N_o`、`qualityStatus` は0戦で `no_target`、1〜2戦で `reference`、3戦以上で `ok`。`recordedOwnerCount` は対象があるオーナー数とする。分母と品質は列に一度だけ保存し、親scopeの `dataQuality` やreviewの品質件数へ加算しない。
+- 対象0戦のcellはcountを0、平均・率を `null` とする。順位分布は1〜4位の4要素を保ち、各countは0、rateは `null`。Webは対象なしの補助countも観測値の「0回」と表示しない。
+- 金額は保存単位の万円、率は0〜1の有限数とし、表示用に丸めない。整数合計のoverflowを拒否する。各平均・率は同じ整数分子と分母による除算結果に一致させ、NaN・Infinity・canonical encodingは共通成果物契約に従う。
+- 意味検証は、オーナー別試合数の合計と親scope、対象ありの列数、各cellの順位件数・平均順位、同じownerの4人分の各順位件数を照合する。目的地・銀次のcountと平均、銀次の遭遇試合数と率、遭遇試合数がcountと `N_o` 以下であること、countが0と遭遇試合数が0の同値も確認する。不正な成果物は公開しない。
+- 列・行のmember IDは既存metadata取得で表示名を補い、cellは `ownerMemberId` で列を参照する。cellごとのDB問合せ、drilldown用ID、根拠試合IDは追加しない。chunkの `item_count` は親scopeのプレーヤー明細数のままとする。
+- 値・件数・品質はWorkerが確定する。APIは保存済み成果物の契約・checksum・上限・要求identityを検証し、Webとともにオーナー集計を再計算しない。
+
+### HTTPと選択試合
+
+- 全指標は一度のaggregate読取りに含める。オーナーや表示指標をAPIのscope、resource query key、ジョブへ加えない。各resourceは同じartifactに固定し、読取りのpermit・timeout・byte/node上限は分析バッチの共通契約に従う。
+- includedのmatch-context HTTP応答には `match.ownerMemberId` を必須とし、excludedでは `match: null` を維持する。APIは試合所属・現在revision・保存chunkのsource revisionを照合する同じSELECTからownerを取得し、一致するsnapshotだけを使う。別取得の試合詳細や表示名から所属を推測しない。
+- ownerは保存payloadのchecksum・decodeを検証した後のHTTP projectionで付加し、ID構造、参加者への所属、付加後のnode/byte上限を確認する。保存match-contextの形式は変えず、この対応表示だけのための全件再計算・promotion・DB変更は要求しない。
+- HTTPの構造はTapir由来のOpenAPI・Web生成契約へ揃え、cache keyはHTTP shapeを区別する。比較画面と試合結果画面で同じ取得・無効化・失効回復を使う。確定した不存在・失効の後に古い成功contextを復活させず、その他の一時失敗は [Web状態契約](series-analysis-batch.md#web-state) に従う。
+- 応答後の訂正は通常のmutation後のreset・明示更新・再訪時の取得で反映する。自動監視を追加せず、読取時点の整合性と常時最新を混同しない。
+- 非互換なHTTP変更は対応するAPI/Webの組で切り替え、rollbackも同じ組で行う。開いたままの旧Webは再読込みを必要とし、旧route・decoderを恒久維持しない。保存形式の非互換変更は [分析バッチの切替契約](series-analysis-batch.md#8-compatibility--release--rollback) に従う。
+
+### URL
+
+`ownerMetric` が選択指標の正本で、`view=context` と `#metric-owner` でオーナー節を復元する。
+
+| `ownerMetric` | 指標 |
+| --- | --- |
+| `rank.average` | 平均順位（既定） |
+| `rank.distribution` | 順位分布 |
+| `assets.average` | 平均総資産 |
+| `revenue.average` | 平均物件収益 |
+| `destination.average` | 目的地到着回数（1試合平均） |
+| `ginji.encounterRate` | 銀次遭遇率 |
+| `ginji.average` | 銀次遭遇回数（1試合平均） |
+
+- 未指定は通知なく既定値にし、明示した既定値もcanonical URLでは省略する。不正値は平均順位へ正規化し、既存の条件補正通知で理由を示す。
+- 指標変更は履歴置換でsearchとfragmentを一度に確定し、scope・view・`focusMatchId`・安全な `returnTo` を保持する。通信・再計算・取得中の遮蔽を起こさず、selectのfocusとページ・表内の位置を保つ。scope・viewの変更でも指標を保持し、選択試合の解除だけは既存scope変更規則に従う。
+- 通常の目次移動、別端末でのURL読込み、reloadでは節へ移動する。browser backではそのvisitの保存位置と起点復帰を優先し、位置がなければ既存fragmentの復元に従う。URLは表示条件を共有し、過去の数値を固定しない。
+- 表示変更の位置保持は、発行元visit・操作・正規化後のtargetを対応させた一度限りのintentで扱う。該当commitにだけ冪等に適用し、別target・POP・unmountでは失効させる。永続したhistory flagや「次の移動を抑止する」booleanにしない。続くcanonical化が新しい操作を上書きせず、指標ごとのremountやURLと同期する第二の選択stateを増やさない。
+
+共通UIへの接続と読解は5節、必須gateは [Change Gates](../dev-rule.md#4-change-gates)、DB schema・migrationを変える場合の事前確認は `AGENTS.md` と [DB利用規約](../db-rule.md) に従う。
 
 ## 8. 受入条件
 
@@ -191,7 +215,7 @@ DB schema・migrationの変更に進む場合は、[DB利用規約](../db-rule.m
 | AC7 | 集計表示に全試合の取得や同期計算を必要とせず、対象試合一覧やdrilldownを追加しない | artifact contract、読み取り境界、画面操作 |
 | AC8 | 既存scopeの集計・振り返り・通知などのconsumerが新契約で壊れず、通常表示の負荷要求を守る | 変更したconsumerの契約証拠、分析バッチのresource検証 |
 
-証拠は [テスト・品質規約](../test-rule.md) に従って選び、[Change Gates](../dev-rule.md#4-change-gates) に割り当てる。各行をすべての層で重複検証する要求ではない。今回の文書検証は実装・DB・E2E・性能の検証済みを意味しない。
+証拠は [テスト・品質規約](../test-rule.md) に従って選び、[Change Gates](../dev-rule.md#4-change-gates) に割り当てる。各行をすべての層で重複検証する要求ではない。
 
 ### 表から答えを得られることの確認
 
@@ -223,23 +247,3 @@ PC・mobileで同じ問いに答えられることを確認する。代表課題
 - 試合2のオーナーをAからBへ訂正すると、Aの対象が1戦、Bが2戦になる。プレーヤーAの平均はAオーナー時1.0位、Bオーナー時3.5位となり、親scope全体の平均順位は変わらない。
 - あるオーナーの2試合でプレーヤーAの銀次回数が0回・3回なら、合計3回、1試合あたり1.5回、遭遇1試合、遭遇率50%となる。遭遇率を150%とはせず、遭遇した試合だけを分母にして1試合あたり3回とも表示しない。
 - 同じ2試合の目的地回数が0回・2回なら平均1回、総資産が-100万円・300万円なら平均100万円となる。
-
-## 9. 調査根拠と未検証事項
-
-以下は2026-09-17の実装前のローカルコード・schema調査記録。MOM-3による変更後の契約は実装仕様、検証結果は実装計画7節を正本とする。
-
-| 確認した事実 | 確認先 |
-| --- | --- |
-| 確定試合は必須のオーナーを保存し、APIは許可された固定4名のいずれかと検証する | [MatchPolicy](../../apps/api/src/main/scala/momo/api/domain/MatchPolicy.scala)、`../momo-db/src/schema.ts` の `matches` |
-| 毎試合4名が参加し、順位1〜4を重複なく保存する | [FourPlayers](../../apps/api/src/main/scala/momo/api/domain/FourPlayers.scala) |
-| WebのURL・比較条件とAPIのscopeにオーナー条件はない | [URL state](../../apps/web/src/features/seriesComparison/model/seriesAnalysisViewModel.ts)、[SeriesAnalysisEndpoints](../../apps/api/src/main/scala/momo/api/endpoints/SeriesAnalysisEndpoints.scala) |
-| 分析入力SQL、入力モデル、入力checksum用の表現にオーナーが含まれない | [input_repository](../../apps/processing-worker/src/series_analysis/input_repository.rs)、[model](../../apps/processing-worker/crates/analysis-core/src/model.rs)、[artifact/build](../../apps/processing-worker/src/series_analysis/artifact/build.rs) |
-| 既存scopeごとに集計・振り返り・詳細を事前計算する | [scope contract](../../apps/processing-worker/crates/analysis-core/src/contract.rs)、[compute](../../apps/processing-worker/crates/analysis-core/src/compute.rs) |
-| 「条件別」には番手、カード売り場×目的地、銀次の比較がある | [ContextView](../../apps/web/src/features/seriesComparison/page/SeriesAnalysisContextView.tsx) |
-| 番手比較はプレーヤー行×番手列で、目次はfragmentへ移動する。第n試合傾向には異なる向きの表もあり、全matrixに一律の向きがあるわけではない | [ContextCharts](../../apps/web/src/features/seriesComparison/charts/SeriesAnalysisContextCharts.tsx)、[目次](../../apps/web/src/features/seriesComparison/page/SeriesComparisonAnalysisNavigation.tsx)、[MatchNoMatrix](../../apps/web/src/features/seriesComparison/charts/SeriesAnalysisMatchNoMatrix.tsx) |
-| 少数例の共通表示は「参考値」、数値未定義は「—」。選択scope全体が0戦なら分析本文の代わりに共通の空状態を出す | [品質表示](../../apps/web/src/features/seriesComparison/SeriesAnalysisQualityAdvisory.tsx)、[formatter](../../apps/web/src/features/seriesComparison/model/seriesAnalysisPresentation.ts)、[比較ページ](../../apps/web/src/features/seriesComparison/page/SeriesComparisonPage.tsx) |
-| 比較条件・総戦数・最終更新・表示更新を共通で持ち、指標選択のURL状態はまだない | [ScopeBar](../../apps/web/src/features/seriesComparison/page/SeriesAnalysisScopeBar.tsx)、[URL管理](../../apps/web/src/features/seriesComparison/navigation/useSeriesAnalysisLocationState.ts)、[節への移動](../../apps/web/src/features/seriesComparison/navigation/SeriesAnalysisNavigation.tsx) |
-| オーナーを含む構造化された試合更新は、試合の分析revisionと作品の再計算要求を同一transactionで更新する | [PostgresMatches](../../apps/api/src/main/scala/momo/api/adapters/postgres/PostgresMatchesRepository.scala)、[mutation intent](../../apps/api/src/main/scala/momo/api/adapters/postgres/PostgresSeriesAnalysisMutationOps.scala) |
-| 通常指標は対象0件を対象なし、1〜2件を参考とする | [stats](../../apps/processing-worker/crates/analysis-core/src/stats.rs) |
-
-チケット本文、当初の6点と追加レビューでの回答を要求へ反映した。調査時点でチケットにはコメント・添付・関連issueの登録はなかった。過去のオーナーは複数人について実態に合わせて入力しているという利用者の回答を前提とする。実DBの件数・条件の偏りを直接照会しておらず、稼働DBへのmigration適用も未実施である。検証量が現在件数の2倍以上という条件は、2026-09-18の利用者の回答に基づいて照合した。実画面の操作と代表fixtureでの性能は隔離検証で確認した。新成果物の具体的な構造、version・互換性の更新範囲、DB変更の要否は [実装仕様](../series-owner-comparison-spec.md) で確定し、必要な実装後の証拠を同書8節へ割り当てた。

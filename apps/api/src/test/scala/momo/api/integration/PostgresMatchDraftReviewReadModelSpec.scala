@@ -10,6 +10,7 @@ import doobie.postgres.implicits.*
 import momo.api.adapters.postgres.PostgresMatchDraftReviewReadModel
 import momo.api.domain.ids.{ImageId, MatchDraftId}
 import momo.api.domain.{MatchDraftReview, ScreenType}
+import momo.api.errors.AppException
 
 final class PostgresMatchDraftReviewReadModelSpec extends IntegrationSuite:
   private val at = Instant.parse("2026-09-01T00:00:00Z")
@@ -19,7 +20,8 @@ final class PostgresMatchDraftReviewReadModelSpec extends IntegrationSuite:
   test("review returns only referenced artifacts and available retained image descriptors"):
     for
       _ <- seed
-      review <- read.map(_.getOrElse(fail("review was absent")))
+      review <- assertReadSnapshot(xa => PostgresMatchDraftReviewReadModel[IO](xa).find(id))
+        .map(_.getOrElse(fail("review was absent")))
       _ <- sql"UPDATE match_drafts SET source_images_deleted_at = $at WHERE id = 'review-snapshot'"
         .update.run.transact(transactor)
       purged <- read.map(_.getOrElse(fail("purged review was absent")))
@@ -38,6 +40,17 @@ final class PostgresMatchDraftReviewReadModelSpec extends IntegrationSuite:
       assertEquals(purged.sourceImages, Nil)
       assertEquals(purged.ocrDrafts.map(_.id.value), List("review-old"))
       assertEquals(missing, None)
+
+  test("review rejects oversized referenced OCR data through the shared read budget"):
+    for
+      _ <- seed
+      _ <-
+        sql"""UPDATE ocr_drafts SET payload_json = jsonb_build_object('raw', repeat('x', 2 * 1024 * 1024))
+                 WHERE id = 'review-old'""".update.run.transact(transactor)
+      result <- read.attempt
+    yield result match
+      case Left(error: AppException) => assertEquals(error.error.code, "PAYLOAD_TOO_LARGE")
+      case _ => fail("expected bounded OCR storage rejection")
 
   test("a concurrent replacement cannot mix the draft pointer with old OCR or image metadata"):
     for

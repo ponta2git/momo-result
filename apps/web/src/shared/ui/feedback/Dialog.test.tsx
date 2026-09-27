@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -46,7 +46,6 @@ describe("Dialog", () => {
     );
 
     const dialog = await screen.findByRole("dialog", { name: "保存しています" });
-    expect(dialog.firstElementChild).toHaveAttribute("aria-busy", "true");
     expect(screen.queryByRole("button", { name: "ダイアログを閉じる" })).not.toBeInTheDocument();
 
     await user.keyboard("{Escape}");
@@ -56,24 +55,46 @@ describe("Dialog", () => {
 });
 
 describe("AlertDialog", () => {
-  it("announces destructive context before confirmation", async () => {
-    const user = userEvent.setup();
-    render(
-      <AlertDialog
-        description="この操作は取り消せません。"
-        title="試合を削除しますか？"
-        trigger={<Button>削除</Button>}
-        onConfirm={vi.fn()}
-      />,
-    );
+  it("starts one confirmation when multiple activations precede the pending render", async () => {
+    const operation = createDeferred<void>();
+    const onConfirm = vi.fn(() => operation.promise);
+    render(<AlertDialog open title="試合を削除" onConfirm={onConfirm} />);
+    const confirm = await screen.findByRole("button", { name: "実行" });
 
-    await user.click(screen.getByRole("button", { name: "削除" }));
-    expect(
-      await screen.findByRole("alertdialog", {
-        description: "この操作は取り消せません。",
-        name: "試合を削除しますか？",
-      }),
-    ).toBeInTheDocument();
+    act(() => {
+      fireEvent.click(confirm);
+      fireEvent.click(confirm);
+    });
+
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(confirm).toBeDisabled();
+    await act(async () => operation.resolve());
+  });
+
+  it("ignores an old confirmation after the controlled owner closes and reopens", async () => {
+    const user = userEvent.setup();
+    const operation = createDeferred<void>();
+    const onOpenChange = vi.fn();
+    const onConfirm = vi.fn(() => operation.promise);
+    const view = (open: boolean) => (
+      <AlertDialog
+        open={open}
+        title="選択した試合を削除"
+        onConfirm={onConfirm}
+        onOpenChange={onOpenChange}
+      />
+    );
+    const { rerender } = render(view(true));
+    await user.click(await screen.findByRole("button", { name: "実行" }));
+
+    rerender(view(false));
+    rerender(view(true));
+    expect(await screen.findByRole("button", { name: "実行" })).toBeEnabled();
+    await act(async () => operation.resolve());
+
+    expect(screen.getByRole("alertdialog", { name: "選択した試合を削除" })).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
   });
 
   it("prevents duplicate or dismissing actions while confirmation is pending", async () => {

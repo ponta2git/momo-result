@@ -50,24 +50,24 @@ pub(crate) async fn prepare(
         let Some(row) = row else {
             return Ok(Err(SkipReason::InvalidSnapshot));
         };
-        if !row.get::<_, bool>("enabled") {
+        if !row.try_get::<_, bool>("enabled")? {
             return Ok(Err(SkipReason::SettingOff));
         }
         let data = OcrData {
             submission_id,
-            match_draft_id: row.get("match_draft_id"),
+            match_draft_id: row.try_get("match_draft_id")?,
             context: Context {
-                game_title_name: row.get("game_title_name"),
-                held_date_iso: row.get("held_date_iso"),
-                match_no_in_event: row.get("match_no_in_event"),
+                game_title_name: row.try_get("game_title_name")?,
+                held_date_iso: row.try_get("held_date_iso")?,
+                match_no_in_event: row.try_get("match_no_in_event")?,
             },
             failures,
         };
         let envelope = NotificationEnvelope::new(
             NotificationKind::OcrCompleted,
             &source,
-            row.get("occurred_at"),
-            row.get("generation"),
+            row.try_get("occurred_at")?,
+            row.try_get("generation")?,
             data,
         );
         Ok(reservation.prepare(&envelope))

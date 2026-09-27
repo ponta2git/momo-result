@@ -65,13 +65,25 @@ export function useExportPageModel({
   }, [serializedSearch]);
   const selectedId = selectedIdForScope(urlState, urlState.scope);
   const candidates = useExportCandidates({ scope: urlState.scope, selectedId });
+  const defaultCandidateId =
+    candidates.view.kind === "ready" ? candidates.view.selectedId : undefined;
+  const requestSelectedId = selectedId || defaultCandidateId;
+  const request: ExportMatchesRequest | undefined =
+    urlState.errors.length === 0 && (urlState.scope === "all" || requestSelectedId)
+      ? {
+          format: urlState.format,
+          scope: urlState.scope,
+          heldEventId: urlState.scope === "heldEvent" ? requestSelectedId : undefined,
+          matchId: urlState.scope === "match" ? requestSelectedId : undefined,
+          seasonMasterId: urlState.scope === "season" ? requestSelectedId : undefined,
+        }
+      : undefined;
   const download = useExportDownload({
+    request,
     slowThresholdMs,
     timeoutMs: downloadTimeoutMs,
   });
 
-  const defaultCandidateId =
-    candidates.view.kind === "ready" ? candidates.view.selectedId : undefined;
   useEffect(() => {
     if (
       urlState.errors.length > 0 ||
@@ -104,17 +116,9 @@ export function useExportPageModel({
     scope: ExportScope,
     nextSelectedId?: string,
   ): void => {
-    download.clearResult();
     const nextParams = buildExportSearchParams({ format, scope, selectedId: nextSelectedId });
     if (returnTo) nextParams.set("returnTo", returnTo);
     setSearchParams(nextParams, { replace: true });
-  };
-  const request: ExportMatchesRequest = {
-    format: urlState.format,
-    scope: urlState.scope,
-    heldEventId: urlState.heldEventId,
-    matchId: urlState.matchId,
-    seasonMasterId: urlState.seasonMasterId,
   };
   const view = buildExportViewModel({
     candidate: candidates.view,
@@ -149,7 +153,9 @@ export function useExportPageModel({
     },
     download: {
       pending: download.pending,
-      start: () => download.start(request),
+      start: () => {
+        if (view.canDownload) download.start();
+      },
     },
     navigation: { returnTo },
     view,

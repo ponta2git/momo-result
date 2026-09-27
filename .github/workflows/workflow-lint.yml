@@ -48,11 +48,11 @@ jobs:
       - name: Set up Go tools
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          cache-dependency-path: tools/go.sum
-          go-version: 1.26.6
+          cache-dependency-path: scripts/tools/go.sum
+          go-version-file: scripts/tools/go.mod
       - name: Test Go and zero-install diagnostic tools
         run: |
-          cd tools
+          cd scripts/tools
           go test ./...
           go vet ./...
           go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
@@ -72,11 +72,4 @@ jobs:
         with:
           node-version: 24
       - name: Test workflow policy scripts
-        run: |
-          for script_path in scripts/ci/*.sh scripts/ops/*.sh; do
-            bash -n "${script_path}"
-          done
-          node --test scripts/dev-local.test.mjs
-          for test_script in scripts/ci/test-*.sh; do
-            "${test_script}"
-          done
+        run: node --run test:policy

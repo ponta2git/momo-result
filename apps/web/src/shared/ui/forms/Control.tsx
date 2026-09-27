@@ -12,8 +12,24 @@ export type {
 import { controlClassName } from "@/shared/ui/forms/controlPresentation";
 import type { ControlPresentationProps } from "@/shared/ui/forms/controlPresentation";
 
-export type InputControlProps = ControlPresentationProps &
-  Omit<ComponentPropsWithRef<"input">, "aria-invalid" | "className" | "style">;
+/** Input kinds that share the editable text/date control's presentation and focus behavior. */
+type InputControlType =
+  | "date"
+  | "datetime-local"
+  | "email"
+  | "month"
+  | "number"
+  | "password"
+  | "search"
+  | "tel"
+  | "text"
+  | "time"
+  | "url"
+  | "week";
+
+export type InputControlProps = ControlPresentationProps & {
+  type?: InputControlType | undefined;
+} & Omit<ComponentPropsWithRef<"input">, "aria-invalid" | "className" | "style" | "type">;
 
 /** Owns the shared presentation and boolean invalid contract for a native input. */
 export function InputControl({

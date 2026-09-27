@@ -114,5 +114,5 @@ final class PostgresOcrJobMaintenanceRepository[F[_]: Async](transactor: Transac
       )
     }
 
-    failAll.flatTap(_ => reconcileAll).flatTap(_ => PostgresOcrSubmissions.wake(transactor))
+    failAll.flatTap(_ => reconcileAll)
 end PostgresOcrJobMaintenanceRepository

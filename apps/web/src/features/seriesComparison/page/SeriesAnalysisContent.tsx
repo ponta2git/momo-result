@@ -3,6 +3,7 @@ import type { RefObject } from "react";
 
 import { SeriesAnalysisDrilldownLoading } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownLoading";
 import type { SeriesAnalysisDisplayBundle } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
+import { seriesAnalysisScopeSignature } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import type { OwnerMetricId } from "@/features/seriesComparison/model/seriesAnalysisOwnerMetrics";
 import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/model/seriesAnalysisViewTypes";
@@ -130,7 +131,12 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
   const resource = bundle.kind === "review" ? bundle.review : bundle.aggregate;
   const { matchContext } = bundle;
   const artifactId = resource.artifact.artifactId;
-  const contentIdentity = `${artifactId}:${bundle.view}`;
+  const scopeIdentity = seriesAnalysisScopeSignature({
+    gameTitleId: resource.artifact.gameTitleId,
+    mapMasterId: "mapMasterId" in resource.scope ? resource.scope.mapMasterId : undefined,
+    seasonMasterId: "seasonMasterId" in resource.scope ? resource.scope.seasonMasterId : undefined,
+  });
+  const contentIdentity = `${artifactId}:${scopeIdentity}:${bundle.view}`;
   const root = useRef<HTMLDivElement>(null);
 
   return (
@@ -154,6 +160,7 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
           strategy="preserve-inert"
         >
           <ReviewView
+            key={contentIdentity}
             loading={bundle.kind !== "review"}
             response={bundle.kind === "review" ? bundle.review : undefined}
             showError={false}
@@ -218,7 +225,7 @@ function AnalysisViewContent({
   onArtifactExpired: () => void;
   onFocusMatch: (matchId: string) => void;
 }) {
-  // A drilldown belongs to one artifact/view. This subtree remounts when either identity changes,
+  // A drilldown belongs to one artifact/scope/view. Remount on any identity change,
   // while the tab lists remain mounted so their focus does not move back to the document.
   const [drilldown, setDrilldown] = useState<DrilldownDialogState | null>(null);
   const openDrilldown = useCallback((selection: SeriesAnalysisDrilldownSelection) => {
@@ -303,7 +310,8 @@ function AnalysisViewLoading({ view }: { view: SeriesAnalysisBundle["view"] }) {
       id={analysisPanelId(view)}
       role="tabpanel"
     >
-      <div aria-label="分析を読み込み中" className="grid gap-8">
+      <div aria-label="分析を読み込み中" className="grid gap-8" role="status">
+        <span className="sr-only">分析を読み込み中</span>
         <Skeleton className="min-h-24" />
         <Skeleton className="min-h-64" />
       </div>

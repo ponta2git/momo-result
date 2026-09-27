@@ -38,17 +38,39 @@ write_valid_artifact() {
     > "${artifact_dir}/image-tar.sha256"
 }
 
+run_loader() {
+  PATH="${fake_bin}:${PATH}" FAKE_IMAGE_ID="${1:-${image_id}}" \
+    "${loader}" "${artifact_dir}" "${image_ref}" "${archive_sha}"
+}
+
+expect_rejected() {
+  local name="$1"
+  shift
+  if run_loader "$@" > /dev/null 2>&1; then
+    echo "Invalid analysis image artifact was accepted: ${name}" >&2
+    exit 1
+  fi
+}
+
 write_valid_artifact
-archive_sha="$(cut -d ' ' -f 1 "${artifact_dir}/image-tar.sha256")"
-PATH="${fake_bin}:${PATH}" FAKE_IMAGE_ID="${image_id}" \
-  "${loader}" "${artifact_dir}" "${image_ref}" "${archive_sha}"
+run_loader
+expect_rejected mismatched-image-id sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 
 printf '%s\n' tampered >> "${artifact_dir}/analysis-worker-image.tar.gz"
-if PATH="${fake_bin}:${PATH}" FAKE_IMAGE_ID="${image_id}" \
-  "${loader}" "${artifact_dir}" "${image_ref}" "${archive_sha}" \
-  > /dev/null 2>&1; then
-  echo "A tampered analysis image archive was accepted." >&2
-  exit 1
-fi
+expect_rejected tampered-archive
+
+write_valid_artifact
+printf '%s\n' unexpected >> "${artifact_dir}/image-ref.txt"
+expect_rejected multiline-image-ref
+
+# Keep the trusted digest in sync to reach the gzip failure rather than the hash guard.
+write_valid_artifact
+archive="${artifact_dir}/analysis-worker-image.tar.gz"
+archive_size="$(wc -c < "${archive}")"
+dd if="${archive}" of="${archive}.truncated" bs=1 count="$((archive_size - 8))" 2> /dev/null
+mv "${archive}.truncated" "${archive}"
+archive_sha="$(sha256sum "${archive}" | cut -d ' ' -f 1)"
+printf '%s  %s\n' "${archive_sha}" analysis-worker-image.tar.gz > "${artifact_dir}/image-tar.sha256"
+expect_rejected truncated-gzip
 
 echo "Analysis candidate image loading tests passed."

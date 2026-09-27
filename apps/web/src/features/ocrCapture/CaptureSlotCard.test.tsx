@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { CaptureSlotCard } from "@/features/ocrCapture/CaptureSlotCard";
@@ -30,25 +31,8 @@ function renderCard(slot: CaptureSlotState, captureTarget = false, statusRefresh
 }
 
 describe("CaptureSlotCard", () => {
-  it("uses one local control to identify the selected capture target", () => {
-    renderCard(
-      {
-        kind: "total_assets",
-        status: "empty",
-      },
-      true,
-    );
-
-    expect(screen.getByRole("button", { name: "撮影先に選択中" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(screen.getByText("総資産の画像待ち")).toBeInTheDocument();
-    expect(screen.getAllByText("画像待ち")).toHaveLength(1);
-    expect(screen.queryByText("01")).not.toBeInTheDocument();
-  });
-
-  it("locks destructive and classification actions while OCR is running", () => {
+  it("locks destructive and classification actions while OCR is running", async () => {
+    const user = userEvent.setup();
     const { onRefreshStatus } = renderCard({
       file: new File(["image"], "assets.png", { type: "image/png" }),
       jobId: "job-1",
@@ -65,11 +49,12 @@ describe("CaptureSlotCard", () => {
     expect(screen.getByRole("status")).toHaveTextContent("読み取り中");
     expect(screen.getByRole("status")).toHaveAttribute("aria-live", "polite");
     const refresh = screen.getByRole("button", { name: "状態を更新" });
-    fireEvent.click(refresh);
+    await user.click(refresh);
     expect(onRefreshStatus).toHaveBeenCalledOnce();
   });
 
-  it("prevents duplicate status updates while a request is in progress", () => {
+  it("prevents duplicate status updates while a request is in progress", async () => {
+    const user = userEvent.setup();
     const { onRefreshStatus } = renderCard(
       {
         jobId: "job-1",
@@ -83,7 +68,7 @@ describe("CaptureSlotCard", () => {
     const refresh = screen.getByRole("button", { name: "更新中" });
     expect(refresh).toBeDisabled();
     expect(refresh).toHaveAttribute("aria-busy", "true");
-    fireEvent.click(refresh);
+    await user.click(refresh);
     expect(onRefreshStatus).not.toHaveBeenCalled();
   });
 
@@ -105,5 +90,19 @@ describe("CaptureSlotCard", () => {
     );
     expect(screen.queryByText("OCR_ENGINE_TIMEOUT")).not.toBeInTheDocument();
     expect(screen.queryByText(/30000ms/u)).not.toBeInTheDocument();
+  });
+
+  it("announces a classification mismatch as an alert with the corrective action", () => {
+    renderCard({
+      detectedKind: "revenue",
+      kind: "total_assets",
+      status: "succeeded",
+    });
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("OCR判定は 収益 でした。");
+    expect(alert).toHaveTextContent(
+      "画像を正しい分類へ移動してから、もう一度読み取りを開始してください。",
+    );
   });
 });

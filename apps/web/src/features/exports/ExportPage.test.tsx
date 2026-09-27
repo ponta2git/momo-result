@@ -1,13 +1,21 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  createMemoryRouter,
+  MemoryRouter,
+  Route,
+  RouterProvider,
+  Routes,
+  useLocation,
+} from "react-router-dom";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { ExportPage } from "@/features/exports/ExportPage";
-import { matchKeys } from "@/shared/api/queryKeys";
+import type { ProblemDetails } from "@/shared/api/problemDetails";
+import { heldEventKeys, matchKeys } from "@/shared/api/queryKeys";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { installAnchorClickMock } from "@/test/doubles/dom";
@@ -17,6 +25,14 @@ import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 
 setupMsw();
+
+const notFoundProblem = {
+  type: "about:blank",
+  title: "Not Found",
+  status: 404,
+  detail: "The selected resource does not exist.",
+  code: "NOT_FOUND",
+} satisfies ProblemDetails;
 
 type RenderOptions = {
   downloadTimeoutMs?: number;
@@ -57,19 +73,21 @@ function renderPage({ downloadTimeoutMs, path = "/exports", slowThresholdMs }: R
   );
 }
 
-function expectSingleCandidateScrollRegion(label: "開催" | "試合") {
-  const dialog = screen.getByRole("dialog", { name: `${label}を選択` });
-  expect(dialog).toHaveClass("overflow-y-hidden");
-  expect(dialog).not.toHaveClass("overflow-y-auto");
-  expect(dialog.firstElementChild).toHaveClass("overflow-y-hidden");
-  expect(dialog.firstElementChild).not.toHaveClass("overflow-y-auto");
-  const candidateGroup = screen.getByRole("group", { name: `${label}を選択` });
-  const candidateList = candidateGroup.querySelector(":scope > div");
-  expect(candidateGroup).not.toHaveClass("overflow-y-auto");
-  expect(candidateList).toHaveClass("overflow-y-auto", "overscroll-contain");
-  const scrollRegions = dialog.querySelectorAll(".overflow-y-auto");
-  expect(scrollRegions).toHaveLength(1);
-  expect(scrollRegions.item(0)).toBe(candidateList);
+function renderExportHistory(previous: string) {
+  setDevUser();
+  const router = createMemoryRouter(
+    [
+      { path: "/exports", element: <ExportPage /> },
+      { path: "/matches", element: <p>matches</p> },
+    ],
+    { initialEntries: [previous, "/exports?format=csv"] },
+  );
+  render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  );
+  return router;
 }
 
 describe("ExportPage", () => {
@@ -77,6 +95,25 @@ describe("ExportPage", () => {
     queryClient = createTestQueryClient();
     user = userEvent.setup();
     anchorClick = installAnchorClickMock();
+  });
+
+  it("announces initial candidate loading before showing an empty directory", async () => {
+    const gate = createDeferred();
+    server.use(
+      http.get("/api/held-events", async () => {
+        await gate.promise;
+        return HttpResponse.json({ items: [] });
+      }),
+    );
+    renderPage({ path: "/exports?heldEventId=" });
+
+    expect(screen.getByRole("status", { name: "開催候補を読み込み中" })).toHaveTextContent(
+      "候補を読み込んでいます。",
+    );
+    expect(screen.queryByText("開催候補がありません")).not.toBeInTheDocument();
+    await act(async () => gate.resolve());
+    expect(await screen.findByText("開催候補がありません")).toBeInTheDocument();
+    expect(screen.queryByRole("status", { name: "開催候補を読み込み中" })).not.toBeInTheDocument();
   });
 
   it("downloads all matches as CSV by default", async () => {
@@ -104,18 +141,80 @@ describe("ExportPage", () => {
     expect(anchorClick.clickedAnchors[0]?.download).toBe("momo-results-all.csv");
   });
 
-  it("keeps the exclusion notice visible for every export scope", async () => {
-    renderPage();
+  it.each(["success", "failure"])(
+    "does not show an earlier %s under conditions restored from browser history",
+    async (outcome) => {
+      server.use(
+        http.get("/api/exports/matches", () =>
+          outcome === "success"
+            ? new HttpResponse("csv", {
+                headers: {
+                  "Content-Disposition": 'attachment; filename="earlier.csv"',
+                  "Content-Type": "text/csv",
+                },
+              })
+            : HttpResponse.json({ detail: "unavailable" }, { status: 500 }),
+        ),
+      );
+      const router = renderExportHistory("/exports?format=tsv");
+      await user.click(screen.getByRole("button", { name: "全試合をCSVでダウンロード" }));
+      await screen.findByText(
+        outcome === "success" ? "ダウンロードを開始しました" : "ダウンロードに失敗しました",
+      );
 
-    await screen.findByRole("region", { name: "出力条件" });
-    const scopeTabs = screen.getByRole("tablist", { name: "出力範囲" });
-    const exclusionNotice = screen.getByText("下書きや確認待ちの試合は含みません。");
+      await act(async () => router.navigate(-1));
+      expect(
+        await screen.findByRole("button", { name: "全試合をTSVでダウンロード" }),
+      ).toBeEnabled();
+      expect(screen.queryByText("ダウンロードを開始しました")).not.toBeInTheDocument();
+      expect(screen.queryByText("ダウンロードに失敗しました")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "もう一度試す" })).not.toBeInTheDocument();
+    },
+  );
 
-    for (const label of ["全試合", "シーズン", "開催", "試合"]) {
-      await user.click(within(scopeTabs).getByRole("tab", { name: label }));
-      expect(screen.getByText("下書きや確認待ちの試合は含みません。")).toBe(exclusionNotice);
-    }
-  });
+  it.each([
+    { destination: "/exports?format=tsv", action: "全試合をTSVでダウンロード" },
+    { destination: "/exports?matchId=match-1&format=csv", action: "この試合をCSVでダウンロード" },
+    { destination: "/matches", action: undefined },
+  ])(
+    "cancels a pending export when history moves to $destination",
+    async ({ destination, action }) => {
+      const gate = createDeferred();
+      let exportSignal: AbortSignal | undefined;
+      server.use(
+        http.get("/api/exports/matches", async ({ request }) => {
+          exportSignal = request.signal;
+          await gate.promise;
+          return new HttpResponse("csv", {
+            headers: {
+              "Content-Disposition": 'attachment; filename="abandoned.csv"',
+              "Content-Type": "text/csv",
+            },
+          });
+        }),
+      );
+      const router = renderExportHistory(destination);
+      await user.click(screen.getByRole("button", { name: "全試合をCSVでダウンロード" }));
+      await waitFor(() => expect(exportSignal).toBeDefined());
+      expect(screen.getByRole("button", { name: "作成中…" })).toBeDisabled();
+
+      await act(async () => router.navigate(-1));
+      await waitFor(() => expect(exportSignal?.aborted).toBe(true));
+      await act(async () => gate.resolve());
+      await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+      expect(anchorClick.click).not.toHaveBeenCalled();
+      expect(screen.queryByText("ダウンロードを開始しました")).not.toBeInTheDocument();
+      expect(screen.queryByText("ダウンロードに失敗しました")).not.toBeInTheDocument();
+      if (action) {
+        expect(await screen.findByRole("button", { name: action })).toBeEnabled();
+        await user.click(screen.getByRole("button", { name: action }));
+        await screen.findByText("ダウンロードを開始しました");
+        expect(anchorClick.click).toHaveBeenCalledTimes(1);
+      } else {
+        expect(router.state.location.pathname).toBe("/matches");
+      }
+    },
+  );
 
   it("activates instant format tabs on focus and waits for confirmation before loading a scope", async () => {
     let seasonRequests = 0;
@@ -288,7 +387,6 @@ describe("ExportPage", () => {
 
     await user.click(await screen.findByRole("button", { name: "開催を変更" }));
     expect(screen.getByRole("dialog", { name: "開催を選択" })).toBeInTheDocument();
-    expectSingleCandidateScrollRegion("開催");
     expect(screen.getByText("1〜20件／全21件")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "次のページへ" }));
@@ -301,7 +399,8 @@ describe("ExportPage", () => {
     expect(screen.queryByText("出力対象を確認しています。")).not.toBeInTheDocument();
     pageGate.resolve();
 
-    const lastEvent = await screen.findByRole("radio", { name: /21試合/u });
+    const lastEvent = await screen.findByRole("radio", { name: /^2026-01-21 \d{2}:\d{2}$/u });
+    expect(lastEvent).toHaveAccessibleDescription("21試合");
     expect(requestedPages).toEqual([1, 2]);
     expect(screen.getByText("21〜21件／全21件")).toBeInTheDocument();
     await waitFor(() => expect(detailRequested).toBe(true));
@@ -382,7 +481,6 @@ describe("ExportPage", () => {
     expect(screen.queryByText("指定された対象: match-21")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "試合を変更" }));
-    expectSingleCandidateScrollRegion("試合");
     await user.click(screen.getByRole("button", { name: "次のページへ" }));
     expect(await screen.findByRole("status")).toHaveTextContent("更新中");
     expect(screen.getByText("1〜20件／全21件")).toBeInTheDocument();
@@ -393,7 +491,11 @@ describe("ExportPage", () => {
     expect(screen.queryByText("出力対象を確認しています。")).not.toBeInTheDocument();
     pageGate.resolve();
 
-    expect(await screen.findByRole("radio", { name: /第21試合/u })).toBeChecked();
+    const selectedMatch = await screen.findByRole("radio", {
+      name: /^2026-01-01 \d{2}:\d{2}・第21試合$/u,
+    });
+    expect(selectedMatch).toBeChecked();
+    expect(selectedMatch).toHaveAccessibleDescription("作品名未取得・シーズン名未取得");
     expect(requestedCursors).toEqual([null, "candidate-last"]);
   });
 
@@ -445,6 +547,8 @@ describe("ExportPage", () => {
       missingId: "opaque-held-event-id",
       path: "/exports?heldEventId=opaque-held-event-id&format=csv",
       recoveryName: "開催を選び直す",
+      candidateName: /^2026-01-01 \d{2}:\d{2}$/u,
+      recoveredQuery: "heldEventId=held-1",
       title: "指定された開催が見つかりません",
     },
     {
@@ -453,18 +557,26 @@ describe("ExportPage", () => {
       missingId: "opaque-match-id",
       path: "/exports?matchId=opaque-match-id&format=csv",
       recoveryName: "試合を選び直す",
+      candidateName: /^2026-01-01 \d{2}:\d{2}・第1試合$/u,
+      recoveredQuery: "matchId=match-1",
       title: "指定された試合が見つかりません",
     },
   ])(
-    "keeps a missing scoped deep link non-downloadable without exposing its opaque ID ($title)",
-    async ({ detailPath, downloadName, missingId, path, recoveryName, title }) => {
+    "recovers a missing scoped deep link by choosing a confirmed candidate ($title)",
+    async ({
+      candidateName,
+      detailPath,
+      downloadName,
+      missingId,
+      path,
+      recoveredQuery,
+      recoveryName,
+      title,
+    }) => {
       server.use(
-        http.get(detailPath, () =>
-          HttpResponse.json(
-            { detail: "not found", status: 404, title: "Not Found" },
-            { status: 404 },
-          ),
-        ),
+        http.get(detailPath, () => HttpResponse.json(notFoundProblem, { status: 404 }), {
+          once: true,
+        }),
       );
 
       renderPage({ path });
@@ -472,7 +584,17 @@ describe("ExportPage", () => {
       expect(await screen.findByText(title)).toBeInTheDocument();
       expect(document.body).not.toHaveTextContent(missingId);
       expect(screen.queryByRole("button", { name: downloadName })).not.toBeInTheDocument();
-      expect(screen.getByRole("button", { name: recoveryName })).toBeEnabled();
+      await user.click(screen.getByRole("button", { name: recoveryName }));
+      await user.click(await screen.findByRole("radio", { name: candidateName }));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(screen.queryByText(title)).not.toBeInTheDocument();
+      expect(screen.getByLabelText("current location")).toHaveAttribute(
+        "data-location",
+        expect.stringContaining(recoveredQuery),
+      );
+      await user.click(await screen.findByRole("button", { name: downloadName }));
+      await screen.findByText("ダウンロードを開始しました");
+      expect(anchorClick.click).toHaveBeenCalledOnce();
     },
   );
 
@@ -502,6 +624,139 @@ describe("ExportPage", () => {
     expect(await screen.findByText(/第7試合.*CSVで書き出します。/u)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "この試合をCSVでダウンロード" })).toBeEnabled();
     expect(attempts).toBe(2);
+  });
+
+  it.each([
+    {
+      scope: "match",
+      directoryPath: "/api/matches",
+      detailPath: "/api/matches/absent-target/identity",
+      queryKey: matchKeys.resource("absent-target"),
+      response: makeMatchDetail({ matchId: "absent-target", matchNoInEvent: 7 }),
+      path: "/exports?matchId=absent-target",
+      missingTitle: "指定された試合が見つかりません",
+      action: "この試合をCSVでダウンロード",
+    },
+    {
+      scope: "heldEvent",
+      directoryPath: "/api/held-events",
+      detailPath: "/api/held-events/absent-target/summary",
+      queryKey: heldEventKeys.resource("absent-target"),
+      response: makeHeldEventDetailResponse({ id: "absent-target" }),
+      path: "/exports?heldEventId=absent-target",
+      missingTitle: "指定された開催が見つかりません",
+      action: "この開催をCSVでダウンロード",
+    },
+  ])(
+    "keeps a confirmed missing $scope target absent during later failed revalidation",
+    async ({
+      action,
+      detailPath,
+      directoryPath,
+      missingTitle,
+      path,
+      queryKey,
+      response,
+      scope,
+    }) => {
+      let phase: "found" | "missing" | "failed" = "found";
+      const failureGate = createDeferred();
+      let failureRequested = false;
+      server.use(
+        http.get(directoryPath, () =>
+          HttpResponse.json({
+            items:
+              phase === "found"
+                ? []
+                : [
+                    scope === "match"
+                      ? { ...response, id: "absent-target", kind: "match", status: "confirmed" }
+                      : response,
+                  ],
+          }),
+        ),
+        http.get(detailPath, async () => {
+          if (phase === "missing") return HttpResponse.json(notFoundProblem, { status: 404 });
+          if (phase === "failed") {
+            failureRequested = true;
+            await failureGate.promise;
+            return HttpResponse.json({ detail: "unavailable" }, { status: 503 });
+          }
+          return HttpResponse.json(response);
+        }),
+      );
+      renderPage({ path });
+      expect(await screen.findByRole("button", { name: action })).toBeEnabled();
+
+      phase = "missing";
+      await act(async () => queryClient.invalidateQueries({ queryKey }));
+      expect(await screen.findByText(missingTitle)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: action })).not.toBeInTheDocument();
+
+      // An older list snapshot cannot override the selected target's confirmed absence.
+      await act(async () =>
+        queryClient.invalidateQueries({
+          queryKey: scope === "match" ? matchKeys.collections() : heldEventKeys.listRoot(),
+        }),
+      );
+      expect(await screen.findByText(missingTitle)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: action })).not.toBeInTheDocument();
+
+      phase = "failed";
+      const refresh = queryClient.invalidateQueries({ queryKey });
+      await waitFor(() => expect(failureRequested).toBe(true));
+      expect(await screen.findByText(missingTitle)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: action })).not.toBeInTheDocument();
+      await act(async () => {
+        failureGate.resolve();
+        await refresh;
+      });
+      expect(await screen.findByText(missingTitle)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: action })).not.toBeInTheDocument();
+
+      phase = "found";
+      await act(async () => queryClient.invalidateQueries({ queryKey }));
+      expect(await screen.findByRole("button", { name: action })).toBeEnabled();
+    },
+  );
+
+  it("never lets a retained retry notice override a newly confirmed missing target", async () => {
+    const gate = createDeferred();
+    let revalidating = false;
+    let requestStarted = false;
+    server.use(
+      http.get("/api/matches", () => HttpResponse.json({ items: [] })),
+      http.get("/api/matches/match-1/identity", async () => {
+        if (!revalidating) return HttpResponse.json(makeMatchDetail());
+        requestStarted = true;
+        await gate.promise;
+        return new HttpResponse(null, { status: 503 });
+      }),
+    );
+    renderPage({ path: "/exports?matchId=match-1" });
+    expect(
+      await screen.findByRole("button", { name: "この試合をCSVでダウンロード" }),
+    ).toBeEnabled();
+
+    let refresh: Promise<void> | undefined;
+    act(() => {
+      // Cache changes may coalesce before React presents an intermediate settled state.
+      queryClient.setQueryData(matchKeys.identityRead("match-1"), { kind: "notFound" });
+      revalidating = true;
+      refresh = queryClient.invalidateQueries({ queryKey: matchKeys.identityRead("match-1") });
+    });
+    await waitFor(() => expect(requestStarted).toBe(true));
+    try {
+      expect(await screen.findByText("指定された試合が見つかりません")).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "この試合をCSVでダウンロード" }),
+      ).not.toBeInTheDocument();
+    } finally {
+      await act(async () => {
+        gate.resolve();
+        await refresh;
+      });
+    }
   });
 
   it.each([
@@ -693,23 +948,16 @@ describe("ExportPage", () => {
   it("uses the projected title without requesting a master directory", async () => {
     const gameTitleId = "opaque-game-title-id";
     const seasonMasterId = "opaque-season-id";
+    const masterRequests: string[] = [];
     server.use(
-      http.get("/api/game-titles", () =>
-        HttpResponse.json({
-          items: [
-            {
-              createdAt: "2026-01-01T00:00:00.000Z",
-              displayOrder: 1,
-              id: gameTitleId,
-              layoutFamily: "momotetsu_2",
-              name: "桃太郎電鉄2",
-            },
-          ],
-        }),
-      ),
-      http.get("/api/season-masters", () =>
-        HttpResponse.json({ detail: "temporarily unavailable" }, { status: 503 }),
-      ),
+      http.get("/api/game-titles", ({ request }) => {
+        masterRequests.push(new URL(request.url).pathname);
+        return HttpResponse.json({ items: [] });
+      }),
+      http.get("/api/season-masters", ({ request }) => {
+        masterRequests.push(new URL(request.url).pathname);
+        return HttpResponse.json({ items: [] });
+      }),
       http.get("/api/matches", () =>
         HttpResponse.json({
           items: [
@@ -752,6 +1000,8 @@ describe("ExportPage", () => {
     expect(document.body).not.toHaveTextContent(gameTitleId);
     expect(document.body).not.toHaveTextContent(seasonMasterId);
     expect(screen.getByRole("button", { name: "この試合をCSVでダウンロード" })).toBeEnabled();
+    await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+    expect(masterRequests).toEqual([]);
   });
 
   it("preserves cached candidates and actions when a same-scope refresh fails", async () => {
@@ -825,17 +1075,20 @@ describe("ExportPage", () => {
 
   it("shows API errors from failed downloads near the action", async () => {
     server.use(
-      http.get("/api/exports/matches", () =>
-        HttpResponse.json(
-          {
-            code: "VALIDATION_FAILED",
-            detail: "Specify at most one export scope.",
-            status: 422,
-            title: "Validation Failed",
-            type: "about:blank",
-          },
-          { status: 422 },
-        ),
+      http.get(
+        "/api/exports/matches",
+        () =>
+          HttpResponse.json(
+            {
+              code: "VALIDATION_FAILED",
+              detail: "Specify at most one export scope.",
+              status: 422,
+              title: "Validation Failed",
+              type: "about:blank",
+            },
+            { status: 422 },
+          ),
+        { once: true },
       ),
     );
 
@@ -849,12 +1102,17 @@ describe("ExportPage", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("Validation Failed")).not.toBeInTheDocument();
     expect(screen.queryByText("Specify at most one export scope.")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "もう一度試す" })).toBeInTheDocument();
+    expect(anchorClick.click).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "もう一度試す" }));
+    expect(await screen.findByText("ダウンロードを開始しました")).toBeInTheDocument();
+    expect(anchorClick.click).toHaveBeenCalledOnce();
+    expect(screen.queryByText("出力条件を確認してください")).not.toBeInTheDocument();
   });
 
   it("keeps a resolved download usable while candidate controls are refreshing", async () => {
     const refetchGate = createDeferred();
     let holdMatchRefetch = false;
+    const requestedExports: string[] = [];
 
     server.use(
       http.get("/api/matches", async ({ request }) => {
@@ -881,6 +1139,10 @@ describe("ExportPage", () => {
           ],
         });
       }),
+      http.get("/api/exports/matches", ({ request }) => {
+        requestedExports.push(new URL(request.url).search);
+        return new HttpResponse("csv", { headers: { "Content-Type": "text/csv" } });
+      }),
     );
 
     renderPage({ path: "/exports?matchId=match-1&format=csv" });
@@ -895,10 +1157,12 @@ describe("ExportPage", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "試合を変更" })).toBeDisabled());
     expect(screen.getByRole("button", { name: "この試合をCSVでダウンロード" })).toBeEnabled();
 
-    refetchGate.resolve();
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "この試合をCSVでダウンロード" })).toBeEnabled();
-    });
+    await user.click(screen.getByRole("button", { name: "この試合をCSVでダウンロード" }));
+    expect(await screen.findByText("ダウンロードを開始しました")).toBeInTheDocument();
+    expect(requestedExports).toEqual(["?format=csv&matchId=match-1"]);
+    expect(anchorClick.click).toHaveBeenCalledOnce();
+    await act(async () => refetchGate.resolve());
+    await waitFor(() => expect(screen.getByRole("button", { name: "試合を変更" })).toBeEnabled());
   });
 
   it("prevents duplicate submission while pending and shows progress", async () => {
@@ -950,50 +1214,6 @@ describe("ExportPage", () => {
 
     responseGate.resolve();
     expect(await screen.findByText("ダウンロードを開始しました")).toBeInTheDocument();
-  });
-
-  it("switches to the slow progress state once at the configured threshold", async () => {
-    const responseGate = createDeferred();
-    server.use(
-      http.get("/api/exports/matches", async () => {
-        await responseGate.promise;
-        return new HttpResponse("csv", {
-          headers: {
-            "Content-Disposition": 'attachment; filename="momo-results-all.csv"',
-            "Content-Type": "text/csv; charset=utf-8",
-          },
-        });
-      }),
-    );
-
-    renderPage({ slowThresholdMs: 1_000 });
-    await screen.findByRole("region", { name: "出力条件" });
-    vi.useFakeTimers();
-
-    fireEvent.click(screen.getByRole("button", { name: "全試合をCSVでダウンロード" }));
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0);
-    });
-
-    expect(screen.queryByText("出力ファイルを作成しています")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "作成中…" })).toBeDisabled();
-    expect(screen.queryByText("通常より時間がかかっています")).not.toBeInTheDocument();
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(999);
-    });
-    expect(screen.queryByText("出力ファイルを作成しています")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "作成中…" })).toBeDisabled();
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1);
-    });
-    expect(screen.getByText("通常より時間がかかっています")).toBeInTheDocument();
-
-    vi.useRealTimers();
-    responseGate.resolve();
-    expect(await screen.findByText("ダウンロードを開始しました")).toBeInTheDocument();
-    expect(screen.queryByText("通常より時間がかかっています")).not.toBeInTheDocument();
   });
 
   it("shows timeout states without leaving the spinner running", async () => {

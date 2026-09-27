@@ -137,92 +137,104 @@ pub(crate) fn parse_delivery(
 pub(crate) fn parse_validated_delivery(
     delivery: &StreamId,
 ) -> Result<ValidatedOcrDelivery, OcrQueueContractError> {
-    if delivery.map.len() < REQUIRED_FIELDS.len()
-        || delivery.map.len() > REQUIRED_FIELDS.len() + OPTIONAL_FIELDS.len()
-        || delivery.map.keys().any(|field| {
-            !REQUIRED_FIELDS.contains(&field.as_str()) && !OPTIONAL_FIELDS.contains(&field.as_str())
-        })
+    parse_wire_fields(
+        delivery
+            .map
+            .iter()
+            .map(|(field, value)| (field.as_str(), strict_string(value))),
+    )
+}
+
+/// Borrows adapter-owned strings until the entire closed wire contract has passed validation.
+/// Database JSON never needs a synthetic Redis message, and malformed fields are never cloned.
+fn parse_wire_fields<'a>(
+    fields: impl ExactSizeIterator<Item = (&'a str, Option<&'a str>)>,
+) -> Result<ValidatedOcrDelivery, OcrQueueContractError> {
+    if fields.len() < REQUIRED_FIELDS.len()
+        || fields.len() > REQUIRED_FIELDS.len() + OPTIONAL_FIELDS.len()
+    {
+        return Err(OcrQueueContractError::ClosedFieldSet);
+    }
+    let fields: BTreeMap<_, _> = fields.collect();
+    if fields
+        .keys()
+        .any(|field| !REQUIRED_FIELDS.contains(field) && !OPTIONAL_FIELDS.contains(field))
     {
         return Err(OcrQueueContractError::ClosedFieldSet);
     }
 
-    let schema_version = required_string(delivery, "schemaVersion")?;
+    let schema_version = required_string(&fields, "schemaVersion")?;
     if schema_version != SCHEMA_VERSION {
         return Err(OcrQueueContractError::InvalidField("schemaVersion"));
     }
-    let job_id = validated_id(required_string(delivery, "jobId")?, "jobId")?;
-    let draft_id = validated_id(required_string(delivery, "draftId")?, "draftId")?;
+    let job_id = validated_id(required_string(&fields, "jobId")?, "jobId")?;
+    let draft_id = validated_id(required_string(&fields, "draftId")?, "draftId")?;
     let source_image_id =
-        validated_id(required_string(delivery, "sourceImageId")?, "sourceImageId")?;
-    let image_object_key = required_string(delivery, "imageObjectKey")?;
-    if !valid_object_key(&image_object_key) {
+        validated_id(required_string(&fields, "sourceImageId")?, "sourceImageId")?;
+    let image_object_key = required_string(&fields, "imageObjectKey")?;
+    if !valid_object_key(image_object_key) {
         return Err(OcrQueueContractError::InvalidField("imageObjectKey"));
     }
-    let sha256 = required_string(delivery, "sha256")?;
-    if !valid_sha256(&sha256) {
+    let sha256 = required_string(&fields, "sha256")?;
+    if !valid_sha256(sha256) {
         return Err(OcrQueueContractError::InvalidField("sha256"));
     }
-    let byte_length_value = required_string(delivery, "byteLength")?;
-    let byte_length = positive_decimal(&byte_length_value, "byteLength")?;
+    let byte_length_value = required_string(&fields, "byteLength")?;
+    let byte_length = positive_decimal(byte_length_value, "byteLength")?;
     if byte_length > MAXIMUM_IMAGE_BYTES {
         return Err(OcrQueueContractError::InvalidField("byteLength"));
     }
-    let media_type = OcrMediaType::parse_wire(&required_string(delivery, "mediaType")?)
+    let media_type = OcrMediaType::parse_wire(required_string(&fields, "mediaType")?)
         .ok_or(OcrQueueContractError::InvalidField("mediaType"))?;
     let requested_screen_type =
-        RequestedScreenType::parse_wire(&required_string(delivery, "requestedScreenType")?)
+        RequestedScreenType::parse_wire(required_string(&fields, "requestedScreenType")?)
             .ok_or(OcrQueueContractError::InvalidField("requestedScreenType"))?;
-    let attempt_string = required_string(delivery, "attempt")?;
-    let attempt_value = positive_decimal(&attempt_string, "attempt")?;
+    let attempt_string = required_string(&fields, "attempt")?;
+    let attempt_value = positive_decimal(attempt_string, "attempt")?;
     u32::try_from(attempt_value)
         .ok()
         .filter(|value| i32::try_from(*value).is_ok())
         .ok_or(OcrQueueContractError::InvalidField("attempt"))?;
-    let enqueued_at = required_string(delivery, "enqueuedAt")?;
-    OffsetDateTime::parse(&enqueued_at, &Rfc3339)
+    let enqueued_at = required_string(&fields, "enqueuedAt")?;
+    OffsetDateTime::parse(enqueued_at, &Rfc3339)
         .map_err(|_parse_error| OcrQueueContractError::InvalidField("enqueuedAt"))?;
-    let hints_json = optional_string(delivery, "ocrHintsJson")?;
-    let hints = hints_json
-        .as_deref()
-        .map_or_else(|| Ok(OcrHints::default()), parse_hints)?;
-    let request_id = optional_string(delivery, "requestId")?;
-    if request_id
-        .as_deref()
-        .is_some_and(|value| !valid_request_id(value))
-    {
+    let hints_json = optional_string(&fields, "ocrHintsJson")?;
+    let hints = hints_json.map_or_else(|| Ok(OcrHints::default()), parse_hints)?;
+    let request_id = optional_string(&fields, "requestId")?;
+    if request_id.is_some_and(|value| !valid_request_id(value)) {
         return Err(OcrQueueContractError::InvalidField("requestId"));
     }
 
     let mut wire_fields = BTreeMap::from([
-        ("schemaVersion", schema_version),
-        ("jobId", job_id.clone()),
-        ("draftId", draft_id.clone()),
-        ("sourceImageId", source_image_id.clone()),
-        ("imageObjectKey", image_object_key.clone()),
-        ("sha256", sha256.clone()),
-        ("byteLength", byte_length_value),
+        ("schemaVersion", schema_version.to_owned()),
+        ("jobId", job_id.to_owned()),
+        ("draftId", draft_id.to_owned()),
+        ("sourceImageId", source_image_id.to_owned()),
+        ("imageObjectKey", image_object_key.to_owned()),
+        ("sha256", sha256.to_owned()),
+        ("byteLength", byte_length_value.to_owned()),
         ("mediaType", String::from(media_type.wire())),
         (
             "requestedScreenType",
             String::from(requested_screen_type.wire()),
         ),
-        ("attempt", attempt_string),
-        ("enqueuedAt", enqueued_at),
+        ("attempt", attempt_string.to_owned()),
+        ("enqueuedAt", enqueued_at.to_owned()),
     ]);
     if let Some(hints_json) = hints_json {
-        wire_fields.insert("ocrHintsJson", hints_json);
+        wire_fields.insert("ocrHintsJson", hints_json.to_owned());
     }
     if let Some(request_id) = request_id {
-        wire_fields.insert("requestId", request_id);
+        wire_fields.insert("requestId", request_id.to_owned());
     }
 
     Ok(ValidatedOcrDelivery {
         payload: OcrQueuePayload::new(
-            job_id,
-            draft_id,
-            source_image_id,
-            image_object_key,
-            sha256,
+            job_id.to_owned(),
+            draft_id.to_owned(),
+            source_image_id.to_owned(),
+            image_object_key.to_owned(),
+            sha256.to_owned(),
             byte_length,
             media_type,
             requested_screen_type,
@@ -244,19 +256,11 @@ pub(crate) fn parse_persisted_payload(
     let object = payload
         .as_object()
         .ok_or(OcrQueueContractError::ClosedFieldSet)?;
-    let delivery = StreamId {
-        id: String::new(),
-        map: object
+    parse_wire_fields(
+        object
             .iter()
-            .map(|(field, value)| {
-                let value = value.as_str().map_or(Value::Nil, |value| {
-                    Value::BulkString(value.as_bytes().to_vec())
-                });
-                (field.clone(), value)
-            })
-            .collect(),
-    };
-    parse_validated_delivery(&delivery)
+            .map(|(field, value)| (field.as_str(), value.as_str())),
+    )
 }
 
 /// Extracts only a bounded job ID for terminal malformed-delivery handling.
@@ -269,55 +273,43 @@ pub(crate) fn parse_persisted_payload(
     )
 )]
 pub(crate) fn recoverable_job_id(delivery: &StreamId) -> Option<String> {
-    required_string(delivery, "jobId")
-        .ok()
-        .filter(|value| valid_id(value))
-}
-
-fn required_string(
-    delivery: &StreamId,
-    field: &'static str,
-) -> Result<String, OcrQueueContractError> {
-    let value = delivery
-        .map
-        .get(field)
-        .ok_or(OcrQueueContractError::MissingField(field))?;
-    strict_string(value).ok_or(OcrQueueContractError::NonStringField(field))
-}
-
-fn optional_string(
-    delivery: &StreamId,
-    field: &'static str,
-) -> Result<Option<String>, OcrQueueContractError> {
     delivery
         .map
+        .get("jobId")
+        .and_then(strict_string)
+        .filter(|value| valid_id(value))
+        .map(String::from)
+}
+
+fn required_string<'a>(
+    fields: &BTreeMap<&str, Option<&'a str>>,
+    field: &'static str,
+) -> Result<&'a str, OcrQueueContractError> {
+    fields
         .get(field)
-        .map(|value| strict_string(value).ok_or(OcrQueueContractError::NonStringField(field)))
+        .ok_or(OcrQueueContractError::MissingField(field))?
+        .ok_or(OcrQueueContractError::NonStringField(field))
+}
+
+fn optional_string<'a>(
+    fields: &BTreeMap<&str, Option<&'a str>>,
+    field: &'static str,
+) -> Result<Option<&'a str>, OcrQueueContractError> {
+    fields
+        .get(field)
+        .map(|value| value.ok_or(OcrQueueContractError::NonStringField(field)))
         .transpose()
 }
 
-fn strict_string(value: &Value) -> Option<String> {
-    match value {
-        Value::BulkString(bytes) => str::from_utf8(bytes).ok().map(String::from),
-        Value::Nil
-        | Value::Int(_)
-        | Value::Array(_)
-        | Value::SimpleString(_)
-        | Value::Okay
-        | Value::Map(_)
-        | Value::Attribute { .. }
-        | Value::Set(_)
-        | Value::Double(_)
-        | Value::Boolean(_)
-        | Value::VerbatimString { .. }
-        | Value::BigNumber(_)
-        | Value::Push { .. }
-        | Value::ServerError(_) => None,
-    }
+fn strict_string(value: &Value) -> Option<&str> {
+    let Value::BulkString(bytes) = value else {
+        return None;
+    };
+    str::from_utf8(bytes).ok()
 }
 
-fn validated_id(value: String, field: &'static str) -> Result<String, OcrQueueContractError> {
-    if valid_id(&value) {
+fn validated_id<'a>(value: &'a str, field: &'static str) -> Result<&'a str, OcrQueueContractError> {
+    if valid_id(value) {
         Ok(value)
     } else {
         Err(OcrQueueContractError::InvalidField(field))
@@ -525,6 +517,18 @@ mod tests {
                 parse_delivery(&delivery).is_err(),
                 "accepted invalid {field}"
             );
+            let Ok(mut persisted) = serde_json::from_str::<serde_json::Value>(VALID_PAYLOAD) else {
+                panic!("shared OCR v2 fixture is not JSON");
+            };
+            let Some(fields) = persisted.as_object_mut() else {
+                panic!("shared OCR v2 fixture is not an object");
+            };
+            fields.insert(String::from(field), serde_json::json!(invalid));
+            assert_eq!(
+                parse_validated_delivery(&delivery),
+                parse_persisted_payload(&persisted),
+                "Redis and persisted JSON must reject the same invalid {field}"
+            );
         }
     }
 
@@ -594,6 +598,21 @@ mod tests {
             Value::BulkString("日本語".as_bytes().to_vec()),
         );
         assert_eq!(recoverable_job_id(&delivery), None);
+
+        delivery.map.insert(
+            String::from("jobId"),
+            Value::BulkString(vec![b'x'; MAXIMUM_ID_BYTES + 1]),
+        );
+        assert_eq!(recoverable_job_id(&delivery), None);
+        delivery.map.insert(
+            String::from("jobId"),
+            Value::SimpleString(String::from("job-v2-1")),
+        );
+        assert_eq!(
+            recoverable_job_id(&delivery),
+            None,
+            "the adapter must not coerce non-bulk Redis values into a job identity"
+        );
     }
 
     fn delivery_from_json(encoded: &str) -> StreamId {
@@ -607,6 +626,7 @@ mod tests {
                 .into_iter()
                 .map(|(key, field_value)| (key, Value::BulkString(field_value.into_bytes())))
                 .collect(),
+            ..StreamId::default()
         }
     }
 

@@ -62,14 +62,10 @@ pub(crate) fn select_count_recognition(
     fallbacks: &[CountRecognition],
     maximum_plausible_count: u32,
 ) -> CountRecognition {
-    let mut candidates = Vec::with_capacity(fallbacks.len().saturating_add(1));
-    candidates.push(primary.clone());
-    candidates.extend_from_slice(fallbacks);
-    let raw_text = combined_raw_text(&candidates);
-    let valid: Vec<&CountRecognition> = candidates
-        .iter()
-        .filter(|result| result.count.is_some())
-        .collect();
+    let candidates = std::iter::once(primary).chain(fallbacks);
+    let raw_text = combined_raw_text(candidates.clone());
+    let valid: Vec<&CountRecognition> =
+        candidates.filter(|result| result.count.is_some()).collect();
     if valid.is_empty() {
         return recognition(raw_text, None, None);
     }
@@ -354,12 +350,11 @@ fn maximum_confidence(values: impl Iterator<Item = Option<f64>>) -> Option<f64> 
     values.flatten().max_by(f64::total_cmp)
 }
 
-fn combined_raw_text(candidates: &[CountRecognition]) -> String {
+fn combined_raw_text<'a>(candidates: impl Iterator<Item = &'a CountRecognition>) -> String {
     let mut seen = BTreeSet::new();
     candidates
-        .iter()
         .filter_map(|candidate| {
-            if candidate.raw_text.is_empty() || !seen.insert(candidate.raw_text.clone()) {
+            if candidate.raw_text.is_empty() || !seen.insert(candidate.raw_text.as_str()) {
                 None
             } else {
                 Some(candidate.raw_text.as_str())

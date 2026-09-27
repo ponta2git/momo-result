@@ -10,8 +10,11 @@ readonly source_run_attempt=2
 readonly consumer_run_attempt=3
 readonly artifact_name="runtime-image-${run_id}-${source_run_attempt}"
 readonly artifact_id=789012
-readonly artifact_digest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+# actions/upload-artifact emits an unprefixed digest; the REST API prefixes it.
+readonly artifact_digest=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 readonly image_ref="registry.fly.io/momo-result:${commit}-${run_id}-${source_run_attempt}"
+
+cd "${TMPDIR:-/tmp}"
 
 actual="$(
   GITHUB_RUN_ATTEMPT="${consumer_run_attempt}" \

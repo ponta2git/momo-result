@@ -149,6 +149,8 @@ export function MobilePlayerNumericField({
   allowSign = false,
   cellId,
   error,
+  draftValue,
+  onDraftChange,
   field,
   focusImageKind,
   index,
@@ -164,6 +166,8 @@ export function MobilePlayerNumericField({
   allowSign?: boolean;
   cellId: string;
   error: boolean;
+  draftValue: string | undefined;
+  onDraftChange: (path: string, value: string | undefined) => void;
   field: keyof typeof playerFieldLabels;
   focusImageKind?: "incident_log" | "revenue" | "total_assets";
   index: number;
@@ -185,6 +189,8 @@ export function MobilePlayerNumericField({
         cellId={cellId}
         commitKind="player"
         error={error}
+        draftValue={draftValue}
+        onDraftChange={onDraftChange}
         field={field}
         focusImageKind={focusImageKind}
         originalValue={originalValue}

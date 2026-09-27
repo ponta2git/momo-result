@@ -1,5 +1,10 @@
 import * as matchers from "@testing-library/jest-dom/matchers";
+import { cleanup } from "@testing-library/react/pure";
 import { afterEach, beforeEach, expect, vi } from "vitest";
+
+import { clearCsrfToken } from "@/shared/api/csrfTokenStore";
+import { resetTestQueryClients } from "@/test/queryClient";
+import { resetResizeObservers } from "@/test/resizeObserver";
 
 expect.extend(matchers);
 
@@ -38,6 +43,7 @@ function formatConsoleArgs(args: unknown[]): string {
 
 beforeEach(() => {
   if (hasDom) {
+    vi.stubGlobal("ResizeObserver", resetResizeObservers());
     vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
   }
   if (hasDom && !window.localStorage) {
@@ -56,13 +62,19 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // Import order must not restore browser doubles or discard cache before unmount effects run.
+  if (hasDom) cleanup();
+  resetTestQueryClients();
+  clearCsrfToken();
   const consoleMessages = unexpectedConsoleMessages;
-  if (hasDom) {
-    window.localStorage.clear();
-    window.sessionStorage.clear();
-  }
-  vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+  if (hasDom) {
+    window.localStorage?.clear();
+    window.sessionStorage?.clear();
+  }
+  resetResizeObservers();
   vi.useRealTimers();
   if (consoleMessages.length > 0) {
     throw new Error(`Unexpected console output during test:\n${consoleMessages.join("\n")}`);

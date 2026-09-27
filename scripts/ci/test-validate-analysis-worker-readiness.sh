@@ -33,6 +33,8 @@ write_log() {
       };
       outer($machineId; "runner"; "2026-08-24T11:59:58Z"; "Machine started"),
       outer($machineId; "app"; "2026-08-24T11:59:59Z"; "not-json"),
+      outer($machineId; "app"; "2026-08-24T11:59:59Z"; "42"),
+      outer($machineId; "app"; "2026-08-24T11:59:59Z"; "{\"fields\":[]}"),
       outer("machine-old"; "app"; "2026-08-24T12:00:00Z";
         (app("analysis_worker_ready"; $analysisWorkerId) | tojson)),
       outer($machineId; "app"; "2026-08-24T12:00:01Z";

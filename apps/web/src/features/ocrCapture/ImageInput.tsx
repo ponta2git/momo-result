@@ -26,7 +26,7 @@ export function ImageInput({
       <input
         ref={inputRef}
         aria-label="OCRの画像をアップロード"
-        className="sr-only"
+        hidden
         disabled={disabled}
         type="file"
         accept="image/png,image/jpeg,image/webp"

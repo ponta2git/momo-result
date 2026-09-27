@@ -94,8 +94,12 @@ export function normalizeSeriesAnalysisSelection(
   ) {
     mapMasterId = undefined;
   }
+  const scopeWasNormalized =
+    (state.gameTitleId !== undefined && state.gameTitleId !== selectedTitle.gameTitleId) ||
+    state.seasonMasterId !== seasonMasterId ||
+    state.mapMasterId !== mapMasterId;
   return {
-    ...(state.focusMatchId ? { focusMatchId: state.focusMatchId } : {}),
+    ...(state.focusMatchId && !scopeWasNormalized ? { focusMatchId: state.focusMatchId } : {}),
     ownerMetric,
     gameTitleId: selectedTitle.gameTitleId,
     ...(mapMasterId ? { mapMasterId } : {}),

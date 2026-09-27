@@ -131,7 +131,9 @@ object OcrModule:
             jobId,
             nowF,
             security.decode(BoundaryId.required("jobId", jobId)(OcrJobId.fromString))(id =>
-              security.respond(cancelOcrJob.run(id))(_ => CancelOcrJobResponse(jobId, "cancelled"))
+              security.respond(cancelOcrJob.run(id, member.accountId))(_ =>
+                CancelOcrJobResponse(jobId, "cancelled")
+              )
             ),
           )
       }

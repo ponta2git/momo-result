@@ -45,7 +45,9 @@ export function StatusBadge({
   return (
     <span
       aria-atomic={announceChanges || undefined}
-      aria-busy={busy || undefined}
+      // The label is already complete. aria-busy on its live region would defer
+      // announcing a pending status until the work had finished.
+      aria-busy={busy && !announceChanges ? true : undefined}
       aria-live={announceChanges ? "polite" : undefined}
       className={cn(
         "inline-flex min-h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-xs border px-2 py-1 text-xs font-plain leading-5",

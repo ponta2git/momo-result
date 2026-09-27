@@ -1,22 +1,24 @@
 // @vitest-environment jsdom
 
-import { waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { createDeferred } from "@/test/deferred";
 import { installAnchorClickMock, installFetchMock, installObjectUrlMock } from "@/test/doubles/dom";
 
 import { downloadExportMatches } from "./exportDownload";
 
 describe("exportDownload", () => {
   it("starts the browser download before revoking the blob URL", async () => {
+    vi.useFakeTimers();
+    const csv = '\uFEFFプレーヤー,総資産\r\n"ぽんた",210000\r\n';
     const anchorClick = installAnchorClickMock();
     const objectUrls = installObjectUrlMock({ createObjectURL: () => "blob:test-download" });
     installFetchMock(
       async () =>
-        new Response("csv", {
+        new Response(csv, {
           headers: {
             "Content-Disposition": 'attachment; filename="momo-results.csv"',
-            "Content-Type": "text/csv",
+            "Content-Type": "text/csv; charset=utf-8",
           },
         }),
     );
@@ -31,10 +33,15 @@ describe("exportDownload", () => {
     expect(anchorClick.click).toHaveBeenCalledTimes(1);
     expect(anchorClick.clickedAnchors[0]?.getAttribute("href")).toBe("blob:test-download");
     expect(anchorClick.clickedAnchors[0]?.download).toBe("momo-results.csv");
-    expect(objectUrls.revokeObjectURL).not.toHaveBeenCalled();
-    await waitFor(() =>
-      expect(objectUrls.revokeObjectURL).toHaveBeenCalledWith("blob:test-download"),
+    const blob = objectUrls.createObjectURL.mock.calls[0]?.[0] as Blob;
+    expect(blob.type).toBe("text/csv;charset=utf-8");
+    expect(Array.from(new Uint8Array(await blob.arrayBuffer()))).toEqual(
+      Array.from(new TextEncoder().encode(csv)),
     );
+    expect(anchorClick.clickedAnchors[0]?.isConnected).toBe(false);
+    expect(objectUrls.revokeObjectURL).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(objectUrls.revokeObjectURL).toHaveBeenCalledExactlyOnceWith("blob:test-download");
   });
 
   it("returns timeout when the client abort timer fires", async () => {
@@ -55,5 +62,23 @@ describe("exportDownload", () => {
       kind: "timeout",
       title: "出力が完了しませんでした",
     });
+  });
+
+  it("does not start a browser download if cancellation wins before the response arrives", async () => {
+    const response = createDeferred<Response>();
+    const controller = new AbortController();
+    const anchorClick = installAnchorClickMock();
+    // A transport may finish despite cancellation; the download side effect still needs ownership.
+    installFetchMock(() => response.promise);
+
+    const result = downloadExportMatches(
+      { format: "csv", scope: "all" },
+      { signal: controller.signal },
+    );
+    controller.abort();
+    response.resolve(new Response("csv", { headers: { "Content-Type": "text/csv" } }));
+
+    await expect(result).resolves.toEqual({ kind: "cancelled" });
+    expect(anchorClick.click).not.toHaveBeenCalled();
   });
 });

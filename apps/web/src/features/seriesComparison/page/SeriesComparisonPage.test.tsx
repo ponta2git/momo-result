@@ -1,9 +1,9 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { createMemoryRouter, MemoryRouter, RouterProvider } from "react-router-dom";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { SeriesComparisonPage } from "@/features/seriesComparison/page/SeriesComparisonPage";
 import { seriesAnalysisKeys } from "@/shared/api/queryKeys";
@@ -21,6 +21,7 @@ import {
   makeFourPlayerSeriesAnalysisMatchContext,
   makeOwnerComparisonAggregate,
   makeSeriesAnalysisAggregate,
+  makeSeriesAnalysisStatus,
 } from "@/test/msw/seriesAnalysisFixtures";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
@@ -28,16 +29,6 @@ import { selectOption } from "@/test/selectOption";
 
 setupMsw();
 beforeAll(() => decodeSeriesAnalysisArtifact("aggregateV4", makeSeriesAnalysisAggregate()));
-beforeEach(() => {
-  vi.stubGlobal(
-    "ResizeObserver",
-    class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    },
-  );
-});
 
 describe("SeriesComparisonPage", () => {
   it("changes owner metrics without making the focused control inert or refetching analysis", async () => {
@@ -93,8 +84,6 @@ describe("SeriesComparisonPage", () => {
     expect(
       screen.getByRole("columnheader", { name: /あかねまみ.*この試合のオーナー/u }),
     ).toHaveAttribute("data-highlighted", "true");
-    const scroller = screen.getByRole("region", { name: "オーナー別の平均順位の表" });
-    scroller.scrollLeft = 123;
     let blockedOwnerControl = false;
     const observer = new MutationObserver((records) => {
       blockedOwnerControl ||= records.some(
@@ -120,8 +109,6 @@ describe("SeriesComparisonPage", () => {
         expect(screen.getByRole("combobox", { name: "オーナー比較の指標" })).toBe(select);
         expect(select).toHaveFocus();
         expect(blockedOwnerControl).toBe(false);
-        expect(screen.getByRole("region", { name: `オーナー別の${label}の表` })).toBe(scroller);
-        expect(scroller.scrollLeft).toBe(123);
         expect(
           screen.getByRole("columnheader", { name: /あかねまみ.*この試合のオーナー/u }),
         ).toHaveAttribute("data-highlighted", "true");
@@ -138,23 +125,37 @@ describe("SeriesComparisonPage", () => {
     }
   });
 
-  it("keeps purpose tabs, analysis tabs, and the metric guide outside stale results", async () => {
+  it("keeps navigation usable while replacement results are pending", async () => {
     const user = userEvent.setup();
     const aggregate = makeSeriesAnalysisAggregate();
     const refresh = createDeferred();
     let requests = 0;
+    let statusRequests = 0;
+    const nextArtifact = { ...analysisArtifact, artifactId: "artifact-next", inputRevision: "13" };
     server.use(
+      http.get("/api/analytics/series-comparison/v2/status", () => {
+        statusRequests += 1;
+        return HttpResponse.json(
+          makeSeriesAnalysisStatus({
+            currentArtifact: statusRequests === 1 ? analysisArtifact : nextArtifact,
+          }),
+        );
+      }),
       http.get("/api/analytics/series-comparison/v4/aggregate", async () => {
         requests += 1;
         if (requests > 1) await refresh.promise;
-        return HttpResponse.json(aggregate);
+        return HttpResponse.json(
+          requests === 1 ? aggregate : { ...aggregate, artifact: nextArtifact },
+        );
       }),
     );
     await act(async () => {
       render(
         <QueryClientProvider client={createTestQueryClient()}>
           <MemoryRouter
-            initialEntries={["/analytics/series?gameTitleId=gt_momotetsu_2&view=overview"]}
+            initialEntries={[
+              "/analytics/series?gameTitleId=gt_momotetsu_2&view=overview&returnTo=%2Fmatches%3Fpage%3D2",
+            ]}
           >
             <SeriesComparisonPage />
           </MemoryRouter>
@@ -162,6 +163,11 @@ describe("SeriesComparisonPage", () => {
       );
     });
     const heading = await screen.findByRole("heading", { name: "順位と基礎比較" });
+    const back = within(screen.getByRole("navigation", { name: "戦績比較の移動" })).getByRole(
+      "link",
+      { name: "前の画面へ戻る" },
+    );
+    expect(back).toHaveAttribute("href", "/matches?page=2");
     await user.click(screen.getByRole("button", { name: "表示を更新" }));
     await waitFor(() => expect(requests).toBe(2));
     await waitFor(() => expect(heading.closest("[inert]")).not.toBeNull());
@@ -172,6 +178,7 @@ describe("SeriesComparisonPage", () => {
     expect(flowTab.closest("[inert]")).toBeNull();
     expect(reviewTab.closest("[inert]")).toBeNull();
     expect(metricGuide.closest("[inert]")).toBeNull();
+    expect(back.closest("[inert]")).toBeNull();
     expect(heading).toBeVisible();
 
     await user.click(metricGuide);
@@ -185,6 +192,7 @@ describe("SeriesComparisonPage", () => {
     await act(async () => refresh.resolve());
     const flowHeading = await screen.findByRole("heading", { name: "直近順位と累積推移" });
     await waitFor(() => expect(flowHeading.closest("[inert]")).toBeNull());
+    expect(screen.getByRole("link", { name: "前の画面へ戻る" })).toBe(back);
     expect(flowTab).toHaveFocus();
   });
 });

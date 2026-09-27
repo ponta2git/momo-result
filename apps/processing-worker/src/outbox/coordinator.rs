@@ -150,38 +150,30 @@ where
     D: OutboxDriver,
     C: CoordinatorClock,
 {
-    let mut demand = true;
-    let mut next_wake_at = None;
-    let mut retry_at = None;
+    let mut schedule = Schedule::Ready;
     let mut consecutive_failures = 0_usize;
 
     loop {
-        if *shutdown.borrow() {
+        if shutdown_requested(&shutdown)? {
             return Ok(());
         }
 
-        if let Some(deadline) = retry_at {
+        if let Some(deadline) = schedule.deadline() {
             match wait_for_event(&mut wake, &mut shutdown, Some(deadline), &clock).await? {
-                WaitEvent::Wake => continue,
-                WaitEvent::Deadline => retry_at = None,
-                WaitEvent::Shutdown => return Ok(()),
-            }
-        }
-
-        if !demand {
-            match wait_for_event(&mut wake, &mut shutdown, next_wake_at, &clock).await? {
+                // Hints can coalesce while dependency recovery is pending, but cannot shorten
+                // its backoff. A deadline always wins over continuously arriving hints.
+                WaitEvent::Wake if matches!(schedule, Schedule::Backoff(_)) => continue,
                 WaitEvent::Wake | WaitEvent::Deadline => {}
                 WaitEvent::Shutdown => return Ok(()),
             }
         }
 
         consume_coalesced_wake(&mut wake)?;
-        match drain_until_pause(&mut driver, &shutdown).await {
+        match drain_until_pause(&mut driver, &shutdown).await? {
             DrainCycle::Idle { next } => {
                 consecutive_failures = 0;
-                demand = false;
                 let has_driver_deadline = next.is_some();
-                next_wake_at = Some(cold_recovery_deadline(clock.now(), next)?);
+                schedule = Schedule::Idle(cold_recovery_deadline(clock.now(), next)?);
                 info!(
                     event = "outbox_coordinator_idle",
                     outbox_kind = "series_analysis",
@@ -190,7 +182,7 @@ where
                 );
             }
             DrainCycle::BudgetExhausted => {
-                demand = true;
+                schedule = Schedule::Ready;
                 tokio::task::yield_now().await;
             }
             DrainCycle::Shutdown => return Ok(()),
@@ -198,14 +190,12 @@ where
                 DriverFailureKind::Recoverable => {
                     consecutive_failures = consecutive_failures.saturating_add(1);
                     let delay = retry_delay(consecutive_failures);
-                    retry_at = Some(
+                    schedule = Schedule::Backoff(
                         clock
                             .now()
                             .checked_add(delay)
                             .ok_or(CoordinatorError::DeadlineOverflow)?,
                     );
-                    demand = true;
-                    next_wake_at = None;
                     warn!(
                         event = "outbox_coordinator_backoff",
                         outbox_kind = "series_analysis",
@@ -221,6 +211,24 @@ where
     }
 }
 
+// These states make demand and backoff mutually exclusive. A wake is demand only while idle;
+// a retry remains due at its original absolute deadline regardless of intervening hints.
+#[derive(Clone, Copy)]
+enum Schedule {
+    Ready,
+    Idle(Instant),
+    Backoff(Instant),
+}
+
+impl Schedule {
+    const fn deadline(self) -> Option<Instant> {
+        match self {
+            Self::Ready => None,
+            Self::Idle(deadline) | Self::Backoff(deadline) => Some(deadline),
+        }
+    }
+}
+
 enum DrainCycle<E> {
     Idle { next: Option<Instant> },
     BudgetExhausted,
@@ -231,29 +239,29 @@ enum DrainCycle<E> {
 async fn drain_until_pause<D>(
     driver: &mut D,
     shutdown: &watch::Receiver<bool>,
-) -> DrainCycle<D::Error>
+) -> Result<DrainCycle<D::Error>, CoordinatorError<D::Error>>
 where
     D: OutboxDriver,
 {
     for _batch in 0..MAX_CONSECUTIVE_BATCHES {
-        if *shutdown.borrow() {
-            return DrainCycle::Shutdown;
+        if shutdown_requested(shutdown)? {
+            return Ok(DrainCycle::Shutdown);
         }
         let batch = match driver.drain_batch().await {
             Ok(batch) => batch,
-            Err(error) => return DrainCycle::Failure(error),
+            Err(error) => return Ok(DrainCycle::Failure(error)),
         };
-        if *shutdown.borrow() {
-            return DrainCycle::Shutdown;
+        if shutdown_requested(shutdown)? {
+            return Ok(DrainCycle::Shutdown);
         }
         match batch.state {
             DrainBatchState::Progress => {}
             DrainBatchState::Idle { next_wake_at } => {
-                return DrainCycle::Idle { next: next_wake_at };
+                return Ok(DrainCycle::Idle { next: next_wake_at });
             }
         }
     }
-    DrainCycle::BudgetExhausted
+    Ok(DrainCycle::BudgetExhausted)
 }
 
 fn consume_coalesced_wake<E>(wake: &mut OutboxWakeReceiver) -> Result<(), CoordinatorError<E>>
@@ -284,44 +292,54 @@ where
     C: CoordinatorClock,
 {
     loop {
-        if *shutdown.borrow() {
+        if shutdown_requested(shutdown)? {
             return Ok(WaitEvent::Shutdown);
         }
-        let event = match deadline {
+        // Check the absolute deadline before polling signals. A perpetually readable wake
+        // channel (or repeated false shutdown values) must never postpone due recovery work.
+        if deadline.is_some_and(|deadline| clock.now() >= deadline) {
+            return Ok(WaitEvent::Deadline);
+        }
+        match deadline {
             Some(deadline) => {
                 tokio::select! {
                     biased;
-                    changed = shutdown.changed() => changed_event(changed, shutdown)?,
-                    signal = wake.recv() => wake_event(signal)?,
-                    () = clock.sleep_until(deadline) => WaitEvent::Deadline,
+                    changed = shutdown.changed() => {
+                        changed.map_err(|_closed| CoordinatorError::ShutdownChannelClosed)?;
+                    }
+                    () = clock.sleep_until(deadline) => return Ok(WaitEvent::Deadline),
+                    signal = wake.recv() => return wake_event(signal),
                 }
             }
             None => {
                 tokio::select! {
                     biased;
-                    changed = shutdown.changed() => changed_event(changed, shutdown)?,
-                    signal = wake.recv() => wake_event(signal)?,
+                    changed = shutdown.changed() => {
+                        changed.map_err(|_closed| CoordinatorError::ShutdownChannelClosed)?;
+                    }
+                    signal = wake.recv() => return wake_event(signal),
                 }
             }
-        };
-        if event != WaitEvent::Shutdown || *shutdown.borrow() {
-            return Ok(event);
         }
     }
 }
 
-fn changed_event<E>(
-    changed: Result<(), watch::error::RecvError>,
-    shutdown: &watch::Receiver<bool>,
-) -> Result<WaitEvent, CoordinatorError<E>>
+fn shutdown_requested<E>(shutdown: &watch::Receiver<bool>) -> Result<bool, CoordinatorError<E>>
 where
     E: Error + 'static,
 {
-    changed.map_err(|_closed| CoordinatorError::ShutdownChannelClosed)?;
+    // Preserve a final true value even if its sender has already been dropped. An absent
+    // supervisor without an explicit stop request is a structural failure, including during
+    // a long sequence of successful batches where changed() would never otherwise be polled.
+    // Observe channel closure first: if the sender publishes true and closes concurrently,
+    // the later value read must still take precedence over the closed-channel error.
+    let changed = shutdown.has_changed();
     if *shutdown.borrow() {
-        Ok(WaitEvent::Shutdown)
+        Ok(true)
     } else {
-        Ok(WaitEvent::Deadline)
+        changed
+            .map(|_changed| false)
+            .map_err(|_closed| CoordinatorError::ShutdownChannelClosed)
     }
 }
 
@@ -627,6 +645,84 @@ mod tests {
         observe_drain(&mut drains).await;
         assert_eq!(shutdown_sender.send(true), Ok(()));
         assert!(matches!(task.await, Ok(Ok(()))));
+    }
+
+    #[tokio::test]
+    async fn repeated_false_shutdown_values_do_not_bypass_dependency_backoff() {
+        let start = Instant::now();
+        let (clock, mut sleeps) = ManualClock::at(start);
+        let retry_at = start + Duration::from_secs(1);
+        let (driver, mut drains) = ScriptedDriver::new([
+            Err(ScriptedError {
+                kind: DriverFailureKind::Recoverable,
+            }),
+            Ok(DrainBatch::idle(None)),
+        ]);
+        let (_sink, wake) = PostCommitSink::channel();
+        let (shutdown_sender, shutdown) = watch::channel(false);
+        let task = tokio::spawn(run_with_clock(driver, wake, shutdown, clock.clone()));
+
+        observe_drain(&mut drains).await;
+        assert_eq!(observe_sleep(&mut sleeps).await, Some(retry_at));
+        assert_eq!(shutdown_sender.send(false), Ok(()));
+        assert_eq!(observe_sleep(&mut sleeps).await, Some(retry_at));
+        assert_eq!(
+            drains.try_recv(),
+            Err(mpsc::error::TryRecvError::Empty),
+            "a non-shutdown watch update cannot retry a failed dependency early"
+        );
+
+        clock.advance(Duration::from_secs(1));
+        observe_drain(&mut drains).await;
+        assert_eq!(shutdown_sender.send(true), Ok(()));
+        assert!(matches!(task.await, Ok(Ok(()))));
+    }
+
+    #[tokio::test]
+    async fn due_retry_takes_priority_over_a_buffered_wake() {
+        let now = Instant::now();
+        let (clock, _sleeps) = ManualClock::at(now);
+        let (sink, mut wake) = PostCommitSink::channel();
+        let (_shutdown_sender, mut shutdown) = watch::channel(false);
+        assert_eq!(sink.submit(PostCommitEffects::WakeAnalysis), Ok(()));
+
+        assert!(matches!(
+            wait_for_event::<ScriptedError, _>(&mut wake, &mut shutdown, Some(now), &clock).await,
+            Ok(WaitEvent::Deadline)
+        ));
+        assert_eq!(
+            wake.try_recv(),
+            Ok(()),
+            "deadline selection must leave coalesced demand available for the drain"
+        );
+    }
+
+    #[tokio::test]
+    async fn missing_supervisor_prevents_work_but_preserves_an_explicit_final_shutdown() {
+        for requested in [false, true] {
+            let (driver, mut drains) = ScriptedDriver::new([Ok(DrainBatch::progress())]);
+            let (_sink, wake) = PostCommitSink::channel();
+            let (shutdown_sender, shutdown) = watch::channel(requested);
+            drop(shutdown_sender);
+
+            let result = run(driver, wake, shutdown).await;
+            if requested {
+                assert!(
+                    result.is_ok(),
+                    "a final shutdown request remains authoritative"
+                );
+            } else {
+                assert!(matches!(
+                    result,
+                    Err(CoordinatorError::ShutdownChannelClosed)
+                ));
+            }
+            assert_eq!(
+                drains.try_recv(),
+                Err(mpsc::error::TryRecvError::Disconnected),
+                "the coordinator must not begin durable work without its supervisor"
+            );
+        }
     }
 
     #[test]

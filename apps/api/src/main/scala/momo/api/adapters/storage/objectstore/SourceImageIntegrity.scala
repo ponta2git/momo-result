@@ -41,6 +41,7 @@ private[objectstore] object SourceImageIntegrity:
   def matches(record: SourceImageRecord, sourceObject: SourceImageObject): Boolean =
     expected(record).exists { expected =>
       metadataMatches(expected, sourceObject.metadata) &&
+      sourceObject.bytes.length.toLong == expected.sizeBytes &&
       Sha256Hex.digest(sourceObject.bytes) == expected.sha256 &&
       ImageValidation.validate(sourceObject.bytes, Some(expected.mediaType)).exists(validated =>
         validated.dimensions.width == expected.width.toLong &&

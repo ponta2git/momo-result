@@ -211,7 +211,8 @@ async fn sweep(
         .await
         .map_err(|_elapsed| RuntimeError::Dependency("scan_timeout"))?
         .map_err(|_error| RuntimeError::Dependency("scan"))?
-        .get(0);
+        .try_get(0)
+        .map_err(|_error| RuntimeError::Dependency("scan_decode"))?;
     }
     let Some(upper) = &cursor.upper else {
         return Ok(());
@@ -230,7 +231,9 @@ async fn sweep(
             if *shutdown.borrow() {
                 return Ok(());
             }
-            cursor.after = row.get(0);
+            cursor.after = row
+                .try_get(0)
+                .map_err(|_error| RuntimeError::Dependency("scan_decode"))?;
             match control::settle(database, &cursor.after, timeout, sink).await {
                 Ok(Settlement::Settled(Some(notification))) => notification.dispatch(),
                 Ok(
@@ -262,7 +265,9 @@ async fn next_delay(database: &Client, timeout: Duration) -> Result<Duration, Ru
         FROM ocr_submissions s WHERE s.status = 'open' AND s.admission_deadline > clock_timestamp() \
         AND EXISTS (SELECT 1 FROM ocr_submission_members m WHERE m.submission_id = s.id AND m.status = 'pending')", &[])).await
         .map_err(|_elapsed| RuntimeError::Dependency("deadline_read_timeout"))?.map_err(|_error| RuntimeError::Dependency("deadline_read"))?;
-    let seconds: Option<f64> = row.get(0);
+    let seconds: Option<f64> = row
+        .try_get(0)
+        .map_err(|_error| RuntimeError::Dependency("deadline_decode"))?;
     Ok(seconds
         .and_then(|value| Duration::try_from_secs_f64(value).ok())
         .map_or(SAFETY_INTERVAL, |value| {

@@ -1,9 +1,11 @@
 import { Tooltip as BaseTooltip } from "@base-ui/react/tooltip";
-import { createContext, useContext } from "react";
+import { cloneElement, createContext, useContext, useId } from "react";
 import type { ReactElement, ReactNode } from "react";
 
+import { useDialogFloatingContainer } from "@/shared/ui/feedback/DialogFloatingContainer";
+
 type TooltipProps = {
-  children: ReactElement;
+  children: ReactElement<{ "aria-describedby"?: string | undefined }>;
   content: ReactNode;
   delay?: number;
   side?: "top" | "right" | "bottom" | "left";
@@ -28,19 +30,34 @@ export function TooltipProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/** A supplementary visual label; the trigger remains responsible for its accessible name. */
+/** A supplementary description; the trigger remains responsible for its accessible name. */
 export function Tooltip({ children, content, delay, side = "top" }: TooltipProps) {
   const hasSharedProvider = useContext(SharedTooltipProviderContext);
+  const floatingContainer = useDialogFloatingContainer();
+  const descriptionId = useId();
+  const trigger = cloneElement(children, {
+    "aria-describedby": [children.props["aria-describedby"], descriptionId]
+      .filter(Boolean)
+      .join(" "),
+  });
 
   return (
     <BaseTooltip.Root>
       <BaseTooltip.Trigger
         delay={delay ?? (hasSharedProvider ? undefined : tooltipOpenDelayMs)}
-        render={children}
+        render={trigger}
       />
-      <BaseTooltip.Portal>
-        <BaseTooltip.Positioner className="z-[var(--z-tooltip)]" side={side} sideOffset={8}>
-          <BaseTooltip.Popup className="max-w-[22rem] rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-inverse)] px-3 py-2 text-xs leading-5 text-[var(--color-text-inverse)] shadow-[var(--shadow-raised)]">
+      <BaseTooltip.Portal container={floatingContainer ?? undefined}>
+        <BaseTooltip.Positioner
+          className="pointer-events-auto z-[var(--z-tooltip)]"
+          side={side}
+          sideOffset={8}
+        >
+          <BaseTooltip.Popup
+            className="max-w-[min(22rem,var(--available-width))] rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-inverse)] px-3 py-2 text-xs leading-5 text-[var(--color-text-inverse)] shadow-[var(--shadow-raised)]"
+            id={descriptionId}
+            role="tooltip"
+          >
             {content}
           </BaseTooltip.Popup>
         </BaseTooltip.Positioner>

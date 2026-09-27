@@ -23,7 +23,7 @@ function LocationStateHarness() {
       </button>
       <output aria-label="current search">{JSON.stringify(state.current)}</output>
       <output aria-label="list return path">{state.listReturnTo}</output>
-      <output aria-label="location">{`${location.pathname}${location.search}`}</output>
+      <output aria-label="location">{`${location.pathname}${location.search}${location.hash}`}</output>
       <button type="button" onClick={state.clear}>
         clear
       </button>
@@ -115,6 +115,28 @@ describe("useMatchListLocationState", () => {
     );
     expect(screen.getByLabelText("list return path")).toHaveTextContent(
       "/matches?returnTo=%2Fheld-events%2Fheld-1",
+    );
+  });
+
+  it("preserves the list fragment in detail return paths and filter changes", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/matches?sort=updated_desc#results"]}>
+        <LocationStateHarness />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByLabelText("list return path")).toHaveTextContent(
+      "/matches?sort=updated_desc#results",
+    );
+    await user.click(screen.getByRole("button", { name: "confirmed" }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("location")).toHaveTextContent(
+        "/matches?status=confirmed&sort=updated_desc#results",
+      ),
+    );
+    expect(screen.getByLabelText("list return path")).toHaveTextContent(
+      "/matches?status=confirmed&sort=updated_desc#results",
     );
   });
 });

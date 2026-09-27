@@ -2,7 +2,6 @@ package momo.api.http
 
 import cats.effect.Async
 import cats.syntax.all.*
-import sttp.model.headers.Cookie
 import sttp.tapir.model.ServerRequest
 
 import momo.api.auth.{
@@ -118,9 +117,7 @@ private def verifyDevelopmentCsrf(context: AuthRequestContext): Either[AppError,
 private def problem(error: AppError): ProblemDetails.ProblemResponse = ProblemDetails.from(error)
 
 private def sessionCookie(config: AppConfig, request: ServerRequest): Option[String] =
-  request.header("Cookie")
-    .flatMap(raw => Cookie.parse(raw).toOption)
-    .flatMap(_.find(_.name == config.auth.sessionCookieName).map(_.value))
+  AuthCookies.value(request, config.auth.sessionCookieName)
 
 private def isMutating(request: ServerRequest): Boolean =
   HttpMethodPredicates.isMutating(request.method.method)

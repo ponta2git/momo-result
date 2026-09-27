@@ -1,8 +1,7 @@
 import { Tabs as BaseTabs } from "@base-ui/react/tabs";
 import { m, useReducedMotionConfig } from "motion/react";
-import type { MotionStyle } from "motion/react";
 import { createContext, useContext } from "react";
-import type { ComponentPropsWithoutRef, ComponentPropsWithRef, CSSProperties, Ref } from "react";
+import type { ComponentPropsWithoutRef, ComponentPropsWithRef, Ref } from "react";
 
 import { cn } from "@/shared/ui/cn";
 import { instantMotionTransition, politeMotionTransition } from "@/shared/ui/motion/transitions";
@@ -31,9 +30,10 @@ export type TabsListProps = Omit<
 > &
   TabsListAccessibleName & {
     ref?: Ref<HTMLDivElement> | undefined;
-    variant?: TabsVariant | undefined;
-    wrap?: boolean | undefined;
-  };
+  } & (
+    | { variant?: "filled" | undefined; wrap?: boolean | undefined }
+    | { variant: "underline"; wrap?: false | undefined }
+  );
 
 export type TabsTabProps = Omit<BaseTabsTabProps, "className" | "style"> & {
   ref?: Ref<HTMLElement> | undefined;
@@ -41,20 +41,13 @@ export type TabsTabProps = Omit<BaseTabsTabProps, "className" | "style"> & {
 
 const TabsVariantContext = createContext<TabsVariant>("filled");
 
-export function TabsRoot(props: Omit<BaseTabsRootProps, "className" | "style">) {
-  return <BaseTabs.Root {...props} />;
+/** The shared presentations are horizontal; vertical tabs require their own layout contract. */
+export function TabsRoot(props: Omit<BaseTabsRootProps, "className" | "orientation" | "style">) {
+  return <BaseTabs.Root {...props} orientation="horizontal" />;
 }
 
 export function TabsPanel(props: Omit<BaseTabsPanelProps, "className" | "style">) {
   return <BaseTabs.Panel {...props} />;
-}
-
-function activeIndicatorStyle(style: CSSProperties | undefined): MotionStyle {
-  return {
-    ...style,
-    transform: "translateX(var(--active-tab-left, 0px))",
-    width: "var(--active-tab-width, 0px)",
-  } as MotionStyle;
 }
 
 function UnderlineSelectionIndicator() {
@@ -62,24 +55,26 @@ function UnderlineSelectionIndicator() {
 
   return (
     <BaseTabs.Indicator
-      className="pointer-events-none absolute -bottom-px left-0 h-0.5 bg-[var(--color-action)]"
+      className="pointer-events-none absolute inset-x-0 -bottom-px h-0.5"
       render={(props, state) => {
         const target =
           state.activeTabPosition && state.activeTabSize
             ? { width: state.activeTabSize.width, x: state.activeTabPosition.left }
             : undefined;
         return (
-          <m.span
-            {...(target ? { animate: target } : {})}
-            className={props.className}
-            hidden={props.hidden}
-            initial={false}
-            ref={props.ref}
-            role={props.role}
-            style={activeIndicatorStyle(props.style)}
-            suppressHydrationWarning={props.suppressHydrationWarning}
-            transition={reduceMotion ? instantMotionTransition : politeMotionTransition}
-          />
+          <span {...props}>
+            <m.span
+              {...(target ? { animate: target } : {})}
+              aria-hidden="true"
+              className="absolute top-0 left-0 h-full bg-[var(--color-action)]"
+              initial={false}
+              style={{
+                width: "var(--active-tab-width, 0px)",
+                x: "var(--active-tab-left, 0px)",
+              }}
+              transition={reduceMotion ? instantMotionTransition : politeMotionTransition}
+            />
+          </span>
         );
       }}
     />

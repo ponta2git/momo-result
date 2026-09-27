@@ -2,9 +2,9 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { clearCsrfToken, getCsrfToken } from "@/shared/api/csrfTokenStore";
+import { getCsrfToken } from "@/shared/api/csrfTokenStore";
 import { useAuth } from "@/shared/auth/useAuth";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
@@ -36,11 +36,6 @@ function renderAuth() {
 }
 
 describe("useAuth logout session cleanup", () => {
-  afterEach(() => {
-    clearCsrfToken();
-    vi.unstubAllEnvs();
-  });
-
   it("clears the previous session CSRF token when logout reports 401", async () => {
     vi.stubEnv("DEV", false);
     server.use(

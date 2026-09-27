@@ -80,7 +80,7 @@ worker_pid=""
 report_error() {
   local status=$?
   echo "Series-analysis control-plane smoke failed near line ${BASH_LINENO[0]}." >&2
-  tail -100 "${worker_log}" >&2 || true
+  analysis_smoke_print_worker_diagnostics "${worker_log}" >&2 || true
   return "${status}"
 }
 trap report_error ERR
@@ -190,7 +190,7 @@ fail_with_worker_log() {
   local message="$1"
   echo "${message}" >&2
   if [[ -f "${worker_log}" ]]; then
-    tail -100 "${worker_log}" >&2
+    analysis_smoke_print_worker_diagnostics "${worker_log}" >&2 || true
   fi
   exit 1
 }
@@ -247,14 +247,18 @@ wait_for_sql_value() {
   fail_with_worker_log "Timed out waiting for ${description}; expected ${expected}, got ${actual}."
 }
 
-wait_for_redis_group_lag() {
-  local expected="$1"
-  local description="$2"
+wait_for_redis_group_drained() {
+  local description="$1"
   local attempts=0
   local actual=""
   while (( attempts < 180 )); do
-    actual="$(redis_ci XINFO GROUPS "${redis_stream}" | awk '$0 == "lag" { getline; print; exit }')"
-    if [[ "${actual}" == "${expected}" ]]; then
+    # XREADGROUP reduces lag before the worker commits and ACKs. Both counters must drain.
+    actual="$(redis_ci XINFO GROUPS "${redis_stream}" | awk '
+      $0 == "lag" { getline; lag = $0 }
+      $0 == "pending" { getline; pending = $0 }
+      END { print lag "|" pending }
+    ')"
+    if [[ "${actual}" == "0|0" ]]; then
       return 0
     fi
     if [[ -n "${worker_pid}" ]] && ! worker_is_running; then
@@ -263,7 +267,7 @@ wait_for_redis_group_lag() {
     attempts=$((attempts + 1))
     sleep 1
   done
-  fail_with_worker_log "Timed out waiting for ${description}; expected lag ${expected}, got ${actual}."
+  fail_with_worker_log "Timed out waiting for ${description}; expected lag/pending 0|0, got ${actual}."
 }
 
 publish_job() {
@@ -434,11 +438,10 @@ fi
 first_job="$(psql_ci -At -c "SELECT id FROM series_analysis_jobs ORDER BY requested_at, id LIMIT 1;")"
 attempts_before="$(psql_ci -At -c "SELECT attempt_count FROM series_analysis_jobs WHERE id = '${first_job}';")"
 redis_ci XADD "${redis_stream}" '*' schemaVersion 1 jobId "${first_job}" >/dev/null
-wait_for_redis_group_lag "0" "duplicate terminal delivery acknowledgement"
+wait_for_redis_group_drained "duplicate terminal delivery acknowledgement"
 
-pending_count="$(redis_ci XPENDING "${redis_stream}" "${redis_group}" | sed -n '1p')"
 attempts_after="$(psql_ci -At -c "SELECT attempt_count FROM series_analysis_jobs WHERE id = '${first_job}';")"
-if [[ "${pending_count}" != "0" || "${attempts_before}" != "${attempts_after}" ]]; then
+if [[ "${attempts_before}" != "${attempts_after}" ]]; then
   fail_with_worker_log "Duplicate delivery was not acknowledged idempotently."
 fi
 

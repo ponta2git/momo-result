@@ -87,6 +87,8 @@ final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transact
         case state if isUniqueViolation(state) =>
           conflict[Unit](s"matchNoInEvent ${record.matchNoInEvent.value
               .toString} already exists for held event ${record.heldEventId.value}.")
+        case state if isForeignKeyViolation(state) =>
+          conflict[Unit]("Match prerequisites changed before confirmation completed.")
       }
 
   private def attachConfirmedMatch(

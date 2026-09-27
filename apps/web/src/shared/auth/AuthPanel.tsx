@@ -1,12 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { AuthMeResponse } from "@/shared/api/auth";
 import { DevUserPicker } from "@/shared/auth/DevUserPicker";
 import { buildAuthLoginHref } from "@/shared/auth/redirectPath";
-import { buttonClassName } from "@/shared/ui/actions/Button";
-import { PendingActionContent } from "@/shared/ui/actions/PendingActionContent";
+import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
-import { useSurfaceFeedback } from "@/shared/ui/motion/useSurfaceFeedback";
 import { contentText } from "@/shared/ui/typography";
 
 type AuthPanelProps = {
@@ -22,8 +20,15 @@ export function AuthPanel({
   forceDevPicker = false,
   loginNextPath,
 }: AuthPanelProps) {
-  const surfaceRef = useSurfaceFeedback<HTMLAnchorElement>();
   const [loginPending, setLoginPending] = useState(false);
+
+  useEffect(() => {
+    const restoreNavigation = (event: PageTransitionEvent) => {
+      if (event.persisted) setLoginPending(false);
+    };
+    window.addEventListener("pageshow", restoreNavigation);
+    return () => window.removeEventListener("pageshow", restoreNavigation);
+  }, []);
 
   if (import.meta.env.DEV) {
     return <DevUserPicker embedded={embedded} force={forceDevPicker} />;
@@ -41,18 +46,26 @@ export function AuthPanel({
       {auth ? (
         <p className={cn(contentText.body, !embedded && "mt-0.5")}>{auth.displayName}</p>
       ) : (
-        <div className={loginPending ? "w-fit opacity-85" : "w-fit"}>
-          <a
-            ref={surfaceRef}
+        <div className="w-fit">
+          <LinkButton
             href={buildAuthLoginHref(loginNextPath)}
-            aria-busy={loginPending || undefined}
-            className={buttonClassName({ variant: "primary" })}
-            onClick={() => setLoginPending(true)}
+            pending={loginPending}
+            pendingLabel="Discordへ移動中…"
+            onClick={(event) => {
+              if (
+                !event.defaultPrevented &&
+                event.button === 0 &&
+                !event.altKey &&
+                !event.ctrlKey &&
+                !event.metaKey &&
+                !event.shiftKey
+              ) {
+                setLoginPending(true);
+              }
+            }}
           >
-            <PendingActionContent pending={loginPending} pendingLabel="Discordへ移動中…">
-              Discordでログインする
-            </PendingActionContent>
-          </a>
+            Discordでログインする
+          </LinkButton>
         </div>
       )}
     </div>

@@ -25,6 +25,7 @@ export function AppPageCanvas({ children, navigation, ...eventHandlers }: AppPag
             pageViewportGutterClass,
           )}
           id="main-content"
+          tabIndex={-1}
         >
           {children}
         </main>

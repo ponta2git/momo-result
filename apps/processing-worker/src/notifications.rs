@@ -157,7 +157,7 @@ impl NotificationReservation {
             return Err(SkipReason::InvalidSnapshot);
         }
         let mut writer = BoundedJson {
-            bytes: Vec::with_capacity(self.maximum_bytes),
+            bytes: Vec::new(),
             maximum: self.maximum_bytes,
         };
         serde_json::to_writer(&mut writer, envelope).map_err(|_error| SkipReason::PayloadBound)?;
@@ -248,6 +248,22 @@ impl io::Write for BoundedJson {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
         if bytes.len() > self.maximum.saturating_sub(self.bytes.len()) {
             return Err(io::Error::other("notification payload bound"));
+        }
+        let required = self.bytes.len() + bytes.len();
+        if required > self.bytes.capacity() {
+            // Typical snapshots are much smaller than their admission allowance. Grow only as
+            // serialization needs memory, and cap geometric growth at the reserved byte bound.
+            // Vec's implicit growth could otherwise allocate beyond a non-power-of-two limit.
+            let capacity = self
+                .bytes
+                .capacity()
+                .saturating_mul(2)
+                .max(256)
+                .max(required)
+                .min(self.maximum);
+            self.bytes
+                .try_reserve_exact(capacity - self.bytes.len())
+                .map_err(|_error| io::Error::other("notification allocation failed"))?;
         }
         self.bytes.extend_from_slice(bytes);
         Ok(bytes.len())

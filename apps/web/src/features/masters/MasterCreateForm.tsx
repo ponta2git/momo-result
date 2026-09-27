@@ -1,3 +1,5 @@
+import { startTransition, useState } from "react";
+
 import { Button } from "@/shared/ui/actions/Button";
 import { TextField } from "@/shared/ui/forms/TextField";
 
@@ -8,6 +10,7 @@ type MasterCreateFormProps = {
   disabledReason?: string | undefined;
   error?: string | undefined;
   formKey?: string | number | undefined;
+  scopeKey: string;
   inputName?: string;
   label: string;
   pending?: boolean | undefined;
@@ -22,6 +25,7 @@ export function MasterCreateForm({
   disabledReason,
   error,
   formKey,
+  scopeKey,
   inputName = "name",
   label,
   pending = false,
@@ -30,6 +34,11 @@ export function MasterCreateForm({
 }: MasterCreateFormProps) {
   const buttonLabel = submitLabel ?? actionLabel;
   const pendingLabel = submitLabel ? `${submitLabel}中` : `${actionLabel}中`;
+  const [drafts, setDrafts] = useState<Record<string, { value: string; version: typeof formKey }>>(
+    {},
+  );
+  const draft = drafts[scopeKey];
+  const value = draft && draft.version === formKey ? draft.value : "";
 
   return (
     <form
@@ -45,13 +54,21 @@ export function MasterCreateForm({
     >
       <TextField
         description={error ? undefined : disabledReason}
-        disabled={disabled}
+        disabled={disabled || pending}
         error={error}
         label={label}
         layout="subgrid"
         name={inputName}
         placeholder={placeholder}
         type="text"
+        value={value}
+        onChange={(event) => {
+          const nextValue = event.target.value;
+          setDrafts((current) => ({
+            ...current,
+            [scopeKey]: { value: nextValue, version: formKey },
+          }));
+        }}
       />
       <div className="grid md:col-start-2 md:row-start-2">
         <Button
@@ -67,4 +84,3 @@ export function MasterCreateForm({
     </form>
   );
 }
-import { startTransition } from "react";

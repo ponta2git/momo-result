@@ -5,10 +5,11 @@ import java.nio.file.Files
 import scala.jdk.CollectionConverters.*
 
 import cats.effect.IO
+import cats.syntax.all.*
 import io.circe.Json
 import org.http4s.circe.*
 import org.http4s.implicits.*
-import org.http4s.{Header, Method, Request, Status, Uri}
+import org.http4s.{Header, Headers, Method, Request, Status, Uri}
 import org.typelevel.ci.CIString
 
 import momo.api.MomoCatsEffectSuite
@@ -147,6 +148,17 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
         assertEquals(jsonField[String](body, "memberId"), "member_ponta")
         assertEquals(jsonField[Boolean](body, "isAdmin"), true)
         assertEquals(jsonField[String](body, "csrfToken"), "dev")
+        assertEquals(headerValue(response, CIString("Cache-Control")), "private, no-store")
+      }
+    }
+  }
+
+  app.test("encoded API route literals retain authentication and private cache policy") { httpApp =>
+    httpApp.run(readGet(uri"/%61pi/auth/%6de")).flatMap { response =>
+      response.as[Json].map { body =>
+        assertEquals(response.status, Status.Ok)
+        assertEquals(jsonField[String](body, "accountId"), "account_ponta")
+        assertEquals(headerValue(response, CIString("Cache-Control")), "private, no-store")
       }
     }
   }
@@ -154,6 +166,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   app.test("GET /api/auth/login?silent=1 requests Discord prompt=none") { httpApp =>
     httpApp.run(Request[IO](Method.GET, uri"/api/auth/login?silent=1")).map { response =>
       assertEquals(response.status, Status.Found)
+      assertEquals(headerValue(response, CIString("Cache-Control")), "private, no-store")
       val location = headerValue(response, CIString("Location"))
       assert(location.contains("prompt=none"), s"expected prompt=none in redirect: $location")
     }
@@ -223,6 +236,30 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
         assertEquals(jsonField[String](body, "csrfToken"), fixture.csrfToken)
       }
     }
+  }
+
+  sessionBackedApp.test("ambiguous session cookies fail closed on auth and protected routes") {
+    fixture =>
+      val cookie = sessionCookieHeader(fixture.sessionCookie)
+      val duplicateHeaders = List(
+        Headers(Header.Raw(CIString("Cookie"), s"${cookie.value}; ${cookie.value}")),
+        Headers(cookie, cookie),
+      )
+      for
+        _ <- List(uri"/api/auth/me", uri"/api/matches").traverse_ { uri =>
+          duplicateHeaders.traverse_ { headers =>
+            fixture.app.run(Request[IO](Method.GET, uri).withHeaders(headers)).flatMap { response =>
+              assertEquals(headerValue(response, CIString("Cache-Control")), "private, no-store")
+              assertProblem(
+                response,
+                Status.Unauthorized,
+                "UNAUTHORIZED",
+                "Authentication is required."
+              )
+            }
+          }
+        }
+      yield ()
   }
 
   sessionBackedApp
@@ -454,7 +491,9 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     )
     requests.foldLeft(IO.unit) { (result, uri) =>
       result.flatMap(_ =>
-        httpApp.run(readGet(uri)).map(response => assertEquals(response.status, Status.NotFound))
+        httpApp.run(readGet(uri)).flatMap(response =>
+          response.body.compile.drain.as(assertEquals(response.status, Status.NotFound))
+        )
       )
     }
   }
@@ -823,6 +862,32 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
         jsonField[String](duplicateBody, "admissionDeadline"),
         jsonField[String](state, "admissionDeadline")
       )
+  }
+
+  app.test(
+    "OCR cancellation rejects another account and leaves the queued job available to its creator"
+  ) { httpApp =>
+    for
+      draftId <- createMatchDraft(httpApp)
+      submissionId <- admitOcrSubmission(httpApp, draftId)
+      imageId <- uploadPng(httpApp)
+      created <- httpApp.run(writePost(
+        uri"/api/ocr-jobs",
+        HttpRequestBodies.Matches.createOcrJob(imageId, "total_assets", submissionId),
+      ))
+      _ = assertEquals(created.status, Status.Ok)
+      body <- created.as[Json]
+      jobId = jsonField[String](body, "jobId")
+      jobUri = Uri.unsafeFromString(s"/api/ocr-jobs/$jobId")
+      rejected <- httpApp.run(writeDelete(jobUri, accountId = "account_eu"))
+      _ <- assertProblem(rejected, Status.Forbidden, "FORBIDDEN", "creator")
+      unchanged <- httpApp.run(readGet(jobUri)).flatMap(_.as[Json])
+      canceled <- httpApp.run(writeDelete(jobUri))
+      canceledBody <- canceled.as[Json]
+    yield
+      assertEquals(jsonField[String](unchanged, "status"), "queued")
+      assertEquals(canceled.status, Status.Ok)
+      assertEquals(jsonField[String](canceledBody, "status"), "cancelled")
   }
 
   private def createMatchDraft(httpApp: TestHttpApp): IO[String] = httpApp

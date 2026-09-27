@@ -1,78 +1,108 @@
 @import "tailwindcss";
 
-@theme static {
+@custom-variant short-viewport (@media (max-height: 24rem));
+
+/* Raw foundation values do not generate utility APIs. Components consume semantic roles. */
+@layer theme {
+  :root {
+    --font-momo-ui:
+      -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+      "Yu Gothic", YuGothic, Meiryo, sans-serif;
+    --font-momo-heading:
+      -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+      "Yu Gothic", YuGothic, Meiryo, sans-serif;
+    --font-momo-data:
+      ui-monospace, "SFMono-Regular", "SF Mono", "Cascadia Mono", "Roboto Mono", "Yu Gothic",
+      YuGothic, monospace;
+
+    /* Reference palette: concrete OKLCH values stay below semantic UI roles. */
+    --ref-neutral-0: oklch(100% 0 0);
+    --ref-neutral-25: oklch(99% 0.003 235);
+    --ref-neutral-50: oklch(97.5% 0.012 235);
+    --ref-neutral-75: oklch(97% 0.005 235);
+    --ref-neutral-100: oklch(96% 0.008 235);
+    --ref-neutral-200: oklch(92.5% 0.025 235);
+    --ref-neutral-300: oklch(54% 0.018 250);
+    --ref-neutral-500: oklch(47.5% 0.022 250);
+    --ref-neutral-700: oklch(30% 0.018 250);
+    --ref-neutral-900: oklch(24.5% 0.02 250);
+    --ref-neutral-border: oklch(24.5% 0.02 250 / 0.12);
+    --ref-neutral-border-strong: oklch(24.5% 0.02 250 / 0.22);
+    --ref-neutral-choice-marker: oklch(63.5% 0.018 250);
+    --ref-neutral-night: oklch(24% 0.035 260);
+
+    --ref-neutral-60: oklch(98% 0.004 235);
+    --ref-neutral-225: oklch(91.5% 0.025 235);
+    --ref-neutral-250: oklch(90.5% 0.025 235);
+    --ref-action-725: oklch(46.5% 0.095 245);
+    --ref-action-750: oklch(44.5% 0.095 245);
+    --ref-status-danger-725: oklch(47.5% 0.17 28);
+    --ref-status-danger-750: oklch(45.5% 0.17 28);
+
+    --ref-action-700: oklch(48% 0.095 245);
+    --ref-analysis-emphasis-700: oklch(51% 0.105 70);
+    --ref-analysis-positive-700: oklch(49% 0.08 195);
+    --ref-analysis-negative-700: oklch(50% 0.14 340);
+    --ref-status-info-700: oklch(49% 0.12 285);
+    --ref-status-success-700: oklch(49% 0.105 150);
+    --ref-status-warning-700: oklch(55% 0.105 82);
+    --ref-status-review-700: oklch(51% 0.13 48);
+    --ref-status-danger-700: oklch(49% 0.17 28);
+
+    --ref-four-player-sequence-1: oklch(61% 0.145 250);
+    --ref-four-player-sequence-2: oklch(59% 0.195 25);
+    --ref-four-player-sequence-3: oklch(65.5% 0.135 100);
+    --ref-four-player-sequence-4: oklch(59% 0.135 150);
+
+    --ref-series-1: oklch(59% 0.13 300);
+    --ref-series-2: oklch(58% 0.095 205);
+    --ref-series-3: oklch(60% 0.135 55);
+    --ref-series-4: oklch(56% 0.125 275);
+    --ref-series-5: oklch(58% 0.15 340);
+    --ref-series-6: oklch(57% 0.105 115);
+
+    --ref-rank-1: oklch(64% 0.155 88);
+    --ref-rank-2: oklch(64% 0.035 235);
+    --ref-rank-3: oklch(50% 0.085 55);
+    --ref-rank-4: oklch(56% 0.145 28);
+
+    --ref-tray-assets: oklch(60% 0.09 240);
+    --ref-tray-revenue: oklch(61% 0.09 92);
+    --ref-tray-incident: oklch(59% 0.075 160);
+    --ref-tray-marker: oklch(42% 0.025 250);
+
+    --z-base: 0;
+    --z-sticky: 20;
+    --z-sticky-raised: 30;
+    --z-dropdown: 40;
+    --z-toast: 60;
+    --z-dialog: 80;
+    --z-tooltip: 90;
+  }
+}
+
+/* Inline aliases resolve against the element that uses a font utility. */
+@theme inline {
   --font-sans: var(--font-momo-ui);
   --font-display: var(--font-momo-heading);
-  --font-momo-ui:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN",
-    "Yu Gothic", YuGothic, Meiryo, sans-serif;
-  --font-momo-heading:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN",
-    "Yu Gothic", YuGothic, Meiryo, sans-serif;
-  --font-momo-data:
-    ui-monospace, "SFMono-Regular", "SF Mono", "Cascadia Mono", "Roboto Mono", "Yu Gothic",
-    YuGothic, monospace;
+  --font-mono: var(--font-momo-data);
+}
 
+@theme {
   --font-weight-plain: 400;
   --font-weight-structure: 500;
   --font-weight-emphasis: 600;
 
-  /* Reference palette: concrete OKLCH values stay below semantic UI roles. */
-  --ref-neutral-0: oklch(100% 0 0);
-  --ref-neutral-25: oklch(99% 0.003 235);
-  --ref-neutral-50: oklch(97.5% 0.012 235);
-  --ref-neutral-75: oklch(97% 0.005 235);
-  --ref-neutral-100: oklch(96% 0.008 235);
-  --ref-neutral-200: oklch(92.5% 0.025 235);
-  --ref-neutral-300: oklch(54% 0.018 250);
-  --ref-neutral-500: oklch(47.5% 0.022 250);
-  --ref-neutral-700: oklch(30% 0.018 250);
-  --ref-neutral-900: oklch(24.5% 0.02 250);
-  --ref-neutral-border: oklch(24.5% 0.02 250 / 0.12);
-  --ref-neutral-border-strong: oklch(24.5% 0.02 250 / 0.22);
-  --ref-neutral-choice-marker: oklch(63.5% 0.018 250);
-  --ref-neutral-night: oklch(24% 0.035 260);
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-dialog: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+}
 
-  --ref-neutral-60: oklch(98% 0.004 235);
-  --ref-neutral-225: oklch(91.5% 0.025 235);
-  --ref-neutral-250: oklch(90.5% 0.025 235);
-  --ref-action-725: oklch(46.5% 0.095 245);
-  --ref-action-750: oklch(44.5% 0.095 245);
-  --ref-status-danger-725: oklch(47.5% 0.17 28);
-  --ref-status-danger-750: oklch(45.5% 0.17 28);
-
-  --ref-action-700: oklch(48% 0.095 245);
-  --ref-analysis-emphasis-700: oklch(51% 0.105 70);
-  --ref-analysis-positive-700: oklch(49% 0.08 195);
-  --ref-analysis-negative-700: oklch(50% 0.14 340);
-  --ref-status-info-700: oklch(49% 0.12 285);
-  --ref-status-success-700: oklch(49% 0.105 150);
-  --ref-status-warning-700: oklch(55% 0.105 82);
-  --ref-status-review-700: oklch(51% 0.13 48);
-  --ref-status-danger-700: oklch(49% 0.17 28);
-
-  --ref-four-player-sequence-1: oklch(61% 0.145 250);
-  --ref-four-player-sequence-2: oklch(59% 0.195 25);
-  --ref-four-player-sequence-3: oklch(65.5% 0.135 100);
-  --ref-four-player-sequence-4: oklch(59% 0.135 150);
-
-  --ref-series-1: oklch(59% 0.13 300);
-  --ref-series-2: oklch(58% 0.095 205);
-  --ref-series-3: oklch(60% 0.135 55);
-  --ref-series-4: oklch(56% 0.125 275);
-  --ref-series-5: oklch(58% 0.15 340);
-  --ref-series-6: oklch(57% 0.105 115);
-
-  --ref-rank-1: oklch(64% 0.155 88);
-  --ref-rank-2: oklch(64% 0.035 235);
-  --ref-rank-3: oklch(50% 0.085 55);
-  --ref-rank-4: oklch(56% 0.145 28);
-
-  --ref-tray-assets: oklch(60% 0.09 240);
-  --ref-tray-revenue: oklch(61% 0.09 92);
-  --ref-tray-incident: oklch(59% 0.075 160);
-  --ref-tray-marker: oklch(42% 0.025 250);
-
+/* Runtime chart and sequence consumers need every semantic color in production CSS. */
+@theme static {
   /* Semantic tokens are the only color API consumed by component and feature UI. */
   --color-canvas: var(--ref-neutral-50);
   --color-surface: var(--ref-neutral-25);
@@ -142,54 +172,40 @@
   --color-tray-revenue: var(--ref-tray-revenue);
   --color-tray-incident: var(--ref-tray-incident);
   --color-tray-marker: var(--ref-tray-marker);
-  --radius-xs: 4px;
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.05);
-  --shadow-dialog: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-
-  --z-base: 0;
-  --z-sticky: 20;
-  --z-sticky-raised: 30;
-  --z-dropdown: 40;
-  --z-toast: 60;
-  --z-dialog: 80;
-  --z-tooltip: 90;
-}
-
-html {
-  color-scheme: light;
-}
-
-body {
-  min-height: 100dvh;
-  margin: 0;
-  background: var(--color-canvas);
-  color: var(--color-text-primary);
-  font-family: var(--font-momo-ui);
-  font-weight: var(--font-weight-plain);
-  font-feature-settings: "palt" 1;
-  font-kerning: normal;
-  line-break: strict;
-  line-height: 1.65;
-  text-rendering: optimizeLegibility;
-}
-
-code,
-kbd,
-pre,
-samp {
-  font-family: var(--font-momo-data);
-  font-feature-settings: normal;
-}
-
-::placeholder {
-  color: var(--color-text-muted);
-  opacity: 1;
 }
 
 @layer base {
+  html {
+    color-scheme: light;
+  }
+
+  body {
+    min-height: 100dvh;
+    margin: 0;
+    background: var(--color-canvas);
+    color: var(--color-text-primary);
+    font-family: var(--font-momo-ui);
+    font-weight: var(--font-weight-plain);
+    font-feature-settings: "palt" 1;
+    font-kerning: normal;
+    line-break: strict;
+    line-height: 1.65;
+    text-rendering: optimizeLegibility;
+  }
+
+  code,
+  kbd,
+  pre,
+  samp {
+    font-family: var(--font-momo-data);
+    font-feature-settings: normal;
+  }
+
+  ::placeholder {
+    color: var(--color-text-muted);
+    opacity: 1;
+  }
+
   h1,
   h2,
   h3,
@@ -227,63 +243,33 @@ samp {
   );
 }
 
-.momo-dialog-popup {
-  padding-top: max(env(safe-area-inset-top), 1rem);
-  padding-right: max(env(safe-area-inset-right), 1rem);
-  padding-bottom: max(env(safe-area-inset-bottom), 1rem);
-  padding-left: max(env(safe-area-inset-left), 1rem);
-}
-
-.momo-dialog-surface {
-  max-height: calc(
-    100dvh - max(env(safe-area-inset-top), 1rem) - max(env(safe-area-inset-bottom), 1rem)
-  );
-}
-
-.momo-select-popup {
-  min-width: var(--anchor-width);
-  width: max-content;
-  max-width: min(var(--available-width), calc(100vw - 2rem));
-  max-height: min(20rem, var(--available-height));
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scroll-padding-block: 0.25rem;
-}
-
-/* Keep the focus outline inside the scroller; selection keeps its separate check mark. */
-.momo-select-option:focus-visible {
-  outline-offset: -3px;
-}
-
-.momo-select-option[data-disabled] {
-  --ui-hover-amount: 0;
-  color: var(--color-text-muted);
-  cursor: not-allowed;
-}
-
-@media (forced-colors: active) {
-  .momo-select-option[data-selected] {
-    forced-color-adjust: none;
-    color: HighlightText;
-    background: Highlight;
+@layer components {
+  .momo-dialog-popup {
+    padding-top: max(env(safe-area-inset-top), 1rem);
+    padding-right: max(env(safe-area-inset-right), 1rem);
+    padding-bottom: max(env(safe-area-inset-bottom), 1rem);
+    padding-left: max(env(safe-area-inset-left), 1rem);
   }
-  .momo-select-option[data-disabled] {
-    color: GrayText;
-  }
-}
 
-@media (max-height: 24rem) {
-  .momo-alert-dialog-surface {
-    display: block;
+  .momo-dialog-surface {
+    max-height: calc(
+      100dvh - max(env(safe-area-inset-top), 1rem) - max(env(safe-area-inset-bottom), 1rem)
+    );
+  }
+
+  .momo-select-popup {
+    min-width: var(--anchor-width);
+    width: max-content;
+    max-width: min(var(--available-width), calc(100vw - 2rem));
+    max-height: min(20rem, var(--available-height));
     overflow-y: auto;
+    overscroll-behavior: contain;
+    scroll-padding-block: 0.25rem;
   }
 
-  .momo-alert-dialog-frame {
-    display: grid;
-  }
-
-  .momo-alert-dialog-body {
-    overflow: visible;
+  /* Keep the focus outline inside the scroller; selection keeps its separate check mark. */
+  .momo-select-option:focus-visible {
+    outline-offset: -3px;
   }
 }
 

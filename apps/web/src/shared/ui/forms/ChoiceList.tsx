@@ -51,8 +51,6 @@ export function ChoiceList<Value extends string>({
   value,
   onValueChange,
 }: ChoiceListProps<Value>) {
-  const groupId = useId();
-
   return (
     <fieldset
       aria-busy={pending || undefined}
@@ -76,12 +74,10 @@ export function ChoiceList<Value extends string>({
             {emptyState ?? "選べる候補はありません。"}
           </div>
         ) : null}
-        {options.map((option, index) => (
+        {options.map((option) => (
           <ChoiceOption
             key={option.value}
             option={option}
-            index={index}
-            groupId={groupId}
             disabled={disabled}
             pending={pending}
             value={value}
@@ -97,8 +93,6 @@ export function ChoiceList<Value extends string>({
 
 function ChoiceOption<Value extends string>({
   option,
-  index,
-  groupId,
   disabled,
   pending,
   value,
@@ -107,8 +101,6 @@ function ChoiceOption<Value extends string>({
   onValueChange,
 }: {
   option: ChoiceListOption<Value>;
-  index: number;
-  groupId: string;
   disabled: boolean;
   pending: boolean;
   value: Value | undefined;
@@ -116,14 +108,15 @@ function ChoiceOption<Value extends string>({
   selectedLabel: ReactNode;
   onValueChange: (value: Value) => void;
 }) {
+  const optionId = useId();
   const surfaceRef = useSurfaceFeedback<HTMLLabelElement>();
   const selected = option.value === value;
   const optionDisabled = disabled || pending || option.disabled || option.pending;
-  const descriptionId = option.description ? `${groupId}-${index}-description` : undefined;
+  const labelId = `${optionId}-label`;
+  const descriptionId = option.description ? `${optionId}-description` : undefined;
 
   return (
     <div
-      key={option.value}
       aria-busy={option.pending || undefined}
       className={cn(
         "grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-stretch",
@@ -144,6 +137,7 @@ function ChoiceOption<Value extends string>({
         <input
           aria-describedby={descriptionId}
           aria-label={option.accessibleLabel}
+          aria-labelledby={option.accessibleLabel ? undefined : labelId}
           checked={selected}
           className="sr-only focus-visible:outline-none"
           disabled={optionDisabled}
@@ -168,7 +162,9 @@ function ChoiceOption<Value extends string>({
           ) : null}
         </span>
         <span className="min-w-0">
-          <span className={cn(fieldText.label, "block text-pretty")}>{option.label}</span>
+          <span className={cn(fieldText.label, "block text-pretty")} id={labelId}>
+            {option.label}
+          </span>
           {option.description ? (
             <span
               className={cn(
@@ -182,7 +178,7 @@ function ChoiceOption<Value extends string>({
             </span>
           ) : null}
         </span>
-        <span aria-hidden={!selected} className={cn(contentText.supporting, "min-w-12 text-right")}>
+        <span aria-hidden="true" className={cn(contentText.supporting, "min-w-12 text-right")}>
           {selected ? selectedLabel : null}
         </span>
       </label>

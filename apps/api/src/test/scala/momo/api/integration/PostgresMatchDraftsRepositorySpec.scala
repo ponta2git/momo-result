@@ -6,8 +6,8 @@ import cats.effect.IO
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
-import momo.api.adapters.postgres.PostgresMatchDraftsRepository
 import momo.api.adapters.postgres.PostgresMeta.given
+import momo.api.adapters.postgres.{PostgresHeldEvents, PostgresMatchDraftsRepository}
 import momo.api.domain.ids.{
   AccountId,
   GameTitleId,
@@ -20,6 +20,7 @@ import momo.api.domain.ids.{
 }
 import momo.api.domain.{
   GameTitle,
+  HeldEvent,
   HeldEventScope,
   MatchDraft,
   MatchDraftStatus,
@@ -84,6 +85,36 @@ final class PostgresMatchDraftsRepositorySpec extends IntegrationSuite:
     yield
       assertEquals(updated, MatchDraftUpdateResult.NotEditableOrChanged)
       assertEquals(status, "ocr_running")
+
+  test("update checks the creator in the same guarded write as the draft snapshot"):
+    val draftId = MatchDraftId.unsafeFromString("match-draft-foreign-owner")
+    val forged = editableDraft(draftId, MatchDraftStatus.NeedsReview)
+      .withCommon(_.copy(createdByAccountId = AccountId.unsafeFromString("account_eu")))
+    for
+      _ <- insertDraft(draftId.value, "draft_ready")
+      result <- repo.update(forged, updatedAt)
+      row <- repo.find(draftId)
+    yield
+      assertEquals(result, MatchDraftUpdateResult.NotEditableOrChanged)
+      assertEquals(row.map(_.createdByAccountId), Some(AccountId.unsafeFromString("account_ponta")))
+      assertEquals(row.map(_.status), Some(MatchDraftStatus.DraftReady))
+      assertEquals(row.map(_.updatedAt), Some(createdAt))
+
+  test("update rolls back a disappearing prerequisite and returns a typed conflict"):
+    val draftId = MatchDraftId.unsafeFromString("match-draft-missing-reference")
+    val eventId = HeldEventId.unsafeFromString("held-disappearing-draft-update")
+    val updated = editableDraft(draftId, MatchDraftStatus.NeedsReview)
+      .withCommon(_.copy(heldEventId = Some(eventId)))
+    for
+      _ <- insertDraft(draftId.value, "draft_ready")
+      _ <- PostgresHeldEvents.alg.create(HeldEvent(eventId, createdAt)).transact(transactor)
+      before <- repo.find(draftId)
+      _ <- sql"DELETE FROM held_events WHERE id = $eventId".update.run.transact(transactor)
+      result <- repo.update(updated, updatedAt)
+      after <- repo.find(draftId)
+    yield
+      assertEquals(result, MatchDraftUpdateResult.PrerequisitesChanged)
+      assertEquals(after, before)
 
   test("markOcrFailed refuses terminal drafts"):
     val draftId = MatchDraftId.unsafeFromString("match-draft-terminal-transition")

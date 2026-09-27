@@ -141,7 +141,11 @@ final class PostgresHeldEventsRepository[F[_]: MonadCancelThrow](transactor: Tra
   private val delegate: HeldEventsRepository[F] = HeldEventsRepository
     .fromAlg(PostgresHeldEvents.alg, transactor.trans)
 
-  export delegate.*
+  export delegate.{listIds, find, create}
+
+  override def listPage(query: Option[String], page: PageRequest): F[PagedResult[HeldEvent]] =
+    (sql"SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY".update.run *>
+      PostgresHeldEvents.alg.listPage(query, page)).transact(transactor)
 end PostgresHeldEventsRepository
 
 final class PostgresHeldEventDeletionRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])

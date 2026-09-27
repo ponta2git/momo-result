@@ -8,7 +8,7 @@ cp "${repo_root}/scripts/ci/"{deploy-processing-worker,resolve-pushed-runtime-im
 export TEST_STATE="${task_tmp}" PATH="${task_tmp}/bin:${PATH}" RUNNER_TEMP="${task_tmp}"
 export ANALYSIS_RELEASE_SHA=0123456789abcdef0123456789abcdef01234567
 export ANALYSIS_IMAGE_REF="registry.fly.io/momo-result-analysis:${ANALYSIS_RELEASE_SHA}-101-2"
-export GITHUB_RUN_ID=101 GITHUB_RUN_ATTEMPT=2
+export GITHUB_RUN_ID=101 GITHUB_RUN_ATTEMPT=2 ANALYSIS_APP=fixture-worker-app
 cat > "${task_tmp}/bin/docker" <<'MOCK'
 #!/usr/bin/env bash
 case "$1 $2" in
@@ -36,7 +36,16 @@ case "$1" in
   machine)
     digest=1
     [[ ! -f "${TEST_STATE}/different" ]] || digest=2
-    printf '{"state":"started","config":{"image":"registry.fly.io/momo-result-analysis@sha256:%064d","guest":{"cpu_kind":"shared","cpus":1,"memory_mb":256},"env":{"MOMO_ANALYSIS_CONFIG_VERSION":"series-analysis-v1-%040d","MOMO_ANALYSIS_PUBLICATION_MODE":"enabled","MOMO_OCR_V2_CONSUMER_MODE":"enabled"}}}\n' "${digest}" 1 | jq -s .
+    printf '{"state":"started","config":{"image":"registry.fly.io/momo-result-analysis@sha256:%064d","guest":{"cpu_kind":"shared","cpus":1,"memory_mb":256},"env":{"MOMO_ANALYSIS_CONFIG_VERSION":"series-analysis-v1-%040d","MOMO_ANALYSIS_PUBLICATION_MODE":"enabled","MOMO_OCR_V2_CONSUMER_MODE":"enabled"}}}\n' "${digest}" 1 | jq -s . > "${TEST_STATE}/machine.json"
+    if [[ -f "${TEST_STATE}/missing-version" ]]; then
+      jq 'del(.[0].config.env.MOMO_ANALYSIS_CONFIG_VERSION)' "${TEST_STATE}/machine.json"
+    elif [[ -f "${TEST_STATE}/invalid-version" ]]; then
+      jq '.[0].config.env.MOMO_ANALYSIS_CONFIG_VERSION = 42' "${TEST_STATE}/machine.json"
+    elif [[ -f "${TEST_STATE}/unprefixed-version" ]]; then
+      jq '.[0].config.env.MOMO_ANALYSIS_CONFIG_VERSION |= ltrimstr("series-analysis-v1-")' "${TEST_STATE}/machine.json"
+    else
+      cat "${TEST_STATE}/machine.json"
+    fi
     ;;
   deploy)
     printf '%s\n' "$*" > "${TEST_STATE}/deploy"
@@ -50,11 +59,12 @@ cd "${task_tmp}"
 scripts/ci/deploy-processing-worker.sh > output 2>&1
 test ! -f deploy
 jq -e '.status == "not_needed"' analysis-production-artifact/worker-deployment.json > /dev/null
-for condition in staged changed different; do
+for condition in staged changed different missing-version invalid-version unprefixed-version; do
   : > "${condition}"
   status=0
   scripts/ci/deploy-processing-worker.sh > output 2>&1 || status=$?
   test "${status}" = 42
+  grep -qF -- '--app fixture-worker-app' deploy
   grep -qF -- '--image registry.fly.io/momo-result-analysis@sha256:' deploy
   rm "${condition}" deploy
 done

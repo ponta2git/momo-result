@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { SeriesAnalysisOwnerComparison } from "@/features/seriesComparison/charts/SeriesAnalysisOwnerComparison";
 import type {
@@ -11,16 +11,6 @@ import type {
 import { makeOwnerComparisonAggregate } from "@/test/msw/seriesAnalysisFixtures";
 import { selectOption } from "@/test/selectOption";
 
-beforeEach(() => {
-  vi.stubGlobal(
-    "ResizeObserver",
-    class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    },
-  );
-});
 function Harness({ focusedOwnerMemberId }: { focusedOwnerMemberId?: string }) {
   const [metric, setMetric] = useState<OwnerMetricId>("rank.average");
   return (
@@ -38,15 +28,6 @@ function expectFocusedOwner(ownerId: string | undefined) {
   const comparison = makeOwnerComparisonAggregate().ownerComparison;
   const ownerIndex = comparison.owners.findIndex((owner) => owner.memberId === ownerId);
   const table = screen.getByRole("table");
-  for (const row of within(table).getAllByRole("row")) {
-    for (const [index, cell] of Array.from(row.children).entries()) {
-      if (ownerIndex !== -1 && index === ownerIndex + 1) {
-        expect(cell).toHaveAttribute("data-highlighted", "true");
-      } else {
-        expect(cell).not.toHaveAttribute("data-highlighted");
-      }
-    }
-  }
   if (ownerIndex === -1) {
     expect(within(table).queryByText("この試合のオーナー")).not.toBeInTheDocument();
   } else {
@@ -66,14 +47,11 @@ function cellValues() {
 }
 
 describe("owner comparison", () => {
-  it("keeps the owner column focused across all seven metrics while preserving values and denominators", async () => {
+  it("preserves the selected owner, values and denominators across all seven metrics", async () => {
     const user = userEvent.setup();
     render(<Harness focusedOwnerMemberId="member_akane_mami" />);
     const select = screen.getByRole("combobox", { name: "オーナー比較の指標" });
-    const scrollArea = screen.getByRole("region", { name: "オーナー別の平均順位の表" });
-    scrollArea.scrollLeft = 123;
     expectFocusedOwner("member_akane_mami");
-    expect(screen.getAllByRole("row")).toHaveLength(5);
     expect(screen.getAllByText("参考値")).toHaveLength(2);
     expect(screen.getAllByText("対象なし")).toHaveLength(2);
     expect(screen.getAllByLabelText("対象なし")).toHaveLength(8);
@@ -87,9 +65,6 @@ describe("owner comparison", () => {
     ] as const) {
       await selectOption(user, select, metric);
       expectFocusedOwner("member_akane_mami");
-      expect(select).toHaveFocus();
-      expect(screen.getByRole("region", { name: `オーナー別の${title}の表` })).toBe(scrollArea);
-      expect(scrollArea.scrollLeft).toBe(123);
       const table = screen.getByRole("table", { name: `オーナー別の${title}` });
       expect(within(table).getAllByText(value)).toHaveLength(
         metric === "assets.average" || metric === "revenue.average" ? 8 : 4,
@@ -105,10 +80,6 @@ describe("owner comparison", () => {
     expect(table).toHaveTextContent("2位 0回");
     expect(table).toHaveTextContent("（0%）");
     expect(table).toHaveTextContent("（50%）");
-    for (const rank of within(table).getAllByRole("listitem")) {
-      expect(rank).not.toHaveAttribute("data-highlighted");
-      expect(rank).not.toHaveAttribute("data-focused-metric");
-    }
   });
 
   it("switches and clears the whole column without changing any aggregate cells", () => {

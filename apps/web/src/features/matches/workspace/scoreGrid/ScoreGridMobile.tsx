@@ -14,17 +14,19 @@ import type {
   ScoreGridCellRegistry,
   ScoreGridData,
   ScoreGridNumericHandlers,
+  ScoreGridNumericDraftState,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
 import { memberDisplayName } from "@/shared/domain/members";
 import { PlayOrderMark } from "@/shared/matches/PlayOrderMark";
 import { RankBadge } from "@/shared/matches/RankBadge";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
-import { contentText } from "@/shared/ui/typography";
+import { contentText, fieldText } from "@/shared/ui/typography";
 
 type ScoreGridMobileCardsProps = ScoreGridData &
   ScoreGridCellRegistry &
-  ScoreGridNumericHandlers & {
+  ScoreGridNumericHandlers &
+  ScoreGridNumericDraftState & {
     expandedMobilePlayer: number;
     onPlayerChange: ScoreGridActions["onPlayerChange"];
     onPlayOrderChange: ScoreGridActions["onPlayOrderChange"];
@@ -40,6 +42,8 @@ export function ScoreGridMobileCards({
   handleIncidentNumericCommit,
   handlePlayerNumericCommit,
   lastSyncedPlayerIndex,
+  numericDrafts,
+  onNumericDraftChange,
   onPlayerChange,
   onPlayOrderChange,
   onPreferImageKindChange,
@@ -128,6 +132,8 @@ export function ScoreGridMobileCards({
                     <MobilePlayerNumericField
                       cellId={getCellId(index, 2)}
                       error={errorPathSet.has(keyToPath(index, "rank"))}
+                      draftValue={numericDrafts[keyToPath(index, "rank")]}
+                      onDraftChange={onNumericDraftChange}
                       field="rank"
                       focusImageKind="total_assets"
                       index={index}
@@ -147,6 +153,8 @@ export function ScoreGridMobileCards({
                     allowSign
                     cellId={getCellId(index, 3)}
                     error={errorPathSet.has(keyToPath(index, "totalAssetsManYen"))}
+                    draftValue={numericDrafts[keyToPath(index, "totalAssetsManYen")]}
+                    onDraftChange={onNumericDraftChange}
                     field="totalAssetsManYen"
                     focusImageKind="total_assets"
                     index={index}
@@ -163,6 +171,8 @@ export function ScoreGridMobileCards({
                     allowSign
                     cellId={getCellId(index, 4)}
                     error={errorPathSet.has(keyToPath(index, "revenueManYen"))}
+                    draftValue={numericDrafts[keyToPath(index, "revenueManYen")]}
+                    onDraftChange={onNumericDraftChange}
                     field="revenueManYen"
                     focusImageKind="revenue"
                     index={index}
@@ -180,7 +190,7 @@ export function ScoreGridMobileCards({
                   {incidentScoreGridColumns.map((column, incidentIndex) => (
                     <label
                       key={column.incidentKey}
-                      className="grid text-xs text-[var(--color-text-secondary)]"
+                      className={cn(fieldText.label, "grid")}
                       htmlFor={getCellId(index, incidentIndex + 5)}
                     >
                       <span className="mb-2">{column.header}</span>
@@ -189,6 +199,10 @@ export function ScoreGridMobileCards({
                         ariaLabel={`${memberDisplayName(player.memberId)} ${column.header}`}
                         cellId={getCellId(index, incidentIndex + 5)}
                         commitKind="incident"
+                        draftValue={
+                          numericDrafts[keyToPath(index, `incident.${column.incidentKey}`)]
+                        }
+                        onDraftChange={onNumericDraftChange}
                         error={errorPathSet.has(keyToPath(index, `incident.${column.incidentKey}`))}
                         focusImageKind="incident_log"
                         incidentKey={column.incidentKey}

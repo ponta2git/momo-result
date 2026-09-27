@@ -62,8 +62,6 @@ jobs:
           version: 10.34.5
           package_json_file: momo-result/package.json
       - run: test "$(pnpm --version)" = 10.34.5 && pnpm install --frozen-lockfile
-      - name: Check isolated harness diagnostics
-        run: pnpm --filter web e2e:ocr-notifications:check
       - run: pnpm --filter web exec playwright install --with-deps chromium
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1

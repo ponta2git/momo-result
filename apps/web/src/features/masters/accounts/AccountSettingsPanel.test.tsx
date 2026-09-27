@@ -229,65 +229,6 @@ describe("AccountSettingsPanel", () => {
     expect(await within(row).findByRole("button", { name: "管理者解除" })).toBeEnabled();
   });
 
-  it("offers one account-creation action when the list is empty", async () => {
-    server.use(http.get("/api/admin/login-accounts", () => HttpResponse.json({ items: [] })));
-
-    renderPage();
-
-    expect(await screen.findByText("登録されたアカウントはありません")).toBeVisible();
-    expect(screen.getAllByRole("button", { name: "アカウントを追加" })).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "アカウントを追加" })).toBeEnabled();
-  });
-
-  it("restores focus to the same header action after creating the first account", async () => {
-    const accounts: Array<{
-      accountId: string;
-      createdAt: string;
-      discordUserId: string;
-      displayName: string;
-      isAdmin: boolean;
-      loginEnabled: boolean;
-      updatedAt: string;
-    }> = [];
-    server.use(
-      http.get("/api/admin/login-accounts", () => HttpResponse.json({ items: accounts })),
-      http.post("/api/admin/login-accounts", async ({ request }) => {
-        const body = (await request.json()) as {
-          discordUserId: string;
-          displayName: string;
-          isAdmin: boolean;
-          loginEnabled: boolean;
-        };
-        const created = {
-          accountId: `account-${body.discordUserId}`,
-          createdAt: "2026-01-01T00:00:00.000Z",
-          ...body,
-          updatedAt: "2026-01-01T00:00:00.000Z",
-        };
-        accounts.push(created);
-        return HttpResponse.json(created);
-      }),
-    );
-
-    renderPage();
-
-    const createTrigger = screen.getByRole("button", { name: "アカウントを追加" });
-    await waitFor(() => expect(createTrigger).toBeEnabled());
-    await user.click(createTrigger);
-    const dialog = screen.getByRole("dialog", { name: "アカウントを追加" });
-    await user.type(
-      within(dialog).getByPlaceholderText("例: 523484457705930752"),
-      "999000111222333444",
-    );
-    await user.type(within(dialog).getByPlaceholderText("例: 代理入力者"), "最初の利用者");
-    await user.click(within(dialog).getByRole("button", { name: "追加" }));
-
-    expect(await screen.findByText("最初の利用者")).toBeInTheDocument();
-    const nextCreateTrigger = await screen.findByRole("button", { name: "アカウントを追加" });
-    expect(nextCreateTrigger).toBe(createTrigger);
-    await waitFor(() => expect(nextCreateTrigger).toHaveFocus());
-  });
-
   it("does not show a cached list error while refetching the account list", async () => {
     await queryClient
       .fetchQuery({

@@ -18,10 +18,14 @@ export function triggerDownload(result: ApiDownloadResult): void {
 
 export async function downloadExportMatches(
   request: ExportMatchesRequest,
-  options: { timeoutMs?: number } = {},
+  options: { signal?: AbortSignal; timeoutMs?: number } = {},
 ): Promise<ExportDownloadOutcome> {
+  const { signal } = options;
+  if (signal?.aborted) return { kind: "cancelled" };
   const timeoutMs = options.timeoutMs ?? DEFAULT_EXPORT_TIMEOUT_MS;
   const controller = new AbortController();
+  const cancel = () => controller.abort();
+  signal?.addEventListener("abort", cancel, { once: true });
   let timedOut = false;
   const timeoutId = window.setTimeout(() => {
     timedOut = true;
@@ -30,6 +34,9 @@ export async function downloadExportMatches(
 
   try {
     const result = await exportMatches(request, { signal: controller.signal });
+    // Even a transport that completed after abort must not initiate a download for an old scope.
+    if (signal?.aborted) return { kind: "cancelled" };
+    if (timedOut) return { detail: timeoutDetail, kind: "timeout", title: timeoutTitle };
     triggerDownload(result);
     return {
       contentType: result.contentType,
@@ -39,6 +46,7 @@ export async function downloadExportMatches(
       startedAt: new Date().toISOString(),
     };
   } catch (error) {
+    if (signal?.aborted) return { kind: "cancelled" };
     const normalized = normalizeUnknownApiError(error);
     if (timedOut || normalized.status === 408 || normalized.status === 504) {
       return {
@@ -53,5 +61,6 @@ export async function downloadExportMatches(
     };
   } finally {
     window.clearTimeout(timeoutId);
+    signal?.removeEventListener("abort", cancel);
   }
 }

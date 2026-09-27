@@ -11,7 +11,12 @@ import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.ids.{AccountId, GameTitleId}
 
 private[postgres] object PostgresSeriesAnalysisRequestSupport:
-  final case class OperationRow(id: String, acceptedAt: Instant, targetCount: Int)
+  final case class OperationRow(
+      id: String,
+      acceptedAt: Instant,
+      targetCount: Int,
+      gameTitleId: Option[GameTitleId],
+  )
   final case class DesiredRow(
       inputRevision: Long,
       algorithmVersion: String,
@@ -20,12 +25,16 @@ private[postgres] object PostgresSeriesAnalysisRequestSupport:
   )
   final case class ActiveJobRow(id: String, status: String)
 
-  def existingOperation(
+  def lockAndFindOperation(
       requestedBy: AccountId,
       endpoint: String,
       idempotencyKeyHash: String,
-  ): ConnectionIO[Option[OperationRow]] = sql"""
-    SELECT id, accepted_at, target_count
+  ): ConnectionIO[Option[OperationRow]] =
+    // Serialize an account's manual acceptance before taking any title/job locks. Keep lookup in
+    // a separate statement so READ COMMITTED sees an operation committed by the previous owner.
+    sql"SELECT pg_advisory_xact_lock(hashtext(${requestedBy.value}), 4)".query[Unit].unique *>
+      sql"""
+    SELECT id, accepted_at, target_count, game_title_id
     FROM series_analysis_operation_requests
     WHERE requested_by_account_id = $requestedBy
       AND endpoint = $endpoint

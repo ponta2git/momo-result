@@ -1,16 +1,13 @@
 import type { Ref } from "react";
 
 import { HeldEventDetailHeaderActions } from "@/features/heldEvents/HeldEventDetailHeaderActions";
-import { LinkButton } from "@/shared/ui/actions/LinkButton";
+import { inlineActionGroupClass } from "@/shared/ui/actions/actionGroup";
 import { ResourcePageState } from "@/shared/ui/feedback/ResourcePageState";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import {
-  PageHeader,
-  responsivePageHeaderLeadActionGroupClass,
-} from "@/shared/ui/layout/PageHeader";
+import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 export function HeldEventDetailLoading() {
   return (
@@ -20,12 +17,9 @@ export function HeldEventDetailLoading() {
       </div>
       <PageHeader
         actions={
-          <div
-            className={responsivePageHeaderLeadActionGroupClass}
-            data-page-header-actions="responsive-lead"
-          >
-            <Skeleton className="h-11 w-full rounded-sm sm:w-36 pointer-fine:h-9" />
-            <Skeleton className="h-11 w-full rounded-sm sm:w-28 pointer-fine:h-9" />
+          <div aria-hidden="true" className={inlineActionGroupClass}>
+            <Skeleton className="h-11 w-28 rounded-sm pointer-fine:h-9" />
+            <Skeleton className="h-11 w-20 rounded-sm pointer-fine:h-9" />
           </div>
         }
         description={<Skeleton as="span" className="block h-5 w-full max-w-56" />}
@@ -37,17 +31,12 @@ export function HeldEventDetailLoading() {
         className="grid grid-cols-[minmax(0,1fr)] gap-8"
         role="region"
       >
-        <div className="grid gap-4 sm:grid-cols-3">
-          {["matches", "drafts", "next"].map((id) => (
-            <div key={id} className="grid gap-2">
-              <Skeleton className="h-3 w-16" />
-              <Skeleton className="h-7 w-20" />
-            </div>
-          ))}
-        </div>
         <div className="grid gap-4">
           <Skeleton className="h-6 w-32" />
-          <Skeleton className="h-11 w-full max-w-56" />
+          <div aria-hidden="true" className={inlineActionGroupClass}>
+            <Skeleton className="h-11 w-36 rounded-sm pointer-fine:h-10" />
+            <Skeleton className="h-11 w-24 rounded-sm pointer-fine:h-10" />
+          </div>
         </div>
         <section className="grid gap-4">
           <div>
@@ -75,7 +64,7 @@ export function HeldEventDetailLoading() {
           </div>
         </section>
       </PageContentSurface>
-      <div aria-hidden="true" className="grid min-w-0 gap-3 sm:grid-cols-2">
+      <div aria-hidden="true" className="grid min-w-0 grid-cols-2 gap-3">
         <Skeleton className="h-20 w-full rounded-sm" />
         <Skeleton className="h-20 w-full rounded-sm" />
       </div>
@@ -103,14 +92,10 @@ export function HeldEventDetailUnavailable({
   titleRef?: Ref<HTMLHeadingElement> | undefined;
 }) {
   const headerActions = (
-    <>
-      <HeldEventDetailHeaderActions exportHref={exportHref} />
-      {backHref === "/held-events" ? null : (
-        <LinkButton size="sm" to="/held-events" variant="quiet">
-          開催履歴を開く
-        </LinkButton>
-      )}
-    </>
+    <HeldEventDetailHeaderActions
+      exportHref={exportHref}
+      showHistoryLink={backHref !== "/held-events"}
+    />
   );
   const headerDescription = `試合数・下書き数は未取得です。${backNotice ?? ""}`;
   return notFound ? (

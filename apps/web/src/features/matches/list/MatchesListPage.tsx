@@ -6,7 +6,7 @@ import { matchListPageSizeOptions } from "@/features/matches/list/matchListSearc
 import { MatchMobileCard } from "@/features/matches/list/MatchMobileCard";
 import { useMatchesListPageModel } from "@/features/matches/list/useMatchesListPageModel";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
-import { responsiveActionGroupClass } from "@/shared/ui/actions/actionGroup";
+import { inlineActionGroupClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
@@ -22,7 +22,8 @@ import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
 function ListSkeleton({ showDesktopTable }: { showDesktopTable: boolean }) {
   return (
-    <div>
+    <div aria-label="試合一覧を読み込み中" role="status">
+      <span className="sr-only">試合一覧を読み込み中</span>
       {showDesktopTable ? (
         <div className="grid gap-3 border-y border-[var(--color-border-strong)] bg-[var(--color-surface)] p-3">
           <Skeleton className="min-h-10" />
@@ -69,7 +70,7 @@ export function MatchesListPage() {
       <PageContentSurface aria-label="試合一覧" className="grid gap-6" role="region">
         <div
           aria-label="試合を登録"
-          className={cn(responsiveActionGroupClass, "sm:ml-auto")}
+          className={cn(inlineActionGroupClass, "justify-end")}
           role="group"
         >
           <LinkButton

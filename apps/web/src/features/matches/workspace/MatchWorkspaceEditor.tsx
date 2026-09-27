@@ -26,11 +26,16 @@ export function MatchWorkspaceEditor({ model }: MatchWorkspaceEditorProps) {
 
   return (
     <>
-      <MatchSetupSection
-        cancellation={model.persistence.cancellation}
-        mastersNavigation={model.navigation.masters}
-        model={model.setup}
-      />
+      <fieldset
+        className="min-w-0"
+        disabled={model.disabled || model.setup.eventCreation.action.pending}
+      >
+        <MatchSetupSection
+          cancellation={model.persistence.cancellation}
+          mastersNavigation={model.navigation.masters}
+          model={model.setup}
+        />
+      </fieldset>
 
       {model.persistence.recovery ? (
         <MatchWorkspaceRecoveryNotice model={model.persistence.recovery} />
@@ -53,14 +58,14 @@ export function MatchWorkspaceEditor({ model }: MatchWorkspaceEditorProps) {
           model.sourceImagePanel ? "2xl:grid-cols-[minmax(0,1fr)_minmax(30rem,32rem)]" : "",
         )}
       >
-        <div className="order-2 min-w-0 2xl:order-none">
+        <fieldset className="order-2 min-w-0 2xl:order-none" disabled={model.disabled}>
           <ScoreGrid actions={scoreGridActions} data={model.scoreGrid.data} />
           {model.note ? (
             <div className="mt-4">
               <MatchNoteField {...model.note} />
             </div>
           ) : null}
-        </div>
+        </fieldset>
 
         <aside className="contents 2xl:sticky 2xl:top-4 2xl:grid 2xl:h-fit 2xl:gap-4">
           {model.sourceImagePanel ? (

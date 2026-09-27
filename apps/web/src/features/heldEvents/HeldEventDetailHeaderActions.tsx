@@ -1,11 +1,12 @@
 import { Download, RefreshCw } from "lucide-react";
 
+import { inlineActionGroupClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
-import { responsivePageHeaderLeadActionGroupClass } from "@/shared/ui/layout/PageHeader";
 
 type HeldEventDetailHeaderActionsProps = {
   exportHref: string;
+  showHistoryLink?: boolean;
   refresh?:
     | {
         pending: boolean;
@@ -19,13 +20,10 @@ type HeldEventDetailHeaderActionsProps = {
 export function HeldEventDetailHeaderActions({
   exportHref,
   refresh,
+  showHistoryLink = false,
 }: HeldEventDetailHeaderActionsProps) {
   return (
-    <nav
-      aria-label="この開催の関連操作"
-      className={responsivePageHeaderLeadActionGroupClass}
-      data-page-header-actions="responsive-lead"
-    >
+    <nav aria-label="この開催の関連操作" className={inlineActionGroupClass}>
       <LinkButton icon={<Download aria-hidden="true" />} size="sm" to={exportHref} variant="quiet">
         CSV出力
       </LinkButton>
@@ -42,6 +40,11 @@ export function HeldEventDetailHeaderActions({
         >
           更新
         </Button>
+      ) : null}
+      {showHistoryLink ? (
+        <LinkButton size="sm" to="/held-events" variant="quiet">
+          開催履歴を開く
+        </LinkButton>
       ) : null}
     </nav>
   );

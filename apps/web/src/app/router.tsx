@@ -1,10 +1,16 @@
 import { lazy } from "react";
 import type { RouteObject } from "react-router-dom";
-import { createBrowserRouter, Navigate } from "react-router-dom";
+import { createBrowserRouter } from "react-router-dom";
 
 import { App } from "@/app/App";
 import { AppShell } from "@/app/AppShell";
-import { AdminRoute, AuthenticatedRoute, PublicOnlyRoute, RootRedirect } from "@/app/routeGuards";
+import {
+  AdminRoute,
+  AuthenticatedRoute,
+  NotFoundRoute,
+  PublicOnlyRoute,
+  RootRedirect,
+} from "@/app/routeGuards";
 import {
   LoginPage,
   loadDraftReviewPage,
@@ -46,6 +52,7 @@ export const appRoutes: RouteObject[] = [
       },
       {
         path: "login",
+        handle: { title: "ログイン" },
         element: (
           <PublicOnlyRoute>
             <LoginPage />
@@ -61,46 +68,57 @@ export const appRoutes: RouteObject[] = [
         children: [
           {
             path: "matches",
+            handle: { title: "試合一覧" },
             element: <MatchesListPage />,
           },
           {
             path: "held-events",
+            handle: { title: "開催履歴" },
             element: <HeldEventsPage />,
           },
           {
             path: "held-events/:heldEventId",
+            handle: { title: "開催詳細" },
             element: <HeldEventDetailPage />,
           },
           {
             path: "matches/new",
+            handle: { title: "試合を手入力" },
             element: <MatchCreatePage />,
           },
           {
             path: "matches/:matchId",
+            handle: { title: "試合詳細" },
             element: <MatchDetailPage />,
           },
           {
             path: "matches/:matchId/edit",
+            handle: { title: "試合を編集" },
             element: <MatchEditPage />,
           },
           {
             path: "ocr/new",
+            handle: { title: "結果画像を読み取る" },
             element: <OcrCapturePage />,
           },
           {
             path: "review/:matchSessionId",
+            handle: { title: "読み取り結果を確認" },
             element: <DraftReviewPage />,
           },
           {
             path: "exports",
+            handle: { title: "戦績を出力" },
             element: <ExportPage />,
           },
           {
             path: "analytics/series",
+            handle: { title: "戦績比較" },
             element: <SeriesComparisonPage />,
           },
           {
             path: "admin/analysis",
+            handle: { title: "分析管理" },
             element: (
               <AdminRoute>
                 <SeriesAnalysisAdminPage />
@@ -109,6 +127,7 @@ export const appRoutes: RouteObject[] = [
           },
           {
             path: "admin/masters",
+            handle: { title: "設定管理" },
             element: (
               <AdminRoute>
                 <MastersPage />
@@ -119,7 +138,8 @@ export const appRoutes: RouteObject[] = [
       },
       {
         path: "*",
-        element: <Navigate replace to="/" />,
+        handle: { title: "ページが見つかりません" },
+        element: <NotFoundRoute />,
       },
     ],
   },

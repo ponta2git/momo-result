@@ -4,6 +4,7 @@ import cats.effect.Async
 import cats.syntax.all.*
 import org.slf4j.LoggerFactory
 import sttp.model.headers.{Cookie as SttpCookie, CookieWithMeta}
+import sttp.tapir.model.ServerRequest
 import sttp.tapir.server.ServerEndpoint
 
 import momo.api.auth.{
@@ -19,9 +20,9 @@ import momo.api.auth.{
   SessionService
 }
 import momo.api.config.{AppConfig, AppEnv, RedirectPath}
-import momo.api.endpoints.{AuthEndpoints, AuthMeResponse, AuthPaths, ProblemDetails}
+import momo.api.endpoints.{AuthEndpoints, AuthMeResponse, AuthPaths, CommonEndpoint, ProblemDetails}
 import momo.api.errors.AppError
-import momo.api.http.{AuthPolicy, ClientIp}
+import momo.api.http.{AuthCookies, AuthPolicy, ClientIp}
 
 object AuthModule:
   private val logger = LoggerFactory.getLogger("momo.api.http.modules.AuthModule")
@@ -53,7 +54,7 @@ object AuthModule:
           code = input.code,
           state = input.state,
           oauthError = input.oauthError,
-          cookies = input.cookies,
+          cookieState = AuthCookies.value(input.request, config.auth.stateCookieName),
           clientKey = ClientIp.of(input.request),
           config = config,
           completeOAuthCallback = completeOAuthCallback,
@@ -61,8 +62,9 @@ object AuthModule:
         )
       },
       AuthEndpoints.logout
-        .serverSecurityLogic { input =>
-          authenticateLogout(config, sessions, csrf, input.csrfToken, input.cookies)
+        .securityIn(CommonEndpoint.serverRequest)
+        .serverSecurityLogic { case (input, request) =>
+          authenticateLogout(config, sessions, csrf, input.csrfToken, request)
         }
         .serverLogic(authenticated =>
           _ =>
@@ -70,8 +72,9 @@ object AuthModule:
               .as(Right(List(clearSessionCookie(config))))
         ),
       AuthEndpoints.me
-        .serverSecurityLogic { input =>
-          authenticateMe(config, sessions, csrf, accounts, input.accountHeader, input.cookies)
+        .securityIn(CommonEndpoint.serverRequest)
+        .serverSecurityLogic { case (input, request) =>
+          authenticateMe(config, sessions, csrf, accounts, input.accountHeader, request)
         }
         .serverLogic(authMe => _ => Async[F].pure(Right(authMe))),
     )
@@ -98,7 +101,7 @@ object AuthModule:
       code: Option[String],
       state: Option[String],
       oauthError: Option[String],
-      cookies: List[SttpCookie],
+      cookieState: Option[String],
       clientKey: String,
       config: AppConfig,
       completeOAuthCallback: CompleteOAuthCallback[F],
@@ -111,7 +114,7 @@ object AuthModule:
           .run(OAuthCallbackInput(
             code = code,
             state = state,
-            cookieState = cookieValue(cookies, config.auth.stateCookieName),
+            cookieState = cookieState,
             providerError = oauthError,
           ))
           .flatMap(renderCallbackDecision(config, _))
@@ -142,9 +145,9 @@ object AuthModule:
       sessions: SessionService[F],
       csrf: CsrfTokenService,
       csrfToken: Option[String],
-      cookies: List[SttpCookie],
+      request: ServerRequest,
   ): F[Either[AuthEndpoints.AuthProblemResponse, AuthenticatedSession]] =
-    sessions.authenticate(cookieValue(cookies, config.auth.sessionCookieName)).map {
+    sessions.authenticate(AuthCookies.value(request, config.auth.sessionCookieName)).map {
       case Left(error) => Left(authProblem(error, List(clearSessionCookie(config))))
       case Right(authenticated) => csrf.verify(authenticated.session, csrfToken) match
           case Left(error) => Left(authProblem(error, Nil))
@@ -157,7 +160,7 @@ object AuthModule:
       csrf: CsrfTokenService,
       accounts: AccountAccess[F],
       accountHeader: Option[String],
-      cookies: List[SttpCookie],
+      request: ServerRequest,
   ): F[Either[AuthEndpoints.AuthProblemResponse, AuthMeResponse]] = config.appEnv match
     case AppEnv.Dev | AppEnv.Test => accountHeader match
         case Some(accountId) => accounts.find(accountId).map {
@@ -171,16 +174,16 @@ object AuthModule:
               )
             )
           }
-        case None => sessionAuthMe(config, sessions, csrf, cookies)
-    case AppEnv.Prod => sessionAuthMe(config, sessions, csrf, cookies)
+        case None => sessionAuthMe(config, sessions, csrf, request)
+    case AppEnv.Prod => sessionAuthMe(config, sessions, csrf, request)
 
   private def sessionAuthMe[F[_]: Async](
       config: AppConfig,
       sessions: SessionService[F],
       csrf: CsrfTokenService,
-      cookies: List[SttpCookie],
+      request: ServerRequest,
   ): F[Either[AuthEndpoints.AuthProblemResponse, AuthMeResponse]] =
-    sessions.authenticate(cookieValue(cookies, config.auth.sessionCookieName)).map {
+    sessions.authenticate(AuthCookies.value(request, config.auth.sessionCookieName)).map {
       case Left(error) => Left(authProblem(error, Nil))
       case Right(authenticated) => Right(AuthMeResponse(
           accountId = authenticated.account.accountId.value,
@@ -221,9 +224,6 @@ object AuthModule:
   private def interactiveLoginPath(next: Option[String]): String = next match
     case None => AuthPaths.LoginPath
     case Some(path) => s"${AuthPaths.LoginPath}?next=${RedirectPath.encodeQueryValue(path)}"
-
-  private def cookieValue(cookies: List[SttpCookie], name: String): Option[String] =
-    cookies.find(_.name == name).map(_.value)
 
   private def sessionCookie(config: AppConfig, value: String): CookieWithMeta =
     baseCookie(config.auth.sessionCookieName, value, config)

@@ -20,7 +20,7 @@ import momo.api.testing.{TestImages, TestTags}
 /**
  * Opt-in probe against an isolated R2 bucket.
  *
- * This suite is excluded from normal tests. Run `sbt apiR2Quality` with all required environment
+ * This suite is excluded from normal tests. Run `sbt --server --batch apiR2Quality` with all required environment
  * variables set. Missing configuration is an explicit failure; the probe never silently skips.
  */
 final class R2SourceImageObjectStorageIntegrationSpec extends MomoCatsEffectSuite:
@@ -36,11 +36,16 @@ final class R2SourceImageObjectStorageIntegrationSpec extends MomoCatsEffectSuit
       val probe =
         for
           put <- storage.put(key, "image/png", bytes, sha256).flatMap(expectRight("put"))
+          replay <- storage.put(key, "image/png", bytes, sha256).flatMap(expectRight("replay"))
+          replacement = TestImages.png(2, 1)
+          conflict <- storage.put(key, "image/png", replacement, Sha256Hex.digest(replacement))
           head <- storage.head(key).flatMap(expectRight("head"))
           get <- storage.get(key).flatMap(expectRight("get"))
           _ <- IO {
             assertEquals(put.key, key)
             assertEquals(put.sha256, sha256)
+            assertEquals(replay.sha256, sha256)
+            assertEquals(conflict, Left(SourceImageObjectFailure.IntegrityViolation))
             assertEquals(head.sha256, sha256)
             assertEquals(head.sizeBytes, bytes.length.toLong)
             assertEquals(get.metadata.sha256, sha256)

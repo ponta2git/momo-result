@@ -307,6 +307,7 @@ fn prepare_objects(manifest: EnduranceManifest) -> Result<Vec<PreparedObject>, O
                         (String::from(name), Value::BulkString(value.into_bytes()))
                     })
                     .collect::<HashMap<_, _>>(),
+                ..StreamId::default()
             };
             let payload =
                 parse_delivery(&delivery).map_err(|_error| OcrEnduranceError::Manifest)?;

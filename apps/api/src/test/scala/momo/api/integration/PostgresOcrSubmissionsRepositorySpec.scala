@@ -86,6 +86,20 @@ final class PostgresOcrSubmissionsRepositorySpec extends IntegrationSuite:
       assertEquals(refusedStatus, "draft_ready")
   }
 
+  test("another account cannot attach an OCR submission to the source draft") {
+    for
+      _ <- seedDraft
+      proposed = submission().copy(ownerAccountId = otherOwner)
+      result <- repository.put(proposed)
+      saved <- repository.find(proposed.id, otherOwner)
+      status <- sql"SELECT status FROM match_drafts WHERE id = ${draft.value}"
+        .query[String].unique.transact(transactor)
+    yield
+      assertEquals(result.left.map(_.code), Left("FORBIDDEN"))
+      assertEquals(saved, None)
+      assertEquals(status, "draft_ready")
+  }
+
   List("draft_ready", "needs_review").foreach { previousStatus =>
     test(s"a later submission preserves $previousStatus when the draft already has result slots") {
       for
@@ -174,7 +188,7 @@ final class PostgresOcrSubmissionsRepositorySpec extends IntegrationSuite:
     for
       _ <- seedDraft
       _ <- repository.put(proposed)
-      locked <- Deferred[IO, Int]
+      locked <- Deferred[IO, Either[Throwable, Int]]
       release <- Deferred[IO, Unit]
       result <-
         Resource.fromAutoCloseable(IO.blocking(dataSource.getConnection)).use { connection =>
@@ -190,7 +204,7 @@ final class PostgresOcrSubmissionsRepositorySpec extends IntegrationSuite:
                   s"UPDATE ocr_submission_members SET status = 'failed', failure_code = 'admission_failed' WHERE submission_id = '${proposed.id}'"
                 )
                 statement.executeUpdate(
-                  s"UPDATE ocr_submissions SET status = 'settled', finished_at = clock_timestamp() WHERE id = '${proposed.id}'"
+                  s"UPDATE ocr_submissions SET status = 'settled', finished_at = GREATEST(created_at, clock_timestamp()) WHERE id = '${proposed.id}'"
                 )
                 val rows = statement.executeQuery("SELECT pg_backend_pid()")
                 try
@@ -198,11 +212,13 @@ final class PostgresOcrSubmissionsRepositorySpec extends IntegrationSuite:
                   rows.getInt(1)
                 finally rows.close()
               finally statement.close()
-            }.flatMap(locked.complete) *> release.get *> IO.blocking(connection.commit()))
+            }.flatMap(pid => locked.complete(Right(pid))) *> release.get *>
+              IO.blocking(connection.commit()))
+              .onError { case error => locked.complete(Left(error)).void }
               .guarantee(IO.blocking(connection.rollback()))
           writer.background.use { completed =>
             for
-              pid <- locked.get
+              pid <- locked.get.rethrow
               response <- repository.find(proposed.id, owner).background.use { reading =>
                 (awaitBackendBlockedBy(pid) *> release.complete(()) *>
                   reading.flatMap(_.embedNever))
@@ -224,7 +240,8 @@ final class PostgresOcrSubmissionsRepositorySpec extends IntegrationSuite:
       _ <- repository.put(proposed)
       _ <- PostgresMatchDraftCancellationRepository[IO](transactor).cancelDraftAndQueuedOcrJobs(
         draft,
-        Instant.now()
+        Instant.now(),
+        owner,
       )
       state <- repository.find(proposed.id, owner)
       replay <- repository.put(proposed)

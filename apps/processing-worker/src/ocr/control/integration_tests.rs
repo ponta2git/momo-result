@@ -867,6 +867,7 @@ fn payload(fixture: &Fixture) -> SmokeResult<ValidatedOcrDelivery> {
             .into_iter()
             .map(|(name, value)| (name, Value::BulkString(value.into_bytes())))
             .collect(),
+        ..StreamId::default()
     };
     parse_validated_delivery(&delivery).map_err(Into::into)
 }

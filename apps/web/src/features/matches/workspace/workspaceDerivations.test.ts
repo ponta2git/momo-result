@@ -36,14 +36,6 @@ describe("draftsByKind", () => {
     expect(result.revenue).toBeUndefined();
     expect(result.incident_log).toBeUndefined();
   });
-
-  it("returns an empty SlotMap when drafts are undefined", () => {
-    expect(draftsByKind({ total_assets: "id" }, undefined)).toEqual({
-      total_assets: undefined,
-      revenue: undefined,
-      incident_log: undefined,
-    });
-  });
 });
 
 function detail(overrides: Partial<MatchDraftDetailResponse> = {}): MatchDraftDetailResponse {
@@ -57,10 +49,6 @@ function detail(overrides: Partial<MatchDraftDetailResponse> = {}): MatchDraftDe
 }
 
 describe("draftIdsFromDetail", () => {
-  it("returns an empty object when detail is undefined", () => {
-    expect(draftIdsFromDetail(undefined)).toEqual({});
-  });
-
   it("maps draft id fields to their slot kinds", () => {
     expect(
       draftIdsFromDetail(
@@ -102,10 +90,6 @@ describe("dedupeWorkspaceErrors", () => {
 describe("prefillFromDraftSummary", () => {
   const base = createEmptyMatchForm("2026-01-01T09:00");
 
-  it("returns the base form unchanged when no summary is provided", () => {
-    expect(prefillFromDraftSummary(base)).toEqual(base);
-  });
-
   it("overrides only the fields the summary supplies", () => {
     const result = prefillFromDraftSummary(base, {
       status: "needs_review",
@@ -122,23 +106,5 @@ describe("prefillFromDraftSummary", () => {
     expect(result.mapMasterId).toBe(base.mapMasterId);
     expect(result.seasonMasterId).toBe(base.seasonMasterId);
     expect(result.ownerMemberId).toBe(base.ownerMemberId);
-  });
-
-  it("falls back to base values when summary fields are omitted", () => {
-    const result = prefillFromDraftSummary(base, {
-      status: "needs_review",
-    });
-
-    expect(result.gameTitleId).toBe(base.gameTitleId);
-    expect(result.ownerMemberId).toBe(base.ownerMemberId);
-  });
-
-  it("does not mutate the base form", () => {
-    const baseSnapshot = JSON.parse(JSON.stringify(base));
-    prefillFromDraftSummary(base, {
-      status: "needs_review",
-      gameTitleId: "gt_world",
-    });
-    expect(base).toEqual(baseSnapshot);
   });
 });

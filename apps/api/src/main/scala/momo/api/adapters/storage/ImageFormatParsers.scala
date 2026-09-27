@@ -140,46 +140,67 @@ private[storage] object ImageFormatParsers:
         ImageBytes.matches(bytes, 8, Webp)
 
     def dimensions(bytes: Array[Byte]): Option[ImageDimensions] =
-      val riffSize = Option.when(bytes.length >= 12)(ImageBytes.littleEndian32(bytes, 4))
-      val riffEnd = riffSize.map(8L + _)
-
       @tailrec
-      def scan(offset: Int, canvasDimensions: Option[ImageDimensions]): Option[ImageDimensions] =
-        if offset + 8 > riffEnd.getOrElse(0L) then None
+      def scan(
+          offset: Int,
+          canvas: Option[ImageDimensions],
+          raster: Option[ImageDimensions],
+      ): Option[ImageDimensions] =
+        if offset == bytes.length then
+          raster.filter(image =>
+            canvas.forall(value =>
+              value.width == image.width && value.height == image.height
+            )
+          )
+        else if offset.toLong + 8L > bytes.length.toLong then None
         else
           val chunkSize = ImageBytes.littleEndian32(bytes, offset + 4)
           val dataStart = offset + 8
           val dataEnd = dataStart.toLong + chunkSize
           val paddedEnd = dataEnd + (chunkSize % 2L)
-          if chunkSize > Int.MaxValue.toLong || dataEnd > riffEnd.getOrElse(0L) ||
-            paddedEnd > riffEnd.getOrElse(0L)
+          if paddedEnd > bytes.length.toLong ||
+            (chunkSize % 2L != 0L && bytes(dataEnd.toInt) != 0.toByte)
           then None
-          else if ImageBytes.matches(bytes, offset, Vp8x) && chunkSize >= 10L then
-            val dimensions = ImageDimensions(
-              ImageBytes.littleEndian24(bytes, dataStart + 4) + 1L,
-              ImageBytes.littleEndian24(bytes, dataStart + 7) + 1L,
-            )
-            scan(paddedEnd.toInt, Some(dimensions))
-          else if ImageBytes.matches(bytes, offset, Vp8l) && chunkSize >= 5L then
-            losslessDimensions(bytes, dataStart)
-              .map(dimensions => canvasDimensions.getOrElse(dimensions))
-          else if ImageBytes.matches(bytes, offset, Vp8) && chunkSize >= 10L then
-            lossyDimensions(bytes, dataStart).map(dimensions =>
-              canvasDimensions.getOrElse(dimensions)
-            )
-          else scan(paddedEnd.toInt, canvasDimensions)
+          else if ImageBytes.matches(bytes, offset, Vp8x) then
+            // This upload boundary accepts a single still image. Its canvas cannot hide a
+            // larger bitstream, and a later canvas must not replace the first header.
+            if offset != 12 || chunkSize < 10L ||
+              (ImageBytes.unsignedByte(bytes, dataStart) & 0x02) != 0
+            then None
+            else
+              val dimensions = ImageDimensions(
+                ImageBytes.littleEndian24(bytes, dataStart + 4) + 1L,
+                ImageBytes.littleEndian24(bytes, dataStart + 7) + 1L,
+              )
+              scan(paddedEnd.toInt, Some(dimensions), raster)
+          else if ImageBytes.matches(bytes, offset, Vp8l) then
+            if raster.nonEmpty || chunkSize < 5L then None
+            else
+              losslessDimensions(bytes, dataStart) match
+                case None => None
+                case image => scan(paddedEnd.toInt, canvas, image)
+          else if ImageBytes.matches(bytes, offset, Vp8) then
+            if raster.nonEmpty || chunkSize < 10L then None
+            else
+              lossyDimensions(bytes, dataStart) match
+                case None => None
+                case image => scan(paddedEnd.toInt, canvas, image)
+          else scan(paddedEnd.toInt, canvas, raster)
 
-      Option.when(bytes.length >= 20 && riffEnd.exists(_ == bytes.length.toLong) &&
-        matchesSignature(bytes))(()).flatMap(_ => scan(12, None))
+      Option.when(bytes.length >= 20 && matchesSignature(bytes) &&
+        ImageBytes.littleEndian32(bytes, 4) + 8L == bytes.length.toLong)(())
+        .flatMap(_ => scan(12, None, None))
 
     private def losslessDimensions(bytes: Array[Byte], dataStart: Int): Option[ImageDimensions] =
-      Option.when(ImageBytes.unsignedByte(bytes, dataStart) == 0x2f) {
+      Option.when(ImageBytes.unsignedByte(bytes, dataStart) == 0x2f &&
+        (ImageBytes.unsignedByte(bytes, dataStart + 4) & 0xe0) == 0) {
         val bits = ImageBytes.littleEndian32(bytes, dataStart + 1)
         ImageDimensions((bits & 0x3fffL) + 1L, ((bits >> 14) & 0x3fffL) + 1L)
       }
 
     private def lossyDimensions(bytes: Array[Byte], dataStart: Int): Option[ImageDimensions] =
-      Option.when(ImageBytes.matches(bytes, dataStart + 3, LossyFrameTag)) {
+      Option.when(ImageBytes.matches(bytes, dataStart + 3, LossyFrameTag) &&
+        (ImageBytes.unsignedByte(bytes, dataStart) & 1) == 0) {
         ImageDimensions(
           ImageBytes.littleEndian16(bytes, dataStart + 6) & 0x3fffL,
           ImageBytes.littleEndian16(bytes, dataStart + 8) & 0x3fffL,

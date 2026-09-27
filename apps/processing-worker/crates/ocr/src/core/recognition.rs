@@ -177,7 +177,14 @@ fn checked_frame(
 }
 
 fn normalize_text(value: &str) -> String {
-    value.split_whitespace().collect::<Vec<_>>().join(" ")
+    let mut normalized = String::with_capacity(value.len());
+    for part in value.split_whitespace() {
+        if !normalized.is_empty() {
+            normalized.push(' ');
+        }
+        normalized.push_str(part);
+    }
+    normalized
 }
 
 #[cfg(test)]

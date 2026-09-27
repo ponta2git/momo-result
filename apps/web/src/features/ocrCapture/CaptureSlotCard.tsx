@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useId, useState } from "react";
 import type { DragEventHandler } from "react";
 
 import { CaptureSlotActions } from "@/features/ocrCapture/CaptureSlotActions";
@@ -47,6 +47,7 @@ export function CaptureSlotCard({
   statusRefreshing,
   slot,
 }: CaptureSlotCardProps) {
+  const headingId = useId();
   const mismatch = slot.detectedKind && slot.detectedKind !== slot.kind;
   const hasImage = Boolean(slot.previewUrl);
   const isWorking = isWorkingStatus(slot.status);
@@ -89,7 +90,10 @@ export function CaptureSlotCard({
   const handleMoveForward = useCallback(() => actions.onMoveImage(1), [actions]);
 
   return (
+    // Labeled move buttons provide the keyboard equivalent of this optional drop target.
+    // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <section
+      aria-labelledby={headingId}
       className={cn(
         "relative grid gap-4 overflow-hidden rounded-md border p-4",
         presentation.captureTarget
@@ -109,7 +113,9 @@ export function CaptureSlotCard({
             className={`h-6 w-1 shrink-0 rounded-full ${presentation.accentClass}`}
           />
           <div className="min-w-0">
-            <h3 className={contentText.heading}>{presentation.label}</h3>
+            <h3 className={contentText.heading} id={headingId}>
+              {presentation.label}
+            </h3>
           </div>
         </div>
         <CaptureStatusBadge status={slot.status} />

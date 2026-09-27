@@ -100,6 +100,7 @@ object PostgresMatchDrafts extends PostgresMatchDraftsRowSupport:
         confirmed_match_id = ${draft.confirmedMatchId},
         updated_at = $updatedAt
       WHERE id = ${draft.id}
+        AND created_by_account_id = ${draft.createdByAccountId}
         AND updated_at = ${draft.updatedAt}
         AND status IN (
           ${MatchDraftStatus.OcrFailed},
@@ -138,7 +139,8 @@ object PostgresMatchDrafts extends PostgresMatchDraftsRowSupport:
         Map.empty[HeldEventId, MatchDraftsRepository.HeldEventStats].pure[ConnectionIO]
       else
         val ids = heldEventIds.map(_.value).toArray
-        sql"""
+        PostgresReadBudget.rows[HeldEventDraftStatsRow](
+          sql"""
           SELECT held_event_id, COUNT(*)::int, COALESCE(MAX(match_no_in_event), 0)::int,
                  game_title_id, season_master_id
           FROM match_drafts
@@ -146,7 +148,10 @@ object PostgresMatchDrafts extends PostgresMatchDraftsRowSupport:
             AND status <> ${MatchDraftStatus.Cancelled}
             AND status <> ${MatchDraftStatus.Confirmed}
           GROUP BY held_event_id, game_title_id, season_master_id
-        """.query[HeldEventDraftStatsRow].to[List].map { rows =>
+        """,
+          PostgresReadBudget.ScopeRows,
+          "Held-event draft scopes"
+        ).map { rows =>
           val seen = rows.groupBy(_.heldEventId).map { case (id, grouped) =>
             id -> MatchDraftsRepository.HeldEventStats(
               draftCount = grouped.map(_.count).sum,

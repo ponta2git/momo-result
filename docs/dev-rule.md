@@ -10,6 +10,7 @@
 - API / worker が root env を自動で読むと仮定しない。起動する process に必要最小限の変数だけを渡す。
 - worker container へ OAuth など無関係な secret を渡さず、接続値を docs、tracked file、shell history へ書かない。
 - DB を使う前に sibling `momo-db` の migration が接続先へ適用済みであることを確認する。
+- 隔離testの既定migration選択は共通resolverで `.momo-db-ref` の内容と照合し、異なるcheckoutや未追跡SQLを拒否する。固定revisionのarchiveや意図したschema実験は `MOMO_DB_MIGRATIONS_DIR` で明示し、検証した前提を区別する。
 - integration / E2E は普段使いの DB、Redis、bucket と分離する。外部依存 gate の未実行は、その wire 動作を未検証として報告する。
 - Web / runtime E2Eのfresh DB bootstrapは `web-e2e` profileで現行の分析公開契約を初期化する。migrationだけのbaselineと区別し、既存DBの正式なpromotionや本番切替を代用しない。
 
@@ -33,11 +34,11 @@
 
 | 領域 | 品質 command |
 | --- | --- |
-| Web | `pnpm --filter web format:check`、`lint`、`contract:check`、`typecheck`、`test:run`、必要に応じ `build` / `e2e` |
-| API | `sbt apiQuality`、`sbt test`、必要に応じ `apiCoverage` / `apiDbQuality` / `apiRedisQuality` / `apiR2Quality` |
+| Web | `pnpm --filter web format:check`、`lint`、`contract:check`、`typecheck`、`test:run`、`scripts:check`、必要に応じ `build` / `e2e` |
+| API | `sbt --server --batch apiQuality`、`sbt --server --batch testFull`、同じオプションで必要に応じ `apiCoverage` / `apiDbQuality` / `apiRedisQuality` / `apiR2Quality` |
 | Processing Worker | `cargo fmt --all -- --check`、`cargo clippy --locked --workspace --all-targets`、`cargo test --locked --workspace`、production image build |
-| Go tools | `cd tools && go test ./... && go vet ./...` |
-| Workflow | `pnpm actionlint` |
+| Go tools | `cd scripts/tools && go test ./... && go vet ./...` |
+| Workflow / policy scripts | `pnpm actionlint`、`pnpm test:policy` |
 | Public docs / config | `pnpm public:safety:check` |
 
 OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、coverage の運用は `docs/test-architecture.md` を正本とする。実行 command、lint 設定、smoke の引数は生成 script、build 設定、`scripts/ci/` を実行上の正本とする。文書中の command が実装とずれた場合は実装を直すか、この表を更新し、別名 command を増やさない。
@@ -63,6 +64,7 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 | 変更 | 必須 gate |
 | --- | --- |
 | Web production | format、lint、typecheck + 選択した unit / component evidence |
+| Web test のみ | format、lint、typecheck + 変更・統合後の対象 suite。E2E / runner を変える場合はその実行境界も検証 |
 | Web API contract | Web gate + Tapir 由来 OpenAPI の生成・構造 lint・freshness + Web 型生成 / typecheck |
 | Web build / runtime | Web gate + build |
 | login、試合記録、OCR、比較、export の主要 UI flow | Web gate + 影響する利用者契約の Playwright |
@@ -77,10 +79,12 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 | Go deploy / ops tool | Go test / vet、shell collector を変えた場合は対応 script test |
 | docs only | `git diff --check`、`pnpm public:safety:check` |
 
-表は変更時に選ぶ evidence の種類を示し、新しい test case の自動追加や各層での重複を要求しない。規約・skill の文章変更は docs only とし、同時に script、schema、設定を変更した場合はその gate も適用する。選択基準と oracle は `docs/test-rule.md`、現在の job 構成とまとめて実行する suite は CI workflow を実行上の正本とする。変更分類を弱めて gate を避けない。
+表は変更時に選ぶ evidence の種類を示し、新しい test case の自動追加や各層での重複を要求しない。規約・skill の指示、参照資料、表示名・説明・default prompt の変更は docs only とする。script、schema、実行設定や tool 依存・起動 policy も変える場合は、その実行境界の gate を加える。選択基準と oracle は `docs/test-rule.md`、現在の job 構成とまとめて実行する suite は CI workflow を実行上の正本とする。変更分類を弱めて gate を避けない。
 
 変更範囲に必要な gate と選択した品質証拠を確認したら、検証を終了する。追加・再実行は、結果を無効にする変更、失敗、具体的な未解決事項が生じた場合に、その影響範囲で行う。
 結果の再利用は、対象コード、依存する schema・設定・環境、観測した経路が今回の判断に適合する場合に限る。必須 gate の実行単位は CI の定義に従い、未実行を通過扱いにしない。
+
+検証結果の件数は、追加・削除した case 数と実行した既存 suite の総数を区別して報告する。suite 単位での実行を、変更にその件数の新規回帰 test が必要だったという根拠にしない。
 
 ## 5. Developer Wait / Parallel Execution
 

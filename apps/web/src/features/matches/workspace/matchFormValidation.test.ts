@@ -81,6 +81,7 @@ describe("validateMatchForm", () => {
     expect(result.messages).toContain("開催を選択してください");
     expect(result.pathSet.has("heldEventId")).toBe(true);
     expect(result.firstPath).toBe("heldEventId");
+    expect(result.firstMessage).toBe("開催を選択してください");
   });
 
   it("requires gameTitleId, mapMasterId, seasonMasterId and playedAt", () => {
@@ -130,13 +131,45 @@ describe("validateMatchForm", () => {
     expect(result.pathSet.has("players.0.revenueManYen")).toBe(true);
   });
 
-  it("exposes the first issue message via firstMessage", () => {
+  it("rejects an invalid date with the path the editor uses for recovery", () => {
     const values = validForm();
-    values.heldEventId = "";
+    values.playedAt = "not-a-date";
 
     const result = validateMatchForm(values);
 
-    expect(result.firstMessage).toBe(result.messages[0]);
-    expect(result.firstMessage).toBe("開催を選択してください");
+    expect(result.success).toBe(false);
+    expect(result.firstPath).toBe("playedAt");
+    expect(result.firstMessage).toBe("開催日時を正しく入力してください");
+  });
+
+  it.each([
+    { path: "players.0.rank", input: "", message: "数値を入力してください" },
+    { path: "players.1.revenueManYen", input: "-", message: "数値を入力してください" },
+    { path: "players.2.incidents.destination", input: "-1" },
+  ])(
+    "validates the visible $path draft instead of its previous valid number",
+    ({ path, input, message }) => {
+      const values = validForm();
+      values.numericDrafts = { [path]: input };
+
+      const result = validateMatchForm(values);
+
+      expect(result.success).toBe(false);
+      expect(result.pathSet).toEqual(new Set([path]));
+      expect(result.firstPath).toBe(path);
+      if (message) expect(result.firstMessage).toBe(message);
+    },
+  );
+
+  it("counts note characters after newline normalization without splitting emoji", () => {
+    const values = validForm();
+    values.noteBody = `${"🍑".repeat(148)}\r\n終`;
+    expect(validateMatchForm(values).success).toBe(true);
+
+    values.noteBody += "。";
+    const result = validateMatchForm(values);
+    expect(result.success).toBe(false);
+    expect(result.firstPath).toBe("noteBody");
+    expect(result.firstMessage).toBe("試合メモは150字以内で入力してください");
   });
 });

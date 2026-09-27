@@ -22,7 +22,7 @@
 | 試合メモ | `docs/requirements/match-note.md` | 変更する境界に応じて base、開催詳細、分析 batch、domain、UI | Tapir、momo-db、API / Web、DB と UI の変更経路 |
 | テスト / coverage / CI | `docs/test-rule.md`、`docs/dev-rule.md` | 実行設計は test-architecture、契約の意味は専門正本 | test 設定、workflow、対象経路の証拠 |
 | ローカル起動 / コマンド / Git | `docs/dev-rule.md` の該当章 | テスト選択は test-rule | package manifest、build 設定、script、workflow |
-| インシデント / 重大なミス / 対策の再評価 | `.agents/skills/postmortem/SKILL.md` | 実装は変更対象の行。個別記録・台帳は参照を許可された場合だけ | スキルの完了条件と対象 gate |
+| ポストモーテムの作成 / レビュー / 対策の再評価 | `.agents/skills/postmortem/SKILL.md` | 実装は変更対象の行。個別記録・台帳は参照を許可された場合だけ | 依頼した作業の完了条件と変更対象の gate |
 | 規約 / repository skill | 本書の「正本と証拠」「規約・skill の保守」、変更対象の正本 | 起動条件・参照先・完了条件が他の入口と整合するか | 対象文書・skill と参照元、Change Gates の docs only |
 | 文書のみ | 変更対象の正本 | 挙動を記述・変更する場合は対応する実行経路と教訓カード | Change Gates の docs only |
 
@@ -30,25 +30,12 @@
 
 品質証拠は、要求・契約から守る結果を特定し、test-rule で境界と oracle を選び、必要なら test-architecture で実行設計を決め、dev-rule の gate と command へ割り当てる。既存 test や checker から逆向きに要求を作らない。
 
-実施記録: [操作面の反応を揃える（採用案の観点2）](ui-interaction-plan.md)。表示契約の正本はUI規約とし、記録には方式・時間の選定理由、接続結果、検証範囲を置く。
+ツール固有の入力・結果の意味は、実装に隣接する次の文書を参照する。実行結果や導入進捗は扱わない。
 
-実施記録: [操作する場所の輪郭を整える（採用案の観点1）](ui-boundary-plan.md)。採用値、共通部品への接続、接続復旧後のE2Eを含む検証結果を整理する。
-
-検討記録: 選択肢表示の共通化の [調査](ui-select-review.md) と [実装計画](ui-select-plan.md)。方式比較、Base UIを使う場合の変更順序・受入条件・確認状況を扱う。未実装の提案であり、表示契約はUI規約を参照する。
-
-検討記録: [オーナー別戦績比較のレビュー](series-owner-comparison-review.md)。提供価値・既存画面との整合に加え、実装仕様・計画を規約、framework、性能効率性・保守性から検討する。採用した変更は要求仕様・実装仕様・計画の該当する正本へ反映する。
-
-実装済み仕様: [オーナー別戦績比較の実装仕様](series-owner-comparison-spec.md)。入力・成果物・HTTP・URL・共有DBの契約、互換性、完了条件を定める。
-
-実施記録: [オーナー別戦績比較の実装計画・検証結果](series-owner-comparison-plan.md)。変更箇所、依存順序、各工程の受入証拠、公開前に残る作業を記録する。
-
-実施記録: [MOM-22 オーナー比較の選択試合ハイライト](owner-comparison-focus-plan.md)。合意済みの受入条件、API・表示状態の契約、実装・検証結果と残るリリース条件をまとめる。
-
-検討記録: [MOM-21・MOM-23 詳細画面の前後移動の実施計画](detail-navigation-plan.md)。開催・試合の対象範囲、前後順、戻り先、並列分担、API・cache・UIの検証と確認事項を扱う。
-
-検討記録: [MOM-24 OCR送出単位通知のレビュー・仕様](ocr-submission-notification-spec.md)。合意した通知要件、送出の終了・再試行、momo-dbとconsumerの責務、停止切替と受入条件を扱う。実装契約は要求・domain・architectureと共有DB契約へ反映している。
-
-実装計画: [MOM-24 OCR送出単位通知の実装・検証計画](ocr-submission-notification-plan.md)。工程、実DB・Playwright MCPを含む検証、資材回収、メンテナンス中の一括導入・rollback条件と実行結果を扱う。
+- [cgroup memory probe](../scripts/tools/cmd/cgroup-memory-probe/README.md): 隔離実験の合格条件と適用範囲。
+- [Linux memory snapshot](../scripts/tools/linux-memory-snapshot.md): 診断値の単位、欠測、計測範囲。
+- [Rust OCR evaluator](../scripts/tools/cmd/ocr-rust-evaluator/README.md): 校正用の精度比較と結果の限界。
+- [OCR evaluation audit](../scripts/tools/cmd/ocr-evaluation-audit/README.md): 標本の独立性と必要量の見積り。
 
 ## 2. 正本と証拠
 
@@ -63,13 +50,16 @@
 
 公開範囲は `AGENTS.md`、公開運用原則は `docs/ops/README.md` に従う。private の計画・測定・履歴は、参照を許可された作業で適用対象と現行判断先を確認して使う。
 
+作業計画、調査・評価の記録、完了履歴は、継続判断に必要なものだけ `private/` に残す。要求・仕様や再利用する規約・skill の参照資料は、それぞれの正本へ置く。
+
 文書を分割するのは、独立して読む作業があり、条件と例外をまとめたまま参照負担を減らせる場合。まず既存の章を整理する。正本性のない写しや判断に寄与しない説明は削除し、移動・統合時は入口と参照先を同じ変更で更新する。
 
 ### 規約・skill の保守
 
-- `AGENTS.md` は作業全体に効く判断と固有の制約、専門規約は対象の契約、skill は特定作業の知識・手順を持つ。詳細は所有する正本へ置き、入口には適用条件と参照先を残す。
-- 指示は守る結果、適用条件、完了条件を明確にする。固定順序や全文確認は、権限・データ保全・互換性など順序を崩すと具体的な問題が生じる箇所に残す。一般的な作業能力の説明や一件の失敗への対策を、すべての作業に適用する規則へ広げない。
-- skill の description は何ができ、どの依頼で使うかを短く示す。単なる用語の一致で通常作業を専門レビューへ誘導せず、複数の作業モードに固有の詳細は条件付きで参照する。特定モデルの癖やツールの一時的な既定値を repository の恒久ルールにしない。
-- 改訂時は、実際に想定する依頼で必要な参照・承認・検証・終了を判断できるか確認する。適用するケースに加え、誤字修正、通常の不具合修正、承認済み作業など誤って手順を増やしやすいケースも選ぶ。実際のエージェント挙動を試していない場合は、文面の点検と区別する。
+- `AGENTS.md` は横断する判断と repository 固有の境界、専門規約は対象の契約、skill は特定作業の知識を持つ。同じ指示を複製せず、入口には適用条件と正本への参照を残す。
+- 指示は適用条件、守る結果、完了条件で書く。固定順序や全文確認は、権限・データ保全・互換性など具体的な理由がある箇所に残す。モデルが判断できる一般論や、一件の失敗から広げた全作業向けの義務は削る。
+- skill の description は実際の依頼を短く識別し、本文は共通の制約と依頼ごとの参照先に絞る。レビュー、記録作成、実装で成果物と必要な参照を分け、テンプレートの全項目や全資料の読込みを一律に要求しない。既存の承認の扱いは `AGENTS.md` に従う。
+- モデル別ガイドの例文をそのまま追加せず、この repository で変えるべき判断へ適用する。モデル名、推論設定、委任、ツールの既定動作は実行環境で管理し、文書の最適化だけを理由に変更しない。
+- 改訂時は適用ケースと誤起動しやすいケースで、参照・承認・成果物・終了の判断を確認する。通常の不具合修正、レビューのみ、承認済み作業などを使い、文面の点検と実際のエージェントによる試行を区別する。文字列一致の検査を行動の証拠にしない。
 
 参考: OpenAI の [skills / AGENTS.md の見直し](https://developers.openai.com/blog/rethinking-skills-and-prompts-for-gpt-6-astra) と [モデル別 prompting guidance](https://developers.openai.com/api/docs/guides/latest-model#prompting-best-practices)。本書はそれらを踏まえた repository の保守方針であり、作業ごとの再読を要求しない。

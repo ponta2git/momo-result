@@ -24,12 +24,14 @@ type ChoicePickerDialogFieldProps = Omit<
   emptyState?: ReactNode | undefined;
   error?: ReactNode | undefined;
   label: string;
+  /** Identifies the dialog's native radio group; the consumer submits the controlled value. */
   name: string;
   options: ChoiceListOption[];
   pagination?: PaginationState | undefined;
   paginationAriaLabel?: string | undefined;
   pending?: boolean | undefined;
   recovery?: boolean | undefined;
+  /** Announces a required choice. The consumer owns validation before its final action. */
   required?: boolean | undefined;
   scopeChanging?: boolean | undefined;
   selectedLabel: ReactNode;
@@ -45,6 +47,7 @@ type ChoicePickerDialogFieldProps = Omit<
  * page mounted but inert until the requested page is ready.
  */
 export function ChoicePickerDialogField({
+  "aria-describedby": ariaDescribedBy,
   choiceLabel,
   disabled = false,
   emptyState = "選べる候補はありません。",
@@ -68,8 +71,14 @@ export function ChoicePickerDialogField({
   const fallbackId = useId();
   const triggerId = `${fallbackId}-trigger`;
   const titleId = `${fallbackId}-title`;
+  const valueId = `${fallbackId}-value`;
+  const requiredId = required ? `${fallbackId}-required` : undefined;
   const subject = choiceLabel ?? label;
   const errorId = error ? `${fallbackId}-error` : undefined;
+
+  // Losing permission/availability closes this selection session permanently.
+  // A read-only candidate refresh deliberately leaves the session open.
+  if (disabled && open) setOpen(false);
 
   const selectChoice = (nextValue: string) => {
     onValueChange(nextValue);
@@ -91,9 +100,17 @@ export function ChoicePickerDialogField({
           error ? controlBorderClass.invalid : controlBorderClass.default,
         )}
       >
-        <p className="font-plain min-w-0 flex-1 text-sm leading-5 text-pretty text-[var(--color-text-primary)]">
+        <p
+          className="font-plain min-w-0 flex-1 text-sm leading-5 text-pretty text-[var(--color-text-primary)]"
+          id={valueId}
+        >
           {selectedLabel}
         </p>
+        {required ? (
+          <span className="sr-only" id={requiredId}>
+            必須
+          </span>
+        ) : null}
         <div className="shrink-0">
           <Dialog
             contentClassName="flex min-h-0 flex-col overflow-y-hidden"
@@ -104,7 +121,12 @@ export function ChoicePickerDialogField({
             title={<span id={titleId}>{`${subject}を選択`}</span>}
             trigger={
               <Button
-                aria-describedby={buildFieldDescribedBy(errorId)}
+                aria-describedby={buildFieldDescribedBy(
+                  valueId,
+                  requiredId,
+                  errorId,
+                  ariaDescribedBy,
+                )}
                 aria-invalid={error ? true : undefined}
                 aria-label={`${label}を${recovery ? "選び直す" : "変更"}`}
                 disabled={disabled}

@@ -240,11 +240,11 @@ export function AlertDialogLayer({
             aria-busy={pending || undefined}
             className={cn(
               dialogSurfaceClassName,
-              "momo-alert-dialog-surface flex overflow-hidden",
+              "momo-alert-dialog-surface flex overflow-hidden short-viewport:block short-viewport:overflow-y-auto",
               surfaceClassName,
             )}
           >
-            <div className="momo-alert-dialog-frame flex min-h-0 w-full flex-1 flex-col gap-4">
+            <div className="momo-alert-dialog-frame short-viewport:grid flex min-h-0 w-full flex-1 flex-col gap-4">
               <div className="min-w-0 shrink-0 px-2">
                 <BaseAlertDialog.Title className={cn(contentText.heading, "text-balance")}>
                   {title}
@@ -260,7 +260,7 @@ export function AlertDialogLayer({
               {(children !== undefined && children !== null) || error ? (
                 <div
                   className={cn(
-                    "momo-alert-dialog-body grid min-h-0 min-w-0 flex-1 gap-4 overflow-y-auto px-2 empty:hidden",
+                    "momo-alert-dialog-body grid min-h-0 min-w-0 flex-1 gap-4 overflow-y-auto px-2 empty:hidden short-viewport:overflow-visible",
                     contentClassName,
                   )}
                 >

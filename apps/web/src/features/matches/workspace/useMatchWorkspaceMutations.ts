@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useTransition } from "react";
+import { useLayoutEffect, useRef, useTransition } from "react";
 import type { NavigateOptions } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 
@@ -55,6 +55,13 @@ export function useMatchWorkspaceMutations({
   returnTo,
 }: MatchWorkspaceMutationsParams) {
   const navigate = useNavigate();
+  const activeRef = useRef(true);
+  useLayoutEffect(() => {
+    activeRef.current = true;
+    return () => {
+      activeRef.current = false;
+    };
+  }, []);
   const [isNavigating, startNavigation] = useTransition();
   const navigateAfterSuccess = (destination: string, options?: NavigateOptions) => {
     startNavigation(async () => {
@@ -77,15 +84,17 @@ export function useMatchWorkspaceMutations({
     onSuccess: async (response, request) => {
       if (request.matchDraftId) evictDraftSourceImageBlobs(queryClient, request.matchDraftId);
       await invalidateAfterMatchConfirmed(queryClient);
+      if (!activeRef.current) return;
       showToast({ title: "試合を確定しました", tone: "success" });
       onConfirmSuccess();
       onPersistedSuccess();
       navigateAfterSuccess(matchSuccessDestination(response.matchId, mode, returnTo));
     },
     onError: async (error, request) => {
+      if (!activeRef.current) return;
       if (request.matchDraftId && isConflict(error)) {
         const handled = await onConfirmConflict?.(request.matchDraftId);
-        if (handled) {
+        if (handled || !activeRef.current) {
           return;
         }
       }
@@ -109,11 +118,13 @@ export function useMatchWorkspaceMutations({
     onSuccess: async (response) => {
       assertDefined(matchId, "matchId");
       await invalidateAfterMatchUpdated(queryClient, matchId);
+      if (!activeRef.current) return;
       showToast({ title: "試合を保存しました", tone: "success" });
       onPersistedSuccess();
       navigateAfterSuccess(matchSuccessDestination(response.matchId, mode, returnTo));
     },
     onError: (error) => {
+      if (!activeRef.current) return;
       onError("update", formatApiError(error, "更新に失敗しました"));
     },
   });
@@ -132,6 +143,7 @@ export function useMatchWorkspaceMutations({
     onSuccess: async (_, draftId) => {
       evictDraftSourceImageBlobs(queryClient, draftId);
       await invalidateAfterDraftCancelled(queryClient);
+      if (!activeRef.current) return;
       showToast({ title: "確定前の記録を削除しました", tone: "success" });
       onPersistedSuccess();
       navigateAfterSuccess(
@@ -140,6 +152,7 @@ export function useMatchWorkspaceMutations({
       );
     },
     onError: (error) => {
+      if (!activeRef.current) return;
       onError("cancelDraft", formatApiError(error, "確定前の記録を削除できませんでした"));
     },
   });

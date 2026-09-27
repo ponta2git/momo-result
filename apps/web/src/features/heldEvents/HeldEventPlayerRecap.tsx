@@ -44,10 +44,7 @@ export function HeldEventPlayerRecap({ recaps }: { recaps: PlayerRecap[] }) {
             <div className="mt-2">
               <p className={contentText.supporting}>順位推移</p>
               <div className="mt-1 overflow-x-auto pb-1">
-                <RankTrail
-                  ariaLabel={`${recap.displayName}の順位推移 ${recap.ranks.map((rank) => `${rank}位`).join("、")}`}
-                  ranks={recap.ranks}
-                />
+                <RankTrail ariaLabel={`${recap.displayName}の順位推移`} ranks={recap.ranks} />
               </div>
             </div>
           </section>

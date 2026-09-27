@@ -25,18 +25,23 @@ export function RankBadge({ rank, size = "sm" }: { rank: number; size?: "md" | "
 export function RankTrail({ ariaLabel, ranks }: { ariaLabel: string; ranks: readonly number[] }) {
   const entries = rankTrailEntries(ranks);
   return (
-    <span aria-label={ariaLabel} className="inline-flex max-w-full flex-wrap items-center gap-2">
+    <ol
+      aria-label={ariaLabel}
+      className="inline-flex max-w-full flex-wrap items-center gap-2"
+      // oxlint-disable-next-line jsx-a11y/no-redundant-roles -- Safari needs an explicit list role when Preflight removes markers.
+      role="list"
+    >
       {entries.map((entry) => (
-        <span key={entry.key} className="inline-flex items-center gap-2">
+        <li key={entry.key} className="inline-flex items-center gap-2">
           {entry.first ? null : (
             <span aria-hidden="true" className="text-[var(--color-text-muted)]">
               {" → "}
             </span>
           )}
           <RankBadge rank={entry.rank} />
-        </span>
+        </li>
       ))}
-    </span>
+    </ol>
   );
 }
 

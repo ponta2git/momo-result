@@ -1,35 +1,73 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
-import type { SeriesAnalysisDisplayBundle } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
-import { SeriesAnalysisContent } from "@/features/seriesComparison/page/SeriesAnalysisContent";
 import { SeriesComparisonPage } from "@/features/seriesComparison/page/SeriesComparisonPage";
+import { decodeSeriesAnalysisArtifact } from "@/shared/api/seriesAnalysisArtifactDecoder";
 import { createDeferred } from "@/test/deferred";
 import { setupMsw } from "@/test/msw/lifecycle";
 import {
   makeSeriesAnalysisAggregate,
-  makeSeriesAnalysisMatchContext,
   makeSeriesAnalysisStatus,
 } from "@/test/msw/seriesAnalysisFixtures";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 
-vi.mock("@/features/seriesComparison/page/SeriesAnalysisFlowView", () => ({
-  FlowView: ({ focusedItemIds }: { focusedItemIds: string[] }) => (
-    <div aria-label="artifact由来の可視化" role="region">
-      {focusedItemIds.length === 0 ? "選択中の試合なし" : focusedItemIds.join(",")}
-    </div>
-  ),
-}));
-
 setupMsw();
 
+// This suite observes refresh after an initial result; cold route loading is covered by app routing.
+beforeAll(() =>
+  Promise.all([
+    import("@/features/seriesComparison/page/SeriesAnalysisFlowView"),
+    decodeSeriesAnalysisArtifact("aggregateV4", makeSeriesAnalysisAggregate()),
+  ]),
+);
+
 describe("SeriesComparisonPage manual refresh", () => {
-  it("uses no automatic interval and updates status only after explicit refresh", async () => {
+  it("keeps same-artifact content and its focused disclosure usable during refresh", async () => {
+    const user = userEvent.setup();
+    const aggregateGate = createDeferred();
+    let aggregateRequests = 0;
+    server.use(
+      http.get("/api/analytics/series-comparison/v4/aggregate", async () => {
+        aggregateRequests += 1;
+        if (aggregateRequests > 1) await aggregateGate.promise;
+        return HttpResponse.json(makeSeriesAnalysisAggregate());
+      }),
+    );
+    const queryClient = createTestQueryClient();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/analytics/series?view=flow"]}>
+          <SeriesComparisonPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    const disclosure = await screen.findByRole("button", {
+      name: "4人の累積入賞率の推移の数値を表で見る",
+    });
+    await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+
+    await user.click(screen.getByRole("button", { name: "表示を更新" }));
+    await waitFor(() => expect(aggregateRequests).toBe(2));
+    expect(screen.getByRole("button", { name: "表示を更新中" })).toBeDisabled();
+    expect(disclosure.closest("[inert]")).toBeNull();
+    await user.click(disclosure);
+    expect(disclosure).toHaveAttribute("aria-expanded", "true");
+    expect(disclosure).toHaveFocus();
+    const values = screen.getByRole("table", { name: "4人の累積入賞率の推移の数値" });
+    expect(within(values).getByRole("row", { name: "第12戦 75%" })).toBeInTheDocument();
+
+    aggregateGate.resolve();
+    await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+    expect(disclosure).toHaveFocus();
+    expect(disclosure).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("updates the calculation status and re-enables refresh after the explicit request settles", async () => {
     const user = userEvent.setup();
     const nextStatusResponse = createDeferred();
     let statusRequests = 0;
@@ -61,9 +99,7 @@ describe("SeriesComparisonPage manual refresh", () => {
       </QueryClientProvider>,
     );
 
-    expect(
-      await screen.findByRole("region", { name: "artifact由来の可視化" }, { timeout: 5_000 }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "累積入賞率" })).toBeInTheDocument();
     await waitFor(() => expect(queryClient.isFetching()).toBe(0));
     expect(statusRequests).toBe(1);
 
@@ -74,41 +110,14 @@ describe("SeriesComparisonPage manual refresh", () => {
     nextStatusResponse.resolve();
 
     expect(await screen.findByText("新しい戦績データを計算中です")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "累積入賞率" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "4人の累積入賞率の推移の数値を表で見る" }));
+    expect(
+      within(screen.getByRole("table", { name: "4人の累積入賞率の推移の数値" })).getByRole("row", {
+        name: "第12戦 75%",
+      }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "表示を更新" })).toBeEnabled();
     expect(statusRequests).toBe(2);
-  });
-
-  it("updates visible analysis evidence when the selected match changes", () => {
-    const queryClient = createTestQueryClient();
-    const aggregate = makeSeriesAnalysisAggregate();
-    const bundle: SeriesAnalysisDisplayBundle = {
-      aggregate,
-      kind: "analysis",
-      matchContext: undefined,
-      view: "flow",
-    };
-    const props = {
-      onArtifactExpired: vi.fn(),
-      onClearFocusedMatch: vi.fn(),
-      onFocusMatch: vi.fn(),
-      onViewChange: vi.fn(),
-    };
-    const view = (nextBundle: SeriesAnalysisDisplayBundle) => (
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <SeriesAnalysisContent {...props} bundle={nextBundle} />
-        </MemoryRouter>
-      </QueryClientProvider>
-    );
-    const rendered = render(view(bundle));
-    expect(screen.getByRole("region", { name: "artifact由来の可視化" })).toHaveTextContent(
-      "選択中の試合なし",
-    );
-
-    rendered.rerender(view({ ...bundle, matchContext: makeSeriesAnalysisMatchContext() }));
-
-    expect(screen.getByRole("region", { name: "artifact由来の可視化" })).toHaveTextContent(
-      "match:match-12",
-    );
   });
 });

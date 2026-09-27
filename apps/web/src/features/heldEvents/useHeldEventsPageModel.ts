@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useActionState, useCallback, useEffect, useMemo, useState } from "react";
+import { useActionState, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
@@ -28,6 +28,7 @@ import { toIsoFromLocalDateTime, toLocalDateTimeInputValue } from "@/shared/lib/
 import { parsePositiveIntSearchParam } from "@/shared/lib/searchParams";
 import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 import { currentInternalLocation, withReturnTo } from "@/shared/navigation/returnTo";
+import type { UnsavedChangesGuardModel } from "@/shared/navigation/UnsavedChangesGuard";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 const initialCreateHeldEventState = { version: 0 };
@@ -39,6 +40,7 @@ export type HeldEventsPageModel = {
   deleteDialog: HeldEventDeleteDialogModel;
   feedback: { errorMessage: string };
   list: HeldEventsListModel;
+  navigationGuard: UnsavedChangesGuardModel;
   openCreate: () => void;
   refresh: HeldEventsListRefreshModel;
 };
@@ -89,6 +91,15 @@ export function useHeldEventsPageModel(): HeldEventsPageModel {
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<HeldEventResponse | null>(null);
   const idempotencyKeys = useIdempotencyKeyStore();
+  const mountedRef = useRef(false);
+  const navigationAllowedRef = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const updatePagination = useCallback(
     (next: { page: number; pageSize: number }) => {
@@ -126,16 +137,18 @@ export function useHeldEventsPageModel(): HeldEventsPageModel {
         request,
         (options) => createHeldEvent(request, options),
       );
-      updatePagination({ page: 1, pageSize: paginationSearch.pageSize });
       await syncHeldEventCreatedCache(queryClient, event);
+      // Cache synchronization survives the screen. Navigation and feedback belong to its owner.
+      if (!mountedRef.current) return { version: previous.version + 1 };
       setHeldAtDraft(toLocalDateTimeInputValue());
       setErrorMessage("");
       setCreateOpen(false);
       showToast({ title: "開催を作成しました。", tone: "success" });
+      navigationAllowedRef.current = true;
       navigate(withReturnTo(`/held-events/${encodeURIComponent(event.id)}`, listReturnTo));
       return { version: previous.version + 1 };
     } catch (error) {
-      setErrorMessage(formatApiError(error, "開催の作成に失敗しました"));
+      if (mountedRef.current) setErrorMessage(formatApiError(error, "開催の作成に失敗しました"));
       return previous;
     }
   }, initialCreateHeldEventState);
@@ -152,6 +165,7 @@ export function useHeldEventsPageModel(): HeldEventsPageModel {
     },
     onSuccess: async (_response, event) => {
       await syncHeldEventDeletedCache(queryClient, event.id);
+      if (!mountedRef.current) return;
       setDeleteTarget(null);
       setErrorMessage("");
       showToast({ title: "開催を削除しました。", tone: "success" });
@@ -194,6 +208,7 @@ export function useHeldEventsPageModel(): HeldEventsPageModel {
   const updateCreateOpen = useCallback((open: boolean) => {
     setCreateOpen(open);
     if (open) {
+      navigationAllowedRef.current = false;
       setErrorMessage("");
     }
   }, []);
@@ -273,6 +288,11 @@ export function useHeldEventsPageModel(): HeldEventsPageModel {
     },
     feedback: { errorMessage },
     list,
+    navigationGuard: {
+      dirty: false,
+      navigationAllowedRef,
+      onDiscard: () => setCreateOpen(false),
+    },
     openCreate,
     refresh,
   };

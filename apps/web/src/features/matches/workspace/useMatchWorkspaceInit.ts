@@ -12,9 +12,10 @@ import {
   draftsByKind,
   prefillFromDraftSummary,
 } from "@/features/matches/workspace/workspaceDerivations";
-import type { getMatchDraftDetail } from "@/shared/api/matchDrafts";
+import type { getMatchDraftDetail, MatchDraftSourceImageResponse } from "@/shared/api/matchDrafts";
 import type { getMatch } from "@/shared/api/matches";
 import type { OcrDraftListResponse } from "@/shared/api/ocrDrafts";
+import { isOcrRunning } from "@/shared/domain/draftStatus";
 import { buildMemberAliasDirectory } from "@/shared/domain/memberDirectory";
 import type { MemberAliasRecord } from "@/shared/domain/memberDirectory";
 import type { SlotMap } from "@/shared/domain/slotMap";
@@ -32,6 +33,7 @@ export type MatchWorkspaceInitParams = {
   onInitialize: (values: MatchFormValues, workspaceData: MatchWorkspaceInitialData | null) => void;
   reviewDraftIdList: readonly string[];
   reviewDraftIds: SlotMap<string>;
+  sourceImages: MatchDraftSourceImageResponse[] | undefined;
   useSampleDrafts: boolean;
   emptyFormFactory: () => MatchFormValues;
   nowIsoFactory: () => string;
@@ -41,7 +43,7 @@ export type MatchWorkspaceInitParams = {
  * モード別の初期化（edit: 既存試合 / create: 下書き / review: OCR 結果）を担う Hook。
  *
  * - semantic workspace の切替は owning component の key で分離する
- * - 同じ workspace 内で OCR source IDs が変化したときだけ再初期化する
+ * - 編集を開始できる snapshot で一度だけ初期化し、後続の取得で入力を置き換えない
  * - 初期化結果は呼び出し側の安定した onInitialize command で一括反映する
  * - effect の多重実行は ref で防ぎ、描画に使う初期化状態は state で公開する
  */
@@ -55,15 +57,18 @@ export function useMatchWorkspaceInit({
   onInitialize,
   reviewDraftIdList,
   reviewDraftIds,
+  sourceImages,
   useSampleDrafts,
   emptyFormFactory,
   nowIsoFactory,
-}: MatchWorkspaceInitParams): { isInitialized: boolean } {
-  const initializedSourceKeyRef = useRef<string | null>(null);
-  const [initializedSourceKey, setInitializedSourceKey] = useState<string | null>(null);
-  const sourceKey = JSON.stringify(reviewDraftIdList);
+}: MatchWorkspaceInitParams) {
+  const initializedRef = useRef(false);
+  const [initializedSnapshot, setInitializedSnapshot] = useState<{
+    sourceImages: MatchDraftSourceImageResponse[];
+    revision: string | undefined;
+  } | null>(null);
   useEffect(() => {
-    if (initializedSourceKeyRef.current === sourceKey) {
+    if (initializedRef.current || (mode !== "edit" && isOcrRunning(draftDetail?.status))) {
       return;
     }
 
@@ -72,10 +77,10 @@ export function useMatchWorkspaceInit({
         return;
       }
       onInitialize(matchDetailToMatchForm(matchDetail), null);
-      initializedSourceKeyRef.current = sourceKey;
+      initializedRef.current = true;
       // Publish readiness after the form initialization command has run in this commit.
       // oxlint-disable-next-line react/set-state-in-effect
-      setInitializedSourceKey(sourceKey);
+      setInitializedSnapshot({ sourceImages: [], revision: undefined });
       return;
     }
 
@@ -89,8 +94,11 @@ export function useMatchWorkspaceInit({
         draftDetail ?? undefined,
       );
       onInitialize(base, null);
-      initializedSourceKeyRef.current = sourceKey;
-      setInitializedSourceKey(sourceKey);
+      initializedRef.current = true;
+      setInitializedSnapshot({
+        sourceImages: sourceImages ?? [],
+        revision: draftDetail?.updatedAt,
+      });
       return;
     }
 
@@ -111,8 +119,11 @@ export function useMatchWorkspaceInit({
       });
 
       onInitialize(prepared.values, prepared.initialData);
-      initializedSourceKeyRef.current = sourceKey;
-      setInitializedSourceKey(sourceKey);
+      initializedRef.current = true;
+      setInitializedSnapshot({
+        sourceImages: sourceImages ?? [],
+        revision: draftDetail?.updatedAt,
+      });
     }
   }, [
     draftDetail,
@@ -124,11 +135,11 @@ export function useMatchWorkspaceInit({
     onInitialize,
     reviewDraftIdList,
     reviewDraftIds,
+    sourceImages,
     useSampleDrafts,
     emptyFormFactory,
     nowIsoFactory,
-    sourceKey,
   ]);
 
-  return { isInitialized: initializedSourceKey === sourceKey };
+  return { isInitialized: initializedSnapshot !== null, initializedSnapshot };
 }

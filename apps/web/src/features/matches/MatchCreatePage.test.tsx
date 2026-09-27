@@ -1,6 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import {
@@ -14,8 +14,11 @@ import {
 } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { MastersPage } from "@/features/masters/MastersPage";
 import { MatchCreatePage } from "@/features/matches/MatchCreatePage";
+import { MatchDetailPage } from "@/features/matches/MatchDetailPage";
 import type { AuthMeResponse } from "@/shared/api/auth";
+import type { ConfirmMatchRequest } from "@/shared/api/matches";
 import { authMeQueryKeyFor } from "@/shared/auth/authQueries";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import {
@@ -24,11 +27,13 @@ import {
 } from "@/shared/workflows/matchWorkspaceMasterHandoff";
 import { setDevUser, testDevUserAccountId } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
+import { makeFourPlayerResults, makeMatchDetail } from "@/test/factories";
 import { makeMatchWorkspaceMasterHandoffValues } from "@/test/factories/draftReview";
 import { makeMatchDraftReviewResponse } from "@/test/factories/matchDraftReview";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
+import { selectOption } from "@/test/selectOption";
 
 setupMsw();
 
@@ -41,7 +46,6 @@ function LocationProbe() {
 
 async function waitForMatchCreateReady() {
   expect(await screen.findByRole("button", { name: "開催（必須）を変更" })).toBeEnabled();
-  expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
 }
 
 describe("MatchCreatePage", () => {
@@ -51,6 +55,115 @@ describe("MatchCreatePage", () => {
     queryClient = createTestQueryClient();
     user = userEvent.setup();
   });
+
+  // The connected form, confirmation, and detail flow shares one total budget under coverage.
+  it(
+    "confirms manual input into the returned match and reads its result and note",
+    { timeout: 15_000 },
+    async () => {
+      setDevUser();
+      const noteBody = "カード交換を次戦に生かす";
+      const expectedRequest = {
+        heldEventId: "held-1",
+        matchNoInEvent: 7,
+        gameTitleId: "gt_momotetsu_2",
+        seasonMasterId: "season_current",
+        mapMasterId: "map_east",
+        ownerMemberId: "member_ponta",
+        playedAt: "2026-01-01T00:00:00.000Z",
+        draftIds: {},
+        players: makeFourPlayerResults([
+          { totalAssetsManYen: 1234, revenueManYen: -42 },
+          { totalAssetsManYen: 0, revenueManYen: 0 },
+          { totalAssetsManYen: 0, revenueManYen: 0 },
+          { totalAssetsManYen: 0, revenueManYen: 0 },
+        ]),
+        noteBody,
+      } satisfies ConfirmMatchRequest;
+      const savedMatch = makeMatchDetail({
+        matchId: "match-manual-created",
+        matchNoInEvent: 7,
+        heldAt: expectedRequest.playedAt,
+        playedAt: expectedRequest.playedAt,
+        players: expectedRequest.players,
+        note: { body: noteBody, version: "1" },
+      });
+      const requests: unknown[] = [];
+      const operationKeys: Array<string | null> = [];
+      const reads: string[] = [];
+      server.use(
+        http.post("/api/matches", async ({ request }) => {
+          requests.push(await request.json());
+          operationKeys.push(request.headers.get("Idempotency-Key"));
+          return HttpResponse.json({
+            createdAt: savedMatch.createdAt,
+            heldEventId: savedMatch.heldEventId,
+            matchId: savedMatch.matchId,
+            matchNoInEvent: savedMatch.matchNoInEvent,
+          });
+        }),
+        http.get("/api/matches/:matchId", ({ params }) => {
+          reads.push(String(params["matchId"]));
+          return HttpResponse.json(savedMatch);
+        }),
+      );
+      const router = createMemoryRouter(
+        [
+          { path: "/matches/new", element: <MatchCreatePage /> },
+          { path: "/matches/:matchId", element: <MatchDetailPage /> },
+        ],
+        { initialEntries: ["/matches/new?heldEventId=held-1"] },
+      );
+      render(
+        <QueryClientProvider client={queryClient}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>,
+      );
+      await waitForMatchCreateReady();
+      await selectOption(
+        user,
+        screen.getByRole("combobox", { name: "作品（必須）" }),
+        "gt_momotetsu_2",
+      );
+      await selectOption(
+        user,
+        screen.getByRole("combobox", { name: "シーズン（必須）" }),
+        "season_current",
+      );
+      await selectOption(
+        user,
+        screen.getByRole("combobox", { name: "マップ（必須）" }),
+        "map_east",
+      );
+      for (const [label, value] of [
+        ["試合番号", "7"],
+        ["ぽんた 総資産（万円）", "1234"],
+        ["ぽんた 収益（万円）", "-42"],
+      ] as const) {
+        const input = screen.getByRole("textbox", { name: label });
+        await user.clear(input);
+        await user.type(input, value);
+      }
+      await user.type(screen.getByRole("textbox", { name: "試合メモ（任意）" }), noteBody);
+      await user.click(screen.getByRole("button", { name: "確定前の確認へ進む" }));
+      const confirmation = await screen.findByRole("dialog", { name: "この内容で確定しますか？" });
+      expect(within(confirmation).getByRole("cell", { name: "1,234" })).toBeVisible();
+      await user.click(within(confirmation).getByRole("button", { name: "確定する" }));
+
+      expect(await screen.findByRole("heading", { name: "第7試合の結果" })).toBeVisible();
+      expect(router.state.location.pathname).toBe("/matches/match-manual-created");
+      expect(requests).toEqual([expectedRequest]);
+      expect(operationKeys[0]).toBeTruthy();
+      expect(new Set(reads)).toEqual(new Set(["match-manual-created"]));
+      expect(screen.getByText("カード交換を次戦に生かす")).toBeVisible();
+      const results = screen.getByRole("list", { name: "試合の順位と成績" });
+      const ponta = within(results)
+        .getAllByRole("listitem")
+        .find((row) => within(row).queryByRole("heading", { name: "ぽんた" }));
+      expect(ponta).toHaveTextContent("1234万円");
+      expect(ponta).toHaveTextContent("-42万円");
+    },
+  );
 
   it("initializes from the latest picker page without fetching a second directory", async () => {
     setDevUser();
@@ -96,46 +209,50 @@ describe("MatchCreatePage", () => {
     expect(requests[0]?.has("limit")).toBe(false);
   });
 
-  it("opens master management from manual creation with return handoff", async () => {
+  it("preserves notes and unfinished numbers through master handoff and still protects unsaved input", async () => {
     setDevUser();
-
+    const router = createMemoryRouter(
+      [
+        { path: "/matches/new", element: <MatchCreatePage /> },
+        { path: "/admin/masters", element: <MastersPage /> },
+        { path: "/outside", element: <p>別の作業</p> },
+      ],
+      { initialEntries: ["/matches/new"] },
+    );
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/matches/new"]}>
-          <Routes>
-            <Route
-              path="/matches/new"
-              element={
-                <>
-                  <LocationProbe />
-                  <MatchCreatePage />
-                </>
-              }
-            />
-            <Route
-              path="/admin/masters"
-              element={
-                <>
-                  <LocationProbe />
-                  <p>masters</p>
-                </>
-              }
-            />
-          </Routes>
-        </MemoryRouter>
+        <RouterProvider router={router} />
       </QueryClientProvider>,
     );
-
     await waitForMatchCreateReady();
+    await user.type(
+      screen.getByRole("textbox", { name: "試合メモ（任意）" }),
+      "カード交換を後で確認",
+    );
+    const revenue = screen.getByRole("textbox", { name: "ぽんた 収益（万円）" });
+    await user.clear(revenue);
+    await user.type(revenue, "-");
     await user.click(screen.getByRole("button", { name: "設定管理へ" }));
-
-    await waitFor(() =>
-      expect(screen.getByLabelText("current location")).toHaveTextContent("/admin/masters"),
+    const returnAction = await screen.findByRole("button", { name: "元の入力画面へ戻る" });
+    expect(router.state.location.pathname).toBe("/admin/masters");
+    const returnParams = new URLSearchParams(router.state.location.search);
+    expect(returnParams.get("returnTo")).toBe("/matches/new");
+    expect(returnParams.get("handoffId")).toBeTruthy();
+    await user.click(returnAction);
+    await waitForMatchCreateReady();
+    expect(screen.getByRole("textbox", { name: "試合メモ（任意）" })).toHaveValue(
+      "カード交換を後で確認",
     );
-    expect(screen.getByLabelText("current location")).toHaveTextContent(
-      "returnTo=%2Fmatches%2Fnew",
-    );
-    expect(screen.getByLabelText("current location")).toHaveTextContent("handoffId=");
+    expect(screen.getByRole("textbox", { name: "ぽんた 収益（万円）" })).toHaveValue("-");
+    expect(screen.queryByRole("button", { name: "一時保存を復元" })).not.toBeInTheDocument();
+    act(() => {
+      void router.navigate("/outside");
+    });
+    expect(
+      await screen.findByRole("alertdialog", { name: "未保存の変更を破棄しますか？" }),
+    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "キャンセル" }));
+    expect(router.state.location.pathname).toBe("/matches/new");
   });
 
   it("keeps the master handoff pending until the destination loader finishes", async () => {
@@ -257,25 +374,28 @@ describe("MatchCreatePage", () => {
 
   it("preserves user input when only preferred-event and return context change", async () => {
     setDevUser();
-
+    const router = createMemoryRouter(
+      [
+        {
+          path: "/matches/new",
+          element: (
+            <>
+              <Link to="/matches/new?heldEventId=held-requested&returnTo=%2Fmatches">
+                作成コンテキストを更新
+              </Link>
+              <Link to="/matches/new?matchDraftId=another-draft">別の下書きを入力</Link>
+              <LocationProbe />
+              <MatchCreatePage />
+            </>
+          ),
+        },
+        { path: "/matches", element: <p>試合一覧</p> },
+      ],
+      { initialEntries: ["/matches/new"] },
+    );
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/matches/new"]}>
-          <Link to="/matches/new?heldEventId=held-requested&returnTo=%2Fmatches">
-            作成コンテキストを更新
-          </Link>
-          <Routes>
-            <Route
-              path="/matches/new"
-              element={
-                <>
-                  <LocationProbe />
-                  <MatchCreatePage />
-                </>
-              }
-            />
-          </Routes>
-        </MemoryRouter>
+        <RouterProvider router={router} />
       </QueryClientProvider>,
     );
 
@@ -292,6 +412,19 @@ describe("MatchCreatePage", () => {
       ),
     );
     expect(screen.getByLabelText("試合番号")).toHaveValue("9");
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("link", { name: "入力をやめる" }));
+    expect(
+      await screen.findByRole("alertdialog", { name: "未保存の変更を破棄しますか？" }),
+    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "キャンセル" }));
+    await user.click(screen.getByRole("link", { name: "別の下書きを入力" }));
+    expect(
+      await screen.findByRole("alertdialog", { name: "未保存の変更を破棄しますか？" }),
+    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "破棄して移動" }));
+    await waitFor(() => expect(screen.getByLabelText("試合番号")).toHaveValue("3"));
   });
 
   it("keys local form state by authenticated principal identity", async () => {

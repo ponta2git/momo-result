@@ -61,7 +61,7 @@ export function ExportCandidateSelect({
 
   if (view.kind === "loading") {
     return (
-      <div aria-busy="true" aria-label={`${labelForScope(scope)}候補を読み込み中`} className="grid">
+      <div aria-label={`${labelForScope(scope)}候補を読み込み中`} className="grid" role="status">
         <div className="grid gap-2">
           <p className={fieldText.label}>{labelForScope(scope)}</p>
           <Skeleton className="h-11 w-full" />

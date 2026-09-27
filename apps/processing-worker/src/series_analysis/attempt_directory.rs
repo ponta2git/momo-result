@@ -1,7 +1,7 @@
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
 };
 
 use crate::process::available_filesystem_bytes;
@@ -53,6 +53,7 @@ pub(super) async fn cleanup_stale_attempt_directories(
         &active_attempts,
         minimum_age,
         config.lease_duration,
+        SystemTime::now(),
     )
     .await
 }
@@ -62,6 +63,7 @@ async fn cleanup_attempt_directories(
     active_attempts: &HashSet<String>,
     minimum_age: Duration,
     active_recheck_interval: Duration,
+    wall_now: SystemTime,
 ) -> Result<Option<Instant>, ConsumerError> {
     let scan_started = Instant::now();
     let mut next_cleanup_at = None;
@@ -85,7 +87,7 @@ async fn cleanup_attempt_directories(
             continue;
         }
         let modified = metadata.modified()?;
-        let remaining = match modified.elapsed() {
+        let remaining = match wall_now.duration_since(modified) {
             Ok(age) if age >= minimum_age => {
                 tokio::fs::remove_dir_all(entry.path()).await?;
                 continue;
@@ -150,29 +152,31 @@ mod tests {
         tokio::fs::create_dir(&stale).await?;
         tokio::fs::create_dir(&active).await?;
         let active_attempts = HashSet::from([String::from("active")]);
-        let minimum_age = Duration::from_millis(30);
+        let minimum_age = Duration::from_mins(2);
+        let modified = tokio::fs::metadata(&stale).await?.modified()?;
+        let before_scan = Instant::now();
 
         let due_at = cleanup_attempt_directories(
             root.path(),
             &active_attempts,
             minimum_age,
-            Duration::from_millis(30),
+            Duration::from_hours(1),
+            modified,
         )
         .await?
         .ok_or("young stale attempt did not schedule its one-shot recovery")?;
         assert!(stale.is_dir());
         assert!(active.is_dir());
+        assert!(due_at >= before_scan + minimum_age);
+        assert!(due_at <= Instant::now() + minimum_age);
 
-        tokio::time::sleep_until(
-            tokio::time::Instant::from_std(due_at) + Duration::from_millis(20),
-        )
-        .await;
         assert!(
             cleanup_attempt_directories(
                 root.path(),
                 &active_attempts,
                 minimum_age,
-                Duration::from_millis(30),
+                Duration::from_hours(1),
+                modified + minimum_age,
             )
             .await?
             .is_some()
@@ -189,24 +193,28 @@ mod tests {
         let attempt = root.path().join("analysis-attempt-active-then-stale");
         tokio::fs::create_dir(&attempt).await?;
         let active_attempts = HashSet::from([String::from("active-then-stale")]);
+        let now = tokio::fs::metadata(&attempt).await?.modified()?;
+        let before_scan = Instant::now();
 
         let recheck_at = cleanup_attempt_directories(
             root.path(),
             &active_attempts,
             Duration::ZERO,
-            Duration::from_millis(10),
+            Duration::from_mins(1),
+            now,
         )
         .await?
         .ok_or("active attempt did not schedule a bounded lease recheck")?;
         assert!(attempt.is_dir());
+        assert!(recheck_at >= before_scan + Duration::from_mins(1));
 
-        tokio::time::sleep_until(tokio::time::Instant::from_std(recheck_at)).await;
         assert_eq!(
             cleanup_attempt_directories(
                 root.path(),
                 &HashSet::new(),
                 Duration::ZERO,
-                Duration::from_millis(10),
+                Duration::from_mins(1),
+                now + Duration::from_mins(1),
             )
             .await?,
             None

@@ -83,9 +83,6 @@ object PostgresMatchList extends PostgresMatchListSupport:
           val countQuery =
             fr"SELECT COUNT(*)::int FROM (" ++ selectQuery ++ fr") AS count_source"
           for
-            // COUNT/page/rank decoration are separate bounded statements. Pin them to one MVCC
-            // snapshot so first-page metadata and rows cannot skew under concurrent writes.
-            _ <- sql"SET TRANSACTION ISOLATION LEVEL REPEATABLE READ".update.run.void
             total <- filter.page.cursor.fold(countQuery.query[Int].unique)(cursor =>
               cursor.totalItems.pure[ConnectionIO]
             )
@@ -102,9 +99,11 @@ object PostgresMatchList extends PostgresMatchListSupport:
             fetched <-
               if targetSize == 0 then List.empty[CursorRow].pure[ConnectionIO]
               else
-                (withLabels(
-                  ordered
-                ) ++ cursorOrderBy(filter.sort, direction)).query[CursorRow].to[List]
+                PostgresReadBudget.guardedRows[CursorRow](
+                  withLabels(ordered) ++ cursorOrderBy(filter.sort, direction),
+                  PostgresReadBudget.HeldEventRecords,
+                  "Match list",
+                )
             pageRows = direction match
               case MatchListReadModel.CursorDirection.After => fetched
               case MatchListReadModel.CursorDirection.Before => fetched.reverse
@@ -149,10 +148,14 @@ object PostgresMatchList extends PostgresMatchListSupport:
         fr"d.status <> ${MatchDraftStatus.Cancelled}",
         fr"d.status <> ${MatchDraftStatus.Confirmed}",
       )
-      (withLabels(selected) ++ fr"""
+      PostgresReadBudget.guardedRows[(Row, MatchLabels)](
+        withLabels(selected) ++ fr"""
         ORDER BY sortable.match_no_in_event ASC NULLS LAST, sortable.updated_at DESC,
                  sortable.kind ASC, sortable.id ASC
-      """).query[(Row, MatchLabels)].to[List].map(_.map { case (row, labels) =>
+      """,
+        PostgresReadBudget.HeldEventRecords,
+        "Held-event drafts"
+      ).map(_.map { case (row, labels) =>
         toItem(row, labels, _ => Nil)
       })
 
@@ -198,5 +201,12 @@ final class PostgresMatchListReadModel[F[_]: MonadCancelThrow](transactor: Trans
   private val delegate: MatchListReadModel[F] = MatchListReadModel
     .fromAlg(PostgresMatchList.alg, transactor.trans)
 
-  export delegate.*
+  export delegate.{listDraftsByHeldEvent, summarize}
+
+  override def list(
+      filter: MatchListReadModel.Filter
+  ): F[MatchListReadModel.CursorPage[MatchListItem]] =
+    // The read-only facade owns the snapshot; the algebra remains safe to compose into writes.
+    (sql"SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY".update.run *>
+      PostgresMatchList.alg.list(filter)).transact(transactor)
 end PostgresMatchListReadModel

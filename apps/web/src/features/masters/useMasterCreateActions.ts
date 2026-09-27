@@ -90,58 +90,61 @@ export function useMasterCreateActions(input: {
     }
   }, initialCreateState);
 
-  const [mapCreateState, mapCreateAction, mapCreatePending] = useActionState<CreateState, FormData>(
-    async (prev, formData) => {
-      input.onFeedback("map", input.selectedGameTitleId, "");
-      const name = normalizeName(String(formData.get("name") ?? ""));
-      if (!isNameValid(name) || !input.selectedGameTitleId) {
-        return { ...prev, error: "マップ名を入力してください" };
-      }
-      const gameTitleId = input.selectedGameTitleId;
-      const intent = { gameTitleId, name };
-      const attempt = input.idempotencyKeys.begin("masters.createMapMaster", intent);
-      const draftId = createMapMasterId(name, attempt.key);
-      const createdAt = input.nowIsoFactory();
-      input.addOptimisticMapMaster({
+  const [mapCreateStates, mapCreateAction, mapCreatePending] = useActionState<
+    Record<string, CreateState>,
+    FormData
+  >(async (states, formData) => {
+    const scope = input.selectedGameTitleId;
+    const prev = states[scope] ?? initialCreateState;
+    input.onFeedback("map", input.selectedGameTitleId, "");
+    const name = normalizeName(String(formData.get("name") ?? ""));
+    if (!isNameValid(name) || !input.selectedGameTitleId) {
+      return { ...states, [scope]: { ...prev, error: "マップ名を入力してください" } };
+    }
+    const gameTitleId = input.selectedGameTitleId;
+    const intent = { gameTitleId, name };
+    const attempt = input.idempotencyKeys.begin("masters.createMapMaster", intent);
+    const draftId = createMapMasterId(name, attempt.key);
+    const createdAt = input.nowIsoFactory();
+    input.addOptimisticMapMaster({
+      id: draftId,
+      gameTitleId,
+      name,
+      displayOrder: input.selectedMapMasterCount,
+      createdAt,
+      pending: true,
+    });
+    try {
+      const request = {
         id: draftId,
         gameTitleId,
         name,
-        displayOrder: input.selectedMapMasterCount,
-        createdAt,
-        pending: true,
-      });
-      try {
-        const request = {
-          id: draftId,
-          gameTitleId,
-          name,
-        };
-        const created = await runIdempotentOperationAttempt(attempt, (options) =>
-          createMapMaster(request, options),
-        );
-        await cacheCreatedMaster(
-          input.queryClient,
-          masterKeys.mapMasters.list(gameTitleId),
-          created,
-        );
-        await invalidateMasterResourceCaches(input.queryClient, "map-masters");
-        input.onFeedback("map", gameTitleId, "マップを追加しました");
-        return { error: undefined, version: prev.version + 1 };
-      } catch (error) {
-        return { ...prev, error: formatApiError(error, "マップの追加に失敗しました") };
-      }
-    },
-    initialCreateState,
-  );
+      };
+      const created = await runIdempotentOperationAttempt(attempt, (options) =>
+        createMapMaster(request, options),
+      );
+      await cacheCreatedMaster(input.queryClient, masterKeys.mapMasters.list(gameTitleId), created);
+      await invalidateMasterResourceCaches(input.queryClient, "map-masters");
+      input.onFeedback("map", gameTitleId, "マップを追加しました");
+      return { ...states, [scope]: { version: prev.version + 1 } };
+    } catch (error) {
+      return {
+        ...states,
+        [scope]: { ...prev, error: formatApiError(error, "マップの追加に失敗しました") },
+      };
+    }
+  }, {});
 
-  const [seasonCreateState, seasonCreateAction, seasonCreatePending] = useActionState<
-    CreateState,
+  const [seasonCreateStates, seasonCreateAction, seasonCreatePending] = useActionState<
+    Record<string, CreateState>,
     FormData
-  >(async (prev, formData) => {
+  >(async (states, formData) => {
+    const scope = input.selectedGameTitleId;
+    const prev = states[scope] ?? initialCreateState;
     input.onFeedback("season", input.selectedGameTitleId, "");
     const name = normalizeName(String(formData.get("name") ?? ""));
     if (!isNameValid(name) || !input.selectedGameTitleId) {
-      return { ...prev, error: "シーズン名を入力してください" };
+      return { ...states, [scope]: { ...prev, error: "シーズン名を入力してください" } };
     }
     const gameTitleId = input.selectedGameTitleId;
     const intent = { gameTitleId, name };
@@ -172,11 +175,14 @@ export function useMasterCreateActions(input: {
       );
       await invalidateMasterResourceCaches(input.queryClient, "season-masters");
       input.onFeedback("season", gameTitleId, "シーズンを追加しました");
-      return { error: undefined, version: prev.version + 1 };
+      return { ...states, [scope]: { version: prev.version + 1 } };
     } catch (error) {
-      return { ...prev, error: formatApiError(error, "シーズンの追加に失敗しました") };
+      return {
+        ...states,
+        [scope]: { ...prev, error: formatApiError(error, "シーズンの追加に失敗しました") },
+      };
     }
-  }, initialCreateState);
+  }, {});
 
   const [aliasCreateState, aliasCreateAction, aliasCreatePending] = useActionState<
     CreateState,
@@ -214,9 +220,9 @@ export function useMasterCreateActions(input: {
     gameTitleCreateState,
     mapCreateAction,
     mapCreatePending,
-    mapCreateState,
+    mapCreateState: mapCreateStates[input.selectedGameTitleId] ?? initialCreateState,
     seasonCreateAction,
     seasonCreatePending,
-    seasonCreateState,
+    seasonCreateState: seasonCreateStates[input.selectedGameTitleId] ?? initialCreateState,
   };
 }

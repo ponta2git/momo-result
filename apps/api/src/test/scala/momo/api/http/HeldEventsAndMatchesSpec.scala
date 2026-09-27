@@ -275,7 +275,9 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
         assertEquals(jsonField[String](body, "matchDraftId"), draftId)
   }
 
-  app.test("PATCH /api/match-drafts/:draftId allows a different account to update the draft") {
+  app.test(
+    "PATCH /api/match-drafts/:draftId preserves the draft when a different account updates it"
+  ) {
     httpApp =>
       for
         draftId <- createMatchDraft(httpApp)
@@ -284,15 +286,23 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
           Json.obj("status" -> Json.fromString("needs_review")),
           accountId = "account_eu",
         ))
-        body <- res.as[Json]
+        _ <- assertProblem(res, Status.Forbidden, "FORBIDDEN", "creator")
+        unchanged <- httpApp.run(readGet(Uri.unsafeFromString(s"/api/match-drafts/$draftId")))
+        unchangedBody <- unchanged.as[Json]
+        owned <- httpApp.run(writePatch(
+          Uri.unsafeFromString(s"/api/match-drafts/$draftId"),
+          Json.obj("status" -> Json.fromString("needs_review")),
+        ))
+        body <- owned.as[Json]
       yield
-        assertEquals(res.status, Status.Ok)
+        assertEquals(jsonField[String](unchangedBody, "status"), "draft_ready")
+        assertEquals(owned.status, Status.Ok)
         assertEquals(jsonField[String](body, "matchDraftId"), draftId)
         assertEquals(jsonField[String](body, "status"), "needs_review")
   }
 
   app
-    .test("POST /api/match-drafts/:draftId/cancel allows a different account to cancel the draft") {
+    .test("POST /api/match-drafts/:draftId/cancel only allows the draft creator") {
       httpApp =>
         for
           draftId <- createMatchDraft(httpApp)
@@ -301,9 +311,17 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
             Uri.unsafeFromString(s"/api/match-drafts/$draftId/cancel"),
             accountId = "account_eu",
           ))
-          body <- res.as[Json]
+          _ <- assertProblem(res, Status.Forbidden, "FORBIDDEN", "creator")
+          unchanged <- httpApp.run(readGet(Uri.unsafeFromString(s"/api/match-drafts/$draftId")))
+          unchangedBody <- unchanged.as[Json]
+          owned <- httpApp.run(writeRequest(
+            Method.POST,
+            Uri.unsafeFromString(s"/api/match-drafts/$draftId/cancel"),
+          ))
+          body <- owned.as[Json]
         yield
-          assertEquals(res.status, Status.Ok)
+          assertEquals(jsonField[String](unchangedBody, "status"), "draft_ready")
+          assertEquals(owned.status, Status.Ok)
           assertEquals(jsonField[String](body, "matchDraftId"), draftId)
           assertEquals(jsonField[String](body, "status"), "cancelled")
     }

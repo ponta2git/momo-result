@@ -31,24 +31,30 @@ final class OAuthStateCodec[F[_]: Sync: SecureRandom](
       nonce <- SecureTokenGenerator.token[F](24)
       marker = if silent then silentMarker else interactiveMarker
       redirect = redirectPath.flatMap(RedirectPath.sanitize)
+        .filter(path =>
+          path.getBytes(StandardCharsets.UTF_8).length <= OAuthStateCodec.MaxRedirectPathBytes
+        )
         .map(path => Base64Url.encode(path.getBytes(StandardCharsets.UTF_8))).getOrElse("")
       payload =
         s"$nonce:${current.plusSeconds(ttl.toSeconds).getEpochSecond}:$marker:$redirect"
       sig <- sign(payload)
     yield s"${Base64Url.encode(payload.getBytes(StandardCharsets.UTF_8))}$separator$sig"
 
-  def validate(value: String): F[Option[Payload]] = value.split("\\.", 2).toList match
-    case payloadEncoded :: signature :: Nil =>
-      val decoded = Base64Url.decode(payloadEncoded)
-      decoded match
-        case None => Sync[F].pure(None)
-        case Some(payloadBytes) =>
-          val payload = String(payloadBytes, StandardCharsets.UTF_8)
-          payload.split(":", 4).toList match
-            case _ :: expires :: marker :: redirect :: Nil =>
-              validatePayload(payload, signature, expires, marker, decodeRedirectPath(redirect))
-            case _ => Sync[F].pure(None)
-    case _ => Sync[F].pure(None)
+  def validate(value: String): F[Option[Payload]] =
+    if value.length > OAuthStateCodec.MaxStateLength then Sync[F].pure(None)
+    else
+      value.split("\\.", 2).toList match
+        case payloadEncoded :: signature :: Nil if signature.length == 43 =>
+          val decoded = Base64Url.decode(payloadEncoded)
+          decoded match
+            case None => Sync[F].pure(None)
+            case Some(payloadBytes) =>
+              val payload = String(payloadBytes, StandardCharsets.UTF_8)
+              payload.split(":", 4).toList match
+                case _ :: expires :: marker :: redirect :: Nil =>
+                  validatePayload(payload, signature, expires, marker, decodeRedirectPath(redirect))
+                case _ => Sync[F].pure(None)
+        case _ => Sync[F].pure(None)
 
   private def validatePayload(
       payload: String,
@@ -78,3 +84,7 @@ final class OAuthStateCodec[F[_]: Sync: SecureRandom](
     mac.init(SecretKeySpec(signingKey.getBytes(StandardCharsets.UTF_8), "HmacSHA256"))
     Base64Url.encode(mac.doFinal(payload.getBytes(StandardCharsets.UTF_8)))
   }
+
+object OAuthStateCodec:
+  private val MaxRedirectPathBytes = 1024
+  private val MaxStateLength = 2048

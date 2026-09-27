@@ -27,7 +27,6 @@ export function RankSignalValidationMethod({ payload }: { payload: RankSignalPay
     <Disclosure
       ariaLabel="別開催テストと採用基準"
       panelPadding="md"
-      presentation="inset"
       summary={
         <span className="flex flex-col gap-0.5">
           <span>検証方法と採用基準</span>
@@ -253,7 +252,6 @@ function FoldDetails({ candidate }: { candidate: RankSignalCandidate }) {
     <Disclosure
       ariaLabel={`${rankSignalLabel(candidate.signal)}の開催別の数値`}
       panelPadding="sm"
-      presentation="inset"
       summary={
         <span className="flex items-baseline justify-between gap-3">
           <span>開催別の数値</span>

@@ -5,6 +5,7 @@ import { cn } from "@/shared/ui/cn";
 import { buildFieldDescribedBy } from "@/shared/ui/forms/Field";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { useSurfaceFeedback } from "@/shared/ui/motion/useSurfaceFeedback";
+import { fieldText } from "@/shared/ui/typography";
 
 export type CheckboxFieldProps = {
   "aria-describedby"?: string | undefined;
@@ -65,7 +66,11 @@ export function CheckboxField({
           />
           <span className="min-w-0 text-pretty">
             {label}
-            {required ? <span className="ml-1 text-[var(--color-danger)]">*</span> : null}
+            {required ? (
+              <span aria-hidden="true" className="ml-1 text-[var(--color-danger)]">
+                *
+              </span>
+            ) : null}
           </span>
         </label>
         {status ? (
@@ -77,10 +82,7 @@ export function CheckboxField({
       <div className="mt-1 flex min-w-0 flex-col gap-1 pl-8 empty:hidden">
         {description ? (
           <p
-            className={cn(
-              "momo-copy text-xs text-pretty text-[var(--color-text-secondary)]",
-              readableTextWidthClass,
-            )}
+            className={cn(fieldText.description, "text-pretty", readableTextWidthClass)}
             id={descriptionId}
           >
             {description}
@@ -88,10 +90,7 @@ export function CheckboxField({
         ) : null}
         {error ? (
           <p
-            className={cn(
-              "momo-copy text-xs text-pretty text-[var(--color-danger)]",
-              readableTextWidthClass,
-            )}
+            className={cn(fieldText.error, "text-pretty", readableTextWidthClass)}
             id={errorId}
             role="alert"
           >

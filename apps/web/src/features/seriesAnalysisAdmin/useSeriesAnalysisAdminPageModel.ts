@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { runIdempotentMutation } from "@/shared/api/idempotency";
@@ -15,6 +15,9 @@ import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 type AcceptanceMessage = { detail: string; title: string };
+type RecalculationTarget =
+  | { kind: "all" }
+  | { kind: "title"; gameTitleId: string; gameTitleName: string };
 
 /**
  * Owns the route selection, server resource lifecycle, and recalculation commands for the page.
@@ -26,18 +29,21 @@ export function useSeriesAnalysisAdminPageModel() {
   const [searchParams, setSearchParams] = useSearchParams();
   const gameTitleId = searchParams.get("gameTitleId")?.trim() || undefined;
   const [acceptanceMessage, setAcceptanceMessage] = useState<AcceptanceMessage | undefined>();
+  const commandPending = useRef(false);
   const overviewQuery = useQuery(seriesAnalysisAdminOverviewQueryOptions(gameTitleId));
   const sourceOverview = overviewQuery.data;
   const canonicalGameTitleId = sourceOverview?.selectedTitle?.gameTitleId;
-  const canonicalKey = seriesAnalysisAdminOverviewQueryOptions(canonicalGameTitleId).queryKey;
-  const canonicalState = queryClient.getQueryState(canonicalKey);
+  const canonicalOverviewQuery = useQuery({
+    ...seriesAnalysisAdminOverviewQueryOptions(canonicalGameTitleId, false),
+    placeholderData: () => undefined,
+  });
   // The default-title alias can outlive a manual refresh of the canonical query.
   // Keep its older history from flashing on screen or overwriting that newer cache.
   const hasNewerCanonical =
     !gameTitleId &&
     canonicalGameTitleId &&
-    (canonicalState?.dataUpdatedAt ?? 0) > overviewQuery.dataUpdatedAt;
-  const overview = hasNewerCanonical ? queryClient.getQueryData(canonicalKey) : sourceOverview;
+    canonicalOverviewQuery.dataUpdatedAt > overviewQuery.dataUpdatedAt;
+  const overview = hasNewerCanonical ? canonicalOverviewQuery.data : sourceOverview;
 
   useEffect(() => {
     if (
@@ -72,52 +78,55 @@ export function useSeriesAnalysisAdminPageModel() {
     ]);
   };
 
-  const titleMutation = useMutation({
-    mutationFn: (targetGameTitleId: string) =>
-      runIdempotentMutation(
-        idempotencyKeys,
-        "seriesAnalysis.recalculateTitle",
-        { gameTitleId: targetGameTitleId },
-        (options) => requestSeriesAnalysisRecalculation(targetGameTitleId, options),
-      ),
+  const recalculation = useMutation({
+    mutationFn: (target: RecalculationTarget) =>
+      target.kind === "title"
+        ? runIdempotentMutation(
+            idempotencyKeys,
+            "seriesAnalysis.recalculateTitle",
+            { gameTitleId: target.gameTitleId },
+            (options) => requestSeriesAnalysisRecalculation(target.gameTitleId, options),
+          )
+        : runIdempotentMutation(
+            idempotencyKeys,
+            "seriesAnalysis.recalculateAll",
+            { confirmation: "all_titles" },
+            requestAllSeriesAnalysisRecalculation,
+          ),
     onMutate: () => setAcceptanceMessage(undefined),
-    onSuccess: async (response) => {
+    onSuccess: async (response, target) => {
+      setAcceptanceMessage(
+        target.kind === "all"
+          ? {
+              detail: "作品ごとの処理として順番に実行します。",
+              title: `${response.targetCount}作品の再計算を受け付けました`,
+            }
+          : {
+              detail: "受付後の状態は、この画面の実行状況と処理履歴へ反映されます。",
+              title:
+                response.target?.requestDisposition === "forced_run_reserved"
+                  ? `${target.gameTitleName}は現在の計算後に再計算します`
+                  : `${target.gameTitleName}の再計算を受け付けました`,
+            },
+      );
       await invalidate();
-      setAcceptanceMessage({
-        detail: "受付後の状態は、この画面の実行状況と処理履歴へ反映されます。",
-        title:
-          response.target?.requestDisposition === "forced_run_reserved"
-            ? "現在の計算後に再計算します"
-            : "再計算を受け付けました",
-      });
+    },
+    onSettled: () => {
+      commandPending.current = false;
     },
   });
 
-  const allMutation = useMutation({
-    mutationFn: () =>
-      runIdempotentMutation(
-        idempotencyKeys,
-        "seriesAnalysis.recalculateAll",
-        { confirmation: "all_titles" },
-        requestAllSeriesAnalysisRecalculation,
-      ),
-    onMutate: () => setAcceptanceMessage(undefined),
-    onSuccess: async (response) => {
-      await invalidate();
-      setAcceptanceMessage({
-        detail: "作品ごとの処理として順番に実行します。",
-        title: `${response.targetCount}作品の再計算を受け付けました`,
-      });
-    },
-  });
-
-  const mutationError = titleMutation.error ?? allMutation.error;
   const selectedGameTitleId = gameTitleId ?? canonicalGameTitleId;
   const selectedTitleCandidate = overview?.selectedTitle;
   const selectedTitle =
     selectedTitleCandidate && selectedTitleCandidate.gameTitleId === selectedGameTitleId
       ? selectedTitleCandidate
       : null;
+  const mutationError =
+    recalculation.variables?.kind === "title" &&
+    recalculation.variables.gameTitleId !== selectedGameTitleId
+      ? null
+      : recalculation.error;
 
   const resourceErrorTitle = useRetryNotice(
     shouldShowQueryError(overviewQuery)
@@ -136,15 +145,24 @@ export function useSeriesAnalysisAdminPageModel() {
 
   return {
     actions: {
-      recalculateAll: () => allMutation.mutateAsync(),
+      recalculateAll: async () => {
+        if (commandPending.current || !overview?.titleOptions.length) return;
+        commandPending.current = true;
+        await recalculation.mutateAsync({ kind: "all" });
+      },
       recalculateTitle: () => {
-        const targetGameTitleId = selectedGameTitleId;
-        if (!targetGameTitleId) return Promise.resolve(undefined);
-        return titleMutation.mutateAsync(targetGameTitleId);
+        if (commandPending.current || !selectedTitle || selectedTitle.pendingManualRun) return;
+        commandPending.current = true;
+        recalculation.mutate({
+          kind: "title",
+          gameTitleId: selectedTitle.gameTitleId,
+          gameTitleName: selectedTitle.gameTitleName,
+        });
       },
       refresh: () => void overviewQuery.refetch(),
       selectTitle: (value: string) => {
         setAcceptanceMessage(undefined);
+        if (!commandPending.current) recalculation.reset();
         const next = new URLSearchParams(searchParams);
         if (value) next.set("gameTitleId", value);
         else next.delete("gameTitleId");
@@ -161,15 +179,21 @@ export function useSeriesAnalysisAdminPageModel() {
         : undefined,
     },
     recalculation: {
-      allPending: allMutation.isPending,
-      titlePending: titleMutation.isPending,
+      pending: recalculation.isPending,
+      allPending: recalculation.isPending && recalculation.variables.kind === "all",
+      titlePending: recalculation.isPending && recalculation.variables.kind === "title",
+      titlePendingLabel:
+        recalculation.variables?.kind === "title"
+          ? `${recalculation.variables.gameTitleName}を受け付け中`
+          : "受け付け中",
+      titleUnavailable: !selectedTitle,
       titleReserved: Boolean(selectedTitle?.pendingManualRun),
     },
     resource: {
       data: overview,
       loading: isInitialQueryLoading(overviewQuery) && !resourceErrorTitle,
-      refreshing: overviewQuery.isFetching && !titleMutation.isPending && !allMutation.isPending,
-      refreshDisabled: overviewQuery.isFetching || titleMutation.isPending || allMutation.isPending,
+      refreshing: overviewQuery.isFetching && !recalculation.isPending,
+      refreshDisabled: overviewQuery.isFetching || recalculation.isPending,
     },
     selection: {
       gameTitleId: selectedGameTitleId,

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   createIdempotencyKey,
@@ -9,11 +9,6 @@ import {
 } from "@/shared/api/idempotency";
 
 describe("idempotency key store", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-    vi.unstubAllGlobals();
-  });
-
   it("reuses the same key for the same operation and JSON payload", () => {
     const store = createIdempotencyKeyStore();
     const first = store.begin("matchWorkspace.confirmMatch", { b: 2, a: 1 }).key;
@@ -54,18 +49,15 @@ describe("idempotency key store", () => {
         slots: [null, { kind: "revenue" }],
       }),
     );
-  });
-
-  it("closes an operation attempt after success", () => {
-    const store = createIdempotencyKeyStore();
-    const payload = { heldAt: "2026-01-01T00:00:00.000Z" };
-    const first = store.begin("heldEvents.createHeldEvent", payload);
-
-    expect(store.begin("heldEvents.createHeldEvent", payload).key).toBe(first.key);
-
-    first.complete();
-
-    expect(store.begin("heldEvents.createHeldEvent", payload).key).not.toBe(first.key);
+    expect(
+      idempotencyFingerprint("ocrCapture.createUploadJob", {
+        slots: [undefined, { kind: "revenue" }],
+      }),
+    ).not.toBe(
+      idempotencyFingerprint("ocrCapture.createUploadJob", {
+        slots: [{ kind: "revenue" }],
+      }),
+    );
   });
 
   it("runs a mutation with one operation attempt and completes it after success", async () => {

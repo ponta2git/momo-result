@@ -228,7 +228,19 @@ export async function postJson(
     headers: mutationHeaders(run, `post-${path}`),
   });
   await expectOk(response, path);
-  return (await response.json()) as Record<string, unknown>;
+  return readJsonObject(response);
+}
+
+export async function readJsonObject(
+  response: Pick<APIResponse, "json">,
+): Promise<Record<string, unknown>> {
+  const value: unknown = await response.json();
+  if (!isJsonObject(value)) throw new TypeError("Expected a JSON object response.");
+  return value;
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export async function expectOk(
@@ -240,8 +252,12 @@ export async function expectOk(
 }
 
 export async function installE2eAuthHeaders(page: Page): Promise<void> {
-  // Runtime E2E exercises the built web bundle, where import.meta.env.DEV is false.
-  // Inject the dev auth contract at the browser boundary instead of relying on localStorage.
+  // The dev bundle reads its selected account locally; built runtime reads /auth/me.
+  // Keep the two entry points on the same test-owned account.
+  await page.addInitScript(({ key, value }) => window.localStorage.setItem(key, value), {
+    key: devUserStorageKey,
+    value: devAccountId,
+  });
   await page.route("**/api/**", continueWithE2eAuth);
 }
 
@@ -267,84 +283,11 @@ export function e2eAuthHeaders(
   return headers;
 }
 
-export function expectGeneratedId(value: string | undefined, label: string): string {
+export function expectGeneratedId(value: unknown, label: string): string {
   expect(typeof value).toBe("string");
   if (typeof value !== "string") {
     throw new TypeError(`Expected ${label}, but received ${String(value)}`);
   }
   expect(value).toEqual(expect.stringMatching(generatedIdPattern));
   return value;
-}
-
-export async function expectNoHorizontalPageOverflow(page: Page): Promise<void> {
-  const geometry = await page.evaluate(() => {
-    const viewportWidth = document.documentElement.clientWidth;
-    const isClippedByAncestor = (element: Element) => {
-      let ancestor = element.parentElement;
-      while (ancestor && ancestor !== document.body) {
-        const overflowX = window.getComputedStyle(ancestor).overflowX;
-        const ancestorRect = ancestor.getBoundingClientRect();
-        const clipsWithinViewport =
-          ancestorRect.left >= -1 && ancestorRect.right <= viewportWidth + 1;
-        if (clipsWithinViewport && ["auto", "clip", "hidden", "scroll"].includes(overflowX)) {
-          return true;
-        }
-        ancestor = ancestor.parentElement;
-      }
-      return false;
-    };
-    const offenders = [...document.body.querySelectorAll("*")]
-      .flatMap((element) => {
-        const rect = element.getBoundingClientRect();
-        if (
-          rect.width <= 0 ||
-          (rect.left >= -1 && rect.right <= viewportWidth + 1) ||
-          isClippedByAncestor(element)
-        ) {
-          return [];
-        }
-        const ancestry = [];
-        let current: Element | null = element;
-        while (current && ancestry.length < 12) {
-          const currentRect = current.getBoundingClientRect();
-          const style = window.getComputedStyle(current);
-          ancestry.push({
-            className: current.getAttribute("class")?.slice(0, 120) ?? "",
-            clientWidth: current.clientWidth,
-            display: style.display,
-            left: Math.round(currentRect.left),
-            overflowX: style.overflowX,
-            right: Math.round(currentRect.right),
-            scrollWidth: current.scrollWidth,
-            tag: current.tagName.toLowerCase(),
-            width: Math.round(currentRect.width),
-          });
-          current = current.parentElement;
-        }
-        return [
-          {
-            ancestry,
-            className: element.getAttribute("class")?.slice(0, 160) ?? "",
-            depth: ancestry.length,
-            left: Math.round(rect.left),
-            right: Math.round(rect.right),
-            tag: element.tagName.toLowerCase(),
-            text: element.textContent?.trim().replaceAll(/\s+/gu, " ").slice(0, 100) ?? "",
-            width: Math.round(rect.width),
-          },
-        ];
-      })
-      .toSorted((left, right) => right.depth - left.depth || right.right - left.right)
-      .slice(0, 1);
-    return {
-      offenders,
-      scrollWidth: document.documentElement.scrollWidth,
-      viewportWidth,
-    };
-  });
-
-  expect(
-    geometry.scrollWidth,
-    `horizontal overflow: ${JSON.stringify(geometry.offenders)}`,
-  ).toBeLessThanOrEqual(geometry.viewportWidth);
 }

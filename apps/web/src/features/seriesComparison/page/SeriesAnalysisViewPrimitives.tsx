@@ -88,7 +88,6 @@ export function AnalysisReadingGuide({
     <Disclosure
       ariaLabel={ariaLabel}
       panelPadding="sm"
-      presentation="inset"
       triggerVariant="supporting"
       summary={
         <span className="inline-flex items-center gap-2">

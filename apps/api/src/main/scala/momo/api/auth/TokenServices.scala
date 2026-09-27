@@ -17,15 +17,27 @@ final case class SessionCookieTokens(sessionToken: String, csrfToken: String)
 object SessionCookieCodec:
   private val Version = "v1"
   private val Separator = "."
+  private val TokenLength = 43
+  private val CookieLength = Version.length + 2 + 2 * TokenLength
 
   def encode(tokens: SessionCookieTokens): String =
     s"$Version$Separator${tokens.sessionToken}$Separator${tokens.csrfToken}"
 
-  def decode(value: String): Option[SessionCookieTokens] = value.split("\\.", -1).toList match
-    case Version :: sessionToken :: csrfToken :: Nil
-        if sessionToken.nonEmpty && csrfToken.nonEmpty =>
-      Some(SessionCookieTokens(sessionToken, csrfToken))
-    case _ => None
+  def decode(value: String): Option[SessionCookieTokens] =
+    if value.length != CookieLength then None
+    else
+      value.split("\\.", -1).toList match
+        case Version :: sessionToken :: csrfToken :: Nil
+            if validToken(sessionToken) && validToken(csrfToken) =>
+          Some(SessionCookieTokens(sessionToken, csrfToken))
+        case _ => None
+
+  private def validToken(value: String): Boolean = value.length == TokenLength && value.forall {
+    character =>
+      (character >= 'A' && character <= 'Z') ||
+      (character >= 'a' && character <= 'z') ||
+      (character >= '0' && character <= '9') || character == '-' || character == '_'
+  }
 
 object SessionTokenHash:
   def sha256[F[_]: Sync](value: String): F[String] = Sync[F].delay(sha256Unsafe(value))

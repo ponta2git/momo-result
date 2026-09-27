@@ -24,7 +24,11 @@ private[postgres] object PostgresSeriesAnalysisTitleRequestOps:
       jobId: String,
       outboxId: String,
   ): ConnectionIO[Either[AppError, SeriesAnalysisRecalculationAccepted]] =
-    existingOperation(requestedBy, "title", idempotencyKeyHash).flatMap {
+    lockAndFindOperation(requestedBy, "title", idempotencyKeyHash).flatMap {
+      case Some(value) if !value.gameTitleId.contains(gameTitleId) =>
+        AppError.IdempotencyPayloadMismatch(
+          "Idempotency-Key was reused for a different game title."
+        ).asLeft[SeriesAnalysisRecalculationAccepted].pure[ConnectionIO]
       case Some(value) => acceptedForExisting(value, gameTitleId)
       case None => create(
           gameTitleId,

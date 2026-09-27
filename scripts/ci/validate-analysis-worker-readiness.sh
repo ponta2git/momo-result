@@ -24,15 +24,16 @@ jq -s -e \
           .meta.Event.Provider == "app" and
           (.message | type == "string")
         ) |
-        (.message | fromjson?) as $entry |
+        (.message | fromjson? | select(type == "object") |
+          .fields | select(type == "object")) as $fields |
         select(
-          ($entry.fields.event | type == "string") and
-          ($entry.fields.worker_id | type == "string")
+          ($fields.event | type == "string") and
+          ($fields.worker_id | type == "string")
         ) |
         {
           timestamp,
-          event: $entry.fields.event,
-          workerId: $entry.fields.worker_id
+          event: $fields.event,
+          workerId: $fields.worker_id
         }
       );
     def latest($events; $event; $workerId):

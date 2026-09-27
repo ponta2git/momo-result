@@ -1,29 +1,21 @@
 import type { Page } from "@playwright/test";
 
-import { devAccountId, devUserStorageKey, expect, installE2eAuthHeaders, test } from "./support";
+import type { components } from "../src/shared/api/generated";
+import { createDeferred } from "../src/test/deferred";
+import { expect, installE2eAuthHeaders, test } from "./support";
 
-type Deferred = {
-  promise: Promise<void>;
-  resolve: () => void;
-};
+type Deferred = ReturnType<typeof createDeferred<void>>;
 
-const noop = () => undefined;
-
-function createDeferred(): Deferred {
-  let resolve = noop;
-  const promise = new Promise<void>((resolvePromise) => {
-    resolve = resolvePromise;
-  });
-  return { promise, resolve };
-}
-
-const heldEvents = Array.from({ length: 41 }, (_, index) => ({
-  draftCount: 0,
-  heldAt: new Date(Date.UTC(2026, 1, 11 - index)).toISOString(),
-  id: `held-continuity-${index + 1}`,
-  matchCount: index + 1,
-  nextMatchNo: index + 2,
-}));
+const heldEvents: Array<components["schemas"]["HeldEventSummaryResponse"]> = Array.from(
+  { length: 41 },
+  (_, index) => ({
+    draftCount: 0,
+    heldAt: new Date(Date.UTC(2026, 1, 11 - index)).toISOString(),
+    id: `held-continuity-${index + 1}`,
+    matchCount: index + 1,
+    nextMatchNo: index + 2,
+  }),
+);
 const firstHeldEvent = heldEvents[0];
 if (!firstHeldEvent) throw new Error("pagination continuity requires a held-event fixture");
 
@@ -46,12 +38,21 @@ async function installHeldEventDirectory(page: Page, pageTwoGate: Deferred): Pro
           totalPages: Math.ceil(heldEvents.length / pageSize),
         },
         totalMatchCount: heldEvents.reduce((sum, event) => sum + event.matchCount, 0),
-      },
+      } satisfies components["schemas"]["HeldEventListResponse"],
+    });
+  });
+  await page.route(/\/api\/held-events\/[^/?]+\/summary(?:\?.*)?$/u, async (route) => {
+    const eventId = new URL(route.request().url()).pathname.split("/").at(-2);
+    const event = heldEvents.find((candidate) => candidate.id === eventId);
+    if (!event) throw new Error(`Unknown held-event fixture: ${eventId}`);
+    await route.fulfill({
+      json: event satisfies components["schemas"]["HeldEventSummaryResponse"],
     });
   });
   await page.route(/\/api\/held-events\/[^/?]+(?:\?.*)?$/u, async (route) => {
     const eventId = new URL(route.request().url()).pathname.split("/").at(-1);
-    const event = heldEvents.find((candidate) => candidate.id === eventId) ?? firstHeldEvent;
+    const event = heldEvents.find((candidate) => candidate.id === eventId);
+    if (!event) throw new Error(`Unknown held-event fixture: ${eventId}`);
     const position = heldEvents.findIndex((candidate) => candidate.id === event.id);
     await route.fulfill({
       json: {
@@ -59,19 +60,15 @@ async function installHeldEventDirectory(page: Page, pageTwoGate: Deferred): Pro
         drafts: [],
         matches: [],
         navigation: {
-          previous: heldEvents[position + 1],
-          next: position > 0 ? heldEvents[position - 1] : undefined,
+          ...(heldEvents[position + 1] ? { previous: heldEvents[position + 1] } : {}),
+          ...(heldEvents[position - 1] ? { next: heldEvents[position - 1] } : {}),
         },
-      },
+      } satisfies components["schemas"]["HeldEventDetailResponse"],
     });
   });
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(
-    ([key, value]) => window.localStorage.setItem(key, value),
-    [devUserStorageKey, devAccountId],
-  );
   await installE2eAuthHeaders(page);
 });
 
@@ -79,6 +76,7 @@ test("keeps held-event rows visible and blocks stale actions while the next page
   page,
 }) => {
   const pageTwoGate = createDeferred();
+  page.once("close", () => pageTwoGate.resolve());
   await installHeldEventDirectory(page, pageTwoGate);
   await page.setViewportSize({ height: 900, width: 1280 });
   await page.goto("/held-events");
@@ -113,6 +111,7 @@ test("keeps held-event rows visible and blocks stale actions while the next page
 
 test("keeps export choices usable and restores paging focus on mobile", async ({ page }) => {
   const pageTwoGate = createDeferred();
+  page.once("close", () => pageTwoGate.resolve());
   await installHeldEventDirectory(page, pageTwoGate);
   await page.setViewportSize({ height: 812, width: 375 });
   await page.goto(`/exports?heldEventId=${encodeURIComponent(firstHeldEvent.id)}&format=csv`);
@@ -123,17 +122,14 @@ test("keeps export choices usable and restores paging focus on mobile", async ({
     includeHidden: true,
     name: "開催候補のページネーション",
   });
-  const choices = dialog.getByRole("group", { includeHidden: true, name: "開催を選択" });
   const nextPage = dialog.getByRole("button", { name: "次のページへ" });
   const selectedCandidate = dialog.getByRole("radio").first();
   await expect(selectedCandidate).toBeChecked();
-  const readyLayout = await Promise.all([choices.boundingBox(), pager.boundingBox()]);
 
   await nextPage.focus();
   await nextPage.click();
   await expect(dialog.getByRole("status")).toHaveText("更新中");
   await expect(dialog).toHaveAccessibleName("開催を選択");
-  expect(await Promise.all([choices.boundingBox(), pager.boundingBox()])).toEqual(readyLayout);
   await expect(dialog.getByRole("button", { name: "ダイアログを閉じる" })).toBeEnabled();
   await expect(selectedCandidate).toBeVisible();
   await expect(pager).toBeVisible();

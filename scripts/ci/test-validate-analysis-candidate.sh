@@ -38,18 +38,38 @@ write_valid_candidate() {
 expect_rejected() {
   local name="$1"
   if "${validator}" "${test_dir}/candidate.json" "${run_id}" "${run_attempt}" "${commit}" \
-    > /dev/null 2>&1; then
+    > "${test_dir}/rejected-output" 2> /dev/null; then
     echo "Invalid candidate was accepted: ${name}" >&2
     exit 1
   fi
+  [[ ! -s "${test_dir}/rejected-output" ]]
 }
 
 write_valid_candidate
 actual="$("${validator}" "${test_dir}/candidate.json" "${run_id}" "${run_attempt}" "${commit}")"
-grep -qx "candidate_sha=${commit}" <<< "${actual}"
-grep -qx "image_artifact_name=analysis-worker-image-${run_id}-${run_attempt}" <<< "${actual}"
-grep -qx "image_ref=registry.fly.io/momo-result-analysis:${commit}-${run_id}-${run_attempt}" <<< "${actual}"
+expected="$(cat <<EOF
+candidate_sha=${commit}
+candidate_run_attempt=${run_attempt}
+config_sha256=${digest}
+image_artifact_digest=${artifact_digest}
+image_artifact_id=987654
+image_artifact_name=analysis-worker-image-${run_id}-${run_attempt}
+image_ref=registry.fly.io/momo-result-analysis:${commit}-${run_id}-${run_attempt}
+tar_sha256=${digest}
+EOF
+)"
+[[ "${actual}" == "${expected}" ]]
 
+jq '{}, .' "${test_dir}/candidate.json" > "${test_dir}/tampered.json"
+mv "${test_dir}/tampered.json" "${test_dir}/candidate.json"
+expect_rejected multiple-json-documents
+
+write_valid_candidate
+jq '.imageArtifactId += "\n"' "${test_dir}/candidate.json" > "${test_dir}/tampered.json"
+mv "${test_dir}/tampered.json" "${test_dir}/candidate.json"
+expect_rejected multiline-artifact-id
+
+write_valid_candidate
 jq '.commit = "ffffffffffffffffffffffffffffffffffffffff"' \
   "${test_dir}/candidate.json" > "${test_dir}/tampered.json"
 mv "${test_dir}/tampered.json" "${test_dir}/candidate.json"

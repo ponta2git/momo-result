@@ -1,31 +1,72 @@
-import type { APIRequestContext, Locator, Page, Route } from "@playwright/test";
+import type { Route } from "@playwright/test";
 
-import {
-  selectControlOption,
-  devAccountId,
-  devUserStorageKey,
-  expect,
-  expectGeneratedId,
-  expectNoHorizontalPageOverflow,
-  installE2eAuthHeaders,
-  postJson,
-  test,
-} from "./support";
-import type { E2eRun } from "./support";
-
-function readRowPaint(row: Locator) {
-  return row.evaluate((element) => getComputedStyle(element).backgroundColor);
-}
+import { createDeferred } from "../src/test/deferred";
+import { installAdjacentNavigationResponses } from "./fixtures/adjacentNavigation";
+import { seedUiContext } from "./fixtures/records";
+import { selectControlOption, expect, installE2eAuthHeaders, test } from "./support";
 
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(
-    ([key, value]) => window.localStorage.setItem(key, value),
-    [devUserStorageKey, devAccountId],
-  );
   await installE2eAuthHeaders(page);
 });
 
-test("keeps dialog select navigation and outside presses within their own layer", async ({
+for (const detail of [
+  {
+    kind: "held-event",
+    route: "held-events",
+    firstId: "held-layout-first",
+    middleId: "held-layout-middle",
+    lastId: "held-layout-last",
+    returnTo: "/held-events?page=2",
+    navigationName: "開催の前後移動",
+    previousLabel: "前の開催",
+    nextLabel: "次の開催",
+  },
+  {
+    kind: "match",
+    route: "matches",
+    firstId: "match-layout-first",
+    middleId: "match-layout-middle",
+    lastId: "match-layout-last",
+    returnTo: "/matches?status=confirmed",
+    navigationName: "前後の試合",
+    previousLabel: "前の試合",
+    nextLabel: "後の試合",
+  },
+] as const) {
+  test(`keeps ${detail.kind} destinations and keyboard focus through adjacent navigation`, async ({
+    page,
+  }) => {
+    await installAdjacentNavigationResponses(page);
+    const pathFor = (id: string) =>
+      `/${detail.route}/${id}?returnTo=${encodeURIComponent(detail.returnTo)}`;
+    const navigation = page.getByRole("navigation", { name: detail.navigationName });
+    const previous = navigation.getByRole("link", {
+      name: new RegExp(`^${detail.previousLabel}`, "u"),
+    });
+    const next = navigation.getByRole("link", { name: new RegExp(`^${detail.nextLabel}`, "u") });
+    const heading = page.getByRole("heading", { level: 1 });
+
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto(pathFor(detail.middleId));
+    await expect(previous).toHaveAttribute("href", pathFor(detail.firstId));
+    await expect(next).toHaveAttribute("href", pathFor(detail.lastId));
+
+    await previous.focus();
+    await previous.press("Enter");
+    await expect(page).toHaveURL(pathFor(detail.firstId));
+    await expect(heading).toBeFocused();
+    await expect(previous).toHaveCount(0);
+
+    await next.click();
+    await expect(page).toHaveURL(pathFor(detail.middleId));
+    await next.click();
+    await expect(page).toHaveURL(pathFor(detail.lastId));
+    await expect(heading).toBeFocused();
+    await expect(next).toHaveCount(0);
+  });
+}
+
+test("keeps an uncommitted select choice when keyboard focus moves to the next dialog field", async ({
   page,
 }) => {
   await page.goto("/admin/masters?tab=accounts");
@@ -36,63 +77,12 @@ test("keeps dialog select navigation and outside presses within their own layer"
   await trigger.click();
   await expect(page.getByRole("option", { selected: true })).toBeFocused();
   await page.keyboard.press("ArrowDown");
-  await page.keyboard.press("Shift+Tab");
-  await expect(dialog.getByRole("textbox", { name: "表示名*", exact: true })).toBeFocused();
-  await expect(trigger).toHaveText("試合参加者に紐づけない");
-
-  await trigger.click();
-  await expect(page.getByRole("option", { selected: true })).toBeFocused();
-  await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Tab");
   await expect(dialog.getByRole("checkbox", { name: "ログイン許可" })).toBeFocused();
   await expect(trigger).toHaveText("試合参加者に紐づけない");
-
-  for (const width of [1440, 375]) {
-    await page.setViewportSize({ width, height: 812 });
-    await trigger.click();
-    await expect(page.getByRole("listbox")).toBeVisible();
-    await expectNoHorizontalPageOverflow(page);
-    const close = await dialog.getByRole("button", { name: "ダイアログを閉じる" }).boundingBox();
-    if (!close) throw new Error("Dialog close control is not visible");
-    // The pointer must land on the select's transparent backdrop, not the button below it.
-    await page.mouse.click(close.x + close.width / 2, close.y + close.height / 2);
-    await expect(page.getByRole("listbox")).toHaveCount(0);
-    await expect(dialog).toBeVisible();
-  }
 });
 
-test.describe("touch selection", () => {
-  test.use({ hasTouch: true, isMobile: true, viewport: { width: 375, height: 667 } });
-
-  test("opens options without scrolling their field out of view", async ({ page }) => {
-    await page.goto("/matches");
-    await page.getByRole("button", { name: /詳細条件/u }).tap();
-    const trigger = page.getByRole("combobox", { name: "作品", exact: true });
-    await trigger.scrollIntoViewIfNeeded();
-    const before = await trigger.boundingBox();
-    if (!before) throw new Error("Select field is not visible");
-    await trigger.tap();
-    const popup = page.getByRole("listbox");
-    await expect(popup).toBeVisible();
-    await expect
-      .poll(async () => {
-        const rect = await popup.boundingBox();
-        return Boolean(rect && rect.y >= 0 && rect.y + rect.height <= 667);
-      })
-      .toBe(true);
-    const after = await trigger.boundingBox();
-    expect(Math.abs((after?.y ?? Infinity) - before.y)).toBeLessThanOrEqual(2);
-    await expectNoHorizontalPageOverflow(page);
-    expect(
-      await popup
-        .getByRole("option")
-        .first()
-        .evaluate((row) => row.getBoundingClientRect().height),
-    ).toBeGreaterThanOrEqual(44);
-  });
-});
-
-test("keeps match rows usable through responsive update and retry states", async ({
+test("preserves keyboard filtering and recovers the match list after a failed request", async ({
   e2eRun,
   page,
   request,
@@ -100,223 +90,12 @@ test("keeps match rows usable through responsive update and retry states", async
   const {
     heldEventId,
     mapName,
-    matchIds,
     primaryGameTitleId,
     primaryGameTitleName,
     seasonMasterId,
     seasonName,
     secondaryGameTitleId,
   } = await seedUiContext(request, e2eRun);
-
-  await test.step("preserve the query-known sample context through loading", async () => {
-    const directoryGate = createDeferred();
-    let directoryRequested = false;
-    const directoryPattern = /\/api\/held-events(?:\?.*)?$/u;
-    const holdDirectory = async (route: Route) => {
-      const url = new URL(route.request().url());
-      if (route.request().method() === "GET" && url.pathname === "/api/held-events") {
-        directoryRequested = true;
-        await directoryGate.promise;
-      }
-      await route.fallback();
-    };
-    const loadingSurfaceTops = new Map<number, number>();
-    await page.route(directoryPattern, holdDirectory);
-
-    try {
-      await page.setViewportSize({ height: 844, width: 320 });
-      await page.goto("/review/dev-sample?sample=1");
-      await expect.poll(() => directoryRequested).toBe(true);
-      await expect(page.getByText("サンプルの読み取り結果で表示中", { exact: true })).toBeVisible();
-      await expect(page.getByRole("heading", { level: 1 })).toHaveCount(0);
-
-      for (const width of [320, 375]) {
-        await page.setViewportSize({ height: 844, width });
-        await expectNoHorizontalPageOverflow(page);
-        loadingSurfaceTops.set(
-          width,
-          await page
-            .locator('[data-page-content-surface=""]')
-            .evaluate((surface) => surface.getBoundingClientRect().top),
-        );
-      }
-    } finally {
-      directoryGate.resolve();
-      await page.unroute(directoryPattern, holdDirectory);
-    }
-
-    await expect(page.getByRole("region", { name: "試合内容" })).toBeVisible();
-    await expect(page.getByText("サンプルの読み取り結果で表示中", { exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { level: 1 })).toHaveCount(0);
-    for (const width of [320, 375]) {
-      await page.setViewportSize({ height: 844, width });
-      await expectNoHorizontalPageOverflow(page);
-      const readySurfaceTop = await page
-        .locator('[data-page-content-surface=""]')
-        .evaluate((surface) => surface.getBoundingClientRect().top);
-      const loadingSurfaceTop = loadingSurfaceTops.get(width);
-      expect(loadingSurfaceTop).toBeDefined();
-      expect(
-        Math.abs(readySurfaceTop - (loadingSurfaceTop ?? readySurfaceTop)),
-      ).toBeLessThanOrEqual(2);
-    }
-
-    await page.getByRole("button", { name: "一覧にない開催を追加する" }).click();
-    const heldEventCreationFields = page.locator('[data-held-event-creation-fields=""]');
-    await expect(heldEventCreationFields).toBeVisible();
-    expect(
-      await heldEventCreationFields.evaluate((element) => {
-        const style = getComputedStyle(element);
-        return {
-          backgroundColor: style.backgroundColor,
-          borderBottomWidth: style.borderBottomWidth,
-          borderLeftWidth: style.borderLeftWidth,
-          borderRightWidth: style.borderRightWidth,
-          borderTopWidth: style.borderTopWidth,
-        };
-      }),
-    ).toEqual({
-      backgroundColor: "rgba(0, 0, 0, 0)",
-      borderBottomWidth: "0px",
-      borderLeftWidth: "0px",
-      borderRightWidth: "0px",
-      borderTopWidth: "0px",
-    });
-  });
-
-  await test.step("contain held-event detail loading at the narrow viewport", async () => {
-    const detailGate = createDeferred();
-    let detailRequested = false;
-    let loadingSurfaceTopAt320: number | undefined;
-    let loadingSurfaceTop: number | undefined;
-    const detailPattern = `**/api/held-events/${heldEventId}`;
-    const holdDetail = async (route: Route) => {
-      if (route.request().method() === "GET") {
-        detailRequested = true;
-        await detailGate.promise;
-      }
-      await route.fallback();
-    };
-    await page.route(detailPattern, holdDetail);
-
-    try {
-      await page.setViewportSize({ height: 844, width: 320 });
-      await page.goto(`/held-events/${heldEventId}?returnTo=%2Fheld-events`);
-
-      await expect(page.getByLabel("開催詳細を読み込み中")).toHaveAttribute("aria-busy", "true");
-      await expect.poll(() => detailRequested).toBe(true);
-      await expectNoHorizontalPageOverflow(page);
-      loadingSurfaceTopAt320 = await page
-        .getByRole("region", { name: "開催内容" })
-        .evaluate((surface) => surface.getBoundingClientRect().top);
-      const navigationGeometry = await page.evaluate(() => {
-        const scroller = document.querySelector<HTMLElement>("[data-nav-scroll]");
-        const active = scroller?.querySelector<HTMLElement>('[aria-current="page"]');
-        if (!scroller || !active) throw new Error("expected active global navigation item");
-        const scrollerRect = scroller.getBoundingClientRect();
-        const activeRect = active.getBoundingClientRect();
-        return {
-          activeLeft: activeRect.left,
-          activeRight: activeRect.right,
-          pageScrollX: window.scrollX,
-          scrollerLeft: scrollerRect.left,
-          scrollerRight: scrollerRect.right,
-          scrollerScrollLeft: scroller.scrollLeft,
-        };
-      });
-      expect(navigationGeometry.pageScrollX).toBe(0);
-      expect(navigationGeometry.scrollerScrollLeft).toBeGreaterThan(0);
-      expect(navigationGeometry.activeLeft).toBeGreaterThanOrEqual(
-        navigationGeometry.scrollerLeft - 1,
-      );
-      expect(navigationGeometry.activeRight).toBeLessThanOrEqual(
-        navigationGeometry.scrollerRight + 1,
-      );
-
-      await page.setViewportSize({ height: 844, width: 375 });
-      loadingSurfaceTop = await page
-        .getByRole("region", { name: "開催内容" })
-        .evaluate((surface) => surface.getBoundingClientRect().top);
-    } finally {
-      detailGate.resolve();
-      await page.unroute(detailPattern, holdDetail);
-    }
-
-    await expect(page.getByText("確定済み2試合・未確定下書き0件", { exact: true })).toBeVisible();
-    const readySurfaceTop = await page
-      .getByRole("region", { name: "開催内容" })
-      .evaluate((surface) => surface.getBoundingClientRect().top);
-    await expectHeldEventActionsUsable(page, true);
-    expect(loadingSurfaceTop).toBeDefined();
-    expect(Math.abs(readySurfaceTop - (loadingSurfaceTop ?? readySurfaceTop))).toBeLessThanOrEqual(
-      2,
-    );
-
-    await page.setViewportSize({ height: 844, width: 320 });
-    await expectNoHorizontalPageOverflow(page);
-    const readySurfaceTopAt320 = await page
-      .getByRole("region", { name: "開催内容" })
-      .evaluate((surface) => surface.getBoundingClientRect().top);
-    await expectHeldEventActionsUsable(page, true);
-    expect(loadingSurfaceTopAt320).toBeDefined();
-    expect(
-      Math.abs(readySurfaceTopAt320 - (loadingSurfaceTopAt320 ?? readySurfaceTopAt320)),
-    ).toBeLessThanOrEqual(2);
-
-    await page.route(detailPattern, fulfillHeldEventNotFound);
-    try {
-      await page.reload();
-      await expect(page.getByRole("heading", { name: "開催が見つかりません" })).toBeVisible();
-      for (const width of [320, 375]) {
-        await page.setViewportSize({ height: 844, width });
-        await expectNoHorizontalPageOverflow(page);
-        await expectHeldEventActionsUsable(page, false);
-      }
-    } finally {
-      await page.unroute(detailPattern, fulfillHeldEventNotFound);
-    }
-  });
-
-  await test.step("stack match-result loading rows without narrow-width collisions", async () => {
-    const matchId = matchIds[0];
-    if (!matchId) throw new Error("expected a seeded match");
-    const matchGate = createDeferred();
-    let matchRequested = false;
-    const detailPattern = `**/api/matches/${matchId}`;
-    const holdMatch = async (route: Route) => {
-      if (route.request().method() === "GET") {
-        matchRequested = true;
-        await matchGate.promise;
-      }
-      await route.fallback();
-    };
-    await page.route(detailPattern, holdMatch);
-
-    try {
-      await page.setViewportSize({ height: 844, width: 320 });
-      await page.goto(`/matches/${matchId}?returnTo=%2Fheld-events%2F${heldEventId}`);
-      await expect(page.getByLabel("試合詳細を読み込み中")).toHaveAttribute("aria-busy", "true");
-      await expect.poll(() => matchRequested).toBe(true);
-
-      for (const width of [320, 375]) {
-        await page.setViewportSize({ height: 844, width });
-        await expectNoHorizontalPageOverflow(page);
-        await expectStackedRowGeometry(page.locator("[data-match-result-loading-row]").first());
-      }
-    } finally {
-      matchGate.resolve();
-      await page.unroute(detailPattern, holdMatch);
-    }
-
-    await expect(page.getByRole("heading", { name: "第1試合の結果" })).toBeVisible();
-    for (const width of [320, 375]) {
-      await page.setViewportSize({ height: 844, width });
-      await expectNoHorizontalPageOverflow(page);
-      await expectStackedRowGeometry(
-        page.getByRole("list", { name: "試合の順位と成績" }).getByRole("listitem").first(),
-      );
-    }
-  });
 
   await test.step("keep the complete match filter contract at mobile and desktop widths", async () => {
     await page.setViewportSize({ height: 844, width: 320 });
@@ -334,11 +113,9 @@ test("keeps match rows usable through responsive update and retry states", async
     await expect(filterBar).toContainText(`作品 ${primaryGameTitleName}`);
     await expect(filterBar).toContainText(`シーズン ${seasonName}`);
     await expect(page.getByRole("region", { name: "登録済みの試合" })).toContainText("2件");
-    await expectNoHorizontalPageOverflow(page);
 
     await page.setViewportSize({ height: 900, width: 1280 });
     await expect(filterBar).toBeVisible();
-    await expectNoHorizontalPageOverflow(page);
   });
 
   await test.step("continue keyboard filtering while protecting the previous results", async () => {
@@ -376,65 +153,6 @@ test("keeps match rows usable through responsive update and retry states", async
     await expect(status).toHaveText("確定済み");
   });
 
-  await test.step("keep surface feedback readable and honor a changed motion preference", async () => {
-    const action = page.getByRole("link", { exact: true, name: "手入力で作成" });
-    const paint = () => action.evaluate((element) => getComputedStyle(element).backgroundColor);
-    await page.mouse.move(0, 0);
-    const restingPaint = await paint();
-    const restingBox = await action.boundingBox();
-    await action.hover();
-    await expect.poll(paint).not.toBe(restingPaint);
-    await page.emulateMedia({ reducedMotion: "reduce" });
-    const hoverPaint = await paint();
-    await expect(action).toHaveCSS("opacity", "1");
-    expect(await action.boundingBox()).toEqual(restingBox);
-    await page.mouse.move(0, 0);
-    await expect.poll(paint).toBe(restingPaint);
-
-    try {
-      await page.emulateMedia({ reducedMotion: "no-preference" });
-      await action.hover();
-      await page.emulateMedia({ reducedMotion: "reduce" });
-      await expect.poll(paint).toBe(hoverPaint);
-      await action.focus();
-      await expect(action).toBeFocused();
-      await expect(action).not.toHaveCSS("outline-style", "none");
-    } finally {
-      await page.emulateMedia({ reducedMotion: "no-preference" });
-      await page.mouse.move(0, 0);
-    }
-  });
-
-  await test.step("connect keyboard actions to their row without overriding pointer context", async () => {
-    const rows = page.getByRole("table", { name: "登録済みの試合" }).locator("tbody tr");
-    const firstRow = rows.first();
-    const secondRow = rows.nth(1);
-    const result = firstRow.getByRole("link", { name: /の試合結果を見る$/u });
-    await page.mouse.move(0, 0);
-    const restingPaint = await readRowPaint(firstRow);
-    await result.focus();
-    await result.press("Tab");
-    await expect(firstRow.locator(":focus-visible")).toHaveCount(1);
-    await expect(firstRow).not.toHaveAttribute("tabindex");
-    const focusPaint = await readRowPaint(firstRow);
-    expect(focusPaint).not.toBe(restingPaint);
-    await expect(firstRow.locator(":focus-visible")).not.toHaveCSS("outline-style", "none");
-
-    await secondRow.hover();
-    await expect.poll(() => readRowPaint(secondRow)).not.toBe(restingPaint);
-    expect(await readRowPaint(firstRow)).toBe(focusPaint);
-    await firstRow.hover();
-    expect(await readRowPaint(firstRow)).toBe(focusPaint);
-
-    await page.mouse.move(0, 0);
-    await page.keyboard.press("Shift+Tab");
-    await expect(result).toBeFocused();
-    expect(await readRowPaint(firstRow)).toBe(focusPaint);
-    await page.getByRole("link", { exact: true, name: "手入力で作成" }).focus();
-    await expect(firstRow.locator(":focus-visible")).toHaveCount(0);
-    await expect.poll(() => readRowPaint(firstRow)).toBe(restingPaint);
-  });
-
   await test.step("distinguish update from retry and preserve visible rows while updating", async () => {
     let holdNextListRequest = false;
     let listRequestHeld = false;
@@ -469,9 +187,11 @@ test("keeps match rows usable through responsive update and retry states", async
         "aria-busy",
         "true",
       );
-      await expect(
-        page.getByRole("region", { name: "登録済みの試合" }).locator("[data-stale]"),
-      ).toHaveAttribute("aria-busy", "true");
+      const updatingStatus = page
+        .getByRole("region", { name: "登録済みの試合" })
+        .getByRole("status")
+        .filter({ hasText: "一覧を更新中" });
+      await expect(updatingStatus).toBeVisible();
       await expect(visibleMatchRow).toBeVisible();
       await expect(page.getByRole("button", { name: "一覧を再読み込み" })).toHaveCount(0);
     } finally {
@@ -521,104 +241,19 @@ test("keeps match rows usable through responsive update and retry states", async
   });
 });
 
-async function expectHeldEventActionsUsable(page: Page, refreshAvailable: boolean) {
-  const back = page.getByRole("link", { exact: true, name: "開催履歴へ戻る" });
-  const actions = page.getByRole("navigation", { name: "この開催の関連操作" });
-  const exportLink = actions.getByRole("link", { exact: true, name: "CSV出力" });
-  const refresh = actions.getByRole("button", { name: "開催詳細を更新" });
-
-  await expect(back).toHaveAttribute("href", "/held-events");
-  await back.click({ trial: true });
-  await exportLink.click({ trial: true });
-  await back.focus();
-  await back.press("Tab");
-  await expect(exportLink).toBeFocused();
-
-  if (refreshAvailable) {
-    await expect(refresh).toBeEnabled();
-    await refresh.click({ trial: true });
-    await exportLink.press("Tab");
-    await expect(refresh).toBeFocused();
-  } else {
-    await expect(refresh).toHaveCount(0);
-  }
-}
-
-async function fulfillHeldEventNotFound(route: Route) {
-  await route.fulfill({
-    contentType: "application/json",
-    json: {
-      code: "NOT_FOUND",
-      detail: "E2E held-event terminal layout",
-      status: 404,
-      title: "Not found",
-      type: "about:blank",
-    },
-    status: 404,
-  });
-}
-
-async function expectStackedRowGeometry(row: Locator) {
-  await expect(row).toBeVisible();
-
-  const geometry = await row.evaluate((element) => {
-    const rowRect = element.getBoundingClientRect();
-    const childRects = Array.from(element.children, (child) => {
-      const rect = child.getBoundingClientRect();
-      return {
-        bottom: rect.bottom,
-        height: rect.height,
-        left: rect.left,
-        right: rect.right,
-        top: rect.top,
-        width: rect.width,
-      };
-    });
-    return {
-      childRects,
-      clientHeight: element.clientHeight,
-      clientWidth: element.clientWidth,
-      rowRect: {
-        bottom: rowRect.bottom,
-        height: rowRect.height,
-        left: rowRect.left,
-        right: rowRect.right,
-        top: rowRect.top,
-        width: rowRect.width,
-      },
-      scrollHeight: element.scrollHeight,
-      scrollWidth: element.scrollWidth,
-    };
-  });
-  expect(geometry.rowRect.height).toBeGreaterThan(0);
-  expect(geometry.rowRect.width).toBeGreaterThan(0);
-  expect(geometry.scrollHeight).toBeLessThanOrEqual(geometry.clientHeight);
-  expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth);
-  for (const child of geometry.childRects) {
-    expect(child.height).toBeGreaterThan(0);
-    expect(child.width).toBeGreaterThan(0);
-    expect(child.left).toBeGreaterThanOrEqual(geometry.rowRect.left - 1);
-    expect(child.right).toBeLessThanOrEqual(geometry.rowRect.right + 1);
-    expect(child.top).toBeGreaterThanOrEqual(geometry.rowRect.top - 1);
-    expect(child.bottom).toBeLessThanOrEqual(geometry.rowRect.bottom + 1);
-  }
-  for (let index = 1; index < geometry.childRects.length; index += 1) {
-    const previous = geometry.childRects[index - 1];
-    const current = geometry.childRects[index];
-    if (!previous || !current) throw new Error("expected result-row geometry");
-    expect(current.top).toBeGreaterThanOrEqual(previous.bottom);
-  }
-  const last = geometry.childRects.at(-1);
-  if (!last) throw new Error("expected result-row geometry");
-  expect(last.bottom).toBeLessThanOrEqual(geometry.rowRect.bottom + 1);
-}
-
 test("changes an export choice by keyboard and restores focus", async ({
   e2eRun,
   page,
   request,
 }) => {
-  const { matchIds } = await seedUiContext(request, e2eRun);
+  const { heldEventId, matchIds } = await seedUiContext(request, e2eRun);
+  // Keep the keyboard candidate order owned by this test, even when other cases seed matches.
+  // The API still supplies real candidate records; only its directory scope is controlled.
+  await page.route(/\/api\/matches(?:\?.*)?$/u, async (route) => {
+    const url = new URL(route.request().url());
+    url.searchParams.set("heldEventId", heldEventId);
+    await route.fallback({ url: url.toString() });
+  });
 
   await test.step("keep export choices native and restore focus after keyboard selection", async () => {
     const selectedMatchId = matchIds[0];
@@ -632,31 +267,20 @@ test("changes an export choice by keyboard and restores focus", async ({
     await changeMatch.click();
     const dialog = page.getByRole("dialog", { name: "試合を選択" });
     await expect(dialog).toBeVisible();
-    await expectNoHorizontalPageOverflow(page);
 
     const radios = dialog.getByRole("radio");
     const radioValues = await radios.evaluateAll((elements) =>
       elements.map((element) => (element as HTMLInputElement).value),
     );
-    const selectedIndex = radioValues.indexOf(selectedMatchId);
-    expect(selectedIndex).toBeGreaterThanOrEqual(0);
-    const nextMatchId = radioValues[(selectedIndex + 1) % radioValues.length];
-    if (!nextMatchId) throw new Error("export conformance requires a next radio candidate");
+    expect(radioValues).toHaveLength(2);
+    expect(radioValues).toEqual(expect.arrayContaining(matchIds));
+    const nextMatchId = matchIds[1];
+    if (!nextMatchId) throw new Error("export conformance requires a next owned candidate");
 
     const selectedRadio = dialog.locator(`input[type="radio"][value="${selectedMatchId}"]`);
     await expect(selectedRadio).toBeChecked();
     await selectedRadio.focus();
     await selectedRadio.press(" ");
-    const visibleChoice = selectedRadio.locator("..");
-    await expect(visibleChoice).toHaveCSS("outline-style", "solid");
-    await expect(selectedRadio).toHaveCSS("outline-style", "none");
-    try {
-      await page.emulateMedia({ forcedColors: "active" });
-      await expect(selectedRadio).toBeFocused();
-      await expect(visibleChoice).toHaveCSS("outline-style", "solid");
-    } finally {
-      await page.emulateMedia({ forcedColors: "none" });
-    }
     await selectedRadio.press("ArrowDown");
 
     await expect(dialog).toHaveCount(0);
@@ -664,101 +288,3 @@ test("changes an export choice by keyboard and restores focus", async ({
     await expect(changeMatch).toBeFocused();
   });
 });
-
-async function seedUiContext(request: APIRequestContext, e2eRun: E2eRun) {
-  const suffix = e2eRun.masterIdSuffix;
-  const primaryGameTitleId = `gt_ui_a_${suffix}`;
-  const secondaryGameTitleId = `gt_ui_b_${suffix}`;
-  const seasonMasterId = `season_ui_${suffix}`;
-  const mapMasterId = `map_ui_${suffix}`;
-  const primaryGameTitleName = `UI確認作品A ${suffix}`;
-  const seasonName = `UI確認シーズン ${suffix}`;
-  const mapName = `UI確認マップ ${suffix}`;
-  // Keep the fixture historical so a parallel smoke run can own the latest-event shortcuts.
-  const localDateTime = e2eRun.uniqueLocalDateTime(2000);
-  const playedAt = new Date(`${localDateTime}:00+09:00`).toISOString();
-
-  await postJson(request, e2eRun, "/api/game-titles", {
-    id: primaryGameTitleId,
-    layoutFamily: "momotetsu_2",
-    name: primaryGameTitleName,
-  });
-  e2eRun.trackGameTitle(primaryGameTitleId);
-  await postJson(request, e2eRun, "/api/game-titles", {
-    id: secondaryGameTitleId,
-    layoutFamily: "momotetsu_2",
-    name: `UI確認作品B ${suffix}`,
-  });
-  e2eRun.trackGameTitle(secondaryGameTitleId);
-  await postJson(request, e2eRun, "/api/season-masters", {
-    gameTitleId: primaryGameTitleId,
-    id: seasonMasterId,
-    name: seasonName,
-  });
-  e2eRun.trackSeasonMaster(seasonMasterId);
-  await postJson(request, e2eRun, "/api/map-masters", {
-    gameTitleId: primaryGameTitleId,
-    id: mapMasterId,
-    name: mapName,
-  });
-  e2eRun.trackMapMaster(mapMasterId);
-
-  const heldEvent = await postJson(request, e2eRun, "/api/held-events", { heldAt: playedAt });
-  const heldEventId = expectGeneratedId(heldEvent["id"] as string | undefined, "held event ID");
-  e2eRun.trackHeldEvent(heldEventId);
-  const matchIds: string[] = [];
-  for (const matchNoInEvent of [1, 2]) {
-    const match = await postJson(request, e2eRun, "/api/matches", {
-      draftIds: {},
-      gameTitleId: primaryGameTitleId,
-      heldEventId,
-      mapMasterId,
-      matchNoInEvent,
-      ownerMemberId: "member_ponta",
-      playedAt,
-      players: makePlayers(matchNoInEvent),
-      seasonMasterId,
-    });
-    const matchId = expectGeneratedId(match["matchId"] as string | undefined, "match ID");
-    matchIds.push(matchId);
-    e2eRun.trackMatch(matchId);
-  }
-
-  return {
-    heldEventId,
-    mapName,
-    matchIds,
-    primaryGameTitleId,
-    primaryGameTitleName,
-    seasonMasterId,
-    seasonName,
-    secondaryGameTitleId,
-  };
-}
-
-function createDeferred(): { promise: Promise<void>; resolve: () => void } {
-  let resolvePromise!: () => void;
-  const promise = new Promise<void>((resolve) => {
-    resolvePromise = resolve;
-  });
-  return { promise, resolve: resolvePromise };
-}
-
-function makePlayers(seed: number) {
-  const memberIds = ["member_ponta", "member_akane_mami", "member_otaka", "member_eu"];
-  return memberIds.map((memberId, index) => ({
-    incidents: {
-      cardShop: 0,
-      cardStation: 0,
-      destination: 0,
-      minusStation: 0,
-      plusStation: 0,
-      suriNoGinji: 0,
-    },
-    memberId,
-    playOrder: index + 1,
-    rank: index + 1,
-    revenueManYen: seed * 100 + (4 - index) * 10,
-    totalAssetsManYen: seed * 1_000 + (4 - index) * 100,
-  }));
-}

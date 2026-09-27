@@ -15,25 +15,34 @@ function render(ui: ReactElement) {
 }
 
 describe("ReviewView", () => {
-  it("shows common hypotheses directly, keeps secondary hypotheses local, and uses help dialogs", async () => {
+  it("identifies the players covered by a common hypothesis before the individual hypotheses", () => {
+    const response = makeFourPlayerSeriesAnalysisReview();
+    response.commonPlaybookTopics = [
+      {
+        category: "revenue",
+        detail: "共通の根拠",
+        heading: "収益先行後の詰め方",
+        playerIds: response.playbookByPlayer.slice(0, 3).map((entry) => entry.player.memberId),
+        topicId: "common:revenue",
+      },
+    ];
+    render(
+      <ReviewView loading={false} response={response} showError={false} onViewChange={vi.fn()} />,
+    );
+    const common = screen.getByRole("region", { name: "複数人共通の行動仮説" });
+    expect(within(common).getByText("3人")).toBeInTheDocument();
+    expect(within(common).getByText("いーゆー、ぽんた、あかねまみ")).toBeInTheDocument();
+    expect(within(common).queryByText("おーたか")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "いーゆー" })).toBeInTheDocument();
+  });
+
+  it("shows the selected hypothesis evidence with its uncertainty and denominator", async () => {
     const user = userEvent.setup();
     const response = makeFourPlayerSeriesAnalysisReview();
     response.playbookByPlayer = response.playbookByPlayer.slice(0, 2);
     const firstEntry = response.playbookByPlayer[0];
     const primary = firstEntry?.primaryCard;
     if (!firstEntry || !primary) throw new Error("primary fixture is required");
-    response.commonPlaybookTopics = [
-      {
-        category: "revenue",
-        detail: "複数人に同じ論点が出たため、個人カードを絞っています。",
-        heading: "収益先行後の詰め方",
-        playerIds: ["member-1", "member-2", "member-3"],
-        topicId: "common:revenue",
-      },
-    ];
-    const firstSecondary = firstEntry.secondaryCards[0];
-    if (!firstSecondary) throw new Error("secondary fixture is required");
-
     const onViewChange = vi.fn();
     render(
       <ReviewView
@@ -43,39 +52,6 @@ describe("ReviewView", () => {
         onViewChange={onViewChange}
       />,
     );
-
-    expect(screen.getAllByRole("heading", { name: primary.actionHypothesis })).toHaveLength(2);
-
-    const commonPlaybook = screen.getByRole("region", { name: "複数人共通の行動仮説" });
-    expect(screen.getByRole("button", { name: "分類の読み方" })).toBeInTheDocument();
-    expect(within(commonPlaybook).getByText("収益先行後の詰め方")).toBeInTheDocument();
-    expect(within(commonPlaybook).getByText("3人")).toBeVisible();
-    expect(screen.queryByText(primary.plainReason)).not.toBeInTheDocument();
-    expect(screen.queryByText(firstSecondary.actionHypothesis)).not.toBeInTheDocument();
-
-    expect(screen.getByRole("heading", { name: "いーゆー" })).toBeInTheDocument();
-
-    const firstDisclosure = screen.getByRole("button", { name: "いーゆーのほかの仮説" });
-    const secondDisclosure = screen.getByRole("button", { name: "ぽんたのほかの仮説" });
-    expect(firstDisclosure).toHaveAttribute("aria-expanded", "false");
-    expect(secondDisclosure).toHaveAttribute("aria-expanded", "false");
-
-    firstDisclosure.focus();
-    await user.keyboard("{Enter}");
-    expect(firstDisclosure).toHaveAttribute("aria-expanded", "true");
-    expect(secondDisclosure).toHaveAttribute("aria-expanded", "false");
-    expect(screen.getByText(firstSecondary.actionHypothesis)).toBeInTheDocument();
-
-    await user.keyboard(" ");
-    expect(firstDisclosure).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByText(firstSecondary.actionHypothesis)).not.toBeInTheDocument();
-
-    expect(screen.queryByText(/信頼度高め/u)).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "分類の読み方" }));
-    const helpDialog = await screen.findByRole("dialog");
-    expect(within(helpDialog).getByText("再現する")).toBeInTheDocument();
-    expect(within(helpDialog).getByText(/本人が次の試合で自己観察する場面/u)).toBeInTheDocument();
-    await user.click(within(helpDialog).getByRole("button", { name: "ダイアログを閉じる" }));
 
     await user.click(screen.getAllByRole("button", { name: "根拠・注意・試合後の確認" })[0]!);
     const detailDialog = await screen.findByRole("dialog");

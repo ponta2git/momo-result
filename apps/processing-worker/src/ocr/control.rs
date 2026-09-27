@@ -823,25 +823,46 @@ fn validate_completion(
 ) -> Result<(), OcrControlError> {
     let parent_elapsed = u32::try_from(completion.duration_milliseconds)
         .map_err(|_conversion_error| OcrControlError::InvalidCompletion)?;
-    let encoded_bytes = [
+    let mut json_budget = JsonByteBudget {
+        remaining: MAXIMUM_DRAFT_JSON_BYTES,
+    };
+    // Count the actual encoded bytes, including JSON escapes, without retaining a second encoded
+    // copy of the candidate. Stop before typed validation can allocate for an oversized payload.
+    for value in [
         &completion.output.payload,
         &completion.output.warnings,
         &completion.output.timings_milliseconds,
-    ]
-    .into_iter()
-    .try_fold(0_usize, |total, value| {
-        serde_json::to_vec(value)
-            .ok()
-            .and_then(|encoded| total.checked_add(encoded.len()))
-    });
+    ] {
+        serde_json::to_writer(&mut json_budget, value)
+            .map_err(|_error| OcrControlError::InvalidCompletion)?;
+    }
     if completion
         .output
         .satisfies_contract(claim.requested_screen_type, hints, parent_elapsed)
-        && encoded_bytes.is_some_and(|bytes| bytes <= MAXIMUM_DRAFT_JSON_BYTES)
     {
         Ok(())
     } else {
         Err(OcrControlError::InvalidCompletion)
+    }
+}
+
+struct JsonByteBudget {
+    remaining: usize,
+}
+
+impl std::io::Write for JsonByteBudget {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.remaining = self.remaining.checked_sub(bytes.len()).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "OCR draft exceeds its byte bound",
+            )
+        })?;
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
     }
 }
 

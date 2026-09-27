@@ -58,22 +58,35 @@ export function AdminAccountCreateDialog({
           </Notice>
         ) : null}
         <TextField
+          disabled={pending}
           inputMode="numeric"
           label="DiscordユーザーID"
           name="discordUserId"
           placeholder="例: 523484457705930752"
           required
         />
-        <TextField label="表示名" name="displayName" placeholder="例: 代理入力者" required />
+        <TextField
+          disabled={pending}
+          label="表示名"
+          name="displayName"
+          placeholder="例: 代理入力者"
+          required
+        />
         <SelectField
+          disabled={pending}
           defaultValue=""
           label="紐づくプレーヤー"
           name="playerMemberId"
           options={accountPlayerOptions}
         />
         <Fieldset legend="権限">
-          <CheckboxField defaultChecked label="ログイン許可" name="loginEnabled" />
-          <CheckboxField label="管理者" name="isAdmin" />
+          <CheckboxField
+            disabled={pending}
+            defaultChecked
+            label="ログイン許可"
+            name="loginEnabled"
+          />
+          <CheckboxField disabled={pending} label="管理者" name="isAdmin" />
         </Fieldset>
         <DialogFooter>
           <Button disabled={pending} variant="secondary" onClick={() => setOpen(false)}>

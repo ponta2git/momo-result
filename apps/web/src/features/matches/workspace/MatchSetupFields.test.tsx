@@ -55,9 +55,7 @@ describe("MatchSetupFields", () => {
     expect(screen.getAllByRole("alert")).toHaveLength(paths.length);
     for (const control of controls) {
       expect(control).toHaveAttribute("aria-invalid", "true");
-      const errorId = control.getAttribute("aria-describedby");
-      expect(errorId).toBeTruthy();
-      expect(document.getElementById(errorId ?? "")).toHaveTextContent("未入力です");
+      expect(control).toHaveAccessibleDescription(expect.stringContaining("未入力です"));
     }
   });
 });

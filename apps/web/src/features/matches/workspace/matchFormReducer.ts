@@ -6,6 +6,7 @@ import type {
 import { emptyIncidentCountsByKey, incidentCountsByLabelToKey } from "@/shared/domain/incidents";
 
 export type MatchFormAction =
+  | { path: string; type: "set_numeric_draft"; value: string | undefined }
   | { patch: Partial<MatchFormValues>; type: "patch_root" }
   | { index: number; patch: Partial<MatchFormValues["players"][number]>; type: "patch_player" }
   | { index: number; key: IncidentKey; type: "patch_incident"; value: number }
@@ -42,6 +43,18 @@ export function matchFormReducer(
   action: MatchFormAction,
 ): MatchFormReducerState {
   switch (action.type) {
+    case "set_numeric_draft": {
+      const current = state.values.numericDrafts ?? {};
+      if (current[action.path] === action.value) return state;
+      const numericDrafts = { ...current };
+      if (action.value === undefined) delete numericDrafts[action.path];
+      else numericDrafts[action.path] = action.value;
+      const { numericDrafts: _previous, ...values } = state.values;
+      return {
+        ...state,
+        values: Object.keys(numericDrafts).length > 0 ? { ...values, numericDrafts } : values,
+      };
+    }
     case "replace":
       return createMatchFormReducerState(action.payload);
     case "patch_root":
@@ -93,10 +106,17 @@ export function matchFormReducer(
       };
     case "sync_incidents_from_play_order": {
       const lookup = action.incidentByPlayOrder?.get(action.playOrder);
+      const { numericDrafts: previousNumericDrafts, ...values } = state.values;
+      const numericDrafts = Object.fromEntries(
+        Object.entries(previousNumericDrafts ?? {}).filter(
+          ([path]) => !path.startsWith(`players.${action.index}.incidents.`),
+        ),
+      );
       return {
         lastSyncedPlayerIndex: action.index,
         values: {
-          ...state.values,
+          ...values,
+          ...(Object.keys(numericDrafts).length > 0 ? { numericDrafts } : {}),
           players: state.values.players.map((player, index) =>
             index === action.index
               ? {

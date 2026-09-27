@@ -4,6 +4,7 @@ import { CreateHeldEventDialog } from "@/features/heldEvents/CreateHeldEventDial
 import { DeleteHeldEventDialog } from "@/features/heldEvents/DeleteHeldEventDialog";
 import { HeldEventsListCard } from "@/features/heldEvents/HeldEventsListCard";
 import { useHeldEventsPageModel } from "@/features/heldEvents/useHeldEventsPageModel";
+import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
 import { actionRowClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
@@ -22,6 +23,11 @@ export function HeldEventsPage() {
 
   return (
     <PageFrame>
+      <UnsavedChangesGuard
+        model={page.navigationGuard}
+        pending={dialogPending}
+        showPendingDialog={false}
+      />
       <PageContentSurface aria-label="開催履歴" className="grid gap-4" role="region">
         <div aria-label="開催履歴の操作" className={cn(actionRowClass, "justify-end")} role="group">
           <Button

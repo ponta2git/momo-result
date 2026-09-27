@@ -21,9 +21,9 @@ select_all() {
 }
 
 while IFS= read -r -d '' path; do
-  [[ "${path}" == scripts/ci/* ]] && policy_scripts=true
+  [[ "${path}" == scripts/ci/* || "${path}" == scripts/ops/* ]] && policy_scripts=true
   [[ "${path}" == .github/workflows/* || "${path}" == .github/actions/* ]] && actionlint=true
-  [[ "${path}" == tools/* ]] && go_tools=true
+  [[ "${path}" == scripts/tools/* ]] && go_tools=true
 
   case "${path}" in
     apps/api/openapi.yaml)
@@ -38,6 +38,13 @@ while IFS= read -r -d '' path; do
       ;;
     apps/api/*)
       api=true
+      runtime=true
+      ;;
+    apps/web/src/test/factories/* | apps/web/src/test/msw/fixtures.ts | \
+      apps/web/src/test/msw/seriesAnalysisFixtures.ts | apps/web/src/test/deferred.ts)
+      # Playwright imports these fixtures directly. Vitest cannot establish that
+      # the assembled browser scenarios still accept the changed inputs.
+      web=true
       runtime=true
       ;;
     apps/web/src/test/* | apps/web/src/*.test.* | apps/web/src/*.spec.* | \
@@ -65,7 +72,7 @@ while IFS= read -r -d '' path; do
     contracts/runtime-tool-characterization-v1.json)
       go_tools=true
       ;;
-    tools/go.mod | tools/go.sum | tools/cmd/momo-runtime-tool/*)
+    scripts/tools/go.mod | scripts/tools/go.sum | scripts/tools/cmd/momo-runtime-tool/*)
       runtime=true
       ;;
     .dockerignore)
@@ -73,8 +80,9 @@ while IFS= read -r -d '' path; do
       analysis=true
       analysis_image=true
       ;;
-    .momo-db-ref | scripts/ci/apply-momo-db-migrations.sh)
+    .momo-db-ref | scripts/ci/apply-momo-db-migrations.sh | scripts/ci/resolve-momo-db-migrations.sh)
       api=true
+      web=true
       analysis=true
       analysis_image=true
       runtime=true
@@ -90,6 +98,7 @@ while IFS= read -r -d '' path; do
     package.json | pnpm-lock.yaml | pnpm-workspace.yaml)
       web=true
       runtime=true
+      [[ "${path}" != package.json ]] || policy_scripts=true
       ;;
     mise.toml)
       select_all
@@ -98,6 +107,10 @@ while IFS= read -r -d '' path; do
       scripts/ci/series-analysis-*)
       analysis=true
       analysis_image=true
+      ;;
+    scripts/ci/check-pr-branch-policy.sh | scripts/ci/check-pr-ready.sh | \
+      scripts/ci/classify-changes.sh | scripts/ci/classify-git-range.sh | \
+      scripts/ci/extract-release-notes.sh | scripts/ci/runtime-release-notes.sh)
       ;;
     scripts/ci/runtime-* | scripts/ci/start-runtime-container.sh | \
       scripts/ci/summarize-runtime-logs.sh | \
@@ -108,11 +121,12 @@ while IFS= read -r -d '' path; do
       api=true
       web=true
       ;;
-    scripts/ci/test-* | scripts/ci/canonicalize-artifact-digest.sh | \
-      scripts/ci/check-pr-branch-policy.sh | scripts/ci/check-pr-ready.sh | \
-      scripts/ci/classify-changes.sh | scripts/ci/extract-release-notes.sh | \
-      scripts/ci/load-* | scripts/ci/resolve-* | scripts/ci/sanitize-* | \
-      scripts/ci/validate-*)
+    scripts/ci/test-* | scripts/ci/*.test.mjs | scripts/ci/canonicalize-artifact-digest.sh | \
+      scripts/ci/load-analysis-candidate.sh | scripts/ci/load-runtime-image-artifact.sh | \
+      scripts/ci/resolve-pushed-runtime-image.sh | scripts/ci/sanitize-analysis-report.sh | \
+      scripts/ci/validate-analysis-candidate.sh | scripts/ci/validate-analysis-worker-readiness.sh | \
+      scripts/ci/validate-runtime-candidate.sh | scripts/ci/validate-runtime-deployment.sh | \
+      scripts/ci/validate-runtime-release-selection.sh)
       ;;
     scripts/ci/actionlint.sh | scripts/ci/install-actionlint.sh | \
       scripts/ci/public-repo-safety-check.sh)
@@ -123,6 +137,8 @@ while IFS= read -r -d '' path; do
       ;;
     scripts/dev-local.mjs | scripts/dev-local.test.mjs)
       policy_scripts=true
+      ;;
+    scripts/ops/analysis.sh | scripts/ops/analysis-maintain.sh)
       ;;
     .github/workflows/api.yml)
       api=true
@@ -152,7 +168,7 @@ while IFS= read -r -d '' path; do
       ;;
     .github/workflows/public-safety.yml | .github/actions/*)
       ;;
-    tools/*)
+    scripts/tools/*)
       ;;
     .github/dependabot.yml | docs/* | *.md)
       ;;

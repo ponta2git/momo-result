@@ -73,6 +73,8 @@ object PostgresMatches extends PostgresMatchesReadSupport:
         case state if isUniqueViolation(state) =>
           conflict[Unit](s"matchNoInEvent ${record.matchNoInEvent.value
               .toString} already exists for held event ${record.heldEventId.value}.")
+        case state if isForeignKeyViolation(state) =>
+          conflict[Unit]("Match prerequisites changed before the update completed.")
       }
 
     override def delete(id: MatchId): ConnectionIO[Boolean] =
@@ -161,13 +163,17 @@ object PostgresMatches extends PostgresMatchesReadSupport:
         Map.empty[HeldEventId, MatchesRepository.HeldEventStats].pure[ConnectionIO]
       else
         val ids = heldEventIds.map(_.value).toArray
-        sql"""
+        PostgresReadBudget.rows[HeldEventMatchStatsRow](
+          sql"""
             SELECT held_event_id, COUNT(*)::int, COALESCE(MAX(match_no_in_event), 0)::int,
                    game_title_id, season_master_id
             FROM matches
             WHERE held_event_id = ANY($ids)
             GROUP BY held_event_id, game_title_id, season_master_id
-          """.query[HeldEventMatchStatsRow].to[List].map { rows =>
+          """,
+          PostgresReadBudget.ScopeRows,
+          "Held-event match scopes"
+        ).map { rows =>
           val seen = rows.groupBy(_.heldEventId).map { case (id, grouped) =>
             id -> MatchesRepository.HeldEventStats(
               matchCount = grouped.map(_.count).sum,

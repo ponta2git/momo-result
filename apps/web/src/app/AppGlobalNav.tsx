@@ -8,6 +8,7 @@ import {
   ScanLine,
   Trophy,
 } from "lucide-react";
+import { useMatch } from "react-router-dom";
 
 import { useAuth } from "@/shared/auth/useAuth";
 import { GlobalNav } from "@/shared/navigation/GlobalNav";
@@ -31,6 +32,7 @@ const noManagementItems: readonly GlobalNavItem[] = [];
 
 export function AppGlobalNav() {
   const auth = useAuth();
+  const reviewingMatch = useMatch("/review/:matchSessionId") !== null;
   const canLogout = import.meta.env.DEV && auth.isAuthenticated && Boolean(auth.logout);
   const logoutFailed = Boolean(auth.logoutError);
   const sessionLabel =
@@ -82,7 +84,11 @@ export function AppGlobalNav() {
         </div>
       }
       environmentLabel={import.meta.env.DEV ? "DEV" : undefined}
-      items={primaryItems}
+      items={
+        reviewingMatch
+          ? primaryItems.map((item) => ({ ...item, current: item.to === "/matches" }))
+          : primaryItems
+      }
       managementItems={auth.auth?.isAdmin ? adminItems : noManagementItems}
     />
   );

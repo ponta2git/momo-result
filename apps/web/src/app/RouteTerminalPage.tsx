@@ -1,4 +1,4 @@
-import { ArrowLeft, Download, ListFilter, PenSquare, ScanLine } from "lucide-react";
+import { ArrowLeft, Download, PenSquare, ScanLine } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { routeTerminalPresentation } from "@/app/RouteSuspenseFallback";
@@ -7,18 +7,15 @@ import type {
   RouteHeaderActionsPresentation,
   RouteNavigationPresentation,
 } from "@/app/RouteSuspenseFallback";
-import { actionRowClass } from "@/shared/ui/actions/actionGroup";
+import { actionRowClass, inlineActionGroupClass } from "@/shared/ui/actions/actionGroup";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import {
-  PageHeader,
-  responsivePageHeaderActionGroupClass,
-  responsivePageHeaderLeadActionGroupClass,
-} from "@/shared/ui/layout/PageHeader";
+import { PageHeader } from "@/shared/ui/layout/PageHeader";
 import { StatusBadge } from "@/shared/ui/status/StatusBadge";
+import { contentText } from "@/shared/ui/typography";
 
 type RouteTerminalPageProps = {
   children: ReactNode;
@@ -52,17 +49,11 @@ function HeaderNavigationLink({ href, icon, label }: RouteNavigationPresentation
 function HeaderActionIcon({ icon }: Pick<RouteHeaderActionPresentation, "icon">) {
   if (icon === "scan") return <ScanLine aria-hidden="true" />;
   if (icon === "manual") return <PenSquare aria-hidden="true" />;
-  if (icon === "filter") return <ListFilter aria-hidden="true" />;
   if (icon === "download") return <Download aria-hidden="true" />;
   return null;
 }
 
-function HeaderActions({
-  items,
-  label,
-  layout = "inline",
-  semantics = "group",
-}: RouteHeaderActionsPresentation) {
+function HeaderActions({ items, label, semantics = "group" }: RouteHeaderActionsPresentation) {
   const actions = items.map((item) => (
     <LinkButton
       icon={item.icon ? <HeaderActionIcon icon={item.icon} /> : undefined}
@@ -75,31 +66,19 @@ function HeaderActions({
     </LinkButton>
   ));
 
-  if (layout !== "inline") {
-    const className =
-      layout === "responsive-lead"
-        ? responsivePageHeaderLeadActionGroupClass
-        : responsivePageHeaderActionGroupClass;
-    if (semantics === "navigation") {
-      return (
-        <nav aria-label={label} className={className} data-page-header-actions={layout}>
-          {actions}
-        </nav>
-      );
-    }
+  if (semantics === "navigation") {
     return (
-      <div
-        aria-label={label}
-        className={className}
-        data-page-header-actions={layout}
-        role={label ? "group" : undefined}
-      >
+      <nav aria-label={label} className={inlineActionGroupClass}>
         {actions}
-      </div>
+      </nav>
     );
   }
 
-  return actions;
+  return (
+    <div aria-label={label} className={inlineActionGroupClass} role={label ? "group" : undefined}>
+      {actions}
+    </div>
+  );
 }
 
 /** Keeps route-level error and access states in the same page composition as loading and ready. */
@@ -121,14 +100,18 @@ export function RouteTerminalPage({
       <div
         className={cn(
           actionRowClass,
-          presentation.descriptionStatus ? "justify-between" : "justify-end",
+          presentation.headerNavigation || presentation.descriptionStatus
+            ? "justify-between"
+            : "justify-end",
         )}
         data-page-content-actions=""
       >
-        {presentation.descriptionStatus ? (
-          <StatusBadge {...presentation.descriptionStatus} />
-        ) : null}
         {pageActions}
+        {presentation.descriptionStatus ? (
+          <div className="ms-auto">
+            <StatusBadge {...presentation.descriptionStatus} />
+          </div>
+        ) : null}
       </div>
     ) : null;
 
@@ -159,11 +142,12 @@ export function RouteTerminalPage({
       ) : null}
       <PageContentSurface
         aria-label={typeof title === "string" ? title : undefined}
-        className={cn(contentToolbar ? "grid gap-4" : "", contentClassName)}
+        className={cn("grid gap-4", contentClassName)}
         padding={presentation.contentPadding}
         role={typeof title === "string" ? "region" : undefined}
       >
         {contentToolbar}
+        {presentation.preserveHeader ? null : <h2 className={contentText.heading}>{title}</h2>}
         {children}
       </PageContentSurface>
     </PageFrame>

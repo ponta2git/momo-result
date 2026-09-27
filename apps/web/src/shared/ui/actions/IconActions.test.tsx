@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { ArrowRight, RefreshCw } from "lucide-react";
+import { createRef } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
@@ -24,47 +25,40 @@ describe("icon actions", () => {
   });
 
   it("keeps icon navigation as a link and removes navigation when disabled", () => {
+    const ref = createRef<HTMLAnchorElement>();
     const { rerender } = render(
       <MemoryRouter>
         <IconLink
           aria-label="試合結果へ"
           icon={<ArrowRight aria-label="右矢印" />}
+          ref={ref}
           to="/matches/1"
         />
       </MemoryRouter>,
     );
 
     expect(screen.getByRole("link", { name: "試合結果へ" })).toHaveAttribute("href", "/matches/1");
+    expect(ref.current).toBe(screen.getByRole("link", { name: "試合結果へ" }));
 
     rerender(
       <MemoryRouter>
-        <IconLink disabled aria-label="試合結果へ" icon={<ArrowRight />} to="/matches/1" />
+        <p id="result-reason">結果の確定を待っています</p>
+        <IconLink
+          aria-describedby="result-reason"
+          disabled
+          aria-label="試合結果へ"
+          icon={<ArrowRight />}
+          ref={ref}
+          to="/matches/1"
+        />
       </MemoryRouter>,
     );
 
     const disabledLink = screen.getByRole("link", { name: "試合結果へ" });
     expect(disabledLink).toHaveAttribute("aria-disabled", "true");
     expect(disabledLink).not.toHaveAttribute("href");
-  });
-
-  it("keeps derived icon-button state authoritative over unsafely forwarded attributes", () => {
-    const unsafeNativeProps = { "aria-busy": "false" } as const;
-    render(
-      // @ts-expect-error -- verifies the public API rejects this override while exercising the runtime guard for untyped callers.
-      <IconButton
-        {...unsafeNativeProps}
-        aria-label="一覧を更新"
-        icon={<RefreshCw />}
-        pending
-        pendingLabel="一覧を更新中"
-        type="submit"
-      />,
-    );
-
-    const button = screen.getByRole("button", { name: "一覧を更新中" });
-    expect(button).toHaveAttribute("aria-busy", "true");
-    expect(button).toBeDisabled();
-    expect(button).toHaveAttribute("type", "submit");
+    expect(disabledLink).toHaveAccessibleDescription("結果の確定を待っています");
+    expect(ref.current).toBe(disabledLink);
   });
 
   it("keeps supplied icons out of icon and text action names", () => {

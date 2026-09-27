@@ -98,7 +98,7 @@
 - page、data surface、workspace は一貫した外余白の内側で利用可能な横幅を使い、読み幅の制約は prose、単一 field 群など幅を狭める理由がある内容へ局所的に掛ける。長文になり得る page description、help、error、notice、empty state、narrative は、親の面を狭めず文字内容を共通の readable measure `max-w-2xl` 以内へ制限する。短い label、metadata、table、chart、matrix、横比較にはこの measure を一律適用しない。画面全体を文章幅へ縮めず、試合間・プレーヤー間の走査や比較が速くなる表・図表は一貫して密にする。不規則な欠け、根拠のない非対称、任意の値や z-index を追加しない。
 - 縦scrollが不要なpageでは、viewportの右端にscrollbar用の空きを常時予約せず、global navigationとpageが利用可能な幅を使う。必要なscrollbarはブラウザに任せ、dialog / selectのscroll lockと幅補正は共通primitiveに任せる。
 - page 幅は内容形状に応じた少数の共通 variant に収束させる。単一の短い form / prose は `max-w-2xl` の narrow、通常の一覧・管理・取り込みは standard、横比較・詳細分析は wide、source と editor を常時並置する編集 workspace だけは workspace を使う。同等の画面は同じ variant を使い、内部の短い prose や単一 field だけを局所的に狭める。利用可能幅を埋めるためだけに workspace を選ばない。
-- responsive layout は、可変列に `minmax(0, 1fr)`、child に縮小可能な幅を与え、label や操作名が不自然に割れる前に列を積み替える。breakpoint は端末名ではなく内容が保てる幅で決める。page 全体の横 scroll は作らず、table、図表、source image など横方向の関係を保つ必要がある領域だけが、可視の案内とともに局所 scroll を所有してよい。
+- responsive layout は、可変列に `minmax(0, 1fr)`、child に縮小可能な幅を与え、label や操作名が不自然に割れる前に列を積み替える。breakpoint は端末名ではなく内容が保てる幅で決める。再利用部品の内部配置は intrinsic な折り返し、必要なら名前付き container query で割当幅に応じて切り替える。inline-size containment は親が幅を与える境界に置き、内容から幅が決まる badge・status まで一律に適用しない。page 全体の横 scroll は作らず、table、図表、source image など横方向の関係を保つ必要がある領域だけが、可視の案内とともに局所 scroll を所有してよい。
 - 通常文を任意の位置で強制改行しない。ID、URL、外部 error など切れ目のない長い値だけへ局所的な wrap または scroll を指定し、全画面へ `overflow-wrap: anywhere` を継承させない。見出しの balance や本文の pretty wrap も、data label、定義値、control label へ一律適用せず、役割ごとに指定する。
 - 一行として走査する control、status、action cluster、通常の table cell は中央、文字同士の短い label / value 行は baseline、heading と lead や主情報と metadata からなる可変高の複合 record は上端を揃える。field を横に並べる form row は control の下端を揃えてよい。table editor の上端、chart axis の下端など対応関係のための例外は局所的に明示し、画面ごとの任意な offset で調整しない。shared interactive primitive が文字サイズ、行高、responsive な高さを所有し、global element selector の font shorthand で上書きしない。
 - 日時、金額、試合番号、状態名は共通 formatter / ViewModel を使う。件数と比較値には対象、単位、分母または基準を添え、整列する数値には tabular numerals を使う。
@@ -127,6 +127,8 @@
 
 - 汎用部品は通常表示を既定とし、主要コンテンツであることが契約に含まれる部品だけが、該当する値・短い文言へ主要強調を持つ。feature composition は画面の主役を選び、同じ文字 recipe をその箇所へ適用する。任意の `fontWeight` を渡す万能 API や親全体の太字指定で補正しない。`th` / `scope` / heading level などの意味構造とウェイトを分離し、子の label・metadata・操作へ太字を継承させない。
 - labelと値を読む表示は、共通の `FactList` がterm / definitionの意味構造、文字recipe、labelと値の近さ、項目間隔、列数に応じた積み替えを所有する。通常の文章・記録情報には周囲の面を共有するplain表示を使い、featureは項目の内容と並びを渡す。入力fieldはlabelとcontrolの対応を持つ別契約とし、この表示用patternへ統合しない。
+- 通常の表は `DataTable` が caption、列見出し、行見出し、overflow の検出と案内を所有する。実際に scroll が必要な場合だけ keyboard の到達点を加え、caption または用途名で scroll 領域を識別する。feature は行の identity、業務 cell、並び順を渡す。
+- 軸やセル構造が異なる行列も、native table と共有 `TableScrollArea` の組合せで同じ scroll 契約を使う。SVG 図表は保存済みの数値・系列名を読み取れる代替表を持ち、多数の観測点すべてを Tab 順に入れない。行の移動先が多い場合は、数値表のページ送りで到達可能な操作数を制限する。
 - 見出しと本文・値・説明からなる読み取り群へ、編集・移動・保存などの補助操作群を横に添える場合は、`ContentWithActions` で内容群と操作群を並べる。見出しとその本文・値・説明は内容群にまとめ、操作の高さで文字同士の距離を増やさない。横方向の群間は16px、折り返した操作との間隔は8pxとし、部品へ割り当てられた幅に収まらなければ内容、操作の読み順で積み替える。画面幅だけで横並びを強制せず、負の余白や重ね配置でhit targetを本文へはみ出させない。内容内部の文字階層と間隔、見出し・region・操作名の意味はfeatureが所有する。page header、labelと入力欄、tab、disclosure、dialogの固定headerと閉じる操作は各primitiveの操作・scroll契約を使い、このpatternへ置き換えない。
 
 ### 3.2 選択・表示切替・表示範囲
@@ -149,6 +151,7 @@
 ### 3.3 移動・実行・確定
 
 - link は場所の移動、button は現在の文脈での実行に使う。icon-only の移動と実行もこの区別を保ち、見た目を共通化しても element の意味を変えない。
+- shared action link は app 内の routing を `to`、document の移動を `href` で区別する。disabled / pending の切替で実要素、ref、説明、focus を作り直さず、activation を制限する。開始した native navigation を pending 表示への切替で取り消さない。
 - 実行操作は影響する対象の近くへ置き、ラベルで対象と予測できる結果を示す。操作前に必要な制約と影響を示し、押下直後、pending、成功、部分成功、失敗のうち該当する状態を同じ操作文脈で返す。
 - form の確定は選択または編集と区別し、pending 中は同じ送信を重複実行させない。取り込み・手入力・OCR確認の最終実行領域は、共通の `taskActionPanelClass` で枠なしの淡色背景と16pxの内余白を持つ操作領域に揃え、可否・結果のfeedbackと実行操作を一群にする。dialog 内の確定操作は一貫した footer、読み順、主要度を持ち、pending 中に不用意に閉じて結果を見失わせない。
 - 不可逆または高コストな操作は、対象と結果を `AlertDialog` で明示する。安全に可逆な操作は即時反映と Undo を優先し、routine な操作へ確認 dialog を増やさない。
@@ -174,7 +177,8 @@
 ## 4. 入力・ワークスペース・アクセシビリティ
 
 - form は可視ラベル、説明、必須、validation error、disabled / pending を同じ field 境界で関連付け、paste を妨げない。checkbox、radio、text input は native semantics を保つ。一行ラベルの単一選択はsharedのBase UI Selectを使い、featureでkeyboard・focus・候補表示を再実装しない。
-- 単一選択は、候補移動と値確定を分ける。現在値はcheckとselected surface、操作位置はfocusで示し、hoverは共通の反応の文法へ接続する。Enter / Spaceで確定し、Escape・外側押下・Tabでは未確定の候補を採用しない。Escapeは欄へ戻り、Tabは次の操作へ進む。閉じた欄のtypeaheadによる値確定は維持し、同じ値の再選択で業務処理を増やさない。
+- 一行Selectは、候補移動と値確定を分ける。現在値はcheckとselected surface、操作位置はfocusで示し、hoverは共通の反応の文法へ接続する。Enter / Spaceで確定し、Escape・外側押下・Tabでは未確定の候補を採用しない。Escapeは欄へ戻り、Tabは次の操作へ進む。閉じた欄のtypeaheadによる値確定は維持し、同じ値の再選択で業務処理を増やさない。
+- radio と segmented control は native radio group の矢印移動・選択と一つの Tab 到達点を保つ。候補の名前は対象を識別する安定した label とし、件数・状態・補足は description、選択状態は checked として関連付ける。同じ説明を名前にも繰り返さない。
 - Selectの可視triggerがlabel・説明・error・外部refの接続先となり、フォーム送信とresetはsharedが所有する。空文字の意味と候補更新時の値変更はfeatureが所有する。popupは既存の寸法・面・境界を使い、viewport内の一つの候補scrollerへ収める。dialog内の候補はowning dialogのfocusとlayerに所属し、本文で切れたり、親dialogの退出後も操作可能なまま残ったりしない。
 - 試合入力表の選択欄もEnter / Space / 上下を選択操作に使う。閉じた選択欄ではTab・左右で欄を移動し、開いた候補の操作を表の移動へ渡さない。数値入力のセル移動・編集取消はその入力契約を維持する。
 - 入力用の文字は `shared/ui/typography.ts` の `fieldText` を `Field` / `Fieldset` と独自入力欄で共有する。可視ラベルは14 / 20px・通常ウェイトの主要文字色、補足は12 / 16px、修正に必要なエラーは14 / 20px・dangerとし、読むための小さなmetadataラベルを入力ラベルやエラーへ流用しない。control自体の入力値・高さ・focus表示は既存のinteractive primitiveが所有する。
@@ -256,7 +260,11 @@
 
 ## 7. ナビゲーションと有限のタスクループ
 
+- ブラウザー title と主ナビの現在地は route の意味を示す。通常の pathname 遷移は安定した main landmark へ focus を移し、同じページの条件変更、履歴移動、隣接移動の専用 focus を上書きしない。未知の URL は黙って別 URL へ置き換えず、復帰先を示す。
+- 詳細の前後移動は `AdjacentNavigation` が全幅で等幅の2列を所有し、前を始端、次を終端へ揃える。方向の矢印を外側へ置き、label と説明の行を対応させる。説明は省略せず折り返し、既知の端や一時的な無効状態でも方向の位置を残す。戻る・作業をやめる導線は領域の始端に置き、同じ領域内の sample などの補助状態は終端へ分離する。dialog のキャンセルは確定操作と同じ footer 内で、DOM と視覚の両方で確定より先に置く。
 - 一覧、詳細、編集、出力、OCR、管理をまたぐ場合は、必要な filter、sort、page、selection、内部 `returnTo` を保持する。`returnTo` は app 内 path だけを受け入れ、復元不能時は安全な既定導線と理由を示す。
+- 未保存入力は workflow の identity に属する。表示幅や同じ作業の補助 query を変えても保持し、別作業への移動・外部離脱では必要な破棄確認を行う。保存中の入力を送信 snapshot から切り離さず、完了前の離脱操作を結果判明後に勝手に再開しない。
+- 完了・失敗・download は開始時の対象と形式に結びつける。画面や対象を離れた応答は、現在の選択を変えたり、別対象の結果として表示したりしない。中断可能な read/download は所有する画面の終了時に中断する。
 - タスクは、きっかけ、最小の操作、確認できる結果、明確な終了からなる有限の流れにする。完了後の連続利用表示、緊急性の演出、予測不能な報酬、再利用させるだけの CTA は追加しない。
 - 通知、再訪誘導、保存済み条件、shortcut は、要求で定義した利用者の便益と停止方法を持つ場合だけ使う。FOMO や不安、export を妨げる lock-in を作らず、通常経路と発見可能なラベルを残す。
 
@@ -274,13 +282,13 @@
 
 ## 9. 検証
 
-本節は UI 変更で検討する evidence catalog であり、全項目を毎回実行する一覧ではない。対象要求と本書から守る利用者価値を特定し、`docs/test-rule.md` に従って静的検査、component test、Playwright、visual review から必要な最小集合を選ぶ。以下の命令形は、その evidence を選んだ場合だけ適用する。
+本節は UI 変更で検討する evidence catalog であり、全項目を毎回実行する一覧ではない。対象要求と本書から守る利用者価値を特定し、`docs/test-rule.md` の「UI の検証を選ぶ基準」に従って静的検査、component test、Playwright、visual review から必要な最小集合を選ぶ。配置や微細な反応の一貫性を設計要求とすることは、その座標・DOM 構造・animation 設定を恒久 test へ固定する理由にはならない。以下の命令形は、その evidence を選んだ場合だけ適用する。
 
 - 静的検査の採用は `docs/dev-rule.md` の Change Gates に従う。UI では未定義 token、禁止 import、構文上確定する依存境界など、違反を一意に判定できる規則だけを候補とし、UI 全体の適合を一つの source checker に集約しない。
 - raw value の有無、一定間隔の倍数、shadow や `z-index` の書式、近似色、表の alignment といった表層規則は、それ単独では blocking gate にしない。本書の意味、階層、操作、アクセシビリティへ実害が現れる場合に、実装規約または visual review で扱う。
-- component test は、shared primitive と利用者価値が現れる component を中心に、選択した state matrix、keyboard、focus、accessible name、local error、pending 中の重複操作、reduced motion 時の挙動を実操作で固定する。rendered size が必要な hit target は代表 flow の browser / visual evidence で確認し、各 component へ同じ case を複製しない。
+- component test は、shared primitive と利用者価値が現れる component を中心に、keyboard での到達・実行、入力保持、pending 中の重複操作、local error からの復旧を実操作で確認する。accessible name や focus はその操作の成立に必要な範囲で判定する。rendered size が必要な hit target は代表 flow の browser / visual evidence で確認し、各 component へ同じ case を複製しない。
 - 固定メンバー、プレー順、状態・意味 token のように複数画面が消費する対応関係は、共通の型・定義を実装上の正本とし、その consumer 契約を unit / component test で代表確認する。各画面の source 文字列を横断走査しない。
-- 主要 flow は Playwright で、変更が影響する layout mode の代表 viewport と主要状態を確認し、URL、request、保存、download、主要結果を主 oracle とする。responsive behavior を変える場合は対応する最小幅を含め、意図しない横 scroll、safe area、focus 復帰、dialog / disclosure の位置変化も確認する。同じ layout mode の近接幅を一律に重複実行しない。
+- 主要 flow の Playwright は URL、request、保存、download、主要結果を主 oracle とする。responsive な切替で入力を失う、必要な操作へ到達できないといった browser 固有の失敗を自動化し、微細な揃え・safe area・dialog の配置は変更時の visual review で確認する。同じ layout mode の近接幅を一律に重複実行しない。
 - screenshot は補助とし、視覚レビューでは hierarchy、読み幅、関係的余白、product specificity、restraint、structural fit を確認する。共通の文字・内容patternを導入するときは、適用する異なる用途の代表画面で、主情報・本文・メタ情報が同じ役割として読め、画面固有の優先順位や必要な注意を失わないことを確認する。component が親 slot に追従していること、狭幅と広幅で intrinsic constraint が保たれること、sibling 間の divider と部品 perimeter が二重にならないことも代表画面で確認する。初見点検と cognitive walkthrough で、目的、現在地、主要操作を説明できるか確認する。
 - ウェイト変更では、通常の label・操作・metadata が主要結果と競合せず、残した主要強調がその画面で読むべき結果や問題に対応することを確認する。500 と 400 が同じ face でも見出しを判別でき、selected / disabled / error と現在地を太字だけに依存せず認識できること、文字幅の変化で折り返しや操作位置が破綻しないことも代表 viewport と状態で確認する。computed weight や太字の個数だけを合格条件にせず、OS ごとの描画を未確認ならその境界を報告する。
 - page 最上部の可視タイトルを省略する変更では、空の header slot や余白が残らず主要 surface が最初の page scope になること、移した action が作用対象の近くにあり loading / terminal / ready で順序が一致すること、global navigation・landmark・section heading・control label から現在地と目的を説明できることを代表 route で確認する。

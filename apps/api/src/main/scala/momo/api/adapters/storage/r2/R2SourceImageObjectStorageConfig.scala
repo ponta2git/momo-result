@@ -51,7 +51,11 @@ object R2SourceImageObjectStorageConfig:
           character == '-'
       ) && bucket.headOption.exists(_.isLetterOrDigit) &&
       bucket.lastOption.exists(_.isLetterOrDigit)
-    val valid = endpointIsAllowed && endpoint.getPath.toString.isEmpty && region.nonEmpty &&
+    val valid = endpointIsAllowed && endpointHost.nonEmpty &&
+      Option(endpoint.getRawPath).forall(_.isEmpty) && Option(endpoint.getRawUserInfo).isEmpty &&
+      Option(endpoint.getRawQuery).isEmpty && Option(endpoint.getRawFragment).isEmpty &&
+      (endpoint.getPort == -1 || (endpoint.getPort > 0 && endpoint.getPort <= 65535)) &&
+      region.nonEmpty &&
       bucketIsSafe && !apiCallTimeout.isNegative && !apiCallTimeout.isZero &&
       !apiCallAttemptTimeout.isNegative && !apiCallAttemptTimeout.isZero &&
       apiCallTimeout.compareTo(apiCallAttemptTimeout) >= 0 && maxAttempts >= 1 && maxAttempts <= 2

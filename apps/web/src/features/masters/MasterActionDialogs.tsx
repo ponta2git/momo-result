@@ -1,12 +1,12 @@
 import { Pencil, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { formatApiError } from "@/shared/api/problemDetails";
 import { layoutFamilies, layoutFamilyLabels } from "@/shared/domain/ocr";
 import type { LayoutFamily } from "@/shared/domain/ocr";
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
-import { AlertDialog, Dialog } from "@/shared/ui/feedback/Dialog";
+import { AlertDialog, Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
 
@@ -30,12 +30,16 @@ export function MasterEditDialog({
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string>();
   const [pending, setPending] = useState(false);
+  const submitting = useRef(false);
 
   return (
     <Dialog
       busy={pending}
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={(next) => {
+        if (next) setError(undefined);
+        setOpen(next);
+      }}
       title={title}
       trigger={
         <IconButton
@@ -51,6 +55,8 @@ export function MasterEditDialog({
         className="grid gap-4"
         onSubmit={async (event) => {
           event.preventDefault();
+          if (submitting.current) return;
+          submitting.current = true;
           setError(undefined);
           setPending(true);
           const formData = new FormData(event.currentTarget);
@@ -65,11 +71,13 @@ export function MasterEditDialog({
           } catch (caught) {
             setError(formatApiError(caught, `${label}の更新に失敗しました`));
           } finally {
+            submitting.current = false;
             setPending(false);
           }
         }}
       >
         <TextField
+          disabled={pending}
           defaultValue={initialName}
           error={error}
           label={`${label}名`}
@@ -78,6 +86,7 @@ export function MasterEditDialog({
         />
         {showLayoutFamily ? (
           <SelectField
+            disabled={pending}
             label="読み取り方式"
             description="作品ごとの画面構造に合わせて、読み取り方を切り替えます。"
             defaultValue={initialLayoutFamily ?? layoutFamilies[0]}
@@ -88,9 +97,14 @@ export function MasterEditDialog({
             }))}
           />
         ) : null}
-        <Button disabled={pending} pending={pending} pendingLabel="保存中" type="submit">
-          保存
-        </Button>
+        <DialogFooter>
+          <Button disabled={pending} variant="secondary" onClick={() => setOpen(false)}>
+            キャンセル
+          </Button>
+          <Button disabled={pending} pending={pending} pendingLabel="保存中" type="submit">
+            保存
+          </Button>
+        </DialogFooter>
       </form>
     </Dialog>
   );

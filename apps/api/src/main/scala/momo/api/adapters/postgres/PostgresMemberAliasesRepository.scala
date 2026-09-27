@@ -41,7 +41,14 @@ object PostgresMemberAliases:
     override def list(memberId: Option[MemberId]): ConnectionIO[List[MemberAlias]] =
       val where = memberId.fold(Fragment.empty)(id => fr"WHERE member_id = $id")
       val order = fr"ORDER BY member_id, alias, id"
-      (selectAll ++ where ++ order).query[MemberAliasRow].to[List].map(_.map(fromRow))
+      val nameLimit = PostgresReadBudget.NameCodePoints
+      val bounded = fr"""SELECT char_length(alias) <= $nameLimit,
+        id, member_id, LEFT(alias, $nameLimit), created_at FROM member_aliases"""
+      PostgresReadBudget.guardedRows[MemberAliasRow](
+        bounded ++ where ++ order,
+        PostgresReadBudget.CatalogRows,
+        "Member alias catalog"
+      ).map(_.map(fromRow))
 
     override def find(id: MemberAliasId): ConnectionIO[Option[MemberAlias]] =
       (selectAll ++ fr"WHERE id = $id").query[MemberAliasRow].option.map(_.map(fromRow))

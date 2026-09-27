@@ -2,6 +2,7 @@ package momo.api.usecases.common
 
 import cats.syntax.all.*
 
+import momo.api.domain.constraints.TextLimits
 import momo.api.errors.AppError
 
 /**
@@ -36,3 +37,14 @@ private[usecases] object UseCaseField:
     val trimmed = value.trim
     if trimmed.isEmpty then Left(AppError.ValidationFailed(s"$field must not be blank."))
     else Right(trimmed)
+
+  def name(field: String, value: String): Either[AppError, String] = nonBlank(field, value).flatMap {
+    trimmed =>
+      Either.cond(
+        trimmed.codePointCount(0, trimmed.length) <= TextLimits.NameMaxCodePoints,
+        trimmed,
+        AppError.ValidationFailed(
+          s"$field must contain at most ${TextLimits.NameMaxCodePoints} characters."
+        ),
+      )
+  }

@@ -39,6 +39,8 @@
 - `apps/api/openapi.yaml` は内部 Web codegen 用の追跡する派生物であり、契約や公開 API documentation の正本ではない。Tapir から一時生成した spec を保守された OpenAPI-aware linter で構造検証し、tracked artifact と一致させ、その artifact から Web 型を生成する。手編集で差分を解消しない。
 - OpenAPI lint は unresolved reference、path / parameter、schema、operation identity など構造整合性に限定する。field の公開可否、認証、業務意味は endpoint、DTO、要求・domain 規約で決め、legacy 名や source 断片の文字列検査を契約にしない。
 - HTTP 層は入力・認証・エラー変換に閉じ、DB、Redis、業務分岐を直接持たない。
+- request body はサイズ上限に加えて、decode 前に同時実行数を制限する。画像uploadと通常mutationを分離し、満杯の場合は本文を保持して待機せず再試行可能な応答を返す。
+- JSON readの待機件数も制限し、JSON・画像・exportの応答は転送終了まで同時実行枠を保持する。DB projectionは全量取得後の検査に頼らず、件数・文字数・保存JSONのbyte数を転送前に検証する。
 - Tapirのserver logicで発生した例外は外側の`HttpErrorMiddleware`へ伝え、共通のProblem Detailsと機密情報を除いたincident logに変換する。Tapirの既定例外応答・例外logと二重に処理しない。mutationの結果不明時に保持するidempotency予約は、このHTTP変換より内側で確定する。
 - raw ID、設定値、wire value は境界で検証済み型へ変換する。usecase へ未検証値や wire DTO を渡さない。
 - 分析は現行の成果物契約とHTTP経路だけを提供する。旧世代のdecoder、互換用route、旧形式からの補完は維持しない。成果物形式を変えるときはAPI・Web・Workerを揃え、必要な再計算を公開再開前に完了する。保存形式を変えないHTTP projectionの変更では対応API/Webを一体で切り替え、Worker変更・再計算を要求しない。
@@ -57,8 +59,10 @@
 - ZIPはresponse bodyの評価scope内で生成し、一時ファイルや全量bufferをHTTP応答へ引き渡さない。事前に画像metadataの合計サイズを検証し、生成中も実際のZIPサイズを制限する。送信中の読取・生成失敗や上限超過は転送を中断し、Webはbody全体の取得成功後にだけファイル保存を開始する。
 - 新しいread endpointや必須response情報にWebを移すときは、APIを先に配備する。旧Webが使う有効なendpointは移行期間中維持し、廃止済みrouteの固定error応答を有効な契約として生成clientへ残さない。
 - 集約結果だけが必要な一覧はDBで集約し、表示しない監査履歴を全件転送しない。DB内で完結するsnapshotの複製は `INSERT ... SELECT` で表し、JVMを経由するread/write往復を増やさない。単純化とquery costの両方を、実行計画と境界のテストで確認する。
+- DB接続・pool取得・SQL実行・lock待ちには有限の上限を設ける。transaction poolingでも制限を維持するため、SQL側の上限は各transactionで `SET LOCAL` を適用し、個別処理では必要に応じて短縮する。
 - 通常制御フローは型で返し、予期しない不整合や外部I/O失敗と区別する。
 - 部分更新は既存値と入力を合わせた実効状態で検証する。読み取り後の前提を更新に使う場合は、同じ更新条件で再検証する。
+- 下書きの変更・取消とOCRの受付・取消は、認証主体の所有権をusecaseと原子的な保存操作で確認する。共同編集可能な確定済み試合の契約とは分ける。
 - in-memory adapter は production adapter と同じ状態遷移 guard を持つ。単純化した double を正本にしない。
 - 分析読み取りは保存済み成果物を返すだけにし、関連する読み取りを同じ artifact version へ固定する。詳細は `docs/requirements/series-analysis-batch.md` を正本とする。
 
@@ -72,6 +76,7 @@
 - API の commit 後 handoff は process-local wake までとし、外部通知の I/O は Resource が所有する coordinator で実行する。通知の遅延・失敗で確定済み更新の応答を待たせず、再試行と停止は coordinator、通知喪失後の回収は durable outbox の consumer が所有する。
 - dispatcher は startup recovery、bounded drain、retry deadline、backoff を扱い、無条件の短周期 polling をしない。
 - append 後の DB 更新失敗や重複配送を許容し、claim / fence と冪等な consumer で収束させる。
+- 手動再計算のidempotencyは永続したoperationを正本とし、同じkeyの並行受付を直列化して対象を照合する。HTTP予約の期限切れ後も別対象へのkey流用を受理しない。
 - 分析ではAPIとrelease controllerをdurable intentのwriter、Processing Workerをcampaign展開からRedis append、delivery mark / retryまでの単一dispatcher ownerとする。writerはcommit時にpayloadless hintだけを送り、workerはhint喪失を低頻度のbounded recoveryで収束させる。
 - PostgreSQLのsession stateへ依存する分析outbox listenerは、通常query用のtransaction-pooled接続と設定を分離したsession-capable接続を所有する。workerは別接続からの通知round tripをstartup readiness前に確認し、`LISTEN`文の成功だけを機能成立と扱わない。
 
@@ -80,6 +85,7 @@
 - 業務、認証、権限、入力、外部依存のエラーを区別し、UI が扱える Problem Details へ正規化する。
 - account、session、provider backoff の判断は auth service に閉じ、Discord HTTP client と Redis実装は adapter に置く。HTTP module は cookie / redirect / wire 変換を担う。
 - 認証主体と試合参加者を混同しない。状態変更 API は CSRF 対策を必須とし、dev/test 認証を本番経路へ混ぜない。
+- 認証cookieは形式と重複を検証してから扱い、API応答は共有cacheへ保存しない。OAuth stateは署名・期限・サイズを検証した後に一回限りの使用を確定する。
 - UI が回復方法を変える HTTP status を汎用内部エラーへ潰さない。
 
 ## 3. Web
@@ -104,12 +110,20 @@
 - ファイル行数は責務混在を見つける signal とし、行数だけを理由に浅い module へ分割しない。
 - 本節を依存方向の正本とする。静的 gate へ投影する場合は `docs/dev-rule.md` の採用基準に従い、module graph から判定できる import 規則だけを syntax-aware な tool で検査する。本番コードから test 専用 module を参照しない。
 
+### Build / Test Tooling
+
+- `apps/web/scripts` は Web の生成・build 検査・隔離 E2E 起動を所有する Node の開発用境界であり、`src` の実行層ではない。production は生成された型・validator を消費し、script や E2E fixture を import しない。
+- API 生成は Tapir 由来 OpenAPI から型、resource 別の遅延読込 registry、CSP 下で実行できる事前コンパイル済み validator をまとめて導出する。途中の schema は生成処理内に閉じ、consumer のない中間ファイルを追跡しない。
+- build checker は最終 CSS に必要な global theme と参照先が残ることを確認する。CSS cascade や実際の paint の証拠とは区別する。
+- `scripts/e2e` の入口は各 run の資源と後片付けを所有し、共通 runtime は子 process の環境・中断・終了待ちと隔離 service の起動を所有する。入口をライブラリとして import せず、import だけでは Docker 設定や process の状態を変えない。OCR 専用の制御 worker・通知 recorder・画像 fixture は通常 E2E の前提にしない。
+
 ### Server State
 
 - server state は TanStack Query の cache lifecycle に従い、Page/UI component から query 基盤を直接操作しない。
 - 結果確認の元画像も、取得状態とBlobをTanStack Queryが所有する。画像一覧と画像本体は異なるquery keyを持ち、本体は認証主体・画面scope・下書き・画像descriptorの世代を区別する。Object URLは画面の表示資源として生成・解放し、Blobや取得状態を別のcacheへ複製しない。
 - 元画像の先読みは初回表示または利用者の画像選択に続く有限の処理として許可する。featureの取得処理が表示対象を優先して直列化し、同一取得の引継ぎ、中断、容量、scope終了時のquery破棄を所有する。自動retryや回線復帰による取得再開を起こさず、確定・削除成功時は関連cacheの更新より先に画像の寿命を閉じる。
 - query key は cache 内の runtime data shape まで区別する。backend resource が同じでも raw response と ViewModel を同じ key に置かない。
+- 対象の確定した不存在を再取得中も保持する read は、domain の `404 / NOT_FOUND` を read-result として扱い、raw response と異なる key に置く。一時的な通信失敗や一般的な HTTP 404 を不存在へ変換しない。mutation 後の cache 整合は両方の key を対象にし、以前の成功表示や候補一覧から不存在を巻き戻さない。
 - masterの管理と入力候補は同じraw responseを共有し、並べ替えを`select`へ閉じる。設定管理は訪問したtabに必要なqueryだけを有効にし、変更responseをcacheへ反映してから表示名を含む関連readを無効化する。再取得失敗で確定した追加・訂正・削除を巻き戻さない。
 - consumer の射影は `select` または純粋な表示変換で行い、cache は元の server data を保持する。表示中の data が現 query の値か前 scope の placeholder かは query observer の状態から判断し、その判定のために描画時に cache を別途読み直さない。
 - fatal error、再取得、cached data、認証待ち、disabled query を別状態として扱う。mutation 後は表示中の resource と選択候補の cache をともに整合させる。
@@ -130,7 +144,7 @@
 | --- | --- | --- |
 | 試合一覧の条件変更 | 即時の選択 intent、遅延した一覧、古い対象への操作制限 | 続けて条件を変えながら表示を追従させる |
 | 戦績比較の view / scope / artifact | 整合した表示 bundle の遅延、図表の memo 境界 | 大きい図表更新を選択操作と分離する |
-| 試合入力 | 数値入力の局所 draft、遅延検証、score grid の描画境界 | メモ・設定の編集が無関係な grid を再描画しない |
+| 試合入力 | workspace が所有する数値文字列、遅延検証、cell 単位の draft 射影 | 表示幅・入力欄の開閉でも未完成の入力を維持し、無関係な cell の描画を抑える |
 | マスタ作成 | Action と局所的な楽観行、成功 response の確定反映 | 待ち時間中も追加を示し、失敗時に入力を回復する |
 | 保存・削除・OCR開始・権限/通知変更・再計算・出力 | Action / mutation の pending と確定結果 | 検証、競合、副作用、生成結果を先取りしない |
 | 開催一覧・出力候補のページ取得 | Query の前ページ保持と scope 表示 | ページ単位の取得は既存の待機境界で扱える |
@@ -160,17 +174,20 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 - 異なる pathname は新しい route identity として、未準備なら route の structural fallback を表示する。同一 pathname の query key、filter、scope、sort、page の変更では、通常 query、Transition、deferred value など所有する state layer の手段で既存内容を維持し、Motion に待機や切替を決めさせない。
 - 通常 query と Suspense query は、前条件の data 保持、部分失敗、独立した回復、安定した操作領域をどちらが簡潔に表現できるかで選ぶ。Suspense 採用を refetch 中の fallback 表示と同一視しない。待機表示の整理だけを理由に取得方式を置き換えず、boundary や content の identity を pending の切替で作り直さない。
 - toast は feature が確定した実行結果から発火し、render、汎用 query observer、cache invalidation ごとの成功通知にしない。通常の route content の境界から共通 host を分離し、rendererはhostと同期で準備する。最初の通知から同じ描画経路を使い、準備用表示との交換で見た目・focus・表示寿命を作り直さない。通知の一意性は実行結果に結び付け、server state や操作の完了判定を toast の状態に移さない。
-- 有限で局所的な motion の標準実装は Motion for React とする。app の一つの provider で同期 `LazyMotion`、animation と renderer だけを含む `domMin`、`strict`、`m` component を構成し、`MotionConfig reducedMotion="user"` を基準にする。`motion` component、`domAnimation` / `domMax` の gesture feature、layout / shared layout、drag / pan は初期 scope に含めず、必要性、操作契約、bundle 差分、主要 device の実測を伴う別の architecture decision とする。
+- 有限で局所的な motion の標準実装は Motion for React とする。app の一つの provider で同期 `LazyMotion`、animation と renderer だけを含む `domMin`、`strict`、`m` component を構成する。provider が `prefers-reduced-motion` を購読し、変更を `MotionConfig` と描画済みの末端 component へ反映する。`motion` component、`domAnimation` / `domMax` の gesture feature、layout / shared layout、drag / pan は初期 scope に含めず、必要性、操作契約、bundle 差分、主要 device の実測を伴う別の architecture decision とする。
 - 面のhoverはshared UIの`useSurfaceFeedback`がnative DOMのpointer進入・離脱・cancelを観測し、Motion `animate`で内部のhover量だけを補間する。CSSは意味に対応した色対と、pressed・focus・操作制限の即時表示を所有する。click、keyboard、選択、openをこの接続で再実装しない。Motionのhover gestureは押下中のleaveを遅らせるため、この用途では使わず、`domMin`を維持する。有限CSS transitionの例外は設けない。外部refの接続・cleanupと動きを減らす設定の変更も接続側が扱い、画面へ時間・色・hover状態を公開しない。
 - Motion の宣言は、変化する pixel と semantic state を所有する shared UI primitive または feature の末端 visual component に置く。PageModel、resource / command / query hook、router は Motion を import しない。`Fade`、`Slide`、`Scale` のように effect 名だけを隠す pass-through wrapper は作らず、複数用途の accessibility、state mapping、interruption を一つの小さい契約で隠せる場合だけ shared abstraction にする。
 - application code は Motion の完了 callback を、data、cache、route、open、focus、pending、error、操作可能性を進める唯一の条件にしない。callback が所有してよいのは、中断または未実行でも application state を誤らせない冪等な表示上の後始末に限る。exit のため一時保持する node は非対話的かつ accessibility tree の対象外とし、先に確定した state と focus を巻き戻さない。
 - presence による一時保持は、shared dialog と toast が通常の close / remove 後に非対話的な exit snapshot を描く場合だけ許可する。親 subtree、route、artifact、view の identity が失われた場合は exit を省略してよく、表示補間のためにそれらの lifecycle を遅らせない。
 - 処理時間が不定な Spinner / Skeleton の loop だけは shared loading primitive 内の CSS を使ってよい。それ以外の新しい有限 motion は Motion に統一し、同じ transition に CSS、timer、Web Animations API、別の motion engine を混ぜない。Motion 導入時は既存の有限 CSS transition もこの境界へ移し、CSS loop の feature 直書きを shared loading primitive へ集約する。
-- `MotionConfig reducedMotion="user"` が transform / layout を無効にしても opacity や color は残り得るため、非必須の残存 motion は末端 component でも省略する。Motion の初回導入と feature bundle の変更では production build の bundle 差分を測る。使用 API と import 境界は、標準 lint で一意に判定できる範囲だけを静的検査へ投影する。
+- `MotionConfig` が transform / layout を無効にしても opacity や color は残り得るため、非必須の残存 motion は末端 component でも省略する。Motion の初回導入と feature bundle の変更では production build の bundle 差分を測る。使用 API と import 境界は、標準 lint で一意に判定できる範囲だけを静的検査へ投影する。
 
 ### Form / React 19 / API Client
 
 - event 由来の値は handler 内で同期的に取り出し、request transform で route / prefill / hidden identifier を落とさない。
+- 入力の owner は認証主体と作業対象で区切る。同じ作業の補助 query 変更では保持し、別の試合・draft・sample へ持ち越さない。未完成の数値文字列も入力に含め、validation と request は同じ最新値の射影を使う。設定往復と一時保存の schema は、完成済み request の制約と分離して入力途中の値を保持する。
+- 編集可能になった最初の snapshot で入力を初期化し、同じ作業の再取得で入力を上書きしない。OCR の入力値・根拠・元画像 descriptor は同じ世代に固定し、世代変更時には再確認を案内する。保存中は送信対象の編集と離脱を保護し、完了前に遮断した離脱操作を完了後に自動再開しない。
+- navigation、feedback、browser download など画面に属する非同期の完了処理は、開始時の route / 対象 / 最新 intent に対応する場合だけ行う。所有者の commit 境界で古い処理を無効にし、中断可能な read は中断する。確定 mutation の cache 整合は画面に属する副作用と分ける。
 - 分析の集計、意味を持つ sort / filter、閾値、統計 fallback は Web で再計算せず、保存済み成果物を表示用に整形する。
 - OCR の開始確認では設定・画像と送信する作品ヒントを同じ snapshot に固定する。API がジョブ受付時に既定のプレーヤー別名と登録済み別名をsnapshot化し、payload 上限を検証する。作品方式ごとの CPU 名の既定値と認識時の名前照合は Worker が所有し、明示した CPU 名を優先する。Web はそのための別名取得・正規化・上限処理を持たない。既存 OCR 結果から編集フォームを復元する名前解決は、入力支援として Web に残す。
 - OCR送信の再試行は日時、下書きID、upload済み画像ID、idempotency keyを同じintent内で保持する。応答消失を未受付と推測して下書きを取消したり、新しい画像・下書きを作り直したりしない。送信前の不備と確定した受付拒否は入力修正へ戻せるようにし、受理不明の再送と区別する。
@@ -230,6 +247,7 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 - secret、session / CSRF token、接続 URL、画像内容、OCR raw text、分析成果物本文をログへ出さない。例外は安全な分類情報へ正規化する。
 - production の DB / Redis は暗号化と相手検証を維持し、接続のために認証要件を暗黙に弱めない。
 - upload は許可形式、byte 数、寸法、内容 fingerprint を完全 decode 前後の境界で検証し、画像実体や長寿命 URL を DB / 公開 DTO に置かない。
+- 画像objectは作成後に上書きせず、再送は保存済みの内容と照合する。localとobject storageで読取上限と整合性検証を共有し、未検証のdescriptorから任意のfileを読まない。
 - health、dependency readiness、機能応答、resource / performance を別の証拠として扱う。
 - stream response は handler 完了ではなく転送終了時に success / error / cancel と byte 数を exactly once 観測する。
 - runtime image は最小権限で動かし、診断手段を残す場合も provider 設定や攻撃面を public docs へ複製しない。

@@ -62,6 +62,38 @@ function renderHarness(url = "/analytics/series?gameTitleId=gt_momotetsu_2&view=
 }
 
 describe("useSeriesAnalysisLocationState", () => {
+  it.each([
+    ["gameTitleId=missing", "指定された作品は比較できないため、選択可能な作品に切り替えました。"],
+    ["gameTitleId=gt_momotetsu_2&seasonMasterId=missing", "全シーズンに戻しました。"],
+    ["gameTitleId=gt_momotetsu_2&mapMasterId=missing", "全マップに戻しました。"],
+  ])(
+    "explains normalized scope and clears a selection from that scope: %s",
+    async (query, reason) => {
+      const user = userEvent.setup();
+      const router = renderHarness(`/analytics/series?${query}&focusMatchId=match-12`);
+      await waitFor(() => expect(router.state.location.search).not.toContain("missing"));
+      expect(screen.getByLabelText("normalization notice")).toHaveTextContent(reason);
+      expect(screen.getByLabelText("normalization notice")).toHaveTextContent(
+        "比較条件が変わったため、選択試合の強調表示を解除しました。",
+      );
+      expect(router.state.location.search).not.toContain("focusMatchId");
+
+      await user.click(screen.getByRole("button", { name: "表示を連続変更" }));
+      expect(screen.getByLabelText("normalization notice")).toBeEmptyDOMElement();
+    },
+  );
+
+  it("explains an unsupported view while preserving the valid scope and focused match", async () => {
+    const router = renderHarness(
+      "/analytics/series?gameTitleId=gt_momotetsu_2&focusMatchId=match-12&view=unknown",
+    );
+    await waitFor(() => expect(router.state.location.search).not.toContain("view="));
+    expect(screen.getByLabelText("normalization notice")).toHaveTextContent(
+      "指定された表示は利用できないため、振り返りに戻しました。",
+    );
+    expect(router.state.location.search).toContain("focusMatchId=match-12");
+  });
+
   it("retains the selected match while its URL navigation is pending", async () => {
     const gate = createDeferred();
     const user = userEvent.setup();

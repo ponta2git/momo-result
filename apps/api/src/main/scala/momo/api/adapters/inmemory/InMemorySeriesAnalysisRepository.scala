@@ -15,16 +15,15 @@ import momo.api.repositories.{GameTitlesRepository, SeriesAnalysisRepository}
 final class InMemorySeriesAnalysisRepository[F[_]: Sync] private (
     gameTitles: GameTitlesRepository[F],
     now: F[Instant],
-    calculations: Ref[F, Map[GameTitleId, SeriesAnalysisCalculation]],
-    recent: Ref[F, List[SeriesAnalysisJobSummary]],
+    state: Ref[F, InMemorySeriesAnalysisRepository.State],
 ) extends SeriesAnalysisRepository[F]:
+  import InMemorySeriesAnalysisRepository.*
+
   override def options: F[Either[AppError, SeriesAnalysisOptions]] = gameTitles.list.map { titles =>
     val sorted = titles.sortBy(value => (value.displayOrder, value.id.value))
     SeriesAnalysisOptions(
       sorted.headOption.map(_.id),
-      sorted.map(value =>
-        SeriesAnalysisTitleOption(value.id, value.name, 0, Nil, Nil, Nil)
-      ),
+      sorted.map(value => SeriesAnalysisTitleOption(value.id, value.name, 0, Nil, Nil, Nil)),
     ).asRight
   }
 
@@ -32,19 +31,7 @@ final class InMemorySeriesAnalysisRepository[F[_]: Sync] private (
       gameTitleId: GameTitleId
   ): F[Either[AppError, SeriesAnalysisStatus]] = gameTitles.find(gameTitleId).flatMap {
     case None => AppError.NotFound("game title", gameTitleId.value).asLeft.pure[F]
-    case Some(_) => calculations.get.map(values =>
-        SeriesAnalysisStatus(
-          gameTitleId,
-          SeriesAnalysisDesiredVersion(
-            0,
-            "series-analysis-v5",
-            SeriesAnalysisArtifactContract.ArtifactSchemaVersion
-          ),
-          "unavailable",
-          None,
-          values.get(gameTitleId),
-        ).asRight
-      )
+    case Some(_) => state.get.map(snapshot => statusFor(gameTitleId, snapshot).asRight)
   }
 
   override def chunk(
@@ -55,130 +42,204 @@ final class InMemorySeriesAnalysisRepository[F[_]: Sync] private (
   override def adminOverview(
       gameTitleId: Option[GameTitleId]
   ): F[Either[AppError, SeriesAnalysisAdminOverview]] =
-    for
-      optionsResult <- options
-      calculationsValue <- calculations.get
-      jobs <- recent.get
-      result <- optionsResult match
-        case Left(error) => error.asLeft[SeriesAnalysisAdminOverview].pure[F]
-        case Right(value) =>
-          val selectedId = gameTitleId.orElse(value.defaultGameTitleId)
-          selectedId match
-            case Some(id) if !value.titles.exists(_.gameTitleId == id) =>
-              AppError.NotFound("game title", id.value).asLeft[SeriesAnalysisAdminOverview].pure[F]
-            case _ =>
-              val selected = selectedId.flatMap(id =>
-                value.titles.find(_.gameTitleId == id)
-                  .map(option =>
-                    SeriesAnalysisSelectedTitle(
-                      id,
-                      option.displayName,
-                      SeriesAnalysisStatus(
-                        id,
-                        SeriesAnalysisDesiredVersion(
-                          0,
-                          "series-analysis-v5",
-                          SeriesAnalysisArtifactContract.ArtifactSchemaVersion
-                        ),
-                        "unavailable",
-                        None,
-                        calculationsValue.get(id),
-                      ),
-                      None,
-                    )
-                  )
+    (options, state.get).mapN { (optionsResult, snapshot) =>
+      optionsResult.flatMap { value =>
+        val selectedId = gameTitleId.orElse(value.defaultGameTitleId)
+        selectedId match
+          case Some(id) if !value.titles.exists(_.gameTitleId == id) =>
+            AppError.NotFound("game title", id.value).asLeft
+          case _ =>
+            val selected = selectedId.flatMap(id =>
+              value.titles.find(_.gameTitleId == id).map(option =>
+                SeriesAnalysisSelectedTitle(id, option.displayName, statusFor(id, snapshot), None)
               )
-              SeriesAnalysisAdminOverview(
-                value.titles,
-                selected,
-                SeriesAnalysisGlobalExecution(
-                  runningCount = 0,
-                  queuedTitleCount = calculationsValue.size,
-                  oldestQueuedAt = calculationsValue.values.map(_.requestedAt).minOption,
-                  activeCampaignCount = 0,
-                  latestActiveCampaign = None,
-                ),
-                jobs.take(10),
-              ).asRight[AppError].pure[F]
-    yield result
+            )
+            SeriesAnalysisAdminOverview(
+              value.titles,
+              selected,
+              SeriesAnalysisGlobalExecution(
+                runningCount = 0,
+                queuedTitleCount = snapshot.jobs.size,
+                oldestQueuedAt = snapshot.jobs.valuesIterator.map(_.requestedAt).minOption,
+                activeCampaignCount = snapshot.campaigns.size,
+                latestActiveCampaign = snapshot.campaigns.lastOption,
+              ),
+              snapshot.recent,
+            ).asRight
+      }
+    }
 
   override def requestTitleRecalculation(
       gameTitleId: GameTitleId,
       requestedBy: AccountId,
       idempotencyKeyHash: String,
-  ): F[Either[AppError, SeriesAnalysisRecalculationAccepted]] = gameTitles.find(gameTitleId)
-    .flatMap {
-      case None => AppError.NotFound("game title", gameTitleId.value).asLeft.pure[F]
-      case Some(title) => enqueue(List(title), requestedBy, Some(gameTitleId)).map(_.asRight)
+  ): F[Either[AppError, SeriesAnalysisRecalculationAccepted]] =
+    val key = OperationKey(requestedBy, "title", idempotencyKeyHash)
+    withReplay(key, Some(gameTitleId)) {
+      gameTitles.find(gameTitleId).flatMap {
+        case None => AppError.NotFound("game title", gameTitleId.value).asLeft.pure[F]
+        case Some(title) =>
+          for
+            acceptedAt <- now
+            operationId <- freshId
+            candidateJob <- freshId.map(id => newJob(id, title, requestedBy, acceptedAt))
+            result <- state.modify { snapshot =>
+              replay(snapshot, key, Some(gameTitleId)) match
+                case Some(existing) => snapshot -> existing
+                case None =>
+                  val existingJob = snapshot.jobs.get(gameTitleId)
+                  val job = existingJob.fold(candidateJob)(value =>
+                    value.copy(manualRequestCount = value.manualRequestCount + 1)
+                  )
+                  val disposition =
+                    if existingJob.isDefined then "coalesced_into_queued_job" else "created_job"
+                  val accepted = SeriesAnalysisRecalculationAccepted(
+                    operationId,
+                    acceptedAt,
+                    1,
+                    None,
+                    Some(SeriesAnalysisAcceptedTarget(gameTitleId, Some(job.jobId), disposition)),
+                  )
+                  val recent = existingJob.fold((job :: snapshot.recent).take(10))(_ =>
+                    snapshot.recent.map(value => if value.jobId == job.jobId then job else value)
+                  )
+                  snapshot.copy(
+                    jobs = snapshot.jobs.updated(gameTitleId, job),
+                    recent = recent,
+                    operations = snapshot.operations.updated(key, accepted),
+                  ) -> accepted.asRight
+            }
+          yield result
+      }
     }
 
   override def requestAllRecalculation(
       requestedBy: AccountId,
       idempotencyKeyHash: String,
-  ): F[Either[AppError, SeriesAnalysisRecalculationAccepted]] = gameTitles.list.flatMap {
-    case Nil => AppError.AnalysisNoEligibleTitles().asLeft.pure[F]
-    case titles => enqueue(titles, requestedBy, None).map(value =>
-        value.copy(
-          campaign = Some(SeriesAnalysisAcceptedCampaign(UUID.randomUUID().toString, "expanding"))
-        ).asRight
-      )
-  }
+  ): F[Either[AppError, SeriesAnalysisRecalculationAccepted]] =
+    val key = OperationKey(requestedBy, "all_titles", idempotencyKeyHash)
+    withReplay(key, None) {
+      gameTitles.list.flatMap {
+        case Nil => AppError.AnalysisNoEligibleTitles().asLeft.pure[F]
+        case titles =>
+          for
+            acceptedAt <- now
+            operationId <- freshId
+            campaignId <- freshId
+            result <- state.modify { snapshot =>
+              replay(snapshot, key, None) match
+                case Some(existing) => snapshot -> existing
+                case None =>
+                  val accepted = SeriesAnalysisRecalculationAccepted(
+                    operationId,
+                    acceptedAt,
+                    titles.size,
+                    Some(SeriesAnalysisAcceptedCampaign(campaignId, "expanding")),
+                    None,
+                  )
+                  val campaign = SeriesAnalysisCampaignSummary(
+                    campaignId,
+                    titles.size,
+                    0,
+                    0,
+                    0,
+                    0,
+                    acceptedAt,
+                  )
+                  snapshot.copy(
+                    operations = snapshot.operations.updated(key, accepted),
+                    campaigns = snapshot.campaigns :+ campaign,
+                  ) -> accepted.asRight
+            }
+          yield result
+      }
+    }
 
-  private def enqueue(
-      titles: List[GameTitle],
+  private def withReplay(
+      key: OperationKey,
+      gameTitleId: Option[GameTitleId],
+  )(fresh: => F[Either[AppError, SeriesAnalysisRecalculationAccepted]])
+      : F[Either[AppError, SeriesAnalysisRecalculationAccepted]] =
+    state.get.flatMap(snapshot => replay(snapshot, key, gameTitleId).fold(fresh)(_.pure[F]))
+
+  private def freshId: F[String] = Sync[F].delay(UUID.randomUUID().toString)
+
+  private def statusFor(gameTitleId: GameTitleId, snapshot: State): SeriesAnalysisStatus =
+    SeriesAnalysisStatus(
+      gameTitleId,
+      SeriesAnalysisDesiredVersion(
+        0,
+        "series-analysis-v5",
+        SeriesAnalysisArtifactContract.ArtifactSchemaVersion
+      ),
+      "unavailable",
+      None,
+      snapshot.jobs.get(gameTitleId).map(job =>
+        SeriesAnalysisCalculation(
+          job.status,
+          job.trigger,
+          job.requestedAt,
+          job.startedAt,
+          job.finishedAt
+        )
+      ),
+    )
+
+  private def newJob(
+      id: String,
+      title: GameTitle,
       requestedBy: AccountId,
-      targetTitleId: Option[GameTitleId],
-  ): F[SeriesAnalysisRecalculationAccepted] =
-    for
-      acceptedAt <- now
-      requestId <- Sync[F].delay(UUID.randomUUID().toString)
-      enqueued <- titles.traverse(title =>
-        Sync[F].delay {
-          val calculation = SeriesAnalysisCalculation("queued", "manual", acceptedAt, None, None)
-          val job = SeriesAnalysisJobSummary(
-            UUID.randomUUID().toString,
-            title.id,
-            title.name,
-            "queued",
-            "manual",
-            List("manual"),
-            "administrator",
-            1,
-            acceptedAt,
-            None,
-            None,
-            None,
-            0,
-            "series-analysis-v5",
-            0,
-            0,
-            0,
-            None,
-            "none",
-            Some(SeriesAnalysisRequester(requestedBy, "administrator")),
-            None,
-          )
-          title.id -> (calculation, job)
-        }
-      )
-      _ <- calculations.update(_ ++ enqueued.map { case (titleId, (calculation, _)) =>
-        titleId -> calculation
-      })
-      _ <- recent.update(enqueued.map(_._2._2).reverse ::: _)
-      target = targetTitleId.flatMap(titleId =>
-        enqueued.collectFirst {
-          case (`titleId`, (_, job)) =>
-            SeriesAnalysisAcceptedTarget(titleId, Some(job.jobId), "created_job")
-        }
-      )
-    yield SeriesAnalysisRecalculationAccepted(requestId, acceptedAt, titles.size, None, target)
+      acceptedAt: Instant,
+  ): SeriesAnalysisJobSummary = SeriesAnalysisJobSummary(
+    jobId = id,
+    gameTitleId = title.id,
+    gameTitleName = title.name,
+    status = "queued",
+    trigger = "manual",
+    coalescedTriggers = List("manual"),
+    requestedBy = "administrator",
+    manualRequestCount = 1,
+    requestedAt = acceptedAt,
+    startedAt = None,
+    finishedAt = None,
+    elapsedMilliseconds = None,
+    inputRevision = 0,
+    algorithmVersion = "series-analysis-v5",
+    attemptCount = 0,
+    transientRetryCount = 0,
+    leaseRecoveryCount = 0,
+    queueWaitMilliseconds = None,
+    resultDisposition = "none",
+    firstManualRequester = Some(SeriesAnalysisRequester(requestedBy, "administrator")),
+    safeFailureCode = None,
+  )
 
 object InMemorySeriesAnalysisRepository:
+  private final case class OperationKey(accountId: AccountId, endpoint: String, keyHash: String)
+      derives CanEqual
+  private final case class State(
+      jobs: Map[GameTitleId, SeriesAnalysisJobSummary],
+      recent: List[SeriesAnalysisJobSummary],
+      operations: Map[OperationKey, SeriesAnalysisRecalculationAccepted],
+      campaigns: Vector[SeriesAnalysisCampaignSummary],
+  )
+
+  private def replay(
+      snapshot: State,
+      key: OperationKey,
+      gameTitleId: Option[GameTitleId],
+  ): Option[Either[AppError, SeriesAnalysisRecalculationAccepted]] = snapshot.operations.get(key)
+    .map { accepted =>
+      if accepted.target.map(_.gameTitleId) == gameTitleId then accepted.asRight
+      else
+        AppError.IdempotencyPayloadMismatch(
+          "Idempotency-Key was reused for a different game title."
+        ).asLeft
+    }
+
   def create[F[_]: Sync](
       gameTitles: GameTitlesRepository[F],
       now: F[Instant],
   ): F[InMemorySeriesAnalysisRepository[F]] =
-    for
-      calculations <- Ref.of[F, Map[GameTitleId, SeriesAnalysisCalculation]](Map.empty)
-      recent <- Ref.of[F, List[SeriesAnalysisJobSummary]](Nil)
-    yield new InMemorySeriesAnalysisRepository(gameTitles, now, calculations, recent)
+    Ref.of[F, State](State(Map.empty, Nil, Map.empty, Vector.empty))
+      .map(new InMemorySeriesAnalysisRepository(gameTitles, now, _))

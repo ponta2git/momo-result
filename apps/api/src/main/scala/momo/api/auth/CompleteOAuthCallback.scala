@@ -37,16 +37,15 @@ final class CompleteOAuthCallback[F[_]: Sync](
       )
         .pure[F]
     case Some(stateValue) =>
-      authorizeStateReplay(stateValue).flatMap {
-        case Some(rejection) => rejection.pure[F]
-        case None => validateState(stateValue).flatMap {
-            case None =>
-              rejected(
-                "state_invalid_or_expired",
-                AppError.Forbidden("OAuth state is invalid or expired.")
-              )
-                .pure[F]
-            case Some(context) => decideWithValidState(input, context)
+      validateState(stateValue).flatMap {
+        case None =>
+          rejected(
+            "state_invalid_or_expired",
+            AppError.Forbidden("OAuth state is invalid or expired.")
+          ).pure[F]
+        case Some(context) => authorizeStateReplay(stateValue).flatMap {
+            case Some(rejection) => rejection.pure[F]
+            case None => decideWithValidState(input, context)
           }
       }
 

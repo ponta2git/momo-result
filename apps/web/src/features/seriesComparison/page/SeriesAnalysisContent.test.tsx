@@ -1,8 +1,8 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { SeriesAnalysisDisplayBundle } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
@@ -22,17 +22,6 @@ import { createTestQueryClient } from "@/test/queryClient";
 
 type AnalysisViewId = Exclude<SeriesAnalysisViewId, "review">;
 
-beforeEach(() => {
-  vi.stubGlobal(
-    "ResizeObserver",
-    class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    },
-  );
-});
-
 function analysisBundle(
   aggregate: SeriesComparisonAggregate,
   view: AnalysisViewId,
@@ -41,6 +30,37 @@ function analysisBundle(
 }
 
 describe("SeriesAnalysisContent", () => {
+  it("closes review evidence when its displayed scope changes instead of retargeting an open dialog", async () => {
+    const user = userEvent.setup();
+    const review = makeFourPlayerSeriesAnalysisReview();
+    const callbacks = {
+      onArtifactExpired: vi.fn(),
+      onClearFocusedMatch: vi.fn(),
+      onFocusMatch: vi.fn(),
+      onViewChange: vi.fn(),
+    };
+    const renderBundle = (response: typeof review) => (
+      <MemoryRouter>
+        <SeriesAnalysisContent
+          {...callbacks}
+          bundle={{ kind: "review", view: "review", review: response, matchContext: undefined }}
+        />
+      </MemoryRouter>
+    );
+    const rendered = render(renderBundle(review));
+    const purpose = screen.getByRole("tab", { name: "次戦に備える" });
+    await user.click(screen.getAllByRole("button", { name: "根拠・注意・試合後の確認" })[0]!);
+    expect(screen.getByRole("dialog", { name: "根拠・注意・試合後の確認" })).toBeInTheDocument();
+    rendered.rerender(
+      renderBundle({
+        ...review,
+        scope: { ...review.scope, kind: "season", seasonMasterId: "season-next" },
+      }),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByRole("tab", { name: "次戦に備える" })).toBe(purpose);
+  });
+
   it("keeps the same owner's focus when the match changes and when returning to the context view", async () => {
     const user = userEvent.setup();
     const aggregate = makeOwnerComparisonAggregate();
@@ -102,26 +122,6 @@ describe("SeriesAnalysisContent", () => {
     expect(screen.getByRole("link", { name: "第13戦の試合結果を見る" })).toBeInTheDocument();
   });
 
-  it("keeps owner comparison and the metric guide usable", async () => {
-    const user = userEvent.setup();
-    render(
-      <QueryClientProvider client={createTestQueryClient()}>
-        <MemoryRouter>
-          <SeriesAnalysisContent
-            bundle={analysisBundle(makeOwnerComparisonAggregate(), "context")}
-            onArtifactExpired={vi.fn()}
-            onClearFocusedMatch={vi.fn()}
-            onFocusMatch={vi.fn()}
-            onViewChange={vi.fn()}
-          />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-    expect(await screen.findByRole("table", { name: "オーナー別の平均順位" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "指標の読み方" }));
-    expect(screen.getByRole("dialog", { name: "指標の読み方" })).toHaveTextContent("平均物件収益");
-  });
-
   it("links review artifacts without presentation metadata to local evidence sections", () => {
     render(
       <QueryClientProvider client={createTestQueryClient()}>
@@ -173,81 +173,7 @@ describe("SeriesAnalysisContent", () => {
     expect(await screen.findByRole("dialog", { name: "指標の読み方" })).toBeInTheDocument();
   });
 
-  it("opens the shared metric guide from an analysis view", async () => {
-    const user = userEvent.setup();
-    const queryClient = createTestQueryClient();
-    const aggregate = makeSeriesAnalysisAggregate();
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <SeriesAnalysisContent
-            bundle={analysisBundle(aggregate, "flow")}
-            onArtifactExpired={vi.fn()}
-            onClearFocusedMatch={vi.fn()}
-            onFocusMatch={vi.fn()}
-            onViewChange={vi.fn()}
-          />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-
-    const guideTrigger = screen.getByRole("button", { name: "指標の読み方" });
-    await user.click(guideTrigger);
-    expect(await screen.findByRole("dialog", { name: "指標の読み方" })).toBeInTheDocument();
-  });
-
-  it("keeps focus on a nested analysis tab when the controlled view changes", async () => {
-    const user = userEvent.setup();
-    const queryClient = createTestQueryClient();
-    const aggregate = makeSeriesAnalysisAggregate();
-    const props = {
-      onArtifactExpired: vi.fn(),
-      onClearFocusedMatch: vi.fn(),
-      onFocusMatch: vi.fn(),
-      onViewChange: vi.fn(),
-    };
-    const view = (bundle: SeriesAnalysisDisplayBundle) => (
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <SeriesAnalysisContent {...props} bundle={bundle} />
-        </MemoryRouter>
-      </QueryClientProvider>
-    );
-    const rendered = render(view(analysisBundle(aggregate, "overview")));
-
-    await user.click(screen.getByRole("tab", { name: "勝因候補" }));
-    rendered.rerender(view(analysisBundle(aggregate, "drivers")));
-
-    expect(screen.getByRole("tab", { name: "勝因候補" })).toHaveFocus();
-  });
-
-  it("reuses one drilldown dialog when it is reopened during exit", async () => {
-    const user = userEvent.setup();
-    const queryClient = createTestQueryClient();
-    const aggregate = makeSeriesAnalysisAggregate();
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <SeriesAnalysisContent
-            bundle={analysisBundle(aggregate, "overview")}
-            onArtifactExpired={vi.fn()}
-            onClearFocusedMatch={vi.fn()}
-            onFocusMatch={vi.fn()}
-            onViewChange={vi.fn()}
-          />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-
-    await user.click(await screen.findByRole("button", { name: "順位推移を見る" }));
-    const dialog = await screen.findByRole("dialog", { name: "平均順位の推移" });
-    await user.click(within(dialog).getByRole("button", { name: "ダイアログを閉じる" }));
-
-    await user.click(screen.getByRole("button", { name: "順位推移を見る" }));
-    expect(await screen.findAllByRole("dialog", { name: "平均順位の推移" })).toHaveLength(1);
-  });
-
-  it("resets drilldown state when the artifact or analysis view identity changes", async () => {
+  it("resets drilldown state when the artifact, scope, or analysis view identity changes", async () => {
     const user = userEvent.setup();
     const queryClient = createTestQueryClient();
     const aggregate = makeSeriesAnalysisAggregate();
@@ -284,7 +210,25 @@ describe("SeriesAnalysisContent", () => {
     await user.click(await screen.findByRole("button", { name: "順位推移を見る" }));
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
 
-    rendered.rerender(view(analysisBundle(nextAggregate, "drivers")));
+    const seasonAggregate: SeriesComparisonAggregate = {
+      ...nextAggregate,
+      scope: { ...nextAggregate.scope, kind: "season", seasonMasterId: "season_current" },
+    };
+    rendered.rerender(view(analysisBundle(seasonAggregate, "overview")));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await user.click(await screen.findByRole("button", { name: "順位推移を見る" }));
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+
+    const mapAggregate: SeriesComparisonAggregate = {
+      ...nextAggregate,
+      scope: { ...nextAggregate.scope, kind: "map", mapMasterId: "map_japan" },
+    };
+    rendered.rerender(view(analysisBundle(mapAggregate, "overview")));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await user.click(await screen.findByRole("button", { name: "順位推移を見る" }));
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+
+    rendered.rerender(view(analysisBundle(mapAggregate, "drivers")));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 });

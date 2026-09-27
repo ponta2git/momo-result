@@ -31,8 +31,9 @@ describe("HeldEventPickerField", () => {
 
     await user.click(screen.getByRole("button", { name: "開催を変更" }));
     const eventChoice = screen.getByRole("radio", {
-      name: "2026/08/09 09:00 — 確定済み3試合・未確定下書き1件",
+      name: "2026/08/09 09:00",
     });
+    expect(eventChoice).toHaveAccessibleDescription("確定済み3試合・未確定下書き1件");
     expect(screen.getByRole("dialog", { name: "開催を選択" })).toHaveTextContent(
       "開催で絞り込みません。",
     );
@@ -44,18 +45,20 @@ describe("HeldEventPickerField", () => {
 
   it("keeps an off-page selected event visible", async () => {
     const user = userEvent.setup();
-    render(
+    const onValueChange = vi.fn();
+    const view = (selectedHeldEvent: HeldEventResponse) => (
       <HeldEventPickerField
         emptyChoiceDescription="開催を選択してください。"
         emptyChoiceLabel="未選択"
         heldEvents={[]}
         label="開催（任意）"
         name="held-event"
-        selectedHeldEvent={heldEvent}
+        selectedHeldEvent={selectedHeldEvent}
         value="held-1"
-        onValueChange={vi.fn()}
-      />,
+        onValueChange={onValueChange}
+      />
     );
+    const { rerender } = render(view(heldEvent));
 
     expect(
       screen.getByText("2026/08/09 09:00 — 確定済み3試合・未確定下書き1件"),
@@ -64,10 +67,14 @@ describe("HeldEventPickerField", () => {
     await user.click(screen.getByRole("button", { name: "開催（任意）を変更" }));
     expect(screen.getByRole("dialog", { name: "開催を選択" })).toBeInTheDocument();
 
-    expect(
-      screen.getByRole("radio", {
-        name: "2026/08/09 09:00 — 確定済み3試合・未確定下書き1件",
-      }),
-    ).toBeChecked();
+    const selected = screen.getByRole("radio", { name: "2026/08/09 09:00" });
+    expect(selected).toBeChecked();
+    expect(selected).toHaveAccessibleDescription("確定済み3試合・未確定下書き1件");
+
+    rerender(view({ ...heldEvent, matchCount: 4, draftCount: 0 }));
+    expect(screen.getByRole("radio", { name: "2026/08/09 09:00" })).toBe(selected);
+    expect(selected).toBeChecked();
+    expect(selected).toHaveAccessibleDescription("確定済み4試合・未確定下書き0件");
+    expect(onValueChange).not.toHaveBeenCalled();
   });
 });

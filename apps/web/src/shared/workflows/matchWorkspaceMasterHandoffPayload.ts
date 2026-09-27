@@ -11,12 +11,12 @@ const handoffTtlMs = 2 * 60 * 60 * 1000;
 const handoffSourceSchema = z.enum(["draftReview", "matchWorkspace"]);
 
 const handoffIncidentsSchema = z.object({
-  cardShop: z.number().int().min(0),
-  cardStation: z.number().int().min(0),
-  destination: z.number().int().min(0),
-  minusStation: z.number().int().min(0),
-  plusStation: z.number().int().min(0),
-  suriNoGinji: z.number().int().min(0),
+  cardShop: z.number().finite(),
+  cardStation: z.number().finite(),
+  destination: z.number().finite(),
+  minusStation: z.number().finite(),
+  plusStation: z.number().finite(),
+  suriNoGinji: z.number().finite(),
 });
 
 const handoffValuesSchema = z.object({
@@ -28,7 +28,10 @@ const handoffValuesSchema = z.object({
   gameTitleId: z.string(),
   heldEventId: z.string(),
   mapMasterId: z.string(),
-  matchNoInEvent: z.number().int().min(1),
+  matchDraftId: z.string().optional(),
+  matchNoInEvent: z.number().finite(),
+  noteBody: z.string().optional(),
+  numericDrafts: z.record(z.string(), z.string()).optional(),
   ownerMemberId: z.string(),
   playedAt: z.string(),
   players: z
@@ -36,10 +39,10 @@ const handoffValuesSchema = z.object({
       z.object({
         incidents: handoffIncidentsSchema,
         memberId: z.string(),
-        playOrder: z.number().int().min(1).max(4),
-        rank: z.number().int().min(1).max(4),
-        revenueManYen: z.number().int(),
-        totalAssetsManYen: z.number().int(),
+        playOrder: z.number().finite(),
+        rank: z.number().finite(),
+        revenueManYen: z.number().finite(),
+        totalAssetsManYen: z.number().finite(),
       }),
     )
     .length(4),
@@ -152,7 +155,10 @@ export function createMatchWorkspaceHandoffPayload(input: {
       gameTitleId: input.values.gameTitleId,
       heldEventId: input.values.heldEventId,
       mapMasterId: input.values.mapMasterId,
+      ...(input.values.matchDraftId ? { matchDraftId: input.values.matchDraftId } : {}),
       matchNoInEvent: input.values.matchNoInEvent,
+      ...(input.values.noteBody === undefined ? {} : { noteBody: input.values.noteBody }),
+      ...(input.values.numericDrafts ? { numericDrafts: { ...input.values.numericDrafts } } : {}),
       ownerMemberId: input.values.ownerMemberId,
       playedAt: input.values.playedAt,
       players: input.values.players.map((player) => ({

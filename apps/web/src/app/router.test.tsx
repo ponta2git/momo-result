@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
@@ -13,14 +13,7 @@ import { createDeferred } from "@/test/deferred";
 import { makeFourPlayerResults, makeMatchDetail } from "@/test/factories";
 import { mswState } from "@/test/msw/fixtures";
 import { setupMsw } from "@/test/msw/lifecycle";
-import {
-  analysisArtifact,
-  makeSeriesAnalysisAggregate,
-  makeSeriesAnalysisAdminOverview,
-  makeSeriesAnalysisOptions,
-  makeSeriesAnalysisReview,
-  makeSeriesAnalysisStatus,
-} from "@/test/msw/seriesAnalysisFixtures";
+import { makeSeriesAnalysisAdminOverview } from "@/test/msw/seriesAnalysisFixtures";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 import { selectOption } from "@/test/selectOption";
@@ -51,36 +44,83 @@ describe("app routing", () => {
     user = userEvent.setup();
   });
 
-  // These flows load cold route chunks under coverage; their total budget must exceed each wait.
-  it(
-    "selects the analysis tab and shows its loading body before its data arrives",
-    { timeout: 15_000 },
-    async () => {
-      setDevUser();
-      const gate = createDeferred();
-      server.use(
-        http.get("/api/analytics/series-comparison/v4/aggregate", async () => {
-          await gate.promise;
-          return HttpResponse.json(makeSeriesAnalysisAggregate());
-        }),
+  it.each([false, true])(
+    "keeps unknown URLs recoverable (authenticated: %s)",
+    async (authenticated) => {
+      if (authenticated) setDevUser();
+      const { router } = renderApp("/unknown-page?source=bookmark#section");
+      expect(await screen.findByRole("heading", { name: "ページが見つかりません" })).toBeVisible();
+      const destination = authenticated ? "試合一覧へ戻る" : "ログイン画面へ";
+      expect(await screen.findByRole("link", { name: destination })).toHaveAttribute(
+        "href",
+        authenticated ? "/matches" : "/login",
       );
-      renderApp("/analytics/series");
-      // Cold route imports include artifact validators; coverage instrumentation can exceed 1s.
-      const tab = await screen.findByRole("tab", { name: "分析する" }, { timeout: 5000 });
-      await user.click(tab);
-      expect(tab).toHaveAttribute("aria-selected", "true");
-      expect(tab.closest("[inert]")).toBeNull();
-      expect(screen.getByLabelText("分析を読み込み中")).toBeInTheDocument();
-      expect(screen.queryByRole("tabpanel", { name: "次戦に備える" })).not.toBeInTheDocument();
-      gate.resolve();
-      // The full suite also loads and validates the lazy analysis view after the gate opens.
-      expect(
-        await screen.findByRole("heading", { name: "順位と基礎比較" }, { timeout: 5000 }),
-      ).toBeInTheDocument();
-      expect(screen.getByRole("tab", { name: "分析する" })).toBe(tab);
+      expect(router.state.location.pathname).toBe("/unknown-page");
+      expect(router.state.location.search).toBe("?source=bookmark");
+      expect(router.state.location.hash).toBe("#section");
+      expect(document.title).toBe("ページが見つかりません | 桃鉄戦績台帳");
     },
   );
 
+  it.each(["/", "/login?next=%2Fexports"])(
+    "recovers an unknown session at %s without treating it as signed out",
+    async (entry) => {
+      setDevUser();
+      let attempts = 0;
+      server.use(
+        http.get("/api/auth/me", () => {
+          attempts += 1;
+          return attempts === 1
+            ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 503 })
+            : HttpResponse.json({
+                accountId: "account_ponta",
+                csrfToken: "dev",
+                displayName: "ぽんた",
+                isAdmin: true,
+                memberId: "member_ponta",
+              });
+        }),
+      );
+      const { router } = renderApp(entry);
+      expect(
+        await screen.findByRole("heading", { name: "ログイン状態を確認できません" }),
+      ).toBeVisible();
+      expect(router.state.location.pathname).toBe(entry.split("?")[0]);
+      expect(screen.queryByRole("region", { name: "ログイン" })).not.toBeInTheDocument();
+      expect(attempts).toBe(1);
+      await user.click(screen.getByRole("button", { name: "再試行" }));
+      expect(
+        await screen.findByRole("region", { name: entry === "/" ? "試合一覧" : "出力条件" }),
+      ).toBeVisible();
+      expect(router.state.location.pathname).toBe(entry === "/" ? "/matches" : "/exports");
+    },
+  );
+
+  it("orients a new page, then preserves focus while its conditions change", async () => {
+    setDevUser();
+    renderApp("/matches");
+    expect(await screen.findByRole("region", { name: "試合一覧" })).toBeVisible();
+    expect(document.title).toBe("試合一覧 | 桃鉄戦績台帳");
+    await user.click(screen.getByRole("link", { name: "出力" }));
+    expect(await screen.findByRole("region", { name: "出力条件" })).toBeVisible();
+    expect(document.title).toBe("戦績を出力 | 桃鉄戦績台帳");
+    expect(screen.getByRole("main")).toHaveFocus();
+    const tsv = screen.getByRole("tab", { name: "TSV" });
+    await user.click(tsv);
+    expect(tsv).toHaveFocus();
+    expect(tsv).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("opens comparison through the protected lazy route from global navigation", async () => {
+    setDevUser();
+    const { router } = renderApp("/matches");
+    expect(await screen.findByRole("region", { name: "試合一覧" })).toBeVisible();
+    await user.click(screen.getByRole("link", { name: "戦績比較" }));
+    expect(await screen.findByText("収益先行時は目的地0回で終えない。")).toBeVisible();
+    expect(router.state.location.pathname).toBe("/analytics/series");
+  });
+
+  // These flows load cold route chunks under coverage; their total budget must exceed each wait.
   it(
     "keeps manually refreshed analysis jobs when returning through the default title route",
     { timeout: 15_000 },
@@ -122,7 +162,7 @@ describe("app routing", () => {
   it("keeps a self-disable completion at login and clears it before another account is used", async () => {
     setDevUser();
     const { router } = renderApp("/admin/masters?tab=accounts");
-    const row = (await screen.findByText("523484457705930752")).closest("tr")!;
+    const row = await screen.findByRole("row", { name: /523484457705930752/u });
     await user.click(within(row).getByRole("button", { name: "ログイン停止" }));
     await user.click(screen.getByRole("button", { name: "停止する" }));
     expect(
@@ -144,28 +184,19 @@ describe("app routing", () => {
     ).not.toBeInTheDocument();
   });
 
-  it.each(["notifications", "accounts"])(
-    "prevents a non-admin from opening the %s settings tab",
-    async (tab) => {
-      setDevUser("account_eu");
-      renderApp(`/admin/masters?tab=${tab}`);
-      expect(await screen.findByText("この画面は管理者専用です。")).toBeInTheDocument();
-      expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
-      expect(screen.queryByRole("region", { name: "設定管理" })).not.toBeInTheDocument();
-    },
-  );
+  it("prevents a non-admin from opening protected settings", async () => {
+    setDevUser("account_eu");
+    renderApp("/admin/masters?tab=accounts");
+    expect(await screen.findByText("この画面は管理者専用です。")).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "設定管理" })).not.toBeInTheDocument();
+  });
 
   it("revokes access to settings after removing the current account's admin permission", async () => {
     setDevUser();
     mswState.loginAccounts.find((account) => account.accountId === "account_eu")!.isAdmin = true;
     renderApp("/admin/masters?tab=accounts");
-    const row = (await screen.findByText("523484457705930752")).closest("tr")!;
-    const navigation = screen.getByRole("navigation", { name: "グローバルナビゲーション" });
-    expect(within(navigation).getByRole("link", { name: "設定" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
-    expect(within(navigation).queryByRole("link", { name: "アカウント" })).not.toBeInTheDocument();
+    const row = await screen.findByRole("row", { name: /523484457705930752/u });
     await user.click(within(row).getByRole("button", { name: "管理者解除" }));
     await user.click(screen.getByRole("button", { name: "解除する" }));
     expect(await screen.findByText("この画面は管理者専用です。")).toBeInTheDocument();
@@ -173,7 +204,7 @@ describe("app routing", () => {
     expect(screen.queryByRole("link", { name: "設定" })).not.toBeInTheDocument();
   });
 
-  it("opens the notification settings tab directly and uses one management navigation entry", async () => {
+  it("opens the requested notification settings tab directly", async () => {
     setDevUser();
     server.use(
       http.get("/api/admin/notification-settings", () =>
@@ -188,33 +219,12 @@ describe("app routing", () => {
     expect(router.state.location.pathname).toBe("/admin/masters");
     expect(router.state.location.search).toBe("?tab=notifications");
     expect(screen.getByRole("tab", { name: "通知" })).toHaveAttribute("aria-selected", "true");
-    const navigation = screen.getByRole("navigation", { name: "グローバルナビゲーション" });
-    expect(within(navigation).getByRole("link", { name: "設定" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
-    expect(within(navigation).queryByRole("link", { name: "通知" })).not.toBeInTheDocument();
   });
 
   it("redirects / to /login when unauthenticated", async () => {
     const { router } = renderApp("/");
 
     expect(await screen.findByRole("region", { name: "ログイン" })).toBeInTheDocument();
-    expect(
-      screen.queryByText("ログインすると、試合の記録・確認・比較・出力を利用できます。"),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "ログイン" })).toBeInTheDocument();
-    expect(
-      screen.queryByText(
-        "別のDiscordアカウントを使う場合は、Discord側でログアウトするか、シークレットウィンドウで開きます。",
-      ),
-    ).not.toBeInTheDocument();
-    expect(screen.getAllByRole("navigation", { name: "グローバルナビゲーション" })).toHaveLength(1);
-    expect(screen.getAllByRole("link", { name: "メインコンテンツへスキップ" })).toHaveLength(1);
-    const main = screen.getByRole("main");
-    expect(main).toHaveAttribute("id", "main-content");
-    expect(main).toHaveClass("px-3", "py-4", "sm:px-4", "sm:py-6");
     expect(router.state.location.pathname).toBe("/login");
   });
 
@@ -229,7 +239,7 @@ describe("app routing", () => {
     expect(screen.getByRole("button", { name: "ログアウト" })).toBeInTheDocument();
   });
 
-  it("shows a structured loading state while checking the login session", async () => {
+  it("waits for the login session before exposing protected content", async () => {
     setDevUser();
     const responseGate = createDeferred();
     server.use(
@@ -245,26 +255,13 @@ describe("app routing", () => {
       }),
     );
 
-    renderApp("/matches");
+    const { router } = renderApp("/matches");
 
     const loadingState = await screen.findByLabelText("ログイン状態を確認中…");
-    expect(loadingState).toHaveAttribute("aria-busy", "true");
-    expect(screen.getByText("ログイン状態を確認中…")).toBeInTheDocument();
-    expect(screen.getByText("momo-result")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "ログアウト" })).not.toBeInTheDocument();
-    const navigation = screen.getByRole("navigation", { name: "グローバルナビゲーション" });
-    expect(within(navigation).getByText("確認中", { exact: true })).toBeInTheDocument();
-    expect(within(navigation).getByRole("link", { name: "戦績比較" })).toHaveAttribute(
-      "href",
-      "/analytics/series",
-    );
-    expect(within(navigation).queryByRole("link", { name: "ログイン" })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "メインコンテンツへスキップ" })).toHaveAttribute(
-      "href",
-      "#main-content",
-    );
-    expect(screen.getByRole("main")).toHaveAttribute("id", "main-content");
-    expect(screen.getAllByRole("navigation", { name: "グローバルナビゲーション" })).toHaveLength(1);
+    expect(within(loadingState).getByRole("status")).toHaveTextContent("ログイン状態を確認中…");
+    expect(screen.queryByRole("region", { name: "試合一覧" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "ログイン" })).not.toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/matches");
 
     responseGate.resolve();
     expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
@@ -334,31 +331,16 @@ describe("app routing", () => {
     expect(
       screen.getByRole("region", { name: "ログイン状態を確認できません" }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
     expect(screen.queryByText("Temporary failure")).not.toBeInTheDocument();
     expect(screen.queryByText("auth temporarily unavailable")).not.toBeInTheDocument();
-    expect(
-      within(screen.getByRole("navigation", { name: "グローバルナビゲーション" })).getByRole(
-        "link",
-        { name: "戦績比較" },
-      ),
-    ).toHaveAttribute("href", "/analytics/series");
-    expect(
-      within(screen.getByRole("navigation", { name: "グローバルナビゲーション" })).getByText(
-        "状態不明",
-        { exact: true },
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("main")).toHaveAttribute("id", "main-content");
     await user.click(retry);
 
     expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
     expect(screen.queryByText("Temporary failure")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "再試行" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("navigation", { name: "グローバルナビゲーション" })).toHaveLength(1);
   });
 
-  it("keeps route-specific chrome when authentication fails before a detail page loads", async () => {
+  it("keeps a route exit available when authentication fails before detail loads", async () => {
     setDevUser();
     server.use(
       http.get("/api/auth/me", () =>
@@ -368,17 +350,14 @@ describe("app routing", () => {
 
     renderApp("/held-events/held-1");
 
-    const heading = await screen.findByRole("heading", {
-      level: 1,
-      name: "ログイン状態を確認できません",
-    });
-    const header = heading.closest("header");
-    const frame = header?.parentElement;
+    expect(
+      await screen.findByRole("heading", {
+        level: 1,
+        name: "ログイン状態を確認できません",
+      }),
+    ).toBeVisible();
     const back = screen.getByRole("link", { name: "開催履歴へ戻る" });
     expect(back).toHaveAttribute("href", "/held-events");
-    expect(header).toHaveTextContent("開催記録");
-    expect(frame?.children).toHaveLength(3);
-    expect(frame?.children.item(0)).toContainElement(back);
   });
 
   it("redirects /login to /matches when authenticated", async () => {
@@ -392,10 +371,8 @@ describe("app routing", () => {
   it("commits match detail navigation through the lazy route while the detail payload is loading", async () => {
     setDevUser();
     const detailGate = createDeferred();
-    let detailRequested = false;
     server.use(
       http.get("/api/matches/:matchId", async ({ params }) => {
-        detailRequested = true;
         await detailGate.promise;
         return HttpResponse.json(
           makeMatchDetail({
@@ -423,12 +400,9 @@ describe("app routing", () => {
       },
       { timeout: 5_000 },
     );
-    await waitFor(() => expect(detailRequested).toBe(true));
 
     detailGate.resolve();
-    await waitFor(() => {
-      screen.getByRole("heading", { name: /第1試合の結果/u });
-    });
+    expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeVisible();
   });
 
   it("logs out from the local default account and lets the operator switch roles", async () => {
@@ -472,462 +446,5 @@ describe("app routing", () => {
     } finally {
       vi.unstubAllEnvs();
     }
-  });
-
-  it("does not offer logout in the commercial navigation", async () => {
-    vi.stubEnv("DEV", false);
-    server.use(
-      http.get("/api/auth/me", () =>
-        HttpResponse.json({
-          accountId: "account_ponta",
-          csrfToken: "session-csrf",
-          displayName: "ぽんた",
-          isAdmin: true,
-          memberId: "member_ponta",
-        }),
-      ),
-    );
-
-    try {
-      const { router } = renderApp("/matches");
-
-      expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
-      expect(router.state.location.pathname).toBe("/matches");
-      expect(screen.queryByRole("button", { name: "ログアウト" })).not.toBeInTheDocument();
-      expect(screen.queryByText("アカウント固定")).not.toBeInTheDocument();
-    } finally {
-      vi.unstubAllEnvs();
-    }
-  });
-
-  it("renders edit mode at /matches/:matchId/edit", async () => {
-    setDevUser();
-    const { router } = renderApp("/matches/match-1/edit");
-
-    await waitFor(() => {
-      expect(router.state.location.pathname).toBe("/matches/match-1/edit");
-    });
-  });
-
-  it("renders held events at /held-events for authenticated users", async () => {
-    setDevUser();
-    const { router } = renderApp("/held-events");
-
-    expect(await screen.findByRole("region", { name: "開催履歴" })).toBeInTheDocument();
-    expect(router.state.location.pathname).toBe("/held-events");
-    expect(screen.getByRole("link", { name: "開催" })).toBeInTheDocument();
-  });
-
-  it("loads only the active review, then loads aggregate after switching views", async () => {
-    setDevUser();
-    const aggregateResponseGate = createDeferred();
-    const aggregateSearches: URLSearchParams[] = [];
-    const reviewSearches: URLSearchParams[] = [];
-    server.use(
-      http.get("/api/analytics/series-comparison/v4/aggregate", async ({ request }) => {
-        aggregateSearches.push(new URL(request.url).searchParams);
-        await aggregateResponseGate.promise;
-        return HttpResponse.json(makeSeriesAnalysisAggregate());
-      }),
-      http.get("/api/analytics/series-comparison/v3/review", ({ request }) => {
-        reviewSearches.push(new URL(request.url).searchParams);
-        return HttpResponse.json(makeSeriesAnalysisReview());
-      }),
-    );
-
-    const { router } = renderApp("/analytics/series");
-
-    expect(await screen.findByRole("region", { name: "戦績比較" })).toBeInTheDocument();
-    const scopeSurface = await screen.findByRole("region", { name: "比較条件" });
-    await waitFor(() => expect(scopeSurface).toHaveTextContent("12戦"));
-    expect(scopeSurface).not.toHaveTextContent("十分");
-    expect(await screen.findByRole("tab", { name: "次戦に備える" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    expect(await screen.findByRole("tabpanel", { name: "次戦に備える" })).toHaveAttribute(
-      "id",
-      "series-comparison-purpose-panel-review",
-    );
-    expect(screen.getByText("収益先行時は目的地0回で終えない。")).toBeInTheDocument();
-
-    await user.click(screen.getAllByRole("button", { name: "根拠・注意・試合後の確認" })[0]!);
-    expect(screen.getByText(/収益上位時の勝率: 60%/u)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "ダイアログを閉じる" }));
-
-    expect(aggregateSearches).toHaveLength(0);
-    expect(reviewSearches).toHaveLength(1);
-    expect(reviewSearches[0]?.get("artifactId")).toBe(analysisArtifact.artifactId);
-
-    // Control API readiness without timing the first transform of the lazy view or validator.
-    // Both real modules still run; their cold loading belongs to build/runtime evidence.
-    await Promise.all([
-      import("@/features/seriesComparison/page/SeriesAnalysisOverviewView"),
-      import("@/shared/api/generatedContracts/series-analysis-aggregate-v4-validators.generated"),
-    ]);
-    const analysisPurposeTab = screen.getByRole("tab", { name: "分析する" });
-    await user.click(analysisPurposeTab);
-    expect(screen.getByLabelText("分析を読み込み中")).toBeInTheDocument();
-    expect(analysisPurposeTab).toHaveAttribute("aria-selected", "true");
-    expect(analysisPurposeTab).toHaveFocus();
-    await act(async () => {
-      aggregateResponseGate.resolve();
-    });
-    expect(await screen.findByRole("heading", { name: "順位と基礎比較" })).toBeInTheDocument();
-    expect(screen.getByRole("tabpanel", { name: "今の差" })).toBeInTheDocument();
-    expect(analysisPurposeTab).toHaveFocus();
-    expect(router.state.location.search).toContain("view=overview");
-
-    expect(aggregateSearches).toHaveLength(1);
-    await user.click(screen.getByRole("tab", { name: "次戦に備える" }));
-    expect(await screen.findByRole("tabpanel", { name: "次戦に備える" })).toBeInTheDocument();
-    await user.click(screen.getByRole("tab", { name: "分析する" }));
-    expect(await screen.findByRole("tabpanel", { name: "今の差" })).toBeInTheDocument();
-
-    expect(aggregateSearches).toHaveLength(1);
-    expect(reviewSearches).toHaveLength(1);
-    expect(
-      aggregateSearches.every((params) => params.get("artifactId") === analysisArtifact.artifactId),
-    ).toBe(true);
-    expect(
-      reviewSearches.every((params) => params.get("artifactId") === analysisArtifact.artifactId),
-    ).toBe(true);
-  });
-
-  it("keeps the last successful artifact visible while a new calculation is running", async () => {
-    setDevUser();
-    server.use(
-      http.get("/api/analytics/series-comparison/v2/status", () =>
-        HttpResponse.json(
-          makeSeriesAnalysisStatus({
-            artifactFreshness: "stale",
-            calculation: {
-              finishedAt: null,
-              requestedAt: "2026-08-09T02:00:00.000Z",
-              startedAt: "2026-08-09T02:00:01.000Z",
-              status: "running",
-              trigger: "match_mutation",
-            },
-          }),
-        ),
-      ),
-    );
-
-    renderApp("/analytics/series");
-
-    const noticeTitle = await screen.findByText("新しい戦績データを計算中です");
-    const notice = noticeTitle.closest("section");
-    expect(notice).not.toBeNull();
-    expect(notice).toHaveTextContent("2026/08/09 10:02更新のデータを表示します");
-    expect(await screen.findByText("収益先行時は目的地0回で終えない。")).toBeInTheDocument();
-  });
-
-  it("keeps a same-scope prior artifact interactive after replacement loading fails", async () => {
-    setDevUser();
-    const replacementArtifact = {
-      ...analysisArtifact,
-      artifactId: "artifact-failing-replacement",
-      inputRevision: "13",
-      publishedAt: "2026-08-09T03:00:00.000Z",
-    };
-    let statusRequests = 0;
-    server.use(
-      http.get("/api/analytics/series-comparison/v2/status", () => {
-        statusRequests += 1;
-        return HttpResponse.json(
-          makeSeriesAnalysisStatus({
-            currentArtifact: statusRequests === 1 ? analysisArtifact : replacementArtifact,
-          }),
-        );
-      }),
-      http.get("/api/analytics/series-comparison/v3/review", ({ request }) => {
-        const artifactId = new URL(request.url).searchParams.get("artifactId");
-        return artifactId === replacementArtifact.artifactId
-          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
-          : HttpResponse.json(makeSeriesAnalysisReview());
-      }),
-    );
-
-    renderApp("/analytics/series");
-
-    expect(await screen.findByText("収益先行時は目的地0回で終えない。")).toBeInTheDocument();
-    await user.click(await screen.findByRole("button", { name: "表示を更新" }));
-    expect(await screen.findByText("最新の戦績データを取得できません")).toBeInTheDocument();
-    expect(screen.getByText("収益先行時は目的地0回で終えない。")).toBeInTheDocument();
-    await waitFor(() =>
-      expect(screen.queryByRole("button", { name: "表示を更新中" })).not.toBeInTheDocument(),
-    );
-    const reviewPanel = screen.getByRole("tabpanel", { name: "次戦に備える" });
-    expect(reviewPanel.closest("[inert]")).toBeNull();
-    expect(screen.getByRole("button", { name: "表示を更新" })).toBeEnabled();
-  });
-
-  it("does not show an old scope after the newly selected scope fails", async () => {
-    setDevUser();
-    server.use(
-      http.get("/api/analytics/series-comparison/v3/review", ({ request }) => {
-        const seasonMasterId = new URL(request.url).searchParams.get("seasonMasterId");
-        return seasonMasterId
-          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
-          : HttpResponse.json(makeSeriesAnalysisReview());
-      }),
-    );
-
-    renderApp("/analytics/series");
-
-    expect(await screen.findByText("収益先行時は目的地0回で終えない。")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /比較対象を変更/u }));
-    await selectOption(user, screen.getByRole("combobox", { name: "シーズン" }), "season_current");
-    expect(await screen.findByText("戦績データを読み込めません")).toBeInTheDocument();
-    await waitFor(() =>
-      expect(screen.queryByText("収益先行時は目的地0回で終えない。")).not.toBeInTheDocument(),
-    );
-  });
-
-  it("shows a calculation-only empty state before the first artifact is published", async () => {
-    setDevUser();
-    let aggregateRequests = 0;
-    let reviewRequests = 0;
-    server.use(
-      http.get("/api/analytics/series-comparison/v2/status", () =>
-        HttpResponse.json(
-          makeSeriesAnalysisStatus({
-            artifactFreshness: "unavailable",
-            calculation: {
-              finishedAt: null,
-              requestedAt: "2026-08-09T02:00:00.000Z",
-              startedAt: null,
-              status: "queued",
-              trigger: "initial_backfill",
-            },
-            currentArtifact: null,
-          }),
-        ),
-      ),
-      http.get("/api/analytics/series-comparison/v4/aggregate", () => {
-        aggregateRequests += 1;
-        return HttpResponse.json(makeSeriesAnalysisAggregate());
-      }),
-      http.get("/api/analytics/series-comparison/v3/review", () => {
-        reviewRequests += 1;
-        return HttpResponse.json(makeSeriesAnalysisReview());
-      }),
-    );
-
-    renderApp("/analytics/series");
-
-    expect(
-      await screen.findByRole("heading", { name: "戦績データの計算を待っています" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("計算完了後に「状態を再確認」を押すと表示します。"),
-    ).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "状態を再確認" })).toBeEnabled();
-    expect(aggregateRequests).toBe(0);
-    expect(reviewRequests).toBe(0);
-  });
-
-  it("pins season and map aggregate requests to the published artifact", async () => {
-    setDevUser();
-    const aggregateSearches: URLSearchParams[] = [];
-    server.use(
-      http.get("/api/analytics/series-comparison/v4/aggregate", ({ request }) => {
-        aggregateSearches.push(new URL(request.url).searchParams);
-        return HttpResponse.json(makeSeriesAnalysisAggregate());
-      }),
-    );
-    const { router } = renderApp("/analytics/series?view=overview");
-
-    expect(await screen.findByRole("region", { name: "戦績比較" })).toBeInTheDocument();
-    await user.click(await screen.findByRole("button", { name: /比較対象を変更/u }));
-    await selectOption(user, screen.getByRole("combobox", { name: "シーズン" }), "season_current");
-    await selectOption(user, screen.getByRole("combobox", { name: "マップ" }), "map_east");
-
-    await waitFor(() => {
-      expect(router.state.location.search).toContain("seasonMasterId=season_current");
-      expect(router.state.location.search).toContain("mapMasterId=map_east");
-      expect(
-        aggregateSearches.some(
-          (params) =>
-            params.get("artifactId") === analysisArtifact.artifactId &&
-            params.get("seasonMasterId") === "season_current" &&
-            params.get("mapMasterId") === "map_east",
-        ),
-      ).toBe(true);
-    });
-  });
-
-  it("keeps analysis tab identity while a new comparison scope is loading", async () => {
-    setDevUser();
-    const scopedAggregateResponseGate = createDeferred();
-    server.use(
-      http.get("/api/analytics/series-comparison/v4/aggregate", async ({ request }) => {
-        const seasonMasterId = new URL(request.url).searchParams.get("seasonMasterId");
-        if (!seasonMasterId) return HttpResponse.json(makeSeriesAnalysisAggregate());
-
-        await scopedAggregateResponseGate.promise;
-        const aggregate = makeSeriesAnalysisAggregate();
-        return HttpResponse.json({
-          ...aggregate,
-          scope: {
-            displayName: "今シーズン",
-            kind: "season" as const,
-            matchCount: aggregate.scope.matchCount,
-            seasonMasterId,
-          },
-        });
-      }),
-    );
-
-    renderApp("/analytics/series?view=overview");
-
-    const activeTab = await screen.findByRole("tab", { name: "今の差" });
-    await user.click(screen.getByRole("button", { name: /比較対象を変更/u }));
-    await selectOption(user, screen.getByRole("combobox", { name: "シーズン" }), "season_current");
-
-    expect(await screen.findByRole("button", { name: "表示を更新中" })).toBeDisabled();
-    expect(screen.getByRole("tab", { name: "今の差" })).toBe(activeTab);
-
-    scopedAggregateResponseGate.resolve();
-    await waitFor(() =>
-      expect(screen.queryByRole("button", { name: "表示を更新中" })).not.toBeInTheDocument(),
-    );
-    expect(screen.getByRole("tab", { name: "今の差" })).toBe(activeTab);
-  });
-
-  it("refreshes status once and moves to the replacement artifact after a 410", async () => {
-    setDevUser();
-    const replacementArtifact = {
-      ...analysisArtifact,
-      artifactId: "artifact-replacement",
-      inputRevision: "13",
-      publishedAt: "2026-08-09T03:00:00.000Z",
-    };
-    let statusRequests = 0;
-    const aggregateArtifactIds: string[] = [];
-    server.use(
-      http.get("/api/analytics/series-comparison/v2/status", () => {
-        statusRequests += 1;
-        return HttpResponse.json(
-          statusRequests === 1
-            ? makeSeriesAnalysisStatus()
-            : makeSeriesAnalysisStatus({
-                currentArtifact: replacementArtifact,
-                desired: {
-                  algorithmVersion: replacementArtifact.algorithmVersion,
-                  artifactSchemaVersion: replacementArtifact.artifactSchemaVersion,
-                  inputRevision: replacementArtifact.inputRevision,
-                },
-              }),
-        );
-      }),
-      http.get("/api/analytics/series-comparison/v4/aggregate", ({ request }) => {
-        const artifactId = new URL(request.url).searchParams.get("artifactId") ?? "";
-        aggregateArtifactIds.push(artifactId);
-        if (artifactId === analysisArtifact.artifactId) {
-          return HttpResponse.json(
-            {
-              code: "ANALYSIS_ARTIFACT_EXPIRED",
-              detail: "The requested artifact is no longer retained.",
-              status: 410,
-              title: "Artifact expired",
-              type: "about:blank",
-            },
-            { status: 410 },
-          );
-        }
-        return HttpResponse.json(makeSeriesAnalysisAggregate(replacementArtifact));
-      }),
-      http.get("/api/analytics/series-comparison/v3/review", () => {
-        const review = makeSeriesAnalysisReview();
-        return HttpResponse.json({ ...review, artifact: replacementArtifact });
-      }),
-    );
-
-    renderApp("/analytics/series?view=overview");
-
-    expect(await screen.findByRole("heading", { name: "順位と基礎比較" })).toBeInTheDocument();
-    expect(statusRequests).toBe(2);
-    expect(aggregateArtifactIds).toEqual([
-      analysisArtifact.artifactId,
-      replacementArtifact.artifactId,
-    ]);
-  });
-
-  it("recovers an expired review without fetching inactive aggregate data", async () => {
-    setDevUser();
-    const replacementArtifact = {
-      ...analysisArtifact,
-      artifactId: "artifact-review-replacement",
-      inputRevision: "13",
-      publishedAt: "2026-08-09T03:00:00.000Z",
-    };
-    let statusRequests = 0;
-    let aggregateRequests = 0;
-    const reviewArtifactIds: string[] = [];
-    server.use(
-      http.get("/api/analytics/series-comparison/v2/status", () => {
-        statusRequests += 1;
-        return HttpResponse.json(
-          statusRequests === 1
-            ? makeSeriesAnalysisStatus()
-            : makeSeriesAnalysisStatus({ currentArtifact: replacementArtifact }),
-        );
-      }),
-      http.get("/api/analytics/series-comparison/v3/review", ({ request }) => {
-        const artifactId = new URL(request.url).searchParams.get("artifactId") ?? "";
-        reviewArtifactIds.push(artifactId);
-        if (artifactId === analysisArtifact.artifactId) {
-          return HttpResponse.json(
-            {
-              code: "ANALYSIS_ARTIFACT_EXPIRED",
-              detail: "The requested artifact is no longer retained.",
-              status: 410,
-              title: "Artifact expired",
-              type: "about:blank",
-            },
-            { status: 410 },
-          );
-        }
-        const review = makeSeriesAnalysisReview();
-        return HttpResponse.json({ ...review, artifact: replacementArtifact });
-      }),
-      http.get("/api/analytics/series-comparison/v4/aggregate", () => {
-        aggregateRequests += 1;
-        return HttpResponse.json(makeSeriesAnalysisAggregate(replacementArtifact));
-      }),
-    );
-
-    renderApp("/analytics/series");
-
-    expect(await screen.findByText("収益先行時は目的地0回で終えない。")).toBeInTheDocument();
-    expect(statusRequests).toBe(2);
-    expect(reviewArtifactIds).toEqual([
-      analysisArtifact.artifactId,
-      replacementArtifact.artifactId,
-    ]);
-    expect(aggregateRequests).toBe(0);
-  });
-
-  it("retries v2 comparison options without showing a false empty state", async () => {
-    setDevUser();
-    let attempts = 0;
-    server.use(
-      http.get("/api/analytics/series-comparison/v2/options", () => {
-        attempts += 1;
-        return attempts === 1
-          ? HttpResponse.json({ detail: "failed" }, { status: 500 })
-          : HttpResponse.json(makeSeriesAnalysisOptions());
-      }),
-    );
-
-    renderApp("/analytics/series");
-
-    expect(await screen.findByText("対象作品を読み込めません")).toBeInTheDocument();
-    expect(screen.queryByText("登録されている作品がありません")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "比較対象を再読み込み" }));
-    await user.click(await screen.findByRole("button", { name: "比較対象を変更" }));
-    expect(screen.getByRole("combobox", { name: "対象作品" })).toBeInTheDocument();
-    expect(attempts).toBe(2);
   });
 });

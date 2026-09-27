@@ -38,11 +38,27 @@ aggregate coverage は、PR review と推移確認の非 blocking report とす�
 | API | domain、usecase、codec、HTTP mapping | PostgreSQL / Redis / object storage と migration 前提を実 service で確認 |
 | Processing Worker | pure calculation、parser、codec、state machine、decision table | DB / Redis、native OCR、parent / child process、cgroup、preemption、resource を専用 smoke で確認 |
 
-- UI は line coverage より loading / empty / error / success / mutation の scenario coverage を優先する。
+- UI は line coverage や全表示状態の網羅より、入力保持・正しい送信先・保存・復旧・操作続行に関わる独立した scenario を優先する。採否は `docs/test-rule.md` の「UI の検証を選ぶ基準」に従う。
 - DB / queue adapter は coverage 対象へ含めること自体を品質目標にせず、production と同じ wire / transaction を通す。
 - OCR accuracy は version 固定 dataset の項目別 oracle と差分で管理し、code coverage から未知画像への一般化を推測しない。
 - 分析計算は golden、高精度参照、property を組み合わせる。既存実装の出力だけを正解にしない。
 - performance / endurance の対象量、回数、上限は要求文書と private release gate を正本とし、public な coverage 設計へ複製しない。
+
+### Webの実行境界
+
+- `src`のVitestは値変換とcomponent / hook / MSWの証拠を扱う。appのroute接続とfeatureのresource lifecycleを区別し、後者の詳細をrouter suiteへ集約しない。
+- browserでHTTPを制御するcaseは、実画面のfocus・描画・非同期遷移の証拠。実APIを通るsmokeと区別し、mock応答だけで保存・生成・配送の接続を確認済みにしない。
+- E2E・Playwright設定もWebのtypecheckに含める。`scripts:check` の Node test は build checker の誤検出・未検出、runner の中断と所有 process の回収、診断の機密保護を観測する pipeline-integrity evidence とし、Vitest / coverage と分離する。別 process を起動する runner test は L であり、browser の利用者 flow や実 DB / queue の接続成功を保証しない。
+- API 生成の freshness は `contract:check`、生成された validator の受理・拒否はそれを使う decoder suite で観測する。generator の各内部関数へ同じ schema fixture を複製しない。build checker は実際の build にも接続し、正負 fixture の成功だけで最終 asset を確認済みにしない。
+- 共通setupはunmount後にQueryClientを解放し、mockを復元してから実storageを清掃する。各suiteには共通cleanupを複製せず、個別に所有する資源の解放と未完了操作の完了待ちを残す。
+
+採用・統合・廃止の判断は[テスト・品質規約](test-rule.md#2-品質証拠の採用維持削除)を参照する。現在のファイル配置・実行対象・並列数・commandは設定とCIが所有する。
+
+### API / Workerの実行境界
+
+- APIのservice suiteは通常testとコンパイル結果を共有しても、tag選択、fork、直列化を独立した設定scopeに置く。外部gateを実行した順序で後続の通常testの対象・隔離が変わらないようにする。
+- 複数adapterが同じportを実装する場合、consumerが依存する受理・拒否、返却identity、保存結果の共通契約を共有できる。DB固有のtransaction、lock、rollback、outboxは実DB suiteが所有し、非永続adapterとの共通化のためにoracleを弱めない。
+- 設定の解釈は入力を注入できる純粋境界で検証し、process全体の環境変数を書き換えて並列testを制御しない。filesystem / cgroup / child processの観測は実adapterを通す証拠として分ける。
 
 ## 4. Cross-System Contract Evidence
 
@@ -65,6 +81,9 @@ aggregate coverage は、PR review と推移確認の非 blocking report とす�
 
 ## 6. CI Artifacts
 
+- workflow は gate の依存関係、権限、service、artifact の受け渡しを所有する。`scripts/ci` はその実行境界の調整と検証を担い、アプリの業務判断は各 subsystem に置く。複数環境で使う型付きの処理や process 管理は `scripts/tools` が所有する。
+- `scripts/ci/test-*.sh` は分類、来歴、結果集約、実行の調整を観測する pipeline-integrity evidence とする。外部 command の double は実 container、DB / queue、provider 接続の成功を保証しない。ローカル候補の起動確認と配備後の公開 edge の確認は、それぞれの対象へ接続する smoke で証拠を取る。
+- shell の contract suite は標準 test runner から独立した process で実行し、一つの失敗で他の結果を失わない。fixture と command double は各 suite が所有し、ローカルと CI は同じ実行入口を使う。変更分類には test 自体に加え、検証される運用 script と実行入口の変更も接続する。
 - coverage artifact は PR review と推移確認の補助であり、integration / smoke の代わりにしない。
 - artifact は raw summary、review 用 summary、必要な HTML / machine-readable report に分け、生成 script と workflow が path / format を所有する。
 - coverage report を有効にした job は test failure を隠さず、artifact upload failure と品質 failure を区別する。

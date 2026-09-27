@@ -290,6 +290,7 @@ fn payload() -> OcrQueuePayload {
             .into_iter()
             .map(|(key, value)| (key, Value::BulkString(value.into_bytes())))
             .collect(),
+        ..StreamId::default()
     };
     match parse_delivery(&delivery) {
         Ok(payload) => payload,
@@ -334,6 +335,7 @@ fn payload_with_image_claims(
             .into_iter()
             .map(|(key, value)| (key, Value::BulkString(value.into_bytes())))
             .collect(),
+        ..StreamId::default()
     };
     match parse_delivery(&delivery) {
         Ok(parsed) => parsed,

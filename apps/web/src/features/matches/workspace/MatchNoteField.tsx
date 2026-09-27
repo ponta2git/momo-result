@@ -13,16 +13,17 @@ type MatchNoteFieldProps = {
 };
 
 export function MatchNoteField({ error, onChange, value }: MatchNoteFieldProps) {
+  const id = useId();
   const count = Array.from(normalizeMatchNote(value)).length;
   const invalid = error || count > matchNoteMaximumCharacters;
   return (
-    <section aria-labelledby="match-note-field-heading" className="grid gap-2">
+    <section aria-labelledby={`${id}-label`} className="grid gap-2">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <h2 className={fieldText.label} id="match-note-field-heading">
+          <h2 className={fieldText.label} id={`${id}-label`}>
             試合メモ（任意）
           </h2>
-          <p className={cn(fieldText.description, "mt-1")}>
+          <p className={cn(fieldText.description, "mt-1")} id={`${id}-help`}>
             印象に残った出来事や、あとで話したいことを残せます。
           </p>
         </div>
@@ -34,8 +35,9 @@ export function MatchNoteField({ error, onChange, value }: MatchNoteFieldProps) 
         </span>
       </div>
       <TextareaControl
-        aria-label="試合メモ（任意）"
-        aria-describedby={invalid ? "match-note-error" : undefined}
+        aria-labelledby={`${id}-label`}
+        aria-describedby={`${id}-help${invalid ? ` ${id}-error` : ""}`}
+        data-validation-path="noteBody"
         invalid={invalid}
         minHeight="sm"
         placeholderTone="muted"
@@ -46,10 +48,11 @@ export function MatchNoteField({ error, onChange, value }: MatchNoteFieldProps) 
         onChange={(event) => onChange(event.currentTarget.value)}
       />
       {invalid ? (
-        <p className={fieldText.error} id="match-note-error" role="alert">
+        <p className={fieldText.error} id={`${id}-error`} role="alert">
           試合メモは{matchNoteMaximumCharacters}字以内で入力してください。
         </p>
       ) : null}
     </section>
   );
 }
+import { useId } from "react";

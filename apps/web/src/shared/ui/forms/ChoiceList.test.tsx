@@ -23,11 +23,16 @@ describe("ChoiceList", () => {
     );
 
     expect(screen.getByRole("group", { name: "出力対象" })).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: /第12回/u })).toBeChecked();
+    const selected = screen.getByRole("radio", { name: "第12回" });
+    expect(selected).toBeChecked();
+    expect(selected).toHaveAccessibleDescription("2026年8月開催");
     expect(screen.getByText("選択中")).toBeVisible();
 
     await user.click(screen.getByText("第11回"));
     expect(onValueChange).toHaveBeenCalledWith("event-11");
+
+    await user.click(selected);
+    expect(onValueChange).toHaveBeenCalledTimes(1);
   });
 
   it("keeps a trailing action outside selection behavior", async () => {
@@ -39,6 +44,7 @@ describe("ChoiceList", () => {
         legend="作品"
         name="game-title"
         options={[
+          { label: "桃太郎電鉄ワールド", value: "game-1" },
           {
             label: "桃太郎電鉄2",
             trailingAction: (
@@ -46,7 +52,7 @@ describe("ChoiceList", () => {
                 編集
               </Button>
             ),
-            value: "game-1",
+            value: "game-2",
           },
         ]}
         value="game-1"
@@ -57,6 +63,11 @@ describe("ChoiceList", () => {
     await user.click(screen.getByRole("button", { name: "編集" }));
     expect(onEdit).toHaveBeenCalledTimes(1);
     expect(onValueChange).not.toHaveBeenCalled();
+    expect(screen.getByRole("radio", { name: "桃太郎電鉄ワールド" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "桃太郎電鉄2" })).not.toBeChecked();
+
+    await user.click(screen.getByText("桃太郎電鉄2"));
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith("game-2");
   });
 
   it("disables the group while pending and announces the busy state", () => {

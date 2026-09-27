@@ -61,6 +61,10 @@ describe("held event cache contract", () => {
     const pageList = { items: [newerEvent] };
     queryClient.setQueryData(heldEventKeys.detail(newerEvent.id), newerEvent);
     queryClient.setQueryData(heldEventKeys.summary(newerEvent.id), newerEvent);
+    queryClient.setQueryData(heldEventKeys.summaryRead(newerEvent.id), {
+      kind: "found",
+      value: newerEvent,
+    });
     queryClient.setQueryData(heldEventKeys.summary(olderEvent.id), olderEvent);
     queryClient.setQueryData(pageListKey, pageList);
 
@@ -68,6 +72,7 @@ describe("held event cache contract", () => {
 
     expect(queryClient.getQueryData(heldEventKeys.detail(newerEvent.id))).toBeUndefined();
     expect(queryClient.getQueryData(heldEventKeys.summary(newerEvent.id))).toBeUndefined();
+    expect(queryClient.getQueryData(heldEventKeys.summaryRead(newerEvent.id))).toBeUndefined();
     expect(queryClient.getQueryData(heldEventKeys.summary(olderEvent.id))).toEqual(olderEvent);
     expect(queryClient.getQueryData(pageListKey)).toBe(pageList);
     expect(queryClient.getQueryState(heldEventKeys.summary(olderEvent.id))?.isInvalidated).toBe(

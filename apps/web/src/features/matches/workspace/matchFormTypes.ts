@@ -1,3 +1,4 @@
+import type { MatchNumericDrafts } from "@/features/matches/workspace/matchNumericDrafts";
 import type { ConfirmMatchFormValues } from "@/features/matches/workspace/review/confirmMatchFormSchema";
 import type {
   ReviewFieldEvidence,
@@ -57,6 +58,7 @@ export type WorkspaceMode = "review" | "create" | "edit";
 export type MatchFormValues = Omit<ConfirmMatchFormValues, "noteBody"> & {
   matchDraftId?: string;
   noteBody: string;
+  numericDrafts?: MatchNumericDrafts;
 };
 
 /** Match context edited independently of score rows, OCR evidence, and workflow identifiers. */

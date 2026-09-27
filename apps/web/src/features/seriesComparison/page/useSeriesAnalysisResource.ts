@@ -18,11 +18,7 @@ import type {
   SeriesAnalysisViewId,
 } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { seriesAnalysisQueryFromState } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
-import {
-  isInitialQueryLoading,
-  shouldShowQueryError,
-  shouldShowStaleShield,
-} from "@/shared/api/queryErrorState";
+import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { seriesAnalysisKeys } from "@/shared/api/queryKeys";
 import { readSeriesAnalysisMatchContext } from "@/shared/api/seriesAnalysisMatchContextState";
 import {
@@ -85,7 +81,6 @@ export function useSeriesAnalysisResource({
     error: aggregateError,
     isFetching: aggregateFetching,
     isLoading: aggregateLoading,
-    isPlaceholderData: aggregatePlaceholder,
     refetch: refetchAggregate,
   } = aggregateQuery;
   const {
@@ -93,9 +88,13 @@ export function useSeriesAnalysisResource({
     error: reviewError,
     isFetching: reviewFetching,
     isLoading: reviewLoading,
-    isPlaceholderData: reviewPlaceholder,
     refetch: refetchReview,
   } = reviewQuery;
+  const activeQueryParams = activeView === "review" ? reviewQueryParams : aggregateQueryParams;
+  const activeError = activeView === "review" ? reviewError : aggregateError;
+  const activeFetching = activeView === "review" ? reviewFetching : aggregateFetching;
+  const activeLoading = activeView === "review" ? reviewLoading : aggregateLoading;
+  const activeData = activeView === "review" ? reviewData : aggregateData;
 
   const candidateAggregate = matchesSeriesAnalysisResource(
     aggregateData,
@@ -150,12 +149,33 @@ export function useSeriesAnalysisResource({
           (matchContextFailed || matchContextUnavailable)
         ? displaySeriesAnalysisBundleWithoutContext(activeView, candidateAggregate, candidateReview)
         : undefined;
+  const previousResource =
+    lastSuccessfulBundle?.kind === "review"
+      ? lastSuccessfulBundle.review
+      : lastSuccessfulBundle?.aggregate;
+  // A failed replacement may leave the previous artifact readable. Apply the requested view
+  // to that immutable payload, but never retain a different match's result or highlights.
+  const retainedBundle =
+    shouldShowQueryError({ error: activeError, isFetching: activeFetching }) &&
+    matchesSeriesAnalysisScope(previousResource, state)
+      ? displaySeriesAnalysisBundleWithoutContext(
+          activeView,
+          lastSuccessfulBundle?.kind === "analysis" ? lastSuccessfulBundle.aggregate : undefined,
+          lastSuccessfulBundle?.kind === "review" ? lastSuccessfulBundle.review : undefined,
+        )
+      : undefined;
+  if (retainedBundle && !matchContextUnavailable) {
+    retainedBundle.matchContext =
+      lastSuccessfulBundle?.matchContext?.matchId === state.focusMatchId
+        ? lastSuccessfulBundle?.matchContext
+        : undefined;
+  }
   // A missing replacement aggregate cannot keep a context that the current read invalidated.
   const nextSuccessfulBundle =
     resolvedBundle ??
     (matchContextUnavailable && lastSuccessfulBundle?.matchContext
       ? { ...lastSuccessfulBundle, matchContext: undefined }
-      : undefined);
+      : retainedBundle);
   if (
     nextSuccessfulBundle &&
     !sameSeriesAnalysisDisplayBundle(lastSuccessfulBundle, nextSuccessfulBundle)
@@ -163,12 +183,6 @@ export function useSeriesAnalysisResource({
     setLastSuccessfulBundle(nextSuccessfulBundle);
   }
 
-  const activeQueryParams = activeView === "review" ? reviewQueryParams : aggregateQueryParams;
-  const activeError = activeView === "review" ? reviewError : aggregateError;
-  const activeFetching = activeView === "review" ? reviewFetching : aggregateFetching;
-  const activeLoading = activeView === "review" ? reviewLoading : aggregateLoading;
-  const activePlaceholder = activeView === "review" ? reviewPlaceholder : aggregatePlaceholder;
-  const activeData = activeView === "review" ? reviewData : aggregateData;
   const refetchActive = useCallback(
     () => (activeView === "review" ? refetchReview() : refetchAggregate()),
     [activeView, refetchAggregate, refetchReview],
@@ -237,13 +251,16 @@ export function useSeriesAnalysisResource({
     displaySettling
       ? displayedBundle
       : undefined;
-  const resourceShielded = shouldShowStaleShield({
-    hasVisibleData: visibleBundle !== undefined,
-    isPlaceholderData: activePlaceholder,
-    isRefreshing: bundleFetching && visibleBundle !== undefined,
-    isSettling:
-      displaySettling || scopeSettling || (bundleResolution.kind === "waiting" && bundleFetching),
-  });
+  // Fetching the same immutable artifact does not invalidate its links, disclosures, or focus.
+  // Restrict retained content only while its identity differs from the requested display bundle.
+  const resourceShielded =
+    visibleBundle !== undefined &&
+    (((!matchesSeriesAnalysisResource(displayedResource, publishedArtifactId, state) ||
+      visibleBundle.view !== activeView ||
+      (visibleBundle.matchContext !== undefined &&
+        visibleBundle.matchContext.matchId !== state.focusMatchId)) &&
+      (bundleFetching || scopeSettling || displaySettling)) ||
+      (bundleResolution.kind === "waiting" && bundleFetching));
   const visibleResource =
     visibleBundle?.kind === "review" ? visibleBundle.review : visibleBundle?.aggregate;
 
@@ -300,7 +317,10 @@ export function useSeriesAnalysisResource({
     candidateArtifactId,
     focus: {
       data: visibleBundle?.matchContext,
-      hasError: matchContextQueryParams !== undefined && matchContextFailed,
+      hasError:
+        matchContextQueryParams !== undefined &&
+        (matchContextFailed ||
+          Boolean(activeError && !bundleFetching && visibleBundle && !visibleBundle.matchContext)),
       loading:
         matchContextQueryParams !== undefined &&
         isInitialQueryLoading({

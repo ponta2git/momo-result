@@ -1,11 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  describeMatchListDetailFilters,
-  MatchesListFilters,
-} from "@/features/matches/list/MatchesListFilters";
+import { MatchesListFilters } from "@/features/matches/list/MatchesListFilters";
 import type {
   MatchListFilterCandidates,
   MatchListSearch,
@@ -67,17 +64,34 @@ const candidates: MatchListFilterCandidates = {
 };
 
 describe("MatchesListFilters", () => {
-  it("keeps dependent season options with the selected game title", () => {
-    render(
+  it("offers only seasons belonging to the selected title and all seasons when no title is selected", async () => {
+    const user = userEvent.setup();
+    const actions = { onApply: vi.fn(), onClear: vi.fn() };
+    const { rerender } = render(
       <MatchesListFilters
-        actions={{ onApply: vi.fn(), onClear: vi.fn() }}
+        actions={actions}
         candidates={candidates}
         search={{ ...initialSearch, gameTitleId: "game-1", seasonMasterId: "season-1" }}
       />,
     );
 
-    expect(screen.getByLabelText("シーズン")).toHaveTextContent("今シーズン");
-    expect(screen.getByLabelText("シーズン")).not.toHaveTextContent("別シーズン");
+    await user.click(screen.getByRole("combobox", { name: "シーズン" }));
+    const options = within(await screen.findByRole("listbox"));
+    expect(options.getByRole("option", { name: "今シーズン" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(options.queryByRole("option", { name: "別シーズン" })).not.toBeInTheDocument();
+    await user.keyboard("{Escape}");
+
+    rerender(
+      <MatchesListFilters actions={actions} candidates={candidates} search={initialSearch} />,
+    );
+    await selectOption(user, screen.getByRole("combobox", { name: "シーズン" }), "season-2");
+    expect(actions.onApply).toHaveBeenLastCalledWith({
+      ...initialSearch,
+      seasonMasterId: "season-2",
+    });
   });
 
   it("clears cursor and an incompatible season when the game title changes", async () => {
@@ -131,16 +145,5 @@ describe("MatchesListFilters", () => {
       cursor: "",
       heldEventId: "held-1",
     });
-  });
-
-  it("describes all active details using the selected candidate labels", () => {
-    expect(
-      describeMatchListDetailFilters(candidates, {
-        ...initialSearch,
-        gameTitleId: "game-1",
-        heldEventId: "held-1",
-        seasonMasterId: "season-1",
-      }),
-    ).toEqual(["開催 2026/08/09", "作品 桃太郎電鉄2", "シーズン 今シーズン"]);
   });
 });

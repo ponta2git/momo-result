@@ -18,6 +18,8 @@ type PlayerNumericDesktopCellProps = ScoreGridCellRegistry &
     allowSign?: boolean;
     col: number;
     error: boolean;
+    draftValue: string | undefined;
+    onDraftChange: (path: string, value: string | undefined) => void;
     field: keyof typeof playerFieldLabels;
     focusImageKind?: "incident_log" | "revenue" | "total_assets";
     handleKeyboard: ScoreGridKeyboardHandler;
@@ -34,6 +36,8 @@ export function PlayerNumericDesktopCell({
   allowSign = false,
   col,
   error,
+  draftValue,
+  onDraftChange,
   field,
   focusImageKind,
   getCellId,
@@ -57,6 +61,8 @@ export function PlayerNumericDesktopCell({
         col={col}
         commitKind="player"
         error={error}
+        draftValue={draftValue}
+        onDraftChange={onDraftChange}
         field={field}
         focusImageKind={focusImageKind}
         originalValue={originalValue}

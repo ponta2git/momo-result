@@ -5,9 +5,13 @@ import { CaptureRail } from "@/features/ocrCapture/CaptureRail";
 import { ImageInput } from "@/features/ocrCapture/ImageInput";
 import { OcrStartDialog } from "@/features/ocrCapture/OcrStartDialog";
 import { SetupPanel } from "@/features/ocrCapture/SetupPanel";
-import { useOcrCapturePageModel } from "@/features/ocrCapture/useOcrCapturePageModel";
+import {
+  useOcrCaptureAuth,
+  useOcrCapturePageModel,
+} from "@/features/ocrCapture/useOcrCapturePageModel";
 import { AuthPanel } from "@/shared/auth/AuthPanel";
-import { actionRowClass, taskActionPanelClass } from "@/shared/ui/actions/actionGroup";
+import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
+import { inlineActionGroupClass, taskActionPanelClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
@@ -24,54 +28,62 @@ const panelTitleClass = contentText.heading;
 const panelLeadClass = cn(contentText.body, "mt-1");
 
 export function OcrCapturePage() {
-  const { capture, feedback, navigation, setup, submission, startError } = useOcrCapturePageModel();
+  const auth = useOcrCaptureAuth();
+  return <OcrCapturePageContent auth={auth} key={auth.accountId ?? "unresolved"} />;
+}
+
+function OcrCapturePageContent({ auth }: { auth: ReturnType<typeof useOcrCaptureAuth> }) {
+  const { capture, feedback, navigation, setup, submission, startError } =
+    useOcrCapturePageModel(auth);
 
   return (
     <PageFrame>
+      <nav aria-label="OCR取り込みの移動" className={inlineActionGroupClass}>
+        <LinkButton
+          icon={<ArrowLeft aria-hidden="true" />}
+          size="sm"
+          to={navigation.returnTo}
+          variant="quiet"
+        >
+          取り込みをやめる
+        </LinkButton>
+      </nav>
       <PageContentSurface aria-label="OCR取り込み" className="grid gap-6" role="region">
-        {navigation.returnTo ? (
-          <nav aria-label="OCR取り込みの操作" className={cn(actionRowClass, "justify-end")}>
-            <LinkButton
-              icon={<ArrowLeft aria-hidden="true" />}
-              size="sm"
-              to={navigation.returnTo}
-              variant="quiet"
-            >
-              取り込みをやめる
-            </LinkButton>
-          </nav>
-        ) : null}
         {feedback.auth.error ? (
-          <div className="grid gap-4 rounded-md border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 p-4 md:grid-cols-[1fr_18rem] md:items-center">
-            <Notice
-              action={
-                feedback.auth.error.status === 403 ? undefined : (
-                  <Button
-                    pending={feedback.auth.retrying}
-                    pendingLabel="確認中"
-                    size="sm"
-                    variant="secondary"
-                    onClick={feedback.auth.retry}
-                  >
-                    ログイン状態を再確認
-                  </Button>
-                )
-              }
-              presentation="bare"
-              tone="danger"
-              title={feedback.auth.error.title}
-            >
-              <p>
-                {feedback.auth.error.status === 403
-                  ? "この操作用アカウントでは利用できません。管理者に確認してください。"
-                  : feedback.auth.error.detail}
-              </p>
-            </Notice>
-            <AuthPanel
-              auth={feedback.auth.data}
-              embedded
-              forceDevPicker={feedback.auth.error.status === 401}
-            />
+          <div className="flex min-w-0 flex-wrap items-center gap-4 rounded-md border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 p-4">
+            <div className="min-w-0 flex-[2_1_20rem]">
+              <Notice
+                action={
+                  feedback.auth.error.status === 403 ? undefined : (
+                    <Button
+                      pending={feedback.auth.retrying}
+                      pendingLabel="確認中"
+                      size="sm"
+                      variant="secondary"
+                      onClick={feedback.auth.retry}
+                    >
+                      ログイン状態を再確認
+                    </Button>
+                  )
+                }
+                presentation="bare"
+                tone="danger"
+                title={feedback.auth.error.title}
+              >
+                <p>
+                  {feedback.auth.error.status === 403
+                    ? "この操作用アカウントでは利用できません。管理者に確認してください。"
+                    : feedback.auth.error.detail}
+                </p>
+              </Notice>
+            </div>
+            <div className="min-w-0 flex-[1_1_18rem]">
+              <AuthPanel
+                auth={feedback.auth.data}
+                embedded
+                forceDevPicker={feedback.auth.error.status === 401}
+              />
+            </div>
           </div>
         ) : null}
 
@@ -244,6 +256,13 @@ export function OcrCapturePage() {
         onClose={submission.dialog.close}
         onConfirm={submission.dialog.confirm}
         onViewMatches={submission.dialog.viewMatches}
+      />
+      <UnsavedChangesGuard
+        preservesInput={(current, next) => current.pathname === next.pathname}
+        description="配置した画像はまだ読み取りを開始していません。移動すると画像の選択は失われ、撮影またはファイル選択が必要になります。"
+        model={navigation.guard}
+        pending={navigation.pending}
+        showPendingDialog={false}
       />
     </PageFrame>
   );

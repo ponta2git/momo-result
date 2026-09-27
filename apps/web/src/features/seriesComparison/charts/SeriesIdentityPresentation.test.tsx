@@ -16,11 +16,15 @@ const reversedCanonicalPlayers = [
 
 describe("series artifact presentation", () => {
   it("preserves the player order supplied by the artifact", () => {
-    const response = makeSeriesAnalysisAggregate();
     render(
       <CrownShareBars
         players={reversedCanonicalPlayers}
-        shares={response.rankAnalysis.crownCertainty.shares}
+        shares={[
+          { displayName: "いーゆー", memberId: "member_eu", share: 0.1 },
+          { displayName: "ぽんた", memberId: "member_ponta", share: 0.2 },
+          { displayName: "あかねまみ", memberId: "member_akane_mami", share: 0.3 },
+          { displayName: "おーたか", memberId: "member_otaka", share: 0.4 },
+        ]}
       />,
     );
 
@@ -30,16 +34,11 @@ describe("series artifact presentation", () => {
       "ぽんた",
       "いーゆー",
     ]);
-    const crownShareBar = screen.getByRole("img", {
-      name: /平均順位首位に残った比率/u,
-    });
-    const crownShareSegments = crownShareBar.children;
-    expect(crownShareSegments[0]).not.toHaveStyle({
-      boxShadow: "inset 1px 0 var(--color-chart-segment-separator)",
-    });
-    expect(crownShareSegments[1]).toHaveStyle({
-      boxShadow: "inset 1px 0 var(--color-chart-segment-separator)",
-    });
+    expect(
+      screen.getByRole("img", {
+        name: "平均順位首位に残った比率。おーたか 40%、あかねまみ 30%、ぽんた 20%、いーゆー 10%",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("uses the artifact category instead of inferring it from the match number", async () => {

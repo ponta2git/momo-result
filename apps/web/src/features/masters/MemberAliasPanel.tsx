@@ -1,5 +1,5 @@
 import { Pencil, Trash2 } from "lucide-react";
-import { startTransition, useState } from "react";
+import { startTransition, useRef, useState } from "react";
 
 import { MasterResourceRefreshNotice } from "@/features/masters/MasterResourceRefreshNotice";
 import type { MemberAliasResponse } from "@/shared/api/masters";
@@ -9,7 +9,7 @@ import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { cn } from "@/shared/ui/cn";
-import { AlertDialog, Dialog } from "@/shared/ui/feedback/Dialog";
+import { AlertDialog, Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
 import { contentText } from "@/shared/ui/typography";
@@ -64,7 +64,7 @@ export function MemberAliasPanel({
         />
       </div>
 
-      <p className={contentText.supporting} role="status">
+      <p className={cn(contentText.supporting, "empty:hidden")} role="status">
         {completion}
       </p>
       <form
@@ -78,6 +78,7 @@ export function MemberAliasPanel({
         }}
       >
         <SelectField
+          disabled={createPending}
           label="プレーヤー"
           layout="subgrid"
           name="memberId"
@@ -88,6 +89,7 @@ export function MemberAliasPanel({
           }))}
         />
         <TextField
+          disabled={createPending}
           error={createError}
           label="別名"
           layout="subgrid"
@@ -162,12 +164,16 @@ function AliasEditDialog({
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
+  const submitting = useRef(false);
 
   return (
     <Dialog
       busy={pending}
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={(next) => {
+        if (next) setError(undefined);
+        setOpen(next);
+      }}
       title="別名を編集"
       trigger={
         <IconButton
@@ -183,6 +189,8 @@ function AliasEditDialog({
         className="grid gap-4"
         onSubmit={async (event) => {
           event.preventDefault();
+          if (submitting.current) return;
+          submitting.current = true;
           setError(undefined);
           setPending(true);
           const formData = new FormData(event.currentTarget);
@@ -195,11 +203,13 @@ function AliasEditDialog({
           } catch (caught) {
             setError(formatApiError(caught, "別名の更新に失敗しました"));
           } finally {
+            submitting.current = false;
             setPending(false);
           }
         }}
       >
         <SelectField
+          disabled={pending}
           defaultValue={alias.memberId}
           label="プレーヤー"
           name="memberId"
@@ -208,10 +218,22 @@ function AliasEditDialog({
             value: member.memberId,
           }))}
         />
-        <TextField defaultValue={alias.alias} error={error} label="別名" name="alias" required />
-        <Button disabled={pending} pending={pending} pendingLabel="保存中" type="submit">
-          保存
-        </Button>
+        <TextField
+          disabled={pending}
+          defaultValue={alias.alias}
+          error={error}
+          label="別名"
+          name="alias"
+          required
+        />
+        <DialogFooter>
+          <Button disabled={pending} variant="secondary" onClick={() => setOpen(false)}>
+            キャンセル
+          </Button>
+          <Button disabled={pending} pending={pending} pendingLabel="保存中" type="submit">
+            保存
+          </Button>
+        </DialogFooter>
       </form>
     </Dialog>
   );

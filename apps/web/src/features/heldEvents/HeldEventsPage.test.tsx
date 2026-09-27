@@ -1,9 +1,16 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import {
+  createMemoryRouter,
+  MemoryRouter,
+  Route,
+  RouterProvider,
+  Routes,
+  useLocation,
+} from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { HeldEventDetailPage } from "@/features/heldEvents/HeldEventDetailPage";
@@ -429,6 +436,7 @@ describe("HeldEventsPage", () => {
   });
 
   it("creates a held event in a dialog and continues to its detail page", async () => {
+    const requests: Array<{ body: unknown; idempotencyKey: string | null }> = [];
     const heldEvents = [makeHeldEventResponse()];
     const created = makeHeldEventResponse({
       heldAt: "2026-01-02T03:04:00.000Z",
@@ -436,7 +444,11 @@ describe("HeldEventsPage", () => {
     });
     server.use(
       http.get("/api/held-events", () => HttpResponse.json({ items: heldEvents })),
-      http.post("/api/held-events", () => {
+      http.post("/api/held-events", async ({ request }) => {
+        requests.push({
+          body: await request.json(),
+          idempotencyKey: request.headers.get("Idempotency-Key"),
+        });
         heldEvents.unshift(created);
         return HttpResponse.json(created);
       }),
@@ -465,6 +477,9 @@ describe("HeldEventsPage", () => {
       ),
     );
     expect(await screen.findByRole("heading", { name: "2026/01/02 12:04" })).toBeInTheDocument();
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.body).toEqual({ heldAt: "2026-01-02T03:04:00.000Z" });
+    expect(requests[0]?.idempotencyKey).toMatch(/\S/u);
     expect(screen.getByRole("link", { name: /前の開催/u })).toHaveAttribute(
       "href",
       "/held-events/held-1?returnTo=%2Fheld-events",
@@ -487,6 +502,60 @@ describe("HeldEventsPage", () => {
       expect(screen.queryByRole("dialog", { name: "新しい開催を作成" })).not.toBeInTheDocument(),
     );
   });
+
+  it.each(["browser back", "wait"])(
+    "preserves the originating entry after creation when the user chooses to %s while pending",
+    async (completion) => {
+      setDevUser();
+      const gate = createDeferred();
+      const created = makeHeldEventResponse({ id: "created-after-wait" });
+      server.use(
+        http.get("/api/held-events", () => HttpResponse.json({ items: [makeHeldEventResponse()] })),
+        http.post("/api/held-events", async () => {
+          await gate.promise;
+          return HttpResponse.json(created);
+        }),
+      );
+      const origin = "/held-events?page=2#ledger";
+      const router = createMemoryRouter(
+        [
+          { path: "/held-events", element: <HeldEventsPage /> },
+          { path: "/held-events/:heldEventId", element: <p>created detail</p> },
+          { path: "/matches", element: <p>matches</p> },
+        ],
+        { initialEntries: ["/matches", origin] },
+      );
+      render(
+        <QueryClientProvider client={queryClient}>
+          <RouterProvider router={router} />
+          <ToastHost />
+        </QueryClientProvider>,
+      );
+
+      await user.click(await screen.findByRole("button", { name: "開催を作成" }));
+      const dialog = screen.getByRole("dialog", { name: "新しい開催を作成" });
+      await user.click(within(dialog).getByRole("button", { name: "開催を作成" }));
+      expect(within(dialog).getByRole("button", { name: "作成中…" })).toBeDisabled();
+      if (completion === "browser back") {
+        await act(async () => router.navigate(-1));
+        expect(router.state.location.pathname).toBe("/held-events");
+        expect(screen.getByRole("dialog", { name: "新しい開催を作成" })).toBeInTheDocument();
+        expect(within(dialog).getByRole("button", { name: "作成中…" })).toBeDisabled();
+        expect(screen.queryByRole("button", { name: "破棄して移動" })).not.toBeInTheDocument();
+      }
+      await act(async () => gate.resolve());
+      await waitFor(() =>
+        expect(queryClient.getQueryData(heldEventKeys.summary(created.id))).toEqual(created),
+      );
+
+      await screen.findByText("created detail");
+      expect(new URLSearchParams(router.state.location.search).get("returnTo")).toBe(origin);
+      await act(async () => router.navigate(-1));
+      expect(
+        `${router.state.location.pathname}${router.state.location.search}${router.state.location.hash}`,
+      ).toBe(origin);
+    },
+  );
 
   it("keeps a dismissed creation failure in the held-event owner surface", async () => {
     server.use(
@@ -592,6 +661,45 @@ describe("HeldEventsPage", () => {
     expect(await screen.findByText("最初の開催です")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /前の開催/u })).not.toBeInTheDocument();
     expect(queryClient.getQueryData(heldEventKeys.detail(oldEvent.id))).toBeUndefined();
+  });
+
+  it("keeps a pending deletion on its owning page and cancels the blocked back request", async () => {
+    setDevUser();
+    const gate = createDeferred();
+    let deleted = false;
+    const event = makeHeldEventResponse({ draftCount: 0, matchCount: 0 });
+    server.use(
+      http.get("/api/held-events", () => HttpResponse.json({ items: deleted ? [] : [event] })),
+      http.delete("/api/held-events/:heldEventId", async () => {
+        await gate.promise;
+        deleted = true;
+        return HttpResponse.json({ deleted: true, heldEventId: event.id });
+      }),
+    );
+    const router = createMemoryRouter(
+      [
+        { path: "/held-events", element: <HeldEventsPage /> },
+        { path: "/matches", element: <p>matches</p> },
+      ],
+      { initialEntries: ["/matches", "/held-events"] },
+    );
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /を削除$/u }));
+    await user.click(screen.getByRole("button", { name: "削除する" }));
+    expect(screen.getByRole("button", { name: "削除中…" })).toBeDisabled();
+    await act(async () => router.navigate(-1));
+    expect(router.state.location.pathname).toBe("/held-events");
+    await act(async () => gate.resolve());
+    await screen.findByText("開催履歴はまだありません");
+    await waitFor(() => expect(screen.getByRole("button", { name: "更新" })).toBeEnabled());
+    expect(router.state.location.pathname).toBe("/held-events");
+    await act(async () => router.navigate(-1));
+    expect(router.state.location.pathname).toBe("/matches");
   });
 
   it("keeps deletion disabled for events with confirmed matches", async () => {

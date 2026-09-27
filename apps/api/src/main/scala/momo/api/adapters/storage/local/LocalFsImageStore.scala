@@ -1,154 +1,144 @@
 package momo.api.adapters.storage.local
 
-import java.nio.file.{Files, LinkOption, Path, StandardOpenOption}
+import java.nio.file.{Files, LinkOption, Path}
 import java.time.Instant
 
 import scala.jdk.CollectionConverters.*
 
+import cats.effect.Async
 import cats.effect.std.Random
-import cats.effect.{Async, Sync}
 import cats.syntax.all.*
 import fs2.Stream
-import fs2.io.file.{Files as Fs2Files, Path as Fs2Path}
 
 import momo.api.adapters.storage.ImageValidation
 import momo.api.domain.ids.*
 import momo.api.domain.{StoredImage, StoredImageLocation}
-import momo.api.errors.AppError
-import momo.api.ports.storage.{
-  ImageDiskUsage,
-  ImageStorage,
-  ImageStorageInspector,
-  ImageStorageUsage,
-  ReferenceAwareImageOrphanCleaner,
-  Sha256Hex
-}
+import momo.api.errors.{AppError, AppException}
+import momo.api.ports.storage.*
 
+/** Standalone image lifecycle over the same bounded, immutable object I/O as the DB runtime. */
 final class LocalFsImageStore[F[_]: Async: Random](root: Path)
     extends ImageStorage[F], ImageStorageInspector[F], ReferenceAwareImageOrphanCleaner[F]:
   import ImageValidation.*
   import LocalFsImageStoreSupport.*
 
-  private val rootDirectory: Path = root.toAbsolutePath.normalize()
+  private val rootDirectory = root.toAbsolutePath.normalize()
+  private val objects = LocalSourceImageObjectStorage[F](rootDirectory)
 
   override def save(
       ownerAccountId: AccountId,
       fileName: Option[String],
       contentType: Option[String],
       bytes: Array[Byte],
-  ): F[Either[AppError, StoredImage]] = validate(bytes, contentType).traverse { validated =>
-    for
-      id <- ImageId.fresh[F]
-      directory = accountDirectory(ownerAccountId)
-      _ <- Sync[F].blocking(Files.createDirectories(directory))
-      imageType = validated.imageType
-      path = directory.resolve(s"${id.value}.${imageType.extension}").toAbsolutePath.normalize()
-      _ <- Sync[F]
-        .blocking(Files.write(path, bytes, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE))
-    yield StoredImage(
-      id,
-      locationFor(path),
-      imageType.mediaType,
-      bytes.length.toLong,
-      Sha256Hex.digest(bytes).value,
-    )
-  }
-
-  override def find(imageId: ImageId): F[Option[StoredImage]] = Sync[F].blocking {
-    imagePaths(imageId).headOption.map { case (path, imageType) =>
-      val bytes = Files.readAllBytes(path)
-      StoredImage(
-        imageId,
-        locationFor(path),
-        imageType.mediaType,
-        bytes.length.toLong,
-        Sha256Hex.digest(bytes).value,
-      )
+  ): F[Either[AppError, StoredImage]] = Async[F].delay(validate(bytes, contentType)).flatMap {
+    _.traverse { validated =>
+      for
+        id <- ImageId.fresh[F]
+        path =
+          accountDirectory(ownerAccountId).resolve(s"${id.value}.${validated.imageType.extension}")
+        key <- keyFor(path).liftTo[F]
+        digest <- Async[F].delay(Sha256Hex.digest(bytes))
+        metadata <- objects.put(key, validated.imageType.mediaType, bytes, digest)
+          .flatMap(_.leftMap(storageError).liftTo[F])
+      yield storedImage(id, path, metadata)
     }
   }
 
-  override def readStream(image: StoredImage): Stream[F, Byte] = Fs2Files.forAsync[F]
-    .readAll(Fs2Path.fromNioPath(pathFor(image.location)))
+  override def find(imageId: ImageId): F[Option[StoredImage]] = Async[F]
+    .blocking(imagePaths(imageId).headOption).flatMap(_.traverse { path =>
+      keyFor(path).liftTo[F].flatMap(objects.head).flatMap(_.leftMap(storageError).liftTo[F])
+        .map(storedImage(imageId, path, _))
+    })
 
-  override def delete(imageId: ImageId): F[Boolean] = Sync[F].blocking {
-    imagePaths(imageId)
-      .foldLeft(false)((deleted, pathAndType) => Files.deleteIfExists(pathAndType._1) || deleted)
+  override def readStream(image: StoredImage): Stream[F, Byte] = Stream.eval {
+    Async[F].delay(Path.of(image.location.value)).flatMap(path => keyFor(path).liftTo[F])
+      .flatMap(objects.get).flatMap(_.leftMap(storageError).liftTo[F]).flatMap { stored =>
+        val metadata = stored.metadata
+        if metadata.mediaType == image.mediaType && metadata.sizeBytes == image.sizeBytes &&
+          metadata.sha256.value == image.sha256
+        then Async[F].pure(stored.bytes)
+        else
+          Async[F].raiseError[Array[Byte]](storageError(
+            SourceImageObjectFailure.IntegrityViolation
+          ))
+      }
+  }.flatMap(bytes => Stream.emits(bytes).covary[F])
+
+  override def delete(imageId: ImageId): F[Boolean] = Async[F].blocking {
+    imagePaths(imageId).foldLeft(false)((deleted, path) => Files.deleteIfExists(path) || deleted)
   }
 
   override def unreferencedUsage(
       ownerAccountId: AccountId,
       referenced: Set[ImageId],
-  ): F[ImageStorageUsage] = Sync[F].blocking {
-    val directory = accountDirectory(ownerAccountId)
-    if !Files.isDirectory(directory) then ImageStorageUsage(fileCount = 0, sizeBytes = 0L)
-    else
-      imageFiles(directory).filterNot(path => fileImageId(path).exists(referenced.contains))
+  ): F[ImageStorageUsage] = Async[F].blocking {
+    withImageFiles(accountDirectory(ownerAccountId)) { paths =>
+      paths.filterNot(path => fileImageId(path).exists(referenced.contains))
         .foldLeft(ImageStorageUsage(fileCount = 0, sizeBytes = 0L)) { (usage, path) =>
-          usage
-            .copy(fileCount = usage.fileCount + 1, sizeBytes = usage.sizeBytes + Files.size(path))
+          usage.copy(
+            fileCount = usage.fileCount + 1,
+            sizeBytes = usage.sizeBytes + Files.size(path)
+          )
         }
+    }
   }
 
-  override def diskUsage: F[Option[ImageDiskUsage]] = Sync[F].blocking {
-    Files.createDirectories(rootDirectory)
-    Some(ImageDiskUsage(
-      totalBytes = rootDirectory.toFile.getTotalSpace,
-      usableBytes = rootDirectory.toFile.getUsableSpace,
-    ))
-  }
+  override def diskUsage: F[Option[ImageDiskUsage]] = objects.diskUsage
 
-  override def deleteOrphans(referenced: Set[ImageId], olderThan: Instant): F[Int] = Sync[F]
+  override def deleteOrphans(referenced: Set[ImageId], olderThan: Instant): F[Int] = Async[F]
     .blocking {
-      if !Files.isDirectory(rootDirectory) then 0
-      else
-        val deleted = imageFiles(rootDirectory).count { path =>
+      val deleted = withImageFiles(rootDirectory) { paths =>
+        paths.count { path =>
           fileImageId(path).exists(id => !referenced.contains(id)) &&
-          Files.getLastModifiedTime(path).toInstant.isBefore(olderThan) &&
+          Files.getLastModifiedTime(
+            path,
+            LinkOption.NOFOLLOW_LINKS
+          ).toInstant.isBefore(olderThan) &&
           Files.deleteIfExists(path)
         }
-        deleteEmptyDirectories()
-        deleted
+      }
+      deleteEmptyDirectories()
+      deleted
     }
 
   private def accountDirectory(accountId: AccountId): Path = rootDirectory
-    .resolve(s"account-${sha256Hex(accountId.value)}").normalize()
+    .resolve(s"account-${sha256Hex(accountId.value)}")
 
-  private def flatImagePath(stem: String, imageType: ImageType): Path = rootDirectory
-    .resolve(s"$stem.${imageType.extension}").normalize()
+  private def imagePaths(imageId: ImageId): List[Path] =
+    safeImageFileStem(imageId).fold(List.empty[Path]) {
+      stem =>
+        withImageFiles(rootDirectory) { paths =>
+          paths.filter(path =>
+            SupportedImageTypes.exists(imageType =>
+              path.getFileName.toString == s"$stem.${imageType.extension}"
+            )
+          ).toList
+        }
+    }
 
-  private def imagePaths(imageId: ImageId): List[(Path, ImageType)] =
-    val stem = safeImageFileStem(imageId)
-    val candidates = stem.toList.flatMap(value =>
-      SupportedImageTypes.map(imageType => flatImagePath(value, imageType) -> imageType)
-    )
-    val nested = stem match
-      case None => List.empty[(Path, ImageType)]
-      case Some(value) if !Files.isDirectory(rootDirectory) => List.empty[(Path, ImageType)]
-      case Some(value) => imageFiles(rootDirectory).flatMap(path =>
-          SupportedImageTypes.collectFirst {
-            case imageType if path.getFileName.toString == s"$value.${imageType.extension}" =>
-              path -> imageType
-          }
-        )
-    (candidates ++ nested).distinct.filter(pathAndType => Files.exists(pathAndType._1))
-
-  private def imageFiles(directory: Path): List[Path] =
-    val paths = Files.walk(directory, 2)
-    try paths.iterator().asScala.toList
-        .filter(path => Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
-        .filter(path => fileImageId(path).isDefined)
-    finally paths.close()
+  /** Consume the walk while it is open; directory size never becomes a list of all paths. */
+  private def withImageFiles[A](directory: Path)(consume: Iterator[Path] => A): A =
+    if !Files.isDirectory(rootDirectory, LinkOption.NOFOLLOW_LINKS) ||
+      !Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)
+    then consume(Iterator.empty)
+    else
+      val paths = Files.walk(directory, 2)
+      try consume(paths.iterator().asScala
+          .filter(path => Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
+          .filter(path => fileImageId(path).isDefined))
+      finally paths.close()
 
   private def deleteEmptyDirectories(): Unit =
-    val paths = Files.walk(rootDirectory, 2)
-    try paths.iterator().asScala.toList.sortBy(_.getNameCount).reverseIterator.foreach { path =>
-        if !path.equals(rootDirectory) && Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS) then
-          val entries = Files.list(path)
-          try if !entries.iterator().hasNext then
-              val _ = Files.deleteIfExists(path)
-          finally entries.close()
-      }
-    finally paths.close()
+    if Files.isDirectory(rootDirectory, LinkOption.NOFOLLOW_LINKS) then
+      val paths = Files.list(rootDirectory)
+      try paths.iterator().asScala.foreach { path =>
+          if Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS) then
+            val entries = Files.list(path)
+            try if !entries.iterator().hasNext then
+                val _ = Files.deleteIfExists(path)
+            finally entries.close()
+        }
+      finally paths.close()
 
   private def fileImageId(path: Path): Option[ImageId] =
     val fileName = path.getFileName.toString
@@ -157,7 +147,30 @@ final class LocalFsImageStore[F[_]: Async: Random](root: Path)
         fileName.stripSuffix(s".${imageType.extension}")
     }.filter(isSafeImageFileStem).flatMap(ImageId.fromString(_).toOption)
 
-  private def locationFor(path: Path): StoredImageLocation = StoredImageLocation
-    .unsafeFromString(path.toAbsolutePath.normalize().toString)
+  private def keyFor(path: Path): Either[AppException, SourceImageObjectKey] =
+    val normalized = path.toAbsolutePath.normalize()
+    if !normalized.startsWith(rootDirectory) || normalized.equals(rootDirectory) then
+      Left(storageError(SourceImageObjectFailure.IntegrityViolation))
+    else
+      SourceImageObjectKey.fromString(rootDirectory.relativize(normalized).toString)
+        .leftMap(_ => storageError(SourceImageObjectFailure.IntegrityViolation))
 
-  private def pathFor(location: StoredImageLocation): Path = Path.of(location.value)
+  private def storedImage(
+      id: ImageId,
+      path: Path,
+      metadata: SourceImageObjectMetadata,
+  ): StoredImage = StoredImage(
+    id,
+    StoredImageLocation.unsafeFromString(path.toString),
+    metadata.mediaType,
+    metadata.sizeBytes,
+    metadata.sha256.value,
+  )
+
+  private def storageError(failure: SourceImageObjectFailure): AppException =
+    AppException(failure match
+      case SourceImageObjectFailure.NotFound => AppError.NotFound("source image", "unavailable")
+      case SourceImageObjectFailure.IntegrityViolation | SourceImageObjectFailure.AccessDenied =>
+        AppError.DependencyFailed("Stored image integrity verification failed.")
+      case SourceImageObjectFailure.Unavailable =>
+        AppError.ServiceUnavailable("Image storage is temporarily unavailable."))

@@ -262,7 +262,8 @@ mod tests {
             &OcrHints::default(),
             &mut first_recognizer,
             &mut |event| first_events.push(event),
-        );
+        )
+        .expect("valid ranked screen produces a candidate");
         let mut second_recognizer = DeterministicRecognizer;
         let mut second_events = Vec::new();
         let second = analyze(
@@ -271,7 +272,8 @@ mod tests {
             &OcrHints::default(),
             &mut second_recognizer,
             &mut |event| second_events.push(event),
-        );
+        )
+        .expect("repeated ranked screen produces a candidate");
 
         assert_eq!(
             first, second,
@@ -292,6 +294,77 @@ mod tests {
             "runtime timing receives boundaries without feeding values into output"
         );
         assert_eq!(first_events, second_events);
+        assert!(
+            first
+                .with_timings(
+                    crate::OcrTimings::new(0.0, 0.0, 0.0, 0.0, 1.0).expect("valid timing")
+                )
+                .satisfies_contract(RequestedScreenType::TotalAssets, &OcrHints::default(), 1),
+            "the parser candidate must satisfy the persistence contract"
+        );
+    }
+
+    #[test]
+    fn hinted_noise_cannot_create_a_member_candidate_that_fails_persistence_validation() {
+        struct HintedRecognizer(&'static str);
+
+        impl RecognitionPort for HintedRecognizer {
+            fn initialize(&mut self) -> Result<(), RecognitionError> {
+                Ok(())
+            }
+
+            fn recognize(
+                &mut self,
+                _frame: RecognitionFrame<'_>,
+                _language: RecognitionLanguage,
+                _segmentation: PageSegmentationMode,
+            ) -> Result<RecognizedText, RecognitionError> {
+                Ok(RecognizedText::new(self.0, Some(0.9)))
+            }
+        }
+
+        let bytes = png_bytes();
+        for (aliases, recognized, expected_name, expected_member) in [
+            (vec!["ーーー社長"], "ーーー社長 1億0000万円", None, None),
+            (
+                vec!["ーーー社長", "短", "新しい名前社長"],
+                "新しい名前社長 1億0000万円",
+                Some("新しい名前社長"),
+                Some("member-1"),
+            ),
+        ] {
+            let hints: OcrHints = serde_json::from_value(serde_json::json!({
+                "knownPlayerAliases": [{"memberId": "member-1", "aliases": aliases}],
+            }))
+            .expect("bounded hints decode");
+            assert!(
+                hints.is_valid(),
+                "these hints are accepted by the wire contract"
+            );
+            let analysis = analyze(
+                &bytes,
+                RequestedScreenType::TotalAssets,
+                &hints,
+                &mut HintedRecognizer(recognized),
+                &mut |_| {},
+            )
+            .expect("a noisy name must remain a reviewable OCR result");
+            let output = analysis.with_timings(
+                crate::OcrTimings::new(0.0, 0.0, 0.0, 0.0, 1.0).expect("valid timing"),
+            );
+            assert_eq!(
+                output.payload.pointer("/players/0/raw_player_name/value"),
+                Some(&serde_json::json!(expected_name))
+            );
+            assert_eq!(
+                output.payload.pointer("/players/0/member_id"),
+                Some(&serde_json::json!(expected_member))
+            );
+            assert!(
+                output.satisfies_contract(RequestedScreenType::TotalAssets, &hints, 1),
+                "alias recognition and parent candidate validation must agree"
+            );
+        }
     }
 
     #[test]

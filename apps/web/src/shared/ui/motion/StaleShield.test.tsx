@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
 
 import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
@@ -41,9 +42,13 @@ describe("StaleShield", () => {
     const preservedContent = screen.getByText("表示中の結果").parentElement;
     expect(preservedContent).toHaveAttribute("inert");
     expect(screen.getByRole("status")).toHaveTextContent("比較条件を更新中");
+    expect(preservedContent).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("status").closest('[aria-busy="true"]')).toBeNull();
   });
 
-  it("keeps safe operations interactive during a same-scope refresh", () => {
+  it("keeps safe operations interactive during a same-scope refresh", async () => {
+    const user = userEvent.setup();
+    const onOpen = vi.fn();
     render(
       <StaleShield
         active
@@ -51,13 +56,20 @@ describe("StaleShield", () => {
         fallback={<div>読み込み中</div>}
         strategy="preserve-interactive"
       >
-        <button type="button">表示中の試合を開く</button>
+        <button type="button" onClick={onOpen}>
+          表示中の試合を開く
+        </button>
       </StaleShield>,
     );
 
     const button = screen.getByRole("button", { name: "表示中の試合を開く" });
-    expect(button.parentElement).not.toHaveAttribute("inert");
+    expect(button.closest("[inert]")).toBeNull();
+    await user.tab();
+    expect(button).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(onOpen).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("status")).toHaveTextContent("一覧を更新中");
+    expect(screen.getByRole("status").closest('[aria-busy="true"]')).toBeNull();
   });
 
   it("restores focus dropped by inert without stealing focus moved outside", () => {

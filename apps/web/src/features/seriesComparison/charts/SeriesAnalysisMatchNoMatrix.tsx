@@ -40,12 +40,7 @@ export function MatchNoInEventMatrix({
         players={players}
       />
       {additionalEntries.length > 0 ? (
-        <Disclosure
-          panelPadding="sm"
-          presentation="inset"
-          summary="追加試合"
-          triggerVariant="supporting"
-        >
+        <Disclosure panelPadding="sm" summary="追加試合" triggerVariant="supporting">
           <MatchNoMatrix
             ariaLabel="追加試合の開催内順別傾向"
             entries={additionalEntries}

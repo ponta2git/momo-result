@@ -2,7 +2,7 @@ import { AlertDialog as BaseAlertDialog } from "@base-ui/react/alert-dialog";
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import { AnimatePresence, useReducedMotionConfig } from "motion/react";
 import type { HTMLAttributes, ReactElement, ReactNode } from "react";
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 import { AlertDialogLayer, DialogLayer } from "@/shared/ui/feedback/DialogLayer";
 import type { AlertDialogLayerProps } from "@/shared/ui/feedback/DialogLayer";
@@ -154,31 +154,44 @@ export function AlertDialog({
   title,
   trigger,
 }: AlertDialogProps) {
-  const [internalPending, setInternalPending] = useState(false);
-  const [internalError, setInternalError] = useState("");
   const controllableOpen = useControllableDialogOpen(open, onOpenChange);
   const { actualOpen } = controllableOpen;
-  const actualPending = pending || internalPending;
+  const [confirmation, setConfirmation] = useState({
+    open: actualOpen,
+    pending: false,
+    error: "",
+  });
+  const activeAttempt = useRef<symbol | null>(null);
+  // A controlled owner may close or replace this task while its request is unresolved.
+  // Its next opening must start clean, and the old request must not close the new task.
+  if (confirmation.open !== actualOpen) {
+    setConfirmation({ open: actualOpen, pending: false, error: "" });
+  }
+  useLayoutEffect(() => {
+    if (!actualOpen) activeAttempt.current = null;
+    return () => {
+      activeAttempt.current = null;
+    };
+  }, [actualOpen]);
+  const actualPending = pending || confirmation.pending;
   const reduceMotion = useReducedMotionConfig();
-  const setOpen = (nextOpen: boolean) => {
-    if (!nextOpen && actualPending) {
-      return;
-    }
-    setInternalError("");
-    controllableOpen.setOpen(nextOpen);
-  };
   const handleConfirm = async () => {
-    setInternalPending(true);
+    if (!actualOpen || actualPending || confirmDisabled || activeAttempt.current) return;
+    const attempt = Symbol("confirmation");
+    activeAttempt.current = attempt;
+    setConfirmation({ open: actualOpen, pending: true, error: "" });
     try {
       await onConfirm();
-      setInternalError("");
+      if (activeAttempt.current !== attempt) return;
+      setConfirmation({ open: actualOpen, pending: false, error: "" });
       if (closeOnSuccess) {
-        setOpen(false);
+        controllableOpen.setOpen(false);
       }
     } catch (error) {
-      setInternalError(formatError(error));
+      if (activeAttempt.current !== attempt) return;
+      setConfirmation({ open: actualOpen, pending: false, error: formatError(error) });
     } finally {
-      setInternalPending(false);
+      if (activeAttempt.current === attempt) activeAttempt.current = null;
     }
   };
 
@@ -186,11 +199,11 @@ export function AlertDialog({
     <BaseAlertDialog.Root
       open={actualOpen}
       onOpenChange={(nextOpen, eventDetails) => {
-        if (!nextOpen && actualPending) {
+        if (!nextOpen && (actualPending || activeAttempt.current)) {
           eventDetails.cancel();
           return;
         }
-        setOpen(nextOpen);
+        controllableOpen.setOpen(nextOpen);
       }}
     >
       {trigger ? <BaseAlertDialog.Trigger render={trigger} /> : null}
@@ -204,7 +217,7 @@ export function AlertDialog({
             confirmLabel={confirmLabel}
             pendingLabel={pendingLabel}
             description={description}
-            error={internalError}
+            error={confirmation.error}
             finalFocus={finalFocus}
             key="alert-dialog-layer"
             pending={actualPending}

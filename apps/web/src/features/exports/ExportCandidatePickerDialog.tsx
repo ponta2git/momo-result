@@ -1,7 +1,6 @@
 import { ChoicePickerDialogField } from "@/shared/ui/forms/ChoicePickerDialogField";
 
 import type { ExportScope } from "./exportTypes";
-import { candidateDisplayLabel } from "./exportViewModel";
 import type { ExportCandidateView } from "./exportViewModel";
 
 type ReadyCandidateView = Extract<ExportCandidateView, { kind: "ready" }>;
@@ -40,7 +39,6 @@ export function ExportCandidatePickerDialog({
       label={label}
       name={`export-${scope}-candidate`}
       options={view.candidates.map((candidate) => ({
-        accessibleLabel: candidateDisplayLabel(candidate),
         description: candidate.description,
         label: candidate.label,
         value: candidate.value,

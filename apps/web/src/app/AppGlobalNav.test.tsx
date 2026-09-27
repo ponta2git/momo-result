@@ -30,6 +30,18 @@ describe("AppGlobalNav", () => {
     };
   });
 
+  it("keeps match review in the match section while its navigation link returns to the list", () => {
+    render(
+      <MemoryRouter initialEntries={["/review/session-1"]}>
+        <AppGlobalNav />
+      </MemoryRouter>,
+    );
+    const current = screen.getByRole("link", { name: "試合" });
+    expect(current).toHaveAttribute("aria-current", "page");
+    expect(current).toHaveAttribute("href", "/matches");
+    expect(screen.getByRole("link", { name: "OCR" })).not.toHaveAttribute("aria-current");
+  });
+
   it("owns the product route catalog and exposes admin destinations only to admins", () => {
     const { rerender } = render(
       <MemoryRouter initialEntries={["/matches"]}>

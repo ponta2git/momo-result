@@ -1,6 +1,10 @@
 package momo.api.config
 
+import java.net.URI
+import java.nio.charset.StandardCharsets
+
 import scala.concurrent.duration.*
+import scala.util.Try
 
 import cats.effect.Async
 import cats.syntax.all.*
@@ -37,10 +41,10 @@ private[config] object AuthConfigLoader:
           secureCookies,
       ) =>
         AuthConfig(
-          discordClientId = env.get("DISCORD_CLIENT_ID").filter(_.nonEmpty),
-          discordClientSecret = env.get("DISCORD_CLIENT_SECRET").filter(_.nonEmpty),
-          discordRedirectUri = env.get("DISCORD_REDIRECT_URI").filter(_.nonEmpty),
-          stateSigningKey = env.get("AUTH_STATE_SIGNING_KEY").filter(_.nonEmpty),
+          discordClientId = env.get("DISCORD_CLIENT_ID").filterNot(_.isBlank),
+          discordClientSecret = env.get("DISCORD_CLIENT_SECRET").filterNot(_.isBlank),
+          discordRedirectUri = env.get("DISCORD_REDIRECT_URI").filterNot(_.isBlank),
+          stateSigningKey = env.get("AUTH_STATE_SIGNING_KEY").filterNot(_.isBlank),
           sessionCookieName = env.getOrElse(
             "SESSION_COOKIE_NAME",
             if appEnv == AppEnv.Prod then "__Host-momo_result_session" else "momo_result_session",
@@ -62,10 +66,21 @@ private[config] object AuthConfigLoader:
     }
 
   private def validateAuth[F[_]: Async](config: AuthConfig, appEnv: AppEnv): F[AuthConfig] =
-    val problems = if appEnv == AppEnv.Prod then prodAuthProblems(config) else Nil
+    val cookieNames = List(config.sessionCookieName, config.stateCookieName)
+    val invalidCookie = Option.when(!cookieNames.forall(_.matches("[!#$%&'*+.^_`|~0-9A-Za-z-]+")))(
+      "session and OAuth state cookie names must be HTTP tokens"
+    )
+    val duplicateCookie = Option.when(config.sessionCookieName == config.stateCookieName)(
+      "session and OAuth state cookie names must be distinct"
+    )
+    val redirect = Option.when(!RedirectPath.isSafe(config.callbackRedirectPath))(
+      "AUTH_CALLBACK_REDIRECT_PATH must be a root-relative path"
+    )
+    val problems = List(invalidCookie, duplicateCookie, redirect).flatten ++
+      (if appEnv == AppEnv.Prod then prodAuthProblems(config) else Nil)
     if problems.nonEmpty then
       Async[F]
-        .raiseError(new IllegalArgumentException(s"Invalid production auth config: ${problems
+        .raiseError(new IllegalArgumentException(s"Invalid auth config: ${problems
             .mkString(", ")}"))
     else Async[F].pure(config)
 
@@ -77,11 +92,21 @@ private[config] object AuthConfigLoader:
       "AUTH_STATE_SIGNING_KEY" -> config.stateSigningKey,
     ).collect { case (name, None) => s"$name is required" }
     val secureCookie = Option.when(!config.useSecureCookies)("AUTH_COOKIE_SECURE must be true")
+    val signingKey = Option.when(config.stateSigningKey.exists(
+      _.getBytes(StandardCharsets.UTF_8).length < 32
+    ))("AUTH_STATE_SIGNING_KEY must contain at least 32 bytes in prod APP_ENV")
     val hostPrefix = Option.when(
       !config.sessionCookieName.startsWith("__Host-") ||
         !config.stateCookieName.startsWith("__Host-")
     )("production session and OAuth state cookie names must use the __Host- prefix")
-    val redirect = Option.when(!RedirectPath.isSafe(config.callbackRedirectPath))(
-      "AUTH_CALLBACK_REDIRECT_PATH must be a root-relative path"
+    val providerRedirect = Option.when(config.discordRedirectUri.exists(value =>
+      !Try(URI.create(value)).toOption.exists(uri =>
+        Option(uri.getScheme).exists(_.equalsIgnoreCase("https")) &&
+          Option(uri.getHost).exists(_.nonEmpty) &&
+          Option(uri.getUserInfo).isEmpty && Option(uri.getFragment).isEmpty &&
+          (uri.getPort == -1 || (uri.getPort > 0 && uri.getPort <= 65535))
+      )
+    ))(
+      "DISCORD_REDIRECT_URI must be an HTTPS URL without user info or a fragment in prod APP_ENV"
     )
-    missing ++ List(secureCookie, hostPrefix, redirect).flatten
+    missing ++ List(secureCookie, signingKey, hostPrefix, providerRedirect).flatten

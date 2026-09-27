@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CircleHelp } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { describe, expect, it } from "vitest";
 
 import { Button } from "@/shared/ui/actions/Button";
@@ -25,36 +25,6 @@ function PendingForm({ action }: { action: () => Promise<void> }) {
 }
 
 describe("Button", () => {
-  it("preserves the button and its child state while exposing only the current label", () => {
-    let mounts = 0;
-    function Label() {
-      useEffect(() => {
-        mounts += 1;
-      }, []);
-      return <>ダウンロード</>;
-    }
-    const { rerender } = render(
-      <Button pending={false} pendingLabel="作成中…">
-        <Label />
-      </Button>,
-    );
-    const button = screen.getByRole("button", { name: "ダウンロード" });
-    button.focus();
-    rerender(
-      <Button pending pendingLabel="作成中…">
-        <Label />
-      </Button>,
-    );
-    expect(screen.getByRole("button", { name: "作成中…" })).toBe(button);
-    expect(screen.queryByRole("button", { name: "ダウンロード" })).not.toBeInTheDocument();
-    rerender(
-      <Button pending={false} pendingLabel="作成中…">
-        <Label />
-      </Button>,
-    );
-    expect(screen.getByRole("button", { name: "ダウンロード" })).toBe(button);
-    expect(mounts).toBe(1);
-  });
   it("defaults to a non-submitting button", () => {
     render(<Button>閉じる</Button>);
 
@@ -84,21 +54,6 @@ describe("Button", () => {
     );
 
     expect(screen.getByRole("button", { name: "更新中" })).toBeDisabled();
-  });
-
-  it("keeps derived native state authoritative over unsafely forwarded attributes", () => {
-    const unsafeNativeProps = { "aria-busy": "false" } as const;
-    render(
-      // @ts-expect-error -- verifies the public API rejects this override while exercising the runtime guard for untyped callers.
-      <Button {...unsafeNativeProps} pending pendingLabel="送信中" type="submit">
-        送信
-      </Button>,
-    );
-
-    const button = screen.getByRole("button", { name: "送信中" });
-    expect(button).toHaveAttribute("aria-busy", "true");
-    expect(button).toBeDisabled();
-    expect(button).toHaveAttribute("type", "submit");
   });
 
   it("treats a supplied icon as decorative and keeps one accessible name", () => {

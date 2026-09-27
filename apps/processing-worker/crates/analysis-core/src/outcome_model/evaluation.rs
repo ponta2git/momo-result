@@ -491,4 +491,56 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "fixture fit errors propagate while assertions explain a held-out event leak"
+    )]
+    fn held_out_outcomes_change_evaluation_without_changing_the_trained_model() -> Result<(), String>
+    {
+        let events = [
+            event("a", &[1.0, 2.0]),
+            event("b", &[3.0]),
+            event("c", &[4.0, 5.0]),
+            event("d", &[6.0]),
+            event("e", &[7.0, 8.0]),
+            event("f", &[9.0]),
+        ];
+        let original = evaluate_folds(&events)
+            .map_err(|error| format!("original folds did not fit: {error:?}"))?;
+        let mut corrected = events.clone();
+        // Events a and f are held out together. Correct every match outcome in those events;
+        // their labels must affect scoring, but cannot enter that fold's training data.
+        for held_event in corrected.iter_mut().step_by(5) {
+            for rank_match in &mut held_event.matches {
+                for row in &mut rank_match.rows {
+                    row.source.rank = 5 - row.source.rank;
+                }
+            }
+        }
+        let updated = evaluate_folds(&corrected)
+            .map_err(|error| format!("corrected folds did not fit: {error:?}"))?;
+        let before = original.first().ok_or("missing original held-out fold")?;
+        let after = updated.first().ok_or("missing corrected held-out fold")?;
+        assert_eq!(
+            before
+                .test_events
+                .iter()
+                .map(|held_event| held_event.held_event_id.as_ref())
+                .collect::<Vec<_>>(),
+            ["a", "f"],
+        );
+        assert_eq!(before.score.comparison_count, 18);
+        assert_eq!(
+            before.full_fit.coefficients.map(f64::to_bits),
+            after.full_fit.coefficients.map(f64::to_bits),
+            "held-out labels leaked into the fit",
+        );
+        assert!(
+            (before.score.full_log_loss - after.score.full_log_loss).abs() > 0.01,
+            "the held-out corrections must change observed prediction quality",
+        );
+        Ok(())
+    }
 }

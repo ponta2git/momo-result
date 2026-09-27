@@ -8,6 +8,7 @@ import {
   formatHistogramManYenBin,
   formatManYen,
   formatPercent,
+  playerName,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
@@ -124,7 +125,7 @@ export function StrategyScatter({
               {
                 href: withReturnTo(`/matches/${encodeURIComponent(point.matchId)}`, returnTo),
                 itemId: point.itemId,
-                label: `${formatSeriesMatchIndex(point.matchIndex)}、${formatPercent(point.revenueAssetRate)}、${formatManYen(point.totalAssetsManYen)}、${point.rank}位`,
+                label: `${playerName(players, point.memberId)}、${formatSeriesMatchIndex(point.matchIndex)}、${point.rank}位`,
                 seriesId: point.memberId,
                 x: point.revenueAssetRate,
                 y: point.totalAssetsManYen,

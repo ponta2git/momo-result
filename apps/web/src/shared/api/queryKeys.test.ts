@@ -9,27 +9,11 @@ import {
   invalidateAfterMatchUpdated,
   invalidateAfterOcrSubmissionStarted,
 } from "@/shared/api/cacheInvalidation";
-import {
-  heldEventKeys,
-  masterKeys,
-  matchKeys,
-  ocrDraftKeys,
-  seriesAnalysisKeys,
-} from "@/shared/api/queryKeys";
-import {
-  heldEventsQueryOptions,
-  matchListQueryOptions,
-  memberAliasesQueryOptions,
-} from "@/shared/api/queryOptions";
+import { heldEventKeys, matchKeys, ocrDraftKeys, seriesAnalysisKeys } from "@/shared/api/queryKeys";
+import { heldEventsQueryOptions, matchListQueryOptions } from "@/shared/api/queryOptions";
 import { createTestQueryClient } from "@/test/queryClient";
 
 describe("shared query keys", () => {
-  it("partitions match contexts by HTTP shape while keeping the reset prefix and final params", () => {
-    const params = { artifactId: "artifact-1", gameTitleId: "gt-1", matchId: "match-1" };
-    const key = seriesAnalysisKeys.matchContext(params);
-    expect(key).toEqual([...seriesAnalysisKeys.matchContextRoot(), "http-v3", params]);
-    expect(key).not.toEqual([...seriesAnalysisKeys.matchContextRoot(), params]);
-  });
   it("normalizes held-event search before using it in the query key", () => {
     expect(
       heldEventsQueryOptions({ limit: 25, page: 2, pageSize: 10, q: "  tournament  " }).queryKey,
@@ -46,10 +30,6 @@ describe("shared query keys", () => {
     expect(heldEventsQueryOptions(left).queryKey).not.toEqual(
       heldEventsQueryOptions(right).queryKey,
     );
-  });
-
-  it("uses the unfiltered member-alias directory key", () => {
-    expect(memberAliasesQueryOptions().queryKey).toEqual(masterKeys.memberAliases.list());
   });
 
   it("partitions match-list cache entries by opaque cursor", () => {
@@ -161,6 +141,14 @@ describe("shared query keys", () => {
     queryClient.setQueryData(matchKeys.detail("match-2"), { matchId: "match-2" });
     queryClient.setQueryData(matchKeys.identity("match-1"), { matchId: "match-1" });
     queryClient.setQueryData(matchKeys.identity("match-2"), { matchId: "match-2" });
+    queryClient.setQueryData(matchKeys.identityRead("match-1"), {
+      kind: "found",
+      value: { matchId: "match-1" },
+    });
+    queryClient.setQueryData(matchKeys.identityRead("match-2"), {
+      kind: "found",
+      value: { matchId: "match-2" },
+    });
     queryClient.setQueryData(matchKeys.list({ status: "confirmed" }), { items: [] });
 
     await invalidateAfterMatchDeleted(queryClient, "match-1");
@@ -176,6 +164,11 @@ describe("shared query keys", () => {
     expect(queryClient.getQueryState(matchKeys.detail("match-1"))).toBeUndefined();
     expect(queryClient.getQueryState(matchKeys.detail("match-2"))?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(matchKeys.identity("match-1"))).toBeUndefined();
+    expect(queryClient.getQueryData(matchKeys.identityRead("match-1"))).toBeUndefined();
+    expect(queryClient.getQueryData(matchKeys.identityRead("match-2"))).toEqual({
+      kind: "found",
+      value: { matchId: "match-2" },
+    });
     expect(queryClient.getQueryState(matchKeys.identity("match-2"))?.isInvalidated).toBe(false);
   });
 

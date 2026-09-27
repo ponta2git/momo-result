@@ -513,7 +513,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
 
   private def editableDraft(id: MatchDraftId): MatchDraft = MatchDraft.fromInputs(
     id = id,
-    createdByAccountId = AccountId.unsafeFromString("account_ponta"),
+    createdByAccountId = AccountId.unsafeFromString("account-1"),
     createdByMemberId = Some(MemberId.unsafeFromString("member_ponta")),
     status = MatchDraftStatus.DraftReady,
     heldEventId = None,
@@ -597,6 +597,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
               matchDrafts,
               jobs.existsActiveByDraft,
               submissions,
+              IO.pure(now),
             ),
           matchDrafts = matchDrafts,
           submissions = submissions,

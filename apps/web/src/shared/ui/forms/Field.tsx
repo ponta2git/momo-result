@@ -50,7 +50,11 @@ export function Field({
     >
       <label className={cn(fieldText.label, "mb-2")} htmlFor={htmlFor}>
         {label}
-        {required ? <span className="ml-1 text-[var(--color-danger)]">*</span> : null}
+        {required ? (
+          <span aria-hidden="true" className="ml-1 text-[var(--color-danger)]">
+            *
+          </span>
+        ) : null}
       </label>
       <div className="min-w-0">{children}</div>
       <div className="mt-1 flex min-w-0 flex-col gap-1 empty:hidden">
@@ -77,6 +81,8 @@ export function Field({
 }
 
 export function buildFieldDescribedBy(...ids: Array<string | undefined>) {
-  const describedBy = ids.filter(Boolean).join(" ");
+  const describedBy = [
+    ...new Set(ids.flatMap((id) => id?.split(/\s+/u) ?? []).filter(Boolean)),
+  ].join(" ");
   return describedBy.length > 0 ? describedBy : undefined;
 }

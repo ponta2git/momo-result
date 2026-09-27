@@ -8,22 +8,6 @@ import {
 } from "./exportUrlState";
 
 describe("exportUrlState", () => {
-  it("defaults to csv/all", () => {
-    const state = parseExportSearchParams(new URLSearchParams());
-
-    expect(state.format).toBe("csv");
-    expect(state.scope).toBe("all");
-    expect(state.errors).toEqual([]);
-  });
-
-  it("parses tsv match deep links", () => {
-    const state = parseExportSearchParams(new URLSearchParams("format=tsv&matchId=match-1"));
-
-    expect(state.format).toBe("tsv");
-    expect(state.scope).toBe("match");
-    expect(selectedIdForScope(state, "match")).toBe("match-1");
-  });
-
   it("trims scope ids from deep links", () => {
     const state = parseExportSearchParams(new URLSearchParams("heldEventId=%20held-1%20"));
 

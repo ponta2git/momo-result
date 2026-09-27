@@ -77,7 +77,13 @@ final class JavaDiscordOAuthClient[F[_]: Async](
       build: => HttpRequest
   ): F[Either[AppError, A]] = Async[F].interruptible {
     Either.catchNonFatal {
-      val response = client.send(build, HttpResponse.BodyHandlers.ofString())
+      val response = client.send(
+        build,
+        HttpResponse.BodyHandlers.limiting(
+          HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8),
+          MaxResponseBytes,
+        ),
+      )
       if response.statusCode() / 100 != 2 then
         Left(statusError(operation, response.statusCode(), forbiddenDetail))
       else decode[A](response.body()).leftMap(_ => parseError(operation, invalidDetail))
@@ -124,6 +130,7 @@ object JavaDiscordOAuthClient:
 
   private val ConnectTimeout = java.time.Duration.ofSeconds(5)
   private val RequestTimeout = java.time.Duration.ofSeconds(8)
+  private[api] val MaxResponseBytes = 64L * 1024L
 
   def resource[F[_]: Async](config: JavaDiscordOAuthClient.Config)
       : Resource[F, JavaDiscordOAuthClient[F]] = Resource

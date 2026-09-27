@@ -3,7 +3,7 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode, useEffect, useState } from "react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { SeriesAnalysisNavigation } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
 import { useSeriesAnalysisLocationState } from "@/features/seriesComparison/navigation/useSeriesAnalysisLocationState";
@@ -16,17 +16,6 @@ import {
 } from "@/test/msw/seriesAnalysisFixtures";
 import { createTestQueryClient } from "@/test/queryClient";
 import { selectOption } from "@/test/selectOption";
-
-beforeEach(() => {
-  vi.stubGlobal(
-    "ResizeObserver",
-    class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    },
-  );
-});
 
 const options = makeSeriesAnalysisOptions();
 const review = makeFourPlayerSeriesAnalysisReview();

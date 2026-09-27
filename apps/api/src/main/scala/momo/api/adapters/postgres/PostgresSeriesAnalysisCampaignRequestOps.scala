@@ -9,7 +9,7 @@ import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.adapters.postgres.PostgresSeriesAnalysisRequestSupport.{
-  existingOperation,
+  lockAndFindOperation,
   OperationRow
 }
 import momo.api.contracts.seriesanalysis.SeriesAnalysisArtifactContract
@@ -24,7 +24,7 @@ private[postgres] object PostgresSeriesAnalysisCampaignRequestOps:
       operationId: String,
       campaignId: String,
   ): ConnectionIO[Either[AppError, SeriesAnalysisRecalculationAccepted]] =
-    existingOperation(requestedBy, "all_titles", idempotencyKeyHash).flatMap {
+    lockAndFindOperation(requestedBy, "all_titles", idempotencyKeyHash).flatMap {
       case Some(value) => acceptedForExisting(value)
       case None => create(requestedBy, idempotencyKeyHash, operationId, campaignId)
     }

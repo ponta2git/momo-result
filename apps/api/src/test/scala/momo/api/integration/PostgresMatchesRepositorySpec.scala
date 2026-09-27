@@ -15,8 +15,10 @@ import momo.api.errors.AppError
 import momo.api.repositories.{
   MatchConfirmationResult,
   MatchDraftConfirmation,
-  MatchExportsRepository
+  MatchExportsRepository,
+  MatchListReadModel
 }
+import momo.api.testing.AppErrorAssertions.assertAppException
 
 final class PostgresMatchesRepositorySpec extends IntegrationSuite:
 
@@ -674,6 +676,44 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       assertEquals(snapshot._2, "repeatable read")
       assertEquals(snapshot._3, "on")
 
+  test("legacy oversized labels reject bounded views but do not block unrelated export selections"):
+    val oversized = sampleMatch("export_budget_a", 1)
+    val bounded = sampleMatch("export_budget_z", 2).copy(
+      gameTitleId = secondGameTitleId,
+      mapMasterId = secondMapMasterId,
+      seasonMasterId = secondSeasonMasterId,
+    )
+    for
+      _ <- seedPrereqs
+      _ <- seedSecondTitle
+      _ <- createMatch(oversized)
+      _ <- createMatch(bounded)
+      _ <- sql"UPDATE season_masters SET name = repeat('x', 4096) WHERE id = $seasonMasterId"
+        .update.run.transact(transactor)
+      rejectedExport <- matchExports.project(
+        MatchExportsRepository.Selection(matchId = Some(oversized.id), limit = 1)
+      ).attempt
+      acceptedExport <- matchExports.project(
+        MatchExportsRepository.Selection(matchId = Some(bounded.id), limit = 1)
+      )
+      // Both timestamps tie. The preflight and materialization must select the same stable row.
+      tiedSelection <- matchExports.project(MatchExportsRepository.Selection(limit = 1))
+      rejectedDetail <- PostgresHeldEventDetailReadModel[IO](transactor).find(heldEventId).attempt
+      rejectedEvents <- PostgresHeldEventListReadModel[IO](transactor)
+        .list(None, PageRequest(1, 20)).attempt
+      rejectedMatches <- PostgresMatchListReadModel[IO](transactor)
+        .list(MatchListReadModel.Filter(heldEventId = Some(heldEventId))).attempt
+      acceptedMatches <- PostgresMatchListReadModel[IO](transactor)
+        .list(MatchListReadModel.Filter(gameTitleId = Some(secondGameTitleId)))
+    yield
+      assertAppException(rejectedExport, "PAYLOAD_TOO_LARGE", "oversized stored text")
+      assertEquals(acceptedExport.size, 4)
+      assertEquals(tiedSelection, acceptedExport)
+      assertAppException(rejectedDetail, "PAYLOAD_TOO_LARGE", "oversized stored text")
+      assertAppException(rejectedEvents, "PAYLOAD_TOO_LARGE", "oversized stored text")
+      assertAppException(rejectedMatches, "PAYLOAD_TOO_LARGE", "oversized stored text")
+      assertEquals(acceptedMatches.items.size, 1)
+
   test("existsMatchNo reflects inserted rows"):
     for
       _ <- seedPrereqs
@@ -723,6 +763,37 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       _ <- seedPrereqs
       result <- matches.update(rec, now.plusSeconds(60))
     yield assertEquals(result, Left(AppError.NotFound("match", rec.id.value)))
+
+  test("update rejects a disappearing prerequisite without changing players or analysis work"):
+    val rec = sampleMatch("match_missing_reference_update", 1)
+    val disappearingEventId = HeldEventId.unsafeFromString("held_disappearing_update")
+    val analysisState = sql"""
+      SELECT m.analysis_revision, s.input_revision,
+             (SELECT COUNT(*)::int FROM series_analysis_queue_outbox)
+      FROM matches m
+      JOIN series_analysis_title_states s ON s.game_title_id = m.game_title_id
+      WHERE m.id = ${rec.id}
+    """.query[(Long, Long, Int)].unique.transact(transactor)
+    for
+      _ <- seedPrereqs
+      _ <- createMatch(rec)
+      _ <- heldEvents.create(HeldEvent(disappearingEventId, now))
+      expected <- matches.find(rec.id)
+      before <- analysisState
+      _ <- sql"DELETE FROM held_events WHERE id = $disappearingEventId".update.run
+        .transact(transactor)
+      result <- matches.update(rec.copy(heldEventId = disappearingEventId), now.plusSeconds(60))
+      persisted <- matches.find(rec.id)
+      after <- analysisState
+    yield
+      assertEquals(
+        result,
+        Left(AppError.Conflict(
+          "Match prerequisites changed before the update completed."
+        ))
+      )
+      assertEquals(persisted, expected)
+      assertEquals(after, before)
 
   test("statsByHeldEvents returns count and maximum match number including gaps"):
     val missing = HeldEventId.unsafeFromString("missing_event")
@@ -827,6 +898,45 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
         (MatchDraftStatus.DraftReady, None, None, None, "AVAILABLE", None, 1, 1),
       )
       assertEquals(conflictingMatch, None)
+      assertEquals(notificationAfter, notificationBefore)
+
+  test("confirmation rolls back source deletion when a prerequisite disappears"):
+    val disappearingEventId = HeldEventId.unsafeFromString("held_disappearing_confirm")
+    val rec = sampleMatch("match_missing_reference_confirm", 1)
+      .copy(heldEventId = disappearingEventId)
+    val draftId = MatchDraftId.unsafeFromString("match-draft-missing-reference-confirm")
+    val imageId = ImageId.unsafeFromString("image-missing-reference-confirm")
+    val snapshot = MatchDraftConfirmation(draftId, now, None, None, None)
+    val persistedState = sql"""
+      SELECT d.status, d.source_images_deleted_at, s.status, s.delete_pending_at,
+             (SELECT COUNT(*)::int FROM matches),
+             (SELECT COUNT(*)::int FROM series_analysis_queue_outbox)
+      FROM match_drafts d
+      JOIN source_images s ON s.id = d.total_assets_image_id
+      WHERE d.id = $draftId
+    """.query[(MatchDraftStatus, Option[Instant], String, Option[Instant], Int, Int)]
+      .unique.transact(transactor)
+    for
+      _ <- seedPrereqs
+      _ <- heldEvents.create(HeldEvent(disappearingEventId, now))
+      _ <- insertSourceImage(imageId)
+      _ <- insertMatchDraft(draftId, now, Some(imageId))
+      _ <- ResultNotificationFixture.seed("match_draft", draftId.value, now).transact(transactor)
+      notificationBefore <- ResultNotificationFixture.state(transactor)
+      before <- persistedState
+      _ <- sql"DELETE FROM held_events WHERE id = $disappearingEventId".update.run
+        .transact(transactor)
+      result <- confirmations.confirm(rec, Some(snapshot), now.plusSeconds(2))
+      after <- persistedState
+      notificationAfter <- ResultNotificationFixture.state(transactor)
+    yield
+      assertEquals(
+        result,
+        Left(AppError.Conflict(
+          "Match prerequisites changed before confirmation completed."
+        ))
+      )
+      assertEquals(after, before)
       assertEquals(notificationAfter, notificationBefore)
 
   test("confirmation from draft persists match and confirmed draft link"):

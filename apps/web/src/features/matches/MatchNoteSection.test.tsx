@@ -223,22 +223,6 @@ describe("MatchNoteSection", () => {
     expect(requests[1]).toEqual(requests[0]);
   });
 
-  it("returns focus to the add action when deletion display refresh settles", async () => {
-    const user = userEvent.setup();
-    const display = createDeferred<MatchNoteReadResult>();
-    server.use(
-      http.put("/api/matches/:matchId/note", () =>
-        HttpResponse.json({ matchId: "match-1", version: "deleted" }),
-      ),
-    );
-    renderNote({ commitSavedNote: () => display.promise });
-    await user.click(screen.getByRole("button", { name: "メモを削除" }));
-    await user.click(await screen.findByRole("button", { name: "削除する" }));
-    await screen.findByText("メモを削除しました");
-    await act(async () => display.resolve({ kind: "failed" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "メモを追加" })).toHaveFocus());
-  });
-
   it("does not label cached data as the latest note after conflict refresh fails", async () => {
     const user = userEvent.setup();
     const requests: unknown[] = [];

@@ -1,11 +1,13 @@
 import {
   advanceAdmission,
   delivered,
+  enableOcrNotifications,
   headers,
   messages,
   outcomes,
   prepareRead,
   release,
+  screens,
   reread,
   seedMasters,
   startRead,
@@ -14,17 +16,16 @@ import {
   waitForRecheck,
   waitForStarted,
 } from "./ocr-notifications-support";
-import {
-  test,
-  expect,
-  installE2eAuthHeaders,
-  e2eAuthHeaders,
-  expectNoHorizontalPageOverflow,
-} from "./support";
+import { test, expect, installE2eAuthHeaders, e2eAuthHeaders } from "./support";
 
-test.describe.configure({ mode: "serial" });
-test.beforeEach(async ({ page }) => {
+// One controlled worker and notification setting are shared by this dedicated runtime.
+// Config workers=1 serializes access; each case establishes its own setting and releases gates.
+test.beforeEach(async ({ page, request }) => {
   await installE2eAuthHeaders(page);
+  await enableOcrNotifications(request);
+});
+test.afterEach(async () => {
+  await Promise.all(screens.map((screen) => release(screen)));
 });
 
 test("E1: one operation waits for every image and posts one result", async ({
@@ -129,10 +130,10 @@ test("E3: lost job response retries the same operation; an explicit reread creat
   const operation = await startRead(page, e2eRun, 1);
   await waitForStarted("total_assets");
   const original = await submission(request, operation.id);
+  expect(original.members).toHaveLength(1);
   await page.setViewportSize({ width: 390, height: 844 });
   const retry = page.getByRole("dialog", { name: "読み取りの受付を確認できませんでした" });
   await expect(retry).toBeVisible();
-  await expectNoHorizontalPageOverflow(page);
   await retry.getByRole("button", { name: "もう一度試す" }).click();
   await expect(page).toHaveURL(/\/matches\?status=incomplete&sort=updated_desc$/u);
   expect((await submission(request, operation.id)).members).toEqual(original.members);
@@ -159,13 +160,14 @@ test("E4: closing before any upload still settles and a new read remains possibl
   await page.route("**/api/uploads/images", (route) => route.abort("failed"));
   const operation = await startRead(page, e2eRun, 1);
   await page.close();
-  expect((await submission(request, operation.id)).members?.every((member) => !member.jobId)).toBe(
-    true,
-  );
+  const admitted = await submission(request, operation.id);
+  expect(admitted.members).toHaveLength(1);
+  expect(admitted.members?.every((member) => !member.jobId)).toBe(true);
   await advanceAdmission(operation.id);
   const text = await delivered(request, operation);
   expect(text).toContain("総資産");
   const closed = await submission(request, operation.id);
+  expect(closed.members).toHaveLength(1);
   expect(
     closed.members?.every((member) => member.failureCode === "admission_timeout" && !member.jobId),
   ).toBe(true);

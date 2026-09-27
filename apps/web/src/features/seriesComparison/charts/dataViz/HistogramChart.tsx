@@ -33,6 +33,24 @@ export function DataVizHistogramChart({
       <p className="text-xs leading-5 text-[var(--color-text-secondary)]">
         4人とも同じ金額帯と件数目盛りで比較しています。
       </p>
+      <DataVizTable
+        label={ariaLabel}
+        minWidth={seriesIdentity.length > 2 ? "36rem" : "24rem"}
+        rows={bins.map((bin, index) => ({ ...bin, index }))}
+        getRowKey={(bin) => String(bin.id)}
+        columns={[
+          { key: "bin", header: "金額帯", rowHeader: true, renderCell: (bin) => bin.label },
+          ...seriesIdentity.map((identity) => ({
+            key: identity.id,
+            header: identity.label,
+            tabular: true,
+            renderCell: (bin: { index: number }) => {
+              const count = countsById.get(identity.id)?.[bin.index];
+              return count === undefined ? "—" : `${count}戦`;
+            },
+          })),
+        ]}
+      />
     </figure>
   );
 }
@@ -133,3 +151,4 @@ function SingleHistogram({
     </div>
   );
 }
+import { DataVizTable } from "@/features/seriesComparison/charts/dataViz/DataVizTable";

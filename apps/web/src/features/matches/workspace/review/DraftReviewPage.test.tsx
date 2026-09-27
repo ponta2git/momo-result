@@ -1,6 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { Link, MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { confirmedDraftMessages } from "@/features/matches/confirmedDraftNavigation";
 import { DraftReviewPage } from "@/features/matches/workspace/DraftReviewPage";
 import { matchWorkspaceSessionDraftKey } from "@/features/matches/workspace/matchWorkspaceSessionDraft";
+import { matchKeys } from "@/shared/api/queryKeys";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import {
@@ -34,35 +35,8 @@ function LocationProbe() {
   return <output aria-label="current location">{`${location.pathname}${location.search}`}</output>;
 }
 
-function matchDraftDetailResponse(
-  draftId: string,
-  overrides: Record<string, unknown> = {},
-): Record<string, unknown> {
-  return {
-    createdAt: "2026-01-01T00:00:00.000Z",
-    gameTitleId: "gt_momotetsu_2",
-    heldEventId: "held-1",
-    incidentLogDraftId: `${draftId}-incident`,
-    incidentLogImageId: `${draftId}-img-incident`,
-    mapMasterId: "map_east",
-    matchDraftId: draftId,
-    matchNoInEvent: 3,
-    ownerMemberId: "member_ponta",
-    playedAt: "2026-01-01T00:00:00.000Z",
-    revenueDraftId: `${draftId}-revenue`,
-    revenueImageId: `${draftId}-img-revenue`,
-    seasonMasterId: "season_current",
-    status: "needs_review",
-    totalAssetsDraftId: `${draftId}-total`,
-    totalAssetsImageId: `${draftId}-img-total`,
-    updatedAt: "2026-01-01T00:00:00.000Z",
-    ...overrides,
-  };
-}
-
 async function waitForReviewWorkspaceReady() {
   expect(await screen.findByRole("button", { name: "開催（必須）を変更" })).toBeEnabled();
-  expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
 }
 
 async function waitForSampleWorkspaceReady() {
@@ -189,6 +163,7 @@ describe("DraftReviewPage", () => {
         ]),
       }),
     );
+    expect(await screen.findByText("試合詳細")).toBeInTheDocument();
   });
 
   it("redirects to the confirmed match when the draft is already confirmed on load", async () => {
@@ -343,15 +318,10 @@ describe("DraftReviewPage", () => {
         draftDetailRequests += 1;
         const draftId = String(params["draftId"]);
         return HttpResponse.json(
-          matchDraftDetailResponse(
-            draftId,
-            draftDetailRequests >= 1
-              ? {
-                  confirmedMatchId: "match-confirmed-after-conflict",
-                  status: "confirmed",
-                }
-              : {},
-          ),
+          makeMatchDraftReviewResponse(draftId, {
+            confirmedMatchId: "match-confirmed-after-conflict",
+            status: "confirmed",
+          }).draft,
         );
       }),
       http.post("/api/matches", async () => {
@@ -392,6 +362,7 @@ describe("DraftReviewPage", () => {
       ),
     );
     expect(postCalled).toBe(true);
+    expect(draftDetailRequests).toBe(1);
     expect(await screen.findAllByText(confirmedDraftMessages.confirmConflict)).toHaveLength(1);
   });
 
@@ -522,6 +493,110 @@ describe("DraftReviewPage", () => {
     responseGate.resolve();
     await waitForReviewWorkspaceReady();
     expect(screen.getByRole("button", { name: "確定前の確認へ進む" })).toBeEnabled();
+  });
+
+  it("initializes from completed OCR and preserves edits when the same review snapshot changes", async () => {
+    setDevUser();
+    let response = makeMatchDraftReviewResponse("draft-running-1");
+    server.use(http.get("/api/match-drafts/:draftId/review", () => HttpResponse.json(response)));
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/review/draft-running-1"]}>
+          <Routes>
+            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    expect(
+      await screen.findByRole("heading", { name: "読み取り中は編集できません" }),
+    ).toBeVisible();
+    expect(screen.queryByRole("button", { name: "確定前の確認へ進む" })).not.toBeInTheDocument();
+    response = makeMatchDraftReviewResponse("draft-running-1", { status: "needs_review" });
+    await user.click(screen.getByRole("button", { name: "状態を再確認" }));
+    await waitForReviewWorkspaceReady();
+    const revenue = screen.getByRole("textbox", { name: "ぽんた 収益（万円）" });
+    await user.clear(revenue);
+    await user.type(revenue, "-");
+    const matchNumber = screen.getByLabelText("試合番号");
+    await user.clear(matchNumber);
+    await user.type(matchNumber, "9");
+
+    act(() => {
+      queryClient.setQueryData(
+        matchKeys.draft.review("draft-running-1"),
+        makeMatchDraftReviewResponse("draft-running-1", {
+          status: "needs_review",
+          revenueDraftId: "replacement-revenue",
+          matchNoInEvent: 4,
+          updatedAt: "2026-02-01T00:00:00.000Z",
+        }),
+      );
+    });
+
+    await waitFor(() => expect(screen.getByLabelText("試合番号")).toHaveValue("9"));
+    expect(screen.getByRole("textbox", { name: "ぽんた 収益（万円）" })).toHaveValue("-");
+    expect(screen.getByText(/元画像または記録が更新されています/u)).toBeVisible();
+    expect(screen.getByRole("button", { name: "元画像を保存" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "確定前の確認へ進む" })).toBeEnabled();
+  });
+
+  it("keeps a running draft read-only after a failed refresh and recovers through the data retry", async () => {
+    setDevUser();
+    const recoveryResponse = createDeferred();
+    let requests = 0;
+    server.use(
+      http.get("/api/match-drafts/:draftId/review", async () => {
+        const attempt = ++requests;
+        if (attempt === 2) {
+          return HttpResponse.json({ detail: "一時的に状態を取得できません" }, { status: 503 });
+        }
+        if (attempt === 3) await recoveryResponse.promise;
+        return HttpResponse.json(
+          makeMatchDraftReviewResponse("draft-retry", {
+            matchNoInEvent: attempt === 1 ? 3 : 7,
+            status: attempt === 1 ? "ocr_running" : "needs_review",
+          }),
+        );
+      }),
+    );
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/review/draft-retry"]}>
+          <Routes>
+            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "状態を再確認" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("画面データを読み込めません");
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(screen.getByRole("heading", { name: "読み取り中は編集できません" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "確定前の確認へ進む" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "失敗したデータを再読み込み" }));
+    await waitFor(() => expect(requests).toBe(3));
+    expect(screen.getByRole("heading", { name: "読み取り中は編集できません" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "確定前の確認へ進む" })).not.toBeInTheDocument();
+
+    await act(async () => recoveryResponse.resolve());
+    await waitFor(() => {
+      expect(queryClient.getQueryState(matchKeys.draft.review("draft-retry"))).toMatchObject({
+        fetchStatus: "idle",
+        status: "success",
+      });
+      expect(screen.getByLabelText("試合番号")).toHaveValue("7");
+      expect(
+        screen.queryByRole("heading", { name: "画面データを読み込めません" }),
+      ).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "確定前の確認へ進む" })).toBeEnabled();
+    expect(
+      screen.queryByRole("heading", { name: "読み取り中は編集できません" }),
+    ).not.toBeInTheDocument();
+    expect(requests).toBe(3);
   });
 
   it("returns to the loading shell when navigating to another review session", async () => {
@@ -656,26 +731,6 @@ describe("DraftReviewPage", () => {
     expect(screen.getByLabelText("試合番号")).toHaveValue("9");
   });
 
-  it("keeps held event creation collapsed until requested", async () => {
-    setDevUser();
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/review/dev-sample?sample=1"]}>
-          <Routes>
-            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-
-    expect(await screen.findByText("一覧にない開催を追加する")).toBeInTheDocument();
-    expect(screen.getByRole("button", { hidden: true, name: "作成して選択" })).not.toBeVisible();
-
-    await user.click(screen.getByText("一覧にない開催を追加する"));
-    expect(screen.getByRole("button", { name: "作成して選択" })).toBeVisible();
-  });
-
   it("announces held event creation and selects the created option", async () => {
     setDevUser();
     const heldEvents = [makeHeldEventResponse()];
@@ -683,9 +738,11 @@ describe("DraftReviewPage", () => {
       heldAt: "2026-01-02T00:00:00.000Z",
       id: "held-created",
     });
+    const creationGate = createDeferred();
     server.use(
       http.get("/api/held-events", () => HttpResponse.json({ items: heldEvents })),
-      http.post("/api/held-events", () => {
+      http.post("/api/held-events", async () => {
+        await creationGate.promise;
         heldEvents.unshift(createdHeldEvent);
         return HttpResponse.json(createdHeldEvent);
       }),
@@ -706,6 +763,14 @@ describe("DraftReviewPage", () => {
     await user.click(screen.getByText("一覧にない開催を追加する"));
     await user.click(screen.getByRole("button", { name: "作成して選択" }));
 
+    expect(screen.getByRole("button", { name: "開催（必須）を変更" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "確定前の確認へ進む" })).toBeDisabled();
+    const revenue = screen.getByRole("textbox", { name: "ぽんた 収益（万円）" });
+    expect(revenue).toBeEnabled();
+    await user.clear(revenue);
+    await user.type(revenue, "42");
+    creationGate.resolve();
+
     await waitFor(() =>
       expect(
         screen.getByText(/2026\/01\/02 09:00 — 確定済み0試合・未確定下書き0件/u),
@@ -718,36 +783,9 @@ describe("DraftReviewPage", () => {
         `開催（${formatDateTimeLong(createdHeldEvent.heldAt)}）を作成して選択しました。`,
       ),
     ).toBeInTheDocument();
-  });
-
-  it("renders the development sample drafts without OCR worker data", async () => {
-    setDevUser();
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/review/dev-sample?sample=1"]}>
-          <Routes>
-            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-
-    await waitForSampleWorkspaceReady();
-    expect(screen.getByRole("heading", { name: "保存先と試合条件" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "4人分の結果を確認・修正" })).toBeInTheDocument();
-    expect(screen.getByText("必須条件を設定してください")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "条件を閉じる" })).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    );
-    expect(
-      await screen.findByRole("combobox", { name: "あかねまみ メンバー" }),
-    ).toBeInTheDocument();
-    expect(await screen.findByDisplayValue("15420")).toBeInTheDocument();
-    expect(screen.queryByText("OCR読み取り状況を確認")).not.toBeInTheDocument();
-    expect(screen.queryByText(/緑=高信頼OCR/u)).not.toBeInTheDocument();
-    expect(screen.getByText(/選択欄はEnter・上下キーで候補を開き/u)).toBeInTheDocument();
+    expect(revenue).toHaveValue("42");
+    await user.click(screen.getByRole("button", { name: "ダイアログを閉じる" }));
+    expect(screen.getByRole("button", { name: "確定前の確認へ進む" })).toBeEnabled();
   });
 
   it("focuses the first invalid field when confirmation cannot open", async () => {

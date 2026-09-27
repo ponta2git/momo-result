@@ -58,6 +58,12 @@ export function useMatchWorkspaceFormHandlers({
     [dispatch],
   );
 
+  const onNumericDraftChange = useCallback(
+    (path: string, value: string | undefined) =>
+      dispatch({ path, type: "set_numeric_draft", value }),
+    [dispatch],
+  );
+
   const onPlayerChange = useCallback(
     (index: number, patch: Partial<MatchFormValues["players"][number]>) => {
       dispatch({ index, patch, type: "patch_player" });
@@ -96,6 +102,7 @@ export function useMatchWorkspaceFormHandlers({
     onCreateEvent,
     onGameTitleChange,
     onIncidentChange,
+    onNumericDraftChange,
     onPatchRoot,
     onPlayerChange,
     onPlayOrderChange,

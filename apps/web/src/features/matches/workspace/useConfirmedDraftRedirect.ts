@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
@@ -27,6 +27,13 @@ export function useConfirmedDraftRedirect({
   const queryClient = useQueryClient();
   const [confirmedDraftRedirecting, setConfirmedDraftRedirecting] = useState(false);
   const redirectedConfirmedDraftRef = useRef<string | null>(null);
+  const activeRef = useRef(true);
+  useLayoutEffect(() => {
+    activeRef.current = true;
+    return () => {
+      activeRef.current = false;
+    };
+  }, []);
 
   const fetchLatestDraftDetail = useCallback(
     (draftId: string) =>
@@ -40,6 +47,7 @@ export function useConfirmedDraftRedirect({
 
   const redirectConfirmedDraft = useCallback(
     (detail: MatchDraftDetailResponse | undefined, message: string): boolean => {
+      if (!activeRef.current) return false;
       const destination = confirmedDraftDestination(detail);
       if (!destination) {
         return false;

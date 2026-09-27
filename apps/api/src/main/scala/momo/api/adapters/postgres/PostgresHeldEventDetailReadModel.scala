@@ -72,6 +72,7 @@ object PostgresHeldEventDetail:
       event <- PostgresHeldEvents.alg.find(id)
       detail <- event.traverse { heldEvent =>
         for
+          _ <- validateReadBudget(id)
           matches <- sql"""
             SELECT m.id, m.match_no_in_event, m.game_title_id, m.season_master_id,
                    m.owner_member_id, m.map_master_id, m.played_at, m.note_body,
@@ -111,6 +112,50 @@ object PostgresHeldEventDetail:
         yield HeldEventDetail(heldEvent, confirmed, drafts, RecordNavigation(previous, next))
       }
     yield detail
+
+  private def validateReadBudget(id: HeldEventId): ConnectionIO[Unit] =
+    val limit = PostgresReadBudget.HeldEventRecords
+    val nameLimit = PostgresReadBudget.NameCodePoints
+    val noteLimit = MatchNoteBody.MaximumCodePoints
+    PostgresReadBudget.ensureCount(
+      sql"""
+      SELECT COUNT(*) FROM (
+        SELECT 1 FROM matches WHERE held_event_id = $id
+        UNION ALL
+        SELECT 1 FROM match_drafts WHERE held_event_id = $id
+          AND status <> ${MatchDraftStatus.Cancelled}
+          AND status <> ${MatchDraftStatus.Confirmed}
+        LIMIT ${limit + 1}
+      ) bounded
+    """.query[Long].unique,
+      limit,
+      "Held-event detail"
+    ) *>
+      PostgresReadBudget.ensureText(
+        sql"""
+        SELECT NOT EXISTS (
+          SELECT 1 FROM matches m
+          LEFT JOIN game_titles gt ON gt.id = m.game_title_id
+          LEFT JOIN season_masters season ON season.id = m.season_master_id
+          LEFT JOIN map_masters map ON map.id = m.map_master_id
+          WHERE m.held_event_id = $id AND (
+            char_length(gt.name) > $nameLimit OR char_length(season.name) > $nameLimit
+            OR char_length(map.name) > $nameLimit OR char_length(m.note_body) > $noteLimit
+          )
+          UNION ALL
+          SELECT 1 FROM match_drafts d
+          LEFT JOIN game_titles gt ON gt.id = d.game_title_id
+          LEFT JOIN season_masters season ON season.id = d.season_master_id
+          LEFT JOIN map_masters map ON map.id = d.map_master_id
+          WHERE d.held_event_id = $id
+            AND d.status <> ${MatchDraftStatus.Cancelled}
+            AND d.status <> ${MatchDraftStatus.Confirmed}
+            AND (char_length(gt.name) > $nameLimit OR char_length(season.name) > $nameLimit
+              OR char_length(map.name) > $nameLimit)
+        )
+      """.query[Boolean].unique,
+        "Held-event detail"
+      )
 
   private def adjacent(event: HeldEvent, previous: Boolean): ConnectionIO[Option[HeldEvent]] =
     val comparison = if previous then fr"<" else fr">"

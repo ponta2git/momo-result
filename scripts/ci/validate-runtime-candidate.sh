@@ -37,8 +37,8 @@ for file in \
   }
 done
 
-recorded_ref="$(sed -n '1p' "${image_ref_file}")"
-recorded_id="$(sed -n '1p' "${image_id_file}")"
+recorded_ref="$(< "${image_ref_file}")"
+recorded_id="$(< "${image_id_file}")"
 recorded_tar_sha="$(cut -d ' ' -f 1 "${tar_sha_file}")"
 actual_tar_sha="$(sha256sum "${image_archive}" | cut -d ' ' -f 1)"
 [[ "${recorded_ref}" == "${expected_ref}" ]] || exit 1
@@ -51,31 +51,28 @@ actual_tar_sha="$(sha256sum "${image_archive}" | cut -d ' ' -f 1)"
 expected_http4s_ref="$(tr -d '[:space:]' < "${repo_root}/.http4s-ref")"
 [[ "${expected_http4s_ref}" =~ ^[0-9a-f]{40}$ ]] || exit 1
 
-jq -e \
-  --arg expectedRepository "https://github.com/ponta2git/http4s.git" \
-  --arg expectedRef "${expected_http4s_ref}" '
-    type == "object" and
-    keys == ["repository", "scalaVersion", "sourceSha", "version"] and
-    .repository == $expectedRepository and
-    .scalaVersion == "3.3.6" and
-    .sourceSha == $expectedRef and
-    (.version | type == "string" and test("^[0-9A-Za-z][0-9A-Za-z.+-]*$"))
-  ' "${http4s_patch_file}" > /dev/null || {
-    echo "Runtime image does not contain the expected http4s patch provenance." >&2
-    exit 1
-  }
+actual_config_sha="$(sha256sum "${repo_root}/fly.toml" | cut -d ' ' -f 1)"
 
-jq -e \
+jq -es \
   --arg commit "${expected_commit}" \
+  --arg configSha256 "${actual_config_sha}" \
   --arg imageId "${recorded_id}" \
   --arg imageRef "${expected_ref}" \
   --arg runAttempt "${expected_run_attempt}" \
   --arg runId "${expected_run_id}" \
   --arg tarSha256 "${actual_tar_sha}" \
-  --arg http4sRepository "$(jq -r '.repository' "${http4s_patch_file}")" \
-  --arg http4sScalaVersion "$(jq -r '.scalaVersion' "${http4s_patch_file}")" \
-  --arg http4sSourceSha "$(jq -r '.sourceSha' "${http4s_patch_file}")" \
-  --arg http4sVersion "$(jq -r '.version' "${http4s_patch_file}")" '
+  --arg http4sSourceSha "${expected_http4s_ref}" \
+  --slurpfile http4sPatch "${http4s_patch_file}" '
+    select(length == 1) | .[0] |
+    ($http4sPatch | select(length == 1) | .[0]) as $patch |
+    ($patch |
+      type == "object" and
+      keys == ["repository", "scalaVersion", "sourceSha", "version"] and
+      .repository == "https://github.com/ponta2git/http4s.git" and
+      .scalaVersion == "3.3.6" and
+      .sourceSha == $http4sSourceSha and
+      (.version | type == "string" and test("^[0-9A-Za-z][0-9A-Za-z.+-]*\\z"))
+    ) and
     type == "object" and
     keys == [
       "commit",
@@ -98,19 +95,12 @@ jq -e \
     .imageRef == $imageRef and
     .imageId == $imageId and
     .tarSha256 == $tarSha256 and
-    .http4sPatchRepository == $http4sRepository and
-    .http4sPatchScalaVersion == $http4sScalaVersion and
-    .http4sPatchSourceSha == $http4sSourceSha and
-    .http4sPatchVersion == $http4sVersion and
-    (.configSha256 | type == "string" and test("^[0-9a-f]{64}$"))
+    .http4sPatchRepository == $patch.repository and
+    .http4sPatchScalaVersion == $patch.scalaVersion and
+    .http4sPatchSourceSha == $patch.sourceSha and
+    .http4sPatchVersion == $patch.version and
+    .configSha256 == $configSha256
   ' "${candidate_file}" > /dev/null || {
     echo "Runtime candidate failed its immutable provenance contract." >&2
     exit 1
   }
-
-actual_config_sha="$(sha256sum fly.toml | cut -d ' ' -f 1)"
-expected_config_sha="$(jq -r '.configSha256' "${candidate_file}")"
-[[ "${actual_config_sha}" == "${expected_config_sha}" ]] || {
-  echo "fly.toml changed after runtime candidate validation." >&2
-  exit 1
-}

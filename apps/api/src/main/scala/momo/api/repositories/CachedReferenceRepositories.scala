@@ -47,8 +47,9 @@ private final class ReferenceCache[F[_]: Async, A](
 
   def invalidateAfterSuccess[E, B](effect: F[Either[E, B]]): F[Either[E, B]] =
     Async[F].uncancelable { poll =>
-      // Cancellation can race a committed delegate write, so it invalidates conservatively.
+      // Cancellation or an I/O error can race a committed write. Neither proves rollback.
       Async[F].onCancel(poll(effect), invalidate)
+        .onError(_ => invalidate)
         .flatTap(_.traverse_(_ => invalidate))
     }
 

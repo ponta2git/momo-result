@@ -37,7 +37,7 @@ worker_pid=""
 report_error() {
   local status=$?
   echo "Preemption smoke failed near line ${BASH_LINENO[0]}." >&2
-  tail -100 "${worker_log}" >&2 || true
+  analysis_smoke_print_worker_diagnostics "${worker_log}" >&2 || true
   return "${status}"
 }
 
@@ -158,7 +158,7 @@ trap cleanup EXIT
 
 fail_with_log() {
   echo "$1" >&2
-  tail -100 "${worker_log}" >&2 || true
+  analysis_smoke_print_worker_diagnostics "${worker_log}" >&2 || true
   exit 1
 }
 

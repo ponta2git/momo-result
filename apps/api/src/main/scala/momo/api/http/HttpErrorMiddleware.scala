@@ -3,8 +3,6 @@ package momo.api.http
 import java.io.IOException
 import java.sql.SQLException
 
-import scala.annotation.tailrec
-
 import cats.data.Kleisli
 import cats.effect.Async
 import cats.syntax.all.*
@@ -27,19 +25,24 @@ private[http] object HttpErrorMiddleware:
   private def problem[F[_]: Async](error: AppError): F[Response[F]] = HttpProblemResponse
     .fromError[F](error).pure[F]
 
-  private def classify(error: Throwable): AppError = findAppException(error) match
-    case Some(app) => app.error
-    case _ if hasCause(error)(isSqlError) => AppError.DependencyFailed("Database operation failed.")
-    case _ if hasCause(error)(isRedisError) => AppError.DependencyFailed("Queue operation failed.")
-    case _ if hasCause(error)(isIoError) => AppError.Internal("File operation failed.")
-    case _ => AppError.Internal("Unexpected server error.")
+  private def classify(error: Throwable): AppError =
+    val causes = SafeLog.causeChain(error)
+    causes.collectFirst { case app: AppException => app.error } match
+      case Some(appError) => appError
+      case _ if causes.exists(isSqlError) => AppError.DependencyFailed("Database operation failed.")
+      case _ if causes.exists(isRedisError) => AppError.DependencyFailed("Queue operation failed.")
+      case _ if causes.exists(isIoError) => AppError.Internal("File operation failed.")
+      case _ => AppError.Internal("Unexpected server error.")
 
   private def logIncident[F[_]: Async](
       request: Request[?],
       appError: AppError,
       error: Throwable,
   ): F[Unit] =
-    if HttpIncidentPolicy.shouldLog(appError) then Async[F].delay(log(request, appError, error))
+    if HttpIncidentPolicy.shouldLog(appError) then
+      val requestId = request.headers.get(RequestIdMiddleware.HeaderName).map(_.head.value)
+        .flatMap(momo.api.domain.RequestId.sanitize).getOrElse("none")
+      RequestIdMiddleware.logWithMdc[F](requestId)(log(request, appError, error))
     else Async[F].unit
 
   private def log(request: Request[?], appError: AppError, error: Throwable): Unit =
@@ -50,25 +53,6 @@ private[http] object HttpErrorMiddleware:
     logger.error(
       s"HTTP request failed method=$method path=$path problemCode=$code errorClasses=$classes"
     )
-
-  private def hasCause(error: Throwable)(predicate: Throwable => Boolean): Boolean =
-    findCause(error)(predicate).isDefined
-
-  private def findAppException(error: Throwable): Option[AppException] =
-    @tailrec
-    def loop(current: Option[Throwable]): Option[AppException] = current match
-      case None => None
-      case Some(app: AppException) => Some(app)
-      case Some(throwable) => loop(Option(throwable.getCause))
-    loop(Some(error))
-
-  private def findCause(error: Throwable)(predicate: Throwable => Boolean): Option[Throwable] =
-    @tailrec
-    def loop(current: Option[Throwable]): Option[Throwable] = current match
-      case None => None
-      case Some(throwable) if predicate(throwable) => Some(throwable)
-      case Some(throwable) => loop(Option(throwable.getCause))
-    loop(Some(error))
 
   private def isSqlError(error: Throwable): Boolean = error match
     case _: SQLException => true

@@ -43,7 +43,8 @@ private[storage] object ImageValidation:
               Left(AppError.UnsupportedMediaType("Content-Type does not match the image bytes."))
             case Some(imageDimensions) => Right(ValidatedImage(imageType, imageDimensions))
 
-  def normalizeMediaType(value: String): String = value.takeWhile(_ != ';').trim.toLowerCase
+  def normalizeMediaType(value: String): String = value.takeWhile(_ != ';').trim
+    .toLowerCase(java.util.Locale.ROOT)
 
   def detect(bytes: Array[Byte]): Option[ImageType] = ImageFormatParsers.detect(bytes)
 

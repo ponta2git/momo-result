@@ -1,5 +1,8 @@
 package momo.api.http
 
+import scala.concurrent.duration.*
+
+import cats.effect.testkit.TestControl
 import cats.effect.{Deferred, IO, Ref}
 import cats.syntax.all.*
 import io.circe.Json
@@ -14,6 +17,7 @@ import momo.api.config.ResourceLimitsConfig
 import momo.api.domain.ids.{AccountId, MemberId}
 import momo.api.endpoints.ProblemDetails
 import momo.api.http.HttpAssertions.{assertProblem, jsonField}
+import momo.api.repositories.{IdempotencyRepository, IdempotencyResponse}
 
 final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
 
@@ -32,12 +36,12 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
   private val directLimiterNow = java.time.Instant.parse("2026-05-14T00:00:00Z")
 
   private def idempotencyGuard(
-      repo: InMemoryIdempotencyRepository[IO]
+      repo: IdempotencyRepository[IO]
   ): IO[IdempotencyReplay.Guard[IO]] =
     idempotencyGuard(repo, mutationLimit = 100, activeKeyLimit = 100)
 
   private def idempotencyGuard(
-      repo: InMemoryIdempotencyRepository[IO],
+      repo: IdempotencyRepository[IO],
       mutationLimit: Int,
       activeKeyLimit: Int,
   ): IO[IdempotencyReplay.Guard[IO]] = LoginRateLimiter
@@ -197,6 +201,61 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
         case Left(problem) => assertEquals(problem.body.code, "IDEMPOTENCY_IN_PROGRESS")
         case Right(value) => fail(s"unknown commit must not be re-executed, got $value")
       assertEquals(attemptCount, 1)
+  }
+
+  test("idempotency: cancellation after a successful mutation still records its replay") {
+    val account = AuthenticatedAccount(
+      accountId = AccountId.unsafeFromString("account_ponta"),
+      displayName = "ponta",
+      isAdmin = true,
+      playerMemberId = None,
+    )
+    val request = Json.obj("value" -> Json.fromString("same"))
+    val result = Json.obj("saved" -> Json.fromBoolean(true))
+    TestControl.executeEmbed {
+      for
+        underlying <- InMemoryIdempotencyRepository.create[IO]
+        recordingStarted <- IO.deferred[Unit]
+        repository = new IdempotencyRepository[IO]:
+          export underlying.{lookup, reserveWithinAccountLimit, abandon, cleanup}
+          def complete(
+              key: String,
+              accountId: AccountId,
+              endpoint: String,
+              requestHash: Vector[Byte],
+              response: IdempotencyResponse,
+          ): IO[Unit] = recordingStarted.complete(()).void *> IO.sleep(100.millis) *>
+            underlying.complete(key, accountId, endpoint, requestHash, response)
+        guard <- idempotencyGuard(repository)
+        attempts <- IO.ref(0)
+        run = attempts.update(_ + 1).as(Right(result): Either[ProblemDetails.ProblemResponse, Json])
+        first <- IdempotencyReplay.wrap[IO, Json, Json](
+          guard,
+          Some("cancel-after-save"),
+          account,
+          "POST /api/testing/idempotency",
+          request,
+          IO.pure(directLimiterNow),
+          run,
+        ).start
+        _ <- recordingStarted.get
+        _ <- first.cancel
+        outcome <- first.join
+        replay <- IdempotencyReplay.wrap[IO, Json, Json](
+          guard,
+          Some("cancel-after-save"),
+          account,
+          "POST /api/testing/idempotency",
+          request,
+          IO.pure(directLimiterNow),
+          run,
+        )
+        count <- attempts.get
+      yield
+        assert(outcome.isCanceled)
+        assertEquals(replay, Right(result))
+        assertEquals(count, 1)
+    }
   }
 
   test("idempotency: undecodable stored replay returns an internal problem") {

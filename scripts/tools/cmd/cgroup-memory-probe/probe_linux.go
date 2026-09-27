@@ -164,12 +164,19 @@ func executeLauncher(ctx context.Context, opts options, cgroupPath string) (laun
 		"--allocation-bytes", strconv.FormatUint(opts.allocationBytes, 10),
 	)
 	command.SysProcAttr = &syscall.SysProcAttr{
-		Setpgid: true,
 		Credential: &syscall.Credential{
 			Uid: uint32(opts.workerUID),
 			Gid: uint32(opts.workerGID),
 		},
 	}
+	return executeLauncherCommand(command)
+}
+
+func executeLauncherCommand(command *exec.Cmd) (launcherResult, error) {
+	if command.SysProcAttr == nil {
+		command.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	command.SysProcAttr.Setpgid = true
 	// The allocator inherits this dedicated process group. Killing only the launcher on a
 	// deadline or signal would leave its allocation running and prevent cgroup removal.
 	command.Cancel = func() error {

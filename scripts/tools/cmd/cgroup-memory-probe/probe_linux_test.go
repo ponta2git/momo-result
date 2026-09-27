@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -66,6 +67,10 @@ func TestAllocatorRequiresExplicitAttachmentRelease(t *testing.T) {
 }
 
 func TestLauncherCompletionStopsAllocator(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, cause := range []string{"cancellation", "launcher exit"} {
 		t.Run(cause, func(t *testing.T) {
 			// Uses an ordinary directory, never a real cgroup; the helper child allocates no memory.
@@ -98,15 +103,35 @@ func TestLauncherCompletionStopsAllocator(t *testing.T) {
 			})
 			go func() {
 				defer close(completed)
-				_, err := executeLauncher(ctx, options{
-					workerUID: uint(os.Getuid()), workerGID: uint(os.Getgid()),
-					limitBytes: 4096, allocationBytes: 8192,
-				}, root)
+				// Exercise the production process-group lifecycle as the current user. Changing
+				// credentials would require setgroups privileges even for the same UID/GID.
+				command := exec.CommandContext(ctx, executable,
+					"--mode", modeLauncher,
+					"--cgroup-path", root,
+					"--limit-bytes", "4096",
+					"--allocation-bytes", "8192",
+				)
+				_, err := executeLauncherCommand(command)
 				completed <- err
 			}()
-			line, err := bufio.NewReader(ready).ReadString('\n')
-			if err != nil {
-				t.Fatal(err)
+			type readyResult struct {
+				line string
+				err  error
+			}
+			allocatorReady := make(chan readyResult, 1)
+			go func() {
+				line, err := bufio.NewReader(ready).ReadString('\n')
+				allocatorReady <- readyResult{line: line, err: err}
+			}()
+			var line string
+			select {
+			case result := <-allocatorReady:
+				if result.err != nil {
+					t.Fatal(result.err)
+				}
+				line = result.line
+			case err := <-completed:
+				t.Fatalf("launcher exited before allocator readiness: %v", err)
 			}
 			var pid, launcherPID int
 			if _, err := fmt.Sscanf(line, "%d %d", &pid, &launcherPID); err != nil {

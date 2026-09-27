@@ -435,13 +435,22 @@ describe("HeldEventsPage", () => {
     expect(screen.getByText("2／2")).toBeInTheDocument();
   });
 
-  it("creates a held event in a dialog and continues to its detail page", async () => {
+  it("creates a held event from local time and continues to its detail page", async () => {
     const requests: Array<{ body: unknown; idempotencyKey: string | null }> = [];
     const heldEvents = [makeHeldEventResponse()];
     const created = makeHeldEventResponse({
       heldAt: "2026-01-02T03:04:00.000Z",
       id: "held-created",
     });
+    // The form uses browser-local time; the wire instant and Japan-time heading stay fixed.
+    const localHeldAt = new Date(created.heldAt);
+    const [year, month, day, hour, minute] = [
+      localHeldAt.getFullYear(),
+      localHeldAt.getMonth() + 1,
+      localHeldAt.getDate(),
+      localHeldAt.getHours(),
+      localHeldAt.getMinutes(),
+    ].map((part) => String(part).padStart(2, "0"));
     server.use(
       http.get("/api/held-events", () => HttpResponse.json({ items: heldEvents })),
       http.post("/api/held-events", async ({ request }) => {
@@ -468,7 +477,10 @@ describe("HeldEventsPage", () => {
     await user.click(screen.getByRole("button", { name: "開催を作成" }));
     const dialog = screen.getByRole("dialog", { name: "新しい開催を作成" });
     await user.clear(within(dialog).getByLabelText(/開催日時/u));
-    await user.type(within(dialog).getByLabelText(/開催日時/u), "2026-01-02T12:04");
+    await user.type(
+      within(dialog).getByLabelText(/開催日時/u),
+      `${year}-${month}-${day}T${hour}:${minute}`,
+    );
     await user.click(within(dialog).getByRole("button", { name: "開催を作成" }));
 
     await waitFor(() =>

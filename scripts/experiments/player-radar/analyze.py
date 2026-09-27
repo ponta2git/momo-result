@@ -36,6 +36,8 @@ METRICS = {
     'low_revenue_podium': ('低収益時の入賞率', 1, '%'),
     'zero_destination_podium': ('目的地なしの入賞率', 1, '%'),
     'ginji_rank': ('銀次遭遇試合の平均順位', -1, '位'),
+    'ginji_podium': ('銀次遭遇試合の入賞率', 1, '%'),
+    'ginji_assets_median': ('銀次遭遇試合の資産中央値', 1, '万円'),
     'after_lower_podium': ('前戦下位からの入賞率', 1, '%'),
     'non_revenue_delta': ('収益順位と最終順位の差', 0, '位'),
     'destination_delta': ('目的地順位と最終順位の差', 0, '位'),
@@ -55,6 +57,14 @@ AXIS_SETS = {
                   'ginji_avoid', 'destination_mean', 'assets_median', 'assets_mean', 'assets_p90'],
     'profile8': ['rank_mean', 'revenue_p90', 'revenue_mean', 'ginji_avoid',
                  'destination_mean', 'assets_p10', 'assets_median', 'assets_p90'],
+    'no_destination6': ['rank_mean', 'revenue_p90', 'revenue_mean',
+                        'assets_p10', 'assets_median', 'assets_p90'],
+    'wins7': ['rank_mean', 'revenue_p90', 'revenue_mean', 'win_rate',
+              'assets_p10', 'assets_median', 'assets_p90'],
+    'rebound7': ['rank_mean', 'revenue_p90', 'revenue_mean', 'after_lower_podium',
+                 'assets_p10', 'assets_median', 'assets_p90'],
+    'ginji7': ['rank_mean', 'revenue_p90', 'revenue_mean', 'ginji_rank',
+               'assets_p10', 'assets_median', 'assets_p90'],
 }
 QUANTILE_LEVELS = [.05, .10, .20, .35, .50, .65, .80, .90, .99]
 DIAGNOSTIC_AXIS_SET = 'median4'
@@ -167,9 +177,12 @@ def player_metrics(matches, player_id):
         answer[field + '_mean'] = {'value': mean([p['incidents'].get('incident_' + field, 0) for p in rows]), 'n': n}
     for key, subset, field in [('top_revenue_win', top, 'win'), ('low_revenue_podium', low, 'podium'),
                                ('zero_destination_podium', zero, 'podium'), ('ginji_rank', ginji, 'rank'),
+                               ('ginji_podium', ginji, 'podium'),
                                ('after_lower_podium', after_lower, 'podium')]:
         values = [p['rank'] if field == 'rank' else (p['rank'] == 1 if field == 'win' else p['rank'] <= 2) for p in subset]
         answer[key] = {'value': mean(values), 'n': len(subset)}
+    answer['ginji_assets_median'] = {'value': statistics.median([p['assets'] for p in ginji]) if ginji else None,
+                                    'n': len(ginji)}
     return answer
 
 
@@ -280,6 +293,10 @@ def combine_baseline(common, per_map, mode):
 
 
 def pearson(xs, ys):
+    pairs = [(x, y) for x, y in zip(xs, ys) if x is not None and y is not None]
+    if len(pairs) < 3:
+        return None
+    xs, ys = zip(*pairs)
     if len(xs) < 3 or statistics.pstdev(xs) == 0 or statistics.pstdev(ys) == 0:
         return None
     return statistics.correlation(xs, ys)
@@ -323,10 +340,50 @@ def review_status(high_players_per_window, events):
     return {'status': 'review_suggested' if axes else 'no_review_signal', 'axes': axes}
 
 
+def ginji_evidence(matches, player_id):
+    hit_matches = [m for m in matches if m['_players'][player_id]['_ginji'] > 0]
+    rows = [m['_players'][player_id] for m in hit_matches]
+    counts = {str(rank): sum(p['rank'] == rank for p in rows) for rank in range(1, 5)}
+    return {'n': len(rows), 'events': len({m['eventId'] for m in hit_matches}),
+            'rankCounts': counts, 'encounters': sum(p['_ginji'] for p in rows),
+            'nonEncounterRank': mean([m['_players'][player_id]['rank'] for m in matches if not m['_players'][player_id]['_ginji']]),
+            'matches': [{'date': m['playedAt'], 'eventId': m['eventId'], 'eventNo': m['eventNo'],
+                         'mapId': m['mapId'], 'rank': m['_players'][player_id]['rank'],
+                         'assets': m['_players'][player_id]['assets'], 'ginjiCount': m['_players'][player_id]['_ginji']}
+                        for m in hit_matches]}
+
+
+def conditional_window_trial(calibration, holdout, ids, window, method='spread'):
+    """Diagnostic only: aggregate equal numbers of encounters, never impute recovery."""
+    keys = ('ginji_rank', 'ginji_podium', 'ginji_assets_median')
+    distributions = {key: [] for key in keys}
+    count_by_player = {}
+    for pid in ids:
+        hits = [m for m in calibration if m['_players'][pid]['_ginji'] > 0]
+        count_by_player[pid] = len(hits)
+        for start in range(0, len(hits) - window + 1):
+            metrics = player_metrics(hits[start:start + window], pid)
+            for key in keys:
+                distributions[key].append(metrics[key]['value'] * METRICS[key][1])
+    definitions = {key: threshold_definition(values, method, METRICS[key][1],
+                    1 if METRICS[key][2] == '%' else -1 if METRICS[key][1] == -1 else None)
+                   for key, values in distributions.items()}
+    results = {}
+    for pid in ids:
+        metrics = player_metrics(holdout, pid)
+        results[pid] = {key: {**metrics[key], 'score': score(metrics[key]['value'], definitions[key], METRICS[key][1])
+            if metrics[key]['n'] >= MIN_SCORE_MATCHES else None} for key in keys}
+    return {'encounterWindow': window, 'calibrationEncounters': count_by_player,
+            'referenceValues': {key: len(values) for key, values in distributions.items()},
+            'definitions': definitions, 'holdout': results,
+            'status': 'diagnostic_only_not_applied'}
+
+
 def analyze(source):
     players, matches = prepare(source)
     ids = [p['id'] for p in players]
     report = {'schemaVersion': 'mom30-report-v1', 'snapshotAt': source['snapshotAt'], 'players': players,
+              'provenance': source.get('provenance'), 'totalMatchCount': len(matches),
               'metrics': {key: {'label': label, 'direction': direction, 'unit': unit} for key, (label, direction, unit) in METRICS.items()},
               'axisSets': AXIS_SETS, 'diagnosticAxisSet': DIAGNOSTIC_AXIS_SET,
               'policy': {'minimumScoreMatches': MIN_SCORE_MATCHES,
@@ -342,12 +399,20 @@ def analyze(source):
         if holdout and (calibration[-1]['playedAt'] >= holdout[0]['playedAt'] or {m['eventId'] for m in calibration} & {m['eventId'] for m in holdout}):
             raise ValueError('Earliest-season split is not a chronological event-disjoint holdout')
         baselines = {}
+        ginji_baselines = {}
         for period, sample in [('initial', calibration), ('updated', title_matches), ('candidate', title_matches[:-1])]:
             for method in ('spread', 'quantile'):
                 for mid in [None] + map_ids:
                     selected = [m for m in sample if mid is None or m['mapId'] == mid]
                     key = '|'.join([period, method, mid or 'all'])
                     baselines[key] = calibrate(selected, ids, method=method)
+                trial = conditional_window_trial(sample, [], ids, 5, method)
+                common = baselines[period + '|' + method + '|all']
+                ginji_baselines[period + '|' + method] = {
+                    **common, 'id': common['id'] + '-ginji5',
+                    'axes': {**common['axes'], **trial['definitions']},
+                    'conditionalWindow': 5, 'conditionalCounts': trial['calibrationEncounters'],
+                    'statusNote': 'conditional_axis_is_experimental'}
         scopes = []
         for sid, mid in itertools.product([None] + season_ids, [None] + map_ids):
             selected = [m for m in title_matches if (sid is None or m['seasonId'] == sid) and (mid is None or m['mapId'] == mid)]
@@ -360,6 +425,9 @@ def analyze(source):
                 baseline = combine_baseline(common, per_map, mode)
                 evaluations['|'.join([period, method, mode])] = evaluate(selected, ids, baseline)
             scopes.append({'id': (sid or 'all') + '|' + (mid or 'all'), 'seasonId': sid, 'mapId': mid,
+                           'from': selected[0]['playedAt'], 'to': selected[-1]['playedAt'],
+                           'ginjiEvidence': {pid: ginji_evidence(selected, pid) for pid in ids},
+                           'ginjiEvaluations': {key: evaluate(selected, ids, value) for key, value in ginji_baselines.items()},
                            'n': len(selected), 'events': len({m['eventId'] for m in selected}), 'evaluations': evaluations})
         common = baselines['initial|spread|all']
         holdout_eval = evaluate(holdout, ids, common)
@@ -400,8 +468,10 @@ def analyze(source):
         blocks = [title_matches[i:i + 20] for i in range(0, len(title_matches) - 19, 20)]
         observations = [player_metrics(block, pid) for block in blocks for pid in ids]
         correlation = []
-        for a, b in itertools.combinations(['rank_mean', 'assets_mean', 'assets_median', 'assets_p10', 'assets_p90', 'revenue_mean', 'revenue_median', 'revenue_p90', 'destination_mean', 'ginji_avoid'], 2):
-            correlation.append({'a': a, 'b': b, 'r': pearson([v[a]['value'] for v in observations], [v[b]['value'] for v in observations])})
+        for a, b in itertools.combinations(['rank_mean', 'win_rate', 'after_lower_podium', 'assets_mean', 'assets_median', 'assets_p10', 'assets_p90', 'revenue_mean', 'revenue_median', 'revenue_p90', 'destination_mean', 'ginji_avoid'], 2):
+            correlation.append({'a': a, 'b': b,
+                'observations': sum(v[a]['value'] is not None and v[b]['value'] is not None for v in observations),
+                'r': pearson([v[a]['value'] for v in observations], [v[b]['value'] for v in observations])})
         weight_trials = []
         if all(holdout_eval['scores'][pid][key]['score'] is not None for pid in ids for key in axes):
             for axis, factor in itertools.product(axes, (.5, 1.5)):
@@ -447,9 +517,12 @@ def analyze(source):
             'seasons': [s for s in source['seasons'] if s['id'] in season_ids],
             'calibrationSeasonId': season_ids[0], 'calibrationMatches': len(calibration), 'holdoutMatches': len(holdout),
             'calibrationEvents': len({m['eventId'] for m in calibration}), 'holdoutEvents': len({m['eventId'] for m in holdout}),
-            'baselines': baselines, 'scopes': scopes, 'correlations': correlation, 'correlationObservations': len(observations),
+            'baselines': baselines, 'ginjiBaselines': ginji_baselines,
+            'scopes': scopes, 'correlations': correlation, 'correlationObservations': len(observations),
             'windowSensitivity': variants, 'weightSensitivity': weight_trials, 'mapCalibrationChecks': map_checks, 'adminDemo': admin_demo,
-            'profileDiagnostics': {name: perturbation(holdout, ids, common, name) for name in ('quantile9', 'profile8')},
+            'profileDiagnostics': {name: perturbation(holdout, ids, common, name)
+                for name in ('quantile9', 'profile8', 'no_destination6', 'wins7', 'rebound7')},
+            'ginjiWindowTrials': [conditional_window_trial(calibration, holdout, ids, window) for window in (3, 5, 8)],
             'sampleSizeChecks': sample_size_checks,
             'reviewIndicator': review,
             'saturation': {'windowMatches': 20, 'disjointWindows': len(high_blocks),
@@ -476,6 +549,7 @@ def main():
     source = json.loads(source_bytes)
     report = analyze(source)
     report['inputSha256'] = hashlib.sha256(source_bytes).hexdigest()
+    report['sourceFile'] = args.input.name
     report['analyzerSha256'] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False) + '\n')

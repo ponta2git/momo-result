@@ -471,6 +471,11 @@
     <div class="surface">
       <h1>プレーヤーレーダー</h1>
       <p class="muted" id="introduction">外側ほど好成績。総合点は各軸の点数の平均です。</p>
+      <p id="data-origin" class="control-copy"></p>
+      <details>
+        <summary>取得した本番記録の内訳</summary>
+        <div id="provenance-details"></div>
+      </details>
       <div class="filters">
         <label>作品<select id="title"></select></label>
         <label>シーズン<select id="season"></select></label>
@@ -484,6 +489,12 @@
         <a id="numeric-link" href="#numeric">数値で比較</a>
       </div>
       <div id="quality" class="notice" hidden></div>
+      <div class="actions" id="current-variants" aria-label="今回の比較案">
+        <button data-axis-preview="no_destination6">目的地なし</button>
+        <button data-axis-preview="wins7">勝率へ替える</button>
+        <button data-axis-preview="rebound7">前戦下位からの入賞へ替える</button>
+        <button data-axis-preview="ginji7">銀次遭遇試合の平均順位を加える</button>
+      </div>
       <div id="players" class="players"></div>
       <p class="footnote">
         総合評価はこの採点基準での点数順です。平均順位・勝率とは異なる場合があり、小さな点差だけで実力差は断定できません。
@@ -495,6 +506,40 @@
         </div>
       </details>
 
+      <section class="section" id="ginji-comparison">
+        <h2>銀次に遭遇した試合で残した成績</h2>
+        <p class="control-copy">
+          リカバーを考えるための候補です。記録にあるのは遭遇回数と最終結果なので、遭遇した時刻、被害額、その後に取り戻した金額は分かりません。1試合で何回遭遇しても、下の割合では1試合として数えます。
+        </p>
+        <p id="ginji-caption"></p>
+        <div class="scroll" tabindex="0" aria-label="銀次遭遇試合の4人比較">
+          <table class="comparison-table" id="ginji-values"></table>
+        </div>
+        <p class="control-copy">
+          平均順位は全順位を使い、入賞率は1・2位で終えられた割合を見ます。資産中央値は残せた額の水準です。非遭遇時との違いには元の強さや遭遇条件も含まれるため、銀次の因果効果や回復量とは扱いません。
+        </p>
+        <details>
+          <summary>銀次を軸にした場合の仮採点を見る</summary>
+          <div id="ginji-scores"></div>
+        </details>
+        <details>
+          <summary>根拠になった本番の確定試合を見る</summary>
+          <div class="scroll" tabindex="0" aria-label="銀次遭遇試合の記録">
+            <table id="ginji-matches"></table>
+          </div>
+        </details>
+      </section>
+
+      <section class="section" id="destination-comparison">
+        <h2>目的地を外す・替える案の比較</h2>
+        <p class="control-copy">
+          同じ記録・同じ作品共通基準で比較します。以下3案の銀次は上の補助表に置き、平均点には含めていません。勝率は平均順位と重なり、前戦下位からの入賞は対象件数が減る点も確認します。
+        </p>
+        <div class="scroll" tabindex="0" aria-label="目的地の代案の総合点">
+          <table class="comparison-table" id="destination-values"></table>
+        </div>
+      </section>
+
       <section class="section">
         <h2>採点案を比べる</h2>
         <p class="control-copy">
@@ -503,13 +548,21 @@
         <div class="controls">
           <label
             >評価する観点<select id="axes">
-              <option value="basic4">A：平均順位・平均資産・収益・目的地</option>
-              <option value="median4">B：資産を中央値に替えた4軸（軸構成は再検討中）</option>
-              <option value="compact3">C：資産を外した3軸</option>
-              <option value="downside5">D：下位資産を加えた5軸</option>
-              <option value="reference9">元画像の9軸（最高額は参考）</option>
-              <option value="quantile9">最高額を上位10%点に替えた9軸</option>
-              <option value="profile8">上側・普段・下側の成績を見る8軸</option>
+              <optgroup label="今回の追加案">
+                <option value="no_destination6">目的地なし・銀次は別表（6軸）</option>
+                <option value="wins7">目的地を勝率へ・銀次は別表（7軸）</option>
+                <option value="rebound7">目的地を前戦下位からの入賞へ（7軸）</option>
+                <option value="ginji7">目的地なし・銀次遭遇時の順位を加える（7軸・参考）</option>
+              </optgroup>
+              <optgroup label="以前の比較案">
+                <option value="basic4">A：平均順位・平均資産・収益・目的地</option>
+                <option value="median4">B：資産を中央値に替えた4軸（軸構成は再検討中）</option>
+                <option value="compact3">C：資産を外した3軸</option>
+                <option value="downside5">D：下位資産を加えた5軸</option>
+                <option value="reference9">元画像の9軸（最高額は参考）</option>
+                <option value="quantile9">最高額を上位10%点に替えた9軸</option>
+                <option value="profile8">上側・普段・下側の成績を見る8軸</option>
+              </optgroup>
             </select></label
           >
           <label
@@ -653,7 +706,7 @@
       title: selected.get("title") || report.titles[0].id,
       season: selected.get("season"),
       map: selected.get("map") || "all",
-      axes: selected.get("axes") || "median4",
+      axes: selected.get("axes") || "no_destination6",
       method: selected.get("method") || "spread",
       mode: selected.get("mode") || "common",
       period: selected.get("period") || "initial",
@@ -689,6 +742,9 @@
     }
     const axisLabel = {
       rank_mean: "平均順位",
+      win_rate: "勝率",
+      after_lower_podium: "下位後入賞",
+      ginji_rank: "銀次試合順位",
       assets_mean: "平均総資産",
       assets_median: "資産中央値",
       assets_p10: "下位資産",
@@ -712,6 +768,7 @@
       ready: "",
     };
     function baselineFor(t) {
+      if (state.axes === "ginji7") return t.ginjiBaselines[state.period + "|" + state.method];
       const common = t.baselines[state.period + "|" + state.method + "|all"];
       if (state.map === "all" || state.mode === "common") return common;
       const mapped = t.baselines[state.period + "|" + state.method + "|" + state.map];
@@ -810,7 +867,228 @@
       const q = new URLSearchParams(state);
       history.replaceState(null, "", "?" + q + location.hash);
     }
+    function renderEvidence(t, scope, evaluation) {
+      const japanDate = (date, time = false) =>
+        new Date(date).toLocaleString("ja-JP", {
+          timeZone: "Asia/Tokyo",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          ...(time ? { hour: "2-digit", minute: "2-digit" } : {}),
+        });
+      byId("data-origin").textContent =
+        (report.provenance?.kind === "neon-production"
+          ? "NeonDBの本番確定記録"
+          : "取得済みの記録") +
+        " " +
+        report.totalMatchCount +
+        "試合を使った試算 · " +
+        japanDate(report.snapshotAt, true) +
+        " JST取得";
+      byId("provenance-details").innerHTML =
+        "<p>表示対象と採点基準の作成対象は別です。上の取得時刻は記録の読み取り時刻で、冬までの基準を選んだ場合は冬の記録だけから閾値を作っています。本番の記録・採点基準への書き込みは行っていません。</p><ul>" +
+        report.titles
+          .map((item) => {
+            const all = item.scopes.find((x) => x.id === "all|all");
+            return (
+              "<li>" +
+              esc(item.name) +
+              "：" +
+              all.n +
+              "試合（" +
+              japanDate(all.from) +
+              "〜" +
+              japanDate(all.to) +
+              "）</li>"
+            );
+          })
+          .join("") +
+        "</ul>";
+      const head =
+        '<thead><tr><th scope="col">指標</th>' +
+        report.players.map((p) => '<th scope="col">' + esc(p.name) + "</th>").join("") +
+        "</tr></thead>";
+      const cell = (value, note = "") =>
+        '<td><span class="num">' +
+        esc(value) +
+        '</span><span class="sub">' +
+        esc(note) +
+        "</span></td>";
+      const row = (label, cells) =>
+        '<tr><th scope="row">' + label + "</th>" + cells.join("") + "</tr>";
+      const ginjiRow = (key) =>
+        row(
+          esc(report.metrics[key].label),
+          report.players.map((p) => {
+            const v = evaluation.raw[p.id][key],
+              evidence = scope.ginjiEvidence[p.id];
+            return cell(
+              compact(v.value, key),
+              key === "ginji_podium" && v.n
+                ? evidence.rankCounts["1"] + evidence.rankCounts["2"] + " / " + v.n + "試合"
+                : v.n + "試合",
+            );
+          }),
+        );
+      byId("ginji-caption").textContent =
+        byId("season").selectedOptions[0].text +
+        "・" +
+        byId("map").selectedOptions[0].text +
+        "の確定" +
+        scope.n +
+        "試合から、各人が銀次に遭遇した試合を抽出しています。少ない件数での成績も、その件数と一緒に確認してください。";
+      byId("ginji-values").innerHTML =
+        head +
+        "<tbody>" +
+        row(
+          "遭遇した試合",
+          report.players.map((p) =>
+            cell(scope.ginjiEvidence[p.id].n + "試合", scope.ginjiEvidence[p.id].events + "開催"),
+          ),
+        ) +
+        ginjiRow("ginji_podium") +
+        ginjiRow("ginji_rank") +
+        ginjiRow("ginji_assets_median") +
+        row(
+          '最終順位の内訳<span class="sub">1位 / 2位 / 3位 / 4位</span>',
+          report.players.map((p) =>
+            cell(Object.values(scope.ginjiEvidence[p.id].rankCounts).join(" / ")),
+          ),
+        ) +
+        row(
+          "非遭遇試合の平均順位",
+          report.players.map((p) =>
+            cell(
+              raw(scope.ginjiEvidence[p.id].nonEncounterRank, "rank_mean"),
+              scope.n - scope.ginjiEvidence[p.id].n + "試合",
+            ),
+          ),
+        ) +
+        "</tbody>";
+      const ge = scope.ginjiEvaluations[state.period + "|" + state.method],
+        gb = t.ginjiBaselines[state.period + "|" + state.method];
+      byId("ginji-scores").innerHTML =
+        "<p>全試合を20件ずつ区切ると銀次の対象が足りないため、銀次に遭遇した試合だけを各人5件ずつ集計する案も試しました。基準作成側の遭遇件数は " +
+        report.players
+          .map((p) => esc(p.name) + " " + gb.conditionalCounts[p.id] + "件")
+          .join("、") +
+        "です。</p>" +
+        "<p>以下は上で選んだ作成期間・採点方法による仮採点です。窓は重なり、窓の多い人の値が多く入ります。少数例のため採用前の参考値とし、これを含む総合評価順位は出しません。</p>" +
+        '<div class="scroll" tabindex="0"><table class="comparison-table">' +
+        head +
+        "<tbody>" +
+        ["ginji_rank", "ginji_podium", "ginji_assets_median"]
+          .map((key) =>
+            row(
+              esc(report.metrics[key].label),
+              report.players.map((p) => {
+                const v = ge.scores[p.id][key];
+                return cell(
+                  v.score === null ? "—" : v.score + "点（参考）",
+                  v.score === null ? statusLabel[v.status] || v.status : v.n + "試合",
+                );
+              }),
+            ),
+          )
+          .join("") +
+        '</tbody></table></div><p><button data-axis-preview="ginji7">銀次遭遇試合の平均順位をレーダーへ加える</button></p>' +
+        '<details><summary>3・5・8件の窓で試した結果（冬→春、全マップ）</summary><p>この診断は上の絞り込みとは別に、冬で基準を作り、その後の全マップを採点したものです。窓の変更に対する点数差と、基準の不足を確認します。</p><div class="scroll" tabindex="0"><table class="comparison-table">' +
+        head +
+        "<tbody>" +
+        t.ginjiWindowTrials
+          .map((trial) =>
+            row(
+              trial.encounterWindow + '件の窓<span class="sub">平均順位の点数</span>',
+              report.players.map((p) => {
+                const v = trial.holdout[p.id].ginji_rank;
+                return cell(v.score === null ? "—" : v.score + "点", v.n + "試合");
+              }),
+            ),
+          )
+          .join("") +
+        "</tbody></table></div></details>";
+      const records = report.players.flatMap((p) =>
+        scope.ginjiEvidence[p.id].matches.map((m) => ({ ...m, player: p.name })),
+      );
+      byId("ginji-matches").innerHTML =
+        "<thead><tr><th>日付・試合</th><th>プレーヤー</th><th>マップ</th><th>銀次回数</th><th>最終順位</th><th>総資産</th></tr></thead><tbody>" +
+        records
+          .map(
+            (m) =>
+              "<tr><td>" +
+              esc(japanDate(m.date)) +
+              " #" +
+              m.eventNo +
+              "</td><td>" +
+              esc(m.player) +
+              "</td><td>" +
+              esc(t.maps.find((x) => x.id === m.mapId)?.name) +
+              "</td><td>" +
+              m.ginjiCount +
+              "</td><td>" +
+              m.rank +
+              "位</td><td>" +
+              esc(raw(m.assets, "assets_median")) +
+              "</td></tr>",
+          )
+          .join("") +
+        "</tbody>";
+      const ce = scope.evaluations[state.period + "|" + state.method + "|common"];
+      const variants = [
+        ["no_destination6", "目的地なし"],
+        ["wins7", "勝率へ置換"],
+        ["rebound7", "前戦下位からの入賞へ置換"],
+      ];
+      byId("destination-values").innerHTML =
+        head +
+        "<tbody>" +
+        variants
+          .map(([name, label]) =>
+            row(
+              '<button data-axis-preview="' + name + '">' + label + "</button>",
+              report.players.map((p) => {
+                const v = ce.totals[name][p.id];
+                return cell(
+                  v.score?.toFixed(2) ?? "—",
+                  v.rank === null ? "参考・順位なし" : v.rank + "位",
+                );
+              }),
+            ),
+          )
+          .join("") +
+        row(
+          "勝率の元の値",
+          report.players.map((p) =>
+            cell(raw(ce.raw[p.id].win_rate.value, "win_rate"), ce.n + "試合"),
+          ),
+        ) +
+        row(
+          "下位後入賞の元の値",
+          report.players.map((p) =>
+            cell(
+              raw(ce.raw[p.id].after_lower_podium.value, "after_lower_podium"),
+              "対象 " + ce.raw[p.id].after_lower_podium.n + "試合",
+            ),
+          ),
+        ) +
+        "</tbody>";
+      for (const button of document.querySelectorAll("[data-axis-preview]"))
+        button.setAttribute("aria-pressed", String(button.dataset.axisPreview === state.axes));
+    }
+    document.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-axis-preview]");
+      if (!button) return;
+      state.axes = button.dataset.axisPreview;
+      state.mode = "common";
+      render();
+      byId("current-variants").scrollIntoView({ block: "start" });
+    });
     function renderMapComparison(t, scope, axes) {
+      if (state.axes === "ginji7") {
+        byId("map-comparison-content").innerHTML =
+          "<p>銀次を加えた参考案は作品共通基準だけで試算しています。上のマップ絞り込みは同じ基準で採点します。マップ別基準との比較は、他の軸案を選ぶと確認できます。</p>";
+        return;
+      }
       const controls =
         '<div class="actions">' +
         t.maps
@@ -972,12 +1250,18 @@
       byId("map-comparison").querySelector("summary").focus();
     });
     function render() {
-      const defaults = { axes: "median4", method: "spread", mode: "common", period: "initial" };
+      const defaults = {
+        axes: "no_destination6",
+        method: "spread",
+        mode: "common",
+        period: "initial",
+      };
       for (const [key, fallback] of Object.entries(defaults)) {
         if (![...byId(key).options].some((option) => option.value === state[key]))
           state[key] = fallback;
       }
       const t = title();
+      if (state.axes === "ginji7") state.mode = "common";
       state.title = t.id;
       const seasons = ["all", ...t.seasons.map((s) => s.id)];
       if (!state.season || !seasons.includes(state.season))
@@ -994,7 +1278,10 @@
         t.maps.map((m) => option(m.id, m.name, state.map)).join("");
       for (const id of ["axes", "method", "mode", "period"]) byId(id).value = state[id];
       const scope = t.scopes.find((s) => s.id === state.season + "|" + state.map);
-      const e = scope.evaluations[state.period + "|" + state.method + "|" + state.mode],
+      const e =
+          state.axes === "ginji7"
+            ? scope.ginjiEvaluations[state.period + "|" + state.method]
+            : scope.evaluations[state.period + "|" + state.method + "|" + state.mode],
         axes = report.axisSets[state.axes],
         base = baselineFor(t);
       const phase =
@@ -1020,6 +1307,8 @@
         base.events +
         "開催）／ " +
         byId("mode").selectedOptions[0].text;
+      if (state.axes === "ginji7")
+        byId("baseline-caption").textContent += " ／ 銀次軸は遭遇5試合の集計窓で仮採点";
       byId("introduction").textContent =
         "外側ほど好成績。総合点は" + axes.length + "つの軸の平均です。";
       const qualified = report.players.every((p) => e.totals[state.axes][p.id].rank !== null);
@@ -1028,14 +1317,16 @@
         base.status !== "ready"
           ? "この条件に対応する基準をまだ作れません。試作では作成元40試合以上・8開催以上を必要としています。"
           : !report.players.every((p) => e.totals[state.axes][p.id].score !== null)
-            ? "採点できない軸があるため、総合点・総合評価順位は表示していません。理由は数値表で確認できます。"
+            ? "採点できない軸がある人の総合点と、4人の総合評価順位は表示していません。理由は数値表で確認できます。"
             : axes.some((key) =>
                   report.players.some(
                     (p) => e.scores[p.id][key].status === "reference_opportunity",
                   ),
                 )
               ? "最高額は、基準作成の20試合と表示対象とで更新機会の数が異なります。点数・平均は比較用の参考値とし、総合順位を出していません。"
-              : "参考値を含むため、総合評価順位は表示していません。試作の表示下限は40試合以上・8開催以上です。";
+              : state.axes === "ginji7"
+                ? "銀次遭遇試合の成績は少ない記録での仮採点です。各点数と平均を参考表示にし、総合順位は出していません。対象件数と根拠は下の表で確認できます。"
+                : "参考値を含むため、総合評価順位は表示していません。試作の表示下限は各軸40試合以上・8開催以上です。";
       byId("players").innerHTML = report.players
         .map((p, i) => {
           const total = e.totals[state.axes][p.id],
@@ -1152,24 +1443,35 @@
           .join("") +
         "</tbody>";
       byId("method-caption").textContent =
+        (state.axes === "ginji7"
+          ? "銀次遭遇試合の平均順位だけは、連続する遭遇5試合の集計値で閾値を作っています。他の軸は以下の方式です。"
+          : "") +
         (state.method === "spread"
           ? "連続20試合の集計値の中央値と上下10%点の幅から閾値を作り、満点を上位側へ延ばす案です。"
           : "連続20試合の集計値を9つの分位点で区切る案です。満点の境界は99%分位点（下から99%の値）です。") +
         "窓が重なっても試合数が増えたとは扱いません。割合など上限がある指標は満点を到達可能な範囲に収めます。どちらの方式も採用前の候補です。";
       const moneyAxes = axes.filter((key) => report.metrics[key].unit === "万円").length;
       byId("axes-caption").textContent =
-        (state.axes === "profile8"
-          ? "上位10%点は好成績側、中央値は普段の水準、下位10%点は低い側の水準を表します。最高額の一度きりの突出とは区別します。"
-          : state.axes === "quantile9"
-            ? "元画像の構成を保ち、資産・収益の最高額を上位10%点へ替えた案です。平均と中央値の重複評価は残ります。"
-            : state.axes === "reference9"
-              ? "元画像の観点に近い参考案です。最高額の点数は試合数による更新機会に左右されます。"
-              : "軸を減らして要約する案との比較用です。") +
+        (state.axes === "no_destination6"
+          ? "目的地と銀次非遭遇率をレーダーから外した案です。銀次遭遇試合の成績は補助表で比較します。"
+          : state.axes === "wins7"
+            ? "目的地の代わりに勝率を使う案です。選んだ稼ぎ方を直接評価しませんが、平均順位と勝率で勝敗を2軸に数えます。"
+            : state.axes === "rebound7"
+              ? "目的地の代わりに、選択条件内の前戦が3・4位だった場合に次戦を1・2位で終えた割合を使う案です。試合中の逆転や心理的な回復を観測した値ではありません。"
+              : state.axes === "ginji7"
+                ? "目的地を外し、銀次に遭遇した試合の平均順位を加えた案です。この軸だけは遭遇5試合の集計窓で仮採点し、少数例なので総合点も参考表示にします。"
+                : state.axes === "profile8"
+                  ? "上位10%点は好成績側、中央値は普段の水準、下位10%点は低い側の水準を表します。最高額の一度きりの突出とは区別します。"
+                  : state.axes === "quantile9"
+                    ? "元画像の構成を保ち、資産・収益の最高額を上位10%点へ替えた案です。平均と中央値の重複評価は残ります。"
+                    : state.axes === "reference9"
+                      ? "元画像の観点に近い参考案です。最高額の点数は試合数による更新機会に左右されます。"
+                      : "軸を減らして要約する案との比較用です。") +
         " 現在の総合点は各軸の単純平均で、金額の軸が " +
         moneyAxes +
         " / " +
         axes.length +
-        " を占めます。銀次の非遭遇率を含む案でも、回避行動の上手さを観測した値とは扱いません。";
+        " を占めます。銀次の遭遇前後の経過は記録していないため、回復量や回復速度は算出しません。";
       const omit = scope.fixedBaselineEventRemoval;
       byId("sensitivity").innerHTML =
         "<p>以下は中央値型4軸・冬の作品共通基準で確認した結果です。他の案へ切り替えてもこの診断の条件は変わりません。</p><ul><li>基準作成：" +
@@ -1192,8 +1494,9 @@
       byId("snapshot").textContent =
         "データ取得：" +
         report.snapshotAt.replace("T", " ").slice(0, 19) +
-        " UTC。実データをローカルで読み取った試作です。作品共通基準を採用し、参考画像に近く特徴が見える8・9軸案を比較中です。採用軸・計算方式・件数条件は未確定です。";
+        " UTC。実データをローカルで読み取った試作です。作品共通基準を採用し、目的地なし・別指標への置換・銀次遭遇試合の成績を比較中です。採用軸・計算方式・件数条件は未確定です。";
       renderMapComparison(t, scope, axes);
+      renderEvidence(t, scope, e);
       sync();
       renderAdmin();
     }

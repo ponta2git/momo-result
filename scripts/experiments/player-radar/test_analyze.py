@@ -22,6 +22,26 @@ def fixture():
 
 
 class Counterexamples(unittest.TestCase):
+    def test_ginji_multi_encounter_denominator_and_no_target(self):
+        source = fixture()
+        first, second = source['matches'][:2]
+        first['players'][0]['incidents']['incident_suri_no_ginji'] = 3
+        second['players'][0]['incidents']['incident_suri_no_ginji'] = 1
+        second['players'][0]['rank'], second['players'][2]['rank'] = 3, 1
+        second['players'][0]['assets'] = -30
+        players, matches = a.prepare(source)
+        values = a.player_metrics(matches, 'A')
+        self.assertEqual(values['ginji_rank'], {'value': 2, 'n': 2})
+        self.assertEqual(values['ginji_podium'], {'value': .5, 'n': 2})
+        self.assertEqual(values['ginji_assets_median'], {'value': -10, 'n': 2})
+        self.assertEqual(a.player_metrics(matches, 'B')['ginji_podium'], {'value': None, 'n': 0})
+        evidence = a.ginji_evidence(matches, 'A')
+        self.assertEqual((evidence['n'], evidence['encounters']), (2, 4))
+        self.assertEqual(evidence['rankCounts'], {'1': 1, '2': 0, '3': 1, '4': 0})
+        trial = a.conditional_window_trial(matches, matches, [p['id'] for p in players], 3)
+        self.assertEqual(trial['referenceValues']['ginji_rank'], 0)
+        self.assertIsNone(trial['holdout']['A']['ginji_rank']['score'])
+
     def test_stored_rank_ties_and_structural_no_opportunity(self):
         players, matches = a.prepare(fixture())
         winner = a.player_metrics(matches, players[0]['id'])
@@ -33,6 +53,10 @@ class Counterexamples(unittest.TestCase):
         self.assertEqual(loser['after_lower_podium'], {'value': 0, 'n': 3})
         self.assertEqual(loser['assets_mean']['value'], -10)
         self.assertEqual(winner['destination_mean']['value'], 0)
+        # Conditional opportunities can be absent in a whole analysis window.
+        # Omit the pair; never turn no opportunity into a zero-valued observation.
+        self.assertAlmostEqual(a.pearson([1, None, 3, 4], [4, 9, 2, 1]), -1)
+        self.assertIsNone(a.pearson([None, None, 3, 4], [4, 9, 2, 1]))
 
     def test_fixed_boundary_equality_direction_and_no_forced_full_score(self):
         definition = {'thresholds': list(range(2, 11))}

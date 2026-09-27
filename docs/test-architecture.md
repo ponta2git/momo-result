@@ -54,6 +54,12 @@ aggregate coverage は、PR review と推移確認の非 blocking report とす�
 
 採用・統合・廃止の判断は[テスト・品質規約](test-rule.md#2-品質証拠の採用維持削除)を参照する。現在のファイル配置・実行対象・並列数・commandは設定とCIが所有する。
 
+### API / Workerの実行境界
+
+- APIのservice suiteは通常testとコンパイル結果を共有しても、tag選択、fork、直列化を独立した設定scopeに置く。外部gateを実行した順序で後続の通常testの対象・隔離が変わらないようにする。
+- 複数adapterが同じportを実装する場合、consumerが依存する受理・拒否、返却identity、保存結果の共通契約を共有できる。DB固有のtransaction、lock、rollback、outboxは実DB suiteが所有し、非永続adapterとの共通化のためにoracleを弱めない。
+- 設定の解釈は入力を注入できる純粋境界で検証し、process全体の環境変数を書き換えて並列testを制御しない。filesystem / cgroup / child processの観測は実adapterを通す証拠として分ける。
+
 ## 4. Cross-System Contract Evidence
 
 | 契約 | 選択時の主な production boundary |

@@ -7,7 +7,10 @@ use std::{
 
 use thiserror::Error;
 
-use crate::{cgroup::ChildCgroup, pel_recovery::MAXIMUM_READ_BLOCK};
+use crate::{
+    cgroup::{CgroupError, ChildCgroup},
+    pel_recovery::MAXIMUM_READ_BLOCK,
+};
 
 const PUBLICATION_MODE_ENV: &str = "MOMO_ANALYSIS_PUBLICATION_MODE";
 const OUTBOX_LISTENER_DATABASE_URL_ENV: &str = "MOMO_ANALYSIS_OUTBOX_LISTENER_DATABASE_URL";
@@ -93,8 +96,12 @@ impl AnalysisActivationConfig {
     ///
     /// Returns an error when publication is enabled with missing, invalid, or unsafe limits.
     pub(crate) fn from_environment() -> Result<Self, AnalysisConfigError> {
-        let publication_mode = match env::var(PUBLICATION_MODE_ENV)
-            .unwrap_or_else(|_| String::from("disabled"))
+        Self::from_lookup(&|name| env::var(name).ok())
+    }
+
+    fn from_lookup(lookup: &impl Fn(&str) -> Option<String>) -> Result<Self, AnalysisConfigError> {
+        let publication_mode = match lookup(PUBLICATION_MODE_ENV)
+            .unwrap_or_else(|| String::from("disabled"))
             .trim()
         {
             "disabled" => AnalysisPublicationMode::Disabled,
@@ -110,15 +117,15 @@ impl AnalysisActivationConfig {
         }
 
         let execution_limits = AnalysisExecutionLimits {
-            runtime_memory_limit: positive("MOMO_ANALYSIS_RUNTIME_MEMORY_LIMIT_BYTES")?,
-            child_memory_limit: positive(CHILD_MEMORY_LIMIT_ENV)?,
-            parent_headroom: positive("MOMO_ANALYSIS_PARENT_HEADROOM_BYTES")?,
-            calculation_timeout: duration_millis("MOMO_ANALYSIS_CALCULATION_TIMEOUT_MS")?,
-            finalization_timeout: duration_millis("MOMO_ANALYSIS_FINALIZATION_TIMEOUT_MS")?,
-            temporary_bytes_limit: positive("MOMO_ANALYSIS_TEMPORARY_MAX_BYTES")?,
-            chunk_bytes_limit: positive("MOMO_ANALYSIS_CHUNK_MAX_BYTES")?,
-            chunk_count_limit: positive("MOMO_ANALYSIS_CHUNK_COUNT_MAX")?,
-            temporary_file_count_limit: positive("MOMO_ANALYSIS_TEMPORARY_FILE_COUNT_MAX")?,
+            runtime_memory_limit: positive(lookup, "MOMO_ANALYSIS_RUNTIME_MEMORY_LIMIT_BYTES")?,
+            child_memory_limit: positive(lookup, CHILD_MEMORY_LIMIT_ENV)?,
+            parent_headroom: positive(lookup, "MOMO_ANALYSIS_PARENT_HEADROOM_BYTES")?,
+            calculation_timeout: duration_millis(lookup, "MOMO_ANALYSIS_CALCULATION_TIMEOUT_MS")?,
+            finalization_timeout: duration_millis(lookup, "MOMO_ANALYSIS_FINALIZATION_TIMEOUT_MS")?,
+            temporary_bytes_limit: positive(lookup, "MOMO_ANALYSIS_TEMPORARY_MAX_BYTES")?,
+            chunk_bytes_limit: positive(lookup, "MOMO_ANALYSIS_CHUNK_MAX_BYTES")?,
+            chunk_count_limit: positive(lookup, "MOMO_ANALYSIS_CHUNK_COUNT_MAX")?,
+            temporary_file_count_limit: positive(lookup, "MOMO_ANALYSIS_TEMPORARY_FILE_COUNT_MAX")?,
         };
         if execution_limits
             .child_memory_limit
@@ -167,6 +174,18 @@ impl AnalysisConsumerConfig {
     pub(crate) fn from_environment(
         activation: &AnalysisActivationConfig,
     ) -> Result<Self, AnalysisConfigError> {
+        Self::from_lookup(
+            activation,
+            &|name| env::var(name).ok(),
+            ChildCgroup::from_environment,
+        )
+    }
+
+    fn from_lookup(
+        activation: &AnalysisActivationConfig,
+        lookup: &impl Fn(&str) -> Option<String>,
+        open_cgroup: impl FnOnce(u64) -> Result<ChildCgroup, CgroupError>,
+    ) -> Result<Self, AnalysisConfigError> {
         let execution_limits =
             activation
                 .execution_limits
@@ -174,12 +193,13 @@ impl AnalysisConsumerConfig {
                 .ok_or(AnalysisConfigError::MissingRuntime {
                     name: PUBLICATION_MODE_ENV,
                 })?;
-        let lease_duration = duration_millis("MOMO_ANALYSIS_LEASE_DURATION_MS")?;
-        let heartbeat_interval = duration_millis("MOMO_ANALYSIS_HEARTBEAT_INTERVAL_MS")?;
-        let heartbeat_timeout = duration_millis("MOMO_ANALYSIS_HEARTBEAT_TIMEOUT_MS")?;
-        let child_stop_grace = duration_millis("MOMO_ANALYSIS_CHILD_STOP_GRACE_MS")?;
-        let redis_block = duration_millis("MOMO_ANALYSIS_REDIS_BLOCK_MS")?;
-        let pel_recovery_interval = duration_millis("MOMO_ANALYSIS_PEL_RECOVERY_INTERVAL_MS")?;
+        let lease_duration = duration_millis(lookup, "MOMO_ANALYSIS_LEASE_DURATION_MS")?;
+        let heartbeat_interval = duration_millis(lookup, "MOMO_ANALYSIS_HEARTBEAT_INTERVAL_MS")?;
+        let heartbeat_timeout = duration_millis(lookup, "MOMO_ANALYSIS_HEARTBEAT_TIMEOUT_MS")?;
+        let child_stop_grace = duration_millis(lookup, "MOMO_ANALYSIS_CHILD_STOP_GRACE_MS")?;
+        let redis_block = duration_millis(lookup, "MOMO_ANALYSIS_REDIS_BLOCK_MS")?;
+        let pel_recovery_interval =
+            duration_millis(lookup, "MOMO_ANALYSIS_PEL_RECOVERY_INTERVAL_MS")?;
         let required_margin = heartbeat_interval
             .max(heartbeat_timeout)
             .checked_mul(3)
@@ -191,12 +211,12 @@ impl AnalysisConsumerConfig {
         if redis_block > MAXIMUM_READ_BLOCK {
             return Err(AnalysisConfigError::UnsafeRedisBlock);
         }
-        let redis_stream = env::var("MOMO_REDIS_ANALYSIS_STREAM")
-            .unwrap_or_else(|_| String::from("momo:analysis:jobs"));
-        let redis_group = env::var("MOMO_ANALYSIS_REDIS_GROUP")
-            .unwrap_or_else(|_| String::from("momo-analysis-v1"));
-        let worker_id = required_string("MOMO_ANALYSIS_WORKER_ID")?;
-        let effective_config_version = required_string("MOMO_ANALYSIS_CONFIG_VERSION")?;
+        let redis_stream = lookup("MOMO_REDIS_ANALYSIS_STREAM")
+            .unwrap_or_else(|| String::from("momo:analysis:jobs"));
+        let redis_group =
+            lookup("MOMO_ANALYSIS_REDIS_GROUP").unwrap_or_else(|| String::from("momo-analysis-v1"));
+        let worker_id = required_string(lookup, "MOMO_ANALYSIS_WORKER_ID")?;
+        let effective_config_version = required_string(lookup, "MOMO_ANALYSIS_CONFIG_VERSION")?;
         for (name, value) in [
             ("MOMO_REDIS_ANALYSIS_STREAM", redis_stream.as_str()),
             ("MOMO_ANALYSIS_REDIS_GROUP", redis_group.as_str()),
@@ -210,17 +230,21 @@ impl AnalysisConsumerConfig {
                 return Err(AnalysisConfigError::UnsafeRuntimeIdentifier { name });
             }
         }
-        let temporary_root = PathBuf::from(required_string("MOMO_ANALYSIS_TEMPORARY_ROOT")?);
+        let temporary_root =
+            PathBuf::from(required_string(lookup, "MOMO_ANALYSIS_TEMPORARY_ROOT")?);
         if !dedicated_absolute_path(&temporary_root) {
             return Err(AnalysisConfigError::UnsafeTemporaryRoot);
         }
-        let child_cgroup = ChildCgroup::from_environment(execution_limits.child_memory_limit.get())
+        let child_cgroup = open_cgroup(execution_limits.child_memory_limit.get())
             .map_err(|error| AnalysisConfigError::ChildCgroup { kind: error.kind() })?;
         Ok(Self {
-            database_url: required_string("DATABASE_URL")?,
-            outbox_listener_database_url: required_string(OUTBOX_LISTENER_DATABASE_URL_ENV)?,
-            read_database_url: required_string("MOMO_ANALYSIS_READ_DATABASE_URL")?,
-            redis_url: required_string("REDIS_URL")?,
+            database_url: required_string(lookup, "DATABASE_URL")?,
+            outbox_listener_database_url: required_string(
+                lookup,
+                OUTBOX_LISTENER_DATABASE_URL_ENV,
+            )?,
+            read_database_url: required_string(lookup, "MOMO_ANALYSIS_READ_DATABASE_URL")?,
+            redis_url: required_string(lookup, "REDIS_URL")?,
             redis_stream,
             redis_group,
             worker_id,
@@ -239,21 +263,29 @@ impl AnalysisConsumerConfig {
     }
 }
 
-fn positive(name: &'static str) -> Result<NonZeroU64, AnalysisConfigError> {
-    let raw = env::var(name).map_err(|_environment_error| AnalysisConfigError::Missing { name })?;
+fn positive(
+    lookup: &impl Fn(&str) -> Option<String>,
+    name: &'static str,
+) -> Result<NonZeroU64, AnalysisConfigError> {
+    let raw = lookup(name).ok_or(AnalysisConfigError::Missing { name })?;
     raw.parse::<u64>()
         .ok()
         .and_then(NonZeroU64::new)
         .ok_or(AnalysisConfigError::InvalidPositiveInteger { name })
 }
 
-fn duration_millis(name: &'static str) -> Result<Duration, AnalysisConfigError> {
-    positive(name).map(|value| Duration::from_millis(value.get()))
+fn duration_millis(
+    lookup: &impl Fn(&str) -> Option<String>,
+    name: &'static str,
+) -> Result<Duration, AnalysisConfigError> {
+    positive(lookup, name).map(|value| Duration::from_millis(value.get()))
 }
 
-fn required_string(name: &'static str) -> Result<String, AnalysisConfigError> {
-    env::var(name)
-        .ok()
+fn required_string(
+    lookup: &impl Fn(&str) -> Option<String>,
+    name: &'static str,
+) -> Result<String, AnalysisConfigError> {
+    lookup(name)
         .filter(|value| !value.trim().is_empty())
         .ok_or(AnalysisConfigError::MissingRuntime { name })
 }
@@ -267,14 +299,6 @@ fn dedicated_absolute_path(path: &Path) -> bool {
 }
 
 #[cfg(test)]
-#[expect(
-    unsafe_code,
-    reason = "Rust 2024 environment mutation is unsafe; tests serialize it with a global mutex"
-)]
-#[expect(
-    clippy::panic,
-    reason = "configuration fixtures abort with context when a supposedly valid setup is rejected"
-)]
 #[expect(
     clippy::expect_used,
     reason = "configuration fixtures abort with precise context when test setup is invalid"

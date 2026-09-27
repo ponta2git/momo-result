@@ -54,6 +54,8 @@ ignored_test_catalog="$(
     --list
 )"
 
+# These suites mutate shared DB control state, including release and execution-slot
+# fixtures. Keep this service scope sequential; the ordinary Rust suite stays parallel.
 for test_name in "${tests[@]}"; do
   if ! grep -Fqx "${test_name}: test" <<<"${ignored_test_catalog}"; then
     echo "Required ignored Rust test was not found: ${test_name}" >&2

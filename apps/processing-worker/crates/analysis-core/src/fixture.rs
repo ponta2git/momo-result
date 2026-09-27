@@ -7,6 +7,7 @@ use crate::{
     compute::{ComputedResourceKind, compute_all},
     contract::ScopeRef,
     model::{AnalysisInput, IncidentCounts, PlayerMatchInput},
+    payload::PayloadSetValidator,
 };
 
 const INPUT_FIXTURE: &str =
@@ -232,6 +233,46 @@ fn assert_asset_style_fixture(payload: &Value, fixture: &Value) {
             payload.pointer(payload_pointer),
             Some(fixture_value(fixture, fixture_pointer)),
             "asset-style fixture drifted at {payload_pointer}",
+        );
+    }
+}
+
+#[test]
+fn all_scopes_are_semantically_valid_and_independent_of_input_order() {
+    let mut input = boundary_input();
+    let expected = compute_all(&input);
+    let mut validator = PayloadSetValidator::new();
+    for resource in &expected {
+        validator.add_computed(resource).unwrap_or_else(|error| {
+            panic!(
+                "computed {:?} {:?} violates its publication contract: {error}",
+                resource.scope, resource.kind
+            )
+        });
+    }
+    validator
+        .finish()
+        .unwrap_or_else(|error| panic!("computed artifact is incomplete: {error}"));
+
+    // Cross match/player/event boundaries rather than only swapping adjacent equal records.
+    // The fixture reaches the model's event/match threshold and includes multiple scope types,
+    // ties in timestamps, and nonpositive denominators.
+    input.player_matches.reverse();
+    input.player_matches.rotate_left(7);
+    let actual = compute_all(&input);
+    assert_eq!(actual.len(), expected.len());
+    for (actual_resource, expected_resource) in actual.iter().zip(&expected) {
+        assert_eq!(actual_resource.scope, expected_resource.scope);
+        assert_eq!(actual_resource.kind, expected_resource.kind);
+        assert_eq!(actual_resource.item_count, expected_resource.item_count);
+        assert_eq!(
+            actual_resource.source_match_revision,
+            expected_resource.source_match_revision
+        );
+        assert_eq!(
+            actual_resource.payload, expected_resource.payload,
+            "input order changed {:?} {:?}",
+            actual_resource.scope, actual_resource.kind,
         );
     }
 }

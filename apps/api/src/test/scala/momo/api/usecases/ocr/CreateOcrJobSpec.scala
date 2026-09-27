@@ -597,6 +597,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
               matchDrafts,
               jobs.existsActiveByDraft,
               submissions,
+              IO.pure(now),
             ),
           matchDrafts = matchDrafts,
           submissions = submissions,

@@ -15,30 +15,27 @@ addCommandAlias("apiCheck", "apiQuality; testFull")
 addCommandAlias("apiFullCheck", "apiCheck; apiDbQuality; apiRedisQuality")
 // sbt 2's `test` is incremental/cached; CI and coverage need each test's actual execution.
 addCommandAlias("apiCoverage", "clean; coverage; testFull; coverageReport; coverageOff")
-addCommandAlias(
-  "apiRedisQuality",
-  "set Test / fork := true; " +
-    "set Test / testOptions := Seq(); " +
-    "testOnly * -- --include-tags=RedisIntegration",
-)
-addCommandAlias(
-  "apiR2Quality",
-  "set Test / fork := true; " +
-    "set Test / parallelExecution := false; " +
-    "set Test / testOptions := Seq(); " +
-    "testOnly * -- --include-tags=R2Integration",
-)
-addCommandAlias(
-  "apiDbQuality",
-  "set Test / fork := true; " +
-    "set Test / parallelExecution := false; " +
-    "set Test / testOptions := Seq(); " +
-    "testOnly * -- --include-tags=DbIntegration",
-)
+addCommandAlias("apiRedisQuality", "RedisTest / testFull")
+addCommandAlias("apiR2Quality", "R2Test / testFull")
+addCommandAlias("apiDbQuality", "DbTest / testFull")
 
 lazy val apiOpenApi = taskKey[File]("Generate OpenAPI from Tapir endpoint definitions")
 lazy val apiOpenApiCheck = taskKey[Unit]("Check that openapi.yaml matches generated Tapir output")
 lazy val OpenApi = config("openapi").hide.extend(Compile)
+lazy val DbTest = config("dbTest").hide.extend(Test)
+lazy val RedisTest = config("redisTest").hide.extend(Test)
+lazy val R2Test = config("r2Test").hide.extend(Test)
+
+// Reuse the compiled suite while isolating runner settings. Command aliases using `set Test / ...`
+// used to leak service tags and DB serialization into every later test command in the session.
+def serviceTestSettings(tag: String): Seq[Def.Setting[?]] = Defaults.testSettings ++ Seq(
+  fullClasspath := (Test / fullClasspath).value,
+  definedTests := (Test / definedTests).value,
+  testOptions := Seq(Tests.Argument(TestFrameworks.MUnit, s"--include-tags=$tag")),
+  fork := true,
+  envVars := (Test / envVars).value,
+  parallelExecution := true,
+)
 
 lazy val nettyVersion = "4.2.18.Final"
 lazy val http4sVersion = "0.23.37"
@@ -100,12 +97,18 @@ lazy val sharedScalacOptions = Seq(
 )
 
 lazy val root = (project in file("."))
-  .configs(OpenApi)
+  .configs(OpenApi, DbTest, RedisTest, R2Test)
   .enablePlugins(JavaAppPackaging)
   .settings(
     inConfig(OpenApi)(Defaults.compileSettings),
     org.scalafmt.sbt.ScalafmtPlugin.scalafmtConfigSettings(OpenApi),
     scalafixConfigSettings(OpenApi),
+    inConfig(DbTest)(serviceTestSettings("DbIntegration")),
+    inConfig(RedisTest)(serviceTestSettings("RedisIntegration")),
+    inConfig(R2Test)(serviceTestSettings("R2Integration")),
+    // These suites share one migrated database and truncate app tables before each case.
+    // Serialize only the DB configuration; Redis keys and R2 object keys are test-owned.
+    DbTest / parallelExecution := false,
     OpenApi / compile := Def.uncached((OpenApi / compile).dependsOn(Compile / compile).value),
     name := "momo-result-api",
     organization := "momo",

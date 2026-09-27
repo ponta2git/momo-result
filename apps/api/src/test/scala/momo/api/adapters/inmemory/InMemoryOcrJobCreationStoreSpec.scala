@@ -18,20 +18,22 @@ import momo.api.domain.{
 }
 import momo.api.ports.queue.OcrJobEnqueueRequest
 import momo.api.repositories.OcrJobCreationStore.OcrJobCreationRejection
+import momo.api.repositories.contract.OcrJobCreationStoreContract
+import momo.api.repositories.contract.OcrJobCreationStoreContract.{CreationFixture, CreationState}
 import momo.api.repositories.{
   OcrJobCreationPlan,
-  OcrJobCreationStore,
   OcrJobDraftAttachment,
   OcrJobSubmissionBinding,
   OcrQueueDispatchIntent
 }
 import momo.api.testing.AppErrorAssertions.assertAppException
 
-final class InMemoryOcrJobCreationStoreSpec extends MomoCatsEffectSuite:
-  private val now = Instant.parse("2026-05-15T00:00:00Z")
-  private val matchDraftId = MatchDraftId.unsafeFromString("match-draft-ocr-create")
-  private val imageId = ImageId.unsafeFromString("image-ocr-create")
-  private val imageLocation =
+final class InMemoryOcrJobCreationStoreSpec
+    extends MomoCatsEffectSuite with OcrJobCreationStoreContract:
+  private def now = Instant.parse("2026-05-15T00:00:00Z")
+  private def matchDraftId = MatchDraftId.unsafeFromString("match-draft-ocr-create")
+  private def imageId = ImageId.unsafeFromString("image-ocr-create")
+  private def imageLocation =
     StoredImageLocation.unsafeFromString("/tmp/momo-result/uploads/image-ocr-create.png")
 
   test("store rejects duplicate OCR drafts before attaching match draft artifacts"):
@@ -46,19 +48,6 @@ final class InMemoryOcrJobCreationStoreSpec extends MomoCatsEffectSuite:
       assertAppException(result, "CONFLICT", "ocr draft already exists")
       assertEquals(matchDraft.flatMap(_.totalAssetsDraftId), None)
       assertEquals(matchDraft.flatMap(_.totalAssetsImageId), None)
-
-  test("store returns active limit rejection without inserting OCR records"):
-    for
-      fixture <- newFixture
-      draft = ocrDraft("ocr-draft-active-limit", "ocr-job-active-limit")
-      job = queuedJob("ocr-job-active-limit", draft.id)
-      result <- fixture.store.store(plan(job, draft, attachment(draft.id), 0))
-      storedDraft <- fixture.drafts.find(draft.id)
-      storedJob <- fixture.jobs.find(job.id)
-    yield
-      assertActiveLimit(result, 0)
-      assertEquals(storedDraft, None)
-      assertEquals(storedJob, None)
 
   test("store refuses a submission whose source draft was deleted without inserting OCR records"):
     for
@@ -77,23 +66,29 @@ final class InMemoryOcrJobCreationStoreSpec extends MomoCatsEffectSuite:
       assertEquals(storedDraft, None)
       assertEquals(storedJob, None)
 
-  test("store rejects inconsistent duplicated image identity before mutation"):
+  override protected def freshCreationFixture(admissionDeadline: Instant): IO[CreationFixture] =
     for
-      fixture <- newFixture
-      draft = ocrDraft("ocr-draft-invalid-plan", "ocr-job-invalid-plan")
-      job = queuedJob("ocr-job-invalid-plan", draft.id)
-      inconsistent = attachment(draft.id).copy(
-        sourceImageId = ImageId.unsafeFromString("different-source-image")
-      )
-      result <- fixture.store.store(plan(job, draft, inconsistent, 10))
-      storedDraft <- fixture.drafts.find(draft.id)
-      storedJob <- fixture.jobs.find(job.id)
-    yield
-      assertEquals(result, Left(OcrJobCreationRejection.InvalidPlan))
-      assertEquals(storedDraft, None)
-      assertEquals(storedJob, None)
+      fixture <- newFixture(admissionDeadline)
+      draft = ocrDraft("ocr-draft-contract", "ocr-job-contract")
+      job = queuedJob("ocr-job-contract", draft.id)
+    yield CreationFixture(
+      fixture.store,
+      plan(job, draft, attachment(draft.id), 10),
+      for
+        savedJob <- fixture.jobs.find(job.id)
+        savedDraft <- fixture.drafts.find(draft.id)
+        sourceDraft <- fixture.matchDrafts.find(matchDraftId)
+        submission <- fixture.submissions.find(
+          "00000000-0000-4000-8000-000000000001",
+          AccountId.unsafeFromString("account_ponta"),
+        )
+      yield CreationState(savedJob, savedDraft, sourceDraft, submission),
+    )
 
-  private def newFixture: IO[Fixture] =
+  private def newFixture: IO[Fixture] = IO.realTimeInstant
+    .flatMap(time => newFixture(time.plusSeconds(3600)))
+
+  private def newFixture(admissionDeadline: Instant): IO[Fixture] =
     for
       drafts <- InMemoryOcrDraftsRepository.create[IO]
       jobs <- InMemoryOcrJobsRepository.create[IO]
@@ -106,7 +101,7 @@ final class InMemoryOcrJobCreationStoreSpec extends MomoCatsEffectSuite:
         matchDraftId,
         OcrJobHints.empty,
         "open",
-        now.plusSeconds(600),
+        admissionDeadline,
         now,
         None,
         List(OcrSubmissionMember(ScreenType.TotalAssets, "a" * 64, "ab" * 32, 1))
@@ -120,8 +115,9 @@ final class InMemoryOcrJobCreationStoreSpec extends MomoCatsEffectSuite:
           matchDrafts,
           jobs.existsActiveByDraft,
           submissions,
+          IO.realTimeInstant,
         )
-    yield Fixture(drafts, jobs, matchDrafts, store)
+    yield Fixture(drafts, jobs, matchDrafts, submissions, store)
 
   private def editableMatchDraft: MatchDraft = MatchDraft.fromInputs(
     id = matchDraftId,
@@ -219,17 +215,10 @@ final class InMemoryOcrJobCreationStoreSpec extends MomoCatsEffectSuite:
       activeJobLimit = activeJobLimit,
     )
 
-  private def assertActiveLimit(
-      result: OcrJobCreationStore.OcrJobCreationResult,
-      limit: Int,
-  ): Unit = result match
-    case Left(OcrJobCreationRejection.ActiveJobLimitExceeded(actualLimit)) =>
-      assertEquals(actualLimit, limit)
-    case other => fail(s"expected active limit rejection, got $other")
-
   private final case class Fixture(
       drafts: InMemoryOcrDraftsRepository[IO],
       jobs: InMemoryOcrJobsRepository[IO],
       matchDrafts: InMemoryMatchDraftsRepository[IO],
+      submissions: InMemoryOcrSubmissionsRepository[IO],
       store: InMemoryOcrJobCreationStore[IO],
   )

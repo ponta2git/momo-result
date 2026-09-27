@@ -188,7 +188,7 @@ final class PostgresOcrSubmissionsRepositorySpec extends IntegrationSuite:
     for
       _ <- seedDraft
       _ <- repository.put(proposed)
-      locked <- Deferred[IO, Int]
+      locked <- Deferred[IO, Either[Throwable, Int]]
       release <- Deferred[IO, Unit]
       result <-
         Resource.fromAutoCloseable(IO.blocking(dataSource.getConnection)).use { connection =>
@@ -204,7 +204,7 @@ final class PostgresOcrSubmissionsRepositorySpec extends IntegrationSuite:
                   s"UPDATE ocr_submission_members SET status = 'failed', failure_code = 'admission_failed' WHERE submission_id = '${proposed.id}'"
                 )
                 statement.executeUpdate(
-                  s"UPDATE ocr_submissions SET status = 'settled', finished_at = clock_timestamp() WHERE id = '${proposed.id}'"
+                  s"UPDATE ocr_submissions SET status = 'settled', finished_at = GREATEST(created_at, clock_timestamp()) WHERE id = '${proposed.id}'"
                 )
                 val rows = statement.executeQuery("SELECT pg_backend_pid()")
                 try
@@ -212,11 +212,13 @@ final class PostgresOcrSubmissionsRepositorySpec extends IntegrationSuite:
                   rows.getInt(1)
                 finally rows.close()
               finally statement.close()
-            }.flatMap(locked.complete) *> release.get *> IO.blocking(connection.commit()))
+            }.flatMap(pid => locked.complete(Right(pid))) *> release.get *>
+              IO.blocking(connection.commit()))
+              .onError { case error => locked.complete(Left(error)).void }
               .guarantee(IO.blocking(connection.rollback()))
           writer.background.use { completed =>
             for
-              pid <- locked.get
+              pid <- locked.get.rethrow
               response <- repository.find(proposed.id, owner).background.use { reading =>
                 (awaitBackendBlockedBy(pid) *> release.complete(()) *>
                   reading.flatMap(_.embedNever))

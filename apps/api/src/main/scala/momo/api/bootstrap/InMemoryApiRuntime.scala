@@ -177,6 +177,7 @@ private[bootstrap] object InMemoryApiRuntime:
         matchDrafts,
         jobs.existsActiveByDraft,
         ocrSubmissions,
+        Clock[F].realTimeInstant,
       )
       imageReferences: ImageReferenceRepository[F] =
         InMemoryImageReferenceRepository[F](jobs, matchDrafts)

@@ -1,5 +1,7 @@
 package momo.api.adapters.inmemory
 
+import java.time.Instant
+
 import cats.MonadThrow
 import cats.data.EitherT
 import cats.effect.Async
@@ -28,6 +30,7 @@ final class InMemoryOcrJobCreationStore[F[_]: Async](
     matchDrafts: MatchDraftsRepository[F],
     activeJobForDraft: OcrDraftId => F[Boolean],
     submissions: InMemoryOcrSubmissionsRepository[F],
+    now: F[Instant],
 ) extends OcrJobCreationStore[F]:
   override def store(plan: OcrJobCreationPlan): F[OcrJobCreationStore.OcrJobCreationResult] =
     submissions.serialized {
@@ -40,7 +43,7 @@ final class InMemoryOcrJobCreationStore[F[_]: Async](
       : F[OcrJobCreationStore.OcrJobCreationResult] =
     submissions.find(plan.submission.submissionId, plan.submission.ownerAccountId).flatMap {
       case None => OcrJobCreationRejection.SubmissionRejected.asLeft[StoredOcrJob].pure[F]
-      case Some(submission) =>
+      case Some(submission) if submission.matchDraftId == plan.matchDraftAttachment.draftId =>
         submission.members.find(_.screenType == plan.job.requestedScreenType) match
           case Some(member) if member.jobId.nonEmpty =>
             (for
@@ -58,17 +61,18 @@ final class InMemoryOcrJobCreationStore[F[_]: Async](
             yield StoredOcrJob(job, draft, false)).value
           case Some(member)
               if submission.status == "open" && member.status == "pending" &&
-                submission.matchDraftId == plan.matchDraftAttachment.draftId &&
-                plan.job.createdAt.isBefore(submission.admissionDeadline) &&
                 member.imageSha256 == plan.queueDispatch.enqueueRequest.imageSha256 &&
                 member.imageByteLength.toLong ==
                 plan.queueDispatch.enqueueRequest.imageByteLength =>
-            matchDrafts.find(plan.matchDraftAttachment.draftId).flatMap {
-              case Some(draft) if draft.createdByAccountId == plan.submission.ownerAccountId =>
+            (now, matchDrafts.find(plan.matchDraftAttachment.draftId)).tupled.flatMap {
+              case (currentTime, Some(draft))
+                  if currentTime.isBefore(submission.admissionDeadline) &&
+                    draft.createdByAccountId == plan.submission.ownerAccountId =>
                 create(plan)
               case _ => OcrJobCreationRejection.SubmissionRejected.asLeft[StoredOcrJob].pure[F]
             }
           case _ => OcrJobCreationRejection.SubmissionRejected.asLeft[StoredOcrJob].pure[F]
+      case Some(_) => OcrJobCreationRejection.SubmissionRejected.asLeft[StoredOcrJob].pure[F]
     }
 
   private def create(plan: OcrJobCreationPlan): F[OcrJobCreationStore.OcrJobCreationResult] =

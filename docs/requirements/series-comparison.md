@@ -8,7 +8,7 @@
 | --- | --- |
 | 本ページのscope、指標の意味、表示上の判断 | 本書 |
 | オーナー別比較の初版範囲、指標、件数・表示 | `docs/requirements/series-owner-comparison.md` |
-| プレーヤーレーダーの基本要求と採点設計の先行試作（未実装） | `docs/requirements/series-player-radar.md` |
+| プレーヤーレーダーの軸・総合評価・採点基準と先行試作（未実装） | `docs/requirements/series-player-radar.md` |
 | 「次戦に備える」の行動プレイブック | `docs/requirements/series-review-playbook.md` |
 | 非同期計算、artifact、状態、管理、公開・復旧 | `docs/requirements/series-analysis-batch.md` |
 | HTTP / artifact shape | Tapir endpoint、JSON Schema |
@@ -62,6 +62,7 @@ endpoint path、DTO field、component構成、query cache key、閾値の配置�
 
 - URLは作品、season、map、view、選択試合を復元する。無効値は別scopeへ推測変換せず、安全な既定値へ正規化して理由を示す。
 - オーナー比較への到達と選択指標のURL復元は [オーナー別戦績比較](series-owner-comparison.md#別端末で同じ話題を見る) に従う。
+- 「今の差」へ追加するレーダー比較は [プレーヤーレーダー](series-player-radar.md) に従う。総合点・総合評価順位とその同率・件数条件は同仕様を正本とし、既存の平均順位・勝率・指標内の値順位と区別する。
 - view切替だけで集計scopeを変えない。作品・season・map変更時は選択試合を解除する。
 - 根拠試合の選択中は4人の結果と分析上の位置を一貫して示す。試合粒度で一意に対応できない指標へ目印を捏造しない。
 - 対象試合のrevisionまたは作品所属がartifactと異なる場合、一次データは維持し、古い派生分析だけを隠す。

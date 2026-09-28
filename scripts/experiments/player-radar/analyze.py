@@ -75,7 +75,6 @@ MIN_FULL_MATCHES = 40
 MIN_FULL_EVENTS = 8
 
 
-
 def quantile(values, probability):
     """Linear interpolation at (n-1)*p, including both endpoints."""
     if not values:
@@ -136,7 +135,12 @@ def player_metrics(matches, player_id):
     rows = [m['_players'][player_id] for m in matches]
     n = len(rows)
     if not n:
-        return {key: {'value': None, 'n': 0} for key in METRICS}
+        return {key: {'value': None, 'n': 0, 'events': 0} for key in METRICS}
+    event_by_row = {id(m['_players'][player_id]): m['eventId'] for m in matches}
+
+    def entry(value, subset=rows):
+        return {'value': value, 'n': len(subset),
+                'events': len({event_by_row[id(row)] for row in subset})}
     rank = [p['rank'] for p in rows]
     assets = [p['assets'] for p in rows]
     revenue = [p['revenue'] for p in rows]
@@ -162,17 +166,16 @@ def player_metrics(matches, player_id):
         'non_revenue_delta': mean([a - b for a, b in zip(revenue_rank, rank)]),
         'destination_delta': mean([a - b for a, b in zip(destination_rank, rank)]),
     }
-    answer = {key: {'value': value, 'n': n} for key, value in result.items()}
+    answer = {key: entry(value) for key, value in result.items()}
     for field in ('plus_station', 'minus_station', 'card_station', 'card_shop'):
-        answer[field + '_mean'] = {'value': mean([p['incidents'].get('incident_' + field, 0) for p in rows]), 'n': n}
+        answer[field + '_mean'] = entry(mean([p['incidents'].get('incident_' + field, 0) for p in rows]))
     for key, subset, field in [('top_revenue_win', top, 'win'), ('low_revenue_podium', low, 'podium'),
                                ('zero_destination_podium', zero, 'podium'), ('ginji_rank', ginji, 'rank'),
                                ('ginji_podium', ginji, 'podium'),
                                ('after_lower_podium', after_lower, 'podium')]:
         values = [p['rank'] if field == 'rank' else (p['rank'] == 1 if field == 'win' else p['rank'] <= 2) for p in subset]
-        answer[key] = {'value': mean(values), 'n': len(subset)}
-    answer['ginji_assets_median'] = {'value': statistics.median([p['assets'] for p in ginji]) if ginji else None,
-                                    'n': len(ginji)}
+        answer[key] = entry(mean(values), subset)
+    answer['ginji_assets_median'] = entry(statistics.median([p['assets'] for p in ginji]) if ginji else None, ginji)
     return answer
 
 
@@ -252,8 +255,10 @@ def evaluate(matches, ids, baseline, full_min=MIN_FULL_MATCHES, event_min=MIN_FU
             status = ('no_target' if not item['n'] else 'insufficient_sample') if point is None else 'ready'
             if point is None and item['n'] >= MIN_SCORE_MATCHES:
                 status = baseline['axes'][key]['status']
-            if point is not None and (item['n'] < full_min or events < event_min):
+            if point is not None and (item['n'] < full_min or item['events'] < event_min):
                 status = 'reference'
+            if point is not None and baseline.get('conditionalWindow') and key.startswith('ginji_'):
+                status = 'reference_experimental'
             if point is not None and key in ('assets_max', 'revenue_max') and n != baseline.get('window', n):
                 status = 'reference_opportunity'
             scored[pid][key] = {**item, 'score': point, 'status': status}
@@ -367,7 +372,7 @@ def conditional_window_trial(calibration, holdout, ids, window, method='spread')
 def analyze(source):
     players, matches = prepare(source)
     ids = [p['id'] for p in players]
-    report = {'schemaVersion': 'mom30-report-v2', 'snapshotAt': source['snapshotAt'], 'players': players,
+    report = {'schemaVersion': 'mom30-report-v3', 'snapshotAt': source['snapshotAt'], 'players': players,
               'provenance': source.get('provenance'), 'totalMatchCount': len(matches),
               'metrics': {key: {'label': label, 'direction': direction, 'unit': unit} for key, (label, direction, unit) in METRICS.items()},
               'axisSets': AXIS_SETS, 'diagnosticAxisSet': DIAGNOSTIC_AXIS_SET,
@@ -379,8 +384,9 @@ def analyze(source):
         title_matches = [m for m in matches if m['titleId'] == title['id']]
         season_ids = list(dict.fromkeys(m['seasonId'] for m in title_matches))
         map_ids = list(dict.fromkeys(m['mapId'] for m in title_matches))
-        calibration = [m for m in title_matches if m['seasonId'] == season_ids[0]]
-        holdout = [m for m in title_matches if m['seasonId'] != season_ids[0]]
+        first_season = season_ids[0] if season_ids else None
+        calibration = [m for m in title_matches if m['seasonId'] == first_season]
+        holdout = [m for m in title_matches if m['seasonId'] != first_season]
         if holdout and (calibration[-1]['playedAt'] >= holdout[0]['playedAt'] or {m['eventId'] for m in calibration} & {m['eventId'] for m in holdout}):
             raise ValueError('Earliest-season split is not a chronological event-disjoint holdout')
         baselines = {}
@@ -401,8 +407,6 @@ def analyze(source):
         scopes = []
         for sid, mid in itertools.product([None] + season_ids, [None] + map_ids):
             selected = [m for m in title_matches if (sid is None or m['seasonId'] == sid) and (mid is None or m['mapId'] == mid)]
-            if not selected:
-                continue
             evaluations = {}
             for period, method, mode in itertools.product(('initial', 'updated', 'candidate'), ('spread', 'quantile'), ('common', 'separate', 'hybrid')):
                 common = baselines['|'.join([period, method, 'all'])]
@@ -410,7 +414,8 @@ def analyze(source):
                 baseline = combine_baseline(common, per_map, mode)
                 evaluations['|'.join([period, method, mode])] = evaluate(selected, ids, baseline)
             scopes.append({'id': (sid or 'all') + '|' + (mid or 'all'), 'seasonId': sid, 'mapId': mid,
-                           'from': selected[0]['playedAt'], 'to': selected[-1]['playedAt'],
+                           'from': selected[0]['playedAt'] if selected else None,
+                           'to': selected[-1]['playedAt'] if selected else None,
                            'ginjiEvidence': {pid: ginji_evidence(selected, pid) for pid in ids},
                            'ginjiEvaluations': {key: evaluate(selected, ids, value) for key, value in ginji_baselines.items()},
                            'n': len(selected), 'events': len({m['eventId'] for m in selected}), 'evaluations': evaluations})
@@ -495,7 +500,7 @@ def analyze(source):
                 'matches': [(m['id'], m['revision']) for m in review_matches]}, sort_keys=True).encode()).hexdigest()[:16]}
         report['titles'].append({**title, 'maps': [m for m in source['maps'] if m['id'] in map_ids],
             'seasons': [s for s in source['seasons'] if s['id'] in season_ids],
-            'calibrationSeasonId': season_ids[0], 'calibrationMatches': len(calibration), 'holdoutMatches': len(holdout),
+            'calibrationSeasonId': first_season, 'calibrationMatches': len(calibration), 'holdoutMatches': len(holdout),
             'calibrationEvents': len({m['eventId'] for m in calibration}), 'holdoutEvents': len({m['eventId'] for m in holdout}),
             'baselines': baselines, 'ginjiBaselines': ginji_baselines,
             'scopes': scopes, 'correlations': correlation, 'correlationObservations': len(observations),
@@ -513,8 +518,9 @@ def analyze(source):
                 'meanPointChange': mean([v['meanAbsoluteChange'] for v in calibration_changes if v['meanAbsoluteChange'] is not None])}})
     all_scopes = [scope for title in report['titles'] for scope in title['scopes']]
     report['candidateCoverage'] = {
-        key: {'qualifiedScopes': sum(scope['events'] >= MIN_FULL_EVENTS and
-             all(scope['evaluations']['initial|spread|common']['raw'][pid][key]['n'] >= MIN_FULL_MATCHES for pid in ids)
+        key: {'qualifiedScopes': sum(all(
+             scope['evaluations']['initial|spread|common']['raw'][pid][key]['events'] >= MIN_FULL_EVENTS and
+             scope['evaluations']['initial|spread|common']['raw'][pid][key]['n'] >= MIN_FULL_MATCHES for pid in ids)
              for scope in all_scopes), 'totalScopes': len(all_scopes)} for key in METRICS}
     return report
 

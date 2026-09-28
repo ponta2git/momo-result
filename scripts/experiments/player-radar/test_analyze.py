@@ -31,10 +31,10 @@ class Counterexamples(unittest.TestCase):
         second['players'][0]['assets'] = -30
         players, matches = a.prepare(source)
         values = a.player_metrics(matches, 'A')
-        self.assertEqual(values['ginji_rank'], {'value': 2, 'n': 2})
-        self.assertEqual(values['ginji_podium'], {'value': .5, 'n': 2})
-        self.assertEqual(values['ginji_assets_median'], {'value': -10, 'n': 2})
-        self.assertEqual(a.player_metrics(matches, 'B')['ginji_podium'], {'value': None, 'n': 0})
+        self.assertEqual(values['ginji_rank'], {'value': 2, 'n': 2, 'events': 1})
+        self.assertEqual(values['ginji_podium'], {'value': .5, 'n': 2, 'events': 1})
+        self.assertEqual(values['ginji_assets_median'], {'value': -10, 'n': 2, 'events': 1})
+        self.assertEqual(a.player_metrics(matches, 'B')['ginji_podium'], {'value': None, 'n': 0, 'events': 0})
         evidence = a.ginji_evidence(matches, 'A')
         self.assertEqual((evidence['n'], evidence['encounters']), (2, 4))
         self.assertEqual(evidence['rankCounts'], {'1': 1, '2': 0, '3': 1, '4': 0})
@@ -46,11 +46,11 @@ class Counterexamples(unittest.TestCase):
         players, matches = a.prepare(fixture())
         winner = a.player_metrics(matches, players[0]['id'])
         loser = a.player_metrics(matches, players[-1]['id'])
-        self.assertEqual(winner['rank_mean'], {'value': 1, 'n': 4})
-        self.assertEqual(winner['top_revenue_win'], {'value': 1, 'n': 4})
-        self.assertEqual(winner['low_revenue_podium'], {'value': None, 'n': 0})
-        self.assertEqual(winner['after_lower_podium'], {'value': None, 'n': 0})
-        self.assertEqual(loser['after_lower_podium'], {'value': 0, 'n': 3})
+        self.assertEqual(winner['rank_mean'], {'value': 1, 'n': 4, 'events': 1})
+        self.assertEqual(winner['top_revenue_win'], {'value': 1, 'n': 4, 'events': 1})
+        self.assertEqual(winner['low_revenue_podium'], {'value': None, 'n': 0, 'events': 0})
+        self.assertEqual(winner['after_lower_podium'], {'value': None, 'n': 0, 'events': 0})
+        self.assertEqual(loser['after_lower_podium'], {'value': 0, 'n': 3, 'events': 1})
         self.assertEqual(loser['assets_mean']['value'], -10)
         self.assertEqual(winner['destination_mean']['value'], 0)
         # Conditional opportunities can be absent in a whole analysis window.
@@ -113,6 +113,39 @@ class Counterexamples(unittest.TestCase):
         self.assertEqual(selected['axes']['rank_mean']['status'], 'ready')
         self.assertIsNone(selected['axes']['assets_mean']['thresholds'])
         self.assertIsNone(a.score(500, selected['axes']['assets_mean'], 1))
+
+    def test_conditional_quality_counts_only_eligible_events(self):
+        source = fixture()
+        for match in source['matches'][:3]:
+            match['players'][0]['incidents']['incident_suri_no_ginji'] = 1
+        source['matches'][-1]['eventId'] = 'another-event'
+        players, matches = a.prepare(source)
+        baseline = {'axes': {key: {'status': 'ready', 'thresholds': list(range(2, 11))}
+                             for key, (_, direction, _) in a.METRICS.items() if direction}}
+        scored = a.evaluate(matches, [p['id'] for p in players], baseline, full_min=3, event_min=2)['scores']['A']
+        self.assertEqual(scored['rank_mean']['status'], 'ready')
+        self.assertEqual(scored['ginji_rank']['n'], 3)
+        self.assertEqual(scored['ginji_rank']['events'], 1)
+        self.assertEqual(scored['ginji_rank']['status'], 'reference')
+        exploratory = a.evaluate(matches, [p['id'] for p in players], {**baseline, 'conditionalWindow': 5}, full_min=3, event_min=1)
+        self.assertEqual(exploratory['scores']['A']['ginji_rank']['status'], 'reference_experimental')
+
+    def test_empty_scope_and_unrecorded_title_remain_explicit(self):
+        source = fixture()
+        source['titles'] = [{'id': 'title', 'name': 'Title'}, {'id': 'empty', 'name': 'No records'}]
+        source['seasons'] = [{'id': 'winter', 'name': 'Winter'}, {'id': 'spring', 'name': 'Spring'}]
+        source['maps'] = [{'id': 'map', 'name': 'First'}, {'id': 'new-map', 'name': 'Second'}]
+        source['snapshotAt'] = '2026-03-01T00:00:00Z'
+        source['matches'][-1].update(playedAt='2026-02-01T00:00:00Z', eventId='later', seasonId='spring', mapId='new-map')
+        report = a.analyze(source)
+        for title_id, scope_id in [('title', 'winter|new-map'), ('empty', 'all|all')]:
+            title = next(t for t in report['titles'] if t['id'] == title_id)
+            scope = next(s for s in title['scopes'] if s['id'] == scope_id)
+            self.assertEqual(scope['n'], 0)
+            self.assertIsNone(scope['from'])
+            value = scope['evaluations']['initial|spread|common']['scores']['A']['rank_mean']
+            self.assertIsNone(value['score'])
+            self.assertEqual(value['status'], 'no_target')
 
     def test_incomplete_export_and_roster_mismatch_fail_closed(self):
         source = fixture()

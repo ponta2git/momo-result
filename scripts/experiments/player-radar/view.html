@@ -418,34 +418,38 @@
         padding: 16px;
       }
     }
-    @media (max-width: 600px) {
-      #values,
-      .comparison-table {
-        table-layout: fixed;
-      }
-      #values th,
-      #values td,
-      .comparison-table th,
-      .comparison-table td {
-        padding: 10px 3px;
-        white-space: normal;
-      }
-      #values th,
-      .comparison-table th {
-        font-size: 11px;
-      }
-      #values th:first-child,
-      .comparison-table th:first-child {
-        width: 72px;
-      }
-      #values .sub,
-      .comparison-table .sub {
-        font-size: 10px;
-      }
-      #values .point,
-      .comparison-table .point {
-        font-size: 15px;
-      }
+    #values,
+    .comparison-table {
+      min-width: 620px;
+      table-layout: fixed;
+    }
+    #values th:first-child,
+    .comparison-table th:first-child {
+      width: 140px;
+      white-space: normal;
+    }
+    #values .sub,
+    .comparison-table .sub {
+      font-size: 12px;
+      white-space: normal;
+    }
+    .section > summary {
+      font-size: 18px;
+    }
+    .axis-definition {
+      scroll-margin-top: 16px;
+    }
+    .chart-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 20px;
+    }
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
     }
   </style>
   <header>
@@ -458,10 +462,6 @@
         各観点の成績と、得点の揃い方を見ます。外側ほど好成績です。
       </p>
       <p id="data-origin" class="control-copy"></p>
-      <details>
-        <summary>取得した本番記録の内訳</summary>
-        <div id="provenance-details"></div>
-      </details>
       <div class="filters">
         <label>作品<select id="title"></select></label>
         <label>シーズン<select id="season"></select></label>
@@ -472,26 +472,57 @@
           <p id="scope-caption"></p>
           <small id="baseline-caption"></small>
         </div>
-        <a id="numeric-link" href="#numeric">数値で比較</a>
+        <div class="chart-links">
+          <a id="numeric-link" href="#numeric">数値で比較</a
+          ><a id="meaning-link" href="#axis-help">軸の意味</a>
+        </div>
       </div>
+      <p id="selection-notice" class="notice" hidden></p>
+      <p id="scope-update" class="visually-hidden" role="status" aria-live="polite"></p>
       <div id="quality" class="notice" hidden></div>
-      <div class="actions" id="current-variants" aria-label="今回の比較案">
-        <button data-axis-preview="no_destination6">検討を進める案：目的地なし（6軸）</button>
-        <button data-axis-preview="ginji7">銀次を加えた参考案</button>
+      <p id="current-variants" class="control-copy"></p>
+      <div id="empty-scope" class="notice" hidden>
+        <p>この条件の確定試合はありません。採点せず、選択条件を保持しています。</p>
+        <button id="show-all">この作品の全記録を見る</button>
       </div>
       <div id="players" class="players"></div>
       <p class="footnote">
-        選んだ観点での万能性を読み取る図です。低い点数で形が揃っているだけでは高評価になりません。図形の面積で強さを順位づけしません。
+        外側ほど好成績。白抜きの点・破線・「参考」は件数不足などの参考値です。各軸の1点差は同じ大きさの能力差を意味しません。面積や形の均一さで順位づけしません。
       </p>
       <details id="numeric">
         <summary>数値で比較・元の成績を確認</summary>
+        <p class="control-copy">
+          指標名から意味を確認できます。表は横にスクロールできます。元の値は表示時のみ丸め、採点は丸める前の値で行います。
+        </p>
         <div class="scroll" tabindex="0" aria-label="4人の点数と元の成績">
           <table id="values"></table>
         </div>
       </details>
 
-      <section class="section" id="six-axis-study">
-        <h2>目的地なしの6軸を深める</h2>
+      <details id="axis-help">
+        <summary>軸の意味・採点の境界</summary>
+        <p class="control-copy">
+          この図は選んだ観点での成績の幅を表します。6つの独立した能力を測っているわけではありません。低い点数で形だけが均等でも、高い万能性とは読みません。1点・10点は表示の下限・上限で、それを超える違いは元の値で確認します。
+        </p>
+        <div id="axis-definitions"></div>
+        <details>
+          <summary>各点数の境界を照合する</summary>
+          <p class="control-copy">
+            2〜10点へ上がる境界です。平均順位など小さいほど良い軸は以下、ほかは以上で該当します。同じ境界なら高い点に入ります。表示時だけ丸めています。
+          </p>
+          <div class="scroll" tabindex="0" aria-label="各点数の採点境界">
+            <table id="thresholds"></table>
+          </div>
+        </details>
+      </details>
+      <details>
+        <summary>取得した記録・表示対象の内訳</summary>
+        <div id="scope-composition"></div>
+        <div id="provenance-details"></div>
+      </details>
+
+      <details class="section" id="six-axis-study">
+        <summary>設計の検証：6軸の役割と点数の変わりやすさ</summary>
         <p class="control-copy">
           目的地なしの方向で、各観点の成績と得点の揃い方を確認します。6軸の最終採用と採点方法は、まだ確定していません。
         </p>
@@ -521,10 +552,10 @@
           <summary>基準を作る試合のまとめ方・軸の重なりを確認する</summary>
           <div id="six-calibration"></div>
         </details>
-      </section>
+      </details>
 
-      <section class="section" id="ginji-comparison">
-        <h2>銀次に遭遇した試合で残した成績</h2>
+      <details class="section" id="ginji-comparison">
+        <summary>補助比較：銀次に遭遇した試合で残した成績</summary>
         <p class="control-copy">
           リカバーを考えるための候補です。記録にあるのは遭遇回数と最終結果なので、遭遇した時刻、被害額、その後に取り戻した金額は分かりません。1試合で何回遭遇しても、下の割合では1試合として数えます。
         </p>
@@ -545,10 +576,10 @@
             <table id="ginji-matches"></table>
           </div>
         </details>
-      </section>
+      </details>
 
-      <section class="section">
-        <h2>採点案を比べる</h2>
+      <details class="section" id="alternatives">
+        <summary>設計の検証：別の軸・採点案と比較する</summary>
         <p class="control-copy">
           以下は採用案を決めるための試作専用の選択肢です。一般利用者が自由に軸や基準を設定する機能にはしません。まだ採用していない案を含みます。
         </p>
@@ -595,18 +626,9 @@
         </div>
         <p class="control-copy" id="method-caption"></p>
         <p class="notice" id="axes-caption"></p>
-        <details id="map-comparison" open>
+        <details id="map-comparison">
           <summary>作品共通とマップ別を同じ成績で比べる</summary>
           <div id="map-comparison-content"></div>
-        </details>
-        <details>
-          <summary>採点の境界を見る</summary>
-          <p class="control-copy">
-            2〜10点へ上がる境界です。平均順位は以下、それ以外は以上で該当します。境界は表示時だけ丸め、採点は元の値で行っています。
-          </p>
-          <div class="scroll" tabindex="0" aria-label="各点数の採点境界">
-            <table id="thresholds"></table>
-          </div>
         </details>
         <details>
           <summary>全候補の指標・対象件数を見る</summary>
@@ -621,15 +643,16 @@
           <summary>安定性と比較上の制約を見る</summary>
           <div id="sensitivity"></div>
         </details>
-      </section>
+      </details>
 
-      <section class="section" id="admin">
+      <details class="section" id="admin">
+        <summary>管理操作の試作：基準の見直し</summary>
         <div class="admin-mode">
           <h2>基準の見直し</h2>
           <span class="status-label">管理操作の試作</span>
         </div>
         <p class="admin-caption muted">
-          冬の基準から、その後の記録を含む候補へ更新する例です。比較には春の全マップの同じ記録を使います。候補・適用状態はこの画面内にだけ保存されます。
+          冬の基準から、その後の記録を含む候補へ更新する例です。比較には春の全マップの同じ記録を使います。候補・適用状態はこのブラウザーに保存し、適用結果はこの管理欄の比較表に表示します。主図は上で選んだ採点案を表示する別の比較です。
         </p>
         <details>
           <summary>見直しの目安を試す（採用前の案）</summary>
@@ -676,7 +699,7 @@
         <div class="actions">
           <button id="prepare" class="primary">基準候補を計算する</button
           ><button id="fail-next">計算失敗の例を試す</button
-          ><button id="reset-admin">試作を最初に戻す</button>
+          ><button id="reset-admin">管理操作を最初に戻す</button>
         </div>
         <div id="admin-state" class="state" role="status" aria-live="polite"></div>
         <div id="preview" hidden>
@@ -693,7 +716,7 @@
           ><button id="refresh-preview" hidden>比較を更新して確認する</button>
         </div>
         <button id="restore" hidden>直前の基準への比較を確認する</button>
-      </section>
+      </details>
     </div>
   </main>
   <footer id="snapshot"></footer>
@@ -708,16 +731,19 @@
         /[&<>"']/g,
         (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
       );
-    const selected = new URLSearchParams(location.search);
-    let state = {
-      title: selected.get("title") || report.titles[0].id,
-      season: selected.get("season"),
-      map: selected.get("map") || "all",
-      axes: selected.get("axes") || "no_destination6",
-      method: selected.get("method") || "spread",
-      mode: selected.get("mode") || "common",
-      period: selected.get("period") || "initial",
-    };
+    function stateFromUrl() {
+      const selected = new URLSearchParams(location.search);
+      return {
+        title: selected.get("title") || report.titles[0].id,
+        season: selected.get("season"),
+        map: selected.get("map") || "all",
+        axes: selected.get("axes") || "no_destination6",
+        method: selected.get("method") || "spread",
+        mode: selected.get("mode") || "common",
+        period: selected.get("period") || "initial",
+      };
+    }
+    let state = stateFromUrl();
     const title = () => report.titles.find((t) => t.id === state.title) || report.titles[0];
     const option = (value, label, active) =>
       '<option value="' +
@@ -754,13 +780,13 @@
       ginji_rank: "銀次試合順位",
       assets_mean: "平均総資産",
       assets_median: "資産中央値",
-      assets_p10: "下位資産",
-      assets_p90: "上位資産",
+      assets_p10: "資産P10",
+      assets_p90: "資産P90",
       assets_max: "最高資産",
       revenue_mean: "平均収益",
       revenue_median: "収益中央値",
       revenue_max: "最高収益",
-      revenue_p90: "上位収益",
+      revenue_p90: "収益P90",
       destination_mean: "目的地",
       ginji_avoid: "銀次非遭遇",
     };
@@ -771,9 +797,58 @@
       degenerate_reference: "分布が偏り採点できません",
       insufficient_reference: "基準となる値が不足",
       reference: "参考",
+      reference_experimental: "条件付き基準の試作・参考",
       reference_opportunity: "更新機会が異なる参考値",
       ready: "",
     };
+    const axisMeaning = {
+      rank_mean:
+        "対象試合の保存済み順位の平均です。小さいほど好成績。勝率と同じ指標ではありません。",
+      revenue_mean:
+        "全試合の物件収益の平均です。大きな収益の試合も平均を押し上げます。収益の稼ぎ方や効率を観測した値ではありません。",
+      revenue_p90:
+        "物件収益を小さい順に並べた90%の位置（P90）です。高い側の境界を見ます。上位10%の平均や最高額ではありません。",
+      assets_p10:
+        "総資産を小さい順に並べた10%の位置（P10）です。資産が少なかった側の境界を見ます。3・4位の試合だけを抽出した値や、被害後の回復力ではありません。",
+      assets_median:
+        "全試合の総資産を小さい順に並べた真ん中の水準です。偶数件では中央2値の平均を使います。",
+      assets_p90:
+        "総資産を小さい順に並べた90%の位置（P90）です。大きな資産を残せた側の境界を見ます。勝利した試合だけの値や最高額ではありません。",
+      ginji_rank:
+        "銀次に遭遇した試合の保存済み順位の平均です。遭遇時刻や被害額がないため、実際に取り戻した量・回復速度は分かりません。",
+      assets_mean: "全試合の総資産の平均です。大勝した試合も平均に影響します。",
+      assets_max: "対象試合で最も大きい総資産です。試合数が多いほど更新の機会が増えます。",
+      revenue_max: "対象試合で最も大きい物件収益です。試合数が多いほど更新の機会が増えます。",
+      revenue_median: "全試合の物件収益の中央値です。偶数件では中央2値の平均を使います。",
+      destination_mean:
+        "目的地到着回数を対象試合数で割った値です。目的地を選ばない戦略もあるため、以前の比較案として残しています。",
+      ginji_avoid:
+        "銀次に遭遇しなかった試合の割合です。遭遇機会の総数は記録されていません。以前の比較案です。",
+      win_rate: "保存順位1位の試合数を対象試合数で割った割合です。平均順位と評価内容が重なります。",
+      after_lower_podium:
+        "選択条件内の前戦が3・4位だったとき、次戦を1・2位で終えた割合です。試合中の逆転ではありません。",
+    };
+    function qualityReason(value) {
+      if (value.status === "reference")
+        return (
+          "参考：対象" +
+          value.n +
+          "試合・" +
+          value.events +
+          "開催。仮の目安は" +
+          report.policy.minimumFullMatches +
+          "試合・" +
+          report.policy.minimumFullEvents +
+          "開催です。"
+        );
+      if (value.status === "insufficient_sample")
+        return "採点に必要な対象" + report.policy.minimumScoreMatches + "試合に達していません。";
+      return statusLabel[value.status] || "";
+    }
+    const pointLabel = (value) =>
+      value.score === null
+        ? "未採点"
+        : value.score + (value.status === "ready" ? "点" : "点（参考）");
     function baselineFor(t) {
       if (state.axes === "ginji7") return t.ginjiBaselines[state.period + "|" + state.method];
       const common = t.baselines[state.period + "|" + state.method + "|all"];
@@ -806,8 +881,25 @@
       });
       let out =
         '<svg class="radar" viewBox="0 0 300 280" role="img" aria-label="' +
-        esc(player.name + context) +
-        'のレーダー。各軸の点数は数値表でも確認できます。">';
+        esc(
+          player.name +
+            context +
+            "。" +
+            axes
+              .map((key) => {
+                const value = evaluation.scores[player.id][key];
+                return (
+                  report.metrics[key].label +
+                  "：" +
+                  pointLabel(value) +
+                  "。" +
+                  (value.score === null ? qualityReason(value) : "")
+                );
+              })
+              .join(" ") +
+            " 元の値・対象件数・理由は数値表で確認できます。",
+        ) +
+        '">';
       for (const level of [2, 4, 6, 8, 10]) {
         out +=
           '<polygon fill="none" stroke="var(--grid)" points="' +
@@ -838,41 +930,51 @@
           '<tspan x="' +
           label[0] +
           '" dy="15">' +
-          (evaluation.scores[player.id][key].score ?? "—") +
-          "点</tspan></text>";
+          (evaluation.scores[player.id][key].score === null
+            ? "未採点"
+            : evaluation.scores[player.id][key].score +
+              "点" +
+              (evaluation.scores[player.id][key].status !== "ready" ? " 参考" : "")) +
+          "</tspan></text>";
       });
-      if (points.every((p) => p !== null)) {
+      points.forEach((p, i) => {
+        const next = points[(i + 1) % count];
+        const reference =
+          evaluation.scores[player.id][axes[i]].status !== "ready" ||
+          evaluation.scores[player.id][axes[(i + 1) % count]].status !== "ready";
+        if (p && next)
+          out +=
+            '<line x1="' +
+            p[0] +
+            '" y1="' +
+            p[1] +
+            '" x2="' +
+            next[0] +
+            '" y2="' +
+            next[1] +
+            '" stroke="var(--member)" stroke-width="2.5"' +
+            (reference ? ' stroke-dasharray="4 3"' : "") +
+            "/>";
+      });
+      points.forEach((p, i) => {
+        if (!p) return;
+        const reference = evaluation.scores[player.id][axes[i]].status !== "ready";
         out +=
-          '<polygon points="' +
-          points.map((p) => p.join(",")).join(" ") +
-          '" fill="none" stroke="var(--member)" stroke-width="2.5"/>';
-      } else {
-        points.forEach((p, i) => {
-          const next = points[(i + 1) % count];
-          if (p && next)
-            out +=
-              '<line x1="' +
-              p[0] +
-              '" y1="' +
-              p[1] +
-              '" x2="' +
-              next[0] +
-              '" y2="' +
-              next[1] +
-              '" stroke="var(--member)" stroke-width="2.5"/>';
-        });
-      }
-      points
-        .filter(Boolean)
-        .forEach(
-          (p) =>
-            (out += '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="3.5" fill="var(--member)"/>'),
-        );
+          '<circle cx="' +
+          p[0] +
+          '" cy="' +
+          p[1] +
+          '" r="3.5" stroke="var(--member)" stroke-width="1.8" fill="' +
+          (reference ? "var(--surface)" : "var(--member)") +
+          '"/>';
+      });
       return out + "</svg>";
     }
-    function sync() {
+    function sync(mode = "replace") {
       const q = new URLSearchParams(state);
-      history.replaceState(null, "", "?" + q + location.hash);
+      const target = "?" + q + location.hash;
+      if (target !== location.search + location.hash)
+        history[mode === "push" ? "pushState" : "replaceState"](null, "", target);
     }
     function renderNoDestination(t, scope) {
       const head =
@@ -980,17 +1082,19 @@
     }
     function renderEvidence(t, scope, evaluation) {
       const japanDate = (date, time = false) =>
-        new Date(date).toLocaleString("ja-JP", {
-          timeZone: "Asia/Tokyo",
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-          ...(time ? { hour: "2-digit", minute: "2-digit" } : {}),
-        });
+        date
+          ? new Date(date).toLocaleString("ja-JP", {
+              timeZone: "Asia/Tokyo",
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+              ...(time ? { hour: "2-digit", minute: "2-digit" } : {}),
+            })
+          : "記録なし";
       byId("data-origin").textContent =
         (report.provenance?.kind === "neon-production"
           ? "NeonDBの本番確定記録"
-          : "取得済みの記録") +
+          : report.provenance?.label || "取得済みの記録") +
         " " +
         report.totalMatchCount +
         "試合を使った試算 · " +
@@ -1152,7 +1256,7 @@
       if (!button) return;
       state.axes = button.dataset.axisPreview;
       state.mode = "common";
-      render();
+      render("push");
       byId("current-variants").scrollIntoView({ block: "start" });
     });
     function renderMapComparison(t, scope, axes) {
@@ -1219,9 +1323,9 @@
                 .map(
                   (p) =>
                     '<td><span class="num">' +
-                    (common.scores[p.id][axis].score ?? "—") +
+                    pointLabel(common.scores[p.id][axis]) +
                     " → " +
-                    (mapped.scores[p.id][axis].score ?? "—") +
+                    pointLabel(mapped.scores[p.id][axis]) +
                     '</span><span class="sub">' +
                     esc(compact(common.raw[p.id][axis].value, axis)) +
                     '</span><span class="sub">' +
@@ -1253,10 +1357,11 @@
       const button = event.target.closest("button[data-compare-map]");
       if (!button) return;
       state.map = button.dataset.compareMap;
-      render();
+      render("push");
       byId("map-comparison").querySelector("summary").focus();
     });
-    function render() {
+    function render(historyMode = "replace") {
+      const adjusted = [];
       const defaults = {
         axes: "no_destination6",
         method: "spread",
@@ -1264,16 +1369,32 @@
         period: "initial",
       };
       for (const [key, fallback] of Object.entries(defaults)) {
-        if (![...byId(key).options].some((option) => option.value === state[key]))
+        if (![...byId(key).options].some((option) => option.value === state[key])) {
           state[key] = fallback;
+          adjusted.push("採点案");
+        }
       }
       const t = title();
-      if (state.axes === "ginji7") state.mode = "common";
+      if (state.title !== t.id) adjusted.push("作品");
+      if (state.axes === "ginji7" && state.mode !== "common") {
+        state.mode = "common";
+        adjusted.push("銀次の基準（作品共通のみ）");
+      }
       state.title = t.id;
       const seasons = ["all", ...t.seasons.map((s) => s.id)];
-      if (!state.season || !seasons.includes(state.season))
+      if (!state.season || !seasons.includes(state.season)) {
+        if (state.season) adjusted.push("シーズン");
         state.season = t.seasons.find((s) => s.id !== t.calibrationSeasonId)?.id || "all";
-      if (state.map !== "all" && !t.maps.some((m) => m.id === state.map)) state.map = "all";
+      }
+      if (state.map !== "all" && !t.maps.some((m) => m.id === state.map)) {
+        state.map = "all";
+        adjusted.push("マップ");
+      }
+      byId("selection-notice").hidden = !adjusted.length;
+      byId("selection-notice").textContent =
+        "指定された" +
+        [...new Set(adjusted)].join("・") +
+        "を利用できないため、表示中の選択肢へ戻しました。条件を確認してください。";
       byId("title").innerHTML = report.titles
         .map((x) => option(x.id, x.name, state.title))
         .join("");
@@ -1306,20 +1427,37 @@
         "・" +
         byId("map").selectedOptions[0].text;
       byId("baseline-caption").textContent =
-        "使用基準：" +
+        "表示中の採点案：" +
         phase +
         "から作成（" +
         base.n +
         "試合・" +
         base.events +
         "開催）／ " +
-        byId("mode").selectedOptions[0].text;
+        byId("mode").selectedOptions[0].text +
+        " ／ " +
+        (state.method === "spread" ? "分布幅の案" : "分位点の案") +
+        "（未確定）";
       if (state.axes === "ginji7")
         byId("baseline-caption").textContent += " ／ 銀次軸は遭遇5試合の集計窓で仮採点";
       byId("introduction").textContent =
-        "各観点の成績と、得点の揃い方を見ます。外側ほど好成績です。";
+        "選んだ観点で、どこに強みがあり、どこまで好成績が揃うかを比べます。";
+      byId("current-variants").textContent = ["no_destination6", "ginji7"].includes(state.axes)
+        ? "順位1軸・収益2軸・資産3軸" +
+          (state.axes === "ginji7" ? "＋銀次遭遇試合の順位。" : "。") +
+          "P10は低い側、P90は高い側の水準です。軸数は独立した能力の数ではありません。"
+        : "比較中の軸案：" + byId("axes").selectedOptions[0].text;
+      byId("empty-scope").hidden = scope.n > 0;
+      byId("players").hidden = scope.n === 0;
+      byId("show-all").hidden = state.season === "all" && state.map === "all";
+      byId("scope-update").textContent =
+        t.name +
+        "、" +
+        byId("scope-caption").textContent +
+        "。" +
+        (scope.n ? "比較を更新しました。" : "対象の試合はありません。");
       const scores = report.players.flatMap((p) => axes.map((key) => e.scores[p.id][key]));
-      byId("quality").hidden = scores.every((v) => v.status === "ready");
+      byId("quality").hidden = scope.n === 0 || scores.every((v) => v.status === "ready");
       byId("quality").textContent =
         base.status !== "ready"
           ? "この条件に対応する基準をまだ作れません。試作では作成元40試合以上・8開催以上を必要としています。"
@@ -1327,7 +1465,11 @@
             ? "採点できない軸は空欄にしています。理由と対象件数は数値表で確認できます。ほかの軸はそのまま読めます。"
             : scores.some((v) => v.status === "reference_opportunity")
               ? "最高額は基準作成時と集計試合数が異なるため、更新機会が違う参考値です。"
-              : "件数が少ない軸を参考値として表示しています。対象件数は数値表で確認できます。";
+              : "参考値を含みます。件数の仮の目安は各軸の対象" +
+                report.policy.minimumFullMatches +
+                "試合・" +
+                report.policy.minimumFullEvents +
+                "開催です。銀次の追加基準も採用前の参考です。件数が多いことだけで安定性を保証しません。";
       byId("players").innerHTML = report.players
         .map((p, i) => {
           const values = e.raw[p.id];
@@ -1363,7 +1505,13 @@
           .map(
             (key) =>
               '<tr><th scope="row">' +
+              '<a href="#definition-' +
+              key +
+              '" data-axis-help="' +
+              key +
+              '">' +
               esc(report.metrics[key].label) +
+              "</a>" +
               "</th>" +
               report.players
                 .map((p) => {
@@ -1372,10 +1520,12 @@
                     '<td><span class="point">' +
                     (v.score === null ? "—" : v.score + "点") +
                     '</span><span class="sub">' +
-                    esc(compact(v.value, key)) +
+                    esc(raw(v.value, key, 4)) +
                     '</span><span class="sub">' +
                     v.n +
-                    '試合</span><span class="sub">' +
+                    "試合・" +
+                    v.events +
+                    '開催</span><span class="sub">' +
                     esc(statusLabel[v.status] ?? v.status) +
                     "</span></td>"
                   );
@@ -1385,6 +1535,37 @@
           )
           .join("") +
         "</tbody>";
+      byId("axis-definitions").innerHTML =
+        axes
+          .map(
+            (key) =>
+              '<div class="axis-definition" id="definition-' +
+              key +
+              '" tabindex="-1"><h3>' +
+              esc(report.metrics[key].label) +
+              "</h3><p>" +
+              esc(axisMeaning[key] || "元の成績と件数を数値表で確認してください。") +
+              "</p></div>",
+          )
+          .join("") +
+        '<p class="control-copy">P10・P90は小さい順の (試合数−1)×0.1／0.9 の位置を線形補間します。基準を作る集計窓と、いま採点している試合数は別です。期間の長さが違えば点数の変わりやすさも変わります。基準識別：' +
+        esc(base.id) +
+        "</p>";
+      byId("scope-composition").innerHTML =
+        "<p>表示中の作品：" +
+        esc(t.name) +
+        "。マップ別の対象件数：" +
+        t.maps
+          .filter((m) => state.map === "all" || m.id === state.map)
+          .map(
+            (m) =>
+              esc(m.name) +
+              " " +
+              (t.scopes.find((s) => s.id === state.season + "|" + m.id)?.n ?? 0) +
+              "試合",
+          )
+          .join("、") +
+        '</p><p class="control-copy">全マップは試合数で集計します。マップの件数構成が違う期間同士の差を、そのまま上達や能力の変化とは読めません。作品ごとに基準が異なるため、別作品の同じ点数も同じ強さを表しません。</p>';
       byId("candidates").innerHTML =
         head +
         "<tbody>" +
@@ -1448,7 +1629,7 @@
             : state.axes === "rebound7"
               ? "目的地の代わりに、選択条件内の前戦が3・4位だった場合に次戦を1・2位で終えた割合を使う案です。試合中の逆転や心理的な回復を観測した値ではありません。"
               : state.axes === "ginji7"
-                ? "目的地を外し、銀次に遭遇した試合の平均順位を加えた案です。この軸だけは遭遇5試合の集計窓で仮採点し、少数例なのでこの軸は参考表示にします。"
+                ? "目的地を外し、銀次に遭遇した試合の平均順位を加えた案です。この軸だけは遭遇5試合の集計窓で仮採点し、条件付き基準を検討中のため、この軸は参考表示にします。"
                 : state.axes === "profile8"
                   ? "上位10%点は好成績側、中央値は普段の水準、下位10%点は低い側の水準を表します。最高額の一度きりの突出とは区別します。"
                   : state.axes === "quantile9"
@@ -1468,18 +1649,18 @@
         "試合・" +
         t.holdoutEvents +
         "開催。</li><li>この表示対象から1開催ずつ除くと、各軸の最大変化は " +
-        omit.maxPointChange +
+        (omit.maxPointChange ?? "比較できる値なし：—") +
         "点です。基準を作る記録から1開催ずつ除いた場合、後の期間の点数は最大 " +
-        t.calibrationEventRemoval.maxPointChange +
+        (t.calibrationEventRemoval.maxPointChange ?? "比較できる値なし：—") +
         "点変化しました。</li><li>マップ別基準は、記録が不足する場合に作品共通へ自動で置き換えません。全マップ表示には作品共通基準を使います。</li><li>全記録で作り直す例には評価対象の記録も含まれます。新しい時期への検証結果としては扱いません。</li></ul>";
       byId("snapshot").textContent =
         "データ取得：" +
         report.snapshotAt.replace("T", " ").slice(0, 19) +
-        " UTC。実データをローカルで読み取った試作です。作品共通基準・目的地なし案を中心に、各観点の成績を比較しています。総合点や総合順位は算出しません。採用軸・計算方式・件数条件は未確定です。";
+        " UTC。ローカルで読み込んだ記録の試作です。作品共通基準・目的地なし案を中心に、各観点の成績を比較しています。総合点や総合順位は算出しません。採用軸・計算方式・件数条件は未確定です。";
       renderMapComparison(t, scope, axes);
       renderNoDestination(t, scope);
       renderEvidence(t, scope, e);
-      sync();
+      sync(historyMode);
       renderAdmin();
     }
     for (const id of ["title", "season", "map", "axes", "method", "mode", "period"])
@@ -1489,24 +1670,61 @@
           state.season = null;
           state.map = "all";
         }
-        render();
+        render("push");
       });
+    window.addEventListener("popstate", () => {
+      state = stateFromUrl();
+      render();
+    });
+    byId("show-all").onclick = () => {
+      state.season = "all";
+      state.map = "all";
+      render("push");
+    };
+    function openMeaning(key) {
+      byId("axis-help").open = true;
+      const target = key ? byId("definition-" + key) : byId("axis-help").querySelector("summary");
+      target?.scrollIntoView({ block: "start" });
+      target?.focus();
+    }
+    byId("meaning-link").onclick = (event) => {
+      event.preventDefault();
+      openMeaning();
+    };
+    byId("values").addEventListener("click", (event) => {
+      const link = event.target.closest("[data-axis-help]");
+      if (link) {
+        event.preventDefault();
+        openMeaning(link.dataset.axisHelp);
+      }
+    });
     byId("numeric-link").addEventListener("click", (event) => {
       event.preventDefault();
       byId("numeric").open = true;
       byId("numeric").scrollIntoView({ behavior: "auto", block: "start" });
       byId("numeric").querySelector("summary").focus();
     });
-    const adminKey = () => "mom30-radar-admin-" + title().id;
-    function adminRead() {
+    const adminKey = () => "mom30-radar-admin-v3-" + title().id + "-" + report.inputSha256;
+    const memoryAdmin = new Map();
+    let storageUnavailable = false;
+    function adminRead(key = adminKey()) {
       try {
-        return JSON.parse(localStorage.getItem(adminKey())) || { phase: "idle", added: false };
+        return (
+          memoryAdmin.get(key) ||
+          JSON.parse(localStorage.getItem(key)) || { phase: "idle", added: false }
+        );
       } catch {
-        return { phase: "idle", added: false };
+        storageUnavailable = true;
+        return memoryAdmin.get(key) || { phase: "idle", added: false };
       }
     }
     function adminSave(value, key = adminKey()) {
-      localStorage.setItem(key, JSON.stringify(value));
+      memoryAdmin.set(key, value);
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+      } catch {
+        storageUnavailable = true;
+      }
       if (key === adminKey()) renderAdmin();
     }
     let shouldFail = false;
@@ -1538,25 +1756,44 @@
         invalid:
           "候補の作成元が訂正された想定です。この候補は適用できません。基準候補を作り直してください。",
         failed: "候補の計算に失敗した例です。現行の基準と点数は維持しています。再試行できます。",
-        applied: "試作画面内で候補を適用しました。本番の記録・基準は変更していません。",
+        applied:
+          "この管理試作で候補を適用しました。比較表の変更後が適用結果です。本番の記録・基準は変更していません。",
         restore: "直前の基準へ戻す比較です。同じ記録を再採点します。試合記録は戻しません。",
       };
-      byId("admin-state").textContent = messages[a.phase] || messages.idle;
-      byId("prepare").disabled = ["running", "applied", "restore"].includes(a.phase);
+      byId("admin-state").textContent =
+        (d
+          ? messages[a.phase] || messages.idle
+          : "基準作成後の評価期間に記録がないため、更新比較を試せません。") +
+        (storageUnavailable
+          ? " このブラウザーでは状態を保存できません。再読込すると模擬操作は初期状態に戻ります。"
+          : "");
+      byId("prepare").disabled =
+        !d || ["running", "candidate", "stale", "applied", "restore"].includes(a.phase);
       byId("fail-next").disabled = byId("prepare").disabled;
       byId("prepare").textContent = ["failed", "invalid"].includes(a.phase)
         ? "基準候補を再計算する"
         : "基準候補を計算する";
-      const preview = ["candidate", "stale", "applied", "restore"].includes(a.phase);
+      const preview = !!d && ["candidate", "stale", "applied", "restore"].includes(a.phase);
+      const applying = a.phase === "restore" ? t.baselines["initial|spread|all"] : d?.candidate;
+      const canApply =
+        applying?.status === "ready" &&
+        report.axisSets.no_destination6.every((key) => applying.axes[key].status === "ready");
       byId("preview").hidden = !preview;
       byId("preview-actions").hidden = !["candidate", "stale", "restore"].includes(a.phase);
       byId("refresh-preview").hidden = a.phase !== "stale";
-      byId("apply").disabled = a.phase === "stale";
+      byId("apply").disabled = a.phase === "stale" || !canApply;
       byId("apply").textContent =
         a.phase === "restore" ? "直前の基準へ戻す（試作内）" : "候補を適用する（試作内）";
+      byId("discard").textContent = a.phase === "restore" ? "戻す操作をやめる" : "候補を取り下げる";
       byId("add-record").disabled = a.added || a.phase === "restore" || a.phase === "stale";
       byId("correct-record").disabled = a.phase === "restore";
       byId("restore").hidden = a.phase !== "applied";
+      if (preview && !canApply)
+        byId("admin-state").textContent =
+          "採用候補の6軸すべての基準を作れないため、この案は適用できません。現在の適用状態は変えていません。各軸の理由を比較表で確認してください。" +
+          (storageUnavailable
+            ? " 模擬操作の状態を保存できません。再読込で初期状態へ戻ります。"
+            : "");
       if (preview && d) {
         const suffix = a.added ? "After" : "Before",
           current = d[(a.phase === "restore" ? "candidate" : "current") + suffix],
@@ -1583,9 +1820,9 @@
                   .map(
                     (p) =>
                       '<td><span class="num">' +
-                      (current.scores[p.id][key].score ?? "—") +
+                      pointLabel(current.scores[p.id][key]) +
                       " → " +
-                      (candidate.scores[p.id][key].score ?? "—") +
+                      pointLabel(candidate.scores[p.id][key]) +
                       '</span><span class="sub">' +
                       esc(statusLabel[candidate.scores[p.id][key].status] || "") +
                       "</span></td>",
@@ -1598,13 +1835,14 @@
       }
     }
     byId("prepare").onclick = () => {
+      if (!title().adminDemo) return;
       const key = adminKey(),
         finish = shouldFail ? "failed" : "candidate",
         requestId = Date.now();
       shouldFail = false;
       adminSave({ phase: "running", added: false, finish, requestId }, key);
       setTimeout(() => {
-        const current = JSON.parse(localStorage.getItem(key) || "{}");
+        const current = adminRead(key);
         if (current.phase === "running" && current.requestId === requestId)
           adminSave({ phase: finish, added: false }, key);
       }, 300);
@@ -1616,22 +1854,22 @@
     byId("reset-admin").onclick = () => {
       shouldFail = false;
       adminSave({ phase: "idle", added: false });
-      state.period = "initial";
-      render();
     };
-    byId("discard").onclick = () => adminSave({ phase: "idle", added: false });
+    byId("discard").onclick = () => {
+      const current = adminRead();
+      adminSave(
+        current.phase === "restore"
+          ? { ...current, phase: "applied" }
+          : { phase: "idle", added: false },
+      );
+    };
     byId("add-record").onclick = () => adminSave({ ...adminRead(), phase: "stale" });
     byId("refresh-preview").onclick = () => adminSave({ phase: "candidate", added: true });
     byId("correct-record").onclick = () => adminSave({ ...adminRead(), phase: "invalid" });
     byId("apply").onclick = () => {
       const a = adminRead();
-      if (!["candidate", "restore"].includes(a.phase)) return;
-      state.period = a.phase === "restore" ? "initial" : "candidate";
-      state.method = "spread";
-      state.mode = "common";
-      state.axes = "no_destination6";
+      if (byId("apply").disabled || !["candidate", "restore"].includes(a.phase)) return;
       adminSave({ ...a, phase: a.phase === "restore" ? "idle" : "applied" });
-      render();
     };
     byId("restore").onclick = () => adminSave({ ...adminRead(), phase: "restore" });
     const resumed = adminRead();

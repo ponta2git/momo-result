@@ -101,14 +101,95 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
           </Button>
         }
       >
-        <h2
-          className={contentText.heading}
-          id="radar-administration-heading"
-          ref={headingRef}
-          tabIndex={-1}
-        >
-          レーダーの採点基準
-        </h2>
+        <div className="grid min-w-0 gap-2">
+          <h2
+            className={contentText.heading}
+            id="radar-administration-heading"
+            ref={headingRef}
+            tabIndex={-1}
+          >
+            レーダーの採点基準
+          </h2>
+          <section aria-label="適用中の基準" className="grid min-w-0">
+            {model.currentBasis ? (
+              <div className="flex min-w-0 flex-wrap items-start gap-x-4 gap-y-2">
+                {[
+                  {
+                    id: "applied",
+                    label: "適用中",
+                    value: formatDateTimeLong(model.currentBasis.appliedAt ?? undefined, "未取得"),
+                  },
+                  {
+                    id: "created",
+                    label: "作成日時",
+                    value: formatDateTimeLong(model.currentBasis.createdAt ?? undefined, "未取得"),
+                  },
+                ].map((item) => (
+                  <FactList key={item.id} ariaLabel={item.label} items={[item]} />
+                ))}
+              </div>
+            ) : (
+              <p className={cn(contentText.body, readableTextWidthClass)}>未適用です。</p>
+            )}
+            {model.currentBasis && (!candidateActive || !model.preview) ? (
+              <Disclosure
+                summary="作成元の記録"
+                triggerVariant="supporting"
+                triggerLayout="flush-horizontal"
+              >
+                <FactList
+                  ariaLabel="適用中基準の作成元"
+                  columns={2}
+                  items={[
+                    {
+                      id: "sample",
+                      label: "件数",
+                      value: `${model.currentBasis.source.matchCount}試合・${model.currentBasis.source.heldEventCount}開催`,
+                    },
+                    {
+                      id: "period",
+                      label: "期間",
+                      value:
+                        model.currentBasis.source.firstPlayedAt &&
+                        model.currentBasis.source.lastPlayedAt
+                          ? `${formatDateTimeLong(model.currentBasis.source.firstPlayedAt)}〜${formatDateTimeLong(model.currentBasis.source.lastPlayedAt)}`
+                          : "未取得",
+                    },
+                    {
+                      id: "maps",
+                      label: "マップ別件数",
+                      value:
+                        model.currentBasis.source.maps
+                          .map((map) => `${map.displayName} ${map.matchCount}試合`)
+                          .join("、") || "未取得",
+                    },
+                  ]}
+                />
+              </Disclosure>
+            ) : null}
+            {model.previousBasis && !candidateActive ? (
+              <div className="grid justify-items-start gap-1">
+                <CommandButton
+                  action={model.actions.restore}
+                  label="直前の基準で比較する"
+                  pendingLabel="比較を準備中"
+                />
+                {model.actions.restore.disabledReason &&
+                !operationInProgress &&
+                !model.communicationUnknown ? (
+                  <p className={cn(contentText.supporting, readableTextWidthClass)}>
+                    {model.actions.restore.disabledReason}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
+          {model.review.reasons.length === 0 && model.review.explanation ? (
+            <p className={cn(contentText.supporting, readableTextWidthClass)}>
+              {model.review.explanation}
+            </p>
+          ) : null}
+        </div>
       </ContentWithActions>
       {model.feedback && !confirmation && !withdrawOpen ? (
         model.feedback.tone === "success" ? (
@@ -121,83 +202,7 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
           </Notice>
         )
       ) : null}
-      <section aria-labelledby="radar-current-heading" className="grid min-w-0 gap-4">
-        <h3 className={contentText.heading} id="radar-current-heading">
-          適用中の基準
-        </h3>
-        {model.currentBasis ? (
-          <FactList
-            ariaLabel="適用中の採点基準"
-            columns={2}
-            items={[
-              {
-                id: "applied",
-                label: "適用日時",
-                value: formatDateTimeLong(model.currentBasis.appliedAt ?? undefined, "未取得"),
-              },
-              {
-                id: "created",
-                label: "基準作成日時",
-                value: formatDateTimeLong(model.currentBasis.createdAt ?? undefined, "未取得"),
-              },
-            ]}
-          />
-        ) : (
-          <p className={cn(contentText.body, readableTextWidthClass)}>未適用です。</p>
-        )}
-        {model.currentBasis && (!candidateActive || !model.preview) ? (
-          <Disclosure
-            summary="作成元の記録"
-            triggerVariant="supporting"
-            panelSpacing="md"
-            panelPadding="sm"
-          >
-            <FactList
-              ariaLabel="適用中基準の作成元"
-              columns={2}
-              items={[
-                {
-                  id: "sample",
-                  label: "件数",
-                  value: `${model.currentBasis.source.matchCount}試合・${model.currentBasis.source.heldEventCount}開催`,
-                },
-                {
-                  id: "period",
-                  label: "期間",
-                  value:
-                    model.currentBasis.source.firstPlayedAt &&
-                    model.currentBasis.source.lastPlayedAt
-                      ? `${formatDateTimeLong(model.currentBasis.source.firstPlayedAt)}〜${formatDateTimeLong(model.currentBasis.source.lastPlayedAt)}`
-                      : "未取得",
-                },
-                {
-                  id: "maps",
-                  label: "マップ別件数",
-                  value:
-                    model.currentBasis.source.maps
-                      .map((map) => `${map.displayName} ${map.matchCount}試合`)
-                      .join("、") || "未取得",
-                },
-              ]}
-            />
-          </Disclosure>
-        ) : null}
-        {model.previousBasis && !candidateActive ? (
-          <div className="grid justify-items-start gap-1">
-            <CommandButton
-              action={model.actions.restore}
-              label="直前の基準で比較する"
-              pendingLabel="比較を準備中"
-            />
-            {model.actions.restore.disabledReason ? (
-              <p className={cn(contentText.supporting, readableTextWidthClass)}>
-                {model.actions.restore.disabledReason}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-      </section>
-      {model.review.explanation || model.review.reasons.length > 0 ? (
+      {model.review.reasons.length > 0 ? (
         <section aria-labelledby="radar-review-heading" className="grid min-w-0 gap-4">
           <div className="grid gap-2">
             <h3 className={contentText.heading} id="radar-review-heading">
@@ -217,9 +222,7 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
                     actions={
                       reason.acknowledged ? (
                         <span className={contentText.supporting}>
-                          {model.currentBasis
-                            ? "現在の基準を継続すると確認済み"
-                            : "この目安を確認済み"}
+                          {model.currentBasis ? "現在の基準を継続" : "確認済み"}
                         </span>
                       ) : (
                         <Button
@@ -282,13 +285,12 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
               />
             }
           >
-            通信が途切れたため、成功・失敗はまだ不明です。状態を確認してから同じ操作を続けます。
+            {null}
           </Notice>
         ) : operationInProgress && model.operation ? (
-          <Notice title={model.operation.title} tone="info">
-            <p>画面を離れても処理は続きます。「基準の状態を更新」で確認できます。</p>
-            {applicationInProgress ? <p>公開までは現在の基準を維持します。</p> : null}
-          </Notice>
+          <p className={contentText.body} role="status">
+            {model.operation.title}
+          </p>
         ) : model.operation?.status === "failed" ? (
           <Notice
             title={model.operation.title}
@@ -302,7 +304,6 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
             }
           >
             <p>{model.operation.detail}</p>
-            <p>公開中の基準は変更していません。</p>
             {model.actions.retry.disabledReason ? (
               <p>{model.actions.retry.disabledReason}</p>
             ) : null}
@@ -317,9 +318,8 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
               </Notice>
             ) : null}
             {candidate.status === "unavailable" ? (
-              <Notice title="6軸すべての基準を作れませんでした" tone="info">
-                <p>同じ記録で再計算しても不足は解消しません。</p>
-                <ul className="mt-2 grid gap-1">
+              <Notice title="採点基準を作れませんでした" tone="info">
+                <ul className="grid gap-1">
                   {candidate.unavailableAxes.map((axis) => (
                     <li key={axis.axisId}>
                       {playerRadarAxes.find((definition) => definition.id === axis.axisId)?.label}:{" "}
@@ -334,7 +334,13 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
               model.previewState === "none" ||
               model.previewState === "failed") ? (
               <Notice
-                title="最新の記録で比較を確認してください"
+                title={
+                  model.previewState === "stale"
+                    ? "比較の更新が必要です"
+                    : model.previewState === "failed"
+                      ? "比較を計算できませんでした"
+                      : "比較は未計算です"
+                }
                 tone="info"
                 action={
                   <CommandButton
@@ -345,7 +351,7 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
                   />
                 }
               >
-                候補の閾値は維持しています。記録または現行基準が変わったため、適用前の比較を更新します。
+                {null}
               </Notice>
             ) : null}
             {model.preview ? (
@@ -373,7 +379,7 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
                   }
                   confirmLabel="作品全体に適用する"
                   pendingLabel="適用を受付中"
-                  description={`${confirmation?.gameTitleName ?? model.gameTitleName}の全シーズン・全マップに適用します。過去に見た点数も変わります。`}
+                  description={`${confirmation?.gameTitleName ?? model.gameTitleName}の全シーズン・全マップに適用します。過去の成績もこの基準で再採点します。`}
                   formatError={radarCommandErrorMessage}
                   pending={model.applyPending}
                   title="この基準を作品全体に適用しますか？"
@@ -439,8 +445,8 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
                 pendingLabel="取り下げを受付中"
                 description={
                   applicationInProgress
-                    ? "まだ公開されていなければ、この基準の適用を停止します。公開が先に完了した場合は適用済みとして表示します。"
-                    : "この候補の比較と適用を終了します。公開中の基準は変わりません。"
+                    ? "公開前であれば、適用を取り消します。"
+                    : "この候補の比較と適用を終了します。"
                 }
                 formatError={radarCommandErrorMessage}
                 pending={model.actions.withdraw.pending}
@@ -464,7 +470,10 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
                 }}
               />
             </div>
-            {model.applyDisabledReason && applyTarget ? (
+            {model.applyDisabledReason &&
+            applyTarget &&
+            !operationInProgress &&
+            !model.communicationUnknown ? (
               <p className={cn(contentText.body, readableTextWidthClass)}>
                 {model.applyDisabledReason}
               </p>
@@ -482,7 +491,9 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
               pendingLabel="候補計算を受付中"
               primary
             />
-            {model.actions.generate.disabledReason ? (
+            {model.actions.generate.disabledReason &&
+            !operationInProgress &&
+            !model.communicationUnknown ? (
               <p className={cn(contentText.supporting, readableTextWidthClass)}>
                 {model.actions.generate.disabledReason}
               </p>

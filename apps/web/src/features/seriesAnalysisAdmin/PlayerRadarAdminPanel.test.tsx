@@ -143,11 +143,12 @@ describe("PlayerRadarAdminPanel", () => {
     const firstCell = within(table).getAllByRole("cell")[0]!;
     expect(firstCell).toHaveTextContent("現行 6点 → 候補 7点");
     expect(within(firstCell).getByText("2.25位")).toBeInTheDocument();
-    expect(screen.getByText(/同じ記録での点数：現行 → 候補/u)).toBeInTheDocument();
+    const firstPlayerHeader = within(table).getByRole("columnheader", { name: /いーゆー/u });
+    expect(firstPlayerHeader).toHaveTextContent("現行 → 候補");
     await user.click(screen.getByRole("button", { name: "適用を確認する" }));
     const dialog = screen.getByRole("alertdialog");
     expect(dialog).toHaveTextContent("比較対象の作品の全シーズン・全マップに適用します");
-    expect(dialog).toHaveTextContent("過去に見た点数も変わります");
+    expect(dialog).toHaveTextContent("過去の成績もこの基準で再採点します");
     expect(dialog).toHaveTextContent("基準作成日時");
     expect(dialog).toHaveTextContent("48試合・12開催");
     expect(model.actions.apply).not.toHaveBeenCalled();
@@ -285,9 +286,7 @@ describe("PlayerRadarAdminPanel", () => {
         for (const axis of player.axes) axis.sampleQuality = "reference";
       }
       render(<PlayerRadarAdminPanel model={model} />);
-      expect(
-        screen.getByText(`${reason}のため、点数を参考値として表示しています。`),
-      ).toBeInTheDocument();
+      expect(screen.getByText(`参考値（${reason}）`)).toBeInTheDocument();
       const table = screen.getByRole("table", { name: "採点基準変更前後の比較" });
       expect(within(table).getAllByText("参考値")).toHaveLength(24);
       expect(within(table).getAllByText("7点")).toHaveLength(24);

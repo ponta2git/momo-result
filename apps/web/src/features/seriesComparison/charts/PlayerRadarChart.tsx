@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 
 import { dataVizSeriesPresentation } from "@/features/seriesComparison/charts/dataViz/seriesPresentation";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
@@ -10,38 +10,40 @@ import type { PlayerRadarPlayer } from "@/shared/seriesAnalysis/playerRadarPrese
 import { cn } from "@/shared/ui/cn";
 import { contentText } from "@/shared/ui/typography";
 
-const center = { x: 120, y: 140 };
-const radius = 80;
 const ticks = [2, 4, 6, 8, 10];
-const labelPositions = [
-  { x: 120, y: 24, anchor: "middle" },
-  { x: 236, y: 62, anchor: "end" },
-  { x: 236, y: 221, anchor: "end" },
-  { x: 120, y: 252, anchor: "middle" },
-  { x: 4, y: 221, anchor: "start" },
-  { x: 4, y: 62, anchor: "start" },
-] as const;
 
-function coordinate(index: number, score: number) {
+function coordinate(center: { x: number; y: number }, index: number, distance: number) {
   const angle = -Math.PI / 2 + (index * Math.PI) / 3;
   return {
-    x: center.x + Math.cos(angle) * radius * (score / 10),
-    y: center.y + Math.sin(angle) * radius * (score / 10),
+    x: center.x + Math.cos(angle) * distance,
+    y: center.y + Math.sin(angle) * distance,
   };
-}
-
-function polygonPoints(score: number) {
-  return playerRadarAxes
-    .map((_, index) => {
-      const point = coordinate(index, score);
-      return `${point.x},${point.y}`;
-    })
-    .join(" ");
 }
 
 /** Geometry only: all values, scores, and sample judgements come from the saved result. */
 export function PlayerRadarChart({ player }: { player: PlayerRadarPlayer }) {
   const figureId = useId();
+  const figureRef = useRef<HTMLElement>(null);
+  const [width, setWidth] = useState(320);
+  useLayoutEffect(() => {
+    const figure = figureRef.current;
+    if (!figure) return;
+    const measure = () => {
+      const nextWidth = figure.getBoundingClientRect().width;
+      if (nextWidth > 0) setWidth(nextWidth);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(figure);
+    return () => observer.disconnect();
+  }, []);
+  // Keep text and marks in CSS pixels; resize the geometry inside its allotted column.
+  const radius = Math.min(128, (width / 2 - 36) / Math.cos(Math.PI / 6) - 36);
+  const center = { x: width / 2, y: radius + 70 };
+  const hasReferenceScore = player.axes.some(
+    (axis) => axis.sampleQuality === "reference" && axis.score !== null,
+  );
+  const height = Math.ceil(radius * 2 + (hasReferenceScore ? 160 : 144));
   const presentation = dataVizSeriesPresentation(player.memberId);
   const vertices = playerRadarAxes.map((axis, index) => {
     const cell = player.axes.find((value) => value.axisId === axis.id);
@@ -49,24 +51,28 @@ export function PlayerRadarChart({ player }: { player: PlayerRadarPlayer }) {
       axis,
       cell,
       point:
-        cell?.score !== null && cell?.score !== undefined ? coordinate(index, cell.score) : null,
+        cell?.score !== null && cell?.score !== undefined
+          ? coordinate(center, index, (radius * cell.score) / 10)
+          : null,
     };
   });
-  const reference = vertices.some((vertex) => vertex.cell?.sampleQuality === "reference");
-
   return (
-    <figure className="grid min-w-0 gap-2" aria-labelledby={`${figureId}-name`}>
-      <figcaption className={cn(contentText.heading, "text-center")} id={`${figureId}-name`}>
+    <figure
+      ref={figureRef}
+      className="grid w-full min-w-0 gap-2"
+      aria-labelledby={`${figureId}-name`}
+    >
+      <figcaption className={cn(contentText.body, "flex")} id={`${figureId}-name`}>
         <MemberSequenceLabel memberId={player.memberId}>{player.displayName}</MemberSequenceLabel>
       </figcaption>
       <svg
         aria-describedby={`${figureId}-description`}
         aria-labelledby={`${figureId}-title`}
-        className="mx-auto block w-60 max-w-none"
-        height="280"
+        className="block w-full"
+        height={height}
         role="img"
-        viewBox="0 0 240 280"
-        width="240"
+        viewBox={`0 0 ${width} ${height}`}
+        width={width}
       >
         <title id={`${figureId}-title`}>{player.displayName}の6軸レーダー</title>
         <desc id={`${figureId}-description`}>
@@ -79,10 +85,18 @@ export function PlayerRadarChart({ player }: { player: PlayerRadarPlayer }) {
         </desc>
         <g aria-hidden="true" fill="none" stroke="var(--color-border)">
           {ticks.map((tick) => (
-            <polygon key={tick} points={polygonPoints(tick)} />
+            <polygon
+              key={tick}
+              points={playerRadarAxes
+                .map((_, index) => {
+                  const point = coordinate(center, index, (radius * tick) / 10);
+                  return `${point.x},${point.y}`;
+                })
+                .join(" ")}
+            />
           ))}
           {playerRadarAxes.map((axis, index) => {
-            const edge = coordinate(index, 10);
+            const edge = coordinate(center, index, radius);
             return <line key={axis.id} x1={center.x} x2={edge.x} y1={center.y} y2={edge.y} />;
           })}
         </g>
@@ -99,33 +113,62 @@ export function PlayerRadarChart({ player }: { player: PlayerRadarPlayer }) {
           ))}
         </g>
         <g aria-hidden="true" fill="var(--color-text-secondary)" fontSize="12">
-          {playerRadarAxes.map((axis, index) => {
-            const label = labelPositions[index];
-            if (!label) return null;
+          {vertices.map(({ axis, cell }, index) => {
+            const label = coordinate(center, index, radius + 36);
+            const reference = cell?.sampleQuality === "reference" && cell.score !== null;
+            const labelHeight = axis.chartLabel.length * 16 + (reference ? 36 : 20);
+            const top = index === 3 ? label.y - 24 : label.y - labelHeight / 2;
             return (
-              <text key={axis.id} textAnchor={label.anchor} x={label.x} y={label.y}>
-                {axis.chartLabel.map((line, lineIndex) => (
-                  <tspan key={line} dy={lineIndex === 0 ? 0 : 16} x={label.x}>
-                    {line}
-                  </tspan>
-                ))}
-              </text>
+              <g key={axis.id} textAnchor="middle">
+                <text x={label.x} y={top + 12}>
+                  {axis.chartLabel.map((line, lineIndex) => (
+                    <tspan key={line} dy={lineIndex === 0 ? 0 : 16} x={label.x}>
+                      {line}
+                    </tspan>
+                  ))}
+                </text>
+                <text
+                  className={cn(
+                    cell?.score !== null && cell?.score !== undefined
+                      ? contentText.compactPrimary
+                      : contentText.body,
+                    "tabular-nums",
+                  )}
+                  fill="currentColor"
+                  x={label.x}
+                  y={top + axis.chartLabel.length * 16 + 16}
+                >
+                  {playerRadarScoreLabel(cell)}
+                  {reference ? (
+                    <tspan
+                      className={contentText.supporting}
+                      dy="16"
+                      fill="currentColor"
+                      x={label.x}
+                    >
+                      参考
+                    </tspan>
+                  ) : null}
+                </text>
+              </g>
             );
           })}
         </g>
         <g aria-hidden="true" stroke={presentation.color} strokeWidth="1.8">
-          {vertices.map(({ axis, point }, index) => {
-            const next = vertices[(index + 1) % vertices.length]?.point;
-            if (!point || !next) return null;
+          {vertices.map(({ axis, cell, point }, index) => {
+            const next = vertices[(index + 1) % vertices.length];
+            if (!point || !next?.point) return null;
+            const reference =
+              cell?.sampleQuality === "reference" || next.cell?.sampleQuality === "reference";
             return (
               <line
                 data-radar-edge={axis.id}
                 key={axis.id}
                 strokeDasharray={reference ? "4 4" : undefined}
                 x1={point.x}
-                x2={next.x}
+                x2={next.point.x}
                 y1={point.y}
-                y2={next.y}
+                y2={next.point.y}
               />
             );
           })}

@@ -6,40 +6,37 @@ export const playerRadarAxes = [
     id: "averageRank",
     label: "平均順位",
     chartLabel: ["平均順位"],
-    description: "対象試合の順位の平均。小さいほど好成績です。",
+    description: "対象試合の順位の平均。",
   },
   {
     id: "revenueP90",
     label: "物件収益（高め）",
     chartLabel: ["物件収益", "高め"],
-    description:
-      "物件収益を小さい順に並べた90%の位置（P90）。最高額や上位10%の平均ではありません。",
+    description: "物件収益を小さい順に並べた90%の位置（P90）。",
   },
   {
     id: "revenueAverage",
     label: "平均物件収益",
     chartLabel: ["平均", "物件収益"],
-    description: "対象試合の物件収益の平均。大きな収益の試合も影響します。",
+    description: "対象試合の物件収益の平均。",
   },
   {
     id: "totalAssetsP10",
     label: "総資産（低め）",
     chartLabel: ["総資産", "低め"],
-    description:
-      "総資産を小さい順に並べた10%の位置（P10）。最低額や、3・4位だった試合だけの値ではありません。",
+    description: "総資産を小さい順に並べた10%の位置（P10）。",
   },
   {
     id: "totalAssetsMedian",
     label: "総資産（中央）",
     chartLabel: ["総資産", "中央"],
-    description: "総資産の中央値。全試合の真ん中の水準で、偶数件では中央2値の平均です。",
+    description: "総資産の中央値。偶数件は中央2値の平均。",
   },
   {
     id: "totalAssetsP90",
     label: "総資産（高め）",
     chartLabel: ["総資産", "高め"],
-    description:
-      "総資産を小さい順に並べた90%の位置（P90）。最高額や、勝利した試合だけの値ではありません。",
+    description: "総資産を小さい順に並べた90%の位置（P90）。",
   },
 ] as const;
 

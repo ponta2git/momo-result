@@ -175,10 +175,37 @@ export function SeriesComparisonPage() {
                 status.data?.currentArtifact) ? (
                 <ComparisonSkeleton />
               ) : null}
-              {!status.loading &&
-              status.data?.currentArtifact &&
-              resource.hasError &&
-              !resource.data ? (
+              {resource.scopeState === "empty" ? (
+                <EmptyState
+                  placement="embedded"
+                  title="この範囲に確定済みの試合がありません"
+                  description="シーズン・マップの選択は保持しています。条件を変更すると別の記録を確認できます。"
+                  action={
+                    <Button variant="secondary" onClick={page.actions.clearScope}>
+                      全シーズン・全マップに戻す
+                    </Button>
+                  }
+                />
+              ) : resource.scopeState === "awaiting_analysis" && status.data?.currentArtifact ? (
+                <Notice tone="info" title="この条件の分析を準備しています">
+                  記録はありますが、この条件の分析結果はまだ公開されていません。計算後に状態を更新してください。
+                </Notice>
+              ) : resource.scopeState === "invalid" ? (
+                <Notice
+                  tone="warning"
+                  title="この比較条件は現在利用できません"
+                  action={
+                    <Button variant="secondary" onClick={page.actions.clearScope}>
+                      全シーズン・全マップに戻す
+                    </Button>
+                  }
+                >
+                  対象のシーズンまたはマップが変更されています。状態を更新すると、現在の条件を確認できます。
+                </Notice>
+              ) : !status.loading &&
+                status.data?.currentArtifact &&
+                resource.hasError &&
+                !resource.data ? (
                 <Notice
                   action={
                     <Button

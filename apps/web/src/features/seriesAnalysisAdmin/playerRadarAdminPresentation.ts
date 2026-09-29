@@ -1,0 +1,112 @@
+import type { PlayerRadarAdminModel } from "@/features/seriesAnalysisAdmin/playerRadarAdminModel";
+import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import type {
+  SeriesPlayerRadarOperation,
+  SeriesPlayerRadarState,
+} from "@/shared/api/seriesPlayerRadar";
+import { playerRadarAxes } from "@/shared/seriesAnalysis/playerRadarPresentation";
+
+export function radarSubmissionUncertain(error: unknown): boolean {
+  if (!error) return false;
+  const normalized = normalizeUnknownApiError(error);
+  return (
+    normalized.status === undefined ||
+    normalized.status >= 500 ||
+    normalized.category === "idempotency_in_progress"
+  );
+}
+
+export function radarCommandErrorMessage(error: unknown): string {
+  if (radarSubmissionUncertain(error))
+    return "操作の受付結果はまだ不明です。この確認を閉じて「操作の状態を確認する」を選んでください。";
+  if (normalizeUnknownApiError(error).status === 409)
+    return "記録・候補・基準の状態が変わりました。この確認を閉じて「基準の状態を更新」から最新の比較を確認してください。";
+  return formatApiError(error, "操作を受け付けられません");
+}
+
+const operationNames = {
+  candidate: "基準候補の計算",
+  preview: "比較の計算",
+  apply: "基準の適用",
+  withdraw: "取り下げ",
+  restore: "直前基準との比較",
+  acknowledge: "見直し目安の確認",
+  retry: "再試行",
+} as const;
+
+export function radarFailureMessage(code: string | null): string {
+  switch (code) {
+    case "source_changed":
+    case "candidate_source_changed":
+      return "候補の作成元の記録が変わったため、適用できません。最新の記録から候補を作り直してください。";
+    case "preview_stale":
+      return "比較後に記録または現行基準が変わりました。最新の記録で比較を計算してください。";
+    case "basis_incompatible":
+      return "現在の指標・計算方法ではこの基準を適用できません。新しい候補を作成してください。";
+    default:
+      return "処理を完了できませんでした。現在の状態を確認し、候補が有効なら再試行してください。";
+  }
+}
+
+export function radarOperationPresentation(
+  operation: SeriesPlayerRadarOperation,
+): NonNullable<PlayerRadarAdminModel["operation"]> {
+  const name = operationNames[operation.kind];
+  const title =
+    operation.status === "pending"
+      ? `${name}を受け付けました`
+      : operation.status === "running"
+        ? `${name}中です`
+        : operation.status === "failed"
+          ? `${name}を完了できませんでした`
+          : operation.status === "withdrawn"
+            ? `${name}を取り下げました`
+            : `${name}が完了しました`;
+  return {
+    operationId: operation.operationId,
+    kind: operation.kind,
+    status: operation.status,
+    title,
+    detail:
+      operation.status === "failed"
+        ? radarFailureMessage(operation.safeFailureCode)
+        : operation.kind === "apply" && operation.status !== "succeeded"
+          ? "適用の受付と公開完了は別の状態です。"
+          : "この作品の保存済み状態を表示しています。",
+  };
+}
+
+export function radarReviewPresentation(
+  state: SeriesPlayerRadarState,
+): PlayerRadarAdminModel["review"] {
+  const monitor = state.monitor;
+  if (!monitor)
+    return {
+      explanation: "次の分析計算で見直しの目安を確認できます。自動で基準は変わりません。",
+      reasons: [],
+    };
+  const explanation =
+    monitor.status === "basis_unavailable"
+      ? "初回基準を適用すると、その後の記録から見直しの目安を確認できます。"
+      : monitor.status === "insufficient_matches" || monitor.status === "insufficient_events"
+        ? `基準作成元より後の記録が${monitor.postSourceMatchCount}試合あります。高得点の集中を確認するには、新しい40試合・8開催以上が必要です。`
+        : "直近の重複しない20試合ずつの2区間で、同じ軸に3人以上が9点以上かを確認します。目安だけでは基準を変更しません。";
+  return {
+    explanation,
+    reasons: monitor.reasons.map((reason) => {
+      const label =
+        reason.kind === "initial_basis_eligible"
+          ? "初回基準を作成する件数を満たしています。"
+          : reason.kind === "source_changed"
+            ? "基準を作った記録に訂正があります。適用中の閾値は維持しています。"
+            : reason.kind === "new_map"
+              ? "基準作成後に新しいマップの記録が加わっています。"
+              : `${reason.axisIds.map((id) => playerRadarAxes.find((axis) => axis.id === id)?.label ?? id).join("・")}で高得点が続いています。必要に応じて候補と比較できます。`;
+      return {
+        evidenceKey: reason.evidenceChecksum,
+        label,
+        acknowledged: state.acknowledgedEvidenceKeys.includes(reason.evidenceChecksum),
+      };
+    }),
+  };
+}

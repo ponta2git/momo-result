@@ -11,19 +11,21 @@ import {
   makeSeriesAnalysisReview,
 } from "@/test/msw/seriesAnalysisFixtures";
 
-import aggregateFixture from "../../../../../docs/schemas/fixtures/series-analysis/aggregate-payload-v5.json";
+import aggregateFixture from "../../../../../docs/schemas/fixtures/series-analysis/aggregate-payload-v6.json";
 import drilldownFixture from "../../../../../docs/schemas/fixtures/series-analysis/drilldown-payload-v3.json";
 import matchContextFixture from "../../../../../docs/schemas/fixtures/series-analysis/match-context-payload-v1.json";
 import rankSignalsDrilldownFixture from "../../../../../docs/schemas/fixtures/series-analysis/rank-signals-drilldown-payload-v3.json";
 import reviewFixture from "../../../../../docs/schemas/fixtures/series-analysis/review-payload-v4.json";
 
 const artifact = {
-  algorithmVersion: "series-analysis-v5",
+  algorithmVersion: "series-analysis-v6",
   artifactId: "artifact-1",
-  artifactSchemaVersion: 4,
+  artifactSchemaVersion: 5,
   gameTitleId: "title-1",
   inputRevision: "1",
   publishedAt: "2026-08-29T00:00:00Z",
+  radarBasisCreatedAt: null,
+  radarBasisAppliedAt: null,
 };
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -37,6 +39,8 @@ function hydrateMembers(value: unknown): unknown {
     Object.entries(value).map(([key, child]) => [key, hydrateMembers(child)]),
   );
   if (typeof hydrated["memberId"] === "string") hydrated["displayName"] = "プレーヤー";
+  if (typeof hydrated["mapMasterId"] === "string" && typeof hydrated["matchCount"] === "number")
+    hydrated["displayName"] = "マップ";
   return hydrated;
 }
 
@@ -65,7 +69,7 @@ function includedMatchContextResponse(): Record<string, unknown> {
 
 describe("series analysis artifact response decoder", () => {
   it.each([
-    ["aggregateV4", aggregateFixture],
+    ["aggregateV5", aggregateFixture],
     ["reviewV3", reviewFixture],
     ["drilldown", drilldownFixture],
     ["drilldown", rankSignalsDrilldownFixture],
@@ -76,7 +80,7 @@ describe("series analysis artifact response decoder", () => {
     async (kind, fixture) => {
       const response = artifactResponse(fixture);
       await expect(decodeSeriesAnalysisArtifact(kind, response)).resolves.toBe(response);
-      for (const artifactSchemaVersion of [1, 2, 3, 99]) {
+      for (const artifactSchemaVersion of [1, 2, 3, 4, 99]) {
         await expect(
           decodeSeriesAnalysisArtifact(kind, {
             ...response,
@@ -88,7 +92,7 @@ describe("series analysis artifact response decoder", () => {
   );
 
   it.each([
-    ["aggregateV4", aggregateFixture, [3, 4]],
+    ["aggregateV5", aggregateFixture, [3, 4, 5]],
     ["reviewV3", reviewFixture, [3]],
   ] as const)("%s rejects obsolete payload generations", async (kind, fixture, versions) => {
     const response = artifactResponse(fixture);
@@ -105,14 +109,14 @@ describe("series analysis artifact response decoder", () => {
   it("requires owner comparison data in an aggregate", async () => {
     const response = artifactResponse(aggregateFixture);
     delete response["ownerComparison"];
-    await expect(decodeSeriesAnalysisArtifact("aggregateV4", response)).rejects.toThrow(
-      "Invalid series analysis aggregateV4 response.",
+    await expect(decodeSeriesAnalysisArtifact("aggregateV5", response)).rejects.toThrow(
+      "Invalid series analysis aggregateV5 response.",
     );
   });
 
   it.each([
-    ["aggregateV4", makeSeriesAnalysisAggregate()],
-    ["aggregateV4", makeOwnerComparisonAggregate()],
+    ["aggregateV5", makeSeriesAnalysisAggregate()],
+    ["aggregateV5", makeOwnerComparisonAggregate()],
     ["reviewV3", makeSeriesAnalysisReview()],
     ["reviewV3", makeFourPlayerSeriesAnalysisReview()],
     ["drilldown", makeSeriesAnalysisDrilldown("rank.averageHistory")],
@@ -156,8 +160,8 @@ describe("series analysis artifact response decoder", () => {
     const impossibleExclusion = includedMatchContextResponse();
     impossibleExclusion["inclusion"] = { status: "not_in_scope" };
 
-    await expect(decodeSeriesAnalysisArtifact("aggregateV4", malformedAggregate)).rejects.toThrow(
-      "Invalid series analysis aggregateV4 response.",
+    await expect(decodeSeriesAnalysisArtifact("aggregateV5", malformedAggregate)).rejects.toThrow(
+      "Invalid series analysis aggregateV5 response.",
     );
     await expect(decodeSeriesAnalysisArtifact("matchContext", impossibleExclusion)).rejects.toThrow(
       "Invalid series analysis matchContext response.",
@@ -180,8 +184,8 @@ describe("series analysis artifact response decoder", () => {
     await expect(decodeSeriesAnalysisArtifact("reviewV3", missingDisplayName)).rejects.toThrow(
       "Invalid series analysis reviewV3 response.",
     );
-    await expect(decodeSeriesAnalysisArtifact("aggregateV4", oversizedUtf8)).rejects.toThrow(
-      "Invalid series analysis aggregateV4 response.",
+    await expect(decodeSeriesAnalysisArtifact("aggregateV5", oversizedUtf8)).rejects.toThrow(
+      "Invalid series analysis aggregateV5 response.",
     );
   });
 

@@ -21,8 +21,9 @@ setupMsw();
 // This suite observes refresh after an initial result; cold route loading is covered by app routing.
 beforeAll(() =>
   Promise.all([
+    import("@/shared/api/generatedContracts/series-analysis-envelope-validators.generated"),
     import("@/features/seriesComparison/page/SeriesAnalysisFlowView"),
-    decodeSeriesAnalysisArtifact("aggregateV4", makeSeriesAnalysisAggregate()),
+    decodeSeriesAnalysisArtifact("aggregateV5", makeSeriesAnalysisAggregate()),
   ]),
 );
 
@@ -32,7 +33,7 @@ describe("SeriesComparisonPage manual refresh", () => {
     const aggregateGate = createDeferred();
     let aggregateRequests = 0;
     server.use(
-      http.get("/api/analytics/series-comparison/v4/aggregate", async () => {
+      http.get("/api/analytics/series-comparison/v5/aggregate", async () => {
         aggregateRequests += 1;
         if (aggregateRequests > 1) await aggregateGate.promise;
         return HttpResponse.json(makeSeriesAnalysisAggregate());

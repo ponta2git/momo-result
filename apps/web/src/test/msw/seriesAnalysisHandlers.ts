@@ -1,6 +1,7 @@
 import { http, HttpResponse } from "msw";
 
 import type { SeriesAnalysisRecalculationAccepted } from "@/shared/api/seriesAnalysis";
+import { makePlayerRadarState } from "@/test/msw/playerRadarFixtures";
 import {
   makeSeriesAnalysisAdminOverview,
   makeSeriesAnalysisAggregate,
@@ -9,16 +10,50 @@ import {
   makeSeriesAnalysisOptions,
   makeSeriesAnalysisReview,
   makeSeriesAnalysisStatus,
+  makeSeriesAnalysisScopeStatus,
 } from "@/test/msw/seriesAnalysisFixtures";
 
 export const seriesAnalysisHandlers = [
+  http.get("/api/admin/series-analysis/radar", ({ request }) =>
+    HttpResponse.json(
+      makePlayerRadarState(
+        new URL(request.url).searchParams.get("gameTitleId") ?? "gt_momotetsu_2",
+      ),
+    ),
+  ),
+  http.get("/api/analytics/series-comparison/v2/scope-status", ({ request }) => {
+    const params = new URL(request.url).searchParams;
+    const seasonMasterId = params.get("seasonMasterId");
+    const mapMasterId = params.get("mapMasterId");
+    const title = makeSeriesAnalysisOptions().titles.find(
+      (entry) => entry.gameTitleId === params.get("gameTitleId"),
+    );
+    const season = title?.seasons.find((entry) => entry.seasonMasterId === seasonMasterId);
+    const map = title?.maps.find((entry) => entry.mapMasterId === mapMasterId);
+    const invalidFields = [
+      ...(seasonMasterId && !season ? ["seasonMasterId"] : []),
+      ...(mapMasterId && !map ? ["mapMasterId"] : []),
+    ];
+    return HttpResponse.json(
+      makeSeriesAnalysisScopeStatus({
+        gameTitleId: params.get("gameTitleId") ?? "gt_momotetsu_2",
+        artifactId: params.get("artifactId"),
+        seasonMasterId,
+        mapMasterId,
+        seasonName: season?.displayName ?? null,
+        mapName: map?.displayName ?? null,
+        state: invalidFields.length > 0 ? "invalid" : "available",
+        invalidFields,
+      }),
+    );
+  }),
   http.get("/api/analytics/series-comparison/v2/options", () =>
     HttpResponse.json(makeSeriesAnalysisOptions()),
   ),
   http.get("/api/analytics/series-comparison/v2/status", () =>
     HttpResponse.json(makeSeriesAnalysisStatus()),
   ),
-  http.get("/api/analytics/series-comparison/v4/aggregate", () =>
+  http.get("/api/analytics/series-comparison/v5/aggregate", () =>
     HttpResponse.json(makeSeriesAnalysisAggregate()),
   ),
   http.get("/api/analytics/series-comparison/v3/review", () =>

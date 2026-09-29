@@ -9,7 +9,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { SeriesAnalysisUrlState } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { useSeriesAnalysisResource } from "@/features/seriesComparison/page/useSeriesAnalysisResource";
 import { invalidateAfterMatchUpdated } from "@/shared/api/cacheInvalidation";
-import { seriesAnalysisKeys } from "@/shared/api/queryKeys";
+import { seriesAnalysisKeys, seriesPlayerRadarKeys } from "@/shared/api/queryKeys";
 import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import { decodeSeriesAnalysisArtifact } from "@/shared/api/seriesAnalysisArtifactDecoder";
 import { setDevUser } from "@/test/auth";
@@ -21,6 +21,7 @@ import {
   makeSeriesAnalysisExcludedMatchContext,
   makeSeriesAnalysisMatchContext,
   makeSeriesAnalysisStatus,
+  makeSeriesAnalysisScopeStatus,
 } from "@/test/msw/seriesAnalysisFixtures";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
@@ -30,7 +31,8 @@ setupMsw();
 // Query lifecycle is the oracle here; prepare the large generated validator before timed UI waits.
 beforeAll(() =>
   Promise.all([
-    decodeSeriesAnalysisArtifact("aggregateV4", makeSeriesAnalysisAggregate()),
+    import("@/shared/api/generatedContracts/series-analysis-envelope-validators.generated"),
+    decodeSeriesAnalysisArtifact("aggregateV5", makeSeriesAnalysisAggregate()),
     decodeSeriesAnalysisArtifact("matchContext", makeSeriesAnalysisMatchContext()),
   ]),
 );
@@ -52,7 +54,7 @@ describe("useSeriesAnalysisResource", () => {
           }),
         ),
       ),
-      http.get("/api/analytics/series-comparison/v4/aggregate", ({ request }) =>
+      http.get("/api/analytics/series-comparison/v5/aggregate", ({ request }) =>
         new URL(request.url).searchParams.get("artifactId") === nextArtifact.artifactId
           ? HttpResponse.json({ title: "Unavailable" }, { status: 503 })
           : HttpResponse.json(makeSeriesAnalysisAggregate()),
@@ -139,7 +141,7 @@ describe("useSeriesAnalysisResource", () => {
             }),
           ),
         ),
-        http.get("/api/analytics/series-comparison/v4/aggregate", async ({ request }) => {
+        http.get("/api/analytics/series-comparison/v5/aggregate", async ({ request }) => {
           if (new URL(request.url).searchParams.get("artifactId") !== nextArtifact.artifactId)
             return HttpResponse.json(makeSeriesAnalysisAggregate());
           await aggregateGate.promise;
@@ -240,6 +242,14 @@ describe("useSeriesAnalysisResource", () => {
     );
     queryClient.setQueryData(seriesAnalysisKeys.aggregate(query), aggregate);
     queryClient.setQueryData(
+      seriesPlayerRadarKeys.scopeStatus(query),
+      makeSeriesAnalysisScopeStatus(),
+    );
+    queryClient.setQueryData(
+      seriesPlayerRadarKeys.scopeStatus({ ...query, seasonMasterId: "season_current" }),
+      makeSeriesAnalysisScopeStatus({ seasonMasterId: "season_current", seasonName: "今シーズン" }),
+    );
+    queryClient.setQueryData(
       seriesAnalysisKeys.aggregate({ ...query, seasonMasterId: "season_current" }),
       season,
     );
@@ -318,7 +328,7 @@ describe("useSeriesAnalysisResource", () => {
             }),
           );
         }),
-        http.get("/api/analytics/series-comparison/v4/aggregate", ({ request }) => {
+        http.get("/api/analytics/series-comparison/v5/aggregate", ({ request }) => {
           const id = new URL(request.url).searchParams.get("artifactId") ?? "";
           aggregates.push(id);
           return HttpResponse.json(
@@ -378,7 +388,7 @@ describe("useSeriesAnalysisResource", () => {
           if (statusReads > 1) await statusGate.promise;
           return HttpResponse.json(makeSeriesAnalysisStatus());
         }),
-        http.get("/api/analytics/series-comparison/v4/aggregate", ({ request }) => {
+        http.get("/api/analytics/series-comparison/v5/aggregate", ({ request }) => {
           const seasonMasterId = new URL(request.url).searchParams.get("seasonMasterId");
           scopes.push(seasonMasterId);
           const aggregate = makeSeriesAnalysisAggregate();
@@ -420,7 +430,7 @@ describe("useSeriesAnalysisResource", () => {
     let aggregateReads = 0;
     let contextReads = 0;
     server.use(
-      http.get("/api/analytics/series-comparison/v4/aggregate", () => {
+      http.get("/api/analytics/series-comparison/v5/aggregate", () => {
         aggregateReads += 1;
         return HttpResponse.json(makeSeriesAnalysisAggregate());
       }),
@@ -475,7 +485,7 @@ describe("useSeriesAnalysisResource", () => {
           }
           return HttpResponse.json(makeSeriesAnalysisStatus());
         }),
-        http.get("/api/analytics/series-comparison/v4/aggregate", ({ request }) => {
+        http.get("/api/analytics/series-comparison/v5/aggregate", ({ request }) => {
           const seasonMasterId = new URL(request.url).searchParams.get("seasonMasterId");
           aggregateScopes.push(seasonMasterId);
           if (!seasonMasterId) {

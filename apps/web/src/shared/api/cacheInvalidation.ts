@@ -1,6 +1,12 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import { heldEventKeys, matchKeys, ocrDraftKeys, seriesAnalysisKeys } from "@/shared/api/queryKeys";
+import {
+  heldEventKeys,
+  matchKeys,
+  ocrDraftKeys,
+  seriesAnalysisKeys,
+  seriesPlayerRadarKeys,
+} from "@/shared/api/queryKeys";
 
 async function invalidateMatchCollections(queryClient: QueryClient): Promise<void> {
   await Promise.all([
@@ -15,6 +21,8 @@ async function invalidateAnalysisState(queryClient: QueryClient): Promise<void> 
     queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.options() }),
     queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.statusRoot() }),
     queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.adminRoot() }),
+    queryClient.invalidateQueries({ queryKey: seriesPlayerRadarKeys.all() }),
+    queryClient.invalidateQueries({ queryKey: seriesPlayerRadarKeys.scopeStatusRoot() }),
   ]);
 }
 

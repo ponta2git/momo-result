@@ -7,14 +7,19 @@ import type {
   SeriesComparisonAggregate,
   SeriesComparisonReviewV3,
 } from "@/shared/api/seriesAnalysis";
+import type { SeriesAnalysisScopeStatus } from "@/shared/api/seriesPlayerRadar";
+import { memberDisplayName } from "@/shared/domain/members";
+import { makePlayerRadarEvaluation } from "@/test/msw/playerRadarFixtures";
 
 export const analysisArtifact = {
-  algorithmVersion: "series-analysis-v5",
+  algorithmVersion: "series-analysis-v6",
   artifactId: "artifact-current",
-  artifactSchemaVersion: 4,
+  artifactSchemaVersion: 5,
   gameTitleId: "gt_momotetsu_2",
   inputRevision: "12",
   publishedAt: "2026-08-09T01:02:03.000Z",
+  radarBasisCreatedAt: null,
+  radarBasisAppliedAt: null,
 } as const;
 
 const player = { displayName: "ぽんた", memberId: "member_ponta" } as const;
@@ -63,11 +68,30 @@ export function makeSeriesAnalysisStatus(
     currentArtifact: analysisArtifact,
     desired: {
       algorithmVersion: analysisArtifact.algorithmVersion,
-      artifactSchemaVersion: 4,
+      artifactSchemaVersion: 5,
       inputRevision: analysisArtifact.inputRevision,
     },
     gameTitleId: analysisArtifact.gameTitleId,
     schemaVersion: 1,
+    ...overrides,
+  };
+}
+
+export function makeSeriesAnalysisScopeStatus(
+  overrides: Partial<SeriesAnalysisScopeStatus> = {},
+): SeriesAnalysisScopeStatus {
+  return {
+    schemaVersion: 1,
+    gameTitleId: analysisArtifact.gameTitleId,
+    artifactId: analysisArtifact.artifactId,
+    seasonMasterId: null,
+    mapMasterId: null,
+    seasonName: null,
+    mapName: null,
+    state: "available",
+    invalidFields: [],
+    currentHasMatches: true,
+    publishedHasMatches: true,
     ...overrides,
   };
 }
@@ -405,6 +429,31 @@ export function makeSeriesAnalysisAggregate(
       },
     ],
     players: [player],
+    playerRadar: {
+      basis: null,
+      monitoring: null,
+      evaluation: {
+        ...makePlayerRadarEvaluation(),
+        basisChecksum: null,
+        sample: {
+          ...makePlayerRadarEvaluation().sample,
+          matchCount: 12,
+          heldEventCount: 3,
+          quality: "reference",
+          mapCounts: [{ mapMasterId: "map_east", matchCount: 12, displayName: "東日本編" }],
+        },
+        players: makePlayerRadarEvaluation().players.map((entry) => ({
+          ...entry,
+          displayName: memberDisplayName(entry.memberId),
+          axes: entry.axes.map((axis) => ({
+            ...axis,
+            score: null,
+            sampleQuality: "reference",
+            scoreUnavailableReasons: ["basis_unavailable"],
+          })),
+        })),
+      },
+    },
     rankAnalysis: {
       crownCertainty: {
         bootstrapIterations: 128,
@@ -511,7 +560,7 @@ export function makeSeriesAnalysisAggregate(
         memberId: player.memberId,
       },
     ],
-    schemaVersion: 5,
+    schemaVersion: 6,
     scope,
     source: { gameTitleId: artifact.gameTitleId },
     strategyScatter: {
@@ -1001,7 +1050,7 @@ export function makeSeriesAnalysisAdminOverview(): SeriesAnalysisAdminOverview {
     },
     recentJobs: [
       {
-        algorithmVersion: "series-analysis-v5",
+        algorithmVersion: "series-analysis-v6",
         attemptCount: 1,
         coalescedTriggers: [],
         elapsedMilliseconds: 1234,

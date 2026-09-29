@@ -1,6 +1,7 @@
 import { Activity, Play, RefreshCw, RotateCw } from "lucide-react";
 import { useState } from "react";
 
+import { PlayerRadarAdministration } from "@/features/seriesAnalysisAdmin/PlayerRadarAdministration";
 import {
   AdminSkeleton,
   ExecutionStatus,
@@ -143,6 +144,13 @@ export function SeriesAnalysisAdminPage() {
             </section>
             <ExecutionStatus data={data} />
             <SelectedTitleStatus selected={page.selection.selectedTitle} />
+            {page.selection.selectedTitle ? (
+              <PlayerRadarAdministration
+                key={page.selection.selectedTitle.gameTitleId}
+                gameTitleId={page.selection.selectedTitle.gameTitleId}
+                gameTitleName={page.selection.selectedTitle.gameTitleName}
+              />
+            ) : null}
             <RecentJobs jobs={data.recentJobs} />
           </>
         ) : null}

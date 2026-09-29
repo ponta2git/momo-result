@@ -82,18 +82,9 @@ export function normalizeSeriesAnalysisSelection(
   )
     ? state.seasonMasterId
     : undefined;
-  let mapMasterId = selectedTitle.maps.some((map) => map.mapMasterId === state.mapMasterId)
+  const mapMasterId = selectedTitle.maps.some((map) => map.mapMasterId === state.mapMasterId)
     ? state.mapMasterId
     : undefined;
-  if (
-    seasonMasterId &&
-    mapMasterId &&
-    !selectedTitle.seasonMapPairs.some(
-      (pair) => pair.seasonMasterId === seasonMasterId && pair.mapMasterId === mapMasterId,
-    )
-  ) {
-    mapMasterId = undefined;
-  }
   const scopeWasNormalized =
     (state.gameTitleId !== undefined && state.gameTitleId !== selectedTitle.gameTitleId) ||
     state.seasonMasterId !== seasonMasterId ||
@@ -119,32 +110,4 @@ export function seriesAnalysisQueryFromState(
     mapMasterId: state.mapMasterId,
     seasonMasterId: state.seasonMasterId,
   };
-}
-
-export function compatibleMapIds(
-  options: SeriesAnalysisOptionsResponse | undefined,
-  gameTitleId: string | undefined,
-  seasonMasterId: string | undefined,
-): Set<string> | undefined {
-  if (!seasonMasterId) return undefined;
-  const title = findSeriesAnalysisTitle(options, gameTitleId);
-  return new Set(
-    title?.seasonMapPairs
-      .filter((pair) => pair.seasonMasterId === seasonMasterId)
-      .map((pair) => pair.mapMasterId) ?? [],
-  );
-}
-
-export function compatibleSeasonIds(
-  options: SeriesAnalysisOptionsResponse | undefined,
-  gameTitleId: string | undefined,
-  mapMasterId: string | undefined,
-): Set<string> | undefined {
-  if (!mapMasterId) return undefined;
-  const title = findSeriesAnalysisTitle(options, gameTitleId);
-  return new Set(
-    title?.seasonMapPairs
-      .filter((pair) => pair.mapMasterId === mapMasterId)
-      .map((pair) => pair.seasonMasterId) ?? [],
-  );
 }

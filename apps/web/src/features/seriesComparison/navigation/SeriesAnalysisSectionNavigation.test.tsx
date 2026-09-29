@@ -3,7 +3,7 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode, useEffect, useState } from "react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { SeriesAnalysisNavigation } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
 import { useSeriesAnalysisLocationState } from "@/features/seriesComparison/navigation/useSeriesAnalysisLocationState";
@@ -16,6 +16,15 @@ import {
 } from "@/test/msw/seriesAnalysisFixtures";
 import { createTestQueryClient } from "@/test/queryClient";
 import { selectOption } from "@/test/selectOption";
+
+// Navigation assertions start after real lazy view modules are available.
+beforeAll(() =>
+  Promise.all([
+    import("@/features/seriesComparison/page/SeriesAnalysisContextView"),
+    import("@/features/seriesComparison/page/SeriesAnalysisDriversView"),
+    import("@/features/seriesComparison/page/SeriesAnalysisOverviewView"),
+  ]),
+);
 
 const options = makeSeriesAnalysisOptions();
 const review = makeFourPlayerSeriesAnalysisReview();

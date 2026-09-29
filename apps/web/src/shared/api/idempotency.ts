@@ -32,6 +32,7 @@ export const idempotencyOperations = [
   "notificationSettings.update",
   "seriesAnalysis.recalculateAll",
   "seriesAnalysis.recalculateTitle",
+  "seriesAnalysis.radarOperation",
 ] as const;
 
 export type IdempotencyOperation = (typeof idempotencyOperations)[number];

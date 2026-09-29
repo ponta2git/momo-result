@@ -8,7 +8,7 @@
 | --- | --- |
 | 本ページのscope、指標の意味、表示上の判断 | 本書 |
 | オーナー別比較の初版範囲、指標、件数・表示 | `docs/requirements/series-owner-comparison.md` |
-| プレーヤーレーダーの軸・万能性の比較・採点基準と先行試作（未実装） | `docs/requirements/series-player-radar.md` |
+| プレーヤーレーダーの6軸・万能性の比較・作品共通の固定採点基準（要求確定・未実装） | `docs/requirements/series-player-radar.md` |
 | 「次戦に備える」の行動プレイブック | `docs/requirements/series-review-playbook.md` |
 | 非同期計算、artifact、状態、管理、公開・復旧 | `docs/requirements/series-analysis-batch.md` |
 | HTTP / artifact shape | Tapir endpoint、JSON Schema |

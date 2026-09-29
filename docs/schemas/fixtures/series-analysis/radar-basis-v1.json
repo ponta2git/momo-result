@@ -1,0 +1,142 @@
+{
+  "axes": [
+    {
+      "axisId": "averageRank",
+      "median": 2.5,
+      "q10": 4.0,
+      "q90": 1.0,
+      "thresholds": [
+        4.9,
+        4.3,
+        3.7,
+        3.1,
+        2.5,
+        2.125,
+        1.75,
+        1.375,
+        1.0
+      ]
+    },
+    {
+      "axisId": "revenueP90",
+      "median": 421.0,
+      "q10": 254.0,
+      "q90": 588.0,
+      "thresholds": [
+        153.8,
+        220.6,
+        287.4,
+        354.2,
+        421.0,
+        487.8,
+        554.6,
+        621.4,
+        688.2
+      ]
+    },
+    {
+      "axisId": "revenueAverage",
+      "median": 345.0,
+      "q10": 178.0,
+      "q90": 512.0,
+      "thresholds": [
+        77.80000000000001,
+        144.6,
+        211.4,
+        278.2,
+        345.0,
+        411.8,
+        478.6,
+        545.4,
+        612.2
+      ]
+    },
+    {
+      "axisId": "totalAssetsP10",
+      "median": 259.0,
+      "q10": 92.0,
+      "q90": 426.0,
+      "thresholds": [
+        -8.199999999999989,
+        58.599999999999994,
+        125.4,
+        192.2,
+        259.0,
+        325.8,
+        392.6,
+        459.4,
+        526.2
+      ]
+    },
+    {
+      "axisId": "totalAssetsMedian",
+      "median": 335.0,
+      "q10": 168.0,
+      "q90": 502.0,
+      "thresholds": [
+        67.80000000000001,
+        134.6,
+        201.4,
+        268.2,
+        335.0,
+        401.8,
+        468.6,
+        535.4,
+        602.2
+      ]
+    },
+    {
+      "axisId": "totalAssetsP90",
+      "median": 411.0,
+      "q10": 244.0,
+      "q90": 578.0,
+      "thresholds": [
+        143.8,
+        210.6,
+        277.4,
+        344.2,
+        411.0,
+        477.8,
+        544.6,
+        611.4,
+        678.2
+      ]
+    }
+  ],
+  "definitionVersion": "player-radar-six-axes-v1",
+  "methodVersion": "player-radar-spread-v1",
+  "source": {
+    "firstMatch": {
+      "heldEventId": "event-0000",
+      "matchId": "match-0000",
+      "matchNoInEvent": 1,
+      "playedAt": "2026-01-01T00:00:00.000000Z"
+    },
+    "gameTitleId": "title",
+    "heldEventCount": 8,
+    "lastMatch": {
+      "heldEventId": "event-0007",
+      "matchId": "match-0039",
+      "matchNoInEvent": 5,
+      "playedAt": "2026-01-01T00:00:39.000000Z"
+    },
+    "mapCounts": [
+      {
+        "mapMasterId": "east",
+        "matchCount": 20
+      },
+      {
+        "mapMasterId": "west",
+        "matchCount": 20
+      }
+    ],
+    "mapMasterIds": [
+      "east",
+      "west"
+    ],
+    "matchCount": 40,
+    "sourceChecksum": "sha256:c5b6266b01c164f2c7811192c63576c437a3d775db15806ecfdd2fdc01796f9d"
+  },
+  "windowSize": 20,
+  "windowStride": 1
+}

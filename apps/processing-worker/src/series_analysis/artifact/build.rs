@@ -220,6 +220,7 @@ fn source_input_checksum(input: &NormalizedAnalysisInput) -> Result<String, Arti
         &SourceHeader {
             game_title_id: input.game_title_id(),
             input_revision: Decimal(input.input_revision()),
+            radar_basis: input.radar_basis(),
         },
         &mut buffer,
     )?;
@@ -234,6 +235,7 @@ fn source_input_checksum(input: &NormalizedAnalysisInput) -> Result<String, Arti
 struct SourceHeader<'a> {
     game_title_id: &'a str,
     input_revision: Decimal,
+    radar_basis: Option<&'a momo_analysis_core::radar::RadarPublishedBasis>,
 }
 
 #[derive(Serialize)]

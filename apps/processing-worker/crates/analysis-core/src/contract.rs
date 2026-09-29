@@ -6,14 +6,14 @@ use thiserror::Error;
 
 use crate::canonical::{CanonicalError, FramedSha256};
 
-pub const ARTIFACT_SCHEMA_VERSION: u32 = 4;
+pub const ARTIFACT_SCHEMA_VERSION: u32 = 5;
 /// Exact identifier for the complete Rust-owned validation contract applied before publication.
 ///
 /// This is deliberately independent from [`ARTIFACT_SCHEMA_VERSION`]: the latter identifies the
 /// persisted payload shape, while this value proves which semantic, cross-resource, canonical,
 /// and bounded-file checks accepted a concrete artifact. Existing rows without this exact value
 /// must not be treated as having passed the current validator.
-pub const ARTIFACT_VALIDATION_CONTRACT_ID: &str = "series-analysis-artifact-v4-full-validation-v1";
+pub const ARTIFACT_VALIDATION_CONTRACT_ID: &str = "series-analysis-artifact-v5-full-validation-v1";
 pub const MANIFEST_VERSION: u32 = 1;
 pub const QUEUE_SCHEMA_VERSION: &str = "1";
 const MAXIMUM_SCHEMA_CHUNK_BYTES: u64 = 16 * 1024 * 1024;
@@ -503,9 +503,9 @@ mod tests {
     use super::*;
 
     const VALID_ARTIFACT: &str =
-        include_str!("../../../../../docs/schemas/fixtures/series-analysis/valid-artifact-v4.json");
+        include_str!("../../../../../docs/schemas/fixtures/series-analysis/valid-artifact-v5.json");
     const INVALID_ARTIFACT: &str = include_str!(
-        "../../../../../docs/schemas/fixtures/series-analysis/invalid-artifact-v4.json"
+        "../../../../../docs/schemas/fixtures/series-analysis/invalid-artifact-v5.json"
     );
     const VALID_QUEUE: &str = include_str!(
         "../../../../../docs/schemas/fixtures/series-analysis/valid-queue-payload-v1.json"
@@ -527,7 +527,7 @@ mod tests {
     fn rejects_every_noncurrent_artifact_version() {
         let mut manifest: ArtifactManifest = serde_json::from_str(VALID_ARTIFACT)
             .unwrap_or_else(|error| panic!("valid artifact did not decode: {error}"));
-        for version in [1, 2, 3, 5] {
+        for version in [1, 2, 3, 4, 6] {
             manifest.artifact_schema_version = version;
             assert!(matches!(
                 manifest.validate(16, 16 * 1024 * 1024),

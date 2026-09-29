@@ -231,8 +231,8 @@ fn scoring_and_reference_conditions_are_independent_of_basis_availability() {
         );
     }
     let mut seven_events = input(40);
-    for row in &mut seven_events.player_matches {
-        row.held_event_id = format!("event-{}", row.match_no_in_event % 7);
+    for (index, row) in seven_events.player_matches.iter_mut().enumerate() {
+        row.held_event_id = format!("event-{}", index / 4 % 7);
     }
     assert_eq!(
         evaluate(seven_events, Some(&basis)).sample.quality,
@@ -519,4 +519,141 @@ fn initial_eligibility_does_not_repeat_for_each_added_record() {
     let later = monitor(&normalized(input(60)), None, None)
         .unwrap_or_else(|error| panic!("monitor: {error}"));
     assert_eq!(eligible.reasons, later.reasons);
+}
+
+#[test]
+fn public_payload_owner_rejects_mixed_basis_and_invented_scores() {
+    let basis = hand_basis();
+    let value = serde_json::to_value(evaluate(input(40), Some(&basis)))
+        .unwrap_or_else(|error| panic!("encode evaluation: {error}"));
+    assert!(
+        crate::payload::radar_evaluation_from_payload(&value, Some(&basis)).is_ok(),
+        "valid evaluation must pass the full owner"
+    );
+    assert!(
+        crate::payload::radar_evaluation_from_payload(&value, None).is_err(),
+        "scores cannot claim no basis"
+    );
+    let mut invented = value;
+    if let Some(score) = invented.pointer_mut("/players/0/axes/0/score") {
+        *score = serde_json::json!(1);
+    }
+    assert!(
+        crate::payload::radar_evaluation_from_payload(&invented, Some(&basis)).is_err(),
+        "shape-valid but wrong scores must fail"
+    );
+    let candidate = generate_candidate(&normalized(input(40)))
+        .unwrap_or_else(|error| panic!("candidate: {error}"));
+    let candidate_value = serde_json::to_value(candidate.summary())
+        .unwrap_or_else(|error| panic!("candidate JSON: {error}"));
+    assert!(
+        crate::payload::radar_candidate_from_payload(&candidate_value).is_ok(),
+        "candidate and derived application basis must match"
+    );
+}
+
+#[test]
+fn normalized_input_binds_the_published_identity_and_clears_old_monitoring_on_basis_change() {
+    let basis = hand_basis();
+    let checksum = basis
+        .checksum()
+        .unwrap_or_else(|error| panic!("basis checksum: {error}"));
+    let published = RadarPublishedBasis {
+        basis_id: "basis-a".to_owned(),
+        checksum,
+        basis,
+    };
+    let normalized = normalized(input(40))
+        .with_radar_basis(Some(published.clone()))
+        .unwrap_or_else(|error| panic!("attach basis: {error}"));
+    assert_eq!(normalized.radar_basis(), Some(&published));
+    assert_eq!(normalized.scope_refs().count(), 9);
+    let monitored = normalized.with_radar_monitoring(run_monitor(input(40)));
+    assert!(
+        monitored.radar_monitoring().is_some(),
+        "same-snapshot monitoring is retained"
+    );
+    let cleared = monitored
+        .with_radar_basis(None)
+        .unwrap_or_else(|error| panic!("clear basis: {error}"));
+    assert!(
+        cleared.radar_monitoring().is_none(),
+        "derived monitoring cannot survive a different basis"
+    );
+    let mut corrupt = published;
+    corrupt.checksum = "sha256:invalid".to_owned();
+    assert!(
+        self::normalized(input(40))
+            .with_radar_basis(Some(corrupt))
+            .is_err(),
+        "a database id cannot substitute for content validation"
+    );
+}
+
+#[test]
+fn empty_public_radar_fixture_matches_the_calculator() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../../../docs/schemas/fixtures/series-analysis/aggregate-payload-v6.json"
+    ))
+    .unwrap_or_else(|error| panic!("fixture: {error}"));
+    let result = RadarAggregate {
+        basis: None,
+        monitoring: None,
+        evaluation: evaluate(input(0), None),
+    };
+    assert_eq!(
+        fixture.get("playerRadar"),
+        serde_json::to_value(result).ok().as_ref()
+    );
+}
+
+#[test]
+fn checked_in_radar_fixtures_match_the_pure_calculator() {
+    use std::path::Path;
+
+    let candidate = generate_candidate(&normalized(input(40)))
+        .unwrap_or_else(|error| panic!("candidate: {error}"));
+    let basis = candidate
+        .basis
+        .as_ref()
+        .unwrap_or_else(|| panic!("synthetic basis must be non-degenerate"));
+    let evaluation = evaluate(input(40), Some(basis));
+    let monitoring = monitor(
+        &normalized(high_results(80)),
+        Some(basis),
+        Some(&candidate.source),
+    )
+    .unwrap_or_else(|error| panic!("monitoring: {error}"));
+    let fixtures = [
+        ("radar-basis-v1.json", serde_json::to_value(basis)),
+        (
+            "radar-candidate-v1.json",
+            serde_json::to_value(candidate.summary()),
+        ),
+        ("radar-evaluation-v1.json", serde_json::to_value(evaluation)),
+        ("radar-monitoring-v1.json", serde_json::to_value(monitoring)),
+        (
+            "radar-source-v1.json",
+            serde_json::to_value(&candidate.source),
+        ),
+    ];
+    let directory = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../../docs/schemas/fixtures/series-analysis");
+    for (name, value) in fixtures {
+        let value = value.unwrap_or_else(|error| panic!("{name}: {error}"));
+        let mut encoded = serde_json::to_string_pretty(&value)
+            .unwrap_or_else(|error| panic!("{name} encoding: {error}"));
+        encoded.push('\n');
+        let path = directory.join(name);
+        if std::env::var_os("UPDATE_SERIES_PLAYER_RADAR_FIXTURES").is_some() {
+            std::fs::write(&path, &encoded)
+                .unwrap_or_else(|error| panic!("write {}: {error}", path.display()));
+        }
+        let saved = std::fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
+        assert_eq!(
+            saved, encoded,
+            "{name} drifted; regenerate with UPDATE_SERIES_PLAYER_RADAR_FIXTURES=1 cargo test -p momo-analysis-core checked_in_radar_fixtures_match_the_pure_calculator"
+        );
+    }
 }

@@ -2,6 +2,8 @@ use serde_json::Value;
 
 use super::PayloadError;
 
+mod radar;
+
 const MAX_ITEMS: usize = 1_000_000;
 const MAX_TEXT_BYTES: usize = 4_096;
 
@@ -38,7 +40,7 @@ const BOOL: Schema = Schema::Bool;
 const SCHEMA_V1: Schema = Schema::ExactUnsigned(1);
 const SCHEMA_V3: Schema = Schema::ExactUnsigned(3);
 const SCHEMA_V4: Schema = Schema::ExactUnsigned(4);
-const SCHEMA_V5: Schema = Schema::ExactUnsigned(5);
+const SCHEMA_V6: Schema = Schema::ExactUnsigned(6);
 const COUNT: Schema = Schema::Unsigned { maximum: 1_000_000 };
 const INDEX: Schema = Schema::Unsigned { maximum: 1_000_000 };
 const I32: Schema = Schema::Integer {
@@ -1390,12 +1392,16 @@ const OWNER_COMPARISON: Schema = Schema::Object(&[
     field("recordedOwnerCount", &Schema::Unsigned { maximum: 4 }),
 ]);
 const OWNER_FIELDS: &[Field] = &[field("ownerComparison", &OWNER_COMPARISON)];
-const V5_RESOURCE_FIELDS: &[Field] = &[field("schemaVersion", &SCHEMA_V5), field("scope", &SCOPE)];
+const V6_RESOURCE_FIELDS: &[Field] = &[field("schemaVersion", &SCHEMA_V6), field("scope", &SCOPE)];
 const V4_RESOURCE_FIELDS: &[Field] = &[field("schemaVersion", &SCHEMA_V4), field("scope", &SCOPE)];
 const V3_RESOURCE_FIELDS: &[Field] = &[field("schemaVersion", &SCHEMA_V3), field("scope", &SCOPE)];
 const V1_RESOURCE_FIELDS: &[Field] = &[field("schemaVersion", &SCHEMA_V1), field("scope", &SCOPE)];
-const AGGREGATE: Schema =
-    Schema::MergedObject(&[V5_RESOURCE_FIELDS, AGGREGATE_BODY_FIELDS, OWNER_FIELDS]);
+const AGGREGATE: Schema = Schema::MergedObject(&[
+    V6_RESOURCE_FIELDS,
+    AGGREGATE_BODY_FIELDS,
+    OWNER_FIELDS,
+    &[radar::RESOURCE_FIELD],
+]);
 const REVIEW: Schema = Schema::MergedObject(&[V4_RESOURCE_FIELDS, REVIEW_BODY_FIELDS]);
 const DRILLDOWN_IDENTITY_FIELDS: &[Field] = &[field("player", &MEMBER_REF)];
 const RANK_HISTORY_PAYLOAD_FIELDS: &[Field] = &[field("payload", &RANK_HISTORY)];
@@ -1472,6 +1478,22 @@ pub(super) fn validate_drilldown(value: &Value, metric_id: &str) -> Result<(), P
 
 pub(super) fn validate_match_context(value: &Value) -> Result<(), PayloadError> {
     validate(value, &CONTEXT_RESOURCE)
+}
+
+pub(super) fn validate_radar_basis(value: &Value) -> Result<(), PayloadError> {
+    validate(value, &radar::BASIS)
+}
+
+pub(super) fn validate_radar_evaluation(value: &Value) -> Result<(), PayloadError> {
+    validate(value, &radar::EVALUATION)
+}
+
+pub(super) fn validate_radar_candidate(value: &Value) -> Result<(), PayloadError> {
+    validate(value, &radar::CANDIDATE)
+}
+
+pub(super) fn validate_radar_monitoring(value: &Value) -> Result<(), PayloadError> {
+    validate(value, &radar::MONITORING)
 }
 
 fn validate_selected(
@@ -1617,7 +1639,7 @@ mod json_schema_export_tests {
 
     use super::{
         AGGREGATE, CONTEXT_RESOURCE, DRILLDOWN_VARIANTS, DrilldownVariant, FOLD_ROW, Field,
-        MAX_ITEMS, MAX_TEXT_BYTES, REVIEW, Schema, validate, validate_aggregate,
+        MAX_ITEMS, MAX_TEXT_BYTES, REVIEW, Schema, radar, validate, validate_aggregate,
         validate_drilldown, validate_match_context, validate_review,
     };
 
@@ -1870,11 +1892,11 @@ mod json_schema_export_tests {
         }
     }
 
-    fn generated_schemas() -> [GeneratedSchema; 5] {
+    fn generated_schemas() -> [GeneratedSchema; 9] {
         [
             document(
-                "series-analysis-aggregate-v5.schema.json",
-                "Series Analysis Aggregate Resource v5",
+                "series-analysis-aggregate-v6.schema.json",
+                "Series Analysis Aggregate Resource v6",
                 &AGGREGATE,
             ),
             document(
@@ -1889,6 +1911,26 @@ mod json_schema_export_tests {
                 &CONTEXT_RESOURCE,
             ),
             publication_contract_document(),
+            document(
+                "series-player-radar-basis-v1.schema.json",
+                "Series Player Radar Basis v1",
+                &radar::BASIS,
+            ),
+            document(
+                "series-player-radar-evaluation-v1.schema.json",
+                "Series Player Radar Evaluation v1",
+                &radar::EVALUATION,
+            ),
+            document(
+                "series-player-radar-candidate-v1.schema.json",
+                "Series Player Radar Candidate Summary v1",
+                &radar::CANDIDATE,
+            ),
+            document(
+                "series-player-radar-monitoring-v1.schema.json",
+                "Series Player Radar Monitoring v1",
+                &radar::MONITORING,
+            ),
         ]
     }
 
@@ -1930,7 +1972,7 @@ mod json_schema_export_tests {
     fn shared_normal_fixtures_and_invalid_mutations_follow_owner_descriptor() {
         let aggregate: Value = serde_json::from_str(include_str!(concat!(
             "../../../../../../docs/schemas/fixtures/series-analysis/",
-            "aggregate-payload-v5.json"
+            "aggregate-payload-v6.json"
         )))
         .unwrap_or_else(|error| panic!("aggregate fixture is not JSON: {error}"));
         let review: Value = serde_json::from_str(include_str!(concat!(

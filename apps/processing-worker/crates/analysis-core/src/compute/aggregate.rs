@@ -5,6 +5,7 @@ use crate::{
     contract::ScopeRef,
     model::{PlayerMatchInput, PlayerMatchesByMember},
     outcome_model::OutcomeModelAnalysis,
+    radar::RadarAggregate,
 };
 
 use super::{
@@ -23,6 +24,10 @@ use super::{
     trends::{asset_histogram, match_digest, match_no_in_event, revenue_histogram, trends},
 };
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one scoped calculation passes its existing analyses and immutable radar result to the payload owner"
+)]
 pub(super) fn aggregate(
     game_title_id: &str,
     scope: &ScopeRef,
@@ -31,6 +36,7 @@ pub(super) fn aggregate(
     player_matches_by_member: &PlayerMatchesByMember<'_>,
     groups: &[MatchGroup<'_>],
     outcome_model: &OutcomeModelAnalysis,
+    player_radar: &RadarAggregate,
 ) -> Value {
     let revenue_ranks = competition_ranks_by_match(rows, |row| row.revenue_man_yen);
     let asset_ranks = competition_ranks_by_match(rows, |row| row.total_assets_man_yen);
@@ -60,7 +66,8 @@ pub(super) fn aggregate(
     let (leader_member_ids, rank_spread) = leader_summary(players, player_matches_by_member);
 
     object([
-        ("schemaVersion", 5.into()),
+        ("schemaVersion", 6.into()),
+        ("playerRadar", json!(player_radar)),
         ("scope", scope_summary_json(scope, groups.len())),
         (
             "players",

@@ -137,6 +137,22 @@ pub struct RadarBasis {
     pub axes: [RadarAxisBasis; 6],
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct RadarPublishedBasis {
+    pub basis_id: String,
+    pub checksum: String,
+    pub basis: RadarBasis,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct RadarAggregate {
+    pub basis: Option<RadarPublishedBasis>,
+    pub evaluation: RadarEvaluation,
+    pub monitoring: Option<RadarMonitoring>,
+}
+
 impl RadarBasis {
     /// Calculation identity excludes the database basis id and every application timestamp.
     ///

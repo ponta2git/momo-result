@@ -13,6 +13,7 @@ use momo_analysis_core::{
     contract::{ARTIFACT_VALIDATION_CONTRACT_ID, ArtifactManifest, ResourceManifest},
     model::{AnalysisInput, IncidentCounts, NormalizedAnalysisInput, PlayerMatchInput},
     payload,
+    radar::{RadarBasis, RadarPublishedBasis},
 };
 
 use super::{
@@ -419,4 +420,47 @@ fn owner_correction_changes_source_checksum_without_changing_input_revision() {
         .unwrap_or_else(|error| panic!("artifact build: {error}"));
     assert_ne!(first.source_input_checksum, second.source_input_checksum);
     assert_ne!(first.root_checksum, second.root_checksum);
+}
+
+#[test]
+fn saved_radar_identity_changes_reuse_and_returning_to_the_same_basis_reproduces_it() {
+    let mut basis: RadarBasis = serde_json::from_str(include_str!(
+        "../../../../../docs/schemas/fixtures/series-analysis/radar-basis-v1.json"
+    ))
+    .unwrap_or_else(|error| panic!("synthetic radar basis: {error}"));
+    basis.source.game_title_id = "title-artifact".to_owned();
+    let checksum = basis
+        .checksum()
+        .unwrap_or_else(|error| panic!("basis checksum: {error}"));
+    let manifests = [None, Some("basis-a"), Some("basis-b"), Some("basis-a")]
+        .into_iter()
+        .map(|basis_id| {
+            let published = basis_id.map(|basis_id| RadarPublishedBasis {
+                basis_id: basis_id.to_owned(),
+                checksum: checksum.clone(),
+                basis: basis.clone(),
+            });
+            let input = normalized(input())
+                .with_radar_basis(published)
+                .unwrap_or_else(|error| panic!("basis input: {error}"));
+            let directory =
+                TempDir::new().unwrap_or_else(|error| panic!("temp directory: {error}"));
+            let built = build_artifact(&input, &request(), directory.path())
+                .unwrap_or_else(|error| panic!("artifact build: {error}"));
+            let validated = validate(directory.path())
+                .unwrap_or_else(|error| panic!("artifact validation: {error}"));
+            assert_eq!(validated.manifest(), &built.manifest);
+            built.manifest
+        })
+        .collect::<Vec<_>>();
+    let [without, first, different, restored] = manifests.as_slice() else {
+        panic!("four identity cases")
+    };
+    assert_eq!(without.input_revision, first.input_revision);
+    assert_eq!(first.input_revision, different.input_revision);
+    assert_ne!(without.source_input_checksum, first.source_input_checksum);
+    assert_ne!(first.source_input_checksum, different.source_input_checksum);
+    assert_ne!(first.root_checksum, different.root_checksum);
+    assert_eq!(first.source_input_checksum, restored.source_input_checksum);
+    assert_eq!(first.root_checksum, restored.root_checksum);
 }

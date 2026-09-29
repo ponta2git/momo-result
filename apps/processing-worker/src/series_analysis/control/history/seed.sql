@@ -45,6 +45,35 @@ FROM series_analysis_artifacts WHERE game_title_id = 'analysis-history-test-titl
 UPDATE series_analysis_artifacts
 SET validation_contract_id = 'series-analysis-artifact-v4-full-validation-v1'
 WHERE game_title_id = 'analysis-history-test-title';
+
+INSERT INTO series_radar_bases (
+  id, game_title_id, checksum, payload, source_snapshot, source_checksum,
+  source_input_revision, created_at
+)
+SELECT 'analysis-history-radar-' || name, 'analysis-history-test-title',
+       'sha256:' || repeat('a', 64), '{}', '{"matches":[]}',
+       'sha256:' || repeat('b', 64), 0, '2099-06-01'
+FROM (VALUES ('current'), ('obsolete')) fixtures(name);
+INSERT INTO series_radar_title_states (
+  game_title_id, current_basis_id, desired_basis_id, current_applied_at
+) VALUES (
+  'analysis-history-test-title', 'analysis-history-radar-current',
+  'analysis-history-radar-current', '2099-06-01'
+);
+INSERT INTO series_radar_candidates (id, game_title_id, basis_id, status)
+VALUES ('analysis-history-radar-candidate', 'analysis-history-test-title',
+        'analysis-history-radar-current', 'ready');
+INSERT INTO series_radar_previews (
+  id, game_title_id, candidate_id, input_revision, status,
+  evaluation_snapshot, scope_keys, created_at, updated_at
+)
+SELECT 'analysis-history-radar-preview-' || name, 'analysis-history-test-title',
+       'analysis-history-radar-candidate', 0, 'ready', '{"matches":[]}',
+       ARRAY['overall'], created_at::timestamptz, '2099-06-01'
+FROM (VALUES ('old', '2099-06-01'), ('latest', '2099-06-02')) fixtures(name, created_at);
+INSERT INTO series_radar_preview_scopes (preview_id, scope_key, payload)
+SELECT id, 'overall', '{"before":null,"after":null}'
+FROM series_radar_previews WHERE game_title_id = 'analysis-history-test-title';
 UPDATE series_analysis_artifacts SET status = 'published', published_at = '2099-06-01'
 WHERE game_title_id = 'analysis-history-test-title' AND id <> 'analysis-history-test-staging';
 UPDATE series_analysis_title_states

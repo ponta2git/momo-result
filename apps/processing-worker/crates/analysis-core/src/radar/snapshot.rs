@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     canonical::FramedSha256,
-    model::{NormalizedAnalysisInput, PlayerMatchInput},
+    model::{AnalysisInput, IncidentCounts, NormalizedAnalysisInput, PlayerMatchInput},
 };
 
 use super::types::{
@@ -52,6 +52,60 @@ pub fn source_is_current(
 }
 
 impl RadarSourceSnapshot {
+    /// Validates a saved radar-only snapshot and recovers its deterministic scope index.
+    ///
+    /// Synthetic incident/owner/order fields satisfy the existing input boundary only; no
+    /// non-radar calculation may use the returned rows as newly observed match facts.
+    ///
+    /// # Errors
+    ///
+    /// Rejects unsupported identities, counts, ranks, duplicate matches, and noncanonical order.
+    pub fn normalized_for_validation(
+        &self,
+        input_revision: i64,
+    ) -> Result<NormalizedAnalysisInput, RadarError> {
+        let rows = self
+            .matches
+            .iter()
+            .flat_map(|item| {
+                let owner = item
+                    .players
+                    .first()
+                    .map_or("", |player| player.member_id.as_str());
+                item.players
+                    .iter()
+                    .zip(1..=4)
+                    .map(move |(player, play_order)| PlayerMatchInput {
+                        match_id: item.order.match_id.clone(),
+                        match_revision: 0,
+                        played_at: item.order.played_at.clone(),
+                        held_event_id: item.order.held_event_id.clone(),
+                        match_no_in_event: item.order.match_no_in_event,
+                        season_master_id: item.season_master_id.clone(),
+                        map_master_id: item.map_master_id.clone(),
+                        owner_member_id: owner.to_owned(),
+                        member_id: player.member_id.clone(),
+                        play_order,
+                        rank: player.rank,
+                        total_assets_man_yen: player.total_assets_man_yen,
+                        revenue_man_yen: player.revenue_man_yen,
+                        incidents: IncidentCounts::default(),
+                    })
+            })
+            .collect();
+        let input = AnalysisInput {
+            game_title_id: self.game_title_id.clone(),
+            input_revision,
+            player_matches: rows,
+        }
+        .try_into_normalized()
+        .map_err(|_invalid| RadarError::InvalidSource)?;
+        if snapshot(&input)? != *self {
+            return Err(RadarError::InvalidSource);
+        }
+        Ok(input)
+    }
+
     /// Bounded display metadata and the semantic source checksum.
     ///
     /// # Errors

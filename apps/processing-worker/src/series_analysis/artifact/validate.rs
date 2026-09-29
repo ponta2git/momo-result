@@ -23,6 +23,7 @@ use super::{
 /// and cross-resource check in [`validate_artifact_directory`].
 pub(crate) struct ValidatedArtifact {
     manifest: ArtifactManifest,
+    radar_basis: Option<(String, String)>,
     validation_contract_id: &'static str,
 }
 
@@ -37,9 +38,17 @@ impl ValidatedArtifact {
         self.validation_contract_id
     }
 
-    const fn new(manifest: ArtifactManifest) -> Self {
+    #[must_use]
+    pub(crate) fn radar_basis(&self) -> Option<(&str, &str)> {
+        self.radar_basis
+            .as_ref()
+            .map(|(id, checksum)| (id.as_str(), checksum.as_str()))
+    }
+
+    const fn new(manifest: ArtifactManifest, radar_basis: Option<(String, String)>) -> Self {
         Self {
             manifest,
+            radar_basis,
             validation_contract_id: ARTIFACT_VALIDATION_CONTRACT_ID,
         }
     }
@@ -92,6 +101,7 @@ pub(crate) fn validate_artifact_directory(
     let mut total_bytes = u64::try_from(manifest_bytes.len())?;
     drop(manifest_bytes);
     let mut payloads = payload::PayloadSetValidator::new();
+    let mut radar_basis = None;
     for resource in &manifest.resources {
         let common = resource_common(resource);
         let path = directory.join(&common.path);
@@ -119,9 +129,27 @@ pub(crate) fn validate_artifact_directory(
             return Err(ArtifactError::ResourceBound);
         }
         payloads.add_manifest(resource, &value)?;
+        if matches!(
+            resource,
+            momo_analysis_core::contract::ResourceManifest::Aggregate { .. }
+        ) && common.scope == momo_analysis_core::contract::ScopeRef::Overall
+            && let Some(basis) = value
+                .pointer("/playerRadar/basis")
+                .filter(|value| !value.is_null())
+        {
+            let id = basis
+                .get("basisId")
+                .and_then(serde_json::Value::as_str)
+                .ok_or(payload::PayloadError::ReferenceMismatch)?;
+            let checksum = basis
+                .get("checksum")
+                .and_then(serde_json::Value::as_str)
+                .ok_or(payload::PayloadError::ReferenceMismatch)?;
+            radar_basis = Some((id.to_owned(), checksum.to_owned()));
+        }
     }
     payloads.finish()?;
-    Ok(ValidatedArtifact::new(manifest))
+    Ok(ValidatedArtifact::new(manifest, radar_basis))
 }
 
 fn read_bounded_regular_file(path: &Path, maximum_bytes: u64) -> Result<Vec<u8>, ArtifactError> {

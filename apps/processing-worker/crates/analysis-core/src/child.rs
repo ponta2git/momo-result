@@ -10,6 +10,7 @@ const REPORT_SCHEMA_VERSION: u32 = 3;
 /// Logical identity of one Analysis child computation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AnalysisAttemptIdentity {
+    pub job_id: String,
     pub game_title_id: String,
     pub input_revision: i64,
     pub artifact_id: String,

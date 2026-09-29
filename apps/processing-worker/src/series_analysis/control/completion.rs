@@ -24,6 +24,7 @@ use super::{
 use crate::series_analysis::metrics::{PhaseTimer, measure};
 
 mod authoritative_input;
+mod radar_source;
 
 struct PublicationNotification<'a> {
     comparison: Option<Box<crate::notifications::analysis::Comparison>>,
@@ -56,6 +57,17 @@ pub(crate) async fn publish(
     metrics: &mut AttemptMetrics,
     finalization_deadline: tokio::time::Instant,
 ) -> Result<ControlOutcome<PublicationResult>, ControlError> {
+    if claim.work_kind == "radar_prepare" {
+        return Box::pin(super::radar::complete_preparation(
+            client,
+            claim,
+            config,
+            artifact_directory,
+            metrics,
+        ))
+        .await;
+    }
+
     let (artifact, mut staged) =
         prepare_staging(client, claim, config, artifact_directory, metrics).await?;
     let worker_id = config.worker_id.as_str();
@@ -95,7 +107,7 @@ pub(crate) async fn publish(
         )
         .await?;
         let desired = desired_artifact(&transaction, claim).await?;
-        if !desired.matches(claim) {
+        if !desired.matches(claim) || !super::radar::desired_matches(&transaction, claim).await? {
             drop(notification);
             transaction.rollback().await?;
             finish_publication_metrics(metrics, publication_started);
@@ -103,11 +115,23 @@ pub(crate) async fn publish(
                 .await
                 .map(|outcome| outcome.map(|()| PublicationResult::Superseded));
         }
-        measure(
+        let radar_source_valid = measure(
             "publication_validation",
             validate_candidate(&transaction, claim, &artifact, staged),
         )
         .await?;
+        if !radar_source_valid {
+            drop(notification);
+            finish_publication_metrics(metrics, publication_started);
+            return commit_integrity_failure(
+                transaction,
+                claim,
+                worker_id,
+                metrics,
+                super::SafeFailureCode::InputContractInvalid,
+            )
+            .await;
+        }
         let notification = PublicationNotification {
             comparison: notification,
             baseline: &desired.notification_baseline,
@@ -210,13 +234,13 @@ async fn validate_candidate(
     claim: &ClaimedJob,
     artifact: &ValidatedArtifact,
     staged: bool,
-) -> Result<(), ControlError> {
+) -> Result<bool, ControlError> {
     authoritative_input::validate_manifest(transaction, &claim.game_title_id, artifact.manifest())
         .await?;
     if staged {
         validate_staged_artifact(transaction, claim, artifact).await?;
     }
-    Ok(())
+    radar_source::validate(transaction, claim).await
 }
 
 async fn commit_successful_publication(
@@ -483,6 +507,10 @@ mod tests {
     #[test]
     fn publication_supersedes_a_contract_only_desired_version_change() {
         let claim = ClaimedJob {
+            work_kind: String::from("analysis"),
+            radar_operation_id: None,
+            radar_basis_id: None,
+            radar_generation: 0,
             job_id: String::from("job-1"),
             game_title_id: String::from("title-1"),
             input_revision: 3,

@@ -164,6 +164,36 @@ impl RadarBasis {
         digest.update_serialized(self, &mut Vec::new())?;
         Ok(digest.finalize())
     }
+    /// Projects the saved distribution into the administration result for restoring a basis.
+    /// It does not calculate a new distribution or adjust the saved thresholds.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a basis incompatible with the fixed definition or scoring method.
+    pub fn candidate_summary(&self) -> Result<RadarCandidateSummary, RadarError> {
+        super::calculation::validate_basis(self)?;
+        let window_count = self
+            .source
+            .match_count
+            .saturating_sub(RADAR_WINDOW_SIZE - 1);
+        let values_per_axis = window_count
+            .checked_mul(4)
+            .ok_or(RadarError::InvalidBasis)?;
+        Ok(RadarCandidateSummary {
+            source_summary: self.source.clone(),
+            window_count,
+            values_per_axis,
+            axes: self.axes.clone().map(|axis| RadarCandidateAxis {
+                axis_id: axis.axis_id,
+                q10: Some(axis.q10),
+                median: Some(axis.median),
+                q90: Some(axis.q90),
+                thresholds: Some(axis.thresholds),
+                unavailable_reasons: Vec::new(),
+            }),
+            basis: Some(self.clone()),
+        })
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]

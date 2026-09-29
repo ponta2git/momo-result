@@ -341,6 +341,14 @@ fn fixed_basis_is_deterministic_after_input_shuffle_and_json_round_trip() {
     let second = generate_candidate(&normalized(shuffled))
         .unwrap_or_else(|error| panic!("candidate: {error}"));
     assert_eq!(first, second);
+    assert_eq!(
+        first
+            .basis
+            .as_ref()
+            .and_then(|basis| basis.candidate_summary().ok()),
+        Some(first.summary()),
+        "restoring projects the exact saved distribution without regeneration"
+    );
     let basis = first.basis.unwrap_or_else(|| panic!("basis"));
     let encoded = serde_json::to_string(&basis).unwrap_or_else(|error| panic!("encode: {error}"));
     let decoded: RadarBasis =

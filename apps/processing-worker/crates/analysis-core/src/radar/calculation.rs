@@ -116,6 +116,27 @@ pub fn evaluate_scope(
     evaluate_rows(&rows, &member_ids, basis)
 }
 
+/// Evaluates the existing scope index in a bounded four-way pass over match rows.
+///
+/// # Errors
+///
+/// Rejects incompatible bases and invalid fixed-player rosters.
+pub fn evaluate_scopes(
+    input: &NormalizedAnalysisInput,
+    basis: Option<&RadarBasis>,
+) -> Result<Vec<(ScopeRef, RadarEvaluation)>, RadarError> {
+    if basis.is_some_and(|basis| basis.source.game_title_id != input.game_title_id()) {
+        return Err(RadarError::InvalidBasis);
+    }
+    input
+        .scopes()
+        .map(|(scope, rows)| {
+            let players = ordered_member_ids(&rows);
+            Ok((scope.clone(), evaluate_rows(&rows, &players, basis)?))
+        })
+        .collect()
+}
+
 /// Scores already selected normalized rows, retaining the caller's fixed player order.
 ///
 /// The rows must be a complete-match subset of a validated `NormalizedAnalysisInput`. The

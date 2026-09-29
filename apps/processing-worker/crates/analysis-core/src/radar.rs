@@ -9,7 +9,7 @@ mod snapshot;
 mod types;
 
 pub use calculation::{
-    evaluate_rows, evaluate_scope, generate_candidate, score_value, validate_basis,
+    evaluate_rows, evaluate_scope, evaluate_scopes, generate_candidate, score_value, validate_basis,
 };
 pub use monitoring::monitor;
 pub use snapshot::{snapshot, source_is_current};

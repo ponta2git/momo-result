@@ -23,6 +23,7 @@ async fn real_postgres_retention_preserves_active_jobs_and_readable_artifacts()
         cleanup_history(&mut primary, now, 1).await?,
         [0, 0, 1, 1, 1]
     );
+    assert_radar_retention(&primary).await?;
     let remaining = primary
         .query(
             "SELECT id FROM series_analysis_jobs WHERE game_title_id = $1 ORDER BY id",
@@ -84,5 +85,67 @@ async fn real_postgres_retention_preserves_active_jobs_and_readable_artifacts()
             &[],
         )
         .await?;
+    Ok(())
+}
+
+async fn assert_radar_retention(
+    client: &tokio_postgres::Client,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let bases = client
+        .query(
+            "SELECT id, source_snapshot IS NOT NULL FROM series_radar_bases \
+             WHERE game_title_id = 'analysis-history-test-title' ORDER BY id",
+            &[],
+        )
+        .await?
+        .into_iter()
+        .map(|row| Ok((row.try_get::<_, String>(0)?, row.try_get::<_, bool>(1)?)))
+        .collect::<Result<Vec<_>, tokio_postgres::Error>>()?;
+    assert_eq!(
+        bases,
+        [
+            ("analysis-history-radar-current".to_owned(), true),
+            ("analysis-history-radar-obsolete".to_owned(), false),
+        ]
+    );
+    let previews = client
+        .query(
+            "SELECT p.id, p.status, p.evaluation_snapshot IS NOT NULL, \
+                    cardinality(p.scope_keys), count(s.scope_key) \
+             FROM series_radar_previews p LEFT JOIN series_radar_preview_scopes s ON s.preview_id=p.id \
+             WHERE p.game_title_id = 'analysis-history-test-title' GROUP BY p.id ORDER BY p.id",
+            &[],
+        )
+        .await?
+        .into_iter()
+        .map(|row| {
+            Ok((
+                row.try_get::<_, String>(0)?,
+                row.try_get::<_, String>(1)?,
+                row.try_get::<_, bool>(2)?,
+                row.try_get::<_, i32>(3)?,
+                row.try_get::<_, i64>(4)?,
+            ))
+        })
+        .collect::<Result<Vec<_>, tokio_postgres::Error>>()?;
+    assert_eq!(
+        previews,
+        [
+            (
+                "analysis-history-radar-preview-latest".to_owned(),
+                "ready".to_owned(),
+                true,
+                1,
+                1
+            ),
+            (
+                "analysis-history-radar-preview-old".to_owned(),
+                "stale".to_owned(),
+                false,
+                0,
+                0
+            ),
+        ]
+    );
     Ok(())
 }

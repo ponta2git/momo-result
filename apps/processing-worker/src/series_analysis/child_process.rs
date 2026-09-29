@@ -123,6 +123,8 @@ impl ManagedAnalysisChild {
             .arg("child-compute")
             .arg("--game-title-id")
             .arg(&spec.identity.game_title_id)
+            .arg("--job-id")
+            .arg(&spec.identity.job_id)
             .arg("--input-revision")
             .arg(spec.identity.input_revision.to_string())
             .arg("--artifact-id")

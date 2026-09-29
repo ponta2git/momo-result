@@ -14,18 +14,18 @@ final class SeriesAnalysisResponseSchemasSpec extends FunSuite with JsonSchemaAs
   private val registry = SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12)
 
   List(
-    (SeriesAnalysisResponseSchemas.aggregateV4, "aggregate-payload-v5.json", List(2, 3, 4)),
+    (SeriesAnalysisResponseSchemas.aggregateV5, "aggregate-payload-v6.json", List(2, 3, 4, 5)),
     (SeriesAnalysisResponseSchemas.reviewV3, "review-payload-v4.json", List(2, 3)),
   ).foreach { case (resource, file, obsoletePayloadVersions) =>
     test(s"${resource.kind} accepts only the current artifact and payload pair"):
       val schema = compiled(resource)
       val payload = fixture(file)
-      versions.foreach(version => assertResponse(schema, payload, version, version == 4))
+      versions.foreach(version => assertResponse(schema, payload, version, version == 5))
       obsoletePayloadVersions.foreach(version =>
         assertResponse(
           schema,
           payload.mapObject(_.add("schemaVersion", Json.fromInt(version))),
-          4,
+          5,
           false
         )
       )
@@ -34,7 +34,7 @@ final class SeriesAnalysisResponseSchemasSpec extends FunSuite with JsonSchemaAs
   test("shared drilldown shapes accept only the current artifact generation"):
     val schema = compiled(SeriesAnalysisResponseSchemas.drilldown)
     List("drilldown-payload-v3.json", "rank-signals-drilldown-payload-v3.json").foreach { name =>
-      versions.foreach(version => assertResponse(schema, fixture(name), version, version == 4))
+      versions.foreach(version => assertResponse(schema, fixture(name), version, version == 5))
     }
 
   test("included and excluded match contexts reject unknown artifact generations"):
@@ -67,12 +67,12 @@ final class SeriesAnalysisResponseSchemasSpec extends FunSuite with JsonSchemaAs
         fields("match").get.mapObject(_.remove("ownerMemberId"))
       )
     )
-    assertResponse(schema, missingOwner, 4, false)
+    assertResponse(schema, missingOwner, 5, false)
     val extraOwnerOnExcluded =
       excluded.mapObject(_.add("ownerMemberId", Json.fromString("member-1")))
-    assertResponse(schema, extraOwnerOnExcluded, 4, false)
+    assertResponse(schema, extraOwnerOnExcluded, 5, false)
     List(included, excluded).foreach { payload =>
-      versions.foreach(version => assertResponse(schema, payload, version, version == 4))
+      versions.foreach(version => assertResponse(schema, payload, version, version == 5))
     }
 
   private def compiled(resource: SeriesAnalysisResponseSchemas.Resource): Schema =
@@ -83,9 +83,11 @@ final class SeriesAnalysisResponseSchemasSpec extends FunSuite with JsonSchemaAs
       "artifactId" -> Json.fromString("artifact-fixture"),
       "gameTitleId" -> Json.fromString("title-fixture"),
       "inputRevision" -> Json.fromString("1"),
-      "algorithmVersion" -> Json.fromString("series-analysis-v5"),
+      "algorithmVersion" -> Json.fromString("series-analysis-v6"),
       "artifactSchemaVersion" -> Json.fromInt(version),
       "publishedAt" -> Json.fromString("2026-01-01T00:00:00Z"),
+      "radarBasisCreatedAt" -> Json.Null,
+      "radarBasisAppliedAt" -> Json.Null,
     )
     val response = hydrateMembers(payload).mapObject(fields =>
       fields.add("artifact", artifact).add(

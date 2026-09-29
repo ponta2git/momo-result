@@ -9,7 +9,10 @@ import sttp.apispec.openapi.OpenAPI
 import sttp.apispec.openapi.circe.*
 import sttp.tapir.docs.openapi.OpenAPIDocsInterpreter
 
-import momo.api.contracts.seriesanalysis.SeriesAnalysisResponseSchemas
+import momo.api.contracts.seriesanalysis.{
+  SeriesAnalysisResponseSchemas,
+  SeriesPlayerRadarResponseSchemas
+}
 import momo.api.domain.SeriesAnalysisDrilldownMetric
 import momo.api.endpoints.ApiEndpoints
 
@@ -33,7 +36,24 @@ object OpenApiGenerator:
     .mkString("\n")
 
   private def withDocumentedContracts(document: Json): Json =
-    withDrilldownMetricIds(withResponseSchemas(document))
+    withDrilldownMetricIds(withRadarResponseSchemas(withResponseSchemas(document)))
+
+  private def withRadarResponseSchemas(document: Json): Json =
+    val operation = document.hcursor.downField("components").downField("schemas")
+      .downField("SeriesPlayerRadarOperationResponse").focus
+      .getOrElse(sys.error("Radar operation schema is missing."))
+    List(
+      SeriesPlayerRadarResponseSchemas.StateComponent ->
+        SeriesPlayerRadarResponseSchemas.state(operation),
+      SeriesPlayerRadarResponseSchemas.PreviewComponent -> SeriesPlayerRadarResponseSchemas.preview,
+    ).foldLeft(document) { case (current, (name, schema)) =>
+      val cursor = current.hcursor.downField("components").downField("schemas").downField(name)
+      val marker = Json.obj("title" -> Json.fromString(name), "type" -> Json.fromString("object"))
+      if !cursor.focus.contains(marker) then sys.error(s"Radar OpenAPI marker changed: $name")
+      cursor.withFocus(_ => schema).top.getOrElse(sys.error(
+        s"Failed to project radar schema: $name"
+      ))
+    }
 
   private def withResponseSchemas(document: Json): Json =
     SeriesAnalysisResponseSchemas.resources.foldLeft(document) { (current, resource) =>

@@ -50,7 +50,7 @@ object SeriesAnalysisCodec:
       matchId,
     )
 
-  private def scope(
+  def scope(
       seasonMasterId: Option[String],
       mapMasterId: Option[String],
   ): Either[AppError, SeriesAnalysisScope] =

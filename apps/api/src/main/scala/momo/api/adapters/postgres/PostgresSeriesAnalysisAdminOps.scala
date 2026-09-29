@@ -176,6 +176,7 @@ private[postgres] object PostgresSeriesAnalysisAdminOps:
       j.safe_failure_code
     FROM series_analysis_jobs j
     JOIN game_titles gt ON gt.id = j.game_title_id
+    WHERE j.work_kind = 'analysis'
     ORDER BY j.created_at DESC, j.id DESC
     LIMIT 10
   """.query[JobRow].to[List]

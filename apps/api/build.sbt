@@ -136,7 +136,11 @@ lazy val root = (project in file("."))
     Compile / resourceGenerators += Def.task {
       Def.uncached {
         val schemaNames = Seq(
-          "series-analysis-aggregate-v5.schema.json",
+          "series-analysis-aggregate-v6.schema.json",
+          "series-player-radar-basis-v1.schema.json",
+          "series-player-radar-evaluation-v1.schema.json",
+          "series-player-radar-candidate-v1.schema.json",
+          "series-player-radar-monitoring-v1.schema.json",
           "series-analysis-drilldown-v3.schema.json",
           "series-analysis-match-context-v1.schema.json",
           "series-analysis-publication-contract-v2.json",

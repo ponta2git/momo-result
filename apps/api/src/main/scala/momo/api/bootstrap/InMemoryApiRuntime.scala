@@ -162,6 +162,8 @@ private[bootstrap] object InMemoryApiRuntime:
         gameTitles,
         Clock[F].realTimeInstant,
       )
+      seriesPlayerRadar <-
+        InMemorySeriesPlayerRadarRepository.create[F](gameTitles, Clock[F].realTimeInstant)
       incidentMasters <- InMemoryIncidentMastersRepository.create[F]
       memberAliases <- InMemoryMemberAliasesRepository.create[F]
       idempotency <- InMemoryIdempotencyRepository.create[F]
@@ -209,6 +211,7 @@ private[bootstrap] object InMemoryApiRuntime:
         matchDraftCancellation = matchDraftCancellation,
         matchList = matchList,
         seriesAnalysis = seriesAnalysis,
+        seriesPlayerRadar = seriesPlayerRadar,
         matchConfirmation = matchConfirmation,
         appSessions = appSessions,
         sessionAccounts = sessionAccounts,

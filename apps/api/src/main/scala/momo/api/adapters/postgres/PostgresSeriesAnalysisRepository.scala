@@ -36,6 +36,10 @@ final class PostgresSeriesAnalysisRepository[F[_]: Async] private (
       chunkPipeline(request)
     )
 
+  override def scopeStatus(request: SeriesAnalysisScopeStatusRequest)
+      : F[Either[AppError, SeriesAnalysisScopeStatus]] =
+    PostgresSeriesAnalysisScopeStatusOps.read(request).transact(transactor)
+
   /**
    * Keeps the memory/decode permit for the complete read while releasing database connections
    * before checksum, JSON decoding, hydration and bounded byte rendering. The first stage returns
@@ -54,6 +58,7 @@ final class PostgresSeriesAnalysisRepository[F[_]: Async] private (
             chunk.scope,
             chunk.memberIds,
             readConfig,
+            PostgresSeriesAnalysisChunkCodec.radarMapIds(chunk.payload),
           ).map(_.asRight[AppError])
       ).flatMap {
         case Left(error) => error.asLeft[SeriesAnalysisChunk].pure[F]
@@ -63,6 +68,7 @@ final class PostgresSeriesAnalysisRepository[F[_]: Async] private (
               metadata.memberNames,
               metadata.scopeName,
               readConfig,
+              metadata.mapNames,
             )
           )
       }

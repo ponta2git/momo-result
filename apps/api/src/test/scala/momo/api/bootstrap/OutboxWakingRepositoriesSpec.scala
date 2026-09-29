@@ -314,6 +314,9 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
       IO.raiseError(new AssertionError("unused"))
     override def status(gameTitleId: GameTitleId): IO[Either[AppError, SeriesAnalysisStatus]] =
       IO.raiseError(new AssertionError("unused"))
+    override def scopeStatus(request: SeriesAnalysisScopeStatusRequest)
+        : IO[Either[AppError, SeriesAnalysisScopeStatus]] =
+      IO.raiseError(new AssertionError("unused"))
     override def chunk(
         request: SeriesAnalysisChunkRequest
     ): IO[Either[AppError, SeriesAnalysisChunk]] = IO.raiseError(new AssertionError("unused"))

@@ -7,6 +7,8 @@ import momo.api.errors.AppError
 trait SeriesAnalysisRepository[F[_]]:
   def options: F[Either[AppError, SeriesAnalysisOptions]]
   def status(gameTitleId: GameTitleId): F[Either[AppError, SeriesAnalysisStatus]]
+  def scopeStatus(request: SeriesAnalysisScopeStatusRequest)
+      : F[Either[AppError, SeriesAnalysisScopeStatus]]
   def chunk(request: SeriesAnalysisChunkRequest): F[Either[AppError, SeriesAnalysisChunk]]
   def adminOverview(
       gameTitleId: Option[GameTitleId]

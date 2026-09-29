@@ -8,6 +8,21 @@ import momo.api.domain.SeriesAnalysisScope
 import momo.api.domain.ids.GameTitleId
 
 private[postgres] object PostgresSeriesAnalysisScopeOps:
+  /** Valid identities remain selectable even when their current combination has no matches. */
+  def valid(gameTitleId: GameTitleId, scope: SeriesAnalysisScope): Fragment = scope match
+    case SeriesAnalysisScope.Overall =>
+      fr"EXISTS(SELECT 1 FROM game_titles WHERE id = $gameTitleId)"
+    case SeriesAnalysisScope.Season(id) => fr"""
+      EXISTS(SELECT 1 FROM season_masters WHERE game_title_id = $gameTitleId AND id = $id)
+    """
+    case SeriesAnalysisScope.Map(id) => fr"""
+      EXISTS(SELECT 1 FROM map_masters WHERE game_title_id = $gameTitleId AND id = $id)
+    """
+    case SeriesAnalysisScope.SeasonMap(season, map) => fr"""
+      EXISTS(SELECT 1 FROM season_masters WHERE game_title_id = $gameTitleId AND id = $season)
+      AND EXISTS(SELECT 1 FROM map_masters WHERE game_title_id = $gameTitleId AND id = $map)
+    """
+
   def exists(
       gameTitleId: GameTitleId,
       scope: SeriesAnalysisScope,

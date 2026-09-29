@@ -39,6 +39,28 @@ final class InMemorySeriesAnalysisRepository[F[_]: Sync] private (
   ): F[Either[AppError, SeriesAnalysisChunk]] =
     AppError.AnalysisArtifactExpired().asLeft.pure[F]
 
+  override def scopeStatus(request: SeriesAnalysisScopeStatusRequest)
+      : F[Either[AppError, SeriesAnalysisScopeStatus]] = gameTitles.find(request.gameTitleId).map {
+    case None => AppError.NotFound("game title", request.gameTitleId.value).asLeft
+    case Some(_) if request.artifactId.nonEmpty => AppError.AnalysisArtifactExpired().asLeft
+    case Some(_) =>
+      val invalid = List(
+        request.scope.seasonMasterId.map(_ => "seasonMasterId"),
+        request.scope.mapMasterId.map(_ => "mapMasterId")
+      ).flatten
+      SeriesAnalysisScopeStatus(
+        request.gameTitleId,
+        None,
+        request.scope,
+        if invalid.isEmpty then "empty" else "invalid",
+        None,
+        None,
+        invalid,
+        false,
+        None
+      ).asRight
+  }
+
   override def adminOverview(
       gameTitleId: Option[GameTitleId]
   ): F[Either[AppError, SeriesAnalysisAdminOverview]] =
@@ -169,7 +191,7 @@ final class InMemorySeriesAnalysisRepository[F[_]: Sync] private (
       gameTitleId,
       SeriesAnalysisDesiredVersion(
         0,
-        "series-analysis-v5",
+        "series-analysis-v6",
         SeriesAnalysisArtifactContract.ArtifactSchemaVersion
       ),
       "unavailable",
@@ -204,7 +226,7 @@ final class InMemorySeriesAnalysisRepository[F[_]: Sync] private (
     finishedAt = None,
     elapsedMilliseconds = None,
     inputRevision = 0,
-    algorithmVersion = "series-analysis-v5",
+    algorithmVersion = "series-analysis-v6",
     attemptCount = 0,
     transientRetryCount = 0,
     leaseRecoveryCount = 0,

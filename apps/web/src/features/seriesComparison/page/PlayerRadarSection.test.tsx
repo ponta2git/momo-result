@@ -47,8 +47,11 @@ function radarFixture(): PlayerRadarDisplay {
 }
 
 describe("PlayerRadarSection", () => {
-  it("shows the saved score and raw value in canonical player order without rescoring in the browser", () => {
+  it("opens the saved score and raw value in canonical player order without rescoring in the browser", async () => {
+    const user = userEvent.setup();
     const { container } = render(<PlayerRadarSection radar={radarFixture()} />);
+    expect(screen.queryByRole("table", { name: "6軸の点数と元の成績" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "プレーヤーレーダーの数値を表で見る" }));
     const table = screen.getByRole("table", { name: "6軸の点数と元の成績" });
     expect(
       within(table)
@@ -60,18 +63,15 @@ describe("PlayerRadarSection", () => {
     expect(within(table).getAllByText("-123万円")).toHaveLength(4);
     expect(container.querySelectorAll('[data-radar-score="7"]')).toHaveLength(24);
     expect(screen.getAllByRole("img")).toHaveLength(4);
-    expect(screen.getByRole("link", { name: "数値で比較する" })).toHaveAttribute(
-      "href",
-      "#player-radar-values",
-    );
     expect(screen.queryByText(/総合点|平均点|総合順位/u)).not.toBeInTheDocument();
-    expect(screen.getByLabelText("レーダーの対象と使用基準")).toHaveTextContent(
-      "2026/06/02 作成・2026/06/03 適用",
+    expect(screen.getByLabelText("レーダーの使用基準")).toHaveTextContent(
+      "作品共通・2026/06/03適用",
     );
-    expect(screen.getByLabelText("レーダーの対象と使用基準")).not.toHaveTextContent("basis-1");
+    expect(screen.getByLabelText("レーダーの使用基準")).not.toHaveTextContent("basis-1");
   });
 
-  it("leaves a real gap around an unscored axis and gives reference points a visible non-color meaning", () => {
+  it("leaves a real gap around an unscored axis and gives reference points a visible non-color meaning", async () => {
+    const user = userEvent.setup();
     const radar = radarFixture();
     const firstPlayer = radar.players[0]!;
     const changed = {
@@ -94,7 +94,6 @@ describe("PlayerRadarSection", () => {
       ],
     };
     const { container } = render(<PlayerRadarSection radar={changed} />);
-    expect(container.querySelector("[data-radar-area]")).not.toBeInTheDocument();
     expect(container.querySelectorAll("[data-radar-edge]")).toHaveLength(4);
     expect(container.querySelector('[data-radar-edge="averageRank"]')).not.toBeInTheDocument();
     expect(container.querySelector('[data-radar-edge="revenueP90"]')).not.toBeInTheDocument();
@@ -104,11 +103,16 @@ describe("PlayerRadarSection", () => {
       "var(--color-surface)",
     );
     expect(container.querySelector("[data-radar-edge]")).toHaveAttribute("stroke-dasharray", "4 4");
+    expect(screen.getByRole("img")).toHaveAccessibleDescription(
+      /平均順位：7点（参考値）。物件収益（高め）：未採点/u,
+    );
+    await user.click(screen.getByRole("button", { name: "プレーヤーレーダーの数値を表で見る" }));
     expect(screen.getAllByText("参考値")).toHaveLength(5);
     expect(screen.getByText("基準未適用")).toBeInTheDocument();
   });
 
-  it("preserves both sample shortage and missing-basis reasons while keeping observed zero distinct from no target", () => {
+  it("preserves both sample shortage and missing-basis reasons while keeping observed zero distinct from no target", async () => {
+    const user = userEvent.setup();
     const radar = radarFixture();
     render(
       <PlayerRadarSection
@@ -128,6 +132,7 @@ describe("PlayerRadarSection", () => {
         }}
       />,
     );
+    await user.click(screen.getByRole("button", { name: "プレーヤーレーダーの数値を表で見る" }));
     const table = screen.getByRole("table", { name: "6軸の点数と元の成績" });
     expect(within(table).getAllByText("未採点")).toHaveLength(24);
     expect(within(table).getAllByText("3試合未満・基準未適用")).toHaveLength(24);
@@ -139,15 +144,20 @@ describe("PlayerRadarSection", () => {
     const user = userEvent.setup();
     const { container } = render(<PlayerRadarSection radar={radarFixture()} />);
     await user.tab();
-    expect(screen.getByRole("link", { name: "数値で比較する" })).toHaveFocus();
+    expect(
+      screen.getByRole("button", { name: "プレーヤーレーダーの数値を表で見る" }),
+    ).toHaveFocus();
     await user.tab();
     const disclosure = screen.getByRole("button", {
-      name: "レーダーの読み方と採点基準",
+      name: "レーダーの読み方",
     });
     expect(disclosure).toHaveFocus();
     await user.keyboard("{Enter}");
-    expect(screen.getByRole("table", { name: "点数が上がる境界" })).toBeInTheDocument();
     expect(screen.getByText(/3・4位だった試合だけの値ではありません/u)).toBeInTheDocument();
+    await user.tab();
+    expect(screen.getByRole("button", { name: "レーダーの採点基準" })).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(screen.getByRole("table", { name: "点数が上がる境界" })).toBeInTheDocument();
     expect(screen.getByText(/「約」は表示用に丸めた境界です/u)).toBeInTheDocument();
     expect(container.querySelector("svg [tabindex]")).not.toBeInTheDocument();
   });

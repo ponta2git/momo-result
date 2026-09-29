@@ -87,9 +87,7 @@ describe("SeriesComparison empty scope", () => {
       "記録のなくなったマップ",
     );
     await user.click(screen.getByRole("button", { name: "全シーズン・全マップに戻す" }));
-    expect(
-      await screen.findByRole("heading", { name: "6つの観点で成績を比べる" }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "プレーヤーレーダー" })).toBeInTheDocument();
     expect(aggregateReads).toBe(1);
     await act(async () => router.navigate(-1));
     expect(await screen.findByText("この範囲に確定済みの試合がありません")).toBeInTheDocument();
@@ -101,9 +99,7 @@ describe("SeriesComparison empty scope", () => {
       within(screen.getByRole("region", { name: "比較条件" })).getByText("0戦"),
     ).toBeInTheDocument();
     await act(async () => router.navigate(1));
-    expect(
-      await screen.findByRole("heading", { name: "6つの観点で成績を比べる" }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "プレーヤーレーダー" })).toBeInTheDocument();
     expect(new URLSearchParams(router.state.location.search).has("mapMasterId")).toBe(false);
     expect(new URLSearchParams(router.state.location.search).has("seasonMasterId")).toBe(false);
     expect(aggregateReads).toBe(1);

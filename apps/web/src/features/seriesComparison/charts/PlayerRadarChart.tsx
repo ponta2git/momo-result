@@ -2,7 +2,10 @@ import { useId } from "react";
 
 import { dataVizSeriesPresentation } from "@/features/seriesComparison/charts/dataViz/seriesPresentation";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
-import { playerRadarAxes } from "@/shared/seriesAnalysis/playerRadarPresentation";
+import {
+  playerRadarAxes,
+  playerRadarScoreLabel,
+} from "@/shared/seriesAnalysis/playerRadarPresentation";
 import type { PlayerRadarPlayer } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { cn } from "@/shared/ui/cn";
 import { contentText } from "@/shared/ui/typography";
@@ -37,13 +40,7 @@ function polygonPoints(score: number) {
 }
 
 /** Geometry only: all values, scores, and sample judgements come from the saved result. */
-export function PlayerRadarChart({
-  player,
-  tableId,
-}: {
-  player: PlayerRadarPlayer;
-  tableId: string;
-}) {
+export function PlayerRadarChart({ player }: { player: PlayerRadarPlayer }) {
   const figureId = useId();
   const presentation = dataVizSeriesPresentation(player.memberId);
   const vertices = playerRadarAxes.map((axis, index) => {
@@ -55,8 +52,6 @@ export function PlayerRadarChart({
         cell?.score !== null && cell?.score !== undefined ? coordinate(index, cell.score) : null,
     };
   });
-  const plottedPoints = vertices.flatMap((vertex) => (vertex.point ? [vertex.point] : []));
-  const complete = plottedPoints.length === playerRadarAxes.length;
   const reference = vertices.some((vertex) => vertex.cell?.sampleQuality === "reference");
 
   return (
@@ -65,18 +60,22 @@ export function PlayerRadarChart({
         <MemberSequenceLabel memberId={player.memberId}>{player.displayName}</MemberSequenceLabel>
       </figcaption>
       <svg
-        aria-describedby={tableId}
-        aria-labelledby={`${figureId}-title ${figureId}-description`}
-        className="mx-auto block w-full max-w-80 overflow-visible"
+        aria-describedby={`${figureId}-description`}
+        aria-labelledby={`${figureId}-title`}
+        className="mx-auto block w-60 max-w-none"
+        height="280"
         role="img"
         viewBox="0 0 240 280"
+        width="240"
       >
         <title id={`${figureId}-title`}>{player.displayName}の6軸レーダー</title>
         <desc id={`${figureId}-description`}>
-          外側ほど好成績です。点数は1〜10点、中心の0は目盛りです。
-          {reference ? "白抜きの点と破線は参考値です。" : ""}
-          {complete ? "" : "未採点の軸は線と面をつなぎません。"}
-          各軸の点数と元の成績は数値比較表で確認できます。
+          {vertices
+            .map(
+              ({ axis, cell }) =>
+                `${axis.label}：${playerRadarScoreLabel(cell)}${cell?.sampleQuality === "reference" && cell.score !== null ? "（参考値）" : ""}`,
+            )
+            .join("。")}
         </desc>
         <g aria-hidden="true" fill="none" stroke="var(--color-border)">
           {ticks.map((tick) => (
@@ -87,7 +86,12 @@ export function PlayerRadarChart({
             return <line key={axis.id} x1={center.x} x2={edge.x} y1={center.y} y2={edge.y} />;
           })}
         </g>
-        <g aria-hidden="true" fill="var(--color-text-muted)" fontSize="12" className="tabular-nums">
+        <g
+          aria-hidden="true"
+          fill="var(--color-text-secondary)"
+          fontSize="12"
+          className="tabular-nums"
+        >
           {[0, ...ticks].map((tick) => (
             <text key={tick} x={center.x + 4} y={center.y - (radius * tick) / 10 + 5}>
               {tick}
@@ -109,16 +113,7 @@ export function PlayerRadarChart({
             );
           })}
         </g>
-        {complete && !reference ? (
-          <polygon
-            aria-hidden="true"
-            data-radar-area="complete"
-            fill={presentation.color}
-            fillOpacity="0.1"
-            points={plottedPoints.map((point) => `${point.x},${point.y}`).join(" ")}
-          />
-        ) : null}
-        <g aria-hidden="true" stroke={presentation.color} strokeWidth="2.5">
+        <g aria-hidden="true" stroke={presentation.color} strokeWidth="1.8">
           {vertices.map(({ axis, point }, index) => {
             const next = vertices[(index + 1) % vertices.length]?.point;
             if (!point || !next) return null;
@@ -145,7 +140,7 @@ export function PlayerRadarChart({
                 key={axis.id}
                 cx={point.x}
                 cy={point.y}
-                r="3.5"
+                r="2.5"
               />
             ) : null,
           )}

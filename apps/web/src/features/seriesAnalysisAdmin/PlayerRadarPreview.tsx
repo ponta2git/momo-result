@@ -1,5 +1,3 @@
-import { BookOpenText } from "lucide-react";
-
 import type {
   PlayerRadarPreviewFilter,
   PlayerRadarPreviewModel,
@@ -53,12 +51,17 @@ export function PlayerRadarPreview({
         preview.after.sample.heldEventCount < 8 ? "8開催未満" : null,
       ].filter(Boolean)
     : [];
+  const recordSources = [
+    ...(preview.after
+      ? [{ id: "evaluation", label: "比較対象", sample: preview.after.sample }]
+      : []),
+    ...(preview.beforeBasis
+      ? [{ id: "before", label: "現行基準の作成元", sample: preview.beforeBasis.source }]
+      : []),
+    { id: "candidate", label: "候補の作成元", sample: preview.candidateBasis.source },
+  ];
   return (
     <div className="grid min-w-0 gap-4">
-      <p className={cn(contentText.body, readableTextWidthClass, "text-pretty")}>
-        同じ記録を現行基準と候補で採点しています。点数の変化は採点基準の違いによるもので、成績の変化ではありません。
-        適用すると、ここで選んだ条件だけでなく過去を含む作品全体の点数が変わります。
-      </p>
       <FilterBar
         ariaLabel="採点基準の比較条件"
         primary={
@@ -84,6 +87,11 @@ export function PlayerRadarPreview({
             </Button>
           ) : undefined
         }
+        meta={
+          preview.after
+            ? `比較対象 ${preview.after.sample.matchCount}試合・${preview.after.sample.heldEventCount}開催`
+            : undefined
+        }
       />
       {updating ? (
         <p className={contentText.body} role="status">
@@ -99,26 +107,10 @@ export function PlayerRadarPreview({
           </p>
         ) : preview.evaluationState === "error" ? (
           <Notice tone="warning" title="比較結果を読み込めません">
-            「基準の状態を更新」から再読み込みできます。採点基準は変更していません。
+            「基準の状態を更新」から再読み込みしてください。
           </Notice>
         ) : preview.after ? (
           <>
-            <FactList
-              ariaLabel="比較に使った記録"
-              columns={2}
-              items={[
-                {
-                  id: "sample",
-                  label: "比較対象",
-                  value: `${preview.after.sample.matchCount}試合・${preview.after.sample.heldEventCount}開催`,
-                },
-                {
-                  id: "created",
-                  label: "比較計算日時",
-                  value: formatDateTimeLong(preview.createdAt),
-                },
-              ]}
-            />
             {hasReferenceScores ? (
               <p className={cn(contentText.body, readableTextWidthClass)}>
                 {referenceReasons.length > 0
@@ -126,70 +118,73 @@ export function PlayerRadarPreview({
                   : "参考値の点数を含みます。"}
               </p>
             ) : null}
-            <p className={cn(contentText.supporting, readableTextWidthClass)}>
-              各欄の上段は現行基準から候補への点数の変化、下段は同じ記録から集計した元の成績です。
-            </p>
-            <DataTable
-              caption={{ content: "採点基準変更前後の比較" }}
-              density="compact"
-              columns={[
-                {
-                  header: "観点",
-                  key: "axis",
-                  rowHeader: true,
-                  minWidth: "9rem",
-                  renderCell: (axis) => axis.label,
-                },
-                ...players.map((player) => ({
-                  header: (
-                    <MemberSequenceLabel memberId={player.memberId}>
-                      {player.displayName}
-                    </MemberSequenceLabel>
-                  ),
-                  key: player.memberId,
-                  minWidth: "12rem",
-                  tabular: true,
-                  renderCell: (axis: (typeof playerRadarAxes)[number]) => {
-                    const before = preview.before?.players
-                      .find((entry) => entry.memberId === player.memberId)
-                      ?.axes.find((cell) => cell.axisId === axis.id);
-                    const after = player.axes.find((cell) => cell.axisId === axis.id);
-                    return (
-                      <div className="grid gap-1">
-                        <p>
-                          現行 {playerRadarScoreLabel(before)} <span aria-label="変更後">→</span>{" "}
-                          候補{" "}
-                          <span className={contentText.compactPrimary}>
-                            {playerRadarScoreLabel(after)}
-                          </span>
-                        </p>
-                        <p>{formatPlayerRadarRawValue(axis.id, after?.rawValue ?? null)}</p>
-                        {after?.sampleQuality === "reference" && after.score !== null ? (
-                          <p className={contentText.supporting}>参考値</p>
-                        ) : null}
-                        {after?.scoreUnavailableReasons.length ? (
-                          <p className={contentText.supporting}>
-                            {after.scoreUnavailableReasons
-                              .map(playerRadarUnavailableLabel)
-                              .join("・")}
-                          </p>
-                        ) : null}
-                      </div>
-                    );
+            <div className="grid min-w-0 gap-2">
+              <p className={cn(contentText.supporting, readableTextWidthClass)}>
+                同じ記録での点数：現行 → 候補（下段は元の成績）
+              </p>
+              <DataTable
+                caption={{ content: "採点基準変更前後の比較" }}
+                density="compact"
+                columns={[
+                  {
+                    header: "観点",
+                    key: "axis",
+                    rowHeader: true,
+                    minWidth: "9rem",
+                    renderCell: (axis) => axis.label,
                   },
-                })),
-              ]}
-              getRowKey={(axis) => axis.id}
-              rows={[...playerRadarAxes]}
-              stickyRowHeader
-              verticalAlign="top"
-            />
+                  ...players.map((player) => ({
+                    header: (
+                      <MemberSequenceLabel memberId={player.memberId}>
+                        {player.displayName}
+                      </MemberSequenceLabel>
+                    ),
+                    key: player.memberId,
+                    minWidth: "10rem",
+                    tabular: true,
+                    renderCell: (axis: (typeof playerRadarAxes)[number]) => {
+                      const before = preview.before?.players
+                        .find((entry) => entry.memberId === player.memberId)
+                        ?.axes.find((cell) => cell.axisId === axis.id);
+                      const after = player.axes.find((cell) => cell.axisId === axis.id);
+                      return (
+                        <div className="grid gap-1">
+                          <p>
+                            <span className="sr-only">現行 </span>
+                            {playerRadarScoreLabel(before)} <span aria-label="変更後">→</span>{" "}
+                            <span className="sr-only">候補 </span>
+                            <span className={contentText.compactPrimary}>
+                              {playerRadarScoreLabel(after)}
+                            </span>
+                          </p>
+                          <p>{formatPlayerRadarRawValue(axis.id, after?.rawValue ?? null)}</p>
+                          {after?.sampleQuality === "reference" && after.score !== null ? (
+                            <p className={contentText.supporting}>参考値</p>
+                          ) : null}
+                          {after?.scoreUnavailableReasons.length ? (
+                            <p className={contentText.supporting}>
+                              {after.scoreUnavailableReasons
+                                .map(playerRadarUnavailableLabel)
+                                .join("・")}
+                            </p>
+                          ) : null}
+                        </div>
+                      );
+                    },
+                  })),
+                ]}
+                getRowKey={(axis) => axis.id}
+                rows={[...playerRadarAxes]}
+                stickyRowHeader
+                verticalAlign="top"
+              />
+            </div>
           </>
         ) : (
           <EmptyState
             placement="embedded"
             title="この条件に対象試合はありません"
-            description="シーズン・マップの選択は保持しています。条件を変更すると別の記録で比較できます。"
+            description="シーズン・マップを変更して比較してください。"
             action={
               <Button variant="secondary" onClick={onResetFilter}>
                 全期間・全マップで比較する
@@ -199,13 +194,7 @@ export function PlayerRadarPreview({
         )}
       </div>
       <Disclosure
-        ariaLabel="レーダー比較の読み方・対象記録・採点境界"
-        summary={
-          <span className="inline-flex items-center gap-2">
-            <BookOpenText aria-hidden="true" className="size-4" />
-            読み方・対象記録・採点境界
-          </span>
-        }
+        summary="採点基準と対象記録"
         panelSpacing="md"
         panelPadding="sm"
         triggerVariant="supporting"
@@ -220,61 +209,65 @@ export function PlayerRadarPreview({
               value: axis.description,
             }))}
           />
-          {preview.after ? (
+          <div className="grid min-w-0 gap-4">
             <FactList
-              ariaLabel="比較に使った記録の範囲"
-              columns={2}
+              ariaLabel="比較の計算時点"
               items={[
                 {
-                  id: "period",
-                  label: "比較対象の期間",
-                  value:
-                    preview.after.sample.firstPlayedAt && preview.after.sample.lastPlayedAt
-                      ? `${formatDateTimeLong(preview.after.sample.firstPlayedAt)}〜${formatDateTimeLong(preview.after.sample.lastPlayedAt)}`
+                  id: "created",
+                  label: "比較計算日時",
+                  value: formatDateTimeLong(preview.createdAt),
+                },
+              ]}
+            />
+            <DataTable
+              caption={{ content: "集計に使った記録" }}
+              columns={[
+                {
+                  key: "source",
+                  header: "記録",
+                  rowHeader: true,
+                  minWidth: "9rem",
+                  renderCell: (entry) => entry.label,
+                },
+                {
+                  key: "sample",
+                  header: "件数",
+                  minWidth: "8rem",
+                  tabular: true,
+                  renderCell: (entry) =>
+                    `${entry.sample.matchCount}試合・${entry.sample.heldEventCount}開催`,
+                },
+                {
+                  key: "period",
+                  header: "期間",
+                  minWidth: "18rem",
+                  tabular: true,
+                  renderCell: (entry) =>
+                    entry.sample.firstPlayedAt && entry.sample.lastPlayedAt
+                      ? `${formatDateTimeLong(entry.sample.firstPlayedAt)}〜${formatDateTimeLong(entry.sample.lastPlayedAt)}`
                       : "未取得",
                 },
                 {
-                  id: "maps",
-                  label: "比較対象のマップ別件数",
-                  value:
-                    preview.after.sample.maps
+                  key: "maps",
+                  header: "マップ別件数",
+                  minWidth: "12rem",
+                  tabular: true,
+                  renderCell: (entry) =>
+                    entry.sample.maps
                       .map((map) => `${map.displayName} ${map.matchCount}試合`)
                       .join("、") || "未取得",
                 },
               ]}
+              density="compact"
+              getRowKey={(entry) => entry.id}
+              rows={recordSources}
+              stickyRowHeader
+              verticalAlign="top"
             />
-          ) : null}
-          {[
-            { id: "before", label: "現行基準", basis: preview.beforeBasis },
-            { id: "candidate", label: "候補", basis: preview.candidateBasis },
-          ].map(({ id, label, basis }) =>
-            basis ? (
-              <FactList
-                ariaLabel={`${label}の作成元の範囲`}
-                columns={2}
-                key={id}
-                items={[
-                  {
-                    id: "source-period",
-                    label: `${label}を作った記録の期間`,
-                    value:
-                      basis.source.firstPlayedAt && basis.source.lastPlayedAt
-                        ? `${formatDateTimeLong(basis.source.firstPlayedAt)}〜${formatDateTimeLong(basis.source.lastPlayedAt)}`
-                        : "未取得",
-                  },
-                  {
-                    id: "source-maps",
-                    label: `${label}を作った記録のマップ別件数`,
-                    value:
-                      basis.source.maps
-                        .map((map) => `${map.displayName} ${map.matchCount}試合`)
-                        .join("、") || "未取得",
-                  },
-                ]}
-              />
-            ) : null,
-          )}
+          </div>
           <div className="grid min-w-0 gap-2">
+            <p className={contentText.supporting}>採点境界：上段は現行、下段は候補</p>
             <DataTable
               caption={{ content: "現行と候補の採点境界" }}
               density="compact"
@@ -290,7 +283,7 @@ export function PlayerRadarPreview({
                   header: `${score}点`,
                   key: `score-${score}`,
                   tabular: true,
-                  minWidth: "12rem",
+                  minWidth: "10rem",
                   renderCell: (axis: (typeof playerRadarAxes)[number]) => {
                     const before = preview.beforeBasis?.axes
                       .find((entry) => entry.axisId === axis.id)
@@ -301,11 +294,11 @@ export function PlayerRadarPreview({
                     return (
                       <div className="grid gap-1">
                         <p>
-                          現行{" "}
+                          <span className="sr-only">現行 </span>
                           {before ? formatPlayerRadarBoundary(axis.id, before.rawValue) : "未適用"}
                         </p>
                         <p>
-                          候補{" "}
+                          <span className="sr-only">候補 </span>
                           {after ? formatPlayerRadarBoundary(axis.id, after.rawValue) : "未作成"}
                         </p>
                       </div>
@@ -319,7 +312,7 @@ export function PlayerRadarPreview({
               verticalAlign="top"
             />
             <p className={cn(contentText.supporting, readableTextWidthClass)}>
-              「約」は表示用に丸めた境界です。採点には丸める前の値を使います。
+              「約」は表示用の丸めです。採点は元の値を使います。
             </p>
           </div>
         </div>

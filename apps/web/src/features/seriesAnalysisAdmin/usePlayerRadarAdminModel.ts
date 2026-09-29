@@ -231,7 +231,14 @@ export function usePlayerRadarAdminModel(gameTitleId: string, gameTitleName: str
             : null);
   const missingRecords =
     state && (state.eligibility.matchCount < 40 || state.eligibility.heldEventCount < 8)
-      ? `あと${Math.max(0, 40 - state.eligibility.matchCount)}試合・${Math.max(0, 8 - state.eligibility.heldEventCount)}開催が必要です。元の記録を確認してください。`
+      ? `作成にはあと${[
+          state.eligibility.matchCount < 40 ? `${40 - state.eligibility.matchCount}試合` : null,
+          state.eligibility.heldEventCount < 8
+            ? `${8 - state.eligibility.heldEventCount}開催`
+            : null,
+        ]
+          .filter(Boolean)
+          .join("・")}が必要です。`
       : null;
   const feedbackError =
     checkError ??
@@ -244,7 +251,7 @@ export function usePlayerRadarAdminModel(gameTitleId: string, gameTitleName: str
     : accepted && latestOperation?.status === "succeeded"
       ? {
           title: radarOperationPresentation(acceptedOperation ?? accepted).title,
-          detail: "保存済みの状態を確認できます。",
+          detail: "",
           tone: "success",
         }
       : null;

@@ -14,6 +14,7 @@ import type { PlayerRadarBasis } from "@/shared/seriesAnalysis/playerRadarPresen
 import { actionRowClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
+import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { FactList } from "@/shared/ui/data/FactList";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -100,24 +101,25 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
           </Button>
         }
       >
-        <header className="grid gap-1">
-          <h2
-            className={cn(contentText.heading, "text-balance")}
-            id="radar-administration-heading"
-            ref={headingRef}
-            tabIndex={-1}
-          >
-            レーダーの採点基準
-          </h2>
-          <p className={cn(contentText.body, readableTextWidthClass, "text-pretty")}>
-            通常の分析再計算では採点基準を変えません。候補を確認して適用すると、作品全体の点数を更新します。
-          </p>
-        </header>
+        <h2
+          className={contentText.heading}
+          id="radar-administration-heading"
+          ref={headingRef}
+          tabIndex={-1}
+        >
+          レーダーの採点基準
+        </h2>
       </ContentWithActions>
       {model.feedback && !confirmation && !withdrawOpen ? (
-        <Notice tone={model.feedback.tone} title={model.feedback.title}>
-          {model.feedback.detail}
-        </Notice>
+        model.feedback.tone === "success" ? (
+          <p className={contentText.body} role="status">
+            {model.feedback.title}
+          </p>
+        ) : (
+          <Notice tone={model.feedback.tone} title={model.feedback.title}>
+            {model.feedback.detail}
+          </Notice>
+        )
       ) : null}
       <section aria-labelledby="radar-current-heading" className="grid min-w-0 gap-4">
         <h3 className={contentText.heading} id="radar-current-heading">
@@ -138,27 +140,48 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
                 label: "基準作成日時",
                 value: formatDateTimeLong(model.currentBasis.createdAt ?? undefined, "未取得"),
               },
-              {
-                id: "source",
-                label: "作成元",
-                value: `${model.currentBasis.source.matchCount}試合・${model.currentBasis.source.heldEventCount}開催（作品の全期間・全マップ）`,
-              },
-              {
-                id: "basis",
-                label: "基準ID",
-                value: (
-                  <span className={cn(contentText.supporting, "momo-data break-all")}>
-                    {model.currentBasis.basisId}
-                  </span>
-                ),
-              },
             ]}
           />
         ) : (
-          <p className={cn(contentText.body, readableTextWidthClass)}>
-            適用中の基準はありません。戦績比較では元の成績を確認できます。
-          </p>
+          <p className={cn(contentText.body, readableTextWidthClass)}>未適用です。</p>
         )}
+        {model.currentBasis && (!candidateActive || !model.preview) ? (
+          <Disclosure
+            summary="作成元の記録"
+            triggerVariant="supporting"
+            panelSpacing="md"
+            panelPadding="sm"
+          >
+            <FactList
+              ariaLabel="適用中基準の作成元"
+              columns={2}
+              items={[
+                {
+                  id: "sample",
+                  label: "件数",
+                  value: `${model.currentBasis.source.matchCount}試合・${model.currentBasis.source.heldEventCount}開催`,
+                },
+                {
+                  id: "period",
+                  label: "期間",
+                  value:
+                    model.currentBasis.source.firstPlayedAt &&
+                    model.currentBasis.source.lastPlayedAt
+                      ? `${formatDateTimeLong(model.currentBasis.source.firstPlayedAt)}〜${formatDateTimeLong(model.currentBasis.source.lastPlayedAt)}`
+                      : "未取得",
+                },
+                {
+                  id: "maps",
+                  label: "マップ別件数",
+                  value:
+                    model.currentBasis.source.maps
+                      .map((map) => `${map.displayName} ${map.matchCount}試合`)
+                      .join("、") || "未取得",
+                },
+              ]}
+            />
+          </Disclosure>
+        ) : null}
         {model.previousBasis && !candidateActive ? (
           <div className="grid justify-items-start gap-1">
             <CommandButton
@@ -166,10 +189,11 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
               label="直前の基準で比較する"
               pendingLabel="比較を準備中"
             />
-            <p className={cn(contentText.supporting, readableTextWidthClass)}>
-              {model.actions.restore.disabledReason ??
-                "比較しただけでは基準は変わりません。内容を確認してから適用できます。"}
-            </p>
+            {model.actions.restore.disabledReason ? (
+              <p className={cn(contentText.supporting, readableTextWidthClass)}>
+                {model.actions.restore.disabledReason}
+              </p>
+            ) : null}
           </div>
         ) : null}
       </section>
@@ -236,9 +260,16 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
         </section>
       ) : null}
       <section aria-labelledby="radar-candidate-heading" className="grid min-w-0 gap-4">
-        <h3 className={contentText.heading} id="radar-candidate-heading">
-          候補の計算と比較
-        </h3>
+        <div className="grid gap-1">
+          <h3 className={contentText.heading} id="radar-candidate-heading">
+            {candidateActive ? "候補の比較" : "新しい基準"}
+          </h3>
+          {candidateActive && model.preview?.candidateBasis.createdAt ? (
+            <p className={cn(contentText.supporting, "tabular-nums")}>
+              {formatDateTimeLong(model.preview.candidateBasis.createdAt)} 作成
+            </p>
+          ) : null}
+        </div>
         {model.communicationUnknown ? (
           <Notice
             title="操作の受付結果をまだ確認できません"
@@ -255,11 +286,8 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
           </Notice>
         ) : operationInProgress && model.operation ? (
           <Notice title={model.operation.title} tone="info">
-            <p>{model.operation.detail}</p>
-            <p>画面を離れても処理は続きます。「基準の状態を更新」で進行を確認できます。</p>
-            {applicationInProgress ? (
-              <p>新しい基準と点数を一緒に公開するまで、現在の表示を維持します。</p>
-            ) : null}
+            <p>画面を離れても処理は続きます。「基準の状態を更新」で確認できます。</p>
+            {applicationInProgress ? <p>公開までは現在の基準を維持します。</p> : null}
           </Notice>
         ) : model.operation?.status === "failed" ? (
           <Notice
@@ -282,28 +310,6 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
         ) : null}
         {candidateActive ? (
           <>
-            {candidate.source ? (
-              <FactList
-                ariaLabel="候補の作成元"
-                columns={2}
-                items={[
-                  {
-                    id: "source",
-                    label: "候補を作った記録",
-                    value: `${candidate.source.matchCount}試合・${candidate.source.heldEventCount}開催（作品の全期間・全マップ）`,
-                  },
-                  {
-                    id: "candidate",
-                    label: "候補ID",
-                    value: (
-                      <span className={cn(contentText.supporting, "momo-data break-all")}>
-                        {candidate.candidateId}
-                      </span>
-                    ),
-                  },
-                ]}
-              />
-            ) : null}
             {candidate.status === "invalid" ? (
               <Notice title="この候補は適用できません" tone="warning">
                 {candidate.failureMessage ??
@@ -312,9 +318,7 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
             ) : null}
             {candidate.status === "unavailable" ? (
               <Notice title="6軸すべての基準を作れませんでした" tone="info">
-                <p>
-                  作成に必要な試合数・開催数、または分布の広がりが不足しています。公開中の基準は維持しています。同じ記録で再計算しても、この条件は変わりません。
-                </p>
+                <p>同じ記録で再計算しても不足は解消しません。</p>
                 <ul className="mt-2 grid gap-1">
                   {candidate.unavailableAxes.map((axis) => (
                     <li key={axis.axisId}>
@@ -369,7 +373,7 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
                   }
                   confirmLabel="作品全体に適用する"
                   pendingLabel="適用を受付中"
-                  description={`${confirmation?.gameTitleName ?? model.gameTitleName}の過去を含む全シーズン・全マップへ適用します。新しい点数を公開するまでは現在の表示を維持します。`}
+                  description={`${confirmation?.gameTitleName ?? model.gameTitleName}の全シーズン・全マップに適用します。過去に見た点数も変わります。`}
                   formatError={radarCommandErrorMessage}
                   pending={model.applyPending}
                   title="この基準を作品全体に適用しますか？"
@@ -380,7 +384,7 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
                       ref={applyTriggerRef}
                       variant={model.applyDisabledReason ? "secondary" : "primary"}
                     >
-                      作品全体への適用を確認する
+                      適用を確認する
                     </Button>
                   }
                   onConfirm={async () => {
@@ -411,23 +415,11 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
                         id: "source",
                         label: "作成元",
                         value: confirmation
-                          ? `${confirmation.basis.source.matchCount}試合・${confirmation.basis.source.heldEventCount}開催（作品の全期間・全マップ）`
+                          ? `${confirmation.basis.source.matchCount}試合・${confirmation.basis.source.heldEventCount}開催`
                           : "未取得",
-                      },
-                      {
-                        id: "basis",
-                        label: "適用する基準ID",
-                        value: (
-                          <span className={cn(contentText.supporting, "momo-data break-all")}>
-                            {confirmation?.basisId}
-                          </span>
-                        ),
                       },
                     ]}
                   />
-                  <p className={cn(contentText.body, readableTextWidthClass)}>
-                    表示中の絞り込みだけへの適用ではありません。過去に見た点数も変わることがあります。
-                  </p>
                   {confirmationChanged ? (
                     <p className={cn(contentText.body, readableTextWidthClass)}>
                       比較または現行基準が変わりました。いったん閉じ、最新の比較を確認してください。
@@ -481,8 +473,8 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
         ) : (
           <div className="grid justify-items-start gap-2">
             <p className={cn(contentText.body, readableTextWidthClass, "tabular-nums")}>
-              現在の記録は{model.eligibility.matchCount}試合・{model.eligibility.heldEventCount}
-              開催です。候補の作成には40試合以上・8開催以上が必要です。
+              作品全体の{model.eligibility.matchCount}試合・{model.eligibility.heldEventCount}
+              開催から計算します。
             </p>
             <CommandButton
               action={model.actions.generate}
@@ -490,10 +482,11 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
               pendingLabel="候補計算を受付中"
               primary
             />
-            <p className={cn(contentText.supporting, readableTextWidthClass)}>
-              {model.actions.generate.disabledReason ??
-                "計算を依頼した時点の全確定記録を使います。候補を作っただけでは適用されません。"}
-            </p>
+            {model.actions.generate.disabledReason ? (
+              <p className={cn(contentText.supporting, readableTextWidthClass)}>
+                {model.actions.generate.disabledReason}
+              </p>
+            ) : null}
           </div>
         )}
       </section>

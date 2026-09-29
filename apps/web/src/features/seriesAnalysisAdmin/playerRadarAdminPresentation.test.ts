@@ -112,8 +112,8 @@ describe("radarReviewPresentation", () => {
 
     const result = radarReviewPresentation(state);
 
-    expect(result.explanation).toContain("直近の対象40試合は6開催分");
-    expect(result.explanation).toContain("対象の2期間で8開催以上");
+    expect(result.explanation).toContain("対象40試合は6開催分");
+    expect(result.explanation).toContain("8開催以上で判定");
     expect(result.explanation).not.toContain("67試合");
   });
 });

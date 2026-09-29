@@ -68,12 +68,7 @@ export function radarOperationPresentation(
     kind: operation.kind,
     status: operation.status,
     title,
-    detail:
-      operation.status === "failed"
-        ? radarFailureMessage(operation.safeFailureCode)
-        : operation.kind === "apply" && operation.status !== "succeeded"
-          ? "適用の受付と公開完了は別の状態です。"
-          : "この作品の保存済み状態を表示しています。",
+    detail: operation.status === "failed" ? radarFailureMessage(operation.safeFailureCode) : "",
   };
 }
 
@@ -83,27 +78,27 @@ export function radarReviewPresentation(
   const monitor = state.monitor;
   if (!monitor)
     return {
-      explanation: "見直しの目安はまだ計算されていません。",
+      explanation: state.currentBasis ? "見直しの目安は未計算です。" : null,
       reasons: [],
     };
   const explanation =
     monitor.status === "basis_unavailable"
-      ? "初回基準を適用すると、その後の記録から見直しの目安を確認できます。"
+      ? null
       : monitor.status === "insufficient_matches"
-        ? `基準作成元より後の記録は${monitor.postSourceMatchCount}試合です。高得点の集中を確認するには、20試合ずつの2期間と、その2期間で8開催以上が必要です。`
+        ? `基準の作成元より新しい記録は${monitor.postSourceMatchCount}試合です。判定には40試合・8開催が必要です。`
         : monitor.status === "insufficient_events"
-          ? `直近の対象${monitor.evaluatedMatchCount}試合は${monitor.evaluatedHeldEventCount}開催分です。高得点の集中を確認するには、対象の2期間で8開催以上が必要です。`
+          ? `対象${monitor.evaluatedMatchCount}試合は${monitor.evaluatedHeldEventCount}開催分です（8開催以上で判定）。`
           : null;
   return {
     explanation,
     reasons: monitor.reasons.map((reason) => {
       const label =
         reason.kind === "initial_basis_eligible"
-          ? "初回基準を作成する件数を満たしています。"
+          ? "初回基準を作成できます。"
           : reason.kind === "source_changed"
-            ? "基準を作った記録に訂正があります。適用中の閾値は維持しています。"
+            ? "基準を作った記録に訂正があります。"
             : reason.kind === "new_map"
-              ? "基準作成後に新しいマップの記録が加わっています。"
+              ? "作成元にないマップの記録が加わりました。"
               : `${reason.axisIds.map((id) => playerRadarAxes.find((axis) => axis.id === id)?.label ?? id).join("・")}で、続く2期間とも4人中3人以上が9点以上です。`;
       return {
         evidenceKey: reason.evidenceChecksum,

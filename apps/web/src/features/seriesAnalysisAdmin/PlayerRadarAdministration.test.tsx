@@ -104,7 +104,7 @@ describe("PlayerRadarAdministration", () => {
     );
     renderAdministration();
     await screen.findByRole("table", { name: "採点基準変更前後の比較" });
-    await user.click(screen.getByRole("button", { name: "作品全体への適用を確認する" }));
+    await user.click(screen.getByRole("button", { name: "適用を確認する" }));
     const dialog = screen.getByRole("alertdialog");
     await user.click(within(dialog).getByRole("button", { name: "作品全体に適用する" }));
     expect(await screen.findByText("基準の適用を受け付けました")).toBeInTheDocument();
@@ -117,8 +117,10 @@ describe("PlayerRadarAdministration", () => {
         expectedCurrentBasisId: "radar-basis-current",
       },
     ]);
-    expect(screen.getByText("radar-basis-current")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "作品全体への適用を確認する" })).toBeDisabled();
+    expect(screen.getByRole("region", { name: "適用中の基準" })).toHaveTextContent(
+      "2026/09/01 09:01",
+    );
+    expect(screen.getByRole("button", { name: "適用を確認する" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "適用を取り下げる" })).toBeEnabled();
   });
 
@@ -166,13 +168,15 @@ describe("PlayerRadarAdministration", () => {
     );
     renderAdministration();
     await screen.findByRole("table", { name: "採点基準変更前後の比較" });
-    await user.click(screen.getByRole("button", { name: "作品全体への適用を確認する" }));
+    await user.click(screen.getByRole("button", { name: "適用を確認する" }));
     await user.click(
       within(screen.getByRole("alertdialog")).getByRole("button", { name: "作品全体に適用する" }),
     );
     expect(await screen.findByText("基準の適用を受け付けました")).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
-    expect(screen.getByText("radar-basis-current")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "適用中の基準" })).toHaveTextContent(
+      "2026/09/01 09:01",
+    );
     refreshGate.resolve();
   });
 
@@ -202,7 +206,7 @@ describe("PlayerRadarAdministration", () => {
     );
     renderAdministration();
     await screen.findByRole("table", { name: "採点基準変更前後の比較" });
-    await user.click(screen.getByRole("button", { name: "作品全体への適用を確認する" }));
+    await user.click(screen.getByRole("button", { name: "適用を確認する" }));
     const dialog = screen.getByRole("alertdialog");
     await user.click(within(dialog).getByRole("button", { name: "作品全体に適用する" }));
     expect(await within(dialog).findByText(/基準の状態を更新.*最新の比較/u)).toBeInTheDocument();
@@ -210,7 +214,7 @@ describe("PlayerRadarAdministration", () => {
     await user.click(within(dialog).getByRole("button", { name: "キャンセル" }));
     await user.click(screen.getByRole("button", { name: "基準の状態を更新" }));
     expect(await screen.findByRole("button", { name: "最新の記録で比較を計算する" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "作品全体への適用を確認する" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "適用を確認する" })).toBeDisabled();
   });
 
   it("removes old values while a new scope loads and keeps an empty map selected", async () => {

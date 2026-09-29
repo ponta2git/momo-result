@@ -104,7 +104,7 @@ function modelFixture(): PlayerRadarAdminModel {
 }
 
 describe("PlayerRadarAdminPanel", () => {
-  it.each(["作品全体への適用を確認する", "候補を取り下げる"])(
+  it.each(["適用を確認する", "候補を取り下げる"])(
     "returns keyboard focus to %s after Escape",
     async (name) => {
       const user = userEvent.setup();
@@ -123,7 +123,7 @@ describe("PlayerRadarAdminPanel", () => {
     const user = userEvent.setup();
     const model = modelFixture();
     const { rerender } = render(<PlayerRadarAdminPanel model={model} />);
-    await user.click(screen.getByRole("button", { name: "作品全体への適用を確認する" }));
+    await user.click(screen.getByRole("button", { name: "適用を確認する" }));
     rerender(
       <PlayerRadarAdminPanel
         model={{ ...model, applyDisabledReason: "最新の比較を確認してください。" }}
@@ -143,13 +143,13 @@ describe("PlayerRadarAdminPanel", () => {
     const firstCell = within(table).getAllByRole("cell")[0]!;
     expect(firstCell).toHaveTextContent("現行 6点 → 候補 7点");
     expect(within(firstCell).getByText("2.25位")).toBeInTheDocument();
-    expect(screen.getByText(/下段は同じ記録から集計した元の成績です/u)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "作品全体への適用を確認する" }));
+    expect(screen.getByText(/同じ記録での点数：現行 → 候補/u)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "適用を確認する" }));
     const dialog = screen.getByRole("alertdialog");
-    expect(dialog).toHaveTextContent("比較対象の作品の過去を含む全シーズン・全マップへ適用します");
+    expect(dialog).toHaveTextContent("比較対象の作品の全シーズン・全マップに適用します");
+    expect(dialog).toHaveTextContent("過去に見た点数も変わります");
     expect(dialog).toHaveTextContent("基準作成日時");
     expect(dialog).toHaveTextContent("48試合・12開催");
-    expect(dialog).toHaveTextContent("basis-candidate");
     expect(model.actions.apply).not.toHaveBeenCalled();
     await user.click(within(dialog).getByRole("button", { name: "作品全体に適用する" }));
     expect(model.actions.apply).toHaveBeenCalledExactlyOnceWith({
@@ -168,7 +168,9 @@ describe("PlayerRadarAdminPanel", () => {
     model.preview!.beforeBasis = null;
     render(<PlayerRadarAdminPanel model={model} />);
     const table = screen.getByRole("table", { name: "採点基準変更前後の比較" });
-    expect(within(table).getAllByText(/現行 未採点/u)).toHaveLength(24);
+    const cells = within(table).getAllByRole("cell");
+    expect(cells).toHaveLength(24);
+    for (const cell of cells) expect(cell).toHaveTextContent("現行 未採点 → 候補 7点");
     expect(within(table).queryByText("0点")).not.toBeInTheDocument();
   });
 
@@ -178,7 +180,7 @@ describe("PlayerRadarAdminPanel", () => {
     model.previewState = "stale";
     model.applyDisabledReason = "比較を更新してから適用してください。";
     render(<PlayerRadarAdminPanel model={model} />);
-    expect(screen.getByRole("button", { name: "作品全体への適用を確認する" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "適用を確認する" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "基準の状態を更新" }));
     expect(model.actions.refresh.run).toHaveBeenCalledOnce();
     expect(model.actions.rebuildPreview.run).not.toHaveBeenCalled();
@@ -191,7 +193,7 @@ describe("PlayerRadarAdminPanel", () => {
     const user = userEvent.setup();
     const model = modelFixture();
     const { rerender } = render(<PlayerRadarAdminPanel model={model} />);
-    await user.click(screen.getByRole("button", { name: "作品全体への適用を確認する" }));
+    await user.click(screen.getByRole("button", { name: "適用を確認する" }));
     rerender(
       <PlayerRadarAdminPanel
         model={{ ...model, preview: { ...model.preview!, previewId: "preview-2" } }}

@@ -1,4 +1,4 @@
-import { formatManYen } from "@/shared/lib/formatters";
+import { formatDecimal, formatManYen } from "@/shared/lib/formatters";
 
 /** Display vocabulary shared by the public comparison and administrator's preview. */
 export const playerRadarAxes = [
@@ -10,9 +10,10 @@ export const playerRadarAxes = [
   },
   {
     id: "revenueP90",
-    label: "収益の高い側",
-    chartLabel: ["収益の", "高い側"],
-    description: "物件収益のP90。小さい順の90%の位置にある境界で、最高額ではありません。",
+    label: "物件収益（高め）",
+    chartLabel: ["物件収益", "高め"],
+    description:
+      "物件収益を小さい順に並べた90%の位置（P90）。最高額や上位10%の平均ではありません。",
   },
   {
     id: "revenueAverage",
@@ -22,23 +23,23 @@ export const playerRadarAxes = [
   },
   {
     id: "totalAssetsP10",
-    label: "資産の低い側",
-    chartLabel: ["資産の低い側"],
+    label: "総資産（低め）",
+    chartLabel: ["総資産", "低め"],
     description:
-      "総資産のP10。小さい順の10%の位置にある境界で、下位だった試合だけの値ではありません。",
+      "総資産を小さい順に並べた10%の位置（P10）。最低額や、3・4位だった試合だけの値ではありません。",
   },
   {
     id: "totalAssetsMedian",
-    label: "資産の真ん中",
-    chartLabel: ["資産の", "真ん中"],
+    label: "総資産（中央）",
+    chartLabel: ["総資産", "中央"],
     description: "総資産の中央値。全試合の真ん中の水準で、偶数件では中央2値の平均です。",
   },
   {
     id: "totalAssetsP90",
-    label: "資産の高い側",
-    chartLabel: ["資産の", "高い側"],
+    label: "総資産（高め）",
+    chartLabel: ["総資産", "高め"],
     description:
-      "総資産のP90。小さい順の90%の位置にある境界で、勝利した試合だけの値ではありません。",
+      "総資産を小さい順に並べた90%の位置（P90）。最高額や、勝利した試合だけの値ではありません。",
   },
 ] as const;
 
@@ -90,16 +91,16 @@ export type PlayerRadarDisplay = {
   players: readonly PlayerRadarPlayer[];
 };
 
-const rankFormatter = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 2 });
-const boundaryFormatter = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 10 });
-
 export function formatPlayerRadarRawValue(axisId: PlayerRadarAxisId, value: number | null) {
   if (value === null) return "—";
-  return axisId === "averageRank" ? `${rankFormatter.format(value)}位` : formatManYen(value);
+  return axisId === "averageRank" ? `${formatDecimal(value)}位` : formatManYen(value);
 }
 
 export function formatPlayerRadarBoundary(axisId: PlayerRadarAxisId, value: number) {
-  return `${boundaryFormatter.format(value)}${axisId === "averageRank" ? "位以下" : "万円以上"}`;
+  const rounded =
+    axisId === "averageRank" ? Number(formatDecimal(value).replaceAll(",", "")) : Math.round(value);
+  const approximate = rounded === value ? "" : "約";
+  return `${approximate}${formatPlayerRadarRawValue(axisId, value)}${axisId === "averageRank" ? "以下" : "以上"}`;
 }
 
 export function playerRadarScoreLabel(cell: PlayerRadarCell | undefined): string {
@@ -115,6 +116,6 @@ export function playerRadarUnavailableLabel(reason: PlayerRadarUnavailableReason
     case "insufficient_matches":
       return "3試合未満";
     case "basis_unavailable":
-      return "基準未作成";
+      return "基準未適用";
   }
 }

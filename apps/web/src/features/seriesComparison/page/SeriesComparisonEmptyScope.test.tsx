@@ -1,11 +1,13 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { SeriesComparisonPage } from "@/features/seriesComparison/page/SeriesComparisonPage";
+import { decodeSeriesAnalysisArtifact } from "@/shared/api/seriesAnalysisArtifactDecoder";
+import { createDeferred } from "@/test/deferred";
 import { setupMsw } from "@/test/msw/lifecycle";
 import {
   makeSeriesAnalysisAggregate,
@@ -15,6 +17,13 @@ import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 
 setupMsw();
+// Empty-scope navigation is the oracle; load the real populated view before timing interactions.
+beforeAll(() =>
+  Promise.all([
+    import("@/features/seriesComparison/page/SeriesAnalysisOverviewView"),
+    decodeSeriesAnalysisArtifact("aggregateV5", makeSeriesAnalysisAggregate()),
+  ]),
+);
 
 function renderScope() {
   const client = createTestQueryClient();
@@ -63,6 +72,11 @@ describe("SeriesComparison empty scope", () => {
     const { client, router } = renderScope();
     expect(await screen.findByText("この範囲に確定済みの試合がありません")).toBeInTheDocument();
     await waitFor(() => expect(client.isFetching()).toBe(0));
+    const summary = within(screen.getByRole("region", { name: "比較条件" }));
+    expect(summary.getByText("0戦")).toBeInTheDocument();
+    expect(summary.getByText("対象試合なし")).toBeInTheDocument();
+    expect(summary.queryByText("対戦数未取得")).not.toBeInTheDocument();
+    expect(summary.queryByText("分析結果は未取得です")).not.toBeInTheDocument();
     expect(new URLSearchParams(router.state.location.search).get("mapMasterId")).toBe("map_empty");
     expect(new URLSearchParams(router.state.location.search).get("seasonMasterId")).toBe(
       "season_current",
@@ -76,6 +90,22 @@ describe("SeriesComparison empty scope", () => {
     expect(
       await screen.findByRole("heading", { name: "6つの観点で成績を比べる" }),
     ).toBeInTheDocument();
+    expect(aggregateReads).toBe(1);
+    await act(async () => router.navigate(-1));
+    expect(await screen.findByText("この範囲に確定済みの試合がありません")).toBeInTheDocument();
+    expect(new URLSearchParams(router.state.location.search).get("seasonMasterId")).toBe(
+      "season_current",
+    );
+    expect(new URLSearchParams(router.state.location.search).get("mapMasterId")).toBe("map_empty");
+    expect(
+      within(screen.getByRole("region", { name: "比較条件" })).getByText("0戦"),
+    ).toBeInTheDocument();
+    await act(async () => router.navigate(1));
+    expect(
+      await screen.findByRole("heading", { name: "6つの観点で成績を比べる" }),
+    ).toBeInTheDocument();
+    expect(new URLSearchParams(router.state.location.search).has("mapMasterId")).toBe(false);
+    expect(new URLSearchParams(router.state.location.search).has("seasonMasterId")).toBe(false);
     expect(aggregateReads).toBe(1);
   });
 
@@ -96,11 +126,75 @@ describe("SeriesComparison empty scope", () => {
         );
       }),
     );
-    const { router } = renderScope();
+    const { client, router } = renderScope();
     expect(await screen.findByText("この条件の分析を準備しています")).toBeInTheDocument();
     expect(screen.queryByText("この範囲に確定済みの試合がありません")).not.toBeInTheDocument();
     expect(new URLSearchParams(router.state.location.search).get("mapMasterId")).toBe("map_empty");
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+    const summary = within(screen.getByRole("region", { name: "比較条件" }));
+    expect(summary.queryByText("0戦")).not.toBeInTheDocument();
+    expect(summary.queryByText("対象試合なし")).not.toBeInTheDocument();
   });
+
+  it.each(["scope_error", "missing_payload"] as const)(
+    "does not describe pending or %s results as zero matches",
+    async (failure) => {
+      const gate = createDeferred();
+      server.use(
+        http.get("/api/analytics/series-comparison/v2/scope-status", async ({ request }) => {
+          const params = new URL(request.url).searchParams;
+          if (params.has("artifactId")) {
+            await gate.promise;
+            if (failure === "scope_error")
+              return HttpResponse.json(
+                {
+                  type: "about:blank",
+                  title: "Unavailable",
+                  detail: "Scope lookup failed",
+                  status: 503,
+                  code: "SERVICE_UNAVAILABLE",
+                },
+                { status: 503 },
+              );
+          }
+          return HttpResponse.json(
+            makeSeriesAnalysisScopeStatus({
+              artifactId: params.get("artifactId"),
+              seasonMasterId: "season_current",
+              mapMasterId: "map_empty",
+              seasonName: "今シーズン",
+              mapName: "選択マップ",
+              state: "available",
+            }),
+          );
+        }),
+        http.get("/api/analytics/series-comparison/v5/aggregate", () =>
+          HttpResponse.json(
+            {
+              type: "about:blank",
+              title: "Unavailable",
+              detail: "Missing expected payload",
+              status: 500,
+              code: "INTERNAL_ERROR",
+            },
+            { status: 500 },
+          ),
+        ),
+      );
+      const { client } = renderScope();
+      const summary = within(await screen.findByRole("region", { name: "比較条件" }));
+      expect(summary.getByText("対戦数を確認中")).toBeInTheDocument();
+      expect(summary.queryByText("0戦")).not.toBeInTheDocument();
+      expect(summary.queryByText("対象試合なし")).not.toBeInTheDocument();
+      gate.resolve();
+      expect(await screen.findByText("戦績データを読み込めません")).toBeInTheDocument();
+      await waitFor(() => expect(client.isFetching()).toBe(0));
+      expect(summary.getByText("対戦数未取得")).toBeInTheDocument();
+      expect(summary.getByText("分析結果は未取得です")).toBeInTheDocument();
+      expect(summary.queryByText("0戦")).not.toBeInTheDocument();
+      expect(screen.queryByText("この範囲に確定済みの試合がありません")).not.toBeInTheDocument();
+    },
+  );
 
   it("normalizes only an invalid identity and keeps the other valid selection", async () => {
     server.use(

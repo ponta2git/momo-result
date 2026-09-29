@@ -178,35 +178,44 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
 
   const updateGameTitle = useCallback(
     (gameTitleId: string) =>
-      update((current) => ({
-        gameTitleId,
-        view: current.view ?? defaultSeriesAnalysisView,
-        ownerMetric: current.ownerMetric,
-      })),
+      update(
+        (current) => ({
+          gameTitleId,
+          view: current.view ?? defaultSeriesAnalysisView,
+          ownerMetric: current.ownerMetric,
+        }),
+        { replace: false },
+      ),
     [update],
   );
   const updateSeasonMasterId = useCallback(
     (seasonMasterId: string) =>
-      update((current) => {
-        const nextSeason = seasonMasterId || undefined;
-        return {
-          ...current,
-          focusMatchId: undefined,
-          seasonMasterId: nextSeason,
-        };
-      }),
+      update(
+        (current) => {
+          const nextSeason = seasonMasterId || undefined;
+          return {
+            ...current,
+            focusMatchId: undefined,
+            seasonMasterId: nextSeason,
+          };
+        },
+        { replace: false },
+      ),
     [update],
   );
   const updateMapMasterId = useCallback(
     (mapMasterId: string) =>
-      update((current) => {
-        const nextMap = mapMasterId || undefined;
-        return {
-          ...current,
-          focusMatchId: undefined,
-          mapMasterId: nextMap,
-        };
-      }),
+      update(
+        (current) => {
+          const nextMap = mapMasterId || undefined;
+          return {
+            ...current,
+            focusMatchId: undefined,
+            mapMasterId: nextMap,
+          };
+        },
+        { replace: false },
+      ),
     [update],
   );
   const updateView = useCallback(
@@ -230,12 +239,15 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
   );
   const clearScope = useCallback(
     () =>
-      update((current) => ({
-        ...current,
-        focusMatchId: undefined,
-        mapMasterId: undefined,
-        seasonMasterId: undefined,
-      })),
+      update(
+        (current) => ({
+          ...current,
+          focusMatchId: undefined,
+          mapMasterId: undefined,
+          seasonMasterId: undefined,
+        }),
+        { replace: false },
+      ),
     [update],
   );
 

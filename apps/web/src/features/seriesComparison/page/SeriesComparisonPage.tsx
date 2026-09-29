@@ -137,6 +137,7 @@ export function SeriesComparisonPage() {
           ) : filters.seriesOptions.length > 0 ? (
             <>
               <SeriesAnalysisScopeBar
+                scopeEmpty={resource.scopeState === "empty"}
                 loading={updating}
                 canRefresh={
                   (resource.canRefresh || Boolean(filters.state.gameTitleId)) &&

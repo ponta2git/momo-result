@@ -115,7 +115,8 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
     val validScope = PostgresSeriesAnalysisScopeOps.valid(request.gameTitleId, request.scope)
     val scopeName = PostgresSeriesAnalysisScopeOps.displayName(request.gameTitleId, request.scope)
     val scope = request.scope
-    val query = fr"""
+    val query =
+      fr"""
       SELECT jsonb_build_object(
         'schemaVersion', 1, 'gameTitleId', p.game_title_id, 'previewId', p.id,
         'candidateId', p.candidate_id, 'inputRevision', p.input_revision::text,
@@ -151,7 +152,8 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
         .leftMap(_ => AppError.Internal("Invalid saved radar preview."))
         .flatMap(json =>
           json.hcursor.downField("scope").get[String]("state").toOption match
-            case Some("unavailable") => Left(AppError.Internal("A saved radar preview scope is missing."))
+            case Some("unavailable") =>
+              Left(AppError.Internal("A saved radar preview scope is missing."))
             case Some("invalid") => Left(AppError.AnalysisScopeNotFound())
             case _ => Right(value)
         )
@@ -166,7 +168,8 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
       fr"THEN document::text ELSE NULL END FROM (" ++ query ++ fr") saved_radar")
       .query[Option[String]].option.map {
         case None => Left(missing)
-        case Some(None) => Left(AppError.PayloadTooLarge("Saved radar data exceeds its read bound."))
+        case Some(None) =>
+          Left(AppError.PayloadTooLarge("Saved radar data exceeds its read bound."))
         case Some(Some(value)) => parse(value)
             .leftMap(_ => AppError.Internal("Invalid saved radar data."))
             .flatMap(validateSummary)
@@ -180,7 +183,11 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
       depth <= 24 && json.arrayOrObject(
         true,
         _.forall(safe(_, depth + 1)),
-        fields => !fields.keys.exists(forbidden.contains) && fields.values.forall(safe(_, depth + 1)),
+        fields =>
+          !fields.keys.exists(forbidden.contains) && fields.values.forall(safe(_, depth + 1)),
       )
-    Either.cond(safe(value, 0) && SeriesPlayerRadarPayloadValidator.validate(value), value,
-      AppError.Internal("Invalid radar summary shape."))
+    Either.cond(
+      safe(value, 0) && SeriesPlayerRadarPayloadValidator.validate(value),
+      value,
+      AppError.Internal("Invalid radar summary shape.")
+    )

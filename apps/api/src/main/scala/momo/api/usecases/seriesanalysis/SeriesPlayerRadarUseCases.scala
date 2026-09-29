@@ -13,7 +13,8 @@ final class GetSeriesPlayerRadarState[F[_]](repository: SeriesPlayerRadarReposit
     repository.radarState(gameTitleId)
 
 final class GetSeriesPlayerRadarPreview[F[_]](repository: SeriesPlayerRadarRepository[F]):
-  def run(request: SeriesPlayerRadarPreviewRequest): F[Either[AppError, SeriesPlayerRadarDocument]] =
+  def run(request: SeriesPlayerRadarPreviewRequest)
+      : F[Either[AppError, SeriesPlayerRadarDocument]] =
     repository.radarPreview(request)
 
 final class GetSeriesPlayerRadarOperation[F[_]](repository: SeriesPlayerRadarRepository[F]):

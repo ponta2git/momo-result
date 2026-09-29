@@ -39,7 +39,10 @@ final class PostgresSeriesPlayerRadarRepository[F[_]: Async] private (
   ): F[Either[AppError, SeriesPlayerRadarOperation]] =
     (freshId, freshId, freshId).tupled.flatMap { case (operation, candidate, preview) =>
       PostgresSeriesPlayerRadarCommandOps.request(
-        command, requestedBy, idempotencyKeyHash, requestFingerprint,
+        command,
+        requestedBy,
+        idempotencyKeyHash,
+        requestFingerprint,
         PostgresSeriesPlayerRadarCommandOps.FreshIds(operation, candidate, preview),
       ).transact(transactor)
     }
@@ -56,8 +59,10 @@ final class PostgresSeriesPlayerRadarRepository[F[_]: Async] private (
           query).exceptSomeSqlState {
           case state if state.value == "57014" =>
             AppError.AnalysisReadBusy(config.busyRetryAfterSeconds).asLeft[A].pure[ConnectionIO]
-        }.transact(transactor).timeoutTo(config.readTimeout,
-          AppError.AnalysisReadBusy(config.busyRetryAfterSeconds).asLeft[A].pure[F])
+        }.transact(transactor).timeoutTo(
+          config.readTimeout,
+          AppError.AnalysisReadBusy(config.busyRetryAfterSeconds).asLeft[A].pure[F]
+        )
     }
 
 object PostgresSeriesPlayerRadarRepository:
@@ -65,4 +70,4 @@ object PostgresSeriesPlayerRadarRepository:
       : F[PostgresSeriesPlayerRadarRepository[F]] =
     Async[F].delay(SeriesPlayerRadarPayloadValidator.ensureReady()) *>
       Semaphore[F](config.decodeConcurrency.toLong)
-      .map(new PostgresSeriesPlayerRadarRepository(transactor, config, _))
+        .map(new PostgresSeriesPlayerRadarRepository(transactor, config, _))

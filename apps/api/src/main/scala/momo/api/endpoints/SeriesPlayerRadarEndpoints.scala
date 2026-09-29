@@ -38,8 +38,10 @@ object SeriesPlayerRadarEndpoints:
     .securityIn(CommonEndpoint.accountHeader)
     .get
     .in("api" / "admin" / "series-analysis" / "radar" / "preview")
-    .in(query[String]("gameTitleId").and(query[String]("previewId"))
-      .and(query[Option[String]]("seasonMasterId")).and(query[Option[String]]("mapMasterId"))
+    .in(query[String]("gameTitleId")
+      .and(query[String]("previewId"))
+      .and(query[Option[String]]("seasonMasterId"))
+      .and(query[Option[String]]("mapMasterId"))
       .mapTo[PreviewInput])
     .errorOut(CommonEndpoint.errorOut)
     .out(savedDocument("SeriesPlayerRadarPreviewResponse"))

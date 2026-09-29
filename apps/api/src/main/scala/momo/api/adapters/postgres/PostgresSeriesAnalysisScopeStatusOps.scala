@@ -53,6 +53,15 @@ private[postgres] object PostgresSeriesAnalysisScopeStatusOps:
           else if row.publishedHasMatches.contains(true) then "available"
           else if row.currentHasMatches then "awaiting_analysis"
           else "empty"
-        SeriesAnalysisScopeStatus(request.gameTitleId, row.artifactId, request.scope, state,
-          row.seasonName, row.mapName, invalid, row.currentHasMatches, row.publishedHasMatches).asRight
+        SeriesAnalysisScopeStatus(
+          request.gameTitleId,
+          row.artifactId,
+          request.scope,
+          state,
+          row.seasonName,
+          row.mapName,
+          invalid,
+          row.currentHasMatches,
+          row.publishedHasMatches
+        ).asRight
     }

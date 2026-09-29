@@ -21,7 +21,8 @@ private[postgres] object SeriesPlayerRadarPayloadValidator:
   private val schemas: Map[String, Schema] = List("basis", "candidate", "evaluation", "monitoring")
     .map { kind =>
       val schema = registry.getSchema(SchemaLocation.of(
-        s"classpath:momo/api/series-analysis-schemas/series-player-radar-$kind-v1.schema.json"))
+        s"classpath:momo/api/series-analysis-schemas/series-player-radar-$kind-v1.schema.json"
+      ))
       schema.initializeValidators()
       kind -> schema
     }.toMap
@@ -38,7 +39,8 @@ private[postgres] object SeriesPlayerRadarPayloadValidator:
       "evaluation" -> cursor.downField("before").focus,
       "evaluation" -> cursor.downField("after").focus,
     )
-    fragments.forall { case (kind, fragment) => fragment.filterNot(_.isNull).forall { value =>
+    fragments.forall { case (kind, fragment) =>
+      fragment.filterNot(_.isNull).forall { value =>
         val bytes = value.noSpaces.getBytes(StandardCharsets.UTF_8)
         val node = reader.readTree(new ByteArrayInputStream(bytes), InputFormat.JSON)
         schemas(kind).validate(node, OutputFormat.BOOLEAN).booleanValue()

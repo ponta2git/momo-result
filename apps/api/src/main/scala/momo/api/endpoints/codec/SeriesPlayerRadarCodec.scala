@@ -16,7 +16,8 @@ object SeriesPlayerRadarCodec:
       )
     )
 
-  def command(value: SeriesPlayerRadarOperationRequest): Either[AppError, SeriesPlayerRadarCommand] =
+  def command(value: SeriesPlayerRadarOperationRequest)
+      : Either[AppError, SeriesPlayerRadarCommand] =
     for
       title <- SeriesAnalysisCodec.gameTitleId(value.gameTitleId)
       kind <- SeriesPlayerRadarOperationKind.fromWire(value.kind)

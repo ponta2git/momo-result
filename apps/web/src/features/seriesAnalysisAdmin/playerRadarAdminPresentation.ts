@@ -4,6 +4,7 @@ import type {
   SeriesPlayerRadarOperation,
   SeriesPlayerRadarState,
 } from "@/shared/api/seriesPlayerRadar";
+import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { playerRadarAxes } from "@/shared/seriesAnalysis/playerRadarPresentation";
 
 export function radarSubmissionUncertain(error: unknown): boolean {
@@ -82,15 +83,17 @@ export function radarReviewPresentation(
   const monitor = state.monitor;
   if (!monitor)
     return {
-      explanation: "次の分析計算で見直しの目安を確認できます。自動で基準は変わりません。",
+      explanation: "見直しの目安はまだ計算されていません。",
       reasons: [],
     };
   const explanation =
     monitor.status === "basis_unavailable"
       ? "初回基準を適用すると、その後の記録から見直しの目安を確認できます。"
-      : monitor.status === "insufficient_matches" || monitor.status === "insufficient_events"
-        ? `基準作成元より後の記録が${monitor.postSourceMatchCount}試合あります。高得点の集中を確認するには、新しい40試合・8開催以上が必要です。`
-        : "直近の重複しない20試合ずつの2区間で、同じ軸に3人以上が9点以上かを確認します。目安だけでは基準を変更しません。";
+      : monitor.status === "insufficient_matches"
+        ? `基準作成元より後の記録は${monitor.postSourceMatchCount}試合です。高得点の集中を確認するには、20試合ずつの2期間と、その2期間で8開催以上が必要です。`
+        : monitor.status === "insufficient_events"
+          ? `直近の対象${monitor.evaluatedMatchCount}試合は${monitor.evaluatedHeldEventCount}開催分です。高得点の集中を確認するには、対象の2期間で8開催以上が必要です。`
+          : null;
   return {
     explanation,
     reasons: monitor.reasons.map((reason) => {
@@ -101,11 +104,24 @@ export function radarReviewPresentation(
             ? "基準を作った記録に訂正があります。適用中の閾値は維持しています。"
             : reason.kind === "new_map"
               ? "基準作成後に新しいマップの記録が加わっています。"
-              : `${reason.axisIds.map((id) => playerRadarAxes.find((axis) => axis.id === id)?.label ?? id).join("・")}で高得点が続いています。必要に応じて候補と比較できます。`;
+              : `${reason.axisIds.map((id) => playerRadarAxes.find((axis) => axis.id === id)?.label ?? id).join("・")}で、続く2期間とも4人中3人以上が9点以上です。`;
       return {
         evidenceKey: reason.evidenceChecksum,
         label,
         acknowledged: state.acknowledgedEvidenceKeys.includes(reason.evidenceChecksum),
+        evidence:
+          reason.kind === "high_score_concentration"
+            ? [
+                {
+                  label: "対象記録",
+                  value: `${monitor.evaluatedMatchCount}試合・${monitor.evaluatedHeldEventCount}開催`,
+                },
+                ...monitor.latestWindows.map((window, index) => ({
+                  label: `${index + 1}つ目の期間`,
+                  value: `${formatDateTimeLong(window.firstMatch.playedAt)}〜${formatDateTimeLong(window.lastMatch.playedAt)}（${window.evaluation.sample.matchCount}試合・${window.evaluation.sample.heldEventCount}開催）`,
+                })),
+              ]
+            : [],
       };
     }),
   };

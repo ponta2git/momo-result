@@ -61,8 +61,13 @@ export type PlayerRadarAdminModel = {
     detail: string;
   } | null;
   review: {
-    explanation: string;
-    reasons: ReadonlyArray<{ evidenceKey: string; label: string; acknowledged: boolean }>;
+    explanation: string | null;
+    reasons: ReadonlyArray<{
+      evidenceKey: string;
+      label: string;
+      acknowledged: boolean;
+      evidence: ReadonlyArray<{ label: string; value: string }>;
+    }>;
   };
   feedback: {
     title: string;

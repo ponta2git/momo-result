@@ -22,6 +22,7 @@ export function PlayerRadarAdministration({
           <Button
             pending={page.refreshing}
             pendingLabel="再読み込み中"
+            size="sm"
             onClick={() => void page.refresh()}
           >
             基準の状態を再読み込み
@@ -32,7 +33,7 @@ export function PlayerRadarAdministration({
       </Notice>
     );
   return (
-    <div aria-label="採点基準を読み込み中" role="status" className="grid gap-3">
+    <div aria-label="採点基準を読み込み中" role="status" className="grid min-w-0 gap-4">
       <Skeleton className="h-5 w-48" />
       <Skeleton className="h-32 w-full" />
     </div>

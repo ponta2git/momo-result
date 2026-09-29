@@ -142,11 +142,13 @@ describe("PlayerRadarAdminPanel", () => {
     const table = screen.getByRole("table", { name: "採点基準変更前後の比較" });
     const firstCell = within(table).getAllByRole("cell")[0]!;
     expect(firstCell).toHaveTextContent("現行 6点 → 候補 7点");
-    expect(firstCell).toHaveTextContent("元の成績 2.25位");
-    expect(within(firstCell).getAllByText(/元の成績/u)).toHaveLength(1);
+    expect(within(firstCell).getByText("2.25位")).toBeInTheDocument();
+    expect(screen.getByText(/下段は同じ記録から集計した元の成績です/u)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "作品全体への適用を確認する" }));
     const dialog = screen.getByRole("alertdialog");
     expect(dialog).toHaveTextContent("比較対象の作品の過去を含む全シーズン・全マップへ適用します");
+    expect(dialog).toHaveTextContent("基準作成日時");
+    expect(dialog).toHaveTextContent("48試合・12開催");
     expect(dialog).toHaveTextContent("basis-candidate");
     expect(model.actions.apply).not.toHaveBeenCalled();
     await user.click(within(dialog).getByRole("button", { name: "作品全体に適用する" }));
@@ -237,5 +239,85 @@ describe("PlayerRadarAdminPanel", () => {
     expect(screen.queryByRole("table", { name: "採点基準変更前後の比較" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "全期間・全マップで比較する" }));
     expect(model.actions.resetPreviewFilter).toHaveBeenCalledOnce();
+  });
+
+  it("offers one title-wide reset beside active comparison filters without changing the candidate", async () => {
+    const user = userEvent.setup();
+    const model = modelFixture();
+    model.previewFilter = {
+      ...model.previewFilter,
+      seasonMasterId: "season-1",
+      mapMasterId: "map-1",
+      seasonOptions: [
+        { label: "全期間", value: "" },
+        { label: "第1シーズン", value: "season-1" },
+      ],
+      mapOptions: [
+        { label: "全マップ", value: "" },
+        { label: "マップ1", value: "map-1" },
+      ],
+    };
+    render(<PlayerRadarAdminPanel model={model} />);
+    const filters = screen.getByRole("region", { name: "採点基準の比較条件" });
+    expect(within(filters).getByRole("combobox", { name: "比較するシーズン" })).toHaveTextContent(
+      "第1シーズン",
+    );
+    expect(screen.getAllByRole("button", { name: "全期間・全マップで比較する" })).toHaveLength(1);
+    await user.click(within(filters).getByRole("button", { name: "全期間・全マップで比較する" }));
+    expect(model.actions.resetPreviewFilter).toHaveBeenCalledOnce();
+    expect(model.actions.generate.run).not.toHaveBeenCalled();
+    expect(model.actions.apply).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [12, 3, "40試合未満・8開催未満"],
+    [12, 8, "40試合未満"],
+    [40, 3, "8開催未満"],
+  ])(
+    "explains reference scores for %i matches and %i events",
+    (matchCount, heldEventCount, reason) => {
+      const model = modelFixture();
+      const after = model.preview!.after!;
+      after.sample = { ...after.sample, matchCount, heldEventCount, quality: "reference" };
+      for (const player of after.players) {
+        for (const axis of player.axes) axis.sampleQuality = "reference";
+      }
+      render(<PlayerRadarAdminPanel model={model} />);
+      expect(
+        screen.getByText(`${reason}のため、点数を参考値として表示しています。`),
+      ).toBeInTheDocument();
+      const table = screen.getByRole("table", { name: "採点基準変更前後の比較" });
+      expect(within(table).getAllByText("参考値")).toHaveLength(24);
+      expect(within(table).getAllByText("7点")).toHaveLength(24);
+    },
+  );
+
+  it("keeps saved monitoring evidence visible while acknowledging that evidence alone", async () => {
+    const user = userEvent.setup();
+    const model = modelFixture();
+    model.review = {
+      explanation: null,
+      reasons: [
+        {
+          evidenceKey: "high-score-evidence",
+          label: "平均順位で高得点が続いています。",
+          acknowledged: false,
+          evidence: [
+            { label: "確認対象", value: "40試合・8開催" },
+            { label: "1つ目の期間", value: "2026/01/01〜2026/02/01（20試合・4開催）" },
+            { label: "2つ目の期間", value: "2026/03/01〜2026/04/01（20試合・4開催）" },
+          ],
+        },
+      ],
+    };
+    render(<PlayerRadarAdminPanel model={model} />);
+    const review = screen.getByRole("region", { name: "見直しの目安" });
+    expect(within(review).getByText("40試合・8開催")).toBeInTheDocument();
+    expect(within(review).getByText(/2026\/01\/01〜2026\/02\/01/u)).toBeInTheDocument();
+    expect(within(review).getByText(/2026\/03\/01〜2026\/04\/01/u)).toBeInTheDocument();
+    await user.click(within(review).getByRole("button", { name: "この目安を確認し、基準を継続" }));
+    expect(model.actions.acknowledge).toHaveBeenCalledExactlyOnceWith("high-score-evidence");
+    expect(model.actions.generate.run).not.toHaveBeenCalled();
+    expect(model.actions.apply).not.toHaveBeenCalled();
   });
 });

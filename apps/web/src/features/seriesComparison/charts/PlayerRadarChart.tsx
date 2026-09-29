@@ -7,14 +7,14 @@ import type { PlayerRadarPlayer } from "@/shared/seriesAnalysis/playerRadarPrese
 import { cn } from "@/shared/ui/cn";
 import { contentText } from "@/shared/ui/typography";
 
-const center = { x: 128, y: 140 };
+const center = { x: 120, y: 140 };
 const radius = 80;
 const ticks = [2, 4, 6, 8, 10];
 const labelPositions = [
-  { x: 128, y: 24, anchor: "middle" },
-  { x: 252, y: 62, anchor: "end" },
-  { x: 252, y: 221, anchor: "end" },
-  { x: 128, y: 264, anchor: "middle" },
+  { x: 120, y: 24, anchor: "middle" },
+  { x: 236, y: 62, anchor: "end" },
+  { x: 236, y: 221, anchor: "end" },
+  { x: 120, y: 252, anchor: "middle" },
   { x: 4, y: 221, anchor: "start" },
   { x: 4, y: 62, anchor: "start" },
 ] as const;
@@ -60,7 +60,7 @@ export function PlayerRadarChart({
   const reference = vertices.some((vertex) => vertex.cell?.sampleQuality === "reference");
 
   return (
-    <figure className="min-w-0" aria-labelledby={`${figureId}-name`}>
+    <figure className="grid min-w-0 gap-2" aria-labelledby={`${figureId}-name`}>
       <figcaption className={cn(contentText.heading, "text-center")} id={`${figureId}-name`}>
         <MemberSequenceLabel memberId={player.memberId}>{player.displayName}</MemberSequenceLabel>
       </figcaption>
@@ -69,7 +69,7 @@ export function PlayerRadarChart({
         aria-labelledby={`${figureId}-title ${figureId}-description`}
         className="mx-auto block w-full max-w-80 overflow-visible"
         role="img"
-        viewBox="0 0 256 280"
+        viewBox="0 0 240 280"
       >
         <title id={`${figureId}-title`}>{player.displayName}の6軸レーダー</title>
         <desc id={`${figureId}-description`}>
@@ -87,21 +87,21 @@ export function PlayerRadarChart({
             return <line key={axis.id} x1={center.x} x2={edge.x} y1={center.y} y2={edge.y} />;
           })}
         </g>
-        <g aria-hidden="true" fill="var(--color-text-muted)" fontSize="14" className="tabular-nums">
+        <g aria-hidden="true" fill="var(--color-text-muted)" fontSize="12" className="tabular-nums">
           {[0, ...ticks].map((tick) => (
             <text key={tick} x={center.x + 4} y={center.y - (radius * tick) / 10 + 5}>
               {tick}
             </text>
           ))}
         </g>
-        <g aria-hidden="true" fill="var(--color-text-primary)" fontSize="16">
+        <g aria-hidden="true" fill="var(--color-text-secondary)" fontSize="12">
           {playerRadarAxes.map((axis, index) => {
             const label = labelPositions[index];
             if (!label) return null;
             return (
               <text key={axis.id} textAnchor={label.anchor} x={label.x} y={label.y}>
                 {axis.chartLabel.map((line, lineIndex) => (
-                  <tspan key={line} dy={lineIndex === 0 ? 0 : 18} x={label.x}>
+                  <tspan key={line} dy={lineIndex === 0 ? 0 : 16} x={label.x}>
                     {line}
                   </tspan>
                 ))}

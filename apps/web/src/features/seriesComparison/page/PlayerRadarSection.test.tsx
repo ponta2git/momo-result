@@ -104,8 +104,8 @@ describe("PlayerRadarSection", () => {
       "var(--color-surface)",
     );
     expect(container.querySelector("[data-radar-edge]")).toHaveAttribute("stroke-dasharray", "4 4");
-    expect(screen.getAllByText("参考")).toHaveLength(5);
-    expect(screen.getByText("基準未作成")).toBeInTheDocument();
+    expect(screen.getAllByText("参考値")).toHaveLength(5);
+    expect(screen.getByText("基準未適用")).toBeInTheDocument();
   });
 
   it("preserves both sample shortage and missing-basis reasons while keeping observed zero distinct from no target", () => {
@@ -130,7 +130,7 @@ describe("PlayerRadarSection", () => {
     );
     const table = screen.getByRole("table", { name: "6軸の点数と元の成績" });
     expect(within(table).getAllByText("未採点")).toHaveLength(24);
-    expect(within(table).getAllByText("3試合未満・基準未作成")).toHaveLength(24);
+    expect(within(table).getAllByText("3試合未満・基準未適用")).toHaveLength(24);
     expect(within(table).getAllByText("0万円")).toHaveLength(16);
     expect(within(table).queryByText("対象なし")).not.toBeInTheDocument();
   });
@@ -142,12 +142,13 @@ describe("PlayerRadarSection", () => {
     expect(screen.getByRole("link", { name: "数値で比較する" })).toHaveFocus();
     await user.tab();
     const disclosure = screen.getByRole("button", {
-      name: "指標の意味・対象記録・採点基準を確認する",
+      name: "レーダーの読み方と採点基準",
     });
     expect(disclosure).toHaveFocus();
     await user.keyboard("{Enter}");
     expect(screen.getByRole("table", { name: "点数が上がる境界" })).toBeInTheDocument();
-    expect(screen.getByText(/下位だった試合だけの値ではありません/u)).toBeInTheDocument();
+    expect(screen.getByText(/3・4位だった試合だけの値ではありません/u)).toBeInTheDocument();
+    expect(screen.getByText(/「約」は表示用に丸めた境界です/u)).toBeInTheDocument();
     expect(container.querySelector("svg [tabindex]")).not.toBeInTheDocument();
   });
 });

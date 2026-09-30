@@ -221,7 +221,7 @@ export function usePlayerRadarAdminModel(gameTitleId: string, gameTitleName: str
     operationReason ??
     (conflictNeedsRefresh ? "基準の状態を更新し、最新の比較を確認してください。" : null) ??
     (candidate?.status !== "ready"
-      ? "有効な候補が必要です。"
+      ? "有効な変更案が必要です。"
       : previewState !== "ready"
         ? "最新の記録で比較を計算し、内容を確認してください。"
         : previewQuery.isFetching || stateQuery.isFetching
@@ -267,6 +267,7 @@ export function usePlayerRadarAdminModel(gameTitleId: string, gameTitleName: str
           ? {
               candidateId: candidate.candidateId,
               status: candidate.status,
+              basis: candidateBasis,
               source: candidate.result
                 ? playerRadarSampleDisplay(candidate.result.sourceSummary, maps)
                 : null,
@@ -328,7 +329,7 @@ export function usePlayerRadarAdminModel(gameTitleId: string, gameTitleName: str
             pending: command.isPending && command.variables?.kind === "candidate",
             disabledReason:
               operationReason ??
-              (candidateActive ? "現在の候補を確認または取り下げてください。" : missingRecords),
+              (candidateActive ? "現在の変更案を確認または取り下げてください。" : missingRecords),
             run: () => submit({ gameTitleId, kind: "candidate" }),
           },
           rebuildPreview: {
@@ -351,7 +352,7 @@ export function usePlayerRadarAdminModel(gameTitleId: string, gameTitleName: str
             pending: command.isPending && command.variables?.kind === "restore",
             disabledReason:
               operationReason ??
-              (candidateActive ? "現在の候補を確認または取り下げてください。" : null),
+              (candidateActive ? "現在の変更案を確認または取り下げてください。" : null),
             run: () =>
               submit({
                 gameTitleId,
@@ -364,7 +365,7 @@ export function usePlayerRadarAdminModel(gameTitleId: string, gameTitleName: str
             disabledReason:
               operationReason ??
               (candidate?.status === "invalid" || candidate?.status === "unavailable"
-                ? "候補を取り下げ、最新の記録から作り直してください。"
+                ? "変更案を取り下げ、最新の記録から作り直してください。"
                 : null),
             run: () => {
               if (latestOperation)

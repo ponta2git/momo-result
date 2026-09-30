@@ -72,8 +72,8 @@ describe("SeriesAnalysisAdminPage", () => {
     );
     renderPage();
     expect(await screen.findByRole("button", { name: "この作品を再計算" })).toBeEnabled();
-    expect(screen.queryByRole("button", { name: "適用を確認する" })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("tab", { name: "レーダー" }));
+    expect(screen.queryByRole("button", { name: "この変更案を適用する" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "レーダーの採点基準" }));
     await screen.findByRole("table", { name: "採点基準変更前後の比較" });
     expect(screen.queryByRole("button", { name: "この作品を再計算" })).not.toBeInTheDocument();
 
@@ -81,7 +81,7 @@ describe("SeriesAnalysisAdminPage", () => {
     expect(await screen.findByText("この条件に対象試合はありません")).toBeVisible();
     await user.click(screen.getByRole("tab", { name: "分析の再計算" }));
     expect(screen.getByRole("button", { name: "この作品を再計算" })).toBeEnabled();
-    await user.click(screen.getByRole("tab", { name: "レーダー" }));
+    await user.click(screen.getByRole("tab", { name: "レーダーの採点基準" }));
     expect(screen.getByRole("combobox", { name: "比較するマップ" })).toHaveTextContent("東日本編");
     expect(screen.getByText("この条件に対象試合はありません")).toBeVisible();
     expect(screen.getByRole("combobox", { name: "対象作品" })).toHaveTextContent("桃太郎電鉄2");

@@ -7,7 +7,6 @@ import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { PlayerRadarAxisLabel } from "@/shared/seriesAnalysis/PlayerRadarAxisLabel";
 import {
-  formatPlayerRadarBoundary,
   formatPlayerRadarRawValue,
   playerRadarAxes,
   playerRadarScoreLabel,
@@ -65,15 +64,6 @@ export function PlayerRadarPreview({
         preview.after.sample.heldEventCount < 8 ? "8開催未満" : null,
       ].filter(Boolean)
     : [];
-  const recordSources = [
-    ...(preview.after
-      ? [{ id: "evaluation", label: "比較対象", sample: preview.after.sample }]
-      : []),
-    ...(preview.beforeBasis
-      ? [{ id: "before", label: "現行基準の作成元", sample: preview.beforeBasis.source }]
-      : []),
-    { id: "candidate", label: "候補の作成元", sample: preview.candidateBasis.source },
-  ];
   return (
     <div className="grid min-w-0 gap-4">
       <FilterBar
@@ -148,7 +138,7 @@ export function PlayerRadarPreview({
                         <MemberSequenceLabel memberId={player.memberId}>
                           {player.displayName}
                         </MemberSequenceLabel>
-                        <span className="whitespace-nowrap">現行 → 候補</span>
+                        <span className="whitespace-nowrap">適用中 → 変更案</span>
                       </div>
                     ),
                     key: player.memberId,
@@ -164,9 +154,9 @@ export function PlayerRadarPreview({
                       return (
                         <div className="grid gap-1">
                           <p className="whitespace-nowrap">
-                            <span className="sr-only">現行 </span>
+                            <span className="sr-only">適用中 </span>
                             {playerRadarScoreLabel(before)} <span aria-label="変更後">→</span>{" "}
-                            <span className="sr-only">候補 </span>
+                            <span className="sr-only">変更案 </span>
                             <span className={contentText.compactPrimary}>
                               {playerRadarScoreLabel(after)}
                             </span>
@@ -180,8 +170,8 @@ export function PlayerRadarPreview({
                               {beforeReference && afterReference
                                 ? "参考値"
                                 : beforeReference
-                                  ? "現行: 参考値"
-                                  : "候補: 参考値"}
+                                  ? "適用中: 参考値"
+                                  : "変更案: 参考値"}
                             </p>
                           ) : null}
                           {after?.scoreUnavailableReasons.length ? (
@@ -214,126 +204,39 @@ export function PlayerRadarPreview({
             />
           )}
         </div>
-        <Disclosure
-          summary="採点基準と対象記録"
-          triggerLayout="flush-horizontal"
-          triggerVariant="supporting"
-        >
-          <div className="grid min-w-0 gap-6">
+        <Disclosure summary="点数の集計に使った記録" triggerVariant="supporting">
+          <div className="px-3">
             <FactList
-              ariaLabel="6つの観点の意味"
+              ariaLabel="点数の集計に使った記録"
               columns={2}
-              items={playerRadarAxes.map((axis) => ({
-                id: axis.id,
-                label: axis.label,
-                value: axis.description,
-              }))}
+              items={[
+                {
+                  id: "created",
+                  label: "比較計算日時",
+                  value: formatDateTimeLong(preview.createdAt),
+                },
+                ...(preview.after
+                  ? [
+                      {
+                        id: "period",
+                        label: "対象期間",
+                        value:
+                          preview.after.sample.firstPlayedAt && preview.after.sample.lastPlayedAt
+                            ? `${formatDateTimeLong(preview.after.sample.firstPlayedAt)}〜${formatDateTimeLong(preview.after.sample.lastPlayedAt)}`
+                            : "未取得",
+                      },
+                      {
+                        id: "maps",
+                        label: "マップ別件数",
+                        value:
+                          preview.after.sample.maps
+                            .map((map) => `${map.displayName} ${map.matchCount}試合`)
+                            .join("、") || "未取得",
+                      },
+                    ]
+                  : []),
+              ]}
             />
-            <div className="grid min-w-0 gap-4">
-              <FactList
-                ariaLabel="比較の計算時点"
-                items={[
-                  {
-                    id: "created",
-                    label: "比較計算日時",
-                    value: formatDateTimeLong(preview.createdAt),
-                  },
-                ]}
-              />
-              <DataTable
-                caption={{ content: "集計に使った記録" }}
-                columns={[
-                  {
-                    key: "source",
-                    header: "記録",
-                    rowHeader: true,
-                    minWidth: "9rem",
-                    renderCell: (entry) => entry.label,
-                  },
-                  {
-                    key: "sample",
-                    header: "件数",
-                    minWidth: "8rem",
-                    tabular: true,
-                    renderCell: (entry) =>
-                      `${entry.sample.matchCount}試合・${entry.sample.heldEventCount}開催`,
-                  },
-                  {
-                    key: "period",
-                    header: "期間",
-                    minWidth: "18rem",
-                    tabular: true,
-                    renderCell: (entry) =>
-                      entry.sample.firstPlayedAt && entry.sample.lastPlayedAt
-                        ? `${formatDateTimeLong(entry.sample.firstPlayedAt)}〜${formatDateTimeLong(entry.sample.lastPlayedAt)}`
-                        : "未取得",
-                  },
-                  {
-                    key: "maps",
-                    header: "マップ別件数",
-                    minWidth: "12rem",
-                    tabular: true,
-                    renderCell: (entry) =>
-                      entry.sample.maps
-                        .map((map) => `${map.displayName} ${map.matchCount}試合`)
-                        .join("、") || "未取得",
-                  },
-                ]}
-                density="compact"
-                getRowKey={(entry) => entry.id}
-                rows={recordSources}
-                stickyRowHeader
-                verticalAlign="top"
-              />
-            </div>
-            <div className="grid min-w-0 gap-2">
-              <DataTable
-                caption={{ content: "採点境界（現行 → 候補）", visibility: "visible" }}
-                density="compact"
-                columns={[
-                  {
-                    header: "観点",
-                    key: "axis",
-                    rowHeader: true,
-                    minWidth: "9rem",
-                    renderCell: (axis) => <PlayerRadarAxisLabel label={axis.label} />,
-                  },
-                  ...Array.from({ length: 9 }, (_, index) => index + 2).map((score) => ({
-                    header: `${score}点`,
-                    key: `score-${score}`,
-                    tabular: true,
-                    minWidth: "12rem",
-                    renderCell: (axis: (typeof playerRadarAxes)[number]) => {
-                      const before = preview.beforeBasis?.axes
-                        .find((entry) => entry.axisId === axis.id)
-                        ?.thresholds.find((entry) => entry.score === score);
-                      const after = preview.candidateBasis.axes
-                        .find((entry) => entry.axisId === axis.id)
-                        ?.thresholds.find((entry) => entry.score === score);
-                      return (
-                        <p>
-                          <span className="inline-block whitespace-nowrap">
-                            <span className="sr-only">現行 </span>
-                            {before
-                              ? formatPlayerRadarBoundary(axis.id, before.rawValue)
-                              : "未適用"}
-                          </span>
-                          <span aria-label="変更後"> → </span>
-                          <span className="inline-block whitespace-nowrap">
-                            <span className="sr-only">候補 </span>
-                            {after ? formatPlayerRadarBoundary(axis.id, after.rawValue) : "未作成"}
-                          </span>
-                        </p>
-                      );
-                    },
-                  })),
-                ]}
-                getRowKey={(axis) => axis.id}
-                rows={[...playerRadarAxes]}
-                stickyRowHeader
-                verticalAlign="top"
-              />
-            </div>
           </div>
         </Disclosure>
       </div>

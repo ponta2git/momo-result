@@ -9,6 +9,7 @@ import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { setupMsw } from "@/test/msw/lifecycle";
 import {
+  makePlayerRadarBasis,
   makePlayerRadarOperation,
   makePlayerRadarPreview,
   makePlayerRadarState,
@@ -48,6 +49,53 @@ function readyHandlers() {
 }
 
 describe("PlayerRadarAdministration", () => {
+  it.each([
+    ["最新の記録から作り直す", "candidate"],
+    ["前回の基準に戻す", "restore"],
+  ] as const)("prepares a proposal with %s without applying it", async (method, kind) => {
+    const user = userEvent.setup();
+    const state = makeReadyPlayerRadarState();
+    state.candidate = null;
+    state.previousBasis = { ...makePlayerRadarBasis(), basisId: "radar-basis-previous" };
+    const submitted: unknown[] = [];
+    server.use(
+      http.get("/api/admin/series-analysis/radar", () => HttpResponse.json(state)),
+      http.post("/api/admin/series-analysis/radar/operations", async ({ request }) => {
+        submitted.push(await request.json());
+        return HttpResponse.json(makePlayerRadarOperation(kind), { status: 202 });
+      }),
+    );
+    renderAdministration();
+    const boundaries = await screen.findByRole("table", { name: "適用中の採点境界" });
+    const appliedValues = boundaries.textContent;
+    await user.click(screen.getByRole("radio", { name: method }));
+    expect(submitted).toEqual([]);
+    await user.click(screen.getByRole("button", { name: "変更案を作成" }));
+    await waitFor(() =>
+      expect(submitted).toEqual([
+        {
+          gameTitleId: "gt_momotetsu_2",
+          kind,
+          ...(kind === "restore" ? { expectedCurrentBasisId: "radar-basis-current" } : {}),
+        },
+      ]),
+    );
+    expect(screen.getByRole("table", { name: "適用中の採点境界" }).textContent).toBe(appliedValues);
+    expect(screen.queryByRole("button", { name: "この変更案を適用する" })).not.toBeInTheDocument();
+  });
+
+  it("shows proposed boundaries before a score comparison exists", async () => {
+    const state = makeReadyPlayerRadarState();
+    state.candidate!.latestPreview = null;
+    server.use(http.get("/api/admin/series-analysis/radar", () => HttpResponse.json(state)));
+    renderAdministration();
+    const boundaries = await screen.findByRole("table", { name: "採点境界の変更案" });
+    expect(within(boundaries).getByRole("rowheader", { name: "10点" })).toBeVisible();
+    expect(boundaries).toHaveTextContent("1位以下");
+    expect(screen.getByRole("button", { name: "最新の記録で点数を再比較" })).toBeEnabled();
+    expect(screen.queryByRole("table", { name: "採点基準変更前後の比較" })).not.toBeInTheDocument();
+  });
+
   it("keeps accepted candidate work pending until an explicit status refresh", async () => {
     const user = userEvent.setup();
     const initial = makePlayerRadarState();
@@ -78,8 +126,8 @@ describe("PlayerRadarAdministration", () => {
       }),
     );
     const client = renderAdministration();
-    await user.click(await screen.findByRole("button", { name: "基準候補を計算する" }));
-    expect(await screen.findByText("基準候補の計算を受け付けました")).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "最新の記録から変更案を作成" }));
+    expect(await screen.findByText("変更案の作成を受け付けました")).toBeInTheDocument();
     await waitFor(() => expect(client.isFetching()).toBe(0));
     const acceptedReads = reads;
     completed = true;
@@ -104,7 +152,7 @@ describe("PlayerRadarAdministration", () => {
     );
     renderAdministration();
     await screen.findByRole("table", { name: "採点基準変更前後の比較" });
-    await user.click(screen.getByRole("button", { name: "適用を確認する" }));
+    await user.click(screen.getByRole("button", { name: "この変更案を適用する" }));
     const dialog = screen.getByRole("alertdialog");
     await user.click(within(dialog).getByRole("button", { name: "作品全体に適用する" }));
     expect(await screen.findByText("基準の適用を受け付けました")).toBeInTheDocument();
@@ -117,10 +165,8 @@ describe("PlayerRadarAdministration", () => {
         expectedCurrentBasisId: "radar-basis-current",
       },
     ]);
-    expect(screen.getByRole("region", { name: "適用中の基準" })).toHaveTextContent(
-      "2026/09/01 09:01",
-    );
-    expect(screen.getByRole("button", { name: "適用を確認する" })).toBeDisabled();
+    expect(screen.getByRole("region", { name: "採点境界" })).toHaveTextContent("2026/09/01 09:01");
+    expect(screen.getByRole("button", { name: "この変更案を適用する" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "適用を取り下げる" })).toBeEnabled();
   });
 
@@ -139,11 +185,11 @@ describe("PlayerRadarAdministration", () => {
       }),
     );
     renderAdministration();
-    await user.click(await screen.findByRole("button", { name: "基準候補を計算する" }));
+    await user.click(await screen.findByRole("button", { name: "最新の記録から変更案を作成" }));
     expect(await screen.findByText("操作の受付結果をまだ確認できません")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "基準候補を計算する" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "最新の記録から変更案を作成" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "操作の状態を確認する" }));
-    expect(await screen.findByText("基準候補の計算を受け付けました")).toBeInTheDocument();
+    expect(await screen.findByText("変更案の作成を受け付けました")).toBeInTheDocument();
     expect(keys).toHaveLength(2);
     expect(keys[0]).toBeTruthy();
     expect(keys[1]).toBe(keys[0]);
@@ -168,15 +214,13 @@ describe("PlayerRadarAdministration", () => {
     );
     renderAdministration();
     await screen.findByRole("table", { name: "採点基準変更前後の比較" });
-    await user.click(screen.getByRole("button", { name: "適用を確認する" }));
+    await user.click(screen.getByRole("button", { name: "この変更案を適用する" }));
     await user.click(
       within(screen.getByRole("alertdialog")).getByRole("button", { name: "作品全体に適用する" }),
     );
     expect(await screen.findByText("基準の適用を受け付けました")).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
-    expect(screen.getByRole("region", { name: "適用中の基準" })).toHaveTextContent(
-      "2026/09/01 09:01",
-    );
+    expect(screen.getByRole("region", { name: "採点境界" })).toHaveTextContent("2026/09/01 09:01");
     refreshGate.resolve();
   });
 
@@ -206,15 +250,15 @@ describe("PlayerRadarAdministration", () => {
     );
     renderAdministration();
     await screen.findByRole("table", { name: "採点基準変更前後の比較" });
-    await user.click(screen.getByRole("button", { name: "適用を確認する" }));
+    await user.click(screen.getByRole("button", { name: "この変更案を適用する" }));
     const dialog = screen.getByRole("alertdialog");
     await user.click(within(dialog).getByRole("button", { name: "作品全体に適用する" }));
     expect(await within(dialog).findByText(/基準の状態を更新.*最新の比較/u)).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "作品全体に適用する" })).toBeDisabled();
     await user.click(within(dialog).getByRole("button", { name: "キャンセル" }));
     await user.click(screen.getByRole("button", { name: "基準の状態を更新" }));
-    expect(await screen.findByRole("button", { name: "最新の記録で比較を計算する" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "適用を確認する" })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "最新の記録で点数を再比較" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "この変更案を適用する" })).toBeDisabled();
   });
 
   it("removes old values while a new scope loads and keeps an empty map selected", async () => {
@@ -255,8 +299,10 @@ describe("PlayerRadarAdministration", () => {
     await screen.findByRole("table", { name: "採点基準変更前後の比較" });
     await selectOption(user, screen.getByRole("combobox", { name: "比較するマップ" }), "map_east");
     expect(screen.queryByRole("table", { name: "採点基準変更前後の比較" })).not.toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "採点境界の変更案" })).toBeVisible();
     gate.resolve();
     expect(await screen.findByText("この条件に対象試合はありません")).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "採点境界の変更案" })).toBeVisible();
     expect(screen.getByRole("combobox", { name: "比較するマップ" })).toHaveTextContent("東日本編");
     mapMissingFromDirectory = true;
     await user.click(screen.getByRole("button", { name: "基準の状態を更新" }));

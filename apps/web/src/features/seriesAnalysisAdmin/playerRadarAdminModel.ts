@@ -46,6 +46,7 @@ export type PlayerRadarAdminModel = {
     candidateId: string;
     status: "pending" | "ready" | "unavailable" | "invalid" | "withdrawn" | "applied" | "failed";
     source: PlayerRadarSample | null;
+    basis: PlayerRadarBasis | null;
     failureMessage: string | null;
     unavailableAxes: ReadonlyArray<{ axisId: PlayerRadarAxisId; reason: string }>;
   } | null;

@@ -35,7 +35,7 @@ export function SeriesAnalysisAdminPage() {
         <TabsRoot defaultValue="recalculation">
           <TabsList activateOnFocus={false} aria-label="戦績分析管理の表示切替">
             <TabsTab value="recalculation">分析の再計算</TabsTab>
-            <TabsTab value="radar">レーダー</TabsTab>
+            <TabsTab value="radar">レーダーの採点基準</TabsTab>
           </TabsList>
           <div className="mt-6 grid min-w-0 gap-6">
             {page.feedback.resourceError ? (

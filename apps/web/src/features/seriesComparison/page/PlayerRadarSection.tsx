@@ -83,7 +83,7 @@ export function PlayerRadarSection({ radar }: { radar: PlayerRadarDisplay }) {
           <p className={cn(contentText.body, readableTextWidthClass)}>3試合未満のため未採点</p>
         ) : null}
         {hasScores ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
             {players.map((player) => (
               <div className="w-full max-w-sm min-w-0" key={player.memberId}>
                 <PlayerRadarChart player={player} />
@@ -97,7 +97,6 @@ export function PlayerRadarSection({ radar }: { radar: PlayerRadarDisplay }) {
             panelSpacing="sm"
             summary="数値を表で見る"
             triggerVariant="supporting"
-            triggerLayout="flush-horizontal"
             defaultOpen={!hasScores}
           >
             <DataTable
@@ -138,11 +137,10 @@ export function PlayerRadarSection({ radar }: { radar: PlayerRadarDisplay }) {
             ariaLabel="レーダーの採点基準"
             summary="採点基準"
             triggerVariant="supporting"
-            triggerLayout="flush-horizontal"
             panelSpacing="sm"
           >
             <div className="grid min-w-0 gap-4">
-              <div className={readableTextWidthClass}>
+              <div className={cn(readableTextWidthClass, "px-3")}>
                 <FactList
                   ariaLabel="採点対象"
                   items={[
@@ -156,7 +154,7 @@ export function PlayerRadarSection({ radar }: { radar: PlayerRadarDisplay }) {
               </div>
               {radar.basis ? (
                 <DataTable
-                  caption={{ content: "点数の境界", visibility: "visible" }}
+                  caption={{ content: "点数の境界" }}
                   columns={[
                     {
                       header: "観点",

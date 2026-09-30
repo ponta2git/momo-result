@@ -6,8 +6,10 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
 import { SeriesAnalysisAdminPage } from "@/features/seriesAnalysisAdmin/SeriesAnalysisAdminPage";
+import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { setupMsw } from "@/test/msw/lifecycle";
+import { makePlayerRadarPreview, makeReadyPlayerRadarState } from "@/test/msw/playerRadarFixtures";
 import { makeSeriesAnalysisAdminOverview } from "@/test/msw/seriesAnalysisFixtures";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
@@ -41,6 +43,50 @@ function rejectedCommand() {
 }
 
 describe("SeriesAnalysisAdminPage", () => {
+  it("separates radar administration and retains its comparison scope when switching tabs", async () => {
+    const user = userEvent.setup();
+    setDevUser();
+    server.use(
+      http.get("/api/admin/series-analysis/radar", () =>
+        HttpResponse.json(makeReadyPlayerRadarState()),
+      ),
+      http.get("/api/admin/series-analysis/radar/preview", ({ request }) => {
+        const preview = makePlayerRadarPreview();
+        return HttpResponse.json(
+          new URL(request.url).searchParams.has("mapMasterId")
+            ? {
+                ...preview,
+                scope: {
+                  ...preview.scope,
+                  kind: "map",
+                  key: "map:map_east",
+                  mapMasterId: "map_east",
+                  state: "empty",
+                },
+                before: null,
+                after: null,
+              }
+            : preview,
+        );
+      }),
+    );
+    renderPage();
+    expect(await screen.findByRole("button", { name: "この作品を再計算" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "適用を確認する" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "レーダー" }));
+    await screen.findByRole("table", { name: "採点基準変更前後の比較" });
+    expect(screen.queryByRole("button", { name: "この作品を再計算" })).not.toBeInTheDocument();
+
+    await selectOption(user, screen.getByRole("combobox", { name: "比較するマップ" }), "map_east");
+    expect(await screen.findByText("この条件に対象試合はありません")).toBeVisible();
+    await user.click(screen.getByRole("tab", { name: "分析の再計算" }));
+    expect(screen.getByRole("button", { name: "この作品を再計算" })).toBeEnabled();
+    await user.click(screen.getByRole("tab", { name: "レーダー" }));
+    expect(screen.getByRole("combobox", { name: "比較するマップ" })).toHaveTextContent("東日本編");
+    expect(screen.getByText("この条件に対象試合はありません")).toBeVisible();
+    expect(screen.getByRole("combobox", { name: "対象作品" })).toHaveTextContent("桃太郎電鉄2");
+  });
+
   it("handles a title-command rejection and clears it when another command succeeds", async () => {
     const user = userEvent.setup();
     server.use(http.post("/api/admin/series-analysis/recalculations", rejectedCommand));

@@ -13,6 +13,7 @@ import {
   playerRadarScoreLabel,
   playerRadarUnavailableLabel,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
+import type { PlayerRadarCell } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
@@ -25,6 +26,10 @@ import { FilterBar } from "@/shared/ui/forms/FilterBar";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { contentText } from "@/shared/ui/typography";
+
+function isReferenceScore(cell: PlayerRadarCell | undefined): boolean {
+  return cell?.sampleQuality === "reference" && cell.score !== null;
+}
 
 export function PlayerRadarPreview({
   preview,
@@ -43,9 +48,17 @@ export function PlayerRadarPreview({
 }) {
   const players = orderFixedMembers(preview.after?.players ?? []);
   const hasFilter = Boolean(filter.seasonMasterId || filter.mapMasterId);
-  const hasReferenceScores = players.some((player) =>
-    player.axes.some((axis) => axis.sampleQuality === "reference" && axis.score !== null),
-  );
+  const allScoresReference =
+    players.length > 0 &&
+    players.every((player) =>
+      playerRadarAxes.every((axis) => {
+        const after = player.axes.find((cell) => cell.axisId === axis.id);
+        const before = preview.before?.players
+          .find((entry) => entry.memberId === player.memberId)
+          ?.axes.find((cell) => cell.axisId === axis.id);
+        return isReferenceScore(after) && (!preview.before || isReferenceScore(before));
+      }),
+    );
   const referenceReasons = preview.after
     ? [
         preview.after.sample.matchCount < 40 ? "40試合未満" : null,
@@ -111,11 +124,11 @@ export function PlayerRadarPreview({
             </Notice>
           ) : preview.after ? (
             <>
-              {hasReferenceScores ? (
+              {allScoresReference ? (
                 <p className={cn(contentText.body, readableTextWidthClass)}>
                   {referenceReasons.length > 0
                     ? `参考値（${referenceReasons.join("・")}）`
-                    : "参考値を含みます。"}
+                    : "参考値"}
                 </p>
               ) : null}
               <DataTable
@@ -146,6 +159,8 @@ export function PlayerRadarPreview({
                         .find((entry) => entry.memberId === player.memberId)
                         ?.axes.find((cell) => cell.axisId === axis.id);
                       const after = player.axes.find((cell) => cell.axisId === axis.id);
+                      const beforeReference = isReferenceScore(before);
+                      const afterReference = isReferenceScore(after);
                       return (
                         <div className="grid gap-1">
                           <p className="whitespace-nowrap">
@@ -160,8 +175,14 @@ export function PlayerRadarPreview({
                             <span className="sr-only">元の成績 </span>
                             {formatPlayerRadarRawValue(axis.id, after?.rawValue ?? null)}
                           </p>
-                          {after?.sampleQuality === "reference" && after.score !== null ? (
-                            <p className={contentText.supporting}>参考値</p>
+                          {!allScoresReference && (beforeReference || afterReference) ? (
+                            <p className={contentText.supporting}>
+                              {beforeReference && afterReference
+                                ? "参考値"
+                                : beforeReference
+                                  ? "現行: 参考値"
+                                  : "候補: 参考値"}
+                            </p>
                           ) : null}
                           {after?.scoreUnavailableReasons.length ? (
                             <p className={contentText.supporting}>
@@ -185,7 +206,6 @@ export function PlayerRadarPreview({
             <EmptyState
               placement="embedded"
               title="この条件に対象試合はありません"
-              description="シーズン・マップを変更して比較してください。"
               action={
                 <Button variant="secondary" onClick={onResetFilter}>
                   全期間・全マップで比較する
@@ -313,9 +333,6 @@ export function PlayerRadarPreview({
                 stickyRowHeader
                 verticalAlign="top"
               />
-              <p className={cn(contentText.supporting, readableTextWidthClass)}>
-                「約」は表示用の丸めです。採点は元の値を使います。
-              </p>
             </div>
           </div>
         </Disclosure>

@@ -64,6 +64,14 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
     model.operation?.status === "pending" || model.operation?.status === "running";
   const applicationInProgress = operationInProgress && model.operation?.kind === "apply";
   const candidateActive = candidate && !["applied", "withdrawn"].includes(candidate.status);
+  const previewNeedsRebuild =
+    candidate?.status === "ready" &&
+    (model.previewState === "stale" ||
+      model.previewState === "none" ||
+      model.previewState === "failed");
+  const applyReasonExplainedByPreview =
+    previewNeedsRebuild &&
+    model.applyDisabledReason === "最新の記録で比較を計算し、内容を確認してください。";
   const applyTarget =
     candidate?.status === "ready" && model.preview
       ? {
@@ -329,10 +337,7 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
                 </ul>
               </Notice>
             ) : null}
-            {candidate.status === "ready" &&
-            (model.previewState === "stale" ||
-              model.previewState === "none" ||
-              model.previewState === "failed") ? (
+            {previewNeedsRebuild ? (
               <Notice
                 title={
                   model.previewState === "stale"
@@ -472,6 +477,7 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
             </div>
             {model.applyDisabledReason &&
             applyTarget &&
+            !applyReasonExplainedByPreview &&
             !operationInProgress &&
             !model.communicationUnknown ? (
               <p className={cn(contentText.body, readableTextWidthClass)}>

@@ -142,12 +142,14 @@ describe("PlayerRadarSection", () => {
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
     const table = screen.getByRole("table", { name: "6軸の点数と元の成績" });
     expect(within(table).getAllByText("未採点")).toHaveLength(24);
-    expect(within(table).getAllByText("3試合未満・基準未適用")).toHaveLength(24);
+    expect(screen.getByText("3試合未満のため未採点")).toBeInTheDocument();
+    expect(screen.getByLabelText("レーダーの使用基準")).toHaveTextContent("基準未適用");
+    expect(within(table).queryByText(/3試合未満|基準未適用/u)).not.toBeInTheDocument();
     expect(within(table).getAllByText("0万円")).toHaveLength(16);
     expect(within(table).queryByText("対象なし")).not.toBeInTheDocument();
   });
 
-  it("keeps definitions and score boundaries keyboard accessible without making every vertex a tab stop", async () => {
+  it("opens scoring eligibility and boundaries together by keyboard without making every vertex a tab stop", async () => {
     const user = userEvent.setup();
     const { container } = render(<PlayerRadarSection radar={radarFixture()} />);
     await user.tab();
@@ -156,16 +158,14 @@ describe("PlayerRadarSection", () => {
     ).toHaveFocus();
     await user.tab();
     const disclosure = screen.getByRole("button", {
-      name: "レーダーの指標と採点基準",
+      name: "レーダーの採点基準",
     });
     expect(disclosure).toHaveFocus();
     await user.keyboard("{Enter}");
-    expect(screen.getByText(/総資産を小さい順に並べた10%の位置/u)).toBeInTheDocument();
-    await user.tab();
-    expect(screen.getByRole("button", { name: "レーダーの点数の境界" })).toHaveFocus();
-    await user.keyboard("{Enter}");
-    expect(screen.getByRole("table", { name: "点数が上がる境界" })).toBeInTheDocument();
-    expect(screen.getByText(/「約」は表示用の丸め/u)).toBeInTheDocument();
+    expect(screen.getByText("3試合以上（40試合未満または8開催未満は参考値）")).toBeInTheDocument();
+    const table = screen.getByRole("table", { name: "点数の境界" });
+    expect(within(table).getByRole("columnheader", { name: "10点" })).toBeInTheDocument();
+    expect(within(table).getAllByRole("rowheader")).toHaveLength(6);
     expect(container.querySelector("svg [tabindex]")).not.toBeInTheDocument();
   });
 });

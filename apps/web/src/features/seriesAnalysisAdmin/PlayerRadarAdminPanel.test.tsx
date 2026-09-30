@@ -175,20 +175,29 @@ describe("PlayerRadarAdminPanel", () => {
     expect(within(table).queryByText("0点")).not.toBeInTheDocument();
   });
 
-  it("requires refreshing a stale comparison and keeps calculation separate from state refresh", async () => {
-    const user = userEvent.setup();
-    const model = modelFixture();
-    model.previewState = "stale";
-    model.applyDisabledReason = "比較を更新してから適用してください。";
-    render(<PlayerRadarAdminPanel model={model} />);
-    expect(screen.getByRole("button", { name: "適用を確認する" })).toBeDisabled();
-    await user.click(screen.getByRole("button", { name: "基準の状態を更新" }));
-    expect(model.actions.refresh.run).toHaveBeenCalledOnce();
-    expect(model.actions.rebuildPreview.run).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "最新の記録で比較を計算する" }));
-    expect(model.actions.rebuildPreview.run).toHaveBeenCalledOnce();
-    expect(model.actions.apply).not.toHaveBeenCalled();
-  });
+  it.each([
+    ["最新の記録で比較を計算し、内容を確認してください。", false],
+    ["基準の状態を更新し、最新の比較を確認してください。", true],
+  ])(
+    "requires a fresh comparison without hiding a separate recovery reason: %s",
+    async (disabledReason, showReason) => {
+      const user = userEvent.setup();
+      const model = modelFixture();
+      model.previewState = "stale";
+      model.applyDisabledReason = disabledReason;
+      render(<PlayerRadarAdminPanel model={model} />);
+      expect(screen.getByRole("button", { name: "適用を確認する" })).toBeDisabled();
+      expect(screen.getByText("比較の更新が必要です")).toBeInTheDocument();
+      if (showReason) expect(screen.getByText(disabledReason)).toBeInTheDocument();
+      else expect(screen.queryByText(disabledReason)).not.toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "基準の状態を更新" }));
+      expect(model.actions.refresh.run).toHaveBeenCalledOnce();
+      expect(model.actions.rebuildPreview.run).not.toHaveBeenCalled();
+      await user.click(screen.getByRole("button", { name: "最新の記録で比較を計算する" }));
+      expect(model.actions.rebuildPreview.run).toHaveBeenCalledOnce();
+      expect(model.actions.apply).not.toHaveBeenCalled();
+    },
+  );
 
   it("invalidates an open confirmation when the comparison changes and leaves the candidate intact on cancel", async () => {
     const user = userEvent.setup();
@@ -280,18 +289,42 @@ describe("PlayerRadarAdminPanel", () => {
     "explains reference scores for %i matches and %i events",
     (matchCount, heldEventCount, reason) => {
       const model = modelFixture();
-      const after = model.preview!.after!;
-      after.sample = { ...after.sample, matchCount, heldEventCount, quality: "reference" };
-      for (const player of after.players) {
-        for (const axis of player.axes) axis.sampleQuality = "reference";
+      for (const evaluation of [model.preview!.before!, model.preview!.after!]) {
+        evaluation.sample = {
+          ...evaluation.sample,
+          matchCount,
+          heldEventCount,
+          quality: "reference",
+        };
+        for (const player of evaluation.players) {
+          for (const axis of player.axes) axis.sampleQuality = "reference";
+        }
       }
       render(<PlayerRadarAdminPanel model={model} />);
       expect(screen.getByText(`参考値（${reason}）`)).toBeInTheDocument();
       const table = screen.getByRole("table", { name: "採点基準変更前後の比較" });
-      expect(within(table).getAllByText("参考値")).toHaveLength(24);
+      expect(within(table).queryByText(/参考値/u)).not.toBeInTheDocument();
       expect(within(table).getAllByText("7点")).toHaveLength(24);
     },
   );
+
+  it("keeps partial reference warnings with the affected current and candidate scores", () => {
+    const model = modelFixture();
+    const before = model.preview!.before!;
+    const after = model.preview!.after!;
+    before.players[0]!.axes[0]!.sampleQuality = "reference";
+    after.players[0]!.axes[0]!.sampleQuality = "reference";
+    before.players[1]!.axes[0]!.sampleQuality = "reference";
+    after.players[2]!.axes[0]!.sampleQuality = "reference";
+    render(<PlayerRadarAdminPanel model={model} />);
+    const table = screen.getByRole("table", { name: "採点基準変更前後の比較" });
+    const cells = within(table).getAllByRole("cell");
+    expect(within(cells[0]!).getByText("参考値")).toBeInTheDocument();
+    expect(within(cells[1]!).getByText("現行: 参考値")).toBeInTheDocument();
+    expect(within(cells[2]!).getByText("候補: 参考値")).toBeInTheDocument();
+    expect(within(table).getAllByText(/参考値/u)).toHaveLength(3);
+    expect(screen.queryByText(/^参考値（/u)).not.toBeInTheDocument();
+  });
 
   it("keeps saved monitoring evidence visible while acknowledging that evidence alone", async () => {
     const user = userEvent.setup();

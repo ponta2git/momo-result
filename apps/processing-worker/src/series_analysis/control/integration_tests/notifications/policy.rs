@@ -1,5 +1,6 @@
 use super::*;
 
+mod limits;
 mod release;
 
 const SECOND_MATCH: &str = "analysis-notification-second-match";
@@ -54,6 +55,12 @@ pub(super) async fn cleanup(client: &Client) -> SmokeResult {
         .await?;
     client
         .execute("DELETE FROM matches WHERE game_title_id=$1", &[&TITLE_ID])
+        .await?;
+    client
+        .execute(
+            "DELETE FROM season_masters WHERE game_title_id=$1",
+            &[&TITLE_ID],
+        )
         .await?;
     client.execute("UPDATE series_analysis_title_states SET notification_baseline_state='unknown', notification_baseline_artifact_id=NULL WHERE game_title_id=$1", &[&TITLE_ID]).await?;
     cleanup_database(client).await

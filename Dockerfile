@@ -72,6 +72,7 @@ COPY apps/api/build.sbt build.sbt
 COPY --from=http4s-builder /root/.ivy2/local /root/.ivy2/local
 COPY --from=http4s-builder /opt/http4s-patch /opt/http4s-patch
 COPY docs/schemas/series-analysis-*.schema.json /workspace/docs/schemas/
+COPY docs/schemas/series-player-radar-*.schema.json /workspace/docs/schemas/
 COPY docs/schemas/series-analysis-publication-contract-v2.json /workspace/docs/schemas/
 COPY apps/api/src/main src/main
 COPY apps/api/src/openapi src/openapi

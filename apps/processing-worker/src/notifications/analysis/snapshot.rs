@@ -7,11 +7,15 @@ use tokio_postgres::{
 };
 
 use super::{
-    AnalysisSource, Comparison, MAXIMUM_SNAPSHOT_BYTES, PreparedNotification, SkipReason,
-    comparison,
+    AnalysisSource, Comparison, MAXIMUM_LISTED_MATCHES, MAXIMUM_LISTED_SEASONS,
+    MAXIMUM_SNAPSHOT_BYTES, PreparedNotification, SkipReason, comparison,
     types::{AnalysisData, NotificationMatch, SeasonRanks},
 };
 use crate::notifications::{NotificationEnvelope, NotificationKind};
+
+const MAXIMUM_NAME_CODE_POINTS: i32 = 256;
+const MAXIMUM_DISPLAY_NAME_CODE_POINTS: i32 = 32;
+const MAXIMUM_NOTE_CODE_POINTS: i32 = 150;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -43,6 +47,9 @@ pub(super) async fn prepare(
                 (&source.input_revision, Type::INT8),
                 (&season_ids, Type::TEXT_ARRAY),
                 (&MAXIMUM_SNAPSHOT_BYTES, Type::INT4),
+                (&MAXIMUM_NAME_CODE_POINTS, Type::INT4),
+                (&MAXIMUM_DISPLAY_NAME_CODE_POINTS, Type::INT4),
+                (&MAXIMUM_NOTE_CODE_POINTS, Type::INT4),
             ],
         )
         .await?;
@@ -100,17 +107,37 @@ pub(super) async fn prepare(
                 seasons,
             },
         );
-        let prepared = reservation.prepare(&envelope)?;
+        Ok(envelope)
+    })();
+    let envelope = match result {
+        Ok(envelope) => envelope,
+        Err(reason) => return Ok(Err(reason)),
+    };
+    let prepared = reservation.prepare_in(transaction, &envelope).await?;
+    if prepared.is_ok() {
         tracing::info!(event = "analysis_notification_prepared", notification_id = %envelope.notification_id(),
             job_id = %source.job_id, input_revision = source.input_revision,
             previous_artifact_id = ?comparison.previous.as_artifact().map(|artifact| &artifact.identity.artifact_id),
             current_artifact_id = %current.identity.artifact_id);
-        Ok(prepared)
-    })();
-    Ok(result)
+    }
+    Ok(prepared)
 }
 
 fn validate(snapshot: &Snapshot, changes: &comparison::Changes) -> Result<(), SkipReason> {
+    if snapshot.matches.len() > MAXIMUM_LISTED_MATCHES
+        || snapshot.seasons.len() > MAXIMUM_LISTED_SEASONS
+        || !within_code_point_bound(&snapshot.game_title_name, MAXIMUM_NAME_CODE_POINTS)
+        || snapshot
+            .members
+            .values()
+            .any(|name| !within_code_point_bound(name, MAXIMUM_DISPLAY_NAME_CODE_POINTS))
+        || snapshot
+            .seasons
+            .values()
+            .any(|name| !within_code_point_bound(name, MAXIMUM_NAME_CODE_POINTS))
+    {
+        return Err(SkipReason::PayloadBound);
+    }
     if snapshot.members.len() != 4
         || snapshot
             .members
@@ -123,6 +150,18 @@ fn validate(snapshot: &Snapshot, changes: &comparison::Changes) -> Result<(), Sk
     }
     let mut seen = BTreeSet::new();
     for m in &snapshot.matches {
+        if !within_code_point_bound(&m.map_name, MAXIMUM_NAME_CODE_POINTS)
+            || !within_code_point_bound(&m.season_name, MAXIMUM_NAME_CODE_POINTS)
+            || !within_code_point_bound(&m.owner_name, MAXIMUM_DISPLAY_NAME_CODE_POINTS)
+            || m.players.iter().any(|player| {
+                !within_code_point_bound(&player.display_name, MAXIMUM_DISPLAY_NAME_CODE_POINTS)
+            })
+            || m.note
+                .as_ref()
+                .is_some_and(|note| !within_code_point_bound(note, MAXIMUM_NOTE_CODE_POINTS))
+        {
+            return Err(SkipReason::PayloadBound);
+        }
         let Some(expected) = changes.matches.get(&m.match_id) else {
             return Err(SkipReason::InvalidSnapshot);
         };
@@ -152,3 +191,10 @@ fn validate(snapshot: &Snapshot, changes: &comparison::Changes) -> Result<(), Sk
     }
     Ok(())
 }
+
+fn within_code_point_bound(value: &str, maximum: i32) -> bool {
+    i32::try_from(value.chars().count()).is_ok_and(|count| count <= maximum)
+}
+
+#[cfg(test)]
+mod tests;

@@ -5,6 +5,7 @@ use std::{fmt, io, sync::Arc};
 use futures_util::{StreamExt, stream::FuturesUnordered};
 use serde::Serialize;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc};
+use tokio_postgres::{Transaction, types::Type};
 
 pub(crate) mod analysis;
 mod config;
@@ -149,10 +150,41 @@ pub(crate) struct NotificationReservation {
 }
 
 impl NotificationReservation {
-    pub(crate) fn prepare<T: Serialize>(
+    /// Check the complete wire snapshot using the same JSONB text representation as Summit.
+    /// Call inside the producer's recoverable preparation deadline; no prepared send escapes
+    /// on a byte overflow, database failure or timeout.
+    pub(crate) async fn prepare_in<T: Serialize + Sync>(
         self,
+        transaction: &Transaction<'_>,
         envelope: &NotificationEnvelope<'_, T>,
-    ) -> Result<PreparedNotification, SkipReason> {
+    ) -> Result<Result<PreparedNotification, SkipReason>, tokio_postgres::Error> {
+        let body = match self.encode(envelope) {
+            Ok(body) => body,
+            Err(reason) => return Ok(Err(reason)),
+        };
+        let (Ok(text), Ok(maximum)) = (
+            std::str::from_utf8(&body),
+            i32::try_from(envelope.maximum_jsonb_bytes()),
+        ) else {
+            return Ok(Err(SkipReason::InvalidSnapshot));
+        };
+        // JSONB adds separators and expands numeric exponents. Wire bytes alone cannot prove
+        // the consumer's bound; PostgreSQL owns this representation instead of a second codec.
+        let row = Box::pin(transaction.query_typed_one(
+            "SELECT octet_length($1::jsonb::text) <= $2 AS within_bound",
+            &[(&text, Type::TEXT), (&maximum, Type::INT4)],
+        ))
+        .await?;
+        if !row.try_get::<_, bool>("within_bound")? {
+            return Ok(Err(SkipReason::PayloadBound));
+        }
+        Ok(Ok(self.finish(envelope, body)))
+    }
+
+    fn encode<T: Serialize>(
+        &self,
+        envelope: &NotificationEnvelope<'_, T>,
+    ) -> Result<Vec<u8>, SkipReason> {
         if !valid_source_id(envelope.source_job_id()) {
             return Err(SkipReason::InvalidSnapshot);
         }
@@ -161,19 +193,36 @@ impl NotificationReservation {
             maximum: self.maximum_bytes,
         };
         serde_json::to_writer(&mut writer, envelope).map_err(|_error| SkipReason::PayloadBound)?;
-        Ok(PreparedNotification {
+        Ok(writer.bytes)
+    }
+
+    fn finish<T>(
+        self,
+        envelope: &NotificationEnvelope<'_, T>,
+        body: Vec<u8>,
+    ) -> PreparedNotification {
+        PreparedNotification {
             sender: self.sender,
             entry: QueuedNotification {
                 id: envelope.notification_id().to_owned(),
                 source_job_id: envelope.source_job_id().to_owned(),
                 kind: envelope.kind(),
-                body: Some(writer.bytes),
+                body: Some(body),
                 _count: self.count,
                 _bytes: self.bytes,
                 attempted: false,
                 finished: false,
             },
-        })
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn prepare_for_test<T: Serialize>(
+        self,
+        envelope: &NotificationEnvelope<'_, T>,
+    ) -> Result<PreparedNotification, SkipReason> {
+        let body = self.encode(envelope)?;
+        Ok(self.finish(envelope, body))
     }
 }
 
@@ -274,6 +323,8 @@ impl io::Write for BoundedJson {
     }
 }
 
+#[cfg(test)]
+mod bounds_tests;
 #[cfg(test)]
 pub(crate) mod test_support;
 #[cfg(test)]

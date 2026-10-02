@@ -54,6 +54,8 @@ const resources = {
   workerId: undefined,
   workerName: `mom24-e2e-${basename(runDir).toLowerCase()}`,
   workerRequested: false,
+  contractName: `mom24-contract-${basename(runDir).toLowerCase()}`,
+  contractRequested: false,
 };
 const interruption = createInterruptionSignal();
 remember();
@@ -159,6 +161,7 @@ async function run() {
     RESULT_NOTIFICATION_WEB_ORIGIN: webOrigin,
   });
   const recorderReady = await waitForJson(join(recorderDir, "summit-ready.json"), recorder);
+  await verifyAnalysisNotificationContract(databaseUrl, webOrigin);
   const api = startApi({
     apiPort,
     databaseUrl,
@@ -301,6 +304,69 @@ async function run() {
   }
 }
 
+async function verifyAnalysisNotificationContract(databaseUrl, webOrigin) {
+  const directory = join(runDir, "analysis-contract");
+  await mkdir(directory);
+  const environment = join(runDir, "analysis-contract.env");
+  const database = new URL(databaseUrl);
+  database.hostname = process.platform === "linux" ? "127.0.0.1" : "host.docker.internal";
+  await writeEnvironment(environment, {
+    ANALYSIS_CONTROL_SMOKE_DATABASE_URL: database.toString(),
+    ANALYSIS_SMOKE_SERVICES_ARE_ISOLATED: "true",
+    ANALYSIS_NOTIFICATION_LIMIT_FIXTURE_PATH: "/notification-contract/analysis.json",
+  });
+  resources.contractRequested = true;
+  remember();
+  await docker(
+    [
+      "run",
+      "--rm",
+      "--name",
+      resources.contractName,
+      "--memory",
+      "768m",
+      "--cpus",
+      "2",
+      "--network",
+      process.platform === "linux" ? "host" : "bridge",
+      "--env-file",
+      environment,
+      "--mount",
+      `type=bind,src=${directory},dst=/notification-contract`,
+      "--entrypoint",
+      "/usr/local/bin/mom24-worker-test",
+      workerImageId,
+      "series_analysis::control::integration_tests::notifications::policy::limits::real_postgres_maximum_standard_notification_exports_consumer_fixture",
+      "--ignored",
+      "--exact",
+    ],
+    {
+      operation: "Analysis notification fixture",
+      phase: "run",
+      timeout: 120_000,
+      signal: interruption,
+    },
+  );
+  resources.contractRequested = false;
+  remember();
+  checkpoint();
+  await runCommand(
+    "node",
+    [
+      join(webDir, "scripts/e2e/analysis-notification-contract.mjs"),
+      summitDir,
+      join(directory, "analysis.json"),
+      webOrigin,
+    ],
+    {
+      cwd: webDir,
+      env: childEnvironment({}),
+      label: "Analysis notification consumer",
+      signal: interruption,
+    },
+  );
+}
+
 function startProcess(command, args, cwd, additions) {
   const child = spawn(command, args, {
     cwd,
@@ -371,6 +437,20 @@ async function docker(args, { operation = args[0], phase = args[0], ...options }
 }
 async function cleanup() {
   const failures = [];
+  if (resources.contractRequested) {
+    try {
+      const owned = await docker([
+        "ps",
+        "--all",
+        "--quiet",
+        "--filter",
+        `name=^/${resources.contractName}$`,
+      ]);
+      if (owned.stdout.trim()) await docker(["rm", "--force", owned.stdout.trim()]);
+    } catch (error) {
+      failures.push(error);
+    }
+  }
   if (resources.workerRequested && !resources.workerId) {
     try {
       resources.workerId =
@@ -424,6 +504,8 @@ function remember() {
       workerId: resources.workerId,
       workerName: resources.workerName,
       workerRequested: resources.workerRequested,
+      contractName: resources.contractName,
+      contractRequested: resources.contractRequested,
     }),
     { mode: 0o600 },
   );

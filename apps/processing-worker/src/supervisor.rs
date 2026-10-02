@@ -520,7 +520,7 @@ mod tests {
                 (),
             );
             sink.reserve(1024)
-                .and_then(|reservation| reservation.prepare(&envelope))
+                .and_then(|reservation| reservation.prepare_for_test(&envelope))
                 .map_err(|_error| SupervisorError::ShutdownDrainBudgetBound)?
                 .dispatch();
             committed_sender

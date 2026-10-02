@@ -23,6 +23,7 @@ if [[ "${DATABASE_URL:-}" != "${ANALYSIS_CONTROL_SMOKE_DATABASE_URL}" ]]; then
 fi
 
 tests=(
+  "notifications::bounds_tests::real_postgres_preparation_enforces_complete_jsonb_limits"
   "series_analysis::control::integration_tests::heartbeat::real_postgres_heartbeat_owns_deadline_and_connection"
   "series_analysis::release::promotion_tests::real_postgres_promotion_detaches_obsolete_empty_title_pointers_without_deleting_artifacts"
   "series_analysis::campaign::tests::real_postgres_campaign_refresh_counts_concurrent_target_commits"
@@ -35,6 +36,8 @@ tests=(
   "series_analysis::control::integration_tests::notifications::real_postgres_analysis_notifications_follow_committed_publications"
   "series_analysis::control::integration_tests::notifications::policy::real_postgres_coalesced_requests_notify_only_actual_match_changes"
   "series_analysis::control::integration_tests::notifications::policy::real_postgres_notification_baseline_advances_only_with_success"
+  "series_analysis::control::integration_tests::notifications::policy::limits::real_postgres_maximum_standard_notification_exports_consumer_fixture"
+  "series_analysis::control::integration_tests::notifications::policy::limits::real_postgres_notification_limits_preserve_success_and_baseline"
   "series_analysis::control::integration_tests::notifications::policy::release::real_postgres_release_detachment_preserves_notification_input_history"
   "series_analysis::release::tests::real_postgres_release_capabilities_require_exact_singleton_arrays"
   "series_analysis::release::tests::real_postgres_promotion_freezes_capability_registration_after_inspection"

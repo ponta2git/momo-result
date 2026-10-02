@@ -2,7 +2,8 @@
 
 use serde::Serialize;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub(crate) enum NotificationKind {
     OcrCompleted,
     AnalysisCompleted,
@@ -21,7 +22,7 @@ impl NotificationKind {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct NotificationEnvelope<'a, T> {
     notification_id: String,
-    kind: &'static str,
+    kind: NotificationKind,
     // Private so producers cannot construct an independently versioned or mismatched envelope.
     schema_version: u8,
     source_job_id: &'a str,
@@ -36,7 +37,14 @@ impl<'a, T> NotificationEnvelope<'a, T> {
     }
 
     pub(super) const fn kind(&self) -> &'static str {
-        self.kind
+        self.kind.as_str()
+    }
+
+    pub(super) const fn maximum_jsonb_bytes(&self) -> usize {
+        match self.kind {
+            NotificationKind::OcrCompleted => super::config::MAXIMUM_OCR_JSONB_BYTES,
+            NotificationKind::AnalysisCompleted => super::config::MAXIMUM_ANALYSIS_JSONB_BYTES,
+        }
     }
 
     pub(super) const fn source_job_id(&self) -> &str {
@@ -52,7 +60,7 @@ impl<'a, T> NotificationEnvelope<'a, T> {
     ) -> Self {
         Self {
             notification_id: format!("result:{}:{source_job_id}", kind.as_str()),
-            kind: kind.as_str(),
+            kind,
             schema_version: match kind {
                 NotificationKind::OcrCompleted => 2,
                 NotificationKind::AnalysisCompleted => 1,

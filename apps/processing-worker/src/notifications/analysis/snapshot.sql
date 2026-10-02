@@ -7,15 +7,17 @@ LEFT JOIN series_analysis_title_states state ON state.game_title_id = $1
 LEFT JOIN game_titles title ON title.id = $1
 LEFT JOIN LATERAL (
   WITH member_names AS (
-    SELECT left(id, 201) AS id, display_name FROM members ORDER BY id LIMIT 5
+    SELECT left(id, 201) AS id,
+      CASE WHEN char_length(display_name) <= $9 THEN display_name END AS display_name
+    FROM members ORDER BY id LIMIT 5
   ), selected_matches AS (
     SELECT m.id, m.analysis_revision, m.held_event_id, m.match_no_in_event, m.played_at,
       m.season_master_id, m.map_master_id, he.held_date_iso,
-      CASE WHEN octet_length(m.note_body) <= 16384 THEN m.note_body END AS note,
-      (m.note_body IS NULL OR octet_length(m.note_body) <= 16384) AS note_valid,
-      CASE WHEN octet_length(map.name) <= 1024 THEN map.name END AS map_name,
-      CASE WHEN octet_length(season.name) <= 1024 THEN season.name END AS season_name,
-      owner.display_name AS owner_name
+      CASE WHEN char_length(m.note_body) <= $10 THEN m.note_body END AS note,
+      (m.note_body IS NULL OR char_length(m.note_body) <= $10) AS note_valid,
+      CASE WHEN char_length(map.name) <= $8 THEN map.name END AS map_name,
+      CASE WHEN char_length(season.name) <= $8 THEN season.name END AS season_name,
+      CASE WHEN char_length(owner.display_name) <= $9 THEN owner.display_name END AS owner_name
     FROM matches m
     JOIN held_events he ON he.id = m.held_event_id
     JOIN map_masters map ON map.id = m.map_master_id
@@ -28,7 +30,8 @@ LEFT JOIN LATERAL (
     FROM selected_matches m
     CROSS JOIN LATERAL (
       SELECT jsonb_agg(jsonb_build_object(
-        'memberId', left(mp.member_id, 201), 'displayName', member.display_name,
+        'memberId', left(mp.member_id, 201),
+        'displayName', CASE WHEN char_length(member.display_name) <= $9 THEN member.display_name END,
         'rank', mp.rank, 'ginjiCount', COALESCE(mi.count, 0)
       ) ORDER BY mp.rank) AS items,
       sum(COALESCE(mi.count, 0)) AS ginji_total
@@ -40,11 +43,11 @@ LEFT JOIN LATERAL (
     ) players
   )
   SELECT jsonb_build_object(
-    'gameTitleName', CASE WHEN octet_length(title.name) <= 1024 THEN title.name END,
+    'gameTitleName', CASE WHEN char_length(title.name) <= $8 THEN title.name END,
     'members', (SELECT jsonb_object_agg(id, display_name) FROM member_names),
     'seasons', COALESCE((SELECT jsonb_object_agg(requested.id,
         CASE WHEN season.id IS NULL THEN '削除済みシーズン'
-          WHEN octet_length(season.name) <= 1024 THEN season.name END)
+          WHEN char_length(season.name) <= $8 THEN season.name END)
       FROM unnest($6::text[]) requested(id)
       LEFT JOIN season_masters season ON season.id = requested.id AND season.game_title_id = $1), '{}'::jsonb),
     'matches', COALESCE((SELECT jsonb_agg(jsonb_build_object(

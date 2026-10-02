@@ -30,22 +30,19 @@ fn envelope() -> NotificationEnvelope<'static, serde_json::Value> {
 fn admission_bounds_cover_preparation_and_pending_requests()
 -> Result<(), Box<dyn std::error::Error>> {
     let (sink, driver) = NotificationDriver::new(config()?)?;
-    let first = sink
-        .reserve(MAXIMUM_WIRE_BYTES)
-        .map_err(|_error| "first reservation")?;
-    let second = sink
-        .reserve(MAXIMUM_WIRE_BYTES)
-        .map_err(|_error| "second reservation")?;
+    let reservations = (0..MAXIMUM_BYTES / MAXIMUM_WIRE_BYTES)
+        .map(|_| sink.reserve(MAXIMUM_WIRE_BYTES))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_error| "byte reservations")?;
     assert!(
         matches!(sink.reserve(1), Err(SkipReason::Capacity)),
         "reserved bytes must include preparing payloads"
     );
-    drop(first);
-    drop(second);
+    drop(reservations);
     for _ in 0..MAXIMUM_PENDING {
         sink.reserve(1024)
             .map_err(|_error| "count reservation")?
-            .prepare(&envelope())
+            .prepare_for_test(&envelope())
             .map_err(|_error| "prepare fixture")?
             .dispatch();
     }
@@ -68,7 +65,7 @@ fn oversized_snapshot_is_discarded_and_releases_admission() -> Result<(), Box<dy
     let reservation = sink.reserve(16).map_err(|_error| "fixture reservation")?;
     assert!(
         matches!(
-            reservation.prepare(&envelope()),
+            reservation.prepare_for_test(&envelope()),
             Err(SkipReason::PayloadBound)
         ),
         "bounded serialization cannot grow past its reservation"
@@ -120,7 +117,7 @@ async fn http_sends_once_without_redirect_or_automatic_retry()
             NotificationDriver::new(NotificationConfig::http(&endpoint, &"x".repeat(32))?)?;
         sink.reserve(1024)
             .map_err(|_error| "fixture reservation")?
-            .prepare(&envelope())
+            .prepare_for_test(&envelope())
             .map_err(|_error| "fixture serialization")?
             .dispatch();
         drop(sink);
@@ -166,7 +163,7 @@ async fn active_http_keeps_its_permit_without_blocking_other_work()
         NotificationDriver::new(NotificationConfig::http(&endpoint, &"x".repeat(32))?)?;
     sink.reserve(1024)
         .map_err(|_error| "fixture reservation")?
-        .prepare(&envelope())
+        .prepare_for_test(&envelope())
         .map_err(|_error| "fixture serialization")?
         .dispatch();
     let business_work = async {

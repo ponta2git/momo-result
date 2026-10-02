@@ -325,6 +325,35 @@ describe("PlayerRadarAdminPanel", () => {
     expect(screen.queryByText(/^参考値（/u)).not.toBeInTheDocument();
   });
 
+  it("groups reference scores on a first proposal even when the current basis has no scores", () => {
+    const model = modelFixture();
+    model.currentBasis = null;
+    model.preview!.beforeBasis = null;
+    for (const evaluation of [model.preview!.before!, model.preview!.after!]) {
+      evaluation.sample = {
+        ...evaluation.sample,
+        quality: "reference",
+        matchCount: 12,
+        heldEventCount: 3,
+      };
+      for (const player of evaluation.players) {
+        for (const cell of player.axes) {
+          cell.sampleQuality = "reference";
+          if (evaluation === model.preview!.before) {
+            cell.score = null;
+            cell.scoreUnavailableReasons = ["basis_unavailable"];
+          }
+        }
+      }
+    }
+    render(<PlayerRadarAdminPanel model={model} />);
+    expect(screen.getByText("参考値（40試合未満・8開催未満）")).toBeVisible();
+    const table = screen.getByRole("table", { name: "採点基準変更前後の比較" });
+    expect(within(table).queryByText(/参考値/u)).not.toBeInTheDocument();
+    expect(within(table).getAllByText("7点")).toHaveLength(24);
+    expect(within(table).getAllByText(/未採点/u)).toHaveLength(24);
+  });
+
   it("keeps saved monitoring evidence visible while acknowledging that evidence alone", async () => {
     const user = userEvent.setup();
     const model = modelFixture();

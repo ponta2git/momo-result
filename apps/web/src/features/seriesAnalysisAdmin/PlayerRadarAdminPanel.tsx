@@ -47,7 +47,13 @@ function CommandButton({
   );
 }
 
-export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel }) {
+export function PlayerRadarAdminPanel({
+  model,
+  applyFinalFocus,
+}: {
+  model: PlayerRadarAdminModel;
+  applyFinalFocus?: (() => HTMLElement | null) | undefined;
+}) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const applyTriggerRef = useRef<HTMLButtonElement>(null);
   const withdrawTriggerRef = useRef<HTMLButtonElement>(null);
@@ -243,9 +249,10 @@ export function PlayerRadarAdminPanel({ model }: { model: PlayerRadarAdminModel 
             {applyTarget ? (
               <AlertDialog
                 finalFocus={() =>
-                  applyTriggerRef.current?.isConnected && !applyTriggerRef.current.disabled
+                  applyFinalFocus?.() ??
+                  (applyTriggerRef.current?.isConnected && !applyTriggerRef.current.disabled
                     ? applyTriggerRef.current
-                    : headingRef.current
+                    : headingRef.current)
                 }
                 open={confirmation !== null}
                 onOpenChange={(open) => setConfirmation(open ? applyTarget : null)}

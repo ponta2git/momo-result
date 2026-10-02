@@ -6,10 +6,16 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
 import { SeriesAnalysisAdminPage } from "@/features/seriesAnalysisAdmin/SeriesAnalysisAdminPage";
+import { ToastHost } from "@/shared/ui/feedback/ToastHost";
+import { AppMotionProvider } from "@/shared/ui/motion/AppMotionProvider";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { setupMsw } from "@/test/msw/lifecycle";
-import { makePlayerRadarPreview, makeReadyPlayerRadarState } from "@/test/msw/playerRadarFixtures";
+import {
+  makePlayerRadarOperation,
+  makePlayerRadarPreview,
+  makeReadyPlayerRadarState,
+} from "@/test/msw/playerRadarFixtures";
 import { makeSeriesAnalysisAdminOverview } from "@/test/msw/seriesAnalysisFixtures";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
@@ -22,7 +28,10 @@ function renderPage() {
   render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={["/admin/series-analysis?gameTitleId=gt_momotetsu_2"]}>
-        <SeriesAnalysisAdminPage />
+        <AppMotionProvider>
+          <SeriesAnalysisAdminPage />
+          <ToastHost />
+        </AppMotionProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -43,6 +52,116 @@ function rejectedCommand() {
 }
 
 describe("SeriesAnalysisAdminPage", () => {
+  it("opens the recalculation tab on accepted application and announces acceptance once before refresh completes", async () => {
+    const user = userEvent.setup();
+    setDevUser();
+    const refreshGate = createDeferred();
+    let accepted = false;
+    const overview = makeSeriesAnalysisAdminOverview();
+    const newestJob = {
+      ...overview.recentJobs[0]!,
+      jobId: "radar-application-job",
+      status: "running" as const,
+      finishedAt: null,
+      elapsedMilliseconds: null,
+      resultDisposition: "none" as const,
+    };
+    server.use(
+      http.get("/api/admin/series-analysis/overview", async () => {
+        if (accepted) await refreshGate.promise;
+        return HttpResponse.json(
+          accepted
+            ? {
+                ...overview,
+                globalExecution: { ...overview.globalExecution, runningCount: 1 },
+                recentJobs: [newestJob],
+              }
+            : overview,
+        );
+      }),
+      http.get("/api/admin/series-analysis/radar", () =>
+        HttpResponse.json(makeReadyPlayerRadarState()),
+      ),
+      http.get("/api/admin/series-analysis/radar/preview", () =>
+        HttpResponse.json(makePlayerRadarPreview()),
+      ),
+      http.post("/api/admin/series-analysis/radar/operations", () => {
+        accepted = true;
+        return HttpResponse.json(makePlayerRadarOperation(), { status: 202 });
+      }),
+    );
+    renderPage();
+    await user.click(await screen.findByRole("tab", { name: "レーダーの採点基準" }));
+    await user.click(await screen.findByRole("button", { name: "この変更案を適用する" }));
+    await user.click(
+      within(screen.getByRole("alertdialog")).getByRole("button", { name: "作品全体に適用する" }),
+    );
+    const recalculationTab = screen.getByRole("tab", { name: "分析の再計算" });
+    await waitFor(() => expect(recalculationTab).toHaveAttribute("aria-selected", "true"));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(recalculationTab).toHaveFocus());
+    await waitFor(() =>
+      expect(screen.getByRole("dialog", { name: "採点基準の適用を受け付けました" })).toBeVisible(),
+    );
+    expect(screen.getByRole("button", { name: "状態を更新中" })).toBeDisabled();
+    expect(screen.queryByText("基準の適用が完了しました")).not.toBeInTheDocument();
+    refreshGate.resolve();
+    const jobs = screen.getByRole("table", { name: "全作品の直近10件の実行履歴" });
+    expect(await within(jobs).findByText("計算中")).toBeVisible();
+    await user.click(await screen.findByRole("button", { name: "状態を更新" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "状態を更新" })).toBeEnabled());
+    expect(screen.getAllByRole("dialog", { name: "採点基準の適用を受け付けました" })).toHaveLength(
+      1,
+    );
+  });
+
+  it("keeps an uncertain application on the radar tab until the same request is confirmed", async () => {
+    const user = userEvent.setup();
+    setDevUser();
+    const keys: Array<string | null> = [];
+    server.use(
+      http.get("/api/admin/series-analysis/radar", () =>
+        HttpResponse.json(makeReadyPlayerRadarState()),
+      ),
+      http.get("/api/admin/series-analysis/radar/preview", () =>
+        HttpResponse.json(makePlayerRadarPreview()),
+      ),
+      http.post("/api/admin/series-analysis/radar/operations", ({ request }) => {
+        keys.push(request.headers.get("Idempotency-Key"));
+        return keys.length === 1
+          ? HttpResponse.error()
+          : HttpResponse.json(
+              { ...makePlayerRadarOperation(), operationId: "recovered-application" },
+              { status: 202 },
+            );
+      }),
+    );
+    renderPage();
+    const radarTab = await screen.findByRole("tab", { name: "レーダーの採点基準" });
+    await user.click(radarTab);
+    await user.click(await screen.findByRole("button", { name: "この変更案を適用する" }));
+    const dialog = screen.getByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: "作品全体に適用する" }));
+    expect(await within(dialog).findByText(/操作の受付結果はまだ不明/u)).toBeVisible();
+    expect(radarTab).toHaveAttribute("aria-selected", "true");
+    expect(
+      screen.queryByRole("dialog", { name: "採点基準の適用を受け付けました" }),
+    ).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "キャンセル" }));
+    await user.click(await screen.findByRole("button", { name: "操作の状態を確認する" }));
+    await waitFor(() =>
+      expect(screen.getByRole("dialog", { name: "採点基準の適用を受け付けました" })).toBeVisible(),
+    );
+    expect(screen.getByRole("tab", { name: "分析の再計算" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("tab", { name: "分析の再計算" })).toHaveFocus();
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).toBeTruthy();
+    expect(keys[1]).toBe(keys[0]);
+  });
+
   it("separates radar administration and retains its comparison scope when switching tabs", async () => {
     const user = userEvent.setup();
     setDevUser();

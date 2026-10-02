@@ -47,6 +47,35 @@ function radarFixture(): PlayerRadarDisplay {
 }
 
 describe("PlayerRadarSection", () => {
+  it("groups a common reference warning above the charts and table while retaining unscored axes", async () => {
+    const user = userEvent.setup();
+    const radar = radarFixture();
+    radar.sample = { ...radar.sample, quality: "reference", matchCount: 20, heldEventCount: 5 };
+    for (const [index, player] of radar.players.entries()) {
+      for (const axis of player.axes) {
+        axis.sampleQuality = "reference";
+        if (index === 0 && axis.axisId === "revenueP90") {
+          axis.score = null;
+          axis.scoreUnavailableReasons = ["basis_unavailable"];
+        }
+      }
+    }
+    render(<PlayerRadarSection radar={radar} />);
+    expect(screen.getAllByText("参考値")).toHaveLength(1);
+    expect(screen.getByText("40試合未満・8開催未満")).toBeVisible();
+    for (const chart of screen.getAllByRole("img")) {
+      expect(chart).toHaveAccessibleDescription(/^点数は参考値です。/u);
+      expect(within(chart).queryByText("参考")).not.toBeInTheDocument();
+    }
+    await user.click(screen.getByRole("button", { name: "プレーヤーレーダーの数値を表で見る" }));
+    const table = screen.getByRole("table", { name: "6軸の点数と元の成績" });
+    expect(within(table).queryByText(/参考/u)).not.toBeInTheDocument();
+    expect(within(table).getAllByText("7点")).toHaveLength(23);
+    expect(within(table).getByText("未採点")).toBeInTheDocument();
+    expect(within(table).getByText("基準未適用")).toBeInTheDocument();
+    expect(screen.getAllByText("参考値")).toHaveLength(1);
+  });
+
   it("opens the saved score and raw value in canonical player order without rescoring in the browser", async () => {
     const user = userEvent.setup();
     const { container } = render(<PlayerRadarSection radar={radarFixture()} />);

@@ -88,6 +88,11 @@ export type PlayerRadarDisplay = {
   players: readonly PlayerRadarPlayer[];
 };
 
+export function playerRadarScoresAreReference(players: readonly PlayerRadarPlayer[]): boolean {
+  const scores = players.flatMap((player) => player.axes).filter((cell) => cell.score !== null);
+  return scores.length > 0 && scores.every((cell) => cell.sampleQuality === "reference");
+}
+
 export function formatPlayerRadarRawValue(axisId: PlayerRadarAxisId, value: number | null) {
   if (value === null) return "—";
   return axisId === "averageRank" ? `${formatDecimal(value)}位` : formatManYen(value);

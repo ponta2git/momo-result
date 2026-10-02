@@ -21,7 +21,13 @@ function coordinate(center: { x: number; y: number }, index: number, distance: n
 }
 
 /** Geometry only: all values, scores, and sample judgements come from the saved result. */
-export function PlayerRadarChart({ player }: { player: PlayerRadarPlayer }) {
+export function PlayerRadarChart({
+  player,
+  referenceScoresGrouped,
+}: {
+  player: PlayerRadarPlayer;
+  referenceScoresGrouped: boolean;
+}) {
   const figureId = useId();
   const figureRef = useRef<HTMLElement>(null);
   const [width, setWidth] = useState(320);
@@ -40,9 +46,9 @@ export function PlayerRadarChart({ player }: { player: PlayerRadarPlayer }) {
   // Keep text and marks in CSS pixels; resize the geometry inside its allotted column.
   const radius = Math.min(128, (width / 2 - 36) / Math.cos(Math.PI / 6) - 36);
   const center = { x: width / 2, y: radius + 70 };
-  const hasReferenceScore = player.axes.some(
-    (axis) => axis.sampleQuality === "reference" && axis.score !== null,
-  );
+  const hasReferenceScore =
+    !referenceScoresGrouped &&
+    player.axes.some((axis) => axis.sampleQuality === "reference" && axis.score !== null);
   const height = Math.ceil(radius * 2 + (hasReferenceScore ? 160 : 144));
   const presentation = dataVizSeriesPresentation(player.memberId);
   const vertices = playerRadarAxes.map((axis, index) => {
@@ -76,10 +82,11 @@ export function PlayerRadarChart({ player }: { player: PlayerRadarPlayer }) {
       >
         <title id={`${figureId}-title`}>{player.displayName}の6軸レーダー</title>
         <desc id={`${figureId}-description`}>
+          {referenceScoresGrouped ? "点数は参考値です。" : ""}
           {vertices
             .map(
               ({ axis, cell }) =>
-                `${axis.label}：${playerRadarScoreLabel(cell)}${cell?.sampleQuality === "reference" && cell.score !== null ? "（参考値）" : ""}`,
+                `${axis.label}：${playerRadarScoreLabel(cell)}${!referenceScoresGrouped && cell?.sampleQuality === "reference" && cell.score !== null ? "（参考値）" : ""}`,
             )
             .join("。")}
         </desc>
@@ -115,7 +122,8 @@ export function PlayerRadarChart({ player }: { player: PlayerRadarPlayer }) {
         <g aria-hidden="true" fill="var(--color-text-secondary)" fontSize="12">
           {vertices.map(({ axis, cell }, index) => {
             const label = coordinate(center, index, radius + 36);
-            const reference = cell?.sampleQuality === "reference" && cell.score !== null;
+            const reference =
+              !referenceScoresGrouped && cell?.sampleQuality === "reference" && cell.score !== null;
             const labelHeight = axis.chartLabel.length * 16 + (reference ? 36 : 20);
             const top = index === 3 ? label.y - 24 : label.y - labelHeight / 2;
             return (

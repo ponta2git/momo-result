@@ -1,5 +1,6 @@
 import { PlayerRadarChart } from "@/features/seriesComparison/charts/PlayerRadarChart";
 import { AnalysisSection } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
+import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import { orderFixedMembers } from "@/shared/domain/members";
 import { formatDateOnly } from "@/shared/lib/dateTime";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
@@ -9,6 +10,7 @@ import {
   formatPlayerRadarRawValue,
   playerRadarAxes,
   playerRadarScoreLabel,
+  playerRadarScoresAreReference,
   playerRadarUnavailableLabel,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import type {
@@ -26,16 +28,18 @@ import { contentText } from "@/shared/ui/typography";
 function RadarValue({
   cell,
   sharedReasons,
+  referenceScoresGrouped,
 }: {
   cell: PlayerRadarCell | undefined;
   sharedReasons: readonly PlayerRadarUnavailableReason[];
+  referenceScoresGrouped: boolean;
 }) {
   const reasons = cell?.scoreUnavailableReasons.filter((reason) => !sharedReasons.includes(reason));
   return (
     <div className="grid gap-1">
       <p className={cn(contentText.compactPrimary, "whitespace-nowrap")}>
         {playerRadarScoreLabel(cell)}
-        {cell?.sampleQuality === "reference" && cell.score !== null ? (
+        {!referenceScoresGrouped && cell?.sampleQuality === "reference" && cell.score !== null ? (
           <span className={cn(contentText.supporting, "ml-2")}>参考値</span>
         ) : null}
       </p>
@@ -55,6 +59,11 @@ export function PlayerRadarSection({ radar }: { radar: PlayerRadarDisplay }) {
   const players = orderFixedMembers(radar.players);
   const hasScores = players.some((player) => player.axes.some((axis) => axis.score !== null));
   const cells = players.flatMap((player) => player.axes);
+  const referenceScoresGrouped = playerRadarScoresAreReference(players);
+  const referenceReasons = [
+    radar.sample.matchCount < 40 ? "40試合未満" : null,
+    radar.sample.heldEventCount < 8 ? "8開催未満" : null,
+  ].filter(Boolean);
   const sharedReasons = (cells[0]?.scoreUnavailableReasons ?? []).filter(
     (reason) =>
       cells.every((cell) => cell.scoreUnavailableReasons.includes(reason)) &&
@@ -79,6 +88,14 @@ export function PlayerRadarSection({ radar }: { radar: PlayerRadarDisplay }) {
       }
     >
       <div className="grid gap-4">
+        {referenceScoresGrouped ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <SeriesAnalysisQualityAdvisory status="reference" />
+            {referenceReasons.length > 0 ? (
+              <p className={contentText.supporting}>{referenceReasons.join("・")}</p>
+            ) : null}
+          </div>
+        ) : null}
         {sharedReasons.includes("insufficient_matches") ? (
           <p className={cn(contentText.body, readableTextWidthClass)}>3試合未満のため未採点</p>
         ) : null}
@@ -86,7 +103,7 @@ export function PlayerRadarSection({ radar }: { radar: PlayerRadarDisplay }) {
           <div className="grid grid-cols-1 gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
             {players.map((player) => (
               <div className="w-full max-w-sm min-w-0" key={player.memberId}>
-                <PlayerRadarChart player={player} />
+                <PlayerRadarChart player={player} referenceScoresGrouped={referenceScoresGrouped} />
               </div>
             ))}
           </div>
@@ -122,6 +139,7 @@ export function PlayerRadarSection({ radar }: { radar: PlayerRadarDisplay }) {
                     <RadarValue
                       cell={player.axes.find((cell) => cell.axisId === axis.id)}
                       sharedReasons={sharedReasons}
+                      referenceScoresGrouped={referenceScoresGrouped}
                     />
                   ),
                 })),

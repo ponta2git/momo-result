@@ -1,5 +1,5 @@
 import { Activity, Play, RefreshCw, RotateCw } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { PlayerRadarAdministration } from "@/features/seriesAnalysisAdmin/PlayerRadarAdministration";
 import {
@@ -15,6 +15,7 @@ import { Button } from "@/shared/ui/actions/Button";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { showToast } from "@/shared/ui/feedback/Toast";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
@@ -24,7 +25,10 @@ import { contentText } from "@/shared/ui/typography";
 export function SeriesAnalysisAdminPage() {
   const page = useSeriesAnalysisAdminPageModel();
   const [allDialogOpen, setAllDialogOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("recalculation");
+  const recalculationTabRef = useRef<HTMLElement>(null);
   const { data } = page.resource;
+  const { selectedTitle } = page.selection;
   return (
     <PageFrame width="wide">
       <PageContentSurface
@@ -32,9 +36,11 @@ export function SeriesAnalysisAdminPage() {
         className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6"
         role="region"
       >
-        <TabsRoot defaultValue="recalculation">
+        <TabsRoot value={activeTab} onValueChange={(value) => setActiveTab(String(value))}>
           <TabsList activateOnFocus={false} aria-label="戦績分析管理の表示切替">
-            <TabsTab value="recalculation">分析の再計算</TabsTab>
+            <TabsTab value="recalculation" ref={recalculationTabRef}>
+              分析の再計算
+            </TabsTab>
             <TabsTab value="radar">レーダーの採点基準</TabsTab>
           </TabsList>
           <div className="mt-6 grid min-w-0 gap-6">
@@ -151,18 +157,31 @@ export function SeriesAnalysisAdminPage() {
                   ) : null}
                 </section>
                 <ExecutionStatus data={data} />
-                <SelectedTitleStatus selected={page.selection.selectedTitle} />
+                <SelectedTitleStatus selected={selectedTitle} />
                 <RecentJobs jobs={data.recentJobs} />
               </div>
             ) : null}
           </TabsPanel>
           <TabsPanel keepMounted value="radar">
-            {page.selection.selectedTitle ? (
+            {selectedTitle ? (
               <div className="mt-6 min-w-0">
                 <PlayerRadarAdministration
-                  key={page.selection.selectedTitle.gameTitleId}
-                  gameTitleId={page.selection.selectedTitle.gameTitleId}
-                  gameTitleName={page.selection.selectedTitle.gameTitleName}
+                  key={selectedTitle.gameTitleId}
+                  gameTitleId={selectedTitle.gameTitleId}
+                  gameTitleName={selectedTitle.gameTitleName}
+                  onApplyAccepted={(operationId) => {
+                    page.actions.clearRecalculationFeedback();
+                    setActiveTab("recalculation");
+                    recalculationTabRef.current?.focus();
+                    showToast({
+                      id: `radar-apply-accepted:${operationId}`,
+                      title: "採点基準の適用を受け付けました",
+                      description: `${selectedTitle.gameTitleName}の再計算状況を表示しています。`,
+                    });
+                  }}
+                  applyFinalFocus={() =>
+                    activeTab === "recalculation" ? recalculationTabRef.current : null
+                  }
                 />
               </div>
             ) : null}

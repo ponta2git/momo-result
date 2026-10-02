@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type {
   PlayerRadarAdminModel,
@@ -32,10 +32,22 @@ import {
 } from "@/shared/seriesAnalysis/playerRadarDisplay";
 
 /** Each mounted instance owns one title; scope changes never retarget a submitted command. */
-export function usePlayerRadarAdminModel(gameTitleId: string, gameTitleName: string) {
+export function usePlayerRadarAdminModel(
+  gameTitleId: string,
+  gameTitleName: string,
+  onApplyAccepted?: (operationId: string) => void,
+) {
   const queryClient = useQueryClient();
   const keys = useIdempotencyKeyStore();
   const commandPending = useRef(false);
+  const mounted = useRef(false);
+  const notifiedApplication = useRef<string | null>(null);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const [scope, setScope] = useState({
     seasonMasterId: "",
     mapMasterId: "",
@@ -85,6 +97,15 @@ export function usePlayerRadarAdminModel(gameTitleId: string, gameTitleName: str
         queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.statusRoot() }),
         queryClient.invalidateQueries({ queryKey: seriesPlayerRadarKeys.scopeStatusRoot() }),
       ]);
+      if (
+        request.kind === "apply" &&
+        ["pending", "running", "succeeded"].includes(response.status) &&
+        mounted.current &&
+        notifiedApplication.current !== response.operationId
+      ) {
+        notifiedApplication.current = response.operationId;
+        onApplyAccepted?.(response.operationId);
+      }
     },
     onSettled: () => {
       commandPending.current = false;

@@ -10,6 +10,7 @@ import {
   formatPlayerRadarRawValue,
   playerRadarAxes,
   playerRadarScoreLabel,
+  playerRadarScoresAreReference,
   playerRadarUnavailableLabel,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import type { PlayerRadarCell } from "@/shared/seriesAnalysis/playerRadarPresentation";
@@ -47,17 +48,10 @@ export function PlayerRadarPreview({
 }) {
   const players = orderFixedMembers(preview.after?.players ?? []);
   const hasFilter = Boolean(filter.seasonMasterId || filter.mapMasterId);
-  const allScoresReference =
-    players.length > 0 &&
-    players.every((player) =>
-      playerRadarAxes.every((axis) => {
-        const after = player.axes.find((cell) => cell.axisId === axis.id);
-        const before = preview.before?.players
-          .find((entry) => entry.memberId === player.memberId)
-          ?.axes.find((cell) => cell.axisId === axis.id);
-        return isReferenceScore(after) && (!preview.before || isReferenceScore(before));
-      }),
-    );
+  const allScoresReference = playerRadarScoresAreReference([
+    ...(preview.before?.players ?? []),
+    ...players,
+  ]);
   const referenceReasons = preview.after
     ? [
         preview.after.sample.matchCount < 40 ? "40試合未満" : null,

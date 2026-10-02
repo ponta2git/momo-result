@@ -232,7 +232,10 @@ describe("MatchCreatePage", () => {
     const revenue = screen.getByRole("textbox", { name: "ぽんた 収益（万円）" });
     await user.clear(revenue);
     await user.type(revenue, "-");
+    const createPage = screen.getByRole("region", { name: "試合内容" });
     await user.click(screen.getByRole("button", { name: "設定管理へ" }));
+    // Let the transition finish without repeatedly scanning the outgoing form's buttons.
+    await waitFor(() => expect(createPage).not.toBeInTheDocument());
     const returnAction = await screen.findByRole("button", { name: "元の入力画面へ戻る" });
     expect(router.state.location.pathname).toBe("/admin/masters");
     const returnParams = new URLSearchParams(router.state.location.search);

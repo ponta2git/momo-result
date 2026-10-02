@@ -62,6 +62,7 @@ export function PlayerRadarChart({
           : null,
     };
   });
+  const areaPoints = vertices.map(({ point }) => point);
   return (
     <figure
       ref={figureRef}
@@ -90,6 +91,14 @@ export function PlayerRadarChart({
             )
             .join("。")}
         </desc>
+        {areaPoints.every((point) => point !== null) ? (
+          <polygon
+            aria-hidden="true"
+            fill={presentation.color}
+            fillOpacity="0.08"
+            points={areaPoints.map((point) => `${point.x},${point.y}`).join(" ")}
+          />
+        ) : null}
         <g aria-hidden="true" fill="none" stroke="var(--color-border)">
           {ticks.map((tick) => (
             <polygon

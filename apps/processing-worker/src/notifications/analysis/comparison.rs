@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::{
-    MAXIMUM_LISTED_MATCHES, MAXIMUM_SEASONS, SkipReason,
+    MAXIMUM_LISTED_MATCHES, MAXIMUM_LISTED_SEASONS, SkipReason,
     types::{Artifact, Baseline, MatchIdentity, RankComparison, RankSample},
 };
 
@@ -33,7 +33,7 @@ pub(super) fn changes(baseline: &Baseline, after: &Artifact) -> Result<Changes, 
             if let Some(previous) = previous {
                 seasons.insert(previous.season_id.clone());
             }
-            if seasons.len() > MAXIMUM_SEASONS {
+            if seasons.len() > MAXIMUM_LISTED_SEASONS {
                 return Err(SkipReason::PayloadBound);
             }
         }
@@ -42,7 +42,7 @@ pub(super) fn changes(baseline: &Baseline, after: &Artifact) -> Result<Changes, 
         for (id, previous) in &before.matches {
             if !after.matches.contains_key(id) {
                 seasons.insert(previous.season_id.clone());
-                if seasons.len() > MAXIMUM_SEASONS {
+                if seasons.len() > MAXIMUM_LISTED_SEASONS {
                     return Err(SkipReason::PayloadBound);
                 }
             }

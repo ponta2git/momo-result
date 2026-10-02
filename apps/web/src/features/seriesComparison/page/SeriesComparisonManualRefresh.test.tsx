@@ -18,7 +18,7 @@ import { createTestQueryClient } from "@/test/queryClient";
 
 setupMsw();
 
-// This suite observes refresh after an initial result; cold route loading is covered by app routing.
+// Prepare real lazy modules before observing refresh of an initial result.
 beforeAll(() =>
   Promise.all([
     import("@/shared/api/generatedContracts/series-analysis-envelope-validators.generated"),
@@ -47,10 +47,13 @@ describe("SeriesComparisonPage manual refresh", () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
+    await waitFor(() => {
+      expect(aggregateRequests).toBe(1);
+      expect(queryClient.isFetching()).toBe(0);
+    });
     const disclosure = await screen.findByRole("button", {
       name: "4人の累積入賞率の推移の数値を表で見る",
     });
-    await waitFor(() => expect(queryClient.isFetching()).toBe(0));
 
     await user.click(screen.getByRole("button", { name: "表示を更新" }));
     await waitFor(() => expect(aggregateRequests).toBe(2));

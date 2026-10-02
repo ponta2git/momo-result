@@ -14,7 +14,7 @@ addCommandAlias("apiQuality", "apiFormatCheck; apiLint; apiOpenApiCheck")
 addCommandAlias("apiCheck", "apiQuality; testFull")
 addCommandAlias("apiFullCheck", "apiCheck; apiDbQuality; apiRedisQuality")
 // sbt 2's `test` is incremental/cached; CI and coverage need each test's actual execution.
-addCommandAlias("apiCoverage", "clean; coverage; testFull; coverageReport; coverageOff")
+addCommandAlias("apiCoverage", "coverage; clean; testFull; coverageReport; coverageOff")
 addCommandAlias("apiRedisQuality", "RedisTest / testFull")
 addCommandAlias("apiR2Quality", "R2Test / testFull")
 addCommandAlias("apiDbQuality", "DbTest / testFull")
@@ -172,7 +172,8 @@ lazy val root = (project in file("."))
       "--exclude-tags=DbIntegration,RedisIntegration,R2Integration",
     ),
     Test / parallelExecution := true,
-    Test / fork := false,
+    // Scoverage retains open measurement writers; isolate them from earlier runs in the sbt JVM.
+    Test / fork := coverageEnabled.value,
     Test / envVars ++= {
       sys.env.get("DOCKER_HOST").fold {
         val dockerDesktopSocket = Paths.get(sys.props("user.home"), ".docker", "run", "docker.sock")
@@ -182,6 +183,13 @@ lazy val root = (project in file("."))
       }(dockerHost => Map("DOCKER_HOST" -> dockerHost))
     },
     coverageFailOnMinimum := false,
+    // sbt 2 restores instrumented classes without the compiler's scoverage metadata side files.
+    // Use a fresh per-session cache so apiCoverage rebuilds that metadata after clean.
+    // An empty store list falls back to sbt's on-disk boot cache; coverageOff restores normal stores.
+    cacheStores := {
+      if (coverageEnabled.value) Seq(new sbt.util.InMemoryActionCacheStore)
+      else cacheStores.value
+    },
     coverageExcludedPackages := "momo\\.api\\.Main",
     coverageExcludedFiles := Seq(
       ".*/momo/api/adapters/postgres/.*",
@@ -285,7 +293,9 @@ lazy val root = (project in file("."))
         val expectedText = Files.readString(output.toPath)
         val generatedText = Files.readString(generated)
         if (expectedText != generatedText) {
-          sys.error("openapi.yaml is stale. Run `sbt --server --batch apiOpenApi` and commit the result.")
+          sys.error(
+            "openapi.yaml is stale. Run `sbt --server --batch apiOpenApi` and commit the result."
+          )
         }
       } finally Files.deleteIfExists(generated)
       ()

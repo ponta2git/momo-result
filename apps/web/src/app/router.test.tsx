@@ -3,9 +3,17 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ErrorBoundary } from "@/app/ErrorBoundary";
+import {
+  loadExportPage,
+  loadMastersPage,
+  loadMatchDetailPage,
+  loadMatchesListPage,
+  loadSeriesAnalysisAdminPage,
+  loadSeriesComparisonPage,
+} from "@/app/routeModules";
 import { appRoutes } from "@/app/router";
 import { matchKeys } from "@/shared/api/queryKeys";
 import { setDevUser } from "@/test/auth";
@@ -40,6 +48,19 @@ function renderApp(initialEntry: string) {
 }
 
 describe("app routing", () => {
+  // Compile the real route modules before interaction waits start. React.lazy and the route
+  // guards still run normally; module transformation under coverage is test setup work.
+  beforeAll(async () => {
+    await Promise.all([
+      loadExportPage(),
+      loadMastersPage(),
+      loadMatchDetailPage(),
+      loadMatchesListPage(),
+      loadSeriesAnalysisAdminPage(),
+      loadSeriesComparisonPage(),
+    ]);
+  });
+
   beforeEach(() => {
     user = userEvent.setup();
   });
@@ -120,7 +141,6 @@ describe("app routing", () => {
     expect(router.state.location.pathname).toBe("/analytics/series");
   });
 
-  // These flows load cold route chunks under coverage; their total budget must exceed each wait.
   it(
     "keeps manually refreshed analysis jobs when returning through the default title route",
     { timeout: 15_000 },

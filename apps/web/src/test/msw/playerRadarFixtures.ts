@@ -7,9 +7,9 @@ import type {
 } from "@/shared/api/seriesPlayerRadar";
 import { canonicalResultMembers } from "@/shared/domain/members";
 
-import basisFixture from "../../../../../docs/schemas/fixtures/series-analysis/radar-basis-v1.json";
-import candidateFixture from "../../../../../docs/schemas/fixtures/series-analysis/radar-candidate-v1.json";
-import evaluationFixture from "../../../../../docs/schemas/fixtures/series-analysis/radar-evaluation-v1.json";
+import basisFixture from "../../../../../docs/schemas/fixtures/series-analysis/radar-basis-v1.json" with { type: "json" };
+import candidateFixture from "../../../../../docs/schemas/fixtures/series-analysis/radar-candidate-v1.json" with { type: "json" };
+import evaluationFixture from "../../../../../docs/schemas/fixtures/series-analysis/radar-evaluation-v1.json" with { type: "json" };
 
 export function makePlayerRadarBasis(): SeriesPlayerRadarBasisRecord {
   return {

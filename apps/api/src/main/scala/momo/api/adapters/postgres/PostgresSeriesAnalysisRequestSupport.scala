@@ -23,7 +23,7 @@ private[postgres] object PostgresSeriesAnalysisRequestSupport:
       artifactSchemaVersion: Int,
       validationContractId: Option[String],
   )
-  final case class ActiveJobRow(id: String, status: String)
+  final case class ActiveJobRow(id: String, status: String, workKind: String)
 
   def lockAndFindOperation(
       requestedBy: AccountId,

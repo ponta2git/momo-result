@@ -7,7 +7,13 @@ import {
   invalidateMasterResourceCaches,
   invalidateMemberAliasCaches,
 } from "@/features/masters/masterResourceCache";
-import { heldEventKeys, masterKeys, matchKeys, seriesAnalysisKeys } from "@/shared/api/queryKeys";
+import {
+  heldEventKeys,
+  masterKeys,
+  matchKeys,
+  seriesAnalysisKeys,
+  seriesPlayerRadarKeys,
+} from "@/shared/api/queryKeys";
 import { createDeferred } from "@/test/deferred";
 import { createTestQueryClient } from "@/test/queryClient";
 
@@ -78,6 +84,8 @@ describe("masterResourceCache", () => {
         seriesAnalysisKeys.options(),
         seriesAnalysisKeys.status("title-1"),
         seriesAnalysisKeys.adminOverview("title-1"),
+        seriesPlayerRadarKeys.state("title-1"),
+        seriesPlayerRadarKeys.scopeStatus({ gameTitleId: "title-1", mapMasterId: "map-1" }),
         seriesAnalysisKeys.aggregate({ artifactId: "artifact-1" }),
       ];
       for (const key of affected) queryClient.setQueryData(key, {});

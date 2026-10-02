@@ -7,6 +7,7 @@ use crate::{
         player_matches_by_member,
     },
     outcome_model,
+    radar::{RadarAggregate, RadarError, evaluate_rows},
 };
 
 mod aggregate;
@@ -123,15 +124,19 @@ impl<'a> ScopeAnalysis<'a> {
 
 #[must_use]
 #[cfg(test)]
+#[expect(
+    clippy::panic,
+    reason = "invalid calculation fixtures must fail with their exact radar domain error"
+)]
 pub(crate) fn compute_all(input: &AnalysisInput) -> Vec<ComputedResource> {
     let input = input.normalized();
     let mut resources = Vec::new();
     match try_for_each_resource(&input, |resource| {
         resources.push(resource);
-        Ok::<(), std::convert::Infallible>(())
+        Ok::<(), RadarError>(())
     }) {
         Ok(()) => {}
-        Err(never) => match never {},
+        Err(error) => panic!("invalid radar calculation fixture: {error}"),
     }
     resources
 }
@@ -145,7 +150,7 @@ pub(crate) fn compute_all(input: &AnalysisInput) -> Vec<ComputedResource> {
 /// # Errors
 ///
 /// Returns the first error produced by the resource consumer without generating later resources.
-pub fn try_for_each_resource<E>(
+pub fn try_for_each_resource<E: From<RadarError>>(
     input: &NormalizedAnalysisInput,
     mut consume: impl FnMut(ComputedResource) -> Result<(), E>,
 ) -> Result<(), E> {
@@ -157,6 +162,7 @@ pub fn try_for_each_resource<E>(
             }
             Some(_) | None => ScopeAnalysis::new(player_matches),
         };
+        let player_radar = player_radar(input, scope, &analysis)?;
         let aggregate = aggregate(
             input.game_title_id(),
             scope,
@@ -165,6 +171,7 @@ pub fn try_for_each_resource<E>(
             &analysis.player_matches_by_member,
             &analysis.match_groups,
             &analysis.outcome_model,
+            &player_radar,
         );
         let aggregate_item_ids = AggregateItemIds::from_aggregate(&aggregate);
         let review_data_quality = aggregate.get("dataQuality").cloned();
@@ -237,6 +244,26 @@ pub fn try_for_each_resource<E>(
         previous_analysis = Some(analysis);
     }
     Ok(())
+}
+
+fn player_radar(
+    input: &NormalizedAnalysisInput,
+    scope: &ScopeRef,
+    analysis: &ScopeAnalysis<'_>,
+) -> Result<RadarAggregate, RadarError> {
+    Ok(RadarAggregate {
+        basis: input.radar_basis().cloned(),
+        monitoring: if *scope == ScopeRef::Overall {
+            input.radar_monitoring().cloned()
+        } else {
+            None
+        },
+        evaluation: evaluate_rows(
+            &analysis.player_matches,
+            &analysis.member_ids,
+            input.radar_basis().map(|basis| &basis.basis),
+        )?,
+    })
 }
 
 #[cfg(test)]

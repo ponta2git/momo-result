@@ -10,9 +10,9 @@ final class SeriesAnalysisArtifactContractSpec extends FunSuite with JsonSchemaA
   private val fixtureRoot = "docs/schemas/fixtures/series-analysis"
 
   test("artifact and queue fixtures satisfy the shared JSON Schemas"):
-    val currentSchema = repositoryFile("docs/schemas/series-analysis-artifact-v4.schema.json")
-    assertJsonSchemaValid(currentSchema, fixture("valid-artifact-v4.json"))
-    assertJsonSchemaInvalid(currentSchema, fixture("invalid-artifact-v4.json"))
+    val currentSchema = repositoryFile("docs/schemas/series-analysis-artifact-v5.schema.json")
+    assertJsonSchemaValid(currentSchema, fixture("valid-artifact-v5.json"))
+    assertJsonSchemaInvalid(currentSchema, fixture("invalid-artifact-v5.json"))
     assertJsonSchemaValid(
       seriesAnalysisQueueSchemaPath,
       fixture("valid-queue-payload-v1.json"),

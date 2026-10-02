@@ -29,19 +29,26 @@ export function MetricDefinitions() {
 export function AnalysisSection({
   children,
   id,
+  meta,
   title,
 }: {
   children: ReactNode;
   id: string;
+  meta?: ReactNode;
   title: string;
 }) {
   const headingId = `${id}-heading`;
   return (
     <section aria-labelledby={headingId} className="min-w-0 scroll-mt-24" id={id}>
-      <header>
+      <header
+        className={
+          meta ? "flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1" : undefined
+        }
+      >
         <h2 className={contentText.heading} id={headingId} tabIndex={-1}>
           {title}
         </h2>
+        {meta}
       </header>
       <div className="mt-4">{children}</div>
     </section>

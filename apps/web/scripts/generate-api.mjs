@@ -25,6 +25,12 @@ const envelopeRoots = [
   "SeriesAnalysisOptionsResponse",
   "SeriesAnalysisRecalculationAcceptedResponse",
   "SeriesAnalysisStatusResponse",
+  "SeriesAnalysisScopeStatusResponse",
+];
+const radarRoots = [
+  "SeriesPlayerRadarStateResponse",
+  "SeriesPlayerRadarPreviewResponse",
+  "SeriesPlayerRadarOperationResponse",
 ];
 
 const generatedArtifactPattern =
@@ -59,14 +65,14 @@ function referencedComponentNames(schema) {
   return names;
 }
 
-function envelopeSchemaDocument(openapi) {
+function envelopeSchemaDocument(openapi, roots) {
   const sourceSchemas = openapi.components?.schemas;
   if (typeof sourceSchemas !== "object" || sourceSchemas === null) {
     throw new Error("OpenAPI components.schemas is missing.");
   }
 
-  const selected = new Set(envelopeRoots);
-  const pending = [...envelopeRoots];
+  const selected = new Set(roots);
+  const pending = [...roots];
   while (pending.length > 0) {
     const name = pending.pop();
     const schema = sourceSchemas[name];
@@ -265,12 +271,22 @@ async function generate() {
   const schema = JSON.parse(await readFile(source, "utf8"));
   const ast = await openapiTS(schema);
   const artifacts = artifactContracts(schema);
-  const envelopeDocument = envelopeSchemaDocument(schema);
-  const envelopeSchemaId = "https://momo-result.local/schemas/series-analysis-envelope.json";
-  const envelopeValidators = envelopeRoots.map((name) => ({
-    exportName: `validate${name}`,
-    schema: { $ref: `${envelopeSchemaId}#/$defs/${name}` },
-  }));
+  const envelopeOutputs = [
+    { moduleName: "envelope", roots: envelopeRoots },
+    { moduleName: "radar", roots: radarRoots },
+  ].flatMap(({ moduleName, roots }) => {
+    const document = envelopeSchemaDocument(schema, roots);
+    const schemaId = `https://momo-result.local/schemas/series-analysis-${moduleName}.json`;
+    const validators = roots.map((name) => ({
+      exportName: `validate${name}`,
+      schema: { $ref: `${schemaId}#/$defs/${name}` },
+    }));
+    return validatorModuleOutputs(
+      `series-analysis-${moduleName}-validators.generated`,
+      validators,
+      [{ ...document, $id: schemaId }],
+    );
+  });
   // Schemas are compiler inputs, not separately maintained runtime artifacts.
   // Only emit files consumed by the Web: types, lazy loaders and CSP-safe validators.
   return [
@@ -287,9 +303,7 @@ async function generate() {
         },
       ]),
     ),
-    ...validatorModuleOutputs("series-analysis-envelope-validators.generated", envelopeValidators, [
-      { ...envelopeDocument, $id: envelopeSchemaId },
-    ]),
+    ...envelopeOutputs,
   ];
 }
 

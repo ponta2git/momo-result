@@ -48,6 +48,8 @@ pub(crate) enum ArtifactError {
     NumericConversion(#[from] std::num::TryFromIntError),
     #[error("artifact payload validation failed")]
     Payload(#[from] payload::PayloadError),
+    #[error("artifact radar calculation input is invalid")]
+    Radar(#[from] momo_analysis_core::radar::RadarError),
 }
 
 #[cfg(test)]

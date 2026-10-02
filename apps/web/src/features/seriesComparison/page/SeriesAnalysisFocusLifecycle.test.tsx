@@ -26,7 +26,9 @@ setupMsw();
 
 beforeAll(() =>
   Promise.all([
-    decodeSeriesAnalysisArtifact("aggregateV4", makeOwnerComparisonAggregate()),
+    import("@/features/seriesComparison/page/SeriesAnalysisContextView"),
+    import("@/shared/api/generatedContracts/series-analysis-envelope-validators.generated"),
+    decodeSeriesAnalysisArtifact("aggregateV5", makeOwnerComparisonAggregate()),
     decodeSeriesAnalysisArtifact("matchContext", makeFourPlayerSeriesAnalysisMatchContext()),
   ]),
 );
@@ -34,7 +36,7 @@ beforeAll(() =>
 beforeEach(() => {
   setDevUser();
   server.use(
-    http.get("/api/analytics/series-comparison/v4/aggregate", () =>
+    http.get("/api/analytics/series-comparison/v5/aggregate", () =>
       HttpResponse.json(makeOwnerComparisonAggregate()),
     ),
   );

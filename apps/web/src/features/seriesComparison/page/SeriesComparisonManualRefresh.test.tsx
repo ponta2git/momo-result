@@ -18,11 +18,12 @@ import { createTestQueryClient } from "@/test/queryClient";
 
 setupMsw();
 
-// This suite observes refresh after an initial result; cold route loading is covered by app routing.
+// Prepare real lazy modules before observing refresh of an initial result.
 beforeAll(() =>
   Promise.all([
+    import("@/shared/api/generatedContracts/series-analysis-envelope-validators.generated"),
     import("@/features/seriesComparison/page/SeriesAnalysisFlowView"),
-    decodeSeriesAnalysisArtifact("aggregateV4", makeSeriesAnalysisAggregate()),
+    decodeSeriesAnalysisArtifact("aggregateV5", makeSeriesAnalysisAggregate()),
   ]),
 );
 
@@ -32,7 +33,7 @@ describe("SeriesComparisonPage manual refresh", () => {
     const aggregateGate = createDeferred();
     let aggregateRequests = 0;
     server.use(
-      http.get("/api/analytics/series-comparison/v4/aggregate", async () => {
+      http.get("/api/analytics/series-comparison/v5/aggregate", async () => {
         aggregateRequests += 1;
         if (aggregateRequests > 1) await aggregateGate.promise;
         return HttpResponse.json(makeSeriesAnalysisAggregate());
@@ -46,10 +47,13 @@ describe("SeriesComparisonPage manual refresh", () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
+    await waitFor(() => {
+      expect(aggregateRequests).toBe(1);
+      expect(queryClient.isFetching()).toBe(0);
+    });
     const disclosure = await screen.findByRole("button", {
       name: "4人の累積入賞率の推移の数値を表で見る",
     });
-    await waitFor(() => expect(queryClient.isFetching()).toBe(0));
 
     await user.click(screen.getByRole("button", { name: "表示を更新" }));
     await waitFor(() => expect(aggregateRequests).toBe(2));

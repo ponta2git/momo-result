@@ -2,7 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { SeriesAnalysisDisplayBundle } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
@@ -19,6 +19,14 @@ import {
   makeFourPlayerSeriesAnalysisMatchContext,
 } from "@/test/msw/seriesAnalysisFixtures";
 import { createTestQueryClient } from "@/test/queryClient";
+
+// Navigation assertions start after real lazy view modules are available.
+beforeAll(() =>
+  Promise.all([
+    import("@/features/seriesComparison/page/SeriesAnalysisContextView"),
+    import("@/features/seriesComparison/page/SeriesAnalysisOverviewView"),
+  ]),
+);
 
 type AnalysisViewId = Exclude<SeriesAnalysisViewId, "review">;
 

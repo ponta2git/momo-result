@@ -149,82 +149,10 @@ pub(super) async fn schedule_follow_up(
     claim: &ClaimedJob,
     effects: &mut TransactionEffects,
 ) -> Result<(), ControlError> {
-    let pending = transaction
-        .query_opt(
-            "SELECT id, trigger FROM series_analysis_job_requests\x20\
-             WHERE game_title_id = $1 AND status = 'pending'\x20\
-             ORDER BY accepted_at, id LIMIT 1 FOR UPDATE",
-            &[&claim.game_title_id],
-        )
-        .await?;
-    let Some(pending) = pending else {
-        return Ok(());
-    };
-    let request_id = pending.try_get::<_, String>(0)?;
-    let trigger = pending.try_get::<_, String>(1)?;
-    let desired = transaction
-        .query_one(
-            "SELECT input_revision, algorithm_version, artifact_schema_version, validation_contract_id\x20\
-             FROM series_analysis_title_states WHERE game_title_id = $1",
-            &[&claim.game_title_id],
-        )
-        .await?;
-    let desired_revision = desired.try_get::<_, i64>(0)?;
-    let desired_algorithm = desired.try_get::<_, String>(1)?;
-    let desired_schema = desired.try_get::<_, i32>(2)?;
-    let desired_validation_contract = desired.try_get::<_, Option<String>>(3)?;
-    let next_job_id = stable_id(
-        "analysis-job-followup",
-        &[&claim.game_title_id, &request_id],
-    );
-    transaction
-        .execute(
-            "INSERT INTO series_analysis_jobs (id, game_title_id, input_revision,\x20\
-               algorithm_version, artifact_schema_version, validation_contract_id, status,\x20\
-               trigger, requested_at, available_at)\x20\
-             VALUES ($1,$2,$3,$4,$5,$6,'queued',$7,clock_timestamp(),clock_timestamp())",
-            &[
-                &next_job_id,
-                &claim.game_title_id,
-                &desired_revision,
-                &desired_algorithm,
-                &desired_schema,
-                &desired_validation_contract,
-                &trigger,
-            ],
-        )
-        .await?;
-    transaction
-        .execute(
-            "UPDATE series_analysis_job_requests SET assigned_job_id = $1, assigned_attempt_id = NULL\x20\
-             WHERE game_title_id = $2 AND status = 'pending'",
-            &[&next_job_id, &claim.game_title_id],
-        )
-        .await?;
-    transaction
-        .execute(
-            "UPDATE series_analysis_title_states SET pending_work = true,\x20\
-               pending_forced_run_count = 0, updated_at = clock_timestamp()\x20\
-             WHERE game_title_id = $1",
-            &[&claim.game_title_id],
-        )
-        .await?;
-    transaction
-        .execute(
-            "UPDATE series_analysis_campaign_targets t SET status = 'expanded', updated_at = clock_timestamp()\x20\
-             FROM series_analysis_job_requests r\x20\
-             WHERE t.job_request_id = r.id AND r.assigned_job_id = $1",
-            &[&next_job_id],
-        )
-        .await?;
-    enqueue_delivery(
-        transaction,
-        &next_job_id,
-        DeliveryReason::FollowUp,
-        0,
-        effects,
-    )
-    .await
+    if super::radar::materialize_next(transaction, &claim.game_title_id).await? {
+        effects.record_series_analysis();
+    }
+    Ok(())
 }
 
 pub(super) async fn refresh_operation_projections(

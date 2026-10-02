@@ -29,6 +29,7 @@ export function SeriesAnalysisScopeBar({
   onSeriesChange,
   refreshing,
   response,
+  scopeEmpty = false,
   seasonOptions,
   seasonValue,
   seriesOptions,
@@ -44,6 +45,7 @@ export function SeriesAnalysisScopeBar({
   onSeriesChange: (value: string) => void;
   refreshing: boolean;
   response: SeriesAnalysisResourceSummary | undefined;
+  scopeEmpty?: boolean;
   seasonOptions: SelectOption[];
   seasonValue: string;
   seriesOptions: Array<SelectOption & { summaryLabel?: string | undefined }>;
@@ -82,11 +84,13 @@ export function SeriesAnalysisScopeBar({
                 {selectedSeries?.summaryLabel ?? selectedSeries?.label ?? "対象作品を選択"}
               </span>
               <span className={cn(contentText.supporting, "tabular-nums")}>
-                {response
-                  ? `${response.scope.matchCount}戦`
-                  : loading
-                    ? "対戦数を確認中"
-                    : "対戦数未取得"}
+                {scopeEmpty
+                  ? "0戦"
+                  : response
+                    ? `${response.scope.matchCount}戦`
+                    : loading
+                      ? "対戦数を確認中"
+                      : "対戦数未取得"}
               </span>
               {detailFilterLabels.length > 0 ? (
                 <span className={contentText.supporting}>{detailFilterLabels.join("・")}</span>
@@ -132,11 +136,13 @@ export function SeriesAnalysisScopeBar({
       </Disclosure>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className={cn(contentText.supporting, "tabular-nums")}>
-          {response
-            ? `最終更新 ${formatDateTimeLong(response.artifact.publishedAt)}`
-            : loading
-              ? "分析結果を読み込み中"
-              : "分析結果は未取得です"}
+          {scopeEmpty
+            ? "対象試合なし"
+            : response
+              ? `最終更新 ${formatDateTimeLong(response.artifact.publishedAt)}`
+              : loading
+                ? "分析結果を読み込み中"
+                : "分析結果は未取得です"}
         </span>
         <Button
           disabled={!canRefresh}

@@ -1,0 +1,639 @@
+{
+  "$comment": "Generated from apps/processing-worker/crates/analysis-core/src/payload/schema.rs; do not edit by hand. Draft 2020-12 keywords describe the portable shape, type, and bounds subset. x-momo-maxUtf8Bytes, x-momo-finiteF64, and x-momo-integerToken record constraints additionally enforced by the Rust owner validator; generic JSON Schema validation that ignores these annotations is not fully equivalent.",
+  "$id": "https://momo-result.local/schemas/series-player-radar-evaluation-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "basisChecksum": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string",
+          "x-momo-maxUtf8Bytes": 4096
+        }
+      ]
+    },
+    "definitionVersion": {
+      "const": "player-radar-six-axes-v1",
+      "type": "string"
+    },
+    "methodVersion": {
+      "const": "player-radar-spread-v1",
+      "type": "string"
+    },
+    "players": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "axes": {
+            "items": false,
+            "maxItems": 6,
+            "minItems": 6,
+            "prefixItems": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "axisId": {
+                    "enum": [
+                      "averageRank",
+                      "revenueP90",
+                      "revenueAverage",
+                      "totalAssetsP10",
+                      "totalAssetsMedian",
+                      "totalAssetsP90"
+                    ],
+                    "type": "string"
+                  },
+                  "rawValue": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "maximum": 1.7976931348623157e+308,
+                        "minimum": -1.7976931348623157e+308,
+                        "type": "number",
+                        "x-momo-finiteF64": true
+                      }
+                    ]
+                  },
+                  "sampleQuality": {
+                    "enum": [
+                      "no_target",
+                      "insufficient",
+                      "reference",
+                      "standard"
+                    ],
+                    "type": "string"
+                  },
+                  "score": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "maximum": 10,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-momo-integerToken": true
+                      }
+                    ]
+                  },
+                  "scoreUnavailableReasons": {
+                    "items": {
+                      "enum": [
+                        "no_target",
+                        "insufficient_matches",
+                        "basis_unavailable"
+                      ],
+                      "type": "string"
+                    },
+                    "maxItems": 2,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "axisId",
+                  "rawValue",
+                  "sampleQuality",
+                  "score",
+                  "scoreUnavailableReasons"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "axisId": {
+                    "enum": [
+                      "averageRank",
+                      "revenueP90",
+                      "revenueAverage",
+                      "totalAssetsP10",
+                      "totalAssetsMedian",
+                      "totalAssetsP90"
+                    ],
+                    "type": "string"
+                  },
+                  "rawValue": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "maximum": 1.7976931348623157e+308,
+                        "minimum": -1.7976931348623157e+308,
+                        "type": "number",
+                        "x-momo-finiteF64": true
+                      }
+                    ]
+                  },
+                  "sampleQuality": {
+                    "enum": [
+                      "no_target",
+                      "insufficient",
+                      "reference",
+                      "standard"
+                    ],
+                    "type": "string"
+                  },
+                  "score": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "maximum": 10,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-momo-integerToken": true
+                      }
+                    ]
+                  },
+                  "scoreUnavailableReasons": {
+                    "items": {
+                      "enum": [
+                        "no_target",
+                        "insufficient_matches",
+                        "basis_unavailable"
+                      ],
+                      "type": "string"
+                    },
+                    "maxItems": 2,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "axisId",
+                  "rawValue",
+                  "sampleQuality",
+                  "score",
+                  "scoreUnavailableReasons"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "axisId": {
+                    "enum": [
+                      "averageRank",
+                      "revenueP90",
+                      "revenueAverage",
+                      "totalAssetsP10",
+                      "totalAssetsMedian",
+                      "totalAssetsP90"
+                    ],
+                    "type": "string"
+                  },
+                  "rawValue": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "maximum": 1.7976931348623157e+308,
+                        "minimum": -1.7976931348623157e+308,
+                        "type": "number",
+                        "x-momo-finiteF64": true
+                      }
+                    ]
+                  },
+                  "sampleQuality": {
+                    "enum": [
+                      "no_target",
+                      "insufficient",
+                      "reference",
+                      "standard"
+                    ],
+                    "type": "string"
+                  },
+                  "score": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "maximum": 10,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-momo-integerToken": true
+                      }
+                    ]
+                  },
+                  "scoreUnavailableReasons": {
+                    "items": {
+                      "enum": [
+                        "no_target",
+                        "insufficient_matches",
+                        "basis_unavailable"
+                      ],
+                      "type": "string"
+                    },
+                    "maxItems": 2,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "axisId",
+                  "rawValue",
+                  "sampleQuality",
+                  "score",
+                  "scoreUnavailableReasons"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "axisId": {
+                    "enum": [
+                      "averageRank",
+                      "revenueP90",
+                      "revenueAverage",
+                      "totalAssetsP10",
+                      "totalAssetsMedian",
+                      "totalAssetsP90"
+                    ],
+                    "type": "string"
+                  },
+                  "rawValue": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "maximum": 1.7976931348623157e+308,
+                        "minimum": -1.7976931348623157e+308,
+                        "type": "number",
+                        "x-momo-finiteF64": true
+                      }
+                    ]
+                  },
+                  "sampleQuality": {
+                    "enum": [
+                      "no_target",
+                      "insufficient",
+                      "reference",
+                      "standard"
+                    ],
+                    "type": "string"
+                  },
+                  "score": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "maximum": 10,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-momo-integerToken": true
+                      }
+                    ]
+                  },
+                  "scoreUnavailableReasons": {
+                    "items": {
+                      "enum": [
+                        "no_target",
+                        "insufficient_matches",
+                        "basis_unavailable"
+                      ],
+                      "type": "string"
+                    },
+                    "maxItems": 2,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "axisId",
+                  "rawValue",
+                  "sampleQuality",
+                  "score",
+                  "scoreUnavailableReasons"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "axisId": {
+                    "enum": [
+                      "averageRank",
+                      "revenueP90",
+                      "revenueAverage",
+                      "totalAssetsP10",
+                      "totalAssetsMedian",
+                      "totalAssetsP90"
+                    ],
+                    "type": "string"
+                  },
+                  "rawValue": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "maximum": 1.7976931348623157e+308,
+                        "minimum": -1.7976931348623157e+308,
+                        "type": "number",
+                        "x-momo-finiteF64": true
+                      }
+                    ]
+                  },
+                  "sampleQuality": {
+                    "enum": [
+                      "no_target",
+                      "insufficient",
+                      "reference",
+                      "standard"
+                    ],
+                    "type": "string"
+                  },
+                  "score": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "maximum": 10,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-momo-integerToken": true
+                      }
+                    ]
+                  },
+                  "scoreUnavailableReasons": {
+                    "items": {
+                      "enum": [
+                        "no_target",
+                        "insufficient_matches",
+                        "basis_unavailable"
+                      ],
+                      "type": "string"
+                    },
+                    "maxItems": 2,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "axisId",
+                  "rawValue",
+                  "sampleQuality",
+                  "score",
+                  "scoreUnavailableReasons"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "axisId": {
+                    "enum": [
+                      "averageRank",
+                      "revenueP90",
+                      "revenueAverage",
+                      "totalAssetsP10",
+                      "totalAssetsMedian",
+                      "totalAssetsP90"
+                    ],
+                    "type": "string"
+                  },
+                  "rawValue": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "maximum": 1.7976931348623157e+308,
+                        "minimum": -1.7976931348623157e+308,
+                        "type": "number",
+                        "x-momo-finiteF64": true
+                      }
+                    ]
+                  },
+                  "sampleQuality": {
+                    "enum": [
+                      "no_target",
+                      "insufficient",
+                      "reference",
+                      "standard"
+                    ],
+                    "type": "string"
+                  },
+                  "score": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "maximum": 10,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-momo-integerToken": true
+                      }
+                    ]
+                  },
+                  "scoreUnavailableReasons": {
+                    "items": {
+                      "enum": [
+                        "no_target",
+                        "insufficient_matches",
+                        "basis_unavailable"
+                      ],
+                      "type": "string"
+                    },
+                    "maxItems": 2,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "axisId",
+                  "rawValue",
+                  "sampleQuality",
+                  "score",
+                  "scoreUnavailableReasons"
+                ],
+                "type": "object"
+              }
+            ],
+            "type": "array"
+          },
+          "memberId": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string",
+            "x-momo-maxUtf8Bytes": 4096
+          }
+        },
+        "required": [
+          "axes",
+          "memberId"
+        ],
+        "type": "object"
+      },
+      "maxItems": 4,
+      "type": "array"
+    },
+    "sample": {
+      "additionalProperties": false,
+      "properties": {
+        "firstMatch": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "heldEventId": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "matchId": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "matchNoInEvent": {
+                  "maximum": 2147483647,
+                  "minimum": 1,
+                  "type": "integer",
+                  "x-momo-integerToken": true
+                },
+                "playedAt": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                }
+              },
+              "required": [
+                "heldEventId",
+                "matchId",
+                "matchNoInEvent",
+                "playedAt"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "heldEventCount": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "integer",
+          "x-momo-integerToken": true
+        },
+        "lastMatch": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "heldEventId": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "matchId": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "matchNoInEvent": {
+                  "maximum": 2147483647,
+                  "minimum": 1,
+                  "type": "integer",
+                  "x-momo-integerToken": true
+                },
+                "playedAt": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                }
+              },
+              "required": [
+                "heldEventId",
+                "matchId",
+                "matchNoInEvent",
+                "playedAt"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "mapCounts": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "mapMasterId": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string",
+                "x-momo-maxUtf8Bytes": 4096
+              },
+              "matchCount": {
+                "maximum": 1000000,
+                "minimum": 0,
+                "type": "integer",
+                "x-momo-integerToken": true
+              }
+            },
+            "required": [
+              "mapMasterId",
+              "matchCount"
+            ],
+            "type": "object"
+          },
+          "maxItems": 25000,
+          "type": "array"
+        },
+        "matchCount": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "integer",
+          "x-momo-integerToken": true
+        },
+        "quality": {
+          "enum": [
+            "no_target",
+            "insufficient",
+            "reference",
+            "standard"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "firstMatch",
+        "heldEventCount",
+        "lastMatch",
+        "mapCounts",
+        "matchCount",
+        "quality"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "basisChecksum",
+    "definitionVersion",
+    "methodVersion",
+    "players",
+    "sample"
+  ],
+  "title": "Series Player Radar Evaluation v1",
+  "type": "object"
+}

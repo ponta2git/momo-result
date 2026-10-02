@@ -23,7 +23,7 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
 
   test("accepts the Rust-attested owner resource fixtures"):
     assert(validate(
-      sharedFixture("aggregate-payload-v5.json"),
+      sharedFixture("aggregate-payload-v6.json"),
       simpleRequest(SeriesAnalysisChunkKind.Aggregate),
       None,
     ))
@@ -60,13 +60,13 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
 
   test("accepts only the current artifact and payload generations"):
     List(
-      (SeriesAnalysisChunkKind.Aggregate, "aggregate-payload-v5.json", List(2, 3, 4)),
+      (SeriesAnalysisChunkKind.Aggregate, "aggregate-payload-v6.json", List(2, 3, 4, 5)),
       (SeriesAnalysisChunkKind.Review, "review-payload-v4.json", List(2, 3)),
     ).foreach { case (kind, file, obsoletePayloadVersions) =>
       val current = sharedFixture(file)
       val request = simpleRequest(kind)
-      assert(validate(current, request, None, 4))
-      List(0, 1, 2, 3, 5, 99).foreach(version =>
+      assert(validate(current, request, None, 5))
+      List(0, 1, 2, 3, 4, 99).foreach(version =>
         assert(!validate(current, request, None, version))
       )
       obsoletePayloadVersions.foreach(version =>
@@ -74,13 +74,13 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
           current.mapObject(_.add("schemaVersion", Json.fromInt(version))),
           request,
           None,
-          4
+          5
         ))
       )
     }
     val currentId = SeriesAnalysisArtifactContract.ValidationContractId
-    assert(SeriesAnalysisArtifactContract.supports(4, Some(currentId)))
-    List(0, 1, 2, 3, 5, 99).foreach(version =>
+    assert(SeriesAnalysisArtifactContract.supports(5, Some(currentId)))
+    List(0, 1, 2, 3, 4, 99).foreach(version =>
       assert(!SeriesAnalysisArtifactContract.supports(version, Some(currentId)))
     )
     List(
@@ -89,7 +89,7 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
       Some("series-analysis-artifact-v3-full-validation-v1"),
       Some("unknown")
     ).foreach(id =>
-      assert(!SeriesAnalysisArtifactContract.supports(4, id))
+      assert(!SeriesAnalysisArtifactContract.supports(5, id))
     )
 
   test("keeps the API drilldown vocabulary aligned with the owner schema"):
@@ -106,12 +106,12 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
 
   test("rejects generated-shape and request-identity mismatches"):
     assert(!validate(
-      sharedFixture("aggregate-payload-v5.json").mapObject(_.add("unexpected", Json.True)),
+      sharedFixture("aggregate-payload-v6.json").mapObject(_.add("unexpected", Json.True)),
       simpleRequest(SeriesAnalysisChunkKind.Aggregate),
       None,
     ))
     assert(!validate(
-      sharedFixture("aggregate-payload-v5.json"),
+      sharedFixture("aggregate-payload-v6.json"),
       simpleRequest(SeriesAnalysisChunkKind.Aggregate).copy(
         scope = SeriesAnalysisScope.Season(
           SeasonMasterId.unsafeFromString("season-other")
@@ -151,7 +151,7 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
     ))
 
   test("rejects nested shape violations and unsigned-field underflow"):
-    val aggregate = sharedFixture("aggregate-payload-v5.json")
+    val aggregate = sharedFixture("aggregate-payload-v6.json")
     val emptySummary = aggregate.hcursor.downField("summary")
       .withFocus(_ => Json.obj()).top.getOrElse(fail("failed to replace aggregate summary"))
     val negativeCount = aggregate.hcursor.downField("summary").downField("totalGinjiCount")
@@ -163,7 +163,7 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
     )
 
   test("derives and enforces the Rust owner's UTF-8 byte bound"):
-    val oversized = sharedFixture("aggregate-payload-v5.json").hcursor
+    val oversized = sharedFixture("aggregate-payload-v6.json").hcursor
       .downField("source").downField("gameTitleId")
       .withFocus(_ => Json.fromString("あ" * 1400)).top
       .getOrElse(fail("failed to replace aggregate source gameTitleId"))
@@ -209,7 +209,7 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
       request: SeriesAnalysisChunkRequest,
       revision: Option[Long]
   ): Boolean =
-    validate(json, request, revision, 4)
+    validate(json, request, revision, 5)
 
   private def validate(
       json: Json,

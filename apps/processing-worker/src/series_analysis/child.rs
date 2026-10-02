@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use momo_analysis_core::{child::AnalysisAttemptIdentity, model::NormalizedAnalysisInput};
+use momo_analysis_core::child::AnalysisAttemptIdentity;
 
 use crate::{
     postgres::{PostgresError, open},
@@ -20,7 +20,7 @@ use super::{
     artifact::{ArtifactBuildRequest, ArtifactError, build_artifact},
     child_report::{self, ChildPhase, ChildReport, ChildReportMetrics, ChildReportOutcome},
     control::ALGORITHM_VERSION,
-    input_repository::{InputRepositoryError, load_analysis_input},
+    input_repository::{InputRepositoryError, LoadedInput, load_job_input},
 };
 
 pub(crate) struct AnalysisChildExecutionConfig<'a> {
@@ -109,9 +109,45 @@ async fn execute_inner(
         .ok_or(ChildFailure::CalculationFailed)?;
     telemetry.phase = ChildPhase::InputSnapshot;
     let input_started = Instant::now();
-    let input = load_input_snapshot(&read_database_url, &config.identity).await;
+    let loaded_result = load_input_snapshot(&read_database_url, &config.identity).await;
     telemetry.metrics.input_milliseconds = milliseconds(input_started.elapsed());
-    let input = input?;
+    let loaded = loaded_result?;
+    let mut input = loaded.input;
+    if let Some(context) = loaded.context.as_ref()
+        && context.work_kind == "radar_prepare"
+    {
+        telemetry.phase = ChildPhase::ArtifactBuild;
+        let started = Instant::now();
+        let preparation = super::radar_prepare::compute(&input, context)
+            .map_err(|_error| ChildFailure::InputInvalid)?;
+        telemetry.metrics.calculation_milliseconds = milliseconds(started.elapsed());
+        let encoding_started = Instant::now();
+        let bytes = super::radar_prepare::write(
+            config.output_directory,
+            &preparation,
+            config
+                .maximum_total_bytes
+                .saturating_sub(child_report::RESERVED_BYTES),
+        )
+        .map_err(|_error| ChildFailure::ArtifactTooLarge)?;
+        telemetry.metrics.encoding_milliseconds = milliseconds(encoding_started.elapsed());
+        telemetry.metrics.input_row_count = u64::try_from(input.player_matches().len())
+            .map_err(|_error| ChildFailure::ArtifactTooLarge)?;
+        telemetry.metrics.artifact_chunk_count = 1;
+        telemetry.metrics.artifact_payload_bytes = bytes;
+        telemetry.metrics.artifact_temporary_bytes = bytes;
+        telemetry.phase = ChildPhase::Complete;
+        return Ok(());
+    }
+    if let Some(context) = loaded.context.as_ref() {
+        let monitoring = momo_analysis_core::radar::monitor(
+            &input,
+            context.basis.as_ref(),
+            context.source.as_ref(),
+        )
+        .map_err(|_error| ChildFailure::InputInvalid)?;
+        input = input.with_radar_monitoring(monitoring);
+    }
     telemetry.metrics.input_row_count = u64::try_from(input.player_matches().len())
         .map_err(|_error| ChildFailure::CalculationFailed)?;
     if input
@@ -158,12 +194,12 @@ async fn execute_inner(
 async fn load_input_snapshot(
     database_url: &str,
     identity: &AnalysisAttemptIdentity,
-) -> Result<NormalizedAnalysisInput, ChildFailure> {
+) -> Result<LoadedInput, ChildFailure> {
     let (mut client, mut connection) = open(database_url)
         .await
         .map_err(|error| map_postgres_failure(&error))?;
     tokio::select! {
-        result = load_analysis_input(&mut client, &identity.game_title_id, identity.input_revision) => {
+        result = load_job_input(&mut client, identity) => {
             result.map_err(|error| map_input_repository_failure(&error))
         }
         _result = &mut connection => Err(ChildFailure::DependencyFailed),
@@ -200,7 +236,9 @@ const fn map_artifact_failure(error: &ArtifactError) -> ChildFailure {
         ArtifactError::ResourceBound | ArtifactError::NumericConversion(_) => {
             ChildFailure::ArtifactTooLarge
         }
-        ArtifactError::Canonical(_) | ArtifactError::Contract(_) => ChildFailure::InputInvalid,
+        ArtifactError::Canonical(_) | ArtifactError::Contract(_) | ArtifactError::Radar(_) => {
+            ChildFailure::InputInvalid
+        }
         ArtifactError::UnsafeDirectory | ArtifactError::Io(_) | ArtifactError::Payload(_) => {
             ChildFailure::CalculationFailed
         }

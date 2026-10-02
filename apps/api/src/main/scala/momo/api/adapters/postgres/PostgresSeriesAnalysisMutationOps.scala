@@ -24,7 +24,7 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
       validationContractId: Option[String],
   )
 
-  private final case class ActiveJob(id: String, status: String)
+  private final case class ActiveJob(id: String, status: String, workKind: String)
 
   def enqueueMatchMutation(gameTitleIds: List[GameTitleId]): ConnectionIO[Unit] = gameTitleIds
     .distinct.sortBy(_.value).traverse_(enqueueTitle)
@@ -58,7 +58,7 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
         else
           MonadThrow[ConnectionIO].raiseError(new AppException(AppError.AnalysisStateUnavailable()))
       active <- sql"""
-        SELECT id, status
+        SELECT id, status, work_kind
         FROM series_analysis_jobs
         WHERE game_title_id = $gameTitleId
           AND status IN ('queued', 'running')
@@ -72,7 +72,10 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
         desired.artifactSchemaVersion.toString,
         SeriesAnalysisArtifactContract.ValidationContractId,
       )
-      jobId = active.fold(derivedJobId)(_.id)
+      jobId = active match
+        case None => Some(derivedJobId)
+        case Some(job) if job.workKind == "analysis" => Some(job.id)
+        case Some(_) => None
       requestId = stableId(
         "analysis-request",
         gameTitleId.value,
@@ -103,7 +106,7 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
               'match_mutation'
             )
           """.update.run.void
-        case Some(job) if job.status == "queued" =>
+        case Some(job) if job.status == "queued" && job.workKind == "analysis" =>
           sql"""
             UPDATE series_analysis_jobs
             SET input_revision = ${desired.inputRevision},
@@ -142,13 +145,15 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
         ON CONFLICT (id) DO NOTHING
       """.update.run.void
       _ <- active match
-        case Some(job) if job.status == "running" => ().pure[ConnectionIO]
+        case Some(job) if job.status == "running" || job.workKind != "analysis" =>
+          ().pure[ConnectionIO]
         case _ =>
-          val outboxId = stableId("analysis-outbox", jobId, desired.inputRevision.toString)
-          val dedupeKey = s"$jobId:${desired.inputRevision.toString}"
+          val assignedJobId = jobId.getOrElse(derivedJobId)
+          val outboxId = stableId("analysis-outbox", assignedJobId, desired.inputRevision.toString)
+          val dedupeKey = s"$assignedJobId:${desired.inputRevision.toString}"
           sql"""
             INSERT INTO series_analysis_queue_outbox (id, job_id, dedupe_key)
-            VALUES ($outboxId, $jobId, $dedupeKey)
+            VALUES ($outboxId, $assignedJobId, $dedupeKey)
             ON CONFLICT (dedupe_key) DO NOTHING
           """.update.run.void
     yield ()

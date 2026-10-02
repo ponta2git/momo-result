@@ -109,7 +109,7 @@ export const seriesAnalysisKeys = {
     ["series-analysis", "status", "v2", gameTitleId ?? "none"] as const,
   artifactRoot: () => ["series-analysis", "artifact", "v3"] as const,
   aggregate: (params: unknown) =>
-    ["series-analysis", "artifact", "v3", "aggregate", "http-v3", params] as const,
+    ["series-analysis", "artifact", "v3", "aggregate", "http-v5", params] as const,
   review: (params: unknown) => ["series-analysis", "artifact", "v3", "review", params] as const,
   drilldown: (params: unknown) =>
     ["series-analysis", "artifact", "v3", "drilldown", params] as const,
@@ -119,4 +119,42 @@ export const seriesAnalysisKeys = {
   adminRoot: () => ["series-analysis", "admin", "overview"] as const,
   adminOverview: (gameTitleId: string | undefined) =>
     ["series-analysis", "admin", "overview", gameTitleId ?? "default"] as const,
+};
+
+export const seriesPlayerRadarKeys = {
+  all: () => ["series-analysis", "radar"] as const,
+  title: (gameTitleId: string) => ["series-analysis", "radar", gameTitleId] as const,
+  state: (gameTitleId: string | undefined) =>
+    ["series-analysis", "radar", gameTitleId ?? "none", "state-v1"] as const,
+  previewRoot: (gameTitleId: string) =>
+    ["series-analysis", "radar", gameTitleId, "preview-v1"] as const,
+  preview: (
+    query:
+      | {
+          gameTitleId: string;
+          previewId: string;
+          seasonMasterId?: string | undefined;
+          mapMasterId?: string | undefined;
+        }
+      | undefined,
+  ) => ["series-analysis", "radar", query?.gameTitleId ?? "none", "preview-v1", query] as const,
+  operation: (gameTitleId: string | undefined, operationId: string | undefined) =>
+    [
+      "series-analysis",
+      "radar",
+      gameTitleId ?? "none",
+      "operation-v1",
+      operationId ?? "none",
+    ] as const,
+  scopeStatusRoot: () => ["series-analysis", "scope-status", "v2"] as const,
+  scopeStatus: (
+    query:
+      | {
+          gameTitleId: string;
+          artifactId?: string | undefined;
+          seasonMasterId?: string | undefined;
+          mapMasterId?: string | undefined;
+        }
+      | undefined,
+  ) => ["series-analysis", "scope-status", "v2", query] as const,
 };

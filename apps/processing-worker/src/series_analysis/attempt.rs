@@ -58,6 +58,7 @@ pub(super) fn child_spec(
         .ok_or(ConsumerError::DurationBound)?;
     Ok(AnalysisChildProcessSpec {
         identity: momo_analysis_core::child::AnalysisAttemptIdentity {
+            job_id: claim.job_id.clone(),
             game_title_id: claim.game_title_id.clone(),
             input_revision: claim.input_revision,
             artifact_id: artifact_id_for_attempt(&claim.attempt_id),
@@ -656,7 +657,9 @@ async fn finish_successful_child(
     metrics.observe_worker_peak(current_process_peak_resident_bytes().await);
     match result {
         Ok(Ok(outcome)) => match outcome.value {
-            publication @ (PublicationResult::Published | PublicationResult::Reused) => {
+            publication @ (PublicationResult::Published
+            | PublicationResult::Reused
+            | PublicationResult::Prepared) => {
                 log_attempt_success(publication, metrics);
                 Ok(outcome.map(|_| DeliveryDisposition::Acknowledge))
             }
@@ -756,14 +759,14 @@ async fn publish_with_deadline(
     let finalization_deadline = time::Instant::now() + config.execution_limits.finalization_timeout;
     time::timeout_at(
         finalization_deadline,
-        publish(
+        Box::pin(publish(
             control_client,
             claim,
             config,
             attempt_directory,
             metrics,
             finalization_deadline,
-        ),
+        )),
     )
     .await
 }
@@ -849,6 +852,7 @@ mod tests {
     fn test_child_spec(directory: &std::path::Path) -> AnalysisChildProcessSpec {
         AnalysisChildProcessSpec {
             identity: momo_analysis_core::child::AnalysisAttemptIdentity {
+                job_id: String::from("job-1"),
                 game_title_id: String::from("title-1"),
                 input_revision: 1,
                 artifact_id: String::from("artifact-1"),

@@ -28,7 +28,7 @@ beforeAll(() =>
   Promise.all([
     import("@/features/seriesComparison/page/SeriesAnalysisOverviewView"),
     import("@/features/seriesComparison/page/SeriesAnalysisReviewView"),
-    decodeSeriesAnalysisArtifact("aggregateV4", makeSeriesAnalysisAggregate()),
+    decodeSeriesAnalysisArtifact("aggregateV5", makeSeriesAnalysisAggregate()),
     decodeSeriesAnalysisArtifact("reviewV3", makeSeriesAnalysisReview()),
   ]),
 );
@@ -130,7 +130,7 @@ describe("SeriesComparisonPage resource lifecycle", () => {
           }),
         ),
       ),
-      http.get("/api/analytics/series-comparison/v4/aggregate", ({ request }) => {
+      http.get("/api/analytics/series-comparison/v5/aggregate", ({ request }) => {
         artifactRequests.push(request.url);
         return HttpResponse.json(makeSeriesAnalysisAggregate());
       }),
@@ -166,7 +166,7 @@ describe("SeriesComparisonPage resource lifecycle", () => {
         }),
         ...(["aggregate", "review"] as const).map((kind) =>
           http.get(
-            `/api/analytics/series-comparison/${kind === "aggregate" ? "v4" : "v3"}/${kind}`,
+            `/api/analytics/series-comparison/${kind === "aggregate" ? "v5" : "v3"}/${kind}`,
             ({ request }) => {
               const artifactId = new URL(request.url).searchParams.get("artifactId");
               artifactRequests.push({ kind, artifactId });
@@ -233,7 +233,7 @@ describe("SeriesComparisonPage resource lifecycle", () => {
     const aggregateSearches: URLSearchParams[] = [];
     const reviewSearches: URLSearchParams[] = [];
     server.use(
-      http.get("/api/analytics/series-comparison/v4/aggregate", async ({ request }) => {
+      http.get("/api/analytics/series-comparison/v5/aggregate", async ({ request }) => {
         aggregateSearches.push(new URL(request.url).searchParams);
         await aggregateResponseGate.promise;
         return HttpResponse.json(makeSeriesAnalysisAggregate());
@@ -289,7 +289,7 @@ describe("SeriesComparisonPage resource lifecycle", () => {
     const user = userEvent.setup();
     const aggregateSearches: URLSearchParams[] = [];
     server.use(
-      http.get("/api/analytics/series-comparison/v4/aggregate", ({ request }) => {
+      http.get("/api/analytics/series-comparison/v5/aggregate", ({ request }) => {
         aggregateSearches.push(new URL(request.url).searchParams);
         return HttpResponse.json(makeSeriesAnalysisAggregate());
       }),

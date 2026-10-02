@@ -9,7 +9,13 @@ import {
   invalidateAfterMatchUpdated,
   invalidateAfterOcrSubmissionStarted,
 } from "@/shared/api/cacheInvalidation";
-import { heldEventKeys, matchKeys, ocrDraftKeys, seriesAnalysisKeys } from "@/shared/api/queryKeys";
+import {
+  heldEventKeys,
+  matchKeys,
+  ocrDraftKeys,
+  seriesAnalysisKeys,
+  seriesPlayerRadarKeys,
+} from "@/shared/api/queryKeys";
 import { heldEventsQueryOptions, matchListQueryOptions } from "@/shared/api/queryOptions";
 import { createTestQueryClient } from "@/test/queryClient";
 
@@ -50,6 +56,8 @@ describe("shared query keys", () => {
     queryClient.setQueryData(seriesAnalysisKeys.options(), { titles: [] });
     queryClient.setQueryData(seriesAnalysisKeys.status("gt-1"), { gameTitleId: "gt-1" });
     queryClient.setQueryData(seriesAnalysisKeys.adminOverview("gt-1"), { recentJobs: [] });
+    queryClient.setQueryData(seriesPlayerRadarKeys.state("gt-1"), {});
+    queryClient.setQueryData(seriesPlayerRadarKeys.scopeStatus({ gameTitleId: "gt-1" }), {});
     queryClient.setQueryData(seriesAnalysisKeys.aggregate({ artifactId: "artifact-1" }), {
       artifact: { artifactId: "artifact-1" },
     });
@@ -72,6 +80,13 @@ describe("shared query keys", () => {
       queryClient.getQueryState(heldEventKeys.list({ page: 1, pageSize: 20 }))?.isInvalidated,
     ).toBe(true);
     expect(queryClient.getQueryState(seriesAnalysisKeys.options())?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(seriesPlayerRadarKeys.state("gt-1"))?.isInvalidated).toBe(
+      true,
+    );
+    expect(
+      queryClient.getQueryState(seriesPlayerRadarKeys.scopeStatus({ gameTitleId: "gt-1" }))
+        ?.isInvalidated,
+    ).toBe(true);
     expect(queryClient.getQueryState(seriesAnalysisKeys.status("gt-1"))?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(seriesAnalysisKeys.adminOverview("gt-1"))?.isInvalidated).toBe(
       true,

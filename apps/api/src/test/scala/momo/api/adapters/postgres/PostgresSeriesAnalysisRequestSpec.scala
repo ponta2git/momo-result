@@ -22,8 +22,8 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
   private def seedTitle(id: GameTitleId): IO[Unit] =
     sql"""
       UPDATE series_analysis_release_state
-      SET algorithm_version = 'series-analysis-v5', artifact_schema_version = 4,
-          validation_contract_id = 'series-analysis-artifact-v4-full-validation-v1'
+      SET algorithm_version = 'series-analysis-v6', artifact_schema_version = 5,
+          validation_contract_id = 'series-analysis-artifact-v5-full-validation-v1'
       WHERE singleton_key = 'current'
     """.update.run.transact(transactor) *>
       new PostgresGameTitlesRepository[IO](transactor)

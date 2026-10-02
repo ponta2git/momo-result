@@ -65,10 +65,19 @@ object PostgresMatches extends PostgresMatchesReadSupport:
       """.update.run
       (for
         oldTitle <- previousTitle
+        previousRadarInput <- PostgresSeriesPlayerRadarMutationOps.inputIdentity(record.id)
         affected <- updateMatch
         _ <- if affected == 1 then replaceMatchChildren(record)
         else notFound[Unit]("match", record.id.value)
         _ <- enqueueMatchMutation(List(oldTitle, record.gameTitleId))
+        currentRadarInput <- PostgresSeriesPlayerRadarMutationOps.inputIdentity(record.id)
+        _ <- if previousRadarInput != currentRadarInput then
+          PostgresSeriesPlayerRadarMutationOps.changed(
+            List(oldTitle, record.gameTitleId),
+            record.id,
+            true
+          )
+        else ().pure[ConnectionIO]
       yield ()).exceptSomeSqlState {
         case state if isUniqueViolation(state) =>
           conflict[Unit](s"matchNoInEvent ${record.matchNoInEvent.value
@@ -91,7 +100,8 @@ object PostgresMatches extends PostgresMatchesReadSupport:
           .query[MatchDraftId].to[List]
         deleted <- sql"DELETE FROM matches WHERE id = $id".update.run.map(_ > 0)
         _ <- oldTitle.filter(_ => deleted).toList.traverse_(title =>
-          enqueueMatchMutation(List(title))
+          enqueueMatchMutation(List(title)) *>
+            PostgresSeriesPlayerRadarMutationOps.changed(List(title), id, true)
         )
         _ <- PostgresResultNotificationCancellation.afterDeletion(
           deletedDrafts,

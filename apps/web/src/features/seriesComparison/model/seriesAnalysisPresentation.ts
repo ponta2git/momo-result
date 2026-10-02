@@ -7,18 +7,15 @@ import type {
   SeriesAnalysisPlaybookEvidenceStrength,
 } from "@/shared/api/seriesAnalysis";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
-import { formatManYen as formatStoredManYen } from "@/shared/lib/formatters";
+import { formatDecimal, formatManYen as formatStoredManYen } from "@/shared/lib/formatters";
 
-const numberFormatter = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 2 });
+export { formatDecimal } from "@/shared/lib/formatters";
+
 const integerFormatter = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 0 });
 const percentFormatter = new Intl.NumberFormat("ja-JP", {
   maximumFractionDigits: 1,
   style: "percent",
 });
-
-export function formatDecimal(value: number | null | undefined): string {
-  return value === null || value === undefined ? "—" : numberFormatter.format(value);
-}
 
 export function formatInteger(value: number | null | undefined): string {
   return value === null || value === undefined ? "—" : integerFormatter.format(value);

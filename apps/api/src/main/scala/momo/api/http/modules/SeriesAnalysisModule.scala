@@ -5,9 +5,9 @@ import cats.syntax.all.*
 import sttp.tapir.server.ServerEndpoint
 
 import momo.api.auth.RateLimiter
-import momo.api.domain.SeriesAnalysisChunkKind
+import momo.api.domain.{SeriesAnalysisChunkKind, SeriesAnalysisScopeStatusRequest}
 import momo.api.endpoints.*
-import momo.api.endpoints.codec.SeriesAnalysisCodec
+import momo.api.endpoints.codec.{SeriesAnalysisCodec, SeriesPlayerRadarCodec}
 import momo.api.errors.AppError
 import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay, SecuredEndpoint}
 import momo.api.usecases.seriesanalysis.*
@@ -70,9 +70,27 @@ object SeriesAnalysisModule:
           )
         )
       },
+      SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.scopeStatus) { member => input =>
+        val decoded =
+          for
+            title <- SeriesAnalysisCodec.gameTitleId(input.gameTitleId)
+            artifact <- input.artifactId.traverse(SeriesPlayerRadarCodec.opaqueId("artifactId", _))
+            scope <- SeriesAnalysisCodec.scope(input.seasonMasterId, input.mapMasterId)
+          yield SeriesAnalysisScopeStatusRequest(title, artifact, scope)
+        read(
+          readRateLimiter,
+          member.accountId.value,
+          HttpOperation.GetSeriesAnalysisScopeStatus,
+          security.decode(decoded)(request =>
+            security.respond(getStatus.scope(request))(
+              SeriesAnalysisScopeStatusResponse.from
+            )
+          )
+        )
+      },
       scoped(
-        SeriesAnalysisEndpoints.aggregateV4,
-        HttpOperation.GetSeriesAnalysisAggregateV4,
+        SeriesAnalysisEndpoints.aggregateV5,
+        HttpOperation.GetSeriesAnalysisAggregateV5,
         SeriesAnalysisChunkKind.Aggregate,
       ),
       scoped(

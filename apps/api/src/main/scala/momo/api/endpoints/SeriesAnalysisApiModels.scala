@@ -28,7 +28,10 @@ object SeriesAnalysisApiSchemas:
   )
 
   given Schema[SeriesAnalysisDesiredResponse] = Schema.derived
-  given Schema[SeriesAnalysisArtifactRefResponse] = Schema.derived
+  given Schema[SeriesAnalysisArtifactRefResponse] =
+    Schema.derived[SeriesAnalysisArtifactRefResponse]
+      .modify(_.radarBasisCreatedAt)(requiredNullable)
+      .modify(_.radarBasisAppliedAt)(requiredNullable)
   given Schema[SeriesAnalysisCalculationResponse] = Schema
     .derived[SeriesAnalysisCalculationResponse]
     .modify(_.status)(_.validate(closedString(SeriesAnalysisVocabulary.JobStatuses)))

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-readonly analysis_smoke_algorithm_version="series-analysis-v5"
+readonly analysis_smoke_algorithm_version="series-analysis-v6"
 
 analysis_smoke_print_worker_diagnostics() {
   # Only bounded event/enum fields may reach CI output. Free-form messages and errors can contain

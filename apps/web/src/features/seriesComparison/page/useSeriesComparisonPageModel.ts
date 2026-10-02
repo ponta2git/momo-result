@@ -5,6 +5,7 @@ import { seriesAnalysisFocusExclusionNotice } from "@/features/seriesComparison/
 import { buildSeriesAnalysisFilterOptions } from "@/features/seriesComparison/model/seriesAnalysisFilterOptions";
 import { useSeriesAnalysisLocationState } from "@/features/seriesComparison/navigation/useSeriesAnalysisLocationState";
 import { useSeriesAnalysisResource } from "@/features/seriesComparison/page/useSeriesAnalysisResource";
+import { useSeriesAnalysisScopeIdentity } from "@/features/seriesComparison/page/useSeriesAnalysisScopeIdentity";
 import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { seriesAnalysisOptionsQueryOptions } from "@/shared/api/seriesAnalysisQueryOptions";
 import { useRetryNotice } from "@/shared/lib/useRetryNotice";
@@ -20,7 +21,9 @@ export function useSeriesComparisonPageModel() {
     isLoading: optionsLoading,
     refetch: refetchOptions,
   } = optionsQuery;
-  const location = useSeriesAnalysisLocationState(optionsData);
+  const scopeIdentity = useSeriesAnalysisScopeIdentity(optionsData);
+  const { isEnabled: identityEnabled, refetch: refetchIdentity } = scopeIdentity.query;
+  const location = useSeriesAnalysisLocationState(scopeIdentity.options);
   const {
     clearFocusedMatch,
     clearScope,
@@ -32,13 +35,14 @@ export function useSeriesComparisonPageModel() {
     updateOwnerMetric,
   } = location.actions;
   const filterOptions = useMemo(
-    () => buildSeriesAnalysisFilterOptions(optionsData, location.state),
-    [location.state, optionsData],
+    () => buildSeriesAnalysisFilterOptions(scopeIdentity.options, location.state),
+    [location.state, scopeIdentity.options],
   );
   const analysis = useSeriesAnalysisResource({
     activeView: location.activeView,
     deferredState: location.deferredState,
     state: location.state,
+    selectionReady: !scopeIdentity.pending,
   });
   const refreshAnalysis = analysis.refresh;
 
@@ -64,12 +68,14 @@ export function useSeriesComparisonPageModel() {
   );
   const refresh = useCallback(() => {
     void refetchOptions();
+    if (identityEnabled) void refetchIdentity();
     refreshAnalysis();
-  }, [refetchOptions, refreshAnalysis]);
+  }, [identityEnabled, refetchIdentity, refetchOptions, refreshAnalysis]);
 
   const optionsFailed = useRetryNotice(
-    shouldShowQueryError({ error: optionsError, isFetching: optionsFetching }),
-    optionsFetching,
+    shouldShowQueryError({ error: optionsError, isFetching: optionsFetching }) ||
+      shouldShowQueryError(scopeIdentity.query),
+    optionsFetching || scopeIdentity.query.isFetching,
   );
 
   return {
@@ -106,7 +112,7 @@ export function useSeriesComparisonPageModel() {
           isFetching: optionsFetching,
           isLoading: optionsLoading,
         }),
-      refreshing: optionsFetching,
+      refreshing: optionsFetching || scopeIdentity.query.isFetching,
     },
     resource: analysis.resource,
     returnTo: location.returnTo,

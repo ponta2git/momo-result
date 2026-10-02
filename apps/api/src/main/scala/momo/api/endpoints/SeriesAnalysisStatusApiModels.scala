@@ -19,6 +19,8 @@ final case class SeriesAnalysisArtifactRefResponse(
     algorithmVersion: String,
     artifactSchemaVersion: Int,
     publishedAt: String,
+    radarBasisCreatedAt: Option[String] = None,
+    radarBasisAppliedAt: Option[String] = None,
 ) derives Codec.AsObject
 
 object SeriesAnalysisArtifactRefResponse:
@@ -30,6 +32,8 @@ object SeriesAnalysisArtifactRefResponse:
       value.algorithmVersion,
       value.artifactSchemaVersion,
       DateTimeFormatter.ISO_INSTANT.format(value.publishedAt),
+      value.radarBasisCreatedAt.map(DateTimeFormatter.ISO_INSTANT.format),
+      value.radarBasisAppliedAt.map(DateTimeFormatter.ISO_INSTANT.format),
     )
 
 final case class SeriesAnalysisCalculationResponse(

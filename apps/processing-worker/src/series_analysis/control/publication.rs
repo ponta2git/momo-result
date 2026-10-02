@@ -44,6 +44,7 @@ pub(super) async fn validated_artifact(
     let expected_input_revision = claim.input_revision;
     let expected_algorithm_version = claim.algorithm_version.clone();
     let expected_artifact_schema_version = claim.artifact_schema_version;
+    let expected_basis_id = claim.radar_basis_id.clone();
     // Validation performs bounded synchronous file reads and JSON decoding. Keeping that work off
     // the current-thread runtime lets the enclosing finalization timeout and sibling coordinators
     // continue. The task is read-only, so timeout cancellation cannot publish or mutate a candidate.
@@ -63,6 +64,7 @@ pub(super) async fn validated_artifact(
             || manifest_revision != expected_input_revision
             || manifest.algorithm_version != expected_algorithm_version
             || manifest_schema != expected_artifact_schema_version
+            || artifact.radar_basis().map(|(id, _)| id) != expected_basis_id.as_deref()
         {
             return Err(ControlError::InvalidMetadata);
         }
@@ -83,6 +85,21 @@ pub(super) async fn requires_staging(
     claim: &ClaimedJob,
     artifact: &ValidatedArtifact,
 ) -> Result<bool, ControlError> {
+    if let Some((id, checksum)) = artifact.radar_basis() {
+        let matches = client
+            .query_opt(
+                "SELECT checksum FROM series_radar_bases WHERE id=$1 AND game_title_id=$2",
+                &[&id, &claim.game_title_id],
+            )
+            .await?
+            .is_some_and(|row| {
+                row.try_get::<_, String>(0)
+                    .is_ok_and(|stored| stored == checksum)
+            });
+        if !matches {
+            return Err(ControlError::InvalidMetadata);
+        }
+    }
     let should_stage = client
         .query_one(
             "SELECT s.input_revision = $2 AND s.algorithm_version = $3\x20\
@@ -93,6 +110,7 @@ pub(super) async fn requires_staging(
                         AND a.input_revision = $2 AND a.algorithm_version = $3\x20\
                         AND a.artifact_schema_version = $4\x20\
                         AND a.validation_contract_id = $6\x20\
+                        AND a.radar_basis_id IS NOT DISTINCT FROM $7 AND a.radar_generation = $8\x20\
                     )\x20\
              FROM series_analysis_title_states s WHERE s.game_title_id = $1",
             &[
@@ -102,6 +120,8 @@ pub(super) async fn requires_staging(
                 &claim.artifact_schema_version,
                 &claim.validation_contract_id,
                 &artifact.validation_contract_id(),
+                &claim.radar_basis_id,
+                &claim.radar_generation,
             ],
         )
         .await?
@@ -121,7 +141,7 @@ pub(super) async fn existing_artifact(
     let current = transaction
         .query_one(
             "SELECT input_revision, algorithm_version, artifact_schema_version,\x20\
-                    source_input_checksum, root_checksum, validation_contract_id\x20\
+                    source_input_checksum, root_checksum, validation_contract_id, radar_basis_id, radar_generation\x20\
              FROM series_analysis_artifacts WHERE id = $1 AND status = 'published'",
             &[&current_artifact_id],
         )
@@ -132,7 +152,9 @@ pub(super) async fn existing_artifact(
     let current_source_checksum = current.try_get::<_, String>(3)?;
     let current_root_checksum = current.try_get::<_, String>(4)?;
     let current_validation_contract = current.try_get::<_, Option<String>>(5)?;
-    let same_version = current_revision == claim.input_revision
+    let same_version = current.try_get::<_, Option<String>>(6)? == claim.radar_basis_id
+        && current.try_get::<_, i64>(7)? == claim.radar_generation
+        && current_revision == claim.input_revision
         && current_algorithm == claim.algorithm_version
         && current_schema == claim.artifact_schema_version;
     if !same_version
@@ -277,7 +299,8 @@ pub(super) async fn publish_staged_artifact(
     let published = transaction
         .execute(
             "UPDATE series_analysis_artifacts\x20\
-             SET status = 'published', published_at = clock_timestamp()\x20\
+             SET status = 'published', published_at = clock_timestamp(),\x20\
+                 radar_applied_at = CASE WHEN radar_basis_id IS NULL THEN NULL ELSE COALESCE(radar_applied_at,clock_timestamp()) END\x20\
              WHERE id = $1 AND attempt_id = $2 AND status = 'staging'\x20\
                AND validation_contract_id = $3",
             &[
@@ -315,7 +338,8 @@ pub(super) async fn publish_staged_artifact(
             ],
         )
         .await?;
-    require_publication_row(pointed)
+    require_publication_row(pointed)?;
+    super::radar::record_publication(transaction, claim, &manifest.artifact_id).await
 }
 
 pub(super) async fn finish_success(
@@ -438,6 +462,19 @@ async fn insert_artifact_header(
 ) -> Result<u64, ControlError> {
     let manifest = artifact.manifest();
     let validation_contract_id: Option<&str> = None;
+    let scope_keys: Vec<String> = manifest
+        .resources
+        .iter()
+        .filter_map(|r| match r {
+            ResourceManifest::Aggregate { common } if common.item_count > 0 => {
+                Some(common.scope.key())
+            }
+            ResourceManifest::Aggregate { .. }
+            | ResourceManifest::Review { .. }
+            | ResourceManifest::Drilldown { .. }
+            | ResourceManifest::MatchContext { .. } => None,
+        })
+        .collect();
     Ok(transaction
         .execute(
             "INSERT INTO series_analysis_artifacts (\x20\
@@ -445,8 +482,9 @@ async fn insert_artifact_header(
                artifact_schema_version, validation_contract_id, source_input_checksum,\x20\
                root_checksum, status,\x20\
                aggregate_chunk_count, review_chunk_count, drilldown_chunk_count,\x20\
-               match_context_chunk_count, encoded_bytes, decoded_bytes\x20\
-             ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'staging',$10,$11,$12,$13,$14,$15)\x20\
+               match_context_chunk_count, encoded_bytes, decoded_bytes, radar_basis_id, radar_generation, radar_applied_at, scope_keys\x20\
+             ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'staging',$10,$11,$12,$13,$14,$15,$16,$17,\x20\
+               (SELECT current_applied_at FROM series_radar_title_states WHERE game_title_id=$2 AND current_basis_id=$16),$18)\x20\
              ON CONFLICT (id) DO NOTHING",
             &[
                 &manifest.artifact_id,
@@ -464,6 +502,9 @@ async fn insert_artifact_header(
                 &totals.counts.match_contexts,
                 &totals.encoded_bytes,
                 &totals.decoded_bytes,
+                &claim.radar_basis_id,
+                &claim.radar_generation,
+                &scope_keys,
             ],
         )
         .await?)
@@ -500,6 +541,19 @@ async fn validate_staged_artifact_shape(
     expected_validation_contract_id: Option<&str>,
 ) -> Result<(), ControlError> {
     let manifest = artifact.manifest();
+    let scope_keys: Vec<String> = manifest
+        .resources
+        .iter()
+        .filter_map(|r| match r {
+            ResourceManifest::Aggregate { common } if common.item_count > 0 => {
+                Some(common.scope.key())
+            }
+            ResourceManifest::Aggregate { .. }
+            | ResourceManifest::Review { .. }
+            | ResourceManifest::Drilldown { .. }
+            | ResourceManifest::MatchContext { .. } => None,
+        })
+        .collect();
     let row = transaction
         .query_opt(
             "WITH child_shape AS (\x20\
@@ -530,6 +584,8 @@ async fn validate_staged_artifact_shape(
                     AND a.aggregate_chunk_count = $10 AND a.review_chunk_count = $11\x20\
                     AND a.drilldown_chunk_count = $12 AND a.match_context_chunk_count = $13\x20\
                     AND a.encoded_bytes = $14 AND a.decoded_bytes = $15\x20\
+                    AND a.radar_basis_id IS NOT DISTINCT FROM $16 AND a.radar_generation=$17\x20\
+                    AND a.scope_keys = $18\x20\
                     AND (SELECT chunk_count FROM child_shape WHERE kind = 'aggregate') = $10\x20\
                     AND (SELECT chunk_count FROM child_shape WHERE kind = 'review') = $11\x20\
                     AND (SELECT chunk_count FROM child_shape WHERE kind = 'drilldown') = $12\x20\
@@ -553,6 +609,9 @@ async fn validate_staged_artifact_shape(
                 &totals.counts.match_contexts,
                 &totals.encoded_bytes,
                 &totals.decoded_bytes,
+                &claim.radar_basis_id,
+                &claim.radar_generation,
+                &scope_keys,
             ],
         )
         .await?;

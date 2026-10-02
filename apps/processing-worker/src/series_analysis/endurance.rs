@@ -399,6 +399,7 @@ fn shadow_child_spec(
 ) -> AnalysisChildProcessSpec {
     AnalysisChildProcessSpec {
         identity: momo_analysis_core::child::AnalysisAttemptIdentity {
+            job_id: String::new(),
             game_title_id: request.game_title_id.clone(),
             input_revision,
             artifact_id: format!("shadow-artifact-{run_number}"),

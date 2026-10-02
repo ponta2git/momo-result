@@ -35,6 +35,7 @@ type SmokeResult<T = ()> = Result<T, Box<dyn Error + Send + Sync>>;
 
 mod heartbeat;
 mod notifications;
+mod radar;
 
 const TITLE_ID: &str = "analysis-stage-smoke-title";
 const JOB_ID: &str = "analysis-stage-smoke-job";
@@ -311,6 +312,10 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
 
 fn claim(attempt_id: &str, attempt_no: i32, fencing_token: i64) -> SmokeResult<ClaimedJob> {
     Ok(ClaimedJob {
+        work_kind: String::from("analysis"),
+        radar_operation_id: None,
+        radar_basis_id: None,
+        radar_generation: 0,
         job_id: String::from(JOB_ID),
         game_title_id: String::from(TITLE_ID),
         input_revision: 1,

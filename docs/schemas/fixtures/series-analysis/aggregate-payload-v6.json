@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "scope": {
     "kind": "overall",
     "matchCount": 0
@@ -103,5 +103,23 @@
     "owners": [],
     "rows": [],
     "recordedOwnerCount": 0
+  },
+  "playerRadar": {
+    "basis": null,
+    "monitoring": null,
+    "evaluation": {
+      "definitionVersion": "player-radar-six-axes-v1",
+      "methodVersion": "player-radar-spread-v1",
+      "basisChecksum": null,
+      "sample": {
+        "matchCount": 0,
+        "heldEventCount": 0,
+        "quality": "no_target",
+        "firstMatch": null,
+        "lastMatch": null,
+        "mapCounts": []
+      },
+      "players": []
+    }
   }
 }

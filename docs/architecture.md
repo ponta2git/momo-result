@@ -218,8 +218,9 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 - 同時実行や publication は DB lease と fencing token で世代をまたいで保証する。process 内 semaphore や台数を正本にしない。
 - 子 process の成果物は上限、path、件数、schema、checksum を親が検証し、失敗時に部分公開しない。
 - 分析worker内のRust validatorをpayload意味、canonical encoding、resource集合・相互参照の単一ownerとする。parentは完全検証を通ったopaque artifactだけをversion付きで公開し、APIはそのimmutable publication attestation、生成schema、reader resource上限、request identityだけを独立に検証する。
+- 分析成果物の公開とレーダー基準準備を実行目的で区別する。基準準備も同じqueue・共有実行枠・親子process境界を使い、保存元と全scopeの比較を検証する。準備の成功を通常の分析要求の充足や公開完了として扱わない。
 - 分析release controllerはactiveなalgorithm / artifact schema / validation contract singletonと全titleへのpromotionを所有する。API / workerのcapability registryを検査中だけ凍結し、互換判定とdesired-state切替の間へ別世代を割り込ませない。
-- 入力 version、algorithm version、artifact schema version を別の型として扱い、同じ入力と algorithm version では決定論的にする。
+- 入力 version、algorithm version、artifact schema version、固定採点基準を別の識別として扱い、同じ入力・algorithm・基準の内容では決定論的にする。基準の適用日時と公開競合の世代は、計算内容のchecksumから分離する。
 - 計算の中間表現は必要な観測値だけを持ち、fold・bootstrap・permutationごとに識別情報や未使用featureを複製しない。共有できる入力は借用し、計算順序や乱数列に意味がある最適化は出力のcanonical bytesまで比較する。結果の意味を変える場合はalgorithm versionの変更として扱う。
 - 公開前のDB照合はtransaction内で行い、全Rowとdecode後の同じ集合を重ねて保持しない。metadataは借用して逐次照合し、入力は必要なshapeへ集約する。順序の違いを許容する照合でも欠落・余剰・重複・値の不一致を拒否する。
 - OCR だけが分析を preempt できる。共有実行枠、再queue、失敗回数、公開の詳細は `docs/requirements/series-analysis-batch.md` を正本とする。

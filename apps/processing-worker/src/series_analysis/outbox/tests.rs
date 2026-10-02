@@ -171,6 +171,7 @@ fn active_job(
     attempt_id: Option<&str>,
 ) -> ActiveAnalysisJob {
     ActiveAnalysisJob {
+        work_kind: String::from("analysis"),
         id: String::from("active-job"),
         status: String::from(status),
         algorithm_version: String::from("series-analysis-v1"),

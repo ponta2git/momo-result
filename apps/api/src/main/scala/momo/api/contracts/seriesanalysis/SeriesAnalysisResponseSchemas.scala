@@ -35,6 +35,10 @@ private[api] object SeriesAnalysisResponseSchemas:
         "type" -> Json.fromString("string"),
       ),
       "publishedAt" -> TextSchema,
+      "radarBasisCreatedAt" ->
+        Json.obj("anyOf" -> Json.arr(TextSchema, Json.obj("type" -> Json.fromString("null")))),
+      "radarBasisAppliedAt" ->
+        Json.obj("anyOf" -> Json.arr(TextSchema, Json.obj("type" -> Json.fromString("null")))),
     )
   )
   private val IncludedSchema = objectSchema(
@@ -74,12 +78,12 @@ private[api] object SeriesAnalysisResponseSchemas:
     SeriesAnalysisChunkKind.MatchContext,
     "series-analysis-match-context-response-v3.schema.json",
   )
-  val aggregateV4: Resource = Resource(
+  val aggregateV5: Resource = Resource(
     "aggregate",
-    "aggregateV4",
-    "SeriesAnalysisAggregateV4Response",
+    "aggregateV5",
+    "SeriesAnalysisAggregateV5Response",
     SeriesAnalysisChunkKind.Aggregate,
-    "series-analysis-aggregate-response-v4.schema.json",
+    "series-analysis-aggregate-response-v5.schema.json",
   )
   val reviewV3: Resource = Resource(
     "review",
@@ -90,7 +94,7 @@ private[api] object SeriesAnalysisResponseSchemas:
   )
 
   val resources: List[Resource] =
-    List(aggregateV4, reviewV3, drilldown, matchContext)
+    List(aggregateV5, reviewV3, drilldown, matchContext)
 
   def schemaFor(resource: Resource): Json =
     val registered = resources.find(_.componentName == resource.componentName).getOrElse(
@@ -173,6 +177,14 @@ private[api] object SeriesAnalysisResponseSchemas:
         fields.toIterable.map { case (key, child) => key -> addMemberDisplayNames(child) }
       )
       nested("properties").flatMap(_.asObject) match
+        case Some(mapProperties) if mapProperties.keys.toSet == Set("mapMasterId", "matchCount") =>
+          addProperty(
+            Json.fromJsonObject(nested),
+            "displayName",
+            Json.obj("anyOf" ->
+              Json.arr(DisplayNameSchema, Json.obj("type" -> Json.fromString("null")))),
+            "map count"
+          )
         case Some(memberProperties) if memberProperties.contains("memberId") =>
           val memberSchema = Json.fromJsonObject(nested)
           if !required(memberSchema, "member object").contains("memberId") then

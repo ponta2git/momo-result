@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::contract::ScopeRef;
+use crate::radar::{RadarError, RadarMonitoring, RadarPublishedBasis, validate_basis};
 
 pub const MAXIMUM_INPUT_ID_BYTES: usize = 128;
 pub const MAXIMUM_PLAYER_MATCH_ROWS: usize = 100_000;
@@ -54,11 +55,13 @@ pub struct AnalysisInput {
 ///
 /// Preparation derives the resource-shape bound once and keeps both the player-match inputs and
 /// that derived contract immutable.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct NormalizedAnalysisInput {
     input: AnalysisInput,
     scopes: Vec<ScopeRows>,
     resource_count: Option<u64>,
+    radar_basis: Option<RadarPublishedBasis>,
+    radar_monitoring: Option<RadarMonitoring>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -115,6 +118,8 @@ impl AnalysisInput {
         let scopes = build_scope_rows(&self);
         validate_scope_keys(&scopes)?;
         Ok(NormalizedAnalysisInput {
+            radar_basis: None,
+            radar_monitoring: None,
             resource_count: resource_count_for_scopes(&self, &scopes),
             scopes,
             input: self,
@@ -304,6 +309,51 @@ fn valid_timestamp_shape(value: &str) -> bool {
 }
 
 impl NormalizedAnalysisInput {
+    /// Attaches an immutable, title-compatible scoring input without changing match revisions.
+    ///
+    /// # Errors
+    ///
+    /// Rejects incompatible definitions, a wrong title, or a checksum that does not bind the basis.
+    pub fn with_radar_basis(
+        mut self,
+        basis: Option<RadarPublishedBasis>,
+    ) -> Result<Self, RadarError> {
+        if let Some(basis) = &basis {
+            validate_basis(&basis.basis)?;
+            if !valid_input_id(&basis.basis_id)
+                || basis.basis.source.game_title_id != self.game_title_id()
+                || basis.checksum != basis.basis.checksum()?
+            {
+                return Err(RadarError::InvalidBasis);
+            }
+        }
+        self.radar_basis = basis;
+        self.radar_monitoring = None;
+        Ok(self)
+    }
+
+    #[must_use]
+    pub const fn radar_basis(&self) -> Option<&RadarPublishedBasis> {
+        self.radar_basis.as_ref()
+    }
+
+    /// Stores the pure monitoring result calculated from this same immutable input snapshot.
+    #[must_use]
+    pub fn with_radar_monitoring(mut self, monitoring: RadarMonitoring) -> Self {
+        self.radar_monitoring = Some(monitoring);
+        self
+    }
+
+    #[must_use]
+    pub const fn radar_monitoring(&self) -> Option<&RadarMonitoring> {
+        self.radar_monitoring.as_ref()
+    }
+
+    /// Includes the overall scope even when empty; no empty Cartesian product is materialized.
+    pub fn scope_refs(&self) -> impl Iterator<Item = &ScopeRef> {
+        self.scopes.iter().map(|scope| &scope.scope)
+    }
+
     /// Returns the validated opaque game-title identifier.
     #[must_use]
     pub fn game_title_id(&self) -> &str {

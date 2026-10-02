@@ -9,7 +9,13 @@ use crate::{
 };
 
 mod owner;
+mod radar;
 mod schema;
+
+pub use radar::{
+    radar_basis_from_payload, radar_candidate_from_payload, radar_evaluation_from_payload,
+    radar_monitoring_from_payload,
+};
 
 #[derive(Debug, Error)]
 pub enum PayloadError {
@@ -47,6 +53,7 @@ struct AggregateReferences {
     item_ids: BTreeSet<String>,
     item_count: u64,
     match_count: u64,
+    radar_basis: Option<(String, String)>,
 }
 
 struct ContextReferences<'a> {
@@ -138,6 +145,14 @@ impl PayloadSetValidator {
         references: ResourceReferences<'_>,
     ) -> Result<(), PayloadError> {
         if let ResourceReferences::Aggregate(aggregate) = references {
+            if self
+                .scopes
+                .values()
+                .next()
+                .is_some_and(|first| first.aggregate.radar_basis != aggregate.radar_basis)
+            {
+                return Err(PayloadError::ResourceSetMismatch);
+            }
             return match self.scopes.entry(scope) {
                 std::collections::btree_map::Entry::Vacant(entry) => {
                     entry.insert(ScopeResources {
@@ -338,12 +353,21 @@ fn validate_aggregate<'a>(
         &player_order,
         required_u64(payload.pointer("/scope/matchCount"))?,
     )?;
+    let radar_basis = radar::validate_aggregate(
+        payload
+            .get("playerRadar")
+            .ok_or(PayloadError::InvalidSchema)?,
+        &player_order,
+        required_u64(payload.pointer("/scope/matchCount"))?,
+        scope == &ScopeRef::Overall,
+    )?;
     let item_ids = collect_unique_item_ids(payload)?;
     validate_member_references(payload, &player_ids)?;
     Ok(ResourceReferences::Aggregate(AggregateReferences {
         member_ids: player_ids.into_iter().map(String::from).collect(),
         item_ids,
         item_count,
+        radar_basis,
         match_count: required_u64(
             object
                 .get("scope")
@@ -1263,7 +1287,7 @@ mod tests {
     fn shared_payload_fixtures_match_worker_contract() {
         let aggregate = fixture(include_str!(concat!(
             "../../../../../docs/schemas/fixtures/series-analysis/",
-            "aggregate-payload-v5.json"
+            "aggregate-payload-v6.json"
         )));
         let review = fixture(include_str!(concat!(
             "../../../../../docs/schemas/fixtures/series-analysis/",

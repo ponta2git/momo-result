@@ -3,17 +3,30 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ErrorBoundary } from "@/app/ErrorBoundary";
+import {
+  loadExportPage,
+  loadMastersPage,
+  loadMatchDetailPage,
+  loadMatchesListPage,
+  loadSeriesAnalysisAdminPage,
+  loadSeriesComparisonPage,
+} from "@/app/routeModules";
 import { appRoutes } from "@/app/router";
 import { matchKeys } from "@/shared/api/queryKeys";
+import { decodeSeriesAnalysisArtifact } from "@/shared/api/seriesAnalysisArtifactDecoder";
+import { decodeSeriesAnalysisAdminOverview } from "@/shared/api/seriesAnalysisEnvelopeSchemas";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { makeFourPlayerResults, makeMatchDetail } from "@/test/factories";
 import { mswState } from "@/test/msw/fixtures";
 import { setupMsw } from "@/test/msw/lifecycle";
-import { makeSeriesAnalysisAdminOverview } from "@/test/msw/seriesAnalysisFixtures";
+import {
+  makeSeriesAnalysisAdminOverview,
+  makeSeriesAnalysisReview,
+} from "@/test/msw/seriesAnalysisFixtures";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 import { selectOption } from "@/test/selectOption";
@@ -40,6 +53,21 @@ function renderApp(initialEntry: string) {
 }
 
 describe("app routing", () => {
+  // Compile the real route modules and lazy validators before interaction waits start.
+  // React.lazy, route guards, HTTP requests, and response validation still run normally.
+  beforeAll(async () => {
+    await Promise.all([
+      loadExportPage(),
+      loadMastersPage(),
+      loadMatchDetailPage(),
+      loadMatchesListPage(),
+      loadSeriesAnalysisAdminPage(),
+      loadSeriesComparisonPage(),
+      decodeSeriesAnalysisAdminOverview(makeSeriesAnalysisAdminOverview()),
+      decodeSeriesAnalysisArtifact("reviewV3", makeSeriesAnalysisReview()),
+    ]);
+  });
+
   beforeEach(() => {
     user = userEvent.setup();
   });
@@ -120,7 +148,6 @@ describe("app routing", () => {
     expect(router.state.location.pathname).toBe("/analytics/series");
   });
 
-  // These flows load cold route chunks under coverage; their total budget must exceed each wait.
   it(
     "keeps manually refreshed analysis jobs when returning through the default title route",
     { timeout: 15_000 },

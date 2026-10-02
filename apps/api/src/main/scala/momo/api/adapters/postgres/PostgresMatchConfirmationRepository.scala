@@ -82,7 +82,8 @@ final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transact
     RepositoryResult.capture(program.transact(transactor))
 
   private def insert(record: MatchRecord, updatedAt: Instant): ConnectionIO[Unit] =
-    (insertMatchCascade(record, updatedAt) *> enqueueMatchMutation(List(record.gameTitleId)))
+    (insertMatchCascade(record, updatedAt) *> enqueueMatchMutation(List(record.gameTitleId)) *>
+      PostgresSeriesPlayerRadarMutationOps.changed(List(record.gameTitleId), record.id, false))
       .exceptSomeSqlState {
         case state if isUniqueViolation(state) =>
           conflict[Unit](s"matchNoInEvent ${record.matchNoInEvent.value

@@ -217,6 +217,7 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
       Map("member-ponta" -> "ぽんた"),
       Some("総合"),
       SeriesAnalysisReadConfig.defaults,
+      Map.empty,
     )
 
     assertEquals(
@@ -236,6 +237,7 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
         Map.empty,
         Some("総合"),
         SeriesAnalysisReadConfig.defaults,
+        Map.empty,
       ),
       "Analysis display metadata is unavailable.",
     )
@@ -245,6 +247,7 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
         Map("member-ponta" -> ""),
         Some("総合"),
         SeriesAnalysisReadConfig.defaults,
+        Map.empty,
       ),
       "Analysis display metadata is unavailable.",
     )
@@ -254,8 +257,40 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
         Map("member-ponta" -> "ぽんた"),
         Some(""),
         SeriesAnalysisReadConfig.defaults,
+        Map.empty,
       ),
       "Analysis display metadata is unavailable.",
+    )
+
+  test("radar map names retain numeric counts and explicitly tolerate deleted historical masters"):
+    val counts = Json.arr(
+      Json.obj("mapMasterId" -> Json.fromString("east"), "matchCount" -> Json.fromInt(20)),
+      Json.obj("mapMasterId" -> Json.fromString("deleted-map"), "matchCount" -> Json.fromInt(5)),
+    )
+    val decoded = decodedAggregate().copy(payload =
+      Json.obj(
+        "playerRadar" ->
+          Json.obj("evaluation" -> Json.obj("sample" -> Json.obj("mapCounts" -> counts)))
+      )
+    )
+    val rendered = PostgresSeriesAnalysisChunkCodec.hydrateAndRender(
+      decoded,
+      Map.empty,
+      Some("総合"),
+      SeriesAnalysisReadConfig.defaults,
+      Map("east" -> "東日本")
+    )
+      .flatMap(value => parsePayload(value.payload)).fold(error => fail(error.toString), identity)
+    val hydrated = rendered.hcursor.downField("playerRadar").downField("evaluation")
+      .downField("sample").get[List[Json]]("mapCounts").getOrElse(fail("map counts missing"))
+    assertEquals(
+      PostgresSeriesAnalysisChunkCodec.radarMapIds(decoded.payload),
+      List("east", "deleted-map")
+    )
+    assertEquals(hydrated.map(_.hcursor.get[Int]("matchCount")), List(Right(20), Right(5)))
+    assertEquals(
+      hydrated.map(_.hcursor.get[Option[String]]("displayName")),
+      List(Right(Some("東日本")), Right(None))
     )
 
   test("applies the response byte bound after display metadata hydration"):
@@ -265,6 +300,7 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
         Map.empty,
         Some("総合"),
         SeriesAnalysisReadConfig.defaults.copy(maxResponseBytes = 1),
+        Map.empty,
       ),
       "Analysis response exceeds the configured bound.",
     )
@@ -303,7 +339,13 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
     val names = included.memberIds.map(id => id -> id).toMap
     val bounded = SeriesAnalysisReadConfig.defaults.copy(maxJsonNodes = included.nodeCount - 1)
     assertInternal(
-      PostgresSeriesAnalysisChunkCodec.hydrateAndRender(included, names, Some("総合"), bounded),
+      PostgresSeriesAnalysisChunkCodec.hydrateAndRender(
+        included,
+        names,
+        Some("総合"),
+        bounded,
+        Map.empty
+      ),
       "Analysis artifact exceeds the JSON node bound.",
     )
     val rendered = PostgresSeriesAnalysisChunkCodec.hydrateAndRender(
@@ -311,6 +353,7 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
       names,
       Some("総合"),
       SeriesAnalysisReadConfig.defaults,
+      Map.empty,
     ).fold(error => fail(s"invalid rendered context: $error"), identity)
     assertInternal(
       PostgresSeriesAnalysisChunkCodec.hydrateAndRender(
@@ -318,6 +361,7 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
         names,
         Some("総合"),
         SeriesAnalysisReadConfig.defaults.copy(maxResponseBytes = rendered.payload.length - 1),
+        Map.empty,
       ),
       "Analysis response exceeds the configured bound.",
     )
@@ -336,8 +380,8 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
 
   test("rendered artifact responses satisfy the API-owned schemas"):
     assertHydratedFixture(
-      "aggregate-payload-v5.json",
-      SeriesAnalysisResponseSchemas.aggregateV4,
+      "aggregate-payload-v6.json",
+      SeriesAnalysisResponseSchemas.aggregateV5,
       request,
       itemCount = 0,
       sourceMatchRevision = None,
@@ -378,7 +422,13 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
       SeriesAnalysisMatchContextExclusion.NotInScope,
     )
     val rendered = PostgresSeriesAnalysisChunkCodec
-      .hydrateAndRender(excluded, Map.empty, Some("総合"), SeriesAnalysisReadConfig.defaults)
+      .hydrateAndRender(
+        excluded,
+        Map.empty,
+        Some("総合"),
+        SeriesAnalysisReadConfig.defaults,
+        Map.empty
+      )
       .fold(error => fail(s"failed to render excluded context: $error"), identity)
     assertInlineJsonSchemaValid(
       SeriesAnalysisResponseSchemas.matchContext.componentName,
@@ -401,8 +451,8 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
       artifactGameTitleId = gameTitleId,
       inputRevision = 0,
       algorithmVersion = "series-analysis-v1",
-      artifactSchemaVersion = 4,
-      validationContractId = Some("series-analysis-artifact-v4-full-validation-v1"),
+      artifactSchemaVersion = 5,
+      validationContractId = Some("series-analysis-artifact-v5-full-validation-v1"),
       publishedAt = Instant.parse("2026-08-09T00:00:00Z"),
       scopeKind = Some(scope.kind),
       payload = Some(payload),
@@ -417,8 +467,8 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
     request.artifactId,
     gameTitleId,
     0,
-    "series-analysis-v5",
-    4,
+    "series-analysis-v6",
+    5,
     Instant.parse("2026-08-09T00:00:00Z"),
   )
 
@@ -480,6 +530,7 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
         memberNames,
         Some("総合"),
         SeriesAnalysisReadConfig.defaults,
+        Map.empty,
       )
       .fold(error => fail(s"failed to hydrate $fixtureName: $error"), identity)
     assertInlineJsonSchemaValid(
@@ -502,7 +553,7 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
 
   private lazy val aggregateFixture =
     Files.readString(
-      repositoryFile("docs/schemas/fixtures/series-analysis/aggregate-payload-v5.json")
+      repositoryFile("docs/schemas/fixtures/series-analysis/aggregate-payload-v6.json")
     )
 
   private def nestingDepth(text: String): Int =

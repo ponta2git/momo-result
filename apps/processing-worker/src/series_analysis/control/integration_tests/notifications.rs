@@ -335,6 +335,10 @@ async fn publish(
 
 async fn next_job(client: &Client, previous: &ClaimedJob, label: &str) -> SmokeResult<ClaimedJob> {
     let next = ClaimedJob {
+        work_kind: String::from("analysis"),
+        radar_operation_id: None,
+        radar_basis_id: None,
+        radar_generation: 0,
         job_id: format!("analysis-notification-{label}"),
         attempt_id: format!("analysis-notification-attempt-{label}"),
         fencing_token: previous.fencing_token + 1,

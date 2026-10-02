@@ -42,5 +42,7 @@ only a successful disposable runtime probe can supply that evidence.
 
 For an external runtime probe, cross-compile the command into the ignored `out/` directory and
 build the adjacent Dockerfile with an immutable candidate image supplied as `ANALYSIS_IMAGE`. Run
-the resulting image only in a disposable, secret-free environment. The image starts as root by
-design and exits after this single bounded experiment.
+the resulting image only in a disposable, secret-free environment. The image defaults to a non-root
+user and refuses to start the coordinator. The disposable runtime must explicitly override the
+user to root (for Docker, `--user 0:0`) for this single bounded experiment; the launched parent and
+allocator still use the requested non-root UID/GID.

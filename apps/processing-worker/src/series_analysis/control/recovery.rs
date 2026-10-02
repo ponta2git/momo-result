@@ -50,7 +50,8 @@ pub(crate) async fn recover_expired_analysis_holder(
                         AND lease_validation_contract_id IS NOT DISTINCT FROM validation_contract_id\x20\
                         AND lease_expires_at <= clock_timestamp(), false),\x20\
                     lease_recovery_count, game_title_id, input_revision, algorithm_version,\x20\
-                    artifact_schema_version, validation_contract_id, attempt_count\x20\
+                    artifact_schema_version, validation_contract_id, attempt_count, work_kind,\x20\
+                    radar_operation_id, radar_basis_id, radar_generation\x20\
              FROM series_analysis_jobs\x20\
              WHERE id = $1 AND game_title_id = $5 AND status = 'running' FOR UPDATE",
             &[
@@ -108,6 +109,10 @@ pub(crate) async fn recover_expired_analysis_holder(
 }
 
 struct ExpiredJob {
+    work_kind: String,
+    radar_operation_id: Option<String>,
+    radar_basis_id: Option<String>,
+    radar_generation: i64,
     next_recovery_count: i32,
     game_title_id: String,
     input_revision: i64,
@@ -119,6 +124,10 @@ struct ExpiredJob {
 
 fn decode_expired_job(row: &Row) -> Result<ExpiredJob, ControlError> {
     Ok(ExpiredJob {
+        work_kind: row.try_get(8)?,
+        radar_operation_id: row.try_get(9)?,
+        radar_basis_id: row.try_get(10)?,
+        radar_generation: row.try_get(11)?,
         next_recovery_count: row
             .try_get::<_, i32>(1)?
             .checked_add(1)
@@ -215,15 +224,22 @@ async fn fail_expired_job(
             &[&failure_code, &job_id],
         )
         .await?;
-    transaction
-        .execute(
-            "UPDATE series_analysis_title_states SET pending_work = false,\x20\
+    super::radar::terminal_failure_for_job(transaction, job_id, failure_code).await?;
+    if job.work_kind == "analysis" {
+        transaction
+            .execute(
+                "UPDATE series_analysis_title_states SET pending_work = false,\x20\
                last_failure_code = $1, last_failure_at = clock_timestamp(),\x20\
                updated_at = clock_timestamp() WHERE game_title_id = $2",
-            &[&failure_code, &job.game_title_id],
-        )
-        .await?;
+                &[&failure_code, &job.game_title_id],
+            )
+            .await?;
+    }
     let recovered_claim = ClaimedJob {
+        work_kind: job.work_kind,
+        radar_operation_id: job.radar_operation_id,
+        radar_basis_id: job.radar_basis_id,
+        radar_generation: job.radar_generation,
         job_id: String::from(job_id),
         game_title_id: job.game_title_id,
         input_revision: job.input_revision,

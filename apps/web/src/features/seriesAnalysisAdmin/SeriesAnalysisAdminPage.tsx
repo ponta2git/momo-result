@@ -1,6 +1,7 @@
 import { Activity, Play, RefreshCw, RotateCw } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
+import { PlayerRadarAdministration } from "@/features/seriesAnalysisAdmin/PlayerRadarAdministration";
 import {
   AdminSkeleton,
   ExecutionStatus,
@@ -9,13 +10,14 @@ import {
 } from "@/features/seriesAnalysisAdmin/SeriesAnalysisAdminStatus";
 import { useSeriesAnalysisAdminPageModel } from "@/features/seriesAnalysisAdmin/useSeriesAnalysisAdminPageModel";
 import { formatApiError } from "@/shared/api/problemDetails";
-import { actionRowClass } from "@/shared/ui/actions/actionGroup";
+import { inlineActionGroupClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
-import { cn } from "@/shared/ui/cn";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { showToast } from "@/shared/ui/feedback/Toast";
 import { SelectField } from "@/shared/ui/forms/SelectField";
+import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { contentText } from "@/shared/ui/typography";
@@ -23,7 +25,10 @@ import { contentText } from "@/shared/ui/typography";
 export function SeriesAnalysisAdminPage() {
   const page = useSeriesAnalysisAdminPageModel();
   const [allDialogOpen, setAllDialogOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("recalculation");
+  const recalculationTabRef = useRef<HTMLElement>(null);
   const { data } = page.resource;
+  const { selectedTitle } = page.selection;
   return (
     <PageFrame width="wide">
       <PageContentSurface
@@ -31,121 +36,157 @@ export function SeriesAnalysisAdminPage() {
         className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6"
         role="region"
       >
-        {data && !page.feedback.resourceError ? (
-          <div
-            aria-label="戦績分析管理の操作"
-            className={cn(actionRowClass, "justify-end")}
-            role="group"
-          >
-            <Button
-              icon={<RefreshCw aria-hidden="true" />}
-              disabled={page.resource.refreshDisabled}
-              pending={page.resource.refreshing}
-              pendingLabel="状態を更新中"
-              size="sm"
-              variant="secondary"
-              onClick={page.actions.refresh}
-            >
-              状態を更新
-            </Button>
-          </div>
-        ) : null}
-        {page.feedback.mutationError && !allDialogOpen ? (
-          <Notice tone="danger" title={page.feedback.mutationError.title}>
-            {page.feedback.mutationError.detail}
-          </Notice>
-        ) : null}
-        {page.feedback.acceptance ? (
-          <Notice tone="success" title={page.feedback.acceptance.title}>
-            {page.feedback.acceptance.detail}
-          </Notice>
-        ) : null}
-        {page.feedback.resourceError ? (
-          <Notice
-            action={
-              <Button
-                disabled={page.resource.refreshDisabled}
-                pending={page.resource.refreshing}
-                pendingLabel="再読み込み中"
-                size="sm"
-                variant={data ? "secondary" : "primary"}
-                onClick={page.actions.refresh}
+        <TabsRoot value={activeTab} onValueChange={(value) => setActiveTab(String(value))}>
+          <TabsList activateOnFocus={false} aria-label="戦績分析管理の表示切替">
+            <TabsTab value="recalculation" ref={recalculationTabRef}>
+              分析の再計算
+            </TabsTab>
+            <TabsTab value="radar">レーダーの採点基準</TabsTab>
+          </TabsList>
+          <div className="mt-6 grid min-w-0 gap-6">
+            {page.feedback.resourceError ? (
+              <Notice
+                action={
+                  <Button
+                    disabled={page.resource.refreshDisabled}
+                    pending={page.resource.refreshing}
+                    pendingLabel="再読み込み中"
+                    size="sm"
+                    variant={data ? "secondary" : "primary"}
+                    onClick={page.actions.refresh}
+                  >
+                    状態を再読み込み
+                  </Button>
+                }
+                tone={data ? "warning" : "danger"}
+                title={page.feedback.resourceError.title}
               >
-                状態を再読み込み
-              </Button>
-            }
-            tone={data ? "warning" : "danger"}
-            title={page.feedback.resourceError.title}
-          >
-            <p>{page.feedback.resourceError.detail}</p>
-          </Notice>
-        ) : null}
-        {page.resource.loading && !data ? (
-          <AdminSkeleton />
-        ) : data?.titleOptions.length === 0 ? (
-          <EmptyState
-            icon={<Activity />}
-            placement="embedded"
-            title="再計算できる作品がありません"
-            description="設定管理で作品を登録すると、ここから再計算できます。"
-          />
-        ) : data ? (
-          <>
-            <section aria-label="再計算する対象" className="grid min-w-0 gap-1">
-              <div className="grid min-w-0 gap-2 lg:grid-cols-[minmax(16rem,32rem)_auto_auto] lg:items-end lg:justify-start">
+                <p>{page.feedback.resourceError.detail}</p>
+              </Notice>
+            ) : null}
+            {page.resource.loading && !data ? (
+              <AdminSkeleton />
+            ) : data?.titleOptions.length === 0 ? (
+              <EmptyState
+                icon={<Activity />}
+                placement="embedded"
+                title="対象作品がありません"
+                description="設定管理で作品を登録してください。"
+              />
+            ) : data ? (
+              <div className="max-w-lg">
                 <SelectField
                   label="対象作品"
                   options={page.selection.options}
                   value={page.selection.gameTitleId ?? ""}
                   onValueChange={(nextValue) => page.actions.selectTitle(nextValue)}
                 />
-                <Button
-                  disabled={
-                    page.recalculation.titleUnavailable ||
-                    page.recalculation.titleReserved ||
-                    page.recalculation.pending
-                  }
-                  icon={<Play />}
-                  pending={page.recalculation.titlePending}
-                  pendingLabel={page.recalculation.titlePendingLabel}
-                  onClick={page.actions.recalculateTitle}
-                >
-                  {page.recalculation.titleReserved ? "再計算を予約済み" : "この作品を再計算"}
-                </Button>
-                <AlertDialog
-                  open={allDialogOpen}
-                  onOpenChange={setAllDialogOpen}
-                  confirmLabel="全作品を再計算"
-                  description={`${data.titleOptions.length}作品を対象として予約します。実行中の作品は完了後に再計算されます。`}
-                  formatError={(error) => formatApiError(error, "再計算を受け付けられません")}
-                  pending={page.recalculation.allPending}
-                  title="全作品の再計算を予約しますか？"
-                  tone="primary"
-                  trigger={
-                    <Button
-                      disabled={page.recalculation.pending}
-                      icon={<RotateCw />}
-                      variant="secondary"
-                    >
-                      全作品を再計算
-                    </Button>
-                  }
-                  onConfirm={async () => {
-                    await page.actions.recalculateAll();
+              </div>
+            ) : null}
+          </div>
+          <TabsPanel keepMounted value="recalculation">
+            {data && data.titleOptions.length > 0 ? (
+              <div className="mt-6 grid min-w-0 gap-6">
+                {page.feedback.mutationError && !allDialogOpen ? (
+                  <Notice tone="danger" title={page.feedback.mutationError.title}>
+                    {page.feedback.mutationError.detail}
+                  </Notice>
+                ) : null}
+                {page.feedback.acceptance ? (
+                  <Notice tone="success" title={page.feedback.acceptance.title}>
+                    {page.feedback.acceptance.detail}
+                  </Notice>
+                ) : null}
+                <section aria-label="再計算の操作" className="grid min-w-0 gap-1">
+                  <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                    <div className={inlineActionGroupClass}>
+                      <Button
+                        disabled={
+                          page.recalculation.titleUnavailable ||
+                          page.recalculation.titleReserved ||
+                          page.recalculation.pending
+                        }
+                        icon={<Play />}
+                        pending={page.recalculation.titlePending}
+                        pendingLabel={page.recalculation.titlePendingLabel}
+                        onClick={page.actions.recalculateTitle}
+                      >
+                        {page.recalculation.titleReserved ? "再計算を予約済み" : "この作品を再計算"}
+                      </Button>
+                      <AlertDialog
+                        open={allDialogOpen}
+                        onOpenChange={setAllDialogOpen}
+                        confirmLabel="全作品を再計算"
+                        description={`${data.titleOptions.length}作品を対象として予約します。実行中の作品は完了後に再計算されます。`}
+                        formatError={(error) => formatApiError(error, "再計算を受け付けられません")}
+                        pending={page.recalculation.allPending}
+                        title="全作品の再計算を予約しますか？"
+                        tone="primary"
+                        trigger={
+                          <Button
+                            disabled={page.recalculation.pending}
+                            icon={<RotateCw />}
+                            variant="secondary"
+                          >
+                            全作品を再計算
+                          </Button>
+                        }
+                        onConfirm={async () => {
+                          await page.actions.recalculateAll();
+                        }}
+                      />
+                    </div>
+                    {page.feedback.resourceError ? null : (
+                      <Button
+                        icon={<RefreshCw aria-hidden="true" />}
+                        disabled={page.resource.refreshDisabled}
+                        pending={page.resource.refreshing}
+                        pendingLabel="状態を更新中"
+                        size="sm"
+                        variant="secondary"
+                        onClick={page.actions.refresh}
+                      >
+                        状態を更新
+                      </Button>
+                    )}
+                  </div>
+                  {page.recalculation.titleReserved ? (
+                    <p className={contentText.body}>
+                      この作品には処理待ちの手動再計算予約があります。完了後にもう一度予約できます。
+                    </p>
+                  ) : null}
+                </section>
+                <ExecutionStatus data={data} />
+                <SelectedTitleStatus selected={selectedTitle} />
+                <RecentJobs jobs={data.recentJobs} />
+              </div>
+            ) : null}
+          </TabsPanel>
+          <TabsPanel keepMounted value="radar">
+            {selectedTitle ? (
+              <div className="mt-6 min-w-0">
+                <PlayerRadarAdministration
+                  key={selectedTitle.gameTitleId}
+                  gameTitleId={selectedTitle.gameTitleId}
+                  gameTitleName={selectedTitle.gameTitleName}
+                  onApplyAccepted={(operationId) => {
+                    page.actions.clearRecalculationFeedback();
+                    setActiveTab("recalculation");
+                    recalculationTabRef.current?.focus();
+                    showToast({
+                      id: `radar-apply-accepted:${operationId}`,
+                      title: "採点基準の適用を受け付けました",
+                      description: `${selectedTitle.gameTitleName}の再計算状況を表示しています。`,
+                    });
                   }}
+                  applyFinalFocus={() =>
+                    activeTab === "recalculation" ? recalculationTabRef.current : null
+                  }
                 />
               </div>
-              {page.recalculation.titleReserved ? (
-                <p className={contentText.body}>
-                  この作品には処理待ちの手動再計算予約があります。完了後にもう一度予約できます。
-                </p>
-              ) : null}
-            </section>
-            <ExecutionStatus data={data} />
-            <SelectedTitleStatus selected={page.selection.selectedTitle} />
-            <RecentJobs jobs={data.recentJobs} />
-          </>
-        ) : null}
+            ) : null}
+          </TabsPanel>
+        </TabsRoot>
       </PageContentSurface>
     </PageFrame>
   );

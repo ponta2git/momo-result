@@ -2,16 +2,16 @@ import type { components } from "@/shared/api/generated";
 import type { ContractValidator } from "@/shared/api/seriesAnalysisContractDecoder";
 
 export type SeriesAnalysisArtifactResponseByContract = {
-  aggregateV4: components["schemas"]["SeriesAnalysisAggregateV4Response"];
+  aggregateV5: components["schemas"]["SeriesAnalysisAggregateV5Response"];
   drilldown: components["schemas"]["SeriesAnalysisDrilldownResponse"];
   matchContext: components["schemas"]["SeriesAnalysisMatchContextResponse"];
   reviewV3: components["schemas"]["SeriesAnalysisReviewV3Response"];
 };
 
 export const seriesAnalysisArtifactValidatorLoaders = {
-  aggregateV4: async () =>
-    (await import("./series-analysis-aggregate-v4-validators.generated"))
-      .validateSeriesAnalysisAggregateV4,
+  aggregateV5: async () =>
+    (await import("./series-analysis-aggregate-v5-validators.generated"))
+      .validateSeriesAnalysisAggregateV5,
   drilldown: async () =>
     (await import("./series-analysis-drilldown-validators.generated"))
       .validateSeriesAnalysisDrilldown,

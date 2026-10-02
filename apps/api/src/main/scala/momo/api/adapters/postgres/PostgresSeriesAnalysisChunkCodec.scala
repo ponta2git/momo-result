@@ -37,6 +37,8 @@ private[postgres] final case class SeriesAnalysisStoredChunk(
     itemCount: Option[Int],
     nestingDepth: Option[Int],
     checksum: Option[String],
+    radarBasisCreatedAt: Option[Instant] = None,
+    radarBasisAppliedAt: Option[Instant] = None,
 ):
   def artifact: SeriesAnalysisArtifactRef = SeriesAnalysisArtifactRef(
     artifactId,
@@ -45,6 +47,8 @@ private[postgres] final case class SeriesAnalysisStoredChunk(
     algorithmVersion,
     artifactSchemaVersion,
     publishedAt,
+    radarBasisCreatedAt,
+    radarBasisAppliedAt,
   )
 
 /**
@@ -147,6 +151,7 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
       memberNames: Map[String, String],
       scopeName: Option[String],
       config: SeriesAnalysisReadConfig,
+      mapNames: Map[String, String],
   ): Either[AppError, SeriesAnalysisChunk] = scopeName
     .filter(displayName =>
       displayName.nonEmpty && memberNames.values.forall(_.nonEmpty) &&
@@ -156,7 +161,7 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
     .flatMap { displayName =>
       Either.cond(
         chunk.nodeCount <= config.maxJsonNodes,
-        hydratePayload(chunk, memberNames, displayName),
+        hydratePayload(chunk, memberNames, displayName, mapNames),
         AppError.Internal("Analysis artifact exceeds the JSON node bound."),
       )
     }
@@ -243,8 +248,9 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
       chunk: DecodedSeriesAnalysisChunk,
       names: Map[String, String],
       scopeName: String,
+      mapNames: Map[String, String],
   ): Json =
-    val memberHydrated = hydrateMemberObjects(chunk.payload, names)._1
+    val memberHydrated = hydrateMemberObjects(chunk.payload, names, mapNames)._1
     val storedScope = memberHydrated.hcursor.downField("scope").focus
       .flatMap(_.asObject).orElse(scopeJson(chunk.scope).asObject)
       .getOrElse(io.circe.JsonObject.empty)
@@ -261,6 +267,7 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
   private def hydrateMemberObjects(
       json: Json,
       names: Map[String, String],
+      mapNames: Map[String, String],
   ): (Json, Boolean) = json.arrayOrObject(
     json -> false,
     values =>
@@ -268,7 +275,7 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
       var changed = false
       var index = 0
       while index < values.length do
-        val (child, childChanged) = hydrateMemberObjects(values(index), names)
+        val (child, childChanged) = hydrateMemberObjects(values(index), names, mapNames)
         if childChanged then
           hydrated = hydrated.updated(index, child)
           changed = true
@@ -279,7 +286,7 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
       var hydrated = fields
       var changed = false
       fields.toIterable.foreach { case (key, value) =>
-        val (child, childChanged) = hydrateMemberObjects(value, names)
+        val (child, childChanged) = hydrateMemberObjects(value, names, mapNames)
         if childChanged then
           hydrated = hydrated.add(key, child)
           changed = true
@@ -288,8 +295,24 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
         hydrated = hydrated.add("displayName", Json.fromString(name))
         changed = true
       }
+      if fields.keys.toSet == Set("mapMasterId", "matchCount") then
+        fields("mapMasterId").flatMap(_.asString).foreach { id =>
+          hydrated = hydrated.add("displayName", mapNames.get(id).fold(Json.Null)(Json.fromString))
+          changed = true
+        }
       if changed then Json.fromJsonObject(hydrated) -> true else json -> false,
   )
+
+  private[postgres] def radarMapIds(value: Json): List[String] =
+    def collect(json: Json): List[String] = json.arrayOrObject(
+      Nil,
+      _.toList.flatMap(collect),
+      fields =>
+        if fields.keys.toSet == Set("mapMasterId", "matchCount") then
+          fields("mapMasterId").flatMap(_.asString).toList
+        else fields.values.toList.flatMap(collect)
+    )
+    value.hcursor.downField("playerRadar").focus.toList.flatMap(collect).distinct
 
   private def validateUtf8(payload: Array[Byte]): Either[AppError, Unit] = Either.cond(
     isValidUtf8(payload),
@@ -501,6 +524,10 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
     "algorithmVersion" -> Json.fromString(value.algorithmVersion),
     "artifactSchemaVersion" -> Json.fromInt(value.artifactSchemaVersion),
     "publishedAt" -> Json.fromString(value.publishedAt.toString),
+    "radarBasisCreatedAt" ->
+      value.radarBasisCreatedAt.fold(Json.Null)(at => Json.fromString(at.toString)),
+    "radarBasisAppliedAt" ->
+      value.radarBasisAppliedAt.fold(Json.Null)(at => Json.fromString(at.toString)),
   )
 
   private def scopeJson(value: SeriesAnalysisScope): Json = Json.obj(

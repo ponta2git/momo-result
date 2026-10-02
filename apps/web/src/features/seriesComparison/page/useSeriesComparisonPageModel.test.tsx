@@ -19,7 +19,7 @@ import { createTestQueryClient } from "@/test/queryClient";
 setupMsw();
 
 // Query lifecycle is the oracle here; prepare the large generated validator before timed UI waits.
-beforeAll(() => decodeSeriesAnalysisArtifact("aggregateV4", makeSeriesAnalysisAggregate()));
+beforeAll(() => decodeSeriesAnalysisArtifact("aggregateV5", makeSeriesAnalysisAggregate()));
 
 function PageModelHarness({
   onFocusChange,

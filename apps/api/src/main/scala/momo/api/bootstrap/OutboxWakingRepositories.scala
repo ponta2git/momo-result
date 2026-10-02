@@ -189,6 +189,9 @@ private[bootstrap] object OutboxWakingRepositories:
           request: SeriesAnalysisChunkRequest
       ): F[Either[AppError, SeriesAnalysisChunk]] = delegate.chunk(request)
 
+      override def scopeStatus(request: SeriesAnalysisScopeStatusRequest)
+          : F[Either[AppError, SeriesAnalysisScopeStatus]] = delegate.scopeStatus(request)
+
       override def adminOverview(
           gameTitleId: Option[GameTitleId]
       ): F[Either[AppError, SeriesAnalysisAdminOverview]] = delegate.adminOverview(gameTitleId)
@@ -207,6 +210,36 @@ private[bootstrap] object OutboxWakingRepositories:
           idempotencyKeyHash: String,
       ): F[Either[AppError, SeriesAnalysisRecalculationAccepted]] = wake(
         delegate.requestAllRecalculation(requestedBy, idempotencyKeyHash),
+        OutboxKind.SeriesAnalysis,
+      )(_.isRight)
+
+  def seriesPlayerRadar[F[_]: Async: LoggerFactory](
+      delegate: SeriesPlayerRadarRepository[F],
+      sink: OutboxWakeSink[F],
+      onSinkClosed: F[Unit],
+  ): SeriesPlayerRadarRepository[F] =
+    val wake = WakeAfterCommit(sink, onSinkClosed)
+    new SeriesPlayerRadarRepository[F]:
+      override def radarState(title: GameTitleId): F[Either[AppError, SeriesPlayerRadarDocument]] =
+        delegate.radarState(title)
+      override def radarPreview(request: SeriesPlayerRadarPreviewRequest)
+          : F[Either[AppError, SeriesPlayerRadarDocument]] = delegate.radarPreview(request)
+      override def radarOperation(title: GameTitleId, operationId: String)
+          : F[Either[AppError, SeriesPlayerRadarOperation]] =
+        delegate.radarOperation(title, operationId)
+      override def requestRadarOperation(
+          command: SeriesPlayerRadarCommand,
+          requestedBy: AccountId,
+          idempotencyKeyHash: String,
+          requestFingerprint: String
+      )
+          : F[Either[AppError, SeriesPlayerRadarOperation]] = wake(
+        delegate.requestRadarOperation(
+          command,
+          requestedBy,
+          idempotencyKeyHash,
+          requestFingerprint
+        ),
         OutboxKind.SeriesAnalysis,
       )(_.isRight)
 

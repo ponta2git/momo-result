@@ -112,6 +112,9 @@ private[postgres] object PostgresSeriesAnalysisReadOps:
       artifactSchemaVersionValue: Option[Int],
       artifactValidationContractId: Option[String],
       artifactPublishedAt: Option[Instant],
+      radarBasisCreatedAt: Option[Instant],
+      radarBasisAppliedAt: Option[Instant],
+      radarMatches: Boolean,
   )
 
   private final case class PendingProjectionRow(trigger: String, acceptedAt: Instant)
@@ -134,15 +137,20 @@ private[postgres] object PostgresSeriesAnalysisReadOps:
           a.artifact_schema_version,
           a.validation_contract_id,
           a.published_at,
+          rb.created_at, a.radar_applied_at,
+          (a.radar_basis_id IS NOT DISTINCT FROM r.desired_basis_id AND
+            COALESCE(a.radar_generation, 0) = COALESCE(r.generation, 0)),
           j.status, j.trigger, j.requested_at, j.started_at, j.finished_at,
           p.trigger, p.accepted_at
         FROM game_titles gt
         LEFT JOIN series_analysis_title_states s ON s.game_title_id = gt.id
         LEFT JOIN series_analysis_artifacts a ON a.id = s.current_artifact_id
+        LEFT JOIN series_radar_title_states r ON r.game_title_id = gt.id
+        LEFT JOIN series_radar_bases rb ON rb.id = a.radar_basis_id AND rb.game_title_id = gt.id
         LEFT JOIN LATERAL (
           SELECT status, trigger, requested_at, started_at, finished_at
           FROM series_analysis_jobs
-          WHERE game_title_id = gt.id
+          WHERE game_title_id = gt.id AND work_kind = 'analysis'
           ORDER BY
             CASE status WHEN 'running' THEN 0 WHEN 'queued' THEN 1 ELSE 2 END,
             CASE WHEN status IN ('running', 'queued') THEN requested_at END ASC NULLS LAST,
@@ -187,7 +195,16 @@ private[postgres] object PostgresSeriesAnalysisReadOps:
       row.artifactSchemaVersionValue,
       row.artifactPublishedAt,
     ).tupled.map { case (id, titleId, revision, algorithm, schema, publishedAt) =>
-      SeriesAnalysisArtifactRef(id, titleId, revision, algorithm, schema, publishedAt)
+      SeriesAnalysisArtifactRef(
+        id,
+        titleId,
+        revision,
+        algorithm,
+        schema,
+        publishedAt,
+        row.radarBasisCreatedAt,
+        row.radarBasisAppliedAt
+      )
     }
     val supported = SeriesAnalysisArtifactContract.supports(
       row.artifactSchemaVersion,
@@ -203,7 +220,7 @@ private[postgres] object PostgresSeriesAnalysisReadOps:
         gameTitleId,
         desired,
         artifact,
-        row.desiredValidationContractId == row.artifactValidationContractId,
+        row.desiredValidationContractId == row.artifactValidationContractId && row.radarMatches,
         row.pendingWork,
         activeOrLatest,
         pending.map(value =>

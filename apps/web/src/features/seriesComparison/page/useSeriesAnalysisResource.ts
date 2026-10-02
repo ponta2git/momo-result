@@ -19,7 +19,7 @@ import type {
 } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { seriesAnalysisQueryFromState } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
-import { seriesAnalysisKeys } from "@/shared/api/queryKeys";
+import { seriesAnalysisKeys, seriesPlayerRadarKeys } from "@/shared/api/queryKeys";
 import { readSeriesAnalysisMatchContext } from "@/shared/api/seriesAnalysisMatchContextState";
 import {
   seriesAnalysisAggregateQueryOptions,
@@ -27,6 +27,7 @@ import {
   seriesAnalysisReviewQueryOptions,
   seriesAnalysisStatusQueryOptions,
 } from "@/shared/api/seriesAnalysisQueryOptions";
+import { seriesAnalysisScopeStatusQueryOptions } from "@/shared/api/seriesPlayerRadar";
 import { useAnalysisArtifactRecovery } from "@/shared/api/useAnalysisArtifactRecovery";
 import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
@@ -38,10 +39,12 @@ export function useSeriesAnalysisResource({
   activeView,
   deferredState,
   state,
+  selectionReady = true,
 }: {
   activeView: SeriesAnalysisViewId;
   deferredState: SeriesAnalysisUrlState;
   state: SeriesAnalysisUrlState;
+  selectionReady?: boolean;
 }) {
   const queryClient = useQueryClient();
   const [lastSuccessfulBundle, setLastSuccessfulBundle] = useState<
@@ -57,21 +60,46 @@ export function useSeriesAnalysisResource({
     refetch: refetchStatus,
   } = statusQuery;
   const publishedArtifactId = statusData?.currentArtifact?.artifactId;
+  const scopeQueryParams = useMemo(
+    () =>
+      selectionReady && state.gameTitleId && statusData
+        ? {
+            gameTitleId: state.gameTitleId,
+            artifactId: publishedArtifactId,
+            seasonMasterId: state.seasonMasterId,
+            mapMasterId: state.mapMasterId,
+          }
+        : undefined,
+    [
+      publishedArtifactId,
+      selectionReady,
+      state.gameTitleId,
+      state.mapMasterId,
+      state.seasonMasterId,
+      statusData,
+    ],
+  );
+  const scopeQuery = useQuery(seriesAnalysisScopeStatusQueryOptions(scopeQueryParams));
+  const { refetch: refetchScope } = scopeQuery;
+  const scopeAvailable = scopeQuery.data?.state === "available";
+  const scopePending = selectionReady && scopeQuery.isFetching && !scopeQuery.data;
   const queryParams = useMemo(() => {
-    const context = seriesAnalysisQueryFromState(state, publishedArtifactId);
+    const context = scopeAvailable
+      ? seriesAnalysisQueryFromState(state, publishedArtifactId)
+      : undefined;
     return {
       aggregate:
-        activeView === "review"
+        activeView === "review" || !scopeAvailable
           ? undefined
           : seriesAnalysisQueryFromState(deferredState, publishedArtifactId),
       matchContext:
         context && state.focusMatchId ? { ...context, matchId: state.focusMatchId } : undefined,
       review:
-        activeView === "review"
+        activeView === "review" && scopeAvailable
           ? seriesAnalysisQueryFromState(state, publishedArtifactId)
           : undefined,
     };
-  }, [activeView, deferredState, publishedArtifactId, state]);
+  }, [activeView, deferredState, publishedArtifactId, scopeAvailable, state]);
   const aggregateQueryParams = queryParams.aggregate;
   const reviewQueryParams = queryParams.review;
   const aggregateQuery = useQuery(seriesAnalysisAggregateQueryOptions(aggregateQueryParams));
@@ -216,6 +244,13 @@ export function useSeriesAnalysisResource({
   const displaySettling = deferredBundle !== currentDisplayBundle;
 
   useAnalysisArtifactRecovery({
+    artifactId: scopeQueryParams?.artifactId,
+    error: scopeQuery.error,
+    queryKey: seriesPlayerRadarKeys.scopeStatus(scopeQueryParams),
+    refetchArtifact: refetchScope,
+    refetchStatus,
+  });
+  useAnalysisArtifactRecovery({
     artifactId: activeQueryParams?.artifactId,
     error: activeError,
     queryKey:
@@ -245,30 +280,44 @@ export function useSeriesAnalysisResource({
   const scopeSettling =
     seriesAnalysisScopeSignature(state) !== seriesAnalysisScopeSignature(deferredState);
   const visibleBundle =
-    (displayMatchesActivePurpose && displayMatchesCurrentScope) ||
-    bundleFetching ||
-    scopeSettling ||
-    displaySettling
+    (scopeAvailable || scopePending) &&
+    ((displayMatchesActivePurpose && displayMatchesCurrentScope) ||
+      scopePending ||
+      bundleFetching ||
+      scopeSettling ||
+      displaySettling)
       ? displayedBundle
       : undefined;
   // Fetching the same immutable artifact does not invalidate its links, disclosures, or focus.
   // Restrict retained content only while its identity differs from the requested display bundle.
   const resourceShielded =
     visibleBundle !== undefined &&
-    (((!matchesSeriesAnalysisResource(displayedResource, publishedArtifactId, state) ||
-      visibleBundle.view !== activeView ||
-      (visibleBundle.matchContext !== undefined &&
-        visibleBundle.matchContext.matchId !== state.focusMatchId)) &&
-      (bundleFetching || scopeSettling || displaySettling)) ||
+    (scopePending ||
+      ((!matchesSeriesAnalysisResource(displayedResource, publishedArtifactId, state) ||
+        visibleBundle.view !== activeView ||
+        (visibleBundle.matchContext !== undefined &&
+          visibleBundle.matchContext.matchId !== state.focusMatchId)) &&
+        (bundleFetching || scopeSettling || displaySettling)) ||
       (bundleResolution.kind === "waiting" && bundleFetching));
   const visibleResource =
     visibleBundle?.kind === "review" ? visibleBundle.review : visibleBundle?.aggregate;
 
   const refresh = useCallback(() => {
     if (!state.gameTitleId) return;
-    void refetchStatus({ cancelRefetch: false }).then((result) => {
+    void refetchStatus({ cancelRefetch: false }).then(async (result) => {
       if (result.isError || result.data?.currentArtifact?.artifactId !== publishedArtifactId)
         return;
+      if (scopeQueryParams) {
+        try {
+          const scope = await queryClient.fetchQuery({
+            ...seriesAnalysisScopeStatusQueryOptions(scopeQueryParams),
+            staleTime: 0,
+          });
+          if (scope.state !== "available") return;
+        } catch {
+          return;
+        }
+      }
       // A new publication selects its own queries. Only refresh the same publication's live
       // overlays, using explicit active keys so navigation/unmount cannot retarget this continuation.
       const keys = [
@@ -300,6 +349,7 @@ export function useSeriesAnalysisResource({
     queryClient,
     refetchStatus,
     state.gameTitleId,
+    scopeQueryParams,
   ]);
 
   const resourceFailed = useRetryNotice(
@@ -338,10 +388,13 @@ export function useSeriesAnalysisResource({
     resolution: bundleResolution,
     resource: {
       bundle: visibleBundle,
-      canRefresh: activeQueryParams !== undefined,
+      canRefresh: activeQueryParams !== undefined || scopeQueryParams !== undefined,
       data: visibleResource,
-      hasError: resourceFailed,
+      hasError: resourceFailed || shouldShowQueryError(scopeQuery),
+      scopeState: scopeQuery.data?.state,
       loading:
+        !selectionReady ||
+        isInitialQueryLoading(scopeQuery) ||
         isInitialQueryLoading({
           data: activeData,
           isFetching: activeFetching,
@@ -349,7 +402,7 @@ export function useSeriesAnalysisResource({
         }) ||
         (!candidateResource && activeFetching) ||
         (displaySettling && displayedBundle === undefined),
-      refreshing: activeFetching && activeData !== undefined,
+      refreshing: (activeFetching && activeData !== undefined) || scopeQuery.isFetching,
       shielded: resourceShielded,
     },
     status: {

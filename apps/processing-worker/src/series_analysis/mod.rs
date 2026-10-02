@@ -38,6 +38,7 @@ mod attempt_directory;
 mod campaign;
 mod heartbeat;
 mod input_repository;
+mod radar_prepare;
 use heartbeat::HeartbeatConnection;
 mod metrics;
 mod policy;
@@ -274,7 +275,7 @@ pub(crate) async fn run(
         worker_id = %config.worker_id,
         "analysis worker is ready"
     );
-    let result = consume_deliveries(
+    let result = Box::pin(consume_deliveries(
         &mut control_client,
         &mut heartbeat_client,
         &mut redis,
@@ -282,7 +283,7 @@ pub(crate) async fn run(
         &post_commit_sink,
         maintenance,
         &mut shutdown,
-    )
+    ))
     .await;
     if let Err(error) = &result {
         error!(

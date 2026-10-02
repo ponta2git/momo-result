@@ -150,6 +150,8 @@ enum Command {
     #[command(hide = true)]
     ChildCompute {
         #[arg(long)]
+        job_id: String,
+        #[arg(long)]
         game_title_id: String,
         #[arg(long)]
         input_revision: i64,
@@ -320,6 +322,7 @@ pub async fn entrypoint() -> ExitCode {
             return exit_code(crate::ocr::child::execute(tessdata_path.clone()));
         }
         Command::ChildCompute {
+            job_id,
             game_title_id,
             input_revision,
             artifact_id,
@@ -346,6 +349,7 @@ pub async fn entrypoint() -> ExitCode {
                 crate::series_analysis::child::execute(
                     &crate::series_analysis::child::AnalysisChildExecutionConfig {
                         identity: momo_analysis_core::child::AnalysisAttemptIdentity {
+                            job_id: job_id.clone(),
                             game_title_id: game_title_id.clone(),
                             input_revision: *input_revision,
                             artifact_id: artifact_id.clone(),

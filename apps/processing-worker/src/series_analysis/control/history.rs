@@ -103,8 +103,44 @@ pub(crate) async fn cleanup_history(
             .execute(statement, &[&now, &limit_per_table])
             .await?;
     }
+    // Small basis/application history remains available. Only unreferenced large snapshots expire.
+    cleanup_radar_payloads(&transaction, now, limit_per_table).await?;
     transaction.commit().await?;
     Ok(deleted)
+}
+
+async fn cleanup_radar_payloads(
+    transaction: &tokio_postgres::Transaction<'_>,
+    now: SystemTime,
+    limit: i64,
+) -> Result<(), ControlError> {
+    transaction.execute(r"
+      WITH victims AS MATERIALIZED (
+        SELECT p.id FROM series_radar_previews p JOIN series_radar_candidates c ON c.id=p.candidate_id
+        WHERE p.updated_at < ($1::timestamptz - interval '45 days') AND p.evaluation_snapshot IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM series_radar_operations o WHERE o.preview_id=p.id AND o.status IN ('pending','running'))
+          AND (c.status IN ('withdrawn','invalid','applied') OR EXISTS (SELECT 1 FROM series_radar_previews newer WHERE newer.candidate_id=p.candidate_id AND (newer.created_at,newer.id)>(p.created_at,p.id)))
+        ORDER BY p.updated_at,p.id LIMIT $2 FOR UPDATE OF p SKIP LOCKED
+      ), removed_scopes AS (
+        DELETE FROM series_radar_preview_scopes s USING victims WHERE s.preview_id=victims.id RETURNING s.preview_id
+      )
+      UPDATE series_radar_previews p SET evaluation_snapshot=NULL,scope_keys='{}',status='stale'
+      FROM victims WHERE p.id=victims.id
+    ", &[&now,&limit]).await?;
+    transaction.execute(r"
+      WITH victims AS MATERIALIZED (
+        SELECT b.id FROM series_radar_bases b
+        WHERE b.created_at < ($1::timestamptz - interval '45 days') AND b.source_snapshot IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM series_radar_title_states s WHERE b.id IN (s.current_basis_id,s.previous_basis_id,s.desired_basis_id))
+          AND NOT EXISTS (SELECT 1 FROM series_analysis_artifacts a WHERE a.radar_basis_id=b.id)
+          AND NOT EXISTS (SELECT 1 FROM series_analysis_jobs j WHERE j.radar_basis_id=b.id AND j.status IN ('queued','running','publishing'))
+          AND NOT EXISTS (SELECT 1 FROM series_radar_candidates c WHERE c.basis_id=b.id AND c.status IN ('pending','ready','unavailable','failed'))
+          AND NOT EXISTS (SELECT 1 FROM series_radar_operations o WHERE o.basis_id=b.id AND o.status IN ('pending','running'))
+        ORDER BY b.created_at,b.id LIMIT $2 FOR UPDATE OF b SKIP LOCKED
+      )
+      UPDATE series_radar_bases b SET source_snapshot=NULL FROM victims WHERE b.id=victims.id
+    ", &[&now,&limit]).await?;
+    Ok(())
 }
 
 #[cfg(test)]

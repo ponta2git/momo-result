@@ -4,7 +4,7 @@ use thiserror::Error;
 
 use crate::outbox::{ControlOutcome, PostCommitEffects};
 
-pub(crate) const ALGORITHM_VERSION: &str = "series-analysis-v5";
+pub(crate) const ALGORITHM_VERSION: &str = "series-analysis-v6";
 
 mod capability;
 mod claim;
@@ -12,6 +12,7 @@ mod completion;
 mod history;
 mod lifecycle;
 mod publication;
+pub(crate) mod radar;
 mod recovery;
 mod staging_metadata;
 mod transaction;
@@ -74,6 +75,10 @@ impl TransactionEffects {
 pub(crate) struct ClaimedJob {
     pub(crate) job_id: String,
     pub(crate) game_title_id: String,
+    pub(crate) work_kind: String,
+    pub(crate) radar_operation_id: Option<String>,
+    pub(crate) radar_basis_id: Option<String>,
+    pub(crate) radar_generation: i64,
     pub(crate) input_revision: i64,
     pub(crate) algorithm_version: String,
     pub(crate) artifact_schema_version: i32,
@@ -109,6 +114,7 @@ pub(crate) enum HeartbeatResult {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum PublicationResult {
+    Prepared,
     Published,
     Reused,
     Superseded,
@@ -119,6 +125,7 @@ impl PublicationResult {
     #[must_use]
     pub(crate) const fn wire(self) -> &'static str {
         match self {
+            Self::Prepared => "prepared",
             Self::Published => "published",
             Self::Reused => "reused",
             Self::Superseded => "superseded",

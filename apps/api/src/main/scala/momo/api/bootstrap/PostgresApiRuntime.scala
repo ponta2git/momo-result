@@ -193,6 +193,13 @@ private[bootstrap] object PostgresApiRuntime:
               outboxWakeup,
               signalBackgroundFailure,
             )
+            seriesPlayerRadar <-
+              PostgresSeriesPlayerRadarRepository.create[F](transactor, config.seriesAnalysisRead)
+            wakingSeriesPlayerRadar = OutboxWakingRepositories.seriesPlayerRadar(
+              seriesPlayerRadar,
+              outboxWakeup,
+              signalBackgroundFailure,
+            )
             cachedMembers <- CachedReferenceRepositories.members(members)
             cachedGameTitles <- CachedReferenceRepositories.gameTitles(gameTitles)
             cachedMapMasters <- CachedReferenceRepositories.mapMasters(mapMasters)
@@ -223,6 +230,7 @@ private[bootstrap] object PostgresApiRuntime:
                 matchDraftCancellation = matchDraftCancellation,
                 matchList = matchList,
                 seriesAnalysis = wakingSeriesAnalysis,
+                seriesPlayerRadar = wakingSeriesPlayerRadar,
                 matchConfirmation = matchConfirmation,
                 appSessions = appSessions,
                 sessionAccounts = sessionAccounts,

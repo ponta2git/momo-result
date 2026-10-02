@@ -26,7 +26,11 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
         reason: SeriesAnalysisMatchContextExclusion,
     )
 
-  final case class DisplayMetadata(memberNames: Map[String, String], scopeName: Option[String])
+  final case class DisplayMetadata(
+      memberNames: Map[String, String],
+      scopeName: Option[String],
+      mapNames: Map[String, String]
+  )
 
   private final case class MatchIdentityRow(
       gameTitleId: GameTitleId,
@@ -56,6 +60,7 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
       scope: SeriesAnalysisScope,
       memberIds: List[String],
       config: SeriesAnalysisReadConfig,
+      mapIds: List[String],
   ): ConnectionIO[DisplayMetadata] =
     val ids = memberIds.toArray
     val scopeName = PostgresSeriesAnalysisScopeOps.displayName(artifact.gameTitleId, scope)
@@ -63,14 +68,25 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
       fr"""AS display_name) scope
         LEFT JOIN members m ON m.id = ANY($ids)
       """
-    localStatementTimeout(config) *>
-      query.query[(Option[MemberDisplayNameRow], Option[String])]
-        .nel.map(rows =>
-          DisplayMetadata(
-            rows.toList.flatMap(_._1).map(row => row.id -> row.displayName).toMap,
-            rows.head._2,
-          )
-        )
+    for
+      _ <- localStatementTimeout(config)
+      rows <- query.query[(Option[MemberDisplayNameRow], Option[String])].nel
+      maps <- if mapIds.isEmpty then Map.empty[String, String].pure[ConnectionIO]
+      else
+        val ids = mapIds.toArray
+        PostgresReadBudget.rows[(String, String)](
+          fr"""
+          SELECT id, name FROM map_masters
+          WHERE game_title_id = ${artifact.gameTitleId} AND id = ANY($ids)
+        """,
+          PostgresReadBudget.CatalogRows,
+          "Analysis map display names"
+        ).map(_.toMap)
+    yield DisplayMetadata(
+      rows.toList.flatMap(_._1).map(row => row.id -> row.displayName).toMap,
+      rows.head._2,
+      maps
+    )
 
   private def localStatementTimeout(config: SeriesAnalysisReadConfig): ConnectionIO[Unit] =
     val value = s"${config.readTimeout.toMillis}ms"
@@ -80,13 +96,21 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
       request: SeriesAnalysisChunkRequest,
       config: SeriesAnalysisReadConfig,
   ): ConnectionIO[Either[AppError, LoadedChunk]] =
-    val exists = PostgresSeriesAnalysisScopeOps.exists(request.gameTitleId, request.scope)
-    val query = fr"SELECT" ++ exists ++ fr"," ++ storedColumns(config) ++
+    val exists = PostgresSeriesAnalysisScopeOps.valid(request.gameTitleId, request.scope)
+    val query = fr"SELECT" ++ exists ++ fr", ${request.scope.key} = ANY(a.scope_keys)," ++
+      storedColumns(config) ++
       readableArtifact(request) ++ chunkJoin(request)
-    query.query[(Boolean, Option[SeriesAnalysisStoredChunk])].unique.map {
-      case (false, _) => AppError.AnalysisScopeNotFound().asLeft
-      case (_, None) => AppError.AnalysisArtifactExpired().asLeft
-      case (_, Some(row)) => LoadedChunk(request, ChunkMaterial.Stored(row, None)).asRight
+    query.query[(Boolean, Option[Boolean], Option[SeriesAnalysisStoredChunk])].unique.map {
+      case (false, _, _) => AppError.AnalysisScopeNotFound().asLeft
+      case (_, _, None) => AppError.AnalysisArtifactExpired().asLeft
+      case (_, Some(true), Some(row))
+          if row.scopeKind.isEmpty &&
+            (request.kind == SeriesAnalysisChunkKind.Aggregate ||
+              request.kind == SeriesAnalysisChunkKind.Review) =>
+        AppError.Internal("A published analysis scope resource is missing.").asLeft
+      case (_, Some(false), Some(row)) if row.scopeKind.nonEmpty =>
+        AppError.Internal("The published analysis scope index is inconsistent.").asLeft
+      case (_, _, Some(row)) => LoadedChunk(request, ChunkMaterial.Stored(row, None)).asRight
     }
 
   /**
@@ -102,7 +126,8 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
           AND c.item_count BETWEEN 0 AND ${config.maxItemCount}
           AND c.nesting_depth BETWEEN 1 AND ${config.maxNestingDepth}
          THEN c.payload ELSE ''::bytea END,
-    c.encoded_bytes, c.decoded_bytes, c.item_count, c.nesting_depth, c.checksum
+    c.encoded_bytes, c.decoded_bytes, c.item_count, c.nesting_depth, c.checksum,
+    rb.created_at, a.radar_applied_at
   """
 
   private def readableArtifact(request: SeriesAnalysisChunkRequest): Fragment =
@@ -114,8 +139,10 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
      AND a.id = ${request.artifactId}
      AND a.status = 'published'
      AND
-  """ ++ readableContract ++ fr"""
+  """ ++ readableContract ++
+      fr"""
      AND a.id IN (s.current_artifact_id, s.previous_artifact_id)
+     LEFT JOIN series_radar_bases rb ON rb.id = a.radar_basis_id AND rb.game_title_id = a.game_title_id
   """
 
   private val readableContract: Fragment = fr"""

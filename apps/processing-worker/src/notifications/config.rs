@@ -5,8 +5,10 @@ use thiserror::Error;
 use url::{Host, Url};
 
 pub(super) const MAXIMUM_PENDING: usize = 16;
-pub(super) const MAXIMUM_BYTES: usize = 32 * 1024 * 1024;
-pub(super) const MAXIMUM_WIRE_BYTES: usize = 16 * 1024 * 1024;
+pub(super) const MAXIMUM_ANALYSIS_JSONB_BYTES: usize = 256 * 1024;
+pub(super) const MAXIMUM_OCR_JSONB_BYTES: usize = 16 * 1024;
+pub(super) const MAXIMUM_BYTES: usize = MAXIMUM_PENDING * MAXIMUM_ANALYSIS_JSONB_BYTES;
+pub(super) const MAXIMUM_WIRE_BYTES: usize = 512 * 1024;
 pub(super) const CONCURRENT_REQUESTS: usize = 2;
 pub(super) const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 

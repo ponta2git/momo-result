@@ -206,15 +206,18 @@ pub(super) async fn finish_terminal_failure(
             ],
         )
         .await?;
-    transaction
-        .execute(
-            "UPDATE series_analysis_title_states SET\x20\
+    super::radar::terminal_failure(transaction, claim, safe_failure_code).await?;
+    if claim.work_kind == "analysis" {
+        transaction
+            .execute(
+                "UPDATE series_analysis_title_states SET\x20\
                pending_work = false, last_failure_code = $1,\x20\
                last_failure_at = clock_timestamp(), updated_at = clock_timestamp()\x20\
              WHERE game_title_id = $2",
-            &[&safe_failure_code, &claim.game_title_id],
-        )
-        .await?;
+                &[&safe_failure_code, &claim.game_title_id],
+            )
+            .await?;
+    }
     fulfill_requests(transaction, claim, RequestOutcome::Failed).await?;
     schedule_follow_up(transaction, claim, effects).await?;
     refresh_operation_projections(transaction, &claim.attempt_id).await?;

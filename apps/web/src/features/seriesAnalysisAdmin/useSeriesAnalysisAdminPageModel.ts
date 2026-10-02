@@ -145,6 +145,10 @@ export function useSeriesAnalysisAdminPageModel() {
 
   return {
     actions: {
+      clearRecalculationFeedback: () => {
+        setAcceptanceMessage(undefined);
+        if (!commandPending.current) recalculation.reset();
+      },
       recalculateAll: async () => {
         if (commandPending.current || !overview?.titleOptions.length) return;
         commandPending.current = true;

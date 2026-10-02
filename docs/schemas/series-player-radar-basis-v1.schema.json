@@ -1,0 +1,832 @@
+{
+  "$comment": "Generated from apps/processing-worker/crates/analysis-core/src/payload/schema.rs; do not edit by hand. Draft 2020-12 keywords describe the portable shape, type, and bounds subset. x-momo-maxUtf8Bytes, x-momo-finiteF64, and x-momo-integerToken record constraints additionally enforced by the Rust owner validator; generic JSON Schema validation that ignores these annotations is not fully equivalent.",
+  "$id": "https://momo-result.local/schemas/series-player-radar-basis-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "axes": {
+      "items": false,
+      "maxItems": 6,
+      "minItems": 6,
+      "prefixItems": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "axisId": {
+              "enum": [
+                "averageRank",
+                "revenueP90",
+                "revenueAverage",
+                "totalAssetsP10",
+                "totalAssetsMedian",
+                "totalAssetsP90"
+              ],
+              "type": "string"
+            },
+            "median": {
+              "maximum": 1.7976931348623157e+308,
+              "minimum": -1.7976931348623157e+308,
+              "type": "number",
+              "x-momo-finiteF64": true
+            },
+            "q10": {
+              "maximum": 1.7976931348623157e+308,
+              "minimum": -1.7976931348623157e+308,
+              "type": "number",
+              "x-momo-finiteF64": true
+            },
+            "q90": {
+              "maximum": 1.7976931348623157e+308,
+              "minimum": -1.7976931348623157e+308,
+              "type": "number",
+              "x-momo-finiteF64": true
+            },
+            "thresholds": {
+              "items": false,
+              "maxItems": 9,
+              "minItems": 9,
+              "prefixItems": [
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                }
+              ],
+              "type": "array"
+            }
+          },
+          "required": [
+            "axisId",
+            "median",
+            "q10",
+            "q90",
+            "thresholds"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "axisId": {
+              "enum": [
+                "averageRank",
+                "revenueP90",
+                "revenueAverage",
+                "totalAssetsP10",
+                "totalAssetsMedian",
+                "totalAssetsP90"
+              ],
+              "type": "string"
+            },
+            "median": {
+              "maximum": 1.7976931348623157e+308,
+              "minimum": -1.7976931348623157e+308,
+              "type": "number",
+              "x-momo-finiteF64": true
+            },
+            "q10": {
+              "maximum": 1.7976931348623157e+308,
+              "minimum": -1.7976931348623157e+308,
+              "type": "number",
+              "x-momo-finiteF64": true
+            },
+            "q90": {
+              "maximum": 1.7976931348623157e+308,
+              "minimum": -1.7976931348623157e+308,
+              "type": "number",
+              "x-momo-finiteF64": true
+            },
+            "thresholds": {
+              "items": false,
+              "maxItems": 9,
+              "minItems": 9,
+              "prefixItems": [
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                }
+              ],
+              "type": "array"
+            }
+          },
+          "required": [
+            "axisId",
+            "median",
+            "q10",
+            "q90",
+            "thresholds"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "axisId": {
+              "enum": [
+                "averageRank",
+                "revenueP90",
+                "revenueAverage",
+                "totalAssetsP10",
+                "totalAssetsMedian",
+                "totalAssetsP90"
+              ],
+              "type": "string"
+            },
+            "median": {
+              "maximum": 1.7976931348623157e+308,
+              "minimum": -1.7976931348623157e+308,
+              "type": "number",
+              "x-momo-finiteF64": true
+            },
+            "q10": {
+              "maximum": 1.7976931348623157e+308,
+              "minimum": -1.7976931348623157e+308,
+              "type": "number",
+              "x-momo-finiteF64": true
+            },
+            "q90": {
+              "maximum": 1.7976931348623157e+308,
+              "minimum": -1.7976931348623157e+308,
+              "type": "number",
+              "x-momo-finiteF64": true
+            },
+            "thresholds": {
+              "items": false,
+              "maxItems": 9,
+              "minItems": 9,
+              "prefixItems": [
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                }
+              ],
+              "type": "array"
+            }
+          },
+          "required": [
+            "axisId",
+            "median",
+            "q10",
+            "q90",
+            "thresholds"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "axisId": {
+              "enum": [
+                "averageRank",
+                "revenueP90",
+                "revenueAverage",
+                "totalAssetsP10",
+                "totalAssetsMedian",
+                "totalAssetsP90"
+              ],
+              "type": "string"
+            },
+            "median": {
+              "maximum": 1.7976931348623157e+308,
+              "minimum": -1.7976931348623157e+308,
+              "type": "number",
+              "x-momo-finiteF64": true
+            },
+            "q10": {
+              "maximum": 1.7976931348623157e+308,
+              "minimum": -1.7976931348623157e+308,
+              "type": "number",
+              "x-momo-finiteF64": true
+            },
+            "q90": {
+              "maximum": 1.7976931348623157e+308,
+              "minimum": -1.7976931348623157e+308,
+              "type": "number",
+              "x-momo-finiteF64": true
+            },
+            "thresholds": {
+              "items": false,
+              "maxItems": 9,
+              "minItems": 9,
+              "prefixItems": [
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                }
+              ],
+              "type": "array"
+            }
+          },
+          "required": [
+            "axisId",
+            "median",
+            "q10",
+            "q90",
+            "thresholds"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "axisId": {
+              "enum": [
+                "averageRank",
+                "revenueP90",
+                "revenueAverage",
+                "totalAssetsP10",
+                "totalAssetsMedian",
+                "totalAssetsP90"
+              ],
+              "type": "string"
+            },
+            "median": {
+              "maximum": 1.7976931348623157e+308,
+              "minimum": -1.7976931348623157e+308,
+              "type": "number",
+              "x-momo-finiteF64": true
+            },
+            "q10": {
+              "maximum": 1.7976931348623157e+308,
+              "minimum": -1.7976931348623157e+308,
+              "type": "number",
+              "x-momo-finiteF64": true
+            },
+            "q90": {
+              "maximum": 1.7976931348623157e+308,
+              "minimum": -1.7976931348623157e+308,
+              "type": "number",
+              "x-momo-finiteF64": true
+            },
+            "thresholds": {
+              "items": false,
+              "maxItems": 9,
+              "minItems": 9,
+              "prefixItems": [
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                }
+              ],
+              "type": "array"
+            }
+          },
+          "required": [
+            "axisId",
+            "median",
+            "q10",
+            "q90",
+            "thresholds"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "axisId": {
+              "enum": [
+                "averageRank",
+                "revenueP90",
+                "revenueAverage",
+                "totalAssetsP10",
+                "totalAssetsMedian",
+                "totalAssetsP90"
+              ],
+              "type": "string"
+            },
+            "median": {
+              "maximum": 1.7976931348623157e+308,
+              "minimum": -1.7976931348623157e+308,
+              "type": "number",
+              "x-momo-finiteF64": true
+            },
+            "q10": {
+              "maximum": 1.7976931348623157e+308,
+              "minimum": -1.7976931348623157e+308,
+              "type": "number",
+              "x-momo-finiteF64": true
+            },
+            "q90": {
+              "maximum": 1.7976931348623157e+308,
+              "minimum": -1.7976931348623157e+308,
+              "type": "number",
+              "x-momo-finiteF64": true
+            },
+            "thresholds": {
+              "items": false,
+              "maxItems": 9,
+              "minItems": 9,
+              "prefixItems": [
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                }
+              ],
+              "type": "array"
+            }
+          },
+          "required": [
+            "axisId",
+            "median",
+            "q10",
+            "q90",
+            "thresholds"
+          ],
+          "type": "object"
+        }
+      ],
+      "type": "array"
+    },
+    "definitionVersion": {
+      "const": "player-radar-six-axes-v1",
+      "type": "string"
+    },
+    "methodVersion": {
+      "const": "player-radar-spread-v1",
+      "type": "string"
+    },
+    "source": {
+      "additionalProperties": false,
+      "properties": {
+        "firstMatch": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "heldEventId": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "matchId": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "matchNoInEvent": {
+                  "maximum": 2147483647,
+                  "minimum": 1,
+                  "type": "integer",
+                  "x-momo-integerToken": true
+                },
+                "playedAt": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                }
+              },
+              "required": [
+                "heldEventId",
+                "matchId",
+                "matchNoInEvent",
+                "playedAt"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "gameTitleId": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string",
+          "x-momo-maxUtf8Bytes": 4096
+        },
+        "heldEventCount": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "integer",
+          "x-momo-integerToken": true
+        },
+        "lastMatch": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "heldEventId": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "matchId": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "matchNoInEvent": {
+                  "maximum": 2147483647,
+                  "minimum": 1,
+                  "type": "integer",
+                  "x-momo-integerToken": true
+                },
+                "playedAt": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                }
+              },
+              "required": [
+                "heldEventId",
+                "matchId",
+                "matchNoInEvent",
+                "playedAt"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "mapCounts": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "mapMasterId": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string",
+                "x-momo-maxUtf8Bytes": 4096
+              },
+              "matchCount": {
+                "maximum": 1000000,
+                "minimum": 0,
+                "type": "integer",
+                "x-momo-integerToken": true
+              }
+            },
+            "required": [
+              "mapMasterId",
+              "matchCount"
+            ],
+            "type": "object"
+          },
+          "maxItems": 25000,
+          "type": "array"
+        },
+        "mapMasterIds": {
+          "items": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string",
+            "x-momo-maxUtf8Bytes": 4096
+          },
+          "maxItems": 25000,
+          "type": "array"
+        },
+        "matchCount": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "integer",
+          "x-momo-integerToken": true
+        },
+        "sourceChecksum": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string",
+          "x-momo-maxUtf8Bytes": 4096
+        }
+      },
+      "required": [
+        "firstMatch",
+        "gameTitleId",
+        "heldEventCount",
+        "lastMatch",
+        "mapCounts",
+        "mapMasterIds",
+        "matchCount",
+        "sourceChecksum"
+      ],
+      "type": "object"
+    },
+    "windowSize": {
+      "const": 20,
+      "minimum": 0,
+      "type": "integer",
+      "x-momo-integerToken": true
+    },
+    "windowStride": {
+      "const": 1,
+      "minimum": 0,
+      "type": "integer",
+      "x-momo-integerToken": true
+    }
+  },
+  "required": [
+    "axes",
+    "definitionVersion",
+    "methodVersion",
+    "source",
+    "windowSize",
+    "windowStride"
+  ],
+  "title": "Series Player Radar Basis v1",
+  "type": "object"
+}

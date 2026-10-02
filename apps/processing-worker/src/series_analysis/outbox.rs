@@ -114,7 +114,15 @@ impl SeriesAnalysisOutboxDriver {
     }
 
     async fn drain_once(&mut self) -> Result<DrainBatch, SeriesAnalysisOutboxError> {
-        let expanded = self.expand_pending_campaign_targets().await?;
+        let radar_expanded = super::control::radar::materialize_pending(
+            &mut self.database,
+            i64::try_from(self.config.batch_size).map_err(SeriesAnalysisOutboxError::BatchBound)?,
+        )
+        .await?;
+        let expanded = self
+            .expand_pending_campaign_targets()
+            .await?
+            .saturating_add(radar_expanded);
         let reconciled = self.reconcile_queued().await?;
         let claims = measure("outbox_claim", self.claim_due()).await?;
         let claimed = claims.len();
@@ -564,6 +572,7 @@ struct DesiredAnalysis {
 
 #[derive(Debug)]
 struct ActiveAnalysisJob {
+    work_kind: String,
     id: String,
     status: String,
     algorithm_version: String,
@@ -662,7 +671,7 @@ async fn lock_active_analysis_job(
         .query_opt(
             r"
             SELECT id, status, algorithm_version, artifact_schema_version,
-                   validation_contract_id, started_at, lease_attempt_id
+                   validation_contract_id, started_at, lease_attempt_id, work_kind
             FROM series_analysis_jobs
             WHERE game_title_id = $1
               AND status IN ('queued', 'running')
@@ -673,6 +682,9 @@ async fn lock_active_analysis_job(
         .await?
         .map(|row| {
             Ok(ActiveAnalysisJob {
+                work_kind: row
+                    .try_get("work_kind")
+                    .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
                 id: row
                     .try_get("id")
                     .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
@@ -796,6 +808,9 @@ fn campaign_assignment_decision<'a>(
 ) -> Result<CampaignAssignmentDecision<'a>, SeriesAnalysisOutboxError> {
     match active {
         None => Ok(CampaignAssignmentDecision::Create),
+        Some(job) if job.work_kind == "radar_prepare" => {
+            Ok(CampaignAssignmentDecision::DeferForcedRun)
+        }
         Some(job) if job.status == "queued" => {
             Ok(CampaignAssignmentDecision::RefreshQueued { job_id: &job.id })
         }
@@ -1247,6 +1262,22 @@ async fn fail_undeliverable_job(
     else {
         return Ok(());
     };
+    super::control::radar::terminal_failure_for_job(
+        transaction,
+        job_id,
+        "dependency_retry_exhausted",
+    )
+    .await?;
+    let work_kind: String = transaction
+        .query_one(
+            "SELECT work_kind FROM series_analysis_jobs WHERE id=$1",
+            &[&job_id],
+        )
+        .await?
+        .try_get(0)?;
+    if work_kind == "radar_prepare" {
+        return Ok(());
+    }
     transaction
         .execute(
             r"

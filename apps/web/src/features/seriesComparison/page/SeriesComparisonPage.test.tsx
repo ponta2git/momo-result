@@ -14,6 +14,7 @@ import {
   seriesAnalysisOptionsQueryOptions,
   seriesAnalysisStatusQueryOptions,
 } from "@/shared/api/seriesAnalysisQueryOptions";
+import { seriesAnalysisScopeStatusQueryOptions } from "@/shared/api/seriesPlayerRadar";
 import { createDeferred } from "@/test/deferred";
 import { setupMsw } from "@/test/msw/lifecycle";
 import {
@@ -28,7 +29,7 @@ import { createTestQueryClient } from "@/test/queryClient";
 import { selectOption } from "@/test/selectOption";
 
 setupMsw();
-beforeAll(() => decodeSeriesAnalysisArtifact("aggregateV4", makeSeriesAnalysisAggregate()));
+beforeAll(() => decodeSeriesAnalysisArtifact("aggregateV5", makeSeriesAnalysisAggregate()));
 
 describe("SeriesComparisonPage", () => {
   it("changes owner metrics without making the focused control inert or refetching analysis", async () => {
@@ -36,7 +37,7 @@ describe("SeriesComparisonPage", () => {
     let aggregateReads = 0;
     let contextReads = 0;
     server.use(
-      http.get("/api/analytics/series-comparison/v4/aggregate", () => {
+      http.get("/api/analytics/series-comparison/v5/aggregate", () => {
         aggregateReads += 1;
         return HttpResponse.json(makeOwnerComparisonAggregate());
       }),
@@ -58,6 +59,7 @@ describe("SeriesComparisonPage", () => {
     await Promise.all([
       queryClient.fetchQuery(seriesAnalysisOptionsQueryOptions()),
       queryClient.fetchQuery(seriesAnalysisStatusQueryOptions(query.gameTitleId)),
+      queryClient.fetchQuery(seriesAnalysisScopeStatusQueryOptions(query)),
       queryClient.fetchQuery(seriesAnalysisAggregateQueryOptions(query)),
       queryClient.fetchQuery(
         seriesAnalysisMatchContextQueryOptions({ ...query, matchId: "match-12" }),
@@ -141,7 +143,7 @@ describe("SeriesComparisonPage", () => {
           }),
         );
       }),
-      http.get("/api/analytics/series-comparison/v4/aggregate", async () => {
+      http.get("/api/analytics/series-comparison/v5/aggregate", async () => {
         requests += 1;
         if (requests > 1) await refresh.promise;
         return HttpResponse.json(

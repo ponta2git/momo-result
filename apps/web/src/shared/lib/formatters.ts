@@ -1,3 +1,9 @@
+const decimalFormatter = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 2 });
+
+export function formatDecimal(value: number | null | undefined): string {
+  return value === null || value === undefined ? "—" : decimalFormatter.format(value);
+}
+
 export function formatManYen(value: number): string {
   const rounded = Math.round(value);
   const sign = rounded < 0 ? "-" : "";

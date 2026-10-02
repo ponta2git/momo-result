@@ -15,6 +15,10 @@ final class GetSeriesAnalysisStatus[F[_]](repository: SeriesAnalysisRepository[F
   def run(gameTitleId: GameTitleId): F[Either[AppError, SeriesAnalysisStatus]] = repository
     .status(gameTitleId)
 
+  def scope(request: SeriesAnalysisScopeStatusRequest)
+      : F[Either[AppError, SeriesAnalysisScopeStatus]] =
+    repository.scopeStatus(request)
+
 final class GetSeriesAnalysisChunk[F[_]](repository: SeriesAnalysisRepository[F]):
   def run(request: SeriesAnalysisChunkRequest): F[Either[AppError, SeriesAnalysisChunk]] =
     repository

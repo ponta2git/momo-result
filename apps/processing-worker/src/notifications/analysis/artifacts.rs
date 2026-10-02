@@ -10,7 +10,7 @@ use momo_analysis_core::{
 use tokio_postgres::{Client, IsolationLevel, Transaction, types::Type};
 
 use super::{
-    MAXIMUM_SEASONS, SkipReason,
+    SkipReason,
     types::{
         AnalysisIdentity, Artifact, Baseline, BaselinePointer, MatchIdentity, RankSample, Ranks,
     },
@@ -19,6 +19,8 @@ use super::{
 mod aggregate;
 pub(super) use aggregate::decode_ranks;
 
+// Full comparison history can exceed the seasons affected by one notification.
+const MAXIMUM_ARTIFACT_SEASONS: usize = 128;
 const MAXIMUM_ARTIFACT_BYTES: i64 = 8 * 1024 * 1024;
 
 pub(super) async fn load(
@@ -96,7 +98,8 @@ async fn read(
     }
     let count: i64 = header.try_get("scope_count").map_err(database_error)?;
     let bytes: i64 = header.try_get("payload_bytes").map_err(database_error)?;
-    if !usize::try_from(count).is_ok_and(|count| (1..=MAXIMUM_SEASONS + 1).contains(&count))
+    if !usize::try_from(count)
+        .is_ok_and(|count| (1..=MAXIMUM_ARTIFACT_SEASONS + 1).contains(&count))
         || (current_publication(&identity) && bytes > MAXIMUM_ARTIFACT_BYTES)
     {
         return Err(SkipReason::PayloadBound);

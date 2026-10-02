@@ -7,6 +7,7 @@ import {
   makeSeriesAnalysisMatchContext,
   makeSeriesAnalysisOptions,
   makeSeriesAnalysisStatus,
+  makeSeriesAnalysisScopeStatus,
 } from "../../src/test/msw/seriesAnalysisFixtures";
 import type { seedConfirmedContext } from "./records";
 
@@ -119,7 +120,23 @@ export async function installAnalysisResponses(
       }),
     });
   });
-  await page.route(/\/api\/analytics\/series-comparison\/v4\/aggregate(?:\?.*)?$/u, async (route) =>
+  await page.route(
+    /\/api\/analytics\/series-comparison\/v2\/scope-status(?:\?.*)?$/u,
+    async (route) => {
+      const params = new URL(route.request().url()).searchParams;
+      await route.fulfill({
+        json: makeSeriesAnalysisScopeStatus({
+          gameTitleId,
+          artifactId: params.get("artifactId"),
+          seasonMasterId: params.get("seasonMasterId"),
+          mapMasterId: params.get("mapMasterId"),
+          seasonName: params.has("seasonMasterId") ? "E2Eシーズン" : null,
+          mapName: params.has("mapMasterId") ? "E2Eマップ" : null,
+        }),
+      });
+    },
+  );
+  await page.route(/\/api\/analytics\/series-comparison\/v5\/aggregate(?:\?.*)?$/u, async (route) =>
     route.fulfill({ json: aggregateFixture }),
   );
   await page.route(/\/api\/analytics\/series-comparison\/v3\/review(?:\?.*)?$/u, async (route) =>

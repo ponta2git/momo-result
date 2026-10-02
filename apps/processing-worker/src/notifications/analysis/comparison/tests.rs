@@ -155,7 +155,7 @@ fn rank_comparisons_use_unrounded_artifact_values_and_typed_absence() {
 fn oversized_changes_skip_the_whole_listing_but_unchanged_history_is_allowed()
 -> Result<(), SkipReason> {
     let mut after = artifact("current", &[]);
-    for index in 0..MAXIMUM_LISTED_MATCHES {
+    for index in 0..50 {
         after.matches.insert(
             format!("m{index}"),
             MatchIdentity {
@@ -169,10 +169,7 @@ fn oversized_changes_skip_the_whole_listing_but_unchanged_history_is_allowed()
         .scopes
         .get_or_insert_default()
         .insert(Some("season".to_owned()), BTreeMap::new());
-    assert_eq!(
-        changes(&Baseline::Initial, &after)?.matches.len(),
-        MAXIMUM_LISTED_MATCHES
-    );
+    assert_eq!(changes(&Baseline::Initial, &after)?.matches.len(), 50);
     after.matches.insert(
         "overflow".to_owned(),
         MatchIdentity {
@@ -197,6 +194,24 @@ fn oversized_changes_skip_the_whole_listing_but_unchanged_history_is_allowed()
     assert!(
         unchanged.is_empty(),
         "large unchanged histories are still a no-op"
+    );
+    let previous = after.as_artifact().ok_or(SkipReason::InvalidSnapshot)?;
+    let mut changed = artifact("next", &[]);
+    changed.matches.clone_from(&previous.matches);
+    changed.scopes.clone_from(&previous.scopes);
+    changed
+        .matches
+        .get_mut("overflow")
+        .ok_or(SkipReason::InvalidSnapshot)?
+        .source_revision = "2".to_owned();
+    assert_eq!(
+        changes(&after, &changed)?
+            .matches
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+        ["overflow"],
+        "one changed match remains admissible when the complete history exceeds fifty"
     );
     Ok(())
 }
@@ -324,5 +339,86 @@ fn distinct_artifacts_with_identical_input_are_not_changes() -> Result<(), SkipR
         changes(&Baseline::Initial, &artifact("empty", &[]))?.is_empty(),
         "an empty initial input has no matches or changed aggregates"
     );
+    Ok(())
+}
+
+fn seasonal_history(count: usize) -> Artifact {
+    let mut history = artifact("history", &[]);
+    for index in 0..count {
+        let season = format!("season{index}");
+        history.matches.insert(
+            format!("match{index}"),
+            MatchIdentity {
+                source_revision: "1".to_owned(),
+                season_id: season.clone(),
+                map_id: "map".to_owned(),
+            },
+        );
+        history
+            .scopes
+            .get_or_insert_default()
+            .insert(Some(season), BTreeMap::new());
+    }
+    history
+}
+
+#[test]
+fn affected_seasons_include_additions_deletions_and_both_sides_of_moves() -> Result<(), SkipReason>
+{
+    for count in [16, 17] {
+        let baseline = Baseline::Artifact(seasonal_history(count));
+        let current = baseline.as_artifact().ok_or(SkipReason::InvalidSnapshot)?;
+        let initial = changes(&Baseline::Initial, current);
+        let deletion = changes(&baseline, &artifact("empty", &[]));
+        if count == 16 {
+            assert_eq!(initial?.seasons.len(), 16);
+            let deleted = deletion?;
+            assert_eq!(deleted.seasons.len(), 16);
+            assert!(
+                deleted.matches.is_empty(),
+                "deleted matches are never listed"
+            );
+        } else {
+            assert!(
+                matches!(initial, Err(SkipReason::PayloadBound)),
+                "seventeen newly affected seasons skip the entire notification"
+            );
+            assert!(
+                matches!(deletion, Err(SkipReason::PayloadBound)),
+                "deletion-only changes retain the affected-season bound"
+            );
+        }
+    }
+    for count in [8, 9] {
+        let baseline = Baseline::Artifact(seasonal_history(count));
+        let mut moved = seasonal_history(count);
+        for identity in moved.matches.values_mut() {
+            identity.season_id.push_str("-moved");
+        }
+        let result = changes(&baseline, &moved);
+        if count == 8 {
+            assert_eq!(result?.seasons.len(), 16);
+        } else {
+            assert!(
+                matches!(result, Err(SkipReason::PayloadBound)),
+                "the old and new season of each move consume the same listing allowance"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn one_change_in_many_historical_seasons_is_admissible() -> Result<(), SkipReason> {
+    let baseline = Baseline::Artifact(seasonal_history(17));
+    let mut current = seasonal_history(17);
+    current
+        .matches
+        .get_mut("match0")
+        .ok_or(SkipReason::InvalidSnapshot)?
+        .source_revision = "2".to_owned();
+    let changed = changes(&baseline, &current)?;
+    assert_eq!(changed.matches.len(), 1);
+    assert_eq!(changed.seasons.into_iter().collect::<Vec<_>>(), ["season0"]);
     Ok(())
 }

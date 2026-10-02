@@ -31,6 +31,7 @@ import momo.api.http.modules.{
   NotificationSettingsModule,
   OcrModule,
   SeriesAnalysisModule,
+  SeriesPlayerRadarModule,
   UploadModule
 }
 import momo.api.repositories.IdempotencyRepository
@@ -105,6 +106,10 @@ object HttpRoutes:
       getSeriesAnalysisChunk: GetSeriesAnalysisChunk[F],
       getSeriesAnalysisAdminOverview: GetSeriesAnalysisAdminOverview[F],
       requestSeriesAnalysisRecalculation: RequestSeriesAnalysisRecalculation[F],
+      getSeriesPlayerRadarState: GetSeriesPlayerRadarState[F],
+      getSeriesPlayerRadarPreview: GetSeriesPlayerRadarPreview[F],
+      getSeriesPlayerRadarOperation: GetSeriesPlayerRadarOperation[F],
+      requestSeriesPlayerRadarOperation: RequestSeriesPlayerRadarOperation[F],
   )
 
   final case class MasterUseCases[F[_]](
@@ -246,6 +251,16 @@ object HttpRoutes:
         deps.analytics.getSeriesAnalysisChunk,
         deps.analytics.getSeriesAnalysisAdminOverview,
         deps.analytics.requestSeriesAnalysisRecalculation,
+        deps.rateLimiters.readApi,
+        idempotencyGuard,
+        deps.nowF,
+        security,
+      ) :::
+      SeriesPlayerRadarModule.routes[F](
+        deps.analytics.getSeriesPlayerRadarState,
+        deps.analytics.getSeriesPlayerRadarPreview,
+        deps.analytics.getSeriesPlayerRadarOperation,
+        deps.analytics.requestSeriesPlayerRadarOperation,
         deps.rateLimiters.readApi,
         idempotencyGuard,
         deps.nowF,

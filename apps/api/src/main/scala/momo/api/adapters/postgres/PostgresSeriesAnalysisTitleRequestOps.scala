@@ -83,7 +83,7 @@ private[postgres] object PostgresSeriesAnalysisTitleRequestOps:
         FOR UPDATE
       """.query[DesiredRow].option
       active <- sql"""
-        SELECT id, status
+        SELECT id, status, work_kind
         FROM series_analysis_jobs
         WHERE game_title_id = $gameTitleId
           AND status IN ('queued', 'running')
@@ -126,7 +126,8 @@ private[postgres] object PostgresSeriesAnalysisTitleRequestOps:
   ): ConnectionIO[Either[AppError, SeriesAnalysisRecalculationAccepted]] =
     val accepted = active match
       case None => (Some(newJobId), "created_job")
-      case Some(job) if job.status == "queued" => (Some(job.id), "coalesced_into_queued_job")
+      case Some(job) if job.status == "queued" && job.workKind == "analysis" =>
+        (Some(job.id), "coalesced_into_queued_job")
       case Some(_) => (None, "forced_run_reserved")
     for
       acceptedAt <- sql"SELECT now()".query[Instant].unique
@@ -141,7 +142,7 @@ private[postgres] object PostgresSeriesAnalysisTitleRequestOps:
       """.update.run.void
       _ <- active match
         case None => insertManualJob(newJobId, gameTitleId, version, acceptedAt)
-        case Some(job) if job.status == "queued" =>
+        case Some(job) if job.status == "queued" && job.workKind == "analysis" =>
           sql"""
             UPDATE series_analysis_jobs
             SET input_revision = ${version.inputRevision},

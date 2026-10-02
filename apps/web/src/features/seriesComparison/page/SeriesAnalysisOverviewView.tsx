@@ -12,6 +12,7 @@ import {
   formatPercent,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { AnalysisViewProps } from "@/features/seriesComparison/model/seriesAnalysisViewTypes";
+import { PlayerRadarSection } from "@/features/seriesComparison/page/PlayerRadarSection";
 import {
   AnalysisReadingGuide,
   AnalysisSection,
@@ -26,6 +27,7 @@ import {
   SeriesAnalysisQualityAdvisory,
 } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
+import { playerRadarAggregateDisplay } from "@/shared/seriesAnalysis/playerRadarDisplay";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { DataTable } from "@/shared/ui/data/DataTable";
@@ -155,6 +157,7 @@ export const OverviewView = memo(function OverviewView({
           />
         </div>
       </AnalysisSection>
+      <PlayerRadarSection radar={playerRadarAggregateDisplay(response)} />
       <AnalysisSection id="metric-crown-certainty" title="平均順位首位の確からしさ">
         <CrownShareBars
           players={response.players}

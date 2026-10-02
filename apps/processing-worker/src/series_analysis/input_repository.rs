@@ -53,11 +53,12 @@ pub(super) enum InputRepositoryError {
 ///
 /// Returns [`InputRepositoryError::Superseded`] before calculation when the leased revision is
 /// stale.
-pub(super) async fn load_analysis_input(
+async fn load_snapshot(
     client: &mut Client,
     game_title_id: &str,
-    expected_revision: i64,
-) -> Result<NormalizedAnalysisInput, InputRepositoryError> {
+    expected_revision: Option<i64>,
+    job_id: Option<&str>,
+) -> Result<LoadedInput, InputRepositoryError> {
     let transaction = client
         .build_transaction()
         .isolation_level(IsolationLevel::RepeatableRead)
@@ -75,11 +76,39 @@ pub(super) async fn load_analysis_input(
         .await?
         .ok_or(InputRepositoryError::TitleNotFound)?;
     let input_revision = title.try_get::<_, i64>(0)?;
-    if input_revision != expected_revision {
+    if expected_revision.is_some_and(|expected| input_revision != expected) {
         return Err(InputRepositoryError::Superseded);
     }
 
-    let expected_player_match_count = validate_input_shape(&transaction, game_title_id).await?;
+    let input = load_in_transaction(&transaction, game_title_id, input_revision).await?;
+    let context = match job_id {
+        Some(id) => {
+            Some(super::radar_prepare::load_context(&transaction, id, game_title_id).await?)
+        }
+        None => None,
+    };
+    let input =
+        if let Some(context) = &context {
+            input
+                .with_radar_basis(context.public_basis().map_err(|_error| {
+                    InputRepositoryError::InputContract("invalid radar criteria")
+                })?)
+                .map_err(|_error| InputRepositoryError::InputContract("invalid radar criteria"))?
+        } else {
+            input
+        };
+    transaction.commit().await?;
+    Ok(LoadedInput { input, context })
+}
+
+/// Reuses the bounded facts read within an existing coherent snapshot or held title revision fence.
+/// The caller owns the transaction timeout and must not change the input revision while reading.
+pub(super) async fn load_in_transaction(
+    transaction: &tokio_postgres::Transaction<'_>,
+    game_title_id: &str,
+    input_revision: i64,
+) -> Result<NormalizedAnalysisInput, InputRepositoryError> {
+    let expected_player_match_count = validate_input_shape(transaction, game_title_id).await?;
 
     let query_limit = i64::try_from(MAXIMUM_PLAYER_MATCH_ROWS)
         .map_err(|_conversion_error| {
@@ -104,15 +133,13 @@ pub(super) async fn load_analysis_input(
             "input snapshot row count changed inside a repeatable-read transaction",
         ));
     }
-    let input = AnalysisInput {
+    AnalysisInput {
         game_title_id: String::from(game_title_id),
         input_revision,
         player_matches,
     }
     .try_into_normalized()
-    .map_err(|error| InputRepositoryError::InputContract(error.reason()))?;
-    transaction.commit().await?;
-    Ok(input)
+    .map_err(|error| InputRepositoryError::InputContract(error.reason()))
 }
 
 async fn validate_input_shape(
@@ -184,4 +211,44 @@ fn player_match_from_database(row: &Row) -> Result<PlayerMatchInput, tokio_postg
             suri_no_ginji: row.try_get(17)?,
         },
     })
+}
+
+pub(super) struct LoadedInput {
+    pub(super) input: NormalizedAnalysisInput,
+    pub(super) context: Option<super::radar_prepare::RadarReadContext>,
+}
+
+#[cfg(test)]
+pub(super) async fn load_analysis_input(
+    client: &mut Client,
+    game_title_id: &str,
+    expected_revision: i64,
+) -> Result<NormalizedAnalysisInput, InputRepositoryError> {
+    Ok(
+        load_snapshot(client, game_title_id, Some(expected_revision), None)
+            .await?
+            .input,
+    )
+}
+
+pub(super) async fn load_job_input(
+    client: &mut Client,
+    identity: &momo_analysis_core::child::AnalysisAttemptIdentity,
+) -> Result<LoadedInput, InputRepositoryError> {
+    load_snapshot(
+        client,
+        &identity.game_title_id,
+        Some(identity.input_revision),
+        Some(&identity.job_id),
+    )
+    .await
+}
+
+pub(super) async fn load_current_input(
+    client: &mut Client,
+    game_title_id: &str,
+) -> Result<NormalizedAnalysisInput, InputRepositoryError> {
+    Ok(load_snapshot(client, game_title_id, None, None)
+        .await?
+        .input)
 }

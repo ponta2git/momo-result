@@ -102,6 +102,10 @@ pub(crate) async fn claim_job(
     .await?;
     measure("claim_commit", transaction.commit()).await?;
     Ok(effects.committed(ClaimResult::Claimed(ClaimedJob {
+        work_kind: candidate.work_kind,
+        radar_operation_id: candidate.radar_operation_id,
+        radar_basis_id: candidate.radar_basis_id,
+        radar_generation: candidate.radar_generation,
         job_id: String::from(job_id),
         game_title_id: candidate.game_title_id,
         input_revision: candidate.input_revision,
@@ -115,6 +119,10 @@ pub(crate) async fn claim_job(
 }
 
 pub(super) struct ClaimCandidate {
+    work_kind: String,
+    radar_operation_id: Option<String>,
+    radar_basis_id: Option<String>,
+    radar_generation: i64,
     game_title_id: String,
     input_revision: i64,
     algorithm_version: String,
@@ -189,7 +197,8 @@ pub(super) async fn prepare_claim(
                     validation_contract_id, status,\x20\
                     GREATEST(\x20\
                       CEIL(EXTRACT(EPOCH FROM (available_at - clock_timestamp())) * 1000), 0\x20\
-                    )::bigint AS remaining_delay_milliseconds, attempt_count\x20\
+                    )::bigint AS remaining_delay_milliseconds, attempt_count, work_kind,\x20\
+                    radar_operation_id, radar_basis_id, radar_generation\x20\
              FROM series_analysis_jobs WHERE id = $1 FOR UPDATE",
             &[&job_id],
         )
@@ -210,6 +219,10 @@ pub(super) async fn prepare_claim(
     }
     Ok(ClaimPreparation::Ready {
         candidate: ClaimCandidate {
+            work_kind: job.try_get(7)?,
+            radar_operation_id: job.try_get(8)?,
+            radar_basis_id: job.try_get(9)?,
+            radar_generation: job.try_get(10)?,
             game_title_id,
             input_revision: job.try_get(0)?,
             algorithm_version: job.try_get(1)?,
@@ -351,6 +364,11 @@ async fn persist_claim(
             ],
         )
         .await?;
+    transaction.execute("UPDATE series_radar_operations SET status = 'running', updated_at = clock_timestamp() WHERE job_id = $1 AND status = 'pending'", &[&attempt.job_id]).await?;
+    if attempt.candidate.work_kind == "radar_prepare" {
+        return Ok(());
+    }
+    transaction.execute("UPDATE series_radar_operations o SET job_id=$1,status='running',updated_at=clock_timestamp() FROM series_radar_title_states s WHERE s.game_title_id=$2 AND s.active_operation_id=o.id AND s.generation=$3 AND o.kind='apply' AND o.status IN ('pending','running')", &[&attempt.job_id,&attempt.candidate.game_title_id,&attempt.candidate.radar_generation]).await?;
     mark_associated_requests_running(transaction, attempt.job_id, attempt.attempt_id).await
 }
 
@@ -395,6 +413,10 @@ mod tests {
 
     fn candidate(validation_contract_id: Option<&str>) -> ClaimCandidate {
         ClaimCandidate {
+            work_kind: String::from("analysis"),
+            radar_operation_id: None,
+            radar_basis_id: None,
+            radar_generation: 0,
             game_title_id: String::from("title-1"),
             input_revision: 1,
             algorithm_version: String::from(ALGORITHM_VERSION),

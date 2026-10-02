@@ -190,6 +190,10 @@ private[bootstrap] object UseCaseRouteBundles:
         getSeriesAnalysisChunk = getSeriesAnalysisChunk,
         getSeriesAnalysisAdminOverview = getSeriesAnalysisAdminOverview,
         requestSeriesAnalysisRecalculation = requestSeriesAnalysisRecalculation,
+        getSeriesPlayerRadarState = GetSeriesPlayerRadarState[F](seriesPlayerRadar),
+        getSeriesPlayerRadarPreview = GetSeriesPlayerRadarPreview[F](seriesPlayerRadar),
+        getSeriesPlayerRadarOperation = GetSeriesPlayerRadarOperation[F](seriesPlayerRadar),
+        requestSeriesPlayerRadarOperation = RequestSeriesPlayerRadarOperation[F](seriesPlayerRadar),
       ),
       masters = HttpRoutes.MasterUseCases(
         listGameTitles = listGameTitles,

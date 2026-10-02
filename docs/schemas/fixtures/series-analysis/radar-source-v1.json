@@ -1,0 +1,1445 @@
+{
+  "gameTitleId": "title",
+  "matches": [
+    {
+      "mapMasterId": "east",
+      "order": {
+        "heldEventId": "event-0000",
+        "matchId": "match-0000",
+        "matchNoInEvent": 1,
+        "playedAt": "2026-01-01T00:00:00.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 0,
+          "totalAssetsManYen": -10
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 100,
+          "totalAssetsManYen": 90
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 200,
+          "totalAssetsManYen": 190
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 300,
+          "totalAssetsManYen": 290
+        }
+      ],
+      "seasonMasterId": "winter"
+    },
+    {
+      "mapMasterId": "west",
+      "order": {
+        "heldEventId": "event-0000",
+        "matchId": "match-0001",
+        "matchNoInEvent": 2,
+        "playedAt": "2026-01-01T00:00:01.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 10,
+          "totalAssetsManYen": 0
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 110,
+          "totalAssetsManYen": 100
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 210,
+          "totalAssetsManYen": 200
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 310,
+          "totalAssetsManYen": 300
+        }
+      ],
+      "seasonMasterId": "winter"
+    },
+    {
+      "mapMasterId": "east",
+      "order": {
+        "heldEventId": "event-0000",
+        "matchId": "match-0002",
+        "matchNoInEvent": 3,
+        "playedAt": "2026-01-01T00:00:02.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 20,
+          "totalAssetsManYen": 10
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 120,
+          "totalAssetsManYen": 110
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 220,
+          "totalAssetsManYen": 210
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 320,
+          "totalAssetsManYen": 310
+        }
+      ],
+      "seasonMasterId": "winter"
+    },
+    {
+      "mapMasterId": "west",
+      "order": {
+        "heldEventId": "event-0000",
+        "matchId": "match-0003",
+        "matchNoInEvent": 4,
+        "playedAt": "2026-01-01T00:00:03.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 30,
+          "totalAssetsManYen": 20
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 130,
+          "totalAssetsManYen": 120
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 230,
+          "totalAssetsManYen": 220
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 330,
+          "totalAssetsManYen": 320
+        }
+      ],
+      "seasonMasterId": "winter"
+    },
+    {
+      "mapMasterId": "east",
+      "order": {
+        "heldEventId": "event-0000",
+        "matchId": "match-0004",
+        "matchNoInEvent": 5,
+        "playedAt": "2026-01-01T00:00:04.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 40,
+          "totalAssetsManYen": 30
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 140,
+          "totalAssetsManYen": 130
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 240,
+          "totalAssetsManYen": 230
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 340,
+          "totalAssetsManYen": 330
+        }
+      ],
+      "seasonMasterId": "winter"
+    },
+    {
+      "mapMasterId": "west",
+      "order": {
+        "heldEventId": "event-0001",
+        "matchId": "match-0005",
+        "matchNoInEvent": 1,
+        "playedAt": "2026-01-01T00:00:05.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 50,
+          "totalAssetsManYen": 40
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 150,
+          "totalAssetsManYen": 140
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 250,
+          "totalAssetsManYen": 240
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 350,
+          "totalAssetsManYen": 340
+        }
+      ],
+      "seasonMasterId": "winter"
+    },
+    {
+      "mapMasterId": "east",
+      "order": {
+        "heldEventId": "event-0001",
+        "matchId": "match-0006",
+        "matchNoInEvent": 2,
+        "playedAt": "2026-01-01T00:00:06.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 60,
+          "totalAssetsManYen": 50
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 160,
+          "totalAssetsManYen": 150
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 260,
+          "totalAssetsManYen": 250
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 360,
+          "totalAssetsManYen": 350
+        }
+      ],
+      "seasonMasterId": "winter"
+    },
+    {
+      "mapMasterId": "west",
+      "order": {
+        "heldEventId": "event-0001",
+        "matchId": "match-0007",
+        "matchNoInEvent": 3,
+        "playedAt": "2026-01-01T00:00:07.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 70,
+          "totalAssetsManYen": 60
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 170,
+          "totalAssetsManYen": 160
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 270,
+          "totalAssetsManYen": 260
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 370,
+          "totalAssetsManYen": 360
+        }
+      ],
+      "seasonMasterId": "winter"
+    },
+    {
+      "mapMasterId": "east",
+      "order": {
+        "heldEventId": "event-0001",
+        "matchId": "match-0008",
+        "matchNoInEvent": 4,
+        "playedAt": "2026-01-01T00:00:08.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 80,
+          "totalAssetsManYen": 70
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 180,
+          "totalAssetsManYen": 170
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 280,
+          "totalAssetsManYen": 270
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 380,
+          "totalAssetsManYen": 370
+        }
+      ],
+      "seasonMasterId": "winter"
+    },
+    {
+      "mapMasterId": "west",
+      "order": {
+        "heldEventId": "event-0001",
+        "matchId": "match-0009",
+        "matchNoInEvent": 5,
+        "playedAt": "2026-01-01T00:00:09.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 90,
+          "totalAssetsManYen": 80
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 190,
+          "totalAssetsManYen": 180
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 290,
+          "totalAssetsManYen": 280
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 390,
+          "totalAssetsManYen": 380
+        }
+      ],
+      "seasonMasterId": "winter"
+    },
+    {
+      "mapMasterId": "east",
+      "order": {
+        "heldEventId": "event-0002",
+        "matchId": "match-0010",
+        "matchNoInEvent": 1,
+        "playedAt": "2026-01-01T00:00:10.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 100,
+          "totalAssetsManYen": 90
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 200,
+          "totalAssetsManYen": 190
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 300,
+          "totalAssetsManYen": 290
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 400,
+          "totalAssetsManYen": 390
+        }
+      ],
+      "seasonMasterId": "winter"
+    },
+    {
+      "mapMasterId": "west",
+      "order": {
+        "heldEventId": "event-0002",
+        "matchId": "match-0011",
+        "matchNoInEvent": 2,
+        "playedAt": "2026-01-01T00:00:11.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 110,
+          "totalAssetsManYen": 100
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 210,
+          "totalAssetsManYen": 200
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 310,
+          "totalAssetsManYen": 300
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 410,
+          "totalAssetsManYen": 400
+        }
+      ],
+      "seasonMasterId": "winter"
+    },
+    {
+      "mapMasterId": "east",
+      "order": {
+        "heldEventId": "event-0002",
+        "matchId": "match-0012",
+        "matchNoInEvent": 3,
+        "playedAt": "2026-01-01T00:00:12.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 120,
+          "totalAssetsManYen": 110
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 220,
+          "totalAssetsManYen": 210
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 320,
+          "totalAssetsManYen": 310
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 420,
+          "totalAssetsManYen": 410
+        }
+      ],
+      "seasonMasterId": "winter"
+    },
+    {
+      "mapMasterId": "west",
+      "order": {
+        "heldEventId": "event-0002",
+        "matchId": "match-0013",
+        "matchNoInEvent": 4,
+        "playedAt": "2026-01-01T00:00:13.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 130,
+          "totalAssetsManYen": 120
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 230,
+          "totalAssetsManYen": 220
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 330,
+          "totalAssetsManYen": 320
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 430,
+          "totalAssetsManYen": 420
+        }
+      ],
+      "seasonMasterId": "winter"
+    },
+    {
+      "mapMasterId": "east",
+      "order": {
+        "heldEventId": "event-0002",
+        "matchId": "match-0014",
+        "matchNoInEvent": 5,
+        "playedAt": "2026-01-01T00:00:14.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 140,
+          "totalAssetsManYen": 130
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 240,
+          "totalAssetsManYen": 230
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 340,
+          "totalAssetsManYen": 330
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 440,
+          "totalAssetsManYen": 430
+        }
+      ],
+      "seasonMasterId": "winter"
+    },
+    {
+      "mapMasterId": "west",
+      "order": {
+        "heldEventId": "event-0003",
+        "matchId": "match-0015",
+        "matchNoInEvent": 1,
+        "playedAt": "2026-01-01T00:00:15.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 150,
+          "totalAssetsManYen": 140
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 250,
+          "totalAssetsManYen": 240
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 350,
+          "totalAssetsManYen": 340
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 450,
+          "totalAssetsManYen": 440
+        }
+      ],
+      "seasonMasterId": "winter"
+    },
+    {
+      "mapMasterId": "east",
+      "order": {
+        "heldEventId": "event-0003",
+        "matchId": "match-0016",
+        "matchNoInEvent": 2,
+        "playedAt": "2026-01-01T00:00:16.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 160,
+          "totalAssetsManYen": 150
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 260,
+          "totalAssetsManYen": 250
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 360,
+          "totalAssetsManYen": 350
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 460,
+          "totalAssetsManYen": 450
+        }
+      ],
+      "seasonMasterId": "winter"
+    },
+    {
+      "mapMasterId": "west",
+      "order": {
+        "heldEventId": "event-0003",
+        "matchId": "match-0017",
+        "matchNoInEvent": 3,
+        "playedAt": "2026-01-01T00:00:17.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 170,
+          "totalAssetsManYen": 160
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 270,
+          "totalAssetsManYen": 260
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 370,
+          "totalAssetsManYen": 360
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 470,
+          "totalAssetsManYen": 460
+        }
+      ],
+      "seasonMasterId": "winter"
+    },
+    {
+      "mapMasterId": "east",
+      "order": {
+        "heldEventId": "event-0003",
+        "matchId": "match-0018",
+        "matchNoInEvent": 4,
+        "playedAt": "2026-01-01T00:00:18.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 180,
+          "totalAssetsManYen": 170
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 280,
+          "totalAssetsManYen": 270
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 380,
+          "totalAssetsManYen": 370
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 480,
+          "totalAssetsManYen": 470
+        }
+      ],
+      "seasonMasterId": "winter"
+    },
+    {
+      "mapMasterId": "west",
+      "order": {
+        "heldEventId": "event-0003",
+        "matchId": "match-0019",
+        "matchNoInEvent": 5,
+        "playedAt": "2026-01-01T00:00:19.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 190,
+          "totalAssetsManYen": 180
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 290,
+          "totalAssetsManYen": 280
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 390,
+          "totalAssetsManYen": 380
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 490,
+          "totalAssetsManYen": 480
+        }
+      ],
+      "seasonMasterId": "winter"
+    },
+    {
+      "mapMasterId": "east",
+      "order": {
+        "heldEventId": "event-0004",
+        "matchId": "match-0020",
+        "matchNoInEvent": 1,
+        "playedAt": "2026-01-01T00:00:20.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 200,
+          "totalAssetsManYen": 190
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 300,
+          "totalAssetsManYen": 290
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 400,
+          "totalAssetsManYen": 390
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 500,
+          "totalAssetsManYen": 490
+        }
+      ],
+      "seasonMasterId": "summer"
+    },
+    {
+      "mapMasterId": "west",
+      "order": {
+        "heldEventId": "event-0004",
+        "matchId": "match-0021",
+        "matchNoInEvent": 2,
+        "playedAt": "2026-01-01T00:00:21.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 210,
+          "totalAssetsManYen": 200
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 310,
+          "totalAssetsManYen": 300
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 410,
+          "totalAssetsManYen": 400
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 510,
+          "totalAssetsManYen": 500
+        }
+      ],
+      "seasonMasterId": "summer"
+    },
+    {
+      "mapMasterId": "east",
+      "order": {
+        "heldEventId": "event-0004",
+        "matchId": "match-0022",
+        "matchNoInEvent": 3,
+        "playedAt": "2026-01-01T00:00:22.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 220,
+          "totalAssetsManYen": 210
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 320,
+          "totalAssetsManYen": 310
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 420,
+          "totalAssetsManYen": 410
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 520,
+          "totalAssetsManYen": 510
+        }
+      ],
+      "seasonMasterId": "summer"
+    },
+    {
+      "mapMasterId": "west",
+      "order": {
+        "heldEventId": "event-0004",
+        "matchId": "match-0023",
+        "matchNoInEvent": 4,
+        "playedAt": "2026-01-01T00:00:23.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 230,
+          "totalAssetsManYen": 220
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 330,
+          "totalAssetsManYen": 320
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 430,
+          "totalAssetsManYen": 420
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 530,
+          "totalAssetsManYen": 520
+        }
+      ],
+      "seasonMasterId": "summer"
+    },
+    {
+      "mapMasterId": "east",
+      "order": {
+        "heldEventId": "event-0004",
+        "matchId": "match-0024",
+        "matchNoInEvent": 5,
+        "playedAt": "2026-01-01T00:00:24.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 240,
+          "totalAssetsManYen": 230
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 340,
+          "totalAssetsManYen": 330
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 440,
+          "totalAssetsManYen": 430
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 540,
+          "totalAssetsManYen": 530
+        }
+      ],
+      "seasonMasterId": "summer"
+    },
+    {
+      "mapMasterId": "west",
+      "order": {
+        "heldEventId": "event-0005",
+        "matchId": "match-0025",
+        "matchNoInEvent": 1,
+        "playedAt": "2026-01-01T00:00:25.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 250,
+          "totalAssetsManYen": 240
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 350,
+          "totalAssetsManYen": 340
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 450,
+          "totalAssetsManYen": 440
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 550,
+          "totalAssetsManYen": 540
+        }
+      ],
+      "seasonMasterId": "summer"
+    },
+    {
+      "mapMasterId": "east",
+      "order": {
+        "heldEventId": "event-0005",
+        "matchId": "match-0026",
+        "matchNoInEvent": 2,
+        "playedAt": "2026-01-01T00:00:26.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 260,
+          "totalAssetsManYen": 250
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 360,
+          "totalAssetsManYen": 350
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 460,
+          "totalAssetsManYen": 450
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 560,
+          "totalAssetsManYen": 550
+        }
+      ],
+      "seasonMasterId": "summer"
+    },
+    {
+      "mapMasterId": "west",
+      "order": {
+        "heldEventId": "event-0005",
+        "matchId": "match-0027",
+        "matchNoInEvent": 3,
+        "playedAt": "2026-01-01T00:00:27.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 270,
+          "totalAssetsManYen": 260
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 370,
+          "totalAssetsManYen": 360
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 470,
+          "totalAssetsManYen": 460
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 570,
+          "totalAssetsManYen": 560
+        }
+      ],
+      "seasonMasterId": "summer"
+    },
+    {
+      "mapMasterId": "east",
+      "order": {
+        "heldEventId": "event-0005",
+        "matchId": "match-0028",
+        "matchNoInEvent": 4,
+        "playedAt": "2026-01-01T00:00:28.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 280,
+          "totalAssetsManYen": 270
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 380,
+          "totalAssetsManYen": 370
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 480,
+          "totalAssetsManYen": 470
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 580,
+          "totalAssetsManYen": 570
+        }
+      ],
+      "seasonMasterId": "summer"
+    },
+    {
+      "mapMasterId": "west",
+      "order": {
+        "heldEventId": "event-0005",
+        "matchId": "match-0029",
+        "matchNoInEvent": 5,
+        "playedAt": "2026-01-01T00:00:29.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 290,
+          "totalAssetsManYen": 280
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 390,
+          "totalAssetsManYen": 380
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 490,
+          "totalAssetsManYen": 480
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 590,
+          "totalAssetsManYen": 580
+        }
+      ],
+      "seasonMasterId": "summer"
+    },
+    {
+      "mapMasterId": "east",
+      "order": {
+        "heldEventId": "event-0006",
+        "matchId": "match-0030",
+        "matchNoInEvent": 1,
+        "playedAt": "2026-01-01T00:00:30.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 300,
+          "totalAssetsManYen": 290
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 400,
+          "totalAssetsManYen": 390
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 500,
+          "totalAssetsManYen": 490
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 600,
+          "totalAssetsManYen": 590
+        }
+      ],
+      "seasonMasterId": "summer"
+    },
+    {
+      "mapMasterId": "west",
+      "order": {
+        "heldEventId": "event-0006",
+        "matchId": "match-0031",
+        "matchNoInEvent": 2,
+        "playedAt": "2026-01-01T00:00:31.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 310,
+          "totalAssetsManYen": 300
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 410,
+          "totalAssetsManYen": 400
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 510,
+          "totalAssetsManYen": 500
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 610,
+          "totalAssetsManYen": 600
+        }
+      ],
+      "seasonMasterId": "summer"
+    },
+    {
+      "mapMasterId": "east",
+      "order": {
+        "heldEventId": "event-0006",
+        "matchId": "match-0032",
+        "matchNoInEvent": 3,
+        "playedAt": "2026-01-01T00:00:32.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 320,
+          "totalAssetsManYen": 310
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 420,
+          "totalAssetsManYen": 410
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 520,
+          "totalAssetsManYen": 510
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 620,
+          "totalAssetsManYen": 610
+        }
+      ],
+      "seasonMasterId": "summer"
+    },
+    {
+      "mapMasterId": "west",
+      "order": {
+        "heldEventId": "event-0006",
+        "matchId": "match-0033",
+        "matchNoInEvent": 4,
+        "playedAt": "2026-01-01T00:00:33.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 330,
+          "totalAssetsManYen": 320
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 430,
+          "totalAssetsManYen": 420
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 530,
+          "totalAssetsManYen": 520
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 630,
+          "totalAssetsManYen": 620
+        }
+      ],
+      "seasonMasterId": "summer"
+    },
+    {
+      "mapMasterId": "east",
+      "order": {
+        "heldEventId": "event-0006",
+        "matchId": "match-0034",
+        "matchNoInEvent": 5,
+        "playedAt": "2026-01-01T00:00:34.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 340,
+          "totalAssetsManYen": 330
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 440,
+          "totalAssetsManYen": 430
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 540,
+          "totalAssetsManYen": 530
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 640,
+          "totalAssetsManYen": 630
+        }
+      ],
+      "seasonMasterId": "summer"
+    },
+    {
+      "mapMasterId": "west",
+      "order": {
+        "heldEventId": "event-0007",
+        "matchId": "match-0035",
+        "matchNoInEvent": 1,
+        "playedAt": "2026-01-01T00:00:35.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 350,
+          "totalAssetsManYen": 340
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 450,
+          "totalAssetsManYen": 440
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 550,
+          "totalAssetsManYen": 540
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 650,
+          "totalAssetsManYen": 640
+        }
+      ],
+      "seasonMasterId": "summer"
+    },
+    {
+      "mapMasterId": "east",
+      "order": {
+        "heldEventId": "event-0007",
+        "matchId": "match-0036",
+        "matchNoInEvent": 2,
+        "playedAt": "2026-01-01T00:00:36.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 360,
+          "totalAssetsManYen": 350
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 460,
+          "totalAssetsManYen": 450
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 560,
+          "totalAssetsManYen": 550
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 660,
+          "totalAssetsManYen": 650
+        }
+      ],
+      "seasonMasterId": "summer"
+    },
+    {
+      "mapMasterId": "west",
+      "order": {
+        "heldEventId": "event-0007",
+        "matchId": "match-0037",
+        "matchNoInEvent": 3,
+        "playedAt": "2026-01-01T00:00:37.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 370,
+          "totalAssetsManYen": 360
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 470,
+          "totalAssetsManYen": 460
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 570,
+          "totalAssetsManYen": 560
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 670,
+          "totalAssetsManYen": 660
+        }
+      ],
+      "seasonMasterId": "summer"
+    },
+    {
+      "mapMasterId": "east",
+      "order": {
+        "heldEventId": "event-0007",
+        "matchId": "match-0038",
+        "matchNoInEvent": 4,
+        "playedAt": "2026-01-01T00:00:38.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 380,
+          "totalAssetsManYen": 370
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 480,
+          "totalAssetsManYen": 470
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 580,
+          "totalAssetsManYen": 570
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 680,
+          "totalAssetsManYen": 670
+        }
+      ],
+      "seasonMasterId": "summer"
+    },
+    {
+      "mapMasterId": "west",
+      "order": {
+        "heldEventId": "event-0007",
+        "matchId": "match-0039",
+        "matchNoInEvent": 5,
+        "playedAt": "2026-01-01T00:00:39.000000Z"
+      },
+      "players": [
+        {
+          "memberId": "member-1",
+          "rank": 1,
+          "revenueManYen": 390,
+          "totalAssetsManYen": 380
+        },
+        {
+          "memberId": "member-2",
+          "rank": 2,
+          "revenueManYen": 490,
+          "totalAssetsManYen": 480
+        },
+        {
+          "memberId": "member-3",
+          "rank": 3,
+          "revenueManYen": 590,
+          "totalAssetsManYen": 580
+        },
+        {
+          "memberId": "member-4",
+          "rank": 4,
+          "revenueManYen": 690,
+          "totalAssetsManYen": 680
+        }
+      ],
+      "seasonMasterId": "summer"
+    }
+  ]
+}

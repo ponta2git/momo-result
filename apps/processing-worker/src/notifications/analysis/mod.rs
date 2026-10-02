@@ -19,10 +19,10 @@ mod snapshot;
 mod types;
 
 const KIND: &str = NotificationKind::AnalysisCompleted.as_str();
-// Conservative wire bound leaves room for JSONB whitespace and numeric expansion at receipt.
-const MAXIMUM_SNAPSHOT_BYTES: i32 = 4 * 1024 * 1024;
-const MAXIMUM_LISTED_MATCHES: usize = 1024;
-const MAXIMUM_SEASONS: usize = 128;
+// Bound the intermediate database snapshot independently of the final wire envelope.
+const MAXIMUM_SNAPSHOT_BYTES: i32 = 256 * 1024;
+const MAXIMUM_LISTED_MATCHES: usize = 50;
+const MAXIMUM_LISTED_SEASONS: usize = 16;
 const COMPARISON_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Immutable job identity needed to freeze a notification; no lease, fence or runtime settings.

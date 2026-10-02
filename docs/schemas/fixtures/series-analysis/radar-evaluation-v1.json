@@ -1,0 +1,222 @@
+{
+  "basisChecksum": "sha256:20aa7a12379a61df6e336890b4bd0a3612ce86316209cc1617abf0cffd0f1ec4",
+  "definitionVersion": "player-radar-six-axes-v1",
+  "methodVersion": "player-radar-spread-v1",
+  "players": [
+    {
+      "axes": [
+        {
+          "axisId": "averageRank",
+          "rawValue": 1.0,
+          "sampleQuality": "standard",
+          "score": 10,
+          "scoreUnavailableReasons": []
+        },
+        {
+          "axisId": "revenueP90",
+          "rawValue": 351.0,
+          "sampleQuality": "standard",
+          "score": 4,
+          "scoreUnavailableReasons": []
+        },
+        {
+          "axisId": "revenueAverage",
+          "rawValue": 195.0,
+          "sampleQuality": "standard",
+          "score": 3,
+          "scoreUnavailableReasons": []
+        },
+        {
+          "axisId": "totalAssetsP10",
+          "rawValue": 29.000000000000004,
+          "sampleQuality": "standard",
+          "score": 2,
+          "scoreUnavailableReasons": []
+        },
+        {
+          "axisId": "totalAssetsMedian",
+          "rawValue": 185.0,
+          "sampleQuality": "standard",
+          "score": 3,
+          "scoreUnavailableReasons": []
+        },
+        {
+          "axisId": "totalAssetsP90",
+          "rawValue": 341.0,
+          "sampleQuality": "standard",
+          "score": 4,
+          "scoreUnavailableReasons": []
+        }
+      ],
+      "memberId": "member-1"
+    },
+    {
+      "axes": [
+        {
+          "axisId": "averageRank",
+          "rawValue": 2.0,
+          "sampleQuality": "standard",
+          "score": 7,
+          "scoreUnavailableReasons": []
+        },
+        {
+          "axisId": "revenueP90",
+          "rawValue": 451.0,
+          "sampleQuality": "standard",
+          "score": 6,
+          "scoreUnavailableReasons": []
+        },
+        {
+          "axisId": "revenueAverage",
+          "rawValue": 295.0,
+          "sampleQuality": "standard",
+          "score": 5,
+          "scoreUnavailableReasons": []
+        },
+        {
+          "axisId": "totalAssetsP10",
+          "rawValue": 129.0,
+          "sampleQuality": "standard",
+          "score": 4,
+          "scoreUnavailableReasons": []
+        },
+        {
+          "axisId": "totalAssetsMedian",
+          "rawValue": 285.0,
+          "sampleQuality": "standard",
+          "score": 5,
+          "scoreUnavailableReasons": []
+        },
+        {
+          "axisId": "totalAssetsP90",
+          "rawValue": 441.0,
+          "sampleQuality": "standard",
+          "score": 6,
+          "scoreUnavailableReasons": []
+        }
+      ],
+      "memberId": "member-2"
+    },
+    {
+      "axes": [
+        {
+          "axisId": "averageRank",
+          "rawValue": 3.0,
+          "sampleQuality": "standard",
+          "score": 5,
+          "scoreUnavailableReasons": []
+        },
+        {
+          "axisId": "revenueP90",
+          "rawValue": 551.0,
+          "sampleQuality": "standard",
+          "score": 7,
+          "scoreUnavailableReasons": []
+        },
+        {
+          "axisId": "revenueAverage",
+          "rawValue": 395.0,
+          "sampleQuality": "standard",
+          "score": 6,
+          "scoreUnavailableReasons": []
+        },
+        {
+          "axisId": "totalAssetsP10",
+          "rawValue": 229.0,
+          "sampleQuality": "standard",
+          "score": 5,
+          "scoreUnavailableReasons": []
+        },
+        {
+          "axisId": "totalAssetsMedian",
+          "rawValue": 385.0,
+          "sampleQuality": "standard",
+          "score": 6,
+          "scoreUnavailableReasons": []
+        },
+        {
+          "axisId": "totalAssetsP90",
+          "rawValue": 541.0,
+          "sampleQuality": "standard",
+          "score": 7,
+          "scoreUnavailableReasons": []
+        }
+      ],
+      "memberId": "member-3"
+    },
+    {
+      "axes": [
+        {
+          "axisId": "averageRank",
+          "rawValue": 4.0,
+          "sampleQuality": "standard",
+          "score": 3,
+          "scoreUnavailableReasons": []
+        },
+        {
+          "axisId": "revenueP90",
+          "rawValue": 651.0,
+          "sampleQuality": "standard",
+          "score": 9,
+          "scoreUnavailableReasons": []
+        },
+        {
+          "axisId": "revenueAverage",
+          "rawValue": 495.0,
+          "sampleQuality": "standard",
+          "score": 8,
+          "scoreUnavailableReasons": []
+        },
+        {
+          "axisId": "totalAssetsP10",
+          "rawValue": 329.0,
+          "sampleQuality": "standard",
+          "score": 7,
+          "scoreUnavailableReasons": []
+        },
+        {
+          "axisId": "totalAssetsMedian",
+          "rawValue": 485.0,
+          "sampleQuality": "standard",
+          "score": 8,
+          "scoreUnavailableReasons": []
+        },
+        {
+          "axisId": "totalAssetsP90",
+          "rawValue": 641.0,
+          "sampleQuality": "standard",
+          "score": 9,
+          "scoreUnavailableReasons": []
+        }
+      ],
+      "memberId": "member-4"
+    }
+  ],
+  "sample": {
+    "firstMatch": {
+      "heldEventId": "event-0000",
+      "matchId": "match-0000",
+      "matchNoInEvent": 1,
+      "playedAt": "2026-01-01T00:00:00.000000Z"
+    },
+    "heldEventCount": 8,
+    "lastMatch": {
+      "heldEventId": "event-0007",
+      "matchId": "match-0039",
+      "matchNoInEvent": 5,
+      "playedAt": "2026-01-01T00:00:39.000000Z"
+    },
+    "mapCounts": [
+      {
+        "mapMasterId": "east",
+        "matchCount": 20
+      },
+      {
+        "mapMasterId": "west",
+        "matchCount": 20
+      }
+    ],
+    "matchCount": 40,
+    "quality": "standard"
+  }
+}

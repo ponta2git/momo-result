@@ -24,7 +24,7 @@ provider固有値、費用、実測、昇格・復旧手順は public docs へ�
 
 - 通常集計、振り返り、高度分析、drilldown、試合文脈は作品単位で事前計算し、API は保存済み成果物だけを読む。同期 fallback を持たない。
 - production の分析計算は Rust に統一し、Scala engine を HTTP / worker runtimeへ戻さない。
-- 1 job は1作品の全有効 scope と全表示用途を同じ入力 snapshot から計算し、作品単位で原子的に公開する。
+- 通常分析の1 job は1作品の全有効 scope と全表示用途を同じ入力 snapshot から計算し、作品単位で原子的に公開する。レーダーの基準準備は別の実行目的として同じqueue・共有枠を利用し、候補と比較結果を保存する。準備だけでは公開成果物・通常の再計算要求・通知基準を更新しない。
 - DB を revision、request、job、attempt、slot、outbox、artifact、公開状態の正本とし、Redis Streams は少なくとも1回の配送路に限定する。
 - 全 runtime を通じた分析実行枠は1件とし、DB lease と単調増加 fence で保証する。
 - OCR 同居時も共有枠は1件とする。OCRだけが分析を preempt でき、分析はOCRをpreemptしない。
@@ -39,6 +39,7 @@ provider固有値、費用、実測、昇格・復旧手順は public docs へ�
 | artifact schema version | 保存成果物の構造とreader互換性 |
 | validation contract ID | publication前に通したRust validator契約。artifact schemaと独立に識別する |
 | HTTP wire version | clientへ返すAPI契約。artifact schemaと独立 |
+| radar basis / generation | 作品共通の固定採点基準と、適用・取消による公開競合の世代。通常の入力revisionやalgorithmの代わりに使わない |
 
 文字列や timestamp の偶然の大小で version を比較しない。成果物、request、job は必要な version 組を明示する。
 
@@ -66,11 +67,11 @@ provider固有値、費用、実測、昇格・復旧手順は public docs へ�
 | --- | --- | --- |
 | `queued` | 実行または再実行待ち | No |
 | `running` | DB lease / fence を持つ attempt が実行中 | No |
-| `succeeded` | 対象 version の成果物を公開済み | Yes |
+| `succeeded` | 通常分析は対象 version の成果物を公開済み、基準準備は候補・比較を保存済み | Yes |
 | `failed` | 非再試行失敗、または retry / lease recovery 上限 | Yes |
 | `timed_out` | hard timeout | Yes |
 
-queued 中の新 revision は最新版へ集約する。running attempt の終了後は、理由に応じて同じ job を次の状態へ移す。job の終端と attempt の終了を混同しない。
+通常分析のqueued 中の新 revision は最新版へ集約する。基準準備へ通常の更新・手動runを割り当てず、未充足の通常intentを保存して後続へ渡す。候補の閾値は計算開始時のsnapshotへ固定し、計算中の追加で候補を作り直さず、比較の鮮度と元記録の妥当性を保存前に再確認する。running attempt の終了後は、理由に応じて同じ job を次の状態へ移す。job の終端と attempt の終了を混同しない。
 
 | 終了理由 | job の次状態・結果 | 再実行の扱い |
 | --- | --- | --- |
@@ -112,14 +113,19 @@ DB lock順とstaging transactionの規則は `docs/db-rule.md`、process責務�
 
 - 実行attemptが引き受け、成功transactionで完了した試合変更要求を通知対象とする。ジョブの代表triggerだけで判断しない。手動再計算、backfill、algorithm / artifact schema / validation contract変更だけの処理は、公開・再利用とも通知しない。保守要求と試合変更要求が一つのjobに合流した場合は、実際の入力差分だけを通知する。
 - 比較元は直前の成功処理が保存した通知用入力基準とし、画面で読めるcurrent / previousとは独立させる。新規作品の空入力は明示的な初回状態で表し、currentの欠落を初回と推測しない。基準が不明・欠落・不完全なら通知を省略し、理由を記録する。
-- 入力基準は公開・再利用の成功と同じtransactionで進める。通知OFF、保守処理、入力差分なし、準備失敗、HTTP送信失敗でも進め、公開失敗やrollbackでは進めない。releaseによる画面用参照の切離しや元jobの履歴整理で入力基準を失わない。
+- 入力基準は公開・再利用の成功と同じtransactionで進める。通知OFF、保守処理、入力差分なし、通知上限超過、準備失敗、HTTP送信失敗でも進め、公開失敗やrollbackでは進めない。releaseによる画面用参照の切離しや元jobの履歴整理で入力基準を失わない。
 - 前後の試合ID・source revision・所属scopeを照合する。真の初回は今回の全試合、以後は変更後に存在する追加・変更試合だけを掲載し、削除試合は含めない。過去日付への追加もこの集合差で扱う。入力差分のない成功から通知を作らず、内部attempt、失敗、superseded、preemption、成功commit不明からも送出を再構築しない。
 - シーズン通算は影響するシーズンだけを載せる。削除だけなら試合一覧を空にし、通算の変化を伝える。削除では変更前、移動では移動前後の所属を含める。masterも削除済みなら「削除済みシーズン」と明示する。
 - 旧形式の入力基準は保存済みの試合識別・revision・scope・件数を照合し、旧aggregate本文を現行形式としてdecodeしない。入力差分を確定できても平均順位が比較できない場合は、変更前平均をnullとし比較不能を明示する。
 - 平均と対象数はoverall / seasonの保存済みaggregateから取り出し、APIやSummitで平均を計算しない。丸め前の差分を保持し、比較可能・初回・対象なし・比較不能を区別する。空のscopeを平均0で補わない。
 - 通知用の比較準備は公開lock前に上限付きで行う。業務更新・slot解放の後、共通gate取得後の一括SELECTで設定世代と保存済み順位・銀次・メモ・表示名を固定する。取得後からcommitまでの編集を含める保証は求めない。
+- 新規通知の掲載件数・文字数・最終envelopeの上限は[通知サイズと送出可否](base.md#通知サイズと送出可否)に従う。比較履歴の読取範囲は掲載上限とは独立に維持し、通知対象を上限内の一部へ絞り直さない。
 - 通知準備の通常失敗・上限超過・通信失敗は分析成功へ波及させない。内容を切り捨てて送らず、通知全体を省略する。DB接続喪失やcommit不明を成功確認済みと扱わない。HTTPはcommit後に一度だけ試み、ACK・次の計算を通信完了で待たせない。
 - 永続受付前の欠落は許容し、producer outbox・HTTP再試行・未受付通知の再構築を追加しない。永続受付後の保存・配送・取消はSummitが担う。wireとconsumer間の排他契約は `../momo-db/docs/discord-notifications.md` を正本とする。
+
+基準の適用・取消はtitle単位の同じ競合制御に参加する。通常分析は希望基準と適用世代を固定して計算し、全resourceと基準を一緒に公開する。基準の内容は計算checksumへ含めるが、適用日時・operation IDは含めない。適用日時はそのartifactの公開metadataとして保存する。候補の無効化・取消・適用の終端失敗では、対象世代が一致する場合だけ希望基準を現行へ戻し、未反映の通常intentを維持する。詳細な状態と数値契約は[プレーヤーレーダー](series-player-radar.md)を正本とする。
+
+固定基準の閾値と小さな適用来歴は保持する。現在・直前・希望基準、保存成果物、未完了の操作・実行が参照する再現用snapshotを保護し、取り下げ済み候補や差し替え済み比較の大きな未参照payloadは45日後のbounded cleanup対象にする。
 
 ## 5. Artifact Contract
 
@@ -154,6 +160,8 @@ DB lock順とstaging transactionの規則は `docs/db-rule.md`、process責務�
 - optionsは全登録作品を返し、scope候補は現在の確定試合に実在する値だけを返す。確定試合0件と登録作品0件を区別する。
 - current / previousでなくなったartifactは明示的なexpired errorとし、Webはstatus更新後に1回だけ最新artifactでretryする。同期計算や別scopeへのfallbackをしない。
 - public statusはjob ID、account、attempt数、内部診断を返さない。safe failure codeや要求者はadmin履歴に限定する。
+
+有効なシーズン・マップの組合せに対象試合がない場合は、条件を維持した空状態を返す。保存済みartifactのscope索引とmaster identityを使い、対象0件・追加分の分析待ち・不正指定・必要chunkの欠落を区別する。通常の選択肢から消えた有効な選択IDは名称とともに補い、不正IDだけを理由付きで正規化する。
 
 ### Web State
 

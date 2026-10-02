@@ -63,6 +63,8 @@ final case class SeriesAnalysisArtifactRef(
     algorithmVersion: String,
     artifactSchemaVersion: Int,
     publishedAt: Instant,
+    radarBasisCreatedAt: Option[Instant] = None,
+    radarBasisAppliedAt: Option[Instant] = None,
 )
 
 final case class SeriesAnalysisCalculation(

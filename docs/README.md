@@ -17,7 +17,7 @@
 | DB / repository | `docs/db-rule.md`、対象の業務・job 要求 | momo-db 側の変更は `AGENTS.md` の事前確認条件と `docs/db-rule.md` の Migration / Deployment | pinned migration、対象 query、変更経路の DB quality |
 | OCR / Redis queue | `docs/redis-streams-ocr-contract.md`、`docs/db-rule.md`、`docs/schemas/ocr-*.schema.json` | worker 構造は architecture の OCR Capability / Worker Role | API producer、`apps/processing-worker/`、queue / DB / process の変更境界 |
 | 分析 job / artifact / worker / API | `docs/requirements/series-analysis-batch.md` | DB は db-rule、構造は architecture、表示は ui-rule、指標・review は対象要求 | artifact / queue schema、Tapir、processing-worker、Web。Analysis Capability / Worker Evidence Catalog |
-| 戦績比較 | `docs/requirements/series-comparison.md`、分析 batch 要求 | オーナー別比較は `docs/requirements/series-owner-comparison.md`、review は `docs/requirements/series-review-playbook.md`、UI は ui-rule | artifact schema、worker、Web、analysis / Web gate |
+| 戦績比較 | `docs/requirements/series-comparison.md`、分析 batch 要求 | オーナー別比較は `docs/requirements/series-owner-comparison.md`、レーダー・万能性の比較・採点基準は `docs/requirements/series-player-radar.md`、review は `docs/requirements/series-review-playbook.md`、UI は ui-rule | artifact schema、worker、Web、analysis / Web gate |
 | 開催一覧・詳細 | `docs/requirements/held-event-detail.md` | 業務前提は base、メモは match-note、実装境界は architecture | 対象 API / Web |
 | 試合メモ | `docs/requirements/match-note.md` | 変更する境界に応じて base、開催詳細、分析 batch、domain、UI | Tapir、momo-db、API / Web、DB と UI の変更経路 |
 | テスト / coverage / CI | `docs/test-rule.md`、`docs/dev-rule.md` | 実行設計は test-architecture、契約の意味は専門正本 | test 設定、workflow、対象経路の証拠 |

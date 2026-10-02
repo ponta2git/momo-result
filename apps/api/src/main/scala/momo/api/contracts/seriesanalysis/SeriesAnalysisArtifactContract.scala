@@ -21,12 +21,12 @@ private[api] object SeriesAnalysisArtifactContract:
   locally:
     val fields = Set("$comment", "artifactSchemaVersion", "contractVersion", "validationContractId")
     if !Contract.asObject.exists(_.keys.toSet == fields) ||
-      !Contract.hcursor.get[Int]("contractVersion").contains(2) || ArtifactSchemaVersion != 4 ||
+      !Contract.hcursor.get[Int]("contractVersion").contains(2) || ArtifactSchemaVersion != 5 ||
       !ValidationContractId.matches("^[a-z0-9][a-z0-9._-]{0,127}$")
     then sys.error("Unsupported Series analysis publication contract")
 
   val OwnerSchemaFiles: Map[SeriesAnalysisChunkKind, String] = Map(
-    SeriesAnalysisChunkKind.Aggregate -> "series-analysis-aggregate-v5.schema.json",
+    SeriesAnalysisChunkKind.Aggregate -> "series-analysis-aggregate-v6.schema.json",
     SeriesAnalysisChunkKind.Review -> "series-analysis-review-v4.schema.json",
     SeriesAnalysisChunkKind.Drilldown -> "series-analysis-drilldown-v3.schema.json",
     SeriesAnalysisChunkKind.MatchContext -> "series-analysis-match-context-v1.schema.json",

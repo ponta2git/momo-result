@@ -48,6 +48,27 @@ object SeriesAnalysisEndpoints:
       mapMasterId: Option[String],
   )
 
+  final case class ScopeStatusInput(
+      gameTitleId: String,
+      artifactId: Option[String],
+      seasonMasterId: Option[String],
+      mapMasterId: Option[String],
+  )
+
+  val scopeStatus: SecuredRead[ScopeStatusInput, SeriesAnalysisScopeStatusResponse] = endpoint
+    .securityIn(CommonEndpoint.accountHeader)
+    .get
+    .in("api" / "analytics" / "series-comparison" / "v2" / "scope-status")
+    .in(query[String]("gameTitleId")
+      .and(query[Option[String]]("artifactId"))
+      .and(query[Option[String]]("seasonMasterId"))
+      .and(query[Option[String]]("mapMasterId"))
+      .mapTo[ScopeStatusInput])
+    .errorOut(CommonEndpoint.errorOut)
+    .out(jsonBody[SeriesAnalysisScopeStatusResponse])
+    .out(noStore)
+    .tag("analytics")
+
   final case class DrilldownInput(
       gameTitleId: String,
       artifactId: String,
@@ -86,8 +107,8 @@ object SeriesAnalysisEndpoints:
     .and(query[Option[String]]("mapMasterId"))
     .mapTo[MatchContextInput]
 
-  val aggregateV4: SecuredRead[ScopedArtifactInput, Array[Byte]] =
-    artifactEndpoint(SeriesAnalysisResponseSchemas.aggregateV4, "v4")
+  val aggregateV5: SecuredRead[ScopedArtifactInput, Array[Byte]] =
+    artifactEndpoint(SeriesAnalysisResponseSchemas.aggregateV5, "v5")
   val reviewV3: SecuredRead[ScopedArtifactInput, Array[Byte]] =
     artifactEndpoint(SeriesAnalysisResponseSchemas.reviewV3, "v3")
 

@@ -1,6 +1,12 @@
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 
-import { heldEventKeys, masterKeys, matchKeys, seriesAnalysisKeys } from "@/shared/api/queryKeys";
+import {
+  heldEventKeys,
+  masterKeys,
+  matchKeys,
+  seriesAnalysisKeys,
+  seriesPlayerRadarKeys,
+} from "@/shared/api/queryKeys";
 
 /** Transfer a confirmed creation to the cache before its optimistic Action ends. */
 export async function cacheCreatedMaster<Item extends { id: string }>(
@@ -66,6 +72,8 @@ export async function invalidateMasterResourceCaches(
     queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.options() }),
     queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.statusRoot() }),
     queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.adminRoot() }),
+    queryClient.invalidateQueries({ queryKey: seriesPlayerRadarKeys.all() }),
+    queryClient.invalidateQueries({ queryKey: seriesPlayerRadarKeys.scopeStatusRoot() }),
   ]);
 }
 

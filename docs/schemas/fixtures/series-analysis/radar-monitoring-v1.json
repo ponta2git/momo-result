@@ -1,0 +1,496 @@
+{
+  "completedWindowCount": 2,
+  "evaluatedHeldEventCount": 8,
+  "evaluatedMatchCount": 40,
+  "latestWindows": [
+    {
+      "evaluation": {
+        "basisChecksum": "sha256:20aa7a12379a61df6e336890b4bd0a3612ce86316209cc1617abf0cffd0f1ec4",
+        "definitionVersion": "player-radar-six-axes-v1",
+        "methodVersion": "player-radar-spread-v1",
+        "players": [
+          {
+            "axes": [
+              {
+                "axisId": "averageRank",
+                "rawValue": 1.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "revenueP90",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "revenueAverage",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "totalAssetsP10",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "totalAssetsMedian",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "totalAssetsP90",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              }
+            ],
+            "memberId": "member-1"
+          },
+          {
+            "axes": [
+              {
+                "axisId": "averageRank",
+                "rawValue": 2.0,
+                "sampleQuality": "reference",
+                "score": 7,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "revenueP90",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "revenueAverage",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "totalAssetsP10",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "totalAssetsMedian",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "totalAssetsP90",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              }
+            ],
+            "memberId": "member-2"
+          },
+          {
+            "axes": [
+              {
+                "axisId": "averageRank",
+                "rawValue": 3.0,
+                "sampleQuality": "reference",
+                "score": 5,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "revenueP90",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "revenueAverage",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "totalAssetsP10",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "totalAssetsMedian",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "totalAssetsP90",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              }
+            ],
+            "memberId": "member-3"
+          },
+          {
+            "axes": [
+              {
+                "axisId": "averageRank",
+                "rawValue": 4.0,
+                "sampleQuality": "reference",
+                "score": 3,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "revenueP90",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "revenueAverage",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "totalAssetsP10",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "totalAssetsMedian",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "totalAssetsP90",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              }
+            ],
+            "memberId": "member-4"
+          }
+        ],
+        "sample": {
+          "firstMatch": {
+            "heldEventId": "event-0008",
+            "matchId": "match-0040",
+            "matchNoInEvent": 1,
+            "playedAt": "2026-01-01T00:00:40.000000Z"
+          },
+          "heldEventCount": 4,
+          "lastMatch": {
+            "heldEventId": "event-0011",
+            "matchId": "match-0059",
+            "matchNoInEvent": 5,
+            "playedAt": "2026-01-01T00:00:59.000000Z"
+          },
+          "mapCounts": [
+            {
+              "mapMasterId": "east",
+              "matchCount": 10
+            },
+            {
+              "mapMasterId": "west",
+              "matchCount": 10
+            }
+          ],
+          "matchCount": 20,
+          "quality": "reference"
+        }
+      },
+      "firstMatch": {
+        "heldEventId": "event-0008",
+        "matchId": "match-0040",
+        "matchNoInEvent": 1,
+        "playedAt": "2026-01-01T00:00:40.000000Z"
+      },
+      "lastMatch": {
+        "heldEventId": "event-0011",
+        "matchId": "match-0059",
+        "matchNoInEvent": 5,
+        "playedAt": "2026-01-01T00:00:59.000000Z"
+      }
+    },
+    {
+      "evaluation": {
+        "basisChecksum": "sha256:20aa7a12379a61df6e336890b4bd0a3612ce86316209cc1617abf0cffd0f1ec4",
+        "definitionVersion": "player-radar-six-axes-v1",
+        "methodVersion": "player-radar-spread-v1",
+        "players": [
+          {
+            "axes": [
+              {
+                "axisId": "averageRank",
+                "rawValue": 1.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "revenueP90",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "revenueAverage",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "totalAssetsP10",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "totalAssetsMedian",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "totalAssetsP90",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              }
+            ],
+            "memberId": "member-1"
+          },
+          {
+            "axes": [
+              {
+                "axisId": "averageRank",
+                "rawValue": 2.0,
+                "sampleQuality": "reference",
+                "score": 7,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "revenueP90",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "revenueAverage",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "totalAssetsP10",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "totalAssetsMedian",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "totalAssetsP90",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              }
+            ],
+            "memberId": "member-2"
+          },
+          {
+            "axes": [
+              {
+                "axisId": "averageRank",
+                "rawValue": 3.0,
+                "sampleQuality": "reference",
+                "score": 5,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "revenueP90",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "revenueAverage",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "totalAssetsP10",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "totalAssetsMedian",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "totalAssetsP90",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              }
+            ],
+            "memberId": "member-3"
+          },
+          {
+            "axes": [
+              {
+                "axisId": "averageRank",
+                "rawValue": 4.0,
+                "sampleQuality": "reference",
+                "score": 3,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "revenueP90",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "revenueAverage",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "totalAssetsP10",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "totalAssetsMedian",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              },
+              {
+                "axisId": "totalAssetsP90",
+                "rawValue": 10000.0,
+                "sampleQuality": "reference",
+                "score": 10,
+                "scoreUnavailableReasons": []
+              }
+            ],
+            "memberId": "member-4"
+          }
+        ],
+        "sample": {
+          "firstMatch": {
+            "heldEventId": "event-0012",
+            "matchId": "match-0060",
+            "matchNoInEvent": 1,
+            "playedAt": "2026-01-01T00:01:00.000000Z"
+          },
+          "heldEventCount": 4,
+          "lastMatch": {
+            "heldEventId": "event-0015",
+            "matchId": "match-0079",
+            "matchNoInEvent": 5,
+            "playedAt": "2026-01-01T00:01:19.000000Z"
+          },
+          "mapCounts": [
+            {
+              "mapMasterId": "east",
+              "matchCount": 10
+            },
+            {
+              "mapMasterId": "west",
+              "matchCount": 10
+            }
+          ],
+          "matchCount": 20,
+          "quality": "reference"
+        }
+      },
+      "firstMatch": {
+        "heldEventId": "event-0012",
+        "matchId": "match-0060",
+        "matchNoInEvent": 1,
+        "playedAt": "2026-01-01T00:01:00.000000Z"
+      },
+      "lastMatch": {
+        "heldEventId": "event-0015",
+        "matchId": "match-0079",
+        "matchNoInEvent": 5,
+        "playedAt": "2026-01-01T00:01:19.000000Z"
+      }
+    }
+  ],
+  "pendingMatchCount": 0,
+  "postSourceMatchCount": 40,
+  "reasons": [
+    {
+      "axisIds": [
+        "revenueP90",
+        "revenueAverage",
+        "totalAssetsP10",
+        "totalAssetsMedian",
+        "totalAssetsP90"
+      ],
+      "evidenceChecksum": "sha256:256f1705f4dc836d22cf06b742c346013a7a1153da9624e082d91302ebaf3f66",
+      "kind": "high_score_concentration",
+      "mapMasterIds": []
+    }
+  ],
+  "status": "ready"
+}

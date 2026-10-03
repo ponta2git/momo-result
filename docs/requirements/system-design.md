@@ -12,6 +12,8 @@
 
 現在のframework version、directory、env名、threshold、workflow、provider設定は実装・設定を正本とし、この文書へ複製しない。
 
+採用する構成は React/Vite のSPA、Fly.io、Neon、Upstash Redis Streams とする。APIとOCRワーカーは同一リポジトリ・同一Fly.io構成内で分離する。
+
 ## 1. System Boundaries
 
 - Web、API、Processing Worker、共有DB、queue、object storageを独立した責務として扱う。
@@ -102,7 +104,7 @@
 
 ## 9. Performance / Client Quality
 
-- 通常画面 / APIは体感1秒以内、同期CSV / TSV exportは数秒以内を目標とする。
+- 通常画面 / APIは体感1秒以内、同期CSV / TSV exportは数秒以内を目標とする。利用者の待ち方を判断する目安であり、測定条件のない厳密なSLOや使いやすさ全体の合格点として扱わない。具体的な遅さを調べる場合は対象の操作・負荷・環境を定めて測定し、操作の継続性や負担も確認する。
 - OCRは非同期とし、timeout / retry / DLQは実測とjob lifecycleに基づいて調整する。
 - 戦績比較は保存済みartifactだけを読み、worker、API decode / response、browser parse / renderを別々に測定する。
 - 戦績分析のfixture、連続実行、timeout、resource条件は`docs/requirements/series-analysis-batch.md`を正本とする。

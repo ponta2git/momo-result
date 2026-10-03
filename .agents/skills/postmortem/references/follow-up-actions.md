@@ -6,11 +6,13 @@ already established in the conversation.
 
 ## Select a Useful Response
 
-- Tie an action to a supported failure mechanism and an observable outcome. Incomplete causal
-  knowledge can still support a bounded improvement; retain uncertainty that affects the decision.
+- First decide whether an additional measure is needed. Tie a selected action to a supported
+  failure mechanism and a useful outcome. Incomplete causal knowledge can still support a bounded
+  improvement; retain uncertainty that affects the decision.
 - Compare relevant alternatives by risk reduction, maintenance cost, existing coverage, and new
-  failure modes. Removing or constraining the mechanism, improving detection, limiting impact,
-  and improving recovery may be more useful than adding a test, rule, or workflow step.
+  failure modes, including removing or simplifying the mechanism. Use qualitative judgment when
+  a score or metric would obscure these trade-offs. An incident does not by itself justify another
+  test, rule, tracker, or workflow step.
 - Keep unresolved product or operational choices as decision tasks with a next step. Identify a
   known decision-maker or mark the owner unresolved; do not invent an assignee, deadline, or approval.
 - Change durable guidance only for a remaining gap. Use the owning source in
@@ -28,10 +30,11 @@ to satisfy this reference.
 - Keep a stable reference to the source action, such as a section anchor or local action ID.
   Preserve the original priority and decision in the source; update the current target, priority,
   and acceptance condition when justified, recording the date and reason for a changed decision.
-- Make an outstanding action executable from its tracking entry: causal purpose, target boundary,
-  responsible person/role (a stated shared owner is sufficient), acceptance condition, verification
-  method, and next step. Identify any missing owner or decision as unresolved. A deferred or blocked
-  action also needs its reason and a date or condition for reconsideration.
+- Keep enough information to resume an outstanding action: purpose, affected boundary, what would
+  establish completion, and next step. Add ownership where coordination requires it; a stated
+  shared owner is sufficient. Identify unresolved decisions or required ownership. A deferred or
+  blocked action also needs its reason and a date or condition for reconsideration. Use the
+  existing record's form rather than adding fields to satisfy a universal checklist.
 - When reviewing related actions, check whether the target still exists, evidence still applies,
   and a revisit condition has occurred. Connect an event-based trigger to the relevant existing
   work entry point or a named follow-up review. A trigger in a file does not create background
@@ -51,9 +54,10 @@ conditions. Use `docs/test-architecture.md` only when changing test execution de
   rationale; identify the replacement for a superseded action.
 - A completion statement must point to evidence of the acceptance condition, including its scope
   and result. A bare status label is not verification. Record manual review as manual review and
-  distinguish a one-time result from reusable automated coverage. Keep material verification gaps
-  open, with a next verification step; do not require indefinite observation for an otherwise
-  evidenced action.
+  distinguish a one-time result from reusable automated coverage. Completion evidence may be
+  qualitative; do not turn an unsuitable proxy into a numerical acceptance condition. Keep
+  material verification gaps open, with a next verification step; do not require indefinite
+  observation for an otherwise evidenced action.
 - When record updates are authorized, synchronize the selected plan and source references. Keep
   completed history in its source, with at most a concise coverage summary in the tracker. A
   findings-only review reports proposed changes without editing either record. Do not maintain two

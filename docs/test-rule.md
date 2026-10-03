@@ -7,19 +7,21 @@
 - 利用者価値と業務意味は要求、domain、UI 規約を、実装境界は architecture、wire / schema はそれぞれの契約を正本とする。test、test-local fixture、snapshot、lint、checker、coverage は正本の一部を観測する品質証拠であり、それ自体から新しい要求を作らない。
 - green は、宣言した境界、入力、oracle の範囲で違反を観測しなかったことだけを示す。システム全体の正しさや利用者価値を決定論的に保証したとは表現しない。
 - 失敗し得る production 経路を、その因果を判定できる最も近い層で直接通す。隣接層、double、生成成功、coverage の成功を、通していない経路の代用証拠にしない。
+- 品質証拠は、概要から必要な観測条件・結果・限界へ辿れる形で残す。人間による確認の扱いは `AGENTS.md` に従い、後日のレビューを検証の代わりにしない。
 - 人間の承認、復旧判断、手順遵守は private runbook を正本とし、test contract を別に複製しない。runtime / deploy の自動検証は、アプリ利用者への到達性、data 保全、機能、resource 契約を守る場合に限って品質証拠とする。
 
 ## 2. 品質証拠の採用・維持・削除
 
-既存 evidence の維持・変更・削除、または新しい test case、独立 suite、lint / checker rule、manual review の採否は、次の観点で判断する。
+test、suite、lint / checker、manual review は、守る価値に対して必要なものだけ採用・維持する。次の観点は判断を助けるために使い、採点表や全項目の記録を作る義務にはしない。
 
 1. 守るアプリ利用者の結果と、失敗時の影響を特定する。共通実装では直接の利用者をその実装の consumer とし、最終的なアプリ利用者への影響まで遡る。技術的な難しさ、実装規約、未検証であることだけでは採用理由にしない。
 2. その結果を壊す実行経路と独立した失敗条件を特定する。複数 component の組み合わせで初めて価値または失敗が現れる場合は、個別 unit test へ分解して保証したことにせず、integration / component / E2E の組み上がった境界で判断する。
-3. 利用者または実装 consumer が依存する観測可能な結果へ oracle を置く。判定に必要な oracle を置けない、または「crash しない」「呼ばれた」だけでは価値を判定できない場合は、product-value evidence として採用・維持しない。
-4. 既存の test、型、schema、lint、生成照合、上位経路、manual review が同じ失敗をどこまで検出するか確認する。維持・追加する evidence の検出価値が developer 待ち時間、保守負担、誤検出を上回る場合だけ残す。代替 evidence がなくても利用者価値が薄ければ追加・維持しない。
+3. 利用者または実装 consumer が依存する観測可能な結果へ oracle を置く。「crash しない」「呼ばれた」だけでは価値を判定できない場合、それだけを product-value evidence にしない。視覚階層や文章の適切さなど、自動 oracle が不適切な結果は対象を絞った manual review で判断する。
+4. 既存の test、型、schema、lint、生成照合、上位経路、manual review が同じ失敗をどこまで検出するか確認する。検出価値に対して待ち時間、保守負担、誤検出が見合うものだけ残し、代替がなくても価値の薄い evidence は増やさない。
 5. 選んだ境界で、業務上独立した条件、境界値、代表的な失敗を最小集合にする。branch や実装行を埋めるために case を増やさない。
 
-- 判断結果は、既存 evidence の維持、追加・置換、統合・削除、または新しい evidence を置かない、のいずれでもよい。変更説明には採用した evidence と未検証の重要境界を残す。追加・置換・統合・削除を行う場合は、守る価値、境界 / oracle、重複または非採用の理由を必要な範囲で記し、catalog の全項目について非採用理由を列挙しない。
+- 測定は判断を助ける範囲で使う。検出価値と保守負担の比較や見た目の良さを、無理に点数・比率・閾値へ置き換えない。測定が一側面しか捉えない、または仕組みを複雑にする場合は、前提、具体例、限界を定性的に扱う。権限、保存値、互換性、resource 上限など明確な契約は直接検証する。
+- 判断結果は維持、追加・置換、統合・削除、または evidence を置かない、のいずれでもよい。変更説明には選んだ証拠と重要な未検証事項を残す。追加・削除などの判断を理解するために必要なら、守る価値、境界 / oracle、重複や非採用の理由を補い、catalog 全項目の非採用理由は列挙しない。
 - 技術的難易度、変更頻度、過去の欠陥、競合、外部 I/O、復旧困難性は、利用者影響がある候補の優先度と test size を決める要因であり、単独の採用理由ではない。
 - 共通実装は、consumer から見える契約を同値 class、境界、意味の異なる mode に分け、各 partition の代表を検証する。全 call site や内部 branch の機械的な網羅を求めない。
 - test 数や test / production LOC に一律の上限・比率を置かない。ただし、同じ失敗を重複して検出する case、正本を写しただけの assertion、弱い oracle、慢性的に信頼できない test は、追加時だけでなく変更時にも統合・削除を検討する。
@@ -40,7 +42,7 @@
 - accessibility は見た目の微調整と同一視しない。操作名の識別、keyboard での到達・実行、modal の focus 管理などは操作成立の条件として選ぶ。ただし、ライブラリの素の挙動や共通 primitive の契約を全ページで繰り返さない。
 - browser 固有の失敗、実 API との接続、主要な一連の操作を検証するときに E2E を選ぶ。component で判定できる分岐や同じ layout mode の近接幅を、E2E の全状態・全画面へ展開しない。
 - 削除した低価値な自動検証を、全変更で必須の手動チェックリストへ置き換えない。visual review も変更の影響に応じて選ぶ。
-- case を大きな loop や一つの test に詰め替えて件数だけを減らさない。assertion、fixture、mock、helper を含め、独立した検出価値のない保守対象を取り除く。
+- 簡素化は件数の削減ではなく、不要な保守対象の削減で判断する。case を一つの test へ詰め替えるだけで済ませず、assertion、fixture、mock、helper を含め独立した検出価値のないものを取り除く。
 
 以下の各領域に列挙する条件は、対象変更で検討する failure-mode catalog である。一項目ごとに独立した test を要求する一覧ではなく、各項目の命令形は、その条件を evidence に選んだ場合だけ適用する。選択した条件については、記載した境界と oracle を満たす。
 
@@ -188,6 +190,6 @@ job、publication、artifact、version の詳細ケースは `docs/requirements/
 
 ## 10. Quality Gate Handoff
 
-本書で選んだ最小の evidence を、`docs/dev-rule.md` の gate 役割と変更種別へ割り当てる。契約、schema、algorithm version、production OS / runtime、resource profile を変えたことだけを理由に test を自動追加せず、変更した利用者価値と production boundary を直接通す evidence を選ぶ。既存 check の廃止・縮小も同じ採用基準で再評価し、価値がなければ代替 check を作らない。retry と report artifact は `docs/test-architecture.md` に従う。
+本書で選んだ必要十分な evidence を、`docs/dev-rule.md` の gate 役割と変更種別へ割り当てる。変更境界を直接通し、既存 evidence で足りるなら test を増やさない。廃止・縮小も同じ採用基準で判断し、価値がなければ代替 check を作らない。retry と report artifact は `docs/test-architecture.md` に従う。
 
 検証の終了・再実行と報告は `docs/dev-rule.md` の Change Gates と `AGENTS.md` に従う。

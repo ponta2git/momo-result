@@ -45,7 +45,7 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 
 ## 4. Change Gates
 
-各 check は次のいずれか一つの役割を持つ。複数の目的を暗黙に背負わせず、結果の意味を PR 上で区別する。
+必要な check を選び、その結果が何を示すかを次の役割で区別する。分類を埋めるために check や記録を増やさない。
 
 | 役割 | blocking | 判定対象 |
 | --- | --- | --- |
@@ -55,11 +55,11 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 | Manual review | Yes（選択時） | 視覚階層、関係的余白、文章の強さなど自動 oracle が不適切な項目 |
 
 - blocking check は、所有する正本、検出する違反、失敗時の対処を特定できる場合だけ置く。pipeline-integrity evidence の成功を product behavior の成功として扱わない。
-- manual review は、利用者影響があり自動 oracle が適切でない場合だけ選び、確認対象と結果を変更報告や PR に残す。エージェントによるブラウザ実確認も含み、本番操作などの人間承認とは別である。近似的な checker を追加して代用しない。
+- manual review は、利用者影響があり自動 oracle が適切でない場合に選ぶ。エージェントによるブラウザ実確認も含み、本番操作などの人間承認とは別である。確認対象、重要な所見、限界を変更報告や PR に短く残し、近似的な checker や採点で代用しない。人間による不定期の確認を、この gate の完了条件に加えない。
 - lint / checker は syntax-aware な既存 tool と設定を優先する。独自 script は、既存 tool で表現できず、利用者価値または pipeline integrity への影響が大きく、positive / negative fixture で誤検出と未検出を管理できる場合だけ採用する。
 - production build が source detection、tree-shaking、minification などで output を選別し、runtime が識別子を動的に組み立てる場合、canonical build は consumer が必要とする識別子が最終 artifact に残ることを直接検証する。source 定義、compile、unit test の成功を artifact 保持の代用にせず、build が参照する checker、manifest、fixture は host と container の全 build input に含める。
 - check が速いことは採用・維持の理由にしない。廃止時も同等 check の機械的な追加を要求せず、守っていた価値と証拠を `docs/test-rule.md` の基準で再評価する。
-- 一つの command に複数 check をまとめても各結果の役割を区別する。Diagnostic report の欠測や閾値超過を blocking command の失敗へ畳み込まない。
+- 一つの command に複数 check をまとめても、契約の検証と診断を区別する。Diagnostic report の欠測や閾値超過を blocking command の失敗へ畳み込まない。
 
 | 変更 | 必須 gate |
 | --- | --- |
@@ -84,14 +84,14 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 変更範囲に必要な gate と選択した品質証拠を確認したら、検証を終了する。追加・再実行は、結果を無効にする変更、失敗、具体的な未解決事項が生じた場合に、その影響範囲で行う。
 結果の再利用は、対象コード、依存する schema・設定・環境、観測した経路が今回の判断に適合する場合に限る。必須 gate の実行単位は CI の定義に従い、未実行を通過扱いにしない。
 
-検証結果の件数は、追加・削除した case 数と実行した既存 suite の総数を区別して報告する。suite 単位での実行を、変更にその件数の新規回帰 test が必要だったという根拠にしない。
+件数を報告する場合は、追加・削除した case 数と実行した既存 suite の総数を区別する。suite の件数を品質や新規回帰 test の必要性の根拠にしない。
 
 ## 5. Developer Wait / Parallel Execution
 
-- 品質を保つ範囲で developer 待ち時間を最小化する。独立した job は並列実行し、同じ test 集合の通常実行と coverage 実行、重複 setup、不要な build を critical path に重ねない。test 内の並列性と隔離は `docs/test-architecture.md` に従う。
-- shared service、順序、resource 競合など直列性が意味を持つ gate だけを直列化し、理由と scope を workflow 設定の近くへ残す。
-- merge-ready duration は workflow / job timestamp から非 blocking に集計できる。first actionable failure は最初の failed step を暫定 proxy とし、flake、setup、provider failure、cancel、再実行を区別できるか評価してから導入する。
-- 数値予算は必須としない。設定する場合は代表期間の推計と変動幅を根拠にし、計測定義と同じ変更で導入する。local は代表環境で推計し、個人 telemetry を収集しない。
+- 次の判断に必要な前提を確かめたら、独立した検索・読み取り・job はまとめて並列実行する。同じ test 集合の通常実行と coverage 実行、重複 setup、不要な build を重ねない。test 内の並列性と隔離は `docs/test-architecture.md` に従う。
+- subagent は独立した調査、領域別の変更、別視点のレビューに使い、目的・対象・成果物を絞る。主担当は結果待ちの間に独立した作業を進め、統合時に差分と必要な検証を確認する。依存先の未確定な判断や同じ編集を複数 agent に重ねず、委任数や並列率を達成目標にしない。
+- shared service、生成先、DB、CPU / memory などの競合と、結果の統合負担を含めて並列度を決める。並列化で実行が遅くなる、検証が不安定になる場合は減らす。workflow の直列化に固有の理由がある場合は設定の近くに残す。
+- 待ち時間の測定は、遅い工程や改善の効果を判断する必要がある場合だけ加える。timestamp や最初の failed step は一側面の観測であり、作業効率全体を表さない。数値予算・常設 telemetry を導入する前に、不要な実行や依存関係を整理する。予算が必要なら代表条件と変動幅を示し、local の個人 telemetry は収集しない。
 
 ## 6. CI Gates / Release
 
@@ -121,7 +121,9 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 
 本番へ出す commit を選んだら、その `develop` commit を指す短命な `release/YYYYMMDD-N` branch を作り、`master` への release PRを作る。release branch に release 専用の内容変更を追加しない。`master` の required status check が最新baseへの追従を要求する場合だけ、選択した `develop` commitを第1親、現在の `master` を第2親とし、treeを第1親から変えない同期mergeを1件許可する。release PR は merge commit で取り込み、`master` へ直接 push しない。これにより、release PR 作成後に `develop` へ入った変更は次回 release まで含まれず、base更新も候補内容を変えない。
 
-一人開発のため、`develop` と `master` の required approval 数は 0 とする。両 branch とも PR、`pr-ready`、会話解決を必須にし、merge 実行者は repository の write 権限を持つ owner に限定する。`develop` は squash merge のみ、`master` は merge commit のみを許可する。release PR は同一 repository の `release/*` からだけ受け付け、選択したsnapshotが前回 release 以降かつ `develop` 履歴上の commitであることを CI で検証する。同期mergeがある場合は、親の順序、現在の `master` との一致、選択したsnapshotとのtree一致も検証する。
+一人開発のため、`develop` と `master` の required approval 数は 0 とする。これは人間のレビューがないという意味ではなく、確認の時期・深さを固定しない。PR は変更の必要性と結果を先に述べ、検証の範囲・重要な判断・未確認事項から必要な差分や正本へ辿れるようにする。
+
+両 branch とも PR、`pr-ready`、会話解決を必須にし、merge 実行者は repository の write 権限を持つ owner に限定する。`develop` は squash merge のみ、`master` は merge commit のみを許可する。release PR は同一 repository の `release/*` からだけ受け付け、選択したsnapshotが前回 release 以降かつ `develop` 履歴上の commitであることを CI で検証する。同期mergeがある場合は、親の順序、現在の `master` との一致、選択したsnapshotとのtree一致も検証する。
 
 Linear issue を完了させる通常 PR は本文で `Fixes MOM-<番号>` を使う。`develop` merge は started status `Ready for release`、release PR の `master` merge は `Done` の境界として扱うため、release PR に対象 issue の `Fixes MOM-<番号>` をもう一度列挙する。commit message の magic word に issue lifecycle を依存させない。release PR を開いた時点で既存 status を後退させず、複数 PR に紐づく issue は最後の対象 PR が merge されるまで完了扱いにしない。
 

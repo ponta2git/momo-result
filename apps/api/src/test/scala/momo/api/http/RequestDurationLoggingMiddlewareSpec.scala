@@ -1,7 +1,10 @@
 package momo.api.http
 
+import scala.concurrent.duration.*
+
 import cats.data.Kleisli
-import cats.effect.{Deferred, IO}
+import cats.effect.testkit.TestControl
+import cats.effect.{Deferred, IO, Outcome, Resource}
 import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.spi.ILoggingEvent
 import fs2.Stream
@@ -90,6 +93,48 @@ final class RequestDurationLoggingMiddlewareSpec extends MomoCatsEffectSuite:
           assert(completed.head.contains("bodyBytes=0"))
       }
     yield ()
+
+  test("cancellation during response handoff preserves the body release for the consumer"):
+    TestControl.executeEmbed {
+      val readRequest = request.withUri(Uri.unsafeFromString("/api/matches"))
+      for
+        admission <- RequestBodyAdmission.create[IO](1L, 1L, 1L, 1L, 1L)
+        responseReady <- Deferred[IO, Unit]
+        finishHandoff <- Deferred[IO, Unit]
+        bodiesReleased <- IO.ref(0)
+        admitted = admission(Kleisli[IO, Request[IO], Response[IO]](_ =>
+          IO.pure(Response[IO](Status.Ok).withBodyStream(
+            Stream.empty.onFinalize(bodiesReleased.update(_ + 1))
+          ))
+        ))
+        // The response already owns the permit while this masked finalizer is running.
+        // A cancellation must not lose it between the inner app and the logging wrapper.
+        app = RequestDurationLoggingMiddleware[IO](Kleisli(value =>
+          admitted.run(value).guaranteeCase {
+            case Outcome.Succeeded(_) => responseReady.complete(()).void *> finishHandoff.get
+            case _ => IO.unit
+          }
+        ))
+        consumer = Resource.makeFull[IO, Response[IO]](poll => poll(app.run(readRequest)))(
+          _.body.compile.drain
+        )
+        fiber <- consumer.use(_ => IO.never[Unit]).start
+        _ <- responseReady.get
+        cancellation <- fiber.cancel.start
+        _ <- IO.sleep(1.millis)
+        _ <- finishHandoff.complete(())
+        outcome <- fiber.join
+        _ <- cancellation.joinWithNever
+        released <- bodiesReleased.get
+        next <- app.run(readRequest)
+        _ <- next.body.compile.drain
+      yield
+        assert(outcome match
+          case Outcome.Canceled() => true
+          case _ => false)
+        assertEquals(released, 1)
+        assertEquals(next.status, Status.Ok)
+    }
 
   private def middleware(body: Stream[IO, Byte]): HttpApp[IO] =
     RequestDurationLoggingMiddleware[IO](Kleisli(_ =>

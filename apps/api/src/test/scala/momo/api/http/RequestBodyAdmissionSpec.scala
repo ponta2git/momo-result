@@ -59,12 +59,85 @@ final class RequestBodyAdmissionSpec extends MomoCatsEffectSuite:
         _ <- IO.sleep(1.millis)
         excess <- app.run(request)
         _ <- waiters.traverse_(_.cancel)
+        replacement <- app.run(request).start
+        _ <- IO.sleep(1.millis)
         _ <- first.body.compile.drain
-        next <- app.run(request)
+        next <- replacement.joinWithNever
         _ <- next.body.compile.drain
       yield
         assertEquals(excess.status, Status.ServiceUnavailable)
         assertEquals(next.status, Status.Ok)
+    }
+  }
+
+  test("JSON reads time out before entering the handler and their queue capacity can be reused") {
+    TestControl.executeEmbed {
+      val request = Request[IO](Method.GET, Uri.unsafeFromString("/api/matches"))
+      for
+        admission <- RequestBodyAdmission.create[IO](1L, 1L, 1L, 1L, 1L)
+        handlers <- IO.ref(0)
+        rejectedBodies <- IO.ref(0)
+        app = admission(Kleisli[IO, Request[IO], Response[IO]](request =>
+          handlers.update(_ + 1) *> consumingApp.run(request)
+        ))
+        first <- app.run(request)
+        started <- IO.monotonic
+        waiters <- List.fill(16)(request.withBodyStream(
+          Stream.exec(rejectedBodies.update(_ + 1))
+        )).traverse(value => app.run(value).start)
+        rejected <- waiters.traverse(_.joinWithNever)
+        elapsed <- IO.monotonic.map(_ - started)
+        entered <- handlers.get
+        consumed <- rejectedBodies.get
+        replacement <- app.run(request).start
+        _ <- IO.sleep(1.millis)
+        _ <- first.body.compile.drain
+        next <- replacement.joinWithNever
+        _ <- next.body.compile.drain
+        recovered <- app.run(request)
+        _ <- recovered.body.compile.drain
+      yield
+        assert(rejected.forall(_.status.code == Status.ServiceUnavailable.code))
+        assert(rejected.forall(_.headers.headers.exists(header =>
+          header.name.toString == "Retry-After" && header.value == "1"
+        )))
+        assertEquals(elapsed, 5.seconds)
+        assertEquals(entered, 1)
+        assertEquals(consumed, 0)
+        assertEquals(next.status, Status.Ok)
+        assertEquals(recovered.status, Status.Ok)
+    }
+  }
+
+  test("read capacity remains correct when admission and its queue timeout become ready together") {
+    TestControl.executeEmbed {
+      val request = Request[IO](Method.GET, Uri.unsafeFromString("/api/matches"))
+      for
+        admission <- RequestBodyAdmission.create[IO](1L, 1L, 1L, 1L, 1L)
+        handlers <- IO.ref(0)
+        app = admission(Kleisli[IO, Request[IO], Response[IO]](_ =>
+          handlers.update(_ + 1).as(Response[IO](Status.Ok))
+        ))
+        first <- app.run(request)
+        waiting <- app.run(request).start
+        releasing <- (IO.sleep(5.seconds) *> first.body.compile.drain).start
+        result <- waiting.joinWithNever
+        _ <- result.body.compile.drain
+        _ <- releasing.joinWithNever
+        next <- app.run(request)
+        before <- handlers.get
+        queued <- app.run(request).start
+        _ <- IO.sleep(1.millis)
+        after <- handlers.get
+        _ <- queued.cancel
+        _ <- next.body.compile.drain
+        recovered <- app.run(request)
+        _ <- recovered.body.compile.drain
+      yield
+        assert(Set(Status.Ok, Status.ServiceUnavailable).contains(result.status))
+        assertEquals(next.status, Status.Ok)
+        assertEquals(after, before)
+        assertEquals(recovered.status, Status.Ok)
     }
   }
 

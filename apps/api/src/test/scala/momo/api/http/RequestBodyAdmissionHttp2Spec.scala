@@ -168,9 +168,10 @@ final class RequestBodyAdmissionHttp2Spec extends MomoCatsEffectSuite:
 
     private def readExactly(length: Int): IO[ByteVector] =
       if length == 0 then IO.pure(ByteVector.empty)
-      else socket.readN(length).flatMap { bytes =>
-        if bytes.size == length then IO.pure(bytes.toByteVector)
-        else IO.raiseError(new EOFException("HTTP/2 peer closed before completing a frame"))
-      }
+      else
+        socket.readN(length).flatMap { bytes =>
+          if bytes.size == length then IO.pure(bytes.toByteVector)
+          else IO.raiseError(new EOFException("HTTP/2 peer closed before completing a frame"))
+        }
 
   private final case class Frame(kind: Int, flags: Int, streamId: Int, payload: ByteVector)

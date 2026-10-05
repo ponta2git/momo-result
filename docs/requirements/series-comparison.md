@@ -9,7 +9,7 @@
 | 本ページのscope、指標の意味、表示上の判断 | 本書 |
 | オーナー別比較の初版範囲、指標、件数・表示 | `docs/requirements/series-owner-comparison.md` |
 | プレーヤーレーダーの6軸・万能性の比較・作品共通の固定採点基準（要求確定・未実装） | `docs/requirements/series-player-radar.md` |
-| 総合成績で相手を追う・先行を保つ条件の試算（要求確定・未実装） | `docs/requirements/series-rank-outlook.md` |
+| 総合成績で相手を追う・先行を保つ条件の試算（要求確定・仕様定義済み・未実装） | `docs/requirements/series-rank-outlook.md` |
 | 「次戦に備える」の行動プレイブック | `docs/requirements/series-review-playbook.md` |
 | 非同期計算、artifact、状態、管理、公開・復旧 | `docs/requirements/series-analysis-batch.md` |
 | HTTP / artifact shape | Tapir endpoint、JSON Schema |
@@ -60,11 +60,12 @@ endpoint path、DTO field、component構成、query cache key、閾値の配置�
 | 勝因候補 (`drivers`) | 資産、物件収益、目的地、順位を読む追加の手掛かり |
 | 推移 (`flow`) | 直近成績、切り替え力、荒れ試合、開催内の流れ、予測より上位だった勝利 |
 | 条件別 (`context`) | 番手、オーナー、カード売り場と目的地、スリの銀次 |
+| 見通しを試す (`outlook`、追加仕様・未実装) | 総合成績の差を、改善幅と継続戦数へ置き換えて検討する |
 
 - URLは作品、season、map、view、選択試合を復元する。無効値は別scopeへ推測変換せず、安全な既定値へ正規化して理由を示す。
 - オーナー比較への到達と選択指標のURL復元は [オーナー別戦績比較](series-owner-comparison.md#別端末で同じ話題を見る) に従う。
 - 「今の差」へ追加するレーダー比較は [プレーヤーレーダー](series-player-radar.md) に従う。各軸の成績と得点の揃い方から万能性を読み取り、軸点を合算した総合点・平均点・総合順位は計算・表示しない。既存の平均順位・勝率・指標内の値順位はそれぞれの成績指標として維持する。
-- 総合成績の改善幅と継続戦数を条件付きで検討する機能は [総合成績の見通し](series-rank-outlook.md) に従う。将来の勝者予測ではなく、利用者が置いた仮定の試算として扱う。配置・IA・UXは本実装時に既存画面と合わせる。
+- 総合成績の改善幅と継続戦数を条件付きで検討する機能は [総合成績の見通し](series-rank-outlook.md#9-momo-resultへの組み込み) に従う。上位目的の第3項目へ追加し、利用者が置いた仮定の試算として扱う。全マップへの切替は明示操作とし、既存の集計scopeをview選択だけで変えない。
 - view切替だけで集計scopeを変えない。作品・season・map変更時は選択試合を解除する。
 - 根拠試合の選択中は4人の結果と分析上の位置を一貫して示す。試合粒度で一意に対応できない指標へ目印を捏造しない。
 - 対象試合のrevisionまたは作品所属がartifactと異なる場合、一次データは維持し、古い派生分析だけを隠す。

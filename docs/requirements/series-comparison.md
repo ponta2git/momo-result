@@ -9,7 +9,7 @@
 | 本ページのscope、指標の意味、表示上の判断 | 本書 |
 | オーナー別比較の初版範囲、指標、件数・表示 | `docs/requirements/series-owner-comparison.md` |
 | プレーヤーレーダーの6軸・万能性の比較・作品共通の固定採点基準（要求確定・未実装） | `docs/requirements/series-player-radar.md` |
-| 総合成績で相手を追う・先行を保つ条件の試算（要求確定・仕様定義済み・未実装） | `docs/requirements/series-rank-outlook.md` |
+| 総合成績で相手を追う・先行を保つ条件の試算 | `docs/requirements/series-rank-outlook.md` |
 | 「次戦に備える」の行動プレイブック | `docs/requirements/series-review-playbook.md` |
 | 非同期計算、artifact、状態、管理、公開・復旧 | `docs/requirements/series-analysis-batch.md` |
 | HTTP / artifact shape | Tapir endpoint、JSON Schema |
@@ -60,7 +60,7 @@ endpoint path、DTO field、component構成、query cache key、閾値の配置�
 | 勝因候補 (`drivers`) | 資産、物件収益、目的地、順位を読む追加の手掛かり |
 | 推移 (`flow`) | 直近成績、切り替え力、荒れ試合、開催内の流れ、予測より上位だった勝利 |
 | 条件別 (`context`) | 番手、オーナー、カード売り場と目的地、スリの銀次 |
-| 見通しを試す (`outlook`、追加仕様・未実装) | 総合成績の差を、改善幅と継続戦数へ置き換えて検討する |
+| 見通しを試す (`outlook`) | 総合成績の差を、改善幅と継続戦数へ置き換えて検討する |
 
 - URLは作品、season、map、view、選択試合を復元する。無効値は別scopeへ推測変換せず、安全な既定値へ正規化して理由を示す。
 - オーナー比較への到達と選択指標のURL復元は [オーナー別戦績比較](series-owner-comparison.md#別端末で同じ話題を見る) に従う。

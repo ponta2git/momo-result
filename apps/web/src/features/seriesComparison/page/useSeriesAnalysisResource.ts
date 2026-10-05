@@ -8,6 +8,7 @@ import {
   resolveSeriesAnalysisDisplayBundle,
   sameSeriesAnalysisDisplayBundle,
   seriesAnalysisScopeSignature,
+  seriesAnalysisBundleResource,
 } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import type {
   SeriesAnalysisBundleResolution,
@@ -26,6 +27,7 @@ import {
   seriesAnalysisMatchContextQueryOptions,
   seriesAnalysisReviewQueryOptions,
   seriesAnalysisStatusQueryOptions,
+  seriesAnalysisOutlookSummaryQueryOptions,
 } from "@/shared/api/seriesAnalysisQueryOptions";
 import { seriesAnalysisScopeStatusQueryOptions } from "@/shared/api/seriesPlayerRadar";
 import { useAnalysisArtifactRecovery } from "@/shared/api/useAnalysisArtifactRecovery";
@@ -40,11 +42,13 @@ export function useSeriesAnalysisResource({
   deferredState,
   state,
   selectionReady = true,
+  deferOutlookAdoption = false,
 }: {
   activeView: SeriesAnalysisViewId;
   deferredState: SeriesAnalysisUrlState;
   state: SeriesAnalysisUrlState;
   selectionReady?: boolean;
+  deferOutlookAdoption?: boolean;
 }) {
   const queryClient = useQueryClient();
   const [lastSuccessfulBundle, setLastSuccessfulBundle] = useState<
@@ -81,7 +85,12 @@ export function useSeriesAnalysisResource({
   );
   const scopeQuery = useQuery(seriesAnalysisScopeStatusQueryOptions(scopeQueryParams));
   const { refetch: refetchScope } = scopeQuery;
-  const scopeAvailable = scopeQuery.data?.state === "available";
+  const scopeAvailable =
+    scopeQuery.data?.state === "available" ||
+    (activeView === "outlook" &&
+      !state.seasonMasterId &&
+      !state.mapMasterId &&
+      scopeQuery.data?.state === "empty");
   const scopePending = selectionReady && scopeQuery.isFetching && !scopeQuery.data;
   const queryParams = useMemo(() => {
     const context = scopeAvailable
@@ -89,11 +98,17 @@ export function useSeriesAnalysisResource({
       : undefined;
     return {
       aggregate:
-        activeView === "review" || !scopeAvailable
+        activeView === "review" || activeView === "outlook" || !scopeAvailable
           ? undefined
           : seriesAnalysisQueryFromState(deferredState, publishedArtifactId),
       matchContext:
-        context && state.focusMatchId ? { ...context, matchId: state.focusMatchId } : undefined,
+        activeView !== "outlook" && context && state.focusMatchId
+          ? { ...context, matchId: state.focusMatchId }
+          : undefined,
+      outlook:
+        activeView === "outlook" && !state.mapMasterId && scopeAvailable
+          ? seriesAnalysisQueryFromState(state, publishedArtifactId)
+          : undefined,
       review:
         activeView === "review" && scopeAvailable
           ? seriesAnalysisQueryFromState(state, publishedArtifactId)
@@ -104,6 +119,7 @@ export function useSeriesAnalysisResource({
   const reviewQueryParams = queryParams.review;
   const aggregateQuery = useQuery(seriesAnalysisAggregateQueryOptions(aggregateQueryParams));
   const reviewQuery = useQuery(seriesAnalysisReviewQueryOptions(reviewQueryParams));
+  const outlookQuery = useQuery(seriesAnalysisOutlookSummaryQueryOptions(queryParams.outlook));
   const {
     data: aggregateData,
     error: aggregateError,
@@ -118,11 +134,43 @@ export function useSeriesAnalysisResource({
     isLoading: reviewLoading,
     refetch: refetchReview,
   } = reviewQuery;
-  const activeQueryParams = activeView === "review" ? reviewQueryParams : aggregateQueryParams;
-  const activeError = activeView === "review" ? reviewError : aggregateError;
-  const activeFetching = activeView === "review" ? reviewFetching : aggregateFetching;
-  const activeLoading = activeView === "review" ? reviewLoading : aggregateLoading;
-  const activeData = activeView === "review" ? reviewData : aggregateData;
+  const { refetch: refetchOutlook } = outlookQuery;
+  const activeQueryParams =
+    activeView === "outlook"
+      ? queryParams.outlook
+      : activeView === "review"
+        ? reviewQueryParams
+        : aggregateQueryParams;
+  const activeError =
+    activeView === "outlook"
+      ? outlookQuery.error
+      : activeView === "review"
+        ? reviewError
+        : aggregateError;
+  const activeFetching =
+    activeView === "outlook"
+      ? outlookQuery.isFetching
+      : activeView === "review"
+        ? reviewFetching
+        : aggregateFetching;
+  const activeLoading =
+    activeView === "outlook"
+      ? outlookQuery.isLoading
+      : activeView === "review"
+        ? reviewLoading
+        : aggregateLoading;
+  const activeData =
+    activeView === "outlook"
+      ? outlookQuery.data
+      : activeView === "review"
+        ? reviewData
+        : aggregateData;
+  const activeKey =
+    activeView === "outlook"
+      ? seriesAnalysisKeys.outlookSummary(activeQueryParams)
+      : activeView === "review"
+        ? seriesAnalysisKeys.review(activeQueryParams)
+        : seriesAnalysisKeys.aggregate(activeQueryParams);
 
   const candidateAggregate = matchesSeriesAnalysisResource(
     aggregateData,
@@ -134,7 +182,19 @@ export function useSeriesAnalysisResource({
   const candidateReview = matchesSeriesAnalysisResource(reviewData, publishedArtifactId, state)
     ? reviewData
     : undefined;
-  const candidateResource = activeView === "review" ? candidateReview : candidateAggregate;
+  const candidateOutlook = matchesSeriesAnalysisResource(
+    outlookQuery.data,
+    publishedArtifactId,
+    state,
+  )
+    ? outlookQuery.data
+    : undefined;
+  const candidateResource =
+    activeView === "outlook"
+      ? candidateOutlook
+      : activeView === "review"
+        ? candidateReview
+        : candidateAggregate;
   const candidateArtifactId = candidateResource?.artifact.artifactId;
 
   const matchContextQueryParams = queryParams.matchContext;
@@ -163,9 +223,18 @@ export function useSeriesAnalysisResource({
         artifactId: publishedArtifactId,
         matchContext: matchContextData,
         review: candidateReview,
+        outlook: candidateOutlook,
         state,
       }),
-    [activeView, candidateAggregate, candidateReview, matchContextData, publishedArtifactId, state],
+    [
+      activeView,
+      candidateAggregate,
+      candidateReview,
+      candidateOutlook,
+      matchContextData,
+      publishedArtifactId,
+      state,
+    ],
   );
 
   const resolvedBundle =
@@ -177,10 +246,7 @@ export function useSeriesAnalysisResource({
           (matchContextFailed || matchContextUnavailable)
         ? displaySeriesAnalysisBundleWithoutContext(activeView, candidateAggregate, candidateReview)
         : undefined;
-  const previousResource =
-    lastSuccessfulBundle?.kind === "review"
-      ? lastSuccessfulBundle.review
-      : lastSuccessfulBundle?.aggregate;
+  const previousResource = seriesAnalysisBundleResource(lastSuccessfulBundle);
   // A failed replacement may leave the previous artifact readable. Apply the requested view
   // to that immutable payload, but never retain a different match's result or highlights.
   const retainedBundle =
@@ -190,20 +256,27 @@ export function useSeriesAnalysisResource({
           activeView,
           lastSuccessfulBundle?.kind === "analysis" ? lastSuccessfulBundle.aggregate : undefined,
           lastSuccessfulBundle?.kind === "review" ? lastSuccessfulBundle.review : undefined,
+          lastSuccessfulBundle?.kind === "outlook" ? lastSuccessfulBundle.outlook : undefined,
         )
       : undefined;
-  if (retainedBundle && !matchContextUnavailable) {
+  if (retainedBundle && retainedBundle.kind !== "outlook" && !matchContextUnavailable) {
     retainedBundle.matchContext =
       lastSuccessfulBundle?.matchContext?.matchId === state.focusMatchId
         ? lastSuccessfulBundle?.matchContext
         : undefined;
   }
   // A missing replacement aggregate cannot keep a context that the current read invalidated.
-  const nextSuccessfulBundle =
-    resolvedBundle ??
-    (matchContextUnavailable && lastSuccessfulBundle?.matchContext
-      ? { ...lastSuccessfulBundle, matchContext: undefined }
-      : retainedBundle);
+  const outlookAdoptionDeferred =
+    activeView === "outlook" &&
+    deferOutlookAdoption &&
+    lastSuccessfulBundle?.kind === "outlook" &&
+    matchesSeriesAnalysisScope(previousResource, state);
+  const nextSuccessfulBundle = outlookAdoptionDeferred
+    ? lastSuccessfulBundle
+    : (resolvedBundle ??
+      (matchContextUnavailable && lastSuccessfulBundle?.matchContext
+        ? { ...lastSuccessfulBundle, matchContext: undefined }
+        : retainedBundle));
   if (
     nextSuccessfulBundle &&
     !sameSeriesAnalysisDisplayBundle(lastSuccessfulBundle, nextSuccessfulBundle)
@@ -212,8 +285,13 @@ export function useSeriesAnalysisResource({
   }
 
   const refetchActive = useCallback(
-    () => (activeView === "review" ? refetchReview() : refetchAggregate()),
-    [activeView, refetchAggregate, refetchReview],
+    () =>
+      activeView === "outlook"
+        ? refetchOutlook()
+        : activeView === "review"
+          ? refetchReview()
+          : refetchAggregate(),
+    [activeView, refetchAggregate, refetchReview, refetchOutlook],
   );
   const currentDisplayBundle =
     nextSuccessfulBundle &&
@@ -253,10 +331,7 @@ export function useSeriesAnalysisResource({
   useAnalysisArtifactRecovery({
     artifactId: activeQueryParams?.artifactId,
     error: activeError,
-    queryKey:
-      activeView === "review"
-        ? seriesAnalysisKeys.review(activeQueryParams)
-        : seriesAnalysisKeys.aggregate(activeQueryParams),
+    queryKey: activeKey,
     refetchArtifact: refetchActive,
     refetchStatus,
   });
@@ -271,16 +346,17 @@ export function useSeriesAnalysisResource({
   const bundleFetching =
     activeFetching || (matchContextQueryParams !== undefined && matchContextFetching);
   const displayMatchesActivePurpose =
-    activeView === "review"
-      ? displayedBundle?.kind === "review"
-      : displayedBundle?.kind === "analysis";
-  const displayedResource =
-    displayedBundle?.kind === "review" ? displayedBundle.review : displayedBundle?.aggregate;
+    activeView === "outlook"
+      ? displayedBundle?.kind === "outlook"
+      : activeView === "review"
+        ? displayedBundle?.kind === "review"
+        : displayedBundle?.kind === "analysis";
+  const displayedResource = seriesAnalysisBundleResource(displayedBundle);
   const displayMatchesCurrentScope = matchesSeriesAnalysisScope(displayedResource, state);
   const scopeSettling =
     seriesAnalysisScopeSignature(state) !== seriesAnalysisScopeSignature(deferredState);
   const visibleBundle =
-    (scopeAvailable || scopePending) &&
+    (outlookAdoptionDeferred || scopeAvailable || scopePending) &&
     ((displayMatchesActivePurpose && displayMatchesCurrentScope) ||
       scopePending ||
       bundleFetching ||
@@ -291,6 +367,11 @@ export function useSeriesAnalysisResource({
   // Fetching the same immutable artifact does not invalidate its links, disclosures, or focus.
   // Restrict retained content only while its identity differs from the requested display bundle.
   const resourceShielded =
+    !(
+      activeView === "outlook" &&
+      visibleBundle?.kind === "outlook" &&
+      displayMatchesCurrentScope
+    ) &&
     visibleBundle !== undefined &&
     (scopePending ||
       ((!matchesSeriesAnalysisResource(displayedResource, publishedArtifactId, state) ||
@@ -299,8 +380,7 @@ export function useSeriesAnalysisResource({
           visibleBundle.matchContext.matchId !== state.focusMatchId)) &&
         (bundleFetching || scopeSettling || displaySettling)) ||
       (bundleResolution.kind === "waiting" && bundleFetching));
-  const visibleResource =
-    visibleBundle?.kind === "review" ? visibleBundle.review : visibleBundle?.aggregate;
+  const visibleResource = seriesAnalysisBundleResource(visibleBundle);
 
   const refresh = useCallback(() => {
     if (!state.gameTitleId) return;
@@ -313,7 +393,16 @@ export function useSeriesAnalysisResource({
             ...seriesAnalysisScopeStatusQueryOptions(scopeQueryParams),
             staleTime: 0,
           });
-          if (scope.state !== "available") return;
+          if (
+            scope.state !== "available" &&
+            !(
+              activeView === "outlook" &&
+              scope.state === "empty" &&
+              !state.seasonMasterId &&
+              !state.mapMasterId
+            )
+          )
+            return;
         } catch {
           return;
         }
@@ -321,11 +410,7 @@ export function useSeriesAnalysisResource({
       // A new publication selects its own queries. Only refresh the same publication's live
       // overlays, using explicit active keys so navigation/unmount cannot retarget this continuation.
       const keys = [
-        activeQueryParams
-          ? activeView === "review"
-            ? seriesAnalysisKeys.review(activeQueryParams)
-            : seriesAnalysisKeys.aggregate(activeQueryParams)
-          : undefined,
+        activeQueryParams ? activeKey : undefined,
         matchContextQueryParams
           ? seriesAnalysisKeys.matchContext(matchContextQueryParams)
           : undefined,
@@ -350,6 +435,9 @@ export function useSeriesAnalysisResource({
     refetchStatus,
     state.gameTitleId,
     scopeQueryParams,
+    activeKey,
+    state.seasonMasterId,
+    state.mapMasterId,
   ]);
 
   const resourceFailed = useRetryNotice(
@@ -391,17 +479,24 @@ export function useSeriesAnalysisResource({
       canRefresh: activeQueryParams !== undefined || scopeQueryParams !== undefined,
       data: visibleResource,
       hasError: resourceFailed || shouldShowQueryError(scopeQuery),
-      scopeState: scopeQuery.data?.state,
+      // Scope may become empty before its new summary arrives. Keep this display gate,
+      // the input's interactivity and the old bundle together until the gesture ends.
+      scopeState: outlookAdoptionDeferred
+        ? lastSuccessfulBundle.outlook.scope.matchCount === 0
+          ? ("empty" as const)
+          : ("available" as const)
+        : scopeQuery.data?.state,
       loading:
-        !selectionReady ||
-        isInitialQueryLoading(scopeQuery) ||
-        isInitialQueryLoading({
-          data: activeData,
-          isFetching: activeFetching,
-          isLoading: activeLoading,
-        }) ||
-        (!candidateResource && activeFetching) ||
-        (displaySettling && displayedBundle === undefined),
+        !outlookAdoptionDeferred &&
+        (!selectionReady ||
+          isInitialQueryLoading(scopeQuery) ||
+          isInitialQueryLoading({
+            data: activeData,
+            isFetching: activeFetching,
+            isLoading: activeLoading,
+          }) ||
+          (!candidateResource && activeFetching) ||
+          (displaySettling && displayedBundle === undefined)),
       refreshing: (activeFetching && activeData !== undefined) || scopeQuery.isFetching,
       shielded: resourceShielded,
     },

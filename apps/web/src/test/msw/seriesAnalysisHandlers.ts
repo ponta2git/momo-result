@@ -12,8 +12,52 @@ import {
   makeSeriesAnalysisStatus,
   makeSeriesAnalysisScopeStatus,
 } from "@/test/msw/seriesAnalysisFixtures";
+import {
+  makeSeriesAnalysisOutlookSummary,
+  makeSeriesAnalysisOutlookWindow,
+  makeSeriesAnalysisOutlookExamples,
+} from "@/test/msw/seriesAnalysisOutlookFixtures";
 
 export const seriesAnalysisHandlers = [
+  http.get("/api/analytics/series-comparison/v1/outlook-summary", async ({ request }) => {
+    const params = new URL(request.url).searchParams;
+    const response = await makeSeriesAnalysisOutlookSummary();
+    response.artifact = {
+      ...response.artifact,
+      artifactId: params.get("artifactId") ?? response.artifact.artifactId,
+      gameTitleId: params.get("gameTitleId") ?? response.artifact.gameTitleId,
+    };
+    response.source.gameTitleId = response.artifact.gameTitleId;
+    const seasonMasterId = params.get("seasonMasterId");
+    if (seasonMasterId) response.scope = { ...response.scope, kind: "season", seasonMasterId };
+    return HttpResponse.json(response);
+  }),
+  http.get("/api/analytics/series-comparison/v1/outlook-window", async ({ request }) => {
+    const params = new URL(request.url).searchParams;
+    const response = await makeSeriesAnalysisOutlookWindow(Number(params.get("windowSize")), {
+      memberId: params.get("memberId") ?? "member_eu",
+    });
+    response.artifact = {
+      ...response.artifact,
+      artifactId: params.get("artifactId") ?? response.artifact.artifactId,
+      gameTitleId: params.get("gameTitleId") ?? response.artifact.gameTitleId,
+    };
+    response.source.gameTitleId = response.artifact.gameTitleId;
+    return HttpResponse.json(response);
+  }),
+  http.get("/api/analytics/series-comparison/v1/outlook-examples", async ({ request }) => {
+    const params = new URL(request.url).searchParams;
+    const response = await makeSeriesAnalysisOutlookExamples({
+      memberId: params.get("memberId") ?? "member_eu",
+    });
+    response.artifact = {
+      ...response.artifact,
+      artifactId: params.get("artifactId") ?? response.artifact.artifactId,
+      gameTitleId: params.get("gameTitleId") ?? response.artifact.gameTitleId,
+    };
+    response.source.gameTitleId = response.artifact.gameTitleId;
+    return HttpResponse.json(response);
+  }),
   http.get("/api/admin/series-analysis/radar", ({ request }) =>
     HttpResponse.json(
       makePlayerRadarState(

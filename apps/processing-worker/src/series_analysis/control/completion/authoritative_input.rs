@@ -213,7 +213,10 @@ fn candidate_shape(manifest: &ArtifactManifest) -> Result<ArtifactShape, Control
                     return Err(ControlError::InvalidMetadata);
                 }
             }
-            ResourceManifest::Review { .. } | ResourceManifest::Drilldown { .. } => {}
+            ResourceManifest::Review { .. }
+            | ResourceManifest::Drilldown { .. }
+            | ResourceManifest::OutlookSummary { .. }
+            | ResourceManifest::OutlookReference { .. } => {}
         }
     }
     Ok(ArtifactShape {

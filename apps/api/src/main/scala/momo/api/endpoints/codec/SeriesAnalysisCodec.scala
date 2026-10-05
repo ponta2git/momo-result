@@ -5,6 +5,7 @@ import cats.syntax.all.*
 import momo.api.domain.ids.{GameTitleId, MapMasterId, MatchId, MemberId, SeasonMasterId}
 import momo.api.domain.{
   SeriesAnalysisChunkKind,
+  SeriesAnalysisChunkProjection,
   SeriesAnalysisChunkRequest,
   SeriesAnalysisDrilldownMetric,
   SeriesAnalysisScope
@@ -12,6 +13,41 @@ import momo.api.domain.{
 import momo.api.errors.AppError
 
 object SeriesAnalysisCodec:
+  def outlook(
+      rawGameTitleId: String,
+      rawArtifactId: String,
+      seasonMasterId: Option[String],
+      rawMemberId: Option[String],
+      projection: SeriesAnalysisChunkProjection,
+      unsupportedScope: Boolean,
+  ): Either[AppError, SeriesAnalysisChunkRequest] =
+    for
+      _ <- Either.cond(
+        !unsupportedScope,
+        (),
+        AppError.ValidationFailed("This outlook resource does not support the supplied scope."),
+      )
+      _ <- projection match
+        case SeriesAnalysisChunkProjection.OutlookWindow(size) =>
+          Either.cond(
+            size >= 1 && size <= 1000,
+            (),
+            AppError.ValidationFailed("windowSize must be between 1 and 1000.")
+          )
+        case _ => Right(())
+      request <- chunk(
+        if rawMemberId.isDefined then SeriesAnalysisChunkKind.OutlookReference
+        else SeriesAnalysisChunkKind.OutlookSummary,
+        rawGameTitleId,
+        rawArtifactId,
+        seasonMasterId,
+        None,
+        rawMemberId,
+        None,
+        None,
+      )
+    yield request.copy(projection = projection)
+
   def gameTitleId(value: String): Either[AppError, GameTitleId] = BoundaryId
     .required("gameTitleId", value)(GameTitleId.fromString)
 
@@ -74,12 +110,15 @@ object SeriesAnalysisCodec:
       matchId: Option[MatchId],
   ): Either[AppError, Unit] =
     val valid = kind match
-      case SeriesAnalysisChunkKind.Aggregate | SeriesAnalysisChunkKind.Review =>
+      case SeriesAnalysisChunkKind.Aggregate | SeriesAnalysisChunkKind.Review |
+          SeriesAnalysisChunkKind.OutlookSummary =>
         memberId.isEmpty && metric.isEmpty && matchId.isEmpty
       case SeriesAnalysisChunkKind.Drilldown =>
         memberId.nonEmpty && metric.nonEmpty && matchId.isEmpty
       case SeriesAnalysisChunkKind.MatchContext =>
         memberId.isEmpty && metric.isEmpty && matchId.nonEmpty
+      case SeriesAnalysisChunkKind.OutlookReference =>
+        memberId.nonEmpty && metric.isEmpty && matchId.isEmpty
     Either.cond(valid, (), AppError.ValidationFailed("Invalid analysis resource query."))
 
   private val OpaqueIdPattern = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$".r

@@ -28,12 +28,12 @@ beforeAll(() =>
   ]),
 );
 
-type AnalysisViewId = Exclude<SeriesAnalysisViewId, "review">;
+type AnalysisViewId = Exclude<SeriesAnalysisViewId, "review" | "outlook">;
 
 function analysisBundle(
   aggregate: SeriesComparisonAggregate,
   view: AnalysisViewId,
-): SeriesAnalysisDisplayBundle {
+): Extract<SeriesAnalysisDisplayBundle, { kind: "analysis" }> {
   return { aggregate, kind: "analysis", matchContext: undefined, view };
 }
 

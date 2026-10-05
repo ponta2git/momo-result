@@ -65,8 +65,8 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
     ).foreach { case (kind, file, obsoletePayloadVersions) =>
       val current = sharedFixture(file)
       val request = simpleRequest(kind)
-      assert(validate(current, request, None, 5))
-      List(0, 1, 2, 3, 4, 99).foreach(version =>
+      assert(validate(current, request, None, 6))
+      List(0, 1, 2, 3, 4, 5, 99).foreach(version =>
         assert(!validate(current, request, None, version))
       )
       obsoletePayloadVersions.foreach(version =>
@@ -74,13 +74,13 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
           current.mapObject(_.add("schemaVersion", Json.fromInt(version))),
           request,
           None,
-          5
+          6
         ))
       )
     }
     val currentId = SeriesAnalysisArtifactContract.ValidationContractId
-    assert(SeriesAnalysisArtifactContract.supports(5, Some(currentId)))
-    List(0, 1, 2, 3, 4, 99).foreach(version =>
+    assert(SeriesAnalysisArtifactContract.supports(6, Some(currentId)))
+    List(0, 1, 2, 3, 4, 5, 99).foreach(version =>
       assert(!SeriesAnalysisArtifactContract.supports(version, Some(currentId)))
     )
     List(
@@ -89,7 +89,7 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
       Some("series-analysis-artifact-v3-full-validation-v1"),
       Some("unknown")
     ).foreach(id =>
-      assert(!SeriesAnalysisArtifactContract.supports(5, id))
+      assert(!SeriesAnalysisArtifactContract.supports(6, id))
     )
 
   test("keeps the API drilldown vocabulary aligned with the owner schema"):
@@ -209,7 +209,7 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
       request: SeriesAnalysisChunkRequest,
       revision: Option[Long]
   ): Boolean =
-    validate(json, request, revision, 5)
+    validate(json, request, revision, 6)
 
   private def validate(
       json: Json,

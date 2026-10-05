@@ -3288,6 +3288,287 @@
         }
       }
     },
+    "/api/analytics/series-comparison/v1/outlook-summary" : {
+      "get" : {
+        "tags" : [
+          "analytics"
+        ],
+        "operationId" : "getApiAnalyticsSeries-comparisonV1Outlook-summary",
+        "parameters" : [
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "gameTitleId",
+            "in" : "query",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "artifactId",
+            "in" : "query",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "seasonMasterId",
+            "in" : "query",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "headers" : {
+              "Cache-Control" : {
+                "required" : true,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SeriesAnalysisOutlookSummaryResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: query parameter gameTitleId, Invalid value for: query parameter artifactId, Invalid value",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "headers" : {
+              "Retry-After" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/analytics/series-comparison/v1/outlook-window" : {
+      "get" : {
+        "tags" : [
+          "analytics"
+        ],
+        "operationId" : "getApiAnalyticsSeries-comparisonV1Outlook-window",
+        "parameters" : [
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "gameTitleId",
+            "in" : "query",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "artifactId",
+            "in" : "query",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "memberId",
+            "in" : "query",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "windowSize",
+            "in" : "query",
+            "required" : true,
+            "schema" : {
+              "type" : "integer",
+              "format" : "int32",
+              "minimum" : 1,
+              "maximum" : 1000
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "headers" : {
+              "Cache-Control" : {
+                "required" : true,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SeriesAnalysisOutlookWindowResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: query parameter gameTitleId, Invalid value for: query parameter artifactId, Invalid value for: query parameter memberId, Invalid value for: query parameter windowSize, Invalid value",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "headers" : {
+              "Retry-After" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/analytics/series-comparison/v1/outlook-examples" : {
+      "get" : {
+        "tags" : [
+          "analytics"
+        ],
+        "operationId" : "getApiAnalyticsSeries-comparisonV1Outlook-examples",
+        "parameters" : [
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "gameTitleId",
+            "in" : "query",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "artifactId",
+            "in" : "query",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "memberId",
+            "in" : "query",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "headers" : {
+              "Cache-Control" : {
+                "required" : true,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SeriesAnalysisOutlookExamplesResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: query parameter gameTitleId, Invalid value for: query parameter artifactId, Invalid value for: query parameter memberId, Invalid value",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "headers" : {
+              "Retry-After" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/series-analysis/overview" : {
       "get" : {
         "tags" : [
@@ -15291,7 +15572,7 @@
                 "x-momo-maxUtf8Bytes" : 4096
               },
               "artifactSchemaVersion" : {
-                "const" : 5,
+                "const" : 6,
                 "type" : "integer"
               },
               "gameTitleId" : {
@@ -15930,7 +16211,7 @@
                     "x-momo-maxUtf8Bytes" : 4096
                   },
                   "artifactSchemaVersion" : {
-                    "const" : 5,
+                    "const" : 6,
                     "type" : "integer"
                   },
                   "gameTitleId" : {
@@ -16593,7 +16874,7 @@
                     "x-momo-maxUtf8Bytes" : 4096
                   },
                   "artifactSchemaVersion" : {
-                    "const" : 5,
+                    "const" : 6,
                     "type" : "integer"
                   },
                   "gameTitleId" : {
@@ -17075,7 +17356,7 @@
                     "x-momo-maxUtf8Bytes" : 4096
                   },
                   "artifactSchemaVersion" : {
-                    "const" : 5,
+                    "const" : 6,
                     "type" : "integer"
                   },
                   "gameTitleId" : {
@@ -17517,7 +17798,7 @@
                     "x-momo-maxUtf8Bytes" : 4096
                   },
                   "artifactSchemaVersion" : {
-                    "const" : 5,
+                    "const" : 6,
                     "type" : "integer"
                   },
                   "gameTitleId" : {
@@ -18332,7 +18613,7 @@
                     "x-momo-maxUtf8Bytes" : 4096
                   },
                   "artifactSchemaVersion" : {
-                    "const" : 5,
+                    "const" : 6,
                     "type" : "integer"
                   },
                   "gameTitleId" : {
@@ -18439,7 +18720,7 @@
                     "x-momo-maxUtf8Bytes" : 4096
                   },
                   "artifactSchemaVersion" : {
-                    "const" : 5,
+                    "const" : 6,
                     "type" : "integer"
                   },
                   "gameTitleId" : {
@@ -18679,6 +18960,1295 @@
             }
           }
         }
+      },
+      "SeriesAnalysisOutlookExamplesResponse" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "schemaVersion" : {
+            "const" : 1,
+            "minimum" : 0,
+            "type" : "integer",
+            "x-momo-integerToken" : true
+          },
+          "scope" : {
+            "additionalProperties" : false,
+            "properties" : {
+              "kind" : {
+                "const" : "overall",
+                "type" : "string"
+              },
+              "matchCount" : {
+                "maximum" : 1000000,
+                "minimum" : 0,
+                "type" : "integer",
+                "x-momo-integerToken" : true
+              },
+              "displayName" : {
+                "minLength" : 1,
+                "type" : "string"
+              }
+            },
+            "required" : [
+              "kind",
+              "matchCount",
+              "displayName"
+            ],
+            "type" : "object"
+          },
+          "source" : {
+            "additionalProperties" : false,
+            "properties" : {
+              "gameTitleId" : {
+                "maxLength" : 4096,
+                "minLength" : 1,
+                "type" : "string",
+                "x-momo-maxUtf8Bytes" : 4096
+              },
+              "titleMatchCount" : {
+                "maximum" : 25000,
+                "minimum" : 0,
+                "type" : "integer",
+                "x-momo-integerToken" : true
+              }
+            },
+            "required" : [
+              "gameTitleId",
+              "titleMatchCount"
+            ],
+            "type" : "object"
+          },
+          "memberId" : {
+            "maxLength" : 4096,
+            "minLength" : 1,
+            "type" : "string",
+            "x-momo-maxUtf8Bytes" : 4096
+          },
+          "examples" : {
+            "additionalProperties" : false,
+            "properties" : {
+              "status" : {
+                "enum" : [
+                  "available",
+                  "insufficient"
+                ],
+                "type" : "string"
+              },
+              "types" : {
+                "items" : {
+                  "additionalProperties" : false,
+                  "properties" : {
+                    "rankCounts" : {
+                      "items" : false,
+                      "maxItems" : 4,
+                      "minItems" : 4,
+                      "prefixItems" : [
+                        {
+                          "maximum" : 20,
+                          "minimum" : 0,
+                          "type" : "integer",
+                          "x-momo-integerToken" : true
+                        },
+                        {
+                          "maximum" : 20,
+                          "minimum" : 0,
+                          "type" : "integer",
+                          "x-momo-integerToken" : true
+                        },
+                        {
+                          "maximum" : 20,
+                          "minimum" : 0,
+                          "type" : "integer",
+                          "x-momo-integerToken" : true
+                        },
+                        {
+                          "maximum" : 20,
+                          "minimum" : 0,
+                          "type" : "integer",
+                          "x-momo-integerToken" : true
+                        }
+                      ],
+                      "type" : "array"
+                    },
+                    "window" : {
+                      "additionalProperties" : false,
+                      "properties" : {
+                        "averageRank" : {
+                          "maximum" : 4.0,
+                          "minimum" : 1.0,
+                          "type" : "number",
+                          "x-momo-finiteF64" : true
+                        },
+                        "period" : {
+                          "additionalProperties" : false,
+                          "properties" : {
+                            "endMatchId" : {
+                              "maxLength" : 4096,
+                              "minLength" : 1,
+                              "type" : "string",
+                              "x-momo-maxUtf8Bytes" : 4096
+                            },
+                            "endSequence" : {
+                              "maximum" : 25000,
+                              "minimum" : 1,
+                              "type" : "integer",
+                              "x-momo-integerToken" : true
+                            },
+                            "endedAt" : {
+                              "maxLength" : 4096,
+                              "minLength" : 1,
+                              "type" : "string",
+                              "x-momo-maxUtf8Bytes" : 4096
+                            },
+                            "startMatchId" : {
+                              "maxLength" : 4096,
+                              "minLength" : 1,
+                              "type" : "string",
+                              "x-momo-maxUtf8Bytes" : 4096
+                            },
+                            "startSequence" : {
+                              "maximum" : 25000,
+                              "minimum" : 1,
+                              "type" : "integer",
+                              "x-momo-integerToken" : true
+                            },
+                            "startedAt" : {
+                              "maxLength" : 4096,
+                              "minLength" : 1,
+                              "type" : "string",
+                              "x-momo-maxUtf8Bytes" : 4096
+                            }
+                          },
+                          "required" : [
+                            "endMatchId",
+                            "endSequence",
+                            "endedAt",
+                            "startMatchId",
+                            "startSequence",
+                            "startedAt"
+                          ],
+                          "type" : "object"
+                        },
+                        "rankSum" : {
+                          "maximum" : 100000,
+                          "minimum" : 0,
+                          "type" : "integer",
+                          "x-momo-integerToken" : true
+                        },
+                        "windowSize" : {
+                          "maximum" : 1000,
+                          "minimum" : 1,
+                          "type" : "integer",
+                          "x-momo-integerToken" : true
+                        }
+                      },
+                      "required" : [
+                        "averageRank",
+                        "period",
+                        "rankSum",
+                        "windowSize"
+                      ],
+                      "type" : "object"
+                    }
+                  },
+                  "required" : [
+                    "rankCounts",
+                    "window"
+                  ],
+                  "type" : "object"
+                },
+                "maxItems" : 1771,
+                "type" : "array"
+              }
+            },
+            "required" : [
+              "status",
+              "types"
+            ],
+            "type" : "object"
+          },
+          "displayName" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "artifact" : {
+            "additionalProperties" : false,
+            "properties" : {
+              "algorithmVersion" : {
+                "maxLength" : 4096,
+                "minLength" : 1,
+                "type" : "string",
+                "x-momo-maxUtf8Bytes" : 4096
+              },
+              "artifactId" : {
+                "maxLength" : 4096,
+                "minLength" : 1,
+                "type" : "string",
+                "x-momo-maxUtf8Bytes" : 4096
+              },
+              "artifactSchemaVersion" : {
+                "const" : 6,
+                "type" : "integer"
+              },
+              "gameTitleId" : {
+                "maxLength" : 4096,
+                "minLength" : 1,
+                "type" : "string",
+                "x-momo-maxUtf8Bytes" : 4096
+              },
+              "inputRevision" : {
+                "pattern" : "^(0|[1-9][0-9]*)$",
+                "type" : "string"
+              },
+              "publishedAt" : {
+                "maxLength" : 4096,
+                "minLength" : 1,
+                "type" : "string",
+                "x-momo-maxUtf8Bytes" : 4096
+              },
+              "radarBasisCreatedAt" : {
+                "anyOf" : [
+                  {
+                    "maxLength" : 4096,
+                    "minLength" : 1,
+                    "type" : "string",
+                    "x-momo-maxUtf8Bytes" : 4096
+                  },
+                  {
+                    "type" : "null"
+                  }
+                ]
+              },
+              "radarBasisAppliedAt" : {
+                "anyOf" : [
+                  {
+                    "maxLength" : 4096,
+                    "minLength" : 1,
+                    "type" : "string",
+                    "x-momo-maxUtf8Bytes" : 4096
+                  },
+                  {
+                    "type" : "null"
+                  }
+                ]
+              }
+            },
+            "required" : [
+              "algorithmVersion",
+              "artifactId",
+              "artifactSchemaVersion",
+              "gameTitleId",
+              "inputRevision",
+              "publishedAt",
+              "radarBasisCreatedAt",
+              "radarBasisAppliedAt"
+            ],
+            "type" : "object"
+          }
+        },
+        "required" : [
+          "schemaVersion",
+          "scope",
+          "source",
+          "memberId",
+          "examples",
+          "displayName",
+          "artifact"
+        ],
+        "type" : "object",
+        "$comment" : "Generated by the API OpenAPI projection from the Rust-owned artifact schema; do not edit by hand.",
+        "$id" : "https://momo-result.local/schemas/series-analysis-outlook-examples-response-v1.schema.json",
+        "$schema" : "https://json-schema.org/draft/2020-12/schema",
+        "x-momo-series-analysis-resource-kind" : "outlookExamples"
+      },
+      "SeriesAnalysisOutlookSummaryResponse" : {
+        "$comment" : "Generated by the API OpenAPI projection from the Rust-owned artifact schema; do not edit by hand.",
+        "$id" : "https://momo-result.local/schemas/series-analysis-outlook-summary-response-v1.schema.json",
+        "$schema" : "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties" : false,
+        "properties" : {
+          "bestWindows" : {
+            "items" : {
+              "additionalProperties" : false,
+              "properties" : {
+                "memberId" : {
+                  "maxLength" : 4096,
+                  "minLength" : 1,
+                  "type" : "string",
+                  "x-momo-maxUtf8Bytes" : 4096
+                },
+                "status" : {
+                  "enum" : [
+                    "available",
+                    "insufficient"
+                  ],
+                  "type" : "string"
+                },
+                "window" : {
+                  "anyOf" : [
+                    {
+                      "type" : "null"
+                    },
+                    {
+                      "additionalProperties" : false,
+                      "properties" : {
+                        "averageRank" : {
+                          "maximum" : 4.0,
+                          "minimum" : 1.0,
+                          "type" : "number",
+                          "x-momo-finiteF64" : true
+                        },
+                        "period" : {
+                          "additionalProperties" : false,
+                          "properties" : {
+                            "endMatchId" : {
+                              "maxLength" : 4096,
+                              "minLength" : 1,
+                              "type" : "string",
+                              "x-momo-maxUtf8Bytes" : 4096
+                            },
+                            "endSequence" : {
+                              "maximum" : 25000,
+                              "minimum" : 1,
+                              "type" : "integer",
+                              "x-momo-integerToken" : true
+                            },
+                            "endedAt" : {
+                              "maxLength" : 4096,
+                              "minLength" : 1,
+                              "type" : "string",
+                              "x-momo-maxUtf8Bytes" : 4096
+                            },
+                            "startMatchId" : {
+                              "maxLength" : 4096,
+                              "minLength" : 1,
+                              "type" : "string",
+                              "x-momo-maxUtf8Bytes" : 4096
+                            },
+                            "startSequence" : {
+                              "maximum" : 25000,
+                              "minimum" : 1,
+                              "type" : "integer",
+                              "x-momo-integerToken" : true
+                            },
+                            "startedAt" : {
+                              "maxLength" : 4096,
+                              "minLength" : 1,
+                              "type" : "string",
+                              "x-momo-maxUtf8Bytes" : 4096
+                            }
+                          },
+                          "required" : [
+                            "endMatchId",
+                            "endSequence",
+                            "endedAt",
+                            "startMatchId",
+                            "startSequence",
+                            "startedAt"
+                          ],
+                          "type" : "object"
+                        },
+                        "rankSum" : {
+                          "maximum" : 100000,
+                          "minimum" : 0,
+                          "type" : "integer",
+                          "x-momo-integerToken" : true
+                        },
+                        "windowSize" : {
+                          "maximum" : 1000,
+                          "minimum" : 1,
+                          "type" : "integer",
+                          "x-momo-integerToken" : true
+                        }
+                      },
+                      "required" : [
+                        "averageRank",
+                        "period",
+                        "rankSum",
+                        "windowSize"
+                      ],
+                      "type" : "object"
+                    }
+                  ]
+                },
+                "windowSize" : {
+                  "maximum" : 1000,
+                  "minimum" : 1,
+                  "type" : "integer",
+                  "x-momo-integerToken" : true
+                },
+                "displayName" : {
+                  "minLength" : 1,
+                  "type" : "string"
+                }
+              },
+              "required" : [
+                "memberId",
+                "status",
+                "window",
+                "windowSize",
+                "displayName"
+              ],
+              "type" : "object"
+            },
+            "maxItems" : 8,
+            "type" : "array"
+          },
+          "period" : {
+            "anyOf" : [
+              {
+                "type" : "null"
+              },
+              {
+                "additionalProperties" : false,
+                "properties" : {
+                  "endMatchId" : {
+                    "maxLength" : 4096,
+                    "minLength" : 1,
+                    "type" : "string",
+                    "x-momo-maxUtf8Bytes" : 4096
+                  },
+                  "endSequence" : {
+                    "maximum" : 25000,
+                    "minimum" : 1,
+                    "type" : "integer",
+                    "x-momo-integerToken" : true
+                  },
+                  "endedAt" : {
+                    "maxLength" : 4096,
+                    "minLength" : 1,
+                    "type" : "string",
+                    "x-momo-maxUtf8Bytes" : 4096
+                  },
+                  "startMatchId" : {
+                    "maxLength" : 4096,
+                    "minLength" : 1,
+                    "type" : "string",
+                    "x-momo-maxUtf8Bytes" : 4096
+                  },
+                  "startSequence" : {
+                    "maximum" : 25000,
+                    "minimum" : 1,
+                    "type" : "integer",
+                    "x-momo-integerToken" : true
+                  },
+                  "startedAt" : {
+                    "maxLength" : 4096,
+                    "minLength" : 1,
+                    "type" : "string",
+                    "x-momo-maxUtf8Bytes" : 4096
+                  }
+                },
+                "required" : [
+                  "endMatchId",
+                  "endSequence",
+                  "endedAt",
+                  "startMatchId",
+                  "startSequence",
+                  "startedAt"
+                ],
+                "type" : "object"
+              }
+            ]
+          },
+          "players" : {
+            "items" : {
+              "additionalProperties" : false,
+              "properties" : {
+                "averageRank" : {
+                  "maximum" : 4.0,
+                  "minimum" : 1.0,
+                  "type" : "number",
+                  "x-momo-finiteF64" : true
+                },
+                "memberId" : {
+                  "maxLength" : 4096,
+                  "minLength" : 1,
+                  "type" : "string",
+                  "x-momo-maxUtf8Bytes" : 4096
+                },
+                "rankSum" : {
+                  "maximum" : 100000,
+                  "minimum" : 0,
+                  "type" : "integer",
+                  "x-momo-integerToken" : true
+                },
+                "displayName" : {
+                  "minLength" : 1,
+                  "type" : "string"
+                }
+              },
+              "required" : [
+                "averageRank",
+                "memberId",
+                "rankSum",
+                "displayName"
+              ],
+              "type" : "object"
+            },
+            "maxItems" : 4,
+            "type" : "array"
+          },
+          "qualityStatus" : {
+            "enum" : [
+              "ok",
+              "reference",
+              "no_target"
+            ],
+            "type" : "string"
+          },
+          "recent" : {
+            "additionalProperties" : false,
+            "properties" : {
+              "jointRanks" : {
+                "items" : {
+                  "additionalProperties" : false,
+                  "properties" : {
+                    "memberAId" : {
+                      "maxLength" : 4096,
+                      "minLength" : 1,
+                      "type" : "string",
+                      "x-momo-maxUtf8Bytes" : 4096
+                    },
+                    "memberBId" : {
+                      "maxLength" : 4096,
+                      "minLength" : 1,
+                      "type" : "string",
+                      "x-momo-maxUtf8Bytes" : 4096
+                    },
+                    "rankCounts" : {
+                      "items" : false,
+                      "maxItems" : 4,
+                      "minItems" : 4,
+                      "prefixItems" : [
+                        {
+                          "items" : false,
+                          "maxItems" : 4,
+                          "minItems" : 4,
+                          "prefixItems" : [
+                            {
+                              "maximum" : 20,
+                              "minimum" : 0,
+                              "type" : "integer",
+                              "x-momo-integerToken" : true
+                            },
+                            {
+                              "maximum" : 20,
+                              "minimum" : 0,
+                              "type" : "integer",
+                              "x-momo-integerToken" : true
+                            },
+                            {
+                              "maximum" : 20,
+                              "minimum" : 0,
+                              "type" : "integer",
+                              "x-momo-integerToken" : true
+                            },
+                            {
+                              "maximum" : 20,
+                              "minimum" : 0,
+                              "type" : "integer",
+                              "x-momo-integerToken" : true
+                            }
+                          ],
+                          "type" : "array"
+                        },
+                        {
+                          "items" : false,
+                          "maxItems" : 4,
+                          "minItems" : 4,
+                          "prefixItems" : [
+                            {
+                              "maximum" : 20,
+                              "minimum" : 0,
+                              "type" : "integer",
+                              "x-momo-integerToken" : true
+                            },
+                            {
+                              "maximum" : 20,
+                              "minimum" : 0,
+                              "type" : "integer",
+                              "x-momo-integerToken" : true
+                            },
+                            {
+                              "maximum" : 20,
+                              "minimum" : 0,
+                              "type" : "integer",
+                              "x-momo-integerToken" : true
+                            },
+                            {
+                              "maximum" : 20,
+                              "minimum" : 0,
+                              "type" : "integer",
+                              "x-momo-integerToken" : true
+                            }
+                          ],
+                          "type" : "array"
+                        },
+                        {
+                          "items" : false,
+                          "maxItems" : 4,
+                          "minItems" : 4,
+                          "prefixItems" : [
+                            {
+                              "maximum" : 20,
+                              "minimum" : 0,
+                              "type" : "integer",
+                              "x-momo-integerToken" : true
+                            },
+                            {
+                              "maximum" : 20,
+                              "minimum" : 0,
+                              "type" : "integer",
+                              "x-momo-integerToken" : true
+                            },
+                            {
+                              "maximum" : 20,
+                              "minimum" : 0,
+                              "type" : "integer",
+                              "x-momo-integerToken" : true
+                            },
+                            {
+                              "maximum" : 20,
+                              "minimum" : 0,
+                              "type" : "integer",
+                              "x-momo-integerToken" : true
+                            }
+                          ],
+                          "type" : "array"
+                        },
+                        {
+                          "items" : false,
+                          "maxItems" : 4,
+                          "minItems" : 4,
+                          "prefixItems" : [
+                            {
+                              "maximum" : 20,
+                              "minimum" : 0,
+                              "type" : "integer",
+                              "x-momo-integerToken" : true
+                            },
+                            {
+                              "maximum" : 20,
+                              "minimum" : 0,
+                              "type" : "integer",
+                              "x-momo-integerToken" : true
+                            },
+                            {
+                              "maximum" : 20,
+                              "minimum" : 0,
+                              "type" : "integer",
+                              "x-momo-integerToken" : true
+                            },
+                            {
+                              "maximum" : 20,
+                              "minimum" : 0,
+                              "type" : "integer",
+                              "x-momo-integerToken" : true
+                            }
+                          ],
+                          "type" : "array"
+                        }
+                      ],
+                      "type" : "array"
+                    }
+                  },
+                  "required" : [
+                    "memberAId",
+                    "memberBId",
+                    "rankCounts"
+                  ],
+                  "type" : "object"
+                },
+                "maxItems" : 6,
+                "type" : "array"
+              },
+              "matchCount" : {
+                "maximum" : 20,
+                "minimum" : 0,
+                "type" : "integer",
+                "x-momo-integerToken" : true
+              },
+              "period" : {
+                "anyOf" : [
+                  {
+                    "type" : "null"
+                  },
+                  {
+                    "additionalProperties" : false,
+                    "properties" : {
+                      "endMatchId" : {
+                        "maxLength" : 4096,
+                        "minLength" : 1,
+                        "type" : "string",
+                        "x-momo-maxUtf8Bytes" : 4096
+                      },
+                      "endSequence" : {
+                        "maximum" : 25000,
+                        "minimum" : 1,
+                        "type" : "integer",
+                        "x-momo-integerToken" : true
+                      },
+                      "endedAt" : {
+                        "maxLength" : 4096,
+                        "minLength" : 1,
+                        "type" : "string",
+                        "x-momo-maxUtf8Bytes" : 4096
+                      },
+                      "startMatchId" : {
+                        "maxLength" : 4096,
+                        "minLength" : 1,
+                        "type" : "string",
+                        "x-momo-maxUtf8Bytes" : 4096
+                      },
+                      "startSequence" : {
+                        "maximum" : 25000,
+                        "minimum" : 1,
+                        "type" : "integer",
+                        "x-momo-integerToken" : true
+                      },
+                      "startedAt" : {
+                        "maxLength" : 4096,
+                        "minLength" : 1,
+                        "type" : "string",
+                        "x-momo-maxUtf8Bytes" : 4096
+                      }
+                    },
+                    "required" : [
+                      "endMatchId",
+                      "endSequence",
+                      "endedAt",
+                      "startMatchId",
+                      "startSequence",
+                      "startedAt"
+                    ],
+                    "type" : "object"
+                  }
+                ]
+              },
+              "players" : {
+                "items" : {
+                  "additionalProperties" : false,
+                  "properties" : {
+                    "averageRank" : {
+                      "maximum" : 4.0,
+                      "minimum" : 1.0,
+                      "type" : "number",
+                      "x-momo-finiteF64" : true
+                    },
+                    "memberId" : {
+                      "maxLength" : 4096,
+                      "minLength" : 1,
+                      "type" : "string",
+                      "x-momo-maxUtf8Bytes" : 4096
+                    },
+                    "rankCounts" : {
+                      "items" : false,
+                      "maxItems" : 4,
+                      "minItems" : 4,
+                      "prefixItems" : [
+                        {
+                          "maximum" : 20,
+                          "minimum" : 0,
+                          "type" : "integer",
+                          "x-momo-integerToken" : true
+                        },
+                        {
+                          "maximum" : 20,
+                          "minimum" : 0,
+                          "type" : "integer",
+                          "x-momo-integerToken" : true
+                        },
+                        {
+                          "maximum" : 20,
+                          "minimum" : 0,
+                          "type" : "integer",
+                          "x-momo-integerToken" : true
+                        },
+                        {
+                          "maximum" : 20,
+                          "minimum" : 0,
+                          "type" : "integer",
+                          "x-momo-integerToken" : true
+                        }
+                      ],
+                      "type" : "array"
+                    },
+                    "rankSum" : {
+                      "maximum" : 100000,
+                      "minimum" : 0,
+                      "type" : "integer",
+                      "x-momo-integerToken" : true
+                    },
+                    "displayName" : {
+                      "minLength" : 1,
+                      "type" : "string"
+                    }
+                  },
+                  "required" : [
+                    "averageRank",
+                    "memberId",
+                    "rankCounts",
+                    "rankSum",
+                    "displayName"
+                  ],
+                  "type" : "object"
+                },
+                "maxItems" : 4,
+                "type" : "array"
+              },
+              "qualityStatus" : {
+                "enum" : [
+                  "ok",
+                  "reference",
+                  "no_target"
+                ],
+                "type" : "string"
+              }
+            },
+            "required" : [
+              "jointRanks",
+              "matchCount",
+              "period",
+              "players",
+              "qualityStatus"
+            ],
+            "type" : "object"
+          },
+          "schemaVersion" : {
+            "const" : 1,
+            "minimum" : 0,
+            "type" : "integer",
+            "x-momo-integerToken" : true
+          },
+          "scope" : {
+            "oneOf" : [
+              {
+                "additionalProperties" : false,
+                "properties" : {
+                  "kind" : {
+                    "const" : "overall",
+                    "type" : "string"
+                  },
+                  "matchCount" : {
+                    "maximum" : 1000000,
+                    "minimum" : 0,
+                    "type" : "integer",
+                    "x-momo-integerToken" : true
+                  },
+                  "displayName" : {
+                    "minLength" : 1,
+                    "type" : "string"
+                  }
+                },
+                "required" : [
+                  "kind",
+                  "matchCount",
+                  "displayName"
+                ],
+                "type" : "object"
+              },
+              {
+                "additionalProperties" : false,
+                "properties" : {
+                  "kind" : {
+                    "const" : "season",
+                    "type" : "string"
+                  },
+                  "matchCount" : {
+                    "maximum" : 1000000,
+                    "minimum" : 0,
+                    "type" : "integer",
+                    "x-momo-integerToken" : true
+                  },
+                  "seasonMasterId" : {
+                    "maxLength" : 4096,
+                    "minLength" : 1,
+                    "type" : "string",
+                    "x-momo-maxUtf8Bytes" : 4096
+                  },
+                  "displayName" : {
+                    "minLength" : 1,
+                    "type" : "string"
+                  }
+                },
+                "required" : [
+                  "kind",
+                  "matchCount",
+                  "seasonMasterId",
+                  "displayName"
+                ],
+                "type" : "object"
+              }
+            ]
+          },
+          "source" : {
+            "additionalProperties" : false,
+            "properties" : {
+              "gameTitleId" : {
+                "maxLength" : 4096,
+                "minLength" : 1,
+                "type" : "string",
+                "x-momo-maxUtf8Bytes" : 4096
+              },
+              "titleMatchCount" : {
+                "maximum" : 25000,
+                "minimum" : 0,
+                "type" : "integer",
+                "x-momo-integerToken" : true
+              }
+            },
+            "required" : [
+              "gameTitleId",
+              "titleMatchCount"
+            ],
+            "type" : "object"
+          },
+          "artifact" : {
+            "additionalProperties" : false,
+            "properties" : {
+              "algorithmVersion" : {
+                "maxLength" : 4096,
+                "minLength" : 1,
+                "type" : "string",
+                "x-momo-maxUtf8Bytes" : 4096
+              },
+              "artifactId" : {
+                "maxLength" : 4096,
+                "minLength" : 1,
+                "type" : "string",
+                "x-momo-maxUtf8Bytes" : 4096
+              },
+              "artifactSchemaVersion" : {
+                "const" : 6,
+                "type" : "integer"
+              },
+              "gameTitleId" : {
+                "maxLength" : 4096,
+                "minLength" : 1,
+                "type" : "string",
+                "x-momo-maxUtf8Bytes" : 4096
+              },
+              "inputRevision" : {
+                "pattern" : "^(0|[1-9][0-9]*)$",
+                "type" : "string"
+              },
+              "publishedAt" : {
+                "maxLength" : 4096,
+                "minLength" : 1,
+                "type" : "string",
+                "x-momo-maxUtf8Bytes" : 4096
+              },
+              "radarBasisCreatedAt" : {
+                "anyOf" : [
+                  {
+                    "maxLength" : 4096,
+                    "minLength" : 1,
+                    "type" : "string",
+                    "x-momo-maxUtf8Bytes" : 4096
+                  },
+                  {
+                    "type" : "null"
+                  }
+                ]
+              },
+              "radarBasisAppliedAt" : {
+                "anyOf" : [
+                  {
+                    "maxLength" : 4096,
+                    "minLength" : 1,
+                    "type" : "string",
+                    "x-momo-maxUtf8Bytes" : 4096
+                  },
+                  {
+                    "type" : "null"
+                  }
+                ]
+              }
+            },
+            "required" : [
+              "algorithmVersion",
+              "artifactId",
+              "artifactSchemaVersion",
+              "gameTitleId",
+              "inputRevision",
+              "publishedAt",
+              "radarBasisCreatedAt",
+              "radarBasisAppliedAt"
+            ],
+            "type" : "object"
+          }
+        },
+        "required" : [
+          "bestWindows",
+          "period",
+          "players",
+          "qualityStatus",
+          "recent",
+          "schemaVersion",
+          "scope",
+          "source",
+          "artifact"
+        ],
+        "title" : "Series Analysis Outlook Summary Resource v1",
+        "type" : "object",
+        "x-momo-series-analysis-resource-kind" : "outlookSummary"
+      },
+      "SeriesAnalysisOutlookWindowResponse" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "schemaVersion" : {
+            "const" : 1,
+            "minimum" : 0,
+            "type" : "integer",
+            "x-momo-integerToken" : true
+          },
+          "scope" : {
+            "additionalProperties" : false,
+            "properties" : {
+              "kind" : {
+                "const" : "overall",
+                "type" : "string"
+              },
+              "matchCount" : {
+                "maximum" : 1000000,
+                "minimum" : 0,
+                "type" : "integer",
+                "x-momo-integerToken" : true
+              },
+              "displayName" : {
+                "minLength" : 1,
+                "type" : "string"
+              }
+            },
+            "required" : [
+              "kind",
+              "matchCount",
+              "displayName"
+            ],
+            "type" : "object"
+          },
+          "source" : {
+            "additionalProperties" : false,
+            "properties" : {
+              "gameTitleId" : {
+                "maxLength" : 4096,
+                "minLength" : 1,
+                "type" : "string",
+                "x-momo-maxUtf8Bytes" : 4096
+              },
+              "titleMatchCount" : {
+                "maximum" : 25000,
+                "minimum" : 0,
+                "type" : "integer",
+                "x-momo-integerToken" : true
+              }
+            },
+            "required" : [
+              "gameTitleId",
+              "titleMatchCount"
+            ],
+            "type" : "object"
+          },
+          "memberId" : {
+            "maxLength" : 4096,
+            "minLength" : 1,
+            "type" : "string",
+            "x-momo-maxUtf8Bytes" : 4096
+          },
+          "windowSize" : {
+            "type" : "integer",
+            "minimum" : 1,
+            "maximum" : 1000
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [
+              "available",
+              "insufficient"
+            ]
+          },
+          "window" : {
+            "anyOf" : [
+              {
+                "additionalProperties" : false,
+                "properties" : {
+                  "averageRank" : {
+                    "maximum" : 4.0,
+                    "minimum" : 1.0,
+                    "type" : "number",
+                    "x-momo-finiteF64" : true
+                  },
+                  "period" : {
+                    "additionalProperties" : false,
+                    "properties" : {
+                      "endMatchId" : {
+                        "maxLength" : 4096,
+                        "minLength" : 1,
+                        "type" : "string",
+                        "x-momo-maxUtf8Bytes" : 4096
+                      },
+                      "endSequence" : {
+                        "maximum" : 25000,
+                        "minimum" : 1,
+                        "type" : "integer",
+                        "x-momo-integerToken" : true
+                      },
+                      "endedAt" : {
+                        "maxLength" : 4096,
+                        "minLength" : 1,
+                        "type" : "string",
+                        "x-momo-maxUtf8Bytes" : 4096
+                      },
+                      "startMatchId" : {
+                        "maxLength" : 4096,
+                        "minLength" : 1,
+                        "type" : "string",
+                        "x-momo-maxUtf8Bytes" : 4096
+                      },
+                      "startSequence" : {
+                        "maximum" : 25000,
+                        "minimum" : 1,
+                        "type" : "integer",
+                        "x-momo-integerToken" : true
+                      },
+                      "startedAt" : {
+                        "maxLength" : 4096,
+                        "minLength" : 1,
+                        "type" : "string",
+                        "x-momo-maxUtf8Bytes" : 4096
+                      }
+                    },
+                    "required" : [
+                      "endMatchId",
+                      "endSequence",
+                      "endedAt",
+                      "startMatchId",
+                      "startSequence",
+                      "startedAt"
+                    ],
+                    "type" : "object"
+                  },
+                  "rankSum" : {
+                    "maximum" : 100000,
+                    "minimum" : 0,
+                    "type" : "integer",
+                    "x-momo-integerToken" : true
+                  },
+                  "windowSize" : {
+                    "maximum" : 1000,
+                    "minimum" : 1,
+                    "type" : "integer",
+                    "x-momo-integerToken" : true
+                  }
+                },
+                "required" : [
+                  "averageRank",
+                  "period",
+                  "rankSum",
+                  "windowSize"
+                ],
+                "type" : "object"
+              },
+              {
+                "type" : "null"
+              }
+            ]
+          },
+          "displayName" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "artifact" : {
+            "additionalProperties" : false,
+            "properties" : {
+              "algorithmVersion" : {
+                "maxLength" : 4096,
+                "minLength" : 1,
+                "type" : "string",
+                "x-momo-maxUtf8Bytes" : 4096
+              },
+              "artifactId" : {
+                "maxLength" : 4096,
+                "minLength" : 1,
+                "type" : "string",
+                "x-momo-maxUtf8Bytes" : 4096
+              },
+              "artifactSchemaVersion" : {
+                "const" : 6,
+                "type" : "integer"
+              },
+              "gameTitleId" : {
+                "maxLength" : 4096,
+                "minLength" : 1,
+                "type" : "string",
+                "x-momo-maxUtf8Bytes" : 4096
+              },
+              "inputRevision" : {
+                "pattern" : "^(0|[1-9][0-9]*)$",
+                "type" : "string"
+              },
+              "publishedAt" : {
+                "maxLength" : 4096,
+                "minLength" : 1,
+                "type" : "string",
+                "x-momo-maxUtf8Bytes" : 4096
+              },
+              "radarBasisCreatedAt" : {
+                "anyOf" : [
+                  {
+                    "maxLength" : 4096,
+                    "minLength" : 1,
+                    "type" : "string",
+                    "x-momo-maxUtf8Bytes" : 4096
+                  },
+                  {
+                    "type" : "null"
+                  }
+                ]
+              },
+              "radarBasisAppliedAt" : {
+                "anyOf" : [
+                  {
+                    "maxLength" : 4096,
+                    "minLength" : 1,
+                    "type" : "string",
+                    "x-momo-maxUtf8Bytes" : 4096
+                  },
+                  {
+                    "type" : "null"
+                  }
+                ]
+              }
+            },
+            "required" : [
+              "algorithmVersion",
+              "artifactId",
+              "artifactSchemaVersion",
+              "gameTitleId",
+              "inputRevision",
+              "publishedAt",
+              "radarBasisCreatedAt",
+              "radarBasisAppliedAt"
+            ],
+            "type" : "object"
+          }
+        },
+        "required" : [
+          "schemaVersion",
+          "scope",
+          "source",
+          "memberId",
+          "windowSize",
+          "status",
+          "window",
+          "displayName",
+          "artifact"
+        ],
+        "type" : "object",
+        "$comment" : "Generated by the API OpenAPI projection from the Rust-owned artifact schema; do not edit by hand.",
+        "$id" : "https://momo-result.local/schemas/series-analysis-outlook-window-response-v1.schema.json",
+        "$schema" : "https://json-schema.org/draft/2020-12/schema",
+        "x-momo-series-analysis-resource-kind" : "outlookWindow"
       },
       "SeriesAnalysisRecalculationAcceptedResponse" : {
         "title" : "SeriesAnalysisRecalculationAcceptedResponse",
@@ -19880,7 +21450,7 @@
                 "x-momo-maxUtf8Bytes" : 4096
               },
               "artifactSchemaVersion" : {
-                "const" : 5,
+                "const" : 6,
                 "type" : "integer"
               },
               "gameTitleId" : {

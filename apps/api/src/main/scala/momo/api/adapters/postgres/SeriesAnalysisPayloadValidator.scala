@@ -95,6 +95,13 @@ private[postgres] object SeriesAnalysisPayloadValidator:
     val scopeMatches = value("scope").exists(payloadScopeMatches(_, request.scope))
     request.kind match
       case SeriesAnalysisChunkKind.Aggregate | SeriesAnalysisChunkKind.Review => scopeMatches
+      case SeriesAnalysisChunkKind.OutlookSummary | SeriesAnalysisChunkKind.OutlookReference =>
+        val titleMatches = value("source").exists(
+          _.hcursor.get[String]("gameTitleId").contains(request.gameTitleId.value)
+        )
+        val memberMatches = request.kind != SeriesAnalysisChunkKind.OutlookReference ||
+          request.memberId.exists(id => value("memberId").flatMap(_.asString).contains(id.value))
+        scopeMatches && titleMatches && memberMatches
       case SeriesAnalysisChunkKind.Drilldown =>
         val memberMatches = request.memberId.exists(expected =>
           value("player").flatMap(singleMemberId).contains(expected.value)

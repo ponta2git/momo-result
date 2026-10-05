@@ -106,13 +106,16 @@ fn builds_and_stream_validates_a_complete_artifact() {
     assert_eq!(manifest.algorithm_version, "series-analysis-v1");
     assert_eq!(
         manifest.root_checksum,
-        "sha256:c4fcf1a9553ec7695b04b92137cd2b21ba852dcd651adbaf8d8d887ee64b5b94"
+        "sha256:09e81343305a555258221c18cef3086b1e65f2d6b4c7f9369d036c92087bd8bd"
     );
     let resource_counts = manifest.resources.iter().fold(
         (0_usize, 0_usize, 0_usize, 0_usize),
         |(aggregates, reviews, drilldowns, contexts), resource| match resource {
             ResourceManifest::Aggregate { .. } => (aggregates + 1, reviews, drilldowns, contexts),
             ResourceManifest::Review { .. } => (aggregates, reviews + 1, drilldowns, contexts),
+            ResourceManifest::OutlookSummary { .. } | ResourceManifest::OutlookReference { .. } => {
+                (aggregates, reviews, drilldowns, contexts)
+            }
             ResourceManifest::Drilldown { .. } => (aggregates, reviews, drilldowns + 1, contexts),
             ResourceManifest::MatchContext { .. } => {
                 (aggregates, reviews, drilldowns, contexts + 1)
@@ -121,11 +124,139 @@ fn builds_and_stream_validates_a_complete_artifact() {
     );
     assert_eq!(resource_counts, (4, 4, 64, 4));
     assert_eq!(
+        manifest
+            .resources
+            .iter()
+            .filter(|r| matches!(r, ResourceManifest::OutlookSummary { .. }))
+            .count(),
+        2
+    );
+    assert_eq!(
+        manifest
+            .resources
+            .iter()
+            .filter(|r| matches!(r, ResourceManifest::OutlookReference { .. }))
+            .count(),
+        4
+    );
+    assert_eq!(
         fs::read_dir(directory.path())
             .unwrap_or_else(|error| panic!("read artifact directory: {error}"))
             .count(),
         manifest.resources.len() + 1
     );
+}
+
+#[test]
+fn reopens_and_rejects_missing_outlook_and_false_period_metadata() {
+    for corrupt_period in [false, true] {
+        let directory = TempDir::new().unwrap_or_else(|e| panic!("temp directory: {e}"));
+        let mut manifest =
+            build(input(), &request(), directory.path()).unwrap_or_else(|e| panic!("build: {e}"));
+        let position = manifest
+            .resources
+            .iter()
+            .position(|r| matches!(r, ResourceManifest::OutlookReference { .. }))
+            .unwrap_or_else(|| panic!("reference missing"));
+        if corrupt_period {
+            let Some(ResourceManifest::OutlookReference { common, .. }) =
+                manifest.resources.get_mut(position)
+            else {
+                panic!("reference identity changed")
+            };
+            let path = directory.path().join(&common.path);
+            let mut value: Value =
+                serde_json::from_slice(&fs::read(&path).unwrap_or_else(|e| panic!("read: {e}")))
+                    .unwrap_or_else(|e| panic!("decode: {e}"));
+            *value
+                .pointer_mut("/bestWindows/0/period/startedAt")
+                .unwrap_or_else(|| panic!("period missing")) =
+                Value::String("2026-08-08T00:00:00.000000Z".into());
+            let bytes = canonicalize_value(&value).unwrap_or_else(|e| panic!("encode: {e}"));
+            common.encoded_bytes = u64::try_from(bytes.len()).unwrap_or_default();
+            common.decoded_bytes = common.encoded_bytes;
+            common.checksum = sha256_prefixed(&bytes);
+            fs::write(path, bytes).unwrap_or_else(|e| panic!("write: {e}"));
+        } else {
+            let removed = manifest.resources.remove(position);
+            fs::remove_file(directory.path().join(&removed.common().path))
+                .unwrap_or_else(|e| panic!("remove: {e}"));
+        }
+        rewrite_manifest(directory.path(), &mut manifest);
+        assert!(
+            matches!(validate(directory.path()), Err(ArtifactError::Payload(_))),
+            "a checksum-consistent but incomplete or false outlook cannot be published"
+        );
+    }
+}
+
+#[test]
+#[ignore = "explicit full-batch resource evidence on synthetic input"]
+fn measures_full_batch_with_outlook() {
+    let count = std::env::var("MOMO_OUTLOOK_MEASURE_MATCHES")
+        .ok()
+        .and_then(|value| value.parse::<i32>().ok())
+        .unwrap_or(128);
+    assert!(
+        (1..=25_000).contains(&count),
+        "measurement stays within the normalized input bound"
+    );
+    let mut synthetic = input();
+    let base = synthetic.player_matches.clone();
+    synthetic.player_matches = (0..count)
+        .flat_map(|index| {
+            base.iter().cloned().map(move |mut row| {
+                row.match_id = format!("match-{index:05}");
+                row.held_event_id = format!("event-{index:05}");
+                row.played_at = format!("2026-01-01T00:00:00.{index:06}Z");
+                row.rank = 1 + (index + row.play_order - 1) % 4;
+                row
+            })
+        })
+        .collect();
+    let normalized = normalized(synthetic);
+    let mut limits = request();
+    limits.maximum_chunk_count = std::env::var("MOMO_OUTLOOK_MEASURE_CHUNK_LIMIT")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or_else(|| normalized.resource_count().unwrap_or(0));
+    limits.maximum_file_count = limits.maximum_chunk_count + 1;
+    let directory = TempDir::new().unwrap_or_else(|e| panic!("temp directory: {e}"));
+    let started = std::time::Instant::now();
+    let result = build_artifact(&normalized, &limits, directory.path());
+    let report = match result {
+        Ok(artifact) => {
+            let validated = validate_artifact_directory(
+                directory.path(),
+                limits.maximum_chunk_count,
+                limits.maximum_chunk_bytes,
+                limits.maximum_total_bytes,
+                limits.maximum_file_count,
+            )
+            .unwrap_or_else(|e| panic!("full artifact invalid: {e}"));
+            assert_eq!(validated.manifest(), &artifact.manifest);
+            let outlook = artifact
+                .manifest
+                .resources
+                .iter()
+                .filter(|r| {
+                    matches!(
+                        r,
+                        ResourceManifest::OutlookSummary { .. }
+                            | ResourceManifest::OutlookReference { .. }
+                    )
+                })
+                .collect::<Vec<_>>();
+            serde_json::json!({"status":"complete","matchCount":count,"elapsedMilliseconds":started.elapsed().as_millis(),"chunkCount":artifact.manifest.resources.len(),"totalBytes":artifact.manifest.resources.iter().map(|r| r.common().encoded_bytes).sum::<u64>(),"outlookChunkCount":outlook.len(),"outlookBytes":outlook.iter().map(|r| r.common().encoded_bytes).sum::<u64>()})
+        }
+        Err(ArtifactError::ResourceBound) => {
+            serde_json::json!({"status":"bounded_rejection","matchCount":count,"elapsedMilliseconds":started.elapsed().as_millis(),"partialFileCount":fs::read_dir(directory.path()).unwrap_or_else(|e| panic!("inspect files: {e}")).count()})
+        }
+        Err(error) => panic!("full batch failed: {error}"),
+    };
+    let path = std::env::var_os("MOMO_OUTLOOK_BOUND_REPORT")
+        .unwrap_or_else(|| panic!("measurement report path required"));
+    fs::write(path, report.to_string()).unwrap_or_else(|e| panic!("report: {e}"));
 }
 
 #[test]
@@ -299,7 +430,9 @@ fn rejects_schema_drift_even_when_checksums_are_recomputed() {
             ResourceManifest::Review { common } => Some(common),
             ResourceManifest::Aggregate { .. }
             | ResourceManifest::Drilldown { .. }
-            | ResourceManifest::MatchContext { .. } => None,
+            | ResourceManifest::MatchContext { .. }
+            | ResourceManifest::OutlookSummary { .. }
+            | ResourceManifest::OutlookReference { .. } => None,
         })
         .unwrap_or_else(|| panic!("review resource"));
     let resource_path = directory.path().join(&review.path);
@@ -339,6 +472,8 @@ fn rejects_a_dangling_context_item_reference_after_parent_reread() {
             ResourceManifest::MatchContext { common, .. } => Some(common),
             ResourceManifest::Aggregate { .. }
             | ResourceManifest::Review { .. }
+            | ResourceManifest::OutlookSummary { .. }
+            | ResourceManifest::OutlookReference { .. }
             | ResourceManifest::Drilldown { .. } => None,
         })
         .unwrap_or_else(|| panic!("match-context resource"));
@@ -380,7 +515,9 @@ fn rejects_noncanonical_payload_even_when_checksums_are_recomputed() {
             ResourceManifest::Aggregate { common } => Some(common),
             ResourceManifest::Review { .. }
             | ResourceManifest::Drilldown { .. }
-            | ResourceManifest::MatchContext { .. } => None,
+            | ResourceManifest::MatchContext { .. }
+            | ResourceManifest::OutlookSummary { .. }
+            | ResourceManifest::OutlookReference { .. } => None,
         })
         .unwrap_or_else(|| panic!("aggregate resource"));
     let resource_path = directory.path().join(&aggregate.path);

@@ -108,6 +108,12 @@ export const seriesAnalysisKeys = {
   status: (gameTitleId: string | undefined) =>
     ["series-analysis", "status", "v2", gameTitleId ?? "none"] as const,
   artifactRoot: () => ["series-analysis", "artifact", "v3"] as const,
+  outlookSummary: (params: unknown) =>
+    ["series-analysis", "artifact", "v3", "outlook-summary", "http-v1", params] as const,
+  outlookWindow: (params: unknown) =>
+    ["series-analysis", "artifact", "v3", "outlook-window", "http-v1", params] as const,
+  outlookExamples: (params: unknown) =>
+    ["series-analysis", "artifact", "v3", "outlook-examples", "http-v1", params] as const,
   aggregate: (params: unknown) =>
     ["series-analysis", "artifact", "v3", "aggregate", "http-v5", params] as const,
   review: (params: unknown) => ["series-analysis", "artifact", "v3", "review", params] as const,

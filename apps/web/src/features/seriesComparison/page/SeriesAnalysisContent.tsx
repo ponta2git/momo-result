@@ -3,9 +3,15 @@ import type { RefObject } from "react";
 
 import { SeriesAnalysisDrilldownLoading } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownLoading";
 import type { SeriesAnalysisDisplayBundle } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
-import { seriesAnalysisScopeSignature } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
+import {
+  seriesAnalysisScopeSignature,
+  seriesAnalysisBundleResource,
+} from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import type { OwnerMetricId } from "@/features/seriesComparison/model/seriesAnalysisOwnerMetrics";
-import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import type {
+  SeriesAnalysisUrlState,
+  SeriesAnalysisViewId,
+} from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/model/seriesAnalysisViewTypes";
 import { SeriesAnalysisArrival } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
 import { ReviewView } from "@/features/seriesComparison/page/SeriesAnalysisReviewView";
@@ -56,6 +62,13 @@ const OverviewView = lazy(loadOverviewView);
 const DriversView = lazy(loadDriversView);
 const FlowView = lazy(loadFlowView);
 const ContextView = lazy(loadContextView);
+const loadOutlookView = () =>
+  loadLazyModule(() =>
+    import("@/features/seriesComparison/outlook/OutlookView").then((module) => ({
+      default: module.OutlookView,
+    })),
+  );
+const OutlookView = lazy(loadOutlookView);
 const SeriesAnalysisDrilldownContent = lazy(() =>
   loadLazyModule(() =>
     import("@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownContent").then(
@@ -63,6 +76,7 @@ const SeriesAnalysisDrilldownContent = lazy(() =>
     ),
   ),
 );
+const emptyOutlookSelection: SeriesAnalysisUrlState = {};
 const noFocusedItemIds: readonly string[] = [];
 
 function drilldownTitle(metricId: SeriesAnalysisDrilldownMetricId): string {
@@ -86,13 +100,18 @@ export function preloadSeriesAnalysisView(view: SeriesAnalysisViewId): void {
         ? loadDriversView
         : view === "flow"
           ? loadFlowView
-          : view === "context"
-            ? loadContextView
-            : undefined;
+          : view === "outlook"
+            ? loadOutlookView
+            : view === "context"
+              ? loadContextView
+              : undefined;
   void load?.().catch(() => undefined);
 }
 
 type SeriesAnalysisContentProps = {
+  showPurposeTabs?: boolean;
+  outlookSelection?: SeriesAnalysisUrlState;
+  onOutlookMemberChange?: (role: "focus" | "rival", memberId: string) => void;
   ownerMetric?: OwnerMetricId | undefined;
   onOwnerMetricChange?: ((metric: OwnerMetricId) => void) | undefined;
   activeView?: SeriesAnalysisViewId;
@@ -127,8 +146,11 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
   onClearFocusedMatch,
   onFocusMatch,
   onViewChange,
+  showPurposeTabs = true,
+  outlookSelection = emptyOutlookSelection,
+  onOutlookMemberChange,
 }: SeriesAnalysisContentProps) {
-  const resource = bundle.kind === "review" ? bundle.review : bundle.aggregate;
+  const resource = seriesAnalysisBundleResource(bundle);
   const { matchContext } = bundle;
   const artifactId = resource.artifact.artifactId;
   const scopeIdentity = seriesAnalysisScopeSignature({
@@ -151,8 +173,34 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
           <SeriesAnalysisSelectedMatch context={matchContext} onClear={onClearFocusedMatch} />
         </StaleShield>
       ) : null}
-      <PurposeTabs activeView={activeView} onViewChange={onViewChange} />
-      {activeView === "review" ? (
+      {showPurposeTabs ? <PurposeTabs activeView={activeView} onViewChange={onViewChange} /> : null}
+      {activeView === "outlook" ? (
+        <div
+          aria-labelledby={purposeTabId("outlook")}
+          id={purposePanelId("outlook")}
+          role="tabpanel"
+        >
+          {bundle.kind === "outlook" ? (
+            <StaleShield
+              active={shielded}
+              fallback={null}
+              statusPlacement="external"
+              strategy="preserve-inert"
+            >
+              <Suspense fallback={<Skeleton className="min-h-64" />}>
+                <OutlookView
+                  response={bundle.outlook}
+                  selection={outlookSelection}
+                  onMemberChange={onOutlookMemberChange}
+                />
+                <SeriesAnalysisArrival ready={navigationReady} root={root} />
+              </Suspense>
+            </StaleShield>
+          ) : (
+            <Skeleton className="min-h-64" />
+          )}
+        </div>
+      ) : activeView === "review" ? (
         <StaleShield
           active={shielded}
           fallback={null}

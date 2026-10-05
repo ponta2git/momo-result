@@ -411,6 +411,8 @@ struct ArtifactCounts {
     reviews: i32,
     drilldowns: i32,
     match_contexts: i32,
+    outlook_summaries: i32,
+    outlook_references: i32,
 }
 
 impl ArtifactCounts {
@@ -420,6 +422,8 @@ impl ArtifactCounts {
             ResourceManifest::Review { .. } => &mut self.reviews,
             ResourceManifest::Drilldown { .. } => &mut self.drilldowns,
             ResourceManifest::MatchContext { .. } => &mut self.match_contexts,
+            ResourceManifest::OutlookSummary { .. } => &mut self.outlook_summaries,
+            ResourceManifest::OutlookReference { .. } => &mut self.outlook_references,
         };
         *count = count.checked_add(1).ok_or(ControlError::NumericBound)?;
         Ok(())
@@ -472,7 +476,9 @@ async fn insert_artifact_header(
             ResourceManifest::Aggregate { .. }
             | ResourceManifest::Review { .. }
             | ResourceManifest::Drilldown { .. }
-            | ResourceManifest::MatchContext { .. } => None,
+            | ResourceManifest::MatchContext { .. }
+            | ResourceManifest::OutlookSummary { .. }
+            | ResourceManifest::OutlookReference { .. } => None,
         })
         .collect();
     Ok(transaction
@@ -482,9 +488,9 @@ async fn insert_artifact_header(
                artifact_schema_version, validation_contract_id, source_input_checksum,\x20\
                root_checksum, status,\x20\
                aggregate_chunk_count, review_chunk_count, drilldown_chunk_count,\x20\
-               match_context_chunk_count, encoded_bytes, decoded_bytes, radar_basis_id, radar_generation, radar_applied_at, scope_keys\x20\
+               match_context_chunk_count, encoded_bytes, decoded_bytes, radar_basis_id, radar_generation, radar_applied_at, scope_keys, outlook_summary_chunk_count, outlook_reference_chunk_count\x20\
              ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'staging',$10,$11,$12,$13,$14,$15,$16,$17,\x20\
-               (SELECT current_applied_at FROM series_radar_title_states WHERE game_title_id=$2 AND current_basis_id=$16),$18)\x20\
+               (SELECT current_applied_at FROM series_radar_title_states WHERE game_title_id=$2 AND current_basis_id=$16),$18,$19,$20)\x20\
              ON CONFLICT (id) DO NOTHING",
             &[
                 &manifest.artifact_id,
@@ -505,6 +511,8 @@ async fn insert_artifact_header(
                 &claim.radar_basis_id,
                 &claim.radar_generation,
                 &scope_keys,
+                &totals.counts.outlook_summaries,
+                &totals.counts.outlook_references,
             ],
         )
         .await?)
@@ -551,7 +559,9 @@ async fn validate_staged_artifact_shape(
             ResourceManifest::Aggregate { .. }
             | ResourceManifest::Review { .. }
             | ResourceManifest::Drilldown { .. }
-            | ResourceManifest::MatchContext { .. } => None,
+            | ResourceManifest::MatchContext { .. }
+            | ResourceManifest::OutlookSummary { .. }
+            | ResourceManifest::OutlookReference { .. } => None,
         })
         .collect();
     let row = transaction
@@ -574,6 +584,12 @@ async fn validate_staged_artifact_shape(
                       COALESCE(SUM(encoded_bytes), 0)::bigint,\x20\
                       COALESCE(SUM(decoded_bytes), 0)::bigint\x20\
                FROM series_analysis_match_context_artifacts WHERE artifact_id = $1\x20\
+               UNION ALL\x20\
+               SELECT 'outlook_summary', COUNT(*)::integer, COALESCE(SUM(encoded_bytes), 0)::bigint, COALESCE(SUM(decoded_bytes), 0)::bigint\x20\
+               FROM series_analysis_outlook_summary_artifacts WHERE artifact_id = $1\x20\
+               UNION ALL\x20\
+               SELECT 'outlook_reference', COUNT(*)::integer, COALESCE(SUM(encoded_bytes), 0)::bigint, COALESCE(SUM(decoded_bytes), 0)::bigint\x20\
+               FROM series_analysis_outlook_reference_artifacts WHERE artifact_id = $1\x20\
              )\x20\
              SELECT a.game_title_id = $2 AND a.attempt_id = $3\x20\
                     AND a.input_revision = $4 AND a.algorithm_version = $5\x20\
@@ -586,6 +602,9 @@ async fn validate_staged_artifact_shape(
                     AND a.encoded_bytes = $14 AND a.decoded_bytes = $15\x20\
                     AND a.radar_basis_id IS NOT DISTINCT FROM $16 AND a.radar_generation=$17\x20\
                     AND a.scope_keys = $18\x20\
+                    AND a.outlook_summary_chunk_count = $19 AND a.outlook_reference_chunk_count = $20\x20\
+                    AND (SELECT chunk_count FROM child_shape WHERE kind = 'outlook_summary') = $19\x20\
+                    AND (SELECT chunk_count FROM child_shape WHERE kind = 'outlook_reference') = $20\x20\
                     AND (SELECT chunk_count FROM child_shape WHERE kind = 'aggregate') = $10\x20\
                     AND (SELECT chunk_count FROM child_shape WHERE kind = 'review') = $11\x20\
                     AND (SELECT chunk_count FROM child_shape WHERE kind = 'drilldown') = $12\x20\
@@ -612,6 +631,8 @@ async fn validate_staged_artifact_shape(
                 &claim.radar_basis_id,
                 &claim.radar_generation,
                 &scope_keys,
+                &totals.counts.outlook_summaries,
+                &totals.counts.outlook_references,
             ],
         )
         .await?;

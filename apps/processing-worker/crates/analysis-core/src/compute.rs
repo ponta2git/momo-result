@@ -7,6 +7,7 @@ use crate::{
         player_matches_by_member,
     },
     outcome_model,
+    outlook::TitleFacts,
     radar::{RadarAggregate, RadarError, evaluate_rows},
 };
 
@@ -45,6 +46,10 @@ pub struct ComputedResource {
 pub enum ComputedResourceKind {
     Aggregate,
     Review,
+    OutlookSummary,
+    OutlookReference {
+        member_id: String,
+    },
     Drilldown {
         member_id: String,
         metric: DrilldownMetric,
@@ -154,6 +159,7 @@ pub fn try_for_each_resource<E: From<RadarError>>(
     input: &NormalizedAnalysisInput,
     mut consume: impl FnMut(ComputedResource) -> Result<(), E>,
 ) -> Result<(), E> {
+    let title_facts = TitleFacts::new(input);
     let mut previous_analysis: Option<ScopeAnalysis<'_>> = None;
     for (scope, player_matches) in input.scopes() {
         let analysis = match previous_analysis.take() {
@@ -182,6 +188,7 @@ pub fn try_for_each_resource<E: From<RadarError>>(
             item_count: analysis.player_matches.len(),
             source_match_revision: None,
         })?;
+        consume_outlook(scope, &analysis.player_matches, &title_facts, &mut consume)?;
         let review = build_review(
             scope,
             &analysis.player_matches,
@@ -268,3 +275,35 @@ fn player_radar(
 
 #[cfg(test)]
 mod tests;
+
+fn consume_outlook<E>(
+    scope: &ScopeRef,
+    player_matches: &[&PlayerMatchInput],
+    title_facts: &TitleFacts,
+    consume: &mut impl FnMut(ComputedResource) -> Result<(), E>,
+) -> Result<(), E> {
+    if matches!(scope, ScopeRef::Overall | ScopeRef::Season { .. }) {
+        let summary = title_facts.summary(scope, player_matches);
+        consume(ComputedResource {
+            scope: scope.clone(),
+            kind: ComputedResourceKind::OutlookSummary,
+            item_count: summary.players.len(),
+            payload: serde_json::json!(summary),
+            source_match_revision: None,
+        })?;
+    }
+    if *scope == ScopeRef::Overall {
+        for reference in title_facts.references() {
+            consume(ComputedResource {
+                scope: scope.clone(),
+                kind: ComputedResourceKind::OutlookReference {
+                    member_id: reference.member_id.clone(),
+                },
+                item_count: reference.best_windows.len() + reference.examples.types.len(),
+                payload: serde_json::json!(reference),
+                source_match_revision: None,
+            })?;
+        }
+    }
+    Ok(())
+}

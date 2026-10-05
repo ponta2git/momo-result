@@ -2,7 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { beforeAll, describe, expect, it } from "vitest";
 
@@ -10,7 +10,10 @@ import type { SeriesAnalysisUrlState } from "@/features/seriesComparison/model/s
 import { useSeriesAnalysisResource } from "@/features/seriesComparison/page/useSeriesAnalysisResource";
 import { invalidateAfterMatchUpdated } from "@/shared/api/cacheInvalidation";
 import { seriesAnalysisKeys, seriesPlayerRadarKeys } from "@/shared/api/queryKeys";
-import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
+import type {
+  SeriesAnalysisOutlookSummary,
+  SeriesComparisonAggregate,
+} from "@/shared/api/seriesAnalysis";
 import { decodeSeriesAnalysisArtifact } from "@/shared/api/seriesAnalysisArtifactDecoder";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
@@ -23,6 +26,7 @@ import {
   makeSeriesAnalysisStatus,
   makeSeriesAnalysisScopeStatus,
 } from "@/test/msw/seriesAnalysisFixtures";
+import { makeSeriesAnalysisOutlookSummary } from "@/test/msw/seriesAnalysisOutlookFixtures";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 
@@ -38,6 +42,219 @@ beforeAll(() =>
 );
 
 describe("useSeriesAnalysisResource", () => {
+  it("holds a fully loaded replacement outlook during a gesture and adopts its complete summary on release", async () => {
+    setDevUser();
+    const queryClient = createTestQueryClient();
+    const initial = await makeSeriesAnalysisOutlookSummary();
+    const nextArtifact = {
+      ...initial.artifact,
+      artifactId: "artifact-after-deletion",
+      inputRevision: "13",
+      publishedAt: "2026-08-10T01:02:03.000Z",
+    };
+    // A correction leaves one legal four-player game, changing count, quality and all references.
+    const period = {
+      startMatchId: "remaining-match",
+      endMatchId: "remaining-match",
+      startSequence: 1,
+      endSequence: 1,
+      startedAt: "2026-01-01T00:00:00.000000Z",
+      endedAt: "2026-01-01T00:00:00.000000Z",
+    };
+    const recentPlayers = initial.recent.players.map((player, index) => ({
+      ...player,
+      rankCounts: [0, 1, 2, 3].map((rank) => (rank === index ? 1 : 0)) as [
+        number,
+        number,
+        number,
+        number,
+      ],
+      rankSum: index + 1,
+      averageRank: index + 1,
+    }));
+    const jointRanks = initial.recent.jointRanks.map((pair) => {
+      const first = recentPlayers.findIndex((player) => player.memberId === pair.memberAId);
+      const second = recentPlayers.findIndex((player) => player.memberId === pair.memberBId);
+      return {
+        ...pair,
+        rankCounts: [0, 1, 2, 3].map((a) =>
+          [0, 1, 2, 3].map((b) => (a === first && b === second ? 1 : 0)),
+        ) as typeof pair.rankCounts,
+      };
+    });
+    const next = await makeSeriesAnalysisOutlookSummary({
+      ...initial,
+      artifact: nextArtifact,
+      period,
+      qualityStatus: "reference",
+      scope: { ...initial.scope, matchCount: 1 },
+      source: { ...initial.source, titleMatchCount: 1 },
+      players: initial.players.map((player, index) => ({
+        ...player,
+        rankSum: index + 1,
+        averageRank: index + 1,
+      })),
+      recent: {
+        ...initial.recent,
+        period,
+        matchCount: 1,
+        qualityStatus: "reference",
+        players: recentPlayers,
+        jointRanks,
+      },
+    });
+    let publishedArtifact = initial.artifact;
+    const summaryGate = createDeferred();
+    const requestedArtifacts: Array<string | null> = [];
+    server.use(
+      http.get("/api/analytics/series-comparison/v2/status", () =>
+        HttpResponse.json(makeSeriesAnalysisStatus({ currentArtifact: publishedArtifact })),
+      ),
+      http.get("/api/analytics/series-comparison/v1/outlook-summary", async ({ request }) => {
+        const artifactId = new URL(request.url).searchParams.get("artifactId");
+        requestedArtifacts.push(artifactId);
+        if (artifactId === nextArtifact.artifactId) {
+          await summaryGate.promise;
+          return HttpResponse.json(next);
+        }
+        return HttpResponse.json(initial);
+      }),
+    );
+    const state: SeriesAnalysisUrlState = {
+      gameTitleId: initial.artifact.gameTitleId,
+      view: "outlook",
+    };
+    const displayed: Array<{ held: boolean; summary: SeriesAnalysisOutlookSummary }> = [];
+    const { result, rerender } = renderHook(
+      (held: boolean) => {
+        const resource = useSeriesAnalysisResource({
+          activeView: "outlook",
+          state,
+          deferredState: state,
+          deferOutlookAdoption: held,
+        });
+        const bundle = resource.resource.bundle;
+        useEffect(() => {
+          if (bundle?.kind === "outlook") displayed.push({ held, summary: bundle.outlook });
+        }, [bundle, held]);
+        return resource;
+      },
+      {
+        initialProps: false,
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        ),
+      },
+    );
+    await waitFor(() => expect(result.current.resource.data).toEqual(initial));
+    rerender(true);
+    publishedArtifact = nextArtifact;
+    act(() => result.current.refresh());
+    await waitFor(() =>
+      expect(requestedArtifacts).toEqual([initial.artifact.artifactId, nextArtifact.artifactId]),
+    );
+    expect(result.current.resource.data).toEqual(initial);
+    expect(result.current.resource.loading).toBe(false);
+    expect(result.current.resource.scopeState).toBe("available");
+    await act(async () => summaryGate.resolve());
+    await waitFor(() =>
+      expect(
+        queryClient.getQueryData(
+          seriesAnalysisKeys.outlookSummary({
+            gameTitleId: state.gameTitleId,
+            artifactId: nextArtifact.artifactId,
+          }),
+        ),
+      ).toEqual(next),
+    );
+    await waitFor(() => expect(result.current.candidateArtifactId).toBe(nextArtifact.artifactId));
+    expect(result.current.resource.data).toEqual(initial);
+    expect(result.current.resource.shielded).toBe(false);
+    rerender(false);
+    await waitFor(() => expect(result.current.resource.data).toEqual(next));
+    expect(requestedArtifacts).toEqual([initial.artifact.artifactId, nextArtifact.artifactId]);
+    for (const entry of displayed) {
+      if (entry.held || entry.summary.artifact.artifactId === initial.artifact.artifactId)
+        expect(entry.summary).toEqual(initial);
+      else expect(entry.summary).toEqual(next);
+    }
+  });
+
+  it("keeps the displayed scope and inputs available until a gesture ends after the last game is deleted", async () => {
+    setDevUser();
+    const queryClient = createTestQueryClient();
+    const initial = await makeSeriesAnalysisOutlookSummary();
+    const nextArtifact = {
+      ...initial.artifact,
+      artifactId: "artifact-with-no-games",
+      inputRevision: "13",
+    };
+    const empty = await makeSeriesAnalysisOutlookSummary({ artifact: nextArtifact }, true);
+    let publishedArtifact = initial.artifact;
+    const summaryGate = createDeferred();
+    let replacementRequested = false;
+    server.use(
+      http.get("/api/analytics/series-comparison/v2/status", () =>
+        HttpResponse.json(makeSeriesAnalysisStatus({ currentArtifact: publishedArtifact })),
+      ),
+      http.get("/api/analytics/series-comparison/v2/scope-status", ({ request }) => {
+        const artifactId = new URL(request.url).searchParams.get("artifactId");
+        const isEmpty = artifactId === nextArtifact.artifactId;
+        return HttpResponse.json(
+          makeSeriesAnalysisScopeStatus({
+            artifactId,
+            state: isEmpty ? "empty" : "available",
+            currentHasMatches: !isEmpty,
+            publishedHasMatches: !isEmpty,
+          }),
+        );
+      }),
+      http.get("/api/analytics/series-comparison/v1/outlook-summary", async ({ request }) => {
+        if (new URL(request.url).searchParams.get("artifactId") === nextArtifact.artifactId) {
+          replacementRequested = true;
+          await summaryGate.promise;
+          return HttpResponse.json(empty);
+        }
+        return HttpResponse.json(initial);
+      }),
+    );
+    const state: SeriesAnalysisUrlState = {
+      gameTitleId: initial.artifact.gameTitleId,
+      view: "outlook",
+    };
+    const { result, rerender } = renderHook(
+      (held: boolean) =>
+        useSeriesAnalysisResource({
+          activeView: "outlook",
+          state,
+          deferredState: state,
+          deferOutlookAdoption: held,
+        }),
+      {
+        initialProps: false,
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        ),
+      },
+    );
+    await waitFor(() => expect(result.current.resource.data).toEqual(initial));
+    rerender(true);
+    publishedArtifact = nextArtifact;
+    act(() => result.current.refresh());
+    await waitFor(() => expect(replacementRequested).toBe(true));
+    expect(result.current.resource.scopeState).toBe("available");
+    expect(result.current.resource.data).toEqual(initial);
+    expect(result.current.resource.loading).toBe(false);
+    expect(result.current.resource.shielded).toBe(false);
+    await act(async () => summaryGate.resolve());
+    await waitFor(() => expect(result.current.candidateArtifactId).toBe(nextArtifact.artifactId));
+    expect(result.current.resource.scopeState).toBe("available");
+    expect(result.current.resource.data).toEqual(initial);
+    rerender(false);
+    await waitFor(() => expect(result.current.resource.data).toEqual(empty));
+    expect(result.current.resource.scopeState).toBe("empty");
+  });
+
   it("does not retain another selected match or view when a replacement artifact fails", async () => {
     const queryClient = createTestQueryClient();
     const nextArtifact = {

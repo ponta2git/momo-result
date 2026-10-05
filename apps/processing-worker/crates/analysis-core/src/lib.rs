@@ -14,6 +14,7 @@ pub mod contract;
 pub mod model;
 mod numeric;
 mod outcome_model;
+mod outlook;
 pub mod payload;
 pub mod radar;
 mod stats;

@@ -5,6 +5,9 @@ export type SeriesAnalysisArtifactResponseByContract = {
   aggregateV5: components["schemas"]["SeriesAnalysisAggregateV5Response"];
   drilldown: components["schemas"]["SeriesAnalysisDrilldownResponse"];
   matchContext: components["schemas"]["SeriesAnalysisMatchContextResponse"];
+  outlookExamples: components["schemas"]["SeriesAnalysisOutlookExamplesResponse"];
+  outlookSummary: components["schemas"]["SeriesAnalysisOutlookSummaryResponse"];
+  outlookWindow: components["schemas"]["SeriesAnalysisOutlookWindowResponse"];
   reviewV3: components["schemas"]["SeriesAnalysisReviewV3Response"];
 };
 
@@ -18,6 +21,15 @@ export const seriesAnalysisArtifactValidatorLoaders = {
   matchContext: async () =>
     (await import("./series-analysis-match-context-validators.generated"))
       .validateSeriesAnalysisMatchContext,
+  outlookExamples: async () =>
+    (await import("./series-analysis-outlook-examples-validators.generated"))
+      .validateSeriesAnalysisOutlookExamples,
+  outlookSummary: async () =>
+    (await import("./series-analysis-outlook-summary-validators.generated"))
+      .validateSeriesAnalysisOutlookSummary,
+  outlookWindow: async () =>
+    (await import("./series-analysis-outlook-window-validators.generated"))
+      .validateSeriesAnalysisOutlookWindow,
   reviewV3: async () =>
     (await import("./series-analysis-review-v3-validators.generated"))
       .validateSeriesAnalysisReviewV3,

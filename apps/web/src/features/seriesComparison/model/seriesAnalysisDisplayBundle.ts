@@ -7,9 +7,10 @@ import type {
   SeriesAnalysisScope,
   SeriesComparisonAggregate,
   SeriesComparisonReviewV3,
+  SeriesAnalysisOutlookSummary,
 } from "@/shared/api/seriesAnalysis";
 
-type SeriesAnalysisAnalysisViewId = Exclude<SeriesAnalysisViewId, "review">;
+type SeriesAnalysisAnalysisViewId = Exclude<SeriesAnalysisViewId, "review" | "outlook">;
 
 export type SeriesAnalysisDisplayBundle =
   | {
@@ -23,7 +24,27 @@ export type SeriesAnalysisDisplayBundle =
       matchContext: SeriesAnalysisMatchContextV3 | undefined;
       review: SeriesComparisonReviewV3;
       view: "review";
+    }
+  | {
+      kind: "outlook";
+      outlook: SeriesAnalysisOutlookSummary;
+      matchContext: undefined;
+      view: "outlook";
     };
+
+export function seriesAnalysisBundleResource(
+  bundle: SeriesAnalysisDisplayBundle,
+): SeriesComparisonAggregate | SeriesComparisonReviewV3 | SeriesAnalysisOutlookSummary;
+export function seriesAnalysisBundleResource(
+  bundle: SeriesAnalysisDisplayBundle | undefined,
+): SeriesComparisonAggregate | SeriesComparisonReviewV3 | SeriesAnalysisOutlookSummary | undefined;
+export function seriesAnalysisBundleResource(bundle: SeriesAnalysisDisplayBundle | undefined) {
+  return bundle?.kind === "review"
+    ? bundle.review
+    : bundle?.kind === "outlook"
+      ? bundle.outlook
+      : bundle?.aggregate;
+}
 
 export type SeriesAnalysisBundleResolution =
   | {
@@ -37,7 +58,13 @@ export function displaySeriesAnalysisBundleWithoutContext(
   activeView: SeriesAnalysisViewId,
   aggregate: SeriesComparisonAggregate | undefined,
   review: SeriesComparisonReviewV3 | undefined,
+  outlook?: SeriesAnalysisOutlookSummary | undefined,
 ): SeriesAnalysisDisplayBundle | undefined {
+  if (activeView === "outlook") {
+    return outlook
+      ? { kind: "outlook", outlook, matchContext: undefined, view: "outlook" }
+      : undefined;
+  }
   if (activeView === "review") {
     return review ? { kind: "review", matchContext: undefined, review, view: "review" } : undefined;
   }
@@ -51,6 +78,8 @@ export function sameSeriesAnalysisDisplayBundle(
   next: SeriesAnalysisDisplayBundle,
 ): boolean {
   if (!current || current.kind !== next.kind || current.view !== next.view) return false;
+  if (current.kind === "outlook" && next.kind === "outlook")
+    return current.outlook === next.outlook;
   if (current.kind === "review" && next.kind === "review") {
     return current.review === next.review && current.matchContext === next.matchContext;
   }
@@ -123,7 +152,15 @@ function readyBundle(
   aggregate: SeriesComparisonAggregate | undefined,
   review: SeriesComparisonReviewV3 | undefined,
   matchContext: SeriesAnalysisMatchContextV3 | undefined,
+  outlook?: SeriesAnalysisOutlookSummary | undefined,
 ): SeriesAnalysisBundleResolution {
+  if (activeView === "outlook")
+    return outlook
+      ? {
+          kind: "ready",
+          value: { kind: "outlook", outlook, matchContext: undefined, view: "outlook" },
+        }
+      : { kind: "waiting" };
   if (activeView === "review") {
     return review
       ? {
@@ -146,6 +183,7 @@ export function resolveSeriesAnalysisDisplayBundle({
   artifactId,
   matchContext,
   review,
+  outlook,
   state,
 }: {
   activeView: SeriesAnalysisViewId;
@@ -153,8 +191,17 @@ export function resolveSeriesAnalysisDisplayBundle({
   artifactId: string | undefined;
   matchContext: SeriesAnalysisMatchContextV3 | undefined;
   review: SeriesComparisonReviewV3 | undefined;
+  outlook?: SeriesAnalysisOutlookSummary | undefined;
   state: SeriesAnalysisUrlState;
 }): SeriesAnalysisBundleResolution {
+  if (activeView === "outlook")
+    return readyBundle(
+      activeView,
+      undefined,
+      undefined,
+      undefined,
+      matchesSeriesAnalysisResource(outlook, artifactId, state) ? outlook : undefined,
+    );
   const matchingAggregate = matchesSeriesAnalysisResource(aggregate, artifactId, state)
     ? aggregate
     : undefined;

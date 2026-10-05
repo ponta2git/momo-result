@@ -93,8 +93,38 @@ private[api] object SeriesAnalysisResponseSchemas:
     "series-analysis-review-response-v3.schema.json",
   )
 
+  val outlookSummary: Resource = Resource(
+    "outlook-summary",
+    "outlookSummary",
+    "SeriesAnalysisOutlookSummaryResponse",
+    SeriesAnalysisChunkKind.OutlookSummary,
+    "series-analysis-outlook-summary-response-v1.schema.json",
+  )
+  val outlookWindow: Resource = Resource(
+    "outlook-window",
+    "outlookWindow",
+    "SeriesAnalysisOutlookWindowResponse",
+    SeriesAnalysisChunkKind.OutlookReference,
+    "series-analysis-outlook-window-response-v1.schema.json",
+  )
+  val outlookExamples: Resource = Resource(
+    "outlook-examples",
+    "outlookExamples",
+    "SeriesAnalysisOutlookExamplesResponse",
+    SeriesAnalysisChunkKind.OutlookReference,
+    "series-analysis-outlook-examples-response-v1.schema.json",
+  )
+
   val resources: List[Resource] =
-    List(aggregateV5, reviewV3, drilldown, matchContext)
+    List(
+      aggregateV5,
+      reviewV3,
+      drilldown,
+      matchContext,
+      outlookSummary,
+      outlookWindow,
+      outlookExamples
+    )
 
   def schemaFor(resource: Resource): Json =
     val registered = resources.find(_.componentName == resource.componentName).getOrElse(
@@ -106,6 +136,8 @@ private[api] object SeriesAnalysisResponseSchemas:
     val response =
       if resource.chunkKind == SeriesAnalysisChunkKind.MatchContext then
         matchContextResponseSchema(owner)
+      else if resource eq outlookWindow then responseSchema(outlookWindowSchema(owner))
+      else if resource eq outlookExamples then responseSchema(outlookExamplesSchema(owner))
       else responseSchema(owner)
     withMetadata(response, resource)
 
@@ -120,6 +152,32 @@ private[api] object SeriesAnalysisResponseSchemas:
   private def responseSchema(owner: Json): Json =
     val memberHydrated = addMemberDisplayNames(owner)
     mapBranches(memberHydrated)(addResponseEnvelope)
+
+  private def outlookReferenceFields(owner: Json): List[(String, Json)] =
+    List("schemaVersion", "scope", "source", "memberId")
+      .map(name => name -> requiredProperty(owner, name, "outlook reference"))
+
+  private def outlookWindowSchema(owner: Json): Json =
+    val window = requiredProperty(owner, "bestWindows", "outlook reference")
+      .hcursor.downField("items").focus.getOrElse(sys.error("Outlook window schema is missing."))
+    objectSchema(outlookReferenceFields(owner) ++ List(
+      "windowSize" -> Json.obj(
+        "type" -> Json.fromString("integer"),
+        "minimum" -> Json.fromInt(1),
+        "maximum" -> Json.fromInt(1000)
+      ),
+      "status" -> Json.obj(
+        "type" -> Json.fromString("string"),
+        "enum" -> Json.arr(Json.fromString("available"), Json.fromString("insufficient"))
+      ),
+      "window" ->
+        Json.obj("anyOf" -> Json.arr(window, Json.obj("type" -> Json.fromString("null")))),
+    ))
+
+  private def outlookExamplesSchema(owner: Json): Json = objectSchema(
+    outlookReferenceFields(owner) :+
+      ("examples" -> requiredProperty(owner, "examples", "outlook reference"))
+  )
 
   private def matchContextResponseSchema(owner: Json): Json =
     val includedBase = owner.mapObject(

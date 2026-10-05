@@ -105,8 +105,12 @@ export function ReviewView({
       </section>
       <div className="grid items-start gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
         {playbookByPlayer.map((entry) => (
-          <section className="min-w-0" key={entry.player.memberId}>
-            <h2 className={contentText.heading}>
+          <section
+            className="min-w-0"
+            key={entry.player.memberId}
+            id={`review-member-${entry.player.memberId}`}
+          >
+            <h2 className={contentText.heading} tabIndex={-1}>
               <MemberSequenceLabel memberId={entry.player.memberId}>
                 {entry.player.displayName}
               </MemberSequenceLabel>

@@ -1,9 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { seriesAnalysisFocusExclusionNotice } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
+import {
+  seriesAnalysisFocusExclusionNotice,
+  seriesAnalysisScopeSignature,
+} from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import { buildSeriesAnalysisFilterOptions } from "@/features/seriesComparison/model/seriesAnalysisFilterOptions";
+import { normalizeOutlookPair } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { useSeriesAnalysisLocationState } from "@/features/seriesComparison/navigation/useSeriesAnalysisLocationState";
+import { useOutlookSession } from "@/features/seriesComparison/outlook/OutlookSessionOwner";
 import { useSeriesAnalysisResource } from "@/features/seriesComparison/page/useSeriesAnalysisResource";
 import { useSeriesAnalysisScopeIdentity } from "@/features/seriesComparison/page/useSeriesAnalysisScopeIdentity";
 import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
@@ -12,6 +17,7 @@ import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 /** Composes location, option, and artifact owners into the display-ready page contract. */
 export function useSeriesComparisonPageModel() {
+  const { session, store } = useOutlookSession();
   const [focusNotice, setFocusNotice] = useState<string | undefined>();
   const optionsQuery = useQuery(seriesAnalysisOptionsQueryOptions());
   const {
@@ -33,7 +39,19 @@ export function useSeriesComparisonPageModel() {
     updateSeasonMasterId,
     updateView,
     updateOwnerMetric,
+    updateOutlookMember,
   } = location.actions;
+  const outlookPair = normalizeOutlookPair(
+    location.state.focusMemberId,
+    location.state.rivalMemberId,
+  );
+  const outlookKey = `${seriesAnalysisScopeSignature(location.state)}|${outlookPair.focusMemberId}|${outlookPair.rivalMemberId}`;
+  useEffect(() => {
+    // A route round-trip may outlive the options cache. Its temporary empty selection
+    // is not a new comparison, and must not discard the retained input.
+    if (!optionsData || scopeIdentity.pending) return;
+    store.update((current) => (current && current.key !== outlookKey ? undefined : current));
+  }, [store, optionsData, scopeIdentity.pending, outlookKey]);
   const filterOptions = useMemo(
     () => buildSeriesAnalysisFilterOptions(scopeIdentity.options, location.state),
     [location.state, scopeIdentity.options],
@@ -43,6 +61,7 @@ export function useSeriesComparisonPageModel() {
     deferredState: location.deferredState,
     state: location.state,
     selectionReady: !scopeIdentity.pending,
+    deferOutlookAdoption: Boolean(session?.gesture),
   });
   const refreshAnalysis = analysis.refresh;
 
@@ -97,6 +116,7 @@ export function useSeriesComparisonPageModel() {
       updateSeasonMasterId,
       updateView,
       updateOwnerMetric,
+      updateOutlookMember,
     },
     focus: {
       ...analysis.focus,

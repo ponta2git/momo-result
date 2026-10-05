@@ -3,12 +3,14 @@ import { useEffect, useState } from "react";
 
 import { matchesSeriesAnalysisScope } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import { SeriesAnalysisNavigation } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
+import { OutlookSessionBoundary } from "@/features/seriesComparison/outlook/OutlookSessionOwner";
 import {
   preloadSeriesAnalysisView,
   SeriesAnalysisContent,
 } from "@/features/seriesComparison/page/SeriesAnalysisContent";
 import { SeriesAnalysisScopeBar } from "@/features/seriesComparison/page/SeriesAnalysisScopeBar";
 import { SeriesAnalysisStatusFeedback } from "@/features/seriesComparison/page/SeriesAnalysisStatusFeedback";
+import { PurposeTabs } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
 import {
   ComparisonSkeleton,
   PageSkeleton,
@@ -32,11 +34,23 @@ function seriesReturnAction(returnTo: string | undefined) {
 }
 
 export function SeriesComparisonPage() {
+  return (
+    <OutlookSessionBoundary>
+      <SeriesComparisonPageContent />
+    </OutlookSessionBoundary>
+  );
+}
+
+function SeriesComparisonPageContent() {
   const page = useSeriesComparisonPageModel();
   const { filters, focus, options, resource, status } = page;
   const purposeChanging =
     resource.bundle !== undefined &&
-    (filters.activeView === "review") !== (resource.bundle.kind === "review");
+    (filters.activeView === "outlook"
+      ? "outlook"
+      : filters.activeView === "review"
+        ? "review"
+        : "analysis") !== resource.bundle.kind;
   const resultsShielded =
     !purposeChanging && (resource.loading || resource.shielded || focus.shielded);
   const updating =
@@ -162,6 +176,11 @@ export function SeriesComparisonPage() {
                 onSeriesChange={filters.updateGameTitle}
               />
               <SeriesAnalysisStatusFeedback
+                displayedPublishedAt={
+                  matchesSeriesAnalysisScope(resource.data, filters.state)
+                    ? resource.data?.artifact.publishedAt
+                    : undefined
+                }
                 confirmedMatchCount={filters.confirmedMatchCount}
                 hasError={status.hasError}
                 loading={status.loading}
@@ -169,6 +188,7 @@ export function SeriesComparisonPage() {
                 status={status.data}
                 onRefresh={() => retry("status")}
               />
+              <PurposeTabs activeView={filters.activeView} onViewChange={filters.updateView} />
               {(status.loading && !status.data) ||
               (resource.loading &&
                 !resource.data &&
@@ -176,7 +196,19 @@ export function SeriesComparisonPage() {
                 status.data?.currentArtifact) ? (
                 <ComparisonSkeleton />
               ) : null}
-              {resource.scopeState === "empty" ? (
+              {filters.activeView === "outlook" && filters.state.mapMasterId ? (
+                <Notice
+                  tone="info"
+                  title="見通しは全マップの総合成績で試します"
+                  action={
+                    <Button variant="secondary" onClick={() => filters.updateMapMasterId("")}>
+                      全マップで試す
+                    </Button>
+                  }
+                >
+                  作品とシーズンの選択を保って、マップの指定を解除します。
+                </Notice>
+              ) : resource.scopeState === "empty" ? (
                 <EmptyState
                   placement="embedded"
                   title="この範囲に確定済みの試合がありません"
@@ -265,6 +297,9 @@ export function SeriesComparisonPage() {
                     </StaleShield>
                   ) : (
                     <SeriesAnalysisContent
+                      showPurposeTabs={false}
+                      outlookSelection={filters.state}
+                      onOutlookMemberChange={filters.updateOutlookMember}
                       ownerMetric={filters.state.ownerMetric}
                       onOwnerMetricChange={filters.updateOwnerMetric}
                       activeView={filters.activeView}

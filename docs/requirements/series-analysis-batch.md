@@ -131,7 +131,7 @@ DB lock順とstaging transactionの規則は `docs/db-rule.md`、process責務�
 
 - 1作品の成果物はoverallと、確定試合が実在するseason、map、season×mapだけを含む。空の直積scopeを作らない。
 - aggregate、review、drilldown、match contextは同じ入力から計算し、高負荷な中間結果を再利用する。
-- [総合成績の見通し](series-rank-outlook.md#13-実績データと読取契約)を実装する際は、同じsnapshotからsummary・referenceを追加する。過去窓・順位内訳の型・同時順位をWorkerで計算し、利用者の仮定は保存しない。resourceの完全性・上限・一括公開は本節の契約を使う。
+- [総合成績の見通し](series-rank-outlook.md#13-実績データと読取契約)は、同じsnapshotからsummary・referenceを生成する。過去窓・順位内訳の型・同時順位をWorkerで計算し、利用者の仮定は保存しない。resourceの完全性・上限・一括公開は本節の契約を使う。
 - match contextは対象試合revisionと作品所属を保存する。読み取り時に一致しなければ古い派生分析を返さない。
 - artifact / manifest / chunk の shape と上限は JSON Schema、canonicalization の具体例は `docs/schemas/fixtures/series-analysis/canonicalization-v1.json` を正本とする。normal / invalid fixture と validator は契約証拠とする。
 - source input checksumは表示専用metadataを除く入力を決定順にhashし、semantic checksumはresource / scope / item / canonical payloadを決定順にhashする。run ID、日時、表示名、処理時間を含めない。

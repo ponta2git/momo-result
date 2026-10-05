@@ -8,6 +8,7 @@ use crate::{
     contract::{ResourceManifest, ScopeRef},
 };
 
+mod outlook;
 mod owner;
 mod radar;
 mod schema;
@@ -38,6 +39,8 @@ pub enum PayloadError {
 #[derive(Default)]
 pub struct PayloadSetValidator {
     scopes: BTreeMap<ScopeRef, ScopeResources>,
+    outlook: outlook::OutlookSet,
+    title_id: Option<String>,
 }
 
 struct ScopeResources {
@@ -46,6 +49,7 @@ struct ScopeResources {
     drilldowns: BTreeSet<(String, String)>,
     context_match_ids: BTreeSet<String>,
     context_item_count: u64,
+    context_periods: BTreeMap<String, (u64, String)>,
 }
 
 struct AggregateReferences {
@@ -59,9 +63,13 @@ struct AggregateReferences {
 struct ContextReferences<'a> {
     member_ids: BTreeSet<&'a str>,
     focused_item_ids: BTreeSet<&'a str>,
+    sequence: u64,
+    played_at: &'a str,
 }
 
 enum ResourceReferences<'a> {
+    OutlookSummary(Box<crate::outlook::Summary>),
+    OutlookReference(Box<crate::outlook::Reference>),
     Aggregate(AggregateReferences),
     Review(BTreeSet<String>),
     Drilldown {
@@ -78,6 +86,15 @@ impl PayloadSetValidator {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Binds saved source identities to the authoritative artifact title.
+    #[must_use]
+    pub fn for_title(game_title_id: &str) -> Self {
+        Self {
+            title_id: Some(game_title_id.into()),
+            ..Self::default()
+        }
     }
 
     /// Validates and records a freshly computed resource for whole-artifact reference checks.
@@ -115,6 +132,8 @@ impl PayloadSetValidator {
     ///
     /// Returns an error when a scope is incomplete or its context item counts do not balance.
     pub fn finish(self) -> Result<(), PayloadError> {
+        self.outlook
+            .finish(&self.scopes, self.title_id.as_deref())?;
         for resources in self.scopes.into_values() {
             let aggregate = resources.aggregate;
             if !resources.review_seen {
@@ -144,6 +163,18 @@ impl PayloadSetValidator {
         scope: ScopeRef,
         references: ResourceReferences<'_>,
     ) -> Result<(), PayloadError> {
+        match references {
+            ResourceReferences::OutlookSummary(summary) => {
+                return self.outlook.add_summary(scope, *summary);
+            }
+            ResourceReferences::OutlookReference(reference) => {
+                return self.outlook.add_reference(*reference);
+            }
+            ResourceReferences::Aggregate(_)
+            | ResourceReferences::Review(_)
+            | ResourceReferences::Drilldown { .. }
+            | ResourceReferences::MatchContext { .. } => {}
+        }
         if let ResourceReferences::Aggregate(aggregate) = references {
             if self
                 .scopes
@@ -161,6 +192,7 @@ impl PayloadSetValidator {
                         drilldowns: BTreeSet::new(),
                         context_match_ids: BTreeSet::new(),
                         context_item_count: 0,
+                        context_periods: BTreeMap::new(),
                     });
                     Ok(())
                 }
@@ -169,12 +201,16 @@ impl PayloadSetValidator {
                 }
             };
         }
+        let is_overall = scope == ScopeRef::Overall;
         let scope = self
             .scopes
             .get_mut(&scope)
             .ok_or(PayloadError::ResourceSetMismatch)?;
         let inserted = match references {
             ResourceReferences::Aggregate(_) => return Err(PayloadError::ResourceSetMismatch),
+            ResourceReferences::OutlookSummary(_) | ResourceReferences::OutlookReference(_) => {
+                return Err(PayloadError::ResourceSetMismatch);
+            }
             ResourceReferences::Review(member_ids) => {
                 if member_ids != scope.aggregate.member_ids {
                     return Err(PayloadError::ReferenceMismatch);
@@ -205,6 +241,12 @@ impl PayloadSetValidator {
                     .checked_add(u64::try_from(context.member_ids.len())?)
                     .filter(|count| *count <= scope.aggregate.item_count)
                     .ok_or(PayloadError::ResourceSetMismatch)?;
+                if is_overall {
+                    scope.context_periods.insert(
+                        match_id.clone(),
+                        (context.sequence, context.played_at.into()),
+                    );
+                }
                 scope.context_match_ids.insert(match_id)
             }
         };
@@ -235,6 +277,14 @@ fn validate_computed_resource(
 ) -> Result<ResourceReferences<'_>, PayloadError> {
     let item_count = u64::try_from(resource.item_count)?;
     match &resource.kind {
+        ComputedResourceKind::OutlookSummary => {
+            outlook::summary(&resource.payload, &resource.scope, item_count)
+                .map(|value| ResourceReferences::OutlookSummary(Box::new(value)))
+        }
+        ComputedResourceKind::OutlookReference { member_id } => {
+            outlook::reference(&resource.payload, &resource.scope, member_id, item_count)
+                .map(|value| ResourceReferences::OutlookReference(Box::new(value)))
+        }
         ComputedResourceKind::Aggregate => {
             validate_aggregate(&resource.payload, &resource.scope, item_count)
         }
@@ -275,6 +325,14 @@ fn validate_manifest_resource<'a>(
     payload: &'a Value,
 ) -> Result<ResourceReferences<'a>, PayloadError> {
     match resource {
+        ResourceManifest::OutlookSummary { common } => {
+            outlook::summary(payload, &common.scope, common.item_count)
+                .map(|value| ResourceReferences::OutlookSummary(Box::new(value)))
+        }
+        ResourceManifest::OutlookReference { common, member_id } => {
+            outlook::reference(payload, &common.scope, member_id, common.item_count)
+                .map(|value| ResourceReferences::OutlookReference(Box::new(value)))
+        }
         ResourceManifest::Aggregate { common } => {
             validate_aggregate(payload, &common.scope, common.item_count)
         }
@@ -310,6 +368,8 @@ const fn resource_scope(resource: &ResourceManifest) -> &ScopeRef {
     match resource {
         ResourceManifest::Aggregate { common }
         | ResourceManifest::Review { common }
+        | ResourceManifest::OutlookSummary { common }
+        | ResourceManifest::OutlookReference { common, .. }
         | ResourceManifest::Drilldown { common, .. }
         | ResourceManifest::MatchContext { common, .. } => &common.scope,
     }
@@ -576,6 +636,8 @@ fn validate_match_context<'a>(
         context: ContextReferences {
             member_ids: player_ids,
             focused_item_ids: focused_ids,
+            sequence: required_u64(match_value.get("matchIndex"))?,
+            played_at: required_string(match_value.get("playedAt"))?,
         },
     })
 }

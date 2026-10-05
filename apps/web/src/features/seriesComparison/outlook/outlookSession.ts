@@ -19,7 +19,6 @@ export type OutlookEntry = {
   distribution: RankDistribution;
   source: OutlookSource;
   meanDraft?: string | undefined;
-  countDraft?: [string, string, string, string] | undefined;
   error?: string | undefined;
 };
 type SavedEntry = Pick<OutlookEntry, "distribution" | "source">;
@@ -51,14 +50,13 @@ export function sameDistribution(a: RankDistribution, b: RankDistribution) {
 function snapshot(session: OutlookSession): Pair {
   return session.entries.map(({ distribution, source }) => ({ distribution, source })) as Pair;
 }
-function restore(session: OutlookSession, pair: Pair): OutlookSession {
+function restore(session: OutlookSession, pair: Pair, clearDrafts = true): OutlookSession {
   return {
     ...session,
     entries: session.entries.map((entry, i) => ({
       ...entry,
       ...pair[i],
-      meanDraft: undefined,
-      error: undefined,
+      ...(clearDrafts ? { meanDraft: undefined, error: undefined } : {}),
     })) as OutlookSession["entries"],
   };
 }
@@ -110,8 +108,8 @@ export function adoptOutlookSummary(
       editor: 0,
       method: "mean",
       transfer: [0, 3],
-      horizon: 50,
-      horizonText: "50",
+      horizon: 20,
+      horizonText: "20",
       noise: false,
       examplesOpen: false,
     };
@@ -126,7 +124,6 @@ export function adoptOutlookSummary(
     entries: followRecent
       ? (recent.map((entry, i) => ({
           ...entry,
-          countDraft: current.entries[i as OutlookRole].countDraft,
           meanDraft: current.entries[i as OutlookRole].meanDraft,
         })) as OutlookSession["entries"])
       : current.entries,
@@ -169,14 +166,12 @@ export function applyOutlookDistribution(
   )
     return updateOutlookEntry(session, role, {
       meanDraft: undefined,
-      countDraft: undefined,
       error: undefined,
     });
   const next = updateOutlookEntry(session, role, {
     distribution,
     source,
     meanDraft: undefined,
-    countDraft: undefined,
     error: undefined,
   });
   // Fifty complete gestures bound this one ephemeral comparison's history.
@@ -188,9 +183,7 @@ export function applyOutlookDistribution(
 }
 
 export function beginOutlookGesture(session: OutlookSession, role: OutlookRole): OutlookSession {
-  return session.gesture || session.entries[role].countDraft
-    ? session
-    : { ...session, gesture: { role, before: snapshot(session) } };
+  return session.gesture ? session : { ...session, gesture: { role, before: snapshot(session) } };
 }
 
 export function finishOutlookGesture(session: OutlookSession, cancel = false): OutlookSession {
@@ -201,14 +194,13 @@ export function finishOutlookGesture(session: OutlookSession, cancel = false): O
   );
   const next =
     cancel || unchanged
-      ? restore(session, before)
+      ? restore(session, before, false)
       : { ...session, history: [...session.history, before].slice(-50) };
   return { ...next, gesture: undefined };
 }
 
 export function undoOutlook(session: OutlookSession): OutlookSession {
   const last = session.history.at(-1);
-  if (session.entries.some((entry) => entry.countDraft !== undefined) || session.gesture || !last)
-    return session;
+  if (session.gesture || !last) return session;
   return { ...restore(session, last), history: session.history.slice(0, -1), notice: undefined };
 }

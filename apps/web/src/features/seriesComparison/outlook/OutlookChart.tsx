@@ -71,7 +71,7 @@ export function OutlookChart({
   return (
     <figure className="min-w-0" aria-labelledby={titleId}>
       <figcaption className={contentText.supporting} id={titleId}>
-        総合の平均順位の差 · 上側は{focusName}、下側は{rivalName}が上
+        総合平均順位の差 · 上は{focusName}、下は{rivalName}が先行
       </figcaption>
       <div ref={root} className="min-w-0">
         <svg
@@ -93,7 +93,7 @@ export function OutlookChart({
                 x={left - 7}
                 y={y(value) + 4}
                 textAnchor="end"
-                fontSize="11"
+                fontSize="12"
                 fill="var(--color-text-secondary)"
               >
                 {value === 0 ? "同率" : value.toFixed(3)}
@@ -121,16 +121,20 @@ export function OutlookChart({
           >
             この先の試合数（0は現在）
           </text>
-          {horizon <= 100 ? (
-            <line
-              x1={x(horizon)}
-              x2={x(horizon)}
-              y1={top}
-              y2={bottom}
-              stroke="var(--color-border-strong)"
-              strokeDasharray="2 4"
-            />
-          ) : null}
+          {[50, 100, ...(horizon <= 100 && horizon !== 50 && horizon !== 100 ? [horizon] : [])].map(
+            (h) => (
+              <line
+                key={h}
+                aria-label={`${h}戦後の目安`}
+                x1={x(h)}
+                x2={x(h)}
+                y1={top}
+                y2={bottom}
+                stroke="var(--color-border-strong)"
+                strokeDasharray="2 4"
+              />
+            ),
+          )}
           {examples.map((gaps, index) => (
             <path
               key={index}
@@ -182,14 +186,11 @@ export function OutlookChart({
         </svg>
       </div>
       <div className={cn(contentText.supporting, "flex flex-wrap gap-x-4 gap-y-1")}>
-        <span>実線：試している成績</span>
+        <span>実線：指定した成績</span>
         <span>
-          {sameLine
-            ? `直近${recentCount}戦の線と重なっています`
-            : `破線：直近${recentCount}戦のまま`}
+          {sameLine ? `直近${recentCount}戦と同じ推移` : `破線：直近${recentCount}戦のまま`}
         </span>
       </div>
-      <p className={cn(contentText.supporting, "mt-1")}>{markerLabel}</p>
     </figure>
   );
 }

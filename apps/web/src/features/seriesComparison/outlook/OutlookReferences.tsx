@@ -19,16 +19,13 @@ import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
 import { Button } from "@/shared/ui/actions/Button";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { DataTable } from "@/shared/ui/data/DataTable";
-import { TextField } from "@/shared/ui/forms/TextField";
 import { contentText } from "@/shared/ui/typography";
 
-export function requiredMeanText(required: ReturnType<typeof requiredMean>, h: number) {
+export function requiredMeanText(required: ReturnType<typeof requiredMean>) {
   if (required.kind === "mean" && required.maximumHundredths !== null)
     return `${(required.maximumHundredths / 100).toFixed(2)}位以下`;
-  if (required.kind === "counts") return "回数で調整すると、この条件を試せます";
-  if (required.kind === "precision-impossible")
-    return `入力できる細かさでは、${h}戦後に上回る成績を指定できません`;
-  return `相手の成績を変えない場合、${h}戦後には上回れません`;
+  if (required.kind === "precision-impossible") return "0.01刻みでは指定できません";
+  return "相手がこの成績なら届きません";
 }
 
 export function OutlookRequirements({
@@ -36,16 +33,14 @@ export function OutlookRequirements({
   focusId,
   cumulative,
   session,
-  change,
 }: {
   response: SeriesAnalysisOutlookSummary;
   focusId: string;
   cumulative: CumulativePair;
   session: OutlookSession;
-  change: (update: (current: OutlookSession) => OutlookSession) => void;
 }) {
   const { window } = useOutlookResource(response, focusId, session.horizon, false);
-  const rows = [...new Set([50, 100, session.horizon])].map((h) => {
+  const rows = [...new Set([session.horizon, 50, 100])].map((h) => {
     const required = requiredMean(cumulative, session.entries[1].distribution, h);
     const recent = outlookPlayer(response.recent.players, focusId);
     const improvement =
@@ -59,16 +54,16 @@ export function OutlookRequirements({
       (item) => item.memberId === focusId && item.windowSize === h,
     );
     const historical = h === 50 || h === 100 ? best : window.data;
-    return { h, required, improvement, historical };
+    const recentCompatible = areDistributionsCompatible(
+      distributionFromCounts(recent.rankCounts),
+      session.entries[1].distribution,
+    );
+    return { h, required, improvement, historical, recentCompatible };
   });
-  const validHorizon =
-    /^\d+$/u.test(session.horizonText) &&
-    Number(session.horizonText) >= 1 &&
-    Number(session.horizonText) <= 1000;
   return (
     <section className="grid min-w-0 gap-3" aria-labelledby="outlook-requirements-heading">
       <h2 id="outlook-requirements-heading" className={contentText.heading}>
-        この試合数で上回るには
+        上回るための成績
       </h2>
       <DataTable
         caption={{ content: "必要な成績と同期間の過去実績", visibility: "screen-reader" }}
@@ -80,23 +75,12 @@ export function OutlookRequirements({
             key: "games",
             header: "この先",
             rowHeader: true,
-            renderCell: (row) => (
-              <Button
-                size="sm"
-                variant={row.h === session.horizon ? "secondary" : "quiet"}
-                aria-pressed={row.h === session.horizon}
-                onClick={() =>
-                  change((current) => ({ ...current, horizon: row.h, horizonText: String(row.h) }))
-                }
-              >
-                {row.h}戦後を確認
-              </Button>
-            ),
+            renderCell: (row) => `${row.h}戦後`,
           },
           {
             key: "required",
             header: "必要な平均順位",
-            renderCell: (row) => requiredMeanText(row.required, row.h),
+            renderCell: (row) => requiredMeanText(row.required),
           },
           {
             key: "improvement",
@@ -106,7 +90,9 @@ export function OutlookRequirements({
                 ? "—"
                 : row.improvement.numerator > 0n
                   ? `${formatRational(row.improvement, 2)}位の改善`
-                  : "直近の成績で条件を満たす",
+                  : row.recentCompatible
+                    ? "直近の成績で届く"
+                    : "平均は条件内・内訳の変更が必要",
           },
           {
             key: "best",
@@ -137,36 +123,6 @@ export function OutlookRequirements({
           },
         ]}
       />
-      <div className="max-w-sm">
-        <TextField
-          label="この先何戦で比べるか"
-          description="1〜1000戦。成績の指定は変えず、確認する時点を変えます。"
-          inputMode="numeric"
-          value={session.horizonText}
-          error={
-            validHorizon
-              ? undefined
-              : "1〜1000の整数を入力してください。直前の有効な戦数を表示しています。"
-          }
-          onChange={(event) => {
-            const text = event.target.value;
-            change((current) => ({ ...current, horizonText: text }));
-          }}
-          onBlur={() => {
-            if (validHorizon)
-              change((current) => ({ ...current, horizon: Number(current.horizonText) }));
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && validHorizon) {
-              event.preventDefault();
-              change((current) => ({ ...current, horizon: Number(current.horizonText) }));
-            }
-          }}
-        />
-      </div>
-      <p className={contentText.supporting}>
-        過去の自己ベストは当時の相手・展開を含む実績です。この成績を今後も続けられる保証ではありません。
-      </p>
     </section>
   );
 }
@@ -211,18 +167,13 @@ export function OutlookPastExamples({
     .slice(0, 3);
   return (
     <Disclosure
-      ariaLabel="過去の成績例"
-      summary="過去の成績例"
+      ariaLabel={`${focusName}の過去の成績例`}
+      summary={`${focusName}の過去の成績例`}
       open={session.examplesOpen}
       onOpenChange={(open) => change((current) => ({ ...current, examplesOpen: open }))}
       panelPadding="sm"
     >
       <div className="grid gap-3">
-        <p className={contentText.body}>
-          {focusName}
-          の実際の連続20戦から、必要な平均を満たし、直近の内訳に近い例です。適用すると、この内訳を
-          {session.horizon}戦続ける仮定で試します。
-        </p>
         {query.isError ? (
           <div>
             <p className={contentText.body}>過去の成績例を取得できません。試算は続けられます。</p>
@@ -246,63 +197,62 @@ export function OutlookPastExamples({
             {qualifying.length
               ? "必要な平均を満たす実績はありますが、相手の指定と両立する例がありません。"
               : "必要な平均を満たす20戦の実績例がありません。"}{" "}
-            手入力で成立する成績を試せます。
           </p>
         ) : (
-          <ul className="grid gap-4">
-            {examples.map((example) => (
-              <li
-                key={example.rankCounts.join(":")}
-                className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-center"
-              >
-                <div>
-                  <p className={contentText.body}>
-                    {example.window.averageRank.toFixed(2)}位 ·{" "}
-                    {example.rankCounts
-                      .map((count, index) => `${index + 1}位 ${count}回`)
-                      .join(" / ")}
-                  </p>
-                  <p className={contentText.supporting}>
-                    {example.window.period.startedAt.slice(0, 10)}〜
-                    {example.window.period.endedAt.slice(0, 10)}
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={Boolean(session.entries[0].countDraft)}
-                  onClick={() =>
-                    change((current) => {
-                      if (
-                        current.artifactId !== response.artifact.artifactId ||
-                        current.entries[0].countDraft
-                      )
-                        return current;
-                      const distribution = distributionFromCounts(example.rankCounts);
-                      const latest = requiredMean(
-                        cumulative,
-                        current.entries[1].distribution,
-                        current.horizon,
-                      );
-                      if (compareRationals(distributionMean(distribution), latest.threshold) >= 0)
-                        return {
-                          ...current,
-                          notice: "条件が変わったため、この実績例では上回れません。",
-                        };
-                      return applyOutlookDistribution(current, 0, distribution, {
-                        kind: "example",
-                        artifactId: current.artifactId,
-                        matchCount: 20,
-                        period: example.window.period,
-                      });
-                    })
-                  }
+          <div className="grid gap-3">
+            <p className={contentText.body}>
+              過去の連続20戦の成績から、{session.horizon}戦続けると上回れる例を選んでいます。
+            </p>
+            <ul className="grid gap-4">
+              {examples.map((example) => (
+                <li
+                  key={example.rankCounts.join(":")}
+                  className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-center"
                 >
-                  この成績を試す
-                </Button>
-              </li>
-            ))}
-          </ul>
+                  <div>
+                    <p className={contentText.body}>
+                      {example.window.averageRank.toFixed(2)}位 ·{" "}
+                      {example.rankCounts
+                        .map((count, index) => `${index + 1}位 ${count}回`)
+                        .join(" / ")}
+                    </p>
+                    <p className={contentText.supporting}>
+                      {example.window.period.startedAt.slice(0, 10)}〜
+                      {example.window.period.endedAt.slice(0, 10)}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() =>
+                      change((current) => {
+                        if (current.artifactId !== response.artifact.artifactId) return current;
+                        const distribution = distributionFromCounts(example.rankCounts);
+                        const latest = requiredMean(
+                          cumulative,
+                          current.entries[1].distribution,
+                          current.horizon,
+                        );
+                        if (compareRationals(distributionMean(distribution), latest.threshold) >= 0)
+                          return {
+                            ...current,
+                            notice: "条件が変わったため、この実績例では上回れません。",
+                          };
+                        return applyOutlookDistribution(current, 0, distribution, {
+                          kind: "example",
+                          artifactId: current.artifactId,
+                          matchCount: 20,
+                          period: example.window.period,
+                        });
+                      })
+                    }
+                  >
+                    この成績を試す
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
     </Disclosure>

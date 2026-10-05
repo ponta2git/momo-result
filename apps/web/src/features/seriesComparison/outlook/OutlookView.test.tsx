@@ -2,13 +2,19 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { OutlookSessionOwner } from "@/features/seriesComparison/outlook/OutlookSessionOwner";
 import { OutlookView } from "@/features/seriesComparison/outlook/OutlookView";
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
+import { setDevUser } from "@/test/auth";
+import { setupMsw } from "@/test/msw/lifecycle";
 import { makeSeriesAnalysisOutlookSummary } from "@/test/msw/seriesAnalysisOutlookFixtures";
 import { createTestQueryClient } from "@/test/queryClient";
+import { selectOption } from "@/test/selectOption";
+
+setupMsw();
+beforeEach(() => setDevUser());
 
 type RankCounts = SeriesAnalysisOutlookSummary["recent"]["players"][number]["rankCounts"];
 type JointRanks = SeriesAnalysisOutlookSummary["recent"]["jointRanks"][number]["rankCounts"];
@@ -65,15 +71,15 @@ function meanField(name = focusName) {
 function countField(rank: number, name = focusName) {
   return screen.getByRole("textbox", { name: `${name}の${rank}位の回数` });
 }
-async function fillCounts(
-  user: ReturnType<typeof userEvent.setup>,
-  values: readonly string[],
-  name = focusName,
-) {
-  for (const [index, value] of values.entries()) {
-    await user.clear(countField(index + 1, name));
-    await user.type(countField(index + 1, name), value);
-  }
+function displayedCounts(name = focusName) {
+  return within(screen.getByLabelText(`${name}の順位内訳`))
+    .getAllByRole("definition")
+    .map((value) => value.textContent);
+}
+async function editPerson(user: ReturnType<typeof userEvent.setup>, name: string) {
+  await user.click(
+    within(screen.getByRole("tablist", { name: "調整する人" })).getByRole("tab", { name }),
+  );
 }
 
 /** A legal rank permutation corrects the recent games while preserving the older games. */
@@ -155,113 +161,129 @@ async function threeGameSummary() {
 }
 
 describe("OutlookView input and update boundaries", () => {
-  it("keeps fractional counts through a mean-mode round trip and an exact same-value entry", async () => {
+  it("keeps a precise mean and allocation through mode changes, a no-op gesture and the first whole-count move", async () => {
     const user = userEvent.setup();
     renderOutlook(await makeSeriesAnalysisOutlookSummary());
+    await user.clear(meanField());
+    await user.type(meanField(), "2.41{Enter}");
     const conclusion = screen.getByRole("img").getAttribute("aria-label");
     await user.click(screen.getByRole("tab", { name: "順位の回数で調整" }));
-    await fillCounts(user, ["5.54", "5.18", "4.81", "4.47"]);
+    const preciseCounts = ["5.54回", "5.18回", "4.82回", "4.46回"];
+    expect(displayedCounts()).toEqual(preciseCounts);
     expect(screen.getByRole("img")).toHaveAttribute("aria-label", conclusion);
-    await user.click(screen.getByRole("button", { name: "回数を反映" }));
+    expect(countField(1)).toHaveValue("6");
     await user.click(screen.getByRole("tab", { name: "平均順位で調整" }));
-    expect(meanField()).toHaveValue("2.4105");
     await user.clear(meanField());
-    await user.type(meanField(), "2.41050{Enter}");
+    await user.type(meanField(), "2.4100{Enter}");
     await user.click(screen.getByRole("tab", { name: "順位の回数で調整" }));
-    expect([1, 2, 3, 4].map((rank) => (countField(rank) as HTMLInputElement).value)).toEqual([
-      "5.54",
-      "5.18",
-      "4.81",
-      "4.47",
-    ]);
+    expect(displayedCounts()).toEqual(preciseCounts);
+    await user.click(countField(1));
+    await user.tab();
+    await user.tab();
+    expect(screen.getByRole("slider", { name: "1位と4位の配分" })).toHaveFocus();
+    await user.keyboard("{ArrowLeft>}{ArrowRight>}{/ArrowRight}{/ArrowLeft}");
+    expect(displayedCounts()).toEqual(preciseCounts);
+    await user.click(screen.getByRole("button", { name: "4位から1位へ1回移す" }));
+    expect(displayedCounts()).toEqual(["7回", "5回", "4回", "4回"]);
     await user.click(screen.getByRole("button", { name: "元に戻す" }));
-    expect([1, 2, 3, 4].map((rank) => (countField(rank) as HTMLInputElement).value)).toEqual([
-      "4.00",
-      "2.00",
-      "7.00",
-      "7.00",
-    ]);
+    expect(displayedCounts()).toEqual(preciseCounts);
+    await user.click(screen.getByRole("tab", { name: "平均順位で調整" }));
+    expect(meanField()).toHaveValue("2.41");
+    await user.click(screen.getByRole("button", { name: "元に戻す" }));
+    expect(meanField()).toHaveValue("2.85");
     expect(screen.getByRole("button", { name: "元に戻す" })).toBeDisabled();
   });
 
-  it("preserves a hidden dirty draft and allows rival edits and a route round trip before explicit discard", async () => {
+  it("moves whole counts immediately between the named ranks and leaves valid results intact on invalid input", async () => {
+    const user = userEvent.setup();
+    renderOutlook(await makeSeriesAnalysisOutlookSummary());
+    await user.click(screen.getByRole("tab", { name: "順位の回数で調整" }));
+    await user.clear(countField(1));
+    await user.type(countField(1), "5");
+    expect(displayedCounts()).toEqual(["5回", "2回", "7回", "6回"]);
+    expect(
+      within(screen.getByRole("tablist", { name: "調整する人" })).getByRole("tab", {
+        name: focusName,
+      }),
+    ).toHaveTextContent("2.70位");
+    await user.keyboard("{Enter}");
+    await user.tab();
+    await user.click(countField(1));
+    await user.clear(countField(1));
+    await user.paste("20");
+    expect(displayedCounts()).toEqual(["5回", "2回", "7回", "6回"]);
+    expect(screen.getByRole("alert")).toHaveTextContent("整数を入力してください");
+    await user.keyboard("{Escape}");
+    expect(countField(1)).toHaveValue("5");
+    expect(countField(1)).toBeValid();
+    await user.clear(countField(1));
+    await user.type(countField(1), "5");
+    expect(countField(1)).toBeValid();
+    await user.keyboard("{Enter}");
+    await editPerson(user, rivalName);
+    expect(displayedCounts(rivalName)).toEqual(["7回", "4回", "2回", "7回"]);
+    await editPerson(user, focusName);
+    await user.click(screen.getByRole("button", { name: "元に戻す" }));
+    expect(displayedCounts()).toEqual(["4回", "2回", "7回", "7回"]);
+    expect(screen.getByRole("button", { name: "元に戻す" })).toBeDisabled();
+  });
+
+  it("preserves a hidden pending mean during rival edits and a route round trip", async () => {
     const user = userEvent.setup();
     renderOutlook(await makeSeriesAnalysisOutlookSummary());
     await user.clear(meanField());
     await user.type(meanField(), "2.70{Enter}");
+    await user.clear(meanField());
+    await user.type(meanField(), "2.60");
+    await editPerson(user, rivalName);
+    expect(screen.getByText(`${focusName}の平均は入力中です。`)).toBeInTheDocument();
+    await user.clear(meanField(rivalName));
+    await user.type(meanField(rivalName), "2.40{Enter}");
     await user.click(screen.getByRole("tab", { name: "順位の回数で調整" }));
-    await fillCounts(user, ["1", "15", "2", "2"]);
-    expect(screen.getByRole("button", { name: "回数を反映" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "元に戻す" })).toBeDisabled();
-    await user.click(
-      within(screen.getByRole("tablist", { name: "調整する人" })).getByRole("tab", {
-        name: rivalName,
-      }),
-    );
-    await fillCounts(user, ["4", "6", "4", "6"], rivalName);
-    await user.click(screen.getByRole("button", { name: "回数を反映" }));
-    expect(
-      screen.getByText(`${focusName}の回数は入力中・まだ反映されていません。`),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "元に戻す" })).toBeDisabled();
+    await user.click(countField(1, rivalName));
+    await user.tab();
+    expect(screen.getByText(`${focusName}の平均は入力中です。`)).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "平均順位で調整" }));
     await user.click(screen.getByRole("link", { name: "この作品の確定戦績を見る" }));
     await user.click(screen.getByRole("button", { name: "見通しに戻る" }));
+    expect(meanField(rivalName)).toHaveValue("2.40");
     await user.click(screen.getByRole("button", { name: "入力へ戻る" }));
-    expect(countField(1)).toHaveValue("1");
-    expect(countField(2)).toHaveValue("15");
-    expect(screen.getByText("2位は相手との合計が20回を超えます。")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "回数を反映" })).toBeDisabled();
-    await user.click(screen.getByRole("tab", { name: "平均順位で調整" }));
-    expect(meanField()).toBeDisabled();
-    await user.click(screen.getByRole("button", { name: "入力を破棄" }));
-    expect(meanField()).toHaveValue("2.7000");
-    expect(screen.getByRole("button", { name: "元に戻す" })).toBeEnabled();
+    expect(meanField()).toHaveValue("2.60");
+    await user.click(meanField());
+    await user.keyboard("{Escape}");
+    expect(meanField()).toHaveValue("2.70");
     await user.click(screen.getByRole("button", { name: "元に戻す" }));
-    await user.click(
-      within(screen.getByRole("tablist", { name: "調整する人" })).getByRole("tab", {
-        name: rivalName,
-      }),
-    );
-    expect(meanField(rivalName)).toHaveValue("2.4500");
+    await editPerson(user, rivalName);
+    expect(meanField(rivalName)).toHaveValue("2.45");
   });
 
-  it("restores the exact hand-entered allocation when one held-key gesture returns to its starting mean", async () => {
+  it("restores an unbalanced whole-count allocation when a held mean gesture returns to its start", async () => {
     const user = userEvent.setup();
     renderOutlook(await makeSeriesAnalysisOutlookSummary());
     await user.click(screen.getByRole("tab", { name: "順位の回数で調整" }));
-    await fillCounts(user, ["5", "5", "6.8", "3.2"]);
-    await user.click(screen.getByRole("button", { name: "回数を反映" }));
+    await user.click(screen.getByRole("button", { name: "4位から1位へ1回移す" }));
     await user.click(screen.getByRole("tab", { name: "平均順位で調整" }));
+    expect(meanField()).toHaveValue("2.70");
     await user.click(meanField());
     await user.tab();
     expect(screen.getByRole("slider", { name: `${focusName}の平均順位を動かす` })).toHaveFocus();
     await user.keyboard("{ArrowLeft>}{ArrowRight>}{/ArrowRight}{/ArrowLeft}");
     await user.click(screen.getByRole("tab", { name: "順位の回数で調整" }));
-    expect([1, 2, 3, 4].map((rank) => (countField(rank) as HTMLInputElement).value)).toEqual([
-      "5.00",
-      "5.00",
-      "6.80",
-      "3.20",
-    ]);
+    expect(displayedCounts()).toEqual(["5回", "2回", "7回", "6回"]);
     await user.click(screen.getByRole("tab", { name: "平均順位で調整" }));
     await user.click(meanField());
     await user.tab();
     await user.keyboard("{ArrowLeft>3/}");
-    expect(meanField()).toHaveValue("2.3800");
+    expect(meanField()).toHaveValue("2.67");
     await user.click(screen.getByRole("button", { name: "元に戻す" }));
     await user.click(screen.getByRole("tab", { name: "順位の回数で調整" }));
-    expect([1, 2, 3, 4].map((rank) => (countField(rank) as HTMLInputElement).value)).toEqual([
-      "5.00",
-      "5.00",
-      "6.80",
-      "3.20",
-    ]);
+    expect(displayedCounts()).toEqual(["5回", "2回", "7回", "6回"]);
     await user.click(screen.getByRole("button", { name: "元に戻す" }));
-    expect(countField(1)).toHaveValue("4.00");
+    expect(displayedCounts()).toEqual(["4回", "2回", "7回", "7回"]);
     expect(screen.getByRole("button", { name: "元に戻す" })).toBeDisabled();
   });
 
-  it("synchronizes a pending mean after Undo but preserves it across an artifact adoption", async () => {
+  it("synchronizes a pending mean after Undo but preserves it when unedited results follow a new artifact", async () => {
     const user = userEvent.setup();
     const response = await makeSeriesAnalysisOutlookSummary();
     const view = renderOutlook(response);
@@ -270,109 +292,168 @@ describe("OutlookView input and update boundaries", () => {
     await user.clear(meanField());
     await user.type(meanField(), "2.60");
     await user.click(screen.getByRole("button", { name: "元に戻す" }));
-    expect(meanField()).toHaveValue("2.8500");
+    expect(meanField()).toHaveValue("2.85");
     await user.clear(meanField());
     await user.type(meanField(), "2.70");
     view.updateSummary(await correctedSummary(response));
     expect(meanField()).toHaveValue("2.70");
-    expect(
-      screen.getByText(`${focusName}の平均は入力中・まだ反映されていません。`),
-    ).toBeInTheDocument();
     expect(screen.getByText("直近の成績と総合成績を更新しました。")).toBeInTheDocument();
     await user.keyboard("{Escape}");
-    expect(meanField()).toHaveValue("2.4500");
-    await user.click(
-      within(screen.getByRole("tablist", { name: "調整する人" })).getByRole("tab", {
-        name: rivalName,
-      }),
-    );
-    expect(meanField(rivalName)).toHaveValue("2.0500");
+    expect(meanField()).toHaveValue("2.45");
+    await editPerson(user, rivalName);
+    expect(meanField(rivalName)).toHaveValue("2.05");
     expect(screen.getByRole("button", { name: "元に戻す" })).toBeDisabled();
   });
 
-  it("preserves both chosen distributions and the dirty draft when an edited comparison adopts a new artifact", async () => {
+  it("preserves both chosen distributions and a pending mean when an edited comparison adopts a new artifact", async () => {
     const user = userEvent.setup();
     const response = await makeSeriesAnalysisOutlookSummary();
     const view = renderOutlook(response);
     await user.clear(meanField());
     await user.type(meanField(), "2.70{Enter}");
+    await user.clear(meanField());
+    await user.type(meanField(), "2.60");
     await user.click(screen.getByRole("tab", { name: "順位の回数で調整" }));
-    await user.clear(countField(1));
-    await user.type(countField(1), "19");
+    const before = displayedCounts();
     view.updateSummary(await correctedSummary(response));
-    expect(countField(1)).toHaveValue("19");
+    expect(displayedCounts()).toEqual(before);
+    expect(screen.getByText(`${focusName}の平均は入力中です。`)).toBeInTheDocument();
     expect(screen.getByText("試している成績を残して実績を更新しました。")).toBeInTheDocument();
-    expect(screen.getByText("総合の平均順位 2.06位")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "入力を破棄" }));
-    await user.click(screen.getByRole("tab", { name: "平均順位で調整" }));
-    expect(meanField()).toHaveValue("2.7000");
-    await user.click(
-      within(screen.getByRole("tablist", { name: "調整する人" })).getByRole("tab", {
-        name: rivalName,
-      }),
-    );
-    expect(meanField(rivalName)).toHaveValue("2.4500");
+    const results = screen.getByRole("table", { name: "現在とこの先の総合平均順位" });
+    expect(within(results).getByRole("row", { name: /現在/u })).toHaveTextContent("2.06位");
+    await user.click(screen.getByRole("button", { name: "入力へ戻る" }));
+    expect(meanField()).toHaveValue("2.60");
+    await user.click(meanField());
+    await user.keyboard("{Escape}");
+    expect(meanField()).toHaveValue("2.70");
+    await editPerson(user, rivalName);
+    expect(meanField(rivalName)).toHaveValue("2.45");
     expect(screen.getByRole("button", { name: "元に戻す" })).toBeDisabled();
   });
 
-  it("keeps a three-game native average until the proposed decimal counts are explicitly applied", async () => {
+  it("preserves a three-game exact average on same-value input and undoes a new edit after Enter in one step", async () => {
     const user = userEvent.setup();
     renderOutlook(await threeGameSummary());
     expect(meanField()).toHaveValue("1.3333");
     await user.click(screen.getByRole("tab", { name: "順位の回数で調整" }));
-    expect([1, 2, 3, 4].map((rank) => (countField(rank) as HTMLInputElement).value)).toEqual([
-      "13.33",
-      "6.66",
-      "0.01",
-      "0.00",
-    ]);
-    expect(screen.getByRole("slider", { name: "1位と4位の合計を保って動かす" })).toBeDisabled();
+    const actual = ["13.33回", "6.67回", "0回", "0回"];
+    expect(displayedCounts()).toEqual(actual);
+    expect(countField(1)).toHaveValue("13");
+    expect(screen.getByRole("button", { name: "4位から1位へ1回移す" })).toBeDisabled();
+    await user.clear(countField(1));
+    await user.type(countField(1), "13{Enter}");
+    expect(displayedCounts()).toEqual(actual);
+    expect(screen.getByRole("button", { name: "元に戻す" })).toBeDisabled();
+    // Enter ended the previous gesture; this edit starts while the same field still has focus.
+    await user.clear(countField(1));
+    await user.type(countField(1), "12");
+    expect(displayedCounts()).toEqual(["12回", "6回", "1回", "1回"]);
+    expect(
+      within(screen.getByRole("tablist", { name: "調整する人" })).getByRole("tab", {
+        name: focusName,
+      }),
+    ).toHaveTextContent("1.55位");
+    await user.keyboard("{Enter}");
+    await user.click(screen.getByRole("button", { name: "元に戻す" }));
+    expect(displayedCounts()).toEqual(actual);
     await user.click(screen.getByRole("tab", { name: "平均順位で調整" }));
     expect(meanField()).toHaveValue("1.3333");
-    expect(meanField()).toBeEnabled();
+    expect(screen.getByRole("button", { name: "元に戻す" })).toBeDisabled();
     await user.click(meanField());
     await user.tab();
     await user.keyboard("{ArrowLeft}");
     expect(meanField()).toHaveValue("1.3333");
     expect(screen.getByRole("button", { name: "元に戻す" })).toBeDisabled();
-    await user.click(screen.getByRole("tab", { name: "順位の回数で調整" }));
-    await user.click(screen.getByRole("button", { name: "回数を反映" }));
-    expect(screen.getByRole("slider", { name: "1位と4位の合計を保って動かす" })).toBeEnabled();
-    await user.click(screen.getByRole("tab", { name: "平均順位で調整" }));
-    expect(meanField()).toHaveValue("1.3340");
-    await user.click(screen.getByRole("button", { name: "元に戻す" }));
-    expect(meanField()).toHaveValue("1.3333");
   });
 
-  it("rejects a recent-result reset that conflicts with the rival without changing either player or adding Undo", async () => {
+  it("rejects an incompatible recent-result reset without changing either person or adding Undo", async () => {
     const user = userEvent.setup();
     renderOutlook(await makeSeriesAnalysisOutlookSummary());
     await user.clear(meanField());
     await user.type(meanField(), "2.50{Enter}");
-    await user.click(
-      within(screen.getByRole("tablist", { name: "調整する人" })).getByRole("tab", {
-        name: rivalName,
-      }),
-    );
+    await editPerson(user, rivalName);
     await user.click(screen.getByRole("tab", { name: "順位の回数で調整" }));
-    await fillCounts(user, ["0", "5", "15", "0"], rivalName);
-    await user.click(screen.getByRole("button", { name: "回数を反映" }));
-    await user.click(
-      within(screen.getByRole("tablist", { name: "調整する人" })).getByRole("tab", {
-        name: focusName,
-      }),
-    );
+    await selectOption(user, screen.getByRole("combobox", { name: "増やす順位" }), "2");
+    await user.clear(countField(3, rivalName));
+    await user.type(countField(3, rivalName), "9{Enter}");
+    await selectOption(user, screen.getByRole("combobox", { name: "減らす順位" }), "0");
+    await user.clear(countField(3, rivalName));
+    await user.type(countField(3, rivalName), "15{Enter}");
+    expect(displayedCounts(rivalName)).toEqual(["1回", "4回", "15回", "0回"]);
+    await editPerson(user, focusName);
     await user.click(screen.getByRole("tab", { name: "平均順位で調整" }));
     await user.click(screen.getByRole("button", { name: `${focusName}を直近の成績に戻す` }));
-    expect(meanField()).toHaveValue("2.5000");
+    expect(meanField()).toHaveValue("2.50");
     expect(meanField()).toHaveAccessibleDescription(/3位/u);
-    await user.click(
-      within(screen.getByRole("tablist", { name: "調整する人" })).getByRole("tab", {
-        name: rivalName,
-      }),
-    );
-    expect(meanField(rivalName)).toHaveValue("2.7500");
+    await editPerson(user, rivalName);
+    expect(meanField(rivalName)).toHaveValue("2.70");
     await user.click(screen.getByRole("button", { name: "元に戻す" }));
-    expect(meanField(rivalName)).toHaveValue("2.4500");
+    expect(meanField(rivalName)).toHaveValue("2.10");
+  });
+
+  it("does not recommend recent results that conflict with the rival or claim an impossible target is reachable", async () => {
+    const user = userEvent.setup();
+    renderOutlook(await makeSeriesAnalysisOutlookSummary());
+    const horizon = screen.getByRole("textbox", { name: "何戦後" });
+    await user.clear(horizon);
+    await user.type(horizon, "100");
+    await user.clear(meanField());
+    await user.type(meanField(), "2.50{Enter}");
+    await editPerson(user, rivalName);
+    await user.clear(meanField(rivalName));
+    await user.type(meanField(rivalName), "3.75{Enter}");
+    // The rival now takes fourth place 15 times; the focus's recent seven fourths cannot coexist.
+    const requirements = screen.getByRole("table", { name: "必要な成績と同期間の過去実績" });
+    expect(within(requirements).getByRole("row", { name: /^50戦後/u })).toHaveTextContent(
+      "平均は条件内・内訳の変更が必要",
+    );
+    const review = screen.getByRole("region", { name: "戦績を振り返る" });
+    expect(review).not.toHaveTextContent(/直近の成績.*上回/u);
+    expect(review).toHaveTextContent("順位の内訳が相手の指定と両立しません");
+    // Each edit remains legal; the rival's all-first-place assumption makes 100 games unreachable.
+    await editPerson(user, focusName);
+    await user.clear(meanField());
+    await user.type(meanField(), "3.25{Enter}");
+    await editPerson(user, rivalName);
+    await user.clear(meanField(rivalName));
+    await user.type(meanField(rivalName), "1.00{Enter}");
+    await editPerson(user, focusName);
+    await user.clear(meanField());
+    await user.type(meanField(), "2.00{Enter}");
+    expect(within(requirements).getByRole("row", { name: /^100戦後/u })).toHaveTextContent(
+      "相手がこの成績なら届きません",
+    );
+    expect(review).not.toHaveTextContent(/直近の成績.*上回/u);
+  });
+
+  it("updates the custom comparison row while typing without moving focus or changing either distribution", async () => {
+    const user = userEvent.setup();
+    renderOutlook(await makeSeriesAnalysisOutlookSummary());
+    const horizon = screen.getByRole("textbox", { name: "何戦後" });
+    expect(horizon).toHaveValue("20");
+    const results = screen.getByRole("table", { name: "現在とこの先の総合平均順位" });
+    const customRow = within(results)
+      .getAllByRole("row")
+      .find((row) => within(row).queryByRole("textbox", { name: "何戦後" }) !== null);
+    if (!customRow) throw new Error("The result table must contain the editable row");
+    const averages = () =>
+      within(customRow)
+        .getAllByRole("cell")
+        .map((cell) => cell.textContent);
+    expect(averages()).toEqual(["2.52位", "2.44位"]);
+    await user.clear(horizon);
+    await user.type(horizon, "50");
+    expect(horizon).toHaveFocus();
+    expect(horizon).toHaveValue("50");
+    expect(averages()).toEqual(["2.64位", "2.45位"]);
+    await user.clear(horizon);
+    await user.paste("1001");
+    expect(horizon).toHaveFocus();
+    expect(averages()).toEqual(["2.64位", "2.45位"]);
+    expect(screen.getByText(/結果は50戦後のまま/u)).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(horizon).toHaveValue("50");
+    expect(meanField()).toHaveValue("2.85");
+    expect(screen.getByRole("button", { name: "元に戻す" })).toBeDisabled();
   });
 });

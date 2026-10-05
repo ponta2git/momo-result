@@ -1,18 +1,18 @@
-import { useId } from "react";
+import { Minus, Plus } from "lucide-react";
+import { useId, useMemo, useState } from "react";
 
 import {
-  countCapacities,
   countsFromMean,
-  distributionCountUnits,
-  distributionFromCountUnits,
+  countsPerTwenty,
+  distributionFromCounts,
+  exactWholeCounts,
+  nearestWholeCounts,
+  wholeCountCapacities,
   distributionMean,
   formatRational,
-  incompatibleRanks,
   meanInput,
   meanLimits,
-  nearestCountUnits,
   nextMeanHundredths,
-  parseDecimal,
   rationalToNumber,
 } from "@/features/seriesComparison/model/outlook";
 import { outlookAverage } from "@/features/seriesComparison/outlook/outlookPresentation";
@@ -21,16 +21,18 @@ import {
   beginOutlookGesture,
   finishOutlookGesture,
   otherRole,
+  sameDistribution,
   updateOutlookEntry,
 } from "@/features/seriesComparison/outlook/outlookSession";
 import type {
   OutlookSession,
   OutlookRankIndex,
 } from "@/features/seriesComparison/outlook/outlookSession";
-import { Button } from "@/shared/ui/actions/Button";
+import { IconButton } from "@/shared/ui/actions/IconButton";
+import { cn } from "@/shared/ui/cn";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
-import { contentText, fieldText } from "@/shared/ui/typography";
+import { contentText } from "@/shared/ui/typography";
 
 const rangeClass =
   "min-h-11 w-full cursor-pointer accent-[var(--color-action)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)] disabled:cursor-not-allowed disabled:opacity-50";
@@ -57,7 +59,8 @@ export function OutlookEditor({ session, name, change }: Props) {
   const currentMean = distributionMean(entry.distribution);
   const limits = meanLimits(opponent);
   const sliderId = useId();
-  const rangeErrorId = `${sliderId}-error`;
+  const meanId = `${sliderId}-mean`;
+  const rangeErrorId = `${meanId}-error`;
   const setMean = (hundredths: number) =>
     change((current) => {
       const start =
@@ -87,7 +90,7 @@ export function OutlookEditor({ session, name, change }: Props) {
   const commitMean = () =>
     change((current) => {
       const edited = current.entries[role];
-      if (edited.meanDraft === undefined || edited.countDraft) return current;
+      if (edited.meanDraft === undefined) return current;
       const mean = distributionMean(edited.distribution);
       if (edited.meanDraft === formatRational(mean, 4))
         return updateOutlookEntry(current, role, { meanDraft: undefined, error: undefined });
@@ -110,72 +113,26 @@ export function OutlookEditor({ session, name, change }: Props) {
               "この平均は相手の成績と両立しません。相手の指定は変えず、入力を見直してください。",
           });
     });
-  const exactUnits = distributionCountUnits(entry.distribution);
-  const proposal = exactUnits ?? nearestCountUnits(entry.distribution, opponent);
-  const texts =
-    entry.countDraft ??
-    (proposal?.map((value) => (value / 100).toFixed(2)) as
-      | [string, string, string, string]
-      | undefined);
-  const parsed = texts?.map((text) => {
-    const value = parseDecimal(text);
-    if (
-      !value ||
-      value.numerator < 0n ||
-      value.numerator > 20n * value.denominator ||
-      (value.numerator * 100n) % value.denominator !== 0n
-    )
-      return null;
-    return Number((value.numerator * 100n) / value.denominator);
-  });
-  const sum = parsed?.every((value) => value !== null)
-    ? parsed.reduce((value, next) => value + (next ?? 0), 0)
-    : null;
-  const proposedDistribution = sum === 2000 ? distributionFromCountUnits(parsed as number[]) : null;
-  const conflict = proposedDistribution ? incompatibleRanks(proposedDistribution, opponent) : [];
-  const countsError =
-    sum === null
-      ? "各順位を0〜20回、0.01回刻みで入力してください。"
-      : sum !== 2000
-        ? `合計${(sum / 100).toFixed(2)}回です。${sum < 2000 ? "あと" : "超過は"}${(Math.abs(2000 - sum) / 100).toFixed(2)}回です。`
-        : conflict.length
-          ? `${conflict.join("・")}位は相手との合計が20回を超えます。`
-          : undefined;
-  const [from, to] = session.transfer;
-  const capacity = countCapacities(opponent);
-  const total = exactUnits ? exactUnits[from] + exactUnits[to] : 0;
-  const transferMin = Math.max(0, total - capacity[to]);
-  const transferMax = Math.min(capacity[from], total);
-  const transfer = (value: number) =>
-    change((current) => {
-      const units = distributionCountUnits(current.entries[role].distribution);
-      if (!units || current.entries[role].countDraft) return current;
-      const next = [...units];
-      next[to] = units[from] + units[to] - value;
-      next[from] = value;
-      return applyOutlookDistribution(current, role, distributionFromCountUnits(next), {
-        kind: "counts",
-      });
-    });
   return (
     <div className="grid min-w-0 gap-3">
       {session.method === "mean" ? (
         <>
           <TextField
+            id={meanId}
             label={`${name}のこれからの平均順位`}
             inputMode="decimal"
-            value={entry.meanDraft ?? formatRational(currentMean, 4)}
-            disabled={Boolean(entry.countDraft)}
-            description={`小さいほど良い成績です。設定できる平均は${(limits.minimumHundredths / 100).toFixed(2)}〜${(limits.maximumHundredths / 100).toFixed(2)}位。`}
+            value={entry.meanDraft ?? formatRational(currentMean, 4).replace(/(\.\d\d)0+$/u, "$1")}
+            description={`小さいほど上位。${(limits.minimumHundredths / 100).toFixed(2)}〜${(limits.maximumHundredths / 100).toFixed(2)}位で調整できます。`}
             error={entry.error}
-            onChange={(event) =>
+            onChange={(event) => {
+              const text = event.target.value;
               change((current) =>
                 updateOutlookEntry(current, role, {
-                  meanDraft: event.target.value,
+                  meanDraft: text,
                   error: undefined,
                 }),
-              )
-            }
+              );
+            }}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();
@@ -206,7 +163,7 @@ export function OutlookEditor({ session, name, change }: Props) {
             }}
           />
           <div>
-            <label htmlFor={sliderId} className={fieldText.label}>
+            <label htmlFor={sliderId} className="sr-only">
               {name}の平均順位を動かす
             </label>
             <input
@@ -218,7 +175,6 @@ export function OutlookEditor({ session, name, change }: Props) {
               max={Math.max(limits.maximumHundredths / 100, rationalToNumber(currentMean))}
               step="any"
               value={rationalToNumber(currentMean)}
-              disabled={Boolean(entry.countDraft)}
               aria-valuetext={`${outlookAverage(currentMean)}位。小さいほど良い成績`}
               onPointerDown={(event) => {
                 event.currentTarget.setPointerCapture(event.pointerId);
@@ -253,152 +209,241 @@ export function OutlookEditor({ session, name, change }: Props) {
                 if (rangeKeys.has(event.key)) finish();
               }}
             />
-            {entry.error ? (
-              <p className={fieldText.error} id={rangeErrorId}>
-                {entry.error}
-              </p>
-            ) : null}
           </div>
         </>
       ) : (
-        <>
-          <p className={contentText.supporting}>
-            20戦あたりの目安です。手入力では、ほかの順位の回数は変わりません。
-          </p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {[0, 1, 2, 3].map((index) => (
-              <TextField
-                key={index}
-                label={`${name}の${index + 1}位の回数`}
-                inputMode="decimal"
-                value={texts?.[index] ?? ""}
-                onChange={(event) => {
-                  const draft = [...(texts ?? ["", "", "", ""])] as [
-                    string,
-                    string,
-                    string,
-                    string,
-                  ];
-                  draft[index] = event.target.value;
-                  change((current) =>
-                    updateOutlookEntry(current, role, { countDraft: draft, error: undefined }),
-                  );
-                }}
-              />
-            ))}
-          </div>
-          {!exactUnits ? (
-            <p className={contentText.supporting}>
-              入力しやすい回数に丸めています。反映すると平均も変わる場合があります。現在
-              {outlookAverage(currentMean)}位
-              {proposedDistribution
-                ? ` → 反映後${outlookAverage(distributionMean(proposedDistribution))}位`
-                : ""}
-            </p>
-          ) : null}
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={Boolean(countsError) || !proposedDistribution}
-              onClick={() => {
-                if (proposedDistribution)
-                  change((current) =>
-                    applyOutlookDistribution(current, role, proposedDistribution, {
-                      kind: "counts",
-                    }),
-                  );
-              }}
-            >
-              回数を反映
-            </Button>
-            <span className={contentText.body}>
-              合計 {sum === null ? "—" : (sum / 100).toFixed(2)} / 20回
-            </span>
-          </div>
-          {countsError ? (
-            <p className={fieldText.error} role="status">
-              {countsError}
-            </p>
-          ) : null}
-          <div className="grid grid-cols-2 gap-3" data-outlook-preserve-draft>
-            <SelectField
-              label="回数を動かす順位"
-              value={String(from)}
-              options={[0, 1, 2, 3].map((index) => ({
-                label: `${index + 1}位`,
-                value: String(index),
-                disabled: index === to,
-              }))}
-              onValueChange={(value) =>
-                change((current) => ({
-                  ...current,
-                  transfer: [Number(value) as OutlookRankIndex, current.transfer[1]],
-                }))
-              }
-            />
-            <SelectField
-              label="入れ替える順位"
-              value={String(to)}
-              options={[0, 1, 2, 3].map((index) => ({
-                label: `${index + 1}位`,
-                value: String(index),
-                disabled: index === from,
-              }))}
-              onValueChange={(value) =>
-                change((current) => ({
-                  ...current,
-                  transfer: [current.transfer[0], Number(value) as OutlookRankIndex],
-                }))
-              }
-            />
-          </div>
-          <div>
-            <label htmlFor={sliderId} className={fieldText.label}>
-              {from + 1}位と{to + 1}位の合計を保って動かす
-            </label>
-            <input
-              id={sliderId}
-              type="range"
-              className={rangeClass}
-              min={transferMin}
-              max={Math.max(transferMin, transferMax)}
-              step={1}
-              value={exactUnits?.[from] ?? 0}
-              disabled={!exactUnits || Boolean(entry.countDraft) || transferMin === transferMax}
-              aria-valuetext={`${from + 1}位 ${(exactUnits?.[from] ?? 0) / 100}回、${to + 1}位 ${(exactUnits?.[to] ?? 0) / 100}回`}
-              onPointerDown={(event) => {
-                event.currentTarget.setPointerCapture(event.pointerId);
-                begin();
-              }}
-              onPointerUp={() => finish()}
-              onPointerCancel={() => finish(true)}
-              onBlur={() => finish()}
-              onChange={(event) => transfer(Number(event.target.value))}
-              onKeyDown={(event) => {
-                if (rangeKeys.has(event.key)) begin();
-                if (event.key === "Escape") {
-                  event.preventDefault();
-                  finish(true);
-                }
-              }}
-              onKeyUp={(event) => {
-                if (rangeKeys.has(event.key)) finish();
-              }}
-            />
-            {!exactUnits ? (
-              <p className={contentText.supporting}>
-                配分を動かすには、先に入力案の「回数を反映」を選んでください。
-              </p>
-            ) : null}
-          </div>
-          {entry.error ? (
-            <p className={fieldText.error} role="status">
-              {entry.error}
-            </p>
-          ) : null}
-        </>
+        <WholeCountEditor session={session} name={name} change={change} />
       )}
+    </div>
+  );
+}
+
+/** Move games between two named ranks; every accepted input is a complete distribution. */
+function WholeCountEditor({ session, name, change }: Props) {
+  const role = session.editor;
+  const entry = session.entries[role];
+  const opponent = session.entries[otherRole(role)].distribution;
+  const [gain, lose] = session.transfer;
+  const exact = exactWholeCounts(entry.distribution);
+  const proposal = useMemo(
+    () => nearestWholeCounts(entry.distribution, opponent),
+    [entry.distribution, opponent],
+  );
+  const counts = exact ?? proposal;
+  const capacity = wholeCountCapacities(opponent);
+  const total = counts ? counts[gain] + counts[lose] : 0;
+  const minimum = Math.max(0, total - capacity[lose]);
+  const maximum = Math.min(capacity[gain], total);
+  const sliderId = useId();
+  const [text, setText] = useState<string>();
+  const begin = () => change((current) => beginOutlookGesture(current, role));
+  const finish = (cancel = false) => change((current) => finishOutlookGesture(current, cancel));
+  const transfer = (value: number) =>
+    change((current) => {
+      const origin =
+        current.gesture?.before[role].distribution ?? current.entries[role].distribution;
+      const other = current.entries[otherRole(role)].distribution;
+      const base = exactWholeCounts(origin) ?? nearestWholeCounts(origin, other);
+      if (!base || !Number.isInteger(value)) return current;
+      const limits = wholeCountCapacities(other);
+      const pairTotal = base[gain] + base[lose];
+      const next = [...base];
+      next[gain] = value;
+      next[lose] = pairTotal - value;
+      if (
+        next[gain] < 0 ||
+        next[lose] < 0 ||
+        next[gain] > limits[gain] ||
+        next[lose] > limits[lose]
+      )
+        return updateOutlookEntry(current, role, {
+          error: `${gain + 1}位は${Math.max(0, pairTotal - limits[lose])}〜${Math.min(limits[gain], pairTotal)}回で指定してください。`,
+        });
+      if (value === base[gain])
+        return sameDistribution(current.entries[role].distribution, origin) || !current.gesture
+          ? updateOutlookEntry(current, role, { error: undefined })
+          : applyOutlookDistribution(current, role, origin, current.gesture.before[role].source);
+      return applyOutlookDistribution(current, role, distributionFromCounts(next), {
+        kind: "counts",
+      });
+    });
+  if (!counts)
+    return (
+      <p className={contentText.body}>
+        相手の成績と両立する20回の配分がありません。平均順位で調整してください。
+      </p>
+    );
+  const currentCounts = countsPerTwenty(entry.distribution);
+  return (
+    <div className="grid gap-3">
+      <div className="grid gap-2">
+        <p className={contentText.heading}>20戦あたりの回数</p>
+        <dl className="grid grid-cols-4 gap-2" aria-label={`${name}の順位内訳`}>
+          {currentCounts.map((value, i) => (
+            <div key={i} className="grid gap-1 text-center">
+              <dt className={contentText.supporting}>{i + 1}位</dt>
+              <dd className={cn(contentText.body, "tabular-nums")}>
+                {value.denominator === 1n ? String(value.numerator) : formatRational(value, 2)}回
+              </dd>
+              <div
+                className="h-1.5 overflow-hidden rounded-xs bg-[var(--color-surface-subtle)]"
+                aria-hidden="true"
+              >
+                <div
+                  className="h-full bg-[var(--color-action)]"
+                  style={{ width: `${rationalToNumber(value) * 5}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </dl>
+      </div>
+      {!exact ? (
+        <p className={contentText.supporting}>
+          回数を動かすと、{counts.map((count, i) => `${i + 1}位${count}回`).join("・")}
+          から調整します。 平均{outlookAverage(distributionMean(entry.distribution))}→
+          {outlookAverage(distributionMean(distributionFromCounts(counts)))}位。
+        </p>
+      ) : null}
+      <div className="grid grid-cols-2 gap-3">
+        {([gain, lose] as const).map((rank, index) => (
+          <SelectField
+            key={index}
+            label={index === 0 ? "増やす順位" : "減らす順位"}
+            value={String(rank)}
+            options={[0, 1, 2, 3].map((value) => ({
+              value: String(value),
+              label: `${value + 1}位`,
+              disabled: value === (index === 0 ? lose : gain),
+            }))}
+            onValueChange={(value) => {
+              setText(undefined);
+              change((current) => ({
+                ...current,
+                transfer: (index === 0 ? [Number(value), lose] : [gain, Number(value)]) as [
+                  OutlookRankIndex,
+                  OutlookRankIndex,
+                ],
+              }));
+            }}
+          />
+        ))}
+      </div>
+      <div className="flex items-end gap-2">
+        <IconButton
+          variant="secondary"
+          size="sm"
+          icon={<Minus />}
+          aria-label={`${gain + 1}位から${lose + 1}位へ1回移す`}
+          disabled={counts[gain] <= minimum}
+          onClick={() => {
+            setText(undefined);
+            transfer(counts[gain] - 1);
+          }}
+        />
+        <div className="min-w-0 flex-1">
+          <TextField
+            label={`${name}の${gain + 1}位の回数`}
+            inputMode="numeric"
+            error={entry.error}
+            value={text ?? String(counts[gain])}
+            onChange={(event) => {
+              const value = event.target.value;
+              setText(value);
+              if (/^\d+$/u.test(value) && Number(value) >= minimum && Number(value) <= maximum) {
+                begin();
+                transfer(Number(value));
+              } else
+                change((current) =>
+                  updateOutlookEntry(current, role, {
+                    error: `${minimum}〜${maximum}の整数を入力してください。`,
+                  }),
+                );
+            }}
+            onBlur={() => {
+              setText(undefined);
+              change((current) =>
+                updateOutlookEntry(finishOutlookGesture(current), role, { error: undefined }),
+              );
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === "Escape") {
+                event.preventDefault();
+                setText(undefined);
+                const cancel = event.key === "Escape";
+                change((current) =>
+                  updateOutlookEntry(finishOutlookGesture(current, cancel), role, {
+                    error: undefined,
+                  }),
+                );
+              }
+            }}
+          />
+        </div>
+        <IconButton
+          variant="secondary"
+          size="sm"
+          icon={<Plus />}
+          aria-label={`${lose + 1}位から${gain + 1}位へ1回移す`}
+          disabled={counts[gain] >= maximum}
+          onClick={() => {
+            setText(undefined);
+            transfer(counts[gain] + 1);
+          }}
+        />
+      </div>
+      <div>
+        <label htmlFor={sliderId} className="sr-only">
+          {gain + 1}位と{lose + 1}位の配分
+        </label>
+        <input
+          id={sliderId}
+          type="range"
+          className={rangeClass}
+          min={minimum}
+          max={maximum}
+          step="1"
+          value={counts[gain]}
+          disabled={minimum === maximum}
+          aria-valuetext={`${gain + 1}位${counts[gain]}回・${lose + 1}位${counts[lose]}回`}
+          onPointerDown={(event) => {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            begin();
+          }}
+          onPointerUp={() => finish()}
+          onPointerCancel={() => finish(true)}
+          onBlur={() => finish()}
+          onChange={(event) => {
+            setText(undefined);
+            transfer(Number(event.target.value));
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              finish(true);
+              return;
+            }
+            if (!rangeKeys.has(event.key)) return;
+            event.preventDefault();
+            begin();
+            const value =
+              event.key === "Home"
+                ? minimum
+                : event.key === "End"
+                  ? maximum
+                  : counts[gain] +
+                    (["ArrowLeft", "ArrowDown", "PageDown"].includes(event.key) ? -1 : 1);
+            if (value >= minimum && value <= maximum) transfer(value);
+          }}
+          onKeyUp={(event) => {
+            if (rangeKeys.has(event.key)) finish();
+          }}
+        />
+        <div className={cn(contentText.supporting, "flex justify-between")}>
+          <span>{lose + 1}位を増やす</span>
+          <span>{gain + 1}位を増やす</span>
+        </div>
+      </div>
     </div>
   );
 }

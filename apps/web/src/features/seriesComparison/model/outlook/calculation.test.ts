@@ -10,10 +10,11 @@ import {
   distributionFromCounts,
   distributionFromCountUnits,
   distributionMean,
+  exactWholeCounts,
   formatRational,
   meanInput,
   meanLimits,
-  nearestCountUnits,
+  nearestWholeCounts,
   nextMatchOutcomes,
   nextMeanHundredths,
   outlookCrossings,
@@ -21,6 +22,7 @@ import {
   projectOutlook,
   rational,
   requiredMean,
+  wholeCountCapacities,
 } from "./index";
 import type { Four, RankDistribution } from "./index";
 
@@ -84,7 +86,9 @@ describe("exact outlook and input precision", () => {
     const opponent = distributionFromCounts([1, 2, 0, 0]);
     expect(distributionMean(actual)).toEqual(rational(4n, 3n));
     expect(distributionCountUnits(actual)).toBeNull();
-    expect(nearestCountUnits(actual, opponent)).toEqual([1333, 666, 1, 0]);
+    expect(exactWholeCounts(actual)).toBeNull();
+    expect(wholeCountCapacities(opponent)).toEqual([13, 6, 20, 20]);
+    expect(nearestWholeCounts(actual, opponent)).toEqual([13, 6, 1, 0]);
     expect(distributionMean(actual)).toEqual(rational(4n, 3n));
     expect(meanLimits(opponent)).toMatchObject({
       continuousMinimum: rational(4n, 3n),
@@ -97,9 +101,14 @@ describe("exact outlook and input precision", () => {
     expect(
       requiredMean({ games: 300, focusRankSum: 833, rivalRankSum: 500 }, opponent, 1000).kind,
     ).toBe("precision-impossible");
+    // The former 0.01-count editor could fit below 401/300; neither current input mode can.
     expect(
-      requiredMean({ games: 100, focusRankSum: 283, rivalRankSum: 250 }, opponent, 100).kind,
-    ).toBe("counts");
+      requiredMean({ games: 100, focusRankSum: 283, rivalRankSum: 250 }, opponent, 100),
+    ).toMatchObject({
+      threshold: rational(401n, 300n),
+      kind: "precision-impossible",
+      maximumHundredths: null,
+    });
     expect(
       requiredMean({ games: 100, focusRankSum: 284, rivalRankSum: 250 }, opponent, 100).kind,
     ).toBe("impossible");
@@ -131,6 +140,110 @@ describe("exact outlook and input precision", () => {
     expect(() =>
       projectOutlook({ ...pair, focusRankSum: Number.MAX_SAFE_INTEGER + 1 }, focus, rival, 1),
     ).toThrow(RangeError);
+  });
+});
+
+/** Enumerates all 1771 integer twenty-game distributions with an independent legality check. */
+function wholeCountOracle(reference: RankDistribution, opponent: RankDistribution): Four<number> {
+  let best: Four<number> | null = null;
+  let bestCost: bigint | null = null;
+  let bestMeanDifference: bigint | null = null;
+  for (let first = 0; first <= 20; first++) {
+    for (let second = 0; second <= 20 - first; second++) {
+      for (let third = 0; third <= 20 - first - second; third++) {
+        const candidate: Four<number> = [first, second, third, 20 - first - second - third];
+        if (
+          candidate.some(
+            (count, index) =>
+              BigInt(count) * opponent.denominator + 20n * opponent.weights[index]! >
+              20n * opponent.denominator,
+          )
+        )
+          continue;
+        const cost = candidate.reduce(
+          (sum, count, index) =>
+            sum + (BigInt(count) * reference.denominator - 20n * reference.weights[index]!) ** 2n,
+          0n,
+        );
+        const difference = candidate.reduce(
+          (sum, count, index) =>
+            sum +
+            BigInt(index + 1) *
+              (BigInt(count) * reference.denominator - 20n * reference.weights[index]!),
+          0n,
+        );
+        const meanDifference = difference < 0n ? -difference : difference;
+        // Enumeration is lexicographic; equally close mean and counts favor the earlier rank.
+        if (
+          bestMeanDifference === null ||
+          meanDifference < bestMeanDifference ||
+          (meanDifference === bestMeanDifference && (bestCost === null || cost <= bestCost))
+        ) {
+          best = candidate;
+          bestCost = cost;
+          bestMeanDifference = meanDifference;
+        }
+      }
+    }
+  }
+  if (best === null)
+    throw new Error("A valid opponent must admit an integer twenty-game distribution");
+  return best;
+}
+
+describe("whole-count editing starting point", () => {
+  it("finds the nearest legal integer allocation without changing exact observations or average input", () => {
+    const cases = [
+      {
+        reference: distributionFromCounts([2, 1, 0, 0]),
+        opponent: distributionFromCounts([1, 2, 0, 0]),
+      },
+      { reference: counts([554, 518, 481, 447]), opponent: distributionFromCounts([1, 1, 1, 1]) },
+      {
+        reference: distributionFromCounts([2, 8, 6, 3]),
+        opponent: distributionFromCounts([7, 5, 3, 2]),
+      },
+      { reference: counts([1, 1999, 0, 0]), opponent: counts([1999, 1, 0, 0]) },
+      {
+        reference: distributionFromCounts([1, 1, 1, 0]),
+        opponent: distributionFromCounts([0, 0, 0, 1]),
+      },
+    ];
+    for (const { reference, opponent } of cases) {
+      const originalMean = distributionMean(reference);
+      const proposal = nearestWholeCounts(reference, opponent);
+      expect(proposal).toEqual(wholeCountOracle(reference, opponent));
+      expect(proposal?.reduce((sum, count) => sum + count, 0)).toBe(20);
+      expect(proposal?.every(Number.isInteger)).toBe(true);
+      expect(distributionMean(reference)).toEqual(originalMean);
+      if (!proposal) throw new Error("A valid opponent must admit a starting point");
+      expect(areDistributionsCompatible(distributionFromCounts(proposal), opponent)).toBe(true);
+    }
+    const quarter = distributionFromCounts([1, 1, 1, 1]);
+    const preciseAverage = countsFromMean(241, quarter, quarter);
+    if (!preciseAverage) throw new Error("The 0.01 average input must remain available");
+    expect(distributionMean(preciseAverage)).toEqual(rational(241n, 100n));
+    expect(exactWholeCounts(preciseAverage)).toBeNull();
+    expect(exactWholeCounts(quarter)).toEqual([5, 5, 5, 5]);
+    expect(nearestWholeCounts(quarter, quarter)).toEqual([5, 5, 5, 5]);
+  });
+
+  it("prioritizes exact mean distance, then count distance, then rank order within legal capacities", () => {
+    const quarter = distributionFromCounts([1, 1, 1, 1]);
+    expect(nearestWholeCounts(counts([554, 518, 481, 447]), quarter)).toEqual([6, 5, 4, 5]);
+    // Both 2.40 and 2.45 are equally close to 2.425; count distance selects 2.45 here.
+    expect(nearestWholeCounts(counts([625, 500, 275, 600]), quarter)).toEqual([6, 5, 3, 6]);
+    // Both costs tie for [6,5,4,5] and [6,5,3,6], so the earlier rank receives the count.
+    expect(nearestWholeCounts(counts([600, 500, 350, 550]), quarter)).toEqual([6, 5, 4, 5]);
+    const nearlyAllFirst = counts([1999, 1, 0, 0]);
+    expect(wholeCountCapacities(nearlyAllFirst)).toEqual([0, 19, 20, 20]);
+    expect(nearestWholeCounts(counts([1, 1999, 0, 0]), nearlyAllFirst)).toEqual([0, 19, 1, 0]);
+    expect(
+      nearestWholeCounts(
+        distributionFromCounts([1, 1, 1, 0]),
+        distributionFromCounts([0, 0, 0, 1]),
+      ),
+    ).toEqual([7, 6, 7, 0]);
   });
 });
 

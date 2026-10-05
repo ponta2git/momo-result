@@ -76,6 +76,15 @@ export function distributionCountUnits(distribution: RankDistribution): Four<num
   );
 }
 
+/** The twenty-game equivalent is editable as whole counts only when no rounding is needed. */
+export function exactWholeCounts(distribution: RankDistribution): Four<number> | null {
+  if (distribution.weights.some((weight) => (weight * 20n) % distribution.denominator !== 0n))
+    return null;
+  return mapFour(distribution.weights, (weight) =>
+    Number((weight * 20n) / distribution.denominator),
+  );
+}
+
 export function countsPerTwenty(distribution: RankDistribution): Four<Rational> {
   return mapFour(distribution.weights, (weight) =>
     rational(20n * weight, distribution.denominator),
@@ -85,6 +94,12 @@ export function countsPerTwenty(distribution: RankDistribution): Four<Rational> 
 export function countCapacities(opponent: RankDistribution): Four<number> {
   return mapFour(opponent.weights, (weight) =>
     Number((TOTAL * (opponent.denominator - weight)) / opponent.denominator),
+  );
+}
+
+export function wholeCountCapacities(opponent: RankDistribution): Four<number> {
+  return mapFour(opponent.weights, (weight) =>
+    Number((20n * (opponent.denominator - weight)) / opponent.denominator),
   );
 }
 
@@ -121,37 +136,56 @@ export function meanLimits(opponent: RankDistribution) {
   };
 }
 
-/** Only for a not-yet-applied draft. Native observations are never changed by this rounding. */
-export function nearestCountUnits(
+/**
+ * A not-yet-applied starting point: closest legal mean, then closest counts, then rank order.
+ * At most 1771 twenty-game distributions are considered; native observations stay exact.
+ */
+export function nearestWholeCounts(
   distribution: RankDistribution,
   opponent: RankDistribution,
 ): Four<number> | null {
-  const caps = countCapacities(opponent);
-  const units: [number, number, number, number] = [
-    ...mapFour(distribution.weights, (weight, index) =>
-      Math.min(caps[index], Number((weight * TOTAL) / distribution.denominator)),
-    ),
-  ];
-  let remaining = COUNT_UNITS - units.reduce((sum, value) => sum + value, 0);
-  while (remaining > 0) {
-    let selected: RankIndex | null = null;
-    let smallest: bigint | null = null;
-    for (const index of RANK_INDICES) {
-      if (units[index] >= caps[index]) continue;
-      // The omitted common positive factor does not change the squared-error ordering.
-      const increment =
-        (2n * BigInt(units[index]) + 1n) * distribution.denominator -
-        2n * TOTAL * distribution.weights[index];
-      if (smallest === null || increment < smallest) {
-        selected = index;
-        smallest = increment;
+  const caps = wholeCountCapacities(opponent);
+  const referenceRankSum = distribution.weights.reduce(
+    (sum, weight, index) => sum + BigInt(index + 1) * weight,
+    0n,
+  );
+  let best: Four<number> | null = null;
+  let bestMeanDifference: bigint | null = null;
+  let bestCountDifference: bigint | null = null;
+  // Descending lexicographic order favors more of the earlier rank only when both costs tie.
+  for (let first = Math.min(caps[0], 20); first >= 0; first--) {
+    for (let second = Math.min(caps[1], 20 - first); second >= 0; second--) {
+      for (let third = Math.min(caps[2], 20 - first - second); third >= 0; third--) {
+        const fourth = 20 - first - second - third;
+        if (fourth > caps[3]) continue;
+        const candidate: Four<number> = [first, second, third, fourth];
+        const difference =
+          BigInt(first + 2 * second + 3 * third + 4 * fourth) * distribution.denominator -
+          20n * referenceRankSum;
+        const meanDifference = difference < 0n ? -difference : difference;
+        if (bestMeanDifference !== null && meanDifference > bestMeanDifference) continue;
+        const countDifference = RANK_INDICES.reduce(
+          (sum, index) =>
+            sum +
+            (BigInt(candidate[index]) * distribution.denominator -
+              20n * distribution.weights[index]) **
+              2n,
+          0n,
+        );
+        if (
+          bestMeanDifference === null ||
+          meanDifference < bestMeanDifference ||
+          bestCountDifference === null ||
+          countDifference < bestCountDifference
+        ) {
+          best = candidate;
+          bestMeanDifference = meanDifference;
+          bestCountDifference = countDifference;
+        }
       }
     }
-    if (selected === null) return null;
-    units[selected] += 1;
-    remaining--;
   }
-  return units;
+  return best;
 }
 
 function lexicallyBefore(left: Four<number>, right: Four<number>): boolean {

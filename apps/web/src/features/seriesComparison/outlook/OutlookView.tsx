@@ -4,6 +4,7 @@ import { useLocation } from "react-router-dom";
 
 import {
   buildJointDistribution,
+  areDistributionsCompatible,
   compareRationals,
   countsPerTwenty,
   distributionFromCounts,
@@ -34,6 +35,7 @@ import {
   OutlookPastExamples,
   OutlookRequirements,
 } from "@/features/seriesComparison/outlook/OutlookReferences";
+import { OutlookResults } from "@/features/seriesComparison/outlook/OutlookResults";
 import {
   adoptOutlookSummary,
   applyOutlookDistribution,
@@ -68,8 +70,7 @@ function crossingLabel(
   rival: string,
 ) {
   if (crossing.current === "ahead") {
-    if (crossing.rivalAtLeast === null)
-      return `${focus}が先行しています。この成績が続くと、先行を保ちます。`;
+    if (crossing.rivalAtLeast === null) return `${focus}の先行が続きます。`;
     return crossing.exactTie === crossing.rivalAtLeast
       ? `${crossing.rivalAtLeast}戦で同率、${crossing.rivalAhead}戦で${rival}が上回ります。`
       : `${crossing.rivalAhead}戦で${rival}が上回ります。`;
@@ -79,9 +80,9 @@ function crossingLabel(
       return `現在同率。${crossing.focusAhead}戦で${focus}が上回ります。`;
     if (crossing.rivalAhead !== null)
       return `現在同率。${crossing.rivalAhead}戦で${rival}が上回ります。`;
-    return "現在同率。この成績が続くと、平均の線は同率のままです。";
+    return "同率のまま推移します。";
   }
-  if (crossing.focusAtLeast === null) return "この成績が続いても、相手には追いつきません。";
+  if (crossing.focusAtLeast === null) return "相手には追いつきません。";
   return crossing.exactTie === crossing.focusAtLeast
     ? `${crossing.focusAtLeast}戦で同率、${crossing.focusAhead}戦で上回ります。`
     : `${crossing.focusAhead}戦で上回ります。`;
@@ -239,6 +240,9 @@ function OutlookWorkspace({
   const targetMean =
     required.maximumHundredths !== null ? rational(BigInt(required.maximumHundredths), 100n) : null;
   const improves = targetMean !== null && compareRationals(recentMean, targetMean) > 0;
+  const recentCanReach =
+    areDistributionsCompatible(recent[0], rival) &&
+    compareRationals(recentMean, required.threshold) < 0;
   const reviewSearch = new URLSearchParams(location.search);
   reviewSearch.set("view", "review");
   const reviewHref = `${location.pathname}?${reviewSearch}#review-member-${focusMemberId}`;
@@ -266,7 +270,7 @@ function OutlookWorkspace({
         : true,
   );
   return (
-    <div className="grid min-w-0 gap-6">
+    <div className="grid min-w-0 gap-4">
       <div className="grid gap-3 sm:grid-cols-2" data-outlook-preserve-draft>
         {([0, 1] as const).map((role) => (
           <div key={role} className="grid gap-1">
@@ -280,16 +284,10 @@ function OutlookWorkspace({
               }))}
               onValueChange={(id) => onMemberChange?.(role === 0 ? "focus" : "rival", id)}
             />
-            <p className={contentText.body}>
-              総合の平均順位 {people[role].averageRank.toFixed(2)}位
-            </p>
           </div>
         ))}
         <p className={cn(contentText.supporting, "sm:col-span-2")}>
-          人物を変更すると、2名とも直近の成績から試します。
-          {selection.seasonMasterId
-            ? "選んだシーズンに、この先の試合を加えた場合です。"
-            : "作品総合に、この先の試合を加えた場合です。"}
+          人物を変更すると、直近の成績に戻ります。
         </p>
       </div>
       <section aria-labelledby="outlook-conclusion" className="grid gap-2">
@@ -299,131 +297,76 @@ function OutlookWorkspace({
         <p className={contentText.primary} aria-live="off">
           {conclusion}
         </p>
-        {changed ? (
+        {changed && conclusion !== crossingLabel(baselineCrossing, names[0], names[1]) ? (
           <p className={contentText.supporting}>
             直近のままなら：{crossingLabel(baselineCrossing, names[0], names[1])}
           </p>
         ) : null}
-        <p className={contentText.supporting}>
-          これからの平均順位：{names[0]} {outlookAverage(distributionMean(focus))}位 / {names[1]}{" "}
-          {outlookAverage(distributionMean(rival))}位
-        </p>
         {session.notice ? (
           <p className={contentText.body} role="status">
             {session.notice}
           </p>
         ) : null}
       </section>
-      <OutlookRequirements
-        response={response}
-        focusId={focusMemberId}
-        cumulative={cumulative}
-        session={session}
-        change={change}
-      />
       <section aria-label="成績を変えて見通しを比べる" className="grid min-w-0 gap-3">
         <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.9fr)]">
           <div className="grid min-w-0 content-start gap-3">
-            <OutlookChart
-              points={chartPoints}
-              recent={recentPoints}
-              examples={
-                examples?.examples.map((example) => example.points.map((point) => point.gap)) ?? []
-              }
-              sameLine={
-                compareRationals(
-                  subtractRationals(distributionMean(rival), distributionMean(focus)),
-                  subtractRationals(distributionMean(recent[1]), distributionMean(recent[0])),
-                ) === 0
-              }
-              recentCount={response.recent.matchCount}
-              horizon={session.horizon}
-              marker={marker !== null && marker <= 100n ? Number(marker) : null}
-              markerLabel={conclusion}
-              focusName={names[0]}
-              rivalName={names[1]}
-              gesturing={Boolean(session.gesture)}
-            />
-            <CheckboxField
-              label="試合ごとのブレを重ねる"
-              checked={session.noise}
-              onChange={(event) => {
-                const checked = event.target.checked;
-                change((current) => ({ ...current, noise: checked }));
-              }}
-              description="試している2名の成績から作った、展開の異なる3例です。上限・下限や逆転の確率ではありません。"
-            />
-            {session.noise ? (
-              <p className={contentText.supporting} role="status">
-                {session.gesture
-                  ? "操作を確定すると、ブレの例を更新します。"
-                  : examples === null
-                    ? "この条件のブレを計算できません。平均の見通しは引き続き使えます。"
-                    : examples?.constantPerGameDifference
-                      ? "この内訳では毎試合の差が一定になり、3本が重なります。"
-                      : examples && examples.distinctCandidateCount < 3
-                        ? `異なる展開は${examples.distinctCandidateCount}例のため、一部が重なっています。`
-                        : "展開例1・2・3：100戦後の差が異なる例を選んでいます。途中で再び追い越される場合もあります。"}
-              </p>
-            ) : null}
+            <div className="grid min-w-0 content-start gap-3">
+              <OutlookChart
+                points={chartPoints}
+                recent={recentPoints}
+                examples={
+                  examples?.examples.map((example) => example.points.map((point) => point.gap)) ??
+                  []
+                }
+                sameLine={
+                  compareRationals(
+                    subtractRationals(distributionMean(rival), distributionMean(focus)),
+                    subtractRationals(distributionMean(recent[1]), distributionMean(recent[0])),
+                  ) === 0
+                }
+                recentCount={response.recent.matchCount}
+                horizon={session.horizon}
+                marker={marker !== null && marker <= 100n ? Number(marker) : null}
+                markerLabel={conclusion}
+                focusName={names[0]}
+                rivalName={names[1]}
+                gesturing={Boolean(session.gesture)}
+              />
+              <CheckboxField
+                label="順位のブレも見る"
+                checked={session.noise}
+                onChange={(event) => {
+                  const checked = event.target.checked;
+                  change((current) => ({ ...current, noise: checked }));
+                }}
+              />
+              {session.noise ? (
+                <p className={contentText.supporting} role="status">
+                  {session.gesture
+                    ? "操作を終えると展開例を更新します。"
+                    : examples === null
+                      ? "展開例を計算できません。平均の見通しは表示しています。"
+                      : examples?.constantPerGameDifference
+                        ? "この内訳では毎試合の差が一定になり、3本が重なります。"
+                        : examples && examples.distinctCandidateCount < 3
+                          ? `異なる展開は${examples.distinctCandidateCount}例のため、一部が重なっています。`
+                          : "2人の順位が揺れる3つの展開例です。確率や上下限を示すものではありません。"}
+                </p>
+              ) : null}
+            </div>
+            <div className="min-w-0">
+              <OutlookResults
+                cumulative={cumulative}
+                names={names}
+                session={session}
+                change={change}
+              />
+            </div>
           </div>
           <div className="grid min-w-0 content-start gap-3">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1" data-outlook-preserve-draft>
-              {([0, 1] as const).map((role) => {
-                const entry = session.entries[role];
-                const pending = entry.countDraft !== undefined || entry.meanDraft !== undefined;
-                return (
-                  <div key={role} className="grid content-start gap-1">
-                    <p className={contentText.heading}>
-                      <MemberSequenceLabel memberId={ids[role]}>{names[role]}</MemberSequenceLabel>{" "}
-                      · これからの平均順位 {outlookAverage(distributionMean(entry.distribution))}位
-                    </p>
-                    <p className={contentText.supporting}>
-                      {outlookSourceLabel(entry.source, session.artifactId)}
-                    </p>
-                    {pending ? (
-                      <div className="grid gap-1">
-                        <p className={contentText.body}>
-                          {names[role]}の{entry.countDraft ? "回数" : "平均"}
-                          は入力中・まだ反映されていません。
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            size="sm"
-                            variant="quiet"
-                            onClick={() =>
-                              change((current) => ({
-                                ...current,
-                                editor: role,
-                                method: entry.countDraft ? "counts" : "mean",
-                              }))
-                            }
-                          >
-                            入力へ戻る
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="quiet"
-                            onClick={() =>
-                              change((current) =>
-                                updateOutlookEntry(current, role, {
-                                  countDraft: undefined,
-                                  meanDraft: undefined,
-                                  error: undefined,
-                                }),
-                              )
-                            }
-                          >
-                            入力を破棄
-                          </Button>
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
             <div data-outlook-preserve-draft>
+              <p className={cn(contentText.heading, "mb-2")}>これからの成績</p>
               <TabsRoot
                 value={String(session.editor)}
                 onValueChange={(value) =>
@@ -432,8 +375,18 @@ function OutlookWorkspace({
               >
                 <TabsList aria-label="調整する人" activateOnFocus={false}>
                   {names.map((name, role) => (
-                    <TabsTab key={ids[role]} value={String(role)}>
-                      {name}
+                    <TabsTab key={ids[role]} value={String(role)} aria-label={name}>
+                      <span className="grid gap-1">
+                        <MemberSequenceLabel memberId={ids[role as OutlookRole]}>
+                          {name}
+                        </MemberSequenceLabel>
+                        <span className={contentText.supporting}>
+                          {outlookAverage(
+                            distributionMean(session.entries[role as OutlookRole].distribution),
+                          )}
+                          位
+                        </span>
+                      </span>
                     </TabsTab>
                   ))}
                 </TabsList>
@@ -441,7 +394,10 @@ function OutlookWorkspace({
                   <TabsRoot
                     value={session.method}
                     onValueChange={(value) =>
-                      change((current) => ({ ...current, method: value as "mean" | "counts" }))
+                      change((current) => ({
+                        ...updateOutlookEntry(current, current.editor, { error: undefined }),
+                        method: value as "mean" | "counts",
+                      }))
                     }
                   >
                     <TabsList
@@ -453,8 +409,24 @@ function OutlookWorkspace({
                       <TabsTab value="counts">順位の回数で調整</TabsTab>
                     </TabsList>
                     <TabsPanel value={session.method}>
-                      <div className="pt-3">
+                      <div className="grid gap-2 pt-3">
+                        {!(
+                          session.entries[session.editor].source.kind === "counts" &&
+                          session.method === "counts"
+                        ) &&
+                        !(
+                          session.entries[session.editor].source.kind === "average" &&
+                          session.method === "mean"
+                        ) ? (
+                          <p className={contentText.supporting}>
+                            {outlookSourceLabel(
+                              session.entries[session.editor].source,
+                              session.artifactId,
+                            )}
+                          </p>
+                        ) : null}
                         <OutlookEditor
+                          key={session.editor}
                           session={session}
                           name={names[session.editor]}
                           change={change}
@@ -465,24 +437,55 @@ function OutlookWorkspace({
                 </TabsPanel>
               </TabsRoot>
             </div>
+            {([0, 1] as const)
+              .filter(
+                (role) =>
+                  session.entries[role].meanDraft !== undefined &&
+                  (role !== session.editor || session.method !== "mean"),
+              )
+              .map((role) => (
+                <div key={role} className="grid gap-1" data-outlook-preserve-draft>
+                  <p className={contentText.supporting}>{names[role]}の平均は入力中です。</p>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="quiet"
+                      onClick={() =>
+                        change((current) => ({ ...current, editor: role, method: "mean" }))
+                      }
+                    >
+                      入力へ戻る
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="quiet"
+                      onClick={() =>
+                        change((current) =>
+                          updateOutlookEntry(current, role, {
+                            meanDraft: undefined,
+                            error: undefined,
+                          }),
+                        )
+                      }
+                    >
+                      入力を破棄
+                    </Button>
+                  </div>
+                </div>
+              ))}
             <div className="flex flex-wrap items-center gap-2" data-outlook-preserve-draft>
               <Button
                 size="sm"
                 variant="quiet"
                 icon={<Undo2 />}
-                disabled={
-                  !session.history.length ||
-                  Boolean(session.gesture) ||
-                  session.entries.some((entry) => entry.countDraft !== undefined)
-                }
-                onClick={() => change(undoOutlook)}
+                disabled={!session.history.length && !session.gesture}
+                onClick={() => change((current) => undoOutlook(finishOutlookGesture(current)))}
               >
                 元に戻す
               </Button>
               <Button
                 size="sm"
                 variant="quiet"
-                disabled={Boolean(session.entries[session.editor].countDraft)}
                 onClick={() =>
                   change((current) =>
                     applyOutlookDistribution(current, current.editor, recent[current.editor], {
@@ -500,8 +503,8 @@ function OutlookWorkspace({
           </div>
         </div>
         <Disclosure
-          summary="指定した時点の数値と参照した実績"
-          ariaLabel="指定した時点の数値と参照した実績"
+          summary="計算に使った実績と詳しい数値"
+          ariaLabel="計算に使った実績と詳しい数値"
           panelPadding="sm"
         >
           <div className="grid gap-3">
@@ -558,6 +561,12 @@ function OutlookWorkspace({
           </div>
         </Disclosure>
       </section>
+      <OutlookRequirements
+        response={response}
+        focusId={focusMemberId}
+        cumulative={cumulative}
+        session={session}
+      />
       {nextOutcomes.length ? (
         <Disclosure
           summary="実際の次戦でも同率・逆転が可能です"
@@ -588,14 +597,16 @@ function OutlookWorkspace({
         data-outlook-preserve-draft
       >
         <h2 id="outlook-review-heading" className={contentText.heading}>
-          {names[0]}の次の検討へ
+          戦績を振り返る
         </h2>
         <p className={contentText.body}>
           {improves && targetMean
             ? `直近より平均順位を${formatRational(subtractRationals(recentMean, targetMean), 2)}位良くし、平均${formatRational(targetMean, 2)}位以下を${session.horizon}戦続けると上回ります。`
-            : compareRationals(recentMean, required.threshold) < 0
-              ? `直近の成績なら、${session.horizon}戦後も上回る条件を満たします。維持できた試合を振り返りましょう。`
-              : "必要な改善と続ける試合数を変えながら、見直す手掛かりを探しましょう。"}
+            : recentCanReach
+              ? `直近の成績を${session.horizon}戦続けると上回ります。好調だった試合を振り返りましょう。`
+              : required.kind === "mean"
+                ? "直近の平均は条件を満たしますが、順位の内訳が相手の指定と両立しません。相手の指定も踏まえ、内訳を見直せます。"
+                : `${session.horizon}戦後に上回るには、相手の成績か続ける戦数を変えて検討できます。`}
         </p>
         {lessLow ? (
           <p className={contentText.body}>下位だった試合で、共通する展開を確かめる。</p>
@@ -611,9 +622,6 @@ function OutlookWorkspace({
             {selection.seasonMasterId ? "このシーズンの確定戦績を見る" : "この作品の確定戦績を見る"}
           </LinkButton>
         </div>
-        <p className={contentText.supporting}>
-          戦績一覧へは作品・シーズン・確定状態を引き継ぎます。人物・順位では絞り込みません。
-        </p>
       </section>
     </div>
   );

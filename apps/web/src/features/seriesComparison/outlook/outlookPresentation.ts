@@ -14,9 +14,9 @@ export function outlookSourceLabel(source: OutlookSource, artifactId: string) {
     case "recent":
       return `${old ? "更新前の" : ""}直近${source.matchCount}戦`;
     case "average":
-      return "平均に合わせた回数の一例";
+      return "平均に合わせた内訳";
     case "counts":
-      return "回数を指定";
+      return "回数から算出";
     case "example":
       return old ? "更新前の実績例を使っています" : "過去20戦の実績例";
   }

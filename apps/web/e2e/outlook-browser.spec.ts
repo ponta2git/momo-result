@@ -31,8 +31,8 @@ test("retains an edited outlook through personal review and real match-list navi
   );
   if (!recent) throw new Error("Outlook fixture is missing the focus player");
   const originalMean = recent.rankSum / outlook.summary.recent.matchCount;
-  const editedMean = (originalMean + 0.01).toFixed(4);
-  await expect(average).toHaveValue(originalMean.toFixed(4));
+  const editedMean = (originalMean + 0.01).toFixed(2);
+  await expect(average).toHaveValue(originalMean.toFixed(2));
   await slider.focus();
   await slider.press("ArrowRight");
   await expect(average).toHaveValue(editedMean);
@@ -40,7 +40,7 @@ test("retains an edited outlook through personal review and real match-list navi
 
   const chart = page.getByRole("img", { name: /^この先100戦の平均順位の差。/u });
   const pathsWithoutNoise = await chart.locator("path").count();
-  const noise = page.getByRole("checkbox", { name: "試合ごとのブレを重ねる" });
+  const noise = page.getByRole("checkbox", { name: "順位のブレも見る" });
   await noise.check();
   await expect(chart.locator("path")).toHaveCount(pathsWithoutNoise + 3);
   const examplePaths = await chartPaths(chart);

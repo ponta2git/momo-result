@@ -100,7 +100,7 @@ export function outlookCrossings(
 export type RequiredMean = Readonly<{
   /** Focus must be strictly below this boundary. */
   threshold: Rational;
-  kind: "mean" | "counts" | "precision-impossible" | "impossible";
+  kind: "mean" | "precision-impossible" | "impossible";
   maximumHundredths: number | null;
   continuousMinimum: Rational;
   countMinimum: Rational;
@@ -136,7 +136,9 @@ export function requiredMean(
     if (countsFromMean(candidate, opponent, opponent) !== null)
       return { ...common, kind: "mean", maximumHundredths: candidate };
   }
-  return { ...common, kind: "counts", maximumHundredths: null };
+  // Whole-count moves have 0.05 average increments, already covered by the 0.01 mean input.
+  // A finer internal allocation is not an additional user-editable route to the target.
+  return { ...common, kind: "precision-impossible", maximumHundredths: null };
 }
 
 export function nextMatchOutcomes(

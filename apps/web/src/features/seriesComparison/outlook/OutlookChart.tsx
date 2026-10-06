@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { memo, useEffect, useId, useRef, useState } from "react";
 
 import { cn } from "@/shared/ui/cn";
 import { contentText } from "@/shared/ui/typography";
@@ -6,7 +6,7 @@ import { contentText } from "@/shared/ui/typography";
 type Point = { h: number; gap: number };
 
 /** One gap axis keeps changes to either player's assumptions mapped to the same result. */
-export function OutlookChart({
+export const OutlookChart = memo(function OutlookChart({
   points,
   recent,
   examples,
@@ -193,4 +193,4 @@ export function OutlookChart({
       </div>
     </figure>
   );
-}
+});

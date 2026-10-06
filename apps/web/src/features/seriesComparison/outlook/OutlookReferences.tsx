@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+
 import {
   areDistributionsCompatible,
   compareRationals,
@@ -8,14 +10,18 @@ import {
   requiredMean,
   subtractRationals,
 } from "@/features/seriesComparison/model/outlook";
-import type { CumulativePair } from "@/features/seriesComparison/model/outlook";
-import {
-  applyOutlookDistribution,
-  outlookPlayer,
-} from "@/features/seriesComparison/outlook/outlookSession";
+import type {
+  CumulativePair,
+  RankDistribution,
+  RequiredMean,
+} from "@/features/seriesComparison/model/outlook";
+import { applyOutlookDistribution } from "@/features/seriesComparison/outlook/outlookSession";
 import type { OutlookSession } from "@/features/seriesComparison/outlook/outlookSession";
 import { useOutlookResource } from "@/features/seriesComparison/outlook/useOutlookResource";
-import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
+import type {
+  SeriesAnalysisOutlookExamples,
+  SeriesAnalysisOutlookSummary,
+} from "@/shared/api/seriesAnalysis";
 import { Button } from "@/shared/ui/actions/Button";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { DataTable } from "@/shared/ui/data/DataTable";
@@ -31,33 +37,30 @@ export function requiredMeanText(required: ReturnType<typeof requiredMean>) {
 export function OutlookRequirements({
   response,
   focusId,
-  cumulative,
-  session,
+  horizon,
+  recent,
+  rival,
+  requirements,
 }: {
   response: SeriesAnalysisOutlookSummary;
   focusId: string;
-  cumulative: CumulativePair;
-  session: OutlookSession;
+  horizon: number;
+  recent: RankDistribution;
+  rival: RankDistribution;
+  requirements: ReadonlyArray<{ h: number; required: RequiredMean }>;
 }) {
-  const { window } = useOutlookResource(response, focusId, session.horizon, false);
-  const rows = [...new Set([session.horizon, 50, 100])].map((h) => {
-    const required = requiredMean(cumulative, session.entries[1].distribution, h);
-    const recent = outlookPlayer(response.recent.players, focusId);
+  const { window } = useOutlookResource(response, focusId, horizon, false);
+  const recentMean = distributionMean(recent);
+  const recentCompatible = areDistributionsCompatible(recent, rival);
+  const rows = requirements.map(({ h, required }) => {
     const improvement =
       required.maximumHundredths === null
         ? null
-        : subtractRationals(
-            distributionMean(distributionFromCounts(recent.rankCounts)),
-            rational(BigInt(required.maximumHundredths), 100n),
-          );
+        : subtractRationals(recentMean, rational(BigInt(required.maximumHundredths), 100n));
     const best = response.bestWindows.find(
       (item) => item.memberId === focusId && item.windowSize === h,
     );
     const historical = h === 50 || h === 100 ? best : window.data;
-    const recentCompatible = areDistributionsCompatible(
-      distributionFromCounts(recent.rankCounts),
-      session.entries[1].distribution,
-    );
     return { h, required, improvement, historical, recentCompatible };
   });
   return (
@@ -132,6 +135,7 @@ export function OutlookPastExamples({
   focusId,
   focusName,
   cumulative,
+  required,
   session,
   change,
 }: {
@@ -139,6 +143,7 @@ export function OutlookPastExamples({
   focusId: string;
   focusName: string;
   cumulative: CumulativePair;
+  required: RequiredMean;
   session: OutlookSession;
   change: (update: (current: OutlookSession) => OutlookSession) => void;
 }) {
@@ -148,23 +153,21 @@ export function OutlookPastExamples({
     undefined,
     session.examplesOpen,
   );
-  const required = requiredMean(cumulative, session.entries[1].distribution, session.horizon);
-  const qualifying =
-    query.data?.examples.types.filter(
-      (example) =>
-        compareRationals(
-          distributionMean(distributionFromCounts(example.rankCounts)),
-          required.threshold,
-        ) < 0,
-    ) ?? [];
-  const examples = qualifying
-    .filter((example) =>
-      areDistributionsCompatible(
-        distributionFromCounts(example.rankCounts),
-        session.entries[1].distribution,
-      ),
-    )
-    .slice(0, 3);
+  const rival = session.entries[1].distribution;
+  const { examples, hasQualifying } = useMemo(() => {
+    const selected: SeriesAnalysisOutlookExamples["examples"]["types"] = [];
+    let hasMatchingMean = false;
+    if (session.examplesOpen && query.data) {
+      for (const example of query.data.examples.types) {
+        const distribution = distributionFromCounts(example.rankCounts);
+        if (compareRationals(distributionMean(distribution), required.threshold) >= 0) continue;
+        hasMatchingMean = true;
+        if (areDistributionsCompatible(distribution, rival)) selected.push(example);
+        if (selected.length === 3) break;
+      }
+    }
+    return { examples: selected, hasQualifying: hasMatchingMean };
+  }, [query.data, session.examplesOpen, required.threshold, rival]);
   return (
     <Disclosure
       ariaLabel={`${focusName}の過去の成績例`}
@@ -194,7 +197,7 @@ export function OutlookPastExamples({
           <p className={contentText.body}>作品の実績が20戦未満のため、連続20戦の例はありません。</p>
         ) : !examples.length ? (
           <p className={contentText.body}>
-            {qualifying.length
+            {hasQualifying
               ? "必要な平均を満たす実績はありますが、相手の指定と両立する例がありません。"
               : "必要な平均を満たす20戦の実績例がありません。"}{" "}
           </p>

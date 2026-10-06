@@ -188,7 +188,7 @@ pub fn try_for_each_resource<E: From<RadarError>>(
             item_count: analysis.player_matches.len(),
             source_match_revision: None,
         })?;
-        consume_outlook(scope, &analysis.player_matches, &title_facts, &mut consume)?;
+        consume_outlook(scope, &analysis, &title_facts, &mut consume)?;
         let review = build_review(
             scope,
             &analysis.player_matches,
@@ -278,12 +278,16 @@ mod tests;
 
 fn consume_outlook<E>(
     scope: &ScopeRef,
-    player_matches: &[&PlayerMatchInput],
+    analysis: &ScopeAnalysis<'_>,
     title_facts: &TitleFacts,
     consume: &mut impl FnMut(ComputedResource) -> Result<(), E>,
 ) -> Result<(), E> {
     if matches!(scope, ScopeRef::Overall | ScopeRef::Season { .. }) {
-        let summary = title_facts.summary(scope, player_matches);
+        let summary = title_facts.summary(
+            scope,
+            &analysis.player_matches,
+            &analysis.player_matches_by_member,
+        );
         consume(ComputedResource {
             scope: scope.clone(),
             kind: ComputedResourceKind::OutlookSummary,

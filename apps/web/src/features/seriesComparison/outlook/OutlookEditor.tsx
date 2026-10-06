@@ -5,6 +5,7 @@ import {
   countsFromMean,
   countsPerTwenty,
   distributionFromCounts,
+  distributionsEqual,
   exactWholeCounts,
   nearestWholeCounts,
   wholeCountCapacities,
@@ -21,7 +22,6 @@ import {
   beginOutlookGesture,
   finishOutlookGesture,
   otherRole,
-  sameDistribution,
   updateOutlookEntry,
 } from "@/features/seriesComparison/outlook/outlookSession";
 import type {
@@ -224,12 +224,13 @@ function WholeCountEditor({ session, name, change }: Props) {
   const entry = session.entries[role];
   const opponent = session.entries[otherRole(role)].distribution;
   const [gain, lose] = session.transfer;
-  const exact = exactWholeCounts(entry.distribution);
-  const proposal = useMemo(
-    () => nearestWholeCounts(entry.distribution, opponent),
-    [entry.distribution, opponent],
-  );
-  const counts = exact ?? proposal;
+  const { exact, counts } = useMemo(() => {
+    const wholeCounts = exactWholeCounts(entry.distribution);
+    return {
+      exact: wholeCounts,
+      counts: wholeCounts ?? nearestWholeCounts(entry.distribution, opponent),
+    };
+  }, [entry.distribution, opponent]);
   const capacity = wholeCountCapacities(opponent);
   const total = counts ? counts[gain] + counts[lose] : 0;
   const minimum = Math.max(0, total - capacity[lose]);
@@ -260,7 +261,7 @@ function WholeCountEditor({ session, name, change }: Props) {
           error: `${gain + 1}位は${Math.max(0, pairTotal - limits[lose])}〜${Math.min(limits[gain], pairTotal)}回で指定してください。`,
         });
       if (value === base[gain])
-        return sameDistribution(current.entries[role].distribution, origin) || !current.gesture
+        return distributionsEqual(current.entries[role].distribution, origin) || !current.gesture
           ? updateOutlookEntry(current, role, { error: undefined })
           : applyOutlookDistribution(current, role, origin, current.gesture.before[role].source);
       return applyOutlookDistribution(current, role, distributionFromCounts(next), {

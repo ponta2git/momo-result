@@ -1,6 +1,7 @@
 import {
   areDistributionsCompatible,
   distributionFromCounts,
+  distributionsEqual,
   incompatibleRanks,
 } from "@/features/seriesComparison/model/outlook";
 import type { RankDistribution } from "@/features/seriesComparison/model/outlook";
@@ -42,11 +43,6 @@ export type OutlookSession = {
 };
 
 export const otherRole = (role: OutlookRole): OutlookRole => (role === 0 ? 1 : 0);
-export function sameDistribution(a: RankDistribution, b: RankDistribution) {
-  return ([0, 1, 2, 3] as const).every(
-    (i) => a.weights[i] * b.denominator === b.weights[i] * a.denominator,
-  );
-}
 function snapshot(session: OutlookSession): Pair {
   return session.entries.map(({ distribution, source }) => ({ distribution, source })) as Pair;
 }
@@ -158,7 +154,7 @@ export function applyOutlookDistribution(
   }
   const prior = session.entries[role];
   if (
-    sameDistribution(prior.distribution, distribution) &&
+    distributionsEqual(prior.distribution, distribution) &&
     !(
       source.kind === "recent" &&
       (prior.source.kind !== "recent" || source.artifactId !== prior.source.artifactId)
@@ -190,7 +186,7 @@ export function finishOutlookGesture(session: OutlookSession, cancel = false): O
   if (!session.gesture) return session;
   const { before } = session.gesture;
   const unchanged = session.entries.every((entry, i) =>
-    sameDistribution(entry.distribution, before[i as OutlookRole].distribution),
+    distributionsEqual(entry.distribution, before[i as OutlookRole].distribution),
   );
   const next =
     cancel || unchanged

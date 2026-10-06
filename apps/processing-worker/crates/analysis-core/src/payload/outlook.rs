@@ -8,6 +8,7 @@ use crate::{
     },
     stats::quality_status,
 };
+use serde::Deserialize;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -31,7 +32,7 @@ pub(super) fn summary(
 ) -> Result<Summary, PayloadError> {
     schema::validate_outlook_summary(payload)?;
     super::validate_scope(payload.get("scope"), scope)?;
-    let summary: Summary = serde_json::from_value(payload.clone())?;
+    let summary = Summary::deserialize(payload)?;
     let n = summary.scope.match_count;
     let t = summary.source.title_match_count;
     require(t <= 25_000 && n <= t && summary.quality_status == quality_status(n))?;
@@ -182,7 +183,7 @@ pub(super) fn reference(
 ) -> Result<Reference, PayloadError> {
     schema::validate_outlook_reference(payload)?;
     super::validate_scope(payload.get("scope"), scope)?;
-    let reference: Reference = serde_json::from_value(payload.clone())?;
+    let reference = Reference::deserialize(payload)?;
     let t = reference.source.title_match_count;
     require(
         *scope == ScopeRef::Overall

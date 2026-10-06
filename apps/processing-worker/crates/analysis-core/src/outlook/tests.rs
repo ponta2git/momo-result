@@ -126,7 +126,7 @@ fn bounded_references_and_zero_target_have_explicit_shapes() {
         facts.references.is_empty(),
         "no fabricated members for empty title"
     );
-    let summary = facts.summary(&ScopeRef::Overall, &[]);
+    let summary = facts.summary(&ScopeRef::Overall, &[], &BTreeMap::new());
     assert_eq!(summary.quality_status, "no_target");
     let short = input(2).normalized();
     let short_facts = TitleFacts::new(&short);
@@ -150,11 +150,13 @@ fn scope_quality_and_recent_quality_use_their_own_denominators() {
         .iter()
         .filter(|r| r.season_master_id == "season-2")
         .collect::<Vec<_>>();
+    let by_member = player_matches_by_member(&rows, &ordered_member_ids(&rows));
     let summary = facts.summary(
         &ScopeRef::Season {
             season_master_id: "season-2".into(),
         },
         &rows,
+        &by_member,
     );
     assert_eq!(summary.scope.match_count, 2);
     assert_eq!(summary.quality_status, "reference");
@@ -245,6 +247,7 @@ fn checked_in_outlook_payload_fixtures_match_owner() {
     let normalized = input(32).normalized();
     let facts = TitleFacts::new(&normalized);
     let rows = normalized.player_matches().iter().collect::<Vec<_>>();
+    let by_member = player_matches_by_member(&rows, &ordered_member_ids(&rows));
     let empty = input(0).normalized();
     let empty_facts = TitleFacts::new(&empty);
     let reference = facts
@@ -254,7 +257,7 @@ fn checked_in_outlook_payload_fixtures_match_owner() {
     let fixtures = [
         (
             "outlook-summary-payload-v1.json",
-            serde_json::json!(facts.summary(&ScopeRef::Overall, &rows)),
+            serde_json::json!(facts.summary(&ScopeRef::Overall, &rows, &by_member)),
         ),
         (
             "outlook-reference-payload-v1.json",
@@ -262,7 +265,7 @@ fn checked_in_outlook_payload_fixtures_match_owner() {
         ),
         (
             "outlook-summary-empty-payload-v1.json",
-            serde_json::json!(empty_facts.summary(&ScopeRef::Overall, &[])),
+            serde_json::json!(empty_facts.summary(&ScopeRef::Overall, &[], &BTreeMap::new())),
         ),
     ];
     let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

@@ -9,6 +9,7 @@ import {
   countsPerTwenty,
   distributionFromCounts,
   distributionMean,
+  distributionsEqual,
   formatRational,
   generateOutlookExamples,
   jointFromCounts,
@@ -40,7 +41,6 @@ import {
   adoptOutlookSummary,
   applyOutlookDistribution,
   finishOutlookGesture,
-  sameDistribution,
   outlookPlayer,
   undoOutlook,
   updateOutlookEntry,
@@ -181,19 +181,33 @@ function OutlookWorkspace({
   );
   const focus = session.entries[0].distribution;
   const rival = session.entries[1].distribution;
-  const crossing = outlookCrossings(cumulative, focus, rival);
-  const baselineCrossing = outlookCrossings(cumulative, recent[0], recent[1]);
-  const changed = !sameDistribution(focus, recent[0]) || !sameDistribution(rival, recent[1]);
+  const crossing = useMemo(
+    () => outlookCrossings(cumulative, focus, rival),
+    [cumulative, focus, rival],
+  );
+  const baselineCrossing = useMemo(
+    () => outlookCrossings(cumulative, recent[0], recent[1]),
+    [cumulative, recent],
+  );
+  const changed = !distributionsEqual(focus, recent[0]) || !distributionsEqual(rival, recent[1]);
   const conclusion = crossingLabel(crossing, names[0], names[1]);
   const marker = crossing.current === "ahead" ? crossing.rivalAtLeast : crossing.focusAtLeast;
-  const chartPoints = Array.from({ length: 101 }, (_, h) => ({
-    h,
-    gap: rationalToNumber(projectOutlook(cumulative, focus, rival, h).gap),
-  }));
-  const recentPoints = Array.from({ length: 101 }, (_, h) => ({
-    h,
-    gap: rationalToNumber(projectOutlook(cumulative, recent[0], recent[1], h).gap),
-  }));
+  const chartPoints = useMemo(
+    () =>
+      Array.from({ length: 101 }, (_, h) => ({
+        h,
+        gap: rationalToNumber(projectOutlook(cumulative, focus, rival, h).gap),
+      })),
+    [cumulative, focus, rival],
+  );
+  const recentPoints = useMemo(
+    () =>
+      Array.from({ length: 101 }, (_, h) => ({
+        h,
+        gap: rationalToNumber(projectOutlook(cumulative, recent[0], recent[1], h).gap),
+      })),
+    [cumulative, recent],
+  );
   const examples = useMemo(() => {
     if (!session.noise || session.gesture) return undefined;
     const jointRecord = response.recent.jointRanks.find(
@@ -232,10 +246,33 @@ function OutlookWorkspace({
         })
       : null;
   }, [session.noise, session.gesture, focus, rival, response, focusMemberId, ids, cumulative]);
-  const numericRows = [...new Set([0, 10, 20, 50, 100, session.horizon])]
-    .toSorted((a, b) => a - b)
-    .map((h) => ({ h, ...projectOutlook(cumulative, focus, rival, h) }));
-  const required = requiredMean(cumulative, rival, session.horizon);
+  const examplePoints = useMemo(
+    () => examples?.examples.map((example) => example.points.map((point) => point.gap)) ?? [],
+    [examples],
+  );
+  const numericRows = useMemo(
+    () =>
+      [...new Set([0, 10, 20, 50, 100, session.horizon])]
+        .toSorted((a, b) => a - b)
+        .map((h) => ({ h, ...projectOutlook(cumulative, focus, rival, h) })),
+    [cumulative, focus, rival, session.horizon],
+  );
+  // All three consumers share the same exact requirement for the selected horizon.
+  const { required, requirements } = useMemo(() => {
+    const atHorizon = requiredMean(cumulative, rival, session.horizon);
+    return {
+      required: atHorizon,
+      requirements: [
+        { h: session.horizon, required: atHorizon },
+        ...[50, 100]
+          .filter((h) => h !== session.horizon)
+          .map((h) => ({
+            h,
+            required: requiredMean(cumulative, rival, h),
+          })),
+      ],
+    };
+  }, [cumulative, rival, session.horizon]);
   const recentMean = distributionMean(recent[0]);
   const targetMean =
     required.maximumHundredths !== null ? rational(BigInt(required.maximumHundredths), 100n) : null;
@@ -315,10 +352,7 @@ function OutlookWorkspace({
               <OutlookChart
                 points={chartPoints}
                 recent={recentPoints}
-                examples={
-                  examples?.examples.map((example) => example.points.map((point) => point.gap)) ??
-                  []
-                }
+                examples={examplePoints}
                 sameLine={
                   compareRationals(
                     subtractRationals(distributionMean(rival), distributionMean(focus)),
@@ -564,8 +598,10 @@ function OutlookWorkspace({
       <OutlookRequirements
         response={response}
         focusId={focusMemberId}
-        cumulative={cumulative}
-        session={session}
+        horizon={session.horizon}
+        recent={recent[0]}
+        rival={rival}
+        requirements={requirements}
       />
       {nextOutcomes.length ? (
         <Disclosure
@@ -588,6 +624,7 @@ function OutlookWorkspace({
         focusId={focusMemberId}
         focusName={names[0]}
         cumulative={cumulative}
+        required={required}
         session={session}
         change={change}
       />

@@ -3,7 +3,7 @@ import { RANK_INDICES } from "./distribution";
 import type { JointDistribution } from "./joint";
 import { validateCumulative } from "./projection";
 import type { CumulativePair } from "./projection";
-import { gcd } from "./rational";
+import { ceilDivide, gcd } from "./rational";
 
 export const OUTLOOK_MODEL_VERSION = "outlook-1";
 export const EXAMPLE_CANDIDATE_COUNT = 201;
@@ -40,7 +40,7 @@ function randomWords(seed: string): () => number {
 }
 
 type Candidate = {
-  ranks: Array<[Rank, Rank]>;
+  ranks: Array<readonly [Rank, Rank]>;
   difference: number;
   signature: string;
   index: number;
@@ -63,7 +63,7 @@ export function generateOutlookExamples(input: {
     throw new RangeError("Two distinct canonical members including the focus are required.");
   const divisor = joint.weights.flat().reduce(gcd, 0n);
   if (divisor <= 0n) throw new RangeError("A nonempty legal joint distribution is required.");
-  const cells: Array<{ first: Rank; second: Rank; end: bigint }> = [];
+  const cumulativeCells: Array<{ ranks: readonly [Rank, Rank]; end: bigint }> = [];
   let total = 0n;
   const differences = new Set<number>();
   for (const i of RANK_INDICES) {
@@ -73,28 +73,34 @@ export function generateOutlookExamples(input: {
         throw new RangeError("Joint ranks must be nonnegative and distinct.");
       if (weight === 0n) continue;
       total += weight / divisor;
-      cells.push({ first: (i + 1) as Rank, second: (j + 1) as Rank, end: total });
+      cumulativeCells.push({ ranks: [(i + 1) as Rank, (j + 1) as Rank], end: total });
       differences.add(j - i);
     }
   }
   if (total * divisor !== joint.denominator)
     throw new RangeError("Joint mass does not match its denominator.");
+  // floor(word * total / 2^32) < end is exactly word < ceil(end * 2^32 / total).
+  // These bounds fit exactly in Number; each draw can reuse them and the immutable rank pair.
+  const cells = cumulativeCells.map(({ ranks, end }) => ({
+    ranks,
+    end: Number(ceilDivide(end * 0x100000000n, total)),
+  }));
   // No artifact, horizon, distribution, or display role enters the common random sequence.
   const next = randomWords(
     JSON.stringify([OUTLOOK_MODEL_VERSION, input.gameTitleId, ...canonicalMemberIds]),
   );
   const candidates: Candidate[] = [];
   for (let index = 0; index < EXAMPLE_CANDIDATE_COUNT; index++) {
-    const ranks: Array<[Rank, Rank]> = [];
+    const ranks: Array<readonly [Rank, Rank]> = [];
     const trajectory = [0];
     let difference = 0;
     for (let game = 0; game < EXAMPLE_GAME_COUNT; game++) {
       // Integer boundaries cannot select zero-mass/diagonal cells, even at either endpoint.
-      const ticket = (BigInt(next()) * total) / 0x100000000n;
-      const cell = cells.find((candidate) => ticket < candidate.end);
+      const word = next();
+      const cell = cells.find((candidate) => word < candidate.end);
       if (!cell) throw new RangeError("Joint mass did not cover the integer sample.");
-      ranks.push([cell.first, cell.second]);
-      difference += cell.second - cell.first;
+      ranks.push(cell.ranks);
+      difference += cell.ranks[1] - cell.ranks[0];
       trajectory.push(difference);
     }
     candidates.push({ ranks, difference, signature: trajectory.join(","), index });

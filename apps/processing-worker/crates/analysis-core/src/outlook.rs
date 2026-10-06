@@ -7,7 +7,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     contract::ScopeRef,
     model::{
-        NormalizedAnalysisInput, PlayerMatchInput, ordered_member_ids, player_matches_by_member,
+        NormalizedAnalysisInput, PlayerMatchInput, PlayerMatchesByMember, ordered_member_ids,
+        player_matches_by_member,
     },
     stats::{quality_status, rate},
 };
@@ -229,9 +230,12 @@ impl TitleFacts {
         &self.references
     }
 
-    pub(crate) fn summary(&self, scope: &ScopeRef, rows: &[&PlayerMatchInput]) -> Summary {
-        let member_ids = ordered_member_ids(rows);
-        let by_member = player_matches_by_member(rows, &member_ids);
+    pub(crate) fn summary(
+        &self,
+        scope: &ScopeRef,
+        rows: &[&PlayerMatchInput],
+        by_member: &PlayerMatchesByMember<'_>,
+    ) -> Summary {
         let match_count = rows.len() / 4;
         let players = by_member
             .iter()

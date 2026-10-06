@@ -14,6 +14,7 @@ import type {
 } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/model/seriesAnalysisViewTypes";
 import { SeriesAnalysisArrival } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
+import { OutlookLoading } from "@/features/seriesComparison/outlook/OutlookLoading";
 import { ReviewView } from "@/features/seriesComparison/page/SeriesAnalysisReviewView";
 import { SeriesAnalysisSelectedMatch } from "@/features/seriesComparison/page/SeriesAnalysisSelectedMatch";
 import { MetricDefinitions } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
@@ -187,7 +188,7 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
               statusPlacement="external"
               strategy="preserve-inert"
             >
-              <Suspense fallback={<Skeleton className="min-h-64" />}>
+              <Suspense fallback={<OutlookLoading />}>
                 <OutlookView
                   response={bundle.outlook}
                   selection={outlookSelection}
@@ -197,7 +198,7 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
               </Suspense>
             </StaleShield>
           ) : (
-            <Skeleton className="min-h-64" />
+            <OutlookLoading />
           )}
         </div>
       ) : activeView === "review" ? (

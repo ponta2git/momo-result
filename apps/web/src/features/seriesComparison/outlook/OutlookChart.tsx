@@ -18,6 +18,7 @@ export const OutlookChart = memo(function OutlookChart({
   gesturing,
   sameLine,
   recentCount,
+  exampleStatus,
 }: {
   points: Point[];
   recent: Point[];
@@ -30,6 +31,7 @@ export const OutlookChart = memo(function OutlookChart({
   gesturing: boolean;
   sameLine: boolean;
   recentCount: number;
+  exampleStatus?: string | undefined;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(640);
@@ -38,7 +40,7 @@ export const OutlookChart = memo(function OutlookChart({
     const element = root.current;
     if (!element) return;
     const observer = new ResizeObserver(([entry]) => {
-      if (entry) setWidth(Math.max(260, Math.floor(entry.contentRect.width)));
+      if (entry) setWidth(Math.max(1, Math.floor(entry.contentRect.width)));
     });
     observer.observe(element);
     return () => observer.disconnect();
@@ -69,12 +71,16 @@ export const OutlookChart = memo(function OutlookChart({
   const shownMarker = marker !== null && marker >= 0 && marker <= 100 ? marker : null;
   const markerPoint = shownMarker === null ? undefined : points[shownMarker];
   return (
-    <figure className="min-w-0" aria-labelledby={titleId}>
-      <figcaption className={contentText.supporting} id={titleId}>
-        総合平均順位の差 · 上は{focusName}、下は{rivalName}が先行
+    <figure className="grid min-w-0 gap-2" aria-labelledby={titleId}>
+      <figcaption className="grid gap-1" id={titleId}>
+        <span className={contentText.heading}>総合平均順位の差</span>
+        <span className={contentText.supporting}>
+          上は{focusName}、下は{rivalName}が先行
+        </span>
       </figcaption>
-      <div ref={root} className="min-w-0">
+      <div ref={root} className="relative min-w-0">
         <svg
+          height={270}
           viewBox={`0 0 ${width} 270`}
           className="block w-full"
           role="img"
@@ -155,7 +161,12 @@ export const OutlookChart = memo(function OutlookChart({
               strokeDasharray="6 4"
             />
           ) : null}
-          <path d={path(points)} fill="none" stroke="var(--color-action)" strokeWidth="2.5" />
+          <path
+            d={path(points)}
+            fill="none"
+            stroke="var(--color-analysis-emphasis)"
+            strokeWidth="2.5"
+          />
           {shownMarker !== null && markerPoint ? (
             <g>
               <line
@@ -163,14 +174,14 @@ export const OutlookChart = memo(function OutlookChart({
                 x2={x(shownMarker)}
                 y1={24}
                 y2={y(markerPoint.gap)}
-                stroke="var(--color-action)"
+                stroke="var(--color-analysis-emphasis)"
                 strokeDasharray="3 3"
               />
               <circle
                 cx={x(shownMarker)}
                 cy={y(markerPoint.gap)}
                 r="4"
-                fill="var(--color-action)"
+                fill="var(--color-analysis-emphasis)"
               />
               <text
                 x={Math.max(left + 4, Math.min(right - 4, x(shownMarker)))}
@@ -184,6 +195,17 @@ export const OutlookChart = memo(function OutlookChart({
             </g>
           ) : null}
         </svg>
+        {exampleStatus ? (
+          <p
+            role="status"
+            className={cn(
+              contentText.supporting,
+              "pointer-events-none absolute top-5 right-4 left-12",
+            )}
+          >
+            {exampleStatus}
+          </p>
+        ) : null}
       </div>
       <div className={cn(contentText.supporting, "flex flex-wrap gap-x-4 gap-y-1")}>
         <span>実線：指定した成績</span>

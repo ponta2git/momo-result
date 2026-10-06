@@ -91,7 +91,8 @@ function SeriesComparisonPageContent() {
     preloadSeriesAnalysisView(filters.activeView);
   }, [filters.activeView, filters.seriesOptions.length]);
 
-  if (options.loading) return <PageSkeleton showReturnAction={Boolean(page.returnTo)} />;
+  if (options.loading)
+    return <PageSkeleton showReturnAction={Boolean(page.returnTo)} view={filters.activeView} />;
 
   return (
     <SeriesAnalysisNavigation
@@ -194,7 +195,7 @@ function SeriesComparisonPageContent() {
                 !resource.data &&
                 !resource.hasError &&
                 status.data?.currentArtifact) ? (
-                <ComparisonSkeleton />
+                <ComparisonSkeleton view={filters.activeView} />
               ) : null}
               {filters.activeView === "outlook" && filters.state.mapMasterId ? (
                 <Notice
@@ -276,7 +277,7 @@ function SeriesComparisonPageContent() {
                     <StaleShield
                       active={resultsShielded}
                       statusPlacement="external"
-                      fallback={<ComparisonSkeleton />}
+                      fallback={<ComparisonSkeleton view={filters.activeView} />}
                       strategy="preserve-inert"
                     >
                       <EmptyState

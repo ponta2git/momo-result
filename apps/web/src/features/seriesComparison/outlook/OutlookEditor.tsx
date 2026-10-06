@@ -30,8 +30,9 @@ import type {
 } from "@/features/seriesComparison/outlook/outlookSession";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { cn } from "@/shared/ui/cn";
+import { InputControl } from "@/shared/ui/forms/Control";
+import { buildFieldDescribedBy, Field } from "@/shared/ui/forms/Field";
 import { SelectField } from "@/shared/ui/forms/SelectField";
-import { TextField } from "@/shared/ui/forms/TextField";
 import { contentText } from "@/shared/ui/typography";
 
 const rangeClass =
@@ -60,7 +61,8 @@ export function OutlookEditor({ session, name, change }: Props) {
   const limits = meanLimits(opponent);
   const sliderId = useId();
   const meanId = `${sliderId}-mean`;
-  const rangeErrorId = `${meanId}-error`;
+  const descriptionId = `${meanId}-description`;
+  const errorId = entry.error ? `${meanId}-error` : undefined;
   const setMean = (hundredths: number) =>
     change((current) => {
       const start =
@@ -114,103 +116,113 @@ export function OutlookEditor({ session, name, change }: Props) {
           });
     });
   return (
-    <div className="grid min-w-0 gap-3">
+    <div className="grid min-w-0 gap-2">
       {session.method === "mean" ? (
-        <>
-          <TextField
-            id={meanId}
-            label={`${name}のこれからの平均順位`}
-            inputMode="decimal"
-            value={entry.meanDraft ?? formatRational(currentMean, 4).replace(/(\.\d\d)0+$/u, "$1")}
-            description={`小さいほど上位。${(limits.minimumHundredths / 100).toFixed(2)}〜${(limits.maximumHundredths / 100).toFixed(2)}位で調整できます。`}
-            error={entry.error}
-            onChange={(event) => {
-              const text = event.target.value;
-              change((current) =>
-                updateOutlookEntry(current, role, {
-                  meanDraft: text,
-                  error: undefined,
-                }),
-              );
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                commitMean();
+        <Field
+          htmlFor={meanId}
+          label={`${name}のこれからの平均順位`}
+          description={`小さいほど上位。${(limits.minimumHundredths / 100).toFixed(2)}〜${(limits.maximumHundredths / 100).toFixed(2)}位で調整できます。`}
+          descriptionId={descriptionId}
+          error={entry.error}
+          errorId={errorId}
+        >
+          <div className="grid gap-2">
+            <InputControl
+              id={meanId}
+              inputMode="decimal"
+              invalid={Boolean(entry.error)}
+              aria-describedby={buildFieldDescribedBy(descriptionId, errorId)}
+              value={
+                entry.meanDraft ?? formatRational(currentMean, 4).replace(/(\.\d\d)0+$/u, "$1")
               }
-              if (event.key === "Escape") {
-                event.preventDefault();
+              onChange={(event) => {
+                const text = event.target.value;
                 change((current) =>
-                  updateOutlookEntry(current, role, { meanDraft: undefined, error: undefined }),
+                  updateOutlookEntry(current, role, {
+                    meanDraft: text,
+                    error: undefined,
+                  }),
                 );
-              }
-            }}
-            onBlur={(event) => {
-              const target = event.relatedTarget;
-              const input = event.currentTarget;
-              if (
-                target instanceof Element &&
-                !target.closest("a,[role=tab],[data-outlook-preserve-draft]")
-              )
-                commitMean();
-              if (target === null) {
-                // A plain chart click has no focus target. Let navigation unmount first,
-                // so leaving the view or browser keeps unfinished text instead.
-                queueMicrotask(() => {
-                  if (input.isConnected && document.hasFocus()) commitMean();
-                });
-              }
-            }}
-          />
-          <div>
-            <label htmlFor={sliderId} className="sr-only">
-              {name}の平均順位を動かす
-            </label>
-            <input
-              id={sliderId}
-              aria-describedby={entry.error ? rangeErrorId : undefined}
-              type="range"
-              className={rangeClass}
-              min={Math.min(limits.minimumHundredths / 100, rationalToNumber(currentMean))}
-              max={Math.max(limits.maximumHundredths / 100, rationalToNumber(currentMean))}
-              step="any"
-              value={rationalToNumber(currentMean)}
-              aria-valuetext={`${outlookAverage(currentMean)}位。小さいほど良い成績`}
-              onPointerDown={(event) => {
-                event.currentTarget.setPointerCapture(event.pointerId);
-                begin();
               }}
-              onPointerUp={() => finish()}
-              onPointerCancel={() => finish(true)}
-              onBlur={() => finish()}
-              onChange={(event) => setMean(Math.round(Number(event.target.value) * 100))}
               onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  commitMean();
+                }
                 if (event.key === "Escape") {
                   event.preventDefault();
-                  finish(true);
-                  return;
+                  change((current) =>
+                    updateOutlookEntry(current, role, { meanDraft: undefined, error: undefined }),
+                  );
                 }
-                if (!rangeKeys.has(event.key)) return;
-                event.preventDefault();
-                begin();
-                const value =
-                  event.key === "Home"
-                    ? limits.minimumHundredths
-                    : event.key === "End"
-                      ? limits.maximumHundredths
-                      : nextMeanHundredths(
-                          currentMean,
-                          ["ArrowLeft", "ArrowDown", "PageDown"].includes(event.key) ? -1 : 1,
-                          opponent,
-                        );
-                if (value !== null) setMean(value);
               }}
-              onKeyUp={(event) => {
-                if (rangeKeys.has(event.key)) finish();
+              onBlur={(event) => {
+                const target = event.relatedTarget;
+                const input = event.currentTarget;
+                if (
+                  target instanceof Element &&
+                  !target.closest("a,[role=tab],[data-outlook-preserve-draft]")
+                )
+                  commitMean();
+                if (target === null) {
+                  // A plain chart click has no focus target. Let navigation unmount first,
+                  // so leaving the view or browser keeps unfinished text instead.
+                  queueMicrotask(() => {
+                    if (input.isConnected && document.hasFocus()) commitMean();
+                  });
+                }
               }}
             />
+            <div>
+              <label htmlFor={sliderId} className="sr-only">
+                {name}の平均順位を動かす
+              </label>
+              <input
+                id={sliderId}
+                aria-describedby={buildFieldDescribedBy(descriptionId, errorId)}
+                type="range"
+                className={rangeClass}
+                min={Math.min(limits.minimumHundredths / 100, rationalToNumber(currentMean))}
+                max={Math.max(limits.maximumHundredths / 100, rationalToNumber(currentMean))}
+                step="any"
+                value={rationalToNumber(currentMean)}
+                aria-valuetext={`${outlookAverage(currentMean)}位。小さいほど良い成績`}
+                onPointerDown={(event) => {
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  begin();
+                }}
+                onPointerUp={() => finish()}
+                onPointerCancel={() => finish(true)}
+                onBlur={() => finish()}
+                onChange={(event) => setMean(Math.round(Number(event.target.value) * 100))}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    finish(true);
+                    return;
+                  }
+                  if (!rangeKeys.has(event.key)) return;
+                  event.preventDefault();
+                  begin();
+                  const value =
+                    event.key === "Home"
+                      ? limits.minimumHundredths
+                      : event.key === "End"
+                        ? limits.maximumHundredths
+                        : nextMeanHundredths(
+                            currentMean,
+                            ["ArrowLeft", "ArrowDown", "PageDown"].includes(event.key) ? -1 : 1,
+                            opponent,
+                          );
+                  if (value !== null) setMean(value);
+                }}
+                onKeyUp={(event) => {
+                  if (rangeKeys.has(event.key)) finish();
+                }}
+              />
+            </div>
           </div>
-        </>
+        </Field>
       ) : (
         <WholeCountEditor session={session} name={name} change={change} />
       )}
@@ -236,6 +248,10 @@ function WholeCountEditor({ session, name, change }: Props) {
   const minimum = Math.max(0, total - capacity[lose]);
   const maximum = Math.min(capacity[gain], total);
   const sliderId = useId();
+  const countId = `${sliderId}-count`;
+  const descriptionId = `${countId}-description`;
+  const errorId = entry.error ? `${countId}-error` : undefined;
+  const roundingId = !exact ? `${countId}-rounding` : undefined;
   const [text, setText] = useState<string>();
   const begin = () => change((current) => beginOutlookGesture(current, role));
   const finish = (cancel = false) => change((current) => finishOutlookGesture(current, cancel));
@@ -276,37 +292,32 @@ function WholeCountEditor({ session, name, change }: Props) {
     );
   const currentCounts = countsPerTwenty(entry.distribution);
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-4">
       <div className="grid gap-2">
         <p className={contentText.heading}>20戦あたりの回数</p>
         <dl className="grid grid-cols-4 gap-2" aria-label={`${name}の順位内訳`}>
           {currentCounts.map((value, i) => (
             <div key={i} className="grid gap-1 text-center">
               <dt className={contentText.supporting}>{i + 1}位</dt>
-              <dd className={cn(contentText.body, "tabular-nums")}>
-                {value.denominator === 1n ? String(value.numerator) : formatRational(value, 2)}回
-              </dd>
-              <div
-                className="h-1.5 overflow-hidden rounded-xs bg-[var(--color-surface-subtle)]"
-                aria-hidden="true"
-              >
+              <dd className={cn(contentText.body, "grid gap-1 tabular-nums")}>
+                <span>
+                  {value.denominator === 1n ? String(value.numerator) : formatRational(value, 2)}回
+                </span>
                 <div
-                  className="h-full bg-[var(--color-action)]"
-                  style={{ width: `${rationalToNumber(value) * 5}%` }}
-                />
-              </div>
+                  className="h-1.5 overflow-hidden rounded-xs bg-[var(--color-surface-subtle)]"
+                  aria-hidden="true"
+                >
+                  <div
+                    className="h-full bg-[var(--color-series-1)]"
+                    style={{ width: `${rationalToNumber(value) * 5}%` }}
+                  />
+                </div>
+              </dd>
             </div>
           ))}
         </dl>
       </div>
-      {!exact ? (
-        <p className={contentText.supporting}>
-          回数を動かすと、{counts.map((count, i) => `${i + 1}位${count}回`).join("・")}
-          から調整します。 平均{outlookAverage(distributionMean(entry.distribution))}→
-          {outlookAverage(distributionMean(distributionFromCounts(counts)))}位。
-        </p>
-      ) : null}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-4">
         {([gain, lose] as const).map((rank, index) => (
           <SelectField
             key={index}
@@ -330,120 +341,150 @@ function WholeCountEditor({ session, name, change }: Props) {
           />
         ))}
       </div>
-      <div className="flex items-end gap-2">
-        <IconButton
-          variant="secondary"
-          size="sm"
-          icon={<Minus />}
-          aria-label={`${gain + 1}位から${lose + 1}位へ1回移す`}
-          disabled={counts[gain] <= minimum}
-          onClick={() => {
-            setText(undefined);
-            transfer(counts[gain] - 1);
-          }}
-        />
-        <div className="min-w-0 flex-1">
-          <TextField
-            label={`${name}の${gain + 1}位の回数`}
-            inputMode="numeric"
-            error={entry.error}
-            value={text ?? String(counts[gain])}
-            onChange={(event) => {
-              const value = event.target.value;
-              setText(value);
-              if (/^\d+$/u.test(value) && Number(value) >= minimum && Number(value) <= maximum) {
-                begin();
-                transfer(Number(value));
-              } else
-                change((current) =>
-                  updateOutlookEntry(current, role, {
-                    error: `${minimum}〜${maximum}の整数を入力してください。`,
-                  }),
-                );
-            }}
-            onBlur={() => {
-              setText(undefined);
-              change((current) =>
-                updateOutlookEntry(finishOutlookGesture(current), role, { error: undefined }),
-              );
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === "Escape") {
-                event.preventDefault();
-                setText(undefined);
-                const cancel = event.key === "Escape";
-                change((current) =>
-                  updateOutlookEntry(finishOutlookGesture(current, cancel), role, {
-                    error: undefined,
-                  }),
-                );
-              }
-            }}
-          />
-        </div>
-        <IconButton
-          variant="secondary"
-          size="sm"
-          icon={<Plus />}
-          aria-label={`${lose + 1}位から${gain + 1}位へ1回移す`}
-          disabled={counts[gain] >= maximum}
-          onClick={() => {
-            setText(undefined);
-            transfer(counts[gain] + 1);
-          }}
-        />
-      </div>
-      <div>
-        <label htmlFor={sliderId} className="sr-only">
-          {gain + 1}位と{lose + 1}位の配分
-        </label>
-        <input
-          id={sliderId}
-          type="range"
-          className={rangeClass}
-          min={minimum}
-          max={maximum}
-          step="1"
-          value={counts[gain]}
-          disabled={minimum === maximum}
-          aria-valuetext={`${gain + 1}位${counts[gain]}回・${lose + 1}位${counts[lose]}回`}
-          onPointerDown={(event) => {
-            event.currentTarget.setPointerCapture(event.pointerId);
-            begin();
-          }}
-          onPointerUp={() => finish()}
-          onPointerCancel={() => finish(true)}
-          onBlur={() => finish()}
-          onChange={(event) => {
-            setText(undefined);
-            transfer(Number(event.target.value));
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              event.preventDefault();
-              finish(true);
-              return;
-            }
-            if (!rangeKeys.has(event.key)) return;
-            event.preventDefault();
-            begin();
-            const value =
-              event.key === "Home"
-                ? minimum
-                : event.key === "End"
-                  ? maximum
-                  : counts[gain] +
-                    (["ArrowLeft", "ArrowDown", "PageDown"].includes(event.key) ? -1 : 1);
-            if (value >= minimum && value <= maximum) transfer(value);
-          }}
-          onKeyUp={(event) => {
-            if (rangeKeys.has(event.key)) finish();
-          }}
-        />
-        <div className={cn(contentText.supporting, "flex justify-between")}>
-          <span>{lose + 1}位を増やす</span>
-          <span>{gain + 1}位を増やす</span>
-        </div>
+      <div className="grid gap-2">
+        <Field
+          label={`${name}の${gain + 1}位の回数`}
+          htmlFor={countId}
+          description={
+            minimum === maximum
+              ? `この順位の組み合わせでは${minimum}回から動かせません。`
+              : `相手と両立する範囲は${minimum}〜${maximum}回です。`
+          }
+          descriptionId={descriptionId}
+          error={entry.error}
+          errorId={errorId}
+        >
+          <div className="grid gap-2">
+            <div className="flex items-center gap-1">
+              <IconButton
+                variant="secondary"
+                size="sm"
+                icon={<Minus />}
+                aria-label={`${gain + 1}位から${lose + 1}位へ1回移す`}
+                aria-describedby={roundingId}
+                disabled={counts[gain] <= minimum}
+                onClick={() => {
+                  setText(undefined);
+                  transfer(counts[gain] - 1);
+                }}
+              />
+              <InputControl
+                id={countId}
+                inputMode="numeric"
+                invalid={Boolean(entry.error)}
+                aria-describedby={buildFieldDescribedBy(descriptionId, errorId, roundingId)}
+                value={text ?? String(counts[gain])}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setText(value);
+                  if (
+                    /^\d+$/u.test(value) &&
+                    Number(value) >= minimum &&
+                    Number(value) <= maximum
+                  ) {
+                    begin();
+                    transfer(Number(value));
+                  } else
+                    change((current) =>
+                      updateOutlookEntry(current, role, {
+                        error: `${minimum}〜${maximum}の整数を入力してください。`,
+                      }),
+                    );
+                }}
+                onBlur={() => {
+                  setText(undefined);
+                  change((current) =>
+                    updateOutlookEntry(finishOutlookGesture(current), role, { error: undefined }),
+                  );
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === "Escape") {
+                    event.preventDefault();
+                    setText(undefined);
+                    const cancel = event.key === "Escape";
+                    change((current) =>
+                      updateOutlookEntry(finishOutlookGesture(current, cancel), role, {
+                        error: undefined,
+                      }),
+                    );
+                  }
+                }}
+              />
+              <IconButton
+                variant="secondary"
+                size="sm"
+                icon={<Plus />}
+                aria-label={`${lose + 1}位から${gain + 1}位へ1回移す`}
+                aria-describedby={roundingId}
+                disabled={counts[gain] >= maximum}
+                onClick={() => {
+                  setText(undefined);
+                  transfer(counts[gain] + 1);
+                }}
+              />
+            </div>
+            <div className="grid gap-1">
+              <label htmlFor={sliderId} className="sr-only">
+                {gain + 1}位と{lose + 1}位の配分
+              </label>
+              <input
+                id={sliderId}
+                aria-describedby={buildFieldDescribedBy(descriptionId, errorId, roundingId)}
+                type="range"
+                className={rangeClass}
+                min={minimum}
+                max={maximum}
+                step="1"
+                value={counts[gain]}
+                disabled={minimum === maximum}
+                aria-valuetext={`${gain + 1}位${counts[gain]}回・${lose + 1}位${counts[lose]}回`}
+                onPointerDown={(event) => {
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  begin();
+                }}
+                onPointerUp={() => finish()}
+                onPointerCancel={() => finish(true)}
+                onBlur={() => finish()}
+                onChange={(event) => {
+                  setText(undefined);
+                  transfer(Number(event.target.value));
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    finish(true);
+                    return;
+                  }
+                  if (!rangeKeys.has(event.key)) return;
+                  event.preventDefault();
+                  begin();
+                  const value =
+                    event.key === "Home"
+                      ? minimum
+                      : event.key === "End"
+                        ? maximum
+                        : counts[gain] +
+                          (["ArrowLeft", "ArrowDown", "PageDown"].includes(event.key) ? -1 : 1);
+                  if (value >= minimum && value <= maximum) transfer(value);
+                }}
+                onKeyUp={(event) => {
+                  if (rangeKeys.has(event.key)) finish();
+                }}
+              />
+              <div className={cn(contentText.supporting, "flex justify-between")}>
+                <span>{lose + 1}位を増やす</span>
+                <span>{gain + 1}位を増やす</span>
+              </div>
+            </div>
+          </div>
+        </Field>
+        {!exact ? (
+          <p id={roundingId} className={contentText.supporting}>
+            回数を動かすと、{counts.map((count, i) => `${i + 1}位${count}回`).join("・")}
+            から調整します。 平均{outlookAverage(distributionMean(entry.distribution))}→
+            {outlookAverage(distributionMean(distributionFromCounts(counts)))}位。
+          </p>
+        ) : null}
       </div>
     </div>
   );

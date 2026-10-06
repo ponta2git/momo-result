@@ -22,7 +22,13 @@ type JointRanks = SeriesAnalysisOutlookSummary["recent"]["jointRanks"][number]["
 const focusName = "いーゆー";
 const rivalName = "ぽんた";
 
-function RoutedWorkspace({ response }: { response: SeriesAnalysisOutlookSummary }) {
+function RoutedWorkspace({
+  response,
+  memberIds,
+}: {
+  response: SeriesAnalysisOutlookSummary;
+  memberIds: readonly [string, string];
+}) {
   const location = useLocation();
   const navigate = useNavigate();
   if (location.pathname === "/matches")
@@ -37,14 +43,17 @@ function RoutedWorkspace({ response }: { response: SeriesAnalysisOutlookSummary 
       selection={{
         gameTitleId: response.artifact.gameTitleId,
         view: "outlook",
-        focusMemberId: "member_eu",
-        rivalMemberId: "member_ponta",
+        focusMemberId: memberIds[0],
+        rivalMemberId: memberIds[1],
       }}
     />
   );
 }
 
-function renderOutlook(response: SeriesAnalysisOutlookSummary) {
+function renderOutlook(
+  response: SeriesAnalysisOutlookSummary,
+  memberIds: readonly [string, string] = ["member_eu", "member_ponta"],
+) {
   const queryClient = createTestQueryClient();
   const tree = (summary: SeriesAnalysisOutlookSummary) => (
     <QueryClientProvider client={queryClient}>
@@ -54,7 +63,7 @@ function renderOutlook(response: SeriesAnalysisOutlookSummary) {
         ]}
       >
         <OutlookSessionOwner>
-          <RoutedWorkspace response={summary} />
+          <RoutedWorkspace response={summary} memberIds={memberIds} />
         </OutlookSessionOwner>
       </MemoryRouter>
     </QueryClientProvider>
@@ -161,6 +170,42 @@ async function threeGameSummary() {
 }
 
 describe("OutlookView input and update boundaries", () => {
+  it("keeps each member's results and editor attached to their identity when focus follows rival in canonical order", async () => {
+    const user = userEvent.setup();
+    const response = await makeSeriesAnalysisOutlookSummary();
+    renderOutlook(response, ["member_ponta", "member_eu"]);
+    const people = within(screen.getByRole("tablist", { name: "調整する人" }));
+    expect(people.getAllByRole("tab").map((tab) => tab.getAttribute("aria-label"))).toEqual([
+      "いーゆー",
+      "ぽんた",
+    ]);
+    expect(people.getByRole("tab", { name: "ぽんた" })).toHaveAttribute("aria-selected", "true");
+    const results = within(screen.getByRole("table", { name: "現在とこの先の総合平均順位" }));
+    expect(results.getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual([
+      "時点",
+      "いーゆー",
+      "ぽんた",
+    ]);
+    const current = results.getByRole("row", { name: /^現在/u });
+    expect(
+      within(current)
+        .getAllByRole("cell")
+        .map((cell) => cell.textContent),
+    ).toEqual(
+      ["member_eu", "member_ponta"].map(
+        (id) =>
+          `${response.players.find((player) => player.memberId === id)!.averageRank.toFixed(2)}位`,
+      ),
+    );
+    const before = results.getByRole("row", { name: /^50戦後/u });
+    const rivalBefore = within(before).getAllByRole("cell")[0]!.textContent;
+    const focusBefore = within(before).getAllByRole("cell")[1]!.textContent;
+    await user.clear(meanField("ぽんた"));
+    await user.type(meanField("ぽんた"), "2.40{Enter}");
+    expect(within(before).getAllByRole("cell")[0]).toHaveTextContent(rivalBefore!);
+    expect(within(before).getAllByRole("cell")[1]).not.toHaveTextContent(focusBefore!);
+  });
+
   it("keeps a precise mean and allocation through mode changes, a no-op gesture and the first whole-count move", async () => {
     const user = userEvent.setup();
     renderOutlook(await makeSeriesAnalysisOutlookSummary());

@@ -1,41 +1,36 @@
-import { useId, useState } from "react";
-
 import { formatRational, projectOutlook } from "@/features/seriesComparison/model/outlook";
 import type { CumulativePair } from "@/features/seriesComparison/model/outlook";
+import { outlookGapText } from "@/features/seriesComparison/outlook/outlookComparison";
+import type { OutlookComparison } from "@/features/seriesComparison/outlook/outlookComparison";
 import type { OutlookSession } from "@/features/seriesComparison/outlook/outlookSession";
 import { orderFixedMembers } from "@/shared/domain/members";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
+import { cn } from "@/shared/ui/cn";
 import { DataTable } from "@/shared/ui/data/DataTable";
-import { InputControl } from "@/shared/ui/forms/Control";
-import { buildFieldDescribedBy, Field } from "@/shared/ui/forms/Field";
 import { contentText } from "@/shared/ui/typography";
 
-/** The editable row keeps its identity while the comparison horizon changes. */
+/** The selected horizon and fixed comparisons keep stable row identities. */
 export function OutlookResults({
   cumulative,
   names,
   memberIds,
   session,
-  change,
+  comparison,
 }: {
   cumulative: CumulativePair;
   names: readonly [string, string];
   memberIds: readonly [string, string];
   session: OutlookSession;
-  change: (update: (current: OutlookSession) => OutlookSession) => void;
+  comparison: OutlookComparison;
 }) {
-  const horizonId = useId();
-  const [validateBlank, setValidateBlank] = useState(false);
-  const blank = session.horizonText === "";
-  const valid =
-    /^\d+$/u.test(session.horizonText) &&
-    Number(session.horizonText) >= 1 &&
-    Number(session.horizonText) <= 1000;
-  const showError = !valid && (!blank || validateBlank);
-  const descriptionId = showError ? undefined : `${horizonId}-description`;
-  const errorId = showError ? `${horizonId}-error` : undefined;
   const members = orderFixedMembers(
     memberIds.map((memberId, role) => ({ memberId, role: role as 0 | 1 })),
+  );
+  const selected = projectOutlook(
+    cumulative,
+    session.entries[0].distribution,
+    session.entries[1].distribution,
+    session.horizon,
   );
   const rows = [
     { key: "now", h: 0 },
@@ -44,18 +39,42 @@ export function OutlookResults({
     { key: "hundred", h: 100 },
   ].map((row) => ({
     ...row,
-    ...projectOutlook(
-      cumulative,
-      session.entries[0].distribution,
-      session.entries[1].distribution,
-      row.h,
-    ),
+    ...(row.key === "custom"
+      ? selected
+      : projectOutlook(
+          cumulative,
+          session.entries[0].distribution,
+          session.entries[1].distribution,
+          row.h,
+        )),
   }));
+  const before = comparison
+    ? projectOutlook(
+        cumulative,
+        comparison.before[0].distribution,
+        comparison.before[1].distribution,
+        session.horizon,
+      )
+    : null;
   return (
-    <section className="grid min-w-0 gap-2" aria-labelledby="outlook-results-heading">
+    <section className="grid min-w-0 gap-4" aria-labelledby="outlook-results-heading">
       <h3 id="outlook-results-heading" className={contentText.heading}>
         総合平均順位の変化
       </h3>
+      <div className="grid min-w-0 gap-1" aria-label={`${session.horizon}戦後の差`}>
+        <p className={contentText.body}>{session.horizon}戦後の差</p>
+        {before ? (
+          <p className={cn(contentText.body, "tabular-nums")}>
+            <span aria-hidden="true">○ </span>変更前：{outlookGapText(before.gap, names)}
+          </p>
+        ) : null}
+        <p className={cn(contentText.body, "tabular-nums")}>
+          <span aria-hidden="true" className="text-[var(--color-analysis-emphasis)]">
+            ●{" "}
+          </span>
+          試している成績：{outlookGapText(selected.gap, names)}
+        </p>
+      </div>
       <DataTable
         caption={{ content: "現在とこの先の総合平均順位", visibility: "screen-reader" }}
         density="compact"
@@ -72,54 +91,15 @@ export function OutlookResults({
             width: "8rem",
             renderCell: (row) =>
               row.key === "custom" ? (
-                <Field
-                  label="何戦後"
-                  htmlFor={horizonId}
-                  description={
-                    showError ? undefined : blank ? `結果は${session.horizon}戦後` : "1〜1000戦"
-                  }
-                  descriptionId={descriptionId}
-                  error={
-                    showError
-                      ? `1〜1000の整数を入力してください。結果は${session.horizon}戦後のままです。`
-                      : undefined
-                  }
-                  errorId={errorId}
-                >
-                  <div className="max-w-28">
-                    <InputControl
-                      id={horizonId}
-                      inputMode="numeric"
-                      invalid={showError}
-                      value={session.horizonText}
-                      aria-describedby={buildFieldDescribedBy(descriptionId, errorId)}
-                      onChange={(event) => {
-                        const text = event.target.value;
-                        setValidateBlank(false);
-                        const next =
-                          /^\d+$/u.test(text) && Number(text) >= 1 && Number(text) <= 1000
-                            ? Number(text)
-                            : undefined;
-                        change((current) => ({
-                          ...current,
-                          horizonText: text,
-                          ...(next === undefined ? {} : { horizon: next }),
-                        }));
-                      }}
-                      onBlur={() => setValidateBlank(true)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") setValidateBlank(true);
-                        if (event.key === "Escape") {
-                          setValidateBlank(false);
-                          change((current) => ({
-                            ...current,
-                            horizonText: String(current.horizon),
-                          }));
-                        }
-                      }}
-                    />
-                  </div>
-                </Field>
+                <div className="grid gap-1">
+                  <span className={contentText.supporting}>指定した戦数</span>
+                  <span>
+                    <span aria-hidden="true" className="text-[var(--color-analysis-emphasis)]">
+                      ●{" "}
+                    </span>
+                    {row.h}戦後
+                  </span>
+                </div>
               ) : row.h === 0 ? (
                 "現在"
               ) : (

@@ -1,4 +1,5 @@
 import { memo, useEffect, useId, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
 import { contentText } from "@/shared/ui/typography";
@@ -19,6 +20,8 @@ export const OutlookChart = memo(function OutlookChart({
   sameLine,
   recentCount,
   exampleStatus,
+  horizonControl,
+  comparisonGap,
 }: {
   points: Point[];
   recent: Point[];
@@ -32,6 +35,8 @@ export const OutlookChart = memo(function OutlookChart({
   sameLine: boolean;
   recentCount: number;
   exampleStatus?: string | undefined;
+  horizonControl: ReactNode;
+  comparisonGap: number | null;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(640);
@@ -49,6 +54,7 @@ export const OutlookChart = memo(function OutlookChart({
     ...points.map((point) => point.gap),
     ...recent.map((point) => point.gap),
     ...examples.flat(),
+    ...(comparisonGap !== null && horizon <= 100 ? [comparisonGap] : []),
     0,
   ];
   const low = Math.min(...values);
@@ -70,6 +76,7 @@ export const OutlookChart = memo(function OutlookChart({
   const marks = [max, 0, min];
   const shownMarker = marker !== null && marker >= 0 && marker <= 100 ? marker : null;
   const markerPoint = shownMarker === null ? undefined : points[shownMarker];
+  const selectedPoint = horizon <= 100 ? points[horizon] : undefined;
   return (
     <figure className="grid min-w-0 gap-2" aria-labelledby={titleId}>
       <figcaption className="grid gap-1" id={titleId}>
@@ -78,13 +85,14 @@ export const OutlookChart = memo(function OutlookChart({
           上は{focusName}、下は{rivalName}が先行
         </span>
       </figcaption>
+      {horizonControl}
       <div ref={root} className="relative min-w-0">
         <svg
           height={270}
           viewBox={`0 0 ${width} 270`}
           className="block w-full"
           role="img"
-          aria-label={`この先100戦の平均順位の差。${markerLabel}`}
+          aria-label={`この先100戦の平均順位の差。確認する時点は${horizon}戦後${horizon > 100 ? "（グラフの範囲外）" : ""}。${markerLabel}`}
         >
           {marks.map((value, index) => (
             <g key={index}>
@@ -127,8 +135,9 @@ export const OutlookChart = memo(function OutlookChart({
           >
             この先の試合数（0は現在）
           </text>
-          {[50, 100, ...(horizon <= 100 && horizon !== 50 && horizon !== 100 ? [horizon] : [])].map(
-            (h) => (
+          {[50, 100]
+            .filter((h) => h !== horizon)
+            .map((h) => (
               <line
                 key={h}
                 aria-label={`${h}戦後の目安`}
@@ -139,8 +148,7 @@ export const OutlookChart = memo(function OutlookChart({
                 stroke="var(--color-border-strong)"
                 strokeDasharray="2 4"
               />
-            ),
-          )}
+            ))}
           {examples.map((gaps, index) => (
             <path
               key={index}
@@ -167,6 +175,70 @@ export const OutlookChart = memo(function OutlookChart({
             stroke="var(--color-analysis-emphasis)"
             strokeWidth="2.5"
           />
+          {selectedPoint ? (
+            <g aria-label={`${horizon}戦後の確認位置`}>
+              <line
+                x1={x(horizon)}
+                x2={x(horizon)}
+                y1={top}
+                y2={bottom}
+                stroke="var(--color-analysis-emphasis)"
+                strokeWidth="1"
+                opacity=".5"
+              />
+              {comparisonGap !== null ? (
+                <g aria-label={`${horizon}戦後の変更前`}>
+                  <line
+                    x1={x(horizon)}
+                    x2={x(horizon)}
+                    y1={y(comparisonGap)}
+                    y2={y(selectedPoint.gap)}
+                    stroke="var(--color-analysis-emphasis)"
+                    strokeWidth="2"
+                  />
+                  <circle
+                    cx={x(horizon)}
+                    cy={y(comparisonGap)}
+                    r="4.5"
+                    fill="var(--color-surface)"
+                    stroke="var(--color-analysis-emphasis)"
+                    strokeWidth="1.5"
+                  />
+                </g>
+              ) : null}
+              <circle
+                aria-label={`${horizon}戦後の試している成績`}
+                cx={x(horizon)}
+                cy={y(selectedPoint.gap)}
+                r="3.5"
+                fill="var(--color-analysis-emphasis)"
+              />
+              <text
+                x={Math.max(left + 4, Math.min(right - 4, x(horizon)))}
+                y={bottom - 6}
+                textAnchor={horizon < 25 ? "start" : horizon > 75 ? "end" : "middle"}
+                fontSize="12"
+                fill="var(--color-text-primary)"
+                stroke="var(--color-surface)"
+                strokeWidth="3"
+                paintOrder="stroke"
+              >
+                {horizon}戦後
+              </text>
+            </g>
+          ) : (
+            <text
+              x={left}
+              y={bottom - 6}
+              fontSize="12"
+              fill="var(--color-text-primary)"
+              stroke="var(--color-surface)"
+              strokeWidth="3"
+              paintOrder="stroke"
+            >
+              {horizon}戦後はグラフの範囲外
+            </text>
+          )}
           {shownMarker !== null && markerPoint ? (
             <g>
               <line
@@ -208,7 +280,7 @@ export const OutlookChart = memo(function OutlookChart({
         ) : null}
       </div>
       <div className={cn(contentText.supporting, "flex flex-wrap gap-x-4 gap-y-1")}>
-        <span>実線：指定した成績</span>
+        <span>実線：試している成績</span>
         <span>
           {sameLine ? `直近${recentCount}戦と同じ推移` : `破線：直近${recentCount}戦のまま`}
         </span>

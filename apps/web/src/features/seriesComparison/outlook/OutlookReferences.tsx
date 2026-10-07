@@ -1,8 +1,9 @@
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 
 import {
   areDistributionsCompatible,
   compareRationals,
+  countsFromMean,
   distributionFromCounts,
   distributionMean,
   formatRational,
@@ -15,7 +16,12 @@ import type {
   RankDistribution,
   RequiredMean,
 } from "@/features/seriesComparison/model/outlook";
-import { applyOutlookDistribution } from "@/features/seriesComparison/outlook/outlookSession";
+import { parseOutlookHorizon } from "@/features/seriesComparison/outlook/OutlookHorizonControl";
+import { outlookAverage } from "@/features/seriesComparison/outlook/outlookPresentation";
+import {
+  applyOutlookDistribution,
+  finishOutlookGesture,
+} from "@/features/seriesComparison/outlook/outlookSession";
 import type { OutlookSession } from "@/features/seriesComparison/outlook/outlookSession";
 import { useOutlookResource } from "@/features/seriesComparison/outlook/useOutlookResource";
 import type {
@@ -42,22 +48,42 @@ export function requiredMeanText(required: ReturnType<typeof requiredMean>) {
 export function OutlookRequirements({
   response,
   focusId,
-  horizon,
+  names,
+  cumulative,
+  session,
+  change,
   recent,
-  rival,
   requirements,
 }: {
   response: SeriesAnalysisOutlookSummary;
   focusId: string;
-  horizon: number;
+  names: readonly [string, string];
+  cumulative: CumulativePair;
+  session: OutlookSession;
+  change: (update: (current: OutlookSession) => OutlookSession) => void;
   recent: RankDistribution;
-  rival: RankDistribution;
   requirements: ReadonlyArray<{
     key: "custom" | "fifty" | "hundred";
     h: number;
     required: RequiredMean;
   }>;
 }) {
+  const conditionId = useId();
+  const { horizon } = session;
+  const valid = parseOutlookHorizon(session.horizonText) !== undefined;
+  const focus = session.entries[0].distribution;
+  const rival = session.entries[1].distribution;
+  const selected = requirements.find((row) => row.key === "custom")?.required;
+  const maximum = selected?.maximumHundredths ?? null;
+  const focusMean = distributionMean(focus);
+  const reaches =
+    selected !== undefined &&
+    compareRationals(focusMean, selected.threshold) < 0 &&
+    areDistributionsCompatible(focus, rival);
+  const applied =
+    maximum !== null &&
+    session.entries[0].source.kind === "average" &&
+    compareRationals(focusMean, rational(BigInt(maximum), 100n)) === 0;
   const { window } = useOutlookResource(response, focusId, horizon, false);
   const recentMean = distributionMean(recent);
   const recentCompatible = areDistributionsCompatible(recent, rival);
@@ -73,10 +99,72 @@ export function OutlookRequirements({
     return { key, h, required, improvement, historical, recentCompatible };
   });
   return (
-    <section className="grid min-w-0 gap-2" aria-labelledby="outlook-requirements-heading">
+    <section
+      className="grid min-w-0 gap-4"
+      aria-labelledby="outlook-requirements-heading"
+      data-outlook-preserve-draft
+    >
       <h2 id="outlook-requirements-heading" className={contentText.heading}>
-        上回るための成績
+        {horizon}戦後に{names[0]}が上回るための成績
       </h2>
+      {reaches || maximum !== null ? (
+        <div className="grid min-w-0 justify-items-start">
+          {reaches && !applied ? (
+            <p className={contentText.body}>今の成績で条件を満たしています。</p>
+          ) : maximum !== null ? (
+            <Button
+              size="sm"
+              variant={applied ? "quiet" : "secondary"}
+              disabled={!valid}
+              aria-disabled={applied || undefined}
+              aria-describedby={conditionId}
+              onClick={() => {
+                if (!valid || applied) return;
+                change((current) => {
+                  if (
+                    current.artifactId !== response.artifact.artifactId ||
+                    current.key !== session.key ||
+                    parseOutlookHorizon(current.horizonText) === undefined
+                  )
+                    return current;
+                  const latest = requiredMean(
+                    cumulative,
+                    current.entries[1].distribution,
+                    current.horizon,
+                  );
+                  if (current.horizon !== horizon || latest.maximumHundredths !== maximum)
+                    return {
+                      ...current,
+                      notice: "条件が変わりました。必要な平均を確認して、もう一度試してください。",
+                    };
+                  const currentMean = distributionMean(current.entries[0].distribution);
+                  if (compareRationals(currentMean, latest.threshold) < 0) return current;
+                  const distribution = countsFromMean(
+                    maximum,
+                    current.entries[1].distribution,
+                    current.entries[0].distribution,
+                  );
+                  if (!distribution) return current;
+                  return {
+                    ...applyOutlookDistribution(finishOutlookGesture(current), 0, distribution, {
+                      kind: "average",
+                    }),
+                    editor: 0,
+                    method: "mean",
+                  };
+                });
+              }}
+            >
+              {applied
+                ? `${names[0]}に平均${(maximum / 100).toFixed(2)}位を適用中`
+                : `${names[0]}を平均${(maximum / 100).toFixed(2)}位で試す`}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+      <p id={conditionId} className={contentText.body}>
+        {names[1]}は平均{outlookAverage(distributionMean(rival))}位を続ける条件です。
+      </p>
       <DataTable
         caption={{ content: "必要な成績と同期間の過去実績", visibility: "screen-reader" }}
         rows={rows}

@@ -26,7 +26,9 @@ import { seriesAnalysisScopeSignature } from "@/features/seriesComparison/model/
 import { normalizeOutlookPair } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import type { SeriesAnalysisUrlState } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { OutlookChart } from "@/features/seriesComparison/outlook/OutlookChart";
+import { getOutlookComparison } from "@/features/seriesComparison/outlook/outlookComparison";
 import { OutlookEditor } from "@/features/seriesComparison/outlook/OutlookEditor";
+import { OutlookHorizonControl } from "@/features/seriesComparison/outlook/OutlookHorizonControl";
 import {
   exactAverageFraction,
   outlookAverage,
@@ -193,6 +195,32 @@ function OutlookWorkspace({
   );
   const focus = session.entries[0].distribution;
   const rival = session.entries[1].distribution;
+  const { visible: comparison, announcement } = getOutlookComparison({
+    session,
+    cumulative,
+    names,
+  });
+  const comparisonGap =
+    comparison && session.horizon <= 100
+      ? rationalToNumber(
+          projectOutlook(
+            cumulative,
+            comparison.before[0].distribution,
+            comparison.before[1].distribution,
+            session.horizon,
+          ).gap,
+        )
+      : null;
+  const horizonControl = useMemo(
+    () => (
+      <OutlookHorizonControl
+        horizon={session.horizon}
+        horizonText={session.horizonText}
+        change={change}
+      />
+    ),
+    [session.horizon, session.horizonText, change],
+  );
   const crossing = useMemo(
     () => outlookCrossings(cumulative, focus, rival),
     [cumulative, focus, rival],
@@ -324,6 +352,9 @@ function OutlookWorkspace({
   );
   return (
     <div className="grid min-w-0 gap-6">
+      <span role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+        {announcement}
+      </span>
       <div className="@container/outlook-people grid max-w-2xl gap-1" data-outlook-preserve-draft>
         <div className="grid min-w-0 gap-4 @xs/outlook-people:grid-cols-2">
           {([0, 1] as const).map((role) => (
@@ -377,6 +408,8 @@ function OutlookWorkspace({
                   }
                   recentCount={response.recent.matchCount}
                   horizon={session.horizon}
+                  horizonControl={horizonControl}
+                  comparisonGap={comparisonGap}
                   marker={marker !== null && marker <= 100n ? Number(marker) : null}
                   markerLabel={conclusion}
                   focusName={names[0]}
@@ -493,8 +526,8 @@ function OutlookWorkspace({
                               variant="underline"
                               activateOnFocus={false}
                             >
-                              <TabsTab value="mean">平均順位で調整</TabsTab>
-                              <TabsTab value="counts">順位の回数で調整</TabsTab>
+                              <TabsTab value="mean">平均を変えたら</TabsTab>
+                              <TabsTab value="counts">回数を変えたら</TabsTab>
                             </TabsList>
                             <TabsPanel value={session.method}>
                               <div className="grid min-w-0 gap-2">
@@ -569,6 +602,15 @@ function OutlookWorkspace({
                     </ContentWithActions>
                   </div>
                 ))}
+              {comparison ? (
+                <div role="group" aria-label="成績の変更内容" className="grid min-w-0 gap-1">
+                  {comparison.changes.map((item) => (
+                    <p key={item.role} className={cn(contentText.body, "text-pretty tabular-nums")}>
+                      {item.description}。{item.average}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
             </section>
           }
           results={
@@ -577,7 +619,7 @@ function OutlookWorkspace({
               names={names}
               memberIds={ids}
               session={session}
-              change={change}
+              comparison={comparison}
             />
           }
         />
@@ -585,9 +627,11 @@ function OutlookWorkspace({
       <OutlookRequirements
         response={response}
         focusId={focusMemberId}
-        horizon={session.horizon}
+        names={names}
+        cumulative={cumulative}
+        session={session}
+        change={change}
         recent={recent[0]}
-        rival={rival}
         requirements={requirements}
       />
       {nextOutcomes.length ? (
@@ -661,6 +705,11 @@ function OutlookWorkspace({
             直近{response.recent.matchCount}戦のままでは、
             {crossingLabel(baselineCrossing, names[0], names[1])}
           </p>
+          {comparison && comparison.beforeArrival !== comparison.afterArrival ? (
+            <p className={cn(contentText.body, readableTextWidthClass)}>
+              直前の成績変更による到達時点：{comparison.beforeArrival} → {comparison.afterArrival}。
+            </p>
+          ) : null}
           <DataTable
             caption={{ content: "今後の総合平均順位", visibility: "screen-reader" }}
             rows={numericRows}

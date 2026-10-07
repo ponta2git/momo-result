@@ -1,4 +1,4 @@
-import { Minus, Plus } from "lucide-react";
+import { ArrowRight, Minus, Plus } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 
 import {
@@ -317,28 +317,37 @@ function WholeCountEditor({ session, name, change }: Props) {
           ))}
         </dl>
       </div>
-      <div className="grid grid-cols-2 gap-4">
-        {([gain, lose] as const).map((rank, index) => (
-          <SelectField
-            key={index}
-            label={index === 0 ? "増やす順位" : "減らす順位"}
-            value={String(rank)}
-            options={[0, 1, 2, 3].map((value) => ({
-              value: String(value),
-              label: `${value + 1}位`,
-              disabled: value === (index === 0 ? lose : gain),
-            }))}
-            onValueChange={(value) => {
-              setText(undefined);
-              change((current) => ({
-                ...current,
-                transfer: (index === 0 ? [Number(value), lose] : [gain, Number(value)]) as [
-                  OutlookRankIndex,
-                  OutlookRankIndex,
-                ],
-              }));
-            }}
-          />
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-2">
+        {([lose, gain] as const).map((rank, index) => (
+          <div key={index} className={index === 0 ? "contents" : "min-w-0"}>
+            <SelectField
+              label={index === 0 ? "減らす順位" : "増やす順位"}
+              value={String(rank)}
+              options={[0, 1, 2, 3].map((value) => ({
+                value: String(value),
+                label: `${value + 1}位`,
+                disabled: value === (index === 0 ? gain : lose),
+              }))}
+              onValueChange={(value) => {
+                setText(undefined);
+                change((current) => ({
+                  ...current,
+                  transfer: (index === 0 ? [gain, Number(value)] : [Number(value), lose]) as [
+                    OutlookRankIndex,
+                    OutlookRankIndex,
+                  ],
+                }));
+              }}
+            />
+            {index === 0 ? (
+              <span
+                className="flex h-11 items-center text-[var(--color-text-secondary)] pointer-fine:h-10"
+                aria-hidden="true"
+              >
+                <ArrowRight className="size-4" />
+              </span>
+            ) : null}
+          </div>
         ))}
       </div>
       <div className="grid gap-2">

@@ -31,6 +31,7 @@ export type OutlookSession = {
   artifactId: string;
   entries: [OutlookEntry, OutlookEntry];
   history: Pair[];
+  comparisonBefore?: Pair | undefined;
   gesture?: { role: OutlookRole; before: Pair } | undefined;
   editor: OutlookRole;
   method: "mean" | "counts";
@@ -103,7 +104,7 @@ export function adoptOutlookSummary(
       history: [],
       editor: 0,
       method: "mean",
-      transfer: [0, 3],
+      transfer: [2, 3],
       horizon: 20,
       horizonText: "20",
       noise: false,
@@ -116,6 +117,7 @@ export function adoptOutlookSummary(
     ...current,
     artifactId,
     history: [],
+    comparisonBefore: undefined,
     gesture: undefined,
     entries: followRecent
       ? (recent.map((entry, i) => ({
@@ -170,10 +172,12 @@ export function applyOutlookDistribution(
     meanDraft: undefined,
     error: undefined,
   });
+  const before = session.gesture ? undefined : snapshot(session);
   // Fifty complete gestures bound this one ephemeral comparison's history.
   return {
     ...next,
-    history: session.gesture ? session.history : [...session.history, snapshot(session)].slice(-50),
+    history: before ? [...session.history, before].slice(-50) : session.history,
+    comparisonBefore: before ?? session.comparisonBefore,
     notice: undefined,
   };
 }
@@ -191,12 +195,21 @@ export function finishOutlookGesture(session: OutlookSession, cancel = false): O
   const next =
     cancel || unchanged
       ? restore(session, before, false)
-      : { ...session, history: [...session.history, before].slice(-50) };
+      : {
+          ...session,
+          history: [...session.history, before].slice(-50),
+          comparisonBefore: before,
+        };
   return { ...next, gesture: undefined };
 }
 
 export function undoOutlook(session: OutlookSession): OutlookSession {
   const last = session.history.at(-1);
   if (session.gesture || !last) return session;
-  return { ...restore(session, last), history: session.history.slice(0, -1), notice: undefined };
+  return {
+    ...restore(session, last),
+    history: session.history.slice(0, -1),
+    comparisonBefore: undefined,
+    notice: undefined,
+  };
 }

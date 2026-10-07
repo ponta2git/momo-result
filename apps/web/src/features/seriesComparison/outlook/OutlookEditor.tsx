@@ -28,6 +28,7 @@ import type {
   OutlookSession,
   OutlookRankIndex,
 } from "@/features/seriesComparison/outlook/outlookSession";
+import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { cn } from "@/shared/ui/cn";
 import { InputControl } from "@/shared/ui/forms/Control";
@@ -49,12 +50,13 @@ const rangeKeys = new Set([
 ]);
 type Props = {
   session: OutlookSession;
+  role: 0 | 1;
+  method: "mean" | "counts";
   name: string;
   change: (update: (session: OutlookSession) => OutlookSession) => void;
 };
 
-export function OutlookEditor({ session, name, change }: Props) {
-  const role = session.editor;
+export function OutlookEditor({ session, role, method, name, change }: Props) {
   const entry = session.entries[role];
   const opponent = session.entries[otherRole(role)].distribution;
   const currentMean = distributionMean(entry.distribution);
@@ -117,7 +119,7 @@ export function OutlookEditor({ session, name, change }: Props) {
     });
   return (
     <div className="grid min-w-0 gap-2">
-      {session.method === "mean" ? (
+      {method === "mean" ? (
         <Field
           htmlFor={meanId}
           label={`${name}のこれからの平均順位`}
@@ -127,52 +129,47 @@ export function OutlookEditor({ session, name, change }: Props) {
           errorId={errorId}
         >
           <div className="grid gap-2">
-            <InputControl
-              id={meanId}
-              inputMode="decimal"
-              invalid={Boolean(entry.error)}
-              aria-describedby={buildFieldDescribedBy(descriptionId, errorId)}
-              value={
-                entry.meanDraft ?? formatRational(currentMean, 4).replace(/(\.\d\d)0+$/u, "$1")
-              }
-              onChange={(event) => {
-                const text = event.target.value;
-                change((current) =>
-                  updateOutlookEntry(current, role, {
-                    meanDraft: text,
-                    error: undefined,
-                  }),
-                );
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  commitMean();
+            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+              <InputControl
+                id={meanId}
+                inputMode="decimal"
+                invalid={Boolean(entry.error)}
+                aria-describedby={buildFieldDescribedBy(descriptionId, errorId)}
+                value={
+                  entry.meanDraft ?? formatRational(currentMean, 4).replace(/(\.\d\d)0+$/u, "$1")
                 }
-                if (event.key === "Escape") {
-                  event.preventDefault();
+                onChange={(event) => {
+                  const text = event.target.value;
                   change((current) =>
-                    updateOutlookEntry(current, role, { meanDraft: undefined, error: undefined }),
+                    updateOutlookEntry(current, role, {
+                      meanDraft: text,
+                      error: undefined,
+                    }),
                   );
-                }
-              }}
-              onBlur={(event) => {
-                const target = event.relatedTarget;
-                const input = event.currentTarget;
-                if (
-                  target instanceof Element &&
-                  !target.closest("a,[role=tab],[data-outlook-preserve-draft]")
-                )
-                  commitMean();
-                if (target === null) {
-                  // A plain chart click has no focus target. Let navigation unmount first,
-                  // so leaving the view or browser keeps unfinished text instead.
-                  queueMicrotask(() => {
-                    if (input.isConnected && document.hasFocus()) commitMean();
-                  });
-                }
-              }}
-            />
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    commitMean();
+                  }
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    change((current) =>
+                      updateOutlookEntry(current, role, { meanDraft: undefined, error: undefined }),
+                    );
+                  }
+                }}
+              />
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={entry.meanDraft === undefined}
+                aria-label={`${name}の平均順位を反映`}
+                onClick={commitMean}
+              >
+                反映
+              </Button>
+            </div>
             <div>
               <label htmlFor={sliderId} className="sr-only">
                 {name}の平均順位を動かす
@@ -224,15 +221,20 @@ export function OutlookEditor({ session, name, change }: Props) {
           </div>
         </Field>
       ) : (
-        <WholeCountEditor session={session} name={name} change={change} />
+        <WholeCountEditor
+          session={session}
+          role={role}
+          method={method}
+          name={name}
+          change={change}
+        />
       )}
     </div>
   );
 }
 
 /** Move games between two named ranks; every accepted input is a complete distribution. */
-function WholeCountEditor({ session, name, change }: Props) {
-  const role = session.editor;
+function WholeCountEditor({ session, role, name, change }: Props) {
   const entry = session.entries[role];
   const opponent = session.entries[otherRole(role)].distribution;
   const [gain, lose] = session.transfer;
@@ -331,7 +333,7 @@ function WholeCountEditor({ session, name, change }: Props) {
               onValueChange={(value) => {
                 setText(undefined);
                 change((current) => ({
-                  ...current,
+                  ...updateOutlookEntry(finishOutlookGesture(current), role, { error: undefined }),
                   transfer: (index === 0 ? [gain, Number(value)] : [Number(value), lose]) as [
                     OutlookRankIndex,
                     OutlookRankIndex,
@@ -401,6 +403,7 @@ function WholeCountEditor({ session, name, change }: Props) {
                     );
                 }}
                 onBlur={(event) => {
+                  if (entry.error) return;
                   const target = event.relatedTarget;
                   if (
                     target instanceof HTMLElement &&
@@ -415,6 +418,7 @@ function WholeCountEditor({ session, name, change }: Props) {
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === "Escape") {
                     event.preventDefault();
+                    if (event.key === "Enter" && entry.error) return;
                     setText(undefined);
                     const cancel = event.key === "Escape";
                     change((current) =>

@@ -1,41 +1,44 @@
 import { useId, useState } from "react";
 
-import type { OutlookSession } from "@/features/seriesComparison/outlook/outlookSession";
 import { InputControl } from "@/shared/ui/forms/Control";
 import { buildFieldDescribedBy, Field } from "@/shared/ui/forms/Field";
 
-export function parseOutlookHorizon(text: string) {
+export function parseOutlookHorizon(text: string, max = 1000) {
   const value = Number(text);
-  return /^\d+$/u.test(text) && value >= 1 && value <= 1000 ? value : undefined;
+  return /^\d+$/u.test(text) && value >= 1 && value <= max ? value : undefined;
 }
 
-/** One horizon controls the point on the chart, the result, and the required performance. */
+/** Keep unfinished text separate from the last valid horizon for each task. */
 export function OutlookHorizonControl({
   horizon,
   horizonText,
-  change,
+  onChange,
+  label = "何戦後を見る",
+  max = 1000,
 }: {
   horizon: number;
   horizonText: string;
-  change: (update: (current: OutlookSession) => OutlookSession) => void;
+  onChange: (selection: { horizon: number; horizonText: string }) => void;
+  label?: string;
+  max?: number;
 }) {
   const id = useId();
   const [validateBlank, setValidateBlank] = useState(false);
   const blank = horizonText === "";
-  const valid = parseOutlookHorizon(horizonText) !== undefined;
+  const valid = parseOutlookHorizon(horizonText, max) !== undefined;
   const showError = !valid && (!blank || validateBlank);
   const descriptionId = showError ? undefined : `${id}-description`;
   const errorId = showError ? `${id}-error` : undefined;
   return (
     <div data-outlook-preserve-draft>
       <Field
-        label="何戦後"
+        label={label}
         htmlFor={id}
-        description={showError ? undefined : blank ? `結果は${horizon}戦後` : "1〜1000戦"}
+        description={showError ? undefined : blank ? `結果は${horizon}戦後` : `1〜${max}戦`}
         descriptionId={descriptionId}
         error={
           showError
-            ? `1〜1000の整数を入力してください。結果は${horizon}戦後のままです。`
+            ? `1〜${max}の整数を入力してください。結果は${horizon}戦後のままです。`
             : undefined
         }
         errorId={errorId}
@@ -50,19 +53,18 @@ export function OutlookHorizonControl({
             onChange={(event) => {
               const text = event.target.value;
               setValidateBlank(false);
-              const next = parseOutlookHorizon(text);
-              change((current) => ({
-                ...current,
+              const next = parseOutlookHorizon(text, max);
+              onChange({
                 horizonText: text,
-                ...(next === undefined ? {} : { horizon: next }),
-              }));
+                horizon: next ?? horizon,
+              });
             }}
             onBlur={() => setValidateBlank(true)}
             onKeyDown={(event) => {
               if (event.key === "Enter") setValidateBlank(true);
               if (event.key === "Escape") {
                 setValidateBlank(false);
-                change((current) => ({ ...current, horizonText: String(current.horizon) }));
+                onChange({ horizon, horizonText: String(horizon) });
               }
             }}
           />

@@ -33,12 +33,13 @@ export type OutlookSession = {
   history: Pair[];
   pinned?: Pair | undefined;
   gesture?: { role: OutlookRole; before: Pair } | undefined;
-  editor: OutlookRole;
-  method: "mean" | "counts";
+  task: "performance" | "goal";
   transfer: [OutlookRankIndex, OutlookRankIndex];
   horizon: number;
   horizonText: string;
-  noise: boolean;
+  chartRange: 100 | 500 | 1000;
+  goalHorizon: number;
+  goalHorizonText: string;
   examplesOpen: boolean;
   notice?: string | undefined;
 };
@@ -68,6 +69,35 @@ export function pinOutlook(session: OutlookSession): OutlookSession {
   return canPinOutlook(session)
     ? { ...session, pinned: snapshot(session), notice: undefined }
     : session;
+}
+
+/** Dialogs edit their own proposal; closing them leaves the page's conditions untouched. */
+export function draftOutlook(session: OutlookSession): OutlookSession {
+  return {
+    ...session,
+    entries: snapshot(session),
+    history: [],
+    gesture: undefined,
+    notice: undefined,
+  };
+}
+
+/** Adopt both compatible conditions together, as one undoable change. */
+export function applyOutlookPair(session: OutlookSession, pair: Pair): OutlookSession {
+  if (!areDistributionsCompatible(pair[0].distribution, pair[1].distribution)) return session;
+  if (
+    pair.every((entry, role) =>
+      distributionsEqual(entry.distribution, session.entries[role as OutlookRole].distribution),
+    )
+  )
+    return session;
+  const committed = finishOutlookGesture(session);
+  return {
+    ...committed,
+    entries: pair.map(({ distribution, source }) => ({ distribution, source })) as Pair,
+    history: [...committed.history, snapshot(committed)].slice(-50),
+    notice: undefined,
+  };
 }
 
 function restore(session: OutlookSession, pair: Pair, clearDrafts = true): OutlookSession {
@@ -125,12 +155,13 @@ export function adoptOutlookSummary(
       artifactId,
       entries: recent,
       history: [],
-      editor: 0,
-      method: "mean",
+      task: "performance",
       transfer: [2, 3],
       horizon: 20,
       horizonText: "20",
-      noise: false,
+      chartRange: 100,
+      goalHorizon: 100,
+      goalHorizonText: "100",
       examplesOpen: false,
     };
   const followRecent = current.entries.every(
@@ -152,7 +183,7 @@ export function adoptOutlookSummary(
       (followRecent
         ? "直近の成績と総合成績を更新しました。"
         : "試している成績を残して実績を更新しました。") +
-      (current.pinned ? "比較用に保持した成績を解除しました。" : ""),
+      (current.pinned ? "比較の基準に残した成績を解除しました。" : ""),
   };
 }
 

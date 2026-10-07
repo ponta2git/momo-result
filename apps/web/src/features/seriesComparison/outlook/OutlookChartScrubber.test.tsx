@@ -8,9 +8,11 @@ import { OutlookChartScrubber } from "@/features/seriesComparison/outlook/Outloo
 function ScrubberHarness({
   horizon = 20,
   horizonText = String(horizon),
+  range = 100,
 }: {
   horizon?: number;
   horizonText?: string;
+  range?: 100 | 500 | 1000;
 }) {
   const [selection, setSelection] = useState({ horizon, horizonText });
   return (
@@ -18,6 +20,7 @@ function ScrubberHarness({
       <p id="scrubber-description">確認する戦数を選びます。</p>
       <OutlookChartScrubber
         {...selection}
+        range={range}
         valueText={`${selection.horizon}戦後`}
         descriptionId="scrubber-description"
         onChange={setSelection}
@@ -27,8 +30,12 @@ function ScrubberHarness({
   );
 }
 
-function renderScrubber(horizon = 20, horizonText = String(horizon)) {
-  render(<ScrubberHarness horizon={horizon} horizonText={horizonText} />);
+function renderScrubber(
+  horizon = 20,
+  horizonText = String(horizon),
+  range: 100 | 500 | 1000 = 100,
+) {
+  render(<ScrubberHarness horizon={horizon} horizonText={horizonText} range={range} />);
   const slider = screen.getByRole("slider", { name: "グラフで確認する戦数" });
   vi.spyOn(slider, "getBoundingClientRect").mockReturnValue(new DOMRect(100, 40, 400, 188));
   const captured = new Set<number>();
@@ -93,7 +100,7 @@ describe("OutlookChartScrubber", () => {
     expect(screen.getByLabelText("入力中の戦数")).toHaveTextContent("100");
   });
 
-  it.each(["pointer cancel", "lost capture", "Escape"] as const)(
+  it.each(["pointer cancel", "lost capture", "blur", "Escape"] as const)(
     "restores the starting horizon and unfinished text after %s",
     async (cancel) => {
       const user = userEvent.setup();
@@ -104,6 +111,7 @@ describe("OutlookChartScrubber", () => {
       expect(screen.getByLabelText("入力中の戦数")).toHaveTextContent("70");
       if (cancel === "pointer cancel") fireEvent.pointerCancel(slider, pointer(380));
       else if (cancel === "lost capture") fireEvent.lostPointerCapture(slider, pointer(380));
+      else if (cancel === "blur") fireEvent.blur(slider);
       else await user.keyboard("{Escape}");
       expect(slider).toHaveAttribute("aria-valuenow", "140");
       expect(screen.getByLabelText("入力中の戦数")).toBeEmptyDOMElement();
@@ -112,4 +120,18 @@ describe("OutlookChartScrubber", () => {
       expect(screen.getByLabelText("入力中の戦数")).toBeEmptyDOMElement();
     },
   );
+
+  it.each([500, 1000] as const)("maps pointer input to the visible %i-game range", (range) => {
+    const slider = renderScrubber(20, "20", range);
+    fireEvent.pointerDown(slider, pointer(300));
+    fireEvent.pointerUp(slider, pointer(300));
+    expect(slider).toHaveAttribute("aria-valuenow", String(range / 2));
+    fireEvent.pointerDown(slider, pointer(300));
+    fireEvent.pointerMove(slider, pointer(540));
+    expect(slider).toHaveAttribute("aria-valuenow", String(range));
+    fireEvent.pointerMove(slider, pointer(80));
+    expect(slider).toHaveAttribute("aria-valuenow", "1");
+    fireEvent.pointerUp(slider, pointer(80));
+    expect(screen.getByLabelText("入力中の戦数")).toHaveTextContent("1");
+  });
 });

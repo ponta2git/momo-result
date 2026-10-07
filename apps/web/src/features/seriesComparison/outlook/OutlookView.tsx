@@ -1,61 +1,41 @@
 import { Undo2 } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useMemo } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useLocation } from "react-router-dom";
 
 import {
-  buildJointDistribution,
-  areDistributionsCompatible,
-  compareRationals,
-  countsPerTwenty,
   distributionFromCounts,
-  distributionMean,
-  distributionsEqual,
   formatRational,
-  generateOutlookExamples,
-  jointFromCounts,
   nextMatchOutcomes,
-  outlookCrossings,
   projectOutlook,
-  rational,
-  rationalToNumber,
-  requiredMean,
-  subtractRationals,
 } from "@/features/seriesComparison/model/outlook";
 import type { CumulativePair } from "@/features/seriesComparison/model/outlook";
 import { seriesAnalysisScopeSignature } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import { normalizeOutlookPair } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import type { SeriesAnalysisUrlState } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { OutlookChart } from "@/features/seriesComparison/outlook/OutlookChart";
-import { outlookGapParts } from "@/features/seriesComparison/outlook/outlookComparison";
-import { OutlookComparisonControl } from "@/features/seriesComparison/outlook/OutlookComparisonControl";
-import { OutlookEditor } from "@/features/seriesComparison/outlook/OutlookEditor";
+import { OutlookGoalPanel } from "@/features/seriesComparison/outlook/OutlookGoalPanel";
 import { OutlookHorizonControl } from "@/features/seriesComparison/outlook/OutlookHorizonControl";
+import { OutlookNoiseDialog } from "@/features/seriesComparison/outlook/OutlookNoiseDialog";
+import { outlookOutcome } from "@/features/seriesComparison/outlook/outlookOutcome";
+import { OutlookPlayerEditor } from "@/features/seriesComparison/outlook/OutlookPlayerEditor";
 import {
   exactAverageFraction,
   outlookAverage,
-  outlookSourceLabel,
 } from "@/features/seriesComparison/outlook/outlookPresentation";
-import {
-  OutlookPastExamples,
-  OutlookRequirements,
-} from "@/features/seriesComparison/outlook/OutlookReferences";
-import { OutlookResults } from "@/features/seriesComparison/outlook/OutlookResults";
+import { OutlookScenarioComparison } from "@/features/seriesComparison/outlook/OutlookScenarioComparison";
 import {
   adoptOutlookSummary,
-  applyOutlookDistribution,
   finishOutlookGesture,
   outlookPlayer,
   undoOutlook,
-  updateOutlookEntry,
 } from "@/features/seriesComparison/outlook/outlookSession";
 import type {
   OutlookRole,
   OutlookSession,
 } from "@/features/seriesComparison/outlook/outlookSession";
 import { useOutlookSession } from "@/features/seriesComparison/outlook/OutlookSessionOwner";
-import { OutlookWorkspaceLayout } from "@/features/seriesComparison/outlook/OutlookWorkspaceLayout";
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
-import { canonicalResultMemberIds, orderFixedMembers } from "@/shared/domain/members";
+import { orderFixedMembers } from "@/shared/domain/members";
 import { formatDateOnly } from "@/shared/lib/dateTime";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { currentInternalLocation, withReturnTo } from "@/shared/navigation/returnTo";
@@ -64,35 +44,14 @@ import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { DataTable } from "@/shared/ui/data/DataTable";
-import { CheckboxField } from "@/shared/ui/forms/CheckboxField";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TabsRoot, TabsList, TabsTab, TabsPanel } from "@/shared/ui/forms/Tabs";
-import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
+import { revealPageElement } from "@/shared/ui/layout/revealPageElement";
 import { contentText } from "@/shared/ui/typography";
 
-function crossingLabel(
-  crossing: ReturnType<typeof outlookCrossings>,
-  focus: string,
-  rival: string,
-) {
-  if (crossing.current === "ahead") {
-    if (crossing.rivalAtLeast === null) return `${focus}の先行が続きます。`;
-    return crossing.exactTie === crossing.rivalAtLeast
-      ? `${crossing.rivalAtLeast}戦で同率、${crossing.rivalAhead}戦で${rival}が上回ります。`
-      : `${crossing.rivalAhead}戦で${rival}が上回ります。`;
-  }
-  if (crossing.current === "tied") {
-    if (crossing.focusAhead !== null)
-      return `現在同率。${crossing.focusAhead}戦で${focus}が上回ります。`;
-    if (crossing.rivalAhead !== null)
-      return `現在同率。${crossing.rivalAhead}戦で${rival}が上回ります。`;
-    return "同率のまま推移します。";
-  }
-  if (crossing.focusAtLeast === null) return "相手には追いつきません。";
-  return crossing.exactTie === crossing.focusAtLeast
-    ? `${crossing.focusAtLeast}戦で同率、${crossing.focusAhead}戦で上回ります。`
-    : `${crossing.focusAhead}戦で上回ります。`;
+function rangeFor(horizon: number): 100 | 500 | 1000 {
+  return horizon <= 100 ? 100 : horizon <= 500 ? 500 : 1000;
 }
 
 export function OutlookView({
@@ -139,6 +98,7 @@ export function OutlookView({
     );
   return (
     <OutlookWorkspace
+      key={session.key}
       response={response}
       selection={selection}
       session={session}
@@ -162,6 +122,8 @@ function OutlookWorkspace({
   onMemberChange: ((role: "focus" | "rival", memberId: string) => void) | undefined;
 }) {
   const location = useLocation();
+  const resultHeading = useRef<HTMLHeadingElement>(null);
+  const chartHeading = useRef<HTMLDivElement>(null);
   const { focusMemberId, rivalMemberId } = normalizeOutlookPair(
     selection.focusMemberId,
     selection.rivalMemberId,
@@ -170,11 +132,10 @@ function OutlookWorkspace({
     () => [focusMemberId, rivalMemberId] as const,
     [focusMemberId, rivalMemberId],
   );
-  const people = [
-    outlookPlayer(response.players, focusMemberId),
-    outlookPlayer(response.players, rivalMemberId),
+  const names = [
+    outlookPlayer(response.players, focusMemberId).displayName,
+    outlookPlayer(response.players, rivalMemberId).displayName,
   ] as const;
-  const names = [people[0].displayName, people[1].displayName] as const;
   const displayRoles = orderFixedMembers(
     ids.map((memberId, role) => ({ memberId, role: role as OutlookRole })),
   );
@@ -194,140 +155,39 @@ function OutlookWorkspace({
     }),
     [response.scope.matchCount, response.players, focusMemberId, rivalMemberId],
   );
-  const focus = session.entries[0].distribution;
-  const rival = session.entries[1].distribution;
-  const selectedProjection = projectOutlook(cumulative, focus, rival, session.horizon);
-  const pinnedProjection = session.pinned
-    ? projectOutlook(
-        cumulative,
-        session.pinned[0].distribution,
-        session.pinned[1].distribution,
-        session.horizon,
-      )
-    : null;
+  const distributions = [session.entries[0].distribution, session.entries[1].distribution] as const;
+  const outcome = outlookOutcome(cumulative, distributions, names);
+  const eventHorizon =
+    outcome.eventHorizon !== null && outcome.eventHorizon <= 1000n
+      ? Number(outcome.eventHorizon)
+      : null;
   const selectHorizon = useCallback(
     (next: Pick<OutlookSession, "horizon" | "horizonText">) => {
-      change((current) =>
-        current.horizon === next.horizon && current.horizonText === next.horizonText
-          ? current
-          : { ...current, ...next },
-      );
+      change((current) => ({
+        ...current,
+        ...next,
+      }));
     },
     [change],
   );
-  const horizonControl = useMemo(
-    () => (
-      <OutlookHorizonControl
-        horizon={session.horizon}
-        horizonText={session.horizonText}
-        change={change}
-      />
-    ),
-    [session.horizon, session.horizonText, change],
-  );
-  const crossing = useMemo(
-    () => outlookCrossings(cumulative, focus, rival),
-    [cumulative, focus, rival],
-  );
-  const baselineCrossing = useMemo(
-    () => outlookCrossings(cumulative, recent[0], recent[1]),
-    [cumulative, recent],
-  );
-  const changed = !distributionsEqual(focus, recent[0]) || !distributionsEqual(rival, recent[1]);
-  const conclusion = crossingLabel(crossing, names[0], names[1]);
-  const marker = crossing.current === "ahead" ? crossing.rivalAtLeast : crossing.focusAtLeast;
-  const chartPoints = useMemo(
-    () =>
-      Array.from({ length: 101 }, (_, h) => ({
-        h,
-        gap: rationalToNumber(projectOutlook(cumulative, focus, rival, h).gap),
-      })),
-    [cumulative, focus, rival],
-  );
-  const recentPoints = useMemo(
-    () =>
-      Array.from({ length: 101 }, (_, h) => ({
-        h,
-        gap: rationalToNumber(projectOutlook(cumulative, recent[0], recent[1], h).gap),
-      })),
-    [cumulative, recent],
-  );
-  const examples = useMemo(() => {
-    if (!session.noise || session.gesture) return undefined;
-    const jointRecord = response.recent.jointRanks.find(
-      (pair) =>
-        ids.includes(pair.memberAId as (typeof ids)[number]) &&
-        ids.includes(pair.memberBId as (typeof ids)[number]),
-    );
-    if (!jointRecord) return null;
-    const canonicalIds = canonicalResultMemberIds.filter((id) => ids.includes(id)) as [
-      string,
-      string,
-    ];
-    const canonicalFocusFirst = canonicalIds[0] === focusMemberId;
-    const observed =
-      jointRecord.memberAId === canonicalIds[0]
-        ? jointRecord.rankCounts
-        : [0, 1, 2, 3].map((column) =>
-            jointRecord.rankCounts.map((row) => {
-              const value = row[column];
-              if (value === undefined) throw new Error("Incomplete joint ranks");
-              return value;
-            }),
-          );
-    const joint = buildJointDistribution(
-      canonicalFocusFirst ? focus : rival,
-      canonicalFocusFirst ? rival : focus,
-      jointFromCounts(observed),
-    );
-    return joint
-      ? generateOutlookExamples({
-          gameTitleId: response.artifact.gameTitleId,
-          canonicalMemberIds: canonicalIds,
-          focusMemberId,
-          cumulative,
-          joint,
-        })
-      : null;
-  }, [session.noise, session.gesture, focus, rival, response, focusMemberId, ids, cumulative]);
-  const examplePoints = useMemo(
-    () => examples?.examples.map((example) => example.points.map((point) => point.gap)) ?? [],
-    [examples],
-  );
-  const numericRows = useMemo(
-    () =>
-      [...new Set([0, 10, 20, 50, 100, session.horizon])]
-        .toSorted((a, b) => a - b)
-        .map((h) => ({ h, ...projectOutlook(cumulative, focus, rival, h) })),
-    [cumulative, focus, rival, session.horizon],
-  );
-  // All three consumers share the same exact requirement for the selected horizon.
-  const { required, requirements } = useMemo(() => {
-    const atHorizon = requiredMean(cumulative, rival, session.horizon);
-    return {
-      required: atHorizon,
-      requirements: [
-        { key: "custom" as const, h: session.horizon, required: atHorizon },
-        ...(
-          [
-            { key: "fifty", h: 50 },
-            { key: "hundred", h: 100 },
-          ] as const
-        ).map(({ key, h }) => ({
-          key,
-          h,
-          required: h === session.horizon ? atHorizon : requiredMean(cumulative, rival, h),
-        })),
-      ],
-    };
-  }, [cumulative, rival, session.horizon]);
-  const recentMean = distributionMean(recent[0]);
-  const targetMean =
-    required.maximumHundredths !== null ? rational(BigInt(required.maximumHundredths), 100n) : null;
-  const improves = targetMean !== null && compareRationals(recentMean, targetMean) > 0;
-  const recentCanReach =
-    areDistributionsCompatible(recent[0], rival) &&
-    compareRationals(recentMean, required.threshold) < 0;
+  const usePerformance = () => {
+    change((current) => ({
+      ...current,
+      task: "performance",
+      horizon: current.goalHorizon,
+      horizonText: String(current.goalHorizon),
+      chartRange: Math.max(current.chartRange, rangeFor(current.goalHorizon)) as 100 | 500 | 1000,
+    }));
+    requestAnimationFrame(() => {
+      if (resultHeading.current) {
+        resultHeading.current.focus({ preventScroll: true });
+        revealPageElement(resultHeading.current, "start");
+      }
+    });
+  };
+  const numericRows = [...new Set([0, 10, 20, 50, 100, session.horizon])]
+    .toSorted((a, b) => a - b)
+    .map((h) => ({ h, ...projectOutlook(cumulative, distributions[0], distributions[1], h) }));
   const reviewSearch = new URLSearchParams(location.search);
   reviewSearch.set("view", "review");
   const reviewHref = `${location.pathname}?${reviewSearch}#review-member-${focusMemberId}`;
@@ -337,26 +197,21 @@ function OutlookWorkspace({
   });
   if (selection.seasonMasterId) matchParams.set("seasonMasterId", selection.seasonMasterId);
   const matchHref = withReturnTo(`/matches?${matchParams}`, currentInternalLocation(location));
-  const chosenCounts = ["counts", "example"].includes(session.entries[0].source.kind);
-  const recentCounts = countsPerTwenty(recent[0]);
-  const focusCounts = countsPerTwenty(focus);
-  const lessLow =
-    chosenCounts &&
-    compareRationals(
-      subtractRationals(focusCounts[2], recentCounts[2]),
-      subtractRationals(recentCounts[3], focusCounts[3]),
-    ) < 0;
-  const moreWins = chosenCounts && compareRationals(focusCounts[0], recentCounts[0]) > 0;
-  const nextOutcomes = nextMatchOutcomes(cumulative).filter((outcome) =>
-    crossing.current === "ahead"
-      ? outcome.relation !== "ahead"
-      : crossing.current === "behind"
-        ? outcome.relation !== "behind"
+  const nextOutcomes = nextMatchOutcomes(cumulative).filter((next) =>
+    outcome.crossing.current === "ahead"
+      ? next.relation !== "ahead"
+      : outcome.crossing.current === "behind"
+        ? next.relation !== "behind"
         : true,
   );
+  const playerProps = { response, cumulative, session, names, memberIds: ids, change };
+
   return (
-    <div className="grid min-w-0 gap-6">
-      <div className="@container/outlook-people grid max-w-2xl gap-1" data-outlook-preserve-draft>
+    <div className="grid min-w-0 grid-cols-1 gap-6">
+      <div
+        className="@container/outlook-people grid max-w-2xl min-w-0 grid-cols-1 gap-2"
+        data-outlook-preserve-draft
+      >
         <div className="grid min-w-0 gap-4 @xs/outlook-people:grid-cols-2">
           {([0, 1] as const).map((role) => (
             <SelectField
@@ -373,369 +228,207 @@ function OutlookWorkspace({
           ))}
         </div>
         <p className={contentText.supporting}>
-          人物を変更すると、直近の成績に戻り、保持も解除されます。
+          選択した範囲の{cumulative.games}戦をもとに、この先の成績を試せます。
         </p>
       </div>
-      <section aria-labelledby="outlook-conclusion" className="min-w-0">
-        <OutlookWorkspaceLayout
-          chart={
-            <div className="grid min-w-0 gap-4">
-              <div className={cn("grid gap-2", readableTextWidthClass)}>
-                <h2 id="outlook-conclusion" className={contentText.heading}>
-                  {changed
-                    ? "試している成績が続くと"
-                    : `直近${response.recent.matchCount}戦の成績が続くと`}
+      {session.notice ? (
+        <p className={contentText.body} role="status">
+          {session.notice}
+        </p>
+      ) : null}
+      <TabsRoot
+        value={session.task}
+        onValueChange={(task) =>
+          change((current) => ({ ...current, task: task as OutlookSession["task"] }))
+        }
+      >
+        <TabsList aria-label="見通しの使い方" variant="underline">
+          <TabsTab value="performance">成績から試す</TabsTab>
+          <TabsTab value="goal">戦数から考える</TabsTab>
+        </TabsList>
+        <TabsPanel value="performance" keepMounted>
+          <div className="grid min-w-0 grid-cols-1 gap-6 pt-6 lg:grid-cols-[minmax(18rem,2fr)_minmax(0,3fr)]">
+            <section
+              className="grid min-w-0 grid-cols-1 content-start gap-4"
+              aria-labelledby="outlook-assumptions"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 id="outlook-assumptions" className={contentText.heading}>
+                  この先に続ける成績
                 </h2>
-                <p className={contentText.primary} aria-live="off">
-                  {conclusion}
-                </p>
-                {response.recent.qualityStatus === "reference" ? (
-                  <p className={contentText.body}>直近の実績が少ないため、見通しは参考値です。</p>
-                ) : null}
-                {session.notice ? (
-                  <p className={contentText.body} role="status">
-                    {session.notice}
-                  </p>
-                ) : null}
+                <Button
+                  variant="quiet"
+                  size="sm"
+                  disabled={session.history.length === 0 && !session.gesture}
+                  icon={<Undo2 aria-hidden="true" className="size-4" />}
+                  onClick={() => change(undoOutlook)}
+                >
+                  1つ戻す
+                </Button>
               </div>
-              <div className="grid min-w-0 gap-2">
+              {displayRoles.map(({ memberId, role }) => (
+                <OutlookPlayerEditor key={memberId} {...playerProps} role={role} />
+              ))}
+              <p className={contentText.supporting}>
+                初期値は作品全体の直近{response.recent.matchCount}戦です。
+                {response.recent.qualityStatus === "reference"
+                  ? "直近の実績が少ないため、見通しは参考値です。"
+                  : ""}
+              </p>
+            </section>
+            <div className="grid min-w-0 grid-cols-1 content-start gap-6">
+              <section className="grid min-w-0 gap-2" aria-labelledby="outlook-conclusion">
+                <h2
+                  ref={resultHeading}
+                  id="outlook-conclusion"
+                  tabIndex={-1}
+                  className={contentText.heading}
+                >
+                  この成績が続くと
+                </h2>
+                <p className={contentText.primary}>{outcome.headline}</p>
+                {outcome.detail ? <p className={contentText.supporting}>{outcome.detail}</p> : null}
+                <div className="flex flex-wrap gap-2" data-outlook-preserve-draft>
+                  {eventHorizon !== null ? (
+                    <Button
+                      size="sm"
+                      variant="quiet"
+                      onClick={() => {
+                        change((current) => ({
+                          ...current,
+                          horizon: eventHorizon,
+                          horizonText: String(eventHorizon),
+                          chartRange: Math.max(current.chartRange, rangeFor(eventHorizon)) as
+                            | 100
+                            | 500
+                            | 1000,
+                        }));
+                        requestAnimationFrame(() => {
+                          if (chartHeading.current) revealPageElement(chartHeading.current);
+                        });
+                      }}
+                    >
+                      {eventHorizon}戦後を見る
+                    </Button>
+                  ) : null}
+                  <OutlookScenarioComparison
+                    session={session}
+                    cumulative={cumulative}
+                    names={names}
+                    memberIds={ids}
+                    change={change}
+                  />
+                </div>
+              </section>
+              <div ref={chartHeading} className="min-w-0">
                 <OutlookChart
                   key={`${session.key}|${session.artifactId}`}
-                  points={chartPoints}
-                  recent={recentPoints}
-                  examples={examplePoints}
-                  sameLine={
-                    compareRationals(
-                      subtractRationals(distributionMean(rival), distributionMean(focus)),
-                      subtractRationals(distributionMean(recent[1]), distributionMean(recent[0])),
-                    ) === 0
-                  }
-                  recentCount={response.recent.matchCount}
+                  cumulative={cumulative}
+                  distributions={distributions}
+                  names={names}
+                  memberIds={ids}
                   horizon={session.horizon}
-                  horizonControl={horizonControl}
-                  pinControl={
-                    <OutlookComparisonControl
-                      session={session}
-                      names={names}
-                      memberIds={ids}
-                      change={change}
-                    />
-                  }
                   horizonText={session.horizonText}
+                  range={session.chartRange}
+                  marker={
+                    eventHorizon === null
+                      ? null
+                      : { h: eventHorizon, label: `${eventHorizon}戦後に${outcome.eventLabel}` }
+                  }
                   onHorizonChange={selectHorizon}
-                  currentGap={outlookGapParts(selectedProjection.gap, names)}
-                  heldGap={pinnedProjection ? outlookGapParts(pinnedProjection.gap, names) : null}
-                  pinnedGap={pinnedProjection ? rationalToNumber(pinnedProjection.gap) : null}
-                  pinnedPlotEndGap={
-                    session.pinned
-                      ? rationalToNumber(
-                          projectOutlook(
-                            cumulative,
-                            session.pinned[0].distribution,
-                            session.pinned[1].distribution,
-                            100,
-                          ).gap,
-                        )
-                      : null
-                  }
-                  marker={marker !== null && marker <= 100n ? Number(marker) : null}
-                  markerLabel={conclusion}
-                  focusName={names[0]}
-                  rivalName={names[1]}
-                  gesturing={Boolean(session.gesture)}
-                  exampleStatus={
-                    !session.noise
-                      ? undefined
-                      : session.gesture
-                        ? "操作後に展開例を更新"
-                        : examples === null
-                          ? "展開例を表示できません"
-                          : examples?.constantPerGameDifference
-                            ? "この内訳ではブレなし"
-                            : examples && examples.distinctCandidateCount < 3
-                              ? `展開は${examples.distinctCandidateCount}例（一部重複）`
-                              : undefined
+                  horizonControl={
+                    <div className="grid min-w-0 grid-cols-2 gap-4" data-outlook-preserve-draft>
+                      <OutlookHorizonControl
+                        horizon={session.horizon}
+                        horizonText={session.horizonText}
+                        onChange={selectHorizon}
+                      />
+                      <SelectField
+                        label="表示範囲"
+                        value={String(session.chartRange)}
+                        options={[100, 500, 1000].map((range) => ({
+                          value: String(range),
+                          label: `${range}戦`,
+                        }))}
+                        onValueChange={(value) =>
+                          change((current) => ({
+                            ...current,
+                            chartRange: Number(value) as 100 | 500 | 1000,
+                          }))
+                        }
+                      />
+                    </div>
                   }
                 />
-                <CheckboxField
-                  label="順位のブレも見る"
-                  description="3つの展開例を重ねます。確率や上下限を示すものではありません。"
-                  checked={session.noise}
-                  onChange={(event) => {
-                    const checked = event.target.checked;
-                    change((current) => ({ ...current, noise: checked }));
-                  }}
-                />
+              </div>
+              <div>
+                <OutlookNoiseDialog {...playerProps} />
               </div>
             </div>
-          }
-          editor={
-            <section aria-labelledby="outlook-editor-heading" className="grid min-w-0 gap-4">
-              <div className="grid min-w-0 gap-2" data-outlook-preserve-draft>
-                <h3 id="outlook-editor-heading" className={contentText.heading}>
-                  これからの成績
-                </h3>
-                <TabsRoot
-                  value={String(session.editor)}
-                  onValueChange={(value) =>
-                    change((current) => ({ ...current, editor: Number(value) as OutlookRole }))
-                  }
-                >
-                  <div className="grid min-w-0 gap-4">
-                    <TabsList aria-label="調整する人" activateOnFocus={false}>
-                      {displayRoles.map(({ memberId, role }) => (
-                        <TabsTab key={memberId} value={String(role)} aria-label={names[role]}>
-                          <span className="grid gap-1">
-                            <MemberSequenceLabel memberId={memberId}>
-                              {names[role]}
-                            </MemberSequenceLabel>
-                            <span className={cn(contentText.body, "tabular-nums")}>
-                              {outlookAverage(distributionMean(session.entries[role].distribution))}
-                              位
-                            </span>
-                          </span>
-                        </TabsTab>
-                      ))}
-                    </TabsList>
-                    <TabsPanel value={String(session.editor)}>
-                      <div className="grid min-w-0 gap-4">
-                        <div
-                          className="flex flex-wrap items-center gap-2"
-                          data-outlook-preserve-draft
-                        >
-                          <Button
-                            size="sm"
-                            variant="quiet"
-                            icon={<Undo2 />}
-                            disabled={!session.history.length && !session.gesture}
-                            onClick={() =>
-                              change((current) => undoOutlook(finishOutlookGesture(current)))
-                            }
-                          >
-                            元に戻す
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="quiet"
-                            aria-label={`${names[session.editor]}を直近の成績に戻す`}
-                            onClick={() =>
-                              change((current) =>
-                                applyOutlookDistribution(
-                                  current,
-                                  current.editor,
-                                  recent[current.editor],
-                                  {
-                                    kind: "recent",
-                                    artifactId: response.artifact.artifactId,
-                                    matchCount: response.recent.matchCount,
-                                    ...(response.recent.period
-                                      ? { period: response.recent.period }
-                                      : {}),
-                                  },
-                                ),
-                              )
-                            }
-                          >
-                            直近の成績に戻す
-                          </Button>
-                        </div>
-                        <TabsRoot
-                          value={session.method}
-                          onValueChange={(value) =>
-                            change((current) => ({
-                              ...updateOutlookEntry(current, current.editor, { error: undefined }),
-                              method: value as "mean" | "counts",
-                            }))
-                          }
-                        >
-                          <div className="grid min-w-0 gap-4">
-                            <TabsList
-                              aria-label="成績の入力方法"
-                              variant="underline"
-                              activateOnFocus={false}
-                            >
-                              <TabsTab value="mean">平均を変えたら</TabsTab>
-                              <TabsTab value="counts">回数を変えたら</TabsTab>
-                            </TabsList>
-                            <TabsPanel value={session.method}>
-                              <div className="grid min-w-0 gap-2">
-                                <OutlookEditor
-                                  key={session.editor}
-                                  session={session}
-                                  name={names[session.editor]}
-                                  change={change}
-                                />
-                                {!(
-                                  session.entries[session.editor].source.kind === "counts" &&
-                                  session.method === "counts"
-                                ) &&
-                                !(
-                                  session.entries[session.editor].source.kind === "average" &&
-                                  session.method === "mean"
-                                ) ? (
-                                  <p className={contentText.supporting}>
-                                    {outlookSourceLabel(
-                                      session.entries[session.editor].source,
-                                      session.artifactId,
-                                    )}
-                                  </p>
-                                ) : null}
-                              </div>
-                            </TabsPanel>
-                          </div>
-                        </TabsRoot>
-                      </div>
-                    </TabsPanel>
+          </div>
+        </TabsPanel>
+        <TabsPanel value="goal" keepMounted>
+          <div className="min-w-0 pt-6">
+            {session.task === "goal" ? (
+              <OutlookGoalPanel
+                {...playerProps}
+                recent={recent}
+                horizonControl={
+                  <OutlookHorizonControl
+                    label="目標の戦数"
+                    horizon={session.goalHorizon}
+                    horizonText={session.goalHorizonText}
+                    onChange={({ horizon, horizonText }) =>
+                      change((current) => ({
+                        ...current,
+                        goalHorizon: horizon,
+                        goalHorizonText: horizonText,
+                      }))
+                    }
+                  />
+                }
+                opponentEditor={<OutlookPlayerEditor {...playerProps} role={1} />}
+                onUsePerformance={usePerformance}
+                reviewLinks={
+                  <div className="grid gap-2">
+                    <h3 className={contentText.heading}>実際の戦績で考える</h3>
+                    <div className="flex flex-wrap gap-2">
+                      <LinkButton variant="secondary" size="sm" to={reviewHref}>
+                        {names[0]}の行動仮説を見る
+                      </LinkButton>
+                      <LinkButton variant="quiet" size="sm" to={matchHref}>
+                        {selection.seasonMasterId
+                          ? "このシーズンの確定戦績を見る"
+                          : "この作品の確定戦績を見る"}
+                      </LinkButton>
+                    </div>
                   </div>
-                </TabsRoot>
-              </div>
-              {([0, 1] as const)
-                .filter(
-                  (role) =>
-                    session.entries[role].meanDraft !== undefined &&
-                    (role !== session.editor || session.method !== "mean"),
-                )
-                .map((role) => (
-                  <div key={role} data-outlook-preserve-draft>
-                    <ContentWithActions
-                      actions={
-                        <>
-                          <Button
-                            size="sm"
-                            variant="quiet"
-                            onClick={() =>
-                              change((current) => ({ ...current, editor: role, method: "mean" }))
-                            }
-                          >
-                            入力へ戻る
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="quiet"
-                            onClick={() =>
-                              change((current) =>
-                                updateOutlookEntry(current, role, {
-                                  meanDraft: undefined,
-                                  error: undefined,
-                                }),
-                              )
-                            }
-                          >
-                            入力を破棄
-                          </Button>
-                        </>
-                      }
-                    >
-                      <p className={contentText.body}>{names[role]}の平均は入力中です。</p>
-                    </ContentWithActions>
-                  </div>
-                ))}
-            </section>
-          }
-          results={
-            <OutlookResults
-              cumulative={cumulative}
-              names={names}
-              memberIds={ids}
-              session={session}
-            />
-          }
-        />
-      </section>
-      <OutlookRequirements
-        response={response}
-        focusId={focusMemberId}
-        names={names}
-        cumulative={cumulative}
-        session={session}
-        change={change}
-        recent={recent[0]}
-        requirements={requirements}
-      />
-      {nextOutcomes.length ? (
-        <Disclosure
-          summary="実際の次戦でも同率・逆転が可能です"
-          ariaLabel="次戦の順位の組合せ"
-          triggerLayout="flush-horizontal"
-          panelSpacing="sm"
-        >
-          <p className={cn(contentText.body, readableTextWidthClass)}>
-            {nextOutcomes
-              .map(
-                (outcome) =>
-                  `${names[0]}${outcome.focusRank}位・${names[1]}${outcome.rivalRank}位で${outcome.relation === "tied" ? "同率" : `${outcome.relation === "ahead" ? names[0] : names[1]}が上`}`,
-              )
-              .join("。")}
-          </p>
-        </Disclosure>
-      ) : null}
-      <OutlookPastExamples
-        response={response}
-        focusId={focusMemberId}
-        focusName={names[0]}
-        cumulative={cumulative}
-        required={required}
-        session={session}
-        change={change}
-      />
-      <section
-        className="grid gap-4"
-        aria-labelledby="outlook-review-heading"
-        data-outlook-preserve-draft
-      >
-        <div className={cn("grid gap-2", readableTextWidthClass)}>
-          <h2 id="outlook-review-heading" className={contentText.heading}>
-            戦績を振り返る
-          </h2>
-          <p className={contentText.body}>
-            {improves && targetMean
-              ? `直近より平均順位を${formatRational(subtractRationals(recentMean, targetMean), 2)}位良くし、平均${formatRational(targetMean, 2)}位以下を${session.horizon}戦続けると上回ります。`
-              : recentCanReach
-                ? `直近の成績を${session.horizon}戦続けると上回ります。好調だった試合を振り返りましょう。`
-                : required.kind === "mean"
-                  ? "直近の平均は条件を満たしますが、順位の内訳が相手の指定と両立しません。相手の指定も踏まえ、内訳を見直せます。"
-                  : `${session.horizon}戦後に上回るには、相手の成績か続ける戦数を変えて検討できます。`}
-          </p>
-          {lessLow ? (
-            <p className={contentText.body}>下位だった試合で、共通する展開を確かめる。</p>
-          ) : null}
-          {moreWins ? (
-            <p className={contentText.body}>勝ち切れなかった試合で、見直せる点を探す。</p>
-          ) : null}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <LinkButton variant="secondary" size="sm" to={reviewHref}>
-            {names[0]}の行動仮説を見る
-          </LinkButton>
-          <LinkButton variant="quiet" size="sm" to={matchHref}>
-            {selection.seasonMasterId ? "このシーズンの確定戦績を見る" : "この作品の確定戦績を見る"}
-          </LinkButton>
-        </div>
-      </section>
+                }
+              />
+            ) : null}
+          </div>
+        </TabsPanel>
+      </TabsRoot>
       <Disclosure
-        summary="計算に使った実績と詳しい数値"
-        ariaLabel="計算に使った実績と詳しい数値"
+        summary="数値と計算の前提"
+        ariaLabel="数値と計算の前提"
         triggerLayout="flush-horizontal"
         panelSpacing="sm"
       >
-        <div className="grid min-w-0 gap-4">
-          <p className={cn(contentText.body, readableTextWidthClass)}>
-            直近{response.recent.matchCount}戦のままでは、
-            {crossingLabel(baselineCrossing, names[0], names[1])}
-          </p>
+        <div className="grid min-w-0 grid-cols-1 gap-4">
           <DataTable
-            caption={{ content: "今後の総合平均順位", visibility: "screen-reader" }}
+            caption={{ content: "今後の総合平均順位の詳しい数値", visibility: "screen-reader" }}
             rows={numericRows}
             getRowKey={(row) => String(row.h)}
             density="compact"
-            minWidth="36rem"
+            minWidth="32rem"
             stickyRowHeader
             columns={[
               {
                 key: "h",
                 header: "この先",
                 rowHeader: true,
-                renderCell: (row) => (row.h === 0 ? "現在" : `${row.h}戦`),
+                renderCell: (row) => (row.h === 0 ? "現在" : `${row.h}戦後`),
               },
               ...displayRoles.map(({ memberId, role }) => ({
                 key: memberId,
@@ -755,19 +448,31 @@ function OutlookWorkspace({
               },
             ]}
           />
-          <div className={cn("grid gap-1", readableTextWidthClass)}>
-            <p className={contentText.supporting}>
+          <div className={cn("grid gap-2", readableTextWidthClass)}>
+            <p className={contentText.body}>
               累積は選択した範囲の{response.scope.matchCount}戦。初期値は作品全体の直近
               {response.recent.matchCount}戦
               {response.recent.period
                 ? `（${formatDateOnly(response.recent.period.startedAt)}〜${formatDateOnly(response.recent.period.endedAt)}）`
                 : ""}
-              です。表示を丸めても、同率・逆転は丸め前の値で判定しています。
+              です。この先も同じ平均の成績が続く条件で計算しています。
             </p>
             <p className={contentText.supporting}>
-              {names[0]}の直近平均：{exactAverageFraction(recent[0])}、{names[1]}：
-              {exactAverageFraction(recent[1])}（順位合計 / 戦数）。
+              表示を丸めても、同率・逆転は丸め前の値で判定しています。{names[0]}の直近平均：
+              {exactAverageFraction(recent[0])}、{names[1]}：{exactAverageFraction(recent[1])}
+              （順位合計 / 戦数）。
             </p>
+            {nextOutcomes.length ? (
+              <p className={contentText.body}>
+                実際の次戦では、
+                {nextOutcomes
+                  .map(
+                    (next) =>
+                      `${names[0]}${next.focusRank}位・${names[1]}${next.rivalRank}位で${next.relation === "tied" ? "同率" : `${next.relation === "ahead" ? names[0] : names[1]}が上`}`,
+                  )
+                  .join("。")}
+              </p>
+            ) : null}
           </div>
         </div>
       </Disclosure>

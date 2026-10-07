@@ -10,28 +10,32 @@ type Drag = {
   before: Selection;
 };
 
-/** The plot chooses 1–100 by position; keyboard input also reaches the numeric range beyond it. */
+/** Pointer input follows the visible range; keyboard input reaches the full numeric range. */
 export function OutlookChartScrubber({
   horizon,
   horizonText,
+  range,
+  maxHorizon = 1000,
   valueText,
   descriptionId,
   onChange,
 }: Selection & {
+  range: 100 | 500 | 1000;
+  maxHorizon?: 100 | 1000;
   valueText: string;
   descriptionId: string;
   onChange: (selection: Selection) => void;
 }) {
   const drag = useRef<Drag | null>(null);
   const select = (value: number) => {
-    const next = Math.max(1, Math.min(1000, value));
+    const next = Math.max(1, Math.min(maxHorizon, value));
     onChange({ horizon: next, horizonText: String(next) });
   };
   const selectPosition = (event: PointerEvent<HTMLDivElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     if (rect.width <= 0) return;
     select(
-      Math.max(1, Math.min(100, Math.round(((event.clientX - rect.left) / rect.width) * 100))),
+      Math.max(1, Math.min(range, Math.round(((event.clientX - rect.left) / rect.width) * range))),
     );
   };
   const cancel = () => {
@@ -45,7 +49,7 @@ export function OutlookChartScrubber({
       tabIndex={0}
       aria-label="グラフで確認する戦数"
       aria-valuemin={1}
-      aria-valuemax={1000}
+      aria-valuemax={maxHorizon}
       aria-valuenow={horizon}
       aria-valuetext={valueText}
       aria-describedby={descriptionId}
@@ -111,7 +115,7 @@ export function OutlookChartScrubber({
             next = 1;
             break;
           case "End":
-            next = 1000;
+            next = maxHorizon;
             break;
           case "Escape":
             if (drag.current) {

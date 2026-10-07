@@ -400,7 +400,13 @@ function WholeCountEditor({ session, name, change }: Props) {
                       }),
                     );
                 }}
-                onBlur={() => {
+                onBlur={(event) => {
+                  const target = event.relatedTarget;
+                  if (
+                    target instanceof HTMLElement &&
+                    target.closest("[data-outlook-preserve-draft]")
+                  )
+                    return;
                   setText(undefined);
                   change((current) =>
                     updateOutlookEntry(finishOutlookGesture(current), role, { error: undefined }),

@@ -31,7 +31,7 @@ export type OutlookSession = {
   artifactId: string;
   entries: [OutlookEntry, OutlookEntry];
   history: Pair[];
-  comparisonBefore?: Pair | undefined;
+  pinned?: Pair | undefined;
   gesture?: { role: OutlookRole; before: Pair } | undefined;
   editor: OutlookRole;
   method: "mean" | "counts";
@@ -47,6 +47,29 @@ export const otherRole = (role: OutlookRole): OutlookRole => (role === 0 ? 1 : 0
 function snapshot(session: OutlookSession): Pair {
   return session.entries.map(({ distribution, source }) => ({ distribution, source })) as Pair;
 }
+
+export function canPinOutlook(session: OutlookSession): boolean {
+  if (
+    session.gesture ||
+    session.entries.some((entry) => entry.meanDraft !== undefined || entry.error !== undefined)
+  )
+    return false;
+  const pinned = session.pinned;
+  return (
+    !pinned ||
+    session.entries.some(
+      (entry, role) =>
+        !distributionsEqual(entry.distribution, pinned[role as OutlookRole].distribution),
+    )
+  );
+}
+
+export function pinOutlook(session: OutlookSession): OutlookSession {
+  return canPinOutlook(session)
+    ? { ...session, pinned: snapshot(session), notice: undefined }
+    : session;
+}
+
 function restore(session: OutlookSession, pair: Pair, clearDrafts = true): OutlookSession {
   return {
     ...session,
@@ -117,7 +140,7 @@ export function adoptOutlookSummary(
     ...current,
     artifactId,
     history: [],
-    comparisonBefore: undefined,
+    pinned: undefined,
     gesture: undefined,
     entries: followRecent
       ? (recent.map((entry, i) => ({
@@ -125,9 +148,11 @@ export function adoptOutlookSummary(
           meanDraft: current.entries[i as OutlookRole].meanDraft,
         })) as OutlookSession["entries"])
       : current.entries,
-    notice: followRecent
-      ? "直近の成績と総合成績を更新しました。"
-      : "試している成績を残して実績を更新しました。",
+    notice:
+      (followRecent
+        ? "直近の成績と総合成績を更新しました。"
+        : "試している成績を残して実績を更新しました。") +
+      (current.pinned ? "比較用に保持した成績を解除しました。" : ""),
   };
 }
 
@@ -172,12 +197,10 @@ export function applyOutlookDistribution(
     meanDraft: undefined,
     error: undefined,
   });
-  const before = session.gesture ? undefined : snapshot(session);
   // Fifty complete gestures bound this one ephemeral comparison's history.
   return {
     ...next,
-    history: before ? [...session.history, before].slice(-50) : session.history,
-    comparisonBefore: before ?? session.comparisonBefore,
+    history: session.gesture ? session.history : [...session.history, snapshot(session)].slice(-50),
     notice: undefined,
   };
 }
@@ -195,11 +218,7 @@ export function finishOutlookGesture(session: OutlookSession, cancel = false): O
   const next =
     cancel || unchanged
       ? restore(session, before, false)
-      : {
-          ...session,
-          history: [...session.history, before].slice(-50),
-          comparisonBefore: before,
-        };
+      : { ...session, history: [...session.history, before].slice(-50) };
   return { ...next, gesture: undefined };
 }
 
@@ -209,7 +228,6 @@ export function undoOutlook(session: OutlookSession): OutlookSession {
   return {
     ...restore(session, last),
     history: session.history.slice(0, -1),
-    comparisonBefore: undefined,
     notice: undefined,
   };
 }

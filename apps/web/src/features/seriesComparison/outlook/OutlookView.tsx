@@ -26,7 +26,8 @@ import { seriesAnalysisScopeSignature } from "@/features/seriesComparison/model/
 import { normalizeOutlookPair } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import type { SeriesAnalysisUrlState } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { OutlookChart } from "@/features/seriesComparison/outlook/OutlookChart";
-import { getOutlookComparison } from "@/features/seriesComparison/outlook/outlookComparison";
+import { outlookGapParts } from "@/features/seriesComparison/outlook/outlookComparison";
+import { OutlookComparisonControl } from "@/features/seriesComparison/outlook/OutlookComparisonControl";
 import { OutlookEditor } from "@/features/seriesComparison/outlook/OutlookEditor";
 import { OutlookHorizonControl } from "@/features/seriesComparison/outlook/OutlookHorizonControl";
 import {
@@ -195,22 +196,25 @@ function OutlookWorkspace({
   );
   const focus = session.entries[0].distribution;
   const rival = session.entries[1].distribution;
-  const { visible: comparison, announcement } = getOutlookComparison({
-    session,
-    cumulative,
-    names,
-  });
-  const comparisonGap =
-    comparison && session.horizon <= 100
-      ? rationalToNumber(
-          projectOutlook(
-            cumulative,
-            comparison.before[0].distribution,
-            comparison.before[1].distribution,
-            session.horizon,
-          ).gap,
-        )
-      : null;
+  const selectedProjection = projectOutlook(cumulative, focus, rival, session.horizon);
+  const pinnedProjection = session.pinned
+    ? projectOutlook(
+        cumulative,
+        session.pinned[0].distribution,
+        session.pinned[1].distribution,
+        session.horizon,
+      )
+    : null;
+  const selectHorizon = useCallback(
+    (next: Pick<OutlookSession, "horizon" | "horizonText">) => {
+      change((current) =>
+        current.horizon === next.horizon && current.horizonText === next.horizonText
+          ? current
+          : { ...current, ...next },
+      );
+    },
+    [change],
+  );
   const horizonControl = useMemo(
     () => (
       <OutlookHorizonControl
@@ -352,9 +356,6 @@ function OutlookWorkspace({
   );
   return (
     <div className="grid min-w-0 gap-6">
-      <span role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-        {announcement}
-      </span>
       <div className="@container/outlook-people grid max-w-2xl gap-1" data-outlook-preserve-draft>
         <div className="grid min-w-0 gap-4 @xs/outlook-people:grid-cols-2">
           {([0, 1] as const).map((role) => (
@@ -371,7 +372,9 @@ function OutlookWorkspace({
             />
           ))}
         </div>
-        <p className={contentText.supporting}>人物を変更すると、直近の成績に戻ります。</p>
+        <p className={contentText.supporting}>
+          人物を変更すると、直近の成績に戻り、保持も解除されます。
+        </p>
       </div>
       <section aria-labelledby="outlook-conclusion" className="min-w-0">
         <OutlookWorkspaceLayout
@@ -397,6 +400,7 @@ function OutlookWorkspace({
               </div>
               <div className="grid min-w-0 gap-2">
                 <OutlookChart
+                  key={`${session.key}|${session.artifactId}`}
                   points={chartPoints}
                   recent={recentPoints}
                   examples={examplePoints}
@@ -409,7 +413,31 @@ function OutlookWorkspace({
                   recentCount={response.recent.matchCount}
                   horizon={session.horizon}
                   horizonControl={horizonControl}
-                  comparisonGap={comparisonGap}
+                  pinControl={
+                    <OutlookComparisonControl
+                      session={session}
+                      names={names}
+                      memberIds={ids}
+                      change={change}
+                    />
+                  }
+                  horizonText={session.horizonText}
+                  onHorizonChange={selectHorizon}
+                  currentGap={outlookGapParts(selectedProjection.gap, names)}
+                  heldGap={pinnedProjection ? outlookGapParts(pinnedProjection.gap, names) : null}
+                  pinnedGap={pinnedProjection ? rationalToNumber(pinnedProjection.gap) : null}
+                  pinnedPlotEndGap={
+                    session.pinned
+                      ? rationalToNumber(
+                          projectOutlook(
+                            cumulative,
+                            session.pinned[0].distribution,
+                            session.pinned[1].distribution,
+                            100,
+                          ).gap,
+                        )
+                      : null
+                  }
                   marker={marker !== null && marker <= 100n ? Number(marker) : null}
                   markerLabel={conclusion}
                   focusName={names[0]}
@@ -602,15 +630,6 @@ function OutlookWorkspace({
                     </ContentWithActions>
                   </div>
                 ))}
-              {comparison ? (
-                <div role="group" aria-label="成績の変更内容" className="grid min-w-0 gap-1">
-                  {comparison.changes.map((item) => (
-                    <p key={item.role} className={cn(contentText.body, "text-pretty tabular-nums")}>
-                      {item.description}。{item.average}
-                    </p>
-                  ))}
-                </div>
-              ) : null}
             </section>
           }
           results={
@@ -619,7 +638,6 @@ function OutlookWorkspace({
               names={names}
               memberIds={ids}
               session={session}
-              comparison={comparison}
             />
           }
         />
@@ -705,11 +723,6 @@ function OutlookWorkspace({
             直近{response.recent.matchCount}戦のままでは、
             {crossingLabel(baselineCrossing, names[0], names[1])}
           </p>
-          {comparison && comparison.beforeArrival !== comparison.afterArrival ? (
-            <p className={cn(contentText.body, readableTextWidthClass)}>
-              直前の成績変更による到達時点：{comparison.beforeArrival} → {comparison.afterArrival}。
-            </p>
-          ) : null}
           <DataTable
             caption={{ content: "今後の総合平均順位", visibility: "screen-reader" }}
             rows={numericRows}

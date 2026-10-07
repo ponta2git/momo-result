@@ -32,14 +32,29 @@ export function OutlookLoading() {
                   <Skeleton className="h-5 w-36 max-w-full" />
                   <Skeleton className="h-4 w-64 max-w-full" />
                 </div>
+                <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-[7rem_minmax(0,1fr)]">
+                  <div className="grid min-w-0 grid-cols-1 gap-2">
+                    <Skeleton className="h-5 w-16" />
+                    <div className="grid min-w-0 grid-cols-1 gap-1">
+                      <Skeleton className="h-11 w-28 rounded-sm pointer-fine:h-10" />
+                      <Skeleton className="h-4 w-20" />
+                    </div>
+                  </div>
+                  <div className="grid min-w-0 grid-cols-1 gap-2 self-start">
+                    <Skeleton className="h-11 w-36 max-w-full rounded-sm pointer-fine:h-9" />
+                    <Skeleton className="h-4 w-52 max-w-full" />
+                  </div>
+                </div>
                 <div className="grid min-w-0 grid-cols-1 gap-2">
-                  <Skeleton className="h-5 w-16" />
+                  <Skeleton className="h-5 w-20" />
                   <div className="grid min-w-0 grid-cols-1 gap-1">
-                    <Skeleton className="h-11 w-28 rounded-sm pointer-fine:h-10" />
-                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-5 w-32 max-w-full" />
+                    <Skeleton className="h-5 w-24 max-w-full" />
+                    <Skeleton className="h-5 w-24 max-w-full" />
                   </div>
                 </div>
                 <Skeleton className="h-[270px] w-full" />
+                <Skeleton className="h-4 w-96 max-w-full" />
                 <Skeleton className="h-4 w-72 max-w-full" />
               </div>
               <div className="min-w-0">
@@ -107,10 +122,6 @@ export function OutlookLoading() {
         results={
           <div className="grid min-w-0 grid-cols-1 gap-4">
             <Skeleton className="h-5 w-40 max-w-full" />
-            <div className="grid min-w-0 grid-cols-1 gap-1">
-              <Skeleton className="h-5 w-28 max-w-full" />
-              <Skeleton className="h-5 w-80 max-w-full" />
-            </div>
             <div aria-hidden="true" className="min-w-0" inert>
               <DataTable
                 caption={{ content: "総合平均順位の変化", visibility: "screen-reader" }}

@@ -42,6 +42,9 @@ function RoutedWorkspace({
       response={response}
       selection={{
         gameTitleId: response.artifact.gameTitleId,
+        ...(response.scope.kind === "season"
+          ? { seasonMasterId: response.scope.seasonMasterId }
+          : {}),
         view: "outlook",
         focusMemberId: memberIds[0],
         rivalMemberId: memberIds[1],
@@ -55,7 +58,7 @@ function renderOutlook(
   memberIds: readonly [string, string] = ["member_eu", "member_ponta"],
 ) {
   const queryClient = createTestQueryClient();
-  const tree = (summary: SeriesAnalysisOutlookSummary) => (
+  const tree = (summary: SeriesAnalysisOutlookSummary, people = memberIds) => (
     <QueryClientProvider client={queryClient}>
       <MemoryRouter
         initialEntries={[
@@ -63,7 +66,7 @@ function renderOutlook(
         ]}
       >
         <OutlookSessionOwner>
-          <RoutedWorkspace response={summary} memberIds={memberIds} />
+          <RoutedWorkspace response={summary} memberIds={people} />
         </OutlookSessionOwner>
       </MemoryRouter>
     </QueryClientProvider>
@@ -71,6 +74,7 @@ function renderOutlook(
   const result = render(tree(response));
   return {
     updateSummary: (summary: SeriesAnalysisOutlookSummary) => result.rerender(tree(summary)),
+    updateMembers: (people: readonly [string, string]) => result.rerender(tree(response, people)),
   };
 }
 
@@ -85,8 +89,27 @@ function displayedCounts(name = focusName) {
     .getAllByRole("definition")
     .map((value) => value.textContent);
 }
-function comparison() {
-  return screen.queryByRole("group", { name: "成績の変更内容" });
+function gapValue(label: "試している成績" | "保持した成績", horizon = 20) {
+  return (
+    within(screen.getByLabelText(`${horizon}戦後の差`)).queryByText(label, { selector: "dt" })
+      ?.nextElementSibling ?? null
+  );
+}
+function chartAxisLabels() {
+  return [...screen.getByRole("img").querySelectorAll("text")]
+    .slice(0, 3)
+    .map((label) => label.textContent);
+}
+function expectHeldPointInsideChart(horizon: number) {
+  const guide = screen.getByLabelText(`${horizon}戦後の確認位置`).querySelector("line")!;
+  const heldY = Number(
+    screen
+      .getByLabelText(`${horizon}戦後の保持した成績`)
+      .querySelector("circle")!
+      .getAttribute("cy"),
+  );
+  expect(heldY).toBeGreaterThanOrEqual(Number(guide.getAttribute("y1")));
+  expect(heldY).toBeLessThanOrEqual(Number(guide.getAttribute("y2")));
 }
 async function editPerson(user: ReturnType<typeof userEvent.setup>, name: string) {
   await user.click(
@@ -234,9 +257,6 @@ describe("OutlookView input and update boundaries", () => {
     expect(displayedCounts()).toEqual(preciseCounts);
     await user.click(screen.getByRole("button", { name: "4位から1位へ1回移す" }));
     expect(displayedCounts()).toEqual(["7回", "5回", "4回", "4回"]);
-    expect(screen.getByRole("group", { name: "成績の変更内容" })).toHaveTextContent(
-      "整数化して回数を調整",
-    );
     await user.click(screen.getByRole("button", { name: "元に戻す" }));
     expect(displayedCounts()).toEqual(preciseCounts);
     await user.click(screen.getByRole("tab", { name: "平均を変えたら" }));
@@ -259,9 +279,6 @@ describe("OutlookView input and update boundaries", () => {
         name: focusName,
       }),
     ).toHaveTextContent("2.80位");
-    expect(screen.getByRole("group", { name: "成績の変更内容" })).toHaveTextContent(
-      "4位から3位へ1回移す",
-    );
     await user.keyboard("{Enter}");
     await user.tab();
     await user.click(countField(3));
@@ -368,16 +385,21 @@ describe("OutlookView input and update boundaries", () => {
     const view = renderOutlook(response);
     await user.clear(meanField());
     await user.type(meanField(), "2.70{Enter}");
+    await user.click(screen.getByRole("button", { name: "今の成績を保持" }));
     await user.clear(meanField());
     await user.type(meanField(), "2.60");
     await user.click(screen.getByRole("tab", { name: "回数を変えたら" }));
     const before = displayedCounts();
-    expect(screen.getByRole("group", { name: "成績の変更内容" })).toBeInTheDocument();
+    expect(gapValue("保持した成績")).toBeInTheDocument();
     view.updateSummary(await correctedSummary(response));
     expect(displayedCounts()).toEqual(before);
-    expect(screen.queryByRole("group", { name: "成績の変更内容" })).not.toBeInTheDocument();
+    expect(gapValue("保持した成績")).not.toBeInTheDocument();
     expect(screen.getByText(`${focusName}の平均は入力中です。`)).toBeInTheDocument();
-    expect(screen.getByText("試している成績を残して実績を更新しました。")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "試している成績を残して実績を更新しました。比較用に保持した成績を解除しました。",
+      ),
+    ).toBeInTheDocument();
     const results = screen.getByRole("table", { name: "現在とこの先の総合平均順位" });
     expect(within(results).getByRole("row", { name: /現在/u })).toHaveTextContent("2.06位");
     await user.click(screen.getByRole("button", { name: "入力へ戻る" }));
@@ -522,7 +544,6 @@ describe("OutlookView input and update boundaries", () => {
     await editPerson(user, focusName);
     expect(displayedCounts()).toEqual(["4回", "2回", "7回", "7回"]);
     expect(screen.getByRole("button", { name: "元に戻す" })).toBeDisabled();
-    expect(screen.queryByRole("group", { name: "成績の変更内容" })).not.toBeInTheDocument();
   });
 
   it("replaces only the focus mean draft when applying a required mean from the rival editor", async () => {
@@ -544,93 +565,214 @@ describe("OutlookView input and update boundaries", () => {
     expect(meanField(rivalName)).toHaveValue("2.45");
   });
 
-  it("compares a held mean gesture with its starting result and clears that comparison on Undo", async () => {
+  it("keeps an explicit pair through edits, Undo and a recent reset until it is updated or released", async () => {
     const user = userEvent.setup();
     renderOutlook(await makeSeriesAnalysisOutlookSummary());
-    expect(comparison()).not.toBeInTheDocument();
+    expect(gapValue("保持した成績")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "今の成績を保持" }));
+    expect(screen.getByText(/^保持：/u)).toHaveTextContent(
+      `保持：${focusName} 2.85位、${rivalName} 2.45位`,
+    );
+    const held = gapValue("保持した成績")!.textContent;
+    await user.clear(meanField());
+    await user.type(meanField(), "2.40{Enter}");
+    await editPerson(user, rivalName);
+    await user.clear(meanField(rivalName));
+    await user.type(meanField(rivalName), "2.55{Enter}");
+    expect(gapValue("保持した成績")).toHaveTextContent(held!);
+    expect(gapValue("試している成績")).toHaveTextContent(/約0\.1346位.*いーゆーが上/u);
+    await user.click(screen.getByRole("button", { name: "元に戻す" }));
+    expect(meanField(rivalName)).toHaveValue("2.45");
+    expect(gapValue("保持した成績")).toHaveTextContent(held!);
+    await editPerson(user, focusName);
+    await user.click(screen.getByRole("button", { name: `${focusName}を直近の成績に戻す` }));
+    expect(meanField()).toHaveValue("2.85");
+    expect(gapValue("保持した成績")).toHaveTextContent(held!);
+    const update = screen.getByRole("button", { name: "保持を更新" });
+    expect(update).toHaveAttribute("aria-disabled", "true");
+    await user.click(update);
+    await user.click(screen.getByRole("button", { name: "元に戻す" }));
+    expect(meanField()).toHaveValue("2.40");
+    expect(gapValue("保持した成績")).toHaveTextContent(held!);
+    await user.click(screen.getByRole("button", { name: "保持を更新" }));
+    expect(screen.getByText(/^保持：/u)).toHaveTextContent(
+      `保持：${focusName} 2.40位、${rivalName} 2.45位`,
+    );
+    expect(gapValue("保持した成績")!.textContent).toBe(gapValue("試している成績")!.textContent);
+    await user.click(screen.getByRole("button", { name: "保持を解除" }));
+    expect(gapValue("保持した成績")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("20戦後の保持した成績")).not.toBeInTheDocument();
+    expect(meanField()).toHaveValue("2.40");
+    await user.click(screen.getByRole("button", { name: "元に戻す" }));
+    expect(meanField()).toHaveValue("2.85");
+    expect(screen.getByRole("button", { name: "元に戻す" })).toBeDisabled();
+  });
+
+  it("keeps pinning focusable but inactive for pending input, invalid means and an unfinished gesture", async () => {
+    const user = userEvent.setup();
+    renderOutlook(await makeSeriesAnalysisOutlookSummary());
+    const pin = screen.getByRole("button", { name: "今の成績を保持" });
     await user.clear(meanField());
     await user.type(meanField(), "2.60");
-    expect(comparison()).not.toBeInTheDocument();
-    const horizon = screen.getByRole("textbox", { name: "何戦後" });
-    await user.clear(horizon);
-    await user.type(horizon, "50");
-    await user.click(screen.getByRole("tab", { name: "回数を変えたら" }));
-    expect(comparison()).not.toBeInTheDocument();
-    await user.click(screen.getByRole("tab", { name: "平均を変えたら" }));
+    expect(pin).toHaveAttribute("aria-disabled", "true");
+    await user.click(pin);
+    expect(pin).toHaveFocus();
     expect(meanField()).toHaveValue("2.60");
+    expect(gapValue("保持した成績")).not.toBeInTheDocument();
+    await user.keyboard("{Enter}");
+    expect(gapValue("保持した成績")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "元に戻す" })).toBeDisabled();
+    await user.tab();
+    expect(screen.getByRole("slider", { name: "グラフで確認する戦数" })).toHaveFocus();
+    await user.keyboard("{ArrowRight}");
+    expect(screen.getByRole("textbox", { name: "何戦後" })).toHaveValue("21");
+    expect(meanField()).toHaveValue("2.60");
+    expect(gapValue("保持した成績", 21)).not.toBeInTheDocument();
+    await user.keyboard("{ArrowLeft}");
+    await user.clear(meanField());
+    await user.type(meanField(), "2.6001{Enter}");
+    expect(meanField()).toBeInvalid();
+    expect(pin).toHaveAttribute("aria-disabled", "true");
+    await user.click(pin);
+    expect(meanField()).toHaveValue("2.6001");
+    expect(gapValue("保持した成績")).not.toBeInTheDocument();
     await user.click(meanField());
     await user.keyboard("{Escape}");
     await user.tab();
     const slider = screen.getByRole("slider", { name: `${focusName}の平均順位を動かす` });
     expect(slider).toHaveFocus();
     await user.keyboard("{ArrowLeft>}");
-    expect(comparison()).toHaveTextContent(/2\.85位\s*→\s*2\.84位/u);
-    fireEvent.keyDown(slider, { key: "ArrowLeft", repeat: true });
-    fireEvent.keyDown(slider, { key: "ArrowLeft", repeat: true });
-    expect(meanField()).toHaveValue("2.82");
-    expect(comparison()).toHaveTextContent(/2\.85位\s*→\s*2\.82位/u);
+    expect(pin).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(pin);
+    expect(gapValue("保持した成績")).not.toBeInTheDocument();
     await user.keyboard("{/ArrowLeft}");
-    expect(comparison()).toHaveTextContent(/2\.85位\s*→\s*2\.82位/u);
-    await user.click(screen.getByRole("button", { name: "元に戻す" }));
-    expect(meanField()).toHaveValue("2.85");
-    expect(comparison()).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "元に戻す" })).toBeDisabled();
+    await user.click(pin);
+    expect(screen.getByText(/^保持：/u)).toHaveTextContent(`${focusName} 2.84位`);
   });
 
-  it("keeps both compared results on the selected horizon and retains numeric results outside the chart", async () => {
+  it.each(["person", "scope"] as const)(
+    "releases the held pair when the %s changes",
+    async (kind) => {
+      const user = userEvent.setup();
+      const response = await makeSeriesAnalysisOutlookSummary();
+      const view = renderOutlook(response);
+      await user.click(screen.getByRole("button", { name: "今の成績を保持" }));
+      expect(gapValue("保持した成績")).toBeInTheDocument();
+      if (kind === "person") view.updateMembers(["member_ponta", "member_eu"]);
+      else
+        view.updateSummary(
+          await makeSeriesAnalysisOutlookSummary({
+            ...response,
+            scope: { ...response.scope, kind: "season", seasonMasterId: "another-season" },
+          }),
+        );
+      expect(gapValue("保持した成績")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "今の成績を保持" })).not.toHaveAttribute(
+        "aria-disabled",
+        "true",
+      );
+    },
+  );
+
+  it("does not pin when a count draft or gesture loses focus to the inactive pin button", async () => {
+    const user = userEvent.setup();
+    renderOutlook(await makeSeriesAnalysisOutlookSummary());
+    await user.click(screen.getByRole("tab", { name: "回数を変えたら" }));
+    const pin = screen.getByRole("button", { name: "今の成績を保持" });
+    await user.clear(countField(3));
+    await user.type(countField(3), "20");
+    expect(countField(3)).toBeInvalid();
+    expect(pin).toHaveAttribute("aria-disabled", "true");
+    await user.click(pin);
+    expect(pin).toHaveFocus();
+    expect(countField(3)).toHaveValue("20");
+    expect(countField(3)).toBeInvalid();
+    expect(gapValue("保持した成績")).not.toBeInTheDocument();
+    await user.clear(countField(3));
+    await user.type(countField(3), "8");
+    expect(pin).toHaveAttribute("aria-disabled", "true");
+    await user.click(pin);
+    expect(pin).toHaveFocus();
+    expect(pin).toHaveAttribute("aria-disabled", "true");
+    expect(countField(3)).toHaveValue("8");
+    expect(gapValue("保持した成績")).not.toBeInTheDocument();
+    expect(displayedCounts()).toEqual(["4回", "2回", "8回", "6回"]);
+    await user.click(countField(3));
+    await user.keyboard("{Enter}");
+    await user.click(pin);
+    expect(screen.getByText(/^保持：/u)).toHaveTextContent(`${focusName} 2.80位`);
+  });
+
+  it("compares a pinned pair with a stable chart scale and retains numeric results outside the chart", async () => {
     const user = userEvent.setup();
     renderOutlook(await makeSeriesAnalysisOutlookSummary());
     await user.clear(meanField());
-    await user.type(meanField(), "2.40{Enter}");
+    await user.type(meanField(), "1.35{Enter}");
+    await user.click(screen.getByRole("button", { name: "今の成績を保持" }));
+    await user.clear(meanField());
+    await user.type(meanField(), "3.65{Enter}");
     const horizon = screen.getByRole("textbox", { name: "何戦後" });
-    const initialDifference = screen.getByLabelText("20戦後の差");
-    expect(initialDifference).toHaveTextContent("変更前：約0.0769位（ぽんたが上）");
-    expect(initialDifference).toHaveTextContent("試している成績：約0.0962位（いーゆーが上）");
+    const fixedAxisLabels = chartAxisLabels();
+    expect(gapValue("保持した成績")).toHaveTextContent(/0\.50位.*いーゆーが上/u);
+    expect(gapValue("試している成績")).toHaveTextContent(/約0\.3846位.*ぽんたが上/u);
     const initialPoint = screen.getByLabelText("20戦後の試している成績");
-    const initialBeforePoint = screen.getByLabelText("20戦後の変更前").querySelector("circle")!;
+    const initialBeforePoint = screen
+      .getByLabelText("20戦後の保持した成績")
+      .querySelector("circle")!;
     const initialX = initialPoint.getAttribute("cx");
     const initialBeforeY = initialBeforePoint.getAttribute("cy");
     expect(initialBeforePoint).toHaveAttribute("cx", initialX);
-    expect(Number(initialPoint.getAttribute("cy"))).toBeLessThan(Number(initialBeforeY));
+    expect(Number(initialPoint.getAttribute("cy"))).toBeGreaterThan(Number(initialBeforeY));
+
+    await user.clear(horizon);
+    await user.type(horizon, "1");
+    expect(chartAxisLabels()).toEqual(fixedAxisLabels);
+    expectHeldPointInsideChart(1);
 
     await user.clear(horizon);
     await user.type(horizon, "50");
-    const difference = screen.getByLabelText("50戦後の差");
-    expect(difference).toHaveTextContent("変更前：約0.1951位（ぽんたが上）");
-    expect(difference).toHaveTextContent("試している成績：約0.0793位（いーゆーが上）");
+    expect(chartAxisLabels()).toEqual(fixedAxisLabels);
+    expectHeldPointInsideChart(50);
+    expect(gapValue("保持した成績", 50)).toHaveTextContent(/約0\.7195位.*いーゆーが上/u);
+    expect(gapValue("試している成績", 50)).toHaveTextContent(/約0\.6829位.*ぽんたが上/u);
     expect(screen.queryByLabelText("20戦後の確認位置")).not.toBeInTheDocument();
     const point = screen.getByLabelText("50戦後の試している成績");
-    const beforePoint = screen.getByLabelText("50戦後の変更前").querySelector("circle")!;
+    const beforePoint = screen.getByLabelText("50戦後の保持した成績").querySelector("circle")!;
     expect(point.getAttribute("cx")).not.toBe(initialX);
     expect(beforePoint).toHaveAttribute("cx", point.getAttribute("cx"));
     expect(beforePoint.getAttribute("cy")).not.toBe(initialBeforeY);
-    expect(Number(point.getAttribute("cy"))).toBeLessThan(Number(beforePoint.getAttribute("cy")));
+    expect(Number(point.getAttribute("cy"))).toBeGreaterThan(
+      Number(beforePoint.getAttribute("cy")),
+    );
     expect(
       screen.getByRole("heading", { name: `50戦後に${focusName}が上回るための成績` }),
     ).toBeInTheDocument();
 
     await user.clear(horizon);
     await user.type(horizon, "100");
+    expect(chartAxisLabels()).toEqual(fixedAxisLabels);
+    expectHeldPointInsideChart(100);
     expect(screen.getByLabelText("100戦後の確認位置")).toBeInTheDocument();
     await user.clear(horizon);
     await user.type(horizon, "101");
+    expect(chartAxisLabels()).toEqual(fixedAxisLabels);
     expect(screen.queryByLabelText(/戦後の確認位置$/u)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/戦後の変更前$/u)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/戦後の保持した成績$/u)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/戦後の試している成績$/u)).not.toBeInTheDocument();
     expect(screen.getByText("101戦後はグラフの範囲外")).toBeInTheDocument();
-    const outsideDifference = screen.getByLabelText("101戦後の差");
-    expect(outsideDifference).toHaveTextContent("変更前：約0.2737位（ぽんたが上）");
-    expect(outsideDifference).toHaveTextContent("試している成績：約0.0680位（いーゆーが上）");
+    expect(gapValue("保持した成績", 101)).toHaveTextContent(/約0\.8654位.*いーゆーが上/u);
+    expect(gapValue("試している成績", 101)).toHaveTextContent(/約0\.8812位.*ぽんたが上/u);
 
     await user.clear(horizon);
     await user.type(horizon, "50");
     await user.click(screen.getByRole("button", { name: "元に戻す" }));
-    expect(screen.queryByLabelText("50戦後の変更前")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("50戦後の保持した成績")).toBeInTheDocument();
     expect(screen.getByLabelText("50戦後の試している成績")).toBeInTheDocument();
-    const restoredDifference = screen.getByLabelText("50戦後の差");
-    expect(restoredDifference).not.toHaveTextContent("変更前：");
-    expect(restoredDifference).toHaveTextContent("試している成績：約0.1951位（ぽんたが上）");
-    expect(meanField()).toHaveValue("2.85");
+    expect(gapValue("保持した成績", 50)).toHaveTextContent(/約0\.7195位.*いーゆーが上/u);
+    expect(gapValue("試している成績", 50)!.textContent).toBe(
+      gapValue("保持した成績", 50)!.textContent,
+    );
+    expect(meanField()).toHaveValue("1.35");
   });
 
   it("updates the displayed horizon while typing and disables application until the horizon is valid", async () => {

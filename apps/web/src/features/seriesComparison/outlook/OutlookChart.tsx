@@ -1,10 +1,13 @@
 import { memo, useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
+import { OutlookChartScrubber } from "@/features/seriesComparison/outlook/OutlookChartScrubber";
 import { cn } from "@/shared/ui/cn";
 import { contentText } from "@/shared/ui/typography";
 
 type Point = { h: number; gap: number };
+type Gap = { value: string; relation: string };
+type HorizonSelection = { horizon: number; horizonText: string };
 
 /** One gap axis keeps changes to either player's assumptions mapped to the same result. */
 export const OutlookChart = memo(function OutlookChart({
@@ -21,7 +24,13 @@ export const OutlookChart = memo(function OutlookChart({
   recentCount,
   exampleStatus,
   horizonControl,
-  comparisonGap,
+  pinnedGap,
+  pinnedPlotEndGap,
+  pinControl,
+  horizonText,
+  onHorizonChange,
+  currentGap,
+  heldGap,
 }: {
   points: Point[];
   recent: Point[];
@@ -36,11 +45,18 @@ export const OutlookChart = memo(function OutlookChart({
   recentCount: number;
   exampleStatus?: string | undefined;
   horizonControl: ReactNode;
-  comparisonGap: number | null;
+  pinnedGap: number | null;
+  pinnedPlotEndGap: number | null;
+  pinControl: ReactNode;
+  horizonText: string;
+  onHorizonChange: (selection: HorizonSelection) => void;
+  currentGap: Gap;
+  heldGap: Gap | null;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(640);
   const titleId = useId();
+  const helpId = useId();
   useEffect(() => {
     const element = root.current;
     if (!element) return;
@@ -54,7 +70,9 @@ export const OutlookChart = memo(function OutlookChart({
     ...points.map((point) => point.gap),
     ...recent.map((point) => point.gap),
     ...examples.flat(),
-    ...(comparisonGap !== null && horizon <= 100 ? [comparisonGap] : []),
+    // All scenarios share the current gap and change monotonically through 100 games.
+    // Including the held endpoint keeps the scale stable while only the horizon moves.
+    ...(pinnedPlotEndGap !== null ? [pinnedPlotEndGap] : []),
     0,
   ];
   const low = Math.min(...values);
@@ -85,7 +103,41 @@ export const OutlookChart = memo(function OutlookChart({
           上は{focusName}、下は{rivalName}が先行
         </span>
       </figcaption>
-      {horizonControl}
+      <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-[7rem_minmax(0,1fr)]">
+        {horizonControl}
+        {pinControl}
+      </div>
+      <div className="grid min-w-0 grid-cols-1 gap-2" aria-label={`${horizon}戦後の差`}>
+        <p className={contentText.body}>{horizon}戦後</p>
+        <dl className="grid min-w-0 grid-cols-2 gap-4">
+          <div className="grid min-w-0 gap-1">
+            <dt className={contentText.body}>
+              <span aria-hidden="true" className="text-[var(--color-analysis-emphasis)]">
+                ●{" "}
+              </span>
+              試している成績
+            </dt>
+            <dd className="grid gap-1">
+              <span className={cn(contentText.body, "tabular-nums")}>{currentGap.value}</span>
+              <span className={contentText.body}>{currentGap.relation}</span>
+            </dd>
+          </div>
+          {heldGap ? (
+            <div className="grid min-w-0 gap-1">
+              <dt className={contentText.body}>
+                <span aria-hidden="true" className="text-[var(--color-analysis-emphasis)]">
+                  ○{" "}
+                </span>
+                保持した成績
+              </dt>
+              <dd className="grid gap-1">
+                <span className={cn(contentText.body, "tabular-nums")}>{heldGap.value}</span>
+                <span className={contentText.body}>{heldGap.relation}</span>
+              </dd>
+            </div>
+          ) : null}
+        </dl>
+      </div>
       <div ref={root} className="relative min-w-0">
         <svg
           height={270}
@@ -186,19 +238,19 @@ export const OutlookChart = memo(function OutlookChart({
                 strokeWidth="1"
                 opacity=".5"
               />
-              {comparisonGap !== null ? (
-                <g aria-label={`${horizon}戦後の変更前`}>
+              {pinnedGap !== null ? (
+                <g aria-label={`${horizon}戦後の保持した成績`}>
                   <line
                     x1={x(horizon)}
                     x2={x(horizon)}
-                    y1={y(comparisonGap)}
+                    y1={y(pinnedGap)}
                     y2={y(selectedPoint.gap)}
                     stroke="var(--color-analysis-emphasis)"
                     strokeWidth="2"
                   />
                   <circle
                     cx={x(horizon)}
-                    cy={y(comparisonGap)}
+                    cy={y(pinnedGap)}
                     r="4.5"
                     fill="var(--color-surface)"
                     stroke="var(--color-analysis-emphasis)"
@@ -267,6 +319,15 @@ export const OutlookChart = memo(function OutlookChart({
             </g>
           ) : null}
         </svg>
+        <div className="absolute" style={{ left, right: width - right, top, bottom: 270 - bottom }}>
+          <OutlookChartScrubber
+            horizon={horizon}
+            horizonText={horizonText}
+            onChange={onHorizonChange}
+            descriptionId={helpId}
+            valueText={`${horizon}戦後${horizon > 100 ? "（グラフの表示範囲外）" : ""}。試している成績は${currentGap.value}（${currentGap.relation}）${heldGap ? `。保持した成績は${heldGap.value}（${heldGap.relation}）` : ""}`}
+          />
+        </div>
         {exampleStatus ? (
           <p
             role="status"
@@ -279,6 +340,9 @@ export const OutlookChart = memo(function OutlookChart({
           </p>
         ) : null}
       </div>
+      <p id={helpId} className={contentText.supporting}>
+        図のタップ・横ドラッグは1〜100戦。矢印キーでも動かせます。
+      </p>
       <div className={cn(contentText.supporting, "flex flex-wrap gap-x-4 gap-y-1")}>
         <span>実線：試している成績</span>
         <span>

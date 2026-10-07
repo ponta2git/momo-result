@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { seriesAnalysisKeys } from "@/shared/api/queryKeys";
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
@@ -17,13 +17,22 @@ export function useOutlookResource(
   examplesOpen: boolean,
 ) {
   const queryClient = useQueryClient();
+  const [settledSize, setSettledSize] = useState(windowSize);
+  useEffect(() => {
+    if (settledSize === windowSize) return;
+    const timeout = setTimeout(() => setSettledSize(windowSize), 180);
+    return () => clearTimeout(timeout);
+  }, [settledSize, windowSize]);
   const identity = {
     gameTitleId: response.artifact.gameTitleId,
     artifactId: response.artifact.artifactId,
     memberId,
   };
   const windowParams =
-    windowSize === undefined || windowSize === 50 || windowSize === 100
+    settledSize !== windowSize ||
+    windowSize === undefined ||
+    windowSize === 50 ||
+    windowSize === 100
       ? undefined
       : { ...identity, windowSize };
   const examplesParams = examplesOpen ? identity : undefined;

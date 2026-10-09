@@ -95,12 +95,12 @@ function resultCells(name = focusName) {
   const table = within(screen.getByRole("table", { name: /^現在と\d+戦後の総合平均順位$/u }));
   const column =
     table.getAllByRole("columnheader").indexOf(table.getByRole("columnheader", { name })) - 1;
-  return ["現在", "平均"].map(
-    (label) =>
-      within(table.getByRole("row", { name: new RegExp(`^${label}`, "u") })).getAllByRole("cell")[
-        column
-      ]?.textContent,
-  );
+  return ["現在", "平均"].map((label) => {
+    const cell = within(
+      table.getByRole("row", { name: new RegExp(`^${label}`, "u") }),
+    ).getAllByRole("cell")[column]!;
+    return within(cell).getByText(/^\d\.\d{2}位$/u).textContent;
+  });
 }
 function undo() {
   return screen.getByRole("button", { name: "成績を1つ戻す" });
@@ -527,7 +527,7 @@ describe("OutlookView input and update boundaries", () => {
     );
     expect(screen.getAllByRole("figure")).toHaveLength(4);
     expect(screen.getByRole("textbox", { name: "何戦後を見る" })).toHaveValue("500");
-    expect(screen.getByRole("combobox", { name: "表示範囲" })).toHaveTextContent("500戦");
+    expect(screen.getByRole("combobox", { name: "表示範囲" })).toHaveTextContent("200戦");
     expect(meanField()).toHaveValue("2.45");
     expect(meanField(rivalName)).toHaveValue("2.45");
     await waitFor(() =>
@@ -569,6 +569,7 @@ describe("OutlookView input and update boundaries", () => {
     const user = userEvent.setup();
     renderOutlook(await makeSeriesAnalysisOutlookSummary());
     const pin = screen.getByRole("button", { name: "この成績を残して比べる" });
+    expect(pin).toHaveTextContent("残して比べる");
     await user.clear(meanField());
     await user.type(meanField(), "2.60");
     expect(pin).toBeDisabled();
@@ -580,7 +581,9 @@ describe("OutlookView input and update boundaries", () => {
     expect(screen.getByLabelText(`${focusName}の比較基準`)).toHaveTextContent("2.85位");
     expect(undo()).toBeDisabled();
     await setMean(user, "bad");
-    expect(screen.getByRole("button", { name: "今の成績を基準にする" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "基準を更新（今の成績を基準にする）" }),
+    ).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "比較を終える" }));
     expect(meanField()).toHaveValue("bad");
     expect(meanField()).toHaveAttribute("aria-invalid", "true");
@@ -593,9 +596,22 @@ describe("OutlookView input and update boundaries", () => {
   it("compares the main inputs to a fixed baseline and keeps rebasing separate from Undo", async () => {
     const user = userEvent.setup();
     renderOutlook(await makeSeriesAnalysisOutlookSummary());
+    expect(screen.getByLabelText(`${focusName}の直近の平均`)).toHaveTextContent(
+      "直近の平均 2.85位",
+    );
     await pinComparison(user);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(undo()).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "基準を更新（今の成績を基準にする）" }),
+    ).toHaveTextContent("基準を更新");
+    const comparison = within(screen.getByRole("region", { name: "平均どおりに進んだときの差" }));
+    expect(comparison.getAllByRole("term").map((term) => term.textContent)).toEqual([
+      "残した成績",
+      "今の成績",
+    ]);
+    for (const outcome of comparison.getAllByRole("definition"))
+      expect(outcome).toHaveTextContent("11戦後にぽんたが上回ります");
     await setMean(user, "2.65");
     expect(screen.getByRole("status")).toHaveTextContent(
       "ぽんたに上回られる時点が10戦遅くなります",
@@ -612,8 +628,10 @@ describe("OutlookView input and update boundaries", () => {
     expect(meanField()).toHaveValue("2.65");
     expect(meanField(rivalName)).toHaveValue("2.45");
     expect(screen.getByLabelText(`${focusName}の比較基準`)).toHaveTextContent("2.85位");
-    await user.click(screen.getByRole("button", { name: "今の成績を基準にする" }));
+    await user.click(screen.getByRole("button", { name: "基準を更新（今の成績を基準にする）" }));
     expect(screen.getByLabelText(`${focusName}の比較基準`)).toHaveTextContent("2.65位");
+    for (const outcome of comparison.getAllByRole("definition"))
+      expect(outcome).toHaveTextContent("21戦後にぽんたが上回ります");
     await user.click(undo());
     expect(meanField()).toHaveValue("2.85");
     expect(undo()).toBeDisabled();
@@ -624,6 +642,9 @@ describe("OutlookView input and update boundaries", () => {
     expect(meanField(rivalName)).toHaveValue("2.45");
     expect(undo()).toBeDisabled();
     expect(screen.queryByLabelText(`${focusName}の比較基準`)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(`${focusName}の直近の平均`)).toHaveTextContent(
+      "直近の平均 2.85位",
+    );
     expect(screen.getByText("11戦後にぽんたが上回ります")).toBeInTheDocument();
   });
 
@@ -646,7 +667,7 @@ describe("OutlookView input and update boundaries", () => {
     const horizon = screen.getByRole("textbox", { name: "何戦後を見る" });
     await user.clear(horizon);
     await user.type(horizon, "450{Enter}");
-    await selectOption(user, screen.getByRole("combobox", { name: "表示範囲" }), "500");
+    await selectOption(user, screen.getByRole("combobox", { name: "表示範囲" }), "50");
     await pinComparison(user);
     const average = resultCells();
     await user.clear(meanField());
@@ -656,7 +677,7 @@ describe("OutlookView input and update boundaries", () => {
     expect(screen.queryByRole("figure")).not.toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "成績から試す" }));
     expect(screen.getByRole("textbox", { name: "何戦後を見る" })).toHaveValue("450");
-    expect(screen.getByRole("combobox", { name: "表示範囲" })).toHaveTextContent("500戦");
+    expect(screen.getByRole("combobox", { name: "表示範囲" })).toHaveTextContent("50戦");
     expect(screen.getAllByRole("figure")).toHaveLength(4);
     expect(resultCells()).toEqual(average);
     expect(meanField()).toHaveValue("2.60");
@@ -709,12 +730,27 @@ describe("OutlookView input and update boundaries", () => {
       expect(chart).toHaveAccessibleName(/確認する時点は101戦後（グラフの範囲外）/u);
     expect(screen.queryAllByLabelText("いーゆーの101戦後")).toHaveLength(0);
     expect(screen.getByRole("table", { name: "現在と101戦後の総合平均順位" })).toBeVisible();
-    await selectOption(user, screen.getByRole("combobox", { name: "表示範囲" }), "1000");
+    await selectOption(user, screen.getByRole("combobox", { name: "表示範囲" }), "200");
     expect(screen.getAllByLabelText("いーゆーの101戦後")).toHaveLength(4);
     const slider = screen.getByRole("slider", { name: "平均のグラフで確認する戦数" });
     fireEvent.keyDown(slider, { key: "Home" });
     expect(horizon).toHaveValue("1");
     fireEvent.keyDown(slider, { key: "End" });
     expect(horizon).toHaveValue("1000");
+    expect(screen.getByRole("table", { name: "現在と1000戦後の総合平均順位" })).toBeVisible();
+    for (const chart of screen.getAllByRole("img"))
+      expect(chart).toHaveAccessibleName(/この先200戦.+確認する時点は1000戦後（グラフの範囲外）/u);
+  });
+
+  it("opens an event beyond 200 games in the numeric table while keeping the graph bounded", async () => {
+    const user = userEvent.setup();
+    renderOutlook(await makeSeriesAnalysisOutlookSummary());
+    await setMean(user, "2.46");
+    await user.click(screen.getByRole("button", { name: "401戦後の数値を見る" }));
+    expect(screen.getByRole("textbox", { name: "何戦後を見る" })).toHaveValue("401");
+    expect(screen.getByRole("combobox", { name: "表示範囲" })).toHaveTextContent("200戦");
+    expect(screen.getByRole("table", { name: "現在と401戦後の総合平均順位" })).toBeVisible();
+    for (const chart of screen.getAllByRole("img"))
+      expect(chart).toHaveAccessibleName(/この先200戦.+確認する時点は401戦後（グラフの範囲外）/u);
   });
 });

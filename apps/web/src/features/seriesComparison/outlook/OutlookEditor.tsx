@@ -38,7 +38,7 @@ import { SelectField } from "@/shared/ui/forms/SelectField";
 import { contentText } from "@/shared/ui/typography";
 
 const rangeClass =
-  "min-h-11 w-full cursor-pointer accent-[var(--color-action)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)] disabled:cursor-not-allowed disabled:opacity-50";
+  "block min-h-11 w-full cursor-pointer accent-[var(--color-action)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)] disabled:cursor-not-allowed disabled:opacity-50";
 const rangeKeys = new Set([
   "ArrowLeft",
   "ArrowRight",

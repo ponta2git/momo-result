@@ -73,7 +73,7 @@ export function SeriesAnalysisScopeBar({
   const selectedSeries = seriesOptions.find((option) => option.value === seriesValue);
 
   return (
-    <section aria-label="比較条件" className="grid min-w-0 gap-2">
+    <section aria-label="比較条件" className="@container/analysis-scope grid min-w-0 gap-2">
       <Disclosure
         keepMounted
         ariaLabel="比較対象を変更"
@@ -136,7 +136,7 @@ export function SeriesAnalysisScopeBar({
           />
         </div>
       </Disclosure>
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="grid min-w-0 grid-cols-1 items-center justify-items-start gap-2 @sm/analysis-scope:flex @sm/analysis-scope:justify-between">
         <span className={cn(contentText.supporting, "tabular-nums")}>
           {scopeEmpty
             ? "対象試合なし"

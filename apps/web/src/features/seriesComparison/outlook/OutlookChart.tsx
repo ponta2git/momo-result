@@ -1,10 +1,9 @@
-import { memo, useEffect, useId, useRef, useState } from "react";
+import { memo, useLayoutEffect, useId, useRef, useState } from "react";
 
 import type { OutlookRelation } from "@/features/seriesComparison/model/outlook";
 import { OutlookChartScrubber } from "@/features/seriesComparison/outlook/OutlookChartScrubber";
 import { orderFixedMembers } from "@/shared/domain/members";
 import { memberSequencePresentation } from "@/shared/matches/MemberSequenceLabel";
-import { cn } from "@/shared/ui/cn";
 import { contentText } from "@/shared/ui/typography";
 
 export type OutlookChartPoint = { h: number; averages: readonly [number, number] };
@@ -12,6 +11,7 @@ export type OutlookChartSelection = {
   averages: readonly [number, number];
   formatted: readonly [string, string];
   relation: OutlookRelation;
+  gapText: string;
 };
 export type OutlookChartPattern = {
   id: string;
@@ -38,7 +38,7 @@ export const OutlookChart = memo(function OutlookChart({
   memberIds: readonly [string, string];
   horizon: number;
   horizonText: string;
-  range: 100 | 500 | 1000;
+  range: 50 | 100 | 200;
   ticks: readonly number[];
   descriptionId: string;
   onHorizonChange: (selection: { horizon: number; horizonText: string }) => void;
@@ -47,9 +47,10 @@ export const OutlookChart = memo(function OutlookChart({
   const root = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(320);
   const titleId = useId();
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = root.current;
     if (!element) return;
+    setWidth(Math.max(1, Math.floor(element.getBoundingClientRect().width)));
     const observer = new ResizeObserver(([entry]) => {
       if (entry) setWidth(Math.max(1, Math.floor(entry.contentRect.width)));
     });
@@ -71,7 +72,7 @@ export const OutlookChart = memo(function OutlookChart({
   const max = ticks.at(-1) ?? 4;
   const tickStep = (ticks[1] ?? max) - min;
   const tickDigits = Math.max(2, Math.min(4, Math.ceil(-Math.log10(tickStep))));
-  const left = tickDigits > 3 ? 56 : 48;
+  const left = 56;
   const right = width - 16;
   const top = 26;
   const bottom = 190;
@@ -84,8 +85,6 @@ export const OutlookChart = memo(function OutlookChart({
       .map((point, index) => `${index ? "L" : "M"}${x(point.h)},${y(point.averages[role])}`)
       .join(" ");
   const shownMarker = marker && marker.h <= range ? marker : null;
-  const roundedSame =
-    selected.relation !== "tied" && selected.formatted[0] === selected.formatted[1];
 
   return (
     <figure className="grid min-w-0 content-start gap-2" aria-labelledby={titleId}>
@@ -236,14 +235,6 @@ export const OutlookChart = memo(function OutlookChart({
           />
         </div>
       </div>
-      <p className={cn(contentText.body, "tabular-nums")}>
-        {horizon}戦後は{relationLabel}
-        {roundedSame ? (
-          <span className={cn(contentText.supporting, "block")}>
-            表示は同じ値ですが、丸める前の平均には差があります。
-          </span>
-        ) : null}
-      </p>
     </figure>
   );
 });

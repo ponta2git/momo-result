@@ -30,6 +30,7 @@ import type {
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 import { Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
 import { contentText } from "@/shared/ui/typography";
 
@@ -69,14 +70,16 @@ export function OutlookPlayerEditor(props: Props) {
     entry.source.artifactId !== undefined && entry.source.artifactId !== session.artifactId;
   return (
     <section className="grid min-w-0 grid-cols-1 gap-2" aria-label={`${names[role]}の成績を試す`}>
-      <h3 className={contentText.heading}>
+      <h3 className={cn(contentText.heading, "flex items-center")}>
         <MemberSequenceLabel memberId={memberIds[role]}>{names[role]}</MemberSequenceLabel>
       </h3>
-      {baseline ? (
-        <p className={contentText.supporting} aria-label={`${names[role]}の比較基準`}>
-          残した平均 {outlookAverage(distributionMean(baseline))}位
-        </p>
-      ) : null}
+      <p
+        className={contentText.supporting}
+        aria-label={`${names[role]}の${baseline ? "比較基準" : "直近の平均"}`}
+      >
+        {baseline ? "残した平均" : "直近の平均"}{" "}
+        {outlookAverage(distributionMean(baseline ?? recent))}位
+      </p>
       <OutlookEditor
         session={session}
         role={role}

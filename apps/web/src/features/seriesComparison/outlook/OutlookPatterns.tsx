@@ -15,6 +15,7 @@ import type {
   CumulativePair,
   OutlookExample,
   RankDistribution,
+  Rational,
 } from "@/features/seriesComparison/model/outlook";
 import { OutlookChart } from "@/features/seriesComparison/outlook/OutlookChart";
 import type {
@@ -29,8 +30,14 @@ import {
   MemberSequenceLabel,
   memberSequencePresentation,
 } from "@/shared/matches/MemberSequenceLabel";
+import { cn } from "@/shared/ui/cn";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import { contentText } from "@/shared/ui/typography";
+
+function signedGap(gap: Rational) {
+  const absolute = rational(gap.numerator < 0n ? -gap.numerator : gap.numerator, gap.denominator);
+  return `${gap.numerator > 0n ? "+" : gap.numerator < 0n ? "−" : "±"}${formatRational(absolute, 2)}`;
+}
 
 function averageSelection(
   cumulative: CumulativePair,
@@ -46,6 +53,7 @@ function averageSelection(
       formatRational(projected.rivalAverage, 2),
     ],
     relation: projected.relation,
+    gapText: signedGap(projected.gap),
   };
 }
 
@@ -68,6 +76,7 @@ function exampleSelection(
       formatRational(rational(rival, count), 2),
     ],
     relation: focus < rival ? "ahead" : focus > rival ? "behind" : "tied",
+    gapText: signedGap(rational(rival - focus, count)),
   };
 }
 
@@ -139,13 +148,7 @@ export function OutlookPatterns({
 
   const meanPoints = useMemo<OutlookChartPoint[]>(() => {
     if (!active) return [];
-    // Denser samples near the current result retain the bend in longer projections.
-    const horizons = new Set(
-      Array.from({ length: 101 }, (_, index) =>
-        range === 100 ? index : Math.round(range * (index / 100) ** 2),
-      ),
-    );
-    return [...horizons].map((h) => ({
+    return Array.from({ length: range + 1 }, (_, h) => ({
       h,
       averages: averageSelection(cumulative, liveFocus, liveRival, h).averages,
     }));
@@ -233,6 +236,7 @@ export function OutlookPatterns({
       <DataTable
         caption={{ content: `現在と${session.horizon}戦後の総合平均順位`, visibility: "visible" }}
         density="compact"
+        verticalAlign="top"
         layout="fixed"
         rows={rows}
         getRowKey={(row) => row.id}
@@ -246,17 +250,30 @@ export function OutlookPatterns({
           },
           ...people.map(({ memberId, role }) => ({
             key: memberId,
-            header: <MemberSequenceLabel memberId={memberId}>{names[role]}</MemberSequenceLabel>,
+            header: (
+              <span className="inline-flex min-h-8 items-center">
+                <MemberSequenceLabel memberId={memberId}>{names[role]}</MemberSequenceLabel>
+              </span>
+            ),
             tabular: true,
-            renderCell: (row: (typeof rows)[number]) => `${row.selected.formatted[role]}位`,
+            renderCell: (row: (typeof rows)[number]) => (
+              <span className="grid content-start gap-1">
+                <span className="whitespace-nowrap">{row.selected.formatted[role]}位</span>
+                {role === 0 ? (
+                  <span
+                    className={cn(contentText.supporting, "whitespace-nowrap")}
+                    aria-label={`相手との差 ${row.selected.gapText}位`}
+                  >
+                    （{row.selected.gapText}位）
+                  </span>
+                ) : null}
+              </span>
+            ),
           })),
         ]}
       />
       <div className="grid gap-2">
-        <p className={contentText.supporting}>
-          {exampleDescription}
-          {examples ? "確率や上下限を示すものではありません。" : null}
-        </p>
+        <p className={contentText.supporting}>{names[0]}の差：＋は上位、−は下位。</p>
         <p className={contentText.body}>総合平均順位 · 上の線が先行</p>
         <div className="flex flex-wrap gap-x-4 gap-y-2" aria-label="グラフの凡例">
           {people.map(({ memberId, role }, index) => (
@@ -281,18 +298,15 @@ export function OutlookPatterns({
         </div>
         <p
           id={helpId}
-          className={contentText.supporting}
+          className={cn(contentText.supporting, "min-h-8")}
           role={session.gesture ? "status" : undefined}
         >
           {session.gesture
             ? "展開例は操作後に更新します。"
-            : "タップ・横ドラッグ・矢印キーで戦数を選べます。"}
+            : session.horizon > range
+              ? `グラフは${range}戦までです。表は${session.horizon}戦後を表示しています。`
+              : "タップ・横ドラッグ・矢印キーで戦数を選べます。"}
         </p>
-        {session.horizon > range ? (
-          <p className={contentText.supporting}>
-            グラフは{range}戦までです。表は{session.horizon}戦後を表示しています。
-          </p>
-        ) : null}
       </div>
       <div className="grid min-w-0 grid-cols-1 gap-x-6 gap-y-6 @xl/outlook-patterns:grid-cols-2">
         {patterns.map((pattern) => (
@@ -317,6 +331,15 @@ export function OutlookPatterns({
             }
           />
         ))}
+      </div>
+      <div className="grid gap-2">
+        <p className={contentText.supporting}>
+          数値は小数第2位に丸めていますが、同率の判定は丸める前の値を使います。
+        </p>
+        <p className={contentText.supporting}>
+          {exampleDescription}
+          {examples ? "確率や上下限を示すものではありません。" : null}
+        </p>
       </div>
     </div>
   );

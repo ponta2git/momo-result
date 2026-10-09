@@ -20,7 +20,7 @@ export function OutlookChartScrubber({
   descriptionId,
   onChange,
 }: Selection & {
-  range: 100 | 500 | 1000;
+  range: 50 | 100 | 200;
   label?: string;
   valueText: string;
   descriptionId: string;

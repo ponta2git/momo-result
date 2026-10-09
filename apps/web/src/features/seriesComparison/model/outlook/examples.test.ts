@@ -18,7 +18,7 @@ const input = {
 };
 
 describe("three reproducible joint examples", () => {
-  it.each([100, 500, 1000] as const)(
+  it.each([50, 100, 200] as const)(
     "selects reproducible legal examples over %i games and retains precise values through 1000",
     (selectionRange) => {
       const result = generateOutlookExamples({ ...input, selectionRange });
@@ -43,7 +43,7 @@ describe("three reproducible joint examples", () => {
         expect(
           example.ranks.every(([a, b]) => a !== b && input.joint.weights[a - 1]![b - 1]! > 0n),
         ).toBe(true);
-        for (const horizon of [0, 100, 500, 1000]) {
+        for (const horizon of [0, 50, 100, 200, 1000]) {
           const ranks = example.ranks.slice(0, horizon);
           const focusSum = 510 + ranks.reduce((sum, [rank]) => sum + rank, 0);
           const rivalSum = 500 + ranks.reduce((sum, [, rank]) => sum + rank, 0);
@@ -59,10 +59,10 @@ describe("three reproducible joint examples", () => {
   );
 
   it("reverses the same canonical examples when focus/rival roles reverse", () => {
-    const original = generateOutlookExamples({ ...input, selectionRange: 500 });
+    const original = generateOutlookExamples({ ...input, selectionRange: 200 });
     const reversed = generateOutlookExamples({
       ...input,
-      selectionRange: 500,
+      selectionRange: 200,
       focusMemberId: "second",
       cumulative: { games: 200, focusRankSum: 500, rivalRankSum: 510 },
     });
@@ -83,23 +83,23 @@ describe("three reproducible joint examples", () => {
     const scaled = jointFromCounts(
       input.joint.weights.map((row) => row.map((weight) => Number(weight * 17n))),
     );
-    expect(generateOutlookExamples({ ...input, joint: scaled, selectionRange: 1000 })).toEqual(
-      generateOutlookExamples({ ...input, selectionRange: 1000 }),
+    expect(generateOutlookExamples({ ...input, joint: scaled, selectionRange: 200 })).toEqual(
+      generateOutlookExamples({ ...input, selectionRange: 200 }),
     );
   });
 
   it("counts distinct trajectories only inside the selection range without claiming there is no variability", () => {
     const rare = jointFromCounts([
-      [0, 99999, 1, 0],
+      [0, 14999, 1, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
     ]);
-    // The fixed model's rare outcomes occur after game 100, in two different candidates.
+    // Rare outcomes enter the fixed candidates' 100- and 200-game prefixes, but not their first 50.
     for (const [selectionRange, distinct] of [
-      [100, 1],
-      [500, 2],
-      [1000, 3],
+      [50, 1],
+      [100, 2],
+      [200, 5],
     ] as const) {
       const finite = generateOutlookExamples({ ...input, joint: rare, selectionRange });
       expect(finite.distinctCandidateCount).toBe(distinct);
@@ -113,7 +113,7 @@ describe("three reproducible joint examples", () => {
               .join(","),
           ),
         ).size,
-      ).toBe(distinct);
+      ).toBe(Math.min(3, distinct));
     }
   });
 
@@ -132,7 +132,7 @@ describe("three reproducible joint examples", () => {
         .size,
     ).toBe(1);
     // Equal differences retain generation order, making the same candidate identities observable.
-    for (const selectionRange of [100, 500, 1000] as const)
+    for (const selectionRange of [50, 100, 200] as const)
       expect(generateOutlookExamples({ ...input, joint: constant, selectionRange })).toEqual(fixed);
   });
 });

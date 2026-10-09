@@ -52,8 +52,8 @@ import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { revealPageElement } from "@/shared/ui/layout/revealPageElement";
 import { contentText } from "@/shared/ui/typography";
 
-function rangeFor(horizon: number): 100 | 500 | 1000 {
-  return horizon <= 100 ? 100 : horizon <= 500 ? 500 : 1000;
+function rangeFor(horizon: number): 50 | 100 | 200 {
+  return horizon <= 50 ? 50 : horizon <= 100 ? 100 : 200;
 }
 
 export function OutlookView({
@@ -178,7 +178,7 @@ function OutlookWorkspace({
       task: "performance",
       horizon: current.goalHorizon,
       horizonText: String(current.goalHorizon),
-      chartRange: Math.max(current.chartRange, rangeFor(current.goalHorizon)) as 100 | 500 | 1000,
+      chartRange: Math.max(current.chartRange, rangeFor(current.goalHorizon)) as 50 | 100 | 200,
     }));
     requestAnimationFrame(() => {
       if (resultHeading.current) {
@@ -300,13 +300,14 @@ function OutlookWorkspace({
                   />
                 ) : (
                   <>
-                    <p className={contentText.primary}>{outcome.headline}</p>
-                    {outcome.detail ? (
-                      <p className={contentText.supporting}>{outcome.detail}</p>
-                    ) : null}
+                    <p className={cn(contentText.primary, "min-h-14")}>{outcome.headline}</p>
+                    <p className={cn(contentText.supporting, "min-h-4")}>{outcome.detail}</p>
                   </>
                 )}
-                <div className="flex flex-wrap gap-2" data-outlook-preserve-draft>
+                <div
+                  className="flex min-h-11 flex-wrap gap-2 pointer-fine:min-h-9"
+                  data-outlook-preserve-draft
+                >
                   {eventHorizon !== null ? (
                     <Button
                       size="sm"
@@ -317,16 +318,16 @@ function OutlookWorkspace({
                           horizon: eventHorizon,
                           horizonText: String(eventHorizon),
                           chartRange: Math.max(current.chartRange, rangeFor(eventHorizon)) as
+                            | 50
                             | 100
-                            | 500
-                            | 1000,
+                            | 200,
                         }));
                         requestAnimationFrame(() => {
                           if (chartHeading.current) revealPageElement(chartHeading.current);
                         });
                       }}
                     >
-                      {eventHorizon}戦後を見る
+                      {eventHorizon}戦後{eventHorizon > 200 ? "の数値" : ""}を見る
                     </Button>
                   ) : null}
                 </div>
@@ -342,27 +343,27 @@ function OutlookWorkspace({
                       : { h: eventHorizon, label: `${eventHorizon}戦後に${outcome.eventLabel}` }
                   }
                   horizonControl={
-                    <div className="grid min-w-0 grid-cols-2 gap-4" data-outlook-preserve-draft>
-                      <OutlookHorizonControl
-                        horizon={session.horizon}
-                        horizonText={session.horizonText}
-                        onChange={selectHorizon}
-                      />
-                      <SelectField
-                        label="表示範囲"
-                        value={String(session.chartRange)}
-                        options={[100, 500, 1000].map((range) => ({
-                          value: String(range),
-                          label: `${range}戦`,
-                        }))}
-                        onValueChange={(value) =>
-                          change((current) => ({
-                            ...current,
-                            chartRange: Number(value) as 100 | 500 | 1000,
-                          }))
-                        }
-                      />
-                    </div>
+                    <OutlookHorizonControl
+                      horizon={session.horizon}
+                      horizonText={session.horizonText}
+                      onChange={selectHorizon}
+                      rangeControl={
+                        <SelectField
+                          label="表示範囲"
+                          value={String(session.chartRange)}
+                          options={[50, 100, 200].map((range) => ({
+                            value: String(range),
+                            label: `${range}戦`,
+                          }))}
+                          onValueChange={(value) =>
+                            change((current) => ({
+                              ...current,
+                              chartRange: Number(value) as 50 | 100 | 200,
+                            }))
+                          }
+                        />
+                      }
+                    />
                   }
                 />
               </div>

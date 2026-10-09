@@ -12,7 +12,7 @@ function ScrubberHarness({
 }: {
   horizon?: number;
   horizonText?: string;
-  range?: 100 | 500 | 1000;
+  range?: 50 | 100 | 200;
 }) {
   const [selection, setSelection] = useState({ horizon, horizonText });
   return (
@@ -30,11 +30,7 @@ function ScrubberHarness({
   );
 }
 
-function renderScrubber(
-  horizon = 20,
-  horizonText = String(horizon),
-  range: 100 | 500 | 1000 = 100,
-) {
+function renderScrubber(horizon = 20, horizonText = String(horizon), range: 50 | 100 | 200 = 100) {
   render(<ScrubberHarness horizon={horizon} horizonText={horizonText} range={range} />);
   const slider = screen.getByRole("slider", { name: "グラフで確認する戦数" });
   vi.spyOn(slider, "getBoundingClientRect").mockReturnValue(new DOMRect(100, 40, 400, 188));
@@ -121,7 +117,7 @@ describe("OutlookChartScrubber", () => {
     },
   );
 
-  it.each([500, 1000] as const)("maps pointer input to the visible %i-game range", (range) => {
+  it.each([50, 200] as const)("maps pointer input to the visible %i-game range", (range) => {
     const slider = renderScrubber(20, "20", range);
     fireEvent.pointerDown(slider, pointer(300));
     fireEvent.pointerUp(slider, pointer(300));

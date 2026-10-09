@@ -37,7 +37,7 @@ export type OutlookSession = {
   transfer: [OutlookRankIndex, OutlookRankIndex];
   horizon: number;
   horizonText: string;
-  chartRange: 100 | 500 | 1000;
+  chartRange: 50 | 100 | 200;
   goalHorizon: number;
   goalHorizonText: string;
   examplesOpen: boolean;

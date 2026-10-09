@@ -53,13 +53,13 @@ export function generateOutlookExamples(input: {
   focusMemberId: string;
   cumulative: CumulativePair;
   joint: JointDistribution;
-  selectionRange?: 100 | 500 | 1000;
+  selectionRange?: 50 | 100 | 200;
 }): OutlookExamples {
   validateCumulative(input.cumulative);
   const { canonicalMemberIds, focusMemberId, joint } = input;
   const selectionRange = input.selectionRange ?? 100;
-  if (![100, 500, 1000].includes(selectionRange))
-    throw new RangeError("Example selection requires 100, 500, or 1000 games.");
+  if (![50, 100, 200].includes(selectionRange))
+    throw new RangeError("Example selection requires 50, 100, or 200 games.");
   if (
     canonicalMemberIds[0] === canonicalMemberIds[1] ||
     !canonicalMemberIds.includes(focusMemberId)

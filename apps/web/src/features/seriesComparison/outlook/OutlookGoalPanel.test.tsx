@@ -237,6 +237,15 @@ describe("OutlookGoalPanel", () => {
     expect(view.readSession().goalHorizon).toBe(50);
     expect(view.readSession().horizon).toBe(20);
     expect(view.readSession().history).toHaveLength(0);
+    await user.clear(horizon);
+    await user.paste("1001");
+    expect(horizon).toHaveAccessibleDescription(
+      "1〜1000の整数で入力してください（現在は50戦後を表示）。",
+    );
+    expect(usePerformance).toBeDisabled();
+    expect(screen.getByText("平均2.52位以下")).toBeVisible();
+    expect(view.readSession().goalHorizon).toBe(50);
+    expect(view.readSession().horizon).toBe(20);
   });
 
   it("does not recommend a recent distribution that conflicts with the rival", async () => {

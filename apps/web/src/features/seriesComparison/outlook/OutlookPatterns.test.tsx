@@ -59,27 +59,27 @@ function PatternsHarness({ props, editor = false }: { props: PatternProps; edito
         marker={null}
         onHorizonChange={onHorizonChange}
         horizonControl={
-          <>
-            <OutlookHorizonControl
-              horizon={session.horizon}
-              horizonText={session.horizonText}
-              onChange={onHorizonChange}
-            />
-            <SelectField
-              label="表示範囲"
-              value={String(session.chartRange)}
-              options={[100, 500, 1000].map((range) => ({
-                value: String(range),
-                label: `${range}戦`,
-              }))}
-              onValueChange={(value) =>
-                setSession((current) => ({
-                  ...current,
-                  chartRange: Number(value) as 100 | 500 | 1000,
-                }))
-              }
-            />
-          </>
+          <OutlookHorizonControl
+            horizon={session.horizon}
+            horizonText={session.horizonText}
+            onChange={onHorizonChange}
+            rangeControl={
+              <SelectField
+                label="表示範囲"
+                value={String(session.chartRange)}
+                options={[50, 100, 200].map((range) => ({
+                  value: String(range),
+                  label: `${range}戦`,
+                }))}
+                onValueChange={(value) =>
+                  setSession((current) => ({
+                    ...current,
+                    chartRange: Number(value) as 50 | 100 | 200,
+                  }))
+                }
+              />
+            }
+          />
         }
       />
     </>
@@ -90,10 +90,14 @@ function resultTable() {
   return within(screen.getByRole("table", { name: /^現在と\d+戦後の総合平均順位$/u }));
 }
 
+function resultRow(label: string) {
+  return within(resultTable().getByRole("row", { name: new RegExp(`^${label}`, "u") }));
+}
+
 function rowValues(label: string) {
-  return within(resultTable().getByRole("row", { name: new RegExp(`^${label}`, "u") }))
+  return resultRow(label)
     .getAllByRole("cell")
-    .map((cell) => cell.textContent);
+    .map((cell) => within(cell).getByText(/^\d\.\d{2}位$/u).textContent);
 }
 
 function exampleValues() {
@@ -103,7 +107,7 @@ function exampleValues() {
     .map((row) =>
       within(row)
         .getAllByRole("cell")
-        .map((cell) => cell.textContent),
+        .map((cell) => within(cell).getByText(/^\d\.\d{2}位$/u).textContent),
     );
 }
 
@@ -134,6 +138,9 @@ describe("OutlookPatterns", () => {
     ).toEqual(["現在", "平均", "有利な例", "中間の例", "不利な例"]);
     expect(rowValues("現在")).toEqual(["2.31位", "2.44位"]);
     expect(rowValues("平均")).toEqual(["2.52位", "2.44位"]);
+    expect(resultRow("現在").getByLabelText("相手との差 +0.13位")).toHaveTextContent("（+0.13位）");
+    expect(resultRow("平均").getByLabelText("相手との差 −0.08位")).toHaveTextContent("（−0.08位）");
+    expect(screen.getByRole("combobox", { name: "表示範囲" })).toHaveTextContent("100戦");
     for (const name of ["平均", "有利な例", "中間の例", "不利な例"]) {
       const figure = within(screen.getByRole("figure", { name }));
       expect(figure.getByLabelText("いーゆーの総合平均順位（実線）")).toBeInTheDocument();
@@ -149,6 +156,9 @@ describe("OutlookPatterns", () => {
     await user.paste("1001");
     expect(horizon).toHaveValue("1001");
     expect(horizon).toHaveAttribute("aria-invalid", "true");
+    expect(horizon).toHaveAccessibleDescription(
+      "1〜1000の整数で入力してください（現在は20戦後を表示）。",
+    );
     for (const slider of sliders) expect(slider).toHaveAttribute("aria-valuenow", "20");
     expect(screen.getByRole("table", { name: "現在と20戦後の総合平均順位" })).toBeVisible();
 
@@ -170,13 +180,15 @@ describe("OutlookPatterns", () => {
     });
     expect(exampleValues().toSorted()).toEqual(expected.toSorted());
 
-    await selectOption(user, screen.getByRole("combobox", { name: "表示範囲" }), "1000");
+    await selectOption(user, screen.getByRole("combobox", { name: "表示範囲" }), "200");
     expect(generate).toHaveBeenCalledTimes(2);
-    expect(generate).toHaveBeenLastCalledWith(expect.objectContaining({ selectionRange: 1000 }));
-    for (const figure of screen.getAllByRole("figure").slice(1)) {
+    expect(generate).toHaveBeenLastCalledWith(expect.objectContaining({ selectionRange: 200 }));
+    for (const figure of screen.getAllByRole("figure")) {
       const line = within(figure).getByLabelText("いーゆーの総合平均順位（実線）");
-      expect(line.getAttribute("d")?.match(/[ML]/gu)).toHaveLength(1001);
+      expect(line.getAttribute("d")?.match(/[ML]/gu)).toHaveLength(201);
     }
+    expect(horizon).toHaveValue("1000");
+    expect(screen.getByRole("table", { name: "現在と1000戦後の総合平均順位" })).toBeVisible();
     const averageSlider = screen.getByRole("slider", { name: "平均のグラフで確認する戦数" });
     act(() => averageSlider.focus());
     await user.keyboard("{Home}{ArrowLeft}{PageDown}");
@@ -227,7 +239,7 @@ describe("OutlookPatterns", () => {
   it("shares fitted axes across all patterns and changes them for conditions, not the observation position", async () => {
     const user = userEvent.setup();
     const props = await patternProps();
-    props.session.chartRange = 1000;
+    props.session.chartRange = 200;
     render(<PatternsHarness props={props} editor />);
     const axes = axisLabels(screen.getByRole("figure", { name: "平均" }));
     expect(Number(axes[0])).toBeGreaterThan(1);
@@ -252,6 +264,9 @@ describe("OutlookPatterns", () => {
     const ponta = memberLines("ぽんた", "破線");
     const favorable = rowValues("有利な例");
     const unfavorable = rowValues("不利な例");
+    expect(
+      within(resultRow("現在").getAllByRole("cell")[0]!).getByLabelText("相手との差 +0.13位"),
+    ).toBeVisible();
     const reversed = await patternProps(["member_ponta", "member_eu"]);
     view.rerender(<PatternsHarness key={reversed.session.key} props={reversed} />);
     expect(
@@ -261,8 +276,51 @@ describe("OutlookPatterns", () => {
     ).toEqual(["展開", "いーゆー", "ぽんた"]);
     expect(rowValues("有利な例")).toEqual(unfavorable);
     expect(rowValues("不利な例")).toEqual(favorable);
+    const current = resultRow("現在").getAllByRole("cell");
+    expect(within(current[0]!).queryByLabelText(/^相手との差 /u)).not.toBeInTheDocument();
+    expect(within(current[1]!).getByLabelText("相手との差 −0.13位")).toHaveTextContent(
+      "（−0.13位）",
+    );
+    expect(resultRow("平均").getByLabelText("相手との差 +0.08位")).toHaveTextContent("（+0.08位）");
     expect(memberLines("いーゆー", "実線")).toEqual(expect.arrayContaining(eu));
     expect(memberLines("ぽんた", "破線")).toEqual(expect.arrayContaining(ponta));
+  });
+
+  it("calculates signed differences before rounding and distinguishes a tie from a small lead or deficit", async () => {
+    const user = userEvent.setup();
+    const props = await patternProps();
+    props.cumulative = { games: 1000, focusRankSum: 2497, rivalRankSum: 2502 };
+    props.session.horizon = 1;
+    props.session.horizonText = "1";
+    props.session.entries = [
+      {
+        distribution: outlookModel.distributionFromCounts([0, 20, 0, 0]),
+        source: { kind: "counts" },
+      },
+      {
+        distribution: outlookModel.distributionFromCounts([20, 0, 0, 0]),
+        source: { kind: "counts" },
+      },
+    ];
+    render(<PatternsHarness props={props} />);
+    // Both displayed averages round to 2.50, but the exact current gap is 5 / 1000.
+    expect(rowValues("現在")).toEqual(["2.50位", "2.50位"]);
+    expect(resultRow("現在").getByLabelText("相手との差 +0.01位")).toHaveTextContent("（+0.01位）");
+    const horizon = screen.getByRole("textbox", { name: "何戦後を見る" });
+    for (const [games, gap] of [
+      [1, "+0.00"],
+      [5, "±0.00"],
+      [6, "−0.00"],
+    ] as const) {
+      if (games !== 1) {
+        await user.clear(horizon);
+        await user.paste(String(games));
+      }
+      for (const label of ["平均", "展開例1", "展開例2", "展開例3"])
+        expect(resultRow(label).getByLabelText(`相手との差 ${gap}位`)).toHaveTextContent(
+          `（${gap}位）`,
+        );
+    }
   });
 
   it("uses neutral labels when all examples have the same difference trajectory", async () => {

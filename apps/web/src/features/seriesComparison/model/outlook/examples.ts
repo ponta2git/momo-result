@@ -5,9 +5,9 @@ import { validateCumulative } from "./projection";
 import type { CumulativePair } from "./projection";
 import { ceilDivide, gcd } from "./rational";
 
-export const OUTLOOK_MODEL_VERSION = "outlook-1";
+export const OUTLOOK_MODEL_VERSION = "outlook-2";
 export const EXAMPLE_CANDIDATE_COUNT = 201;
-export const EXAMPLE_GAME_COUNT = 100;
+export const EXAMPLE_GAME_COUNT = 1000;
 
 export type OutlookExamplePoint = Readonly<{
   games: number;
@@ -16,7 +16,7 @@ export type OutlookExamplePoint = Readonly<{
   gap: number;
 }>;
 export type OutlookExample = Readonly<{
-  /** Focus rank, rival rank, for each of the next 100 games. */
+  /** Focus rank, rival rank, for each of the next 1000 games. */
   ranks: ReadonlyArray<readonly [Rank, Rank]>;
   points: readonly OutlookExamplePoint[];
 }>;
@@ -53,9 +53,13 @@ export function generateOutlookExamples(input: {
   focusMemberId: string;
   cumulative: CumulativePair;
   joint: JointDistribution;
+  selectionRange?: 100 | 500 | 1000;
 }): OutlookExamples {
   validateCumulative(input.cumulative);
   const { canonicalMemberIds, focusMemberId, joint } = input;
+  const selectionRange = input.selectionRange ?? 100;
+  if (![100, 500, 1000].includes(selectionRange))
+    throw new RangeError("Example selection requires 100, 500, or 1000 games.");
   if (
     canonicalMemberIds[0] === canonicalMemberIds[1] ||
     !canonicalMemberIds.includes(focusMemberId)
@@ -85,7 +89,7 @@ export function generateOutlookExamples(input: {
     ranks,
     end: Number(ceilDivide(end * 0x100000000n, total)),
   }));
-  // No artifact, horizon, distribution, or display role enters the common random sequence.
+  // No artifact, horizon, selection range, distribution, or role enters this sequence.
   const next = randomWords(
     JSON.stringify([OUTLOOK_MODEL_VERSION, input.gameTitleId, ...canonicalMemberIds]),
   );
@@ -94,14 +98,17 @@ export function generateOutlookExamples(input: {
     const ranks: Array<readonly [Rank, Rank]> = [];
     const trajectory = [0];
     let difference = 0;
+    // Drawing every candidate in full keeps its prefix identical for every selection range.
     for (let game = 0; game < EXAMPLE_GAME_COUNT; game++) {
       // Integer boundaries cannot select zero-mass/diagonal cells, even at either endpoint.
       const word = next();
       const cell = cells.find((candidate) => word < candidate.end);
       if (!cell) throw new RangeError("Joint mass did not cover the integer sample.");
       ranks.push(cell.ranks);
-      difference += cell.ranks[1] - cell.ranks[0];
-      trajectory.push(difference);
+      if (game < selectionRange) {
+        difference += cell.ranks[1] - cell.ranks[0];
+        trajectory.push(difference);
+      }
     }
     candidates.push({ ranks, difference, signature: trajectory.join(","), index });
   }

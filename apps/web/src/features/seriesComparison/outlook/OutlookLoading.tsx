@@ -32,18 +32,15 @@ export function OutlookLoading() {
               <Skeleton className="h-4 w-72 max-w-full" />
             </div>
             {["first", "second"].map((person) => (
-              <div
-                key={person}
-                className={`grid min-w-0 grid-cols-1 gap-2 ${person === "second" ? "border-t border-[var(--color-border)] pt-6" : ""}`}
-              >
-                <Skeleton className="h-9 w-24 max-w-full" />
+              <div key={person} className="grid min-w-0 grid-cols-1 gap-2">
+                <Skeleton className="h-6 w-24 max-w-full" />
                 <Skeleton className="h-5 w-40 max-w-full" />
                 <Skeleton className="h-11 w-full rounded-sm pointer-fine:h-10" />
                 <div className="flex h-11 items-center">
                   <Skeleton className="h-2 w-full rounded-full" />
                 </div>
                 <Skeleton className="h-4 w-64 max-w-full" />
-                <Skeleton className="h-9 w-36 max-w-full" />
+                <Skeleton className="h-11 w-64 max-w-full pointer-fine:h-9" />
               </div>
             ))}
             <Skeleton className="h-11 w-44 max-w-full pointer-fine:h-9" />
@@ -54,14 +51,7 @@ export function OutlookLoading() {
               <Skeleton className="h-7 w-4/5" />
               <Skeleton className="h-11 w-44 max-w-full pointer-fine:h-9" />
             </div>
-            <div className="grid min-w-0 grid-cols-1 gap-3">
-              <div className="flex overflow-hidden border-b border-[var(--color-border)]">
-                {["average", "noise"].map((view) => (
-                  <Skeleton key={view} className="h-11 w-32 shrink-0 pointer-fine:h-9" />
-                ))}
-              </div>
-              <Skeleton className="h-5 w-40 max-w-full" />
-              <Skeleton className="h-4 w-64 max-w-full" />
+            <div className="@container/outlook-patterns grid min-w-0 grid-cols-1 gap-4">
               <div className="grid min-w-0 grid-cols-2 gap-4">
                 {["horizon", "range"].map((field) => (
                   <div key={field} className="grid min-w-0 grid-cols-1 gap-2">
@@ -79,17 +69,17 @@ export function OutlookLoading() {
                   }}
                   density="compact"
                   layout="fixed"
-                  rows={["first", "second"]}
+                  rows={["current", "average", "good", "middle", "poor"]}
                   getRowKey={(row) => row}
                   columns={[
                     {
                       key: "person",
                       header: <Skeleton className="h-4 w-20 max-w-full" />,
                       rowHeader: true,
-                      width: "40%",
+                      width: "34%",
                       renderCell: () => <Skeleton className="h-5 w-20 max-w-full" />,
                     },
-                    ...["current", "selected"].map((key) => ({
+                    ...["first", "second"].map((key) => ({
                       key,
                       header: <Skeleton className="h-4 w-12 max-w-full" />,
                       renderCell: () => <Skeleton className="h-5 w-12 max-w-full" />,
@@ -97,9 +87,18 @@ export function OutlookLoading() {
                   ]}
                 />
               </div>
-              <Skeleton className="h-[258px] w-full" />
+              <Skeleton className="h-10 w-full" />
               <Skeleton className="h-5 w-48 max-w-full" />
               <Skeleton className="h-4 w-72 max-w-full" />
+              <div className="grid min-w-0 grid-cols-1 gap-6 @xl/outlook-patterns:grid-cols-2">
+                {["average", "good", "middle", "poor"].map((pattern) => (
+                  <div key={pattern} className="grid gap-2">
+                    <Skeleton className="h-6 w-24 max-w-full" />
+                    <Skeleton className="h-[230px] w-full" />
+                    <Skeleton className="h-6 w-44 max-w-full" />
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>

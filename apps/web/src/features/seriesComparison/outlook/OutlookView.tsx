@@ -12,11 +12,10 @@ import type { CumulativePair } from "@/features/seriesComparison/model/outlook";
 import { seriesAnalysisScopeSignature } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import { normalizeOutlookPair } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import type { SeriesAnalysisUrlState } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
-import { OutlookChart } from "@/features/seriesComparison/outlook/OutlookChart";
 import { OutlookGoalPanel } from "@/features/seriesComparison/outlook/OutlookGoalPanel";
 import { OutlookHorizonControl } from "@/features/seriesComparison/outlook/OutlookHorizonControl";
-import { OutlookNoisePanel } from "@/features/seriesComparison/outlook/OutlookNoisePanel";
 import { outlookOutcome } from "@/features/seriesComparison/outlook/outlookOutcome";
+import { OutlookPatterns } from "@/features/seriesComparison/outlook/OutlookPatterns";
 import { OutlookPlayerEditor } from "@/features/seriesComparison/outlook/OutlookPlayerEditor";
 import {
   exactAverageFraction,
@@ -177,7 +176,6 @@ function OutlookWorkspace({
     change((current) => ({
       ...current,
       task: "performance",
-      chartView: "average",
       horizon: current.goalHorizon,
       horizonText: String(current.goalHorizon),
       chartRange: Math.max(current.chartRange, rangeFor(current.goalHorizon)) as 100 | 500 | 1000,
@@ -273,13 +271,8 @@ function OutlookWorkspace({
                 </p>
               </div>
               <div className="grid gap-6">
-                {displayRoles.map(({ memberId, role }, index) => (
-                  <div
-                    key={memberId}
-                    className={index > 0 ? "border-t border-[var(--color-border)] pt-6" : undefined}
-                  >
-                    <OutlookPlayerEditor {...playerProps} role={role} showComparison />
-                  </div>
+                {displayRoles.map(({ memberId, role }) => (
+                  <OutlookPlayerEditor key={memberId} {...playerProps} role={role} showComparison />
                 ))}
               </div>
               <OutlookComparisonControls session={session} change={change} />
@@ -297,13 +290,7 @@ function OutlookWorkspace({
                   tabIndex={-1}
                   className={contentText.heading}
                 >
-                  {session.chartView === "noise"
-                    ? session.pinned
-                      ? "平均どおりに進んだときの差"
-                      : "平均どおりに進むと"
-                    : session.pinned
-                      ? "残した成績との差"
-                      : "この成績が続くと"}
+                  {session.pinned ? "平均どおりに進んだときの差" : "平均どおりに進むと"}
                 </h2>
                 {session.pinned ? (
                   <OutlookScenarioComparison
@@ -320,7 +307,7 @@ function OutlookWorkspace({
                   </>
                 )}
                 <div className="flex flex-wrap gap-2" data-outlook-preserve-draft>
-                  {eventHorizon !== null && session.chartView === "average" ? (
+                  {eventHorizon !== null ? (
                     <Button
                       size="sm"
                       variant="quiet"
@@ -345,77 +332,39 @@ function OutlookWorkspace({
                 </div>
               </section>
               <div ref={chartHeading} className="min-w-0">
-                <TabsRoot
-                  value={session.chartView}
-                  onValueChange={(chartView) =>
-                    change((current) => ({
-                      ...current,
-                      chartView: chartView as OutlookSession["chartView"],
-                    }))
+                <OutlookPatterns
+                  {...playerProps}
+                  active={session.task === "performance"}
+                  onHorizonChange={selectHorizon}
+                  marker={
+                    eventHorizon === null
+                      ? null
+                      : { h: eventHorizon, label: `${eventHorizon}戦後に${outcome.eventLabel}` }
                   }
-                >
-                  <TabsList aria-label="推移の見方" variant="underline">
-                    <TabsTab value="average">平均の推移</TabsTab>
-                    <TabsTab value="noise">試合ごとのブレ</TabsTab>
-                  </TabsList>
-                  <TabsPanel value="average" keepMounted>
-                    <div className="pt-4">
-                      <OutlookChart
-                        key={`${session.key}|${session.artifactId}`}
-                        cumulative={cumulative}
-                        distributions={distributions}
-                        names={names}
-                        memberIds={ids}
+                  horizonControl={
+                    <div className="grid min-w-0 grid-cols-2 gap-4" data-outlook-preserve-draft>
+                      <OutlookHorizonControl
                         horizon={session.horizon}
                         horizonText={session.horizonText}
-                        range={session.chartRange}
-                        marker={
-                          eventHorizon === null
-                            ? null
-                            : {
-                                h: eventHorizon,
-                                label: `${eventHorizon}戦後に${outcome.eventLabel}`,
-                              }
-                        }
-                        onHorizonChange={selectHorizon}
-                        horizonControl={
-                          <div
-                            className="grid min-w-0 grid-cols-2 gap-4"
-                            data-outlook-preserve-draft
-                          >
-                            <OutlookHorizonControl
-                              horizon={session.horizon}
-                              horizonText={session.horizonText}
-                              onChange={selectHorizon}
-                            />
-                            <SelectField
-                              label="表示範囲"
-                              value={String(session.chartRange)}
-                              options={[100, 500, 1000].map((range) => ({
-                                value: String(range),
-                                label: `${range}戦`,
-                              }))}
-                              onValueChange={(value) =>
-                                change((current) => ({
-                                  ...current,
-                                  chartRange: Number(value) as 100 | 500 | 1000,
-                                }))
-                              }
-                            />
-                          </div>
+                        onChange={selectHorizon}
+                      />
+                      <SelectField
+                        label="表示範囲"
+                        value={String(session.chartRange)}
+                        options={[100, 500, 1000].map((range) => ({
+                          value: String(range),
+                          label: `${range}戦`,
+                        }))}
+                        onValueChange={(value) =>
+                          change((current) => ({
+                            ...current,
+                            chartRange: Number(value) as 100 | 500 | 1000,
+                          }))
                         }
                       />
                     </div>
-                  </TabsPanel>
-                  <TabsPanel value="noise" keepMounted>
-                    <div className="pt-4">
-                      <OutlookNoisePanel
-                        {...playerProps}
-                        active={session.task === "performance" && session.chartView === "noise"}
-                      />
-                    </div>
-                  </TabsPanel>
-                </TabsRoot>
+                  }
+                />
               </div>
             </div>
           </div>

@@ -34,7 +34,6 @@ export type OutlookSession = {
   pinned?: Pair | undefined;
   gesture?: { role: OutlookRole; before: Pair } | undefined;
   task: "performance" | "goal";
-  chartView: "average" | "noise";
   transfer: [OutlookRankIndex, OutlookRankIndex];
   horizon: number;
   horizonText: string;
@@ -139,7 +138,6 @@ export function adoptOutlookSummary(
       entries: recent,
       history: [],
       task: "performance",
-      chartView: "average",
       transfer: [2, 3],
       horizon: 20,
       horizonText: "20",

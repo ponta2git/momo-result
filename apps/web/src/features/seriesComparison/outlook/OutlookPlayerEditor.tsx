@@ -69,27 +69,9 @@ export function OutlookPlayerEditor(props: Props) {
     entry.source.artifactId !== undefined && entry.source.artifactId !== session.artifactId;
   return (
     <section className="grid min-w-0 grid-cols-1 gap-2" aria-label={`${names[role]}の成績を試す`}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <h3 className={contentText.heading}>
         <MemberSequenceLabel memberId={memberIds[role]}>{names[role]}</MemberSequenceLabel>
-        <Button
-          size="sm"
-          variant="quiet"
-          disabled={unchanged}
-          aria-label={`${names[role]}を直近の成績に戻す`}
-          onClick={() =>
-            change((current) =>
-              applyOutlookDistribution(finishOutlookGesture(current), role, recent, {
-                kind: "recent",
-                artifactId: response.artifact.artifactId,
-                matchCount: response.recent.matchCount,
-                ...(response.recent.period ? { period: response.recent.period } : {}),
-              }),
-            )
-          }
-        >
-          直近に戻す
-        </Button>
-      </div>
+      </h3>
       {baseline ? (
         <p className={contentText.supporting} aria-label={`${names[role]}の比較基準`}>
           残した平均 {outlookAverage(distributionMean(baseline))}位
@@ -103,12 +85,32 @@ export function OutlookPlayerEditor(props: Props) {
         label="これからの平均順位"
         change={change}
       />
-      <div className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 pointer-fine:min-h-9">
+      <div className="grid gap-1">
         <p className={contentText.supporting} aria-label={`${names[role]}の直近からの差`}>
           {outdated ? "更新前の成績 · " : ""}
           {differenceLabel}
         </p>
-        <OutlookCountDialog {...props} />
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="quiet"
+            disabled={unchanged}
+            aria-label={`${names[role]}を直近の成績に戻す`}
+            onClick={() =>
+              change((current) =>
+                applyOutlookDistribution(finishOutlookGesture(current), role, recent, {
+                  kind: "recent",
+                  artifactId: response.artifact.artifactId,
+                  matchCount: response.recent.matchCount,
+                  ...(response.recent.period ? { period: response.recent.period } : {}),
+                }),
+              )
+            }
+          >
+            直近に戻す
+          </Button>
+          <OutlookCountDialog {...props} />
+        </div>
       </div>
     </section>
   );

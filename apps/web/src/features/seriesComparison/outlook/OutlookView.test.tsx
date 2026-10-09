@@ -91,16 +91,16 @@ function displayedCounts(name = focusName) {
     .getAllByRole("definition")
     .map((value) => value.textContent);
 }
-function chartAxisLabels() {
-  return [...screen.getByRole("img").querySelectorAll("text")]
-    .slice(0, 3)
-    .map((label) => label.textContent);
-}
 function resultCells(name = focusName) {
-  const table = within(screen.getByRole("table", { name: "現在と指定戦数後の総合平均順位" }));
-  return within(table.getByRole("row", { name: new RegExp(`^${name}`, "u") }))
-    .getAllByRole("cell")
-    .map((cell) => cell.textContent);
+  const table = within(screen.getByRole("table", { name: /^現在と\d+戦後の総合平均順位$/u }));
+  const column =
+    table.getAllByRole("columnheader").indexOf(table.getByRole("columnheader", { name })) - 1;
+  return ["現在", "平均"].map(
+    (label) =>
+      within(table.getByRole("row", { name: new RegExp(`^${label}`, "u") })).getAllByRole("cell")[
+        column
+      ]?.textContent,
+  );
 }
 function undo() {
   return screen.getByRole("button", { name: "成績を1つ戻す" });
@@ -202,24 +202,21 @@ async function threeGameSummary() {
 }
 
 describe("OutlookView input and update boundaries", () => {
-  it("keeps both named editors and chart rows in member order when focus follows rival", async () => {
+  it("keeps both named editors and result columns in member order when focus follows rival", async () => {
     const user = userEvent.setup();
     renderOutlook(await makeSeriesAnalysisOutlookSummary(), ["member_ponta", "member_eu"]);
     expect(meanField(focusName)).toHaveValue("2.85");
     expect(meanField(rivalName)).toHaveValue("2.45");
-    const table = within(screen.getByRole("table", { name: "現在と指定戦数後の総合平均順位" }));
-    expect(table.getAllByRole("rowheader").map((cell) => cell.textContent)).toEqual([
-      "いーゆー（実線）",
-      "ぽんた（破線）",
+    const table = within(screen.getByRole("table", { name: "現在と20戦後の総合平均順位" }));
+    expect(table.getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual([
+      "展開",
+      "いーゆー",
+      "ぽんた",
     ]);
     const otherBefore = resultCells(focusName);
-    const before = screen.getByLabelText("いーゆーの総合平均順位（実線）").getAttribute("d");
-    const axes = chartAxisLabels();
     await setMean(user, "2.40", rivalName);
     expect(resultCells(focusName)).toEqual(otherBefore);
     expect(resultCells(rivalName)).toEqual(["2.44位", "2.42位"]);
-    expect(screen.getByLabelText("いーゆーの総合平均順位（実線）")).toHaveAttribute("d", before);
-    expect(chartAxisLabels()).toEqual(axes);
   });
 
   it("commits each mean only with Enter or its adjacent button and retains invalid input on blur", async () => {
@@ -514,16 +511,13 @@ describe("OutlookView input and update boundaries", () => {
     const horizon = screen.getByRole("textbox", { name: "何戦後を見る" });
     await user.clear(horizon);
     await user.type(horizon, "50{Enter}");
-    await user.click(screen.getByRole("tab", { name: "試合ごとのブレ" }));
     await user.click(screen.getByRole("tab", { name: "戦数から考える" }));
     const goal = screen.getByRole("textbox", { name: "目標の戦数" });
     expect(goal).toHaveValue("100");
     await user.clear(goal);
     await user.type(goal, "500{Enter}");
     await user.click(screen.getByRole("tab", { name: "成績から試す" }));
-    await user.click(screen.getByRole("tab", { name: "平均の推移" }));
     expect(screen.getByRole("textbox", { name: "何戦後を見る" })).toHaveValue("50");
-    await user.click(screen.getByRole("tab", { name: "試合ごとのブレ" }));
     await user.click(screen.getByRole("tab", { name: "戦数から考える" }));
     expect(screen.getByRole("textbox", { name: "目標の戦数" })).toHaveValue("500");
     await user.click(screen.getByRole("button", { name: /^平均.+位で推移を見る$/u }));
@@ -531,16 +525,13 @@ describe("OutlookView input and update boundaries", () => {
       "aria-selected",
       "true",
     );
-    expect(screen.getByRole("tab", { name: "平均の推移" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    expect(screen.getAllByRole("figure")).toHaveLength(4);
     expect(screen.getByRole("textbox", { name: "何戦後を見る" })).toHaveValue("500");
     expect(screen.getByRole("combobox", { name: "表示範囲" })).toHaveTextContent("500戦");
     expect(meanField()).toHaveValue("2.45");
     expect(meanField(rivalName)).toHaveValue("2.45");
     await waitFor(() =>
-      expect(screen.getByRole("heading", { name: "この成績が続くと" })).toHaveFocus(),
+      expect(screen.getByRole("heading", { name: "平均どおりに進むと" })).toHaveFocus(),
     );
     await user.click(undo());
     expect(meanField()).toHaveValue("2.85");
@@ -649,7 +640,7 @@ describe("OutlookView input and update boundaries", () => {
     expect(screen.getByText(/比較の基準に残した成績を解除しました/u)).toBeInTheDocument();
   });
 
-  it("switches the inline chart without changing either condition, baseline, or the other chart's horizon", async () => {
+  it("preserves the shared chart horizon, input draft, and comparison baseline across task switches", async () => {
     const user = userEvent.setup();
     renderOutlook(await makeSeriesAnalysisOutlookSummary());
     const horizon = screen.getByRole("textbox", { name: "何戦後を見る" });
@@ -657,34 +648,17 @@ describe("OutlookView input and update boundaries", () => {
     await user.type(horizon, "450{Enter}");
     await selectOption(user, screen.getByRole("combobox", { name: "表示範囲" }), "500");
     await pinComparison(user);
-    const averagePath = screen.getByLabelText("いーゆーの総合平均順位（実線）").getAttribute("d");
+    const average = resultCells();
     await user.clear(meanField());
     await user.type(meanField(), "2.60");
-    await user.click(screen.getByRole("tab", { name: "試合ごとのブレ" }));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getAllByRole("img")).toHaveLength(1);
-    const noiseHorizon = screen.getByRole("textbox", { name: "何戦後を見る" });
-    expect(noiseHorizon).toHaveValue("20");
-    await user.clear(noiseHorizon);
-    await user.type(noiseHorizon, "100{Enter}");
-    await selectOption(user, screen.getByRole("combobox", { name: "表示する展開例" }), "2");
-    await user.click(screen.getByRole("tab", { name: "平均の推移" }));
-    expect(horizon).toHaveValue("450");
-    expect(screen.getByRole("combobox", { name: "表示範囲" })).toHaveTextContent("500戦");
-    expect(screen.getByLabelText("いーゆーの総合平均順位（実線）")).toHaveAttribute(
-      "d",
-      averagePath,
-    );
-    await user.click(screen.getByRole("tab", { name: "試合ごとのブレ" }));
-    expect(screen.getByRole("textbox", { name: "何戦後を見る" })).toHaveValue("100");
-    expect(screen.getByRole("combobox", { name: "表示する展開例" })).toHaveTextContent("展開例3");
     await user.click(screen.getByRole("tab", { name: "戦数から考える" }));
     expect(screen.getByRole("textbox", { name: "目標の戦数" })).toHaveValue("100");
+    expect(screen.queryByRole("figure")).not.toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "成績から試す" }));
-    expect(screen.getByRole("tab", { name: "試合ごとのブレ" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    expect(screen.getByRole("textbox", { name: "何戦後を見る" })).toHaveValue("450");
+    expect(screen.getByRole("combobox", { name: "表示範囲" })).toHaveTextContent("500戦");
+    expect(screen.getAllByRole("figure")).toHaveLength(4);
+    expect(resultCells()).toEqual(average);
     expect(meanField()).toHaveValue("2.60");
     expect(meanField(rivalName)).toHaveValue("2.45");
     expect(screen.getByLabelText(`${focusName}の比較基準`)).toHaveTextContent("2.85位");
@@ -723,34 +697,21 @@ describe("OutlookView input and update boundaries", () => {
     },
   );
 
-  it("keeps the chart scale fixed while editing and preserves a horizon outside its selected range", async () => {
+  it("keeps results beyond the graph's range and lets a graph control the shared horizon", async () => {
     const user = userEvent.setup();
     renderOutlook(await makeSeriesAnalysisOutlookSummary());
-    const axes = chartAxisLabels();
-    await setMean(user, "1.35");
-    expect(chartAxisLabels()).toEqual(axes);
-    await setMean(user, "3.65");
-    expect(chartAxisLabels()).toEqual(axes);
     const horizon = screen.getByRole("textbox", { name: "何戦後を見る" });
-    for (const value of ["1", "50", "100"]) {
-      await user.clear(horizon);
-      await user.type(horizon, `${value}{Enter}`);
-      expect(chartAxisLabels()).toEqual(axes);
-    }
     await user.clear(horizon);
     await user.type(horizon, "101{Enter}");
     expect(screen.getByRole("combobox", { name: "表示範囲" })).toHaveTextContent("100戦");
     expect(horizon).toHaveValue("101");
-    expect(screen.getByRole("img")).toHaveAccessibleName(
-      /確認する時点は101戦後（グラフの範囲外）/u,
-    );
-    expect(screen.queryByLabelText("いーゆーの101戦後")).not.toBeInTheDocument();
-    expect(screen.getByRole("table", { name: "現在と指定戦数後の総合平均順位" })).toHaveTextContent(
-      "101戦後",
-    );
+    for (const chart of screen.getAllByRole("img"))
+      expect(chart).toHaveAccessibleName(/確認する時点は101戦後（グラフの範囲外）/u);
+    expect(screen.queryAllByLabelText("いーゆーの101戦後")).toHaveLength(0);
+    expect(screen.getByRole("table", { name: "現在と101戦後の総合平均順位" })).toBeVisible();
     await selectOption(user, screen.getByRole("combobox", { name: "表示範囲" }), "1000");
-    expect(screen.getByLabelText("いーゆーの101戦後")).toBeInTheDocument();
-    const slider = screen.getByRole("slider", { name: "グラフで確認する戦数" });
+    expect(screen.getAllByLabelText("いーゆーの101戦後")).toHaveLength(4);
+    const slider = screen.getByRole("slider", { name: "平均のグラフで確認する戦数" });
     fireEvent.keyDown(slider, { key: "Home" });
     expect(horizon).toHaveValue("1");
     fireEvent.keyDown(slider, { key: "End" });

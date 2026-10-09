@@ -15,20 +15,20 @@ export function OutlookChartScrubber({
   horizon,
   horizonText,
   range,
-  maxHorizon = 1000,
+  label = "グラフで確認する戦数",
   valueText,
   descriptionId,
   onChange,
 }: Selection & {
   range: 100 | 500 | 1000;
-  maxHorizon?: 100 | 1000;
+  label?: string;
   valueText: string;
   descriptionId: string;
   onChange: (selection: Selection) => void;
 }) {
   const drag = useRef<Drag | null>(null);
   const select = (value: number) => {
-    const next = Math.max(1, Math.min(maxHorizon, value));
+    const next = Math.max(1, Math.min(1000, value));
     onChange({ horizon: next, horizonText: String(next) });
   };
   const selectPosition = (event: PointerEvent<HTMLDivElement>) => {
@@ -47,9 +47,9 @@ export function OutlookChartScrubber({
     <div
       role="slider"
       tabIndex={0}
-      aria-label="グラフで確認する戦数"
+      aria-label={label}
       aria-valuemin={1}
-      aria-valuemax={maxHorizon}
+      aria-valuemax={1000}
       aria-valuenow={horizon}
       aria-valuetext={valueText}
       aria-describedby={descriptionId}
@@ -115,7 +115,7 @@ export function OutlookChartScrubber({
             next = 1;
             break;
           case "End":
-            next = maxHorizon;
+            next = 1000;
             break;
           case "Escape":
             if (drag.current) {

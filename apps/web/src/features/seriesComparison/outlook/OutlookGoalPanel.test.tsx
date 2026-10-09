@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { useLayoutEffect } from "react";
@@ -9,6 +9,7 @@ import {
   distributionFromCounts,
   distributionMean,
 } from "@/features/seriesComparison/model/outlook";
+import { OutlookEditor } from "@/features/seriesComparison/outlook/OutlookEditor";
 import { OutlookGoalPanel } from "@/features/seriesComparison/outlook/OutlookGoalPanel";
 import { OutlookHorizonControl } from "@/features/seriesComparison/outlook/OutlookHorizonControl";
 import {
@@ -85,7 +86,9 @@ function renderGoal(response: SeriesAnalysisOutlookSummary, initial = initialSes
             }
           />
         }
-        opponentEditor={<p>相手の成績入力</p>}
+        opponentEditor={
+          <OutlookEditor session={session} role={1} method="mean" name={names[1]} change={change} />
+        }
         onUsePerformance={onUsePerformance}
       />
     );
@@ -101,34 +104,95 @@ function renderGoal(response: SeriesAnalysisOutlookSummary, initial = initialSes
 }
 
 describe("OutlookGoalPanel", () => {
-  it("uses the goal horizon, applies the strict mean to the focus only, and retains the rival draft", async () => {
+  it.each(["cancel", "reflect", "cancel-error"] as const)(
+    "waits for the rival draft to %s before applying the goal mean to the focus",
+    async (resolution) => {
+      const user = userEvent.setup();
+      const response = await makeSeriesAnalysisOutlookSummary();
+      const initial = initialSession(response);
+      initial.entries[0].meanDraft = "2.60";
+      if (resolution === "cancel-error") initial.entries[1].error = "相手と両立しない内訳です。";
+      else initial.entries[1].meanDraft = "2.30";
+      const view = renderGoal(response, initial);
+      expect(
+        screen.getByRole("heading", { name: "100戦後もいーゆーが先行を維持するには" }),
+      ).toBeVisible();
+      expect(screen.getByText("平均2.48位以下")).toBeVisible();
+      expect(screen.getByText("作品内の連続100戦の自己ベスト")).toBeVisible();
+      expect(screen.getByText("作品の実績32戦では不足")).toBeVisible();
+      const pendingAction = screen.getByRole("button", { name: "平均2.48位で推移を見る" });
+      expect(pendingAction).toBeDisabled();
+      await user.click(pendingAction);
+      expect(view.readSession()).toBe(initial);
+      expect(view.onUsePerformance).not.toHaveBeenCalled();
+      await user.click(
+        screen.getByRole("button", {
+          name: resolution === "reflect" ? "ぽんたの平均順位を反映" : "ぽんたの入力を取り消す",
+        }),
+      );
+      const ready = view.readSession();
+      if (resolution === "reflect") {
+        expect(distributionMean(ready.entries[1].distribution)).toEqual({
+          numerator: 23n,
+          denominator: 10n,
+        });
+      } else {
+        expect(ready.entries[1]).toEqual({
+          ...initial.entries[1],
+          meanDraft: undefined,
+          error: undefined,
+        });
+        expect(ready.history).toEqual(initial.history);
+        expect(screen.getByRole("textbox", { name: "ぽんたのこれからの平均順位" })).toHaveFocus();
+      }
+      // A mean of rival + 0.04 ties at 100 games; the selected hundredth must be lower.
+      const appliedMean = resolution === "reflect" ? "2.33" : "2.48";
+      const apply = screen.getByRole("button", { name: `平均${appliedMean}位で推移を見る` });
+      expect(apply).toBeEnabled();
+      await user.click(apply);
+      const result = view.readSession();
+      expect(distributionMean(result.entries[0].distribution)).toEqual(
+        resolution === "reflect"
+          ? { numerator: 233n, denominator: 100n }
+          : { numerator: 62n, denominator: 25n },
+      );
+      expect(result.entries[0].source.kind).toBe("average");
+      expect(result.entries[0].meanDraft).toBeUndefined();
+      expect(result.entries[1]).toEqual(ready.entries[1]);
+      expect(result.history).toHaveLength(ready.history.length + 1);
+      expect(undoOutlook(result).entries.map((entry) => entry.distribution)).toEqual(
+        ready.entries.map((entry) => entry.distribution),
+      );
+      expect(result.horizon).toBe(20);
+      expect(view.onUsePerformance).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("waits for the rival slider gesture to finish before applying the goal", async () => {
     const user = userEvent.setup();
-    const response = await makeSeriesAnalysisOutlookSummary();
-    const initial = initialSession(response);
-    initial.entries[0].meanDraft = "2.60";
-    initial.entries[1].meanDraft = "2.30";
-    const view = renderGoal(response, initial);
-    expect(
-      screen.getByRole("heading", { name: "100戦後もいーゆーが先行を維持するには" }),
-    ).toBeVisible();
-    expect(screen.getByText("平均2.48位以下")).toBeVisible();
-    expect(screen.getByText("作品内の連続100戦の自己ベスト")).toBeVisible();
-    expect(screen.getByText("作品の実績32戦では不足")).toBeVisible();
-    // 2.49 ties at 100 games: 74 + 100 * 2.49 = 78 + 100 * 2.45.
-    await user.click(screen.getByRole("button", { name: "この成績で推移を見る" }));
+    const view = renderGoal(await makeSeriesAnalysisOutlookSummary());
+    await user.click(screen.getByRole("textbox", { name: "ぽんたのこれからの平均順位" }));
+    await user.tab();
+    const slider = screen.getByRole("slider", { name: "ぽんたの平均順位を動かす" });
+    expect(slider).toHaveFocus();
+    await user.keyboard("{ArrowLeft>}");
+    const apply = screen.getByRole("button", { name: "平均2.47位で推移を見る" });
+    expect(apply).toBeDisabled();
+    fireEvent.click(apply);
+    expect(view.onUsePerformance).not.toHaveBeenCalled();
+    await user.keyboard("{/ArrowLeft}");
+    expect(apply).toBeEnabled();
+    await user.click(apply);
     const result = view.readSession();
     expect(distributionMean(result.entries[0].distribution)).toEqual({
-      numerator: 62n,
+      numerator: 247n,
+      denominator: 100n,
+    });
+    expect(distributionMean(result.entries[1].distribution)).toEqual({
+      numerator: 61n,
       denominator: 25n,
     });
-    expect(result.entries[0].source.kind).toBe("average");
-    expect(result.entries[0].meanDraft).toBeUndefined();
-    expect(result.entries[1]).toEqual(initial.entries[1]);
-    expect(result.history).toHaveLength(1);
-    expect(undoOutlook(result).entries.map((entry) => entry.distribution)).toEqual(
-      initial.entries.map((entry) => entry.distribution),
-    );
-    expect(result.horizon).toBe(20);
+    expect(result.history).toHaveLength(2);
     expect(view.onUsePerformance).toHaveBeenCalledOnce();
   });
 
@@ -142,10 +206,9 @@ describe("OutlookGoalPanel", () => {
       meanDraft: "2.11",
       error: "入力を見直してください。",
     };
-    initial.entries[1].meanDraft = "2.30";
     const view = renderGoal(response, initial);
-    expect(screen.getByText("今の平均2.15位で条件を満たしています。")).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "今の成績で推移を見る" }));
+    expect(screen.getByText("今の平均2.15位で維持できます")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "平均2.15位で推移を見る" }));
     const result = view.readSession();
     expect(result.entries[0]).toEqual({
       distribution: initial.entries[0].distribution,
@@ -162,7 +225,7 @@ describe("OutlookGoalPanel", () => {
     const user = userEvent.setup();
     const view = renderGoal(await makeSeriesAnalysisOutlookSummary());
     const horizon = screen.getByRole("textbox", { name: "目標の戦数" });
-    const usePerformance = screen.getByRole("button", { name: "この成績で推移を見る" });
+    const usePerformance = screen.getByRole("button", { name: "平均2.48位で推移を見る" });
     await user.clear(horizon);
     expect(usePerformance).toBeDisabled();
     expect(screen.getByText("平均2.48位以下")).toBeVisible();
@@ -194,7 +257,7 @@ describe("OutlookGoalPanel", () => {
     initial.entries[1].distribution = distributionFromCounts([20, 0, 0, 0]);
     const view = renderGoal(response, initial);
     expect(screen.getByText("相手がこの成績なら届きません")).toBeVisible();
-    const usePerformance = screen.getByRole("button", { name: "この成績で推移を見る" });
+    const usePerformance = screen.getByRole("button", { name: "推移を見る" });
     expect(usePerformance).toBeDisabled();
     await user.click(usePerformance);
     expect(view.readSession()).toBe(initial);
@@ -218,11 +281,11 @@ describe("OutlookGoalPanel", () => {
       );
       const view = renderGoal(response, initial);
       const usePerformance = screen.getByRole("button", {
-        name: alreadyReaches ? "今の成績で推移を見る" : "この成績で推移を見る",
+        name: alreadyReaches ? "平均1.5010位で推移を見る" : "推移を見る",
       });
       expect(screen.queryByText("相手がこの成績なら届きません")).not.toBeInTheDocument();
       if (alreadyReaches) {
-        expect(screen.getByText("今の成績で先行を維持できます")).toBeVisible();
+        expect(screen.getByText("今の平均1.5010位で維持できます")).toBeVisible();
         expect(usePerformance).toBeEnabled();
       } else {
         expect(screen.getByText("入力できる細かさでは指定できません")).toBeVisible();
@@ -264,16 +327,31 @@ describe("OutlookGoalPanel", () => {
     const user = userEvent.setup();
     const response = await makeSeriesAnalysisOutlookSummary();
     const initial = { ...initialSession(response), horizon: 1, horizonText: "1" };
+    initial.entries[1].meanDraft = "2.30";
     const view = renderGoal(response, initial);
     await user.click(screen.getByRole("button", { name: "いーゆーの過去の成績例" }));
     const examples = await screen.findAllByRole("button", { name: "この成績を試す" });
     expect(examples).toHaveLength(3);
     expect(screen.getByText(/100戦続けると上回れる例/u)).toBeVisible();
+    expect(examples[0]).toBeDisabled();
+    expect(examples[0]).toHaveAccessibleDescription(
+      "ぽんたの入力を反映するか、取り消してください。",
+    );
+    await user.click(examples[0]!);
+    expect(distributionMean(view.readSession().entries[0].distribution)).toEqual({
+      numerator: 57n,
+      denominator: 20n,
+    });
+    expect(view.readSession().entries[1].meanDraft).toBe("2.30");
+    expect(view.onUsePerformance).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "ぽんたの入力を取り消す" }));
+    const ready = view.readSession();
+    expect(examples[0]).toBeEnabled();
     await user.click(examples[0]!);
     const result = view.readSession();
     expect(result.entries[0].distribution).toEqual(distributionFromCounts([4, 7, 7, 2]));
     expect(result.entries[0].source).toMatchObject({ kind: "example", matchCount: 20 });
-    expect(result.entries[1]).toEqual(initial.entries[1]);
+    expect(result.entries[1]).toEqual(ready.entries[1]);
     expect(result.history).toHaveLength(1);
     expect(result.horizon).toBe(1);
     expect(view.onUsePerformance).toHaveBeenCalledOnce();

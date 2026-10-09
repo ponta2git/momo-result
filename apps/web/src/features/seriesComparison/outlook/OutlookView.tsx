@@ -124,6 +124,7 @@ function OutlookWorkspace({
   const location = useLocation();
   const resultHeading = useRef<HTMLHeadingElement>(null);
   const chartHeading = useRef<HTMLDivElement>(null);
+  const goalPanel = useRef<HTMLDivElement>(null);
   const { focusMemberId, rivalMemberId } = normalizeOutlookPair(
     selection.focusMemberId,
     selection.rivalMemberId,
@@ -185,6 +186,16 @@ function OutlookWorkspace({
       }
     });
   };
+  const viewGoal = () => {
+    change((current) => ({ ...current, task: "goal" }));
+    requestAnimationFrame(() => {
+      const input = goalPanel.current?.querySelector<HTMLInputElement>("input");
+      if (input) {
+        input.focus({ preventScroll: true });
+        revealPageElement(input, "start");
+      }
+    });
+  };
   const numericRows = [...new Set([0, 10, 20, 50, 100, session.horizon])]
     .toSorted((a, b) => a - b)
     .map((h) => ({ h, ...projectOutlook(cumulative, distributions[0], distributions[1], h) }));
@@ -227,9 +238,6 @@ function OutlookWorkspace({
             />
           ))}
         </div>
-        <p className={contentText.supporting}>
-          選択した範囲の{cumulative.games}戦をもとに、この先の成績を試せます。
-        </p>
       </div>
       {session.notice ? (
         <p className={contentText.body} role="status">
@@ -254,7 +262,7 @@ function OutlookWorkspace({
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 id="outlook-assumptions" className={contentText.heading}>
-                  この先に続ける成績
+                  これからの成績
                 </h2>
                 <Button
                   variant="quiet"
@@ -263,18 +271,20 @@ function OutlookWorkspace({
                   icon={<Undo2 aria-hidden="true" className="size-4" />}
                   onClick={() => change(undoOutlook)}
                 >
-                  1つ戻す
+                  成績を1つ戻す
                 </Button>
               </div>
+              <p className={contentText.supporting}>
+                小さいほど上位。初期値は作品全体の直近{response.recent.matchCount}戦です。
+              </p>
               {displayRoles.map(({ memberId, role }) => (
                 <OutlookPlayerEditor key={memberId} {...playerProps} role={role} />
               ))}
-              <p className={contentText.supporting}>
-                初期値は作品全体の直近{response.recent.matchCount}戦です。
-                {response.recent.qualityStatus === "reference"
-                  ? "直近の実績が少ないため、見通しは参考値です。"
-                  : ""}
-              </p>
+              {response.recent.qualityStatus === "reference" ? (
+                <p className={contentText.supporting}>
+                  直近の実績が少ないため、見通しは参考値です。
+                </p>
+              ) : null}
             </section>
             <div className="grid min-w-0 grid-cols-1 content-start gap-6">
               <section className="grid min-w-0 gap-2" aria-labelledby="outlook-conclusion">
@@ -311,6 +321,10 @@ function OutlookWorkspace({
                       {eventHorizon}戦後を見る
                     </Button>
                   ) : null}
+                  <Button size="sm" variant="quiet" onClick={viewGoal}>
+                    {session.goalHorizon}戦後{outcome.crossing.current === "ahead" ? "も" : "に"}
+                    {names[0]}が先行する条件
+                  </Button>
                   <OutlookScenarioComparison
                     session={session}
                     cumulative={cumulative}
@@ -368,7 +382,7 @@ function OutlookWorkspace({
           </div>
         </TabsPanel>
         <TabsPanel value="goal" keepMounted>
-          <div className="min-w-0 pt-6">
+          <div ref={goalPanel} className="min-w-0 pt-6">
             {session.task === "goal" ? (
               <OutlookGoalPanel
                 {...playerProps}
@@ -390,18 +404,15 @@ function OutlookWorkspace({
                 opponentEditor={<OutlookPlayerEditor {...playerProps} role={1} />}
                 onUsePerformance={usePerformance}
                 reviewLinks={
-                  <div className="grid gap-2">
-                    <h3 className={contentText.heading}>実際の戦績で考える</h3>
-                    <div className="flex flex-wrap gap-2">
-                      <LinkButton variant="secondary" size="sm" to={reviewHref}>
-                        {names[0]}の行動仮説を見る
-                      </LinkButton>
-                      <LinkButton variant="quiet" size="sm" to={matchHref}>
-                        {selection.seasonMasterId
-                          ? "このシーズンの確定戦績を見る"
-                          : "この作品の確定戦績を見る"}
-                      </LinkButton>
-                    </div>
+                  <div className="flex flex-wrap gap-2">
+                    <LinkButton variant="secondary" size="sm" to={reviewHref}>
+                      {names[0]}の行動仮説を見る
+                    </LinkButton>
+                    <LinkButton variant="quiet" size="sm" to={matchHref}>
+                      {selection.seasonMasterId
+                        ? "このシーズンの確定戦績を見る"
+                        : "この作品の確定戦績を見る"}
+                    </LinkButton>
                   </div>
                 }
               />

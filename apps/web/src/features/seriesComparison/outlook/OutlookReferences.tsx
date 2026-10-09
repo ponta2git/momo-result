@@ -38,6 +38,7 @@ export function OutlookPastExamples({
   session,
   change,
   onUsePerformance,
+  pendingDescriptionId,
 }: {
   response: SeriesAnalysisOutlookSummary;
   focusId: string;
@@ -47,6 +48,7 @@ export function OutlookPastExamples({
   session: OutlookSession;
   change: (update: (current: OutlookSession) => OutlookSession) => void;
   onUsePerformance?: (() => void) | undefined;
+  pendingDescriptionId?: string | undefined;
 }) {
   const { examples: query } = useOutlookResource(
     response,
@@ -55,6 +57,10 @@ export function OutlookPastExamples({
     session.examplesOpen,
   );
   const rival = session.entries[1].distribution;
+  const opponentPending =
+    session.entries[1].meanDraft !== undefined ||
+    session.entries[1].error !== undefined ||
+    Boolean(session.gesture);
   const { examples, hasQualifying } = useMemo(() => {
     const selected: SeriesAnalysisOutlookExamples["examples"]["types"] = [];
     let hasMatchingMean = false;
@@ -109,14 +115,19 @@ export function OutlookPastExamples({
                         size="sm"
                         variant="secondary"
                         disabled={
+                          opponentPending ||
                           parseOutlookHorizon(session.goalHorizonText) !== session.goalHorizon
                         }
+                        aria-describedby={opponentPending ? pendingDescriptionId : undefined}
                         onClick={() => {
                           let accepted = false;
                           change((current) => {
                             if (
                               current.artifactId !== response.artifact.artifactId ||
                               current.key !== session.key ||
+                              current.entries[1].meanDraft !== undefined ||
+                              current.entries[1].error !== undefined ||
+                              current.gesture !== undefined ||
                               parseOutlookHorizon(current.goalHorizonText) !== current.goalHorizon
                             )
                               return current;

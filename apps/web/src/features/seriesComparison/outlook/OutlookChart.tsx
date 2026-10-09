@@ -179,7 +179,7 @@ export const OutlookChart = memo(function OutlookChart({
     <figure className="grid min-w-0 gap-3" aria-labelledby={titleId}>
       <figcaption className="grid gap-1" id={titleId}>
         <span className={contentText.heading}>総合平均順位の推移</span>
-        <span className={contentText.supporting}>小さいほど上。上にある人が先行しています。</span>
+        <span className={contentText.supporting}>上の線が先行</span>
       </figcaption>
       {horizonControl}
       <DataTable
@@ -389,14 +389,8 @@ export const OutlookChart = memo(function OutlookChart({
           </span>
         ) : null}
       </p>
-      {marker ? (
-        <p className={contentText.supporting}>
-          {marker.label}
-          {marker.h > range ? `（グラフは${range}戦まで）` : ""}
-        </p>
-      ) : null}
       <p id={helpId} className={contentText.supporting}>
-        図のタップ・横ドラッグは1〜{range}戦。矢印キーでも動かせます。
+        タップ・横ドラッグ・矢印キーで戦数を選べます。
       </p>
     </figure>
   );

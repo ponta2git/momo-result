@@ -103,7 +103,7 @@ function resultCells(name = focusName) {
     .map((cell) => cell.textContent);
 }
 function undo() {
-  return screen.getByRole("button", { name: "1つ戻す" });
+  return screen.getByRole("button", { name: "成績を1つ戻す" });
 }
 async function setMean(
   user: ReturnType<typeof userEvent.setup>,
@@ -120,7 +120,7 @@ async function openCounts(user: ReturnType<typeof userEvent.setup>, name = focus
   return screen.getByRole("dialog", { name: `${name}の順位の回数を変える` });
 }
 async function openComparison(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole("button", { name: /^(?:別の成績|残した条件)と比べる$/u }));
+  await user.click(screen.getByRole("button", { name: /^(?:別の成績|残した成績)と比べる$/u }));
   return screen.getByRole("dialog", { name: "2つの成績を比べる" });
 }
 
@@ -232,7 +232,7 @@ describe("OutlookView input and update boundaries", () => {
     expect(meanField()).toHaveValue("2.60");
     expect(resultCells(focusName)).toEqual(["2.31位", "2.52位"]);
     expect(resultCells(rivalName)).toEqual(["2.44位", "2.48位"]);
-    expect(screen.getByText("入力中・見通しは前の値")).toBeInTheDocument();
+    expect(screen.getByText(/反映済み.*2.85位/u)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: `${focusName}の平均順位を反映` }));
     expect(resultCells(focusName)).toEqual(["2.31位", "2.42位"]);
     await setMean(user, "2.6001");
@@ -240,8 +240,7 @@ describe("OutlookView input and update boundaries", () => {
     expect(meanField()).toHaveValue("2.6001");
     expect(meanField()).toHaveAccessibleDescription(/0\.01刻み/u);
     expect(resultCells(focusName)).toEqual(["2.31位", "2.42位"]);
-    await user.click(meanField());
-    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: `${focusName}の入力を取り消す` }));
     expect(meanField()).toHaveValue("2.60");
     await user.click(undo());
     expect(meanField()).toHaveValue("2.85");
@@ -446,7 +445,7 @@ describe("OutlookView input and update boundaries", () => {
     const view = renderOutlook(initial);
     await setMean(user, "2.70");
     await openComparison(user);
-    await user.click(screen.getByRole("button", { name: "この条件を使う" }));
+    await user.click(screen.getByRole("button", { name: "2人に反映" }));
     await user.clear(meanField());
     await user.type(meanField(), "2.60");
     view.updateSummary(await correctedSummary(initial));
@@ -503,6 +502,9 @@ describe("OutlookView input and update boundaries", () => {
     expect(meanField()).toHaveValue("2.50");
     expect(meanField()).toHaveAccessibleDescription(/3位/u);
     expect(meanField(rivalName)).toHaveValue("2.70");
+    await user.click(screen.getByRole("button", { name: `${focusName}の入力を取り消す` }));
+    expect(meanField()).toHaveValue("2.50");
+    expect(meanField()).not.toHaveAttribute("aria-invalid", "true");
     await user.click(undo());
     expect(meanField()).toHaveValue("2.50");
     expect(meanField(rivalName)).toHaveValue("2.45");
@@ -523,7 +525,7 @@ describe("OutlookView input and update boundaries", () => {
     expect(screen.getByRole("textbox", { name: "何戦後を見る" })).toHaveValue("50");
     await user.click(screen.getByRole("tab", { name: "戦数から考える" }));
     expect(screen.getByRole("textbox", { name: "目標の戦数" })).toHaveValue("500");
-    await user.click(screen.getByRole("button", { name: "この成績で推移を見る" }));
+    await user.click(screen.getByRole("button", { name: /^平均.+位で推移を見る$/u }));
     expect(screen.getByRole("tab", { name: "成績から試す" })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -540,7 +542,7 @@ describe("OutlookView input and update boundaries", () => {
     expect(undo()).toBeDisabled();
   });
 
-  it("uses committed rival performance for a goal and preserves the rival's pending draft", async () => {
+  it("waits for the rival's pending input to be resolved before applying a goal", async () => {
     const user = userEvent.setup();
     renderOutlook(await makeSeriesAnalysisOutlookSummary());
     await user.clear(meanField());
@@ -548,39 +550,78 @@ describe("OutlookView input and update boundaries", () => {
     await user.clear(meanField(rivalName));
     await user.type(meanField(rivalName), "2.30");
     await user.click(screen.getByRole("tab", { name: "戦数から考える" }));
-    await user.click(screen.getByRole("button", { name: "この成績で推移を見る" }));
-    expect(meanField()).toHaveValue("2.48");
+    const apply = screen.getByRole("button", { name: /^平均.+位で推移を見る$/u });
+    expect(apply).toBeDisabled();
+    await user.click(apply);
+    expect(screen.getByRole("tab", { name: "戦数から考える" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     expect(meanField(rivalName)).toHaveValue("2.30");
-    expect(resultCells(rivalName)).toEqual(["2.44位", "2.45位"]);
-    await user.click(meanField(rivalName));
-    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: `${rivalName}の入力を取り消す` }));
     expect(meanField(rivalName)).toHaveValue("2.45");
+    await user.click(apply);
+    expect(meanField()).toHaveValue("2.48");
+    expect(meanField(rivalName)).toHaveValue("2.45");
+    expect(resultCells(rivalName)).toEqual(["2.44位", "2.45位"]);
     await user.click(undo());
     expect(meanField()).toHaveValue("2.85");
     expect(undo()).toBeDisabled();
   });
 
-  it("keeps the comparison trigger focusable without opening or committing pending or invalid input", async () => {
+  it("compares applied values without losing a pending draft, and explicitly reapplies both values", async () => {
     const user = userEvent.setup();
     renderOutlook(await makeSeriesAnalysisOutlookSummary());
     const trigger = screen.getByRole("button", { name: "別の成績と比べる" });
-    await user.clear(meanField());
-    await user.type(meanField(), "2.60");
+    const main = meanField();
+    await user.clear(main);
+    await user.type(main, "2.60");
     await user.click(trigger);
-    expect(trigger).toHaveFocus();
-    expect(trigger).toHaveAttribute("aria-disabled", "true");
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(meanField()).toHaveValue("2.60");
+    expect(meanField()).toHaveValue("2.85");
+    expect(main).toHaveValue("2.60");
+    await user.click(screen.getByRole("button", { name: "キャンセル" }));
+    expect(main).toHaveValue("2.60");
     expect(resultCells()[1]).toBe("2.52位");
     await setMean(user, "bad");
     await user.click(trigger);
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(meanField()).toHaveValue("bad");
-    await user.click(meanField());
-    await user.keyboard("{Escape}");
-    expect(trigger).not.toHaveAttribute("aria-disabled");
-    await user.click(trigger);
-    expect(screen.getByRole("dialog", { name: "2つの成績を比べる" })).toBeInTheDocument();
+    expect(main).toHaveValue("bad");
+    expect(meanField()).toHaveValue("2.85");
+    await user.click(screen.getByRole("button", { name: "2人に反映" }));
+    expect(main).toHaveValue("2.85");
+    expect(main).not.toHaveAttribute("aria-invalid", "true");
+    expect(undo()).toBeDisabled();
+  });
+
+  it("keeps following recent results after an equal comparison clears an unfinished input", async () => {
+    const user = userEvent.setup();
+    const base = await makeSeriesAnalysisOutlookSummary();
+    const view = renderOutlook({
+      ...base,
+      recent: {
+        ...base.recent,
+        players: base.recent.players.map((player) => ({
+          ...player,
+          rankCounts: [5, 5, 5, 5],
+          rankSum: 50,
+          averageRank: 2.5,
+        })),
+      },
+    });
+    await user.clear(meanField());
+    await user.type(meanField(), "2.60");
+    const dialog = await openComparison(user);
+    await setMean(user, "2.40", focusName, dialog);
+    await setMean(user, "2.50", focusName, dialog);
+    await user.click(screen.getByRole("button", { name: "2人に反映" }));
+    expect(meanField()).toHaveValue("2.50");
+    expect(undo()).toBeDisabled();
+    view.updateSummary({
+      ...base,
+      artifact: { ...base.artifact, artifactId: "artifact-after-comparison", inputRevision: "13" },
+    });
+    expect(meanField()).toHaveValue("2.85");
+    expect(meanField(rivalName)).toHaveValue("2.45");
+    expect(undo()).toBeDisabled();
   });
 
   it.each(["キャンセル", "ダイアログを閉じる", "Escape"])(
@@ -594,7 +635,7 @@ describe("OutlookView input and update boundaries", () => {
       const dialog = await openComparison(user);
       await setMean(user, "2.40", focusName, dialog);
       await setMean(user, "2.55", rivalName, dialog);
-      await user.click(screen.getByRole("button", { name: "試した条件を基準にする" }));
+      await user.click(screen.getByRole("button", { name: "2人の成績を基準にする" }));
       expect(mainFocus).toHaveValue("2.85");
       expect(mainRival).toHaveValue("2.45");
       if (closing === "Escape") await user.keyboard("{Escape}");
@@ -605,8 +646,8 @@ describe("OutlookView input and update boundaries", () => {
       expect(meanField(rivalName)).toHaveValue("2.45");
       expect(undo()).toBeDisabled();
       await openComparison(user);
-      expect(screen.getByLabelText("残した成績")).toHaveTextContent("これからの平均 2.85位");
-      expect(screen.getByLabelText("残した成績")).toHaveTextContent("これからの平均 2.45位");
+      expect(screen.getByLabelText(`${focusName}の比較基準`)).toHaveTextContent("2.85位");
+      expect(screen.getByLabelText(`${rivalName}の比較基準`)).toHaveTextContent("2.45位");
     },
   );
 
@@ -616,20 +657,20 @@ describe("OutlookView input and update boundaries", () => {
     const dialog = await openComparison(user);
     await setMean(user, "2.40", focusName, dialog);
     await setMean(user, "2.55", rivalName, dialog);
-    await user.click(screen.getByRole("button", { name: "この条件を使う" }));
+    await user.click(screen.getByRole("button", { name: "2人に反映" }));
     expect(meanField()).toHaveValue("2.40");
     expect(meanField(rivalName)).toHaveValue("2.55");
     await openComparison(user);
-    expect(screen.getByLabelText("残した成績")).toHaveTextContent("これからの平均 2.85位");
-    await user.click(screen.getByRole("button", { name: "試した条件を基準にする" }));
-    await user.click(screen.getByRole("button", { name: "この条件を使う" }));
+    expect(screen.getByLabelText(`${focusName}の比較基準`)).toHaveTextContent("2.85位");
+    await user.click(screen.getByRole("button", { name: "2人の成績を基準にする" }));
+    await user.click(screen.getByRole("button", { name: "2人に反映" }));
     await user.click(undo());
     expect(meanField()).toHaveValue("2.85");
     expect(meanField(rivalName)).toHaveValue("2.45");
     expect(undo()).toBeDisabled();
     await openComparison(user);
-    expect(screen.getByLabelText("残した成績")).toHaveTextContent("これからの平均 2.40位");
-    expect(screen.getByLabelText("残した成績")).toHaveTextContent("これからの平均 2.55位");
+    expect(screen.getByLabelText(`${focusName}の比較基準`)).toHaveTextContent("2.40位");
+    expect(screen.getByLabelText(`${rivalName}の比較基準`)).toHaveTextContent("2.55位");
   });
 
   it("blocks a pending comparison draft and rejects a proposal after its artifact changes", async () => {
@@ -639,12 +680,12 @@ describe("OutlookView input and update boundaries", () => {
     const dialog = await openComparison(user);
     await user.clear(meanField(focusName, dialog));
     await user.type(meanField(focusName, dialog), "2.40");
-    expect(screen.getByRole("button", { name: "この条件を使う" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "2人に反映" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: `${focusName}の平均順位を反映` }));
-    expect(screen.getByRole("button", { name: "この条件を使う" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "2人に反映" })).toBeEnabled();
     view.updateSummary(await correctedSummary(initial));
     expect(screen.getByText(/現在の条件から比べ直してください/u)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "この条件を使う" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "2人に反映" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "キャンセル" }));
     expect(meanField()).toHaveValue("2.45");
     expect(meanField(rivalName)).toHaveValue("2.05");
@@ -659,7 +700,7 @@ describe("OutlookView input and update boundaries", () => {
       const view = renderOutlook(initial);
       await setMean(user, "2.70");
       await openComparison(user);
-      await user.click(screen.getByRole("button", { name: "この条件を使う" }));
+      await user.click(screen.getByRole("button", { name: "2人に反映" }));
       const horizon = screen.getByRole("textbox", { name: "何戦後を見る" });
       await user.clear(horizon);
       await user.type(horizon, "50{Enter}");

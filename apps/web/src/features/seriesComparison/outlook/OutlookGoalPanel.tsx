@@ -60,6 +60,7 @@ export function OutlookGoalPanel({
 }) {
   const headingId = useId();
   const conditionId = useId();
+  const pendingId = useId();
   const { goalHorizon } = session;
   const valid = parseOutlookHorizon(session.goalHorizonText) === goalHorizon;
   const focus = session.entries[0].distribution;
@@ -73,10 +74,33 @@ export function OutlookGoalPanel({
   const reaches =
     compareRationals(distributionMean(focus), required.threshold) < 0 &&
     areDistributionsCompatible(focus, rival);
+  const opponentPending =
+    session.entries[1].meanDraft !== undefined ||
+    session.entries[1].error !== undefined ||
+    Boolean(session.gesture);
+  const performanceMean = reaches
+    ? outlookAverage(distributionMean(focus))
+    : maximum === null
+      ? undefined
+      : (maximum / 100).toFixed(2);
   const recentMean = distributionMean(recent[0]);
   const recentWithinMean = compareRationals(recentMean, required.threshold) < 0;
   const improvement =
     maximum === null ? null : subtractRationals(recentMean, rational(BigInt(maximum), 100n));
+  const chosenCounts = ["counts", "example"].includes(session.entries[0].source.kind);
+  const fewerLowerRanks =
+    (focus.weights[2] + focus.weights[3]) * recent[0].denominator <
+    (recent[0].weights[2] + recent[0].weights[3]) * focus.denominator;
+  const moreWins =
+    focus.weights[0] * recent[0].denominator > recent[0].weights[0] * focus.denominator;
+  const reviewHeading =
+    chosenCounts && fewerLowerRanks
+      ? "下位だった試合を振り返る"
+      : chosenCounts && moreWins
+        ? "勝ち切れなかった試合を振り返る"
+        : recentWithinMean && areDistributionsCompatible(recent[0], rival)
+          ? "今の成績を続ける手掛かりを探す"
+          : "改善の手掛かりを探す";
   const { window } = useOutlookResource(response, memberIds[0], goalHorizon, false);
   const historical =
     goalHorizon === 50 || goalHorizon === 100
@@ -86,13 +110,16 @@ export function OutlookGoalPanel({
       : window.data;
 
   const usePerformance = () => {
-    if (!valid || (!reaches && maximum === null)) return;
+    if (!valid || opponentPending || (!reaches && maximum === null)) return;
     let accepted = false;
     // The session store applies this update synchronously, before changing the visible task.
     change((current) => {
       if (
         current.artifactId !== response.artifact.artifactId ||
         current.key !== session.key ||
+        current.entries[1].meanDraft !== undefined ||
+        current.entries[1].error !== undefined ||
+        current.gesture !== undefined ||
         parseOutlookHorizon(current.goalHorizonText) !== current.goalHorizon
       )
         return current;
@@ -134,7 +161,7 @@ export function OutlookGoalPanel({
       <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[minmax(18rem,2fr)_minmax(0,3fr)]">
         <div className="grid min-w-0 grid-cols-1 content-start gap-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className={contentText.heading}>到達の条件</h2>
+            <h2 className={contentText.heading}>目標と相手の成績</h2>
             <Button
               variant="quiet"
               size="sm"
@@ -142,7 +169,7 @@ export function OutlookGoalPanel({
               icon={<Undo2 aria-hidden="true" className="size-4" />}
               onClick={() => change(undoOutlook)}
             >
-              1つ戻す
+              成績を1つ戻す
             </Button>
           </div>
           {horizonControl}
@@ -155,33 +182,40 @@ export function OutlookGoalPanel({
               {names[0]}が{ahead ? "先行を維持するには" : "上回るには"}
             </h2>
             <p className={cn(contentText.primary, "tabular-nums")}>
-              {maximum === null
-                ? reaches
-                  ? `今の成績で${ahead ? "先行を維持できます" : "上回れます"}`
-                  : required.kind === "precision-impossible"
+              {reaches
+                ? `今の平均${performanceMean}位で${ahead ? "維持できます" : "上回れます"}`
+                : maximum === null
+                  ? required.kind === "precision-impossible"
                     ? "入力できる細かさでは指定できません"
                     : "相手がこの成績なら届きません"
-                : `平均${(maximum / 100).toFixed(2)}位以下`}
+                  : `平均${(maximum / 100).toFixed(2)}位以下`}
             </p>
+            {reaches && maximum !== null ? (
+              <p className={contentText.supporting}>
+                必要な平均は{(maximum / 100).toFixed(2)}位以下。
+              </p>
+            ) : null}
             <p id={conditionId} className={contentText.body}>
               {names[1]}が平均{outlookAverage(distributionMean(rival))}位を続ける条件です。
             </p>
-            {reaches ? (
-              <p className={contentText.body}>
-                今の平均{outlookAverage(distributionMean(focus))}位で条件を満たしています。
-              </p>
-            ) : null}
           </div>
-          <div>
+          <div className="grid justify-items-start gap-2">
             <Button
               size="sm"
               variant="secondary"
-              disabled={!valid || (!reaches && maximum === null)}
-              aria-describedby={conditionId}
+              disabled={!valid || opponentPending || (!reaches && maximum === null)}
+              aria-describedby={opponentPending ? `${conditionId} ${pendingId}` : conditionId}
               onClick={usePerformance}
             >
-              {reaches ? "今の成績で推移を見る" : "この成績で推移を見る"}
+              {performanceMean === undefined
+                ? "推移を見る"
+                : `平均${performanceMean}位で推移を見る`}
             </Button>
+            {opponentPending ? (
+              <p id={pendingId} className={contentText.supporting}>
+                {names[1]}の入力を反映するか、取り消してください。
+              </p>
+            ) : null}
           </div>
           <FactList
             ariaLabel={`${names[0]}の目標と過去の成績`}
@@ -247,8 +281,14 @@ export function OutlookGoalPanel({
         session={session}
         change={change}
         onUsePerformance={onUsePerformance}
+        pendingDescriptionId={opponentPending ? pendingId : undefined}
       />
-      {reviewLinks}
+      {reviewLinks ? (
+        <div className="grid gap-2">
+          <h3 className={contentText.heading}>{reviewHeading}</h3>
+          {reviewLinks}
+        </div>
+      ) : null}
     </section>
   );
 }

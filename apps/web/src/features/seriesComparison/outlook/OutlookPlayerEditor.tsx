@@ -5,6 +5,8 @@ import {
   distributionFromCounts,
   distributionMean,
   distributionsEqual,
+  rational,
+  subtractRationals,
 } from "@/features/seriesComparison/model/outlook";
 import type { CumulativePair } from "@/features/seriesComparison/model/outlook";
 import { OutlookEditor } from "@/features/seriesComparison/outlook/OutlookEditor";
@@ -53,6 +55,16 @@ export function OutlookPlayerEditor(props: Props) {
     entry.meanDraft === undefined &&
     entry.source.kind === "recent" &&
     entry.source.artifactId === session.artifactId;
+  const difference = subtractRationals(
+    distributionMean(recent),
+    distributionMean(entry.distribution),
+  );
+  const differenceLabel =
+    difference.numerator === 0n
+      ? "直近と同じ平均"
+      : `直近より${outlookAverage(rational(difference.numerator < 0n ? -difference.numerator : difference.numerator, difference.denominator))}位${difference.numerator > 0n ? "上" : "下"}`;
+  const outdated =
+    entry.source.artifactId !== undefined && entry.source.artifactId !== session.artifactId;
   return (
     <section className="grid min-w-0 grid-cols-1 gap-2" aria-label={`${names[role]}の成績を試す`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -81,13 +93,13 @@ export function OutlookPlayerEditor(props: Props) {
         role={role}
         method="mean"
         name={names[role]}
+        label="これからの平均順位"
         change={change}
       />
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className={contentText.supporting}>
-          {entry.meanDraft !== undefined
-            ? "入力中・見通しは前の値"
-            : outlookSourceLabel(entry.source, session.artifactId)}
+      <div className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 pointer-fine:min-h-9">
+        <p className={contentText.supporting} aria-label={`${names[role]}の直近からの差`}>
+          {outdated ? "更新前の成績 · " : ""}
+          {differenceLabel}
         </p>
         <OutlookCountDialog {...props} />
       </div>
@@ -142,6 +154,9 @@ function CountProposal({
   );
   return (
     <div className="grid min-w-0 grid-cols-1 gap-4">
+      <p className={contentText.supporting}>
+        {outlookSourceLabel(entry.source, session.artifactId)}
+      </p>
       <OutlookEditor
         key={editorVersion}
         session={draft}

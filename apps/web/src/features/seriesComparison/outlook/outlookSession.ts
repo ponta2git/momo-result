@@ -90,7 +90,14 @@ export function applyOutlookPair(session: OutlookSession, pair: Pair): OutlookSe
       distributionsEqual(entry.distribution, session.entries[role as OutlookRole].distribution),
     )
   )
-    return session;
+    return session.entries.some(
+      (entry) => entry.meanDraft !== undefined || entry.error !== undefined,
+    )
+      ? {
+          ...session,
+          entries: snapshot(session),
+        }
+      : session;
   const committed = finishOutlookGesture(session);
   return {
     ...committed,

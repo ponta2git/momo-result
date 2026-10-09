@@ -15,7 +15,6 @@ export function OutlookLoading() {
             </div>
           ))}
         </div>
-        <Skeleton className="h-4 w-80 max-w-full" />
       </div>
       <div className="grid min-w-0 grid-cols-1 gap-6">
         <div className="flex overflow-hidden border-b border-[var(--color-border)]">
@@ -29,6 +28,7 @@ export function OutlookLoading() {
               <Skeleton className="h-5 w-40 max-w-full" />
               <Skeleton className="h-11 w-24 shrink-0 pointer-fine:h-9" />
             </div>
+            <Skeleton className="h-4 w-72 max-w-full" />
             {["first", "second"].map((person) => (
               <div key={person} className="grid min-w-0 grid-cols-1 gap-2">
                 <Skeleton className="h-9 w-24 max-w-full" />
@@ -41,7 +41,6 @@ export function OutlookLoading() {
                 <Skeleton className="h-9 w-36 max-w-full" />
               </div>
             ))}
-            <Skeleton className="h-4 w-72 max-w-full" />
           </div>
           <div className="grid min-w-0 grid-cols-1 content-start gap-6">
             <div className="grid min-w-0 grid-cols-1 gap-2">

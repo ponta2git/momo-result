@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useState } from "react";
 
 import { distributionMean } from "@/features/seriesComparison/model/outlook";
 import type { CumulativePair } from "@/features/seriesComparison/model/outlook";
@@ -23,7 +23,6 @@ import type {
 import { orderFixedMembers } from "@/shared/domain/members";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { Button } from "@/shared/ui/actions/Button";
-import { FactList } from "@/shared/ui/data/FactList";
 import { Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
 import { contentText } from "@/shared/ui/typography";
 
@@ -44,10 +43,6 @@ export function OutlookScenarioComparison({
   change,
 }: Props) {
   const [opened, setOpened] = useState<ComparisonStart>();
-  const descriptionId = useId();
-  const pending =
-    Boolean(session.gesture) ||
-    session.entries.some((entry) => entry.meanDraft !== undefined || entry.error !== undefined);
   return (
     <div className="grid min-w-0 gap-1" data-outlook-preserve-draft>
       <Dialog
@@ -56,17 +51,11 @@ export function OutlookScenarioComparison({
         open={opened !== undefined}
         onOpenChange={(open) => {
           if (!open) setOpened(undefined);
-          else if (!pending)
-            setOpened({ session: draftOutlook(session), cumulative, names, memberIds });
+          else setOpened({ session: draftOutlook(session), cumulative, names, memberIds });
         }}
         trigger={
-          <Button
-            size="sm"
-            variant="secondary"
-            aria-disabled={pending || undefined}
-            aria-describedby={pending ? descriptionId : undefined}
-          >
-            {session.pinned ? "残した条件と比べる" : "別の成績と比べる"}
+          <Button size="sm" variant="secondary">
+            {session.pinned ? "残した成績と比べる" : "別の成績と比べる"}
           </Button>
         }
       >
@@ -79,11 +68,6 @@ export function OutlookScenarioComparison({
           />
         ) : null}
       </Dialog>
-      {pending ? (
-        <p id={descriptionId} className="sr-only">
-          入力を反映すると比べられます。
-        </p>
-      ) : null}
     </div>
   );
 }
@@ -114,71 +98,87 @@ function ComparisonProposal({
   const afterPair = [draft.entries[0].distribution, draft.entries[1].distribution] as const;
   const before = outlookOutcome(cumulative, beforePair, names);
   const after = outlookOutcome(cumulative, afterPair, names);
+  const sameOutcome = before.headline === after.headline && before.detail === after.detail;
   const roles = orderFixedMembers(
     memberIds.map((memberId, role) => ({ memberId, role: role as OutlookRole })),
   );
   return (
     <div className="grid min-w-0 grid-cols-1 gap-6">
       <div className="grid min-w-0 grid-cols-1 gap-6 md:grid-cols-2">
-        <section className="grid min-w-0 content-start gap-4" aria-label="比較の基準">
-          <div className="grid gap-2">
-            <h3 className={contentText.heading}>比較の基準</h3>
-            <p className={contentText.primary}>{before.headline}</p>
-            {before.detail ? <p className={contentText.body}>{before.detail}</p> : null}
-          </div>
-          <FactList
-            ariaLabel="残した成績"
-            items={roles.map(({ memberId, role }) => ({
-              id: memberId,
-              label: <MemberSequenceLabel memberId={memberId}>{names[role]}</MemberSequenceLabel>,
-              value: `これからの平均 ${outlookAverage(distributionMean(baseline[role].distribution))}位`,
-            }))}
-          />
-        </section>
-        <section className="grid min-w-0 content-start gap-4" aria-label="比較する成績の編集">
-          <div className="grid gap-2">
-            <h3 className={contentText.heading}>試す条件</h3>
-          </div>
-          {roles.map(({ memberId, role }) => (
+        {roles.map(({ memberId, role }) => (
+          <section
+            key={memberId}
+            className="grid min-w-0 content-start gap-2"
+            aria-label={`${names[role]}の成績を比べる`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <MemberSequenceLabel memberId={memberId}>{names[role]}</MemberSequenceLabel>
+              <p className={contentText.supporting} aria-label={`${names[role]}の比較基準`}>
+                基準の平均 {outlookAverage(distributionMean(baseline[role].distribution))}位
+              </p>
+            </div>
             <OutlookEditor
-              key={memberId}
               session={draft}
               role={role}
               method="mean"
               name={names[role]}
+              label="試す平均順位"
               change={setDraft}
             />
-          ))}
-          <div className="flex flex-wrap gap-2" data-outlook-preserve-draft>
-            <Button
-              size="sm"
-              variant="quiet"
-              disabled={draft.history.length === 0 && !draft.gesture}
-              onClick={() => setDraft((value) => undoOutlook(finishOutlookGesture(value)))}
-            >
-              変更を戻す
-            </Button>
-            <Button
-              size="sm"
-              variant="quiet"
-              aria-disabled={!canPinOutlook(draft) || undefined}
-              onClick={() => setDraft(pinOutlook)}
-            >
-              試した条件を基準にする
-            </Button>
-          </div>
-          <div className="grid gap-2">
-            <p className={contentText.primary}>{after.headline}</p>
-            {after.detail ? <p className={contentText.body}>{after.detail}</p> : null}
-          </div>
-          {pending ? (
-            <p className={contentText.supporting}>入力を反映してから、この条件を使えます。</p>
-          ) : null}
-        </section>
+          </section>
+        ))}
       </div>
-      <p className={contentText.primary} role="status">
-        {compareOutlookOutcomes(cumulative, beforePair, afterPair, names)}
-      </p>
+      <div className="flex flex-wrap gap-2" data-outlook-preserve-draft>
+        <Button
+          size="sm"
+          variant="quiet"
+          disabled={draft.history.length === 0 && !draft.gesture}
+          onClick={() => setDraft((value) => undoOutlook(finishOutlookGesture(value)))}
+        >
+          成績を1つ戻す
+        </Button>
+        <Button
+          size="sm"
+          variant="quiet"
+          disabled={!canPinOutlook(draft)}
+          onClick={() => setDraft(pinOutlook)}
+        >
+          2人の成績を基準にする
+        </Button>
+      </div>
+      <div className="grid gap-4 border-t border-[var(--color-border)] pt-4">
+        <p className={contentText.primary} role="status">
+          {compareOutlookOutcomes(cumulative, beforePair, afterPair, names)}
+        </p>
+        {sameOutcome ? (
+          before.eventHorizon !== null ? (
+            <div className="grid gap-1">
+              <p className={contentText.body}>{before.headline}</p>
+              {before.detail ? <p className={contentText.supporting}>{before.detail}</p> : null}
+            </div>
+          ) : null
+        ) : (
+          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2">
+            {[
+              { label: "基準", outcome: before },
+              { label: "試す成績", outcome: after },
+            ].map(({ label, outcome }) => (
+              <div key={label} className="contents">
+                <dt className={contentText.supporting}>{label}</dt>
+                <dd className={contentText.body}>
+                  {outcome.headline}
+                  {outcome.detail ? (
+                    <span className={`${contentText.supporting} block`}>{outcome.detail}</span>
+                  ) : null}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </div>
+      {pending ? (
+        <p className={contentText.supporting}>入力を反映するか、取り消してください。</p>
+      ) : null}
       {stale ? (
         <p className={contentText.body} role="status">
           実績または比較する人が変わりました。閉じて、現在の条件から比べ直してください。
@@ -208,7 +208,7 @@ function ComparisonProposal({
             if (accepted) close();
           }}
         >
-          この条件を使う
+          2人に反映
         </Button>
       </DialogFooter>
     </div>

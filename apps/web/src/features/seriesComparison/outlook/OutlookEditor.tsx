@@ -1,5 +1,6 @@
-import { ArrowRight, Minus, Plus } from "lucide-react";
-import { useId, useMemo, useState } from "react";
+import { ArrowRight, Minus, Plus, X } from "lucide-react";
+import { useId, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import {
   countsFromMean,
@@ -53,16 +54,19 @@ type Props = {
   role: 0 | 1;
   method: "mean" | "counts";
   name: string;
+  label?: ReactNode;
   change: (update: (session: OutlookSession) => OutlookSession) => void;
 };
 
-export function OutlookEditor({ session, role, method, name, change }: Props) {
+export function OutlookEditor({ session, role, method, name, label, change }: Props) {
   const entry = session.entries[role];
+  const meanPending = entry.meanDraft !== undefined || entry.error !== undefined;
   const opponent = session.entries[otherRole(role)].distribution;
   const currentMean = distributionMean(entry.distribution);
   const limits = meanLimits(opponent);
   const sliderId = useId();
   const meanId = `${sliderId}-mean`;
+  const meanInputRef = useRef<HTMLInputElement>(null);
   const descriptionId = `${meanId}-description`;
   const errorId = entry.error ? `${meanId}-error` : undefined;
   const setMean = (hundredths: number) =>
@@ -91,6 +95,12 @@ export function OutlookEditor({ session, role, method, name, change }: Props) {
     });
   const begin = () => change((current) => beginOutlookGesture(current, role));
   const finish = (cancel = false) => change((current) => finishOutlookGesture(current, cancel));
+  const cancelMean = () => {
+    change((current) =>
+      updateOutlookEntry(current, role, { meanDraft: undefined, error: undefined }),
+    );
+    meanInputRef.current?.focus({ preventScroll: true });
+  };
   const commitMean = () =>
     change((current) => {
       const edited = current.entries[role];
@@ -122,16 +132,28 @@ export function OutlookEditor({ session, role, method, name, change }: Props) {
       {method === "mean" ? (
         <Field
           htmlFor={meanId}
-          label={`${name}のこれからの平均順位`}
-          description={`小さいほど上位。${(limits.minimumHundredths / 100).toFixed(2)}〜${(limits.maximumHundredths / 100).toFixed(2)}位で調整できます。`}
+          label={label ?? `${name}のこれからの平均順位`}
+          description={
+            <span className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-2 tabular-nums">
+              <span>
+                {(limits.minimumHundredths / 100).toFixed(2)}〜
+                {(limits.maximumHundredths / 100).toFixed(2)}位
+              </span>
+              <span className={meanPending ? undefined : "invisible"}>
+                反映済み {outlookAverage(currentMean)}位
+              </span>
+            </span>
+          }
           descriptionId={descriptionId}
           error={entry.error}
           errorId={errorId}
         >
           <div className="grid gap-2">
-            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2">
               <InputControl
+                ref={meanInputRef}
                 id={meanId}
+                aria-label={`${name}のこれからの平均順位`}
                 inputMode="decimal"
                 invalid={Boolean(entry.error)}
                 aria-describedby={buildFieldDescribedBy(descriptionId, errorId)}
@@ -154,12 +176,20 @@ export function OutlookEditor({ session, role, method, name, change }: Props) {
                   }
                   if (event.key === "Escape") {
                     event.preventDefault();
-                    change((current) =>
-                      updateOutlookEntry(current, role, { meanDraft: undefined, error: undefined }),
-                    );
+                    cancelMean();
                   }
                 }}
               />
+              <span className={meanPending ? undefined : "invisible"}>
+                <IconButton
+                  variant="quiet"
+                  size="sm"
+                  icon={<X />}
+                  aria-label={`${name}の入力を取り消す`}
+                  disabled={!meanPending}
+                  onClick={cancelMean}
+                />
+              </span>
               <Button
                 size="sm"
                 variant="secondary"
@@ -245,6 +275,9 @@ function WholeCountEditor({ session, role, name, change }: Props) {
       counts: wholeCounts ?? nearestWholeCounts(entry.distribution, opponent),
     };
   }, [entry.distribution, opponent]);
+  const [wholeStart] = useState(() =>
+    exact || !counts ? undefined : { counts, mean: distributionMean(entry.distribution) },
+  );
   const capacity = wholeCountCapacities(opponent);
   const total = counts ? counts[gain] + counts[lose] : 0;
   const minimum = Math.max(0, total - capacity[lose]);
@@ -253,7 +286,7 @@ function WholeCountEditor({ session, role, name, change }: Props) {
   const countId = `${sliderId}-count`;
   const descriptionId = `${countId}-description`;
   const errorId = entry.error ? `${countId}-error` : undefined;
-  const roundingId = !exact ? `${countId}-rounding` : undefined;
+  const roundingId = wholeStart ? `${countId}-rounding` : undefined;
   const [text, setText] = useState<string>();
   const begin = () => change((current) => beginOutlookGesture(current, role));
   const finish = (cancel = false) => change((current) => finishOutlookGesture(current, cancel));
@@ -297,6 +330,7 @@ function WholeCountEditor({ session, role, name, change }: Props) {
     <div className="grid gap-4">
       <div className="grid gap-2">
         <p className={contentText.heading}>20戦あたりの回数</p>
+        {wholeStart ? <p className={contentText.supporting}>現在の内訳</p> : null}
         <dl className="grid grid-cols-4 gap-2" aria-label={`${name}の順位内訳`}>
           {currentCounts.map((value, i) => (
             <div key={i} className="grid gap-1 text-center">
@@ -318,6 +352,25 @@ function WholeCountEditor({ session, role, name, change }: Props) {
             </div>
           ))}
         </dl>
+        {wholeStart ? (
+          <div className="grid gap-2" id={roundingId}>
+            <p className={contentText.supporting}>開始時の整数配分</p>
+            <dl className="grid grid-cols-4 gap-2" aria-label={`${name}の開始時の整数配分`}>
+              {([0, 1, 2, 3] as const).map((rank) => (
+                <div key={rank} className="text-center">
+                  <dt className="sr-only">{rank + 1}位</dt>
+                  <dd className={cn(contentText.body, "tabular-nums")}>
+                    {wholeStart.counts[rank]}回
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            <p className={cn(contentText.supporting, "tabular-nums")}>
+              平均{outlookAverage(wholeStart.mean)}→
+              {outlookAverage(distributionMean(distributionFromCounts(wholeStart.counts)))}位
+            </p>
+          </div>
+        ) : null}
       </div>
       <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-2">
         {([lose, gain] as const).map((rank, index) => (
@@ -497,13 +550,6 @@ function WholeCountEditor({ session, role, name, change }: Props) {
             </div>
           </div>
         </Field>
-        {!exact ? (
-          <p id={roundingId} className={contentText.supporting}>
-            回数を動かすと、{counts.map((count, i) => `${i + 1}位${count}回`).join("・")}
-            から調整します。 平均{outlookAverage(distributionMean(entry.distribution))}→
-            {outlookAverage(distributionMean(distributionFromCounts(counts)))}位。
-          </p>
-        ) : null}
       </div>
     </div>
   );

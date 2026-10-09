@@ -23,14 +23,19 @@ export function OutlookLoading() {
           ))}
         </div>
         <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[minmax(18rem,2fr)_minmax(0,3fr)]">
-          <div className="grid min-w-0 grid-cols-1 content-start gap-4">
-            <div className="flex items-center justify-between gap-2">
-              <Skeleton className="h-5 w-40 max-w-full" />
-              <Skeleton className="h-11 w-24 shrink-0 pointer-fine:h-9" />
+          <div className="grid min-w-0 grid-cols-1 content-start gap-6">
+            <div className="grid gap-2">
+              <div className="flex items-center justify-between gap-2">
+                <Skeleton className="h-5 w-40 max-w-full" />
+                <Skeleton className="h-11 w-24 shrink-0 pointer-fine:h-9" />
+              </div>
+              <Skeleton className="h-4 w-72 max-w-full" />
             </div>
-            <Skeleton className="h-4 w-72 max-w-full" />
             {["first", "second"].map((person) => (
-              <div key={person} className="grid min-w-0 grid-cols-1 gap-2">
+              <div
+                key={person}
+                className={`grid min-w-0 grid-cols-1 gap-2 ${person === "second" ? "border-t border-[var(--color-border)] pt-6" : ""}`}
+              >
                 <Skeleton className="h-9 w-24 max-w-full" />
                 <Skeleton className="h-5 w-40 max-w-full" />
                 <Skeleton className="h-11 w-full rounded-sm pointer-fine:h-10" />
@@ -41,6 +46,7 @@ export function OutlookLoading() {
                 <Skeleton className="h-9 w-36 max-w-full" />
               </div>
             ))}
+            <Skeleton className="h-11 w-44 max-w-full pointer-fine:h-9" />
           </div>
           <div className="grid min-w-0 grid-cols-1 content-start gap-6">
             <div className="grid min-w-0 grid-cols-1 gap-2">
@@ -49,6 +55,11 @@ export function OutlookLoading() {
               <Skeleton className="h-11 w-44 max-w-full pointer-fine:h-9" />
             </div>
             <div className="grid min-w-0 grid-cols-1 gap-3">
+              <div className="flex overflow-hidden border-b border-[var(--color-border)]">
+                {["average", "noise"].map((view) => (
+                  <Skeleton key={view} className="h-11 w-32 shrink-0 pointer-fine:h-9" />
+                ))}
+              </div>
               <Skeleton className="h-5 w-40 max-w-full" />
               <Skeleton className="h-4 w-64 max-w-full" />
               <div className="grid min-w-0 grid-cols-2 gap-4">

@@ -34,6 +34,7 @@ export type OutlookSession = {
   pinned?: Pair | undefined;
   gesture?: { role: OutlookRole; before: Pair } | undefined;
   task: "performance" | "goal";
+  chartView: "average" | "noise";
   transfer: [OutlookRankIndex, OutlookRankIndex];
   horizon: number;
   horizonText: string;
@@ -78,31 +79,6 @@ export function draftOutlook(session: OutlookSession): OutlookSession {
     entries: snapshot(session),
     history: [],
     gesture: undefined,
-    notice: undefined,
-  };
-}
-
-/** Adopt both compatible conditions together, as one undoable change. */
-export function applyOutlookPair(session: OutlookSession, pair: Pair): OutlookSession {
-  if (!areDistributionsCompatible(pair[0].distribution, pair[1].distribution)) return session;
-  if (
-    pair.every((entry, role) =>
-      distributionsEqual(entry.distribution, session.entries[role as OutlookRole].distribution),
-    )
-  )
-    return session.entries.some(
-      (entry) => entry.meanDraft !== undefined || entry.error !== undefined,
-    )
-      ? {
-          ...session,
-          entries: snapshot(session),
-        }
-      : session;
-  const committed = finishOutlookGesture(session);
-  return {
-    ...committed,
-    entries: pair.map(({ distribution, source }) => ({ distribution, source })) as Pair,
-    history: [...committed.history, snapshot(committed)].slice(-50),
     notice: undefined,
   };
 }
@@ -163,6 +139,7 @@ export function adoptOutlookSummary(
       entries: recent,
       history: [],
       task: "performance",
+      chartView: "average",
       transfer: [2, 3],
       horizon: 20,
       horizonText: "20",

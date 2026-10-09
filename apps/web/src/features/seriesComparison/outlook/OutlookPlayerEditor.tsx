@@ -40,13 +40,15 @@ type Props = {
   role: OutlookRole;
   names: readonly [string, string];
   memberIds: readonly [string, string];
+  showComparison?: boolean;
   change: (update: (current: OutlookSession) => OutlookSession) => void;
 };
 
 /** A named player's condition stays next to both ways of changing it. */
 export function OutlookPlayerEditor(props: Props) {
-  const { response, session, role, names, memberIds, change } = props;
+  const { response, session, role, names, memberIds, change, showComparison = false } = props;
   const entry = session.entries[role];
+  const baseline = showComparison ? session.pinned?.[role].distribution : undefined;
   const recent = distributionFromCounts(
     outlookPlayer(response.recent.players, memberIds[role]).rankCounts,
   );
@@ -88,6 +90,11 @@ export function OutlookPlayerEditor(props: Props) {
           直近に戻す
         </Button>
       </div>
+      {baseline ? (
+        <p className={contentText.supporting} aria-label={`${names[role]}の比較基準`}>
+          残した平均 {outlookAverage(distributionMean(baseline))}位
+        </p>
+      ) : null}
       <OutlookEditor
         session={session}
         role={role}

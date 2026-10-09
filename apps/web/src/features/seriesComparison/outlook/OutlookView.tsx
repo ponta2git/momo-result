@@ -15,14 +15,17 @@ import type { SeriesAnalysisUrlState } from "@/features/seriesComparison/model/s
 import { OutlookChart } from "@/features/seriesComparison/outlook/OutlookChart";
 import { OutlookGoalPanel } from "@/features/seriesComparison/outlook/OutlookGoalPanel";
 import { OutlookHorizonControl } from "@/features/seriesComparison/outlook/OutlookHorizonControl";
-import { OutlookNoiseDialog } from "@/features/seriesComparison/outlook/OutlookNoiseDialog";
+import { OutlookNoisePanel } from "@/features/seriesComparison/outlook/OutlookNoisePanel";
 import { outlookOutcome } from "@/features/seriesComparison/outlook/outlookOutcome";
 import { OutlookPlayerEditor } from "@/features/seriesComparison/outlook/OutlookPlayerEditor";
 import {
   exactAverageFraction,
   outlookAverage,
 } from "@/features/seriesComparison/outlook/outlookPresentation";
-import { OutlookScenarioComparison } from "@/features/seriesComparison/outlook/OutlookScenarioComparison";
+import {
+  OutlookComparisonControls,
+  OutlookScenarioComparison,
+} from "@/features/seriesComparison/outlook/OutlookScenarioComparison";
 import {
   adoptOutlookSummary,
   finishOutlookGesture,
@@ -124,7 +127,6 @@ function OutlookWorkspace({
   const location = useLocation();
   const resultHeading = useRef<HTMLHeadingElement>(null);
   const chartHeading = useRef<HTMLDivElement>(null);
-  const goalPanel = useRef<HTMLDivElement>(null);
   const { focusMemberId, rivalMemberId } = normalizeOutlookPair(
     selection.focusMemberId,
     selection.rivalMemberId,
@@ -175,6 +177,7 @@ function OutlookWorkspace({
     change((current) => ({
       ...current,
       task: "performance",
+      chartView: "average",
       horizon: current.goalHorizon,
       horizonText: String(current.goalHorizon),
       chartRange: Math.max(current.chartRange, rangeFor(current.goalHorizon)) as 100 | 500 | 1000,
@@ -183,16 +186,6 @@ function OutlookWorkspace({
       if (resultHeading.current) {
         resultHeading.current.focus({ preventScroll: true });
         revealPageElement(resultHeading.current, "start");
-      }
-    });
-  };
-  const viewGoal = () => {
-    change((current) => ({ ...current, task: "goal" }));
-    requestAnimationFrame(() => {
-      const input = goalPanel.current?.querySelector<HTMLInputElement>("input");
-      if (input) {
-        input.focus({ preventScroll: true });
-        revealPageElement(input, "start");
       }
     });
   };
@@ -257,29 +250,39 @@ function OutlookWorkspace({
         <TabsPanel value="performance" keepMounted>
           <div className="grid min-w-0 grid-cols-1 gap-6 pt-6 lg:grid-cols-[minmax(18rem,2fr)_minmax(0,3fr)]">
             <section
-              className="grid min-w-0 grid-cols-1 content-start gap-4"
+              className="grid min-w-0 grid-cols-1 content-start gap-6"
               aria-labelledby="outlook-assumptions"
             >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 id="outlook-assumptions" className={contentText.heading}>
-                  これからの成績
-                </h2>
-                <Button
-                  variant="quiet"
-                  size="sm"
-                  disabled={session.history.length === 0 && !session.gesture}
-                  icon={<Undo2 aria-hidden="true" className="size-4" />}
-                  onClick={() => change(undoOutlook)}
-                >
-                  成績を1つ戻す
-                </Button>
+              <div className="grid gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h2 id="outlook-assumptions" className={contentText.heading}>
+                    これからの成績
+                  </h2>
+                  <Button
+                    variant="quiet"
+                    size="sm"
+                    disabled={session.history.length === 0 && !session.gesture}
+                    icon={<Undo2 aria-hidden="true" className="size-4" />}
+                    onClick={() => change(undoOutlook)}
+                  >
+                    成績を1つ戻す
+                  </Button>
+                </div>
+                <p className={contentText.supporting}>
+                  小さいほど上位。初期値は作品全体の直近{response.recent.matchCount}戦です。
+                </p>
               </div>
-              <p className={contentText.supporting}>
-                小さいほど上位。初期値は作品全体の直近{response.recent.matchCount}戦です。
-              </p>
-              {displayRoles.map(({ memberId, role }) => (
-                <OutlookPlayerEditor key={memberId} {...playerProps} role={role} />
-              ))}
+              <div className="grid gap-6">
+                {displayRoles.map(({ memberId, role }, index) => (
+                  <div
+                    key={memberId}
+                    className={index > 0 ? "border-t border-[var(--color-border)] pt-6" : undefined}
+                  >
+                    <OutlookPlayerEditor {...playerProps} role={role} showComparison />
+                  </div>
+                ))}
+              </div>
+              <OutlookComparisonControls session={session} change={change} />
               {response.recent.qualityStatus === "reference" ? (
                 <p className={contentText.supporting}>
                   直近の実績が少ないため、見通しは参考値です。
@@ -294,12 +297,30 @@ function OutlookWorkspace({
                   tabIndex={-1}
                   className={contentText.heading}
                 >
-                  この成績が続くと
+                  {session.chartView === "noise"
+                    ? session.pinned
+                      ? "平均どおりに進んだときの差"
+                      : "平均どおりに進むと"
+                    : session.pinned
+                      ? "残した成績との差"
+                      : "この成績が続くと"}
                 </h2>
-                <p className={contentText.primary}>{outcome.headline}</p>
-                {outcome.detail ? <p className={contentText.supporting}>{outcome.detail}</p> : null}
+                {session.pinned ? (
+                  <OutlookScenarioComparison
+                    session={session}
+                    cumulative={cumulative}
+                    names={names}
+                  />
+                ) : (
+                  <>
+                    <p className={contentText.primary}>{outcome.headline}</p>
+                    {outcome.detail ? (
+                      <p className={contentText.supporting}>{outcome.detail}</p>
+                    ) : null}
+                  </>
+                )}
                 <div className="flex flex-wrap gap-2" data-outlook-preserve-draft>
-                  {eventHorizon !== null ? (
+                  {eventHorizon !== null && session.chartView === "average" ? (
                     <Button
                       size="sm"
                       variant="quiet"
@@ -321,68 +342,86 @@ function OutlookWorkspace({
                       {eventHorizon}戦後を見る
                     </Button>
                   ) : null}
-                  <Button size="sm" variant="quiet" onClick={viewGoal}>
-                    {session.goalHorizon}戦後{outcome.crossing.current === "ahead" ? "も" : "に"}
-                    {names[0]}が先行する条件
-                  </Button>
-                  <OutlookScenarioComparison
-                    session={session}
-                    cumulative={cumulative}
-                    names={names}
-                    memberIds={ids}
-                    change={change}
-                  />
                 </div>
               </section>
               <div ref={chartHeading} className="min-w-0">
-                <OutlookChart
-                  key={`${session.key}|${session.artifactId}`}
-                  cumulative={cumulative}
-                  distributions={distributions}
-                  names={names}
-                  memberIds={ids}
-                  horizon={session.horizon}
-                  horizonText={session.horizonText}
-                  range={session.chartRange}
-                  marker={
-                    eventHorizon === null
-                      ? null
-                      : { h: eventHorizon, label: `${eventHorizon}戦後に${outcome.eventLabel}` }
+                <TabsRoot
+                  value={session.chartView}
+                  onValueChange={(chartView) =>
+                    change((current) => ({
+                      ...current,
+                      chartView: chartView as OutlookSession["chartView"],
+                    }))
                   }
-                  onHorizonChange={selectHorizon}
-                  horizonControl={
-                    <div className="grid min-w-0 grid-cols-2 gap-4" data-outlook-preserve-draft>
-                      <OutlookHorizonControl
+                >
+                  <TabsList aria-label="推移の見方" variant="underline">
+                    <TabsTab value="average">平均の推移</TabsTab>
+                    <TabsTab value="noise">試合ごとのブレ</TabsTab>
+                  </TabsList>
+                  <TabsPanel value="average" keepMounted>
+                    <div className="pt-4">
+                      <OutlookChart
+                        key={`${session.key}|${session.artifactId}`}
+                        cumulative={cumulative}
+                        distributions={distributions}
+                        names={names}
+                        memberIds={ids}
                         horizon={session.horizon}
                         horizonText={session.horizonText}
-                        onChange={selectHorizon}
-                      />
-                      <SelectField
-                        label="表示範囲"
-                        value={String(session.chartRange)}
-                        options={[100, 500, 1000].map((range) => ({
-                          value: String(range),
-                          label: `${range}戦`,
-                        }))}
-                        onValueChange={(value) =>
-                          change((current) => ({
-                            ...current,
-                            chartRange: Number(value) as 100 | 500 | 1000,
-                          }))
+                        range={session.chartRange}
+                        marker={
+                          eventHorizon === null
+                            ? null
+                            : {
+                                h: eventHorizon,
+                                label: `${eventHorizon}戦後に${outcome.eventLabel}`,
+                              }
+                        }
+                        onHorizonChange={selectHorizon}
+                        horizonControl={
+                          <div
+                            className="grid min-w-0 grid-cols-2 gap-4"
+                            data-outlook-preserve-draft
+                          >
+                            <OutlookHorizonControl
+                              horizon={session.horizon}
+                              horizonText={session.horizonText}
+                              onChange={selectHorizon}
+                            />
+                            <SelectField
+                              label="表示範囲"
+                              value={String(session.chartRange)}
+                              options={[100, 500, 1000].map((range) => ({
+                                value: String(range),
+                                label: `${range}戦`,
+                              }))}
+                              onValueChange={(value) =>
+                                change((current) => ({
+                                  ...current,
+                                  chartRange: Number(value) as 100 | 500 | 1000,
+                                }))
+                              }
+                            />
+                          </div>
                         }
                       />
                     </div>
-                  }
-                />
-              </div>
-              <div>
-                <OutlookNoiseDialog {...playerProps} />
+                  </TabsPanel>
+                  <TabsPanel value="noise" keepMounted>
+                    <div className="pt-4">
+                      <OutlookNoisePanel
+                        {...playerProps}
+                        active={session.task === "performance" && session.chartView === "noise"}
+                      />
+                    </div>
+                  </TabsPanel>
+                </TabsRoot>
               </div>
             </div>
           </div>
         </TabsPanel>
         <TabsPanel value="goal" keepMounted>
-          <div ref={goalPanel} className="min-w-0 pt-6">
+          <div className="min-w-0 pt-6">
             {session.task === "goal" ? (
               <OutlookGoalPanel
                 {...playerProps}

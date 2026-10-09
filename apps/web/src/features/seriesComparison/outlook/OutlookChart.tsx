@@ -177,9 +177,8 @@ export const OutlookChart = memo(function OutlookChart({
 
   return (
     <figure className="grid min-w-0 gap-3" aria-labelledby={titleId}>
-      <figcaption className="grid gap-1" id={titleId}>
-        <span className={contentText.heading}>総合平均順位の推移</span>
-        <span className={contentText.supporting}>上の線が先行</span>
+      <figcaption className={contentText.supporting} id={titleId}>
+        総合平均順位 · 上の線が先行
       </figcaption>
       {horizonControl}
       <DataTable

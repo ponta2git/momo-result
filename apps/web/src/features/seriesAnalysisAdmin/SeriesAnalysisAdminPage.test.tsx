@@ -3,7 +3,7 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { createMemoryRouter, MemoryRouter, RouterProvider } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { SeriesAnalysisAdminPage } from "@/features/seriesAnalysisAdmin/SeriesAnalysisAdminPage";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
@@ -22,6 +22,10 @@ import { createTestQueryClient } from "@/test/queryClient";
 import { selectOption } from "@/test/selectOption";
 
 setupMsw();
+// The timed assertions exercise operation lifecycle after the real wire validators load.
+beforeAll(
+  () => import("@/shared/api/generatedContracts/series-analysis-radar-validators.generated"),
+);
 
 function renderPage() {
   const queryClient = createTestQueryClient();
@@ -145,7 +149,9 @@ describe("SeriesAnalysisAdminPage", () => {
     );
     renderPage();
     await user.click(await screen.findByRole("tab", { name: "レーダーの採点基準" }));
-    await user.click(await screen.findByRole("button", { name: "この変更案を適用する" }));
+    const applyButton = await screen.findByRole("button", { name: "この変更案を適用する" });
+    await waitFor(() => expect(applyButton).toBeEnabled());
+    await user.click(applyButton);
     await user.click(
       within(screen.getByRole("alertdialog")).getByRole("button", { name: "作品全体に適用する" }),
     );
@@ -192,7 +198,9 @@ describe("SeriesAnalysisAdminPage", () => {
     renderPage();
     const radarTab = await screen.findByRole("tab", { name: "レーダーの採点基準" });
     await user.click(radarTab);
-    await user.click(await screen.findByRole("button", { name: "この変更案を適用する" }));
+    const applyButton = await screen.findByRole("button", { name: "この変更案を適用する" });
+    await waitFor(() => expect(applyButton).toBeEnabled());
+    await user.click(applyButton);
     const dialog = screen.getByRole("alertdialog");
     await user.click(within(dialog).getByRole("button", { name: "作品全体に適用する" }));
     expect(await within(dialog).findByText(/操作の受付結果はまだ不明/u)).toBeVisible();

@@ -53,7 +53,7 @@ function meetsCondition(
   kind: ExampleCondition["kind"],
 ) {
   const comparison = compareRationals(distributionMean(distribution), threshold);
-  return kind === "goal" ? comparison < 0 : comparison <= 0;
+  return kind === "goal" ? comparison < 0 : comparison >= 0;
 }
 
 export function OutlookPastExamples({
@@ -153,119 +153,121 @@ export function OutlookPastExamples({
     if (accepted && condition.kind === "goal") condition.onUsePerformance?.();
   };
   return (
-    <Disclosure
-      ariaLabel={`${memberName}の過去の成績例`}
-      summary={`${memberName}の過去の成績例`}
-      open={open}
-      onOpenChange={(nextOpen) => change((current) => ({ ...current, [openKey]: nextOpen }))}
-      triggerLayout="flush-horizontal"
-      panelSpacing="sm"
-    >
-      <div className="grid min-w-0 gap-4">
-        {condition.kind === "rival-mean" ? (
-          <p className={cn(contentText.body, readableTextWidthClass)}>
-            過去の連続20戦から、平均{outlookAverage(targetMean)}位以下の例を選んでいます。
-            {session.entries[role].meanDraft !== undefined ||
-            session.entries[role].error !== undefined
-              ? "入力途中の値は使わず、反映済みの平均で確認しています。"
-              : null}
-          </p>
-        ) : null}
-        {condition.kind === "rival-mean" && pending ? (
-          <p id={pendingId} className={contentText.supporting}>
-            {session.gesture
-              ? "平均順位の操作を終えてから、成績例を試してください。"
-              : session.task === "goal" &&
-                  (session.entries[0].meanDraft !== undefined ||
-                    session.entries[0].error !== undefined)
-                ? "「成績から試す」で、2人の入力を反映するか、取り消してください。"
-                : "成績例を試す前に、2人の入力を反映するか、取り消してください。"}
-          </p>
-        ) : null}
-        {query.data === undefined ? (
-          query.isError ? null : (
-            <p role="status" className={contentText.supporting}>
-              成績例を読み込み中
+    <div className={cn("min-w-0", readableTextWidthClass)}>
+      <Disclosure
+        ariaLabel={`${memberName}の過去の成績例`}
+        summary={`${memberName}の過去の成績例`}
+        open={open}
+        onOpenChange={(nextOpen) => change((current) => ({ ...current, [openKey]: nextOpen }))}
+        panelPadding="sm"
+      >
+        <div className="grid min-w-0 gap-4">
+          {condition.kind === "rival-mean" ? (
+            <p className={cn(contentText.body, readableTextWidthClass)}>
+              過去の連続20戦から、平均{outlookAverage(targetMean)}位以上の例を選んでいます。
+              {session.entries[role].meanDraft !== undefined ||
+              session.entries[role].error !== undefined
+                ? "入力途中の値は使わず、反映済みの平均で確認しています。"
+                : null}
             </p>
-          )
-        ) : query.data.examples.status === "insufficient" ? (
-          <p className={cn(contentText.body, readableTextWidthClass)}>
-            作品の実績が20戦未満のため、連続20戦の例はありません。
-          </p>
-        ) : examples.length === 0 ? (
-          <p className={cn(contentText.body, readableTextWidthClass)}>
-            {hasQualifying
-              ? condition.kind === "goal"
-                ? "必要な平均を満たす実績はありますが、相手の指定と両立する例がありません。"
-                : "指定した平均を満たす実績はありますが、注目する人の成績と両立する例がありません。"
-              : condition.kind === "goal"
-                ? "必要な平均を満たす20戦の実績例がありません。"
-                : "指定した平均を満たす20戦の実績例がありません。"}
-          </p>
-        ) : (
-          <div className="grid gap-4">
-            {condition.kind === "goal" ? (
-              <p className={cn(contentText.body, readableTextWidthClass)}>
-                過去の連続20戦の成績から、{session.goalHorizon}戦続けると上回れる例を選んでいます。
+          ) : null}
+          {condition.kind === "rival-mean" && pending ? (
+            <p id={pendingId} className={contentText.supporting}>
+              {session.gesture
+                ? "平均順位の操作を終えてから、成績例を試してください。"
+                : session.task === "goal" &&
+                    (session.entries[0].meanDraft !== undefined ||
+                      session.entries[0].error !== undefined)
+                  ? "「成績から試す」で、2人の入力を反映するか、取り消してください。"
+                  : "成績例を試す前に、2人の入力を反映するか、取り消してください。"}
+            </p>
+          ) : null}
+          {query.data === undefined ? (
+            query.isError ? null : (
+              <p role="status" className={contentText.supporting}>
+                成績例を読み込み中
               </p>
-            ) : null}
-            <ul className="grid gap-4">
-              {examples.map((example) => (
-                <li key={example.rankCounts.join(":")}>
-                  <ContentWithActions
-                    actions={
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={pending || invalidGoal}
-                        aria-describedby={pending ? pendingDescriptionId : undefined}
-                        onClick={() => applyExample(example)}
-                      >
-                        この成績を試す
-                      </Button>
-                    }
-                  >
-                    <div className="grid gap-1">
-                      <p className={contentText.compactPrimary}>
-                        {example.window.averageRank.toFixed(2)}位
-                      </p>
-                      <p className={contentText.body}>
-                        {example.rankCounts
-                          .map((count, index) => `${index + 1}位 ${count}回`)
-                          .join(" / ")}
-                      </p>
-                      <p className={contentText.supporting}>
-                        {formatDateOnly(example.window.period.startedAt)}〜
-                        {formatDateOnly(example.window.period.endedAt)}
-                      </p>
-                    </div>
-                  </ContentWithActions>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {query.isError ? (
-          <Notice
-            presentation="bare"
-            tone={query.data ? "warning" : "danger"}
-            action={
-              <Button
-                size="sm"
-                variant="secondary"
-                pending={query.isFetching}
-                onClick={() => void query.refetch()}
-              >
-                成績例を再読み込み
-              </Button>
-            }
-          >
-            {query.data
-              ? "過去の成績例を再取得できません。取得済みの結果を表示しています。"
-              : "過去の成績例を取得できません。試算は続けられます。"}
-          </Notice>
-        ) : null}
-      </div>
-    </Disclosure>
+            )
+          ) : query.data.examples.status === "insufficient" ? (
+            <p className={cn(contentText.body, readableTextWidthClass)}>
+              作品の実績が20戦未満のため、連続20戦の例はありません。
+            </p>
+          ) : examples.length === 0 ? (
+            <p className={cn(contentText.body, readableTextWidthClass)}>
+              {hasQualifying
+                ? condition.kind === "goal"
+                  ? "必要な平均を満たす実績はありますが、相手の指定と両立する例がありません。"
+                  : "指定した平均を満たす実績はありますが、注目する人の成績と両立する例がありません。"
+                : condition.kind === "goal"
+                  ? "必要な平均を満たす20戦の実績例がありません。"
+                  : "指定した平均を満たす20戦の実績例がありません。"}
+            </p>
+          ) : (
+            <div className="grid gap-4">
+              {condition.kind === "goal" ? (
+                <p className={cn(contentText.body, readableTextWidthClass)}>
+                  過去の連続20戦の成績から、{session.goalHorizon}
+                  戦続けると上回れる例を選んでいます。
+                </p>
+              ) : null}
+              <ul className="grid gap-4">
+                {examples.map((example) => (
+                  <li key={example.rankCounts.join(":")}>
+                    <ContentWithActions
+                      actions={
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={pending || invalidGoal}
+                          aria-describedby={pending ? pendingDescriptionId : undefined}
+                          onClick={() => applyExample(example)}
+                        >
+                          この成績を試す
+                        </Button>
+                      }
+                    >
+                      <div className="grid gap-1">
+                        <p className={contentText.compactPrimary}>
+                          {example.window.averageRank.toFixed(2)}位
+                        </p>
+                        <p className={contentText.body}>
+                          {example.rankCounts
+                            .map((count, index) => `${index + 1}位 ${count}回`)
+                            .join(" / ")}
+                        </p>
+                        <p className={contentText.supporting}>
+                          {formatDateOnly(example.window.period.startedAt)}〜
+                          {formatDateOnly(example.window.period.endedAt)}
+                        </p>
+                      </div>
+                    </ContentWithActions>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {query.isError ? (
+            <Notice
+              presentation="bare"
+              tone={query.data ? "warning" : "danger"}
+              action={
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  pending={query.isFetching}
+                  onClick={() => void query.refetch()}
+                >
+                  成績例を再読み込み
+                </Button>
+              }
+            >
+              {query.data
+                ? "過去の成績例を再取得できません。取得済みの結果を表示しています。"
+                : "過去の成績例を取得できません。試算は続けられます。"}
+            </Notice>
+          ) : null}
+        </div>
+      </Disclosure>
+    </div>
   );
 }

@@ -278,22 +278,22 @@ export function OutlookGoalPanel({
               },
             ]}
           />
+          <OutlookPastExamples
+            response={response}
+            memberId={memberIds[0]}
+            memberName={names[0]}
+            condition={{
+              kind: "goal",
+              cumulative,
+              required,
+              onUsePerformance,
+              pendingDescriptionId: opponentPending ? pendingId : undefined,
+            }}
+            session={session}
+            change={change}
+          />
         </div>
       </div>
-      <OutlookPastExamples
-        response={response}
-        memberId={memberIds[0]}
-        memberName={names[0]}
-        condition={{
-          kind: "goal",
-          cumulative,
-          required,
-          onUsePerformance,
-          pendingDescriptionId: opponentPending ? pendingId : undefined,
-        }}
-        session={session}
-        change={change}
-      />
       {reviewLinks ? (
         <div className="grid gap-2">
           <h3 className={contentText.heading}>{reviewHeading}</h3>

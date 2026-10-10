@@ -781,7 +781,7 @@ describe("OutlookView input and update boundaries", () => {
       memberId: "member_ponta",
       examples: {
         ...base.examples,
-        types: base.examples.types.filter((example) => example.window.rankSum === 44),
+        types: base.examples.types.filter((example) => example.window.rankSum === 53),
       },
     });
     const requestedMembers: string[] = [];
@@ -799,20 +799,21 @@ describe("OutlookView input and update boundaries", () => {
     expect(requestedMembers).toEqual([]);
     await user.click(screen.getByRole("button", { name: "ぽんたの過去の成績例" }));
     const rival = pastExamples(rivalName);
-    expect(await rival.findByText("2.20位")).toBeVisible();
+    expect(await rival.findByText("2.65位")).toBeVisible();
     expect(requestedMembers).toEqual(["member_ponta"]);
     const apply = rival.getByRole("button", { name: "この成績を試す" });
     await user.clear(meanField(rivalName));
-    await user.type(meanField(rivalName), "2.10");
+    await user.type(meanField(rivalName), "2.70");
     await user.clear(meanField());
     await user.type(meanField(), "2.60");
-    expect(rival.getByText(/平均2\.45位以下.*反映済みの平均で確認しています/u)).toBeVisible();
+    expect(rival.getByText(/平均2\.45位以上.*反映済みの平均で確認しています/u)).toBeVisible();
+    expect(rival.getByText("2.65位")).toBeVisible();
     expect(apply).toBeDisabled();
     expect(apply).toHaveAccessibleDescription(
       "成績例を試す前に、2人の入力を反映するか、取り消してください。",
     );
     await user.click(apply);
-    expect(meanField(rivalName)).toHaveValue("2.10");
+    expect(meanField(rivalName)).toHaveValue("2.70");
     expect(meanField()).toHaveValue("2.60");
     expect(undo()).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "ぽんたの入力を取り消す" }));
@@ -867,12 +868,12 @@ describe("OutlookView input and update boundaries", () => {
       "true",
     );
     expect(screen.getByRole("textbox", { name: "目標の戦数" })).toHaveValue("80");
-    expect(meanField(rivalName)).toHaveValue("2.20");
+    expect(meanField(rivalName)).toHaveValue("2.65");
     await user.click(screen.getByRole("tab", { name: "成績から試す" }));
     expect(screen.getByRole("textbox", { name: "何戦後を見る" })).toHaveValue("37");
     expect(meanField()).toHaveValue("2.85");
     await openCounts(user, rivalName);
-    expect(displayedCounts(rivalName)).toEqual(["5回", "7回", "7回", "1回"]);
+    expect(displayedCounts(rivalName)).toEqual(["2回", "7回", "7回", "4回"]);
     await user.click(screen.getByRole("button", { name: "キャンセル" }));
     await user.click(undo());
     expect(meanField()).toHaveValue("2.85");

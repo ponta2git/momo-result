@@ -396,7 +396,7 @@ describe("OutlookGoalPanel", () => {
     expect(view.onUsePerformance).toHaveBeenCalledOnce();
   });
 
-  it("includes an equal rival mean without rounding an exceeding example down or weakening the focus goal", async () => {
+  it("includes an equal rival mean without rounding a lower example up or weakening the focus goal", async () => {
     const user = userEvent.setup();
     const response = await makeSeriesAnalysisOutlookSummary();
     const initial = {
@@ -406,7 +406,7 @@ describe("OutlookGoalPanel", () => {
       goalHorizonText: "80",
     };
     initial.entries[1] = {
-      distribution: distributionFromCounts([0, 551, 449, 0]),
+      distribution: distributionFromCounts([0, 549, 451, 0]),
       source: { kind: "counts" },
     };
     const focusExamples = await historicalExamples(memberIds[0], [
@@ -415,7 +415,7 @@ describe("OutlookGoalPanel", () => {
     ]);
     const rivalExamples = await historicalExamples(memberIds[1], [
       [5, 5, 6, 4],
-      [6, 4, 6, 4],
+      [4, 6, 6, 4],
     ]);
     server.use(
       http.get("/api/analytics/series-comparison/v1/outlook-examples", ({ request }) =>
@@ -429,8 +429,8 @@ describe("OutlookGoalPanel", () => {
     const view = renderGoal(response, initial);
     await user.click(screen.getByRole("button", { name: "ぽんたの過去の成績例" }));
     const rival = pastExamples(names[1]);
-    expect(await rival.findByText("2.40位")).toBeVisible();
-    // 2.449 rounds to 2.45, but the historical mean 2.45 still exceeds the exact condition.
+    expect(await rival.findByText("2.50位")).toBeVisible();
+    // 2.451 rounds to 2.45, but the historical mean 2.45 is still below the exact condition.
     expect(rival.queryByText("2.45位")).not.toBeInTheDocument();
     expect(rival.getAllByRole("button", { name: "この成績を試す" })).toHaveLength(1);
     const mean = screen.getByRole("textbox", { name: "ぽんたのこれからの平均順位" });
@@ -449,9 +449,9 @@ describe("OutlookGoalPanel", () => {
   });
 
   it.each([
-    { counts: [0, 0, 0, 20], message: "指定した平均を満たす20戦の実績例がありません。" },
+    { counts: [20, 0, 0, 0], message: "指定した平均を満たす20戦の実績例がありません。" },
     {
-      counts: [20, 0, 0, 0],
+      counts: [0, 0, 0, 20],
       message: "指定した平均を満たす実績はありますが、注目する人の成績と両立する例がありません。",
     },
   ] satisfies Array<{ counts: RankCounts; message: string }>)(

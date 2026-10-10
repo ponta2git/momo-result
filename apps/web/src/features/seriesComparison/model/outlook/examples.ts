@@ -116,7 +116,8 @@ export function generateOutlookExamples(input: {
   const distinctCandidateCount = new Set(candidates.map((candidate) => candidate.signature)).size;
   const selected: Candidate[] = [];
   const used = new Set<string>();
-  for (const origin of [50, 100, 150]) {
+  // Use the 20th, 50th, and 80th percentiles to show modestly separated outcomes.
+  for (const origin of [40, 100, 160]) {
     let chosen: Candidate | undefined;
     for (let distance = 0; distance < candidates.length && !chosen; distance++) {
       for (const index of distance === 0 ? [origin] : [origin - distance, origin + distance]) {

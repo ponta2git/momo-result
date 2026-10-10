@@ -41,6 +41,7 @@ export type OutlookSession = {
   goalHorizon: number;
   goalHorizonText: string;
   examplesOpen: boolean;
+  rivalExamplesOpen: boolean;
   notice?: string | undefined;
 };
 
@@ -145,6 +146,7 @@ export function adoptOutlookSummary(
       goalHorizon: 100,
       goalHorizonText: "100",
       examplesOpen: false,
+      rivalExamplesOpen: false,
     };
   const followRecent = current.entries.every(
     (entry) => entry.source.kind === "recent" && entry.source.artifactId === current.artifactId,

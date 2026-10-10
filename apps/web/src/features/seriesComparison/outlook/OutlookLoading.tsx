@@ -51,6 +51,7 @@ export function OutlookLoading() {
                 </div>
               </div>
             ))}
+            <Skeleton className="h-11 w-52 max-w-full" />
             <div className="grid gap-2">
               <Skeleton className="h-11 w-44 max-w-full pointer-fine:h-9" />
               <div className="h-8" />

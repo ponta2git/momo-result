@@ -1,6 +1,7 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { http, HttpResponse } from "msw";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -9,7 +10,11 @@ import { OutlookView } from "@/features/seriesComparison/outlook/OutlookView";
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
 import { setDevUser } from "@/test/auth";
 import { setupMsw } from "@/test/msw/lifecycle";
-import { makeSeriesAnalysisOutlookSummary } from "@/test/msw/seriesAnalysisOutlookFixtures";
+import {
+  makeSeriesAnalysisOutlookExamples,
+  makeSeriesAnalysisOutlookSummary,
+} from "@/test/msw/seriesAnalysisOutlookFixtures";
+import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 import { selectOption } from "@/test/selectOption";
 
@@ -121,6 +126,14 @@ async function openCounts(user: ReturnType<typeof userEvent.setup>, name = focus
 }
 async function pinComparison(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: "この成績を残して比べる" }));
+}
+
+function pastExamples(name: string) {
+  const trigger = screen.getByRole("button", { name: `${name}の過去の成績例` });
+  const panelId = trigger.getAttribute("aria-controls");
+  const panel = panelId ? document.getElementById(panelId) : null;
+  if (!panel) throw new Error(`The historical examples for ${name} must be open.`);
+  return within(panel);
 }
 
 /** A legal rank permutation corrects the recent games while preserving the older games. */
@@ -752,5 +765,119 @@ describe("OutlookView input and update boundaries", () => {
     expect(screen.getByRole("table", { name: "現在と401戦後の総合平均順位" })).toBeVisible();
     for (const chart of screen.getAllByRole("img"))
       expect(chart).toHaveAccessibleName(/この先200戦.+確認する時点は401戦後（グラフの範囲外）/u);
+  });
+
+  it("loads each person's examples on demand and applies only the rival after pending inputs are resolved", async () => {
+    const user = userEvent.setup();
+    const base = await makeSeriesAnalysisOutlookExamples();
+    const focusExamples = await makeSeriesAnalysisOutlookExamples({
+      memberId: "member_eu",
+      examples: {
+        ...base.examples,
+        types: base.examples.types.filter((example) => example.window.rankSum === 47),
+      },
+    });
+    const rivalExamples = await makeSeriesAnalysisOutlookExamples({
+      memberId: "member_ponta",
+      examples: {
+        ...base.examples,
+        types: base.examples.types.filter((example) => example.window.rankSum === 44),
+      },
+    });
+    const requestedMembers: string[] = [];
+    server.use(
+      http.get("/api/analytics/series-comparison/v1/outlook-examples", ({ request }) => {
+        const memberId = new URL(request.url).searchParams.get("memberId")!;
+        requestedMembers.push(memberId);
+        return HttpResponse.json(memberId === "member_ponta" ? rivalExamples : focusExamples);
+      }),
+    );
+    renderOutlook(await makeSeriesAnalysisOutlookSummary());
+    const horizon = screen.getByRole("textbox", { name: "何戦後を見る" });
+    await user.clear(horizon);
+    await user.type(horizon, "37");
+    expect(requestedMembers).toEqual([]);
+    await user.click(screen.getByRole("button", { name: "ぽんたの過去の成績例" }));
+    const rival = pastExamples(rivalName);
+    expect(await rival.findByText("2.20位")).toBeVisible();
+    expect(requestedMembers).toEqual(["member_ponta"]);
+    const apply = rival.getByRole("button", { name: "この成績を試す" });
+    await user.clear(meanField(rivalName));
+    await user.type(meanField(rivalName), "2.10");
+    await user.clear(meanField());
+    await user.type(meanField(), "2.60");
+    expect(rival.getByText(/平均2\.45位以下.*反映済みの平均で確認しています/u)).toBeVisible();
+    expect(apply).toBeDisabled();
+    expect(apply).toHaveAccessibleDescription(
+      "成績例を試す前に、2人の入力を反映するか、取り消してください。",
+    );
+    await user.click(apply);
+    expect(meanField(rivalName)).toHaveValue("2.10");
+    expect(meanField()).toHaveValue("2.60");
+    expect(undo()).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "ぽんたの入力を取り消す" }));
+    expect(apply).toBeDisabled();
+    await setMean(user, "bad");
+    expect(meanField()).toHaveAttribute("aria-invalid", "true");
+    expect(apply).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "いーゆーの入力を取り消す" }));
+    const slider = screen.getByRole("slider", { name: "ぽんたの平均順位を動かす" });
+    fireEvent.keyDown(slider, { key: "ArrowRight" });
+    fireEvent.keyDown(slider, { key: "ArrowLeft" });
+    expect(apply).toBeDisabled();
+    fireEvent.keyUp(slider, { key: "ArrowLeft" });
+    expect(apply).toBeEnabled();
+    expect(undo()).toBeDisabled();
+
+    await user.click(screen.getByRole("tab", { name: "戦数から考える" }));
+    const goal = screen.getByRole("textbox", { name: "目標の戦数" });
+    await user.clear(goal);
+    await user.type(goal, "80");
+    expect(screen.getByRole("button", { name: "ぽんたの過去の成績例" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "いーゆーの過去の成績例" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    expect(requestedMembers).toEqual(["member_ponta"]);
+    await user.click(screen.getByRole("button", { name: "いーゆーの過去の成績例" }));
+    expect(await pastExamples(focusName).findByText("2.35位")).toBeVisible();
+    expect(pastExamples(rivalName).queryByText("2.35位")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "ぽんたの過去の成績例" }));
+    expect(screen.getByRole("button", { name: "いーゆーの過去の成績例" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await user.click(screen.getByRole("tab", { name: "成績から試す" }));
+    expect(screen.getByRole("button", { name: "ぽんたの過去の成績例" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    await user.click(screen.getByRole("button", { name: "ぽんたの過去の成績例" }));
+    await user.click(screen.getByRole("tab", { name: "戦数から考える" }));
+    expect(screen.getByRole("button", { name: "いーゆーの過去の成績例" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await user.click(pastExamples(rivalName).getByRole("button", { name: "この成績を試す" }));
+    expect(screen.getByRole("tab", { name: "戦数から考える" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("textbox", { name: "目標の戦数" })).toHaveValue("80");
+    expect(meanField(rivalName)).toHaveValue("2.20");
+    await user.click(screen.getByRole("tab", { name: "成績から試す" }));
+    expect(screen.getByRole("textbox", { name: "何戦後を見る" })).toHaveValue("37");
+    expect(meanField()).toHaveValue("2.85");
+    await openCounts(user, rivalName);
+    expect(displayedCounts(rivalName)).toEqual(["5回", "7回", "7回", "1回"]);
+    await user.click(screen.getByRole("button", { name: "キャンセル" }));
+    await user.click(undo());
+    expect(meanField()).toHaveValue("2.85");
+    expect(meanField(rivalName)).toHaveValue("2.45");
+    expect(undo()).toBeDisabled();
+    expect(requestedMembers).toEqual(["member_ponta", "member_eu"]);
   });
 });

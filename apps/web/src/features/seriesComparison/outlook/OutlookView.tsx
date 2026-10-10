@@ -21,6 +21,7 @@ import {
   exactAverageFraction,
   outlookAverage,
 } from "@/features/seriesComparison/outlook/outlookPresentation";
+import { OutlookPastExamples } from "@/features/seriesComparison/outlook/OutlookReferences";
 import {
   OutlookComparisonControls,
   OutlookScenarioComparison,
@@ -275,6 +276,16 @@ function OutlookWorkspace({
                   <OutlookPlayerEditor key={memberId} {...playerProps} role={role} showComparison />
                 ))}
               </div>
+              {session.task === "performance" ? (
+                <OutlookPastExamples
+                  response={response}
+                  memberId={ids[1]}
+                  memberName={names[1]}
+                  condition={{ kind: "rival-mean" }}
+                  session={session}
+                  change={change}
+                />
+              ) : null}
               <OutlookComparisonControls session={session} change={change} />
               {response.recent.qualityStatus === "reference" ? (
                 <p className={contentText.supporting}>

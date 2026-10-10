@@ -22,12 +22,16 @@ import {
   OutlookSessionOwner,
   useOutlookSession,
 } from "@/features/seriesComparison/outlook/OutlookSessionOwner";
-import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
+import type {
+  SeriesAnalysisOutlookExamples,
+  SeriesAnalysisOutlookSummary,
+} from "@/shared/api/seriesAnalysis";
 import { setDevUser } from "@/test/auth";
 import { setupMsw } from "@/test/msw/lifecycle";
 import {
   makeSeriesAnalysisOutlookSummary,
   makeSeriesAnalysisOutlookWindow,
+  makeSeriesAnalysisOutlookExamples,
 } from "@/test/msw/seriesAnalysisOutlookFixtures";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
@@ -37,6 +41,30 @@ beforeEach(() => setDevUser());
 
 const memberIds = ["member_eu", "member_ponta"] as const;
 const names = ["いーゆー", "ぽんた"] as const;
+type RankCounts = SeriesAnalysisOutlookExamples["examples"]["types"][number]["rankCounts"];
+
+async function historicalExamples(memberId: string, counts: readonly RankCounts[]) {
+  const base = await makeSeriesAnalysisOutlookExamples({ memberId });
+  const window = base.examples.types[0]!.window;
+  return makeSeriesAnalysisOutlookExamples({
+    ...base,
+    examples: {
+      status: "available",
+      types: counts.map((rankCounts) => {
+        const rankSum = rankCounts.reduce((sum, count, index) => sum + count * (index + 1), 0);
+        return { rankCounts, window: { ...window, rankSum, averageRank: rankSum / 20 } };
+      }),
+    },
+  });
+}
+
+function pastExamples(name: string) {
+  const trigger = screen.getByRole("button", { name: `${name}の過去の成績例` });
+  const panelId = trigger.getAttribute("aria-controls");
+  const panel = panelId ? document.getElementById(panelId) : null;
+  if (!panel) throw new Error(`The historical examples for ${name} must be open.`);
+  return within(panel);
+}
 
 function initialSession(response: SeriesAnalysisOutlookSummary) {
   return adoptOutlookSummary(undefined, response, "scope", [...memberIds])!;
@@ -339,7 +367,9 @@ describe("OutlookGoalPanel", () => {
     initial.entries[1].meanDraft = "2.30";
     const view = renderGoal(response, initial);
     await user.click(screen.getByRole("button", { name: "いーゆーの過去の成績例" }));
-    const examples = await screen.findAllByRole("button", { name: "この成績を試す" });
+    const examples = await pastExamples(names[0]).findAllByRole("button", {
+      name: "この成績を試す",
+    });
     expect(examples).toHaveLength(3);
     expect(screen.getByText(/100戦続けると上回れる例/u)).toBeVisible();
     expect(examples[0]).toBeDisabled();
@@ -365,4 +395,85 @@ describe("OutlookGoalPanel", () => {
     expect(result.horizon).toBe(1);
     expect(view.onUsePerformance).toHaveBeenCalledOnce();
   });
+
+  it("includes an equal rival mean without rounding an exceeding example down or weakening the focus goal", async () => {
+    const user = userEvent.setup();
+    const response = await makeSeriesAnalysisOutlookSummary();
+    const initial = {
+      ...initialSession(response),
+      task: "goal" as const,
+      goalHorizon: 80,
+      goalHorizonText: "80",
+    };
+    initial.entries[1] = {
+      distribution: distributionFromCounts([0, 551, 449, 0]),
+      source: { kind: "counts" },
+    };
+    const focusExamples = await historicalExamples(memberIds[0], [
+      [4, 6, 6, 4],
+      [6, 4, 6, 4],
+    ]);
+    const rivalExamples = await historicalExamples(memberIds[1], [
+      [5, 5, 6, 4],
+      [6, 4, 6, 4],
+    ]);
+    server.use(
+      http.get("/api/analytics/series-comparison/v1/outlook-examples", ({ request }) =>
+        HttpResponse.json(
+          new URL(request.url).searchParams.get("memberId") === memberIds[1]
+            ? rivalExamples
+            : focusExamples,
+        ),
+      ),
+    );
+    const view = renderGoal(response, initial);
+    await user.click(screen.getByRole("button", { name: "ぽんたの過去の成績例" }));
+    const rival = pastExamples(names[1]);
+    expect(await rival.findByText("2.40位")).toBeVisible();
+    // 2.449 rounds to 2.45, but the historical mean 2.45 still exceeds the exact condition.
+    expect(rival.queryByText("2.45位")).not.toBeInTheDocument();
+    expect(rival.getAllByRole("button", { name: "この成績を試す" })).toHaveLength(1);
+    const mean = screen.getByRole("textbox", { name: "ぽんたのこれからの平均順位" });
+    await user.clear(mean);
+    await user.type(mean, "2.45{Enter}");
+    expect(rival.getByText("2.45位")).toBeVisible();
+    expect(rival.getAllByRole("button", { name: "この成績を試す" })).toHaveLength(2);
+
+    await user.click(screen.getByRole("button", { name: "いーゆーの過去の成績例" }));
+    const focus = pastExamples(names[0]);
+    expect(await focus.findByText("2.40位")).toBeVisible();
+    // At 80 games, 2.50 ties the rival; the focus goal still requires a strictly lower mean.
+    expect(focus.queryByText("2.50位")).not.toBeInTheDocument();
+    expect(focus.getAllByRole("button", { name: "この成績を試す" })).toHaveLength(1);
+    expect(view.onUsePerformance).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { counts: [0, 0, 0, 20], message: "指定した平均を満たす20戦の実績例がありません。" },
+    {
+      counts: [20, 0, 0, 0],
+      message: "指定した平均を満たす実績はありますが、注目する人の成績と両立する例がありません。",
+    },
+  ] satisfies Array<{ counts: RankCounts; message: string }>)(
+    "does not offer a rival application when $message",
+    async ({ counts, message }) => {
+      const user = userEvent.setup();
+      const response = await makeSeriesAnalysisOutlookSummary();
+      const initial = initialSession(response);
+      const examples = await historicalExamples(memberIds[1], [counts]);
+      server.use(
+        http.get("/api/analytics/series-comparison/v1/outlook-examples", () =>
+          HttpResponse.json(examples),
+        ),
+      );
+      const view = renderGoal(response, initial);
+      await user.click(screen.getByRole("button", { name: "ぽんたの過去の成績例" }));
+      const panel = pastExamples(names[1]);
+      expect(await panel.findByText(message)).toBeVisible();
+      expect(panel.queryByRole("button", { name: "この成績を試す" })).not.toBeInTheDocument();
+      expect(view.readSession().entries).toEqual(initial.entries);
+      expect(view.readSession().history).toEqual(initial.history);
+      expect(view.onUsePerformance).not.toHaveBeenCalled();
+    },
+  );
 });

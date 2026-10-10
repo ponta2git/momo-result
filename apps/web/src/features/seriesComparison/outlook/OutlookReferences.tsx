@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 
 import {
   areDistributionsCompatible,
@@ -8,11 +8,18 @@ import {
   distributionsEqual,
   requiredMean,
 } from "@/features/seriesComparison/model/outlook";
-import type { CumulativePair, RequiredMean } from "@/features/seriesComparison/model/outlook";
+import type {
+  CumulativePair,
+  RankDistribution,
+  Rational,
+  RequiredMean,
+} from "@/features/seriesComparison/model/outlook";
 import { parseOutlookHorizon } from "@/features/seriesComparison/outlook/OutlookHorizonControl";
+import { outlookAverage } from "@/features/seriesComparison/outlook/outlookPresentation";
 import {
   applyOutlookDistribution,
   finishOutlookGesture,
+  otherRole,
 } from "@/features/seriesComparison/outlook/outlookSession";
 import type { OutlookSession } from "@/features/seriesComparison/outlook/outlookSession";
 import { useOutlookResource } from "@/features/seriesComparison/outlook/useOutlookResource";
@@ -29,62 +36,152 @@ import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { contentText } from "@/shared/ui/typography";
 
+type ExampleCondition =
+  | {
+      kind: "goal";
+      cumulative: CumulativePair;
+      required: RequiredMean;
+      onUsePerformance?: (() => void) | undefined;
+      pendingDescriptionId?: string | undefined;
+    }
+  | { kind: "rival-mean" };
+type HistoricalExample = SeriesAnalysisOutlookExamples["examples"]["types"][number];
+
+function meetsCondition(
+  distribution: RankDistribution,
+  threshold: Rational,
+  kind: ExampleCondition["kind"],
+) {
+  const comparison = compareRationals(distributionMean(distribution), threshold);
+  return kind === "goal" ? comparison < 0 : comparison <= 0;
+}
+
 export function OutlookPastExamples({
   response,
-  focusId,
-  focusName,
-  cumulative,
-  required,
+  memberId,
+  memberName,
+  condition,
   session,
   change,
-  onUsePerformance,
-  pendingDescriptionId,
 }: {
   response: SeriesAnalysisOutlookSummary;
-  focusId: string;
-  focusName: string;
-  cumulative: CumulativePair;
-  required: RequiredMean;
+  memberId: string;
+  memberName: string;
+  condition: ExampleCondition;
   session: OutlookSession;
   change: (update: (current: OutlookSession) => OutlookSession) => void;
-  onUsePerformance?: (() => void) | undefined;
-  pendingDescriptionId?: string | undefined;
 }) {
-  const { examples: query } = useOutlookResource(
-    response,
-    focusId,
-    undefined,
-    session.examplesOpen,
-  );
-  const rival = session.entries[1].distribution;
-  const opponentPending =
-    session.entries[1].meanDraft !== undefined ||
-    session.entries[1].error !== undefined ||
-    Boolean(session.gesture);
+  const role = condition.kind === "goal" ? 0 : 1;
+  const peerRole = otherRole(role);
+  const openKey = condition.kind === "goal" ? "examplesOpen" : "rivalExamplesOpen";
+  const open = session[openKey] ?? false;
+  const pendingId = useId();
+  const { examples: query } = useOutlookResource(response, memberId, undefined, open);
+  const target = session.entries[role].distribution;
+  const peer = session.entries[peerRole].distribution;
+  const targetMean = useMemo(() => distributionMean(target), [target]);
+  const threshold = condition.kind === "goal" ? condition.required.threshold : targetMean;
+  const hasPendingInput = (current: OutlookSession) =>
+    Boolean(current.gesture) ||
+    current.entries[peerRole].meanDraft !== undefined ||
+    current.entries[peerRole].error !== undefined ||
+    (condition.kind === "rival-mean" &&
+      (current.entries[role].meanDraft !== undefined || current.entries[role].error !== undefined));
+  const pending = hasPendingInput(session);
+  const pendingDescriptionId =
+    condition.kind === "goal" ? condition.pendingDescriptionId : pendingId;
+  const invalidGoal =
+    condition.kind === "goal" &&
+    parseOutlookHorizon(session.goalHorizonText) !== session.goalHorizon;
   const { examples, hasQualifying } = useMemo(() => {
     const selected: SeriesAnalysisOutlookExamples["examples"]["types"] = [];
     let hasMatchingMean = false;
-    if (session.examplesOpen && query.data) {
+    if (open && query.data) {
       for (const example of query.data.examples.types) {
         const distribution = distributionFromCounts(example.rankCounts);
-        if (compareRationals(distributionMean(distribution), required.threshold) >= 0) continue;
+        if (!meetsCondition(distribution, threshold, condition.kind)) continue;
         hasMatchingMean = true;
-        if (areDistributionsCompatible(distribution, rival)) selected.push(example);
+        if (areDistributionsCompatible(distribution, peer)) selected.push(example);
         if (selected.length === 3) break;
       }
     }
     return { examples: selected, hasQualifying: hasMatchingMean };
-  }, [query.data, session.examplesOpen, required.threshold, rival]);
+  }, [query.data, open, threshold, condition.kind, peer]);
+  const applyExample = (example: HistoricalExample) => {
+    let accepted = false;
+    change((current) => {
+      if (
+        current.artifactId !== response.artifact.artifactId ||
+        current.key !== session.key ||
+        hasPendingInput(current) ||
+        (condition.kind === "goal" &&
+          parseOutlookHorizon(current.goalHorizonText) !== current.goalHorizon)
+      )
+        return current;
+      if (
+        !distributionsEqual(current.entries[peerRole].distribution, peer) ||
+        (condition.kind === "goal"
+          ? current.goalHorizon !== session.goalHorizon
+          : !distributionsEqual(current.entries[role].distribution, target))
+      )
+        return {
+          ...current,
+          notice: "条件が変わりました。成績例を確認して、もう一度試してください。",
+        };
+      const distribution = distributionFromCounts(example.rankCounts);
+      const latestThreshold =
+        condition.kind === "goal"
+          ? requiredMean(condition.cumulative, current.entries[1].distribution, current.goalHorizon)
+              .threshold
+          : distributionMean(current.entries[role].distribution);
+      if (
+        !meetsCondition(distribution, latestThreshold, condition.kind) ||
+        !areDistributionsCompatible(distribution, current.entries[peerRole].distribution)
+      )
+        return {
+          ...current,
+          notice: "条件が変わったため、この実績例を適用できません。",
+        };
+      accepted = true;
+      return applyOutlookDistribution(finishOutlookGesture(current), role, distribution, {
+        kind: "example",
+        artifactId: current.artifactId,
+        matchCount: 20,
+        period: example.window.period,
+      });
+    });
+    if (accepted && condition.kind === "goal") condition.onUsePerformance?.();
+  };
   return (
     <Disclosure
-      ariaLabel={`${focusName}の過去の成績例`}
-      summary={`${focusName}の過去の成績例`}
-      open={session.examplesOpen}
-      onOpenChange={(open) => change((current) => ({ ...current, examplesOpen: open }))}
+      ariaLabel={`${memberName}の過去の成績例`}
+      summary={`${memberName}の過去の成績例`}
+      open={open}
+      onOpenChange={(nextOpen) => change((current) => ({ ...current, [openKey]: nextOpen }))}
       triggerLayout="flush-horizontal"
       panelSpacing="sm"
     >
       <div className="grid min-w-0 gap-4">
+        {condition.kind === "rival-mean" ? (
+          <p className={cn(contentText.body, readableTextWidthClass)}>
+            過去の連続20戦から、平均{outlookAverage(targetMean)}位以下の例を選んでいます。
+            {session.entries[role].meanDraft !== undefined ||
+            session.entries[role].error !== undefined
+              ? "入力途中の値は使わず、反映済みの平均で確認しています。"
+              : null}
+          </p>
+        ) : null}
+        {condition.kind === "rival-mean" && pending ? (
+          <p id={pendingId} className={contentText.supporting}>
+            {session.gesture
+              ? "平均順位の操作を終えてから、成績例を試してください。"
+              : session.task === "goal" &&
+                  (session.entries[0].meanDraft !== undefined ||
+                    session.entries[0].error !== undefined)
+                ? "「成績から試す」で、2人の入力を反映するか、取り消してください。"
+                : "成績例を試す前に、2人の入力を反映するか、取り消してください。"}
+          </p>
+        ) : null}
         {query.data === undefined ? (
           query.isError ? null : (
             <p role="status" className={contentText.supporting}>
@@ -98,14 +195,20 @@ export function OutlookPastExamples({
         ) : examples.length === 0 ? (
           <p className={cn(contentText.body, readableTextWidthClass)}>
             {hasQualifying
-              ? "必要な平均を満たす実績はありますが、相手の指定と両立する例がありません。"
-              : "必要な平均を満たす20戦の実績例がありません。"}{" "}
+              ? condition.kind === "goal"
+                ? "必要な平均を満たす実績はありますが、相手の指定と両立する例がありません。"
+                : "指定した平均を満たす実績はありますが、注目する人の成績と両立する例がありません。"
+              : condition.kind === "goal"
+                ? "必要な平均を満たす20戦の実績例がありません。"
+                : "指定した平均を満たす20戦の実績例がありません。"}
           </p>
         ) : (
           <div className="grid gap-4">
-            <p className={cn(contentText.body, readableTextWidthClass)}>
-              過去の連続20戦の成績から、{session.goalHorizon}戦続けると上回れる例を選んでいます。
-            </p>
+            {condition.kind === "goal" ? (
+              <p className={cn(contentText.body, readableTextWidthClass)}>
+                過去の連続20戦の成績から、{session.goalHorizon}戦続けると上回れる例を選んでいます。
+              </p>
+            ) : null}
             <ul className="grid gap-4">
               {examples.map((example) => (
                 <li key={example.rankCounts.join(":")}>
@@ -114,65 +217,9 @@ export function OutlookPastExamples({
                       <Button
                         size="sm"
                         variant="secondary"
-                        disabled={
-                          opponentPending ||
-                          parseOutlookHorizon(session.goalHorizonText) !== session.goalHorizon
-                        }
-                        aria-describedby={opponentPending ? pendingDescriptionId : undefined}
-                        onClick={() => {
-                          let accepted = false;
-                          change((current) => {
-                            if (
-                              current.artifactId !== response.artifact.artifactId ||
-                              current.key !== session.key ||
-                              current.entries[1].meanDraft !== undefined ||
-                              current.entries[1].error !== undefined ||
-                              current.gesture !== undefined ||
-                              parseOutlookHorizon(current.goalHorizonText) !== current.goalHorizon
-                            )
-                              return current;
-                            if (
-                              current.goalHorizon !== session.goalHorizon ||
-                              !distributionsEqual(current.entries[1].distribution, rival)
-                            )
-                              return {
-                                ...current,
-                                notice:
-                                  "条件が変わりました。成績例を確認して、もう一度試してください。",
-                              };
-                            const distribution = distributionFromCounts(example.rankCounts);
-                            const latest = requiredMean(
-                              cumulative,
-                              current.entries[1].distribution,
-                              current.goalHorizon,
-                            );
-                            if (
-                              compareRationals(distributionMean(distribution), latest.threshold) >=
-                                0 ||
-                              !areDistributionsCompatible(
-                                distribution,
-                                current.entries[1].distribution,
-                              )
-                            )
-                              return {
-                                ...current,
-                                notice: "条件が変わったため、この実績例を適用できません。",
-                              };
-                            accepted = true;
-                            return applyOutlookDistribution(
-                              finishOutlookGesture(current),
-                              0,
-                              distribution,
-                              {
-                                kind: "example",
-                                artifactId: current.artifactId,
-                                matchCount: 20,
-                                period: example.window.period,
-                              },
-                            );
-                          });
-                          if (accepted) onUsePerformance?.();
-                        }}
+                        disabled={pending || invalidGoal}
+                        aria-describedby={pending ? pendingDescriptionId : undefined}
+                        onClick={() => applyExample(example)}
                       >
                         この成績を試す
                       </Button>

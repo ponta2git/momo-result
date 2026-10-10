@@ -174,6 +174,14 @@ export function OutlookGoalPanel({
           </div>
           {horizonControl}
           {opponentEditor}
+          <OutlookPastExamples
+            response={response}
+            memberId={memberIds[1]}
+            memberName={names[1]}
+            condition={{ kind: "rival-mean" }}
+            session={session}
+            change={change}
+          />
         </div>
         <div className="grid min-w-0 grid-cols-1 content-start gap-4">
           <div className={cn("grid gap-2", readableTextWidthClass)}>
@@ -274,14 +282,17 @@ export function OutlookGoalPanel({
       </div>
       <OutlookPastExamples
         response={response}
-        focusId={memberIds[0]}
-        focusName={names[0]}
-        cumulative={cumulative}
-        required={required}
+        memberId={memberIds[0]}
+        memberName={names[0]}
+        condition={{
+          kind: "goal",
+          cumulative,
+          required,
+          onUsePerformance,
+          pendingDescriptionId: opponentPending ? pendingId : undefined,
+        }}
         session={session}
         change={change}
-        onUsePerformance={onUsePerformance}
-        pendingDescriptionId={opponentPending ? pendingId : undefined}
       />
       {reviewLinks ? (
         <div className="grid gap-2">

@@ -197,7 +197,11 @@ export function useSeriesAnalysisAdminPageModel() {
       data: overview,
       loading: isInitialQueryLoading(overviewQuery) && !resourceErrorTitle,
       refreshing: overviewQuery.isFetching && !recalculation.isPending,
-      refreshDisabled: overviewQuery.isFetching || recalculation.isPending,
+      // Switching from the default query cancels its in-flight request.
+      refreshDisabled:
+        overviewQuery.isFetching ||
+        recalculation.isPending ||
+        (!gameTitleId && canonicalGameTitleId !== undefined),
     },
     selection: {
       gameTitleId: selectedGameTitleId,

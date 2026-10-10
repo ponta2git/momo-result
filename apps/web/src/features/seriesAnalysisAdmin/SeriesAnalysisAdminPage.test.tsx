@@ -1,8 +1,8 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { MemoryRouter } from "react-router-dom";
+import { createMemoryRouter, MemoryRouter, RouterProvider } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
 import { SeriesAnalysisAdminPage } from "@/features/seriesAnalysisAdmin/SeriesAnalysisAdminPage";
@@ -52,6 +52,59 @@ function rejectedCommand() {
 }
 
 describe("SeriesAnalysisAdminPage", () => {
+  it("waits for the default title route to commit before accepting a manual refresh", async () => {
+    setDevUser();
+    const user = userEvent.setup();
+    const routeStarted = createDeferred();
+    const routeGate = createDeferred();
+    const requestedTitles: Array<string | null> = [];
+    server.use(
+      http.get("/api/admin/series-analysis/overview", ({ request }) => {
+        requestedTitles.push(new URL(request.url).searchParams.get("gameTitleId"));
+        const overview = makeSeriesAnalysisAdminOverview();
+        for (const job of overview.recentJobs) {
+          job.gameTitleName =
+            requestedTitles.length === 1 ? "初回の処理履歴" : "更新済みの処理履歴";
+        }
+        return HttpResponse.json(overview);
+      }),
+    );
+    const router = createMemoryRouter(
+      [
+        {
+          path: "/admin/analysis",
+          loader: async ({ request }) => {
+            if (new URL(request.url).searchParams.has("gameTitleId")) {
+              routeStarted.resolve();
+              await routeGate.promise;
+            }
+            return null;
+          },
+          hydrateFallbackElement: <p>読み込み中</p>,
+          element: <SeriesAnalysisAdminPage />,
+        },
+      ],
+      { initialEntries: ["/admin/analysis"] },
+    );
+    render(
+      <QueryClientProvider client={createTestQueryClient()}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText("初回の処理履歴")).toBeVisible();
+    await routeStarted.promise;
+    const refresh = screen.getByRole("button", { name: "状態を更新" });
+    expect(refresh).toBeDisabled();
+    await user.click(refresh);
+    expect(requestedTitles).toEqual([null]);
+
+    await act(async () => routeGate.resolve());
+    await waitFor(() => expect(screen.getByRole("button", { name: "状態を更新" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "状態を更新" }));
+    expect(await screen.findByText("更新済みの処理履歴")).toBeVisible();
+    expect(requestedTitles).toEqual([null, "gt_momotetsu_2"]);
+  });
+
   it("opens the recalculation tab on accepted application and announces acceptance once before refresh completes", async () => {
     const user = userEvent.setup();
     setDevUser();

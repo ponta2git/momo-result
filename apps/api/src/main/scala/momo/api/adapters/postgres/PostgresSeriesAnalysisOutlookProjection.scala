@@ -30,7 +30,8 @@ private[postgres] object PostgresSeriesAnalysisOutlookProjection:
                 .leftMap(_ => error)
               windows <- chunk.payload.hcursor.get[Vector[Json]]("bestWindows").leftMap(_ => error)
               window <- if size > count then Option.empty[Json].asRight[AppError]
-                else windows.find(_.hcursor.get[Int]("windowSize").contains(size))
+              else
+                windows.find(_.hcursor.get[Int]("windowSize").contains(size))
                   .toRight(error).map(Some(_))
             yield Json.obj((fields ++ List(
               "windowSize" -> Json.fromInt(size),
@@ -38,5 +39,7 @@ private[postgres] object PostgresSeriesAnalysisOutlookProjection:
               "window" -> window.getOrElse(Json.Null),
             ))*)
           case SeriesAnalysisChunkProjection.Stored => chunk.payload.asRight[AppError]
-      yield chunk.copy(payload = selected,
-        nodeCount = PostgresSeriesAnalysisChunkCodec.jsonNodeCount(selected))
+      yield chunk.copy(
+        payload = selected,
+        nodeCount = PostgresSeriesAnalysisChunkCodec.jsonNodeCount(selected)
+      )

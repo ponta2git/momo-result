@@ -36,25 +36,24 @@ test("retains an edited outlook through personal review and real match-list navi
   await slider.focus();
   await slider.press("ArrowRight");
   await expect(average).toHaveValue(editedMean);
-  await expect(page.getByRole("heading", { name: "試している成績が続くと" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "平均どおりに進むと" })).toBeVisible();
 
-  const chart = page.getByRole("img", { name: /^この先100戦の平均順位の差。/u });
-  const pathsWithoutNoise = await chart.locator("path").count();
-  const noise = page.getByRole("checkbox", { name: "順位のブレも見る" });
-  await noise.check();
-  await expect(chart.locator("path")).toHaveCount(pathsWithoutNoise + 3);
-  const examplePaths = await chartPaths(chart);
-  await noise.uncheck();
-  await expect(chart.locator("path")).toHaveCount(pathsWithoutNoise);
-  await noise.check();
-  // Geometry represents the displayed paths; toggling must not draw new random outcomes.
-  await expect.poll(() => chartPaths(chart)).toEqual(examplePaths);
+  const charts = page.getByRole("img", { name: /。この先100戦の2人の総合平均順位。/u });
+  await expect(charts).toHaveCount(4);
+  await expect(charts.locator("path")).toHaveCount(8);
+  await expect(page.getByRole("table", { name: "現在と20戦後の総合平均順位" })).toBeVisible();
+  const patternPaths = await chartPaths(charts);
+  const performanceTab = page.getByRole("tab", { name: "成績から試す" });
+  const goalTab = page.getByRole("tab", { name: "戦数から考える" });
+  await goalTab.click();
+  await expect(charts).toHaveCount(0);
 
   const outlookUrl = page.url();
   await page.getByRole("link", { name: "ぽんたの行動仮説を見る" }).click();
   await expect(page).toHaveURL(
     (url) =>
-      url.searchParams.get("view") === "review" &&
+      url.pathname === "/analytics/series" &&
+      !url.searchParams.has("view") &&
       url.searchParams.get("seasonMasterId") === outlook.seasonMasterId &&
       !url.searchParams.has("mapMasterId") &&
       url.hash === "#review-member-member_ponta",
@@ -66,10 +65,14 @@ test("retains an edited outlook through personal review and real match-list navi
   await expect(personalHeading).toBeInViewport();
   await page.goBack();
   await expect(page).toHaveURL(outlookUrl);
+  await expect(goalTab).toHaveAttribute("aria-selected", "true");
+  await performanceTab.click();
   await expect(average).toHaveValue(editedMean);
-  await expect(noise).toBeChecked();
-  await expect.poll(() => chartPaths(chart)).toEqual(examplePaths);
+  await expect(charts).toHaveCount(4);
+  // Geometry captures both players in every pattern; returning keeps the same outcomes.
+  await expect.poll(() => chartPaths(charts)).toEqual(patternPaths);
 
+  await goalTab.click();
   const listResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return (
@@ -96,9 +99,11 @@ test("retains an edited outlook through personal review and real match-list navi
   ).toHaveAttribute("href", new RegExp(`^/matches/${outlook.matchId}\\?`, "u"));
   await page.goBack();
   await expect(page).toHaveURL(outlookUrl);
+  await expect(goalTab).toHaveAttribute("aria-selected", "true");
+  await performanceTab.click();
   await expect(average).toHaveValue(editedMean);
-  await expect(noise).toBeChecked();
-  await expect.poll(() => chartPaths(chart)).toEqual(examplePaths);
+  await expect(charts).toHaveCount(4);
+  await expect.poll(() => chartPaths(charts)).toEqual(patternPaths);
 });
 
 test("keeps the season when explicitly leaving a map filter at mobile width", async ({
@@ -113,7 +118,8 @@ test("keeps the season when explicitly leaving a map filter at mobile width", as
   await expect(page).toHaveURL(
     (url) => url.searchParams.get("mapMasterId") === outlook.mapMasterId,
   );
-  await expect(page.getByRole("img", { name: /^この先100戦の平均順位の差。/u })).toHaveCount(0);
+  const charts = page.getByRole("img", { name: /。この先100戦の2人の総合平均順位。/u });
+  await expect(charts).toHaveCount(0);
   const summaryResponse = page.waitForResponse((response) =>
     new URL(response.url()).pathname.endsWith("/v1/outlook-summary"),
   );
@@ -132,6 +138,8 @@ test("keeps the season when explicitly leaving a map filter at mobile width", as
   );
   const slider = page.getByRole("slider", { name: "ぽんたの平均順位を動かす" });
   await expect(slider).toBeVisible();
+  await expect(charts).toHaveCount(4);
+  await expect(charts.locator("path")).toHaveCount(8);
   await slider.scrollIntoViewIfNeeded();
   await expect(slider).toBeInViewport();
   await expect

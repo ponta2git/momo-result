@@ -5,7 +5,11 @@ import cats.syntax.all.*
 import sttp.tapir.server.ServerEndpoint
 
 import momo.api.auth.RateLimiter
-import momo.api.domain.{SeriesAnalysisChunkKind, SeriesAnalysisScopeStatusRequest}
+import momo.api.domain.{
+  SeriesAnalysisChunkKind,
+  SeriesAnalysisChunkProjection,
+  SeriesAnalysisScopeStatusRequest
+}
 import momo.api.endpoints.*
 import momo.api.endpoints.codec.{SeriesAnalysisCodec, SeriesPlayerRadarCodec}
 import momo.api.errors.AppError
@@ -135,6 +139,58 @@ object SeriesAnalysisModule:
           ),
           security,
         )
+      },
+      SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.outlookSummary) { member => input =>
+        readChunk(
+          readRateLimiter,
+          member.accountId.value,
+          HttpOperation.GetSeriesAnalysisOutlookSummary,
+          getChunk,
+          SeriesAnalysisCodec.outlook(
+            input.gameTitleId,
+            input.artifactId,
+            input.seasonMasterId,
+            None,
+            SeriesAnalysisChunkProjection.Stored,
+            input.unsupportedScope
+          ),
+          security
+        )
+      },
+      SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.outlookWindow) { member => input =>
+        readChunk(
+          readRateLimiter,
+          member.accountId.value,
+          HttpOperation.GetSeriesAnalysisOutlookWindow,
+          getChunk,
+          SeriesAnalysisCodec.outlook(
+            input.gameTitleId,
+            input.artifactId,
+            None,
+            Some(input.memberId),
+            SeriesAnalysisChunkProjection.OutlookWindow(input.windowSize),
+            input.unsupportedScope
+          ),
+          security
+        )
+      },
+      SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.outlookExamples) {
+        member => input =>
+          readChunk(
+            readRateLimiter,
+            member.accountId.value,
+            HttpOperation.GetSeriesAnalysisOutlookExamples,
+            getChunk,
+            SeriesAnalysisCodec.outlook(
+              input.gameTitleId,
+              input.artifactId,
+              None,
+              Some(input.memberId),
+              SeriesAnalysisChunkProjection.OutlookExamples,
+              input.unsupportedScope
+            ),
+            security
+          )
       },
       SecuredEndpoint.adminReadLogic(security, SeriesAnalysisEndpoints.adminOverview) {
         member => rawTitleId =>

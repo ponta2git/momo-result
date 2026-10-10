@@ -155,7 +155,9 @@ fn empty_title_still_produces_overall_aggregate_and_review() {
         u64::try_from(resources.len()).ok()
     );
     match resources.as_slice() {
-        [aggregate, review] => {
+        [aggregate, outlook, review] => {
+            assert_eq!(outlook.kind, ComputedResourceKind::OutlookSummary);
+            assert_eq!(outlook.item_count, 0);
             assert_eq!(aggregate.scope, ScopeRef::Overall);
             assert_eq!(aggregate.kind, ComputedResourceKind::Aggregate);
             assert_eq!(aggregate.item_count, 0);
@@ -169,7 +171,11 @@ fn empty_title_still_produces_overall_aggregate_and_review() {
             assert_eq!(review.item_count, 0);
             assert_eq!(review.source_match_revision, None);
         }
-        _ => assert_eq!(resources.len(), 2, "empty title resource set changed"),
+        _ => assert_eq!(
+            resources.len(),
+            3,
+            "empty title includes the no-target outlook summary"
+        ),
     }
 }
 
@@ -192,7 +198,9 @@ fn every_match_context_is_generated_for_each_real_scope() {
             )),
             ComputedResourceKind::Aggregate
             | ComputedResourceKind::Review
-            | ComputedResourceKind::Drilldown { .. } => None,
+            | ComputedResourceKind::Drilldown { .. }
+            | ComputedResourceKind::OutlookSummary
+            | ComputedResourceKind::OutlookReference { .. } => None,
         })
         .collect::<Vec<_>>();
     assert_eq!(

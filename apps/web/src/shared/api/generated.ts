@@ -561,6 +561,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/analytics/series-comparison/v1/outlook-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getApiAnalyticsSeries-comparisonV1Outlook-summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/analytics/series-comparison/v1/outlook-window": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getApiAnalyticsSeries-comparisonV1Outlook-window"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/analytics/series-comparison/v1/outlook-examples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getApiAnalyticsSeries-comparisonV1Outlook-examples"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/series-analysis/overview": {
         parameters: {
             query?: never;
@@ -2623,7 +2671,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 5;
+                artifactSchemaVersion: 6;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -2720,7 +2768,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 5;
+                artifactSchemaVersion: 6;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -2815,7 +2863,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 5;
+                artifactSchemaVersion: 6;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -2897,7 +2945,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 5;
+                artifactSchemaVersion: 6;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -2971,7 +3019,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 5;
+                artifactSchemaVersion: 6;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3125,7 +3173,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 5;
+                artifactSchemaVersion: 6;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3142,7 +3190,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 5;
+                artifactSchemaVersion: 6;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3188,6 +3236,224 @@ export interface components {
             schemaVersion: 1;
             defaultGameTitleId: string | null;
             titles: components["schemas"]["SeriesAnalysisTitleOptionResponse"][];
+        };
+        SeriesAnalysisOutlookExamplesResponse: {
+            /** @constant */
+            schemaVersion: 1;
+            scope: {
+                /** @constant */
+                kind: "overall";
+                matchCount: number;
+                displayName: string;
+            };
+            source: {
+                gameTitleId: string;
+                titleMatchCount: number;
+            };
+            memberId: string;
+            examples: {
+                /** @enum {string} */
+                status: "available" | "insufficient";
+                types: {
+                    rankCounts: [
+                        number,
+                        number,
+                        number,
+                        number
+                    ];
+                    window: {
+                        averageRank: number;
+                        period: {
+                            endMatchId: string;
+                            endSequence: number;
+                            endedAt: string;
+                            startMatchId: string;
+                            startSequence: number;
+                            startedAt: string;
+                        };
+                        rankSum: number;
+                        windowSize: number;
+                    };
+                }[];
+            };
+            displayName: string;
+            artifact: {
+                algorithmVersion: string;
+                artifactId: string;
+                /** @constant */
+                artifactSchemaVersion: 6;
+                gameTitleId: string;
+                inputRevision: string;
+                publishedAt: string;
+                radarBasisCreatedAt: string | null;
+                radarBasisAppliedAt: string | null;
+            };
+        };
+        /** Series Analysis Outlook Summary Resource v1 */
+        SeriesAnalysisOutlookSummaryResponse: {
+            bestWindows: {
+                memberId: string;
+                /** @enum {string} */
+                status: "available" | "insufficient";
+                window: null | {
+                    averageRank: number;
+                    period: {
+                        endMatchId: string;
+                        endSequence: number;
+                        endedAt: string;
+                        startMatchId: string;
+                        startSequence: number;
+                        startedAt: string;
+                    };
+                    rankSum: number;
+                    windowSize: number;
+                };
+                windowSize: number;
+                displayName: string;
+            }[];
+            period: null | {
+                endMatchId: string;
+                endSequence: number;
+                endedAt: string;
+                startMatchId: string;
+                startSequence: number;
+                startedAt: string;
+            };
+            players: {
+                averageRank: number;
+                memberId: string;
+                rankSum: number;
+                displayName: string;
+            }[];
+            /** @enum {string} */
+            qualityStatus: "ok" | "reference" | "no_target";
+            recent: {
+                jointRanks: {
+                    memberAId: string;
+                    memberBId: string;
+                    rankCounts: [
+                        [
+                            number,
+                            number,
+                            number,
+                            number
+                        ],
+                        [
+                            number,
+                            number,
+                            number,
+                            number
+                        ],
+                        [
+                            number,
+                            number,
+                            number,
+                            number
+                        ],
+                        [
+                            number,
+                            number,
+                            number,
+                            number
+                        ]
+                    ];
+                }[];
+                matchCount: number;
+                period: null | {
+                    endMatchId: string;
+                    endSequence: number;
+                    endedAt: string;
+                    startMatchId: string;
+                    startSequence: number;
+                    startedAt: string;
+                };
+                players: {
+                    averageRank: number;
+                    memberId: string;
+                    rankCounts: [
+                        number,
+                        number,
+                        number,
+                        number
+                    ];
+                    rankSum: number;
+                    displayName: string;
+                }[];
+                /** @enum {string} */
+                qualityStatus: "ok" | "reference" | "no_target";
+            };
+            /** @constant */
+            schemaVersion: 1;
+            scope: {
+                /** @constant */
+                kind: "overall";
+                matchCount: number;
+                displayName: string;
+            } | {
+                /** @constant */
+                kind: "season";
+                matchCount: number;
+                seasonMasterId: string;
+                displayName: string;
+            };
+            source: {
+                gameTitleId: string;
+                titleMatchCount: number;
+            };
+            artifact: {
+                algorithmVersion: string;
+                artifactId: string;
+                /** @constant */
+                artifactSchemaVersion: 6;
+                gameTitleId: string;
+                inputRevision: string;
+                publishedAt: string;
+                radarBasisCreatedAt: string | null;
+                radarBasisAppliedAt: string | null;
+            };
+        };
+        SeriesAnalysisOutlookWindowResponse: {
+            /** @constant */
+            schemaVersion: 1;
+            scope: {
+                /** @constant */
+                kind: "overall";
+                matchCount: number;
+                displayName: string;
+            };
+            source: {
+                gameTitleId: string;
+                titleMatchCount: number;
+            };
+            memberId: string;
+            windowSize: number;
+            /** @enum {string} */
+            status: "available" | "insufficient";
+            window: {
+                averageRank: number;
+                period: {
+                    endMatchId: string;
+                    endSequence: number;
+                    endedAt: string;
+                    startMatchId: string;
+                    startSequence: number;
+                    startedAt: string;
+                };
+                rankSum: number;
+                windowSize: number;
+            } | null;
+            displayName: string;
+            artifact: {
+                algorithmVersion: string;
+                artifactId: string;
+                /** @constant */
+                artifactSchemaVersion: 6;
+                gameTitleId: string;
+                inputRevision: string;
+                publishedAt: string;
+                radarBasisCreatedAt: string | null;
+                radarBasisAppliedAt: string | null;
+            };
         };
         /** SeriesAnalysisRecalculationAcceptedResponse */
         SeriesAnalysisRecalculationAcceptedResponse: {
@@ -3402,7 +3668,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 5;
+                artifactSchemaVersion: 6;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -6174,6 +6440,139 @@ export interface operations {
                 };
             };
             /** @description Invalid value for: query parameter gameTitleId, Invalid value for: query parameter artifactId, Invalid value for: query parameter matchId */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            default: {
+                headers: {
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    "getApiAnalyticsSeries-comparisonV1Outlook-summary": {
+        parameters: {
+            query: {
+                gameTitleId: string;
+                artifactId: string;
+                seasonMasterId?: string;
+            };
+            header?: {
+                "X-Momo-Account-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    "Cache-Control": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesAnalysisOutlookSummaryResponse"];
+                };
+            };
+            /** @description Invalid value for: query parameter gameTitleId, Invalid value for: query parameter artifactId, Invalid value */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            default: {
+                headers: {
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    "getApiAnalyticsSeries-comparisonV1Outlook-window": {
+        parameters: {
+            query: {
+                gameTitleId: string;
+                artifactId: string;
+                memberId: string;
+                windowSize: number;
+            };
+            header?: {
+                "X-Momo-Account-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    "Cache-Control": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesAnalysisOutlookWindowResponse"];
+                };
+            };
+            /** @description Invalid value for: query parameter gameTitleId, Invalid value for: query parameter artifactId, Invalid value for: query parameter memberId, Invalid value for: query parameter windowSize, Invalid value */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            default: {
+                headers: {
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    "getApiAnalyticsSeries-comparisonV1Outlook-examples": {
+        parameters: {
+            query: {
+                gameTitleId: string;
+                artifactId: string;
+                memberId: string;
+            };
+            header?: {
+                "X-Momo-Account-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    "Cache-Control": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesAnalysisOutlookExamplesResponse"];
+                };
+            };
+            /** @description Invalid value for: query parameter gameTitleId, Invalid value for: query parameter artifactId, Invalid value for: query parameter memberId, Invalid value */
             400: {
                 headers: {
                     [name: string]: unknown;

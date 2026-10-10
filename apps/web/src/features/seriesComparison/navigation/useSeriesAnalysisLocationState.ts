@@ -88,6 +88,14 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
     if (rawState.focusMatchId && !urlState.focusMatchId) {
       reasons.push("比較条件が変わったため、選択試合の強調表示を解除しました。");
     }
+    if (
+      (rawState.focusMemberId && rawState.focusMemberId !== urlState.focusMemberId) ||
+      (rawState.rivalMemberId && rawState.rivalMemberId !== urlState.rivalMemberId)
+    ) {
+      reasons.push(
+        "比較する人物を、異なる固定メンバーに調整しました。新しい2名の直近成績から試します。",
+      );
+    }
     if (reasons.length > 0) {
       setNormalization({ source: location.key, message: reasons.join(" ") });
     }
@@ -250,6 +258,17 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
       ),
     [update],
   );
+  const updateOutlookMember = useCallback(
+    (role: "focus" | "rival", memberId: string) =>
+      update(
+        (current) => ({
+          ...current,
+          [role === "focus" ? "focusMemberId" : "rivalMemberId"]: memberId,
+        }),
+        { replace: false },
+      ),
+    [update],
+  );
 
   return {
     actions: {
@@ -261,6 +280,7 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
       updateSeasonMasterId,
       updateView,
       updateOwnerMetric,
+      updateOutlookMember,
     },
     activeView: state.view ?? defaultSeriesAnalysisView,
     deferredState,

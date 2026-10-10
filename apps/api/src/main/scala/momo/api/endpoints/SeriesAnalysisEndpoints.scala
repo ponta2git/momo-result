@@ -86,6 +86,79 @@ object SeriesAnalysisEndpoints:
       mapMasterId: Option[String],
   )
 
+  final case class OutlookSummaryInput(
+      gameTitleId: String,
+      artifactId: String,
+      seasonMasterId: Option[String],
+      unsupportedScope: Boolean,
+  )
+
+  final case class OutlookWindowInput(
+      gameTitleId: String,
+      artifactId: String,
+      memberId: String,
+      windowSize: Int,
+      unsupportedScope: Boolean,
+  )
+
+  final case class OutlookExamplesInput(
+      gameTitleId: String,
+      artifactId: String,
+      memberId: String,
+      unsupportedScope: Boolean,
+  )
+
+  // Reject unsupported filters rather than silently returning an overall projection.
+  private val outlookSummaryInput = query[String]("gameTitleId")
+    .and(query[String]("artifactId"))
+    .and(query[Option[String]]("seasonMasterId"))
+    .and(extractFromRequest(_.queryParameters.get("mapMasterId").isDefined))
+    .mapTo[OutlookSummaryInput]
+
+  private val unsupportedReferenceScope = extractFromRequest(request =>
+    request.queryParameters.get("seasonMasterId").isDefined ||
+      request.queryParameters.get("mapMasterId").isDefined
+  )
+  private val outlookReferenceInput = query[String]("gameTitleId")
+    .and(query[String]("artifactId"))
+    .and(query[String]("memberId"))
+
+  val outlookSummary: SecuredRead[OutlookSummaryInput, Array[Byte]] = endpoint
+    .securityIn(CommonEndpoint.accountHeader)
+    .get
+    .in("api" / "analytics" / "series-comparison" / "v1" /
+      SeriesAnalysisResponseSchemas.outlookSummary.pathSegment)
+    .in(outlookSummaryInput)
+    .errorOut(CommonEndpoint.errorOut)
+    .out(rawJsonBody(SeriesAnalysisResponseSchemas.outlookSummary))
+    .out(noStore)
+    .tag("analytics")
+
+  val outlookWindow: SecuredRead[OutlookWindowInput, Array[Byte]] = endpoint
+    .securityIn(CommonEndpoint.accountHeader)
+    .get
+    .in("api" / "analytics" / "series-comparison" / "v1" /
+      SeriesAnalysisResponseSchemas.outlookWindow.pathSegment)
+    .in(outlookReferenceInput
+      .and(query[Int]("windowSize").validate(Validator.min(1)).validate(Validator.max(1000)))
+      .and(unsupportedReferenceScope)
+      .mapTo[OutlookWindowInput])
+    .errorOut(CommonEndpoint.errorOut)
+    .out(rawJsonBody(SeriesAnalysisResponseSchemas.outlookWindow))
+    .out(noStore)
+    .tag("analytics")
+
+  val outlookExamples: SecuredRead[OutlookExamplesInput, Array[Byte]] = endpoint
+    .securityIn(CommonEndpoint.accountHeader)
+    .get
+    .in("api" / "analytics" / "series-comparison" / "v1" /
+      SeriesAnalysisResponseSchemas.outlookExamples.pathSegment)
+    .in(outlookReferenceInput.and(unsupportedReferenceScope).mapTo[OutlookExamplesInput])
+    .errorOut(CommonEndpoint.errorOut)
+    .out(rawJsonBody(SeriesAnalysisResponseSchemas.outlookExamples))
+    .out(noStore)
+    .tag("analytics")
+
   private val scopedArtifactInput: EndpointInput[ScopedArtifactInput] = query[String]("gameTitleId")
     .and(query[String]("artifactId"))
     .and(query[Option[String]]("seasonMasterId"))

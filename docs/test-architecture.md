@@ -1,6 +1,6 @@
 # テストアーキテクチャ
 
-目的: test size、証拠の量感、parallelism、coverage、cross-system contract evidence、CI artifact の責務を定義する。日々の test 選択と oracle は `docs/test-rule.md`、command と変更 gate は `docs/dev-rule.md`、現在の実行構成は test / coverage 設定と CI workflow を正本とする。
+目的: 必要な品質証拠を、シンプルで保守できる実行構成へ割り当てる。test size、parallelism、coverage、cross-system contract evidence、CI artifact を扱い、日々の test 選択と oracle は `docs/test-rule.md`、command と変更 gate は `docs/dev-rule.md`、現在の実行構成は設定と CI workflow を正本とする。
 
 ## 1. Test Size
 
@@ -22,6 +22,8 @@ size は実行時間ではなく、失敗時に疑う境界と依存範囲で決
 ## 2. Coverage Model
 
 aggregate coverage は、PR review と推移確認の非 blocking report とする。test failure は blocking のまま扱うが、aggregate coverage 値や増減だけで gate を失敗させない。
+
+coverage は未確認の経路を探す補助であり、品質を一つの数値で表す目標ではない。測りやすい分岐や行を増やして数値を最適化せず、守る利用者結果と実行境界から証拠を選ぶ。
 
 - CI は同じ test 集合を通常実行と coverage 実行で二重に回さない。report を作る場合は通常 test を coverage 付き実行へ置き換える。
 - production deploy は coverage artifact の生成を待たず、同じ test 集合と変更対象の integration / smoke を release gate にする。
@@ -77,7 +79,8 @@ aggregate coverage は、PR review と推移確認の非 blocking report とす�
 
 - test は並列実行を既定とし、resource、DB row、schema、stream、object、file、port、clock を test ごとに隔離する。
 - 共有状態、順序、resource 競合そのものを検証する場合、または隔離コストが証拠価値を上回る場合だけ直列化し、理由と対象 scope を test 設定の近くへ残す。
-- job の並列化と developer 待ち時間の計測は `docs/dev-rule.md` の Developer Wait / Parallel Execution に従う。
+- 独立した suite や準備は並列化し、依存する処理と同じ資源へ干渉する処理は順序を守る。並列数を増やすための過剰な隔離機構や重複 setup を作らず、必要な証拠を効率よく得られる構成を選ぶ。
+- job の並列化と待ち時間の扱いは `docs/dev-rule.md` の Developer Wait / Parallel Execution に従う。
 
 ## 6. CI Artifacts
 
@@ -85,10 +88,10 @@ aggregate coverage は、PR review と推移確認の非 blocking report とす�
 - `scripts/ci/test-*.sh` は分類、来歴、結果集約、実行の調整を観測する pipeline-integrity evidence とする。外部 command の double は実 container、DB / queue、provider 接続の成功を保証しない。ローカル候補の起動確認と配備後の公開 edge の確認は、それぞれの対象へ接続する smoke で証拠を取る。
 - shell の contract suite は標準 test runner から独立した process で実行し、一つの失敗で他の結果を失わない。fixture と command double は各 suite が所有し、ローカルと CI は同じ実行入口を使う。変更分類には test 自体に加え、検証される運用 script と実行入口の変更も接続する。
 - coverage artifact は PR review と推移確認の補助であり、integration / smoke の代わりにしない。
-- artifact は raw summary、review 用 summary、必要な HTML / machine-readable report に分け、生成 script と workflow が path / format を所有する。
+- artifact は失敗の診断と変更の確認に必要なものを残し、生成 script と workflow が path / format を所有する。人間が概要から必要な詳細へ進めるようにし、利用先のない report や同じ内容の別形式を増やさない。
 - coverage report を有効にした job は test failure を隠さず、artifact upload failure と品質 failure を区別する。
 - retry-pass は green としてよい。ただし retry を許す runner は、test ID、最初の失敗、attempt 数を結果から追跡可能にし、再現に必要な trace / log を artifact にする。PR summary への集約は diagnostic report として導入できるが、観測可能性と利用方法を評価する前に blocking gate にしない。
 - Processing Worker に coverage artifact を導入する場合も、実 service / process gate を coverage へ置き換えない。
 - provider resource、費用、実測 memory / timing、非公開 OCR dataset は public artifact にせず private release evidence へ置く。
 
-coverage baseline と長期推移保存は、観測データと維持コストを確認して個別に導入する。将来案を現行 gate として記述しない。
+coverage baseline と長期推移保存は、具体的な判断に役立ち、維持コストに見合う場合にだけ導入する。定性的に扱うべき品質を数値化するためには追加せず、将来案を現行 gate として記述しない。

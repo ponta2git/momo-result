@@ -127,6 +127,8 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
             }
             ResourceManifest::Aggregate { .. }
             | ResourceManifest::Review { .. }
+            | ResourceManifest::OutlookSummary { .. }
+            | ResourceManifest::OutlookReference { .. }
             | ResourceManifest::Drilldown { .. } => None,
         })
         .ok_or("fixture must contain a match-context resource")?;
@@ -406,6 +408,8 @@ async fn assert_staged_metadata_requires_an_exact_set(
     match &mut absent_resource {
         ResourceManifest::Aggregate { common }
         | ResourceManifest::Review { common }
+        | ResourceManifest::OutlookSummary { common }
+        | ResourceManifest::OutlookReference { common, .. }
         | ResourceManifest::Drilldown { common, .. }
         | ResourceManifest::MatchContext { common, .. } => {
             common.scope = momo_analysis_core::contract::ScopeRef::Season {
@@ -422,6 +426,8 @@ async fn assert_staged_metadata_requires_an_exact_set(
     {
         ResourceManifest::Aggregate { common }
         | ResourceManifest::Review { common }
+        | ResourceManifest::OutlookSummary { common }
+        | ResourceManifest::OutlookReference { common, .. }
         | ResourceManifest::Drilldown { common, .. }
         | ResourceManifest::MatchContext { common, .. } => common.nesting_depth += 1,
     }
@@ -497,6 +503,8 @@ fn corrupt_last_match_context(
             ResourceManifest::MatchContext { common, .. } => Some(common),
             ResourceManifest::Aggregate { .. }
             | ResourceManifest::Review { .. }
+            | ResourceManifest::OutlookSummary { .. }
+            | ResourceManifest::OutlookReference { .. }
             | ResourceManifest::Drilldown { .. } => None,
         })
         .ok_or("fixture must contain a match-context resource")?;

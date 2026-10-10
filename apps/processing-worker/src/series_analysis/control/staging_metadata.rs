@@ -31,6 +31,14 @@ impl<'a> StagedResourceMetadata<'a> {
         let (kind, member_id, metric_id, match_id, source_match_revision) = match resource {
             ResourceManifest::Aggregate { .. } => ("aggregate", None, None, None, None),
             ResourceManifest::Review { .. } => ("review", None, None, None, None),
+            ResourceManifest::OutlookSummary { .. } => ("outlook_summary", None, None, None, None),
+            ResourceManifest::OutlookReference { member_id, .. } => (
+                "outlook_reference",
+                Some(member_id.as_str()),
+                None,
+                None,
+                None,
+            ),
             ResourceManifest::Drilldown {
                 member_id,
                 metric_id,
@@ -134,6 +142,12 @@ pub(super) async fn validate_staged_resource_metadata(
                       NULL::text, NULL::text, match_id, source_match_revision, encoded_bytes,\x20\
                       decoded_bytes, item_count, nesting_depth, checksum\x20\
                FROM series_analysis_match_context_artifacts WHERE artifact_id = $1\x20\
+               UNION ALL\x20\
+               SELECT 'outlook_summary', scope_key, scope_kind, season_master_id, map_master_id, NULL::text, NULL::text, NULL::text, NULL::bigint, encoded_bytes, decoded_bytes, item_count, nesting_depth, checksum\x20\
+               FROM series_analysis_outlook_summary_artifacts WHERE artifact_id = $1\x20\
+               UNION ALL\x20\
+               SELECT 'outlook_reference', scope_key, scope_kind, season_master_id, map_master_id, member_id, NULL::text, NULL::text, NULL::bigint, encoded_bytes, decoded_bytes, item_count, nesting_depth, checksum\x20\
+               FROM series_analysis_outlook_reference_artifacts WHERE artifact_id = $1\x20\
              ) resources",
             [&manifest.artifact_id],
         )

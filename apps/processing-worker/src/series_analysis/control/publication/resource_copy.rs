@@ -63,6 +63,21 @@ pub(super) async fn copy_artifact_resources(
         ),
     )
     .await?;
+    copy_scope_resources(
+        transaction,
+        manifest,
+        directory,
+        ScopeResourceKind::OutlookSummary,
+        totals.counts.outlook_summaries,
+    )
+    .await?;
+    copy_outlook_reference_resources(
+        transaction,
+        manifest,
+        directory,
+        totals.counts.outlook_references,
+    )
+    .await?;
     Ok(())
 }
 
@@ -70,6 +85,7 @@ pub(super) async fn copy_artifact_resources(
 enum ScopeResourceKind {
     Aggregate,
     Review,
+    OutlookSummary,
 }
 
 impl ScopeResourceKind {
@@ -77,6 +93,7 @@ impl ScopeResourceKind {
         match self {
             Self::Aggregate => "aggregate",
             Self::Review => "review",
+            Self::OutlookSummary => "outlook_summary",
         }
     }
 
@@ -84,6 +101,9 @@ impl ScopeResourceKind {
         match self {
             Self::Aggregate => {
                 "COPY series_analysis_scope_aggregate_artifacts (artifact_id, scope_key, scope_kind, season_master_id, map_master_id, payload, encoded_bytes, decoded_bytes, item_count, nesting_depth, checksum) FROM STDIN BINARY"
+            }
+            Self::OutlookSummary => {
+                "COPY series_analysis_outlook_summary_artifacts (artifact_id, scope_key, scope_kind, season_master_id, map_master_id, payload, encoded_bytes, decoded_bytes, item_count, nesting_depth, checksum) FROM STDIN BINARY"
             }
             Self::Review => {
                 "COPY series_analysis_scope_review_artifacts (artifact_id, scope_key, scope_kind, season_master_id, map_master_id, payload, encoded_bytes, decoded_bytes, item_count, nesting_depth, checksum) FROM STDIN BINARY"
@@ -94,7 +114,8 @@ impl ScopeResourceKind {
     const fn common(self, resource: &ResourceManifest) -> Option<&CommonResource> {
         match (self, resource) {
             (Self::Aggregate, ResourceManifest::Aggregate { common })
-            | (Self::Review, ResourceManifest::Review { common }) => Some(common),
+            | (Self::Review, ResourceManifest::Review { common })
+            | (Self::OutlookSummary, ResourceManifest::OutlookSummary { common }) => Some(common),
             _ => None,
         }
     }
@@ -291,6 +312,73 @@ async fn copy_drilldown_resources(
                 &row.map_id,
                 member_id,
                 metric_id,
+                &row.payload,
+                &row.encoded_bytes,
+                &row.decoded_bytes,
+                &row.item_count,
+                &row.nesting_depth,
+                &row.checksum,
+            ])
+            .await
+            .map_err(|source| copy_failure(resource_kind, ControlError::Postgres(source)))?;
+    }
+    let actual = writer
+        .as_mut()
+        .finish()
+        .await
+        .map_err(|source| copy_failure(resource_kind, ControlError::Postgres(source)))?;
+    verify_copy_count(resource_kind, actual, expected_count)
+}
+
+async fn copy_outlook_reference_resources(
+    transaction: &Transaction<'_>,
+    manifest: &ArtifactManifest,
+    directory: &Path,
+    expected_count: i32,
+) -> Result<(), ControlError> {
+    if expected_count == 0 {
+        return Ok(());
+    }
+    let types = [
+        Type::TEXT,
+        Type::TEXT,
+        Type::TEXT,
+        Type::TEXT,
+        Type::TEXT,
+        Type::TEXT,
+        Type::BYTEA,
+        Type::INT4,
+        Type::INT4,
+        Type::INT4,
+        Type::INT4,
+        Type::TEXT,
+    ];
+    let resource_kind = "outlook_reference";
+    let sink = transaction
+        .copy_in(
+            "COPY series_analysis_outlook_reference_artifacts (artifact_id, scope_key, scope_kind, season_master_id, map_master_id, member_id, payload, encoded_bytes, decoded_bytes, item_count, nesting_depth, checksum) FROM STDIN BINARY",
+        )
+        .await
+        .map_err(|source| copy_failure(resource_kind, ControlError::Postgres(source)))?;
+    let writer = BinaryCopyInWriter::new(sink, &types);
+    tokio::pin!(writer);
+
+    for resource in &manifest.resources {
+        let ResourceManifest::OutlookReference { common, member_id } = resource else {
+            continue;
+        };
+        let row = ResourceCopyRow::load(directory, common)
+            .await
+            .map_err(|failure| copy_failure(resource_kind, failure))?;
+        writer
+            .as_mut()
+            .write(&[
+                &manifest.artifact_id,
+                &row.scope_key,
+                &row.scope_kind,
+                &row.season_id,
+                &row.map_id,
+                member_id,
                 &row.payload,
                 &row.encoded_bytes,
                 &row.decoded_bytes,

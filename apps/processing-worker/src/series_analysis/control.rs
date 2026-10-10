@@ -4,7 +4,7 @@ use thiserror::Error;
 
 use crate::outbox::{ControlOutcome, PostCommitEffects};
 
-pub(crate) const ALGORITHM_VERSION: &str = "series-analysis-v6";
+pub(crate) const ALGORITHM_VERSION: &str = "series-analysis-v7";
 
 mod capability;
 mod claim;

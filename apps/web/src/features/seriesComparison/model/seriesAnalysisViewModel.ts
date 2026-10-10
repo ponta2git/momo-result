@@ -7,19 +7,45 @@ import type {
   SeriesAnalysisOptionsResponse,
   SeriesAnalysisQuery,
 } from "@/shared/api/seriesAnalysis";
+import { canonicalResultMemberIds, isFixedMemberId } from "@/shared/domain/members";
 
-export type SeriesAnalysisViewId = "context" | "drivers" | "flow" | "overview" | "review";
+export type SeriesAnalysisViewId =
+  | "context"
+  | "drivers"
+  | "flow"
+  | "overview"
+  | "review"
+  | "outlook";
 
 export type SeriesAnalysisUrlState = {
   ownerMetric?: OwnerMetricId | undefined;
   focusMatchId?: string | undefined;
+  focusMemberId?: string | undefined;
+  rivalMemberId?: string | undefined;
   gameTitleId?: string | undefined;
   mapMasterId?: string | undefined;
   seasonMasterId?: string | undefined;
   view?: SeriesAnalysisViewId | undefined;
 };
 
-const viewIds = new Set(["review", "overview", "flow", "drivers", "context"]);
+const viewIds = new Set(["review", "overview", "flow", "drivers", "context", "outlook"]);
+
+export function normalizeOutlookPair(focus?: string, rival?: string) {
+  const validFocus = focus && isFixedMemberId(focus) ? focus : undefined;
+  const validRival = rival && isFixedMemberId(rival) ? rival : undefined;
+  const focusMemberId =
+    validFocus ??
+    (canonicalResultMemberIds[0] === validRival
+      ? canonicalResultMemberIds[1]
+      : canonicalResultMemberIds[0]);
+  const rivalMemberId =
+    validRival && validRival !== focusMemberId
+      ? validRival
+      : canonicalResultMemberIds[0] === focusMemberId
+        ? canonicalResultMemberIds[1]
+        : canonicalResultMemberIds[0];
+  return { focusMemberId, rivalMemberId };
+}
 
 export const defaultSeriesAnalysisView: SeriesAnalysisViewId = "review";
 
@@ -41,7 +67,18 @@ export function parseSeriesAnalysisSearchParams(params: URLSearchParams): Series
   const view = normalizeView(params.get("view")?.trim());
   const rawMetric = params.get("ownerMetric");
   const ownerMetric = isOwnerMetricId(rawMetric) ? rawMetric : defaultOwnerMetric;
-  return { focusMatchId, gameTitleId, mapMasterId, seasonMasterId, view, ownerMetric };
+  const focusMemberId = params.get("focusMemberId")?.trim() || undefined;
+  const rivalMemberId = params.get("rivalMemberId")?.trim() || undefined;
+  return {
+    focusMatchId,
+    gameTitleId,
+    mapMasterId,
+    seasonMasterId,
+    view,
+    ownerMetric,
+    ...(focusMemberId ? { focusMemberId } : {}),
+    ...(rivalMemberId ? { rivalMemberId } : {}),
+  };
 }
 
 export function buildSeriesAnalysisSearchParams(state: SeriesAnalysisUrlState): URLSearchParams {
@@ -52,6 +89,8 @@ export function buildSeriesAnalysisSearchParams(state: SeriesAnalysisUrlState): 
   if (state.seasonMasterId) params.set("seasonMasterId", state.seasonMasterId);
   if (state.mapMasterId) params.set("mapMasterId", state.mapMasterId);
   if (state.focusMatchId) params.set("focusMatchId", state.focusMatchId);
+  if (state.focusMemberId) params.set("focusMemberId", state.focusMemberId);
+  if (state.rivalMemberId) params.set("rivalMemberId", state.rivalMemberId);
   const view = normalizeView(state.view);
   if (view !== defaultSeriesAnalysisView) params.set("view", view);
   return params;
@@ -91,6 +130,9 @@ export function normalizeSeriesAnalysisSelection(
     state.mapMasterId !== mapMasterId;
   return {
     ...(state.focusMatchId && !scopeWasNormalized ? { focusMatchId: state.focusMatchId } : {}),
+    ...(view === "outlook" || state.focusMemberId || state.rivalMemberId
+      ? normalizeOutlookPair(state.focusMemberId, state.rivalMemberId)
+      : {}),
     ownerMetric,
     gameTitleId: selectedTitle.gameTitleId,
     ...(mapMasterId ? { mapMasterId } : {}),

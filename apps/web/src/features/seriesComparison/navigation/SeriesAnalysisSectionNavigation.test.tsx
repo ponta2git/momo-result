@@ -54,7 +54,12 @@ function Harness({ gate }: { gate?: Promise<void> | undefined }) {
         bundle={
           location.activeView === "review"
             ? { kind: "review", view: "review", review, matchContext: undefined }
-            : { kind: "analysis", view: location.activeView, aggregate, matchContext: undefined }
+            : {
+                kind: "analysis",
+                view: location.activeView === "outlook" ? "overview" : location.activeView,
+                aggregate,
+                matchContext: undefined,
+              }
         }
         navigationReady={location.activeView === "review" || ready}
         onArtifactExpired={() => undefined}

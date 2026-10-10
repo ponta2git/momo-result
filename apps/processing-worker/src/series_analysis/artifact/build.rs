@@ -37,6 +37,7 @@ impl<'a> ArtifactWriter<'a> {
     fn new(
         request: &'a ArtifactBuildRequest,
         output_directory: &'a Path,
+        game_title_id: &str,
     ) -> Result<Self, ArtifactError> {
         let initial_capacity = usize::try_from(request.maximum_chunk_count.min(1_024))?;
         Ok(Self {
@@ -45,7 +46,7 @@ impl<'a> ArtifactWriter<'a> {
             total_bytes: 0,
             encoding_duration: Duration::ZERO,
             resources: Vec::with_capacity(initial_capacity),
-            payloads: payload::PayloadSetValidator::new(),
+            payloads: payload::PayloadSetValidator::for_title(game_title_id),
         })
     }
 
@@ -124,6 +125,10 @@ fn resource_manifest(
     Ok(match kind {
         ComputedResourceKind::Aggregate => ResourceManifest::Aggregate { common },
         ComputedResourceKind::Review => ResourceManifest::Review { common },
+        ComputedResourceKind::OutlookSummary => ResourceManifest::OutlookSummary { common },
+        ComputedResourceKind::OutlookReference { member_id } => {
+            ResourceManifest::OutlookReference { common, member_id }
+        }
         ComputedResourceKind::Drilldown { member_id, metric } => ResourceManifest::Drilldown {
             common,
             member_id,
@@ -161,7 +166,7 @@ pub(crate) fn build_artifact(
     }
     let source_input_checksum = source_input_checksum(input)?;
 
-    let mut writer = ArtifactWriter::new(request, output_directory)?;
+    let mut writer = ArtifactWriter::new(request, output_directory, input.game_title_id())?;
     try_for_each_resource(input, |resource| writer.write(resource))?;
     let (total_bytes, mut encoding_duration, resources) = writer.finish()?;
 
@@ -292,7 +297,10 @@ impl Serialize for Decimal {
 
 fn resource_item_key(kind: &ComputedResourceKind, scope_key: &str) -> String {
     match kind {
-        ComputedResourceKind::Aggregate | ComputedResourceKind::Review => String::from(scope_key),
+        ComputedResourceKind::Aggregate
+        | ComputedResourceKind::Review
+        | ComputedResourceKind::OutlookSummary => String::from(scope_key),
+        ComputedResourceKind::OutlookReference { member_id } => member_id.clone(),
         ComputedResourceKind::Drilldown { member_id, metric } => {
             format!("{member_id}:{}", metric.wire())
         }
@@ -306,6 +314,8 @@ fn resource_file_name(kind: &ComputedResourceKind, scope_key: &str, item_key: &s
         ComputedResourceKind::Review => "review",
         ComputedResourceKind::Drilldown { .. } => "drilldown",
         ComputedResourceKind::MatchContext { .. } => "match-context",
+        ComputedResourceKind::OutlookSummary => "outlook-summary",
+        ComputedResourceKind::OutlookReference { .. } => "outlook-reference",
     };
     let mut digest = Sha256::new();
     digest.update(prefix.as_bytes());

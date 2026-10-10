@@ -32,23 +32,19 @@ private[api] object BodyTransferObserver:
 
   def apply[F[_]: Async](body: Stream[F, Byte])(
       onComplete: BodyTransferResult => F[Unit]
-  ): Stream[F, Byte] = Stream.eval((Clock[F].monotonic, Ref.of[F, Long](0L)).tupled).flatMap {
-    case (startedAt, bodyBytes) =>
+  ): Stream[F, Byte] =
+    // The observer is a leading resource scope, so a server disposing an unstarted body
+    // can reach its existing finalizers without evaluating ordinary payload effects.
+    Stream.bracketCase((Clock[F].monotonic, Ref.of[F, Long](0L)).tupled) {
+      case ((startedAt, bodyBytes), exitCase) =>
+        (bodyBytes.get, Clock[F].monotonic).mapN { (count, finishedAt) =>
+          BodyTransferResult(outcome(exitCase), count, startedAt, finishedAt, errorClass(exitCase))
+        }.flatMap(onComplete)
+    }.flatMap { case (_, bodyBytes) =>
       body.chunks
         .evalTap(chunk => bodyBytes.update(current => saturatedAdd(current, chunk.size.toLong)))
         .flatMap(Stream.chunk)
-        .onFinalizeCase(exitCase =>
-          (bodyBytes.get, Clock[F].monotonic).mapN { (count, finishedAt) =>
-            BodyTransferResult(
-              outcome(exitCase),
-              count,
-              startedAt,
-              finishedAt,
-              errorClass(exitCase),
-            )
-          }.flatMap(onComplete)
-        )
-  }
+    }
 
   private def outcome(exitCase: ExitCase): BodyTransferOutcome = exitCase match
     case ExitCase.Succeeded => BodyTransferOutcome.Succeeded

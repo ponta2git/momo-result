@@ -100,7 +100,7 @@ pub(crate) fn validate_artifact_directory(
     drop(declared);
     let mut total_bytes = u64::try_from(manifest_bytes.len())?;
     drop(manifest_bytes);
-    let mut payloads = payload::PayloadSetValidator::new();
+    let mut payloads = payload::PayloadSetValidator::for_title(&manifest.game_title_id);
     let mut radar_basis = None;
     for resource in &manifest.resources {
         let common = resource_common(resource);

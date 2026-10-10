@@ -1,6 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import {
@@ -233,9 +233,11 @@ describe("MatchCreatePage", () => {
     await user.clear(revenue);
     await user.type(revenue, "-");
     const createPage = screen.getByRole("region", { name: "試合内容" });
-    await user.click(screen.getByRole("button", { name: "設定管理へ" }));
-    // Let the transition finish without repeatedly scanning the outgoing form's buttons.
-    await waitFor(() => expect(createPage).not.toBeInTheDocument());
+    // Flush the async navigation action before checking the destination's committed UI.
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "設定管理へ" }));
+    });
+    expect(createPage).not.toBeInTheDocument();
     const returnAction = await screen.findByRole("button", { name: "元の入力画面へ戻る" });
     expect(router.state.location.pathname).toBe("/admin/masters");
     const returnParams = new URLSearchParams(router.state.location.search);

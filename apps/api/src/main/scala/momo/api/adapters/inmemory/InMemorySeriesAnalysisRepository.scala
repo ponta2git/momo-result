@@ -191,7 +191,7 @@ final class InMemorySeriesAnalysisRepository[F[_]: Sync] private (
       gameTitleId,
       SeriesAnalysisDesiredVersion(
         0,
-        "series-analysis-v6",
+        "series-analysis-v7",
         SeriesAnalysisArtifactContract.ArtifactSchemaVersion
       ),
       "unavailable",
@@ -226,7 +226,7 @@ final class InMemorySeriesAnalysisRepository[F[_]: Sync] private (
     finishedAt = None,
     elapsedMilliseconds = None,
     inputRevision = 0,
-    algorithmVersion = "series-analysis-v6",
+    algorithmVersion = "series-analysis-v7",
     attemptCount = 0,
     transientRetryCount = 0,
     leaseRecoveryCount = 0,

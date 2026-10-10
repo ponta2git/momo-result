@@ -26,7 +26,7 @@
 - 接続poolはruntimeで再利用し、取得待ちの実行枠もpool上限へ合わせる。利用しない接続の常時補充やkeepalive queryを避ける一方、requestごとの接続開閉へ置き換えない。
 - 受付判定は必要な外部状態の取得結果から行う。直前のPINGを成功保証とせず、外部状態をcacheしてquotaやfail-closedの意味を弱めない。
 - 処理中のlease heartbeat、待機中のcapability更新、queueのblocking read、再配送期限、履歴保持は別の目的を持つ。閾値は相互の期限・shutdown予算・利用者の待ち時間と合わせて調整し、コマンド数やquery負荷だけで決めない。
-- queryやindexの変更は、開発用data storeと分離した合成fixtureで通常件数・上限付近・上限超過を比較する。実行計画、転送量、buffer利用、応答時間から採否を決め、実験資源を破棄する。接続数・コマンド数の削減を、そのままproviderの稼働時間や請求額の削減と扱わない。
+- queryやindexの変更は、変更する負荷境界と未解決の疑問に応じて、通常件数・上限付近・上限超過の条件と、実行計画・転送量・buffer利用・応答時間から必要な証拠を選ぶ。測定には開発用data storeと分離した合成fixtureを使い、実験資源を破棄する。整合性とresource上限を守ったうえで単純さと保守負担も含めて採否を決め、接続数・コマンド数の削減をそのままproviderの稼働時間や請求額の削減と扱わない。
 
 ## 2. API
 
@@ -40,7 +40,8 @@
 - OpenAPI lint は unresolved reference、path / parameter、schema、operation identity など構造整合性に限定する。field の公開可否、認証、業務意味は endpoint、DTO、要求・domain 規約で決め、legacy 名や source 断片の文字列検査を契約にしない。
 - HTTP 層は入力・認証・エラー変換に閉じ、DB、Redis、業務分岐を直接持たない。
 - request body はサイズ上限に加えて、decode 前に同時実行数を制限する。画像uploadと通常mutationを分離し、満杯の場合は本文を保持して待機せず再試行可能な応答を返す。
-- JSON readの待機件数も制限し、JSON・画像・exportの応答は転送終了まで同時実行枠を保持する。DB projectionは全量取得後の検査に頼らず、件数・文字数・保存JSONのbyte数を転送前に検証する。
+- JSON readの待機件数と時間を制限し、待機上限では再試行可能な応答を返す。JSON・画像・exportの応答は転送終了まで同時実行枠を保持する。DB projectionは全量取得後の検査に頼らず、件数・文字数・保存JSONのbyte数を転送前に検証する。
+- 応答を返す前の失敗・取消ではHTTP層が取得済みの枠を解放し、応答を返した後はbodyの解放scopeへ引き継ぐ。ログなどのbody wrapperはそのscopeを通常の効果の後へ隠さず、本文開始前の送信失敗でもserverが解放できる形を保つ。応答生成後の補助処理は取消で応答の所有権を失わないようにする。
 - Tapirのserver logicで発生した例外は外側の`HttpErrorMiddleware`へ伝え、共通のProblem Detailsと機密情報を除いたincident logに変換する。Tapirの既定例外応答・例外logと二重に処理しない。mutationの結果不明時に保持するidempotency予約は、このHTTP変換より内側で確定する。
 - raw ID、設定値、wire value は境界で検証済み型へ変換する。usecase へ未検証値や wire DTO を渡さない。
 - 分析は現行の成果物契約とHTTP経路だけを提供する。旧世代のdecoder、互換用route、旧形式からの補完は維持しない。成果物形式を変えるときはAPI・Web・Workerを揃え、必要な再計算を公開再開前に完了する。保存形式を変えないHTTP projectionの変更では対応API/Webを一体で切り替え、Worker変更・再計算を要求しない。
@@ -58,7 +59,7 @@
 - 元画像の取得はdescriptorが指す画像ID、ZIP取得は下書きの更新時刻を前提条件にする。差替え後の別画像を古いOCR結果と組み合わせず、世代不一致は再確認を求める。未保存の入力へ新しいOCR結果を自動で混入させない。
 - ZIPはresponse bodyの評価scope内で生成し、一時ファイルや全量bufferをHTTP応答へ引き渡さない。事前に画像metadataの合計サイズを検証し、生成中も実際のZIPサイズを制限する。送信中の読取・生成失敗や上限超過は転送を中断し、Webはbody全体の取得成功後にだけファイル保存を開始する。
 - 新しいread endpointや必須response情報にWebを移すときは、APIを先に配備する。旧Webが使う有効なendpointは移行期間中維持し、廃止済みrouteの固定error応答を有効な契約として生成clientへ残さない。
-- 集約結果だけが必要な一覧はDBで集約し、表示しない監査履歴を全件転送しない。DB内で完結するsnapshotの複製は `INSERT ... SELECT` で表し、JVMを経由するread/write往復を増やさない。単純化とquery costの両方を、実行計画と境界のテストで確認する。
+- 集約結果だけが必要な一覧はDBで集約し、表示しない監査履歴を全件転送しない。DB内で完結するsnapshotの複製は `INSERT ... SELECT` で表し、JVMを経由するread/write往復を増やさない。整合性は境界のテストで確認し、query costに具体的な懸念があれば実行計画など必要な証拠を選ぶ。単純化は所有する責務と変更時の負担から判断する。
 - DB接続・pool取得・SQL実行・lock待ちには有限の上限を設ける。transaction poolingでも制限を維持するため、SQL側の上限は各transactionで `SET LOCAL` を適用し、個別処理では必要に応じて短縮する。
 - 通常制御フローは型で返し、予期しない不整合や外部I/O失敗と区別する。
 - 部分更新は既存値と入力を合わせた実効状態で検証する。読み取り後の前提を更新に使う場合は、同じ更新条件で再検証する。

@@ -17,27 +17,32 @@ private[http] object RequestDurationLoggingMiddleware:
   def apply[F[_]: Async](http: HttpApp[F]): HttpApp[F] = Kleisli { request =>
     val correlationId = requestId(request)
     Clock[F].monotonic.flatMap { started =>
-      http.run(request).attempt.flatMap {
-        case Right(response) =>
-          val method = request.method.name
-          val path = request.uri.path.renderString
-          val httpVersion = request.httpVersion.renderString
-          val status = response.status.code
-          logResponseReady(request, response, correlationId, started).as(
-            response.withBodyStream(BodyTransferObserver(response.body)(result =>
-              logTransferCompleted(
-                method,
-                path,
-                httpVersion,
-                status,
-                correlationId,
-                started,
-                result,
-              )
-            ))
-          )
-        case Left(error) =>
-          logFailed(request, correlationId, started) *> Async[F].raiseError[Response[F]](error)
+      // Once an inner handler returns a Response, preserve ownership through decoration
+      // and readiness logging until the server can take responsibility for its body.
+      Async[F].uncancelable { poll =>
+        poll(http.run(request)).attempt.flatMap {
+          case Right(response) =>
+            val method = request.method.name
+            val path = request.uri.path.renderString
+            val httpVersion = request.httpVersion.renderString
+            val status = response.status.code
+            // Observation failure must not discard a Response with acquired body resources.
+            logResponseReady(request, response, correlationId, started).attempt.void.as(
+              response.withBodyStream(BodyTransferObserver(response.body)(result =>
+                logTransferCompleted(
+                  method,
+                  path,
+                  httpVersion,
+                  status,
+                  correlationId,
+                  started,
+                  result,
+                )
+              ))
+            )
+          case Left(error) =>
+            logFailed(request, correlationId, started) *> Async[F].raiseError[Response[F]](error)
+        }
       }
     }
   }

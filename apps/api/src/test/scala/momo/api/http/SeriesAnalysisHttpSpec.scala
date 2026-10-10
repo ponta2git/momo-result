@@ -3,10 +3,11 @@ package momo.api.http
 import java.time.Instant
 
 import cats.effect.IO
+import cats.syntax.all.*
 import io.circe.Json
 import org.http4s.circe.*
 import org.http4s.implicits.*
-import org.http4s.{Status, Uri}
+import org.http4s.{Method, Request, Status, Uri}
 import org.typelevel.ci.CIString
 
 import momo.api.MomoCatsEffectSuite
@@ -59,7 +60,7 @@ final class SeriesAnalysisHttpSpec extends MomoCatsEffectSuite with HttpAppTestF
       assertEquals(jsonField[String](statusBody, "artifactFreshness"), "unavailable")
       assertEquals(
         statusBody.hcursor.downField("desired").get[String]("algorithmVersion"),
-        Right("series-analysis-v6"),
+        Right("series-analysis-v7"),
       )
   }
 
@@ -91,6 +92,46 @@ final class SeriesAnalysisHttpSpec extends MomoCatsEffectSuite with HttpAppTestF
         "metricId must be one of",
       )
     )
+  }
+
+  app.test("outlook reads authenticate ordinary members and never calculate a missing artifact") {
+    httpApp =>
+      List(
+        "outlook-summary" -> "",
+        "outlook-window" -> "&memberId=member_ponta&windowSize=50",
+        "outlook-examples" -> "&memberId=member_ponta",
+      ).traverse_ { case (resource, suffix) =>
+        val uri = Uri.unsafeFromString(
+          s"/api/analytics/series-comparison/v1/$resource?gameTitleId=${titleId.value}&artifactId=missing$suffix"
+        )
+        for
+          anonymous <- httpApp.run(Request[IO](Method.GET, uri))
+          _ <- assertProblem(anonymous, Status.Unauthorized, "UNAUTHORIZED", "account")
+          member <- httpApp.run(readGet(uri, "account_akane_mami"))
+          _ <-
+            assertProblem(member, Status.Gone, "ANALYSIS_ARTIFACT_EXPIRED", "no longer available")
+        yield ()
+      }
+  }
+
+  app.test("outlook refuses unsupported filters without falling back to overall") { httpApp =>
+    List(
+      "outlook-summary" -> "&mapMasterId=map-other",
+      "outlook-window" -> "&memberId=member_ponta&windowSize=50&seasonMasterId=season-other",
+      "outlook-examples" -> "&memberId=member_ponta&mapMasterId=map-other",
+    ).traverse_ { case (resource, suffix) =>
+      val uri = Uri.unsafeFromString(
+        s"/api/analytics/series-comparison/v1/$resource?gameTitleId=${titleId.value}&artifactId=missing$suffix"
+      )
+      httpApp.run(readGet(uri)).flatMap(response =>
+        assertProblem(
+          response,
+          Status.UnprocessableContent,
+          "VALIDATION_FAILED",
+          "does not support"
+        )
+      )
+    }
   }
 
   app.test("title recalculation requires Idempotency-Key and replays the accepted contract") {

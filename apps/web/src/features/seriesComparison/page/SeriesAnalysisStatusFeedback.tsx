@@ -8,6 +8,7 @@ import { Notice } from "@/shared/ui/feedback/Notice";
 
 export function SeriesAnalysisStatusFeedback({
   confirmedMatchCount,
+  displayedPublishedAt,
   hasError,
   loading,
   onRefresh,
@@ -15,6 +16,7 @@ export function SeriesAnalysisStatusFeedback({
   status,
 }: {
   confirmedMatchCount: number;
+  displayedPublishedAt?: string | undefined;
   hasError: boolean;
   loading: boolean;
   onRefresh: () => void;
@@ -57,7 +59,8 @@ export function SeriesAnalysisStatusFeedback({
         : "新しい戦績データを計算中です";
     return (
       <Notice tone="info" title={title}>
-        完了まで、{lastUpdatedText(status)}を表示します。
+        完了まで、{lastUpdatedText(displayedPublishedAt ?? status.currentArtifact.publishedAt)}
+        を表示します。
       </Notice>
     );
   }
@@ -71,14 +74,16 @@ export function SeriesAnalysisStatusFeedback({
             : "分析データを再計算できませんでした"
         }
       >
-        {lastUpdatedText(status)}を表示しています。
+        {lastUpdatedText(displayedPublishedAt ?? status.currentArtifact.publishedAt)}
+        を表示しています。
       </Notice>
     );
   }
   if (status.artifactFreshness === "stale") {
     return (
       <Notice tone="warning" title="新しい試合結果はまだ反映されていません">
-        {lastUpdatedText(status)}を表示しています。
+        {lastUpdatedText(displayedPublishedAt ?? status.currentArtifact.publishedAt)}
+        を表示しています。
       </Notice>
     );
   }
@@ -165,8 +170,6 @@ function RefreshAction({ onRefresh, refreshing }: { onRefresh: () => void; refre
   );
 }
 
-function lastUpdatedText(status: SeriesAnalysisStatusResponse): string {
-  return status.currentArtifact
-    ? `${formatDateTimeLong(status.currentArtifact.publishedAt)}更新のデータ`
-    : "前回の成功済みデータ";
+function lastUpdatedText(publishedAt: string): string {
+  return `${formatDateTimeLong(publishedAt)}更新のデータ`;
 }

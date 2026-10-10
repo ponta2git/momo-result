@@ -480,7 +480,16 @@ fn resource_count_for_scopes(input: &AnalysisInput, scopes: &[ScopeRows]) -> Opt
         let player_chunks = u64::try_from(member_ids.len()).ok()?.checked_mul(4)?;
         let scope_count = 2_u64
             .checked_add(player_chunks)?
-            .checked_add(u64::try_from(match_ids.len()).ok()?)?;
+            .checked_add(u64::try_from(match_ids.len()).ok()?)?
+            .checked_add(u64::from(matches!(
+                scope.scope,
+                ScopeRef::Overall | ScopeRef::Season { .. }
+            )))?
+            .checked_add(if scope.scope == ScopeRef::Overall {
+                u64::try_from(member_ids.len()).ok()?
+            } else {
+                0
+            })?;
         total.checked_add(scope_count)
     })
 }
@@ -739,7 +748,7 @@ mod tests {
             row_count * 4,
             "a row belongs only to overall, season, map, and season-map indexes"
         );
-        assert_eq!(normalized.resource_count(), Some(58_018));
+        assert_eq!(normalized.resource_count(), Some(59_023));
     }
 
     #[test]

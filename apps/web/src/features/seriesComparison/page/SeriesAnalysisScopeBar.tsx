@@ -4,6 +4,7 @@ import { useState } from "react";
 import type {
   SeriesComparisonAggregate,
   SeriesComparisonReviewV3,
+  SeriesAnalysisOutlookSummary,
 } from "@/shared/api/seriesAnalysis";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { Button } from "@/shared/ui/actions/Button";
@@ -13,10 +14,9 @@ import { SelectField } from "@/shared/ui/forms/SelectField";
 import { contentText, fieldText } from "@/shared/ui/typography";
 
 type SelectOption = { disabled?: boolean | undefined; label: string; value: string };
-type SeriesAnalysisResourceSummary = Pick<
-  SeriesComparisonAggregate | SeriesComparisonReviewV3,
-  "artifact" | "dataQuality" | "scope"
->;
+type SeriesAnalysisResourceSummary =
+  | Pick<SeriesComparisonAggregate | SeriesComparisonReviewV3, "artifact" | "dataQuality" | "scope">
+  | SeriesAnalysisOutlookSummary;
 
 export function SeriesAnalysisScopeBar({
   canRefresh,
@@ -52,13 +52,15 @@ export function SeriesAnalysisScopeBar({
   seriesValue: string;
 }) {
   const [open, setOpen] = useState(false);
-  const quality = response?.dataQuality.summary;
+  const quality = response && "dataQuality" in response ? response.dataQuality.summary : undefined;
   const qualityAdvisories = quality
     ? [
         quality.referenceCount > 0 ? `参考値 ${quality.referenceCount}項目` : null,
         quality.noTargetCount > 0 ? `対象なし ${quality.noTargetCount}項目` : null,
       ].filter((entry): entry is string => entry !== null)
-    : [];
+    : response && "qualityStatus" in response && response.qualityStatus === "reference"
+      ? ["総合成績は参考値"]
+      : [];
   const detailFilterLabels = [
     seasonValue
       ? `シーズン ${seasonOptions.find((option) => option.value === seasonValue)?.label ?? "選択中"}`
@@ -71,7 +73,7 @@ export function SeriesAnalysisScopeBar({
   const selectedSeries = seriesOptions.find((option) => option.value === seriesValue);
 
   return (
-    <section aria-label="比較条件" className="grid min-w-0 gap-2">
+    <section aria-label="比較条件" className="@container/analysis-scope grid min-w-0 gap-2">
       <Disclosure
         keepMounted
         ariaLabel="比較対象を変更"
@@ -134,7 +136,7 @@ export function SeriesAnalysisScopeBar({
           />
         </div>
       </Disclosure>
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="grid min-w-0 grid-cols-1 items-center justify-items-start gap-2 @sm/analysis-scope:flex @sm/analysis-scope:justify-between">
         <span className={cn(contentText.supporting, "tabular-nums")}>
           {scopeEmpty
             ? "対象試合なし"

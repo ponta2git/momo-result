@@ -8,6 +8,8 @@ pub(super) const fn resource_common(resource: &ResourceManifest) -> &CommonResou
     match resource {
         ResourceManifest::Aggregate { common }
         | ResourceManifest::Review { common }
+        | ResourceManifest::OutlookSummary { common }
+        | ResourceManifest::OutlookReference { common, .. }
         | ResourceManifest::Drilldown { common, .. }
         | ResourceManifest::MatchContext { common, .. } => common,
     }

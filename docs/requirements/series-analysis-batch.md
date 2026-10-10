@@ -131,6 +131,7 @@ DB lock順とstaging transactionの規則は `docs/db-rule.md`、process責務�
 
 - 1作品の成果物はoverallと、確定試合が実在するseason、map、season×mapだけを含む。空の直積scopeを作らない。
 - aggregate、review、drilldown、match contextは同じ入力から計算し、高負荷な中間結果を再利用する。
+- [総合成績の見通し](series-rank-outlook.md#13-実績データと読取契約)は、同じsnapshotからsummary・referenceを生成する。過去窓・順位内訳の型・同時順位をWorkerで計算し、利用者の仮定は保存しない。resourceの完全性・上限・一括公開は本節の契約を使う。
 - match contextは対象試合revisionと作品所属を保存する。読み取り時に一致しなければ古い派生分析を返さない。
 - artifact / manifest / chunk の shape と上限は JSON Schema、canonicalization の具体例は `docs/schemas/fixtures/series-analysis/canonicalization-v1.json` を正本とする。normal / invalid fixture と validator は契約証拠とする。
 - source input checksumは表示専用metadataを除く入力を決定順にhashし、semantic checksumはresource / scope / item / canonical payloadを決定順にhashする。run ID、日時、表示名、処理時間を含めない。
@@ -153,8 +154,8 @@ DB lock順とstaging transactionの規則は `docs/db-rule.md`、process責務�
 - artifact endpointはstatusで解決したartifact IDを必須入力とし、1画面の全resourceを同じartifactへpinする。
 - current / previousとして読取可能かの確認と、要求された1 resource / scopeのbounded chunk取得を同じread snapshotで行う。作品全体をdecodeしない。
 - artifact schemaとHTTP wire schemaを分け、reader decoderのallowlistと上限を満たさないartifactはfail closedにする。
-- artifact世代4ではaggregate payload世代5とreview payload世代4を保存し、固定の`metricDefinitions`と画面用`anchorTarget`を持たない。指標説明と分類に対応する画面遷移はWebが所有する。計算上の分類・提案・根拠は引き続きWorkerの責務とする。
-- aggregate HTTP v4、review HTTP v3、match-context HTTP v3は現行artifact世代4だけを読む。旧aggregate HTTP v2/v3、review HTTP v2、match-context HTTP v2、廃止済み同期分析は提供しない。保存形式とHTTPの世代番号を同一視しない。
+- aggregateとreviewの保存payloadは、固定の`metricDefinitions`と画面用`anchorTarget`を持たない。指標説明と分類に対応する画面遷移はWebが所有する。計算上の分類・提案・根拠は引き続きWorkerの責務とする。
+- 対応するartifact・payload・HTTPの世代は、生成publication contract、各JSON Schema、Tapir endpoint、readerのallowlistを正本とする。保存形式とHTTPの世代番号を同一視しない。廃止済みのendpointや同期分析へfallbackしない。
 - match contextは現在の試合revisionと保存chunkのsource revisionを同じread snapshotで照合する。includedの `match.ownerMemberId` はそのsnapshotの試合ownerを必須のHTTP表示情報として返し、excludedは `match: null` とする。owner・revisionの同時更新とWorker入力snapshotの対応を前提にし、独立した表示名hydrateからownerを補完しない。保存payloadの検証後に付加して応答上限を守り、保存schemaや集計意味を変更しない。
 - readerはvalidation contract ID、checksum、UTF-8、生成schema、byte / depth / node上限、要求したscope / member / metric / match identityを検証する。producerの集計意味やcross-resource整合性をbounded chunk readで再計算しない。
 - optionsは全登録作品を返し、scope候補は現在の確定試合に実在する値だけを返す。確定試合0件と登録作品0件を区別する。
@@ -166,6 +167,7 @@ DB lock順とstaging transactionの規則は `docs/db-rule.md`、process責務�
 ### Web State
 
 - Webはlocale、label、semantic token、描画geometry、URL / selectionだけを扱い、集計、閾値、候補採否、意味順、統計fallbackを再計算しない。
+- [総合成績の見通し](series-rank-outlook.md#13-実績データと読取契約)の仮定からの条件計算と、保存済み実績例の利用者条件への適合判定は、上記の実績集計・行動プレイブックの候補採否と区別する。実績の生成・並び順・品質は引き続きWorkerが所有する。
 - `queued` / `running` で成功artifactがあれば旧表示と最終成功日時を維持し、更新または手動再計算中であることを区別する。
 - 初回計算中は分析値のないloading state、成果物なしの失敗は分析値のないerror stateを出す。失敗時も旧成功artifactがあれば維持する。
 - preemptionは失敗として表示せず `queued` と同じ扱いにする。対象match revision不一致では一次データを維持し、分析文脈だけを隠す。
@@ -206,7 +208,7 @@ OCR同居を有効化する場合は、共通parent-child境界、単一slot、�
 - idle capabilityの更新間隔はactive jobのlease heartbeatと分離し、freshness期限に失敗・遅延の余裕を残す。世代不一致や期限切れのcapabilityで昇格しない。
 - 自動保守は稼働世代とsingletonのexact tuple差分を昇格対象とし、既知の過去世代への自動復帰を拒否する。previewとapplyの間で対象作品・input revision・世代が変われば適用しない。自動・手動の再実行は同じdurable operationを参照する。
 - release完了は受理snapshotのtargetが公開済みまたは作品削除で終端したことと整合性監査で判定する。failed target、current / previousの不正契約、failed outboxは要対応とする。通常の更新では後続入力によるpending workを別に扱い、非互換切替では公開再開前に対象全作品の現行成果物を確認する。
-- HTTP wireはOpenAPI・生成型と同時更新する。artifactからwireへのprojectionはrename、enum mapping、metadata hydrateとrevision整合を確認した試合属性の付加に限定し、API / Webで欠けた分析値を計算しない。保存artifactを変えないHTTP-onlyの非互換変更は、対応API/Webの切替とrollbackを一体で扱い、成果物移行・全件再計算を要求しない。
+- HTTP wireはOpenAPI・生成型と同時更新する。artifactからwireへのprojectionはrename、enum mapping、metadata hydrate、revision整合を確認した試合属性の付加、用途に対応する保存済み項目の選択に限定する。[見通しreference](series-rank-outlook.md#13-実績データと読取契約)では指定窓長の保存済み1項目を抽出できる。API / Webで欠けた分析値を計算したり、実績の意味順を並べ直したりしない。保存artifactを変えないHTTP-onlyの非互換変更は、対応API/Webの切替とrollbackを一体で扱い、成果物移行・全件再計算を要求しない。
 - 通常rollbackはDB契約・lease fenceと現行publicationを扱えるreleaseに限定し、current artifact、request、campaign、job、outboxを維持する。未対応jobを旧algorithmで処理せずqueuedに保つ。
 - 非互換切替を切り戻す場合は、公開を停止したままDB snapshotとimmutable releaseを整合する組合せへ戻す。部分的な世代の組合せでは再開せず、再開後のデータを守る修復はforward fixを原則とする。
 - release候補はmigration、runtimeのexact capability、immutable provenance、resource hard limit、timeout、artifact / API上限を確認してから昇格する。本番操作の承認境界は公開運用規約に従う。

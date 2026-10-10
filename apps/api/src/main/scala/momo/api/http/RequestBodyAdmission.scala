@@ -1,8 +1,10 @@
 package momo.api.http
 
+import scala.concurrent.duration.*
+
 import cats.data.Kleisli
-import cats.effect.kernel.Poll
 import cats.effect.std.Semaphore
+import cats.effect.syntax.all.*
 import cats.effect.{Async, Resource}
 import cats.syntax.all.*
 import org.http4s.{Header, HttpApp, Method, Request, Response}
@@ -23,8 +25,8 @@ final class RequestBodyAdmission[F[_]: Async] private (
 
   def apply(http: HttpApp[F]): HttpApp[F] = Kleisli { request =>
     if isImageDownload(request) then
-      responseLifetime(downloads, _ => downloads.tryAcquire, http, request)
-    else if isExport(request) then responseLifetime(exports, _ => exports.tryAcquire, http, request)
+      responseLifetime(downloads.tryPermit, http, request)
+    else if isExport(request) then responseLifetime(exports.tryPermit, http, request)
     else if !HttpMethodPredicates.isMutating(request.method) then
       if isDataRead(request) then read(http, request)
       else http.run(request)
@@ -44,32 +46,34 @@ final class RequestBodyAdmission[F[_]: Async] private (
   private def read(http: HttpApp[F], request: Request[F]): F[Response[F]] =
     // A screen fetches several JSON resources together. Bound the waiters before queueing
     // without allocating response projections, so a normal burst can share the read budget.
-    responseLifetime(
-      reads,
-      poll =>
-        waitingReads.tryAcquire.flatMap {
-          case false => Async[F].pure(false)
-          case true => Async[F].guarantee(poll(reads.acquire), waitingReads.release).as(true)
-        },
-      http,
-      request
-    )
+    val admission = Resource.applyFull[F, Boolean] { poll =>
+      waitingReads.tryAcquire.flatMap {
+        case false => Async[F].pure((false, (_: Resource.ExitCase) => Async[F].unit))
+        case true =>
+          // This bounds only queueing, not the handler or response-body lifetime. Racing
+          // Resources also releases a permit acquired just as the timeout wins.
+          poll(reads.permit.race(Resource.sleep[F](5.seconds)).allocatedCase)
+            .map { case (decision, release) => (decision.isLeft, release) }
+            .guarantee(waitingReads.release)
+      }
+    }
+    responseLifetime(admission, http, request)
 
   private def responseLifetime(
-      semaphore: Semaphore[F],
-      acquire: Poll[F] => F[Boolean],
+      admission: Resource[F, Boolean],
       http: HttpApp[F],
       request: Request[F],
   ): F[Response[F]] =
-    // Like http4s BracketRequestResponse, a successful handler transfers resource ownership
-    // to the response body. The server must evaluate the body even when it is empty.
-    Resource.makeCaseFull[F, Boolean](acquire) {
-      case (true, Resource.ExitCase.Canceled | Resource.ExitCase.Errored(_)) => semaphore.release
+    // A successful handler transfers the admission release to the response body. Keep its
+    // leading finalizer reachable so the server can dispose a response before body effects run.
+    Resource.makeCaseFull[F, (Boolean, F[Unit])](poll => poll(admission.allocated)) {
+      case ((_, release), Resource.ExitCase.Canceled | Resource.ExitCase.Errored(_)) => release
+      case ((false, release), _) => release
       case _ => Async[F].unit
     }.use {
-      case false => Async[F].pure(busy)
-      case true => http.run(request).map(response =>
-          response.withBodyStream(response.body.onFinalize(semaphore.release))
+      case (false, _) => Async[F].pure(busy)
+      case (true, release) => http.run(request).map(response =>
+          response.withBodyStream(response.body.onFinalize(release))
         )
     }
 

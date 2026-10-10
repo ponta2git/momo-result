@@ -13,3 +13,4 @@
 - production deploy / rollbackは同じ承認境界を通し、CIに記録したcommit・設定・artifact identityを照合できない候補を適用しない。
 - release の候補選択、branch、merge 方法、公開履歴は `docs/dev-rule.md` の CI Gates / Release と Git を正本とする。`master` への release PR merge は deploy を開始する本番操作として扱う。
 - exactなworkflow入力、action、timeout、artifact名はCI設定を正とし、private runbookは人間の判断順序、承認条件、成功証拠、失敗後の状態確認を定める。
+- 手順や監視を増やす前に、既存の仕組みで判断・復旧できるかを確認する。観測は具体的な運用判断に必要なものを選び、health、機能応答、性能の一つだけで全体を成功としない。測定できない状態や残る不確実さは明記し、根拠のない数値で埋めない。

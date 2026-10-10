@@ -1,4 +1,6 @@
 export { LoginPage } from "@/features/auth/LoginPage";
+// The owner has no runtime dependency on the lazy calculator or visualization.
+export { OutlookSessionOwner } from "@/features/seriesComparison/outlook/OutlookSessionOwner";
 
 export const loadDraftReviewPage = () =>
   import("@/features/matches/workspace/DraftReviewPage").then((module) => ({

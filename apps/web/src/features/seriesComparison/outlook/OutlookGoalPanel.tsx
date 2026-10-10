@@ -178,7 +178,7 @@ export function OutlookGoalPanel({
             response={response}
             memberId={memberIds[1]}
             memberName={names[1]}
-            condition={{ kind: "rival-mean" }}
+            condition={{ kind: "mean", role: 1 }}
             session={session}
             change={change}
           />

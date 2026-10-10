@@ -273,19 +273,21 @@ function OutlookWorkspace({
               </div>
               <div className="grid gap-6">
                 {displayRoles.map(({ memberId, role }) => (
-                  <OutlookPlayerEditor key={memberId} {...playerProps} role={role} showComparison />
+                  <div key={memberId} className="grid min-w-0 gap-4">
+                    <OutlookPlayerEditor {...playerProps} role={role} showComparison />
+                    {session.task === "performance" ? (
+                      <OutlookPastExamples
+                        response={response}
+                        memberId={memberId}
+                        memberName={names[role]}
+                        condition={{ kind: "mean", role }}
+                        session={session}
+                        change={change}
+                      />
+                    ) : null}
+                  </div>
                 ))}
               </div>
-              {session.task === "performance" ? (
-                <OutlookPastExamples
-                  response={response}
-                  memberId={ids[1]}
-                  memberName={names[1]}
-                  condition={{ kind: "rival-mean" }}
-                  session={session}
-                  change={change}
-                />
-              ) : null}
               <OutlookComparisonControls session={session} change={change} />
               {response.recent.qualityStatus === "reference" ? (
                 <p className={contentText.supporting}>

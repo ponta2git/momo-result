@@ -21,7 +21,10 @@ import {
   finishOutlookGesture,
   otherRole,
 } from "@/features/seriesComparison/outlook/outlookSession";
-import type { OutlookSession } from "@/features/seriesComparison/outlook/outlookSession";
+import type {
+  OutlookRole,
+  OutlookSession,
+} from "@/features/seriesComparison/outlook/outlookSession";
 import { useOutlookResource } from "@/features/seriesComparison/outlook/useOutlookResource";
 import type {
   SeriesAnalysisOutlookExamples,
@@ -44,16 +47,18 @@ type ExampleCondition =
       onUsePerformance?: (() => void) | undefined;
       pendingDescriptionId?: string | undefined;
     }
-  | { kind: "rival-mean" };
+  | { kind: "mean"; role: OutlookRole };
 type HistoricalExample = SeriesAnalysisOutlookExamples["examples"]["types"][number];
 
 function meetsCondition(
   distribution: RankDistribution,
   threshold: Rational,
   kind: ExampleCondition["kind"],
+  role: OutlookRole,
 ) {
   const comparison = compareRationals(distributionMean(distribution), threshold);
-  return kind === "goal" ? comparison < 0 : comparison >= 0;
+  if (kind === "goal") return comparison < 0;
+  return role === 0 ? comparison <= 0 : comparison >= 0;
 }
 
 export function OutlookPastExamples({
@@ -71,9 +76,9 @@ export function OutlookPastExamples({
   session: OutlookSession;
   change: (update: (current: OutlookSession) => OutlookSession) => void;
 }) {
-  const role = condition.kind === "goal" ? 0 : 1;
+  const role = condition.kind === "goal" ? 0 : condition.role;
   const peerRole = otherRole(role);
-  const openKey = condition.kind === "goal" ? "examplesOpen" : "rivalExamplesOpen";
+  const openKey = role === 0 ? "examplesOpen" : "rivalExamplesOpen";
   const open = session[openKey] ?? false;
   const pendingId = useId();
   const { examples: query } = useOutlookResource(response, memberId, undefined, open);
@@ -85,7 +90,7 @@ export function OutlookPastExamples({
     Boolean(current.gesture) ||
     current.entries[peerRole].meanDraft !== undefined ||
     current.entries[peerRole].error !== undefined ||
-    (condition.kind === "rival-mean" &&
+    (condition.kind === "mean" &&
       (current.entries[role].meanDraft !== undefined || current.entries[role].error !== undefined));
   const pending = hasPendingInput(session);
   const pendingDescriptionId =
@@ -99,14 +104,14 @@ export function OutlookPastExamples({
     if (open && query.data) {
       for (const example of query.data.examples.types) {
         const distribution = distributionFromCounts(example.rankCounts);
-        if (!meetsCondition(distribution, threshold, condition.kind)) continue;
+        if (!meetsCondition(distribution, threshold, condition.kind, role)) continue;
         hasMatchingMean = true;
         if (areDistributionsCompatible(distribution, peer)) selected.push(example);
         if (selected.length === 3) break;
       }
     }
     return { examples: selected, hasQualifying: hasMatchingMean };
-  }, [query.data, open, threshold, condition.kind, peer]);
+  }, [query.data, open, threshold, condition.kind, peer, role]);
   const applyExample = (example: HistoricalExample) => {
     let accepted = false;
     change((current) => {
@@ -135,7 +140,7 @@ export function OutlookPastExamples({
               .threshold
           : distributionMean(current.entries[role].distribution);
       if (
-        !meetsCondition(distribution, latestThreshold, condition.kind) ||
+        !meetsCondition(distribution, latestThreshold, condition.kind, role) ||
         !areDistributionsCompatible(distribution, current.entries[peerRole].distribution)
       )
         return {
@@ -162,16 +167,17 @@ export function OutlookPastExamples({
         panelPadding="sm"
       >
         <div className="grid min-w-0 gap-4">
-          {condition.kind === "rival-mean" ? (
+          {condition.kind === "mean" ? (
             <p className={cn(contentText.body, readableTextWidthClass)}>
-              過去の連続20戦から、平均{outlookAverage(targetMean)}位以上の例を選んでいます。
+              過去の連続20戦から、平均{outlookAverage(targetMean)}位{role === 0 ? "以下" : "以上"}
+              の例を選んでいます。
               {session.entries[role].meanDraft !== undefined ||
               session.entries[role].error !== undefined
                 ? "入力途中の値は使わず、反映済みの平均で確認しています。"
                 : null}
             </p>
           ) : null}
-          {condition.kind === "rival-mean" && pending ? (
+          {condition.kind === "mean" && pending ? (
             <p id={pendingId} className={contentText.supporting}>
               {session.gesture
                 ? "平均順位の操作を終えてから、成績例を試してください。"
@@ -195,9 +201,7 @@ export function OutlookPastExamples({
           ) : examples.length === 0 ? (
             <p className={cn(contentText.body, readableTextWidthClass)}>
               {hasQualifying
-                ? condition.kind === "goal"
-                  ? "必要な平均を満たす実績はありますが、相手の指定と両立する例がありません。"
-                  : "指定した平均を満たす実績はありますが、注目する人の成績と両立する例がありません。"
+                ? `${condition.kind === "goal" ? "必要な平均" : "指定した平均"}を満たす実績はありますが、${role === 0 ? "相手の指定" : "注目する人の成績"}と両立する例がありません。`
                 : condition.kind === "goal"
                   ? "必要な平均を満たす20戦の実績例がありません。"
                   : "指定した平均を満たす20戦の実績例がありません。"}

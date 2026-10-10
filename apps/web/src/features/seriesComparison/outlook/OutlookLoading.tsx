@@ -34,24 +34,26 @@ export function OutlookLoading() {
               </Skeleton>
             </div>
             {["first", "second"].map((person) => (
-              <div key={person} className="grid min-w-0 grid-cols-1 gap-2">
-                <Skeleton className="h-5 w-24 max-w-full" />
-                <Skeleton className="h-4 w-32 max-w-full" />
-                <div>
-                  <Skeleton className="mb-2 h-5 w-40 max-w-full" />
-                  <Skeleton className="h-11 w-full rounded-sm pointer-fine:h-10" />
-                  <div className="mt-2 flex h-11 items-center">
-                    <Skeleton className="h-2 w-full rounded-full" />
+              <div key={person} className="grid min-w-0 gap-4">
+                <div className="grid min-w-0 grid-cols-1 gap-2">
+                  <Skeleton className="h-5 w-24 max-w-full" />
+                  <Skeleton className="h-4 w-32 max-w-full" />
+                  <div>
+                    <Skeleton className="mb-2 h-5 w-40 max-w-full" />
+                    <Skeleton className="h-11 w-full rounded-sm pointer-fine:h-10" />
+                    <div className="mt-2 flex h-11 items-center">
+                      <Skeleton className="h-2 w-full rounded-full" />
+                    </div>
+                    <Skeleton className="mt-1 h-4 w-full" />
                   </div>
-                  <Skeleton className="mt-1 h-4 w-full" />
+                  <div className="grid gap-1">
+                    <Skeleton className="h-4 w-40 max-w-full" />
+                    <Skeleton className="h-11 w-52 max-w-full pointer-fine:h-9" />
+                  </div>
                 </div>
-                <div className="grid gap-1">
-                  <Skeleton className="h-4 w-40 max-w-full" />
-                  <Skeleton className="h-11 w-52 max-w-full pointer-fine:h-9" />
-                </div>
+                <Skeleton className="h-11 w-52 max-w-full" />
               </div>
             ))}
-            <Skeleton className="h-11 w-52 max-w-full" />
             <div className="grid gap-2">
               <Skeleton className="h-11 w-44 max-w-full pointer-fine:h-9" />
               <div className="h-8" />

@@ -170,27 +170,29 @@ async function correctedSummary(base: SeriesAnalysisOutlookSummary) {
   });
 }
 
-async function threeGameSummary() {
-  const base = await makeSeriesAnalysisOutlookSummary();
-  const matches = [
+async function shortWindowSummary(
+  matches = [
     [1, 2, 3, 4],
     [1, 2, 4, 3],
     [2, 1, 3, 4],
-  ];
+  ],
+) {
+  const base = await makeSeriesAnalysisOutlookSummary();
+  const matchCount = matches.length;
   const players = base.recent.players.map((player, memberIndex) => {
     const rankCounts = [1, 2, 3, 4].map(
       (rank) => matches.filter((match) => match[memberIndex] === rank).length,
     ) as RankCounts;
     const rankSum = rankCounts.reduce((sum, count, index) => sum + count * (index + 1), 0);
-    return { ...player, rankCounts, rankSum, averageRank: rankSum / 3 };
+    return { ...player, rankCounts, rankSum, averageRank: rankSum / matchCount };
   });
   const period = {
     startMatchId: "synthetic-1",
-    endMatchId: "synthetic-3",
+    endMatchId: `synthetic-${matchCount}`,
     startSequence: 1,
-    endSequence: 3,
+    endSequence: matchCount,
     startedAt: "2026-01-01T00:00:00.000000Z",
-    endedAt: "2026-01-01T00:00:00.000002Z",
+    endedAt: `2026-01-01T00:00:00.${String(matchCount - 1).padStart(6, "0")}Z`,
   };
   const jointRanks = base.recent.jointRanks.map((pair) => {
     const first = players.findIndex((player) => player.memberId === pair.memberAId);
@@ -207,9 +209,9 @@ async function threeGameSummary() {
   return makeSeriesAnalysisOutlookSummary({
     ...base,
     period,
-    scope: { ...base.scope, matchCount: 3 },
-    source: { ...base.source, titleMatchCount: 3 },
-    recent: { ...base.recent, period, matchCount: 3, players, jointRanks },
+    scope: { ...base.scope, matchCount },
+    source: { ...base.source, titleMatchCount: matchCount },
+    recent: { ...base.recent, period, matchCount, players, jointRanks },
     players: players.map(({ rankCounts: _counts, ...player }) => player),
   });
 }
@@ -469,7 +471,7 @@ describe("OutlookView input and update boundaries", () => {
 
   it("keeps short-window rational precision through no-op edits and count-dialog Undo", async () => {
     const user = userEvent.setup();
-    renderOutlook(await threeGameSummary());
+    renderOutlook(await shortWindowSummary());
     expect(meanField()).toHaveValue("1.3333");
     await setMean(user, "1.3333");
     expect(undo()).toBeDisabled();
@@ -767,14 +769,14 @@ describe("OutlookView input and update boundaries", () => {
       expect(chart).toHaveAccessibleName(/この先200戦.+確認する時点は401戦後（グラフの範囲外）/u);
   });
 
-  it("loads each person's examples on demand and applies only the rival after pending inputs are resolved", async () => {
+  it("keeps each person's examples independent across tasks and applies only the chosen person's resolved input", async () => {
     const user = userEvent.setup();
     const base = await makeSeriesAnalysisOutlookExamples();
     const focusExamples = await makeSeriesAnalysisOutlookExamples({
       memberId: "member_eu",
       examples: {
         ...base.examples,
-        types: base.examples.types.filter((example) => example.window.rankSum === 47),
+        types: base.examples.types.filter((example) => [47, 57].includes(example.window.rankSum)),
       },
     });
     const rivalExamples = await makeSeriesAnalysisOutlookExamples({
@@ -802,12 +804,21 @@ describe("OutlookView input and update boundaries", () => {
     expect(await rival.findByText("2.65位")).toBeVisible();
     expect(requestedMembers).toEqual(["member_ponta"]);
     const apply = rival.getByRole("button", { name: "この成績を試す" });
+    await user.click(screen.getByRole("button", { name: "いーゆーの過去の成績例" }));
+    const focus = pastExamples(focusName);
+    expect(await focus.findByText("2.85位")).toBeVisible();
+    expect(focus.getByText("2.35位")).toBeVisible();
+    expect(requestedMembers).toEqual(["member_ponta", "member_eu"]);
     await user.clear(meanField(rivalName));
     await user.type(meanField(rivalName), "2.70");
     await user.clear(meanField());
     await user.type(meanField(), "2.60");
     expect(rival.getByText(/平均2\.45位以上.*反映済みの平均で確認しています/u)).toBeVisible();
     expect(rival.getByText("2.65位")).toBeVisible();
+    expect(focus.getByText(/平均2\.85位以下.*反映済みの平均で確認しています/u)).toBeVisible();
+    expect(focus.getByText("2.85位")).toBeVisible();
+    for (const button of focus.getAllByRole("button", { name: "この成績を試す" }))
+      expect(button).toBeDisabled();
     expect(apply).toBeDisabled();
     expect(apply).toHaveAccessibleDescription(
       "成績例を試す前に、2人の入力を反映するか、取り消してください。",
@@ -818,6 +829,8 @@ describe("OutlookView input and update boundaries", () => {
     expect(undo()).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "ぽんたの入力を取り消す" }));
     expect(apply).toBeDisabled();
+    for (const button of focus.getAllByRole("button", { name: "この成績を試す" }))
+      expect(button).toBeDisabled();
     await setMean(user, "bad");
     expect(meanField()).toHaveAttribute("aria-invalid", "true");
     expect(apply).toBeDisabled();
@@ -840,11 +853,11 @@ describe("OutlookView input and update boundaries", () => {
     );
     expect(screen.getByRole("button", { name: "いーゆーの過去の成績例" })).toHaveAttribute(
       "aria-expanded",
-      "false",
+      "true",
     );
-    expect(requestedMembers).toEqual(["member_ponta"]);
-    await user.click(screen.getByRole("button", { name: "いーゆーの過去の成績例" }));
-    expect(await pastExamples(focusName).findByText("2.35位")).toBeVisible();
+    expect(requestedMembers).toEqual(["member_ponta", "member_eu"]);
+    expect(pastExamples(focusName).getByText("2.35位")).toBeVisible();
+    expect(pastExamples(focusName).queryByText("2.85位")).not.toBeInTheDocument();
     expect(pastExamples(rivalName).queryByText("2.35位")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "ぽんたの過去の成績例" }));
     expect(screen.getByRole("button", { name: "いーゆーの過去の成績例" })).toHaveAttribute(
@@ -879,6 +892,69 @@ describe("OutlookView input and update boundaries", () => {
     expect(meanField()).toHaveValue("2.85");
     expect(meanField(rivalName)).toHaveValue("2.45");
     expect(undo()).toBeDisabled();
+
+    const ownExample = pastExamples(focusName)
+      .getAllByRole("listitem")
+      .find((item) => within(item).queryByText("2.35位"));
+    if (!ownExample) throw new Error("The focus's historical performance must remain available.");
+    await user.click(within(ownExample).getByRole("button", { name: "この成績を試す" }));
+    expect(screen.getByRole("tab", { name: "成績から試す" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("textbox", { name: "何戦後を見る" })).toHaveValue("37");
+    expect(meanField()).toHaveValue("2.35");
+    expect(meanField(rivalName)).toHaveValue("2.45");
+    await openCounts(user);
+    expect(displayedCounts()).toEqual(["4回", "7回", "7回", "2回"]);
+    await user.click(screen.getByRole("button", { name: "キャンセル" }));
+    await user.click(undo());
+    expect(meanField()).toHaveValue("2.85");
+    expect(meanField(rivalName)).toHaveValue("2.45");
+    expect(undo()).toBeDisabled();
     expect(requestedMembers).toEqual(["member_ponta", "member_eu"]);
+  });
+
+  it("does not round a retained focus mean up when matching historical examples", async () => {
+    const user = userEvent.setup();
+    const initial = await shortWindowSummary([
+      [1, 4, 2, 3],
+      ...Array.from({ length: 9 }, () => [2, 1, 3, 4]),
+      ...Array.from({ length: 9 }, () => [2, 3, 4, 1]),
+    ]);
+    const view = renderOutlook(initial);
+    await setMean(user, "2.50", rivalName);
+    const response = await makeSeriesAnalysisOutlookSummary({
+      artifact: { ...initial.artifact, artifactId: "artifact-expanded", inputRevision: "13" },
+    });
+    const base = await makeSeriesAnalysisOutlookExamples();
+    const examples = await makeSeriesAnalysisOutlookExamples({
+      artifact: response.artifact,
+      memberId: "member_eu",
+      examples: {
+        status: "available",
+        types: [
+          {
+            rankCounts: [2, 17, 1, 0],
+            window: { ...base.examples.types[0]!.window, rankSum: 39, averageRank: 1.95 },
+          },
+        ],
+      },
+    });
+    server.use(
+      http.get("/api/analytics/series-comparison/v1/outlook-examples", () =>
+        HttpResponse.json(examples),
+      ),
+    );
+    view.updateSummary(response);
+    // The edited pair retains the exact 37 / 19 focus mean while new history provides 20-game examples.
+    expect(meanField()).toHaveValue("1.9474");
+    await user.click(screen.getByRole("button", { name: "いーゆーの過去の成績例" }));
+    const panel = pastExamples(focusName);
+    expect(await panel.findByText("指定した平均を満たす20戦の実績例がありません。")).toBeVisible();
+    expect(panel.queryByRole("button", { name: "この成績を試す" })).not.toBeInTheDocument();
+    await setMean(user, "1.95");
+    expect(panel.getByText("1.95位")).toBeVisible();
+    expect(panel.getByRole("button", { name: "この成績を試す" })).toBeEnabled();
   });
 });

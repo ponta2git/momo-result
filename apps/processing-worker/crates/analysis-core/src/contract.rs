@@ -6,14 +6,14 @@ use thiserror::Error;
 
 use crate::canonical::{CanonicalError, FramedSha256};
 
-pub const ARTIFACT_SCHEMA_VERSION: u32 = 5;
+pub const ARTIFACT_SCHEMA_VERSION: u32 = 6;
 /// Exact identifier for the complete Rust-owned validation contract applied before publication.
 ///
 /// This is deliberately independent from [`ARTIFACT_SCHEMA_VERSION`]: the latter identifies the
 /// persisted payload shape, while this value proves which semantic, cross-resource, canonical,
 /// and bounded-file checks accepted a concrete artifact. Existing rows without this exact value
 /// must not be treated as having passed the current validator.
-pub const ARTIFACT_VALIDATION_CONTRACT_ID: &str = "series-analysis-artifact-v5-full-validation-v1";
+pub const ARTIFACT_VALIDATION_CONTRACT_ID: &str = "series-analysis-artifact-v6-full-validation-v1";
 pub const MANIFEST_VERSION: u32 = 1;
 pub const QUEUE_SCHEMA_VERSION: &str = "1";
 const MAXIMUM_SCHEMA_CHUNK_BYTES: u64 = 16 * 1024 * 1024;
@@ -111,6 +111,16 @@ pub enum ResourceManifest {
     Review {
         #[serde(flatten)]
         common: CommonResource,
+    },
+    OutlookSummary {
+        #[serde(flatten)]
+        common: CommonResource,
+    },
+    OutlookReference {
+        #[serde(flatten)]
+        common: CommonResource,
+        #[serde(rename = "memberId")]
+        member_id: String,
     },
     Drilldown {
         #[serde(flatten)]
@@ -295,6 +305,19 @@ impl ResourceManifest {
                 validate_id(match_id)?;
                 validate_decimal(source_match_revision)?;
             }
+            Self::OutlookReference { member_id, .. } => {
+                validate_id(member_id)?;
+                if common.scope != ScopeRef::Overall || common.item_key != *member_id {
+                    return Err(ContractError::InvalidChunkMetadata);
+                }
+            }
+            Self::OutlookSummary { .. } => {
+                if !matches!(common.scope, ScopeRef::Overall | ScopeRef::Season { .. })
+                    || common.item_key != common.scope.key()
+                {
+                    return Err(ContractError::InvalidChunkMetadata);
+                }
+            }
             Self::Aggregate { .. } | Self::Review { .. } => {}
         }
         Ok(())
@@ -305,6 +328,8 @@ impl ResourceManifest {
         match self {
             Self::Aggregate { common }
             | Self::Review { common }
+            | Self::OutlookSummary { common }
+            | Self::OutlookReference { common, .. }
             | Self::Drilldown { common, .. }
             | Self::MatchContext { common, .. } => common,
         }
@@ -331,6 +356,8 @@ impl ResourceManifest {
                 Self::Review { .. } => "review",
                 Self::Drilldown { .. } => "drilldown",
                 Self::MatchContext { .. } => "match_context",
+                Self::OutlookSummary { .. } => "outlook_summary",
+                Self::OutlookReference { .. } => "outlook_reference",
             },
             scope_key: common.scope.key(),
         }
@@ -399,6 +426,8 @@ const fn resource_kind_order(resource: &ResourceManifest) -> u8 {
         ResourceManifest::Review { .. } => 1,
         ResourceManifest::Drilldown { .. } => 2,
         ResourceManifest::MatchContext { .. } => 3,
+        ResourceManifest::OutlookSummary { .. } => 4,
+        ResourceManifest::OutlookReference { .. } => 5,
     }
 }
 
@@ -478,16 +507,23 @@ fn validate_checksum(value: &str) -> Result<(), ContractError> {
 }
 
 fn validate_file_name(value: &str) -> Result<(), ContractError> {
-    let valid_suffix = ["aggregate-", "review-", "drilldown-", "match-context-"]
-        .into_iter()
-        .find_map(|prefix| value.strip_prefix(prefix))
-        .and_then(|remaining| remaining.strip_suffix(".json"))
-        .is_some_and(|remaining| {
-            !remaining.is_empty()
-                && remaining
-                    .bytes()
-                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
-        });
+    let valid_suffix = [
+        "aggregate-",
+        "review-",
+        "drilldown-",
+        "match-context-",
+        "outlook-summary-",
+        "outlook-reference-",
+    ]
+    .into_iter()
+    .find_map(|prefix| value.strip_prefix(prefix))
+    .and_then(|remaining| remaining.strip_suffix(".json"))
+    .is_some_and(|remaining| {
+        !remaining.is_empty()
+            && remaining
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+    });
     if value.len() > 255 || !valid_suffix {
         return Err(ContractError::UnsafePath(String::from(value)));
     }
@@ -503,9 +539,9 @@ mod tests {
     use super::*;
 
     const VALID_ARTIFACT: &str =
-        include_str!("../../../../../docs/schemas/fixtures/series-analysis/valid-artifact-v5.json");
+        include_str!("../../../../../docs/schemas/fixtures/series-analysis/valid-artifact-v6.json");
     const INVALID_ARTIFACT: &str = include_str!(
-        "../../../../../docs/schemas/fixtures/series-analysis/invalid-artifact-v5.json"
+        "../../../../../docs/schemas/fixtures/series-analysis/invalid-artifact-v6.json"
     );
     const VALID_QUEUE: &str = include_str!(
         "../../../../../docs/schemas/fixtures/series-analysis/valid-queue-payload-v1.json"
@@ -527,7 +563,7 @@ mod tests {
     fn rejects_every_noncurrent_artifact_version() {
         let mut manifest: ArtifactManifest = serde_json::from_str(VALID_ARTIFACT)
             .unwrap_or_else(|error| panic!("valid artifact did not decode: {error}"));
-        for version in [1, 2, 3, 4, 6] {
+        for version in [1, 2, 3, 4, 5, 7] {
             manifest.artifact_schema_version = version;
             assert!(matches!(
                 manifest.validate(16, 16 * 1024 * 1024),

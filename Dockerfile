@@ -3,12 +3,12 @@
 ARG NODE_IMAGE=node:24-bookworm-slim@sha256:c2d5ade763cacfb03fe9cb8e8af5d1be5041ff331921fa26a9b231ca3a4f780a
 ARG JAVA_JDK_IMAGE=eclipse-temurin:25-jdk-noble@sha256:5b14970485a676b41faa08f4a7bc8716cc20915daa1d581d7a75f37a8ebaf9a8
 ARG JAVA_JRE_IMAGE=eclipse-temurin:25-jre-noble@sha256:30772b161c319f9a10c82e30fd77b7b6702c6b051e44e0e9f3d7ab5dd389a5ab
-ARG GO_IMAGE=golang:1.27.1-bookworm@sha256:69a7b9788769bec032d238959b61854e9ae87f57be9029ec04e9885fabf99195
+ARG GO_IMAGE=golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61
 ARG HTTP4S_REPOSITORY=https://github.com/ponta2git/http4s.git
 ARG CADDY_VERSION=v2.11.4
-ARG CADDY_X_CRYPTO_VERSION=v0.55.0
-ARG CADDY_X_NET_VERSION=v0.58.0
-ARG CADDY_X_TEXT_VERSION=v0.41.0
+ARG CADDY_X_CRYPTO_VERSION=v0.57.0
+ARG CADDY_X_NET_VERSION=v0.60.0
+ARG CADDY_X_TEXT_VERSION=v0.42.0
 ARG CADDY_GRPC_VERSION=v1.83.2
 ARG DEBIAN_RUNTIME_IMAGE=debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
 
@@ -150,6 +150,7 @@ RUN apt-get update \
     ca-certificates \
     libpcre2-8-0 \
     libstdc++6 \
+    perl-base \
     zlib1g \
   && rm -rf /var/lib/apt/lists/* \
   && groupadd --gid 10001 momo \

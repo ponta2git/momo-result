@@ -203,9 +203,9 @@ object IntegrationDb:
       WHERE slot_key = 'shared-heavy-work'
     """.update.run.void *> sql"""
       UPDATE series_analysis_release_state
-      SET algorithm_version = 'series-analysis-v6',
-          artifact_schema_version = 5,
-          validation_contract_id = 'series-analysis-artifact-v5-full-validation-v1',
+      SET algorithm_version = 'series-analysis-v7',
+          artifact_schema_version = 6,
+          validation_contract_id = 'series-analysis-artifact-v6-full-validation-v1',
           updated_at = clock_timestamp()
       WHERE singleton_key = 'current'
     """.update.run.void).transact(transactor)

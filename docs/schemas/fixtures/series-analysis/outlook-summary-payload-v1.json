@@ -1,0 +1,332 @@
+{
+  "bestWindows": [
+    {
+      "memberId": "member-0",
+      "status": "insufficient",
+      "window": null,
+      "windowSize": 50
+    },
+    {
+      "memberId": "member-0",
+      "status": "insufficient",
+      "window": null,
+      "windowSize": 100
+    },
+    {
+      "memberId": "member-1",
+      "status": "insufficient",
+      "window": null,
+      "windowSize": 50
+    },
+    {
+      "memberId": "member-1",
+      "status": "insufficient",
+      "window": null,
+      "windowSize": 100
+    },
+    {
+      "memberId": "member-2",
+      "status": "insufficient",
+      "window": null,
+      "windowSize": 50
+    },
+    {
+      "memberId": "member-2",
+      "status": "insufficient",
+      "window": null,
+      "windowSize": 100
+    },
+    {
+      "memberId": "member-3",
+      "status": "insufficient",
+      "window": null,
+      "windowSize": 50
+    },
+    {
+      "memberId": "member-3",
+      "status": "insufficient",
+      "window": null,
+      "windowSize": 100
+    }
+  ],
+  "period": {
+    "endMatchId": "match-00031",
+    "endSequence": 32,
+    "endedAt": "2026-01-01T00:00:00.000031Z",
+    "startMatchId": "match-00000",
+    "startSequence": 1,
+    "startedAt": "2026-01-01T00:00:00.000000Z"
+  },
+  "players": [
+    {
+      "averageRank": 2.3125,
+      "memberId": "member-0",
+      "rankSum": 74
+    },
+    {
+      "averageRank": 2.4375,
+      "memberId": "member-1",
+      "rankSum": 78
+    },
+    {
+      "averageRank": 2.5625,
+      "memberId": "member-2",
+      "rankSum": 82
+    },
+    {
+      "averageRank": 2.6875,
+      "memberId": "member-3",
+      "rankSum": 86
+    }
+  ],
+  "qualityStatus": "ok",
+  "recent": {
+    "jointRanks": [
+      {
+        "memberAId": "member-0",
+        "memberBId": "member-1",
+        "rankCounts": [
+          [
+            0,
+            4,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            2,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            7
+          ],
+          [
+            7,
+            0,
+            0,
+            0
+          ]
+        ]
+      },
+      {
+        "memberAId": "member-0",
+        "memberBId": "member-2",
+        "rankCounts": [
+          [
+            0,
+            0,
+            4,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            2
+          ],
+          [
+            7,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            7,
+            0,
+            0
+          ]
+        ]
+      },
+      {
+        "memberAId": "member-0",
+        "memberBId": "member-3",
+        "rankCounts": [
+          [
+            0,
+            0,
+            0,
+            4
+          ],
+          [
+            2,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            7,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            7,
+            0
+          ]
+        ]
+      },
+      {
+        "memberAId": "member-1",
+        "memberBId": "member-2",
+        "rankCounts": [
+          [
+            0,
+            7,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            4,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            2
+          ],
+          [
+            7,
+            0,
+            0,
+            0
+          ]
+        ]
+      },
+      {
+        "memberAId": "member-1",
+        "memberBId": "member-3",
+        "rankCounts": [
+          [
+            0,
+            0,
+            7,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            4
+          ],
+          [
+            2,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            7,
+            0,
+            0
+          ]
+        ]
+      },
+      {
+        "memberAId": "member-2",
+        "memberBId": "member-3",
+        "rankCounts": [
+          [
+            0,
+            7,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            7,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            4
+          ],
+          [
+            2,
+            0,
+            0,
+            0
+          ]
+        ]
+      }
+    ],
+    "matchCount": 20,
+    "period": {
+      "endMatchId": "match-00031",
+      "endSequence": 32,
+      "endedAt": "2026-01-01T00:00:00.000031Z",
+      "startMatchId": "match-00012",
+      "startSequence": 13,
+      "startedAt": "2026-01-01T00:00:00.000012Z"
+    },
+    "players": [
+      {
+        "averageRank": 2.85,
+        "memberId": "member-0",
+        "rankCounts": [
+          4,
+          2,
+          7,
+          7
+        ],
+        "rankSum": 57
+      },
+      {
+        "averageRank": 2.45,
+        "memberId": "member-1",
+        "rankCounts": [
+          7,
+          4,
+          2,
+          7
+        ],
+        "rankSum": 49
+      },
+      {
+        "averageRank": 2.05,
+        "memberId": "member-2",
+        "rankCounts": [
+          7,
+          7,
+          4,
+          2
+        ],
+        "rankSum": 41
+      },
+      {
+        "averageRank": 2.65,
+        "memberId": "member-3",
+        "rankCounts": [
+          2,
+          7,
+          7,
+          4
+        ],
+        "rankSum": 53
+      }
+    ],
+    "qualityStatus": "ok"
+  },
+  "schemaVersion": 1,
+  "scope": {
+    "kind": "overall",
+    "matchCount": 32
+  },
+  "source": {
+    "gameTitleId": "title-outlook",
+    "titleMatchCount": 32
+  }
+}

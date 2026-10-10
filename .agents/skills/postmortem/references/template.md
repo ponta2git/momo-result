@@ -1,6 +1,7 @@
 # Private Postmortem Template
 
-Adapt this structure to the requested private record; omit sections that do not support a decision.
+Adapt this structure to the requested private record; omit sections and fields that do not support
+a decision. Put findings and decisions before detail, and link evidence rather than copying logs.
 Keep secret values out. Preserve the event and original decisions as dated history; append dated
 corrections when later evidence changes a conclusion instead of silently rewriting what was known.
 
@@ -19,7 +20,8 @@ Analysis state: <draft | complete for the stated scope>, as of <date>
 ## Summary and Impact
 
 <What failed, what users observed, mitigation, remaining impact, and the basis and limits of the
-impact estimate. Distinguish unknown impact from verified absence of harm.>
+impact estimate. Use a qualitative description when a precise count would misrepresent what is
+known. Distinguish unknown impact from verified absence of harm.>
 
 ## Evidence and Timeline
 
@@ -49,9 +51,9 @@ implementation-ready tasks.>
 As of: <date>. Current plan: <authorized tracker or this section>.
 Shared owner, if known: <person/role; override per action when needed>.
 
-- <Stable action ID, priority, status>: <action or decision and causal purpose>
-  - Target / owner: <affected boundary; owner override or unassigned>
-  - Completion evidence: <observable acceptance condition and verification method>
+- <Action reference and status; priority if useful>: <action or decision and causal purpose>
+  - Target / owner: <affected boundary; owner when coordination needs it>
+  - Completion evidence: <what would establish the outcome and how to verify it>
   - Next step: <work needed; reason and revisit date/condition if deferred or blocked>
 
 <Connect material unknowns and residual risks to these actions. For accepted risk, identify the

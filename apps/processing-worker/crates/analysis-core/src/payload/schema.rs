@@ -2,6 +2,7 @@ use serde_json::Value;
 
 use super::PayloadError;
 
+mod outlook;
 mod radar;
 
 const MAX_ITEMS: usize = 1_000_000;
@@ -1463,6 +1464,13 @@ pub(super) fn validate_aggregate(value: &Value) -> Result<(), PayloadError> {
     validate(value, &AGGREGATE)
 }
 
+pub(super) fn validate_outlook_summary(value: &Value) -> Result<(), PayloadError> {
+    validate(value, &outlook::SUMMARY)
+}
+pub(super) fn validate_outlook_reference(value: &Value) -> Result<(), PayloadError> {
+    validate(value, &outlook::REFERENCE)
+}
+
 pub(super) fn validate_review(value: &Value) -> Result<(), PayloadError> {
     validate(value, &REVIEW)
 }
@@ -1639,7 +1647,7 @@ mod json_schema_export_tests {
 
     use super::{
         AGGREGATE, CONTEXT_RESOURCE, DRILLDOWN_VARIANTS, DrilldownVariant, FOLD_ROW, Field,
-        MAX_ITEMS, MAX_TEXT_BYTES, REVIEW, Schema, radar, validate, validate_aggregate,
+        MAX_ITEMS, MAX_TEXT_BYTES, REVIEW, Schema, outlook, radar, validate, validate_aggregate,
         validate_drilldown, validate_match_context, validate_review,
     };
 
@@ -1892,7 +1900,7 @@ mod json_schema_export_tests {
         }
     }
 
-    fn generated_schemas() -> [GeneratedSchema; 9] {
+    fn generated_schemas() -> [GeneratedSchema; 11] {
         [
             document(
                 "series-analysis-aggregate-v6.schema.json",
@@ -1911,6 +1919,16 @@ mod json_schema_export_tests {
                 &CONTEXT_RESOURCE,
             ),
             publication_contract_document(),
+            document(
+                "series-analysis-outlook-summary-v1.schema.json",
+                "Series Analysis Outlook Summary Resource v1",
+                &outlook::SUMMARY,
+            ),
+            document(
+                "series-analysis-outlook-reference-v1.schema.json",
+                "Series Analysis Outlook Reference Resource v1",
+                &outlook::REFERENCE,
+            ),
             document(
                 "series-player-radar-basis-v1.schema.json",
                 "Series Player Radar Basis v1",

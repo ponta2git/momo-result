@@ -20,12 +20,14 @@ function calculation(status: Calculation["status"]): Calculation {
 
 function renderFeedback({
   confirmedMatchCount = 12,
+  displayedPublishedAt,
   hasError = false,
   loading = false,
   refreshing = false,
   status = makeSeriesAnalysisStatus(),
 }: {
   confirmedMatchCount?: number;
+  displayedPublishedAt?: string;
   hasError?: boolean;
   loading?: boolean;
   refreshing?: boolean;
@@ -35,6 +37,7 @@ function renderFeedback({
   const view = render(
     <SeriesAnalysisStatusFeedback
       confirmedMatchCount={confirmedMatchCount}
+      displayedPublishedAt={displayedPublishedAt}
       hasError={hasError}
       loading={loading}
       refreshing={refreshing}
@@ -46,6 +49,18 @@ function renderFeedback({
 }
 
 describe("SeriesAnalysisStatusFeedback", () => {
+  it("describes the displayed artifact while a newer publication is held", () => {
+    renderFeedback({
+      displayedPublishedAt: "2026-08-08T01:02:00.000Z",
+      status: makeSeriesAnalysisStatus({
+        artifactFreshness: "stale",
+        calculation: calculation("running"),
+      }),
+    });
+    const notice = screen.getByRole("status");
+    expect(notice).toHaveTextContent("2026/08/08 10:02更新のデータ");
+    expect(notice).not.toHaveTextContent("2026/08/09 10:02");
+  });
   it.each([
     {
       expectedTitle: "分析データの再計算を待っています",

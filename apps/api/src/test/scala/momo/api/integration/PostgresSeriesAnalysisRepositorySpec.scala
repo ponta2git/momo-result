@@ -28,7 +28,7 @@ import momo.api.domain.{
   SeriesAnalysisScope
 }
 import momo.api.errors.AppError
-import momo.api.testing.JsonSchemaAssertions
+import momo.api.testing.{JsonSchemaAssertions, SeriesAnalysisPublicationFixtures}
 
 final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with JsonSchemaAssertions:
   private val now = Instant.parse("2026-08-09T00:00:00Z")
@@ -38,9 +38,9 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
   private def seedTitle: IO[Unit] =
     val activateRelease = sql"""
       UPDATE series_analysis_release_state
-      SET algorithm_version = 'series-analysis-v6',
-          artifact_schema_version = 5,
-          validation_contract_id = 'series-analysis-artifact-v5-full-validation-v1',
+      SET algorithm_version = 'series-analysis-v7',
+          artifact_schema_version = 6,
+          validation_contract_id = 'series-analysis-artifact-v6-full-validation-v1',
           updated_at = clock_timestamp()
       WHERE singleton_key = 'current'
     """.update.run.void.transact(transactor)
@@ -136,7 +136,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
           id, game_title_id, input_revision, algorithm_version, artifact_schema_version,
           status, trigger, requested_at, finished_at
         ) VALUES (
-          'job-status-terminal', $titleId, 0, 'series-analysis-v6', 5,
+          'job-status-terminal', $titleId, 0, 'series-analysis-v7', 6,
           'succeeded', 'match_mutation', $terminalAt, $terminalAt
         )
       """.update.run.transact(transactor)
@@ -146,7 +146,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
           id, game_title_id, input_revision, algorithm_version, artifact_schema_version,
           status, trigger, accepted_at
         ) VALUES (
-          'request-status-pending', $titleId, 0, 'series-analysis-v6', 5,
+          'request-status-pending', $titleId, 0, 'series-analysis-v7', 6,
           'pending', 'manual', $now
         )
       """.update.run.transact(transactor)
@@ -156,7 +156,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
           id, game_title_id, input_revision, algorithm_version, artifact_schema_version,
           status, trigger, requested_at
         ) VALUES (
-          'job-status-active', $titleId, 0, 'series-analysis-v6', 5,
+          'job-status-active', $titleId, 0, 'series-analysis-v7', 6,
           'queued', 'algorithm_update', $now
         )
       """.update.run.transact(transactor)
@@ -191,7 +191,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
           id, game_title_id, input_revision, algorithm_version, artifact_schema_version,
           trigger, status, assigned_job_id, accepted_at
         )
-        SELECT 'audit-coalesced-' || n, $titleId, 0, 'series-analysis-v6', 5,
+        SELECT 'audit-coalesced-' || n, $titleId, 0, 'series-analysis-v7', 6,
                CASE WHEN n = 2001 THEN 'match_mutation' ELSE 'manual' END,
                'pending', $firstJobId, $now
         FROM generate_series(1, 2001) n
@@ -234,7 +234,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
             artifact_schema_version, status, trigger, requested_at, available_at,
             finished_at, result_disposition, created_at
           ) VALUES (
-            $jobId, $jobTitleId, 0, 'series-analysis-v6',
+            $jobId, $jobTitleId, 0, 'series-analysis-v7',
             2, 'succeeded', 'match_mutation', $createdAt, $createdAt,
             ${createdAt.plusSeconds(1)}, 'published', $createdAt
           )
@@ -261,15 +261,15 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
           attempt_count, transient_retry_count, lease_owner, lease_attempt_id, lease_fencing_token,
           lease_expires_at
         ) VALUES (
-          'timing-finished', $titleId, 0, 'series-analysis-v6', 5,
+          'timing-finished', $titleId, 0, 'series-analysis-v7', 6,
           'failed', 'manual', $now, ${now.plusSeconds(7)}, ${now.plusSeconds(
           26
         )}, 1234, 2, 1, NULL, NULL, NULL, NULL
         ), (
-          'timing-unstarted', $titleId, 0, 'series-analysis-v6', 5,
+          'timing-unstarted', $titleId, 0, 'series-analysis-v7', 6,
           'failed', 'manual', $now, NULL, ${now.plusSeconds(26)}, 123, 0, 0, NULL, NULL, NULL, NULL
         ), (
-          'timing-running', $titleId, 0, 'series-analysis-v6', 5,
+          'timing-running', $titleId, 0, 'series-analysis-v7', 6,
           'running', 'manual', $now, ${now.plusSeconds(
           9
         )}, NULL, 456, 2, 1, 'timing-worker', 'timing-attempt', 1, ${now.plusSeconds(70)}
@@ -293,9 +293,9 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
       _ <- seedTitle
       _ <- sql"""
         UPDATE series_analysis_title_states
-        SET algorithm_version = 'series-analysis-v6',
-            artifact_schema_version = 5,
-            validation_contract_id = 'series-analysis-artifact-v5-full-validation-v1',
+        SET algorithm_version = 'series-analysis-v7',
+            artifact_schema_version = 6,
+            validation_contract_id = 'series-analysis-artifact-v6-full-validation-v1',
             pending_work = true
         WHERE game_title_id = $titleId
       """.update.run.transact(transactor)
@@ -304,8 +304,8 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
           id, game_title_id, input_revision, algorithm_version, artifact_schema_version,
           validation_contract_id, status, trigger, requested_at, available_at
         ) VALUES (
-          $jobId, $titleId, 0, 'series-analysis-v6', 5,
-          'series-analysis-artifact-v5-full-validation-v1', 'queued',
+          $jobId, $titleId, 0, 'series-analysis-v7', 6,
+          'series-analysis-artifact-v6-full-validation-v1', 'queued',
           'validation_contract_update', $now, $now
         )
       """.update.run.transact(transactor)
@@ -314,8 +314,8 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
           id, game_title_id, input_revision, algorithm_version, artifact_schema_version,
           validation_contract_id, trigger, status, assigned_job_id, accepted_at
         ) VALUES (
-          'request-validation-contract-update', $titleId, 0, 'series-analysis-v6', 5,
-          'series-analysis-artifact-v5-full-validation-v1', 'validation_contract_update',
+          'request-validation-contract-update', $titleId, 0, 'series-analysis-v7', 6,
+          'series-analysis-artifact-v6-full-validation-v1', 'validation_contract_update',
           'pending', $jobId, $now
         )
       """.update.run.transact(transactor)
@@ -334,7 +334,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
       assertEquals(
         stored,
         List.fill(2)(
-          ("validation_contract_update", Some("series-analysis-artifact-v5-full-validation-v1"))
+          ("validation_contract_update", Some("series-analysis-artifact-v6-full-validation-v1"))
         ),
       )
       status match
@@ -377,9 +377,9 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
       _ <- seedTitle
       _ <- sql"""
         UPDATE series_analysis_title_states
-        SET algorithm_version = 'series-analysis-v6',
-            artifact_schema_version = 5,
-            validation_contract_id = 'series-analysis-artifact-v5-full-validation-v1'
+        SET algorithm_version = 'series-analysis-v7',
+            artifact_schema_version = 6,
+            validation_contract_id = 'series-analysis-artifact-v6-full-validation-v1'
         WHERE game_title_id = $titleId
       """.update.run.transact(transactor)
       repo <- repository
@@ -440,8 +440,8 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
                   target.jobId.getOrElse(fail("created job id is missing")),
                   "queued",
                   "manual",
-                  Some("series-analysis-artifact-v5-full-validation-v1"),
-                  Some("series-analysis-artifact-v5-full-validation-v1"),
+                  Some("series-analysis-artifact-v6-full-validation-v1"),
+                  Some("series-analysis-artifact-v6-full-validation-v1"),
                   target.jobId.getOrElse(fail("created job id is missing")),
                   "pending",
                 ),
@@ -465,14 +465,14 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
           id, game_title_id, input_revision, algorithm_version,
           artifact_schema_version, validation_contract_id, status, trigger
         ) VALUES (
-          $queuedJobId, $titleId, 0, 'series-analysis-v6', 5, NULL, 'queued', 'match_mutation'
+          $queuedJobId, $titleId, 0, 'series-analysis-v7', 6, NULL, 'queued', 'match_mutation'
         )
       """.update.run.transact(transactor)
       _ <- sql"""
         UPDATE series_analysis_title_states
-        SET algorithm_version = 'series-analysis-v6',
-            artifact_schema_version = 5,
-            validation_contract_id = 'series-analysis-artifact-v5-full-validation-v1'
+        SET algorithm_version = 'series-analysis-v7',
+            artifact_schema_version = 6,
+            validation_contract_id = 'series-analysis-artifact-v6-full-validation-v1'
         WHERE game_title_id = $titleId
       """.update.run.transact(transactor)
       repo <- repository
@@ -498,8 +498,8 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
       assertEquals(
         stored,
         (
-          Some("series-analysis-artifact-v5-full-validation-v1"),
-          Some("series-analysis-artifact-v5-full-validation-v1"),
+          Some("series-analysis-artifact-v6-full-validation-v1"),
+          Some("series-analysis-artifact-v6-full-validation-v1"),
           Some(queuedJobId),
           1,
         ),
@@ -528,9 +528,9 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         .createWithNextDisplayOrder(GameTitle(secondId, "分析契約作品2", "momotetsu2", 2, now))
       _ <- sql"""
         UPDATE series_analysis_title_states
-        SET algorithm_version = 'series-analysis-v6',
-            artifact_schema_version = 5,
-            validation_contract_id = 'series-analysis-artifact-v5-full-validation-v1'
+        SET algorithm_version = 'series-analysis-v7',
+            artifact_schema_version = 6,
+            validation_contract_id = 'series-analysis-artifact-v6-full-validation-v1'
         WHERE game_title_id IN ($titleId, $secondId)
       """.update.run.transact(transactor)
       repo <- repository
@@ -570,16 +570,16 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
             case None => fail("accepted all-title recalculation has no campaign")
         case Left(error) => fail(s"expected accepted all-title request, got $error")
       assertEquals(snapshotCounts, (1, 1, 2, 0, 0))
-      assertEquals(campaignContract, Some("series-analysis-artifact-v5-full-validation-v1"))
+      assertEquals(campaignContract, Some("series-analysis-artifact-v6-full-validation-v1"))
       assertEquals(
         snapshots,
         List(titleId.value, secondId.value).sorted.map(id =>
           (
             id,
             0L,
-            "series-analysis-v6",
-            5,
-            Some("series-analysis-artifact-v5-full-validation-v1"),
+            "series-analysis-v7",
+            6,
+            Some("series-analysis-artifact-v6-full-validation-v1"),
             "pending",
             None,
           )
@@ -630,9 +630,9 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         artifactPayload,
         0,
         1,
-        Some("series-analysis-artifact-v5-full-validation-v1"),
+        Some("series-analysis-artifact-v6-full-validation-v1"),
         None,
-        5,
+        6,
       )
       _ <- pointToArtifacts("artifact-analysis-delete", None)
       analysis <- repository
@@ -705,18 +705,18 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         payload,
         0,
         payloadDepth,
-        Some("series-analysis-artifact-v5-full-validation-v1"),
+        Some("series-analysis-artifact-v6-full-validation-v1"),
         None,
-        5,
+        6,
       )
       _ <- insertPublishedArtifact(
         "artifact-analysis-current",
         payload,
         0,
         payloadDepth,
-        Some("series-analysis-artifact-v5-full-validation-v1"),
+        Some("series-analysis-artifact-v6-full-validation-v1"),
         None,
-        5,
+        6,
       )
       _ <- pointToArtifacts("artifact-analysis-current", Some("artifact-analysis-previous"))
       repo <- repository
@@ -767,8 +767,8 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         """.update.run.transact(transactor)
         _ <- sql"""
           UPDATE series_analysis_title_states
-          SET artifact_schema_version = 5,
-              validation_contract_id = 'series-analysis-artifact-v5-full-validation-v1',
+          SET artifact_schema_version = 6,
+              validation_contract_id = 'series-analysis-artifact-v6-full-validation-v1',
               pending_work = true
           WHERE game_title_id = $titleId
         """.update.run.transact(transactor)
@@ -807,9 +807,9 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         payload,
         0,
         depth,
-        Some("series-analysis-artifact-v5-full-validation-v1"),
+        Some("series-analysis-artifact-v6-full-validation-v1"),
         None,
-        5,
+        6,
       )
       _ <- pointToArtifacts(request.artifactId, None)
       repo <- repository
@@ -878,9 +878,9 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         aggregate,
         0,
         depth,
-        Some("series-analysis-artifact-v5-full-validation-v1"),
+        Some("series-analysis-artifact-v6-full-validation-v1"),
         Some(context),
-        5,
+        6,
       )
       _ <- pointToArtifacts(request.artifactId, None)
       repo <- repository
@@ -980,9 +980,12 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
       contextPayload: Option[Array[Byte]],
       artifactSchemaVersion: Int,
   ): IO[Unit] =
-    val algorithmVersion = "series-analysis-v6"
+    val algorithmVersion = "series-analysis-v7"
     val length = payload.length
     val checksum = sha256(payload)
+    val outlookInventory = if artifactSchemaVersion == 6 then
+      SeriesAnalysisPublicationFixtures.addUnreadOutlookInventory(artifactId)
+    else ().pure[doobie.ConnectionIO]
     (sql"""
       INSERT INTO series_analysis_artifacts (
         id, game_title_id, input_revision, algorithm_version,
@@ -1015,7 +1018,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         encoded_bytes, decoded_bytes, item_count, nesting_depth, checksum
       ) VALUES ($artifactId, 'overall', 'overall', 'match-1', 1, $context,
         $size, $size, 1, $depth, $checksum)""".update.run.void
-    } *> validationContractId.traverse_(contractId => sql"""
+    } *> outlookInventory *> validationContractId.traverse_(contractId => sql"""
       UPDATE series_analysis_artifacts
       SET validation_contract_id = $contractId
       WHERE id = $artifactId AND status = 'staging'
@@ -1027,9 +1030,9 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
 
   private def pointToArtifacts(currentId: String, previousId: Option[String]): IO[Unit] = sql"""
       UPDATE series_analysis_title_states
-      SET algorithm_version = 'series-analysis-v6',
-          artifact_schema_version = 5,
-          validation_contract_id = 'series-analysis-artifact-v5-full-validation-v1',
+      SET algorithm_version = 'series-analysis-v7',
+          artifact_schema_version = 6,
+          validation_contract_id = 'series-analysis-artifact-v6-full-validation-v1',
           current_artifact_id = $currentId,
           previous_artifact_id = $previousId,
           pending_work = false

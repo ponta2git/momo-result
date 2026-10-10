@@ -5,7 +5,7 @@ import { isSeriesAnalysisViewId } from "@/features/seriesComparison/model/series
 import { useSeriesAnalysisNavigation } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
 import { TabsList, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 
-type AnalysisViewId = Exclude<SeriesAnalysisViewId, "review">;
+type AnalysisViewId = Exclude<SeriesAnalysisViewId, "review" | "outlook">;
 
 type AnalysisViewDefinition = {
   id: AnalysisViewId;
@@ -13,7 +13,7 @@ type AnalysisViewDefinition = {
   sections: Array<{ id: string; label: string }>;
 };
 
-type PurposeId = "analysis" | "review";
+type PurposeId = "analysis" | "review" | "outlook";
 
 const analysisViews = [
   {
@@ -84,13 +84,14 @@ export function PurposeTabs({
   activeView: SeriesAnalysisViewId;
   onViewChange: (view: SeriesAnalysisViewId) => void;
 }) {
-  const activePurpose: PurposeId = activeView === "review" ? "review" : "analysis";
+  const activePurpose: PurposeId =
+    activeView === "review" || activeView === "outlook" ? activeView : "analysis";
   return (
     <TabsRoot
       value={activePurpose}
       onValueChange={(value) => {
-        if (value === "review") {
-          onViewChange("review");
+        if (value === "review" || value === "outlook") {
+          onViewChange(value);
         } else if (value === "analysis") {
           onViewChange("overview");
         }
@@ -111,6 +112,13 @@ export function PurposeTabs({
         >
           分析する
         </TabsTab>
+        <TabsTab
+          aria-controls={purposePanelId("outlook")}
+          id={purposeTabId("outlook")}
+          value="outlook"
+        >
+          見通しを試す
+        </TabsTab>
       </TabsList>
     </TabsRoot>
   );
@@ -127,7 +135,12 @@ export function AnalysisTabs({
     <TabsRoot
       value={activeView}
       onValueChange={(value) => {
-        if (typeof value === "string" && isSeriesAnalysisViewId(value) && value !== "review") {
+        if (
+          typeof value === "string" &&
+          isSeriesAnalysisViewId(value) &&
+          value !== "review" &&
+          value !== "outlook"
+        ) {
           onViewChange(value);
         }
       }}

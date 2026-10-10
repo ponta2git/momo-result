@@ -1,0 +1,332 @@
+{
+  "$comment": "Generated from apps/processing-worker/crates/analysis-core/src/payload/schema.rs; do not edit by hand. Draft 2020-12 keywords describe the portable shape, type, and bounds subset. x-momo-maxUtf8Bytes, x-momo-finiteF64, and x-momo-integerToken record constraints additionally enforced by the Rust owner validator; generic JSON Schema validation that ignores these annotations is not fully equivalent.",
+  "$id": "https://momo-result.local/schemas/series-analysis-outlook-reference-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "bestWindows": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "averageRank": {
+            "maximum": 4.0,
+            "minimum": 1.0,
+            "type": "number",
+            "x-momo-finiteF64": true
+          },
+          "period": {
+            "additionalProperties": false,
+            "properties": {
+              "endMatchId": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string",
+                "x-momo-maxUtf8Bytes": 4096
+              },
+              "endSequence": {
+                "maximum": 25000,
+                "minimum": 1,
+                "type": "integer",
+                "x-momo-integerToken": true
+              },
+              "endedAt": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string",
+                "x-momo-maxUtf8Bytes": 4096
+              },
+              "startMatchId": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string",
+                "x-momo-maxUtf8Bytes": 4096
+              },
+              "startSequence": {
+                "maximum": 25000,
+                "minimum": 1,
+                "type": "integer",
+                "x-momo-integerToken": true
+              },
+              "startedAt": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string",
+                "x-momo-maxUtf8Bytes": 4096
+              }
+            },
+            "required": [
+              "endMatchId",
+              "endSequence",
+              "endedAt",
+              "startMatchId",
+              "startSequence",
+              "startedAt"
+            ],
+            "type": "object"
+          },
+          "rankSum": {
+            "maximum": 100000,
+            "minimum": 0,
+            "type": "integer",
+            "x-momo-integerToken": true
+          },
+          "windowSize": {
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer",
+            "x-momo-integerToken": true
+          }
+        },
+        "required": [
+          "averageRank",
+          "period",
+          "rankSum",
+          "windowSize"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1000,
+      "type": "array"
+    },
+    "examples": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": [
+            "available",
+            "insufficient"
+          ],
+          "type": "string"
+        },
+        "types": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "rankCounts": {
+                "items": false,
+                "maxItems": 4,
+                "minItems": 4,
+                "prefixItems": [
+                  {
+                    "maximum": 20,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-momo-integerToken": true
+                  },
+                  {
+                    "maximum": 20,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-momo-integerToken": true
+                  },
+                  {
+                    "maximum": 20,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-momo-integerToken": true
+                  },
+                  {
+                    "maximum": 20,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-momo-integerToken": true
+                  }
+                ],
+                "type": "array"
+              },
+              "window": {
+                "additionalProperties": false,
+                "properties": {
+                  "averageRank": {
+                    "maximum": 4.0,
+                    "minimum": 1.0,
+                    "type": "number",
+                    "x-momo-finiteF64": true
+                  },
+                  "period": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "endMatchId": {
+                        "maxLength": 4096,
+                        "minLength": 1,
+                        "type": "string",
+                        "x-momo-maxUtf8Bytes": 4096
+                      },
+                      "endSequence": {
+                        "maximum": 25000,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-momo-integerToken": true
+                      },
+                      "endedAt": {
+                        "maxLength": 4096,
+                        "minLength": 1,
+                        "type": "string",
+                        "x-momo-maxUtf8Bytes": 4096
+                      },
+                      "startMatchId": {
+                        "maxLength": 4096,
+                        "minLength": 1,
+                        "type": "string",
+                        "x-momo-maxUtf8Bytes": 4096
+                      },
+                      "startSequence": {
+                        "maximum": 25000,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-momo-integerToken": true
+                      },
+                      "startedAt": {
+                        "maxLength": 4096,
+                        "minLength": 1,
+                        "type": "string",
+                        "x-momo-maxUtf8Bytes": 4096
+                      }
+                    },
+                    "required": [
+                      "endMatchId",
+                      "endSequence",
+                      "endedAt",
+                      "startMatchId",
+                      "startSequence",
+                      "startedAt"
+                    ],
+                    "type": "object"
+                  },
+                  "rankSum": {
+                    "maximum": 100000,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-momo-integerToken": true
+                  },
+                  "windowSize": {
+                    "maximum": 1000,
+                    "minimum": 1,
+                    "type": "integer",
+                    "x-momo-integerToken": true
+                  }
+                },
+                "required": [
+                  "averageRank",
+                  "period",
+                  "rankSum",
+                  "windowSize"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "rankCounts",
+              "window"
+            ],
+            "type": "object"
+          },
+          "maxItems": 1771,
+          "type": "array"
+        }
+      },
+      "required": [
+        "status",
+        "types"
+      ],
+      "type": "object"
+    },
+    "memberId": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "type": "string",
+      "x-momo-maxUtf8Bytes": 4096
+    },
+    "recentRankCounts": {
+      "items": false,
+      "maxItems": 4,
+      "minItems": 4,
+      "prefixItems": [
+        {
+          "maximum": 20,
+          "minimum": 0,
+          "type": "integer",
+          "x-momo-integerToken": true
+        },
+        {
+          "maximum": 20,
+          "minimum": 0,
+          "type": "integer",
+          "x-momo-integerToken": true
+        },
+        {
+          "maximum": 20,
+          "minimum": 0,
+          "type": "integer",
+          "x-momo-integerToken": true
+        },
+        {
+          "maximum": 20,
+          "minimum": 0,
+          "type": "integer",
+          "x-momo-integerToken": true
+        }
+      ],
+      "type": "array"
+    },
+    "schemaVersion": {
+      "const": 1,
+      "minimum": 0,
+      "type": "integer",
+      "x-momo-integerToken": true
+    },
+    "scope": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "overall",
+          "type": "string"
+        },
+        "matchCount": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "integer",
+          "x-momo-integerToken": true
+        }
+      },
+      "required": [
+        "kind",
+        "matchCount"
+      ],
+      "type": "object"
+    },
+    "source": {
+      "additionalProperties": false,
+      "properties": {
+        "gameTitleId": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string",
+          "x-momo-maxUtf8Bytes": 4096
+        },
+        "titleMatchCount": {
+          "maximum": 25000,
+          "minimum": 0,
+          "type": "integer",
+          "x-momo-integerToken": true
+        }
+      },
+      "required": [
+        "gameTitleId",
+        "titleMatchCount"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "bestWindows",
+    "examples",
+    "memberId",
+    "recentRankCounts",
+    "schemaVersion",
+    "scope",
+    "source"
+  ],
+  "title": "Series Analysis Outlook Reference Resource v1",
+  "type": "object"
+}

@@ -1,0 +1,22 @@
+{
+  "bestWindows": [],
+  "period": null,
+  "players": [],
+  "qualityStatus": "no_target",
+  "recent": {
+    "jointRanks": [],
+    "matchCount": 0,
+    "period": null,
+    "players": [],
+    "qualityStatus": "no_target"
+  },
+  "schemaVersion": 1,
+  "scope": {
+    "kind": "overall",
+    "matchCount": 0
+  },
+  "source": {
+    "gameTitleId": "title-outlook",
+    "titleMatchCount": 0
+  }
+}

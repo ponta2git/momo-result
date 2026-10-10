@@ -12,9 +12,9 @@ import { memberDisplayName } from "@/shared/domain/members";
 import { makePlayerRadarEvaluation } from "@/test/msw/playerRadarFixtures";
 
 export const analysisArtifact = {
-  algorithmVersion: "series-analysis-v6",
+  algorithmVersion: "series-analysis-v7",
   artifactId: "artifact-current",
-  artifactSchemaVersion: 5,
+  artifactSchemaVersion: 6,
   gameTitleId: "gt_momotetsu_2",
   inputRevision: "12",
   publishedAt: "2026-08-09T01:02:03.000Z",
@@ -68,7 +68,7 @@ export function makeSeriesAnalysisStatus(
     currentArtifact: analysisArtifact,
     desired: {
       algorithmVersion: analysisArtifact.algorithmVersion,
-      artifactSchemaVersion: 5,
+      artifactSchemaVersion: 6,
       inputRevision: analysisArtifact.inputRevision,
     },
     gameTitleId: analysisArtifact.gameTitleId,
@@ -1050,7 +1050,7 @@ export function makeSeriesAnalysisAdminOverview(): SeriesAnalysisAdminOverview {
     },
     recentJobs: [
       {
-        algorithmVersion: "series-analysis-v6",
+        algorithmVersion: "series-analysis-v7",
         attemptCount: 1,
         coalescedTriggers: [],
         elapsedMilliseconds: 1234,

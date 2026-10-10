@@ -99,6 +99,7 @@ final class PostgresSeriesAnalysisRepository[F[_]: Async] private (
     case PostgresSeriesAnalysisChunkOps.ChunkMaterial.Stored(row, matchSnapshot) =>
       PostgresSeriesAnalysisChunkCodec
         .decode(row, loaded.request, readConfig, matchSnapshot.map(_.sourceMatchRevision))
+        .flatMap(PostgresSeriesAnalysisOutlookProjection(_, loaded.request.projection))
         .flatMap(chunk =>
           matchSnapshot.fold(chunk.asRight[AppError])(snapshot =>
             PostgresSeriesAnalysisChunkCodec.includedContext(chunk, snapshot)

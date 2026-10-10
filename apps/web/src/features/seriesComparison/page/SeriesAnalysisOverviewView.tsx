@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { useLocation } from "react-router-dom";
 
 import { SeriesTrendCharts } from "@/features/seriesComparison/charts/SeriesAnalysisFlowCharts";
 import {
@@ -29,6 +30,7 @@ import {
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { playerRadarAggregateDisplay } from "@/shared/seriesAnalysis/playerRadarDisplay";
 import { Button } from "@/shared/ui/actions/Button";
+import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import { contentText } from "@/shared/ui/typography";
@@ -38,6 +40,9 @@ export const OverviewView = memo(function OverviewView({
   response,
   onDrilldown,
 }: AnalysisViewProps) {
+  const location = useLocation();
+  const outlookSearch = new URLSearchParams(location.search);
+  outlookSearch.set("view", "outlook");
   const crownQualityAdvisory = qualityAdvisoryLabel(response.rankAnalysis.crownCertainty.status);
   const leaders = response.players.filter((player) =>
     response.summary.leaderMemberIds.includes(player.memberId),
@@ -52,6 +57,15 @@ export const OverviewView = memo(function OverviewView({
     >
       <AnalysisTableOfContents view="overview" />
       <AnalysisSection id="metric-basic" title="順位と基礎比較">
+        <div className="mb-3">
+          <LinkButton
+            size="sm"
+            variant="quiet"
+            to={{ pathname: location.pathname, search: `?${outlookSearch}`, hash: "" }}
+          >
+            総合成績の見通しを試す
+          </LinkButton>
+        </div>
         <dl
           aria-label="現在の順位差"
           className="mb-6 grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"

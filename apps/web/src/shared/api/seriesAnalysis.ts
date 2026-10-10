@@ -23,6 +23,14 @@ import {
   decodeSeriesAnalysisRecalculationAccepted,
   decodeSeriesAnalysisStatus,
 } from "@/shared/api/seriesAnalysisEnvelopeSchemas";
+import type {
+  SeriesAnalysisOutlookSummary,
+  SeriesAnalysisOutlookSummaryQuery,
+  SeriesAnalysisOutlookWindow,
+  SeriesAnalysisOutlookWindowQuery,
+  SeriesAnalysisOutlookExamples,
+  SeriesAnalysisOutlookExamplesQuery,
+} from "@/shared/api/seriesAnalysisOutlookTypes";
 import type { SeriesComparisonReviewV3 } from "@/shared/api/seriesAnalysisReviewTypes";
 
 export type * from "@/shared/api/seriesAnalysisCoreTypes";
@@ -31,6 +39,53 @@ export type * from "@/shared/api/seriesAnalysisMetricTypes";
 export type * from "@/shared/api/seriesAnalysisReviewTypes";
 export type * from "@/shared/api/seriesAnalysisDetailTypes";
 export type * from "@/shared/api/seriesAnalysisAdminTypes";
+export type * from "@/shared/api/seriesAnalysisOutlookTypes";
+
+export function getSeriesAnalysisOutlookSummary(
+  query: SeriesAnalysisOutlookSummaryQuery,
+  options: ApiSignalOptions = {},
+): Promise<SeriesAnalysisOutlookSummary> {
+  const params = new URLSearchParams({
+    artifactId: query.artifactId,
+    gameTitleId: query.gameTitleId,
+  });
+  if (query.seasonMasterId) params.set("seasonMasterId", query.seasonMasterId);
+  return apiRequest(`/api/analytics/series-comparison/v1/outlook-summary?${params.toString()}`, {
+    ...options,
+    decodeResponse: (value) => decodeSeriesAnalysisArtifact("outlookSummary", value),
+  });
+}
+
+export function getSeriesAnalysisOutlookWindow(
+  query: SeriesAnalysisOutlookWindowQuery,
+  options: ApiSignalOptions = {},
+): Promise<SeriesAnalysisOutlookWindow> {
+  const params = new URLSearchParams({
+    artifactId: query.artifactId,
+    gameTitleId: query.gameTitleId,
+    memberId: query.memberId,
+    windowSize: String(query.windowSize),
+  });
+  return apiRequest(`/api/analytics/series-comparison/v1/outlook-window?${params.toString()}`, {
+    ...options,
+    decodeResponse: (value) => decodeSeriesAnalysisArtifact("outlookWindow", value),
+  });
+}
+
+export function getSeriesAnalysisOutlookExamples(
+  query: SeriesAnalysisOutlookExamplesQuery,
+  options: ApiSignalOptions = {},
+): Promise<SeriesAnalysisOutlookExamples> {
+  const params = new URLSearchParams({
+    artifactId: query.artifactId,
+    gameTitleId: query.gameTitleId,
+    memberId: query.memberId,
+  });
+  return apiRequest(`/api/analytics/series-comparison/v1/outlook-examples?${params.toString()}`, {
+    ...options,
+    decodeResponse: (value) => decodeSeriesAnalysisArtifact("outlookExamples", value),
+  });
+}
 
 function scopedPath(resource: "aggregate" | "review", query: SeriesAnalysisQuery): string {
   const params = scopeParams(query);

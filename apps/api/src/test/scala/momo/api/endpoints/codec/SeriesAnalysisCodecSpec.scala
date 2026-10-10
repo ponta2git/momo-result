@@ -3,7 +3,12 @@ package momo.api.endpoints.codec
 import munit.FunSuite
 
 import momo.api.domain.ids.{GameTitleId, MapMasterId, MatchId, MemberId, SeasonMasterId}
-import momo.api.domain.{SeriesAnalysisChunkKind, SeriesAnalysisDrilldownMetric, SeriesAnalysisScope}
+import momo.api.domain.{
+  SeriesAnalysisChunkKind,
+  SeriesAnalysisChunkProjection,
+  SeriesAnalysisDrilldownMetric,
+  SeriesAnalysisScope
+}
 import momo.api.errors.AppError
 
 final class SeriesAnalysisCodecSpec extends FunSuite:
@@ -19,6 +24,37 @@ final class SeriesAnalysisCodecSpec extends FunSuite:
 
   private val gameTitleId = GameTitleId.unsafeFromString("title-analysis-codec")
   private val artifactId = "artifact-analysis-codec"
+
+  test("outlook window reads preserve identity and reject out-of-range sizes"):
+    List(1, 1000).foreach { size =>
+      val result = SeriesAnalysisCodec.outlook(
+        gameTitleId.value,
+        artifactId,
+        None,
+        Some("member_ponta"),
+        SeriesAnalysisChunkProjection.OutlookWindow(size),
+        false
+      )
+      assertEquals(
+        result.map(r => (r.kind, r.scope, r.memberId, r.projection)),
+        Right((
+          SeriesAnalysisChunkKind.OutlookReference,
+          SeriesAnalysisScope.Overall,
+          Some(MemberId.unsafeFromString("member_ponta")),
+          SeriesAnalysisChunkProjection.OutlookWindow(size)
+        ))
+      )
+    }
+    List(0, 1001).foreach { size =>
+      assert(SeriesAnalysisCodec.outlook(
+        gameTitleId.value,
+        artifactId,
+        None,
+        Some("member_ponta"),
+        SeriesAnalysisChunkProjection.OutlookWindow(size),
+        false
+      ).isLeft)
+    }
 
   test("maps all supported scope query shapes to an unrepresentably-valid scope"):
     val cases = List(

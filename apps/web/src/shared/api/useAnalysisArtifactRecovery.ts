@@ -57,8 +57,10 @@ export function useAnalysisArtifactRecovery({
     }
     handledResources.current.add(resourceKey);
     // Active analysis and match context can expire together; share their in-flight status read.
-    void refetchStatus({ cancelRefetch: false }).then((result) =>
-      retryCurrentResource(resourceKey, artifactId, result),
-    );
+    void refetchStatus({ cancelRefetch: false })
+      .then((result) => retryCurrentResource(resourceKey, artifactId, result))
+      .catch(() => {
+        // The failed query retains its error for the consumer's explicit retry.
+      });
   }, [artifactId, error, refetchStatus, resourceKey]);
 }

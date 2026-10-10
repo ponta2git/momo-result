@@ -487,7 +487,7 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
       else index += 1
     valid
 
-  private def jsonNodeCount(value: Json): Int = value.arrayOrObject(
+  private[postgres] def jsonNodeCount(value: Json): Int = value.arrayOrObject(
     1,
     values => 1 + values.map(jsonNodeCount).sum,
     fields => 1 + fields.values.map(jsonNodeCount).sum,

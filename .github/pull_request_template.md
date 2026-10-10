@@ -6,7 +6,7 @@ and replace N/A with public release notes. Do not include secrets or private ope
 
 ## Summary
 
-<!-- Why is this change needed, and what does it change? -->
+<!-- State the problem and resulting behavior first. Add key decisions or trade-offs only when they help review. -->
 
 ## Linear issues
 
@@ -14,8 +14,9 @@ and replace N/A with public release notes. Do not include secrets or private ope
 
 ## Verification
 
-- [ ] Required CI checks passed
-- [ ] Major failure cases were considered
+<!-- State what was checked, the result, and material limits or pending checks.
+Link a command, run, or relevant evidence when useful; distinguish CI from local or qualitative review.
+Keep this proportional to the change. Do not report pending checks as passed. -->
 
 ## Included PRs
 

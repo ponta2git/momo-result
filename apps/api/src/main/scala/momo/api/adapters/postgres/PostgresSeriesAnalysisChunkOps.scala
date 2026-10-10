@@ -97,20 +97,33 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
       config: SeriesAnalysisReadConfig,
   ): ConnectionIO[Either[AppError, LoadedChunk]] =
     val exists = PostgresSeriesAnalysisScopeOps.valid(request.gameTitleId, request.scope)
-    val query = fr"SELECT" ++ exists ++ fr", ${request.scope.key} = ANY(a.scope_keys)," ++
+    val memberExists = if request.kind == SeriesAnalysisChunkKind.OutlookReference then
+      fr"EXISTS (SELECT 1 FROM members WHERE id = ${request.memberId.map(_.value)})"
+    else fr"true"
+    // An empty title has no aggregate scope index, but its no-target outlook summary is mandatory.
+    val overallOutlook = request.kind == SeriesAnalysisChunkKind.OutlookSummary &&
+      request.scope == SeriesAnalysisScope.Overall
+    val query = fr"SELECT" ++ exists ++ fr"," ++ memberExists ++
+      fr", ${request.scope.key} = ANY(a.scope_keys)," ++
       storedColumns(config) ++
       readableArtifact(request) ++ chunkJoin(request)
-    query.query[(Boolean, Option[Boolean], Option[SeriesAnalysisStoredChunk])].unique.map {
-      case (false, _, _) => AppError.AnalysisScopeNotFound().asLeft
-      case (_, _, None) => AppError.AnalysisArtifactExpired().asLeft
-      case (_, Some(true), Some(row))
+    query.query[(Boolean, Boolean, Option[Boolean], Option[SeriesAnalysisStoredChunk])].unique.map {
+      case (false, _, _, _) => AppError.AnalysisScopeNotFound().asLeft
+      case (_, false, _, _) =>
+        AppError.NotFound("member", request.memberId.fold("")(_.value)).asLeft
+      case (_, _, _, None) => AppError.AnalysisArtifactExpired().asLeft
+      case (_, _, indexed, Some(row))
           if row.scopeKind.isEmpty &&
-            (request.kind == SeriesAnalysisChunkKind.Aggregate ||
-              request.kind == SeriesAnalysisChunkKind.Review) =>
+            (overallOutlook ||
+              (indexed.contains(true) &&
+                (request.kind == SeriesAnalysisChunkKind.Aggregate ||
+                  request.kind == SeriesAnalysisChunkKind.Review ||
+                  request.kind == SeriesAnalysisChunkKind.OutlookSummary ||
+                  request.kind == SeriesAnalysisChunkKind.OutlookReference))) =>
         AppError.Internal("A published analysis scope resource is missing.").asLeft
-      case (_, Some(false), Some(row)) if row.scopeKind.nonEmpty =>
+      case (_, _, Some(false), Some(row)) if row.scopeKind.nonEmpty && !overallOutlook =>
         AppError.Internal("The published analysis scope index is inconsistent.").asLeft
-      case (_, _, Some(row)) => LoadedChunk(request, ChunkMaterial.Stored(row, None)).asRight
+      case (_, _, _, Some(row)) => LoadedChunk(request, ChunkMaterial.Stored(row, None)).asRight
     }
 
   /**
@@ -169,6 +182,15 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
         LEFT JOIN series_analysis_match_context_artifacts c
           ON c.artifact_id = a.id AND c.scope_key = ${request.scope.key}
          AND c.match_id = ${request.matchId.map(_.value)}
+      """
+    case SeriesAnalysisChunkKind.OutlookSummary => fr"""
+        LEFT JOIN series_analysis_outlook_summary_artifacts c
+          ON c.artifact_id = a.id AND c.scope_key = ${request.scope.key}
+      """
+    case SeriesAnalysisChunkKind.OutlookReference => fr"""
+        LEFT JOIN series_analysis_outlook_reference_artifacts c
+          ON c.artifact_id = a.id AND c.scope_key = ${request.scope.key}
+         AND c.member_id = ${request.memberId.map(_.value)}
       """
 
   private def matchContextCio(

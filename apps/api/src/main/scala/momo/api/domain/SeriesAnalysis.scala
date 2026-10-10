@@ -193,7 +193,12 @@ final case class SeriesAnalysisChunk(
 )
 
 enum SeriesAnalysisChunkKind derives CanEqual:
-  case Aggregate, Review, Drilldown, MatchContext
+  case Aggregate, Review, Drilldown, MatchContext, OutlookSummary, OutlookReference
+
+/** A reference is stored once per member; its bounded HTTP reads expose only one use. */
+enum SeriesAnalysisChunkProjection derives CanEqual:
+  case Stored, OutlookExamples
+  case OutlookWindow(windowSize: Int)
 
 enum SeriesAnalysisMatchContextExclusion(val wire: String) derives CanEqual:
   case MatchChangedSinceArtifact
@@ -209,6 +214,7 @@ final case class SeriesAnalysisChunkRequest(
     memberId: Option[MemberId] = None,
     metric: Option[SeriesAnalysisDrilldownMetric] = None,
     matchId: Option[MatchId] = None,
+    projection: SeriesAnalysisChunkProjection = SeriesAnalysisChunkProjection.Stored,
 )
 
 final case class SeriesAnalysisRecalculationAccepted(

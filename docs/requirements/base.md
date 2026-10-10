@@ -420,9 +420,4 @@ CSV/TSVは、1行を1プレーヤーの試合結果明細とする。
 
 ## 10. 技術・構成
 
-- フロントエンドは React/Vite のSPAとする。
-- バックエンドAPIとフロントエンドは分離する。
-- バックエンドは APIサーバー + OCRワーカーを同一リポジトリ、同一Fly.io構成内で分離する。
-- バックエンドは Fly.io を使う。
-- DBは Neon を使い、summit アプリと共有する。
-- OCRジョブキューには Upstash Redis Streams を使う。
+技術構成と非機能要件は [system-design.md](system-design.md)、実装の責務・依存方向は [architecture.md](../architecture.md) を正本とする。Web / API / Processing Worker の境界と共有DB・queueの役割はそこへ集約し、本書では再定義しない。

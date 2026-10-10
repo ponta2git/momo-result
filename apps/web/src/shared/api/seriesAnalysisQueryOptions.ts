@@ -6,6 +6,9 @@ import {
   getSeriesAnalysisAggregate,
   getSeriesAnalysisDrilldown,
   getSeriesAnalysisOptions,
+  getSeriesAnalysisOutlookSummary,
+  getSeriesAnalysisOutlookWindow,
+  getSeriesAnalysisOutlookExamples,
   getSeriesAnalysisReview,
   getSeriesAnalysisStatus,
 } from "@/shared/api/seriesAnalysis";
@@ -13,11 +16,63 @@ import type {
   SeriesAnalysisDrilldownQuery,
   SeriesAnalysisMatchContextQuery,
   SeriesAnalysisQuery,
+  SeriesAnalysisOutlookSummaryQuery,
+  SeriesAnalysisOutlookWindowQuery,
+  SeriesAnalysisOutlookExamplesQuery,
 } from "@/shared/api/seriesAnalysis";
 import { loadSeriesAnalysisMatchContext } from "@/shared/api/seriesAnalysisMatchContextState";
 
 // Cache the immutable calculation payloads until explicit refresh or display-metadata invalidation.
 const immutableArtifactStaleTime = Number.POSITIVE_INFINITY;
+
+export function seriesAnalysisOutlookSummaryQueryOptions(
+  query: SeriesAnalysisOutlookSummaryQuery | undefined,
+  enabled = true,
+) {
+  return queryOptions({
+    queryKey: seriesAnalysisKeys.outlookSummary(query),
+    queryFn: ({ signal }) => {
+      if (!query) throw new Error("series analysis outlook summary query is not ready");
+      return getSeriesAnalysisOutlookSummary(query, { signal });
+    },
+    enabled: enabled && query !== undefined,
+    placeholderData: keepPreviousData,
+    retry: false,
+    staleTime: immutableArtifactStaleTime,
+  });
+}
+
+export function seriesAnalysisOutlookWindowQueryOptions(
+  query: SeriesAnalysisOutlookWindowQuery | undefined,
+  enabled = true,
+) {
+  return queryOptions({
+    queryKey: seriesAnalysisKeys.outlookWindow(query),
+    queryFn: ({ signal }) => {
+      if (!query) throw new Error("series analysis outlook window query is not ready");
+      return getSeriesAnalysisOutlookWindow(query, { signal });
+    },
+    enabled: enabled && query !== undefined,
+    retry: false,
+    staleTime: immutableArtifactStaleTime,
+  });
+}
+
+export function seriesAnalysisOutlookExamplesQueryOptions(
+  query: SeriesAnalysisOutlookExamplesQuery | undefined,
+  enabled = true,
+) {
+  return queryOptions({
+    queryKey: seriesAnalysisKeys.outlookExamples(query),
+    queryFn: ({ signal }) => {
+      if (!query) throw new Error("series analysis outlook examples query is not ready");
+      return getSeriesAnalysisOutlookExamples(query, { signal });
+    },
+    enabled: enabled && query !== undefined,
+    retry: false,
+    staleTime: immutableArtifactStaleTime,
+  });
+}
 
 export function seriesAnalysisOptionsQueryOptions() {
   return queryOptions({

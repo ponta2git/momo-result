@@ -64,7 +64,7 @@ fn notification_reader_requires_the_current_attested_format() {
         validation_contract_id: Some(ARTIFACT_VALIDATION_CONTRACT_ID.to_owned()),
     };
     assert!(current_publication(&identity));
-    for version in [1, 2, 3, 4, 6] {
+    for version in [1, 2, 3, 4, 5, 7] {
         identity.artifact_schema_version = version;
         assert!(!current_publication(&identity));
     }

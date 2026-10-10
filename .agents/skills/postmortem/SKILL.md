@@ -5,7 +5,8 @@ description: Write or review momo-result postmortems and reassess incident follo
 
 # Postmortem
 
-Produce evidence-based findings and useful decisions about recurrence, within the requested scope.
+Explain the incident and choose useful responses within the requested scope. Keep the analysis
+and resulting maintenance burden proportionate to the decisions they support.
 
 ## Choose the Requested Work
 
@@ -31,6 +32,10 @@ and follow-ups; distinguish analysis completion, incident recovery, and action c
 - For recurrence, inspect relevant prior measures when access is authorized. Distinguish missing
   implementation, an uncovered path, bypass, and ineffective protection. Investigate the same
   mechanism elsewhere only where evidence makes that relevant.
+- Collect additional evidence when it can change the explanation or response. Estimates and
+  qualitative findings are valid when precise measurement would be costly or misleading; state
+  their basis and limits rather than inventing a score or threshold. Directly verify explicit
+  safety, compatibility, and resource contracts through the affected implementation's rules.
 - When guidance contributed, distinguish missing, ambiguous, or inaccessible guidance from a
   correct rule that was not enforced. A documentation change needs that finding, not just an error.
 
@@ -46,7 +51,9 @@ specifies another private path. Public output must respect the
 [postmortem policy](../../../docs/post-mortem/README.md); the automated safety check cannot judge
 whether incident details are suitable for publication.
 
-Deliver the requested record, findings, or verified changes. Include material uncertainty and the
-next step for unresolved work, with tracking references when used. For changed files, apply the
-[change gates](../../../docs/dev-rule.md#4-change-gates); a read-only review does not require
-implementation gates or tracker edits.
+Deliver the requested record, findings, or verified changes. Lead with findings and decisions, and
+link the supporting evidence so a later reader can inspect them briefly or in depth. Do not assume
+a future human review will supply missing investigation or verification. Include material
+uncertainty and the next step for unresolved work, with tracking references when used. For changed
+files, apply the [change gates](../../../docs/dev-rule.md#4-change-gates); a read-only review does
+not require implementation gates or tracker edits.

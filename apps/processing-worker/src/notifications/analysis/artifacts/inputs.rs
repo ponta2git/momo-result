@@ -17,7 +17,6 @@ pub(super) struct ArtifactInput {
     pub(super) artifact: Artifact,
     pub(super) scope_counts: BTreeMap<Option<String>, usize>,
     expected_contexts: i32,
-    actual_contexts: i64,
 }
 
 pub(super) async fn read(
@@ -68,9 +67,7 @@ pub(super) async fn read(
     }
     read_matches(transaction, &ids, &mut inputs).await?;
     for input in inputs.values() {
-        if i64::from(input.expected_contexts) != input.actual_contexts
-            || usize::try_from(input.expected_contexts) != Ok(input.artifact.matches.len() * 4)
-        {
+        if usize::try_from(input.expected_contexts) != Ok(input.artifact.matches.len() * 4) {
             return Err(SkipReason::InvalidSnapshot);
         }
         validate_input_counts(&input.scope_counts, &input.artifact.matches)?;
@@ -125,6 +122,15 @@ fn from_header(
     if usize::try_from(count) != Ok(scope_counts.len()) {
         return Err(SkipReason::InvalidSnapshot);
     }
+    let expected_contexts: i32 = row
+        .try_get("match_context_chunk_count")
+        .map_err(database_error)?;
+    let actual_contexts: i64 = row
+        .try_get("actual_match_context_count")
+        .map_err(database_error)?;
+    if i64::from(expected_contexts) != actual_contexts {
+        return Err(SkipReason::InvalidSnapshot);
+    }
     Ok(ArtifactInput {
         artifact: Artifact {
             scopes: current_publication(&identity).then(BTreeMap::new),
@@ -132,12 +138,7 @@ fn from_header(
             matches: BTreeMap::new(),
         },
         scope_counts,
-        expected_contexts: row
-            .try_get("match_context_chunk_count")
-            .map_err(database_error)?,
-        actual_contexts: row
-            .try_get("actual_match_context_count")
-            .map_err(database_error)?,
+        expected_contexts,
     })
 }
 

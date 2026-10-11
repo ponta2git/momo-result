@@ -65,7 +65,7 @@ pub(crate) async fn load(
                 source_job_id = %source.job_id, error_kind = error.kind());
                 SkipReason::PreparationFailed
             })?;
-        if !intent::has_match_mutation(&client, source, "assigned")
+        if !intent::has_assigned_match_mutation(&client, source)
             .await
             .map_err(|error| {
                 tracing::warn!(

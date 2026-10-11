@@ -15,14 +15,14 @@ import {
   startApi,
   stopProcessGroup,
   waitForApi,
-} from "./runtime.mjs";
+} from "./runtime.mts";
 
 test(
   "interruption survives lazy dependency exit hooks and repeated signals until cleanup finishes",
   { skip: process.platform === "win32", timeout: 15_000 },
   async () => {
     const code = `
-import { createInterruptionSignal } from ${JSON.stringify(new URL("./runtime.mjs", import.meta.url).href)};
+import { createInterruptionSignal } from ${JSON.stringify(new URL("./runtime.mts", import.meta.url).href)};
 import { once } from "node:events";
 const interruption = createInterruptionSignal();
 // Loading the real dependency after the CLI handler registers its signal-exit hook.
@@ -39,7 +39,7 @@ process.disconnect();
       detached: true,
       stdio: ["ignore", "ignore", "inherit", "ipc"],
     });
-    const messages = [];
+    const messages: unknown[] = [];
     child.on("message", (message) => {
       messages.push(message);
       if (message === "ready") child.kill("SIGINT");
@@ -149,8 +149,8 @@ for (const abort of [false, true]) {
         label: "owned fixture launcher",
         signal: controller.signal,
       }).then(
-        () => ({ ok: true }),
-        (error) => ({ ok: false, error }),
+        () => ({ ok: true as const }),
+        (error: unknown) => ({ ok: false as const, error }),
       );
       try {
         const pid = await readStartedPid(ready);
@@ -173,26 +173,26 @@ for (const abort of [false, true]) {
   );
 }
 
-async function readStartedPid(path) {
+async function readStartedPid(path: string) {
   const deadline = Date.now() + 5_000;
   while (Date.now() < deadline) {
     try {
       const pid = Number(await readFile(path, "utf8"));
       if (Number.isInteger(pid) && pid > 0) return pid;
     } catch (error) {
-      if (error.code !== "ENOENT") throw error;
+      if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
     }
     await delay(20);
   }
   throw new Error("The owned child did not become ready.");
 }
 
-async function isRunning(pid) {
+async function isRunning(pid: number | undefined) {
   try {
     const { stdout } = await promisify(execFile)("ps", ["-p", String(pid), "-o", "stat="]);
     return stdout.trim() !== "" && !stdout.trim().startsWith("Z");
   } catch (error) {
-    if (error.code === 1) return false;
+    if (error instanceof Error && "code" in error && error.code === 1) return false;
     throw error;
   }
 }

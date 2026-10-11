@@ -23,7 +23,7 @@ select_all() {
 while IFS= read -r -d '' path; do
   [[ "${path}" == scripts/ci/* || "${path}" == scripts/ops/* ]] && policy_scripts=true
   [[ "${path}" == .github/workflows/* || "${path}" == .github/actions/* ]] && actionlint=true
-  [[ "${path}" == scripts/tools/* ]] && go_tools=true
+  [[ "${path}" == scripts/tools/* || "${path}" == apps/runtime/* ]] && go_tools=true
 
   case "${path}" in
     apps/api/openapi.yaml)
@@ -44,6 +44,10 @@ while IFS= read -r -d '' path; do
       apps/web/src/test/msw/seriesAnalysisFixtures.ts | apps/web/src/test/deferred.ts)
       # Playwright imports these fixtures directly. Vitest cannot establish that
       # the assembled browser scenarios still accept the changed inputs.
+      web=true
+      runtime=true
+      ;;
+    apps/web/scripts/e2e/* | apps/web/scripts/process.mts)
       web=true
       runtime=true
       ;;
@@ -72,7 +76,7 @@ while IFS= read -r -d '' path; do
     contracts/runtime-tool-characterization-v1.json)
       go_tools=true
       ;;
-    scripts/tools/go.mod | scripts/tools/go.sum | scripts/tools/cmd/momo-runtime-tool/*)
+    apps/runtime/*)
       runtime=true
       ;;
     .dockerignore)
@@ -102,6 +106,15 @@ while IFS= read -r -d '' path; do
       ;;
     mise.toml)
       select_all
+      ;;
+    scripts/e2e/runtime-smoke*)
+      web=true
+      runtime=true
+      ;;
+    scripts/e2e/*)
+      web=true
+      analysis=true
+      analysis_image=true
       ;;
     scripts/ci/analysis-* | scripts/ci/ocr-rust-* | scripts/ci/processing-worker-* | \
       scripts/ci/series-analysis-*)

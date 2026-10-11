@@ -18,12 +18,12 @@
 
 ## 2. Local Run
 
-通常の API + Web は root の `pnpm dev` を使う。起動 tool は Go で実行するため、`mise.toml` の Go toolchain を用意する。依存 DB の起動と migration は `../momo-db` の scripts を使い、利用可能な command は各 `package.json` を正とする。
+通常の API + Web は root の `pnpm dev` を使う。起動 tool は `apps/web/scripts/dev-local.mts` を Node で直接実行する。Node の version は `mise.toml` を正とする。依存 DB の起動と migration は `../momo-db` の scripts を使い、利用可能な command は各 `package.json` を正とする。
 
 `pnpm dev` は Processing Worker を起動しない。worker の process isolation は Linux runtime が前提なので、macOS で host binary を直接実行せず、`apps/processing-worker/Dockerfile` から build した専用 container を使う。
 
 - worker には専用 env file と明示的な memory / cgroup 設定を渡す。root env 全体を渡さない。
-- runtime image、DB / Redis control plane、preemption は `scripts/ci/` の対応 smoke と同じ境界で検証する。
+- runtime image は `scripts/ci/`、DB / Redis control plane と preemption は `scripts/e2e/` の対応 smoke と同じ境界で検証する。
 - algorithm version の昇格は image 更新と別操作とし、reader / worker compatibility を確認してから dry-run、apply の順で行う。DB row を直接書き換えない。
 - local volume のデータが消えたように見えても書込みや volume 削除を続けず、mount と PostgreSQL major version を確認する。異なる major version の data directory を直接 mount しない。
 - Playwright の既定 E2E は隔離環境を使う。既存 runtime を対象にする場合は runtime 用 script、任意 target は target 用 script を使い、接続先 data store の隔離を確認する。
@@ -37,11 +37,11 @@
 | Web | `pnpm --filter web format:check`、`lint`、`contract:check`、`typecheck`、`test:run`、`scripts:check`、必要に応じ `build` / `e2e` |
 | API | `sbt --server --batch apiQuality`、`sbt --server --batch testFull`、同じオプションで必要に応じ `apiCoverage` / `apiDbQuality` / `apiRedisQuality` / `apiR2Quality` |
 | Processing Worker | `cargo fmt --all -- --check`、`cargo clippy --locked --workspace --all-targets`、`cargo test --locked --workspace`、production image build |
-| Go tools | `cd scripts/tools && go test ./... && go vet ./...` |
+| Go runtime / tools | 変更対象の `apps/runtime` または `scripts/tools` で `go test ./... && go vet ./...` |
 | Workflow / policy scripts | `pnpm actionlint`、`pnpm test:policy` |
 | Public docs / config | `pnpm public:safety:check` |
 
-OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、coverage の運用は `docs/test-architecture.md` を正本とする。実行 command、lint 設定、smoke の引数は生成 script、build 設定、`scripts/ci/` を実行上の正本とする。文書中の command が実装とずれた場合は実装を直すか、この表を更新し、別名 command を増やさない。
+OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、coverage の運用は `docs/test-architecture.md` を正本とする。実行 command、lint 設定、smoke の引数は生成 script、build 設定、`scripts/ci/`、`scripts/e2e/` を実行上の正本とする。文書中の command が実装とずれた場合は実装を直すか、この表を更新し、別名 command を増やさない。
 
 ## 4. Change Gates
 
@@ -76,7 +76,8 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 | analysis algorithm version | Worker gate + release DB / control-plane compatibility |
 | worker DB / Redis / process / isolation | Worker gate + 対象 control-plane、preemption、image smoke |
 | runtime / deploy config | public safety、image build / scan + 変更経路の runtime / memory / shutdown / Playwright evidence |
-| Go deploy / ops tool | Go test / vet、CI script を変えた場合は対応 script test |
+| Node 開発 / E2E tool | Web の format、lint、typecheck、scripts:check + 変更した起動・service 境界の検証 |
+| Go runtime / 開発 / ops tool | 対象 module の Go test / vet、CI script を変えた場合は対応 script test |
 | docs only | `git diff --check`、`pnpm public:safety:check` |
 
 表は変更時に選ぶ evidence の種類を示し、新しい test case の自動追加や各層での重複を要求しない。規約・skill の指示、参照資料、表示名・説明・default prompt の変更は docs only とする。script、schema、実行設定や tool 依存・起動 policy も変える場合は、その実行境界の gate を加える。選択基準と oracle は `docs/test-rule.md`、現在の job 構成とまとめて実行する suite は CI workflow を実行上の正本とする。変更分類を弱めて gate を避けない。

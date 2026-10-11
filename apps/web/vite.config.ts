@@ -36,7 +36,7 @@ export default defineConfig({
       reporter: ["text", "lcov", "json-summary"],
     },
     environment: "jsdom",
-    exclude: [...configDefaults.exclude, "e2e/**", "scripts/**/*.test.mjs"],
+    exclude: [...configDefaults.exclude, "e2e/**", "scripts/**/*.test.mts"],
     globals: true,
     pool: "threads",
     setupFiles: ["./src/test/setup.ts"],

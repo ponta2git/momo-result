@@ -37,10 +37,14 @@ jobs:
         run: scripts/ci/actionlint.sh
 
   go-tools:
-    name: Go tools
+    name: Go (${{ matrix.module }})
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: inputs.go_tools
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [apps/runtime, scripts/tools]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -48,11 +52,11 @@ jobs:
       - name: Set up Go tools
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          cache-dependency-path: scripts/tools/go.sum
-          go-version-file: scripts/tools/go.mod
-      - name: Test Go tools
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+          go-version-file: ${{ matrix.module }}/go.mod
+      - name: Test Go module
+        working-directory: ${{ matrix.module }}
         run: |
-          cd scripts/tools
           go test ./...
           go vet ./...
           go install golang.org/x/vuln/cmd/govulncheck@v1.6.0

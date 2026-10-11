@@ -3,7 +3,7 @@
   "private": true,
   "packageManager": "pnpm@10.34.5",
   "scripts": {
-    "dev": "cd scripts/tools && go run ./cmd/dev-local",
+    "dev": "node apps/web/scripts/dev-local.mts",
     "test:policy": "scripts/ci/check-policy.sh",
     "api:format": "cd apps/api && sbt --server --batch apiFormat",
     "api:format:check": "cd apps/api && sbt --server --batch apiFormatCheck",

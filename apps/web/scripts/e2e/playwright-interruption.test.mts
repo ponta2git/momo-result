@@ -9,7 +9,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
-import { childEnvironment, runPlaywrightCommand, stopProcessGroup } from "./runtime.mjs";
+import { childEnvironment, runPlaywrightCommand, stopProcessGroup } from "./runtime.mts";
 
 const require = createRequire(import.meta.url);
 const webDir = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -85,17 +85,22 @@ test("wait for parent interruption", async () => {
         label: "Playwright interruption fixture",
         signal: controller.signal,
       }).then(
-        () => ({ ok: true }),
-        (error) => ({ ok: false, error }),
+        () => ({ ok: true as const }),
+        (error: unknown) => ({ ok: false as const, error }),
       );
       await Promise.race([
         waitForFile(startedFile, controller.signal),
         outcome.then((result) => {
-          throw new Error("Playwright exited before its test started.", { cause: result.error });
+          throw new Error("Playwright exited before its test started.", {
+            cause: result.ok ? undefined : result.error,
+          });
         }),
       ]);
       serverPid = await readPid(serverPidFile);
-      assert.ok(Number.isInteger(serverPid) && serverPid > 0, "the server reports its owned PID");
+      assert.ok(
+        serverPid !== undefined && Number.isInteger(serverPid) && serverPid > 0,
+        "the server reports its owned PID",
+      );
       assert.equal(await isRunning(serverPid), true, "the server must be running before abort");
 
       controller.abort(new Error("test interruption"));
@@ -109,7 +114,7 @@ test("wait for parent interruption", async () => {
         // exec makes the fixture's known server PID its process-group leader.
         // Recover it even if CLI startup failed before the test obtained the PID.
         serverPid ??= await readPid(serverPidFile);
-        if (Number.isInteger(serverPid) && serverPid > 0) {
+        if (serverPid !== undefined && Number.isInteger(serverPid) && serverPid > 0) {
           await stopProcessGroup({ pid: serverPid });
         }
       } finally {
@@ -119,39 +124,39 @@ test("wait for parent interruption", async () => {
   },
 );
 
-function shellQuote(value) {
+function shellQuote(value: string) {
   return `'${value.replaceAll("'", "'\"'\"'")}'`;
 }
 
-async function waitForFile(path, signal) {
+async function waitForFile(path: string, signal: AbortSignal) {
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
     signal.throwIfAborted();
     try {
       return await readFile(path, "utf8");
     } catch (error) {
-      if (error.code !== "ENOENT") throw error;
+      if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
     }
     await delay(20, undefined, { signal });
   }
   throw new Error("Playwright did not start its interruption fixture.");
 }
 
-async function readPid(path) {
+async function readPid(path: string) {
   try {
     return Number(await readFile(path, "utf8"));
   } catch (error) {
-    if (error.code !== "ENOENT") throw error;
+    if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
     return undefined;
   }
 }
 
-async function isRunning(pid) {
+async function isRunning(pid: number | undefined) {
   try {
     const { stdout } = await promisify(execFile)("ps", ["-p", String(pid), "-o", "stat="]);
     return stdout.trim() !== "" && !stdout.trim().startsWith("Z");
   } catch (error) {
-    if (error.code === 1) return false;
+    if (error instanceof Error && "code" in error && error.code === 1) return false;
     throw error;
   }
 }

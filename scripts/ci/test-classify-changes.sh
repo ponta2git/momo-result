@@ -75,7 +75,11 @@ fi
 
 assert_case docs-only "${none}" docs/README.md
 assert_case actionlint-only "${actionlint_policy}" scripts/ci/actionlint.sh
-assert_case dev-launcher "${go_only}" scripts/tools/cmd/dev-local/main.go
+assert_case dev-launcher "${web_only}" apps/web/scripts/dev-local.mts
+assert_case shared-process "$(expected web runtime)" apps/web/scripts/process.mts
+assert_case browser-runner "$(expected web runtime)" apps/web/scripts/e2e/run-isolated.mts
+assert_case worker-e2e "$(expected web analysis analysis_image)" scripts/e2e/series-analysis-control-plane-smoke.mts
+assert_case runtime-e2e "$(expected web runtime)" scripts/e2e/runtime-smoke.mts
 assert_case ops-dispatcher "${policy_only}" scripts/ops/analysis.sh
 assert_case ops-orchestration "${policy_only}" scripts/ops/analysis-maintain.sh
 assert_case policy-runner "${policy_only}" scripts/ci/check-policy.sh
@@ -118,7 +122,7 @@ assert_case browser-shared-analysis "$(expected web runtime)" \
   apps/web/src/test/msw/seriesAnalysisFixtures.ts
 assert_case browser-shared-async-control "$(expected web runtime)" \
   apps/web/src/test/deferred.ts
-assert_case web-quality-script "${web_only}" apps/web/scripts/generate-api.mjs
+assert_case web-quality-script "${web_only}" apps/web/scripts/generate-api.mts
 assert_case web-lint-config "${web_only}" apps/web/oxlint.config.ts
 assert_case analysis-test "${analysis_only}" apps/processing-worker/tests/parent_liveness.rs
 assert_case analysis-source "${analysis_image}" apps/processing-worker/src/main.rs
@@ -132,11 +136,13 @@ assert_case processing-worker-script \
   "$(expected analysis analysis_image workflow policy_scripts)" \
   scripts/ci/processing-worker-image-smoke.sh
 assert_case series-analysis-script \
-  "$(expected analysis analysis_image workflow policy_scripts)" \
-  scripts/ci/series-analysis-control-plane-smoke.sh
-assert_case runtime-tool "${runtime_go}" scripts/tools/cmd/momo-runtime-tool/main.go
-assert_case runtime-tool-go-mod "${runtime_go}" scripts/tools/go.mod
-assert_case runtime-tool-go-sum "${runtime_go}" scripts/tools/go.sum
+  "$(expected web analysis analysis_image)" \
+  scripts/e2e/series-analysis-control-plane-smoke.mts
+assert_case runtime-tool "${runtime_go}" apps/runtime/cmd/momo-runtime-tool/main.go
+assert_case runtime-tool-go-mod "${runtime_go}" apps/runtime/go.mod
+assert_case runtime-tool-go-sum "${runtime_go}" apps/runtime/go.sum
+assert_case development-go-mod "${go_only}" scripts/tools/go.mod
+assert_case development-go-sum "${go_only}" scripts/tools/go.sum
 assert_case development-tool "${go_only}" scripts/tools/cmd/ocr-evaluation-audit/main.go
 assert_case runtime-db-contract "${runtime_go}" contracts/runtime-db-contract.json
 assert_case runtime-tool-characterization \

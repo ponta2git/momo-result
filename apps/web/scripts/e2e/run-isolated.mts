@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import type { StartedTestContainer } from "testcontainers";
+
 import {
   applyMigrations,
   childEnvironment,
@@ -15,13 +17,19 @@ import {
   startRedis,
   stopProcessGroup,
   waitForApi,
-} from "./runtime.mjs";
+} from "./runtime.mts";
+import type { ApiProcess } from "./runtime.mts";
 
 const webDir = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const playwrightArgs = process.argv.slice(2);
 const POSTGRES_DB = "momo_result";
 
-const resources = {
+const resources: {
+  apiProcess?: ApiProcess;
+  imageTmpDir?: string;
+  postgres?: StartedTestContainer;
+  redis?: StartedTestContainer;
+} = {
   apiProcess: undefined,
   imageTmpDir: undefined,
   postgres: undefined,
@@ -46,15 +54,15 @@ async function run() {
 
   console.log("Starting isolated E2E dependencies with Testcontainers.");
   interruption.throwIfAborted();
-  await startDependencies();
+  const { postgres, redis } = await startDependencies();
   interruption.throwIfAborted();
-  await applyMigrations(resources.postgres, POSTGRES_DB, interruption);
+  await applyMigrations(postgres, POSTGRES_DB, interruption);
   interruption.throwIfAborted();
 
-  const databaseUrl = `postgres://postgres:postgres@${resources.postgres.getHost()}:${resources.postgres.getMappedPort(
+  const databaseUrl = `postgres://postgres:postgres@${postgres.getHost()}:${postgres.getMappedPort(
     5432,
   )}/${POSTGRES_DB}`;
-  const redisUrl = `redis://${resources.redis.getHost()}:${resources.redis.getMappedPort(6379)}/0`;
+  const redisUrl = `redis://${redis.getHost()}:${redis.getMappedPort(6379)}/0`;
   const apiBaseUrl = `http://127.0.0.1:${apiPort}`;
   const webBaseUrl = `http://127.0.0.1:${webPort}`;
 
@@ -89,12 +97,19 @@ async function startDependencies() {
     failures.push(redisResult.reason);
   }
 
-  if (failures.length > 0) {
+  if (postgresResult.status === "rejected" || redisResult.status === "rejected") {
     throw new AggregateError(failures, "Failed to start isolated E2E dependencies.");
   }
+  return { postgres: postgresResult.value, redis: redisResult.value };
 }
 
-async function runPlaywright({ apiBaseUrl, webBaseUrl }) {
+async function runPlaywright({
+  apiBaseUrl,
+  webBaseUrl,
+}: {
+  apiBaseUrl: string;
+  webBaseUrl: string;
+}) {
   await runPlaywrightCommand(playwrightArgs, {
     cwd: webDir,
     env: childEnvironment({

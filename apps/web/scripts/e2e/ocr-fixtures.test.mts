@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { dockerFailure } from "./ocr-fixtures.mjs";
+import { dockerFailure } from "./ocr-fixtures.mts";
 
 test("Docker diagnostics distinguish bootstrap phases without carrying captured output", () => {
   const secret = "fixture-credential-must-not-appear";

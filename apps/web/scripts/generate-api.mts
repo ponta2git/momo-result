@@ -2,11 +2,15 @@ import { mkdir, readFile, readdir, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import Ajv2020 from "ajv/dist/2020.js";
+import { Ajv2020 } from "ajv/dist/2020.js";
+import type { AnySchema } from "ajv/dist/2020.js";
 import { _ } from "ajv/dist/compile/codegen/index.js";
-import standaloneCode from "ajv/dist/standalone/index.js";
+import standaloneModule from "ajv/dist/standalone/index.js";
 import openapiTS, { astToString } from "openapi-typescript";
+import type { OpenAPI3 } from "openapi-typescript";
 import { format } from "oxfmt";
+
+type ValidatorSchema = { exportName: string; schema: AnySchema };
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const source = resolve(root, "../api/openapi.yaml");
@@ -39,10 +43,13 @@ const generatedValidatorPattern =
   /^series-analysis-(?:[a-z0-9-]+-)?validators\.generated\.(?:js|d\.ts)$/u;
 
 if (process.argv.length > (checkOnly ? 3 : 2)) {
-  throw new Error("Usage: node scripts/generate-api.mjs [--check]");
+  throw new Error("Usage: node scripts/generate-api.mts [--check]");
 }
 
-function visit(value, visitor) {
+function visit(
+  value: unknown,
+  visitor: (value: Record<string, unknown>) => Record<string, unknown>,
+): unknown {
   if (Array.isArray(value)) {
     return value.map((child) => visit(child, visitor));
   }
@@ -52,8 +59,8 @@ function visit(value, visitor) {
   );
 }
 
-function referencedComponentNames(schema) {
-  const names = new Set();
+function referencedComponentNames(schema: unknown) {
+  const names = new Set<string>();
   visit(schema, (value) => {
     if (typeof value.$ref === "string") {
       const match = /^#\/components\/schemas\/([^/]+)$/u.exec(value.$ref);
@@ -65,7 +72,7 @@ function referencedComponentNames(schema) {
   return names;
 }
 
-function envelopeSchemaDocument(openapi, roots) {
+function envelopeSchemaDocument(openapi: OpenAPI3, roots: string[]) {
   const sourceSchemas = openapi.components?.schemas;
   if (typeof sourceSchemas !== "object" || sourceSchemas === null) {
     throw new Error("OpenAPI components.schemas is missing.");
@@ -73,8 +80,7 @@ function envelopeSchemaDocument(openapi, roots) {
 
   const selected = new Set(roots);
   const pending = [...roots];
-  while (pending.length > 0) {
-    const name = pending.pop();
+  for (const name of pending) {
     const schema = sourceSchemas[name];
     if (typeof schema !== "object" || schema === null) {
       throw new Error(`OpenAPI component schema is missing: ${name}`);
@@ -105,13 +111,13 @@ function envelopeSchemaDocument(openapi, roots) {
 
   return {
     $comment:
-      "Generated from apps/api/openapi.yaml by apps/web/scripts/generate-api.mjs; do not edit by hand.",
+      "Generated from apps/api/openapi.yaml by apps/web/scripts/generate-api.mts; do not edit by hand.",
     $defs: definitions,
     $schema: "https://json-schema.org/draft/2020-12/schema",
   };
 }
 
-function artifactContracts(openapi) {
+function artifactContracts(openapi: OpenAPI3) {
   const schemas = openapi.components?.schemas;
   if (typeof schemas !== "object" || schemas === null) {
     throw new Error("OpenAPI components.schemas is missing.");
@@ -119,7 +125,7 @@ function artifactContracts(openapi) {
   const runtimeSchemas = [];
   const seenKinds = new Set();
   for (const [componentName, schema] of Object.entries(schemas)) {
-    const kind = schema?.[artifactKindExtension];
+    const kind: unknown = schema?.[artifactKindExtension];
     if (kind === undefined) continue;
     if (typeof kind !== "string" || !/^[a-z][A-Za-z0-9]*$/u.test(kind)) {
       throw new Error(`Invalid series analysis resource kind on ${componentName}.`);
@@ -146,15 +152,16 @@ function artifactContracts(openapi) {
   );
 }
 
-async function formatGenerated(path, sourceText) {
+async function formatGenerated(path: string, sourceText: string) {
   const result = await format(path, sourceText);
-  if (result.errors.length > 0) {
-    throw new Error(`Failed to format generated contract ${path}: ${result.errors[0].message}`);
+  const firstError = result.errors[0];
+  if (firstError) {
+    throw new Error(`Failed to format generated contract ${path}: ${firstError.message}`);
   }
   return result.code;
 }
 
-function artifactRegistrySource(artifacts) {
+function artifactRegistrySource(artifacts: ReturnType<typeof artifactContracts>) {
   const responseTypes = artifacts
     .map(
       ({ componentName, kind }) =>
@@ -180,11 +187,11 @@ ${validatorLoaders}
 `;
 }
 
-function artifactValidatorExport(kind) {
-  return `validateSeriesAnalysis${kind[0].toUpperCase()}${kind.slice(1)}`;
+function artifactValidatorExport(kind: string) {
+  return `validateSeriesAnalysis${kind.charAt(0).toUpperCase()}${kind.slice(1)}`;
 }
 
-function registerOwnerKeywords(ajv) {
+function registerOwnerKeywords(ajv: Ajv2020) {
   ajv.addKeyword({
     keyword: "x-momo-maxUtf8Bytes",
     schemaType: "number",
@@ -213,7 +220,7 @@ function registerOwnerKeywords(ajv) {
   ajv.addKeyword({ keyword: "x-momo-metricId", schemaType: "string", valid: true });
 }
 
-function standaloneValidatorSource(schemas, sharedSchemas) {
+function standaloneValidatorSource(schemas: ValidatorSchema[], sharedSchemas: AnySchema[]) {
   const ajv = new Ajv2020({
     allErrors: false,
     code: { esm: true, source: true },
@@ -224,20 +231,22 @@ function standaloneValidatorSource(schemas, sharedSchemas) {
   registerOwnerKeywords(ajv);
   for (const schema of sharedSchemas) ajv.addSchema(schema);
 
-  const validators = {};
+  const validators: Record<string, string> = {};
   for (const { exportName, schema } of schemas) {
     ajv.addSchema(schema, exportName);
     validators[exportName] = exportName;
   }
 
-  const generated = standaloneCode(ajv, validators).replaceAll(
-    /const (func\d+) = require\("ajv\/dist\/runtime\/ucs2length"\)\.default;/gu,
-    "const $1 = ucs2length;",
-  );
+  const generated = standaloneModule
+    .default(ajv, validators)
+    .replaceAll(
+      /const (func\d+) = require\("ajv\/dist\/runtime\/ucs2length"\)\.default;/gu,
+      "const $1 = ucs2length;",
+    );
   if (generated.includes("require(") || generated.includes("new Function(")) {
     throw new Error("Generated validators are not browser-CSP-safe.");
   }
-  return `// Generated by scripts/generate-api.mjs; do not edit by hand.
+  return `// Generated by scripts/generate-api.mts; do not edit by hand.
 function ucs2length(value) {
   let length = 0;
   for (const _codePoint of value) length += 1;
@@ -247,14 +256,18 @@ ${generated}
 `;
 }
 
-function validatorTypesSource(schemas) {
+function validatorTypesSource(schemas: ValidatorSchema[]) {
   return `import type { ContractValidator } from "@/shared/api/seriesAnalysisContractDecoder";
 
 ${schemas.map(({ exportName }) => `export const ${exportName}: ContractValidator;`).join("\n")}
 `;
 }
 
-function validatorModuleOutputs(moduleName, schemas, sharedSchemas = []) {
+function validatorModuleOutputs(
+  moduleName: string,
+  schemas: ValidatorSchema[],
+  sharedSchemas: AnySchema[] = [],
+) {
   return [
     {
       output: resolve(generatedContractRoot, `${moduleName}.js`),
@@ -268,7 +281,7 @@ function validatorModuleOutputs(moduleName, schemas, sharedSchemas = []) {
 }
 
 async function generate() {
-  const schema = JSON.parse(await readFile(source, "utf8"));
+  const schema: OpenAPI3 = JSON.parse(await readFile(source, "utf8"));
   const ast = await openapiTS(schema);
   const artifacts = artifactContracts(schema);
   const envelopeOutputs = [
@@ -307,7 +320,7 @@ async function generate() {
   ];
 }
 
-async function updateOutput(path, generated) {
+async function updateOutput(path: string, generated: string) {
   if (checkOnly) {
     const committed = await readFile(path, "utf8").catch(() => "");
     if (committed !== generated) {
@@ -324,10 +337,10 @@ async function updateOutput(path, generated) {
   return true;
 }
 
-async function removeUnexpectedGeneratedContracts(expectedPaths) {
+async function removeUnexpectedGeneratedContracts(expectedPaths: string[]) {
   const expectedNames = new Set(expectedPaths.map((path) => basename(path)));
-  const entries = await readdir(generatedContractRoot).catch((error) => {
-    if (error?.code === "ENOENT") return [];
+  const entries = await readdir(generatedContractRoot).catch((error: unknown) => {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return [];
     throw error;
   });
   const unexpected = entries.filter(

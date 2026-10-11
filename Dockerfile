@@ -27,8 +27,8 @@ COPY apps/web/index.html apps/web/index.html
 COPY apps/web/tsconfig.json apps/web/tsconfig.json
 COPY apps/web/vite.config.ts apps/web/vite.config.ts
 COPY apps/web/public apps/web/public
-COPY apps/web/scripts/check-built-theme.mjs apps/web/scripts/check-built-theme.mjs
-COPY apps/web/scripts/generate-api.mjs apps/web/scripts/generate-api.mjs
+COPY apps/web/scripts/check-built-theme.mts apps/web/scripts/check-built-theme.mts
+COPY apps/web/scripts/generate-api.mts apps/web/scripts/generate-api.mts
 COPY apps/web/src apps/web/src
 RUN pnpm --filter web contract:check
 RUN pnpm --filter web build
@@ -85,11 +85,11 @@ RUN --mount=type=cache,id=sbt-boot,target=/root/.sbt,sharing=locked \
   && sbt --server --batch "-Dmomo.http4s.patched.version=${HTTP4S_PATCH_VERSION}" "apiOpenApiCheck; stage"
 
 FROM ${GO_IMAGE} AS runtime-tool-builder
-WORKDIR /workspace/scripts/tools
-COPY scripts/tools/go.mod scripts/tools/go.sum ./
+WORKDIR /workspace/apps/runtime
+COPY apps/runtime/go.mod apps/runtime/go.sum ./
 RUN --mount=type=cache,id=go-mod,target=/go/pkg/mod,sharing=locked \
   go mod download
-COPY scripts/tools/cmd/momo-runtime-tool cmd/momo-runtime-tool
+COPY apps/runtime/cmd/momo-runtime-tool cmd/momo-runtime-tool
 RUN --mount=type=cache,id=go-build,target=/root/.cache/go-build,sharing=locked \
   CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' \
     -o /out/momo-runtime-tool ./cmd/momo-runtime-tool

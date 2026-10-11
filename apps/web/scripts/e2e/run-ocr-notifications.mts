@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { execFile, spawn } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -8,12 +9,14 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
+import type { StartedTestContainer } from "testcontainers";
+
 import {
   dockerFailure,
   workerTiming,
   writeImages,
   writeMinioImageContexts,
-} from "./ocr-fixtures.mjs";
+} from "./ocr-fixtures.mts";
 import {
   applyMigrations,
   childEnvironment,
@@ -27,7 +30,7 @@ import {
   startRedis,
   stopProcessGroup,
   waitForApi,
-} from "./runtime.mjs";
+} from "./runtime.mts";
 
 const execute = promisify(execFile);
 const webDir = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -47,7 +50,16 @@ const runDir = await mkdtemp(join(tmpdir(), "mom24_e2e_"));
 const controlDir = join(runDir, "control");
 const recorderDir = join(runDir, "recorder");
 const databaseName = "mom24_e2e";
-const resources = {
+const resources: {
+  processes: ChildProcess[];
+  containers: StartedTestContainer[];
+  images: string[];
+  workerId: string | undefined;
+  workerName: string;
+  workerRequested: boolean;
+  contractName: string;
+  contractRequested: boolean;
+} = {
   processes: [],
   containers: [],
   images: [],
@@ -74,7 +86,7 @@ function checkpoint() {
 async function run() {
   await mkdir(controlDir);
   const architecture = (await docker(["info", "--format", "{{.Architecture}}"])).stdout.trim();
-  const minioImages = {};
+  const minioImages: Partial<Record<"mc" | "minio", string>> = {};
   for (const { name, context } of await writeMinioImageContexts(runDir, architecture)) {
     checkpoint();
     const built = await docker(
@@ -89,6 +101,8 @@ async function run() {
     minioImages[name] = imageId;
   }
   const minioClientImage = minioImages.mc;
+  const minioImage = minioImages.minio;
+  if (!minioClientImage || !minioImage) throw new Error("MinIO fixture images are missing.");
   const images = await writeImages(runDir);
   checkpoint();
   const postgres = await startPostgres(databaseName);
@@ -106,7 +120,7 @@ async function run() {
   const { GenericContainer, Wait } = await import("testcontainers");
   const accessKey = randomBytes(16).toString("hex");
   const secretKey = randomBytes(32).toString("hex");
-  const minio = await new GenericContainer(minioImages.minio)
+  const minio = await new GenericContainer(minioImage)
     .withEnvironment({
       MINIO_ROOT_USER: accessKey,
       MINIO_ROOT_PASSWORD: secretKey,
@@ -282,8 +296,8 @@ async function run() {
   });
   console.log(`Isolated OCR notification E2E ready: ${metadataFile}`);
   if (process.argv.includes("--hold")) {
-    await new Promise((resolveStop) => {
-      interruption.addEventListener("abort", resolveStop, { once: true });
+    await new Promise<void>((resolveStop) => {
+      interruption.addEventListener("abort", () => resolveStop(), { once: true });
       if (interruption.aborted) resolveStop();
     });
     checkpoint();
@@ -304,7 +318,7 @@ async function run() {
   }
 }
 
-async function verifyAnalysisNotificationContract(databaseUrl, webOrigin) {
+async function verifyAnalysisNotificationContract(databaseUrl: string, webOrigin: string) {
   const directory = join(runDir, "analysis-contract");
   await mkdir(directory);
   const environment = join(runDir, "analysis-contract.env");
@@ -353,7 +367,7 @@ async function verifyAnalysisNotificationContract(databaseUrl, webOrigin) {
   await runCommand(
     "node",
     [
-      join(webDir, "scripts/e2e/analysis-notification-contract.mjs"),
+      join(webDir, "scripts/e2e/analysis-notification-contract.mts"),
       summitDir,
       join(directory, "analysis.json"),
       webOrigin,
@@ -367,13 +381,16 @@ async function verifyAnalysisNotificationContract(databaseUrl, webOrigin) {
   );
 }
 
-function startProcess(command, args, cwd, additions) {
-  const child = spawn(command, args, {
-    cwd,
-    env: childEnvironment(additions),
-    detached: true,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+function startProcess(command: string, args: string[], cwd: string, additions: NodeJS.ProcessEnv) {
+  const child = Object.assign(
+    spawn(command, args, {
+      cwd,
+      env: childEnvironment(additions),
+      detached: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    }),
+    { e2eFailed: false, e2eOutput: "" },
+  );
   resources.processes.push(child);
   remember();
   checkpoint();
@@ -382,27 +399,41 @@ function startProcess(command, args, cwd, additions) {
     child.e2eFailed = true;
     console.error(`${command} failed to start.`);
   });
-  child.e2eOutput = "";
-  const capture = (chunk) => {
+  const capture = (chunk: Buffer) => {
     child.e2eOutput = (child.e2eOutput + chunk.toString()).slice(-16000);
   };
   child.stderr.on("data", capture);
   child.stdout.on("data", capture);
   return child;
 }
-async function waitForJson(path, child) {
-  let parsed;
+async function waitForJson(
+  path: string,
+  child: ReturnType<typeof startProcess>,
+): Promise<{ origin: string }> {
+  let origin = "";
   await until(
     async () => {
-      parsed = JSON.parse(await readFile(path, "utf8"));
+      const parsed: unknown = JSON.parse(await readFile(path, "utf8"));
+      if (
+        typeof parsed !== "object" ||
+        parsed === null ||
+        !("origin" in parsed) ||
+        typeof parsed.origin !== "string"
+      )
+        return false;
+      origin = parsed.origin;
       return true;
     },
     child,
     "Summit recorder",
   );
-  return parsed;
+  return { origin };
 }
-async function until(probe, child, label) {
+async function until(
+  probe: () => Promise<boolean>,
+  child: ReturnType<typeof startProcess> | undefined,
+  label: string,
+) {
   const deadline = Date.now() + 120_000;
   while (Date.now() < deadline) {
     checkpoint();
@@ -413,13 +444,13 @@ async function until(probe, child, label) {
     } catch {
       /* Readiness can precede bind / file creation. */
     }
-    await new Promise((resolvePoll) => {
+    await new Promise<void>((resolvePoll) => {
       setTimeout(resolvePoll, 100);
     });
   }
   throw new Error(`${label} did not become ready.\n${child?.e2eOutput ?? ""}`);
 }
-async function writeEnvironment(path, values) {
+async function writeEnvironment(path: string, values: Record<string, string>) {
   await writeFile(
     path,
     Object.entries(values)
@@ -428,7 +459,14 @@ async function writeEnvironment(path, values) {
     { flag: "wx", mode: 0o600 },
   );
 }
-async function docker(args, { operation = args[0], phase = args[0], ...options } = {}) {
+async function docker(
+  args: string[],
+  {
+    operation = args[0] ?? "command",
+    phase = args[0] ?? "command",
+    ...options
+  }: { operation?: string; phase?: string; timeout?: number; signal?: AbortSignal } = {},
+) {
   try {
     return await execute("docker", args, options);
   } catch (error) {

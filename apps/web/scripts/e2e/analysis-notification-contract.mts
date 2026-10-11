@@ -23,18 +23,50 @@ Object.assign(process.env, {
   DATABASE_URL: "postgres://unused:unused@127.0.0.1:1/unused",
   SUMMIT_CONFIG_YAML: await readFile(join(summitDir, "summit.config.example.yml"), "utf8"),
 });
-const source = (path) => pathToFileURL(join(summitDir, "src", path)).href;
-const { validateNewNotification } = await import(source("domain/resultNotificationPayload.ts"));
-const { assertNewNotificationPartLimit, planResultNotification } = await import(
-  source("features/result-notifications/render.ts")
+const source = (path: string) => pathToFileURL(join(summitDir, "src", path)).href;
+type DisplayRank = { displayName: string };
+type AnalysisNotification = {
+  kind: string;
+  data: {
+    gameTitleName: string;
+    overall: DisplayRank[];
+    seasons: Array<{ seasonName: string; ranks: DisplayRank[] }>;
+    matches: Array<{
+      matchId: string;
+      mapName: string;
+      seasonName: string;
+      ownerName: string;
+      note: string;
+      players: DisplayRank[];
+    }>;
+  };
+};
+
+// The pinned consumer is loaded from a caller-selected checkout. Describe only
+// the surface exercised here; the real consumer validates the producer input.
+const {
+  validateNewNotification,
+}: { validateNewNotification(input: unknown): AnalysisNotification } = await import(
+  source("domain/resultNotificationPayload.ts")
 );
-const fixture = JSON.parse(await readFile(fixturePath, "utf8"));
+const {
+  assertNewNotificationPartLimit,
+  planResultNotification,
+}: {
+  assertNewNotificationPartLimit(notification: AnalysisNotification, origin: string): void;
+  planResultNotification(
+    notification: AnalysisNotification,
+    origin: string,
+  ): { partCount: number; parts(): Iterable<{ content: string }> };
+} = await import(source("features/result-notifications/render.ts"));
+const fixture: { schemaVersion: number; body: string; wireBytes: number; jsonbBytes: number } =
+  JSON.parse(await readFile(fixturePath, "utf8"));
 assert.equal(fixture.schemaVersion, 1);
 assert.equal(typeof fixture.body, "string");
 assert.equal(Buffer.byteLength(fixture.body), fixture.wireBytes);
 assert.ok(fixture.wireBytes <= 512 * 1024);
 assert.ok(fixture.jsonbBytes > fixture.wireBytes && fixture.jsonbBytes <= 256 * 1024);
-const input = JSON.parse(fixture.body);
+const input: unknown = JSON.parse(fixture.body);
 const notification = validateNewNotification(input);
 assert.deepEqual(
   notification,
@@ -44,7 +76,7 @@ assert.deepEqual(
 assert.equal(notification.kind, "analysis_completed");
 assert.equal(notification.data.matches.length, 50);
 assert.equal(notification.data.seasons.length, 16);
-const points = (text, limit) => assert.equal([...text].length, limit);
+const points = (text: string, limit: number) => assert.equal([...text].length, limit);
 points(notification.data.gameTitleName, 256);
 for (const rank of notification.data.overall) points(rank.displayName, 32);
 for (const season of notification.data.seasons) {

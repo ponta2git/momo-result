@@ -3,7 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
 
-export const screens = ["total_assets", "revenue", "incident_log"];
+export const screens = ["total_assets", "revenue", "incident_log"] as const;
 
 // Same releases as the former registry images; official release assets remain available.
 // https://github.com/minio/minio/releases/tag/RELEASE.2025-09-07T16-13-09Z
@@ -25,12 +25,16 @@ const minioReleases = [
       arm64: "14c8c9616cfce4636add161304353244e8de383b2e2752c0e9dad01d4c27c12c",
     },
   },
-];
+] as const;
 
-export async function writeMinioImageContexts(directory, dockerArchitecture) {
-  const architecture = { x86_64: "amd64", amd64: "amd64", aarch64: "arm64", arm64: "arm64" }[
-    dockerArchitecture
-  ];
+export async function writeMinioImageContexts(directory: string, dockerArchitecture: string) {
+  const architectures: Record<string, "amd64" | "arm64"> = {
+    x86_64: "amd64",
+    amd64: "amd64",
+    aarch64: "arm64",
+    arm64: "arm64",
+  };
+  const architecture = architectures[dockerArchitecture];
   if (!architecture) throw new Error("Unsupported isolated MinIO Docker architecture.");
   const contexts = [];
   for (const { name, release, sha256 } of minioReleases) {
@@ -63,26 +67,37 @@ export async function writeMinioImageContexts(directory, dockerArchitecture) {
 
 // Child-process errors can contain credentials in command/output/cause fields. Expose only
 // fixed operation labels and bounded process metadata, never the original error object.
-export function dockerFailure(operation, phase, error) {
+export function dockerFailure(operation: string, phase: string, error: unknown) {
+  const metadata = typeof error === "object" && error !== null ? error : {};
+  const errorCode = "code" in metadata ? metadata.code : undefined;
+  const errorSignal = "signal" in metadata ? metadata.signal : undefined;
   const code =
-    Number.isInteger(error?.code) && error.code >= 0 && error.code <= 255
-      ? error.code
-      : ["ENOENT", "EACCES", "EPERM", "ERR_CHILD_PROCESS_STDIO_MAXBUFFER"].includes(error?.code)
-        ? error.code
+    typeof errorCode === "number" &&
+    Number.isInteger(errorCode) &&
+    errorCode >= 0 &&
+    errorCode <= 255
+      ? errorCode
+      : typeof errorCode === "string" &&
+          ["ENOENT", "EACCES", "EPERM", "ERR_CHILD_PROCESS_STDIO_MAXBUFFER"].includes(errorCode)
+        ? errorCode
         : "unknown";
-  const signal = ["SIGINT", "SIGTERM", "SIGKILL", "SIGABRT", "SIGSEGV"].includes(error?.signal)
-    ? error.signal
-    : error?.signal == null
-      ? "none"
-      : "unknown";
+  const signal =
+    typeof errorSignal === "string" &&
+    ["SIGINT", "SIGTERM", "SIGKILL", "SIGABRT", "SIGSEGV"].includes(errorSignal)
+      ? errorSignal
+      : errorSignal == null
+        ? "none"
+        : "unknown";
   return new Error(
     `Owned E2E Docker ${operation} failed (phase=${phase}, exit=${code}, signal=${signal}).`,
   );
 }
 
 // Full HD synthetic inputs exercise the real upload / checksum / image decoder boundary.
-export async function writeImages(directory) {
-  const images = {};
+export async function writeImages(directory: string) {
+  const images: Partial<
+    Record<(typeof screens)[number], { path: string; size: number; sha256: string }>
+  > = {};
   for (const [index, screen] of screens.entries()) {
     const width = 1920;
     const height = 1080;
@@ -110,7 +125,7 @@ export async function writeImages(directory) {
   return images;
 }
 
-function chunk(type, body) {
+function chunk(type: string, body: Buffer) {
   const content = Buffer.concat([Buffer.from(type), body]);
   const result = Buffer.alloc(content.length + 8);
   result.writeUInt32BE(body.length, 0);

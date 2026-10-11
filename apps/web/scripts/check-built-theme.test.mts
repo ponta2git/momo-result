@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { requiredThemeVariables, validateBuiltTheme } from "./check-built-theme.mjs";
+import { requiredThemeVariables, validateBuiltTheme } from "./check-built-theme.mts";
 
 const theme = (value = "var(--palette)") =>
   `@layer theme { :root,:host { ${requiredThemeVariables.map((name) => `${name}:${value};`).join("")} } }`;

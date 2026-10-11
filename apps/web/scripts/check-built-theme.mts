@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { generate, parse, walk } from "css-tree";
+import type { CssNode, WalkContext } from "css-tree";
 
 // Consumer inventory for dynamic sequence/chart paint; exact colors belong to styles.css.
 export const requiredThemeVariables = [
@@ -16,10 +17,10 @@ export const requiredThemeVariables = [
 
 // This is artifact-retention evidence for the global theme, not a CSS cascade/paint engine.
 // Comments, component-local declarations and conditional rules cannot supply the baseline.
-export function validateBuiltTheme(css) {
-  const declarations = new Map();
+export function validateBuiltTheme(css: string) {
+  const declarations = new Map<string, CssNode>();
   walk(parse(css, { parseCustomProperty: true }), {
-    enter(node) {
+    enter(this: WalkContext, node: CssNode) {
       if (node.type === "Atrule" && node.name !== "layer") return this.skip;
       if (node.type !== "Rule") return;
       if (
@@ -36,7 +37,7 @@ export function validateBuiltTheme(css) {
     },
   });
 
-  function validateVariable(name, path = []) {
+  function validateVariable(name: string, path: string[] = []) {
     if (path.includes(name)) {
       throw new Error(`Built CSS has a cyclic theme reference: ${[...path, name].join(" -> ")}`);
     }
@@ -49,12 +50,14 @@ export function validateBuiltTheme(css) {
     validateReferences(value, [...path, name]);
   }
 
-  function validateReferences(value, path) {
+  function validateReferences(value: CssNode, path: string[]) {
     walk(value, {
       visit: "Function",
       enter(node) {
         if (node.name !== "var") return;
         const [reference, , fallback] = node.children;
+        if (reference?.type !== "Identifier")
+          throw new Error("Built CSS has an invalid var() reference.");
         if (declarations.has(reference.name) || !fallback) {
           validateVariable(reference.name, path);
         } else {

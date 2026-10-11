@@ -165,7 +165,7 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           cache: false
-          go-version-file: scripts/tools/go.mod
+          go-version-file: apps/runtime/go.mod
 
       - name: Download deployed registry manifest
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -262,7 +262,7 @@ jobs:
 
       - name: Build current public edge probe
         run: |
-          cd scripts/tools
+          cd apps/runtime
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w' \
             -o "${RUNNER_TEMP}/momo-runtime-tool" ./cmd/momo-runtime-tool
 

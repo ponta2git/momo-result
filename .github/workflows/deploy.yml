@@ -230,7 +230,7 @@ jobs:
         timeout-minutes: 1
 
       - name: Runtime HTTP smoke
-        run: scripts/ci/runtime-smoke.sh
+        run: node scripts/e2e/runtime-smoke.mts
         env:
           MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
         timeout-minutes: 2

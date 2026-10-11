@@ -3,13 +3,16 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
 )
 
@@ -26,10 +29,13 @@ type options struct {
 }
 
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	code := run(ctx, os.Args[1:], os.Stdout, os.Stderr)
+	stop()
+	os.Exit(code)
 }
 
-func run(args []string, stdout, stderr io.Writer) int {
+func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	options, err := parseOptions(args, stderr)
 	if errors.Is(err, flag.ErrHelp) {
 		return 0
@@ -64,7 +70,13 @@ func run(args []string, stdout, stderr io.Writer) int {
 			_, _ = fmt.Fprintln(stderr, "selected image has no answer-key match")
 			return 1
 		}
-		envelope, resources, pilotErr := runPilot(engine, image)
+		envelope, resources, pilotErr := runPilot(ctx, engine, image)
+		// An interrupted evaluation is incomplete, not a sequence of failed OCR
+		// samples. Stop before another image or a partial report is published.
+		if ctx.Err() != nil {
+			_, _ = fmt.Fprintln(stderr, "evaluation interrupted")
+			return 1
+		}
 		result := evaluateImage(image, expected, envelope, resources, pilotErr)
 		results = append(results, result)
 		_, _ = fmt.Fprintf(

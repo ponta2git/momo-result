@@ -20,7 +20,7 @@ type engineOptions struct {
 	timeout      time.Duration
 }
 
-func runPilot(options engineOptions, image imageMetadata) (pilotEnvelope, processResourceMetrics, error) {
+func runPilot(parent context.Context, options engineOptions, image imageMetadata) (pilotEnvelope, processResourceMetrics, error) {
 	arguments := []string{
 		"ocr-pilot",
 		"--image", image.Path,
@@ -32,7 +32,7 @@ func runPilot(options engineOptions, image imageMetadata) (pilotEnvelope, proces
 	if options.tessdataPath != "" {
 		arguments = append(arguments, "--tessdata-path", options.tessdataPath)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), options.timeout)
+	ctx, cancel := context.WithTimeout(parent, options.timeout)
 	defer cancel()
 	// The option is a filesystem path, including a bare filename in the current
 	// directory; exec.Command would otherwise resolve that filename through PATH.

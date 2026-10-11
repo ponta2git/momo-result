@@ -82,7 +82,7 @@ RUN for lang in eng jpn; do \
     echo "${expected}  ${lang}.traineddata" | sha256sum -c -; \
   done
 
-FROM native-builder AS builder
+FROM native-builder AS source
 WORKDIR /workspace/apps/processing-worker
 COPY apps/processing-worker/Cargo.toml apps/processing-worker/Cargo.lock ./
 COPY apps/processing-worker/crates/analysis-core/Cargo.toml crates/analysis-core/Cargo.toml
@@ -90,6 +90,8 @@ COPY apps/processing-worker/crates/analysis-core/src crates/analysis-core/src
 COPY apps/processing-worker/crates/ocr/Cargo.toml crates/ocr/Cargo.toml
 COPY apps/processing-worker/crates/ocr/src crates/ocr/src
 COPY apps/processing-worker/src src
+
+FROM source AS builder
 RUN --mount=type=cache,id=analysis-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
   --mount=type=cache,id=analysis-cargo-git,target=/usr/local/cargo/git,sharing=locked \
   --mount=type=cache,id=analysis-target,target=/workspace/apps/processing-worker/target,sharing=locked \
@@ -115,9 +117,10 @@ RUN --mount=type=cache,id=analysis-cargo-registry,target=/usr/local/cargo/regist
     cp -L --parents "${library}" /tmp/runtime-root; \
   done < /tmp/runtime-libraries
 
-# Explicit test-only target for the assembled OCR notification E2E. The default target below
+# Compile E2E tests directly from the shared source and native dependencies, without building
+# production release binaries or collecting their runtime libraries. The default target below
 # remains the production runtime and never contains fixture controls or a test executable.
-FROM builder AS e2e-test
+FROM source AS e2e-test
 COPY docs/schemas /workspace/docs/schemas
 COPY apps/processing-worker/testdata /workspace/apps/processing-worker/testdata
 RUN --mount=type=cache,id=analysis-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \

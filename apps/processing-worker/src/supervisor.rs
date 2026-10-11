@@ -42,7 +42,7 @@ impl WorkerRuntimePlan {
     pub(crate) fn from_environment(
         analysis_activation: &AnalysisActivationConfig,
     ) -> Result<Self, SupervisorError> {
-        let notifications = NotificationConfig::from_environment()?;
+        let notifications = crate::notifications::config_from_environment()?;
         let ocr_mode = consumer_mode_from_environment()?;
         if analysis_activation.publication_mode == AnalysisPublicationMode::Disabled {
             if ocr_mode == OcrConsumerMode::Enabled {

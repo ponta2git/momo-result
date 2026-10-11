@@ -120,7 +120,7 @@ pub(super) async fn prepare(
             previous_artifact_id = ?comparison.previous.as_artifact().map(|artifact| &artifact.identity.artifact_id),
             current_artifact_id = %current.identity.artifact_id);
     }
-    Ok(prepared)
+    Ok(prepared.map_err(SkipReason::from))
 }
 
 fn validate(snapshot: &Snapshot, changes: &comparison::Changes) -> Result<(), SkipReason> {

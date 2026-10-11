@@ -215,6 +215,7 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 - supervisorは稼働するpeerと共通の停止期限を組み立てる。各capabilityが外部接続・driver・listenerの寿命を所有し、汎用PostgreSQL接続層へoutboxや分析の知識を持ち込まない。commit後のwakeは現在の配送先を明示する小さな値とし、用途のない種類の集合やpayloadを運搬しない。
 - 分析のterminal履歴と未参照artifactの保持・整理はWorkerのcontrol処理が所有し、APIの起動に依存しない。保持条件は分析batch要求を正本とし、公開済みcurrent / previousの保護とbounded cleanupを同じDB境界で保証する。
 - capability crate は決定論的な domain / 計算 / version 付き論理契約を所有し、DB、Redis、filesystem、clock、async runtime に依存しない。runtime から capability への一方向依存とする。
+- 通知基盤の `momo-notifications` は件数・bytesの予約、envelopeのserialize、呼出側transactionによる最終JSONBサイズ検証、transport設定の検証とHTTP送信を所有する。通知内容を作るproducer、業務SQL、DB接続、SAVEPOINTとcommit、環境変数の読取り、senderの監督・停止期限はworkerが所有する。workerから通知基盤への一方向依存とする。
 - production の OS FFI と `unsafe` は process adapter に隔離し、他 module へ checked な safe API を公開する。TERM・KILL・process groupの回収は共通化し、分析の入力設定・終了分類とOCRのframe・結果decodeは各capabilityのprocess adapterに残す。
 - 子 process の resource 制限は実 runtime の cgroup で保証する。非対応 OS では job claim 前に fail closed にする。
 - 同時実行や publication は DB lease と fencing token で世代をまたいで保証する。process 内 semaphore や台数を正本にしない。
@@ -237,7 +238,7 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 - OCR の object / queue / 状態契約は `docs/redis-streams-ocr-contract.md` と schema を正本とし、URL、credential、local path を runtime 間 payload にしない。
 - 検証済み画像はprocess adapterへ所有権を渡し、headerと画像を順に転送するためだけの全量frame複製を作らない。認識fallbackは既存の評価順を保ち、必要になった画像だけ生成する。
 - OCRの不確かな読取値は、必要な警告を保持して要確認結果として保存する。件数の妥当性しきい値を保存拒否の上限に読み替えず、parserと保存前検証で警告条件を一致させる。構造・型・対応関係が壊れた候補や警告の欠落は拒否する。
-- OCR・分析通知のenvelopeは `notifications/envelope` が種類とsource identityから通知IDとwire versionを構築する。OCRは送出単位のv2、分析は論理job単位のv1。各producerは固定dataと確定時刻・世代を渡し、commit後のhandoffは制御側が所有する。
+- OCR・分析通知のenvelopeは `momo-notifications` が種類とsource identityから通知IDとwire versionを構築する。OCRは送出単位のv2、分析は論理job単位のv1。各producerは固定dataと確定時刻・世代を渡し、commit後のhandoffは制御側が所有する。
 - 新規producer送出は[通知サイズと送出可否](requirements/base.md#通知サイズと送出可否)に従い、最終envelopeのHTTP本文・JSONB text表現と掲載内容を制限する。共有wireの保存互換や分析の比較履歴読取と、新規送出上限を混同しない。上限超過は通知全体の省略とし、業務成功と分析の入力基準更新を維持する。描画後の投稿数検証はSummitが所有する。
 - APIは `ocr_submissions` / `ocr_submission_members` に所有者・固定画像集合・受付期限を原子的に保存し、job登録とmember対応を一つのtransactionにする。同一操作のPUTと登録済みmemberの再送は同じ識別子へ収束する。Webは全画像の内容識別とupload keyを送出受付前に固定する。
 - OCR専用coordinatorは現在の下書きslotではなく固定memberと対応jobの終端を読み、全員終了後だけ送出を確定する。下書き→送出の順にlockし、業務更新後の最後にresult gateと設定を読む。ONなら文脈と失敗だけを固定し、OFFでも送出は終端にして後から再構築しない。画像0件の期限終了も回収し、後の送出・slot状態を上書きしない。

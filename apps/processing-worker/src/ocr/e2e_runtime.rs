@@ -12,7 +12,7 @@ use super::{
     submissions,
 };
 use crate::{
-    notifications::{NotificationConfig, NotificationDriver},
+    notifications::{NotificationDriver, config_from_environment},
     outbox::PostCommitSink,
 };
 use std::{
@@ -54,7 +54,7 @@ async fn controlled_worker_process() -> TestResult {
         listener_database_url: database,
         finalization_timeout: config.shutdown_finalization_bound(),
     };
-    let (notifications, driver) = NotificationDriver::new(NotificationConfig::from_environment()?)?;
+    let (notifications, driver) = NotificationDriver::new(config_from_environment()?)?;
     let (sink, _wake) = PostCommitSink::channel();
     let (shutdown, stop) = watch::channel(false);
     let launcher = Launcher {

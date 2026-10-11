@@ -33,6 +33,7 @@ use crate::series_analysis::artifact::{
 
 type SmokeResult<T = ()> = Result<T, Box<dyn Error + Send + Sync>>;
 
+mod claim_wait;
 mod heartbeat;
 mod notifications;
 mod radar;

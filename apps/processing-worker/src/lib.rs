@@ -8,6 +8,7 @@
 //! [`entrypoint`]; capability and infrastructure modules stay private so deployment commands cannot
 //! bypass the CLI boundary.
 
+mod busy_retry;
 mod cgroup;
 mod cli;
 mod execution_slot;

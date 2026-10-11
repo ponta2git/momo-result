@@ -3,7 +3,7 @@ use std::time::{Duration, Instant, SystemTime};
 use momo_analysis_core::contract::{
     ARTIFACT_SCHEMA_VERSION, ARTIFACT_VALIDATION_CONTRACT_ID, QueuePayload,
 };
-use redis::{RedisError, aio::ConnectionManager};
+use redis::{RedisError, aio::ConnectionManager, streams::StreamId};
 use thiserror::Error;
 use tokio::sync::watch;
 use tracing::{Instrument, error, info, info_span, warn};
@@ -19,6 +19,7 @@ pub(crate) mod outbox;
 pub(crate) mod release;
 
 use crate::{
+    busy_retry::BusyRetryBudget,
     outbox::{ControlOutcome, PostCommitSink, PostCommitSinkClosed},
     pel_recovery::{PelRecoverySchedule, RecoveryAction},
     postgres::{self, PostgresError},
@@ -29,13 +30,14 @@ use self::{
     config::AnalysisConsumerConfig,
     control::{
         ALGORITHM_VERSION, AttemptFailure, ClaimResult, ControlError, IdleRefreshSchedule,
-        SafeFailureCode, claim_job, finish_failure, mark_draining, register_capability,
+        SafeFailureCode, finish_failure, mark_draining, register_capability,
     },
 };
 
 mod attempt;
 mod attempt_directory;
 mod campaign;
+mod claim_wait;
 mod heartbeat;
 mod input_repository;
 mod radar_prepare;
@@ -48,6 +50,7 @@ use attempt::{child_spec, finish_attempt_result, run_claimed_child};
 use attempt_directory::{
     cleanup_stale_attempt_directories, create_attempt_directory, validate_temporary_root,
 };
+use claim_wait::claim_delivery;
 use metrics::{PhaseTimer, elapsed_metrics, measure};
 use queue::{
     AutoClaimCursor, acknowledge, ensure_consumer_group, payload_from_delivery, read_new_delivery,
@@ -137,6 +140,16 @@ struct MaintenanceSchedules {
 }
 
 impl MaintenanceSchedules {
+    fn early_claim_until(
+        &self,
+        received_at: Instant,
+        recovery: &PelRecoverySchedule,
+        lease_duration: Duration,
+    ) -> Option<Instant> {
+        let recovery_wait = recovery.read_block(received_at, lease_duration);
+        received_at.checked_add(recovery_wait.min(self.next_due_in(received_at)))
+    }
+
     fn next_due_in(&self, now: Instant) -> Duration {
         let cleanup_due = self
             .stale_attempt_cleanup_due
@@ -345,31 +358,17 @@ async fn consume_deliveries(
     let mut recovery_cursor = AutoClaimCursor::start();
     let mut recovery_schedule =
         PelRecoverySchedule::new(Instant::now(), config.pel_recovery_interval);
+    let mut busy_retry_budget = BusyRetryBudget::new(config.lease_duration);
     while !*shutdown.borrow() {
         maintenance.run_due(control_client, config).await?;
-        let delivery = match recovery_schedule.due_action(Instant::now()) {
-            Some(RecoveryAction::ColdPage) => {
-                let page = recover_cold_page(redis, config, &mut recovery_cursor).await?;
-                if !recovery_schedule.record_cold_page(Instant::now(), page.complete) {
-                    return Err(ConsumerError::DurationBound);
-                }
-                page.delivery
-            }
-            Some(RecoveryAction::Targeted(message_id)) => {
-                let delivery = recover_targeted_delivery(redis, config, &message_id).await?;
-                recovery_schedule.record_target_attempt(&message_id);
-                delivery
-            }
-            None => {
-                let now = Instant::now();
-                let block = recovery_schedule
-                    .read_block(now, config.redis_block)
-                    .min(maintenance.next_due_in(now));
-                let delivery = read_new_delivery(redis, config, block).await?;
-                recovery_schedule.record_new_delivery_read();
-                delivery
-            }
-        };
+        let delivery = next_delivery(
+            redis,
+            config,
+            &mut recovery_cursor,
+            &mut recovery_schedule,
+            &maintenance,
+        )
+        .await?;
         if *shutdown.borrow() {
             break;
         }
@@ -400,6 +399,13 @@ async fn consume_deliveries(
             continue;
         };
 
+        let early_claim_until = maintenance
+            .early_claim_until(
+                delivery_received_at,
+                &recovery_schedule,
+                config.lease_duration,
+            )
+            .ok_or(ConsumerError::DurationBound)?;
         let disposition = process_delivery(
             control_client,
             heartbeat_client,
@@ -407,6 +413,8 @@ async fn consume_deliveries(
             post_commit_sink,
             &message_id,
             &payload,
+            early_claim_until,
+            &mut busy_retry_budget,
             shutdown,
         )
         .await?;
@@ -439,6 +447,38 @@ async fn consume_deliveries(
     Ok(())
 }
 
+async fn next_delivery(
+    redis: &mut ConnectionManager,
+    config: &AnalysisConsumerConfig,
+    recovery_cursor: &mut AutoClaimCursor,
+    recovery_schedule: &mut PelRecoverySchedule,
+    maintenance: &MaintenanceSchedules,
+) -> Result<Option<StreamId>, ConsumerError> {
+    match recovery_schedule.due_action(Instant::now()) {
+        Some(RecoveryAction::ColdPage) => {
+            let page = recover_cold_page(redis, config, recovery_cursor).await?;
+            if !recovery_schedule.record_cold_page(Instant::now(), page.complete) {
+                return Err(ConsumerError::DurationBound);
+            }
+            Ok(page.delivery)
+        }
+        Some(RecoveryAction::Targeted(message_id)) => {
+            let delivery = recover_targeted_delivery(redis, config, &message_id).await?;
+            recovery_schedule.record_target_attempt(&message_id);
+            Ok(delivery)
+        }
+        None => {
+            let now = Instant::now();
+            let block = recovery_schedule
+                .read_block(now, config.redis_block)
+                .min(maintenance.next_due_in(now));
+            let delivery = read_new_delivery(redis, config, block).await?;
+            recovery_schedule.record_new_delivery_read();
+            Ok(delivery)
+        }
+    }
+}
+
 fn schedule_pending_recovery(
     schedule: &mut PelRecoverySchedule,
     message_id: String,
@@ -468,6 +508,10 @@ fn schedule_pending_recovery(
     Ok(())
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the delivery keeps its recovery and maintenance bounds alongside the shared retry budget"
+)]
 async fn process_delivery(
     control_client: &mut tokio_postgres::Client,
     heartbeat_client: &mut HeartbeatConnection,
@@ -475,16 +519,23 @@ async fn process_delivery(
     post_commit_sink: &PostCommitSink,
     message_id: &str,
     payload: &QueuePayload,
+    early_claim_until: Instant,
+    busy_retry_budget: &mut BusyRetryBudget,
     shutdown: &mut watch::Receiver<bool>,
 ) -> Result<DeliveryDisposition, ConsumerError> {
-    let claim = submit_control_outcome(
+    let Some(claim) = Box::pin(claim_delivery(
+        control_client,
+        &payload.job_id,
+        config,
         post_commit_sink,
-        measure(
-            "job_claim",
-            claim_job(control_client, &payload.job_id, config),
-        )
-        .await?,
-    )?;
+        early_claim_until,
+        busy_retry_budget,
+        shutdown,
+    ))
+    .await?
+    else {
+        return Ok(DeliveryDisposition::StopLoop);
+    };
     let claim = match claim {
         ClaimResult::Claimed(claim) => claim,
         ClaimResult::MissingOrTerminal => {
@@ -706,6 +757,47 @@ mod tests {
         assert_eq!(
             maintenance.next_due_in(now + Duration::from_secs(2)),
             Duration::ZERO
+        );
+    }
+
+    #[test]
+    fn early_claims_yield_to_existing_recovery_and_maintenance() {
+        let now = Instant::now();
+        let mut maintenance = MaintenanceSchedules {
+            capability_refresh: IdleRefreshSchedule::after_success(now),
+            stale_attempt_cleanup_due: None,
+            history_cleanup_due: now + Duration::from_hours(1),
+        };
+        let lease = Duration::from_secs(70);
+        let mut recovery = PelRecoverySchedule::new(now, Duration::from_mins(5));
+        assert!(recovery.record_cold_page(now, true));
+        assert!(
+            recovery.schedule_target(String::from("older-delivery"), now + Duration::from_secs(2))
+        );
+        let deadline = maintenance.early_claim_until(now, &recovery, lease);
+        assert_eq!(deadline, Some(now + Duration::from_secs(2)));
+        let retry = crate::busy_retry::BusyRetry::new(
+            tokio::time::Instant::from_std(now),
+            tokio::time::Instant::from_std(deadline.unwrap_or(now)),
+        );
+        assert!(
+            retry
+                .next_at(tokio::time::Instant::from_std(now + Duration::from_secs(1)))
+                .is_none(),
+            "a busy delivery cannot start another check at an older delivery's recovery deadline"
+        );
+
+        recovery.forget_target("older-delivery");
+        maintenance.stale_attempt_cleanup_due = Some(now + Duration::from_secs(1));
+        assert_eq!(
+            maintenance.early_claim_until(now, &recovery, lease),
+            Some(now + Duration::from_secs(1))
+        );
+        assert!(recovery.record_cold_page(now, false));
+        assert_eq!(
+            maintenance.early_claim_until(now, &recovery, lease),
+            Some(now),
+            "an unfinished cold sweep takes precedence over optional early claims"
         );
     }
 

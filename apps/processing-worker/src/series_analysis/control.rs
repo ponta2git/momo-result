@@ -24,7 +24,7 @@ mod integration_tests;
 pub(crate) use capability::{
     CAPABILITY_FRESH_SECONDS, IdleRefreshSchedule, mark_draining, register_capability,
 };
-pub(crate) use claim::claim_job;
+pub(crate) use claim::{claim_job, retry_busy_job};
 pub(crate) use completion::publish;
 pub(crate) use history::{HISTORY_CLEANUP_INTERVAL, cleanup_history};
 pub(crate) use lifecycle::{

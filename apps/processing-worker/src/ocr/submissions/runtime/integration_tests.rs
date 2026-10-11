@@ -9,6 +9,8 @@ use std::{error::Error, time::Duration};
 use tokio_postgres::Client;
 
 type TestResult<T = ()> = Result<T, Box<dyn Error + Send + Sync>>;
+mod busy_rechecks;
+
 const TIMEOUT: Duration = Duration::from_secs(5);
 const IDS: [&str; 8] = [
     "00000000-0024-4000-8000-000000000001",
@@ -84,6 +86,7 @@ async fn verify(
     verify_recovery_boundaries(primary, peer, url, sink).await?;
     verify_listener_reconnect(primary, url).await?;
     verify_deadline_reconnect(primary, peer, url).await?;
+    busy_rechecks::verify(primary, peer, url).await?;
     let delay = next_delay(primary, TIMEOUT).await?;
     ensure(
         delay == SAFETY_INTERVAL,
@@ -345,6 +348,7 @@ async fn cleanup(client: &Client) -> TestResult {
         .chain(EXTRA_IDS.iter())
         .chain(RETAINED_IDS.iter())
         .chain(RECOVERY_IDS.iter())
+        .chain(busy_rechecks::IDS.iter())
         .copied()
         .collect();
     let jobs: Vec<String> = ids
@@ -489,9 +493,10 @@ async fn verify_idle_recovery(primary: &Client, url: &str, cold: &str) -> TestRe
     let schedule = Schedule {
         safety_interval: Duration::from_millis(30),
         observed: Some(observed),
+        rechecked: None,
     };
     let database = postgres::connect(url).await?;
-    let mut cursor = ScanCursor::default();
+    let mut recovery = Recovery::default();
     let runner = coordinate(
         database,
         receiver,
@@ -499,7 +504,7 @@ async fn verify_idle_recovery(primary: &Client, url: &str, cold: &str) -> TestRe
         TIMEOUT,
         NotificationSink::default(),
         schedule,
-        &mut cursor,
+        &mut recovery,
     );
     let check = async {
         progress.changed().await?; // First scan completed while no new submission existed.

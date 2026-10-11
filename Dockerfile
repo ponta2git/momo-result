@@ -33,7 +33,8 @@ COPY apps/web/src apps/web/src
 RUN pnpm --filter web contract:check
 RUN pnpm --filter web build
 
-FROM ${JAVA_JDK_IMAGE} AS api-deps
+# Compile portable JVM artifacts natively, including when building an amd64 runtime on ARM.
+FROM --platform=$BUILDPLATFORM ${JAVA_JDK_IMAGE} AS api-deps
 WORKDIR /workspace/apps/api
 ENV SBT_OPTS="--enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow"
 ARG SBT_SHA256=351087fb5ad0d8b271f21b4c6f8e4912c8f6dbf81e1d06fe215bb165f14668b3

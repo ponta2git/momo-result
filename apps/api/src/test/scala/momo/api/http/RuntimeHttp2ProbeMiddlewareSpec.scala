@@ -26,7 +26,17 @@ final class RuntimeHttp2ProbeMiddlewareSpec extends MomoCatsEffectSuite:
     yield
       assertEquals(response.status, Status.Ok)
       assertEquals(parse(body).flatMap(_.hcursor.get[String]("httpVersion")), Right("HTTP/2.0"))
-      assertEquals(parse(body).map(_.hcursor.keys.map(_.toSet)), Right(Some(Set("httpVersion"))))
+      val decoded = parse(body).toOption.get.hcursor
+      assert(decoded.get[Long]("startedNanos").toOption.get <
+        decoded.get[Long]("finishedNanos").toOption.get)
+      assertEquals(
+        decoded.keys.map(_.toSet),
+        Some(Set(
+          "httpVersion",
+          "startedNanos",
+          "finishedNanos",
+        ))
+      )
 
   test("falls through when the probe header is absent"):
     app.run(Request[IO](uri = Uri.unsafeFromString(RuntimeHttp2ProbeMiddleware.Path)))

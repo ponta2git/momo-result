@@ -5,7 +5,7 @@ import scala.concurrent.duration.*
 import cats.data.Kleisli
 import cats.effect.{Async, Clock}
 import cats.syntax.all.*
-import org.http4s.{HttpApp, Request, Response}
+import org.http4s.{HttpApp, Method, Request, Response}
 import org.slf4j.LoggerFactory
 
 import momo.api.domain.RequestId
@@ -26,20 +26,26 @@ private[http] object RequestDurationLoggingMiddleware:
             val path = request.uri.path.renderString
             val httpVersion = request.httpVersion.renderString
             val status = response.status.code
+            // HEAD and contentless statuses have no body transfer to observe. The server may
+            // dispose their body scopes normally; that is not a canceled client transfer.
+            val observed =
+              if request.method.name == Method.HEAD.name ||
+                !response.status.isEntityAllowed
+              then response
+              else
+                response.withBodyStream(BodyTransferObserver(response.body)(result =>
+                  logTransferCompleted(
+                    method,
+                    path,
+                    httpVersion,
+                    status,
+                    correlationId,
+                    started,
+                    result,
+                  )
+                ))
             // Observation failure must not discard a Response with acquired body resources.
-            logResponseReady(request, response, correlationId, started).attempt.void.as(
-              response.withBodyStream(BodyTransferObserver(response.body)(result =>
-                logTransferCompleted(
-                  method,
-                  path,
-                  httpVersion,
-                  status,
-                  correlationId,
-                  started,
-                  result,
-                )
-              ))
-            )
+            logResponseReady(request, response, correlationId, started).attempt.void.as(observed)
           case Left(error) =>
             logFailed(request, correlationId, started) *> Async[F].raiseError[Response[F]](error)
         }

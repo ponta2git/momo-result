@@ -2,6 +2,7 @@ package momo.api.http
 
 import cats.data.Kleisli
 import cats.effect.IO
+import cats.syntax.all.*
 import fs2.Stream
 import io.circe.Json
 import org.http4s.{Header, HttpApp, Method, Request, Response, Status, Uri}
@@ -78,4 +79,28 @@ final class MaxBodySizeMiddlewareSpec extends MomoCatsEffectSuite:
       assertEquals(body, "8")
       assertEquals(encoded.status, Status.Ok)
       assertEquals(encodedBody, "8")
+  }
+
+  List(Method.GET, Method.HEAD, Method.OPTIONS, Method.TRACE).foreach { method =>
+    test(s"${method.name} bodies obey the limit with and without Content-Length") {
+      for
+        pulls <- IO.ref(0)
+        handlers <- IO.ref(0)
+        app: HttpApp[IO] = Kleisli(request =>
+          handlers.update(_ + 1) *> request.body.compile.drain.as(Response[IO](Status.Ok))
+        )
+        limited = MaxBodySizeMiddleware.requestAndUpload[IO](4, 8)(app)
+        request = Request[IO](method, Uri.unsafeFromString("/api/test"))
+          .withBodyStream(Stream.exec(pulls.update(_ + 1)) ++
+            Stream.emits[IO, Byte](List.fill(5)(1)))
+        declared <- limited.run(request.putHeaders(Header.Raw(CIString("Content-Length"), "5")))
+        before <- (pulls.get, handlers.get).tupled
+        streamed <- limited.run(request)
+        after <- (pulls.get, handlers.get).tupled
+      yield
+        assertEquals(declared.status, Status.PayloadTooLarge)
+        assertEquals(before, (0, 0))
+        assertEquals(streamed.status, Status.PayloadTooLarge)
+        assertEquals(after, (1, 1))
+    }
   }

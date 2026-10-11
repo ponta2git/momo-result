@@ -2,6 +2,7 @@ package momo.api.http
 
 import java.io.IOException
 import java.sql.SQLException
+import java.util.concurrent.CancellationException
 
 import cats.data.Kleisli
 import cats.effect.Async
@@ -16,9 +17,13 @@ private[http] object HttpErrorMiddleware:
   private val logger = LoggerFactory.getLogger("momo.api.http.HttpErrorMiddleware")
 
   def apply[F[_]: Async](http: HttpApp[F]): HttpApp[F] = Kleisli { request =>
-    http.run(request).handleErrorWith { error =>
-      val appError = classify(error)
-      logIncident[F](request, appError, error) *> problem[F](appError)
+    http.run(request).handleErrorWith {
+      // Ember reports a peer's stream reset to a pending body reader with this exception.
+      // Preserve that transport signal instead of attempting a 500 on the closed stream.
+      case canceled: CancellationException => Async[F].raiseError(canceled)
+      case error =>
+        val appError = classify(error)
+        logIncident[F](request, appError, error) *> problem[F](appError)
     }
   }
 

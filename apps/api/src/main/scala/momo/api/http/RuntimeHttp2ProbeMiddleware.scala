@@ -24,7 +24,11 @@ private[api] object RuntimeHttp2ProbeMiddleware:
 
   def apply[F[_]: Temporal](http: HttpApp[F]): HttpApp[F] = Kleisli { request =>
     if isProbe(request) then
-      Temporal[F].sleep(ParallelismWindow) *> Temporal[F].pure(protocolResponse(request))
+      for
+        started <- Temporal[F].monotonic
+        _ <- Temporal[F].sleep(ParallelismWindow)
+        finished <- Temporal[F].monotonic
+      yield protocolResponse(request, started, finished)
     else http.run(request)
   }
 
@@ -33,9 +37,15 @@ private[api] object RuntimeHttp2ProbeMiddleware:
       request.uri.path.renderString == Path &&
       request.headers.get(HeaderName).exists(_.head.value == HeaderValue)
 
-  private def protocolResponse[F[_]](request: Request[F]): Response[F] =
+  private def protocolResponse[F[_]](
+      request: Request[F],
+      started: FiniteDuration,
+      finished: FiniteDuration,
+  ): Response[F] =
     val payload = Json.obj(
       "httpVersion" -> Json.fromString(request.httpVersion.renderString),
+      "startedNanos" -> Json.fromLong(started.toNanos),
+      "finishedNanos" -> Json.fromLong(finished.toNanos),
     )
     Response[F](Status.Ok).withEntity(payload.noSpaces)
       .putHeaders(`Content-Type`(MediaType.application.json))

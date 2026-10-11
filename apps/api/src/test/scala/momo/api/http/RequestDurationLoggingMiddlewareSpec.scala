@@ -8,7 +8,7 @@ import cats.effect.{Deferred, IO, Outcome, Resource}
 import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.spi.ILoggingEvent
 import fs2.Stream
-import org.http4s.{Header, HttpApp, HttpVersion, Request, Response, Status, Uri}
+import org.http4s.{Header, HttpApp, HttpVersion, Method, Request, Response, Status, Uri}
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.testing.LogbackCapture
@@ -18,6 +18,30 @@ final class RequestDurationLoggingMiddlewareSpec extends MomoCatsEffectSuite:
     uri = Uri.unsafeFromString("/stream"),
     httpVersion = HttpVersion.`HTTP/2`,
   ).putHeaders(Header.Raw(RequestIdMiddleware.HeaderName, "request-stream-1"))
+
+  List((Method.HEAD, Status.Ok), (Method.GET, Status.NoContent), (Method.GET, Status.NotModified))
+    .foreach { case (method, status) =>
+      test(s"${method.name} ${status.code} preserves cleanup without reporting a body transfer") {
+        captureLogs { events =>
+          for
+            releases <- IO.ref(0)
+            app = RequestDurationLoggingMiddleware[IO](Kleisli(_ =>
+              IO.pure(Response[IO](status).withBodyStream(
+                Stream.empty.onFinalize(releases.update(_ + 1))
+              ))
+            ))
+            response <- app.run(request.withMethod(method))
+            _ <- response.body.compile.drain
+            released <- releases.get
+            captured <- events
+          yield
+            assertEquals(released, 1)
+            val logged = messages(captured)
+            assertEquals(logged.count(_.startsWith("http_response_ready ")), 1)
+            assert(!logged.exists(_.startsWith("http_response_transfer_completed ")))
+        }
+      }
+    }
 
   test("logs readiness before pull and successful transfer only after the body is consumed"):
     val app = middleware(Stream.emits[IO, Byte](Array[Byte](1, 2, 3)))

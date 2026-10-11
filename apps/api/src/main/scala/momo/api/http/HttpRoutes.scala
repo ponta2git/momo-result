@@ -4,9 +4,12 @@ import cats.effect.Async
 import cats.syntax.all.*
 import org.http4s.HttpApp as Http4sApp
 import org.http4s.server.Router
-import sttp.tapir.AnyEndpoint
+import sttp.model.StatusCode
 import sttp.tapir.server.ServerEndpoint
 import sttp.tapir.server.http4s.{Http4sServerInterpreter, Http4sServerOptions}
+import sttp.tapir.server.interceptor.reject.RejectHandler
+import sttp.tapir.server.model.ValuedEndpointOutput
+import sttp.tapir.{header, statusCode, stringBody, AnyEndpoint, EndpointInput}
 
 import momo.api.auth.{
   AccountAccess,
@@ -51,6 +54,16 @@ object HttpRoutes:
     Http4sServerOptions.customiseInterceptors[F]
       .exceptionHandler(None)
       .serverLog(None)
+      .rejectHandler(RejectHandler.pure[F] { context =>
+        val allowed = context.failure.failures.map(_.failingInput).collect {
+          case method: EndpointInput.FixedMethod[?] => method.m.method
+        }.distinct.sorted
+        // RFC 9110 section 15.5.6 requires the target's methods on every 405 response.
+        Option.when(allowed.nonEmpty)(ValuedEndpointOutput(
+          statusCode(StatusCode.MethodNotAllowed).and(header[String]("Allow")).and(stringBody),
+          (allowed.mkString(", "), "Method Not Allowed"),
+        ))
+      })
       .options
 
   final case class AuthDependencies[F[_]](
@@ -326,17 +339,17 @@ object HttpRoutes:
     val authRoutes = interpreter.toRoutes(authEndpoints)
 
     val app =
-      RequestIdMiddleware[F](RequestDurationLoggingMiddleware[F](SecurityHeadersMiddleware[F](
-        deps.config.appEnv
-      )(HttpErrorMiddleware[F](
-        MaxBodySizeMiddleware.requestAndUpload[F](
-          deps.config.resourceLimits.requestMaxBytes,
-          deps.config.resourceLimits.uploadRequestMaxBytes,
-        )(
-          deps.bodyAdmission(Router("/" -> (authRoutes <+> tapirRoutes <+> sourceImageRoutes))
-            .orNotFound)
-        )
-      ))))
+      RequestIdMiddleware[F](RequestDurationLoggingMiddleware[F](HeadResponseMiddleware[F](
+        SecurityHeadersMiddleware[F](deps.config.appEnv)(HttpErrorMiddleware[F](
+          MaxBodySizeMiddleware.requestAndUpload[F](
+            deps.config.resourceLimits.requestMaxBytes,
+            deps.config.resourceLimits.uploadRequestMaxBytes,
+          )(
+            deps.bodyAdmission(Router("/" -> (authRoutes <+> tapirRoutes <+> sourceImageRoutes))
+              .orNotFound)
+          )
+        ))
+      )))
     val registeredEndpoints =
       endpoints.map(_.endpoint) ::: sourceImageEndpoints.map(_.endpoint) ::: authEndpoints.map(
         _.endpoint

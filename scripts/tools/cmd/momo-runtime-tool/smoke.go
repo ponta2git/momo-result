@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -9,8 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -34,7 +31,9 @@ type healthPayload struct {
 }
 
 type http2ProbePayload struct {
-	HTTPVersion string `json:"httpVersion"`
+	HTTPVersion   string `json:"httpVersion"`
+	StartedNanos  int64  `json:"startedNanos"`
+	FinishedNanos int64  `json:"finishedNanos"`
 }
 
 func runLocalSmoke(ctx context.Context, stdout io.Writer, stderr io.Writer) int {
@@ -180,7 +179,7 @@ func probeLocalHTTP2(ctx context.Context, host string, originToken string) error
 	if err := probePublicListenerH2C(ctx, host, originToken); err != nil {
 		return err
 	}
-	return probeUpstreamMultiplexing(ctx, host, originToken)
+	return probeUpstreamConcurrency(ctx, host, originToken)
 }
 
 func probePublicListenerH2C(ctx context.Context, host string, originToken string) error {
@@ -207,7 +206,7 @@ func probePublicListenerH2C(ctx context.Context, host string, originToken string
 	return nil
 }
 
-func probeUpstreamMultiplexing(ctx context.Context, host string, originToken string) error {
+func probeUpstreamConcurrency(ctx context.Context, host string, originToken string) error {
 	protocols := new(http.Protocols)
 	protocols.SetHTTP1(true)
 	transport := &http.Transport{
@@ -221,15 +220,7 @@ func probeUpstreamMultiplexing(ctx context.Context, host string, originToken str
 	if _, err := requestHTTP2Probe(ctx, client, host, originToken); err != nil {
 		return err
 	}
-	steadyConnections, err := establishedTCPConnectionsOnLocalPort(8081)
-	if err != nil {
-		return err
-	}
-	if steadyConnections < 1 {
-		return errors.New("upstream HTTP/2 connection was not observable")
-	}
 
-	started := time.Now()
 	results := make(chan http2ProbePayload, http2ProbeCount)
 	failures := make(chan error, http2ProbeCount)
 	startRequests := make(chan struct{})
@@ -247,61 +238,37 @@ func probeUpstreamMultiplexing(ctx context.Context, host string, originToken str
 			results <- payload
 		}()
 	}
-	requestsDone := make(chan struct{})
-	go func() {
-		waitGroup.Wait()
-		close(requestsDone)
-	}()
-	maximumConnections := steadyConnections
-	monitorTicker := time.NewTicker(10 * time.Millisecond)
 	close(startRequests)
-	var monitorError error
-monitorLoop:
-	for {
-		select {
-		case <-requestsDone:
-			break monitorLoop
-		case <-monitorTicker.C:
-			connectionCount, countErr := establishedTCPConnectionsOnLocalPort(8081)
-			if countErr != nil {
-				monitorError = countErr
-				<-requestsDone
-				break monitorLoop
-			}
-			if connectionCount > maximumConnections {
-				maximumConnections = connectionCount
-			}
-		}
-	}
-	monitorTicker.Stop()
-	if monitorError == nil {
-		connectionCount, countErr := establishedTCPConnectionsOnLocalPort(8081)
-		if countErr != nil {
-			monitorError = countErr
-		} else if connectionCount > maximumConnections {
-			maximumConnections = connectionCount
-		}
-	}
+	waitGroup.Wait()
 	close(results)
 	close(failures)
-	if monitorError != nil {
-		return monitorError
-	}
 	if len(failures) != 0 {
 		return <-failures
 	}
+	payloads := make([]http2ProbePayload, 0, http2ProbeCount)
 	for payload := range results {
-		if payload.HTTPVersion != "HTTP/2.0" {
-			return errors.New("upstream requests did not reach the API over HTTP/2")
+		payloads = append(payloads, payload)
+	}
+	return validateHTTP2Concurrency(payloads)
+}
+
+// Overlapping intervals from one server's monotonic clock prove concurrent handling.
+// Global TCP counts and client elapsed time cannot establish HTTP/2 multiplexing:
+// connections may legitimately be replaced, and several connections may already exist.
+func validateHTTP2Concurrency(payloads []http2ProbePayload) error {
+	for _, payload := range payloads {
+		if payload.HTTPVersion != "HTTP/2.0" || payload.StartedNanos >= payload.FinishedNanos {
+			return errors.New("upstream HTTP/2 probe returned an invalid execution interval")
 		}
 	}
-	if maximumConnections != steadyConnections {
-		return errors.New("concurrent upstream requests opened additional API connections")
+	for index, left := range payloads {
+		for _, right := range payloads[index+1:] {
+			if left.StartedNanos < right.FinishedNanos && right.StartedNanos < left.FinishedNanos {
+				return nil
+			}
+		}
 	}
-	if time.Since(started) >= 2*time.Second {
-		return errors.New("upstream HTTP/2 probe did not complete concurrently")
-	}
-	return nil
+	return errors.New("upstream HTTP/2 requests did not execute concurrently")
 }
 
 func requestHTTP2Probe(
@@ -334,66 +301,6 @@ func requestHTTP2Probe(
 		return http2ProbePayload{}, errors.New("upstream HTTP/2 probe returned an invalid payload")
 	}
 	return payload, nil
-}
-
-func establishedTCPConnectionsOnLocalPort(port int) (int, error) {
-	if port < 1 || port > 65535 {
-		return 0, errors.New("invalid TCP port")
-	}
-	paths := []string{"/proc/net/tcp", "/proc/net/tcp6"}
-	total := 0
-	observedProcFile := false
-	for _, path := range paths {
-		file, err := os.Open(path)
-		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				continue
-			}
-			return 0, err
-		}
-		observedProcFile = true
-		count, countErr := countEstablishedTCPConnections(bufio.NewScanner(file), port)
-		closeErr := file.Close()
-		if countErr != nil {
-			return 0, countErr
-		}
-		if closeErr != nil {
-			return 0, closeErr
-		}
-		total += count
-	}
-	if !observedProcFile {
-		return 0, errors.New("TCP connection state is unavailable")
-	}
-	return total, nil
-}
-
-func countEstablishedTCPConnections(scanner *bufio.Scanner, port int) (int, error) {
-	count := 0
-	for scanner.Scan() {
-		fields := strings.Fields(scanner.Text())
-		if len(fields) == 0 || fields[0] == "sl" {
-			continue
-		}
-		if len(fields) < 4 {
-			return 0, errors.New("invalid TCP connection row")
-		}
-		separator := strings.LastIndexByte(fields[1], ':')
-		if separator < 0 || separator == len(fields[1])-1 {
-			return 0, errors.New("invalid local TCP address")
-		}
-		localPort, err := strconv.ParseUint(fields[1][separator+1:], 16, 16)
-		if err != nil {
-			return 0, errors.New("invalid local TCP port")
-		}
-		if int(localPort) == port && fields[3] == "01" {
-			count++
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return 0, err
-	}
-	return count, nil
 }
 
 func decodeValidHealthPayload(reader io.Reader) bool {

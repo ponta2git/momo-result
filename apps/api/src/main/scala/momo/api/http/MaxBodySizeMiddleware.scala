@@ -18,9 +18,9 @@ object MaxBodySizeMiddleware:
   ): HttpApp[F] = Kleisli { request =>
     if HttpRequestPaths.isImageUpload(request) then
       applyLimit(request, uploadLimitBytes, "Upload request", http)
-    else if HttpMethodPredicates.isMutating(request.method) then
-      applyLimit(request, requestLimitBytes, "Request body", http)
-    else http.run(request)
+    // Message framing is independent of method semantics (RFC 9110, section 6.4).
+    // GET, HEAD and extension methods can carry bytes too; they share the ordinary limit.
+    else applyLimit(request, requestLimitBytes, "Request body", http)
   }
 
   private def applyLimit[F[_]: Async](

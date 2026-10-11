@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -173,22 +172,6 @@ func TestHealthPayloadRejectsTrailingData(t *testing.T) {
 		if decodeValidHealthPayload(strings.NewReader(input)) {
 			t.Fatal("health payload with trailing JSON was accepted")
 		}
-	}
-}
-
-func TestCountEstablishedTCPConnectionsFiltersByLocalPortAndState(t *testing.T) {
-	t.Parallel()
-	procNetTCP := `  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
-   0: 0100007F:1F91 0100007F:C350 01 00000000:00000000 00:00000000 00000000  1000        0 1
-   1: 00000000:1F91 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 2
-   2: 0100007F:1F90 0100007F:C351 01 00000000:00000000 00:00000000 00000000  1000        0 3
-`
-	actual, err := countEstablishedTCPConnections(bufio.NewScanner(strings.NewReader(procNetTCP)), 8081)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if actual != 1 {
-		t.Fatalf("established connections = %d, want 1", actual)
 	}
 }
 

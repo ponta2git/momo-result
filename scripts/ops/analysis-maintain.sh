@@ -42,7 +42,7 @@ invoke() {
   [[ "${current_identity}" == "${identity}" ]] || fail 'Worker changed during maintenance; check the current deployment and retry.'
   flyctl ssh console --app "${ANALYSIS_APP}" --machine "${machine_id}" --pty=false --quiet \
     --command "${command}$1" > "${task_tmp}/raw.json" 2> "${task_tmp}/error" || exit_status=$?
-  "${script_dir}/../ci/sanitize-analysis-report.sh" --from-log "${task_tmp}/raw.json" \
+  "${script_dir}/../ci/ci-tool.sh" analysis-report --from-log "${task_tmp}/raw.json" \
     "${report_dir}/operation-report.json" || fail 'Analysis inspection failed; no valid maintenance report was returned.'
   local report_state
   report_state="$("${script_dir}/../ci/ci-tool.sh" analysis-report-state "${report_dir}/operation-report.json")"

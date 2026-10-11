@@ -12,7 +12,7 @@ mkdir -p "$(dirname "${web}")" "${api_dir}"
 run() {
   local expected="$1" actual=0
   shift
-  bash "${script_dir}/write-coverage-summary.sh" "$@" --root "${root}" --out "${out}" > /dev/null 2>&1 || actual=$?
+  bash "${script_dir}/ci-tool.sh" coverage "$@" --root "${root}" --out "${out}" > /dev/null 2>&1 || actual=$?
   [[ "${actual}" == "${expected}" ]] || { echo "Expected ${expected}, got ${actual}: $*" >&2; exit 1; }
 }
 check() { jq -e "$1" "${out}/raw-summary.json" > /dev/null; }

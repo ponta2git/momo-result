@@ -165,21 +165,13 @@ while IFS= read -r -d '' path; do
       scripts/ci/extract-release-notes.sh | scripts/ci/runtime-release-notes.sh)
       ;;
     scripts/ci/runtime-* | scripts/ci/start-runtime-container.sh | \
-      scripts/ci/summarize-runtime-logs.sh | \
       scripts/ci/validate-runtime-image.sh | scripts/ci/dockerfile-lint.sh)
       runtime=true
       ;;
-    scripts/ci/write-coverage-summary.sh)
-      api=true
-      web=true
-      ;;
     scripts/ci/ci-tool.sh | scripts/ci/build-ci-tool.sh | \
-      scripts/ci/test-* | scripts/ci/check-policy.sh | scripts/ci/canonicalize-artifact-digest.sh | \
+      scripts/ci/test-* | scripts/ci/check-policy.sh | \
       scripts/ci/load-analysis-candidate.sh | scripts/ci/load-runtime-image-artifact.sh | \
-      scripts/ci/resolve-pushed-runtime-image.sh | scripts/ci/sanitize-analysis-report.sh | \
-      scripts/ci/validate-analysis-candidate.sh | scripts/ci/validate-analysis-worker-readiness.sh | \
-      scripts/ci/validate-runtime-candidate.sh | scripts/ci/validate-runtime-deployment.sh | \
-      scripts/ci/validate-runtime-release-selection.sh | scripts/ci/validate-postdeploy-evidence.sh)
+      scripts/ci/resolve-pushed-runtime-image.sh)
       ;;
     scripts/ci/actionlint.sh | scripts/ci/install-actionlint.sh | \
       scripts/ci/public-repo-safety-check.sh)

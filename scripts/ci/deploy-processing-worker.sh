@@ -63,7 +63,7 @@ until flyctl logs \
     --machine "${machine_id}" \
     --no-tail \
     --json > "${readiness_log}" 2> /dev/null &&
-  scripts/ci/validate-analysis-worker-readiness.sh \
+  scripts/ci/ci-tool.sh worker-readiness \
     "${readiness_log}" \
     "${machine_id}" \
     "${ANALYSIS_WORKER_ID}" \

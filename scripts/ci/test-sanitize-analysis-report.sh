@@ -2,20 +2,20 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-sanitizer="${repo_root}/scripts/ci/sanitize-analysis-report.sh"
+sanitizer=("${repo_root}/scripts/ci/ci-tool.sh" analysis-report)
 test_dir="$(mktemp -d)"
 trap 'rm -rf "${test_dir}"' EXIT
 
 jq -n '{schemaVersion:1,status:"attention_required",action:"none",
   reason:"reader_or_worker_incompatible",planDigest:"",targetCount:0,
   completedCount:0,failedCount:0,current:{private:"omit"}}' > "${test_dir}/maintenance.json"
-"${sanitizer}" "${test_dir}/maintenance.json" "${test_dir}/safe.json"
+"${sanitizer[@]}" "${test_dir}/maintenance.json" "${test_dir}/safe.json"
 jq -e '.kind == "maintenance" and .reason == "reader_or_worker_incompatible" and
   (keys == ["action","completedCount","failedCount","kind","planDigest","reason","schemaVersion","status","targetCount"])' \
   "${test_dir}/safe.json" > /dev/null
 
 reject() {
-  if "${sanitizer}" "${test_dir}/invalid.json" "${test_dir}/safe.json" > /dev/null 2>&1; then
+  if "${sanitizer[@]}" "${test_dir}/invalid.json" "${test_dir}/safe.json" > /dev/null 2>&1; then
     echo "Invalid or obsolete report was accepted: $1" >&2
     exit 1
   fi
@@ -43,7 +43,7 @@ for field in targetCount completedCount failedCount; do
   done
 done
 jq '.planDigest = ("sha256:" + ("a" * 64))' "${test_dir}/maintenance.json" > "${test_dir}/digest.json"
-"${sanitizer}" "${test_dir}/digest.json" "${test_dir}/safe.json"
+"${sanitizer[@]}" "${test_dir}/digest.json" "${test_dir}/safe.json"
 jq '.planDigest += "\n"' "${test_dir}/digest.json" > "${test_dir}/invalid.json"
 reject 'digest trailing newline'
 cat "${test_dir}/maintenance.json" "${test_dir}/maintenance.json" > "${test_dir}/invalid.json"

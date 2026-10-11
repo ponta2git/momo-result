@@ -5,7 +5,7 @@ task_tmp="$(mktemp -d)"
 trap 'rm -rf "${task_tmp}"' EXIT
 mkdir -p "${task_tmp}/bin" "${task_tmp}/repo/scripts/ci" "${task_tmp}/repo/scripts/ops"
 cp "${repo_root}/scripts/ops/analysis-maintain.sh" "${task_tmp}/repo/scripts/ops/"
-cp "${repo_root}/scripts/ci/"{classify-git-range,classify-changes,sanitize-analysis-report,ci-tool}.sh "${task_tmp}/repo/scripts/ci/"
+cp "${repo_root}/scripts/ci/"{classify-git-range,classify-changes,ci-tool}.sh "${task_tmp}/repo/scripts/ci/"
 export TEST_STATE="${task_tmp}" PATH="${task_tmp}/bin:${PATH}"
 export ANALYSIS_WAIT_SECONDS=3 ANALYSIS_POLL_SECONDS=1
 cat > "${task_tmp}/bin/git" <<'MOCK'

@@ -3,15 +3,15 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 test_dir="$(mktemp -d)"
 trap 'rm -rf "${test_dir}"' EXIT
-validator="${repo_root}/scripts/ci/validate-postdeploy-evidence.sh"
+validator=("${repo_root}/scripts/ci/ci-tool.sh" postdeploy-evidence)
 valid='{"event":"runtime_postdeploy_smoke","schemaVersion":1,"status":"ok","checks":["database","http","http2","processes","publicEdge","redis","web"]}'
 printf '%s\n' "${valid}" > "${test_dir}/evidence.json"
-"${validator}" "${test_dir}/evidence.json" --require-check publicEdge > "${test_dir}/out"
+"${validator[@]}" "${test_dir}/evidence.json" --require-check publicEdge > "${test_dir}/out"
 jq -e '. == {schemaVersion: 1, status: "ok"}' "${test_dir}/out" >/dev/null
 
 reject() {
   local expected="$1"
-  if "${validator}" "${test_dir}/evidence.json" > "${test_dir}/out" 2> "${test_dir}/err"; then
+  if "${validator[@]}" "${test_dir}/evidence.json" > "${test_dir}/out" 2> "${test_dir}/err"; then
     echo "Invalid evidence accepted: ${expected}" >&2
     exit 1
   fi
@@ -31,7 +31,7 @@ for mutation in \
 done
 # Legacy reports may omit the version, but still require every current core check.
 printf '%s\n' "${valid}" | jq 'del(.schemaVersion)' > "${test_dir}/evidence.json"
-"${validator}" "${test_dir}/evidence.json" >/dev/null
+"${validator[@]}" "${test_dir}/evidence.json" >/dev/null
 printf '%s\n%s\n' "${valid}" "${valid}" > "${test_dir}/evidence.json"
 reject JSONDecodeError
 printf 'private malformed content' > "${test_dir}/evidence.json"
@@ -40,7 +40,7 @@ reject JSONDecodeError
 printf '%s' "${valid}" > "${test_dir}/evidence.json"
 head -c 1048577 /dev/zero | tr '\0' ' ' >> "${test_dir}/evidence.json"
 reject JSONDecodeError
-if "${validator}" "${test_dir}/evidence.json" --require-check 'bad-check' > "${test_dir}/out" 2> "${test_dir}/err"; then
+if "${validator[@]}" "${test_dir}/evidence.json" --require-check 'bad-check' > "${test_dir}/out" 2> "${test_dir}/err"; then
   exit 1
 else
   [[ $? == 2 ]]

@@ -99,7 +99,7 @@ jobs:
           metadata="runtime-deployment-metadata/deployment.json"
           target_config="${RUNNER_TEMP}/rollback-fly.toml"
           git show "${CANDIDATE_SHA}:fly.toml" > "${target_config}"
-          selection="$(scripts/ci/validate-runtime-deployment.sh \
+          selection="$(scripts/ci/ci-tool.sh runtime-deployment \
             "${metadata}" "${TARGET_RUN_ID}" "${RUN_ATTEMPT}" "${CANDIDATE_SHA}" --config "${target_config}")"
           artifact_id="$(sed -n 's/^manifest_artifact_id=//p' <<< "${selection}")"
           gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}" | \
@@ -206,7 +206,7 @@ jobs:
           flyctl ssh console --app momo-result --pty=false --quiet \
             --command "env MOMO_POSTDEPLOY_PUBLIC_EDGE=deferred /opt/momo-result/bin/momo-runtime-tool smoke local" \
             > runtime-rollback-evidence/postdeploy-smoke.json
-          scripts/ci/validate-postdeploy-evidence.sh \
+          scripts/ci/ci-tool.sh postdeploy-evidence \
             "${GITHUB_WORKSPACE}/runtime-rollback-evidence/postdeploy-smoke.json" \
             > /dev/null
         timeout-minutes: 2

@@ -126,16 +126,12 @@ assert_case migration-source \
   "$(expected api web analysis analysis_image runtime workflow policy_scripts ocr_notifications)" \
   scripts/ci/resolve-momo-db-migrations.sh
 assert_case release-notes-renderer "${policy_only}" scripts/ci/runtime-release-notes.sh
-assert_case deployment-validator "${policy_only}" scripts/ci/validate-runtime-deployment.sh
 assert_case image-validator \
   "$(expected runtime workflow policy_scripts)" \
   scripts/ci/validate-runtime-image.sh
 assert_case unknown-validator \
   "$(expected api web analysis analysis_image runtime workflow go_runtime go_tools policy_scripts ocr_notifications)" \
   scripts/ci/validate-new-boundary.sh
-assert_case coverage-summary \
-  "$(expected api web workflow policy_scripts)" \
-  scripts/ci/write-coverage-summary.sh
 assert_case api-source "${api_runtime}" apps/api/src/main/scala/momo/api/Main.scala
 assert_case http4s-ref "${http4s_ref}" .http4s-ref
 assert_case http4s-builder "${http4s_builder}" scripts/ci/build-http4s-patch.sh
@@ -178,9 +174,6 @@ assert_case development-tool "${go_only}" scripts/tools/cmd/ocr-evaluation-audit
 assert_case runtime-db-contract "${runtime_go}" contracts/runtime-db-contract.json
 assert_case runtime-tool-characterization \
   "$(expected workflow go_runtime)" contracts/runtime-tool-characterization-v1.json
-assert_case runtime-log-summary \
-  "$(expected runtime workflow policy_scripts)" \
-  scripts/ci/summarize-runtime-logs.sh
 assert_case runtime-memory-smoke \
   "$(expected runtime workflow policy_scripts)" \
   scripts/ci/runtime-memory-smoke.sh
@@ -212,7 +205,6 @@ assert_case docker-runtime "$(expected runtime ocr_notifications)" Dockerfile
 assert_case deployment-config "$(expected runtime ocr_notifications)" deploy/entrypoint.sh
 assert_case runtime-config "$(expected runtime ocr_notifications)" fly.toml
 assert_case browser-config "$(expected web runtime ocr_notifications)" apps/web/playwright.ocr.config.ts
-assert_case report-sanitizer "${policy_only}" scripts/ci/sanitize-analysis-report.sh
 assert_case mixed-test-and-source "$(expected api web runtime ocr_notifications)" apps/api/src/test/Unit.scala apps/web/src/main.tsx
 assert_case mixed-units "$(expected api web analysis)" apps/api/src/test/Unit.scala apps/web/src/features/Foo.test.tsx apps/processing-worker/tests/parent_liveness.rs
 

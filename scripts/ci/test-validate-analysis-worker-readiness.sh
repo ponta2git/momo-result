@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-validator="${repo_root}/scripts/ci/validate-analysis-worker-readiness.sh"
+validator=("${repo_root}/scripts/ci/ci-tool.sh" worker-readiness)
 test_dir="$(mktemp -d)"
 trap 'rm -rf "${test_dir}"' EXIT
 
@@ -55,7 +55,7 @@ write_log() {
 expect_rejected() {
   local name="$1"
   shift
-  if "${validator}" "$@" > /dev/null 2>&1; then
+  if "${validator[@]}" "$@" > /dev/null 2>&1; then
     echo "Invalid readiness evidence was accepted: ${name}" >&2
     exit 1
   fi
@@ -63,7 +63,7 @@ expect_rejected() {
 
 write_log
 actual="$(
-  "${validator}" "${log_file}" "${machine_id}" "${analysis_worker_id}" "${ocr_worker_id}"
+  "${validator[@]}" "${log_file}" "${machine_id}" "${analysis_worker_id}" "${ocr_worker_id}"
 )"
 jq -e \
   --arg machineId "${machine_id}" \

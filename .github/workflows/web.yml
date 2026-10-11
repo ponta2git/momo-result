@@ -68,7 +68,7 @@ jobs:
         if: ${{ always() && github.event_name == 'pull_request' }}
         continue-on-error: true
         run: |
-          bash scripts/ci/write-coverage-summary.sh web \
+          bash scripts/ci/ci-tool.sh coverage web \
             --root . \
             --out coverage-summary/web \
             --allow-missing

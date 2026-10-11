@@ -2,8 +2,8 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-canonicalizer="${repo_root}/scripts/ci/canonicalize-artifact-digest.sh"
-validator="${repo_root}/scripts/ci/validate-runtime-deployment.sh"
+canonicalizer=("${repo_root}/scripts/ci/ci-tool.sh" artifact-digest)
+validator=("${repo_root}/scripts/ci/ci-tool.sh" runtime-deployment)
 test_dir="$(mktemp -d)"
 trap 'rm -rf "${test_dir}"' EXIT
 
@@ -12,7 +12,7 @@ readonly run_attempt=3
 readonly source_run_attempt=2
 readonly commit=0123456789abcdef0123456789abcdef01234567
 readonly digest=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-readonly artifact_digest="$("${canonicalizer}" "${digest}")"
+readonly artifact_digest="$("${canonicalizer[@]}" "${digest}")"
 # A rollback target records its own patch revision, not the current checkout revision.
 readonly http4s_ref=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 
@@ -89,7 +89,7 @@ write_valid_metadata_v3() {
 
 expect_rejected() {
   local name="$1"
-  if "${validator}" "${test_dir}/deployment.json" "${run_id}" "${run_attempt}" "${commit}" \
+  if "${validator[@]}" "${test_dir}/deployment.json" "${run_id}" "${run_attempt}" "${commit}" \
     > "${test_dir}/rejected-output" 2> /dev/null; then
     echo "Invalid runtime deployment was accepted: ${name}" >&2
     exit 1
@@ -98,7 +98,7 @@ expect_rejected() {
 }
 
 write_valid_metadata_v2
-actual="$("${validator}" "${test_dir}/deployment.json" "${run_id}" "${run_attempt}" "${commit}")"
+actual="$("${validator[@]}" "${test_dir}/deployment.json" "${run_id}" "${run_attempt}" "${commit}")"
 expected="$(cat <<EOF
 candidate_sha=${commit}
 source_run_attempt=${source_run_attempt}
@@ -115,7 +115,7 @@ EOF
 [[ "${actual}" == "${expected}" ]]
 
 write_valid_metadata_v3
-actual="$("${validator}" "${test_dir}/deployment.json" "${run_id}" "${run_attempt}" "${commit}")"
+actual="$("${validator[@]}" "${test_dir}/deployment.json" "${run_id}" "${run_attempt}" "${commit}")"
 [[ "${actual}" == "${expected}" ]]
 
 jq '{}, .' "${test_dir}/deployment.json" > "${test_dir}/tampered.json"
@@ -152,7 +152,7 @@ mv "${test_dir}/tampered.json" "${test_dir}/deployment.json"
 expect_rejected mismatched-source-attempt
 
 write_valid_metadata_v2
-if "${validator}" "${test_dir}/deployment.json" 999 "${run_attempt}" "${commit}" \
+if "${validator[@]}" "${test_dir}/deployment.json" 999 "${run_attempt}" "${commit}" \
   > /dev/null 2>&1; then
   echo "Deployment metadata from a different run was accepted." >&2
   exit 1
@@ -160,7 +160,7 @@ fi
 
 write_valid_metadata_v1
 legacy_actual="$(
-  "${validator}" "${test_dir}/deployment.json" "${run_id}" "${run_attempt}" "${commit}"
+  "${validator[@]}" "${test_dir}/deployment.json" "${run_id}" "${run_attempt}" "${commit}"
 )"
 grep -qx "source_run_attempt=${run_attempt}" <<< "${legacy_actual}"
 grep -qx "image_ref=registry.fly.io/momo-result:${commit}-${run_id}-${run_attempt}" \

@@ -25,3 +25,22 @@ if ! jq -es '
 fi
 
 echo "Analysis smoke diagnostic safety tests passed."
+
+# The caller uses this helper in a conditional, which disables errexit inside
+# functions. A failed command must not be accepted just because it wrote output.
+docker() {
+  case "$*" in
+    *'INFO server') printf 'run_id:fixture-id\r\n'; [[ "${failure:-}" != server ]] ;;
+    *'CLIENT INFO') printf 'id=1 db=0 addr=fixture\n'; [[ "${failure:-}" != client ]] ;;
+    *) return 2 ;;
+  esac
+}
+[[ "$(analysis_smoke_redis_identity redis fixture)" == 'fixture-id|0' ]]
+for failure in server client; do
+  if analysis_smoke_redis_identity redis fixture > "${test_dir}/identity"; then
+    echo "Redis identity accepted a failed ${failure} command." >&2
+    exit 1
+  fi
+  [[ ! -s "${test_dir}/identity" ]]
+done
+echo 'Analysis smoke Redis identity failure contracts passed.'

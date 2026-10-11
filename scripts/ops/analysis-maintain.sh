@@ -7,7 +7,9 @@ case "${operation}" in auto|promote|backfill|check) ;; *) echo 'Use auto, promot
 : "${ANALYSIS_APP:=momo-result-analysis}"
 : "${ANALYSIS_WAIT_SECONDS:=1800}"
 : "${ANALYSIS_POLL_SECONDS:=15}"
-[[ "${ANALYSIS_WAIT_SECONDS}" =~ ^[0-9]+$ && "${ANALYSIS_POLL_SECONDS}" =~ ^[1-9][0-9]*$ ]] || exit 2
+# Bash arithmetic treats leading zeroes as octal. Reject them before inspection
+# or apply so an invalid timeout cannot fail only after maintenance has started.
+[[ "${ANALYSIS_WAIT_SECONDS}" =~ ^(0|[1-9][0-9]*)$ && "${ANALYSIS_POLL_SECONDS}" =~ ^[1-9][0-9]*$ ]] || exit 2
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/../.." && pwd)"
 cd "${repo_root}"

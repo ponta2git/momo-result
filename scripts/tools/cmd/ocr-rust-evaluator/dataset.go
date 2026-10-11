@@ -41,7 +41,11 @@ func loadAnswers(path string) (map[int][]expectedPlayer, error) {
 	}
 	indexes := make(map[string]int, len(header))
 	for index, name := range header {
-		indexes[strings.TrimSpace(name)] = index
+		name = strings.TrimSpace(name)
+		if _, exists := indexes[name]; exists {
+			return nil, fmt.Errorf("answers column is duplicated: %s", name)
+		}
+		indexes[name] = index
 	}
 	required := []string{"対戦No.", "プレー順", "プレーヤー名", "順位", "総資産", "収益"}
 	required = append(required, incidentFields...)

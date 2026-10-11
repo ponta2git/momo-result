@@ -632,11 +632,8 @@ jobs:
           flyctl ssh console --app momo-result --pty=false --quiet \
             --command "/opt/momo-result/bin/momo-runtime-tool smoke local" \
             > runtime-production-evidence/postdeploy-smoke.json
-          docker run --rm \
-            --entrypoint /opt/momo-result/bin/momo-runtime-tool \
-            --volume "${PWD}/runtime-production-evidence:/evidence:ro" \
-            "${IMAGE_REF}" validate-postdeploy-evidence \
-            /evidence/postdeploy-smoke.json \
+          scripts/ci/validate-postdeploy-evidence.sh \
+            runtime-production-evidence/postdeploy-smoke.json \
             --require-check publicEdge \
             > runtime-production-evidence/public-health.json
         timeout-minutes: 2

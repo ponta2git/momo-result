@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -25,6 +26,10 @@ func TestMain(tests *testing.M) {
 			connection.Close()
 			os.Exit(0)
 		case "ocr-pilot":
+			if os.Args[3] == "success" {
+				_, _ = fmt.Fprint(os.Stdout, `{"detectedScreenType":"revenue"}`)
+				os.Exit(0)
+			}
 			mode, address, _ := strings.Cut(os.Args[3], "|")
 			child := exec.Command(os.Args[0], "--pilot-test-descendant", address)
 			child.Stdout = os.Stdout
@@ -93,5 +98,23 @@ func TestRunPilotBoundsInheritedPipesAndStopsDescendants(t *testing.T) {
 				t.Fatalf("owned descendant remains alive after pilot completion: %v", err)
 			}
 		})
+	}
+}
+
+func TestRunPilotResolvesBareBinaryFromCurrentDirectory(t *testing.T) {
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory := t.TempDir()
+	if err := os.Symlink(binary, filepath.Join(directory, "local-pilot")); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(directory)
+	result, _, err := runPilot(engineOptions{binary: "local-pilot", timeout: 5 * time.Second}, imageMetadata{
+		Path: "success", ScreenType: "revenue",
+	})
+	if err != nil || result.DetectedScreenType != "revenue" {
+		t.Fatalf("local executable failed: result=%+v err=%v", result, err)
 	}
 }

@@ -18,7 +18,7 @@
 
 ## 2. Local Run
 
-通常の API + Web は root の `pnpm dev` を使う。依存 DB の起動と migration は `../momo-db` の scripts を使い、利用可能な command は各 `package.json` を正とする。
+通常の API + Web は root の `pnpm dev` を使う。起動 tool は Go で実行するため、`mise.toml` の Go toolchain を用意する。依存 DB の起動と migration は `../momo-db` の scripts を使い、利用可能な command は各 `package.json` を正とする。
 
 `pnpm dev` は Processing Worker を起動しない。worker の process isolation は Linux runtime が前提なので、macOS で host binary を直接実行せず、`apps/processing-worker/Dockerfile` から build した専用 container を使う。
 
@@ -76,7 +76,7 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 | analysis algorithm version | Worker gate + release DB / control-plane compatibility |
 | worker DB / Redis / process / isolation | Worker gate + 対象 control-plane、preemption、image smoke |
 | runtime / deploy config | public safety、image build / scan + 変更経路の runtime / memory / shutdown / Playwright evidence |
-| Go deploy / ops tool | Go test / vet、shell collector を変えた場合は対応 script test |
+| Go deploy / ops tool | Go test / vet、CI script を変えた場合は対応 script test |
 | docs only | `git diff --check`、`pnpm public:safety:check` |
 
 表は変更時に選ぶ evidence の種類を示し、新しい test case の自動追加や各層での重複を要求しない。規約・skill の指示、参照資料、表示名・説明・default prompt の変更は docs only とする。script、schema、実行設定や tool 依存・起動 policy も変える場合は、その実行境界の gate を加える。選択基準と oracle は `docs/test-rule.md`、現在の job 構成とまとめて実行する suite は CI workflow を実行上の正本とする。変更分類を弱めて gate を避けない。

@@ -41,6 +41,13 @@ reset_case() { rm -f "${task_tmp}/calls" "${task_tmp}/changed" "${task_tmp}/newe
 run_case() { "${task_tmp}/repo/scripts/ops/analysis-maintain.sh" "$@" > "${task_tmp}/output" 2>&1; }
 expect_calls() { test "$(wc -l < "${task_tmp}/calls" | tr -d ' ')" = "$1"; }
 report 1 not_needed
+for timeout in 08 010; do
+  reset_case
+  exit_status=0
+  ANALYSIS_WAIT_SECONDS="${timeout}" run_case auto || exit_status=$?
+  [[ "${exit_status}" == 2 ]] || { echo 'Noncanonical timeouts must fail validation.' >&2; exit 1; }
+  test ! -f "${task_tmp}/calls"
+done
 run_case auto
 expect_calls 1
 ! grep -qF must-not-appear "${task_tmp}/output"

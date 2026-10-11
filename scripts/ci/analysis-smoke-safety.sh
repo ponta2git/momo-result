@@ -121,13 +121,13 @@ analysis_smoke_redis_identity() {
       --add-host host.docker.internal:host-gateway \
       "${redis_image}" \
       redis-cli --raw -u "${redis_url}" INFO server
-  )"
+  )" || return 1
   client_info="$(
     docker run --rm --network host \
       --add-host host.docker.internal:host-gateway \
       "${redis_image}" \
       redis-cli --raw -u "${redis_url}" CLIENT INFO
-  )"
+  )" || return 1
   run_id="$(awk -F: '$1 == "run_id" { sub(/\r$/, "", $2); print $2; exit }' <<<"${server_info}")"
   database="$(sed -nE 's/.*(^| )db=([0-9]+)( |$).*/\2/p' <<<"${client_info}")"
   if [[ -z "${run_id}" || -z "${database}" ]]; then

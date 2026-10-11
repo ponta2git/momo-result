@@ -117,16 +117,16 @@ while IFS= read -r -d '' path; do
       scripts/ci/validate-runtime-image.sh | scripts/ci/dockerfile-lint.sh)
       runtime=true
       ;;
-    scripts/ci/write-coverage-summary.py)
+    scripts/ci/write-coverage-summary.sh)
       api=true
       web=true
       ;;
-    scripts/ci/test-* | scripts/ci/*.test.mjs | scripts/ci/canonicalize-artifact-digest.sh | \
+    scripts/ci/test-* | scripts/ci/check-policy.sh | scripts/ci/canonicalize-artifact-digest.sh | \
       scripts/ci/load-analysis-candidate.sh | scripts/ci/load-runtime-image-artifact.sh | \
       scripts/ci/resolve-pushed-runtime-image.sh | scripts/ci/sanitize-analysis-report.sh | \
       scripts/ci/validate-analysis-candidate.sh | scripts/ci/validate-analysis-worker-readiness.sh | \
       scripts/ci/validate-runtime-candidate.sh | scripts/ci/validate-runtime-deployment.sh | \
-      scripts/ci/validate-runtime-release-selection.sh)
+      scripts/ci/validate-runtime-release-selection.sh | scripts/ci/validate-postdeploy-evidence.sh)
       ;;
     scripts/ci/actionlint.sh | scripts/ci/install-actionlint.sh | \
       scripts/ci/public-repo-safety-check.sh)
@@ -134,9 +134,6 @@ while IFS= read -r -d '' path; do
       ;;
     scripts/ci/*)
       select_all
-      ;;
-    scripts/dev-local.mjs | scripts/dev-local.test.mjs)
-      policy_scripts=true
       ;;
     scripts/ops/analysis.sh | scripts/ops/analysis-maintain.sh)
       ;;

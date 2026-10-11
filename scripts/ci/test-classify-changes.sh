@@ -75,10 +75,10 @@ fi
 
 assert_case docs-only "${none}" docs/README.md
 assert_case actionlint-only "${actionlint_policy}" scripts/ci/actionlint.sh
-assert_case dev-launcher "${policy_only}" scripts/dev-local.mjs
+assert_case dev-launcher "${go_only}" scripts/tools/cmd/dev-local/main.go
 assert_case ops-dispatcher "${policy_only}" scripts/ops/analysis.sh
 assert_case ops-orchestration "${policy_only}" scripts/ops/analysis-maintain.sh
-assert_case policy-runner "${policy_only}" scripts/ci/policy.test.mjs
+assert_case policy-runner "${policy_only}" scripts/ci/check-policy.sh
 assert_case package-scripts \
   "$(expected web runtime workflow policy_scripts)" package.json
 assert_case unknown-ops-script \
@@ -101,7 +101,7 @@ assert_case unknown-validator \
   scripts/ci/validate-new-boundary.sh
 assert_case coverage-summary \
   "$(expected api web workflow policy_scripts)" \
-  scripts/ci/write-coverage-summary.py
+  scripts/ci/write-coverage-summary.sh
 assert_case api-source "${api_runtime}" apps/api/src/main/scala/momo/api/Main.scala
 assert_case http4s-ref "${http4s_ref}" .http4s-ref
 assert_case http4s-builder "${http4s_builder}" scripts/ci/build-http4s-patch.sh

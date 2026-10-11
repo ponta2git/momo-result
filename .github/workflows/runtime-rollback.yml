@@ -255,7 +255,7 @@ jobs:
           flyctl ssh console --app momo-result --pty=false --quiet \
             --command "env MOMO_POSTDEPLOY_PUBLIC_EDGE=deferred /opt/momo-result/bin/momo-runtime-tool smoke local" \
             > runtime-rollback-evidence/postdeploy-smoke.json
-          go -C scripts/tools run ./cmd/momo-runtime-tool validate-postdeploy-evidence \
+          scripts/ci/validate-postdeploy-evidence.sh \
             "${GITHUB_WORKSPACE}/runtime-rollback-evidence/postdeploy-smoke.json" \
             > /dev/null
         timeout-minutes: 2

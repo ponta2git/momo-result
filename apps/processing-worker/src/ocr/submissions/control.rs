@@ -141,7 +141,7 @@ async fn settle_transaction(
     let notification = match sink.reserve(ocr::MAXIMUM_SNAPSHOT_BYTES) {
         Ok(reservation) => ocr::prepare(&transaction, reservation, id, failures, deadline).await?,
         Err(reason) => {
-            log_skip("ocr_completed", id, reason);
+            log_skip("ocr_completed", id, reason.into());
             None
         }
     };

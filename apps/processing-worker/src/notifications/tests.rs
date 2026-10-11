@@ -35,7 +35,7 @@ fn admission_bounds_cover_preparation_and_pending_requests()
         .collect::<Result<Vec<_>, _>>()
         .map_err(|_error| "byte reservations")?;
     assert!(
-        matches!(sink.reserve(1), Err(SkipReason::Capacity)),
+        matches!(sink.reserve(1), Err(NotificationRejection::Capacity)),
         "reserved bytes must include preparing payloads"
     );
     drop(reservations);
@@ -47,12 +47,12 @@ fn admission_bounds_cover_preparation_and_pending_requests()
             .dispatch();
     }
     assert!(
-        matches!(sink.reserve(1), Err(SkipReason::Capacity)),
+        matches!(sink.reserve(1), Err(NotificationRejection::Capacity)),
         "pending sends must retain count permits"
     );
     drop(driver);
     assert!(
-        matches!(sink.reserve(1), Err(SkipReason::SenderClosed)),
+        matches!(sink.reserve(1), Err(NotificationRejection::SenderClosed)),
         "closed sender is not available"
     );
     Ok(())
@@ -66,7 +66,7 @@ fn oversized_snapshot_is_discarded_and_releases_admission() -> Result<(), Box<dy
     assert!(
         matches!(
             reservation.prepare_for_test(&envelope()),
-            Err(SkipReason::PayloadBound)
+            Err(NotificationRejection::PayloadBound)
         ),
         "bounded serialization cannot grow past its reservation"
     );
@@ -175,7 +175,7 @@ async fn active_http_keeps_its_permit_without_blocking_other_work()
             .collect::<Result<Vec<_>, _>>()
             .map_err(|_error| "other work could not reserve available slots")?;
         assert!(
-            matches!(sink.reserve(1), Err(SkipReason::Capacity)),
+            matches!(sink.reserve(1), Err(NotificationRejection::Capacity)),
             "active HTTP must retain its count permit"
         );
         drop(waiting);

@@ -10,6 +10,13 @@ pub(crate) enum NotificationKind {
 }
 
 impl NotificationKind {
+    pub(crate) const fn maximum_jsonb_bytes(self) -> usize {
+        match self {
+            Self::OcrCompleted => super::config::MAXIMUM_OCR_JSONB_BYTES,
+            Self::AnalysisCompleted => super::config::MAXIMUM_ANALYSIS_JSONB_BYTES,
+        }
+    }
+
     pub(crate) const fn as_str(self) -> &'static str {
         match self {
             Self::OcrCompleted => "ocr_completed",
@@ -41,10 +48,7 @@ impl<'a, T> NotificationEnvelope<'a, T> {
     }
 
     pub(super) const fn maximum_jsonb_bytes(&self) -> usize {
-        match self.kind {
-            NotificationKind::OcrCompleted => super::config::MAXIMUM_OCR_JSONB_BYTES,
-            NotificationKind::AnalysisCompleted => super::config::MAXIMUM_ANALYSIS_JSONB_BYTES,
-        }
+        self.kind.maximum_jsonb_bytes()
     }
 
     pub(super) const fn source_job_id(&self) -> &str {

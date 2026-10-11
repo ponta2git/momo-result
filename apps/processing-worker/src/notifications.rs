@@ -18,6 +18,20 @@ use config::{CONCURRENT_REQUESTS, MAXIMUM_BYTES, MAXIMUM_PENDING, MAXIMUM_WIRE_B
 pub(crate) use config::{NotificationConfig, NotificationConfigError};
 pub(crate) use envelope::{NotificationEnvelope, NotificationKind};
 
+pub(crate) fn config_from_environment() -> Result<NotificationConfig, NotificationConfigError> {
+    use std::env;
+
+    match env::var("RESULT_NOTIFICATIONS_MODE").as_deref() {
+        Ok("disabled") | Err(env::VarError::NotPresent) => Ok(NotificationConfig::disabled()),
+        Ok("http") => NotificationConfig::http(
+            &env::var("RESULT_NOTIFICATIONS_URL").map_err(|_error| NotificationConfigError)?,
+            &env::var("RESULT_NOTIFICATIONS_BEARER_TOKEN")
+                .map_err(|_error| NotificationConfigError)?,
+        ),
+        Ok(_) | Err(env::VarError::NotUnicode(_)) => Err(NotificationConfigError),
+    }
+}
+
 #[derive(Clone, Default)]
 pub(crate) struct NotificationSink(Option<Arc<Admission>>);
 
@@ -45,7 +59,7 @@ impl NotificationDriver {
     pub(crate) fn new(
         config: NotificationConfig,
     ) -> Result<(NotificationSink, Self), NotificationConfigError> {
-        let NotificationConfig::Http(config) = config else {
+        let Some(config) = config.into_http() else {
             return Ok((NotificationSink::default(), Self::disabled()));
         };
         let client = config::client()?;
@@ -109,30 +123,53 @@ pub(crate) enum SkipReason {
     PreparationFailed,
 }
 
+/// Admission or encoding rejection; database failures remain a separate error path.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum NotificationRejection {
+    TransportDisabled,
+    SenderClosed,
+    Capacity,
+    PayloadBound,
+    InvalidEnvelope,
+}
+
+impl From<NotificationRejection> for SkipReason {
+    fn from(reason: NotificationRejection) -> Self {
+        match reason {
+            NotificationRejection::TransportDisabled => Self::TransportDisabled,
+            NotificationRejection::SenderClosed => Self::SenderClosed,
+            NotificationRejection::Capacity => Self::Capacity,
+            NotificationRejection::PayloadBound => Self::PayloadBound,
+            NotificationRejection::InvalidEnvelope => Self::InvalidSnapshot,
+        }
+    }
+}
+
 impl NotificationSink {
     /// Reserve both count and bytes before loading/building a snapshot. Permits cover preparing,
     /// waiting and active sends, and are released only when that complete lifecycle ends.
     pub(crate) fn reserve(
         &self,
         maximum_bytes: usize,
-    ) -> Result<NotificationReservation, SkipReason> {
+    ) -> Result<NotificationReservation, NotificationRejection> {
         let Some(admission) = &self.0 else {
-            return Err(SkipReason::TransportDisabled);
+            return Err(NotificationRejection::TransportDisabled);
         };
         if admission.sender.is_closed() {
-            return Err(SkipReason::SenderClosed);
+            return Err(NotificationRejection::SenderClosed);
         }
         if maximum_bytes == 0 || maximum_bytes > MAXIMUM_WIRE_BYTES {
-            return Err(SkipReason::PayloadBound);
+            return Err(NotificationRejection::PayloadBound);
         }
         let count = Arc::clone(&admission.count)
             .try_acquire_owned()
-            .map_err(|_error| SkipReason::Capacity)?;
+            .map_err(|_error| NotificationRejection::Capacity)?;
         let bytes = Arc::clone(&admission.bytes)
             .try_acquire_many_owned(
-                u32::try_from(maximum_bytes).map_err(|_error| SkipReason::PayloadBound)?,
+                u32::try_from(maximum_bytes)
+                    .map_err(|_error| NotificationRejection::PayloadBound)?,
             )
-            .map_err(|_error| SkipReason::Capacity)?;
+            .map_err(|_error| NotificationRejection::Capacity)?;
         Ok(NotificationReservation {
             sender: admission.sender.clone(),
             count,
@@ -157,7 +194,7 @@ impl NotificationReservation {
         self,
         transaction: &Transaction<'_>,
         envelope: &NotificationEnvelope<'_, T>,
-    ) -> Result<Result<PreparedNotification, SkipReason>, tokio_postgres::Error> {
+    ) -> Result<Result<PreparedNotification, NotificationRejection>, tokio_postgres::Error> {
         let body = match self.encode(envelope) {
             Ok(body) => body,
             Err(reason) => return Ok(Err(reason)),
@@ -166,7 +203,7 @@ impl NotificationReservation {
             std::str::from_utf8(&body),
             i32::try_from(envelope.maximum_jsonb_bytes()),
         ) else {
-            return Ok(Err(SkipReason::InvalidSnapshot));
+            return Ok(Err(NotificationRejection::InvalidEnvelope));
         };
         // JSONB adds separators and expands numeric exponents. Wire bytes alone cannot prove
         // the consumer's bound; PostgreSQL owns this representation instead of a second codec.
@@ -176,7 +213,7 @@ impl NotificationReservation {
         ))
         .await?;
         if !row.try_get::<_, bool>("within_bound")? {
-            return Ok(Err(SkipReason::PayloadBound));
+            return Ok(Err(NotificationRejection::PayloadBound));
         }
         Ok(Ok(self.finish(envelope, body)))
     }
@@ -184,15 +221,16 @@ impl NotificationReservation {
     fn encode<T: Serialize>(
         &self,
         envelope: &NotificationEnvelope<'_, T>,
-    ) -> Result<Vec<u8>, SkipReason> {
+    ) -> Result<Vec<u8>, NotificationRejection> {
         if !valid_source_id(envelope.source_job_id()) {
-            return Err(SkipReason::InvalidSnapshot);
+            return Err(NotificationRejection::InvalidEnvelope);
         }
         let mut writer = BoundedJson {
             bytes: Vec::new(),
             maximum: self.maximum_bytes,
         };
-        serde_json::to_writer(&mut writer, envelope).map_err(|_error| SkipReason::PayloadBound)?;
+        serde_json::to_writer(&mut writer, envelope)
+            .map_err(|_error| NotificationRejection::PayloadBound)?;
         Ok(writer.bytes)
     }
 
@@ -220,7 +258,7 @@ impl NotificationReservation {
     pub(crate) fn prepare_for_test<T: Serialize>(
         self,
         envelope: &NotificationEnvelope<'_, T>,
-    ) -> Result<PreparedNotification, SkipReason> {
+    ) -> Result<PreparedNotification, NotificationRejection> {
         let body = self.encode(envelope)?;
         Ok(self.finish(envelope, body))
     }

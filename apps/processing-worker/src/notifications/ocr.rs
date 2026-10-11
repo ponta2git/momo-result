@@ -9,7 +9,8 @@ use super::{
     SkipReason,
 };
 
-pub(crate) const MAXIMUM_SNAPSHOT_BYTES: usize = super::config::MAXIMUM_OCR_JSONB_BYTES;
+pub(crate) const MAXIMUM_SNAPSHOT_BYTES: usize =
+    NotificationKind::OcrCompleted.maximum_jsonb_bytes();
 
 #[derive(Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -70,7 +71,10 @@ pub(crate) async fn prepare(
             row.try_get("generation")?,
             data,
         );
-        reservation.prepare_in(transaction, &envelope).await
+        Ok(reservation
+            .prepare_in(transaction, &envelope)
+            .await?
+            .map_err(SkipReason::from))
     })
     .await
 }

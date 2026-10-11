@@ -71,7 +71,7 @@ async fn real_postgres_preparation_enforces_complete_jsonb_limits()
                 assert_eq!(prepared.payload()?, serde_json::to_value(&envelope)?);
             } else {
                 assert!(
-                    matches!(prepared, Err(SkipReason::PayloadBound)),
+                    matches!(prepared, Err(NotificationRejection::PayloadBound)),
                     "the full envelope must fit its kind's limit"
                 );
                 drop(prepared);
@@ -98,7 +98,7 @@ async fn real_postgres_preparation_enforces_complete_jsonb_limits()
                 .map_err(|_error| "reserve numeric")?
                 .prepare_in(&transaction, &numeric)
                 .await?,
-            Err(SkipReason::PayloadBound)
+            Err(NotificationRejection::PayloadBound)
         ),
         "JSONB numeric expansion must be checked before handoff"
     );
@@ -107,7 +107,7 @@ async fn real_postgres_preparation_enforces_complete_jsonb_limits()
         .collect::<Result<Vec<_>, _>>()
         .map_err(|_error| "preparation did not release admission permits")?;
     assert!(
-        matches!(sink.reserve(1), Err(SkipReason::Capacity)),
+        matches!(sink.reserve(1), Err(NotificationRejection::Capacity)),
         "all recovered byte permits remain bounded"
     );
     drop(reservations);

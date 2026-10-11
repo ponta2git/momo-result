@@ -1,4 +1,4 @@
-use std::{env, fmt, time::Duration};
+use std::{fmt, time::Duration};
 
 use reqwest::{Client, header::HeaderValue};
 use thiserror::Error;
@@ -13,12 +13,9 @@ pub(super) const CONCURRENT_REQUESTS: usize = 2;
 pub(super) const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Transport activation is separate from the user's durable ON/OFF setting.
-pub(crate) enum NotificationConfig {
-    Disabled,
-    Http(HttpConfig),
-}
+pub(crate) struct NotificationConfig(Option<HttpConfig>);
 
-pub(crate) struct HttpConfig {
+pub(super) struct HttpConfig {
     pub(super) endpoint: Url,
     pub(super) authorization: HeaderValue,
 }
@@ -30,17 +27,12 @@ impl fmt::Debug for NotificationConfig {
 }
 
 impl NotificationConfig {
-    pub(crate) fn from_environment() -> Result<Self, NotificationConfigError> {
-        let mode = env::var("RESULT_NOTIFICATIONS_MODE");
-        match mode.as_deref() {
-            Ok("disabled") | Err(env::VarError::NotPresent) => Ok(Self::Disabled),
-            Ok("http") => Self::http(
-                &env::var("RESULT_NOTIFICATIONS_URL").map_err(|_error| NotificationConfigError)?,
-                &env::var("RESULT_NOTIFICATIONS_BEARER_TOKEN")
-                    .map_err(|_error| NotificationConfigError)?,
-            ),
-            Ok(_) | Err(env::VarError::NotUnicode(_)) => Err(NotificationConfigError),
-        }
+    pub(crate) const fn disabled() -> Self {
+        Self(None)
+    }
+
+    pub(super) fn into_http(self) -> Option<HttpConfig> {
+        self.0
     }
 
     pub(crate) fn http(endpoint: &str, token: &str) -> Result<Self, NotificationConfigError> {
@@ -67,10 +59,10 @@ impl NotificationConfig {
         let mut authorization = HeaderValue::from_str(&format!("Bearer {token}"))
             .map_err(|_error| NotificationConfigError)?;
         authorization.set_sensitive(true);
-        Ok(Self::Http(HttpConfig {
+        Ok(Self(Some(HttpConfig {
             endpoint,
             authorization,
-        }))
+        })))
     }
 }
 

@@ -196,7 +196,11 @@ func TestCommandUsageAndHelp(t *testing.T) {
 			t.Fatalf("help %s: %d %q %q", command, code, out, stderr)
 		}
 		code, out, _ = run(t, command, nil, "")
-		if code != 2 || out != "" {
+		expectedCode := 2
+		if command == "analysis-machine-identity" || command == "canonical-json" || command == "public-edge-evidence" {
+			expectedCode = 1
+		}
+		if code != expectedCode || out != "" {
 			t.Fatalf("missing args %s: %d %q", command, code, out)
 		}
 	}
@@ -205,5 +209,20 @@ func TestCommandUsageAndHelp(t *testing.T) {
 		if code != 2 || out != "" {
 			t.Fatalf("invalid optional arg: %s", command)
 		}
+	}
+}
+
+func TestReadinessRejectsUnstructuredTimestamp(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "readiness.jsonl")
+	baseline := fixture(t, "worker-readiness.jsonl")
+	for _, timestamp := range []any{nil, map[string]any{"token": "private-input-marker"}, "private-input-marker", 123} {
+		lines := strings.Split(strings.TrimSpace(string(baseline)), "\n")
+		for index, line := range lines {
+			if strings.Contains(line, "analysis_worker_ready") && strings.Contains(line, "machine-current") {
+				lines[index] = string(mutated(t, []byte(line), func(o object) { o["timestamp"] = timestamp }))
+			}
+		}
+		writeFile(t, path, []byte(strings.Join(lines, "\n")))
+		rejected(t, "worker-readiness", []string{path, "machine-current", "analysis-current", "ocr-current"}, "")
 	}
 }

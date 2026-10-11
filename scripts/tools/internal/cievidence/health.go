@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"time"
 )
 
 type postdeployError struct {
@@ -91,7 +92,7 @@ func postdeployEvidence(args []string) (string, error) {
 }
 
 type readinessCheck struct {
-	Timestamp any    `json:"timestamp"`
+	Timestamp string `json:"timestamp"`
 	Event     string `json:"event"`
 	WorkerID  string `json:"workerId"`
 }
@@ -129,6 +130,9 @@ func workerReadiness(args []string) (string, error) {
 		}
 		for index, event := range events {
 			if check.Event == event && check.WorkerID == workers[index] {
+				if _, err := time.Parse(time.RFC3339Nano, check.Timestamp); err != nil {
+					return "", fail
+				}
 				// Provider order, rather than timestamp sorting, is the existing
 				// meaning of "latest". Keep only the last matching occurrence.
 				checks[index] = check
@@ -195,5 +199,6 @@ func appReadinessEvent(data []byte, machine string) (*readinessCheck, error) {
 	if !eventOK || !workerOK {
 		return nil, nil
 	}
-	return &readinessCheck{outer["timestamp"], event, worker}, nil
+	timestamp, _ := outer["timestamp"].(string)
+	return &readinessCheck{timestamp, event, worker}, nil
 }

@@ -1,4 +1,4 @@
-package ciproducer
+package cievidence
 
 import (
 	"encoding/json"
@@ -23,9 +23,11 @@ func TestMachineIdentityAndEvidence(t *testing.T) {
 	}
 	for _, mutate := range []func(map[string]any){
 		func(m map[string]any) { m["state"] = "stopped" },
-		func(m map[string]any) { object(field(m, "config", "env"))["MOMO_OCR_V2_CONSUMER_MODE"] = "disabled" },
-		func(m map[string]any) { object(field(m, "config", "guest"))["memory_mb"] = 512 },
-		func(m map[string]any) { object(field(m, "config", "env"))["MOMO_ANALYSIS_WORKER_ID"] = "worker-123-1" },
+		func(m map[string]any) { objectMap(field(m, "config", "env"))["MOMO_OCR_V2_CONSUMER_MODE"] = "disabled" },
+		func(m map[string]any) { objectMap(field(m, "config", "guest"))["memory_mb"] = 512 },
+		func(m map[string]any) {
+			objectMap(field(m, "config", "env"))["MOMO_ANALYSIS_WORKER_ID"] = "worker-123-1"
+		},
 	} {
 		m := machineFixture()
 		mutate(m)
@@ -39,7 +41,7 @@ func TestMachineIdentityAndEvidence(t *testing.T) {
 func TestReuseDoesNotAcceptWrongGeneration(t *testing.T) {
 	for _, version := range []any{"series-analysis-v1-" + testCommit, testCommit, 42, nil} {
 		m := machineFixture()
-		object(field(m, "config", "env"))["MOMO_ANALYSIS_CONFIG_VERSION"] = version
+		objectMap(field(m, "config", "env"))["MOMO_ANALYSIS_CONFIG_VERSION"] = version
 		data, _ := json.Marshal([]any{m})
 		code, out, _ := call(t, "analysis-reusable-release", []string{workerRef}, string(data), "")
 		want := "\n"
@@ -53,7 +55,7 @@ func TestReuseDoesNotAcceptWrongGeneration(t *testing.T) {
 }
 func TestRuntimeMachineEvidence(t *testing.T) {
 	m := machineFixture()
-	object(field(m, "config"))["image"] = runtimeRef
+	objectMap(field(m, "config"))["image"] = runtimeRef
 	data, _ := json.Marshal([]any{m})
 	code, out, _ := call(t, "runtime-machine-evidence", []string{runtimeRef}, string(data), "")
 	if code != 0 || strings.Contains(out, "never-print") || !strings.Contains(out, "singleStartedExactImage") {

@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math"
+	"math/big"
 	"os"
 	"regexp"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -72,13 +75,84 @@ func (o object) equals(name, expected string) bool {
 	return ok && value == expected
 }
 
-func (o object) numberEquals(name string, expected float64) bool {
+func (o object) numberEquals(name string, expected int64) bool {
 	value, ok := o[name].(json.Number)
 	if !ok {
 		return false
 	}
-	number, err := value.Float64()
-	return err == nil && number == expected
+	// The float conversion is only a cheap rejection of obviously different
+	// magnitudes. Rounded fractions must never pass a schema-version guard.
+	approximate, err := value.Float64()
+	if err != nil || approximate != float64(expected) {
+		return false
+	}
+	number, ok := new(big.Rat).SetString(string(value))
+	return ok && number.Cmp(big.NewRat(expected, 1)) == 0
+}
+
+func readObjectFile(path string) (object, error) {
+	data, err := readRegular(path)
+	if err != nil {
+		return nil, err
+	}
+	return decodeObject(data)
+}
+
+// Provider fields are not a wire schema: extra fields are ignored and only
+// explicitly projected values can become public evidence.
+func objectMap(value any) object {
+	switch m := value.(type) {
+	case map[string]any:
+		return m
+	case object:
+		return m
+	default:
+		return nil
+	}
+}
+func field(value any, keys ...string) any {
+	for _, key := range keys {
+		value = objectMap(value)[key]
+	}
+	return value
+}
+func str(value any) string { s, _ := value.(string); return s }
+func number(value any) string {
+	n, ok := value.(json.Number)
+	if !ok {
+		return ""
+	}
+	text := string(n)
+	if !strings.ContainsAny(text, ".eE") {
+		return strings.TrimPrefix(text, "+")
+	}
+	mantissa, _, _ := strings.Cut(strings.ToLower(text), "e")
+	if strings.Trim(mantissa, "-0.") == "" {
+		return "0"
+	}
+	// Exponent notation must not turn a few input bytes into an enormous
+	// integer allocation. Literal integers remain exact at their input size.
+	f, err := n.Float64()
+	if err != nil || math.IsInf(f, 0) || math.Abs(f) < 1 {
+		return ""
+	}
+	r, ok := new(big.Rat).SetString(string(n))
+	if !ok || !r.IsInt() {
+		return ""
+	}
+	return r.Num().String()
+}
+func readJSON(in io.Reader) (any, error) {
+	data, err := io.ReadAll(in)
+	if err != nil {
+		return nil, errors.New("Provider input could not be read.")
+	}
+	return decodeOne(data)
+}
+func encode(out io.Writer, value any) error {
+	e := json.NewEncoder(out)
+	e.SetIndent("", "  ")
+	return e.Encode(value)
 }
 
 func regularFile(path string) bool {

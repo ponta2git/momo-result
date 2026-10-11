@@ -26,6 +26,21 @@ func fixture(t *testing.T, name string) []byte {
 	return data
 }
 
+func TestSchemaVersionsCompareExactly(t *testing.T) {
+	for _, version := range []string{"1.00000000000000001", "0.99999999999999999", "1e999999999"} {
+		data := mutated(t, fixture(t, "analysis-candidate.json"), func(o object) { o["schemaVersion"] = json.Number(version) })
+		if err := checkAnalysisCandidate(data, runIdentity{RunID: "123456", RunAttempt: "2", Commit: fixtureCommit}); err == nil {
+			t.Fatalf("accepted fractional schema %s", version)
+		}
+	}
+	for _, version := range []string{"1", "1.0", "100e-2"} {
+		data := mutated(t, fixture(t, "analysis-candidate.json"), func(o object) { o["schemaVersion"] = json.Number(version) })
+		if err := checkAnalysisCandidate(data, runIdentity{RunID: "123456", RunAttempt: "2", Commit: fixtureCommit}); err != nil {
+			t.Fatalf("rejected exact integer %s: %v", version, err)
+		}
+	}
+}
+
 func writeFile(t *testing.T, path string, data []byte) {
 	t.Helper()
 	if err := os.WriteFile(path, data, 0600); err != nil {
@@ -86,13 +101,13 @@ func TestAnalysisCandidateBaselineAndOutput(t *testing.T) {
 func TestProvenanceRejectsMissingTypesStreamsAndUnknownFields(t *testing.T) {
 	cases := []struct {
 		name     string
-		expected Identity
-		validate func([]byte, Identity) error
+		expected runIdentity
+		validate func([]byte, runIdentity) error
 	}{
-		{"analysis-candidate.json", Identity{"123456", "2", fixtureCommit}, ValidateAnalysisCandidate},
-		{"runtime-deployment-v1.json", Identity{"123456", "3", fixtureCommit}, ValidateRuntimeDeployment},
-		{"runtime-deployment-v2.json", Identity{"123456", "3", fixtureCommit}, ValidateRuntimeDeployment},
-		{"runtime-deployment-v3.json", Identity{"123456", "3", fixtureCommit}, ValidateRuntimeDeployment},
+		{"analysis-candidate.json", runIdentity{"123456", "2", fixtureCommit}, checkAnalysisCandidate},
+		{"runtime-deployment-v1.json", runIdentity{"123456", "3", fixtureCommit}, checkRuntimeDeployment},
+		{"runtime-deployment-v2.json", runIdentity{"123456", "3", fixtureCommit}, checkRuntimeDeployment},
+		{"runtime-deployment-v3.json", runIdentity{"123456", "3", fixtureCommit}, checkRuntimeDeployment},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -237,17 +252,17 @@ func TestRuntimeCandidateChecksActualFilesAndPatch(t *testing.T) {
 }
 
 func TestRuntimeCandidateAndPatchExactShape(t *testing.T) {
-	expected := RuntimeCandidateInputs{Identity: Identity{"123456", "2", fixtureCommit}, ImageID: "sha256:" + fixtureSHA, TarSHA256: fixtureTarSHA, ConfigSHA256: fixtureConfigSHA, HTTP4SSourceSHA: fixturePin}
+	expected := runtimeCandidateInputs{runIdentity: runIdentity{"123456", "2", fixtureCommit}, ImageID: "sha256:" + fixtureSHA, TarSHA256: fixtureTarSHA, ConfigSHA256: fixtureConfigSHA, HTTP4SSourceSHA: fixturePin}
 	data, patch := fixture(t, "runtime-candidate.json"), fixture(t, "http4s-patch.json")
-	if err := ValidateRuntimeCandidate(data, patch, expected); err != nil {
+	if err := parseRuntimeCandidate(data, patch, expected); err != nil {
 		t.Fatal(err)
 	}
 	for _, target := range []struct {
 		data     []byte
 		validate func([]byte) error
 	}{
-		{data, func(b []byte) error { return ValidateRuntimeCandidate(b, patch, expected) }},
-		{patch, func(b []byte) error { return ValidateHTTP4SPatch(b, fixturePin) }},
+		{data, func(b []byte) error { return parseRuntimeCandidate(b, patch, expected) }},
+		{patch, func(b []byte) error { _, err := http4sPatch(b, fixturePin); return err }},
 	} {
 		value, _ := decodeObject(target.data)
 		for key := range value {
@@ -261,4 +276,13 @@ func TestRuntimeCandidateAndPatchExactShape(t *testing.T) {
 			}
 		}
 	}
+}
+
+func checkAnalysisCandidate(data []byte, expected runIdentity) error {
+	_, err := parseAnalysisCandidate(data, expected)
+	return err
+}
+func checkRuntimeDeployment(data []byte, expected runIdentity) error {
+	_, _, err := parseRuntimeDeployment(data, expected)
+	return err
 }

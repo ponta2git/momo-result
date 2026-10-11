@@ -1,8 +1,11 @@
-// Package cievidence validates CI evidence without invoking external commands.
+// Package cievidence owns CI provenance, its production and validation, and
+// allowlisted provider evidence. It never invokes external commands.
 package cievidence
 
 import (
+	"bytes"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 )
@@ -19,6 +22,21 @@ var usages = map[string]string{
 	"image-id-match":             "<expected-id> <actual-id>",
 	"file-digest-match":          "<file> <bare-sha256>",
 	"analysis-release-selection": "<run-id> <producer-attempt> <metadata-name> <metadata-id> <metadata-digest>",
+	"create-http4s-patch":        "--repository URL --scala-version VERSION --source-sha SHA --version VERSION",
+	"create-runtime-candidate":   "--artifact-dir DIR --run-id ID --run-attempt N --commit SHA --image-ref REF",
+	"create-analysis-candidate":  "--artifact-dir DIR --run-id ID --run-attempt N --commit SHA --image-ref REF --artifact-id ID --artifact-digest DIGEST",
+	"create-runtime-deployment":  "--candidate FILE --run-attempt N --registry-ref REF --source-artifact-id ID --source-artifact-digest DIGEST --manifest FILE --manifest-artifact-id ID --manifest-artifact-digest DIGEST",
+	"resolve-pushed-image":       "IMAGE_TAG < docker-repo-digests.json",
+	"resolve-deployment-run":     "REPOSITORY < github-run.json",
+	"verify-manifest-artifact":   "DEPLOYMENT_JSON RUN_ID < github-artifact.json",
+	"runtime-machine-evidence":   "IMAGE_REF < machines.json",
+	"runtime-machine-id":         "IMAGE_REF < machines.json",
+	"analysis-reusable-release":  "IMAGE_REF < machines.json",
+	"analysis-machine-identity":  "< machines.json",
+	"analysis-machine-evidence":  "IMAGE_REF RELEASE_SHA ANALYSIS_WORKER_ID OCR_WORKER_ID < machines.json",
+	"analysis-secrets":           "ready|unstaged < secrets.json",
+	"canonical-json":             "< manifest.json",
+	"public-edge-evidence":       "< edge-smoke.json",
 }
 
 var argumentCounts = map[string]int{
@@ -31,7 +49,7 @@ var argumentCounts = map[string]int{
 // Run preserves the validators' positional arguments and stdout contracts.
 // repoRoot supplies checkout-owned configuration; input evidence stays explicit.
 // No document contents or filesystem/provider errors are copied to stderr.
-func Run(command string, args []string, _ io.Reader, out, errOut io.Writer, repoRoot string) int {
+func Run(command string, args []string, in io.Reader, out, errOut io.Writer, repoRoot string) int {
 	usage, known := usages[command]
 	if !known {
 		fmt.Fprintln(errOut, "Unknown evidence command.")
@@ -66,7 +84,7 @@ func Run(command string, args []string, _ io.Reader, out, errOut io.Writer, repo
 	case "worker-readiness":
 		result, err = workerReadiness(args)
 	case "artifact-digest":
-		result, err = NormalizeArtifactDigest(args[0])
+		result, err = normalizeArtifactDigest(args[0])
 		if err == nil {
 			result += "\n"
 		}
@@ -78,8 +96,20 @@ func Run(command string, args []string, _ io.Reader, out, errOut io.Writer, repo
 		if !digestPattern.MatchString(args[0]) || !digestPattern.MatchString(args[1]) || args[0] != args[1] {
 			err = errors.New("The loaded image ID does not match the verified candidate image ID.")
 		}
+	case "create-http4s-patch", "create-runtime-candidate", "create-analysis-candidate", "create-runtime-deployment":
+		var output bytes.Buffer
+		err = create(command, args, &output, repoRoot)
+		result = output.String()
+	default:
+		var output bytes.Buffer
+		err = provider(command, args, in, &output)
+		result = output.String()
 	}
 	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			fmt.Fprintf(errOut, "Usage: ci-tool %s %s\n", command, usage)
+			return 2
+		}
 		var evidenceErr *postdeployError
 		if errors.As(err, &evidenceErr) {
 			fmt.Fprintf(errOut, "{\"event\":\"runtime_postdeploy_evidence_validation\",\"status\":\"failed\",\"errorKind\":%q}\n", evidenceErr.kind)

@@ -1,7 +1,8 @@
-package ciproducer
+package cievidence
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -100,6 +101,26 @@ func TestPublicEvidenceProjection(t *testing.T) {
 	code, out, _ = call(t, "public-edge-evidence", nil, `{"event":"runtime_public_edge_smoke","schemaVersion":1,"status":"failed"}`, "")
 	if code == 0 || out != "" {
 		t.Fatal("accepted failed smoke")
+	}
+}
+
+func TestProviderJSONRejectsInvalidUTF8(t *testing.T) {
+	code, out, diagnostics := call(t, "canonical-json", nil, "{\"value\":\"\xff\"}", "")
+	if code != 1 || out != "" || strings.Contains(diagnostics, "\xff") {
+		t.Fatal("invalid UTF-8 was repaired into evidence")
+	}
+}
+
+func TestProviderIntegersRejectExponentExpansion(t *testing.T) {
+	for _, input := range []string{"1e999999999", "1e-999999999"} {
+		if number(json.Number(input)) != "" {
+			t.Fatal("accepted unbounded expansion")
+		}
+	}
+	for input, want := range map[string]string{"0e999999999": "0", "1.0": "1", "10e1": "100", "9007199254740993": "9007199254740993"} {
+		if got := number(json.Number(input)); got != want {
+			t.Fatalf("%s => %s", input, got)
+		}
 	}
 }
 func TestSecretsFailClosed(t *testing.T) {

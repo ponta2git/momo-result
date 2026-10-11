@@ -13,38 +13,38 @@ const (
 	http4sScalaVersion = "3.3.6"
 )
 
-// Identity names the producing run, not the current workflow's retry attempt.
-type Identity struct {
+// runIdentity names the producing run, not the current workflow's retry attempt.
+type runIdentity struct {
 	RunID      string
 	RunAttempt string
 	Commit     string
 }
 
-func (i Identity) valid() bool {
+func (i runIdentity) valid() bool {
 	return positiveIDPattern.MatchString(i.RunID) && positiveIDPattern.MatchString(i.RunAttempt) && commitPattern.MatchString(i.Commit)
 }
 
-func (i Identity) imageRef(repository string) string {
+func (i runIdentity) imageRef(repository string) string {
 	return repository + ":" + i.Commit + "-" + i.RunID + "-" + i.RunAttempt
 }
 
-func (i Identity) artifact(prefix string) string {
+func (i runIdentity) artifact(prefix string) string {
 	return prefix + "-" + i.RunID + "-" + i.RunAttempt
 }
 
-// RuntimeCandidateInputs are measured archive/configuration values. Producers
+// runtimeCandidateInputs are measured archive/configuration values. Producers
 // and consumers both validate metadata against these, not against itself.
-type RuntimeCandidateInputs struct {
-	Identity
+type runtimeCandidateInputs struct {
+	runIdentity
 	ImageID         string
 	TarSHA256       string
 	ConfigSHA256    string
 	HTTP4SSourceSHA string
 }
 
-// NormalizeArtifactDigest accepts the upload action's bare digest and the API's
+// normalizeArtifactDigest accepts the upload action's bare digest and the API's
 // prefixed digest. It never accepts other algorithms, uppercase, or whitespace.
-func NormalizeArtifactDigest(value string) (string, error) {
+func normalizeArtifactDigest(value string) (string, error) {
 	if shaPattern.MatchString(value) {
 		return "sha256:" + value, nil
 	}
@@ -54,28 +54,39 @@ func NormalizeArtifactDigest(value string) (string, error) {
 	return "", errors.New("Artifact digest must be a lowercase SHA-256 value.")
 }
 
-// ValidateHTTP4SPatch enforces the pinned source and the exact patch manifest.
-func ValidateHTTP4SPatch(data []byte, expectedSourceSHA string) error {
-	_, err := http4sPatch(data, expectedSourceSHA)
-	return err
-}
-
 func http4sPatch(data []byte, expectedSourceSHA string) (object, error) {
 	patch, err := decodeObject(data)
-	if err != nil || !commitPattern.MatchString(expectedSourceSHA) ||
-		!patch.keys("repository", "scalaVersion", "sourceSha", "version") ||
-		!patch.equals("repository", http4sRepository) || !patch.equals("scalaVersion", http4sScalaVersion) ||
-		!patch.equals("sourceSha", expectedSourceSHA) || !versionPattern.MatchString(patch.text("version")) {
-		return nil, errors.New("HTTP4s patch metadata failed its pinned source contract.")
+	if err != nil {
+		return nil, err
+	}
+	if err := validateHTTP4SPatch(patch, expectedSourceSHA); err != nil {
+		return nil, err
 	}
 	return patch, nil
 }
 
-// ValidateRuntimeCandidate checks the exact v2 candidate and associated patch.
-func ValidateRuntimeCandidate(data, patchData []byte, expected RuntimeCandidateInputs) error {
+func validateHTTP4SPatch(patch object, expectedSourceSHA string) error {
+	if !commitPattern.MatchString(expectedSourceSHA) ||
+		!patch.keys("repository", "scalaVersion", "sourceSha", "version") ||
+		!patch.equals("repository", http4sRepository) || !patch.equals("scalaVersion", http4sScalaVersion) ||
+		!patch.equals("sourceSha", expectedSourceSHA) || !versionPattern.MatchString(patch.text("version")) {
+		return errors.New("HTTP4s patch metadata failed its pinned source contract.")
+	}
+	return nil
+}
+
+// parseRuntimeCandidate checks the exact v2 candidate and associated patch.
+func parseRuntimeCandidate(data, patchData []byte, expected runtimeCandidateInputs) error {
 	candidate, err := decodeObject(data)
-	patch, patchErr := http4sPatch(patchData, expected.HTTP4SSourceSHA)
-	if err != nil || patchErr != nil || !expected.Identity.valid() ||
+	patch, patchErr := decodeObject(patchData)
+	if err != nil || patchErr != nil {
+		return errors.New("Invalid runtime candidate metadata.")
+	}
+	return validateRuntimeCandidate(candidate, patch, expected)
+}
+
+func validateRuntimeCandidate(candidate, patch object, expected runtimeCandidateInputs) error {
+	if validateHTTP4SPatch(patch, expected.HTTP4SSourceSHA) != nil || !expected.runIdentity.valid() ||
 		!digestPattern.MatchString(expected.ImageID) || !shaPattern.MatchString(expected.TarSHA256) ||
 		!shaPattern.MatchString(expected.ConfigSHA256) ||
 		!candidate.keys("commit", "configSha256", "http4sPatchRepository", "http4sPatchScalaVersion", "http4sPatchSourceSha", "http4sPatchVersion", "imageId", "imageRef", "runAttempt", "runId", "schemaVersion", "tarSha256") ||
@@ -93,15 +104,16 @@ func ValidateRuntimeCandidate(data, patchData []byte, expected RuntimeCandidateI
 	return nil
 }
 
-// ValidateAnalysisCandidate is also used by the metadata producer.
-func ValidateAnalysisCandidate(data []byte, expected Identity) error {
-	_, err := validatedAnalysisCandidate(data, expected)
-	return err
+func parseAnalysisCandidate(data []byte, expected runIdentity) (object, error) {
+	candidate, err := decodeObject(data)
+	if err != nil {
+		return nil, err
+	}
+	return validateAnalysisCandidate(candidate, expected)
 }
 
-func validatedAnalysisCandidate(data []byte, expected Identity) (object, error) {
-	candidate, err := decodeObject(data)
-	if err != nil || !expected.valid() ||
+func validateAnalysisCandidate(candidate object, expected runIdentity) (object, error) {
+	if !expected.valid() ||
 		!candidate.keys("commit", "configSha256", "imageArtifactDigest", "imageArtifactId", "imageArtifactName", "imageRef", "runAttempt", "runId", "schemaVersion", "tarSha256") ||
 		!candidate.numberEquals("schemaVersion", 1) ||
 		!candidate.equals("commit", expected.Commit) || !candidate.equals("runId", expected.RunID) ||
@@ -120,7 +132,7 @@ func analysisCandidate(args []string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	candidate, err := validatedAnalysisCandidate(data, Identity{args[1], args[2], args[3]})
+	candidate, err := parseAnalysisCandidate(data, runIdentity{args[1], args[2], args[3]})
 	if err != nil {
 		return "", err
 	}
@@ -135,17 +147,17 @@ func analysisCandidate(args []string) (string, error) {
 		"image_artifact_name", "imageArtifactName", "image_ref", "imageRef", "tar_sha256", "tarSha256"), nil
 }
 
-// ValidateRuntimeDeployment preserves v1/v2/v3 release records, including a
-// producer attempt different from the deployment attempt and historical pins.
-func ValidateRuntimeDeployment(data []byte, expected Identity) error {
-	_, _, err := validatedRuntimeDeployment(data, expected)
-	return err
+func parseRuntimeDeployment(data []byte, expected runIdentity) (object, string, error) {
+	deployment, err := decodeObject(data)
+	if err != nil {
+		return nil, "", err
+	}
+	return validateRuntimeDeployment(deployment, expected)
 }
 
-func validatedRuntimeDeployment(data []byte, expected Identity) (object, string, error) {
+func validateRuntimeDeployment(deployment object, expected runIdentity) (object, string, error) {
 	fail := errors.New("Runtime deployment metadata failed its immutable provenance contract.")
-	deployment, err := decodeObject(data)
-	if err != nil || !expected.valid() {
+	if !expected.valid() {
 		return nil, "", fail
 	}
 	keys := []string{"commit", "configSha256", "imageId", "imageRef", "manifestArtifactDigest", "manifestArtifactId", "manifestArtifactName", "manifestSha256", "registryDigest", "registryRef", "runAttempt", "runId", "schemaVersion", "sourceArtifactDigest", "sourceArtifactId", "sourceArtifactName"}
@@ -167,7 +179,7 @@ func validatedRuntimeDeployment(data []byte, expected Identity) (object, string,
 	default:
 		return nil, "", fail
 	}
-	source := Identity{expected.RunID, sourceAttempt, expected.Commit}
+	source := runIdentity{expected.RunID, sourceAttempt, expected.Commit}
 	if !source.valid() || !deployment.keys(keys...) ||
 		!deployment.equals("commit", expected.Commit) || !deployment.equals("runId", expected.RunID) ||
 		!deployment.equals("runAttempt", expected.RunAttempt) || !deployment.equals("imageRef", source.imageRef(runtimeRepository)) ||
@@ -199,7 +211,7 @@ func runtimeDeployment(args []string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	deployment, sourceAttempt, err := validatedRuntimeDeployment(data, Identity{args[1], args[2], args[3]})
+	deployment, sourceAttempt, err := parseRuntimeDeployment(data, runIdentity{args[1], args[2], args[3]})
 	if err != nil {
 		return "", err
 	}
@@ -225,7 +237,7 @@ func outputFields(value object, pairs ...string) string {
 }
 
 func runtimeReleaseSelection(args []string) (string, error) {
-	source := Identity{args[0], args[2], args[1]}
+	source := runIdentity{args[0], args[2], args[1]}
 	if !source.valid() || !positiveIDPattern.MatchString(args[4]) {
 		return "", errors.New("Invalid runtime release candidate identity.")
 	}
@@ -235,7 +247,7 @@ func runtimeReleaseSelection(args []string) (string, error) {
 	if args[6] != source.imageRef(runtimeRepository) {
 		return "", errors.New("Runtime image reference does not match the producer candidate identity.")
 	}
-	if _, err := NormalizeArtifactDigest(args[5]); err != nil {
+	if _, err := normalizeArtifactDigest(args[5]); err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("artifact_id=%s\nartifact_name=%s\ncandidate_run_attempt=%s\nimage_ref=%s\n", args[4], args[3], args[2], args[6]), nil
@@ -246,6 +258,6 @@ func analysisReleaseSelection(args []string) error {
 		args[2] != "analysis-candidate-metadata-"+args[0]+"-"+args[1] {
 		return errors.New("Worker metadata does not match the selected producer identity.")
 	}
-	_, err := NormalizeArtifactDigest(args[4])
+	_, err := normalizeArtifactDigest(args[4])
 	return err
 }

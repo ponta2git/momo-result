@@ -1,4 +1,4 @@
-package ciproducer
+package cievidence
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ var machineID = regexp.MustCompile(`^[a-z0-9]+$`)
 
 func immutableImage(ref, repository string) bool {
 	prefix := "registry.fly.io/" + repository + "@"
-	return strings.HasPrefix(ref, prefix) && digest.MatchString(strings.TrimPrefix(ref, prefix))
+	return strings.HasPrefix(ref, prefix) && digestPattern.MatchString(strings.TrimPrefix(ref, prefix))
 }
 func enabled(m any) bool {
 	return field(m, "state") == "started" && field(m, "config", "env", "MOMO_ANALYSIS_PUBLICATION_MODE") == "enabled" &&
@@ -27,7 +27,7 @@ func release(m any) string {
 		return ""
 	}
 	v = strings.TrimPrefix(v, "series-analysis-v1-")
-	if !sha.MatchString(v) {
+	if !commitPattern.MatchString(v) {
 		return ""
 	}
 	return v
@@ -73,7 +73,7 @@ func machines(command string, value any, args []string, out io.Writer) error {
 		_, err := fmt.Fprintf(out, "%s\t%s\tseries-analysis-v1-%s\n", id, image, release(m))
 		return err
 	case "analysis-machine-evidence":
-		if !immutableImage(args[0], "momo-result-analysis") || !sha.MatchString(args[1]) ||
+		if !immutableImage(args[0], "momo-result-analysis") || !commitPattern.MatchString(args[1]) ||
 			!regexp.MustCompile(`^worker-[1-9][0-9]*-[1-9][0-9]*$`).MatchString(args[2]) ||
 			!regexp.MustCompile(`^ocr-[1-9][0-9]*-[1-9][0-9]*$`).MatchString(args[3]) ||
 			!enabled(m) || !guest(m) || !machineID.MatchString(id) || image != args[0] || release(m) != args[1] ||

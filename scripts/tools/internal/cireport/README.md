@@ -9,7 +9,8 @@ included in stderr.
 
 - **coverage** preserves the coverage JSON/Markdown shape, metric order,
   percentages rounded to one decimal, and API instrumentation limitation.
-  Counts must be nonnegative integers; positive totals must agree with the
+  Counts must be nonnegative integers; literal integers retain exact precision,
+  while exponent forms must have finite magnitude to avoid unbounded expansion; positive totals must agree with the
   supplied percentage within 0.010000001 percentage points. `Unknown` is only
   accepted for zero covered/total and becomes null. Missing reports are allowed
   only with `--allow-missing`; invalid reports always fail. Both conditions

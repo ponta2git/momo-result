@@ -1,4 +1,4 @@
-package ciproducer
+package cievidence
 
 import (
 	"encoding/json"
@@ -7,8 +7,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-
-	"github.com/ponta2git/momo-result/scripts/tools/internal/cievidence"
 )
 
 func put(t *testing.T, path, content string) {
@@ -60,9 +58,9 @@ func TestCandidateProducerConsumer(t *testing.T) {
 			t.Fatal(command, code, diagnostics)
 		}
 		put(t, filepath.Join(dir, "candidate.json"), out)
-		id := cievidence.Identity{RunID: "123", RunAttempt: "2", Commit: testCommit}
+		id := runIdentity{RunID: "123", RunAttempt: "2", Commit: testCommit}
 		if worker {
-			if err := cievidence.ValidateAnalysisCandidate([]byte(out), id); err != nil {
+			if err := checkAnalysisCandidate([]byte(out), id); err != nil {
 				t.Fatal(err)
 			}
 		} else {
@@ -84,7 +82,7 @@ func TestCandidateProducerConsumer(t *testing.T) {
 }
 func evidenceCall(command string, args []string, root string) (int, string, string) {
 	var out, diagnostics strings.Builder
-	code := cievidence.Run(command, args, strings.NewReader(""), &out, &diagnostics, root)
+	code := Run(command, args, strings.NewReader(""), &out, &diagnostics, root)
 	return code, out.String(), diagnostics.String()
 }
 func TestDeploymentProducerAndHistoricalWire(t *testing.T) {
@@ -100,11 +98,11 @@ func TestDeploymentProducerAndHistoricalWire(t *testing.T) {
 	if code != 0 {
 		t.Fatal(diagnostics)
 	}
-	if err := cievidence.ValidateRuntimeDeployment([]byte(out), cievidence.Identity{RunID: "123", RunAttempt: "3", Commit: testCommit}); err != nil {
+	if err := checkRuntimeDeployment([]byte(out), runIdentity{RunID: "123", RunAttempt: "3", Commit: testCommit}); err != nil {
 		t.Fatal(err)
 	}
 	// This frozen v3 fixture is the pre-refactor jq writer's wire document.
-	want, err := os.ReadFile("testdata/runtime-deployment-v3.json")
+	want, err := os.ReadFile("testdata/produced-runtime-deployment-v3.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,5 +130,33 @@ func TestPatchProducerRejectsUnpinnedSource(t *testing.T) {
 	code, out, _ := call(t, "create-http4s-patch", args, "", root)
 	if code == 0 || out != "" {
 		t.Fatal("accepted unpinned patch")
+	}
+}
+
+func TestProducerAndConsumerShareArchiveAndPinRules(t *testing.T) {
+	root, dir, args := metadataFixture(t, false)
+	archive := filepath.Join(dir, "momo-result-image.tar.gz")
+	digest, err := hashFile(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// sha256sum's descriptive filename may contain spaces; it is never followed.
+	put(t, filepath.Join(dir, "image-tar.sha256"), digest+"  path with spaces/image.tar.gz\n")
+	put(t, filepath.Join(root, ".http4s-ref"), " \t"+testCommit+"\r\n")
+	code, out, diagnostics := call(t, "create-runtime-candidate", args, "", root)
+	if code != 0 {
+		t.Fatal(diagnostics)
+	}
+	put(t, filepath.Join(dir, "candidate.json"), out)
+	if code, _, err := evidenceCall("runtime-candidate", []string{dir, "123", "2", testCommit, args[len(args)-1]}, root); code != 0 {
+		t.Fatal(err)
+	}
+	put(t, filepath.Join(dir, "image-tar.sha256"), digest+"  first\n"+digest+"  second\n")
+	code, out, _ = call(t, "create-runtime-candidate", args, "", root)
+	if code == 0 || out != "" {
+		t.Fatal("producer accepted multiple checksum records")
+	}
+	if code, _, _ := evidenceCall("runtime-candidate", []string{dir, "123", "2", testCommit, args[len(args)-1]}, root); code == 0 {
+		t.Fatal("consumer accepted multiple checksum records")
 	}
 }

@@ -54,11 +54,27 @@ func recordedChecksum(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	lines := strings.Split(string(data), "\n")
-	for index, line := range lines {
-		lines[index], _, _ = strings.Cut(line, " ")
+	line := strings.TrimSuffix(string(data), "\n")
+	digest, filename, found := strings.Cut(line, " ")
+	// The path is descriptive, not an input path to follow. Permit spaces in
+	// it, but require exactly one checksum record for the selected archive.
+	if !found || !shaPattern.MatchString(digest) || len(filename) < 2 ||
+		(filename[0] != ' ' && filename[0] != '*') || strings.ContainsAny(filename, "\r\n") {
+		return "", errors.New("Invalid image archive checksum record.")
 	}
-	return strings.TrimRight(strings.Join(lines, "\n"), "\n"), nil
+	return digest, nil
+}
+
+func http4sPin(repoRoot string) (string, error) {
+	data, err := readRegular(filepath.Join(repoRoot, ".http4s-ref"))
+	if err != nil {
+		return "", err
+	}
+	pin := strings.TrimSpace(string(data))
+	if !commitPattern.MatchString(pin) {
+		return "", errors.New("Invalid HTTP4s source revision.")
+	}
+	return pin, nil
 }
 
 // verifiedArchive validates sidecars and the compressed bytes. Decompression
@@ -76,12 +92,15 @@ func verifiedArchive(directory, archiveName, expectedRef, expectedSHA string) (s
 	if err != nil {
 		return "", "", err
 	}
+	if recordedRef != expectedRef || !digestPattern.MatchString(recordedID) ||
+		(expectedSHA != "" && recordedSHA != expectedSHA) {
+		return "", "", errors.New("Image sidecars do not match candidate provenance.")
+	}
 	actualSHA, err := hashFile(filepath.Join(directory, archiveName))
 	if err != nil {
 		return "", "", err
 	}
-	if recordedRef != expectedRef || !digestPattern.MatchString(recordedID) || recordedSHA != actualSHA ||
-		(expectedSHA != "" && actualSHA != expectedSHA) {
+	if recordedSHA != actualSHA {
 		return "", "", errors.New("Image archive or sidecars do not match candidate provenance.")
 	}
 	return recordedID, actualSHA, nil
@@ -99,7 +118,7 @@ func analysisArchive(args []string) (string, error) {
 }
 
 func runtimeCandidate(args []string, repoRoot string) error {
-	expected := RuntimeCandidateInputs{Identity: Identity{args[1], args[2], args[3]}}
+	expected := runtimeCandidateInputs{runIdentity: runIdentity{args[1], args[2], args[3]}}
 	if !expected.valid() || args[4] != expected.imageRef(runtimeRepository) {
 		return errors.New("Runtime image reference does not match the selected workflow run.")
 	}
@@ -115,20 +134,13 @@ func runtimeCandidate(args []string, repoRoot string) error {
 	if err != nil {
 		return err
 	}
-	pin, err := readRegular(filepath.Join(repoRoot, ".http4s-ref"))
+	expected.HTTP4SSourceSHA, err = http4sPin(repoRoot)
 	if err != nil {
 		return err
 	}
-	// Match tr -d '[:space:]' for the ASCII revision file.
-	expected.HTTP4SSourceSHA = strings.Map(func(r rune) rune {
-		if strings.ContainsRune(" \t\n\r\v\f", r) {
-			return -1
-		}
-		return r
-	}, string(pin))
 	expected.ConfigSHA256, err = hashFile(filepath.Join(repoRoot, "fly.toml"))
 	if err != nil {
 		return err
 	}
-	return ValidateRuntimeCandidate(data, patch, expected)
+	return parseRuntimeCandidate(data, patch, expected)
 }

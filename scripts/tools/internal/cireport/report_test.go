@@ -16,6 +16,20 @@ func invoke(command string, args []string, input string) (int, string, string) {
 	status := Run(command, args, strings.NewReader(input), &out, &stderr, ".")
 	return status, out.String(), stderr.String()
 }
+
+func TestCountAvoidsExponentExpansion(t *testing.T) {
+	for _, input := range []string{"1e999999999", "1e-999999999", "-1e999999999"} {
+		if _, ok := count(json.Number(input)); ok {
+			t.Fatal("accepted unbounded expansion")
+		}
+	}
+	for input, want := range map[string]string{"0e999999999": "0", "0e-999999999": "0", "1.0": "1", "10e1": "100", "9007199254740993": "9007199254740993"} {
+		got, ok := count(json.Number(input))
+		if !ok || got.String() != want {
+			t.Fatalf("%s rejected or altered", input)
+		}
+	}
+}
 func put(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

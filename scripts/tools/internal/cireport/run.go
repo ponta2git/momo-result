@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 var invalidInput = errors.New("invalid input")
@@ -85,6 +86,21 @@ func singleJSON(in io.Reader) (any, error) {
 func count(value any) (*big.Int, bool) {
 	n, ok := value.(json.Number)
 	if !ok || !json.Valid([]byte(n)) {
+		return nil, false
+	}
+	text := string(n)
+	if !strings.ContainsAny(text, ".eE") {
+		integer, ok := new(big.Int).SetString(text, 10)
+		return integer, ok && integer.Sign() >= 0
+	}
+	mantissa, _, _ := strings.Cut(strings.ToLower(text), "e")
+	if strings.Trim(mantissa, "-0.") == "" {
+		return new(big.Int), true
+	}
+	// Avoid expanding tiny exponent-form inputs into enormous allocations.
+	// Zero and literal integers do not need a rational representation.
+	f, err := n.Float64()
+	if err != nil || math.IsInf(f, 0) || f < 1 {
 		return nil, false
 	}
 	r, ok := new(big.Rat).SetString(string(n))

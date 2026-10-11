@@ -1,15 +1,17 @@
-package ciproducer
+package cievidence
 
 import (
-	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
-
-	"github.com/ponta2git/momo-result/scripts/tools/internal/cievidence"
 )
+
+var invalid = errors.New("CI provenance input failed its contract.")
+var candidateTag = regexp.MustCompile(`^registry\.fly\.io/momo-result(-analysis)?:[0-9a-f]{40}-[1-9][0-9]*-[1-9][0-9]*$`)
 
 func provider(command string, args []string, in io.Reader, out io.Writer) error {
 	counts := map[string]int{"resolve-pushed-image": 1, "resolve-deployment-run": 1, "verify-manifest-artifact": 2,
@@ -70,7 +72,7 @@ func pushedImage(value any, tag string, out io.Writer) error {
 		return invalid
 	}
 	for ref := range selected {
-		if !digest.MatchString(strings.TrimPrefix(ref, repository+"@")) {
+		if !digestPattern.MatchString(strings.TrimPrefix(ref, repository+"@")) {
 			return invalid
 		}
 		_, err := fmt.Fprintln(out, ref)
@@ -85,7 +87,7 @@ func deploymentRun(v any, repository string, out io.Writer) error {
 	if repository == "" || field(v, "name") != "deploy" || field(v, "path") != ".github/workflows/deploy.yml" ||
 		(event != "push" && event != "workflow_dispatch") || field(v, "head_branch") != "master" ||
 		field(v, "head_repository", "full_name") != repository || field(v, "conclusion") != "success" ||
-		!positive.MatchString(attempt) || !sha.MatchString(commit) {
+		!positiveIDPattern.MatchString(attempt) || !commitPattern.MatchString(commit) {
 		return invalid
 	}
 	_, err := fmt.Fprintf(out, "candidate_sha=%s\nrun_attempt=%s\n", commit, attempt)
@@ -93,19 +95,15 @@ func deploymentRun(v any, repository string, out io.Writer) error {
 }
 
 func manifestArtifact(v any, path, runID string) error {
-	data, err := regular(path)
+	m, err := readObjectFile(path)
 	if err != nil {
 		return err
 	}
-	m, err := readJSON(bytes.NewReader(data))
-	if err != nil {
-		return err
-	}
-	if err = cievidence.ValidateRuntimeDeployment(data, cievidence.Identity{RunID: runID, RunAttempt: str(field(m, "runAttempt")), Commit: str(field(m, "commit"))}); err != nil {
+	if _, _, err = validateRuntimeDeployment(m, runIdentity{RunID: runID, RunAttempt: m.text("runAttempt"), Commit: m.text("commit")}); err != nil {
 		return err
 	}
 	id, name, expectedDigest := str(field(m, "manifestArtifactId")), str(field(m, "manifestArtifactName")), str(field(m, "manifestArtifactDigest"))
-	if !positive.MatchString(runID) || !positive.MatchString(id) || !digest.MatchString(expectedDigest) ||
+	if !positiveIDPattern.MatchString(runID) || !positiveIDPattern.MatchString(id) || !digestPattern.MatchString(expectedDigest) ||
 		name == "" || number(field(v, "id")) != id || field(v, "name") != name || field(v, "digest") != expectedDigest ||
 		field(v, "expired") != false || number(field(v, "workflow_run", "id")) != runID {
 		return invalid

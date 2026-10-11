@@ -22,8 +22,7 @@ the same `MOMO_CI_TOOL` environment variable.
 Command contracts and focused tests live with their owning packages:
 
 - [Reports](../../internal/cireport/README.md): coverage, runtime logs, maintenance report sanitization/state/summary.
-- [Evidence](../../internal/cievidence/README.md): candidate and deployment provenance, archive identity, readiness and postdeploy guards.
-- [Producers](../../internal/ciproducer/README.md): metadata generation and allowlisted provider response interpretation.
+- [Provenance and evidence](../../internal/cievidence/README.md): metadata creation/validation, archive identity, provider response interpretation, readiness, and postdeploy guards.
 
 Invalid input never produces success evidence. Errors omit raw provider data.
 The caller keeps diagnostic failures nonblocking and required release guards

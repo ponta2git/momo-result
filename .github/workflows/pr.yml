@@ -27,12 +27,14 @@ jobs:
       http4s_patch: ${{ steps.changes.outputs.http4s_patch }}
       workflow: ${{ steps.changes.outputs.workflow }}
       actionlint: ${{ steps.changes.outputs.actionlint }}
+      go_runtime: ${{ steps.changes.outputs.go_runtime }}
       go_tools: ${{ steps.changes.outputs.go_tools }}
       policy_scripts: ${{ steps.changes.outputs.policy_scripts }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
+          # The PR merge commit's parents contain both endpoint trees for diff.
+          fetch-depth: 2
           persist-credentials: false
       - name: Check changed-file whitespace
         env:
@@ -53,7 +55,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
+          # Only release snapshot validation walks commit ancestry.
+          fetch-depth: ${{ github.event.pull_request.base.ref == 'master' && '0' || '1' }}
           persist-credentials: false
       - name: Validate pull request destination and release snapshot
         env:
@@ -85,6 +88,7 @@ jobs:
     uses: ./.github/workflows/workflow-lint.yml
     with:
       actionlint: ${{ needs.classify.outputs.actionlint == 'true' }}
+      go_runtime: ${{ needs.classify.outputs.go_runtime == 'true' }}
       go_tools: ${{ needs.classify.outputs.go_tools == 'true' }}
       policy_scripts: ${{ needs.classify.outputs.policy_scripts == 'true' }}
 

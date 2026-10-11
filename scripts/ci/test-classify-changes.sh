@@ -20,7 +20,7 @@ assert_case() {
 
 expected() {
   local key value
-  for key in api web analysis analysis_image runtime ocr_notifications http4s_patch workflow actionlint go_tools policy_scripts; do
+  for key in api web analysis analysis_image runtime ocr_notifications http4s_patch workflow actionlint go_runtime go_tools policy_scripts; do
     value=false
     case " $* " in *" ${key} "*) value=true ;; esac
     printf '%s=%s\n' "${key}" "${value}"
@@ -35,7 +35,7 @@ readonly api_web="$(expected ocr_notifications api web)"
 readonly analysis_only="$(expected analysis)"
 readonly analysis_image="$(expected ocr_notifications analysis analysis_image)"
 readonly runtime_only="$(expected runtime)"
-readonly runtime_go="$(expected ocr_notifications runtime workflow go_tools)"
+readonly runtime_go="$(expected ocr_notifications runtime workflow go_runtime)"
 readonly go_only="$(expected workflow go_tools)"
 readonly http4s_ref="$(expected ocr_notifications api runtime http4s_patch)"
 readonly http4s_builder="$(expected ocr_notifications api runtime http4s_patch workflow policy_scripts)"
@@ -73,6 +73,36 @@ if [[ "${rename_actual}" != "${api_runtime}" ]]; then
   exit 1
 fi
 
+# Match the PR checkout: a synthetic merge plus its two parents, without their
+# shared ancestor. Classification compares endpoint trees, not a merge base.
+git -C "${rename_repo}" checkout --quiet -b updated-base "${rename_base}"
+mkdir -p "${rename_repo}/docs"
+printf '%s\n' base-only > "${rename_repo}/docs/base-only.md"
+git -C "${rename_repo}" add .
+git -C "${rename_repo}" commit --quiet -m updated-base
+updated_base="$(git -C "${rename_repo}" rev-parse HEAD)"
+git -C "${rename_repo}" merge --quiet --no-ff "${rename_head}" -m pull-request-merge
+shallow_repo="${test_root}/shallow-pr"
+git clone --quiet --no-checkout --depth=2 "file://${rename_repo}" "${shallow_repo}"
+[[ "$(git -C "${shallow_repo}" rev-parse --is-shallow-repository)" == true ]]
+if git -C "${shallow_repo}" cat-file -e "${rename_base}^{commit}" 2>/dev/null; then
+  echo "Shallow PR fixture unexpectedly includes the shared ancestor." >&2
+  exit 1
+fi
+shallow_actual="$(
+  cd "${shallow_repo}"
+  git diff --check "${updated_base}" "${rename_head}" -- &&
+    "${range_classifier}" "${updated_base}" "${rename_head}"
+)"
+if [[ "${shallow_actual}" != "${api_runtime}" ]]; then
+  echo "Shallow PR classification lost a renamed production input." >&2
+  exit 1
+fi
+if (cd "${shallow_repo}" && "${range_classifier}" "${rename_base}" "${rename_head}") >/dev/null 2>&1; then
+  echo "Missing comparison commits must fail closed." >&2
+  exit 1
+fi
+
 assert_case docs-only "${none}" docs/README.md
 assert_case actionlint-only "${actionlint_policy}" scripts/ci/actionlint.sh
 assert_case dev-launcher "${web_only}" apps/web/scripts/dev-local.mts
@@ -86,7 +116,7 @@ assert_case policy-runner "${policy_only}" scripts/ci/check-policy.sh
 assert_case package-scripts \
   "$(expected web runtime workflow policy_scripts ocr_notifications)" package.json
 assert_case unknown-ops-script \
-  "$(expected api web analysis analysis_image runtime workflow policy_scripts ocr_notifications)" \
+  "$(expected api web analysis analysis_image runtime workflow go_runtime go_tools policy_scripts ocr_notifications)" \
   scripts/ops/new-operation.sh
 assert_case policy-fixture "${policy_only}" scripts/ci/test-validate-runtime-deployment.sh
 assert_case release-policy "${policy_only}" scripts/ci/check-pr-branch-policy.sh
@@ -101,7 +131,7 @@ assert_case image-validator \
   "$(expected runtime workflow policy_scripts)" \
   scripts/ci/validate-runtime-image.sh
 assert_case unknown-validator \
-  "$(expected api web analysis analysis_image runtime workflow policy_scripts ocr_notifications)" \
+  "$(expected api web analysis analysis_image runtime workflow go_runtime go_tools policy_scripts ocr_notifications)" \
   scripts/ci/validate-new-boundary.sh
 assert_case coverage-summary \
   "$(expected api web workflow policy_scripts)" \
@@ -141,13 +171,13 @@ assert_case series-analysis-script \
 assert_case runtime-tool "${runtime_go}" apps/runtime/cmd/momo-runtime-tool/main.go
 assert_case runtime-tool-go-mod "${runtime_go}" apps/runtime/go.mod
 assert_case runtime-tool-go-sum "${runtime_go}" apps/runtime/go.sum
-assert_case runtime-unit "$(expected runtime workflow go_tools)" apps/runtime/cmd/momo-runtime-tool/main_test.go
+assert_case runtime-unit "$(expected runtime workflow go_runtime)" apps/runtime/cmd/momo-runtime-tool/main_test.go
 assert_case development-go-mod "${go_only}" scripts/tools/go.mod
 assert_case development-go-sum "${go_only}" scripts/tools/go.sum
 assert_case development-tool "${go_only}" scripts/tools/cmd/ocr-evaluation-audit/main.go
 assert_case runtime-db-contract "${runtime_go}" contracts/runtime-db-contract.json
 assert_case runtime-tool-characterization \
-  "${go_only}" contracts/runtime-tool-characterization-v1.json
+  "$(expected workflow go_runtime)" contracts/runtime-tool-characterization-v1.json
 assert_case runtime-log-summary \
   "$(expected runtime workflow policy_scripts)" \
   scripts/ci/summarize-runtime-logs.sh
@@ -165,7 +195,7 @@ assert_case deploy-workflow \
   .github/workflows/deploy.yml
 assert_case shared-schema "${all}" docs/schemas/series-analysis-v1.json
 assert_case orchestrator "${orchestrator}" .github/workflows/pr.yml
-assert_case unknown-path "${all}" config/unknown-release-input.toml
+assert_case unknown-path "$(expected api web analysis analysis_image runtime ocr_notifications workflow go_runtime go_tools)" config/unknown-release-input.toml
 
 assert_case 'Summit contract pin selects assembled Web gate' "$(expected web ocr_notifications)" '.summit-ref'
 assert_case 'OCR notification workflow selects its gate' \
@@ -185,5 +215,14 @@ assert_case browser-config "$(expected web runtime ocr_notifications)" apps/web/
 assert_case report-sanitizer "${policy_only}" scripts/ci/sanitize-analysis-report.sh
 assert_case mixed-test-and-source "$(expected api web runtime ocr_notifications)" apps/api/src/test/Unit.scala apps/web/src/main.tsx
 assert_case mixed-units "$(expected api web analysis)" apps/api/src/test/Unit.scala apps/web/src/features/Foo.test.tsx apps/processing-worker/tests/parent_liveness.rs
+
+assert_case shared-toolchain "$(expected api web analysis analysis_image runtime ocr_notifications workflow go_runtime go_tools)" mise.toml
+assert_case unknown-go-workspace "$(expected api web analysis analysis_image runtime ocr_notifications workflow go_runtime go_tools)" go.work
+assert_case both-go-modules "$(expected runtime ocr_notifications workflow go_runtime go_tools)" \
+  apps/runtime/go.mod scripts/tools/go.mod
+assert_case both-go-test-modules "$(expected runtime workflow go_runtime go_tools)" \
+  apps/runtime/cmd/momo-runtime-tool/main_test.go scripts/tools/cmd/linux-memory-snapshot/main_test.go
+assert_case workflow-lint-selects-both-modules "$(expected workflow actionlint go_runtime go_tools policy_scripts)" \
+  .github/workflows/workflow-lint.yml
 
 echo "Change classifier tests passed."

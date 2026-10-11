@@ -10,6 +10,7 @@ runtime=false
 ocr_notifications=false
 http4s_patch=false
 actionlint=false
+go_runtime=false
 go_tools=false
 policy_scripts=false
 workflow=false
@@ -26,7 +27,8 @@ select_all() {
 while IFS= read -r -d '' path; do
   [[ "${path}" == scripts/ci/* || "${path}" == scripts/ops/* ]] && policy_scripts=true
   [[ "${path}" == .github/workflows/* || "${path}" == .github/actions/* ]] && actionlint=true
-  [[ "${path}" == scripts/tools/* || "${path}" == apps/runtime/* ]] && go_tools=true
+  [[ "${path}" == apps/runtime/* ]] && go_runtime=true
+  [[ "${path}" == scripts/tools/* ]] && go_tools=true
 
   case "${path}" in
     apps/api/openapi.yaml)
@@ -87,10 +89,10 @@ while IFS= read -r -d '' path; do
     contracts/runtime-db-contract.json)
       ocr_notifications=true
       runtime=true
-      go_tools=true
+      go_runtime=true
       ;;
     contracts/runtime-tool-characterization-v1.json)
-      go_tools=true
+      go_runtime=true
       ;;
     apps/runtime/*_test.go)
       runtime=true
@@ -129,6 +131,8 @@ while IFS= read -r -d '' path; do
       [[ "${path}" != package.json ]] || policy_scripts=true
       ;;
     mise.toml)
+      go_runtime=true
+      go_tools=true
       select_all
       ;;
     scripts/e2e/runtime-smoke*.test.*)
@@ -181,6 +185,8 @@ while IFS= read -r -d '' path; do
       [[ "${path}" == scripts/ci/public-repo-safety-check.sh ]] || actionlint=true
       ;;
     scripts/ci/*)
+      go_runtime=true
+      go_tools=true
       select_all
       ;;
     scripts/ops/analysis.sh | scripts/ops/analysis-maintain.sh)
@@ -212,6 +218,7 @@ while IFS= read -r -d '' path; do
       select_all
       ;;
     .github/workflows/workflow-lint.yml)
+      go_runtime=true
       go_tools=true
       policy_scripts=true
       ;;
@@ -223,12 +230,14 @@ while IFS= read -r -d '' path; do
       ;;
     *)
       # Unknown paths fail closed by exercising every release-relevant gate.
+      go_runtime=true
+      go_tools=true
       select_all
       ;;
   esac
 done
 
-if [[ "${actionlint}" == true || "${go_tools}" == true || "${policy_scripts}" == true ]]; then
+if [[ "${actionlint}" == true || "${go_runtime}" == true || "${go_tools}" == true || "${policy_scripts}" == true ]]; then
   workflow=true
 fi
 
@@ -241,5 +250,6 @@ printf 'ocr_notifications=%s\n' "${ocr_notifications}"
 printf 'http4s_patch=%s\n' "${http4s_patch}"
 printf 'workflow=%s\n' "${workflow}"
 printf 'actionlint=%s\n' "${actionlint}"
+printf 'go_runtime=%s\n' "${go_runtime}"
 printf 'go_tools=%s\n' "${go_tools}"
 printf 'policy_scripts=%s\n' "${policy_scripts}"

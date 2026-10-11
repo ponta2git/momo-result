@@ -7,6 +7,10 @@ on:
         required: false
         default: true
         type: boolean
+      go_runtime:
+        required: false
+        default: true
+        type: boolean
       go_tools:
         required: false
         default: true
@@ -36,15 +40,11 @@ jobs:
           ACTIONLINT_BIN: ${{ runner.temp }}/actionlint
         run: scripts/ci/actionlint.sh
 
-  go-tools:
-    name: Go (${{ matrix.module }})
+  go-runtime:
+    name: Go (apps/runtime)
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: inputs.go_tools
-    strategy:
-      fail-fast: false
-      matrix:
-        module: [apps/runtime, scripts/tools]
+    if: inputs.go_runtime
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -52,10 +52,32 @@ jobs:
       - name: Set up Go tools
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          cache-dependency-path: ${{ matrix.module }}/go.sum
-          go-version-file: ${{ matrix.module }}/go.mod
+          cache-dependency-path: apps/runtime/go.sum
+          go-version-file: apps/runtime/go.mod
       - name: Test Go module
-        working-directory: ${{ matrix.module }}
+        working-directory: apps/runtime
+        run: |
+          go test ./...
+          go vet ./...
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          govulncheck ./...
+
+  go-tools:
+    name: Go (scripts/tools)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: inputs.go_tools
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Go tools
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          cache-dependency-path: scripts/tools/go.sum
+          go-version-file: scripts/tools/go.mod
+      - name: Test Go module
+        working-directory: scripts/tools
         run: |
           go test ./...
           go vet ./...

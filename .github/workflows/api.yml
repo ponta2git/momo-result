@@ -161,11 +161,10 @@ jobs:
         timeout-minutes: 10
         run: sbt --server --batch apiCoverage
 
-      - name: Install coverage XML reader
-        if: ${{ always() && github.event_name == 'pull_request' }}
+      - name: Build structured CI tool
+        if: always() && github.event_name == 'pull_request'
         continue-on-error: true
-        timeout-minutes: 2
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxml2-utils
+        uses: ./.github/actions/setup-ci-tool
 
       - name: Summarize coverage
         if: ${{ always() && github.event_name == 'pull_request' }}

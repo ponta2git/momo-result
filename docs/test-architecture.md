@@ -84,11 +84,12 @@ coverage は未確認の経路を探す補助であり、品質を一つの数�
 
 ## 6. CI Artifacts
 
-- workflow は gate の依存関係、権限、service、artifact の受け渡しを所有する。`scripts/ci` の shell は短い実行接続と運用・policy 検証を担い、アプリの業務判断は各 subsystem に置く。
+- workflow は gate の依存関係、権限、service、artifact の受け渡しを所有する。`scripts/ci` の Shell は外部 command、環境変数、file の受け渡し、終了状態と実行順序を扱い、アプリの業務判断は各 subsystem に置く。
 - API / Web のローカル起動・Web build 補助・Playwright orchestration は `apps/web/scripts`、複数 service を使う worker E2E と runtime HTTP smoke は root の `scripts/e2e` に置く。これらは Node が直接実行できる `.mts` とし、native type stripping とは別に Web の scripts 用 tsconfig で型検査する。root E2E も Web の lint・format・scripts test に含める。
-- 独立した診断・評価用 Go command は `scripts/tools/cmd`、本番 runtime の process 管理と probe は独立 module の `apps/runtime` に置く。CI 専用の集計・判定を runtime binary に含めない。
+- 構造化された CI data の集計・秘匿化・来歴検証と metadata 生成は `scripts/tools/cmd/ci-tool` に集約する。producer と consumer は同じ検証規則を使い、後続 release が以前の metadata を読める契約を保つ。CLI の入力・出力・終了値は [command の説明](../scripts/tools/cmd/ci-tool/README.md) から辿れる。
+- 独立した診断・評価用 Go command も `scripts/tools/cmd`、本番 runtime の process 管理と probe は独立 module の `apps/runtime` に置く。CI 専用の集計・判定を runtime binary に含めない。
 - `scripts/ci/test-*.sh` は分類、来歴、結果集約、実行の調整を観測する pipeline-integrity evidence とする。外部 command の double は実 container、DB / queue、provider 接続の成功を保証しない。ローカル候補の起動確認と配備後の公開 edge の確認は、それぞれの対象へ接続する smoke で証拠を取る。
-- shell の contract suite は共通 runner から独立した process で実行し、一つの失敗で他の結果を失わない。fixture と command double は各 suite が所有し、ローカルと CI は同じ実行入口を使う。変更分類には test 自体に加え、検証される運用 script と実行入口の変更も接続する。
+- Shell の contract suite は共通 runner で CI tool を一度 build してから独立した process で実行し、一つの失敗で他の結果を失わない。fixture と command double は各 suite が所有し、ローカルと CI は同じ実行入口を使う。変更分類には test 自体に加え、検証される運用 script と実行入口の変更も接続する。
 - coverage artifact は PR review と推移確認の補助であり、integration / smoke の代わりにしない。
 - artifact は失敗の診断と変更の確認に必要なものを残し、生成 script と workflow が path / format を所有する。人間が概要から必要な詳細へ進めるようにし、利用先のない report や同じ内容の別形式を増やさない。
 - coverage report を有効にした job は test failure を隠さず、artifact upload failure と品質 failure を区別する。

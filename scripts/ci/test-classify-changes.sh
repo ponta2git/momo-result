@@ -172,8 +172,8 @@ assert_case runtime-tool "${runtime_go}" apps/runtime/cmd/momo-runtime-tool/main
 assert_case runtime-tool-go-mod "${runtime_go}" apps/runtime/go.mod
 assert_case runtime-tool-go-sum "${runtime_go}" apps/runtime/go.sum
 assert_case runtime-unit "$(expected runtime workflow go_runtime)" apps/runtime/cmd/momo-runtime-tool/main_test.go
-assert_case development-go-mod "${go_only}" scripts/tools/go.mod
-assert_case development-go-sum "${go_only}" scripts/tools/go.sum
+assert_case development-go-mod "$(expected workflow go_tools policy_scripts)" scripts/tools/go.mod
+assert_case development-go-sum "$(expected workflow go_tools policy_scripts)" scripts/tools/go.sum
 assert_case development-tool "${go_only}" scripts/tools/cmd/ocr-evaluation-audit/main.go
 assert_case runtime-db-contract "${runtime_go}" contracts/runtime-db-contract.json
 assert_case runtime-tool-characterization \
@@ -218,7 +218,7 @@ assert_case mixed-units "$(expected api web analysis)" apps/api/src/test/Unit.sc
 
 assert_case shared-toolchain "$(expected api web analysis analysis_image runtime ocr_notifications workflow go_runtime go_tools)" mise.toml
 assert_case unknown-go-workspace "$(expected api web analysis analysis_image runtime ocr_notifications workflow go_runtime go_tools)" go.work
-assert_case both-go-modules "$(expected runtime ocr_notifications workflow go_runtime go_tools)" \
+assert_case both-go-modules "$(expected runtime ocr_notifications workflow go_runtime go_tools policy_scripts)" \
   apps/runtime/go.mod scripts/tools/go.mod
 assert_case both-go-test-modules "$(expected runtime workflow go_runtime go_tools)" \
   apps/runtime/cmd/momo-runtime-tool/main_test.go scripts/tools/cmd/linux-memory-snapshot/main_test.go
@@ -226,3 +226,8 @@ assert_case workflow-lint-selects-both-modules "$(expected workflow actionlint g
   .github/workflows/workflow-lint.yml
 
 echo "Change classifier tests passed."
+
+assert_case ci-data-command "$(expected workflow go_tools policy_scripts)" scripts/tools/cmd/ci-tool/main.go
+assert_case ci-data-validator "$(expected workflow go_tools policy_scripts)" scripts/tools/internal/cievidence/provenance.go
+assert_case ci-tool-setup "$(expected workflow actionlint go_tools policy_scripts)" .github/actions/setup-ci-tool/action.yml
+assert_case ci-tool-build "${policy_only}" scripts/ci/build-ci-tool.sh

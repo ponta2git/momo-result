@@ -17,6 +17,10 @@ done
 # report every failure, and bound the number of concurrent child processes.
 logs="$(mktemp -d)"
 trap 'rm -rf "${logs}"' EXIT
+if [[ -z "${MOMO_CI_TOOL:-}" ]]; then
+  scripts/ci/build-ci-tool.sh "${logs}/ci-tool"
+  export MOMO_CI_TOOL="${logs}/ci-tool"
+fi
 pids=()
 paths=()
 collect() {

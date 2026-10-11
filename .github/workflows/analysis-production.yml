@@ -34,6 +34,9 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Build structured CI tool
+        uses: ./.github/actions/setup-ci-tool
+
       - name: Setup flyctl
         uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
         with:

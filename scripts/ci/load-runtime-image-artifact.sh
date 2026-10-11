@@ -15,7 +15,4 @@ gzip -dc "${image_artifact_dir}/momo-result-image.tar.gz" | docker load
 
 expected_id="$(< "${image_artifact_dir}/image-id.txt")"
 loaded_id="$(docker image inspect "${image_ref}" --format '{{.Id}}')"
-if [[ "${loaded_id}" != "${expected_id}" ]]; then
-  echo "Loaded image id ${loaded_id} does not match packaged image id ${expected_id}." >&2
-  exit 1
-fi
+"${script_dir}/ci-tool.sh" image-id-match "${expected_id}" "${loaded_id}"

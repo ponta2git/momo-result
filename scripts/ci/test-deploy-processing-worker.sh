@@ -4,7 +4,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 task_tmp="$(mktemp -d)"
 trap 'rm -rf "${task_tmp}"' EXIT
 mkdir -p "${task_tmp}/bin" "${task_tmp}/scripts/ci"
-cp "${repo_root}/scripts/ci/"{deploy-processing-worker,resolve-pushed-runtime-image,classify-git-range,classify-changes}.sh "${task_tmp}/scripts/ci/"
+cp "${repo_root}/scripts/ci/"{deploy-processing-worker,resolve-pushed-runtime-image,classify-git-range,classify-changes,ci-tool}.sh "${task_tmp}/scripts/ci/"
 export TEST_STATE="${task_tmp}" PATH="${task_tmp}/bin:${PATH}" RUNNER_TEMP="${task_tmp}"
 export ANALYSIS_RELEASE_SHA=0123456789abcdef0123456789abcdef01234567
 export ANALYSIS_IMAGE_REF="registry.fly.io/momo-result-analysis:${ANALYSIS_RELEASE_SHA}-101-2"

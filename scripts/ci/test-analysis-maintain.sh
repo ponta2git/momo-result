@@ -5,7 +5,7 @@ task_tmp="$(mktemp -d)"
 trap 'rm -rf "${task_tmp}"' EXIT
 mkdir -p "${task_tmp}/bin" "${task_tmp}/repo/scripts/ci" "${task_tmp}/repo/scripts/ops"
 cp "${repo_root}/scripts/ops/analysis-maintain.sh" "${task_tmp}/repo/scripts/ops/"
-cp "${repo_root}/scripts/ci/"{classify-git-range,classify-changes,sanitize-analysis-report}.sh "${task_tmp}/repo/scripts/ci/"
+cp "${repo_root}/scripts/ci/"{classify-git-range,classify-changes,sanitize-analysis-report,ci-tool}.sh "${task_tmp}/repo/scripts/ci/"
 export TEST_STATE="${task_tmp}" PATH="${task_tmp}/bin:${PATH}"
 export ANALYSIS_WAIT_SECONDS=3 ANALYSIS_POLL_SECONDS=1
 cat > "${task_tmp}/bin/git" <<'MOCK'
@@ -54,6 +54,13 @@ expect_calls 1
 reset_case
 report 1 planned
 run_case check
+expect_calls 1
+! grep -qF -- --apply "${task_tmp}/calls"
+reset_case
+report 1 planned
+jq '.planDigest = ""' "${task_tmp}/response-1" > "${task_tmp}/missing-plan.json"
+mv "${task_tmp}/missing-plan.json" "${task_tmp}/response-1"
+if run_case auto; then echo 'A planned operation without its inspected digest must fail.' >&2; exit 1; fi
 expect_calls 1
 ! grep -qF -- --apply "${task_tmp}/calls"
 reset_case

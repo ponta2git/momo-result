@@ -291,6 +291,10 @@ jobs:
           retention-days: 7
           compression-level: 0
 
+      - name: Build structured CI tool
+        if: inputs.package_image
+        uses: ./.github/actions/setup-ci-tool
+
       - name: Create candidate provenance
         if: inputs.package_image
         id: candidate
@@ -299,34 +303,11 @@ jobs:
           IMAGE_ARTIFACT_ID: ${{ steps.image-upload.outputs.artifact-id }}
         run: |
           mkdir -p "${ANALYSIS_METADATA_ARTIFACT_NAME}"
-          tar_sha="$(cut -d ' ' -f 1 \
-            "${ANALYSIS_IMAGE_ARTIFACT_NAME}/image-tar.sha256")"
-          config_sha="$(sha256sum fly.analysis.toml | cut -d ' ' -f 1)"
-          image_artifact_digest="$(
-            scripts/ci/canonicalize-artifact-digest.sh "${IMAGE_ARTIFACT_DIGEST}"
-          )"
-          jq -n \
-            --arg commit "${GITHUB_SHA}" \
-            --arg configSha256 "${config_sha}" \
-            --arg imageArtifactDigest "${image_artifact_digest}" \
-            --arg imageArtifactId "${IMAGE_ARTIFACT_ID}" \
-            --arg imageArtifactName "${ANALYSIS_IMAGE_ARTIFACT_NAME}" \
-            --arg imageRef "${ANALYSIS_IMAGE_REF}" \
-            --arg runAttempt "${GITHUB_RUN_ATTEMPT}" \
-            --arg runId "${GITHUB_RUN_ID}" \
-            --arg tarSha256 "${tar_sha}" \
-            '{
-              schemaVersion: 1,
-              commit: $commit,
-              runId: $runId,
-              runAttempt: $runAttempt,
-              imageRef: $imageRef,
-              imageArtifactName: $imageArtifactName,
-              imageArtifactId: $imageArtifactId,
-              imageArtifactDigest: $imageArtifactDigest,
-              tarSha256: $tarSha256,
-              configSha256: $configSha256
-            }' > "${ANALYSIS_METADATA_ARTIFACT_NAME}/candidate.json"
+          scripts/ci/ci-tool.sh create-analysis-candidate \
+            --artifact-dir "${ANALYSIS_IMAGE_ARTIFACT_NAME}" --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" --commit "${GITHUB_SHA}" \
+            --image-ref "${ANALYSIS_IMAGE_REF}" --artifact-id "${IMAGE_ARTIFACT_ID}" \
+            --artifact-digest "${IMAGE_ARTIFACT_DIGEST}" > "${ANALYSIS_METADATA_ARTIFACT_NAME}/candidate.json"
           {
             printf 'metadata_artifact_name=%s\n' "${ANALYSIS_METADATA_ARTIFACT_NAME}"
             printf 'producer_run_attempt=%s\n' "${GITHUB_RUN_ATTEMPT}"

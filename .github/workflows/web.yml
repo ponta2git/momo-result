@@ -59,6 +59,11 @@ jobs:
         timeout-minutes: 5
       - run: pnpm --filter web build
         timeout-minutes: 5
+      - name: Build structured CI tool
+        if: always() && github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: ./.github/actions/setup-ci-tool
+
       - name: Summarize coverage
         if: ${{ always() && github.event_name == 'pull_request' }}
         continue-on-error: true

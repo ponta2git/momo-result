@@ -1,0 +1,14 @@
+name: Setup structured CI tool
+description: Build the repository CI data commands once for this job.
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version-file: scripts/tools/go.mod
+        cache-dependency-path: scripts/tools/go.sum
+    - shell: bash
+      working-directory: ${{ github.workspace }}
+      run: |
+        scripts/ci/build-ci-tool.sh "${RUNNER_TEMP}/ci-tool"
+        printf 'MOMO_CI_TOOL=%s\n' "${RUNNER_TEMP}/ci-tool" >> "${GITHUB_ENV}"

@@ -173,7 +173,8 @@ while IFS= read -r -d '' path; do
       api=true
       web=true
       ;;
-    scripts/ci/test-* | scripts/ci/check-policy.sh | scripts/ci/canonicalize-artifact-digest.sh | \
+    scripts/ci/ci-tool.sh | scripts/ci/build-ci-tool.sh | \
+      scripts/ci/test-* | scripts/ci/check-policy.sh | scripts/ci/canonicalize-artifact-digest.sh | \
       scripts/ci/load-analysis-candidate.sh | scripts/ci/load-runtime-image-artifact.sh | \
       scripts/ci/resolve-pushed-runtime-image.sh | scripts/ci/sanitize-analysis-report.sh | \
       scripts/ci/validate-analysis-candidate.sh | scripts/ci/validate-analysis-worker-readiness.sh | \
@@ -222,10 +223,18 @@ while IFS= read -r -d '' path; do
       go_tools=true
       policy_scripts=true
       ;;
+    .github/actions/setup-ci-tool/*)
+      go_tools=true
+      policy_scripts=true
+      ;;
     .github/workflows/public-safety.yml | .github/actions/*)
+      ;;
+    scripts/tools/cmd/ci-tool/* | scripts/tools/internal/ci*/* | scripts/tools/go.mod | scripts/tools/go.sum)
+      policy_scripts=true
       ;;
     scripts/tools/*)
       ;;
+
     .github/dependabot.yml | docs/* | *.md)
       ;;
     *)

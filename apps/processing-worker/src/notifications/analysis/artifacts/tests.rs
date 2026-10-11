@@ -1,7 +1,9 @@
+use super::inputs::validate_input_counts;
 use super::*;
+use crate::notifications::analysis::types::MatchIdentity;
 
 #[test]
-fn scope_counts_require_complete_seasons_and_exact_denominators() {
+fn selected_scope_counts_require_complete_selected_seasons_and_exact_denominators() {
     let samples = |count| {
         (1..=4)
             .map(|member| {
@@ -15,41 +17,53 @@ fn scope_counts_require_complete_seasons_and_exact_denominators() {
             })
             .collect::<Ranks>()
     };
-    let matches = [("first", "a"), ("second", "b"), ("third", "b")]
-        .into_iter()
-        .map(|(id, season)| {
-            (
-                id.to_owned(),
-                MatchIdentity {
-                    source_revision: "1".to_owned(),
-                    season_id: season.to_owned(),
-                    map_id: "map".to_owned(),
-                },
-            )
-        })
-        .collect();
+    let counts = BTreeMap::from([
+        (None, 12),
+        (Some("a".to_owned()), 4),
+        (Some("b".to_owned()), 8),
+    ]);
+    let seasons = BTreeSet::from(["a".to_owned(), "b".to_owned()]);
     let mut scopes = BTreeMap::from([
         (None, samples(3)),
         (Some("a".to_owned()), samples(1)),
         (Some("b".to_owned()), samples(2)),
     ]);
-    assert!(validate_scope_counts(&scopes, &matches).is_ok());
+    assert!(validate_selected_scope_counts(&scopes, &counts, &seasons).is_ok());
     scopes.insert(Some("a".to_owned()), samples(3));
     assert!(
-        validate_scope_counts(&scopes, &matches).is_err(),
+        validate_selected_scope_counts(&scopes, &counts, &seasons).is_err(),
         "a season cannot inherit the overall denominator"
     );
     scopes.insert(Some("a".to_owned()), samples(1));
     scopes.remove(&Some("b".to_owned()));
     assert!(
-        validate_scope_counts(&scopes, &matches).is_err(),
-        "matches from an absent season aggregate cannot disappear"
+        validate_selected_scope_counts(&scopes, &counts, &seasons).is_err(),
+        "an affected season cannot disappear from its artifact's selected aggregates"
     );
     assert!(
-        validate_scope_counts(&BTreeMap::from([(None, Ranks::new())]), &BTreeMap::new()).is_ok()
+        validate_selected_scope_counts(&scopes, &counts, &BTreeSet::from(["a".to_owned()])).is_ok(),
+        "unaffected historical seasons require metadata, not repeated rank decoding"
     );
     assert!(
-        validate_scope_counts(&BTreeMap::new(), &BTreeMap::new()).is_err(),
+        validate_selected_scope_counts(&scopes, &counts, &BTreeSet::new()).is_err(),
+        "unexpected rank scopes must not bypass selection"
+    );
+    assert!(
+        validate_selected_scope_counts(
+            &BTreeMap::from([(None, Ranks::new())]),
+            &BTreeMap::from([(None, 0)]),
+            &BTreeSet::from(["deleted-season".to_owned()]),
+        )
+        .is_ok(),
+        "a deleted season is absent from the new artifact and yields empty ranks"
+    );
+    assert!(
+        validate_selected_scope_counts(
+            &BTreeMap::new(),
+            &BTreeMap::from([(None, 0)]),
+            &BTreeSet::new()
+        )
+        .is_err(),
         "even an empty artifact requires its overall aggregate"
     );
 }

@@ -199,7 +199,8 @@ async fn consecutive_notifications_reuse_a_connection_and_reconnect_after_close(
         NotificationDriver::new(NotificationConfig::http(&endpoint, &"x".repeat(32))?)?;
     let admission = Arc::clone(&sink.0.as_ref().ok_or("enabled admission")?.count);
     let dispatch = |target: &NotificationSink| -> Result<(), Box<dyn std::error::Error>> {
-        target.reserve(1024)
+        target
+            .reserve(1024)
             .map_err(|_error| "fixture reservation")?
             .prepare_for_test(&envelope())
             .map_err(|_error| "fixture serialization")?

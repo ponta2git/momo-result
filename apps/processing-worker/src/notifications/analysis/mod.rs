@@ -79,19 +79,15 @@ pub(crate) async fn load(
             log_skip(KIND, source.job_id, SkipReason::NoMatchMutation);
             return Ok((client, None));
         }
-        let (previous, current) =
-            artifacts::load(&mut client, source.game_title_id, candidate_id).await?;
-        if current.identity.input_revision != source.input_revision.to_string()
-            || current.identity.algorithm_version != source.algorithm_version
-            || current.identity.artifact_schema_version != source.artifact_schema_version
-        {
-            return Err(SkipReason::InvalidSnapshot);
-        }
-        let changes = comparison::changes(&previous, &current)?;
-        if changes.is_empty() {
+        let Some(artifacts::ComparedArtifacts {
+            previous,
+            current,
+            changes,
+        }) = artifacts::load(&mut client, source, candidate_id).await?
+        else {
             log_skip(KIND, source.job_id, SkipReason::NoInputChanges);
             return Ok((client, None));
-        }
+        };
         tracing::info!(
             event = "result_notification_comparison_ready",
             kind = KIND,

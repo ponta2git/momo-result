@@ -2,6 +2,8 @@ name: PR
 
 on:
   pull_request:
+    # Metadata edits and base retargeting must refresh the required gate too.
+    types: [opened, synchronize, reopened, edited]
 
 permissions:
   contents: read
@@ -21,6 +23,7 @@ jobs:
       analysis: ${{ steps.changes.outputs.analysis }}
       analysis_image: ${{ steps.changes.outputs.analysis_image }}
       runtime: ${{ steps.changes.outputs.runtime }}
+      ocr_notifications: ${{ steps.changes.outputs.ocr_notifications }}
       http4s_patch: ${{ steps.changes.outputs.http4s_patch }}
       workflow: ${{ steps.changes.outputs.workflow }}
       actionlint: ${{ steps.changes.outputs.actionlint }}
@@ -116,7 +119,7 @@ jobs:
   ocr-notifications:
     name: OCR notification E2E
     needs: classify
-    if: github.event.pull_request.base.ref != 'master' && (needs.classify.outputs.api == 'true' || needs.classify.outputs.web == 'true' || needs.classify.outputs.analysis == 'true')
+    if: github.event.pull_request.base.ref != 'master' && needs.classify.outputs.ocr_notifications == 'true'
     uses: ./.github/workflows/ocr-notifications.yml
 
   pr-ready:
@@ -154,5 +157,6 @@ jobs:
           ANALYSIS_RESULT: ${{ needs.analysis.result }}
           RUNTIME_EXPECTED: ${{ needs.classify.outputs.runtime }}
           RUNTIME_RESULT: ${{ needs.runtime.result }}
+          OCR_NOTIFICATIONS_EXPECTED: ${{ needs.classify.outputs.ocr_notifications }}
           OCR_NOTIFICATIONS_RESULT: ${{ needs.ocr-notifications.result }}
         run: scripts/ci/check-pr-ready.sh

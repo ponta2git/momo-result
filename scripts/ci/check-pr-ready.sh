@@ -49,10 +49,6 @@ require_optional web "${WEB_EXPECTED:?}" "${WEB_RESULT:?}"
 require_optional analysis "${ANALYSIS_EXPECTED:?}" "${ANALYSIS_RESULT:?}"
 require_optional runtime "${RUNTIME_EXPECTED:?}" "${RUNTIME_RESULT:?}"
 
-ocr_notifications_expected=false
-if [[ "${API_EXPECTED}" == true || "${WEB_EXPECTED}" == true || "${ANALYSIS_EXPECTED}" == true ]]; then
-  ocr_notifications_expected=true
-fi
-require_optional ocr-notifications "${ocr_notifications_expected}" "${OCR_NOTIFICATIONS_RESULT:?}"
+require_optional ocr-notifications "${OCR_NOTIFICATIONS_EXPECTED:?}" "${OCR_NOTIFICATIONS_RESULT:?}"
 
 echo "All required PR gates passed."

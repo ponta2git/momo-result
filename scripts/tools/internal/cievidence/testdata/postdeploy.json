@@ -1,0 +1,14 @@
+{
+  "event": "runtime_postdeploy_smoke",
+  "schemaVersion": 1,
+  "status": "ok",
+  "checks": [
+    "database",
+    "http",
+    "http2",
+    "processes",
+    "publicEdge",
+    "redis",
+    "web"
+  ]
+}

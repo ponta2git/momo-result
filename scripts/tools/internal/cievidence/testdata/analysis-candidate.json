@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "commit": "0123456789abcdef0123456789abcdef01234567",
+  "runId": "123456",
+  "runAttempt": "2",
+  "imageRef": "registry.fly.io/momo-result-analysis:0123456789abcdef0123456789abcdef01234567-123456-2",
+  "imageArtifactName": "analysis-worker-image-123456-2",
+  "imageArtifactId": "987654",
+  "imageArtifactDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "tarSha256": "2e8d205e86354f4cc09d54a8d7af7302879ab53df8f0f60d06f495cde5d2c3c0",
+  "configSha256": "cccc1e830bd7e323505e8603178a14066a83fdcf305704b7e20fc71c977b1c50"
+}

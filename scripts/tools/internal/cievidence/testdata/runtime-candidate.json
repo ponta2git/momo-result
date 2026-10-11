@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 2,
+  "commit": "0123456789abcdef0123456789abcdef01234567",
+  "runId": "123456",
+  "runAttempt": "2",
+  "imageRef": "registry.fly.io/momo-result:0123456789abcdef0123456789abcdef01234567-123456-2",
+  "imageId": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "tarSha256": "2e8d205e86354f4cc09d54a8d7af7302879ab53df8f0f60d06f495cde5d2c3c0",
+  "configSha256": "cccc1e830bd7e323505e8603178a14066a83fdcf305704b7e20fc71c977b1c50",
+  "http4sPatchRepository": "https://github.com/ponta2git/http4s.git",
+  "http4sPatchScalaVersion": "3.3.6",
+  "http4sPatchSourceSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "http4sPatchVersion": "0.23.36-5-23a6bcd-SNAPSHOT"
+}

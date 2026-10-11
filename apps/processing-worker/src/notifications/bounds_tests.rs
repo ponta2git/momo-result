@@ -4,6 +4,7 @@
 )]
 
 use super::*;
+use tokio_postgres::{Transaction, types::Type};
 
 fn sized_envelope(
     kind: NotificationKind,
@@ -32,6 +33,20 @@ async fn jsonb_bytes(
     Ok(usize::try_from(row.try_get::<_, i32>(0)?)?)
 }
 
+// Exercise count and byte recovery through the public API; the crate's unit tests own the
+// absolute limits. Analysis-sized reservations consume both budgets, unlike small OCR fixtures.
+fn available_capacity(sink: &NotificationSink) -> Result<usize, Box<dyn std::error::Error>> {
+    let mut reservations = Vec::new();
+    for _ in 0..64 {
+        match sink.reserve(NotificationKind::AnalysisCompleted.maximum_jsonb_bytes()) {
+            Ok(reservation) => reservations.push(reservation),
+            Err(NotificationRejection::Capacity) => return Ok(reservations.len()),
+            Err(_) => return Err("unexpected admission rejection".into()),
+        }
+    }
+    Err("notification admission did not reach capacity".into())
+}
+
 #[tokio::test]
 #[ignore = "requires explicitly isolated PostgreSQL"]
 async fn real_postgres_preparation_enforces_complete_jsonb_limits()
@@ -46,6 +61,12 @@ async fn real_postgres_preparation_enforces_complete_jsonb_limits()
         "http://127.0.0.1:1/internal/discord-notifications",
         &"x".repeat(32),
     )?)?;
+
+    let capacity_before = available_capacity(&sink)?;
+    assert!(
+        capacity_before > 0,
+        "the sender must admit prepared snapshots"
+    );
 
     for (kind, limit) in [
         (NotificationKind::OcrCompleted, 16 * 1024_usize),
@@ -102,15 +123,11 @@ async fn real_postgres_preparation_enforces_complete_jsonb_limits()
         ),
         "JSONB numeric expansion must be checked before handoff"
     );
-    let reservations = (0..MAXIMUM_BYTES / MAXIMUM_WIRE_BYTES)
-        .map(|_| sink.reserve(MAXIMUM_WIRE_BYTES))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|_error| "preparation did not release admission permits")?;
-    assert!(
-        matches!(sink.reserve(1), Err(NotificationRejection::Capacity)),
-        "all recovered byte permits remain bounded"
+    assert_eq!(
+        available_capacity(&sink)?,
+        capacity_before,
+        "preparation rejection and dropped snapshots must release both admission budgets"
     );
-    drop(reservations);
     transaction.rollback().await?;
     Ok(())
 }

@@ -2,22 +2,29 @@
 
 use serde::Serialize;
 
+/// Supported wire kinds with fixed versions and complete JSONB limits.
 #[derive(Clone, Copy, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum NotificationKind {
+pub enum NotificationKind {
+    /// A completed OCR submission.
     OcrCompleted,
+    /// A completed logical analysis job.
     AnalysisCompleted,
 }
 
 impl NotificationKind {
-    pub(crate) const fn maximum_jsonb_bytes(self) -> usize {
+    /// Maximum UTF-8 bytes of the complete envelope in PostgreSQL JSONB text form.
+    #[must_use]
+    pub const fn maximum_jsonb_bytes(self) -> usize {
         match self {
             Self::OcrCompleted => super::config::MAXIMUM_OCR_JSONB_BYTES,
             Self::AnalysisCompleted => super::config::MAXIMUM_ANALYSIS_JSONB_BYTES,
         }
     }
 
-    pub(crate) const fn as_str(self) -> &'static str {
+    /// Stable wire kind used by producers and receipt matching.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::OcrCompleted => "ocr_completed",
             Self::AnalysisCompleted => "analysis_completed",
@@ -25,9 +32,10 @@ impl NotificationKind {
     }
 }
 
+/// Bind producer content to the kind's identity and schema version.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct NotificationEnvelope<'a, T> {
+pub struct NotificationEnvelope<'a, T> {
     notification_id: String,
     kind: NotificationKind,
     // Private so producers cannot construct an independently versioned or mismatched envelope.
@@ -39,7 +47,8 @@ pub(crate) struct NotificationEnvelope<'a, T> {
 }
 
 impl<'a, T> NotificationEnvelope<'a, T> {
-    pub(super) fn notification_id(&self) -> &str {
+    /// Stable notification identity derived from kind and source job.
+    pub fn notification_id(&self) -> &str {
         &self.notification_id
     }
 
@@ -55,7 +64,9 @@ impl<'a, T> NotificationEnvelope<'a, T> {
         self.source_job_id
     }
 
-    pub(crate) fn new(
+    /// Freeze producer-supplied content, time and settings generation under a wire identity.
+    /// Domain payload validation remains the producer's responsibility.
+    pub fn new(
         kind: NotificationKind,
         source_job_id: &'a str,
         occurred_at: String,

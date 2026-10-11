@@ -87,6 +87,8 @@ WORKDIR /workspace/apps/processing-worker
 COPY apps/processing-worker/Cargo.toml apps/processing-worker/Cargo.lock ./
 COPY apps/processing-worker/crates/analysis-core/Cargo.toml crates/analysis-core/Cargo.toml
 COPY apps/processing-worker/crates/analysis-core/src crates/analysis-core/src
+COPY apps/processing-worker/crates/notifications/Cargo.toml crates/notifications/Cargo.toml
+COPY apps/processing-worker/crates/notifications/src crates/notifications/src
 COPY apps/processing-worker/crates/ocr/Cargo.toml crates/ocr/Cargo.toml
 COPY apps/processing-worker/crates/ocr/src crates/ocr/src
 COPY apps/processing-worker/src src

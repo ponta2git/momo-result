@@ -1557,6 +1557,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "momo-notifications"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-postgres",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "momo-ocr"
 version = "0.1.0"
 dependencies = [
@@ -1580,11 +1595,11 @@ dependencies = [
  "image",
  "libc",
  "momo-analysis-core",
+ "momo-notifications",
  "momo-ocr",
  "openssl",
  "postgres-openssl",
  "redis",
- "reqwest",
  "serde",
  "serde_json",
  "sha2",

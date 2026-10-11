@@ -13,7 +13,7 @@ pub(super) const CONCURRENT_REQUESTS: usize = 2;
 pub(super) const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Transport activation is separate from the user's durable ON/OFF setting.
-pub(crate) struct NotificationConfig(Option<HttpConfig>);
+pub struct NotificationConfig(Option<HttpConfig>);
 
 pub(super) struct HttpConfig {
     pub(super) endpoint: Url,
@@ -27,7 +27,8 @@ impl fmt::Debug for NotificationConfig {
 }
 
 impl NotificationConfig {
-    pub(crate) const fn disabled() -> Self {
+    /// Disable transport independently of durable user settings.
+    pub const fn disabled() -> Self {
         Self(None)
     }
 
@@ -35,7 +36,11 @@ impl NotificationConfig {
         self.0
     }
 
-    pub(crate) fn http(endpoint: &str, token: &str) -> Result<Self, NotificationConfigError> {
+    /// Validate an internal notification endpoint and its bearer token.
+    ///
+    /// # Errors
+    /// Rejects unsupported endpoints or tokens without exposing their values.
+    pub fn http(endpoint: &str, token: &str) -> Result<Self, NotificationConfigError> {
         let endpoint = Url::parse(endpoint).map_err(|_error| NotificationConfigError)?;
         let internal = match endpoint.host() {
             Some(Host::Domain(host)) => host.ends_with(".internal") || host == "localhost",
@@ -78,9 +83,10 @@ pub(super) fn client() -> Result<Client, NotificationConfigError> {
         .map_err(|_error| NotificationConfigError)
 }
 
+/// Invalid or unavailable transport configuration; credentials are never included.
 #[derive(Debug, Error)]
 #[error("result notification transport configuration is invalid")]
-pub(crate) struct NotificationConfigError;
+pub struct NotificationConfigError;
 
 #[cfg(test)]
 #[cfg(target_os = "linux")]

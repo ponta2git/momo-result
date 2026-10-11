@@ -264,29 +264,10 @@ async fn coordinate(
                     }
                     // An optional attempt never extends the already-scheduled safety/admission scan.
                     let attempt_timeout = timeout.min(recovery_at.saturating_duration_since(now));
-                    let remains_busy = match control::settle(&mut database, &retry.id, attempt_timeout, &sink).await {
-                        Ok(Settlement::Busy) => {
-                            retry.next_at = retry.retry.next_at(time::Instant::now());
-                            true
-                        }
-                        Ok(Settlement::Settled(Some(notification))) => {
-                            notification.dispatch();
-                            false
-                        }
-                        Ok(Settlement::Open | Settlement::Closed | Settlement::Aborted | Settlement::Settled(None)) => false,
-                        Err(control::SubmissionError::InvalidState) => {
-                            tracing::warn!(event = "ocr_submission_invalid_state", submission_id = %retry.id);
-                            false
-                        }
-                        Err(control::SubmissionError::Database(error))
-                            if error.code().is_some_and(|state| state.code().starts_with("23")) =>
-                        {
-                            tracing::warn!(event = "ocr_submission_invalid_state", submission_id = %retry.id,
-                                sqlstate = error.code().map(tokio_postgres::error::SqlState::code));
-                            false
-                        }
-                        Err(error) => return Err(error.into()),
-                    };
+                    let remains_busy = settle_and_dispatch(&mut database, &retry.id, attempt_timeout, &sink).await?;
+                    if remains_busy {
+                        retry.next_at = retry.retry.next_at(time::Instant::now());
+                    }
                     #[cfg(test)]
                     if let Some(rechecked) = &schedule.rechecked {
                         rechecked.send_modify(|count| *count += 1);
@@ -317,6 +298,39 @@ fn retain_busy(
             retry,
             next_at,
         });
+    }
+}
+
+/// Dispatches only the notification returned after commit and isolates invalid source rows.
+/// Returns true only for row-lock contention, which permits a bounded early recheck.
+async fn settle_and_dispatch(
+    database: &mut Client,
+    id: &str,
+    timeout: Duration,
+    sink: &NotificationSink,
+) -> Result<bool, RuntimeError> {
+    match control::settle(database, id, timeout, sink).await {
+        Ok(Settlement::Busy) => Ok(true),
+        Ok(Settlement::Settled(Some(notification))) => {
+            notification.dispatch();
+            Ok(false)
+        }
+        Ok(
+            Settlement::Open | Settlement::Closed | Settlement::Aborted | Settlement::Settled(None),
+        ) => Ok(false),
+        Err(control::SubmissionError::InvalidState) => {
+            tracing::warn!(event = "ocr_submission_invalid_state", submission_id = %id);
+            Ok(false)
+        }
+        Err(control::SubmissionError::Database(error))
+            if error
+                .code()
+                .is_some_and(|state| state.code().starts_with("23")) =>
+        {
+            tracing::warn!(event = "ocr_submission_invalid_state", submission_id = %id, sqlstate = error.code().map(tokio_postgres::error::SqlState::code));
+            Ok(false)
+        }
+        Err(error) => Err(error.into()),
     }
 }
 
@@ -364,33 +378,13 @@ async fn sweep(
             cursor.after = row
                 .try_get(0)
                 .map_err(|_error| RuntimeError::Dependency("scan_decode"))?;
-            match control::settle(database, &cursor.after, timeout, sink).await {
-                Ok(Settlement::Settled(Some(notification))) => notification.dispatch(),
-                Ok(Settlement::Busy) => {
-                    if busy.len() < MAX_BUSY_SUBMISSIONS {
-                        busy.push(BusySubmission {
-                            id: cursor.after.clone(),
-                            observed_at: time::Instant::now(),
-                        });
-                    }
-                }
-                Ok(
-                    Settlement::Open
-                    | Settlement::Closed
-                    | Settlement::Aborted
-                    | Settlement::Settled(None),
-                ) => (),
-                Err(control::SubmissionError::InvalidState) => {
-                    tracing::warn!(event = "ocr_submission_invalid_state", submission_id = %cursor.after);
-                }
-                Err(control::SubmissionError::Database(error))
-                    if error
-                        .code()
-                        .is_some_and(|state| state.code().starts_with("23")) =>
-                {
-                    tracing::warn!(event = "ocr_submission_invalid_state", submission_id = %cursor.after, sqlstate = error.code().map(tokio_postgres::error::SqlState::code));
-                }
-                Err(error) => return Err(error.into()),
+            if settle_and_dispatch(database, &cursor.after, timeout, sink).await?
+                && busy.len() < MAX_BUSY_SUBMISSIONS
+            {
+                busy.push(BusySubmission {
+                    id: cursor.after.clone(),
+                    observed_at: time::Instant::now(),
+                });
             }
         }
         tokio::task::yield_now().await;

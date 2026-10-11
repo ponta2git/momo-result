@@ -1,0 +1,12 @@
+{"instance": "machine-current", "meta": {"Event": {"Provider": "runner"}}, "timestamp": "2026-08-24T11:59:58Z", "message": "Machine started"}
+{"instance": "machine-current", "meta": {"Event": {"Provider": "app"}}, "timestamp": "2026-08-24T11:59:59Z", "message": "not-json"}
+{"instance": "machine-current", "meta": {"Event": {"Provider": "app"}}, "timestamp": "2026-08-24T11:59:59Z", "message": "42"}
+{"instance": "machine-current", "meta": {"Event": {"Provider": "app"}}, "timestamp": "2026-08-24T11:59:59Z", "message": "{\"fields\":[]}"}
+{"instance": "machine-old", "meta": {"Event": {"Provider": "app"}}, "timestamp": "2026-08-24T12:00:00Z", "message": "{\"level\": \"INFO\", \"fields\": {\"event\": \"analysis_worker_ready\", \"worker_id\": \"analysis-current\"}}"}
+{"instance": "machine-current", "meta": {"Event": {"Provider": "app"}}, "timestamp": "2026-08-24T12:00:01Z", "message": "{\"level\": \"INFO\", \"fields\": {\"event\": \"analysis_worker_ready\", \"worker_id\": \"analysis-current\"}}"}
+{"instance": "machine-old", "meta": {"Event": {"Provider": "app"}}, "timestamp": "2026-08-24T12:00:01Z", "message": "{\"level\": \"INFO\", \"fields\": {\"event\": \"ocr_rust_v2_worker_ready\", \"worker_id\": \"ocr-current\"}}"}
+{"instance": "machine-current", "meta": {"Event": {"Provider": "app"}}, "timestamp": "2026-08-24T12:00:02Z", "message": "{\"level\": \"INFO\", \"fields\": {\"event\": \"ocr_rust_v2_worker_ready\", \"worker_id\": \"ocr-current\"}}"}
+{"instance": "machine-old", "meta": {"Event": {"Provider": "app"}}, "timestamp": "2026-08-24T12:00:02Z", "message": "{\"level\": \"INFO\", \"fields\": {\"event\": \"analysis_outbox_notification_route_ready\", \"worker_id\": \"analysis-current\"}}"}
+{"instance": "machine-current", "meta": {"Event": {"Provider": "app"}}, "timestamp": "2026-08-24T12:00:03Z", "message": "{\"level\": \"INFO\", \"fields\": {\"event\": \"analysis_outbox_notification_route_ready\", \"worker_id\": \"analysis-current\"}}"}
+{"instance": "machine-old", "meta": {"Event": {"Provider": "app"}}, "timestamp": "2026-08-24T12:00:03Z", "message": "{\"level\": \"INFO\", \"fields\": {\"event\": \"analysis_outbox_ready\", \"worker_id\": \"analysis-current\"}}"}
+{"instance": "machine-current", "meta": {"Event": {"Provider": "app"}}, "timestamp": "2026-08-24T12:00:04Z", "message": "{\"level\": \"INFO\", \"fields\": {\"event\": \"analysis_outbox_ready\", \"worker_id\": \"analysis-current\"}}"}

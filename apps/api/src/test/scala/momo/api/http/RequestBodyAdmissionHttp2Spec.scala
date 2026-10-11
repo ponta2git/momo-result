@@ -18,6 +18,125 @@ import scodec.bits.ByteVector
 import momo.api.MomoCatsEffectSuite
 
 final class RequestBodyAdmissionHttp2Spec extends MomoCatsEffectSuite:
+  test("HEAD sends no content and releases capacity for the next stream") {
+    for
+      admission <- RequestBodyAdmission.create[IO](1L, 1L, 1L, 1L, 1L)
+      app = HeadResponseMiddleware(admission(Kleisli[IO, Request[IO], Response[IO]](_ =>
+        IO.pure(Response[IO](Status.Ok).withEntity("representation"))
+      )))
+      _ <- server(app).use { address =>
+        peer(address).use { client =>
+          for
+            _ <- client.head(1, "/api/data")
+            head <- client.body(1).timeout(5.seconds)
+            _ <- client.get(3, "/api/data")
+            get <- client.body(3).timeout(5.seconds)
+          yield
+            assertEquals(head, "")
+            assertEquals(get, "representation")
+        }
+      }
+    yield ()
+  }
+
+  test("independent requests progress concurrently on the same HTTP/2 connection") {
+    for
+      admission <- RequestBodyAdmission.create[IO](1L, 1L, 1L, 1L, 2L)
+      entered <- Deferred[IO, Unit]
+      release <- Deferred[IO, Unit]
+      app = admission(Kleisli[IO, Request[IO], Response[IO]] { request =>
+        val response = Response[IO](Status.Ok).withEntity("complete")
+        if request.uri.path.renderString == "/api/held" then
+          entered.complete(()).void *> release.get.as(response)
+        else IO.pure(response)
+      })
+      _ <- server(app).use { address =>
+        peer(address).use { client =>
+          (for
+            _ <- client.get(1, "/api/held")
+            _ <- entered.get.timeout(5.seconds)
+            _ <- client.get(3, "/api/independent")
+            independent <- client.body(3).timeout(5.seconds)
+            _ <- release.complete(())
+            held <- client.body(1).timeout(5.seconds)
+          yield
+            assertEquals(independent, "complete")
+            assertEquals(held, "complete")
+          ).guarantee(release.complete(()).void)
+        }
+      }
+    yield ()
+  }
+
+  test("early size rejection leaves an unfinished upload and the connection reusable") {
+    for
+      handled <- IO.ref(0)
+      app = MaxBodySizeMiddleware.requestAndUpload[IO](4L, 8L)(
+        Kleisli[IO, Request[IO], Response[IO]](_ =>
+          handled.update(_ + 1).as(Response[IO](Status.Ok).withEntity("recovered"))
+        )
+      )
+      _ <- server(app).use { address =>
+        peer(address).use { client =>
+          for
+            _ <- client.post(1, "/api/upload", Some("9"))
+            rejected <- client.body(1).timeout(5.seconds)
+            before <- handled.get
+            _ <- client.get(3, "/api/next")
+            next <- client.body(3).timeout(5.seconds)
+          yield
+            assert(rejected.contains("PAYLOAD_TOO_LARGE"))
+            assertEquals(before, 0)
+            assertEquals(next, "recovered")
+        }
+      }
+    yield ()
+  }
+
+  test("streamed size rejection and a reset upload release mutation capacity") {
+    for
+      admission <- RequestBodyAdmission.create[IO](1L, 1L, 1L, 1L, 1L)
+      reading <- Deferred[IO, Unit]
+      finalized <- Deferred[IO, Unit]
+      released <- Deferred[IO, Unit]
+      limited = MaxBodySizeMiddleware.requestAndUpload[IO](4L, 8L)(admission(
+        Kleisli[IO, Request[IO], Response[IO]] { request =>
+          val body =
+            if request.uri.path.renderString == "/api/reset" then
+              Stream.exec(reading.complete(()).void) ++
+                request.body
+                  .onFinalize(finalized.complete(()).void)
+            else request.body
+          body.compile.drain.as(Response[IO](Status.Ok).withEntity("recovered"))
+        }
+      ))
+      app = Kleisli[IO, Request[IO], Response[IO]] { request =>
+        HttpErrorMiddleware(limited).run(request).guarantee(
+          released.complete(()).void.whenA(request.uri.path.renderString == "/api/reset")
+        )
+      }
+      _ <- server(app).use { address =>
+        peer(address).use { client =>
+          for
+            _ <- client.post(1, "/api/write", None)
+            _ <- client.data(1, "12345", endStream = false)
+            rejected <- client.body(1).timeout(5.seconds)
+            _ <- client.post(3, "/api/reset", None)
+            _ <- reading.get.timeout(5.seconds)
+            _ <- client.resetAndAwaitAck(3)
+            _ <- finalized.get.timeout(5.seconds)
+            _ <- released.get.timeout(5.seconds)
+            _ <- client.post(5, "/api/write", None)
+            _ <- client.data(5, "1234", endStream = true)
+            next <- client.body(5).timeout(5.seconds)
+          yield
+            assert(rejected.contains("PAYLOAD_TOO_LARGE"))
+            assertEquals(next, "recovered")
+        }
+      }
+    yield ()
+  }
+
   test("a reset before response headers releases read capacity through transfer logging") {
     for
       admission <- RequestBodyAdmission.create[IO](1L, 1L, 1L, 1L, 1L)
@@ -39,11 +158,15 @@ final class RequestBodyAdmissionHttp2Spec extends MomoCatsEffectSuite:
       logged = RequestDurationLoggingMiddleware(admission(underlying))
       // Hold the fully wrapped Response so the peer's reset is processed before the server
       // starts sending its headers. The PING acknowledgment below supplies the wire barrier.
+      // Preserve ownership while this test-only gate holds an already acquired Response;
+      // handler cancellation must not discard it before the server can release its body.
       app = Kleisli[IO, Request[IO], Response[IO]] { request =>
-        logged.run(request).flatMap { response =>
-          if request.uri.path.renderString == "/api/canceled" then
-            responseReady.complete(()).void *> returnResponse.get.as(response)
-          else IO.pure(response)
+        IO.uncancelable { poll =>
+          poll(logged.run(request)).flatMap { response =>
+            if request.uri.path.renderString == "/api/canceled" then
+              responseReady.complete(()).void *> returnResponse.get.as(response)
+            else IO.pure(response)
+          }
         }
       }
       _ <- server(app).use { address =>
@@ -102,14 +225,43 @@ final class RequestBodyAdmissionHttp2Spec extends MomoCatsEffectSuite:
         write(Frame(4, 0, 0, ByteVector.empty))
 
     def get(streamId: Int, path: String): IO[Unit] =
+      headers(streamId, path, post = false, None, head = false)
+
+    def head(streamId: Int, path: String): IO[Unit] =
+      headers(streamId, path, post = false, None, head = true)
+
+    def post(streamId: Int, path: String, length: Option[String]): IO[Unit] =
+      headers(streamId, path, post = true, length, head = false)
+
+    def data(streamId: Int, value: String, endStream: Boolean): IO[Unit] =
+      write(Frame(0, if endStream then 1 else 0, streamId, ByteVector.view(value.getBytes(UTF_8))))
+
+    private def headers(
+        streamId: Int,
+        path: String,
+        post: Boolean,
+        length: Option[String],
+        head: Boolean,
+    ): IO[Unit] =
       // HPACK static-table indices: :method GET, :scheme http, :authority, :path.
       // Literal strings use no Huffman coding or dynamic table, so later requests are independent.
       val authority = "localhost".getBytes(UTF_8)
       val target = path.getBytes(UTF_8)
-      val headers = ByteVector(0x82.toByte, 0x86.toByte, 0x01.toByte, authority.length.toByte) ++
+      val method = if head then
+        ByteVector(0x02.toByte, 4.toByte) ++ ByteVector.view("HEAD".getBytes(UTF_8))
+      else ByteVector((if post then 0x83 else 0x82).toByte)
+      val fields = method ++ ByteVector(
+        0x86.toByte,
+        0x01.toByte,
+        authority.length.toByte
+      ) ++
         ByteVector.view(authority) ++ ByteVector(0x04.toByte, target.length.toByte) ++
-        ByteVector.view(target)
-      write(Frame(1, 5, streamId, headers)) // END_HEADERS | END_STREAM
+        ByteVector.view(target) ++ length.fold(ByteVector.empty) { value =>
+          // Literal without indexing, indexed name 28 (content-length).
+          ByteVector(0x0f.toByte, 13.toByte, value.length.toByte) ++
+            ByteVector.view(value.getBytes(UTF_8))
+        }
+      write(Frame(1, if post then 4 else 5, streamId, fields)) // END_HEADERS, optional END_STREAM
 
     def resetAndAwaitAck(streamId: Int): IO[Unit] =
       write(Frame(3, 0, streamId, ByteVector.fromInt(8))) *> // CANCEL

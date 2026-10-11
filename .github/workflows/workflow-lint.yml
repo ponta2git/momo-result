@@ -7,6 +7,10 @@ on:
         required: false
         default: true
         type: boolean
+      go_runtime:
+        required: false
+        default: true
+        type: boolean
       go_tools:
         required: false
         default: true
@@ -36,8 +40,30 @@ jobs:
           ACTIONLINT_BIN: ${{ runner.temp }}/actionlint
         run: scripts/ci/actionlint.sh
 
+  go-runtime:
+    name: Go (apps/runtime)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: inputs.go_runtime
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Go tools
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          cache-dependency-path: apps/runtime/go.sum
+          go-version-file: apps/runtime/go.mod
+      - name: Test Go module
+        working-directory: apps/runtime
+        run: |
+          go test ./...
+          go vet ./...
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          govulncheck ./...
+
   go-tools:
-    name: Go tools
+    name: Go (scripts/tools)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: inputs.go_tools
@@ -50,14 +76,13 @@ jobs:
         with:
           cache-dependency-path: scripts/tools/go.sum
           go-version-file: scripts/tools/go.mod
-      - name: Test Go and zero-install diagnostic tools
+      - name: Test Go module
+        working-directory: scripts/tools
         run: |
-          cd scripts/tools
           go test ./...
           go vet ./...
           go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
           govulncheck ./...
-          ./test-linux-memory-snapshot.sh
 
   policy-scripts:
     name: Policy scripts
@@ -68,8 +93,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - name: Set up Go tools
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          node-version: 24
+          go-version-file: scripts/tools/go.mod
+          cache-dependency-path: scripts/tools/go.sum
       - name: Test workflow policy scripts
-        run: node --run test:policy
+        run: scripts/ci/check-policy.sh

@@ -39,9 +39,10 @@
 - `apps/api/openapi.yaml` は内部 Web codegen 用の追跡する派生物であり、契約や公開 API documentation の正本ではない。Tapir から一時生成した spec を保守された OpenAPI-aware linter で構造検証し、tracked artifact と一致させ、その artifact から Web 型を生成する。手編集で差分を解消しない。
 - OpenAPI lint は unresolved reference、path / parameter、schema、operation identity など構造整合性に限定する。field の公開可否、認証、業務意味は endpoint、DTO、要求・domain 規約で決め、legacy 名や source 断片の文字列検査を契約にしない。
 - HTTP 層は入力・認証・エラー変換に閉じ、DB、Redis、業務分岐を直接持たない。
-- request body はサイズ上限に加えて、decode 前に同時実行数を制限する。画像uploadと通常mutationを分離し、満杯の場合は本文を保持して待機せず再試行可能な応答を返す。
+- request body のサイズ上限はHTTP methodに関係なく適用し、Content-Lengthがない場合も読取byte数で制限する。decode 前に同時実行数を制限し、画像uploadと通常mutationを分離する。満杯の場合は本文を保持して待機せず再試行可能な応答を返す。
 - JSON readの待機件数と時間を制限し、待機上限では再試行可能な応答を返す。JSON・画像・exportの応答は転送終了まで同時実行枠を保持する。DB projectionは全量取得後の検査に頼らず、件数・文字数・保存JSONのbyte数を転送前に検証する。
 - 応答を返す前の失敗・取消ではHTTP層が取得済みの枠を解放し、応答を返した後はbodyの解放scopeへ引き継ぐ。ログなどのbody wrapperはそのscopeを通常の効果の後へ隠さず、本文開始前の送信失敗でもserverが解放できる形を保つ。応答生成後の補助処理は取消で応答の所有権を失わないようにする。
+- HEAD応答はエラーを含めて本文を送らず、本文に引き継いだresourceも解放する。405応答のAllowは対象routeで許可するmethodから求める。HTTP/2のframe、flow control、stream reset、GOAWAYはHTTPライブラリが所有し、アプリケーションで接続全体の切断や未読本文の無制限drainへ置き換えない（[RFC 9110 §9.3.2](https://www.rfc-editor.org/rfc/rfc9110.html#section-9.3.2)、[RFC 9113 §8.1](https://www.rfc-editor.org/rfc/rfc9113.html#section-8.1)）。
 - Tapirのserver logicで発生した例外は外側の`HttpErrorMiddleware`へ伝え、共通のProblem Detailsと機密情報を除いたincident logに変換する。Tapirの既定例外応答・例外logと二重に処理しない。mutationの結果不明時に保持するidempotency予約は、このHTTP変換より内側で確定する。
 - raw ID、設定値、wire value は境界で検証済み型へ変換する。usecase へ未検証値や wire DTO を渡さない。
 - 分析は現行の成果物契約とHTTP経路だけを提供する。旧世代のdecoder、互換用route、旧形式からの補完は維持しない。成果物形式を変えるときはAPI・Web・Workerを揃え、必要な再計算を公開再開前に完了する。保存形式を変えないHTTP projectionの変更では対応API/Webを一体で切り替え、Worker変更・再計算を要求しない。
@@ -113,10 +114,10 @@
 
 ### Build / Test Tooling
 
-- `apps/web/scripts` は Web の生成・build 検査・隔離 E2E 起動を所有する Node の開発用境界であり、`src` の実行層ではない。production は生成された型・validator を消費し、script や E2E fixture を import しない。
+- `apps/web/scripts` は API / Web のローカル起動、Web の生成・build 検査・隔離 E2E 起動を所有する Node の開発用境界であり、`src` の実行層ではない。production は生成された型・validator を消費し、script や E2E fixture を import しない。
 - API 生成は Tapir 由来 OpenAPI から型、resource 別の遅延読込 registry、CSP 下で実行できる事前コンパイル済み validator をまとめて導出する。途中の schema は生成処理内に閉じ、consumer のない中間ファイルを追跡しない。
 - build checker は最終 CSS に必要な global theme と参照先が残ることを確認する。CSS cascade や実際の paint の証拠とは区別する。
-- `scripts/e2e` の入口は各 run の資源と後片付けを所有し、共通 runtime は子 process の環境・中断・終了待ちと隔離 service の起動を所有する。入口をライブラリとして import せず、import だけでは Docker 設定や process の状態を変えない。OCR 専用の制御 worker・通知 recorder・画像 fixture は通常 E2E の前提にしない。
+- `apps/web/scripts/e2e` の入口は各 run の資源と後片付けを所有し、共通 runtime は隔離した子 process 環境と service の起動を所有する。`apps/web/scripts/process.mts` の子 process 起動・中断・終了待ちをローカル開発と共有し、開発用 env の読取りは `dev-local.mts` に閉じる。入口をライブラリとして import せず、import だけでは Docker 設定や process の状態を変えない。OCR 専用の制御 worker・通知 recorder・画像 fixture は通常 E2E の前提にしない。
 
 ### Server State
 

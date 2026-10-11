@@ -214,6 +214,10 @@ jobs:
         env:
           MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
 
+      - name: Build structured CI tool
+        continue-on-error: true
+        uses: ./.github/actions/setup-ci-tool
+
       - name: Start runtime container
         run: scripts/ci/start-runtime-container.sh
         env:
@@ -230,7 +234,7 @@ jobs:
         timeout-minutes: 1
 
       - name: Runtime HTTP smoke
-        run: scripts/ci/runtime-smoke.sh
+        run: node scripts/e2e/runtime-smoke.mts
         env:
           MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
         timeout-minutes: 2
@@ -256,7 +260,7 @@ jobs:
         if: failure()
         run: >-
           docker logs momo-result-runtime 2>&1 |
-          scripts/ci/summarize-runtime-logs.sh > runtime-container-summary.json || true
+          scripts/ci/ci-tool.sh runtime-logs > runtime-container-summary.json || true
 
       - name: Upload safe runtime diagnostics
         if: failure()
@@ -296,13 +300,9 @@ jobs:
             /opt/momo-result/contracts/http4s-patch/version.txt)"
           http4s_scala_version="$(docker run --rm --entrypoint /usr/bin/cat "${IMAGE_REF}" \
             /opt/momo-result/contracts/http4s-patch/scala-version.txt)"
-          jq -n \
-            --arg repository "${http4s_repository}" \
-            --arg scalaVersion "${http4s_scala_version}" \
-            --arg sourceSha "${http4s_source_sha}" \
-            --arg version "${http4s_version}" \
-            '{repository: $repository, scalaVersion: $scalaVersion,
-              sourceSha: $sourceSha, version: $version}' \
+          scripts/ci/ci-tool.sh create-http4s-patch \
+            --repository "${http4s_repository}" --scala-version "${http4s_scala_version}" \
+            --source-sha "${http4s_source_sha}" --version "${http4s_version}" \
             > "${IMAGE_ARTIFACT_NAME}/http4s-patch.json"
 
       - name: Save runtime image
@@ -317,40 +317,10 @@ jobs:
         if: github.event_name != 'pull_request'
         id: candidate
         run: |
-          image_id="$(sed -n '1p' "${IMAGE_ARTIFACT_NAME}/image-id.txt")"
-          tar_sha="$(cut -d ' ' -f 1 "${IMAGE_ARTIFACT_NAME}/image-tar.sha256")"
-          config_sha="$(sha256sum fly.toml | cut -d ' ' -f 1)"
-          http4s_repository="$(jq -r '.repository' "${IMAGE_ARTIFACT_NAME}/http4s-patch.json")"
-          http4s_scala_version="$(jq -r '.scalaVersion' "${IMAGE_ARTIFACT_NAME}/http4s-patch.json")"
-          http4s_source_sha="$(jq -r '.sourceSha' "${IMAGE_ARTIFACT_NAME}/http4s-patch.json")"
-          http4s_version="$(jq -r '.version' "${IMAGE_ARTIFACT_NAME}/http4s-patch.json")"
-          jq -n \
-            --arg commit "${GITHUB_SHA}" \
-            --arg configSha256 "${config_sha}" \
-            --arg imageId "${image_id}" \
-            --arg imageRef "${IMAGE_REF}" \
-            --arg http4sPatchRepository "${http4s_repository}" \
-            --arg http4sPatchScalaVersion "${http4s_scala_version}" \
-            --arg http4sPatchSourceSha "${http4s_source_sha}" \
-            --arg http4sPatchVersion "${http4s_version}" \
-            --arg runId "${GITHUB_RUN_ID}" \
-            --arg runAttempt "${GITHUB_RUN_ATTEMPT}" \
-            --arg tarSha256 "${tar_sha}" \
-            '{
-              schemaVersion: 2,
-              commit: $commit,
-              runId: $runId,
-              runAttempt: $runAttempt,
-              imageRef: $imageRef,
-              imageId: $imageId,
-              tarSha256: $tarSha256,
-              configSha256: $configSha256,
-              http4sPatchRepository: $http4sPatchRepository,
-              http4sPatchScalaVersion: $http4sPatchScalaVersion,
-              http4sPatchSourceSha: $http4sPatchSourceSha,
-              http4sPatchVersion: $http4sPatchVersion
-            }' \
-            > "${IMAGE_ARTIFACT_NAME}/candidate.json"
+          scripts/ci/ci-tool.sh create-runtime-candidate \
+            --artifact-dir "${IMAGE_ARTIFACT_NAME}" --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" --commit "${GITHUB_SHA}" \
+            --image-ref "${IMAGE_REF}" > "${IMAGE_ARTIFACT_NAME}/candidate.json"
           {
             printf 'artifact_name=%s\n' "${IMAGE_ARTIFACT_NAME}"
             printf 'image_ref=%s\n' "${IMAGE_REF}"
@@ -391,9 +361,12 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Build structured CI tool
+        uses: ./.github/actions/setup-ci-tool
+
       - name: Validate exact release candidate selection
         run: |
-          scripts/ci/validate-runtime-release-selection.sh \
+          scripts/ci/ci-tool.sh runtime-release-selection \
             "${GITHUB_RUN_ID}" "${GITHUB_SHA}" "${RUNTIME_CANDIDATE_RUN_ATTEMPT}" \
             "${RUNTIME_CANDIDATE_ARTIFACT_NAME}" "${RUNTIME_CANDIDATE_ARTIFACT_ID}" \
             "${RUNTIME_CANDIDATE_ARTIFACT_DIGEST}" "${IMAGE_REF}"
@@ -405,10 +378,9 @@ jobs:
           METADATA_DIGEST: ${{ needs.analysis-candidate.outputs.metadata_artifact_digest }}
           PRODUCER_ATTEMPT: ${{ needs.analysis-candidate.outputs.producer_run_attempt }}
         run: |
-          [[ "${METADATA_ID}" =~ ^[1-9][0-9]*$ ]] || exit 1
-          [[ "${PRODUCER_ATTEMPT}" =~ ^[1-9][0-9]*$ ]] || exit 1
-          test "${METADATA_NAME}" = "analysis-candidate-metadata-${GITHUB_RUN_ID}-${PRODUCER_ATTEMPT}"
-          scripts/ci/canonicalize-artifact-digest.sh "${METADATA_DIGEST}" > /dev/null
+          scripts/ci/ci-tool.sh analysis-release-selection \
+            "${GITHUB_RUN_ID}" "${PRODUCER_ATTEMPT}" "${METADATA_NAME}" \
+            "${METADATA_ID}" "${METADATA_DIGEST}"
 
       - name: Confirm release gates
         run: echo "All release gates passed for ${IMAGE_REF}."
@@ -437,6 +409,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Build structured CI tool
+        uses: ./.github/actions/setup-ci-tool
+
       - name: Download smoke-tested image
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -464,12 +439,10 @@ jobs:
           PRODUCER_ATTEMPT: ${{ needs.analysis-candidate.outputs.producer_run_attempt }}
         run: |
           candidate=analysis-candidate-metadata/candidate.json
-          scripts/ci/validate-analysis-candidate.sh \
+          scripts/ci/ci-tool.sh analysis-candidate \
             "${candidate}" "${GITHUB_RUN_ID}" "${PRODUCER_ATTEMPT}" "${GITHUB_SHA}" \
+            --config fly.analysis.toml \
             >> "${GITHUB_OUTPUT}"
-          expected_config="$(jq -r '.configSha256' "${candidate}")"
-          actual_config="$(sha256sum fly.analysis.toml | cut -d ' ' -f 1)"
-          test "${expected_config}" = "${actual_config}"
 
       - name: Download verified worker image
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -493,11 +466,9 @@ jobs:
         run: |
           docker push "${IMAGE_REF}"
           registry_ref="$(scripts/ci/resolve-pushed-runtime-image.sh "${IMAGE_REF}")"
-          registry_digest="${registry_ref#*@}"
-          docker manifest inspect "${registry_ref}" | jq -S -c . \
+          docker manifest inspect "${registry_ref}" | scripts/ci/ci-tool.sh canonical-json \
             > "${IMAGE_ARTIFACT_NAME}/registry-manifest.json"
           printf '%s\n' "${registry_ref}" > "${IMAGE_ARTIFACT_NAME}/registry-ref.txt"
-          printf 'registry_digest=%s\n' "${registry_digest}" >> "${GITHUB_OUTPUT}"
           printf 'registry_ref=%s\n' "${registry_ref}" >> "${GITHUB_OUTPUT}"
         timeout-minutes: 10
 
@@ -514,77 +485,18 @@ jobs:
         env:
           MANIFEST_ARTIFACT_DIGEST: ${{ steps.manifest-upload.outputs.artifact-digest }}
           MANIFEST_ARTIFACT_ID: ${{ steps.manifest-upload.outputs.artifact-id }}
-          REGISTRY_DIGEST: ${{ steps.registry.outputs.registry_digest }}
           REGISTRY_REF: ${{ steps.registry.outputs.registry_ref }}
           SOURCE_ARTIFACT_DIGEST: ${{ needs.runtime-image.outputs.artifact_digest }}
           SOURCE_ARTIFACT_ID: ${{ needs.runtime-image.outputs.artifact_id }}
         run: |
           mkdir -p runtime-deployment-metadata
-          scripts/ci/validate-runtime-candidate.sh \
-            "${IMAGE_ARTIFACT_NAME}" "${GITHUB_RUN_ID}" \
-            "${RUNTIME_CANDIDATE_RUN_ATTEMPT}" \
-            "${GITHUB_SHA}" "${IMAGE_REF}"
-          image_id="$(sed -n '1p' "${IMAGE_ARTIFACT_NAME}/image-id.txt")"
-          config_sha="$(jq -r '.configSha256' "${IMAGE_ARTIFACT_NAME}/candidate.json")"
-          http4s_repository="$(jq -r '.http4sPatchRepository' "${IMAGE_ARTIFACT_NAME}/candidate.json")"
-          http4s_scala_version="$(jq -r '.http4sPatchScalaVersion' "${IMAGE_ARTIFACT_NAME}/candidate.json")"
-          http4s_source_sha="$(jq -r '.http4sPatchSourceSha' "${IMAGE_ARTIFACT_NAME}/candidate.json")"
-          http4s_version="$(jq -r '.http4sPatchVersion' "${IMAGE_ARTIFACT_NAME}/candidate.json")"
-          manifest_sha="$(sha256sum "${IMAGE_ARTIFACT_NAME}/registry-manifest.json" | cut -d ' ' -f 1)"
-          manifest_artifact_digest="$(
-            scripts/ci/canonicalize-artifact-digest.sh "${MANIFEST_ARTIFACT_DIGEST}"
-          )"
-          source_artifact_digest="$(
-            scripts/ci/canonicalize-artifact-digest.sh "${SOURCE_ARTIFACT_DIGEST}"
-          )"
-          jq -n \
-            --arg commit "${GITHUB_SHA}" \
-            --arg configSha256 "${config_sha}" \
-            --arg imageId "${image_id}" \
-            --arg imageRef "${IMAGE_REF}" \
-            --arg http4sPatchRepository "${http4s_repository}" \
-            --arg http4sPatchScalaVersion "${http4s_scala_version}" \
-            --arg http4sPatchSourceSha "${http4s_source_sha}" \
-            --arg http4sPatchVersion "${http4s_version}" \
-            --arg manifestArtifactDigest "${manifest_artifact_digest}" \
-            --arg manifestArtifactId "${MANIFEST_ARTIFACT_ID}" \
-            --arg manifestArtifactName "runtime-image-registry-manifest-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
-            --arg manifestSha256 "${manifest_sha}" \
-            --arg registryDigest "${REGISTRY_DIGEST}" \
-            --arg registryRef "${REGISTRY_REF}" \
-            --arg runAttempt "${GITHUB_RUN_ATTEMPT}" \
-            --arg runId "${GITHUB_RUN_ID}" \
-            --arg sourceArtifactDigest "${source_artifact_digest}" \
-            --arg sourceArtifactId "${SOURCE_ARTIFACT_ID}" \
-            --arg sourceArtifactName "${IMAGE_ARTIFACT_NAME}" \
-            --arg sourceRunAttempt "${RUNTIME_CANDIDATE_RUN_ATTEMPT}" \
-            '{
-              schemaVersion: 3,
-              commit: $commit,
-              runId: $runId,
-              runAttempt: $runAttempt,
-              sourceRunAttempt: $sourceRunAttempt,
-              imageRef: $imageRef,
-              imageId: $imageId,
-              registryDigest: $registryDigest,
-              registryRef: $registryRef,
-              configSha256: $configSha256,
-              http4sPatchRepository: $http4sPatchRepository,
-              http4sPatchScalaVersion: $http4sPatchScalaVersion,
-              http4sPatchSourceSha: $http4sPatchSourceSha,
-              http4sPatchVersion: $http4sPatchVersion,
-              sourceArtifactName: $sourceArtifactName,
-              sourceArtifactId: $sourceArtifactId,
-              sourceArtifactDigest: $sourceArtifactDigest,
-              manifestArtifactName: $manifestArtifactName,
-              manifestArtifactId: $manifestArtifactId,
-              manifestArtifactDigest: $manifestArtifactDigest,
-              manifestSha256: $manifestSha256
-            }' > runtime-deployment-metadata/deployment.json
-          scripts/ci/validate-runtime-deployment.sh \
-            runtime-deployment-metadata/deployment.json \
-            "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" "${GITHUB_SHA}" \
-            > /dev/null
+          scripts/ci/ci-tool.sh create-runtime-deployment \
+            --candidate "${IMAGE_ARTIFACT_NAME}/candidate.json" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" --registry-ref "${REGISTRY_REF}" \
+            --source-artifact-id "${SOURCE_ARTIFACT_ID}" --source-artifact-digest "${SOURCE_ARTIFACT_DIGEST}" \
+            --manifest "${IMAGE_ARTIFACT_NAME}/registry-manifest.json" \
+            --manifest-artifact-id "${MANIFEST_ARTIFACT_ID}" --manifest-artifact-digest "${MANIFEST_ARTIFACT_DIGEST}" \
+            > runtime-deployment-metadata/deployment.json
 
       - name: Upload immutable deployment provenance
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -613,16 +525,8 @@ jobs:
         run: |
           mkdir -p runtime-production-evidence
           flyctl machine list --app momo-result --json |
-            jq -e --arg image "${{ steps.registry.outputs.registry_ref }}" '
-              {
-                schemaVersion: 1,
-                singleStartedExactImage: (
-                  length == 1 and
-                  all(.[]; .state == "started" and .config.image == $image)
-                )
-              } |
-              select(.singleStartedExactImage)
-            ' > runtime-production-evidence/deployment-state.json
+            scripts/ci/ci-tool.sh runtime-machine-evidence "${{ steps.registry.outputs.registry_ref }}" \
+            > runtime-production-evidence/deployment-state.json
         timeout-minutes: 2
 
       - name: Run post-deploy dependency, process, and public edge smoke
@@ -632,11 +536,8 @@ jobs:
           flyctl ssh console --app momo-result --pty=false --quiet \
             --command "/opt/momo-result/bin/momo-runtime-tool smoke local" \
             > runtime-production-evidence/postdeploy-smoke.json
-          docker run --rm \
-            --entrypoint /opt/momo-result/bin/momo-runtime-tool \
-            --volume "${PWD}/runtime-production-evidence:/evidence:ro" \
-            "${IMAGE_REF}" validate-postdeploy-evidence \
-            /evidence/postdeploy-smoke.json \
+          scripts/ci/ci-tool.sh postdeploy-evidence \
+            runtime-production-evidence/postdeploy-smoke.json \
             --require-check publicEdge \
             > runtime-production-evidence/public-health.json
         timeout-minutes: 2

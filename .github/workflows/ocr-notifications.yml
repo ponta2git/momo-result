@@ -45,12 +45,26 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
+          cache: pnpm
+          cache-dependency-path: |
+            momo-db/pnpm-lock.yaml
+            summit/pnpm-lock.yaml
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version: "25"
           cache: sbt
       - uses: sbt/setup-sbt@6158cb0903b8ceeae04f830055f3155e1b6a5ad7 # v1.5.11
+      - name: Build the pinned API http4s patch
+        id: http4s
+        run: |
+          HTTP4S_REPOSITORY=https://github.com/ponta2git/http4s.git \
+            HTTP4S_SCALA_VERSION=3.3.6 \
+            HTTP4S_PATCH_OUTPUT_DIR="${RUNNER_TEMP}/http4s-patch" \
+            scripts/ci/build-http4s-patch.sh
+          printf 'version=%s\n' \
+            "$(cat "${RUNNER_TEMP}/http4s-patch/version.txt")" >> "${GITHUB_OUTPUT}"
+        timeout-minutes: 15
       - name: Build shared schema
         working-directory: momo-db
         run: test "$(pnpm --version)" = 11.20.0 && pnpm install --frozen-lockfile && pnpm build
@@ -61,6 +75,11 @@ jobs:
         with:
           version: 10.34.5
           package_json_file: momo-result/package.json
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: momo-result/pnpm-lock.yaml
       - run: test "$(pnpm --version)" = 10.34.5 && pnpm install --frozen-lockfile
       - run: pnpm --filter web exec playwright install --with-deps chromium
       - name: Setup Docker Buildx
@@ -86,6 +105,7 @@ jobs:
           MOM24_WORKER_TEST_IMAGE: mom24-worker-e2e:ci
           MOM24_SUMMIT_DIR: ${{ github.workspace }}/summit
           MOMO_DB_MIGRATIONS_DIR: ${{ github.workspace }}/momo-db/drizzle
+          MOMO_HTTP4S_PATCHED_VERSION: ${{ steps.http4s.outputs.version }}
         run: pnpm --filter web e2e:ocr-notifications
       - name: Upload browser evidence
         if: always()

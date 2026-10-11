@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -154,5 +155,18 @@ func TestSampleFilenameRequiresAnExplicitSupportedScreenPrefix(t *testing.T) {
 	invalid := "桃鉄2_007_20251121_西日本_00auto.jpg"
 	if sampleFilenamePattern.MatchString(invalid) {
 		t.Fatal("auto-like filename must not enter the evaluator")
+	}
+}
+
+func TestLoadAnswersRejectsDuplicateColumns(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "answers.tsv")
+	// Whitespace normalization must not allow a second column to silently replace
+	// the answer key selected for evaluation.
+	if err := os.WriteFile(path, []byte("順位\t 順位 \n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadAnswers(path); err == nil || !strings.Contains(err.Error(), "duplicated") {
+		t.Fatalf("duplicate answer columns were not rejected: %v", err)
 	}
 }

@@ -5,7 +5,7 @@ ARG JAVA_JDK_IMAGE=eclipse-temurin:25-jdk-noble@sha256:5b14970485a676b41faa08f4a
 ARG JAVA_JRE_IMAGE=eclipse-temurin:25-jre-noble@sha256:30772b161c319f9a10c82e30fd77b7b6702c6b051e44e0e9f3d7ab5dd389a5ab
 ARG GO_IMAGE=golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61
 ARG HTTP4S_REPOSITORY=https://github.com/ponta2git/http4s.git
-ARG CADDY_VERSION=v2.11.4
+ARG CADDY_VERSION=v2.11.7
 ARG CADDY_X_CRYPTO_VERSION=v0.57.0
 ARG CADDY_X_NET_VERSION=v0.60.0
 ARG CADDY_X_TEXT_VERSION=v0.42.0
@@ -27,13 +27,14 @@ COPY apps/web/index.html apps/web/index.html
 COPY apps/web/tsconfig.json apps/web/tsconfig.json
 COPY apps/web/vite.config.ts apps/web/vite.config.ts
 COPY apps/web/public apps/web/public
-COPY apps/web/scripts/check-built-theme.mjs apps/web/scripts/check-built-theme.mjs
-COPY apps/web/scripts/generate-api.mjs apps/web/scripts/generate-api.mjs
+COPY apps/web/scripts/check-built-theme.mts apps/web/scripts/check-built-theme.mts
+COPY apps/web/scripts/generate-api.mts apps/web/scripts/generate-api.mts
 COPY apps/web/src apps/web/src
 RUN pnpm --filter web contract:check
 RUN pnpm --filter web build
 
-FROM ${JAVA_JDK_IMAGE} AS api-deps
+# Compile portable JVM artifacts natively, including when building an amd64 runtime on ARM.
+FROM --platform=$BUILDPLATFORM ${JAVA_JDK_IMAGE} AS api-deps
 WORKDIR /workspace/apps/api
 ENV SBT_OPTS="--enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow"
 ARG SBT_SHA256=351087fb5ad0d8b271f21b4c6f8e4912c8f6dbf81e1d06fe215bb165f14668b3
@@ -84,11 +85,11 @@ RUN --mount=type=cache,id=sbt-boot,target=/root/.sbt,sharing=locked \
   && sbt --server --batch "-Dmomo.http4s.patched.version=${HTTP4S_PATCH_VERSION}" "apiOpenApiCheck; stage"
 
 FROM ${GO_IMAGE} AS runtime-tool-builder
-WORKDIR /workspace/scripts/tools
-COPY scripts/tools/go.mod scripts/tools/go.sum ./
+WORKDIR /workspace/apps/runtime
+COPY apps/runtime/go.mod apps/runtime/go.sum ./
 RUN --mount=type=cache,id=go-mod,target=/go/pkg/mod,sharing=locked \
   go mod download
-COPY scripts/tools/cmd/momo-runtime-tool cmd/momo-runtime-tool
+COPY apps/runtime/cmd/momo-runtime-tool cmd/momo-runtime-tool
 RUN --mount=type=cache,id=go-build,target=/root/.cache/go-build,sharing=locked \
   CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' \
     -o /out/momo-runtime-tool ./cmd/momo-runtime-tool

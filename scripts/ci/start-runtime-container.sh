@@ -58,5 +58,5 @@ done
 
 echo "Runtime container did not become ready." >&2
 docker logs "${container_name}" 2>&1 | \
-  IMAGE_REF="${image_ref}" "${repo_root}/scripts/ci/summarize-runtime-logs.sh" >&2
+  "${repo_root}/scripts/ci/ci-tool.sh" runtime-logs >&2
 exit 1

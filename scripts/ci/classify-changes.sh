@@ -6,8 +6,11 @@ web=false
 analysis=false
 analysis_image=false
 runtime=false
+# Assembled OCR inputs are independent of each application quality gate.
+ocr_notifications=false
 http4s_patch=false
 actionlint=false
+go_runtime=false
 go_tools=false
 policy_scripts=false
 workflow=false
@@ -18,15 +21,18 @@ select_all() {
   analysis=true
   analysis_image=true
   runtime=true
+  ocr_notifications=true
 }
 
 while IFS= read -r -d '' path; do
   [[ "${path}" == scripts/ci/* || "${path}" == scripts/ops/* ]] && policy_scripts=true
   [[ "${path}" == .github/workflows/* || "${path}" == .github/actions/* ]] && actionlint=true
+  [[ "${path}" == apps/runtime/* ]] && go_runtime=true
   [[ "${path}" == scripts/tools/* ]] && go_tools=true
 
   case "${path}" in
     apps/api/openapi.yaml)
+      ocr_notifications=true
       api=true
       web=true
       ;;
@@ -37,13 +43,24 @@ while IFS= read -r -d '' path; do
       api=true
       ;;
     apps/api/*)
+      ocr_notifications=true
       api=true
       runtime=true
       ;;
     apps/web/src/test/factories/* | apps/web/src/test/msw/fixtures.ts | \
       apps/web/src/test/msw/seriesAnalysisFixtures.ts | apps/web/src/test/deferred.ts)
+      ocr_notifications=true
       # Playwright imports these fixtures directly. Vitest cannot establish that
       # the assembled browser scenarios still accept the changed inputs.
+      web=true
+      runtime=true
+      ;;
+    apps/web/scripts/e2e/*.test.*)
+      web=true
+      runtime=true
+      ;;
+    apps/web/scripts/e2e/* | apps/web/scripts/process.mts)
+      ocr_notifications=true
       web=true
       runtime=true
       ;;
@@ -52,6 +69,7 @@ while IFS= read -r -d '' path; do
       web=true
       ;;
     apps/web/*)
+      ocr_notifications=true
       web=true
       runtime=true
       ;;
@@ -59,28 +77,38 @@ while IFS= read -r -d '' path; do
       analysis=true
       ;;
     apps/processing-worker/* | fly.analysis.toml | rust-toolchain.toml)
+      # The assembled worker imports fixtures from src/**/tests.rs too.
+      ocr_notifications=true
       analysis=true
       analysis_image=true
       ;;
     Dockerfile | deploy/* | fly.toml)
+      ocr_notifications=true
       runtime=true
       ;;
     contracts/runtime-db-contract.json)
+      ocr_notifications=true
       runtime=true
-      go_tools=true
+      go_runtime=true
       ;;
     contracts/runtime-tool-characterization-v1.json)
-      go_tools=true
+      go_runtime=true
       ;;
-    scripts/tools/go.mod | scripts/tools/go.sum | scripts/tools/cmd/momo-runtime-tool/*)
+    apps/runtime/*_test.go)
+      runtime=true
+      ;;
+    apps/runtime/*)
+      ocr_notifications=true
       runtime=true
       ;;
     .dockerignore)
+      ocr_notifications=true
       runtime=true
       analysis=true
       analysis_image=true
       ;;
     .momo-db-ref | scripts/ci/apply-momo-db-migrations.sh | scripts/ci/resolve-momo-db-migrations.sh)
+      ocr_notifications=true
       api=true
       web=true
       analysis=true
@@ -88,6 +116,7 @@ while IFS= read -r -d '' path; do
       runtime=true
       ;;
     .http4s-ref | scripts/ci/build-http4s-patch.sh)
+      ocr_notifications=true
       api=true
       runtime=true
       http4s_patch=true
@@ -96,12 +125,35 @@ while IFS= read -r -d '' path; do
       select_all
       ;;
     package.json | pnpm-lock.yaml | pnpm-workspace.yaml)
+      ocr_notifications=true
       web=true
       runtime=true
       [[ "${path}" != package.json ]] || policy_scripts=true
       ;;
     mise.toml)
+      go_runtime=true
+      go_tools=true
       select_all
+      ;;
+    scripts/e2e/runtime-smoke*.test.*)
+      web=true
+      runtime=true
+      ;;
+    scripts/e2e/*.test.*)
+      web=true
+      analysis=true
+      analysis_image=true
+      ;;
+    scripts/e2e/runtime-smoke*)
+      ocr_notifications=true
+      web=true
+      runtime=true
+      ;;
+    scripts/e2e/*)
+      ocr_notifications=true
+      web=true
+      analysis=true
+      analysis_image=true
       ;;
     scripts/ci/analysis-* | scripts/ci/ocr-rust-* | scripts/ci/processing-worker-* | \
       scripts/ci/series-analysis-*)
@@ -113,37 +165,33 @@ while IFS= read -r -d '' path; do
       scripts/ci/extract-release-notes.sh | scripts/ci/runtime-release-notes.sh)
       ;;
     scripts/ci/runtime-* | scripts/ci/start-runtime-container.sh | \
-      scripts/ci/summarize-runtime-logs.sh | \
       scripts/ci/validate-runtime-image.sh | scripts/ci/dockerfile-lint.sh)
       runtime=true
       ;;
-    scripts/ci/write-coverage-summary.py)
-      api=true
-      web=true
-      ;;
-    scripts/ci/test-* | scripts/ci/*.test.mjs | scripts/ci/canonicalize-artifact-digest.sh | \
+    scripts/ci/ci-tool.sh | scripts/ci/build-ci-tool.sh | \
+      scripts/ci/test-* | scripts/ci/check-policy.sh | \
       scripts/ci/load-analysis-candidate.sh | scripts/ci/load-runtime-image-artifact.sh | \
-      scripts/ci/resolve-pushed-runtime-image.sh | scripts/ci/sanitize-analysis-report.sh | \
-      scripts/ci/validate-analysis-candidate.sh | scripts/ci/validate-analysis-worker-readiness.sh | \
-      scripts/ci/validate-runtime-candidate.sh | scripts/ci/validate-runtime-deployment.sh | \
-      scripts/ci/validate-runtime-release-selection.sh)
+      scripts/ci/resolve-pushed-runtime-image.sh)
       ;;
     scripts/ci/actionlint.sh | scripts/ci/install-actionlint.sh | \
       scripts/ci/public-repo-safety-check.sh)
       [[ "${path}" == scripts/ci/public-repo-safety-check.sh ]] || actionlint=true
       ;;
     scripts/ci/*)
+      go_runtime=true
+      go_tools=true
       select_all
-      ;;
-    scripts/dev-local.mjs | scripts/dev-local.test.mjs)
-      policy_scripts=true
       ;;
     scripts/ops/analysis.sh | scripts/ops/analysis-maintain.sh)
       ;;
     .github/workflows/api.yml)
       api=true
       ;;
-    .summit-ref | .github/workflows/ocr-notifications.yml | .github/workflows/web.yml)
+    .summit-ref | .github/workflows/ocr-notifications.yml)
+      web=true
+      ocr_notifications=true
+      ;;
+    .github/workflows/web.yml)
       web=true
       ;;
     .github/workflows/processing-worker.yml)
@@ -163,23 +211,34 @@ while IFS= read -r -d '' path; do
       select_all
       ;;
     .github/workflows/workflow-lint.yml)
+      go_runtime=true
+      go_tools=true
+      policy_scripts=true
+      ;;
+    .github/actions/setup-ci-tool/*)
       go_tools=true
       policy_scripts=true
       ;;
     .github/workflows/public-safety.yml | .github/actions/*)
       ;;
+    scripts/tools/cmd/ci-tool/* | scripts/tools/internal/ci*/* | scripts/tools/go.mod | scripts/tools/go.sum)
+      policy_scripts=true
+      ;;
     scripts/tools/*)
       ;;
+
     .github/dependabot.yml | docs/* | *.md)
       ;;
     *)
       # Unknown paths fail closed by exercising every release-relevant gate.
+      go_runtime=true
+      go_tools=true
       select_all
       ;;
   esac
 done
 
-if [[ "${actionlint}" == true || "${go_tools}" == true || "${policy_scripts}" == true ]]; then
+if [[ "${actionlint}" == true || "${go_runtime}" == true || "${go_tools}" == true || "${policy_scripts}" == true ]]; then
   workflow=true
 fi
 
@@ -188,8 +247,10 @@ printf 'web=%s\n' "${web}"
 printf 'analysis=%s\n' "${analysis}"
 printf 'analysis_image=%s\n' "${analysis_image}"
 printf 'runtime=%s\n' "${runtime}"
+printf 'ocr_notifications=%s\n' "${ocr_notifications}"
 printf 'http4s_patch=%s\n' "${http4s_patch}"
 printf 'workflow=%s\n' "${workflow}"
 printf 'actionlint=%s\n' "${actionlint}"
+printf 'go_runtime=%s\n' "${go_runtime}"
 printf 'go_tools=%s\n' "${go_tools}"
 printf 'policy_scripts=%s\n' "${policy_scripts}"

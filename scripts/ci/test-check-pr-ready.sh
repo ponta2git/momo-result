@@ -15,12 +15,14 @@ run_checker() {
     WEB_EXPECTED="${WEB_EXPECTED:-false}" WEB_RESULT="${WEB_RESULT:-skipped}" \
     ANALYSIS_EXPECTED="${ANALYSIS_EXPECTED:-false}" ANALYSIS_RESULT="${ANALYSIS_RESULT:-skipped}" \
     RUNTIME_EXPECTED="${RUNTIME_EXPECTED:-false}" RUNTIME_RESULT="${RUNTIME_RESULT:-skipped}" \
+    OCR_NOTIFICATIONS_EXPECTED="${OCR_NOTIFICATIONS_EXPECTED:-false}" \
     OCR_NOTIFICATIONS_RESULT="${OCR_NOTIFICATIONS_RESULT:-skipped}" \
     "${checker}"
 }
 
 run_checker >/dev/null
-API_EXPECTED=true API_RESULT=success OCR_NOTIFICATIONS_RESULT=success run_checker >/dev/null
+API_EXPECTED=true API_RESULT=success run_checker >/dev/null
+OCR_NOTIFICATIONS_EXPECTED=true OCR_NOTIFICATIONS_RESULT=success run_checker >/dev/null
 WORKFLOW_LINT_EXPECTED=true WORKFLOW_LINT_RESULT=success run_checker >/dev/null
 if API_EXPECTED=true API_RESULT=skipped run_checker >/dev/null 2>&1; then
   echo "Expected checker to reject a skipped required API gate." >&2
@@ -38,16 +40,24 @@ if WORKFLOW_LINT_EXPECTED=true WORKFLOW_LINT_RESULT=skipped run_checker >/dev/nu
   echo "Expected checker to reject skipped workflow tooling checks." >&2
   exit 1
 fi
-if WEB_EXPECTED=true WEB_RESULT=success OCR_NOTIFICATIONS_RESULT=failure run_checker >/dev/null 2>&1; then
-  echo "Expected checker to reject a failed assembled OCR notification gate." >&2
+API_EXPECTED=true API_RESULT=success WEB_EXPECTED=true WEB_RESULT=success \
+  ANALYSIS_EXPECTED=true ANALYSIS_RESULT=success run_checker >/dev/null
+for invalid in skipped cancelled failure; do
+  if OCR_NOTIFICATIONS_EXPECTED=true OCR_NOTIFICATIONS_RESULT="${invalid}" run_checker >/dev/null 2>&1; then
+    echo "OCR notification gate accepted ${invalid} when required." >&2
+    exit 1
+  fi
+done
+if OCR_NOTIFICATIONS_EXPECTED=false OCR_NOTIFICATIONS_RESULT=success run_checker >/dev/null 2>&1; then
+  echo "OCR notification gate accepted an unexpected run." >&2
   exit 1
 fi
-if ANALYSIS_EXPECTED=true ANALYSIS_RESULT=success run_checker >/dev/null 2>&1; then
-  echo "Expected checker to reject a skipped required OCR notification gate." >&2
+if OCR_NOTIFICATIONS_EXPECTED=invalid run_checker >/dev/null 2>&1; then
+  echo "OCR notification gate accepted an invalid classifier output." >&2
   exit 1
 fi
 
-PR_BASE_REF=master API_EXPECTED=true ANALYSIS_EXPECTED=true RUNTIME_EXPECTED=true \
+PR_BASE_REF=master OCR_NOTIFICATIONS_EXPECTED=true API_EXPECTED=true ANALYSIS_EXPECTED=true RUNTIME_EXPECTED=true \
   run_checker >/dev/null
 for gate in BRANCH_POLICY_RESULT CLASSIFY_RESULT PUBLIC_SAFETY_RESULT; do
   if (export PR_BASE_REF=master "${gate}=failure"; run_checker >/dev/null 2>&1); then

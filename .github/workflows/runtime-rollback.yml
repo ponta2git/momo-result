@@ -58,6 +58,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Build structured CI tool
+        uses: ./.github/actions/setup-ci-tool
+
       - name: Resolve successful deployment run
         id: run
         env:
@@ -66,23 +69,9 @@ jobs:
         run: |
           run_json="${RUNNER_TEMP}/runtime-deploy-run.json"
           gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TARGET_RUN_ID}" > "${run_json}"
-          jq -e \
-            --arg path ".github/workflows/deploy.yml" \
-            --arg repository "${GITHUB_REPOSITORY}" '
-              .name == "deploy" and
-              .path == $path and
-              (.event == "push" or .event == "workflow_dispatch") and
-              .head_branch == "master" and
-              .head_repository.full_name == $repository and
-              .conclusion == "success" and
-              (.run_attempt | type == "number" and . >= 1) and
-              (.head_sha | type == "string" and test("^[0-9a-f]{40}$"))
-            ' "${run_json}" > /dev/null || {
-              echo "The target is not a successful trusted runtime deployment." >&2
-              exit 1
-            }
-          candidate_sha="$(jq -r '.head_sha' "${run_json}")"
-          run_attempt="$(jq -r '.run_attempt' "${run_json}")"
+          selection="$(scripts/ci/ci-tool.sh resolve-deployment-run "${GITHUB_REPOSITORY}" < "${run_json}")"
+          candidate_sha="$(sed -n 's/^candidate_sha=//p' <<< "${selection}")"
+          run_attempt="$(sed -n 's/^run_attempt=//p' <<< "${selection}")"
           git merge-base --is-ancestor "${candidate_sha}" "${GITHUB_SHA}" || {
             echo "The rollback target is not an ancestor of current master." >&2
             exit 1
@@ -108,37 +97,14 @@ jobs:
           TARGET_RUN_ID: ${{ inputs.target_run_id }}
         run: |
           metadata="runtime-deployment-metadata/deployment.json"
-          scripts/ci/validate-runtime-deployment.sh \
-            "${metadata}" "${TARGET_RUN_ID}" "${RUN_ATTEMPT}" "${CANDIDATE_SHA}" \
-            >> "${GITHUB_OUTPUT}"
-
           target_config="${RUNNER_TEMP}/rollback-fly.toml"
           git show "${CANDIDATE_SHA}:fly.toml" > "${target_config}"
-          actual_config_sha="$(sha256sum "${target_config}" | cut -d ' ' -f 1)"
-          expected_config_sha="$(jq -r '.configSha256' "${metadata}")"
-          [[ "${actual_config_sha}" == "${expected_config_sha}" ]] || {
-            echo "Rollback target config does not match deployment provenance." >&2
-            exit 1
-          }
-
-          artifact_id="$(jq -r '.manifestArtifactId' "${metadata}")"
-          artifact_json="${RUNNER_TEMP}/runtime-manifest-artifact.json"
-          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}" \
-            > "${artifact_json}"
-          jq -e \
-            --arg digest "$(jq -r '.manifestArtifactDigest' "${metadata}")" \
-            --arg name "$(jq -r '.manifestArtifactName' "${metadata}")" \
-            --argjson artifactId "${artifact_id}" \
-            --argjson runId "${TARGET_RUN_ID}" '
-              .id == $artifactId and
-              .name == $name and
-              .digest == $digest and
-              .expired == false and
-              .workflow_run.id == $runId
-            ' "${artifact_json}" > /dev/null || {
-              echo "Rollback manifest artifact no longer matches deployment provenance." >&2
-              exit 1
-            }
+          selection="$(scripts/ci/ci-tool.sh runtime-deployment \
+            "${metadata}" "${TARGET_RUN_ID}" "${RUN_ATTEMPT}" "${CANDIDATE_SHA}" --config "${target_config}")"
+          artifact_id="$(sed -n 's/^manifest_artifact_id=//p' <<< "${selection}")"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}" | \
+            scripts/ci/ci-tool.sh verify-manifest-artifact "${metadata}" "${TARGET_RUN_ID}"
+          printf '%s\n' "${selection}" >> "${GITHUB_OUTPUT}"
 
   rollback:
     needs:
@@ -165,7 +131,12 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           cache: false
-          go-version-file: scripts/tools/go.mod
+          go-version-file: apps/runtime/go.mod
+
+      - name: Build structured CI tool
+        run: |
+          scripts/ci/build-ci-tool.sh "${RUNNER_TEMP}/ci-tool"
+          printf 'MOMO_CI_TOOL=%s\n' "${RUNNER_TEMP}/ci-tool" >> "${GITHUB_ENV}"
 
       - name: Download deployed registry manifest
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -187,8 +158,7 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           git show "${TARGET_SHA}:fly.toml" > "${RUNNER_TEMP}/rollback-fly.toml"
-          actual_sha="$(sha256sum "${RUNNER_TEMP}/rollback-fly.toml" | cut -d ' ' -f 1)"
-          [[ "${actual_sha}" == "${EXPECTED_CONFIG_SHA256}" ]] || exit 1
+          scripts/ci/ci-tool.sh file-digest-match "${RUNNER_TEMP}/rollback-fly.toml" "${EXPECTED_CONFIG_SHA256}"
           flyctl config validate --strict --config "${RUNNER_TEMP}/rollback-fly.toml"
 
       - name: Authenticate Docker to Fly registry
@@ -201,18 +171,11 @@ jobs:
           EXPECTED_MANIFEST_SHA256: ${{ needs.resolve-target.outputs.manifest_sha256 }}
         run: |
           mkdir -p runtime-rollback-evidence
-          [[ -f rollback-manifest/registry-manifest.json && \
-            ! -L rollback-manifest/registry-manifest.json ]] || exit 1
-          downloaded_sha="$(sha256sum rollback-manifest/registry-manifest.json | cut -d ' ' -f 1)"
-          [[ "${downloaded_sha}" == "${EXPECTED_MANIFEST_SHA256}" ]] || exit 1
-          docker manifest inspect "${REGISTRY_REF}" | jq -S -c . \
+          scripts/ci/ci-tool.sh file-digest-match rollback-manifest/registry-manifest.json "${EXPECTED_MANIFEST_SHA256}"
+          docker manifest inspect "${REGISTRY_REF}" | scripts/ci/ci-tool.sh canonical-json \
             > "${RUNNER_TEMP}/current-registry-manifest.json"
-          current_sha="$(sha256sum "${RUNNER_TEMP}/current-registry-manifest.json" | cut -d ' ' -f 1)"
-          [[ "${current_sha}" == "${EXPECTED_MANIFEST_SHA256}" ]] || {
-            echo "Registry content no longer matches the successful deployment." >&2
-            exit 1
-          }
-          jq -n '{schemaVersion: 1, manifestVerified: true}' \
+          scripts/ci/ci-tool.sh file-digest-match "${RUNNER_TEMP}/current-registry-manifest.json" "${EXPECTED_MANIFEST_SHA256}"
+          printf '%s\n' '{"schemaVersion":1,"manifestVerified":true}' \
             > runtime-rollback-evidence/registry-verification.json
 
       - name: Deploy exact rollback target
@@ -230,21 +193,9 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           machines_json="$(flyctl machine list --app momo-result --json)"
-          jq -e --arg image "${REGISTRY_REF}" '
-              {
-                schemaVersion: 1,
-                singleStartedExactImage: (
-                  length == 1 and
-                  all(.[]; .state == "started" and .config.image == $image)
-                )
-              } |
-              select(.singleStartedExactImage)
-            ' <<<"${machines_json}" \
+          scripts/ci/ci-tool.sh runtime-machine-evidence "${REGISTRY_REF}" <<< "${machines_json}" \
             > runtime-rollback-evidence/deployment-state.json
-          machine_id="$(
-            jq -er '.[0].id | select(type == "string" and length > 0)' \
-              <<<"${machines_json}"
-          )"
+          machine_id="$(scripts/ci/ci-tool.sh runtime-machine-id "${REGISTRY_REF}" <<< "${machines_json}")"
           printf 'machine_id=%s\n' "${machine_id}" >> "${GITHUB_OUTPUT}"
         timeout-minutes: 2
 
@@ -255,14 +206,14 @@ jobs:
           flyctl ssh console --app momo-result --pty=false --quiet \
             --command "env MOMO_POSTDEPLOY_PUBLIC_EDGE=deferred /opt/momo-result/bin/momo-runtime-tool smoke local" \
             > runtime-rollback-evidence/postdeploy-smoke.json
-          go -C scripts/tools run ./cmd/momo-runtime-tool validate-postdeploy-evidence \
+          scripts/ci/ci-tool.sh postdeploy-evidence \
             "${GITHUB_WORKSPACE}/runtime-rollback-evidence/postdeploy-smoke.json" \
             > /dev/null
         timeout-minutes: 2
 
       - name: Build current public edge probe
         run: |
-          cd scripts/tools
+          cd apps/runtime
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w' \
             -o "${RUNNER_TEMP}/momo-runtime-tool" ./cmd/momo-runtime-tool
 
@@ -286,14 +237,7 @@ jobs:
             --machine "${{ steps.deployment-state.outputs.machine_id }}" \
             --command "/tmp/momo-runtime-tool smoke edge momo-result.ponta.me" \
             > "${RUNNER_TEMP}/runtime-public-edge.json"
-          jq -e '
-            select(
-              .event == "runtime_public_edge_smoke" and
-              .schemaVersion == 1 and
-              .status == "ok"
-            ) |
-            {schemaVersion: 1, status: "ok"}
-          ' "${RUNNER_TEMP}/runtime-public-edge.json" \
+          scripts/ci/ci-tool.sh public-edge-evidence < "${RUNNER_TEMP}/runtime-public-edge.json" \
             > runtime-rollback-evidence/public-health.json
         timeout-minutes: 1
 

@@ -41,7 +41,7 @@ fi
 caddy_version="$(
   docker run --rm --entrypoint /usr/bin/caddy "${image_ref}" version
 )"
-if [[ "${caddy_version}" != "v2.11.4" ]]; then
+if [[ "${caddy_version}" != "v2.11.7" ]]; then
   echo "Runtime image does not contain the required Caddy version." >&2
   exit 1
 fi

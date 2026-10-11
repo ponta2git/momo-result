@@ -1,6 +1,7 @@
 package momo.api.http
 
 import java.sql.SQLException
+import java.util.concurrent.CancellationException
 
 import cats.effect.IO
 import ch.qos.logback.classic.Level
@@ -16,6 +17,18 @@ import momo.api.errors.{AppError, AppException}
 import momo.api.testing.LogbackCapture
 
 final class HttpErrorMiddlewareSpec extends MomoCatsEffectSuite:
+  test("a peer reset remains transport cancellation without a 500 or incident log") {
+    val canceled = new CancellationException("peer reset")
+    val app = HttpErrorMiddleware[IO](HttpRoutes.of[IO] { case _ =>
+      IO.raiseError(canceled)
+    }.orNotFound)
+    for
+      (result, events) <- captureHttpErrorLogs(app.run(Request[IO]()).attempt)
+    yield
+      assert(result.left.exists(_ eq canceled))
+      assert(events.isEmpty)
+  }
+
   test("maps and logs database exceptions without exposing dependency details") {
     val secret = "postgres://user:secret@db.example.com/momo"
     val failedEndpoint = endpoint.get.in("boom").out(stringBody)

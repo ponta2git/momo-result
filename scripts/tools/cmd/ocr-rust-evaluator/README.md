@@ -9,6 +9,7 @@ The evaluator:
 - accepts only filename-declared `total_assets`, `revenue`, and `incident_log` screens;
 - runs one image at a time with a bounded timeout and bounded process output, recovering its
   process group on Linux/macOS and allowing at most one second for inherited output pipes to close;
+- interrupts the current process group on SIGINT/SIGTERM and stops without publishing an incomplete report;
 - records per-process wall time, user/system CPU time, and peak RSS when the host exposes it;
 - counts process failures as incorrect expected fields instead of dropping their denominator;
 - writes detailed image and field evidence only to the caller-selected report path; and

@@ -110,6 +110,9 @@ func main() {
 
 func run(args []string, stdout io.Writer, stderr io.Writer) int {
 	opts, err := parseOptions(args, stderr)
+	if errors.Is(err, flag.ErrHelp) {
+		return 0
+	}
 	if err != nil {
 		return 2
 	}
@@ -159,6 +162,7 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 		return options{}, err
 	}
 	if flags.NArg() != 0 {
+		_, _ = fmt.Fprintln(stderr, "positional arguments are not supported")
 		return options{}, errors.New("positional arguments are not supported")
 	}
 	return opts, nil
@@ -356,29 +360,9 @@ func ceilDiv(value, divisor uint64) uint64 {
 	return 1 + (value-1)/divisor
 }
 
-// normalQuantile uses Peter J. Acklam's rational approximation.
 func normalQuantile(probability float64) float64 {
 	if probability <= 0 || probability >= 1 {
 		return math.NaN()
 	}
-	a := [...]float64{-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02, 1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00}
-	b := [...]float64{-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02, 6.680131188771972e+01, -1.328068155288572e+01}
-	c := [...]float64{-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00, -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00}
-	d := [...]float64{7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00, 3.754408661907416e+00}
-	const lower = 0.02425
-	const upper = 1 - lower
-	if probability < lower {
-		q := math.Sqrt(-2 * math.Log(probability))
-		return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q + c[5]) /
-			((((d[0]*q+d[1])*q+d[2])*q+d[3])*q + 1)
-	}
-	if probability > upper {
-		q := math.Sqrt(-2 * math.Log(1-probability))
-		return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q + c[5]) /
-			((((d[0]*q+d[1])*q+d[2])*q+d[3])*q + 1)
-	}
-	q := probability - 0.5
-	r := q * q
-	return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r + a[5]) * q /
-		(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r + 1)
+	return math.Sqrt2 * math.Erfinv(2*probability-1)
 }

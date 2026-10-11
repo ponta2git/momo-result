@@ -62,6 +62,9 @@ func main() {
 
 func run(args []string, stdout io.Writer, stderr io.Writer) int {
 	opts, err := parseOptions(args, stderr)
+	if errors.Is(err, flag.ErrHelp) {
+		return 0
+	}
 	if err != nil {
 		return 2
 	}
@@ -125,6 +128,7 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 		return options{}, err
 	}
 	if flags.NArg() != 0 {
+		_, _ = fmt.Fprintln(stderr, "positional arguments are not supported")
 		return options{}, errors.New("positional arguments are not supported")
 	}
 	return opts, nil

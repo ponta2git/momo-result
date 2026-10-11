@@ -7,7 +7,9 @@ case "${operation}" in auto|promote|backfill|check) ;; *) echo 'Use auto, promot
 : "${ANALYSIS_APP:=momo-result-analysis}"
 : "${ANALYSIS_WAIT_SECONDS:=1800}"
 : "${ANALYSIS_POLL_SECONDS:=15}"
-[[ "${ANALYSIS_WAIT_SECONDS}" =~ ^[0-9]+$ && "${ANALYSIS_POLL_SECONDS}" =~ ^[1-9][0-9]*$ ]] || exit 2
+# Bash arithmetic treats leading zeroes as octal. Reject them before inspection
+# or apply so an invalid timeout cannot fail only after maintenance has started.
+[[ "${ANALYSIS_WAIT_SECONDS}" =~ ^(0|[1-9][0-9]*)$ && "${ANALYSIS_POLL_SECONDS}" =~ ^[1-9][0-9]*$ ]] || exit 2
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/../.." && pwd)"
 cd "${repo_root}"
@@ -20,16 +22,11 @@ trap 'rm -rf "${task_tmp}"' EXIT
 fail() { echo "::error::$1" >&2; exit 1; }
 read_machine() {
   flyctl machine list --app "${ANALYSIS_APP}" --json 2> "${task_tmp}/error" |
-    jq -er 'select(length == 1 and .[0].state == "started" and
-      .[0].config.env.MOMO_ANALYSIS_PUBLICATION_MODE == "enabled" and
-      .[0].config.env.MOMO_OCR_V2_CONSUMER_MODE == "enabled") | .[0] |
-      [.id, .config.image, .config.env.MOMO_ANALYSIS_CONFIG_VERSION] | @tsv'
+    "${script_dir}/../ci/ci-tool.sh" analysis-machine-identity
 }
 identity="$(read_machine)" || fail 'Worker identity is unavailable; verify the deployment before retrying.'
 IFS=$'\t' read -r machine_id image_ref config_version <<< "${identity}"
-[[ "${machine_id}" =~ ^[a-z0-9]+$ && "${image_ref}" =~ ^registry\.fly\.io/momo-result-analysis@sha256:[0-9a-f]{64}$ ]] || fail 'Worker does not have a verified immutable deployment identity.'
 release_id="${config_version#series-analysis-v1-}"
-[[ "${release_id}" =~ ^[0-9a-f]{40}$ ]] || fail 'Worker release generation is unavailable.'
 GIT_TERMINAL_PROMPT=0 git fetch --quiet --no-tags origin refs/heads/master
 master_sha="$(git rev-parse FETCH_HEAD)"
 git merge-base --is-ancestor "${release_id}" "${master_sha}" || fail 'Worker generation is outside current master history.'
@@ -45,14 +42,11 @@ invoke() {
   [[ "${current_identity}" == "${identity}" ]] || fail 'Worker changed during maintenance; check the current deployment and retry.'
   flyctl ssh console --app "${ANALYSIS_APP}" --machine "${machine_id}" --pty=false --quiet \
     --command "${command}$1" > "${task_tmp}/raw.json" 2> "${task_tmp}/error" || exit_status=$?
-  # The CLI also emits structured diagnostics on stdout. Select exactly one
-  # report, then sanitize; a diagnostic must neither mask nor duplicate it.
-  jq -es '[.[] | select(has("schemaVersion") and has("planDigest"))] |
-    select(length == 1) | .[0]' "${task_tmp}/raw.json" > "${task_tmp}/report.json" \
-    || fail 'Analysis inspection returned no unique maintenance report.'
-  "${script_dir}/../ci/sanitize-analysis-report.sh" "${task_tmp}/report.json" \
+  "${script_dir}/../ci/ci-tool.sh" analysis-report --from-log "${task_tmp}/raw.json" \
     "${report_dir}/operation-report.json" || fail 'Analysis inspection failed; no valid maintenance report was returned.'
-  status="$(jq -r '.status' "${report_dir}/operation-report.json")"
+  local report_state
+  report_state="$("${script_dir}/../ci/ci-tool.sh" analysis-report-state "${report_dir}/operation-report.json")"
+  IFS=$'\t' read -r status plan <<< "${report_state}"
   [[ "${exit_status}" == 0 || "${status}" == attention_required ]] || fail 'Analysis command failed; inspect deployment health before retrying.'
   cat "${report_dir}/operation-report.json"
 }
@@ -62,7 +56,6 @@ if [[ "${operation}" == check ]]; then
   exit 0
 fi
 if [[ "${status}" == planned ]]; then
-  plan="$(jq -er '.planDigest | select(test("^sha256:[0-9a-f]{64}$"))' "${report_dir}/operation-report.json")"
   invoke " --apply --expected-plan ${plan}"
 elif [[ "${status}" == running ]]; then
   invoke ' --apply'

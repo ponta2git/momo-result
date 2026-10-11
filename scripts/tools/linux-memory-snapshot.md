@@ -1,14 +1,16 @@
 # Linux memory snapshot
 
-`linux-memory-snapshot.sh` is a read-only, zero-install cgroup v1 diagnostic collector requiring
-POSIX shell utilities and `awk`. It reads `CGROUP_MEMORY_ROOT` (default `/sys/fs/cgroup/memory`) and
+`linux-memory-snapshot` is a read-only cgroup v1 diagnostic collector. Build a standalone binary
+from `scripts/tools` with `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /tmp/linux-memory-snapshot ./cmd/linux-memory-snapshot`
+(choose the target host's architecture). Copy that binary to the diagnostic host and run it;
+the host needs neither Go nor shell utilities. It reads `CGROUP_MEMORY_ROOT` (default `/sys/fs/cgroup/memory`) and
 `PROC_ROOT` (default `/proc`), and writes TSV to stdout. It never reads command lines or process
 environments. Runtime observations belong in private evidence, not public repository files.
 
 Schema version 2 keeps the process columns from version 1, but reports unavailable or invalid
-process measurements as `NA`; measured zero remains `0`. A failed process-file read discards that
-process row. Required cgroup reads must succeed for the command to exit successfully; discard partial
-output on a nonzero exit. Each PID is emitted at most once.
+process measurements as `NA`; measured zero remains `0`. Missing or inaccessible `smaps_rollup`
+reports `NA`; failed required process-file reads discard that process row. All cgroup reads must
+complete before any output is written. Each PID is emitted at most once.
 
 Process memory columns are KiB. UID and thread count are integers. Cgroup keys ending in `_bytes`
 are bytes; `memory_failcnt` and the fields copied from `memory.stat` retain their kernel-defined
@@ -25,5 +27,5 @@ The [kernel memory controller documentation](https://www.kernel.org/doc/html/lat
 describes counter units and accounting; the [proc documentation](https://www.kernel.org/doc/html/latest/filesystems/proc.html)
 describes process memory fields. This tool intentionally does not support cgroup v2 or CPU profiling.
 
-Run `scripts/tools/test-linux-memory-snapshot.sh` for deterministic format, missing-data, read-failure,
+Run `go test ./cmd/linux-memory-snapshot` from `scripts/tools` for deterministic format, missing-data, read-failure,
 and large-value checks. These fixtures do not establish memory accounting accuracy on a live host.

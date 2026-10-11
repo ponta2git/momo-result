@@ -2,8 +2,8 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-canonicalizer="${repo_root}/scripts/ci/canonicalize-artifact-digest.sh"
-validator="${repo_root}/scripts/ci/validate-analysis-candidate.sh"
+canonicalizer=("${repo_root}/scripts/ci/ci-tool.sh" artifact-digest)
+validator=("${repo_root}/scripts/ci/ci-tool.sh" analysis-candidate)
 test_dir="$(mktemp -d)"
 trap 'rm -rf "${test_dir}"' EXIT
 
@@ -11,7 +11,7 @@ readonly run_id=123456
 readonly run_attempt=2
 readonly commit=0123456789abcdef0123456789abcdef01234567
 readonly digest=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-readonly artifact_digest="$("${canonicalizer}" "${digest}")"
+readonly artifact_digest="$("${canonicalizer[@]}" "${digest}")"
 
 write_valid_candidate() {
   jq -n \
@@ -37,7 +37,7 @@ write_valid_candidate() {
 
 expect_rejected() {
   local name="$1"
-  if "${validator}" "${test_dir}/candidate.json" "${run_id}" "${run_attempt}" "${commit}" \
+  if "${validator[@]}" "${test_dir}/candidate.json" "${run_id}" "${run_attempt}" "${commit}" \
     > "${test_dir}/rejected-output" 2> /dev/null; then
     echo "Invalid candidate was accepted: ${name}" >&2
     exit 1
@@ -46,7 +46,7 @@ expect_rejected() {
 }
 
 write_valid_candidate
-actual="$("${validator}" "${test_dir}/candidate.json" "${run_id}" "${run_attempt}" "${commit}")"
+actual="$("${validator[@]}" "${test_dir}/candidate.json" "${run_id}" "${run_attempt}" "${commit}")"
 expected="$(cat <<EOF
 candidate_sha=${commit}
 candidate_run_attempt=${run_attempt}
@@ -87,7 +87,7 @@ mv "${test_dir}/tampered.json" "${test_dir}/candidate.json"
 expect_rejected invalid-artifact-digest
 
 write_valid_candidate
-if "${validator}" "${test_dir}/candidate.json" 999 "${run_attempt}" "${commit}" \
+if "${validator[@]}" "${test_dir}/candidate.json" 999 "${run_attempt}" "${commit}" \
   > /dev/null 2>&1; then
   echo "Candidate from a different run was accepted." >&2
   exit 1

@@ -20,11 +20,7 @@ cat >"${test_dir}/bin/docker" <<'EOF'
 set -euo pipefail
 printf '%s\n' "$1" >>"${TEST_CALLS}"
 case "$1" in
-  run)
-    if [[ "${*: -1}" == "summarize-logs" ]]; then
-      cat
-    fi
-    ;;
+  run) ;;
   inspect)
     if [[ "$*" == *'{{.State.Running}}'* ]]; then
       if [[ "${TEST_SCENARIO}" == "stopped" || -f "${TEST_CALLS}.invalid-edge" ]]; then

@@ -161,12 +161,17 @@ jobs:
         timeout-minutes: 10
         run: sbt --server --batch apiCoverage
 
+      - name: Build structured CI tool
+        if: always() && github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: ./.github/actions/setup-ci-tool
+
       - name: Summarize coverage
         if: ${{ always() && github.event_name == 'pull_request' }}
         continue-on-error: true
         timeout-minutes: 1
         run: |
-          python3 ../../scripts/ci/write-coverage-summary.py api \
+          bash ../../scripts/ci/ci-tool.sh coverage api \
             --root ../.. \
             --out ../../coverage-summary/api \
             --allow-missing

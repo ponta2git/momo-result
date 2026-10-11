@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"os/exec"
+	"path/filepath"
 	"time"
 )
 
@@ -19,7 +20,7 @@ type engineOptions struct {
 	timeout      time.Duration
 }
 
-func runPilot(options engineOptions, image imageMetadata) (pilotEnvelope, processResourceMetrics, error) {
+func runPilot(parent context.Context, options engineOptions, image imageMetadata) (pilotEnvelope, processResourceMetrics, error) {
 	arguments := []string{
 		"ocr-pilot",
 		"--image", image.Path,
@@ -31,9 +32,15 @@ func runPilot(options engineOptions, image imageMetadata) (pilotEnvelope, proces
 	if options.tessdataPath != "" {
 		arguments = append(arguments, "--tessdata-path", options.tessdataPath)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), options.timeout)
+	ctx, cancel := context.WithTimeout(parent, options.timeout)
 	defer cancel()
-	command := exec.CommandContext(ctx, options.binary, arguments...)
+	// The option is a filesystem path, including a bare filename in the current
+	// directory; exec.Command would otherwise resolve that filename through PATH.
+	binary, err := filepath.Abs(options.binary)
+	if err != nil {
+		return pilotEnvelope{}, processResourceMetrics{}, errors.New("pilot_binary_path_invalid")
+	}
+	command := exec.CommandContext(ctx, binary, arguments...)
 	// A descendant can retain the output pipes after the pilot exits. Bound that
 	// wait separately from the image deadline and always recover the owned group.
 	command.WaitDelay = time.Second
@@ -44,7 +51,7 @@ func runPilot(options engineOptions, image imageMetadata) (pilotEnvelope, proces
 	command.Stdout = stdout
 	command.Stderr = stderr
 	started := time.Now()
-	err := command.Run()
+	err = command.Run()
 	resources := measuredProcessResources(command.ProcessState, time.Since(started))
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return pilotEnvelope{}, resources, errors.New("pilot_timeout")

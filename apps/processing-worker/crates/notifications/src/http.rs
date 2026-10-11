@@ -1,5 +1,6 @@
 use reqwest::{Client, StatusCode, header};
 use serde::Deserialize;
+use tokio::time::Instant;
 
 use super::{QueuedNotification, config::HttpConfig};
 
@@ -24,8 +25,12 @@ pub(super) async fn send(client: &Client, config: &HttpConfig, mut entry: Queued
         return;
     };
     entry.attempted = true;
+    let started_at = Instant::now();
+    let reserved_to_dispatch_milliseconds = milliseconds(entry.queued_at - entry.reserved_at);
+    let queue_wait_milliseconds = milliseconds(started_at - entry.queued_at);
     tracing::info!(event = "result_notification_attempt", notification_id = %entry.id,
-        source_job_id = %entry.source_job_id, kind = entry.kind);
+        source_job_id = %entry.source_job_id, kind = entry.kind,
+        reserved_to_dispatch_milliseconds, queue_wait_milliseconds);
     // No error_for_status/body/URL/debug output: even an HTTP 503 may follow a committed receipt.
     let outcome = match client
         .post(config.endpoint.clone())
@@ -43,22 +48,30 @@ pub(super) async fn send(client: &Client, config: &HttpConfig, mut entry: Queued
             (false, false) => "transport",
         }),
     };
+    let http_milliseconds = milliseconds(started_at.elapsed());
     match outcome {
         ReceiptOutcome::Stored(receipt) => tracing::info!(
             event = "result_notification_receipt", notification_id = %entry.id,
             source_job_id = %entry.source_job_id, kind = entry.kind,
             receipt = "stored", disposition = %receipt.disposition, status = %receipt.status,
+            http_milliseconds,
         ),
         ReceiptOutcome::Rejected => tracing::warn!(
             event = "result_notification_receipt", notification_id = %entry.id,
             source_job_id = %entry.source_job_id, kind = entry.kind, receipt = "rejected",
+            http_milliseconds,
         ),
         ReceiptOutcome::Unknown(reason) => tracing::warn!(
             event = "result_notification_receipt", notification_id = %entry.id,
             source_job_id = %entry.source_job_id, kind = entry.kind, receipt = "unknown", reason,
+            http_milliseconds,
         ),
     }
     entry.finished = true;
+}
+
+fn milliseconds(duration: std::time::Duration) -> u64 {
+    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
 }
 
 async fn read_receipt(mut response: reqwest::Response, id: &str) -> ReceiptOutcome {

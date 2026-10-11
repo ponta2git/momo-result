@@ -18,6 +18,7 @@ use super::{
     submit_control_outcome,
 };
 
+/// Returns `None` only when shutdown stops waiting before another claim starts.
 pub(super) async fn claim_delivery(
     client: &mut tokio_postgres::Client,
     job_id: &str,
@@ -34,28 +35,7 @@ pub(super) async fn claim_delivery(
     if !matches!(initial, ClaimResult::Busy) {
         return Ok(Some(initial));
     }
-    wait_for_shared_slot(
-        client,
-        job_id,
-        config,
-        post_commit_sink,
-        early_claim_until,
-        budget,
-        shutdown,
-    )
-    .await
-}
 
-/// Returns `None` only when shutdown stops waiting before another claim starts.
-pub(super) async fn wait_for_shared_slot(
-    client: &mut tokio_postgres::Client,
-    job_id: &str,
-    config: &AnalysisConsumerConfig,
-    post_commit_sink: &PostCommitSink,
-    early_claim_until: std::time::Instant,
-    budget: &mut BusyRetryBudget,
-    shutdown: &mut watch::Receiver<bool>,
-) -> Result<Option<ClaimResult>, ConsumerError> {
     // The caller preserves the earliest original PEL-recovery or maintenance deadline.
     let normal_recovery_at = time::Instant::from_std(early_claim_until);
     let mut retry = BusyRetry::new(time::Instant::now(), normal_recovery_at);
@@ -91,10 +71,11 @@ pub(super) async fn wait_for_shared_slot(
         // A started claim must resolve, even if shutdown or the retry-start deadline arrives.
         // Dropping it at COMMIT could lose the acquired owner or its post-commit outbox effect.
         // Errors retain the delivery through the existing consumer-failure recovery path.
-        summary.outcome = "control_error";
-        let outcome = retry_busy_job(client, job_id, config).await?;
-        summary.outcome = "post_commit_error";
-        let claim = submit_control_outcome(post_commit_sink, outcome)?;
+        let outcome = retry_busy_job(client, job_id, config)
+            .await
+            .inspect_err(|_| summary.outcome = "control_error")?;
+        let claim = submit_control_outcome(post_commit_sink, outcome)
+            .inspect_err(|_| summary.outcome = "post_commit_error")?;
         summary.outcome = match &claim {
             ClaimResult::Busy => continue,
             ClaimResult::Claimed(_) => "claimed",

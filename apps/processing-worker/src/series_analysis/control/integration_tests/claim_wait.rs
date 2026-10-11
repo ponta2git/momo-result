@@ -20,9 +20,8 @@ use crate::{
     outbox::PostCommitSink,
     series_analysis::{
         ConsumerError,
-        claim_wait::wait_for_shared_slot,
+        claim_wait::claim_delivery,
         config::AnalysisConsumerConfig,
-        control::claim_job,
         queue::{ensure_consumer_group, read_new_delivery},
     },
 };
@@ -56,11 +55,10 @@ async fn real_postgres_and_redis_busy_rechecks_preserve_pending_and_owned_claims
     reset_queued_job(&client).await?;
     let holder = occupy_slot(&mut secondary).await?;
     let (first_message, received_at) = receive(&mut redis, &config).await?;
-    assert_busy(&mut client, &config).await?;
     let mut budget = BusyRetryBudget::new(config.lease_duration);
     let result = time::timeout(
         Duration::from_secs(15),
-        wait_for_shared_slot(
+        Box::pin(claim_delivery(
             &mut client,
             JOB_ID,
             &config,
@@ -68,7 +66,7 @@ async fn real_postgres_and_redis_busy_rechecks_preserve_pending_and_owned_claims
             received_at + config.lease_duration,
             &mut budget,
             &mut shutdown,
-        ),
+        )),
     )
     .await??;
     assert!(matches!(result, Some(ClaimResult::Busy)));
@@ -79,12 +77,10 @@ async fn real_postgres_and_redis_busy_rechecks_preserve_pending_and_owned_claims
     assert_queued(&client).await?;
     assert_pending_once(&mut redis, &config, &first_message).await?;
 
-    // A different received entry cannot reset the consumer-wide budget, even when OCR finishes.
+    // A different received entry cannot reset the consumer-wide budget.
     let (next_message, next_received_at) = receive(&mut redis, &config).await?;
-    assert_busy(&mut client, &config).await?;
-    release_ocr(&mut secondary, holder).await?;
     assert!(matches!(
-        wait_for_shared_slot(
+        Box::pin(claim_delivery(
             &mut client,
             JOB_ID,
             &config,
@@ -92,17 +88,20 @@ async fn real_postgres_and_redis_busy_rechecks_preserve_pending_and_owned_claims
             next_received_at + config.lease_duration,
             &mut budget,
             &mut shutdown,
-        )
+        ))
         .await?,
         Some(ClaimResult::Busy)
     ));
     assert_queued(&client).await?;
     assert_pending_once(&mut redis, &config, &next_message).await?;
+    release_ocr(&mut secondary, holder).await?;
 
     // With an available budget, the same pending entry starts before the old Redis idle threshold.
+    let holder = occupy_slot(&mut secondary).await?;
+    let backend_pid = read_backend_pid(&client).await?;
     let mut budget = BusyRetryBudget::new(config.lease_duration);
-    let claim = claimed(
-        wait_for_shared_slot(
+    let (result, released) = tokio::join!(
+        claim_delivery(
             &mut client,
             JOB_ID,
             &config,
@@ -110,18 +109,21 @@ async fn real_postgres_and_redis_busy_rechecks_preserve_pending_and_owned_claims
             next_received_at + config.lease_duration,
             &mut budget,
             &mut shutdown,
-        )
-        .await?,
-    )?;
+        ),
+        release_after_initial_busy(&mut secondary, backend_pid, holder),
+    );
+    released?;
+    let claim = claimed(result?)?;
     assert!(next_received_at.elapsed() < config.lease_duration);
     assert_owned_once(&client, &claim).await?;
     assert_pending_once(&mut redis, &config, &next_message).await?;
 
     reset_queued_job(&client).await?;
+    let holder = occupy_slot(&mut secondary).await?;
     let mut budget = BusyRetryBudget::new(config.lease_duration);
     let expired_start_deadline = Instant::now();
     assert!(matches!(
-        wait_for_shared_slot(
+        Box::pin(claim_delivery(
             &mut client,
             JOB_ID,
             &config,
@@ -129,7 +131,7 @@ async fn real_postgres_and_redis_busy_rechecks_preserve_pending_and_owned_claims
             expired_start_deadline,
             &mut budget,
             &mut shutdown,
-        )
+        ))
         .await?,
         Some(ClaimResult::Busy)
     ));
@@ -143,8 +145,9 @@ async fn real_postgres_and_redis_busy_rechecks_preserve_pending_and_owned_claims
         "UPDATE series_analysis_jobs SET available_at = clock_timestamp() + interval '1 minute' WHERE id = $1",
         &[&JOB_ID],
     ).await?;
-    assert!(matches!(
-        wait_for_shared_slot(
+    let backend_pid = read_backend_pid(&client).await?;
+    let (result, released) = tokio::join!(
+        claim_delivery(
             &mut client,
             JOB_ID,
             &config,
@@ -152,14 +155,21 @@ async fn real_postgres_and_redis_busy_rechecks_preserve_pending_and_owned_claims
             Instant::now() + config.lease_duration,
             &mut budget,
             &mut shutdown,
-        )
-        .await?,
-        Some(ClaimResult::NotYetAvailable { .. })
-    ));
+        ),
+        release_after_initial_busy(&mut secondary, backend_pid, holder),
+    );
+    released?;
+    assert!(matches!(result?, Some(ClaimResult::NotYetAvailable { .. })));
     assert_queued(&client).await?;
     assert_pending_once(&mut redis, &config, &next_message).await?;
 
-    verify_shutdown_keeps_a_completed_claim(&mut client, &mut secondary, &config, &sink).await?;
+    Box::pin(verify_shutdown_keeps_a_completed_claim(
+        &mut client,
+        &mut secondary,
+        &config,
+        &sink,
+    ))
+    .await?;
     assert_pending_once(&mut redis, &config, &next_message).await?;
 
     for (fault, committed) in [
@@ -167,11 +177,13 @@ async fn real_postgres_and_redis_busy_rechecks_preserve_pending_and_owned_claims
         (CommitFault::LostReply, true),
     ] {
         reset_queued_job(&client).await?;
+        let holder = occupy_slot(&mut secondary).await?;
         let proxy = DelayedDatabase::commit_fault(&database_url, fault).await?;
         let mut uncertain = crate::postgres::connect(&proxy.url).await?;
+        let backend_pid = read_backend_pid(&uncertain).await?;
         let mut budget = BusyRetryBudget::new(config.lease_duration);
-        assert!(matches!(
-            wait_for_shared_slot(
+        let (result, released) = tokio::join!(
+            claim_delivery(
                 &mut uncertain,
                 JOB_ID,
                 &config,
@@ -179,10 +191,11 @@ async fn real_postgres_and_redis_busy_rechecks_preserve_pending_and_owned_claims
                 Instant::now() + config.lease_duration,
                 &mut budget,
                 &mut shutdown,
-            )
-            .await,
-            Err(ConsumerError::Control(_))
-        ));
+            ),
+            release_after_initial_busy(&mut secondary, backend_pid, holder),
+        );
+        released?;
+        assert!(matches!(result, Err(ConsumerError::Control(_))));
         let row = client
             .query_one(
                 "SELECT status = 'running', attempt_count FROM series_analysis_jobs WHERE id = $1",
@@ -212,10 +225,11 @@ async fn verify_shutdown_keeps_a_completed_claim(
     sink: &PostCommitSink,
 ) -> SmokeResult {
     reset_queued_job(client).await?;
+    let holder = occupy_slot(secondary).await?;
     let mut budget = BusyRetryBudget::new(config.lease_duration);
     let (shutdown_sender, mut shutdown) = watch::channel(true);
     assert!(
-        wait_for_shared_slot(
+        Box::pin(claim_delivery(
             client,
             JOB_ID,
             config,
@@ -223,24 +237,19 @@ async fn verify_shutdown_keeps_a_completed_claim(
             Instant::now() + config.lease_duration,
             &mut budget,
             &mut shutdown,
-        )
+        ))
         .await?
         .is_none()
     );
     assert_queued(client).await?;
     shutdown_sender.send(false)?;
 
-    let backend_pid: i32 = client
-        .query_one("SELECT pg_backend_pid()", &[])
-        .await?
-        .try_get(0)?;
-    let held = secondary.transaction().await?;
-    held.query_one(
-        "SELECT slot_key FROM worker_execution_slots FOR UPDATE",
-        &[],
-    )
-    .await?;
+    let backend_pid = read_backend_pid(client).await?;
     let unblock = async {
+        wait_for_initial_busy(secondary, backend_pid).await?;
+        let held = secondary.transaction().await?;
+        // Free the slot without committing yet: the next claim must start and block on this row.
+        assert!(release_owned(&held, ocr_identity(holder)).await?);
         let deadline = time::Instant::now() + Duration::from_secs(5);
         loop {
             let waiting: bool = held.query_one(
@@ -249,7 +258,7 @@ async fn verify_shutdown_keeps_a_completed_claim(
             ).await?.try_get(0)?;
             if waiting {
                 shutdown_sender.send(true)?;
-                held.rollback().await?;
+                held.commit().await?;
                 return Ok::<(), Box<dyn std::error::Error + Send + Sync>>(());
             }
             if time::Instant::now() >= deadline {
@@ -259,7 +268,7 @@ async fn verify_shutdown_keeps_a_completed_claim(
         }
     };
     let (result, released) = tokio::join!(
-        wait_for_shared_slot(
+        claim_delivery(
             client,
             JOB_ID,
             config,
@@ -324,12 +333,40 @@ async fn assert_pending_once(
     Ok(())
 }
 
-async fn assert_busy(client: &mut Client, config: &AnalysisConsumerConfig) -> SmokeResult {
-    assert!(matches!(
-        claim_job(client, JOB_ID, config).await?.value,
-        ClaimResult::Busy
-    ));
-    Ok(())
+async fn read_backend_pid(client: &Client) -> SmokeResult<i32> {
+    Ok(client
+        .query_one("SELECT pg_backend_pid()", &[])
+        .await?
+        .try_get(0)?)
+}
+
+async fn wait_for_initial_busy(observer: &Client, backend_pid: i32) -> SmokeResult {
+    let deadline = time::Instant::now() + Duration::from_secs(5);
+    loop {
+        let waiting: bool = observer
+            .query_one(
+                "SELECT state = 'idle' AND query = 'ROLLBACK' FROM pg_stat_activity WHERE pid = $1",
+                &[&backend_pid],
+            )
+            .await?
+            .try_get(0)?;
+        if waiting {
+            return Ok(());
+        }
+        if time::Instant::now() >= deadline {
+            return Err("the initial claim did not finish while OCR held the slot".into());
+        }
+        time::sleep(Duration::from_millis(10)).await;
+    }
+}
+
+async fn release_after_initial_busy(
+    observer: &mut Client,
+    backend_pid: i32,
+    fencing_token: i64,
+) -> SmokeResult {
+    wait_for_initial_busy(observer, backend_pid).await?;
+    release_ocr(observer, fencing_token).await
 }
 
 fn claimed(result: Option<ClaimResult>) -> SmokeResult<ClaimedJob> {
@@ -398,19 +435,17 @@ async fn occupy_slot(client: &mut Client) -> SmokeResult<i64> {
 
 async fn release_ocr(client: &mut Client, fencing_token: i64) -> SmokeResult {
     let transaction = client.transaction().await?;
-    assert!(
-        release_owned(
-            &transaction,
-            ExecutionSlotIdentity {
-                task_kind: ExecutionTaskKind::Ocr,
-                owner: OCR_OWNER,
-                job_id: OCR_JOB,
-                attempt_id: OCR_ATTEMPT,
-                fencing_token,
-            }
-        )
-        .await?
-    );
+    assert!(release_owned(&transaction, ocr_identity(fencing_token)).await?);
     transaction.commit().await?;
     Ok(())
+}
+
+fn ocr_identity(fencing_token: i64) -> ExecutionSlotIdentity<'static> {
+    ExecutionSlotIdentity {
+        task_kind: ExecutionTaskKind::Ocr,
+        owner: OCR_OWNER,
+        job_id: OCR_JOB,
+        attempt_id: OCR_ATTEMPT,
+        fencing_token,
+    }
 }

@@ -33,8 +33,7 @@ private[http] object HeadResponseMiddleware:
     // before any ordinary payload effect. A checkpoint also terminates pure/infinite bodies.
     val release = F.uncancelable { poll =>
       body.chunks.evalMap(_ => F.unit).translate(new (F ~> F):
-        def apply[A](effect: F[A]): F[A] = F.canceled *> poll(effect)
-      ).compile.drain
+        def apply[A](effect: F[A]): F[A] = F.canceled *> poll(effect)).compile.drain
     }
     // A new fiber makes the cancellation checkpoint effective inside the masked handoff.
     release.start.flatMap(_.join).flatMap {

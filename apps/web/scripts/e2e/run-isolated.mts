@@ -72,9 +72,7 @@ async function run() {
     imageTmpDir: resources.imageTmpDir,
     redisUrl,
   });
-  await waitForApi(resources.apiProcess, `${apiBaseUrl}/healthz/details`, () =>
-    interruption.throwIfAborted(),
-  );
+  await waitForApi(resources.apiProcess, `${apiBaseUrl}/healthz/details`, interruption);
 
   return runPlaywright({
     apiBaseUrl,

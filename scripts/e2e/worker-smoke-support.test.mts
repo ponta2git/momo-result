@@ -249,3 +249,66 @@ esac
     }
   },
 );
+
+test(
+  "worker cleanup joins its owned CLI even when container removal cannot start",
+  { skip: process.platform === "win32", timeout: 5_000 },
+  async (t) => {
+    const directory = mkdtempSync(join(tmpdir(), "momo-smoke-cleanup-test-"));
+    const previousPath = process.env.PATH;
+    const pidFile = join(directory, "worker.pid");
+    const stoppedFile = join(directory, "worker.stopped");
+    let pid: number | undefined;
+    t.after(() => {
+      if (previousPath === undefined) delete process.env.PATH;
+      else process.env.PATH = previousPath;
+      try {
+        if (pid !== undefined) process.kill(-pid, "SIGKILL");
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    });
+    writeFileSync(
+      join(directory, "docker"),
+      `#!${process.execPath}
+const fs = require("node:fs");
+switch (process.argv[2]) {
+  case "run": {
+    const timer = setInterval(() => {}, 1000);
+    process.on("SIGTERM", () => {
+      fs.writeFileSync(${JSON.stringify(stoppedFile)}, "stopped");
+      clearInterval(timer);
+    });
+    fs.writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));
+    break;
+  }
+  case "inspect":
+    if (!fs.existsSync(${JSON.stringify(pidFile)})) process.exit(1);
+    console.log("true");
+    break;
+  case "stop":
+    fs.unlinkSync(__filename);
+    process.exit(1);
+  default:
+    process.exit(2);
+}
+`,
+      { mode: 0o700 },
+    );
+    // An absent fixture command must not fall back to the machine's Docker.
+    process.env.PATH = directory;
+    const worker = startWorker(
+      { signal: AbortSignal.timeout(3_000), log: join(directory, "worker.log") },
+      "fixture",
+      "fixture-image",
+      {},
+    );
+    await worker.ready();
+    pid = Number(readFileSync(pidFile, "utf8"));
+    await assert.rejects(worker.stop(), /^Error: Command could not be started\.$/);
+    assert.equal(readFileSync(stoppedFile, "utf8"), "stopped");
+    assert.throws(() => process.kill(pid!, 0), { code: "ESRCH" });
+  },
+);

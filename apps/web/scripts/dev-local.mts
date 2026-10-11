@@ -168,7 +168,12 @@ async function run(): Promise<void> {
     processes.push(api);
     await waitForPersistentApi(api, port, signal);
     signal.throwIfAborted();
-    processes.push(startProcess("pnpm", ["--filter", "web", "dev"], repoRoot, env));
+    processes.push(
+      startProcess("pnpm", ["--filter", "web", "dev"], repoRoot, {
+        ...env,
+        VITE_API_PROXY_TARGET: `http://127.0.0.1:${port}`,
+      }),
+    );
     const first = await Promise.race([
       ...processes.map(({ completion }) => completion),
       new Promise<undefined>((resolveAbort) =>

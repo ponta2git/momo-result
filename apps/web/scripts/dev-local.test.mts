@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { resolveDevEnvironment, waitForPersistentApi } from "./dev-local.mts";
+import { findFreePort } from "./e2e/runtime.mts";
 
 function repos(t: TestContext) {
   const parent = mkdtempSync(join(tmpdir(), "momo-dev-environment-"));
@@ -106,3 +107,51 @@ test("help and invalid CLI arguments exit before loading environment or starting
     },
   );
 });
+
+test(
+  "development Web targets the API started on the selected HTTP_PORT",
+  { skip: process.platform === "win32", timeout: 10_000 },
+  async (t) => {
+    const directory = mkdtempSync(join(tmpdir(), "momo-dev-processes-"));
+    const port = await findFreePort();
+    const reached = join(directory, "web-reached-api");
+    try {
+      writeFileSync(
+        join(directory, "sbt"),
+        `#!${process.execPath}
+require("node:http").createServer((_request, response) => {
+  response.end(JSON.stringify({ database: "ok", fixture: "owned-api" }));
+}).listen(Number(process.env.HTTP_PORT), "127.0.0.1");
+`,
+        { mode: 0o700 },
+      );
+      writeFileSync(
+        join(directory, "pnpm"),
+        `#!${process.execPath}
+const expected = "http://127.0.0.1:" + process.env.HTTP_PORT;
+if (process.env.VITE_API_PROXY_TARGET !== expected) process.exit(7);
+fetch(process.env.VITE_API_PROXY_TARGET + "/healthz/details")
+  .then(response => response.json())
+  .then(health => {
+    if (health.fixture !== "owned-api") process.exit(8);
+    require("node:fs").writeFileSync(${JSON.stringify(reached)}, "connected");
+  });
+`,
+        { mode: 0o700 },
+      );
+      const script = fileURLToPath(new URL("./dev-local.mts", import.meta.url));
+      await promisify(execFile)(process.execPath, [script], {
+        signal: t.signal,
+        env: {
+          PATH: `${directory}:${process.env["PATH"] ?? ""}`,
+          DATABASE_URL: "postgres://fixture-only",
+          HTTP_PORT: String(port),
+          VITE_API_PROXY_TARGET: "http://unused.invalid:1",
+        },
+      });
+      assert.equal(readFileSync(reached, "utf8"), "connected");
+    } finally {
+      rmSync(directory, { force: true, recursive: true });
+    }
+  },
+);

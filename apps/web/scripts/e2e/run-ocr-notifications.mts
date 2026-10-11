@@ -135,7 +135,7 @@ async function run() {
   );
   const [recorderReady] = await settle([
     waitForJson(join(recorderDir, "summit-ready.json"), recorder),
-    waitForApi(api, `${apiOrigin}/healthz/details`, checkpoint),
+    waitForApi(api, `${apiOrigin}/healthz/details`, interruption),
     until(
       async () => (await fetch(webOrigin, { signal: AbortSignal.timeout(2_000) })).ok,
       web,

@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { createServer } from "node:net";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
@@ -209,15 +210,11 @@ export function startApi({
 
 export type ApiProcess = ReturnType<typeof startApi>;
 
-export async function waitForApi(
-  apiProcess: ApiProcess,
-  url: string,
-  checkpoint: () => void = () => {},
-) {
+export async function waitForApi(apiProcess: ApiProcess, url: string, signal: AbortSignal) {
   const deadline = Date.now() + API_START_TIMEOUT_MS;
 
   while (Date.now() < deadline) {
-    checkpoint();
+    signal.throwIfAborted();
     if (apiProcess.e2eState.error) {
       throw new Error("API process could not start.", { cause: apiProcess.e2eState.error });
     }
@@ -228,16 +225,27 @@ export async function waitForApi(
     }
 
     try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(2_000) });
-      const body = await response.text();
-      if (response.ok && body.includes('"database":"ok"') && body.includes('"redis":"ok"')) {
+      const response = await fetch(url, {
+        signal: AbortSignal.any([signal, AbortSignal.timeout(2_000)]),
+      });
+      const health: unknown = await response.json();
+      if (
+        response.ok &&
+        health !== null &&
+        typeof health === "object" &&
+        "database" in health &&
+        health.database === "ok" &&
+        "redis" in health &&
+        health.redis === "ok"
+      ) {
         return;
       }
     } catch {
       // Retry until the API has finished compiling and binding the port.
+      signal.throwIfAborted();
     }
 
-    await delay(1_000);
+    await delay(1_000, undefined, { signal });
   }
 
   throw new Error(`API did not become healthy in time.\n${apiProcess.e2eLogs.toString()}`);
@@ -287,12 +295,6 @@ export function findFreePort() {
         reject(new Error("Failed to allocate a local port."));
       });
     });
-  });
-}
-
-function delay(ms: number) {
-  return new Promise<void>((resolveDelay) => {
-    setTimeout(resolveDelay, ms);
   });
 }
 

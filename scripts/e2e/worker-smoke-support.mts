@@ -562,9 +562,12 @@ export function startWorker(
         }
       } finally {
         // --rm normally removes it; force removal also handles a failed stop.
-        await command("docker", ["rm", "--force", container]);
-        child.stop();
-        await child.done.catch(() => {});
+        try {
+          await command("docker", ["rm", "--force", container]);
+        } finally {
+          child.stop();
+          await child.done.catch(() => {});
+        }
       }
     },
   };

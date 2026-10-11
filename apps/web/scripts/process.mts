@@ -4,6 +4,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 
 const PROCESS_STOP_TIMEOUT_MS = 10_000;
+const execute = promisify(execFile);
 
 export type CommandOptions = {
   cwd?: string;
@@ -40,7 +41,7 @@ export async function stopProcessGroup(
     if (process.platform === "win32") return child.exitCode === null && child.signalCode === null;
     // macOS can report EPERM for kill(-pgid, 0) after the last live member exits.
     // Observe only the owned group; zombies have already stopped executing.
-    const { stdout } = await promisify(execFile)("ps", ["-e", "-o", "pgid=,stat="]);
+    const { stdout } = await execute("ps", ["-e", "-o", "pgid=,stat="]);
     return stdout.split("\n").some((line) => {
       const [group, state] = line.trim().split(/\s+/u);
       return Number(group) === child.pid && state && !state.startsWith("Z");
@@ -56,18 +57,22 @@ export async function stopProcessGroup(
       throw error;
     }
   };
+  const waitForStop = async (timeoutMs: number) => {
+    const deadline = Date.now() + timeoutMs;
+    while (await alive()) {
+      if (Date.now() >= deadline) return false;
+      await delay(100);
+    }
+    return true;
+  };
   // Reap the owned group, including descendants whose launcher has already exited.
   // Detached groups belong to their launcher: Playwright receives SIGINT to run its teardown.
   // Arbitrary SIGKILL of that launcher is not covered by this process-group contract.
   if (!(await alive())) return;
   await signal(initialSignal);
-  const deadline = Date.now() + PROCESS_STOP_TIMEOUT_MS;
-  while ((await alive()) && Date.now() < deadline) await delay(100);
-  if (!(await alive())) return;
+  if (await waitForStop(PROCESS_STOP_TIMEOUT_MS)) return;
   await signal("SIGKILL");
-  const killDeadline = Date.now() + 2_000;
-  while ((await alive()) && Date.now() < killDeadline) await delay(100);
-  if (await alive()) throw new Error("An owned E2E process group did not stop.");
+  if (!(await waitForStop(2_000))) throw new Error("An owned process group did not stop.");
 }
 
 export async function runCommand(

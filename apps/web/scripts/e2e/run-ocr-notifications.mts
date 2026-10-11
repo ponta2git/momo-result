@@ -31,6 +31,7 @@ import {
   stopProcessGroup,
   waitForApi,
 } from "./runtime.mts";
+import { settle } from "./settle.mts";
 
 const execute = promisify(execFile);
 const webDir = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -85,87 +86,21 @@ function checkpoint() {
 
 async function run() {
   await mkdir(controlDir);
-  const architecture = (await docker(["info", "--format", "{{.Architecture}}"])).stdout.trim();
-  const minioImages: Partial<Record<"mc" | "minio", string>> = {};
-  for (const { name, context } of await writeMinioImageContexts(runDir, architecture)) {
-    checkpoint();
-    const built = await docker(
-      ["build", "--quiet", "--label", `momo.test.run=${basename(runDir)}`, context],
-      { operation: `${name} fixture image`, phase: "build" },
-    );
-    const imageId = built.stdout.trim();
-    if (!/^sha256:[0-9a-f]{64}$/u.test(imageId))
-      throw new Error("Expected an immutable local MinIO fixture image identity.");
-    resources.images.push(imageId);
-    remember();
-    minioImages[name] = imageId;
-  }
-  const minioClientImage = minioImages.mc;
-  const minioImage = minioImages.minio;
-  if (!minioClientImage || !minioImage) throw new Error("MinIO fixture images are missing.");
-  const images = await writeImages(runDir);
-  checkpoint();
-  const postgres = await startPostgres(databaseName);
-  resources.containers.push(postgres);
-  remember();
-  checkpoint();
-  const redis = await startRedis();
-  resources.containers.push(redis);
-  remember();
-  checkpoint();
-  await applyMigrations(postgres, databaseName, interruption);
-  checkpoint();
-  const databaseUrl = `postgres://postgres:postgres@127.0.0.1:${postgres.getMappedPort(5432)}/${databaseName}`;
-  const redisUrl = `redis://127.0.0.1:${redis.getMappedPort(6379)}/0`;
-  const { GenericContainer, Wait } = await import("testcontainers");
-  const accessKey = randomBytes(16).toString("hex");
-  const secretKey = randomBytes(32).toString("hex");
-  const minio = await new GenericContainer(minioImage)
-    .withEnvironment({
-      MINIO_ROOT_USER: accessKey,
-      MINIO_ROOT_PASSWORD: secretKey,
-      MINIO_SITE_REGION: "auto",
-    })
-    .withCommand(["server", "/data", "--address", ":9000"])
-    .withExposedPorts(9000)
-    .withWaitStrategy(Wait.forHttp("/minio/health/ready", 9000))
-    .start();
-  resources.containers.push(minio);
-  remember();
-  checkpoint();
-  const bucket = "mom24-fixtures";
-  const clientEnv = join(runDir, "minio-client.env");
-  await writeEnvironment(clientEnv, {
-    MC_HOST_fixture: `http://${accessKey}:${secretKey}@127.0.0.1:9000`,
-  });
-  await docker(
-    [
-      "run",
-      "--rm",
-      "--pull=never",
-      "--network",
-      `container:${minio.getId()}`,
-      "--env-file",
-      clientEnv,
-      minioClientImage,
-      "mb",
-      `fixture/${bucket}`,
-    ],
-    { operation: "MinIO bucket creation", phase: "run" },
-  );
-  const r2 = {
-    SOURCE_IMAGE_STORAGE_MODE: "r2",
-    SOURCE_IMAGE_R2_ENDPOINT: `http://127.0.0.1:${minio.getMappedPort(9000)}`,
-    SOURCE_IMAGE_R2_BUCKET: bucket,
-    SOURCE_IMAGE_R2_ACCESS_KEY_ID: accessKey,
-    SOURCE_IMAGE_R2_SECRET_ACCESS_KEY: secretKey,
-    SOURCE_IMAGE_R2_REGION: "auto",
-  };
   const apiPort = await findFreePort();
   let webPort = await findFreePort();
   while (webPort === apiPort) webPort = await findFreePort();
   const apiOrigin = `http://127.0.0.1:${apiPort}`;
   const webOrigin = `http://127.0.0.1:${webPort}`;
+
+  const [{ postgres, databaseUrl }, redis, { minio, r2 }, images, webBuild] = await settle([
+    preparePostgres(webOrigin),
+    startOwnedContainer(startRedis),
+    prepareStorage(),
+    writeImages(runDir),
+    buildWeb(),
+  ]);
+  checkpoint();
+  const redisUrl = `redis://127.0.0.1:${redis.getMappedPort(6379)}/0`;
   const token = randomBytes(32).toString("hex");
   const recorder = startProcess("node", ["scripts/dev/resultNotificationRecorder.ts"], summitDir, {
     TEST_DATABASE_URL: databaseUrl,
@@ -174,8 +109,6 @@ async function run() {
     RESULT_NOTIFICATION_OPERATIONS_TOKEN: randomBytes(32).toString("hex"),
     RESULT_NOTIFICATION_WEB_ORIGIN: webOrigin,
   });
-  const recorderReady = await waitForJson(join(recorderDir, "summit-ready.json"), recorder);
-  await verifyAnalysisNotificationContract(databaseUrl, webOrigin);
   const api = startApi({
     apiPort,
     databaseUrl,
@@ -185,17 +118,6 @@ async function run() {
   });
   resources.processes.push(api);
   remember();
-  checkpoint();
-  await waitForApi(api, `${apiOrigin}/healthz/details`, checkpoint);
-  await runCommand("pnpm", ["build"], {
-    cwd: webDir,
-    env: childEnvironment({}),
-    label: "Web build",
-    signal: interruption,
-  });
-  const webBuild = join(runDir, "web-dist");
-  await cp(join(webDir, "dist"), webBuild, { recursive: true, force: false, errorOnExist: true });
-  checkpoint();
   const web = startProcess(
     "pnpm",
     [
@@ -211,11 +133,16 @@ async function run() {
     webDir,
     { VITE_API_PROXY_TARGET: apiOrigin },
   );
-  await until(
-    async () => (await fetch(webOrigin, { signal: AbortSignal.timeout(2_000) })).ok,
-    web,
-    "built Web",
-  );
+  const [recorderReady] = await settle([
+    waitForJson(join(recorderDir, "summit-ready.json"), recorder),
+    waitForApi(api, `${apiOrigin}/healthz/details`, checkpoint),
+    until(
+      async () => (await fetch(webOrigin, { signal: AbortSignal.timeout(2_000) })).ok,
+      web,
+      "built Web",
+    ),
+  ]);
+  checkpoint();
 
   const workerEnv = join(runDir, "worker.env");
   const containerHost = process.platform === "linux" ? "127.0.0.1" : "host.docker.internal";
@@ -318,6 +245,107 @@ async function run() {
   }
 }
 
+async function startOwnedContainer(start: () => Promise<StartedTestContainer>) {
+  checkpoint();
+  const container = await start();
+  resources.containers.push(container);
+  remember();
+  checkpoint();
+  return container;
+}
+
+async function preparePostgres(webOrigin: string) {
+  const postgres = await startOwnedContainer(() => startPostgres(databaseName));
+  await applyMigrations(postgres, databaseName, interruption);
+  checkpoint();
+  const databaseUrl = `postgres://postgres:postgres@127.0.0.1:${postgres.getMappedPort(5432)}/${databaseName}`;
+  // This fixture temporarily changes shared member names. Finish it before the
+  // API or recorder can read that data; storage and Web compilation are independent.
+  await verifyAnalysisNotificationContract(databaseUrl, webOrigin);
+  return { postgres, databaseUrl };
+}
+
+async function prepareStorage() {
+  checkpoint();
+  const architecture = (await docker(["info", "--format", "{{.Architecture}}"])).stdout.trim();
+  const minioImages: Partial<Record<"mc" | "minio", string>> = {};
+  const contexts = await writeMinioImageContexts(runDir, architecture);
+  await settle(
+    contexts.map(async ({ name, context }) => {
+      checkpoint();
+      const built = await docker(
+        ["build", "--quiet", "--label", `momo.test.run=${basename(runDir)}`, context],
+        { operation: `${name} fixture image`, phase: "build" },
+      );
+      const imageId = built.stdout.trim();
+      if (!/^sha256:[0-9a-f]{64}$/u.test(imageId))
+        throw new Error("Expected an immutable local MinIO fixture image identity.");
+      resources.images.push(imageId);
+      remember();
+      minioImages[name] = imageId;
+    }),
+  );
+  const minioClientImage = minioImages.mc;
+  const minioImage = minioImages.minio;
+  if (!minioClientImage || !minioImage) throw new Error("MinIO fixture images are missing.");
+  const { GenericContainer, Wait } = await import("testcontainers");
+  const accessKey = randomBytes(16).toString("hex");
+  const secretKey = randomBytes(32).toString("hex");
+  const minio = await startOwnedContainer(() =>
+    new GenericContainer(minioImage)
+      .withEnvironment({
+        MINIO_ROOT_USER: accessKey,
+        MINIO_ROOT_PASSWORD: secretKey,
+        MINIO_SITE_REGION: "auto",
+      })
+      .withCommand(["server", "/data", "--address", ":9000"])
+      .withExposedPorts(9000)
+      .withWaitStrategy(Wait.forHttp("/minio/health/ready", 9000))
+      .start(),
+  );
+  const bucket = "mom24-fixtures";
+  const clientEnv = join(runDir, "minio-client.env");
+  await writeEnvironment(clientEnv, {
+    MC_HOST_fixture: `http://${accessKey}:${secretKey}@127.0.0.1:9000`,
+  });
+  await docker(
+    [
+      "run",
+      "--rm",
+      "--pull=never",
+      "--network",
+      `container:${minio.getId()}`,
+      "--env-file",
+      clientEnv,
+      minioClientImage,
+      "mb",
+      `fixture/${bucket}`,
+    ],
+    { operation: "MinIO bucket creation", phase: "run" },
+  );
+  const r2 = {
+    SOURCE_IMAGE_STORAGE_MODE: "r2",
+    SOURCE_IMAGE_R2_ENDPOINT: `http://127.0.0.1:${minio.getMappedPort(9000)}`,
+    SOURCE_IMAGE_R2_BUCKET: bucket,
+    SOURCE_IMAGE_R2_ACCESS_KEY_ID: accessKey,
+    SOURCE_IMAGE_R2_SECRET_ACCESS_KEY: secretKey,
+    SOURCE_IMAGE_R2_REGION: "auto",
+  };
+  return { minio, r2 };
+}
+
+async function buildWeb() {
+  await runCommand("pnpm", ["build"], {
+    cwd: webDir,
+    env: childEnvironment({}),
+    label: "Web build",
+    signal: interruption,
+  });
+  const webBuild = join(runDir, "web-dist");
+  await cp(join(webDir, "dist"), webBuild, { recursive: true, force: false, errorOnExist: true });
+  return webBuild;
+}
+
 async function verifyAnalysisNotificationContract(databaseUrl: string, webOrigin: string) {
   const directory = join(runDir, "analysis-contract");
   await mkdir(directory);
@@ -382,6 +410,7 @@ async function verifyAnalysisNotificationContract(databaseUrl: string, webOrigin
 }
 
 function startProcess(command: string, args: string[], cwd: string, additions: NodeJS.ProcessEnv) {
+  checkpoint();
   const child = Object.assign(
     spawn(command, args, {
       cwd,
@@ -391,9 +420,6 @@ function startProcess(command: string, args: string[], cwd: string, additions: N
     }),
     { e2eFailed: false, e2eOutput: "" },
   );
-  resources.processes.push(child);
-  remember();
-  checkpoint();
   // Keep errors attributable without echoing connection values or notification payloads.
   child.on("error", () => {
     child.e2eFailed = true;
@@ -404,6 +430,8 @@ function startProcess(command: string, args: string[], cwd: string, additions: N
   };
   child.stderr.on("data", capture);
   child.stdout.on("data", capture);
+  resources.processes.push(child);
+  remember();
   return child;
 }
 async function waitForJson(

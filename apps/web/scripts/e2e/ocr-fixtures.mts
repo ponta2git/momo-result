@@ -3,6 +3,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
 
+import { settle } from "./settle.mts";
+
 export const screens = ["total_assets", "revenue", "incident_log"] as const;
 
 // Same releases as the former registry images; official release assets remain available.
@@ -36,33 +38,33 @@ export async function writeMinioImageContexts(directory: string, dockerArchitect
   };
   const architecture = architectures[dockerArchitecture];
   if (!architecture) throw new Error("Unsupported isolated MinIO Docker architecture.");
-  const contexts = [];
-  for (const { name, release, sha256 } of minioReleases) {
-    let bytes;
-    try {
-      const response = await fetch(
-        `https://github.com/minio/${name}/releases/download/${release}/${name}.linux-${architecture}.${release}`,
-        { signal: AbortSignal.timeout(120_000) },
+  return settle(
+    minioReleases.map(async ({ name, release, sha256 }) => {
+      let bytes;
+      try {
+        const response = await fetch(
+          `https://github.com/minio/${name}/releases/download/${release}/${name}.linux-${architecture}.${release}`,
+          { signal: AbortSignal.timeout(120_000) },
+        );
+        if (!response.ok) throw new Error("Download rejected.");
+        bytes = Buffer.from(await response.arrayBuffer());
+      } catch {
+        throw new Error(`Owned E2E ${name} release download failed.`);
+      }
+      if (createHash("sha256").update(bytes).digest("hex") !== sha256[architecture])
+        throw new Error(`Owned E2E ${name} release checksum mismatch.`);
+      const context = join(directory, `${name}-image`);
+      await mkdir(context);
+      await writeFile(join(context, name), bytes, { flag: "wx", mode: 0o600 });
+      // These static binaries only communicate over the isolated HTTP network; no shell or CA bundle.
+      await writeFile(
+        join(context, "Dockerfile"),
+        `FROM scratch\nCOPY --chmod=0755 ${name} /usr/bin/${name}\nENTRYPOINT ["/usr/bin/${name}"]\n`,
+        { flag: "wx", mode: 0o600 },
       );
-      if (!response.ok) throw new Error("Download rejected.");
-      bytes = Buffer.from(await response.arrayBuffer());
-    } catch {
-      throw new Error(`Owned E2E ${name} release download failed.`);
-    }
-    if (createHash("sha256").update(bytes).digest("hex") !== sha256[architecture])
-      throw new Error(`Owned E2E ${name} release checksum mismatch.`);
-    const context = join(directory, `${name}-image`);
-    await mkdir(context);
-    await writeFile(join(context, name), bytes, { flag: "wx", mode: 0o600 });
-    // These static binaries only communicate over the isolated HTTP network; no shell or CA bundle.
-    await writeFile(
-      join(context, "Dockerfile"),
-      `FROM scratch\nCOPY --chmod=0755 ${name} /usr/bin/${name}\nENTRYPOINT ["/usr/bin/${name}"]\n`,
-      { flag: "wx", mode: 0o600 },
-    );
-    contexts.push({ name, context });
-  }
-  return contexts;
+      return { name, context };
+    }),
+  );
 }
 
 // Child-process errors can contain credentials in command/output/cause fields. Expose only

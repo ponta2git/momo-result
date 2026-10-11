@@ -1,7 +1,17 @@
-SELECT setting.enabled, setting.generation::text AS generation,
+-- This statement runs after the settings gate. The completed requests, rather than the
+-- job's representative trigger, identify the user changes fulfilled by this attempt.
+WITH notification_intent AS MATERIALIZED (
+  SELECT EXISTS (
+    SELECT 1 FROM series_analysis_job_requests
+    WHERE assigned_attempt_id = $11 AND assigned_job_id = $3 AND game_title_id = $1
+      AND input_revision <= $5 AND status = 'fulfilled' AND trigger = 'match_mutation'
+  ) AS has_match_mutation
+)
+SELECT setting.enabled, setting.generation::text AS generation, intent.has_match_mutation,
   to_char(job.finished_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS occurred_at,
   CASE WHEN octet_length(frozen.body::text) <= $7 THEN frozen.body END AS body
 FROM discord_notification_settings setting
+CROSS JOIN notification_intent intent
 LEFT JOIN series_analysis_jobs job ON job.id = $3 AND job.status = 'succeeded'
 LEFT JOIN series_analysis_title_states state ON state.game_title_id = $1
 LEFT JOIN game_titles title ON title.id = $1
@@ -60,7 +70,7 @@ LEFT JOIN LATERAL (
       'players', items, 'ginjiTotal', ginji_total, 'note', note
     ) ORDER BY played_at, held_event_id, match_no_in_event, id) FROM match_data WHERE note_valid), '[]'::jsonb)
   ) AS body
-  WHERE setting.enabled AND job.finished_at IS NOT NULL
+  WHERE intent.has_match_mutation AND setting.enabled AND job.finished_at IS NOT NULL
     AND state.current_artifact_id = $4 AND state.input_revision = $5
 ) frozen ON true
 WHERE setting.kind = 'analysis_completed'

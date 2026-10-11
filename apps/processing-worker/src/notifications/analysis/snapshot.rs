@@ -50,9 +50,13 @@ pub(super) async fn prepare(
                 (&MAXIMUM_NAME_CODE_POINTS, Type::INT4),
                 (&MAXIMUM_DISPLAY_NAME_CODE_POINTS, Type::INT4),
                 (&MAXIMUM_NOTE_CODE_POINTS, Type::INT4),
+                (&source.attempt_id, Type::TEXT),
             ],
         )
         .await?;
+    if !row.try_get::<_, bool>("has_match_mutation")? {
+        return Ok(Err(SkipReason::NoMatchMutation));
+    }
     if !row.try_get::<_, bool>("enabled")? {
         return Ok(Err(SkipReason::SettingOff));
     }

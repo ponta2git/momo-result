@@ -144,14 +144,13 @@ impl Comparison {
             log_skip(KIND, source.job_id, SkipReason::InvalidSnapshot);
             return Ok(None);
         }
-        super::preparation::recoverable(transaction, KIND, source.job_id, deadline, async {
-            // The final fenced transaction has fulfilled precisely this attempt's requests.
-            // A job's representative trigger can hide coalesced user changes.
-            if !intent::has_match_mutation(transaction, source, "fulfilled").await? {
-                return Ok(Err(SkipReason::NoMatchMutation));
-            }
-            snapshot::prepare(transaction, source, self).await
-        })
+        super::preparation::recoverable(
+            transaction,
+            KIND,
+            source.job_id,
+            deadline,
+            snapshot::prepare(transaction, source, self),
+        )
         .await
     }
 }

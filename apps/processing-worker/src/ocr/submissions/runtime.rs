@@ -9,7 +9,7 @@ use crate::{notifications::NotificationSink, postgres};
 use std::time::Duration;
 use thiserror::Error;
 use tokio::{sync::watch, time};
-use tokio_postgres::Client;
+use tokio_postgres::{Client, types::Type};
 
 pub(crate) struct Config {
     pub(crate) database_url: String,
@@ -88,7 +88,7 @@ async fn connect(config: &Config) -> Result<Session, RuntimeError> {
         .await
         .map_err(|error| RuntimeError::Dependency(error.kind()))?;
     listener.verify(&database).await?;
-    time::timeout(config.finalization_timeout, database.query("SELECT s.status, s.match_draft_id, s.admission_deadline, s.finished_at, m.screen_type, m.status, m.failure_code, m.job_id FROM ocr_submissions s LEFT JOIN ocr_submission_members m ON m.submission_id = s.id LIMIT 0", &[])).await
+    time::timeout(config.finalization_timeout, database.query_typed("SELECT s.status, s.match_draft_id, s.admission_deadline, s.finished_at, m.screen_type, m.status, m.failure_code, m.job_id FROM ocr_submissions s LEFT JOIN ocr_submission_members m ON m.submission_id = s.id LIMIT 0", &[])).await
         .map_err(|_elapsed| RuntimeError::Dependency("schema_probe_timeout"))?.map_err(|_error| RuntimeError::Dependency("schema_contract"))?;
     Ok(Session {
         listener,
@@ -203,7 +203,7 @@ async fn sweep(
     if cursor.upper.is_none() {
         cursor.upper = time::timeout(
             timeout,
-            database.query_one(
+            database.query_typed_one(
                 "SELECT max(id) FROM ocr_submissions WHERE status = 'open'",
                 &[],
             ),
@@ -221,7 +221,7 @@ async fn sweep(
         if *shutdown.borrow() {
             return Ok(());
         }
-        let rows = time::timeout(timeout, database.query("SELECT id FROM ocr_submissions WHERE status = 'open' AND id > $1 AND id <= $2 ORDER BY id LIMIT $3", &[&cursor.after, &upper, &PAGE_SIZE])).await
+        let rows = time::timeout(timeout, database.query_typed("SELECT id FROM ocr_submissions WHERE status = 'open' AND id > $1 AND id <= $2 ORDER BY id LIMIT $3", &[(&cursor.after, Type::TEXT), (&upper, Type::TEXT), (&PAGE_SIZE, Type::INT8)])).await
             .map_err(|_elapsed| RuntimeError::Dependency("scan_timeout"))?.map_err(|_error| RuntimeError::Dependency("scan"))?;
         if rows.is_empty() {
             *cursor = ScanCursor::default();
@@ -261,7 +261,7 @@ async fn sweep(
 }
 
 async fn next_delay(database: &Client, timeout: Duration) -> Result<Duration, RuntimeError> {
-    let row = time::timeout(timeout, database.query_one("SELECT EXTRACT(EPOCH FROM (min(s.admission_deadline) - clock_timestamp()))::double precision \
+    let row = time::timeout(timeout, database.query_typed_one("SELECT EXTRACT(EPOCH FROM (min(s.admission_deadline) - clock_timestamp()))::double precision \
         FROM ocr_submissions s WHERE s.status = 'open' AND s.admission_deadline > clock_timestamp() \
         AND EXISTS (SELECT 1 FROM ocr_submission_members m WHERE m.submission_id = s.id AND m.status = 'pending')", &[])).await
         .map_err(|_elapsed| RuntimeError::Dependency("deadline_read_timeout"))?.map_err(|_error| RuntimeError::Dependency("deadline_read"))?;

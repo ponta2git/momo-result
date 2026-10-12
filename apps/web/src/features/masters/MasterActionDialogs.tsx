@@ -52,7 +52,7 @@ export function MasterEditDialog({
       }
     >
       <form
-        className="grid gap-4"
+        className="grid gap-6"
         onSubmit={async (event) => {
           event.preventDefault();
           if (submitting.current) return;
@@ -76,27 +76,29 @@ export function MasterEditDialog({
           }
         }}
       >
-        <TextField
-          disabled={pending}
-          defaultValue={initialName}
-          error={error}
-          label={`${label}名`}
-          name="name"
-          required
-        />
-        {showLayoutFamily ? (
-          <SelectField
+        <div className="grid gap-4">
+          <TextField
             disabled={pending}
-            label="読み取り方式"
-            description="作品ごとの画面構造に合わせて、読み取り方を切り替えます。"
-            defaultValue={initialLayoutFamily ?? layoutFamilies[0]}
-            name="layoutFamily"
-            options={layoutFamilies.map((family) => ({
-              label: layoutFamilyLabels[family],
-              value: family,
-            }))}
+            defaultValue={initialName}
+            error={error}
+            label={`${label}名`}
+            name="name"
+            required
           />
-        ) : null}
+          {showLayoutFamily ? (
+            <SelectField
+              disabled={pending}
+              label="読み取り方式"
+              description="作品ごとの画面構造に合わせて、読み取り方を切り替えます。"
+              defaultValue={initialLayoutFamily ?? layoutFamilies[0]}
+              name="layoutFamily"
+              options={layoutFamilies.map((family) => ({
+                label: layoutFamilyLabels[family],
+                value: family,
+              }))}
+            />
+          ) : null}
+        </div>
         <DialogFooter>
           <Button disabled={pending} variant="secondary" onClick={() => setOpen(false)}>
             キャンセル

@@ -5,8 +5,8 @@ import java.time.Instant
 import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
-import momo.api.domain.LoginAccount
 import momo.api.domain.ids.{AccountId, UserId}
+import momo.api.domain.{AccountRole, LoginAccount}
 import momo.api.errors.AppError
 import momo.api.repositories.{
   CreateLoginAccountData,
@@ -43,39 +43,58 @@ final class InMemoryLoginAccountsRepositorySpec extends MomoCatsEffectSuite:
       )
       assertEquals(listed.map(_.id), List(primaryId))
 
-  test("administration preserves the last enabled administrator"):
-    val admin = loginAccount(primaryId, primaryDiscordId, loginEnabled = true, isAdmin = true)
-    val disable = UpdateLoginAccountData(
-      displayName = None,
-      playerMemberId = None,
-      loginEnabled = Some(false),
-      isAdmin = None,
-      updatedAt = now.plusSeconds(60),
-    )
-    for
-      accounts <- InMemoryLoginAccountsRepository.create[IO](List(admin))
-      sessions <- InMemoryAppSessionsRepository.create[IO]
-      administration = InMemoryLoginAccountAdministrationRepository(accounts, sessions)
-      updated <- administration.updateAndRevokeSessionsWhenDisabled(primaryId, disable)
-      found <- accounts.find(primaryId)
-    yield
-      assertEquals(updated, LoginAccountAdministrationUpdateResult.LastEnabledAdmin)
-      assertEquals(found.map(_.loginEnabled), Some(true))
-      assertEquals(found.map(_.isAdmin), Some(true))
+  List(
+    ("disabling", Some(false), None),
+    ("demotion to operator", None, Some(AccountRole.Operator)),
+    ("demotion to user", None, Some(AccountRole.User)),
+  ).foreach { (label, loginEnabled, role) =>
+    test(s"administration preserves the last enabled administrator when $label"):
+      val admin =
+        loginAccount(primaryId, primaryDiscordId, loginEnabled = true, role = AccountRole.Admin)
+      val operator = loginAccount(
+        AccountId.unsafeFromString("account-operator"),
+        UserId.unsafeFromString("223456789012345678"),
+        loginEnabled = true,
+        role = AccountRole.Operator,
+      )
+      val disabledAdmin = loginAccount(
+        AccountId.unsafeFromString("account-disabled"),
+        UserId.unsafeFromString("323456789012345678"),
+        loginEnabled = false,
+        role = AccountRole.Admin,
+      )
+      val change = UpdateLoginAccountData(
+        displayName = Some("rejected change"),
+        playerMemberId = None,
+        loginEnabled = loginEnabled,
+        role = role,
+        updatedAt = now.plusSeconds(60),
+      )
+      for
+        accounts <- InMemoryLoginAccountsRepository.create[IO](List(admin, operator, disabledAdmin))
+        sessions <- InMemoryAppSessionsRepository.create[IO]
+        administration = InMemoryLoginAccountAdministrationRepository(accounts, sessions)
+        updated <- administration.updateAndRevokeSessionsWhenDisabled(primaryId, change)
+        found <- accounts.find(primaryId)
+      yield
+        assertEquals(updated, LoginAccountAdministrationUpdateResult.LastEnabledAdmin)
+        assertEquals(found, Some(admin))
+  }
 
   test("administration allows disabling an administrator when another remains"):
-    val first = loginAccount(primaryId, primaryDiscordId, loginEnabled = true, isAdmin = true)
+    val first =
+      loginAccount(primaryId, primaryDiscordId, loginEnabled = true, role = AccountRole.Admin)
     val second = loginAccount(
       AccountId.unsafeFromString("account-second"),
       UserId.unsafeFromString("223456789012345678"),
       loginEnabled = true,
-      isAdmin = true,
+      role = AccountRole.Admin,
     )
     val disable = UpdateLoginAccountData(
       displayName = None,
       playerMemberId = None,
       loginEnabled = Some(false),
-      isAdmin = None,
+      role = None,
       updatedAt = now.plusSeconds(60),
     )
     for
@@ -101,7 +120,7 @@ final class InMemoryLoginAccountsRepositorySpec extends MomoCatsEffectSuite:
       displayName = id.value,
       playerMemberId = None,
       loginEnabled = true,
-      isAdmin = false,
+      role = AccountRole.User,
       createdAt = now,
       updatedAt = now,
     )
@@ -110,14 +129,14 @@ final class InMemoryLoginAccountsRepositorySpec extends MomoCatsEffectSuite:
       id: AccountId,
       discordUserId: UserId,
       loginEnabled: Boolean,
-      isAdmin: Boolean,
+      role: AccountRole,
   ): LoginAccount = LoginAccount(
     id = id,
     discordUserId = discordUserId,
     displayName = id.value,
     playerMemberId = None,
     loginEnabled = loginEnabled,
-    isAdmin = isAdmin,
+    role = role,
     createdAt = now,
     updatedAt = now,
   )

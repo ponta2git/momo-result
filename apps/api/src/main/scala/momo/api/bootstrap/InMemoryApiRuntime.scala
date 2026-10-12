@@ -131,7 +131,7 @@ private[bootstrap] object InMemoryApiRuntime:
             identity.displayName,
             Some(identity.memberId),
             loginEnabled = true,
-            isAdmin = identity.isAdmin,
+            role = identity.role,
             createdAt = java.time.Instant.EPOCH,
             updatedAt = java.time.Instant.EPOCH,
           )

@@ -186,7 +186,7 @@ function AliasEditDialog({
       }
     >
       <form
-        className="grid gap-4"
+        className="grid gap-6"
         onSubmit={async (event) => {
           event.preventDefault();
           if (submitting.current) return;
@@ -208,24 +208,26 @@ function AliasEditDialog({
           }
         }}
       >
-        <SelectField
-          disabled={pending}
-          defaultValue={alias.memberId}
-          label="プレーヤー"
-          name="memberId"
-          options={canonicalResultMembers.map((member) => ({
-            label: member.displayName,
-            value: member.memberId,
-          }))}
-        />
-        <TextField
-          disabled={pending}
-          defaultValue={alias.alias}
-          error={error}
-          label="別名"
-          name="alias"
-          required
-        />
+        <div className="grid gap-4">
+          <SelectField
+            disabled={pending}
+            defaultValue={alias.memberId}
+            label="プレーヤー"
+            name="memberId"
+            options={canonicalResultMembers.map((member) => ({
+              label: member.displayName,
+              value: member.memberId,
+            }))}
+          />
+          <TextField
+            disabled={pending}
+            defaultValue={alias.alias}
+            error={error}
+            label="別名"
+            name="alias"
+            required
+          />
+        </div>
         <DialogFooter>
           <Button disabled={pending} variant="secondary" onClick={() => setOpen(false)}>
             キャンセル

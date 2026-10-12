@@ -1,14 +1,18 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { AccountSettingsPanel } from "@/features/masters/accounts/AccountSettingsPanel";
 import { useAccountSettingsModel } from "@/features/masters/accounts/useAccountSettingsModel";
-import type { CreateLoginAccountRequest } from "@/shared/api/adminAccounts";
+import type {
+  CreateLoginAccountRequest,
+  UpdateLoginAccountRequest,
+} from "@/shared/api/adminAccounts";
 import { adminAccountKeys } from "@/shared/api/queryKeys";
+import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { mswState } from "@/test/msw/fixtures";
 import { setupMsw } from "@/test/msw/lifecycle";
@@ -36,15 +40,20 @@ function renderPage() {
 
 describe("AccountSettingsPanel", () => {
   beforeEach(() => {
+    setDevUser();
     queryClient = createTestQueryClient();
     user = userEvent.setup();
   });
 
-  it("creates an account and shows its exact identity and permissions", async () => {
+  it.each([
+    ["user", "一般"],
+    ["operator", "運用担当"],
+    ["admin", "管理者"],
+  ])("creates a %s account with its exact identity and permissions", async (role, label) => {
     renderPage();
 
     expect(
-      await screen.findByRole("table", { name: "登録アカウントとログイン・管理者権限" }),
+      await screen.findByRole("table", { name: "登録アカウントとログイン・ロール" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("rowheader", { name: "ぽんた" })).toBeInTheDocument();
     const createTrigger = screen.getByRole("button", { name: "アカウントを追加" });
@@ -56,23 +65,26 @@ describe("AccountSettingsPanel", () => {
 
     const permissions = within(dialog).getByRole("group", { name: "権限" });
     const loginEnabled = within(permissions).getByRole("checkbox", { name: "ログイン許可" });
-    const isAdmin = within(permissions).getByRole("checkbox", { name: "管理者" });
+    const roleSelect = within(permissions).getByRole("combobox", { name: /ロール/u });
     expect(loginEnabled).toBeChecked();
-    expect(isAdmin).not.toBeChecked();
+    expect(roleSelect).toHaveTextContent("一般");
 
     await user.type(
       within(dialog).getByPlaceholderText("例: 523484457705930752"),
       "999000111222333444",
     );
     await user.type(within(dialog).getByPlaceholderText("例: 代理入力者"), "監査ユーザー");
-    await user.click(isAdmin);
+    await selectOption(user, roleSelect, role);
     await user.click(within(dialog).getByRole("button", { name: "追加" }));
 
     const createdRow = (await screen.findByText("監査ユーザー")).closest("tr");
     expect(createdRow).not.toBeNull();
     expect(within(createdRow!).getByText("999000111222333444")).toBeInTheDocument();
-    expect(within(createdRow!).getByText("管理者")).toBeInTheDocument();
+    expect(within(createdRow!).getByText(label)).toBeInTheDocument();
     expect(within(createdRow!).getByText("ログイン許可")).toBeInTheDocument();
+    expect(
+      mswState.loginAccounts.find((account) => account.discordUserId === "999000111222333444"),
+    ).toMatchObject({ role, loginEnabled: true });
     await waitFor(() =>
       expect(screen.queryByRole("dialog", { name: "アカウントを追加" })).not.toBeInTheDocument(),
     );
@@ -108,12 +120,12 @@ describe("AccountSettingsPanel", () => {
     const displayName = within(dialog).getByRole("textbox", { name: /表示名/u });
     const player = within(dialog).getByRole("combobox", { name: "紐づくプレーヤー" });
     const loginEnabled = within(dialog).getByRole("checkbox", { name: "ログイン許可" });
-    const isAdmin = within(dialog).getByRole("checkbox", { name: "管理者" });
+    const roleSelect = within(dialog).getByRole("combobox", { name: /ロール/u });
     await user.type(discordId, "999000111222333444");
     await user.type(displayName, "再送ユーザー");
     await selectOption(user, player, "member_ponta");
     await user.click(loginEnabled);
-    await user.click(isAdmin);
+    await selectOption(user, roleSelect, "operator");
     await user.click(within(dialog).getByRole("button", { name: "追加" }));
     try {
       const submit = await within(dialog).findByRole("button", { name: "追加中" });
@@ -132,7 +144,7 @@ describe("AccountSettingsPanel", () => {
     expect(displayName).toHaveValue("再送ユーザー");
     expect(player).toHaveTextContent("ぽんた");
     expect(loginEnabled).not.toBeChecked();
-    expect(isAdmin).toBeChecked();
+    expect(roleSelect).toHaveTextContent("運用担当");
 
     await user.click(within(dialog).getByRole("button", { name: "追加" }));
     expect(await screen.findByRole("rowheader", { name: "再送ユーザー" })).toBeVisible();
@@ -142,7 +154,7 @@ describe("AccountSettingsPanel", () => {
     expect(submissions[1]?.payload).toEqual({
       discordUserId: "999000111222333444",
       displayName: "再送ユーザー",
-      isAdmin: true,
+      role: "operator",
       loginEnabled: false,
       playerMemberId: "member_ponta",
     });
@@ -156,7 +168,7 @@ describe("AccountSettingsPanel", () => {
       within(nextDialog).getByRole("combobox", { name: "紐づくプレーヤー" }),
     ).toHaveTextContent("試合参加者に紐づけない");
     expect(within(nextDialog).getByRole("checkbox", { name: "ログイン許可" })).toBeChecked();
-    expect(within(nextDialog).getByRole("checkbox", { name: "管理者" })).not.toBeChecked();
+    expect(within(nextDialog).getByRole("combobox", { name: /ロール/u })).toHaveTextContent("一般");
     expect(within(nextDialog).queryByRole("alert")).not.toBeInTheDocument();
   });
 
@@ -165,10 +177,7 @@ describe("AccountSettingsPanel", () => {
     server.use(
       http.patch("/api/admin/login-accounts/:accountId", async ({ params, request }) => {
         idempotencyKey = request.headers.get("Idempotency-Key");
-        const body = (await request.json()) as {
-          isAdmin: boolean;
-          loginEnabled: boolean;
-        };
+        const body = (await request.json()) as UpdateLoginAccountRequest;
         const accountId = String(params["accountId"]);
         mswState.loginAccounts = mswState.loginAccounts.map((account) =>
           account.accountId === accountId
@@ -207,7 +216,7 @@ describe("AccountSettingsPanel", () => {
           : HttpResponse.json({ items: mswState.loginAccounts }),
       ),
       http.patch("/api/admin/login-accounts/account_eu", async ({ request }) => {
-        const patch = (await request.json()) as { isAdmin: boolean };
+        const patch = (await request.json()) as UpdateLoginAccountRequest;
         await response.promise;
         saved = true;
         return HttpResponse.json({ ...mswState.loginAccounts[1], ...patch });
@@ -215,9 +224,11 @@ describe("AccountSettingsPanel", () => {
     );
     renderPage();
     const row = (await screen.findByRole("rowheader", { name: "いーゆー" })).closest("tr")!;
-    await user.click(within(row).getByRole("button", { name: "管理者にする" }));
-    const dialog = screen.getByRole("alertdialog", { name: "管理者権限を付与しますか？" });
-    await user.click(within(dialog).getByRole("button", { name: "付与する" }));
+    await user.click(within(row).getByRole("button", { name: "ロール変更" }));
+    const dialog = screen.getByRole("alertdialog", { name: "ロールを変更しますか？" });
+    expect(within(dialog).getByRole("button", { name: "変更する" })).toBeDisabled();
+    await selectOption(user, within(dialog).getByRole("combobox", { name: "ロール" }), "admin");
+    await user.click(within(dialog).getByRole("button", { name: "変更する" }));
     expect(within(row).getByText("一般")).toBeInTheDocument();
     expect(within(row).queryByText("管理者")).not.toBeInTheDocument();
     expect(await within(dialog).findByRole("button", { name: "更新中…" })).toBeDisabled();
@@ -226,7 +237,50 @@ describe("AccountSettingsPanel", () => {
     expect(await screen.findByText("最新のアカウント情報を取得できません")).toBeInTheDocument();
     expect(within(row).getByText("管理者")).toBeInTheDocument();
     expect(within(row).queryByText("一般")).not.toBeInTheDocument();
-    expect(await within(row).findByRole("button", { name: "管理者解除" })).toBeEnabled();
+    expect(await within(row).findByRole("button", { name: "ロール変更" })).toBeEnabled();
+  });
+
+  it("retains the selected role after a last-admin rejection without changing the saved role", async () => {
+    const submissions: UpdateLoginAccountRequest[] = [];
+    server.use(
+      http.patch("/api/admin/login-accounts/account_ponta", async ({ request }) => {
+        submissions.push((await request.json()) as UpdateLoginAccountRequest);
+        return HttpResponse.json(
+          {
+            code: "LAST_ENABLED_ADMIN_REQUIRED",
+            detail: "At least one enabled administrator account is required.",
+            status: 409,
+            title: "Conflict",
+            type: "about:blank",
+          },
+          { status: 409 },
+        );
+      }),
+    );
+    renderPage();
+    const row = (await screen.findByRole("rowheader", { name: "ぽんた" })).closest("tr")!;
+    await user.click(within(row).getByRole("button", { name: "ロール変更" }));
+    const dialog = screen.getByRole("alertdialog", { name: "ロールを変更しますか？" });
+    const roleSelect = within(dialog).getByRole("combobox", { name: "ロール" });
+    await selectOption(user, roleSelect, "operator");
+    await user.click(within(dialog).getByRole("button", { name: "変更する" }));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "ログイン可能な管理者を1人以上残してください。",
+    );
+    expect(roleSelect).toHaveTextContent("運用担当");
+    expect(within(row).getByText("管理者")).toBeInTheDocument();
+    expect(submissions).toEqual([{ role: "operator" }]);
+    expect(
+      mswState.loginAccounts.find((account) => account.accountId === "account_ponta")?.role,
+    ).toBe("admin");
+
+    await user.click(within(dialog).getByRole("button", { name: "キャンセル" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    await user.click(within(row).getByRole("button", { name: "ロール変更" }));
+    const reopened = screen.getByRole("alertdialog", { name: "ロールを変更しますか？" });
+    expect(within(reopened).getByRole("combobox", { name: "ロール" })).toHaveTextContent("管理者");
+    expect(within(reopened).getByRole("button", { name: "変更する" })).toBeDisabled();
   });
 
   it("does not show a cached list error while refetching the account list", async () => {
@@ -252,7 +306,7 @@ describe("AccountSettingsPanel", () => {
               createdAt: "2026-01-01T00:00:00.000Z",
               discordUserId: "888000111222333444",
               displayName: "復旧ユーザー",
-              isAdmin: false,
+              role: "user",
               loginEnabled: true,
               updatedAt: "2026-01-01T00:00:00.000Z",
             },
@@ -263,11 +317,15 @@ describe("AccountSettingsPanel", () => {
 
     renderPage();
 
-    await requestStarted.promise;
-    expect(screen.queryByText("cached account error")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("アカウントを読み込み中")).toBeInTheDocument();
-
-    responseGate.resolve();
+    try {
+      await act(async () => {
+        await requestStarted.promise;
+      });
+      expect(await screen.findByLabelText("アカウントを読み込み中")).toBeInTheDocument();
+      expect(screen.queryByText("cached account error")).not.toBeInTheDocument();
+    } finally {
+      await act(async () => responseGate.resolve());
+    }
     expect(await screen.findByText("復旧ユーザー")).toBeInTheDocument();
   });
 
@@ -285,7 +343,7 @@ describe("AccountSettingsPanel", () => {
                   createdAt: "2026-01-01T00:00:00.000Z",
                   discordUserId: "888000111222333444",
                   displayName: "復旧ユーザー",
-                  isAdmin: false,
+                  role: "user",
                   loginEnabled: true,
                   updatedAt: "2026-01-01T00:00:00.000Z",
                 },
@@ -323,7 +381,7 @@ describe("AccountSettingsPanel", () => {
                   createdAt: "2026-01-01T00:00:00.000Z",
                   discordUserId: "888000111222333444",
                   displayName: "復旧ユーザー",
-                  isAdmin: false,
+                  role: "user",
                   loginEnabled: true,
                   updatedAt: "2026-01-01T00:00:00.000Z",
                 },

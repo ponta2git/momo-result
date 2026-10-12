@@ -7,17 +7,21 @@ import io.circe.{Codec, Json}
 import sttp.tapir.Schema
 
 import momo.api.domain.ids.*
-import momo.api.domain.{OcrDraft, OcrJob, OcrJobHints, PlayerAliasHint, StoredImage}
+import momo.api.domain.{AccountRole, OcrDraft, OcrJob, OcrJobHints, PlayerAliasHint, StoredImage}
+import momo.api.endpoints.AccountRoleApi.given
 import momo.api.endpoints.codec.BoundaryId
 import momo.api.errors.AppError
 
 final case class AuthMeResponse(
     accountId: String,
     displayName: String,
-    isAdmin: Boolean,
+    role: AccountRole,
     memberId: Option[String],
     csrfToken: Option[String],
 ) derives Codec.AsObject
+
+object AuthMeResponse:
+  given Schema[AuthMeResponse] = Schema.derived
 
 final case class UploadImageResponse(imageId: String, mediaType: String, sizeBytes: Long)
     derives Codec.AsObject

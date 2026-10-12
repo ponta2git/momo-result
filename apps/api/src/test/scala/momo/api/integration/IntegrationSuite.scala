@@ -6,8 +6,9 @@ import scala.concurrent.duration.DurationInt
 
 import cats.effect.IO
 import doobie.implicits.*
-import munit.{AnyFixture, CatsEffectSuite}
+import munit.AnyFixture
 
+import momo.api.MomoCatsEffectSuite
 import momo.api.testing.TestTags
 
 /**
@@ -21,9 +22,7 @@ import momo.api.testing.TestTags
  * `Unit`-returning and cannot accept an `IO`. Production code MUST NOT call `unsafeRunSync`.
  */
 // scalafix:off DisableSyntax.noUnsafeRunSync
-abstract class IntegrationSuite extends CatsEffectSuite:
-  override def munitIOTimeout = 30.seconds
-
+abstract class IntegrationSuite extends MomoCatsEffectSuite:
   override def munitTests(): Seq[munit.Test] = super.munitTests()
     .map(_.tag(TestTags.DbIntegration))
 

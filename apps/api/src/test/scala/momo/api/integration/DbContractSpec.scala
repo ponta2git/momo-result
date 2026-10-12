@@ -22,16 +22,16 @@ final class DbContractSpec extends IntegrationSuite:
 
   test("login account seeds preserve player identity and the initial administrator"):
     sql"""
-      SELECT id, player_member_id, login_enabled, is_admin
+      SELECT id, player_member_id, login_enabled, role
       FROM momo_login_accounts
-    """.query[(String, Option[String], Boolean, Boolean)].to[Set].transact(transactor).map { rows =>
+    """.query[(String, Option[String], Boolean, String)].to[Set].transact(transactor).map { rows =>
       assertEquals(
         rows,
-        Set[(String, Option[String], Boolean, Boolean)](
-          ("account_akane_mami", Some("member_akane_mami"), true, false),
-          ("account_eu", Some("member_eu"), true, false),
-          ("account_otaka", Some("member_otaka"), true, false),
-          ("account_ponta", Some("member_ponta"), true, true),
+        Set[(String, Option[String], Boolean, String)](
+          ("account_akane_mami", Some("member_akane_mami"), true, "user"),
+          ("account_eu", Some("member_eu"), true, "user"),
+          ("account_otaka", Some("member_otaka"), true, "user"),
+          ("account_ponta", Some("member_ponta"), true, "admin"),
         ),
       )
     }

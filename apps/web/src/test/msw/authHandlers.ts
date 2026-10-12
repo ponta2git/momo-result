@@ -36,7 +36,7 @@ export const authHandlers = [
       accountId: account.accountId,
       csrfToken: "dev",
       displayName: account.displayName,
-      isAdmin: account.isAdmin,
+      role: account.role,
       memberId: account.playerMemberId,
     });
   }),
@@ -51,7 +51,7 @@ export const authHandlers = [
       createdAt: now,
       discordUserId: body.discordUserId,
       displayName: body.displayName,
-      isAdmin: body.isAdmin,
+      role: body.role,
       loginEnabled: body.loginEnabled,
       updatedAt: now,
     };

@@ -11,7 +11,7 @@ describe("admin account cache contract", () => {
     const queryClient = createTestQueryClient();
     const authQueryKey = [...authMeQueryKey, "session"] as const;
     queryClient.setQueryData(adminAccountKeys.all(), { items: [] });
-    queryClient.setQueryData(authQueryKey, { accountId: "account-1", isAdmin: true });
+    queryClient.setQueryData(authQueryKey, { accountId: "account-1", role: "admin" });
 
     await invalidateAdminAccountCaches(queryClient);
 

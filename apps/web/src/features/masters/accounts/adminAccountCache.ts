@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 
 import type { LoginAccountListResponse, LoginAccountResponse } from "@/shared/api/adminAccounts";
+import type { AuthMeResponse } from "@/shared/api/auth";
 import { adminAccountKeys } from "@/shared/api/queryKeys";
 import { authMeQueryKey } from "@/shared/auth/authQueries";
 
@@ -24,4 +25,17 @@ export async function invalidateAdminAccountCaches(queryClient: QueryClient): Pr
     queryClient.invalidateQueries({ queryKey: adminAccountKeys.all() }),
     queryClient.invalidateQueries({ queryKey: authMeQueryKey }),
   ]);
+}
+
+export async function cacheSelfDemotion(queryClient: QueryClient, saved: LoginAccountResponse) {
+  await Promise.all([
+    queryClient.cancelQueries({ queryKey: adminAccountKeys.all() }),
+    queryClient.cancelQueries({ queryKey: authMeQueryKey }),
+  ]);
+  // The committed role must take effect even when a later auth read is unavailable.
+  // Keep this session's other fields, including its CSRF token, intact.
+  queryClient.setQueriesData<AuthMeResponse | null>({ queryKey: authMeQueryKey }, (current) =>
+    current?.accountId === saved.accountId ? { ...current, role: saved.role } : current,
+  );
+  queryClient.removeQueries({ queryKey: adminAccountKeys.all() });
 }

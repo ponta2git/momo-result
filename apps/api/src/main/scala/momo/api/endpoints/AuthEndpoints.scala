@@ -3,7 +3,6 @@ package momo.api.endpoints
 import sttp.model.headers.{Cookie as SttpCookie, CookieWithMeta}
 import sttp.model.{HeaderNames, StatusCode}
 import sttp.tapir.*
-import sttp.tapir.generic.auto.*
 import sttp.tapir.json.circe.*
 import sttp.tapir.model.ServerRequest
 

@@ -37,6 +37,7 @@ const problemDisplayMessages: Readonly<Record<string, string>> = {
   DEPENDENCY_FAILED: "現在処理を完了できません。少し待ってから、もう一度実行してください。",
   FORBIDDEN: "この操作を行う権限がありません。",
   INTERNAL_ERROR: "予期しないエラーが発生しました。もう一度お試しください。",
+  LAST_ENABLED_ADMIN_REQUIRED: "ログイン可能な管理者を1人以上残してください。",
   NOT_FOUND: "指定されたデータが見つかりませんでした。",
   SERVICE_UNAVAILABLE: "現在処理を完了できません。少し待ってから、もう一度実行してください。",
   TOO_MANY_REQUESTS: "操作が集中しています。少し待ってから、もう一度実行してください。",

@@ -26,8 +26,8 @@ import momo.api.auth.{
   SessionService
 }
 import momo.api.config.{AppConfig, AppEnv, AuthConfig}
-import momo.api.domain.LoginAccount
 import momo.api.domain.ids.{AccountId, MemberId, UserId}
+import momo.api.domain.{AccountRole, LoginAccount}
 import momo.api.errors.AppError
 import momo.api.http.HttpAssertions.{assertProblem, headerValue}
 import momo.api.http.modules.AuthModule
@@ -56,7 +56,7 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
     displayName = "ぽんた",
     playerMemberId = Some(MemberId.unsafeFromString("member_ponta")),
     loginEnabled = true,
-    isAdmin = true,
+    role = AccountRole.Admin,
     createdAt = now,
     updatedAt = now,
   )

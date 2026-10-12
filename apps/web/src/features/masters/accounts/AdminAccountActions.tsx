@@ -1,7 +1,12 @@
+import { useState } from "react";
+
+import { accountRoleOptions } from "@/features/masters/accounts/accountRoles";
+import type { AccountRole } from "@/features/masters/accounts/accountRoles";
 import type { LoginAccountResponse, UpdateLoginAccountRequest } from "@/shared/api/adminAccounts";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { Button } from "@/shared/ui/actions/Button";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
+import { SelectField } from "@/shared/ui/forms/SelectField";
 
 export function AdminAccountActions({
   account,
@@ -15,7 +20,8 @@ export function AdminAccountActions({
   pendingRequest?: UpdateLoginAccountRequest | undefined;
 }) {
   const loginPending = pendingRequest?.loginEnabled !== undefined;
-  const adminPending = pendingRequest?.isAdmin !== undefined;
+  const rolePending = pendingRequest?.role !== undefined;
+  const [selectedRole, setSelectedRole] = useState<AccountRole>(account.role);
 
   return (
     <div
@@ -23,65 +29,51 @@ export function AdminAccountActions({
       className="flex flex-wrap gap-2"
       role="group"
     >
-      <AccountActionConfirm
-        disabled={isPending}
+      <AlertDialog
         title={account.loginEnabled ? "ログインを停止しますか？" : "ログインを許可しますか？"}
         description={`${account.displayName} のログイン状態を変更します。変更後すぐに利用可否へ反映されます。`}
-        label={account.loginEnabled ? "ログイン停止" : "ログイン許可"}
         confirmLabel={account.loginEnabled ? "停止する" : "許可する"}
+        formatError={(error) => formatApiError(error, "アカウント設定の更新に失敗しました")}
         pending={loginPending}
+        pendingLabel="更新中…"
         tone={account.loginEnabled ? "danger" : "primary"}
+        trigger={
+          <Button disabled={isPending} size="sm" variant="quiet">
+            {account.loginEnabled ? "ログイン停止" : "ログイン許可"}
+          </Button>
+        }
         onConfirm={() => onPatch({ loginEnabled: !account.loginEnabled })}
       />
-      <AccountActionConfirm
-        disabled={isPending}
-        title={account.isAdmin ? "管理者権限を解除しますか？" : "管理者権限を付与しますか？"}
-        description={`${account.displayName} の管理者権限を変更します。設定の変更や分析の管理を行える範囲が変わります。`}
-        label={account.isAdmin ? "管理者解除" : "管理者にする"}
-        confirmLabel={account.isAdmin ? "解除する" : "付与する"}
-        pending={adminPending}
-        tone={account.isAdmin ? "danger" : "primary"}
-        onConfirm={() => onPatch({ isAdmin: !account.isAdmin })}
-      />
+      <AlertDialog
+        confirmDisabled={selectedRole === account.role}
+        confirmLabel="変更する"
+        description={`${account.displayName} のロールを変更します。変更後すぐに操作できる範囲へ反映されます。`}
+        formatError={(error) => formatApiError(error, "ロールの変更に失敗しました")}
+        pending={rolePending}
+        pendingLabel="更新中…"
+        title="ロールを変更しますか？"
+        tone={account.role === "admin" && selectedRole !== "admin" ? "danger" : "primary"}
+        trigger={
+          <Button disabled={isPending} size="sm" variant="quiet">
+            ロール変更
+          </Button>
+        }
+        onConfirm={() => onPatch({ role: selectedRole })}
+        onOpenChange={(open) => {
+          if (open) setSelectedRole(account.role);
+        }}
+      >
+        <SelectField
+          disabled={rolePending}
+          label="ロール"
+          options={accountRoleOptions}
+          value={selectedRole}
+          onValueChange={(value) => {
+            const option = accountRoleOptions.find((candidate) => candidate.value === value);
+            if (option) setSelectedRole(option.value);
+          }}
+        />
+      </AlertDialog>
     </div>
-  );
-}
-
-function AccountActionConfirm({
-  confirmLabel,
-  description,
-  disabled,
-  label,
-  onConfirm,
-  pending = false,
-  tone,
-  title,
-}: {
-  confirmLabel: string;
-  description: string;
-  disabled: boolean;
-  label: string;
-  onConfirm: () => Promise<void> | void;
-  pending?: boolean;
-  tone: "danger" | "primary";
-  title: string;
-}) {
-  return (
-    <AlertDialog
-      cancelLabel="キャンセル"
-      confirmLabel={confirmLabel}
-      pendingLabel="更新中…"
-      description={description}
-      pending={pending}
-      formatError={(error) => formatApiError(error, "アカウント設定の更新に失敗しました")}
-      tone={tone}
-      title={title}
-      trigger={
-        <Button disabled={disabled} size="sm" variant="quiet">
-          {label}
-        </Button>
-      }
-      onConfirm={onConfirm}
-    />
   );
 }

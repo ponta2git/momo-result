@@ -50,7 +50,7 @@ describe("apiRequest", () => {
         Response.json({
           accountId: "account_ponta",
           displayName: "ぽんた",
-          isAdmin: true,
+          role: "admin",
           memberId: "member_ponta",
           csrfToken: "csrf-1",
         }),
@@ -74,7 +74,7 @@ describe("apiRequest", () => {
         Response.json({
           accountId: "account_ponta",
           displayName: "ぽんた",
-          isAdmin: true,
+          role: "admin",
           memberId: "member_ponta",
           csrfToken: "csrf-1",
         }),
@@ -108,7 +108,7 @@ describe("apiRequest", () => {
         Response.json({
           accountId: "account_ponta",
           displayName: "ぽんた",
-          isAdmin: true,
+          role: "admin",
           memberId: "member_ponta",
           csrfToken: "csrf-1",
         }),

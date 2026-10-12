@@ -280,7 +280,7 @@ describe("MastersPage", () => {
     expect(accountReads).toBe(0);
     await user.click(screen.getByRole("tab", { name: "アカウント" }));
     const table = await screen.findByRole("table", {
-      name: "登録アカウントとログイン・管理者権限",
+      name: "登録アカウントとログイン・ロール",
     });
     expect(accountReads).toBe(1);
     expect(unrelatedReads).toEqual([]);

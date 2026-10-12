@@ -935,7 +935,8 @@ export interface components {
         AuthMeResponse: {
             accountId: string;
             displayName: string;
-            isAdmin: boolean;
+            /** @enum {string} */
+            role: "user" | "operator" | "admin";
             memberId?: string;
             csrfToken?: string;
         };
@@ -994,7 +995,8 @@ export interface components {
             displayName: string;
             playerMemberId?: string;
             loginEnabled: boolean;
-            isAdmin: boolean;
+            /** @enum {string} */
+            role: "user" | "operator" | "admin";
         };
         /** CreateMapMasterRequest */
         CreateMapMasterRequest: {
@@ -1231,7 +1233,8 @@ export interface components {
             displayName: string;
             playerMemberId?: string;
             loginEnabled: boolean;
-            isAdmin: boolean;
+            /** @enum {string} */
+            role: "user" | "operator" | "admin";
             createdAt: string;
             updatedAt: string;
         };
@@ -1558,7 +1561,7 @@ export interface components {
             status: number;
             detail: string;
             /** @enum {string} */
-            code: "BAD_REQUEST" | "UNAUTHORIZED" | "FORBIDDEN" | "NOT_FOUND" | "VALIDATION_FAILED" | "UNSUPPORTED_MEDIA_TYPE" | "PAYLOAD_TOO_LARGE" | "CONFLICT" | "MATCH_NOTE_VERSION_CONFLICT" | "NOTIFICATION_SETTINGS_VERSION_CONFLICT" | "IDEMPOTENCY_IN_PROGRESS" | "IDEMPOTENCY_PAYLOAD_MISMATCH" | "TOO_MANY_REQUESTS" | "SERVICE_UNAVAILABLE" | "ANALYSIS_ARTIFACT_EXPIRED" | "ANALYSIS_SCOPE_NOT_FOUND" | "ANALYSIS_SCOPE_NOT_IN_ARTIFACT" | "ANALYSIS_READ_BUSY" | "ANALYSIS_STATE_UNAVAILABLE" | "ANALYSIS_NO_ELIGIBLE_TITLES" | "DEPENDENCY_FAILED" | "INTERNAL_ERROR";
+            code: "BAD_REQUEST" | "UNAUTHORIZED" | "FORBIDDEN" | "NOT_FOUND" | "VALIDATION_FAILED" | "UNSUPPORTED_MEDIA_TYPE" | "PAYLOAD_TOO_LARGE" | "CONFLICT" | "LAST_ENABLED_ADMIN_REQUIRED" | "MATCH_NOTE_VERSION_CONFLICT" | "NOTIFICATION_SETTINGS_VERSION_CONFLICT" | "IDEMPOTENCY_IN_PROGRESS" | "IDEMPOTENCY_PAYLOAD_MISMATCH" | "TOO_MANY_REQUESTS" | "SERVICE_UNAVAILABLE" | "ANALYSIS_ARTIFACT_EXPIRED" | "ANALYSIS_SCOPE_NOT_FOUND" | "ANALYSIS_SCOPE_NOT_IN_ARTIFACT" | "ANALYSIS_READ_BUSY" | "ANALYSIS_STATE_UNAVAILABLE" | "ANALYSIS_NO_ELIGIBLE_TITLES" | "DEPENDENCY_FAILED" | "INTERNAL_ERROR";
         };
         /** PutOcrSubmissionRequest */
         PutOcrSubmissionRequest: {
@@ -4745,7 +4748,8 @@ export interface components {
             displayName?: string;
             playerMemberId?: string;
             loginEnabled?: boolean;
-            isAdmin?: boolean;
+            /** @enum {string} */
+            role?: "user" | "operator" | "admin";
         };
         /** UpdateMapMasterRequest */
         UpdateMapMasterRequest: {

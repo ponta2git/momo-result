@@ -36,6 +36,7 @@ object ProblemDetails:
     "UNSUPPORTED_MEDIA_TYPE",
     "PAYLOAD_TOO_LARGE",
     "CONFLICT",
+    "LAST_ENABLED_ADMIN_REQUIRED",
     "MATCH_NOTE_VERSION_CONFLICT",
     "NOTIFICATION_SETTINGS_VERSION_CONFLICT",
     "IDEMPOTENCY_IN_PROGRESS",
@@ -84,6 +85,8 @@ object ProblemDetails:
     case _: AppError.PayloadTooLarge => "送信内容が大きすぎます。入力内容を減らしてください。"
     case _: AppError.Conflict =>
       "保存済みの状態が変わっています。内容を確認して、もう一度実行してください。"
+    case _: AppError.LastEnabledAdminRequired =>
+      "ログイン可能な管理者を1人以上残してください。"
     case _: AppError.MatchNoteVersionConflict =>
       "試合メモが別の利用者に更新されました。最新の内容を確認してください。"
     case _: AppError.NotificationSettingsVersionConflict =>
@@ -117,6 +120,7 @@ object ProblemDetails:
     case _: AppError.UnsupportedMediaType => StatusCode.UnsupportedMediaType
     case _: AppError.PayloadTooLarge => StatusCode.PayloadTooLarge
     case _: AppError.Conflict => StatusCode.Conflict
+    case _: AppError.LastEnabledAdminRequired => StatusCode.Conflict
     case _: AppError.MatchNoteVersionConflict => StatusCode.Conflict
     case _: AppError.NotificationSettingsVersionConflict => StatusCode.Conflict
     case _: AppError.IdempotencyInProgress => StatusCode.Conflict

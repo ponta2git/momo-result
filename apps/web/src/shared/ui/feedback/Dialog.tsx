@@ -40,16 +40,11 @@ type AlertDialogProps = DialogBaseProps & {
   trigger?: ReactElement | undefined;
 };
 
-/** Owns the internal boundary and action order of an action-bearing dialog form. */
+/** Groups dialog actions; the parent composition owns spacing from the content. */
 export function DialogFooter({
   ...props
 }: Omit<HTMLAttributes<HTMLDivElement>, "className" | "style">) {
-  return (
-    <div
-      className="flex flex-wrap justify-end gap-2 border-t border-[var(--color-border)] pt-4"
-      {...props}
-    />
-  );
+  return <div className="flex flex-wrap justify-end gap-2" {...props} />;
 }
 
 function useControllableDialogOpen(

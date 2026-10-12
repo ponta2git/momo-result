@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
@@ -15,9 +15,12 @@ import {
   loadSeriesComparisonPage,
 } from "@/app/routeModules";
 import { appRoutes } from "@/app/router";
-import { matchKeys } from "@/shared/api/queryKeys";
+import type { AuthMeResponse } from "@/shared/api/auth";
+import { getCsrfToken } from "@/shared/api/csrfTokenStore";
+import { adminAccountKeys, matchKeys } from "@/shared/api/queryKeys";
 import { decodeSeriesAnalysisArtifact } from "@/shared/api/seriesAnalysisArtifactDecoder";
 import { decodeSeriesAnalysisAdminOverview } from "@/shared/api/seriesAnalysisEnvelopeSchemas";
+import { authMeQueryKey, authMeQueryKeyFor } from "@/shared/auth/authQueries";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { makeFourPlayerResults, makeMatchDetail } from "@/test/factories";
@@ -104,7 +107,7 @@ describe("app routing", () => {
                 accountId: "account_ponta",
                 csrfToken: "dev",
                 displayName: "ぽんた",
-                isAdmin: true,
+                role: "admin",
                 memberId: "member_ponta",
               });
         }),
@@ -211,25 +214,101 @@ describe("app routing", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("prevents a non-admin from opening protected settings", async () => {
-    setDevUser("account_eu");
-    renderApp("/admin/masters?tab=accounts");
-    expect(await screen.findByText("この画面は管理者専用です。")).toBeInTheDocument();
-    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "設定管理" })).not.toBeInTheDocument();
-  });
+  it.each(["user", "operator"] as const)(
+    "prevents a %s from opening protected settings",
+    async (role) => {
+      setDevUser("account_eu");
+      mswState.loginAccounts.find((account) => account.accountId === "account_eu")!.role = role;
+      renderApp("/admin/masters?tab=accounts");
+      expect(await screen.findByText("この画面は管理者専用です。")).toBeInTheDocument();
+      expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+      expect(screen.queryByRole("region", { name: "設定管理" })).not.toBeInTheDocument();
+    },
+  );
 
-  it("revokes access to settings after removing the current account's admin permission", async () => {
-    setDevUser();
-    mswState.loginAccounts.find((account) => account.accountId === "account_eu")!.isAdmin = true;
-    renderApp("/admin/masters?tab=accounts");
-    const row = await screen.findByRole("row", { name: /523484457705930752/u });
-    await user.click(within(row).getByRole("button", { name: "管理者解除" }));
-    await user.click(screen.getByRole("button", { name: "解除する" }));
-    expect(await screen.findByText("この画面は管理者専用です。")).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "設定管理" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "設定" })).not.toBeInTheDocument();
-  });
+  it.each(["user", "operator"] as const)(
+    "exits settings after self-demotion to %s and discards in-flight admin reads without ending the session",
+    async (role) => {
+      vi.stubEnv("DEV", false);
+      mswState.loginAccounts.find((account) => account.accountId === "account_eu")!.role = "admin";
+      let holdReads = false;
+      let accountReads = 0;
+      const staleReads: Request[] = [];
+      const releaseReads = createDeferred();
+      const authReadStarted = createDeferred();
+      const accountReadStarted = createDeferred();
+      server.use(
+        http.get("/api/auth/me", async ({ request }) => {
+          const account = mswState.loginAccounts.find(
+            (item) => item.accountId === "account_ponta",
+          )!;
+          const snapshot: AuthMeResponse = {
+            accountId: account.accountId,
+            csrfToken: "session-csrf",
+            displayName: account.displayName,
+            role: account.role,
+            ...(account.playerMemberId ? { memberId: account.playerMemberId } : {}),
+          };
+          if (holdReads) {
+            staleReads.push(request);
+            authReadStarted.resolve();
+            await releaseReads.promise;
+          }
+          return HttpResponse.json(snapshot);
+        }),
+        http.get("/api/admin/login-accounts", async ({ request }) => {
+          accountReads += 1;
+          const snapshot = structuredClone(mswState.loginAccounts);
+          if (holdReads) {
+            staleReads.push(request);
+            accountReadStarted.resolve();
+            await releaseReads.promise;
+          }
+          return HttpResponse.json({ items: snapshot });
+        }),
+      );
+      const { queryClient } = renderApp("/admin/masters?tab=accounts");
+      const row = await screen.findByRole("row", { name: /523484457705930752/u });
+      const draftKey = "momoresult.matchWorkspaceDraft.v2.account_ponta.review.session-1";
+      window.sessionStorage.setItem(draftKey, "unfinished draft");
+      await user.click(within(row).getByRole("button", { name: "ロール変更" }));
+      const dialog = screen.getByRole("alertdialog", { name: "ロールを変更しますか？" });
+      await selectOption(user, within(dialog).getByRole("combobox", { name: "ロール" }), role);
+
+      holdReads = true;
+      let pendingReads: Array<Promise<unknown>> = [];
+      act(() => {
+        pendingReads = [
+          queryClient.refetchQueries({ queryKey: authMeQueryKey }),
+          queryClient.refetchQueries({ queryKey: adminAccountKeys.all() }),
+        ];
+      });
+      await Promise.all([authReadStarted.promise, accountReadStarted.promise]);
+      try {
+        await user.click(within(dialog).getByRole("button", { name: "変更する" }));
+        expect(await screen.findByText("この画面は管理者専用です。")).toBeInTheDocument();
+        expect(screen.queryByRole("region", { name: "設定管理" })).not.toBeInTheDocument();
+        expect(screen.queryByRole("link", { name: "設定" })).not.toBeInTheDocument();
+        expect(staleReads).toHaveLength(2);
+        expect(staleReads.every((request) => request.signal.aborted)).toBe(true);
+      } finally {
+        releaseReads.resolve();
+      }
+      await act(async () => {
+        await Promise.all(pendingReads);
+      });
+
+      expect(queryClient.getQueryData(adminAccountKeys.all())).toBeUndefined();
+      expect(queryClient.getQueryData(authMeQueryKeyFor(undefined))).toMatchObject({
+        accountId: "account_ponta",
+        csrfToken: "session-csrf",
+        role,
+      });
+      expect(getCsrfToken()).toBe("session-csrf");
+      expect(window.sessionStorage.getItem(draftKey)).toBe("unfinished draft");
+      expect(accountReads).toBe(2);
+    },
+  );
 
   it("opens the requested notification settings tab directly", async () => {
     setDevUser();
@@ -276,7 +355,7 @@ describe("app routing", () => {
           accountId: "account_ponta",
           csrfToken: "dev",
           displayName: "ぽんた",
-          isAdmin: true,
+          role: "admin",
           memberId: "member_ponta",
         });
       }),
@@ -346,7 +425,7 @@ describe("app routing", () => {
               accountId: "account_ponta",
               csrfToken: "dev",
               displayName: "ぽんた",
-              isAdmin: true,
+              role: "admin",
               memberId: "member_ponta",
             });
       }),

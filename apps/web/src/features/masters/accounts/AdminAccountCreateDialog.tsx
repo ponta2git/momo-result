@@ -1,13 +1,13 @@
 import { UserPlus } from "lucide-react";
 import { startTransition } from "react";
 
+import { accountRoleOptions } from "@/features/masters/accounts/accountRoles";
 import type { AdminAccountCreateDialogModel } from "@/features/masters/accounts/useAccountSettingsModel";
 import { canonicalResultMembers } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { CheckboxField } from "@/shared/ui/forms/CheckboxField";
-import { Fieldset } from "@/shared/ui/forms/Fieldset";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
 
@@ -30,7 +30,7 @@ export function AdminAccountCreateDialog({
   return (
     <Dialog
       busy={pending}
-      description="Discordの利用者と、必要な場合だけ試合参加者・管理者権限を紐づけます。"
+      description="Discordの利用者にログイン許可とロールを設定し、必要に応じて試合参加者を紐づけます。"
       open={open}
       title="アカウントを追加"
       trigger={
@@ -42,7 +42,7 @@ export function AdminAccountCreateDialog({
     >
       <form
         key={formKey}
-        className="grid gap-4"
+        className="grid gap-6"
         onSubmit={(event) => {
           event.preventDefault();
           if (pending) return;
@@ -57,37 +57,47 @@ export function AdminAccountCreateDialog({
             {error}
           </Notice>
         ) : null}
-        <TextField
-          disabled={pending}
-          inputMode="numeric"
-          label="DiscordユーザーID"
-          name="discordUserId"
-          placeholder="例: 523484457705930752"
-          required
-        />
-        <TextField
-          disabled={pending}
-          label="表示名"
-          name="displayName"
-          placeholder="例: 代理入力者"
-          required
-        />
-        <SelectField
-          disabled={pending}
-          defaultValue=""
-          label="紐づくプレーヤー"
-          name="playerMemberId"
-          options={accountPlayerOptions}
-        />
-        <Fieldset legend="権限">
-          <CheckboxField
+        <div className="grid gap-4">
+          <TextField
             disabled={pending}
-            defaultChecked
-            label="ログイン許可"
-            name="loginEnabled"
+            inputMode="numeric"
+            label="DiscordユーザーID"
+            name="discordUserId"
+            placeholder="例: 523484457705930752"
+            required
           />
-          <CheckboxField disabled={pending} label="管理者" name="isAdmin" />
-        </Fieldset>
+          <TextField
+            disabled={pending}
+            label="表示名"
+            name="displayName"
+            placeholder="例: 代理入力者"
+            required
+          />
+          <SelectField
+            disabled={pending}
+            defaultValue=""
+            label="紐づくプレーヤー"
+            name="playerMemberId"
+            options={accountPlayerOptions}
+          />
+          <fieldset className="grid min-w-0 gap-4">
+            <legend className="sr-only">権限</legend>
+            <CheckboxField
+              disabled={pending}
+              defaultChecked
+              label="ログイン許可"
+              name="loginEnabled"
+            />
+            <SelectField
+              defaultValue="user"
+              disabled={pending}
+              label="ロール"
+              name="role"
+              options={accountRoleOptions}
+              required
+            />
+          </fieldset>
+        </div>
         <DialogFooter>
           <Button disabled={pending} variant="secondary" onClick={() => setOpen(false)}>
             キャンセル

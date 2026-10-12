@@ -7,7 +7,7 @@ import { AppGlobalNav } from "@/app/AppGlobalNav";
 
 const authMock = vi.hoisted(() => ({
   current: {
-    auth: { displayName: "ぽんた", isAdmin: false },
+    auth: { displayName: "ぽんた", role: "user" },
     isAuthenticated: true,
     isLogoutPending: false,
     logout: vi.fn(),
@@ -22,7 +22,7 @@ vi.mock("@/shared/auth/useAuth", () => ({
 describe("AppGlobalNav", () => {
   beforeEach(() => {
     authMock.current = {
-      auth: { displayName: "ぽんた", isAdmin: false },
+      auth: { displayName: "ぽんた", role: "user" },
       isAuthenticated: true,
       isLogoutPending: false,
       logout: vi.fn(),
@@ -42,7 +42,8 @@ describe("AppGlobalNav", () => {
     expect(screen.getByRole("link", { name: "OCR" })).not.toHaveAttribute("aria-current");
   });
 
-  it("owns the product route catalog and exposes admin destinations only to admins", () => {
+  it.each(["user", "operator"])("keeps admin destinations hidden from %s", (role) => {
+    authMock.current = { ...authMock.current, auth: { displayName: "利用者", role } };
     const { rerender } = render(
       <MemoryRouter initialEntries={["/matches"]}>
         <AppGlobalNav />
@@ -56,7 +57,7 @@ describe("AppGlobalNav", () => {
 
     authMock.current = {
       ...authMock.current,
-      auth: { displayName: "管理者", isAdmin: true },
+      auth: { displayName: "管理者", role: "admin" },
     };
     rerender(
       <MemoryRouter initialEntries={["/matches"]}>
@@ -76,7 +77,7 @@ describe("AppGlobalNav", () => {
     const user = userEvent.setup();
     const logout = vi.fn();
     authMock.current = {
-      auth: { displayName: "ぽんた", isAdmin: false },
+      auth: { displayName: "ぽんた", role: "user" },
       isAuthenticated: true,
       isLogoutPending: false,
       logout,

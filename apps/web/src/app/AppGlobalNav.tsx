@@ -89,7 +89,7 @@ export function AppGlobalNav() {
           ? primaryItems.map((item) => ({ ...item, current: item.to === "/matches" }))
           : primaryItems
       }
-      managementItems={auth.auth?.isAdmin ? adminItems : noManagementItems}
+      managementItems={auth.auth?.role === "admin" ? adminItems : noManagementItems}
     />
   );
 }

@@ -166,13 +166,13 @@ final class SeriesAnalysisHttpSpec extends MomoCatsEffectSuite with HttpAppTestF
         )
   }
 
-  app.test("analysis administration is not exposed to a non-admin account") { httpApp =>
+  app.test("analysis administration is not exposed to a user account") { httpApp =>
     val request = readGet(
       uri"/api/admin/series-analysis/overview",
       accountId = "account_akane_mami",
     )
     httpApp.run(request).flatMap(response =>
-      assertProblem(response, Status.Forbidden, "FORBIDDEN", "Administrator access")
+      assertProblem(response, Status.Forbidden, "FORBIDDEN", "Operator access")
     )
   }
 

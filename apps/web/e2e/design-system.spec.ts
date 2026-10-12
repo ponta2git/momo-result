@@ -25,7 +25,7 @@ test("exposes overflowing account data to the keyboard only while it needs scrol
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/admin/masters?tab=accounts");
 
-  const name = "登録アカウントとログイン・管理者権限";
+  const name = "登録アカウントとログイン・ロール";
   const table = page.getByRole("table", { name });
   const scrollArea = page.getByRole("region", { name });
   await expect(table).toBeVisible();

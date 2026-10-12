@@ -89,7 +89,7 @@ object AdminAccountModule:
       displayName = request.displayName,
       playerMemberId = playerMemberId,
       loginEnabled = request.loginEnabled,
-      isAdmin = request.isAdmin,
+      role = request.role,
     )
 
   private def toCommand(
@@ -101,6 +101,6 @@ object AdminAccountModule:
         displayName = request.displayName,
         playerMemberId = playerMemberId,
         loginEnabled = request.loginEnabled,
-        isAdmin = request.isAdmin,
+        role = request.role,
       )
     )

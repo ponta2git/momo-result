@@ -137,14 +137,13 @@ describe("useSeriesAnalysisLocationState", () => {
   it("merges an uncommitted metric change with scope and preserves it across title changes", async () => {
     const user = userEvent.setup();
     const router = renderHarness(
-      "/analytics/series?gameTitleId=gt_momotetsu_2&view=context&returnTo=%2Fmatches&focusMatchId=match-12",
+      "/analytics/series?gameTitleId=gt_momotetsu_2&view=context&focusMatchId=match-12",
     );
     await user.click(screen.getByRole("button", { name: "指標と条件を連続変更" }));
     await waitFor(() =>
       expect(router.state.location.search).toContain("seasonMasterId=season_current"),
     );
     expect(router.state.location.search).toContain("ownerMetric=ginji.average");
-    expect(router.state.location.search).toContain("returnTo=%2Fmatches");
     expect(router.state.location.search).not.toContain("focusMatchId");
     expect(router.state.location.hash).toBe("#metric-owner");
     expect(router.state.location.state).toEqual({ from: "test" });

@@ -126,10 +126,14 @@
 - 元画像の先読みは初回表示または利用者の画像選択に続く有限の処理として許可する。featureの取得処理が表示対象を優先して直列化し、同一取得の引継ぎ、中断、容量、scope終了時のquery破棄を所有する。自動retryや回線復帰による取得再開を起こさず、確定・削除成功時は関連cacheの更新より先に画像の寿命を閉じる。
 - query key は cache 内の runtime data shape まで区別する。backend resource が同じでも raw response と ViewModel を同じ key に置かない。
 - 対象の確定した不存在を再取得中も保持する read は、domain の `404 / NOT_FOUND` を read-result として扱い、raw response と異なる key に置く。一時的な通信失敗や一般的な HTTP 404 を不存在へ変換しない。mutation 後の cache 整合は両方の key を対象にし、以前の成功表示や候補一覧から不存在を巻き戻さない。
-- masterの管理と入力候補は同じraw responseを共有し、並べ替えを`select`へ閉じる。設定管理は訪問したtabに必要なqueryだけを有効にし、変更responseをcacheへ反映してから表示名を含む関連readを無効化する。再取得失敗で確定した追加・訂正・削除を巻き戻さない。
+- masterの管理と入力候補は同じraw responseを共有し、並べ替えを`select`へ閉じる。設定管理は現在の権限で許可された訪問済みtabに必要なqueryだけを有効にし、変更responseをcacheへ反映してから表示名を含む関連readを無効化する。再取得失敗で確定した追加・訂正・削除を巻き戻さない。
 - consumer の射影は `select` または純粋な表示変換で行い、cache は元の server data を保持する。表示中の data が現 query の値か前 scope の placeholder かは query observer の状態から判断し、その判定のために描画時に cache を別途読み直さない。
 - fatal error、再取得、cached data、認証待ち、disabled query を別状態として扱う。mutation 後は表示中の resource と選択候補の cache をともに整合させる。
+- Webの本人情報はauth queryを正本とし、管理機能の表示・query・明示refetch・送信直前のcommandを`shared/auth`の共通の許可判断へ接続する。再確認の進行と操作の所有期間も同じ境界で扱い、一時失敗中に旧roleだけで操作を再開しない。
+- 確定失権した管理readはcancelしてcacheを除去する。管理者権限だけの喪失ではアカウント・通知、運用権限も失った場合は分析管理・レーダーを対象にし、通常のmaster・分析結果等の共有参照は保持する。主体と許可の所有期間が変わった後の応答で保護cacheや新しい入力を復活・上書きせず、再付与を古い操作の継続と扱わない。同一主体が参照できるmasterの確定mutation結果の反映と、保護refetch・画面の完了処理を分ける。
+- 管理用query/commandの権限拒否は一度の本人情報再確認へ集約し、処理済み・旧作業の拒否を起点に循環させない。本人情報と保護queryの401/403は自動retryせず、許可継続後も拒否されたreadの再試行は利用者の操作に任せる。再確認・再表示でPOSTを再送せず、確認中に到着した受付結果は既存mutationのownerに保持する。
 - 初回表示、mutation 後の cache 整合、artifact 失効時の bounded recovery、利用者が実行した更新 / 再試行だけが server state の取得を開始する。interval、遅延 timer、window focus、tab visibility、network reconnect を起点に自動再取得しない。この契約は共通 QueryClient に集約し、feature ごとに再実装しない。
+- レーダー基準の作成・復元は、利用者が開始して受付が確定した操作に限り、待機表示から編集へ進むために完了状態を自動確認する。対象はその操作だけとし、完了・失敗・読取エラー・権限停止で止め、非表示ブラウザでは継続取得しない。読取失敗の再開は明示更新で行い、POSTを再送しない。通常の管理状態取得や手入力の正式比較には適用しない。
 - 分析の計算payloadがimmutableでも、現在の名称や試合revisionに依存するHTTP projectionは可変として扱う。master変更は表示名を含むartifact response、試合訂正・削除はその試合のcontextとidentityを更新する。手動更新はstatusで参照世代を確定してから必要なresourceを読み、新旧artifactを同時に再取得しない。
 - match-contextの確定した不存在・失効は成功済みcacheの利用を止め、一時的な更新失敗と区別する。比較画面と試合結果画面で共通の利用判定を使い、表示bundleの選択試合と全マーカーを揃える。再取得中の復活を含む状態契約は[分析横断要求](requirements/series-analysis-batch.md#web-state)を正本とする。
 - React の concurrent / form API は cache、retry、認証、validation の既存契約を置き換えない範囲で使う。
@@ -151,7 +155,7 @@
 | 保存・削除・OCR開始・権限/通知変更・再計算・出力 | Action / mutation の pending と確定結果 | 検証、競合、副作用、生成結果を先取りしない |
 | 開催一覧・出力候補のページ取得 | Query の前ページ保持と scope 表示 | ページ単位の取得は既存の待機境界で扱える |
 
-設定管理の訪問済み panel は Base UI の `keepMounted` で入力・DOM を保持する。React `Activity` は hidden subtree の Effects を停止するが、現在の Query / Action owner は panel の外にあるため、主要な取得・描画負荷を移せない。focus / dialog 接続の再作成も伴うので、この構造では追加しない。
+設定管理の訪問済み panel は、現在も許可される範囲で Base UI の `keepMounted` により入力・DOM を保持する。管理権限の再確認では画面とdialogの表示・操作を一時停止し、非制御入力と進行中commandのownerを保つ。確定失権したpanel・dialog・入力は終了し、許可が残る操作の入力やpending保護まで一律に破棄しない。
 
 API の判断は React の [useDeferredValue](https://react.dev/reference/react/useDeferredValue)、[useTransition](https://react.dev/reference/react/useTransition)、[useOptimistic](https://react.dev/reference/react/useOptimistic) と TanStack Query の [mutation response による更新](https://tanstack.com/query/latest/docs/framework/react/guides/updates-from-mutation-responses) を参照する。効果は不要な render の削減と待機中の操作で確認し、通信速度や処理時間の短縮とは区別する。
 
@@ -187,7 +191,7 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 ### Form / React 19 / API Client
 
 - event 由来の値は handler 内で同期的に取り出し、request transform で route / prefill / hidden identifier を落とさない。
-- 入力の owner は認証主体と作業対象で区切る。同じ作業の補助 query 変更では保持し、別の試合・draft・sample へ持ち越さない。未完成の数値文字列も入力に含め、validation と request は同じ最新値の射影を使う。設定往復と一時保存の schema は、完成済み request の制約と分離して入力途中の値を保持する。
+- 入力の owner は認証主体と作業対象で区切る。同じ作業の補助 query 変更では保持し、別の試合・draft・sample へ持ち越さない。未完成の数値文字列も入力に含め、validation と request は同じ最新値の射影を使う。一時保存の schema は、完成済み request の制約と分離して入力途中の値を保持する。設定への移動前は既存の保存処理の成功を確認し、ブラウザーの戻るでも同じ主体・作業・元データに限って復元する。roleを作業や保存のidentityに加えない。
 - 編集可能になった最初の snapshot で入力を初期化し、同じ作業の再取得で入力を上書きしない。OCR の入力値・根拠・元画像 descriptor は同じ世代に固定し、世代変更時には再確認を案内する。保存中は送信対象の編集と離脱を保護し、完了前に遮断した離脱操作を完了後に自動再開しない。
 - navigation、feedback、browser download など画面に属する非同期の完了処理は、開始時の route / 対象 / 最新 intent に対応する場合だけ行う。所有者の commit 境界で古い処理を無効にし、中断可能な read は中断する。確定 mutation の cache 整合は画面に属する副作用と分ける。
 - 分析の集計、意味を持つ sort / filter、閾値、統計 fallback は Web で再計算せず、保存済み成果物を表示用に整形する。
@@ -215,9 +219,11 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 - supervisorは稼働するpeerと共通の停止期限を組み立てる。各capabilityが外部接続・driver・listenerの寿命を所有し、汎用PostgreSQL接続層へoutboxや分析の知識を持ち込まない。commit後のwakeは現在の配送先を明示する小さな値とし、用途のない種類の集合やpayloadを運搬しない。
 - 分析のterminal履歴と未参照artifactの保持・整理はWorkerのcontrol処理が所有し、APIの起動に依存しない。保持条件は分析batch要求を正本とし、公開済みcurrent / previousの保護とbounded cleanupを同じDB境界で保証する。
 - capability crate は決定論的な domain / 計算 / version 付き論理契約を所有し、DB、Redis、filesystem、clock、async runtime に依存しない。runtime から capability への一方向依存とする。
+- 通知基盤の `momo-notifications` は件数・bytesの予約、envelopeのserialize、呼出側transactionによる最終JSONBサイズ検証、transport設定の検証とHTTP送信を所有する。通知内容を作るproducer、業務SQL、DB接続、SAVEPOINTとcommit、環境変数の読取り、senderの監督・停止期限はworkerが所有する。workerから通知基盤への一方向依存とする。
 - production の OS FFI と `unsafe` は process adapter に隔離し、他 module へ checked な safe API を公開する。TERM・KILL・process groupの回収は共通化し、分析の入力設定・終了分類とOCRのframe・結果decodeは各capabilityのprocess adapterに残す。
 - 子 process の resource 制限は実 runtime の cgroup で保証する。非対応 OS では job claim 前に fail closed にする。
 - 同時実行や publication は DB lease と fencing token で世代をまたいで保証する。process 内 semaphore や台数を正本にしない。
+- Busy後の早期再確認はconsumerごとの共有予算で回数・開始期限・同時数を制限し、新しい配送や再接続で予算を作り直さない。上限到達時は元の回復・保守期限へ戻す。分析は受信済みdeliveryを保持したままDB claimだけを再試行し、開始済みclaimの確定とpost-commit effectを処理してから配送を判断する。
 - 子 process の成果物は上限、path、件数、schema、checksum を親が検証し、失敗時に部分公開しない。
 - 分析worker内のRust validatorをpayload意味、canonical encoding、resource集合・相互参照の単一ownerとする。parentは完全検証を通ったopaque artifactだけをversion付きで公開し、APIはそのimmutable publication attestation、生成schema、reader resource上限、request identityだけを独立に検証する。
 - 分析成果物の公開とレーダー基準準備を実行目的で区別する。基準準備も同じqueue・共有実行枠・親子process境界を使い、保存元と全scopeの比較を検証する。準備の成功を通常の分析要求の充足や公開完了として扱わない。
@@ -230,21 +236,21 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 - 分析完了通知は `notifications/analysis` が実行attemptに結び付いた試合変更要求と前後のimmutable入力を照合し、公開transaction末尾で要求の完了を再確認して表示metadataを固定する。入力が変わらない成果物の再利用は公開制御側で通知準備を省略する。通知準備はOCRと同じ回復可能なSAVEPOINT境界を使い、正常commitを確認した経路だけが共通senderへ渡す。分析child・API・Summitに平均計算やproducer送出の責務を移さない。内容と比較範囲は `docs/requirements/series-analysis-batch.md` を参照する。
 - 通知producerへ渡すのは通知に必要なjob・attempt・作品・成果物versionの識別情報だけとし、DBのclaim型、lease、fenceや全体設定へ逆依存させない。
 - 通知の入力基準は画面用current / previousから分離する。公開制御は通知の可否とは独立して、公開・再利用成功と基準の更新を一つのtransactionにする。初回と不明を区別し、読取不能な旧形式でも入力metadataの完全性を確かめた範囲で差分を扱う。旧平均を現行形式として解釈せず、基準不足を全試合の追加に置き換えない。
-- 比較用の成果物取得は通知に必要な保存済みplayer metricsだけを射影し、通知で使わない分析カードを転送しない。元成果物のbyte・件数上限とtyped decode、前後のidentity・scope整合性は維持する。比較準備の時間枠には接続確立と全DB往復を含め、確定transaction内の準備とともに親の絶対期限から業務commit・復旧の余裕を残す。比較read transactionが正常commitした新規接続は続く公開transactionに再利用し、失敗・timeout時は破棄する。
+- 比較用の成果物取得は同じsnapshot内で前後の全試合identityとscope metadataを照合し、差分判定後に作品通算と影響シーズンの保存済みplayer metricsだけを取得する。公開validatorが保証するimmutable成果物の意味検証に依存し、元成果物のbyte・件数上限、全identity・scope整合性、取得した順位のtyped decodeは維持する。比較準備の時間枠には接続確立と全DB往復を含め、確定transaction内の準備とともに親の絶対期限から業務commit・復旧の余裕を残す。比較read transactionが正常commitした新規接続は続く公開transactionに再利用し、失敗・timeout時は破棄する。
 
 ### OCR Capability / Worker Role
 
 - OCR の object / queue / 状態契約は `docs/redis-streams-ocr-contract.md` と schema を正本とし、URL、credential、local path を runtime 間 payload にしない。
 - 検証済み画像はprocess adapterへ所有権を渡し、headerと画像を順に転送するためだけの全量frame複製を作らない。認識fallbackは既存の評価順を保ち、必要になった画像だけ生成する。
 - OCRの不確かな読取値は、必要な警告を保持して要確認結果として保存する。件数の妥当性しきい値を保存拒否の上限に読み替えず、parserと保存前検証で警告条件を一致させる。構造・型・対応関係が壊れた候補や警告の欠落は拒否する。
-- OCR・分析通知のenvelopeは `notifications/envelope` が種類とsource identityから通知IDとwire versionを構築する。OCRは送出単位のv2、分析は論理job単位のv1。各producerは固定dataと確定時刻・世代を渡し、commit後のhandoffは制御側が所有する。
+- OCR・分析通知のenvelopeは `momo-notifications` が種類とsource identityから通知IDとwire versionを構築する。OCRは送出単位のv2、分析は論理job単位のv1。各producerは固定dataと確定時刻・世代を渡し、commit後のhandoffは制御側が所有する。
 - 新規producer送出は[通知サイズと送出可否](requirements/base.md#通知サイズと送出可否)に従い、最終envelopeのHTTP本文・JSONB text表現と掲載内容を制限する。共有wireの保存互換や分析の比較履歴読取と、新規送出上限を混同しない。上限超過は通知全体の省略とし、業務成功と分析の入力基準更新を維持する。描画後の投稿数検証はSummitが所有する。
 - APIは `ocr_submissions` / `ocr_submission_members` に所有者・固定画像集合・受付期限を原子的に保存し、job登録とmember対応を一つのtransactionにする。同一操作のPUTと登録済みmemberの再送は同じ識別子へ収束する。Webは全画像の内容識別とupload keyを送出受付前に固定する。
 - OCR専用coordinatorは現在の下書きslotではなく固定memberと対応jobの終端を読み、全員終了後だけ送出を確定する。下書き→送出の順にlockし、業務更新後の最後にresult gateと設定を読む。ONなら文脈と失敗だけを固定し、OFFでも送出は終端にして後から再構築しない。画像0件の期限終了も回収し、後の送出・slot状態を上書きしない。
-- coordinatorはLISTEN確立後の初回・再接続・期限・低頻度の安全走査でopenを巡回する。commit後のwake hintは損失可能で、正本は保存状態。画像の実行slotと独立し、各送出を短いtransactionで扱う。共有wire・宣言的な保存構造と排他契約は `../momo-db/docs/discord-notifications.md` を正本とし、DBへ終了policyやtriggerを置かない。
+- coordinatorはLISTEN確立後の初回・再接続・期限・低頻度の安全走査でopenを巡回する。Busyだった送出だけを上限付きで保持して早期再確認し、通常の安全走査・受付期限を後ろへ延ばさない。commit後のwake hintは損失可能で、正本は保存状態。画像の実行slotと独立し、各送出を短いtransactionで扱う。共有wire・宣言的な保存構造と排他契約は `../momo-db/docs/discord-notifications.md` を正本とし、DBへ終了policyやtriggerを置かない。
 - 通知準備は確定処理と同じ絶対期限から残り時間を計算し、実行中SQLの終了・SAVEPOINT復旧・業務commitの時間を確保する。余裕がなければ通知用SQLを実行せず、復旧可能な準備失敗では業務成功を保って通知を省略する。commit成功後だけ、件数・bytes・同時接続数に上限を持つ共通senderへ渡す。OCRのACK・実行枠解放はHTTP完了を待たない。
 - 通知の一回限りのSQLはパラメータ型を明示し、statementの準備・実行を分ける不要なDB往復を避ける。共有gate取得とsnapshot取得は別statementのまま維持する。比較・準備のtimeout、残時間不足、DBエラーは区別し、準備失敗には処理段階・時間予算・経過時間・SQLSTATEを記録する。DB例外本文やbind値は出力しない。
-- senderはDNS・接続・応答を含む単一のrequest期限内で一度だけHTTPを試み、整合する受付応答を永続受付の証拠として扱う。接続だけを先に打ち切る短い期限を重ねず、TCPの一時的な停滞からの回復も同じ期限に含める。応答不明時も通知outbox・再試行・再起動時の再構築は行わない。停止時はproducerの確定を優先し、残りの共通期限で通知をdrainする。
+- senderはDNS・接続・応答を含む単一のrequest期限内で一度だけHTTPを試み、整合する受付応答を永続受付の証拠として扱う。予約からdispatch、送信queue待ち、HTTP処理の時間を既存のattempt・receipt記録で区別する。接続だけを先に打ち切る短い期限を重ねず、TCPの一時的な停滞からの回復も同じ期限に含める。応答不明時も通知outbox・再試行・再起動時の再構築は行わない。停止時はproducerの確定を優先し、残りの共通期限で通知をdrainする。
 
 ## 5. Runtime / Security
 

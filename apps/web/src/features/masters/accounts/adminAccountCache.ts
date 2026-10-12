@@ -4,9 +4,14 @@ import type { LoginAccountListResponse, LoginAccountResponse } from "@/shared/ap
 import { adminAccountKeys } from "@/shared/api/queryKeys";
 import { authMeQueryKey } from "@/shared/auth/authQueries";
 
-export async function cacheSavedAccount(queryClient: QueryClient, saved: LoginAccountResponse) {
+export async function cacheSavedAccount(
+  queryClient: QueryClient,
+  saved: LoginAccountResponse,
+  canCommit: () => boolean,
+) {
   const queryKey = adminAccountKeys.all();
   await queryClient.cancelQueries({ queryKey, exact: true });
+  if (!canCommit()) return;
   queryClient.setQueryData<LoginAccountListResponse>(queryKey, (current) => {
     if (!current) return current;
     const items = current.items ?? [];

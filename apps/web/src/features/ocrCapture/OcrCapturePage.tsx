@@ -39,12 +39,7 @@ function OcrCapturePageContent({ auth }: { auth: ReturnType<typeof useOcrCapture
   return (
     <PageFrame>
       <nav aria-label="OCR取り込みの移動" className={inlineActionGroupClass}>
-        <LinkButton
-          icon={<ArrowLeft aria-hidden="true" />}
-          size="sm"
-          to={navigation.returnTo}
-          variant="quiet"
-        >
+        <LinkButton icon={<ArrowLeft aria-hidden="true" />} size="sm" to="/matches" variant="quiet">
           取り込みをやめる
         </LinkButton>
       </nav>

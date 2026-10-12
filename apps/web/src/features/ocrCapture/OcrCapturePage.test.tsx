@@ -180,14 +180,6 @@ describe("OcrCapturePage", () => {
     expect(attempts).toBe(2);
   });
 
-  it("returns OCR capture to its source context", async () => {
-    setDevUser();
-    renderCaptureRoute("/ocr/new?returnTo=%2Fheld-events%2Fheld-1");
-
-    const exit = await screen.findByRole("link", { name: "取り込みをやめる" });
-    expect(exit).toHaveAttribute("href", "/held-events/held-1");
-  });
-
   it("protects selected images on back navigation until the user explicitly discards them", async () => {
     setDevUser();
     const { router } = renderCaptureRoute("/matches");
@@ -419,7 +411,7 @@ describe("OcrCapturePage", () => {
         return HttpResponse.json({
           accountId: "account_ponta",
           displayName: "ぽんた",
-          isAdmin: true,
+          role: "admin",
           memberId: "member_ponta",
           csrfToken: "csrf-dev",
         });

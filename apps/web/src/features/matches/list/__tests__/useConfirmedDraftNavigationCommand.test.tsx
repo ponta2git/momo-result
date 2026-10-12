@@ -2,7 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { createMemoryRouter, RouterProvider, useLocation, useNavigate } from "react-router-dom";
+import { createMemoryRouter, RouterProvider, useNavigate } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { useConfirmedDraftNavigationCommand } from "@/features/matches/list/useConfirmedDraftNavigationCommand";
@@ -16,9 +16,8 @@ import { createTestQueryClient } from "@/test/queryClient";
 setupMsw();
 
 function CommandHarness({ onRun }: { onRun: (completion: Promise<void>) => void }) {
-  const location = useLocation();
   const navigate = useNavigate();
-  const command = useConfirmedDraftNavigationCommand(`/matches${location.search}`);
+  const command = useConfirmedDraftNavigationCommand();
   return (
     <>
       {["draft-a", "draft-b"].map((draftId) => (

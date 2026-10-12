@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useOptimistic, useRef, useState, useTransition } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 
 import { useAccountSettingsModel } from "@/features/masters/accounts/useAccountSettingsModel";
 import { defaultLayoutFamily } from "@/features/masters/masterValidation";
@@ -9,11 +9,10 @@ import { useMasterCreateActions } from "@/features/masters/useMasterCreateAction
 import { useMasterEditCommands } from "@/features/masters/useMasterEditCommands";
 import { useMasterOptimisticCatalog } from "@/features/masters/useMasterOptimisticCatalog";
 import { useMasterResourceQueries } from "@/features/masters/useMasterResourceQueries";
-import { useMasterReturnRoute } from "@/features/masters/useMasterReturnRoute";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
-import { useAuth } from "@/shared/auth/useAuth";
+import { useAuthorization } from "@/shared/auth/useAuthorization";
 import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 export const masterTabs = [
@@ -43,59 +42,63 @@ export function errorMessage(error: unknown): string | undefined {
  * Query and command hook implementation details stay behind this contract.
  */
 export function useMastersPageModel() {
-  const auth = useAuth();
+  const authorization = useAuthorization();
+  const { auth } = authorization;
   const authScope = auth.auth?.accountId ?? "anonymous";
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const nowIsoFactory = useCallback(() => new Date().toISOString(), []);
   const navigationAllowedRef = useRef(false);
-  const [isReturnNavigationPending, startReturnTransition] = useTransition();
-  const navigateWithTransition = (to: string) => {
-    startReturnTransition(() => {
-      navigate(to);
-    });
-  };
 
   const [selectedGameTitleId, setSelectedGameTitleId] = useState("");
   const rawTab = searchParams.get("tab");
   const urlTab: MasterTabId = isMasterTabId(rawTab) ? rawTab : "catalog";
   const [activeTab, setOptimisticTab] = useOptimistic(urlTab);
   const [, startTabTransition] = useTransition();
-  const [openedTabs, setOpenedTabs] = useState<MasterTabId[]>([activeTab]);
-  if (!openedTabs.includes(activeTab)) {
-    setOpenedTabs([...openedTabs, activeTab]);
-  }
-  const setActiveTab = useCallback(
-    (nextTab: MasterTabId) => {
-      const next = new URLSearchParams(searchParams);
-      if (nextTab === "catalog") {
-        next.delete("tab");
-      } else {
-        next.set("tab", nextTab);
-      }
-      startTabTransition(() => {
-        setOptimisticTab(nextTab);
-        setSearchParams(next, { replace: true });
-      });
-    },
-    [searchParams, setOptimisticTab, setSearchParams],
+  const permittedTabs = masterTabs.filter(
+    (tab) => authorization.retained.admin || tab.id === "catalog" || tab.id === "incidents",
   );
+  const isTabAllowed = (tab: MasterTabId) =>
+    authorization.retained.operations && permittedTabs.some((item) => item.id === tab);
+  const [visitedTabs, setVisitedTabs] = useState<MasterTabId[]>([]);
+  const openedTabs = visitedTabs.filter(isTabAllowed);
+  if (isTabAllowed(activeTab) && !visitedTabs.includes(activeTab)) {
+    setVisitedTabs([...openedTabs, activeTab]);
+  } else if (openedTabs.length !== visitedTabs.length) {
+    setVisitedTabs(openedTabs);
+  }
+  const setActiveTab = (nextTab: MasterTabId) => {
+    if (
+      !authorization.can(nextTab === "catalog" || nextTab === "incidents" ? "operations" : "admin")
+    )
+      return;
+    const next = new URLSearchParams(searchParams);
+    next.delete("returnTo");
+    next.delete("handoffId");
+    if (nextTab === "catalog") {
+      next.delete("tab");
+    } else {
+      next.set("tab", nextTab);
+    }
+    startTabTransition(() => {
+      setOptimisticTab(nextTab);
+      setSearchParams(next, { replace: true });
+    });
+  };
   const [completions, setCompletions] = useState<Record<string, string>>({});
   const onFeedback = useCallback((kind: string, scope: string, message: string) => {
     setCompletions((current) => ({ ...current, [`${kind}:${scope}`]: message }));
   }, []);
   const [operationError, setOperationError] = useState<string>();
-  const returnRoute = useMasterReturnRoute(auth.auth?.accountId);
 
-  // Keep visited resources mounted and enabled: switching tabs must not become a reload.
+  // Keep only permitted visited resources alive; a revoked panel must lose its draft.
   const notifications = useNotificationSettingsModel(openedTabs.includes("notifications"));
   const accounts = useAccountSettingsModel(openedTabs.includes("accounts"));
   const resourceQueries = useMasterResourceQueries(selectedGameTitleId, {
-    catalog: openedTabs.includes("catalog"),
-    aliases: openedTabs.includes("aliases"),
-    incidents: openedTabs.includes("incidents"),
+    catalog: authorization.allowed.operations && openedTabs.includes("catalog"),
+    aliases: authorization.allowed.admin && openedTabs.includes("aliases"),
+    incidents: authorization.allowed.operations && openedTabs.includes("incidents"),
   });
   const { gameTitles, mapMasters, seasonMasters } = resourceQueries;
   const optimisticCatalog = useMasterOptimisticCatalog({
@@ -132,11 +135,12 @@ export function useMastersPageModel() {
   });
 
   const hasPendingMutation =
-    createActions.gameTitleCreatePending ||
-    createActions.mapCreatePending ||
-    createActions.seasonCreatePending ||
-    createActions.aliasCreatePending ||
-    editCommands.editPending;
+    (authorization.retained.admin &&
+      (createActions.gameTitleCreatePending || createActions.aliasCreatePending)) ||
+    (authorization.retained.operations &&
+      (createActions.mapCreatePending ||
+        createActions.seasonCreatePending ||
+        editCommands.editPending));
   const gameTitlesHasError = useRetryNotice(
     shouldShowQueryError(resourceQueries.gameTitlesQuery),
     resourceQueries.gameTitlesQuery.isFetching,
@@ -187,13 +191,16 @@ export function useMastersPageModel() {
       createPending: createActions.aliasCreatePending,
       items: resourceQueries.memberAliases,
       onDelete: editCommands.deleteMemberAlias,
-      onRetry: async () => (await resourceQueries.memberAliasesQuery.refetch()).isSuccess,
+      onRetry: async () =>
+        Boolean(authorization.begin("admin")) &&
+        (await resourceQueries.memberAliasesQuery.refetch()).isSuccess,
       onUpdate: editCommands.updateMemberAlias,
       refreshing: resourceQueries.memberAliasesQuery.isFetching && !hasPendingMutation,
       stale: memberAliasesHasError && resourceQueries.memberAliasesQuery.data !== undefined,
     },
     catalog: {
       gameTitle: {
+        canEdit: authorization.retained.admin,
         hasData: resourceQueries.gameTitlesQuery.data !== undefined,
         loadFailed: gameTitlesHasError && resourceQueries.gameTitlesQuery.data === undefined,
         completion: completions["gameTitle:"],
@@ -206,7 +213,9 @@ export function useMastersPageModel() {
         defaultLayoutFamily,
         items: optimisticCatalog.optimisticGameTitles,
         onDelete: editCommands.deleteGameTitle,
-        onRetry: async () => (await resourceQueries.gameTitlesQuery.refetch()).isSuccess,
+        onRetry: async () =>
+          Boolean(authorization.begin("operations")) &&
+          (await resourceQueries.gameTitlesQuery.refetch()).isSuccess,
         onSelect: setSelectedGameTitleId,
         onUpdate: editCommands.updateGameTitle,
         refreshing: resourceQueries.gameTitlesQuery.isFetching && !hasPendingMutation,
@@ -228,7 +237,9 @@ export function useMastersPageModel() {
         loadFailed: mapMastersHasError && !mapMastersHasData,
         loading: isInitialQueryLoading(resourceQueries.mapMastersQuery) && !mapMastersHasError,
         onDelete: editCommands.deleteMapMaster,
-        onRetry: () => void resourceQueries.mapMastersQuery.refetch(),
+        onRetry: () => {
+          if (authorization.begin("operations")) void resourceQueries.mapMastersQuery.refetch();
+        },
         onUpdate: editCommands.updateMapMaster,
         retrying: resourceQueries.mapMastersQuery.isFetching && !hasPendingMutation,
         stale: mapMastersHasError && mapMastersHasData,
@@ -250,7 +261,9 @@ export function useMastersPageModel() {
         loading:
           isInitialQueryLoading(resourceQueries.seasonMastersQuery) && !seasonMastersHasError,
         onDelete: editCommands.deleteSeasonMaster,
-        onRetry: () => void resourceQueries.seasonMastersQuery.refetch(),
+        onRetry: () => {
+          if (authorization.begin("operations")) void resourceQueries.seasonMastersQuery.refetch();
+        },
         onUpdate: editCommands.updateSeasonMaster,
         retrying: resourceQueries.seasonMastersQuery.isFetching && !hasPendingMutation,
         stale: seasonMastersHasError && seasonMastersHasData,
@@ -259,7 +272,7 @@ export function useMastersPageModel() {
     feedback: {
       authError: auth.error,
       invalidTab: rawTab !== null && !isMasterTabId(rawTab),
-      invalidReturnTo: returnRoute.hasInvalidReturnTo,
+      forbiddenTab: isMasterTabId(rawTab) && !isTabAllowed(rawTab),
       operationError,
     },
     incidents: {
@@ -267,29 +280,11 @@ export function useMastersPageModel() {
       loadFailed:
         incidentMastersHasError && resourceQueries.incidentMastersQuery.data === undefined,
       items: resourceQueries.incidentMasters,
-      onRetry: async () => (await resourceQueries.incidentMastersQuery.refetch()).isSuccess,
+      onRetry: async () =>
+        Boolean(authorization.begin("operations")) &&
+        (await resourceQueries.incidentMastersQuery.refetch()).isSuccess,
       refreshing: resourceQueries.incidentMastersQuery.isFetching,
       stale: incidentMastersHasError && resourceQueries.incidentMastersQuery.data !== undefined,
-    },
-    navigation: {
-      disabled:
-        hasPendingMutation ||
-        notifications.pending ||
-        accounts.pending ||
-        isReturnNavigationPending,
-      disabledReason: isReturnNavigationPending
-        ? "元の入力画面へ移動しています。"
-        : hasPendingMutation || notifications.pending || accounts.pending
-          ? "設定の追加・保存・削除が完了すると戻れます。"
-          : undefined,
-      destination: returnRoute.returnDestination,
-      handoffStatus: returnRoute.handoffStatus,
-      pending: isReturnNavigationPending,
-      onReturn: () => {
-        if (returnRoute.returnDestination) {
-          navigateWithTransition(returnRoute.returnDestination);
-        }
-      },
     },
     notifications,
     accounts,
@@ -302,8 +297,10 @@ export function useMastersPageModel() {
       pending: hasPendingMutation || notifications.pending || accounts.pending,
     },
     tabs: {
-      active: activeTab,
-      items: masterTabs,
+      active: isTabAllowed(activeTab) ? activeTab : null,
+      admin: authorization.retained.admin,
+      adminEpoch: authorization.epoch.admin,
+      items: permittedTabs,
       onChange: setActiveTab,
     },
   };

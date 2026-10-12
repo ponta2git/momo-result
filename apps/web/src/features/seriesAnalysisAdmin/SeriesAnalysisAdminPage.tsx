@@ -1,7 +1,9 @@
 import { Activity, Play, RefreshCw, RotateCw } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { PlayerRadarAdministration } from "@/features/seriesAnalysisAdmin/PlayerRadarAdministration";
+import { PlayerRadarHistory } from "@/features/seriesAnalysisAdmin/PlayerRadarHistory";
 import {
   AdminSkeleton,
   ExecutionStatus,
@@ -24,9 +26,39 @@ import { contentText } from "@/shared/ui/typography";
 
 export function SeriesAnalysisAdminPage() {
   const page = useSeriesAnalysisAdminPageModel();
-  const [allDialogOpen, setAllDialogOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("recalculation");
+  const [allDialog, setAllDialog] = useState({ epoch: page.authorization.adminEpoch, open: false });
+  const allDialogOpen =
+    page.authorization.retainAdmin &&
+    allDialog.epoch === page.authorization.adminEpoch &&
+    allDialog.open;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const activeTab =
+    requestedTab === "radar" || requestedTab === "history" ? "radar" : "recalculation";
+  const radarView =
+    requestedTab === "history" || searchParams.get("radarView") === "history"
+      ? "history"
+      : "current";
+  const setActiveTab = (value: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", value);
+    setSearchParams(next);
+  };
+  const setRadarView = (value: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", "radar");
+    if (value === "history") next.set("radarView", "history");
+    else next.delete("radarView");
+    setSearchParams(next);
+  };
+  const radarVisible = activeTab === "radar" && radarView === "current";
+  const previouslyVisible = useRef(radarVisible);
+  useEffect(() => {
+    if (radarVisible && !previouslyVisible.current) page.actions.refreshRadar();
+    previouslyVisible.current = radarVisible;
+  }, [radarVisible, page.actions]);
   const recalculationTabRef = useRef<HTMLElement>(null);
+  const applyFocusRef = useRef<HTMLElement | null>(null);
   const { data } = page.resource;
   const { selectedTitle } = page.selection;
   return (
@@ -71,12 +103,17 @@ export function SeriesAnalysisAdminPage() {
                 icon={<Activity />}
                 placement="embedded"
                 title="対象作品がありません"
-                description="設定管理で作品を登録してください。"
+                description={
+                  page.authorization.retainAdmin
+                    ? "設定管理で作品を登録してください。"
+                    : "管理者による作品の登録が必要です。"
+                }
               />
-            ) : data ? (
+            ) : data && !(activeTab === "radar" && radarView === "history") ? (
               <div className="max-w-lg">
                 <SelectField
                   label="対象作品"
+                  disabled={!page.authorization.canOperate}
                   options={page.selection.options}
                   value={page.selection.gameTitleId ?? ""}
                   onValueChange={(nextValue) => page.actions.selectTitle(nextValue)}
@@ -102,6 +139,7 @@ export function SeriesAnalysisAdminPage() {
                     <div className={inlineActionGroupClass}>
                       <Button
                         disabled={
+                          !page.authorization.canOperate ||
                           page.recalculation.titleUnavailable ||
                           page.recalculation.titleReserved ||
                           page.recalculation.pending
@@ -113,28 +151,37 @@ export function SeriesAnalysisAdminPage() {
                       >
                         {page.recalculation.titleReserved ? "再計算を予約済み" : "この作品を再計算"}
                       </Button>
-                      <AlertDialog
-                        open={allDialogOpen}
-                        onOpenChange={setAllDialogOpen}
-                        confirmLabel="全作品を再計算"
-                        description={`${data.titleOptions.length}作品を対象として予約します。実行中の作品は完了後に再計算されます。`}
-                        formatError={(error) => formatApiError(error, "再計算を受け付けられません")}
-                        pending={page.recalculation.allPending}
-                        title="全作品の再計算を予約しますか？"
-                        tone="primary"
-                        trigger={
-                          <Button
-                            disabled={page.recalculation.pending}
-                            icon={<RotateCw />}
-                            variant="secondary"
-                          >
-                            全作品を再計算
-                          </Button>
-                        }
-                        onConfirm={async () => {
-                          await page.actions.recalculateAll();
-                        }}
-                      />
+                      {page.authorization.retainAdmin ? (
+                        <AlertDialog
+                          open={allDialogOpen}
+                          onOpenChange={(open) =>
+                            setAllDialog({ epoch: page.authorization.adminEpoch, open })
+                          }
+                          confirmDisabled={!page.authorization.canRecalculateAll}
+                          confirmLabel="全作品を再計算"
+                          description={`${data.titleOptions.length}作品を対象として予約します。実行中の作品は完了後に再計算されます。`}
+                          formatError={(error) =>
+                            formatApiError(error, "再計算を受け付けられません")
+                          }
+                          pending={page.recalculation.allPending}
+                          title="全作品の再計算を予約しますか？"
+                          tone="primary"
+                          trigger={
+                            <Button
+                              disabled={
+                                !page.authorization.canRecalculateAll || page.recalculation.pending
+                              }
+                              icon={<RotateCw />}
+                              variant="secondary"
+                            >
+                              全作品を再計算
+                            </Button>
+                          }
+                          onConfirm={async () => {
+                            await page.actions.recalculateAll();
+                          }}
+                        />
+                      ) : null}
                     </div>
                     {page.feedback.resourceError ? null : (
                       <Button
@@ -163,28 +210,53 @@ export function SeriesAnalysisAdminPage() {
             ) : null}
           </TabsPanel>
           <TabsPanel keepMounted value="radar">
-            {selectedTitle ? (
-              <div className="mt-6 min-w-0">
-                <PlayerRadarAdministration
-                  key={selectedTitle.gameTitleId}
-                  gameTitleId={selectedTitle.gameTitleId}
-                  gameTitleName={selectedTitle.gameTitleName}
-                  onApplyAccepted={(operationId) => {
-                    page.actions.clearRecalculationFeedback();
-                    setActiveTab("recalculation");
-                    recalculationTabRef.current?.focus();
-                    showToast({
-                      id: `radar-apply-accepted:${operationId}`,
-                      title: "採点基準の適用を受け付けました",
-                      description: `${selectedTitle.gameTitleName}の再計算状況を表示しています。`,
-                    });
-                  }}
-                  applyFinalFocus={() =>
-                    activeTab === "recalculation" ? recalculationTabRef.current : null
-                  }
-                />
-              </div>
-            ) : null}
+            <div className="mt-6 grid min-w-0 gap-4">
+              <TabsRoot value={radarView} onValueChange={(value) => setRadarView(String(value))}>
+                <TabsList aria-label="採点基準の表示切替" variant="underline">
+                  <TabsTab value="current">現在の採点境界</TabsTab>
+                  {page.authorization.retainOperations ? (
+                    <TabsTab value="history">改訂履歴</TabsTab>
+                  ) : null}
+                </TabsList>
+                <TabsPanel keepMounted value="current">
+                  {selectedTitle ? (
+                    <div className="mt-6 min-w-0">
+                      <PlayerRadarAdministration
+                        key={selectedTitle.gameTitleId}
+                        gameTitleId={selectedTitle.gameTitleId}
+                        gameTitleName={selectedTitle.gameTitleName}
+                        active={activeTab === "radar" && radarView === "current"}
+                        onApplyAccepted={(operationId) => {
+                          applyFocusRef.current = recalculationTabRef.current;
+                          page.actions.clearRecalculationFeedback();
+                          setActiveTab("recalculation");
+                          recalculationTabRef.current?.focus();
+                          showToast({
+                            id: `radar-apply-accepted:${operationId}`,
+                            title: "採点基準の適用を受け付けました",
+                            description: `${selectedTitle.gameTitleName}の再計算状況を表示しています。`,
+                          });
+                        }}
+                        applyFinalFocus={() => {
+                          const destination = applyFocusRef.current;
+                          applyFocusRef.current = null;
+                          return destination;
+                        }}
+                      />
+                    </div>
+                  ) : null}
+                </TabsPanel>
+                {page.authorization.retainOperations ? (
+                  <TabsPanel value="history">
+                    {activeTab === "radar" && radarView === "history" ? (
+                      <div className="mt-6 min-w-0">
+                        <PlayerRadarHistory titleOptions={data?.titleOptions ?? []} />
+                      </div>
+                    ) : null}
+                  </TabsPanel>
+                ) : null}
+              </TabsRoot>
+            </div>
           </TabsPanel>
         </TabsRoot>
       </PageContentSurface>

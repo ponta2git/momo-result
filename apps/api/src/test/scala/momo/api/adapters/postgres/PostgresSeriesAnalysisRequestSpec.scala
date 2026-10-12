@@ -23,7 +23,7 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
     sql"""
       UPDATE series_analysis_release_state
       SET algorithm_version = 'series-analysis-v7', artifact_schema_version = 6,
-          validation_contract_id = 'series-analysis-artifact-v6-full-validation-v1'
+          validation_contract_id = 'series-analysis-artifact-v6-full-validation-v2'
       WHERE singleton_key = 'current'
     """.update.run.transact(transactor) *>
       new PostgresGameTitlesRepository[IO](transactor)

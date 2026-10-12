@@ -21,6 +21,7 @@ import {
   memberAliasesQueryOptions,
   seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
+import { useAuthorization } from "@/shared/auth/useAuthorization";
 
 const noGameTitles: GameTitleResponse[] = [];
 const noIncidentMasters: IncidentMasterResponse[] = [];
@@ -32,20 +33,21 @@ export function useMasterResourceQueries(
   selectedGameTitleId: string,
   enabled: { catalog: boolean; aliases: boolean; incidents: boolean },
 ) {
+  const authorization = useAuthorization();
   const gameTitlesQuery = useQuery({
     ...gameTitlesQueryOptions(),
     select: selectGameTitles,
-    enabled: enabled.catalog,
+    enabled: () => enabled.catalog && authorization.can("operations"),
   });
   const incidentMastersQuery = useQuery({
     ...incidentMastersQueryOptions(),
     select: selectIncidentMasters,
-    enabled: enabled.incidents,
+    enabled: () => enabled.incidents && authorization.can("operations"),
   });
   const memberAliasesQuery = useQuery({
     ...memberAliasesQueryOptions(),
     select: selectMemberAliases,
-    enabled: enabled.aliases,
+    enabled: () => enabled.aliases && authorization.can("admin"),
   });
   const gameTitles = gameTitlesQuery.data ?? noGameTitles;
   const effectiveSelectedGameTitleId = gameTitles.some(
@@ -60,6 +62,8 @@ export function useMasterResourceQueries(
       enabled.catalog && Boolean(effectiveSelectedGameTitleId),
     ),
     select: selectMapMasters,
+    enabled: () =>
+      enabled.catalog && Boolean(effectiveSelectedGameTitleId) && authorization.can("operations"),
   });
 
   const seasonMastersQuery = useQuery({
@@ -68,6 +72,8 @@ export function useMasterResourceQueries(
       enabled.catalog && Boolean(effectiveSelectedGameTitleId),
     ),
     select: selectSeasonMasters,
+    enabled: () =>
+      enabled.catalog && Boolean(effectiveSelectedGameTitleId) && authorization.can("operations"),
   });
 
   return {

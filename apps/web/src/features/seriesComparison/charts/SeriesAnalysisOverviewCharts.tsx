@@ -1,6 +1,5 @@
 import { useId } from "react";
 
-import { dataVizSeriesPresentation } from "@/features/seriesComparison/charts/dataViz/seriesPresentation";
 import {
   AnalysisMatrix,
   MatrixAxisHeader,
@@ -16,6 +15,7 @@ import {
 import type { RelativeIntensity, SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { colorMix, rankColor } from "@/shared/matches/rankPresentation";
+import { dataVizSeriesPresentation } from "@/shared/seriesAnalysis/seriesPresentation";
 import { cn } from "@/shared/ui/cn";
 import { contentText } from "@/shared/ui/typography";
 

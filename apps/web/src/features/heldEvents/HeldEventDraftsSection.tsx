@@ -7,20 +7,13 @@ import type { HeldEventDraftResponse } from "@/shared/api/heldEvents";
 import { asDraftStatusOrUnknown, reviewStatusLabel } from "@/shared/domain/draftStatus";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { DraftStatusBadge } from "@/shared/matches/DraftStatusBadge";
-import { withReturnTo } from "@/shared/navigation/returnTo";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
 import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
 import { contentText } from "@/shared/ui/typography";
 
-export function HeldEventDraftsSection({
-  drafts,
-  returnTo,
-}: {
-  drafts: HeldEventDraftResponse[];
-  returnTo: string;
-}) {
+export function HeldEventDraftsSection({ drafts }: { drafts: HeldEventDraftResponse[] }) {
   if (drafts.length === 0) {
     return null;
   }
@@ -46,7 +39,7 @@ export function HeldEventDraftsSection({
                   action.href ? (
                     <LinkButton
                       size="sm"
-                      to={withReturnTo(action.href, returnTo)}
+                      to={action.href}
                       variant={draft.matchDraftId === primaryDraftId ? "primary" : "secondary"}
                     >
                       {action.label}

@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use super::{
     MAXIMUM_LISTED_MATCHES, MAXIMUM_LISTED_SEASONS, SkipReason,
-    types::{Artifact, Baseline, MatchIdentity, RankComparison, RankSample},
+    types::{Artifact, MatchIdentity, RankComparison, RankSample},
 };
 
 pub(super) struct Changes {
@@ -18,8 +18,7 @@ impl Changes {
 
 /// Compare revisions and membership, stopping before an unpublishable listing is materialized.
 /// Deletions affect season aggregates but never become listed matches.
-pub(super) fn changes(baseline: &Baseline, after: &Artifact) -> Result<Changes, SkipReason> {
-    let before = baseline.as_artifact();
+pub(super) fn changes(before: Option<&Artifact>, after: &Artifact) -> Result<Changes, SkipReason> {
     let mut matches = BTreeMap::new();
     let mut seasons = BTreeSet::new();
     for (id, current) in &after.matches {

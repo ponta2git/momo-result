@@ -23,6 +23,13 @@ final class PostgresSeriesPlayerRadarRepository[F[_]: Async] private (
   override def radarState(title: GameTitleId): F[Either[AppError, SeriesPlayerRadarDocument]] =
     read(PostgresSeriesPlayerRadarReadOps.state(title))
 
+  override def radarHistory(request: SeriesPlayerRadarHistoryRequest)
+      : F[Either[AppError, SeriesPlayerRadarDocument]] =
+    read(PostgresSeriesPlayerRadarHistoryOps.list(request))
+
+  override def radarRevision(revisionId: String): F[Either[AppError, SeriesPlayerRadarDocument]] =
+    read(PostgresSeriesPlayerRadarHistoryOps.detail(revisionId))
+
   override def radarPreview(request: SeriesPlayerRadarPreviewRequest)
       : F[Either[AppError, SeriesPlayerRadarDocument]] =
     read(PostgresSeriesPlayerRadarReadOps.preview(request))

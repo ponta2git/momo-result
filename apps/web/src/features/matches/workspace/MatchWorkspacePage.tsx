@@ -9,7 +9,7 @@ import { MatchWorkspaceEditor } from "@/features/matches/workspace/MatchWorkspac
 import { MatchWorkspaceLoading } from "@/features/matches/workspace/MatchWorkspaceLoading";
 import { MatchWorkspaceToolbar } from "@/features/matches/workspace/MatchWorkspaceToolbar";
 import { useMatchWorkspacePageModel } from "@/features/matches/workspace/useMatchWorkspacePageModel";
-import { useAuth } from "@/shared/auth/useAuth";
+import { useAuthorization } from "@/shared/auth/useAuthorization";
 import { trimSearchParam } from "@/shared/lib/searchParams";
 import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
 import { Button } from "@/shared/ui/actions/Button";
@@ -60,7 +60,8 @@ function preservesWorkspaceInput(mode: WorkspaceMode, current: Location, next: L
 
 export function MatchWorkspacePage(props: MatchWorkspacePageProps) {
   const [searchParams] = useSearchParams();
-  const { auth, isChecking } = useAuth();
+  const authorization = useAuthorization();
+  const { auth, isChecking } = authorization.auth;
   const useSampleDrafts = props.mode === "review" && searchParams.get("sample") === "1";
   if (isChecking) {
     return <MatchWorkspaceLoading sample={useSampleDrafts} />;
@@ -69,6 +70,8 @@ export function MatchWorkspacePage(props: MatchWorkspacePageProps) {
     <MatchWorkspacePageContent
       key={matchWorkspaceIdentityKey(props, searchParams, auth?.accountId)}
       accountId={auth?.accountId}
+      canManageMasters={authorization.allowed.operations}
+      canNavigateToMasters={() => authorization.can("operations")}
       {...props}
     />
   );
@@ -76,14 +79,22 @@ export function MatchWorkspacePage(props: MatchWorkspacePageProps) {
 
 function MatchWorkspacePageContent({
   accountId,
+  canManageMasters,
+  canNavigateToMasters,
   matchDraftId,
   matchId,
   matchSessionId,
   mode,
   preferredHeldEventId,
-}: MatchWorkspacePageProps & { accountId: string | undefined }) {
+}: MatchWorkspacePageProps & {
+  accountId: string | undefined;
+  canManageMasters: boolean;
+  canNavigateToMasters: () => boolean;
+}) {
   const pageModel = useMatchWorkspacePageModel({
     accountId,
+    canManageMasters,
+    canNavigateToMasters,
     matchDraftId,
     matchId,
     matchSessionId,

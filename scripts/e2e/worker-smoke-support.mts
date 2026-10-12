@@ -487,7 +487,7 @@ export function analysisEnvironment(
     MOMO_HEAVY_CGROUP_V2_VALIDATED: "true",
     MOMO_OCR_V2_CONSUMER_MODE: "disabled",
     MOMO_LOG_FORMAT: "json",
-    RUST_LOG: "momo_processing_worker=info",
+    RUST_LOG: "momo_processing_worker=info,momo_notifications=info",
   };
 }
 export function startWorker(

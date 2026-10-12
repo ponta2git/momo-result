@@ -10,8 +10,8 @@ import doobie.postgres.implicits.*
 import doobie.postgres.sqlstate
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.domain.LoginAccount
 import momo.api.domain.ids.{AccountId, UserId}
+import momo.api.domain.{AccountRole, LoginAccount}
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{
   CreateLoginAccountData,
@@ -38,20 +38,20 @@ object PostgresLoginAccounts:
       displayName: String,
       playerMemberId: Option[momo.api.domain.ids.MemberId],
       loginEnabled: Boolean,
-      isAdmin: Boolean,
+      role: AccountRole,
       createdAt: java.time.Instant,
       updatedAt: java.time.Instant,
   )
 
   private val selectAll = fr"""
     SELECT id, discord_user_id, display_name, player_member_id,
-           login_enabled, is_admin, created_at, updated_at
+           login_enabled, role, created_at, updated_at
     FROM momo_login_accounts
   """
 
   private val returningAll = fr"""
     RETURNING id, discord_user_id, display_name, player_member_id,
-              login_enabled, is_admin, created_at, updated_at
+              login_enabled, role, created_at, updated_at
   """
 
   private def fromRow(row: LoginAccountRow): LoginAccount = LoginAccount(
@@ -60,15 +60,17 @@ object PostgresLoginAccounts:
     displayName = row.displayName,
     playerMemberId = row.playerMemberId,
     loginEnabled = row.loginEnabled,
-    isAdmin = row.isAdmin,
+    role = row.role,
     createdAt = row.createdAt,
     updatedAt = row.updatedAt,
   )
 
   val alg: LoginAccountsAlg[ConnectionIO] = new LoginAccountsAlg[ConnectionIO]:
-    override def list: ConnectionIO[List[LoginAccount]] =
-      (selectAll ++ fr"ORDER BY is_admin DESC, login_enabled DESC, created_at, id")
-        .query[LoginAccountRow].to[List].map(_.map(fromRow))
+    override def list: ConnectionIO[List[LoginAccount]] = (selectAll ++ fr"""
+        ORDER BY CASE role WHEN 'admin' THEN 0 WHEN 'operator' THEN 1 ELSE 2 END,
+                 login_enabled DESC, created_at, id
+      """)
+      .query[LoginAccountRow].to[List].map(_.map(fromRow))
 
     override def find(id: AccountId): ConnectionIO[Option[LoginAccount]] =
       (selectAll ++ fr"WHERE id = $id").query[LoginAccountRow].option.map(_.map(fromRow))
@@ -80,10 +82,10 @@ object PostgresLoginAccounts:
     override def create(account: CreateLoginAccountData): ConnectionIO[LoginAccount] = (sql"""
         INSERT INTO momo_login_accounts
           (id, discord_user_id, display_name, player_member_id,
-           login_enabled, is_admin, created_at, updated_at)
+           login_enabled, role, created_at, updated_at)
         VALUES
           (${account.id}, ${account.discordUserId}, ${account.displayName},
-           ${account.playerMemberId}, ${account.loginEnabled}, ${account.isAdmin},
+           ${account.playerMemberId}, ${account.loginEnabled}, ${account.role},
            ${account.createdAt}, ${account.updatedAt})
       """ ++ returningAll).query[LoginAccountRow].unique.map(fromRow).exceptSomeSqlState {
       case state if isLoginAccountUniqueViolation(state) =>
@@ -109,20 +111,20 @@ object PostgresLoginAccounts:
                    ELSE player_member_id
               END,
             login_enabled = COALESCE(${data.loginEnabled}, login_enabled),
-            is_admin = COALESCE(${data.isAdmin}, is_admin),
+            role = COALESCE(${data.role}, role),
             updated_at = ${data.updatedAt}
         WHERE id = $id
           AND NOT (
             login_enabled = true
-            AND is_admin = true
+            AND role = 'admin'
             AND (
               COALESCE(${data.loginEnabled}, login_enabled) = false
-              OR COALESCE(${data.isAdmin}, is_admin) = false
+              OR COALESCE(${data.role}, role) <> 'admin'
             )
             AND (
               SELECT COUNT(*)
               FROM momo_login_accounts
-              WHERE login_enabled = true AND is_admin = true
+              WHERE login_enabled = true AND role = 'admin'
             ) <= 1
           )
     """ ++ returningAll).query[LoginAccountRow].option.map(_.map(fromRow))
@@ -166,8 +168,9 @@ object PostgresLoginAccountAdministration:
       data: UpdateLoginAccountData,
   ): Boolean =
     val nextLoginEnabled = data.loginEnabled.getOrElse(existing.loginEnabled)
-    val nextIsAdmin = data.isAdmin.getOrElse(existing.isAdmin)
-    existing.loginEnabled && existing.isAdmin && (!nextLoginEnabled || !nextIsAdmin)
+    val nextRole = data.role.getOrElse(existing.role)
+    existing.loginEnabled && existing.role == AccountRole.Admin &&
+    (!nextLoginEnabled || nextRole != AccountRole.Admin)
 end PostgresLoginAccountAdministration
 
 final class PostgresLoginAccountsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])

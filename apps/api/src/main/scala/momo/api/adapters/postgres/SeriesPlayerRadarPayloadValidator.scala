@@ -32,6 +32,9 @@ private[postgres] object SeriesPlayerRadarPayloadValidator:
   def validate(document: Json): Boolean =
     val cursor = document.hcursor
     val fragments = List(
+      "basis" -> cursor.downField("beforeBasis").focus,
+      "basis" -> cursor.downField("afterBasis").focus,
+      "basis" -> cursor.downField("candidate").downField("sourceBasis").downField("basis").focus,
       "basis" -> cursor.downField("currentBasis").downField("basis").focus,
       "basis" -> cursor.downField("previousBasis").downField("basis").focus,
       "candidate" -> cursor.downField("candidate").downField("result").focus,

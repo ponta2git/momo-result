@@ -673,6 +673,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/series-analysis/radar/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getApiAdminSeries-analysisRadarRevisions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/series-analysis/radar/revisions/{revisionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getApiAdminSeries-analysisRadarRevisionsRevisionid"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/series-analysis/radar/preview": {
         parameters: {
             query?: never;
@@ -935,7 +967,8 @@ export interface components {
         AuthMeResponse: {
             accountId: string;
             displayName: string;
-            isAdmin: boolean;
+            /** @enum {string} */
+            role: "user" | "operator" | "admin";
             memberId?: string;
             csrfToken?: string;
         };
@@ -994,7 +1027,8 @@ export interface components {
             displayName: string;
             playerMemberId?: string;
             loginEnabled: boolean;
-            isAdmin: boolean;
+            /** @enum {string} */
+            role: "user" | "operator" | "admin";
         };
         /** CreateMapMasterRequest */
         CreateMapMasterRequest: {
@@ -1231,7 +1265,8 @@ export interface components {
             displayName: string;
             playerMemberId?: string;
             loginEnabled: boolean;
-            isAdmin: boolean;
+            /** @enum {string} */
+            role: "user" | "operator" | "admin";
             createdAt: string;
             updatedAt: string;
         };
@@ -1558,7 +1593,7 @@ export interface components {
             status: number;
             detail: string;
             /** @enum {string} */
-            code: "BAD_REQUEST" | "UNAUTHORIZED" | "FORBIDDEN" | "NOT_FOUND" | "VALIDATION_FAILED" | "UNSUPPORTED_MEDIA_TYPE" | "PAYLOAD_TOO_LARGE" | "CONFLICT" | "MATCH_NOTE_VERSION_CONFLICT" | "NOTIFICATION_SETTINGS_VERSION_CONFLICT" | "IDEMPOTENCY_IN_PROGRESS" | "IDEMPOTENCY_PAYLOAD_MISMATCH" | "TOO_MANY_REQUESTS" | "SERVICE_UNAVAILABLE" | "ANALYSIS_ARTIFACT_EXPIRED" | "ANALYSIS_SCOPE_NOT_FOUND" | "ANALYSIS_SCOPE_NOT_IN_ARTIFACT" | "ANALYSIS_READ_BUSY" | "ANALYSIS_STATE_UNAVAILABLE" | "ANALYSIS_NO_ELIGIBLE_TITLES" | "DEPENDENCY_FAILED" | "INTERNAL_ERROR";
+            code: "BAD_REQUEST" | "UNAUTHORIZED" | "FORBIDDEN" | "NOT_FOUND" | "VALIDATION_FAILED" | "UNSUPPORTED_MEDIA_TYPE" | "PAYLOAD_TOO_LARGE" | "CONFLICT" | "LAST_ENABLED_ADMIN_REQUIRED" | "MATCH_NOTE_VERSION_CONFLICT" | "NOTIFICATION_SETTINGS_VERSION_CONFLICT" | "IDEMPOTENCY_IN_PROGRESS" | "IDEMPOTENCY_PAYLOAD_MISMATCH" | "TOO_MANY_REQUESTS" | "SERVICE_UNAVAILABLE" | "ANALYSIS_ARTIFACT_EXPIRED" | "ANALYSIS_SCOPE_NOT_FOUND" | "ANALYSIS_SCOPE_NOT_IN_ARTIFACT" | "ANALYSIS_READ_BUSY" | "ANALYSIS_STATE_UNAVAILABLE" | "ANALYSIS_NO_ELIGIBLE_TITLES" | "DEPENDENCY_FAILED" | "INTERNAL_ERROR";
         };
         /** PutOcrSubmissionRequest */
         PutOcrSubmissionRequest: {
@@ -2222,6 +2257,177 @@ export interface components {
                         ];
                         /** @constant */
                         definitionVersion: "player-radar-six-axes-v1";
+                        /** @constant */
+                        methodVersion: "player-radar-spread-v1";
+                        source: {
+                            firstMatch: null | {
+                                heldEventId: string;
+                                matchId: string;
+                                matchNoInEvent: number;
+                                playedAt: string;
+                            };
+                            gameTitleId: string;
+                            heldEventCount: number;
+                            lastMatch: null | {
+                                heldEventId: string;
+                                matchId: string;
+                                matchNoInEvent: number;
+                                playedAt: string;
+                            };
+                            mapCounts: {
+                                mapMasterId: string;
+                                matchCount: number;
+                                displayName: string | null;
+                            }[];
+                            mapMasterIds: string[];
+                            matchCount: number;
+                            sourceChecksum: string;
+                        };
+                        /** @constant */
+                        windowSize: 20;
+                        /** @constant */
+                        windowStride: 1;
+                    } | {
+                        axes: [
+                            {
+                                /** @enum {string} */
+                                axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                                median: null | number;
+                                q10: null | number;
+                                q90: null | number;
+                                thresholds: [
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number
+                                ];
+                            },
+                            {
+                                /** @enum {string} */
+                                axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                                median: null | number;
+                                q10: null | number;
+                                q90: null | number;
+                                thresholds: [
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number
+                                ];
+                            },
+                            {
+                                /** @enum {string} */
+                                axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                                median: null | number;
+                                q10: null | number;
+                                q90: null | number;
+                                thresholds: [
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number
+                                ];
+                            },
+                            {
+                                /** @enum {string} */
+                                axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                                median: null | number;
+                                q10: null | number;
+                                q90: null | number;
+                                thresholds: [
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number
+                                ];
+                            },
+                            {
+                                /** @enum {string} */
+                                axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                                median: null | number;
+                                q10: null | number;
+                                q90: null | number;
+                                thresholds: [
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number
+                                ];
+                            },
+                            {
+                                /** @enum {string} */
+                                axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                                median: null | number;
+                                q10: null | number;
+                                q90: null | number;
+                                thresholds: [
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number
+                                ];
+                            }
+                        ];
+                        /** @constant */
+                        definitionVersion: "player-radar-six-axes-v1";
+                        manual: {
+                            monitoringSource: {
+                                firstMatch: null | {
+                                    heldEventId: string;
+                                    matchId: string;
+                                    matchNoInEvent: number;
+                                    playedAt: string;
+                                };
+                                gameTitleId: string;
+                                heldEventCount: number;
+                                lastMatch: null | {
+                                    heldEventId: string;
+                                    matchId: string;
+                                    matchNoInEvent: number;
+                                    playedAt: string;
+                                };
+                                mapCounts: {
+                                    mapMasterId: string;
+                                    matchCount: number;
+                                    displayName: string | null;
+                                }[];
+                                mapMasterIds: string[];
+                                matchCount: number;
+                                sourceChecksum: string;
+                            };
+                            sourceBasisId: string;
+                            sourceCandidateId: null | string;
+                        };
                         /** @constant */
                         methodVersion: "player-radar-spread-v1";
                         source: {
@@ -3747,16 +3953,31 @@ export interface components {
             maps: components["schemas"]["SeriesAnalysisMapOptionResponse"][];
             seasonMapPairs: components["schemas"]["SeriesAnalysisSeasonMapPairResponse"][];
         };
+        /** SeriesPlayerRadarManualAxisRequest */
+        SeriesPlayerRadarManualAxisRequest: {
+            /** @enum {string} */
+            axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+            thresholds?: number[];
+        };
+        /** SeriesPlayerRadarManualInputRequest */
+        SeriesPlayerRadarManualInputRequest: {
+            axes?: components["schemas"]["SeriesPlayerRadarManualAxisRequest"][];
+        };
         /** SeriesPlayerRadarOperationRequest */
         SeriesPlayerRadarOperationRequest: {
             gameTitleId: string;
             /** @enum {string} */
-            kind: "candidate" | "preview" | "apply" | "withdraw" | "restore" | "acknowledge" | "retry";
+            kind: "candidate" | "manual" | "preview" | "apply" | "withdraw" | "restore" | "acknowledge" | "retry";
             candidateId?: string;
             previewId?: string;
-            expectedCurrentBasisId?: string;
+            expectedCurrentBasisId?: string | null;
+            /** @description Required for retry. For withdraw, optionally identifies this actor's manual creation operation; guarded withdrawal refuses any candidate with an accepted apply operation. */
             originOperationId?: string;
             evidenceKey?: string;
+            expectedCandidateId?: string | null;
+            sourceBasisId?: string;
+            sourceCandidateId?: string | null;
+            manualInput?: components["schemas"]["SeriesPlayerRadarManualInputRequest"];
         };
         /** SeriesPlayerRadarOperationResponse */
         SeriesPlayerRadarOperationResponse: {
@@ -3768,7 +3989,7 @@ export interface components {
             operationId: string;
             gameTitleId: string;
             /** @enum {string} */
-            kind: "candidate" | "preview" | "apply" | "withdraw" | "restore" | "acknowledge" | "retry";
+            kind: "candidate" | "manual" | "preview" | "apply" | "withdraw" | "restore" | "acknowledge" | "retry";
             /** @enum {string} */
             status: "pending" | "running" | "succeeded" | "failed" | "withdrawn";
             candidateId: string | null;
@@ -3979,6 +4200,642 @@ export interface components {
                 };
             } | null;
         };
+        SeriesPlayerRadarRevisionDetailResponse: {
+            /** @constant */
+            schemaVersion: 1;
+            revision: components["schemas"]["SeriesPlayerRadarRevisionResponse"];
+            beforeBasis: ({
+                axes: [
+                    {
+                        /** @enum {string} */
+                        axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                        median: number;
+                        q10: number;
+                        q90: number;
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    },
+                    {
+                        /** @enum {string} */
+                        axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                        median: number;
+                        q10: number;
+                        q90: number;
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    },
+                    {
+                        /** @enum {string} */
+                        axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                        median: number;
+                        q10: number;
+                        q90: number;
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    },
+                    {
+                        /** @enum {string} */
+                        axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                        median: number;
+                        q10: number;
+                        q90: number;
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    },
+                    {
+                        /** @enum {string} */
+                        axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                        median: number;
+                        q10: number;
+                        q90: number;
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    },
+                    {
+                        /** @enum {string} */
+                        axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                        median: number;
+                        q10: number;
+                        q90: number;
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    }
+                ];
+                /** @constant */
+                definitionVersion: "player-radar-six-axes-v1";
+                /** @constant */
+                methodVersion: "player-radar-spread-v1";
+                source: {
+                    firstMatch: null | {
+                        heldEventId: string;
+                        matchId: string;
+                        matchNoInEvent: number;
+                        playedAt: string;
+                    };
+                    gameTitleId: string;
+                    heldEventCount: number;
+                    lastMatch: null | {
+                        heldEventId: string;
+                        matchId: string;
+                        matchNoInEvent: number;
+                        playedAt: string;
+                    };
+                    mapCounts: {
+                        mapMasterId: string;
+                        matchCount: number;
+                    }[];
+                    mapMasterIds: string[];
+                    matchCount: number;
+                    sourceChecksum: string;
+                };
+                /** @constant */
+                windowSize: 20;
+                /** @constant */
+                windowStride: 1;
+            } | {
+                axes: [
+                    {
+                        /** @enum {string} */
+                        axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                        median: null | number;
+                        q10: null | number;
+                        q90: null | number;
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    },
+                    {
+                        /** @enum {string} */
+                        axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                        median: null | number;
+                        q10: null | number;
+                        q90: null | number;
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    },
+                    {
+                        /** @enum {string} */
+                        axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                        median: null | number;
+                        q10: null | number;
+                        q90: null | number;
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    },
+                    {
+                        /** @enum {string} */
+                        axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                        median: null | number;
+                        q10: null | number;
+                        q90: null | number;
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    },
+                    {
+                        /** @enum {string} */
+                        axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                        median: null | number;
+                        q10: null | number;
+                        q90: null | number;
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    },
+                    {
+                        /** @enum {string} */
+                        axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                        median: null | number;
+                        q10: null | number;
+                        q90: null | number;
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    }
+                ];
+                /** @constant */
+                definitionVersion: "player-radar-six-axes-v1";
+                manual: {
+                    monitoringSource: {
+                        firstMatch: null | {
+                            heldEventId: string;
+                            matchId: string;
+                            matchNoInEvent: number;
+                            playedAt: string;
+                        };
+                        gameTitleId: string;
+                        heldEventCount: number;
+                        lastMatch: null | {
+                            heldEventId: string;
+                            matchId: string;
+                            matchNoInEvent: number;
+                            playedAt: string;
+                        };
+                        mapCounts: {
+                            mapMasterId: string;
+                            matchCount: number;
+                        }[];
+                        mapMasterIds: string[];
+                        matchCount: number;
+                        sourceChecksum: string;
+                    };
+                    sourceBasisId: string;
+                    sourceCandidateId: null | string;
+                };
+                /** @constant */
+                methodVersion: "player-radar-spread-v1";
+                source: {
+                    firstMatch: null | {
+                        heldEventId: string;
+                        matchId: string;
+                        matchNoInEvent: number;
+                        playedAt: string;
+                    };
+                    gameTitleId: string;
+                    heldEventCount: number;
+                    lastMatch: null | {
+                        heldEventId: string;
+                        matchId: string;
+                        matchNoInEvent: number;
+                        playedAt: string;
+                    };
+                    mapCounts: {
+                        mapMasterId: string;
+                        matchCount: number;
+                    }[];
+                    mapMasterIds: string[];
+                    matchCount: number;
+                    sourceChecksum: string;
+                };
+                /** @constant */
+                windowSize: 20;
+                /** @constant */
+                windowStride: 1;
+            }) | null;
+            /** Series Player Radar Basis v1 */
+            afterBasis: {
+                axes: [
+                    {
+                        /** @enum {string} */
+                        axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                        median: number;
+                        q10: number;
+                        q90: number;
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    },
+                    {
+                        /** @enum {string} */
+                        axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                        median: number;
+                        q10: number;
+                        q90: number;
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    },
+                    {
+                        /** @enum {string} */
+                        axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                        median: number;
+                        q10: number;
+                        q90: number;
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    },
+                    {
+                        /** @enum {string} */
+                        axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                        median: number;
+                        q10: number;
+                        q90: number;
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    },
+                    {
+                        /** @enum {string} */
+                        axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                        median: number;
+                        q10: number;
+                        q90: number;
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    },
+                    {
+                        /** @enum {string} */
+                        axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                        median: number;
+                        q10: number;
+                        q90: number;
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    }
+                ];
+                /** @constant */
+                definitionVersion: "player-radar-six-axes-v1";
+                /** @constant */
+                methodVersion: "player-radar-spread-v1";
+                source: {
+                    firstMatch: null | {
+                        heldEventId: string;
+                        matchId: string;
+                        matchNoInEvent: number;
+                        playedAt: string;
+                    };
+                    gameTitleId: string;
+                    heldEventCount: number;
+                    lastMatch: null | {
+                        heldEventId: string;
+                        matchId: string;
+                        matchNoInEvent: number;
+                        playedAt: string;
+                    };
+                    mapCounts: {
+                        mapMasterId: string;
+                        matchCount: number;
+                    }[];
+                    mapMasterIds: string[];
+                    matchCount: number;
+                    sourceChecksum: string;
+                };
+                /** @constant */
+                windowSize: 20;
+                /** @constant */
+                windowStride: 1;
+            } | {
+                axes: [
+                    {
+                        /** @enum {string} */
+                        axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                        median: null | number;
+                        q10: null | number;
+                        q90: null | number;
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    },
+                    {
+                        /** @enum {string} */
+                        axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                        median: null | number;
+                        q10: null | number;
+                        q90: null | number;
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    },
+                    {
+                        /** @enum {string} */
+                        axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                        median: null | number;
+                        q10: null | number;
+                        q90: null | number;
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    },
+                    {
+                        /** @enum {string} */
+                        axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                        median: null | number;
+                        q10: null | number;
+                        q90: null | number;
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    },
+                    {
+                        /** @enum {string} */
+                        axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                        median: null | number;
+                        q10: null | number;
+                        q90: null | number;
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    },
+                    {
+                        /** @enum {string} */
+                        axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                        median: null | number;
+                        q10: null | number;
+                        q90: null | number;
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    }
+                ];
+                /** @constant */
+                definitionVersion: "player-radar-six-axes-v1";
+                manual: {
+                    monitoringSource: {
+                        firstMatch: null | {
+                            heldEventId: string;
+                            matchId: string;
+                            matchNoInEvent: number;
+                            playedAt: string;
+                        };
+                        gameTitleId: string;
+                        heldEventCount: number;
+                        lastMatch: null | {
+                            heldEventId: string;
+                            matchId: string;
+                            matchNoInEvent: number;
+                            playedAt: string;
+                        };
+                        mapCounts: {
+                            mapMasterId: string;
+                            matchCount: number;
+                        }[];
+                        mapMasterIds: string[];
+                        matchCount: number;
+                        sourceChecksum: string;
+                    };
+                    sourceBasisId: string;
+                    sourceCandidateId: null | string;
+                };
+                /** @constant */
+                methodVersion: "player-radar-spread-v1";
+                source: {
+                    firstMatch: null | {
+                        heldEventId: string;
+                        matchId: string;
+                        matchNoInEvent: number;
+                        playedAt: string;
+                    };
+                    gameTitleId: string;
+                    heldEventCount: number;
+                    lastMatch: null | {
+                        heldEventId: string;
+                        matchId: string;
+                        matchNoInEvent: number;
+                        playedAt: string;
+                    };
+                    mapCounts: {
+                        mapMasterId: string;
+                        matchCount: number;
+                    }[];
+                    mapMasterIds: string[];
+                    matchCount: number;
+                    sourceChecksum: string;
+                };
+                /** @constant */
+                windowSize: 20;
+                /** @constant */
+                windowStride: 1;
+            };
+        };
+        SeriesPlayerRadarRevisionListResponse: {
+            /** @constant */
+            schemaVersion: 1;
+            items: components["schemas"]["SeriesPlayerRadarRevisionResponse"][];
+            nextCursor: string | null;
+        };
         SeriesPlayerRadarStateResponse: {
             /** @constant */
             schemaVersion: 1;
@@ -4105,6 +4962,175 @@ export interface components {
                     ];
                     /** @constant */
                     definitionVersion: "player-radar-six-axes-v1";
+                    /** @constant */
+                    methodVersion: "player-radar-spread-v1";
+                    source: {
+                        firstMatch: null | {
+                            heldEventId: string;
+                            matchId: string;
+                            matchNoInEvent: number;
+                            playedAt: string;
+                        };
+                        gameTitleId: string;
+                        heldEventCount: number;
+                        lastMatch: null | {
+                            heldEventId: string;
+                            matchId: string;
+                            matchNoInEvent: number;
+                            playedAt: string;
+                        };
+                        mapCounts: {
+                            mapMasterId: string;
+                            matchCount: number;
+                        }[];
+                        mapMasterIds: string[];
+                        matchCount: number;
+                        sourceChecksum: string;
+                    };
+                    /** @constant */
+                    windowSize: 20;
+                    /** @constant */
+                    windowStride: 1;
+                } | {
+                    axes: [
+                        {
+                            /** @enum {string} */
+                            axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                            median: null | number;
+                            q10: null | number;
+                            q90: null | number;
+                            thresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number
+                            ];
+                        },
+                        {
+                            /** @enum {string} */
+                            axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                            median: null | number;
+                            q10: null | number;
+                            q90: null | number;
+                            thresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number
+                            ];
+                        },
+                        {
+                            /** @enum {string} */
+                            axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                            median: null | number;
+                            q10: null | number;
+                            q90: null | number;
+                            thresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number
+                            ];
+                        },
+                        {
+                            /** @enum {string} */
+                            axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                            median: null | number;
+                            q10: null | number;
+                            q90: null | number;
+                            thresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number
+                            ];
+                        },
+                        {
+                            /** @enum {string} */
+                            axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                            median: null | number;
+                            q10: null | number;
+                            q90: null | number;
+                            thresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number
+                            ];
+                        },
+                        {
+                            /** @enum {string} */
+                            axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                            median: null | number;
+                            q10: null | number;
+                            q90: null | number;
+                            thresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number
+                            ];
+                        }
+                    ];
+                    /** @constant */
+                    definitionVersion: "player-radar-six-axes-v1";
+                    manual: {
+                        monitoringSource: {
+                            firstMatch: null | {
+                                heldEventId: string;
+                                matchId: string;
+                                matchNoInEvent: number;
+                                playedAt: string;
+                            };
+                            gameTitleId: string;
+                            heldEventCount: number;
+                            lastMatch: null | {
+                                heldEventId: string;
+                                matchId: string;
+                                matchNoInEvent: number;
+                                playedAt: string;
+                            };
+                            mapCounts: {
+                                mapMasterId: string;
+                                matchCount: number;
+                            }[];
+                            mapMasterIds: string[];
+                            matchCount: number;
+                            sourceChecksum: string;
+                        };
+                        sourceBasisId: string;
+                        sourceCandidateId: null | string;
+                    };
                     /** @constant */
                     methodVersion: "player-radar-spread-v1";
                     source: {
@@ -4285,6 +5311,175 @@ export interface components {
                     windowSize: 20;
                     /** @constant */
                     windowStride: 1;
+                } | {
+                    axes: [
+                        {
+                            /** @enum {string} */
+                            axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                            median: null | number;
+                            q10: null | number;
+                            q90: null | number;
+                            thresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number
+                            ];
+                        },
+                        {
+                            /** @enum {string} */
+                            axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                            median: null | number;
+                            q10: null | number;
+                            q90: null | number;
+                            thresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number
+                            ];
+                        },
+                        {
+                            /** @enum {string} */
+                            axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                            median: null | number;
+                            q10: null | number;
+                            q90: null | number;
+                            thresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number
+                            ];
+                        },
+                        {
+                            /** @enum {string} */
+                            axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                            median: null | number;
+                            q10: null | number;
+                            q90: null | number;
+                            thresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number
+                            ];
+                        },
+                        {
+                            /** @enum {string} */
+                            axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                            median: null | number;
+                            q10: null | number;
+                            q90: null | number;
+                            thresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number
+                            ];
+                        },
+                        {
+                            /** @enum {string} */
+                            axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                            median: null | number;
+                            q10: null | number;
+                            q90: null | number;
+                            thresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number
+                            ];
+                        }
+                    ];
+                    /** @constant */
+                    definitionVersion: "player-radar-six-axes-v1";
+                    manual: {
+                        monitoringSource: {
+                            firstMatch: null | {
+                                heldEventId: string;
+                                matchId: string;
+                                matchNoInEvent: number;
+                                playedAt: string;
+                            };
+                            gameTitleId: string;
+                            heldEventCount: number;
+                            lastMatch: null | {
+                                heldEventId: string;
+                                matchId: string;
+                                matchNoInEvent: number;
+                                playedAt: string;
+                            };
+                            mapCounts: {
+                                mapMasterId: string;
+                                matchCount: number;
+                            }[];
+                            mapMasterIds: string[];
+                            matchCount: number;
+                            sourceChecksum: string;
+                        };
+                        sourceBasisId: string;
+                        sourceCandidateId: null | string;
+                    };
+                    /** @constant */
+                    methodVersion: "player-radar-spread-v1";
+                    source: {
+                        firstMatch: null | {
+                            heldEventId: string;
+                            matchId: string;
+                            matchNoInEvent: number;
+                            playedAt: string;
+                        };
+                        gameTitleId: string;
+                        heldEventCount: number;
+                        lastMatch: null | {
+                            heldEventId: string;
+                            matchId: string;
+                            matchNoInEvent: number;
+                            playedAt: string;
+                        };
+                        mapCounts: {
+                            mapMasterId: string;
+                            matchCount: number;
+                        }[];
+                        mapMasterIds: string[];
+                        matchCount: number;
+                        sourceChecksum: string;
+                    };
+                    /** @constant */
+                    windowSize: 20;
+                    /** @constant */
+                    windowStride: 1;
                 };
             } | null;
             candidate: {
@@ -4413,7 +5608,7 @@ export interface components {
                             unavailableReasons: ("insufficient_matches" | "insufficient_events" | "degenerate_distribution")[];
                         }
                     ];
-                    basis: null | {
+                    basis: null | ({
                         axes: [
                             {
                                 /** @enum {string} */
@@ -4555,7 +5750,176 @@ export interface components {
                         windowSize: 20;
                         /** @constant */
                         windowStride: 1;
-                    };
+                    } | {
+                        axes: [
+                            {
+                                /** @enum {string} */
+                                axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                                median: null | number;
+                                q10: null | number;
+                                q90: null | number;
+                                thresholds: [
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number
+                                ];
+                            },
+                            {
+                                /** @enum {string} */
+                                axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                                median: null | number;
+                                q10: null | number;
+                                q90: null | number;
+                                thresholds: [
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number
+                                ];
+                            },
+                            {
+                                /** @enum {string} */
+                                axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                                median: null | number;
+                                q10: null | number;
+                                q90: null | number;
+                                thresholds: [
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number
+                                ];
+                            },
+                            {
+                                /** @enum {string} */
+                                axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                                median: null | number;
+                                q10: null | number;
+                                q90: null | number;
+                                thresholds: [
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number
+                                ];
+                            },
+                            {
+                                /** @enum {string} */
+                                axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                                median: null | number;
+                                q10: null | number;
+                                q90: null | number;
+                                thresholds: [
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number
+                                ];
+                            },
+                            {
+                                /** @enum {string} */
+                                axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                                median: null | number;
+                                q10: null | number;
+                                q90: null | number;
+                                thresholds: [
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number
+                                ];
+                            }
+                        ];
+                        /** @constant */
+                        definitionVersion: "player-radar-six-axes-v1";
+                        manual: {
+                            monitoringSource: {
+                                firstMatch: null | {
+                                    heldEventId: string;
+                                    matchId: string;
+                                    matchNoInEvent: number;
+                                    playedAt: string;
+                                };
+                                gameTitleId: string;
+                                heldEventCount: number;
+                                lastMatch: null | {
+                                    heldEventId: string;
+                                    matchId: string;
+                                    matchNoInEvent: number;
+                                    playedAt: string;
+                                };
+                                mapCounts: {
+                                    mapMasterId: string;
+                                    matchCount: number;
+                                }[];
+                                mapMasterIds: string[];
+                                matchCount: number;
+                                sourceChecksum: string;
+                            };
+                            sourceBasisId: string;
+                            sourceCandidateId: null | string;
+                        };
+                        /** @constant */
+                        methodVersion: "player-radar-spread-v1";
+                        source: {
+                            firstMatch: null | {
+                                heldEventId: string;
+                                matchId: string;
+                                matchNoInEvent: number;
+                                playedAt: string;
+                            };
+                            gameTitleId: string;
+                            heldEventCount: number;
+                            lastMatch: null | {
+                                heldEventId: string;
+                                matchId: string;
+                                matchNoInEvent: number;
+                                playedAt: string;
+                            };
+                            mapCounts: {
+                                mapMasterId: string;
+                                matchCount: number;
+                            }[];
+                            mapMasterIds: string[];
+                            matchCount: number;
+                            sourceChecksum: string;
+                        };
+                        /** @constant */
+                        windowSize: 20;
+                        /** @constant */
+                        windowStride: 1;
+                    });
                     sourceSummary: {
                         firstMatch: null | {
                             heldEventId: string;
@@ -4590,6 +5954,341 @@ export interface components {
                     status: "pending" | "ready" | "stale" | "failed";
                     createdAt: string;
                 } | null;
+                /** @enum {string} */
+                originKind: "generated" | "manual" | "restore";
+                manualInput: {
+                    axes: {
+                        /** @enum {string} */
+                        axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                        thresholds: number[];
+                    }[];
+                } | null;
+                sourceBasisId: string | null;
+                sourceCandidateId: string | null;
+                sourceBasis: {
+                    basisId: string;
+                    checksum: string;
+                    createdAt: string;
+                    appliedAt: string | null;
+                    sourceInputRevision: string;
+                    /** Series Player Radar Basis v1 */
+                    basis: {
+                        axes: [
+                            {
+                                /** @enum {string} */
+                                axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                                median: number;
+                                q10: number;
+                                q90: number;
+                                thresholds: [
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number
+                                ];
+                            },
+                            {
+                                /** @enum {string} */
+                                axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                                median: number;
+                                q10: number;
+                                q90: number;
+                                thresholds: [
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number
+                                ];
+                            },
+                            {
+                                /** @enum {string} */
+                                axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                                median: number;
+                                q10: number;
+                                q90: number;
+                                thresholds: [
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number
+                                ];
+                            },
+                            {
+                                /** @enum {string} */
+                                axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                                median: number;
+                                q10: number;
+                                q90: number;
+                                thresholds: [
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number
+                                ];
+                            },
+                            {
+                                /** @enum {string} */
+                                axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                                median: number;
+                                q10: number;
+                                q90: number;
+                                thresholds: [
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number
+                                ];
+                            },
+                            {
+                                /** @enum {string} */
+                                axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                                median: number;
+                                q10: number;
+                                q90: number;
+                                thresholds: [
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number
+                                ];
+                            }
+                        ];
+                        /** @constant */
+                        definitionVersion: "player-radar-six-axes-v1";
+                        /** @constant */
+                        methodVersion: "player-radar-spread-v1";
+                        source: {
+                            firstMatch: null | {
+                                heldEventId: string;
+                                matchId: string;
+                                matchNoInEvent: number;
+                                playedAt: string;
+                            };
+                            gameTitleId: string;
+                            heldEventCount: number;
+                            lastMatch: null | {
+                                heldEventId: string;
+                                matchId: string;
+                                matchNoInEvent: number;
+                                playedAt: string;
+                            };
+                            mapCounts: {
+                                mapMasterId: string;
+                                matchCount: number;
+                            }[];
+                            mapMasterIds: string[];
+                            matchCount: number;
+                            sourceChecksum: string;
+                        };
+                        /** @constant */
+                        windowSize: 20;
+                        /** @constant */
+                        windowStride: 1;
+                    } | {
+                        axes: [
+                            {
+                                /** @enum {string} */
+                                axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                                median: null | number;
+                                q10: null | number;
+                                q90: null | number;
+                                thresholds: [
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number
+                                ];
+                            },
+                            {
+                                /** @enum {string} */
+                                axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                                median: null | number;
+                                q10: null | number;
+                                q90: null | number;
+                                thresholds: [
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number
+                                ];
+                            },
+                            {
+                                /** @enum {string} */
+                                axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                                median: null | number;
+                                q10: null | number;
+                                q90: null | number;
+                                thresholds: [
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number
+                                ];
+                            },
+                            {
+                                /** @enum {string} */
+                                axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                                median: null | number;
+                                q10: null | number;
+                                q90: null | number;
+                                thresholds: [
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number
+                                ];
+                            },
+                            {
+                                /** @enum {string} */
+                                axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                                median: null | number;
+                                q10: null | number;
+                                q90: null | number;
+                                thresholds: [
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number
+                                ];
+                            },
+                            {
+                                /** @enum {string} */
+                                axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
+                                median: null | number;
+                                q10: null | number;
+                                q90: null | number;
+                                thresholds: [
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number,
+                                    number
+                                ];
+                            }
+                        ];
+                        /** @constant */
+                        definitionVersion: "player-radar-six-axes-v1";
+                        manual: {
+                            monitoringSource: {
+                                firstMatch: null | {
+                                    heldEventId: string;
+                                    matchId: string;
+                                    matchNoInEvent: number;
+                                    playedAt: string;
+                                };
+                                gameTitleId: string;
+                                heldEventCount: number;
+                                lastMatch: null | {
+                                    heldEventId: string;
+                                    matchId: string;
+                                    matchNoInEvent: number;
+                                    playedAt: string;
+                                };
+                                mapCounts: {
+                                    mapMasterId: string;
+                                    matchCount: number;
+                                }[];
+                                mapMasterIds: string[];
+                                matchCount: number;
+                                sourceChecksum: string;
+                            };
+                            sourceBasisId: string;
+                            sourceCandidateId: null | string;
+                        };
+                        /** @constant */
+                        methodVersion: "player-radar-spread-v1";
+                        source: {
+                            firstMatch: null | {
+                                heldEventId: string;
+                                matchId: string;
+                                matchNoInEvent: number;
+                                playedAt: string;
+                            };
+                            gameTitleId: string;
+                            heldEventCount: number;
+                            lastMatch: null | {
+                                heldEventId: string;
+                                matchId: string;
+                                matchNoInEvent: number;
+                                playedAt: string;
+                            };
+                            mapCounts: {
+                                mapMasterId: string;
+                                matchCount: number;
+                            }[];
+                            mapMasterIds: string[];
+                            matchCount: number;
+                            sourceChecksum: string;
+                        };
+                        /** @constant */
+                        windowSize: 20;
+                        /** @constant */
+                        windowStride: 1;
+                    };
+                } | null;
+                savedBy: {
+                    accountId: string;
+                    displayName: string | null;
+                } | null;
             } | null;
             operations: {
                 /**
@@ -4600,7 +6299,7 @@ export interface components {
                 operationId: string;
                 gameTitleId: string;
                 /** @enum {string} */
-                kind: "candidate" | "preview" | "apply" | "withdraw" | "restore" | "acknowledge" | "retry";
+                kind: "candidate" | "manual" | "preview" | "apply" | "withdraw" | "restore" | "acknowledge" | "retry";
                 /** @enum {string} */
                 status: "pending" | "running" | "succeeded" | "failed" | "withdrawn";
                 candidateId: string | null;
@@ -4745,7 +6444,8 @@ export interface components {
             displayName?: string;
             playerMemberId?: string;
             loginEnabled?: boolean;
-            isAdmin?: boolean;
+            /** @enum {string} */
+            role?: "user" | "operator" | "admin";
         };
         /** UpdateMapMasterRequest */
         UpdateMapMasterRequest: {
@@ -4799,6 +6499,26 @@ export interface components {
             mediaType: string;
             /** Format: int64 */
             sizeBytes: number;
+        };
+        SeriesPlayerRadarRevisionResponse: {
+            revisionId: string;
+            gameTitleId: string;
+            gameTitleName: string;
+            /** @enum {string} */
+            kind: "generated" | "manual" | "restore";
+            appliedAt: string;
+            appliedBy: {
+                accountId: string;
+                displayName: string | null;
+            };
+            savedBy: {
+                accountId: string;
+                displayName: string | null;
+            } | null;
+            beforeBasisId: string | null;
+            afterBasisId: string;
+            sourceBasisId: string | null;
+            sourceCandidateId: string | null;
         };
     };
     responses: never;
@@ -6746,6 +8466,83 @@ export interface operations {
                 };
                 content: {
                     "text/plain": string;
+                };
+            };
+            default: {
+                headers: {
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    "getApiAdminSeries-analysisRadarRevisions": {
+        parameters: {
+            query?: {
+                gameTitleId?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: {
+                "X-Momo-Account-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    "Cache-Control": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesPlayerRadarRevisionListResponse"];
+                };
+            };
+            /** @description Invalid value for: query parameter limit */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            default: {
+                headers: {
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    "getApiAdminSeries-analysisRadarRevisionsRevisionid": {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Momo-Account-Id"?: string;
+            };
+            path: {
+                revisionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    "Cache-Control": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesPlayerRadarRevisionDetailResponse"];
                 };
             };
             default: {

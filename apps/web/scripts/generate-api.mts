@@ -32,6 +32,9 @@ const envelopeRoots = [
   "SeriesAnalysisScopeStatusResponse",
 ];
 const radarRoots = [
+  "SeriesPlayerRadarRevisionResponse",
+  "SeriesPlayerRadarRevisionListResponse",
+  "SeriesPlayerRadarRevisionDetailResponse",
   "SeriesPlayerRadarStateResponse",
   "SeriesPlayerRadarPreviewResponse",
   "SeriesPlayerRadarOperationResponse",

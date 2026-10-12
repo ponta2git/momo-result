@@ -139,7 +139,6 @@ export function useSeriesComparisonPageModel() {
       refreshing: optionsFetching || scopeIdentity.query.isFetching,
     },
     resource: analysis.resource,
-    returnTo: location.returnTo,
     displayIntent: location.displayIntent,
     normalizationNotice: location.normalizationNotice,
     status: analysis.status,

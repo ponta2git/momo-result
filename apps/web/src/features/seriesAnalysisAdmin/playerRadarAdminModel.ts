@@ -1,3 +1,4 @@
+import type { RadarEditingModel } from "@/features/seriesAnalysisAdmin/radarThresholdEditorModel";
 import type {
   PlayerRadarAxisId,
   PlayerRadarBasis,
@@ -37,12 +38,17 @@ export type PlayerRadarAdminAction = {
 };
 
 export type PlayerRadarAdminModel = {
+  authorizationRevision?: number;
+  autoEditCandidateId?: string | null;
+  creationPending?: boolean;
+  editing?: RadarEditingModel | undefined;
   gameTitleId: string;
   gameTitleName: string;
   currentBasis: PlayerRadarBasis | null;
   previousBasis: PlayerRadarBasis | null;
   eligibility: { matchCount: number; heldEventCount: number };
   candidate: {
+    manuallyEdited?: boolean;
     candidateId: string;
     status: "pending" | "ready" | "unavailable" | "invalid" | "withdrawn" | "applied" | "failed";
     source: PlayerRadarSample | null;
@@ -57,7 +63,15 @@ export type PlayerRadarAdminModel = {
   operation: {
     operationId: string;
     status: "pending" | "running" | "succeeded" | "failed" | "withdrawn";
-    kind: "candidate" | "preview" | "apply" | "withdraw" | "restore" | "acknowledge" | "retry";
+    kind:
+      | "candidate"
+      | "manual"
+      | "preview"
+      | "apply"
+      | "withdraw"
+      | "restore"
+      | "acknowledge"
+      | "retry";
     title: string;
     detail: string;
   } | null;

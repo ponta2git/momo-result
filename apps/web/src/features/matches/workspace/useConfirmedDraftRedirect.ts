@@ -12,16 +12,13 @@ import { getMatchDraftDetail } from "@/shared/api/matchDrafts";
 import type { MatchDraftDetailResponse } from "@/shared/api/matchDrafts";
 import { matchKeys } from "@/shared/api/queryKeys";
 import { evictDraftSourceImageBlobs } from "@/shared/api/sourceImageQueries";
-import { withReturnTo } from "@/shared/navigation/returnTo";
 
 export function useConfirmedDraftRedirect({
   notify,
   onBeforeRedirect,
-  returnTo,
 }: {
   notify: (message: string, tone?: WorkspaceNoticeTone) => void;
   onBeforeRedirect?: () => void;
-  returnTo?: string | undefined;
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -62,10 +59,10 @@ export function useConfirmedDraftRedirect({
       void invalidateAfterMatchConfirmed(queryClient);
       notify(message, "warning");
       onBeforeRedirect?.();
-      navigate(withReturnTo(destination.path, returnTo), { replace: true });
+      navigate(destination.path, { replace: true });
       return true;
     },
-    [navigate, notify, onBeforeRedirect, queryClient, returnTo],
+    [navigate, notify, onBeforeRedirect, queryClient],
   );
 
   const handleConfirmConflict = useCallback(

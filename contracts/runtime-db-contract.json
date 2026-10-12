@@ -35,6 +35,7 @@
     "momo_login_accounts.id",
     "momo_login_accounts.login_enabled",
     "momo_login_accounts.player_member_id",
+    "momo_login_accounts.role",
     "ocr_drafts.job_id",
     "ocr_drafts.payload_json",
     "ocr_jobs.attempt_count",

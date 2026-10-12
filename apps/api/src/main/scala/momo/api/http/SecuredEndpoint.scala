@@ -65,6 +65,30 @@ object SecuredEndpoint:
     }
     .serverLogic(logic)
 
+  def operatorReadLogic[F[_], I, O](
+      security: EndpointSecurity[F],
+      endpoint: ReadEndpoint[I, O],
+  )(
+      logic: AuthenticatedAccount => I => F[Either[ProblemResponse, O]]
+  ): ServerEndpoint[Any, F] = endpoint
+    .securityIn(CommonEndpoint.serverRequest)
+    .serverSecurityLogic(accountHeader =>
+      security.authorizeOperatorRead(accountHeader._1, accountHeader._2)
+    )
+    .serverLogic(logic)
+
+  def operatorMutationLogic[F[_], I, O](
+      security: EndpointSecurity[F],
+      endpoint: MutationEndpoint[I, O],
+  )(
+      logic: AuthenticatedAccount => I => F[Either[ProblemResponse, O]]
+  ): ServerEndpoint[Any, F] = endpoint
+    .securityIn(CommonEndpoint.serverRequest)
+    .serverSecurityLogic { case (accountHeader, csrfToken, request) =>
+      security.authorizeOperatorMutation(accountHeader, csrfToken, request)
+    }
+    .serverLogic(logic)
+
   def read[F[_]](security: EndpointSecurity[F]): Read[F, Unit, Unit] = endpoint
     .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.serverRequest))
     .errorOut(CommonEndpoint.errorOut)

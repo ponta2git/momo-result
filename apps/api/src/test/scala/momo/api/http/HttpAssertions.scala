@@ -33,6 +33,7 @@ object HttpAssertions:
     case "PAYLOAD_TOO_LARGE" => "送信内容が大きすぎます。入力内容を減らしてください。"
     case "CONFLICT" =>
       "保存済みの状態が変わっています。内容を確認して、もう一度実行してください。"
+    case "LAST_ENABLED_ADMIN_REQUIRED" => "ログイン可能な管理者を1人以上残してください。"
     case "MATCH_NOTE_VERSION_CONFLICT" =>
       "試合メモが別の利用者に更新されました。最新の内容を確認してください。"
     case "NOTIFICATION_SETTINGS_VERSION_CONFLICT" =>

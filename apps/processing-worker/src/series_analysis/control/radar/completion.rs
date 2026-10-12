@@ -38,6 +38,7 @@ pub(in crate::series_analysis::control) async fn complete_preparation(
         .as_ref()
         .map(|candidate| &candidate.source)
         .or(context.source.as_ref())
+        .or_else(|| context.is_manual().then_some(&prepared.evaluation_snapshot))
         .ok_or(ControlError::InvalidMetadata)?;
     loop {
         if started.elapsed() >= config.execution_limits.finalization_timeout {
@@ -56,8 +57,9 @@ pub(in crate::series_analysis::control) async fn complete_preparation(
         if current.input_revision() == claim.input_revision && current_summary != source_summary {
             return Err(ControlError::AuthoritativeInputContract);
         }
-        let source_valid = radar::source_is_current(candidate_source, &current)
-            .map_err(|_error| ControlError::InvalidMetadata)?;
+        let source_valid = context.is_manual()
+            || radar::source_is_current(candidate_source, &current)
+                .map_err(|_error| ControlError::InvalidMetadata)?;
         let tx = control::transaction::bounded_transaction(
             client,
             config.execution_limits.finalization_timeout,
@@ -145,6 +147,8 @@ async fn save_preparation(
     let valid = source_valid && candidate_status != "invalid";
     if let Some(candidate) = &prepared.candidate {
         save_candidate(tx, claim, prepared, candidate, valid).await?;
+    } else if context.manual.is_some() && valid {
+        save_manual_candidate(tx, claim, prepared, context).await?;
     } else if !valid {
         tx.execute("UPDATE series_radar_candidates SET status='invalid',safe_failure_code='source_changed',updated_at=clock_timestamp() WHERE id=$1", &[&prepared.candidate_id]).await?;
     } else if context.operation_kind.as_deref() == Some("restore") {
@@ -156,6 +160,11 @@ async fn save_preparation(
             .candidate_summary()
             .map_err(|_invalid| ControlError::InvalidMetadata)?;
         tx.execute("UPDATE series_radar_candidates c SET status='ready',result=$2,source_input_revision=b.source_input_revision,safe_failure_code=NULL,updated_at=clock_timestamp() FROM series_radar_bases b WHERE c.id=$1 AND c.basis_id=b.id AND b.id=$3", &[&prepared.candidate_id,&json(&result)?,&context.basis_id]).await?;
+    } else if context.operation_kind.as_deref() == Some("preview") {
+        tx.execute(
+            "UPDATE series_radar_candidates SET safe_failure_code=NULL,updated_at=clock_timestamp() WHERE id=$1",
+            &[&prepared.candidate_id],
+        ).await?;
     }
     let current_basis: Option<String> = tx
         .query_opt(
@@ -166,9 +175,61 @@ async fn save_preparation(
         .map(|row| row.try_get(0))
         .transpose()?
         .flatten();
-    let fresh = valid && evaluation_current && current_basis == prepared.before_basis_id;
+    let fresh = valid
+        && evaluation_current
+        && current_basis == prepared.before_basis_id
+        && (!context.is_manual() || !prepared.evaluation_snapshot.matches.is_empty());
     let preview_id = save_preview(tx, prepared, fresh).await?;
     tx.execute("UPDATE series_radar_operations SET status='succeeded',preview_id=$2,finished_at=clock_timestamp(),updated_at=clock_timestamp() WHERE id=$1 AND status IN ('pending','running')", &[&prepared.operation_id,&preview_id]).await?;
+    Ok(())
+}
+
+async fn save_manual_candidate(
+    tx: &Transaction<'_>,
+    claim: &ClaimedJob,
+    prepared: &Preparation,
+    context: &RadarReadContext,
+) -> Result<(), ControlError> {
+    if let Some(basis) = &prepared.manual_basis {
+        let checksum = basis
+            .checksum()
+            .map_err(|_invalid| ControlError::InvalidMetadata)?;
+        let source_checksum = &basis.monitoring_source().source_checksum;
+        tx.execute(
+            "INSERT INTO series_radar_bases (id,game_title_id,checksum,payload,source_snapshot,source_checksum,source_input_revision) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(id) DO NOTHING",
+            &[&prepared.candidate_id,&claim.game_title_id,&checksum,&json(basis)?,&json(&prepared.evaluation_snapshot)?,&source_checksum,&prepared.input_revision],
+        ).await?;
+        let saved = tx.query_one(
+            "SELECT checksum,source_checksum FROM series_radar_bases WHERE id=$1 AND game_title_id=$2",
+            &[&prepared.candidate_id,&claim.game_title_id],
+        ).await?;
+        if saved.try_get::<_, String>(0)? != checksum
+            || saved.try_get::<_, String>(1)? != *source_checksum
+        {
+            return Err(ControlError::InvalidMetadata);
+        }
+        let result = basis
+            .candidate_summary()
+            .map_err(|_invalid| ControlError::InvalidMetadata)?;
+        tx.execute(
+            "UPDATE series_radar_candidates SET basis_id=$2,status='ready',result=$3,source_input_revision=$4,safe_failure_code=NULL,updated_at=clock_timestamp() WHERE id=$1 AND basis_id IS NULL",
+            &[&prepared.candidate_id,&prepared.candidate_id,&json(&result)?,&prepared.input_revision],
+        ).await?;
+    } else if prepared.evaluation_snapshot.matches.is_empty() {
+        // The shared input survives a zero-record comparison. No basis or monitoring start is
+        // invented; a later preview can complete the same candidate after records are added.
+        tx.execute(
+            "UPDATE series_radar_candidates SET status='unavailable',safe_failure_code='no_matches',updated_at=clock_timestamp() WHERE id=$1",
+            &[&prepared.candidate_id],
+        ).await?;
+    } else if context.basis.is_some() {
+        tx.execute(
+            "UPDATE series_radar_candidates SET status='ready',safe_failure_code=NULL,updated_at=clock_timestamp() WHERE id=$1",
+            &[&prepared.candidate_id],
+        ).await?;
+    } else {
+        return Err(ControlError::InvalidMetadata);
+    }
     Ok(())
 }
 

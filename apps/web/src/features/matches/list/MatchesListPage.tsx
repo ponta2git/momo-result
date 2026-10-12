@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeft, Download, PenSquare, RefreshCw, ScanLine } from "lucide-react";
+import { AlertTriangle, Download, PenSquare, RefreshCw, ScanLine } from "lucide-react";
 
 import { MatchesFilterBar } from "@/features/matches/list/MatchesFilterBar";
 import { MatchesTable } from "@/features/matches/list/MatchesTable";
@@ -55,18 +55,6 @@ export function MatchesListPage() {
 
   return (
     <PageFrame>
-      {navigation.backHref ? (
-        <div>
-          <LinkButton
-            icon={<ArrowLeft aria-hidden="true" />}
-            size="sm"
-            to={navigation.backHref}
-            variant="quiet"
-          >
-            前の画面へ戻る
-          </LinkButton>
-        </div>
-      ) : null}
       <PageContentSurface aria-label="試合一覧" className="grid gap-6" role="region">
         <div
           aria-label="試合を登録"

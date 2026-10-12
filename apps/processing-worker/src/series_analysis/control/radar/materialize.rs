@@ -10,7 +10,7 @@ pub(crate) async fn materialize_pending(
 ) -> Result<usize, tokio_postgres::Error> {
     let titles = client.query(
         "SELECT s.game_title_id FROM series_analysis_title_states s WHERE \
-         (EXISTS (SELECT 1 FROM series_radar_operations o WHERE o.game_title_id=s.game_title_id AND o.status='pending' AND o.job_id IS NULL AND o.kind IN ('candidate','preview','restore','apply')) \
+         (EXISTS (SELECT 1 FROM series_radar_operations o WHERE o.game_title_id=s.game_title_id AND o.status='pending' AND o.job_id IS NULL AND o.kind IN ('candidate','manual','preview','restore','apply')) \
           OR EXISTS (SELECT 1 FROM series_analysis_job_requests r WHERE r.game_title_id=s.game_title_id AND r.status='pending')) \
          AND NOT EXISTS (SELECT 1 FROM series_analysis_jobs j WHERE j.game_title_id=s.game_title_id AND j.status IN ('queued','running')) \
          ORDER BY s.game_title_id LIMIT $1", &[&limit]).await?;
@@ -47,7 +47,7 @@ pub(in crate::series_analysis::control) async fn materialize_next(
     if tx.query_opt("SELECT id FROM series_analysis_jobs WHERE game_title_id=$1 AND status IN ('queued','running') FOR UPDATE", &[&title]).await?.is_some() { return Ok(false); }
     let intent = tx.query_opt(
         "SELECT origin,id,kind FROM (\
-         SELECT 'radar'::text AS origin,id,kind,requested_at AS accepted_at FROM series_radar_operations WHERE game_title_id=$1 AND status='pending' AND job_id IS NULL AND kind IN ('candidate','preview','restore','apply') \
+         SELECT 'radar'::text AS origin,id,kind,requested_at AS accepted_at FROM series_radar_operations WHERE game_title_id=$1 AND status='pending' AND job_id IS NULL AND kind IN ('candidate','manual','preview','restore','apply') \
          UNION ALL SELECT 'analysis',id,trigger,accepted_at FROM series_analysis_job_requests WHERE game_title_id=$1 AND status='pending'\
          ) intents ORDER BY accepted_at,id LIMIT 1", &[&title]).await?;
     let Some(intent) = intent else {

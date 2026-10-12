@@ -27,8 +27,8 @@ import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.discord.JavaDiscordOAuthClient
 import momo.api.adapters.inmemory.InMemoryLoginAccountsRepository
 import momo.api.config.{AppEnv, AuthConfig}
-import momo.api.domain.LoginAccount
 import momo.api.domain.ids.{AccountId, MemberId, UserId}
+import momo.api.domain.{AccountRole, LoginAccount}
 import momo.api.errors.AppError
 import momo.api.repositories.{AppSession, SessionAccountLookup}
 import momo.api.testing.{
@@ -52,7 +52,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
     displayName = "ぽんた",
     playerMemberId = Some(MemberId.unsafeFromString("member_ponta")),
     loginEnabled = true,
-    isAdmin = true,
+    role = AccountRole.Admin,
     createdAt = instant,
     updatedAt = instant,
   )

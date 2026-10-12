@@ -6,6 +6,7 @@ import momo.api.domain.ids.GameTitleId
 
 enum SeriesPlayerRadarOperationKind(val wire: String) derives CanEqual:
   case Candidate extends SeriesPlayerRadarOperationKind("candidate")
+  case Manual extends SeriesPlayerRadarOperationKind("manual")
   case Preview extends SeriesPlayerRadarOperationKind("preview")
   case Apply extends SeriesPlayerRadarOperationKind("apply")
   case Withdraw extends SeriesPlayerRadarOperationKind("withdraw")
@@ -16,7 +17,10 @@ enum SeriesPlayerRadarOperationKind(val wire: String) derives CanEqual:
 object SeriesPlayerRadarOperationKind:
   def fromWire(value: String): Option[SeriesPlayerRadarOperationKind] = values.find(_.wire == value)
 
-/** A command identifies saved work; callers never submit thresholds or calculated scores. */
+final case class SeriesPlayerRadarManualAxis(axisId: String, thresholds: List[Double])
+final case class SeriesPlayerRadarManualInput(axes: List[SeriesPlayerRadarManualAxis])
+
+/** Calculated scores are never accepted; manual commands contain only proposed boundaries. */
 final case class SeriesPlayerRadarCommand(
     gameTitleId: GameTitleId,
     kind: SeriesPlayerRadarOperationKind,
@@ -25,6 +29,16 @@ final case class SeriesPlayerRadarCommand(
     expectedCurrentBasisId: Option[String],
     originOperationId: Option[String],
     evidenceKey: Option[String],
+    expectedCandidateId: Option[String] = None,
+    sourceBasisId: Option[String] = None,
+    sourceCandidateId: Option[String] = None,
+    manualInput: Option[SeriesPlayerRadarManualInput] = None,
+)
+
+final case class SeriesPlayerRadarHistoryRequest(
+    gameTitleId: Option[GameTitleId],
+    limit: Int,
+    cursor: Option[String],
 )
 
 final case class SeriesPlayerRadarOperation(

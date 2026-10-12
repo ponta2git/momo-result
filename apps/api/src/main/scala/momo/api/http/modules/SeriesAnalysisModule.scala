@@ -192,7 +192,7 @@ object SeriesAnalysisModule:
             security
           )
       },
-      SecuredEndpoint.adminReadLogic(security, SeriesAnalysisEndpoints.adminOverview) {
+      SecuredEndpoint.operatorReadLogic(security, SeriesAnalysisEndpoints.adminOverview) {
         member => rawTitleId =>
           read(
             readRateLimiter,
@@ -205,7 +205,7 @@ object SeriesAnalysisModule:
             )
           )
       },
-      SecuredEndpoint.adminMutationLogic(security, SeriesAnalysisEndpoints.recalculateTitle) {
+      SecuredEndpoint.operatorMutationLogic(security, SeriesAnalysisEndpoints.recalculateTitle) {
         account => input =>
           val (idempotencyKey, request) = input
           requiredIdempotencyKey(idempotencyKey, security) { key =>

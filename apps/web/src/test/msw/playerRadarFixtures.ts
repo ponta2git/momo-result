@@ -51,6 +51,12 @@ export function makeReadyPlayerRadarState(): SeriesPlayerRadarState {
   state.currentBasis = makePlayerRadarBasis();
   state.eligibility = { matchCount: 40, heldEventCount: 8 };
   state.candidate = {
+    originKind: "generated",
+    manualInput: null,
+    sourceBasisId: null,
+    sourceCandidateId: null,
+    sourceBasis: null,
+    savedBy: null,
     candidateId: "radar-candidate",
     status: "ready",
     basisId: "radar-basis-candidate",

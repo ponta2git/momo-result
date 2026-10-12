@@ -24,6 +24,13 @@ final class GetSeriesPlayerRadarOperation[F[_]](repository: SeriesPlayerRadarRep
   ): F[Either[AppError, SeriesPlayerRadarOperation]] =
     repository.radarOperation(gameTitleId, operationId)
 
+final class GetSeriesPlayerRadarHistory[F[_]](repository: SeriesPlayerRadarRepository[F]):
+  def list(request: SeriesPlayerRadarHistoryRequest)
+      : F[Either[AppError, SeriesPlayerRadarDocument]] =
+    repository.radarHistory(request)
+  def detail(revisionId: String): F[Either[AppError, SeriesPlayerRadarDocument]] =
+    repository.radarRevision(revisionId)
+
 final class RequestSeriesPlayerRadarOperation[F[_]](repository: SeriesPlayerRadarRepository[F]):
   def run(
       command: SeriesPlayerRadarCommand,
@@ -45,7 +52,17 @@ final class RequestSeriesPlayerRadarOperation[F[_]](repository: SeriesPlayerRada
       command.expectedCurrentBasisId,
       command.originOperationId,
       command.evidenceKey,
-    )
+    ) ++
+      (if command.kind == SeriesPlayerRadarOperationKind.Manual then
+         List(
+           command.expectedCandidateId,
+           command.sourceBasisId,
+           command.sourceCandidateId,
+           command.manualInput.map(_.axes.map(axis =>
+             axis.axisId + ":" + axis.thresholds.map(java.lang.Double.toHexString).mkString(",")
+           ).mkString("|")),
+         )
+       else Nil)
     sha256(fields.map(_.fold("-")(value => s"${value.length}:$value")).mkString("|"))
 
   private def sha256(value: String): String = MessageDigest.getInstance("SHA-256")

@@ -29,7 +29,7 @@ describe("series analysis history drilldowns", () => {
     const matchHistory = screen.getByRole("table", { name: "ぽんたの試合別平均順位推移" });
     expect(
       within(matchHistory).getByRole("link", { name: "第12戦の試合結果を見る" }),
-    ).toHaveAttribute("href", expect.stringContaining("/matches/match-12?returnTo="));
+    ).toHaveAttribute("href", expect.stringContaining("/matches/match-12"));
   });
 
   it("shows the play-order graph and before-after magnitude", () => {

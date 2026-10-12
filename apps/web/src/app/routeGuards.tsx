@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { Activity, useEffect } from "react";
 import type { ReactNode } from "react";
 import { Navigate, useLocation, useSearchParams } from "react-router-dom";
 
@@ -14,10 +14,12 @@ import {
   sanitizeAppRedirectPath,
 } from "@/shared/auth/redirectPath";
 import { useAuth } from "@/shared/auth/useAuth";
+import { useAuthorization } from "@/shared/auth/useAuthorization";
 import { GlobalNav } from "@/shared/navigation/GlobalNav";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { PortalContainer } from "@/shared/ui/feedback/PortalContainer";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
@@ -164,7 +166,8 @@ export function PublicOnlyRoute({ children }: { children: ReactNode }) {
 }
 
 export function AuthenticatedRoute({ children }: { children: ReactNode }) {
-  const auth = useAuth();
+  const authorization = useAuthorization();
+  const { auth } = authorization;
   useEffect(() => {
     if (auth.isAuthenticated && auth.auth?.accountId) clearAccountOperationNotice();
   }, [auth.isAuthenticated, auth.auth?.accountId]);
@@ -192,7 +195,7 @@ export function AuthenticatedRoute({ children }: { children: ReactNode }) {
     return <Navigate to={buildLoginPath(next, "forbidden")} replace />;
   }
 
-  if (auth.error) {
+  if (auth.error && !(authorization.paused && location.pathname.startsWith("/admin/"))) {
     return (
       <ProtectedRouteMain>
         <AuthUnavailable pending={auth.isRefetching} onRetry={() => void auth.refetch()} />
@@ -224,8 +227,9 @@ export function NotFoundRoute() {
   );
 }
 
-export function AdminRoute({ children }: { children: ReactNode }) {
-  const auth = useAuth();
+export function OperationsRoute({ children }: { children: ReactNode }) {
+  const authorization = useAuthorization();
+  const { auth } = authorization;
   const location = useLocation();
 
   if (auth.isChecking) {
@@ -238,19 +242,34 @@ export function AdminRoute({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!auth.auth?.isAdmin) {
+  if (!authorization.retained.operations) {
     return (
       <RouteTerminalPage
         contentClassName="grid justify-items-start gap-4"
         pathname={location.pathname}
         search={location.search}
-        title="管理者権限が必要です"
+        title="運用担当の権限が必要です"
       >
-        <Notice tone="danger">この画面は管理者専用です。</Notice>
-        <LinkButton to="/matches">試合一覧へ戻る</LinkButton>
+        <Notice tone="danger">この画面は運用担当・管理者専用です。</Notice>
       </RouteTerminalPage>
     );
   }
 
-  return children;
+  return (
+    <>
+      {authorization.paused ? (
+        auth.error ? (
+          <AuthUnavailable
+            pending={auth.isRefetching}
+            onRetry={() => void authorization.recheck()}
+          />
+        ) : (
+          <AuthLoading message="権限を確認中…" />
+        )
+      ) : null}
+      <Activity mode={authorization.paused ? "hidden" : "visible"}>
+        <PortalContainer>{children}</PortalContainer>
+      </Activity>
+    </>
+  );
 }

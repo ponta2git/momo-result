@@ -5,7 +5,7 @@ import java.sql.DriverManager
 
 import scala.jdk.CollectionConverters.*
 
-import cats.effect.{IO, Resource}
+import cats.effect.IO
 import cats.syntax.all.*
 import doobie.*
 import doobie.hikari.HikariTransactor
@@ -42,6 +42,7 @@ object IntegrationDb:
   final class DbFixture(
       val transactor: HikariTransactor[IO],
       val migratedNotificationSettings: List[(String, Boolean, Long)],
+      val databaseConfig: DatabaseConfig,
   ):
     def cleanup(): IO[Unit] = truncateAppTables(transactor)
 
@@ -62,27 +63,23 @@ object IntegrationDb:
         container.stop()
         throw error
 
-    val (transactor, releaseTransactor) = transactorResource(settings).allocated.unsafeRunSync()
+    // Three connections cover a lock holder, waiter, and independent lock observer.
+    val databaseConfig = DatabaseConfig(
+      settings.jdbcUrl,
+      settings.user,
+      settings.password,
+      poolSize = 3,
+    )
+    val (transactor, releaseTransactor) = Database.transactor[IO](databaseConfig)
+      .allocated.unsafeRunSync()
     val release = releaseTransactor >> IO.blocking(container.stop())
     val _ = sys.addShutdownHook(release.unsafeRunSync())
     val migratedNotificationSettings = sql"""
       SELECT kind, enabled, generation FROM discord_notification_settings ORDER BY kind
     """.query[(String, Boolean, Long)].to[List].transact(transactor).unsafeRunSync()
-    new DbFixture(transactor, migratedNotificationSettings)
+    new DbFixture(transactor, migratedNotificationSettings, databaseConfig)
 
   def acquire: IO[DbFixture] = IO.blocking(sharedFixture)
-
-  /**
-   * Use the production pool setup. Three connections cover a lock holder, waiter,
-   * and independent lock observer without making contention tests depend on elapsed time.
-   */
-  private def transactorResource(settings: Settings): Resource[IO, HikariTransactor[IO]] =
-    Database.transactor[IO](DatabaseConfig(
-      settings.jdbcUrl,
-      settings.user,
-      settings.password,
-      poolSize = 3,
-    ))
 
   private def migrate(settings: Settings, migrations: Seq[Path]): Unit =
     val connection = DriverManager.getConnection(settings.jdbcUrl, settings.user, settings.password)
@@ -205,7 +202,7 @@ object IntegrationDb:
       UPDATE series_analysis_release_state
       SET algorithm_version = 'series-analysis-v7',
           artifact_schema_version = 6,
-          validation_contract_id = 'series-analysis-artifact-v6-full-validation-v1',
+          validation_contract_id = 'series-analysis-artifact-v6-full-validation-v2',
           updated_at = clock_timestamp()
       WHERE singleton_key = 'current'
     """.update.run.void).transact(transactor)

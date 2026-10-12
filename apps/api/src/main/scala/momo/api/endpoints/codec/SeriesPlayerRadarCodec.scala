@@ -27,7 +27,32 @@ object SeriesPlayerRadarCodec:
       basis <- value.expectedCurrentBasisId.traverse(opaqueId("expectedCurrentBasisId", _))
       origin <- value.originOperationId.traverse(opaqueId("originOperationId", _))
       evidence <- value.evidenceKey.traverse(opaqueId("evidenceKey", _))
-      result = SeriesPlayerRadarCommand(title, kind, candidate, preview, basis, origin, evidence)
+      expectedCandidate <- value.expectedCandidateId.traverse(opaqueId("expectedCandidateId", _))
+      sourceBasis <- value.sourceBasisId.traverse(opaqueId("sourceBasisId", _))
+      sourceCandidate <- value.sourceCandidateId.traverse(opaqueId("sourceCandidateId", _))
+      manual <- value.manualInput.traverse(input =>
+        validateManual(SeriesPlayerRadarManualInput(
+          input.axes.map(axis =>
+            SeriesPlayerRadarManualAxis(
+              axis.axisId,
+              axis.thresholds.map(value => if value == 0 then 0.0 else value)
+            )
+          )
+        ))
+      )
+      result = SeriesPlayerRadarCommand(
+        title,
+        kind,
+        candidate,
+        preview,
+        basis,
+        origin,
+        evidence,
+        expectedCandidate,
+        sourceBasis,
+        sourceCandidate,
+        manual
+      )
       _ <- validateFields(result)
     yield result
 
@@ -39,13 +64,24 @@ object SeriesPlayerRadarCodec:
       "expectedCurrentBasisId" -> value.expectedCurrentBasisId,
       "originOperationId" -> value.originOperationId,
       "evidenceKey" -> value.evidenceKey,
+      "expectedCandidateId" -> value.expectedCandidateId,
+      "sourceBasisId" -> value.sourceBasisId,
+      "sourceCandidateId" -> value.sourceCandidateId,
+      "manualInput" -> value.manualInput.map(_ => "manual"),
     ).collect { case (field, Some(_)) => field }.toSet
     val (required, allowed) = value.kind match
       case Candidate => Set.empty[String] -> Set.empty[String]
+      case Manual => Set("sourceBasisId", "manualInput") -> Set(
+          "sourceBasisId",
+          "sourceCandidateId",
+          "expectedCandidateId",
+          "expectedCurrentBasisId",
+          "manualInput"
+        )
       case Preview => Set("candidateId") -> Set("candidateId")
       case Apply => Set("candidateId", "previewId") ->
           Set("candidateId", "previewId", "expectedCurrentBasisId")
-      case Withdraw => Set("candidateId") -> Set("candidateId")
+      case Withdraw => Set("candidateId") -> Set("candidateId", "originOperationId")
       case Restore => Set.empty[String] -> Set("expectedCurrentBasisId")
       case Acknowledge => Set("evidenceKey") -> Set("evidenceKey")
       case Retry => Set("originOperationId") -> Set("originOperationId")
@@ -53,4 +89,32 @@ object SeriesPlayerRadarCodec:
       required.subsetOf(supplied) && supplied.subsetOf(allowed),
       (),
       AppError.ValidationFailed(s"Invalid fields for radar ${value.kind.wire} operation."),
+    )
+
+  private val axisIds = List(
+    "averageRank",
+    "revenueP90",
+    "revenueAverage",
+    "totalAssetsP10",
+    "totalAssetsMedian",
+    "totalAssetsP90"
+  )
+
+  private def validateManual(value: SeriesPlayerRadarManualInput)
+      : Either[AppError, SeriesPlayerRadarManualInput] =
+    val valid = value.axes.map(_.axisId) == axisIds && value.axes.forall { axis =>
+      val bounds = axis.thresholds
+      bounds.size == 9 && bounds.forall(_.isFinite) &&
+      bounds.sliding(2).forall {
+        case List(left, right) =>
+          if axis.axisId == "averageRank" then left > right else left < right
+        case _ => true
+      } && (axis.axisId != "averageRank" || bounds.lastOption.exists(_ >= 1))
+    }
+    Either.cond(
+      valid,
+      value,
+      AppError.ValidationFailed(
+        "Manual radar boundaries require the six axes in order, nine finite strictly ordered values per axis, and an average-rank 10-point boundary of at least 1."
+      )
     )

@@ -40,7 +40,7 @@ export type HeldEventsListModel =
       pageSize: number;
       pagination: HeldEventListResponse["pagination"] | undefined;
       refresh: HeldEventsListRefreshModel;
-      returnTo: string;
+
       rows: HeldEventResponse[];
       scopeChanging: boolean;
     };

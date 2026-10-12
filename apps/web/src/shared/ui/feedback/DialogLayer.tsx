@@ -9,6 +9,7 @@ import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { cn } from "@/shared/ui/cn";
 import { DialogFloatingContainerContext } from "@/shared/ui/feedback/DialogFloatingContainer";
+import { usePortalContainer } from "@/shared/ui/feedback/PortalContainer";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { instantMotionTransition, politeMotionTransition } from "@/shared/ui/motion/transitions";
 import { contentText, fieldText } from "@/shared/ui/typography";
@@ -104,12 +105,17 @@ export function DialogLayer({
   title,
 }: DialogLayerProps) {
   const isPresent = useIsPresent();
+  const portalContainer = usePortalContainer();
   const [floatingContainer, setFloatingContainer] = useState<HTMLDivElement | null>(null);
   const transition = reduceMotion ? instantMotionTransition : politeMotionTransition;
   const exitSnapshotProps = isPresent ? {} : ({ "aria-hidden": true, inert: true } as const);
 
   return (
-    <BaseDialog.Portal keepMounted className="relative isolate z-[var(--z-dialog)]">
+    <BaseDialog.Portal
+      container={portalContainer ?? undefined}
+      keepMounted
+      className="relative isolate z-[var(--z-dialog)]"
+    >
       <DialogFloatingContainerContext value={floatingContainer}>
         <BaseDialog.Backdrop
           className={cn(
@@ -199,12 +205,17 @@ export function AlertDialogLayer({
   tone,
 }: AlertDialogLayerProps) {
   const isPresent = useIsPresent();
+  const portalContainer = usePortalContainer();
   const [floatingContainer, setFloatingContainer] = useState<HTMLDivElement | null>(null);
   const transition = reduceMotion ? instantMotionTransition : politeMotionTransition;
   const exitSnapshotProps = isPresent ? {} : ({ "aria-hidden": true, inert: true } as const);
 
   return (
-    <BaseAlertDialog.Portal keepMounted className="relative isolate z-[var(--z-dialog)]">
+    <BaseAlertDialog.Portal
+      container={portalContainer ?? undefined}
+      keepMounted
+      className="relative isolate z-[var(--z-dialog)]"
+    >
       <DialogFloatingContainerContext value={floatingContainer}>
         <BaseAlertDialog.Backdrop
           className={cn(

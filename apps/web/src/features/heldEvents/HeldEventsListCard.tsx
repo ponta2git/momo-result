@@ -90,7 +90,7 @@ export function HeldEventsListCard({
               }
               events={model.rows}
               firstRowIsLatest={model.page === 1}
-              returnTo={model.returnTo}
+
               onDelete={model.onRequestDelete}
             />
           )}

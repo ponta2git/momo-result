@@ -91,7 +91,7 @@ describe("masterResourceCache", () => {
       for (const key of affected) queryClient.setQueryData(key, {});
       queryClient.setQueryData(masterKeys.memberAliases.list(), { items: [] });
 
-      await invalidateMasterResourceCaches(queryClient, resource);
+      await invalidateMasterResourceCaches(queryClient, resource, () => true);
 
       for (const key of affected) {
         expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);

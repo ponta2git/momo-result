@@ -14,6 +14,7 @@ import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.inmemory.InMemoryIdempotencyRepository
 import momo.api.auth.{AuthenticatedAccount, LoginRateLimiter}
 import momo.api.config.ResourceLimitsConfig
+import momo.api.domain.AccountRole
 import momo.api.domain.ids.{AccountId, MemberId}
 import momo.api.endpoints.ProblemDetails
 import momo.api.http.HttpAssertions.{assertProblem, jsonField}
@@ -127,7 +128,7 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
     val account = AuthenticatedAccount(
       accountId = AccountId.unsafeFromString("account_ponta"),
       displayName = "ponta",
-      isAdmin = true,
+      role = AccountRole.Admin,
       playerMemberId = Some(MemberId.unsafeFromString("member_ponta")),
     )
     val request = Json.obj("value" -> Json.fromString("same"))
@@ -166,7 +167,7 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
     val account = AuthenticatedAccount(
       accountId = AccountId.unsafeFromString("account_ponta"),
       displayName = "ponta",
-      isAdmin = true,
+      role = AccountRole.Admin,
       playerMemberId = Some(MemberId.unsafeFromString("member_ponta")),
     )
     val request = Json.obj("value" -> Json.fromString("same"))
@@ -207,7 +208,7 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
     val account = AuthenticatedAccount(
       accountId = AccountId.unsafeFromString("account_ponta"),
       displayName = "ponta",
-      isAdmin = true,
+      role = AccountRole.Admin,
       playerMemberId = None,
     )
     val request = Json.obj("value" -> Json.fromString("same"))
@@ -262,7 +263,7 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
     val account = AuthenticatedAccount(
       accountId = AccountId.unsafeFromString("account_ponta"),
       displayName = "ponta",
-      isAdmin = true,
+      role = AccountRole.Admin,
       playerMemberId = Some(MemberId.unsafeFromString("member_ponta")),
     )
     val request = Json.obj("value" -> Json.fromString("same"))

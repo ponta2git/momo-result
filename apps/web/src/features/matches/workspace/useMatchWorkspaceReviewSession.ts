@@ -20,7 +20,6 @@ export function useMatchWorkspaceReviewSession({
   mode,
   notify,
   reviewKey,
-  recoverStoredDraft,
   values,
   workspaceData,
 }: {
@@ -31,7 +30,6 @@ export function useMatchWorkspaceReviewSession({
   mode: WorkspaceMode;
   notify: (message: string, tone?: WorkspaceNoticeTone) => void;
   reviewKey: string;
-  recoverStoredDraft: boolean;
   values: MatchFormValues;
   workspaceData: MatchWorkspaceInitialData | null;
 }) {
@@ -57,7 +55,6 @@ export function useMatchWorkspaceReviewSession({
     enabled: draftTrackingEnabled && !confirmedDraftLoaded,
     mode,
     onRestore: handleRestore,
-    recoverStoredDraft,
     values,
     workspaceKey: reviewKey,
   });

@@ -15,7 +15,7 @@ import { useMatchWorkspaceFormHandlers } from "@/features/matches/workspace/useM
 import { useMatchWorkspaceInit } from "@/features/matches/workspace/useMatchWorkspaceInit";
 import { useMatchWorkspaceLifecycleEffects } from "@/features/matches/workspace/useMatchWorkspaceLifecycleEffects";
 import { useMatchWorkspaceLocalState } from "@/features/matches/workspace/useMatchWorkspaceLocalState";
-import { useMatchWorkspaceMasterHandoff } from "@/features/matches/workspace/useMatchWorkspaceMasterHandoff";
+import { useMatchWorkspaceMasterNavigation } from "@/features/matches/workspace/useMatchWorkspaceMasterNavigation";
 import { useMatchWorkspacePrimaryAction } from "@/features/matches/workspace/useMatchWorkspacePrimaryAction";
 import { useMatchWorkspaceQueries } from "@/features/matches/workspace/useMatchWorkspaceQueries";
 import { useMatchWorkspaceReviewSession } from "@/features/matches/workspace/useMatchWorkspaceReviewSession";
@@ -27,10 +27,11 @@ import {
   heldEventPatchById,
   latestHeldEventPatch,
 } from "@/features/matches/workspace/workspaceViewModel";
-import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 
 type MatchWorkspacePageModelParams = {
   accountId?: string | undefined;
+  canManageMasters: boolean;
+  canNavigateToMasters: () => boolean;
   matchDraftId?: string | undefined;
   matchId?: string | undefined;
   matchSessionId?: string | undefined;
@@ -53,6 +54,8 @@ function validationFeedback(firstMessage: string | undefined, success: boolean):
 
 export function useMatchWorkspacePageModel({
   accountId,
+  canManageMasters,
+  canNavigateToMasters,
   matchDraftId,
   matchId,
   matchSessionId,
@@ -60,13 +63,11 @@ export function useMatchWorkspacePageModel({
   preferredHeldEventId,
 }: MatchWorkspacePageModelParams): MatchWorkspacePageModel {
   const [searchParams] = useSearchParams();
-  const contextualReturnTo = sanitizeReturnTo(searchParams.get("returnTo"));
   const { notice, notify, notifyToast } = useWorkspaceNotice();
   const local = useMatchWorkspaceLocalState();
   const { dispatch, setValidationFocusRequest, setWorkspaceData, state } = local;
   const useSampleDrafts = mode === "review" && searchParams.get("sample") === "1";
-  const hasHandoff = searchParams.has("handoffId");
-  const handoffSessionId = matchSessionId ?? matchDraftId ?? matchId ?? mode;
+  const workspaceKey = matchSessionId ?? matchDraftId ?? matchId ?? mode;
   const {
     heldEventPicker,
     load,
@@ -153,21 +154,18 @@ export function useMatchWorkspacePageModel({
     draftTrackingEnabled,
     mode,
     notify,
-    reviewKey: handoffSessionId,
-    recoverStoredDraft: !hasHandoff,
+    reviewKey: workspaceKey,
     values: state.values,
     workspaceData: local.workspaceData,
   });
   const { reviewState, sessionDraft } = reviewSession;
   const submitFlow = useMatchWorkspaceSubmitFlow({
     matchId,
-    mode,
     notify: notifyToast,
     onPersistedSuccess: sessionDraft.markCommitted,
     setConfirmOpen: local.setConfirmOpen,
     setOperationError: local.setOperationError,
     setValidationMessage: local.setValidationMessage,
-    returnTo: contextualReturnTo,
     values: state.values,
   });
   const {
@@ -183,16 +181,12 @@ export function useMatchWorkspacePageModel({
     redirectConfirmedDraft,
     useSampleDrafts,
   });
-  const masterHandoff = useMatchWorkspaceMasterHandoff({
-    accountId,
-    dispatch,
-    handoffSessionId,
-    isInitialized: draftTrackingEnabled,
+  const masterNavigation = useMatchWorkspaceMasterNavigation({
+    canManageMasters,
+    canNavigateToMasters,
     mode,
     notify,
-    onBeforeNavigate: sessionDraft.allowNavigation,
-    searchParams,
-    values: state.values,
+    saveBeforeNavigate: sessionDraft.saveBeforeNavigate,
   });
   const sourceImageDraftId = view.matchDraftIdForImages;
   const sourceImages = sourceImageDraftId
@@ -231,14 +225,14 @@ export function useMatchWorkspacePageModel({
     view.confirmedDraftLoaded ||
     (!isInitialized && !remoteReview.blocked && !load.initializationFailed);
   const exitHref =
-    contextualReturnTo ??
-    (mode === "edit" && matchId
+    mode === "edit" && matchId
       ? `/matches/${encodeURIComponent(matchId)}`
       : state.values.heldEventId
         ? `/held-events/${encodeURIComponent(state.values.heldEventId)}`
-        : "/matches");
+        : "/matches";
 
-  const busy = mutations.isMutating || submitFlow.confirmation.pending || masterHandoff.isPending;
+  const busy =
+    mutations.isMutating || submitFlow.confirmation.pending || masterNavigation.isPending;
   const operationErrorView = local.operationError
     ? toMatchWorkspaceOperationErrorView(local.operationError)
     : null;
@@ -264,9 +258,9 @@ export function useMatchWorkspacePageModel({
             },
       navigation: {
         masters: {
-          pending: masterHandoff.isPending,
-          show: masterHandoff.returnAvailable,
-          onNavigate: masterHandoff.navigateToMasters,
+          pending: masterNavigation.isPending,
+          show: masterNavigation.available,
+          onNavigate: masterNavigation.navigateToMasters,
         },
       },
       persistence: {
@@ -399,6 +393,7 @@ export function useMatchWorkspacePageModel({
         dirty: sessionDraft.dirty,
         navigationAllowedRef: sessionDraft.navigationAllowedRef,
         onDiscard: sessionDraft.markCommitted,
+        saveBeforeLeave: sessionDraft.saveBeforeLeave,
       },
       toolbar: {
         exit: {

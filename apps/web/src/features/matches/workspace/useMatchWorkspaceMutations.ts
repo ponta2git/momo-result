@@ -18,19 +18,16 @@ import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDe
 import { evictDraftSourceImageBlobs } from "@/shared/api/sourceImageQueries";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { assertDefined } from "@/shared/lib/invariant";
-import { withReturnTo } from "@/shared/navigation/returnTo";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 export type MatchWorkspaceMutationsParams = {
   heldEventId: string;
   matchId: string | undefined;
-  mode: "create" | "edit" | "review";
   onConfirmConflict?: (matchDraftId: string) => Promise<boolean>;
   onConfirmSuccess: () => void;
   onError: (kind: MatchWorkspaceOperationErrorKind, message: string) => void;
   onOperationStart: (kind: MatchWorkspaceOperationErrorKind) => void;
   onPersistedSuccess: () => void;
-  returnTo?: string | undefined;
 };
 
 function isConflict(error: unknown): boolean {
@@ -46,13 +43,11 @@ function isConflict(error: unknown): boolean {
 export function useMatchWorkspaceMutations({
   heldEventId,
   matchId,
-  mode,
   onConfirmConflict,
   onConfirmSuccess,
   onError,
   onOperationStart,
   onPersistedSuccess,
-  returnTo,
 }: MatchWorkspaceMutationsParams) {
   const navigate = useNavigate();
   const activeRef = useRef(true);
@@ -88,7 +83,7 @@ export function useMatchWorkspaceMutations({
       showToast({ title: "試合を確定しました", tone: "success" });
       onConfirmSuccess();
       onPersistedSuccess();
-      navigateAfterSuccess(matchSuccessDestination(response.matchId, mode, returnTo));
+      navigateAfterSuccess(`/matches/${encodeURIComponent(response.matchId)}`);
     },
     onError: async (error, request) => {
       if (!activeRef.current) return;
@@ -121,7 +116,7 @@ export function useMatchWorkspaceMutations({
       if (!activeRef.current) return;
       showToast({ title: "試合を保存しました", tone: "success" });
       onPersistedSuccess();
-      navigateAfterSuccess(matchSuccessDestination(response.matchId, mode, returnTo));
+      navigateAfterSuccess(`/matches/${encodeURIComponent(response.matchId)}`);
     },
     onError: (error) => {
       if (!activeRef.current) return;
@@ -147,7 +142,7 @@ export function useMatchWorkspaceMutations({
       showToast({ title: "確定前の記録を削除しました", tone: "success" });
       onPersistedSuccess();
       navigateAfterSuccess(
-        returnTo ?? (heldEventId ? `/held-events/${encodeURIComponent(heldEventId)}` : "/matches"),
+        heldEventId ? `/held-events/${encodeURIComponent(heldEventId)}` : "/matches",
         { replace: true },
       );
     },
@@ -169,19 +164,4 @@ export function useMatchWorkspaceMutations({
     isMutating,
     updateMutation,
   };
-}
-
-function matchSuccessDestination(
-  matchId: string,
-  mode: "create" | "edit" | "review",
-  returnTo: string | undefined,
-): string {
-  const detailPath = `/matches/${encodeURIComponent(matchId)}`;
-  if (mode === "edit" && returnTo) {
-    const parsed = new URL(returnTo, "https://momo-result.local");
-    if (parsed.pathname === detailPath) {
-      return returnTo;
-    }
-  }
-  return withReturnTo(detailPath, returnTo);
 }

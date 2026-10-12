@@ -2,9 +2,13 @@
 //!
 //! The `momo-analysis-core` and `momo-ocr` crates own capability semantics and wire contracts. This
 //! crate owns their side effects: job coordination, process isolation, bounded storage, release
-//! tooling, and runtime configuration. Its only public Rust entry point is [`entrypoint`]; capability and
-//! infrastructure modules stay private so deployment commands cannot bypass the CLI boundary.
+//! tooling, and runtime configuration. It prepares notification content and owns database connections,
+//! commit, and sender supervision; `momo-notifications` owns bounded admission, wire encoding, final
+//! size checks, transport validation, and HTTP delivery. Its only public Rust entry point is
+//! [`entrypoint`]; capability and infrastructure modules stay private so deployment commands cannot
+//! bypass the CLI boundary.
 
+mod busy_retry;
 mod cgroup;
 mod cli;
 mod execution_slot;

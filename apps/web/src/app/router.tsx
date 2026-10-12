@@ -5,7 +5,7 @@ import { createBrowserRouter } from "react-router-dom";
 import { App } from "@/app/App";
 import { AppShell } from "@/app/AppShell";
 import {
-  AdminRoute,
+  OperationsRoute,
   AuthenticatedRoute,
   NotFoundRoute,
   PublicOnlyRoute,
@@ -120,18 +120,18 @@ export const appRoutes: RouteObject[] = [
             path: "admin/analysis",
             handle: { title: "分析管理" },
             element: (
-              <AdminRoute>
+              <OperationsRoute>
                 <SeriesAnalysisAdminPage />
-              </AdminRoute>
+              </OperationsRoute>
             ),
           },
           {
             path: "admin/masters",
             handle: { title: "設定管理" },
             element: (
-              <AdminRoute>
+              <OperationsRoute>
                 <MastersPage />
-              </AdminRoute>
+              </OperationsRoute>
             ),
           },
         ],

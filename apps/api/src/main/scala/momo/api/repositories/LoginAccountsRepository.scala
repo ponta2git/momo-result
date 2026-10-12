@@ -4,8 +4,8 @@ import java.time.Instant
 
 import cats.{~>, MonadThrow}
 
-import momo.api.domain.LoginAccount
 import momo.api.domain.ids.{AccountId, MemberId, UserId}
+import momo.api.domain.{AccountRole, LoginAccount}
 import momo.api.errors.AppError
 
 final case class CreateLoginAccountData(
@@ -14,7 +14,7 @@ final case class CreateLoginAccountData(
     displayName: String,
     playerMemberId: Option[MemberId],
     loginEnabled: Boolean,
-    isAdmin: Boolean,
+    role: AccountRole,
     createdAt: Instant,
     updatedAt: Instant,
 )
@@ -23,7 +23,7 @@ final case class UpdateLoginAccountData(
     displayName: Option[String],
     playerMemberId: Option[Option[MemberId]],
     loginEnabled: Option[Boolean],
-    isAdmin: Option[Boolean],
+    role: Option[AccountRole],
     updatedAt: Instant,
 )
 

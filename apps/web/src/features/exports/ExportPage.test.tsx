@@ -49,7 +49,7 @@ function LocationProbe() {
   return (
     <output
       aria-label="current location"
-      data-location={`${location.pathname}${location.search}`}
+      data-location={`${location.pathname}${location.search}${location.hash}`}
     />
   );
 }
@@ -260,17 +260,19 @@ describe("ExportPage", () => {
     await waitFor(() => expect(seasonRequests).toBe(1));
   });
 
-  it("keeps the source-page return link while export conditions change", async () => {
-    renderPage({
-      path: "/exports?returnTo=%2Fmatches%3Fstatus%3Dconfirmed%26cursor%3Dcursor-2",
-    });
+  it("keeps the selected target and fragment while changing export format", async () => {
+    renderPage({ path: "/exports?matchId=match-1#export-options" });
 
     await screen.findByRole("region", { name: "出力条件" });
-    const backLink = screen.getByRole("link", { name: "前の画面へ戻る" });
-    expect(backLink).toHaveAttribute("href", "/matches?status=confirmed&cursor=cursor-2");
-
     await user.click(screen.getByRole("tab", { name: "TSV" }));
-    expect(backLink).toHaveAttribute("href", "/matches?status=confirmed&cursor=cursor-2");
+
+    const location = new URL(
+      screen.getByLabelText("current location").dataset["location"] ?? "",
+      "https://app.test",
+    );
+    expect(location.searchParams.get("matchId")).toBe("match-1");
+    expect(location.searchParams.get("format")).toBe("tsv");
+    expect(location.hash).toBe("#export-options");
   });
 
   it("prefills match scope from deep link and downloads TSV for a single match", async () => {

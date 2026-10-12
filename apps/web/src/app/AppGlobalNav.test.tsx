@@ -7,7 +7,7 @@ import { AppGlobalNav } from "@/app/AppGlobalNav";
 
 const authMock = vi.hoisted(() => ({
   current: {
-    auth: { displayName: "ぽんた", isAdmin: false },
+    auth: { displayName: "ぽんた", role: "user" },
     isAuthenticated: true,
     isLogoutPending: false,
     logout: vi.fn(),
@@ -22,7 +22,7 @@ vi.mock("@/shared/auth/useAuth", () => ({
 describe("AppGlobalNav", () => {
   beforeEach(() => {
     authMock.current = {
-      auth: { displayName: "ぽんた", isAdmin: false },
+      auth: { displayName: "ぽんた", role: "user" },
       isAuthenticated: true,
       isLogoutPending: false,
       logout: vi.fn(),
@@ -42,7 +42,9 @@ describe("AppGlobalNav", () => {
     expect(screen.getByRole("link", { name: "OCR" })).not.toHaveAttribute("aria-current");
   });
 
-  it("owns the product route catalog and exposes admin destinations only to admins", () => {
+  it("keeps management destinations hidden from a user and shows them after promotion", () => {
+    const role = "user";
+    authMock.current = { ...authMock.current, auth: { displayName: "利用者", role } };
     const { rerender } = render(
       <MemoryRouter initialEntries={["/matches"]}>
         <AppGlobalNav />
@@ -56,7 +58,7 @@ describe("AppGlobalNav", () => {
 
     authMock.current = {
       ...authMock.current,
-      auth: { displayName: "管理者", isAdmin: true },
+      auth: { displayName: "管理者", role: "admin" },
     };
     rerender(
       <MemoryRouter initialEntries={["/matches"]}>
@@ -72,11 +74,22 @@ describe("AppGlobalNav", () => {
     expect(screen.queryByRole("link", { name: "アカウント" })).not.toBeInTheDocument();
   });
 
+  it("shows analysis and settings to an operator", () => {
+    authMock.current.auth.role = "operator";
+    render(
+      <MemoryRouter>
+        <AppGlobalNav />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("link", { name: "分析" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "設定" })).toBeInTheDocument();
+  });
+
   it("keeps logout failure feedback and its retry action at the account control", async () => {
     const user = userEvent.setup();
     const logout = vi.fn();
     authMock.current = {
-      auth: { displayName: "ぽんた", isAdmin: false },
+      auth: { displayName: "ぽんた", role: "user" },
       isAuthenticated: true,
       isLogoutPending: false,
       logout,

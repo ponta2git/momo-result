@@ -9,20 +9,13 @@ import { formatManYen } from "@/shared/lib/formatters";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { RankBadge } from "@/shared/matches/RankBadge";
 import { seriesComparisonHrefForMatch } from "@/shared/navigation/matchLinks";
-import { withReturnTo } from "@/shared/navigation/returnTo";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
 import { contentText } from "@/shared/ui/typography";
 
-export function HeldEventMatchTimeline({
-  matches,
-  returnTo,
-}: {
-  matches: HeldEventMatchResponse[];
-  returnTo: string;
-}) {
+export function HeldEventMatchTimeline({ matches }: { matches: HeldEventMatchResponse[] }) {
   return (
     <section aria-labelledby="held-event-timeline-heading" className="grid gap-4">
       <h2 id="held-event-timeline-heading" className={contentText.heading}>
@@ -62,7 +55,7 @@ export function HeldEventMatchTimeline({
                       <LinkButton
                         aria-label={`${formatMatchNoInEvent(match.matchNoInEvent)}の結果を見る`}
                         size="sm"
-                        to={withReturnTo(`/matches/${encodeURIComponent(match.matchId)}`, returnTo)}
+                        to={`/matches/${encodeURIComponent(match.matchId)}`}
                         variant="secondary"
                       >
                         結果を見る
@@ -71,7 +64,7 @@ export function HeldEventMatchTimeline({
                         aria-label={`${formatMatchNoInEvent(match.matchNoInEvent)}を戦績比較で見る`}
                         icon={<BarChart3 aria-hidden="true" />}
                         size="sm"
-                        to={withReturnTo(seriesComparisonHrefForMatch(match), returnTo)}
+                        to={seriesComparisonHrefForMatch(match)}
                         variant="quiet"
                       >
                         比較する

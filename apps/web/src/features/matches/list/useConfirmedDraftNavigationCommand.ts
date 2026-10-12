@@ -9,7 +9,6 @@ import {
 import type { MatchListAction } from "@/features/matches/list/matchListTypes";
 import { invalidateAfterMatchConfirmed } from "@/shared/api/cacheInvalidation";
 import { matchDraftDetailQueryOptions } from "@/shared/api/queryOptions";
-import { withReturnTo } from "@/shared/navigation/returnTo";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 export type ConfirmedDraftNavigationCommand = {
@@ -30,9 +29,7 @@ function emptyPresentation(scope: string) {
 }
 
 /** A read may finish after navigation; only the latest intent in its original route owns UI effects. */
-export function useConfirmedDraftNavigationCommand(
-  listReturnTo: string,
-): ConfirmedDraftNavigationCommand {
+export function useConfirmedDraftNavigationCommand(): ConfirmedDraftNavigationCommand {
   const navigate = useNavigate();
   const { key: scope } = useLocation();
   const queryClient = useQueryClient();
@@ -81,7 +78,7 @@ export function useConfirmedDraftNavigationCommand(
         if (destination) {
           void invalidateAfterMatchConfirmed(queryClient);
           showToast({ title: confirmedDraftMessages.listRedirect, tone: "warning" });
-          navigate(withReturnTo(destination.path, listReturnTo));
+          navigate(destination.path);
           return;
         }
         navigate(action.href);
@@ -102,7 +99,7 @@ export function useConfirmedDraftNavigationCommand(
         }
       }
     },
-    [listReturnTo, navigate, queryClient, scope],
+    [navigate, queryClient, scope],
   );
 
   return { checkingIds: presentation.checkingIds, errors: presentation.errors, run };

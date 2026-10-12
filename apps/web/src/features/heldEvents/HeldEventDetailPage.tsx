@@ -1,4 +1,4 @@
-import { ArrowLeft, Camera, Keyboard } from "lucide-react";
+import { Camera, Keyboard } from "lucide-react";
 import type { Ref } from "react";
 
 import { HeldEventDetailHeaderActions } from "@/features/heldEvents/HeldEventDetailHeaderActions";
@@ -30,12 +30,11 @@ export function HeldEventDetailPage() {
     return <HeldEventDetailLoading />;
   }
   if (page.kind === "notFound") {
-    return <HeldEventDetailUnavailable {...page.navigation} notFound titleRef={titleRef} />;
+    return <HeldEventDetailUnavailable notFound titleRef={titleRef} />;
   }
   if (page.kind === "loadFailed") {
     return (
       <HeldEventDetailUnavailable
-        {...page.navigation}
         titleRef={titleRef}
         retrying={page.refresh.pending}
         onRetry={page.refresh.run}
@@ -58,18 +57,10 @@ function HeldEventDetailReadyContent({
 
   return (
     <PageFrame className="min-w-0" width="wide">
-      <div className="grid justify-items-start gap-2">
-        <LinkButton
-          icon={<ArrowLeft aria-hidden="true" />}
-          size="sm"
-          to={navigation.backHref}
-          variant="quiet"
-        >
-          {navigation.backLabel}
+      <div>
+        <LinkButton size="sm" to="/held-events" variant="quiet">
+          開催履歴へ
         </LinkButton>
-        {navigation.backNotice ? (
-          <p className={contentText.supporting}>{navigation.backNotice}</p>
-        ) : null}
       </div>
 
       <PageHeader
@@ -126,9 +117,9 @@ function HeldEventDetailReadyContent({
           </div>
         </section>
 
-        <HeldEventDraftsSection drafts={drafts} returnTo={navigation.returnTo} />
+        <HeldEventDraftsSection drafts={drafts} />
         <HeldEventPlayerRecap recaps={playerRecaps} />
-        <HeldEventMatchTimeline matches={matches} returnTo={navigation.returnTo} />
+        <HeldEventMatchTimeline matches={matches} />
       </PageContentSurface>
 
       <AdjacentNavigation

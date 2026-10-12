@@ -1,7 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { addMatchListReturnTo } from "@/features/matches/list/matchListNavigation";
 import {
   buildMatchListApiQuery,
   buildMatchListSummaryQuery,
@@ -82,13 +81,11 @@ type ManualRefreshFailure = {
 export function useMatchListResource({
   currentSearch,
   deferredSearch,
-  listReturnTo,
   locationSettling,
   resetCursorIfUnchanged,
 }: {
   currentSearch: MatchListSearch;
   deferredSearch: MatchListSearch;
-  listReturnTo: string;
   locationSettling: boolean;
   resetCursorIfUnchanged: (expectedSearch: MatchListSearch) => boolean;
 }): MatchListResource {
@@ -131,11 +128,8 @@ export function useMatchListResource({
   }, []);
 
   const items = useMemo(
-    () =>
-      toMatchListItemViews(matchesQuery.data?.items ?? []).map((item) =>
-        addMatchListReturnTo(item, listReturnTo),
-      ),
-    [listReturnTo, matchesQuery.data],
+    () => toMatchListItemViews(matchesQuery.data?.items ?? []),
+    [matchesQuery.data],
   );
 
   const initialLoading = isInitialQueryLoading(matchesQuery);

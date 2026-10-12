@@ -18,7 +18,6 @@ import { authQueryOptions } from "@/shared/auth/authQueries";
 import { useDevUser } from "@/shared/auth/useDevUser";
 import type { SlotKind } from "@/shared/domain/ocr";
 import { trimSearchParam } from "@/shared/lib/searchParams";
-import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 
 const readyStatuses = new Set(["selected", "failed", "cancelled"]);
 
@@ -43,7 +42,6 @@ export function useOcrCapturePageModel(auth: ReturnType<typeof useOcrCaptureAuth
   const [startError, setStartError] = useState<string>();
   const [searchParams] = useSearchParams();
   const requestedHeldEventId = trimSearchParam(searchParams.get("heldEventId"));
-  const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
   const [setupValue, setSetupValue] = useState<SetupFormValues>(() => ({
     ...defaultSetupValues,
     ...(requestedHeldEventId ? { heldEventId: requestedHeldEventId } : {}),
@@ -184,7 +182,6 @@ export function useOcrCapturePageModel(auth: ReturnType<typeof useOcrCaptureAuth
         onDiscard: () => undefined,
       },
       pending: startFlow.locked,
-      returnTo: returnTo ?? "/matches",
     },
     setup: {
       choices: {

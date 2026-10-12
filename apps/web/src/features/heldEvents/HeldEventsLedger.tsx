@@ -4,7 +4,6 @@ import { heldEventOcrCaptureHref } from "@/features/heldEvents/heldEventNavigati
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
-import { withReturnTo } from "@/shared/navigation/returnTo";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { IconLink } from "@/shared/ui/actions/IconLink";
 import { cn } from "@/shared/ui/cn";
@@ -19,7 +18,6 @@ type HeldEventsLedgerProps = {
   events: HeldEventResponse[];
   firstRowIsLatest: boolean;
   onDelete: (event: HeldEventResponse) => void;
-  returnTo: string;
 };
 
 export function HeldEventsLedger(props: HeldEventsLedgerProps) {
@@ -34,7 +32,6 @@ function HeldEventsTable({
   events,
   firstRowIsLatest,
   onDelete,
-  returnTo,
 }: HeldEventsLedgerProps) {
   const latestEventId = firstRowIsLatest ? events[0]?.id : undefined;
   const columns: Array<DataTableColumn<HeldEventResponse>> = [
@@ -70,11 +67,7 @@ function HeldEventsTable({
             width: "4.5rem",
             renderCell: (event: HeldEventResponse) =>
               event.id === latestEventId ? (
-                <HeldEventCaptureLink
-                  disabled={actionsDisabled}
-                  event={event}
-                  returnTo={returnTo}
-                />
+                <HeldEventCaptureLink disabled={actionsDisabled} event={event} />
               ) : null,
           },
         ]
@@ -84,18 +77,14 @@ function HeldEventsTable({
       header: "結果",
       key: "detail",
       width: "4.5rem",
-      renderCell: (event) => (
-        <HeldEventResultLink disabled={actionsDisabled} event={event} returnTo={returnTo} />
-      ),
+      renderCell: (event) => <HeldEventResultLink disabled={actionsDisabled} event={event} />,
     },
     {
       align: "center",
       header: "出力",
       key: "export",
       width: "4.5rem",
-      renderCell: (event) => (
-        <HeldEventExportLink disabled={actionsDisabled} event={event} returnTo={returnTo} />
-      ),
+      renderCell: (event) => <HeldEventExportLink disabled={actionsDisabled} event={event} />,
     },
     ...(events.some(canDeleteHeldEvent)
       ? [
@@ -130,7 +119,6 @@ function HeldEventsMobileList({
   events,
   firstRowIsLatest,
   onDelete,
-  returnTo,
 }: HeldEventsLedgerProps) {
   return (
     <ol className="divide-y divide-[var(--color-border)] overflow-hidden rounded-md border border-[var(--color-border)]">
@@ -141,7 +129,7 @@ function HeldEventsMobileList({
           deleteDisabled={deleteDisabled}
           event={event}
           latest={firstRowIsLatest && index === 0}
-          returnTo={returnTo}
+
           onDelete={onDelete}
         />
       ))}
@@ -155,14 +143,12 @@ function HeldEventRow({
   event,
   latest,
   onDelete,
-  returnTo,
 }: {
   actionsDisabled: boolean;
   deleteDisabled: boolean;
   event: HeldEventResponse;
   latest: boolean;
   onDelete: (event: HeldEventResponse) => void;
-  returnTo: string;
 }) {
   return (
     <li>
@@ -182,7 +168,7 @@ function HeldEventRow({
           deleteDisabled={deleteDisabled}
           event={event}
           latest={latest}
-          returnTo={returnTo}
+
           onDelete={onDelete}
         />
       </article>
@@ -231,22 +217,18 @@ function HeldEventActions({
   event,
   latest,
   onDelete,
-  returnTo,
 }: {
   actionsDisabled: boolean;
   deleteDisabled: boolean;
   event: HeldEventResponse;
   latest: boolean;
   onDelete: (event: HeldEventResponse) => void;
-  returnTo: string;
 }) {
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2 md:justify-end">
-      {latest ? (
-        <HeldEventCaptureLink disabled={actionsDisabled} event={event} returnTo={returnTo} />
-      ) : null}
-      <HeldEventResultLink disabled={actionsDisabled} event={event} returnTo={returnTo} />
-      <HeldEventExportLink disabled={actionsDisabled} event={event} returnTo={returnTo} />
+      {latest ? <HeldEventCaptureLink disabled={actionsDisabled} event={event} /> : null}
+      <HeldEventResultLink disabled={actionsDisabled} event={event} />
+      <HeldEventExportLink disabled={actionsDisabled} event={event} />
       <HeldEventDeleteButton disabled={deleteDisabled} event={event} onDelete={onDelete} />
     </div>
   );
@@ -255,42 +237,41 @@ function HeldEventActions({
 type HeldEventLinkProps = {
   disabled: boolean;
   event: HeldEventResponse;
-  returnTo: string;
 };
 
-function HeldEventCaptureLink({ disabled, event, returnTo }: HeldEventLinkProps) {
+function HeldEventCaptureLink({ disabled, event }: HeldEventLinkProps) {
   return (
     <IconLink
       aria-label={`${formatDateTimeLong(event.heldAt)}の開催にOCR取り込み`}
       disabled={disabled}
       icon={<Camera />}
-      to={heldEventOcrCaptureHref(event.id, returnTo)}
+      to={heldEventOcrCaptureHref(event.id)}
       tooltip="この開催にOCR取り込み"
       variant="quiet"
     />
   );
 }
 
-function HeldEventResultLink({ disabled, event, returnTo }: HeldEventLinkProps) {
+function HeldEventResultLink({ disabled, event }: HeldEventLinkProps) {
   return (
     <IconLink
       aria-label={`${formatDateTimeLong(event.heldAt)}の開催詳細`}
       disabled={disabled}
       icon={<ClipboardList />}
-      to={withReturnTo(`/held-events/${encodeURIComponent(event.id)}`, returnTo)}
+      to={`/held-events/${encodeURIComponent(event.id)}`}
       tooltip="開催結果を見る"
       variant="quiet"
     />
   );
 }
 
-function HeldEventExportLink({ disabled, event, returnTo }: HeldEventLinkProps) {
+function HeldEventExportLink({ disabled, event }: HeldEventLinkProps) {
   return (
     <IconLink
       aria-label={`${formatDateTimeLong(event.heldAt)}をCSV出力`}
       disabled={disabled}
       icon={<Download />}
-      to={withReturnTo(`/exports?heldEventId=${encodeURIComponent(event.id)}&format=csv`, returnTo)}
+      to={`/exports?heldEventId=${encodeURIComponent(event.id)}&format=csv`}
       tooltip="CSV/TSV出力へ"
       variant="quiet"
     />

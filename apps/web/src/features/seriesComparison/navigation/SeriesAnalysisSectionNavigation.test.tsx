@@ -29,8 +29,7 @@ beforeAll(() =>
 const options = makeSeriesAnalysisOptions();
 const review = makeFourPlayerSeriesAnalysisReview();
 const aggregate = makeOwnerComparisonAggregate();
-const initialUrl =
-  "/analytics/series?gameTitleId=gt_momotetsu_2&focusMatchId=match-12&returnTo=%2Fmatches";
+const initialUrl = "/analytics/series?gameTitleId=gt_momotetsu_2&focusMatchId=match-12";
 
 function Harness({ gate }: { gate?: Promise<void> | undefined }) {
   const location = useSeriesAnalysisLocationState(options);
@@ -139,7 +138,7 @@ describe("series analysis section navigation", () => {
     const linkId = link.id;
     expect(link).toHaveAttribute(
       "href",
-      "/analytics/series?gameTitleId=gt_momotetsu_2&focusMatchId=match-12&view=drivers&returnTo=%2Fmatches#metric-destination-outcome",
+      "/analytics/series?gameTitleId=gt_momotetsu_2&focusMatchId=match-12&view=drivers#metric-destination-outcome",
     );
     await user.click(link);
     await waitFor(() =>
@@ -191,6 +190,5 @@ describe("series analysis section navigation", () => {
     expect(router.state.location.hash).toBe("#metric-revenue-outcome");
     expect(router.state.location.search).not.toContain("unused");
     expect(router.state.location.search).toContain("focusMatchId=match-12");
-    expect(router.state.location.search).toContain("returnTo=%2Fmatches");
   });
 });

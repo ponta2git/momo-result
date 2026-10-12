@@ -9,6 +9,7 @@
 | 変更 | 要求・専門規約 | 条件付きで加える章 | 実装入口・固有の検証境界 |
 | --- | --- | --- | --- |
 | 業務要件 / CSV / TSV | `docs/requirements/base.md` | 用語・状態は `docs/domain-rule.md` | 対象 usecase / export |
+| ログインアカウント / ロール / 認可 | `docs/requirements/base.md` の認証・権限 | 分析操作は分析batch / レーダー要求、DB は db-rule | 認証主体、API guard、アカウント管理、Web の導線・権限制御 |
 | 技術構成 / 非機能 | `docs/requirements/system-design.md` | 構造は `docs/architecture.md`、運用は `docs/ops/README.md` | 設定・runtime 定義、変更した実行境界 |
 | Web | 対象画面の要求、`docs/architecture.md` の Web | 表示・操作は `docs/ui-rule.md`、wire は API / Wire Boundary | `apps/web/src/`、Web Evidence Catalog |
 | UI / UX / デザインシステム / 文章 / IA | 対象画面の要求、`docs/ui-rule.md` の該当章 | 用語は `docs/domain-rule.md`、実装境界は architecture の Web | styles.css、shared/ui、formatter、対象 component。UI規約の検証と UI Conformance |

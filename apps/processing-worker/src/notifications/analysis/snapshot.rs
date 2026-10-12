@@ -50,9 +50,13 @@ pub(super) async fn prepare(
                 (&MAXIMUM_NAME_CODE_POINTS, Type::INT4),
                 (&MAXIMUM_DISPLAY_NAME_CODE_POINTS, Type::INT4),
                 (&MAXIMUM_NOTE_CODE_POINTS, Type::INT4),
+                (&source.attempt_id, Type::TEXT),
             ],
         )
         .await?;
+    if !row.try_get::<_, bool>("has_match_mutation")? {
+        return Ok(Err(SkipReason::NoMatchMutation));
+    }
     if !row.try_get::<_, bool>("enabled")? {
         return Ok(Err(SkipReason::SettingOff));
     }
@@ -120,7 +124,7 @@ pub(super) async fn prepare(
             previous_artifact_id = ?comparison.previous.as_artifact().map(|artifact| &artifact.identity.artifact_id),
             current_artifact_id = %current.identity.artifact_id);
     }
-    Ok(prepared)
+    Ok(prepared.map_err(SkipReason::from))
 }
 
 fn validate(snapshot: &Snapshot, changes: &comparison::Changes) -> Result<(), SkipReason> {

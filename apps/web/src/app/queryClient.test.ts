@@ -3,6 +3,7 @@ import { focusManager, onlineManager, QueryObserver } from "@tanstack/react-quer
 import { describe, expect, it, vi } from "vitest";
 
 import { queryClient } from "@/app/queryClient";
+import { retryProtectedQuery } from "@/shared/api/queryRetry";
 
 describe("app queryClient", () => {
   it("keeps production cache and error defaults explicit", () => {
@@ -11,7 +12,7 @@ describe("app queryClient", () => {
         retry: false,
       },
       queries: {
-        retry: 1,
+        retry: retryProtectedQuery,
         throwOnError: false,
       },
     });

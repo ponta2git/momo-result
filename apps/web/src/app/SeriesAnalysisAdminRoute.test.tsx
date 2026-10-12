@@ -3,14 +3,16 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { ErrorBoundary } from "@/app/ErrorBoundary";
+import { loadSeriesAnalysisAdminPage } from "@/app/routeModules";
 import { appRoutes } from "@/app/router";
 import type {
   SeriesAnalysisAdminOverview,
   SeriesAnalysisRecalculationAccepted,
 } from "@/shared/api/seriesAnalysis";
+import { decodeSeriesAnalysisAdminOverview } from "@/shared/api/seriesAnalysisEnvelopeSchemas";
 import { setDevUser } from "@/test/auth";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { makeSeriesAnalysisAdminOverview } from "@/test/msw/seriesAnalysisFixtures";
@@ -32,6 +34,15 @@ function renderAdminPage(initialEntry = "/admin/analysis") {
 }
 
 describe("SeriesAnalysisAdminPage", () => {
+  // Compile the real lazy route and validator before interaction waits start.
+  // Route guards, HTTP requests, and response validation still run normally.
+  beforeAll(async () => {
+    await Promise.all([
+      loadSeriesAnalysisAdminPage(),
+      decodeSeriesAnalysisAdminOverview(makeSeriesAnalysisAdminOverview()),
+    ]);
+  });
+
   it("offers recovery when the initial overview cannot load", async () => {
     setDevUser();
     const user = userEvent.setup();
@@ -184,7 +195,7 @@ describe("SeriesAnalysisAdminPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("does not load or expose analysis controls to a non-admin user", async () => {
+  it("does not load or expose analysis controls to an ordinary user", async () => {
     setDevUser("account_eu");
     let overviewRequests = 0;
     server.use(
@@ -196,11 +207,9 @@ describe("SeriesAnalysisAdminPage", () => {
 
     renderAdminPage();
 
-    const surface = await screen.findByRole("region", { name: "管理者権限が必要です" });
-    expect(within(surface).getByRole("link", { name: "試合一覧へ戻る" })).toHaveAttribute(
-      "href",
-      "/matches",
-    );
+    const surface = await screen.findByRole("region", { name: "運用担当の権限が必要です" });
+    expect(within(surface).getByRole("alert")).toHaveTextContent("運用担当・管理者専用です");
+    expect(screen.getByRole("link", { name: "試合" })).toHaveAttribute("href", "/matches");
     expect(screen.queryByRole("button", { name: "この作品を再計算" })).not.toBeInTheDocument();
     expect(overviewRequests).toBe(0);
   });

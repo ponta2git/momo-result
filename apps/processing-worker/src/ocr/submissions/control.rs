@@ -7,7 +7,7 @@ use crate::notifications::{
 use std::time::Duration;
 use thiserror::Error;
 use tokio::time::{Instant, timeout_at};
-use tokio_postgres::{Client, Transaction};
+use tokio_postgres::{Client, Transaction, types::Type};
 
 pub(crate) enum Settlement {
     Open,
@@ -53,11 +53,11 @@ async fn settle_transaction(
 ) -> Result<Settlement, SubmissionError> {
     let transaction = client.transaction().await?;
     let milliseconds = format!("{}ms", timeout.as_millis().max(1));
-    transaction.query_one("SELECT set_config('statement_timeout', $1, true), set_config('lock_timeout', $1, true)", &[&milliseconds]).await?;
+    transaction.query_typed_one("SELECT set_config('statement_timeout', $1, true), set_config('lock_timeout', $1, true)", &[(&milliseconds, Type::TEXT)]).await?;
     let Some(source) = transaction
-        .query_opt(
+        .query_typed_opt(
             "SELECT match_draft_id FROM ocr_submissions WHERE id = $1 AND status = 'open'",
-            &[&id],
+            &[(&id, Type::TEXT)],
         )
         .await?
     else {
@@ -67,23 +67,26 @@ async fn settle_transaction(
     // All source writers lock draft before submission. SKIP LOCKED gives a busy source its next
     // fair turn without blocking other submissions; a separate read distinguishes deletion.
     let draft = transaction
-        .query_opt(
+        .query_typed_opt(
             "SELECT status FROM match_drafts WHERE id = $1 FOR UPDATE SKIP LOCKED",
-            &[&draft_id],
+            &[(&draft_id, Type::TEXT)],
         )
         .await?;
     if draft.is_none()
         && transaction
-            .query_opt("SELECT id FROM match_drafts WHERE id = $1", &[&draft_id])
+            .query_typed_opt(
+                "SELECT id FROM match_drafts WHERE id = $1",
+                &[(&draft_id, Type::TEXT)],
+            )
             .await?
             .is_some()
     {
         return Ok(Settlement::Busy);
     }
     let Some(header) = transaction
-        .query_opt(
+        .query_typed_opt(
             "SELECT status FROM ocr_submissions WHERE id = $1 FOR UPDATE SKIP LOCKED",
-            &[&id],
+            &[(&id, Type::TEXT)],
         )
         .await?
     else {
@@ -97,16 +100,16 @@ async fn settle_transaction(
         .map(|row| row.try_get::<_, &str>(0))
         .transpose()?;
     if draft_status.is_none_or(|status| matches!(status, "confirmed" | "cancelled")) {
-        transaction.execute("UPDATE ocr_submissions SET status = 'aborted', finished_at = clock_timestamp() WHERE id = $1", &[&id]).await?;
+        transaction.execute_typed("UPDATE ocr_submissions SET status = 'aborted', finished_at = clock_timestamp() WHERE id = $1", &[(&id, Type::TEXT)]).await?;
         transaction.commit().await?;
         return Ok(Settlement::Aborted);
     }
-    transaction.execute("UPDATE ocr_submission_members m SET status = 'failed', failure_code = 'admission_timeout' \
+    transaction.execute_typed("UPDATE ocr_submission_members m SET status = 'failed', failure_code = 'admission_timeout' \
         FROM ocr_submissions s WHERE s.id = $1 AND m.submission_id = s.id AND m.status = 'pending' \
-        AND s.admission_deadline <= clock_timestamp()", &[&id]).await?;
-    let members = transaction.query("SELECT m.screen_type, m.status, m.failure_code, j.status AS job_status, j.failure_code AS job_failure, j.requested_screen_type AS job_screen_type \
+        AND s.admission_deadline <= clock_timestamp()", &[(&id, Type::TEXT)]).await?;
+    let members = transaction.query_typed("SELECT m.screen_type, m.status, m.failure_code, j.status AS job_status, j.failure_code AS job_failure, j.requested_screen_type AS job_screen_type \
         FROM ocr_submission_members m LEFT JOIN ocr_jobs j ON j.id = m.job_id WHERE m.submission_id = $1 \
-        ORDER BY CASE m.screen_type WHEN 'total_assets' THEN 0 WHEN 'revenue' THEN 1 ELSE 2 END", &[&id]).await?;
+        ORDER BY CASE m.screen_type WHEN 'total_assets' THEN 0 WHEN 'revenue' THEN 1 ELSE 2 END", &[(&id, Type::TEXT)]).await?;
     if members.is_empty() || members.len() > 3 {
         return Err(SubmissionError::InvalidState);
     }
@@ -137,11 +140,11 @@ async fn settle_transaction(
         return Ok(Settlement::Open);
     }
     project_empty_draft(&transaction, id, &draft_id).await?;
-    transaction.execute("UPDATE ocr_submissions SET status = 'settled', finished_at = clock_timestamp() WHERE id = $1", &[&id]).await?;
+    transaction.execute_typed("UPDATE ocr_submissions SET status = 'settled', finished_at = clock_timestamp() WHERE id = $1", &[(&id, Type::TEXT)]).await?;
     let notification = match sink.reserve(ocr::MAXIMUM_SNAPSHOT_BYTES) {
         Ok(reservation) => ocr::prepare(&transaction, reservation, id, failures, deadline).await?,
         Err(reason) => {
-            log_skip("ocr_completed", id, reason);
+            log_skip("ocr_completed", id, reason.into());
             None
         }
     };
@@ -154,12 +157,12 @@ async fn project_empty_draft(
     id: &str,
     draft_id: &str,
 ) -> Result<(), SubmissionError> {
-    transaction.execute("UPDATE match_drafts md SET status = 'ocr_failed', updated_at = clock_timestamp() \
+    transaction.execute_typed("UPDATE match_drafts md SET status = 'ocr_failed', updated_at = clock_timestamp() \
         WHERE md.id = $1 AND md.status = 'ocr_running' AND md.total_assets_draft_id IS NULL \
         AND md.revenue_draft_id IS NULL AND md.incident_log_draft_id IS NULL \
         AND md.total_assets_image_id IS NULL AND md.revenue_image_id IS NULL AND md.incident_log_image_id IS NULL \
         AND NOT EXISTS (SELECT 1 FROM ocr_submissions s WHERE s.match_draft_id = md.id AND s.id <> $2 AND s.status = 'open')",
-        &[&draft_id, &id]).await?;
+        &[(&draft_id, Type::TEXT), (&id, Type::TEXT)]).await?;
     Ok(())
 }
 

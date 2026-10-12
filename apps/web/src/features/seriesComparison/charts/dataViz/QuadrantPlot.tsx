@@ -3,8 +3,8 @@ import {
   DataVizLegend,
   DataVizPointMark,
   createDataVizSeriesPresentationLookup,
-} from "@/features/seriesComparison/charts/dataViz/seriesPresentation";
-import type { DataVizSeriesIdentity } from "@/features/seriesComparison/charts/dataViz/seriesPresentation";
+} from "@/shared/seriesAnalysis/seriesPresentation";
+import type { DataVizSeriesIdentity } from "@/shared/seriesAnalysis/seriesPresentation";
 
 export function DataVizQuadrantPlot({
   ariaLabel,

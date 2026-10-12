@@ -119,6 +119,7 @@ object HttpRoutes:
       getSeriesAnalysisChunk: GetSeriesAnalysisChunk[F],
       getSeriesAnalysisAdminOverview: GetSeriesAnalysisAdminOverview[F],
       requestSeriesAnalysisRecalculation: RequestSeriesAnalysisRecalculation[F],
+      getSeriesPlayerRadarHistory: GetSeriesPlayerRadarHistory[F],
       getSeriesPlayerRadarState: GetSeriesPlayerRadarState[F],
       getSeriesPlayerRadarPreview: GetSeriesPlayerRadarPreview[F],
       getSeriesPlayerRadarOperation: GetSeriesPlayerRadarOperation[F],
@@ -270,6 +271,7 @@ object HttpRoutes:
         security,
       ) :::
       SeriesPlayerRadarModule.routes[F](
+        deps.analytics.getSeriesPlayerRadarHistory,
         deps.analytics.getSeriesPlayerRadarState,
         deps.analytics.getSeriesPlayerRadarPreview,
         deps.analytics.getSeriesPlayerRadarOperation,

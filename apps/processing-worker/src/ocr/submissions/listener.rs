@@ -4,7 +4,7 @@ use super::{CHANNEL, runtime::RuntimeError};
 use crate::postgres;
 use futures_util::future::poll_fn;
 use tokio::{sync::watch, time};
-use tokio_postgres::{AsyncMessage, Client};
+use tokio_postgres::{AsyncMessage, Client, types::Type};
 
 pub(super) struct Listener {
     _client: Client,
@@ -42,7 +42,7 @@ impl Listener {
     pub(super) async fn verify(&mut self, publisher: &Client) -> Result<(), RuntimeError> {
         let probe = async {
             publisher
-                .execute("SELECT pg_notify($1, '')", &[&CHANNEL])
+                .execute_typed("SELECT pg_notify($1, '')", &[(&CHANNEL, Type::TEXT)])
                 .await
                 .map_err(|_error| RuntimeError::Dependency("probe_publish"))?;
             loop {

@@ -168,7 +168,7 @@ object AuthModule:
               AuthMeResponse(
                 accountId = account.accountId.value,
                 displayName = account.displayName,
-                isAdmin = account.isAdmin,
+                role = account.role,
                 memberId = account.playerMemberId.map(_.value),
                 csrfToken = Some(AuthPolicy.DevelopmentCsrfToken),
               )
@@ -188,7 +188,7 @@ object AuthModule:
       case Right(authenticated) => Right(AuthMeResponse(
           accountId = authenticated.account.accountId.value,
           displayName = authenticated.account.displayName,
-          isAdmin = authenticated.account.isAdmin,
+          role = authenticated.account.role,
           memberId = authenticated.account.playerMemberId.map(_.value),
           csrfToken = Some(csrf.issue(authenticated)),
         ))

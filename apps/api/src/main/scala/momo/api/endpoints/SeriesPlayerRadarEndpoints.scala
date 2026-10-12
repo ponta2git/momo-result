@@ -27,6 +27,34 @@ object SeriesPlayerRadarEndpoints:
     .out(noStore)
     .tag("admin-analysis")
 
+  final case class HistoryInput(
+      gameTitleId: Option[String],
+      limit: Option[Int],
+      cursor: Option[String]
+  )
+
+  val history: SecuredRead[HistoryInput, Array[Byte]] = endpoint
+    .securityIn(CommonEndpoint.accountHeader)
+    .get
+    .in("api" / "admin" / "series-analysis" / "radar" / "revisions")
+    .in(query[Option[String]]("gameTitleId")
+      .and(query[Option[Int]]("limit"))
+      .and(query[Option[String]]("cursor"))
+      .mapTo[HistoryInput])
+    .errorOut(CommonEndpoint.errorOut)
+    .out(savedDocument("SeriesPlayerRadarRevisionListResponse"))
+    .out(noStore)
+    .tag("admin-analysis")
+
+  val revision: SecuredRead[String, Array[Byte]] = endpoint
+    .securityIn(CommonEndpoint.accountHeader)
+    .get
+    .in("api" / "admin" / "series-analysis" / "radar" / "revisions" / path[String]("revisionId"))
+    .errorOut(CommonEndpoint.errorOut)
+    .out(savedDocument("SeriesPlayerRadarRevisionDetailResponse"))
+    .out(noStore)
+    .tag("admin-analysis")
+
   final case class PreviewInput(
       gameTitleId: String,
       previewId: String,

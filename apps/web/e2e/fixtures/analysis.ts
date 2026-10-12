@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Page, Route } from "@playwright/test";
 
 import {
   analysisArtifact,
@@ -84,12 +84,16 @@ export async function installAnalysisResponses(
     ];
   }
 
+  const scopedQuery = { artifactId: artifact.artifactId, gameTitleId, seasonMasterId, mapMasterId };
+
   let statusPhase: "failed" | "running" = "running";
   const statusPattern = /\/api\/analytics\/series-comparison\/v2\/status(?:\?.*)?$/u;
-  await page.route(/\/api\/analytics\/series-comparison\/v2\/options(?:\?.*)?$/u, async (route) =>
-    route.fulfill({ json: optionsFixture }),
-  );
+  await page.route(/\/api\/analytics\/series-comparison\/v2\/options(?:\?.*)?$/u, async (route) => {
+    readQuery(route, {});
+    await route.fulfill({ json: optionsFixture });
+  });
   await page.route(statusPattern, async (route) => {
+    readQuery(route, { gameTitleId });
     const calculation =
       statusPhase === "running"
         ? {
@@ -123,7 +127,10 @@ export async function installAnalysisResponses(
   await page.route(
     /\/api\/analytics\/series-comparison\/v2\/scope-status(?:\?.*)?$/u,
     async (route) => {
-      const params = new URL(route.request().url()).searchParams;
+      const params = readQuery(route, { gameTitleId, seasonMasterId, mapMasterId });
+      // URL identity lookup uses the latest publication; artifact reads are explicitly pinned.
+      if (params.has("artifactId") && params.get("artifactId") !== artifact.artifactId)
+        throw new Error("Analysis requested an unexpected artifactId");
       await route.fulfill({
         json: makeSeriesAnalysisScopeStatus({
           gameTitleId,
@@ -136,15 +143,23 @@ export async function installAnalysisResponses(
       });
     },
   );
-  await page.route(/\/api\/analytics\/series-comparison\/v5\/aggregate(?:\?.*)?$/u, async (route) =>
-    route.fulfill({ json: aggregateFixture }),
+  await page.route(
+    /\/api\/analytics\/series-comparison\/v5\/aggregate(?:\?.*)?$/u,
+    async (route) => {
+      readQuery(route, scopedQuery);
+      await route.fulfill({ json: aggregateFixture });
+    },
   );
-  await page.route(/\/api\/analytics\/series-comparison\/v3\/review(?:\?.*)?$/u, async (route) =>
-    route.fulfill({ json: reviewFixture }),
-  );
+  await page.route(/\/api\/analytics\/series-comparison\/v3\/review(?:\?.*)?$/u, async (route) => {
+    readQuery(route, scopedQuery);
+    await route.fulfill({ json: reviewFixture });
+  });
   await page.route(
     /\/api\/analytics\/series-comparison\/v3\/match-context(?:\?.*)?$/u,
-    async (route) => route.fulfill({ json: matchContextFixture }),
+    async (route) => {
+      readQuery(route, { ...scopedQuery, matchId });
+      await route.fulfill({ json: matchContextFixture });
+    },
   );
 
   return {
@@ -154,4 +169,14 @@ export async function installAnalysisResponses(
       statusPhase = "failed";
     },
   };
+}
+
+// A controlled response belongs to its seeded request identity, just as the real API does.
+function readQuery(route: Route, expected: Record<string, string>) {
+  if (route.request().method() !== "GET") throw new Error("Analysis fixture supports reads only");
+  const params = new URL(route.request().url()).searchParams;
+  for (const [key, value] of Object.entries(expected)) {
+    if (params.get(key) !== value) throw new Error(`Analysis requested an unexpected ${key}`);
+  }
+  return params;
 }

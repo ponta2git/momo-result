@@ -36,7 +36,7 @@ describe("radar editor saved identity", () => {
     });
     act(() => result.current.begin(source));
     await act(async () => {
-      await result.current.save();
+      await result.current.prepareApply();
     });
     expect(result.current.canApply).toBe(true);
     expect(result.current.session?.confirmedPreviewId).toBe("formal-one");
@@ -50,7 +50,7 @@ describe("radar editor saved identity", () => {
     expect(result.current.canApply).toBe(false);
     expect(result.current.comparisonChanged).toBe(true);
     await act(async () => {
-      await result.current.save();
+      await result.current.prepareApply();
     });
     expect(result.current.canApply).toBe(true);
     expect(result.current.comparisonChanged).toBe(false);
@@ -77,12 +77,12 @@ describe("radar editor saved identity", () => {
       act(() => result.current.begin(source));
       act(() => result.current.change("averageRank", 0, "4.95"));
       await act(async () => {
-        await result.current.save();
+        await result.current.prepareApply();
       });
       const request = save.mock.calls[0]?.[0];
       if (!request) throw new Error("Save request was not captured");
       expect(result.current.session?.saved).toBeNull();
-      expect(result.current.saveError).toContain("受付結果はまだ不明");
+      expect(result.current.applyError).toContain("受付結果はまだ不明");
 
       const candidate = {
         candidateId: "accepted-manual",
@@ -123,7 +123,7 @@ describe("radar editor saved identity", () => {
       expect(result.current.session?.confirmed).toBe(true);
       expect(result.current.session?.drafts.averageRank[0]).toBe("4.95");
       expect(result.current.contextChanged).toBe(false);
-      expect(result.current.saveError).toBeNull();
+      expect(result.current.applyError).toBeNull();
       expect(result.current.canApply).toBe(false);
       expect(save).toHaveBeenCalledTimes(1);
     },

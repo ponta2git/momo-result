@@ -94,7 +94,9 @@ describe("radar threshold editing", () => {
         revenueP90: [text, ...drafts.revenueP90.slice(1)],
       });
       expect(result.input).toBeNull();
-      expect(result.errors[0]).toMatchObject({ axisId: "revenueP90", index: 0 });
+      expect(result.errors).toEqual([
+        expect.objectContaining({ axisId: "revenueP90", index: 0, kind: "numeric" }),
+      ]);
     },
   );
 
@@ -107,10 +109,60 @@ describe("radar threshold editing", () => {
         averageRank: ["5", "4", "3.5", "3", "3", "2.5", "2", "1.5", "0.9"],
       }).errors,
     ).toEqual([
-      expect.objectContaining({ axisId: "averageRank", index: 4 }),
-      expect.objectContaining({ axisId: "averageRank", index: 8 }),
+      expect.objectContaining({ axisId: "averageRank", index: 3, kind: "order" }),
+      expect.objectContaining({ axisId: "averageRank", index: 4, kind: "order" }),
+      expect.objectContaining({ axisId: "averageRank", index: 8, kind: "range" }),
     ]);
   });
+
+  it("points both rank fields to the adjacent score, unrounded value, and strict descending constraint", () => {
+    const drafts = radarThresholdDrafts(validInput());
+    const result = parseRadarThresholdDrafts({
+      ...drafts,
+      averageRank: ["3.9999999999999996", ...drafts.averageRank.slice(1)],
+    });
+    expect(result.input).toBeNull();
+    expect(result.errors).toEqual([
+      {
+        axisId: "averageRank",
+        index: 0,
+        kind: "order",
+        message: "3点の境界（4位）より大きい値にしてください。",
+      },
+      {
+        axisId: "averageRank",
+        index: 1,
+        kind: "order",
+        message: "2点の境界（3.9999999999999996位）より小さい値にしてください。",
+      },
+    ]);
+  });
+
+  it.each(["-30", "-25.5"])(
+    "marks both money fields for equality or crossing (%s) with the strict ascending constraint",
+    (text) => {
+      const drafts = radarThresholdDrafts(validInput());
+      const result = parseRadarThresholdDrafts({
+        ...drafts,
+        revenueP90: [text, ...drafts.revenueP90.slice(1)],
+      });
+      expect(result.input).toBeNull();
+      expect(result.errors).toEqual([
+        {
+          axisId: "revenueP90",
+          index: 0,
+          kind: "order",
+          message: "3点の境界（-30万円）より小さい値にしてください。",
+        },
+        {
+          axisId: "revenueP90",
+          index: 1,
+          kind: "order",
+          message: `2点の境界（${text}万円）より大きい値にしてください。`,
+        },
+      ]);
+    },
+  );
 
   it("compares values, not formatting or preview scores", () => {
     const input = validInput();

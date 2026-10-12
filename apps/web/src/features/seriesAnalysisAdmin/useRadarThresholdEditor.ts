@@ -43,8 +43,8 @@ export function useRadarThresholdEditor(model: PlayerRadarAdminModel) {
   const [axis, setAxis] = useState<PlayerRadarAxisId>("averageRank");
   const [composing, setComposing] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [preparingApply, setPreparingApply] = useState(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
   const [ready, setReady] = useState<{
     input: RadarManualInput;
     context: string;
@@ -105,7 +105,7 @@ export function useRadarThresholdEditor(model: PlayerRadarAdminModel) {
         comparisonChanged: false,
       };
     });
-    setSaveError(null);
+    setApplyError(null);
   }, [acceptedSave, editing?.permissionReason]);
 
   const currentId = model.currentBasis?.basisId ?? null;
@@ -127,9 +127,7 @@ export function useRadarThresholdEditor(model: PlayerRadarAdminModel) {
     model.operation.kind === "manual",
   );
   const changed = Boolean(
-    session &&
-    (!parsed?.input ||
-      !sameRadarThresholds(parsed.input, session.saved?.input ?? session.source.input)),
+    session && (!parsed?.input || !sameRadarThresholds(parsed.input, session.source.input)),
   );
   const matchesSaved = Boolean(
     session?.saved &&
@@ -204,7 +202,7 @@ export function useRadarThresholdEditor(model: PlayerRadarAdminModel) {
   );
 
   function begin(source: RadarEditingSource) {
-    if (editing?.permissionReason || saving) return;
+    if (editing?.permissionReason || preparingApply) return;
     navigationAllowedRef.current = false;
     submittedSave.current = null;
     setSession({
@@ -219,17 +217,17 @@ export function useRadarThresholdEditor(model: PlayerRadarAdminModel) {
     });
     setAxis("averageRank");
     setShowErrors(false);
-    setSaveError(null);
+    setApplyError(null);
     setReady(null);
     editing?.onActiveChange(true);
   }
   function finish() {
-    if (saving || model.communicationUnknown) return;
+    if (preparingApply || model.communicationUnknown) return;
     debounce.cancel();
     submittedSave.current = null;
     setSession(null);
     setReady(null);
-    setSaveError(null);
+    setApplyError(null);
     editing?.onActiveChange(false);
   }
   function change(axisId: PlayerRadarAxisId, index: number, value: string) {
@@ -246,26 +244,26 @@ export function useRadarThresholdEditor(model: PlayerRadarAdminModel) {
           }
         : null,
     );
-    setSaveError(null);
+    setApplyError(null);
   }
   function adoptCurrentSource() {
     const source = editing?.current ?? editing?.candidate;
-    if (!source || saving) return;
+    if (!source || preparingApply) return;
     setSession((current) =>
       current ? { ...current, source, saved: null, confirmed: false } : null,
     );
-    setSaveError(null);
+    setApplyError(null);
   }
-  async function save() {
-    if (!session || !editing || saving || composing) return null;
+  async function prepareApply() {
+    if (!session || !editing || preparingApply || composing) return null;
     // Do not rely on a debounced parse or blur to determine the submitted snapshot.
     const latest = parseRadarThresholdDrafts(session.drafts);
     setShowErrors(true);
     if (!latest.input) return latest.errors[0] ?? null;
     const submittedInput = latest.input;
     if (editing.saveDisabledReason || contextChanged || noChangeFromCurrent) return null;
-    setSaving(true);
-    setSaveError(null);
+    setPreparingApply(true);
+    setApplyError(null);
     const submitted = session;
     try {
       let acceptedCandidate: string;
@@ -299,9 +297,9 @@ export function useRadarThresholdEditor(model: PlayerRadarAdminModel) {
         );
     } catch (error) {
       if (!radarSubmissionUncertain(error)) submittedSave.current = null;
-      if (mounted.current) setSaveError(radarCommandErrorMessage(error));
+      if (mounted.current) setApplyError(radarCommandErrorMessage(error));
     } finally {
-      if (mounted.current) setSaving(false);
+      if (mounted.current) setPreparingApply(false);
     }
     return null;
   }
@@ -320,10 +318,19 @@ export function useRadarThresholdEditor(model: PlayerRadarAdminModel) {
       setComposing(value);
     },
     showErrors,
-    saving,
-    saveError,
+    preparingApply,
+    applyError,
     changed,
     canApply,
+    awaitingValidation: Boolean(
+      session?.confirmed &&
+      !formal &&
+      !applyError &&
+      !contextChanged &&
+      model.operation &&
+      ["manual", "preview", "retry"].includes(model.operation.kind) &&
+      ["pending", "running"].includes(model.operation.status),
+    ),
     formalMismatch,
     comparisonChanged: session?.comparisonChanged ?? false,
     noChangeFromCurrent,
@@ -333,7 +340,7 @@ export function useRadarThresholdEditor(model: PlayerRadarAdminModel) {
     begin,
     finish,
     change,
-    save,
+    prepareApply,
     adoptCurrentSource,
     reset: () => {
       if (session) {

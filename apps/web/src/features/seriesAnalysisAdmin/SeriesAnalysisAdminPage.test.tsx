@@ -118,6 +118,7 @@ describe("SeriesAnalysisAdminPage", () => {
     const client = renderPage(true);
     await screen.findByRole("button", { name: "この作品を再計算" });
     await user.click(screen.getByRole("tab", { name: "レーダーの採点基準" }));
+    await user.click(await screen.findByRole("tab", { name: "点数への影響" }));
     await screen.findByRole("table", { name: "採点基準変更前後の比較" });
     await selectOption(user, screen.getByRole("combobox", { name: "比較するマップ" }), "map_east");
     await user.click(screen.getByRole("tab", { name: "分析の再計算" }));
@@ -520,6 +521,7 @@ describe("SeriesAnalysisAdminPage", () => {
     expect(await screen.findByRole("button", { name: "この作品を再計算" })).toBeEnabled();
     expect(screen.queryByRole("button", { name: "この変更案を適用する" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "レーダーの採点基準" }));
+    await user.click(await screen.findByRole("tab", { name: "点数への影響" }));
     await screen.findByRole("table", { name: "採点基準変更前後の比較" });
     expect(screen.queryByRole("button", { name: "この作品を再計算" })).not.toBeInTheDocument();
 

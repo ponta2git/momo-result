@@ -56,7 +56,7 @@ export function PlayerRadarCriteria({
                       <span className="sr-only">適用中 </span>
                       {before ? formatPlayerRadarBoundary(axis.id, before.rawValue) : "未適用"}
                     </p>
-                    {proposedBasis ? (
+                    {proposedBasis && before?.rawValue !== after?.rawValue ? (
                       <p className="whitespace-nowrap">
                         <span aria-hidden="true">→ </span>
                         <span className="sr-only">変更案 </span>

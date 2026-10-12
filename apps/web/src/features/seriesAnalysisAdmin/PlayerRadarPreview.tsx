@@ -14,7 +14,10 @@ import {
   playerRadarScoresAreReference,
   playerRadarUnavailableLabel,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
-import type { PlayerRadarCell } from "@/shared/seriesAnalysis/playerRadarPresentation";
+import type {
+  PlayerRadarAxisId,
+  PlayerRadarCell,
+} from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
@@ -36,6 +39,7 @@ export function PlayerRadarPreview({
   preview,
   filter,
   updating,
+  axisId,
   onSeasonChange,
   onMapChange,
   onResetFilter,
@@ -43,6 +47,7 @@ export function PlayerRadarPreview({
   preview: PlayerRadarPreviewModel;
   filter: PlayerRadarPreviewFilter;
   updating: boolean;
+  axisId?: PlayerRadarAxisId;
   onSeasonChange: (value: string) => void;
   onMapChange: (value: string) => void;
   onResetFilter: () => void;
@@ -116,21 +121,6 @@ export function PlayerRadarPreview({
                     : "参考値"}
                 </p>
               ) : null}
-              <div className="grid min-w-0 gap-6 sm:grid-cols-2">
-                {players.map((player) => (
-                  <PlayerRadarChart
-                    key={player.memberId}
-                    player={player}
-                    referenceScoresGrouped={allScoresReference}
-                    comparison={{
-                      before:
-                        preview.before?.players.find(
-                          (before) => before.memberId === player.memberId,
-                        ) ?? null,
-                    }}
-                  />
-                ))}
-              </div>
               <DataTable
                 caption={{ content: "採点基準変更前後の比較" }}
                 density="compact"
@@ -159,6 +149,9 @@ export function PlayerRadarPreview({
                         .find((entry) => entry.memberId === player.memberId)
                         ?.axes.find((cell) => cell.axisId === axis.id);
                       const after = player.axes.find((cell) => cell.axisId === axis.id);
+                      const beforeLabel = playerRadarScoreLabel(before);
+                      const afterLabel = playerRadarScoreLabel(after);
+                      const unchanged = beforeLabel === afterLabel;
                       const beforeReference = isReferenceScore(before);
                       const afterReference = isReferenceScore(after);
                       const delta =
@@ -168,14 +161,18 @@ export function PlayerRadarPreview({
                       return (
                         <div className="grid gap-1">
                           <p className="whitespace-nowrap">
-                            <span className="sr-only">適用中 </span>
-                            {playerRadarScoreLabel(before)} <span aria-label="変更後">→</span>{" "}
-                            <span className="sr-only">変更案 </span>
-                            <span className={contentText.compactPrimary}>
-                              {playerRadarScoreLabel(after)}
-                            </span>
+                            {unchanged ? (
+                              afterLabel
+                            ) : (
+                              <>
+                                <span className="sr-only">適用中 </span>
+                                {beforeLabel} <span aria-label="変更後">→</span>{" "}
+                                <span className="sr-only">変更案 </span>
+                                <span className={contentText.compactPrimary}>{afterLabel}</span>
+                              </>
+                            )}
                           </p>
-                          {delta !== null ? (
+                          {delta !== null && delta !== 0 ? (
                             <p className={contentText.supporting}>
                               増減 {delta > 0 ? "+" : ""}
                               {delta}点
@@ -207,10 +204,25 @@ export function PlayerRadarPreview({
                   })),
                 ]}
                 getRowKey={(axis) => axis.id}
-                rows={[...playerRadarAxes]}
+                rows={playerRadarAxes.filter((axis) => !axisId || axis.id === axisId)}
                 stickyRowHeader
                 verticalAlign="top"
               />
+              <div className="grid min-w-0 gap-6 sm:grid-cols-2">
+                {players.map((player) => (
+                  <PlayerRadarChart
+                    key={player.memberId}
+                    player={player}
+                    referenceScoresGrouped={allScoresReference}
+                    comparison={{
+                      before:
+                        preview.before?.players.find(
+                          (before) => before.memberId === player.memberId,
+                        ) ?? null,
+                    }}
+                  />
+                ))}
+              </div>
             </>
           ) : (
             <EmptyState

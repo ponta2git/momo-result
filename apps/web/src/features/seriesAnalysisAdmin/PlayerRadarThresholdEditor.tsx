@@ -1,19 +1,14 @@
 import { useId, useLayoutEffect, useRef, useState } from "react";
+import type { Ref } from "react";
 
 import type { PlayerRadarAdminModel } from "@/features/seriesAnalysisAdmin/playerRadarAdminModel";
 import { PlayerRadarPreview } from "@/features/seriesAnalysisAdmin/PlayerRadarPreview";
 import type { RadarThresholdError } from "@/features/seriesAnalysisAdmin/radarThresholdInput";
 import type { RadarThresholdEditor } from "@/features/seriesAnalysisAdmin/useRadarThresholdEditor";
-import { orderFixedMembers } from "@/shared/domain/members";
-import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
-import {
-  playerRadarAxes,
-  playerRadarScoreLabel,
-} from "@/shared/seriesAnalysis/playerRadarPresentation";
+import { playerRadarAxes } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { actionRowClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
-import { cn } from "@/shared/ui/cn";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { InputControl } from "@/shared/ui/forms/Control";
 import { Field } from "@/shared/ui/forms/Field";
@@ -24,15 +19,20 @@ import { contentText } from "@/shared/ui/typography";
 export function PlayerRadarThresholdEditor({
   editor,
   model,
+  onApply,
+  applyButtonRef,
 }: {
   editor: RadarThresholdEditor;
   model: PlayerRadarAdminModel;
+  onApply: () => Promise<RadarThresholdError | null>;
+  applyButtonRef: Ref<HTMLButtonElement>;
 }) {
   const id = useId();
   const inputs = useRef(new Map<string, HTMLInputElement>());
   const editStart = useRef(new Map<string, string>());
   const [focusRequest, setFocusRequest] = useState<RadarThresholdError | null>(null);
   const [showReference, setShowReference] = useState(false);
+  const [blurred, setBlurred] = useState<ReadonlySet<string>>(new Set());
   useLayoutEffect(() => {
     if (!focusRequest) return;
     inputs.current.get(`${focusRequest.axisId}:${focusRequest.index}`)?.focus();
@@ -40,7 +40,7 @@ export function PlayerRadarThresholdEditor({
   const { session } = editor;
   if (!session || !model.editing) return null;
   const data = model.editing;
-  const pending = editor.saving || model.communicationUnknown;
+  const pending = editor.preparingApply || model.communicationUnknown;
   const disabled = pending || Boolean(data.permissionReason);
   const selectedAxis =
     playerRadarAxes.find((axis) => axis.id === editor.axis) ?? playerRadarAxes[0];
@@ -52,34 +52,44 @@ export function PlayerRadarThresholdEditor({
   const originalValues = session.source.basis.axes.find(
     (axis) => axis.axisId === editor.axis,
   )?.thresholds;
-  const errors = editor.showErrors ? (editor.parsed?.errors ?? []) : [];
+  const errors = editor.composing
+    ? []
+    : (editor.parsed?.errors ?? []).filter(
+        (error) =>
+          error.kind !== "numeric" ||
+          editor.showErrors ||
+          blurred.has(`${error.axisId}:${error.index}`),
+      );
   const firstError = errors[0];
   const moveToError = (error: RadarThresholdError) => {
     editor.setAxis(error.axisId);
     setFocusRequest({ ...error });
   };
-  const saveReason =
+  const applyReason =
     data.saveDisabledReason ??
     (editor.contextChanged
       ? "最新の基準・共有案を確認してください。"
       : editor.noChangeFromCurrent
         ? "適用中の境界と同じ値です。"
         : null);
-  const comparisonLabel = editor.canApply
-    ? "保存済みの案を正式計算した比較です。"
-    : editor.session?.confirmed
-      ? "案は保存済みです。「基準の状態を更新」で正式な比較の完了を確認してください。"
-      : !editor.ready
-        ? editor.composing || editor.parsed?.errors.length
-          ? "入力を確認中です。表示中の比較は現在の入力を反映していません。"
-          : "入力の反映待ちです。表示中の比較は前回の入力によるものです。"
-        : "入力中の仮プレビューです。案はまだ適用されていません。";
+  const comparisonLabel =
+    errors.length > 0
+      ? "入力に不備があるため、比較を更新できません。各欄の案内を確認してください。表示中の比較は現在の入力を反映していません。"
+      : editor.canApply
+        ? "適用前の確認が完了した比較です。"
+        : editor.awaitingValidation
+          ? "適用前にサーバーで点数の変化を確認しています。"
+          : !editor.ready
+            ? editor.composing || editor.parsed?.errors.length
+              ? "入力を確認中です。表示中の比較は現在の入力を反映していません。"
+              : "入力の反映待ちです。表示中の比較は前回の入力によるものです。"
+            : "入力中の仮プレビューです。案はまだ適用されていません。";
   return (
     <section aria-label="採点境界の編集" className="grid min-w-0 grid-cols-1 gap-4">
       <UnsavedChangesGuard
-        description="採点境界の変更はまだ共有案に保存されていません。このページに残れば編集を続けられます。"
+        description="採点境界の変更はまだ適用されていません。このページに残れば編集を続けられます。"
         model={{
-          dirty: editor.changed,
+          dirty: editor.changed || (Boolean(session.saved) && !editor.noChangeFromCurrent),
           navigationAllowedRef: editor.navigationAllowedRef,
           onDiscard: editor.finish,
         }}
@@ -118,17 +128,17 @@ export function PlayerRadarThresholdEditor({
             </Button>
           }
         >
-          入力値は保持しています。編集元の参照値と置き換える共有案を確認してから保存してください。
+          入力値は保持しています。編集元の参照値と置き換える共有案を確認してから適用してください。
         </Notice>
       ) : null}
-      {editor.saveError && !model.communicationUnknown ? (
-        <Notice tone="danger" title="案を保存して比較できません">
-          {editor.saveError}
+      {editor.applyError && !model.communicationUnknown ? (
+        <Notice tone="danger" title="適用前の確認を完了できません">
+          {editor.applyError}
         </Notice>
       ) : null}
       {editor.comparisonChanged ? (
         <Notice tone="info" title="正式な比較が更新されました">
-          比較に使う記録が変わりました。点数の変化を確認し、「案を保存して比較」で確認を確定してください。
+          比較に使う記録が変わりました。点数の変化を確認し、「変更を適用」で再確認してください。
         </Notice>
       ) : null}
       {editor.formalMismatch ? (
@@ -136,7 +146,7 @@ export function PlayerRadarThresholdEditor({
           この案は適用できません。基準の状態を更新し、比較を再確認してください。
         </Notice>
       ) : null}
-      {firstError ? (
+      {editor.showErrors && firstError ? (
         <Notice
           tone="warning"
           title="採点境界の入力を確認してください"
@@ -190,7 +200,7 @@ export function PlayerRadarThresholdEditor({
                     {session.drafts[axis.id].map((text, index) => {
                       const key = `${axis.id}:${index}`;
                       const inputId = `${id}-${axis.id}-${index}`;
-                      const error = errors.find(
+                      const fieldErrors = errors.filter(
                         (item) => item.axisId === axis.id && item.index === index,
                       );
                       return (
@@ -198,7 +208,11 @@ export function PlayerRadarThresholdEditor({
                           key={key}
                           htmlFor={inputId}
                           label={`${index + 2}点の境界（${unit}）`}
-                          error={error?.message}
+                          error={
+                            fieldErrors.length > 0
+                              ? fieldErrors.map((error) => error.message).join(" ")
+                              : undefined
+                          }
                           errorId={`${inputId}-error`}
                           descriptionId={`${inputId}-reference`}
                           description={
@@ -218,7 +232,7 @@ export function PlayerRadarThresholdEditor({
                           <InputControl
                             id={inputId}
                             aria-label={`${selectedAxis.label} ${index + 2}点の境界（${unit}）`}
-                            aria-describedby={`${inputId}-reference${error ? ` ${inputId}-error` : ""}`}
+                            aria-describedby={`${inputId}-reference${fieldErrors.length > 0 ? ` ${inputId}-error` : ""}`}
                             ref={(element) => {
                               if (element) inputs.current.set(key, element);
                               else inputs.current.delete(key);
@@ -227,11 +241,12 @@ export function PlayerRadarThresholdEditor({
                             inputMode={axis.id === "averageRank" ? "decimal" : "text"}
                             textAlign="end"
                             value={text}
-                            invalid={Boolean(error)}
+                            invalid={fieldErrors.length > 0}
                             onChange={(event) =>
                               editor.change(axis.id, index, event.currentTarget.value)
                             }
                             onFocus={() => editStart.current.set(key, text)}
+                            onBlur={() => setBlurred((current) => new Set(current).add(key))}
                             onCompositionStart={() => editor.setComposing(true)}
                             onCompositionEnd={() => editor.setComposing(false)}
                             onKeyDown={(event) => {
@@ -255,21 +270,22 @@ export function PlayerRadarThresholdEditor({
                   <div className="grid justify-items-start gap-2">
                     {session.source.expectedCandidateId ? (
                       <p className={contentText.supporting}>
-                        保存すると、現在共有中の変更案をこの入力で置き換えます。適用中の基準は変わりません。
+                        適用の確認に進むと、現在の変更案をこの入力で置き換えます。適用中の基準は変わりません。
                       </p>
                     ) : null}
                     <Button
-                      disabled={disabled || Boolean(saveReason) || editor.composing}
-                      pending={editor.saving}
-                      pendingLabel="案を保存中"
+                      ref={applyButtonRef}
+                      disabled={disabled || Boolean(applyReason) || editor.composing}
+                      pending={pending}
+                      pendingLabel="適用前の確認中"
                       onClick={async () => {
-                        const error = await editor.save();
+                        const error = await onApply();
                         if (error) moveToError(error);
                       }}
                     >
-                      案を保存して比較
+                      変更を適用
                     </Button>
-                    {saveReason ? <p className={contentText.supporting}>{saveReason}</p> : null}
+                    {applyReason ? <p className={contentText.supporting}>{applyReason}</p> : null}
                   </div>
                 </div>
                 <div className="grid min-w-0 grid-cols-1 gap-4">
@@ -281,38 +297,10 @@ export function PlayerRadarThresholdEditor({
                       {null}
                     </Notice>
                   ) : null}
-                  {preview?.after ? (
-                    <section
-                      aria-label={`${selectedAxis.label}の点数変化`}
-                      className="grid gap-3 sm:grid-cols-2"
-                    >
-                      {orderFixedMembers(preview.after.players).map((player) => {
-                        const before = preview.before?.players
-                          .find((entry) => entry.memberId === player.memberId)
-                          ?.axes.find((cell) => cell.axisId === axis.id);
-                        const after = player.axes.find((cell) => cell.axisId === axis.id);
-                        const delta =
-                          before?.score != null && after?.score != null
-                            ? after.score - before.score
-                            : null;
-                        return (
-                          <div key={player.memberId} className="grid gap-1">
-                            <MemberSequenceLabel memberId={player.memberId}>
-                              {player.displayName}
-                            </MemberSequenceLabel>
-                            <p className={cn(contentText.body, "tabular-nums")}>
-                              適用中 {playerRadarScoreLabel(before)} → 変更案{" "}
-                              {playerRadarScoreLabel(after)}
-                              {delta !== null ? `（${delta > 0 ? "+" : ""}${delta}）` : ""}
-                            </p>
-                          </div>
-                        );
-                      })}
-                    </section>
-                  ) : null}
                   {preview ? (
                     <PlayerRadarPreview
                       preview={preview}
+                      axisId={editor.axis}
                       filter={model.previewFilter}
                       updating={data.evaluationUpdating}
                       onSeasonChange={model.actions.selectSeason}

@@ -189,6 +189,7 @@ describe("PlayerRadarAdministration", () => {
     const boundaries = await screen.findByRole("table", { name: "採点境界の変更案" });
     expect(within(boundaries).getByRole("rowheader", { name: "10点" })).toBeVisible();
     expect(boundaries).toHaveTextContent("1位以下");
+    await userEvent.setup().click(screen.getByRole("tab", { name: "点数への影響" }));
     expect(screen.getByRole("button", { name: "最新の記録で点数を再比較" })).toBeEnabled();
     expect(screen.queryByRole("table", { name: "採点基準変更前後の比較" })).not.toBeInTheDocument();
   });
@@ -223,6 +224,7 @@ describe("PlayerRadarAdministration", () => {
       }),
     );
     const client = renderAdministration();
+    await userEvent.setup().click(await screen.findByRole("tab", { name: "点数への影響" }));
     await user.click(await screen.findByRole("button", { name: "最新の記録から変更案を作成" }));
     expect(await screen.findByText("変更案の作成を受け付けました")).toBeInTheDocument();
     await waitFor(() => expect(client.isFetching()).toBe(0));
@@ -248,6 +250,7 @@ describe("PlayerRadarAdministration", () => {
       }),
     );
     renderAdministration();
+    await userEvent.setup().click(await screen.findByRole("tab", { name: "点数への影響" }));
     await screen.findByRole("table", { name: "採点基準変更前後の比較" });
     await user.click(screen.getByRole("button", { name: "この変更案を適用する" }));
     const dialog = screen.getByRole("alertdialog");
@@ -364,6 +367,7 @@ describe("PlayerRadarAdministration", () => {
       ),
     );
     renderAdministration();
+    await userEvent.setup().click(await screen.findByRole("tab", { name: "点数への影響" }));
     await screen.findByRole("table", { name: "採点基準変更前後の比較" });
     await user.click(screen.getByRole("button", { name: "この変更案を適用する" }));
     await user.click(
@@ -400,6 +404,7 @@ describe("PlayerRadarAdministration", () => {
       }),
     );
     renderAdministration();
+    await userEvent.setup().click(await screen.findByRole("tab", { name: "点数への影響" }));
     await screen.findByRole("table", { name: "採点基準変更前後の比較" });
     await user.click(screen.getByRole("button", { name: "この変更案を適用する" }));
     const dialog = screen.getByRole("alertdialog");
@@ -447,13 +452,18 @@ describe("PlayerRadarAdministration", () => {
       ...readyHandlers(),
     );
     renderAdministration();
+    await userEvent.setup().click(await screen.findByRole("tab", { name: "点数への影響" }));
     await screen.findByRole("table", { name: "採点基準変更前後の比較" });
     await selectOption(user, screen.getByRole("combobox", { name: "比較するマップ" }), "map_east");
     expect(screen.queryByRole("table", { name: "採点基準変更前後の比較" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "採点境界" }));
     expect(screen.getByRole("table", { name: "採点境界の変更案" })).toBeVisible();
+    await user.click(screen.getByRole("tab", { name: "点数への影響" }));
     gate.resolve();
     expect(await screen.findByText("この条件に対象試合はありません")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "採点境界" }));
     expect(screen.getByRole("table", { name: "採点境界の変更案" })).toBeVisible();
+    await user.click(screen.getByRole("tab", { name: "点数への影響" }));
     expect(screen.getByRole("combobox", { name: "比較するマップ" })).toHaveTextContent("東日本編");
     mapMissingFromDirectory = true;
     await user.click(screen.getByRole("button", { name: "基準の状態を更新" }));

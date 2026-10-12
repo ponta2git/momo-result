@@ -98,10 +98,11 @@ export function PlayerRadarChart({
         <desc id={`${figureId}-description`}>
           {referenceScoresGrouped ? "点数は参考値です。" : ""}
           {vertices
-            .map(
-              ({ axis, cell }) =>
-                `${axis.label}：${comparison ? `適用中 ${playerRadarScoreLabel(comparison.before?.axes.find((value) => value.axisId === axis.id))}、変更案 ` : ""}${playerRadarScoreLabel(cell)}${!referenceScoresGrouped && cell?.sampleQuality === "reference" && cell.score !== null ? "（参考値）" : ""}`,
-            )
+            .map(({ axis, cell }, index) => {
+              const beforeLabel = playerRadarScoreLabel(beforeVertices[index]?.cell);
+              const afterLabel = playerRadarScoreLabel(cell);
+              return `${axis.label}：${comparison && beforeLabel !== afterLabel ? `適用中 ${beforeLabel}、変更案 ` : ""}${afterLabel}${!referenceScoresGrouped && cell?.sampleQuality === "reference" && cell.score !== null ? "（参考値）" : ""}`;
+            })
             .join("。")}
         </desc>
         {areaPoints.every((point) => point !== null) ? (
@@ -143,6 +144,9 @@ export function PlayerRadarChart({
         </g>
         <g aria-hidden="true" fill="var(--color-text-secondary)" fontSize="12">
           {vertices.map(({ axis, cell }, index) => {
+            const before = beforeVertices[index]?.cell;
+            const beforeLabel = playerRadarScoreLabel(before);
+            const afterLabel = playerRadarScoreLabel(cell);
             const label = coordinate(center, index, radius + 36);
             const reference =
               !referenceScoresGrouped && cell?.sampleQuality === "reference" && cell.score !== null;
@@ -168,9 +172,9 @@ export function PlayerRadarChart({
                   x={label.x}
                   y={top + axis.chartLabel.length * 16 + 16}
                 >
-                  {comparison
-                    ? `${beforeVertices[index]?.cell?.score ?? "—"} → ${cell?.score ?? "—"}点`
-                    : playerRadarScoreLabel(cell)}
+                  {comparison && beforeLabel !== afterLabel
+                    ? `${before?.score ?? beforeLabel} → ${afterLabel}`
+                    : afterLabel}
                   {reference ? (
                     <tspan
                       className={contentText.supporting}

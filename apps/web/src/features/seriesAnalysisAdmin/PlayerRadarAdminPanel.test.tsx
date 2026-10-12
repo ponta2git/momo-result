@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -105,6 +105,22 @@ function modelFixture(): PlayerRadarAdminModel {
 }
 
 describe("PlayerRadarAdminPanel", () => {
+  it("separates boundary and score views while keeping actions available and explaining an absent proposal", async () => {
+    const user = userEvent.setup();
+    const model = modelFixture();
+    const { rerender } = render(<PlayerRadarAdminPanel model={model} />);
+    expect(screen.getByRole("tab", { name: "採点境界" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("table", { name: "採点境界の変更案" })).toBeVisible();
+    expect(screen.queryByRole("table", { name: "採点基準変更前後の比較" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "点数への影響" }));
+    expect(screen.getByRole("table", { name: "採点基準変更前後の比較" })).toBeVisible();
+    expect(screen.queryByRole("table", { name: "採点境界の変更案" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "この変更案を適用する" })).toBeEnabled();
+    rerender(<PlayerRadarAdminPanel model={{ ...model, candidate: null, preview: null }} />);
+    expect(screen.getByText("変更案を作成すると、点数への影響を確認できます。")).toBeVisible();
+    expect(screen.getByRole("button", { name: "最新の記録から変更案を作成" })).toBeEnabled();
+  });
+
   it.each(["この変更案を適用する", "変更案を取り下げる"])(
     "returns keyboard focus to %s after Escape",
     async (name) => {
@@ -138,6 +154,7 @@ describe("PlayerRadarAdminPanel", () => {
     const user = userEvent.setup();
     const model = modelFixture();
     render(<PlayerRadarAdminPanel model={model} />);
+    fireEvent.click(screen.getByRole("tab", { name: "点数への影響" }));
     const table = screen.getByRole("table", { name: "採点基準変更前後の比較" });
     const firstCell = within(table).getAllByRole("cell")[0]!;
     expect(firstCell).toHaveTextContent("適用中 6点 → 変更案 7点");
@@ -167,6 +184,7 @@ describe("PlayerRadarAdminPanel", () => {
     model.preview!.before = null;
     model.preview!.beforeBasis = null;
     render(<PlayerRadarAdminPanel model={model} />);
+    fireEvent.click(screen.getByRole("tab", { name: "点数への影響" }));
     const table = screen.getByRole("table", { name: "採点基準変更前後の比較" });
     const cells = within(table).getAllByRole("cell");
     expect(cells).toHaveLength(24);
@@ -185,6 +203,7 @@ describe("PlayerRadarAdminPanel", () => {
       model.previewState = "stale";
       model.applyDisabledReason = disabledReason;
       render(<PlayerRadarAdminPanel model={model} />);
+      fireEvent.click(screen.getByRole("tab", { name: "点数への影響" }));
       expect(screen.getByRole("button", { name: "この変更案を適用する" })).toBeDisabled();
       expect(screen.getByText("比較の更新が必要です")).toBeInTheDocument();
       if (showReason) expect(screen.getByText(disabledReason)).toBeInTheDocument();
@@ -243,6 +262,7 @@ describe("PlayerRadarAdminPanel", () => {
       ],
     };
     render(<PlayerRadarAdminPanel model={model} />);
+    fireEvent.click(screen.getByRole("tab", { name: "点数への影響" }));
     expect(screen.getByRole("combobox", { name: "比較するマップ" })).toHaveTextContent(
       "記録なしマップ",
     );
@@ -269,6 +289,7 @@ describe("PlayerRadarAdminPanel", () => {
       ],
     };
     render(<PlayerRadarAdminPanel model={model} />);
+    fireEvent.click(screen.getByRole("tab", { name: "点数への影響" }));
     const filters = screen.getByRole("region", { name: "採点基準の比較条件" });
     expect(within(filters).getByRole("combobox", { name: "比較するシーズン" })).toHaveTextContent(
       "第1シーズン",
@@ -300,6 +321,7 @@ describe("PlayerRadarAdminPanel", () => {
         }
       }
       render(<PlayerRadarAdminPanel model={model} />);
+      fireEvent.click(screen.getByRole("tab", { name: "点数への影響" }));
       expect(screen.getByText(`参考値（${reason}）`)).toBeInTheDocument();
       const table = screen.getByRole("table", { name: "採点基準変更前後の比較" });
       expect(within(table).queryByText(/参考値/u)).not.toBeInTheDocument();
@@ -316,6 +338,7 @@ describe("PlayerRadarAdminPanel", () => {
     before.players[1]!.axes[0]!.sampleQuality = "reference";
     after.players[2]!.axes[0]!.sampleQuality = "reference";
     render(<PlayerRadarAdminPanel model={model} />);
+    fireEvent.click(screen.getByRole("tab", { name: "点数への影響" }));
     const table = screen.getByRole("table", { name: "採点基準変更前後の比較" });
     const cells = within(table).getAllByRole("cell");
     expect(within(cells[0]!).getByText("参考値")).toBeInTheDocument();
@@ -347,6 +370,7 @@ describe("PlayerRadarAdminPanel", () => {
       }
     }
     render(<PlayerRadarAdminPanel model={model} />);
+    fireEvent.click(screen.getByRole("tab", { name: "点数への影響" }));
     expect(screen.getByText("参考値（40試合未満・8開催未満）")).toBeVisible();
     const table = screen.getByRole("table", { name: "採点基準変更前後の比較" });
     expect(within(table).queryByText(/参考値/u)).not.toBeInTheDocument();

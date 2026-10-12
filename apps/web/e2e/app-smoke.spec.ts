@@ -315,7 +315,7 @@ test("runs analysis administration and enforces access", async ({ e2eRun, page, 
 
     await page.route("**/api/**", continueWithE2eNonAdminAuth);
     await page.goto("/admin/analysis");
-    await expect(page.getByRole("region", { name: "管理者権限が必要です" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "運用担当の権限が必要です" })).toBeVisible();
     await expect(page.getByRole("button", { name: "この作品を再計算" })).toHaveCount(0);
     await page.unroute("**/api/**", continueWithE2eNonAdminAuth);
     await page.setViewportSize({ height: 900, width: 1440 });

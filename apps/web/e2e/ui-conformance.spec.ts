@@ -16,7 +16,6 @@ for (const detail of [
     firstId: "held-layout-first",
     middleId: "held-layout-middle",
     lastId: "held-layout-last",
-    returnTo: "/held-events?page=2",
     navigationName: "開催の前後移動",
     previousLabel: "前の開催",
     nextLabel: "次の開催",
@@ -27,7 +26,6 @@ for (const detail of [
     firstId: "match-layout-first",
     middleId: "match-layout-middle",
     lastId: "match-layout-last",
-    returnTo: "/matches?status=confirmed",
     navigationName: "前後の試合",
     previousLabel: "前の試合",
     nextLabel: "後の試合",
@@ -37,8 +35,7 @@ for (const detail of [
     page,
   }) => {
     await installAdjacentNavigationResponses(page);
-    const pathFor = (id: string) =>
-      `/${detail.route}/${id}?returnTo=${encodeURIComponent(detail.returnTo)}`;
+    const pathFor = (id: string) => `/${detail.route}/${id}`;
     const navigation = page.getByRole("navigation", { name: detail.navigationName });
     const previous = navigation.getByRole("link", {
       name: new RegExp(`^${detail.previousLabel}`, "u"),

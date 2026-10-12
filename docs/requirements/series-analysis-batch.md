@@ -9,6 +9,7 @@
 | 利用者体験、scope、指標の意味 | `docs/requirements/series-comparison.md` |
 | 行動仮説の生成・選定・表現 | `docs/requirements/series-review-playbook.md` |
 | job、artifact、version、公開・復旧 | 本書 |
+| ロール、管理操作の権限 | [基本要求の認証・権限](base.md#3-認証権限) |
 | runtime / parent-child | `docs/architecture.md` |
 | DB / migration | `docs/db-rule.md` と `../momo-db` |
 | artifact / queue / HTTP shape | JSON Schema、Tapir endpoint。本書の Artifact Contract |
@@ -54,7 +55,7 @@ provider固有値、費用、実測、昇格・復旧手順は public docs へ�
 
 ### Manual Triggers
 
-- 管理者は1作品または全作品の再計算を、認証、CSRF、`Idempotency-Key` 付きで要求できる。
+- [基本要求の操作権限](base.md#33-操作権限) に従い、運用担当・管理者は1作品、管理者だけが全作品の再計算を、認証、CSRF、`Idempotency-Key` 付きで要求できる。
 - HTTP operation の監査・冪等性と、作品単位へ集約する work intent を分ける。同じ key は同じ operation、異なる key は別 operation とする。
 - 全作品操作は受理時点の target snapshot と campaign を保存し、作品別 request へ非同期展開する。巨大な同期 response を返さない。
 - 手動 run は current artifact が最新でも、受理後に開始する実計算を最低1回保証する。active attempt 開始後の要求を、その attempt で充足したことにしない。
@@ -178,7 +179,7 @@ DB lock順とstaging transactionの規則は `docs/db-rule.md`、process責務�
 
 ### Admin
 
-- 管理画面は1作品runを主操作、全作品runを明示的な確認付き操作とする。一般利用者へ管理導線を出さない。
+- 管理画面は運用担当・管理者が利用でき、1作品runを主操作とする。全作品runは管理者だけに明示的な確認付きで提供し、運用担当には操作を表示せずAPIでも拒否する。一般利用者へ管理導線を出さない。
 - 作品候補は確定試合0件を含む全登録作品とし、登録作品0件では操作を拒否する。
 - overviewは選択作品のstatus、未充足手動run、slot / queue / campaign要約、全作品横断の直近10件を表示する。
 - 履歴は作品、状態、要求元、時刻、経過時間、version、attempt / recovery、safe failure codeを安全な範囲で示す。内部例外、接続先、artifact本文を返さない。
@@ -224,7 +225,7 @@ OCR同居を有効化する場合は、共通parent-child境界、単一slot、�
 | slot / lease / child / preemption | 複数worker、stale fence、owner喪失、timeout、OOM、process group回収、一方向preemption |
 | calculation / artifact | 文書化した数式・性質・canonicalization、上限、部分公開拒否、current 維持 |
 | API / Web | bounded read、artifact pinning、expired retry、revision mismatch、状態decision table、意味再計算禁止 |
-| admin / retention | auth / CSRF / idempotency、target snapshot、未充足run、直近10件、45日cleanup |
+| admin / retention | ロール別の閲覧・1作品run・全作品runの認可、CSRF / idempotency、target snapshot、未充足run、直近10件、45日cleanup |
 | compatibility / release | 単一世代切替の再開条件、exact capability、旧契約の拒否、rollback時のデータ保全、旧engine不在 |
 | resource | 定義した上限負荷を production 同等 runtime で処理し、worker / API / browser 別の resource と timeout 要求を満たす。実測は private evidence に置く |
 

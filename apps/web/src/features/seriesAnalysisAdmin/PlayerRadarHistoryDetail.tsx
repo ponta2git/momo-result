@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 import type {
   PlayerRadarRevision,
   PlayerRadarRevisionDetail,
@@ -27,7 +29,7 @@ export function PlayerRadarHistoryDetail({ detail }: { detail: PlayerRadarRevisi
     if (document.activeElement === document.body) headingRef.current?.focus();
   }, []);
   return (
-    <section aria-label="改訂詳細" className="grid min-w-0 gap-4">
+    <section aria-label="改訂詳細" className="grid min-w-0 grid-cols-1 gap-4">
       <div className="grid gap-1">
         <h3 ref={headingRef} tabIndex={-1} className={contentText.heading}>
           {revision.gameTitleName} · {playerRadarRevisionKind[revision.kind]}
@@ -38,16 +40,6 @@ export function PlayerRadarHistoryDetail({ detail }: { detail: PlayerRadarRevisi
           案の保存者:{" "}
           {revision.savedBy ? playerRadarRevisionActor(revision.savedBy) : "当時の情報なし"}
         </p>
-        {revision.sourceBasisId ? (
-          <p className={`${contentText.supporting} break-all`}>
-            編集元の基準: {revision.sourceBasisId}
-          </p>
-        ) : null}
-        {revision.sourceCandidateId ? (
-          <p className={`${contentText.supporting} break-all`}>
-            編集元の候補: {revision.sourceCandidateId}
-          </p>
-        ) : null}
       </div>
       {beforeBasis ? null : (
         <p className={contentText.body}>初回適用のため、変更前の採点基準はありません。</p>
@@ -79,6 +71,7 @@ export function PlayerRadarHistoryDetail({ detail }: { detail: PlayerRadarRevisi
                   columns={[
                     {
                       key: "score",
+                      minWidth: "4rem",
                       header: "点数",
                       rowHeader: true,
                       tabular: true,
@@ -86,6 +79,7 @@ export function PlayerRadarHistoryDetail({ detail }: { detail: PlayerRadarRevisi
                     },
                     {
                       key: "before",
+                      minWidth: "10rem",
                       header: `変更前（${unit}）`,
                       tabular: true,
                       renderCell: (row) =>
@@ -93,6 +87,7 @@ export function PlayerRadarHistoryDetail({ detail }: { detail: PlayerRadarRevisi
                     },
                     {
                       key: "after",
+                      minWidth: "10rem",
                       header: `変更後（${unit}）`,
                       tabular: true,
                       renderCell: (row) =>
@@ -100,6 +95,7 @@ export function PlayerRadarHistoryDetail({ detail }: { detail: PlayerRadarRevisi
                     },
                     {
                       key: "change",
+                      minWidth: "6rem",
                       header: "差分",
                       renderCell: (row) =>
                         row.before === undefined
@@ -119,4 +115,3 @@ export function PlayerRadarHistoryDetail({ detail }: { detail: PlayerRadarRevisi
     </section>
   );
 }
-import { useEffect, useRef } from "react";

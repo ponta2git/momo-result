@@ -184,7 +184,7 @@ describe("SeriesAnalysisAdminPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("does not load or expose analysis controls to a non-admin user", async () => {
+  it("does not load or expose analysis controls to an ordinary user", async () => {
     setDevUser("account_eu");
     let overviewRequests = 0;
     server.use(
@@ -196,11 +196,9 @@ describe("SeriesAnalysisAdminPage", () => {
 
     renderAdminPage();
 
-    const surface = await screen.findByRole("region", { name: "管理者権限が必要です" });
-    expect(within(surface).getByRole("link", { name: "試合一覧へ戻る" })).toHaveAttribute(
-      "href",
-      "/matches",
-    );
+    const surface = await screen.findByRole("region", { name: "運用担当の権限が必要です" });
+    expect(within(surface).getByRole("alert")).toHaveTextContent("運用担当・管理者専用です");
+    expect(screen.getByRole("link", { name: "試合" })).toHaveAttribute("href", "/matches");
     expect(screen.queryByRole("button", { name: "この作品を再計算" })).not.toBeInTheDocument();
     expect(overviewRequests).toBe(0);
   });

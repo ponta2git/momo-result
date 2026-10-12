@@ -26,6 +26,7 @@ type MasterCreateBinding = {
 };
 
 type GameTitleListProps = {
+  canEdit: boolean;
   completion?: string | undefined;
   create: MasterCreateBinding;
   defaultLayoutFamily: LayoutFamily;
@@ -40,6 +41,7 @@ type GameTitleListProps = {
 };
 
 export function GameTitleList({
+  canEdit,
   completion,
   create,
   defaultLayoutFamily,
@@ -64,24 +66,25 @@ export function GameTitleList({
         </>
       ),
       disabled: isPending,
-      trailingAction: isPending ? undefined : (
-        <div className="flex items-center gap-2">
-          <MasterEditDialog
-            initialLayoutFamily={item.layoutFamily}
-            initialName={item.name}
-            label="作品"
-            onSave={async (values) => {
-              await onUpdate(item.id, {
-                name: values.name,
-                layoutFamily: values.layoutFamily ?? item.layoutFamily,
-              });
-            }}
-            showLayoutFamily
-            title="作品を編集"
-          />
-          <MasterDeleteDialog label="作品" name={item.name} onDelete={() => onDelete(item.id)} />
-        </div>
-      ),
+      trailingAction:
+        isPending || !canEdit ? undefined : (
+          <div className="flex items-center gap-2">
+            <MasterEditDialog
+              initialLayoutFamily={item.layoutFamily}
+              initialName={item.name}
+              label="作品"
+              onSave={async (values) => {
+                await onUpdate(item.id, {
+                  name: values.name,
+                  layoutFamily: values.layoutFamily ?? item.layoutFamily,
+                });
+              }}
+              showLayoutFamily
+              title="作品を編集"
+            />
+            <MasterDeleteDialog label="作品" name={item.name} onDelete={() => onDelete(item.id)} />
+          </div>
+        ),
       value: item.id,
     };
   });
@@ -90,11 +93,13 @@ export function GameTitleList({
     <section className="grid min-w-0 gap-4">
       <ContentWithActions
         actions={
-          <GameTitleCreateDialog
-            key={create.formKey}
-            create={create}
-            defaultLayoutFamily={defaultLayoutFamily}
-          />
+          canEdit ? (
+            <GameTitleCreateDialog
+              key={create.formKey}
+              create={create}
+              defaultLayoutFamily={defaultLayoutFamily}
+            />
+          ) : undefined
         }
       >
         <div>
@@ -122,7 +127,11 @@ export function GameTitleList({
           <EmptyState
             placement="embedded"
             title="作品はまだありません"
-            description="作品を追加すると、マップとシーズンを登録できます。"
+            description={
+              canEdit
+                ? "作品を追加すると、マップとシーズンを登録できます。"
+                : "マップとシーズンを登録するには、管理者による作品の登録が必要です。"
+            }
           />
         </div>
       ) : (

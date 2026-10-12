@@ -42,7 +42,8 @@ describe("AppGlobalNav", () => {
     expect(screen.getByRole("link", { name: "OCR" })).not.toHaveAttribute("aria-current");
   });
 
-  it.each(["user", "operator"])("keeps admin destinations hidden from %s", (role) => {
+  it("keeps management destinations hidden from a user and shows them after promotion", () => {
+    const role = "user";
     authMock.current = { ...authMock.current, auth: { displayName: "利用者", role } };
     const { rerender } = render(
       <MemoryRouter initialEntries={["/matches"]}>
@@ -71,6 +72,17 @@ describe("AppGlobalNav", () => {
     }
     expect(screen.queryByRole("link", { name: "通知" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "アカウント" })).not.toBeInTheDocument();
+  });
+
+  it("shows analysis and settings to an operator", () => {
+    authMock.current.auth.role = "operator";
+    render(
+      <MemoryRouter>
+        <AppGlobalNav />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("link", { name: "分析" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "設定" })).toBeInTheDocument();
   });
 
   it("keeps logout failure feedback and its retry action at the account control", async () => {

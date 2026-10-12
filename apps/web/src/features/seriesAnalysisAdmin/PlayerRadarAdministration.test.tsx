@@ -1,12 +1,15 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { PlayerRadarAdministration } from "@/features/seriesAnalysisAdmin/PlayerRadarAdministration";
+import { seriesPlayerRadarKeys } from "@/shared/api/queryKeys";
+import { getAuthorization } from "@/shared/auth/authorization";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
+import { mswState } from "@/test/msw/fixtures";
 import { setupMsw } from "@/test/msw/lifecycle";
 import {
   makePlayerRadarBasis,
@@ -25,7 +28,13 @@ setupMsw();
 beforeAll(
   () => import("@/shared/api/generatedContracts/series-analysis-radar-validators.generated"),
 );
-beforeEach(() => setDevUser());
+beforeEach(() => {
+  setDevUser();
+  const account = mswState.loginAccounts.find((entry) => entry.accountId === "account_ponta");
+  if (!account) throw new Error("Expected the authenticated account fixture");
+  account.role = "operator";
+  delete account.playerMemberId;
+});
 
 function renderAdministration() {
   const client = createTestQueryClient();
@@ -49,6 +58,94 @@ function readyHandlers() {
 }
 
 describe("PlayerRadarAdministration", () => {
+  it("retries a failed operation as an operator with its saved origin identity", async () => {
+    const user = userEvent.setup();
+    const state = makeReadyPlayerRadarState();
+    const failed = {
+      ...makePlayerRadarOperation("candidate"),
+      operationId: "failed-candidate-operation",
+      status: "failed" as const,
+      safeFailureCode: "calculation_failed",
+    };
+    state.candidate!.status = "failed";
+    state.operations = [failed];
+    const submitted: unknown[] = [];
+    server.use(
+      http.get("/api/admin/series-analysis/radar", () => HttpResponse.json(state)),
+      ...readyHandlers(),
+      http.post("/api/admin/series-analysis/radar/operations", async ({ request }) => {
+        submitted.push(await request.json());
+        expect(request.headers.get("X-Momo-Account-Id")).toBe("account_ponta");
+        expect(request.headers.get("Idempotency-Key")).toBeTruthy();
+        return HttpResponse.json(
+          {
+            ...makePlayerRadarOperation("retry"),
+            operationId: "retried-candidate-operation",
+            originOperationId: failed.operationId,
+          },
+          { status: 202 },
+        );
+      }),
+    );
+    renderAdministration();
+    await user.click(await screen.findByRole("button", { name: "この処理を再試行する" }));
+    expect(await screen.findByText("再試行を受け付けました")).toBeInTheDocument();
+    expect(submitted).toEqual([
+      {
+        gameTitleId: "gt_momotetsu_2",
+        kind: "retry",
+        originOperationId: failed.operationId,
+      },
+    ]);
+  });
+
+  it("continues the current basis with the reviewed evidence as an operator", async () => {
+    const user = userEvent.setup();
+    const state = makeReadyPlayerRadarState();
+    state.candidate = null;
+    const evidenceKey = `sha256:${"a".repeat(64)}`;
+    state.monitor = {
+      completedWindowCount: 0,
+      evaluatedHeldEventCount: 0,
+      evaluatedMatchCount: 0,
+      latestWindows: [],
+      pendingMatchCount: 0,
+      postSourceMatchCount: 0,
+      reasons: [
+        { axisIds: [], evidenceChecksum: evidenceKey, kind: "source_changed", mapMasterIds: [] },
+      ],
+      status: "insufficient_matches",
+    };
+    const submitted: unknown[] = [];
+    server.use(
+      http.get("/api/admin/series-analysis/radar", () => HttpResponse.json(state)),
+      http.post("/api/admin/series-analysis/radar/operations", async ({ request }) => {
+        submitted.push(await request.json());
+        state.acknowledgedEvidenceKeys = [evidenceKey];
+        return HttpResponse.json(
+          {
+            ...makePlayerRadarOperation("acknowledge"),
+            status: "succeeded",
+            candidateId: null,
+            previewId: null,
+            basisId: null,
+            finishedAt: "2026-09-02T00:01:00Z",
+          },
+          { status: 202 },
+        );
+      }),
+    );
+    renderAdministration();
+    const currentBasis = await screen.findByRole("table", { name: "適用中の採点境界" });
+    const currentValues = currentBasis.textContent;
+    await user.click(screen.getByRole("button", { name: "この目安を確認し、基準を継続" }));
+    expect(await screen.findByText("現在の基準を継続")).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "適用中の採点境界" }).textContent).toBe(currentValues);
+    expect(submitted).toEqual([
+      { gameTitleId: "gt_momotetsu_2", kind: "acknowledge", evidenceKey },
+    ]);
+  });
+
   it.each([
     ["最新の記録から作り直す", "candidate"],
     ["前回の基準に戻す", "restore"],
@@ -184,15 +281,69 @@ describe("PlayerRadarAdministration", () => {
           : HttpResponse.json(makePlayerRadarOperation("candidate"), { status: 202 });
       }),
     );
-    renderAdministration();
+    const client = renderAdministration();
     await user.click(await screen.findByRole("button", { name: "最新の記録から変更案を作成" }));
     expect(await screen.findByText("操作の受付結果をまだ確認できません")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "最新の記録から変更案を作成" })).toBeDisabled();
+    await act(() => getAuthorization(client, "account_ponta").recheck());
+    expect(screen.getByText("操作の受付結果をまだ確認できません")).toBeInTheDocument();
+    expect(keys).toHaveLength(1);
     await user.click(screen.getByRole("button", { name: "操作の状態を確認する" }));
     expect(await screen.findByText("変更案の作成を受け付けました")).toBeInTheDocument();
     expect(keys).toHaveLength(2);
     expect(keys[0]).toBeTruthy();
     expect(keys[1]).toBe(keys[0]);
+  });
+
+  it("does not recreate protected caches or follow-up reads when a revoked command finishes late", async () => {
+    const user = userEvent.setup();
+    const commandGate = createDeferred();
+    const state = makePlayerRadarState();
+    state.eligibility = { matchCount: 40, heldEventCount: 8 };
+    const operation = {
+      ...makePlayerRadarOperation("candidate"),
+      operationId: "late-revoked-operation",
+    };
+    let stateReads = 0;
+    let commands = 0;
+    server.use(
+      http.get("/api/admin/series-analysis/radar", () => {
+        stateReads += 1;
+        return HttpResponse.json(state);
+      }),
+      http.post("/api/admin/series-analysis/radar/operations", async () => {
+        commands += 1;
+        await commandGate.promise;
+        return HttpResponse.json(operation, { status: 202 });
+      }),
+    );
+    const client = renderAdministration();
+    await user.click(await screen.findByRole("button", { name: "最新の記録から変更案を作成" }));
+    await waitFor(() => expect(commands).toBe(1));
+    const account = mswState.loginAccounts.find((entry) => entry.accountId === "account_ponta")!;
+    account.role = "user";
+    await act(() => getAuthorization(client, "account_ponta").recheck());
+    const readsAfterRevocation = stateReads;
+    await act(async () => commandGate.resolve());
+    await waitFor(() =>
+      expect(
+        client
+          .getMutationCache()
+          .getAll()
+          .some(
+            (mutation) =>
+              (mutation.state.data as { operationId?: string } | undefined)?.operationId ===
+              operation.operationId,
+          ),
+      ).toBe(true),
+    );
+    expect(
+      client.getQueryData(seriesPlayerRadarKeys.operation("gt_momotetsu_2", operation.operationId)),
+    ).toBeUndefined();
+    expect(client.getQueryData(seriesPlayerRadarKeys.state("gt_momotetsu_2"))).toBeUndefined();
+    expect(screen.queryByText("変更案の作成を受け付けました")).not.toBeInTheDocument();
+    expect(stateReads).toBe(readsAfterRevocation);
+    expect(commands).toBe(1);
   });
 
   it("acknowledges accepted publication before a slow status refresh finishes", async () => {

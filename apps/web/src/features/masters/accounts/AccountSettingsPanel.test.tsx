@@ -12,6 +12,7 @@ import type {
   UpdateLoginAccountRequest,
 } from "@/shared/api/adminAccounts";
 import { adminAccountKeys } from "@/shared/api/queryKeys";
+import { getAuthorization } from "@/shared/auth/authorization";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { mswState } from "@/test/msw/fixtures";
@@ -172,6 +173,87 @@ describe("AccountSettingsPanel", () => {
     expect(within(nextDialog).queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  it("blocks duplicate new submissions while an obsolete creation waits across demotion and regrant", async () => {
+    const oldResponse = createDeferred();
+    const newResponse = createDeferred();
+    const submissions: Array<{ key: string | null; payload: CreateLoginAccountRequest }> = [];
+    server.use(
+      http.post("/api/admin/login-accounts", async ({ request }) => {
+        const payload = (await request.json()) as CreateLoginAccountRequest;
+        submissions.push({ key: request.headers.get("Idempotency-Key"), payload });
+        await (submissions.length === 1 ? oldResponse : newResponse).promise;
+        const created = {
+          ...payload,
+          accountId: `account-${payload.discordUserId}`,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        };
+        mswState.loginAccounts.push(created);
+        return HttpResponse.json(created);
+      }),
+    );
+    renderPage();
+    const trigger = await screen.findByRole("button", { name: "アカウントを追加" });
+    await waitFor(() => expect(trigger).toBeEnabled());
+    await user.click(trigger);
+    const oldDialog = screen.getByRole("dialog", { name: "アカウントを追加" });
+    await user.type(
+      within(oldDialog).getByRole("textbox", { name: /DiscordユーザーID/u }),
+      "999000111222333444",
+    );
+    await user.type(within(oldDialog).getByRole("textbox", { name: /表示名/u }), "以前の追加");
+    await user.click(within(oldDialog).getByRole("button", { name: "追加" }));
+    await waitFor(() => expect(submissions).toHaveLength(1));
+
+    const account = mswState.loginAccounts.find((entry) => entry.accountId === "account_ponta")!;
+    account.role = "operator";
+    await act(() => getAuthorization(queryClient, "account_ponta").recheck());
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "アカウントを追加" })).not.toBeInTheDocument(),
+    );
+    account.role = "admin";
+    await act(() => getAuthorization(queryClient, "account_ponta").recheck());
+    await waitFor(() => expect(trigger).toBeEnabled());
+    await user.click(trigger);
+    const newDialog = screen.getByRole("dialog", { name: "アカウントを追加" });
+    await user.type(
+      within(newDialog).getByRole("textbox", { name: /DiscordユーザーID/u }),
+      "999000111222333445",
+    );
+    await user.type(within(newDialog).getByRole("textbox", { name: /表示名/u }), "新しい追加");
+    await selectOption(
+      user,
+      within(newDialog).getByRole("combobox", { name: "ロール" }),
+      "operator",
+    );
+    try {
+      await user.dblClick(within(newDialog).getByRole("button", { name: "追加" }));
+      expect(within(newDialog).getByRole("button", { name: "追加中" })).toBeDisabled();
+      expect(submissions).toHaveLength(1);
+
+      await act(async () => oldResponse.resolve());
+      await waitFor(() => expect(submissions).toHaveLength(2));
+      expect(within(newDialog).getByRole("button", { name: "追加中" })).toBeDisabled();
+      expect(within(newDialog).getByRole("textbox", { name: /表示名/u })).toHaveValue("新しい追加");
+      await user.click(within(newDialog).getByRole("button", { name: "追加中" }));
+    } finally {
+      oldResponse.resolve();
+      newResponse.resolve();
+    }
+    expect(await screen.findByRole("rowheader", { name: "新しい追加" })).toBeVisible();
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "アカウントを追加" })).not.toBeInTheDocument(),
+    );
+    expect(submissions).toHaveLength(2);
+    expect(submissions[1]?.key).toMatch(/\S/u);
+    expect(submissions[1]?.payload).toEqual({
+      discordUserId: "999000111222333445",
+      displayName: "新しい追加",
+      role: "operator",
+      loginEnabled: true,
+    });
+  });
+
   it("confirms login permission changes before applying them", async () => {
     let idempotencyKey: string | null = null;
     server.use(
@@ -191,13 +273,13 @@ describe("AccountSettingsPanel", () => {
     );
     renderPage();
 
-    const accountRow = (await screen.findByText("523484457705930752")).closest("tr");
+    const accountRow = (await screen.findByText("523484457705930755")).closest("tr");
     expect(accountRow).not.toBeNull();
-    await user.click((await screen.findAllByRole("button", { name: "ログイン停止" }))[0]!);
+    await user.click(within(accountRow!).getByRole("button", { name: "ログイン停止" }));
 
     expect(screen.getByRole("heading", { name: "ログインを停止しますか？" })).toBeInTheDocument();
     expect(screen.getByText(/変更後すぐに利用可否へ反映/u)).toBeInTheDocument();
-    expect(within(accountRow!).getByText("管理者")).toBeInTheDocument();
+    expect(within(accountRow!).getByText("一般")).toBeInTheDocument();
     expect(within(accountRow!).getByText("ログイン許可")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "停止する" }));

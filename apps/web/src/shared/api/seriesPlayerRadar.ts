@@ -137,6 +137,14 @@ export function seriesPlayerRadarPreviewQueryOptions(
   });
 }
 
+export function seriesPlayerRadarOperationQueryOptions(gameTitleId: string, operationId: string) {
+  return queryOptions({
+    queryKey: seriesPlayerRadarKeys.operation(gameTitleId, operationId),
+    queryFn: ({ signal }) => getSeriesPlayerRadarOperation(gameTitleId, operationId, { signal }),
+    staleTime: 0,
+  });
+}
+
 export function seriesAnalysisScopeStatusQueryOptions(
   query: SeriesAnalysisScopeStatusQuery | undefined,
 ) {

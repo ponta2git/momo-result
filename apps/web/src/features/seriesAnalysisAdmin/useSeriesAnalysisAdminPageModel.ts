@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { runIdempotentMutation } from "@/shared/api/idempotency";
@@ -10,14 +10,18 @@ import {
   requestAllSeriesAnalysisRecalculation,
   requestSeriesAnalysisRecalculation,
 } from "@/shared/api/seriesAnalysis";
+import type { SeriesAnalysisRecalculationAccepted } from "@/shared/api/seriesAnalysis";
 import { seriesAnalysisAdminOverviewQueryOptions } from "@/shared/api/seriesAnalysisQueryOptions";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
+import type { AuthorizationLease } from "@/shared/auth/authorization";
+import { useAuthorization } from "@/shared/auth/useAuthorization";
 import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 type AcceptanceMessage = { detail: string; title: string };
 type RecalculationTarget =
   | { kind: "all" }
   | { kind: "title"; gameTitleId: string; gameTitleName: string };
+type RecalculationRequest = { target: RecalculationTarget; lease: AuthorizationLease };
 
 /**
  * Owns the route selection, server resource lifecycle, and recalculation commands for the page.
@@ -25,13 +29,28 @@ type RecalculationTarget =
  */
 export function useSeriesAnalysisAdminPageModel() {
   const queryClient = useQueryClient();
+  const authorization = useAuthorization();
   const idempotencyKeys = useIdempotencyKeyStore();
   const [searchParams, setSearchParams] = useSearchParams();
   const gameTitleId = searchParams.get("gameTitleId")?.trim() || undefined;
-  const [acceptanceMessage, setAcceptanceMessage] = useState<AcceptanceMessage | undefined>();
-  const commandPending = useRef(false);
-  const overviewQuery = useQuery(seriesAnalysisAdminOverviewQueryOptions(gameTitleId));
-  const sourceOverview = overviewQuery.data;
+  const activeCommand = useRef<AuthorizationLease | undefined>(undefined);
+  const hasPendingCommand = () =>
+    Boolean(activeCommand.current && authorization.isCurrent(activeCommand.current));
+  const mounted = useRef(false);
+  const handledAcceptance = useRef<SeriesAnalysisRecalculationAccepted | undefined>(undefined);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const overviewOptions = seriesAnalysisAdminOverviewQueryOptions(gameTitleId);
+  const canReadOverview = authorization.canRead("operations", overviewOptions.queryKey);
+  const overviewQuery = useQuery({
+    ...overviewOptions,
+    enabled: () => canReadOverview && authorization.canRead("operations", overviewOptions.queryKey),
+  });
+  const sourceOverview = authorization.retained.operations ? overviewQuery.data : undefined;
   const canonicalGameTitleId = sourceOverview?.selectedTitle?.gameTitleId;
   const canonicalOverviewQuery = useQuery({
     ...seriesAnalysisAdminOverviewQueryOptions(canonicalGameTitleId, false),
@@ -43,10 +62,15 @@ export function useSeriesAnalysisAdminPageModel() {
     !gameTitleId &&
     canonicalGameTitleId &&
     canonicalOverviewQuery.dataUpdatedAt > overviewQuery.dataUpdatedAt;
-  const overview = hasNewerCanonical ? canonicalOverviewQuery.data : sourceOverview;
+  const overview = authorization.retained.operations
+    ? hasNewerCanonical
+      ? canonicalOverviewQuery.data
+      : sourceOverview
+    : undefined;
 
   useEffect(() => {
     if (
+      canReadOverview &&
       !gameTitleId &&
       canonicalGameTitleId &&
       sourceOverview &&
@@ -61,6 +85,7 @@ export function useSeriesAnalysisAdminPageModel() {
       setSearchParams(next, { replace: true });
     }
   }, [
+    canReadOverview,
     canonicalGameTitleId,
     gameTitleId,
     sourceOverview,
@@ -71,16 +96,11 @@ export function useSeriesAnalysisAdminPageModel() {
     setSearchParams,
   ]);
 
-  const invalidate = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.adminRoot() }),
-      queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.statusRoot() }),
-    ]);
-  };
-
   const recalculation = useMutation({
-    mutationFn: (target: RecalculationTarget) =>
-      target.kind === "title"
+    mutationFn: ({ target, lease }: RecalculationRequest) => {
+      if (!mounted.current || !authorization.canCommit(lease))
+        throw new DOMException("権限を確認できません", "AbortError");
+      return target.kind === "title"
         ? runIdempotentMutation(
             idempotencyKeys,
             "seriesAnalysis.recalculateTitle",
@@ -92,29 +112,56 @@ export function useSeriesAnalysisAdminPageModel() {
             "seriesAnalysis.recalculateAll",
             { confirmation: "all_titles" },
             requestAllSeriesAnalysisRecalculation,
-          ),
-    onMutate: () => setAcceptanceMessage(undefined),
-    onSuccess: async (response, target) => {
-      setAcceptanceMessage(
-        target.kind === "all"
-          ? {
-              detail: "作品ごとの処理として順番に実行します。",
-              title: `${response.targetCount}作品の再計算を受け付けました`,
-            }
-          : {
-              detail: "受付後の状態は、この画面の実行状況と処理履歴へ反映されます。",
-              title:
-                response.target?.requestDisposition === "forced_run_reserved"
-                  ? `${target.gameTitleName}は現在の計算後に再計算します`
-                  : `${target.gameTitleName}の再計算を受け付けました`,
-            },
-      );
-      await invalidate();
+          );
     },
-    onSettled: () => {
-      commandPending.current = false;
+    onError: (error, { lease }) => {
+      if (mounted.current) authorization.reportError(error, lease);
+    },
+    onSettled: (_data, _error, { lease }) => {
+      if (activeCommand.current === lease) activeCommand.current = undefined;
     },
   });
+
+  // A 202 received while auth is being checked remains a receipt, not another POST.
+  // Only the still-authorized owner reconciles its reads when access resumes.
+  useEffect(() => {
+    const response = recalculation.data;
+    const request = recalculation.variables;
+    if (
+      !response ||
+      !request ||
+      handledAcceptance.current === response ||
+      !authorization.canCommit(request.lease)
+    )
+      return;
+    handledAcceptance.current = response;
+    void Promise.all([
+      queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.adminRoot() }),
+      queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.statusRoot() }),
+    ]);
+  }, [authorization, queryClient, recalculation.data, recalculation.variables]);
+
+  const target = recalculation.variables?.target;
+  const currentRequest = recalculation.variables
+    ? authorization.isCurrent(recalculation.variables.lease)
+    : false;
+  const recalculationPending = currentRequest && recalculation.isPending;
+  const response = currentRequest ? recalculation.data : undefined;
+  const acceptanceMessage: AcceptanceMessage | undefined =
+    response && target
+      ? target.kind === "all"
+        ? {
+            detail: "作品ごとの処理として順番に実行します。",
+            title: `${response.targetCount}作品の再計算を受け付けました`,
+          }
+        : {
+            detail: "受付後の状態は、この画面の実行状況と処理履歴へ反映されます。",
+            title:
+              response.target?.requestDisposition === "forced_run_reserved"
+                ? `${target.gameTitleName}は現在の計算後に再計算します`
+                : `${target.gameTitleName}の再計算を受け付けました`,
+          }
+      : undefined;
 
   const selectedGameTitleId = gameTitleId ?? canonicalGameTitleId;
   const selectedTitleCandidate = overview?.selectedTitle;
@@ -123,8 +170,7 @@ export function useSeriesAnalysisAdminPageModel() {
       ? selectedTitleCandidate
       : null;
   const mutationError =
-    recalculation.variables?.kind === "title" &&
-    recalculation.variables.gameTitleId !== selectedGameTitleId
+    !currentRequest || (target?.kind === "title" && target.gameTitleId !== selectedGameTitleId)
       ? null
       : recalculation.error;
 
@@ -144,29 +190,43 @@ export function useSeriesAnalysisAdminPageModel() {
   );
 
   return {
+    authorization: {
+      canOperate: authorization.allowed.operations,
+      canRecalculateAll: authorization.allowed.admin,
+      retainAdmin: authorization.retained.admin,
+      adminEpoch: authorization.epoch.admin,
+    },
     actions: {
       clearRecalculationFeedback: () => {
-        setAcceptanceMessage(undefined);
-        if (!commandPending.current) recalculation.reset();
+        if (!hasPendingCommand()) recalculation.reset();
       },
       recalculateAll: async () => {
-        if (commandPending.current || !overview?.titleOptions.length) return;
-        commandPending.current = true;
-        await recalculation.mutateAsync({ kind: "all" });
+        if (hasPendingCommand() || !overview?.titleOptions.length) return;
+        const lease = authorization.begin("admin");
+        if (!lease) return;
+        activeCommand.current = lease;
+        await recalculation.mutateAsync({ target: { kind: "all" }, lease });
       },
       recalculateTitle: () => {
-        if (commandPending.current || !selectedTitle || selectedTitle.pendingManualRun) return;
-        commandPending.current = true;
+        if (hasPendingCommand() || !selectedTitle || selectedTitle.pendingManualRun) return;
+        const lease = authorization.begin("operations");
+        if (!lease) return;
+        activeCommand.current = lease;
         recalculation.mutate({
-          kind: "title",
-          gameTitleId: selectedTitle.gameTitleId,
-          gameTitleName: selectedTitle.gameTitleName,
+          lease,
+          target: {
+            kind: "title",
+            gameTitleId: selectedTitle.gameTitleId,
+            gameTitleName: selectedTitle.gameTitleName,
+          },
         });
       },
-      refresh: () => void overviewQuery.refetch(),
+      refresh: () => {
+        if (authorization.begin("operations")) void overviewQuery.refetch();
+      },
       selectTitle: (value: string) => {
-        setAcceptanceMessage(undefined);
-        if (!commandPending.current) recalculation.reset();
+        if (!authorization.begin("operations")) return;
+        if (!hasPendingCommand()) recalculation.reset();
         const next = new URLSearchParams(searchParams);
         if (value) next.set("gameTitleId", value);
         else next.delete("gameTitleId");
@@ -183,24 +243,25 @@ export function useSeriesAnalysisAdminPageModel() {
         : undefined,
     },
     recalculation: {
-      pending: recalculation.isPending,
-      allPending: recalculation.isPending && recalculation.variables.kind === "all",
-      titlePending: recalculation.isPending && recalculation.variables.kind === "title",
+      pending: recalculationPending,
+      allPending: recalculationPending && target?.kind === "all",
+      titlePending: recalculationPending && target?.kind === "title",
       titlePendingLabel:
-        recalculation.variables?.kind === "title"
-          ? `${recalculation.variables.gameTitleName}を受け付け中`
-          : "受け付け中",
+        target?.kind === "title" ? `${target.gameTitleName}を受け付け中` : "受け付け中",
       titleUnavailable: !selectedTitle,
       titleReserved: Boolean(selectedTitle?.pendingManualRun),
     },
     resource: {
       data: overview,
-      loading: isInitialQueryLoading(overviewQuery) && !resourceErrorTitle,
-      refreshing: overviewQuery.isFetching && !recalculation.isPending,
+      loading:
+        (authorization.auth.isChecking || isInitialQueryLoading(overviewQuery)) &&
+        !resourceErrorTitle,
+      refreshing: overviewQuery.isFetching && !recalculationPending,
       // Switching from the default query cancels its in-flight request.
       refreshDisabled:
+        !authorization.allowed.operations ||
         overviewQuery.isFetching ||
-        recalculation.isPending ||
+        recalculationPending ||
         (!gameTitleId && canonicalGameTitleId !== undefined),
     },
     selection: {

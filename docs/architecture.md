@@ -219,6 +219,7 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 - production の OS FFI と `unsafe` は process adapter に隔離し、他 module へ checked な safe API を公開する。TERM・KILL・process groupの回収は共通化し、分析の入力設定・終了分類とOCRのframe・結果decodeは各capabilityのprocess adapterに残す。
 - 子 process の resource 制限は実 runtime の cgroup で保証する。非対応 OS では job claim 前に fail closed にする。
 - 同時実行や publication は DB lease と fencing token で世代をまたいで保証する。process 内 semaphore や台数を正本にしない。
+- Busy後の早期再確認はconsumerごとの共有予算で回数・開始期限・同時数を制限し、新しい配送や再接続で予算を作り直さない。上限到達時は元の回復・保守期限へ戻す。分析は受信済みdeliveryを保持したままDB claimだけを再試行し、開始済みclaimの確定とpost-commit effectを処理してから配送を判断する。
 - 子 process の成果物は上限、path、件数、schema、checksum を親が検証し、失敗時に部分公開しない。
 - 分析worker内のRust validatorをpayload意味、canonical encoding、resource集合・相互参照の単一ownerとする。parentは完全検証を通ったopaque artifactだけをversion付きで公開し、APIはそのimmutable publication attestation、生成schema、reader resource上限、request identityだけを独立に検証する。
 - 分析成果物の公開とレーダー基準準備を実行目的で区別する。基準準備も同じqueue・共有実行枠・親子process境界を使い、保存元と全scopeの比較を検証する。準備の成功を通常の分析要求の充足や公開完了として扱わない。
@@ -231,7 +232,7 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 - 分析完了通知は `notifications/analysis` が実行attemptに結び付いた試合変更要求と前後のimmutable入力を照合し、公開transaction末尾で要求の完了を再確認して表示metadataを固定する。入力が変わらない成果物の再利用は公開制御側で通知準備を省略する。通知準備はOCRと同じ回復可能なSAVEPOINT境界を使い、正常commitを確認した経路だけが共通senderへ渡す。分析child・API・Summitに平均計算やproducer送出の責務を移さない。内容と比較範囲は `docs/requirements/series-analysis-batch.md` を参照する。
 - 通知producerへ渡すのは通知に必要なjob・attempt・作品・成果物versionの識別情報だけとし、DBのclaim型、lease、fenceや全体設定へ逆依存させない。
 - 通知の入力基準は画面用current / previousから分離する。公開制御は通知の可否とは独立して、公開・再利用成功と基準の更新を一つのtransactionにする。初回と不明を区別し、読取不能な旧形式でも入力metadataの完全性を確かめた範囲で差分を扱う。旧平均を現行形式として解釈せず、基準不足を全試合の追加に置き換えない。
-- 比較用の成果物取得は通知に必要な保存済みplayer metricsだけを射影し、通知で使わない分析カードを転送しない。元成果物のbyte・件数上限とtyped decode、前後のidentity・scope整合性は維持する。比較準備の時間枠には接続確立と全DB往復を含め、確定transaction内の準備とともに親の絶対期限から業務commit・復旧の余裕を残す。比較read transactionが正常commitした新規接続は続く公開transactionに再利用し、失敗・timeout時は破棄する。
+- 比較用の成果物取得は同じsnapshot内で前後の全試合identityとscope metadataを照合し、差分判定後に作品通算と影響シーズンの保存済みplayer metricsだけを取得する。公開validatorが保証するimmutable成果物の意味検証に依存し、元成果物のbyte・件数上限、全identity・scope整合性、取得した順位のtyped decodeは維持する。比較準備の時間枠には接続確立と全DB往復を含め、確定transaction内の準備とともに親の絶対期限から業務commit・復旧の余裕を残す。比較read transactionが正常commitした新規接続は続く公開transactionに再利用し、失敗・timeout時は破棄する。
 
 ### OCR Capability / Worker Role
 
@@ -242,10 +243,10 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 - 新規producer送出は[通知サイズと送出可否](requirements/base.md#通知サイズと送出可否)に従い、最終envelopeのHTTP本文・JSONB text表現と掲載内容を制限する。共有wireの保存互換や分析の比較履歴読取と、新規送出上限を混同しない。上限超過は通知全体の省略とし、業務成功と分析の入力基準更新を維持する。描画後の投稿数検証はSummitが所有する。
 - APIは `ocr_submissions` / `ocr_submission_members` に所有者・固定画像集合・受付期限を原子的に保存し、job登録とmember対応を一つのtransactionにする。同一操作のPUTと登録済みmemberの再送は同じ識別子へ収束する。Webは全画像の内容識別とupload keyを送出受付前に固定する。
 - OCR専用coordinatorは現在の下書きslotではなく固定memberと対応jobの終端を読み、全員終了後だけ送出を確定する。下書き→送出の順にlockし、業務更新後の最後にresult gateと設定を読む。ONなら文脈と失敗だけを固定し、OFFでも送出は終端にして後から再構築しない。画像0件の期限終了も回収し、後の送出・slot状態を上書きしない。
-- coordinatorはLISTEN確立後の初回・再接続・期限・低頻度の安全走査でopenを巡回する。commit後のwake hintは損失可能で、正本は保存状態。画像の実行slotと独立し、各送出を短いtransactionで扱う。共有wire・宣言的な保存構造と排他契約は `../momo-db/docs/discord-notifications.md` を正本とし、DBへ終了policyやtriggerを置かない。
+- coordinatorはLISTEN確立後の初回・再接続・期限・低頻度の安全走査でopenを巡回する。Busyだった送出だけを上限付きで保持して早期再確認し、通常の安全走査・受付期限を後ろへ延ばさない。commit後のwake hintは損失可能で、正本は保存状態。画像の実行slotと独立し、各送出を短いtransactionで扱う。共有wire・宣言的な保存構造と排他契約は `../momo-db/docs/discord-notifications.md` を正本とし、DBへ終了policyやtriggerを置かない。
 - 通知準備は確定処理と同じ絶対期限から残り時間を計算し、実行中SQLの終了・SAVEPOINT復旧・業務commitの時間を確保する。余裕がなければ通知用SQLを実行せず、復旧可能な準備失敗では業務成功を保って通知を省略する。commit成功後だけ、件数・bytes・同時接続数に上限を持つ共通senderへ渡す。OCRのACK・実行枠解放はHTTP完了を待たない。
 - 通知の一回限りのSQLはパラメータ型を明示し、statementの準備・実行を分ける不要なDB往復を避ける。共有gate取得とsnapshot取得は別statementのまま維持する。比較・準備のtimeout、残時間不足、DBエラーは区別し、準備失敗には処理段階・時間予算・経過時間・SQLSTATEを記録する。DB例外本文やbind値は出力しない。
-- senderはDNS・接続・応答を含む単一のrequest期限内で一度だけHTTPを試み、整合する受付応答を永続受付の証拠として扱う。接続だけを先に打ち切る短い期限を重ねず、TCPの一時的な停滞からの回復も同じ期限に含める。応答不明時も通知outbox・再試行・再起動時の再構築は行わない。停止時はproducerの確定を優先し、残りの共通期限で通知をdrainする。
+- senderはDNS・接続・応答を含む単一のrequest期限内で一度だけHTTPを試み、整合する受付応答を永続受付の証拠として扱う。予約からdispatch、送信queue待ち、HTTP処理の時間を既存のattempt・receipt記録で区別する。接続だけを先に打ち切る短い期限を重ねず、TCPの一時的な停滞からの回復も同じ期限に含める。応答不明時も通知outbox・再試行・再起動時の再構築は行わない。停止時はproducerの確定を優先し、残りの共通期限で通知をdrainする。
 
 ## 5. Runtime / Security
 

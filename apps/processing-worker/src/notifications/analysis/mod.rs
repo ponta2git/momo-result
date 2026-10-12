@@ -65,7 +65,7 @@ pub(crate) async fn load(
                 source_job_id = %source.job_id, error_kind = error.kind());
                 SkipReason::PreparationFailed
             })?;
-        if !intent::has_match_mutation(&client, source, "assigned")
+        if !intent::has_assigned_match_mutation(&client, source)
             .await
             .map_err(|error| {
                 tracing::warn!(
@@ -79,19 +79,15 @@ pub(crate) async fn load(
             log_skip(KIND, source.job_id, SkipReason::NoMatchMutation);
             return Ok((client, None));
         }
-        let (previous, current) =
-            artifacts::load(&mut client, source.game_title_id, candidate_id).await?;
-        if current.identity.input_revision != source.input_revision.to_string()
-            || current.identity.algorithm_version != source.algorithm_version
-            || current.identity.artifact_schema_version != source.artifact_schema_version
-        {
-            return Err(SkipReason::InvalidSnapshot);
-        }
-        let changes = comparison::changes(&previous, &current)?;
-        if changes.is_empty() {
+        let Some(artifacts::ComparedArtifacts {
+            previous,
+            current,
+            changes,
+        }) = artifacts::load(&mut client, source, candidate_id).await?
+        else {
             log_skip(KIND, source.job_id, SkipReason::NoInputChanges);
             return Ok((client, None));
-        }
+        };
         tracing::info!(
             event = "result_notification_comparison_ready",
             kind = KIND,
@@ -144,14 +140,13 @@ impl Comparison {
             log_skip(KIND, source.job_id, SkipReason::InvalidSnapshot);
             return Ok(None);
         }
-        super::preparation::recoverable(transaction, KIND, source.job_id, deadline, async {
-            // The final fenced transaction has fulfilled precisely this attempt's requests.
-            // A job's representative trigger can hide coalesced user changes.
-            if !intent::has_match_mutation(transaction, source, "fulfilled").await? {
-                return Ok(Err(SkipReason::NoMatchMutation));
-            }
-            snapshot::prepare(transaction, source, self).await
-        })
+        super::preparation::recoverable(
+            transaction,
+            KIND,
+            source.job_id,
+            deadline,
+            snapshot::prepare(transaction, source, self),
+        )
         .await
     }
 }

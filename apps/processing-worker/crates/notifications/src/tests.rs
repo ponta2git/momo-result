@@ -187,6 +187,86 @@ async fn active_http_keeps_its_permit_without_blocking_other_work()
     result
 }
 
+#[tokio::test]
+async fn consecutive_notifications_reuse_a_connection_and_reconnect_after_close()
+-> Result<(), Box<dyn std::error::Error>> {
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let endpoint = format!(
+        "http://{}/internal/discord-notifications",
+        listener.local_addr()?
+    );
+    let (sink, driver) =
+        NotificationDriver::new(NotificationConfig::http(&endpoint, &"x".repeat(32))?)?;
+    let admission = Arc::clone(&sink.0.as_ref().ok_or("enabled admission")?.count);
+    let dispatch = |target: &NotificationSink| -> Result<(), Box<dyn std::error::Error>> {
+        target
+            .reserve(1024)
+            .map_err(|_error| "fixture reservation")?
+            .prepare_for_test(&envelope())
+            .map_err(|_error| "fixture serialization")?
+            .dispatch();
+        Ok(())
+    };
+    dispatch(&sink)?;
+    let server = async {
+        let (mut socket, _) = listener.accept().await?;
+        assert_eq!(
+            read_request(&mut socket).await?,
+            serde_json::to_value(envelope())?
+        );
+        reply(&mut socket, false).await?;
+        // Receipt parsing releases the admission permit after the response body is consumed.
+        // Wait for that boundary so the second request tests reuse, not simultaneous sends.
+        drop(
+            Arc::clone(&admission)
+                .acquire_many_owned(u32::try_from(MAXIMUM_PENDING)?)
+                .await?,
+        );
+        dispatch(&sink)?;
+        let second = tokio::select! {
+            request = read_request(&mut socket) => request?,
+            connection = listener.accept() => {
+                drop(connection?);
+                return Err("the second notification opened another connection".into());
+            }
+        };
+        assert_eq!(second, serde_json::to_value(envelope())?);
+        reply(&mut socket, true).await?;
+        drop(socket);
+        drop(
+            Arc::clone(&admission)
+                .acquire_many_owned(u32::try_from(MAXIMUM_PENDING)?)
+                .await?,
+        );
+        dispatch(&sink)?;
+        let (mut replacement, _) = listener.accept().await?;
+        assert_eq!(
+            read_request(&mut replacement).await?,
+            serde_json::to_value(envelope())?
+        );
+        reply(&mut replacement, true).await?;
+        drop(replacement);
+        drop(sink);
+        Ok::<_, Box<dyn std::error::Error>>(())
+    };
+    let (result, ()) = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        tokio::join!(server, driver.run())
+    })
+    .await?;
+    result
+}
+
+async fn reply(socket: &mut tokio::net::TcpStream, close: bool) -> io::Result<()> {
+    let body = r#"{"notificationId":"result:ocr_completed:example-ocr-1","disposition":"accepted","status":"PENDING"}"#;
+    let connection = if close { "close" } else { "keep-alive" };
+    socket
+        .write_all(format!(
+            "HTTP/1.1 202 Accepted\r\nContent-Length: {}\r\nConnection: {connection}\r\n\r\n{body}",
+            body.len()
+        ).as_bytes())
+        .await
+}
+
 async fn read_request(
     socket: &mut tokio::net::TcpStream,
 ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {

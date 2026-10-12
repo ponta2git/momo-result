@@ -165,7 +165,7 @@ async fn real_postgres_notification_limits_preserve_success_and_baseline() -> Sm
     Ok(())
 }
 
-async fn assert_business_success(client: &Client, claim: &ClaimedJob) -> SmokeResult {
+pub(super) async fn assert_business_success(client: &Client, claim: &ClaimedJob) -> SmokeResult {
     let row = client
         .query_one(
             "SELECT j.status, a.status, a.outcome FROM series_analysis_jobs j \
@@ -179,7 +179,11 @@ async fn assert_business_success(client: &Client, claim: &ClaimedJob) -> SmokeRe
     assert_baseline(client, &artifact_id_for_attempt(&claim.attempt_id)).await
 }
 
-async fn seed_matches(client: &Client, match_count: i32, season_count: i32) -> SmokeResult {
+pub(super) async fn seed_matches(
+    client: &Client,
+    match_count: i32,
+    season_count: i32,
+) -> SmokeResult {
     client
         .execute(
             "INSERT INTO season_masters (id, game_title_id, name, display_order) \

@@ -1,4 +1,4 @@
-use crate::series_analysis::metrics::measure;
+use crate::series_analysis::metrics::PhaseTimer;
 
 use tokio_postgres::{Client, Transaction};
 
@@ -31,10 +31,29 @@ pub(crate) async fn claim_job(
     job_id: &str,
     config: &AnalysisConsumerConfig,
 ) -> Result<ControlOutcome<ClaimResult>, ControlError> {
+    claim_job_with_diagnostics(client, job_id, config, true).await
+}
+
+/// Rechecks a locally pending delivery without emitting phase logs for every busy retry.
+pub(crate) async fn retry_busy_job(
+    client: &mut Client,
+    job_id: &str,
+    config: &AnalysisConsumerConfig,
+) -> Result<ControlOutcome<ClaimResult>, ControlError> {
+    claim_job_with_diagnostics(client, job_id, config, false).await
+}
+
+async fn claim_job_with_diagnostics(
+    client: &mut Client,
+    job_id: &str,
+    config: &AnalysisConsumerConfig,
+    diagnostics: bool,
+) -> Result<ControlOutcome<ClaimResult>, ControlError> {
     let transaction =
         bounded_transaction(client, config.execution_limits.finalization_timeout).await?;
     let lease_milliseconds = duration_milliseconds(config.lease_duration)?;
-    let (candidate, effects) = match measure(
+    let (candidate, effects) = match measure_claim(
+        diagnostics,
         "claim_lock_and_recovery",
         prepare_claim(&transaction, job_id, lease_milliseconds),
     )
@@ -45,7 +64,7 @@ pub(crate) async fn claim_job(
             effects,
             current_delivery_resolved,
         } => {
-            measure("claim_commit", transaction.commit()).await?;
+            measure_claim(diagnostics, "claim_commit", transaction.commit()).await?;
             let result = if current_delivery_resolved {
                 ClaimResult::RecoveredCurrentJob
             } else {
@@ -100,7 +119,7 @@ pub(crate) async fn claim_job(
         &attempt,
     )
     .await?;
-    measure("claim_commit", transaction.commit()).await?;
+    measure_claim(diagnostics, "claim_commit", transaction.commit()).await?;
     Ok(effects.committed(ClaimResult::Claimed(ClaimedJob {
         work_kind: candidate.work_kind,
         radar_operation_id: candidate.radar_operation_id,
@@ -116,6 +135,19 @@ pub(crate) async fn claim_job(
         attempt_no,
         fencing_token,
     })))
+}
+
+async fn measure_claim<T, E>(
+    diagnostics: bool,
+    phase: &'static str,
+    operation: impl Future<Output = Result<T, E>>,
+) -> Result<T, E> {
+    let timer = diagnostics.then(|| PhaseTimer::start(phase));
+    let result = operation.await?;
+    if let Some(timer) = timer {
+        timer.complete();
+    }
+    Ok(result)
 }
 
 pub(super) struct ClaimCandidate {

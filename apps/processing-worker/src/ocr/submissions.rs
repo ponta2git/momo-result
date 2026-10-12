@@ -1,7 +1,7 @@
 //! Submission completion is independent of image execution and of notification delivery.
 
 use std::time::Duration;
-use tokio_postgres::Client;
+use tokio_postgres::{Client, types::Type};
 
 pub(crate) mod control;
 mod listener;
@@ -16,7 +16,7 @@ pub(super) const SAFETY_INTERVAL: Duration = Duration::from_secs(30);
 pub(crate) async fn wake(client: &Client) {
     let attempt = tokio::time::timeout(
         Duration::from_secs(1),
-        client.execute("SELECT pg_notify($1, '')", &[&CHANNEL]),
+        client.execute_typed("SELECT pg_notify($1, '')", &[(&CHANNEL, Type::TEXT)]),
     )
     .await;
     if !matches!(attempt, Ok(Ok(_))) {

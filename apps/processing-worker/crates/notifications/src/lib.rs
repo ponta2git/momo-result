@@ -8,7 +8,10 @@ use std::{fmt, io, sync::Arc};
 
 use futures_util::{StreamExt, stream::FuturesUnordered};
 use serde::Serialize;
-use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc};
+use tokio::{
+    sync::{OwnedSemaphorePermit, Semaphore, mpsc},
+    time::Instant,
+};
 use tokio_postgres::{Transaction, types::Type};
 
 mod config;
@@ -149,6 +152,7 @@ impl NotificationSink {
             count,
             bytes,
             maximum_bytes,
+            reserved_at: Instant::now(),
         })
     }
 }
@@ -159,6 +163,7 @@ pub struct NotificationReservation {
     count: OwnedSemaphorePermit,
     bytes: OwnedSemaphorePermit,
     maximum_bytes: usize,
+    reserved_at: Instant,
 }
 
 impl NotificationReservation {
@@ -225,6 +230,8 @@ impl NotificationReservation {
                 source_job_id: envelope.source_job_id().to_owned(),
                 kind: envelope.kind(),
                 body: Some(body),
+                reserved_at: self.reserved_at,
+                queued_at: Instant::now(),
                 _count: self.count,
                 _bytes: self.bytes,
                 attempted: false,
@@ -266,7 +273,8 @@ impl PreparedNotification {
     }
 
     /// Hand off without waiting for HTTP. Call only after the business commit has succeeded.
-    pub fn dispatch(self) {
+    pub fn dispatch(mut self) {
+        self.entry.queued_at = Instant::now();
         if let Err(error) = self.sender.try_send(self.entry) {
             let mut entry = error.into_inner();
             tracing::info!(event = "result_notification_skipped", kind = entry.kind,
@@ -281,6 +289,8 @@ struct QueuedNotification {
     source_job_id: String,
     kind: &'static str,
     body: Option<Vec<u8>>,
+    reserved_at: Instant,
+    queued_at: Instant,
     _count: OwnedSemaphorePermit,
     _bytes: OwnedSemaphorePermit,
     attempted: bool,

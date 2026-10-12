@@ -77,13 +77,13 @@ export function handleScoreGridKeydown(args: ScoreGridKeyArgs): void {
     "isComposing" in args.event.nativeEvent &&
     Boolean(args.event.nativeEvent.isComposing);
 
-  if ((args.event.metaKey || args.event.ctrlKey) && args.event.key === "Enter") {
-    args.event.preventDefault();
-    args.onSubmitFocus();
+  if (isComposing) {
     return;
   }
 
-  if (isComposing) {
+  if ((args.event.metaKey || args.event.ctrlKey) && args.event.key === "Enter") {
+    args.event.preventDefault();
+    args.onSubmitFocus();
     return;
   }
 

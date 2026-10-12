@@ -52,11 +52,10 @@ export function MatchSetupFields({ model }: { model: MatchWorkspaceSetupFieldsMo
           label="試合番号（必須）"
           type="text"
           value={Number.isFinite(values.matchNoInEvent) ? String(values.matchNoInEvent) : ""}
-          onChange={(event) =>
-            actions.onPatchRoot({
-              matchNoInEvent: Math.trunc(Number(event.currentTarget.value.replaceAll(/\D/gu, ""))),
-            })
-          }
+          onChange={(event) => {
+            const matchNoInEvent = Number(event.currentTarget.value.replaceAll(/\D/gu, ""));
+            if (Number.isSafeInteger(matchNoInEvent)) actions.onPatchRoot({ matchNoInEvent });
+          }}
         />
       </div>
 

@@ -99,11 +99,9 @@ function parseNumericValue(value: string, allowSign: boolean): number | undefine
     return undefined;
   }
 
-  if (allowSign) {
-    return /^-?\d+$/u.test(value) ? Number(value) : undefined;
-  }
-
-  return /^\d+$/u.test(value) ? Number(value) : undefined;
+  if (!(allowSign ? /^-?\d+$/u : /^\d+$/u).test(value)) return undefined;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : undefined;
 }
 
 export type NumericInputCellField = {

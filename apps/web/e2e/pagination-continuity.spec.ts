@@ -103,7 +103,7 @@ test("keeps held-event rows visible and blocks stale actions while the next page
   pageTwoGate.resolve();
   await expect(page.getByText("2／5")).toBeVisible();
   await expect(history.getByRole("button", { name: "更新", exact: true })).toBeEnabled();
-  await expect(visibleEventLink).toHaveAttribute("href", /held-continuity-11\?/u);
+  await expect(visibleEventLink).toHaveAttribute("href", "/held-events/held-continuity-11");
   await expect(nextPage).toBeEnabled();
   await expect(nextPage).toBeFocused();
   await expect(history.getByRole("status")).toHaveCount(0);

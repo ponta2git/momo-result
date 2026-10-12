@@ -1,5 +1,4 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { useActionState } from "react";
 
 import {
   createGameTitleId,
@@ -27,6 +26,8 @@ import {
 } from "@/shared/api/masters";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { masterKeys } from "@/shared/api/queryKeys";
+import { useAuthorization } from "@/shared/auth/useAuthorization";
+import { useAuthorizedAction } from "@/shared/auth/useAuthorizedAction";
 
 export type CreateState = { error?: string | undefined; version: number };
 
@@ -46,170 +47,220 @@ export function useMasterCreateActions(input: {
   setSelectedGameTitleId: (id: string) => void;
   selectedGameTitleId: string;
 }) {
-  const [gameTitleCreateState, gameTitleCreateAction, gameTitleCreatePending] = useActionState<
-    CreateState,
-    FormData
-  >(async (prev, formData) => {
-    input.onFeedback("gameTitle", "", "");
-    const name = normalizeName(String(formData.get("name") ?? ""));
-    if (!isNameValid(name)) {
-      return { ...prev, error: "作品名を入力してください" };
-    }
-    const layoutFamily = parseLayoutFamily(String(formData.get("layoutFamily") ?? ""));
-    if (!layoutFamily) {
-      return { ...prev, error: "読み取り方式を選択してください" };
-    }
-    const intent = { layoutFamily, name };
-    const attempt = input.idempotencyKeys.begin("masters.createGameTitle", intent);
-    const draftId = createGameTitleId(name, attempt.key);
-    const createdAt = input.nowIsoFactory();
-    input.addOptimisticGameTitle({
-      id: draftId,
-      layoutFamily,
-      name,
-      displayOrder: input.optimisticGameTitleCount,
-      createdAt,
-      pending: true,
-    });
-    try {
-      const request = {
-        id: draftId,
-        layoutFamily,
-        name,
-      };
-      const created = await runIdempotentOperationAttempt(attempt, (options) =>
-        createGameTitle(request, options),
-      );
-      await cacheCreatedMaster(input.queryClient, masterKeys.gameTitles.list(), created);
-      input.setSelectedGameTitleId(created.id);
-      await invalidateMasterResourceCaches(input.queryClient, "game-titles");
-      input.onFeedback("gameTitle", "", "作品を追加しました");
-      return { error: undefined, version: prev.version + 1 };
-    } catch (error) {
-      return { ...prev, error: formatApiError(error, "作品の追加に失敗しました") };
-    }
-  }, initialCreateState);
+  const authorization = useAuthorization();
+  const [gameTitleCreateState, gameTitleCreateAction, gameTitleCreatePending] =
+    useAuthorizedAction<CreateState>(
+      authorization,
+      "admin",
+      async (prev, formData, lease) => {
+        input.onFeedback("gameTitle", "", "");
+        const name = normalizeName(String(formData.get("name") ?? ""));
+        if (!isNameValid(name)) {
+          return { ...prev, error: "作品名を入力してください" };
+        }
+        const layoutFamily = parseLayoutFamily(String(formData.get("layoutFamily") ?? ""));
+        if (!layoutFamily) {
+          return { ...prev, error: "読み取り方式を選択してください" };
+        }
+        const intent = { layoutFamily, name };
+        const attempt = input.idempotencyKeys.begin("masters.createGameTitle", intent);
+        const draftId = createGameTitleId(name, attempt.key);
+        const createdAt = input.nowIsoFactory();
+        input.addOptimisticGameTitle({
+          id: draftId,
+          layoutFamily,
+          name,
+          displayOrder: input.optimisticGameTitleCount,
+          createdAt,
+          pending: true,
+        });
+        try {
+          const request = {
+            id: draftId,
+            layoutFamily,
+            name,
+          };
+          const created = await runIdempotentOperationAttempt(attempt, (options) =>
+            createGameTitle(request, options),
+          );
+          if (!authorization.isSameAccount(lease)) return prev;
+          await cacheCreatedMaster(input.queryClient, masterKeys.gameTitles.list(), created, () =>
+            authorization.isSameAccount(lease),
+          );
+          if (authorization.canCommit(lease)) input.setSelectedGameTitleId(created.id);
+          await invalidateMasterResourceCaches(input.queryClient, "game-titles", () =>
+            authorization.canCommit(lease),
+          );
+          if (!authorization.isCurrent(lease)) return prev;
+          input.onFeedback("gameTitle", "", "作品を追加しました");
+          return { error: undefined, version: prev.version + 1 };
+        } catch (error) {
+          authorization.reportError(error, lease);
+          if (!authorization.isCurrent(lease)) return prev;
+          return { ...prev, error: formatApiError(error, "作品の追加に失敗しました") };
+        }
+      },
+      initialCreateState,
+    );
 
-  const [mapCreateStates, mapCreateAction, mapCreatePending] = useActionState<
-    Record<string, CreateState>,
-    FormData
-  >(async (states, formData) => {
-    const scope = input.selectedGameTitleId;
-    const prev = states[scope] ?? initialCreateState;
-    input.onFeedback("map", input.selectedGameTitleId, "");
-    const name = normalizeName(String(formData.get("name") ?? ""));
-    if (!isNameValid(name) || !input.selectedGameTitleId) {
-      return { ...states, [scope]: { ...prev, error: "マップ名を入力してください" } };
-    }
-    const gameTitleId = input.selectedGameTitleId;
-    const intent = { gameTitleId, name };
-    const attempt = input.idempotencyKeys.begin("masters.createMapMaster", intent);
-    const draftId = createMapMasterId(name, attempt.key);
-    const createdAt = input.nowIsoFactory();
-    input.addOptimisticMapMaster({
-      id: draftId,
-      gameTitleId,
-      name,
-      displayOrder: input.selectedMapMasterCount,
-      createdAt,
-      pending: true,
-    });
-    try {
-      const request = {
-        id: draftId,
-        gameTitleId,
-        name,
-      };
-      const created = await runIdempotentOperationAttempt(attempt, (options) =>
-        createMapMaster(request, options),
-      );
-      await cacheCreatedMaster(input.queryClient, masterKeys.mapMasters.list(gameTitleId), created);
-      await invalidateMasterResourceCaches(input.queryClient, "map-masters");
-      input.onFeedback("map", gameTitleId, "マップを追加しました");
-      return { ...states, [scope]: { version: prev.version + 1 } };
-    } catch (error) {
-      return {
-        ...states,
-        [scope]: { ...prev, error: formatApiError(error, "マップの追加に失敗しました") },
-      };
-    }
-  }, {});
-
-  const [seasonCreateStates, seasonCreateAction, seasonCreatePending] = useActionState<
-    Record<string, CreateState>,
-    FormData
-  >(async (states, formData) => {
-    const scope = input.selectedGameTitleId;
-    const prev = states[scope] ?? initialCreateState;
-    input.onFeedback("season", input.selectedGameTitleId, "");
-    const name = normalizeName(String(formData.get("name") ?? ""));
-    if (!isNameValid(name) || !input.selectedGameTitleId) {
-      return { ...states, [scope]: { ...prev, error: "シーズン名を入力してください" } };
-    }
-    const gameTitleId = input.selectedGameTitleId;
-    const intent = { gameTitleId, name };
-    const attempt = input.idempotencyKeys.begin("masters.createSeasonMaster", intent);
-    const draftId = createSeasonMasterId(name, attempt.key);
-    const createdAt = input.nowIsoFactory();
-    input.addOptimisticSeasonMaster({
-      id: draftId,
-      gameTitleId,
-      name,
-      displayOrder: input.selectedSeasonMasterCount,
-      createdAt,
-      pending: true,
-    });
-    try {
-      const request = {
+  const [mapCreateStates, mapCreateAction, mapCreatePending] = useAuthorizedAction<
+    Record<string, CreateState>
+  >(
+    authorization,
+    "operations",
+    async (states, formData, lease) => {
+      const scope = input.selectedGameTitleId;
+      const prev = states[scope] ?? initialCreateState;
+      input.onFeedback("map", input.selectedGameTitleId, "");
+      const name = normalizeName(String(formData.get("name") ?? ""));
+      if (!isNameValid(name) || !input.selectedGameTitleId) {
+        return { ...states, [scope]: { ...prev, error: "マップ名を入力してください" } };
+      }
+      const gameTitleId = input.selectedGameTitleId;
+      const intent = { gameTitleId, name };
+      const attempt = input.idempotencyKeys.begin("masters.createMapMaster", intent);
+      const draftId = createMapMasterId(name, attempt.key);
+      const createdAt = input.nowIsoFactory();
+      input.addOptimisticMapMaster({
         id: draftId,
         gameTitleId,
         name,
-      };
-      const created = await runIdempotentOperationAttempt(attempt, (options) =>
-        createSeasonMaster(request, options),
-      );
-      await cacheCreatedMaster(
-        input.queryClient,
-        masterKeys.seasonMasters.list(gameTitleId),
-        created,
-      );
-      await invalidateMasterResourceCaches(input.queryClient, "season-masters");
-      input.onFeedback("season", gameTitleId, "シーズンを追加しました");
-      return { ...states, [scope]: { version: prev.version + 1 } };
-    } catch (error) {
-      return {
-        ...states,
-        [scope]: { ...prev, error: formatApiError(error, "シーズンの追加に失敗しました") },
-      };
-    }
-  }, {});
+        displayOrder: input.selectedMapMasterCount,
+        createdAt,
+        pending: true,
+      });
+      try {
+        const request = {
+          id: draftId,
+          gameTitleId,
+          name,
+        };
+        const created = await runIdempotentOperationAttempt(attempt, (options) =>
+          createMapMaster(request, options),
+        );
+        if (!authorization.isSameAccount(lease)) return states;
+        await cacheCreatedMaster(
+          input.queryClient,
+          masterKeys.mapMasters.list(gameTitleId),
+          created,
+          () => authorization.isSameAccount(lease),
+        );
+        await invalidateMasterResourceCaches(input.queryClient, "map-masters", () =>
+          authorization.canCommit(lease),
+        );
+        if (!authorization.isCurrent(lease)) return states;
+        input.onFeedback("map", gameTitleId, "マップを追加しました");
+        return { ...states, [scope]: { version: prev.version + 1 } };
+      } catch (error) {
+        authorization.reportError(error, lease);
+        if (!authorization.isCurrent(lease)) return states;
+        return {
+          ...states,
+          [scope]: { ...prev, error: formatApiError(error, "マップの追加に失敗しました") },
+        };
+      }
+    },
+    {},
+  );
 
-  const [aliasCreateState, aliasCreateAction, aliasCreatePending] = useActionState<
-    CreateState,
-    FormData
-  >(async (prev, formData) => {
-    input.onFeedback("aliases", "", "");
-    const memberId = normalizeName(String(formData.get("memberId") ?? ""));
-    const alias = normalizeName(String(formData.get("alias") ?? ""));
-    if (!memberId || !alias) {
-      return { ...prev, error: "プレーヤーと別名を入力してください" };
-    }
-    try {
-      const request = { memberId, alias };
-      const created = await runIdempotentMutation(
-        input.idempotencyKeys,
-        "masters.createMemberAlias",
-        request,
-        (options) => createMemberAlias(request, options),
-      );
-      await cacheCreatedMaster(input.queryClient, masterKeys.memberAliases.list(), created);
-      await invalidateMemberAliasCaches(input.queryClient);
-      input.onFeedback("aliases", "", "別名を追加しました");
-      return { error: undefined, version: prev.version + 1 };
-    } catch (error) {
-      return { ...prev, error: formatApiError(error, "別名の追加に失敗しました") };
-    }
-  }, initialCreateState);
+  const [seasonCreateStates, seasonCreateAction, seasonCreatePending] = useAuthorizedAction<
+    Record<string, CreateState>
+  >(
+    authorization,
+    "operations",
+    async (states, formData, lease) => {
+      const scope = input.selectedGameTitleId;
+      const prev = states[scope] ?? initialCreateState;
+      input.onFeedback("season", input.selectedGameTitleId, "");
+      const name = normalizeName(String(formData.get("name") ?? ""));
+      if (!isNameValid(name) || !input.selectedGameTitleId) {
+        return { ...states, [scope]: { ...prev, error: "シーズン名を入力してください" } };
+      }
+      const gameTitleId = input.selectedGameTitleId;
+      const intent = { gameTitleId, name };
+      const attempt = input.idempotencyKeys.begin("masters.createSeasonMaster", intent);
+      const draftId = createSeasonMasterId(name, attempt.key);
+      const createdAt = input.nowIsoFactory();
+      input.addOptimisticSeasonMaster({
+        id: draftId,
+        gameTitleId,
+        name,
+        displayOrder: input.selectedSeasonMasterCount,
+        createdAt,
+        pending: true,
+      });
+      try {
+        const request = {
+          id: draftId,
+          gameTitleId,
+          name,
+        };
+        const created = await runIdempotentOperationAttempt(attempt, (options) =>
+          createSeasonMaster(request, options),
+        );
+        if (!authorization.isSameAccount(lease)) return states;
+        await cacheCreatedMaster(
+          input.queryClient,
+          masterKeys.seasonMasters.list(gameTitleId),
+          created,
+          () => authorization.isSameAccount(lease),
+        );
+        await invalidateMasterResourceCaches(input.queryClient, "season-masters", () =>
+          authorization.canCommit(lease),
+        );
+        if (!authorization.isCurrent(lease)) return states;
+        input.onFeedback("season", gameTitleId, "シーズンを追加しました");
+        return { ...states, [scope]: { version: prev.version + 1 } };
+      } catch (error) {
+        authorization.reportError(error, lease);
+        if (!authorization.isCurrent(lease)) return states;
+        return {
+          ...states,
+          [scope]: { ...prev, error: formatApiError(error, "シーズンの追加に失敗しました") },
+        };
+      }
+    },
+    {},
+  );
+
+  const [aliasCreateState, aliasCreateAction, aliasCreatePending] =
+    useAuthorizedAction<CreateState>(
+      authorization,
+      "admin",
+      async (prev, formData, lease) => {
+        input.onFeedback("aliases", "", "");
+        const memberId = normalizeName(String(formData.get("memberId") ?? ""));
+        const alias = normalizeName(String(formData.get("alias") ?? ""));
+        if (!memberId || !alias) {
+          return { ...prev, error: "プレーヤーと別名を入力してください" };
+        }
+        try {
+          const request = { memberId, alias };
+          const created = await runIdempotentMutation(
+            input.idempotencyKeys,
+            "masters.createMemberAlias",
+            request,
+            (options) => createMemberAlias(request, options),
+          );
+          if (!authorization.isSameAccount(lease)) return prev;
+          await cacheCreatedMaster(
+            input.queryClient,
+            masterKeys.memberAliases.list(),
+            created,
+            () => authorization.isSameAccount(lease),
+          );
+          await invalidateMemberAliasCaches(input.queryClient);
+          if (!authorization.isCurrent(lease)) return prev;
+          input.onFeedback("aliases", "", "別名を追加しました");
+          return { error: undefined, version: prev.version + 1 };
+        } catch (error) {
+          authorization.reportError(error, lease);
+          if (!authorization.isCurrent(lease)) return prev;
+          return { ...prev, error: formatApiError(error, "別名の追加に失敗しました") };
+        }
+      },
+      initialCreateState,
+    );
 
   return {
     aliasCreateAction,

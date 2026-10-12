@@ -8,15 +8,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { MastersPage } from "@/features/masters/MastersPage";
 import type { GameTitleResponse } from "@/shared/api/masters";
-import { masterKeys } from "@/shared/api/queryKeys";
+import { adminAccountKeys, masterKeys, notificationSettingsKeys } from "@/shared/api/queryKeys";
 import { authQueryOptions } from "@/shared/auth/authQueries";
-import {
-  createMatchWorkspaceMasterHandoffPayload,
-  saveMasterHandoff,
-} from "@/shared/workflows/matchWorkspaceMasterHandoff";
 import { setDevUser, testDevUserAccountId } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
-import { makeMatchWorkspaceMasterHandoffValues } from "@/test/factories";
 import { mswState } from "@/test/msw/fixtures";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
@@ -65,29 +60,6 @@ async function openGameTitleCreateDialog() {
   return screen.findByRole("dialog", { name: "作品を追加" });
 }
 
-function createMasterReturnEntry() {
-  const returnTo = "/review/session-1?totalAssets=draft-1";
-  const handoffId = saveMasterHandoff(
-    createMatchWorkspaceMasterHandoffPayload({
-      accountId: testDevUserAccountId,
-      matchSessionId: "session-1",
-      returnTo,
-      values: makeMatchWorkspaceMasterHandoffValues({
-        draftIds: { totalAssets: "draft-1" },
-        gameTitleId: "gt_momotetsu_2",
-        heldEventId: "event-1",
-        mapMasterId: "map_east",
-        matchNoInEvent: 1,
-        ownerMemberId: "member_ponta",
-        playedAt: "2026-01-01T00:00:00.000Z",
-        seasonMasterId: "season_current",
-      }),
-    }),
-  );
-
-  return `/admin/masters?returnTo=${encodeURIComponent(returnTo)}&handoffId=${handoffId}`;
-}
-
 describe("MastersPage", () => {
   beforeEach(() => {
     queryClient = createTestQueryClient();
@@ -104,9 +76,7 @@ describe("MastersPage", () => {
     );
     await user.click(screen.getByRole("button", { name: "設定項目をリセット" }));
     expect(screen.queryByText("指定された設定項目が見つかりません")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("current location")).toHaveTextContent(
-      "/admin/masters?returnTo=%2Fmatches",
-    );
+    expect(screen.getByLabelText("current location")).toHaveTextContent("/admin/masters");
   });
 
   it("retains unsaved notification choices across tabs and asks before leaving the page", async () => {
@@ -353,7 +323,7 @@ describe("MastersPage", () => {
     expect(attempts).toBe(2);
   });
 
-  it("includes account updates in the shared return guard and retains the committed status", async () => {
+  it("retains the committed account status across tabs", async () => {
     setDevUser();
     const committed = createDeferred();
     server.use(
@@ -366,19 +336,15 @@ describe("MastersPage", () => {
         return HttpResponse.json(account);
       }),
     );
-    renderPage(`${createMasterReturnEntry()}&tab=accounts`);
-    const returnButton = await screen.findByRole("button", { name: "元の入力画面へ戻る" });
+    renderPage("/admin/masters?tab=accounts");
     const row = (await screen.findByText("523484457705930755")).closest("tr")!;
     await user.click(within(row).getByRole("button", { name: "ログイン停止" }));
     await user.click(screen.getByRole("button", { name: "停止する" }));
-    expect(returnButton).toBeDisabled();
     committed.resolve();
-    await waitFor(() => expect(returnButton).toBeEnabled());
     await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
     await user.click(screen.getByRole("tab", { name: "事件簿" }));
     await user.click(screen.getByRole("tab", { name: "アカウント" }));
     expect(within(row).getByText("ログイン停止")).toBeVisible();
-    expect(screen.getByLabelText("current location")).toHaveTextContent("returnTo=");
   });
 
   it("opens notification settings directly without requesting master resources", async () => {
@@ -476,7 +442,7 @@ describe("MastersPage", () => {
     expect(screen.getByRole("textbox", { name: /^別名/u })).toHaveValue("編集中の別名");
   });
 
-  it("keeps notification saving tied to the shared return action across tab changes", async () => {
+  it("retains a pending notification save across tab changes", async () => {
     setDevUser();
     const committed = createDeferred();
     const saved = {
@@ -491,19 +457,14 @@ describe("MastersPage", () => {
         return HttpResponse.json(saved);
       }),
     );
-    renderPage(`${createMasterReturnEntry()}&tab=notifications`);
+    renderPage("/admin/masters?tab=notifications");
     await user.click(await screen.findByRole("checkbox", { name: "OCR完了" }));
     await user.click(screen.getByRole("button", { name: "保存" }));
-    const returnButton = screen.getByRole("button", { name: "元の入力画面へ戻る" });
-    expect(returnButton).toBeDisabled();
     await user.click(screen.getByRole("tab", { name: "事件簿" }));
-    expect(returnButton).toBeDisabled();
     committed.resolve();
-    await waitFor(() => expect(returnButton).toBeEnabled());
     await user.click(screen.getByRole("tab", { name: "通知" }));
     expect(screen.getByRole("checkbox", { name: "OCR完了" })).toBeChecked();
     expect(screen.getByText("通知設定を保存しました。")).toBeVisible();
-    expect(screen.getByLabelText("current location")).toHaveTextContent("returnTo=");
   });
 
   it("loads only visited tabs, allowing independent tabs to start while another is pending", async () => {
@@ -991,7 +952,7 @@ describe("MastersPage", () => {
     expect(screen.queryByRole("dialog", { name: "作品を追加" })).not.toBeInTheDocument();
   });
 
-  it("restores the selected tab from the URL and preserves return context", async () => {
+  it("restores its selected tab and stops propagating obsolete return context", async () => {
     setDevUser();
     renderPage("/admin/masters?tab=aliases&returnTo=%2Fmatches%3Fpage%3D2");
 
@@ -1004,7 +965,7 @@ describe("MastersPage", () => {
     await user.click(screen.getByRole("tab", { name: "事件簿" }));
     await waitFor(() =>
       expect(screen.getByLabelText("current location")).toHaveTextContent(
-        "/admin/masters?tab=incidents&returnTo=%2Fmatches%3Fpage%3D2",
+        "/admin/masters?tab=incidents",
       ),
     );
   });
@@ -1124,7 +1085,7 @@ describe("MastersPage", () => {
     await waitFor(() => expect(screen.queryByText("NO11")).not.toBeInTheDocument());
   });
 
-  it("disables the only return action while a master edit is pending", async () => {
+  it("keeps the editing snapshot disabled until its request completes", async () => {
     setDevUser();
     const requestStarted = createDeferred();
     const responseGate = createDeferred();
@@ -1142,9 +1103,8 @@ describe("MastersPage", () => {
       }),
     );
 
-    renderPage(createMasterReturnEntry());
+    renderPage();
 
-    const returnButton = await screen.findByRole("button", { name: "元の入力画面へ戻る" });
     await screen.findByRole("radio", { name: "桃太郎電鉄2" });
     await user.click(screen.getByRole("button", { name: "作品を編集" }));
     const nameInput = screen.getByDisplayValue("桃太郎電鉄2");
@@ -1153,15 +1113,12 @@ describe("MastersPage", () => {
     await user.click(screen.getByRole("button", { name: "保存" }));
 
     await requestStarted.promise;
-    expect(returnButton).toBeDisabled();
     expect(screen.getByRole("button", { name: "キャンセル" })).toBeDisabled();
-    expect(screen.getByText("設定の追加・保存・削除が完了すると戻れます。")).toBeInTheDocument();
 
     responseGate.resolve();
-    await waitFor(() => expect(returnButton).toBeEnabled());
-    expect(
-      screen.queryByText("設定の追加・保存・削除が完了すると戻れます。"),
-    ).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "作品を編集" })).not.toBeInTheDocument(),
+    );
   });
 
   it("does not show cached load error after the route error boundary resets it", async () => {
@@ -1225,5 +1182,157 @@ describe("MastersPage", () => {
     expect(screen.queryByText("作品を読み込めませんでした")).not.toBeInTheDocument();
     responseGate.resolve();
     expect(await screen.findByRole("radio", { name: "復旧済み作品" })).toBeChecked();
+  });
+
+  it.each(["aliases", "notifications", "accounts"])(
+    "rejects the operator's %s URL without mounting or reading that panel",
+    async (tab) => {
+      setDevUser();
+      mswState.loginAccounts.find((account) => account.accountId === testDevUserAccountId)!.role =
+        "operator";
+      const forbiddenReads: string[] = [];
+      server.use(
+        ...[
+          "/api/member-aliases",
+          "/api/admin/notification-settings",
+          "/api/admin/login-accounts",
+        ].map((path) =>
+          http.get(path, () => {
+            forbiddenReads.push(path);
+            return HttpResponse.json({ items: [] });
+          }),
+        ),
+      );
+      queryClient.setQueryData(adminAccountKeys.all(), { items: mswState.loginAccounts });
+      renderPage(`/admin/masters?tab=${tab}`);
+      await waitFor(() =>
+        expect(
+          queryClient.getQueryData(authQueryOptions(testDevUserAccountId).queryKey),
+        ).toMatchObject({ role: "operator" }),
+      );
+      expect(screen.getByText("この設定項目は管理者専用です。")).toBeVisible();
+      expect(screen.queryByRole("tab", { name: "アカウント" })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("table", { name: "登録アカウントとログイン・ロール" }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryAllByRole("tab", { selected: true })).toHaveLength(0);
+      expect(forbiddenReads).toEqual([]);
+      await user.click(screen.getByRole("tab", { name: "作品・マップ・シーズン" }));
+      await screen.findByRole("radio", { name: "桃太郎電鉄2" });
+      expect(screen.queryByRole("button", { name: "作品を追加" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "作品を編集" })).not.toBeInTheDocument();
+      expect(await screen.findByRole("button", { name: "マップを編集" })).toBeEnabled();
+      expect(forbiddenReads).toEqual([]);
+    },
+  );
+
+  it("keeps map input and ends the title dialog when admin becomes operator", async () => {
+    setDevUser();
+    renderPage();
+    const mapSection = (await screen.findByRole("heading", { name: "マップ" })).closest("section")!;
+    const mapName = within(mapSection).getByRole("textbox", { name: "名称" });
+    await waitFor(() => expect(mapName).toBeEnabled());
+    await user.type(mapName, "継続する入力");
+    expect(mapName).toHaveValue("継続する入力");
+    const dialog = await openGameTitleCreateDialog();
+    await user.type(within(dialog).getByRole("textbox", { name: "作品名" }), "終了する入力");
+    mswState.loginAccounts.find((account) => account.accountId === testDevUserAccountId)!.role =
+      "operator";
+    await act(async () => {
+      await queryClient.fetchQuery({ ...authQueryOptions(testDevUserAccountId), staleTime: 0 });
+    });
+    expect(screen.queryByRole("dialog", { name: "作品を追加" })).not.toBeInTheDocument();
+    expect(mapName).toHaveValue("継続する入力");
+    expect(screen.queryByRole("tab", { name: "メンバー名寄せ" })).not.toBeInTheDocument();
+  });
+
+  it("releases native Back after a pending notification save loses permission and ignores its late completion", async () => {
+    setDevUser();
+    const response = createDeferred();
+    const started = createDeferred();
+    let reads = 0;
+    const saved = {
+      ocrCompleted: { enabled: false, generation: "0" },
+      analysisCompleted: { enabled: true, generation: "0" },
+    };
+    server.use(
+      http.get("/api/admin/notification-settings", () => {
+        reads += 1;
+        return HttpResponse.json(saved);
+      }),
+      http.put("/api/admin/notification-settings", async () => {
+        started.resolve();
+        await response.promise;
+        return HttpResponse.json({ ...saved, ocrCompleted: { enabled: true, generation: "1" } });
+      }),
+    );
+    const router = renderRoutedPage("/admin/masters?tab=notifications");
+    await user.click(await screen.findByRole("checkbox", { name: "OCR完了" }));
+    await user.click(screen.getByRole("button", { name: "保存" }));
+    await started.promise;
+    await act(async () => {
+      await router.navigate(-1);
+    });
+    expect(router.state.location.pathname).toBe("/admin/masters");
+    mswState.loginAccounts.find((account) => account.accountId === testDevUserAccountId)!.role =
+      "operator";
+    await act(async () => {
+      await queryClient.fetchQuery({ ...authQueryOptions(testDevUserAccountId), staleTime: 0 });
+    });
+    expect(router.state.location.pathname).toBe("/admin/masters");
+    await act(async () => {
+      await router.navigate(-1);
+    });
+    expect(await screen.findByRole("heading", { name: "試合へ移動しました" })).toBeVisible();
+    await act(async () => response.resolve());
+    expect(reads).toBe(1);
+    expect(queryClient.getQueryData(notificationSettingsKeys.all())).toBeUndefined();
+  });
+
+  it("does not let an old admin save erase a new notification draft after permission is restored", async () => {
+    setDevUser();
+    const response = createDeferred();
+    const started = createDeferred();
+    let reads = 0;
+    const saved = {
+      ocrCompleted: { enabled: false, generation: "0" },
+      analysisCompleted: { enabled: true, generation: "0" },
+    };
+    server.use(
+      http.get("/api/admin/notification-settings", () => {
+        reads += 1;
+        return HttpResponse.json(saved);
+      }),
+      http.put("/api/admin/notification-settings", async () => {
+        started.resolve();
+        await response.promise;
+        return HttpResponse.json({ ...saved, ocrCompleted: { enabled: true, generation: "1" } });
+      }),
+    );
+    renderPage("/admin/masters?tab=notifications");
+    await user.click(await screen.findByRole("checkbox", { name: "OCR完了" }));
+    await user.click(screen.getByRole("button", { name: "保存" }));
+    await started.promise;
+    const account = mswState.loginAccounts.find((item) => item.accountId === testDevUserAccountId)!;
+    account.role = "operator";
+    await act(async () => {
+      await queryClient.fetchQuery({ ...authQueryOptions(testDevUserAccountId), staleTime: 0 });
+    });
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    account.role = "admin";
+    await act(async () => {
+      await queryClient.fetchQuery({ ...authQueryOptions(testDevUserAccountId), staleTime: 0 });
+    });
+    expect(await screen.findByRole("checkbox", { name: "OCR完了" })).not.toBeChecked();
+    await user.click(screen.getByRole("checkbox", { name: "分析完了" }));
+    await user.click(screen.getByRole("button", { name: "保存" }));
+    const confirmation = screen.getByRole("alertdialog", { name: "通知をOFFにして保存しますか？" });
+    const readsBeforeCompletion = reads;
+    await act(async () => response.resolve());
+    expect(confirmation).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: "分析完了", hidden: true })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "OCR完了", hidden: true })).not.toBeChecked();
+    expect(queryClient.getQueryData(notificationSettingsKeys.all())).toEqual(saved);
+    expect(reads).toBe(readsBeforeCompletion);
   });
 });

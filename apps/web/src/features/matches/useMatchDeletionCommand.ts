@@ -19,28 +19,9 @@ type MatchDeletionCommand = {
 };
 
 type MatchDeletionCommandOptions = {
-  contextualReturnTo: string | undefined;
   heldEventId: string | undefined;
   matchId: string;
-  pathname: string;
 };
-
-function normalizePathname(pathname: string): string {
-  return pathname.length > 1 ? pathname.replace(/\/+$/u, "") : pathname;
-}
-
-function deletionDestination({
-  contextualReturnTo,
-  heldEventId,
-  pathname,
-}: MatchDeletionCommandOptions): string {
-  const pointsToCurrentDetail =
-    contextualReturnTo !== undefined &&
-    normalizePathname(new URL(contextualReturnTo, "https://momo-result.local").pathname) ===
-      normalizePathname(pathname);
-  if (contextualReturnTo && !pointsToCurrentDetail) return contextualReturnTo;
-  return heldEventId ? `/held-events/${encodeURIComponent(heldEventId)}` : "/matches";
-}
 
 /** Owns deletion state, route ownership, and the post-delete cache/navigation transaction. */
 export function useMatchDeletionCommand(options: MatchDeletionCommandOptions): MatchDeletionModel {
@@ -51,7 +32,9 @@ export function useMatchDeletionCommand(options: MatchDeletionCommandOptions): M
   const mountedRef = useRef(false);
   const [open, setOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const destination = deletionDestination(options);
+  const destination = options.heldEventId
+    ? `/held-events/${encodeURIComponent(options.heldEventId)}`
+    : "/matches";
 
   useEffect(() => {
     mountedRef.current = true;

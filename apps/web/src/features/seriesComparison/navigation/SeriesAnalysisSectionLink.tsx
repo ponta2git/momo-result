@@ -8,7 +8,6 @@ import {
 import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { useSeriesAnalysisNavigation } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
 import type { SeriesAnalysisPlaybookCard } from "@/shared/api/seriesAnalysis";
-import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 
 const evidenceTargets = {
@@ -46,8 +45,6 @@ export function SeriesAnalysisSectionLink({
     ...parseSeriesAnalysisSearchParams(params),
     view: target.view,
   });
-  const returnTo = sanitizeReturnTo(params.get("returnTo"));
-  if (returnTo) search.set("returnTo", returnTo);
   const id = `review-link-${card.cardId}`;
   return (
     <LinkButton

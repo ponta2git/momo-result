@@ -119,20 +119,20 @@ describe("MatchDetailPage", () => {
     expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "前後の戦績を見る" })).toHaveAttribute(
       "href",
-      "/analytics/series?gameTitleId=gt_momotetsu_2&seasonMasterId=season_current&mapMasterId=map_east&focusMatchId=match-1&view=flow&returnTo=%2Fmatches%2Fmatch-1",
+      "/analytics/series?gameTitleId=gt_momotetsu_2&seasonMasterId=season_current&mapMasterId=map_east&focusMatchId=match-1&view=flow",
     );
-    expect(screen.getByRole("link", { name: "この開催へ戻る" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "この試合の開催を見る" })).toHaveAttribute(
       "href",
       "/held-events/held-1",
     );
     const relatedActions = within(screen.getByRole("navigation", { name: "この試合の関連操作" }));
     expect(relatedActions.getByRole("link", { name: "この試合を出力" })).toHaveAttribute(
       "href",
-      "/exports?matchId=match-1&returnTo=%2Fmatches%2Fmatch-1",
+      "/exports?matchId=match-1",
     );
     expect(relatedActions.getByRole("link", { name: "試合結果を編集" })).toHaveAttribute(
       "href",
-      "/matches/match-1/edit?returnTo=%2Fmatches%2Fmatch-1",
+      "/matches/match-1/edit",
     );
 
     await user.click(screen.getByRole("button", { name: "削除" }));
@@ -418,56 +418,6 @@ describe("MatchDetailPage", () => {
     expect(screen.queryByText("削除に失敗しました")).not.toBeInTheDocument();
     expect(screen.queryByText("delete failed")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "試合を削除しますか？" })).not.toBeInTheDocument();
-  });
-
-  it("returns to the originating filtered list after deleting a match", async () => {
-    setDevUser();
-
-    renderDeletionPage(
-      queryClient,
-      "/matches/match-1?returnTo=%2Fmatches%3Fstatus%3Dconfirmed%26cursor%3Dcursor-2",
-    );
-
-    expect(await screen.findByRole("link", { name: "試合一覧へ戻る" })).toHaveAttribute(
-      "href",
-      "/matches?status=confirmed&cursor=cursor-2",
-    );
-    await user.click(screen.getByRole("button", { name: "削除" }));
-    await user.click(screen.getByRole("button", { name: "削除する" }));
-
-    await waitFor(() =>
-      expect(screen.getByLabelText("current location")).toHaveTextContent(
-        "/matches?status=confirmed&cursor=cursor-2",
-      ),
-    );
-  });
-
-  it("ignores a return destination that points back to the deleted match detail", async () => {
-    setDevUser();
-    const removeQueries = vi.spyOn(queryClient, "removeQueries");
-
-    renderDeletionPage(
-      queryClient,
-      "/matches/match-1?returnTo=%2Fmatches%2Fmatch-1%2F%3Fsource%3Dcrafted",
-    );
-
-    expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "削除" }));
-    await user.click(screen.getByRole("button", { name: "削除する" }));
-
-    await waitFor(() =>
-      expect(screen.getByLabelText("current location")).toHaveTextContent("/held-events/held-1"),
-    );
-    expect(screen.getByText("held-event-page")).toBeInTheDocument();
-    expect(screen.queryByLabelText("試合詳細を読み込み中")).not.toBeInTheDocument();
-    await waitFor(() =>
-      expect(removeQueries).toHaveBeenCalledWith({
-        queryKey: matchKeys.resource("match-1"),
-      }),
-    );
-    await waitFor(() =>
-      expect(queryClient.getQueryData(matchKeys.detail("match-1"))).toBeUndefined(),
-    );
   });
 
   it("shows match feature badges supplied by the pinned analysis artifact", async () => {

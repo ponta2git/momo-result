@@ -8,10 +8,11 @@ export type AuthMeResponse = components["schemas"]["AuthMeResponse"];
 export async function getAuthMe(options: ApiSignalOptions = {}): Promise<AuthMeResponse> {
   try {
     const response = await apiRequest<AuthMeResponse>("/api/auth/me", options);
+    options.signal?.throwIfAborted();
     setCsrfToken(response.csrfToken ?? undefined);
     return response;
   } catch (error) {
-    if (isAuthRejected(error)) {
+    if (!options.signal?.aborted && isAuthRejected(error)) {
       clearCsrfToken();
     }
     throw error;

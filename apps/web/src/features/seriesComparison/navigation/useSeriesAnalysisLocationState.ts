@@ -24,7 +24,6 @@ import type {
   SeriesAnalysisViewId,
 } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import type { SeriesAnalysisOptionsResponse } from "@/shared/api/seriesAnalysis";
-import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 
 /** One page-local operation; only the matching REPLACE commit can inherit its source position. */
 export type SeriesAnalysisDisplayIntent = {
@@ -45,7 +44,6 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
   const rawState = useMemo(() => parseSeriesAnalysisSearchParams(searchParams), [searchParams]);
   const [, startStateTransition] = useTransition();
   const urlState = useMemo(
@@ -107,7 +105,6 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
     if (pending.current?.sourceKey === location.key && pending.current.target !== href) return;
     pending.current = undefined;
     const next = buildSeriesAnalysisSearchParams(urlState);
-    if (returnTo) next.set("returnTo", returnTo);
     if (next.toString() !== searchParams.toString()) {
       void navigate(
         { pathname: location.pathname, search: `?${next.toString()}`, hash: location.hash },
@@ -122,7 +119,6 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
     location.state,
     navigate,
     options,
-    returnTo,
     searchParams,
     urlState,
   ]);
@@ -142,7 +138,6 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
         change(inFlight?.state ?? urlState),
       );
       const params = buildSeriesAnalysisSearchParams(normalized);
-      if (returnTo) params.set("returnTo", returnTo);
       const hash = updateOptions.displayOnly ? "#metric-owner" : (inFlight?.hash ?? location.hash);
       const target = `${location.pathname}?${params.toString()}${hash}`;
       pending.current = { sourceKey: location.key, target, state: normalized, hash };
@@ -178,7 +173,6 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
       location.state,
       navigate,
       options,
-      returnTo,
       setOptimisticState,
       urlState,
     ],
@@ -286,7 +280,6 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
     deferredState,
     displayIntent,
     normalizationNotice: normalization?.message,
-    returnTo,
     state,
   };
 }

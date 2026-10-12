@@ -41,7 +41,6 @@ import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
 import { orderFixedMembers } from "@/shared/domain/members";
 import { formatDateOnly } from "@/shared/lib/dateTime";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
-import { currentInternalLocation, withReturnTo } from "@/shared/navigation/returnTo";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
@@ -199,7 +198,7 @@ function OutlookWorkspace({
     status: "confirmed",
   });
   if (selection.seasonMasterId) matchParams.set("seasonMasterId", selection.seasonMasterId);
-  const matchHref = withReturnTo(`/matches?${matchParams}`, currentInternalLocation(location));
+  const matchHref = `/matches?${matchParams}`;
   const nextOutcomes = nextMatchOutcomes(cumulative).filter((next) =>
     outcome.crossing.current === "ahead"
       ? next.relation !== "ahead"

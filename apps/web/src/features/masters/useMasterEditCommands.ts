@@ -20,6 +20,9 @@ import {
   updateSeasonMaster as updateSeasonMasterResource,
 } from "@/shared/api/masters";
 import { masterKeys } from "@/shared/api/queryKeys";
+import type { AuthorizationLease } from "@/shared/auth/authorization";
+import type { ManagementPermission } from "@/shared/auth/permissions";
+import { useAuthorization } from "@/shared/auth/useAuthorization";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 export function useMasterEditCommands(input: {
@@ -30,6 +33,7 @@ export function useMasterEditCommands(input: {
   setOperationError: (message: string | undefined) => void;
   setSelectedGameTitleId: (id: string) => void;
 }) {
+  const authorization = useAuthorization();
   const {
     onFeedback,
     idempotencyKeys,
@@ -38,16 +42,24 @@ export function useMasterEditCommands(input: {
     setOperationError,
     setSelectedGameTitleId,
   } = input;
-  const [pendingMutationCount, setPendingMutationCount] = useState(0);
+  const [pendingMutations, setPendingMutations] = useState<AuthorizationLease[]>([]);
 
-  const trackMutation = useCallback(async <Result>(action: () => Promise<Result>) => {
-    setPendingMutationCount((count) => count + 1);
+  const trackMutation = async <Result>(
+    permission: ManagementPermission,
+    action: (lease: AuthorizationLease) => Promise<Result>,
+  ) => {
+    const lease = authorization.begin(permission);
+    if (!lease) throw new DOMException("権限を確認できません", "AbortError");
+    setPendingMutations((pending) => [...pending, lease]);
     try {
-      return await action();
+      return await action(lease);
+    } catch (error) {
+      authorization.reportError(error, lease);
+      throw error;
     } finally {
-      setPendingMutationCount((count) => Math.max(0, count - 1));
+      setPendingMutations((pending) => pending.filter((attempt) => attempt !== lease));
     }
-  }, []);
+  };
 
   const deleteWithDialogFeedback = useCallback(
     async (action: () => Promise<unknown>) => {
@@ -58,7 +70,11 @@ export function useMasterEditCommands(input: {
   );
 
   const updateGameTitle = useCallback(
-    async (id: string, request: { name: string; layoutFamily: string }) => {
+    async (
+      lease: AuthorizationLease,
+      id: string,
+      request: { name: string; layoutFamily: string },
+    ) => {
       onFeedback("gameTitle", "", "");
       setOperationError(undefined);
       const layoutFamily = parseLayoutFamily(request.layoutFamily);
@@ -76,15 +92,21 @@ export function useMasterEditCommands(input: {
         { id, request: normalizedRequest },
         (options) => updateGameTitleResource(id, normalizedRequest, options),
       );
-      await cacheMasterUpdate(queryClient, masterKeys.gameTitles.all(), id, updated);
-      await invalidateMasterResourceCaches(queryClient, "game-titles");
-      onFeedback("gameTitle", "", "作品を保存しました");
+      if (!authorization.isSameAccount(lease)) return;
+      await cacheMasterUpdate(queryClient, masterKeys.gameTitles.all(), id, updated, () =>
+        authorization.isSameAccount(lease),
+      );
+      if (!authorization.isSameAccount(lease)) return;
+      await invalidateMasterResourceCaches(queryClient, "game-titles", () =>
+        authorization.canCommit(lease),
+      );
+      if (authorization.isCurrent(lease)) onFeedback("gameTitle", "", "作品を保存しました");
     },
-    [onFeedback, idempotencyKeys, queryClient, setOperationError],
+    [authorization, onFeedback, idempotencyKeys, queryClient, setOperationError],
   );
 
   const updateMapMaster = useCallback(
-    async (id: string, request: { name: string }) => {
+    async (lease: AuthorizationLease, id: string, request: { name: string }) => {
       onFeedback("map", selectedGameTitleId, "");
       setOperationError(undefined);
       const normalizedRequest = { name: normalizeName(request.name) };
@@ -94,15 +116,29 @@ export function useMasterEditCommands(input: {
         { id, request: normalizedRequest },
         (options) => updateMapMasterResource(id, normalizedRequest, options),
       );
-      await cacheMasterUpdate(queryClient, masterKeys.mapMasters.all(), id, updated);
-      await invalidateMasterResourceCaches(queryClient, "map-masters");
-      onFeedback("map", selectedGameTitleId, "マップを保存しました");
+      if (!authorization.isSameAccount(lease)) return;
+      await cacheMasterUpdate(queryClient, masterKeys.mapMasters.all(), id, updated, () =>
+        authorization.isSameAccount(lease),
+      );
+      if (!authorization.isSameAccount(lease)) return;
+      await invalidateMasterResourceCaches(queryClient, "map-masters", () =>
+        authorization.canCommit(lease),
+      );
+      if (authorization.isCurrent(lease))
+        onFeedback("map", selectedGameTitleId, "マップを保存しました");
     },
-    [onFeedback, idempotencyKeys, queryClient, selectedGameTitleId, setOperationError],
+    [
+      authorization,
+      onFeedback,
+      idempotencyKeys,
+      queryClient,
+      selectedGameTitleId,
+      setOperationError,
+    ],
   );
 
   const updateSeasonMaster = useCallback(
-    async (id: string, request: { name: string }) => {
+    async (lease: AuthorizationLease, id: string, request: { name: string }) => {
       onFeedback("season", selectedGameTitleId, "");
       setOperationError(undefined);
       const normalizedRequest = { name: normalizeName(request.name) };
@@ -112,15 +148,29 @@ export function useMasterEditCommands(input: {
         { id, request: normalizedRequest },
         (options) => updateSeasonMasterResource(id, normalizedRequest, options),
       );
-      await cacheMasterUpdate(queryClient, masterKeys.seasonMasters.all(), id, updated);
-      await invalidateMasterResourceCaches(queryClient, "season-masters");
-      onFeedback("season", selectedGameTitleId, "シーズンを保存しました");
+      if (!authorization.isSameAccount(lease)) return;
+      await cacheMasterUpdate(queryClient, masterKeys.seasonMasters.all(), id, updated, () =>
+        authorization.isSameAccount(lease),
+      );
+      if (!authorization.isSameAccount(lease)) return;
+      await invalidateMasterResourceCaches(queryClient, "season-masters", () =>
+        authorization.canCommit(lease),
+      );
+      if (authorization.isCurrent(lease))
+        onFeedback("season", selectedGameTitleId, "シーズンを保存しました");
     },
-    [onFeedback, idempotencyKeys, queryClient, selectedGameTitleId, setOperationError],
+    [
+      authorization,
+      onFeedback,
+      idempotencyKeys,
+      queryClient,
+      selectedGameTitleId,
+      setOperationError,
+    ],
   );
 
   const updateMemberAlias = useCallback(
-    async (id: string, request: { memberId: string; alias: string }) => {
+    async (lease: AuthorizationLease, id: string, request: { memberId: string; alias: string }) => {
       onFeedback("aliases", "", "");
       setOperationError(undefined);
       const normalizedRequest = {
@@ -133,16 +183,20 @@ export function useMasterEditCommands(input: {
         { id, request: normalizedRequest },
         (options) => updateMemberAliasResource(id, normalizedRequest, options),
       );
-      await cacheMasterUpdate(queryClient, masterKeys.memberAliases.all(), id, updated);
+      if (!authorization.isSameAccount(lease)) return;
+      await cacheMasterUpdate(queryClient, masterKeys.memberAliases.all(), id, updated, () =>
+        authorization.isSameAccount(lease),
+      );
+      if (!authorization.isSameAccount(lease)) return;
       await invalidateMemberAliasCaches(queryClient);
-      onFeedback("aliases", "", "別名を保存しました");
+      if (authorization.isCurrent(lease)) onFeedback("aliases", "", "別名を保存しました");
     },
-    [onFeedback, idempotencyKeys, queryClient, setOperationError],
+    [authorization, onFeedback, idempotencyKeys, queryClient, setOperationError],
   );
 
   return {
     deleteGameTitle: (id: string) =>
-      trackMutation(() =>
+      trackMutation("admin", (lease) =>
         deleteWithDialogFeedback(async () => {
           onFeedback("gameTitle", "", "");
           await runIdempotentMutation(
@@ -151,16 +205,23 @@ export function useMasterEditCommands(input: {
             { id },
             (options) => deleteGameTitle(id, options),
           );
-          await cacheMasterUpdate(queryClient, masterKeys.gameTitles.all(), id, null);
-          if (selectedGameTitleId === id) {
+          if (!authorization.isSameAccount(lease)) return;
+          await cacheMasterUpdate(queryClient, masterKeys.gameTitles.all(), id, null, () =>
+            authorization.isSameAccount(lease),
+          );
+          if (!authorization.isSameAccount(lease)) return;
+          if (authorization.canCommit(lease) && selectedGameTitleId === id) {
             setSelectedGameTitleId("");
           }
-          await invalidateMasterResourceCaches(queryClient, "game-titles");
-          showToast({ title: "作品を削除しました", tone: "success" });
+          await invalidateMasterResourceCaches(queryClient, "game-titles", () =>
+            authorization.canCommit(lease),
+          );
+          if (authorization.canCommit(lease))
+            showToast({ title: "作品を削除しました", tone: "success" });
         }),
       ),
     deleteMapMaster: (id: string) =>
-      trackMutation(() =>
+      trackMutation("operations", (lease) =>
         deleteWithDialogFeedback(async () => {
           onFeedback("map", selectedGameTitleId, "");
           await runIdempotentMutation(
@@ -169,13 +230,20 @@ export function useMasterEditCommands(input: {
             { id },
             (options) => deleteMapMaster(id, options),
           );
-          await cacheMasterUpdate(queryClient, masterKeys.mapMasters.all(), id, null);
-          await invalidateMasterResourceCaches(queryClient, "map-masters");
-          showToast({ title: "マップを削除しました", tone: "success" });
+          if (!authorization.isSameAccount(lease)) return;
+          await cacheMasterUpdate(queryClient, masterKeys.mapMasters.all(), id, null, () =>
+            authorization.isSameAccount(lease),
+          );
+          if (!authorization.isSameAccount(lease)) return;
+          await invalidateMasterResourceCaches(queryClient, "map-masters", () =>
+            authorization.canCommit(lease),
+          );
+          if (authorization.canCommit(lease))
+            showToast({ title: "マップを削除しました", tone: "success" });
         }),
       ),
     deleteMemberAlias: (id: string) =>
-      trackMutation(() =>
+      trackMutation("admin", (lease) =>
         deleteWithDialogFeedback(async () => {
           onFeedback("aliases", "", "");
           await runIdempotentMutation(
@@ -184,13 +252,18 @@ export function useMasterEditCommands(input: {
             { id },
             (options) => deleteMemberAlias(id, options),
           );
-          await cacheMasterUpdate(queryClient, masterKeys.memberAliases.all(), id, null);
+          if (!authorization.isSameAccount(lease)) return;
+          await cacheMasterUpdate(queryClient, masterKeys.memberAliases.all(), id, null, () =>
+            authorization.isSameAccount(lease),
+          );
+          if (!authorization.isSameAccount(lease)) return;
           await invalidateMemberAliasCaches(queryClient);
-          showToast({ title: "別名を削除しました", tone: "success" });
+          if (authorization.canCommit(lease))
+            showToast({ title: "別名を削除しました", tone: "success" });
         }),
       ),
     deleteSeasonMaster: (id: string) =>
-      trackMutation(() =>
+      trackMutation("operations", (lease) =>
         deleteWithDialogFeedback(async () => {
           onFeedback("season", selectedGameTitleId, "");
           await runIdempotentMutation(
@@ -199,19 +272,26 @@ export function useMasterEditCommands(input: {
             { id },
             (options) => deleteSeasonMaster(id, options),
           );
-          await cacheMasterUpdate(queryClient, masterKeys.seasonMasters.all(), id, null);
-          await invalidateMasterResourceCaches(queryClient, "season-masters");
-          showToast({ title: "シーズンを削除しました", tone: "success" });
+          if (!authorization.isSameAccount(lease)) return;
+          await cacheMasterUpdate(queryClient, masterKeys.seasonMasters.all(), id, null, () =>
+            authorization.isSameAccount(lease),
+          );
+          if (!authorization.isSameAccount(lease)) return;
+          await invalidateMasterResourceCaches(queryClient, "season-masters", () =>
+            authorization.canCommit(lease),
+          );
+          if (authorization.canCommit(lease))
+            showToast({ title: "シーズンを削除しました", tone: "success" });
         }),
       ),
-    editPending: pendingMutationCount > 0,
+    editPending: pendingMutations.some(authorization.isCurrent),
     updateGameTitle: (id: string, request: { name: string; layoutFamily: string }) =>
-      trackMutation(() => updateGameTitle(id, request)),
+      trackMutation("admin", (lease) => updateGameTitle(lease, id, request)),
     updateMapMaster: (id: string, request: { name: string }) =>
-      trackMutation(() => updateMapMaster(id, request)),
+      trackMutation("operations", (lease) => updateMapMaster(lease, id, request)),
     updateMemberAlias: (id: string, request: { memberId: string; alias: string }) =>
-      trackMutation(() => updateMemberAlias(id, request)),
+      trackMutation("admin", (lease) => updateMemberAlias(lease, id, request)),
     updateSeasonMaster: (id: string, request: { name: string }) =>
-      trackMutation(() => updateSeasonMaster(id, request)),
+      trackMutation("operations", (lease) => updateSeasonMaster(lease, id, request)),
   };
 }

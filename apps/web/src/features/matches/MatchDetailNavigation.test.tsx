@@ -10,7 +10,6 @@ import { invalidateAfterMatchUpdated } from "@/shared/api/cacheInvalidation";
 import type { MatchNeighbor } from "@/shared/api/detailReadResult";
 import type { MatchDetailResponse } from "@/shared/api/matches";
 import { matchKeys } from "@/shared/api/queryKeys";
-import { withReturnTo } from "@/shared/navigation/returnTo";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { makeFourPlayerResults, makeMatchDetail } from "@/test/factories";
@@ -72,7 +71,7 @@ function makeJourney() {
 
 const origin = "/matches?status=confirmed&cursor=cursor-alpha#results";
 function detailHref(id: string) {
-  return withReturnTo(`/matches/${id}`, origin);
+  return `/matches/${id}`;
 }
 
 function notFound() {
@@ -136,7 +135,7 @@ async function editNote(user: ReturnType<typeof userEvent.setup>) {
 describe("MatchDetail adjacent navigation", () => {
   beforeEach(() => setDevUser());
 
-  it("crosses held events and comparison scopes while keeping origin, current actions and history", async () => {
+  it("crosses held events and comparison scopes while browser history keeps the original list", async () => {
     const user = userEvent.setup();
     const { a, b, c } = makeJourney();
     installDetails([a, b, c]);
@@ -147,22 +146,17 @@ describe("MatchDetail adjacent navigation", () => {
     await screen.findByText("開催Bのメモ");
     expect(currentHref(router)).toBe(detailHref(b.matchId));
     expect(screen.queryByText("開催Aのメモ")).not.toBeInTheDocument();
-    const returnNavigation = within(screen.getByRole("navigation", { name: "試合詳細の移動" }));
-    expect(returnNavigation.getByRole("link", { name: "試合一覧へ戻る" })).toHaveAttribute(
-      "href",
-      origin,
-    );
-    expect(returnNavigation.getByRole("link", { name: "この試合の開催を見る" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "この試合の開催を見る" })).toHaveAttribute(
       "href",
       "/held-events/held-b",
     );
     expect(screen.getByRole("link", { name: "試合結果を編集" })).toHaveAttribute(
       "href",
-      withReturnTo("/matches/journey-b/edit", detailHref(b.matchId)),
+      "/matches/journey-b/edit",
     );
     expect(screen.getByRole("link", { name: "この試合を出力" })).toHaveAttribute(
       "href",
-      withReturnTo("/exports?matchId=journey-b", detailHref(b.matchId)),
+      "/exports?matchId=journey-b",
     );
     const comparison = new URL(
       screen.getByRole("link", { name: "前後の戦績を見る" }).getAttribute("href") ?? "",
@@ -173,7 +167,6 @@ describe("MatchDetail adjacent navigation", () => {
       seasonMasterId: "season-b",
       mapMasterId: "map-b",
       focusMatchId: "journey-b",
-      returnTo: detailHref(b.matchId),
     });
     const heading = screen.getByRole("heading", { level: 1, name: "第7試合の結果" });
     expect(heading).toHaveFocus();
@@ -186,7 +179,7 @@ describe("MatchDetail adjacent navigation", () => {
     });
     await screen.findByText("開催Bのメモ");
     expect(currentHref(router)).toBe(detailHref(b.matchId));
-    await user.click(screen.getByRole("link", { name: "試合一覧へ戻る" }));
+    await act(async () => router.navigate(-2));
     expect(await screen.findByText("元の試合一覧")).toBeInTheDocument();
     expect(currentHref(router)).toBe(origin);
   });
@@ -290,9 +283,9 @@ describe("MatchDetail adjacent navigation", () => {
         { name: "削除する" },
       ),
     );
-    expect(await screen.findByText("元の試合一覧")).toBeInTheDocument();
+    expect(await screen.findByText("所属開催")).toBeInTheDocument();
     expect(deleteRequests).toBe(1);
-    expect(currentHref(router)).toBe(origin);
+    expect(currentHref(router)).toBe("/held-events/held-a");
   });
 
   it("does not resurrect a confirmed missing detail on delayed and failed revisits", async () => {
@@ -354,7 +347,7 @@ describe("MatchDetail adjacent navigation", () => {
     );
     expect(screen.queryByRole("heading", { name: "順位・総資産" })).not.toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "前後の試合" })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("link", { name: "試合一覧へ戻る" }));
+    await user.click(screen.getByRole("link", { name: "試合一覧へ" }));
     const dialog = await screen.findByRole("alertdialog");
     await user.click(within(dialog).getByRole("button", { name: "破棄して移動" }));
     expect(await screen.findByText("元の試合一覧")).toBeInTheDocument();

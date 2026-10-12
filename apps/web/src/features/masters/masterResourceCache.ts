@@ -13,8 +13,10 @@ export async function cacheCreatedMaster<Item extends { id: string }>(
   queryClient: QueryClient,
   queryKey: QueryKey,
   created: Item,
+  canApply: () => boolean = () => true,
 ) {
   await queryClient.cancelQueries({ queryKey, exact: true });
+  if (!canApply()) return;
   queryClient.setQueryData<{ items?: Item[] }>(queryKey, (response) => {
     if (!response) return response;
     const items = response.items ?? [];
@@ -33,8 +35,10 @@ export async function cacheMasterUpdate<Item extends { id: string }>(
   queryKey: QueryKey,
   id: string,
   updated: Item | null,
+  canApply: () => boolean = () => true,
 ) {
   await queryClient.cancelQueries({ queryKey });
+  if (!canApply()) return;
   queryClient.setQueriesData<{ items?: Item[] }>(
     { queryKey },
     (response) =>
@@ -62,6 +66,7 @@ function consumerResourceKey(resource: MasterResourceKind) {
 export async function invalidateMasterResourceCaches(
   queryClient: QueryClient,
   resource: MasterResourceKind,
+  canReadManagement: () => boolean,
 ) {
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: consumerResourceKey(resource) }),
@@ -71,8 +76,12 @@ export async function invalidateMasterResourceCaches(
     queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.artifactRoot() }),
     queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.options() }),
     queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.statusRoot() }),
-    queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.adminRoot() }),
-    queryClient.invalidateQueries({ queryKey: seriesPlayerRadarKeys.all() }),
+    ...(canReadManagement()
+      ? [
+          queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.adminRoot() }),
+          queryClient.invalidateQueries({ queryKey: seriesPlayerRadarKeys.all() }),
+        ]
+      : []),
     queryClient.invalidateQueries({ queryKey: seriesPlayerRadarKeys.scopeStatusRoot() }),
   ]);
 }

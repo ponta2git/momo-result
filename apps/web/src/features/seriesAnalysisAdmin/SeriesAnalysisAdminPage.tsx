@@ -24,7 +24,11 @@ import { contentText } from "@/shared/ui/typography";
 
 export function SeriesAnalysisAdminPage() {
   const page = useSeriesAnalysisAdminPageModel();
-  const [allDialogOpen, setAllDialogOpen] = useState(false);
+  const [allDialog, setAllDialog] = useState({ epoch: page.authorization.adminEpoch, open: false });
+  const allDialogOpen =
+    page.authorization.retainAdmin &&
+    allDialog.epoch === page.authorization.adminEpoch &&
+    allDialog.open;
   const [activeTab, setActiveTab] = useState("recalculation");
   const recalculationTabRef = useRef<HTMLElement>(null);
   const { data } = page.resource;
@@ -71,12 +75,17 @@ export function SeriesAnalysisAdminPage() {
                 icon={<Activity />}
                 placement="embedded"
                 title="対象作品がありません"
-                description="設定管理で作品を登録してください。"
+                description={
+                  page.authorization.retainAdmin
+                    ? "設定管理で作品を登録してください。"
+                    : "管理者による作品の登録が必要です。"
+                }
               />
             ) : data ? (
               <div className="max-w-lg">
                 <SelectField
                   label="対象作品"
+                  disabled={!page.authorization.canOperate}
                   options={page.selection.options}
                   value={page.selection.gameTitleId ?? ""}
                   onValueChange={(nextValue) => page.actions.selectTitle(nextValue)}
@@ -102,6 +111,7 @@ export function SeriesAnalysisAdminPage() {
                     <div className={inlineActionGroupClass}>
                       <Button
                         disabled={
+                          !page.authorization.canOperate ||
                           page.recalculation.titleUnavailable ||
                           page.recalculation.titleReserved ||
                           page.recalculation.pending
@@ -113,28 +123,37 @@ export function SeriesAnalysisAdminPage() {
                       >
                         {page.recalculation.titleReserved ? "再計算を予約済み" : "この作品を再計算"}
                       </Button>
-                      <AlertDialog
-                        open={allDialogOpen}
-                        onOpenChange={setAllDialogOpen}
-                        confirmLabel="全作品を再計算"
-                        description={`${data.titleOptions.length}作品を対象として予約します。実行中の作品は完了後に再計算されます。`}
-                        formatError={(error) => formatApiError(error, "再計算を受け付けられません")}
-                        pending={page.recalculation.allPending}
-                        title="全作品の再計算を予約しますか？"
-                        tone="primary"
-                        trigger={
-                          <Button
-                            disabled={page.recalculation.pending}
-                            icon={<RotateCw />}
-                            variant="secondary"
-                          >
-                            全作品を再計算
-                          </Button>
-                        }
-                        onConfirm={async () => {
-                          await page.actions.recalculateAll();
-                        }}
-                      />
+                      {page.authorization.retainAdmin ? (
+                        <AlertDialog
+                          open={allDialogOpen}
+                          onOpenChange={(open) =>
+                            setAllDialog({ epoch: page.authorization.adminEpoch, open })
+                          }
+                          confirmDisabled={!page.authorization.canRecalculateAll}
+                          confirmLabel="全作品を再計算"
+                          description={`${data.titleOptions.length}作品を対象として予約します。実行中の作品は完了後に再計算されます。`}
+                          formatError={(error) =>
+                            formatApiError(error, "再計算を受け付けられません")
+                          }
+                          pending={page.recalculation.allPending}
+                          title="全作品の再計算を予約しますか？"
+                          tone="primary"
+                          trigger={
+                            <Button
+                              disabled={
+                                !page.authorization.canRecalculateAll || page.recalculation.pending
+                              }
+                              icon={<RotateCw />}
+                              variant="secondary"
+                            >
+                              全作品を再計算
+                            </Button>
+                          }
+                          onConfirm={async () => {
+                            await page.actions.recalculateAll();
+                          }}
+                        />
+                      ) : null}
                     </div>
                     {page.feedback.resourceError ? null : (
                       <Button

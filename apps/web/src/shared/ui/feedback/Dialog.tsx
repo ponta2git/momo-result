@@ -155,36 +155,58 @@ export function AlertDialog({
     open: actualOpen,
     pending: false,
     error: "",
+    completed: null as symbol | null,
+    generation: 0,
   });
-  const activeAttempt = useRef<symbol | null>(null);
+  const activeAttempt = useRef<{ token: symbol; generation: number } | null>(null);
+  const handledCompletion = useRef<symbol | null>(null);
   // A controlled owner may close or replace this task while its request is unresolved.
   // Its next opening must start clean, and the old request must not close the new task.
   if (confirmation.open !== actualOpen) {
-    setConfirmation({ open: actualOpen, pending: false, error: "" });
+    setConfirmation({
+      open: actualOpen,
+      pending: false,
+      error: "",
+      completed: null,
+      generation: confirmation.generation + 1,
+    });
   }
   useLayoutEffect(() => {
-    if (!actualOpen) activeAttempt.current = null;
-    return () => {
-      activeAttempt.current = null;
-    };
-  }, [actualOpen]);
+    const completed = confirmation.completed;
+    if (!actualOpen || !completed || handledCompletion.current === completed) return;
+    handledCompletion.current = completed;
+    // Activity keeps an in-flight confirmation alive while hiding its UI. Defer the
+    // owner's close callback until effects resume; an unmounted owner never receives it.
+    if (closeOnSuccess) controllableOpen.setOpen(false);
+  }, [actualOpen, closeOnSuccess, confirmation.completed, controllableOpen]);
   const actualPending = pending || confirmation.pending;
   const reduceMotion = useReducedMotionConfig();
   const handleConfirm = async () => {
-    if (!actualOpen || actualPending || confirmDisabled || activeAttempt.current) return;
-    const attempt = Symbol("confirmation");
+    if (
+      !actualOpen ||
+      actualPending ||
+      confirmDisabled ||
+      activeAttempt.current?.generation === confirmation.generation
+    )
+      return;
+    const attempt = { token: Symbol("confirmation"), generation: confirmation.generation };
     activeAttempt.current = attempt;
-    setConfirmation({ open: actualOpen, pending: true, error: "" });
+    setConfirmation({ ...confirmation, pending: true, error: "", completed: null });
     try {
       await onConfirm();
       if (activeAttempt.current !== attempt) return;
-      setConfirmation({ open: actualOpen, pending: false, error: "" });
-      if (closeOnSuccess) {
-        controllableOpen.setOpen(false);
-      }
+      setConfirmation((current) =>
+        current.open && current.generation === attempt.generation
+          ? { ...current, pending: false, error: "", completed: attempt.token }
+          : current,
+      );
     } catch (error) {
       if (activeAttempt.current !== attempt) return;
-      setConfirmation({ open: actualOpen, pending: false, error: formatError(error) });
+      setConfirmation((current) =>
+        current.open && current.generation === attempt.generation
+          ? { ...current, pending: false, error: formatError(error), completed: null }
+          : current,
+      );
     } finally {
       if (activeAttempt.current === attempt) activeAttempt.current = null;
     }
@@ -194,7 +216,10 @@ export function AlertDialog({
     <BaseAlertDialog.Root
       open={actualOpen}
       onOpenChange={(nextOpen, eventDetails) => {
-        if (!nextOpen && (actualPending || activeAttempt.current)) {
+        if (
+          !nextOpen &&
+          (actualPending || activeAttempt.current?.generation === confirmation.generation)
+        ) {
           eventDetails.cancel();
           return;
         }

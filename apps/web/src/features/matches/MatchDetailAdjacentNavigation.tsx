@@ -2,13 +2,12 @@ import type { MatchDetailReadyPageModel } from "@/features/matches/matchDetailPa
 import type { MatchNeighbor } from "@/shared/api/detailReadResult";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { formatNavigationDateTime } from "@/shared/lib/dateTime";
-import { withReturnTo } from "@/shared/navigation/returnTo";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { AdjacentNavigation } from "@/shared/ui/navigation/AdjacentNavigation";
 
 export function MatchDetailAdjacentNavigation({ page }: { page: MatchDetailReadyPageModel }) {
-  const { adjacent, adjacentState, returnTo } = page.navigation;
+  const { adjacent, adjacentState } = page.navigation;
   const previous = adjacent.kind === "available" ? adjacent.previous : undefined;
   const next = adjacent.kind === "available" ? adjacent.next : undefined;
   const peers = [page.match.playedAt, previous?.playedAt, next?.playedAt].filter(
@@ -21,9 +20,7 @@ export function MatchDetailAdjacentNavigation({ page }: { page: MatchDetailReady
       : adjacent.kind === "available"
         ? `${label}はありません`
         : "前後情報を確認できません",
-    href: neighbor
-      ? withReturnTo(`/matches/${encodeURIComponent(neighbor.matchId)}`, returnTo)
-      : undefined,
+    href: neighbor ? `/matches/${encodeURIComponent(neighbor.matchId)}` : undefined,
   });
   return (
     <AdjacentNavigation

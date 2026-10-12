@@ -1,5 +1,3 @@
-import { useLocation } from "react-router-dom";
-
 import { DataVizHistogramChart } from "@/features/seriesComparison/charts/dataViz/HistogramChart";
 import { DataVizScatterPlot } from "@/features/seriesComparison/charts/dataViz/ScatterPlot";
 import { MatrixValueLegend } from "@/features/seriesComparison/charts/SeriesAnalysisMatrix";
@@ -13,7 +11,6 @@ import {
 import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
-import { currentInternalLocation, withReturnTo } from "@/shared/navigation/returnTo";
 import { cn } from "@/shared/ui/cn";
 import { contentText } from "@/shared/ui/typography";
 
@@ -111,7 +108,6 @@ export function StrategyScatter({
   players: SeriesComparisonAggregate["players"];
   points: SeriesComparisonAggregate["strategyScatter"]["points"];
 }) {
-  const returnTo = currentInternalLocation(useLocation());
   return (
     <DataVizScatterPlot
       ariaLabel="物件収益比率と総資産の散布図"
@@ -123,7 +119,7 @@ export function StrategyScatter({
           ? []
           : [
               {
-                href: withReturnTo(`/matches/${encodeURIComponent(point.matchId)}`, returnTo),
+                href: `/matches/${encodeURIComponent(point.matchId)}`,
                 itemId: point.itemId,
                 label: `${playerName(players, point.memberId)}、${formatSeriesMatchIndex(point.matchIndex)}、${point.rank}位`,
                 seriesId: point.memberId,

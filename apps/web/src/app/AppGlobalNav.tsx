@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useMatch } from "react-router-dom";
 
+import { hasOperationsRole } from "@/shared/auth/permissions";
 import { useAuth } from "@/shared/auth/useAuth";
 import { GlobalNav } from "@/shared/navigation/GlobalNav";
 import type { GlobalNavItem } from "@/shared/navigation/GlobalNav";
@@ -23,7 +24,7 @@ const primaryItems = [
   { icon: <Download />, label: "出力", to: "/exports" },
 ] as const satisfies readonly GlobalNavItem[];
 
-const adminItems = [
+const managementItems = [
   { icon: <Activity />, label: "分析", to: "/admin/analysis" },
   { icon: <Database />, label: "設定", to: "/admin/masters" },
 ] as const satisfies readonly GlobalNavItem[];
@@ -89,7 +90,14 @@ export function AppGlobalNav() {
           ? primaryItems.map((item) => ({ ...item, current: item.to === "/matches" }))
           : primaryItems
       }
-      managementItems={auth.auth?.role === "admin" ? adminItems : noManagementItems}
+      managementItems={
+        auth.isAuthenticated &&
+        !auth.error &&
+        !auth.isRefetching &&
+        hasOperationsRole(auth.auth?.role)
+          ? managementItems
+          : noManagementItems
+      }
     />
   );
 }

@@ -1,6 +1,5 @@
 import type { Ref } from "react";
 
-import { HeldEventDetailHeaderActions } from "@/features/heldEvents/HeldEventDetailHeaderActions";
 import { inlineActionGroupClass } from "@/shared/ui/actions/actionGroup";
 import { ResourcePageState } from "@/shared/ui/feedback/ResourcePageState";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
@@ -73,51 +72,32 @@ export function HeldEventDetailLoading() {
 }
 
 export function HeldEventDetailUnavailable({
-  backHref = "/held-events",
-  backLabel = "開催履歴へ戻る",
-  backNotice,
-  exportHref,
   notFound = false,
   onRetry,
   retrying = false,
   titleRef,
 }: {
-  backHref?: string;
-  backLabel?: string;
-  backNotice?: string | undefined;
-  exportHref: string;
   notFound?: boolean;
   onRetry?: (() => void) | undefined;
   retrying?: boolean;
   titleRef?: Ref<HTMLHeadingElement> | undefined;
 }) {
-  const headerActions = (
-    <HeldEventDetailHeaderActions
-      exportHref={exportHref}
-      showHistoryLink={backHref !== "/held-events"}
-    />
-  );
-  const headerDescription = `試合数・下書き数は未取得です。${backNotice ?? ""}`;
   return notFound ? (
     <ResourcePageState
-      backHref={backHref}
-      backLabel={backLabel}
+      backHref="/held-events"
+      backLabel="開催履歴へ"
       description="指定された開催は削除されたか、存在しません。開催履歴から別の開催を選んでください。"
       eyebrow="開催記録"
-      headerActions={headerActions}
-      headerDescription={headerDescription}
       kind="not-found"
       title="開催が見つかりません"
       titleRef={titleRef}
     />
   ) : onRetry ? (
     <ResourcePageState
-      backHref={backHref}
-      backLabel={backLabel}
+      backHref="/held-events"
+      backLabel="開催履歴へ"
       description="通信状態を確認して、もう一度お試しください。"
       eyebrow="開催記録"
-      headerActions={headerActions}
-      headerDescription={headerDescription}
       kind="error"
       retryLabel="開催詳細を再読み込み"
       retrying={retrying}

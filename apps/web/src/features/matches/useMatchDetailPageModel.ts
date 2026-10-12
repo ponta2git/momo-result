@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import { useLocation, useParams, useSearchParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 
 import type { MatchDetailPageModel } from "@/features/matches/matchDetailPageModel";
 import { seriesComparisonHrefForMatch } from "@/features/matches/matchDetailViewModel";
@@ -11,55 +11,16 @@ import { invalidateAfterMatchNoteReplaced } from "@/shared/api/cacheInvalidation
 import { readDetailQuery } from "@/shared/api/detailReadResult";
 import { commitMatchNoteCache } from "@/shared/api/matchNoteCache";
 import { matchDetailQueryOptions } from "@/shared/api/queryOptions";
-import {
-  classifyReturnTo,
-  currentInternalLocation,
-  isSameResourceReturnTo,
-  sanitizeReturnTo,
-  withReturnTo,
-} from "@/shared/navigation/returnTo";
-
-function backLabel(returnTo: string | undefined, hasMatch: boolean): string {
-  switch (classifyReturnTo(returnTo).kind) {
-    case "matchList":
-      return "試合一覧へ戻る";
-    case "heldEventList":
-      return "開催履歴へ戻る";
-    case "heldEventDetail":
-      return "元の開催へ戻る";
-    case "seriesComparison":
-      return "戦績比較へ戻る";
-    case "none":
-      return hasMatch ? "この開催へ戻る" : "試合一覧へ戻る";
-    default:
-      return "前の画面へ戻る";
-  }
-}
-
 /** The detail cache owns confirmed absence; notices never decide whether old data is valid. */
 export function useMatchDetailPageModel(): MatchDetailPageModel {
   const { matchId = "" } = useParams<{ matchId: string }>();
-  const location = useLocation();
-  const [searchParams] = useSearchParams();
-  const rawReturnTo = searchParams.get("returnTo");
-  const safeReturnTo = sanitizeReturnTo(rawReturnTo);
-  const contextualReturnTo = isSameResourceReturnTo(safeReturnTo, location.pathname)
-    ? undefined
-    : safeReturnTo;
-  const fallbackReason =
-    rawReturnTo && !contextualReturnTo
-      ? "元の戻り先を利用できないため、既定の移動先を表示しています。"
-      : undefined;
-  const detailReturnTo = currentInternalLocation(location);
   const queryClient = useQueryClient();
   const matchQuery = useQuery(matchDetailQueryOptions(matchId, matchId.trim().length > 0));
   const { detail: match, navigation: adjacent, notFound } = readDetailQuery(matchQuery);
   const analysis = useMatchFeatureAnalysis(match);
   const deletion = useMatchDeletionCommand({
-    contextualReturnTo,
     heldEventId: match?.heldEventId,
     matchId,
-    pathname: location.pathname,
   });
   const { refetch, isFetching, isPaused, isPending, error } = matchQuery;
   const readLatest = useCallback(async (): Promise<MatchNoteReadResult> => {
@@ -84,18 +45,11 @@ export function useMatchDetailPageModel(): MatchDetailPageModel {
   }, [refetch]);
   const common = { matchId, note: { readLatest, commitSavedNote } };
   const refresh = { pending: isFetching || isPaused, run: retryPrimary };
-  const terminalNavigation = {
-    backHref: contextualReturnTo ?? "/matches",
-    backLabel: backLabel(contextualReturnTo, false),
-    fallbackReason,
-  };
-
-  if (notFound) return { ...common, kind: "notFound", navigation: terminalNavigation, refresh };
+  if (notFound) return { ...common, kind: "notFound", refresh };
   if (!match && isPending && matchId.trim()) return { ...common, kind: "loading" };
-  if (!match) return { ...common, kind: "loadFailed", navigation: terminalNavigation, refresh };
+  if (!match) return { ...common, kind: "loadFailed", refresh };
 
   const heldEventHref = `/held-events/${encodeURIComponent(match.heldEventId)}`;
-  const backHref = contextualReturnTo ?? heldEventHref;
   const adjacentNavigation = adjacent ?? { kind: "unavailable" as const };
   return {
     ...common,
@@ -114,19 +68,10 @@ export function useMatchDetailPageModel(): MatchDetailPageModel {
     kind: "ready",
     match,
     navigation: {
-      backHref,
-      backLabel: backLabel(contextualReturnTo, true),
-      returnTo: contextualReturnTo,
-      comparisonHref: withReturnTo(seriesComparisonHrefForMatch(match), detailReturnTo),
-      editHref: withReturnTo(`/matches/${encodeURIComponent(match.matchId)}/edit`, detailReturnTo),
-      exportHref: withReturnTo(
-        `/exports?matchId=${encodeURIComponent(match.matchId)}`,
-        detailReturnTo,
-      ),
-      currentHeldEventHref: isSameResourceReturnTo(backHref, heldEventHref)
-        ? undefined
-        : heldEventHref,
-      fallbackReason,
+      comparisonHref: seriesComparisonHrefForMatch(match),
+      editHref: `/matches/${encodeURIComponent(match.matchId)}/edit`,
+      exportHref: `/exports?matchId=${encodeURIComponent(match.matchId)}`,
+      heldEventHref,
       adjacent: adjacentNavigation,
       adjacentState:
         isFetching || isPaused

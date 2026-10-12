@@ -16,7 +16,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { HeldEventDetailPage } from "@/features/heldEvents/HeldEventDetailPage";
 import { heldEventKeys } from "@/shared/api/queryKeys";
-import { withReturnTo } from "@/shared/navigation/returnTo";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { makeHeldEventDetailResponse } from "@/test/factories";
@@ -49,7 +48,7 @@ function LocationProbe() {
   );
 }
 
-function renderNavigationPage(path: string) {
+function renderNavigationPage(path: string | string[]) {
   setDevUser();
   const router = createMemoryRouter(
     [
@@ -67,7 +66,7 @@ function renderNavigationPage(path: string) {
         ],
       },
     ],
-    { initialEntries: [path] },
+    { initialEntries: Array.isArray(path) ? path : [path] },
   );
   render(
     <QueryClientProvider client={queryClient}>
@@ -83,7 +82,7 @@ describe("HeldEventDetailPage", () => {
     user = userEvent.setup();
   });
 
-  it("moves across events while retaining the original conditions and current action targets", async () => {
+  it("moves across events while browser history retains the original list and current actions stay scoped", async () => {
     const events = [
       { id: "held-1", heldAt: "2026-01-01T00:00:00.000Z" },
       { id: "held-2", heldAt: "2026-01-02T00:00:00.000Z" },
@@ -106,19 +105,19 @@ describe("HeldEventDetailPage", () => {
       }),
     );
     const origin = "/held-events?page=2&pageSize=5#records";
-    const router = renderNavigationPage(withReturnTo("/held-events/held-1", origin));
+    const router = renderNavigationPage([origin, "/held-events/held-1"]);
 
     await user.click(await screen.findByRole("link", { name: /次の開催/u }));
-    const secondUrl = withReturnTo("/held-events/held-2", origin);
+    const secondUrl = "/held-events/held-2";
     expect(await screen.findByRole("heading", { name: "2026/01/02 09:00" })).toHaveFocus();
     expect(screen.getByLabelText("現在のURL")).toHaveTextContent(secondUrl);
     expect(screen.getByRole("link", { name: "手入力" })).toHaveAttribute(
       "href",
-      withReturnTo("/matches/new?heldEventId=held-2", secondUrl),
+      "/matches/new?heldEventId=held-2",
     );
     expect(screen.getByRole("link", { name: "CSV出力" })).toHaveAttribute(
       "href",
-      withReturnTo("/exports?heldEventId=held-2&format=csv", secondUrl),
+      "/exports?heldEventId=held-2&format=csv",
     );
     await user.click(screen.getByRole("link", { name: /次の開催/u }));
     expect(await screen.findByRole("heading", { name: "2026/01/03 09:00" })).toBeInTheDocument();
@@ -128,7 +127,7 @@ describe("HeldEventDetailPage", () => {
       await router.navigate(-1);
     });
     expect(await screen.findByRole("heading", { name: "2026/01/02 09:00" })).toBeInTheDocument();
-    await user.click(screen.getByRole("link", { name: "開催履歴へ戻る" }));
+    await act(async () => router.navigate(-2));
     expect(screen.getByLabelText("現在のURL")).toHaveTextContent(origin);
     expect(screen.getByText("開催履歴の起点")).toBeInTheDocument();
   });
@@ -148,11 +147,11 @@ describe("HeldEventDetailPage", () => {
         ),
       ),
     );
-    renderNavigationPage(withReturnTo("/held-events/held-1", "/matches/match-1#note"));
+    renderNavigationPage("/held-events/held-1");
     expect(await screen.findByText(/前後の開催を利用できません/u)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "試合結果へ戻る" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "開催履歴へ" })).toHaveAttribute(
       "href",
-      "/matches/match-1#note",
+      "/held-events",
     );
     expect(screen.getByRole("link", { name: "手入力" })).toBeInTheDocument();
     expect(screen.queryByText("最初の開催です")).not.toBeInTheDocument();
@@ -160,7 +159,7 @@ describe("HeldEventDetailPage", () => {
     await user.click(screen.getByRole("button", { name: "前後の開催を再取得" }));
     expect(await screen.findByRole("link", { name: /次の開催/u })).toHaveAttribute(
       "href",
-      withReturnTo("/held-events/held-2", "/matches/match-1#note"),
+      "/held-events/held-2",
     );
   });
 
@@ -187,7 +186,7 @@ describe("HeldEventDetailPage", () => {
       "href",
       "/held-events/held-old",
     );
-    await user.click(screen.getByRole("link", { name: "開催履歴へ戻る" }));
+    await user.click(screen.getByRole("link", { name: "開催履歴へ" }));
     changed = true;
     await queryClient.invalidateQueries({ queryKey: heldEventKeys.detail("held-1") });
     await act(async () => {
@@ -236,7 +235,7 @@ describe("HeldEventDetailPage", () => {
         );
       }),
     );
-    const path = withReturnTo("/held-events/held-1", "/matches/match-1#note");
+    const path = "/held-events/held-1";
     const router = renderNavigationPage(path);
     expect(await screen.findByRole("link", { name: /次の開催/u })).toBeInTheDocument();
     phase = "missing";
@@ -244,12 +243,11 @@ describe("HeldEventDetailPage", () => {
     expect(
       await screen.findByRole("heading", { name: "開催が見つかりません" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "試合結果へ戻る" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "開催履歴へ" })).toHaveAttribute(
       "href",
-      "/matches/match-1#note",
+      "/held-events",
     );
-    const recoveryActions = within(screen.getByRole("navigation", { name: "この開催の関連操作" }));
-    await user.click(recoveryActions.getByRole("link", { name: "開催履歴を開く" }));
+    await user.click(screen.getByRole("link", { name: "開催履歴へ" }));
     phase = "outage";
     await queryClient.invalidateQueries({ queryKey: heldEventKeys.detail("held-1") });
     await act(async () => {
@@ -266,21 +264,6 @@ describe("HeldEventDetailPage", () => {
       await queryClient.refetchQueries({ queryKey: heldEventKeys.detail("held-1") });
     });
     expect(await screen.findByRole("link", { name: /次の開催/u })).toBeInTheDocument();
-  });
-
-  it.each([
-    [
-      "/held-events/held-1?different=condition#part",
-      "戻り先が現在の開催のため、開催履歴へ戻ります。",
-    ],
-    ["https://outside.example/", "戻り先が無効なため、開催履歴へ戻ります。"],
-  ])("recovers from an unusable return destination %s", async (returnTo, notice) => {
-    renderNavigationPage(`/held-events/held-1?returnTo=${encodeURIComponent(returnTo)}`);
-    expect(await screen.findByText(notice)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "開催履歴へ戻る" })).toHaveAttribute(
-      "href",
-      "/held-events",
-    );
   });
 
   it("connects one held event to its draft, player recap, results, and comparison", async () => {
@@ -347,10 +330,7 @@ describe("HeldEventDetailPage", () => {
     expect(screen.getByText("確定済み1試合・未確定下書き2件")).toBeInTheDocument();
     expect(await screen.findAllByText("桃太郎電鉄2・今シーズン・東日本編")).toHaveLength(2);
     const primaryDraftAction = screen.getByRole("link", { name: "確認事項を直す" });
-    expect(primaryDraftAction).toHaveAttribute(
-      "href",
-      "/review/draft-review-1?returnTo=%2Fheld-events%2Fheld-1",
-    );
+    expect(primaryDraftAction).toHaveAttribute("href", "/review/draft-review-1");
     expect(screen.getByRole("link", { name: "手入力で続ける" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "OCR取り込み" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "手入力" })).toBeInTheDocument();
@@ -362,11 +342,11 @@ describe("HeldEventDetailPage", () => {
     expect(screen.getByText("終盤のカード交換で流れが変わった")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "第1試合の結果を見る" })).toHaveAttribute(
       "href",
-      "/matches/match-1?returnTo=%2Fheld-events%2Fheld-1",
+      "/matches/match-1",
     );
     expect(screen.getByRole("link", { name: "第1試合を戦績比較で見る" })).toHaveAttribute(
       "href",
-      "/analytics/series?gameTitleId=gt_momotetsu_2&seasonMasterId=season_current&mapMasterId=map_east&focusMatchId=match-1&view=flow&returnTo=%2Fheld-events%2Fheld-1",
+      "/analytics/series?gameTitleId=gt_momotetsu_2&seasonMasterId=season_current&mapMasterId=map_east&focusMatchId=match-1&view=flow",
     );
     expect(
       screen.queryByRole("link", { name: /試合検索で見る|の試合を検索$/u }),
@@ -381,15 +361,9 @@ describe("HeldEventDetailPage", () => {
       await screen.findByRole("heading", { name: "確定済みの試合はまだありません" }),
     ).toBeInTheDocument();
     const ocrLink = await screen.findByRole("link", { name: "OCR取り込み" });
-    expect(ocrLink).toHaveAttribute(
-      "href",
-      "/ocr/new?heldEventId=held-1&returnTo=%2Fheld-events%2Fheld-1",
-    );
+    expect(ocrLink).toHaveAttribute("href", "/ocr/new?heldEventId=held-1");
     const manualLink = screen.getByRole("link", { name: "手入力" });
-    expect(manualLink).toHaveAttribute(
-      "href",
-      "/matches/new?heldEventId=held-1&returnTo=%2Fheld-events%2Fheld-1",
-    );
+    expect(manualLink).toHaveAttribute("href", "/matches/new?heldEventId=held-1");
   });
 
   it("distinguishes a missing event from a transient load failure", async () => {
@@ -417,11 +391,8 @@ describe("HeldEventDetailPage", () => {
     expect(
       screen.queryByRole("link", { name: /試合検索で見る|の試合を検索$/u }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "CSV出力" })).toHaveAttribute(
-      "href",
-      "/exports?heldEventId=held-1&format=csv&returnTo=%2Fheld-events%2Fheld-1",
-    );
-    expect(screen.getByRole("link", { name: "開催履歴へ戻る" })).toHaveAttribute(
+    expect(screen.queryByRole("link", { name: "CSV出力" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "開催履歴へ" })).toHaveAttribute(
       "href",
       "/held-events",
     );
@@ -477,7 +448,7 @@ describe("HeldEventDetailPage", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "OCR取り込み" })).toHaveAttribute(
       "href",
-      "/ocr/new?heldEventId=held-1&returnTo=%2Fheld-events%2Fheld-1",
+      "/ocr/new?heldEventId=held-1",
     );
 
     await user.click(screen.getByRole("button", { name: "開催詳細を再取得" }));

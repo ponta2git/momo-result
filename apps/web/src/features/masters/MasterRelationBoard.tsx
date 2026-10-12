@@ -19,6 +19,7 @@ type MasterCreateBinding = {
 };
 
 type GameTitleRelation = {
+  canEdit: boolean;
   completion?: string | undefined;
   create: MasterCreateBinding;
   defaultLayoutFamily: LayoutFamily;
@@ -97,6 +98,7 @@ export function MasterRelationBoard({
   return (
     <section className="grid gap-6">
       <GameTitleList
+        canEdit={gameTitle.canEdit}
         create={gameTitle.create}
         completion={gameTitle.completion}
         defaultLayoutFamily={gameTitle.defaultLayoutFamily}

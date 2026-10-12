@@ -4,20 +4,9 @@ import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 
-export function PageSkeleton({
-  showReturnAction,
-  view,
-}: {
-  showReturnAction: boolean;
-  view?: SeriesAnalysisViewId | undefined;
-}) {
+export function PageSkeleton({ view }: { view?: SeriesAnalysisViewId | undefined }) {
   return (
     <PageFrame aria-label="戦績比較を読み込み中" width="wide">
-      {showReturnAction ? (
-        <div>
-          <Skeleton className="h-11 w-40 max-w-full rounded-sm pointer-fine:h-9" />
-        </div>
-      ) : null}
       <PageContentSurface
         aria-label="戦績比較"
         className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4"

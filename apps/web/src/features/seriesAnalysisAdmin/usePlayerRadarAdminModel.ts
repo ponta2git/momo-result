@@ -18,18 +18,25 @@ import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryE
 import { seriesAnalysisKeys, seriesPlayerRadarKeys } from "@/shared/api/queryKeys";
 import { seriesAnalysisOptionsQueryOptions } from "@/shared/api/seriesAnalysisQueryOptions";
 import {
-  getSeriesPlayerRadarOperation,
   requestSeriesPlayerRadarOperation,
+  seriesPlayerRadarOperationQueryOptions,
   seriesPlayerRadarPreviewQueryOptions,
   seriesPlayerRadarStateQueryOptions,
 } from "@/shared/api/seriesPlayerRadar";
-import type { SeriesPlayerRadarCommand } from "@/shared/api/seriesPlayerRadar";
+import type {
+  SeriesPlayerRadarCommand,
+  SeriesPlayerRadarOperation,
+} from "@/shared/api/seriesPlayerRadar";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
+import type { AuthorizationLease } from "@/shared/auth/authorization";
+import { useAuthorization } from "@/shared/auth/useAuthorization";
 import {
   playerRadarBasisDisplay,
   playerRadarEvaluationDisplay,
   playerRadarSampleDisplay,
 } from "@/shared/seriesAnalysis/playerRadarDisplay";
+
+type RadarCommandRequest = { request: SeriesPlayerRadarCommand; lease: AuthorizationLease };
 
 /** Each mounted instance owns one title; scope changes never retarget a submitted command. */
 export function usePlayerRadarAdminModel(
@@ -38,10 +45,12 @@ export function usePlayerRadarAdminModel(
   onApplyAccepted?: (operationId: string) => void,
 ) {
   const queryClient = useQueryClient();
+  const authorization = useAuthorization();
   const keys = useIdempotencyKeyStore();
   const commandPending = useRef(false);
   const mounted = useRef(false);
   const notifiedApplication = useRef<string | null>(null);
+  const handledAcceptance = useRef<SeriesPlayerRadarOperation | undefined>(undefined);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -57,62 +66,93 @@ export function usePlayerRadarAdminModel(
   const [checkingOperation, setCheckingOperation] = useState(false);
   const [checkError, setCheckError] = useState<unknown>();
   const optionsQuery = useQuery(seriesAnalysisOptionsQueryOptions());
-  const stateQuery = useQuery(seriesPlayerRadarStateQueryOptions(gameTitleId));
-  const state = stateQuery.data;
+  const stateOptions = seriesPlayerRadarStateQueryOptions(gameTitleId);
+  const canReadState = authorization.canRead("operations", stateOptions.queryKey);
+  const stateQuery = useQuery({
+    ...stateOptions,
+    enabled: () => canReadState && authorization.canRead("operations", stateOptions.queryKey),
+  });
+  const state = authorization.retained.operations ? stateQuery.data : undefined;
   const title = optionsQuery.data?.titles.find((entry) => entry.gameTitleId === gameTitleId);
   const maps = title?.maps ?? [];
   const candidate = state?.candidate;
   const previewId = candidate?.latestPreview?.previewId;
-  const previewQuery = useQuery(
-    seriesPlayerRadarPreviewQueryOptions(
-      previewId
-        ? {
-            gameTitleId,
-            previewId,
-            seasonMasterId: scope.seasonMasterId || undefined,
-            mapMasterId: scope.mapMasterId || undefined,
-          }
-        : undefined,
-    ),
+  const previewOptions = seriesPlayerRadarPreviewQueryOptions(
+    previewId
+      ? {
+          gameTitleId,
+          previewId,
+          seasonMasterId: scope.seasonMasterId || undefined,
+          mapMasterId: scope.mapMasterId || undefined,
+        }
+      : undefined,
   );
+  const previewQuery = useQuery({
+    ...previewOptions,
+    enabled: () =>
+      authorization.allowed.operations &&
+      Boolean(previewOptions.enabled) &&
+      authorization.canRead("operations", previewOptions.queryKey),
+  });
 
   const command = useMutation({
-    mutationFn: (request: SeriesPlayerRadarCommand) =>
-      runIdempotentMutation(keys, "seriesAnalysis.radarOperation", request, (options) =>
+    mutationFn: ({ request, lease }: RadarCommandRequest) => {
+      if (!mounted.current || !authorization.canCommit(lease))
+        throw new DOMException("権限を確認できません", "AbortError");
+      return runIdempotentMutation(keys, "seriesAnalysis.radarOperation", request, (options) =>
         requestSeriesPlayerRadarOperation(request, options),
-      ),
-    onMutate: () => setCheckError(undefined),
-    onSuccess: (response, request) => {
-      queryClient.setQueryData(
-        seriesPlayerRadarKeys.operation(request.gameTitleId, response.operationId),
-        response,
       );
-      // Acceptance is durable before these reads. A slow or failed refresh must not keep
-      // the confirmation dialog submitting or change the acknowledged operation outcome.
-      void Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: seriesPlayerRadarKeys.title(request.gameTitleId),
-        }),
-        queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.adminRoot() }),
-        queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.statusRoot() }),
-        queryClient.invalidateQueries({ queryKey: seriesPlayerRadarKeys.scopeStatusRoot() }),
-      ]);
-      if (
-        request.kind === "apply" &&
-        ["pending", "running", "succeeded"].includes(response.status) &&
-        mounted.current &&
-        notifiedApplication.current !== response.operationId
-      ) {
-        notifiedApplication.current = response.operationId;
-        onApplyAccepted?.(response.operationId);
-      }
+    },
+    onMutate: () => setCheckError(undefined),
+    onError: (error, { lease }) => {
+      if (mounted.current) authorization.reportError(error, lease);
     },
     onSettled: () => {
       commandPending.current = false;
     },
   });
 
-  const accepted = command.data;
+  // Keep a confirmed receipt during temporary auth checks. Its cache updates and navigation
+  // resume once for the same authorized owner; a revoked owner never recreates protected data.
+  useEffect(() => {
+    const response = command.data;
+    const submitted = command.variables;
+    if (
+      !response ||
+      !submitted ||
+      handledAcceptance.current === response ||
+      !authorization.canCommit(submitted.lease)
+    )
+      return;
+    handledAcceptance.current = response;
+    const { request } = submitted;
+    queryClient.setQueryData(
+      seriesPlayerRadarKeys.operation(request.gameTitleId, response.operationId),
+      response,
+    );
+    // Read reconciliation does not keep the already accepted confirmation submitting.
+    void Promise.all([
+      queryClient.invalidateQueries({ queryKey: seriesPlayerRadarKeys.title(request.gameTitleId) }),
+      queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.adminRoot() }),
+      queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.statusRoot() }),
+      queryClient.invalidateQueries({ queryKey: seriesPlayerRadarKeys.scopeStatusRoot() }),
+    ]);
+    if (
+      request.kind === "apply" &&
+      ["pending", "running", "succeeded"].includes(response.status) &&
+      notifiedApplication.current !== response.operationId
+    ) {
+      notifiedApplication.current = response.operationId;
+      onApplyAccepted?.(response.operationId);
+    }
+  }, [authorization, command.data, command.variables, onApplyAccepted, queryClient]);
+
+  const currentCommand = command.variables
+    ? authorization.isCurrent(command.variables.lease)
+    : false;
+  const submittedRequest = command.variables?.request;
+  const commandError = currentCommand ? command.error : undefined;
+  const accepted = currentCommand ? command.data : undefined;
   const operations = state?.operations ?? [];
   const acceptedOperation = accepted
     ? (operations.find((operation) => operation.operationId === accepted.operationId) ?? accepted)
@@ -123,17 +163,21 @@ export function usePlayerRadarAdminModel(
   const latestOperation = activeOperation ?? acceptedOperation ?? operations[0];
   const operationInProgress =
     latestOperation?.status === "pending" || latestOperation?.status === "running";
-  const communicationUnknown = radarSubmissionUncertain(command.error);
+  const communicationUnknown = radarSubmissionUncertain(commandError);
   const conflictNeedsRefresh =
-    !communicationUnknown &&
-    command.error &&
-    normalizeUnknownApiError(command.error).status === 409;
+    !communicationUnknown && commandError && normalizeUnknownApiError(commandError).status === 409;
+  const permissionReason = authorization.allowed.operations
+    ? null
+    : authorization.paused
+      ? "権限を確認できるまで操作できません。"
+      : "運用担当の権限が必要です。";
   const busyReason =
-    command.isPending || checkingOperation
+    permissionReason ??
+    (command.isPending || checkingOperation
       ? "操作を受け付けています。"
       : communicationUnknown
         ? "操作の状態を確認してください。"
-        : null;
+        : null);
   const operationReason =
     busyReason ?? (operationInProgress ? "現在の処理の完了を確認してください。" : null);
   const candidateActive =
@@ -141,43 +185,53 @@ export function usePlayerRadarAdminModel(
 
   const submit = (request: SeriesPlayerRadarCommand) => {
     if (commandPending.current) return;
+    const lease = authorization.begin("operations");
+    if (!lease) return;
     commandPending.current = true;
-    command.mutate(request);
+    command.mutate({ request, lease });
   };
   const submitAsync = async (request: SeriesPlayerRadarCommand) => {
     if (commandPending.current) return;
+    const lease = authorization.begin("operations");
+    if (!lease) throw new DOMException("権限を確認できません", "AbortError");
     commandPending.current = true;
-    await command.mutateAsync(request);
+    await command.mutateAsync({ request, lease });
   };
   const refresh = async () => {
+    const lease = authorization.begin("operations");
+    if (!lease) return;
     setCheckError(undefined);
     const result = await stateQuery.refetch();
+    if (!mounted.current || !authorization.canCommit(lease)) return;
     await optionsQuery.refetch();
+    if (!mounted.current || !authorization.canCommit(lease)) return;
     if (result.data?.candidate?.latestPreview?.previewId === previewId && previewId)
       await previewQuery.refetch();
+    if (!mounted.current || !authorization.canCommit(lease)) return;
     if (result.isSuccess && conflictNeedsRefresh) command.reset();
   };
   const checkOperation = async () => {
     if (checkingOperation || commandPending.current) return;
+    const lease = authorization.begin("operations");
+    if (!lease) return;
     setCheckingOperation(true);
     setCheckError(undefined);
     try {
-      if (communicationUnknown && command.variables) {
+      if (communicationUnknown && submittedRequest) {
         // The same key recovers the durable acceptance when its response was lost.
-        await submitAsync(command.variables);
+        await submitAsync(submittedRequest);
       } else if (latestOperation) {
-        const result = await getSeriesPlayerRadarOperation(
-          gameTitleId,
-          latestOperation.operationId,
+        await queryClient.fetchQuery(
+          seriesPlayerRadarOperationQueryOptions(gameTitleId, latestOperation.operationId),
         );
-        queryClient.setQueryData(
-          seriesPlayerRadarKeys.operation(gameTitleId, result.operationId),
-          result,
-        );
+        if (!mounted.current || !authorization.canCommit(lease)) return;
         await stateQuery.refetch();
       }
     } catch (error) {
-      setCheckError(error);
+      if (mounted.current && authorization.isCurrent(lease)) {
+        setCheckError(error);
+        authorization.reportError(error, lease);
+      }
     } finally {
       setCheckingOperation(false);
     }
@@ -263,7 +317,7 @@ export function usePlayerRadarAdminModel(
       : null;
   const feedbackError =
     checkError ??
-    (!communicationUnknown ? command.error : null) ??
+    (!communicationUnknown ? commandError : null) ??
     (shouldShowQueryError(stateQuery) ? stateQuery.error : null) ??
     (shouldShowQueryError(optionsQuery) ? optionsQuery.error : null);
   const normalizedError = feedbackError ? normalizeDisplayApiError(feedbackError) : null;
@@ -336,25 +390,26 @@ export function usePlayerRadarAdminModel(
         feedback,
         communicationUnknown,
         applyDisabledReason,
-        applyPending: command.isPending && command.variables?.kind === "apply",
+        applyPending: command.isPending && submittedRequest?.kind === "apply",
         actions: {
           refresh: {
             disabledReason:
-              stateQuery.isFetching || previewQuery.isFetching || command.isPending
+              permissionReason ??
+              (stateQuery.isFetching || previewQuery.isFetching || command.isPending
                 ? "状態を更新中です。"
-                : null,
+                : null),
             pending: stateQuery.isFetching || previewQuery.isFetching,
             run: refresh,
           },
           generate: {
-            pending: command.isPending && command.variables?.kind === "candidate",
+            pending: command.isPending && submittedRequest?.kind === "candidate",
             disabledReason:
               operationReason ??
               (candidateActive ? "現在の変更案を確認または取り下げてください。" : missingRecords),
             run: () => submit({ gameTitleId, kind: "candidate" }),
           },
           rebuildPreview: {
-            pending: command.isPending && command.variables?.kind === "preview",
+            pending: command.isPending && submittedRequest?.kind === "preview",
             disabledReason: operationReason,
             run: () => {
               if (candidate)
@@ -362,7 +417,7 @@ export function usePlayerRadarAdminModel(
             },
           },
           withdraw: {
-            pending: command.isPending && command.variables?.kind === "withdraw",
+            pending: command.isPending && submittedRequest?.kind === "withdraw",
             disabledReason: busyReason,
             run: () =>
               candidate
@@ -370,7 +425,7 @@ export function usePlayerRadarAdminModel(
                 : undefined,
           },
           restore: {
-            pending: command.isPending && command.variables?.kind === "restore",
+            pending: command.isPending && submittedRequest?.kind === "restore",
             disabledReason:
               operationReason ??
               (candidateActive ? "現在の変更案を確認または取り下げてください。" : null),
@@ -382,7 +437,7 @@ export function usePlayerRadarAdminModel(
               }),
           },
           retry: {
-            pending: command.isPending && command.variables?.kind === "retry",
+            pending: command.isPending && submittedRequest?.kind === "retry",
             disabledReason:
               operationReason ??
               (candidate?.status === "invalid" || candidate?.status === "unavailable"
@@ -398,7 +453,9 @@ export function usePlayerRadarAdminModel(
             },
           },
           checkOperation: {
-            disabledReason: checkingOperation || command.isPending ? "操作を確認中です。" : null,
+            disabledReason:
+              permissionReason ??
+              (checkingOperation || command.isPending ? "操作を確認中です。" : null),
             pending: checkingOperation,
             run: checkOperation,
           },
@@ -416,23 +473,29 @@ export function usePlayerRadarAdminModel(
             });
           },
           acknowledge: (evidenceKey) => submit({ gameTitleId, kind: "acknowledge", evidenceKey }),
-          selectSeason: (seasonMasterId) =>
+          selectSeason: (seasonMasterId) => {
+            if (!authorization.begin("operations")) return;
             setScope((current) => ({
               ...current,
               seasonMasterId,
               seasonName:
                 title?.seasons.find((season) => season.seasonMasterId === seasonMasterId)
                   ?.displayName ?? current.seasonName,
-            })),
-          selectMap: (mapMasterId) =>
+            }));
+          },
+          selectMap: (mapMasterId) => {
+            if (!authorization.begin("operations")) return;
             setScope((current) => ({
               ...current,
               mapMasterId,
               mapName:
                 maps.find((map) => map.mapMasterId === mapMasterId)?.displayName ?? current.mapName,
-            })),
-          resetPreviewFilter: () =>
-            setScope({ seasonMasterId: "", mapMasterId: "", seasonName: "", mapName: "" }),
+            }));
+          },
+          resetPreviewFilter: () => {
+            if (authorization.begin("operations"))
+              setScope({ seasonMasterId: "", mapMasterId: "", seasonName: "", mapName: "" });
+          },
         },
       }
     : null;

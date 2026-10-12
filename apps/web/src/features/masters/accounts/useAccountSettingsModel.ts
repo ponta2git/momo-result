@@ -1,10 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useActionState, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { accountRoleOptions } from "@/features/masters/accounts/accountRoles";
 import {
   cacheSavedAccount,
-  cacheSelfDemotion,
   invalidateAdminAccountCaches,
 } from "@/features/masters/accounts/adminAccountCache";
 import { createLoginAccount, updateLoginAccount } from "@/shared/api/adminAccounts";
@@ -24,7 +23,9 @@ import {
 import { adminLoginAccountsQueryOptions } from "@/shared/api/queryOptions";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { reportSelfAccountDisabled } from "@/shared/auth/accountOperationNotice";
-import { useAuth } from "@/shared/auth/useAuth";
+import type { AuthorizationLease } from "@/shared/auth/authorization";
+import { useAuthorization } from "@/shared/auth/useAuthorization";
+import { useAuthorizedAction } from "@/shared/auth/useAuthorizedAction";
 import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
@@ -69,89 +70,150 @@ const initialCreateAccountState = { error: "", formKey: 0 };
 
 /** Keeps account workflows alive while the user moves between settings tabs. */
 export function useAccountSettingsModel(queryEnabled = true): AccountSettingsModel {
-  const auth = useAuth();
+  const authorization = useAuthorization();
+  const { auth } = authorization;
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
   const [createOpen, setCreateOpen] = useState(false);
-  const canManageAccounts = auth.auth?.role === "admin";
+  const canManageAccounts = authorization.allowed.admin;
+  const [createEpoch, setCreateEpoch] = useState(authorization.epoch.admin);
+  const [createdReceipt, setCreatedReceipt] = useState<{
+    saved: LoginAccountResponse;
+    lease: AuthorizationLease;
+  }>();
+  const applied = useRef(new WeakSet<LoginAccountResponse>());
+  if (createEpoch !== authorization.epoch.admin) {
+    setCreateEpoch(authorization.epoch.admin);
+    setCreateOpen(false);
+    setCreatedReceipt(undefined);
+  }
   const accountsQuery = useQuery({
     ...adminLoginAccountsQueryOptions(),
-    enabled: queryEnabled && canManageAccounts,
+    enabled: () =>
+      queryEnabled &&
+      canManageAccounts &&
+      authorization.canRead("admin", adminLoginAccountsQueryOptions().queryKey),
   });
 
-  const [createState, createAction, createPending] = useActionState<
-    typeof initialCreateAccountState,
-    FormData
-  >(async (previous, formData) => {
-    const playerMemberId = String(formData.get("playerMemberId") ?? "");
-    const role = accountRoleOptions.find((option) => option.value === formData.get("role"))?.value;
-    if (!role) return { error: "ロールを選択してください", formKey: previous.formKey };
-    const request: CreateLoginAccountRequest = {
-      discordUserId: String(formData.get("discordUserId") ?? ""),
-      displayName: String(formData.get("displayName") ?? ""),
-      role,
-      loginEnabled: formData.get("loginEnabled") === "on",
-      ...(playerMemberId ? { playerMemberId } : {}),
-    };
-
-    try {
-      const created = await runIdempotentMutation(
-        idempotencyKeys,
-        "adminAccounts.createLoginAccount",
-        request,
-        (options) => createLoginAccount(request, options),
-      );
-      await cacheSavedAccount(queryClient, created);
-      await invalidateAdminAccountCaches(queryClient);
-      setCreateOpen(false);
-      showToast({ title: "アカウントを追加しました", tone: "success" });
-      return { error: "", formKey: previous.formKey + 1 };
-    } catch (error) {
-      return {
-        error: formatApiError(error, "ログインアカウントの作成に失敗しました"),
-        formKey: previous.formKey,
+  const [createState, createAction, createPending] = useAuthorizedAction<
+    typeof initialCreateAccountState
+  >(
+    authorization,
+    "admin",
+    async (previous, formData, lease) => {
+      const playerMemberId = String(formData.get("playerMemberId") ?? "");
+      const role = accountRoleOptions.find(
+        (option) => option.value === formData.get("role"),
+      )?.value;
+      if (!role) return { error: "ロールを選択してください", formKey: previous.formKey };
+      const request: CreateLoginAccountRequest = {
+        discordUserId: String(formData.get("discordUserId") ?? ""),
+        displayName: String(formData.get("displayName") ?? ""),
+        role,
+        loginEnabled: formData.get("loginEnabled") === "on",
+        ...(playerMemberId ? { playerMemberId } : {}),
       };
-    }
-  }, initialCreateAccountState);
+
+      try {
+        const created = await runIdempotentMutation(
+          idempotencyKeys,
+          "adminAccounts.createLoginAccount",
+          request,
+          (options) => createLoginAccount(request, options),
+        );
+        if (authorization.isCurrent(lease)) setCreatedReceipt({ saved: created, lease });
+        return { error: "", formKey: previous.formKey };
+      } catch (error) {
+        authorization.reportError(error, lease);
+        if (!authorization.isCurrent(lease)) return previous;
+        return {
+          error: formatApiError(error, "ログインアカウントの作成に失敗しました"),
+          formKey: previous.formKey,
+        };
+      }
+    },
+    initialCreateAccountState,
+  );
 
   const updateMutation = useMutation({
     mutationFn: ({
       accountId,
       request,
+      lease,
     }: {
       accountId: string;
       request: UpdateLoginAccountRequest;
-    }) =>
-      runIdempotentMutation(
+      lease: AuthorizationLease;
+    }) => {
+      if (!authorization.canCommit(lease))
+        throw new DOMException("権限を確認できません", "AbortError");
+      return runIdempotentMutation(
         idempotencyKeys,
         "adminAccounts.updateLoginAccount",
         { accountId, request },
         (options) => updateLoginAccount(accountId, request, options),
-      ),
-    onSuccess: async (saved, { accountId, request }) => {
-      const selfDisabled = accountId === auth.auth?.accountId && request.loginEnabled === false;
-      if (selfDisabled) reportSelfAccountDisabled(accountId);
-      const selfDemoted = accountId === auth.auth?.accountId && saved.role !== "admin";
-      if (selfDemoted && !selfDisabled) {
-        await cacheSelfDemotion(queryClient, saved);
-      } else {
-        await cacheSavedAccount(queryClient, saved);
-        await invalidateAdminAccountCaches(queryClient);
-      }
-      if (!selfDisabled) showToast({ title: "アカウント設定を更新しました", tone: "success" });
+      );
     },
+    onSuccess: async (saved, { accountId, request, lease }) => {
+      if (!authorization.isSameAccount(lease)) return;
+      const selfDisabled = accountId === lease.accountId && request.loginEnabled === false;
+      const selfDemoted = accountId === lease.accountId && saved.role !== "admin";
+      if (selfDisabled) {
+        if (authorization.isCurrent(lease)) reportSelfAccountDisabled(accountId);
+        await authorization.recheck();
+      } else if (selfDemoted) {
+        await authorization.acceptSelfRole(lease, saved.role);
+      }
+    },
+    onError: (error, { lease }) => authorization.reportError(error, lease),
   });
 
-  const refreshAccounts = async () =>
-    canManageAccounts && (await accountsQuery.refetch()).isSuccess;
-  const updateAccount = async (accountId: string, request: UpdateLoginAccountRequest) => {
-    await updateMutation.mutateAsync({ accountId, request });
-  };
+  const updated = updateMutation.data;
+  const updateVariables = updateMutation.variables;
+  useEffect(() => {
+    const receipt =
+      createdReceipt ??
+      (updated && updateVariables ? { saved: updated, lease: updateVariables.lease } : undefined);
+    if (!receipt || applied.current.has(receipt.saved) || !authorization.canCommit(receipt.lease))
+      return;
+    applied.current.add(receipt.saved);
+    void (async () => {
+      await cacheSavedAccount(queryClient, receipt.saved, () =>
+        authorization.canCommit(receipt.lease),
+      );
+      if (!authorization.canCommit(receipt.lease)) {
+        applied.current.delete(receipt.saved);
+        return;
+      }
+      await invalidateAdminAccountCaches(queryClient);
+      if (!authorization.isCurrent(receipt.lease)) return;
+      if (createdReceipt) {
+        setCreateOpen(false);
+        setCreatedReceipt(undefined);
+        showToast({ title: "アカウントを追加しました", tone: "success" });
+      } else {
+        showToast({ title: "アカウント設定を更新しました", tone: "success" });
+      }
+    })();
+  }, [authorization, createdReceipt, queryClient, updated, updateVariables]);
 
-  const accounts = canManageAccounts ? (accountsQuery.data?.items ?? []) : [];
+  const refreshAccounts = async () =>
+    Boolean(authorization.begin("admin")) && (await accountsQuery.refetch()).isSuccess;
+  const updateAccount = async (accountId: string, request: UpdateLoginAccountRequest) => {
+    const lease = authorization.begin("admin");
+    if (!lease) throw new DOMException("権限を確認できません", "AbortError");
+    await updateMutation.mutateAsync({ accountId, request, lease });
+  };
+  const currentCreatePending =
+    createPending || Boolean(createdReceipt && authorization.isCurrent(createdReceipt.lease));
+  const currentUpdatePending =
+    updateMutation.isPending &&
+    Boolean(updateVariables && authorization.isCurrent(updateVariables.lease));
+
+  const accounts = authorization.retained.admin ? (accountsQuery.data?.items ?? []) : [];
 
   const refresh = {
-    pending: accountsQuery.isFetching && !createPending && !updateMutation.isPending,
+    pending: accountsQuery.isFetching && !currentCreatePending && !currentUpdatePending,
     run: refreshAccounts,
   };
   const loadFailed = useRetryNotice(
@@ -185,16 +247,18 @@ export function useAccountSettingsModel(queryEnabled = true): AccountSettingsMod
       action: createAction,
       error: createState.error,
       formKey: createState.formKey,
-      open: createOpen,
-      pending: createPending,
-      setOpen: setCreateOpen,
+      open: authorization.retained.admin && createOpen,
+      pending: currentCreatePending,
+      setOpen: (open) => {
+        if (!open || authorization.can("admin")) setCreateOpen(open);
+      },
     },
     list,
-    pending: createPending || updateMutation.isPending,
+    pending: currentCreatePending || currentUpdatePending,
     update: {
-      pending: updateMutation.isPending,
+      pending: currentUpdatePending,
       pendingRequestFor: (accountId) =>
-        updateMutation.isPending && updateMutation.variables?.accountId === accountId
+        currentUpdatePending && updateMutation.variables?.accountId === accountId
           ? updateMutation.variables.request
           : undefined,
       run: updateAccount,

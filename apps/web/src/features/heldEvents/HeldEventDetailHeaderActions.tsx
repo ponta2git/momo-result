@@ -6,7 +6,6 @@ import { LinkButton } from "@/shared/ui/actions/LinkButton";
 
 type HeldEventDetailHeaderActionsProps = {
   exportHref: string;
-  showHistoryLink?: boolean;
   refresh?:
     | {
         pending: boolean;
@@ -16,11 +15,10 @@ type HeldEventDetailHeaderActionsProps = {
     | undefined;
 };
 
-/** Keeps route-known detail navigation stable while the optional refresh command changes state. */
+/** Offers operations for the loaded event and its current refresh state. */
 export function HeldEventDetailHeaderActions({
   exportHref,
   refresh,
-  showHistoryLink = false,
 }: HeldEventDetailHeaderActionsProps) {
   return (
     <nav aria-label="この開催の関連操作" className={inlineActionGroupClass}>
@@ -40,11 +38,6 @@ export function HeldEventDetailHeaderActions({
         >
           更新
         </Button>
-      ) : null}
-      {showHistoryLink ? (
-        <LinkButton size="sm" to="/held-events" variant="quiet">
-          開催履歴を開く
-        </LinkButton>
       ) : null}
     </nav>
   );

@@ -1,4 +1,3 @@
-import { sanitizeReturnTo, withReturnTo } from "@/shared/navigation/returnTo";
 import { PageLoadingFallback } from "@/shared/ui/feedback/PageLoadingFallback";
 import type {
   PageLoadingContentToolbarShape,
@@ -8,7 +7,6 @@ import type {
 import type { PageContentSurfacePadding } from "@/shared/ui/layout/PageContentSurface";
 import type { PageFrameWidth } from "@/shared/ui/layout/PageFrame";
 import type { PageHeaderDescriptionStatus } from "@/shared/ui/layout/PageHeader";
-import { appendHandoffIdToReturnTo } from "@/shared/workflows/matchWorkspaceMasterHandoff";
 import { workspaceSampleStatus } from "@/shared/workflows/matchWorkspacePresentation";
 
 type RouteSuspenseFallbackProps = {
@@ -20,7 +18,6 @@ type RouteSuspenseFallbackProps = {
 
 type RouteLoadingPresentation = {
   contentToolbar?: PageLoadingContentToolbarShape | undefined;
-  contextNoticeSlot?: boolean;
   header?: PageLoadingHeaderShape | undefined;
   kind: NonNullable<PageLoadingFallbackProps["kind"]>;
   leadingActionSlot?: boolean;
@@ -28,43 +25,11 @@ type RouteLoadingPresentation = {
   width: PageFrameWidth;
 };
 
-export type RouteNavigationPresentation = {
-  href: string;
-  icon?: "back" | undefined;
-  label: string;
-};
-
-export type RouteHeaderActionPresentation = Omit<RouteNavigationPresentation, "icon"> & {
-  icon?: "download" | "manual" | "scan" | undefined;
-  size?: "md" | "sm" | undefined;
-  variant?: "quiet" | "secondary" | undefined;
-};
-
-type RouteHeaderActionsPresentationBase = {
-  items: readonly RouteHeaderActionPresentation[];
-};
-
-export type RouteHeaderActionsPresentation = RouteHeaderActionsPresentationBase &
-  (
-    | {
-        label: string;
-        semantics: "navigation";
-      }
-    | {
-        label?: string | undefined;
-        semantics?: "group" | undefined;
-      }
-  );
-
-export type RouteTerminalPresentation = {
+type RouteTerminalPresentation = {
   contentPadding: PageContentSurfacePadding;
-  contextNavigation?: RouteNavigationPresentation | undefined;
   description?: string | undefined;
   descriptionStatus?: PageHeaderDescriptionStatus | undefined;
   eyebrow?: string | undefined;
-  headerActions?: RouteHeaderActionsPresentation | undefined;
-  headerNavigation?: RouteNavigationPresentation | undefined;
-  leadingNavigation?: RouteNavigationPresentation | undefined;
   preserveHeader?: boolean | undefined;
   width: PageFrameWidth;
 };
@@ -73,14 +38,6 @@ type RoutePagePresentation = {
   loading: RouteLoadingPresentation;
   terminal: RouteTerminalPresentation;
 };
-
-function decodeRouteSegment(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}
 
 function defineRoutePresentation(
   loading: RouteLoadingPresentation,
@@ -99,47 +56,19 @@ function defineRoutePresentation(
 }
 
 /** Keeps pathname-to-layout knowledge in one app-layer owner for every route state. */
-export function routePagePresentation(pathname: string, search = ""): RoutePagePresentation {
+function routePagePresentation(pathname: string, search = ""): RoutePagePresentation {
   const normalizedPathname = pathname.replace(/\/+$/u, "") || "/";
-  const searchParams = new URLSearchParams(search);
-  const normalizedSearch = searchParams.size > 0 ? `?${searchParams.toString()}` : "";
-  const routeLocation = `${normalizedPathname}${normalizedSearch}`;
-  const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
-  const hasReturnTo = Boolean(returnTo);
 
   if (normalizedPathname === "/matches") {
-    return defineRoutePresentation(
-      {
-        contentToolbar: {
-          actionSize: "sm",
-          actionSlots: 2,
-          actionWidths: ["standard", "wide"],
-        },
-        kind: "list",
-        leadingActionSlot: hasReturnTo,
-        width: "standard",
+    return defineRoutePresentation({
+      contentToolbar: {
+        actionSize: "sm",
+        actionSlots: 2,
+        actionWidths: ["standard", "wide"],
       },
-      {
-        headerActions: {
-          items: [
-            {
-              href: withReturnTo("/ocr/new", routeLocation),
-              icon: "scan",
-              label: "OCR取り込み",
-              size: "sm",
-            },
-            {
-              href: withReturnTo("/matches/new", routeLocation),
-              icon: "manual",
-              label: "手入力で作成",
-              size: "sm",
-            },
-          ],
-          label: "試合を登録",
-        },
-        leadingNavigation: returnTo ? { href: returnTo, label: "前の画面へ戻る" } : undefined,
-      },
-    );
+      kind: "list",
+      width: "standard",
+    });
   }
   if (normalizedPathname === "/held-events") {
     return defineRoutePresentation({
@@ -147,29 +76,15 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
       width: "standard",
     });
   }
-  if (normalizedPathname === "/matches/new") {
-    return defineRoutePresentation(
-      {
-        contentToolbar: {
-          actionPlacement: "leading",
-          actionSize: "sm",
-          actionSlots: 1,
-          actionWidths: ["long"],
-        },
-        kind: "workspace",
-        width: "workspace",
-      },
-      {
-        headerNavigation: {
-          href: returnTo ?? "/matches",
-          label: "入力をやめる",
-        },
-      },
-    );
-  }
-  if (/^\/review\/[^/]+$/u.test(normalizedPathname)) {
+  if (
+    normalizedPathname === "/matches/new" ||
+    /^\/matches\/[^/]+\/edit$/u.test(normalizedPathname) ||
+    /^\/review\/[^/]+$/u.test(normalizedPathname)
+  ) {
     const descriptionStatus =
-      searchParams.get("sample") === "1" ? workspaceSampleStatus : undefined;
+      normalizedPathname.startsWith("/review/") && new URLSearchParams(search).get("sample") === "1"
+        ? workspaceSampleStatus
+        : undefined;
     return defineRoutePresentation(
       {
         contentToolbar: {
@@ -182,50 +97,15 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
         kind: "workspace",
         width: "workspace",
       },
-      {
-        descriptionStatus,
-        headerNavigation: {
-          href: returnTo ?? "/matches",
-          label: "入力をやめる",
-        },
-      },
-    );
-  }
-  if (/^\/matches\/[^/]+\/edit$/u.test(normalizedPathname)) {
-    return defineRoutePresentation(
-      {
-        contentToolbar: {
-          actionPlacement: "leading",
-          actionSize: "sm",
-          actionSlots: 1,
-          actionWidths: ["long"],
-        },
-        kind: "workspace",
-        width: "workspace",
-      },
-      {
-        headerNavigation: {
-          href: returnTo ?? normalizedPathname.slice(0, -"/edit".length),
-          label: "編集をやめる",
-        },
-      },
+      { descriptionStatus },
     );
   }
   if (normalizedPathname === "/ocr/new") {
-    return defineRoutePresentation(
-      {
-        kind: "workspace",
-        leadingActionSlot: true,
-        width: "standard",
-      },
-      {
-        leadingNavigation: {
-          href: returnTo ?? "/matches",
-          icon: "back",
-          label: "取り込みをやめる",
-        },
-      },
-    );
+    return defineRoutePresentation({
+      kind: "workspace",
+      leadingActionSlot: true,
+      width: "standard",
+    });
   }
   if (/^\/matches\/[^/]+$/u.test(normalizedPathname)) {
     return defineRoutePresentation(
@@ -241,42 +121,10 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
         leadingActionSlot: true,
         width: "wide",
       },
-      {
-        headerActions: {
-          items: [
-            {
-              href: withReturnTo(
-                `/exports?${new URLSearchParams({
-                  matchId: decodeRouteSegment(normalizedPathname.slice("/matches/".length)),
-                }).toString()}`,
-                routeLocation,
-              ),
-              icon: "download",
-              label: "この試合を出力",
-              size: "sm",
-              variant: "quiet",
-            },
-            {
-              href: withReturnTo(`${normalizedPathname}/edit`, routeLocation),
-              icon: "manual",
-              label: "試合結果を編集",
-              size: "sm",
-            },
-          ],
-          label: "この試合の関連操作",
-          semantics: "navigation",
-        },
-        leadingNavigation: {
-          href: returnTo ?? "/matches",
-          label: "前の画面へ戻る",
-        },
-        preserveHeader: true,
-      },
+      { preserveHeader: true },
     );
   }
   if (/^\/held-events\/[^/]+$/u.test(normalizedPathname)) {
-    const heldEventId = decodeRouteSegment(normalizedPathname.slice("/held-events/".length));
-    const exportParams = new URLSearchParams({ heldEventId, format: "csv" });
     return defineRoutePresentation(
       {
         header: {
@@ -293,41 +141,16 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
       {
         description: "試合数・下書き数は未取得です。",
         eyebrow: "開催記録",
-        headerActions: {
-          items: [
-            {
-              href: withReturnTo(`/exports?${exportParams.toString()}`, routeLocation),
-              icon: "download",
-              label: "CSV出力",
-              size: "sm",
-              variant: "quiet",
-            },
-          ],
-          label: "この開催の関連操作",
-          semantics: "navigation",
-        },
-        leadingNavigation: {
-          href: returnTo ?? "/held-events",
-          label: "開催履歴へ戻る",
-        },
         preserveHeader: true,
       },
     );
   }
   if (normalizedPathname === "/analytics/series") {
-    return defineRoutePresentation(
-      {
-        kind: "comparison",
-        leadingActionSlot: hasReturnTo,
-        loadingLabel: "戦績比較を読み込んでいます",
-        width: "wide",
-      },
-      {
-        leadingNavigation: returnTo
-          ? { href: returnTo, icon: "back", label: "前の画面へ戻る" }
-          : undefined,
-      },
-    );
+    return defineRoutePresentation({
+      kind: "comparison",
+      loadingLabel: "戦績比較を読み込んでいます",
+      width: "wide",
+    });
   }
   if (normalizedPathname === "/admin/analysis") {
     return defineRoutePresentation({
@@ -337,34 +160,16 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
     });
   }
   if (normalizedPathname === "/admin/masters") {
-    const handoffId = searchParams.get("handoffId");
-    const returnDestination =
-      returnTo && handoffId ? appendHandoffIdToReturnTo(returnTo, handoffId) : returnTo;
-    return defineRoutePresentation(
-      {
-        contextNoticeSlot: hasReturnTo,
-        kind: "catalog",
-        loadingLabel: "設定管理を読み込んでいます",
-        width: "standard",
-      },
-      {
-        contextNavigation: returnDestination
-          ? { href: returnDestination, label: "元の画面へ戻る" }
-          : undefined,
-      },
-    );
+    return defineRoutePresentation({
+      kind: "catalog",
+      loadingLabel: "設定管理を読み込んでいます",
+      width: "standard",
+    });
   }
   if (normalizedPathname === "/exports") {
     return defineRoutePresentation(
-      {
-        kind: "form",
-        leadingActionSlot: hasReturnTo,
-        width: "narrow",
-      },
-      {
-        contentPadding: "compact",
-        leadingNavigation: returnTo ? { href: returnTo, label: "前の画面へ戻る" } : undefined,
-      },
+      { kind: "form", width: "narrow" },
+      { contentPadding: "compact" },
     );
   }
   return defineRoutePresentation({
@@ -373,20 +178,11 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
   });
 }
 
-export function routeLoadingPresentation(pathname: string, search = ""): RouteLoadingPresentation {
-  return routePagePresentation(pathname, search).loading;
-}
-
 export function routeTerminalPresentation(
   pathname: string,
   search = "",
 ): RouteTerminalPresentation {
   return routePagePresentation(pathname, search).terminal;
-}
-
-/** Keeps terminal route states aligned with the ready/loading page width. */
-export function routeFrameWidth(pathname: string): PageFrameWidth {
-  return routeLoadingPresentation(pathname).width;
 }
 
 export function RouteSuspenseFallback({

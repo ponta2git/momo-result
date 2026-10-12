@@ -13,7 +13,6 @@ import { useMatchListLocationState } from "@/features/matches/list/useMatchListL
 import { useMatchListResource } from "@/features/matches/list/useMatchListResource";
 import { cursorForPage } from "@/shared/lib/cursorPagination";
 import type { PaginationState } from "@/shared/lib/pagination";
-import { withReturnTo } from "@/shared/navigation/returnTo";
 
 type RefreshModel = {
   pending: boolean;
@@ -49,7 +48,6 @@ export type MatchesListPageModel = {
     updating: boolean;
   };
   navigation: {
-    backHref: string | undefined;
     exportHref: string;
     manualCreateHref: string;
     ocrHref: string;
@@ -70,11 +68,10 @@ export function useMatchesListPageModel(): MatchesListPageModel {
   const resource = useMatchListResource({
     currentSearch: location.current,
     deferredSearch: location.deferred,
-    listReturnTo: location.listReturnTo,
     locationSettling: location.settling,
     resetCursorIfUnchanged: location.resetCursorIfUnchanged,
   });
-  const draftNavigation = useConfirmedDraftNavigationCommand(location.listReturnTo);
+  const draftNavigation = useConfirmedDraftNavigationCommand();
 
   const { checkingIds, errors, run: checkDraftStatus } = draftNavigation;
   const rowActions = useMemo<MatchListRowActions>(
@@ -125,10 +122,9 @@ export function useMatchesListPageModel(): MatchesListPageModel {
       updating: resource.list.updating,
     },
     navigation: {
-      backHref: location.parentReturnTo,
-      exportHref: withReturnTo("/exports", location.listReturnTo),
-      manualCreateHref: withReturnTo("/matches/new", location.listReturnTo),
-      ocrHref: withReturnTo("/ocr/new", location.listReturnTo),
+      exportHref: "/exports",
+      manualCreateHref: "/matches/new",
+      ocrHref: "/ocr/new",
     },
     summary: resource.summary,
   };

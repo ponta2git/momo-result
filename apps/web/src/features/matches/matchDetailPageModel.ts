@@ -33,14 +33,10 @@ export type MatchDetailReadyPageModel = {
   kind: "ready";
   match: MatchDetailResponse;
   navigation: {
-    backHref: string;
-    backLabel: string;
-    returnTo: string | undefined;
     comparisonHref: string;
     editHref: string;
     exportHref: string;
-    currentHeldEventHref: string | undefined;
-    fallbackReason: string | undefined;
+    heldEventHref: string;
     adjacent: DetailNavigation<MatchNeighbor>;
     adjacentState: "current" | "pending" | "failed" | "unavailable";
   };
@@ -51,12 +47,10 @@ type MatchDetailScreenState =
   | { kind: "loading" }
   | {
       kind: "notFound";
-      navigation: { backHref: string; backLabel: string; fallbackReason: string | undefined };
       refresh: MatchDetailRefreshModel;
     }
   | {
       kind: "loadFailed";
-      navigation: { backHref: string; backLabel: string; fallbackReason: string | undefined };
       refresh: MatchDetailRefreshModel;
     }
   | MatchDetailReadyPageModel;

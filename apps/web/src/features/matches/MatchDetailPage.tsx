@@ -1,4 +1,4 @@
-import { ArrowLeft, Download, PenSquare } from "lucide-react";
+import { Download, PenSquare } from "lucide-react";
 import type { Ref } from "react";
 import { useParams } from "react-router-dom";
 
@@ -56,9 +56,6 @@ function MatchDetailScreen() {
         <MatchDetailReadyContent page={page} editor={editor} titleRef={titleRef} />
       ) : (
         <MatchDetailLoadFailed
-          backHref={page.navigation.backHref}
-          backLabel={page.navigation.backLabel}
-          backNotice={page.navigation.fallbackReason}
           notFound={page.kind === "notFound"}
           retrying={page.refresh.pending}
           onRetry={page.refresh.run}
@@ -114,25 +111,10 @@ function MatchDetailReadyContent({
 
   return (
     <PageFrame className="min-w-0" width="wide">
-      <div className="grid gap-2">
-        <nav aria-label="試合詳細の移動" className={inlineActionGroupClass}>
-          <LinkButton
-            icon={<ArrowLeft aria-hidden="true" />}
-            size="sm"
-            to={navigation.backHref}
-            variant="quiet"
-          >
-            {navigation.backLabel}
-          </LinkButton>
-          {navigation.currentHeldEventHref ? (
-            <LinkButton to={navigation.currentHeldEventHref} size="sm" variant="quiet">
-              この試合の開催を見る
-            </LinkButton>
-          ) : null}
-        </nav>
-        {navigation.fallbackReason ? (
-          <p className={contentText.supporting}>{navigation.fallbackReason}</p>
-        ) : null}
+      <div>
+        <LinkButton to={navigation.heldEventHref} size="sm" variant="quiet">
+          この試合の開催を見る
+        </LinkButton>
       </div>
       <PageHeader
         title={`${formatMatchNoInEvent(match.matchNoInEvent)}の結果`}

@@ -22,7 +22,6 @@ function LocationStateHarness() {
         needs review
       </button>
       <output aria-label="current search">{JSON.stringify(state.current)}</output>
-      <output aria-label="list return path">{state.listReturnTo}</output>
       <output aria-label="location">{`${location.pathname}${location.search}${location.hash}`}</output>
       <button type="button" onClick={state.clear}>
         clear
@@ -72,11 +71,11 @@ describe("useMatchListLocationState", () => {
     },
   );
 
-  it("builds a canonical list return path from parsed URL state", () => {
+  it("parses list conditions and ignores unknown query parameters", () => {
     render(
       <MemoryRouter
         initialEntries={[
-          "/matches?status=broken&sort=updated_desc&pageSize=100&gameTitleId=%20game-1%20&unknown=1&returnTo=%2Fheld-events%2Fheld-1",
+          "/matches?status=broken&sort=updated_desc&pageSize=100&gameTitleId=%20game-1%20&unknown=1",
         ]}
       >
         <LocationStateHarness />
@@ -89,19 +88,12 @@ describe("useMatchListLocationState", () => {
       sort: "updated_desc",
       status: "all",
     });
-    expect(screen.getByLabelText("list return path")).toHaveTextContent(
-      "/matches?gameTitleId=game-1&sort=updated_desc&returnTo=%2Fheld-events%2Fheld-1",
-    );
   });
 
-  it("clears list state while preserving a safe parent return path", async () => {
+  it("clears list filters and pagination while retaining the fragment", async () => {
     const user = userEvent.setup();
     render(
-      <MemoryRouter
-        initialEntries={[
-          "/matches?status=confirmed&cursor=opaque&returnTo=%2Fheld-events%2Fheld-1",
-        ]}
-      >
+      <MemoryRouter initialEntries={["/matches?status=confirmed&cursor=opaque#results"]}>
         <LocationStateHarness />
       </MemoryRouter>,
     );
@@ -109,16 +101,11 @@ describe("useMatchListLocationState", () => {
     await user.click(screen.getByRole("button", { name: "clear" }));
 
     await waitFor(() =>
-      expect(screen.getByLabelText("location")).toHaveTextContent(
-        "/matches?returnTo=%2Fheld-events%2Fheld-1",
-      ),
-    );
-    expect(screen.getByLabelText("list return path")).toHaveTextContent(
-      "/matches?returnTo=%2Fheld-events%2Fheld-1",
+      expect(screen.getByLabelText("location")).toHaveTextContent("/matches#results"),
     );
   });
 
-  it("preserves the list fragment in detail return paths and filter changes", async () => {
+  it("preserves the list fragment when changing filters", async () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter initialEntries={["/matches?sort=updated_desc#results"]}>
@@ -126,17 +113,11 @@ describe("useMatchListLocationState", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByLabelText("list return path")).toHaveTextContent(
-      "/matches?sort=updated_desc#results",
-    );
     await user.click(screen.getByRole("button", { name: "confirmed" }));
     await waitFor(() =>
       expect(screen.getByLabelText("location")).toHaveTextContent(
         "/matches?status=confirmed&sort=updated_desc#results",
       ),
-    );
-    expect(screen.getByLabelText("list return path")).toHaveTextContent(
-      "/matches?status=confirmed&sort=updated_desc#results",
     );
   });
 });

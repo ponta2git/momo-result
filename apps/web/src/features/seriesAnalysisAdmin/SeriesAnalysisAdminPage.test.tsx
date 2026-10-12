@@ -5,11 +5,15 @@ import { http, HttpResponse } from "msw";
 import { createMemoryRouter, MemoryRouter, RouterProvider } from "react-router-dom";
 import { beforeAll, describe, expect, it } from "vitest";
 
+import { OperationsRoute } from "@/app/routeGuards";
 import { SeriesAnalysisAdminPage } from "@/features/seriesAnalysisAdmin/SeriesAnalysisAdminPage";
+import { seriesPlayerRadarKeys } from "@/shared/api/queryKeys";
+import { getAuthorization } from "@/shared/auth/authorization";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import { AppMotionProvider } from "@/shared/ui/motion/AppMotionProvider";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
+import { mswState } from "@/test/msw/fixtures";
 import { setupMsw } from "@/test/msw/lifecycle";
 import {
   makePlayerRadarOperation,
@@ -27,13 +31,20 @@ beforeAll(
   () => import("@/shared/api/generatedContracts/series-analysis-radar-validators.generated"),
 );
 
-function renderPage() {
+function renderPage(guarded = false) {
+  setDevUser();
   const queryClient = createTestQueryClient();
   render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={["/admin/series-analysis?gameTitleId=gt_momotetsu_2"]}>
         <AppMotionProvider>
-          <SeriesAnalysisAdminPage />
+          {guarded ? (
+            <OperationsRoute>
+              <SeriesAnalysisAdminPage />
+            </OperationsRoute>
+          ) : (
+            <SeriesAnalysisAdminPage />
+          )}
           <ToastHost />
         </AppMotionProvider>
       </MemoryRouter>
@@ -56,6 +67,262 @@ function rejectedCommand() {
 }
 
 describe("SeriesAnalysisAdminPage", () => {
+  it("lets an unlinked operator recalculate the selected title without offering all-title commands", async () => {
+    const user = userEvent.setup();
+    const account = mswState.loginAccounts.find((entry) => entry.accountId === "account_ponta")!;
+    account.role = "operator";
+    delete account.playerMemberId;
+    const submitted: unknown[] = [];
+    server.use(
+      http.post("/api/admin/series-analysis/recalculations", async ({ request }) => {
+        submitted.push(await request.json());
+        expect(request.headers.get("X-Momo-Account-Id")).toBe("account_ponta");
+        expect(request.headers.get("Idempotency-Key")).toBeTruthy();
+        return HttpResponse.json(
+          {
+            acceptedAt: "2026-08-09T02:00:00.000Z",
+            campaign: null,
+            requestId: "operator-recalculation",
+            schemaVersion: 1,
+            target: {
+              gameTitleId: "gt_momotetsu_2",
+              jobId: "operator-job",
+              requestDisposition: "created_job",
+            },
+            targetCount: 1,
+          },
+          { status: 202 },
+        );
+      }),
+    );
+    renderPage(true);
+    const recalculate = await screen.findByRole("button", { name: "この作品を再計算" });
+    expect(recalculate).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "全作品を再計算" })).not.toBeInTheDocument();
+    await user.click(recalculate);
+    expect(await screen.findByText("桃太郎電鉄2の再計算を受け付けました")).toBeVisible();
+    expect(submitted).toEqual([{ gameTitleId: "gt_momotetsu_2" }]);
+  });
+
+  it("closes the all-title confirmation on demotion while keeping the operator's radar scope", async () => {
+    const user = userEvent.setup();
+    const account = mswState.loginAccounts.find((entry) => entry.accountId === "account_ponta")!;
+    server.use(
+      http.get("/api/admin/series-analysis/radar", () =>
+        HttpResponse.json(makeReadyPlayerRadarState()),
+      ),
+      http.get("/api/admin/series-analysis/radar/preview", () =>
+        HttpResponse.json(makePlayerRadarPreview()),
+      ),
+    );
+    const client = renderPage(true);
+    await screen.findByRole("button", { name: "この作品を再計算" });
+    await user.click(screen.getByRole("tab", { name: "レーダーの採点基準" }));
+    await screen.findByRole("table", { name: "採点基準変更前後の比較" });
+    await selectOption(user, screen.getByRole("combobox", { name: "比較するマップ" }), "map_east");
+    await user.click(screen.getByRole("tab", { name: "分析の再計算" }));
+    await user.click(screen.getByRole("button", { name: "全作品を再計算" }));
+    expect(screen.getByRole("alertdialog")).toBeVisible();
+
+    account.role = "operator";
+    await act(() => getAuthorization(client, "account_ponta").recheck());
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "全作品を再計算" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "この作品を再計算" })).toBeEnabled();
+    await user.click(screen.getByRole("tab", { name: "レーダーの採点基準" }));
+    expect(screen.getByRole("combobox", { name: "比較するマップ" })).toHaveTextContent("東日本編");
+
+    account.role = "admin";
+    await act(() => getAuthorization(client, "account_ponta").recheck());
+    await user.click(screen.getByRole("tab", { name: "分析の再計算" }));
+    expect(screen.getByRole("button", { name: "全作品を再計算" })).toBeEnabled();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
+
+  it("allows an operator command while an obsolete all-title command settles without clearing the new pending state", async () => {
+    const user = userEvent.setup();
+    const account = mswState.loginAccounts.find((entry) => entry.accountId === "account_ponta")!;
+    const oldCommandGate = createDeferred();
+    const titleCommandGate = createDeferred();
+    const submitted: unknown[] = [];
+    let allRequests = 0;
+    const overview = makeSeriesAnalysisAdminOverview();
+    const selectedTitle = overview.selectedTitle;
+    if (!selectedTitle) throw new Error("Expected a selected title fixture");
+    server.use(
+      http.get("/api/admin/series-analysis/overview", ({ request }) => {
+        const isNext = new URL(request.url).searchParams.get("gameTitleId") === "title-next";
+        return HttpResponse.json({
+          ...overview,
+          titleOptions: [
+            ...overview.titleOptions,
+            { gameTitleId: "title-next", gameTitleName: "次の作品", confirmedMatchCount: 0 },
+          ],
+          selectedTitle: isNext
+            ? { ...selectedTitle, gameTitleId: "title-next", gameTitleName: "次の作品" }
+            : selectedTitle,
+        });
+      }),
+      http.post("/api/admin/series-analysis/recalculations/all", async () => {
+        allRequests += 1;
+        await oldCommandGate.promise;
+        return HttpResponse.json(
+          {
+            acceptedAt: "2026-08-09T02:00:00.000Z",
+            campaign: { campaignId: "old-campaign", status: "expanding" },
+            requestId: "obsolete-admin-command",
+            schemaVersion: 1,
+            target: null,
+            targetCount: 2,
+          },
+          { status: 202 },
+        );
+      }),
+      http.post("/api/admin/series-analysis/recalculations", async ({ request }) => {
+        submitted.push(await request.json());
+        await titleCommandGate.promise;
+        return HttpResponse.json(
+          {
+            acceptedAt: "2026-08-09T02:00:00.000Z",
+            campaign: null,
+            requestId: "current-operator-command",
+            schemaVersion: 1,
+            target: {
+              gameTitleId: "gt_momotetsu_2",
+              jobId: "operator-job",
+              requestDisposition: "created_job",
+            },
+            targetCount: 1,
+          },
+          { status: 202 },
+        );
+      }),
+    );
+    const client = renderPage(true);
+    await user.click(await screen.findByRole("button", { name: "全作品を再計算" }));
+    await user.click(
+      within(screen.getByRole("alertdialog")).getByRole("button", { name: "全作品を再計算" }),
+    );
+    await waitFor(() => expect(allRequests).toBe(1));
+
+    account.role = "operator";
+    await act(() => getAuthorization(client, "account_ponta").recheck());
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    const recalculate = screen.getByRole("button", { name: "この作品を再計算" });
+    expect(recalculate).toBeEnabled();
+    expect(screen.getByRole("button", { name: "状態を更新" })).toBeEnabled();
+    await user.click(recalculate);
+    await waitFor(() => expect(submitted).toEqual([{ gameTitleId: "gt_momotetsu_2" }]));
+
+    await act(async () => oldCommandGate.resolve());
+    await waitFor(() =>
+      expect(
+        client
+          .getMutationCache()
+          .getAll()
+          .some(
+            (mutation) =>
+              (mutation.state.data as { requestId?: string } | undefined)?.requestId ===
+              "obsolete-admin-command",
+          ),
+      ).toBe(true),
+    );
+    await selectOption(user, screen.getByRole("combobox", { name: "対象作品" }), "title-next");
+    expect(await screen.findByRole("heading", { name: "次の作品" })).toBeInTheDocument();
+    const pending = screen.getByRole("button", { name: "桃太郎電鉄2を受け付け中" });
+    expect(pending).toBeDisabled();
+    expect(screen.getByRole("button", { name: "状態を更新" })).toBeDisabled();
+    await user.click(pending);
+    expect(submitted).toHaveLength(1);
+
+    titleCommandGate.resolve();
+    expect(await screen.findByText("桃太郎電鉄2の再計算を受け付けました")).toBeVisible();
+    expect(screen.queryByText("2作品の再計算を受け付けました")).not.toBeInTheDocument();
+    expect(allRequests).toBe(1);
+    expect(submitted).toHaveLength(1);
+  });
+
+  it("retains a late radar acceptance during auth rechecking and resumes without another POST", async () => {
+    const user = userEvent.setup();
+    const commandGate = createDeferred();
+    const authGate = createDeferred();
+    const authStarted = createDeferred();
+    const submitted: unknown[] = [];
+    const operation = { ...makePlayerRadarOperation(), operationId: "accepted-while-checking" };
+    server.use(
+      http.get("/api/admin/series-analysis/radar", () =>
+        HttpResponse.json(makeReadyPlayerRadarState()),
+      ),
+      http.get("/api/admin/series-analysis/radar/preview", () =>
+        HttpResponse.json(makePlayerRadarPreview()),
+      ),
+      http.post("/api/admin/series-analysis/radar/operations", async ({ request }) => {
+        submitted.push(await request.json());
+        await commandGate.promise;
+        return HttpResponse.json(operation, { status: 202 });
+      }),
+    );
+    const client = renderPage(true);
+    await user.click(await screen.findByRole("tab", { name: "レーダーの採点基準" }));
+    const apply = await screen.findByRole("button", { name: "この変更案を適用する" });
+    await waitFor(() => expect(apply).toBeEnabled());
+    await user.click(apply);
+    await user.click(
+      within(screen.getByRole("alertdialog")).getByRole("button", { name: "作品全体に適用する" }),
+    );
+    await waitFor(() => expect(submitted).toHaveLength(1));
+    server.use(
+      http.get("/api/auth/me", async () => {
+        authStarted.resolve();
+        await authGate.promise;
+        return HttpResponse.json({
+          accountId: "account_ponta",
+          displayName: "ぽんた",
+          role: "admin",
+        });
+      }),
+    );
+    let recheck: Promise<void> | undefined;
+    await act(async () => {
+      recheck = getAuthorization(client, "account_ponta").recheck();
+      await authStarted.promise;
+    });
+    expect(screen.queryByRole("table", { name: "採点基準変更前後の比較" })).not.toBeInTheDocument();
+    await act(async () => commandGate.resolve());
+    await waitFor(() =>
+      expect(
+        client
+          .getMutationCache()
+          .getAll()
+          .some(
+            (mutation) =>
+              (mutation.state.data as { operationId?: string } | undefined)?.operationId ===
+              operation.operationId,
+          ),
+      ).toBe(true),
+    );
+    expect(
+      client.getQueryData(seriesPlayerRadarKeys.operation("gt_momotetsu_2", operation.operationId)),
+    ).toBeUndefined();
+    expect(submitted).toHaveLength(1);
+
+    await act(async () => {
+      authGate.resolve();
+      await recheck;
+    });
+    await waitFor(() =>
+      expect(screen.getByRole("dialog", { name: "採点基準の適用を受け付けました" })).toBeVisible(),
+    );
+    expect(screen.getByRole("tab", { name: "分析の再計算" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(
+      client.getQueryData(seriesPlayerRadarKeys.operation("gt_momotetsu_2", operation.operationId)),
+    ).toEqual(operation);
+    expect(submitted).toHaveLength(1);
+  });
+
   it("waits for the default title route to commit before accepting a manual refresh", async () => {
     setDevUser();
     const user = userEvent.setup();

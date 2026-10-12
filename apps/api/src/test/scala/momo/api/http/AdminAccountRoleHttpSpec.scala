@@ -42,44 +42,60 @@ final class AdminAccountRoleHttpSpec extends MomoCatsEffectSuite with HttpAppTes
     }
   }
 
-  app.test("invalid create roles, legacy fields, and unknown fields cannot create an account") { http =>
-    val valid = createBody(Json.fromString("operator"))
-    val invalidRoles = List(Json.Null, Json.fromString("owner"), Json.fromString("Operator"), Json.True,
-      Json.fromInt(1), Json.obj())
-    val invalid = invalidRoles.map(role => valid.mapObject(_.add("role", role))) ++ List(
-      valid.mapObject(_.remove("role")),
-      valid.mapObject(_.remove("role").add("isAdmin", Json.False)),
-      valid.mapObject(_.add("isAdmin", Json.False)),
-      valid.mapObject(_.add("unexpected", Json.True)),
-    )
-    for
-      before <- http.run(readGet(accountsUri)).flatMap(_.as[Json])
-      statuses <- invalid.traverse(body => http.run(writePost(accountsUri, body)).map(_.status))
-      after <- http.run(readGet(accountsUri)).flatMap(_.as[Json])
-    yield
-      assertEquals(statuses, List.fill(invalid.size)(Status.BadRequest))
-      assertEquals(after, before)
+  app.test("invalid create roles, legacy fields, and unknown fields cannot create an account") {
+    http =>
+      val valid = createBody(Json.fromString("operator"))
+      val invalidRoles = List(
+        Json.Null,
+        Json.fromString("owner"),
+        Json.fromString("Operator"),
+        Json.True,
+        Json.fromInt(1),
+        Json.obj()
+      )
+      val invalid = invalidRoles.map(role => valid.mapObject(_.add("role", role))) ++ List(
+        valid.mapObject(_.remove("role")),
+        valid.mapObject(_.remove("role").add("isAdmin", Json.False)),
+        valid.mapObject(_.add("isAdmin", Json.False)),
+        valid.mapObject(_.add("unexpected", Json.True)),
+      )
+      for
+        before <- http.run(readGet(accountsUri)).flatMap(_.as[Json])
+        statuses <- invalid.traverse(body => http.run(writePost(accountsUri, body)).map(_.status))
+        after <- http.run(readGet(accountsUri)).flatMap(_.as[Json])
+      yield
+        assertEquals(statuses, List.fill(invalid.size)(Status.BadRequest))
+        assertEquals(after, before)
   }
 
-  app.test("invalid patch fields reject the whole update without changing display name or role") { http =>
-    val invalidRoles = List(Json.Null, Json.fromString("owner"), Json.fromString("ADMIN"), Json.False,
-      Json.fromInt(1), Json.arr())
-    val invalid = invalidRoles.map(role => Json.obj(
-      "displayName" -> Json.fromString("must-not-change"),
-      "role" -> role,
-    )) ++ List(
-      Json.obj("isAdmin" -> Json.True),
-      Json.obj("displayName" -> Json.fromString("must-not-change"), "isAdmin" -> Json.True),
-      Json.obj("role" -> Json.fromString("admin"), "isAdmin" -> Json.True),
-      Json.obj("displayName" -> Json.fromString("must-not-change"), "unexpected" -> Json.True),
-    )
-    for
-      before <- http.run(readGet(accountsUri)).flatMap(_.as[Json])
-      statuses <- invalid.traverse(body => http.run(writePatch(targetUri, body)).map(_.status))
-      after <- http.run(readGet(accountsUri)).flatMap(_.as[Json])
-    yield
-      assertEquals(statuses, List.fill(invalid.size)(Status.BadRequest))
-      assertEquals(after, before)
+  app.test("invalid patch fields reject the whole update without changing display name or role") {
+    http =>
+      val invalidRoles = List(
+        Json.Null,
+        Json.fromString("owner"),
+        Json.fromString("ADMIN"),
+        Json.False,
+        Json.fromInt(1),
+        Json.arr()
+      )
+      val invalid = invalidRoles.map(role =>
+        Json.obj(
+          "displayName" -> Json.fromString("must-not-change"),
+          "role" -> role,
+        )
+      ) ++ List(
+        Json.obj("isAdmin" -> Json.True),
+        Json.obj("displayName" -> Json.fromString("must-not-change"), "isAdmin" -> Json.True),
+        Json.obj("role" -> Json.fromString("admin"), "isAdmin" -> Json.True),
+        Json.obj("displayName" -> Json.fromString("must-not-change"), "unexpected" -> Json.True),
+      )
+      for
+        before <- http.run(readGet(accountsUri)).flatMap(_.as[Json])
+        statuses <- invalid.traverse(body => http.run(writePatch(targetUri, body)).map(_.status))
+        after <- http.run(readGet(accountsUri)).flatMap(_.as[Json])
+      yield
+        assertEquals(statuses, List.fill(invalid.size)(Status.BadRequest))
+        assertEquals(after, before)
   }
 
   app.test("patch role omission retains the existing role and explicit roles change it") { http =>

@@ -93,7 +93,9 @@ final class RoleAuthorizationHttpSpec extends MomoCatsEffectSuite with HttpAppTe
     }
   }
 
-  app.test("operators cannot mutate titles, aliases, accounts, global notifications, or all titles") { http =>
+  app.test(
+    "operators cannot mutate titles, aliases, accounts, global notifications, or all titles"
+  ) { http =>
     val titleForm = Json.obj(
       "id" -> Json.fromString("title_denied"),
       "name" -> Json.fromString("Denied"),
@@ -122,7 +124,11 @@ final class RoleAuthorizationHttpSpec extends MomoCatsEffectSuite with HttpAppTe
       writeDelete(uri"/api/member-aliases/alias_denied", operator),
       readGet(uri"/api/admin/login-accounts", operator),
       writePost(uri"/api/admin/login-accounts", accountForm, operator),
-      writePatch(uri"/api/admin/login-accounts/account_ponta", Json.obj("role" -> Json.fromString("user")), operator),
+      writePatch(
+        uri"/api/admin/login-accounts/account_ponta",
+        Json.obj("role" -> Json.fromString("user")),
+        operator
+      ),
       readGet(uri"/api/admin/notification-settings", operator),
       writeRequest(Method.PUT, uri"/api/admin/notification-settings", operator).withEntity(Json.obj(
         "ocrCompleted" -> notification,
@@ -158,11 +164,14 @@ final class RoleAuthorizationHttpSpec extends MomoCatsEffectSuite with HttpAppTe
       _ <- assertProblem(preview, Status.NotFound, "NOT_FOUND", "radar preview")
       operation <- http.run(readGet(operationUri, operator))
       _ <- assertProblem(operation, Status.NotFound, "NOT_FOUND", "radar operation")
-      denied <- http.run(writePost(titleRecalculationUri, titleBody, user, Some("user-title-denied")))
+      denied <-
+        http.run(writePost(titleRecalculationUri, titleBody, user, Some("user-title-denied")))
       _ <- assertProblem(denied, Status.Forbidden, "FORBIDDEN", "Operator access")
-      noCsrf <- http.run(readRequest(Method.POST, titleRecalculationUri, operator).withEntity(titleBody))
+      noCsrf <-
+        http.run(readRequest(Method.POST, titleRecalculationUri, operator).withEntity(titleBody))
       _ <- assertProblem(noCsrf, Status.Forbidden, "FORBIDDEN", "CSRF")
-      accepted <- http.run(writePost(titleRecalculationUri, titleBody, operator, Some("operator-title")))
+      accepted <-
+        http.run(writePost(titleRecalculationUri, titleBody, operator, Some("operator-title")))
       body <- accepted.as[Json]
     yield
       assertEquals(overview.status, Status.Ok)
@@ -179,16 +188,25 @@ final class RoleAuthorizationHttpSpec extends MomoCatsEffectSuite with HttpAppTe
 
   app.test("operators may handle another operator's saved radar candidate") { http =>
     for
-      accepted <- http.run(writePost(operationsUri, candidateBody, operator, Some("operator-candidate")))
+      accepted <-
+        http.run(writePost(operationsUri, candidateBody, operator, Some("operator-candidate")))
       first <- accepted.as[Json]
       candidate = jsonField[String](first, "candidateId")
       operation = jsonField[String](first, "operationId")
-      observed <- http.run(readGet(Uri.unsafeFromString(
-        s"/api/admin/series-analysis/radar/operation?gameTitleId=$title&operationId=$operation"
-      ), otherOperator)).flatMap(_.as[Json])
-      withdrawn <- http.run(writePost(operationsUri, candidateBody.mapObject(
-        _.add("kind", Json.fromString("withdraw")).add("candidateId", Json.fromString(candidate))
-      ), otherOperator, Some("other-operator-withdraw")))
+      observed <- http.run(readGet(
+        Uri.unsafeFromString(
+          s"/api/admin/series-analysis/radar/operation?gameTitleId=$title&operationId=$operation"
+        ),
+        otherOperator
+      )).flatMap(_.as[Json])
+      withdrawn <- http.run(writePost(
+        operationsUri,
+        candidateBody.mapObject(
+          _.add("kind", Json.fromString("withdraw")).add("candidateId", Json.fromString(candidate))
+        ),
+        otherOperator,
+        Some("other-operator-withdraw")
+      ))
       state <- http.run(readGet(radarStateUri, otherOperator)).flatMap(_.as[Json])
     yield
       assertEquals(accepted.status, Status.Accepted)
@@ -197,23 +215,29 @@ final class RoleAuthorizationHttpSpec extends MomoCatsEffectSuite with HttpAppTe
       assertEquals(state.hcursor.downField("candidate").get[String]("status"), Right("withdrawn"))
   }
 
-  app.test("demotion rejects saved and new mutation keys while retaining accepted analysis and radar state") { http =>
+  app.test(
+    "demotion rejects saved and new mutation keys while retaining accepted analysis and radar state"
+  ) { http =>
     for
       all <- http.run(writePost(allRecalculationUri, allBody, managingAdmin, Some("saved-all")))
       _ = assertEquals(all.status, Status.Accepted)
-      titleResult <- http.run(writePost(titleRecalculationUri, titleBody, operator, Some("saved-title")))
+      titleResult <-
+        http.run(writePost(titleRecalculationUri, titleBody, operator, Some("saved-title")))
       _ = assertEquals(titleResult.status, Status.Accepted)
       radar <- http.run(writePost(operationsUri, candidateBody, operator, Some("saved-radar")))
       _ = assertEquals(radar.status, Status.Accepted)
       overviewBefore <- http.run(readGet(overviewUri)).flatMap(_.as[Json])
       radarBefore <- http.run(readGet(radarStateUri)).flatMap(_.as[Json])
       _ <- List(managingAdmin -> "operator", operator -> "user").traverse_ { case (account, role) =>
-        http.run(writePatch(Uri.unsafeFromString(s"/api/admin/login-accounts/$account"),
-          Json.obj("role" -> Json.fromString(role)))).map(response => assertEquals(response.status, Status.Ok))
+        http.run(writePatch(
+          Uri.unsafeFromString(s"/api/admin/login-accounts/$account"),
+          Json.obj("role" -> Json.fromString(role))
+        )).map(response => assertEquals(response.status, Status.Ok))
       }
       _ <- List("saved-all", "new-all").traverse_ { key =>
-        http.run(writePost(allRecalculationUri, allBody, managingAdmin, Some(key))).flatMap(response =>
-          assertProblem(response, Status.Forbidden, "FORBIDDEN", "Administrator access")
+        http.run(writePost(allRecalculationUri, allBody, managingAdmin, Some(key))).flatMap(
+          response =>
+            assertProblem(response, Status.Forbidden, "FORBIDDEN", "Administrator access")
         )
       }
       _ <- List(

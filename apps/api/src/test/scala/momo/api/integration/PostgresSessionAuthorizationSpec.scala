@@ -138,7 +138,9 @@ final class PostgresSessionAuthorizationSpec extends IntegrationSuite:
       yield assertEquals(afterDisabling, accepted)
     }
 
-  test("self-demotion keeps the same session operational and immediately removes administrator access"):
+  test(
+    "self-demotion keeps the same session operational and immediately removes administrator access"
+  ):
     withSessionApp(AccountRole.Admin) { fixture =>
       val demote = mutation(
         Method.PATCH,

@@ -47,10 +47,10 @@ final class InMemoryLoginAccountsRepository[F[_]: Sync] private (
   private[inmemory] def updateUnchecked(
       id: AccountId,
       data: UpdateLoginAccountData,
-  ): F[Option[LoginAccount]] = ref
+  ): F[(LoginAccountAdministrationUpdateResult, Boolean)] = ref
     .modify { accounts =>
       accounts.get(id) match
-        case None => (accounts, None)
+        case None => (accounts, (LoginAccountAdministrationUpdateResult.NotFound, false))
         case Some(existing) =>
           val updated = existing.copy(
             displayName = data.displayName.getOrElse(existing.displayName),
@@ -62,8 +62,14 @@ final class InMemoryLoginAccountsRepository[F[_]: Sync] private (
           val wouldRemoveLastAdmin = existing.loginEnabled && existing.role == AccountRole.Admin &&
             (!updated.loginEnabled || updated.role != AccountRole.Admin) &&
             accounts.values.count(a => a.loginEnabled && a.role == AccountRole.Admin) <= 1
-          if wouldRemoveLastAdmin then (accounts, None)
-          else (accounts.updated(id, updated), Some(updated))
+          if wouldRemoveLastAdmin then
+            (accounts, (LoginAccountAdministrationUpdateResult.LastEnabledAdmin, false))
+          else
+            val revokeSessions = existing.loginEnabled && !updated.loginEnabled
+            (
+              accounts.updated(id, updated),
+              (LoginAccountAdministrationUpdateResult.Updated(updated), revokeSessions),
+            )
     }
 final class InMemoryLoginAccountAdministrationRepository[F[_]: Sync](
     accounts: InMemoryLoginAccountsRepository[F],
@@ -72,37 +78,11 @@ final class InMemoryLoginAccountAdministrationRepository[F[_]: Sync](
   override def updateAndRevokeSessionsWhenDisabled(
       id: AccountId,
       data: UpdateLoginAccountData,
-  ): F[LoginAccountAdministrationUpdateResult] =
-    for
-      existing <- accounts.find(id)
-      result <- existing match
-        case None => Sync[F].pure(LoginAccountAdministrationUpdateResult.NotFound)
-        case Some(account) => updateExisting(account, data)
-    yield result
-
-  private def updateExisting(
-      existing: LoginAccount,
-      data: UpdateLoginAccountData,
   ): F[LoginAccountAdministrationUpdateResult] = accounts
-    .updateUnchecked(existing.id, data).flatMap {
-      case Some(updated) =>
-        val revokeSessions = existing.loginEnabled && !updated.loginEnabled
-        val revoke =
-          if revokeSessions then sessions.deleteByAccount(existing.id).void else Sync[F].unit
-        revoke.as(LoginAccountAdministrationUpdateResult.Updated(updated))
-      case None if wouldRemoveEnabledAdmin(existing, data) =>
-        Sync[F].pure(LoginAccountAdministrationUpdateResult.LastEnabledAdmin)
-      case None => Sync[F].pure(LoginAccountAdministrationUpdateResult.NotFound)
+    .updateUnchecked(id, data).flatMap { case (result, revokeSessions) =>
+      if revokeSessions then sessions.deleteByAccount(id).as(result)
+      else Sync[F].pure(result)
     }
-
-  private def wouldRemoveEnabledAdmin(
-      existing: LoginAccount,
-      data: UpdateLoginAccountData,
-  ): Boolean =
-    val nextLoginEnabled = data.loginEnabled.getOrElse(existing.loginEnabled)
-    val nextRole = data.role.getOrElse(existing.role)
-    existing.loginEnabled && existing.role == AccountRole.Admin &&
-    (!nextLoginEnabled || nextRole != AccountRole.Admin)
 
 object InMemoryLoginAccountsRepository:
   def create[F[_]: Sync](accounts: List[LoginAccount]): F[InMemoryLoginAccountsRepository[F]] = Ref

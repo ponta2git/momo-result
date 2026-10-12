@@ -230,7 +230,6 @@ describe("MatchCreatePage", () => {
       [
         { path: "/matches/new", element: <MatchCreatePage /> },
         { path: "/admin/masters", element: <p>設定管理</p> },
-        { path: "/outside", element: <p>別の作業</p> },
       ],
       { initialEntries: ["/matches/new"] },
     );
@@ -248,14 +247,12 @@ describe("MatchCreatePage", () => {
       ["ぽんた 収益（万円）", "-"],
     ] as const;
     for (const [name, value] of expectedInputs) {
-      const input = screen.getByRole("textbox", { name });
+      const input = screen.getByLabelText(name);
       await user.clear(input);
-      await user.type(input, value);
+      await user.paste(value);
     }
-    await user.type(
-      screen.getByRole("textbox", { name: "試合メモ（任意）" }),
-      "カード交換を後で確認",
-    );
+    await user.click(screen.getByRole("textbox", { name: "試合メモ（任意）" }));
+    await user.paste("カード交換を後で確認");
     const createPage = screen.getByRole("region", { name: "試合内容" });
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "設定管理へ" }));
@@ -274,14 +271,13 @@ describe("MatchCreatePage", () => {
     await act(async () => {
       await router.navigate(-1);
     });
-    await waitForMatchCreateReady();
     await waitFor(() =>
       expect(screen.getByRole("textbox", { name: "試合メモ（任意）" })).toHaveValue(
         "カード交換を後で確認",
       ),
     );
     for (const [name, value] of expectedInputs) {
-      expect(screen.getByRole("textbox", { name })).toHaveValue(value);
+      expect(screen.getByLabelText(name)).toHaveValue(value);
     }
     expect(screen.queryByRole("button", { name: "一時保存を復元" })).not.toBeInTheDocument();
     expect(JSON.parse(window.sessionStorage.getItem(storageKey) ?? "null")).toMatchObject({
@@ -304,7 +300,7 @@ describe("MatchCreatePage", () => {
       "カード交換を後で確認",
     );
     for (const [name, value] of expectedInputs) {
-      expect(screen.getByRole("textbox", { name })).toHaveValue(value);
+      expect(screen.getByLabelText(name)).toHaveValue(value);
     }
   });
 

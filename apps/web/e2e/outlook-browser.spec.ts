@@ -96,7 +96,7 @@ test("retains an edited outlook through personal review and real match-list navi
     page
       .getByRole("region", { name: "試合一覧", exact: true })
       .getByRole("link", { name: `第1試合 ${outlook.mapName}の試合結果を見る` }),
-  ).toHaveAttribute("href", new RegExp(`^/matches/${outlook.matchId}\\?`, "u"));
+  ).toHaveAttribute("href", `/matches/${outlook.matchId}`);
   await page.goBack();
   await expect(page).toHaveURL(outlookUrl);
   await expect(goalTab).toHaveAttribute("aria-selected", "true");

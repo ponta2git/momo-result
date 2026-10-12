@@ -84,7 +84,7 @@ function renderPage() {
 }
 
 describe("radar revision history", () => {
-  it("preserves unfinished threshold input while browsing another title's history", async () => {
+  it("keeps unfinished input when navigation is canceled and leaves the editor after confirmed discard", async () => {
     const user = userEvent.setup();
     server.use(
       http.get("/api/admin/series-analysis/radar", () =>
@@ -99,20 +99,42 @@ describe("radar revision history", () => {
     );
     const { router } = renderPage();
     await user.click(await screen.findByRole("tab", { name: "レーダーの採点基準" }));
-    await user.click(await screen.findByRole("button", { name: "適用中の基準を調整" }));
+    await user.click(await screen.findByRole("button", { name: "調整を始める" }));
     const threshold = await screen.findByRole("textbox", { name: "平均順位 2点の境界（位以下）" });
     await user.clear(threshold);
     await user.type(threshold, "-");
     await user.click(screen.getByRole("tab", { name: "改訂履歴" }));
+    const confirmation = await screen.findByRole("alertdialog", {
+      name: "未保存の変更を破棄しますか？",
+    });
+    expect(new URLSearchParams(router.state.location.search).get("tab")).toBe("radar");
+    await user.click(within(confirmation).getByRole("button", { name: "キャンセル" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(screen.getByRole("tab", { name: "レーダーの採点基準" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("textbox", { name: "平均順位 2点の境界（位以下）" })).toHaveValue("-");
+
+    await user.click(screen.getByRole("tab", { name: "改訂履歴" }));
+    await user.click(
+      within(
+        await screen.findByRole("alertdialog", { name: "未保存の変更を破棄しますか？" }),
+      ).getByRole("button", { name: "破棄して移動" }),
+    );
     await screen.findByRole("table", { name: "採点基準の改訂一覧" });
     await selectOption(user, screen.getByRole("combobox", { name: "履歴の作品" }), "title-next");
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(new URLSearchParams(router.state.location.search).get("gameTitleId")).toBe(
       "gt_momotetsu_2",
     );
-    await user.click(screen.getByRole("tab", { name: "レーダーの採点基準" }));
+    await user.click(screen.getByRole("tab", { name: "現在の採点境界" }));
     expect(screen.getByRole("combobox", { name: "対象作品" })).toHaveTextContent("桃太郎電鉄2");
-    expect(screen.getByRole("textbox", { name: "平均順位 2点の境界（位以下）" })).toHaveValue("-");
+    expect(
+      screen.queryByRole("textbox", { name: "平均順位 2点の境界（位以下）" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "適用中の採点境界" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "調整を始める" })).toBeEnabled();
   });
 
   it("restores independent history filters and pagination without changing the editing title", async () => {
@@ -143,14 +165,18 @@ describe("radar revision history", () => {
     );
     const { router } = renderPage();
     await screen.findByRole("combobox", { name: "対象作品" });
+    await user.click(screen.getByRole("tab", { name: "レーダーの採点基準" }));
     const historyTab = screen.getByRole("tab", { name: "改訂履歴" });
-    await user.click(screen.getByRole("tab", { name: "分析の再計算" }));
-    await user.keyboard("{ArrowRight}{ArrowRight}");
+    await user.click(screen.getByRole("tab", { name: "現在の採点境界" }));
+    await user.keyboard("{ArrowRight}");
     expect(historyTab).toHaveFocus();
     expect(historyTab).toHaveAttribute("aria-selected", "false");
     expect(requests).toHaveLength(0);
     await user.keyboard("{Enter}");
     await screen.findByRole("table", { name: "採点基準の改訂一覧" });
+    expect(new URLSearchParams(router.state.location.search).get("tab")).toBe("radar");
+    expect(new URLSearchParams(router.state.location.search).get("radarView")).toBe("history");
+    expect(screen.queryByRole("combobox", { name: "対象作品" })).not.toBeInTheDocument();
     await selectOption(user, screen.getByRole("combobox", { name: "履歴の作品" }), "title-next");
     await waitFor(() => expect(requests.at(-1)?.get("gameTitleId")).toBe("title-next"));
     expect(new URLSearchParams(router.state.location.search).get("gameTitleId")).toBe(
@@ -189,6 +215,7 @@ describe("radar revision history", () => {
       }),
     );
     const { client } = renderPage();
+    await user.click(await screen.findByRole("tab", { name: "レーダーの採点基準" }));
     await user.click(await screen.findByRole("tab", { name: "改訂履歴" }));
     await waitFor(() => expect(requested).toBe(true));
     account.role = "user";

@@ -3971,6 +3971,7 @@ export interface components {
             candidateId?: string;
             previewId?: string;
             expectedCurrentBasisId?: string | null;
+            /** @description Required for retry. For withdraw, optionally identifies this actor's manual creation operation; guarded withdrawal refuses any candidate with an accepted apply operation. */
             originOperationId?: string;
             evidenceKey?: string;
             expectedCandidateId?: string | null;

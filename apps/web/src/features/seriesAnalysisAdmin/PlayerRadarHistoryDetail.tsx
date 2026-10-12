@@ -34,7 +34,7 @@ export function PlayerRadarHistoryDetail({ detail }: { detail: PlayerRadarRevisi
         <h3 ref={headingRef} tabIndex={-1} className={contentText.heading}>
           {revision.gameTitleName} · {playerRadarRevisionKind[revision.kind]}
         </h3>
-        <p className={contentText.body}>{formatDateTimeLong(revision.appliedAt)} 公開</p>
+        <p className={contentText.body}>{formatDateTimeLong(revision.appliedAt)} 適用</p>
         <p className={contentText.body}>適用者: {playerRadarRevisionActor(revision.appliedBy)}</p>
         <p className={contentText.body}>
           案の保存者:{" "}

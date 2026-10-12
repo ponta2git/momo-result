@@ -107,6 +107,9 @@ object SeriesPlayerRadarApiSchemas:
   given Schema[SeriesPlayerRadarManualInputRequest] = Schema.derived
   given Schema[SeriesPlayerRadarOperationRequest] = Schema
     .derived[SeriesPlayerRadarOperationRequest].modify(_.kind)(_.validate(kinds))
+    .modify(_.originOperationId)(_.description(
+      "Required for retry. For withdraw, optionally identifies this actor's manual creation operation; guarded withdrawal refuses any candidate with an accepted apply operation."
+    ))
     .modify(_.expectedCurrentBasisId)(_.modifyUnsafe[String](Schema.ModifyCollectionElements)(
       _.nullable
     ))

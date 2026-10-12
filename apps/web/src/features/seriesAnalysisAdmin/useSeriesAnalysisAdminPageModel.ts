@@ -5,7 +5,7 @@ import { useSearchParams } from "react-router-dom";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { normalizeDisplayApiError } from "@/shared/api/problemDetails";
 import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
-import { seriesAnalysisKeys } from "@/shared/api/queryKeys";
+import { seriesAnalysisKeys, seriesPlayerRadarKeys } from "@/shared/api/queryKeys";
 import {
   requestAllSeriesAnalysisRecalculation,
   requestSeriesAnalysisRecalculation,
@@ -223,7 +223,23 @@ export function useSeriesAnalysisAdminPageModel() {
         });
       },
       refresh: () => {
-        if (authorization.begin("operations")) void overviewQuery.refetch();
+        if (!authorization.begin("operations")) return;
+        void Promise.all([
+          overviewQuery.refetch(),
+          selectedGameTitleId
+            ? queryClient.invalidateQueries({
+                queryKey: seriesPlayerRadarKeys.state(selectedGameTitleId),
+                exact: true,
+              })
+            : Promise.resolve(),
+        ]);
+      },
+      refreshRadar: () => {
+        if (!selectedGameTitleId || !authorization.begin("operations")) return;
+        void queryClient.invalidateQueries({
+          queryKey: seriesPlayerRadarKeys.state(selectedGameTitleId),
+          exact: true,
+        });
       },
       selectTitle: (value: string) => {
         if (!authorization.begin("operations")) return;

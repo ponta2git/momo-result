@@ -23235,6 +23235,7 @@
             ]
           },
           "originOperationId" : {
+            "description" : "Required for retry. For withdraw, optionally identifies this actor's manual creation operation; guarded withdrawal refuses any candidate with an accepted apply operation.",
             "type" : "string"
           },
           "evidenceKey" : {

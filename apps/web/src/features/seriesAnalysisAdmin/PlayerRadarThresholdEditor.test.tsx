@@ -13,10 +13,36 @@ import { makePlayerRadarEditorModel } from "@/test/fixtures/playerRadarEditorMod
 afterEach(() => vi.useRealTimers());
 
 describe("radar threshold input workflow", () => {
+  it("keeps edits when leaving is cancelled and discards them only after confirmation", async () => {
+    const user = userEvent.setup();
+    render(<PlayerRadarAdminPanel model={makePlayerRadarEditorModel()} />);
+    await user.click(screen.getByRole("button", { name: "調整を始める" }));
+    const input = screen.getByRole("textbox", { name: "平均順位 2点の境界（位以下）" });
+    await user.clear(input);
+    await user.type(input, "4.95");
+    await user.click(screen.getByRole("button", { name: "編集をやめる" }));
+    let dialog = screen.getByRole("alertdialog", { name: "編集内容を破棄しますか？" });
+    await user.click(within(dialog).getByRole("button", { name: "キャンセル" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(input).toHaveValue("4.95");
+    expect(screen.getByRole("button", { name: "編集をやめる" })).toHaveFocus();
+    await user.click(screen.getByRole("button", { name: "編集をやめる" }));
+    dialog = screen.getByRole("alertdialog", { name: "編集内容を破棄しますか？" });
+    await user.click(within(dialog).getByRole("button", { name: "編集内容を破棄する" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("region", { name: "採点境界の編集" })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("table", { name: "適用中の採点境界" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "調整を始める" }));
+    expect(screen.getByRole("textbox", { name: "平均順位 2点の境界（位以下）" })).toHaveValue(
+      "4.9",
+    );
+  });
+
   it("shows ordering constraints immediately on both affected boundaries without a form notice", async () => {
     const user = userEvent.setup();
     render(<PlayerRadarAdminPanel model={makePlayerRadarEditorModel()} />);
-    await user.click(screen.getByRole("button", { name: "適用中の基準を調整" }));
+    await user.click(screen.getByRole("button", { name: "調整を始める" }));
     const first = screen.getByRole("textbox", { name: "平均順位 2点の境界（位以下）" });
     const next = screen.getByRole("textbox", { name: "平均順位 3点の境界（位以下）" });
     next.focus();
@@ -37,7 +63,7 @@ describe("radar threshold input workflow", () => {
   it("waits for blur for incomplete numbers and suppresses error emphasis during IME composition", async () => {
     const user = userEvent.setup();
     render(<PlayerRadarAdminPanel model={makePlayerRadarEditorModel()} />);
-    await user.click(screen.getByRole("button", { name: "適用中の基準を調整" }));
+    await user.click(screen.getByRole("button", { name: "調整を始める" }));
     const input = screen.getByRole("textbox", { name: "平均順位 2点の境界（位以下）" });
     await user.clear(input);
     await user.type(input, "-");
@@ -64,7 +90,7 @@ describe("radar threshold input workflow", () => {
     const save = vi.fn(model.editing!.save);
     model.editing!.save = save;
     render(<PlayerRadarAdminPanel model={model} />);
-    await user.click(screen.getByRole("button", { name: "適用中の基準を調整" }));
+    await user.click(screen.getByRole("button", { name: "調整を始める" }));
     expect(screen.getAllByRole("textbox")).toHaveLength(9);
     const first = screen.getByRole("textbox", { name: "平均順位 2点の境界（位以下）" });
     const next = screen.getByRole("textbox", { name: "平均順位 3点の境界（位以下）" });
@@ -95,7 +121,7 @@ describe("radar threshold input workflow", () => {
     const save = vi.fn(model.editing!.save);
     model.editing!.save = save;
     render(<PlayerRadarAdminPanel model={model} />);
-    await user.click(screen.getByRole("button", { name: "適用中の基準を調整" }));
+    await user.click(screen.getByRole("button", { name: "調整を始める" }));
     const comparison = await screen.findByRole("table", { name: "採点基準変更前後の比較" });
     expect(within(comparison).getAllByRole("row")).toHaveLength(2);
     expect(within(comparison).getByRole("rowheader", { name: "平均順位" })).toBeVisible();
@@ -132,7 +158,7 @@ describe("radar threshold input workflow", () => {
     const save = vi.fn(model.editing!.save);
     model.editing!.save = save;
     render(<PlayerRadarAdminPanel model={model} />);
-    await user.click(screen.getByRole("button", { name: "適用中の基準を調整" }));
+    await user.click(screen.getByRole("button", { name: "調整を始める" }));
     const input = screen.getByRole("textbox", { name: "平均順位 2点の境界（位以下）" });
     input.focus();
     vi.useFakeTimers();
@@ -147,15 +173,13 @@ describe("radar threshold input workflow", () => {
     fireEvent.compositionEnd(input);
     act(() => vi.advanceTimersByTime(300));
     vi.useRealTimers();
-    expect(
-      screen.getByText("入力中の仮プレビューです。案はまだ適用されていません。"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("入力中の比較です。まだ適用されていません。")).toBeInTheDocument();
   });
 
   it("keeps the previous comparison visibly stale while a now-invalid input cancels the queued preview", async () => {
     const user = userEvent.setup();
     render(<PlayerRadarAdminPanel model={makePlayerRadarEditorModel()} />);
-    await user.click(screen.getByRole("button", { name: "適用中の基準を調整" }));
+    await user.click(screen.getByRole("button", { name: "調整を始める" }));
     const comparison = await screen.findByRole("table", { name: "採点基準変更前後の比較" });
     const previous = comparison.textContent;
     const input = screen.getByRole("textbox", { name: "平均順位 9点の境界（位以下）" });

@@ -133,6 +133,7 @@
 - 確定失権した管理readはcancelしてcacheを除去する。管理者権限だけの喪失ではアカウント・通知、運用権限も失った場合は分析管理・レーダーを対象にし、通常のmaster・分析結果等の共有参照は保持する。主体と許可の所有期間が変わった後の応答で保護cacheや新しい入力を復活・上書きせず、再付与を古い操作の継続と扱わない。同一主体が参照できるmasterの確定mutation結果の反映と、保護refetch・画面の完了処理を分ける。
 - 管理用query/commandの権限拒否は一度の本人情報再確認へ集約し、処理済み・旧作業の拒否を起点に循環させない。本人情報と保護queryの401/403は自動retryせず、許可継続後も拒否されたreadの再試行は利用者の操作に任せる。再確認・再表示でPOSTを再送せず、確認中に到着した受付結果は既存mutationのownerに保持する。
 - 初回表示、mutation 後の cache 整合、artifact 失効時の bounded recovery、利用者が実行した更新 / 再試行だけが server state の取得を開始する。interval、遅延 timer、window focus、tab visibility、network reconnect を起点に自動再取得しない。この契約は共通 QueryClient に集約し、feature ごとに再実装しない。
+- レーダー基準の作成・復元は、利用者が開始して受付が確定した操作に限り、待機表示から編集へ進むために完了状態を自動確認する。対象はその操作だけとし、完了・失敗・読取エラー・権限停止で止め、非表示ブラウザでは継続取得しない。読取失敗の再開は明示更新で行い、POSTを再送しない。通常の管理状態取得や手入力の正式比較には適用しない。
 - 分析の計算payloadがimmutableでも、現在の名称や試合revisionに依存するHTTP projectionは可変として扱う。master変更は表示名を含むartifact response、試合訂正・削除はその試合のcontextとidentityを更新する。手動更新はstatusで参照世代を確定してから必要なresourceを読み、新旧artifactを同時に再取得しない。
 - match-contextの確定した不存在・失効は成功済みcacheの利用を止め、一時的な更新失敗と区別する。比較画面と試合結果画面で共通の利用判定を使い、表示bundleの選択試合と全マーカーを揃える。再取得中の復活を含む状態契約は[分析横断要求](requirements/series-analysis-batch.md#web-state)を正本とする。
 - React の concurrent / form API は cache、retry、認証、validation の既存契約を置き換えない範囲で使う。

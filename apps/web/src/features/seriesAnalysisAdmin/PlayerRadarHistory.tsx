@@ -13,6 +13,7 @@ import { DataTable } from "@/shared/ui/data/DataTable";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
+import { FilterBar } from "@/shared/ui/forms/FilterBar";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { contentText } from "@/shared/ui/typography";
 
@@ -26,8 +27,10 @@ export function PlayerRadarHistory({
   const { gameTitleId, cursor, revisionId, data, revision, error } = model;
 
   return (
-    <section aria-label="採点基準の改訂履歴" className="mt-6 grid min-w-0 gap-4">
-      <p className={contentText.body}>作品全体への公開が完了した改訂を、新しい順に表示します。</p>
+    <section aria-label="採点基準の改訂履歴" className="grid min-w-0 gap-4">
+      {revisionId ? null : (
+        <p className={contentText.supporting}>適用が完了した改訂を、新しい順に表示します。</p>
+      )}
       {revisionId ? (
         <div>
           <Button variant="secondary" size="sm" onClick={model.actions.showList}>
@@ -35,21 +38,41 @@ export function PlayerRadarHistory({
           </Button>
         </div>
       ) : (
-        <div className="max-w-lg">
-          <SelectField
-            label="履歴の作品"
-            disabled={model.disabled}
-            value={gameTitleId ?? ""}
-            options={[
-              { value: "", label: "全作品" },
-              ...titleOptions.map((title) => ({
-                value: title.gameTitleId,
-                label: title.gameTitleName,
-              })),
-            ]}
-            onValueChange={model.actions.selectTitle}
-          />
-        </div>
+        <FilterBar
+          ariaLabel="改訂履歴の表示条件"
+          primary={
+            <div className="max-w-lg">
+              <SelectField
+                label="履歴の作品"
+                disabled={model.disabled}
+                value={gameTitleId ?? ""}
+                options={[
+                  { value: "", label: "全作品" },
+                  ...titleOptions.map((title) => ({
+                    value: title.gameTitleId,
+                    label: title.gameTitleName,
+                  })),
+                ]}
+                onValueChange={model.actions.selectTitle}
+              />
+            </div>
+          }
+          action={
+            data ? (
+              <Button
+                icon={<RefreshCw />}
+                variant="secondary"
+                size="sm"
+                disabled={model.refreshDisabled}
+                pending={model.refreshing}
+                pendingLabel="履歴を更新中"
+                onClick={model.actions.refresh}
+              >
+                履歴を更新
+              </Button>
+            ) : undefined
+          }
+        />
       )}
       {error ? (
         <Notice
@@ -81,19 +104,6 @@ export function PlayerRadarHistory({
         ) : null
       ) : data ? (
         <>
-          <div>
-            <Button
-              icon={<RefreshCw />}
-              variant="secondary"
-              size="sm"
-              disabled={model.refreshDisabled}
-              pending={model.refreshing}
-              pendingLabel="履歴を更新中"
-              onClick={model.actions.refresh}
-            >
-              履歴を更新
-            </Button>
-          </div>
           {data.items.length > 0 ? (
             <DataTable<PlayerRadarRevision>
               caption={{ content: "採点基準の改訂一覧" }}
@@ -109,7 +119,7 @@ export function PlayerRadarHistory({
                 },
                 {
                   key: "time",
-                  header: "公開成功日時",
+                  header: "適用日時",
                   minWidth: "11rem",
                   tabular: true,
                   renderCell: (row) => formatDateTimeLong(row.appliedAt),
@@ -136,7 +146,7 @@ export function PlayerRadarHistory({
                       aria-label={`${row.gameTitleName} ${formatDateTimeLong(row.appliedAt)}の改訂詳細`}
                       onClick={() => model.actions.selectRevision(row.revisionId)}
                     >
-                      閾値の変更を確認
+                      採点境界の変更を確認
                     </Button>
                   ),
                 },

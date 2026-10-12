@@ -56,7 +56,8 @@ export function makePlayerRadarEditorModel(): PlayerRadarAdminModel {
       permissionReason: null,
       saveDisabledReason: null,
       onActiveChange: () => {},
-      save: async () => "saved-candidate",
+      save: async () => ({ candidateId: "saved-candidate", operationId: "saved-operation" }),
+      discard: async () => {},
       reuseCandidate: async () => {},
     },
     actions: {

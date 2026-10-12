@@ -81,7 +81,7 @@ object SeriesPlayerRadarCodec:
       case Preview => Set("candidateId") -> Set("candidateId")
       case Apply => Set("candidateId", "previewId") ->
           Set("candidateId", "previewId", "expectedCurrentBasisId")
-      case Withdraw => Set("candidateId") -> Set("candidateId")
+      case Withdraw => Set("candidateId") -> Set("candidateId", "originOperationId")
       case Restore => Set.empty[String] -> Set("expectedCurrentBasisId")
       case Acknowledge => Set("evidenceKey") -> Set("evidenceKey")
       case Retry => Set("originOperationId") -> Set("originOperationId")

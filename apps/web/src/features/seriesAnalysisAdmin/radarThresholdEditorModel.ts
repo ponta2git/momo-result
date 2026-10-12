@@ -23,8 +23,11 @@ export type RadarManualSave = {
   manualInput: RadarManualInput;
 };
 
+export type RadarPreparedCandidate = { candidateId: string; operationId: string };
+
 export type RadarEditingModel = {
-  acceptedSave?: { candidateId: string; request: RadarManualSave } | null;
+  acceptedApply?: { operationId: string; candidateId: string } | null;
+  acceptedSave?: (RadarPreparedCandidate & { request: RadarManualSave }) | null;
   current: RadarEditingSource | null;
   candidate: RadarEditingSource | null;
   evaluation: {
@@ -38,6 +41,7 @@ export type RadarEditingModel = {
   permissionReason: string | null;
   saveDisabledReason: string | null;
   onActiveChange: (active: boolean) => void;
-  save: (request: RadarManualSave) => Promise<string>;
+  save: (request: RadarManualSave) => Promise<RadarPreparedCandidate>;
+  discard: (prepared: RadarPreparedCandidate) => Promise<void>;
   reuseCandidate: (candidateId: string) => Promise<void>;
 };

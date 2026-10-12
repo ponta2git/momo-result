@@ -5,15 +5,17 @@ import type { PlayerRadarAdminModel } from "@/features/seriesAnalysisAdmin/playe
 import { PlayerRadarPreview } from "@/features/seriesAnalysisAdmin/PlayerRadarPreview";
 import type { RadarThresholdError } from "@/features/seriesAnalysisAdmin/radarThresholdInput";
 import type { RadarThresholdEditor } from "@/features/seriesAnalysisAdmin/useRadarThresholdEditor";
-import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
 import { playerRadarAxes } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { actionRowClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
+import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { InputControl } from "@/shared/ui/forms/Control";
 import { Field } from "@/shared/ui/forms/Field";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
+import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { contentText } from "@/shared/ui/typography";
 
 export function PlayerRadarThresholdEditor({
@@ -21,15 +23,18 @@ export function PlayerRadarThresholdEditor({
   model,
   onApply,
   applyButtonRef,
+  active = true,
 }: {
   editor: RadarThresholdEditor;
   model: PlayerRadarAdminModel;
   onApply: () => Promise<RadarThresholdError | null>;
   applyButtonRef: Ref<HTMLButtonElement>;
+  active?: boolean;
 }) {
   const id = useId();
   const inputs = useRef(new Map<string, HTMLInputElement>());
   const editStart = useRef(new Map<string, string>());
+  const exitTriggerRef = useRef<HTMLButtonElement>(null);
   const [focusRequest, setFocusRequest] = useState<RadarThresholdError | null>(null);
   const [showReference, setShowReference] = useState(false);
   const [blurred, setBlurred] = useState<ReadonlySet<string>>(new Set());
@@ -41,7 +46,7 @@ export function PlayerRadarThresholdEditor({
   if (!session || !model.editing) return null;
   const data = model.editing;
   const pending = editor.preparingApply || model.communicationUnknown;
-  const disabled = pending || Boolean(data.permissionReason);
+  const disabled = pending || editor.discarding || Boolean(data.permissionReason);
   const selectedAxis =
     playerRadarAxes.find((axis) => axis.id === editor.axis) ?? playerRadarAxes[0];
   const unit = editor.axis === "averageRank" ? "位以下" : "万円以上";
@@ -78,28 +83,14 @@ export function PlayerRadarThresholdEditor({
       : editor.canApply
         ? "適用前の確認が完了した比較です。"
         : editor.awaitingValidation
-          ? "適用前にサーバーで点数の変化を確認しています。"
+          ? "適用前に点数の変化を確認しています。"
           : !editor.ready
             ? editor.composing || editor.parsed?.errors.length
               ? "入力を確認中です。表示中の比較は現在の入力を反映していません。"
               : "入力の反映待ちです。表示中の比較は前回の入力によるものです。"
-            : "入力中の仮プレビューです。案はまだ適用されていません。";
+            : "入力中の比較です。まだ適用されていません。";
   return (
     <section aria-label="採点境界の編集" className="grid min-w-0 grid-cols-1 gap-4">
-      <UnsavedChangesGuard
-        description="採点境界の変更はまだ適用されていません。このページに残れば編集を続けられます。"
-        model={{
-          dirty: editor.changed || (Boolean(session.saved) && !editor.noChangeFromCurrent),
-          navigationAllowedRef: editor.navigationAllowedRef,
-          onDiscard: editor.finish,
-        }}
-        pending={pending}
-        preservesInput={(current, next) =>
-          current.pathname === next.pathname &&
-          (new URLSearchParams(current.search).get("gameTitleId") ?? model.gameTitleId) ===
-            (new URLSearchParams(next.search).get("gameTitleId") ?? model.gameTitleId)
-        }
-      />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="grid gap-1">
           <h3 className={contentText.heading}>採点境界を調整</h3>
@@ -109,9 +100,25 @@ export function PlayerRadarThresholdEditor({
           <Button disabled={disabled} size="sm" variant="quiet" onClick={editor.reset}>
             編集開始時の値へ戻す
           </Button>
-          <Button disabled={pending} size="sm" variant="secondary" onClick={editor.finish}>
-            編集をやめる
-          </Button>
+          {active ? (
+            <AlertDialog
+              title="編集内容を破棄しますか？"
+              description="入力した採点境界を破棄し、編集前の画面に戻ります。適用中の基準は変わりません。"
+              confirmLabel="編集内容を破棄する"
+              confirmDisabled={pending}
+              finalFocus={() =>
+                exitTriggerRef.current?.isConnected
+                  ? exitTriggerRef.current
+                  : document.getElementById("radar-administration-heading")
+              }
+              trigger={
+                <Button disabled={pending} ref={exitTriggerRef} size="sm" variant="secondary">
+                  編集をやめる
+                </Button>
+              }
+              onConfirm={editor.discard}
+            />
+          ) : null}
         </div>
       </div>
       {editor.contextChanged ? (
@@ -137,12 +144,12 @@ export function PlayerRadarThresholdEditor({
         </Notice>
       ) : null}
       {editor.comparisonChanged ? (
-        <Notice tone="info" title="正式な比較が更新されました">
+        <Notice tone="info" title="比較に使う記録が更新されました">
           比較に使う記録が変わりました。点数の変化を確認し、「変更を適用」で再確認してください。
         </Notice>
       ) : null}
       {editor.formalMismatch ? (
-        <Notice tone="danger" title="仮プレビューと正式計算が一致しません">
+        <Notice tone="danger" title="入力中の比較と適用前の計算が一致しません">
           この案は適用できません。基準の状態を更新し、比較を再確認してください。
         </Notice>
       ) : null}
@@ -178,8 +185,8 @@ export function PlayerRadarThresholdEditor({
               <div className="mt-4 grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(18rem,26rem)_minmax(0,1fr)]">
                 <div className="grid min-w-0 grid-cols-1 gap-4">
                   <div className="grid gap-1">
-                    <p className={contentText.body}>
-                      {selectedAxis.description} 境界の単位は{unit}です。
+                    <p className={cn(contentText.body, readableTextWidthClass)}>
+                      {selectedAxis.description}
                     </p>
                     <p className={contentText.supporting}>
                       Enterで次の欄、Shift+Enterで前の欄へ。Escでその欄の編集を戻せます。
@@ -191,11 +198,11 @@ export function PlayerRadarThresholdEditor({
                         aria-pressed={showReference}
                         onClick={() => setShowReference((current) => !current)}
                       >
-                        {showReference ? "編集元の参照値を閉じる" : "編集元の値を参照"}
+                        {showReference ? "編集元の値を隠す" : "編集元の値を参照"}
                       </Button>
                     </div>
                   </div>
-                  <fieldset disabled={disabled} className="grid min-w-0 gap-3">
+                  <fieldset disabled={disabled} className="grid min-w-0 gap-4">
                     <legend className="sr-only">{selectedAxis.label}の9境界</legend>
                     {session.drafts[axis.id].map((text, index) => {
                       const key = `${axis.id}:${index}`;
@@ -219,11 +226,12 @@ export function PlayerRadarThresholdEditor({
                             <>
                               適用中:{" "}
                               {currentValues?.[index]
-                                ? `${currentValues[index].rawValue} ${unit}`
+                                ? `${currentValues[index].rawValue}${unit}`
                                 : "未適用"}
                               {showReference ? (
                                 <span className="block">
-                                  編集元: {originalValues?.[index]?.rawValue} {unit}
+                                  編集元: {originalValues?.[index]?.rawValue}
+                                  {unit}
                                 </span>
                               ) : null}
                             </>
@@ -289,7 +297,11 @@ export function PlayerRadarThresholdEditor({
                   </div>
                 </div>
                 <div className="grid min-w-0 grid-cols-1 gap-4">
-                  <p className={contentText.body} role="status" aria-live="polite">
+                  <p
+                    className={cn(contentText.body, readableTextWidthClass)}
+                    role="status"
+                    aria-live="polite"
+                  >
                     {comparisonLabel}
                   </p>
                   {data.evaluationMessage ? (

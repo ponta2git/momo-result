@@ -163,9 +163,58 @@ export function usePlayerRadarAdminModel(
   const submittedRequest = command.variables?.request;
   const commandError = currentCommand ? command.error : undefined;
   const accepted = currentCommand ? command.data : undefined;
+  const creationAccepted =
+    accepted && (accepted.kind === "candidate" || accepted.kind === "restore")
+      ? accepted
+      : undefined;
+  const creationOptions = seriesPlayerRadarOperationQueryOptions(
+    gameTitleId,
+    creationAccepted?.operationId ?? "",
+  );
+  const creationQuery = useQuery({
+    ...creationOptions,
+    enabled: (query) => {
+      const status = query.state.data?.status ?? creationAccepted?.status;
+      return (
+        Boolean(creationAccepted) &&
+        authorization.canRead("operations", creationOptions.queryKey) &&
+        (status === "pending" || status === "running")
+      );
+    },
+    refetchOnWindowFocus: false,
+    refetchIntervalInBackground: false,
+    refetchInterval: (query) => {
+      if (query.state.status === "error") return false;
+      const status = query.state.data?.status ?? creationAccepted?.status;
+      return status === "pending" || status === "running" ? 2000 : false;
+    },
+  });
+  const completedCreation = useRef<string | null>(null);
+  useEffect(() => {
+    const operation = creationQuery.data;
+    if (
+      !creationAccepted ||
+      !operation ||
+      !authorization.allowed.operations ||
+      operation.status === "pending" ||
+      operation.status === "running" ||
+      completedCreation.current === operation.operationId
+    )
+      return;
+    completedCreation.current = operation.operationId;
+    void queryClient.invalidateQueries({ queryKey: seriesPlayerRadarKeys.title(gameTitleId) });
+  }, [
+    authorization.allowed.operations,
+    creationAccepted,
+    creationQuery.data,
+    gameTitleId,
+    queryClient,
+  ]);
   const operations = state?.operations ?? [];
   const acceptedOperation = accepted
-    ? (operations.find((operation) => operation.operationId === accepted.operationId) ?? accepted)
+    ? (creationQuery.data ??
+      operations.find((operation) => operation.operationId === accepted.operationId) ??
+      accepted)
     : undefined;
   const activeOperation = operations.find(
     (operation) => operation.status === "pending" || operation.status === "running",
@@ -214,6 +263,8 @@ export function usePlayerRadarAdminModel(
     const lease = authorization.begin("operations");
     if (!lease) return;
     setCheckError(undefined);
+    if (creationAccepted && creationQuery.isError) await creationQuery.refetch();
+    if (!mounted.current || !authorization.canCommit(lease)) return;
     const result = await stateQuery.refetch();
     if (!mounted.current || !authorization.canCommit(lease)) return;
     await optionsQuery.refetch();
@@ -389,6 +440,7 @@ export function usePlayerRadarAdminModel(
       : null;
   const feedbackError =
     checkError ??
+    (creationAccepted && creationQuery.isError ? creationQuery.error : null) ??
     (communicationUnknown ? null : commandError) ??
     (shouldShowQueryError(stateQuery) ? stateQuery.error : null) ??
     (shouldShowQueryError(optionsQuery) ? optionsQuery.error : null);
@@ -405,7 +457,16 @@ export function usePlayerRadarAdminModel(
 
   const model: PlayerRadarAdminModel | null = state
     ? {
+        authorizationRevision: authorization.revision,
         editing: {
+          acceptedApply:
+            accepted?.kind === "apply" &&
+            accepted.candidateId &&
+            ["pending", "running", "succeeded"].includes(accepted.status) &&
+            command.variables &&
+            authorization.canCommit(command.variables.lease)
+              ? { operationId: accepted.operationId, candidateId: accepted.candidateId }
+              : null,
           acceptedSave:
             accepted?.candidateId &&
             submittedRequest?.kind === "manual" &&
@@ -415,6 +476,7 @@ export function usePlayerRadarAdminModel(
             authorization.canCommit(command.variables.lease)
               ? {
                   candidateId: accepted.candidateId,
+                  operationId: accepted.operationId,
                   request: {
                     sourceBasisId: submittedRequest.sourceBasisId,
                     sourceCandidateId: submittedRequest.sourceCandidateId ?? null,
@@ -442,7 +504,46 @@ export function usePlayerRadarAdminModel(
             if (operationReason) throw new Error(operationReason);
             const response = await submitAsync({ gameTitleId, kind: "manual", ...request });
             if (!response.candidateId) throw new Error("保存済みの案を確認できません。");
-            return response.candidateId;
+            return { candidateId: response.candidateId, operationId: response.operationId };
+          },
+          discard: async (prepared) => {
+            const lease = authorization.begin("operations");
+            if (!lease) throw new DOMException("権限を確認できません", "AbortError");
+            try {
+              await submitAsync({
+                gameTitleId,
+                kind: "withdraw",
+                candidateId: prepared.candidateId,
+                originOperationId: prepared.operationId,
+              });
+            } catch (error) {
+              if (normalizeUnknownApiError(error).status !== 409) throw error;
+              if (!mounted.current || !authorization.canCommit(lease))
+                throw new DOMException("権限を確認できません", "AbortError");
+              // The save receipt can precede the state cache. Only a fresh read after
+              // the guarded rejection can prove this edit no longer owns a live draft.
+              const result = await stateQuery.refetch({ throwOnError: true });
+              if (!mounted.current || !authorization.canCommit(lease))
+                throw new DOMException("権限を確認できません", "AbortError");
+              const fresh = result.isSuccess ? result.data : undefined;
+              const freshCandidate = fresh?.candidate;
+              const superseded =
+                freshCandidate &&
+                (freshCandidate.candidateId !== prepared.candidateId ||
+                  ["withdrawn", "applied"].includes(freshCandidate.status));
+              const applicationAccepted = fresh?.operations.some(
+                (operation) =>
+                  operation.kind === "apply" && operation.candidateId === prepared.candidateId,
+              );
+              if (
+                !fresh ||
+                fresh.gameTitleId !== gameTitleId ||
+                (!superseded && !applicationAccepted)
+              )
+                throw error;
+              // Preserve the newer/shared server candidate; only this local edit ends.
+              command.reset();
+            }
           },
           reuseCandidate: async (id) => {
             if (candidate?.candidateId !== id || operationReason)
@@ -510,6 +611,19 @@ export function usePlayerRadarAdminModel(
         communicationUnknown,
         applyDisabledReason,
         applyPending: command.isPending && submittedRequest?.kind === "apply",
+        autoEditCandidateId: creationAccepted?.candidateId ?? null,
+        creationPending:
+          (command.isPending &&
+            (submittedRequest?.kind === "candidate" || submittedRequest?.kind === "restore")) ||
+          Boolean(
+            creationAccepted &&
+            !creationQuery.isError &&
+            (acceptedOperation?.status === "pending" ||
+              acceptedOperation?.status === "running" ||
+              (acceptedOperation?.status === "succeeded" &&
+                stateQuery.isFetching &&
+                candidate?.status !== "ready")),
+          ),
         actions: {
           refresh: {
             disabledReason:

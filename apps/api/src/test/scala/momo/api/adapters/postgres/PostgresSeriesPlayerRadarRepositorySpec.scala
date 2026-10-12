@@ -559,6 +559,138 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
       assertEquals(unchanged, (None, None, 0L, None))
 
   test(
+    "editing discard requires its actor and exact manual creation, and replay cannot withdraw a newer candidate"
+  ):
+    for
+      _ <- seedTitle *> seedReady
+      repository <- repo
+      useCase = RequestSeriesPlayerRadarOperation[IO](repository)
+      saved <- useCase.run(manualCommand, account, "discard-manual").map(_.toOption.get)
+      discard = command(SeriesPlayerRadarOperationKind.Withdraw, saved.candidateId, None)
+        .copy(originOperationId = Some(saved.operationId))
+      wrongActor <-
+        useCase.run(discard, AccountId.unsafeFromString("account_akane_mami"), "wrong-actor")
+      wrongCandidate <-
+        useCase.run(discard.copy(candidateId = Some(candidateId)), account, "wrong-candidate")
+      wrongOrigin <-
+        useCase.run(discard.copy(originOperationId = Some("missing")), account, "wrong-origin")
+      untouched <- repository.radarOperation(title, saved.operationId)
+      withdrawn <- useCase.run(discard, account, "editing-discard")
+      next <- useCase.run(
+        command(SeriesPlayerRadarOperationKind.Candidate, None, None),
+        account,
+        "next-candidate"
+      )
+      replay <- useCase.run(discard, account, "editing-discard")
+      changedKeyPayload <-
+        useCase.run(discard.copy(originOperationId = None), account, "editing-discard")
+      statuses <- sql"SELECT id, status FROM series_radar_candidates".query[(
+          String,
+          String
+      )].to[List].transact(transactor)
+      cancelled <- repository.radarOperation(title, saved.operationId)
+      unchanged <- titleState
+    yield
+      List(wrongActor, wrongCandidate, wrongOrigin).foreach(result =>
+        assertEquals(result.left.toOption.map(_.code), Some("CONFLICT"))
+      )
+      assertEquals(untouched.map(_.status), Right("pending"))
+      assertEquals(
+        withdrawn.map(value => (value.status, value.originOperationId)),
+        Right(("succeeded", Some(saved.operationId)))
+      )
+      assertEquals(replay, withdrawn)
+      assertEquals(
+        changedKeyPayload.left.toOption.map(_.code),
+        Some("IDEMPOTENCY_PAYLOAD_MISMATCH")
+      )
+      assertEquals(cancelled.map(_.status), Right("withdrawn"))
+      assertEquals(statuses.toMap.get(saved.candidateId.get), Some("withdrawn"))
+      assertEquals(statuses.toMap.get(next.toOption.flatMap(_.candidateId).get), Some("pending"))
+      assertEquals(unchanged, (None, None, 0L, None))
+
+  /** Materialize a completed comparison so acceptance tests can race real apply and discard commands. */
+  private def readyManualForDiscard: IO[SeriesPlayerRadarOperation] =
+    for
+      _ <- seedTitle *> seedReady
+      repository <- repo
+      saved <- RequestSeriesPlayerRadarOperation[IO](repository)
+        .run(manualCommand, account, "ready-manual-discard").map(_.toOption.get)
+      _ <-
+      (sql"""UPDATE series_radar_candidates SET status='ready', basis_id=$basisId
+        WHERE id=${saved.candidateId}""".update.run *>
+        sql"""UPDATE series_radar_operations SET status='succeeded', finished_at=now()
+          WHERE id=${saved.operationId}""".update.run *>
+        sql"""INSERT INTO series_radar_previews
+          (id,game_title_id,candidate_id,before_basis_id,input_revision,status,evaluation_snapshot,scope_keys)
+          SELECT 'discard-preview',game_title_id,${saved.candidateId},before_basis_id,input_revision,'ready',evaluation_snapshot,scope_keys
+          FROM series_radar_previews WHERE id=$previewId""".update.run).transact(transactor)
+    yield saved
+
+  test(
+    "editing discard never cancels an accepted application, while explicit withdrawal remains available"
+  ):
+    for
+      saved <- readyManualForDiscard
+      repository <- repo
+      useCase = RequestSeriesPlayerRadarOperation[IO](repository)
+      applied <- useCase.run(
+        command(SeriesPlayerRadarOperationKind.Apply, saved.candidateId, Some("discard-preview")),
+        AccountId.unsafeFromString("account_akane_mami"),
+        "another-actor-apply"
+      )
+      before <- titleState
+      discard = command(SeriesPlayerRadarOperationKind.Withdraw, saved.candidateId, None)
+        .copy(originOperationId = Some(saved.operationId))
+      rejected <- useCase.run(discard, account, "discard-after-apply")
+      retained <- titleState
+      operation <- applied.traverse(value => repository.radarOperation(title, value.operationId))
+      explicit <- useCase.run(discard.copy(originOperationId = None), account, "explicit-withdraw")
+      // Even a withdrawn application is an accepted application: guarded discard is not rollback.
+      stillRejected <- useCase.run(discard, account, "discard-after-explicit-withdraw")
+    yield
+      assertEquals(applied.map(_.status), Right("pending"))
+      assertEquals(rejected.left.toOption.map(_.code), Some("CONFLICT"))
+      assertEquals(retained, before)
+      assertEquals(operation.toOption.flatMap(_.toOption).map(_.status), Some("pending"))
+      assertEquals(explicit.map(_.status), Right("succeeded"))
+      assertEquals(stillRejected.left.toOption.map(_.code), Some("CONFLICT"))
+
+  test("concurrent application and editing discard serialize without cancelling an accepted apply"):
+    for
+      saved <- readyManualForDiscard
+      repository <- repo
+      useCase = RequestSeriesPlayerRadarOperation[IO](repository)
+      results <- (
+        useCase.run(
+          command(SeriesPlayerRadarOperationKind.Apply, saved.candidateId, Some("discard-preview")),
+          AccountId.unsafeFromString("account_akane_mami"),
+          "racing-apply"
+        ),
+        useCase.run(
+          command(SeriesPlayerRadarOperationKind.Withdraw, saved.candidateId, None)
+            .copy(originOperationId = Some(saved.operationId)),
+          account,
+          "racing-discard"
+        )
+      ).parTupled
+      finalState <- titleState
+      candidate <- sql"SELECT status FROM series_radar_candidates WHERE id=${saved.candidateId}"
+        .query[String].unique.transact(transactor)
+      applications <- sql"SELECT status FROM series_radar_operations WHERE kind='apply'"
+        .query[String].to[List].transact(transactor)
+    yield
+      assertEquals(List(results._1, results._2).count(_.isRight), 1)
+      if results._1.isRight then
+        assertEquals(candidate, "ready")
+        assertEquals(applications, List("pending"))
+        assertEquals(finalState._4, results._1.toOption.map(_.operationId))
+      else
+        assertEquals(candidate, "withdrawn")
+        assertEquals(applications, Nil)
+        assertEquals(finalState, (None, None, 0L, None))
+
+  test(
     "history paginates immutable publications and detail keeps recorded actors and basis payloads"
   ):
     for

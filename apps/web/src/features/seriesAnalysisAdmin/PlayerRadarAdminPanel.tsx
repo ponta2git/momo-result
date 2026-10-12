@@ -1,5 +1,5 @@
 import { RefreshCw } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type {
   PlayerRadarAdminAction,
@@ -8,20 +8,19 @@ import type {
 } from "@/features/seriesAnalysisAdmin/playerRadarAdminModel";
 import { radarCommandErrorMessage } from "@/features/seriesAnalysisAdmin/playerRadarAdminPresentation";
 import { PlayerRadarCriteria } from "@/features/seriesAnalysisAdmin/PlayerRadarCriteria";
-import { PlayerRadarPreview } from "@/features/seriesAnalysisAdmin/PlayerRadarPreview";
 import { PlayerRadarThresholdEditor } from "@/features/seriesAnalysisAdmin/PlayerRadarThresholdEditor";
 import { useRadarThresholdEditor } from "@/features/seriesAnalysisAdmin/useRadarThresholdEditor";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
+import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
 import { playerRadarAxes } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import type { PlayerRadarBasis } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { actionRowClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { FactList } from "@/shared/ui/data/FactList";
-import { AlertDialog } from "@/shared/ui/feedback/Dialog";
+import { AlertDialog, Dialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { ChoiceList } from "@/shared/ui/forms/ChoiceList";
-import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { contentText } from "@/shared/ui/typography";
@@ -62,6 +61,30 @@ export function PlayerRadarAdminPanel({
   const editor = useRadarThresholdEditor(model);
   const currentSource = model.editing?.current;
   const candidateSource = model.editing?.candidate;
+  const enteredCandidate = useRef<string | null>(null);
+  useEffect(() => {
+    const id = model.autoEditCandidateId;
+    if (
+      !active ||
+      editor.active ||
+      !id ||
+      enteredCandidate.current === id ||
+      model.candidate?.candidateId !== id ||
+      model.candidate.status !== "ready" ||
+      !candidateSource ||
+      model.editing?.saveDisabledReason
+    )
+      return;
+    enteredCandidate.current = id;
+    editor.begin(candidateSource);
+  }, [
+    active,
+    candidateSource,
+    editor,
+    model.autoEditCandidateId,
+    model.candidate,
+    model.editing?.saveDisabledReason,
+  ]);
   const applyDisabledReason =
     model.applyDisabledReason ??
     (editor.active && !editor.canApply ? "入力した境界の確認が必要です。" : null);
@@ -85,26 +108,25 @@ export function PlayerRadarAdminPanel({
     setEditConfirmationOpen(false);
     setWithdrawOpen(false);
   }
-  const [readOnlyTab, setReadOnlyTab] = useState("criteria");
-  const [changeMethod, setChangeMethod] = useState<"generate" | "restore">("generate");
+  const [changeMethod, setChangeMethod] = useState<"current" | "generate" | "restore">(
+    currentSource ? "current" : "generate",
+  );
+  const [creationDialogOpen, setCreationDialogOpen] = useState(false);
   const creationAction =
-    changeMethod === "restore" && model.previousBasis
-      ? model.actions.restore
-      : model.actions.generate;
+    changeMethod === "current" && currentSource
+      ? {
+          disabledReason: model.editing?.saveDisabledReason ?? null,
+          pending: false,
+          run: () => editor.begin(currentSource),
+        }
+      : changeMethod === "restore" && model.previousBasis
+        ? model.actions.restore
+        : model.actions.generate;
   const candidate = model.candidate;
   const operationInProgress =
     model.operation?.status === "pending" || model.operation?.status === "running";
   const applicationInProgress = operationInProgress && model.operation?.kind === "apply";
   const candidateActive = candidate && !["applied", "withdrawn"].includes(candidate.status);
-  const previewNeedsRebuild =
-    (candidate?.status === "ready" ||
-      (candidate?.manuallyEdited && ["unavailable", "failed"].includes(candidate.status))) &&
-    (model.previewState === "stale" ||
-      model.previewState === "none" ||
-      model.previewState === "failed");
-  const applyReasonExplainedByPreview =
-    previewNeedsRebuild &&
-    applyDisabledReason === "最新の記録で比較を計算し、内容を確認してください。";
   const applyTarget =
     candidate?.status === "ready" && model.preview
       ? {
@@ -130,6 +152,28 @@ export function PlayerRadarAdminPanel({
 
   return (
     <section aria-labelledby="radar-administration-heading" className="grid min-w-0 gap-6">
+      <Dialog
+        open={active && creationDialogOpen && Boolean(model.creationPending)}
+        onOpenChange={setCreationDialogOpen}
+        title="変更案を作成しています"
+        description="完了後、採点境界の編集を開きます。この画面を閉じても作成は続きます。"
+      >
+        <Button variant="secondary" onClick={() => setCreationDialogOpen(false)}>
+          閉じて待つ
+        </Button>
+      </Dialog>
+      <UnsavedChangesGuard
+        // Recreate the router subscription after an authorization Activity resumes.
+        // The input remains in this panel; an old blocked destination must not resume.
+        key={model.authorizationRevision}
+        description="採点境界の変更はまだ適用されていません。このページに残れば編集を続けられます。"
+        model={{
+          dirty: editor.active,
+          navigationAllowedRef: editor.navigationAllowedRef,
+          onDiscard: editor.discard,
+        }}
+        pending={editor.preparingApply || model.applyPending || model.communicationUnknown}
+      />
       <ContentWithActions
         actions={
           <Button
@@ -146,17 +190,12 @@ export function PlayerRadarAdminPanel({
         }
       >
         <div className="grid min-w-0 gap-1">
-          <h2
-            className={contentText.heading}
-            id="radar-administration-heading"
-            ref={headingRef}
-            tabIndex={-1}
-          >
+          <h2 className="sr-only" id="radar-administration-heading" ref={headingRef} tabIndex={-1}>
             採点境界
           </h2>
           <p className={cn(contentText.supporting, "tabular-nums")}>
             {model.currentBasis
-              ? `適用中の基準: ${formatDateTimeLong(model.currentBasis.appliedAt ?? undefined, "日時未取得")} 適用`
+              ? `適用日時: ${formatDateTimeLong(model.currentBasis.appliedAt ?? undefined, "日時未取得")}`
               : "採点基準は未適用です。"}
           </p>
         </div>
@@ -231,6 +270,7 @@ export function PlayerRadarAdminPanel({
       {editor.active ? (
         <PlayerRadarThresholdEditor
           editor={editor}
+          active={active}
           model={model}
           applyButtonRef={applyTriggerRef}
           onApply={async () => {
@@ -243,198 +283,120 @@ export function PlayerRadarAdminPanel({
         />
       ) : (
         <>
-          <TabsRoot value={readOnlyTab} onValueChange={(value) => setReadOnlyTab(String(value))}>
-            <TabsList aria-label="採点基準の確認" variant="underline">
-              <TabsTab value="criteria">採点境界</TabsTab>
-              <TabsTab value="impact">点数への影響</TabsTab>
-            </TabsList>
-            <TabsPanel value="criteria">
-              <div className="mt-4">
-                <PlayerRadarCriteria
-                  currentBasis={model.currentBasis}
-                  proposedBasis={candidateActive ? candidate.basis : null}
-                />
-              </div>
-            </TabsPanel>
-            <TabsPanel value="impact">
-              <div className="mt-4 grid min-w-0 gap-4">
-                {candidateActive ? (
-                  <>
-                    {previewNeedsRebuild ? (
-                      <Notice
-                        title={
-                          model.previewState === "stale"
-                            ? "比較の更新が必要です"
-                            : model.previewState === "failed"
-                              ? "比較を計算できませんでした"
-                              : "比較は未計算です"
-                        }
-                        tone="info"
-                        action={
-                          <CommandButton
-                            action={model.actions.rebuildPreview}
-                            label="最新の記録で点数を再比較"
-                            pendingLabel="点数を再比較中"
-                            primary
-                          />
-                        }
-                      >
-                        {null}
-                      </Notice>
-                    ) : null}
-                    {model.preview && !editor.active ? (
-                      <PlayerRadarPreview
-                        preview={model.preview}
-                        filter={model.previewFilter}
-                        updating={model.previewUpdating}
-                        onSeasonChange={model.actions.selectSeason}
-                        onMapChange={model.actions.selectMap}
-                        onResetFilter={model.actions.resetPreviewFilter}
-                      />
-                    ) : null}
-                  </>
-                ) : (
-                  <p className={contentText.body}>
-                    変更案を作成すると、点数への影響を確認できます。
-                  </p>
-                )}
-              </div>
-            </TabsPanel>
-          </TabsRoot>
+          <PlayerRadarCriteria currentBasis={model.currentBasis} proposedBasis={null} />
           {model.editing && (model.editing.current || model.editing.candidate) ? (
             <div className={actionRowClass}>
-              {model.editing.current ? (
-                <Button
-                  disabled={Boolean(model.editing.saveDisabledReason)}
-                  onClick={() => currentSource && editor.begin(currentSource)}
-                >
-                  適用中の基準を調整
-                </Button>
-              ) : null}
               {model.editing.candidate ? (
                 <Button
                   disabled={Boolean(model.editing.saveDisabledReason)}
                   variant={model.editing.current ? "secondary" : "primary"}
                   onClick={() => candidateSource && editor.begin(candidateSource)}
                 >
-                  {candidate?.manuallyEdited ? "変更案を編集" : "この提案を調整"}
+                  変更案を編集
                 </Button>
               ) : null}
             </div>
           ) : null}
         </>
       )}
-      {applyTarget || editor.active ? (
-        <div className={editor.active ? "contents" : actionRowClass}>
-          <AlertDialog
-            finalFocus={() =>
-              applyFinalFocus?.() ??
-              (applyTriggerRef.current?.isConnected && !applyTriggerRef.current.disabled
-                ? applyTriggerRef.current
-                : headingRef.current)
+      <div className="contents">
+        <AlertDialog
+          finalFocus={() =>
+            applyFinalFocus?.() ??
+            (applyTriggerRef.current?.isConnected && !applyTriggerRef.current.disabled
+              ? applyTriggerRef.current
+              : headingRef.current)
+          }
+          open={editor.active && active && (editConfirmationOpen || confirmation !== null)}
+          onOpenChange={(open) => {
+            setEditConfirmationOpen(false);
+            setConfirmation(open ? applyTarget : null);
+          }}
+          confirmDisabled={
+            !confirmation || Boolean(applyDisabledReason) || Boolean(confirmationChanged)
+          }
+          confirmLabel="作品全体に適用する"
+          pendingLabel="適用を受付中"
+          description={`${confirmation?.gameTitleName ?? model.gameTitleName}の全シーズン・全マップに適用します。過去の成績もこの基準で再採点します。`}
+          formatError={radarCommandErrorMessage}
+          pending={model.applyPending}
+          title="この基準を作品全体に適用しますか？"
+          tone="primary"
+          onConfirm={async () => {
+            if (confirmation && !confirmationChanged) {
+              const target = {
+                gameTitleId: confirmation.gameTitleId,
+                candidateId: confirmation.candidateId,
+                previewId: confirmation.previewId,
+                expectedCurrentBasisId: confirmation.expectedCurrentBasisId,
+                basisId: confirmation.basisId,
+              };
+              await model.actions.apply(target);
+              editor.finish();
             }
-            open={active && (editConfirmationOpen || confirmation !== null)}
-            onOpenChange={(open) => {
-              setEditConfirmationOpen(false);
-              setConfirmation(open ? applyTarget : null);
-            }}
-            confirmDisabled={
-              !confirmation || Boolean(applyDisabledReason) || Boolean(confirmationChanged)
-            }
-            confirmLabel="作品全体に適用する"
-            pendingLabel="適用を受付中"
-            description={`${confirmation?.gameTitleName ?? model.gameTitleName}の全シーズン・全マップに適用します。過去の成績もこの基準で再採点します。`}
-            formatError={radarCommandErrorMessage}
-            pending={model.applyPending}
-            title="この基準を作品全体に適用しますか？"
-            tone="primary"
-            trigger={
-              !editor.active ? (
-                <Button
-                  disabled={Boolean(applyDisabledReason)}
-                  ref={applyTriggerRef}
-                  variant={applyDisabledReason ? "secondary" : "primary"}
-                >
-                  この変更案を適用する
-                </Button>
-              ) : undefined
-            }
-            onConfirm={async () => {
-              if (confirmation && !confirmationChanged) {
-                const target = {
-                  gameTitleId: confirmation.gameTitleId,
-                  candidateId: confirmation.candidateId,
-                  previewId: confirmation.previewId,
-                  expectedCurrentBasisId: confirmation.expectedCurrentBasisId,
-                  basisId: confirmation.basisId,
-                };
-                await model.actions.apply(target);
-                editor.finish();
-              }
-            }}
-          >
-            {editor.active && !editor.canApply ? (
-              <div className="grid gap-3">
-                <p className={contentText.body} role="status">
-                  {model.editing?.permissionReason ??
-                    editor.applyError ??
-                    (editor.formalMismatch
-                      ? "比較結果が一致しません。キャンセルして入力と比較を確認してください。"
-                      : editor.contextChanged || editor.comparisonChanged
-                        ? "基準または比較が変わりました。キャンセルして最新の内容を確認してください。"
-                        : "適用前に入力した境界をサーバーで確認しています。確認が終わるまで適用されません。")}
-                </p>
-                {model.communicationUnknown ? (
-                  <CommandButton
-                    action={model.actions.checkOperation}
-                    label="操作の状態を確認する"
-                    pendingLabel="操作の状態を確認中"
-                  />
-                ) : model.operation?.status === "failed" ? (
-                  <>
-                    <p className={contentText.body}>{model.operation.detail}</p>
-                    <CommandButton
-                      action={model.actions.retry}
-                      label="この処理を再試行する"
-                      pendingLabel="再試行を受付中"
-                    />
-                  </>
-                ) : (
-                  <CommandButton
-                    action={model.actions.refresh}
-                    label="確認結果を更新"
-                    pendingLabel="確認結果を更新中"
-                  />
-                )}
-              </div>
-            ) : null}
-            {confirmation ? (
-              <FactList
-                ariaLabel="適用する採点基準"
-                items={[
-                  {
-                    id: "created",
-                    label: "基準作成日時",
-                    value: formatDateTimeLong(confirmation?.basis.createdAt ?? undefined, "未取得"),
-                  },
-                  {
-                    id: "source",
-                    label: "作成元",
-                    value: confirmation
-                      ? `${confirmation.basis.source.matchCount}試合・${confirmation.basis.source.heldEventCount}開催`
-                      : "未取得",
-                  },
-                ]}
-              />
-            ) : null}
-            {confirmationChanged ? (
-              <p className={cn(contentText.body, readableTextWidthClass)}>
-                比較または適用中の基準が変わりました。いったん閉じ、最新の比較を確認してください。
+          }}
+        >
+          {editor.active && !editor.canApply ? (
+            <div className="grid gap-3">
+              <p className={contentText.body} role="status">
+                {model.editing?.permissionReason ??
+                  editor.applyError ??
+                  (editor.formalMismatch
+                    ? "比較結果が一致しません。キャンセルして入力と比較を確認してください。"
+                    : editor.contextChanged || editor.comparisonChanged
+                      ? "基準または比較が変わりました。キャンセルして最新の内容を確認してください。"
+                      : "入力した境界を確認しています。確認が終わるまで適用されません。")}
               </p>
-            ) : null}
-          </AlertDialog>
-        </div>
-      ) : null}
+              {model.communicationUnknown ? (
+                <CommandButton
+                  action={model.actions.checkOperation}
+                  label="操作の状態を確認する"
+                  pendingLabel="操作の状態を確認中"
+                />
+              ) : model.operation?.status === "failed" ? (
+                <>
+                  <p className={contentText.body}>{model.operation.detail}</p>
+                  <CommandButton
+                    action={model.actions.retry}
+                    label="この処理を再試行する"
+                    pendingLabel="再試行を受付中"
+                  />
+                </>
+              ) : (
+                <CommandButton
+                  action={model.actions.refresh}
+                  label="確認結果を更新"
+                  pendingLabel="確認結果を更新中"
+                />
+              )}
+            </div>
+          ) : null}
+          {confirmation ? (
+            <FactList
+              ariaLabel="適用する採点基準"
+              items={[
+                {
+                  id: "created",
+                  label: "基準作成日時",
+                  value: formatDateTimeLong(confirmation?.basis.createdAt ?? undefined, "未取得"),
+                },
+                {
+                  id: "source",
+                  label: "作成元",
+                  value: confirmation
+                    ? `${confirmation.basis.source.matchCount}試合・${confirmation.basis.source.heldEventCount}開催`
+                    : "未取得",
+                },
+              ]}
+            />
+          ) : null}
+          {confirmationChanged ? (
+            <p className={cn(contentText.body, readableTextWidthClass)}>
+              比較または適用中の基準が変わりました。いったん閉じ、最新の比較を確認してください。
+            </p>
+          ) : null}
+        </AlertDialog>
+      </div>
       {candidateActive && !editor.active ? (
         <div className="grid min-w-0 gap-4">
           <div className={actionRowClass}>
@@ -477,21 +439,12 @@ export function PlayerRadarAdminPanel({
               />
             ) : null}
           </div>
-          {applyDisabledReason &&
-          applyTarget &&
-          !applyReasonExplainedByPreview &&
-          !operationInProgress &&
-          !model.communicationUnknown ? (
-            <p className={cn(contentText.body, readableTextWidthClass)}>{applyDisabledReason}</p>
-          ) : null}
         </div>
-      ) : !editor.active ? (
-        <section aria-labelledby="radar-change-heading" className="grid min-w-0 gap-4">
-          <h3 className={contentText.heading} id="radar-change-heading">
-            採点基準を変更する
-          </h3>
+      ) : null}
+      {!editor.active ? (
+        <section aria-label="採点基準の変更" className="grid min-w-0 gap-4">
           <div className="grid max-w-2xl gap-4">
-            {model.previousBasis ? (
+            {model.previousBasis || currentSource ? (
               <ChoiceList
                 legend="変更方法"
                 name="radar-change-method"
@@ -501,16 +454,28 @@ export function PlayerRadarAdminPanel({
                   operationInProgress || model.communicationUnknown || creationAction.pending
                 }
                 options={[
+                  ...(currentSource
+                    ? [
+                        {
+                          value: "current" as const,
+                          label: "適用中の基準を調整",
+                        },
+                      ]
+                    : []),
                   {
                     value: "generate",
                     label: "最新の記録から作り直す",
-                    description: `作品全体の${model.eligibility.matchCount}試合・${model.eligibility.heldEventCount}開催から境界を計算`,
+                    description: `作品全体の${model.eligibility.matchCount}試合・${model.eligibility.heldEventCount}開催から境界を計算します。`,
                   },
-                  {
-                    value: "restore",
-                    label: "前回の基準に戻す",
-                    description: `${formatDateTimeLong(model.previousBasis.appliedAt ?? undefined, "日時未取得")} 適用の基準`,
-                  },
+                  ...(model.previousBasis
+                    ? [
+                        {
+                          value: "restore",
+                          label: "前回の基準に戻す",
+                          description: `${formatDateTimeLong(model.previousBasis.appliedAt ?? undefined, "日時未取得")} 適用の基準`,
+                        } as const,
+                      ]
+                    : []),
                 ]}
               />
             ) : (
@@ -521,8 +486,20 @@ export function PlayerRadarAdminPanel({
             )}
             <div className="grid justify-items-start gap-1">
               <CommandButton
-                action={creationAction}
-                label={model.previousBasis ? "変更案を作成" : "最新の記録から変更案を作成"}
+                action={{
+                  ...creationAction,
+                  run: () => {
+                    setCreationDialogOpen(changeMethod !== "current");
+                    return creationAction.run();
+                  },
+                }}
+                label={
+                  changeMethod === "current" && currentSource
+                    ? "調整を始める"
+                    : changeMethod === "restore" && model.previousBasis
+                      ? "前回の基準から復元"
+                      : "最新の記録から作成"
+                }
                 pendingLabel="変更案を作成中"
                 primary={!model.editing?.current}
               />

@@ -114,7 +114,21 @@ final class InMemorySeriesPlayerRadarRepository[F[_]: Sync] private (
                       operations = snapshot.operations.updated(key, fingerprint -> operation),
                     ) -> operation.asRight
                   case SeriesPlayerRadarOperationKind.Withdraw
-                      if existing.exists(value => command.candidateId.contains(value.id)) =>
+                      if existing.exists(value =>
+                        command.candidateId.contains(value.id) && value.status != "applied"
+                      ) &&
+                        command.originOperationId.forall(origin =>
+                          snapshot.operations.exists { case ((actor, _), (_, operation)) =>
+                            actor == requestedBy && operation.operationId == origin &&
+                            operation.gameTitleId == command.gameTitleId &&
+                            operation.candidateId == command.candidateId &&
+                            operation.kind == "manual"
+                          } && !snapshot.operations.values.exists { case (_, operation) =>
+                            operation.gameTitleId == command.gameTitleId &&
+                            operation.candidateId == command.candidateId &&
+                            operation.kind == "apply"
+                          }
+                        ) =>
                     val operation = accepted(command, id, command.candidateId, "succeeded", at)
                     val operations =
                       snapshot.operations.map { case (savedKey, (savedFingerprint, saved)) =>
@@ -162,7 +176,7 @@ object InMemorySeriesPlayerRadarRepository:
     candidateId,
     None,
     None,
-    None,
+    command.originOperationId,
     None,
     at,
     Option.when(status == "succeeded")(at)

@@ -11,6 +11,7 @@ import {
 import type {
   RadarEditingSource,
   RadarManualSave,
+  RadarPreparedCandidate,
 } from "@/features/seriesAnalysisAdmin/radarThresholdEditorModel";
 import {
   parseRadarThresholdDrafts,
@@ -31,6 +32,7 @@ type EditSession = {
   source: RadarEditingSource;
   drafts: RadarThresholdDrafts;
   saved: { candidateId: string; input: RadarManualInput } | null;
+  prepared: RadarPreparedCandidate | null;
   confirmed: boolean;
   confirmedPreviewId: string | null;
   comparisonChanged: boolean;
@@ -43,6 +45,7 @@ export function useRadarThresholdEditor(model: PlayerRadarAdminModel) {
   const [axis, setAxis] = useState<PlayerRadarAxisId>("averageRank");
   const [composing, setComposing] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
   const [preparingApply, setPreparingApply] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [ready, setReady] = useState<{
@@ -52,6 +55,7 @@ export function useRadarThresholdEditor(model: PlayerRadarAdminModel) {
   } | null>(null);
   const navigationAllowedRef = useRef(false);
   const submittedSave = useRef<RadarManualSave | null>(null);
+  const handledApply = useRef<string | null>(null);
   const mounted = useRef(false);
   useEffect(() => {
     mounted.current = true;
@@ -100,6 +104,7 @@ export function useRadarThresholdEditor(model: PlayerRadarAdminModel) {
         ...current,
         source: { ...current.source, expectedCandidateId: acceptedSave.candidateId },
         saved: { candidateId: acceptedSave.candidateId, input: submitted.manualInput },
+        prepared: { candidateId: acceptedSave.candidateId, operationId: acceptedSave.operationId },
         confirmed: true,
         confirmedPreviewId: null,
         comparisonChanged: false,
@@ -107,6 +112,34 @@ export function useRadarThresholdEditor(model: PlayerRadarAdminModel) {
     });
     setApplyError(null);
   }, [acceptedSave, editing?.permissionReason]);
+
+  // A recovered 202 can arrive after the confirmation promise rejected (for example,
+  // during an authorization check). Close only the input represented by that receipt.
+  const acceptedApply = editing?.acceptedApply;
+  useEffect(() => {
+    if (
+      editing?.permissionReason ||
+      !acceptedApply ||
+      handledApply.current === acceptedApply.operationId
+    )
+      return;
+    handledApply.current = acceptedApply.operationId;
+    if (
+      session?.saved?.candidateId !== acceptedApply.candidateId ||
+      !parsed?.input ||
+      !sameRadarThresholds(parsed.input, session.saved.input)
+    )
+      return;
+    navigationAllowedRef.current = true;
+    debounce.cancel();
+    submittedSave.current = null;
+    // Reconcile an externally recovered receipt after the original event handler ended.
+    // oxlint-disable-next-line react/set-state-in-effect
+    setSession(null);
+    setReady(null);
+    setApplyError(null);
+    editing?.onActiveChange(false);
+  }, [acceptedApply, session, parsed?.input, debounce, editing]);
 
   const currentId = model.currentBasis?.basisId ?? null;
   const candidateId =
@@ -211,6 +244,7 @@ export function useRadarThresholdEditor(model: PlayerRadarAdminModel) {
       saved: source.savedCandidateId
         ? { candidateId: source.savedCandidateId, input: source.input }
         : null,
+      prepared: null,
       confirmed: false,
       confirmedPreviewId: null,
       comparisonChanged: false,
@@ -223,12 +257,25 @@ export function useRadarThresholdEditor(model: PlayerRadarAdminModel) {
   }
   function finish() {
     if (preparingApply || model.communicationUnknown) return;
+    navigationAllowedRef.current = true;
     debounce.cancel();
     submittedSave.current = null;
     setSession(null);
     setReady(null);
     setApplyError(null);
     editing?.onActiveChange(false);
+  }
+  async function discard() {
+    if (!session || !editing || preparingApply || discarding || model.communicationUnknown) return;
+    setDiscarding(true);
+    try {
+      if (session.prepared) await editing.discard(session.prepared);
+      finish();
+    } catch (error) {
+      throw new Error(radarCommandErrorMessage(error), { cause: error });
+    } finally {
+      setDiscarding(false);
+    }
   }
   function change(axisId: PlayerRadarAxisId, index: number, value: string) {
     debounce.cancel();
@@ -267,6 +314,7 @@ export function useRadarThresholdEditor(model: PlayerRadarAdminModel) {
     const submitted = session;
     try {
       let acceptedCandidate: string;
+      let prepared = session.prepared;
       if (session.saved && sameRadarThresholds(latest.input, session.saved.input)) {
         acceptedCandidate = session.saved.candidateId;
         await editing.reuseCandidate(acceptedCandidate);
@@ -279,7 +327,8 @@ export function useRadarThresholdEditor(model: PlayerRadarAdminModel) {
           manualInput: latest.input,
         };
         submittedSave.current = request;
-        acceptedCandidate = await editing.save(request);
+        prepared = await editing.save(request);
+        acceptedCandidate = prepared.candidateId;
         submittedSave.current = null;
       }
       if (mounted.current)
@@ -289,6 +338,7 @@ export function useRadarThresholdEditor(model: PlayerRadarAdminModel) {
                 ...current,
                 source: { ...current.source, expectedCandidateId: acceptedCandidate },
                 saved: { candidateId: acceptedCandidate, input: submittedInput },
+                prepared,
                 confirmed: true,
                 confirmedPreviewId: null,
                 comparisonChanged: false,
@@ -299,7 +349,9 @@ export function useRadarThresholdEditor(model: PlayerRadarAdminModel) {
       if (!radarSubmissionUncertain(error)) submittedSave.current = null;
       if (mounted.current) setApplyError(radarCommandErrorMessage(error));
     } finally {
-      if (mounted.current) setPreparingApply(false);
+      // Activity suspends effects while keeping this editor's state. Always settle the
+      // event's pending flag so an authorized receipt can restore the hidden editor.
+      setPreparingApply(false);
     }
     return null;
   }
@@ -319,6 +371,7 @@ export function useRadarThresholdEditor(model: PlayerRadarAdminModel) {
     },
     showErrors,
     preparingApply,
+    discarding,
     applyError,
     changed,
     canApply,
@@ -339,6 +392,7 @@ export function useRadarThresholdEditor(model: PlayerRadarAdminModel) {
     navigationAllowedRef,
     begin,
     finish,
+    discard,
     change,
     prepareApply,
     adoptCurrentSource,

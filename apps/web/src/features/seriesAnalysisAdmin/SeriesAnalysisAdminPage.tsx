@@ -1,5 +1,5 @@
 import { Activity, Play, RefreshCw, RotateCw } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { PlayerRadarAdministration } from "@/features/seriesAnalysisAdmin/PlayerRadarAdministration";
@@ -34,13 +34,31 @@ export function SeriesAnalysisAdminPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const activeTab =
-    requestedTab === "radar" || requestedTab === "history" ? requestedTab : "recalculation";
+    requestedTab === "radar" || requestedTab === "history" ? "radar" : "recalculation";
+  const radarView =
+    requestedTab === "history" || searchParams.get("radarView") === "history"
+      ? "history"
+      : "current";
   const setActiveTab = (value: string) => {
     const next = new URLSearchParams(searchParams);
     next.set("tab", value);
     setSearchParams(next);
   };
+  const setRadarView = (value: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", "radar");
+    if (value === "history") next.set("radarView", "history");
+    else next.delete("radarView");
+    setSearchParams(next);
+  };
+  const radarVisible = activeTab === "radar" && radarView === "current";
+  const previouslyVisible = useRef(radarVisible);
+  useEffect(() => {
+    if (radarVisible && !previouslyVisible.current) page.actions.refreshRadar();
+    previouslyVisible.current = radarVisible;
+  }, [radarVisible, page.actions]);
   const recalculationTabRef = useRef<HTMLElement>(null);
+  const applyFocusRef = useRef<HTMLElement | null>(null);
   const { data } = page.resource;
   const { selectedTitle } = page.selection;
   return (
@@ -56,9 +74,6 @@ export function SeriesAnalysisAdminPage() {
               分析の再計算
             </TabsTab>
             <TabsTab value="radar">レーダーの採点基準</TabsTab>
-            {page.authorization.retainOperations ? (
-              <TabsTab value="history">改訂履歴</TabsTab>
-            ) : null}
           </TabsList>
           <div className="mt-6 grid min-w-0 gap-6">
             {page.feedback.resourceError ? (
@@ -94,7 +109,7 @@ export function SeriesAnalysisAdminPage() {
                     : "管理者による作品の登録が必要です。"
                 }
               />
-            ) : data && activeTab !== "history" ? (
+            ) : data && !(activeTab === "radar" && radarView === "history") ? (
               <div className="max-w-lg">
                 <SelectField
                   label="対象作品"
@@ -195,37 +210,54 @@ export function SeriesAnalysisAdminPage() {
             ) : null}
           </TabsPanel>
           <TabsPanel keepMounted value="radar">
-            {selectedTitle ? (
-              <div className="mt-6 min-w-0">
-                <PlayerRadarAdministration
-                  key={selectedTitle.gameTitleId}
-                  gameTitleId={selectedTitle.gameTitleId}
-                  gameTitleName={selectedTitle.gameTitleName}
-                  active={activeTab === "radar"}
-                  onApplyAccepted={(operationId) => {
-                    page.actions.clearRecalculationFeedback();
-                    setActiveTab("recalculation");
-                    recalculationTabRef.current?.focus();
-                    showToast({
-                      id: `radar-apply-accepted:${operationId}`,
-                      title: "採点基準の適用を受け付けました",
-                      description: `${selectedTitle.gameTitleName}の再計算状況を表示しています。`,
-                    });
-                  }}
-                  applyFinalFocus={() =>
-                    activeTab === "recalculation" ? recalculationTabRef.current : null
-                  }
-                />
-              </div>
-            ) : null}
+            <div className="mt-6 grid min-w-0 gap-4">
+              <TabsRoot value={radarView} onValueChange={(value) => setRadarView(String(value))}>
+                <TabsList aria-label="採点基準の表示切替" variant="underline">
+                  <TabsTab value="current">現在の採点境界</TabsTab>
+                  {page.authorization.retainOperations ? (
+                    <TabsTab value="history">改訂履歴</TabsTab>
+                  ) : null}
+                </TabsList>
+                <TabsPanel keepMounted value="current">
+                  {selectedTitle ? (
+                    <div className="mt-6 min-w-0">
+                      <PlayerRadarAdministration
+                        key={selectedTitle.gameTitleId}
+                        gameTitleId={selectedTitle.gameTitleId}
+                        gameTitleName={selectedTitle.gameTitleName}
+                        active={activeTab === "radar" && radarView === "current"}
+                        onApplyAccepted={(operationId) => {
+                          applyFocusRef.current = recalculationTabRef.current;
+                          page.actions.clearRecalculationFeedback();
+                          setActiveTab("recalculation");
+                          recalculationTabRef.current?.focus();
+                          showToast({
+                            id: `radar-apply-accepted:${operationId}`,
+                            title: "採点基準の適用を受け付けました",
+                            description: `${selectedTitle.gameTitleName}の再計算状況を表示しています。`,
+                          });
+                        }}
+                        applyFinalFocus={() => {
+                          const destination = applyFocusRef.current;
+                          applyFocusRef.current = null;
+                          return destination;
+                        }}
+                      />
+                    </div>
+                  ) : null}
+                </TabsPanel>
+                {page.authorization.retainOperations ? (
+                  <TabsPanel value="history">
+                    {activeTab === "radar" && radarView === "history" ? (
+                      <div className="mt-6 min-w-0">
+                        <PlayerRadarHistory titleOptions={data?.titleOptions ?? []} />
+                      </div>
+                    ) : null}
+                  </TabsPanel>
+                ) : null}
+              </TabsRoot>
+            </div>
           </TabsPanel>
-          {page.authorization.retainOperations ? (
-            <TabsPanel value="history">
-              {activeTab === "history" ? (
-                <PlayerRadarHistory titleOptions={data?.titleOptions ?? []} />
-              ) : null}
-            </TabsPanel>
-          ) : null}
         </TabsRoot>
       </PageContentSurface>
     </PageFrame>

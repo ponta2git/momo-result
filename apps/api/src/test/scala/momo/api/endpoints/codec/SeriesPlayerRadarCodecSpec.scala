@@ -66,3 +66,18 @@ final class SeriesPlayerRadarCodecSpec extends FunSuite:
       """{"gameTitleId":"title","kind":"manual","expectedCurrentBasisId":null,"expectedCandidateId":null}"""
     assert(decode[SeriesPlayerRadarOperationRequest](missing).isLeft)
     assert(decode[SeriesPlayerRadarOperationRequest](explicit).isRight)
+
+  test("withdraw optionally carries a creation operation while still requiring its candidate"):
+    val guarded = request.copy(
+      kind = "withdraw",
+      candidateId = Some("candidate"),
+      originOperationId = Some("manual-creation"),
+      sourceBasisId = None,
+      manualInput = None
+    )
+    assertEquals(
+      SeriesPlayerRadarCodec.command(guarded).map(_.originOperationId),
+      Right(Some("manual-creation"))
+    )
+    assert(SeriesPlayerRadarCodec.command(guarded.copy(candidateId = None)).isLeft)
+    assert(SeriesPlayerRadarCodec.command(guarded.copy(originOperationId = None)).isRight)

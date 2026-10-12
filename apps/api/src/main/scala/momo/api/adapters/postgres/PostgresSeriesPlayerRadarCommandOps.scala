@@ -350,6 +350,26 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
         candidate.status != "applied",
         "This basis was already published. Compare the previous basis to restore it."
       )
+      _ <- command.originOperationId.traverse_ { origin =>
+        for
+          owned <- EitherT.liftF(sql"""
+            SELECT EXISTS(SELECT 1 FROM series_radar_operations
+              WHERE id = $origin AND game_title_id = ${command.gameTitleId}
+                AND candidate_id = ${candidate.id} AND kind = 'manual' AND requested_by = $account)
+          """.query[Boolean].unique)
+          _ <-
+            require(owned, "The manual creation operation does not belong to this editing session.")
+          applied <- EitherT.liftF(sql"""
+            SELECT EXISTS(SELECT 1 FROM series_radar_operations
+              WHERE game_title_id = ${command.gameTitleId} AND candidate_id = ${candidate.id}
+                AND kind = 'apply')
+          """.query[Boolean].unique)
+          _ <- require(
+            !applied,
+            "This candidate has an accepted application. Refresh before withdrawing it explicitly."
+          )
+        yield ()
+      }
       _ <- EitherT.liftF(sql"""
       UPDATE series_radar_candidates SET status = 'withdrawn', updated_at = $at
       WHERE id = ${candidate.id} AND game_title_id = ${command.gameTitleId}
@@ -382,7 +402,7 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
         Some(candidate.id),
         None,
         candidate.basisId,
-        None,
+        command.originOperationId,
         "succeeded"
       )
     yield operation

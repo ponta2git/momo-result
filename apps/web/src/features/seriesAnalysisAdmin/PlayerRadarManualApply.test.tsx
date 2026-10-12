@@ -74,7 +74,7 @@ async function startManualApply() {
   const model = makePlayerRadarEditorModel();
   const editing = model.editing;
   if (!editing) throw new Error("Missing editor fixture");
-  const accepted = createDeferred<string>();
+  const accepted = createDeferred<{ candidateId: string; operationId: string }>();
   const save = vi.fn((_request: RadarManualSave) => accepted.promise);
   const apply = vi.fn(async () => {});
   const refresh = vi.fn();
@@ -82,7 +82,7 @@ async function startManualApply() {
   model.actions.apply = apply;
   model.actions.refresh.run = refresh;
   const rendered = render(<PlayerRadarAdminPanel model={model} />);
-  await user.click(screen.getByRole("button", { name: "適用中の基準を調整" }));
+  await user.click(screen.getByRole("button", { name: "調整を始める" }));
   const input = screen.getByRole("textbox", { name: "平均順位 2点の境界（位以下）" });
   fireEvent.change(input, { target: { value: "4.95" } });
   await user.click(screen.getByRole("button", { name: "変更を適用" }));
@@ -103,7 +103,9 @@ async function startManualApply() {
 describe("manual radar application confirmation", () => {
   it("opens immediately and waits for the formal comparison before applying its exact identities", async () => {
     const flow = await startManualApply();
-    await act(async () => flow.accepted.resolve("manual-candidate"));
+    await act(async () =>
+      flow.accepted.resolve({ candidateId: "manual-candidate", operationId: "manual-operation" }),
+    );
     flow.rendered.rerender(
       <PlayerRadarAdminPanel model={comparisonModel(flow.model, flow.request, false)} />,
     );
@@ -129,7 +131,9 @@ describe("manual radar application confirmation", () => {
 
   it("cancels without applying and keeps the visible input available when confirmation resumes", async () => {
     const flow = await startManualApply();
-    await act(async () => flow.accepted.resolve("manual-candidate"));
+    await act(async () =>
+      flow.accepted.resolve({ candidateId: "manual-candidate", operationId: "manual-operation" }),
+    );
     flow.rendered.rerender(
       <PlayerRadarAdminPanel model={comparisonModel(flow.model, flow.request, false)} />,
     );

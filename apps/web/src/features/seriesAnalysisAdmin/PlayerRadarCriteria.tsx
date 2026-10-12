@@ -28,7 +28,10 @@ export function PlayerRadarCriteria({
       <div className="grid min-w-0 gap-4">
         {proposedBasis ? <p className={contentText.body}>適用中 → 変更案（未適用）</p> : null}
         <DataTable
-          caption={{ content: proposedBasis ? "採点境界の変更案" : "適用中の採点境界" }}
+          caption={{
+            content: proposedBasis ? "採点境界の変更案" : "適用中の採点境界",
+            visibility: "screen-reader",
+          }}
           columns={[
             {
               key: "score",
@@ -53,7 +56,7 @@ export function PlayerRadarCriteria({
                 return (
                   <div className="grid gap-1">
                     <p className="whitespace-nowrap">
-                      <span className="sr-only">適用中 </span>
+                      {proposedBasis ? <span className="sr-only">適用中 </span> : null}
                       {before ? formatPlayerRadarBoundary(axis.id, before.rawValue) : "未適用"}
                     </p>
                     {proposedBasis && before?.rawValue !== after?.rawValue ? (

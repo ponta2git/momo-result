@@ -8,7 +8,7 @@ import { AlertDialog, Dialog } from "@/shared/ui/feedback/Dialog";
 export type UnsavedChangesGuardModel = {
   dirty: boolean;
   navigationAllowedRef: { current: boolean };
-  onDiscard: () => void;
+  onDiscard: () => void | Promise<void>;
   /** Return true only after the current input has been saved for recovery. */
   saveBeforeLeave?: () => boolean;
 };
@@ -33,6 +33,14 @@ function UnsavedChangesRouterGuard({
 }: UnsavedChangesGuardProps) {
   const { dirty, navigationAllowedRef, onDiscard, saveBeforeLeave } = model;
   const blockedWhilePending = useRef(false);
+  const discarding = useRef(false);
+  const discardAttempt = useRef<symbol | null>(null);
+  useEffect(
+    () => () => {
+      discardAttempt.current = null;
+    },
+    [],
+  );
   const blocker = useBlocker(({ currentLocation, nextLocation }) => {
     const shouldBlock =
       (pending || dirty) &&
@@ -52,7 +60,7 @@ function UnsavedChangesRouterGuard({
     }
     if (pending) {
       blockedWhilePending.current = true;
-    } else if (blockedWhilePending.current || !dirty) {
+    } else if (!discarding.current && (blockedWhilePending.current || !dirty)) {
       // A blocked click is not a command to leave after a save finishes or fails.
       blocker.reset();
       blockedWhilePending.current = false;
@@ -68,14 +76,22 @@ function UnsavedChangesRouterGuard({
     },
     [blocker],
   );
-  const handleDiscard = useCallback(() => {
+  const handleDiscard = async () => {
     if (pending || blocker.state !== "blocked") {
       return;
     }
-    onDiscard();
-    navigationAllowedRef.current = true;
-    blocker.proceed();
-  }, [blocker, navigationAllowedRef, onDiscard, pending]);
+    discarding.current = true;
+    const attempt = Symbol("discard");
+    discardAttempt.current = attempt;
+    try {
+      await onDiscard();
+      if (discardAttempt.current !== attempt) return;
+      navigationAllowedRef.current = true;
+      blocker.proceed();
+    } finally {
+      discarding.current = false;
+    }
+  };
 
   if (pending) {
     if (!showPendingDialog) return null;

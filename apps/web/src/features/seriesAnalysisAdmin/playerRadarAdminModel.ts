@@ -38,6 +38,9 @@ export type PlayerRadarAdminAction = {
 };
 
 export type PlayerRadarAdminModel = {
+  authorizationRevision?: number;
+  autoEditCandidateId?: string | null;
+  creationPending?: boolean;
   editing?: RadarEditingModel | undefined;
   gameTitleId: string;
   gameTitleName: string;

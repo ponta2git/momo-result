@@ -2,6 +2,7 @@ import type {
   PlayerRadarPreviewFilter,
   PlayerRadarPreviewModel,
 } from "@/features/seriesAnalysisAdmin/playerRadarAdminModel";
+import { PlayerRadarScoringCurve } from "@/features/seriesAnalysisAdmin/PlayerRadarScoringCurve";
 import { orderFixedMembers } from "@/shared/domain/members";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
@@ -121,94 +122,101 @@ export function PlayerRadarPreview({
                     : "参考値"}
                 </p>
               ) : null}
-              <DataTable
-                caption={{ content: "採点基準変更前後の比較" }}
-                density="compact"
-                columns={[
-                  {
-                    header: "観点",
-                    key: "axis",
-                    rowHeader: true,
-                    minWidth: "7rem",
-                    renderCell: (axis) => <PlayerRadarAxisLabel label={axis.label} />,
-                  },
-                  ...players.map((player) => ({
-                    header: (
-                      <div className="grid gap-1">
+              <div className="grid min-w-0 gap-1">
+                <p className={contentText.supporting}>適用中 → 変更案</p>
+                <DataTable
+                  caption={{ content: "採点基準変更前後の比較" }}
+                  density="compact"
+                  columns={[
+                    {
+                      header: "観点",
+                      key: "axis",
+                      rowHeader: true,
+                      minWidth: "7rem",
+                      renderCell: (axis) => <PlayerRadarAxisLabel label={axis.label} />,
+                    },
+                    ...players.map((player) => ({
+                      header: (
                         <MemberSequenceLabel memberId={player.memberId}>
                           {player.displayName}
                         </MemberSequenceLabel>
-                        <span className="whitespace-nowrap">適用中 → 変更案</span>
-                      </div>
-                    ),
-                    key: player.memberId,
-                    minWidth: "8.5rem",
-                    tabular: true,
-                    renderCell: (axis: (typeof playerRadarAxes)[number]) => {
-                      const before = preview.before?.players
-                        .find((entry) => entry.memberId === player.memberId)
-                        ?.axes.find((cell) => cell.axisId === axis.id);
-                      const after = player.axes.find((cell) => cell.axisId === axis.id);
-                      const beforeLabel = playerRadarScoreLabel(before);
-                      const afterLabel = playerRadarScoreLabel(after);
-                      const unchanged = beforeLabel === afterLabel;
-                      const beforeReference = isReferenceScore(before);
-                      const afterReference = isReferenceScore(after);
-                      const delta =
-                        before?.score != null && after?.score != null
-                          ? after.score - before.score
-                          : null;
-                      return (
-                        <div className="grid gap-1">
-                          <p className="whitespace-nowrap">
-                            {unchanged ? (
-                              afterLabel
-                            ) : (
-                              <>
-                                <span className="sr-only">適用中 </span>
-                                {beforeLabel} <span aria-label="変更後">→</span>{" "}
-                                <span className="sr-only">変更案 </span>
-                                <span className={contentText.compactPrimary}>{afterLabel}</span>
-                              </>
-                            )}
-                          </p>
-                          {delta !== null && delta !== 0 ? (
-                            <p className={contentText.supporting}>
-                              増減 {delta > 0 ? "+" : ""}
-                              {delta}点
+                      ),
+                      key: player.memberId,
+                      minWidth: "8.5rem",
+                      tabular: true,
+                      renderCell: (axis: (typeof playerRadarAxes)[number]) => {
+                        const before = preview.before?.players
+                          .find((entry) => entry.memberId === player.memberId)
+                          ?.axes.find((cell) => cell.axisId === axis.id);
+                        const after = player.axes.find((cell) => cell.axisId === axis.id);
+                        const beforeLabel = playerRadarScoreLabel(before);
+                        const afterLabel = playerRadarScoreLabel(after);
+                        const unchanged = beforeLabel === afterLabel;
+                        const beforeReference = isReferenceScore(before);
+                        const afterReference = isReferenceScore(after);
+                        const delta =
+                          before?.score != null && after?.score != null
+                            ? after.score - before.score
+                            : null;
+                        return (
+                          <div className="grid gap-1">
+                            <p className="whitespace-nowrap">
+                              {unchanged ? (
+                                afterLabel
+                              ) : (
+                                <>
+                                  <span className="sr-only">適用中 </span>
+                                  {beforeLabel} <span aria-label="変更後">→</span>{" "}
+                                  <span className="sr-only">変更案 </span>
+                                  <span className={contentText.compactPrimary}>{afterLabel}</span>
+                                </>
+                              )}
                             </p>
-                          ) : null}
-                          <p className="whitespace-nowrap">
-                            <span className="sr-only">元の成績 </span>
-                            {formatPlayerRadarRawValue(axis.id, after?.rawValue ?? null)}
-                          </p>
-                          {!allScoresReference && (beforeReference || afterReference) ? (
-                            <p className={contentText.supporting}>
-                              {beforeReference && afterReference
-                                ? "参考値"
-                                : beforeReference
-                                  ? "適用中: 参考値"
-                                  : "変更案: 参考値"}
+                            {delta !== null && delta !== 0 ? (
+                              <p className={contentText.supporting}>
+                                増減 {delta > 0 ? "+" : ""}
+                                {delta}点
+                              </p>
+                            ) : null}
+                            <p className="whitespace-nowrap">
+                              <span className="sr-only">元の成績 </span>
+                              {formatPlayerRadarRawValue(axis.id, after?.rawValue ?? null)}
                             </p>
-                          ) : null}
-                          {after?.scoreUnavailableReasons.length ? (
-                            <p className={contentText.supporting}>
-                              {after.scoreUnavailableReasons
-                                .map(playerRadarUnavailableLabel)
-                                .join("・")}
-                            </p>
-                          ) : null}
-                        </div>
-                      );
-                    },
-                  })),
-                ]}
-                getRowKey={(axis) => axis.id}
-                rows={playerRadarAxes.filter((axis) => !axisId || axis.id === axisId)}
-                stickyRowHeader
-                verticalAlign="top"
-              />
-              <div className="grid min-w-0 gap-6 sm:grid-cols-2">
+                            {!allScoresReference && (beforeReference || afterReference) ? (
+                              <p className={contentText.supporting}>
+                                {beforeReference && afterReference
+                                  ? "参考値"
+                                  : beforeReference
+                                    ? "適用中: 参考値"
+                                    : "変更案: 参考値"}
+                              </p>
+                            ) : null}
+                            {after?.scoreUnavailableReasons.length ? (
+                              <p className={contentText.supporting}>
+                                {after.scoreUnavailableReasons
+                                  .map(playerRadarUnavailableLabel)
+                                  .join("・")}
+                              </p>
+                            ) : null}
+                          </div>
+                        );
+                      },
+                    })),
+                  ]}
+                  getRowKey={(axis) => axis.id}
+                  rows={playerRadarAxes.filter((axis) => !axisId || axis.id === axisId)}
+                  stickyRowHeader
+                  verticalAlign="top"
+                />
+              </div>
+              {axisId ? (
+                <PlayerRadarScoringCurve
+                  axisId={axisId}
+                  before={preview.before}
+                  after={preview.after}
+                />
+              ) : null}
+              <div className="grid min-w-0 gap-4 sm:grid-cols-2">
                 {players.map((player) => (
                   <PlayerRadarChart
                     key={player.memberId}

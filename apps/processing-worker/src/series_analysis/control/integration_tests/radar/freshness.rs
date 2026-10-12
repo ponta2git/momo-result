@@ -118,7 +118,7 @@ async fn real_postgres_radar_preparation_checks_current_source_and_preserves_pen
     clean(&client).await
 }
 
-async fn add_record(client: &Client) -> SmokeResult {
+pub(super) async fn add_record(client: &Client) -> SmokeResult {
     client.execute("INSERT INTO matches (id,held_event_id,match_no_in_event,game_title_id,layout_family,season_master_id,owner_member_id,map_master_id,played_at,created_by_account_id,created_by_member_id,analysis_revision) SELECT 'analysis-radar-smoke-match-added',held_event_id,99,game_title_id,layout_family,season_master_id,owner_member_id,map_master_id,played_at+interval '1 day',created_by_account_id,created_by_member_id,1 FROM matches WHERE id='analysis-radar-smoke-match-39'", &[]).await?;
     client.execute("INSERT INTO match_players (match_id,member_id,play_order,rank,total_assets_man_yen,revenue_man_yen) SELECT 'analysis-radar-smoke-match-added',member_id,play_order,rank,total_assets_man_yen,revenue_man_yen FROM match_players WHERE match_id='analysis-radar-smoke-match-39'", &[]).await?;
     client

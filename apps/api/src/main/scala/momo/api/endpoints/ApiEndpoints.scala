@@ -55,6 +55,8 @@ object ApiEndpoints:
     SeriesAnalysisEndpoints.recalculateTitle,
     SeriesAnalysisEndpoints.recalculateAll,
     SeriesPlayerRadarEndpoints.state,
+    SeriesPlayerRadarEndpoints.history,
+    SeriesPlayerRadarEndpoints.revision,
     SeriesPlayerRadarEndpoints.preview,
     SeriesPlayerRadarEndpoints.operation,
     SeriesPlayerRadarEndpoints.requestOperation,

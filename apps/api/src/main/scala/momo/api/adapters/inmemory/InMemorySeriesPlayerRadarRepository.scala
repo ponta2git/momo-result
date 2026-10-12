@@ -21,6 +21,17 @@ final class InMemorySeriesPlayerRadarRepository[F[_]: Sync] private (
 ) extends SeriesPlayerRadarRepository[F]:
   import InMemorySeriesPlayerRadarRepository.*
 
+  override def radarHistory(request: SeriesPlayerRadarHistoryRequest)
+      : F[Either[AppError, SeriesPlayerRadarDocument]] =
+    SeriesPlayerRadarDocument(Json.obj(
+      "schemaVersion" -> Json.fromInt(1),
+      "items" -> Json.arr(),
+      "nextCursor" -> Json.Null
+    ).noSpaces.getBytes(StandardCharsets.UTF_8)).asRight.pure[F]
+
+  override def radarRevision(revisionId: String): F[Either[AppError, SeriesPlayerRadarDocument]] =
+    AppError.NotFound("radar revision", revisionId).asLeft.pure[F]
+
   override def radarState(title: GameTitleId): F[Either[AppError, SeriesPlayerRadarDocument]] =
     titles.find(title).flatMap {
       case None => AppError.NotFound("game title", title.value).asLeft.pure[F]
@@ -30,6 +41,12 @@ final class InMemorySeriesPlayerRadarRepository[F[_]: Sync] private (
               "candidateId" -> Json.fromString(value.id),
               "status" -> Json.fromString(value.status),
               "basisId" -> Json.Null,
+              "originKind" -> Json.fromString("generated"),
+              "manualInput" -> Json.Null,
+              "sourceBasisId" -> Json.Null,
+              "sourceCandidateId" -> Json.Null,
+              "sourceBasis" -> Json.Null,
+              "savedBy" -> Json.Null,
               "sourceInputRevision" -> Json.Null,
               "safeFailureCode" -> Json.Null,
               "createdAt" -> Json.fromString(value.createdAt.toString),

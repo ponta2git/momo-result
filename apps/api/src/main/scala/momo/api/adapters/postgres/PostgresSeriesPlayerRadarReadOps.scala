@@ -50,6 +50,14 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
           'sourceInputRevision', c.source_input_revision::text,
           'safeFailureCode', c.safe_failure_code, 'createdAt', c.created_at,
           'updatedAt', c.updated_at, 'result', c.result,
+          'originKind', c.origin_kind, 'manualInput', c.manual_input,
+          'sourceBasisId', c.source_basis_id, 'sourceCandidateId', c.source_candidate_id,
+          'savedBy', CASE WHEN c.saved_by IS NULL THEN NULL ELSE jsonb_build_object(
+            'accountId', c.saved_by, 'displayName', c.saved_by_display_name) END,
+          'sourceBasis', CASE WHEN sb.id IS NULL THEN NULL ELSE jsonb_build_object(
+            'basisId', sb.id, 'checksum', sb.checksum, 'createdAt', sb.created_at,
+            'appliedAt', NULL, 'sourceInputRevision', sb.source_input_revision::text,
+            'basis', sb.payload) END,
           'latestPreview', CASE WHEN p.id IS NULL THEN NULL ELSE jsonb_build_object(
             'previewId', p.id, 'beforeBasisId', p.before_basis_id,
             'inputRevision', p.input_revision::text,
@@ -70,10 +78,12 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
       LEFT JOIN series_radar_bases pb ON pb.id = r.previous_basis_id AND pb.game_title_id = gt.id
       LEFT JOIN LATERAL (
         SELECT id, status, basis_id, source_input_revision, safe_failure_code,
-               created_at, updated_at, result
+               created_at, updated_at, result, origin_kind, manual_input, source_basis_id,
+               source_candidate_id, saved_by, saved_by_display_name
         FROM series_radar_candidates WHERE game_title_id = gt.id
         ORDER BY created_at DESC, id DESC LIMIT 1
       ) c ON true
+      LEFT JOIN series_radar_bases sb ON sb.id = c.source_basis_id AND sb.game_title_id = gt.id
       LEFT JOIN LATERAL (
         SELECT id, before_basis_id, input_revision, status, created_at
         FROM series_radar_previews WHERE candidate_id = c.id AND game_title_id = gt.id
@@ -160,7 +170,7 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
     })
 
   /** SQL truncates before JDBC allocation, and rendering independently admits the final bytes. */
-  private def document(
+  def document(
       query: Fragment,
       missing: AppError,
   ): ConnectionIO[Either[AppError, SeriesPlayerRadarDocument]] =

@@ -132,3 +132,18 @@ final class SeriesPlayerRadarHttpSpec extends MomoCatsEffectSuite with HttpAppTe
         assertEquals(jsonField[String](invalid, "state"), "invalid")
         assertEquals(invalid.hcursor.get[List[String]]("invalidFields"), Right(List("mapMasterId")))
   }
+
+  app.test("history validates its bounds and requires operator permission") { http =>
+    val history = uri"/api/admin/series-analysis/radar/revisions"
+    for
+      denied <- http.run(readGet(history, "account_akane_mami"))
+      _ <- denied.body.compile.drain
+      invalid <- http.run(readGet(Uri.unsafeFromString(history.toString + "?limit=51")))
+      _ <- invalid.body.compile.drain
+      allowed <- http.run(readGet(history))
+      body <- allowed.as[Json]
+    yield
+      assertEquals(denied.status, Status.Forbidden)
+      assertEquals(invalid.status, Status.UnprocessableContent)
+      assertEquals(allowed.status, Status.Ok, body.noSpaces)
+  }

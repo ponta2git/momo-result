@@ -27,6 +27,7 @@ export function radarCommandErrorMessage(error: unknown): string {
 
 const operationNames = {
   candidate: "変更案の作成",
+  manual: "保存した案の比較",
   preview: "比較の計算",
   apply: "基準の適用",
   withdraw: "取り下げ",
@@ -37,6 +38,8 @@ const operationNames = {
 
 export function radarFailureMessage(code: string | null): string {
   switch (code) {
+    case "no_matches":
+      return "案は保存済みですが、比較する試合がありません。記録を追加した後に比較を再試行してください。";
     case "source_changed":
     case "candidate_source_changed":
       return "変更案の作成元の記録が変わったため、適用できません。最新の記録から変更案を作り直してください。";

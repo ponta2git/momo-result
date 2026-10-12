@@ -190,6 +190,7 @@ private[bootstrap] object UseCaseRouteBundles:
         getSeriesAnalysisChunk = getSeriesAnalysisChunk,
         getSeriesAnalysisAdminOverview = getSeriesAnalysisAdminOverview,
         requestSeriesAnalysisRecalculation = requestSeriesAnalysisRecalculation,
+        getSeriesPlayerRadarHistory = GetSeriesPlayerRadarHistory[F](seriesPlayerRadar),
         getSeriesPlayerRadarState = GetSeriesPlayerRadarState[F](seriesPlayerRadar),
         getSeriesPlayerRadarPreview = GetSeriesPlayerRadarPreview[F](seriesPlayerRadar),
         getSeriesPlayerRadarOperation = GetSeriesPlayerRadarOperation[F](seriesPlayerRadar),

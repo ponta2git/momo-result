@@ -46,6 +46,8 @@ object HttpOperation:
   val GetSeriesAnalysisAdminOverview = "GET /api/admin/series-analysis/overview"
   val RequestSeriesAnalysisTitle = "POST /api/admin/series-analysis/recalculations"
   val RequestSeriesAnalysisAll = "POST /api/admin/series-analysis/recalculations/all"
+  val GetRadarHistory = "GET /api/admin/series-analysis/radar/revisions"
+  val GetRadarRevision = "GET /api/admin/series-analysis/radar/revisions/:revisionId"
   val GetRadarState = "GET /api/admin/series-analysis/radar"
   val GetRadarPreview = "GET /api/admin/series-analysis/radar/preview"
   val GetRadarOperation = "GET /api/admin/series-analysis/radar/operation"

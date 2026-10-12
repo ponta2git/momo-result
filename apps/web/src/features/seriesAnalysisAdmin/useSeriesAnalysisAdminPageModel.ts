@@ -192,6 +192,7 @@ export function useSeriesAnalysisAdminPageModel() {
   return {
     authorization: {
       canOperate: authorization.allowed.operations,
+      retainOperations: authorization.retained.operations,
       canRecalculateAll: authorization.allowed.admin,
       retainAdmin: authorization.retained.admin,
       adminEpoch: authorization.epoch.admin,

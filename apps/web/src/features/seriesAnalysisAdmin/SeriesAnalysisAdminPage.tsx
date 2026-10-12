@@ -1,7 +1,9 @@
 import { Activity, Play, RefreshCw, RotateCw } from "lucide-react";
 import { useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { PlayerRadarAdministration } from "@/features/seriesAnalysisAdmin/PlayerRadarAdministration";
+import { PlayerRadarHistory } from "@/features/seriesAnalysisAdmin/PlayerRadarHistory";
 import {
   AdminSkeleton,
   ExecutionStatus,
@@ -29,7 +31,15 @@ export function SeriesAnalysisAdminPage() {
     page.authorization.retainAdmin &&
     allDialog.epoch === page.authorization.adminEpoch &&
     allDialog.open;
-  const [activeTab, setActiveTab] = useState("recalculation");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const activeTab =
+    requestedTab === "radar" || requestedTab === "history" ? requestedTab : "recalculation";
+  const setActiveTab = (value: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", value);
+    setSearchParams(next);
+  };
   const recalculationTabRef = useRef<HTMLElement>(null);
   const { data } = page.resource;
   const { selectedTitle } = page.selection;
@@ -46,6 +56,9 @@ export function SeriesAnalysisAdminPage() {
               分析の再計算
             </TabsTab>
             <TabsTab value="radar">レーダーの採点基準</TabsTab>
+            {page.authorization.retainOperations ? (
+              <TabsTab value="history">改訂履歴</TabsTab>
+            ) : null}
           </TabsList>
           <div className="mt-6 grid min-w-0 gap-6">
             {page.feedback.resourceError ? (
@@ -81,7 +94,7 @@ export function SeriesAnalysisAdminPage() {
                     : "管理者による作品の登録が必要です。"
                 }
               />
-            ) : data ? (
+            ) : data && activeTab !== "history" ? (
               <div className="max-w-lg">
                 <SelectField
                   label="対象作品"
@@ -188,6 +201,7 @@ export function SeriesAnalysisAdminPage() {
                   key={selectedTitle.gameTitleId}
                   gameTitleId={selectedTitle.gameTitleId}
                   gameTitleName={selectedTitle.gameTitleName}
+                  active={activeTab === "radar"}
                   onApplyAccepted={(operationId) => {
                     page.actions.clearRecalculationFeedback();
                     setActiveTab("recalculation");
@@ -205,6 +219,13 @@ export function SeriesAnalysisAdminPage() {
               </div>
             ) : null}
           </TabsPanel>
+          {page.authorization.retainOperations ? (
+            <TabsPanel value="history">
+              {activeTab === "history" ? (
+                <PlayerRadarHistory titleOptions={data?.titleOptions ?? []} />
+              ) : null}
+            </TabsPanel>
+          ) : null}
         </TabsRoot>
       </PageContentSurface>
     </PageFrame>

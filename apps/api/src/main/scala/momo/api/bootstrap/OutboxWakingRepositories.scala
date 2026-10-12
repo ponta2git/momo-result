@@ -220,6 +220,10 @@ private[bootstrap] object OutboxWakingRepositories:
   ): SeriesPlayerRadarRepository[F] =
     val wake = WakeAfterCommit(sink, onSinkClosed)
     new SeriesPlayerRadarRepository[F]:
+      override def radarHistory(request: SeriesPlayerRadarHistoryRequest)
+          : F[Either[AppError, SeriesPlayerRadarDocument]] = delegate.radarHistory(request)
+      override def radarRevision(revisionId: String)
+          : F[Either[AppError, SeriesPlayerRadarDocument]] = delegate.radarRevision(revisionId)
       override def radarState(title: GameTitleId): F[Either[AppError, SeriesPlayerRadarDocument]] =
         delegate.radarState(title)
       override def radarPreview(request: SeriesPlayerRadarPreviewRequest)

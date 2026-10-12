@@ -12,6 +12,15 @@ import {
   radarReviewPresentation,
   radarSubmissionUncertain,
 } from "@/features/seriesAnalysisAdmin/playerRadarAdminPresentation";
+import type {
+  RadarEditingModel,
+  RadarEditingSource,
+} from "@/features/seriesAnalysisAdmin/radarThresholdEditorModel";
+import {
+  radarBasisInput,
+  radarInputBasis,
+} from "@/features/seriesAnalysisAdmin/radarThresholdInput";
+import { useRadarEditingEvaluation } from "@/features/seriesAnalysisAdmin/useRadarEditingEvaluation";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { normalizeDisplayApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
@@ -63,6 +72,7 @@ export function usePlayerRadarAdminModel(
     seasonName: "",
     mapName: "",
   });
+  const [editorActive, setEditorActive] = useState(false);
   const [checkingOperation, setCheckingOperation] = useState(false);
   const [checkError, setCheckError] = useState<unknown>();
   const optionsQuery = useQuery(seriesAnalysisOptionsQueryOptions());
@@ -181,7 +191,7 @@ export function usePlayerRadarAdminModel(
   const operationReason =
     busyReason ?? (operationInProgress ? "現在の処理の完了を確認してください。" : null);
   const candidateActive =
-    candidate && candidate.status !== "applied" && candidate.status !== "withdrawn";
+    candidate && ["pending", "ready", "unavailable", "failed"].includes(candidate.status);
 
   const submit = (request: SeriesPlayerRadarCommand) => {
     if (commandPending.current) return;
@@ -191,11 +201,14 @@ export function usePlayerRadarAdminModel(
     command.mutate({ request, lease });
   };
   const submitAsync = async (request: SeriesPlayerRadarCommand) => {
-    if (commandPending.current) return;
+    if (commandPending.current) throw new Error("操作を受け付けています。");
     const lease = authorization.begin("operations");
     if (!lease) throw new DOMException("権限を確認できません", "AbortError");
     commandPending.current = true;
-    await command.mutateAsync({ request, lease });
+    const response = await command.mutateAsync({ request, lease });
+    if (!mounted.current || !authorization.canCommit(lease))
+      throw new DOMException("権限を確認できません", "AbortError");
+    return response;
   };
   const refresh = async () => {
     const lease = authorization.begin("operations");
@@ -207,6 +220,7 @@ export function usePlayerRadarAdminModel(
     if (!mounted.current || !authorization.canCommit(lease)) return;
     if (result.data?.candidate?.latestPreview?.previewId === previewId && previewId)
       await previewQuery.refetch();
+    await editingEvaluation.refresh();
     if (!mounted.current || !authorization.canCommit(lease)) return;
     if (result.isSuccess && conflictNeedsRefresh) command.reset();
   };
@@ -274,13 +288,13 @@ export function usePlayerRadarAdminModel(
               ? "loading"
               : previewQuery.isError
                 ? "error"
-                : !preview
-                  ? "loading"
-                  : preview.scope.state === "empty"
+                : preview
+                  ? preview.scope.state === "empty"
                     ? "empty"
                     : preview.scope.state === "awaiting_analysis"
                       ? "awaiting_analysis"
-                      : "ready",
+                      : "ready"
+                  : "loading",
           before: preview?.before
             ? playerRadarEvaluationDisplay(preview.before, beforeBasis, maps)
             : null,
@@ -292,18 +306,76 @@ export function usePlayerRadarAdminModel(
         }
       : null;
 
+  const preparedEvaluation: RadarEditingModel["evaluation"] =
+    previewDisplay?.after &&
+    preview?.status === "ready" &&
+    (preview.beforeBasisId ?? null) === (currentBasis?.basisId ?? null) &&
+    !previewQuery.isError
+      ? {
+          key: `${preview.previewId}:${preview.inputRevision}:${scope.seasonMasterId}:${scope.mapMasterId}`,
+          before: previewDisplay.before,
+          raw: previewDisplay.after,
+          createdAt: preview.createdAt,
+        }
+      : null;
+  const editingEvaluation = useRadarEditingEvaluation({
+    active: editorActive && authorization.allowed.operations,
+    gameTitleId,
+    currentBasisId: currentBasis?.basisId ?? null,
+    scope,
+    prepared: preparedEvaluation,
+  });
+  const expectedCandidateId = candidateActive ? candidate.candidateId : null;
+  const currentEditingSource: RadarEditingSource | null = currentBasis
+    ? {
+        label: "適用中の基準",
+        basis: currentBasis,
+        input: radarBasisInput(currentBasis),
+        sourceBasisId: currentBasis.basisId,
+        sourceCandidateId: null,
+        expectedCurrentBasisId: currentBasis.basisId,
+        expectedCandidateId,
+        savedCandidateId: null,
+      }
+    : null;
+  const sourceBasis = candidate?.sourceBasis
+    ? playerRadarBasisDisplay(candidate.sourceBasis, maps)
+    : candidateBasis;
+  const manualSourceBasisId = candidate?.sourceBasisId;
+  const editableBasis =
+    candidate?.manualInput && sourceBasis && manualSourceBasisId
+      ? radarInputBasis(sourceBasis, candidate.manualInput)
+      : candidate?.status === "ready"
+        ? candidateBasis
+        : null;
+  const candidateEditingSource: RadarEditingSource | null =
+    candidateActive && editableBasis
+      ? {
+          label: candidate.manualInput ? "保存済みの手調整案" : "自動提案の変更案",
+          basis: editableBasis,
+          input: candidate.manualInput ?? radarBasisInput(editableBasis),
+          sourceBasisId: manualSourceBasisId ?? editableBasis.basisId,
+          sourceCandidateId: candidate.manualInput
+            ? candidate.sourceCandidateId
+            : candidate.candidateId,
+          expectedCurrentBasisId: currentBasis?.basisId ?? null,
+          expectedCandidateId,
+          savedCandidateId: candidate.candidateId,
+        }
+      : null;
+
   const applyDisabledReason =
     operationReason ??
     (conflictNeedsRefresh ? "基準の状態を更新し、最新の比較を確認してください。" : null) ??
-    (candidate?.status !== "ready"
-      ? "有効な変更案が必要です。"
-      : previewState !== "ready"
-        ? "最新の記録で比較を計算し、内容を確認してください。"
-        : previewQuery.isFetching || stateQuery.isFetching
+    (candidate?.status === "ready"
+      ? previewState === "ready"
+        ? previewQuery.isFetching || stateQuery.isFetching
           ? "最新の状態を読み込んでいます。"
           : previewQuery.isError || stateQuery.isError
             ? "比較と基準の状態を再読み込みしてください。"
-            : null);
+            : null
+        : "最新の記録で比較を計算し、内容を確認してください。"
+      : "有効な変更案が必要です。");
   const missingRecords =
     state && (state.eligibility.matchCount < 40 || state.eligibility.heldEventCount < 8)
       ? `作成にはあと${[
@@ -317,7 +389,7 @@ export function usePlayerRadarAdminModel(
       : null;
   const feedbackError =
     checkError ??
-    (!communicationUnknown ? commandError : null) ??
+    (communicationUnknown ? null : commandError) ??
     (shouldShowQueryError(stateQuery) ? stateQuery.error : null) ??
     (shouldShowQueryError(optionsQuery) ? optionsQuery.error : null);
   const normalizedError = feedbackError ? normalizeDisplayApiError(feedbackError) : null;
@@ -333,6 +405,52 @@ export function usePlayerRadarAdminModel(
 
   const model: PlayerRadarAdminModel | null = state
     ? {
+        editing: {
+          acceptedSave:
+            accepted?.candidateId &&
+            submittedRequest?.kind === "manual" &&
+            submittedRequest.manualInput &&
+            submittedRequest.sourceBasisId &&
+            command.variables &&
+            authorization.canCommit(command.variables.lease)
+              ? {
+                  candidateId: accepted.candidateId,
+                  request: {
+                    sourceBasisId: submittedRequest.sourceBasisId,
+                    sourceCandidateId: submittedRequest.sourceCandidateId ?? null,
+                    expectedCurrentBasisId: submittedRequest.expectedCurrentBasisId ?? null,
+                    expectedCandidateId: submittedRequest.expectedCandidateId ?? null,
+                    manualInput: {
+                      axes: (submittedRequest.manualInput.axes ?? []).map((axis) => ({
+                        axisId: axis.axisId,
+                        thresholds: axis.thresholds ?? [],
+                      })),
+                    },
+                  },
+                }
+              : null,
+          current: currentEditingSource,
+          candidate: candidateEditingSource,
+          evaluation: editingEvaluation.evaluation,
+          evaluationMessage: editingEvaluation.message,
+          evaluationUpdating: editingEvaluation.loading || previewQuery.isFetching,
+          permissionReason,
+          saveDisabledReason:
+            operationReason ?? (conflictNeedsRefresh ? "基準の状態を更新してください。" : null),
+          onActiveChange: setEditorActive,
+          save: async (request) => {
+            if (operationReason) throw new Error(operationReason);
+            const response = await submitAsync({ gameTitleId, kind: "manual", ...request });
+            if (!response.candidateId) throw new Error("保存済みの案を確認できません。");
+            return response.candidateId;
+          },
+          reuseCandidate: async (id) => {
+            if (candidate?.candidateId !== id || operationReason)
+              throw new Error("最新の共有案を確認してください。");
+            if (previewState !== "ready")
+              await submitAsync({ gameTitleId, kind: "preview", candidateId: id });
+          },
+        },
         gameTitleId,
         gameTitleName,
         currentBasis,
@@ -340,6 +458,7 @@ export function usePlayerRadarAdminModel(
         eligibility: state.eligibility,
         candidate: candidate
           ? {
+              manuallyEdited: Boolean(candidate.manualInput),
               candidateId: candidate.candidateId,
               status: candidate.status,
               basis: candidateBasis,
@@ -419,10 +538,14 @@ export function usePlayerRadarAdminModel(
           withdraw: {
             pending: command.isPending && submittedRequest?.kind === "withdraw",
             disabledReason: busyReason,
-            run: () =>
-              candidate
-                ? submitAsync({ gameTitleId, kind: "withdraw", candidateId: candidate.candidateId })
-                : undefined,
+            run: async () => {
+              if (candidate)
+                await submitAsync({
+                  gameTitleId,
+                  kind: "withdraw",
+                  candidateId: candidate.candidateId,
+                });
+            },
           },
           restore: {
             pending: command.isPending && submittedRequest?.kind === "restore",
@@ -440,7 +563,8 @@ export function usePlayerRadarAdminModel(
             pending: command.isPending && submittedRequest?.kind === "retry",
             disabledReason:
               operationReason ??
-              (candidate?.status === "invalid" || candidate?.status === "unavailable"
+              (!candidate?.manualInput &&
+              (candidate?.status === "invalid" || candidate?.status === "unavailable")
                 ? "変更案を取り下げ、最新の記録から作り直してください。"
                 : null),
             run: () => {

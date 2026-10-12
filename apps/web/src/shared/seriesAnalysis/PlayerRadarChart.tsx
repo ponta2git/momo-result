@@ -1,12 +1,12 @@
 import { useId, useLayoutEffect, useRef, useState } from "react";
 
-import { dataVizSeriesPresentation } from "@/features/seriesComparison/charts/dataViz/seriesPresentation";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import {
   playerRadarAxes,
   playerRadarScoreLabel,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import type { PlayerRadarPlayer } from "@/shared/seriesAnalysis/playerRadarPresentation";
+import { dataVizSeriesPresentation } from "@/shared/seriesAnalysis/seriesPresentation";
 import { cn } from "@/shared/ui/cn";
 import { contentText } from "@/shared/ui/typography";
 
@@ -24,9 +24,11 @@ function coordinate(center: { x: number; y: number }, index: number, distance: n
 export function PlayerRadarChart({
   player,
   referenceScoresGrouped,
+  comparison,
 }: {
   player: PlayerRadarPlayer;
   referenceScoresGrouped: boolean;
+  comparison?: { before: PlayerRadarPlayer | null } | undefined;
 }) {
   const figureId = useId();
   const figureRef = useRef<HTMLElement>(null);
@@ -62,6 +64,14 @@ export function PlayerRadarChart({
           : null,
     };
   });
+  const beforeVertices = playerRadarAxes.map((axis, index) => {
+    const cell = comparison?.before?.axes.find((value) => value.axisId === axis.id);
+    return {
+      axis,
+      cell,
+      point: cell?.score != null ? coordinate(center, index, (radius * cell.score) / 10) : null,
+    };
+  });
   const areaPoints = vertices.map(({ point }) => point);
   return (
     <figure
@@ -69,8 +79,9 @@ export function PlayerRadarChart({
       className="grid w-full min-w-0 gap-2"
       aria-labelledby={`${figureId}-name`}
     >
-      <figcaption className={cn(contentText.body, "flex")} id={`${figureId}-name`}>
+      <figcaption className={cn(contentText.body, "grid gap-1")} id={`${figureId}-name`}>
         <MemberSequenceLabel memberId={player.memberId}>{player.displayName}</MemberSequenceLabel>
+        {comparison ? <span className={contentText.supporting}>■ 適用中　● 変更案</span> : null}
       </figcaption>
       <svg
         aria-describedby={`${figureId}-description`}
@@ -81,13 +92,15 @@ export function PlayerRadarChart({
         viewBox={`0 0 ${width} ${height}`}
         width={width}
       >
-        <title id={`${figureId}-title`}>{player.displayName}の6軸レーダー</title>
+        <title id={`${figureId}-title`}>
+          {player.displayName}の6軸レーダー{comparison ? "（適用中／変更案）" : ""}
+        </title>
         <desc id={`${figureId}-description`}>
           {referenceScoresGrouped ? "点数は参考値です。" : ""}
           {vertices
             .map(
               ({ axis, cell }) =>
-                `${axis.label}：${playerRadarScoreLabel(cell)}${!referenceScoresGrouped && cell?.sampleQuality === "reference" && cell.score !== null ? "（参考値）" : ""}`,
+                `${axis.label}：${comparison ? `適用中 ${playerRadarScoreLabel(comparison.before?.axes.find((value) => value.axisId === axis.id))}、変更案 ` : ""}${playerRadarScoreLabel(cell)}${!referenceScoresGrouped && cell?.sampleQuality === "reference" && cell.score !== null ? "（参考値）" : ""}`,
             )
             .join("。")}
         </desc>
@@ -155,7 +168,9 @@ export function PlayerRadarChart({
                   x={label.x}
                   y={top + axis.chartLabel.length * 16 + 16}
                 >
-                  {playerRadarScoreLabel(cell)}
+                  {comparison
+                    ? `${beforeVertices[index]?.cell?.score ?? "—"} → ${cell?.score ?? "—"}点`
+                    : playerRadarScoreLabel(cell)}
                   {reference ? (
                     <tspan
                       className={contentText.supporting}
@@ -171,6 +186,42 @@ export function PlayerRadarChart({
             );
           })}
         </g>
+        {comparison ? (
+          <g aria-hidden="true" stroke="var(--color-text-secondary)" strokeWidth="1.5">
+            {beforeVertices.map(({ axis, cell, point }, index) => {
+              const next = beforeVertices[(index + 1) % beforeVertices.length];
+              return point ? (
+                <g key={axis.id}>
+                  {next?.point ? (
+                    <line
+                      strokeDasharray={
+                        cell?.sampleQuality === "reference" ||
+                        next.cell?.sampleQuality === "reference"
+                          ? "4 4"
+                          : undefined
+                      }
+                      x1={point.x}
+                      x2={next.point.x}
+                      y1={point.y}
+                      y2={next.point.y}
+                    />
+                  ) : null}
+                  <rect
+                    x={point.x - 2.5}
+                    y={point.y - 2.5}
+                    width="5"
+                    height="5"
+                    fill={
+                      cell?.sampleQuality === "reference"
+                        ? "var(--color-surface)"
+                        : "var(--color-text-secondary)"
+                    }
+                  />
+                </g>
+              ) : null;
+            })}
+          </g>
+        ) : null}
         <g aria-hidden="true" stroke={presentation.color} strokeWidth="1.8">
           {vertices.map(({ axis, cell, point }, index) => {
             const next = vertices[(index + 1) % vertices.length];

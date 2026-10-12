@@ -119,9 +119,10 @@ pub struct RadarMapCount {
 pub struct RadarAxisBasis {
     pub axis_id: RadarAxis,
     /// Distribution quantiles expressed in the original unit (rank therefore decreases).
-    pub q10: f64,
-    pub median: f64,
-    pub q90: f64,
+    /// Manual criteria do not claim a generated distribution.
+    pub q10: Option<f64>,
+    pub median: Option<f64>,
+    pub q90: Option<f64>,
     /// Original-unit boundaries for scores 2 through 10, in that order.
     pub thresholds: [f64; 9],
 }
@@ -135,6 +136,31 @@ pub struct RadarBasis {
     pub window_stride: usize,
     pub source: RadarSourceSummary,
     pub axes: [RadarAxisBasis; 6],
+    /// Absent on legacy generated criteria so their canonical bytes and checksum stay unchanged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manual: Option<Box<RadarManualProvenance>>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct RadarManualProvenance {
+    pub source_basis_id: String,
+    pub source_candidate_id: Option<String>,
+    /// First successful comparison, kept independently of the inherited generation source.
+    pub monitoring_source: RadarSourceSummary,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct RadarManualAxis {
+    pub axis_id: RadarAxis,
+    pub thresholds: [f64; 9],
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct RadarManualInput {
+    pub axes: [RadarManualAxis; 6],
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -154,6 +180,14 @@ pub struct RadarAggregate {
 }
 
 impl RadarBasis {
+    /// Selects the immutable snapshot used for review monitoring, never the latest preview.
+    #[must_use]
+    pub fn monitoring_source(&self) -> &RadarSourceSummary {
+        self.manual
+            .as_ref()
+            .map_or(&self.source, |manual| &manual.monitoring_source)
+    }
+
     /// Calculation identity excludes the database basis id and every application timestamp.
     ///
     /// # Errors
@@ -172,10 +206,13 @@ impl RadarBasis {
     /// Rejects a basis incompatible with the fixed definition or scoring method.
     pub fn candidate_summary(&self) -> Result<RadarCandidateSummary, RadarError> {
         super::calculation::validate_basis(self)?;
-        let window_count = self
-            .source
-            .match_count
-            .saturating_sub(RADAR_WINDOW_SIZE - 1);
+        let window_count = if self.manual.is_some() {
+            0
+        } else {
+            self.source
+                .match_count
+                .saturating_sub(RADAR_WINDOW_SIZE - 1)
+        };
         let values_per_axis = window_count
             .checked_mul(4)
             .ok_or(RadarError::InvalidBasis)?;
@@ -185,9 +222,9 @@ impl RadarBasis {
             values_per_axis,
             axes: self.axes.clone().map(|axis| RadarCandidateAxis {
                 axis_id: axis.axis_id,
-                q10: Some(axis.q10),
-                median: Some(axis.median),
-                q90: Some(axis.q90),
+                q10: axis.q10,
+                median: axis.median,
+                q90: axis.q90,
                 thresholds: Some(axis.thresholds),
                 unavailable_reasons: Vec::new(),
             }),

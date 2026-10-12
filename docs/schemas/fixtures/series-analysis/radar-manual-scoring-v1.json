@@ -1,0 +1,28 @@
+{
+  "input": {
+    "axes": [
+      { "axisId": "averageRank", "thresholds": [4.2, 3.8, 3.4, 3, 2.6, 2.2, 1.8, 1.4, 1] },
+      { "axisId": "revenueP90", "thresholds": [-50, -25, 0, 25, 50, 75, 100, 125, 150] },
+      { "axisId": "revenueAverage", "thresholds": [-50, -25, 0, 25, 50, 75, 100, 125, 150] },
+      { "axisId": "totalAssetsP10", "thresholds": [-50, -25, 0, 25, 50, 75, 100, 125, 150] },
+      { "axisId": "totalAssetsMedian", "thresholds": [-50, -25, 0, 25, 50, 75, 100, 125, 150] },
+      { "axisId": "totalAssetsP90", "thresholds": [-50, -25, 0, 25, 50, 75, 100, 125, 150] }
+    ]
+  },
+  "cases": [
+    { "axisId": "averageRank", "rawValue": 4, "score": 2 },
+    { "axisId": "averageRank", "rawValue": 2.6000000000000005, "score": 5 },
+    { "axisId": "averageRank", "rawValue": 2.6, "score": 6 },
+    { "axisId": "averageRank", "rawValue": 2.5999999999999996, "score": 6 },
+    { "axisId": "averageRank", "rawValue": 1.0000000000000002, "score": 9 },
+    { "axisId": "averageRank", "rawValue": 1, "score": 10 },
+    { "axisId": "revenueP90", "rawValue": -50.00000000000001, "score": 1 },
+    { "axisId": "revenueP90", "rawValue": -50, "score": 2 },
+    { "axisId": "revenueP90", "rawValue": -49.99999999999999, "score": 2 },
+    { "axisId": "revenueAverage", "rawValue": 0, "score": 4 },
+    { "axisId": "totalAssetsP10", "rawValue": -25, "score": 3 },
+    { "axisId": "totalAssetsMedian", "rawValue": 149.99999999999997, "score": 9 },
+    { "axisId": "totalAssetsP90", "rawValue": 150, "score": 10 },
+    { "axisId": "totalAssetsP90", "rawValue": 1000, "score": 10 }
+  ]
+}

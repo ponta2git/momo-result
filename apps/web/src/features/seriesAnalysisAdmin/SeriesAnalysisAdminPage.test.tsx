@@ -317,6 +317,7 @@ describe("SeriesAnalysisAdminPage", () => {
       "aria-selected",
       "true",
     );
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(
       client.getQueryData(seriesPlayerRadarKeys.operation("gt_momotetsu_2", operation.operationId)),
     ).toEqual(operation);
@@ -480,11 +481,9 @@ describe("SeriesAnalysisAdminPage", () => {
     await waitFor(() =>
       expect(screen.getByRole("dialog", { name: "採点基準の適用を受け付けました" })).toBeVisible(),
     );
-    expect(screen.getByRole("tab", { name: "分析の再計算" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    expect(screen.getByRole("tab", { name: "分析の再計算" })).toHaveFocus();
+    const recalculationTab = screen.getByRole("tab", { name: "分析の再計算" });
+    await waitFor(() => expect(recalculationTab).toHaveAttribute("aria-selected", "true"));
+    await waitFor(() => expect(recalculationTab).toHaveFocus());
     expect(keys).toHaveLength(2);
     expect(keys[0]).toBeTruthy();
     expect(keys[1]).toBe(keys[0]);

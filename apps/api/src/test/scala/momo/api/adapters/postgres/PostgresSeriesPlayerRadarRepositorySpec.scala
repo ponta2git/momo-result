@@ -233,7 +233,7 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
         INSERT INTO series_analysis_jobs(id, game_title_id, input_revision, algorithm_version,
           artifact_schema_version, validation_contract_id, status, trigger, work_kind, radar_operation_id)
         VALUES ('radar-prepare-job', $title, 0, 'series-analysis-v7', 6,
-          'series-analysis-artifact-v6-full-validation-v1', 'queued', 'manual', 'radar_prepare', $operationId)
+          'series-analysis-artifact-v6-full-validation-v2', 'queued', 'manual', 'radar_prepare', $operationId)
       """.update.run.transact(transactor)
       analysis <-
         PostgresSeriesAnalysisRepository.create[IO](transactor, SeriesAnalysisReadConfig.defaults)
@@ -279,7 +279,7 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
         "artifact-scope-proof"
       ) *> sql"""
         UPDATE series_analysis_artifacts
-        SET validation_contract_id = 'series-analysis-artifact-v6-full-validation-v1'
+        SET validation_contract_id = 'series-analysis-artifact-v6-full-validation-v2'
         WHERE id = 'artifact-scope-proof'
       """.update.run *> sql"""
         UPDATE series_analysis_artifacts SET status = 'published', published_at = now()
@@ -432,6 +432,169 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
         saved.hcursor.get[List[String]]("acknowledgedEvidenceKeys"),
         Right(List(evidence))
       )
+
+  test(
+    "editing a captured result stops a manual-basis restore application while preserving its candidate"
+  ):
+    val manualBasis = fixture("basis").mapObject(_.add(
+      "manual",
+      Json.obj(
+        "sourceBasisId" -> Json.fromString(basisId),
+        "sourceCandidateId" -> Json.fromString(candidateId),
+        "monitoringSource" ->
+          fixture("basis").hcursor.downField("source").focus.getOrElse(Json.Null)
+      )
+    )).noSpaces
+    for
+      _ <- seedTitle *> seedMatchPrerequisites
+      _ <- new PostgresMatchConfirmationRepository[IO](transactor).confirm(matchRecord, None, now)
+      _ <- seedReady
+      _ <-
+      (sql"UPDATE series_radar_candidates SET status='withdrawn' WHERE id=$candidateId".update.run *>
+        sql"""INSERT INTO series_radar_bases(id,game_title_id,checksum,payload,source_snapshot,source_checksum,source_input_revision)
+          SELECT 'manual-basis',$title,checksum,$manualBasis::jsonb,source_snapshot,source_checksum,source_input_revision
+          FROM series_radar_bases WHERE id=$basisId""".update.run *>
+        sql"""INSERT INTO series_radar_candidates(id,game_title_id,basis_id,status,origin_kind)
+          VALUES ('manual-restore',$title,'manual-basis','ready','restore')""".update.run *>
+        sql"""INSERT INTO series_radar_previews(id,game_title_id,candidate_id,before_basis_id,input_revision,status,evaluation_snapshot)
+          SELECT 'manual-preview',$title,'manual-restore',before_basis_id,input_revision,'ready',evaluation_snapshot
+          FROM series_radar_previews WHERE id=$previewId""".update.run).transact(transactor)
+      repository <- repo
+      accepted <- RequestSeriesPlayerRadarOperation[IO](repository).run(
+        command(
+          SeriesPlayerRadarOperationKind.Apply,
+          Some("manual-restore"),
+          Some("manual-preview")
+        ),
+        account,
+        "manual-restore-apply"
+      )
+      _ <- new PostgresMatchesRepository[IO](transactor).update(
+        matchRecord.copy(playedAt = now.plusSeconds(1)),
+        now.plusSeconds(1)
+      )
+      candidate <- sql"SELECT status FROM series_radar_candidates WHERE id='manual-restore'".query[
+        String
+      ].unique.transact(transactor)
+      operation <- accepted.traverse(value => repository.radarOperation(title, value.operationId))
+      state <- titleState
+      // The Worker's publication fence records this code on the retained candidate as well.
+      _ <- sql"""UPDATE series_radar_candidates SET safe_failure_code='evaluation_changed'
+        WHERE id='manual-restore'""".update.run.transact(transactor)
+      compared <- RequestSeriesPlayerRadarOperation[IO](repository).run(
+        command(SeriesPlayerRadarOperationKind.Preview, Some("manual-restore"), None),
+        account,
+        "manual-restore-recompare"
+      )
+      failure <-
+        sql"SELECT safe_failure_code FROM series_radar_candidates WHERE id='manual-restore'"
+          .query[Option[String]].unique.transact(transactor)
+    yield
+      assert(accepted.isRight, accepted.toString)
+      assertEquals(candidate, "ready")
+      assertEquals(
+        operation.toOption.flatMap(_.toOption).flatMap(_.safeFailureCode),
+        Some("evaluation_changed")
+      )
+      assertEquals(state, (None, None, 2L, None))
+      assertEquals(compared.map(_.status), Right("pending"))
+      assertEquals(failure, None)
+
+  test("pre-manual durable candidate requests retain their idempotency fingerprint"):
+    for
+      _ <- seedTitle
+      _ <-
+      (sql"""INSERT INTO series_radar_candidates(id,game_title_id) VALUES ('legacy-candidate',$title)""".update.run *>
+        sql"""INSERT INTO series_radar_operations(id,game_title_id,kind,candidate_id,requested_by,idempotency_key_hash,request_fingerprint)
+          VALUES ('legacy-operation',$title,'candidate','legacy-candidate',$account,
+            '215d8f2b05b32e88b18e3440b7fdd4a6da4764e0b2ebf3bac24d223b3644a269',
+            '2bce677318f1469630b38142f57d71cc6b847799989ae95cfc43ba873d87f3e1')""".update.run).transact(
+        transactor
+      )
+      repository <- repo
+      result <- RequestSeriesPlayerRadarOperation[IO](repository).run(
+        command(SeriesPlayerRadarOperationKind.Candidate, None, None),
+        account,
+        "legacy-radar-key"
+      )
+    yield assertEquals(result.map(_.operationId), Right("legacy-operation"))
+
+  private def manualCommand: SeriesPlayerRadarCommand =
+    val axes = fixture("basis").hcursor.get[List[Json]]("axes").toOption.getOrElse(fail("axes"))
+      .map { axis =>
+        SeriesPlayerRadarManualAxis(
+          axis.hcursor.get[String]("axisId").toOption.get,
+          axis.hcursor.get[List[Double]]("thresholds").toOption.get
+        )
+      }
+    command(SeriesPlayerRadarOperationKind.Manual, None, None).copy(
+      expectedCandidateId = Some(candidateId),
+      sourceBasisId = Some(basisId),
+      sourceCandidateId = Some(candidateId),
+      manualInput = Some(SeriesPlayerRadarManualInput(axes))
+    )
+
+  test(
+    "manual save atomically replaces a candidate, snapshots its actor, replays and fences competing saves"
+  ):
+    for
+      _ <- seedTitle *> seedReady
+      repository <- repo
+      useCase = RequestSeriesPlayerRadarOperation[IO](repository)
+      saved <- useCase.run(manualCommand, account, "manual-save")
+      replay <- useCase.run(manualCommand, account, "manual-save")
+      conflict <- useCase.run(manualCommand, account, "competing-save")
+      rows <-
+        sql"SELECT status, origin_kind, saved_by FROM series_radar_candidates ORDER BY created_at, id"
+          .query[(String, String, Option[String])].to[List].transact(transactor)
+      document <- repository.radarState(title)
+      unchanged <- titleState
+    yield
+      assertEquals(saved.map(_.kind), Right("manual"))
+      assertEquals(replay, saved)
+      assertEquals(conflict.left.toOption.map(_.code), Some("CONFLICT"))
+      assert(rows.contains(("withdrawn", "generated", None)))
+      assert(rows.contains(("pending", "manual", Some(account.value))))
+      assert(document.isRight, document.toString)
+      assertEquals(unchanged, (None, None, 0L, None))
+
+  test(
+    "history paginates immutable publications and detail keeps recorded actors and basis payloads"
+  ):
+    for
+      _ <- seedTitle *> seedReady
+      _ <- List("history-a", "history-b", "history-c").traverse_ { id =>
+        (sql"""INSERT INTO series_radar_operations(id,game_title_id,kind,status,candidate_id,preview_id,basis_id,
+          requested_by,requested_by_display_name,idempotency_key_hash,request_fingerprint,finished_at)
+          VALUES ($id,$title,'apply','succeeded',$candidateId,$previewId,$basisId,$account,'当時の適用者',$id,$id,$now)""".update.run *>
+          sql"""INSERT INTO series_radar_revisions(operation_id,game_title_id,candidate_id,after_basis_id,change_kind,
+          requested_by,requested_by_display_name,published_at)
+          VALUES ($id,$title,$candidateId,$basisId,'generated',$account,'当時の適用者',$now)""".update.run).transact(
+          transactor
+        ).void
+      }
+      repository <- repo
+      first <- repository.radarHistory(SeriesPlayerRadarHistoryRequest(Some(title), 2, None))
+      next <-
+        repository.radarHistory(SeriesPlayerRadarHistoryRequest(Some(title), 2, Some("history-b")))
+      detail <- repository.radarRevision("history-c")
+    yield
+      def json(value: Either[momo.api.errors.AppError, SeriesPlayerRadarDocument]): Json =
+        value.toOption.flatMap(doc =>
+          parser.parse(new String(doc.payload, java.nio.charset.StandardCharsets.UTF_8)).toOption
+        )
+          .getOrElse(fail(value.toString))
+      assertEquals(json(first).hcursor.get[String]("nextCursor"), Right("history-b"))
+      assertEquals(json(first).hcursor.get[List[Json]]("items").map(_.size), Right(2))
+      assertEquals(json(next).hcursor.get[List[Json]]("items").map(_.size), Right(1))
+      assertEquals(json(next).hcursor.downField("nextCursor").focus, Some(Json.Null))
+      assertEquals(
+        json(
+          detail
+        ).hcursor.downField("revision").downField("appliedBy").get[String]("displayName"),
+        Right("当時の適用者")
+      )
+      assertEquals(json(detail).hcursor.downField("afterBasis").focus, Some(fixture("basis")))
 
   private def titleState: IO[(Option[String], Option[String], Long, Option[String])] = sql"""
     SELECT desired_basis_id, current_basis_id, generation, active_operation_id

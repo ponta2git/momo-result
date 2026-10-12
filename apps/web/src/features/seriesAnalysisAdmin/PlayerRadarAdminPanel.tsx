@@ -9,6 +9,8 @@ import type {
 import { radarCommandErrorMessage } from "@/features/seriesAnalysisAdmin/playerRadarAdminPresentation";
 import { PlayerRadarCriteria } from "@/features/seriesAnalysisAdmin/PlayerRadarCriteria";
 import { PlayerRadarPreview } from "@/features/seriesAnalysisAdmin/PlayerRadarPreview";
+import { PlayerRadarThresholdEditor } from "@/features/seriesAnalysisAdmin/PlayerRadarThresholdEditor";
+import { useRadarThresholdEditor } from "@/features/seriesAnalysisAdmin/useRadarThresholdEditor";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { playerRadarAxes } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import type { PlayerRadarBasis } from "@/shared/seriesAnalysis/playerRadarPresentation";
@@ -49,11 +51,21 @@ function CommandButton({
 
 export function PlayerRadarAdminPanel({
   model,
+  active = true,
   applyFinalFocus,
 }: {
   model: PlayerRadarAdminModel;
+  active?: boolean;
   applyFinalFocus?: (() => HTMLElement | null) | undefined;
 }) {
+  const editor = useRadarThresholdEditor(model);
+  const currentSource = model.editing?.current;
+  const candidateSource = model.editing?.candidate;
+  const applyDisabledReason =
+    model.applyDisabledReason ??
+    (editor.active && !editor.canApply
+      ? "入力中の案を保存し、正式な比較を確認してください。"
+      : null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const applyTriggerRef = useRef<HTMLButtonElement>(null);
   const withdrawTriggerRef = useRef<HTMLButtonElement>(null);
@@ -66,6 +78,12 @@ export function PlayerRadarAdminPanel({
     | null
   >(null);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [previousActive, setPreviousActive] = useState(active);
+  if (previousActive !== active) {
+    setPreviousActive(active);
+    setConfirmation(null);
+    setWithdrawOpen(false);
+  }
   const [changeMethod, setChangeMethod] = useState<"generate" | "restore">("generate");
   const creationAction =
     changeMethod === "restore" && model.previousBasis
@@ -77,13 +95,14 @@ export function PlayerRadarAdminPanel({
   const applicationInProgress = operationInProgress && model.operation?.kind === "apply";
   const candidateActive = candidate && !["applied", "withdrawn"].includes(candidate.status);
   const previewNeedsRebuild =
-    candidate?.status === "ready" &&
+    (candidate?.status === "ready" ||
+      (candidate?.manuallyEdited && ["unavailable", "failed"].includes(candidate.status))) &&
     (model.previewState === "stale" ||
       model.previewState === "none" ||
       model.previewState === "failed");
   const applyReasonExplainedByPreview =
     previewNeedsRebuild &&
-    model.applyDisabledReason === "最新の記録で比較を計算し、内容を確認してください。";
+    applyDisabledReason === "最新の記録で比較を計算し、内容を確認してください。";
   const applyTarget =
     candidate?.status === "ready" && model.preview
       ? {
@@ -190,7 +209,7 @@ export function PlayerRadarAdminPanel({
                 "変更案を作った記録が変更されました。変更案を取り下げ、最新の記録から作り直してください。"}
             </Notice>
           ) : null}
-          {candidate.status === "unavailable" ? (
+          {candidate.status === "unavailable" && !candidate.manuallyEdited ? (
             <Notice title="採点基準を作れませんでした" tone="info">
               <ul className="grid gap-1">
                 {candidate.unavailableAxes.map((axis) => (
@@ -204,14 +223,41 @@ export function PlayerRadarAdminPanel({
           ) : null}
         </>
       ) : null}
-      <PlayerRadarCriteria
-        currentBasis={model.currentBasis}
-        proposedBasis={candidateActive ? candidate.basis : null}
-      />
+      {editor.active ? (
+        <PlayerRadarThresholdEditor editor={editor} model={model} />
+      ) : (
+        <>
+          <PlayerRadarCriteria
+            currentBasis={model.currentBasis}
+            proposedBasis={candidateActive ? candidate.basis : null}
+          />
+          {model.editing && (model.editing.current || model.editing.candidate) ? (
+            <div className={actionRowClass}>
+              {model.editing.current ? (
+                <Button
+                  disabled={Boolean(model.editing.saveDisabledReason)}
+                  onClick={() => currentSource && editor.begin(currentSource)}
+                >
+                  適用中の基準を調整
+                </Button>
+              ) : null}
+              {model.editing.candidate ? (
+                <Button
+                  disabled={Boolean(model.editing.saveDisabledReason)}
+                  variant={model.editing.current ? "secondary" : "primary"}
+                  onClick={() => candidateSource && editor.begin(candidateSource)}
+                >
+                  {candidate?.manuallyEdited ? "保存済みの案を編集" : "この提案を調整"}
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+        </>
+      )}
       {candidateActive ? (
         <section aria-labelledby="radar-preview-heading" className="grid min-w-0 gap-4">
           <h3 className={contentText.heading} id="radar-preview-heading">
-            点数への影響
+            {editor.active ? "正式な比較と適用" : "点数への影響"}
           </h3>
           {previewNeedsRebuild ? (
             <Notice
@@ -235,7 +281,7 @@ export function PlayerRadarAdminPanel({
               {null}
             </Notice>
           ) : null}
-          {model.preview ? (
+          {model.preview && !editor.active ? (
             <PlayerRadarPreview
               preview={model.preview}
               filter={model.previewFilter}
@@ -254,9 +300,9 @@ export function PlayerRadarAdminPanel({
                     ? applyTriggerRef.current
                     : headingRef.current)
                 }
-                open={confirmation !== null}
+                open={active && confirmation !== null}
                 onOpenChange={(open) => setConfirmation(open ? applyTarget : null)}
-                confirmDisabled={Boolean(model.applyDisabledReason) || Boolean(confirmationChanged)}
+                confirmDisabled={Boolean(applyDisabledReason) || Boolean(confirmationChanged)}
                 confirmLabel="作品全体に適用する"
                 pendingLabel="適用を受付中"
                 description={`${confirmation?.gameTitleName ?? model.gameTitleName}の全シーズン・全マップに適用します。過去の成績もこの基準で再採点します。`}
@@ -266,9 +312,9 @@ export function PlayerRadarAdminPanel({
                 tone="primary"
                 trigger={
                   <Button
-                    disabled={Boolean(model.applyDisabledReason)}
+                    disabled={Boolean(applyDisabledReason)}
                     ref={applyTriggerRef}
-                    variant={model.applyDisabledReason ? "secondary" : "primary"}
+                    variant={applyDisabledReason ? "secondary" : "primary"}
                   >
                     この変更案を適用する
                   </Button>
@@ -283,6 +329,7 @@ export function PlayerRadarAdminPanel({
                       basisId: confirmation.basisId,
                     };
                     await model.actions.apply(target);
+                    editor.finish();
                   }
                 }}
               >
@@ -313,54 +360,54 @@ export function PlayerRadarAdminPanel({
                 ) : null}
               </AlertDialog>
             ) : null}
-            <AlertDialog
-              finalFocus={() =>
-                withdrawTriggerRef.current?.isConnected && !withdrawTriggerRef.current.disabled
-                  ? withdrawTriggerRef.current
-                  : headingRef.current
-              }
-              open={withdrawOpen}
-              onOpenChange={setWithdrawOpen}
-              confirmLabel={applicationInProgress ? "適用を取り下げる" : "変更案を取り下げる"}
-              pendingLabel="取り下げを受付中"
-              description={
-                applicationInProgress
-                  ? "公開前であれば、適用を取り消します。"
-                  : "この変更案を破棄します。適用中の採点基準は変わりません。"
-              }
-              formatError={radarCommandErrorMessage}
-              pending={model.actions.withdraw.pending}
-              confirmDisabled={Boolean(model.actions.withdraw.disabledReason)}
-              title={
-                applicationInProgress
-                  ? "この基準の適用を取り下げますか？"
-                  : "この変更案を取り下げますか？"
-              }
-              trigger={
-                <Button
-                  disabled={Boolean(model.actions.withdraw.disabledReason)}
-                  ref={withdrawTriggerRef}
-                  variant="quiet"
-                >
-                  {applicationInProgress ? "適用を取り下げる" : "変更案を取り下げる"}
-                </Button>
-              }
-              onConfirm={async () => {
-                await model.actions.withdraw.run();
-              }}
-            />
+            {!editor.active ? (
+              <AlertDialog
+                finalFocus={() =>
+                  withdrawTriggerRef.current?.isConnected && !withdrawTriggerRef.current.disabled
+                    ? withdrawTriggerRef.current
+                    : headingRef.current
+                }
+                open={active && withdrawOpen}
+                onOpenChange={setWithdrawOpen}
+                confirmLabel={applicationInProgress ? "適用を取り下げる" : "変更案を取り下げる"}
+                pendingLabel="取り下げを受付中"
+                description={
+                  applicationInProgress
+                    ? "公開前であれば、適用を取り消します。"
+                    : "この変更案を破棄します。適用中の採点基準は変わりません。"
+                }
+                formatError={radarCommandErrorMessage}
+                pending={model.actions.withdraw.pending}
+                confirmDisabled={Boolean(model.actions.withdraw.disabledReason)}
+                title={
+                  applicationInProgress
+                    ? "この基準の適用を取り下げますか？"
+                    : "この変更案を取り下げますか？"
+                }
+                trigger={
+                  <Button
+                    disabled={Boolean(model.actions.withdraw.disabledReason)}
+                    ref={withdrawTriggerRef}
+                    variant="quiet"
+                  >
+                    {applicationInProgress ? "適用を取り下げる" : "変更案を取り下げる"}
+                  </Button>
+                }
+                onConfirm={async () => {
+                  await model.actions.withdraw.run();
+                }}
+              />
+            ) : null}
           </div>
-          {model.applyDisabledReason &&
+          {applyDisabledReason &&
           applyTarget &&
           !applyReasonExplainedByPreview &&
           !operationInProgress &&
           !model.communicationUnknown ? (
-            <p className={cn(contentText.body, readableTextWidthClass)}>
-              {model.applyDisabledReason}
-            </p>
+            <p className={cn(contentText.body, readableTextWidthClass)}>{applyDisabledReason}</p>
           ) : null}
         </section>
-      ) : (
+      ) : !editor.active ? (
         <section aria-labelledby="radar-change-heading" className="grid min-w-0 gap-4">
           <h3 className={contentText.heading} id="radar-change-heading">
             採点基準を変更する
@@ -399,7 +446,7 @@ export function PlayerRadarAdminPanel({
                 action={creationAction}
                 label={model.previousBasis ? "変更案を作成" : "最新の記録から変更案を作成"}
                 pendingLabel="変更案を作成中"
-                primary
+                primary={!model.editing?.current}
               />
               {creationAction.disabledReason &&
               !operationInProgress &&
@@ -411,7 +458,7 @@ export function PlayerRadarAdminPanel({
             </div>
           </div>
         </section>
-      )}
+      ) : null}
       {model.review.reasons.length > 0 || model.review.explanation ? (
         <section aria-labelledby="radar-review-heading" className="grid min-w-0 gap-4">
           <div className="grid gap-2">

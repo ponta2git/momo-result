@@ -34,6 +34,8 @@ tests=(
   "series_analysis::control::integration_tests::real_postgres_keeps_staging_separate_from_fenced_publication"
   "series_analysis::control::integration_tests::radar::freshness::real_postgres_radar_preparation_checks_current_source_and_preserves_pending_analysis"
   "series_analysis::control::integration_tests::radar::publication::real_postgres_radar_application_restore_and_failure_keep_artifact_and_basis_atomic"
+  "series_analysis::control::integration_tests::radar::manual::real_postgres_manual_radar_recomparison_publication_restore_and_history_are_coherent"
+  "series_analysis::control::integration_tests::radar::manual::real_postgres_manual_radar_empty_first_comparison_and_withdrawal_never_fix_a_basis"
   "series_analysis::control::integration_tests::notifications::real_postgres_analysis_notifications_follow_committed_publications"
   "series_analysis::control::integration_tests::notifications::policy::real_postgres_coalesced_requests_notify_only_actual_match_changes"
   "series_analysis::control::integration_tests::notifications::policy::real_postgres_notification_baseline_advances_only_with_success"

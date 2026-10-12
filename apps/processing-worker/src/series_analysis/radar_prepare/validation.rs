@@ -22,7 +22,7 @@ pub(in crate::series_analysis) fn validate(
         || (context.operation_kind.as_deref() == Some("candidate")) != prepared.candidate.is_some()
         || !matches!(
             context.operation_kind.as_deref(),
-            Some("candidate" | "preview" | "restore")
+            Some("candidate" | "manual" | "preview" | "restore")
         )
         || prepared.game_title_id != prepared.evaluation_snapshot.game_title_id
         || prepared.before_basis_id.is_some() != before_basis.is_some()
@@ -32,6 +32,9 @@ pub(in crate::series_analysis) fn validate(
     let input = prepared
         .evaluation_snapshot
         .normalized_for_validation(prepared.input_revision)?;
+    if prepared.manual_basis != context.new_manual_basis(&input)? {
+        return Err(RadarError::InvalidSource);
+    }
     let basis = if let Some(candidate) = &prepared.candidate {
         let value = serde_json::to_value(candidate.summary())
             .map_err(|_encoding| RadarError::InvalidSource)?;
@@ -44,6 +47,26 @@ pub(in crate::series_analysis) fn validate(
             return Err(RadarError::InvalidSource);
         }
         candidate.basis.as_ref()
+    } else if context.is_manual() {
+        if !prepared.candidate_source_valid {
+            return Err(RadarError::InvalidSource);
+        }
+        let basis = prepared.manual_basis.as_ref().or(context.basis.as_ref());
+        if let Some(manual) = &context.manual
+            && let Some(basis) = basis
+            && basis
+                .axes
+                .iter()
+                .zip(&manual.input.axes)
+                .any(|(stored, entered)| {
+                    stored.axis_id != entered.axis_id
+                        || stored.thresholds.map(f64::to_bits)
+                            != entered.thresholds.map(f64::to_bits)
+                })
+        {
+            return Err(RadarError::InvalidBasis);
+        }
+        basis
     } else {
         let source = context.source.as_ref().ok_or(RadarError::InvalidSource)?;
         if radar::source_is_current(source, &input)? != prepared.candidate_source_valid {

@@ -7,7 +7,7 @@ SET algorithm_version = 'series-analysis-v7',
     artifact_schema_version = CASE game_title_id WHEN 'obsolete-title' THEN 3 ELSE 6 END,
     validation_contract_id = CASE game_title_id
       WHEN 'obsolete-title' THEN 'series-analysis-artifact-v3-full-validation-v1'
-      ELSE 'series-analysis-artifact-v6-full-validation-v1' END;
+      ELSE 'series-analysis-artifact-v6-full-validation-v2' END;
 INSERT INTO series_analysis_artifacts(id, game_title_id, input_revision,
   algorithm_version, artifact_schema_version, source_input_checksum, root_checksum,
   aggregate_chunk_count, review_chunk_count, drilldown_chunk_count, match_context_chunk_count,
@@ -26,7 +26,7 @@ INSERT INTO series_analysis_outlook_summary_artifacts(artifact_id,scope_key,scop
 SELECT id,'overall','overall',convert_to('{}','UTF8'),2,2,0,1,'sha256:'||repeat('a',64)
 FROM series_analysis_artifacts WHERE artifact_schema_version=6;
 UPDATE series_analysis_artifacts SET validation_contract_id = CASE artifact_schema_version
-  WHEN 6 THEN 'series-analysis-artifact-v6-full-validation-v1'
+  WHEN 6 THEN 'series-analysis-artifact-v6-full-validation-v2'
   ELSE 'series-analysis-artifact-v3-full-validation-v1' END;
 UPDATE series_analysis_artifacts SET status = 'published', published_at = clock_timestamp();
 UPDATE series_analysis_title_states

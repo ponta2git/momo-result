@@ -56,6 +56,48 @@ private[api] object SeriesPlayerRadarResponseSchemas:
     "status" -> values("pending", "ready", "stale", "failed"),
     "createdAt" -> text
   )
+  private val actor = record("accountId" -> text, "displayName" -> nullable(text))
+  private val manualInput = record("axes" -> list(
+    record(
+      "axisId" -> values(
+        "averageRank",
+        "revenueP90",
+        "revenueAverage",
+        "totalAssetsP10",
+        "totalAssetsMedian",
+        "totalAssetsP90"
+      ),
+      "thresholds" -> list(Json.obj("type" -> Json.fromString("number")), 9)
+    ),
+    6
+  ))
+  val revisionSummary: Json = record(
+    "revisionId" -> text,
+    "gameTitleId" -> text,
+    "gameTitleName" -> text,
+    "kind" -> values("generated", "manual", "restore"),
+    "appliedAt" -> text,
+    "appliedBy" -> actor,
+    "savedBy" -> nullable(actor),
+    "beforeBasisId" -> nullable(text),
+    "afterBasisId" -> text,
+    "sourceBasisId" -> nullable(text),
+    "sourceCandidateId" -> nullable(text)
+  )
+  private val revisionRef =
+    Json.obj("$ref" -> Json.fromString("#/components/schemas/SeriesPlayerRadarRevisionResponse"))
+  val revisionList: Json = record(
+    "schemaVersion" -> version,
+    "items" -> list(revisionRef, 50),
+    "nextCursor" -> nullable(text)
+  )
+  val revisionDetail: Json = record(
+    "schemaVersion" -> version,
+    "revision" -> revisionRef,
+    "beforeBasis" -> nullable(owner("basis")),
+    "afterBasis" -> owner("basis")
+  )
+
   private val candidate = record(
     "candidateId" -> text,
     "status" ->
@@ -66,7 +108,13 @@ private[api] object SeriesPlayerRadarResponseSchemas:
     "createdAt" -> text,
     "updatedAt" -> text,
     "result" -> nullable(owner("candidate")),
-    "latestPreview" -> nullable(previewMetadata)
+    "latestPreview" -> nullable(previewMetadata),
+    "originKind" -> values("generated", "manual", "restore"),
+    "manualInput" -> nullable(manualInput),
+    "sourceBasisId" -> nullable(text),
+    "sourceCandidateId" -> nullable(text),
+    "sourceBasis" -> nullable(basis),
+    "savedBy" -> nullable(actor)
   )
 
   def state(operationSchema: Json): Json = record(

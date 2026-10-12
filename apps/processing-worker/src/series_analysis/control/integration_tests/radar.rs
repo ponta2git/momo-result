@@ -14,6 +14,7 @@ use crate::{
 };
 
 mod freshness;
+mod manual;
 mod publication;
 
 async fn clean(client: &Client) -> SmokeResult {
@@ -68,7 +69,12 @@ async fn operation(
     preview: Option<&str>,
 ) -> SmokeResult {
     if matches!(kind, "candidate" | "restore") {
-        client.execute("INSERT INTO series_radar_candidates (id,game_title_id,basis_id,status) VALUES ($1,$2,$3,'pending')", &[&candidate,&TITLE_ID,&basis]).await?;
+        let origin = if kind == "restore" {
+            "restore"
+        } else {
+            "generated"
+        };
+        client.execute("INSERT INTO series_radar_candidates (id,game_title_id,basis_id,status,origin_kind) VALUES ($1,$2,$3,'pending',$4)", &[&candidate,&TITLE_ID,&basis,&origin]).await?;
     }
     client.execute("INSERT INTO series_radar_operations (id,game_title_id,kind,candidate_id,basis_id,preview_id,requested_by,idempotency_key_hash,request_fingerprint) VALUES ($1,$2,$3,$4,$5,$6,'account_ponta',$1,$1)", &[&id,&TITLE_ID,&kind,&candidate,&basis,&preview]).await?;
     Ok(())

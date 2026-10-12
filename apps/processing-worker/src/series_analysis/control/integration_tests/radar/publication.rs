@@ -174,7 +174,7 @@ async fn assert_changed_source_cannot_be_newly_applied(
     Ok(())
 }
 
-async fn reserve_apply(
+pub(super) async fn reserve_apply(
     client: &Client,
     id: &str,
     candidate: &str,
@@ -186,7 +186,7 @@ async fn reserve_apply(
     Ok(())
 }
 
-async fn restore(
+pub(super) async fn restore(
     client: &mut Client,
     config: &AnalysisConsumerConfig,
     candidate: &str,
@@ -222,7 +222,7 @@ async fn restore(
     row.try_get(3).map_err(Into::into)
 }
 
-async fn artifact(
+pub(super) async fn artifact(
     client: &mut Client,
     claim: &ClaimedJob,
     omit_basis: bool,
@@ -260,7 +260,7 @@ async fn artifact(
     Ok((directory, metrics))
 }
 
-async fn publish(
+pub(super) async fn publish(
     client: &mut Client,
     claim: &ClaimedJob,
     config: &AnalysisConsumerConfig,
@@ -279,7 +279,7 @@ async fn publish(
     Ok(())
 }
 
-async fn current(client: &Client, basis: &str) -> SmokeResult<String> {
+pub(super) async fn current(client: &Client, basis: &str) -> SmokeResult<String> {
     let row = client.query_one("SELECT s.current_artifact_id,r.current_basis_id,a.radar_basis_id,a.radar_applied_at=r.current_applied_at,(convert_from(c.payload,'UTF8')::jsonb #>> '{playerRadar,basis,basisId}'),r.monitor=(convert_from(c.payload,'UTF8')::jsonb #> '{playerRadar,monitoring}'),a.radar_generation=r.generation FROM series_analysis_title_states s JOIN series_radar_title_states r USING(game_title_id) JOIN series_analysis_artifacts a ON a.id=s.current_artifact_id JOIN series_analysis_scope_aggregate_artifacts c ON c.artifact_id=a.id AND c.scope_key='overall' WHERE s.game_title_id=$1", &[&TITLE_ID]).await?;
     assert_eq!(row.try_get::<_, String>(1)?, basis);
     assert_eq!(row.try_get::<_, String>(2)?, basis);

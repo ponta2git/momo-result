@@ -50,14 +50,37 @@ const AXIS_BASIS: Schema = Schema::Object(&[
     field("q90", &NUMBER),
     field("thresholds", &THRESHOLDS),
 ]);
-pub(super) const BASIS: Schema = Schema::Object(&[
+const BASIS_COMMON: &[Field] = &[
     field("definitionVersion", &DEFINITION),
     field("methodVersion", &METHOD),
     field("windowSize", &Schema::ExactUnsigned(20)),
     field("windowStride", &Schema::ExactUnsigned(1)),
     field("source", &SOURCE),
-    field("axes", &Schema::Tuple(&[&AXIS_BASIS; 6])),
+];
+const GENERATED_BASIS: Schema = Schema::MergedObject(&[
+    BASIS_COMMON,
+    &[field("axes", &Schema::Tuple(&[&AXIS_BASIS; 6]))],
 ]);
+const MANUAL_AXIS: Schema = Schema::Object(&[
+    field("axisId", &AXIS),
+    field("q10", &NULLABLE_NUMBER),
+    field("median", &NULLABLE_NUMBER),
+    field("q90", &NULLABLE_NUMBER),
+    field("thresholds", &THRESHOLDS),
+]);
+const MANUAL_PROVENANCE: Schema = Schema::Object(&[
+    field("sourceBasisId", &ID),
+    field("sourceCandidateId", &NULLABLE_ID),
+    field("monitoringSource", &SOURCE),
+]);
+const MANUAL_BASIS: Schema = Schema::MergedObject(&[
+    BASIS_COMMON,
+    &[
+        field("axes", &Schema::Tuple(&[&MANUAL_AXIS; 6])),
+        field("manual", &MANUAL_PROVENANCE),
+    ],
+]);
+pub(super) const BASIS: Schema = Schema::OneOf(&[&GENERATED_BASIS, &MANUAL_BASIS]);
 const NULLABLE_BASIS: Schema = Schema::Nullable(&BASIS);
 const PUBLISHED_BASIS: Schema = Schema::Object(&[
     field("basisId", &ID),

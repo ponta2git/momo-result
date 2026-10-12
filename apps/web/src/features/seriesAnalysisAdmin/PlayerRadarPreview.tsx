@@ -6,6 +6,7 @@ import { orderFixedMembers } from "@/shared/domain/members";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { PlayerRadarAxisLabel } from "@/shared/seriesAnalysis/PlayerRadarAxisLabel";
+import { PlayerRadarChart } from "@/shared/seriesAnalysis/PlayerRadarChart";
 import {
   formatPlayerRadarRawValue,
   playerRadarAxes,
@@ -115,6 +116,21 @@ export function PlayerRadarPreview({
                     : "参考値"}
                 </p>
               ) : null}
+              <div className="grid min-w-0 gap-6 sm:grid-cols-2">
+                {players.map((player) => (
+                  <PlayerRadarChart
+                    key={player.memberId}
+                    player={player}
+                    referenceScoresGrouped={allScoresReference}
+                    comparison={{
+                      before:
+                        preview.before?.players.find(
+                          (before) => before.memberId === player.memberId,
+                        ) ?? null,
+                    }}
+                  />
+                ))}
+              </div>
               <DataTable
                 caption={{ content: "採点基準変更前後の比較" }}
                 density="compact"
@@ -145,6 +161,10 @@ export function PlayerRadarPreview({
                       const after = player.axes.find((cell) => cell.axisId === axis.id);
                       const beforeReference = isReferenceScore(before);
                       const afterReference = isReferenceScore(after);
+                      const delta =
+                        before?.score != null && after?.score != null
+                          ? after.score - before.score
+                          : null;
                       return (
                         <div className="grid gap-1">
                           <p className="whitespace-nowrap">
@@ -155,6 +175,12 @@ export function PlayerRadarPreview({
                               {playerRadarScoreLabel(after)}
                             </span>
                           </p>
+                          {delta !== null ? (
+                            <p className={contentText.supporting}>
+                              増減 {delta > 0 ? "+" : ""}
+                              {delta}点
+                            </p>
+                          ) : null}
                           <p className="whitespace-nowrap">
                             <span className="sr-only">元の成績 </span>
                             {formatPlayerRadarRawValue(axis.id, after?.rawValue ?? null)}

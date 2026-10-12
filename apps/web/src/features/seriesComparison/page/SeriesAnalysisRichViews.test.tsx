@@ -70,7 +70,7 @@ describe("rich series analysis views", () => {
       within(scatterValues).getByRole("link", {
         name: "ぽんた、第12戦、1位の試合結果を見る",
       }),
-    ).toHaveAttribute("href", expect.stringContaining("/matches/match-12?returnTo="));
+    ).toHaveAttribute("href", expect.stringContaining("/matches/match-12"));
   });
 
   it("labels strengths and risks without relying on color", () => {
@@ -166,13 +166,10 @@ describe("rich series analysis views", () => {
     const recentRankPlayerRow = within(recentRankStrip).getAllByRole("row")[1];
     if (!recentRankPlayerRow) throw new Error("recent rank player row is required");
     const recentRankLinks = within(recentRankPlayerRow).getAllByRole("link");
-    expect(recentRankLinks[0]).toHaveAttribute(
-      "href",
-      expect.stringContaining("/matches/match-1?returnTo="),
-    );
+    expect(recentRankLinks[0]).toHaveAttribute("href", expect.stringContaining("/matches/match-1"));
     expect(recentRankLinks.at(-1)).toHaveAttribute(
       "href",
-      expect.stringContaining("/matches/match-20?returnTo="),
+      expect.stringContaining("/matches/match-20"),
     );
     const matchDigestHeading = screen.getByRole("heading", {
       level: 2,
@@ -190,10 +187,7 @@ describe("rich series analysis views", () => {
     const selectedRankLink = screen.getByRole("link", {
       name: /ぽんた、第12戦、4位、この試合。試合結果を見る/u,
     });
-    expect(selectedRankLink).toHaveAttribute(
-      "href",
-      expect.stringContaining("/matches/match-12?returnTo="),
-    );
+    expect(selectedRankLink).toHaveAttribute("href", expect.stringContaining("/matches/match-12"));
     expect(within(selectedRankLink).getByText("4")).toBeInTheDocument();
     expect(
       screen.getAllByRole("link", {
@@ -249,7 +243,7 @@ describe("rich series analysis views", () => {
     expect(within(selectedMatch).getByRole("heading", { name: /第12戦/u })).toBeInTheDocument();
     expect(
       within(selectedMatch).getByRole("link", { name: "第12戦の試合結果を見る" }),
-    ).toHaveAttribute("href", expect.stringContaining("/matches/match-12?returnTo="));
+    ).toHaveAttribute("href", expect.stringContaining("/matches/match-12"));
     expect(
       within(selectedMatch).getByRole("list", { name: "選択中の試合の順位と成績" }),
     ).toBeInTheDocument();

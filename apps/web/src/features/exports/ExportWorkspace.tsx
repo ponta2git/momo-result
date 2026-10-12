@@ -1,6 +1,3 @@
-import { ArrowLeft } from "lucide-react";
-
-import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 
@@ -15,7 +12,7 @@ type ExportWorkspaceProps = {
 };
 
 export function ExportWorkspace({ model }: ExportWorkspaceProps) {
-  const { candidate, conditions, download, navigation, view } = model;
+  const { candidate, conditions, download, view } = model;
   const showActionPanel =
     view.errors.length > 0 ||
     view.candidate.kind === "hidden" ||
@@ -23,18 +20,6 @@ export function ExportWorkspace({ model }: ExportWorkspaceProps) {
 
   return (
     <PageFrame width="narrow">
-      {navigation.returnTo ? (
-        <div>
-          <LinkButton
-            icon={<ArrowLeft aria-hidden="true" />}
-            size="sm"
-            to={navigation.returnTo}
-            variant="quiet"
-          >
-            前の画面へ戻る
-          </LinkButton>
-        </div>
-      ) : null}
       <PageContentSurface
         aria-label="出力条件"
         className="grid gap-4"

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCallback } from "react";
-import { useLocation, useParams, useSearchParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 
 import { buildHeldEventPlayerRecaps } from "@/features/heldEvents/heldEventDetailViewModel";
 import type { HeldEventPlayerRecap } from "@/features/heldEvents/heldEventDetailViewModel";
@@ -16,13 +16,6 @@ import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { heldEventDetailQueryOptions } from "@/shared/api/queryOptions";
 import { formatNavigationDateTime } from "@/shared/lib/dateTime";
 import { useRetryNotice } from "@/shared/lib/useRetryNotice";
-import {
-  classifyReturnTo,
-  currentInternalLocation,
-  isSameResourceReturnTo,
-  sanitizeReturnTo,
-  withReturnTo,
-} from "@/shared/navigation/returnTo";
 import type { AdjacentDestination } from "@/shared/ui/navigation/AdjacentNavigation";
 
 type RefreshModel = {
@@ -32,12 +25,6 @@ type RefreshModel = {
 };
 
 type HeldEventDetailFreshnessModel = { kind: "current" } | { kind: "stale"; refresh: RefreshModel };
-
-type HeldEventBackNavigation = {
-  backHref: string;
-  backLabel: string;
-  backNotice: string | undefined;
-};
 
 export type HeldEventDetailReadyPageModel = {
   event: {
@@ -49,7 +36,7 @@ export type HeldEventDetailReadyPageModel = {
   };
   freshness: HeldEventDetailFreshnessModel;
   kind: "ready";
-  navigation: HeldEventBackNavigation & {
+  navigation: {
     adjacent: {
       previous: AdjacentDestination;
       next: AdjacentDestination;
@@ -60,48 +47,24 @@ export type HeldEventDetailReadyPageModel = {
     exportHref: string;
     manualEntryHref: string;
     ocrCaptureHref: string;
-    returnTo: string;
   };
   refresh: RefreshModel;
 };
 
-type HeldEventDetailTerminalNavigation = HeldEventBackNavigation & {
-  exportHref: string;
-};
-
 export type HeldEventDetailPageModel =
   | { kind: "loading" }
-  | { kind: "notFound"; navigation: HeldEventDetailTerminalNavigation }
+  | { kind: "notFound" }
   | {
       kind: "loadFailed";
-      navigation: HeldEventDetailTerminalNavigation;
       refresh: RefreshModel;
     }
   | HeldEventDetailReadyPageModel;
-
-function heldEventBackLabel(href: string): string {
-  switch (classifyReturnTo(href).kind) {
-    case "heldEventList":
-      return "開催履歴へ戻る";
-    case "heldEventDetail":
-      return "元の開催へ戻る";
-    case "matchList":
-      return "試合一覧へ戻る";
-    case "matchDetail":
-      return "試合結果へ戻る";
-    case "seriesComparison":
-      return "戦績比較へ戻る";
-    default:
-      return "戻る";
-  }
-}
 
 function adjacentDestination(
   neighbor: HeldEventNeighbor | undefined,
   direction: "previous" | "next",
   current: HeldEventDetailResponse,
   peers: string[],
-  origin: string | undefined,
   available: boolean,
 ): AdjacentDestination {
   const label = direction === "previous" ? "前の開催" : "次の開催";
@@ -118,37 +81,13 @@ function adjacentDestination(
   return {
     label,
     description: `${formatNavigationDateTime(neighbor.heldAt, peers)}${neighbor.heldAt === current.heldAt ? `（同日時の${label}）` : ""}`,
-    href: withReturnTo(`/held-events/${encodeURIComponent(neighbor.id)}`, origin),
+    href: `/held-events/${encodeURIComponent(neighbor.id)}`,
   };
 }
 
 /** Maps one read snapshot to the visible content and independently available adjacent links. */
 export function useHeldEventDetailPageModel(): HeldEventDetailPageModel {
   const { heldEventId = "" } = useParams<{ heldEventId: string }>();
-  const location = useLocation();
-  const [searchParams] = useSearchParams();
-  const returnTo = currentInternalLocation(location);
-  const rawOrigin = searchParams.get("returnTo");
-  const requestedOrigin = sanitizeReturnTo(rawOrigin);
-  const selfReturn = isSameResourceReturnTo(requestedOrigin, location.pathname);
-  const origin = selfReturn ? undefined : requestedOrigin;
-  const backHref = origin ?? "/held-events";
-  const backNavigation = {
-    backHref,
-    backLabel: heldEventBackLabel(backHref),
-    backNotice: selfReturn
-      ? "戻り先が現在の開催のため、開催履歴へ戻ります。"
-      : rawOrigin !== null && !requestedOrigin
-        ? "戻り先が無効なため、開催履歴へ戻ります。"
-        : undefined,
-  };
-  const terminalNavigation: HeldEventDetailTerminalNavigation = {
-    ...backNavigation,
-    exportHref: withReturnTo(
-      `/exports?heldEventId=${encodeURIComponent(heldEventId)}&format=csv`,
-      returnTo,
-    ),
-  };
   const detailQuery = useQuery(
     heldEventDetailQueryOptions(heldEventId, heldEventId.trim().length > 0),
   );
@@ -175,12 +114,12 @@ export function useHeldEventDetailPageModel(): HeldEventDetailPageModel {
   }, [refetchDetail]);
   const refreshModel = { disabled: pending, pending, run: refresh };
 
-  if (notFound) return { kind: "notFound", navigation: terminalNavigation };
+  if (notFound) return { kind: "notFound" };
   if (!detail && detailQuery.isPending && !error && heldEventId.trim().length > 0) {
     return { kind: "loading" };
   }
   if (!detail || heldEventId.trim().length === 0) {
-    return { kind: "loadFailed", navigation: terminalNavigation, refresh: refreshModel };
+    return { kind: "loadFailed", refresh: refreshModel };
   }
 
   const available = navigation?.kind === "available";
@@ -203,18 +142,16 @@ export function useHeldEventDetailPageModel(): HeldEventDetailPageModel {
     freshness: detailFailed ? { kind: "stale", refresh: refreshModel } : { kind: "current" },
     kind: "ready",
     navigation: {
-      ...backNavigation,
       adjacent: {
-        previous: adjacentDestination(previous, "previous", detail, peers, origin, available),
-        next: adjacentDestination(next, "next", detail, peers, origin, available),
+        previous: adjacentDestination(previous, "previous", detail, peers, available),
+        next: adjacentDestination(next, "next", detail, peers, available),
         disabled: pending || Boolean(error) || !available,
         status: pending ? "refreshing" : error ? "failed" : available ? "ready" : "unavailable",
       },
       currentDateTime: formatNavigationDateTime(detail.heldAt, peers),
-      exportHref: withReturnTo(`/exports?heldEventId=${encodedHeldEventId}&format=csv`, returnTo),
-      manualEntryHref: withReturnTo(`/matches/new?heldEventId=${encodedHeldEventId}`, returnTo),
-      ocrCaptureHref: heldEventOcrCaptureHref(detail.id, returnTo),
-      returnTo,
+      exportHref: `/exports?heldEventId=${encodedHeldEventId}&format=csv`,
+      manualEntryHref: `/matches/new?heldEventId=${encodedHeldEventId}`,
+      ocrCaptureHref: heldEventOcrCaptureHref(detail.id),
     },
     refresh: refreshModel,
   };

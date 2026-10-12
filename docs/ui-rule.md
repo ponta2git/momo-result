@@ -22,7 +22,7 @@
 
 ### 2.1 読解順と強調文法
 
-- グローバルナビゲーションの現在地、必要な親スコープ、主要な検索・絞り込みを、初見でも判断できる位置へ置く。page 最上部の可視タイトルと補助文は、対象の identity 自体が主役になる試合結果・開催記録などの resource detail に限定する。一覧、入力 workspace、取り込み、比較、出力、設定・管理、認証では global navigation と content surface 内の section heading / landmark で scope を示し、route 名を page header として反復しない。詳細画面は安全な戻り先を持つ。
+- グローバルナビゲーションの現在地、必要な親スコープ、主要な検索・絞り込みを、初見でも判断できる位置へ置く。page 最上部の可視タイトルと補助文は、対象の identity 自体が主役になる試合結果・開催記録などの resource detail に限定する。一覧、入力 workspace、取り込み、比較、出力、設定・管理、認証では global navigation と content surface 内の section heading / landmark で scope を示し、route 名を page header として反復しない。詳細画面には所属する開催や一覧への明確な導線を持たせる。
 - 画面の主役は利用段階で決める。未完了の取り込み、確認、編集では次に完了すべき操作を第一視線にし、確定済みの閲覧、結果、比較では判断対象となる結果を第一視線にする。結果と操作が共存しても同じ強さで競合させない。
 - 初期表示範囲に画面全体の視覚的な錨を原則1つ定める。錨は見出しを飾る容器ではなく、現在の目的に対する主要結果、主要操作、または現在状態そのものとする。4人比較など同格の反復要素は一つの比較群として扱い、各要素を等しくしても、その外側へ同じ強さの錨を重ねない。
 - 強調は次の3段階で組み立てる。
@@ -46,7 +46,7 @@
 - 淡色背景は、選択中または現在の scope、状態・通知・注意、入力や操作の inset、および compact な装飾ラベルに限定する。通常の要約、説明、見出し、重要情報は、重要という理由だけで淡色面へ置かない。面を追加するときは「何の選択・状態・操作領域・局所標識か」を答えられなければ使わない。
 - disclosure / collapsible は情報を開閉する操作であり、それ自体を選択状態や inset とみなさない。`Collapsible.Panel` に相当する展開内容は背景を所有せず、周囲の面をそのまま使う。feature や filter から panel 自体へ淡色背景を上書きしない。実際の状態、注意、独立した操作領域を内包する場合だけ、その内側の該当要素へ淡色背景を付ける。enabled trigger は文字階層や用途variantによらず同じ淡色hoverを持ち、行全体が操作可能であることを即時に返す。hoverは一時的なpointer feedbackに限り、展開中の固定背景やpanelの面へ転用せず、disabled triggerでは出さない。
 - `1位`、`2位`、分類名など、短く反復され、走査や識別を助けるラベルは局所的な標章として背景色、形、border を持ってよい。標章は文字だけでも意味が分かり、同じ種類で一貫した寸法と強度を持ち、clickable、selected、warning と誤認させない。広い面へ装飾を拡張せず、識別やリズムに寄与しない badge は足さない。
-- page canvas は、global navigation、戻り先、detail で必要な画面見出しと content 間の余白を受け持つ。主要な作業・結果・data は白い content surface に置き、連続した1タスクまたは1 data scope につき原則1面とする。page 最上部の可視見出しを省く画面では空の header slot を残さず、page-level action は作用する content surface の先頭または対象 section の近くへ置く。detail の画面見出しは原則として content surface の外に置き、面をまたぐ下線を既定で持たせない。
+- page canvas は、global navigation、関連画面への導線、detail で必要な画面見出しと content 間の余白を受け持つ。主要な作業・結果・data は白い content surface に置き、連続した1タスクまたは1 data scope につき原則1面とする。page 最上部の可視見出しを省く画面では空の header slot を残さず、page-level action は作用する content surface の先頭または対象 section の近くへ置く。detail の画面見出しは原則として content surface の外に置き、面をまたぐ下線を既定で持たせない。
 - table が主要内容の一覧・管理画面も page header から table を直結せず、通常の内余白を持つ content surface の内側に table を置く。table は上端、header 下端、最終行下端の横罫線を所有し、外周の枠線と角丸は持たない。loading、empty、error、pagination は同じ data scope の面と余白に従属させる。`padding="none"` は、workspace や全面表示など child が外余白を所有する明確な理由がある場合だけ使う。
 - content surface の内側を通常 section ごとの白い card に分割しない。まず見出し、整列、列、関係的余白で構成し、同時に独立して扱う source / editor などの workspace、独立して反復する record、境界が操作の理解に必要な bounded panel に限って別面を許容する。empty、pagination、loading など親 scope に従属する状態・操作は、親の白面を重ねて作り直さない。
 - グルーピングは整列と余白から始める。divider は、隣接内容が余白と見出しだけでは同一群と誤認される場合、table の row / column、control、状態通知など境界自体が意味を持つ場合に限る。通常 section を上下線で挟まず、必要なら片側1本を使う。
@@ -262,7 +262,7 @@
 
 - ブラウザー title と主ナビの現在地は route の意味を示す。通常の pathname 遷移は安定した main landmark へ focus を移し、同じページの条件変更、履歴移動、隣接移動の専用 focus を上書きしない。未知の URL は黙って別 URL へ置き換えず、復帰先を示す。
 - 詳細の前後移動は `AdjacentNavigation` が全幅で等幅の2列を所有し、前を始端、次を終端へ揃える。方向の矢印を外側へ置き、label と説明の行を対応させる。説明は省略せず折り返し、既知の端や一時的な無効状態でも方向の位置を残す。戻る・作業をやめる導線は領域の始端に置き、同じ領域内の sample などの補助状態は終端へ分離する。dialog のキャンセルは確定操作と同じ footer 内で、DOM と視覚の両方で確定より先に置く。
-- 一覧、詳細、編集、出力、OCR、管理をまたぐ場合は、必要な filter、sort、page、selection、内部 `returnTo` を保持する。`returnTo` は app 内 path だけを受け入れ、復元不能時は安全な既定導線と理由を示す。
+- 閲覧の往復はブラウザーの戻る・進むに任せ、各画面の filter、sort、page、selection、hash はその画面の URL に保持する。遷移元を `returnTo` で連鎖させたり、閲覧履歴を独自に管理したりしない。画面内の導線は、所属開催、対象試合、一覧など行き先が明確なものにし、履歴へ戻る操作を重ねない。認証後の復帰と未保存入力の保護は、それぞれの契約に従う。
 - 未保存入力は workflow の identity に属する。表示幅や同じ作業の補助 query を変えても保持し、別作業への移動・外部離脱では必要な破棄確認を行う。保存中の入力を送信 snapshot から切り離さず、完了前の離脱操作を結果判明後に勝手に再開しない。
 - 完了・失敗・download は開始時の対象と形式に結びつける。画面や対象を離れた応答は、現在の選択を変えたり、別対象の結果として表示したりしない。中断可能な read/download は所有する画面の終了時に中断する。
 - タスクは、きっかけ、最小の操作、確認できる結果、明確な終了からなる有限の流れにする。完了後の連続利用表示、緊急性の演出、予測不能な報酬、再利用させるだけの CTA は追加しない。

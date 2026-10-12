@@ -86,10 +86,70 @@ describe("UnsavedChangesGuard", () => {
     expect(onDiscard).not.toHaveBeenCalled();
   });
 
+  it("keeps discard protection when saving for recovery fails", async () => {
+    const user = userEvent.setup();
+    const onDiscard = vi.fn();
+    const saveBeforeLeave = vi.fn(() => false);
+    const router = createMemoryRouter(
+      [
+        {
+          path: "/edit",
+          element: (
+            <>
+              <input aria-label="編集内容" defaultValue="保持する入力" />
+              <Link to="/next">次の画面へ</Link>
+              <UnsavedChangesGuard
+                model={{
+                  dirty: true,
+                  navigationAllowedRef: { current: false },
+                  onDiscard,
+                  saveBeforeLeave,
+                }}
+              />
+            </>
+          ),
+        },
+        { path: "/next", element: <p>移動後</p> },
+      ],
+      { initialEntries: ["/edit"] },
+    );
+    render(<RouterProvider router={router} />);
+
+    await user.click(screen.getByRole("link", { name: "次の画面へ" }));
+    expect(await screen.findByRole("alertdialog")).toBeVisible();
+    expect(saveBeforeLeave).toHaveBeenCalledTimes(1);
+    expect(router.state.location.pathname).toBe("/edit");
+    await user.click(screen.getByRole("button", { name: "キャンセル" }));
+    expect(screen.getByRole("textbox", { name: "編集内容" })).toHaveValue("保持する入力");
+    expect(onDiscard).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])(
+    "protects document unload unless the current input is recoverable (saved: %s)",
+    (saved) => {
+      const saveBeforeLeave = vi.fn(() => saved);
+      render(
+        <UnsavedChangesGuard
+          model={{
+            dirty: true,
+            navigationAllowedRef: { current: false },
+            onDiscard: vi.fn(),
+            saveBeforeLeave,
+          }}
+        />,
+      );
+      const unloading = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(unloading);
+      expect(unloading.defaultPrevented).toBe(!saved);
+      expect(saveBeforeLeave).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it("forgets navigation attempted during an Action even when its blocked render is delayed", async () => {
     const user = userEvent.setup();
     const responseGate = createDeferred();
     const onDiscard = vi.fn();
+    const saveBeforeLeave = vi.fn(() => true);
     function PendingPage() {
       const navigationAllowedRef = useRef(false);
       const [, action, pending] = useActionState(async () => {
@@ -104,7 +164,7 @@ describe("UnsavedChangesGuard", () => {
           </form>
           <Link to="/next">次の画面へ</Link>
           <UnsavedChangesGuard
-            model={{ dirty: true, navigationAllowedRef, onDiscard }}
+            model={{ dirty: true, navigationAllowedRef, onDiscard, saveBeforeLeave }}
             pending={pending}
             showPendingDialog={false}
           />
@@ -123,13 +183,19 @@ describe("UnsavedChangesGuard", () => {
     await user.click(screen.getByRole("button", { name: "保存" }));
     expect(screen.getByRole("button", { name: "保存中" })).toBeDisabled();
     await user.click(screen.getByRole("link", { name: "次の画面へ" }));
+    const unloading = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(unloading);
+    expect(unloading.defaultPrevented).toBe(true);
+    expect(saveBeforeLeave).not.toHaveBeenCalled();
     await act(async () => responseGate.resolve());
     await waitFor(() => expect(screen.getByRole("button", { name: "保存" })).toBeEnabled());
     expect(router.state.location.pathname).toBe("/edit");
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(saveBeforeLeave).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("link", { name: "次の画面へ" }));
-    expect(await screen.findByRole("alertdialog")).toBeInTheDocument();
+    expect(await screen.findByText("移動後")).toBeInTheDocument();
+    expect(saveBeforeLeave).toHaveBeenCalledTimes(1);
     expect(onDiscard).not.toHaveBeenCalled();
   });
 });

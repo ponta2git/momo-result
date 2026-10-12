@@ -16,7 +16,6 @@ import {
   parseMatchListSearchParams,
 } from "@/features/matches/list/matchListSearchParams";
 import type { MatchListSearch } from "@/features/matches/list/matchListTypes";
-import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 
 export type MatchListLocationState = {
   apply: (search: MatchListSearch) => void;
@@ -24,8 +23,6 @@ export type MatchListLocationState = {
   current: MatchListSearch;
   deferred: MatchListSearch;
   hasFilters: boolean;
-  listReturnTo: string;
-  parentReturnTo: string | undefined;
   resetCursorIfUnchanged: (expectedSearch: MatchListSearch) => boolean;
   settling: boolean;
 };
@@ -40,7 +37,6 @@ export function useMatchListLocationState(): MatchListLocationState {
   const { hash } = useLocation();
   const navigate = useNavigate();
   const rawSearch = searchParams.toString();
-  const parentReturnTo = sanitizeReturnTo(searchParams.get("returnTo"));
   const routeSearch = useMemo(
     () => parseMatchListSearchParams(new URLSearchParams(rawSearch)),
     [rawSearch],
@@ -60,11 +56,10 @@ export function useMatchListLocationState(): MatchListLocationState {
       startTransition(async () => {
         setOptimisticSearch(nextSearch);
         const nextParams = buildMatchListSearchParams(nextSearch);
-        if (parentReturnTo) nextParams.set("returnTo", parentReturnTo);
         await navigate({ search: nextParams.toString(), hash });
       });
     },
-    [hash, navigate, parentReturnTo, setOptimisticSearch],
+    [hash, navigate, setOptimisticSearch],
   );
   const clear = useCallback(() => apply(defaultMatchListSearch), [apply]);
   const resetCursorIfUnchanged = useCallback(
@@ -77,18 +72,12 @@ export function useMatchListLocationState(): MatchListLocationState {
     [apply],
   );
 
-  const canonicalParams = buildMatchListSearchParams(routeSearch);
-  if (parentReturnTo) canonicalParams.set("returnTo", parentReturnTo);
-  const canonicalSearch = canonicalParams.toString();
-
   return {
     apply,
     clear,
     current,
     deferred,
     hasFilters: hasMatchListFilters(current),
-    listReturnTo: `/matches${canonicalSearch ? `?${canonicalSearch}` : ""}${hash}`,
-    parentReturnTo,
     resetCursorIfUnchanged,
     settling: isTransitionPending || searchSignature(current) !== searchSignature(deferred),
   };

@@ -94,7 +94,7 @@ describe("MatchesListPage", () => {
     expect(within(listRegion).getByText("1〜3件／全3件")).toBeInTheDocument();
     const listActions = within(listRegion).getByRole("group", { name: "試合一覧の操作" });
     const bulkExport = within(listActions).getByRole("link", { name: "CSV/TSVをまとめて出力" });
-    expect(bulkExport).toHaveAttribute("href", "/exports?returnTo=%2Fmatches");
+    expect(bulkExport).toHaveAttribute("href", "/exports");
     const matchInfoCell = screen.getAllByRole("rowheader").find((cell) => {
       const text = cell.textContent ?? "";
       return ["01/01 09:00", "桃太郎電鉄2", "今シーズン", "第1試合", "東日本編"].every((part) =>
@@ -114,14 +114,12 @@ describe("MatchesListPage", () => {
       name: "第1試合 東日本編の試合結果を見る",
     });
     expect(detailLinks).toHaveLength(1);
-    expect(detailLinks[0]).toHaveAttribute("href", "/matches/match-1?returnTo=%2Fmatches");
+    expect(detailLinks[0]).toHaveAttribute("href", "/matches/match-1");
     const exportLinks = await screen.findAllByRole("link", {
       name: "第1試合をCSV/TSV出力",
     });
     expect(exportLinks).toHaveLength(1);
-    exportLinks.forEach((link) =>
-      expect(link).toHaveAttribute("href", "/exports?matchId=match-1&returnTo=%2Fmatches"),
-    );
+    exportLinks.forEach((link) => expect(link).toHaveAttribute("href", "/exports?matchId=match-1"));
   });
 
   it("commits detail navigation immediately while the detail payload is loading", async () => {
@@ -195,7 +193,7 @@ describe("MatchesListPage", () => {
     expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
     expect(await screen.findByText("試合はまだありません")).toBeInTheDocument();
     const emptyOcrAction = screen.getAllByRole("link", { name: "OCR取り込み" }).at(-1)!;
-    expect(emptyOcrAction).toHaveAttribute("href", "/ocr/new?returnTo=%2Fmatches");
+    expect(emptyOcrAction).toHaveAttribute("href", "/ocr/new");
     const filterSection = screen.getByRole("region", { name: "試合の表示条件" });
     expect(within(filterSection).getByLabelText("確定状況")).toHaveTextContent("すべて");
   });
@@ -472,7 +470,7 @@ describe("MatchesListPage", () => {
       const result = await within(listRegion).findByRole("link", {
         name: `第${page}試合 東日本編の試合結果を見る`,
       });
-      expect(result).toHaveAttribute("href", expect.stringContaining(`/matches/match-${page}?`));
+      expect(result).toHaveAttribute("href", `/matches/match-${page}`);
       expect(within(listRegion).getAllByRole("rowheader")).toHaveLength(1);
       expect(within(listRegion).getByText(`${page}〜${page}件／全3件`)).toBeInTheDocument();
     };

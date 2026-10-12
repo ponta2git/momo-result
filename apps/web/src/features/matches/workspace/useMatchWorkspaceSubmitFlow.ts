@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
-import type { MatchFormValues, WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
+import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import type {
   MatchWorkspaceOperationError,
   MatchWorkspaceOperationErrorKind,
@@ -13,30 +13,25 @@ import type { WorkspaceNoticeTone } from "@/features/matches/workspace/useWorksp
 
 export function useMatchWorkspaceSubmitFlow({
   matchId,
-  mode,
   notify,
   onPersistedSuccess,
   setConfirmOpen,
   setOperationError,
   setValidationMessage,
-  returnTo,
   values,
 }: {
   matchId: string | undefined;
-  mode: WorkspaceMode;
   notify: (message: string, tone?: WorkspaceNoticeTone) => void;
   onPersistedSuccess: () => void;
   setConfirmOpen: Dispatch<SetStateAction<boolean>>;
   setOperationError: Dispatch<SetStateAction<MatchWorkspaceOperationError | null>>;
   setValidationMessage: Dispatch<SetStateAction<string>>;
-  returnTo?: string | undefined;
   values: MatchFormValues;
 }) {
   const handleOperationStart = useCallback(() => setOperationError(null), [setOperationError]);
   const confirmedDraft = useConfirmedDraftRedirect({
     notify,
     onBeforeRedirect: onPersistedSuccess,
-    returnTo,
   });
   const handleConfirmSuccess = useCallback(() => setConfirmOpen(false), [setConfirmOpen]);
   const handleMutationError = useCallback(
@@ -49,13 +44,11 @@ export function useMatchWorkspaceSubmitFlow({
   const mutations = useMatchWorkspaceMutations({
     heldEventId: values.heldEventId,
     matchId,
-    mode,
     onConfirmConflict: confirmedDraft.handleConfirmConflict,
     onConfirmSuccess: handleConfirmSuccess,
     onError: handleMutationError,
     onOperationStart: handleOperationStart,
     onPersistedSuccess,
-    returnTo,
   });
   const confirmation = useMatchWorkspaceConfirmAction({
     confirmMutation: mutations.confirmMutation,

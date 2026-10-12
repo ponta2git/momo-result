@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   DEFAULT_EXPORT_SLOW_THRESHOLD_MS,
@@ -19,7 +19,6 @@ import { buildExportViewModel } from "@/features/exports/exportViewModel";
 import type { ExportViewModel } from "@/features/exports/exportViewModel";
 import { useExportCandidates } from "@/features/exports/useExportCandidates";
 import { useExportDownload } from "@/features/exports/useExportDownload";
-import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 
 export type ExportPageModelParams = {
   downloadTimeoutMs?: number | undefined;
@@ -43,9 +42,6 @@ export type ExportPageModel = {
     pending: boolean;
     start: () => void;
   };
-  navigation: {
-    returnTo?: string | undefined;
-  };
   view: ExportViewModel;
 };
 
@@ -54,15 +50,14 @@ export function useExportPageModel({
   downloadTimeoutMs = DEFAULT_EXPORT_TIMEOUT_MS,
   slowThresholdMs = DEFAULT_EXPORT_SLOW_THRESHOLD_MS,
 }: ExportPageModelParams): ExportPageModel {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
+  const { hash } = useLocation();
+  const navigate = useNavigate();
   const serializedSearch = searchParams.toString();
-  const { returnTo, urlState } = useMemo(() => {
-    const params = new URLSearchParams(serializedSearch);
-    return {
-      returnTo: sanitizeReturnTo(params.get("returnTo")),
-      urlState: parseExportSearchParams(params),
-    };
-  }, [serializedSearch]);
+  const urlState = useMemo(
+    () => parseExportSearchParams(new URLSearchParams(serializedSearch)),
+    [serializedSearch],
+  );
   const selectedId = selectedIdForScope(urlState, urlState.scope);
   const candidates = useExportCandidates({ scope: urlState.scope, selectedId });
   const defaultCandidateId =
@@ -99,13 +94,12 @@ export function useExportPageModel({
       scope: urlState.scope,
       selectedId: defaultCandidateId,
     });
-    if (returnTo) nextParams.set("returnTo", returnTo);
-    setSearchParams(nextParams, { replace: true });
+    void navigate({ search: nextParams.toString(), hash }, { replace: true });
   }, [
     defaultCandidateId,
-    returnTo,
+    hash,
     selectedId,
-    setSearchParams,
+    navigate,
     urlState.errors.length,
     urlState.format,
     urlState.scope,
@@ -117,8 +111,7 @@ export function useExportPageModel({
     nextSelectedId?: string,
   ): void => {
     const nextParams = buildExportSearchParams({ format, scope, selectedId: nextSelectedId });
-    if (returnTo) nextParams.set("returnTo", returnTo);
-    setSearchParams(nextParams, { replace: true });
+    void navigate({ search: nextParams.toString(), hash }, { replace: true });
   };
   const view = buildExportViewModel({
     candidate: candidates.view,
@@ -157,7 +150,6 @@ export function useExportPageModel({
         if (view.canDownload) download.start();
       },
     },
-    navigation: { returnTo },
     view,
   };
 }

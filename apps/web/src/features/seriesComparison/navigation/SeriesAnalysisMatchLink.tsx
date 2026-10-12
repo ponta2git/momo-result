@@ -1,7 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link } from "react-router-dom";
 
-import { currentInternalLocation, withReturnTo } from "@/shared/navigation/returnTo";
 import { cn } from "@/shared/ui/cn";
 
 export function SeriesAnalysisMatchLink({
@@ -21,7 +20,6 @@ export function SeriesAnalysisMatchLink({
   presentation: "axis" | "inline" | "rank-cell" | "text";
   title?: string | undefined;
 }) {
-  const returnTo = currentInternalLocation(useLocation());
   return (
     <Link
       aria-label={ariaLabel}
@@ -53,7 +51,7 @@ export function SeriesAnalysisMatchLink({
           : undefined
       }
       title={title}
-      to={withReturnTo(`/matches/${encodeURIComponent(matchId)}`, returnTo)}
+      to={`/matches/${encodeURIComponent(matchId)}`}
     >
       {children}
     </Link>

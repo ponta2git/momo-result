@@ -1,6 +1,5 @@
 import type { Page } from "@playwright/test";
 
-import { withReturnTo } from "../src/shared/navigation/returnTo";
 import { installAnalysisResponses } from "./fixtures/analysis";
 import { seedConfirmedContext } from "./fixtures/records";
 import { expect, installE2eAuthHeaders, test as base } from "./support";
@@ -30,14 +29,11 @@ test("opens the selected match in saved analysis and retains it after a failed r
   await page.goto(`/matches/${encodeURIComponent(matchId)}`);
   await page.setViewportSize({ height: 844, width: 390 });
   const comparisonLink = page.getByRole("link", { name: "前後の戦績を見る" });
-  const comparisonHref = withReturnTo(
-    `/analytics/series?gameTitleId=${encodeURIComponent(
-      gameTitleId,
-    )}&seasonMasterId=${encodeURIComponent(seasonMasterId)}&mapMasterId=${encodeURIComponent(
-      mapMasterId,
-    )}&focusMatchId=${encodeURIComponent(matchId)}&view=flow`,
-    currentPagePath(page),
-  );
+  const comparisonHref = `/analytics/series?gameTitleId=${encodeURIComponent(
+    gameTitleId,
+  )}&seasonMasterId=${encodeURIComponent(seasonMasterId)}&mapMasterId=${encodeURIComponent(
+    mapMasterId,
+  )}&focusMatchId=${encodeURIComponent(matchId)}&view=flow`;
   await expect(comparisonLink).toHaveAttribute("href", comparisonHref);
   await comparisonLink.click();
 
@@ -58,10 +54,7 @@ test("opens the selected match in saved analysis and retains it after a failed r
   await expect(page.getByText("新しい戦績データを計算中です")).toBeVisible();
   await expect(page.getByText(/更新のデータを表示します/u)).toBeVisible();
   const selectedMatch = page.getByRole("region", { name: "選択中の試合" });
-  const selectedMatchHref = withReturnTo(
-    `/matches/${encodeURIComponent(matchId)}`,
-    currentPagePath(page),
-  );
+  const selectedMatchHref = `/matches/${encodeURIComponent(matchId)}`;
   await expect(selectedMatch.getByRole("link", { name: "第1戦の試合結果を見る" })).toHaveAttribute(
     "href",
     selectedMatchHref,
@@ -96,7 +89,7 @@ test("reaches recent ranks by keyboard and opens their saved match", async ({ an
   await expect(recentRankPlayerLinks.last()).toBeInViewport();
   await expect(recentRankPlayerLinks.last()).toHaveAttribute(
     "href",
-    withReturnTo(`/matches/${encodeURIComponent(matchId)}`, currentPagePath(page)),
+    `/matches/${encodeURIComponent(matchId)}`,
   );
   await recentRankPlayerLinks.last().click();
   await expect(page.getByRole("heading", { name: "第1試合の結果" })).toBeVisible();
@@ -168,9 +161,4 @@ async function openAnalysis(page: Page, context: AnalysisContext) {
   });
   await page.goto(`/analytics/series?${params}`);
   await expect(page.getByRole("table", { name: "直近の試合順位" })).toBeVisible();
-}
-
-function currentPagePath(page: Page): string {
-  const url = new URL(page.url());
-  return `${url.pathname}${url.search}${url.hash}`;
 }

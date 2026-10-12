@@ -3,26 +3,28 @@ import type { QueryClient } from "@tanstack/react-query";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { Link, MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import {
+  createMemoryRouter,
+  Link,
+  MemoryRouter,
+  Route,
+  RouterProvider,
+  Routes,
+  useLocation,
+} from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { confirmedDraftMessages } from "@/features/matches/confirmedDraftNavigation";
 import { DraftReviewPage } from "@/features/matches/workspace/DraftReviewPage";
 import { matchWorkspaceSessionDraftKey } from "@/features/matches/workspace/matchWorkspaceSessionDraft";
+import type { AuthMeResponse } from "@/shared/api/auth";
 import { matchKeys } from "@/shared/api/queryKeys";
+import { authMeQueryKeyFor } from "@/shared/auth/authQueries";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
-import {
-  createMatchWorkspaceMasterHandoffPayload,
-  saveMasterHandoff,
-} from "@/shared/workflows/matchWorkspaceMasterHandoff";
 import { setDevUser, testDevUserAccountId } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
-import {
-  makeHeldEventResponse,
-  makeMatchWorkspaceMasterHandoffValues,
-  makeFourReviewPlayerInputs,
-} from "@/test/factories";
+import { makeHeldEventResponse } from "@/test/factories";
 import { makeMatchDraftReviewResponse } from "@/test/factories/matchDraftReview";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
@@ -701,36 +703,6 @@ describe("DraftReviewPage", () => {
     expect(window.sessionStorage.getItem(secondSessionDraftKey)).toBeNull();
   });
 
-  it("preserves review input when handoff and return context change in place", async () => {
-    setDevUser();
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/review/session-1?sample=1"]}>
-          <Link to="/review/session-1?sample=1&handoffId=missing&returnTo=%2Fmatches">
-            復元コンテキストを反映
-          </Link>
-          <Routes>
-            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
-          </Routes>
-          <ToastHost />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-
-    await waitForSampleWorkspaceReady();
-    const matchNumber = screen.getByLabelText("試合番号");
-    await user.clear(matchNumber);
-    await user.type(matchNumber, "9");
-
-    await user.click(screen.getByRole("link", { name: "復元コンテキストを反映" }));
-
-    expect(
-      await screen.findByText("設定管理から戻りましたが、入力内容を復元できませんでした。"),
-    ).toBeInTheDocument();
-    expect(screen.getByLabelText("試合番号")).toHaveValue("9");
-  });
-
   it("announces held event creation and selects the created option", async () => {
     setDevUser();
     const heldEvents = [makeHeldEventResponse()];
@@ -876,57 +848,73 @@ describe("DraftReviewPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("restores form values after returning from master management with handoffId", async () => {
+  it("restores OCR acknowledgements on native Back even after losing operations access", async () => {
     setDevUser();
-
-    const handoffId = saveMasterHandoff(
-      createMatchWorkspaceMasterHandoffPayload({
-        accountId: testDevUserAccountId,
-        matchSessionId: "session-1",
-        returnTo: "/review/session-1?sample=1",
-        values: makeMatchWorkspaceMasterHandoffValues({
-          heldEventId: "held-2",
-          matchNoInEvent: 9,
-          playedAt: "2026-02-02T02:02:00.000Z",
-          players: makeFourReviewPlayerInputs([
-            {
-              memberId: "member_ponta",
-              rank: 4,
-              revenueManYen: 777,
-              totalAssetsManYen: 8888,
-              incidents: {
-                cardShop: 3,
-                cardStation: 2,
-                destination: 1,
-                minusStation: 5,
-                plusStation: 4,
-                suriNoGinji: 6,
-              },
-            },
-            { memberId: "member_akane_mami", rank: 1, revenueManYen: 111, totalAssetsManYen: 2222 },
-            { memberId: "member_otaka", rank: 2, revenueManYen: 333, totalAssetsManYen: 4444 },
-            { memberId: "member_eu", rank: 3, revenueManYen: 555, totalAssetsManYen: 6666 },
-          ]),
-        }),
-      }),
+    const router = createMemoryRouter(
+      [
+        { path: "/review/:matchSessionId", element: <DraftReviewPage /> },
+        { path: "/admin/masters", element: <p>設定管理</p> },
+      ],
+      { initialEntries: ["/review/dev-sample?sample=1"] },
     );
+    const firstView = render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await waitForSampleWorkspaceReady();
+    await user.click(screen.getByRole("button", { name: "この値で確認済み" }));
+    const reviewProgress = screen.getByText(/未確認\d+件／全\d+件/u).textContent;
+    const revenue = screen.getByRole("textbox", { name: "ぽんた 収益（万円）" });
+    await user.clear(revenue);
+    await user.type(revenue, "-");
+    await user.type(screen.getByRole("textbox", { name: "試合メモ（任意）" }), "OCRを確認中");
+    await user.click(screen.getByRole("button", { name: "設定管理へ" }));
+    expect(await screen.findByText("設定管理")).toBeInTheDocument();
+    expect(router.state.location.search).toBe("");
+    server.use(
+      http.get("/api/auth/me", () =>
+        HttpResponse.json({
+          accountId: testDevUserAccountId,
+          csrfToken: "dev",
+          displayName: "User",
+          memberId: "member_ponta",
+          role: "user",
+        }),
+      ),
+    );
+    await act(async () => {
+      queryClient.setQueryData<AuthMeResponse>(
+        authMeQueryKeyFor(testDevUserAccountId),
+        (current) => (current ? { ...current, role: "user" } : current),
+      );
+      await router.navigate(-1);
+    });
+    await waitForSampleWorkspaceReady();
+    await waitFor(() => {
+      expect(screen.getByRole("textbox", { name: "試合メモ（任意）" })).toHaveValue("OCRを確認中");
+      expect(screen.getByRole("textbox", { name: "ぽんた 収益（万円）" })).toHaveValue("-");
+      expect(screen.getByText(reviewProgress ?? "")).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("button", { name: "設定管理へ" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "一時保存を復元" })).not.toBeInTheDocument();
 
+    firstView.unmount();
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={[`/review/session-1?sample=1&handoffId=${handoffId}`]}>
+        <MemoryRouter initialEntries={["/review/dev-sample?sample=1"]}>
           <Routes>
             <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
           </Routes>
-          <ToastHost />
         </MemoryRouter>
       </QueryClientProvider>,
     );
-
-    expect(
-      await screen.findByText("設定管理から戻ったため、入力内容を復元しました。"),
-    ).toBeInTheDocument();
-    expect(screen.getByLabelText("試合番号")).toHaveValue("9");
-    expect(screen.getByLabelText("ぽんた 順位")).toHaveValue("4");
-    expect(screen.getByDisplayValue("777")).toBeInTheDocument();
+    await waitForSampleWorkspaceReady();
+    expect(await screen.findByRole("button", { name: "一時保存を復元" })).toBeEnabled();
+    expect(screen.getByRole("textbox", { name: "試合メモ（任意）" })).toHaveValue("");
+    await user.click(screen.getByRole("button", { name: "一時保存を復元" }));
+    expect(screen.getByRole("textbox", { name: "試合メモ（任意）" })).toHaveValue("OCRを確認中");
+    expect(screen.getByRole("textbox", { name: "ぽんた 収益（万円）" })).toHaveValue("-");
+    expect(screen.getByText(reviewProgress ?? "")).toBeInTheDocument();
   });
 });

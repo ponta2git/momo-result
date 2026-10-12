@@ -3,7 +3,6 @@ import { readFile } from "node:fs/promises";
 import type { Locator, Page, Response } from "@playwright/test";
 
 import { formatDateTimeLong } from "../src/shared/lib/dateTime";
-import { withReturnTo } from "../src/shared/navigation/returnTo";
 import { seedConfirmedContext, seedHeldEventContext, seedMasterContext } from "./fixtures/records";
 import {
   continueWithE2eAuth,
@@ -56,7 +55,7 @@ test("creates a held event and accepts an OCR upload", async ({ e2eRun, page, re
     if (typeof body["heldAt"] !== "string") throw new TypeError("Missing held event timestamp");
     heldEventLabelPrefix = formatDateTimeLong(body["heldAt"]);
     e2eRun.trackHeldEvent(heldEventId);
-    const heldEventDetailHref = withReturnTo(`/held-events/${heldEventId}`, "/held-events");
+    const heldEventDetailHref = `/held-events/${heldEventId}`;
     await expect(page).toHaveURL(heldEventDetailHref);
     await expect(page.getByText("確定済み0試合・未確定下書き0件", { exact: true })).toBeVisible();
     await expect(
@@ -65,16 +64,10 @@ test("creates a held event and accepts an OCR upload", async ({ e2eRun, page, re
 
     const manualLink = page.getByRole("link", { exact: true, name: "手入力" });
     await expect(manualLink).toHaveCount(1);
-    await expect(manualLink).toHaveAttribute(
-      "href",
-      withReturnTo(`/matches/new?heldEventId=${heldEventId}`, currentPagePath(page)),
-    );
+    await expect(manualLink).toHaveAttribute("href", `/matches/new?heldEventId=${heldEventId}`);
     const ocrLink = page.getByRole("link", { exact: true, name: "OCR取り込み" });
     await expect(ocrLink).toHaveCount(1);
-    await expect(ocrLink).toHaveAttribute(
-      "href",
-      withReturnTo(`/ocr/new?heldEventId=${heldEventId}`, currentPagePath(page)),
-    );
+    await expect(ocrLink).toHaveAttribute("href", `/ocr/new?heldEventId=${heldEventId}`);
   });
 
   await test.step("open OCR for this run's held event from held-event history", async () => {
@@ -83,7 +76,7 @@ test("creates a held event and accepts an OCR upload", async ({ e2eRun, page, re
     await page.goto("/held-events");
     await expect(page.getByRole("region", { exact: true, name: "開催履歴" })).toBeVisible();
 
-    const expectedOcrHref = withReturnTo(`/ocr/new?heldEventId=${heldEventId}`, "/held-events");
+    const expectedOcrHref = `/ocr/new?heldEventId=${heldEventId}`;
     const heldEventOcrLink = page.getByRole("link", {
       exact: true,
       name: `${heldEventLabelPrefix}の開催にOCR取り込み`,
@@ -103,9 +96,9 @@ test("creates a held event and accepts an OCR upload", async ({ e2eRun, page, re
     await expect(page.getByLabel("試合番号")).toHaveValue("1");
 
     const cancelOcrLink = page.getByRole("link", { exact: true, name: "取り込みをやめる" });
-    await expect(cancelOcrLink).toHaveAttribute("href", "/held-events");
+    await expect(cancelOcrLink).toHaveAttribute("href", "/matches");
     await cancelOcrLink.click();
-    await expect(page).toHaveURL("/held-events");
+    await expect(page).toHaveURL("/matches");
     await page.setViewportSize({ height: 900, width: 1440 });
   });
 
@@ -240,11 +233,11 @@ test("confirms sample review and reads its persisted match from the held event",
     await expect(firstPlaceLedgerRow.getByText("1位", { exact: true })).toBeVisible();
     await expect(firstPlaceLedgerRow.getByText("総資産", { exact: true })).toBeVisible();
 
-    await page.getByRole("link", { name: "この開催へ戻る" }).click();
+    await page.getByRole("link", { name: "この試合の開催を見る" }).click();
     await expect(page).toHaveURL(`/held-events/${heldEventId}`);
     await expect(page.getByRole("heading", { exact: true, name: "この開催の戦績" })).toBeVisible();
     const eventMatchLink = page.getByRole("link", { name: /第\d+試合の結果を見る/u });
-    const matchFromHeldEventHref = withReturnTo(`/matches/${matchId}`, currentPagePath(page));
+    const matchFromHeldEventHref = `/matches/${matchId}`;
     await expect(eventMatchLink).toHaveAttribute("href", matchFromHeldEventHref);
     await expect(page.getByRole("link", { name: /第\d+試合を戦績比較で見る/u })).toBeVisible();
     await eventMatchLink.click();
@@ -423,7 +416,7 @@ test("filters and opens a confirmed match", async ({ e2eRun, page, request }) =>
       const detailLink = matchDetailLink(page, matchId);
       await expect(detailLink).toHaveCount(1);
       await expect(detailLink).toBeVisible();
-      const matchFromListHref = withReturnTo(`/matches/${matchId}`, currentPagePath(page));
+      const matchFromListHref = `/matches/${matchId}`;
       await expect(detailLink).toHaveAttribute("href", matchFromListHref);
       await detailLink.click();
 
@@ -513,11 +506,6 @@ test("downloads a confirmed match export", async ({ e2eRun, page, request }) => 
 function isMatchListResponse(response: Response): boolean {
   const url = new URL(response.url());
   return url.pathname === "/api/matches" && response.request().method() === "GET";
-}
-
-function currentPagePath(page: Page): string {
-  const url = new URL(page.url());
-  return `${url.pathname}${url.search}${url.hash}`;
 }
 
 function matchDetailLink(page: Page, matchId: string) {

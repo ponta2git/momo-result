@@ -5,6 +5,7 @@ import { fixedMemberIds } from "@/shared/domain/members";
 
 const legacyStoragePrefix = "momoresult.matchWorkspaceDraft.v1.";
 const storagePrefix = "momoresult.matchWorkspaceDraft.v2.";
+export const matchWorkspaceSessionDraftTtlMs = 2 * 60 * 60 * 1000;
 const memberIds = [...fixedMemberIds] as [string, ...string[]];
 
 const incidentSchema = z.object({
@@ -50,6 +51,7 @@ const sessionDraftSchema = z.object({
   accountId: z.string().min(1),
   acknowledgedCellIds: z.array(z.string()),
   baselineFingerprint: z.string(),
+  resumeAutomatically: z.boolean().optional(),
   savedAt: z.string(),
   values: matchFormValuesSchema,
   version: z.literal(2),
@@ -119,10 +121,14 @@ export function matchWorkspaceSessionDraftKey(scope: MatchWorkspaceSessionDraftS
 export function parseMatchWorkspaceSessionDraft(
   raw: string,
   expectedAccountId: string,
+  now: number = Date.now(),
 ): MatchWorkspaceSessionDraft | null {
   try {
     const parsed = sessionDraftSchema.safeParse(JSON.parse(raw));
-    return parsed.success && parsed.data.accountId === expectedAccountId
+    if (!parsed.success || parsed.data.accountId !== expectedAccountId) return null;
+    const savedAt = Date.parse(parsed.data.savedAt);
+    const age = now - savedAt;
+    return Number.isFinite(savedAt) && age >= 0 && age <= matchWorkspaceSessionDraftTtlMs
       ? (parsed.data as MatchWorkspaceSessionDraft)
       : null;
   } catch {
@@ -133,9 +139,16 @@ export function parseMatchWorkspaceSessionDraft(
 export function loadMatchWorkspaceSessionDraft(
   scope: MatchWorkspaceSessionDraftScope,
 ): MatchWorkspaceSessionDraft | null {
-  const storage = sessionStorageOrNull();
-  const raw = storage?.getItem(matchWorkspaceSessionDraftKey(scope));
-  return raw ? parseMatchWorkspaceSessionDraft(raw, scope.accountId) : null;
+  try {
+    const storage = sessionStorageOrNull();
+    const key = matchWorkspaceSessionDraftKey(scope);
+    const raw = storage?.getItem(key);
+    const draft = raw ? parseMatchWorkspaceSessionDraft(raw, scope.accountId) : null;
+    if (raw && !draft) storage?.removeItem(key);
+    return draft;
+  } catch {
+    return null;
+  }
 }
 
 export function saveMatchWorkspaceSessionDraft(
@@ -148,8 +161,10 @@ export function saveMatchWorkspaceSessionDraft(
     return false;
   }
   try {
-    storage.setItem(matchWorkspaceSessionDraftKey(scope), JSON.stringify(parsed.data));
-    return true;
+    const key = matchWorkspaceSessionDraftKey(scope);
+    const serialized = JSON.stringify(parsed.data);
+    storage.setItem(key, serialized);
+    return storage.getItem(key) === serialized;
   } catch {
     return false;
   }

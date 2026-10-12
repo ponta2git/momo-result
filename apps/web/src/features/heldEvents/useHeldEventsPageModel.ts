@@ -27,7 +27,6 @@ import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { toIsoFromLocalDateTime, toLocalDateTimeInputValue } from "@/shared/lib/dateTime";
 import { parsePositiveIntSearchParam } from "@/shared/lib/searchParams";
 import { useRetryNotice } from "@/shared/lib/useRetryNotice";
-import { currentInternalLocation, withReturnTo } from "@/shared/navigation/returnTo";
 import type { UnsavedChangesGuardModel } from "@/shared/navigation/UnsavedChangesGuard";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
@@ -45,27 +44,11 @@ export type HeldEventsPageModel = {
   refresh: HeldEventsListRefreshModel;
 };
 
-function withPaginationParams(
-  current: URLSearchParams,
-  next: { page: number; pageSize: number },
-): URLSearchParams {
-  const params = new URLSearchParams(current);
-  if (next.page === defaultPagination.page) {
-    params.delete("page");
-  } else {
-    params.set("page", String(next.page));
-  }
-  if (next.pageSize === defaultPagination.pageSize) {
-    params.delete("pageSize");
-  } else {
-    params.set("pageSize", String(next.pageSize));
-  }
+function paginationParams(next: { page: number; pageSize: number }): URLSearchParams {
+  const params = new URLSearchParams();
+  if (next.page !== defaultPagination.page) params.set("page", String(next.page));
+  if (next.pageSize !== defaultPagination.pageSize) params.set("pageSize", String(next.pageSize));
   return params;
-}
-
-function heldEventsReturnTo(params: URLSearchParams, hash: string): string {
-  const search = params.toString();
-  return `/held-events${search ? `?${search}` : ""}${hash}`;
 }
 
 /** Owns the complete held-event list screen without exposing query or mutation result objects. */
@@ -73,9 +56,8 @@ export function useHeldEventsPageModel(): HeldEventsPageModel {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const rawSearch = searchParams.toString();
-  const listReturnTo = currentInternalLocation(location);
   const paginationSearch = useMemo(() => {
     const pageSize = parsePositiveIntSearchParam(
       searchParams.get("pageSize"),
@@ -103,9 +85,9 @@ export function useHeldEventsPageModel(): HeldEventsPageModel {
 
   const updatePagination = useCallback(
     (next: { page: number; pageSize: number }) => {
-      setSearchParams(withPaginationParams(searchParams, next));
+      void navigate({ search: paginationParams(next).toString(), hash: location.hash });
     },
-    [searchParams, setSearchParams],
+    [location.hash, navigate],
   );
 
   const heldEventsOptions = heldEventsQueryOptions(paginationSearch);
@@ -145,7 +127,7 @@ export function useHeldEventsPageModel(): HeldEventsPageModel {
       setCreateOpen(false);
       showToast({ title: "開催を作成しました。", tone: "success" });
       navigationAllowedRef.current = true;
-      navigate(withReturnTo(`/held-events/${encodeURIComponent(event.id)}`, listReturnTo));
+      navigate(`/held-events/${encodeURIComponent(event.id)}`);
       return { version: previous.version + 1 };
     } catch (error) {
       if (mountedRef.current) setErrorMessage(formatApiError(error, "開催の作成に失敗しました"));
@@ -178,15 +160,6 @@ export function useHeldEventsPageModel(): HeldEventsPageModel {
   const scopeChanging = Boolean(isPlaceholderData && heldEventsIsFetching);
   const displayedPage = pagination?.page ?? paginationSearch.page;
   const displayedPageSize = pagination?.pageSize ?? paginationSearch.pageSize;
-  const displayedReturnTo = scopeChanging
-    ? heldEventsReturnTo(
-        withPaginationParams(searchParams, {
-          page: displayedPage,
-          pageSize: displayedPageSize,
-        }),
-        location.hash,
-      )
-    : listReturnTo;
   const pageCorrectionPending = Boolean(
     pagination && !isPlaceholderData && paginationSearch.page > Math.max(pagination.totalPages, 1),
   );
@@ -263,7 +236,6 @@ export function useHeldEventsPageModel(): HeldEventsPageModel {
       pageSize: displayedPageSize,
       pagination,
       refresh,
-      returnTo: displayedReturnTo,
       rows,
       scopeChanging,
     };

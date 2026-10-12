@@ -1,4 +1,4 @@
-import { ArrowLeft, BarChart3 } from "lucide-react";
+import { BarChart3 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { matchesSeriesAnalysisScope } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
@@ -16,7 +16,6 @@ import {
   PageSkeleton,
 } from "@/features/seriesComparison/page/SeriesComparisonSkeletons";
 import { useSeriesComparisonPageModel } from "@/features/seriesComparison/page/useSeriesComparisonPageModel";
-import { inlineActionGroupClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
@@ -24,14 +23,6 @@ import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { StaleShield } from "@/shared/ui/motion/StaleShield";
-
-function seriesReturnAction(returnTo: string | undefined) {
-  return returnTo ? (
-    <LinkButton icon={<ArrowLeft aria-hidden="true" />} size="sm" to={returnTo} variant="quiet">
-      前の画面へ戻る
-    </LinkButton>
-  ) : null;
-}
 
 export function SeriesComparisonPage() {
   return (
@@ -91,8 +82,7 @@ function SeriesComparisonPageContent() {
     preloadSeriesAnalysisView(filters.activeView);
   }, [filters.activeView, filters.seriesOptions.length]);
 
-  if (options.loading)
-    return <PageSkeleton showReturnAction={Boolean(page.returnTo)} view={filters.activeView} />;
+  if (options.loading) return <PageSkeleton view={filters.activeView} />;
 
   return (
     <SeriesAnalysisNavigation
@@ -100,11 +90,6 @@ function SeriesComparisonPageContent() {
       failed={options.hasError || status.hasError || resource.hasError}
     >
       <PageFrame width="wide">
-        {page.returnTo ? (
-          <nav aria-label="戦績比較の移動" className={inlineActionGroupClass}>
-            {seriesReturnAction(page.returnTo)}
-          </nav>
-        ) : null}
         <PageContentSurface
           aria-label="戦績比較"
           className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4"

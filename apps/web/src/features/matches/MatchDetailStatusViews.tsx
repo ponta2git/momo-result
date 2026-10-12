@@ -6,7 +6,6 @@ import {
 } from "@/shared/matches/MatchResultLedger";
 import { inlineActionGroupClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
-import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { FactList } from "@/shared/ui/data/FactList";
 import { ResourcePageState } from "@/shared/ui/feedback/ResourcePageState";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
@@ -86,18 +85,12 @@ export function MatchDetailLoading() {
 }
 
 export function MatchDetailLoadFailed({
-  backHref = "/matches",
-  backLabel = "前の画面へ戻る",
-  backNotice,
   notFound = false,
   onRetry,
   retrying = false,
   titleRef,
   recovery,
 }: {
-  backHref?: string;
-  backLabel?: string;
-  backNotice?: string | undefined;
   titleRef?: Ref<HTMLHeadingElement>;
   recovery?: ReactNode;
   notFound?: boolean;
@@ -106,27 +99,17 @@ export function MatchDetailLoadFailed({
 }) {
   return notFound ? (
     <ResourcePageState
-      backHref={backHref}
-      backLabel={backLabel}
+      backHref="/matches"
+      backLabel="試合一覧へ"
       titleRef={titleRef}
-      headerDescription={backNotice}
       headerActions={
-        backHref !== "/matches" || onRetry ? (
-          <div aria-label="試合詳細の回復操作" className={inlineActionGroupClass} role="group">
-            {backHref === "/matches" ? null : (
-              <LinkButton size="sm" to="/matches" variant="quiet">
-                試合一覧へ
-              </LinkButton>
-            )}
-            {onRetry ? (
-              <Button onClick={onRetry} pending={retrying} size="sm" variant="quiet">
-                再取得
-              </Button>
-            ) : null}
-          </div>
+        onRetry ? (
+          <Button onClick={onRetry} pending={retrying} size="sm" variant="quiet">
+            再取得
+          </Button>
         ) : undefined
       }
-      description="指定された試合は削除されたか、存在しません。前の画面から別の試合を選んでください。"
+      description="指定された試合は削除されたか、存在しません。試合一覧から別の試合を選んでください。"
       kind="not-found"
       title="試合が見つかりません"
     >
@@ -134,19 +117,9 @@ export function MatchDetailLoadFailed({
     </ResourcePageState>
   ) : onRetry ? (
     <ResourcePageState
-      backHref={backHref}
-      backLabel={backLabel}
+      backHref="/matches"
+      backLabel="試合一覧へ"
       titleRef={titleRef}
-      headerDescription={backNotice}
-      headerActions={
-        backHref === "/matches" ? undefined : (
-          <div aria-label="試合詳細の回復操作" className={inlineActionGroupClass} role="group">
-            <LinkButton size="sm" to="/matches" variant="quiet">
-              試合一覧へ
-            </LinkButton>
-          </div>
-        )
-      }
       description="通信状態を確認して、もう一度お試しください。"
       kind="error"
       retryLabel="試合詳細を再読み込み"

@@ -11,9 +11,4 @@ export type {
   IncidentCountsResponse,
 } from "@/test/factories/matchDetail";
 export { makeHeldEventDetailResponse, makeHeldEventResponse } from "@/test/factories/heldEvents";
-export {
-  makeReviewPlayerInput,
-  makeFourReviewPlayerInputs,
-  makeMatchWorkspaceMasterHandoffValues,
-} from "@/test/factories/draftReview";
 export { makeMatchDraftSourceImageResponses } from "@/test/factories/sourceImages";

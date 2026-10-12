@@ -103,9 +103,7 @@ describe("MatchEditPage", () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter
-          initialEntries={["/matches/match-1/edit?returnTo=%2Fmatches%3Fcursor%3Dcursor-2"]}
-        >
+        <MemoryRouter initialEntries={["/matches/match-1/edit"]}>
           <Routes>
             <Route path="/matches/:matchId/edit" element={<MatchEditPage />} />
           </Routes>
@@ -122,7 +120,7 @@ describe("MatchEditPage", () => {
     expect(screen.getByRole("button", { name: "保存" })).toBeEnabled();
     expect(screen.getByRole("link", { name: "編集をやめる" })).toHaveAttribute(
       "href",
-      "/matches?cursor=cursor-2",
+      "/matches/match-1",
     );
   });
 
@@ -443,6 +441,9 @@ describe("MatchEditPage", () => {
     const revenue = screen.getByRole("textbox", { name: "ぽんた 収益（万円）" });
     await user.clear(revenue);
     await user.type(revenue, "-");
+    const unloading = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(unloading);
+    expect(unloading.defaultPrevented).toBe(false);
     first.unmount();
     const second = mountEditor("match-b");
     await waitForMatchEditReady();

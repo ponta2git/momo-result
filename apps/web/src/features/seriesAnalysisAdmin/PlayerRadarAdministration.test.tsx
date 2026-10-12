@@ -580,7 +580,7 @@ describe("PlayerRadarAdministration", () => {
     expect(screen.getByRole("textbox", { name: "平均順位 10点の境界（位以下）" })).toHaveValue("1");
     expect(screen.getByRole("combobox", { name: "比較するマップ" })).toHaveTextContent("東日本編");
     mapMissingFromDirectory = true;
-    await user.click(screen.getByRole("button", { name: "基準の状態を更新" }));
+    await user.click(await screen.findByRole("button", { name: "基準の状態を更新" }));
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "基準の状態を更新" })).toBeEnabled(),
     );

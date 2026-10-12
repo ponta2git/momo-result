@@ -170,6 +170,7 @@ export function OutlookEditor({ session, role, method, name, label, change }: Pr
                   );
                 }}
                 onKeyDown={(event) => {
+                  if (event.nativeEvent.isComposing) return;
                   if (event.key === "Enter") {
                     event.preventDefault();
                     commitMean();
@@ -469,6 +470,7 @@ function WholeCountEditor({ session, role, name, change }: Props) {
                   );
                 }}
                 onKeyDown={(event) => {
+                  if (event.nativeEvent.isComposing) return;
                   if (event.key === "Enter" || event.key === "Escape") {
                     event.preventDefault();
                     if (event.key === "Enter" && entry.error) return;

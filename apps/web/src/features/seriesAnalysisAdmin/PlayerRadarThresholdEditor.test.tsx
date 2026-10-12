@@ -176,6 +176,31 @@ describe("radar threshold input workflow", () => {
     expect(screen.getByText("入力中の比較です。まだ適用されていません。")).toBeInTheDocument();
   });
 
+  it("starts a usable new edit after discarding an unfinished IME composition", async () => {
+    const user = userEvent.setup();
+    const model = makePlayerRadarEditorModel();
+    const save = vi.fn(model.editing!.save);
+    model.editing!.save = save;
+    render(<PlayerRadarAdminPanel model={model} />);
+    await user.click(screen.getByRole("button", { name: "調整を始める" }));
+    fireEvent.compositionStart(
+      screen.getByRole("textbox", { name: "平均順位 2点の境界（位以下）" }),
+    );
+    await user.click(screen.getByRole("button", { name: "編集をやめる" }));
+    await user.click(
+      within(screen.getByRole("alertdialog")).getByRole("button", {
+        name: "編集内容を破棄する",
+      }),
+    );
+    await user.click(await screen.findByRole("button", { name: "調整を始める" }));
+    const input = screen.getByRole("textbox", { name: "平均順位 2点の境界（位以下）" });
+    await user.clear(input);
+    await user.type(input, "4.95");
+    await user.click(screen.getByRole("button", { name: "変更を適用" }));
+    await waitFor(() => expect(save).toHaveBeenCalledOnce());
+    expect(save.mock.calls[0]![0].manualInput.axes[0]!.thresholds[0]).toBe(4.95);
+  });
+
   it("keeps the previous comparison visibly stale while a now-invalid input cancels the queued preview", async () => {
     const user = userEvent.setup();
     render(<PlayerRadarAdminPanel model={makePlayerRadarEditorModel()} />);

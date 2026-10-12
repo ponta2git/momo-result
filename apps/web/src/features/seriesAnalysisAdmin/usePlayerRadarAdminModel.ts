@@ -271,7 +271,7 @@ export function usePlayerRadarAdminModel(
     if (!mounted.current || !authorization.canCommit(lease)) return;
     if (result.data?.candidate?.latestPreview?.previewId === previewId && previewId)
       await previewQuery.refetch();
-    await editingEvaluation.refresh();
+    await editingEvaluation.refresh(() => mounted.current && authorization.canCommit(lease));
     if (!mounted.current || !authorization.canCommit(lease)) return;
     if (result.isSuccess && conflictNeedsRefresh) command.reset();
   };

@@ -104,7 +104,7 @@ test("keeps canceled edits, waits for discard, and browses another title's immut
   const changedRow = detail
     .getByRole("row")
     .filter({ has: page.getByRole("rowheader", { name: "2点", exact: true }) });
-  await expect(changedRow.getByRole("cell", { name: "4.123456789123", exact: true })).toBeVisible();
+  await expect(changedRow.getByRole("cell", { name: "4.923456789123", exact: true })).toBeVisible();
   await expect(changedRow.getByRole("cell", { name: "変更あり", exact: true })).toBeVisible();
 
   await page.getByRole("tab", { name: "現在の採点境界", exact: true }).click();

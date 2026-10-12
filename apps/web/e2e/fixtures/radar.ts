@@ -44,7 +44,7 @@ export async function installRadarResponses(page: Page) {
     beforeBasis: makePlayerRadarBasis().basis,
     afterBasis: makePlayerRadarBasis().basis,
   };
-  detail.afterBasis.axes[0].thresholds[0] = 4.123456789123;
+  detail.afterBasis.axes[0].thresholds[0] = 4.923456789123;
   const commands: SeriesPlayerRadarCommand[] = [];
   const historyQueries: URLSearchParams[] = [];
   const withdrawal = createDeferred();

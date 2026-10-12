@@ -80,7 +80,7 @@ export function useCameraCaptureSession({
   );
 
   const refreshDevices = useCallback(
-    async (cameraGeneration?: number) => {
+    (cameraGeneration?: number) => {
       if (!navigator.mediaDevices?.enumerateDevices) return;
       const enumerationGeneration = deviceEnumerationGenerationRef.current + 1;
       deviceEnumerationGenerationRef.current = enumerationGeneration;
@@ -89,12 +89,16 @@ export function useCameraCaptureSession({
         deviceEnumerationGenerationRef.current === enumerationGeneration &&
         (cameraGeneration === undefined || isCurrentCameraGeneration(cameraGeneration));
 
-      try {
-        const items = await navigator.mediaDevices.enumerateDevices();
-        if (mayCommit()) setDevices(selectableVideoDevices(items));
-      } catch {
-        if (mayCommit()) setDevices([]);
-      }
+      // Enumeration is advisory: only its asynchronous response changes the device list.
+      void navigator.mediaDevices.enumerateDevices().then(
+        (items) => {
+          if (mayCommit()) setDevices(selectableVideoDevices(items));
+          return null;
+        },
+        () => {
+          if (mayCommit()) setDevices([]);
+        },
+      );
     },
     [isCurrentCameraGeneration],
   );
@@ -124,9 +128,7 @@ export function useCameraCaptureSession({
   }, [releaseCurrentStream]);
 
   useEffect(() => {
-    // Device state arrives asynchronously from enumerateDevices, not from render-derived data.
-    // oxlint-disable-next-line react/set-state-in-effect
-    void refreshDevices();
+    refreshDevices();
   }, [refreshDevices]);
 
   useLayoutEffect(() => {
@@ -157,11 +159,7 @@ export function useCameraCaptureSession({
       }
 
       streamRef.current = nextStream;
-      await refreshDevices(cameraGeneration);
-      if (!isCurrentCameraGeneration(cameraGeneration)) {
-        releaseStream(nextStream);
-        return;
-      }
+      refreshDevices(cameraGeneration);
 
       const video = videoRef.current;
       if (!video) {
@@ -169,11 +167,7 @@ export function useCameraCaptureSession({
         return;
       }
       video.srcObject = nextStream;
-      try {
-        await video.play();
-      } catch (playError) {
-        if (!nextStream.active) throw playError;
-      }
+      await video.play();
       if (!isCurrentCameraGeneration(cameraGeneration)) {
         releaseStream(nextStream);
         return;
@@ -189,7 +183,8 @@ export function useCameraCaptureSession({
       else releaseCurrentStream();
       setActive(false);
       setError(
-        caught instanceof Error && caught.name === "NotAllowedError"
+        (caught instanceof Error || caught instanceof DOMException) &&
+          caught.name === "NotAllowedError"
           ? "カメラの利用が許可されていません。ブラウザの権限を確認してください。"
           : "カメラを開始できませんでした。接続とブラウザの権限を確認してください。",
       );
@@ -246,6 +241,10 @@ export function useCameraCaptureSession({
         return;
       }
       onSelect(file, "camera");
+    } catch {
+      if (isCurrentCameraGeneration(cameraGeneration)) {
+        onValidationError("撮影画像を生成できませんでした。もう一度撮影してください。");
+      }
     } finally {
       if (isCurrentCameraGeneration(cameraGeneration)) {
         capturingRef.current = false;

@@ -54,6 +54,9 @@ function SetupOptionsHarness({ initialValue }: { initialValue: SetupFormValues }
       <button type="button" onClick={options.retry}>
         選択肢を再取得
       </button>
+      <button type="button" disabled={!options.ready}>
+        読み取りを開始
+      </button>
     </>
   );
 }
@@ -63,6 +66,48 @@ function readSetupValue(): SetupFormValues {
 }
 
 describe("useOcrSetupOptions", () => {
+  it.each(["map", "season"] as const)(
+    "keeps OCR unavailable when the selected %s no longer exists, and recovers on reload",
+    async (missing) => {
+      const user = userEvent.setup();
+      const queryClient = createTestQueryClient();
+      queryClient.setQueryDefaults(masterKeys.all(), { staleTime: Number.POSITIVE_INFINITY });
+      queryClient.setQueryData(masterKeys.gameTitles.list(), { items: [gameTitle] });
+      queryClient.setQueryData(masterKeys.mapMasters.list(gameTitle.id), {
+        items: missing === "map" ? [] : [mapMaster],
+      });
+      queryClient.setQueryData(masterKeys.seasonMasters.list(gameTitle.id), {
+        items: missing === "season" ? [] : [seasonMaster],
+      });
+      server.use(
+        http.get("/api/map-masters", () => HttpResponse.json({ items: [mapMaster] })),
+        http.get("/api/season-masters", () => HttpResponse.json({ items: [seasonMaster] })),
+        http.get("/api/game-titles", () => HttpResponse.json({ items: [gameTitle] })),
+      );
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <SetupOptionsHarness
+            initialValue={{
+              gameTitleId: gameTitle.id,
+              mapMasterId: mapMaster.id,
+              ownerMemberId: "member_ponta",
+              seasonMasterId: seasonMaster.id,
+            }}
+          />
+        </QueryClientProvider>,
+      );
+
+      expect(screen.getByRole("button", { name: "読み取りを開始" })).toBeDisabled();
+      expect(readSetupValue().mapMasterId).toBe(mapMaster.id);
+      expect(readSetupValue().seasonMasterId).toBe(seasonMaster.id);
+      await user.click(screen.getByRole("button", { name: "選択肢を再取得" }));
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: "読み取りを開始" })).toBeEnabled(),
+      );
+    },
+  );
+
   it("shares the first picker page and retries a failed request only once", async () => {
     const user = userEvent.setup();
     const requests: URLSearchParams[] = [];

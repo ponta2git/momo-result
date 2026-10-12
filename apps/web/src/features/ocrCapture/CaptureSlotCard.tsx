@@ -1,4 +1,4 @@
-import { useCallback, useId, useState } from "react";
+import { useId, useState } from "react";
 import type { DragEventHandler } from "react";
 
 import { CaptureSlotActions } from "@/features/ocrCapture/CaptureSlotActions";
@@ -53,41 +53,26 @@ export function CaptureSlotCard({
   const isWorking = isWorkingStatus(slot.status);
   const [dragOver, setDragOver] = useState(false);
 
-  const handleDragStart = useCallback<DragEventHandler<HTMLDivElement>>(
-    (event) => {
-      if (!hasImage || isWorking) {
-        return;
-      }
-      event.dataTransfer.effectAllowed = "move";
-      event.dataTransfer.setData("text/plain", slot.kind);
-    },
-    [hasImage, isWorking, slot.kind],
-  );
+  const handleDragStart: DragEventHandler<HTMLDivElement> = (event) => {
+    if (!hasImage || isWorking) return;
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", slot.kind);
+  };
 
-  const handleDragOver = useCallback<DragEventHandler<HTMLElement>>(
-    (event) => {
-      if (isWorking) return;
-      event.preventDefault();
-      event.dataTransfer.dropEffect = "move";
-      setDragOver(true);
-    },
-    [isWorking],
-  );
+  const handleDragOver: DragEventHandler<HTMLElement> = (event) => {
+    if (isWorking) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setDragOver(true);
+  };
 
-  const handleDrop = useCallback<DragEventHandler<HTMLElement>>(
-    (event) => {
-      event.preventDefault();
-      setDragOver(false);
-      const sourceKind = parseSlotKind(event.dataTransfer.getData("text/plain"));
-      if (sourceKind) {
-        actions.onDropImage(sourceKind, slot.kind);
-      }
-    },
-    [actions, slot.kind],
-  );
-
-  const handleMoveBackward = useCallback(() => actions.onMoveImage(-1), [actions]);
-  const handleMoveForward = useCallback(() => actions.onMoveImage(1), [actions]);
+  const handleDrop: DragEventHandler<HTMLElement> = (event) => {
+    event.preventDefault();
+    setDragOver(false);
+    if (isWorking) return;
+    const sourceKind = parseSlotKind(event.dataTransfer.getData("text/plain"));
+    if (sourceKind) actions.onDropImage(sourceKind, slot.kind);
+  };
 
   return (
     // Labeled move buttons provide the keyboard equivalent of this optional drop target.
@@ -138,8 +123,8 @@ export function CaptureSlotCard({
           moveBackwardLabel={presentation.previousLabel}
           moveForwardLabel={presentation.nextLabel}
           onClear={actions.onClear}
-          onMoveBackward={handleMoveBackward}
-          onMoveForward={handleMoveForward}
+          onMoveBackward={() => actions.onMoveImage(-1)}
+          onMoveForward={() => actions.onMoveImage(1)}
           onSelectCapture={actions.onSelectCapture}
         />
       </div>

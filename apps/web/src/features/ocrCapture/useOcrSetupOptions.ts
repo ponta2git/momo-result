@@ -146,7 +146,13 @@ export function useOcrSetupOptions({ enabled, onChange, value }: OcrSetupOptions
     !heldEventContextFailed &&
     !mapMastersLoadFailed &&
     !seasonMastersLoadFailed &&
-    Boolean(selectedGameTitle && value.mapMasterId && value.seasonMasterId && value.ownerMemberId);
+    Boolean(selectedGameTitle && value.ownerMemberId) &&
+    mapMasters.some(
+      (item) => item.id === value.mapMasterId && item.gameTitleId === value.gameTitleId,
+    ) &&
+    seasonMasters.some(
+      (item) => item.id === value.seasonMasterId && item.gameTitleId === value.gameTitleId,
+    );
   const hasError =
     gameTitlesLoadFailed ||
     heldEventsLoadFailed ||

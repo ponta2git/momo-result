@@ -187,6 +187,75 @@ describe("CameraCapture", () => {
     expect(screen.getByRole("button", { name: "静止画を撮影" })).toBeEnabled();
   });
 
+  it("starts the preview without waiting for an unresolved device enumeration", async () => {
+    const user = userEvent.setup();
+    const { stream } = createMockMediaStream();
+    const enumeration = createDeferred<MediaDeviceInfo[]>();
+    getUserMedia = installGetUserMediaMock(() => Promise.resolve(stream));
+    Object.assign(navigator.mediaDevices, {
+      enumerateDevices: vi.fn(() => enumeration.promise),
+    });
+
+    render(<CameraCapture slotLabel="総資産" onSelect={vi.fn()} onValidationError={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "カメラ開始" }));
+
+    expect(screen.getByLabelText("総資産のカメラプレビュー")).toHaveProperty("srcObject", stream);
+    expect(screen.getByRole("button", { name: "静止画を撮影" })).toBeEnabled();
+    await act(async () =>
+      enumeration.resolve([mediaDevice({ deviceId: "camera-1", label: "カメラ 1" })]),
+    );
+    expect(screen.getByRole("combobox", { name: "カメラ" })).toBeInTheDocument();
+  });
+
+  it("releases the camera and offers a retry when preview playback fails", async () => {
+    const user = userEvent.setup();
+    const { stream, track } = createMockMediaStream();
+    getUserMedia = installGetUserMediaMock(() => Promise.resolve(stream));
+    videoSpies.play.mockRejectedValueOnce(new DOMException("blocked", "NotAllowedError"));
+
+    render(<CameraCapture slotLabel="総資産" onSelect={vi.fn()} onValidationError={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "カメラ開始" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("カメラの利用が許可されていません");
+    expect(screen.getByRole("button", { name: "静止画を撮影" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "カメラ開始" })).toBeEnabled();
+    expect(track.stop).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("総資産のカメラプレビュー")).toHaveProperty("srcObject", null);
+
+    await user.click(screen.getByRole("button", { name: "カメラ開始" }));
+    expect(screen.getByRole("button", { name: "静止画を撮影" })).toBeEnabled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("reports an image creation exception and allows the next capture", async () => {
+    const user = userEvent.setup();
+    const { stream } = createMockMediaStream();
+    getUserMedia = installGetUserMediaMock(() => Promise.resolve(stream));
+    canvasSpies.toBlob.mockImplementationOnce(() => {
+      throw new DOMException("encoding failed", "SecurityError");
+    });
+    const onSelect = vi.fn();
+    const onValidationError = vi.fn();
+    render(
+      <CameraCapture
+        slotLabel="総資産"
+        onSelect={onSelect}
+        onValidationError={onValidationError}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "カメラ開始" }));
+    await user.click(screen.getByRole("button", { name: "静止画を撮影" }));
+
+    expect(onValidationError).toHaveBeenCalledWith(
+      expect.stringContaining("撮影画像を生成できませんでした"),
+    );
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "静止画を撮影" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "静止画を撮影" }));
+    expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
   it("omits cameras without a selectable id and de-duplicates device options", async () => {
     getUserMedia = installGetUserMediaMock(() => Promise.resolve(createMockMediaStream().stream));
     Object.assign(navigator.mediaDevices, {

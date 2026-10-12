@@ -74,7 +74,7 @@ export function AppShell() {
         return;
       }
       const anchor = target.closest<HTMLAnchorElement>("a[href]");
-      if (!anchor || anchor.target === "_blank" || anchor.origin !== window.location.origin) {
+      if (!anchor || !shouldPreloadAnchor(anchor)) {
         return;
       }
       preloadRouteForPath(anchor.pathname);

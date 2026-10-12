@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
-import { Link, useLocation, useMatch, useResolvedPath } from "react-router-dom";
+import { Link, useMatch, useResolvedPath } from "react-router-dom";
 
 import { cn } from "@/shared/ui/cn";
 import { pageViewportGutterClass } from "@/shared/ui/layout/PageFrame";
@@ -72,19 +72,17 @@ export function GlobalNav({
   managementItems = emptyNavItems,
   managementLabel = "管理",
 }: GlobalNavProps) {
-  const location = useLocation();
   const navItemsRef = useRef<HTMLDivElement>(null);
-  const destinationSignature = [...items, ...managementItems].map((item) => item.to).join("\0");
 
+  // Explicit current flags and labels also affect the active link and its geometry.
+  // Synchronize the rendered DOM after each commit instead of duplicating that identity.
   useEffect(() => {
     const scroller = navItemsRef.current;
     const activeLink = scroller?.querySelector<HTMLAnchorElement>('a[aria-current="page"]');
     if (scroller && activeLink) {
       revealActiveDestination(scroller, activeLink);
     }
-    // Route and destination changes update aria-current and link geometry in the DOM.
-    // oxlint-disable-next-line react/exhaustive-effect-dependencies
-  }, [destinationSignature, location.pathname]);
+  });
 
   return (
     <nav

@@ -1,6 +1,6 @@
 import { hashKey } from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
-import { useEffect, useEffectEvent, useRef } from "react";
+import { useEffect, useEffectEvent, useLayoutEffect, useRef } from "react";
 
 import { isAnalysisArtifactExpired } from "@/shared/api/problemDetails";
 import type { SeriesAnalysisStatusResponse } from "@/shared/api/seriesAnalysis";
@@ -25,7 +25,7 @@ export function useAnalysisArtifactRecovery({
   const handledResources = useRef(new Set<string>());
   const mounted = useRef(false);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;

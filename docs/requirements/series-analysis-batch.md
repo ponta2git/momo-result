@@ -167,7 +167,7 @@ DB lock順とstaging transactionの規則は `docs/db-rule.md`、process責務�
 
 ### Web State
 
-- Webはlocale、label、semantic token、描画geometry、URL / selectionだけを扱い、集計、閾値、候補採否、意味順、統計fallbackを再計算しない。
+- Webはlocale、label、semantic token、描画geometry、URL / selectionを扱い、集計、閾値の自動生成、候補採否、意味順、統計fallbackを再計算しない。例外は[レーダー閾値編集の仮プレビュー](series-player-radar.md#閾値の手入力と自動プレビュー)に限る。保存済み元指標と手入力境界による仮採点を許すが、正式比較・公開値は引き続きWorkerが計算し、APIの保存済み値の読み取り契約は変えない。
 - [総合成績の見通し](series-rank-outlook.md#13-実績データと読取契約)の仮定からの条件計算と、保存済み実績例の利用者条件への適合判定は、上記の実績集計・行動プレイブックの候補採否と区別する。実績の生成・並び順・品質は引き続きWorkerが所有する。
 - `queued` / `running` で成功artifactがあれば旧表示と最終成功日時を維持し、更新または手動再計算中であることを区別する。
 - 初回計算中は分析値のないloading state、成果物なしの失敗は分析値のないerror stateを出す。失敗時も旧成功artifactがあれば維持する。

@@ -3,14 +3,16 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { ErrorBoundary } from "@/app/ErrorBoundary";
+import { loadSeriesAnalysisAdminPage } from "@/app/routeModules";
 import { appRoutes } from "@/app/router";
 import type {
   SeriesAnalysisAdminOverview,
   SeriesAnalysisRecalculationAccepted,
 } from "@/shared/api/seriesAnalysis";
+import { decodeSeriesAnalysisAdminOverview } from "@/shared/api/seriesAnalysisEnvelopeSchemas";
 import { setDevUser } from "@/test/auth";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { makeSeriesAnalysisAdminOverview } from "@/test/msw/seriesAnalysisFixtures";
@@ -32,6 +34,15 @@ function renderAdminPage(initialEntry = "/admin/analysis") {
 }
 
 describe("SeriesAnalysisAdminPage", () => {
+  // Compile the real lazy route and validator before interaction waits start.
+  // Route guards, HTTP requests, and response validation still run normally.
+  beforeAll(async () => {
+    await Promise.all([
+      loadSeriesAnalysisAdminPage(),
+      decodeSeriesAnalysisAdminOverview(makeSeriesAnalysisAdminOverview()),
+    ]);
+  });
+
   it("offers recovery when the initial overview cannot load", async () => {
     setDevUser();
     const user = userEvent.setup();

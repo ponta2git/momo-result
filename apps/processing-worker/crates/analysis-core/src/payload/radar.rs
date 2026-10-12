@@ -31,6 +31,22 @@ pub fn radar_basis_from_payload(value: &Value) -> Result<RadarBasis, PayloadErro
     {
         return Err(PayloadError::InvalidSchema);
     }
+    if let Some(manual) = &basis.manual {
+        validate_map_counts(
+            &manual.monitoring_source.map_counts,
+            manual.monitoring_source.match_count,
+        )?;
+        if manual.monitoring_source.map_master_ids
+            != manual
+                .monitoring_source
+                .map_counts
+                .iter()
+                .map(|item| item.map_master_id.clone())
+                .collect::<Vec<_>>()
+        {
+            return Err(PayloadError::InvalidSchema);
+        }
+    }
     Ok(basis)
 }
 
@@ -63,7 +79,11 @@ pub fn radar_candidate_from_payload(value: &Value) -> Result<RadarCandidateSumma
     )?;
     let eligible = candidate.source_summary.match_count >= RADAR_MINIMUM_MATCHES
         && candidate.source_summary.held_event_count >= RADAR_MINIMUM_EVENTS;
-    let expected_windows = if eligible {
+    let manual = candidate
+        .basis
+        .as_ref()
+        .is_some_and(|basis| basis.manual.is_some());
+    let expected_windows = if eligible && !manual {
         candidate.source_summary.match_count.saturating_sub(19)
     } else {
         0
@@ -94,10 +114,10 @@ pub fn radar_candidate_from_payload(value: &Value) -> Result<RadarCandidateSumma
                             .thresholds
                             .map(|values| values.map(f64::to_bits))
                             != Some(basis_axis.thresholds.map(f64::to_bits))
-                        || candidate_axis.q10.map(f64::to_bits) != Some(basis_axis.q10.to_bits())
+                        || candidate_axis.q10.map(f64::to_bits) != basis_axis.q10.map(f64::to_bits)
                         || candidate_axis.median.map(f64::to_bits)
-                            != Some(basis_axis.median.to_bits())
-                        || candidate_axis.q90.map(f64::to_bits) != Some(basis_axis.q90.to_bits())
+                            != basis_axis.median.map(f64::to_bits)
+                        || candidate_axis.q90.map(f64::to_bits) != basis_axis.q90.map(f64::to_bits)
                 })
         {
             return Err(PayloadError::InvalidSchema);

@@ -2,10 +2,15 @@ package momo.api.endpoints
 
 import java.time.format.DateTimeFormatter
 
-import io.circe.Codec
+import io.circe.{Codec, Decoder, DecodingFailure, Encoder}
 import sttp.tapir.{Schema, Validator}
 
 import momo.api.domain.{SeriesPlayerRadarOperation, SeriesPlayerRadarOperationKind}
+
+final case class SeriesPlayerRadarManualAxisRequest(axisId: String, thresholds: List[Double])
+    derives Codec.AsObject
+final case class SeriesPlayerRadarManualInputRequest(axes: List[SeriesPlayerRadarManualAxisRequest])
+    derives Codec.AsObject
 
 final case class SeriesPlayerRadarOperationRequest(
     gameTitleId: String,
@@ -15,7 +20,30 @@ final case class SeriesPlayerRadarOperationRequest(
     expectedCurrentBasisId: Option[String],
     originOperationId: Option[String],
     evidenceKey: Option[String],
-) derives Codec.AsObject
+    expectedCandidateId: Option[String] = None,
+    sourceBasisId: Option[String] = None,
+    sourceCandidateId: Option[String] = None,
+    manualInput: Option[SeriesPlayerRadarManualInputRequest] = None,
+)
+
+object SeriesPlayerRadarOperationRequest:
+  private val derived = Codec.AsObject.derived[SeriesPlayerRadarOperationRequest]
+  given Codec.AsObject[SeriesPlayerRadarOperationRequest] = Codec.AsObject.from(
+    Decoder.instance { cursor =>
+      derived(cursor).flatMap { request =>
+        val fields = cursor.keys.map(_.toSet).getOrElse(Set.empty)
+        if request.kind == "manual" &&
+          !Set("expectedCurrentBasisId", "expectedCandidateId").subsetOf(fields)
+        then
+          Left(DecodingFailure(
+            "Manual radar saves require explicit expected basis and candidate IDs (or null).",
+            cursor.history
+          ))
+        else Right(request)
+      }
+    },
+    Encoder.AsObject.instance(derived.encodeObject),
+  )
 
 final case class SeriesPlayerRadarOperationResponse(
     schemaVersion: Int,
@@ -63,8 +91,34 @@ object SeriesPlayerRadarApiSchemas:
     List("pending", "running", "succeeded", "failed", "withdrawn"),
     value => Some(value),
   )
+  given Schema[SeriesPlayerRadarManualAxisRequest] =
+    Schema.derived[SeriesPlayerRadarManualAxisRequest]
+      .modify(_.axisId)(_.validate(Validator.enumeration(
+        List(
+          "averageRank",
+          "revenueP90",
+          "revenueAverage",
+          "totalAssetsP10",
+          "totalAssetsMedian",
+          "totalAssetsP90"
+        ),
+        value => Some(value)
+      )))
+  given Schema[SeriesPlayerRadarManualInputRequest] = Schema.derived
   given Schema[SeriesPlayerRadarOperationRequest] = Schema
     .derived[SeriesPlayerRadarOperationRequest].modify(_.kind)(_.validate(kinds))
+    .modify(_.originOperationId)(_.description(
+      "Required for retry. For withdraw, optionally identifies this actor's manual creation operation; guarded withdrawal refuses any candidate with an accepted apply operation."
+    ))
+    .modify(_.expectedCurrentBasisId)(_.modifyUnsafe[String](Schema.ModifyCollectionElements)(
+      _.nullable
+    ))
+    .modify(_.expectedCandidateId)(_.modifyUnsafe[String](Schema.ModifyCollectionElements)(
+      _.nullable
+    ))
+    .modify(_.sourceCandidateId)(_.modifyUnsafe[String](Schema.ModifyCollectionElements)(
+      _.nullable
+    ))
   given Schema[SeriesPlayerRadarOperationResponse] = Schema
     .derived[SeriesPlayerRadarOperationResponse]
     .modify(_.schemaVersion)(_.validate(Validator.enumeration(List(1), value => Some(value))))

@@ -1,10 +1,10 @@
-import { PlayerRadarChart } from "@/features/seriesComparison/charts/PlayerRadarChart";
 import { AnalysisSection } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import { orderFixedMembers } from "@/shared/domain/members";
 import { formatDateOnly } from "@/shared/lib/dateTime";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { PlayerRadarAxisLabel } from "@/shared/seriesAnalysis/PlayerRadarAxisLabel";
+import { PlayerRadarChart } from "@/shared/seriesAnalysis/PlayerRadarChart";
 import {
   formatPlayerRadarBoundary,
   formatPlayerRadarRawValue,

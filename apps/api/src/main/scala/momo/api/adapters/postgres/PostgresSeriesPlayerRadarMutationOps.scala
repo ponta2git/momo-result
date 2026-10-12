@@ -39,6 +39,7 @@ private[postgres] object PostgresSeriesPlayerRadarMutationOps:
         FROM series_radar_bases b
         WHERE c.game_title_id = $title AND b.game_title_id = $title
           AND c.basis_id = b.id AND c.status IN ('pending', 'ready', 'unavailable', 'failed')
+          AND b.payload->'manual' IS NULL
           AND EXISTS(SELECT 1 FROM jsonb_array_elements(b.source_snapshot->'matches') m
             WHERE m->'order'->>'matchId' = ${matchId.value})
         RETURNING c.id
@@ -53,7 +54,21 @@ private[postgres] object PostgresSeriesPlayerRadarMutationOps:
           AND status IN ('pending', 'running')
         RETURNING id
       """.query[String].to[List]
-      stoppedIds = stopped.toArray
+      stoppedManual <- if sourceMayHaveChanged then
+        sql"""
+        UPDATE series_radar_operations o
+        SET status = 'failed', safe_failure_code = 'evaluation_changed', finished_at = now(), updated_at = now()
+        FROM series_radar_candidates c, series_radar_previews p, series_radar_bases b
+        WHERE o.game_title_id = $title AND o.kind = 'apply' AND o.status IN ('pending', 'running')
+          AND c.id = o.candidate_id AND c.game_title_id = $title
+          AND b.id = c.basis_id AND b.game_title_id = $title AND b.payload->'manual' IS NOT NULL
+          AND p.id = o.preview_id AND p.game_title_id = $title
+          AND EXISTS(SELECT 1 FROM jsonb_array_elements(p.evaluation_snapshot->'matches') m
+            WHERE m->'order'->>'matchId' = ${matchId.value})
+        RETURNING o.id
+      """.query[String].to[List]
+      else List.empty[String].pure[ConnectionIO]
+      stoppedIds = (stopped ++ stoppedManual).toArray
       reset <- sql"""
         UPDATE series_radar_title_states
         SET desired_basis_id = current_basis_id, generation = generation + 1,

@@ -1,5 +1,8 @@
 import type { ContractValidator } from "@/shared/api/seriesAnalysisContractDecoder";
 
+export const validateSeriesPlayerRadarRevisionResponse: ContractValidator;
+export const validateSeriesPlayerRadarRevisionListResponse: ContractValidator;
+export const validateSeriesPlayerRadarRevisionDetailResponse: ContractValidator;
 export const validateSeriesPlayerRadarStateResponse: ContractValidator;
 export const validateSeriesPlayerRadarPreviewResponse: ContractValidator;
 export const validateSeriesPlayerRadarOperationResponse: ContractValidator;

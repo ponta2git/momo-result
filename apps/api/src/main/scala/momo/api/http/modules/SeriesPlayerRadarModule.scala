@@ -5,7 +5,7 @@ import cats.syntax.all.*
 import sttp.tapir.server.ServerEndpoint
 
 import momo.api.auth.RateLimiter
-import momo.api.domain.SeriesPlayerRadarPreviewRequest
+import momo.api.domain.{SeriesPlayerRadarHistoryRequest, SeriesPlayerRadarPreviewRequest}
 import momo.api.endpoints.*
 import momo.api.endpoints.codec.{SeriesAnalysisCodec, SeriesPlayerRadarCodec}
 import momo.api.errors.AppError
@@ -14,6 +14,7 @@ import momo.api.usecases.seriesanalysis.*
 
 object SeriesPlayerRadarModule:
   def routes[F[_]: Async](
+      getHistory: GetSeriesPlayerRadarHistory[F],
       getState: GetSeriesPlayerRadarState[F],
       getPreview: GetSeriesPlayerRadarPreview[F],
       getOperation: GetSeriesPlayerRadarOperation[F],
@@ -23,6 +24,39 @@ object SeriesPlayerRadarModule:
       now: F[java.time.Instant],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(
+    SecuredEndpoint.operatorReadLogic(security, SeriesPlayerRadarEndpoints.history) {
+      account => input =>
+        val decoded =
+          for
+            title <- input.gameTitleId.traverse(SeriesAnalysisCodec.gameTitleId)
+            cursor <- input.cursor.traverse(SeriesPlayerRadarCodec.opaqueId("cursor", _))
+            limit = input.limit.getOrElse(20)
+            _ <- Either.cond(
+              limit >= 1 && limit <= 50,
+              (),
+              AppError.ValidationFailed("limit must be between 1 and 50.")
+            )
+          yield SeriesPlayerRadarHistoryRequest(title, limit, cursor)
+        ReadRateLimit.enforce(
+          readRateLimiter,
+          account.accountId.value,
+          HttpOperation.GetRadarHistory
+        )(
+          security.decode(decoded)(request => security.respond(getHistory.list(request))(_.payload))
+        )
+    },
+    SecuredEndpoint.operatorReadLogic(security, SeriesPlayerRadarEndpoints.revision) {
+      account => id =>
+        ReadRateLimit.enforce(
+          readRateLimiter,
+          account.accountId.value,
+          HttpOperation.GetRadarRevision
+        )(
+          security.decode(SeriesPlayerRadarCodec.opaqueId("revisionId", id))(revision =>
+            security.respond(getHistory.detail(revision))(_.payload)
+          )
+        )
+    },
     SecuredEndpoint.operatorReadLogic(security, SeriesPlayerRadarEndpoints.state) {
       account => rawTitle =>
         ReadRateLimit.enforce(

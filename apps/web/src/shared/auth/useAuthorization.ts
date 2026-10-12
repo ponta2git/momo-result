@@ -10,11 +10,12 @@ export function useAuthorization() {
   const auth = useAuth();
   const { devUser } = useDevUser();
   const owner = getAuthorization(client, devUser);
-  useSyncExternalStore(owner.subscribe, owner.snapshot, owner.snapshot);
+  const revision = useSyncExternalStore(owner.subscribe, owner.snapshot, owner.snapshot);
   const allowed = { admin: owner.can("admin"), operations: owner.can("operations") };
   const retained = { admin: owner.has("admin"), operations: owner.has("operations") };
 
   return {
+    revision,
     auth,
     allowed,
     retained,

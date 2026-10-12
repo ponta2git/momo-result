@@ -12,8 +12,9 @@ use super::{
         RADAR_DEFINITION_VERSION, RADAR_METHOD_VERSION, RADAR_MINIMUM_EVENTS,
         RADAR_MINIMUM_MATCHES, RADAR_MINIMUM_SCORING_MATCHES, RADAR_WINDOW_SIZE, RadarAxis,
         RadarAxisBasis, RadarBasis, RadarCandidate, RadarCandidateAxis,
-        RadarCandidateUnavailableReason, RadarCell, RadarError, RadarEvaluation, RadarPlayer,
-        RadarSample, RadarSampleQuality, RadarScoreUnavailableReason, RadarSourceMatch,
+        RadarCandidateUnavailableReason, RadarCell, RadarError, RadarEvaluation, RadarManualInput,
+        RadarManualProvenance, RadarPlayer, RadarSample, RadarSampleQuality,
+        RadarScoreUnavailableReason, RadarSourceMatch, RadarSourceSummary,
     },
 };
 
@@ -66,9 +67,9 @@ pub fn generate_candidate(input: &NormalizedAnalysisInput) -> Result<RadarCandid
         .map(|axis| {
             Some(RadarAxisBasis {
                 axis_id: axis.axis_id,
-                q10: axis.q10?,
-                median: axis.median?,
-                q90: axis.q90?,
+                q10: Some(axis.q10?),
+                median: Some(axis.median?),
+                q90: Some(axis.q90?),
                 thresholds: axis.thresholds?,
             })
         })
@@ -81,6 +82,7 @@ pub fn generate_candidate(input: &NormalizedAnalysisInput) -> Result<RadarCandid
         window_stride: 1,
         source: source_summary.clone(),
         axes: valid_axes,
+        manual: None,
     });
     Ok(RadarCandidate {
         source,
@@ -90,6 +92,75 @@ pub fn generate_candidate(input: &NormalizedAnalysisInput) -> Result<RadarCandid
         axes,
         basis,
     })
+}
+
+/// Checks the complete entered boundaries without changing precision or inventing quantiles.
+///
+/// # Errors
+///
+/// Rejects non-finite values, a changed axis order, duplicate/reversed boundaries, and a rank
+/// threshold for ten points below the attainable rank of one.
+pub fn validate_manual_input(input: &RadarManualInput) -> Result<(), RadarError> {
+    for (axis, expected) in input.axes.iter().zip(RadarAxis::ALL) {
+        if axis.axis_id != expected
+            || axis.thresholds.iter().any(|value| !value.is_finite())
+            || axis
+                .thresholds
+                .iter()
+                .zip(axis.thresholds.iter().skip(1))
+                .any(|(left, right)| axis.axis_id.orient(*left) >= axis.axis_id.orient(*right))
+            || (axis.axis_id == RadarAxis::AverageRank
+                && axis.thresholds.last().is_none_or(|value| *value < 1.0))
+        {
+            return Err(RadarError::InvalidBasis);
+        }
+    }
+    Ok(())
+}
+
+/// Fixes manual thresholds and their monitoring start at the first nonempty formal comparison.
+/// Subsequent comparisons reuse this basis rather than calling this constructor again.
+///
+/// # Errors
+///
+/// Rejects malformed input, incompatible editing criteria, and a mismatched title.
+pub fn create_manual_basis(
+    input: &NormalizedAnalysisInput,
+    source_basis: &RadarBasis,
+    source_basis_id: &str,
+    source_candidate_id: Option<&str>,
+    manual_input: &RadarManualInput,
+) -> Result<Option<RadarBasis>, RadarError> {
+    validate_basis(source_basis)?;
+    validate_manual_input(manual_input)?;
+    if source_basis.source.game_title_id != input.game_title_id() {
+        return Err(RadarError::InvalidBasis);
+    }
+    let monitoring_source = snapshot(input)?.summary()?;
+    if monitoring_source.match_count == 0 {
+        return Ok(None);
+    }
+    let basis = RadarBasis {
+        definition_version: RADAR_DEFINITION_VERSION.to_owned(),
+        method_version: RADAR_METHOD_VERSION.to_owned(),
+        window_size: RADAR_WINDOW_SIZE,
+        window_stride: 1,
+        source: source_basis.source.clone(),
+        axes: manual_input.axes.clone().map(|axis| RadarAxisBasis {
+            axis_id: axis.axis_id,
+            q10: None,
+            median: None,
+            q90: None,
+            thresholds: axis.thresholds,
+        }),
+        manual: Some(Box::new(RadarManualProvenance {
+            source_basis_id: source_basis_id.to_owned(),
+            source_candidate_id: source_candidate_id.map(str::to_owned),
+            monitoring_source,
+        })),
+    };
+    validate_basis(&basis)?;
+    Ok(Some(basis))
 }
 
 /// Scores a scope from its complete selected history using the fixed title basis.
@@ -158,7 +229,8 @@ pub fn evaluate_rows(
 ///
 /// # Errors
 ///
-/// Rejects any changed method, axis order, numeric domain, or non-derived threshold.
+/// Rejects changed methods and malformed criteria; generated boundaries must still match the
+/// exact original formula, while manual boundaries carry no invented distribution quantiles.
 pub fn validate_basis(basis: &RadarBasis) -> Result<(), RadarError> {
     if basis.definition_version != RADAR_DEFINITION_VERSION
         || basis.method_version != RADAR_METHOD_VERSION
@@ -166,17 +238,41 @@ pub fn validate_basis(basis: &RadarBasis) -> Result<(), RadarError> {
         || basis.window_stride != 1
         || basis.source.match_count < RADAR_MINIMUM_MATCHES
         || basis.source.held_event_count < RADAR_MINIMUM_EVENTS
-        || basis.source.held_event_count > basis.source.match_count
-        || basis.source.first_match.is_none()
-        || basis.source.last_match.is_none()
-        || basis.source.first_match > basis.source.last_match
-        || basis.source.game_title_id.is_empty()
-        || basis.source.map_master_ids.is_empty()
+        || !valid_nonempty_source(&basis.source)
     {
         return Err(RadarError::InvalidBasis);
     }
+    if let Some(manual) = &basis.manual {
+        if manual.source_basis_id.is_empty()
+            || manual
+                .source_candidate_id
+                .as_ref()
+                .is_some_and(String::is_empty)
+            || manual.monitoring_source.game_title_id != basis.source.game_title_id
+            || !valid_nonempty_source(&manual.monitoring_source)
+            || basis
+                .axes
+                .iter()
+                .any(|axis| axis.q10.is_some() || axis.median.is_some() || axis.q90.is_some())
+        {
+            return Err(RadarError::InvalidBasis);
+        }
+        return validate_manual_input(&RadarManualInput {
+            axes: basis
+                .axes
+                .clone()
+                .map(|axis| super::types::RadarManualAxis {
+                    axis_id: axis.axis_id,
+                    thresholds: axis.thresholds,
+                }),
+        });
+    }
     for (axis, expected_id) in basis.axes.iter().zip(RadarAxis::ALL) {
-        let generated = thresholds(axis.axis_id, axis.q10, axis.median, axis.q90);
+        let generated = axis
+            .q10
+            .zip(axis.median)
+            .zip(axis.q90)
+            .and_then(|((q10, median), q90)| thresholds(axis.axis_id, q10, median, q90));
         if axis.axis_id != expected_id
             || generated.is_none_or(|generated| {
                 generated.map(f64::to_bits) != axis.thresholds.map(f64::to_bits)
@@ -186,6 +282,17 @@ pub fn validate_basis(basis: &RadarBasis) -> Result<(), RadarError> {
         }
     }
     Ok(())
+}
+
+fn valid_nonempty_source(source: &RadarSourceSummary) -> bool {
+    source.match_count > 0
+        && source.held_event_count > 0
+        && source.held_event_count <= source.match_count
+        && source.first_match.is_some()
+        && source.last_match.is_some()
+        && source.first_match <= source.last_match
+        && !source.game_title_id.is_empty()
+        && !source.map_master_ids.is_empty()
 }
 
 /// Scores a raw value without display rounding. Equality belongs to the higher score.

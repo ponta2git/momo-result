@@ -1,5 +1,4 @@
 import { DataVizLineChart } from "@/features/seriesComparison/charts/dataViz/LineChart";
-import { playOrderSeriesId } from "@/features/seriesComparison/charts/dataViz/seriesPresentation";
 import {
   formatDateTime,
   formatDecimal,
@@ -14,6 +13,7 @@ import type { SeriesAnalysisDrilldownV3 } from "@/shared/api/seriesAnalysis";
 import { formatMatchNoInEvent, formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { PlayOrderMark, playOrderPresentation } from "@/shared/matches/PlayOrderMark";
 import { RankBadge } from "@/shared/matches/RankBadge";
+import { playOrderSeriesId } from "@/shared/seriesAnalysis/seriesPresentation";
 import { cn } from "@/shared/ui/cn";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import { FactList } from "@/shared/ui/data/FactList";

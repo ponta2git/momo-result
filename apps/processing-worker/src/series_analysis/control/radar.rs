@@ -59,6 +59,19 @@ pub(super) async fn record_publication(
         &[&claim.game_title_id],
     )
     .await?;
+    // Application history is committed with the artifact pointer and immutable criteria. Normal
+    // recalculation has no active application and cannot create another revision.
+    tx.execute(
+        "INSERT INTO series_radar_revisions (operation_id,game_title_id,candidate_id,before_basis_id,after_basis_id,change_kind,requested_by,requested_by_display_name,saved_by,saved_by_display_name,published_at) \
+         SELECT o.id,s.game_title_id,c.id,s.current_basis_id,$2,c.origin_kind,o.requested_by,o.requested_by_display_name,c.saved_by,c.saved_by_display_name,a.radar_applied_at \
+         FROM series_radar_title_states s JOIN series_radar_operations o ON o.id=s.active_operation_id \
+         JOIN series_radar_candidates c ON c.id=o.candidate_id AND c.game_title_id=s.game_title_id \
+         JOIN series_analysis_artifacts a ON a.id=$4 AND a.game_title_id=s.game_title_id \
+         WHERE s.game_title_id=$1 AND s.generation=$3 AND s.current_basis_id IS DISTINCT FROM $2 \
+           AND o.kind='apply' AND o.status IN ('pending','running') \
+         ON CONFLICT(operation_id) DO NOTHING",
+        &[&claim.game_title_id,&claim.radar_basis_id,&claim.radar_generation,&artifact_id],
+    ).await?;
     tx.execute("UPDATE series_radar_candidates c SET status='applied',updated_at=clock_timestamp() FROM series_radar_operations o JOIN series_radar_title_states s ON s.active_operation_id=o.id WHERE c.id=o.candidate_id AND s.game_title_id=$1 AND s.generation=$2 AND o.kind='apply' AND o.status IN ('pending','running')", &[&claim.game_title_id,&claim.radar_generation]).await?;
     tx.execute("UPDATE series_radar_operations o SET status='succeeded',finished_at=clock_timestamp(),updated_at=clock_timestamp() FROM series_radar_title_states s WHERE s.active_operation_id=o.id AND s.game_title_id=$1 AND s.generation=$2 AND o.kind='apply' AND o.status IN ('pending','running')", &[&claim.game_title_id,&claim.radar_generation]).await?;
     tx.execute("UPDATE series_radar_title_states s SET previous_basis_id=CASE WHEN current_basis_id IS DISTINCT FROM $2 THEN current_basis_id ELSE previous_basis_id END,previous_applied_at=CASE WHEN current_basis_id IS DISTINCT FROM $2 THEN current_applied_at ELSE previous_applied_at END,current_basis_id=$2,current_applied_at=a.radar_applied_at,active_operation_id=NULL,updated_at=clock_timestamp() FROM series_analysis_artifacts a WHERE s.game_title_id=$1 AND s.generation=$3 AND a.id=$4", &[&claim.game_title_id,&claim.radar_basis_id,&claim.radar_generation,&artifact_id]).await?;

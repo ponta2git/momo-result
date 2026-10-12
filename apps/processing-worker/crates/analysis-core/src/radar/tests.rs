@@ -5,6 +5,8 @@ use crate::{
 
 use super::{calculation::thresholds, *};
 
+mod manual;
+
 fn input(match_count: i32) -> AnalysisInput {
     let rows = (0..match_count)
         .flat_map(|index| {
@@ -50,9 +52,9 @@ fn hand_basis() -> RadarBasis {
         };
         RadarAxisBasis {
             axis_id,
-            q10,
-            median,
-            q90,
+            q10: Some(q10),
+            median: Some(median),
+            q90: Some(q90),
             thresholds: thresholds(axis_id, q10, median, q90)
                 .unwrap_or_else(|| panic!("valid hand basis")),
         }
@@ -66,6 +68,7 @@ fn hand_basis() -> RadarBasis {
             .summary()
             .unwrap_or_else(|error| panic!("source summary: {error}")),
         axes,
+        manual: None,
     }
 }
 

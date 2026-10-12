@@ -9,7 +9,8 @@ use momo_analysis_core::{
     contract::ScopeRef,
     model::NormalizedAnalysisInput,
     radar::{
-        self, RadarBasis, RadarCandidate, RadarEvaluation, RadarPublishedBasis, RadarSourceSnapshot,
+        self, RadarBasis, RadarCandidate, RadarEvaluation, RadarManualInput, RadarPublishedBasis,
+        RadarSourceSnapshot,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -34,9 +35,47 @@ pub(super) struct RadarReadContext {
     pub(super) before_basis_id: Option<String>,
     pub(super) before_basis: Option<RadarBasis>,
     pub(super) operation_kind: Option<String>,
+    pub(super) manual: Option<Box<ManualCandidateContext>>,
+}
+
+pub(super) struct ManualCandidateContext {
+    pub(super) input: RadarManualInput,
+    pub(super) source_basis_id: String,
+    pub(super) source_candidate_id: Option<String>,
+    pub(super) source_basis: RadarBasis,
 }
 
 impl RadarReadContext {
+    pub(super) fn is_manual(&self) -> bool {
+        self.manual.is_some()
+            || self
+                .basis
+                .as_ref()
+                .is_some_and(|basis| basis.manual.is_some())
+    }
+
+    pub(super) fn new_manual_basis(
+        &self,
+        input: &NormalizedAnalysisInput,
+    ) -> Result<Option<RadarBasis>, radar::RadarError> {
+        if self.basis.is_some() {
+            return Ok(None);
+        }
+        self.manual
+            .as_ref()
+            .map(|manual| {
+                radar::create_manual_basis(
+                    input,
+                    &manual.source_basis,
+                    &manual.source_basis_id,
+                    manual.source_candidate_id.as_deref(),
+                    &manual.input,
+                )
+            })
+            .transpose()
+            .map(Option::flatten)
+    }
+
     pub(super) fn public_basis(&self) -> Result<Option<RadarPublishedBasis>, radar::RadarError> {
         // Preparation uses its own before/after inputs and never publishes this projection.
         self.basis_id
@@ -80,10 +119,12 @@ pub(super) async fn load_context(
             before_basis_id: None,
             before_basis: None,
             operation_kind: None,
+            manual: None,
         });
     }
     let row = tx.query_opt(
-        "SELECT j.work_kind,j.radar_operation_id,j.radar_basis_id,o.kind,o.candidate_id,o.preview_id,c.basis_id,p.before_basis_id \
+        "SELECT j.work_kind,j.radar_operation_id,j.radar_basis_id,o.kind,o.candidate_id,o.preview_id,c.basis_id,p.before_basis_id, \
+         c.origin_kind,CASE WHEN octet_length(c.manual_input::text)<=65536 THEN c.manual_input END,c.source_basis_id,c.source_candidate_id \
          FROM series_analysis_jobs j LEFT JOIN series_radar_operations o ON o.id=j.radar_operation_id \
          LEFT JOIN series_radar_candidates c ON c.id=o.candidate_id \
          LEFT JOIN series_radar_previews p ON p.id=o.preview_id \
@@ -108,6 +149,13 @@ pub(super) async fn load_context(
     };
     let (basis, source) = load_basis(tx, basis_id.as_deref(), title).await?;
     let (before_basis, _) = load_basis(tx, before_basis_id.as_deref(), title).await?;
+    let manual = if work_kind == "radar_prepare"
+        && row.try_get::<_, Option<String>>(8)?.as_deref() == Some("manual")
+    {
+        Some(Box::new(load_manual_context(tx, title, &row).await?))
+    } else {
+        None
+    };
     Ok(RadarReadContext {
         work_kind,
         operation_id: row.try_get(1)?,
@@ -119,7 +167,49 @@ pub(super) async fn load_context(
         before_basis_id,
         before_basis,
         operation_kind: row.try_get(3)?,
+        manual,
     })
+}
+
+async fn load_manual_context(
+    tx: &Transaction<'_>,
+    title: &str,
+    row: &tokio_postgres::Row,
+) -> Result<ManualCandidateContext, InputRepositoryError> {
+    let invalid = || InputRepositoryError::InputContract("manual radar input is invalid");
+    let value: Option<serde_json::Value> = row.try_get(9)?;
+    let input: RadarManualInput =
+        serde_json::from_value(value.ok_or_else(invalid)?).map_err(|_invalid| invalid())?;
+    radar::validate_manual_input(&input).map_err(|_invalid| invalid())?;
+    let source_basis_id: String = row.try_get::<_, Option<String>>(10)?.ok_or_else(invalid)?;
+    // Editing only needs the immutable criteria, not a possibly expired generation snapshot.
+    let saved = tx.query_opt(
+        "SELECT payload,checksum FROM series_radar_bases WHERE id=$1 AND game_title_id=$2 AND octet_length(payload::text)<=$3",
+        &[&source_basis_id,&title,&STORED_PAYLOAD_BOUND],
+    ).await?.ok_or_else(invalid)?;
+    let source_basis = decode_basis(&saved.try_get(0)?, &saved.try_get::<_, String>(1)?, title)?;
+    Ok(ManualCandidateContext {
+        input,
+        source_basis_id,
+        source_candidate_id: row.try_get(11)?,
+        source_basis,
+    })
+}
+
+fn decode_basis(
+    value: &serde_json::Value,
+    checksum: &str,
+    title: &str,
+) -> Result<RadarBasis, InputRepositoryError> {
+    let invalid = || InputRepositoryError::InputContract("radar basis is invalid");
+    let basis = momo_analysis_core::payload::radar_basis_from_payload(value)
+        .map_err(|_invalid| invalid())?;
+    if basis.source.game_title_id != title
+        || basis.checksum().map_err(|_invalid| invalid())? != checksum
+    {
+        return Err(invalid());
+    }
+    Ok(basis)
 }
 
 pub(super) async fn load_basis(
@@ -132,11 +222,7 @@ pub(super) async fn load_basis(
     };
     let row = tx.query_opt("SELECT payload,source_snapshot,checksum FROM series_radar_bases WHERE id=$1 AND game_title_id=$2 AND octet_length(payload::text)<=$3 AND octet_length(source_snapshot::text)<=$3", &[&id,&title,&STORED_PAYLOAD_BOUND]).await?.ok_or(InputRepositoryError::InputContract("radar basis is missing or oversized"))?;
     let invalid = || InputRepositoryError::InputContract("radar basis snapshot is invalid");
-    let basis: RadarBasis = serde_json::from_value(row.try_get(0)?).map_err(|_error| invalid())?;
-    radar::validate_basis(&basis).map_err(|_error| invalid())?;
-    if basis.checksum().map_err(|_error| invalid())? != row.try_get::<_, String>(2)? {
-        return Err(invalid());
-    }
+    let basis = decode_basis(&row.try_get(0)?, &row.try_get::<_, String>(2)?, title)?;
     let source: Option<RadarSourceSnapshot> = row
         .try_get::<_, Option<serde_json::Value>>(1)?
         .map(serde_json::from_value)
@@ -145,7 +231,7 @@ pub(super) async fn load_basis(
     if basis.source.game_title_id != title
         || source
             .as_ref()
-            .is_none_or(|source| source.summary().ok().as_ref() != Some(&basis.source))
+            .is_none_or(|source| source.summary().ok().as_ref() != Some(basis.monitoring_source()))
     {
         return Err(invalid());
     }
@@ -168,6 +254,8 @@ pub(super) struct Preparation {
     pub(super) preview_id: Option<String>,
     pub(super) before_basis_id: Option<String>,
     pub(super) candidate: Option<RadarCandidate>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) manual_basis: Option<RadarBasis>,
     pub(super) evaluation_snapshot: RadarSourceSnapshot,
     pub(super) candidate_source_valid: bool,
     pub(super) scopes: Vec<PreparationScope>,
@@ -196,11 +284,15 @@ pub(super) fn compute(
     } else {
         None
     };
+    let manual_basis = context.new_manual_basis(input)?;
     let basis = candidate
         .as_ref()
         .and_then(|c| c.basis.as_ref())
+        .or(manual_basis.as_ref())
         .or(context.basis.as_ref());
-    let source_valid = if let Some(source) = context.source.as_ref() {
+    let source_valid = if context.is_manual() {
+        true
+    } else if let Some(source) = context.source.as_ref() {
         radar::source_is_current(source, input)?
     } else {
         candidate.is_some()
@@ -230,6 +322,7 @@ pub(super) fn compute(
         preview_id: context.preview_id.clone(),
         before_basis_id: context.before_basis_id.clone(),
         candidate,
+        manual_basis,
         evaluation_snapshot: radar::snapshot(input)?,
         candidate_source_valid: source_valid,
         scopes,

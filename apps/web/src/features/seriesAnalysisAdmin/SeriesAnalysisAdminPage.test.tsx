@@ -2,7 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { createMemoryRouter, MemoryRouter, RouterProvider } from "react-router-dom";
+import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { OperationsRoute } from "@/app/routeGuards";
@@ -20,7 +20,10 @@ import {
   makePlayerRadarPreview,
   makeReadyPlayerRadarState,
 } from "@/test/msw/playerRadarFixtures";
-import { makeSeriesAnalysisAdminOverview } from "@/test/msw/seriesAnalysisFixtures";
+import {
+  makeSeriesAnalysisAdminOverview,
+  makeSeriesAnalysisScopeStatus,
+} from "@/test/msw/seriesAnalysisFixtures";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 import { selectOption } from "@/test/selectOption";
@@ -34,20 +37,29 @@ beforeAll(
 function renderPage(guarded = false) {
   setDevUser();
   const queryClient = createTestQueryClient();
+  const router = createMemoryRouter(
+    [
+      {
+        path: "/admin/series-analysis",
+        element: (
+          <AppMotionProvider>
+            {guarded ? (
+              <OperationsRoute>
+                <SeriesAnalysisAdminPage />
+              </OperationsRoute>
+            ) : (
+              <SeriesAnalysisAdminPage />
+            )}
+            <ToastHost />
+          </AppMotionProvider>
+        ),
+      },
+    ],
+    { initialEntries: ["/admin/series-analysis?gameTitleId=gt_momotetsu_2"] },
+  );
   render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={["/admin/series-analysis?gameTitleId=gt_momotetsu_2"]}>
-        <AppMotionProvider>
-          {guarded ? (
-            <OperationsRoute>
-              <SeriesAnalysisAdminPage />
-            </OperationsRoute>
-          ) : (
-            <SeriesAnalysisAdminPage />
-          )}
-          <ToastHost />
-        </AppMotionProvider>
-      </MemoryRouter>
+      <RouterProvider router={router} />
     </QueryClientProvider>,
   );
   return queryClient;
@@ -118,24 +130,36 @@ describe("SeriesAnalysisAdminPage", () => {
     const client = renderPage(true);
     await screen.findByRole("button", { name: "この作品を再計算" });
     await user.click(screen.getByRole("tab", { name: "レーダーの採点基準" }));
+    await user.click(await screen.findByRole("button", { name: "変更案を編集" }));
     await screen.findByRole("table", { name: "採点基準変更前後の比較" });
     await selectOption(user, screen.getByRole("combobox", { name: "比較するマップ" }), "map_east");
     await user.click(screen.getByRole("tab", { name: "分析の再計算" }));
-    await user.click(screen.getByRole("button", { name: "全作品を再計算" }));
+    await user.click(
+      within(
+        await screen.findByRole("alertdialog", { name: "未保存の変更を破棄しますか？" }),
+      ).getByRole("button", { name: "破棄して移動" }),
+    );
+    await user.click(await screen.findByRole("button", { name: "全作品を再計算" }));
     expect(screen.getByRole("alertdialog")).toBeVisible();
 
     account.role = "operator";
     await act(() => getAuthorization(client, "account_ponta").recheck());
     await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
     expect(screen.queryByRole("button", { name: "全作品を再計算" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "この作品を再計算" })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: "この作品を再計算" })).toBeEnabled();
     await user.click(screen.getByRole("tab", { name: "レーダーの採点基準" }));
+    await user.click(await screen.findByRole("button", { name: "変更案を編集" }));
     expect(screen.getByRole("combobox", { name: "比較するマップ" })).toHaveTextContent("東日本編");
 
     account.role = "admin";
     await act(() => getAuthorization(client, "account_ponta").recheck());
     await user.click(screen.getByRole("tab", { name: "分析の再計算" }));
-    expect(screen.getByRole("button", { name: "全作品を再計算" })).toBeEnabled();
+    await user.click(
+      within(
+        await screen.findByRole("alertdialog", { name: "未保存の変更を破棄しますか？" }),
+      ).getByRole("button", { name: "破棄して移動" }),
+    );
+    expect(await screen.findByRole("button", { name: "全作品を再計算" })).toBeEnabled();
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 
@@ -264,7 +288,8 @@ describe("SeriesAnalysisAdminPage", () => {
     );
     const client = renderPage(true);
     await user.click(await screen.findByRole("tab", { name: "レーダーの採点基準" }));
-    const apply = await screen.findByRole("button", { name: "この変更案を適用する" });
+    await user.click(await screen.findByRole("button", { name: "変更案を編集" }));
+    const apply = screen.getByRole("button", { name: "変更を適用" });
     await waitFor(() => expect(apply).toBeEnabled());
     await user.click(apply);
     await user.click(
@@ -317,6 +342,7 @@ describe("SeriesAnalysisAdminPage", () => {
       "aria-selected",
       "true",
     );
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(
       client.getQueryData(seriesPlayerRadarKeys.operation("gt_momotetsu_2", operation.operationId)),
     ).toEqual(operation);
@@ -416,7 +442,8 @@ describe("SeriesAnalysisAdminPage", () => {
     );
     renderPage();
     await user.click(await screen.findByRole("tab", { name: "レーダーの採点基準" }));
-    const applyButton = await screen.findByRole("button", { name: "この変更案を適用する" });
+    await user.click(await screen.findByRole("button", { name: "変更案を編集" }));
+    const applyButton = screen.getByRole("button", { name: "変更を適用" });
     await waitFor(() => expect(applyButton).toBeEnabled());
     await user.click(applyButton);
     await user.click(
@@ -439,6 +466,84 @@ describe("SeriesAnalysisAdminPage", () => {
     expect(screen.getAllByRole("dialog", { name: "採点基準の適用を受け付けました" })).toHaveLength(
       1,
     );
+  });
+
+  it("blocks back navigation during apply and moves to recalculation only after acceptance", async () => {
+    const user = userEvent.setup();
+    setDevUser();
+    const applyGate = createDeferred();
+    const submitted: Array<{ kind: string }> = [];
+    server.use(
+      http.get("/api/admin/series-analysis/radar", () =>
+        HttpResponse.json(makeReadyPlayerRadarState()),
+      ),
+      http.get("/api/admin/series-analysis/radar/preview", () =>
+        HttpResponse.json(makePlayerRadarPreview()),
+      ),
+      http.post("/api/admin/series-analysis/radar/operations", async ({ request }) => {
+        submitted.push((await request.json()) as { kind: string });
+        await applyGate.promise;
+        return HttpResponse.json(makePlayerRadarOperation(), { status: 202 });
+      }),
+    );
+    const client = createTestQueryClient();
+    const router = createMemoryRouter(
+      [
+        { path: "/previous", element: <p>移動前のページ</p> },
+        {
+          path: "/admin/series-analysis",
+          element: (
+            <AppMotionProvider>
+              <SeriesAnalysisAdminPage />
+              <ToastHost />
+            </AppMotionProvider>
+          ),
+        },
+      ],
+      {
+        initialEntries: [
+          "/previous",
+          "/admin/series-analysis?gameTitleId=gt_momotetsu_2&tab=radar",
+        ],
+      },
+    );
+    render(
+      <QueryClientProvider client={client}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await user.click(await screen.findByRole("button", { name: "変更案を編集" }));
+    await user.click(screen.getByRole("button", { name: "変更を適用" }));
+    const confirm = within(await screen.findByRole("alertdialog")).getByRole("button", {
+      name: "作品全体に適用する",
+    });
+    await waitFor(() => expect(confirm).toBeEnabled());
+    await user.click(confirm);
+    await waitFor(() => expect(submitted.map(({ kind }) => kind)).toEqual(["apply"]));
+
+    await act(async () => router.navigate(-1));
+    expect(await screen.findByRole("dialog", { name: "処理結果を確認しています" })).toBeVisible();
+    expect(router.state.location.pathname).toBe("/admin/series-analysis");
+    expect(new URLSearchParams(router.state.location.search).get("tab")).toBe("radar");
+    expect(screen.queryByRole("button", { name: "破棄して移動" })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("textbox", { name: "平均順位 2点の境界（位以下）", hidden: true }),
+    ).toBeInTheDocument();
+    expect(submitted.map(({ kind }) => kind)).toEqual(["apply"]);
+
+    await act(async () => applyGate.resolve());
+    await waitFor(() =>
+      expect(screen.getByRole("tab", { name: "分析の再計算" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      ),
+    );
+    expect(router.state.location.pathname).toBe("/admin/series-analysis");
+    expect(screen.queryByText("移動前のページ")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("textbox", { name: "平均順位 2点の境界（位以下）", hidden: true }),
+    ).not.toBeInTheDocument();
+    expect(submitted.map(({ kind }) => kind)).toEqual(["apply"]);
   });
 
   it("keeps an uncertain application on the radar tab until the same request is confirmed", async () => {
@@ -465,7 +570,8 @@ describe("SeriesAnalysisAdminPage", () => {
     renderPage();
     const radarTab = await screen.findByRole("tab", { name: "レーダーの採点基準" });
     await user.click(radarTab);
-    const applyButton = await screen.findByRole("button", { name: "この変更案を適用する" });
+    await user.click(await screen.findByRole("button", { name: "変更案を編集" }));
+    const applyButton = screen.getByRole("button", { name: "変更を適用" });
     await waitFor(() => expect(applyButton).toBeEnabled());
     await user.click(applyButton);
     const dialog = screen.getByRole("alertdialog");
@@ -480,20 +586,214 @@ describe("SeriesAnalysisAdminPage", () => {
     await waitFor(() =>
       expect(screen.getByRole("dialog", { name: "採点基準の適用を受け付けました" })).toBeVisible(),
     );
-    expect(screen.getByRole("tab", { name: "分析の再計算" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    expect(screen.getByRole("tab", { name: "分析の再計算" })).toHaveFocus();
+    const recalculationTab = screen.getByRole("tab", { name: "分析の再計算" });
+    await waitFor(() => expect(recalculationTab).toHaveAttribute("aria-selected", "true"));
+    await waitFor(() => expect(recalculationTab).toHaveFocus());
     expect(keys).toHaveLength(2);
     expect(keys[0]).toBeTruthy();
     expect(keys[1]).toBe(keys[0]);
+  });
+
+  it("closes the accepted manual editor and refreshes the applied basis before returning from recalculation", async () => {
+    const user = userEvent.setup();
+    const state = makeReadyPlayerRadarState();
+    const current = state.currentBasis;
+    const candidate = state.candidate;
+    if (!current || !candidate?.result?.basis) throw new Error("Expected complete radar fixtures");
+    type ManualBasis = Extract<typeof candidate.result.basis, { manual: unknown }>;
+    const basis: ManualBasis = {
+      ...candidate.result.basis,
+      manual: {
+        sourceBasisId: current.basisId,
+        sourceCandidateId: null,
+        monitoringSource: current.basis.source,
+      },
+      axes: candidate.result.basis.axes.map((axis) => {
+        const thresholds = structuredClone(axis.thresholds);
+        if (axis.axisId === "averageRank") thresholds[0] = 5.25;
+        return { ...axis, q10: null, median: null, q90: null, thresholds };
+      }) as ManualBasis["axes"],
+    };
+    candidate.originKind = "manual";
+    candidate.manualInput = {
+      axes: basis.axes.map(({ axisId, thresholds }) => ({ axisId, thresholds })),
+    };
+    candidate.sourceBasisId = current.basisId;
+    candidate.sourceBasis = current;
+    for (const axis of candidate.result.axes) {
+      const entered = basis.axes.find((entry) => entry.axisId === axis.axisId);
+      if (!entered) throw new Error("Missing manual axis fixture");
+      Object.assign(axis, entered, { unavailableReasons: [] });
+    }
+    candidate.result = {
+      ...candidate.result,
+      basis,
+      windowCount: 0,
+      valuesPerAxis: 0,
+    };
+    const preview = makePlayerRadarPreview();
+    // Raising the first rank boundary from 4.9 to 5.25 changes no fixture scores:
+    // every real average rank is already below both boundaries. All 54 values remain present.
+    const operation = makePlayerRadarOperation();
+    const overview = makeSeriesAnalysisAdminOverview();
+    const job = overview.recentJobs[0];
+    if (!job) throw new Error("Expected an analysis job fixture");
+    let accepted = false;
+    let completed = false;
+    let radarReads = 0;
+    const submitted: unknown[] = [];
+    server.use(
+      http.get("/api/admin/series-analysis/overview", () =>
+        HttpResponse.json({
+          ...overview,
+          recentJobs:
+            accepted && !completed
+              ? [
+                  {
+                    ...job,
+                    status: "running",
+                    finishedAt: null,
+                    elapsedMilliseconds: null,
+                    resultDisposition: "none",
+                  },
+                ]
+              : overview.recentJobs,
+        }),
+      ),
+      http.get("/api/admin/series-analysis/radar", () => {
+        radarReads += 1;
+        return HttpResponse.json(
+          completed
+            ? {
+                ...state,
+                currentBasis: {
+                  ...current,
+                  basisId: candidate.basisId,
+                  basis,
+                  appliedAt: "2026-10-12T00:02:00Z",
+                },
+                previousBasis: current,
+                candidate: { ...candidate, status: "applied" },
+                operations: [
+                  { ...operation, status: "succeeded", finishedAt: "2026-10-12T00:02:00Z" },
+                ],
+              }
+            : { ...state, operations: accepted ? [operation] : [] },
+        );
+      }),
+      http.get("/api/admin/series-analysis/radar/preview", () => HttpResponse.json(preview)),
+      http.post("/api/admin/series-analysis/radar/operations", async ({ request }) => {
+        submitted.push(await request.json());
+        accepted = true;
+        return HttpResponse.json(operation, { status: 202 });
+      }),
+    );
+    setDevUser();
+    const client = createTestQueryClient();
+    const router = createMemoryRouter(
+      [
+        {
+          path: "/admin/series-analysis",
+          element: (
+            <AppMotionProvider>
+              <SeriesAnalysisAdminPage />
+              <ToastHost />
+            </AppMotionProvider>
+          ),
+        },
+      ],
+      { initialEntries: ["/admin/series-analysis?gameTitleId=gt_momotetsu_2"] },
+    );
+    render(
+      <QueryClientProvider client={client}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await user.click(await screen.findByRole("tab", { name: "レーダーの採点基準" }));
+    await user.click(await screen.findByRole("button", { name: "変更案を編集" }));
+    expect(screen.getByRole("textbox", { name: "平均順位 2点の境界（位以下）" })).toHaveValue(
+      "5.25",
+    );
+    await user.click(screen.getByRole("button", { name: "変更を適用" }));
+    const confirm = within(await screen.findByRole("alertdialog")).getByRole("button", {
+      name: "作品全体に適用する",
+    });
+    await waitFor(() => expect(confirm).toBeEnabled());
+    await user.click(confirm);
+    await waitFor(() =>
+      expect(screen.getByRole("tab", { name: "分析の再計算" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      ),
+    );
+    expect(submitted).toEqual([
+      {
+        gameTitleId: state.gameTitleId,
+        kind: "apply",
+        candidateId: candidate.candidateId,
+        previewId: preview.previewId,
+        expectedCurrentBasisId: current.basisId,
+      },
+    ]);
+    const jobs = screen.getByRole("table", { name: "全作品の直近10件の実行履歴" });
+    expect(await within(jobs).findByText("計算中")).toBeVisible();
+    expect(screen.queryByText("基準の適用が完了しました")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "状態を更新" })).toBeEnabled());
+
+    completed = true;
+    const readsBeforeRefresh = radarReads;
+    await user.click(screen.getByRole("button", { name: "状態を更新" }));
+    await waitFor(() =>
+      expect(
+        client.getQueryData<ReturnType<typeof makeReadyPlayerRadarState>>(
+          seriesPlayerRadarKeys.state(state.gameTitleId),
+        )?.currentBasis?.basisId,
+      ).toBe(candidate.basisId),
+    );
+    expect(radarReads).toBeGreaterThan(readsBeforeRefresh);
+    await waitFor(() => expect(screen.getByRole("button", { name: "状態を更新" })).toBeEnabled());
+    const readsBeforeReturn = radarReads;
+    await user.click(screen.getByRole("tab", { name: "レーダーの採点基準" }));
+    await waitFor(() => expect(radarReads).toBeGreaterThan(readsBeforeReturn));
+    const criteria = await screen.findByRole("table", { name: "適用中の採点境界" });
+    expect(within(criteria).getByText("5.25位以下")).toBeVisible();
+    expect(within(criteria).queryByText("4.9位以下")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("textbox", { name: "平均順位 2点の境界（位以下）" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "変更案を編集" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: "採点境界の変更案" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "分析の再計算" }));
+    const readsBeforeHistoryReturn = radarReads;
+    await act(async () => {
+      await router.navigate(-1);
+    });
+    await waitFor(() => expect(radarReads).toBeGreaterThan(readsBeforeHistoryReturn));
+    expect(
+      within(await screen.findByRole("table", { name: "適用中の採点境界" })).getByText(
+        "5.25位以下",
+      ),
+    ).toBeVisible();
   });
 
   it("separates radar administration and retains its comparison scope when switching tabs", async () => {
     const user = userEvent.setup();
     setDevUser();
     server.use(
+      http.get("/api/analytics/series-comparison/v2/scope-status", ({ request }) => {
+        const params = new URL(request.url).searchParams;
+        const mapMasterId = params.get("mapMasterId");
+        return HttpResponse.json(
+          makeSeriesAnalysisScopeStatus({
+            artifactId: params.get("artifactId"),
+            mapMasterId,
+            mapName: mapMasterId ? "東日本編" : null,
+            state: mapMasterId ? "empty" : "available",
+            currentHasMatches: !mapMasterId,
+            publishedHasMatches: !mapMasterId,
+          }),
+        );
+      }),
       http.get("/api/admin/series-analysis/radar", () =>
         HttpResponse.json(makeReadyPlayerRadarState()),
       ),
@@ -521,16 +821,23 @@ describe("SeriesAnalysisAdminPage", () => {
     expect(await screen.findByRole("button", { name: "この作品を再計算" })).toBeEnabled();
     expect(screen.queryByRole("button", { name: "この変更案を適用する" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "レーダーの採点基準" }));
+    await user.click(await screen.findByRole("button", { name: "変更案を編集" }));
     await screen.findByRole("table", { name: "採点基準変更前後の比較" });
     expect(screen.queryByRole("button", { name: "この作品を再計算" })).not.toBeInTheDocument();
 
     await selectOption(user, screen.getByRole("combobox", { name: "比較するマップ" }), "map_east");
-    expect(await screen.findByText("この条件に対象試合はありません")).toBeVisible();
+    expect(await screen.findByText(/この比較条件に対象試合はありません/u)).toBeVisible();
     await user.click(screen.getByRole("tab", { name: "分析の再計算" }));
-    expect(screen.getByRole("button", { name: "この作品を再計算" })).toBeEnabled();
+    await user.click(
+      within(
+        await screen.findByRole("alertdialog", { name: "未保存の変更を破棄しますか？" }),
+      ).getByRole("button", { name: "破棄して移動" }),
+    );
+    expect(await screen.findByRole("button", { name: "この作品を再計算" })).toBeEnabled();
     await user.click(screen.getByRole("tab", { name: "レーダーの採点基準" }));
+    await user.click(await screen.findByRole("button", { name: "変更案を編集" }));
     expect(screen.getByRole("combobox", { name: "比較するマップ" })).toHaveTextContent("東日本編");
-    expect(screen.getByText("この条件に対象試合はありません")).toBeVisible();
+    expect(screen.getByText(/この比較条件に対象試合はありません/u)).toBeVisible();
     expect(screen.getByRole("combobox", { name: "対象作品" })).toHaveTextContent("桃太郎電鉄2");
   });
 
@@ -546,9 +853,9 @@ describe("SeriesAnalysisAdminPage", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText("Do not display provider detail")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "この作品を再計算" })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: "この作品を再計算" })).toBeEnabled();
 
-    await user.click(screen.getByRole("button", { name: "全作品を再計算" }));
+    await user.click(await screen.findByRole("button", { name: "全作品を再計算" }));
     const dialog = await screen.findByRole("alertdialog", {
       name: "全作品の再計算を予約しますか？",
     });
@@ -667,7 +974,7 @@ describe("SeriesAnalysisAdminPage", () => {
     await user.click(await screen.findByRole("button", { name: "状態を更新" }));
     const retry = await screen.findByRole("button", { name: "状態を再読み込み" });
     expect(screen.getByRole("table", { name: "全作品の直近10件の実行履歴" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "この作品を再計算" })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: "この作品を再計算" })).toBeEnabled();
     await user.click(retry);
     expect(await screen.findByRole("button", { name: "状態を更新" })).toBeEnabled();
     expect(screen.queryByRole("button", { name: "状態を再読み込み" })).not.toBeInTheDocument();

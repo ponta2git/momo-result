@@ -7,17 +7,21 @@ import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 export function PlayerRadarAdministration({
   gameTitleId,
   gameTitleName,
+  active = true,
   onApplyAccepted,
   applyFinalFocus,
 }: {
   gameTitleId: string;
   gameTitleName: string;
+  active?: boolean;
   onApplyAccepted?: ((operationId: string) => void) | undefined;
   applyFinalFocus?: (() => HTMLElement | null) | undefined;
 }) {
   const page = usePlayerRadarAdminModel(gameTitleId, gameTitleName, onApplyAccepted);
   if (page.model)
-    return <PlayerRadarAdminPanel model={page.model} applyFinalFocus={applyFinalFocus} />;
+    return (
+      <PlayerRadarAdminPanel model={page.model} active={active} applyFinalFocus={applyFinalFocus} />
+    );
   if (page.error)
     return (
       <Notice

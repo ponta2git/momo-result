@@ -17,6 +17,7 @@ fn context() -> RadarReadContext {
         before_basis_id: None,
         before_basis: None,
         operation_kind: Some("candidate".to_owned()),
+        manual: None,
     }
 }
 
@@ -25,6 +26,116 @@ fn source() -> RadarSourceSnapshot {
         "../../../../../docs/schemas/fixtures/series-analysis/radar-source-v1.json"
     ))
     .unwrap_or_else(|error| panic!("source fixture: {error}"))
+}
+
+fn manual_context() -> RadarReadContext {
+    let input = source()
+        .normalized_for_validation(1)
+        .unwrap_or_else(|error| panic!("input fixture: {error}"));
+    let original = radar::generate_candidate(&input)
+        .unwrap_or_else(|error| panic!("candidate: {error}"))
+        .basis
+        .unwrap_or_else(|| panic!("valid candidate"));
+    let entered = RadarManualInput {
+        axes: original.axes.clone().map(|axis| radar::RadarManualAxis {
+            axis_id: axis.axis_id,
+            thresholds: axis.thresholds,
+        }),
+    };
+    let mut context = context();
+    context.operation_kind = Some("manual".to_owned());
+    context.manual = Some(Box::new(ManualCandidateContext {
+        input: entered,
+        source_basis_id: "original".to_owned(),
+        source_candidate_id: Some("original-candidate".to_owned()),
+        source_basis: original,
+    }));
+    context
+}
+
+#[test]
+fn manual_preparation_binds_entered_values_and_defers_empty_first_basis() {
+    let input = source()
+        .normalized_for_validation(1)
+        .unwrap_or_else(|error| panic!("input fixture: {error}"));
+    let context = manual_context();
+    let prepared = compute(&input, &context).unwrap_or_else(|error| panic!("prepare: {error}"));
+    assert!(
+        prepared.manual_basis.is_some(),
+        "first nonempty comparison fixes the basis"
+    );
+    assert!(
+        validate(&prepared, &context, None).is_ok(),
+        "owner validates manual calculation"
+    );
+    let mut wrong = prepared;
+    if let Some(value) = wrong
+        .manual_basis
+        .as_mut()
+        .and_then(|basis| basis.axes.last_mut())
+        .and_then(|axis| axis.thresholds.last_mut())
+    {
+        *value += 1.0;
+    }
+    assert!(
+        validate(&wrong, &context, None).is_err(),
+        "shape-valid manual values must match the entered candidate"
+    );
+
+    let empty = RadarSourceSnapshot {
+        game_title_id: input.game_title_id().to_owned(),
+        matches: Vec::new(),
+    }
+    .normalized_for_validation(2)
+    .unwrap_or_else(|error| panic!("empty input: {error}"));
+    let empty_prepared =
+        compute(&empty, &context).unwrap_or_else(|error| panic!("empty prepare: {error}"));
+    assert!(
+        empty_prepared.manual_basis.is_none(),
+        "empty input has no fabricated monitoring start"
+    );
+    assert!(
+        validate(&empty_prepared, &context, None).is_ok(),
+        "empty comparison is a recoverable product state"
+    );
+}
+
+#[test]
+fn manual_recomparison_retains_basis_after_original_source_correction() {
+    let input = source()
+        .normalized_for_validation(1)
+        .unwrap_or_else(|error| panic!("input fixture: {error}"));
+    let mut context = manual_context();
+    let first = compute(&input, &context).unwrap_or_else(|error| panic!("prepare: {error}"));
+    context.basis = first.manual_basis;
+    context.basis_id = Some("manual-basis".to_owned());
+    context.source = Some(source());
+    context.operation_kind = Some("preview".to_owned());
+    let mut corrected = source();
+    if let Some(player) = corrected
+        .matches
+        .first_mut()
+        .and_then(|game| game.players.first_mut())
+    {
+        player.revenue_man_yen += 1;
+    }
+    let corrected = corrected
+        .normalized_for_validation(2)
+        .unwrap_or_else(|error| panic!("corrected input: {error}"));
+    let preview =
+        compute(&corrected, &context).unwrap_or_else(|error| panic!("recompare: {error}"));
+    assert!(
+        preview.manual_basis.is_none(),
+        "refresh does not create a new monitoring start"
+    );
+    assert!(
+        preview.candidate_source_valid,
+        "manual values survive record corrections"
+    );
+    assert!(
+        validate(&preview, &context, None).is_ok(),
+        "same manual basis scores latest records"
+    );
 }
 
 #[test]

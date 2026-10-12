@@ -6,6 +6,9 @@ import momo.api.errors.AppError
 
 trait SeriesPlayerRadarRepository[F[_]]:
   def radarState(gameTitleId: GameTitleId): F[Either[AppError, SeriesPlayerRadarDocument]]
+  def radarHistory(request: SeriesPlayerRadarHistoryRequest)
+      : F[Either[AppError, SeriesPlayerRadarDocument]]
+  def radarRevision(revisionId: String): F[Either[AppError, SeriesPlayerRadarDocument]]
   def radarPreview(
       request: SeriesPlayerRadarPreviewRequest
   ): F[Either[AppError, SeriesPlayerRadarDocument]]

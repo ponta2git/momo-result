@@ -35,7 +35,10 @@ pub fn monitor(
     };
     validate_basis(basis)?;
     let source = source.ok_or(RadarError::InvalidSource)?;
-    if basis.source != source.summary()? || basis.source.game_title_id != input.game_title_id() {
+    let monitoring_source = basis.monitoring_source();
+    if *monitoring_source != source.summary()?
+        || basis.source.game_title_id != input.game_title_id()
+    {
         return Err(RadarError::InvalidSource);
     }
     let basis_checksum = basis.checksum()?;
@@ -45,8 +48,7 @@ pub fn monitor(
         .iter()
         .map(|item| &item.order.match_id)
         .collect::<BTreeSet<_>>();
-    let last_source = basis
-        .source
+    let last_source = monitoring_source
         .last_match
         .as_ref()
         .ok_or(RadarError::InvalidBasis)?;

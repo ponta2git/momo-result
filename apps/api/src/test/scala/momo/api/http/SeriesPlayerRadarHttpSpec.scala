@@ -50,6 +50,15 @@ final class SeriesPlayerRadarHttpSpec extends MomoCatsEffectSuite with HttpAppTe
         .flatMap(_.as[Json])
       candidateId =
         first.hcursor.get[String]("candidateId").getOrElse(fail("missing candidate identity"))
+      guarded <- http.run(writePost(
+        operationsUri,
+        command.mapObject(_.add("kind", Json.fromString("withdraw"))
+          .add("candidateId", Json.fromString(candidateId))
+          .add("originOperationId", Json.fromString(operationId))),
+        Some("radar-guarded-withdraw")
+      ))
+      _ <- assertProblem(guarded, Status.Conflict, "CONFLICT", "saved candidate")
+      retained <- http.run(readGet(stateUri)).flatMap(_.as[Json])
       withdrawn <- http.run(writePost(
         operationsUri,
         command.mapObject(_.add("kind", Json.fromString("withdraw"))
@@ -67,6 +76,7 @@ final class SeriesPlayerRadarHttpSpec extends MomoCatsEffectSuite with HttpAppTe
       )
       assertEquals(state.hcursor.get[List[Json]]("operations").map(_.size), Right(1))
       assertEquals(state.hcursor.downField("currentBasis").focus, Some(Json.Null))
+      assertEquals(retained.hcursor.downField("candidate").get[String]("status"), Right("pending"))
       assertEquals(withdrawn.status, Status.Accepted)
       assertEquals(after.hcursor.downField("candidate").get[String]("status"), Right("withdrawn"))
       assertEquals(after.hcursor.downField("currentBasis").focus, Some(Json.Null))
@@ -131,4 +141,19 @@ final class SeriesPlayerRadarHttpSpec extends MomoCatsEffectSuite with HttpAppTe
         assertEquals(jsonField[String](empty, "state"), "empty")
         assertEquals(jsonField[String](invalid, "state"), "invalid")
         assertEquals(invalid.hcursor.get[List[String]]("invalidFields"), Right(List("mapMasterId")))
+  }
+
+  app.test("history validates its bounds and requires operator permission") { http =>
+    val history = uri"/api/admin/series-analysis/radar/revisions"
+    for
+      denied <- http.run(readGet(history, "account_akane_mami"))
+      _ <- denied.body.compile.drain
+      invalid <- http.run(readGet(Uri.unsafeFromString(history.toString + "?limit=51")))
+      _ <- invalid.body.compile.drain
+      allowed <- http.run(readGet(history))
+      body <- allowed.as[Json]
+    yield
+      assertEquals(denied.status, Status.Forbidden)
+      assertEquals(invalid.status, Status.UnprocessableContent)
+      assertEquals(allowed.status, Status.Ok, body.noSpaces)
   }

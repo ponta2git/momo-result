@@ -20,7 +20,7 @@ final class PostgresSeriesAnalysisReaderCapabilitySpec extends IntegrationSuite:
         active,
         (
           "[6]",
-          "[\"series-analysis-artifact-v6-full-validation-v1\"]",
+          "[\"series-analysis-artifact-v6-full-validation-v2\"]",
           false
         ),
       )
@@ -28,7 +28,7 @@ final class PostgresSeriesAnalysisReaderCapabilitySpec extends IntegrationSuite:
         draining,
         (
           "[6]",
-          "[\"series-analysis-artifact-v6-full-validation-v1\"]",
+          "[\"series-analysis-artifact-v6-full-validation-v2\"]",
           true
         ),
       )

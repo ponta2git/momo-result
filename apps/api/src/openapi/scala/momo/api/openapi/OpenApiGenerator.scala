@@ -46,13 +46,17 @@ object OpenApiGenerator:
       SeriesPlayerRadarResponseSchemas.StateComponent ->
         SeriesPlayerRadarResponseSchemas.state(operation),
       SeriesPlayerRadarResponseSchemas.PreviewComponent -> SeriesPlayerRadarResponseSchemas.preview,
+      "SeriesPlayerRadarRevisionListResponse" -> SeriesPlayerRadarResponseSchemas.revisionList,
+      "SeriesPlayerRadarRevisionDetailResponse" -> SeriesPlayerRadarResponseSchemas.revisionDetail,
+      "SeriesPlayerRadarRevisionResponse" -> SeriesPlayerRadarResponseSchemas.revisionSummary,
     ).foldLeft(document) { case (current, (name, schema)) =>
       val cursor = current.hcursor.downField("components").downField("schemas").downField(name)
       val marker = Json.obj("title" -> Json.fromString(name), "type" -> Json.fromString("object"))
-      if !cursor.focus.contains(marker) then sys.error(s"Radar OpenAPI marker changed: $name")
-      cursor.withFocus(_ => schema).top.getOrElse(sys.error(
-        s"Failed to project radar schema: $name"
-      ))
+      if name != "SeriesPlayerRadarRevisionResponse" && !cursor.focus.contains(marker) then
+        sys.error(s"Radar OpenAPI marker changed: $name")
+      current.hcursor.downField("components").downField("schemas").withFocus(
+        _.mapObject(_.add(name, schema))
+      ).top.getOrElse(sys.error(s"Failed to project radar schema: $name"))
     }
 
   private def withResponseSchemas(document: Json): Json =

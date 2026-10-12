@@ -1,6 +1,7 @@
 import { UserPlus } from "lucide-react";
 import { startTransition } from "react";
 
+import { accountRoleOptions } from "@/features/masters/accounts/accountRoles";
 import type { AdminAccountCreateDialogModel } from "@/features/masters/accounts/useAccountSettingsModel";
 import { canonicalResultMembers } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
@@ -30,7 +31,7 @@ export function AdminAccountCreateDialog({
   return (
     <Dialog
       busy={pending}
-      description="Discordの利用者と、必要な場合だけ試合参加者・管理者権限を紐づけます。"
+      description="Discordの利用者にログイン許可とロールを設定し、必要に応じて試合参加者を紐づけます。"
       open={open}
       title="アカウントを追加"
       trigger={
@@ -86,7 +87,14 @@ export function AdminAccountCreateDialog({
             label="ログイン許可"
             name="loginEnabled"
           />
-          <CheckboxField disabled={pending} label="管理者" name="isAdmin" />
+          <SelectField
+            defaultValue="user"
+            disabled={pending}
+            label="ロール"
+            name="role"
+            options={accountRoleOptions}
+            required
+          />
         </Fieldset>
         <DialogFooter>
           <Button disabled={pending} variant="secondary" onClick={() => setOpen(false)}>

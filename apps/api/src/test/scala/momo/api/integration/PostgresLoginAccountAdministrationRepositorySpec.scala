@@ -4,17 +4,20 @@ import java.time.Instant
 
 import cats.effect.{IO, Resource}
 import cats.syntax.all.*
+import doobie.Transactor
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.{
   PostgresAppSessionsRepository,
+  PostgresLoginAccountAdministration,
   PostgresLoginAccountAdministrationRepository,
   PostgresLoginAccountsRepository,
   PostgresMeta
 }
 import momo.api.auth.SessionTokenHash
 import momo.api.domain.ids.{AccountId, MemberId, UserId}
+import momo.api.domain.{AccountRole, LoginAccount}
 import momo.api.repositories.{
   AppSession,
   CreateLoginAccountData,
@@ -30,92 +33,159 @@ final class PostgresLoginAccountAdministrationRepositorySpec extends Integration
   private val primaryAdminId = AccountId.unsafeFromString("account_ponta")
   private val primaryMemberId = MemberId.unsafeFromString("member_ponta")
   private val backupAdminId = AccountId.unsafeFromString("account_atomic_backup_admin")
+  private val operatorId = AccountId.unsafeFromString("account_atomic_operator")
+  private val userId = AccountId.unsafeFromString("account_atomic_user")
   private val backupDiscordUserId = UserId.unsafeFromString("323456789012345678")
+  private val adminRemovals = List(
+    "disabling login" -> disableLogin,
+    "demoting to operator" -> changeRole(AccountRole.Operator),
+    "demoting to user" -> changeRole(AccountRole.User),
+  )
 
   private def accounts = new PostgresLoginAccountsRepository[IO](transactor)
   private def administration = new PostgresLoginAccountAdministrationRepository[IO](transactor)
   private def sessions = new PostgresAppSessionsRepository[IO](transactor)
 
-  test("disabling a login account revokes its sessions through the administration contract"):
+  test("all three account roles round-trip without changing player identity"):
+    val data = List(
+      backupAdminData.copy(
+        id = userId,
+        discordUserId = UserId.unsafeFromString("523456789012345678"),
+        playerMemberId = Some(primaryMemberId),
+        role = AccountRole.User,
+      ),
+      operatorData,
+      backupAdminData,
+    )
     val program =
       for
         _ <- resetLoginAccountState
-        _ <- accounts.create(backupAdminData)
-        session <- buildSession("disable-session-token", "disable-csrf-token")
-        _ <- sessions.upsert(session)
-        result <- administration.updateAndRevokeSessionsWhenDisabled(primaryAdminId, disableLogin)
-        foundSession <- sessions.find(session.idHash)
-        foundAccount <- accounts.find(primaryAdminId)
+        created <- data.traverse(createAccount)
+        byId <- data.traverse(account => accounts.find(account.id))
+        byDiscordId <- data.traverse(account => accounts.findByDiscordUserId(account.discordUserId))
+        listed <- accounts.list
       yield
-        result match
-          case LoginAccountAdministrationUpdateResult.Updated(account) =>
-            assertEquals(account.id, primaryAdminId)
-            assertEquals(account.loginEnabled, false)
-          case other => fail(s"expected Updated, got $other")
-        assertEquals(foundSession, None)
-        assertEquals(foundAccount.map(_.loginEnabled), Some(false))
-
+        assertEquals(
+          created.map(account => (account.id, account.role, account.playerMemberId)),
+          data.map(account => (account.id, account.role, account.playerMemberId)),
+        )
+        assertEquals(byId, created.map(Some(_)))
+        assertEquals(byDiscordId, created.map(Some(_)))
+        assertEquals(
+          listed.filter(account => data.exists(_.id == account.id)).map(_.id),
+          List(backupAdminId, operatorId, userId),
+        )
     program.guarantee(resetLoginAccountState)
 
-  test("preserving the last enabled administrator leaves its session intact"):
-    val program =
-      for
-        _ <- resetLoginAccountState
-        session <- buildSession("last-admin-session-token", "last-admin-csrf-token")
-        _ <- sessions.upsert(session)
-        result <- administration.updateAndRevokeSessionsWhenDisabled(primaryAdminId, disableLogin)
-        foundSession <- sessions.find(session.idHash)
-        foundAccount <- accounts.find(primaryAdminId)
-      yield
-        assertEquals(result, LoginAccountAdministrationUpdateResult.LastEnabledAdmin)
-        assertEquals(foundSession, Some(session))
-        assertEquals(foundAccount.map(_.loginEnabled), Some(true))
+  test("an unknown stored role fails checked decoding instead of receiving a default role"):
+    sql"SELECT 'unrecognized'::text".query[AccountRole].unique.transact(transactor).attempt.map {
+      result => assert(result.isLeft)
+    }
 
-    program.guarantee(resetLoginAccountState)
+  adminRemovals.foreach { case (label, change) =>
+    test(s"$label succeeds when another administrator remains and only disabling revokes sessions"):
+      val program =
+        for
+          _ <- resetLoginAccountState
+          _ <- createAccount(backupAdminData)
+          before <- accounts.find(primaryAdminId)
+          session <- buildSession(s"allowed-$label-session", s"allowed-$label-csrf")
+          _ <- sessions.upsert(session)
+          result <- administration.updateAndRevokeSessionsWhenDisabled(primaryAdminId, change)
+          foundSession <- sessions.find(session.idHash)
+          foundAccount <- accounts.find(primaryAdminId)
+        yield
+          val expected = before.map(account =>
+            account.copy(
+              role = change.role.getOrElse(account.role),
+              loginEnabled = change.loginEnabled.getOrElse(account.loginEnabled),
+              updatedAt = change.updatedAt,
+            )
+          ).getOrElse(fail("primary administrator is missing"))
+          assertEquals(result, LoginAccountAdministrationUpdateResult.Updated(expected))
+          assertEquals(foundAccount, Some(expected))
+          assertEquals(foundSession, Option.when(expected.loginEnabled)(session))
+      program.guarantee(resetLoginAccountState)
 
-  test("a waiting account update preserves the administrator left by the preceding commit"):
-    val program =
-      for
-        _ <- resetLoginAccountState
-        _ <- accounts.create(backupAdminData)
-        session <- buildSession("concurrent-admin-session", "concurrent-admin-csrf")
-        _ <- sessions.upsert(session)
-        result <- Resource.fromAutoCloseable(IO.blocking(dataSource.getConnection)).use {
-          connection =>
-            for
-              blocker <- IO.blocking {
-                connection.setAutoCommit(false)
-                val statement = connection.createStatement()
-                try
-                  val rows = statement.executeQuery(
-                    "SELECT pg_backend_pid(), pg_advisory_xact_lock(hashtext('momo:login_accounts:admin_guard'))"
-                  )
-                  val pid = try
-                    assert(rows.next())
-                    rows.getInt(1)
-                  finally rows.close()
-                  val changed = statement.executeUpdate(
-                    "UPDATE momo_login_accounts SET login_enabled = false WHERE id = 'account_atomic_backup_admin'"
-                  )
-                  assertEquals(changed, 1)
-                  pid
-                finally statement.close()
-              }
-              result <-
-                administration.updateAndRevokeSessionsWhenDisabled(primaryAdminId, disableLogin)
-                  .background.use { completion =>
-                    awaitBackendBlockedBy(blocker) *> IO.blocking(connection.commit()) *>
-                      completion.flatMap(_.embedNever)
-                  }
-            yield result
-        }
-        found <- accounts.find(primaryAdminId)
-        keptSession <- sessions.find(session.idHash)
-      yield
-        assertEquals(result, LoginAccountAdministrationUpdateResult.LastEnabledAdmin)
-        assertEquals(found.map(_.loginEnabled), Some(true))
-        assertEquals(keptSession, Some(session))
-    program.guarantee(resetLoginAccountState)
+    test(s"$label preserves the last enabled administrator and its session"):
+      val program =
+        for
+          _ <- resetLoginAccountState
+          _ <- createAccount(backupAdminData.copy(loginEnabled = false))
+          _ <- createAccount(operatorData)
+          before <- accounts.find(primaryAdminId)
+          session <- buildSession(s"last-admin-$label-session", s"last-admin-$label-csrf")
+          _ <- sessions.upsert(session)
+          result <- administration.updateAndRevokeSessionsWhenDisabled(
+            primaryAdminId,
+            change.copy(displayName = Some("must not be saved")),
+          )
+          foundSession <- sessions.find(session.idHash)
+          foundAccount <- accounts.find(primaryAdminId)
+        yield
+          assertEquals(result, LoginAccountAdministrationUpdateResult.LastEnabledAdmin)
+          assertEquals(foundSession, Some(session))
+          assertEquals(foundAccount, before)
+      program.guarantee(resetLoginAccountState)
+  }
+
+  List(
+    ("two disabling commands", disableLogin, disableLogin),
+    ("two demotions", changeRole(AccountRole.Operator), changeRole(AccountRole.User)),
+    ("disabling followed by demotion", disableLogin, changeRole(AccountRole.Operator)),
+    ("demotion followed by disabling", changeRole(AccountRole.User), disableLogin),
+  ).foreach { case (label, precedingChange, waitingChange) =>
+    test(s"concurrent $label preserve the administrator left by the preceding commit"):
+      val program =
+        for
+          _ <- resetLoginAccountState
+          _ <- createAccount(backupAdminData)
+          before <- accounts.find(primaryAdminId)
+          session <- buildSession("concurrent-admin-session", "concurrent-admin-csrf")
+          _ <- sessions.upsert(session)
+          results <- updateWhileAnotherAdminChangeCommits(precedingChange, waitingChange)
+          found <- accounts.find(primaryAdminId)
+          keptSession <- sessions.find(session.idHash)
+          enabledAdmins <- sql"""
+            SELECT id FROM momo_login_accounts
+            WHERE login_enabled = true AND role = 'admin'
+          """.query[AccountId].to[List].transact(transactor)
+        yield
+          results._1 match
+            case LoginAccountAdministrationUpdateResult.Updated(account) =>
+              assertEquals(account.id, backupAdminId)
+              assertEquals(account.role, precedingChange.role.getOrElse(AccountRole.Admin))
+              assertEquals(account.loginEnabled, precedingChange.loginEnabled.getOrElse(true))
+            case other => fail(s"expected the preceding update to succeed, got $other")
+          assertEquals(results._2, LoginAccountAdministrationUpdateResult.LastEnabledAdmin)
+          assertEquals(found, before)
+          assertEquals(keptSession, Some(session))
+          assertEquals(enabledAdmins, List(primaryAdminId))
+      program.guarantee(resetLoginAccountState)
+  }
+
+  private def updateWhileAnotherAdminChangeCommits(
+      precedingChange: UpdateLoginAccountData,
+      waitingChange: UpdateLoginAccountData,
+  ): IO[(LoginAccountAdministrationUpdateResult, LoginAccountAdministrationUpdateResult)] =
+    Resource.fromAutoCloseable(IO.blocking(dataSource.getConnection)).use { connection =>
+      val xa = Transactor.fromConnection[IO](connection, None)
+      (for
+        _ <- IO.blocking(connection.setAutoCommit(false))
+        preceding <- xa.rawTrans.apply(PostgresLoginAccountAdministration
+          .updateAndRevokeSessionsWhenDisabled(backupAdminId, precedingChange))
+        blocker <- xa.rawTrans.apply(sql"SELECT pg_backend_pid()".query[Int].unique)
+        waiting <- administration
+          .updateAndRevokeSessionsWhenDisabled(primaryAdminId, waitingChange)
+          .background.use { completion =>
+            awaitBackendBlockedBy(blocker) *> IO.blocking(connection.commit()) *>
+              completion.flatMap(_.embedNever)
+          }
+      yield (preceding, waiting)).onError(_ => IO.blocking(connection.rollback()))
+    }
+
+  private def createAccount(data: CreateLoginAccountData): IO[LoginAccount] = accounts.create(data)
+    .map(_.fold(error => fail(s"could not create account fixture: $error"), identity))
 
   private def backupAdminData: CreateLoginAccountData = CreateLoginAccountData(
     id = backupAdminId,
@@ -123,17 +193,29 @@ final class PostgresLoginAccountAdministrationRepositorySpec extends Integration
     displayName = "backup-admin",
     playerMemberId = None,
     loginEnabled = true,
-    isAdmin = true,
+    role = AccountRole.Admin,
     createdAt = now,
     updatedAt = now,
+  )
+
+  private def operatorData: CreateLoginAccountData = backupAdminData.copy(
+    id = operatorId,
+    discordUserId = UserId.unsafeFromString("423456789012345678"),
+    displayName = "operator",
+    role = AccountRole.Operator,
   )
 
   private def disableLogin: UpdateLoginAccountData = UpdateLoginAccountData(
     displayName = None,
     playerMemberId = None,
     loginEnabled = Some(false),
-    isAdmin = None,
+    role = None,
     updatedAt = now.plusSeconds(60),
+  )
+
+  private def changeRole(role: AccountRole): UpdateLoginAccountData = disableLogin.copy(
+    loginEnabled = None,
+    role = Some(role),
   )
 
   private def buildSession(rawSessionToken: String, rawCsrfToken: String): IO[AppSession] =
@@ -153,19 +235,19 @@ final class PostgresLoginAccountAdministrationRepositorySpec extends Integration
   private def resetLoginAccountState: IO[Unit] =
     val deleteSessions = sql"""
       DELETE FROM app_sessions
-      WHERE account_id = $primaryAdminId OR account_id = $backupAdminId
+      WHERE account_id IN ($primaryAdminId, $backupAdminId, $operatorId, $userId)
     """.update.run
-    val deleteBackup = sql"""
+    val deleteFixtures = sql"""
       DELETE FROM momo_login_accounts
-      WHERE id = $backupAdminId
+      WHERE id IN ($backupAdminId, $operatorId, $userId)
     """.update.run
     val restorePrimary = sql"""
       UPDATE momo_login_accounts
       SET login_enabled = true,
-          is_admin = true,
+          role = 'admin',
           updated_at = $now
       WHERE id = $primaryAdminId
     """.update.run
 
-    (deleteSessions >> deleteBackup >> restorePrimary).void.transact(transactor)
+    (deleteSessions >> deleteFixtures >> restorePrimary).void.transact(transactor)
 end PostgresLoginAccountAdministrationRepositorySpec

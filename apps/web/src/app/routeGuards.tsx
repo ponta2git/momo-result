@@ -238,7 +238,7 @@ export function AdminRoute({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!auth.auth?.isAdmin) {
+  if (auth.auth?.role !== "admin") {
     return (
       <RouteTerminalPage
         contentClassName="grid justify-items-start gap-4"

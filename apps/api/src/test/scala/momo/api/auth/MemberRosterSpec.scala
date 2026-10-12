@@ -2,6 +2,8 @@ package momo.api.auth
 
 import munit.FunSuite
 
+import momo.api.domain.AccountRole
+
 final class MemberRosterSpec extends FunSuite:
   test("dev identities derive account ids and administrator order from member ids"):
     val identities = MemberRoster.devIdentities(List("member_ponta", "member_akane_mami"))
@@ -10,8 +12,8 @@ final class MemberRosterSpec extends FunSuite:
 
     assertEquals(identities.map(_.accountId.value), List("account_ponta", "account_akane_mami"))
     assertEquals(identities.map(_.userId.value), List("member_ponta", "member_akane_mami"))
-    assertEquals(roster.find("account_ponta").map(_.isAdmin), Some(true))
-    assertEquals(roster.find("account_akane_mami").map(_.isAdmin), Some(false))
+    assertEquals(roster.find("account_ponta").map(_.role), Some(AccountRole.Admin))
+    assertEquals(roster.find("account_akane_mami").map(_.role), Some(AccountRole.User))
     assertEquals(
       roster.find("account_ponta").flatMap(_.playerMemberId.map(_.value)),
       Some("member_ponta"),

@@ -8,8 +8,8 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.domain.LoginAccount
 import momo.api.domain.ids.{AccountId, MemberId, UserId}
+import momo.api.domain.{AccountRole, LoginAccount}
 import momo.api.repositories.{AppSession, SessionAccount, SessionAccountLookup}
 
 final class PostgresSessionAccountLookup[F[_]: MonadCancelThrow](transactor: Transactor[F])
@@ -30,7 +30,7 @@ final class PostgresSessionAccountLookup[F[_]: MonadCancelThrow](transactor: Tra
         a.display_name,
         a.player_member_id,
         a.login_enabled,
-        a.is_admin,
+        a.role,
         a.created_at,
         a.updated_at
       FROM app_sessions s
@@ -52,7 +52,7 @@ object PostgresSessionAccountLookup:
       displayName: String,
       accountPlayerMemberId: Option[MemberId],
       loginEnabled: Boolean,
-      isAdmin: Boolean,
+      role: AccountRole,
       accountCreatedAt: Instant,
       updatedAt: Instant,
   )
@@ -73,7 +73,7 @@ object PostgresSessionAccountLookup:
       displayName = row.displayName,
       playerMemberId = row.accountPlayerMemberId,
       loginEnabled = row.loginEnabled,
-      isAdmin = row.isAdmin,
+      role = row.role,
       createdAt = row.accountCreatedAt,
       updatedAt = row.updatedAt,
     ),

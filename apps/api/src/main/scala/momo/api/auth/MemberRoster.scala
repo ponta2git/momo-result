@@ -2,6 +2,7 @@ package momo.api.auth
 
 import cats.syntax.all.*
 
+import momo.api.domain.AccountRole
 import momo.api.domain.ids.*
 
 final case class MemberRoster(accounts: Map[String, AuthenticatedAccount]):
@@ -12,7 +13,7 @@ final case class DevMemberIdentity(
     userId: UserId,
     memberId: MemberId,
     displayName: String,
-    isAdmin: Boolean,
+    role: AccountRole,
 )
 
 object MemberRoster:
@@ -36,7 +37,7 @@ object MemberRoster:
         userId = userId,
         memberId = memberId,
         displayName = memberId.value,
-        isAdmin = index == 0,
+        role = if index == 0 then AccountRole.Admin else AccountRole.User,
       )
     }
 
@@ -48,7 +49,7 @@ object MemberRoster:
       identity.accountId.value -> AuthenticatedAccount(
         accountId = identity.accountId,
         displayName = identity.displayName,
-        isAdmin = identity.isAdmin,
+        role = identity.role,
         playerMemberId = Some(identity.memberId),
       )
   }.toMap)

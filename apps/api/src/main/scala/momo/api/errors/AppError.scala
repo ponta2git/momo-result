@@ -41,6 +41,12 @@ object AppError:
     val code = "CONFLICT"
     val title = "Conflict"
 
+  final case class LastEnabledAdminRequired(
+      detail: String = "At least one enabled administrator account is required."
+  ) extends AppError:
+    val code = "LAST_ENABLED_ADMIN_REQUIRED"
+    val title = "Enabled Administrator Required"
+
   final case class MatchNoteVersionConflict(
       detail: String = "The match note was changed by another user. Reload the latest note."
   ) extends AppError:

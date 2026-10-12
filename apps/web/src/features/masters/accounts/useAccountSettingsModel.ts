@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useActionState, useState } from "react";
 
+import { accountRoleOptions } from "@/features/masters/accounts/accountRoles";
 import {
   cacheSavedAccount,
+  cacheSelfDemotion,
   invalidateAdminAccountCaches,
 } from "@/features/masters/accounts/adminAccountCache";
 import { createLoginAccount, updateLoginAccount } from "@/shared/api/adminAccounts";
@@ -71,17 +73,23 @@ export function useAccountSettingsModel(queryEnabled = true): AccountSettingsMod
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
   const [createOpen, setCreateOpen] = useState(false);
-  const accountsQuery = useQuery({ ...adminLoginAccountsQueryOptions(), enabled: queryEnabled });
+  const canManageAccounts = auth.auth?.role === "admin";
+  const accountsQuery = useQuery({
+    ...adminLoginAccountsQueryOptions(),
+    enabled: queryEnabled && canManageAccounts,
+  });
 
   const [createState, createAction, createPending] = useActionState<
     typeof initialCreateAccountState,
     FormData
   >(async (previous, formData) => {
     const playerMemberId = String(formData.get("playerMemberId") ?? "");
+    const role = accountRoleOptions.find((option) => option.value === formData.get("role"))?.value;
+    if (!role) return { error: "ロールを選択してください", formKey: previous.formKey };
     const request: CreateLoginAccountRequest = {
       discordUserId: String(formData.get("discordUserId") ?? ""),
       displayName: String(formData.get("displayName") ?? ""),
-      isAdmin: formData.get("isAdmin") === "on",
+      role,
       loginEnabled: formData.get("loginEnabled") === "on",
       ...(playerMemberId ? { playerMemberId } : {}),
     };
@@ -123,30 +131,39 @@ export function useAccountSettingsModel(queryEnabled = true): AccountSettingsMod
     onSuccess: async (saved, { accountId, request }) => {
       const selfDisabled = accountId === auth.auth?.accountId && request.loginEnabled === false;
       if (selfDisabled) reportSelfAccountDisabled(accountId);
-      await cacheSavedAccount(queryClient, saved);
-      await invalidateAdminAccountCaches(queryClient);
+      const selfDemoted = accountId === auth.auth?.accountId && saved.role !== "admin";
+      if (selfDemoted && !selfDisabled) {
+        await cacheSelfDemotion(queryClient, saved);
+      } else {
+        await cacheSavedAccount(queryClient, saved);
+        await invalidateAdminAccountCaches(queryClient);
+      }
       if (!selfDisabled) showToast({ title: "アカウント設定を更新しました", tone: "success" });
     },
   });
 
-  const refreshAccounts = async () => (await accountsQuery.refetch()).isSuccess;
+  const refreshAccounts = async () =>
+    canManageAccounts && (await accountsQuery.refetch()).isSuccess;
   const updateAccount = async (accountId: string, request: UpdateLoginAccountRequest) => {
     await updateMutation.mutateAsync({ accountId, request });
   };
 
-  const accounts = accountsQuery.data?.items ?? [];
+  const accounts = canManageAccounts ? (accountsQuery.data?.items ?? []) : [];
 
   const refresh = {
     pending: accountsQuery.isFetching && !createPending && !updateMutation.isPending,
     run: refreshAccounts,
   };
   const loadFailed = useRetryNotice(
-    shouldShowBlockingQueryError(accountsQuery),
+    canManageAccounts && shouldShowBlockingQueryError(accountsQuery),
     accountsQuery.isFetching,
   );
-  const stale = useRetryNotice(shouldShowQueryError(accountsQuery), accountsQuery.isFetching);
+  const stale = useRetryNotice(
+    canManageAccounts && shouldShowQueryError(accountsQuery),
+    accountsQuery.isFetching,
+  );
   let list: AdminAccountListModel;
-  if (isInitialQueryLoading(accountsQuery) && !loadFailed) {
+  if (auth.isChecking || (isInitialQueryLoading(accountsQuery) && !loadFailed)) {
     list = { kind: "loading" };
   } else if (loadFailed) {
     list = {

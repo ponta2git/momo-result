@@ -135,7 +135,7 @@ object MasterModule:
             .map(items => Right(MapMasterListResponse(items.map(MapMasterResponse.from))))
       }
     },
-    SecuredEndpoint.adminMutationLogic(security, MapMastersEndpoints.create) { member =>
+    SecuredEndpoint.operatorMutationLogic(security, MapMastersEndpoints.create) { member =>
       {
         case (idemKey, request) =>
           IdempotencyReplay.wrap[F, CreateMapMasterRequest, MapMasterResponse](
@@ -151,7 +151,7 @@ object MasterModule:
           )
       }
     },
-    SecuredEndpoint.adminMutationLogic(security, MapMastersEndpoints.update) { member =>
+    SecuredEndpoint.operatorMutationLogic(security, MapMastersEndpoints.update) { member =>
       {
         case (id, idemKey, request) =>
           IdempotencyReplay.wrap[F, (String, UpdateMapMasterRequest), MapMasterResponse](
@@ -167,7 +167,7 @@ object MasterModule:
           )
       }
     },
-    SecuredEndpoint.adminMutationLogic(security, MapMastersEndpoints.delete) { member =>
+    SecuredEndpoint.operatorMutationLogic(security, MapMastersEndpoints.delete) { member =>
       {
         case (id, idemKey) =>
           IdempotencyReplay.wrap[F, String, DeleteMasterResponse](
@@ -193,7 +193,7 @@ object MasterModule:
             .map(items => Right(SeasonMasterListResponse(items.map(SeasonMasterResponse.from))))
       }
     },
-    SecuredEndpoint.adminMutationLogic(security, SeasonMastersEndpoints.create) { member =>
+    SecuredEndpoint.operatorMutationLogic(security, SeasonMastersEndpoints.create) { member =>
       {
         case (idemKey, request) =>
           IdempotencyReplay.wrap[F, CreateSeasonMasterRequest, SeasonMasterResponse](
@@ -211,7 +211,7 @@ object MasterModule:
           )
       }
     },
-    SecuredEndpoint.adminMutationLogic(security, SeasonMastersEndpoints.update) { member =>
+    SecuredEndpoint.operatorMutationLogic(security, SeasonMastersEndpoints.update) { member =>
       {
         case (id, idemKey, request) =>
           IdempotencyReplay.wrap[F, (String, UpdateSeasonMasterRequest), SeasonMasterResponse](
@@ -227,7 +227,7 @@ object MasterModule:
           )
       }
     },
-    SecuredEndpoint.adminMutationLogic(security, SeasonMastersEndpoints.delete) { member =>
+    SecuredEndpoint.operatorMutationLogic(security, SeasonMastersEndpoints.delete) { member =>
       {
         case (id, idemKey) =>
           IdempotencyReplay.wrap[F, String, DeleteMasterResponse](

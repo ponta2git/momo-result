@@ -1,5 +1,6 @@
 import { useRef } from "react";
 
+import { accountRoleLabels } from "@/features/masters/accounts/accountRoles";
 import { AdminAccountActions } from "@/features/masters/accounts/AdminAccountActions";
 import { AdminAccountCreateDialog } from "@/features/masters/accounts/AdminAccountCreateDialog";
 import type { AccountSettingsModel } from "@/features/masters/accounts/useAccountSettingsModel";
@@ -47,7 +48,7 @@ export function AccountSettingsPanel({ model: page }: { model: AccountSettingsMo
             ログインと権限
           </h2>
           <p className={cn(contentText.body, readableTextWidthClass)}>
-            Discordアカウントのログイン許可と管理者権限を設定します。
+            Discordアカウントのログイン許可とロールを設定します。
           </p>
         </header>
       </ContentWithActions>
@@ -88,7 +89,7 @@ export function AccountSettingsPanel({ model: page }: { model: AccountSettingsMo
             />
           ) : (
             <DataTable
-              caption={{ content: "登録アカウントとログイン・管理者権限" }}
+              caption={{ content: "登録アカウントとログイン・ロール" }}
               columns={[
                 {
                   key: "name",
@@ -116,7 +117,7 @@ export function AccountSettingsPanel({ model: page }: { model: AccountSettingsMo
                   header: "権限",
                   renderCell: (account) => (
                     <div className="flex flex-wrap gap-2">
-                      <StatusBadge label={account.isAdmin ? "管理者" : "一般"} tone="neutral" />
+                      <StatusBadge label={accountRoleLabels[account.role]} tone="neutral" />
                       <StatusBadge
                         label={account.loginEnabled ? "ログイン許可" : "ログイン停止"}
                         tone={account.loginEnabled ? "success" : "warning"}

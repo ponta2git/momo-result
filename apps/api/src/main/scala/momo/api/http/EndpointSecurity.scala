@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory
 import sttp.tapir.model.ServerRequest
 
 import momo.api.auth.AuthenticatedAccount
+import momo.api.domain.AccountRole
 import momo.api.endpoints.ProblemDetails
 import momo.api.errors.AppError
 
@@ -41,14 +42,41 @@ private[http] final class EndpointSecurity[F[_]: Async](
     authorizeRead(accountHeader, request)
   )
 
+  def authorizeOperatorMutation(
+      accountHeader: Option[String],
+      csrfToken: Option[String],
+      request: ServerRequest,
+  ): F[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]] = requireOperator(
+    authorizeMutation(accountHeader, csrfToken, request)
+  )
+
+  def authorizeOperatorRead(
+      accountHeader: Option[String],
+      request: ServerRequest,
+  ): F[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]] = requireOperator(
+    authorizeRead(accountHeader, request)
+  )
+
   private def requireAdmin(
       authenticated: F[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]]
   ): F[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]] = authenticated.map(
     _.flatMap(account =>
       Either.cond(
-        account.isAdmin,
+        account.role == AccountRole.Admin,
         account,
         problem(AppError.Forbidden("Administrator access is required.")),
+      )
+    )
+  )
+
+  private def requireOperator(
+      authenticated: F[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]]
+  ): F[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]] = authenticated.map(
+    _.flatMap(account =>
+      Either.cond(
+        account.role == AccountRole.Operator || account.role == AccountRole.Admin,
+        account,
+        problem(AppError.Forbidden("Operator access is required.")),
       )
     )
   )

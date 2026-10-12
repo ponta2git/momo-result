@@ -419,7 +419,7 @@ describe("OcrCapturePage", () => {
         return HttpResponse.json({
           accountId: "account_ponta",
           displayName: "ぽんた",
-          isAdmin: true,
+          role: "admin",
           memberId: "member_ponta",
           csrfToken: "csrf-dev",
         });

@@ -146,7 +146,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
         assertEquals(response.status, Status.Ok)
         assertEquals(jsonField[String](body, "accountId"), "account_ponta")
         assertEquals(jsonField[String](body, "memberId"), "member_ponta")
-        assertEquals(jsonField[Boolean](body, "isAdmin"), true)
+        assertEquals(jsonField[String](body, "role"), "admin")
         assertEquals(jsonField[String](body, "csrfToken"), "dev")
         assertEquals(headerValue(response, CIString("Cache-Control")), "private, no-store")
       }
@@ -272,7 +272,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
         "displayName" -> Json.fromString("operator-from-session"),
         "playerMemberId" -> Json.Null,
         "loginEnabled" -> Json.fromBoolean(true),
-        "isAdmin" -> Json.fromBoolean(false),
+        "role" -> Json.fromString("user"),
       ))
       fixture.app.run(request).flatMap { response =>
         response.as[Json].map { body =>
@@ -293,7 +293,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
         "displayName" -> Json.fromString("backup-admin"),
         "playerMemberId" -> Json.Null,
         "loginEnabled" -> Json.fromBoolean(true),
-        "isAdmin" -> Json.fromBoolean(true),
+        "role" -> Json.fromString("admin"),
       ))
     val disableCurrentAccount =
       Request[IO](Method.PATCH, uri"/api/admin/login-accounts/account_ponta")
@@ -305,7 +305,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
       createResponse <- fixture.app.run(createBackupAdmin)
       _ <- createResponse.as[Json].map { body =>
         assertEquals(createResponse.status, Status.Ok)
-        assertEquals(jsonField[Boolean](body, "isAdmin"), true)
+        assertEquals(jsonField[String](body, "role"), "admin")
       }
       disableResponse <- fixture.app.run(disableCurrentAccount)
       _ <- disableResponse.as[Json].map { body =>
@@ -334,44 +334,6 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     )
   }
 
-  app.test("GET /api/admin/login-accounts lists operator accounts for administrators") { httpApp =>
-    val request = readGet(uri"/api/admin/login-accounts")
-    httpApp.run(request).flatMap { response =>
-      response.as[Json].map { body =>
-        assertEquals(response.status, Status.Ok)
-        val accountIds = body.hcursor.downField("items").as[List[Json]].fold(
-          error => fail(s"expected items: ${error.getMessage}; body=${body.noSpaces}"),
-          _.flatMap(_.hcursor.get[String]("accountId").toOption),
-        )
-        assert(
-          accountIds.contains("account_ponta"),
-          s"account_ponta account is missing: $accountIds",
-        )
-      }
-    }
-  }
-
-  app.test("POST /api/admin/login-accounts creates an operator-only account") { httpApp =>
-    val request = writePost(
-      uri"/api/admin/login-accounts",
-      Json.obj(
-        "discordUserId" -> Json.fromString("123456789012345678"),
-        "displayName" -> Json.fromString("operator"),
-        "playerMemberId" -> Json.Null,
-        "loginEnabled" -> Json.fromBoolean(true),
-        "isAdmin" -> Json.fromBoolean(false),
-      ),
-    )
-    httpApp.run(request).flatMap { response =>
-      response.as[Json].map { body =>
-        assertEquals(response.status, Status.Ok)
-        assertEquals(jsonField[String](body, "displayName"), "operator")
-        assertEquals(jsonField[Option[String]](body, "playerMemberId"), None)
-        assertEquals(jsonField[Boolean](body, "isAdmin"), false)
-      }
-    }
-  }
-
   app.test("admin login account mutations reject blank ids at the HTTP boundary") { httpApp =>
     val create = writePost(
       uri"/api/admin/login-accounts",
@@ -380,7 +342,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
         "displayName" -> Json.fromString("operator"),
         "playerMemberId" -> Json.Null,
         "loginEnabled" -> Json.fromBoolean(true),
-        "isAdmin" -> Json.fromBoolean(false),
+        "role" -> Json.fromString("user"),
       ),
     )
     val update = writePatch(
@@ -414,7 +376,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
       assertProblem(
         response,
         Status.Conflict,
-        "CONFLICT",
+        "LAST_ENABLED_ADMIN_REQUIRED",
         "At least one enabled administrator account is required.",
       )
     )

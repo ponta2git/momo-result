@@ -6,8 +6,8 @@ import cats.Monad
 import cats.data.EitherT
 import cats.syntax.all.*
 
-import momo.api.domain.LoginAccount
 import momo.api.domain.ids.{AccountId, MemberId, UserId}
+import momo.api.domain.{AccountRole, LoginAccount}
 import momo.api.errors.AppError
 import momo.api.repositories.{
   CreateLoginAccountData,
@@ -24,14 +24,14 @@ final case class CreateLoginAccountCommand(
     displayName: String,
     playerMemberId: Option[MemberId],
     loginEnabled: Boolean,
-    isAdmin: Boolean,
+    role: AccountRole,
 )
 
 final case class UpdateLoginAccountCommand(
     displayName: Option[String],
     playerMemberId: Option[Option[MemberId]],
     loginEnabled: Option[Boolean],
-    isAdmin: Option[Boolean],
+    role: Option[AccountRole],
 )
 
 final class ListLoginAccounts[F[_]](accounts: LoginAccountsRepository[F]):
@@ -59,7 +59,7 @@ final class CreateLoginAccount[F[_]: Monad](
       displayName = displayName,
       playerMemberId = command.playerMemberId,
       loginEnabled = command.loginEnabled,
-      isAdmin = command.isAdmin,
+      role = command.role,
       createdAt = at,
       updatedAt = at,
     )))
@@ -83,7 +83,7 @@ final class UpdateLoginAccount[F[_]: Monad](
           displayName = displayName,
           playerMemberId = command.playerMemberId,
           loginEnabled = command.loginEnabled,
-          isAdmin = command.isAdmin,
+          role = command.role,
           updatedAt = at,
         ),
       ))
@@ -91,13 +91,10 @@ final class UpdateLoginAccount[F[_]: Monad](
         case LoginAccountAdministrationUpdateResult.Updated(value) => EitherT
             .rightT[F, AppError](value)
         case LoginAccountAdministrationUpdateResult.LastEnabledAdmin => EitherT
-            .leftT[F, LoginAccount](lastAdminConflict)
+            .leftT[F, LoginAccount](AppError.LastEnabledAdminRequired())
         case LoginAccountAdministrationUpdateResult.NotFound => EitherT
             .leftT[F, LoginAccount](AppError.NotFound("login account", id.value))
     yield updated).value
-
-  private val lastAdminConflict: AppError = AppError
-    .Conflict("At least one enabled administrator account is required.")
 
 private[usecases] object LoginAccountField:
   private val DiscordUserIdPattern = "^[0-9]{5,32}$".r

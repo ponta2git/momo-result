@@ -23,7 +23,7 @@ object SeriesPlayerRadarModule:
       now: F[java.time.Instant],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(
-    SecuredEndpoint.adminReadLogic(security, SeriesPlayerRadarEndpoints.state) {
+    SecuredEndpoint.operatorReadLogic(security, SeriesPlayerRadarEndpoints.state) {
       account => rawTitle =>
         ReadRateLimit.enforce(
           readRateLimiter,
@@ -35,7 +35,7 @@ object SeriesPlayerRadarModule:
           )
         )
     },
-    SecuredEndpoint.adminReadLogic(security, SeriesPlayerRadarEndpoints.preview) {
+    SecuredEndpoint.operatorReadLogic(security, SeriesPlayerRadarEndpoints.preview) {
       account => input =>
         val decoded =
           for
@@ -51,7 +51,7 @@ object SeriesPlayerRadarModule:
           security.decode(decoded)(request => security.respond(getPreview.run(request))(_.payload))
         )
     },
-    SecuredEndpoint.adminReadLogic(security, SeriesPlayerRadarEndpoints.operation) {
+    SecuredEndpoint.operatorReadLogic(security, SeriesPlayerRadarEndpoints.operation) {
       account => input =>
         val decoded =
           for
@@ -71,7 +71,7 @@ object SeriesPlayerRadarModule:
           }
         )
     },
-    SecuredEndpoint.adminMutationLogic(security, SeriesPlayerRadarEndpoints.requestOperation) {
+    SecuredEndpoint.operatorMutationLogic(security, SeriesPlayerRadarEndpoints.requestOperation) {
       account => input =>
         val (idempotencyKey, request) = input
         idempotencyKey match

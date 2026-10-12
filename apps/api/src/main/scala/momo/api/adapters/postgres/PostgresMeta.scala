@@ -4,6 +4,7 @@ import doobie.Meta
 
 import momo.api.domain.ids.*
 import momo.api.domain.{
+  AccountRole,
   FailureCode,
   IncidentCount,
   ManYen,
@@ -23,6 +24,7 @@ import momo.api.repositories.{OcrQueueOutboxStatus, SourceImageFailureCode, Sour
  * PostgreSQL repositories. Keeping them in one place avoids accidental divergence between repos.
  */
 object PostgresMeta:
+  given Meta[AccountRole] = Meta[String].tiemap(AccountRole.fromWire)(_.wire)
   given Meta[OcrJobId] = Meta[String].imap(OcrJobId.unsafeFromString)(_.value)
   given Meta[OcrDraftId] = Meta[String].imap(OcrDraftId.unsafeFromString)(_.value)
   given Meta[ImageId] = Meta[String].imap(ImageId.unsafeFromString)(_.value)

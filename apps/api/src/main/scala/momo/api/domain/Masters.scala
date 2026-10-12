@@ -61,7 +61,7 @@ final case class MemberAlias(
 final case class Member(id: MemberId, userId: UserId, displayName: String, createdAt: Instant)
 
 /**
- * Login/operator account for momo-result. `playerMemberId` is nullable because some operators can
+ * Login account for momo-result. `playerMemberId` is nullable because some accounts can
  * edit records without being one of the current four game participants.
  */
 final case class LoginAccount(
@@ -70,7 +70,7 @@ final case class LoginAccount(
     displayName: String,
     playerMemberId: Option[MemberId],
     loginEnabled: Boolean,
-    isAdmin: Boolean,
+    role: AccountRole,
     createdAt: Instant,
     updatedAt: Instant,
 )

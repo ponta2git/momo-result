@@ -7,6 +7,7 @@ import io.circe.Json
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.inmemory.InMemoryIdempotencyRepository
 import momo.api.auth.{AuthenticatedAccount, LoginRateLimiter}
+import momo.api.domain.AccountRole
 import momo.api.domain.ids.AccountId
 import momo.api.endpoints.ProblemDetails
 import momo.api.errors.AppError
@@ -17,7 +18,7 @@ final class IdempotencyRecordingSpec extends MomoCatsEffectSuite:
   private val account = AuthenticatedAccount(
     AccountId.unsafeFromString("account_ponta"),
     "ponta",
-    true,
+    AccountRole.Admin,
     None
   )
   private val endpoint = "POST /api/testing/recording"

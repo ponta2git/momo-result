@@ -72,16 +72,16 @@ final class SeriesPlayerRadarHttpSpec extends MomoCatsEffectSuite with HttpAppTe
       assertEquals(after.hcursor.downField("currentBasis").focus, Some(Json.Null))
   }
 
-  app.test("radar administration requires administrator access and mutation idempotency") { http =>
+  app.test("radar administration requires operator access and mutation idempotency") { http =>
     val command = Json.obj(
       "gameTitleId" -> Json.fromString(title.value),
       "kind" -> Json.fromString("candidate")
     )
     for
       deniedRead <- http.run(readGet(stateUri, "account_akane_mami"))
-      _ <- assertProblem(deniedRead, Status.Forbidden, "FORBIDDEN", "Administrator access")
+      _ <- assertProblem(deniedRead, Status.Forbidden, "FORBIDDEN", "Operator access")
       deniedWrite <- http.run(writePost(operationsUri, command, "account_akane_mami"))
-      _ <- assertProblem(deniedWrite, Status.Forbidden, "FORBIDDEN", "Administrator access")
+      _ <- assertProblem(deniedWrite, Status.Forbidden, "FORBIDDEN", "Operator access")
       missingKey <- http.run(writePost(operationsUri, command))
       _ <- assertProblem(
         missingKey,

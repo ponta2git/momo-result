@@ -12,7 +12,13 @@ final class InMemoryLoginAccountsRepository[F[_]: Sync] private (
     ref: Ref[F, Map[AccountId, LoginAccount]]
 ) extends LoginAccountsRepository[F]:
   override def list: F[List[LoginAccount]] = ref.get
-    .map(_.values.toList.sortBy(a => (!a.isAdmin, !a.loginEnabled, a.createdAt, a.id.value)))
+    .map(_.values.toList.sortBy { account =>
+      val roleOrder = account.role match
+        case AccountRole.Admin => 0
+        case AccountRole.Operator => 1
+        case AccountRole.User => 2
+      (roleOrder, !account.loginEnabled, account.createdAt, account.id.value)
+    })
   override def find(id: AccountId): F[Option[LoginAccount]] = ref.get.map(_.get(id))
   override def findByDiscordUserId(userId: UserId): F[Option[LoginAccount]] = ref.get
     .map(_.values.find(_.discordUserId == userId))
@@ -23,7 +29,7 @@ final class InMemoryLoginAccountsRepository[F[_]: Sync] private (
       account.displayName,
       account.playerMemberId,
       account.loginEnabled,
-      account.isAdmin,
+      account.role,
       account.createdAt,
       account.updatedAt,
     )
@@ -50,12 +56,12 @@ final class InMemoryLoginAccountsRepository[F[_]: Sync] private (
             displayName = data.displayName.getOrElse(existing.displayName),
             playerMemberId = data.playerMemberId.getOrElse(existing.playerMemberId),
             loginEnabled = data.loginEnabled.getOrElse(existing.loginEnabled),
-            isAdmin = data.isAdmin.getOrElse(existing.isAdmin),
+            role = data.role.getOrElse(existing.role),
             updatedAt = data.updatedAt,
           )
-          val wouldRemoveLastAdmin = existing.loginEnabled && existing.isAdmin &&
-            (!updated.loginEnabled || !updated.isAdmin) &&
-            accounts.values.count(a => a.loginEnabled && a.isAdmin) <= 1
+          val wouldRemoveLastAdmin = existing.loginEnabled && existing.role == AccountRole.Admin &&
+            (!updated.loginEnabled || updated.role != AccountRole.Admin) &&
+            accounts.values.count(a => a.loginEnabled && a.role == AccountRole.Admin) <= 1
           if wouldRemoveLastAdmin then (accounts, None)
           else (accounts.updated(id, updated), Some(updated))
     }
@@ -94,8 +100,9 @@ final class InMemoryLoginAccountAdministrationRepository[F[_]: Sync](
       data: UpdateLoginAccountData,
   ): Boolean =
     val nextLoginEnabled = data.loginEnabled.getOrElse(existing.loginEnabled)
-    val nextIsAdmin = data.isAdmin.getOrElse(existing.isAdmin)
-    existing.loginEnabled && existing.isAdmin && (!nextLoginEnabled || !nextIsAdmin)
+    val nextRole = data.role.getOrElse(existing.role)
+    existing.loginEnabled && existing.role == AccountRole.Admin &&
+    (!nextLoginEnabled || nextRole != AccountRole.Admin)
 
 object InMemoryLoginAccountsRepository:
   def create[F[_]: Sync](accounts: List[LoginAccount]): F[InMemoryLoginAccountsRepository[F]] = Ref

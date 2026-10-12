@@ -5809,7 +5809,7 @@
         "required" : [
           "accountId",
           "displayName",
-          "isAdmin"
+          "role"
         ],
         "properties" : {
           "accountId" : {
@@ -5818,8 +5818,13 @@
           "displayName" : {
             "type" : "string"
           },
-          "isAdmin" : {
-            "type" : "boolean"
+          "role" : {
+            "type" : "string",
+            "enum" : [
+              "user",
+              "operator",
+              "admin"
+            ]
           },
           "memberId" : {
             "type" : "string"
@@ -5993,7 +5998,7 @@
           "discordUserId",
           "displayName",
           "loginEnabled",
-          "isAdmin"
+          "role"
         ],
         "properties" : {
           "discordUserId" : {
@@ -6008,8 +6013,13 @@
           "loginEnabled" : {
             "type" : "boolean"
           },
-          "isAdmin" : {
-            "type" : "boolean"
+          "role" : {
+            "type" : "string",
+            "enum" : [
+              "user",
+              "operator",
+              "admin"
+            ]
           }
         }
       },
@@ -6703,7 +6713,7 @@
           "discordUserId",
           "displayName",
           "loginEnabled",
-          "isAdmin",
+          "role",
           "createdAt",
           "updatedAt"
         ],
@@ -6723,8 +6733,13 @@
           "loginEnabled" : {
             "type" : "boolean"
           },
-          "isAdmin" : {
-            "type" : "boolean"
+          "role" : {
+            "type" : "string",
+            "enum" : [
+              "user",
+              "operator",
+              "admin"
+            ]
           },
           "createdAt" : {
             "type" : "string"
@@ -7762,6 +7777,7 @@
               "UNSUPPORTED_MEDIA_TYPE",
               "PAYLOAD_TOO_LARGE",
               "CONFLICT",
+              "LAST_ENABLED_ADMIN_REQUIRED",
               "MATCH_NOTE_VERSION_CONFLICT",
               "NOTIFICATION_SETTINGS_VERSION_CONFLICT",
               "IDEMPOTENCY_IN_PROGRESS",
@@ -28227,8 +28243,13 @@
           "loginEnabled" : {
             "type" : "boolean"
           },
-          "isAdmin" : {
-            "type" : "boolean"
+          "role" : {
+            "type" : "string",
+            "enum" : [
+              "user",
+              "operator",
+              "admin"
+            ]
           }
         }
       },

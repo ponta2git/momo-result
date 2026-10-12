@@ -13,5 +13,6 @@ export function authQueryOptions(devUser?: string) {
     queryKey: authMeQueryKeyFor(devUser),
     queryFn: ({ signal }) => getAuthMe({ signal }),
     enabled: !import.meta.env.DEV || Boolean(devUser),
+    refetchOnMount: false,
   });
 }

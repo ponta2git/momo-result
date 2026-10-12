@@ -229,7 +229,9 @@ export function installMatchMediaController(initialMatches: boolean): MatchMedia
         addListener(listener as (event: MediaQueryListEvent) => void);
       },
       dispatchEvent: () => true,
-      matches: matchesQuery(query),
+      get matches() {
+        return matchesQuery(query);
+      },
       media: query,
       onchange: null,
       removeEventListener: (_type: string, listener: EventListenerOrEventListenerObject) => {

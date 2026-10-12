@@ -163,7 +163,7 @@ function GameTitleCreateDialog({
       onOpenChange={setOpen}
     >
       <form
-        className="grid gap-4"
+        className="grid gap-6"
         onSubmit={(event) => {
           event.preventDefault();
           if (create.pending) return;
@@ -171,26 +171,27 @@ function GameTitleCreateDialog({
           startTransition(() => create.action(data));
         }}
       >
-        <TextField
-          disabled={create.pending}
-          error={create.error}
-          label="作品名"
-          name="name"
-          placeholder="例: 桃太郎電鉄2"
-          type="text"
-        />
-
-        <SelectField
-          disabled={create.pending}
-          defaultValue={defaultLayoutFamily}
-          description="作品ごとの画面構造に合わせて、読み取り方を切り替えます。"
-          label="読み取り方式"
-          name="layoutFamily"
-          options={layoutFamilies.map((family) => ({
-            label: layoutFamilyLabels[family],
-            value: family,
-          }))}
-        />
+        <div className="grid gap-4">
+          <TextField
+            disabled={create.pending}
+            error={create.error}
+            label="作品名"
+            name="name"
+            placeholder="例: 桃太郎電鉄2"
+            type="text"
+          />
+          <SelectField
+            disabled={create.pending}
+            defaultValue={defaultLayoutFamily}
+            description="作品ごとの画面構造に合わせて、読み取り方を切り替えます。"
+            label="読み取り方式"
+            name="layoutFamily"
+            options={layoutFamilies.map((family) => ({
+              label: layoutFamilyLabels[family],
+              value: family,
+            }))}
+          />
+        </div>
 
         <DialogFooter>
           <Button disabled={create.pending} variant="secondary" onClick={() => setOpen(false)}>

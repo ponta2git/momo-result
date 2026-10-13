@@ -1,4 +1,4 @@
-import { Activity, useEffect } from "react";
+import { Activity, Fragment, useEffect } from "react";
 import type { ReactNode } from "react";
 import { Navigate, useLocation, useSearchParams } from "react-router-dom";
 
@@ -203,7 +203,7 @@ export function AuthenticatedRoute({ children }: { children: ReactNode }) {
     );
   }
 
-  return children;
+  return <Fragment key={auth.auth?.accountId}>{children}</Fragment>;
 }
 
 /** Keep an invalid URL inspectable and offer a known destination without silently redirecting. */

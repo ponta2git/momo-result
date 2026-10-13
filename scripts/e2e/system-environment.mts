@@ -53,7 +53,6 @@ export type SystemMetadata = {
   controlDir: string;
   images: Awaited<ReturnType<typeof writeImages>>;
   webOrigin: string;
-  apiOrigin: string;
   sessionsFile: string;
   messagesFile: string;
   postgresContainer: string;
@@ -65,6 +64,7 @@ export type SystemMetadata = {
   sourceCommit: string;
   sourceDirty: boolean;
   recorderPid: number;
+  workerMode: "native" | "controlled";
 };
 
 /** One fresh stack per invocation; candidates are resolved to immutable image IDs first. */
@@ -125,8 +125,11 @@ export async function withSystemEnvironment(
         if (!ids) return;
         if (controlled && name.includes("worker"))
           await writeFile(join(controlDir, "stop"), "stop\n");
-        await docker(["stop", "--time", "15", name]);
-        await docker(["rm", name]);
+        try {
+          await docker(["stop", "--time", "15", name]);
+        } finally {
+          await docker(["rm", "--force", name]);
+        }
       },
     });
     remember();
@@ -351,12 +354,53 @@ export async function withSystemEnvironment(
       signal,
       () => containerExited(workerContainer),
     );
+    if (!controlled) {
+      phase = "initialize current analysis release";
+      // Migrations intentionally preserve their historical algorithm baseline.
+      // Exercise the candidate's release controller once live reader/worker
+      // capabilities are registered, before any user fixture can be created.
+      await until(
+        async () => {
+          const report = await docker(
+            [
+              "exec",
+              workerContainer,
+              "/usr/local/bin/momo-processing-worker",
+              "release-promote",
+              "--trigger",
+              "algorithm-update",
+              "--operation-key",
+              "system-e2e-bootstrap",
+              "--apply",
+            ],
+            signal,
+          );
+          return report.stdout.split("\n").some((line) => {
+            try {
+              const value: unknown = JSON.parse(line);
+              return (
+                value !== null &&
+                typeof value === "object" &&
+                "mode" in value &&
+                value.mode === "apply" &&
+                "targetCount" in value &&
+                value.targetCount === 0
+              );
+            } catch {
+              return false;
+            }
+          });
+        },
+        "current analysis release",
+        signal,
+        () => containerExited(workerContainer),
+      );
+    }
     const metadata: SystemMetadata = {
       runDir,
       controlDir,
       images,
       webOrigin,
-      apiOrigin: webOrigin,
       sessionsFile,
       messagesFile: join(recorderDir, "summit-messages.jsonl"),
       postgresContainer: postgres.getId(),
@@ -368,6 +412,7 @@ export async function withSystemEnvironment(
       sourceCommit,
       sourceDirty,
       recorderPid,
+      workerMode: controlled ? "controlled" : "native",
     };
     const metadataFile = join(runDir, "ready.json");
     await writeFile(metadataFile, JSON.stringify(metadata), { flag: "wx", mode: 0o600 });

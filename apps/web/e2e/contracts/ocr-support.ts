@@ -4,26 +4,21 @@ import { readFile, rm, writeFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { promisify } from "node:util";
 
-import type { APIRequestContext, Page } from "@playwright/test";
+import type { APIRequestContext } from "@playwright/test";
 import { z } from "zod";
 
-import type { components } from "../src/shared/api/generated";
-import { seedMasterContext as seedMasters } from "./fixtures/records";
-import {
-  expect,
-  expectGeneratedId,
-  expectOk,
-  readJsonObject,
-  selectControlOption,
-} from "./support";
+import type { components } from "../../src/shared/api/generated";
+import { seedMasterContext as seedMasters } from "../fixtures/records";
+import { postJson } from "../support";
+import type { E2eRun } from "../support";
+import { expect, expectGeneratedId, expectOk, readJsonObject } from "../system/support";
+
 export { seedMasters };
-import type { E2eRun } from "./support";
 
 type SubmissionRequest = components["schemas"]["PutOcrSubmissionRequest"];
 export type Submission = components["schemas"]["OcrSubmissionResponse"];
 export type Screen = "total_assets" | "revenue" | "incident_log";
 export const screens: Screen[] = ["total_assets", "revenue", "incident_log"];
-export const headers = { "X-Momo-Account-Id": "account_ponta", "X-CSRF-Token": "dev" };
 export type CapturedSubmission = { id: string; draftId: string; request: SubmissionRequest };
 type Message = { body: { content: string; nonce: string; allowedMentions: { parse: string[] } } };
 const runtimeSchema = z.object({
@@ -50,8 +45,8 @@ const notificationSettingsSchema = z.object({
 const execute = promisify(execFile);
 
 export async function runtime(): Promise<Runtime> {
-  const path = process.env["MOM24_E2E_METADATA"];
-  if (!path) throw new Error("Use the isolated OCR notification runner.");
+  const path = process.env["MOMO_E2E_METADATA"];
+  if (!path) throw new Error("Use the isolated system runner.");
   const parsed = runtimeSchema.safeParse(JSON.parse(await readFile(path, "utf8")));
   if (!parsed.success) throw new Error("Invalid isolated OCR E2E metadata.");
   const result = parsed.data;
@@ -97,7 +92,7 @@ export async function waitForStarted(screen: Screen) {
     .not.toBe("");
 }
 export async function submission(request: APIRequestContext, id: string): Promise<Submission> {
-  const response = await request.get(`/api/ocr-submissions/${id}`, { headers });
+  const response = await request.get(`/api/ocr-submissions/${id}`);
   await expectOk(response, "read submission");
   return response.json() as Promise<Submission>;
 }
@@ -168,7 +163,6 @@ export async function delivered(request: APIRequestContext, operation: CapturedS
     rendererVersion: 2,
     partCount: 1,
   });
-  await waitForRecheck();
   const recorded = await messages(operation.id);
   expect(recorded).toHaveLength(1);
   const first = recorded[0];
@@ -178,7 +172,8 @@ export async function delivered(request: APIRequestContext, operation: CapturedS
   return first.body.content;
 }
 export async function enableOcrNotifications(request: APIRequestContext) {
-  const response = await request.get("/api/admin/notification-settings", { headers });
+  const headers = await mutationHeaders(request);
+  const response = await request.get("/api/admin/notification-settings");
   await expectOk(response, "read notification settings");
   const current = notificationSettingsSchema.parse(await response.json());
   await expectOk(
@@ -196,96 +191,100 @@ export async function enableOcrNotifications(request: APIRequestContext) {
   );
 }
 
-export async function prepareRead(
-  page: Page,
-  masters: Awaited<ReturnType<typeof seedMasters>>,
-  count: number,
-) {
-  await page.goto("/ocr/new");
-  await selectControlOption(
-    page,
-    page.getByRole("combobox", { name: /^作品/u }),
-    masters.gameTitleId,
-  );
-  await selectControlOption(
-    page,
-    page.getByRole("combobox", { name: /^シーズン/u }),
-    masters.seasonMasterId,
-  );
-  await selectControlOption(
-    page,
-    page.getByRole("combobox", { name: /^マップ/u }),
-    masters.mapMasterId,
-  );
-  const { images } = await runtime();
-  for (const screen of screens.slice(0, count))
-    await page.getByLabel("OCRの画像をアップロード").setInputFiles(images[screen].path);
-}
-export async function startRead(
-  page: Page,
+/** Build admissions through the HTTP API; browser work belongs to recovery specs. */
+export async function createRead(
+  request: APIRequestContext,
   run: E2eRun,
-  count: number,
+  masters: Awaited<ReturnType<typeof seedMasters>>,
+  members: Screen[],
 ): Promise<CapturedSubmission> {
-  await page.getByRole("button", { name: `${count}件で読み取りを開始` }).click();
-  const response = page.waitForResponse(
-    (value) => value.url().includes("/api/ocr-submissions/") && value.request().method() === "PUT",
-  );
-  await page
-    .getByRole("dialog", { name: "読み取りを開始しますか？" })
-    .getByRole("button", { name: `${count}件で読み取りを開始` })
-    .click();
-  const result = await response;
-  await expectOk(result, "create submission");
-  const body = await readJsonObject(result);
-  const draftId = expectGeneratedId(body["matchDraftId"], "OCR match draft ID");
-  const id = expectGeneratedId(body["submissionId"], "OCR submission ID");
+  const created = await postJson(request, run, "/api/match-drafts", {
+    gameTitleId: masters.gameTitleId,
+    mapMasterId: masters.mapMasterId,
+    seasonMasterId: masters.seasonMasterId,
+    ownerMemberId: "member_ponta",
+    playedAt: "2026-01-01T00:00:00.000Z",
+    status: "draft_ready",
+  } satisfies components["schemas"]["CreateMatchDraftRequest"]);
+  const draftId = expectGeneratedId(created["matchDraftId"], "contract OCR draft");
   run.trackDraft(draftId);
-  return {
-    id,
-    draftId,
-    request: result.request().postDataJSON() as SubmissionRequest,
-  };
+  return admitAndUpload(
+    request,
+    run,
+    {
+      matchDraftId: draftId,
+      ocrHints: {
+        gameTitle: masters.gameTitleName,
+        layoutFamily: "momotetsu_2",
+        knownPlayerAliases: [],
+        computerPlayerAliases: [],
+      },
+    },
+    members,
+  );
 }
+
 export async function reread(
   request: APIRequestContext,
   previous: CapturedSubmission,
   run: E2eRun,
 ): Promise<CapturedSubmission> {
+  return admitAndUpload(request, run, previous.request, ["total_assets"]);
+}
+
+async function admitAndUpload(
+  request: APIRequestContext,
+  run: E2eRun,
+  previousRequest: SubmissionRequest,
+  screenTypes: Screen[],
+): Promise<CapturedSubmission> {
+  const headers = await mutationHeaders(request);
   const id = randomUUID();
-  const key = run.nextIdempotencyKey("reread");
-  const image = (await runtime()).images.total_assets;
+  const { images } = await runtime();
   const body: SubmissionRequest = {
-    ...previous.request,
-    members: [
-      {
-        screenType: "total_assets",
-        uploadIdempotencyKey: key,
-        imageSha256: image.sha256,
-        imageByteLength: image.size,
-      },
-    ],
+    ...previousRequest,
+    members: screenTypes.map((screen) => ({
+      screenType: screen,
+      uploadIdempotencyKey: run.nextIdempotencyKey(`ocr-${screen}`),
+      imageSha256: images[screen].sha256,
+      imageByteLength: images[screen].size,
+    })),
   };
   await expectOk(
     await request.put(`/api/ocr-submissions/${id}`, { headers, data: body }),
-    "new read on same draft",
+    "admit OCR operation",
   );
-  const uploaded = await request.post("/api/uploads/images", {
-    headers: { ...headers, "Idempotency-Key": key },
-    multipart: {
-      file: { name: "total_assets.png", mimeType: "image/png", buffer: await readFile(image.path) },
-    },
-  });
-  await expectOk(uploaded, "upload reread image");
-  const imageId = expectGeneratedId(
-    (await readJsonObject(uploaded))["imageId"],
-    "uploaded image ID",
-  );
-  await expectOk(
-    await request.post("/api/ocr-jobs", {
-      headers: { ...headers, "Idempotency-Key": key },
-      data: { imageId, submissionId: id, requestedScreenType: "total_assets" },
-    }),
-    "create reread job",
-  );
-  return { id, draftId: previous.draftId, request: body };
+  for (const member of body.members ?? []) {
+    const screen = screens.find((value) => value === member.screenType);
+    if (!screen) throw new Error("Unexpected owned OCR screen");
+    const image = images[screen];
+    const memberHeaders = { ...headers, "Idempotency-Key": member.uploadIdempotencyKey };
+    const uploaded = await request.post("/api/uploads/images", {
+      headers: memberHeaders,
+      multipart: {
+        file: { name: `${screen}.png`, mimeType: "image/png", buffer: await readFile(image.path) },
+      },
+    });
+    await expectOk(uploaded, "upload contract image");
+    const imageId = expectGeneratedId(
+      (await readJsonObject(uploaded))["imageId"],
+      "uploaded image ID",
+    );
+    await expectOk(
+      await request.post("/api/ocr-jobs", {
+        headers: memberHeaders,
+        data: { imageId, submissionId: id, requestedScreenType: screen },
+      }),
+      "create contract OCR job",
+    );
+  }
+  return { id, draftId: previousRequest.matchDraftId, request: body };
+}
+
+async function mutationHeaders(request: APIRequestContext): Promise<Record<string, string>> {
+  const response = await request.get("/api/auth/me");
+  await expectOk(response, "read mutation session");
+  const body = await readJsonObject(response);
+  if (typeof body["csrfToken"] !== "string") throw new Error("Missing session mutation token");
+  return { "X-CSRF-Token": body["csrfToken"] };
 }

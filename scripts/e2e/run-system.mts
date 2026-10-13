@@ -24,33 +24,29 @@ try {
       });
       return;
     }
-    const configs = contracts
-      ? ["playwright.contracts.config.ts"]
+    const config = contracts
+      ? "playwright.contracts.config.ts"
       : controlled
-        ? ["playwright.recovery.config.ts", "playwright.contracts.config.ts"]
-        : ["playwright.system.config.ts"];
-    for (const config of configs) {
-      await runPlaywrightCommand(["--config", config, ...args], {
-        cwd: fileURLToPath(new URL("../../apps/web/", import.meta.url)),
-        env: childEnvironment({
-          DOCKER_HOST: process.env["DOCKER_HOST"],
-          DOCKER_CONTEXT: process.env["DOCKER_CONTEXT"],
-          DOCKER_CERT_PATH: process.env["DOCKER_CERT_PATH"],
-          DOCKER_CONFIG: process.env["DOCKER_CONFIG"],
-          DOCKER_TLS_VERIFY: process.env["DOCKER_TLS_VERIFY"],
-          DOCKER_API_VERSION: process.env["DOCKER_API_VERSION"],
-          MOMO_E2E_METADATA: metadataFile,
-          PLAYWRIGHT_BASE_URL: metadata.webOrigin,
-          PLAYWRIGHT_SKIP_WEB_SERVER: "1",
-        }),
-        label: controlled ? "Recovery and integration contracts" : "System E2E",
-        signal,
-      });
-    }
+        ? "playwright.recovery.config.ts"
+        : "playwright.system.config.ts";
+    await runPlaywrightCommand(["--config", config, ...args], {
+      cwd: fileURLToPath(new URL("../../apps/web/", import.meta.url)),
+      env: childEnvironment({
+        DOCKER_HOST: process.env["DOCKER_HOST"],
+        DOCKER_CONTEXT: process.env["DOCKER_CONTEXT"],
+        DOCKER_CERT_PATH: process.env["DOCKER_CERT_PATH"],
+        DOCKER_CONFIG: process.env["DOCKER_CONFIG"],
+        DOCKER_TLS_VERIFY: process.env["DOCKER_TLS_VERIFY"],
+        DOCKER_API_VERSION: process.env["DOCKER_API_VERSION"],
+        MOMO_E2E_METADATA: metadataFile,
+        PLAYWRIGHT_BASE_URL: metadata.webOrigin,
+      }),
+      label: controlled ? "Recovery and integration contracts" : "System E2E",
+      signal,
+    });
   });
 } catch (error) {
-  if (!signal.aborted) {
-    console.error(error instanceof Error ? error.message : "System E2E failed.");
-    process.exitCode = 1;
-  }
+  // The environment handles interruption; a remaining error can be a cleanup failure.
+  console.error(error instanceof Error ? error.message : "System E2E failed.");
+  if (!signal.aborted) process.exitCode = 1;
 }

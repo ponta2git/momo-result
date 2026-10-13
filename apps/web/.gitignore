@@ -10,5 +10,6 @@ playwright-contracts-report/
 test-results/
 test-results-ocr/
 test-results-system/
+test-results-ui/
 test-results-recovery/
 test-results-contracts/

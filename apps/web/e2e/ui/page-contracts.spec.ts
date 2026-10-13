@@ -94,3 +94,28 @@ test("asks before discarding an OCR image and retains it when navigation is canc
   await confirmation.getByRole("button", { name: "破棄して移動" }).click();
   await expect(page.getByRole("region", { name: "試合一覧", exact: true })).toBeVisible();
 });
+
+// Review warning decisions belong to component tests. At mobile width, the
+// browser must also reveal and scroll the target editor into the usable viewport.
+test("reveals each review warning's editor and scrolls keyboard focus into view on mobile", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/review/dev-sample?sample=1");
+  const review = page.getByLabel("OCRの確認項目");
+  const member = page.getByRole("combobox", { name: /^(?:あかねまみ )?メンバー$/u });
+  const rank = page.getByLabel("おーたか 順位", { exact: true });
+  await review.getByRole("button", { name: "次の要確認セルへ" }).click();
+  await expect(member).toBeFocused();
+  await expect(member).toBeInViewport();
+  await review.getByRole("button", { name: "次の要確認セルへ" }).click();
+  await expect(rank).toBeFocused();
+  await expect(rank).toBeInViewport();
+  await review.getByRole("button", { name: "前の要確認セルへ" }).click();
+  await expect(member).toBeFocused();
+  await expect(member).toBeInViewport();
+  await review.getByRole("button", { name: "この値で確認済み" }).click();
+  await review.getByRole("button", { name: "次の要確認セルへ" }).click();
+  await expect(rank).toBeFocused();
+  await expect(rank).toBeInViewport();
+});

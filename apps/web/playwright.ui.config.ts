@@ -4,6 +4,7 @@ const baseURL = "http://127.0.0.1:5174";
 
 export default defineConfig({
   testDir: "./e2e/ui",
+  outputDir: "test-results-ui",
   fullyParallel: true,
   retries: 0,
   ...(process.env["CI"] ? { workers: 2 } : {}),

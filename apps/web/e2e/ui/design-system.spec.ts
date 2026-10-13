@@ -1,10 +1,10 @@
-import type { components } from "../src/shared/api/generated";
-import { expect, installE2eAuthHeaders, test } from "./support";
+import type { components } from "../../src/shared/api/generated";
+import { expect, installUiAuth, test } from "./support";
 
 test("moves skip-link focus into the ready page and resumes keyboard navigation there", async ({
   page,
 }) => {
-  await installE2eAuthHeaders(page);
+  await installUiAuth(page);
   await page.goto("/admin/masters?tab=accounts");
   await expect(page.getByRole("heading", { name: "ログインと権限" })).toBeVisible();
 
@@ -21,7 +21,7 @@ test("moves skip-link focus into the ready page and resumes keyboard navigation 
 test("exposes overflowing account data to the keyboard only while it needs scrolling", async ({
   page,
 }) => {
-  await installE2eAuthHeaders(page);
+  await installUiAuth(page);
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/admin/masters?tab=accounts");
 

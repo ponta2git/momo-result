@@ -1,12 +1,12 @@
 import type { Page } from "@playwright/test";
 
 import { installRadarResponses } from "./fixtures/radar";
-import { expect, installE2eAuthHeaders, selectControlOption, test as base } from "./support";
+import { expect, installUiAuth, selectControlOption, test as base } from "./support";
 
 type RadarContext = Awaited<ReturnType<typeof installRadarResponses>>;
 const test = base.extend<{ radar: RadarContext }>({
   radar: async ({ page }, provide) => {
-    await installE2eAuthHeaders(page);
+    await installUiAuth(page);
     const radar = await installRadarResponses(page);
     try {
       await provide(radar);

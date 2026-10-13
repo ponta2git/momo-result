@@ -1,12 +1,12 @@
 import type { Route } from "@playwright/test";
 
-import { createDeferred } from "../src/test/deferred";
+import { createDeferred } from "../../src/test/deferred";
 import { installAdjacentNavigationResponses } from "./fixtures/adjacentNavigation";
-import { seedUiContext } from "./fixtures/records";
-import { selectControlOption, expect, installE2eAuthHeaders, test } from "./support";
+import { uiContext } from "./fixtures/records";
+import { selectControlOption, expect, installUiAuth, test } from "./support";
 
 test.beforeEach(async ({ page }) => {
-  await installE2eAuthHeaders(page);
+  await installUiAuth(page);
 });
 
 for (const detail of [
@@ -80,9 +80,7 @@ test("keeps an uncommitted select choice when keyboard focus moves to the next d
 });
 
 test("preserves keyboard filtering and recovers the match list after a failed request", async ({
-  e2eRun,
   page,
-  request,
 }) => {
   const {
     heldEventId,
@@ -92,7 +90,7 @@ test("preserves keyboard filtering and recovers the match list after a failed re
     seasonMasterId,
     seasonName,
     secondaryGameTitleId,
-  } = await seedUiContext(request, e2eRun);
+  } = uiContext;
 
   await test.step("keep the complete match filter contract at mobile and desktop widths", async () => {
     await page.setViewportSize({ height: 844, width: 320 });
@@ -142,12 +140,12 @@ test("preserves keyboard filtering and recovers the match list after a failed re
       await expect(sort).toBeFocused();
     } finally {
       gate.resolve();
-      await page.unroute(pattern, holdCondition);
     }
     await expect(list.locator("[inert]")).toHaveCount(0);
     await expect(list.getByRole("table").locator("tbody tr")).toHaveCount(2);
     await expect(sort).toBeFocused();
     await expect(status).toHaveText("確定済み");
+    await page.unroute(pattern, holdCondition);
   });
 
   await test.step("distinguish update from retry and preserve visible rows while updating", async () => {
@@ -193,9 +191,9 @@ test("preserves keyboard filtering and recovers the match list after a failed re
       await expect(page.getByRole("button", { name: "一覧を再読み込み" })).toHaveCount(0);
     } finally {
       listRequestGate.resolve();
-      await page.unroute(listPattern, holdListRequest);
     }
     await expect(page.getByRole("button", { name: "最新情報に更新" })).toBeEnabled();
+    await page.unroute(listPattern, holdListRequest);
 
     let retryAllowed = false;
     const failUncachedScope = async (route: Route) => {
@@ -238,14 +236,10 @@ test("preserves keyboard filtering and recovers the match list after a failed re
   });
 });
 
-test("changes an export choice by keyboard and restores focus", async ({
-  e2eRun,
-  page,
-  request,
-}) => {
-  const { heldEventId, matchIds } = await seedUiContext(request, e2eRun);
-  // Keep the keyboard candidate order owned by this test, even when other cases seed matches.
-  // The API still supplies real candidate records; only its directory scope is controlled.
+test("changes an export choice by keyboard and restores focus", async ({ page }) => {
+  const { heldEventId, matchIds } = uiContext;
+  // Keep the keyboard candidate order explicit for this browser scenario.
+  // Candidate records and their directory scope are controlled.
   await page.route(/\/api\/matches(?:\?.*)?$/u, async (route) => {
     const url = new URL(route.request().url());
     url.searchParams.set("heldEventId", heldEventId);
@@ -254,7 +248,7 @@ test("changes an export choice by keyboard and restores focus", async ({
 
   await test.step("keep export choices native and restore focus after keyboard selection", async () => {
     const selectedMatchId = matchIds[0];
-    if (!selectedMatchId) throw new Error("export conformance requires a seeded match");
+    if (!selectedMatchId) throw new Error("export conformance requires a match fixture");
 
     await page.setViewportSize({ height: 812, width: 375 });
     await page.goto(`/exports?matchId=${encodeURIComponent(selectedMatchId)}`);

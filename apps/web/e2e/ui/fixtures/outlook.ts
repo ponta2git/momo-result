@@ -6,15 +6,15 @@ import {
   makeSeriesAnalysisOptions,
   makeSeriesAnalysisScopeStatus,
   makeSeriesAnalysisStatus,
-} from "../../src/test/msw/seriesAnalysisFixtures";
+} from "../../../src/test/msw/seriesAnalysisFixtures";
 import {
   makeSeriesAnalysisOutlookExamples,
   makeSeriesAnalysisOutlookSummary,
   makeSeriesAnalysisOutlookWindow,
-} from "../../src/test/msw/seriesAnalysisOutlookFixtures";
-import type { seedConfirmedContext } from "./records";
+} from "../../../src/test/msw/seriesAnalysisOutlookFixtures";
+import type { confirmedContext } from "./records";
 
-type Records = Awaited<ReturnType<typeof seedConfirmedContext>>;
+type Records = typeof confirmedContext;
 
 /** Only analysis is controlled. Authentication and the seeded match remain on the real API. */
 export async function installOutlookResponses(page: Page, records: Records) {

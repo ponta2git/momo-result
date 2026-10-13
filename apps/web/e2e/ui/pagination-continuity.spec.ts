@@ -1,8 +1,8 @@
 import type { Page } from "@playwright/test";
 
-import type { components } from "../src/shared/api/generated";
-import { createDeferred } from "../src/test/deferred";
-import { expect, installE2eAuthHeaders, test } from "./support";
+import type { components } from "../../src/shared/api/generated";
+import { createDeferred } from "../../src/test/deferred";
+import { expect, installUiAuth, test } from "./support";
 
 type Deferred = ReturnType<typeof createDeferred<void>>;
 
@@ -69,7 +69,7 @@ async function installHeldEventDirectory(page: Page, pageTwoGate: Deferred): Pro
 }
 
 test.beforeEach(async ({ page }) => {
-  await installE2eAuthHeaders(page);
+  await installUiAuth(page);
 });
 
 test("keeps held-event rows visible and blocks stale actions while the next page loads", async ({

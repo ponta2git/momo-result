@@ -1,24 +1,23 @@
 import type { Locator } from "@playwright/test";
 
 import { installOutlookResponses } from "./fixtures/outlook";
-import { seedConfirmedContext } from "./fixtures/records";
-import { expect, installE2eAuthHeaders, test as base } from "./support";
+import { confirmedContext } from "./fixtures/records";
+import { expect, installUiAuth, test as base } from "./support";
 
-type OutlookContext = Awaited<ReturnType<typeof seedConfirmedContext>> &
-  Awaited<ReturnType<typeof installOutlookResponses>>;
+type OutlookContext = typeof confirmedContext & Awaited<ReturnType<typeof installOutlookResponses>>;
 
-// Analysis uses owner-derived controlled responses; records and authentication use the API.
+// Analysis uses owner-derived controlled responses; records and authentication are controlled.
 // This covers browser integration, not calculation-worker publication.
 const test = base.extend<{ outlook: OutlookContext }>({
-  outlook: async ({ e2eRun, page, request }, provide) => {
-    await installE2eAuthHeaders(page);
-    const records = await seedConfirmedContext(request, e2eRun);
+  outlook: async ({ page }, provide) => {
+    await installUiAuth(page);
+    const records = confirmedContext;
     const responses = await installOutlookResponses(page, records);
     await provide({ ...records, ...responses });
   },
 });
 
-test("retains an edited outlook through personal review and real match-list navigation", async ({
+test("retains an edited outlook through personal review and match-list navigation", async ({
   outlook,
   page,
 }) => {

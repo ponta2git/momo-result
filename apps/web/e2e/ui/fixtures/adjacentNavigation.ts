@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 
-import type { components } from "../../src/shared/api/generated";
-import { makeSeriesAnalysisStatus } from "../../src/test/msw/seriesAnalysisFixtures";
+import type { components } from "../../../src/shared/api/generated";
+import { makeSeriesAnalysisStatus } from "../../../src/test/msw/seriesAnalysisFixtures";
 
 const heldEvents = [
   { id: "held-layout-first", heldAt: "2024-11-30T03:00:00.000Z" },

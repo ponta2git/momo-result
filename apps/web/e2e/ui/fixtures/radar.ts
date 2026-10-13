@@ -1,19 +1,19 @@
 import type { Page } from "@playwright/test";
 
-import type { SeriesPlayerRadarCommand } from "../../src/shared/api/seriesPlayerRadar";
-import type { PlayerRadarRevisionDetail } from "../../src/shared/api/seriesPlayerRadarHistory";
-import { createDeferred } from "../../src/test/deferred";
+import type { SeriesPlayerRadarCommand } from "../../../src/shared/api/seriesPlayerRadar";
+import type { PlayerRadarRevisionDetail } from "../../../src/shared/api/seriesPlayerRadarHistory";
+import { createDeferred } from "../../../src/test/deferred";
 import {
   makePlayerRadarBasis,
   makePlayerRadarOperation,
   makePlayerRadarPreview,
   makeReadyPlayerRadarState,
-} from "../../src/test/msw/playerRadarFixtures";
+} from "../../../src/test/msw/playerRadarFixtures";
 import {
   makeSeriesAnalysisAdminOverview,
   makeSeriesAnalysisOptions,
   makeSeriesAnalysisStatus,
-} from "../../src/test/msw/seriesAnalysisFixtures";
+} from "../../../src/test/msw/seriesAnalysisFixtures";
 
 /** Wire responses are controlled here; these browser tests do not validate worker scoring. */
 export async function installRadarResponses(page: Page) {

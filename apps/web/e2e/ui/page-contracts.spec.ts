@@ -3,12 +3,12 @@ import {
   makeHeldEventDetailResponse,
   makeHeldEventResponse,
   makeMatchDetail,
-} from "../src/test/factories";
-import { mswState } from "../src/test/msw/fixtures";
-import { expect, installE2eAuthHeaders, test } from "./support";
+} from "../../src/test/factories";
+import { mswState } from "../../src/test/msw/fixtures";
+import { expect, installUiAuth, test } from "./support";
 
 test.beforeEach(async ({ page }) => {
-  await installE2eAuthHeaders(page);
+  await installUiAuth(page);
 });
 
 test("announces the new page through its title and landmark without disturbing condition focus", async ({

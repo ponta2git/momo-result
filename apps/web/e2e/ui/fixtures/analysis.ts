@@ -8,13 +8,10 @@ import {
   makeSeriesAnalysisOptions,
   makeSeriesAnalysisStatus,
   makeSeriesAnalysisScopeStatus,
-} from "../../src/test/msw/seriesAnalysisFixtures";
-import type { seedConfirmedContext } from "./records";
+} from "../../../src/test/msw/seriesAnalysisFixtures";
+import type { confirmedContext } from "./records";
 
-export async function installAnalysisResponses(
-  page: Page,
-  context: Awaited<ReturnType<typeof seedConfirmedContext>>,
-) {
+export async function installAnalysisResponses(page: Page, context: typeof confirmedContext) {
   const { gameTitleId, gameTitleName, mapMasterId, matchId, seasonMasterId } = context;
   const masterIdSuffix = gameTitleId;
   const artifact = {

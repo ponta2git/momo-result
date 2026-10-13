@@ -1,17 +1,17 @@
 import type { Page } from "@playwright/test";
 
 import { installAnalysisResponses } from "./fixtures/analysis";
-import { seedConfirmedContext } from "./fixtures/records";
-import { expect, installE2eAuthHeaders, test as base } from "./support";
+import { confirmedContext } from "./fixtures/records";
+import { expect, installUiAuth, test as base } from "./support";
 
-type AnalysisContext = Awaited<ReturnType<typeof seedConfirmedContext>> &
+type AnalysisContext = typeof confirmedContext &
   Awaited<ReturnType<typeof installAnalysisResponses>>;
-// Analysis payloads are controlled; match detail links and persisted records use the real API.
+// All HTTP reads are controlled; only browser navigation, focus and rendering are exercised.
 // These tests do not validate calculation-worker output.
 const test = base.extend<{ analysis: AnalysisContext }>({
-  analysis: async ({ e2eRun, page, request }, provide) => {
-    await installE2eAuthHeaders(page);
-    const records = await seedConfirmedContext(request, e2eRun);
+  analysis: async ({ page }, provide) => {
+    await installUiAuth(page);
+    const records = confirmedContext;
     const responses = await installAnalysisResponses(page, records);
     await provide({ ...records, ...responses });
   },

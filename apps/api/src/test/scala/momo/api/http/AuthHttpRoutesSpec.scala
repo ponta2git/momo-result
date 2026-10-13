@@ -5,7 +5,7 @@ import java.time.Instant
 import scala.concurrent.duration.*
 
 import cats.effect.std.SecureRandom
-import cats.effect.{IO, Ref, Resource}
+import cats.effect.{IO, Resource}
 import cats.syntax.all.*
 import org.http4s.implicits.*
 import org.http4s.{Header, HttpApp as Http4sApp, Method, Request, ResponseCookie, Status}
@@ -38,7 +38,7 @@ import momo.api.errors.AppError
 import momo.api.http.HttpAssertions.{assertProblem, headerValue}
 import momo.api.http.modules.AuthModule
 import momo.api.repositories.SessionAccountLookup
-import momo.api.testing.SuccessfulDiscordOAuthClient
+import momo.api.testing.{RecordingDiscordOAuthClient, SuccessfulDiscordOAuthClient}
 
 final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
   private val now = Instant.parse("2026-05-14T00:00:00Z")
@@ -327,21 +327,3 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
       .getOrElse(fail("missing cleared OAuth state cookie"))
     assertEquals(cleared.content, "")
     assertEquals(cleared.maxAge, Some(0L))
-
-  private final class RecordingDiscordOAuthClient private (
-      result: Either[AppError, DiscordUser],
-      fetchCallRef: Ref[IO, Int],
-  ) extends DiscordOAuthClient[IO]:
-    def fetchCalls: IO[Int] = fetchCallRef.get
-
-    override def authorizationUrl(state: String, prompt: Option[String]): IO[String] =
-      val _ = prompt
-      IO.pure(s"https://discord.example/oauth?state=$state")
-
-    override def fetchUser(code: String): IO[Either[AppError, DiscordUser]] =
-      val _ = code
-      fetchCallRef.update(_ + 1).map(_ => result)
-
-  private object RecordingDiscordOAuthClient:
-    def create(result: Either[AppError, DiscordUser]): IO[RecordingDiscordOAuthClient] = Ref
-      .of[IO, Int](0).map(new RecordingDiscordOAuthClient(result, _))

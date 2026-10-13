@@ -148,6 +148,32 @@ fn tls_connector(ca_file: Option<&Path>) -> Result<MakeTlsConnector, PostgresErr
 }
 
 #[cfg(test)]
+pub(crate) mod test_support {
+    use std::io;
+
+    use tokio::{
+        io::{AsyncReadExt as _, AsyncWriteExt as _},
+        net::{TcpListener, TcpStream},
+    };
+
+    /// Completes startup only; each test owns its query response or deliberate silence.
+    pub(crate) async fn accept_startup(listener: &TcpListener) -> io::Result<TcpStream> {
+        let (mut socket, _) = listener.accept().await?;
+        let startup_length = socket.read_u32().await?;
+        if !(8..1024).contains(&startup_length) {
+            return Err(io::Error::other(
+                "invalid PostgreSQL test startup packet length",
+            ));
+        }
+        let length = usize::try_from(startup_length - 4).map_err(io::Error::other)?;
+        socket.read_exact(&mut vec![0; length]).await?;
+        // AuthenticationOk followed by ReadyForQuery permits normal client requests.
+        socket.write_all(b"R\0\0\0\x08\0\0\0\0Z\0\0\0\x05I").await?;
+        Ok(socket)
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use std::{
         error::Error,
@@ -231,7 +257,7 @@ mod tests {
     #[tokio::test]
     async fn cancelled_session_closes_the_socket_with_an_unanswered_query() -> Result<(), TestError>
     {
-        use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+        use tokio::io::AsyncReadExt as _;
 
         let listener = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await?;
         let configuration = format!(
@@ -239,14 +265,7 @@ mod tests {
             listener.local_addr()?.port()
         );
         let peer = async {
-            let (mut socket, _) = listener.accept().await?;
-            let startup_length = socket.read_u32().await?;
-            if !(8..1024).contains(&startup_length) {
-                return Err("invalid startup packet length".into());
-            }
-            let mut startup = vec![0; usize::try_from(startup_length - 4)?];
-            socket.read_exact(&mut startup).await?;
-            socket.write_all(b"R\0\0\0\x08\0\0\0\0Z\0\0\0\x05I").await?;
+            let mut socket = super::test_support::accept_startup(&listener).await?;
             let mut query = [0; 14];
             socket.read_exact(&mut query).await?;
             if query != *b"Q\0\0\0\rSELECT 1\0" {

@@ -17,7 +17,7 @@ export function authQueryOptions(devUser?: string) {
       const previous = client.getQueryData<AuthMeResponse | null>(queryKey);
       const current = await getAuthMe({ signal });
       if (previous?.accountId && previous.accountId !== current.accountId) {
-        await clearPrincipalClientState(client, { preserveAuthQueryKey: queryKey });
+        await clearPrincipalClientState(client, { queryKey, state: "authenticated" });
         signal.throwIfAborted();
       }
       return current;

@@ -46,7 +46,7 @@ impl SeriesAnalysisOutboxConfig {
     ///
     /// # Errors
     ///
-    /// Returns an error when the configured stream name violates the bounded driver contract.
+    /// Returns an error when the stream name or batch deadline violates the bounded driver contract.
     pub(crate) fn for_runtime(
         stream: String,
         batch_timeout: Duration,
@@ -96,8 +96,8 @@ impl SeriesAnalysisOutboxConfig {
 
 /// Series Analysis adapter that owns outbox SQL, payload fields, and Redis publication state.
 ///
-/// Construction receives already-open dependency handles so connection ownership and task
-/// supervision remain outside this domain adapter.
+/// Construction receives already-open dependency sessions; the database driver closes with this
+/// adapter, while the runtime owns setup and supervision of the coordinator and listener.
 pub(crate) struct SeriesAnalysisOutboxDriver {
     database: crate::postgres::ConnectedClient,
     redis: ConnectionManager,

@@ -245,7 +245,8 @@ describe("OcrCapturePage", () => {
     await waitFor(() => expect(draftStarted).toBe(true));
     await act(async () => {
       const clearing = clearPrincipalClientState(queryClient, {
-        preserveAuthQueryKey: authMeQueryKeyFor(testDevUserAccountId),
+        queryKey: authMeQueryKeyFor(testDevUserAccountId),
+        state: "authenticated",
       });
       draftResponse.resolve();
       await clearing;

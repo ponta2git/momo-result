@@ -67,12 +67,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
   )
 
   test("OAuthStateCodec accepts signed state before expiry and rejects tampering") {
-    val now = IO.pure(Instant.parse("2026-01-01T00:00:00Z"))
-    val codec = OAuthStateCodec[IO](
-      config.stateSigningKey.getOrElse("test-signing-key"),
-      config.stateTtl,
-      now
-    )
+    val codec = stateCodec(IO.pure(instant))
     for
       state <- codec.create(silent = true, redirectPath = None)
       valid <- codec.validate(state)
@@ -83,24 +78,14 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
   }
 
   test("OAuthStateCodec rejects expired state") {
-    val createdAt = Instant.parse("2026-01-01T00:00:00Z")
     for
-      state <- OAuthStateCodec[IO](
-        config.stateSigningKey.getOrElse("test-signing-key"),
-        config.stateTtl,
-        IO.pure(createdAt)
-      )
-        .create(silent = false, redirectPath = None)
-      valid <- OAuthStateCodec[IO](
-        config.stateSigningKey.getOrElse("test-signing-key"),
-        config.stateTtl,
-        IO.pure(createdAt.plusSeconds(301))
-      ).validate(state)
+      state <- stateCodec(IO.pure(instant)).create(silent = false, redirectPath = None)
+      valid <- stateCodec(IO.pure(instant.plusSeconds(301))).validate(state)
     yield assertEquals(valid, None)
   }
 
   test("OAuthStateCodec rejects alternate encodings of the same signed payload") {
-    val codec = OAuthStateCodec[IO]("test-signing-key", config.stateTtl, IO.pure(instant))
+    val codec = stateCodec(IO.pure(instant))
     for
       state <- codec.create(silent = false, redirectPath = None)
       separator = state.indexOf('.')
@@ -119,12 +104,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
   }
 
   test("OAuthStateCodec preserves only safe root-relative redirect paths") {
-    val now = IO.pure(Instant.parse("2026-01-01T00:00:00Z"))
-    val codec = OAuthStateCodec[IO](
-      config.stateSigningKey.getOrElse("test-signing-key"),
-      config.stateTtl,
-      now
-    )
+    val codec = stateCodec(IO.pure(instant))
     for
       state <- codec.create(silent = true, redirectPath = Some("/exports?format=tsv#latest"))
       valid <- codec.validate(state)
@@ -139,7 +119,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
   }
 
   test("OAuthStateCodec bounds redirect UTF-8 bytes so issued state remains a usable cookie") {
-    val codec = OAuthStateCodec[IO]("test-signing-key", config.stateTtl, IO.pure(instant))
+    val codec = stateCodec(IO.pure(instant))
     val boundaryPath = "/" + ("あ" * 341)
     for
       state <- codec.create(silent = false, redirectPath = Some(boundaryPath))
@@ -224,7 +204,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
           val _ = (stateHash, expiresAt)
           reservations.update(_ + 1).as(true)
       sessions = sessionService(repo, accounts, IO.pure(instant))
-      codec = OAuthStateCodec[IO]("test-signing-key", config.stateTtl, IO.pure(instant))
+      codec = stateCodec(IO.pure(instant))
       service = CompleteOAuthCallback[IO](
         codec,
         CompleteOAuthLogin[IO](
@@ -261,7 +241,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
           val _ = (stateHash, expiresAt)
           IO.raiseError(new IllegalStateException("state store unavailable"))
       sessions = sessionService(repo, accounts, IO.pure(instant))
-      codec = OAuthStateCodec[IO]("test-signing-key", config.stateTtl, IO.pure(instant))
+      codec = stateCodec(IO.pure(instant))
       service = CompleteOAuthCallback[IO](
         codec,
         CompleteOAuthLogin[IO](oauth, sessions, accounts, backoff),
@@ -607,6 +587,12 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       assertEquals(authenticated.map(_.account.accountId), Right(account.id))
       assertEquals(stored.sessions.size, 1)
   }
+
+  private def stateCodec(now: IO[Instant]): OAuthStateCodec[IO] = OAuthStateCodec[IO](
+    config.stateSigningKey.getOrElse("test-signing-key"),
+    config.stateTtl,
+    now,
+  )
 
   private def sessionService(
       sessions: AppSessionsRepository[IO],

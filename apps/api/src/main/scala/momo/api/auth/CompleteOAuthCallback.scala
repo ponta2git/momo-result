@@ -39,15 +39,18 @@ final class CompleteOAuthCallback[F[_]: Sync](
       )
         .pure[F]
     case Some(stateValue) =>
-      validateState(stateValue).flatMap {
+      stateCodec.validate(stateValue).flatMap {
         case None =>
           rejected(
             "state_invalid_or_expired",
             AppError.Forbidden("OAuth state is invalid or expired.")
           ).pure[F]
-        case Some(context) => authorizeStateReplay(stateValue, context.expiresAt).flatMap {
-            case Some(rejection) => rejection.pure[F]
-            case None => decideWithValidState(input, context)
+        case Some(context) => consumeState(stateValue, context.expiresAt).flatMap {
+            case true => decideWithValidState(input, context)
+            case false => rejected(
+                "state_already_used",
+                AppError.Forbidden("OAuth state is no longer available. Start login again."),
+              ).pure[F]
           }
       }
 
@@ -56,23 +59,8 @@ final class CompleteOAuthCallback[F[_]: Sync](
       case (Some(stateValue), Some(cookieValue)) if stateValue == cookieValue => Some(stateValue)
       case _ => None
 
-  private def authorizeStateReplay(
-      stateValue: String,
-      expiresAt: Instant,
-  ): F[Option[OAuthCallbackDecision.Rejected]] =
-    SessionTokenHash.sha256[F](stateValue).flatMap { stateHash =>
-      stateReplayGuard.consume(stateHash, expiresAt).map {
-        case true => None
-        case false =>
-          Some(rejected(
-            "state_already_used",
-            AppError.Forbidden("OAuth state is no longer available. Start login again."),
-          ))
-      }
-    }
-
-  private def validateState(stateValue: String): F[Option[stateCodec.Payload]] =
-    stateCodec.validate(stateValue)
+  private def consumeState(stateValue: String, expiresAt: Instant): F[Boolean] =
+    SessionTokenHash.sha256[F](stateValue).flatMap(stateReplayGuard.consume(_, expiresAt))
 
   private def decideWithValidState(
       input: OAuthCallbackInput,

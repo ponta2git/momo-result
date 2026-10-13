@@ -234,7 +234,7 @@ mod tests {
     )]
     async fn stalled_listen_response_expires_and_closes_its_connection()
     -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::io::AsyncReadExt as _;
 
         let server = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
         let database_url = format!(
@@ -243,14 +243,8 @@ mod tests {
         );
         let (sink, _wake) = PostCommitSink::channel();
         let peer = async {
-            let (mut socket, _) = server.accept().await?;
-            let startup_length = socket.read_u32().await?;
-            assert!((8..1024).contains(&startup_length));
-            let mut startup = vec![0; usize::try_from(startup_length - 4)?];
-            socket.read_exact(&mut startup).await?;
-            // AuthenticationOk followed by ReadyForQuery completes normal driver startup.
-            // The peer then accepts the simple LISTEN query without ever acknowledging it.
-            socket.write_all(b"R\0\0\0\x08\0\0\0\0Z\0\0\0\x05I").await?;
+            let mut socket = postgres::test_support::accept_startup(&server).await?;
+            // Accept the simple LISTEN query without ever acknowledging it.
             assert_eq!(socket.read_u8().await?, b'Q');
             let query_length = socket.read_u32().await?;
             assert!((5..1024).contains(&query_length));

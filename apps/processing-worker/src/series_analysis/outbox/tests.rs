@@ -395,7 +395,7 @@ async fn assert_stalled_publish_defers_the_remaining_batch(
 async fn assert_silent_postgres_expires_and_closes_its_connection(
     driver: &SeriesAnalysisOutboxDriver,
 ) -> SmokeResult {
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::io::AsyncReadExt as _;
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
     let database_url = format!(
@@ -403,12 +403,7 @@ async fn assert_silent_postgres_expires_and_closes_its_connection(
         listener.local_addr()?.port()
     );
     let peer = async {
-        let (mut socket, _) = listener.accept().await?;
-        let startup_length = socket.read_u32().await?;
-        assert!((8..1024).contains(&startup_length));
-        let mut startup = vec![0; usize::try_from(startup_length - 4)?];
-        socket.read_exact(&mut startup).await?;
-        socket.write_all(b"R\0\0\0\x08\0\0\0\0Z\0\0\0\x05I").await?;
+        let mut socket = crate::postgres::test_support::accept_startup(&listener).await?;
         // Accept the actual outbox query, but never answer it. The acknowledged socket does
         // not hit TCP_USER_TIMEOUT, and there is no server statement timeout to rely upon.
         assert_eq!(socket.read_u8().await?, b'P');
@@ -431,9 +426,7 @@ async fn assert_silent_postgres_expires_and_closes_its_connection(
         let (_sink, wake) = crate::outbox::PostCommitSink::channel();
         let (_shutdown_sender, shutdown) = tokio::sync::watch::channel(false);
         Ok::<_, Box<dyn Error + Send + Sync>>(
-            crate::outbox::coordinator::run(stalled, wake, shutdown)
-                .await
-                .map_err(runtime::RuntimeError::Coordinator),
+            crate::outbox::coordinator::run(stalled, wake, shutdown).await,
         )
     };
     let (result, peer) = Box::pin(tokio::time::timeout(Duration::from_secs(10), async {
@@ -443,10 +436,8 @@ async fn assert_silent_postgres_expires_and_closes_its_connection(
     peer?;
     assert!(matches!(
         result?,
-        Err(runtime::RuntimeError::Coordinator(
-            crate::outbox::coordinator::CoordinatorError::Driver(
-                SeriesAnalysisOutboxError::BatchTimeout
-            )
+        Err(crate::outbox::coordinator::CoordinatorError::Driver(
+            SeriesAnalysisOutboxError::BatchTimeout
         ))
     ));
     Ok(())

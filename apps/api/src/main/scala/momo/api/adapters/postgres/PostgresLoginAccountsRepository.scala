@@ -134,6 +134,8 @@ object PostgresLoginAccounts:
 end PostgresLoginAccounts
 
 object PostgresLoginAccountAdministration:
+  // Acquire in a separate statement before account reads: waiting login and administration
+  // commands must use a fresh READ COMMITTED snapshot after the preceding command commits.
   private val lockLifecycle =
     sql"SELECT pg_advisory_xact_lock(hashtext('momo:login_accounts:admin_guard'))".query[
       Unit
@@ -155,8 +157,6 @@ object PostgresLoginAccountAdministration:
       data: UpdateLoginAccountData,
   ): ConnectionIO[LoginAccountAdministrationUpdateResult] =
     for
-      // Acquire before reading either the account or the administrator count: a waiting command
-      // must use a fresh READ COMMITTED snapshot when deciding updates and session revocation.
       _ <- lockLifecycle
       existing <- PostgresLoginAccounts.alg.find(id)
       result <- existing match

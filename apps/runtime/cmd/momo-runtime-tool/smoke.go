@@ -119,7 +119,7 @@ func runEdgeSmoke(ctx context.Context, host string, stdout io.Writer, stderr io.
 }
 
 func probeLocalHTTP(ctx context.Context, host string, originToken string) string {
-	client := &http.Client{Timeout: localHTTPTimeout, CheckRedirect: rejectProbeRedirect}
+	client := newProbeHTTPClient(localHTTPTimeout, nil)
 	healthRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:8080/healthz", nil)
 	if err != nil {
 		return "HealthContractError"
@@ -164,7 +164,7 @@ func probePublicEdge(ctx context.Context, host string) error {
 	}
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("User-Agent", "momo-result-release-probe/1")
-	response, err := (&http.Client{Timeout: edgeHTTPTimeout, CheckRedirect: rejectProbeRedirect}).Do(request)
+	response, err := newProbeHTTPClient(edgeHTTPTimeout, nil).Do(request)
 	if err != nil {
 		return err
 	}
@@ -187,7 +187,7 @@ func probePublicListenerH2C(ctx context.Context, host string, originToken string
 	protocols.SetUnencryptedHTTP2(true)
 	transport := &http.Transport{Protocols: protocols}
 	defer transport.CloseIdleConnections()
-	client := &http.Client{Timeout: localHTTPTimeout, Transport: transport, CheckRedirect: rejectProbeRedirect}
+	client := newProbeHTTPClient(localHTTPTimeout, transport)
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:8080/healthz", nil)
 	if err != nil {
 		return err
@@ -215,7 +215,7 @@ func probeUpstreamConcurrency(ctx context.Context, host string, originToken stri
 		MaxIdleConnsPerHost: http2ProbeCount,
 	}
 	defer transport.CloseIdleConnections()
-	client := &http.Client{Timeout: localHTTPTimeout, Transport: transport, CheckRedirect: rejectProbeRedirect}
+	client := newProbeHTTPClient(localHTTPTimeout, transport)
 
 	if _, err := requestHTTP2Probe(ctx, client, host, originToken); err != nil {
 		return err
@@ -309,8 +309,14 @@ func decodeValidHealthPayload(reader io.Reader) bool {
 }
 
 // A probe verifies exactly its target and must never forward origin credentials.
-func rejectProbeRedirect(_ *http.Request, _ []*http.Request) error {
-	return http.ErrUseLastResponse
+func newProbeHTTPClient(timeout time.Duration, transport http.RoundTripper) *http.Client {
+	return &http.Client{
+		Timeout:   timeout,
+		Transport: transport,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 }
 
 func probeDatabase(ctx context.Context, databaseURL string) error {

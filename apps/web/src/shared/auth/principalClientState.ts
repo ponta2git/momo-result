@@ -23,27 +23,25 @@ function clearPrincipalSessionStorage(): void {
 
 export async function clearPrincipalClientState(
   queryClient: QueryClient,
-  options: { loggedOutAuthQueryKey?: QueryKey; preserveAuthQueryKey?: QueryKey } = {},
+  retainedAuth?: { queryKey: QueryKey; state: "authenticated" | "logged-out" },
 ): Promise<void> {
   clearPrincipalRequestScope(queryClient);
   // A newly confirmed account already owns its auth request and CSRF token.
   // Logout and the development picker instead discard the entire previous session.
-  if (!options.preserveAuthQueryKey) clearCsrfToken();
+  if (retainedAuth?.state !== "authenticated") clearCsrfToken();
   clearAccountOperationNotice();
   momoToastManager.close();
   clearPrincipalSessionStorage();
   await queryClient.cancelQueries({
     predicate: (query) =>
-      !options.preserveAuthQueryKey ||
-      !isSameQueryKey(query.queryKey, options.preserveAuthQueryKey),
+      retainedAuth?.state !== "authenticated" ||
+      !isSameQueryKey(query.queryKey, retainedAuth.queryKey),
   });
 
-  const loggedOutAuthQueryKey = options.loggedOutAuthQueryKey;
-  if (loggedOutAuthQueryKey) {
-    queryClient.setQueryData(loggedOutAuthQueryKey, null);
+  if (retainedAuth?.state === "logged-out") {
+    queryClient.setQueryData(retainedAuth.queryKey, null);
   }
-  const preservedKey = options.preserveAuthQueryKey ?? loggedOutAuthQueryKey;
   queryClient.removeQueries({
-    predicate: (query) => !preservedKey || !isSameQueryKey(query.queryKey, preservedKey),
+    predicate: (query) => !retainedAuth || !isSameQueryKey(query.queryKey, retainedAuth.queryKey),
   });
 }

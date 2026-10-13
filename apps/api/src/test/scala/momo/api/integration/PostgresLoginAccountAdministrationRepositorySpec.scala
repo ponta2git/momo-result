@@ -167,6 +167,7 @@ final class PostgresLoginAccountAdministrationRepositorySpec extends Integration
   test(
     "a login waiting for account disabling cannot leave a session that revives after re-enabling"
   ):
+    val reEnabledAt = now.plusSeconds(120).plusNanos(123456789)
     val program =
       for
         _ <- resetLoginAccountState
@@ -181,9 +182,9 @@ final class PostgresLoginAccountAdministrationRepositorySpec extends Integration
           administration.createIfAccountCurrent(session, before.updatedAt),
         )
         afterDisabling <- sessions.find(session.idHash)
-        _ <- administration.updateAndRevokeSessionsWhenDisabled(
+        reEnabled <- administration.updateAndRevokeSessionsWhenDisabled(
           primaryAdminId,
-          disableLogin.copy(loginEnabled = Some(true), updatedAt = now.plusSeconds(120))
+          disableLogin.copy(loginEnabled = Some(true), updatedAt = reEnabledAt)
         )
         stale <- administration.createIfAccountCurrent(session, before.updatedAt)
         afterReEnabling <- sessions.find(session.idHash)
@@ -195,6 +196,9 @@ final class PostgresLoginAccountAdministrationRepositorySpec extends Integration
         assertEquals(afterDisabling, None)
         assert(!stale)
         assertEquals(afterReEnabling, None)
+        assertEquals(reEnabled, LoginAccountAdministrationUpdateResult.Updated(current))
+        assert(!current.updatedAt.equals(reEnabledAt))
+        assertEquals(current.updatedAt.getNano % 1000, 0)
         assert(fresh)
         assertEquals(saved, Some(session))
     program.guarantee(resetLoginAccountState)

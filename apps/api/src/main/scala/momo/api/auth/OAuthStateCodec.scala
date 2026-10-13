@@ -45,27 +45,24 @@ final class OAuthStateCodec[F[_]: Sync: SecureRandom](
     else
       value.split("\\.", 2).toList match
         case payloadEncoded :: signature :: Nil if signature.length == 43 =>
-          val decoded = Base64Url.decode(payloadEncoded)
-          decoded match
+          decodeCanonicalPayload(payloadEncoded) match
             case None => Sync[F].pure(None)
-            case Some(payloadBytes) =>
-              val payload = String(payloadBytes, StandardCharsets.UTF_8)
-              // Signatures cover the decoded text. Reject alternate Base64/UTF-8 spellings so
-              // a consumed state cannot acquire another replay identity with the same signature.
-              if Base64Url.encode(payload.getBytes(StandardCharsets.UTF_8)) != payloadEncoded then
-                Sync[F].pure(None)
-              else
-                payload.split(":", 4).toList match
-                  case _ :: expires :: marker :: redirect :: Nil =>
-                    validatePayload(
-                      payload,
-                      signature,
-                      expires,
-                      marker,
-                      decodeRedirectPath(redirect)
-                    )
-                  case _ => Sync[F].pure(None)
+            case Some(payload) => payload.split(":", 4).toList match
+                case _ :: expires :: marker :: redirect :: Nil =>
+                  validatePayload(
+                    payload,
+                    signature,
+                    expires,
+                    marker,
+                    decodeRedirectPath(redirect)
+                  )
+                case _ => Sync[F].pure(None)
         case _ => Sync[F].pure(None)
+
+  private def decodeCanonicalPayload(value: String): Option[String] = Base64Url.decode(value)
+    .map(bytes => String(bytes, StandardCharsets.UTF_8))
+    // Signatures cover the decoded text. One spelling prevents an alternate replay identity.
+    .filter(payload => Base64Url.encode(payload.getBytes(StandardCharsets.UTF_8)) == value)
 
   private def validatePayload(
       payload: String,

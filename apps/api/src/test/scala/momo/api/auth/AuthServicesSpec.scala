@@ -69,7 +69,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       valid <- codec.validate(state)
       tampered <- codec.validate(state.dropRight(1) + "x")
     yield
-      assertEquals(valid, Some(codec.Payload(silent = true, redirectPath = None)))
+      assertEquals(valid, Some(codec.Payload(true, None, instant.plusSeconds(300))))
       assertEquals(tampered, None)
   }
 
@@ -90,6 +90,25 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
     yield assertEquals(valid, None)
   }
 
+  test("OAuthStateCodec rejects alternate encodings of the same signed payload") {
+    val codec = OAuthStateCodec[IO]("test-signing-key", config.stateTtl, IO.pure(instant))
+    for
+      state <- codec.create(silent = false, redirectPath = None)
+      separator = state.indexOf('.')
+      payload = state.take(separator)
+      padding = "=" * ((4 - payload.length % 4) % 4)
+      _ = assert(padding.nonEmpty)
+      _ = assertEquals(
+        Base64Url.decode(payload + padding).map(_.toList),
+        Base64Url.decode(payload).map(_.toList)
+      )
+      aliased <- codec.validate(payload + padding + state.drop(separator))
+      valid <- codec.validate(state)
+    yield
+      assertEquals(aliased, None)
+      assert(valid.nonEmpty)
+  }
+
   test("OAuthStateCodec preserves only safe root-relative redirect paths") {
     val now = IO.pure(Instant.parse("2026-01-01T00:00:00Z"))
     val codec = OAuthStateCodec[IO](
@@ -105,9 +124,9 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
     yield
       assertEquals(
         valid,
-        Some(codec.Payload(silent = true, redirectPath = Some("/exports?format=tsv#latest"))),
+        Some(codec.Payload(true, Some("/exports?format=tsv#latest"), instant.plusSeconds(300))),
       )
-      assertEquals(external, Some(codec.Payload(silent = true, redirectPath = None)))
+      assertEquals(external, Some(codec.Payload(true, None, instant.plusSeconds(300))))
   }
 
   test("OAuthStateCodec bounds redirect UTF-8 bytes so issued state remains a usable cookie") {
@@ -120,9 +139,9 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       fallback <- codec.validate(oversized)
       rejected <- codec.validate("a" * 10000)
     yield
-      assertEquals(valid, Some(codec.Payload(silent = false, redirectPath = Some(boundaryPath))))
+      assertEquals(valid, Some(codec.Payload(false, Some(boundaryPath), instant.plusSeconds(300))))
       assert(state.length < 4096)
-      assertEquals(fallback, Some(codec.Payload(silent = false, redirectPath = None)))
+      assertEquals(fallback, Some(codec.Payload(false, None, instant.plusSeconds(300))))
       assertEquals(rejected, None)
   }
 
@@ -185,15 +204,15 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       assertEquals(fetchCalls, 1)
   }
 
-  test("CompleteOAuthCallback validates signatures before reserving state replay quota") {
+  test("CompleteOAuthCallback validates signatures before consuming state") {
     for
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
       backoff <- InMemoryOAuthProviderBackoff.create[IO](1, 60.seconds, IO.pure(instant))
       reservations <- IO.ref(0)
-      limiter = new RateLimiter[IO]:
-        def allow(key: String): IO[Boolean] =
-          val _ = key
+      guard = new OAuthStateReplayGuard[IO]:
+        def consume(stateHash: String, expiresAt: Instant): IO[Boolean] =
+          val _ = (stateHash, expiresAt)
           reservations.update(_ + 1).as(true)
       sessions = SessionService[IO](repo, accounts, config.sessionTtl, IO.pure(instant))
       codec = OAuthStateCodec[IO]("test-signing-key", config.stateTtl, IO.pure(instant))
@@ -205,7 +224,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
           accounts,
           backoff
         ),
-        limiter,
+        guard,
         "/",
       )
       invalid <- service.run(OAuthCallbackInput(None, Some("forged"), Some("forged"), None))
@@ -220,6 +239,33 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       }
       assertEquals(countAfterInvalid, 0)
       assertEquals(countAfterValid, 1)
+  }
+
+  test("CompleteOAuthCallback fails closed when shared state consumption is unavailable") {
+    for
+      repo <- RecordingAppSessionsRepository.create
+      accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
+      backoff <- InMemoryOAuthProviderBackoff.create[IO](1, 60.seconds, IO.pure(instant))
+      oauth <- RecordingDiscordOAuthClient.create(Right(DiscordUser(account.discordUserId.value)))
+      guard = new OAuthStateReplayGuard[IO]:
+        def consume(stateHash: String, expiresAt: Instant): IO[Boolean] =
+          val _ = (stateHash, expiresAt)
+          IO.raiseError(new IllegalStateException("state store unavailable"))
+      sessions = SessionService[IO](repo, accounts, config.sessionTtl, IO.pure(instant))
+      codec = OAuthStateCodec[IO]("test-signing-key", config.stateTtl, IO.pure(instant))
+      service = CompleteOAuthCallback[IO](
+        codec,
+        CompleteOAuthLogin[IO](oauth, sessions, accounts, backoff),
+        guard,
+        "/",
+      )
+      state <- codec.create(silent = false, redirectPath = None)
+      result <-
+        service.run(OAuthCallbackInput(Some("code"), Some(state), Some(state), None)).attempt
+      providerCalls <- oauth.fetchCalls
+    yield
+      assert(result.isLeft)
+      assertEquals(providerCalls, 0)
   }
 
   test("JavaDiscordOAuthClient maps token exchange transport failures to dependency errors") {

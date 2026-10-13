@@ -23,7 +23,7 @@ final class OAuthStateCodec[F[_]: Sync: SecureRandom](
   private val silentMarker = "1"
   private val interactiveMarker = "0"
 
-  final case class Payload(silent: Boolean, redirectPath: Option[String])
+  final case class Payload(silent: Boolean, redirectPath: Option[String], expiresAt: Instant)
 
   def create(silent: Boolean, redirectPath: Option[String]): F[String] =
     for
@@ -50,10 +50,21 @@ final class OAuthStateCodec[F[_]: Sync: SecureRandom](
             case None => Sync[F].pure(None)
             case Some(payloadBytes) =>
               val payload = String(payloadBytes, StandardCharsets.UTF_8)
-              payload.split(":", 4).toList match
-                case _ :: expires :: marker :: redirect :: Nil =>
-                  validatePayload(payload, signature, expires, marker, decodeRedirectPath(redirect))
-                case _ => Sync[F].pure(None)
+              // Signatures cover the decoded text. Reject alternate Base64/UTF-8 spellings so
+              // a consumed state cannot acquire another replay identity with the same signature.
+              if Base64Url.encode(payload.getBytes(StandardCharsets.UTF_8)) != payloadEncoded then
+                Sync[F].pure(None)
+              else
+                payload.split(":", 4).toList match
+                  case _ :: expires :: marker :: redirect :: Nil =>
+                    validatePayload(
+                      payload,
+                      signature,
+                      expires,
+                      marker,
+                      decodeRedirectPath(redirect)
+                    )
+                  case _ => Sync[F].pure(None)
         case _ => Sync[F].pure(None)
 
   private def validatePayload(
@@ -67,12 +78,14 @@ final class OAuthStateCodec[F[_]: Sync: SecureRandom](
       signature.getBytes(StandardCharsets.UTF_8),
       expected.getBytes(StandardCharsets.UTF_8),
     )
-    val notExpired = expires.toLongOption.exists(_ > current.getEpochSecond)
+    val expiresAt = expires.toLongOption.flatMap(value =>
+      Either.catchNonFatal(Instant.ofEpochSecond(value)).toOption
+    ).filter(_.isAfter(current))
     val silent = marker match
       case `silentMarker` => Some(true)
       case `interactiveMarker` => Some(false)
       case _ => None
-    if signatureMatches && notExpired then silent.map(Payload(_, redirectPath)) else None
+    if signatureMatches then (silent, expiresAt).mapN(Payload(_, redirectPath, _)) else None
   }
 
   private def decodeRedirectPath(value: String): Option[String] = Option.when(value.nonEmpty)(value)

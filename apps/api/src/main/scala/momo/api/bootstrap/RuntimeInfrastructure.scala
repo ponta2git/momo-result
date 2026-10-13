@@ -11,13 +11,16 @@ import dev.profunktor.redis4cats.effect.Log.NoOp.*
 import momo.api.adapters.inmemory.InMemoryOcrJobQueuePublisher
 import momo.api.adapters.redis.{
   RedisOAuthProviderBackoff,
+  RedisOAuthStateReplayGuard,
   RedisOcrJobQueuePublisher,
   RedisRateLimiter
 }
 import momo.api.auth.{
   InMemoryOAuthProviderBackoff,
+  InMemoryOAuthStateReplayGuard,
   LoginRateLimiter,
   OAuthProviderBackoff,
+  OAuthStateReplayGuard,
   RateLimiter,
   ResilientRateLimiter
 }
@@ -29,7 +32,7 @@ private[bootstrap] final case class RuntimeInfrastructure[F[_]](
     queue: OcrJobQueuePublisher[F],
     queueHealth: OcrJobQueueHealthCheck[F],
     loginRateLimiter: RateLimiter[F],
-    authCallbackStateRateLimiter: RateLimiter[F],
+    oauthStateReplayGuard: OAuthStateReplayGuard[F],
     oauthProviderBackoff: OAuthProviderBackoff[F],
     rateLimiters: HttpRateLimiters[F],
 )
@@ -48,12 +51,7 @@ private[bootstrap] object RuntimeInfrastructure:
           .healthProbeFromCommands(redis.v2DeadLetterStream, commands)
         val login: RateLimiter[F] = RedisRateLimiter
           .fromCommands(commands, "login", config.auth.rateLimitPerMinute, now)
-        val authCallbackState: RateLimiter[F] = RedisRateLimiter.fromCommands(
-          commands,
-          "auth-callback-state",
-          config.auth.callbackStateRateLimitPerMinute,
-          now,
-        )
+        val stateReplayGuard = RedisOAuthStateReplayGuard(commands, now)
         val oauthProviderBackoff: OAuthProviderBackoff[F] = RedisOAuthProviderBackoff.fromCommands(
           commands,
           "discord",
@@ -114,7 +112,7 @@ private[bootstrap] object RuntimeInfrastructure:
           queue,
           queueHealth,
           login,
-          authCallbackState,
+          stateReplayGuard,
           oauthProviderBackoff,
           HttpRateLimiters(
             upload,
@@ -133,8 +131,7 @@ private[bootstrap] object RuntimeInfrastructure:
           queue <- InMemoryOcrJobQueuePublisher.create[F]
           queueHealth = OcrJobQueueHealthCheck.healthy[F]
           login <- LoginRateLimiter.create[F](config.auth.rateLimitPerMinute, now)
-          authCallbackState <- LoginRateLimiter
-            .create[F](config.auth.callbackStateRateLimitPerMinute, now)
+          stateReplayGuard <- InMemoryOAuthStateReplayGuard.create[F](now)
           oauthProviderBackoff <- InMemoryOAuthProviderBackoff
             .create[F](config.auth.providerFailureThreshold, config.auth.providerBackoff, now)
           upload <- LoginRateLimiter.create[F](config.resourceLimits.uploadRateLimitPerMinute, now)
@@ -156,7 +153,7 @@ private[bootstrap] object RuntimeInfrastructure:
           queue,
           queueHealth,
           login,
-          authCallbackState,
+          stateReplayGuard,
           oauthProviderBackoff,
           HttpRateLimiters(
             upload,

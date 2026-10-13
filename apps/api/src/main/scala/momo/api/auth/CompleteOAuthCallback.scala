@@ -1,5 +1,7 @@
 package momo.api.auth
 
+import java.time.Instant
+
 import cats.effect.Sync
 import cats.syntax.all.*
 import org.slf4j.LoggerFactory
@@ -24,7 +26,7 @@ object OAuthCallbackDecision:
 final class CompleteOAuthCallback[F[_]: Sync](
     stateCodec: OAuthStateCodec[F],
     completeOAuthLogin: CompleteOAuthLogin[F],
-    callbackStateRateLimiter: RateLimiter[F],
+    stateReplayGuard: OAuthStateReplayGuard[F],
     fallbackRedirectPath: String,
 ):
   private val logger = LoggerFactory.getLogger("momo.api.auth.CompleteOAuthCallback")
@@ -43,7 +45,7 @@ final class CompleteOAuthCallback[F[_]: Sync](
             "state_invalid_or_expired",
             AppError.Forbidden("OAuth state is invalid or expired.")
           ).pure[F]
-        case Some(context) => authorizeStateReplay(stateValue).flatMap {
+        case Some(context) => authorizeStateReplay(stateValue, context.expiresAt).flatMap {
             case Some(rejection) => rejection.pure[F]
             case None => decideWithValidState(input, context)
           }
@@ -54,14 +56,17 @@ final class CompleteOAuthCallback[F[_]: Sync](
       case (Some(stateValue), Some(cookieValue)) if stateValue == cookieValue => Some(stateValue)
       case _ => None
 
-  private def authorizeStateReplay(stateValue: String): F[Option[OAuthCallbackDecision.Rejected]] =
+  private def authorizeStateReplay(
+      stateValue: String,
+      expiresAt: Instant,
+  ): F[Option[OAuthCallbackDecision.Rejected]] =
     SessionTokenHash.sha256[F](stateValue).flatMap { stateHash =>
-      callbackStateRateLimiter.allow(stateHash).map {
+      stateReplayGuard.consume(stateHash, expiresAt).map {
         case true => None
         case false =>
           Some(rejected(
-            "callback_state_rate_limited",
-            AppError.TooManyRequests("Too many OAuth callback attempts. Start login again."),
+            "state_already_used",
+            AppError.Forbidden("OAuth state is no longer available. Start login again."),
           ))
       }
     }

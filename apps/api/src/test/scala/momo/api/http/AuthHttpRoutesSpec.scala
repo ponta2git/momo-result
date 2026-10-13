@@ -6,6 +6,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.std.SecureRandom
 import cats.effect.{IO, Ref, Resource}
+import cats.syntax.all.*
 import org.http4s.implicits.*
 import org.http4s.{Header, HttpApp as Http4sApp, Method, Request, ResponseCookie, Status}
 import org.typelevel.ci.CIString
@@ -21,6 +22,7 @@ import momo.api.auth.{
   DiscordOAuthClient,
   DiscordUser,
   InMemoryOAuthProviderBackoff,
+  InMemoryOAuthStateReplayGuard,
   LoginRateLimiter,
   OAuthStateCodec,
   SessionService
@@ -88,25 +90,35 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
     }
   }
 
-  test("OAuth callback state replay is rate limited before calling the provider again") {
-    val replayLimitedConfig = authConfig.copy(callbackStateRateLimitPerMinute = 1)
+  test("OAuth state stays consumed across minute boundaries and a new login can succeed") {
     RecordingDiscordOAuthClient.create(Right(DiscordUser(account.discordUserId.value))).flatMap {
       oauth =>
-        authAppWith(oauth, replayLimitedConfig).use { app =>
-          for
-            stateCookie <- loginStateCookie(app, replayLimitedConfig)
-            firstResponse <- app.run(callbackRequest(stateCookie))
-            secondResponse <- app.run(callbackRequest(stateCookie))
-            _ <- assertProblem(
-              secondResponse,
-              Status.TooManyRequests,
-              "TOO_MANY_REQUESTS",
-              "Too many OAuth callback attempts",
-            )
-            fetchCalls <- oauth.fetchCalls
-          yield
-            assertEquals(firstResponse.status, Status.Found)
-            assertEquals(fetchCalls, 1)
+        IO.ref(now).flatMap { clock =>
+          authAppWith(oauth, authConfig, clock.get).use { app =>
+            for
+              stateCookie <- loginStateCookie(app, authConfig)
+              firstResponse <- app.run(callbackRequest(stateCookie))
+              secondResponse <- app.run(callbackRequest(stateCookie))
+              _ <- clock.set(now.plusSeconds(61))
+              nextMinuteResponse <- app.run(callbackRequest(stateCookie))
+              _ <- List(secondResponse, nextMinuteResponse).traverse_(response =>
+                assertProblem(
+                  response,
+                  Status.Forbidden,
+                  "FORBIDDEN",
+                  "OAuth state is no longer available. Start login again.",
+                ).map(_ => assertStateCookieCleared(response, authConfig))
+              )
+              callsAfterReplays <- oauth.fetchCalls
+              newState <- loginStateCookie(app, authConfig)
+              recovered <- app.run(callbackRequest(newState))
+              fetchCalls <- oauth.fetchCalls
+            yield
+              assertEquals(firstResponse.status, Status.Found)
+              assertEquals(callsAfterReplays, 1)
+              assertEquals(recovered.status, Status.Found)
+              assertEquals(fetchCalls, 2)
+          }
         }
     }
   }
@@ -207,6 +219,13 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
                 "DEPENDENCY_FAILED",
                 "Discord OAuth provider request failed",
               )
+              replay <- app.run(callbackRequest(firstCookie))
+              _ <- assertProblem(
+                replay,
+                Status.Forbidden,
+                "FORBIDDEN",
+                "OAuth state is no longer available. Start login again.",
+              )
               secondCookie <- loginStateCookie(app, backoffConfig)
               secondResponse <- app.run(callbackRequest(secondCookie))
               _ <- assertProblem(
@@ -230,6 +249,12 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
   private def authAppWith(
       oauth: DiscordOAuthClient[IO],
       authConfigValue: AuthConfig,
+  ): Resource[IO, Http4sApp[IO]] = authAppWith(oauth, authConfigValue, IO.pure(now))
+
+  private def authAppWith(
+      oauth: DiscordOAuthClient[IO],
+      authConfigValue: AuthConfig,
+      nowF: IO[Instant],
   ): Resource[IO, Http4sApp[IO]] = tempDirectory("momo-result-auth-routes-test")
     .evalMap { imageTmpDir =>
       SecureRandom.javaSecuritySecureRandom[IO].flatMap { random =>
@@ -237,20 +262,19 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
         for
           sessionsRepo <- InMemoryAppSessionsRepository.create[IO]
           accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
-          limiter <- LoginRateLimiter.create[IO](10, IO.pure(now))
-          callbackStateLimiter <- LoginRateLimiter
-            .create[IO](authConfigValue.callbackStateRateLimitPerMinute, IO.pure(now))
+          limiter <- LoginRateLimiter.create[IO](10, nowF)
+          stateReplayGuard <- InMemoryOAuthStateReplayGuard.create[IO](nowF)
           providerBackoff <- InMemoryOAuthProviderBackoff.create[IO](
             authConfigValue.providerFailureThreshold,
             authConfigValue.providerBackoff,
-            IO.pure(now),
+            nowF,
           )
           sessions =
-            SessionService[IO](sessionsRepo, accounts, authConfigValue.sessionTtl, IO.pure(now))
+            SessionService[IO](sessionsRepo, accounts, authConfigValue.sessionTtl, nowF)
           stateCodec = OAuthStateCodec[IO](
             authConfigValue.stateSigningKey.getOrElse("test-signing-key"),
             authConfigValue.stateTtl,
-            IO.pure(now)
+            nowF
           )
         yield Http4sServerInterpreter[IO]().toRoutes(AuthModule.routes[IO](
           config = configFor(imageTmpDir, authConfigValue),
@@ -263,7 +287,7 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
           completeOAuthCallback = CompleteOAuthCallback[IO](
             stateCodec,
             CompleteOAuthLogin[IO](oauth, sessions, accounts, providerBackoff),
-            callbackStateLimiter,
+            stateReplayGuard,
             authConfigValue.callbackRedirectPath,
           ),
         )).orNotFound

@@ -79,7 +79,6 @@ final case class AuthConfig(
     sessionTtl: FiniteDuration,
     stateTtl: FiniteDuration,
     rateLimitPerMinute: Int,
-    callbackStateRateLimitPerMinute: Int,
     providerFailureThreshold: Int,
     providerBackoff: FiniteDuration,
     callbackRedirectPath: String,
@@ -93,7 +92,6 @@ final case class AuthConfig(
     s"AuthConfig(discordConfigured=$discordConfigured, credentials=[REDACTED], " +
       s"sessionCookieName=$sessionCookieName, stateCookieName=$stateCookieName, " +
       s"sessionTtl=$sessionTtl, stateTtl=$stateTtl, rateLimitPerMinute=$rateLimitPerMinute, " +
-      s"callbackStateRateLimitPerMinute=$callbackStateRateLimitPerMinute, " +
       s"providerFailureThreshold=$providerFailureThreshold, providerBackoff=$providerBackoff, " +
       s"useSecureCookies=$useSecureCookies)"
 
@@ -119,7 +117,6 @@ object AuthConfig:
     sessionTtl = 30.days,
     stateTtl = 300.seconds,
     rateLimitPerMinute = 10,
-    callbackStateRateLimitPerMinute = 3,
     providerFailureThreshold = 3,
     providerBackoff = 60.seconds,
     callbackRedirectPath = "/",

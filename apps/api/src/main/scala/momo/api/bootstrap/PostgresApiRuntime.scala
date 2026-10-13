@@ -251,7 +251,7 @@ private[bootstrap] object PostgresApiRuntime:
                 ocrAdmissionGuard = ocrAdmissionGuard,
                 oauthClient = oauthClient,
                 loginRateLimiter = infrastructure.loginRateLimiter,
-                authCallbackStateRateLimiter = infrastructure.authCallbackStateRateLimiter,
+                oauthStateReplayGuard = infrastructure.oauthStateReplayGuard,
                 oauthProviderBackoff = infrastructure.oauthProviderBackoff,
                 rateLimiters = infrastructure.rateLimiters,
               ),

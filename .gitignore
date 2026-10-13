@@ -9,6 +9,8 @@ scripts/tools/cmd/cgroup-memory-probe/out/
 **/.coverage
 **/.coverage.*
 .bloop/
+.bsp/
+_deps/
 .metals/
 .scala-build/
 .vscode/

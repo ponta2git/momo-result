@@ -1,9 +1,8 @@
-import { execFile, spawn } from "node:child_process";
+import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createServer } from "node:net";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
@@ -16,14 +15,10 @@ const REDIS_IMAGE = process.env["MOMO_E2E_REDIS_IMAGE"] ?? "redis:7-alpine";
 const POSTGRES_DB = "momo_result";
 const POSTGRES_USER = "postgres";
 const POSTGRES_PASSWORD = "postgres";
-const DEV_MEMBER_IDS = "member_ponta,member_akane_mami,member_otaka,member_eu";
-const E2E_MUTATION_RATE_LIMIT_PER_MINUTE = "240";
-const API_START_TIMEOUT_MS = 240_000;
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const webDir = resolve(scriptDir, "../..");
 const repoRoot = resolve(webDir, "../..");
-const apiDir = resolve(repoRoot, "apps/api");
 const migrationScript = resolve(repoRoot, "scripts/ci/apply-momo-db-migrations.sh");
 const migrationResolver = resolve(repoRoot, "scripts/ci/resolve-momo-db-migrations.sh");
 
@@ -154,103 +149,6 @@ export async function resolveMigrationsDir(signal?: AbortSignal) {
   return stdout.replace(/\r?\n$/u, "");
 }
 
-export function startApi({
-  apiPort,
-  databaseUrl,
-  imageTmpDir,
-  redisUrl,
-  environment = {},
-}: {
-  apiPort: number;
-  databaseUrl: string;
-  imageTmpDir: string;
-  redisUrl: string;
-  environment?: NodeJS.ProcessEnv;
-}) {
-  const logs = createRingBuffer(240);
-  const child = spawn("sbt", ["--server", "--batch", "run"], {
-    cwd: apiDir,
-    detached: process.platform !== "win32",
-    env: childEnvironment({
-      APP_ENV: "dev",
-      DATABASE_URL: databaseUrl,
-      DEV_MEMBER_IDS: process.env["DEV_MEMBER_IDS"] ?? DEV_MEMBER_IDS,
-      HTTP_HOST: "127.0.0.1",
-      HTTP_PORT: String(apiPort),
-      IMAGE_TMP_DIR: imageTmpDir,
-      MOMO_HTTP4S_PATCHED_VERSION: process.env["MOMO_HTTP4S_PATCHED_VERSION"],
-      MOMO_LOG_FORMAT: process.env["MOMO_LOG_FORMAT"] ?? "text",
-      MUTATION_RATE_LIMIT_PER_MINUTE: E2E_MUTATION_RATE_LIMIT_PER_MINUTE,
-      REDIS_URL: redisUrl,
-      ...environment,
-    }),
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-
-  const state: {
-    code: number | null | undefined;
-    signal: NodeJS.Signals | null | undefined;
-    error: Error | undefined;
-  } = {
-    code: undefined,
-    signal: undefined,
-    error: undefined,
-  };
-  child.once("error", (error) => {
-    state.error = error;
-  });
-  child.stdout?.on("data", (chunk) => logs.push(chunk));
-  child.stderr?.on("data", (chunk) => logs.push(chunk));
-  child.once("exit", (code, signal) => {
-    state.code = code;
-    state.signal = signal;
-  });
-  return Object.assign(child, { e2eLogs: logs, e2eState: state });
-}
-
-export type ApiProcess = ReturnType<typeof startApi>;
-
-export async function waitForApi(apiProcess: ApiProcess, url: string, signal: AbortSignal) {
-  const deadline = Date.now() + API_START_TIMEOUT_MS;
-
-  while (Date.now() < deadline) {
-    signal.throwIfAborted();
-    if (apiProcess.e2eState.error) {
-      throw new Error("API process could not start.", { cause: apiProcess.e2eState.error });
-    }
-    if (apiProcess.e2eState.code !== undefined || apiProcess.e2eState.signal !== undefined) {
-      throw new Error(
-        `API process exited before becoming healthy.\n${apiProcess.e2eLogs.toString()}`,
-      );
-    }
-
-    try {
-      const response = await fetch(url, {
-        signal: AbortSignal.any([signal, AbortSignal.timeout(2_000)]),
-      });
-      const health: unknown = await response.json();
-      if (
-        response.ok &&
-        health !== null &&
-        typeof health === "object" &&
-        "database" in health &&
-        health.database === "ok" &&
-        "redis" in health &&
-        health.redis === "ok"
-      ) {
-        return;
-      }
-    } catch {
-      // Retry until the API has finished compiling and binding the port.
-      signal.throwIfAborted();
-    }
-
-    await delay(1_000, undefined, { signal });
-  }
-
-  throw new Error(`API did not become healthy in time.\n${apiProcess.e2eLogs.toString()}`);
-}
-
 export function runPlaywrightCommand(args: string[], options: CommandOptions) {
   // Direct CLI ownership lets SIGINT reach Playwright's teardown without a package-manager
   // launcher forwarding the same signal a second time.
@@ -259,25 +157,6 @@ export function runPlaywrightCommand(args: string[], options: CommandOptions) {
     ...options,
     interruptSignal: "SIGINT",
   });
-}
-
-function createRingBuffer(limit: number) {
-  const lines: string[] = [];
-  return {
-    push(chunk: Buffer | string) {
-      const text = chunk.toString();
-      if (process.env["MOMO_E2E_VERBOSE"] === "1") {
-        process.stderr.write(text);
-      }
-      lines.push(...text.split(/\r?\n/u).filter(Boolean));
-      if (lines.length > limit) {
-        lines.splice(0, lines.length - limit);
-      }
-    },
-    toString() {
-      return lines.join("\n");
-    },
-  };
 }
 
 export function findFreePort() {

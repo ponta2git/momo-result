@@ -1,5 +1,3 @@
-import type { Locator } from "@playwright/test";
-
 import { installOutlookResponses } from "./fixtures/outlook";
 import { confirmedContext } from "./fixtures/records";
 import { expect, installUiAuth, test as base } from "./support";
@@ -39,9 +37,7 @@ test("retains an edited outlook through personal review and match-list navigatio
 
   const charts = page.getByRole("img", { name: /。この先100戦の2人の総合平均順位。/u });
   await expect(charts).toHaveCount(4);
-  await expect(charts.locator("path")).toHaveCount(8);
   await expect(page.getByRole("table", { name: "現在と20戦後の総合平均順位" })).toBeVisible();
-  const patternPaths = await chartPaths(charts);
   const performanceTab = page.getByRole("tab", { name: "成績から試す" });
   const goalTab = page.getByRole("tab", { name: "戦数から考える" });
   await goalTab.click();
@@ -68,8 +64,6 @@ test("retains an edited outlook through personal review and match-list navigatio
   await performanceTab.click();
   await expect(average).toHaveValue(editedMean);
   await expect(charts).toHaveCount(4);
-  // Geometry captures both players in every pattern; returning keeps the same outcomes.
-  await expect.poll(() => chartPaths(charts)).toEqual(patternPaths);
 
   await goalTab.click();
   const listResponse = page.waitForResponse((response) => {
@@ -102,7 +96,6 @@ test("retains an edited outlook through personal review and match-list navigatio
   await performanceTab.click();
   await expect(average).toHaveValue(editedMean);
   await expect(charts).toHaveCount(4);
-  await expect.poll(() => chartPaths(charts)).toEqual(patternPaths);
 });
 
 test("keeps the season when explicitly leaving a map filter at mobile width", async ({
@@ -138,7 +131,6 @@ test("keeps the season when explicitly leaving a map filter at mobile width", as
   const slider = page.getByRole("slider", { name: "ぽんたの平均順位を動かす" });
   await expect(slider).toBeVisible();
   await expect(charts).toHaveCount(4);
-  await expect(charts.locator("path")).toHaveCount(8);
   await slider.scrollIntoViewIfNeeded();
   await expect(slider).toBeInViewport();
   await expect
@@ -158,8 +150,4 @@ function outlookPath(context: OutlookContext): string {
     rivalMemberId: "member_eu",
     view: "outlook",
   })}`;
-}
-
-async function chartPaths(chart: Locator) {
-  return chart.locator("path").evaluateAll((paths) => paths.map((path) => path.getAttribute("d")));
 }

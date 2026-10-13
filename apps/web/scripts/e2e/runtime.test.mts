@@ -1,22 +1,14 @@
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 
-import {
-  applyMigrations,
-  findFreePort,
-  resolveMigrationsDir,
-  runCommand,
-  startApi,
-  stopProcessGroup,
-  waitForApi,
-} from "./runtime.mts";
+import { applyMigrations, resolveMigrationsDir, runCommand, stopProcessGroup } from "./runtime.mts";
 
 test(
   "interruption survives lazy dependency exit hooks and repeated signals until cleanup finishes",
@@ -108,84 +100,6 @@ test("a missing command and nonzero exit reject rather than hanging the runner",
     /failed fixture command exited with code 7/u,
   );
 });
-
-test("API readiness observes a spawn failure", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "momo-e2e-process-"));
-  const api = startApi({
-    apiPort: 1,
-    databaseUrl: "unused",
-    redisUrl: "unused",
-    imageTmpDir: directory,
-    environment: { PATH: directory },
-  });
-  try {
-    await assert.rejects(
-      waitForApi(api, "http://127.0.0.1:1/healthz/details", new AbortController().signal),
-      /could not start/u,
-    );
-  } finally {
-    await stopProcessGroup(api);
-    await rm(directory, { recursive: true, force: true });
-  }
-});
-
-test(
-  "API readiness uses top-level health fields and cancels an in-flight response",
-  { skip: process.platform === "win32", timeout: 10_000 },
-  async () => {
-    const directory = await mkdtemp(join(tmpdir(), "momo-e2e-health-"));
-    const requestsFile = join(directory, "requests");
-    const apiPort = await findFreePort();
-    await writeFile(
-      join(directory, "sbt"),
-      `#!${process.execPath}
-const { createServer } = require("node:http");
-const { writeFileSync } = require("node:fs");
-let requests = 0;
-createServer((request, response) => {
-  response.writeHead(200, { "Content-Type": "application/json" });
-  if (request.url === "/pending") {
-    response.write('{"database":');
-    process.stdout.write("PENDING_RESPONSE\\n");
-    return;
-  }
-  requests++;
-  writeFileSync(${JSON.stringify(requestsFile)}, String(requests));
-  response.end(requests === 1
-    ? '{"database":"unavailable","redis":"unavailable","previous":{"database":"ok","redis":"ok"}}'
-    : JSON.stringify({ status: "ok", database: "ok", redis: "ok", ocrAdmission: "disabled" }, null, 2));
-}).listen(Number(process.env.HTTP_PORT), "127.0.0.1");
-`,
-      { mode: 0o700 },
-    );
-    const api = startApi({
-      apiPort,
-      databaseUrl: "unused",
-      redisUrl: "unused",
-      imageTmpDir: directory,
-      environment: { PATH: directory },
-    });
-    const controller = new AbortController();
-    const reason = new Error("fixture interrupted during response");
-    const abortPendingResponse = (chunk: Buffer) => {
-      if (chunk.toString().includes("PENDING_RESPONSE")) controller.abort(reason);
-    };
-    try {
-      await waitForApi(api, `http://127.0.0.1:${apiPort}/healthz/details`, controller.signal);
-      assert.equal(await readFile(requestsFile, "utf8"), "2");
-      api.stdout?.on("data", abortPendingResponse);
-      await assert.rejects(
-        waitForApi(api, `http://127.0.0.1:${apiPort}/pending`, controller.signal),
-        (error: unknown) => error === reason,
-      );
-    } finally {
-      controller.abort();
-      api.stdout?.removeListener("data", abortPendingResponse);
-      await stopProcessGroup(api);
-      await rm(directory, { recursive: true, force: true });
-    }
-  },
-);
 
 // POSIX groups let a completed launcher retain ownership of its descendants.
 // Windows uses single-process termination and does not provide this group contract.

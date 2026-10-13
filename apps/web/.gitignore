@@ -3,5 +3,12 @@ coverage/
 .cache/
 playwright-report/
 playwright-report-ocr/
+playwright-ui-report/
+playwright-system-report/
+playwright-recovery-report/
+playwright-contracts-report/
 test-results/
 test-results-ocr/
+test-results-system/
+test-results-recovery/
+test-results-contracts/

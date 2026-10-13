@@ -93,11 +93,13 @@ func resolveCaddyRenderValues(config caddyRenderConfig) (caddyRenderValues, erro
 		}
 		token = developmentOriginLockToken
 	}
-	if strings.ContainsAny(token, "\r\n") {
+	// Header matchers interpret wildcards and expand placeholders even in quotes.
+	// Keep credentials literal in both Caddyfile parsing and request matching.
+	if !isVisibleASCII(token) || strings.ContainsAny(token, "*{}") {
 		return caddyRenderValues{}, errors.New("invalid origin lock token")
 	}
 	if config.AppEnv == "prod" {
-		if len(token) < minimumOriginLockTokenLength || !isVisibleASCII(token) {
+		if len(token) < minimumOriginLockTokenLength {
 			return caddyRenderValues{}, errors.New("invalid production origin lock token")
 		}
 	}

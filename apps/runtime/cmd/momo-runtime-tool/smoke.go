@@ -119,7 +119,7 @@ func runEdgeSmoke(ctx context.Context, host string, stdout io.Writer, stderr io.
 }
 
 func probeLocalHTTP(ctx context.Context, host string, originToken string) string {
-	client := &http.Client{Timeout: localHTTPTimeout}
+	client := &http.Client{Timeout: localHTTPTimeout, CheckRedirect: rejectProbeRedirect}
 	healthRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:8080/healthz", nil)
 	if err != nil {
 		return "HealthContractError"
@@ -164,7 +164,7 @@ func probePublicEdge(ctx context.Context, host string) error {
 	}
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("User-Agent", "momo-result-release-probe/1")
-	response, err := (&http.Client{Timeout: edgeHTTPTimeout}).Do(request)
+	response, err := (&http.Client{Timeout: edgeHTTPTimeout, CheckRedirect: rejectProbeRedirect}).Do(request)
 	if err != nil {
 		return err
 	}
@@ -187,7 +187,7 @@ func probePublicListenerH2C(ctx context.Context, host string, originToken string
 	protocols.SetUnencryptedHTTP2(true)
 	transport := &http.Transport{Protocols: protocols}
 	defer transport.CloseIdleConnections()
-	client := &http.Client{Timeout: localHTTPTimeout, Transport: transport}
+	client := &http.Client{Timeout: localHTTPTimeout, Transport: transport, CheckRedirect: rejectProbeRedirect}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:8080/healthz", nil)
 	if err != nil {
 		return err
@@ -215,7 +215,7 @@ func probeUpstreamConcurrency(ctx context.Context, host string, originToken stri
 		MaxIdleConnsPerHost: http2ProbeCount,
 	}
 	defer transport.CloseIdleConnections()
-	client := &http.Client{Timeout: localHTTPTimeout, Transport: transport}
+	client := &http.Client{Timeout: localHTTPTimeout, Transport: transport, CheckRedirect: rejectProbeRedirect}
 
 	if _, err := requestHTTP2Probe(ctx, client, host, originToken); err != nil {
 		return err
@@ -306,6 +306,11 @@ func requestHTTP2Probe(
 func decodeValidHealthPayload(reader io.Reader) bool {
 	var payload healthPayload
 	return decodeBoundedJSON(reader, 4096, &payload) == nil && payload.Status == "ok"
+}
+
+// A probe verifies exactly its target and must never forward origin credentials.
+func rejectProbeRedirect(_ *http.Request, _ []*http.Request) error {
+	return http.ErrUseLastResponse
 }
 
 func probeDatabase(ctx context.Context, databaseURL string) error {

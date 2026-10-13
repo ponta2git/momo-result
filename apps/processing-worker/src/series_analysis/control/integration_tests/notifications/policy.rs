@@ -68,7 +68,7 @@ pub(super) async fn cleanup(client: &Client) -> SmokeResult {
 }
 
 struct Harness {
-    client: Client,
+    client: crate::postgres::ConnectedClient,
     config: AnalysisConsumerConfig,
     received: mpsc::Receiver<Value>,
     server: tokio::task::JoinHandle<SmokeResult>,

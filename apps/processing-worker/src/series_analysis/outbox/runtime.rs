@@ -1,5 +1,7 @@
 //! Owns the outbox's connections and concurrent listener/coordinator lifetime.
 
+use std::time::Duration;
+
 use thiserror::Error;
 use tokio::sync::watch;
 
@@ -19,6 +21,7 @@ pub(crate) struct RuntimeConfig {
     redis_url: String,
     stream: String,
     worker_id: String,
+    batch_timeout: Duration,
 }
 
 impl From<&AnalysisConsumerConfig> for RuntimeConfig {
@@ -29,6 +32,7 @@ impl From<&AnalysisConsumerConfig> for RuntimeConfig {
             redis_url: config.redis_url.clone(),
             stream: config.redis_stream.clone(),
             worker_id: config.worker_id.clone(),
+            batch_timeout: config.execution_limits.finalization_timeout,
         }
     }
 }
@@ -82,8 +86,11 @@ pub(crate) async fn run(
             dependency: "redis",
             kind: "connection",
         })?;
-    let driver_config = SeriesAnalysisOutboxConfig::for_runtime(runtime_config.stream)
-        .map_err(RuntimeError::Configuration)?;
+    let driver_config = SeriesAnalysisOutboxConfig::for_runtime(
+        runtime_config.stream,
+        runtime_config.batch_timeout,
+    )
+    .map_err(RuntimeError::Configuration)?;
     let driver = SeriesAnalysisOutboxDriver::new(database, redis, driver_config);
     tracing::info!(
         event = "analysis_outbox_ready",

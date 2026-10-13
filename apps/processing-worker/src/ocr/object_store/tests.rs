@@ -194,6 +194,47 @@ fn downloaded_bytes_require_matching_hash_type_and_fullhd_dimensions() {
 }
 
 #[test]
+fn parent_header_inspection_rejects_metadata_amplification_within_the_encoded_byte_bound() {
+    use image::{ExtendedColorType, ImageEncoder, codecs::png::PngEncoder};
+
+    let mut bytes = Vec::new();
+    let mut encoder = PngEncoder::new(&mut bytes);
+    encoder
+        .set_icc_profile(vec![0; MAXIMUM_IMAGE_BYTES * 2 / 3])
+        .unwrap_or_else(|error| panic!("set compressed PNG profile: {error}"));
+    encoder
+        .set_exif_metadata(vec![0; MAXIMUM_IMAGE_BYTES / 2])
+        .unwrap_or_else(|error| panic!("set PNG metadata: {error}"));
+    encoder
+        .write_image(&[0, 0, 0], 1, 1, ExtendedColorType::Rgb8)
+        .unwrap_or_else(|error| panic!("encode PNG fixture: {error}"));
+    assert!(bytes.len() < MAXIMUM_IMAGE_BYTES);
+    assert_eq!(
+        ImageReader::with_format(Cursor::new(&bytes), ImageFormat::Png)
+            .into_dimensions()
+            .unwrap_or_else(|error| panic!("verify unrestricted fixture dimensions: {error}")),
+        (1, 1),
+        "the fixture must be a valid tiny image whose header amplifies its encoded size"
+    );
+    let digest = Sha256::digest(&bytes);
+    let sha256 = hex::encode(digest);
+    let payload = payload_with_image_claims(&payload(), bytes.len(), &sha256, "image/png");
+    let claims = SourceImageClaims::try_from_payload(&payload)
+        .unwrap_or_else(|| panic!("bounded fixture claims must be valid"));
+    let metadata = DownloadMetadata {
+        content_length: i64::try_from(bytes.len()).ok(),
+        content_type: Some(String::from("image/png")),
+        stored_sha256: Some(sha256),
+        checksum_sha256: Some(BASE64_STANDARD.encode(digest)),
+    };
+    assert_eq!(
+        verify_bytes(&claims, &metadata, bytes),
+        Err(OcrObjectStoreError::Integrity),
+        "valid byte and checksum claims must not bypass the parent's metadata budget"
+    );
+}
+
+#[test]
 fn response_metadata_must_match_every_queue_claim() {
     let payload = payload();
     let claims = SourceImageClaims::try_from_payload(&payload);

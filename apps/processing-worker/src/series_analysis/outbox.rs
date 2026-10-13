@@ -2,17 +2,14 @@
 
 pub(crate) mod runtime;
 
-use std::{
-    future::Future,
-    time::{Duration, SystemTime},
-};
+use std::time::{Duration, SystemTime};
 
 use momo_analysis_core::contract::QUEUE_SCHEMA_VERSION;
 use redis::{AsyncCommands, RedisError, aio::ConnectionManager};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 use tokio::time::Instant;
-use tokio_postgres::{Client, Row, Transaction};
+use tokio_postgres::{Row, Transaction};
 use tracing::{info, warn};
 
 use crate::outbox::coordinator::{DrainBatch, DriverFailureKind, OutboxDriver};
@@ -40,6 +37,7 @@ pub(crate) struct SeriesAnalysisOutboxConfig {
     batch_size: usize,
     claim_ttl: Duration,
     semantic_redelivery_after: Duration,
+    batch_timeout: Duration,
 }
 
 impl SeriesAnalysisOutboxConfig {
@@ -49,12 +47,16 @@ impl SeriesAnalysisOutboxConfig {
     /// # Errors
     ///
     /// Returns an error when the configured stream name violates the bounded driver contract.
-    pub(crate) fn for_runtime(stream: String) -> Result<Self, SeriesAnalysisOutboxError> {
+    pub(crate) fn for_runtime(
+        stream: String,
+        batch_timeout: Duration,
+    ) -> Result<Self, SeriesAnalysisOutboxError> {
         Self::new(
             stream,
             RUNTIME_BATCH_SIZE,
             RUNTIME_CLAIM_TTL,
             RUNTIME_SEMANTIC_REDELIVERY_AFTER,
+            batch_timeout,
         )
     }
 
@@ -69,15 +71,17 @@ impl SeriesAnalysisOutboxConfig {
         batch_size: usize,
         claim_ttl: Duration,
         semantic_redelivery_after: Duration,
+        batch_timeout: Duration,
     ) -> Result<Self, SeriesAnalysisOutboxError> {
         if stream.trim().is_empty()
             || !(1..=MAXIMUM_BATCH_SIZE).contains(&batch_size)
             || claim_ttl.is_zero()
             || semantic_redelivery_after.is_zero()
+            || batch_timeout.is_zero()
         {
             return Err(SeriesAnalysisOutboxError::InvalidConfiguration);
         }
-        for duration in [claim_ttl, semantic_redelivery_after] {
+        for duration in [claim_ttl, semantic_redelivery_after, batch_timeout] {
             postgres_duration_milliseconds(duration)?;
         }
         Ok(Self {
@@ -85,6 +89,7 @@ impl SeriesAnalysisOutboxConfig {
             batch_size,
             claim_ttl,
             semantic_redelivery_after,
+            batch_timeout,
         })
     }
 }
@@ -94,7 +99,7 @@ impl SeriesAnalysisOutboxConfig {
 /// Construction receives already-open dependency handles so connection ownership and task
 /// supervision remain outside this domain adapter.
 pub(crate) struct SeriesAnalysisOutboxDriver {
-    database: Client,
+    database: crate::postgres::ConnectedClient,
     redis: ConnectionManager,
     config: SeriesAnalysisOutboxConfig,
 }
@@ -102,7 +107,7 @@ pub(crate) struct SeriesAnalysisOutboxDriver {
 impl SeriesAnalysisOutboxDriver {
     #[must_use]
     pub(crate) const fn new(
-        database: Client,
+        database: crate::postgres::ConnectedClient,
         redis: ConnectionManager,
         config: SeriesAnalysisOutboxConfig,
     ) -> Self {
@@ -1106,8 +1111,14 @@ async fn lock_terminal_retry_boundary(
 impl OutboxDriver for SeriesAnalysisOutboxDriver {
     type Error = SeriesAnalysisOutboxError;
 
-    fn drain_batch(&mut self) -> impl Future<Output = Result<DrainBatch, Self::Error>> + Send {
-        self.drain_once()
+    async fn drain_batch(&mut self) -> Result<DrainBatch, Self::Error> {
+        // A PostgreSQL peer can acknowledge a request and never return its result. Per-SQL
+        // server timeouts and TCP_USER_TIMEOUT cannot bound that wait, nor an entire batch of
+        // independently bounded operations. The runtime drops both database halves when this
+        // structural error escapes, so an uncertain transaction is never reused for a retry.
+        tokio::time::timeout(self.config.batch_timeout, self.drain_once())
+            .await
+            .map_err(|_elapsed| SeriesAnalysisOutboxError::BatchTimeout)?
     }
 
     fn failure_kind(error: &Self::Error) -> DriverFailureKind {
@@ -1128,6 +1139,7 @@ impl OutboxDriver for SeriesAnalysisOutboxDriver {
             | SeriesAnalysisOutboxError::InvalidRecordValue
             | SeriesAnalysisOutboxError::BatchBound(_)
             | SeriesAnalysisOutboxError::DurationBound(_)
+            | SeriesAnalysisOutboxError::BatchTimeout
             | SeriesAnalysisOutboxError::TimeBound => DriverFailureKind::Structural,
         }
     }
@@ -1141,6 +1153,7 @@ impl OutboxDriver for SeriesAnalysisOutboxDriver {
             SeriesAnalysisOutboxError::InvalidRecordValue => "invalid_record_value",
             SeriesAnalysisOutboxError::BatchBound(_) => "batch_bound",
             SeriesAnalysisOutboxError::DurationBound(_) => "duration_bound",
+            SeriesAnalysisOutboxError::BatchTimeout => "batch_timeout",
             SeriesAnalysisOutboxError::TimeBound => "time_bound",
         }
     }
@@ -1162,6 +1175,8 @@ pub(crate) enum SeriesAnalysisOutboxError {
     BatchBound(#[source] std::num::TryFromIntError),
     #[error("Series Analysis outbox duration exceeds the PostgreSQL protocol bound")]
     DurationBound(#[source] std::num::TryFromIntError),
+    #[error("Series Analysis outbox batch exceeded its deadline")]
+    BatchTimeout,
     #[error("Series Analysis outbox deadline exceeds a supported clock bound")]
     TimeBound,
 }

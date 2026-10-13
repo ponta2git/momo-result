@@ -1,6 +1,7 @@
 use std::error::Error;
 
 use redis::{AsyncCommands, aio::ConnectionManager, streams::StreamRangeReply};
+use tokio_postgres::Client;
 
 use super::*;
 
@@ -185,7 +186,13 @@ fn active_job(
 #[test]
 fn configuration_rejects_unbounded_or_immediate_work() {
     assert!(matches!(
-        SeriesAnalysisOutboxConfig::new(String::new(), 0, Duration::ZERO, Duration::ZERO,),
+        SeriesAnalysisOutboxConfig::new(
+            String::new(),
+            0,
+            Duration::ZERO,
+            Duration::ZERO,
+            Duration::ZERO,
+        ),
         Err(SeriesAnalysisOutboxError::InvalidConfiguration)
     ));
     assert!(
@@ -194,16 +201,28 @@ fn configuration_rejects_unbounded_or_immediate_work() {
             10,
             Duration::from_secs(30),
             Duration::from_mins(5),
+            Duration::from_secs(30),
         )
         .is_ok()
     );
-    assert!(SeriesAnalysisOutboxConfig::for_runtime(String::from("analysis-stream")).is_ok());
+    assert!(
+        SeriesAnalysisOutboxConfig::for_runtime(
+            String::from("analysis-stream"),
+            Duration::from_secs(30),
+        )
+        .is_ok()
+    );
+    assert!(matches!(
+        SeriesAnalysisOutboxConfig::for_runtime(String::from("analysis-stream"), Duration::ZERO),
+        Err(SeriesAnalysisOutboxError::InvalidConfiguration)
+    ));
     assert!(matches!(
         SeriesAnalysisOutboxConfig::new(
             String::from("analysis-stream"),
             10,
             Duration::MAX,
             Duration::from_mins(5),
+            Duration::from_secs(30),
         ),
         Err(SeriesAnalysisOutboxError::DurationBound(_))
     ));
@@ -242,10 +261,15 @@ async fn real_postgres_and_redis_preserve_claim_and_payload_contract() -> SmokeR
         10,
         Duration::from_secs(30),
         Duration::from_mins(5),
+        Duration::from_secs(30),
     )?;
     let redis = crate::stream_connection::connect_publisher(&redis_client).await?;
     let mut driver = SeriesAnalysisOutboxDriver::new(database, redis, config);
 
+    Box::pin(assert_silent_postgres_expires_and_closes_its_connection(
+        &driver,
+    ))
+    .await?;
     let peer = crate::postgres::connect(&database_url).await?;
     for lose_fence in [false, true] {
         assert_stalled_publish_defers_the_remaining_batch(
@@ -365,6 +389,66 @@ async fn assert_stalled_publish_defers_the_remaining_batch(
     );
     let _: usize = observer.del(STREAM).await?;
     prepare_outbox(&driver.database).await?;
+    Ok(())
+}
+
+async fn assert_silent_postgres_expires_and_closes_its_connection(
+    driver: &SeriesAnalysisOutboxDriver,
+) -> SmokeResult {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+    let database_url = format!(
+        "host=127.0.0.1 port={} user=test dbname=test sslmode=disable",
+        listener.local_addr()?.port()
+    );
+    let peer = async {
+        let (mut socket, _) = listener.accept().await?;
+        let startup_length = socket.read_u32().await?;
+        assert!((8..1024).contains(&startup_length));
+        let mut startup = vec![0; usize::try_from(startup_length - 4)?];
+        socket.read_exact(&mut startup).await?;
+        socket.write_all(b"R\0\0\0\x08\0\0\0\0Z\0\0\0\x05I").await?;
+        // Accept the actual outbox query, but never answer it. The acknowledged socket does
+        // not hit TCP_USER_TIMEOUT, and there is no server statement timeout to rely upon.
+        assert_eq!(socket.read_u8().await?, b'P');
+        let query_length = socket.read_u32().await?;
+        assert!((5..4096).contains(&query_length));
+        let mut query = vec![0; usize::try_from(query_length - 4)?];
+        socket.read_exact(&mut query).await?;
+        assert!(
+            String::from_utf8_lossy(&query).contains("series_analysis_title_states"),
+            "the deadline must cover the production outbox's first database operation"
+        );
+        tokio::io::copy(&mut socket, &mut tokio::io::sink()).await?;
+        Ok::<_, Box<dyn Error + Send + Sync>>(())
+    };
+    let stalled = async {
+        let database = crate::postgres::connect(&database_url).await?;
+        let mut config = driver.config.clone();
+        config.batch_timeout = Duration::from_millis(250);
+        let stalled = SeriesAnalysisOutboxDriver::new(database, driver.redis.clone(), config);
+        let (_sink, wake) = crate::outbox::PostCommitSink::channel();
+        let (_shutdown_sender, shutdown) = tokio::sync::watch::channel(false);
+        Ok::<_, Box<dyn Error + Send + Sync>>(
+            crate::outbox::coordinator::run(stalled, wake, shutdown)
+                .await
+                .map_err(runtime::RuntimeError::Coordinator),
+        )
+    };
+    let (result, peer) = Box::pin(tokio::time::timeout(Duration::from_secs(10), async {
+        tokio::join!(stalled, peer)
+    }))
+    .await?;
+    peer?;
+    assert!(matches!(
+        result?,
+        Err(runtime::RuntimeError::Coordinator(
+            crate::outbox::coordinator::CoordinatorError::Driver(
+                SeriesAnalysisOutboxError::BatchTimeout
+            )
+        ))
+    ));
     Ok(())
 }
 

@@ -13,7 +13,11 @@ import org.typelevel.ci.CIString
 import sttp.tapir.server.http4s.Http4sServerInterpreter
 
 import momo.api.MomoCatsEffectSuite
-import momo.api.adapters.inmemory.{InMemoryAppSessionsRepository, InMemoryLoginAccountsRepository}
+import momo.api.adapters.inmemory.{
+  InMemoryAppSessionsRepository,
+  InMemoryLoginAccountAdministrationRepository,
+  InMemoryLoginAccountsRepository
+}
 import momo.api.auth.{
   AccountAccess,
   CompleteOAuthCallback,
@@ -33,6 +37,7 @@ import momo.api.domain.{AccountRole, LoginAccount}
 import momo.api.errors.AppError
 import momo.api.http.HttpAssertions.{assertProblem, headerValue}
 import momo.api.http.modules.AuthModule
+import momo.api.repositories.SessionAccountLookup
 import momo.api.testing.SuccessfulDiscordOAuthClient
 
 final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
@@ -270,7 +275,13 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
             nowF,
           )
           sessions =
-            SessionService[IO](sessionsRepo, accounts, authConfigValue.sessionTtl, nowF)
+            SessionService[IO](
+              sessionsRepo,
+              authConfigValue.sessionTtl,
+              nowF,
+              SessionAccountLookup.fromRepositories(sessionsRepo, accounts),
+              InMemoryLoginAccountAdministrationRepository(accounts, sessionsRepo)
+            )
           stateCodec = OAuthStateCodec[IO](
             authConfigValue.stateSigningKey.getOrElse("test-signing-key"),
             authConfigValue.stateTtl,

@@ -9,12 +9,18 @@ import cats.syntax.all.*
 import doobie.implicits.*
 import io.circe.Json
 
-import momo.api.adapters.postgres.{PostgresAppSessionsRepository, PostgresLoginAccountsRepository}
+import momo.api.adapters.postgres.{
+  PostgresAppSessionsRepository,
+  PostgresLoginAccountAdministrationRepository,
+  PostgresLoginAccountsRepository,
+  PostgresSessionAccountLookup
+}
 import momo.api.auth.SessionService
 import momo.api.config.{AppConfig, AppEnv}
 import momo.api.db.Database
 import momo.api.domain.ids.{AccountId, UserId}
 import momo.api.domain.{AccountRole, LoginAccount}
+import momo.api.errors.AppException
 import momo.api.repositories.CreateLoginAccountData
 
 /** Creates credentials only in the disposable database owned by the system E2E runner. */
@@ -43,9 +49,10 @@ object SessionFixture extends IOApp.Simple:
         val accounts = PostgresLoginAccountsRepository[IO](transactor)
         val sessions = SessionService[IO](
           PostgresAppSessionsRepository[IO](transactor),
-          accounts,
           config.auth.sessionTtl,
           IO.realTimeInstant,
+          PostgresSessionAccountLookup[IO](transactor),
+          PostgresLoginAccountAdministrationRepository[IO](transactor),
         )
         def seeded(id: String, role: AccountRole): IO[LoginAccount] =
           accounts.find(AccountId.unsafeFromString(id)).flatMap { account =>
@@ -82,7 +89,7 @@ object SessionFixture extends IOApp.Simple:
             "logout" -> administrator,
           )
             .traverse { (role, account) =>
-              sessions.create(account).map(created =>
+              sessions.create(account).flatMap(_.leftMap(AppException(_)).liftTo[IO]).map(created =>
                 role -> Json.obj(
                   "accountId" -> Json.fromString(account.id.value),
                   "cookieValue" -> Json.fromString(created.cookieValue),

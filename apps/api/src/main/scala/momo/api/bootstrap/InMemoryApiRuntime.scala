@@ -215,6 +215,7 @@ private[bootstrap] object InMemoryApiRuntime:
         matchConfirmation = matchConfirmation,
         appSessions = appSessions,
         sessionAccounts = sessionAccounts,
+        sessionCreation = loginAccountAdministration,
         members = members,
         loginAccounts = loginAccounts,
         loginAccountAdministration = loginAccountAdministration,

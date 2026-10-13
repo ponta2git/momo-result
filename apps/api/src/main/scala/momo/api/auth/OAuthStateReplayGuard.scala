@@ -33,5 +33,6 @@ object InMemoryOAuthStateReplayGuard:
   ): F[InMemoryOAuthStateReplayGuard[F]] =
     if maxKeys <= 0 then
       Sync[F].raiseError(new IllegalArgumentException("OAuth state capacity must be positive"))
-    else Ref.of[F, Map[String, Instant]](Map.empty)
-      .map(new InMemoryOAuthStateReplayGuard(_, now, maxKeys))
+    else
+      Ref.of[F, Map[String, Instant]](Map.empty)
+        .map(new InMemoryOAuthStateReplayGuard(_, now, maxKeys))

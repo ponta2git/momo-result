@@ -25,12 +25,21 @@ import cats.syntax.all.*
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.discord.JavaDiscordOAuthClient
-import momo.api.adapters.inmemory.InMemoryLoginAccountsRepository
+import momo.api.adapters.inmemory.{
+  InMemoryLoginAccountAdministrationRepository,
+  InMemoryLoginAccountsRepository
+}
 import momo.api.config.{AppEnv, AuthConfig}
 import momo.api.domain.ids.{AccountId, MemberId, UserId}
 import momo.api.domain.{AccountRole, LoginAccount}
 import momo.api.errors.AppError
-import momo.api.repositories.{AppSession, SessionAccountLookup}
+import momo.api.repositories.{
+  AppSession,
+  AppSessionsRepository,
+  LoginSessionCreationRepository,
+  SessionAccountLookup,
+  UpdateLoginAccountData
+}
 import momo.api.testing.{
   RecordingAppSessionsRepository,
   RecordingDiscordOAuthClient,
@@ -150,7 +159,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
       backoff <- InMemoryOAuthProviderBackoff.create[IO](1, 60.seconds, IO.pure(instant))
-      sessions = SessionService[IO](repo, accounts, config.sessionTtl, IO.pure(instant))
+      sessions = sessionService(repo, accounts, IO.pure(instant))
       service = CompleteOAuthLogin[IO](
         SuccessfulDiscordOAuthClient(account.discordUserId.value),
         sessions,
@@ -173,7 +182,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](Nil)
       backoff <- InMemoryOAuthProviderBackoff.create[IO](1, 60.seconds, IO.pure(instant))
-      sessions = SessionService[IO](repo, accounts, config.sessionTtl, IO.pure(instant))
+      sessions = sessionService(repo, accounts, IO.pure(instant))
       service = CompleteOAuthLogin[IO](
         SuccessfulDiscordOAuthClient("223456789012345678"),
         sessions,
@@ -193,7 +202,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       oauth <- RecordingDiscordOAuthClient
         .create(Left(AppError.DependencyFailed("Discord OAuth provider request failed.")))
       backoff <- InMemoryOAuthProviderBackoff.create[IO](1, 60.seconds, IO.pure(instant))
-      sessions = SessionService[IO](repo, accounts, config.sessionTtl, IO.pure(instant))
+      sessions = sessionService(repo, accounts, IO.pure(instant))
       service = CompleteOAuthLogin[IO](oauth, sessions, accounts, backoff)
       first <- service.run("first")
       second <- service.run("second")
@@ -214,7 +223,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
         def consume(stateHash: String, expiresAt: Instant): IO[Boolean] =
           val _ = (stateHash, expiresAt)
           reservations.update(_ + 1).as(true)
-      sessions = SessionService[IO](repo, accounts, config.sessionTtl, IO.pure(instant))
+      sessions = sessionService(repo, accounts, IO.pure(instant))
       codec = OAuthStateCodec[IO]("test-signing-key", config.stateTtl, IO.pure(instant))
       service = CompleteOAuthCallback[IO](
         codec,
@@ -251,7 +260,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
         def consume(stateHash: String, expiresAt: Instant): IO[Boolean] =
           val _ = (stateHash, expiresAt)
           IO.raiseError(new IllegalStateException("state store unavailable"))
-      sessions = SessionService[IO](repo, accounts, config.sessionTtl, IO.pure(instant))
+      sessions = sessionService(repo, accounts, IO.pure(instant))
       codec = OAuthStateCodec[IO]("test-signing-key", config.stateTtl, IO.pure(instant))
       service = CompleteOAuthCallback[IO](
         codec,
@@ -450,8 +459,8 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
     for
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
-      service = SessionService[IO](repo, accounts, config.sessionTtl, IO.pure(instant))
-      created <- service.create(account)
+      service = sessionService(repo, accounts, IO.pure(instant))
+      created <- createdSession(service, account)
       tokens = SessionCookieCodec.decode(created.cookieValue).getOrElse(fail("cookie decode"))
       snapshot <- repo.snapshot
       stored = snapshot.sessions.values.headOption.getOrElse(fail("session not stored"))
@@ -469,7 +478,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
     for
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
-      service = SessionService[IO](repo, accounts, config.sessionTtl, IO.pure(instant))
+      service = sessionService(repo, accounts, IO.pure(instant))
       result <- service.authenticate(Some("legacy-session-id"))
     yield assertEquals(result, Left(momo.api.errors.AppError.Unauthorized()))
 
@@ -481,7 +490,11 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
         def find(idHash: String) =
           val _ = idHash
           lookups.update(_ + 1).as(None)
-      service = SessionService[IO](repo, config.sessionTtl, IO.pure(instant), lookup)
+      creation = new LoginSessionCreationRepository[IO]:
+        def createIfAccountCurrent(session: AppSession, expectedAccountUpdatedAt: Instant) =
+          val _ = (session, expectedAccountUpdatedAt)
+          IO.raiseError[Boolean](new IllegalStateException("session creation was not expected"))
+      service = SessionService[IO](repo, config.sessionTtl, IO.pure(instant), lookup, creation)
       results <- List(
         "v1.a.b",
         s"v1.${"a" * 43}.${"!" * 43}",
@@ -499,8 +512,8 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
       nowRef <- IO.ref(instant)
-      service = SessionService[IO](repo, accounts, config.sessionTtl, nowRef.get)
-      created <- service.create(account)
+      service = sessionService(repo, accounts, nowRef.get)
+      created <- createdSession(service, account)
       _ <- nowRef.set(instant.plusSeconds(4.minutes.toSeconds))
       result <- service.authenticate(Some(created.cookieValue))
       snapshot <- repo.snapshot
@@ -513,8 +526,8 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
       nowRef <- IO.ref(instant)
-      service = SessionService[IO](repo, accounts, config.sessionTtl, nowRef.get)
-      created <- service.create(account)
+      service = sessionService(repo, accounts, nowRef.get)
+      created <- createdSession(service, account)
       _ <- nowRef.set(instant.plusSeconds(6.minutes.toSeconds))
       result <- service.authenticate(Some(created.cookieValue))
       snapshot <- repo.snapshot
@@ -530,8 +543,8 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
       nowRef <- IO.ref(instant)
-      service = SessionService[IO](repo, accounts, config.sessionTtl, nowRef.get)
-      created <- service.create(account)
+      service = sessionService(repo, accounts, nowRef.get)
+      created <- createdSession(service, account)
       before <- repo.snapshot
       stored = before.sessions.values.headOption.getOrElse(fail("session not stored"))
       _ <- nowRef.set(instant.plusSeconds(config.sessionTtl.toSeconds + 1L))
@@ -546,9 +559,10 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
     val disabled = account.copy(loginEnabled = false)
     for
       repo <- RecordingAppSessionsRepository.create
+      enabledAccounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
+      created <- createdSession(sessionService(repo, enabledAccounts, IO.pure(instant)), account)
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(disabled))
-      service = SessionService[IO](repo, accounts, config.sessionTtl, IO.pure(instant))
-      created <- service.create(disabled)
+      service = sessionService(repo, accounts, IO.pure(instant))
       before <- repo.snapshot
       stored = before.sessions.values.headOption.getOrElse(fail("session not stored"))
       result <- service.authenticate(Some(created.cookieValue))
@@ -557,6 +571,60 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       assertEquals(result, Left(AppError.Forbidden("This account is not allowed to log in.")))
       assertEquals(after.sessions.get(stored.idHash), None)
       assertEquals(after.deletes, List(stored.idHash))
+
+  test(
+    "SessionService rejects login snapshots invalidated by disabling and re-enabling the account"
+  ) {
+    val backup = account.copy(
+      id = AccountId.unsafeFromString("account_backup"),
+      discordUserId = UserId.unsafeFromString("223456789012345678"),
+    )
+    for
+      repo <- RecordingAppSessionsRepository.create
+      accounts <- InMemoryLoginAccountsRepository.create[IO](List(account, backup))
+      lifecycle = InMemoryLoginAccountAdministrationRepository(accounts, repo)
+      service = sessionService(repo, accounts, IO.pure(instant))
+      old <- createdSession(service, account)
+      _ <- lifecycle.updateAndRevokeSessionsWhenDisabled(
+        account.id,
+        UpdateLoginAccountData(None, None, Some(false), None, instant.plusSeconds(1))
+      )
+      disabled <- service.create(account)
+      _ <- lifecycle.updateAndRevokeSessionsWhenDisabled(
+        account.id,
+        UpdateLoginAccountData(None, None, Some(true), None, instant.plusSeconds(2))
+      )
+      stale <- service.create(account)
+      revoked <- service.authenticate(Some(old.cookieValue))
+      current <- accounts.find(account.id).map(_.getOrElse(fail("account missing")))
+      fresh <- createdSession(service, current)
+      authenticated <- service.authenticate(Some(fresh.cookieValue))
+      stored <- repo.snapshot
+    yield
+      assertEquals(disabled.left.toOption.map(_.code), Some("FORBIDDEN"))
+      assertEquals(stale.left.toOption.map(_.code), Some("FORBIDDEN"))
+      assertEquals(revoked.left.toOption.map(_.code), Some("UNAUTHORIZED"))
+      assertEquals(authenticated.map(_.account.accountId), Right(account.id))
+      assertEquals(stored.sessions.size, 1)
+  }
+
+  private def sessionService(
+      sessions: AppSessionsRepository[IO],
+      accounts: InMemoryLoginAccountsRepository[IO],
+      now: IO[Instant],
+  ): SessionService[IO] = SessionService[IO](
+    sessions,
+    config.sessionTtl,
+    now,
+    SessionAccountLookup.fromRepositories(sessions, accounts),
+    InMemoryLoginAccountAdministrationRepository(accounts, sessions)
+  )
+
+  private def createdSession(
+      service: SessionService[IO],
+      account: LoginAccount
+  ): IO[CreatedSession] =
+    service.create(account).map(_.fold(error => fail(s"session rejected: ${error.code}"), identity))
 
   test("LoginRateLimiter rejects attempts over the configured minute bucket") {
     for

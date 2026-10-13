@@ -14,7 +14,7 @@ import momo.api.errors.AppError
 import momo.api.repositories.{
   AppSession,
   AppSessionsRepository,
-  LoginAccountsRepository,
+  LoginSessionCreationRepository,
   SessionAccountLookup
 }
 
@@ -31,15 +31,9 @@ final class SessionService[F[_]: Sync: SecureRandom](
     sessionTtl: FiniteDuration,
     now: F[Instant],
     sessionAccounts: SessionAccountLookup[F],
+    sessionCreation: LoginSessionCreationRepository[F],
 ):
-  def this(
-      sessions: AppSessionsRepository[F],
-      accounts: LoginAccountsRepository[F],
-      sessionTtl: FiniteDuration,
-      now: F[Instant],
-  ) = this(sessions, sessionTtl, now, SessionAccountLookup.fromRepositories(sessions, accounts))
-
-  def create(account: LoginAccount): F[CreatedSession] =
+  def create(account: LoginAccount): F[Either[AppError, CreatedSession]] =
     for
       current <- now
       id <- SecureTokenGenerator.token[F](32)
@@ -55,8 +49,12 @@ final class SessionService[F[_]: Sync: SecureRandom](
         lastSeenAt = current,
         expiresAt = current.plusSeconds(sessionTtl.toSeconds),
       )
-      _ <- sessions.upsert(session)
-    yield CreatedSession(SessionCookieCodec.encode(SessionCookieTokens(id, csrf)))
+      stored <- sessionCreation.createIfAccountCurrent(session, account.updatedAt)
+    yield Either.cond(
+      stored,
+      CreatedSession(SessionCookieCodec.encode(SessionCookieTokens(id, csrf))),
+      AppError.Forbidden("Account access changed. Start login again."),
+    )
 
   def authenticate(sessionCookie: Option[String]): F[Either[AppError, AuthenticatedSession]] =
     (for

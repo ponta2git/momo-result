@@ -78,7 +78,7 @@ private[bootstrap] object PostgresApiRuntime:
     val members: MembersRepository[F] = PostgresMembersRepository[F](transactor)
     val loginAccounts: LoginAccountsRepository[F] =
       PostgresLoginAccountsRepository[F](transactor)
-    val loginAccountAdministration: LoginAccountAdministrationRepository[F] =
+    val loginAccountAdministration =
       PostgresLoginAccountAdministrationRepository[F](transactor)
     val gameTitles: GameTitlesRepository[F] = PostgresGameTitlesRepository[F](transactor)
     val mapMasters: MapMastersRepository[F] = PostgresMapMastersRepository[F](transactor)
@@ -234,6 +234,7 @@ private[bootstrap] object PostgresApiRuntime:
                 matchConfirmation = matchConfirmation,
                 appSessions = appSessions,
                 sessionAccounts = sessionAccounts,
+                sessionCreation = loginAccountAdministration,
                 members = cachedMembers,
                 loginAccounts = loginAccounts,
                 loginAccountAdministration = loginAccountAdministration,

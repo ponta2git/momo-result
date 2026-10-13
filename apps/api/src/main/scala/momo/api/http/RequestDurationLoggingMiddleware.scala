@@ -14,21 +14,26 @@ private[http] object RequestDurationLoggingMiddleware:
   private val logger = LoggerFactory.getLogger("momo.api.http.RequestDurationLoggingMiddleware")
   private val SlowThreshold = 1.second
 
-  def apply[F[_]: Async](http: HttpApp[F]): HttpApp[F] = Kleisli { request =>
+  def apply[F[_]: Async](http: HttpApp[F]): HttpApp[F] = apply(http, (app: HttpApp[F]) => app)
+
+  def apply[F[_]: Async](
+      http: HttpApp[F],
+      admit: HttpApp[F] => HttpApp[F],
+  ): HttpApp[F] = Kleisli { request =>
     val correlationId = requestId(request)
     Clock[F].monotonic.flatMap { started =>
       // Once an inner handler returns a Response, preserve ownership through decoration
       // and readiness logging until the server can take responsibility for its body.
       Async[F].uncancelable { poll =>
-        poll(http.run(request)).attempt.flatMap {
-          case Right(response) =>
-            val method = request.method.name
-            val path = request.uri.path.renderString
-            val httpVersion = request.httpVersion.renderString
-            val status = response.status.code
-            // HEAD and contentless statuses have no body transfer to observe. The server may
-            // dispose their body scopes normally; that is not a canceled client transfer.
-            val observed =
+        val observed = Kleisli[F, Request[F], Response[F]] { currentRequest =>
+          Async[F].uncancelable { observePoll =>
+            observePoll(http.run(currentRequest)).map { response =>
+              val method = request.method.name
+              val path = request.uri.path.renderString
+              val httpVersion = request.httpVersion.renderString
+              val status = response.status.code
+              // HEAD and contentless statuses have no body transfer to observe. The server may
+              // dispose their body scopes normally; that is not a canceled client transfer.
               if request.method.name == Method.HEAD.name ||
                 !response.status.isEntityAllowed
               then response
@@ -44,8 +49,15 @@ private[http] object RequestDurationLoggingMiddleware:
                     result,
                   )
                 ))
-            // Observation failure must not discard a Response with acquired body resources.
-            logResponseReady(request, response, correlationId, started).attempt.void.as(observed)
+            }
+          }
+        }
+        // Admission must attach its release outside the observer's leading resource scope.
+        // Cancellation while that scope starts must not strand an already acquired permit.
+        poll(admit(observed).run(request)).attempt.flatMap {
+          case Right(response) =>
+            // Include queueing and rejections in readiness logging without another body scope.
+            logResponseReady(request, response, correlationId, started).attempt.void.as(response)
           case Left(error) =>
             logFailed(request, correlationId, started) *> Async[F].raiseError[Response[F]](error)
         }

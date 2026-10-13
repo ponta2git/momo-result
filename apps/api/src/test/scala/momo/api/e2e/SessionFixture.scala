@@ -70,9 +70,11 @@ object SessionFixture extends IOApp.Simple:
             role = AccountRole.Operator,
             createdAt = now,
             updatedAt = now,
-          )).flatMap(result => IO.fromOption(result.toOption)(
-            new IllegalStateException("Could not create disposable operator fixture")
-          ))
+          )).flatMap(result =>
+            IO.fromOption(result.toOption)(
+              new IllegalStateException("Could not create disposable operator fixture")
+            )
+          )
           credentials <- List(
             "admin" -> administrator,
             "operator" -> operator,
@@ -80,10 +82,12 @@ object SessionFixture extends IOApp.Simple:
             "logout" -> administrator,
           )
             .traverse { (role, account) =>
-              sessions.create(account).map(created => role -> Json.obj(
-                "accountId" -> Json.fromString(account.id.value),
-                "cookieValue" -> Json.fromString(created.cookieValue),
-              ))
+              sessions.create(account).map(created =>
+                role -> Json.obj(
+                  "accountId" -> Json.fromString(account.id.value),
+                  "cookieValue" -> Json.fromString(created.cookieValue),
+                )
+              )
             }
         yield Json.obj(
           "cookieName" -> Json.fromString(config.auth.sessionCookieName),
@@ -92,9 +96,12 @@ object SessionFixture extends IOApp.Simple:
       }
       _ <- IO.blocking {
         // CREATE_NEW semantics reject existing files and symlinks; permissions precede content.
-        Files.createFile(output, PosixFilePermissions.asFileAttribute(
-          PosixFilePermissions.fromString("rw-------")
-        ))
+        Files.createFile(
+          output,
+          PosixFilePermissions.asFileAttribute(
+            PosixFilePermissions.fromString("rw-------")
+          )
+        )
         Files.writeString(output, payload.noSpaces)
         ()
       }

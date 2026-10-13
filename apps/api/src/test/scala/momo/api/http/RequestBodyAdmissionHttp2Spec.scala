@@ -155,7 +155,7 @@ final class RequestBodyAdmissionHttp2Spec extends MomoCatsEffectSuite:
           else Response[IO](Status.Ok).withEntity("recovered")
         }
       }
-      logged = RequestDurationLoggingMiddleware(admission(underlying))
+      logged = RequestDurationLoggingMiddleware(underlying, admission.apply)
       // Hold the fully wrapped Response so the peer's reset is processed before the server
       // starts sending its headers. The PING acknowledgment below supplies the wire barrier.
       // Preserve ownership while this test-only gate holds an already acquired Response;

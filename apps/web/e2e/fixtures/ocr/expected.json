@@ -1,0 +1,29 @@
+{
+  "screenType": "total_assets",
+  "players": [
+    {
+      "rank": 1,
+      "name": "ぽんた社長",
+      "playOrder": 1,
+      "totalAssetsManYen": 400
+    },
+    {
+      "rank": 2,
+      "name": "オータカ社長",
+      "playOrder": 2,
+      "totalAssetsManYen": 300
+    },
+    {
+      "rank": 3,
+      "name": "いーゆー社長",
+      "playOrder": 3,
+      "totalAssetsManYen": 200
+    },
+    {
+      "rank": 4,
+      "name": "さくま社長",
+      "playOrder": 4,
+      "totalAssetsManYen": 100
+    }
+  ]
+}

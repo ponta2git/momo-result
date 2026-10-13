@@ -49,7 +49,9 @@ coverage は未確認の経路を探す補助であり、品質を一つの数�
 ### Webの実行境界
 
 - `src`のVitestは値変換とcomponent / hook / MSWの証拠を扱う。appのroute接続とfeatureのresource lifecycleを区別し、後者の詳細をrouter suiteへ集約しない。
-- browserでHTTPを制御するcaseは、実画面のfocus・描画・非同期遷移の証拠。実APIを通るsmokeと区別し、mock応答だけで保存・生成・配送の接続を確認済みにしない。
+- `e2e/ui` はビルド済み Web と制御した HTTP 応答で focus・描画・非同期遷移を検証し、未定義 API 通信を失敗させる。DB や Worker を起動せず、mock 応答を保存・生成・配送の証拠にしない。
+- `e2e/system` は production image の Web / API / Worker と実 DB・queue・画像 storage・固定した通知 consumer を通す。session fixture は既存 SessionService で生成し、ブラウザは通常 cookie / CSRF を使う。OAuth provider の handshake と callback はこの fixture の保証範囲に含めない。
+- `e2e/recovery` は制御 Worker を使い、受付応答の喪失や処理失敗から利用者が操作を続けられることを確認する。実 Worker と同じ queue に同時起動しない。通知本文・全画像待ちなどの詳細は API を入口にする `e2e/contracts`、全体状態を変える上限 fixture は独立した通知契約 runner が所有する。
 - E2E・Playwright設定もWebのtypecheckに含める。`scripts:check` の Node test は build checker の誤検出・未検出、runner の中断と所有 process の回収、診断の機密保護を観測する pipeline-integrity evidence とし、Vitest / coverage と分離する。別 process を起動する runner test は L であり、browser の利用者 flow や実 DB / queue の接続成功を保証しない。
 - API 生成の freshness は `contract:check`、生成された validator の受理・拒否はそれを使う decoder suite で観測する。generator の各内部関数へ同じ schema fixture を複製しない。build checker は実際の build にも接続し、正負 fixture の成功だけで最終 asset を確認済みにしない。
 - 共通setupはunmount後にQueryClientを解放し、mockを復元してから実storageを清掃する。各suiteには共通cleanupを複製せず、個別に所有する資源の解放と未完了操作の完了待ちを残す。
@@ -85,7 +87,7 @@ coverage は未確認の経路を探す補助であり、品質を一つの数�
 ## 6. CI Artifacts
 
 - workflow は gate の依存関係、権限、service、artifact の受け渡しを所有する。`scripts/ci` の Shell は外部 command、環境変数、file の受け渡し、終了状態と実行順序を扱い、アプリの業務判断は各 subsystem に置く。
-- API / Web のローカル起動・Web build 補助・Playwright orchestration は `apps/web/scripts`、複数 service を使う worker E2E と runtime HTTP smoke は root の `scripts/e2e` に置く。これらは Node が直接実行できる `.mts` とし、native type stripping とは別に Web の scripts 用 tsconfig で型検査する。root E2E も Web の lint・format・scripts test に含める。
+- API / Web のローカル起動・Web build 補助は `apps/web/scripts`、複数 service の E2E 環境管理と runtime HTTP smoke は root の `scripts/e2e` に置く。これらは Node が直接実行できる `.mts` とし、native type stripping とは別に Web の scripts 用 tsconfig で型検査する。root E2E も Web の lint・format・scripts test に含める。
 - 構造化された CI data の集計・秘匿化・来歴検証と metadata 生成は `scripts/tools/cmd/ci-tool` に集約する。producer と consumer は同じ検証規則を使い、後続 release が以前の metadata を読める契約を保つ。CLI の入力・出力・終了値は [command の説明](../scripts/tools/cmd/ci-tool/README.md) から辿れる。
 - 独立した診断・評価用 Go command も `scripts/tools/cmd`、本番 runtime の process 管理と probe は独立 module の `apps/runtime` に置く。CI 専用の集計・判定を runtime binary に含めない。
 - `scripts/ci/test-*.sh` は分類、来歴、結果集約、実行の調整を観測する pipeline-integrity evidence とする。外部 command の double は実 container、DB / queue、provider 接続の成功を保証しない。ローカル候補の起動確認と配備後の公開 edge の確認は、それぞれの対象へ接続する smoke で証拠を取る。

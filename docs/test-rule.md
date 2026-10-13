@@ -111,6 +111,7 @@ test、suite、lint / checker、manual review は、守る価値に対して必�
 - locator は role、accessible name、label、安定した業務識別子を優先する。CSS 構造や表示順へ依存しない。
 - 主要 flow は URL、画面状態、request、保存結果、download など外部契約で判定する。screenshot は補助証拠とする。
 - retry 後も test-owned ID で対象 resource を特定し、前 attempt の data を成功条件にしない。
+- システム E2E は基本操作の完了と、データ損失・操作続行不能を避ける回復経路を選ぶ。受付成功や画面の存在だけで完了せず、対象 ID と再取得した値・出力・利用側への反映で判定する。component / unit が所有する細かな状態分岐や通知書式をブラウザへ重複させない。
 
 ### UI Conformance
 

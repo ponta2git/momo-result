@@ -36,7 +36,7 @@ require_success public-safety "${PUBLIC_SAFETY_RESULT:?}"
 # before any production mutation; do not repeat the application suites here.
 if [[ "${PR_BASE_REF:-develop}" == "master" ]]; then
   for result in "${WORKFLOW_LINT_RESULT:?}" "${API_RESULT:?}" "${WEB_RESULT:?}" \
-    "${ANALYSIS_RESULT:?}" "${RUNTIME_RESULT:?}" "${OCR_NOTIFICATIONS_RESULT:?}"; do
+    "${ANALYSIS_RESULT:?}" "${RUNTIME_RESULT:?}" "${SYSTEM_E2E_RESULT:?}"; do
     require_optional release-suite false "${result}"
   done
   echo "Release snapshot and public release information passed. Production gates run after merge."
@@ -49,6 +49,6 @@ require_optional web "${WEB_EXPECTED:?}" "${WEB_RESULT:?}"
 require_optional analysis "${ANALYSIS_EXPECTED:?}" "${ANALYSIS_RESULT:?}"
 require_optional runtime "${RUNTIME_EXPECTED:?}" "${RUNTIME_RESULT:?}"
 
-require_optional ocr-notifications "${OCR_NOTIFICATIONS_EXPECTED:?}" "${OCR_NOTIFICATIONS_RESULT:?}"
+require_optional system-e2e "${SYSTEM_E2E_EXPECTED:?}" "${SYSTEM_E2E_RESULT:?}"
 
 echo "All required PR gates passed."

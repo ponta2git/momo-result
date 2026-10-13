@@ -34,7 +34,7 @@ jobs:
   test-build:
     name: Test and build
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -57,8 +57,22 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         run: pnpm --filter web test:coverage
         timeout-minutes: 5
-      - run: pnpm --filter web build
-        timeout-minutes: 5
+      - name: Install browser for UI contracts
+        run: pnpm --filter web exec playwright install --with-deps chromium
+        timeout-minutes: 10
+      - name: Verify browser UI contracts
+        run: pnpm --filter web e2e:ui
+        timeout-minutes: 10
+      - name: Upload browser UI evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: browser-ui-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            apps/web/playwright-ui-report/
+            apps/web/test-results-ui/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Build structured CI tool
         if: always() && github.event_name == 'pull_request'
         continue-on-error: true

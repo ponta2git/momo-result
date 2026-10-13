@@ -6,8 +6,8 @@ web=false
 analysis=false
 analysis_image=false
 runtime=false
-# Assembled OCR inputs are independent of each application quality gate.
-ocr_notifications=false
+# Assembled system inputs are independent of each application quality gate.
+system_e2e=false
 http4s_patch=false
 actionlint=false
 go_runtime=false
@@ -21,7 +21,7 @@ select_all() {
   analysis=true
   analysis_image=true
   runtime=true
-  ocr_notifications=true
+  system_e2e=true
 }
 
 while IFS= read -r -d '' path; do
@@ -32,35 +32,34 @@ while IFS= read -r -d '' path; do
 
   case "${path}" in
     apps/api/openapi.yaml)
-      ocr_notifications=true
+      system_e2e=true
       api=true
       web=true
       ;;
     apps/api/redocly.yaml)
       web=true
       ;;
+    apps/api/src/test/scala/momo/api/e2e/*)
+      api=true
+      system_e2e=true
+      ;;
     apps/api/src/test/*)
       api=true
       ;;
     apps/api/*)
-      ocr_notifications=true
+      system_e2e=true
       api=true
       runtime=true
       ;;
-    apps/web/src/test/factories/* | apps/web/src/test/msw/fixtures.ts | \
-      apps/web/src/test/msw/seriesAnalysisFixtures.ts | apps/web/src/test/deferred.ts)
-      ocr_notifications=true
-      # Playwright imports these fixtures directly. Vitest cannot establish that
-      # the assembled browser scenarios still accept the changed inputs.
+    apps/web/e2e/ui/* | apps/web/playwright.ui.config.ts)
+      # Browser-only contracts do not need production candidates or backing stores.
       web=true
-      runtime=true
       ;;
     apps/web/scripts/e2e/*.test.*)
       web=true
-      runtime=true
       ;;
-    apps/web/scripts/e2e/* | apps/web/scripts/process.mts)
-      ocr_notifications=true
+    apps/web/scripts/e2e/runtime.mts | apps/web/scripts/e2e/ocr-fixtures.mts | apps/web/scripts/process.mts)
+      system_e2e=true
       web=true
       runtime=true
       ;;
@@ -69,7 +68,7 @@ while IFS= read -r -d '' path; do
       web=true
       ;;
     apps/web/*)
-      ocr_notifications=true
+      system_e2e=true
       web=true
       runtime=true
       ;;
@@ -78,16 +77,16 @@ while IFS= read -r -d '' path; do
       ;;
     apps/processing-worker/* | fly.analysis.toml | rust-toolchain.toml)
       # The assembled worker imports fixtures from src/**/tests.rs too.
-      ocr_notifications=true
+      system_e2e=true
       analysis=true
       analysis_image=true
       ;;
     Dockerfile | deploy/* | fly.toml)
-      ocr_notifications=true
+      system_e2e=true
       runtime=true
       ;;
     contracts/runtime-db-contract.json)
-      ocr_notifications=true
+      system_e2e=true
       runtime=true
       go_runtime=true
       ;;
@@ -98,17 +97,17 @@ while IFS= read -r -d '' path; do
       runtime=true
       ;;
     apps/runtime/*)
-      ocr_notifications=true
+      system_e2e=true
       runtime=true
       ;;
     .dockerignore)
-      ocr_notifications=true
+      system_e2e=true
       runtime=true
       analysis=true
       analysis_image=true
       ;;
     .momo-db-ref | scripts/ci/apply-momo-db-migrations.sh | scripts/ci/resolve-momo-db-migrations.sh)
-      ocr_notifications=true
+      system_e2e=true
       api=true
       web=true
       analysis=true
@@ -116,7 +115,7 @@ while IFS= read -r -d '' path; do
       runtime=true
       ;;
     .http4s-ref | scripts/ci/build-http4s-patch.sh)
-      ocr_notifications=true
+      system_e2e=true
       api=true
       runtime=true
       http4s_patch=true
@@ -125,7 +124,7 @@ while IFS= read -r -d '' path; do
       select_all
       ;;
     package.json | pnpm-lock.yaml | pnpm-workspace.yaml)
-      ocr_notifications=true
+      system_e2e=true
       web=true
       runtime=true
       [[ "${path}" != package.json ]] || policy_scripts=true
@@ -145,12 +144,12 @@ while IFS= read -r -d '' path; do
       analysis_image=true
       ;;
     scripts/e2e/runtime-smoke*)
-      ocr_notifications=true
+      system_e2e=true
       web=true
       runtime=true
       ;;
     scripts/e2e/*)
-      ocr_notifications=true
+      system_e2e=true
       web=true
       analysis=true
       analysis_image=true
@@ -187,9 +186,9 @@ while IFS= read -r -d '' path; do
     .github/workflows/api.yml)
       api=true
       ;;
-    .summit-ref | .github/workflows/ocr-notifications.yml)
+    .summit-ref | .github/workflows/system-e2e.yml)
       web=true
-      ocr_notifications=true
+      system_e2e=true
       ;;
     .github/workflows/web.yml)
       web=true
@@ -238,6 +237,12 @@ while IFS= read -r -d '' path; do
   esac
 done
 
+if [[ "${system_e2e}" == true ]]; then
+  runtime=true
+  analysis=true
+  analysis_image=true
+fi
+
 if [[ "${actionlint}" == true || "${go_runtime}" == true || "${go_tools}" == true || "${policy_scripts}" == true ]]; then
   workflow=true
 fi
@@ -247,7 +252,7 @@ printf 'web=%s\n' "${web}"
 printf 'analysis=%s\n' "${analysis}"
 printf 'analysis_image=%s\n' "${analysis_image}"
 printf 'runtime=%s\n' "${runtime}"
-printf 'ocr_notifications=%s\n' "${ocr_notifications}"
+printf 'system_e2e=%s\n' "${system_e2e}"
 printf 'http4s_patch=%s\n' "${http4s_patch}"
 printf 'workflow=%s\n' "${workflow}"
 printf 'actionlint=%s\n' "${actionlint}"

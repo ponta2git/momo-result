@@ -26,7 +26,18 @@
 - runtime image は `scripts/ci/`、DB / Redis control plane と preemption は `scripts/e2e/` の対応 smoke と同じ境界で検証する。
 - algorithm version の昇格は image 更新と別操作とし、reader / worker compatibility を確認してから dry-run、apply の順で行う。DB row を直接書き換えない。
 - local volume のデータが消えたように見えても書込みや volume 削除を続けず、mount と PostgreSQL major version を確認する。異なる major version の data directory を直接 mount しない。
-- Playwright の既定 E2E は隔離環境を使う。既存 runtime を対象にする場合は runtime 用 script、任意 target は target 用 script を使い、接続先 data store の隔離を確認する。
+- システム E2E は毎回新しい隔離環境を作り、終了・失敗・中断時に所有資源を回収する。任意の既存 DB や runtime を対象にしない。
+
+E2E の実行には Node、Docker、JDK / sbt と、`.momo-db-ref` / `.summit-ref` に固定した checkout が必要。既定の配置は `_deps/momo-db` / `_deps/summit`。各 checkout の package manager で依存を install・build し、DB の開発規約に従って準備する。migration は runner が新しい DB に適用する。
+
+Runtime と Worker の production image、回復・通知契約用の Worker `e2e-test` target を build し、`MOMO_E2E_RUNTIME_IMAGE`、`MOMO_E2E_WORKER_IMAGE`、`MOMO_E2E_CONTROLLED_WORKER_IMAGE` に指定する。runner は開始時に immutable image ID を確定する。
+
+- `pnpm web:e2e:ui`：ビルド済み Web と明示した HTTP 応答だけでブラウザ操作を検証する。
+- `pnpm e2e`：実 Runtime / Worker を通す保存・OCR・分析・通知・権限と、記録操作の回復を検証する。
+- `pnpm e2e:recovery`：制御 Worker を使う OCR の回復と、ブラウザを使わない通知結合契約を実行する。
+- `pnpm test:notification-contract`：独立 DB で分析通知 producer と固定 Summit consumer の上限・描画互換性を検証する。
+
+手動の E2E 実確認は Playwright MCP を使う。`pnpm e2e --hold`（制御 Worker は `pnpm e2e:recovery --hold`）で同じ隔離環境を保持し、表示された private metadata の接続先と session fixture を使う。metadata、cookie、CSRF、環境ファイルは共有しない。対象ケースを実行したら runner を中断して回収する。CI は同じ runner と suite を実行する。
 
 ## 3. Commands
 
@@ -34,7 +45,7 @@
 
 | 領域 | 品質 command |
 | --- | --- |
-| Web | `pnpm --filter web format:check`、`lint`、`contract:check`、`typecheck`、`test:run`、`scripts:check`、必要に応じ `build` / `e2e` |
+| Web | `pnpm --filter web format:check`、`lint`、`contract:check`、`typecheck`、`test:run`、`scripts:check`、必要に応じ `build` / `e2e:ui` |
 | API | `sbt --server --batch apiQuality`、`sbt --server --batch testFull`、同じオプションで必要に応じ `apiCoverage` / `apiDbQuality` / `apiRedisQuality` / `apiR2Quality` |
 | Processing Worker | `cargo fmt --all -- --check`、`cargo clippy --locked --workspace --all-targets`、`cargo test --locked --workspace`、production image build |
 | Go runtime / tools | 変更対象の `apps/runtime` または `scripts/tools` で `go test ./... && go vet ./...` |
@@ -97,6 +108,8 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 ## 6. CI Gates / Release
 
 - CI は変更範囲を fail closed で分類し、対象 subsystem の gate を通す。workflow、service、timeout、artifact path の一覧は docs へ写さない。
+- チケット完了前には最終差分が影響する基本操作・回復経路を同じ suite で確認する。PR を経由しない `develop` マージ前は、最新 `develop` とのマージ予定結果を隔離 checkout で作り、そのコードから build した候補で基本操作一式と関連する回復・契約を通す。検証後に対象コードや候補が変わった場合は、無効になった範囲を再実行する。
+- 手動結果にも対象 commit（未commit差分があればその範囲）、Runtime / Worker image ID、suite・ケース、成否と未確認事項を残す。結果のためだけの恒久的な記録帳は増やさず、チケット・PR・作業報告へ記載する。
 - PR では compile / lint / generation などの pipeline integrity、選択した S / M evidence、変更境界に応じた DB / Redis contract、影響する主要 user flow を優先する。endurance、resource limit、live provider は、PR でしか検出できない変更を除き release evidence へ分離する。
 - release PR は snapshot、branch policy、公開情報を検証する。アプリ・image の gate は通常 PR と exact `master` commit の本番候補で実行し、release PR で重複させない。最終 gate の失敗は merge 後に判明するが、必要な候補の検証がすべて成功するまで本番変更を開始しない。
 - retry の結果分類と report artifact は `docs/test-architecture.md` の CI Artifacts に従う。

@@ -1,4 +1,4 @@
-name: Analysis worker
+name: Processing worker
 
 on:
   workflow_call:
@@ -139,7 +139,7 @@ jobs:
         run: ../../scripts/ci/ocr-rust-control-plane-smoke.sh
 
   runtime-image:
-    name: Build, scan, and package analysis image
+    name: Build, scan, and package processing image
     runs-on: ubuntu-latest
     timeout-minutes: 45
     if: inputs.verify_image || inputs.package_image

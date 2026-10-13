@@ -2,6 +2,23 @@ name: deploy
 
 on:
   workflow_call:
+    inputs:
+      package_image:
+        description: Package the verified candidate for the system E2E consumer
+        required: false
+        default: false
+        type: boolean
+    outputs:
+      artifact_id:
+        value: ${{ jobs.runtime-image.outputs.artifact_id }}
+      artifact_digest:
+        value: ${{ jobs.runtime-image.outputs.artifact_digest }}
+      artifact_name:
+        value: ${{ jobs.runtime-image.outputs.artifact_name }}
+      image_ref:
+        value: ${{ jobs.runtime-image.outputs.image_ref }}
+      run_attempt:
+        value: ${{ jobs.runtime-image.outputs.run_attempt }}
   push:
     branches:
       - master
@@ -159,20 +176,9 @@ jobs:
           sparse-checkout: drizzle
           persist-credentials: false
 
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-          cache: pnpm
-
-      - name: Install web dependencies
-        run: pnpm install --frozen-lockfile
-        timeout-minutes: 5
-
-      - name: Install Playwright browser
-        run: pnpm --filter web exec playwright install --with-deps chromium
-        timeout-minutes: 10
 
       - name: Apply momo-db migrations
         env:
@@ -239,12 +245,6 @@ jobs:
           MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
         timeout-minutes: 2
 
-      - name: Playwright E2E smoke
-        run: pnpm --filter web e2e:runtime
-        env:
-          PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
-        timeout-minutes: 10
-
       - name: Runtime memory headroom smoke
         if: github.event_name != 'pull_request'
         run: scripts/ci/runtime-memory-smoke.sh
@@ -272,22 +272,12 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Upload Playwright report
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: playwright-report-${{ github.run_id }}-${{ github.run_attempt }}
-          path: apps/web/playwright-report/
-          if-no-files-found: ignore
-          retention-days: 7
-
       - name: Stop runtime container
         if: always()
         run: docker rm -f momo-result-runtime || true
 
       - name: Record runtime image identity
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || inputs.package_image
         run: |
           mkdir -p "${IMAGE_ARTIFACT_NAME}"
           printf "%s\n" "${IMAGE_REF}" > "${IMAGE_ARTIFACT_NAME}/image-ref.txt"
@@ -306,7 +296,7 @@ jobs:
             > "${IMAGE_ARTIFACT_NAME}/http4s-patch.json"
 
       - name: Save runtime image
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || inputs.package_image
         run: |
           docker save "${IMAGE_REF}" | gzip -1 > "${IMAGE_ARTIFACT_NAME}/momo-result-image.tar.gz"
           sha256sum "${IMAGE_ARTIFACT_NAME}/momo-result-image.tar.gz" \
@@ -314,7 +304,7 @@ jobs:
         timeout-minutes: 10
 
       - name: Record runtime candidate provenance
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || inputs.package_image
         id: candidate
         run: |
           scripts/ci/ci-tool.sh create-runtime-candidate \
@@ -328,7 +318,7 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
       - name: Upload runtime image
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || inputs.package_image
         id: image-upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -337,6 +327,22 @@ jobs:
           if-no-files-found: error
           retention-days: 7
           compression-level: 0
+
+  system-e2e:
+    name: Verify assembled system candidate
+    needs: [runtime-image, analysis-candidate]
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/system-e2e.yml
+    with:
+      runtime_artifact_id: ${{ needs.runtime-image.outputs.artifact_id }}
+      runtime_artifact_digest: ${{ needs.runtime-image.outputs.artifact_digest }}
+      runtime_artifact_name: ${{ needs.runtime-image.outputs.artifact_name }}
+      runtime_image_ref: ${{ needs.runtime-image.outputs.image_ref }}
+      runtime_run_attempt: ${{ needs.runtime-image.outputs.run_attempt }}
+      worker_metadata_id: ${{ needs.analysis-candidate.outputs.metadata_artifact_id }}
+      worker_metadata_digest: ${{ needs.analysis-candidate.outputs.metadata_artifact_digest }}
+      worker_metadata_name: ${{ needs.analysis-candidate.outputs.metadata_artifact_name }}
+      worker_run_attempt: ${{ needs.analysis-candidate.outputs.producer_run_attempt }}
 
   release-ready:
     runs-on: ubuntu-latest
@@ -349,6 +355,7 @@ jobs:
       - web
       - dockerfile-lint
       - runtime-image
+      - system-e2e
     if: github.event_name != 'pull_request'
     env:
       IMAGE_REF: ${{ needs.runtime-image.outputs.image_ref }}

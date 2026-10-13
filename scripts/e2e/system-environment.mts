@@ -171,7 +171,7 @@ export async function withSystemEnvironment(
     await applyMigrations(postgres, databaseName, signal);
     phase = "prepare session fixtures";
     const sessionsFile = join(runDir, "sessions.json");
-    await runCommand("sbt", ["--batch", "Test/runMain momo.api.e2e.SessionFixture"], {
+    await runCommand("sbt", ["--server", "--batch", "Test/runMain momo.api.e2e.SessionFixture"], {
       cwd: join(repoRoot, "apps/api"),
       env: childEnvironment({
         APP_ENV: "dev",

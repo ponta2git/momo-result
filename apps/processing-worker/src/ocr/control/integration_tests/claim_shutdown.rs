@@ -1,4 +1,4 @@
-//! Delayed and missing COMMIT replies must preserve recoverable fenced ownership.
+//! Delayed COMMIT replies and cancelled claims must preserve recoverable fenced ownership.
 
 use std::sync::Arc;
 
@@ -29,18 +29,17 @@ pub(super) async fn verify(database_url: &str, observer: &Client) -> SmokeResult
     let config = control_config("ocr-c2-worker-a")?;
     let worker_config = config.clone();
     let mut claim_task = tokio::spawn(async move {
-        let outcome = time::timeout(
-            Duration::from_secs(2),
-            claim_job(&mut client, TAKEOVER.job_id, &worker_config),
-        )
-        .await??;
+        let outcome = claim_job(&mut client, TAKEOVER.job_id, &worker_config).await?;
         Ok::<_, Box<dyn std::error::Error + Send + Sync>>((client, outcome))
     });
-    time::timeout(Duration::from_secs(5), committed.notified()).await?;
+    time::timeout(Duration::from_secs(5), committed.notified())
+        .await
+        .map_err(|_elapsed| "fixture did not observe the held COMMIT reply")?;
     assert!(
         time::timeout(Duration::from_millis(100), &mut claim_task)
             .await
-            .is_err()
+            .is_err(),
+        "a durable claim must wait for its held COMMIT reply"
     );
     release.notify_one();
     let (mut committed_client, outcome) =
@@ -58,18 +57,21 @@ pub(super) async fn verify(database_url: &str, observer: &Client) -> SmokeResult
     prepare_database(observer).await?;
     insert_fixture(observer, &TAKEOVER).await?;
     let mut uncertain_client = crate::postgres::connect(&proxy.url).await?;
-    let uncertain = tokio::spawn(async move {
-        time::timeout(
-            Duration::from_secs(1),
-            claim_job(&mut uncertain_client, TAKEOVER.job_id, &config),
-        )
+    let uncertain =
+        tokio::spawn(
+            async move { claim_job(&mut uncertain_client, TAKEOVER.job_id, &config).await },
+        );
+    time::timeout(Duration::from_secs(5), committed.notified())
         .await
-    });
-    time::timeout(Duration::from_secs(5), committed.notified()).await?;
+        .map_err(|_elapsed| "fixture did not observe COMMIT before claim cancellation")?;
+    // Dropping a timed-out operation cancels its future. Synchronize that cancellation with
+    // durable COMMIT instead of racing container round trips against an arbitrary claim timer.
+    uncertain.abort();
     assert!(
         time::timeout(Duration::from_secs(3), uncertain)
-            .await??
-            .is_err()
+            .await?
+            .is_err_and(|error| error.is_cancelled()),
+        "cancellation must finish without receiving the held COMMIT reply"
     );
     let uncertain_state = observer.query_one(
         "SELECT j.status, s.owner IS NOT NULL, j.failure_retry_count, j.lease_recovery_count FROM ocr_jobs j CROSS JOIN worker_execution_slots s WHERE j.id=$1 AND s.slot_key='shared-heavy-work'", &[&TAKEOVER.job_id],

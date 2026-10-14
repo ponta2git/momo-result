@@ -16,11 +16,9 @@ use crate::{
         ExecutionSlotIdentity, ExecutionTaskKind, NewExecutionSlotHolder, SlotAcquisition,
         acquire_ocr, lock, release_owned,
     },
-    notifications::{
-        NotificationSink,
-        test_support::{CommitFault, DelayedDatabase},
-    },
+    notifications::NotificationSink,
     outbox::PostCommitSink,
+    postgres::test_support::{CommitFault, DelayedDatabase},
     series_analysis::{
         ConsumerError,
         claim_wait::claim_delivery,
@@ -251,7 +249,11 @@ async fn real_postgres_and_redis_busy_rechecks_preserve_pending_and_owned_claims
     assert!(matches!(
         time::timeout(
             Duration::from_secs(2),
-            crate::series_analysis::mark_draining_with_deadline(&uncertain, &bounded_config),
+            crate::series_analysis::finish_consumer(
+                &uncertain,
+                &bounded_config,
+                Err(ConsumerError::ControlTimeout),
+            ),
         )
         .await?,
         Err(ConsumerError::ControlTimeout)

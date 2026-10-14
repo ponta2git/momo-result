@@ -80,6 +80,7 @@ func startProbeDatabasePeer(t *testing.T, stallRollback bool) (string, <-chan st
 		}
 		connected <- connection
 		defer connection.Close()
+		// pgx sends cancellation on a second connection before terminating the first.
 		cancelHandled := make(chan struct{})
 		go func() {
 			defer close(cancelHandled)
@@ -122,6 +123,7 @@ func serveProbeDatabasePeer(connection net.Conn, rollbackReceived chan<- struct{
 	if err := backend.Flush(); err != nil {
 		return err
 	}
+	rollbackReplyHeld := false
 	for {
 		message, err := backend.Receive()
 		if err != nil {
@@ -129,6 +131,9 @@ func serveProbeDatabasePeer(connection net.Conn, rollbackReceived chan<- struct{
 		}
 		if _, ok := message.(*pgproto3.Terminate); ok {
 			return nil
+		}
+		if rollbackReplyHeld {
+			return fmt.Errorf("expected termination after stalled rollback, got %T", message)
 		}
 		query, ok := message.(*pgproto3.Query)
 		if !ok {
@@ -143,14 +148,8 @@ func serveProbeDatabasePeer(connection net.Conn, rollbackReceived chan<- struct{
 		case sql == "rollback":
 			close(rollbackReceived)
 			if stallRollback {
-				message, err := backend.Receive()
-				if err != nil {
-					return err
-				}
-				if _, ok := message.(*pgproto3.Terminate); !ok {
-					return fmt.Errorf("expected termination after stalled rollback, got %T", message)
-				}
-				return nil
+				rollbackReplyHeld = true
+				continue
 			}
 			tag, status = "ROLLBACK", 'I'
 		case strings.HasPrefix(sql, "select "):

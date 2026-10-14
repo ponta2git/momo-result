@@ -332,6 +332,7 @@ func probeDatabase(ctx context.Context, databaseURL string) error {
 	if err != nil {
 		return err
 	}
+	// Closing this dedicated connection also rolls back early error paths.
 	defer func() { _ = connection.Close(operationCtx) }()
 	transaction, err := connection.BeginTx(operationCtx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 	if err != nil {

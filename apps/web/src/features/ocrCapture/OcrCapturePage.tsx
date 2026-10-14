@@ -26,13 +26,14 @@ const panelClass = "grid min-w-0 gap-4";
 const panelTitleClass = contentText.heading;
 const panelLeadClass = cn(contentText.body, "mt-1");
 
+/** Resolve authentication outside the editor whose input belongs to that account. */
 export function OcrCapturePage() {
   const auth = useOcrCaptureAuth();
-  return <OcrCapturePageContent auth={auth} key={auth.accountId ?? "unresolved"} />;
+  return <OcrCapturePageContent authReady={auth.ready} key={auth.accountId ?? "unresolved"} />;
 }
 
-function OcrCapturePageContent({ auth }: { auth: ReturnType<typeof useOcrCaptureAuth> }) {
-  const { capture, navigation, setup, submission, startError } = useOcrCapturePageModel(auth);
+function OcrCapturePageContent({ authReady }: { authReady: boolean }) {
+  const { capture, navigation, setup, submission, startError } = useOcrCapturePageModel(authReady);
 
   return (
     <PageFrame>

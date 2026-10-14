@@ -74,13 +74,11 @@ final class CompleteOAuthLogin[F[_]: Sync](
           case None => OAuthLoginFailure.DiscordUserNotAllowed.asLeft[OAuthLoginCompletion].pure[F]
           case Some(account) if !account.loginEnabled =>
             OAuthLoginFailure.LoginDisabled.asLeft[OAuthLoginCompletion].pure[F]
-          case Some(account) => sessions.create(account)
-              .flatTap {
-                case Right(_) => Sync[F].delay(
-                    logger.info(s"auth_login_completed accountId=${account.id.value}")
-                  )
-                case Left(_) => Sync[F].unit
-              }
-              .map(_.leftMap(OAuthLoginFailure.SessionRejected.apply)
-                .map(session => OAuthLoginCompletion(account.id, session)))
+          case Some(account) => sessions.create(account).flatMap {
+              case Left(error) =>
+                OAuthLoginFailure.SessionRejected(error).asLeft[OAuthLoginCompletion].pure[F]
+              case Right(session) => Sync[F].delay(
+                  logger.info(s"auth_login_completed accountId=${account.id.value}")
+                ).as(OAuthLoginCompletion(account.id, session).asRight[OAuthLoginFailure])
+            }
         }

@@ -157,7 +157,7 @@ async fn verify_delayed_database(
     config: &AnalysisConsumerConfig,
     claim: &ClaimedJob,
 ) -> SmokeResult {
-    let proxy = crate::notifications::test_support::DelayedDatabase::start(
+    let proxy = crate::postgres::test_support::DelayedDatabase::start(
         database_url,
         Duration::from_millis(300),
     )

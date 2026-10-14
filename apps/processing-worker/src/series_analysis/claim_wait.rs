@@ -14,6 +14,7 @@ use super::{
     ConsumerError,
     config::AnalysisConsumerConfig,
     control::{ClaimResult, claim_job, retry_busy_job},
+    control_operation,
     metrics::{measure, signed_milliseconds},
     submit_control_outcome,
 };
@@ -30,12 +31,11 @@ pub(super) async fn claim_delivery(
 ) -> Result<Option<ClaimResult>, ConsumerError> {
     let initial = submit_control_outcome(
         post_commit_sink,
-        time::timeout(
-            config.control_response_timeout(),
+        Box::pin(control_operation(
+            config,
             measure("job_claim", claim_job(client, job_id, config)),
-        )
-        .await
-        .map_err(|_elapsed| ConsumerError::ControlTimeout)??,
+        ))
+        .await?,
     )?;
     if !matches!(initial, ClaimResult::Busy) {
         return Ok(Some(initial));
@@ -76,14 +76,9 @@ pub(super) async fn claim_delivery(
         // A started claim must resolve, even if shutdown or the retry-start deadline arrives.
         // Dropping it at COMMIT could lose the acquired owner or its post-commit outbox effect.
         // Errors retain the delivery through the existing consumer-failure recovery path.
-        let outcome = time::timeout(
-            config.control_response_timeout(),
-            retry_busy_job(client, job_id, config),
-        )
-        .await
-        .map_err(|_elapsed| ConsumerError::ControlTimeout)
-        .and_then(|result| result.map_err(ConsumerError::Control))
-        .inspect_err(|_| summary.outcome = "control_error")?;
+        let outcome = control_operation(config, retry_busy_job(client, job_id, config))
+            .await
+            .inspect_err(|_| summary.outcome = "control_error")?;
         let claim = submit_control_outcome(post_commit_sink, outcome)
             .inspect_err(|_| summary.outcome = "post_commit_error")?;
         summary.outcome = match &claim {

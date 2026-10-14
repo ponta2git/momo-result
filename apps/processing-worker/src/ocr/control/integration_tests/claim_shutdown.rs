@@ -11,7 +11,6 @@ use super::{
     Client, Duration, SmokeResult, TAKEOVER, insert_fixture, persisted_payload, prepare_database,
 };
 use crate::{
-    notifications::test_support::{CommitFault, DelayedDatabase},
     ocr::{
         consumer::{
             self, OcrChildHandle, OcrChildLauncher, OcrConsumerConfig, OcrConsumerError,
@@ -23,6 +22,7 @@ use crate::{
         queue::OcrQueueConfig,
     },
     outbox::PostCommitSink,
+    postgres::test_support::{CommitFault, DelayedDatabase},
 };
 
 pub(super) async fn verify(database_url: &str, redis_url: &str, observer: &Client) -> SmokeResult {

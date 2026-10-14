@@ -63,6 +63,7 @@ func inspectRuntimeDatabase(ctx context.Context, databaseURL string) (databaseSn
 	if err != nil {
 		return databaseSnapshot{}, err
 	}
+	// Closing this dedicated connection also rolls back early error paths.
 	defer func() { _ = connection.Close(ctx) }()
 
 	transaction, err := connection.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})

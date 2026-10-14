@@ -31,7 +31,7 @@ export function useOcrCaptureAuth() {
 }
 
 /** Owns OCR capture screen state and exposes only view-ready slices and user intents. */
-export function useOcrCapturePageModel(auth: ReturnType<typeof useOcrCaptureAuth>) {
+export function useOcrCapturePageModel(authReady: boolean) {
   const [startError, setStartError] = useState<string>();
   const [searchParams] = useSearchParams();
   const requestedHeldEventId = trimSearchParam(searchParams.get("heldEventId"));
@@ -42,7 +42,6 @@ export function useOcrCapturePageModel(auth: ReturnType<typeof useOcrCaptureAuth
   const [captureTargetKind, setCaptureTargetKind] = useState<SlotKind>("total_assets");
   const [captureActionFeedback, setCaptureActionFeedback] = useState<string>();
 
-  const authReady = auth.ready;
   const setupOptions = useOcrSetupOptions({
     enabled: authReady,
     onChange: setSetupValue,

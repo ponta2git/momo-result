@@ -59,5 +59,3 @@ pub(crate) fn log_skip(kind: &'static str, job_id: &str, reason: SkipReason) {
 
 #[cfg(test)]
 mod bounds_tests;
-#[cfg(test)]
-pub(crate) mod test_support;

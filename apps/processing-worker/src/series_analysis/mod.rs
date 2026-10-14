@@ -301,6 +301,14 @@ pub(crate) async fn run(
         &mut shutdown,
     ))
     .await;
+    finish_consumer(&control_client, &config, result).await
+}
+
+async fn finish_consumer(
+    control_client: &tokio_postgres::Client,
+    config: &AnalysisConsumerConfig,
+    result: Result<(), ConsumerError>,
+) -> Result<(), ConsumerError> {
     if let Err(error) = &result {
         error!(
             event = "analysis_worker_runtime_failed",
@@ -309,7 +317,10 @@ pub(crate) async fn run(
             "analysis worker delivery loop stopped unexpectedly"
         );
     }
-    if let Err(error) = mark_draining_with_deadline(&control_client, &config).await {
+    // A failed claim can leave a response unread. Draining is best-effort after failure and
+    // must not keep the consumer alive indefinitely on that same connection.
+    let draining = mark_draining(control_client, &config.worker_id);
+    if let Err(error) = control_operation(config, draining).await {
         if result.is_ok() {
             return Err(error);
         }
@@ -329,19 +340,14 @@ pub(crate) async fn run(
     Ok(())
 }
 
-async fn mark_draining_with_deadline(
-    client: &tokio_postgres::Client,
+async fn control_operation<T>(
     config: &AnalysisConsumerConfig,
-) -> Result<(), ConsumerError> {
-    // A failed claim can leave a response unread. Draining is best-effort after failure and
-    // must not keep the consumer alive indefinitely on that same connection.
-    tokio::time::timeout(
-        config.control_response_timeout(),
-        mark_draining(client, &config.worker_id),
-    )
-    .await
-    .map_err(|_elapsed| ConsumerError::ControlTimeout)??;
-    Ok(())
+    operation: impl Future<Output = Result<T, ControlError>>,
+) -> Result<T, ConsumerError> {
+    tokio::time::timeout(config.control_response_timeout(), operation)
+        .await
+        .map_err(|_elapsed| ConsumerError::ControlTimeout)?
+        .map_err(ConsumerError::Control)
 }
 
 fn startup_result<T, E>(result: Result<T, E>, phase: &'static str) -> Result<T, ConsumerError>

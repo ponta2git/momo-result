@@ -559,21 +559,8 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
         def find(idHash: String) = lookup.find(idHash).flatTap(_ =>
           expiredSnapshotRead.complete(()) *> releaseExpiredSnapshot.get
         )
-      creation = InMemoryLoginAccountAdministrationRepository(accounts, repo)
-      renewing = SessionService[IO](
-        repo,
-        config.sessionTtl,
-        IO.pure(renewingAt),
-        renewingLookup,
-        creation,
-      )
-      expiring = SessionService[IO](
-        repo,
-        config.sessionTtl,
-        IO.pure(expiredAt),
-        expiredLookup,
-        creation,
-      )
+      renewing = sessionService(repo, accounts, IO.pure(renewingAt), renewingLookup)
+      expiring = sessionService(repo, accounts, IO.pure(expiredAt), expiredLookup)
       results <- renewing.authenticate(Some(created.cookieValue)).background.use { renewed =>
         renewingLookupStarted.get *>
           expiring.authenticate(Some(created.cookieValue)).background.use { expired =>
@@ -611,13 +598,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
         def find(idHash: String) = lookup.find(idHash).flatTap(_ =>
           earlierSnapshotRead.complete(()) *> releaseEarlierSnapshot.get
         )
-      earlier = SessionService[IO](
-        repo,
-        config.sessionTtl,
-        IO.pure(earlierAt),
-        earlierLookup,
-        InMemoryLoginAccountAdministrationRepository(accounts, repo),
-      )
+      earlier = sessionService(repo, accounts, IO.pure(earlierAt), earlierLookup)
       results <- earlier.authenticate(Some(created.cookieValue)).background.use { completion =>
         for
           _ <- earlierSnapshotRead.get
@@ -697,11 +678,23 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       sessions: AppSessionsRepository[IO],
       accounts: InMemoryLoginAccountsRepository[IO],
       now: IO[Instant],
+  ): SessionService[IO] = sessionService(
+    sessions,
+    accounts,
+    now,
+    SessionAccountLookup.fromRepositories(sessions, accounts),
+  )
+
+  private def sessionService(
+      sessions: AppSessionsRepository[IO],
+      accounts: InMemoryLoginAccountsRepository[IO],
+      now: IO[Instant],
+      sessionAccounts: SessionAccountLookup[IO],
   ): SessionService[IO] = SessionService[IO](
     sessions,
     config.sessionTtl,
     now,
-    SessionAccountLookup.fromRepositories(sessions, accounts),
+    sessionAccounts,
     InMemoryLoginAccountAdministrationRepository(accounts, sessions)
   )
 

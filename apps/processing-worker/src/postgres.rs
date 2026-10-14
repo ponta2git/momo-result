@@ -148,30 +148,7 @@ fn tls_connector(ca_file: Option<&Path>) -> Result<MakeTlsConnector, PostgresErr
 }
 
 #[cfg(test)]
-pub(crate) mod test_support {
-    use std::io;
-
-    use tokio::{
-        io::{AsyncReadExt as _, AsyncWriteExt as _},
-        net::{TcpListener, TcpStream},
-    };
-
-    /// Completes startup only; each test owns its query response or deliberate silence.
-    pub(crate) async fn accept_startup(listener: &TcpListener) -> io::Result<TcpStream> {
-        let (mut socket, _) = listener.accept().await?;
-        let startup_length = socket.read_u32().await?;
-        if !(8..1024).contains(&startup_length) {
-            return Err(io::Error::other(
-                "invalid PostgreSQL test startup packet length",
-            ));
-        }
-        let length = usize::try_from(startup_length - 4).map_err(io::Error::other)?;
-        socket.read_exact(&mut vec![0; length]).await?;
-        // AuthenticationOk followed by ReadyForQuery permits normal client requests.
-        socket.write_all(b"R\0\0\0\x08\0\0\0\0Z\0\0\0\x05I").await?;
-        Ok(socket)
-    }
-}
+pub(crate) mod test_support;
 
 #[cfg(test)]
 mod tests {

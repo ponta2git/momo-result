@@ -3,26 +3,24 @@ package momo.api.integration
 import cats.effect.{IO, Resource}
 import org.postgresql.PGConnection
 
-import momo.api.adapters.postgres.PostgresOutboxNotifier
-import momo.api.usecases.queue.OutboxDrainResult
+import momo.api.adapters.postgres.PostgresWorkerNotifier
 
-final class PostgresOutboxNotifierSpec extends IntegrationSuite:
-  PostgresOutboxNotifier.Channel.values.foreach { channel =>
+final class PostgresWorkerNotifierSpec extends IntegrationSuite:
+  PostgresWorkerNotifier.Channel.values.foreach { channel =>
     test(s"relays a payloadless ${channel.value} notification and becomes idle"):
       listener(channel).use { connection =>
         val postgres = connection.unwrap(classOf[PGConnection])
-        val notifier = PostgresOutboxNotifier[IO](transactor, channel)
+        val notifier = PostgresWorkerNotifier[IO](transactor, channel)
         for
-          submitted <- notifier.drainBatch
+          _ <- notifier.notifyWorker
           notifications <- IO.blocking(Option(postgres.getNotifications(5000)).toList.flatten)
         yield
-          assertEquals(submitted, OutboxDrainResult.Idle(None))
           assertEquals(notifications.map(_.getName).toList, List(channel.value))
           assertEquals(notifications.map(_.getParameter).toList, List(""))
       }
   }
 
-  private def listener(channel: PostgresOutboxNotifier.Channel): Resource[IO, java.sql.Connection] =
+  private def listener(channel: PostgresWorkerNotifier.Channel): Resource[IO, java.sql.Connection] =
     Resource
       .fromAutoCloseable(IO.blocking(dataSource.getConnection))
       .evalTap(connection =>
@@ -33,4 +31,4 @@ final class PostgresOutboxNotifierSpec extends IntegrationSuite:
         }
       )
 
-end PostgresOutboxNotifierSpec
+end PostgresWorkerNotifierSpec

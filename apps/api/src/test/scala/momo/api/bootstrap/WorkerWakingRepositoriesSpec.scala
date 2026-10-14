@@ -8,31 +8,27 @@ import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.noop.NoOpFactory
 
 import momo.api.MomoCatsEffectSuite
-import momo.api.domain.*
 import momo.api.domain.ids.*
+import momo.api.domain.{OcrJobInput, *}
 import momo.api.errors.AppError
-import momo.api.ports.queue.OcrJobEnqueueRequest
 import momo.api.repositories.*
 import momo.api.repositories.OcrJobCreationStore.OcrJobCreationRejection
 import momo.api.usecases.queue.{
-  OutboxDrainResult,
-  OutboxKind,
-  OutboxWakeCoordinator,
-  OutboxWakeCoordinatorConfig,
-  OutboxWakeDriver,
-  OutboxWakeSink,
-  OutboxWakeSubmitResult,
-  OutboxWakeup,
-  PostCommitEffects
+  PostCommitEffects,
+  WorkerWakeKind,
+  WorkerWakeRelay,
+  WorkerWakeSink,
+  WorkerWakeSubmitResult,
+  WorkerWakeup
 }
 import momo.api.usecases.testing.MatchFixtures
 
-final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
+final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
   private given LoggerFactory[IO] = NoOpFactory[IO]
 
   private val now = Instant.parse("2026-08-15T00:00:00Z")
-  private val titleId = GameTitleId.unsafeFromString("title-outbox-wake")
-  private val accountId = AccountId.unsafeFromString("account-outbox-wake")
+  private val titleId = GameTitleId.unsafeFromString("title-worker-wake")
+  private val accountId = AccountId.unsafeFromString("account-worker-wake")
 
   test("OCR creation wakes only after an accepted durable result"):
     for
@@ -43,7 +39,7 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
       )))
       sink <- RecordingSink.create
       closed <- Ref.of[IO, Int](0)
-      store = OutboxWakingRepositories.ocrJobCreation(
+      store = WorkerWakingRepositories.ocrJobCreation(
         ocrCreationStore(result),
         sink,
         closed.update(_ + 1),
@@ -60,7 +56,7 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
       assertEquals(rejected, Left(OcrJobCreationRejection.InvalidPlan))
       assertEquals(
         effects,
-        List(PostCommitEffects.wakeAll(OutboxKind.Ocr, OutboxKind.OcrSubmissions))
+        List(PostCommitEffects.wakeAll(WorkerWakeKind.ProcessingJobs, WorkerWakeKind.OcrSubmissions))
       )
 
   test("match update and actual deletion wake analysis while false deletion does not"):
@@ -69,7 +65,7 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
       deleteResult <- Ref.of[IO, Boolean](true)
       sink <- RecordingSink.create
       closed <- Ref.of[IO, Int](0)
-      repository = OutboxWakingRepositories.matches(
+      repository = WorkerWakingRepositories.matches(
         matchesRepository(updateResult, deleteResult),
         sink,
         closed.update(_ + 1),
@@ -87,7 +83,7 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
       assertEquals(rejected, Left(AppError.Conflict("rejected")))
       assertEquals(
         effects,
-        List.fill(2)(PostCommitEffects.wake(OutboxKind.SeriesAnalysis)),
+        List.fill(2)(PostCommitEffects.wake(WorkerWakeKind.ProcessingJobs)),
       )
 
   test("confirmation and recalculation wake only on accepted state transitions"):
@@ -100,12 +96,12 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
       )
       sink <- RecordingSink.create
       closed <- Ref.of[IO, Int](0)
-      confirmations = OutboxWakingRepositories.matchConfirmation(
+      confirmations = WorkerWakingRepositories.matchConfirmation(
         confirmationRepository(confirmationResult),
         sink,
         closed.update(_ + 1),
       )
-      analysis = OutboxWakingRepositories.seriesAnalysis(
+      analysis = WorkerWakingRepositories.seriesAnalysis(
         seriesAnalysisRepository(recalculationResult),
         sink,
         closed.update(_ + 1),
@@ -123,7 +119,7 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
       assertEquals(rejectedConfirmation, Left(AppError.Conflict("rejected")))
       assertEquals(
         effects,
-        List.fill(2)(PostCommitEffects.wake(OutboxKind.SeriesAnalysis)),
+        List.fill(2)(PostCommitEffects.wake(WorkerWakeKind.ProcessingJobs)),
       )
 
   test("a closed sink escalates runtime failure without changing the committed result"):
@@ -135,7 +131,7 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
       )))
       sink <- RecordingSink.closed
       closed <- Ref.of[IO, Int](0)
-      store = OutboxWakingRepositories.ocrJobCreation(
+      store = WorkerWakingRepositories.ocrJobCreation(
         ocrCreationStore(result),
         sink,
         closed.update(_ + 1),
@@ -151,7 +147,7 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
       updateResult <- Ref.of[IO, Either[AppError, Unit]](Right(()))
       deleteResult <- Ref.of[IO, Boolean](false)
       escalations <- Ref.of[IO, Int](0)
-      repository = OutboxWakingRepositories.matches(
+      repository = WorkerWakingRepositories.matches(
         matchesRepository(updateResult, deleteResult),
         FailingSink,
         escalations.update(_ + 1),
@@ -164,26 +160,23 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
 
   test("analysis commits return during stalled notification I/O and shutdown cancels the relay"):
     TestControl.executeEmbed {
-      OutboxWakeup.resource[IO].use { wakeup =>
+      WorkerWakeup.resource[IO].use { wakeup =>
         for
           updateResult <- Ref.of[IO, Either[AppError, Unit]](Right(()))
           deleteResult <- Ref.of[IO, Boolean](false)
           notificationStarted <- Deferred[IO, Unit]
           notificationCancelled <- Deferred[IO, Unit]
-          notifier = new OutboxWakeDriver[IO]:
-            override def drainBatch: IO[OutboxDrainResult] =
-              (notificationStarted.complete(()).void *> IO.never[OutboxDrainResult])
-                .onCancel(notificationCancelled.complete(()).void)
-          repository = OutboxWakingRepositories.matches(
+          notifier = (notificationStarted.complete(()).void *> IO.never[Unit])
+            .onCancel(notificationCancelled.complete(()).void)
+          repository = WorkerWakingRepositories.matches(
             matchesRepository(updateResult, deleteResult),
             wakeup,
             IO.raiseError(new IllegalStateException("unexpected sink closure")),
           )
-          results <- OutboxWakeCoordinator.resource[IO](
-            OutboxKind.SeriesAnalysis,
+          results <- WorkerWakeRelay.resource[IO](
+            WorkerWakeKind.ProcessingJobs,
             wakeup,
             notifier,
-            OutboxWakeCoordinatorConfig(coldRecoveryInterval = None),
             IO.raiseError[Unit],
           ).use(_ => notificationStarted.get *> repository.update(matchRecord, now).replicateA(32))
           _ <- notificationCancelled.get
@@ -195,7 +188,7 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
     for
       sink <- RecordingSink.create
       closed <- Ref.of[IO, Int](0)
-      repository = OutboxWakingRepositories.matches(
+      repository = WorkerWakingRepositories.matches(
         failingMatchesRepository,
         sink,
         closed.update(_ + 1),
@@ -208,25 +201,22 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
 
   test("OCR admission returns while the submission notifier stalls and shutdown cancels the relay"):
     TestControl.executeEmbed {
-      OutboxWakeup.resource[IO].use { wakeup =>
+      WorkerWakeup.resource[IO].use { wakeup =>
         for
           notificationStarted <- Deferred[IO, Unit]
           notificationCancelled <- Deferred[IO, Unit]
-          notifier = new OutboxWakeDriver[IO]:
-            override def drainBatch: IO[OutboxDrainResult] =
-              (notificationStarted.complete(()).void *> IO.never[OutboxDrainResult])
-                .onCancel(notificationCancelled.complete(()).void)
+          notifier = (notificationStarted.complete(()).void *> IO.never[Unit])
+            .onCancel(notificationCancelled.complete(()).void)
           delegate = new OcrSubmissionsRepository[IO]:
             def find(id: String, owner: AccountId) = IO.pure(None)
             def put(submission: OcrSubmission) = IO.pure(Right(submission))
             def failAdmission(owner: AccountId, keyHash: String, sha256: String, byteLength: Int) =
               IO.unit
-          repository = OutboxWakingRepositories.ocrSubmissions(delegate, wakeup, IO.unit)
-          results <- OutboxWakeCoordinator.resource[IO](
-            OutboxKind.OcrSubmissions,
+          repository = WorkerWakingRepositories.ocrSubmissions(delegate, wakeup, IO.unit)
+          results <- WorkerWakeRelay.resource[IO](
+            WorkerWakeKind.OcrSubmissions,
             wakeup,
             notifier,
-            OutboxWakeCoordinatorConfig(coldRecoveryInterval = None),
             IO.raiseError[Unit],
           ).use(_ => notificationStarted.get *> repository.put(ocrSubmission).replicateA(32))
           _ <- notificationCancelled.get
@@ -242,7 +232,7 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
         def put(submission: OcrSubmission) = IO.pure(Left(AppError.Forbidden("another creator")))
         def failAdmission(owner: AccountId, keyHash: String, sha256: String, byteLength: Int) =
           IO.unit
-      repository = OutboxWakingRepositories.ocrSubmissions(delegate, sink, IO.unit)
+      repository = WorkerWakingRepositories.ocrSubmissions(delegate, sink, IO.unit)
       rejected <- repository.put(ocrSubmission)
       before <- sink.effects
       _ <- repository.failAdmission(accountId, "key", "digest", 1)
@@ -250,7 +240,7 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
     yield
       assertEquals(rejected.left.map(_.code), Left("FORBIDDEN"))
       assertEquals(before, Nil)
-      assertEquals(after, List(PostCommitEffects.wake(OutboxKind.OcrSubmissions)))
+      assertEquals(after, List(PostCommitEffects.wake(WorkerWakeKind.OcrSubmissions)))
 
   private def ocrCreationStore(
       result: Ref[IO, OcrJobCreationStore.OcrJobCreationResult]
@@ -335,20 +325,20 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
     ): IO[Either[AppError, SeriesAnalysisRecalculationAccepted]] = result.get
 
   private def acceptedRecalculation = SeriesAnalysisRecalculationAccepted(
-    requestId = "request-outbox-wake",
+    requestId = "request-worker-wake",
     acceptedAt = now,
     targetCount = 1,
     campaign = None,
-    target = Some(SeriesAnalysisAcceptedTarget(titleId, Some("job-outbox-wake"), "queued")),
+    target = Some(SeriesAnalysisAcceptedTarget(titleId, Some("job-worker-wake"), "queued")),
   )
 
   private def matchRecord = MatchFixtures.matchRecord(
-    id = MatchId.unsafeFromString("match-outbox-wake"),
-    heldEventId = HeldEventId.unsafeFromString("event-outbox-wake"),
+    id = MatchId.unsafeFromString("match-worker-wake"),
+    heldEventId = HeldEventId.unsafeFromString("event-worker-wake"),
     matchNoInEvent = 1,
     titleId = titleId,
-    seasonId = SeasonMasterId.unsafeFromString("season-outbox-wake"),
-    mapId = MapMasterId.unsafeFromString("map-outbox-wake"),
+    seasonId = SeasonMasterId.unsafeFromString("season-worker-wake"),
+    mapId = MapMasterId.unsafeFromString("map-worker-wake"),
     playedAt = now,
     createdAt = now,
     memberValues = List("member-1", "member-2", "member-3", "member-4"),
@@ -358,10 +348,10 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
   )
 
   private def ocrPlan =
-    val jobId = OcrJobId.unsafeFromString("job-outbox-wake")
-    val draftId = OcrDraftId.unsafeFromString("draft-outbox-wake")
-    val imageId = ImageId.unsafeFromString("image-outbox-wake")
-    val imageLocation = StoredImageLocation.unsafeFromString("source-images/outbox-wake.png")
+    val jobId = OcrJobId.unsafeFromString("job-worker-wake")
+    val draftId = OcrDraftId.unsafeFromString("draft-worker-wake")
+    val imageId = ImageId.unsafeFromString("image-worker-wake")
+    val imageLocation = StoredImageLocation.unsafeFromString("source-images/worker-wake.png")
     val draft = OcrDraft(
       draftId,
       jobId,
@@ -384,7 +374,7 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
       now,
       now,
     )
-    val request = OcrJobEnqueueRequest(
+    val request = OcrJobInput(
       jobId,
       draftId,
       imageId,
@@ -393,8 +383,6 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
       1L,
       "image/png",
       ScreenType.TotalAssets,
-      OcrJobEnqueueRequest.InitialAttempt,
-      now,
       OcrJobHints.empty,
       None,
     )
@@ -409,7 +397,7 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
         draftId,
         now
       ),
-      OcrQueueDispatchIntent(request, MatchDraftId.unsafeFromString("match-draft-wake")),
+      request,
       12,
     )
 
@@ -427,9 +415,9 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
 
   private final class RecordingSink private (
       ref: Ref[IO, List[PostCommitEffects]],
-      result: OutboxWakeSubmitResult,
-  ) extends OutboxWakeSink[IO]:
-    override def submit(effects: PostCommitEffects): IO[OutboxWakeSubmitResult] =
+      result: WorkerWakeSubmitResult,
+  ) extends WorkerWakeSink[IO]:
+    override def submit(effects: PostCommitEffects): IO[WorkerWakeSubmitResult] =
       ref.update(_ :+ effects).as(result)
 
     def effects: IO[List[PostCommitEffects]] = ref.get
@@ -437,16 +425,16 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
   private object RecordingSink:
     def create: IO[RecordingSink] =
       Ref.of[IO, List[PostCommitEffects]](Nil).map(
-        new RecordingSink(_, OutboxWakeSubmitResult.Accepted)
+        new RecordingSink(_, WorkerWakeSubmitResult.Accepted)
       )
 
     def closed: IO[RecordingSink] =
       Ref.of[IO, List[PostCommitEffects]](Nil).map(
-        new RecordingSink(_, OutboxWakeSubmitResult.Closed)
+        new RecordingSink(_, WorkerWakeSubmitResult.Closed)
       )
 
-  private object FailingSink extends OutboxWakeSink[IO]:
-    override def submit(effects: PostCommitEffects): IO[OutboxWakeSubmitResult] =
+  private object FailingSink extends WorkerWakeSink[IO]:
+    override def submit(effects: PostCommitEffects): IO[WorkerWakeSubmitResult] =
       IO.raiseError(new IllegalStateException("notification connection unavailable"))
 
-end OutboxWakingRepositoriesSpec
+end WorkerWakingRepositoriesSpec

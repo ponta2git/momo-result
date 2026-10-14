@@ -117,8 +117,8 @@ final class PostgresSeriesAnalysisRepository[F[_]: Async] private (
       requestedBy: AccountId,
       idempotencyKeyHash: String,
   ): F[Either[AppError, SeriesAnalysisRecalculationAccepted]] =
-    (freshId, freshId, freshId, freshId).tupled.flatMap {
-      case (operationId, requestId, jobId, outboxId) =>
+    (freshId, freshId, freshId).tupled.flatMap {
+      case (operationId, requestId, jobId) =>
         PostgresSeriesAnalysisTitleRequestOps.requestTitle(
           gameTitleId,
           requestedBy,
@@ -126,7 +126,6 @@ final class PostgresSeriesAnalysisRepository[F[_]: Async] private (
           operationId,
           requestId,
           jobId,
-          outboxId,
         ).transact(transactor)
     }
 

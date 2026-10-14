@@ -13,7 +13,6 @@ import momo.api.adapters.inmemory.{
   InMemoryMemberAliasesRepository,
   InMemoryOcrDraftsRepository,
   InMemoryOcrJobCreationStore,
-  InMemoryOcrJobQueuePublisher,
   InMemoryOcrJobsRepository,
   InMemoryOcrSubmissionsRepository
 }
@@ -54,8 +53,8 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
 
   private val pngBytes: Array[Byte] = TestImages.png1x1
 
-  test("attaches OCR to a match draft without a held event and queues the image") {
-    inMemoryQueueFixture(
+  test("attaches OCR to a match draft without a held event and persists the image input") {
+    inMemoryFixture(
       prefix = "momo-api-create-job",
       idSeed = List("job-1", "draft-1"),
       requestId = Some("test-req-id"),
@@ -75,19 +74,18 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         ).flatMap(fromAppEither)
         foundJob <- fixture.jobs.find(created.job.id)
         foundDraft <- fixture.drafts.find(created.draft.id)
-        published <- fixture.queue.published
+        inputs <- fixture.jobs.inputs
         matchDraft <- fixture.matchDrafts.find(defaultMatchDraftId)
       yield
         assertEquals(matchDraft.flatMap(_.heldEventId), None)
         assertEquals(matchDraft.flatMap(_.totalAssetsDraftId), Some(created.draft.id))
         assertEquals(foundJob.map(_.status.wire), Some("queued"))
         assertEquals(foundDraft.map(_.id), Some(created.draft.id))
-        assertEquals(published.map(_.jobId.value), Vector("job-1"))
-        assertEquals(published.head.requestedScreenType, ScreenType.TotalAssets)
-        assertEquals(published.head.attempt, 1)
-        assertEquals(published.head.requestId, Some("test-req-id"))
+        assertEquals(inputs.map(_.jobId.value), Vector("job-1"))
+        assertEquals(inputs.head.requestedScreenType, ScreenType.TotalAssets)
+        assertEquals(inputs.head.requestId, Some("test-req-id"))
         assertEquals(
-          published.head.hints.knownPlayerAliases.map(hint => hint.memberId.value -> hint.aliases),
+          inputs.head.hints.knownPlayerAliases.map(hint => hint.memberId.value -> hint.aliases),
           List(
             "member_ponta" -> List("ぽんた"),
             "member_akane_mami" -> List("あかねまみ", "NO11"),
@@ -95,13 +93,13 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
             "member_eu" -> List("いーゆー"),
           ),
         )
-        assertEquals(published.head.hints.computerPlayerAliases, Nil)
+        assertEquals(inputs.head.hints.computerPlayerAliases, Nil)
     }
   }
 
   List("missing", "cancelled", "confirmed").foreach { state =>
     test(s"rejects a $state match draft before creating or publishing OCR") {
-      inMemoryQueueFixture("momo-ocr-draft-guard", List("job-guard", "draft-guard"), None, 12)
+      inMemoryFixture("momo-ocr-draft-guard", List("job-guard", "draft-guard"), None, 12)
         .use { fixture =>
           val id = MatchDraftId.unsafeFromString(s"match-draft-$state")
           val common = editableDraft(id).common
@@ -121,7 +119,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
             )
             job <- fixture.jobs.find(OcrJobId.unsafeFromString("job-guard"))
             draft <- fixture.drafts.find(OcrDraftId.unsafeFromString("draft-guard"))
-            published <- fixture.queue.published
+            inputs <- fixture.jobs.inputs
           yield
             result match
               case Left(_: AppError.NotFound) => assertEquals(state, "missing")
@@ -129,13 +127,13 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
               case other => fail(s"expected match draft rejection, got $other")
             assertEquals(job, None)
             assertEquals(draft, None)
-            assertEquals(published, Vector.empty)
+            assertEquals(inputs, Vector.empty)
         }
     }
   }
 
-  test("merges member aliases from DB into OCR queue hints") {
-    inMemoryQueueFixture(
+  test("merges member aliases from DB into OCR input hints") {
+    inMemoryFixture(
       prefix = "momo-api-create-job-aliases",
       idSeed = List("job-1", "draft-1"),
       requestId = None,
@@ -165,19 +163,19 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
           ),
           fixture.requestId,
         ).flatMap(fromAppEither)
-        published <- fixture.queue.published
+        inputs <- fixture.jobs.inputs
       yield
         assertEquals(
-          published.head.hints.knownPlayerAliases,
+          inputs.head.hints.knownPlayerAliases,
           List(PlayerAliasHint(MemberId.unsafeFromString("member_ponta"), List("ぽんた", "ポン太社長"))),
         )
-        assertEquals(published.head.hints.computerPlayerAliases, List("えんま"))
+        assertEquals(inputs.head.hints.computerPlayerAliases, List("えんま"))
     }
   }
 
   List("reiwa", "world", "momotetsu_2").foreach { layout =>
     test(s"preserves $layout hints without applying worker computer-player defaults") {
-      inMemoryQueueFixture("momo-ocr-layout-hints", List("job-1", "draft-1"), None, 12)
+      inMemoryFixture("momo-ocr-layout-hints", List("job-1", "draft-1"), None, 12)
         .use { fixture =>
           for
             image <- fixture.savePng
@@ -191,17 +189,17 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
               ),
               None,
             ).flatMap(fromAppEither)
-            published <- fixture.queue.published
+            inputs <- fixture.jobs.inputs
           yield
-            assertEquals(published.head.hints.gameTitle, Some("桃太郎電鉄"))
-            assertEquals(published.head.hints.layoutFamily, Some(layout))
-            assertEquals(published.head.hints.computerPlayerAliases, Nil)
+            assertEquals(inputs.head.hints.gameTitle, Some("桃太郎電鉄"))
+            assertEquals(inputs.head.hints.layoutFamily, Some(layout))
+            assertEquals(inputs.head.hints.computerPlayerAliases, Nil)
         }
     }
   }
 
-  test("normalizes persisted aliases after defaults and bounds the queued player hints") {
-    inMemoryQueueFixture("momo-ocr-default-aliases", List("job-1", "draft-1"), None, 12)
+  test("normalizes persisted aliases after defaults and bounds the stored player hints") {
+    inMemoryFixture("momo-ocr-default-aliases", List("job-1", "draft-1"), None, 12)
       .use { fixture =>
         val aliases = List(" ぽんた社長 ", "社長", " ", " ポン太社長 ", "ポン太") ++
           (1 to 10).map(index => s"別名$index")
@@ -231,9 +229,9 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
             ),
             None,
           ).flatMap(fromAppEither)
-          published <- fixture.queue.published
+          inputs <- fixture.jobs.inputs
         yield
-          val hints = published.head.hints
+          val hints = inputs.head.hints
           assertEquals(hints.knownPlayerAliases.length, 4)
           assertEquals(
             hints.knownPlayerAliases.head.aliases,
@@ -244,7 +242,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
   }
 
   test("rejects invalid enriched aliases before storing OCR records or publishing") {
-    inMemoryQueueFixture("momo-ocr-enriched-hints-limit", List("job-1", "draft-1"), None, 12)
+    inMemoryFixture("momo-ocr-enriched-hints-limit", List("job-1", "draft-1"), None, 12)
       .use { fixture =>
         for
           _ <- fixture.memberAliases.create(MemberAlias(
@@ -265,7 +263,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
           )
           job <- fixture.jobs.find(OcrJobId.unsafeFromString("job-1"))
           draft <- fixture.drafts.find(OcrDraftId.unsafeFromString("draft-1"))
-          published <- fixture.queue.published
+          inputs <- fixture.jobs.inputs
         yield
           result match
             case Left(AppError.ValidationFailed(detail)) =>
@@ -273,12 +271,12 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
             case other => fail(s"expected enriched hints validation failure, got $other")
           assertEquals(job, None)
           assertEquals(draft, None)
-          assertEquals(published, Vector.empty)
+          assertEquals(inputs, Vector.empty)
       }
   }
 
   test("rejects OCR hints that exceed Redis payload contract limits") {
-    inMemoryQueueFixture(
+    inMemoryFixture(
       prefix = "momo-api-create-job-hints-limit",
       idSeed = List("job-1", "draft-1"),
       requestId = None,
@@ -309,7 +307,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
   }
 
   test("rejects hints that exceed the encoded byte limit only after persisted aliases are merged") {
-    inMemoryQueueFixture("momo-ocr-enriched-hints-bytes", List("job-1", "draft-1"), None, 12)
+    inMemoryFixture("momo-ocr-enriched-hints-bytes", List("job-1", "draft-1"), None, 12)
       .use { fixture =>
         val wide = "桃" * OcrJobHints.MaxAliasLength
         val requested = List.tabulate(4) { index =>
@@ -339,7 +337,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
           )
           job <- fixture.jobs.find(OcrJobId.unsafeFromString("job-1"))
           draft <- fixture.drafts.find(OcrDraftId.unsafeFromString("draft-1"))
-          published <- fixture.queue.published
+          inputs <- fixture.jobs.inputs
         yield
           assertEquals(OcrHintsCodec.validate(hints), Right(()))
           result match
@@ -347,18 +345,18 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
             case other => fail(s"expected encoded hints validation failure, got $other")
           assertEquals(job, None)
           assertEquals(draft, None)
-          assertEquals(published, Vector.empty)
+          assertEquals(inputs, Vector.empty)
       }
   }
 
   test("rejects before creating OCR records when admission guard is closed") {
     val rejectingAdmission = new OcrAdmissionGuard[IO]:
       override def ensureAvailable: IO[Either[AppError, Unit]] = IO.pure(Left(
-        AppError.ServiceUnavailable("OCR queue is temporarily unavailable. Try again later.")
+        AppError.ServiceUnavailable("OCR processing is temporarily unavailable. Try again later.")
       ))
       override def healthStatus: IO[String] = IO.pure("degraded:test")
 
-    inMemoryQueueFixture(
+    inMemoryFixture(
       prefix = "momo-api-create-job-admission-closed",
       idSeed = List("job-1", "draft-1"),
       requestId = None,
@@ -379,20 +377,20 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         )
         foundJob <- fixture.jobs.find(OcrJobId.unsafeFromString("job-1"))
         foundDraft <- fixture.drafts.find(OcrDraftId.unsafeFromString("draft-1"))
-        published <- fixture.queue.published
+        inputs <- fixture.jobs.inputs
       yield
         result match
           case Left(AppError.ServiceUnavailable(detail)) =>
-            assert(detail.contains("OCR queue is temporarily unavailable"))
+            assert(detail.contains("OCR processing is temporarily unavailable"))
           case other => fail(s"expected Left(AppError.ServiceUnavailable), got: $other")
         assertEquals(foundJob, None)
         assertEquals(foundDraft, None)
-        assertEquals(published, Vector.empty)
+        assertEquals(inputs, Vector.empty)
     }
   }
 
   test("rejects re-running a draft OCR slot while its previous job is active") {
-    inMemoryQueueFixture(
+    inMemoryFixture(
       prefix = "momo-api-create-job-active-slot",
       idSeed = List("job-new-slot", "draft-new-slot"),
       requestId = None,
@@ -422,19 +420,19 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
           fixture.requestId,
         )
         found <- fixture.matchDrafts.find(matchDraftId)
-        published <- fixture.queue.published
+        inputs <- fixture.jobs.inputs
       yield
         result match
           case Left(AppError.Conflict(detail)) =>
             assert(detail.contains("match draft could not be attached"))
           case other => fail(s"expected Left(AppError.Conflict), got: $other")
         assertEquals(found.flatMap(_.totalAssetsDraftId), Some(oldDraftId))
-        assertEquals(published, Vector.empty)
+        assertEquals(inputs, Vector.empty)
     }
   }
 
   test("allows re-running a draft OCR slot after its previous job is terminal") {
-    inMemoryQueueFixture(
+    inMemoryFixture(
       prefix = "momo-api-create-job-terminal-slot",
       idSeed = List("job-new-slot", "draft-new-slot"),
       requestId = None,
@@ -463,24 +461,24 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
           fixture.requestId,
         ).flatMap(fromAppEither)
         found <- fixture.matchDrafts.find(matchDraftId)
-        published <- fixture.queue.published
+        inputs <- fixture.jobs.inputs
       yield
         assertEquals(created.draft.id, newDraftId)
         assertEquals(found.flatMap(_.totalAssetsDraftId), Some(newDraftId))
         assertEquals(found.map(_.status), Some(MatchDraftStatus.OcrRunning))
-        assertEquals(published.map(_.jobId.value), Vector("job-new-slot"))
+        assertEquals(inputs.map(_.jobId.value), Vector("job-new-slot"))
     }
   }
 
-  private def inMemoryQueueFixture(
+  private def inMemoryFixture(
       prefix: String,
       idSeed: List[String],
       requestId: Option[String],
       activeJobLimit: Int,
   ): Resource[IO, Fixture] =
-    inMemoryQueueFixture(prefix, idSeed, requestId, activeJobLimit, OcrAdmissionGuard.allowAll[IO])
+    inMemoryFixture(prefix, idSeed, requestId, activeJobLimit, OcrAdmissionGuard.allowAll[IO])
 
-  private def inMemoryQueueFixture(
+  private def inMemoryFixture(
       prefix: String,
       idSeed: List[String],
       requestId: Option[String],
@@ -494,7 +492,6 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       _ <- matchDrafts.create(editableDraft(defaultMatchDraftId))
       submissions <- InMemoryOcrSubmissionsRepository.create[IO](matchDrafts)
       memberAliases <- InMemoryMemberAliasesRepository.create[IO]
-      queue <- InMemoryOcrJobQueuePublisher.create[IO]
       imageStore = LocalFsImageStore[IO](dir)
     yield Fixture(
       imageStore,
@@ -503,7 +500,6 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       matchDrafts,
       submissions,
       memberAliases,
-      queue,
       idSeed,
       requestId,
       activeJobLimit,
@@ -571,7 +567,6 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       matchDrafts: InMemoryMatchDraftsRepository[IO],
       submissions: InMemoryOcrSubmissionsRepository[IO],
       memberAliases: InMemoryMemberAliasesRepository[IO],
-      queue: InMemoryOcrJobQueuePublisher[IO],
       idSeed: List[String],
       requestId: Option[String],
       activeJobLimit: Int,
@@ -593,7 +588,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
               drafts,
               drafts.create,
               jobs,
-              jobs.create,
+              jobs.createWithInput,
               matchDrafts,
               jobs.existsActiveByDraft,
               submissions,
@@ -603,7 +598,6 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
           submissions = submissions,
           jobs = jobs,
           drafts = drafts,
-          queueSubmitter = OcrJobQueueSubmitter.nonDurable[IO](jobs, matchDrafts, queue),
           admissionGuard = admissionGuard,
           now = IO.pure(now),
           nextJobId = ids.modify {

@@ -132,7 +132,6 @@ private[bootstrap] object UseCaseWiring:
 
   final case class RuntimeServices[F[_]](
       healthDetails: F[HealthDetailsResponse],
-      ocrQueueSubmitter: OcrJobQueueSubmitter[F],
       ocrAdmissionGuard: OcrAdmissionGuard[F],
       oauthClient: DiscordOAuthClient[F],
       loginRateLimiter: RateLimiter[F],

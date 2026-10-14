@@ -372,7 +372,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
       result <- repo.adminOverview(Some(titleId))
     yield assertEquals(result, Left(AppError.AnalysisStateUnavailable()))
 
-  test("manual title request creates durable operation, job request, job and outbox"):
+  test("manual title request creates durable operation, job request, ready job"):
     for
       _ <- seedTitle
       _ <- sql"""
@@ -384,12 +384,13 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
       """.update.run.transact(transactor)
       repo <- repository
       accepted <- repo.requestTitleRecalculation(titleId, accountId, "hash-title-request")
-      counts <- sql"""
+      counts <-
+        sql"""
         SELECT
           (SELECT COUNT(*)::int FROM series_analysis_operation_requests),
           (SELECT COUNT(*)::int FROM series_analysis_job_requests),
           (SELECT COUNT(*)::int FROM series_analysis_jobs WHERE status = 'queued'),
-          (SELECT COUNT(*)::int FROM series_analysis_queue_outbox WHERE status = 'pending')
+          (SELECT COUNT(*)::int FROM series_analysis_jobs WHERE status = 'queued' AND available_at <= now())
       """.query[(Int, Int, Int, Int)].unique.transact(transactor)
       control <- sql"""
         SELECT operation.id,
@@ -399,14 +400,11 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
                job.status,
                job.trigger,
                request.validation_contract_id,
-               job.validation_contract_id,
-               outbox.job_id,
-               outbox.status
+               job.validation_contract_id
         FROM series_analysis_operation_requests operation
         JOIN series_analysis_job_requests request
           ON request.operation_request_id = operation.id
         JOIN series_analysis_jobs job ON job.id = request.assigned_job_id
-        JOIN series_analysis_queue_outbox outbox ON outbox.job_id = job.id
       """.query[
         (
             String,
@@ -416,9 +414,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
             String,
             String,
             Option[String],
-            Option[String],
-            String,
-            String
+            Option[String]
         )
       ].unique
         .transact(transactor)
@@ -442,8 +438,6 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
                   "manual",
                   Some("series-analysis-artifact-v6-full-validation-v2"),
                   Some("series-analysis-artifact-v6-full-validation-v2"),
-                  target.jobId.getOrElse(fail("created job id is missing")),
-                  "pending",
                 ),
               )
             case None => fail("accepted title recalculation has no target")
@@ -479,13 +473,11 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
       accepted <- repo.requestTitleRecalculation(titleId, accountId, "hash-coalesced-contract")
       stored <- sql"""
         SELECT job.validation_contract_id, request.validation_contract_id,
-               request.assigned_job_id,
-               (SELECT COUNT(*)::int FROM series_analysis_queue_outbox outbox
-                WHERE outbox.job_id = job.id)
+               request.assigned_job_id
         FROM series_analysis_jobs job
         JOIN series_analysis_job_requests request ON request.assigned_job_id = job.id
         WHERE job.id = $queuedJobId
-      """.query[(Option[String], Option[String], Option[String], Int)].unique.transact(transactor)
+      """.query[(Option[String], Option[String], Option[String])].unique.transact(transactor)
     yield
       accepted match
         case Right(value) =>
@@ -501,7 +493,6 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
           Some("series-analysis-artifact-v6-full-validation-v2"),
           Some("series-analysis-artifact-v6-full-validation-v2"),
           Some(queuedJobId),
-          1,
         ),
       )
 
@@ -541,13 +532,14 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         WHERE game_title_id = $titleId
       """.update.run.transact(transactor)
       replay <- repo.requestAllRecalculation(accountId, "hash-all-request")
-      snapshotCounts <- sql"""
+      snapshotCounts <-
+        sql"""
         SELECT
           (SELECT COUNT(*)::int FROM series_analysis_operation_requests),
           (SELECT COUNT(*)::int FROM series_analysis_campaigns),
           (SELECT COUNT(*)::int FROM series_analysis_campaign_targets),
           (SELECT COUNT(*)::int FROM series_analysis_jobs),
-          (SELECT COUNT(*)::int FROM series_analysis_queue_outbox)
+          (SELECT COUNT(*)::int FROM series_analysis_jobs WHERE status = 'queued' AND available_at <= now())
       """.query[(Int, Int, Int, Int, Int)].unique.transact(transactor)
       snapshots <- sql"""
         SELECT game_title_id, input_revision, algorithm_version,
@@ -607,13 +599,14 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         repo <- repository
         title <- repo.requestTitleRecalculation(secondId, accountId, "hash-unsupported-title")
         campaign <- repo.requestAllRecalculation(accountId, "hash-unsupported-all")
-        counts <- sql"""
+        counts <-
+          sql"""
           SELECT (SELECT COUNT(*)::int FROM series_analysis_operation_requests),
                  (SELECT COUNT(*)::int FROM series_analysis_campaigns),
                  (SELECT COUNT(*)::int FROM series_analysis_campaign_targets),
                  (SELECT COUNT(*)::int FROM series_analysis_jobs),
                  (SELECT COUNT(*)::int FROM series_analysis_job_requests),
-                 (SELECT COUNT(*)::int FROM series_analysis_queue_outbox)
+                 (SELECT COUNT(*)::int FROM series_analysis_jobs WHERE status = 'queued' AND available_at <= now())
         """.query[(Int, Int, Int, Int, Int, Int)].unique.transact(transactor)
       yield
         assertEquals(title, Left(AppError.AnalysisStateUnavailable()))
@@ -638,7 +631,8 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
       analysis <- repository
       _ <- analysis.requestAllRecalculation(accountId, "hash-delete-campaign")
       _ <- new PostgresGameTitlesRepository[IO](transactor).delete(titleId)
-      state <- sql"""
+      state <-
+        sql"""
         SELECT
           (SELECT status FROM series_analysis_campaign_targets),
           (SELECT status FROM series_analysis_campaigns),
@@ -647,10 +641,10 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
           (SELECT status FROM series_analysis_operation_requests),
           (SELECT COUNT(*)::int FROM series_analysis_job_requests),
           (SELECT COUNT(*)::int FROM series_analysis_jobs),
-          (SELECT COUNT(*)::int FROM series_analysis_queue_outbox),
+          (SELECT COUNT(*)::int FROM series_analysis_jobs WHERE status = 'queued' AND available_at <= now()),
           (SELECT COUNT(*)::int FROM series_analysis_artifacts)
       """.query[(String, String, Int, Int, String, Int, Int, Int, Int)].unique
-        .transact(transactor)
+          .transact(transactor)
     yield assertEquals(
       state,
       ("skipped_title_deleted", "terminal", 1, 1, "terminal", 0, 0, 0, 0),

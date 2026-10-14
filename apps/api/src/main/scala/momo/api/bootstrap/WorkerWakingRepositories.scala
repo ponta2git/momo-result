@@ -12,17 +12,17 @@ import momo.api.errors.AppError
 import momo.api.logging.SafeLog
 import momo.api.repositories.*
 import momo.api.usecases.queue.{
-  OutboxKind,
-  OutboxWakeSink,
-  OutboxWakeSubmitResult,
-  PostCommitEffects
+  PostCommitEffects,
+  WorkerWakeKind,
+  WorkerWakeSink,
+  WorkerWakeSubmitResult
 }
 
-/** Adds outbox wake hints after successful durable repository transitions. */
-private[bootstrap] object OutboxWakingRepositories:
+/** Adds worker wake hints after successful durable repository transitions. */
+private[bootstrap] object WorkerWakingRepositories:
   def ocrJobCreation[F[_]: Async: LoggerFactory](
       delegate: OcrJobCreationStore[F],
-      sink: OutboxWakeSink[F],
+      sink: WorkerWakeSink[F],
       onSinkClosed: F[Unit],
   ): OcrJobCreationStore[F] =
     val wake = WakeAfterCommit(sink, onSinkClosed)
@@ -31,12 +31,12 @@ private[bootstrap] object OutboxWakingRepositories:
           plan: OcrJobCreationPlan
       ): F[OcrJobCreationStore.OcrJobCreationResult] = wake(
         delegate.store(plan),
-        PostCommitEffects.wakeAll(OutboxKind.Ocr, OutboxKind.OcrSubmissions),
+        PostCommitEffects.wakeAll(WorkerWakeKind.ProcessingJobs, WorkerWakeKind.OcrSubmissions),
       )(_.exists(_.created))
 
   def ocrSubmissions[F[_]: Async: LoggerFactory](
       delegate: OcrSubmissionsRepository[F],
-      sink: OutboxWakeSink[F],
+      sink: WorkerWakeSink[F],
       onSinkClosed: F[Unit],
   ): OcrSubmissionsRepository[F] =
     val wake = WakeAfterCommit(sink, onSinkClosed)
@@ -44,7 +44,7 @@ private[bootstrap] object OutboxWakingRepositories:
       export delegate.find
 
       override def put(submission: OcrSubmission): F[Either[AppError, OcrSubmission]] =
-        wake(delegate.put(submission), OutboxKind.OcrSubmissions)(_.isRight)
+        wake(delegate.put(submission), WorkerWakeKind.OcrSubmissions)(_.isRight)
 
       override def failAdmission(
           owner: AccountId,
@@ -53,68 +53,36 @@ private[bootstrap] object OutboxWakingRepositories:
           byteLength: Int,
       ): F[Unit] = wake(
         delegate.failAdmission(owner, keyHash, sha256, byteLength),
-        OutboxKind.OcrSubmissions,
+        WorkerWakeKind.OcrSubmissions,
       )(_ => true)
 
   def ocrJobs[F[_]: Async: LoggerFactory](
       delegate: OcrJobsRepository[F],
-      sink: OutboxWakeSink[F],
+      sink: WorkerWakeSink[F],
       onSinkClosed: F[Unit],
   ): OcrJobsRepository[F] =
     val wake = WakeAfterCommit(sink, onSinkClosed)
     new OcrJobsRepository[F]:
-      export delegate.{find, countActive}
-
-      override def markFailed(jobId: OcrJobId, failure: OcrFailure, now: Instant): F[Unit] =
-        wake(delegate.markFailed(jobId, failure, now), OutboxKind.OcrSubmissions)(_ => true)
+      export delegate.{find, countActive, backlogSnapshot}
 
       override def cancelQueued(jobId: OcrJobId, now: Instant): F[Boolean] =
-        wake(delegate.cancelQueued(jobId, now), OutboxKind.OcrSubmissions)(identity)
+        wake(delegate.cancelQueued(jobId, now), WorkerWakeKind.OcrSubmissions)(identity)
 
       override def cancelQueuedOwned(
           jobId: OcrJobId,
           owner: AccountId,
           now: Instant
       ): F[OcrJobCancellationResult] =
-        wake(delegate.cancelQueuedOwned(jobId, owner, now), OutboxKind.OcrSubmissions)(
+        wake(delegate.cancelQueuedOwned(jobId, owner, now), WorkerWakeKind.OcrSubmissions)(
           _ == OcrJobCancellationResult.Cancelled
         )
 
       override def cancelQueuedByDraftIds(ids: List[OcrDraftId], now: Instant): F[Int] =
-        wake(delegate.cancelQueuedByDraftIds(ids, now), OutboxKind.OcrSubmissions)(_ > 0)
-
-  def ocrMaintenance[F[_]: Async: LoggerFactory](
-      delegate: OcrJobMaintenanceRepository[F],
-      sink: OutboxWakeSink[F],
-      onSinkClosed: F[Unit],
-  ): OcrJobMaintenanceRepository[F] =
-    val wake = WakeAfterCommit(sink, onSinkClosed)
-    new OcrJobMaintenanceRepository[F]:
-      override def failStaleJobs(now: Instant, staleBefore: Instant): F[Int] =
-        wake(delegate.failStaleJobs(now, staleBefore), OutboxKind.OcrSubmissions)(_ > 0)
-
-  def ocrOutbox[F[_]: Async: LoggerFactory](
-      delegate: OcrQueueOutboxRepository[F],
-      sink: OutboxWakeSink[F],
-      onSinkClosed: F[Unit],
-  ): OcrQueueOutboxRepository[F] =
-    val wake = WakeAfterCommit(sink, onSinkClosed)
-    new OcrQueueOutboxRepository[F]:
-      export delegate.{
-        claimDue,
-        rearmQueuedForRedelivery,
-        nextWakeAt,
-        backlogSnapshot,
-        markDelivered,
-        releaseForRetry
-      }
-
-      override def failInvalidClaim(claim: InvalidOcrQueueOutboxClaim, now: Instant): F[Boolean] =
-        wake(delegate.failInvalidClaim(claim, now), OutboxKind.OcrSubmissions)(identity)
+        wake(delegate.cancelQueuedByDraftIds(ids, now), WorkerWakeKind.OcrSubmissions)(_ > 0)
 
   def matches[F[_]: Async: LoggerFactory](
       delegate: MatchesRepository[F],
-      sink: OutboxWakeSink[F],
+      sink: WorkerWakeSink[F],
       onSinkClosed: F[Unit],
   ): MatchesRepository[F] =
     val wake = WakeAfterCommit(sink, onSinkClosed)
@@ -124,12 +92,12 @@ private[bootstrap] object OutboxWakingRepositories:
           updatedAt: Instant,
       ): F[Either[AppError, Unit]] = wake(
         delegate.update(record, updatedAt),
-        OutboxKind.SeriesAnalysis,
+        WorkerWakeKind.ProcessingJobs,
       )(_.isRight)
 
       override def delete(id: MatchId): F[Boolean] = wake(
         delegate.delete(id),
-        OutboxKind.SeriesAnalysis,
+        WorkerWakeKind.ProcessingJobs,
       )(identity)
 
       override def find(id: MatchId): F[Option[MatchRecord]] = delegate.find(id)
@@ -158,7 +126,7 @@ private[bootstrap] object OutboxWakingRepositories:
 
   def matchConfirmation[F[_]: Async: LoggerFactory](
       delegate: MatchConfirmationRepository[F],
-      sink: OutboxWakeSink[F],
+      sink: WorkerWakeSink[F],
       onSinkClosed: F[Unit],
   ): MatchConfirmationRepository[F] =
     val wake = WakeAfterCommit(sink, onSinkClosed)
@@ -169,12 +137,12 @@ private[bootstrap] object OutboxWakingRepositories:
           updatedAt: Instant,
       ): F[Either[AppError, MatchConfirmationResult]] = wake(
         delegate.confirm(record, draft, updatedAt),
-        OutboxKind.SeriesAnalysis,
+        WorkerWakeKind.ProcessingJobs,
       )(_.contains(MatchConfirmationResult.Confirmed))
 
   def seriesAnalysis[F[_]: Async: LoggerFactory](
       delegate: SeriesAnalysisRepository[F],
-      sink: OutboxWakeSink[F],
+      sink: WorkerWakeSink[F],
       onSinkClosed: F[Unit],
   ): SeriesAnalysisRepository[F] =
     val wake = WakeAfterCommit(sink, onSinkClosed)
@@ -202,7 +170,7 @@ private[bootstrap] object OutboxWakingRepositories:
           idempotencyKeyHash: String,
       ): F[Either[AppError, SeriesAnalysisRecalculationAccepted]] = wake(
         delegate.requestTitleRecalculation(gameTitleId, requestedBy, idempotencyKeyHash),
-        OutboxKind.SeriesAnalysis,
+        WorkerWakeKind.ProcessingJobs,
       )(_.isRight)
 
       override def requestAllRecalculation(
@@ -210,12 +178,12 @@ private[bootstrap] object OutboxWakingRepositories:
           idempotencyKeyHash: String,
       ): F[Either[AppError, SeriesAnalysisRecalculationAccepted]] = wake(
         delegate.requestAllRecalculation(requestedBy, idempotencyKeyHash),
-        OutboxKind.SeriesAnalysis,
+        WorkerWakeKind.ProcessingJobs,
       )(_.isRight)
 
   def seriesPlayerRadar[F[_]: Async: LoggerFactory](
       delegate: SeriesPlayerRadarRepository[F],
-      sink: OutboxWakeSink[F],
+      sink: WorkerWakeSink[F],
       onSinkClosed: F[Unit],
   ): SeriesPlayerRadarRepository[F] =
     val wake = WakeAfterCommit(sink, onSinkClosed)
@@ -244,15 +212,15 @@ private[bootstrap] object OutboxWakingRepositories:
           idempotencyKeyHash,
           requestFingerprint
         ),
-        OutboxKind.SeriesAnalysis,
+        WorkerWakeKind.ProcessingJobs,
       )(_.isRight)
 
   private final class WakeAfterCommit[F[_]: Async: LoggerFactory](
-      sink: OutboxWakeSink[F],
+      sink: WorkerWakeSink[F],
       onSinkClosed: F[Unit],
   ):
     private val logger = LoggerFactory[F].getLoggerFromName(
-      "momo.api.bootstrap.OutboxWakingRepositories"
+      "momo.api.bootstrap.WorkerWakingRepositories"
     )
 
     /**
@@ -260,7 +228,7 @@ private[bootstrap] object OutboxWakingRepositories:
      * handoff. An unavailable sink is reported separately and never rewrites a committed
      * repository result as an HTTP failure.
      */
-    def apply[A](operation: F[A], kind: OutboxKind)(shouldWake: A => Boolean): F[A] =
+    def apply[A](operation: F[A], kind: WorkerWakeKind)(shouldWake: A => Boolean): F[A] =
       apply(operation, PostCommitEffects.wake(kind))(shouldWake)
 
     def apply[A](operation: F[A], effects: PostCommitEffects)(shouldWake: A => Boolean): F[A] =
@@ -273,29 +241,29 @@ private[bootstrap] object OutboxWakingRepositories:
 
     private def submit(effects: PostCommitEffects): F[Unit] = sink
       .submit(effects).attempt.flatMap {
-        case Right(OutboxWakeSubmitResult.Accepted) => Async[F].unit
-        case Right(OutboxWakeSubmitResult.Closed) => escalate(effects, None)
+        case Right(WorkerWakeSubmitResult.Accepted) => Async[F].unit
+        case Right(WorkerWakeSubmitResult.Closed) => escalate(effects, None)
         case Left(error) => escalate(effects, Some(error))
       }
 
     private def escalate(effects: PostCommitEffects, cause: Option[Throwable]): F[Unit] =
       val errorClasses = cause.fold("none")(SafeLog.throwableClasses)
       val log = logger.error(
-        s"event=outbox_wake_sink_unavailable effects=$effects " +
+        s"event=worker_wake_sink_unavailable effects=$effects " +
           s"errorClasses=$errorClasses committedResultPreserved=true"
       )
       log.attempt.void >> onSinkClosed.handleErrorWith { error =>
         val escalationErrorClasses = SafeLog.throwableClasses(error)
         logger.error(
-          s"event=outbox_wake_sink_escalation_failed effects=$effects " +
+          s"event=worker_wake_sink_escalation_failed effects=$effects " +
             s"errorClasses=$escalationErrorClasses committedResultPreserved=true"
         )
       }.attempt.void
 
   private object WakeAfterCommit:
     def apply[F[_]: Async: LoggerFactory](
-        sink: OutboxWakeSink[F],
+        sink: WorkerWakeSink[F],
         onSinkClosed: F[Unit],
     ): WakeAfterCommit[F] = new WakeAfterCommit(sink, onSinkClosed)
 
-end OutboxWakingRepositories
+end WorkerWakingRepositories

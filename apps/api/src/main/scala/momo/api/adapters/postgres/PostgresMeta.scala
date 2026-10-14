@@ -17,7 +17,7 @@ import momo.api.domain.{
   StoredImageLocation
 }
 import momo.api.ports.storage.{Sha256Hex, SourceImageIdempotencyHash, SourceImageObjectKey}
-import momo.api.repositories.{OcrQueueOutboxStatus, SourceImageFailureCode, SourceImageStatus}
+import momo.api.repositories.{SourceImageFailureCode, SourceImageStatus}
 
 /**
  * Shared database type mappings for opaque IDs, enums, and other custom types used by the
@@ -64,10 +64,6 @@ object PostgresMeta:
 
   given Meta[OcrJobStatus] = Meta[String].tiemap(s =>
     OcrJobStatus.values.find(_.wire == s).toRight(s"unknown ocr_job status=$s")
-  )(_.wire)
-
-  given Meta[OcrQueueOutboxStatus] = Meta[String].tiemap(s =>
-    OcrQueueOutboxStatus.fromWire(s).toRight(s"unknown ocr_queue_outbox status=$s")
   )(_.wire)
 
   given Meta[MatchDraftStatus] = Meta[String]

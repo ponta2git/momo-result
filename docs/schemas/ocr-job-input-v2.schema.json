@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://momo-result.local/schemas/ocr-queue-payload-v2.schema.json",
-  "title": "OCR Redis Streams payload v2",
+  "$id": "https://momo-result.local/schemas/ocr-job-input-v2.schema.json",
+  "title": "OCR immutable job input v2",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -12,9 +12,7 @@
     "sha256",
     "byteLength",
     "mediaType",
-    "requestedScreenType",
-    "attempt",
-    "enqueuedAt"
+    "requestedScreenType"
   ],
   "properties": {
     "schemaVersion": {
@@ -60,14 +58,6 @@
     "requestedScreenType": {
       "type": "string",
       "enum": ["total_assets", "revenue", "incident_log"]
-    },
-    "attempt": {
-      "type": "string",
-      "pattern": "^[1-9][0-9]*$"
-    },
-    "enqueuedAt": {
-      "type": "string",
-      "format": "date-time"
     },
     "ocrHintsJson": {
       "type": "string",

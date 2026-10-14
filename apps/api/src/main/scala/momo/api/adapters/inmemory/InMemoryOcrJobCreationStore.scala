@@ -8,7 +8,7 @@ import cats.effect.Async
 import cats.syntax.all.*
 
 import momo.api.domain.ids.OcrDraftId
-import momo.api.domain.{OcrDraft, OcrJob}
+import momo.api.domain.{OcrDraft, OcrJob, OcrJobInput}
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.OcrJobCreationStore.OcrJobCreationRejection
 import momo.api.repositories.{
@@ -26,7 +26,7 @@ final class InMemoryOcrJobCreationStore[F[_]: Async](
     drafts: OcrDraftsRepository[F],
     createDraft: OcrDraft => F[Unit],
     jobs: OcrJobsRepository[F],
-    createJob: OcrJob => F[Unit],
+    createJob: (OcrJob, OcrJobInput) => F[Unit],
     matchDrafts: MatchDraftsRepository[F],
     activeJobForDraft: OcrDraftId => F[Boolean],
     submissions: InMemoryOcrSubmissionsRepository[F],
@@ -61,9 +61,9 @@ final class InMemoryOcrJobCreationStore[F[_]: Async](
             yield StoredOcrJob(job, draft, false)).value
           case Some(member)
               if submission.status == "open" && member.status == "pending" &&
-                member.imageSha256 == plan.queueDispatch.enqueueRequest.imageSha256 &&
+                member.imageSha256 == plan.input.imageSha256 &&
                 member.imageByteLength.toLong ==
-                plan.queueDispatch.enqueueRequest.imageByteLength =>
+                plan.input.imageByteLength =>
             (now, matchDrafts.find(plan.matchDraftAttachment.draftId)).tupled.flatMap {
               case (currentTime, Some(draft))
                   if currentTime.isBefore(submission.admissionDeadline) &&
@@ -90,7 +90,7 @@ final class InMemoryOcrJobCreationStore[F[_]: Async](
       _ <- EitherT(rejectActiveSlot(attachment))
       _ <- EitherT(attachMatchDraft(attachment))
       _ <- EitherT.liftF(createDraft(draft))
-      _ <- EitherT.liftF(createJob(job))
+      _ <- EitherT.liftF(createJob(job, plan.input))
       _ <- EitherT.liftF(submissions.register(
         plan.submission.submissionId,
         job.requestedScreenType,

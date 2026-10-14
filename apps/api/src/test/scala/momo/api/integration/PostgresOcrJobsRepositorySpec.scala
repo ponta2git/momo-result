@@ -39,29 +39,21 @@ final class PostgresOcrJobsRepositorySpec extends IntegrationSuite:
       active <- repo.countActive
     yield assertEquals(active, 2L)
 
-  test("late failure reports cannot rewrite a terminal OCR result"):
+  test("backlog counts delayed jobs but ages only ready queued work"):
     for
-      _ <- insertOcrDraft("draft-terminal-failure", "job-terminal-failure")
-      _ <- insertOcrJob(
-        "job-terminal-failure",
-        "draft-terminal-failure",
-        "image-terminal-failure",
-        "succeeded"
-      )
-      _ <- repo.markFailed(
-        OcrJobId.unsafeFromString("job-terminal-failure"),
-        momo.api.domain.OcrFailure(
-          momo.api.domain.FailureCode.QueueFailure,
-          "late queue error",
-          false,
-          None
-        ),
-        now
-      )
-      status <- sql"SELECT status FROM ocr_jobs WHERE id = 'job-terminal-failure'".query[
-        String
-      ].unique.transact(transactor)
-    yield assertEquals(status, "succeeded")
+      _ <- insertOcrJob("job-ready", "draft-ready", "image-ready", "queued")
+      _ <- insertOcrJob("job-delayed", "draft-delayed", "image-delayed", "queued")
+      _ <- insertOcrJob("job-running", "draft-running", "image-running", "running")
+      _ <- sql"""
+        UPDATE ocr_jobs SET available_at = CASE
+          WHEN id = 'job-ready' THEN $now - interval '5 minutes'
+          ELSE $now + interval '10 minutes' END
+      """.update.run.transact(transactor)
+      backlog <- repo.backlogSnapshot(now)
+    yield
+      assertEquals(backlog.queuedCount, 2L)
+      assertEquals(backlog.runningCount, 1L)
+      assertEquals(backlog.oldestReadyAt, Some(now.minusSeconds(300)))
 
   test("cancelQueued marks the queued job cancelled and syncs the attached draft to OCR failed"):
     for
@@ -281,12 +273,12 @@ final class PostgresOcrJobsRepositorySpec extends IntegrationSuite:
   """.update.run.transact(transactor)
 
   private def insertOcrJob(id: String, draftId: String, imageId: String, status: String): IO[Int] =
-    sql"""
+    insertOcrSourceImage(imageId, now) *> sql"""
     INSERT INTO ocr_jobs (
-      id, draft_id, image_id, image_path, requested_screen_type, status, attempt_count,
+      id, draft_id, image_id, image_path, source_image_id, input_snapshot, requested_screen_type, status, attempt_count,
       created_at, updated_at
     ) VALUES (
-      $id, $draftId, $imageId, ${s"/tmp/$imageId.png"}, 'total_assets', $status, 0, $now, $now
+      $id, $draftId, $imageId, ${s"/tmp/$imageId.png"}, $imageId, '{"schemaVersion":"2"}'::jsonb, 'total_assets', $status, 0, $now, $now
     )
   """.update.run.transact(transactor)
 

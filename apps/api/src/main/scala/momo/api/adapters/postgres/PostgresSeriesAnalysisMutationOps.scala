@@ -144,18 +144,6 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
         )
         ON CONFLICT (id) DO NOTHING
       """.update.run.void
-      _ <- active match
-        case Some(job) if job.status == "running" || job.workKind != "analysis" =>
-          ().pure[ConnectionIO]
-        case _ =>
-          val assignedJobId = jobId.getOrElse(derivedJobId)
-          val outboxId = stableId("analysis-outbox", assignedJobId, desired.inputRevision.toString)
-          val dedupeKey = s"$assignedJobId:${desired.inputRevision.toString}"
-          sql"""
-            INSERT INTO series_analysis_queue_outbox (id, job_id, dedupe_key)
-            VALUES ($outboxId, $assignedJobId, $dedupeKey)
-            ON CONFLICT (dedupe_key) DO NOTHING
-          """.update.run.void
     yield ()
 
   private def stableId(prefix: String, parts: String*): String =

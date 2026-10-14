@@ -160,30 +160,4 @@ final class OcrJobLifecycleSpec extends CatsEffectSuite:
       cancelled2 <- repo.cancelQueued(queued.id, laterAt)
     yield assert(!cancelled2)
 
-  test("markFailed transitions any non-failed job to OcrJob.Failed preserving fields"):
-    val running = OcrJob.Running(
-      id = queued.id,
-      draftId = queued.draftId,
-      imageId = queued.imageId,
-      imageLocation = queued.imageLocation,
-      requestedScreenType = queued.requestedScreenType,
-      attemptCount = 1,
-      runningWorkerId = "w1",
-      runningStartedAt = createdAt,
-      createdAt = createdAt,
-      updatedAt = createdAt,
-    )
-    val failure = OcrFailure(FailureCode.OcrTimeout, "timeout", retryable = true, None)
-    for
-      repo <- InMemoryOcrJobsRepository.create[IO]
-      _ <- repo.create(running)
-      _ <- repo.markFailed(running.id, failure, laterAt)
-      after <- repo.find(running.id)
-    yield after match
-      case Some(f: OcrJob.Failed) =>
-        assertEquals(f.failedFailure, failure)
-        assertEquals(f.failedWorkerId, Some("w1"))
-        assertEquals(f.failedStartedAt, Some(createdAt))
-        assertEquals(f.failedFinishedAt, laterAt)
-      case other => fail(s"expected OcrJob.Failed, got $other")
 end OcrJobLifecycleSpec

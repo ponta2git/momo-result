@@ -11,25 +11,17 @@ import momo.api.adapters.storage.local.LocalFsImageStore
 import momo.api.auth.{DiscordOAuthClient, MemberRoster}
 import momo.api.config.AppConfig
 import momo.api.domain.{LoginAccount, Member}
-import momo.api.ports.queue.OcrJobQueuePublisher
 import momo.api.ports.storage.ImageStorage
-import momo.api.repositories.{
-  ImageReferenceRepository,
-  MatchNotesRepository,
-  OcrJobMaintenanceRepository,
-  SessionAccountLookup
-}
+import momo.api.repositories.{ImageReferenceRepository, MatchNotesRepository, SessionAccountLookup}
 import momo.api.usecases.images.ImageStorageAdmission
 import momo.api.usecases.maintenance.SourceImageOrphanReaper
-import momo.api.usecases.ocr.{OcrAdmissionGuard, OcrJobQueueSubmitter}
+import momo.api.usecases.ocr.OcrAdmissionGuard
 
 private[bootstrap] object InMemoryApiRuntime:
   private final case class RuntimeParts[F[_]](
       repositories: UseCaseWiring.RuntimeRepositories[F],
       imageReferences: ImageReferenceRepository[F],
-      ocrQueueSubmitter: OcrJobQueueSubmitter[F],
       ocrAdmissionGuard: OcrAdmissionGuard[F],
-      ocrMaintenance: OcrJobMaintenanceRepository[F],
   )
 
   def resource[F[_]: Async: SecureRandom](
@@ -41,7 +33,7 @@ private[bootstrap] object InMemoryApiRuntime:
       given LoggerFactory[F] = Slf4jFactory.create[F]
       val imageStore = LocalFsImageStore[F](config.imageTmpDir)
 
-      Resource.eval(createParts[F](config, infrastructure.queue, imageStore)).flatMap { parts =>
+      Resource.eval(createParts[F](config, imageStore)).flatMap { parts =>
         val imageCleaner = SourceImageOrphanReaper.referenceAwareCleaner(
           imageStore,
           parts.imageReferences,
@@ -56,13 +48,12 @@ private[bootstrap] object InMemoryApiRuntime:
         val health =
           RuntimeHealthDetails.build[F](
             None,
-            config.redis.map(_ => infrastructure.queueHealth.ping),
+            config.redis.map(_ => infrastructure.redisHealth),
             None
           )
         RuntimeMaintenance.resource(
           config = config,
           imageOrphanCleaner = imageCleaner,
-          ocrMaintenance = parts.ocrMaintenance,
           appSessions = parts.repositories.appSessions,
           idempotency = parts.repositories.idempotency,
           now = Clock[F].realTimeInstant,
@@ -76,7 +67,6 @@ private[bootstrap] object InMemoryApiRuntime:
             repositories = parts.repositories,
             services = UseCaseWiring.RuntimeServices(
               healthDetails = health,
-              ocrQueueSubmitter = parts.ocrQueueSubmitter,
               ocrAdmissionGuard = parts.ocrAdmissionGuard,
               oauthClient = oauthClient,
               loginRateLimiter = infrastructure.loginRateLimiter,
@@ -89,9 +79,8 @@ private[bootstrap] object InMemoryApiRuntime:
       }
     }
 
-  private def createParts[F[_]: Async: LoggerFactory](
+  private def createParts[F[_]: Async](
       config: AppConfig,
-      queue: OcrJobQueuePublisher[F],
       imageStore: ImageStorage[F],
   ): F[RuntimeParts[F]] =
     for
@@ -175,7 +164,7 @@ private[bootstrap] object InMemoryApiRuntime:
         drafts,
         drafts.create,
         jobs,
-        jobs.create,
+        jobs.createWithInput,
         matchDrafts,
         jobs.existsActiveByDraft,
         ocrSubmissions,
@@ -183,7 +172,6 @@ private[bootstrap] object InMemoryApiRuntime:
       )
       imageReferences: ImageReferenceRepository[F] =
         InMemoryImageReferenceRepository[F](jobs, matchDrafts)
-      ocrQueueSubmitter = OcrJobQueueSubmitter.nonDurable[F](jobs, matchDrafts, queue)
       ocrAdmissionGuard = OcrAdmissionGuard.allowAll[F]
       repositories = UseCaseWiring.RuntimeRepositories(
         ocrJobCreationStore = ocrJobCreationStore,
@@ -230,7 +218,5 @@ private[bootstrap] object InMemoryApiRuntime:
     yield RuntimeParts(
       repositories = repositories,
       imageReferences = imageReferences,
-      ocrQueueSubmitter = ocrQueueSubmitter,
       ocrAdmissionGuard = ocrAdmissionGuard,
-      ocrMaintenance = new InMemoryOcrJobMaintenanceRepository[F],
     )

@@ -50,14 +50,8 @@ private[config] object ResourceLimitsConfigLoader:
       parsePercent(env, "IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT", default = 90),
       parsePositiveLong(env, "IMAGE_ORPHAN_OLDER_THAN_MINUTES", default = 15L),
       parsePositiveLong(env, "IMAGE_ORPHAN_REAPER_INTERVAL_MINUTES", default = 5L),
-      parsePositiveLong(env, "STALE_OCR_JOB_AFTER_SECONDS", default = 300L),
-      parsePositiveLong(env, "STALE_OCR_JOB_REAPER_INTERVAL_SECONDS", default = 1800L),
       parsePositiveLong(env, "SESSION_PRUNE_INTERVAL_MINUTES", default = 60L),
-      loadOutboxIntervals(env),
-      parseNonNegativeInt(env, "OCR_OUTBOX_DUE_BACKLOG_LIMIT", default = 24),
-      parseNonNegativeInt(env, "OCR_OUTBOX_ACTIVE_BACKLOG_LIMIT", default = 48),
-      parsePositiveLong(env, "OCR_OUTBOX_OLDEST_DUE_MAX_DELAY_SECONDS", default = 600L),
-      parseNonNegativeInt(env, "OCR_DEAD_LETTER_BACKLOG_LIMIT", default = 24),
+      parsePositiveLong(env, "OCR_JOB_OLDEST_READY_MAX_DELAY_SECONDS", default = 600L),
     ).mapN {
       (
           uploadRateLimit,
@@ -74,14 +68,8 @@ private[config] object ResourceLimitsConfigLoader:
           imageUploadStorageMaxUsedPercent,
           orphanOlderThan,
           orphanReaperInterval,
-          staleOcrJobAfter,
-          staleOcrJobReaperInterval,
           sessionPruneInterval,
-          outboxIntervals,
-          ocrOutboxDueBacklogLimit,
-          ocrOutboxActiveBacklogLimit,
-          ocrOutboxOldestDueMaxDelay,
-          ocrDeadLetterBacklogLimit,
+          ocrJobOldestReadyMaxDelay,
       ) =>
         ResourceLimitsConfig(
           uploadRateLimitPerMinute = uploadRateLimit,
@@ -105,15 +93,8 @@ private[config] object ResourceLimitsConfigLoader:
           imageUploadStorageMaxUsedPercent = imageUploadStorageMaxUsedPercent,
           imageOrphanOlderThan = orphanOlderThan.minutes,
           imageOrphanReaperInterval = orphanReaperInterval.minutes,
-          staleOcrJobAfter = staleOcrJobAfter.seconds,
-          staleOcrJobReaperInterval = staleOcrJobReaperInterval.seconds,
           sessionPruneInterval = sessionPruneInterval.minutes,
-          ocrOutboxRecoveryInterval = outboxIntervals.ocrRecovery,
-          ocrOutboxSemanticRedeliveryInterval = outboxIntervals.ocrSemanticRedelivery,
-          ocrOutboxDueBacklogLimit = ocrOutboxDueBacklogLimit,
-          ocrOutboxActiveBacklogLimit = ocrOutboxActiveBacklogLimit,
-          ocrOutboxOldestDueMaxDelay = ocrOutboxOldestDueMaxDelay.seconds,
-          ocrDeadLetterBacklogLimit = ocrDeadLetterBacklogLimit,
+          ocrJobOldestReadyMaxDelay = ocrJobOldestReadyMaxDelay.seconds,
         )
     }
   }
@@ -129,11 +110,6 @@ private[config] object ResourceLimitsConfigLoader:
       readRateLimitPerMinute: Int,
       mutationRateLimitPerMinute: Int,
       idempotencyActiveKeyLimitPerAccount: Int,
-  )
-
-  private final case class OutboxIntervals(
-      ocrRecovery: FiniteDuration,
-      ocrSemanticRedelivery: FiniteDuration,
   )
 
   private def loadExportResourceLimits(
@@ -152,12 +128,3 @@ private[config] object ResourceLimitsConfigLoader:
     parseNonNegativeInt(env, "MUTATION_RATE_LIMIT_PER_MINUTE", default = 60),
     parseNonNegativeInt(env, "IDEMPOTENCY_ACTIVE_KEY_LIMIT_PER_ACCOUNT", default = 240),
   ).mapN(ApiResourceLimits.apply)
-
-  private def loadOutboxIntervals(
-      env: Map[String, String]
-  ): ConfigValue[Effect, OutboxIntervals] = (
-    parsePositiveLong(env, "OCR_OUTBOX_RECOVERY_INTERVAL_SECONDS", default = 300L),
-    parsePositiveLong(env, "OCR_OUTBOX_REDELIVERY_AFTER_SECONDS", default = 120L),
-  ).mapN((ocrRecovery, ocrSemantic) =>
-    OutboxIntervals(ocrRecovery.seconds, ocrSemantic.seconds)
-  )

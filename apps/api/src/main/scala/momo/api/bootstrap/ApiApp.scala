@@ -68,8 +68,6 @@ object ApiApp:
       limits: ResourceLimitsConfig
   ): OcrAdmissionGuard.Config =
     OcrAdmissionGuard.Config(
-      dueBacklogLimit = limits.ocrOutboxDueBacklogLimit,
-      activeBacklogLimit = limits.ocrOutboxActiveBacklogLimit,
-      oldestDueMaxDelay = limits.ocrOutboxOldestDueMaxDelay,
-      deadLetterBacklogLimit = limits.ocrDeadLetterBacklogLimit,
+      activeJobLimit = limits.ocrActiveJobLimit,
+      oldestReadyMaxDelay = limits.ocrJobOldestReadyMaxDelay,
     )

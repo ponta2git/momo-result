@@ -9,18 +9,10 @@ import momo.api.testing.JsonSchemaAssertions
 final class SeriesAnalysisArtifactContractSpec extends FunSuite with JsonSchemaAssertions:
   private val fixtureRoot = "docs/schemas/fixtures/series-analysis"
 
-  test("artifact and queue fixtures satisfy the shared JSON Schemas"):
+  test("artifact fixtures satisfy the shared JSON Schemas"):
     val currentSchema = repositoryFile("docs/schemas/series-analysis-artifact-v6.schema.json")
     assertJsonSchemaValid(currentSchema, fixture("valid-artifact-v6.json"))
     assertJsonSchemaInvalid(currentSchema, fixture("invalid-artifact-v6.json"))
-    assertJsonSchemaValid(
-      seriesAnalysisQueueSchemaPath,
-      fixture("valid-queue-payload-v1.json"),
-    )
-    assertJsonSchemaInvalid(
-      seriesAnalysisQueueSchemaPath,
-      fixture("invalid-queue-payload-v1.json"),
-    )
 
   private def fixture(name: String): String =
     Files.readString(repositoryFile(s"$fixtureRoot/$name"))

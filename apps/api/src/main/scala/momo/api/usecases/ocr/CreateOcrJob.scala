@@ -8,10 +8,9 @@ import cats.syntax.all.*
 import org.typelevel.log4cats.LoggerFactory
 
 import momo.api.codec.OcrHintsCodec
-import momo.api.domain.*
 import momo.api.domain.ids.*
+import momo.api.domain.{OcrJobInput, *}
 import momo.api.errors.AppError
-import momo.api.ports.queue.OcrJobEnqueueRequest
 import momo.api.ports.storage.ImageStorage
 import momo.api.repositories.OcrJobCreationStore.OcrJobCreationRejection
 import momo.api.repositories.{
@@ -22,7 +21,6 @@ import momo.api.repositories.{
   OcrJobDraftAttachment,
   OcrJobSubmissionBinding,
   OcrJobsRepository,
-  OcrQueueDispatchIntent,
   OcrSubmissionsRepository,
   StoredOcrJob
 }
@@ -43,7 +41,6 @@ final class CreateOcrJob[F[_]: MonadThrow](
     submissions: OcrSubmissionsRepository[F],
     jobs: OcrJobsRepository[F],
     drafts: OcrDraftsRepository[F],
-    queueSubmitter: OcrJobQueueSubmitter[F],
     admissionGuard: OcrAdmissionGuard[F],
     now: F[Instant],
     nextJobId: F[OcrJobId],
@@ -123,7 +120,7 @@ final class CreateOcrJob[F[_]: MonadThrow](
     draftId <- EitherT.liftF(nextDraftId)
     draft = initialDraft(draftId, jobId, command.requestedScreenType, createdAt)
     job = queuedJob(jobId, draftId, imageId, image.location, command.requestedScreenType, createdAt)
-    enqueueRequest = OcrJobEnqueueRequest.initial(job, image, enrichedHints, requestId)
+    input = OcrJobInput.initial(job, image, enrichedHints, requestId)
     attachment = OcrJobDraftAttachment(
       draftId = draftForMatch.id,
       screenType = command.requestedScreenType,
@@ -131,21 +128,15 @@ final class CreateOcrJob[F[_]: MonadThrow](
       ocrDraftId = draft.id,
       updatedAt = createdAt,
     )
-    queueDispatch = OcrQueueDispatchIntent(
-      enqueueRequest = enqueueRequest,
-      matchDraftId = submission.matchDraftId,
-    )
     creationPlan = OcrJobCreationPlan(
       submission = OcrJobSubmissionBinding(submission.id, owner),
       draft = draft,
       job = job,
       matchDraftAttachment = attachment,
-      queueDispatch = queueDispatch,
+      input = input,
       activeJobLimit = activeJobLimit,
     )
     stored <- storeDbRecords(creationPlan)
-    _ <- if stored.created then EitherT(queueSubmitter.submit(queueDispatch))
-    else EitherT.rightT[F, AppError](())
   yield CreatedOcrJob(stored.job, stored.draft)).value
 
   private def storeDbRecords(

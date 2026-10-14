@@ -185,11 +185,12 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
         WHERE game_title_id IN ($gameTitleId, $secondGameTitleId)
         ORDER BY game_title_id
       """.query[(GameTitleId, Long)].to[List].transact(transactor)
-      counts <- sql"""
+      counts <-
+        sql"""
         SELECT
           (SELECT COUNT(*)::int FROM series_analysis_jobs WHERE status = 'queued'),
           (SELECT COUNT(*)::int FROM series_analysis_job_requests),
-          (SELECT COUNT(*)::int FROM series_analysis_queue_outbox),
+          (SELECT COUNT(*)::int FROM series_analysis_jobs WHERE status = 'queued' AND available_at <= now()),
           (SELECT COUNT(*)::int FROM matches WHERE id = ${rec.id}),
           (SELECT bool_and(validation_contract_id = 'series-analysis-artifact-v6-full-validation-v2') FROM series_analysis_jobs),
           (SELECT bool_and(validation_contract_id = 'series-analysis-artifact-v6-full-validation-v2') FROM series_analysis_job_requests)
@@ -199,7 +200,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       assertEquals(matchRevision, 1L)
       assertEquals(titleRevisions.toMap.get(gameTitleId), Some(2L))
       assertEquals(titleRevisions.toMap.get(secondGameTitleId), Some(2L))
-      assertEquals(counts, (2, 4, 4, 0, true, true))
+      assertEquals(counts, (2, 4, 2, 0, true, true))
 
   List(
     (2, Some("series-analysis-artifact-v2-full-validation-v1")),
@@ -222,13 +223,14 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
         revision <-
           sql"SELECT input_revision FROM series_analysis_title_states WHERE game_title_id = $gameTitleId"
             .query[Long].unique.transact(transactor)
-        counts <- sql"""
+        counts <-
+          sql"""
           SELECT (SELECT COUNT(*)::int FROM matches),
                  (SELECT COUNT(*)::int FROM match_players),
                  (SELECT COUNT(*)::int FROM match_incidents),
                  (SELECT COUNT(*)::int FROM series_analysis_jobs),
                  (SELECT COUNT(*)::int FROM series_analysis_job_requests),
-                 (SELECT COUNT(*)::int FROM series_analysis_queue_outbox)
+                 (SELECT COUNT(*)::int FROM series_analysis_jobs WHERE status = 'queued' AND available_at <= now())
         """.query[(Int, Int, Int, Int, Int, Int)].unique.transact(transactor)
       yield
         assertEquals(result, Left(AppError.AnalysisStateUnavailable()))
@@ -529,7 +531,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       case Left(_: PostgresDataIntegrityException) => ()
       case other => fail(s"expected data integrity failure, got $other")
 
-  test("note replacement is versioned without advancing analysis state or outbox"):
+  test("note replacement is versioned without advancing analysis state or jobs"):
     val record = sampleMatch("match_note_versioned", 1)
     val accountId = AccountId.unsafeFromString("account_ponta")
     val body = MatchNoteBody.fromRequiredString("終盤のカード交換が決め手").toOption.get
@@ -540,7 +542,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
         SELECT
           analysis_revision,
           (SELECT input_revision FROM series_analysis_title_states WHERE game_title_id = $gameTitleId),
-          (SELECT COUNT(*)::int FROM series_analysis_queue_outbox)
+          (SELECT COUNT(*)::int FROM series_analysis_jobs WHERE status = 'queued' AND available_at <= now())
         FROM matches WHERE id = ${record.id}
       """.query[(Long, Long, Int)].unique.transact(transactor)
       first <- matchNotes.replace(
@@ -576,7 +578,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
         SELECT
           analysis_revision,
           (SELECT input_revision FROM series_analysis_title_states WHERE game_title_id = $gameTitleId),
-          (SELECT COUNT(*)::int FROM series_analysis_queue_outbox)
+          (SELECT COUNT(*)::int FROM series_analysis_jobs WHERE status = 'queued' AND available_at <= now())
         FROM matches WHERE id = ${record.id}
       """.query[(Long, Long, Int)].unique.transact(transactor)
     yield
@@ -767,9 +769,10 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
   test("update rejects a disappearing prerequisite without changing players or analysis work"):
     val rec = sampleMatch("match_missing_reference_update", 1)
     val disappearingEventId = HeldEventId.unsafeFromString("held_disappearing_update")
-    val analysisState = sql"""
+    val analysisState =
+      sql"""
       SELECT m.analysis_revision, s.input_revision,
-             (SELECT COUNT(*)::int FROM series_analysis_queue_outbox)
+             (SELECT COUNT(*)::int FROM series_analysis_jobs WHERE status = 'queued' AND available_at <= now())
       FROM matches m
       JOIN series_analysis_title_states s ON s.game_title_id = m.game_title_id
       WHERE m.id = ${rec.id}
@@ -849,7 +852,8 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       revenueDraftId = None,
       incidentLogDraftId = None,
     )
-    val persistedState = sql"""
+    val persistedState =
+      sql"""
       SELECT d.status,
              d.confirmed_match_id,
              d.source_images_retained_until,
@@ -857,22 +861,22 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
              s.status,
              s.delete_pending_at,
              (SELECT COUNT(*)::int FROM matches),
-             (SELECT COUNT(*)::int FROM series_analysis_queue_outbox)
+             (SELECT COUNT(*)::int FROM series_analysis_jobs WHERE status = 'queued' AND available_at <= now())
       FROM match_drafts d
       JOIN source_images s ON s.id = d.total_assets_image_id
       WHERE d.id = $draftId
     """.query[
-      (
-          MatchDraftStatus,
-          Option[MatchId],
-          Option[Instant],
-          Option[Instant],
-          String,
-          Option[Instant],
-          Int,
-          Int,
-      )
-    ].unique.transact(transactor)
+        (
+            MatchDraftStatus,
+            Option[MatchId],
+            Option[Instant],
+            Option[Instant],
+            String,
+            Option[Instant],
+            Int,
+            Int,
+        )
+      ].unique.transact(transactor)
     for
       _ <- seedPrereqs
       _ <- createMatch(existing)
@@ -907,15 +911,16 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
     val draftId = MatchDraftId.unsafeFromString("match-draft-missing-reference-confirm")
     val imageId = ImageId.unsafeFromString("image-missing-reference-confirm")
     val snapshot = MatchDraftConfirmation(draftId, now, None, None, None)
-    val persistedState = sql"""
+    val persistedState =
+      sql"""
       SELECT d.status, d.source_images_deleted_at, s.status, s.delete_pending_at,
              (SELECT COUNT(*)::int FROM matches),
-             (SELECT COUNT(*)::int FROM series_analysis_queue_outbox)
+             (SELECT COUNT(*)::int FROM series_analysis_jobs WHERE status = 'queued' AND available_at <= now())
       FROM match_drafts d
       JOIN source_images s ON s.id = d.total_assets_image_id
       WHERE d.id = $draftId
     """.query[(MatchDraftStatus, Option[Instant], String, Option[Instant], Int, Int)]
-      .unique.transact(transactor)
+        .unique.transact(transactor)
     for
       _ <- seedPrereqs
       _ <- heldEvents.create(HeldEvent(disappearingEventId, now))
@@ -964,14 +969,12 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
                j.status,
                j.trigger,
                r.status,
-               r.assigned_job_id = j.id,
-               o.status
+               r.assigned_job_id = j.id
         FROM series_analysis_title_states s
         JOIN series_analysis_jobs j ON j.game_title_id = s.game_title_id
         JOIN series_analysis_job_requests r ON r.assigned_job_id = j.id
-        JOIN series_analysis_queue_outbox o ON o.job_id = j.id
         WHERE s.game_title_id = ${rec.gameTitleId}
-      """.query[(Long, Boolean, Long, String, String, String, Boolean, String)].unique
+      """.query[(Long, Boolean, Long, String, String, String, Boolean)].unique
         .transact(transactor)
     yield
       assertEquals(notification, ResultNotificationFixture.cancelled("draft_unavailable"))
@@ -980,7 +983,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       assertEquals(status, (MatchDraftStatus.Confirmed, Some(rec.id)))
       assertEquals(
         analysisIntent,
-        (1L, true, 1L, "queued", "match_mutation", "pending", true, "pending"),
+        (1L, true, 1L, "queued", "match_mutation", "pending", true),
       )
 
   test("confirmation commits source-image deletion intent with the terminal draft"):

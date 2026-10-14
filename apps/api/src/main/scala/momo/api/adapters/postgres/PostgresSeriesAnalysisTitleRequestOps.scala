@@ -22,7 +22,6 @@ private[postgres] object PostgresSeriesAnalysisTitleRequestOps:
       operationId: String,
       requestId: String,
       jobId: String,
-      outboxId: String,
   ): ConnectionIO[Either[AppError, SeriesAnalysisRecalculationAccepted]] =
     lockAndFindOperation(requestedBy, "title", idempotencyKeyHash).flatMap {
       case Some(value) if !value.gameTitleId.contains(gameTitleId) =>
@@ -37,7 +36,6 @@ private[postgres] object PostgresSeriesAnalysisTitleRequestOps:
           operationId,
           requestId,
           jobId,
-          outboxId,
         )
     }
 
@@ -72,7 +70,6 @@ private[postgres] object PostgresSeriesAnalysisTitleRequestOps:
       operationId: String,
       requestId: String,
       newJobId: String,
-      outboxId: String,
   ): ConnectionIO[Either[AppError, SeriesAnalysisRecalculationAccepted]] =
     for
       desired <- sql"""
@@ -107,7 +104,6 @@ private[postgres] object PostgresSeriesAnalysisTitleRequestOps:
             operationId,
             requestId,
             newJobId,
-            outboxId,
             version,
             active,
           )
@@ -120,7 +116,6 @@ private[postgres] object PostgresSeriesAnalysisTitleRequestOps:
       operationId: String,
       requestId: String,
       newJobId: String,
-      outboxId: String,
       version: DesiredRow,
       active: Option[ActiveJobRow],
   ): ConnectionIO[Either[AppError, SeriesAnalysisRecalculationAccepted]] =
@@ -171,9 +166,6 @@ private[postgres] object PostgresSeriesAnalysisTitleRequestOps:
           true, 'pending', ${accepted._1}, $acceptedAt
         )
       """.update.run.void
-      _ <- accepted._1.traverse_(assignedJobId =>
-        insertOutbox(outboxId, assignedJobId, s"manual:$requestId")
-      )
     yield SeriesAnalysisRecalculationAccepted(
       operationId,
       acceptedAt,

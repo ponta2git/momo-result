@@ -42,15 +42,15 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
           "operation-one",
           "request-one",
           "job-one",
-          "outbox-one",
         ),
         repository.requestTitleRecalculation(titleId, accountId, "same-key"),
       )
-      counts <- sql"""
+      counts <-
+        sql"""
         SELECT (SELECT COUNT(*)::int FROM series_analysis_operation_requests),
                (SELECT COUNT(*)::int FROM series_analysis_job_requests),
                (SELECT COUNT(*)::int FROM series_analysis_jobs),
-               (SELECT COUNT(*)::int FROM series_analysis_queue_outbox)
+               (SELECT COUNT(*)::int FROM series_analysis_jobs WHERE status = 'queued' AND available_at <= now())
       """.query[(Int, Int, Int, Int)].unique.transact(transactor)
     yield
       assertEquals(results._1.map(_.requestId), Right("operation-one"))

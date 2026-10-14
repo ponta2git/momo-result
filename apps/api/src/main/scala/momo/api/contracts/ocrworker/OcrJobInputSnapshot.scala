@@ -1,7 +1,5 @@
 package momo.api.contracts.ocrworker
 
-import java.time.Instant
-import java.time.format.DateTimeFormatter
 
 import cats.syntax.either.*
 import io.circe.Json
@@ -9,11 +7,16 @@ import io.circe.Json
 import momo.api.codec.OcrHintsCodec
 import momo.api.codec.OcrHintsCodec.given
 import momo.api.domain.ids.*
-import momo.api.domain.{OcrJobHints, RequestId, ScreenType, StoredImageLocation}
-import momo.api.ports.queue.OcrJobEnqueueRequest
+import momo.api.domain.{
+  OcrJobHints,
+  OcrJobInput,
+  RequestId,
+  ScreenType,
+  StoredImageLocation
+}
 
-/** Rust OCR queue contract. It carries only opaque object identity and verified image metadata. */
-final class OcrWorkerJobMessageV2 private (
+/** Immutable OCR input saved with its job. Values preserve the accepted image and hints. */
+final class OcrJobInputSnapshot private (
     val jobId: OcrJobId,
     val draftId: OcrDraftId,
     val sourceImageId: ImageId,
@@ -22,16 +25,14 @@ final class OcrWorkerJobMessageV2 private (
     val byteLength: Long,
     val mediaType: String,
     val requestedScreenType: ScreenType,
-    val attempt: Int,
-    val enqueuedAt: Instant,
     val hints: OcrJobHints,
     val requestId: Option[String],
 ):
-  def fields: Map[String, String] = OcrWorkerJobMessageV2.toStreamFields(this)
+  def fields: Map[String, String] = OcrJobInputSnapshot.snapshotFields(this)
 
-  def toEnqueueRequest: Either[String, OcrJobEnqueueRequest] =
+  def toInput: Either[String, OcrJobInput] =
     StoredImageLocation.fromString(imageObjectKey).map(location =>
-      OcrJobEnqueueRequest(
+      OcrJobInput(
         jobId = jobId,
         draftId = draftId,
         imageId = sourceImageId,
@@ -40,14 +41,12 @@ final class OcrWorkerJobMessageV2 private (
         imageByteLength = byteLength,
         imageMediaType = mediaType,
         requestedScreenType = requestedScreenType,
-        attempt = attempt,
-        enqueuedAt = enqueuedAt,
         hints = hints,
         requestId = requestId,
       )
     )
 
-object OcrWorkerJobMessageV2:
+object OcrJobInputSnapshot:
   val SchemaVersionKey = "schemaVersion"
   val SchemaVersion = "2"
   val HintsKey = "ocrHintsJson"
@@ -67,17 +66,15 @@ object OcrWorkerJobMessageV2:
     "byteLength",
     "mediaType",
     "requestedScreenType",
-    "attempt",
-    "enqueuedAt",
   )
 
   private val AllowedMediaTypes = Set("image/png", "image/jpeg", "image/webp")
   private val ObjectKeyCharacters = "^[A-Za-z0-9][A-Za-z0-9._/-]*$".r
   private val Sha256Pattern = "^[0-9a-f]{64}$".r
 
-  def fromEnqueueRequest(
-      request: OcrJobEnqueueRequest
-  ): Either[String, OcrWorkerJobMessageV2] = build(
+  def fromInput(
+      request: OcrJobInput
+  ): Either[String, OcrJobInputSnapshot] = build(
     jobId = request.jobId,
     draftId = request.draftId,
     sourceImageId = request.imageId,
@@ -86,8 +83,6 @@ object OcrWorkerJobMessageV2:
     byteLength = request.imageByteLength,
     mediaType = request.imageMediaType,
     requestedScreenType = request.requestedScreenType,
-    attempt = request.attempt,
-    enqueuedAt = request.enqueuedAt,
     hints = request.hints,
     requestId = request.requestId,
   )
@@ -101,11 +96,9 @@ object OcrWorkerJobMessageV2:
       byteLength: Long,
       mediaType: String,
       requestedScreenType: ScreenType,
-      attempt: Int,
-      enqueuedAt: Instant,
       hints: OcrJobHints,
       requestId: Option[String],
-  ): Either[String, OcrWorkerJobMessageV2] =
+  ): Either[String, OcrJobInputSnapshot] =
     for
       _ <- validateId("jobId", jobId.value)
       _ <- validateId("draftId", draftId.value)
@@ -127,12 +120,11 @@ object OcrWorkerJobMessageV2:
         (),
         "requestedScreenType=auto is not supported by schemaVersion 2",
       )
-      _ <- Either.cond(attempt > 0, (), "attempt must be positive")
       _ <- OcrHintsCodec.validate(hints)
       safeRequestId <- requestId match
         case None => Right(None)
         case Some(value) => RequestId.sanitize(value).toRight(RequestId.Description).map(Some(_))
-    yield new OcrWorkerJobMessageV2(
+    yield new OcrJobInputSnapshot(
       jobId = jobId,
       draftId = draftId,
       sourceImageId = sourceImageId,
@@ -141,13 +133,11 @@ object OcrWorkerJobMessageV2:
       byteLength = byteLength,
       mediaType = mediaType,
       requestedScreenType = requestedScreenType,
-      attempt = attempt,
-      enqueuedAt = enqueuedAt,
       hints = hints,
       requestId = safeRequestId,
     )
 
-  def toStreamFields(value: OcrWorkerJobMessageV2): Map[String, String] =
+  def snapshotFields(value: OcrJobInputSnapshot): Map[String, String] =
     val base = Map(
       SchemaVersionKey -> SchemaVersion,
       "jobId" -> value.jobId.value,
@@ -158,32 +148,30 @@ object OcrWorkerJobMessageV2:
       "byteLength" -> value.byteLength.toString,
       "mediaType" -> value.mediaType,
       "requestedScreenType" -> value.requestedScreenType.wire,
-      "attempt" -> value.attempt.toString,
-      "enqueuedAt" -> DateTimeFormatter.ISO_INSTANT.format(value.enqueuedAt),
     )
     val withHints =
       if value.hints.isEmpty then base
       else base + (HintsKey -> OcrHintsCodec.encode(value.hints))
     value.requestId.fold(withHints)(id => withHints + (RequestIdKey -> id))
 
-  def fieldsAsJson(message: OcrWorkerJobMessageV2): Json = Json
+  def toJson(message: OcrJobInputSnapshot): Json = Json
     .obj(message.fields.toSeq.sortBy(_._1).map { case (key, value) =>
       key -> Json.fromString(value)
     }*)
 
-  def fromJson(json: Json): Either[String, OcrWorkerJobMessageV2] = json.asObject
-    .toRight("stream payload must be a JSON object").flatMap { obj =>
+  def fromJson(json: Json): Either[String, OcrJobInputSnapshot] = json.asObject
+    .toRight("input snapshot must be a JSON object").flatMap { obj =>
       val fields = obj.toMap
       val allowed = RequiredKeys + HintsKey + RequestIdKey
       val unknown = fields.keySet.diff(allowed)
       if unknown.nonEmpty then
-        Left(s"unknown stream payload field(s): ${unknown.toList.sorted.mkString(",")}")
-      else parseRedisFields(fields.map { case (key, value) => key -> value.asString })
+        Left(s"unknown input snapshot field(s): ${unknown.toList.sorted.mkString(",")}")
+      else parseSnapshotFields(fields.map { case (key, value) => key -> value.asString })
     }
 
-  private def parseRedisFields(
+  private def parseSnapshotFields(
       fields: Map[String, Option[String]]
-  ): Either[String, OcrWorkerJobMessageV2] =
+  ): Either[String, OcrJobInputSnapshot] =
     def required(key: String): Either[String, String] = fields.get(key).flatten
       .toRight(s"field $key must be a string")
 
@@ -211,12 +199,6 @@ object OcrWorkerJobMessageV2:
       requested <- required("requestedScreenType")
       screenType <- ScreenType.fromExplicitWire(requested)
         .toRight(s"unknown requestedScreenType=$requested")
-      attempt <- required("attempt").flatMap(value =>
-        value.toIntOption.toRight("attempt must be an integer string")
-      )
-      enqueuedAt <- required("enqueuedAt").flatMap(value =>
-        Either.catchNonFatal(Instant.parse(value)).left.map(_ => "enqueuedAt must be ISO-8601")
-      )
       hintsJson <- optional(HintsKey)
       hints <- hintsJson match
         case None => Right(OcrJobHints.empty)
@@ -231,8 +213,6 @@ object OcrWorkerJobMessageV2:
         byteLength = byteLength,
         mediaType = mediaType,
         requestedScreenType = screenType,
-        attempt = attempt,
-        enqueuedAt = enqueuedAt,
         hints = hints,
         requestId = requestId,
       )

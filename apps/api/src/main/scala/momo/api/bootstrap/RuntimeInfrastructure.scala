@@ -8,11 +8,9 @@ import dev.profunktor.redis4cats.Redis
 import dev.profunktor.redis4cats.data.RedisCodec
 import dev.profunktor.redis4cats.effect.Log.NoOp.*
 
-import momo.api.adapters.inmemory.InMemoryOcrJobQueuePublisher
 import momo.api.adapters.redis.{
   RedisOAuthProviderBackoff,
   RedisOAuthStateReplayGuard,
-  RedisOcrJobQueuePublisher,
   RedisRateLimiter
 }
 import momo.api.auth.{
@@ -26,11 +24,9 @@ import momo.api.auth.{
 }
 import momo.api.config.AppConfig
 import momo.api.http.HttpRateLimiters
-import momo.api.ports.queue.{OcrJobQueueHealthCheck, OcrJobQueuePublisher}
 
 private[bootstrap] final case class RuntimeInfrastructure[F[_]](
-    queue: OcrJobQueuePublisher[F],
-    queueHealth: OcrJobQueueHealthCheck[F],
+    redisHealth: F[Unit],
     loginRateLimiter: RateLimiter[F],
     oauthStateReplayGuard: OAuthStateReplayGuard[F],
     oauthProviderBackoff: OAuthProviderBackoff[F],
@@ -45,10 +41,6 @@ private[bootstrap] object RuntimeInfrastructure:
       now: F[java.time.Instant],
   ): Resource[F, RuntimeInfrastructure[F]] = config.redis match
     case Some(redis) => Redis[F].simple(redis.url, RedisCodec.Utf8).evalMap { commands =>
-        val queue: OcrJobQueuePublisher[F] =
-          RedisOcrJobQueuePublisher.fromCommands(redis.v2Stream, commands)
-        val queueHealth: OcrJobQueueHealthCheck[F] = RedisOcrJobQueuePublisher
-          .healthProbeFromCommands(redis.v2DeadLetterStream, commands)
         val login: RateLimiter[F] = RedisRateLimiter
           .fromCommands(commands, "login", config.auth.rateLimitPerMinute, now)
         val stateReplayGuard = RedisOAuthStateReplayGuard(commands, now)
@@ -109,8 +101,7 @@ private[bootstrap] object RuntimeInfrastructure:
             "mutation",
           )
         yield RuntimeInfrastructure(
-          queue,
-          queueHealth,
+          commands.ping.void,
           login,
           stateReplayGuard,
           oauthProviderBackoff,
@@ -128,8 +119,6 @@ private[bootstrap] object RuntimeInfrastructure:
       }
     case None => Resource.eval(
         for
-          queue <- InMemoryOcrJobQueuePublisher.create[F]
-          queueHealth = OcrJobQueueHealthCheck.healthy[F]
           login <- LoginRateLimiter.create[F](config.auth.rateLimitPerMinute, now)
           stateReplayGuard <- InMemoryOAuthStateReplayGuard.create[F](now)
           oauthProviderBackoff <- InMemoryOAuthProviderBackoff
@@ -150,8 +139,7 @@ private[bootstrap] object RuntimeInfrastructure:
           ocrJobCreateGlobal <- LoginRateLimiter
             .create[F](config.resourceLimits.ocrJobCreateGlobalRateLimitPerMinute, now)
         yield RuntimeInfrastructure(
-          queue,
-          queueHealth,
+          Async[F].unit,
           login,
           stateReplayGuard,
           oauthProviderBackoff,

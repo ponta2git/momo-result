@@ -343,25 +343,6 @@ class AppConfigSpec extends CatsEffectSuite:
     }
   }
 
-  test("loadFromEnv reads only API-owned OCR outbox intervals") {
-    load(
-      prodEnv ++ Map(
-        "OCR_OUTBOX_RECOVERY_INTERVAL_SECONDS" -> "1200",
-        "OCR_OUTBOX_REDELIVERY_AFTER_SECONDS" -> "90",
-        "SERIES_ANALYSIS_OUTBOX_RECOVERY_INTERVAL_SECONDS" -> "not-an-api-setting",
-        "SERIES_ANALYSIS_OUTBOX_REDELIVERY_AFTER_SECONDS" -> "not-an-api-setting",
-        "STALE_OCR_JOB_REAPER_INTERVAL_SECONDS" -> "1800",
-      )
-    ).map { result =>
-      assertEquals(result.map(_.resourceLimits.ocrOutboxRecoveryInterval.toSeconds), Right(1200L))
-      assertEquals(
-        result.map(_.resourceLimits.ocrOutboxSemanticRedeliveryInterval.toSeconds),
-        Right(90L),
-      )
-      assertEquals(result.map(_.resourceLimits.staleOcrJobReaperInterval.toSeconds), Right(1800L))
-    }
-  }
-
   test("loadFromEnv reads the bounded series-analysis read timeout") {
     load(Map("ANALYSIS_API_READ_TIMEOUT_MS" -> "2500")).map { result =>
       assertEquals(result.map(_.seriesAnalysisRead.readTimeout.toMillis), Right(2500L))
@@ -452,69 +433,13 @@ class AppConfigSpec extends CatsEffectSuite:
         "OCR_JOB_CREATE_RATE_LIMIT_PER_MINUTE" -> "8",
         "OCR_JOB_CREATE_GLOBAL_RATE_LIMIT_PER_MINUTE" -> "16",
         "OCR_ACTIVE_JOB_LIMIT" -> "9",
-        "OCR_OUTBOX_DUE_BACKLOG_LIMIT" -> "30",
-        "OCR_OUTBOX_ACTIVE_BACKLOG_LIMIT" -> "60",
-        "OCR_OUTBOX_OLDEST_DUE_MAX_DELAY_SECONDS" -> "900",
-        "OCR_DEAD_LETTER_BACKLOG_LIMIT" -> "12",
+        "OCR_JOB_OLDEST_READY_MAX_DELAY_SECONDS" -> "900",
       )
     ).map { result =>
       assertEquals(result.map(_.resourceLimits.ocrJobCreateRateLimitPerMinute), Right(8))
       assertEquals(result.map(_.resourceLimits.ocrJobCreateGlobalRateLimitPerMinute), Right(16))
       assertEquals(result.map(_.resourceLimits.ocrActiveJobLimit), Right(9))
-      assertEquals(result.map(_.resourceLimits.ocrOutboxDueBacklogLimit), Right(30))
-      assertEquals(result.map(_.resourceLimits.ocrOutboxActiveBacklogLimit), Right(60))
-      assertEquals(result.map(_.resourceLimits.ocrOutboxOldestDueMaxDelay.toSeconds), Right(900L))
-      assertEquals(result.map(_.resourceLimits.ocrDeadLetterBacklogLimit), Right(12))
-      assertEquals(
-        result.flatMap(_.redis.map(_.v2Stream).toRight(new RuntimeException())),
-        Right("momo:ocr:v2:jobs"),
-      )
-      assertEquals(
-        result.flatMap(_.redis.map(_.v2DeadLetterStream).toRight(new RuntimeException())),
-        Right("momo:ocr:v2:jobs:dead"),
-      )
-    }
-  }
-
-  test("loadFromEnv reads dedicated OCR v2 stream names") {
-    load(
-      prodEnv ++ Map(
-        "OCR_REDIS_V2_STREAM" -> "momo:ocr:v2:jobs:test",
-        "OCR_REDIS_V2_DEAD_LETTER_STREAM" -> "momo:ocr:v2:jobs:dead:test",
-      )
-    ).map { result =>
-      assertEquals(
-        result.flatMap(_.redis.map(_.v2Stream).toRight(new RuntimeException())),
-        Right("momo:ocr:v2:jobs:test"),
-      )
-      assertEquals(
-        result.flatMap(_.redis.map(_.v2DeadLetterStream).toRight(new RuntimeException())),
-        Right("momo:ocr:v2:jobs:dead:test"),
-      )
-    }
-  }
-
-  test("loadFromEnv ignores the removed analysis Redis stream setting") {
-    load(prodEnv + ("ANALYSIS_REDIS_STREAM" -> " ")).map { result =>
-      assert(result.isRight, s"analysis queue transport is not API configuration: $result")
-    }
-  }
-
-  test("loadFromEnv ignores blank OCR Redis stream overrides") {
-    load(
-      prodEnv ++ Map(
-        "OCR_REDIS_V2_STREAM" -> " ",
-        "OCR_REDIS_V2_DEAD_LETTER_STREAM" -> "  ",
-      )
-    ).map { result =>
-      assertEquals(
-        result.flatMap(_.redis.map(_.v2Stream).toRight(new RuntimeException())),
-        Right("momo:ocr:v2:jobs"),
-      )
-      assertEquals(
-        result.flatMap(_.redis.map(_.v2DeadLetterStream).toRight(new RuntimeException())),
-        Right("momo:ocr:v2:jobs:dead"),
-      )
+      assertEquals(result.map(_.resourceLimits.ocrJobOldestReadyMaxDelay.toSeconds), Right(900L))
     }
   }
 

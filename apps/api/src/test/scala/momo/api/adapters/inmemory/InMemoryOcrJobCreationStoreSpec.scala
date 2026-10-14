@@ -11,21 +11,16 @@ import momo.api.domain.{
   OcrDraft,
   OcrJob,
   OcrJobHints,
+  OcrJobInput,
   OcrSubmission,
   OcrSubmissionMember,
   ScreenType,
   StoredImageLocation
 }
-import momo.api.ports.queue.OcrJobEnqueueRequest
 import momo.api.repositories.OcrJobCreationStore.OcrJobCreationRejection
 import momo.api.repositories.contract.OcrJobCreationStoreContract
 import momo.api.repositories.contract.OcrJobCreationStoreContract.{CreationFixture, CreationState}
-import momo.api.repositories.{
-  OcrJobCreationPlan,
-  OcrJobDraftAttachment,
-  OcrJobSubmissionBinding,
-  OcrQueueDispatchIntent
-}
+import momo.api.repositories.{OcrJobCreationPlan, OcrJobDraftAttachment, OcrJobSubmissionBinding}
 import momo.api.testing.AppErrorAssertions.assertAppException
 
 final class InMemoryOcrJobCreationStoreSpec
@@ -111,7 +106,7 @@ final class InMemoryOcrJobCreationStoreSpec
           drafts,
           drafts.create,
           jobs,
-          jobs.create,
+          jobs.createWithInput,
           matchDrafts,
           jobs.existsActiveByDraft,
           submissions,
@@ -177,8 +172,8 @@ final class InMemoryOcrJobCreationStoreSpec
     updatedAt = now,
   )
 
-  private def enqueueRequest(job: OcrJob, draft: OcrDraft): OcrJobEnqueueRequest =
-    OcrJobEnqueueRequest(
+  private def enqueueRequest(job: OcrJob, draft: OcrDraft): OcrJobInput =
+    OcrJobInput(
       jobId = job.id,
       draftId = draft.id,
       imageId = job.imageId,
@@ -187,8 +182,6 @@ final class InMemoryOcrJobCreationStoreSpec
       imageByteLength = 1L,
       imageMediaType = "image/png",
       requestedScreenType = job.requestedScreenType,
-      attempt = 1,
-      enqueuedAt = now,
       hints = OcrJobHints.empty,
       requestId = None,
     )
@@ -199,10 +192,6 @@ final class InMemoryOcrJobCreationStoreSpec
       attachment: OcrJobDraftAttachment,
       activeJobLimit: Int,
   ): OcrJobCreationPlan =
-    val dispatch = OcrQueueDispatchIntent(
-      enqueueRequest = enqueueRequest(job, draft),
-      matchDraftId = attachment.draftId,
-    )
     OcrJobCreationPlan(
       submission = OcrJobSubmissionBinding(
         "00000000-0000-4000-8000-000000000001",
@@ -211,7 +200,7 @@ final class InMemoryOcrJobCreationStoreSpec
       draft = draft,
       job = job,
       matchDraftAttachment = attachment,
-      queueDispatch = dispatch,
+      input = enqueueRequest(job, draft),
       activeJobLimit = activeJobLimit,
     )
 

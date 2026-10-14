@@ -60,31 +60,12 @@ EOF
 )"
 [[ "${actual}" == "${expected}" ]]
 
-jq '{}, .' "${test_dir}/candidate.json" > "${test_dir}/tampered.json"
-mv "${test_dir}/tampered.json" "${test_dir}/candidate.json"
-expect_rejected multiple-json-documents
-
-write_valid_candidate
-jq '.imageArtifactId += "\n"' "${test_dir}/candidate.json" > "${test_dir}/tampered.json"
-mv "${test_dir}/tampered.json" "${test_dir}/candidate.json"
-expect_rejected multiline-artifact-id
-
-write_valid_candidate
-jq '.commit = "ffffffffffffffffffffffffffffffffffffffff"' \
-  "${test_dir}/candidate.json" > "${test_dir}/tampered.json"
-mv "${test_dir}/tampered.json" "${test_dir}/candidate.json"
-expect_rejected tampered-commit
-
+# Detailed metadata mutations are covered by the Go provenance tests. Keep
+# rejection without success output and argument forwarding through the launcher.
 write_valid_candidate
 jq '.unexpected = true' "${test_dir}/candidate.json" > "${test_dir}/tampered.json"
 mv "${test_dir}/tampered.json" "${test_dir}/candidate.json"
 expect_rejected unknown-field
-
-write_valid_candidate
-jq '.imageArtifactDigest = "not-a-digest"' \
-  "${test_dir}/candidate.json" > "${test_dir}/tampered.json"
-mv "${test_dir}/tampered.json" "${test_dir}/candidate.json"
-expect_rejected invalid-artifact-digest
 
 write_valid_candidate
 if "${validator[@]}" "${test_dir}/candidate.json" 999 "${run_attempt}" "${commit}" \

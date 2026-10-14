@@ -48,43 +48,10 @@ check '.status == "ok" and (.limitations | length) == 1 and .metrics == {
   statements: {pct: 33.3, covered: 1, total: 3}, branches: {pct: 50, covered: null, total: null}}'
 grep -Fq '| branches | 50.0% | - |' "${out}/summary.md"
 grep -Fq 'omitted from the measured totals' "${out}/summary.md"
-sed 's/statement-count="3"/statement-count="223"/; s/statement-rate="33.33"/statement-rate="0.45"/' "${api}" > "${root}/report"
-mv "${root}/report" "${api}"
-run 0 api
-check '.metrics.statements.pct == 0.4'
-
-# Invalid input must overwrite a previous successful report, even when missing
-# reports are allowed. Count inconsistencies must never become zero coverage.
-for mutation in '.statements.pct = 101' '.statements.pct = 99' '.statements.pct = null' \
-  '.statements.covered = 0.5' '.statements.covered = true' '.statements.covered = -1' \
-  '.statements.covered = 4' '.branches.pct = 50' '.branches.pct = null' \
-  'del(.statements.covered, .statements.total)'; do
-  web_report
-  jq ".total |= (${mutation})" "${web}" > "${root}/report"
-  mv "${root}/report" "${web}"
-  run 1 web --allow-missing
-  check '.status == "invalid" and .metrics == {}'
-  if grep -Fq '| statements |' "${out}/summary.md"; then exit 1; fi
-done
-for subsystem in web api; do
-  if [[ "${subsystem}" == web ]]; then printf '{broken' > "${web}"; else printf '<broken' > "${api}"; fi
-  run 1 "${subsystem}" --allow-missing
-  check '.status == "invalid" and .metrics == {}'
-done
-api_report
-sed 's/50.00/NaN/' "${api}" > "${root}/report"
-mv "${root}/report" "${api}"
-run 1 api
-check '.status == "invalid"'
-api_report
-second="${root}/apps/api/target/out/jvm/scala-3.8.4/momo-result-api/scoverage-report"
-mkdir -p "${second}"
-cp "${api}" "${second}/scoverage.xml"
-run 1 api --allow-missing
-check '.status == "invalid" and (.message | contains("Ambiguous"))'
-web_report
-cat "${web}" "${web}" > "${root}/report"
-mv "${root}/report" "${web}"
-run 1 web
-check '.status == "invalid"'
+# Go tests own metric partitions, XML parsing and ambiguous report discovery.
+# The executable boundary retains stale-output replacement on invalid input.
+printf '{broken' > "${web}"
+run 1 web --allow-missing
+check '.status == "invalid" and .metrics == {}'
+if grep -Fq '| statements |' "${out}/summary.md"; then exit 1; fi
 echo 'coverage summary contracts passed'

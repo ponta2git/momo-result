@@ -23,11 +23,16 @@
     "web:contract:check": "pnpm --filter web contract:check",
     "web:lint": "pnpm --filter web lint",
     "web:e2e": "pnpm --filter web e2e",
-    "web:e2e:target": "pnpm --filter web e2e:target",
-    "web:e2e:runtime": "pnpm --filter web e2e:runtime",
     "web:test": "pnpm --filter web test:run",
     "web:test:coverage": "pnpm --filter web test:coverage",
     "web:typecheck": "pnpm --filter web typecheck",
-    "analysis:maintain": "scripts/ops/analysis.sh"
+    "analysis:maintain": "scripts/ops/analysis.sh",
+    "web:e2e:ui": "pnpm --filter web e2e:ui",
+    "e2e": "node scripts/e2e/run-system.mts",
+    "e2e:recovery": "node scripts/e2e/run-system.mts --controlled",
+    "test:notification-contract": "node scripts/e2e/run-notification-contract.mts"
+  },
+  "devDependencies": {
+    "testcontainers": "^12.1.0"
   }
 }

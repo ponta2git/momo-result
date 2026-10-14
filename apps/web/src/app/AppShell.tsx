@@ -9,6 +9,8 @@ import { RouteErrorBoundary } from "@/app/RouteErrorBoundary";
 import { preloadRouteForPath, OutlookSessionOwner } from "@/app/routeModules";
 import { RouteSuspenseFallback } from "@/app/RouteSuspenseFallback";
 import { useAuth } from "@/shared/auth/useAuth";
+import { Button } from "@/shared/ui/actions/Button";
+import { Notice } from "@/shared/ui/feedback/Notice";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 
 function shouldPreloadAnchor(anchor: HTMLAnchorElement): boolean {
@@ -74,7 +76,7 @@ export function AppShell() {
         return;
       }
       const anchor = target.closest<HTMLAnchorElement>("a[href]");
-      if (!anchor || anchor.target === "_blank" || anchor.origin !== window.location.origin) {
+      if (!anchor || !shouldPreloadAnchor(anchor)) {
         return;
       }
       preloadRouteForPath(anchor.pathname);
@@ -114,6 +116,25 @@ export function AppShell() {
         onFocusCapture={handlePreloadIntent}
         onPointerOverCapture={handlePreloadIntent}
       >
+        {auth.error && !location.pathname.startsWith("/admin/") ? (
+          <div className="mb-6">
+            <Notice
+              action={
+                <Button
+                  pending={auth.isRefetching}
+                  pendingLabel="再試行中…"
+                  onClick={() => void auth.refetch()}
+                >
+                  ログイン状態を再確認
+                </Button>
+              }
+              title="ログイン状態を確認できません"
+              tone="warning"
+            >
+              入力内容を保持しています。通信状態を確認して、ログイン状態を再確認してください。
+            </Notice>
+          </div>
+        ) : null}
         <OutlookSessionOwner key={auth.auth?.accountId ?? "anonymous"}>
           <QueryErrorResetBoundary>
             {({ reset }) => (

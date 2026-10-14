@@ -349,11 +349,6 @@ impl NormalizedAnalysisInput {
         self.radar_monitoring.as_ref()
     }
 
-    /// Includes the overall scope even when empty; no empty Cartesian product is materialized.
-    pub fn scope_refs(&self) -> impl Iterator<Item = &ScopeRef> {
-        self.scopes.iter().map(|scope| &scope.scope)
-    }
-
     /// Returns the validated opaque game-title identifier.
     #[must_use]
     pub fn game_title_id(&self) -> &str {

@@ -82,7 +82,6 @@ export async function invalidateAfterMatchUpdated(
       queryKey: matchKeys.detailRoot(),
       predicate: ({ queryKey }) => queryKey.at(-1) === "read-result",
     }),
-    queryClient.invalidateQueries({ queryKey: matchKeys.identity(matchId), exact: true }),
     queryClient.invalidateQueries({ queryKey: matchKeys.collections() }),
     queryClient.invalidateQueries({ queryKey: heldEventKeys.all() }),
     invalidateAnalysisState(queryClient),

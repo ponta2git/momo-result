@@ -13,7 +13,6 @@ import { useOcrCaptureDraftFlow } from "@/features/ocrCapture/useOcrCaptureDraft
 import { useOcrCaptureMutations } from "@/features/ocrCapture/useOcrCaptureMutations";
 import { useOcrSetupOptions } from "@/features/ocrCapture/useOcrSetupOptions";
 import { useOcrStartFlow } from "@/features/ocrCapture/useOcrStartFlow";
-import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { authQueryOptions } from "@/shared/auth/authQueries";
 import { useDevUser } from "@/shared/auth/useDevUser";
 import type { SlotKind } from "@/shared/domain/ocr";
@@ -28,17 +27,11 @@ export function useOcrCaptureAuth() {
   return {
     accountId: query.data?.accountId,
     ready: query.isSuccess && query.data !== null,
-    feedback: {
-      data: query.data,
-      error: query.error ? normalizeUnknownApiError(query.error) : undefined,
-      retry: () => void query.refetch(),
-      retrying: query.isFetching,
-    },
   };
 }
 
 /** Owns OCR capture screen state and exposes only view-ready slices and user intents. */
-export function useOcrCapturePageModel(auth: ReturnType<typeof useOcrCaptureAuth>) {
+export function useOcrCapturePageModel(authReady: boolean) {
   const [startError, setStartError] = useState<string>();
   const [searchParams] = useSearchParams();
   const requestedHeldEventId = trimSearchParam(searchParams.get("heldEventId"));
@@ -49,7 +42,6 @@ export function useOcrCapturePageModel(auth: ReturnType<typeof useOcrCaptureAuth
   const [captureTargetKind, setCaptureTargetKind] = useState<SlotKind>("total_assets");
   const [captureActionFeedback, setCaptureActionFeedback] = useState<string>();
 
-  const authReady = auth.ready;
   const setupOptions = useOcrSetupOptions({
     enabled: authReady,
     onChange: setSetupValue,
@@ -171,9 +163,6 @@ export function useOcrCapturePageModel(auth: ReturnType<typeof useOcrCaptureAuth
         slots: draftFlow.slots,
         statusRefreshing: draftFlow.statusRefreshing,
       },
-    },
-    feedback: {
-      auth: auth.feedback,
     },
     navigation: {
       guard: {

@@ -13,7 +13,7 @@ import momo.api.repositories.{OcrJobCreationPlan, OcrJobCreationStore, StoredOcr
 /**
  * Shared admission and replay semantics for the HTTP test adapter and the durable adapter.
  * Reads use repository ports, so successful creation and rejected writes are observable through
- * the same boundary as their consumers. SQL locking, rollback and durable outbox stay in DB specs.
+ * the same boundary as their consumers. SQL locking, rollback and durable job input stay in DB specs.
  */
 trait OcrJobCreationStoreContract:
   this: CatsEffectSuite =>
@@ -115,7 +115,6 @@ trait OcrJobCreationStoreContract:
     val other = MatchDraftId.unsafeFromString("other-match-draft")
     plan.copy(
       matchDraftAttachment = plan.matchDraftAttachment.copy(draftId = other),
-      queueDispatch = plan.queueDispatch.copy(matchDraftId = other),
     )
 
 object OcrJobCreationStoreContract:

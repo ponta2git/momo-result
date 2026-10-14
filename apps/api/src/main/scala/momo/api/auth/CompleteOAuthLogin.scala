@@ -18,6 +18,9 @@ object OAuthLoginFailure:
   final case class ProviderError(error: AppError) extends OAuthLoginFailure:
     override val reason: String = "provider_error"
 
+  final case class SessionRejected(error: AppError) extends OAuthLoginFailure:
+    override val reason: String = "session_rejected"
+
   case object InvalidDiscordUserId extends OAuthLoginFailure:
     override val reason: String = "invalid_discord_user_id"
     override val error: AppError =
@@ -71,11 +74,11 @@ final class CompleteOAuthLogin[F[_]: Sync](
           case None => OAuthLoginFailure.DiscordUserNotAllowed.asLeft[OAuthLoginCompletion].pure[F]
           case Some(account) if !account.loginEnabled =>
             OAuthLoginFailure.LoginDisabled.asLeft[OAuthLoginCompletion].pure[F]
-          case Some(account) => sessions.create(account)
-              .flatTap(_ =>
-                Sync[F].delay(
+          case Some(account) => sessions.create(account).flatMap {
+              case Left(error) =>
+                OAuthLoginFailure.SessionRejected(error).asLeft[OAuthLoginCompletion].pure[F]
+              case Right(session) => Sync[F].delay(
                   logger.info(s"auth_login_completed accountId=${account.id.value}")
-                )
-              )
-              .map(session => OAuthLoginCompletion(account.id, session).asRight[OAuthLoginFailure])
+                ).as(OAuthLoginCompletion(account.id, session).asRight[OAuthLoginFailure])
+            }
         }

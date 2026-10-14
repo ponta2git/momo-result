@@ -6,13 +6,8 @@ final case class DatabaseConfig(jdbcUrl: String, user: String, password: String,
   override def toString: String =
     s"DatabaseConfig(jdbcUrl=[REDACTED], user=[REDACTED], password=[REDACTED], poolSize=$poolSize)"
 
-final case class RedisConfig(
-    url: String,
-    v2Stream: String = RedisConfig.DefaultV2Stream,
-    v2DeadLetterStream: String = RedisConfig.DefaultV2DeadLetterStream,
-):
-  override def toString: String =
-    s"RedisConfig(url=[REDACTED], v2Stream=$v2Stream, v2DeadLetterStream=$v2DeadLetterStream)"
+final case class RedisConfig(url: String):
+  override def toString: String = "RedisConfig(url=[REDACTED])"
 
 final case class SeriesAnalysisReadConfig(
     maxEncodedBytes: Long,
@@ -58,15 +53,8 @@ final case class ResourceLimitsConfig(
     imageUploadStorageMaxUsedPercent: Int,
     imageOrphanOlderThan: FiniteDuration,
     imageOrphanReaperInterval: FiniteDuration,
-    staleOcrJobAfter: FiniteDuration,
-    staleOcrJobReaperInterval: FiniteDuration,
     sessionPruneInterval: FiniteDuration,
-    ocrOutboxRecoveryInterval: FiniteDuration,
-    ocrOutboxSemanticRedeliveryInterval: FiniteDuration,
-    ocrOutboxDueBacklogLimit: Int,
-    ocrOutboxActiveBacklogLimit: Int,
-    ocrOutboxOldestDueMaxDelay: FiniteDuration,
-    ocrDeadLetterBacklogLimit: Int,
+    ocrJobOldestReadyMaxDelay: FiniteDuration,
 )
 
 final case class AuthConfig(
@@ -79,7 +67,6 @@ final case class AuthConfig(
     sessionTtl: FiniteDuration,
     stateTtl: FiniteDuration,
     rateLimitPerMinute: Int,
-    callbackStateRateLimitPerMinute: Int,
     providerFailureThreshold: Int,
     providerBackoff: FiniteDuration,
     callbackRedirectPath: String,
@@ -93,7 +80,6 @@ final case class AuthConfig(
     s"AuthConfig(discordConfigured=$discordConfigured, credentials=[REDACTED], " +
       s"sessionCookieName=$sessionCookieName, stateCookieName=$stateCookieName, " +
       s"sessionTtl=$sessionTtl, stateTtl=$stateTtl, rateLimitPerMinute=$rateLimitPerMinute, " +
-      s"callbackStateRateLimitPerMinute=$callbackStateRateLimitPerMinute, " +
       s"providerFailureThreshold=$providerFailureThreshold, providerBackoff=$providerBackoff, " +
       s"useSecureCookies=$useSecureCookies)"
 
@@ -119,16 +105,11 @@ object AuthConfig:
     sessionTtl = 30.days,
     stateTtl = 300.seconds,
     rateLimitPerMinute = 10,
-    callbackStateRateLimitPerMinute = 3,
     providerFailureThreshold = 3,
     providerBackoff = 60.seconds,
     callbackRedirectPath = "/",
     useSecureCookies = appEnv == AppEnv.Prod,
   )
-
-object RedisConfig:
-  val DefaultV2Stream: String = "momo:ocr:v2:jobs"
-  val DefaultV2DeadLetterStream: String = "momo:ocr:v2:jobs:dead"
 
 object SeriesAnalysisReadConfig:
   // Database bytes, decoded character storage, tree nodes and response bytes share an admission
@@ -179,13 +160,6 @@ object ResourceLimitsConfig:
     imageUploadStorageMaxUsedPercent = 90,
     imageOrphanOlderThan = 15.minutes,
     imageOrphanReaperInterval = 5.minutes,
-    staleOcrJobAfter = 300.seconds,
-    staleOcrJobReaperInterval = 1800.seconds,
     sessionPruneInterval = 60.minutes,
-    ocrOutboxRecoveryInterval = 300.seconds,
-    ocrOutboxSemanticRedeliveryInterval = 120.seconds,
-    ocrOutboxDueBacklogLimit = 24,
-    ocrOutboxActiveBacklogLimit = 48,
-    ocrOutboxOldestDueMaxDelay = 600.seconds,
-    ocrDeadLetterBacklogLimit = 24,
+    ocrJobOldestReadyMaxDelay = 600.seconds,
   )

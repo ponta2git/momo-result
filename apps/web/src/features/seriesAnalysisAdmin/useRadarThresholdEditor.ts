@@ -250,6 +250,7 @@ export function useRadarThresholdEditor(model: PlayerRadarAdminModel) {
       comparisonChanged: false,
     });
     setAxis("averageRank");
+    setComposing(false);
     setShowErrors(false);
     setApplyError(null);
     setReady(null);

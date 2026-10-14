@@ -27,6 +27,8 @@ trait AppSessionsAlg[F0[_]]:
   def upsert(session: AppSession): F0[Unit]
   def delete(idHash: String): F0[Unit]
   def deleteByAccount(accountId: AccountId): F0[Int]
+
+  /** Advance timestamps atomically without shortening a newer renewal or recreating a session. */
   def renew(idHash: String, lastSeenAt: Instant, expiresAt: Instant): F0[Unit]
   def deleteExpired(now: Instant): F0[Int]
 

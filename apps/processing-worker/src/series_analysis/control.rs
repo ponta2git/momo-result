@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use thiserror::Error;
 
-use crate::outbox::{ControlOutcome, PostCommitEffects};
+use crate::scheduler::{ControlOutcome, PostCommitEffects};
 
 pub(crate) const ALGORITHM_VERSION: &str = "series-analysis-v7";
 
@@ -13,7 +13,7 @@ mod history;
 mod lifecycle;
 mod publication;
 pub(crate) mod radar;
-mod recovery;
+pub(crate) mod recovery;
 mod staging_metadata;
 mod transaction;
 mod vocabulary;
@@ -24,7 +24,7 @@ mod integration_tests;
 pub(crate) use capability::{
     CAPABILITY_FRESH_SECONDS, IdleRefreshSchedule, mark_draining, register_capability,
 };
-pub(crate) use claim::{claim_job, retry_busy_job};
+pub(crate) use claim::claim_job;
 pub(crate) use completion::publish;
 pub(crate) use history::{HISTORY_CLEANUP_INTERVAL, cleanup_history};
 pub(crate) use lifecycle::{
@@ -34,7 +34,7 @@ pub(crate) use recovery::recover_expired_analysis_holder;
 pub(crate) use transaction::artifact_id_for_attempt;
 pub(crate) use vocabulary::{AttemptFailure, RequeueCause, SafeFailureCode};
 
-use vocabulary::{AttemptOutcome, DeliveryReason, RequestOutcome, ResultDisposition};
+use vocabulary::{AttemptOutcome, RequestOutcome, ResultDisposition};
 
 /// Outbox work made durable by the transaction currently in progress.
 ///
@@ -63,7 +63,7 @@ impl TransactionEffects {
 
     pub(crate) const fn committed<T>(self, value: T) -> ControlOutcome<T> {
         let effects = if self.series_analysis_wake {
-            PostCommitEffects::WakeAnalysis
+            PostCommitEffects::WakeJobs
         } else {
             PostCommitEffects::None
         };
@@ -218,7 +218,7 @@ pub(crate) enum ControlError {
     #[error("analysis PostgreSQL connection failed")]
     PostgresConnection(#[from] crate::postgres::PostgresError),
     #[error("analysis shared execution-slot transition failed: {0}")]
-    ExecutionSlot(&'static str),
+    ExecutionSlot(#[source] crate::execution_slot::ExecutionSlotError),
     #[error("analysis worker lost its fencing ownership")]
     OwnerLost,
     #[error("analysis artifact file is invalid")]
@@ -246,12 +246,34 @@ pub(crate) enum ControlError {
 }
 
 impl ControlError {
+    pub(crate) fn is_contention(&self) -> bool {
+        match self {
+            Self::Postgres(error)
+            | Self::ExecutionSlot(crate::execution_slot::ExecutionSlotError::Postgres(error)) => {
+                crate::postgres::is_lock_contention(error)
+            }
+            Self::PostgresConnection(_)
+            | Self::ExecutionSlot(_)
+            | Self::OwnerLost
+            | Self::Artifact(_)
+            | Self::Io(_)
+            | Self::ArtifactValidationTask(_)
+            | Self::NumericConversion(_)
+            | Self::NumericBound
+            | Self::PublicationRowCount
+            | Self::ChildArtifactMetrics
+            | Self::InvalidMetadata
+            | Self::MetadataParse(_)
+            | Self::AuthoritativeInputContract
+            | Self::UnsupportedValidationContract => false,
+        }
+    }
     #[must_use]
     pub(crate) const fn kind(&self) -> &'static str {
         match self {
             Self::Postgres(_) => "postgres_state_transition",
             Self::PostgresConnection(error) => error.kind(),
-            Self::ExecutionSlot(kind) => kind,
+            Self::ExecutionSlot(error) => error.kind(),
             Self::OwnerLost => "fencing_owner_lost",
             Self::Artifact(_) => "artifact_validation",
             Self::Io(_) => "artifact_io",
@@ -291,8 +313,7 @@ impl ControlError {
     /// `Io` occurs only while re-reading an already validated file for database staging, a join
     /// error means a blocking validation/read task panicked or was cancelled, and an unsupported requested
     /// validator proves the durable claim changed outside the supported control path. The caller
-    /// must retain the lease and delivery for recovery instead of persisting a business failure
-    /// and `ACKing`.
+    /// must retain the lease for recovery instead of persisting a business failure.
     #[must_use]
     pub(crate) const fn is_candidate_processing_infrastructure_failure(&self) -> bool {
         matches!(
@@ -307,6 +328,6 @@ impl ControlError {
 
 impl From<crate::execution_slot::ExecutionSlotError> for ControlError {
     fn from(error: crate::execution_slot::ExecutionSlotError) -> Self {
-        Self::ExecutionSlot(error.kind())
+        Self::ExecutionSlot(error)
     }
 }

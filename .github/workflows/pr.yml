@@ -23,7 +23,7 @@ jobs:
       analysis: ${{ steps.changes.outputs.analysis }}
       analysis_image: ${{ steps.changes.outputs.analysis_image }}
       runtime: ${{ steps.changes.outputs.runtime }}
-      ocr_notifications: ${{ steps.changes.outputs.ocr_notifications }}
+      system_e2e: ${{ steps.changes.outputs.system_e2e }}
       http4s_patch: ${{ steps.changes.outputs.http4s_patch }}
       workflow: ${{ steps.changes.outputs.workflow }}
       actionlint: ${{ steps.changes.outputs.actionlint }}
@@ -113,18 +113,31 @@ jobs:
     uses: ./.github/workflows/processing-worker.yml
     with:
       verify_image: ${{ needs.classify.outputs.analysis_image == 'true' }}
+      package_image: ${{ needs.classify.outputs.system_e2e == 'true' }}
 
   runtime:
     name: Runtime smoke
     needs: classify
     if: github.event.pull_request.base.ref != 'master' && needs.classify.outputs.runtime == 'true'
     uses: ./.github/workflows/deploy.yml
+    with:
+      package_image: ${{ needs.classify.outputs.system_e2e == 'true' }}
 
-  ocr-notifications:
-    name: OCR notification E2E
-    needs: classify
-    if: github.event.pull_request.base.ref != 'master' && needs.classify.outputs.ocr_notifications == 'true'
-    uses: ./.github/workflows/ocr-notifications.yml
+  system-e2e:
+    name: System E2E
+    needs: [classify, runtime, analysis]
+    if: github.event.pull_request.base.ref != 'master' && needs.classify.outputs.system_e2e == 'true'
+    uses: ./.github/workflows/system-e2e.yml
+    with:
+      runtime_artifact_id: ${{ needs.runtime.outputs.artifact_id }}
+      runtime_artifact_digest: ${{ needs.runtime.outputs.artifact_digest }}
+      runtime_artifact_name: ${{ needs.runtime.outputs.artifact_name }}
+      runtime_image_ref: ${{ needs.runtime.outputs.image_ref }}
+      runtime_run_attempt: ${{ needs.runtime.outputs.run_attempt }}
+      worker_metadata_id: ${{ needs.analysis.outputs.metadata_artifact_id }}
+      worker_metadata_digest: ${{ needs.analysis.outputs.metadata_artifact_digest }}
+      worker_metadata_name: ${{ needs.analysis.outputs.metadata_artifact_name }}
+      worker_run_attempt: ${{ needs.analysis.outputs.producer_run_attempt }}
 
   pr-ready:
     name: pr-ready
@@ -138,7 +151,7 @@ jobs:
       - web
       - analysis
       - runtime
-      - ocr-notifications
+      - system-e2e
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -161,6 +174,6 @@ jobs:
           ANALYSIS_RESULT: ${{ needs.analysis.result }}
           RUNTIME_EXPECTED: ${{ needs.classify.outputs.runtime }}
           RUNTIME_RESULT: ${{ needs.runtime.result }}
-          OCR_NOTIFICATIONS_EXPECTED: ${{ needs.classify.outputs.ocr_notifications }}
-          OCR_NOTIFICATIONS_RESULT: ${{ needs.ocr-notifications.result }}
+          SYSTEM_E2E_EXPECTED: ${{ needs.classify.outputs.system_e2e }}
+          SYSTEM_E2E_RESULT: ${{ needs.system-e2e.result }}
         run: scripts/ci/check-pr-ready.sh

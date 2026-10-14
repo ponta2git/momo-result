@@ -5,7 +5,6 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 canonicalizer=("${repo_root}/scripts/ci/ci-tool.sh" artifact-digest)
 readonly digest=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 readonly canonical="sha256:${digest}"
-readonly uppercase=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
 [[ "$("${canonicalizer[@]}" "${digest}")" == "${canonical}" ]]
 [[ "$("${canonicalizer[@]}" "${canonical}")" == "${canonical}" ]]
@@ -19,11 +18,10 @@ expect_rejected() {
   fi
 }
 
+# Detailed digest partitions live in cievidence's Go tests. Keep executable
+# dispatch, argument validation and one rejected value at the shell boundary.
 expect_rejected missing
 expect_rejected extra "${digest}" "${digest}"
-expect_rejected short "${digest:0:63}"
-expect_rejected uppercase "${uppercase}"
 expect_rejected wrong-algorithm "sha512:${digest}"
-expect_rejected malformed-prefix "sha256-${digest}"
 
 echo "Artifact digest canonicalization tests passed."

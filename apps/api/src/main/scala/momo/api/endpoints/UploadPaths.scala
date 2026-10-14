@@ -5,5 +5,4 @@ object UploadPaths:
   val Uploads: String = "uploads"
   val Images: String = "images"
 
-  val ImageUploadPath: String = s"/$Api/$Uploads/$Images"
 end UploadPaths

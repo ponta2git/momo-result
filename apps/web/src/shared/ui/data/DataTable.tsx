@@ -90,8 +90,6 @@ export const dataTableHeaderCellClassName = cn(
   "border-y border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-2 align-middle",
 );
 
-export const dataTableBodyCellClassName = "px-3 py-2 align-middle";
-
 // Each shared horizontal edge belongs to the cell above it, so it is painted only once.
 // Header/footer offsets cover their existing 1px rules without changing cell dimensions.
 const highlightedColumnClassName =

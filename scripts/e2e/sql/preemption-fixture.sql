@@ -46,24 +46,10 @@ INSERT INTO source_images (
 );
 INSERT INTO ocr_jobs (
   id, draft_id, image_id, image_path, requested_screen_type,
-  status, source_image_id, queue_schema_version, available_at
+  status, source_image_id, input_snapshot, available_at
 ) VALUES (
   'ci-preemption-ocr-job', 'ci-preemption-draft', 'ci-preemption-source-image', NULL,
-  'total_assets', 'queued', 'ci-preemption-source-image', 2, clock_timestamp()
-);
-INSERT INTO match_drafts (id, created_by_account_id, created_by_member_id, status, total_assets_draft_id)
-VALUES ('ci-preemption-match-draft', 'account_ponta', 'member_ponta', 'ocr_running', 'ci-preemption-draft');
-INSERT INTO ocr_submissions (id, owner_account_id, match_draft_id, ocr_hints_json, admission_deadline)
-VALUES ('00000000-0024-4000-8000-000000000099', 'account_ponta', 'ci-preemption-match-draft', '{}'::jsonb, clock_timestamp() + interval '10 minutes');
-INSERT INTO ocr_submission_members (submission_id, screen_type, upload_idempotency_key_hash, image_sha256_hex, image_byte_length, status, job_id)
-VALUES ('00000000-0024-4000-8000-000000000099', 'total_assets', repeat('1', 64), repeat('ab', 32), 68, 'registered', 'ci-preemption-ocr-job');
-INSERT INTO ocr_queue_outbox (
-  id, job_id, dedupe_key, stream_payload, schema_version, status,
-  attempt_count, next_attempt_at, delivered_at
-) VALUES (
-  'ocr-outbox-ci-preemption-ocr-job', 'ci-preemption-ocr-job',
-  'ocr-job:ci-preemption-ocr-job',
-  jsonb_build_object(
+  'total_assets', 'queued', 'ci-preemption-source-image', jsonb_build_object(
     'schemaVersion', '2',
     'jobId', 'ci-preemption-ocr-job',
     'draftId', 'ci-preemption-draft',
@@ -72,9 +58,12 @@ INSERT INTO ocr_queue_outbox (
     'sha256', repeat('ab', 32),
     'byteLength', '68',
     'mediaType', 'image/png',
-    'requestedScreenType', 'total_assets',
-    'attempt', '1',
-    'enqueuedAt', '2026-08-12T00:00:00Z'
-  ),
-  2, 'DELIVERED', 0, clock_timestamp(), clock_timestamp()
+    'requestedScreenType', 'total_assets'
+  ), clock_timestamp() + interval '1 hour'
 );
+INSERT INTO match_drafts (id, created_by_account_id, created_by_member_id, status, total_assets_draft_id)
+VALUES ('ci-preemption-match-draft', 'account_ponta', 'member_ponta', 'ocr_running', 'ci-preemption-draft');
+INSERT INTO ocr_submissions (id, owner_account_id, match_draft_id, ocr_hints_json, admission_deadline)
+VALUES ('00000000-0024-4000-8000-000000000099', 'account_ponta', 'ci-preemption-match-draft', '{}'::jsonb, clock_timestamp() + interval '10 minutes');
+INSERT INTO ocr_submission_members (submission_id, screen_type, upload_idempotency_key_hash, image_sha256_hex, image_byte_length, status, job_id)
+VALUES ('00000000-0024-4000-8000-000000000099', 'total_assets', repeat('1', 64), repeat('ab', 32), 68, 'registered', 'ci-preemption-ocr-job');

@@ -221,7 +221,8 @@ function RecentRankScroller({
       observer.disconnect();
       element.removeEventListener("scroll", handleScroll);
     };
-    // New match columns change DOM geometry and must realign to the latest result.
+    // Replaced match columns must realign even when their measured width stays the same.
+    // This DOM dependency preserves scrollbar focus; a keyed remount would lose it.
     // oxlint-disable-next-line react/exhaustive-effect-dependencies
   }, [latestPointKey, syncScrollMetrics]);
 

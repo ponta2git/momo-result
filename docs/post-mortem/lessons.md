@@ -167,7 +167,7 @@
 - `docs/domain-rule.md`
 - `docs/architecture.md`
 - `docs/db-rule.md`
-- `docs/redis-streams-ocr-contract.md`
+- `docs/ocr-job-contract.md`
 - `docs/test-rule.md`
 
 ### L8 高負荷分析は通常経路のコストと観測を先に固定する

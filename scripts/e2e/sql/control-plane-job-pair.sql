@@ -17,7 +17,7 @@ SELECT
   'queued',
   'algorithm_update',
   clock_timestamp(),
-  clock_timestamp()
+  clock_timestamp() + interval '1 hour'
 FROM series_analysis_title_states state
 JOIN (
   VALUES

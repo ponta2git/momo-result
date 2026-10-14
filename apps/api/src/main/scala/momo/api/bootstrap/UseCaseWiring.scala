@@ -15,12 +15,14 @@ import momo.api.auth.{
   MemberRoster,
   OAuthProviderBackoff,
   OAuthStateCodec,
+  OAuthStateReplayGuard,
   RateLimiter,
   SessionService
 }
 import momo.api.config.{AppConfig, AuthConfig, ResourceLimitsConfig}
 import momo.api.domain.ids.*
 import momo.api.endpoints.HealthEndpoints.HealthDetailsResponse
+import momo.api.errors.AppException
 import momo.api.http.{HttpRateLimiters, HttpRoutes, RequestBodyAdmission}
 import momo.api.ports.storage.ImageStorage
 import momo.api.repositories.*
@@ -61,10 +63,12 @@ private[bootstrap] object UseCaseWiring:
     def from[F[_]: Sync: SecureRandom](
         sessions: AppSessionsRepository[F],
         sessionAccounts: SessionAccountLookup[F],
+        sessionCreation: LoginSessionCreationRepository[F],
         config: AuthConfig,
         now: F[java.time.Instant],
     ): RuntimeAuthServices[F] = RuntimeAuthServices(
-      sessionService = SessionService[F](sessions, config.sessionTtl, now, sessionAccounts),
+      sessionService =
+        SessionService[F](sessions, config.sessionTtl, now, sessionAccounts, sessionCreation),
       csrfTokenService = CsrfTokenService(),
       oauthStateCodec = OAuthStateCodec[F](
         config.stateSigningKey.getOrElse("development-only-oauth-state-signing-key"),
@@ -113,6 +117,7 @@ private[bootstrap] object UseCaseWiring:
       matchConfirmation: MatchConfirmationRepository[F],
       appSessions: AppSessionsRepository[F],
       sessionAccounts: SessionAccountLookup[F],
+      sessionCreation: LoginSessionCreationRepository[F],
       members: MembersRepository[F],
       loginAccounts: LoginAccountsRepository[F],
       loginAccountAdministration: LoginAccountAdministrationRepository[F],
@@ -127,11 +132,10 @@ private[bootstrap] object UseCaseWiring:
 
   final case class RuntimeServices[F[_]](
       healthDetails: F[HealthDetailsResponse],
-      ocrQueueSubmitter: OcrJobQueueSubmitter[F],
       ocrAdmissionGuard: OcrAdmissionGuard[F],
       oauthClient: DiscordOAuthClient[F],
       loginRateLimiter: RateLimiter[F],
-      authCallbackStateRateLimiter: RateLimiter[F],
+      oauthStateReplayGuard: OAuthStateReplayGuard[F],
       oauthProviderBackoff: OAuthProviderBackoff[F],
       rateLimiters: HttpRateLimiters[F],
   )
@@ -148,6 +152,7 @@ private[bootstrap] object UseCaseWiring:
       RuntimeAuthServices.from[F](
         repositories.appSessions,
         repositories.sessionAccounts,
+        repositories.sessionCreation,
         config.auth,
         now,
       )
@@ -181,7 +186,7 @@ private[bootstrap] object UseCaseWiring:
             repositories.loginAccounts,
             services.oauthProviderBackoff
           ),
-          services.authCallbackStateRateLimiter,
+          services.oauthStateReplayGuard,
           config.auth.callbackRedirectPath,
         ),
       )
@@ -214,7 +219,9 @@ private[bootstrap] object UseCaseWiring:
           mapMasters = repositories.mapMasters,
           seasonMasters = repositories.seasonMasters,
           loginAccounts = repositories.loginAccounts,
-          createSession = authServices.sessionService.create,
+          createSession = account =>
+            authServices.sessionService.create(account)
+              .flatMap(_.leftMap(AppException(_)).liftTo[F]),
           registeredEndpoints = registeredEndpoints,
         ),
       )

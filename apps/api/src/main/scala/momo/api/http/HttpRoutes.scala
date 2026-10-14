@@ -341,17 +341,19 @@ object HttpRoutes:
     val authRoutes = interpreter.toRoutes(authEndpoints)
 
     val app =
-      RequestIdMiddleware[F](RequestDurationLoggingMiddleware[F](HeadResponseMiddleware[F](
-        SecurityHeadersMiddleware[F](deps.config.appEnv)(HttpErrorMiddleware[F](
-          MaxBodySizeMiddleware.requestAndUpload[F](
-            deps.config.resourceLimits.requestMaxBytes,
-            deps.config.resourceLimits.uploadRequestMaxBytes,
-          )(
-            deps.bodyAdmission(Router("/" -> (authRoutes <+> tapirRoutes <+> sourceImageRoutes))
-              .orNotFound)
+      RequestIdMiddleware[F](HeadResponseMiddleware[F](
+        SecurityHeadersMiddleware[F](deps.config.appEnv)(
+          RequestDurationLoggingMiddleware[F](
+            HttpErrorMiddleware[F](
+              MaxBodySizeMiddleware.requestAndUpload[F](
+                deps.config.resourceLimits.requestMaxBytes,
+                deps.config.resourceLimits.uploadRequestMaxBytes,
+              )(Router("/" -> (authRoutes <+> tapirRoutes <+> sourceImageRoutes)).orNotFound)
+            ),
+            deps.bodyAdmission.apply
           )
-        ))
-      )))
+        )
+      ))
     val registeredEndpoints =
       endpoints.map(_.endpoint) ::: sourceImageEndpoints.map(_.endpoint) ::: authEndpoints.map(
         _.endpoint

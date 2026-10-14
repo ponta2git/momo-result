@@ -101,8 +101,6 @@ describe("shared query keys", () => {
     const queryClient = createTestQueryClient();
     queryClient.setQueryData(matchKeys.detail("match-1"), { matchId: "match-1" });
     queryClient.setQueryData(matchKeys.detail("match-2"), { matchId: "match-2" });
-    queryClient.setQueryData(matchKeys.identity("match-1"), { matchId: "match-1" });
-    queryClient.setQueryData(matchKeys.identity("match-2"), { matchId: "match-2" });
     queryClient.setQueryData(matchKeys.summary({ status: "confirmed" }), { total: 2 });
     queryClient.setQueryData(seriesAnalysisKeys.status("gt-1"), { gameTitleId: "gt-1" });
     queryClient.setQueryData(seriesAnalysisKeys.aggregate({ artifactId: "artifact-1" }), {
@@ -113,8 +111,6 @@ describe("shared query keys", () => {
 
     expect(queryClient.getQueryState(matchKeys.detail("match-1"))?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(matchKeys.detail("match-2"))?.isInvalidated).toBe(true);
-    expect(queryClient.getQueryState(matchKeys.identity("match-1"))?.isInvalidated).toBe(true);
-    expect(queryClient.getQueryState(matchKeys.identity("match-2"))?.isInvalidated).toBe(false);
     expect(
       queryClient.getQueryState(matchKeys.summary({ status: "confirmed" }))?.isInvalidated,
     ).toBe(true);
@@ -154,8 +150,6 @@ describe("shared query keys", () => {
     const queryClient = createTestQueryClient();
     queryClient.setQueryData(matchKeys.detail("match-1"), { matchId: "match-1" });
     queryClient.setQueryData(matchKeys.detail("match-2"), { matchId: "match-2" });
-    queryClient.setQueryData(matchKeys.identity("match-1"), { matchId: "match-1" });
-    queryClient.setQueryData(matchKeys.identity("match-2"), { matchId: "match-2" });
     queryClient.setQueryData(matchKeys.identityRead("match-1"), {
       kind: "found",
       value: { matchId: "match-1" },
@@ -178,13 +172,11 @@ describe("shared query keys", () => {
 
     expect(queryClient.getQueryState(matchKeys.detail("match-1"))).toBeUndefined();
     expect(queryClient.getQueryState(matchKeys.detail("match-2"))?.isInvalidated).toBe(true);
-    expect(queryClient.getQueryState(matchKeys.identity("match-1"))).toBeUndefined();
     expect(queryClient.getQueryData(matchKeys.identityRead("match-1"))).toBeUndefined();
     expect(queryClient.getQueryData(matchKeys.identityRead("match-2"))).toEqual({
       kind: "found",
       value: { matchId: "match-2" },
     });
-    expect(queryClient.getQueryState(matchKeys.identity("match-2"))?.isInvalidated).toBe(false);
   });
 
   it("does not invalidate analysis when OCR drafts start or are cancelled", async () => {

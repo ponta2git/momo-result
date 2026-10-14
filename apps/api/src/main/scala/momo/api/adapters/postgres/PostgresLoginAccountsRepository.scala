@@ -14,11 +14,13 @@ import momo.api.domain.ids.{AccountId, UserId}
 import momo.api.domain.{AccountRole, LoginAccount}
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{
+  AppSession,
   CreateLoginAccountData,
   LoginAccountAdministrationRepository,
   LoginAccountAdministrationUpdateResult,
   LoginAccountsAlg,
   LoginAccountsRepository,
+  LoginSessionCreationRepository,
   UpdateLoginAccountData
 }
 
@@ -132,15 +134,30 @@ object PostgresLoginAccounts:
 end PostgresLoginAccounts
 
 object PostgresLoginAccountAdministration:
+  // Acquire in a separate statement before account reads: waiting login and administration
+  // commands must use a fresh READ COMMITTED snapshot after the preceding command commits.
+  private val lockLifecycle =
+    sql"SELECT pg_advisory_xact_lock(hashtext('momo:login_accounts:admin_guard'))".query[
+      Unit
+    ].unique
+
+  def createIfAccountCurrent(
+      session: AppSession,
+      expectedAccountUpdatedAt: java.time.Instant,
+  ): ConnectionIO[Boolean] =
+    lockLifecycle *> PostgresLoginAccounts.alg.find(session.accountId).flatMap {
+      case Some(current)
+          if current.loginEnabled && current.updatedAt.equals(expectedAccountUpdatedAt) =>
+        PostgresAppSessions.alg.upsert(session).as(true)
+      case _ => false.pure[ConnectionIO]
+    }
+
   def updateAndRevokeSessionsWhenDisabled(
       id: AccountId,
       data: UpdateLoginAccountData,
   ): ConnectionIO[LoginAccountAdministrationUpdateResult] =
     for
-      // Acquire before reading either the account or the administrator count: a waiting command
-      // must use a fresh READ COMMITTED snapshot when deciding updates and session revocation.
-      _ <- sql"SELECT pg_advisory_xact_lock(hashtext('momo:login_accounts:admin_guard'))"
-        .query[Unit].unique
+      _ <- lockLifecycle
       existing <- PostgresLoginAccounts.alg.find(id)
       result <- existing match
         case None => LoginAccountAdministrationUpdateResult.NotFound.pure[ConnectionIO]
@@ -183,7 +200,13 @@ end PostgresLoginAccountsRepository
 
 final class PostgresLoginAccountAdministrationRepository[F[_]: MonadCancelThrow](
     transactor: Transactor[F]
-) extends LoginAccountAdministrationRepository[F]:
+) extends LoginAccountAdministrationRepository[F], LoginSessionCreationRepository[F]:
+  override def createIfAccountCurrent(
+      session: AppSession,
+      expectedAccountUpdatedAt: java.time.Instant,
+  ): F[Boolean] = PostgresLoginAccountAdministration
+    .createIfAccountCurrent(session, expectedAccountUpdatedAt).transact(transactor)
+
   override def updateAndRevokeSessionsWhenDisabled(
       id: AccountId,
       data: UpdateLoginAccountData,

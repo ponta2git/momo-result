@@ -58,14 +58,4 @@ private[postgres] object PostgresSeriesAnalysisRequestSupport:
     )
   """.update.run.void
 
-  def insertOutbox(
-      outboxId: String,
-      jobId: String,
-      dedupeKey: String,
-  ): ConnectionIO[Unit] = sql"""
-    INSERT INTO series_analysis_queue_outbox (id, job_id, dedupe_key)
-    VALUES ($outboxId, $jobId, $dedupeKey)
-    ON CONFLICT (dedupe_key) DO NOTHING
-  """.update.run.void
-
 end PostgresSeriesAnalysisRequestSupport

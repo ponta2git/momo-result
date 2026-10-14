@@ -1,4 +1,4 @@
-import { Activity, useEffect } from "react";
+import { Activity, Fragment, useEffect } from "react";
 import type { ReactNode } from "react";
 import { Navigate, useLocation, useSearchParams } from "react-router-dom";
 
@@ -195,7 +195,9 @@ export function AuthenticatedRoute({ children }: { children: ReactNode }) {
     return <Navigate to={buildLoginPath(next, "forbidden")} replace />;
   }
 
-  if (auth.error && !(authorization.paused && location.pathname.startsWith("/admin/"))) {
+  // A failed refresh does not end the confirmed account's ordinary editing session.
+  // Management routes retain their separate permission pause below AppShell.
+  if (auth.error && !auth.auth) {
     return (
       <ProtectedRouteMain>
         <AuthUnavailable pending={auth.isRefetching} onRetry={() => void auth.refetch()} />
@@ -203,7 +205,7 @@ export function AuthenticatedRoute({ children }: { children: ReactNode }) {
     );
   }
 
-  return children;
+  return <Fragment key={auth.auth?.accountId}>{children}</Fragment>;
 }
 
 /** Keep an invalid URL inspectable and offer a known destination without silently redirecting. */

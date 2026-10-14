@@ -330,7 +330,7 @@ async fn member(client: &Client, id: &str, screen: &str, job_status: Option<&str
     let digest = hex::encode(Sha256::digest(job_id.as_bytes()));
     if let Some(status) = job_status {
         client.execute("INSERT INTO source_images (id, owner_account_id, object_key, idempotency_key_hash, status, media_type, byte_length, sha256_hex, width, height, storage_etag, available_at) VALUES ($1, 'account_ponta', $1, $2, 'AVAILABLE', 'image/png', 68, $2, 1, 1, 'test', clock_timestamp())", &[&job_id, &digest]).await?;
-        client.execute("INSERT INTO ocr_jobs (id, draft_id, image_id, source_image_id, requested_screen_type, status, queue_schema_version, failure_code, finished_at) VALUES ($1, $1, $1, $1, $2, $3, 2, CASE WHEN $3 = 'failed' THEN 'OCR_TIMEOUT' END, clock_timestamp())", &[&job_id, &screen, &status]).await?;
+        client.execute("INSERT INTO ocr_jobs (id, draft_id, image_id, source_image_id, requested_screen_type, status, input_snapshot, failure_code, finished_at) VALUES ($1, $1, $1, $1, $2, $3, jsonb_build_object('schemaVersion','2','jobId',$1::text,'draftId',$1::text,'sourceImageId',$1::text,'imageObjectKey',$1::text,'sha256',$4::text,'byteLength','68','mediaType','image/png','requestedScreenType',$2::text), CASE WHEN $3 = 'failed' THEN 'OCR_TIMEOUT' END, clock_timestamp())", &[&job_id, &screen, &status,&digest]).await?;
     }
     let status = if job_status.is_some() {
         "registered"

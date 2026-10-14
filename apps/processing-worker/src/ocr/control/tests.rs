@@ -397,6 +397,7 @@ fn completion_requires_exact_finite_nonnegative_sensible_timings() {
 
 fn valid_claim(requested_screen_type: RequestedScreenType) -> ClaimedOcrJob {
     ClaimedOcrJob {
+        hints: Box::default(),
         job_id: String::from("ocr-job-1"),
         draft_id: String::from("ocr-draft-1"),
         source_image: SourceImageClaims::new(

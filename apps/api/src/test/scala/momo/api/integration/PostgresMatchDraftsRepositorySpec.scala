@@ -262,12 +262,12 @@ final class PostgresMatchDraftsRepositorySpec extends IntegrationSuite:
   """.update.run.transact(transactor)
 
   private def insertOcrJob(id: String, draftId: String, imageId: String, status: String): IO[Int] =
-    sql"""
+    insertOcrSourceImage(imageId, createdAt) *> sql"""
     INSERT INTO ocr_jobs (
-      id, draft_id, image_id, image_path, requested_screen_type, status, attempt_count,
+      id, draft_id, image_id, image_path, source_image_id, input_snapshot, requested_screen_type, status, attempt_count,
       created_at, updated_at
     ) VALUES (
-      $id, $draftId, $imageId, ${s"/tmp/$imageId.png"}, 'total_assets', $status, 0,
+      $id, $draftId, $imageId, ${s"/tmp/$imageId.png"}, $imageId, '{"schemaVersion":"2"}'::jsonb, 'total_assets', $status, 0,
       $createdAt, $createdAt
     )
   """.update.run.transact(transactor)

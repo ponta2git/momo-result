@@ -161,12 +161,13 @@ final class PostgresMatchDraftCancellationRepositorySpec extends IntegrationSuit
     )
   """.update.run.transact(transactor)
 
-  private def insertOcrJob(id: String, draftId: String, imageId: String): IO[Int] = sql"""
+  private def insertOcrJob(id: String, draftId: String, imageId: String): IO[Int] =
+    insertOcrSourceImage(imageId, now) *> sql"""
     INSERT INTO ocr_jobs (
-      id, draft_id, image_id, image_path, requested_screen_type, status, attempt_count,
+      id, draft_id, image_id, image_path, source_image_id, input_snapshot, requested_screen_type, status, attempt_count,
       created_at, updated_at
     ) VALUES (
-      $id, $draftId, $imageId, ${s"/tmp/$imageId.png"}, 'total_assets', 'queued', 0, $now, $now
+      $id, $draftId, $imageId, ${s"/tmp/$imageId.png"}, $imageId, '{"schemaVersion":"2"}'::jsonb, 'total_assets', 'queued', 0, $now, $now
     )
   """.update.run.transact(transactor)
 

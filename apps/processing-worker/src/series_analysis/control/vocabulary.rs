@@ -24,29 +24,6 @@ impl AttemptOutcome {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum DeliveryReason {
-    Superseded,
-    TransientRetry,
-    Preempted,
-    GracefulStop,
-    LeaseRecovery,
-    FollowUp,
-}
-
-impl DeliveryReason {
-    pub(super) const fn wire(self) -> &'static str {
-        match self {
-            Self::Superseded => "superseded",
-            Self::TransientRetry => "transient-retry",
-            Self::Preempted => "preempted",
-            Self::GracefulStop => "graceful_stop",
-            Self::LeaseRecovery => "lease-recovery",
-            Self::FollowUp => "followup",
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum RequestOutcome {
     Succeeded,
     Failed,
@@ -87,13 +64,6 @@ impl RequeueCause {
         match self {
             Self::Preempted => AttemptOutcome::Preempted,
             Self::GracefulStop => AttemptOutcome::GracefulStop,
-        }
-    }
-
-    pub(super) const fn delivery_reason(self) -> DeliveryReason {
-        match self {
-            Self::Preempted => DeliveryReason::Preempted,
-            Self::GracefulStop => DeliveryReason::GracefulStop,
         }
     }
 
@@ -235,14 +205,7 @@ mod tests {
             ),
             (SafeFailureCode::WorkerCrashed, "worker_crashed"),
         ];
-        let delivery_reasons = [
-            (DeliveryReason::Superseded, "superseded"),
-            (DeliveryReason::TransientRetry, "transient-retry"),
-            (DeliveryReason::Preempted, "preempted"),
-            (DeliveryReason::GracefulStop, "graceful_stop"),
-            (DeliveryReason::LeaseRecovery, "lease-recovery"),
-            (DeliveryReason::FollowUp, "followup"),
-        ];
+
         let request_outcomes = [
             (RequestOutcome::Succeeded, "succeeded"),
             (RequestOutcome::Failed, "failed"),
@@ -254,7 +217,6 @@ mod tests {
 
         assert_wires(&attempt_outcomes, AttemptOutcome::wire);
         assert_wires(&failure_codes, SafeFailureCode::wire);
-        assert_wires(&delivery_reasons, DeliveryReason::wire);
         assert_wires(&request_outcomes, RequestOutcome::wire);
         assert_wires(&result_dispositions, ResultDisposition::wire);
     }

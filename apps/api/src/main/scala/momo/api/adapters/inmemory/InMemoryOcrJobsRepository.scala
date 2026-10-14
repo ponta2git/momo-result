@@ -11,49 +11,62 @@ import momo.api.domain.{
   MatchDraftOcrSlot,
   MatchDraftOcrStatus,
   MatchDraftStatus,
-  OcrFailure,
   OcrJob,
+  OcrJobInput,
   OcrJobStatus
 }
 import momo.api.errors.{AppError, AppException}
-import momo.api.repositories.{MatchDraftsRepository, OcrJobCancellationResult, OcrJobsRepository}
+import momo.api.repositories.{
+  MatchDraftsRepository,
+  OcrJobBacklogSnapshot,
+  OcrJobCancellationResult,
+  OcrJobsRepository
+}
 
 final class InMemoryOcrJobsRepository[F[_]: Sync] private (
-    ref: Ref[F, Map[String, OcrJob]],
+    ref: Ref[F, InMemoryOcrJobsRepository.State],
     onQueuedCancel: (OcrJob.Cancelled, List[OcrJob]) => F[Unit],
     matchDrafts: Option[MatchDraftsRepository[F]],
 ) extends OcrJobsRepository[F]:
-  def create(job: OcrJob): F[Unit] = ref.modify { current =>
-    if current.contains(job.id.value) then
-      (
-        current,
-        Left(new AppException(AppError.Conflict(s"ocr job already exists: ${job.id.value}"))),
-      )
-    else (current + (job.id.value -> job), Right(()))
-  }.flatMap {
-    case Right(()) => Sync[F].unit
-    case Left(error) => Sync[F].raiseError(error)
-  }
+  def create(job: OcrJob): F[Unit] = createRecord(job, None)
 
-  override def find(jobId: OcrJobId): F[Option[OcrJob]] = ref.get.map(_.get(jobId.value))
+  def createWithInput(job: OcrJob, input: OcrJobInput): F[Unit] = createRecord(job, Some(input))
+
+  def inputs: F[Vector[OcrJobInput]] = ref.get.map(_.inputs.values.toVector.sortBy(_.jobId.value))
+
+  private def createRecord(job: OcrJob, input: Option[OcrJobInput]): F[Unit] = ref.modify { current =>
+    if current.jobs.contains(job.id.value) then
+      current ->
+        Left(new AppException(AppError.Conflict(s"ocr job already exists: ${job.id.value}")))
+    else
+      current.copy(
+        jobs = current.jobs.updated(job.id.value, job),
+        inputs = input.fold(current.inputs)(value => current.inputs.updated(job.id.value, value)),
+      ) -> Right(())
+  }.flatMap(_.liftTo[F])
+
+  override def find(jobId: OcrJobId): F[Option[OcrJob]] = ref.get.map(_.jobs.get(jobId.value))
 
   override def countActive: F[Long] = ref.get
-    .map(_.values.count(job => isActive(job.status)).toLong)
+    .map(_.jobs.values.count(job => isActive(job.status)).toLong)
+
+  override def backlogSnapshot(now: Instant): F[OcrJobBacklogSnapshot] = ref.get.map { state =>
+    val queued = state.jobs.values.filter(_.status == OcrJobStatus.Queued).toList
+    OcrJobBacklogSnapshot(
+      queued.size.toLong,
+      state.jobs.values.count(_.status == OcrJobStatus.Running).toLong,
+      queued.map(_.createdAt).filterNot(_.isAfter(now)).minOption,
+    )
+  }
 
   def activeImageIds: F[Set[ImageId]] = ref.get
-    .map(_.values.collect { case job if isActive(job.status) => job.imageId }.toSet)
+    .map(_.jobs.values.collect { case job if isActive(job.status) => job.imageId }.toSet)
 
   def existsActiveByDraft(draftId: OcrDraftId): F[Boolean] = ref.get
-    .map(_.values.exists(job => job.draftId == draftId && isActive(job.status)))
+    .map(_.jobs.values.exists(job => job.draftId == draftId && isActive(job.status)))
 
-  override def markFailed(jobId: OcrJobId, failure: OcrFailure, now: Instant): F[Unit] = ref
-    .update(jobs =>
-      jobs.updatedWith(jobId.value)(_.map(job =>
-        if isActive(job.status) then toFailed(job, failure, now) else job
-      ))
-    )
-
-  override def cancelQueued(jobId: OcrJobId, now: Instant): F[Boolean] = ref.modify { jobs =>
+  override def cancelQueued(jobId: OcrJobId, now: Instant): F[Boolean] = ref.modify { state =>
+    val jobs = state.jobs
     jobs.get(jobId.value) match
       case Some(q: OcrJob.Queued) =>
         val cancelled = OcrJob.Cancelled(
@@ -68,8 +81,8 @@ final class InMemoryOcrJobsRepository[F[_]: Sync] private (
           updatedAt = now,
         )
         val updated = jobs.updated(jobId.value, cancelled)
-        updated -> Some((cancelled, updated.values.toList))
-      case _ => jobs -> None
+        state.copy(jobs = updated) -> Some((cancelled, updated.values.toList))
+      case _ => state -> None
   }.flatMap {
     case Some((cancelled, jobs)) => onQueuedCancel(cancelled, jobs).as(true)
     case None => false.pure[F]
@@ -77,7 +90,8 @@ final class InMemoryOcrJobsRepository[F[_]: Sync] private (
 
   override def cancelQueuedByDraftIds(draftIds: List[OcrDraftId], now: Instant): F[Int] =
     val ids = draftIds.toSet
-    ref.modify { jobs =>
+    ref.modify { state =>
+      val jobs = state.jobs
       val (updated, cancelled) = jobs.foldLeft((jobs, List.empty[OcrJob.Cancelled])) {
         case ((acc, cancelledAcc), (jobId, q: OcrJob.Queued)) if ids.contains(q.draftId) =>
           val cancelled = OcrJob.Cancelled(
@@ -94,7 +108,7 @@ final class InMemoryOcrJobsRepository[F[_]: Sync] private (
           (acc.updated(jobId, cancelled), cancelled :: cancelledAcc)
         case ((acc, cancelledAcc), _) => (acc, cancelledAcc)
       }
-      updated -> (cancelled.reverse, updated.values.toList)
+      state.copy(jobs = updated) -> (cancelled.reverse, updated.values.toList)
     }.flatMap { case (cancelled, jobs) =>
       cancelled.traverse_(job => onQueuedCancel(job, jobs)).as(cancelled.size)
     }
@@ -117,40 +131,23 @@ final class InMemoryOcrJobsRepository[F[_]: Sync] private (
       }
   }
 
-  private def toFailed(job: OcrJob, failure: OcrFailure, now: Instant): OcrJob.Failed = OcrJob
-    .Failed(
-      id = job.id,
-      draftId = job.draftId,
-      imageId = job.imageId,
-      imageLocation = job.imageLocation,
-      requestedScreenType = job.requestedScreenType,
-      failedDetectedScreenType = OcrJob.detectedScreenType(job),
-      attemptCount = job.attemptCount,
-      failedWorkerId = OcrJob.workerId(job),
-      failedFailure = failure,
-      failedStartedAt = OcrJob.startedAt(job),
-      failedFinishedAt = now,
-      failedDurationMs = OcrJob.durationMs(job),
-      createdAt = job.createdAt,
-      updatedAt = now,
-    )
-
   private def isActive(status: OcrJobStatus): Boolean = status == OcrJobStatus.Queued ||
     status == OcrJobStatus.Running
 
 object InMemoryOcrJobsRepository:
-  def create[F[_]: Sync]: F[InMemoryOcrJobsRepository[F]] = Ref
-    .of[F, Map[String, OcrJob]](Map.empty)
-    .map(new InMemoryOcrJobsRepository(_, (_, _) => Sync[F].unit, None))
+  private final case class State(
+      jobs: Map[String, OcrJob],
+      inputs: Map[String, OcrJobInput],
+  )
+  private val empty = State(Map.empty, Map.empty)
 
-  def createWithCancelSync[F[_]: Sync](
-      onQueuedCancel: (OcrJob.Cancelled, List[OcrJob]) => F[Unit]
-  ): F[InMemoryOcrJobsRepository[F]] = Ref.of[F, Map[String, OcrJob]](Map.empty)
-    .map(new InMemoryOcrJobsRepository(_, onQueuedCancel, None))
+  def create[F[_]: Sync]: F[InMemoryOcrJobsRepository[F]] = Ref
+    .of[F, State](empty)
+    .map(new InMemoryOcrJobsRepository(_, (_, _) => Sync[F].unit, None))
 
   def createWithDraftCancelSync[F[_]: Sync](
       matchDrafts: MatchDraftsRepository[F]
-  ): F[InMemoryOcrJobsRepository[F]] = Ref.of[F, Map[String, OcrJob]](Map.empty)
+  ): F[InMemoryOcrJobsRepository[F]] = Ref.of[F, State](empty)
     .map(new InMemoryOcrJobsRepository(
       _,
       syncCancelledOcrJob(matchDrafts, _, _),

@@ -99,7 +99,7 @@ export function idempotencyFingerprint(operation: IdempotencyOperation, payload:
   return `${operation}:${stableJson(payload)}`;
 }
 
-export function createIdempotencyKeyStore(): IdempotencyKeyStore {
+export function createIdempotencyKeyStore(signal?: AbortSignal): IdempotencyKeyStore {
   const keys = new Map<string, string>();
   const reset = (operation?: IdempotencyOperation, payload?: unknown) => {
     if (operation === undefined) {
@@ -130,6 +130,7 @@ export function createIdempotencyKeyStore(): IdempotencyKeyStore {
 
   return {
     begin(operation, payload) {
+      signal?.throwIfAborted();
       const attempt = {
         complete: () => reset(operation, payload),
         key: keyFor(operation, payload),

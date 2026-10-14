@@ -36,14 +36,6 @@ mod native_engine;
     )
 )]
 pub(crate) mod object_store;
-#[cfg_attr(
-    not(target_os = "linux"),
-    expect(
-        dead_code,
-        reason = "the non-Linux build retains queue contract tests while consumption is Linux-only"
-    )
-)]
-pub(crate) mod queue;
 mod runtime_config;
 pub(crate) mod submissions;
 

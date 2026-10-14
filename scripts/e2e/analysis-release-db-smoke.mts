@@ -134,8 +134,7 @@ await runSmoke("Release control-plane smoke", async (signal) => {
         (await smoke.sql(`SELECT
       (SELECT COUNT(*) FROM series_analysis_operation_requests),
       (SELECT COUNT(*) FROM series_analysis_campaigns),
-      (SELECT COUNT(*) FROM series_analysis_jobs),
-      (SELECT COUNT(*) FROM series_analysis_queue_outbox);`)) === "0|0|0|0",
+      (SELECT COUNT(*) FROM series_analysis_jobs);`)) === "0|0|0",
         "Release dry-run changed durable state.",
       );
       requireSuccess(await release([...promote, "--apply"]), "Release apply");
@@ -159,7 +158,6 @@ await runSmoke("Release control-plane smoke", async (signal) => {
       (SELECT COUNT(*) FROM series_analysis_campaign_targets),
       (SELECT COUNT(*) FROM series_analysis_job_requests),
       (SELECT COUNT(*) FROM series_analysis_jobs),
-      (SELECT COUNT(*) FROM series_analysis_queue_outbox),
       (SELECT COUNT(*) FROM series_analysis_campaign_targets
         WHERE status = 'pending' AND job_request_id IS NULL
           AND algorithm_version = :'algorithm' AND artifact_schema_version = :schema
@@ -173,7 +171,7 @@ await runSmoke("Release control-plane smoke", async (signal) => {
             schema: artifactSchemaVersion,
             contract: validationContractId,
           },
-        )) === "1|1|2|0|0|0|2|1|2|2",
+        )) === "1|1|2|0|0|2|1|2|2",
         "Release apply produced an unexpected control-plane shape.",
       );
       requireSuccess(await release(["release-audit"]), "Release audit");

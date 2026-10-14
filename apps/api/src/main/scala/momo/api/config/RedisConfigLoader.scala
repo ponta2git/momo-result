@@ -19,18 +19,4 @@ private[config] object RedisConfigLoader:
           allowPlaintext <- ConfigParsers
             .parseBoolean(env, "REDIS_ALLOW_PLAINTEXT_IN_PROD", default = false).load[F]
           safeUrl <- RedisUrlConfig.ensureProdRedisUrl(url, appEnv, allowPlaintext).liftTo[F]
-          v2Stream <- ConfigParsers
-            .envOrDefault(env, "OCR_REDIS_V2_STREAM", RedisConfig.DefaultV2Stream)
-            .load[F]
-          v2DeadLetterStream <- ConfigParsers
-            .envOrDefault(
-              env,
-              "OCR_REDIS_V2_DEAD_LETTER_STREAM",
-              RedisConfig.DefaultV2DeadLetterStream,
-            )
-            .load[F]
-        yield Some(RedisConfig(
-          url = safeUrl,
-          v2Stream = v2Stream,
-          v2DeadLetterStream = v2DeadLetterStream,
-        ))
+        yield Some(RedisConfig(url = safeUrl))

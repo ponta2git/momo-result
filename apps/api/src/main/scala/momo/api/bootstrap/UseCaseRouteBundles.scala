@@ -40,7 +40,7 @@ private[bootstrap] object UseCaseRouteBundles:
   ): UseCaseRouteBundles[F] =
     import repositories.*
     import storage.*
-    import services.{ocrAdmissionGuard, ocrQueueSubmitter}
+    import services.ocrAdmissionGuard
 
     val uploadImage = UploadImage[F](imageStorage, imageStorageAdmission)
     val createOcrJob = CreateOcrJob[F](
@@ -50,7 +50,6 @@ private[bootstrap] object UseCaseRouteBundles:
       jobs = jobs,
       drafts = drafts,
       matchDrafts = matchDrafts,
-      queueSubmitter = ocrQueueSubmitter,
       admissionGuard = ocrAdmissionGuard,
       now = now,
       nextJobId = ids.nextOcrJobId,

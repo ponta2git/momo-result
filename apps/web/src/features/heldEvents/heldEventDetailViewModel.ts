@@ -1,6 +1,6 @@
 import type { HeldEventDraftResponse, HeldEventMatchResponse } from "@/shared/api/heldEvents";
 import { memberDisplayName, orderFixedMembers } from "@/shared/domain/members";
-import { formatDateTimeCompact, formatDateTimeLong } from "@/shared/lib/dateTime";
+import { formatDateTimeCompact } from "@/shared/lib/dateTime";
 
 export type HeldEventPlayerRecap = {
   averageRank: number;
@@ -88,10 +88,6 @@ export function formatAverageRank(averageRank: number): string {
     maximumFractionDigits: 2,
     minimumFractionDigits: 1,
   });
-}
-
-export function formatHeldEventDateTime(value: string): string {
-  return formatDateTimeLong(value);
 }
 
 export function formatHeldEventShortDateTime(value: string | undefined): string | undefined {

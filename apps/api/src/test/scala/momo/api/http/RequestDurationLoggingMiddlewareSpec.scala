@@ -5,6 +5,7 @@ import scala.concurrent.duration.*
 import cats.data.Kleisli
 import cats.effect.testkit.TestControl
 import cats.effect.{Deferred, IO, Outcome, Resource}
+import cats.~>
 import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.spi.ILoggingEvent
 import fs2.Stream
@@ -158,6 +159,57 @@ final class RequestDurationLoggingMiddlewareSpec extends MomoCatsEffectSuite:
           case _ => false)
         assertEquals(released, 1)
         assertEquals(next.status, Status.Ok)
+    }
+
+  test("cancellation at the first body scope releases admission before transfer observation"):
+    TestControl.executeEmbed {
+      val readRequest = request.withUri(Uri.unsafeFromString("/api/matches"))
+      for
+        admission <- RequestBodyAdmission.create[IO](1L, 1L, 1L, 1L, 1L)
+        firstEffect <- IO.ref(true)
+        app = RequestDurationLoggingMiddleware[IO](
+          Kleisli(_ => IO.pure(Response[IO](Status.Ok).withEntity("recovered"))),
+          admission.apply,
+        )
+        response <- app.run(readRequest)
+        // Cancel just as the leading body resource finishes acquisition. With observation
+        // outside admission, only the observer finalizes and the next read stays busy.
+        outcome <- response.body.translate(new (IO ~> IO):
+          def apply[A](effect: IO[A]): IO[A] = firstEffect.getAndSet(false).flatMap { first =>
+            if first then effect <* IO.canceled else effect
+          }).compile.drain.start.flatMap(_.join)
+        next <- app.run(readRequest)
+        content <- next.bodyText.compile.string
+      yield
+        assert(outcome match
+          case Outcome.Canceled() => true
+          case _ => false)
+        assertEquals(next.status, Status.Ok)
+        assertEquals(content, "recovered")
+    }
+
+  test("admission denials retain readiness logging with the time spent queueing"):
+    TestControl.executeEmbed {
+      captureLogs { events =>
+        val readRequest = request.withUri(Uri.unsafeFromString("/api/matches"))
+        for
+          admission <- RequestBodyAdmission.create[IO](1L, 1L, 1L, 1L, 1L)
+          app = RequestDurationLoggingMiddleware[IO](
+            Kleisli(_ => IO.pure(Response[IO](Status.Ok).withEntity("held"))),
+            admission.apply,
+          )
+          first <- app.run(readRequest)
+          denied <- app.run(readRequest)
+          _ <- denied.body.compile.drain
+          _ <- first.body.compile.drain
+          captured <- events
+        yield
+          assertEquals(denied.status, Status.ServiceUnavailable)
+          assert(messages(captured).exists(message =>
+            message.startsWith("http_response_ready ") && message.contains("status=503") &&
+              message.contains("handlerDurationMs=5000")
+          ))
+      }
     }
 
   private def middleware(body: Stream[IO, Byte]): HttpApp[IO] =

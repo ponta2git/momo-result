@@ -5,19 +5,22 @@ import cats.effect.Async
 import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
+import doobie.postgres.circe.jsonb.implicits.*
 import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
+import momo.api.contracts.ocrworker.OcrJobInputSnapshot
 import momo.api.domain.ids.*
 import momo.api.domain.{
   FailureCode,
   OcrFailure,
   OcrJob,
+  OcrJobInput,
   OcrJobStatus,
   ScreenType,
   StoredImageLocation
 }
-import momo.api.repositories.{OcrJobsAlg, OcrJobsRepository}
+import momo.api.repositories.{OcrJobBacklogSnapshot, OcrJobsAlg, OcrJobsRepository}
 
 object PostgresOcrJobs:
 
@@ -137,16 +140,27 @@ object PostgresOcrJobs:
            created_at, updated_at
          FROM ocr_jobs"""
 
-  def createV2(job: OcrJob): ConnectionIO[Unit] = sql"""
+  def create(job: OcrJob, input: OcrJobInput): ConnectionIO[Unit] =
+    OcrJobInputSnapshot.fromInput(input)
+      .leftMap(reason =>
+        PostgresDataIntegrityException.invalidPayload(
+          "ocr_jobs",
+          job.id.value,
+          "input_snapshot",
+          reason
+        )
+      ).liftTo[ConnectionIO].flatMap { snapshot =>
+        val inputJson = OcrJobInputSnapshot.toJson(snapshot)
+        sql"""
       INSERT INTO ocr_jobs (
-        id, draft_id, image_id, image_path, source_image_id, queue_schema_version,
+        id, draft_id, image_id, image_path, source_image_id, input_snapshot,
         requested_screen_type, detected_screen_type,
         status, attempt_count, worker_id,
         failure_code, failure_message, failure_retryable, failure_user_action,
         started_at, finished_at, duration_ms,
         created_at, updated_at
       ) VALUES (
-        ${job.id}, ${job.draftId}, ${job.imageId}, ${job.imageLocation}, ${job.imageId}, 2,
+        ${job.id}, ${job.draftId}, ${job.imageId}, ${job.imageLocation}, ${job.imageId}, $inputJson,
         ${job.requestedScreenType}, ${OcrJob.detectedScreenType(job)},
         ${job.status}, ${job.attemptCount}, ${OcrJob.workerId(job)},
         ${OcrJob.failure(job).map(_.code)}, ${OcrJob.failure(job).map(_.message)},
@@ -155,6 +169,7 @@ object PostgresOcrJobs:
         ${job.createdAt}, ${job.updatedAt}
       )
     """.update.run.void
+      }
 
   val alg: OcrJobsAlg[ConnectionIO] = new OcrJobsAlg[ConnectionIO]:
     override def find(jobId: OcrJobId): ConnectionIO[Option[OcrJob]] =
@@ -170,22 +185,14 @@ object PostgresOcrJobs:
            OR status = ${OcrJobStatus.Running}
       """.query[Long].unique
 
-    override def markFailed(
-        jobId: OcrJobId,
-        failure: OcrFailure,
-        now: Instant,
-    ): ConnectionIO[Unit] =
-      PostgresMatchDraftStatusSync.lockForJob(jobId) >> sql"""
-        UPDATE ocr_jobs SET
-          status = ${OcrJobStatus.Failed},
-          failure_code = ${failure.code},
-          failure_message = ${failure.message},
-          failure_retryable = ${failure.retryable},
-          failure_user_action = ${failure.userAction},
-          finished_at = $now,
-          updated_at = $now
-        WHERE id = $jobId AND status IN (${OcrJobStatus.Queued}, ${OcrJobStatus.Running})
-      """.update.run.void >> PostgresMatchDraftStatusSync.recomputeForJob(jobId, now)
+    override def backlogSnapshot(now: Instant): ConnectionIO[OcrJobBacklogSnapshot] = sql"""
+        SELECT
+          COUNT(*) FILTER (WHERE status = 'queued'),
+          COUNT(*) FILTER (WHERE status = 'running'),
+          MIN(available_at) FILTER (WHERE status = 'queued' AND available_at <= $now)
+        FROM ocr_jobs
+        WHERE status IN ('queued', 'running')
+      """.query[OcrJobBacklogSnapshot].unique
 
     override def cancelQueued(jobId: OcrJobId, now: Instant): ConnectionIO[Boolean] =
       for
@@ -271,8 +278,8 @@ final class PostgresOcrJobsRepository[F[_]: Async](transactor: Transactor[F])
 
   override def find(jobId: OcrJobId): F[Option[OcrJob]] = delegate.find(jobId)
   override def countActive: F[Long] = delegate.countActive
-  override def markFailed(jobId: OcrJobId, failure: OcrFailure, now: Instant): F[Unit] =
-    delegate.markFailed(jobId, failure, now)
+  override def backlogSnapshot(now: Instant): F[OcrJobBacklogSnapshot] =
+    delegate.backlogSnapshot(now)
   override def cancelQueued(jobId: OcrJobId, now: Instant): F[Boolean] =
     delegate.cancelQueued(jobId, now)
   override def cancelQueuedOwned(

@@ -26,7 +26,7 @@ export function AdminAccountCreateDialog({
   disabled: boolean;
   model: AdminAccountCreateDialogModel;
 }) {
-  const { action, error, formKey, open, pending, setOpen } = model;
+  const { action, error, open, pending, setOpen } = model;
   return (
     <Dialog
       busy={pending}
@@ -41,14 +41,12 @@ export function AdminAccountCreateDialog({
       onOpenChange={setOpen}
     >
       <form
-        key={formKey}
         className="grid gap-6"
         onSubmit={(event) => {
           event.preventDefault();
           if (pending) return;
           const formData = new FormData(event.currentTarget);
           // Dispatch explicitly: resolved error Actions must not trigger an automatic form reset.
-          // The successful action advances formKey to initialize the next account's form.
           startTransition(() => action(formData));
         }}
       >

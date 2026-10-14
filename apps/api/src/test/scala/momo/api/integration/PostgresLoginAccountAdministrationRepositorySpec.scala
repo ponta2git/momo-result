@@ -4,9 +4,9 @@ import java.time.Instant
 
 import cats.effect.{IO, Resource}
 import cats.syntax.all.*
-import doobie.Transactor
 import doobie.implicits.*
 import doobie.postgres.implicits.*
+import doobie.{ConnectionIO, Transactor}
 
 import momo.api.adapters.postgres.{
   PostgresAppSessionsRepository,
@@ -164,24 +164,90 @@ final class PostgresLoginAccountAdministrationRepositorySpec extends Integration
       program.guarantee(resetLoginAccountState)
   }
 
+  test(
+    "a login waiting for account disabling cannot leave a session that revives after re-enabling"
+  ):
+    val reEnabledAt = now.plusSeconds(120).plusNanos(123456789)
+    val program =
+      for
+        _ <- resetLoginAccountState
+        _ <- createAccount(backupAdminData)
+        before <- accounts.find(primaryAdminId).map(_.getOrElse(fail("administrator missing")))
+        session <- buildSession("delayed-login-session", "delayed-login-csrf")
+        results <- commitBefore(
+          PostgresLoginAccountAdministration.updateAndRevokeSessionsWhenDisabled(
+            primaryAdminId,
+            disableLogin
+          ),
+          administration.createIfAccountCurrent(session, before.updatedAt),
+        )
+        afterDisabling <- sessions.find(session.idHash)
+        reEnabled <- administration.updateAndRevokeSessionsWhenDisabled(
+          primaryAdminId,
+          disableLogin.copy(loginEnabled = Some(true), updatedAt = reEnabledAt)
+        )
+        stale <- administration.createIfAccountCurrent(session, before.updatedAt)
+        afterReEnabling <- sessions.find(session.idHash)
+        current <- accounts.find(primaryAdminId).map(_.getOrElse(fail("administrator missing")))
+        fresh <- administration.createIfAccountCurrent(session, current.updatedAt)
+        saved <- sessions.find(session.idHash)
+      yield
+        assert(!results._2)
+        assertEquals(afterDisabling, None)
+        assert(!stale)
+        assertEquals(afterReEnabling, None)
+        assertEquals(reEnabled, LoginAccountAdministrationUpdateResult.Updated(current))
+        assert(!current.updatedAt.equals(reEnabledAt))
+        assertEquals(current.updatedAt.getNano % 1000, 0)
+        assert(fresh)
+        assertEquals(saved, Some(session))
+    program.guarantee(resetLoginAccountState)
+
+  test(
+    "account disabling waits for a preceding session creation and revokes that committed session"
+  ):
+    val program =
+      for
+        _ <- resetLoginAccountState
+        _ <- createAccount(backupAdminData)
+        before <- accounts.find(primaryAdminId).map(_.getOrElse(fail("administrator missing")))
+        session <- buildSession("preceding-login-session", "preceding-login-csrf")
+        results <- commitBefore(
+          PostgresLoginAccountAdministration.createIfAccountCurrent(session, before.updatedAt),
+          administration.updateAndRevokeSessionsWhenDisabled(primaryAdminId, disableLogin),
+        )
+        remaining <- sessions.find(session.idHash)
+        current <- accounts.find(primaryAdminId)
+      yield
+        assert(results._1)
+        assertEquals(current.map(_.loginEnabled), Some(false))
+        assertEquals(remaining, None)
+    program.guarantee(resetLoginAccountState)
+
   private def updateWhileAnotherAdminChangeCommits(
       precedingChange: UpdateLoginAccountData,
       waitingChange: UpdateLoginAccountData,
   ): IO[(LoginAccountAdministrationUpdateResult, LoginAccountAdministrationUpdateResult)] =
+    commitBefore(
+      PostgresLoginAccountAdministration.updateAndRevokeSessionsWhenDisabled(
+        backupAdminId,
+        precedingChange
+      ),
+      administration.updateAndRevokeSessionsWhenDisabled(primaryAdminId, waitingChange),
+    )
+
+  private def commitBefore[A, B](preceding: ConnectionIO[A], waiting: IO[B]): IO[(A, B)] =
     Resource.fromAutoCloseable(IO.blocking(dataSource.getConnection)).use { connection =>
       val xa = Transactor.fromConnection[IO](connection, None)
       (for
         _ <- IO.blocking(connection.setAutoCommit(false))
-        preceding <- xa.rawTrans.apply(PostgresLoginAccountAdministration
-          .updateAndRevokeSessionsWhenDisabled(backupAdminId, precedingChange))
+        first <- xa.rawTrans.apply(preceding)
         blocker <- xa.rawTrans.apply(sql"SELECT pg_backend_pid()".query[Int].unique)
-        waiting <- administration
-          .updateAndRevokeSessionsWhenDisabled(primaryAdminId, waitingChange)
-          .background.use { completion =>
-            awaitBackendBlockedBy(blocker) *> IO.blocking(connection.commit()) *>
-              completion.flatMap(_.embedNever)
-          }
-      yield (preceding, waiting)).onError(_ => IO.blocking(connection.rollback()))
+        second <- waiting.background.use { completion =>
+          awaitBackendBlockedBy(blocker) *> IO.blocking(connection.commit()) *>
+            completion.flatMap(_.embedNever)
+        }
+      yield (first, second)).onError(_ => IO.blocking(connection.rollback()))
     }
 
   private def createAccount(data: CreateLoginAccountData): IO[LoginAccount] = accounts.create(data)

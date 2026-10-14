@@ -161,6 +161,26 @@ func TestCaddyTemplateRequiresEachPlaceholderExactlyOnce(t *testing.T) {
 	}
 }
 
+func TestCaddyOriginTokenMustBeLiteral(t *testing.T) {
+	t.Parallel()
+	for _, token := range []string{
+		strings.Repeat("*", 32),
+		"*0123456789abcdef0123456789abcdef",
+		"0123456789abcdef0123456789abcdef*",
+		"0123456789abcdef{$EXPANDED_VALUE}",
+		"0123456789abcdef{http.request.header.X-Other}",
+	} {
+		for _, appEnv := range []string{"prod", "dev", "test"} {
+			_, err := resolveCaddyRenderValues(caddyRenderConfig{
+				AppEnv: appEnv, CanonicalHost: "example.com", OriginLockToken: token,
+			})
+			if err == nil {
+				t.Errorf("%s accepted a nonliteral origin token", appEnv)
+			}
+		}
+	}
+}
+
 func TestHealthPayloadRejectsTrailingData(t *testing.T) {
 	t.Parallel()
 	payload := `{"status":"ok"}`

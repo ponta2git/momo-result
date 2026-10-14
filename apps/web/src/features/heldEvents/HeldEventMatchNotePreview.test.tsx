@@ -1,6 +1,6 @@
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { HeldEventMatchNotePreview } from "@/features/heldEvents/HeldEventMatchNotePreview";
 import { notifyResize } from "@/test/resizeObserver";
@@ -25,6 +25,18 @@ describe("HeldEventMatchNotePreview", () => {
 
     resizeNote(note, 72);
     expect(screen.queryByRole("button", { name: "メモ全文を表示" })).not.toBeInTheDocument();
+  });
+
+  it("measures changed text even when its clamped dimensions stay the same", () => {
+    const { rerender } = render(<HeldEventMatchNotePreview body="短いメモ" />);
+    const short = screen.getByText("短いメモ");
+    resizeNote(short, 72);
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(72);
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(96);
+
+    rerender(<HeldEventMatchNotePreview body="3行を超える新しいメモ" />);
+
+    expect(screen.getByRole("button", { name: "メモ全文を表示" })).toBeInTheDocument();
   });
 
   it("exposes the controlled note and its expanded state while reading the full text", async () => {

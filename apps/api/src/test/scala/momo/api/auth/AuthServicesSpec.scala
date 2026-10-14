@@ -20,17 +20,27 @@ import scala.concurrent.duration.*
 import scala.jdk.CollectionConverters.*
 import scala.util.Failure
 
-import cats.effect.IO
+import cats.effect.{Deferred, IO}
 import cats.syntax.all.*
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.discord.JavaDiscordOAuthClient
-import momo.api.adapters.inmemory.InMemoryLoginAccountsRepository
+import momo.api.adapters.inmemory.{
+  InMemoryAppSessionsRepository,
+  InMemoryLoginAccountAdministrationRepository,
+  InMemoryLoginAccountsRepository
+}
 import momo.api.config.{AppEnv, AuthConfig}
 import momo.api.domain.ids.{AccountId, MemberId, UserId}
 import momo.api.domain.{AccountRole, LoginAccount}
 import momo.api.errors.AppError
-import momo.api.repositories.{AppSession, SessionAccountLookup}
+import momo.api.repositories.{
+  AppSession,
+  AppSessionsRepository,
+  LoginSessionCreationRepository,
+  SessionAccountLookup,
+  UpdateLoginAccountData
+}
 import momo.api.testing.{
   RecordingAppSessionsRepository,
   RecordingDiscordOAuthClient,
@@ -58,45 +68,44 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
   )
 
   test("OAuthStateCodec accepts signed state before expiry and rejects tampering") {
-    val now = IO.pure(Instant.parse("2026-01-01T00:00:00Z"))
-    val codec = OAuthStateCodec[IO](
-      config.stateSigningKey.getOrElse("test-signing-key"),
-      config.stateTtl,
-      now
-    )
+    val codec = stateCodec(IO.pure(instant))
     for
       state <- codec.create(silent = true, redirectPath = None)
       valid <- codec.validate(state)
       tampered <- codec.validate(state.dropRight(1) + "x")
     yield
-      assertEquals(valid, Some(codec.Payload(silent = true, redirectPath = None)))
+      assertEquals(valid, Some(codec.Payload(true, None, instant.plusSeconds(300))))
       assertEquals(tampered, None)
   }
 
   test("OAuthStateCodec rejects expired state") {
-    val createdAt = Instant.parse("2026-01-01T00:00:00Z")
     for
-      state <- OAuthStateCodec[IO](
-        config.stateSigningKey.getOrElse("test-signing-key"),
-        config.stateTtl,
-        IO.pure(createdAt)
-      )
-        .create(silent = false, redirectPath = None)
-      valid <- OAuthStateCodec[IO](
-        config.stateSigningKey.getOrElse("test-signing-key"),
-        config.stateTtl,
-        IO.pure(createdAt.plusSeconds(301))
-      ).validate(state)
+      state <- stateCodec(IO.pure(instant)).create(silent = false, redirectPath = None)
+      valid <- stateCodec(IO.pure(instant.plusSeconds(301))).validate(state)
     yield assertEquals(valid, None)
   }
 
+  test("OAuthStateCodec rejects alternate encodings of the same signed payload") {
+    val codec = stateCodec(IO.pure(instant))
+    for
+      state <- codec.create(silent = false, redirectPath = None)
+      separator = state.indexOf('.')
+      payload = state.take(separator)
+      padding = "=" * ((4 - payload.length % 4) % 4)
+      _ = assert(padding.nonEmpty)
+      _ = assertEquals(
+        Base64Url.decode(payload + padding).map(_.toList),
+        Base64Url.decode(payload).map(_.toList)
+      )
+      aliased <- codec.validate(payload + padding + state.drop(separator))
+      valid <- codec.validate(state)
+    yield
+      assertEquals(aliased, None)
+      assert(valid.nonEmpty)
+  }
+
   test("OAuthStateCodec preserves only safe root-relative redirect paths") {
-    val now = IO.pure(Instant.parse("2026-01-01T00:00:00Z"))
-    val codec = OAuthStateCodec[IO](
-      config.stateSigningKey.getOrElse("test-signing-key"),
-      config.stateTtl,
-      now
-    )
+    val codec = stateCodec(IO.pure(instant))
     for
       state <- codec.create(silent = true, redirectPath = Some("/exports?format=tsv#latest"))
       valid <- codec.validate(state)
@@ -105,13 +114,13 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
     yield
       assertEquals(
         valid,
-        Some(codec.Payload(silent = true, redirectPath = Some("/exports?format=tsv#latest"))),
+        Some(codec.Payload(true, Some("/exports?format=tsv#latest"), instant.plusSeconds(300))),
       )
-      assertEquals(external, Some(codec.Payload(silent = true, redirectPath = None)))
+      assertEquals(external, Some(codec.Payload(true, None, instant.plusSeconds(300))))
   }
 
   test("OAuthStateCodec bounds redirect UTF-8 bytes so issued state remains a usable cookie") {
-    val codec = OAuthStateCodec[IO]("test-signing-key", config.stateTtl, IO.pure(instant))
+    val codec = stateCodec(IO.pure(instant))
     val boundaryPath = "/" + ("あ" * 341)
     for
       state <- codec.create(silent = false, redirectPath = Some(boundaryPath))
@@ -120,9 +129,9 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       fallback <- codec.validate(oversized)
       rejected <- codec.validate("a" * 10000)
     yield
-      assertEquals(valid, Some(codec.Payload(silent = false, redirectPath = Some(boundaryPath))))
+      assertEquals(valid, Some(codec.Payload(false, Some(boundaryPath), instant.plusSeconds(300))))
       assert(state.length < 4096)
-      assertEquals(fallback, Some(codec.Payload(silent = false, redirectPath = None)))
+      assertEquals(fallback, Some(codec.Payload(false, None, instant.plusSeconds(300))))
       assertEquals(rejected, None)
   }
 
@@ -131,7 +140,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
       backoff <- InMemoryOAuthProviderBackoff.create[IO](1, 60.seconds, IO.pure(instant))
-      sessions = SessionService[IO](repo, accounts, config.sessionTtl, IO.pure(instant))
+      sessions = sessionService(repo, accounts, IO.pure(instant))
       service = CompleteOAuthLogin[IO](
         SuccessfulDiscordOAuthClient(account.discordUserId.value),
         sessions,
@@ -154,7 +163,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](Nil)
       backoff <- InMemoryOAuthProviderBackoff.create[IO](1, 60.seconds, IO.pure(instant))
-      sessions = SessionService[IO](repo, accounts, config.sessionTtl, IO.pure(instant))
+      sessions = sessionService(repo, accounts, IO.pure(instant))
       service = CompleteOAuthLogin[IO](
         SuccessfulDiscordOAuthClient("223456789012345678"),
         sessions,
@@ -174,7 +183,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       oauth <- RecordingDiscordOAuthClient
         .create(Left(AppError.DependencyFailed("Discord OAuth provider request failed.")))
       backoff <- InMemoryOAuthProviderBackoff.create[IO](1, 60.seconds, IO.pure(instant))
-      sessions = SessionService[IO](repo, accounts, config.sessionTtl, IO.pure(instant))
+      sessions = sessionService(repo, accounts, IO.pure(instant))
       service = CompleteOAuthLogin[IO](oauth, sessions, accounts, backoff)
       first <- service.run("first")
       second <- service.run("second")
@@ -185,18 +194,18 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       assertEquals(fetchCalls, 1)
   }
 
-  test("CompleteOAuthCallback validates signatures before reserving state replay quota") {
+  test("CompleteOAuthCallback validates signatures before consuming state") {
     for
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
       backoff <- InMemoryOAuthProviderBackoff.create[IO](1, 60.seconds, IO.pure(instant))
       reservations <- IO.ref(0)
-      limiter = new RateLimiter[IO]:
-        def allow(key: String): IO[Boolean] =
-          val _ = key
+      guard = new OAuthStateReplayGuard[IO]:
+        def consume(stateHash: String, expiresAt: Instant): IO[Boolean] =
+          val _ = (stateHash, expiresAt)
           reservations.update(_ + 1).as(true)
-      sessions = SessionService[IO](repo, accounts, config.sessionTtl, IO.pure(instant))
-      codec = OAuthStateCodec[IO]("test-signing-key", config.stateTtl, IO.pure(instant))
+      sessions = sessionService(repo, accounts, IO.pure(instant))
+      codec = stateCodec(IO.pure(instant))
       service = CompleteOAuthCallback[IO](
         codec,
         CompleteOAuthLogin[IO](
@@ -205,7 +214,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
           accounts,
           backoff
         ),
-        limiter,
+        guard,
         "/",
       )
       invalid <- service.run(OAuthCallbackInput(None, Some("forged"), Some("forged"), None))
@@ -220,6 +229,33 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       }
       assertEquals(countAfterInvalid, 0)
       assertEquals(countAfterValid, 1)
+  }
+
+  test("CompleteOAuthCallback fails closed when shared state consumption is unavailable") {
+    for
+      repo <- RecordingAppSessionsRepository.create
+      accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
+      backoff <- InMemoryOAuthProviderBackoff.create[IO](1, 60.seconds, IO.pure(instant))
+      oauth <- RecordingDiscordOAuthClient.create(Right(DiscordUser(account.discordUserId.value)))
+      guard = new OAuthStateReplayGuard[IO]:
+        def consume(stateHash: String, expiresAt: Instant): IO[Boolean] =
+          val _ = (stateHash, expiresAt)
+          IO.raiseError(new IllegalStateException("state store unavailable"))
+      sessions = sessionService(repo, accounts, IO.pure(instant))
+      codec = stateCodec(IO.pure(instant))
+      service = CompleteOAuthCallback[IO](
+        codec,
+        CompleteOAuthLogin[IO](oauth, sessions, accounts, backoff),
+        guard,
+        "/",
+      )
+      state <- codec.create(silent = false, redirectPath = None)
+      result <-
+        service.run(OAuthCallbackInput(Some("code"), Some(state), Some(state), None)).attempt
+      providerCalls <- oauth.fetchCalls
+    yield
+      assert(result.isLeft)
+      assertEquals(providerCalls, 0)
   }
 
   test("JavaDiscordOAuthClient maps token exchange transport failures to dependency errors") {
@@ -404,8 +440,8 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
     for
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
-      service = SessionService[IO](repo, accounts, config.sessionTtl, IO.pure(instant))
-      created <- service.create(account)
+      service = sessionService(repo, accounts, IO.pure(instant))
+      created <- createdSession(service, account)
       tokens = SessionCookieCodec.decode(created.cookieValue).getOrElse(fail("cookie decode"))
       snapshot <- repo.snapshot
       stored = snapshot.sessions.values.headOption.getOrElse(fail("session not stored"))
@@ -423,7 +459,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
     for
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
-      service = SessionService[IO](repo, accounts, config.sessionTtl, IO.pure(instant))
+      service = sessionService(repo, accounts, IO.pure(instant))
       result <- service.authenticate(Some("legacy-session-id"))
     yield assertEquals(result, Left(momo.api.errors.AppError.Unauthorized()))
 
@@ -435,7 +471,11 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
         def find(idHash: String) =
           val _ = idHash
           lookups.update(_ + 1).as(None)
-      service = SessionService[IO](repo, config.sessionTtl, IO.pure(instant), lookup)
+      creation = new LoginSessionCreationRepository[IO]:
+        def createIfAccountCurrent(session: AppSession, expectedAccountUpdatedAt: Instant) =
+          val _ = (session, expectedAccountUpdatedAt)
+          IO.raiseError[Boolean](new IllegalStateException("session creation was not expected"))
+      service = SessionService[IO](repo, config.sessionTtl, IO.pure(instant), lookup, creation)
       results <- List(
         "v1.a.b",
         s"v1.${"a" * 43}.${"!" * 43}",
@@ -453,8 +493,8 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
       nowRef <- IO.ref(instant)
-      service = SessionService[IO](repo, accounts, config.sessionTtl, nowRef.get)
-      created <- service.create(account)
+      service = sessionService(repo, accounts, nowRef.get)
+      created <- createdSession(service, account)
       _ <- nowRef.set(instant.plusSeconds(4.minutes.toSeconds))
       result <- service.authenticate(Some(created.cookieValue))
       snapshot <- repo.snapshot
@@ -467,8 +507,8 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
       nowRef <- IO.ref(instant)
-      service = SessionService[IO](repo, accounts, config.sessionTtl, nowRef.get)
-      created <- service.create(account)
+      service = sessionService(repo, accounts, nowRef.get)
+      created <- createdSession(service, account)
       _ <- nowRef.set(instant.plusSeconds(6.minutes.toSeconds))
       result <- service.authenticate(Some(created.cookieValue))
       snapshot <- repo.snapshot
@@ -479,30 +519,110 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       assertEquals(stored.lastSeenAt, instant.plusSeconds(6.minutes.toSeconds))
       assertEquals(stored.expiresAt, instant.plusSeconds(16.minutes.toSeconds))
 
-  test("SessionService deletes expired sessions during authentication"):
+  test("SessionService rejects expired sessions and leaves cleanup to expiry pruning"):
     for
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
       nowRef <- IO.ref(instant)
-      service = SessionService[IO](repo, accounts, config.sessionTtl, nowRef.get)
-      created <- service.create(account)
+      service = sessionService(repo, accounts, nowRef.get)
+      created <- createdSession(service, account)
       before <- repo.snapshot
       stored = before.sessions.values.headOption.getOrElse(fail("session not stored"))
       _ <- nowRef.set(instant.plusSeconds(config.sessionTtl.toSeconds + 1L))
       result <- service.authenticate(Some(created.cookieValue))
       after <- repo.snapshot
+      pruned <- repo.deleteExpired(instant.plusSeconds(config.sessionTtl.toSeconds + 1L))
+      remaining <- repo.find(stored.idHash)
     yield
       assertEquals(result, Left(AppError.Unauthorized("Session has expired.")))
-      assertEquals(after.sessions.get(stored.idHash), None)
-      assertEquals(after.deletes, List(stored.idHash))
+      assertEquals(after.sessions.get(stored.idHash), Some(stored))
+      assertEquals(after.deletes, Nil)
+      assertEquals(pruned, 1)
+      assertEquals(remaining, None)
+
+  test("SessionService expiry rejection cannot revoke a concurrently renewed session"):
+    val renewingAt = instant.plusSeconds(config.sessionTtl.toSeconds - 1L)
+    val expiredAt = instant.plusSeconds(config.sessionTtl.toSeconds + 1L)
+    for
+      repo <- InMemoryAppSessionsRepository.create[IO]
+      accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
+      created <- createdSession(sessionService(repo, accounts, IO.pure(instant)), account)
+      renewingLookupStarted <- Deferred[IO, Unit]
+      releaseRenewingLookup <- Deferred[IO, Unit]
+      expiredSnapshotRead <- Deferred[IO, Unit]
+      releaseExpiredSnapshot <- Deferred[IO, Unit]
+      lookup = SessionAccountLookup.fromRepositories(repo, accounts)
+      renewingLookup = new SessionAccountLookup[IO]:
+        def find(idHash: String) =
+          renewingLookupStarted.complete(()) *> releaseRenewingLookup.get *> lookup.find(idHash)
+      expiredLookup = new SessionAccountLookup[IO]:
+        def find(idHash: String) = lookup.find(idHash).flatTap(_ =>
+          expiredSnapshotRead.complete(()) *> releaseExpiredSnapshot.get
+        )
+      renewing = sessionService(repo, accounts, IO.pure(renewingAt), renewingLookup)
+      expiring = sessionService(repo, accounts, IO.pure(expiredAt), expiredLookup)
+      results <- renewing.authenticate(Some(created.cookieValue)).background.use { renewed =>
+        renewingLookupStarted.get *>
+          expiring.authenticate(Some(created.cookieValue)).background.use { expired =>
+            for
+              _ <- expiredSnapshotRead.get
+              _ <- releaseRenewingLookup.complete(())
+              renewedResult <- renewed.flatMap(_.embedNever)
+              _ <- releaseExpiredSnapshot.complete(())
+              expiredResult <- expired.flatMap(_.embedNever)
+              freshResult <- sessionService(repo, accounts, IO.pure(expiredAt))
+                .authenticate(Some(created.cookieValue))
+            yield (renewedResult, expiredResult, freshResult)
+          }
+      }
+    yield
+      assertEquals(
+        results._1.map(_.session.expiresAt),
+        Right(renewingAt.plusSeconds(config.sessionTtl.toSeconds)),
+      )
+      assertEquals(results._2, Left(AppError.Unauthorized("Session has expired.")))
+      assertEquals(results._3.map(_.account.accountId), Right(account.id))
+
+  test("SessionService delayed renewal cannot shorten a newer session lifetime"):
+    val earlierAt = instant.plusSeconds(6.minutes.toSeconds)
+    val laterAt = earlierAt.plusSeconds(2)
+    val afterEarlierExpiry = earlierAt.plusSeconds(config.sessionTtl.toSeconds + 1L)
+    for
+      repo <- InMemoryAppSessionsRepository.create[IO]
+      accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
+      created <- createdSession(sessionService(repo, accounts, IO.pure(instant)), account)
+      earlierSnapshotRead <- Deferred[IO, Unit]
+      releaseEarlierSnapshot <- Deferred[IO, Unit]
+      lookup = SessionAccountLookup.fromRepositories(repo, accounts)
+      earlierLookup = new SessionAccountLookup[IO]:
+        def find(idHash: String) = lookup.find(idHash).flatTap(_ =>
+          earlierSnapshotRead.complete(()) *> releaseEarlierSnapshot.get
+        )
+      earlier = sessionService(repo, accounts, IO.pure(earlierAt), earlierLookup)
+      results <- earlier.authenticate(Some(created.cookieValue)).background.use { completion =>
+        for
+          _ <- earlierSnapshotRead.get
+          laterResult <- sessionService(repo, accounts, IO.pure(laterAt))
+            .authenticate(Some(created.cookieValue))
+          _ <- releaseEarlierSnapshot.complete(())
+          earlierResult <- completion.flatMap(_.embedNever)
+          freshResult <- sessionService(repo, accounts, IO.pure(afterEarlierExpiry))
+            .authenticate(Some(created.cookieValue))
+        yield (earlierResult, laterResult, freshResult)
+      }
+    yield
+      assertEquals(results._1.map(_.account.accountId), Right(account.id))
+      assertEquals(results._2.map(_.account.accountId), Right(account.id))
+      assertEquals(results._3.map(_.account.accountId), Right(account.id))
 
   test("SessionService deletes sessions for disabled accounts during authentication"):
     val disabled = account.copy(loginEnabled = false)
     for
       repo <- RecordingAppSessionsRepository.create
+      enabledAccounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
+      created <- createdSession(sessionService(repo, enabledAccounts, IO.pure(instant)), account)
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(disabled))
-      service = SessionService[IO](repo, accounts, config.sessionTtl, IO.pure(instant))
-      created <- service.create(disabled)
+      service = sessionService(repo, accounts, IO.pure(instant))
       before <- repo.snapshot
       stored = before.sessions.values.headOption.getOrElse(fail("session not stored"))
       result <- service.authenticate(Some(created.cookieValue))
@@ -511,6 +631,78 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       assertEquals(result, Left(AppError.Forbidden("This account is not allowed to log in.")))
       assertEquals(after.sessions.get(stored.idHash), None)
       assertEquals(after.deletes, List(stored.idHash))
+
+  test(
+    "SessionService rejects login snapshots invalidated by disabling and re-enabling the account"
+  ) {
+    val backup = account.copy(
+      id = AccountId.unsafeFromString("account_backup"),
+      discordUserId = UserId.unsafeFromString("223456789012345678"),
+    )
+    for
+      repo <- RecordingAppSessionsRepository.create
+      accounts <- InMemoryLoginAccountsRepository.create[IO](List(account, backup))
+      lifecycle = InMemoryLoginAccountAdministrationRepository(accounts, repo)
+      service = sessionService(repo, accounts, IO.pure(instant))
+      old <- createdSession(service, account)
+      _ <- lifecycle.updateAndRevokeSessionsWhenDisabled(
+        account.id,
+        UpdateLoginAccountData(None, None, Some(false), None, instant.plusSeconds(1))
+      )
+      disabled <- service.create(account)
+      _ <- lifecycle.updateAndRevokeSessionsWhenDisabled(
+        account.id,
+        UpdateLoginAccountData(None, None, Some(true), None, instant.plusSeconds(2))
+      )
+      stale <- service.create(account)
+      revoked <- service.authenticate(Some(old.cookieValue))
+      current <- accounts.find(account.id).map(_.getOrElse(fail("account missing")))
+      fresh <- createdSession(service, current)
+      authenticated <- service.authenticate(Some(fresh.cookieValue))
+      stored <- repo.snapshot
+    yield
+      assertEquals(disabled.left.toOption.map(_.code), Some("FORBIDDEN"))
+      assertEquals(stale.left.toOption.map(_.code), Some("FORBIDDEN"))
+      assertEquals(revoked.left.toOption.map(_.code), Some("UNAUTHORIZED"))
+      assertEquals(authenticated.map(_.account.accountId), Right(account.id))
+      assertEquals(stored.sessions.size, 1)
+  }
+
+  private def stateCodec(now: IO[Instant]): OAuthStateCodec[IO] = OAuthStateCodec[IO](
+    config.stateSigningKey.getOrElse("test-signing-key"),
+    config.stateTtl,
+    now,
+  )
+
+  private def sessionService(
+      sessions: AppSessionsRepository[IO],
+      accounts: InMemoryLoginAccountsRepository[IO],
+      now: IO[Instant],
+  ): SessionService[IO] = sessionService(
+    sessions,
+    accounts,
+    now,
+    SessionAccountLookup.fromRepositories(sessions, accounts),
+  )
+
+  private def sessionService(
+      sessions: AppSessionsRepository[IO],
+      accounts: InMemoryLoginAccountsRepository[IO],
+      now: IO[Instant],
+      sessionAccounts: SessionAccountLookup[IO],
+  ): SessionService[IO] = SessionService[IO](
+    sessions,
+    config.sessionTtl,
+    now,
+    sessionAccounts,
+    InMemoryLoginAccountAdministrationRepository(accounts, sessions)
+  )
+
+  private def createdSession(
+      service: SessionService[IO],
+      account: LoginAccount
+  ): IO[CreatedSession] =
+    service.create(account).map(_.fold(error => fail(s"session rejected: ${error.code}"), identity))
 
   test("LoginRateLimiter rejects attempts over the configured minute bucket") {
     for

@@ -9,8 +9,7 @@ fi
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 : "${ANALYSIS_CONTROL_SMOKE_DATABASE_URL:?an isolated ANALYSIS_CONTROL_SMOKE_DATABASE_URL is required}"
-: "${ANALYSIS_OUTBOX_SMOKE_DATABASE_URL:?an isolated ANALYSIS_OUTBOX_SMOKE_DATABASE_URL is required}"
-: "${ANALYSIS_OUTBOX_SMOKE_REDIS_URL:?an isolated ANALYSIS_OUTBOX_SMOKE_REDIS_URL is required}"
+: "${PROCESSING_SCHEDULER_SMOKE_DATABASE_URL:?an isolated PROCESSING_SCHEDULER_SMOKE_DATABASE_URL is required}"
 
 if [[ "${ANALYSIS_SMOKE_SERVICES_ARE_ISOLATED:-}" != "true" ]]; then
   echo "ANALYSIS_SMOKE_SERVICES_ARE_ISOLATED=true is required." >&2
@@ -30,7 +29,7 @@ tests=(
   "series_analysis::control::history::tests::real_postgres_retention_preserves_active_jobs_and_readable_artifacts"
   "series_analysis::control::capability::tests::real_postgres_registration_replaces_the_generation_capability_set"
   "series_analysis::control::claim::tests::real_postgres_keeps_exact_jobs_queued_when_an_old_binary_omits_the_lease_contract"
-  "series_analysis::control::integration_tests::claim_wait::real_postgres_and_redis_busy_rechecks_preserve_pending_and_owned_claims"
+  "series_analysis::control::integration_tests::claim_wait::real_postgres_claims_preserve_busy_deadlines_and_uncertain_commits"
   "series_analysis::control::integration_tests::real_postgres_keeps_staging_separate_from_fenced_publication"
   "series_analysis::control::integration_tests::radar::freshness::real_postgres_radar_preparation_checks_current_source_and_preserves_pending_analysis"
   "series_analysis::control::integration_tests::radar::publication::real_postgres_radar_application_restore_and_failure_keep_artifact_and_basis_atomic"
@@ -49,8 +48,9 @@ tests=(
   "series_analysis::release::tests::real_postgres_audit_reports_a_release_state_mismatch"
   "series_analysis::release::tests::real_postgres_release_lock_serializes_new_title_state_inheritance"
   "series_analysis::release::maintenance::tests::real_postgres_reconcile_preserves_preview_and_replays_an_applied_operation"
-  "outbox::tests::subscribed_postgres_listener_delivers_the_next_commit_hint"
-  "series_analysis::outbox::tests::real_postgres_and_redis_preserve_claim_and_payload_contract"
+  "scheduler::tests::subscribed_postgres_listener_delivers_the_next_commit_hint"
+  "scheduler::selection::selection_tests::real_postgres_selects_due_work_and_recovers_orphans"
+  "series_analysis::materialization::tests::real_postgres_preserves_campaign_acceptance_and_assignment"
 )
 
 ignored_test_catalog="$(

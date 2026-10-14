@@ -1,18 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 
 import { expect, test as base } from "@playwright/test";
-import type {
-  APIRequestContext,
-  APIResponse,
-  Locator,
-  Page,
-  Request,
-  Route,
-  TestInfo,
-} from "@playwright/test";
+import type { APIRequestContext, APIResponse, Locator, Page, TestInfo } from "@playwright/test";
+
+import type { components } from "../src/shared/api/generated";
 
 export const devAccountId = "account_ponta";
-export const devUserStorageKey = "momoresult.devUser";
 
 /** Exercise the visible selection path using the option's stable business identity. */
 export async function selectControlOption(page: Page, trigger: Locator, value: string) {
@@ -154,18 +148,19 @@ async function cleanupE2eRun(
     }
   };
 
-  for (const draftId of registry.draftIds.toReversed()) {
-    await cleanupMutation(
-      "POST",
-      `/api/match-drafts/${encodeURIComponent(draftId)}/cancel`,
-      `draft ${draftId}`,
-    );
-  }
+  // Deleting a confirmed match also removes its linked draft. Cancel only remaining drafts.
   for (const matchId of registry.matchIds.toReversed()) {
     await cleanupMutation(
       "DELETE",
       `/api/matches/${encodeURIComponent(matchId)}`,
       `match ${matchId}`,
+    );
+  }
+  for (const draftId of registry.draftIds.toReversed()) {
+    await cleanupMutation(
+      "POST",
+      `/api/match-drafts/${encodeURIComponent(draftId)}/cancel`,
+      `draft ${draftId}`,
     );
   }
   for (const heldEventId of registry.heldEventIds.toReversed()) {
@@ -175,26 +170,39 @@ async function cleanupE2eRun(
       `held event ${heldEventId}`,
     );
   }
-  for (const mapMasterId of registry.mapMasterIds.toReversed()) {
-    await cleanupMutation(
-      "DELETE",
-      `/api/map-masters/${encodeURIComponent(mapMasterId)}`,
-      `map master ${mapMasterId}`,
-    );
+  // Deleting the final match schedules analysis too. Settle owned work before
+  // cascading its title/job rows, so a stale shared lease cannot affect the next case.
+  let analysisSettled = true;
+  for (const gameTitleId of registry.gameTitleIds) {
+    try {
+      await waitForAnalysisSettled(request, gameTitleId);
+    } catch (error) {
+      analysisSettled = false;
+      failures.push(error instanceof Error ? error : new Error("Owned analysis did not settle."));
+    }
   }
-  for (const seasonMasterId of registry.seasonMasterIds.toReversed()) {
-    await cleanupMutation(
-      "DELETE",
-      `/api/season-masters/${encodeURIComponent(seasonMasterId)}`,
-      `season master ${seasonMasterId}`,
-    );
-  }
-  for (const gameTitleId of registry.gameTitleIds.toReversed()) {
-    await cleanupMutation(
-      "DELETE",
-      `/api/game-titles/${encodeURIComponent(gameTitleId)}`,
-      `game title ${gameTitleId}`,
-    );
+  if (analysisSettled) {
+    for (const mapMasterId of registry.mapMasterIds.toReversed()) {
+      await cleanupMutation(
+        "DELETE",
+        `/api/map-masters/${encodeURIComponent(mapMasterId)}`,
+        `map master ${mapMasterId}`,
+      );
+    }
+    for (const seasonMasterId of registry.seasonMasterIds.toReversed()) {
+      await cleanupMutation(
+        "DELETE",
+        `/api/season-masters/${encodeURIComponent(seasonMasterId)}`,
+        `season master ${seasonMasterId}`,
+      );
+    }
+    for (const gameTitleId of registry.gameTitleIds.toReversed()) {
+      await cleanupMutation(
+        "DELETE",
+        `/api/game-titles/${encodeURIComponent(gameTitleId)}`,
+        `game title ${gameTitleId}`,
+      );
+    }
   }
   for (const aliasId of registry.aliasIds.toReversed()) {
     await cleanupMutation(
@@ -207,6 +215,33 @@ async function cleanupE2eRun(
   if (failures.length > 0) {
     throw new AggregateError(failures, `E2E cleanup failed for run ${run.masterIdSuffix}`);
   }
+}
+
+export async function waitForAnalysisSettled(request: APIRequestContext, gameTitleId: string) {
+  const metadataPath = process.env["MOMO_E2E_METADATA"];
+  if (!metadataPath) return;
+  const metadata = JSON.parse(await readFile(metadataPath, "utf8")) as {
+    workerMode: "native" | "controlled";
+  };
+  if (metadata.workerMode === "controlled") return;
+  if (metadata.workerMode !== "native") throw new Error("Unknown system Worker mode.");
+  await expect
+    .poll(
+      async () => {
+        const response = await request.get(
+          `/api/analytics/series-comparison/v2/status?${new URLSearchParams({ gameTitleId })}`,
+        );
+        if (response.status() === 404) return "settled";
+        await expectOk(response, "owned analysis settlement");
+        const status =
+          (await response.json()) as components["schemas"]["SeriesAnalysisStatusResponse"];
+        return status.calculation?.status === "queued" || status.calculation?.status === "running"
+          ? status.calculation.status
+          : "settled";
+      },
+      { timeout: 60_000, intervals: [250, 500, 1000] },
+    )
+    .toBe("settled");
 }
 
 function mutationHeaders(run: E2eRun, operation: string): Record<string, string> {
@@ -249,38 +284,6 @@ export async function expectOk(
 ): Promise<void> {
   if (response.ok()) return;
   throw new Error(`${label} failed with ${response.status()}: ${await response.text()}`);
-}
-
-export async function installE2eAuthHeaders(page: Page): Promise<void> {
-  // The dev bundle reads its selected account locally; built runtime reads /auth/me.
-  // Keep the two entry points on the same test-owned account.
-  await page.addInitScript(({ key, value }) => window.localStorage.setItem(key, value), {
-    key: devUserStorageKey,
-    value: devAccountId,
-  });
-  await page.route("**/api/**", continueWithE2eAuth);
-}
-
-export async function continueWithE2eAuth(route: Route): Promise<void> {
-  await route.continue({ headers: e2eAuthHeaders(route.request()) });
-}
-
-export async function continueWithE2eNonAdminAuth(route: Route): Promise<void> {
-  await route.continue({ headers: e2eAuthHeaders(route.request(), "account_eu") });
-}
-
-export function e2eAuthHeaders(
-  request: Request,
-  accountId: string = devAccountId,
-): Record<string, string> {
-  const headers: Record<string, string> = {
-    ...request.headers(),
-    "X-Momo-Account-Id": accountId,
-  };
-  if (["DELETE", "PATCH", "POST", "PUT"].includes(request.method())) {
-    headers["X-CSRF-Token"] = "dev";
-  }
-  return headers;
 }
 
 export function expectGeneratedId(value: unknown, label: string): string {

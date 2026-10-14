@@ -6,14 +6,12 @@ import {
   command,
   eventFields,
   releaseId,
-  redisGroupDrained,
   report,
   requireSuccess,
   runSmoke,
   safeDiagnostics,
   Smoke,
   startWorker,
-  waitFor,
   withCleanup,
 } from "./worker-smoke-support.mts";
 
@@ -22,10 +20,7 @@ await runSmoke("Series-analysis control-plane smoke", async (signal) => {
   const smoke = new Smoke(signal);
   const worker_image = process.env.ANALYSIS_WORKER_IMAGE ?? "";
   const worker_database_url = process.env.WORKER_DATABASE_URL ?? smoke.database;
-  const worker_redis_url = process.env.WORKER_REDIS_URL ?? smoke.redisURL;
   const release_database_url = process.env.RELEASE_DATABASE_URL ?? smoke.database;
-  const redis_stream = process.env.ANALYSIS_SMOKE_REDIS_STREAM ?? "";
-  const redis_group = "ci-analysis-worker-v1";
   const worker_container = `momo-analysis-control-smoke-worker-${process.pid}`;
   const analysis_worker_id = "ci-analysis-worker";
   const analysis_capability_id = smoke.capability(analysis_worker_id);
@@ -45,48 +40,25 @@ await runSmoke("Series-analysis control-plane smoke", async (signal) => {
       container: worker_container,
       rejectFailedJobs: true,
     });
-  const publish = async (job: string) => {
-    await smoke.redis(["XADD", redis_stream, "*", "schemaVersion", "1", "jobId", job]);
+  const makeReady = async (job: string) => {
+    await smoke.sql(
+      `UPDATE series_analysis_jobs SET available_at = clock_timestamp() WHERE id = '${job}'; SELECT pg_notify('processing_jobs', '');`,
+    );
   };
   const pair = async (prefix: string) => {
     await smoke.sqlFile("control-plane-job-pair", { job_a: `${prefix}-a`, job_b: `${prefix}-b` });
   };
-  const drained = async () =>
-    waitFor(
-      "Redis delivery acknowledgement",
-      async (probeSignal) => {
-        const response = await smoke.redis(
-          ["--json", "XINFO", "GROUPS", redis_stream],
-          probeSignal,
-        );
-        if (redisGroupDrained(response, redis_group)) return true;
-        await smoke.running(worker_container, probeSignal);
-        return false;
-      },
-      { signal },
-    );
   await withCleanup(
     async () => {
-      check(worker_image && smoke.redisURL, "Worker image and REDIS_URL are required.");
-      check(
-        /^momo:analysis:control-plane-smoke:[a-zA-Z0-9._-]+$/.test(redis_stream),
-        "An explicit CI-only analysis stream is required.",
-      );
-      await smoke.isolated(
-        { WORKER_DATABASE_URL: worker_database_url, RELEASE_DATABASE_URL: release_database_url },
-        { WORKER_REDIS_URL: worker_redis_url },
-      );
+      check(worker_image, "Worker image is required.");
+      await smoke.isolated({
+        WORKER_DATABASE_URL: worker_database_url,
+        RELEASE_DATABASE_URL: release_database_url,
+      });
       ownsFixtures = true;
       await smoke.sqlFile("control-plane-retention");
-      await smoke.redis(["DEL", redis_stream]);
       worker = startWorker(smoke, worker_container, worker_image, {
-        ...analysisEnvironment(
-          worker_database_url,
-          worker_redis_url,
-          redis_stream,
-          redis_group,
-          analysis_worker_id,
-        ),
+        ...analysisEnvironment(worker_database_url, analysis_worker_id),
         MOMO_ANALYSIS_CONFIG_VERSION: "ci-control-plane-v1",
       });
       await worker.ready();
@@ -117,7 +89,7 @@ await runSmoke("Series-analysis control-plane smoke", async (signal) => {
     COUNT(*) FILTER (WHERE status IN ('queued','running','failed','timed_out'))::int
   FROM series_analysis_jobs;
 `,
-        "worker-owned campaign expansion, dispatch, and publication",
+        "worker-owned campaign expansion and publication",
       );
       check(
         (await smoke.sql(`
@@ -128,14 +100,13 @@ await runSmoke("Series-analysis control-plane smoke", async (signal) => {
          OR target.validation_contract_id IS DISTINCT FROM '${validation_contract_id}'
          OR request.validation_contract_id IS DISTINCT FROM target.validation_contract_id
          OR job.validation_contract_id IS DISTINCT FROM '${validation_contract_id}'
-    )::int,
-    (SELECT COUNT(*)::int FROM series_analysis_queue_outbox WHERE status = 'delivered')
+    )::int
   FROM series_analysis_campaign_targets target
   JOIN series_analysis_campaigns campaign ON campaign.id = target.campaign_id
   JOIN series_analysis_job_requests request ON request.id = target.job_request_id
   JOIN series_analysis_jobs job ON job.id = request.assigned_job_id;
-`)) === "2|0|2",
-        "Worker expansion/dispatch lost the campaign contract.",
+`)) === "2|0",
+        "Worker expansion lost the campaign contract.",
       );
       check(
         (await smoke.sql(`
@@ -170,14 +141,7 @@ await runSmoke("Series-analysis control-plane smoke", async (signal) => {
       const attempts_before = await smoke.sql(
         `SELECT attempt_count FROM series_analysis_jobs WHERE id = '${first_job}';`,
       );
-      await publish(first_job);
-      await drained();
-      check(
-        (await smoke.sql(
-          `SELECT attempt_count FROM series_analysis_jobs WHERE id = '${first_job}';`,
-        )) === attempts_before,
-        "Duplicate delivery was not acknowledged idempotently.",
-      );
+      await makeReady(first_job);
       await release([
         "release-promote",
         "--trigger",
@@ -205,6 +169,12 @@ await runSmoke("Series-analysis control-plane smoke", async (signal) => {
   FROM series_analysis_jobs;
 `)) === "2|2|2",
         "Unexpected publication/reuse dispositions.",
+      );
+      check(
+        (await smoke.sql(
+          `SELECT attempt_count FROM series_analysis_jobs WHERE id = '${first_job}';`,
+        )) === attempts_before,
+        "A wake for a terminal job changed its attempt count.",
       );
       await pair("ci-analysis-lease-recovery");
       const lease_job = await smoke.sql(`
@@ -253,12 +223,17 @@ await runSmoke("Series-analysis control-plane smoke", async (signal) => {
 `)) === [validation_contract_id, validation_contract_id, validation_contract_id].join("|"),
         "Expired lease fixture lost validation contract provenance.",
       );
-      await publish(lease_job);
+      await smoke.sql("SELECT pg_notify('processing_jobs', '');");
+      await waitSQL(
+        "succeeded",
+        `SELECT status FROM series_analysis_jobs WHERE id = '${lease_job}';`,
+        "expired running recovery without an eligible queued job",
+      );
       const queued_peer = await smoke.sql(`
   SELECT id FROM series_analysis_jobs
   WHERE game_title_id = 'title-release-smoke-b' AND status = 'queued';
 `);
-      await publish(queued_peer);
+      await makeReady(queued_peer);
       await waitSQL(
         `6|0`,
         `
@@ -293,9 +268,9 @@ await runSmoke("Series-analysis control-plane smoke", async (signal) => {
       updated_at = clock_timestamp()
   WHERE game_title_id = 'title-release-smoke-a';
 `);
-      await publish(stale_job);
-      // The committed superseding job must be delivered by the worker outbox.
-      await publish(peer_job);
+      await makeReady(stale_job);
+      // The committed superseding job is discovered directly from the DB.
+      await makeReady(peer_job);
       await waitSQL(
         `8|0`,
         `
@@ -357,7 +332,6 @@ await runSmoke("Series-analysis control-plane smoke", async (signal) => {
       const child = events.find((event) => event.event === "analysis_child_report_accepted");
       check(child, "Worker did not record an accepted child report.");
       for (const field of [
-        "delivery_message_id",
         "worker_id",
         "job_id",
         "attempt_id",
@@ -423,49 +397,27 @@ await runSmoke("Series-analysis control-plane smoke", async (signal) => {
   FROM series_analysis_title_states
   WHERE game_title_id = 'title-release-smoke-a';
 `);
-      await publish(unsupported_job_id);
-      await waitFor(
-        "unsupported-version delivery diagnostic",
-        async (probeSignal) => {
-          if (
-            eventFields(smoke.logs()).some(
-              (event) =>
-                event.event === "analysis_delivery_deferred" && event.job_id === unsupported_job_id,
-            )
-          )
-            return true;
-          await smoke.running(worker_container, probeSignal);
-          return false;
-        },
-        { timeoutMs: 60_000, signal },
+      await makeReady(unsupported_job_id);
+      // A later compatible candidate must progress past the unsupported oldest job.
+      await smoke.sql(`
+        INSERT INTO series_analysis_jobs (id, game_title_id, input_revision, algorithm_version,
+          artifact_schema_version, validation_contract_id, status, trigger, requested_at, available_at)
+        SELECT 'ci-analysis-compatible-later', game_title_id, input_revision, algorithm_version,
+          artifact_schema_version, validation_contract_id, 'queued', 'manual', clock_timestamp(), clock_timestamp()
+        FROM series_analysis_title_states WHERE game_title_id = 'title-release-smoke-b';
+        SELECT pg_notify('processing_jobs', '');
+      `);
+      await waitSQL(
+        "succeeded",
+        "SELECT status FROM series_analysis_jobs WHERE id = 'ci-analysis-compatible-later';",
+        "compatible job behind an unsupported job",
       );
-      const deferred = eventFields(smoke.logs()).find(
-        (event) =>
-          event.event === "analysis_delivery_deferred" && event.job_id === unsupported_job_id,
-      );
-      check(
-        deferred?.reason === "unsupported_version" &&
-          deferred.disposition === "leave_pending" &&
-          deferred.job_algorithm_version === "series-analysis-v999999",
-        "Unsupported-version delivery had an unexpected disposition.",
-      );
-      for (const field of [
-        "supported_algorithm_version",
-        "supported_artifact_schema_version",
-        "job_validation_contract_id",
-        "supported_validation_contract_id",
-      ])
-        check(field in deferred, `Unsupported-version diagnostic omitted ${field}.`);
       check(
         (await smoke.sql(`
   SELECT status, attempt_count, lease_owner IS NULL
   FROM series_analysis_jobs WHERE id = '${unsupported_job_id}';
 `)) === "queued|0|t",
         "Unsupported-version job was claimed.",
-      );
-      check(
-        (await smoke.redis(["XPENDING", redis_stream, redis_group])).split("\n")[0] === "1",
-        "Unsupported-version delivery was not left pending.",
       );
       check(
         requireSuccess(
@@ -501,7 +453,6 @@ await runSmoke("Series-analysis control-plane smoke", async (signal) => {
         console.error(JSON.stringify(diagnostic));
       await cleanups([
         () => worker?.stop(),
-        () => (ownsFixtures ? smoke.redis(["DEL", redis_stream], null) : undefined),
         () =>
           ownsFixtures
             ? smoke.sqlFile(

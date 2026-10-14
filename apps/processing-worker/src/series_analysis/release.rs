@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, time::Duration};
 
 use clap::ValueEnum;
 use momo_analysis_core::{
@@ -11,8 +11,8 @@ use sha2::{Digest, Sha256};
 use thiserror::Error;
 use tokio_postgres::{Client, Row, Transaction};
 
-use crate::outbox::listener::CHANNEL;
 use crate::postgres::{PostgresError, connect};
+use crate::scheduler::listener::CHANNEL;
 
 use super::control::{ALGORITHM_VERSION, CAPABILITY_FRESH_SECONDS};
 
@@ -76,7 +76,6 @@ pub(crate) struct CompletenessReport {
     pub(crate) title_count: usize,
     pub(crate) current_artifact_count: usize,
     pub(crate) active_job_count: i64,
-    pub(crate) failed_outbox_count: i64,
     pub(crate) compatible_reader_count: i64,
     pub(crate) compatible_worker_count: i64,
     pub(crate) violations: Vec<CompletenessViolation>,
@@ -193,7 +192,11 @@ pub(crate) async fn promote(
     let mut client = connect(&database_url).await?;
     let transaction = begin_promotion_transaction(&mut client).await?;
 
-    promote_transaction(transaction, request).await
+    let report = promote_transaction(transaction, request).await?;
+    if request.apply && report.target_count > 0 {
+        notify_scheduler(&client).await;
+    }
+    Ok(report)
 }
 
 async fn promote_transaction(
@@ -233,7 +236,10 @@ async fn promote_transaction(
             compatible_worker_count: workers.compatible,
             idempotent_replay: true,
         };
-        finish_replayed_promotion(transaction, request.apply && existing.target_count > 0).await?;
+        transaction
+            .rollback()
+            .await
+            .map_err(|source| postgres_phase("replay_rollback", source))?;
         return Ok(report);
     }
 
@@ -260,11 +266,6 @@ async fn promote_transaction(
             key_hash: &key_hash,
         };
         apply_promotion(&transaction, request, &titles, &identity).await?;
-        if target_count > 0 {
-            enqueue_dispatcher_wake(&transaction)
-                .await
-                .map_err(|source| postgres_phase("outbox_notify", source))?;
-        }
         transaction
             .commit()
             .await
@@ -288,35 +289,22 @@ async fn promote_transaction(
     })
 }
 
-async fn finish_replayed_promotion(
-    transaction: Transaction<'_>,
-    should_wake: bool,
-) -> Result<(), ReleaseError> {
-    if should_wake {
-        enqueue_dispatcher_wake(&transaction)
-            .await
-            .map_err(|source| postgres_phase("replay_outbox_notify", source))?;
-        transaction
-            .commit()
-            .await
-            .map_err(|source| postgres_phase("replay_commit", source))
-    } else {
-        transaction
-            .rollback()
-            .await
-            .map_err(|source| postgres_phase("replay_rollback", source))
+async fn notify_scheduler(client: &Client) {
+    // Durable work has already committed. Losing this bounded hint cannot turn
+    // an accepted campaign into an error; the scheduler also scans on deadlines.
+    if !matches!(
+        tokio::time::timeout(
+            Duration::from_secs(5),
+            client.query_one("SELECT pg_notify($1, '')", &[&CHANNEL]),
+        )
+        .await,
+        Ok(Ok(_))
+    ) {
+        tracing::warn!(
+            event = "analysis_release_wake_failed",
+            "The committed analysis work awaits scheduler recovery"
+        );
     }
-}
-
-async fn enqueue_dispatcher_wake(
-    transaction: &Transaction<'_>,
-) -> Result<(), tokio_postgres::Error> {
-    // PostgreSQL releases NOTIFY only if this transaction commits. The empty payload is a
-    // coalescing hint; campaign targets remain the durable source of work.
-    transaction
-        .query_one("SELECT pg_notify($1, '')", &[&CHANNEL])
-        .await?;
-    Ok(())
 }
 
 async fn begin_promotion_transaction(client: &mut Client) -> Result<Transaction<'_>, ReleaseError> {
@@ -390,13 +378,6 @@ where
         )
         .await?
         .try_get(0)?;
-    let failed_outbox_count = client
-        .query_one(
-            "SELECT COUNT(*)::bigint FROM series_analysis_queue_outbox WHERE status = 'failed'",
-            &[],
-        )
-        .await?
-        .try_get(0)?;
     let mut violations = Vec::new();
     if !release_state_matches {
         violations.push(global_violation("release_state_mismatch"));
@@ -412,9 +393,6 @@ where
     }
     if workers.incompatible > 0 {
         violations.push(global_violation("worker_incompatible"));
-    }
-    if failed_outbox_count > 0 {
-        violations.push(global_violation("failed_outbox"));
     }
     if require_quiescent && active_job_count > 0 {
         violations.push(global_violation("active_jobs"));
@@ -432,7 +410,6 @@ where
             .filter(|row| row.current_artifact_id.is_some())
             .count(),
         active_job_count,
-        failed_outbox_count,
         compatible_reader_count: readers.compatible,
         compatible_worker_count: workers.compatible,
         violations,
@@ -1383,7 +1360,7 @@ mod tests {
             Ok::<(u64, bool), tokio_postgres::Error>((inserted, visible_inside_registration))
         });
 
-        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        tokio::time::timeout(Duration::from_secs(2), async {
             loop {
                 let is_blocked = transaction
                     .query_one(
@@ -1395,7 +1372,7 @@ mod tests {
                 if is_blocked {
                     return Ok::<(), tokio_postgres::Error>(());
                 }
-                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                tokio::time::sleep(Duration::from_millis(10)).await;
             }
         })
         .await
@@ -1405,7 +1382,7 @@ mod tests {
         assert!(!registration.is_finished());
 
         transaction.commit().await?;
-        let registration = tokio::time::timeout(std::time::Duration::from_secs(2), registration)
+        let registration = tokio::time::timeout(Duration::from_secs(2), registration)
             .await
             .map_err(|_elapsed| {
                 std::io::Error::other("capability registration did not resume after promotion")

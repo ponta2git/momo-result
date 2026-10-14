@@ -146,9 +146,9 @@ impl OcrHints {
     }
 }
 
-/// Queue data after the Redis transport has been decoded and validated.
+/// Accepted job input after its persisted snapshot has been decoded and validated.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct OcrQueuePayload {
+pub struct OcrJobInput {
     job_id: String,
     draft_id: String,
     source_image_id: String,
@@ -160,11 +160,11 @@ pub struct OcrQueuePayload {
     hints: OcrHints,
 }
 
-impl OcrQueuePayload {
+impl OcrJobInput {
     #[must_use]
     #[expect(
         clippy::too_many_arguments,
-        reason = "the transport adapter passes every execution-relevant field of the closed OCR queue contract"
+        reason = "the persistence adapter passes every execution-relevant field of the closed OCR input contract"
     )]
     pub const fn new(
         job_id: String,

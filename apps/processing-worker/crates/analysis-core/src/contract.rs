@@ -15,17 +15,9 @@ pub const ARTIFACT_SCHEMA_VERSION: u32 = 6;
 /// must not be treated as having passed the current validator.
 pub const ARTIFACT_VALIDATION_CONTRACT_ID: &str = "series-analysis-artifact-v6-full-validation-v2";
 pub const MANIFEST_VERSION: u32 = 1;
-pub const QUEUE_SCHEMA_VERSION: &str = "1";
 const MAXIMUM_SCHEMA_CHUNK_BYTES: u64 = 16 * 1024 * 1024;
 const MAXIMUM_SCHEMA_CHUNK_COUNT: u64 = 1_000_000;
 const MAXIMUM_SCHEMA_ITEM_COUNT: u64 = 1_000_000;
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct QueuePayload {
-    pub schema_version: String,
-    pub job_id: String,
-}
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -155,8 +147,6 @@ pub struct CommonResource {
 
 #[derive(Debug, Error)]
 pub enum ContractError {
-    #[error("unsupported queue schema version")]
-    UnsupportedQueueSchema,
     #[error("unsupported artifact or manifest schema version")]
     UnsupportedArtifactSchema,
     #[error("invalid opaque identifier: {0}")]
@@ -181,20 +171,6 @@ pub enum ContractError {
     RootChecksumMismatch,
     #[error("canonicalization failed: {0}")]
     Canonical(#[from] CanonicalError),
-}
-
-impl QueuePayload {
-    /// Validates the minimal, untrusted Redis delivery payload.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ContractError`] for an unsupported version or malformed job identifier.
-    pub fn validate(&self) -> Result<(), ContractError> {
-        if self.schema_version != QUEUE_SCHEMA_VERSION {
-            return Err(ContractError::UnsupportedQueueSchema);
-        }
-        validate_id(&self.job_id)
-    }
 }
 
 impl ArtifactManifest {
@@ -543,13 +519,6 @@ mod tests {
     const INVALID_ARTIFACT: &str = include_str!(
         "../../../../../docs/schemas/fixtures/series-analysis/invalid-artifact-v6.json"
     );
-    const VALID_QUEUE: &str = include_str!(
-        "../../../../../docs/schemas/fixtures/series-analysis/valid-queue-payload-v1.json"
-    );
-    const INVALID_QUEUE: &str = include_str!(
-        "../../../../../docs/schemas/fixtures/series-analysis/invalid-queue-payload-v1.json"
-    );
-
     #[test]
     fn accepts_the_shared_artifact_fixture() {
         let manifest: ArtifactManifest = serde_json::from_str(VALID_ARTIFACT)
@@ -579,21 +548,6 @@ mod tests {
         assert!(
             serde_json::from_value::<ArtifactManifest>(value).is_err(),
             "invalid-artifact fixture unexpectedly satisfied the typed manifest contract"
-        );
-    }
-
-    #[test]
-    fn queue_payload_is_minimal_and_versioned() {
-        let payload: QueuePayload = serde_json::from_str(VALID_QUEUE)
-            .unwrap_or_else(|error| panic!("valid queue payload did not decode: {error}"));
-        payload
-            .validate()
-            .unwrap_or_else(|error| panic!("valid queue payload was rejected: {error}"));
-        let invalid: Value = serde_json::from_str(INVALID_QUEUE)
-            .unwrap_or_else(|error| panic!("invalid-queue fixture is malformed JSON: {error}"));
-        assert!(
-            serde_json::from_value::<QueuePayload>(invalid).is_err(),
-            "invalid-queue fixture unexpectedly satisfied the minimal payload contract"
         );
     }
 

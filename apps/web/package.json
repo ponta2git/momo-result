@@ -5,11 +5,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && node ./scripts/check-built-theme.mts",
-    "e2e": "node ./scripts/e2e/run-isolated.mts",
+    "e2e": "node ../../scripts/e2e/run-system.mts",
     "scripts:check": "node --test ./scripts/*.test.mts ./scripts/e2e/*.test.mts ../../scripts/e2e/*.test.mts",
-    "e2e:ocr-notifications": "node ./scripts/e2e/run-ocr-notifications.mts",
-    "e2e:target": "playwright test",
-    "e2e:runtime": "PLAYWRIGHT_SKIP_WEB_SERVER=1 playwright test",
     "preview": "vite preview",
     "typecheck": "tsc --pretty false && tsc --pretty false -p tsconfig.scripts.json",
     "test": "vitest",
@@ -20,7 +17,8 @@
     "format": "oxfmt --write . && (cd ../.. && apps/web/node_modules/.bin/oxfmt --write scripts/e2e)",
     "format:check": "oxfmt --check . && (cd ../.. && apps/web/node_modules/.bin/oxfmt --check scripts/e2e)",
     "generate:api": "node ./scripts/generate-api.mts",
-    "contract:check": "redocly lint --config ../api/redocly.yaml ../api/openapi.yaml && node ./scripts/generate-api.mts --check"
+    "contract:check": "redocly lint --config ../api/redocly.yaml ../api/openapi.yaml && node ./scripts/generate-api.mts --check",
+    "e2e:ui": "playwright test --config playwright.ui.config.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
@@ -54,9 +52,8 @@
     "jsdom": "^30.0.1",
     "msw": "^2.15.0",
     "openapi-typescript": "^7.13.0",
-    "oxfmt": "^0.66.0",
+    "oxfmt": "^0.67.0",
     "oxlint": "^1.81.0",
-    "testcontainers": "^12.1.0",
     "typescript": "^6.0.3",
     "vite": "^8.2.2",
     "vitest": "^5.0.0"

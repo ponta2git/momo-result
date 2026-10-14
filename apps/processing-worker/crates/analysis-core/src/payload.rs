@@ -263,12 +263,8 @@ const DRILLDOWN_METRIC_IDS: &[&str] = &[
     "rankAnalysis.unexpectedWins",
 ];
 
-/// Validates a freshly computed payload before it reaches artifact staging.
-///
-/// # Errors
-///
-/// Returns a bounded contract error when shape, scope, count, or numeric constraints are invalid.
-pub fn validate_computed(resource: &ComputedResource) -> Result<(), PayloadError> {
+#[cfg(test)]
+pub(crate) fn validate_computed(resource: &ComputedResource) -> Result<(), PayloadError> {
     validate_computed_resource(resource).map(|_| ())
 }
 

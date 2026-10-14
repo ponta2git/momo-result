@@ -128,7 +128,7 @@ func TestSecretsFailClosed(t *testing.T) {
 		mode, input string
 		ok          bool
 	}{
-		{"ready", `[{"name":"MOMO_ANALYSIS_OUTBOX_LISTENER_DATABASE_URL","status":"Staged"}]`, true},
+		{"ready", `[{"name":"MOMO_PROCESSING_LISTENER_DATABASE_URL","status":"Staged"}]`, true},
 		{"unstaged", `[{"name":"other","status":"Staged"}]`, false},
 		{"ready", `[]`, false}, {"unstaged", `[]`, true}, {"unstaged", `[{}]`, false}, {"ready", `null`, false},
 	} {

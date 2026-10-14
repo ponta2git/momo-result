@@ -1,0 +1,176 @@
+import { expect, test as base } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
+
+import type { components } from "../../src/shared/api/generated";
+import {
+  makeFourPlayerResults,
+  makeHeldEventDetailResponse,
+  makeHeldEventResponse,
+  makeMatchDetail,
+} from "../../src/test/factories";
+import { incidentMastersSeed, mswState } from "../../src/test/msw/fixtures";
+import { makeSeriesAnalysisStatus } from "../../src/test/msw/seriesAnalysisFixtures";
+import { confirmedContext } from "./fixtures/records";
+
+export { expect };
+
+// The automatic fixture is installed before scenario routes. Those routes may fall
+// back to these explicit reads; an unknown API request can never reach a backend.
+export const test = base.extend<{ mockedApi: void }>({
+  mockedApi: [
+    async ({ context }, use) => {
+      const unexpected: string[] = [];
+      const matches = [1, 2].map((matchNoInEvent) =>
+        makeMatchDetail({
+          ...confirmedContext,
+          matchId: `match-${matchNoInEvent}`,
+          matchNoInEvent,
+          layoutFamily: "momotetsu_2",
+          players: makeFourPlayerResults(),
+        }),
+      );
+      const summaries: Array<components["schemas"]["MatchSummaryResponse"]> = matches.map(
+        (match) => ({
+          createdAt: match.createdAt,
+          updatedAt: match.createdAt,
+          heldAt: match.heldAt ?? match.playedAt,
+          gameTitleId: match.gameTitleId,
+          gameTitleName: match.gameTitleName ?? confirmedContext.gameTitleName,
+          seasonMasterId: match.seasonMasterId,
+          seasonName: match.seasonName ?? confirmedContext.seasonName,
+          mapMasterId: match.mapMasterId,
+          mapName: match.mapName ?? confirmedContext.mapName,
+          heldEventId: match.heldEventId ?? confirmedContext.heldEventId,
+          id: match.matchId,
+          kind: "match",
+          matchId: match.matchId,
+          matchNoInEvent: match.matchNoInEvent ?? 1,
+          ownerMemberId: match.ownerMemberId,
+          playedAt: match.playedAt,
+          status: "confirmed",
+          ranks: (match.players ?? []).map(({ memberId, playOrder, rank }) => ({
+            memberId,
+            playOrder,
+            rank,
+          })),
+        }),
+      );
+      const readResponses: Record<string, unknown> = {
+        "/api/auth/me": {
+          accountId: "account_ponta",
+          csrfToken: "dev",
+          displayName: "ぽんた",
+          role: "admin",
+          memberId: "member_ponta",
+        } satisfies components["schemas"]["AuthMeResponse"],
+        "/api/admin/login-accounts": { items: mswState.loginAccounts },
+        "/api/game-titles": {
+          items: [
+            ...mswState.gameTitles,
+            { ...mswState.gameTitles[0], id: "gt_ui_other", name: "別作品" },
+          ],
+        },
+        "/api/map-masters": { items: mswState.mapMasters },
+        "/api/season-masters": { items: mswState.seasonMasters },
+        "/api/member-aliases": { items: mswState.memberAliases },
+        "/api/incident-masters": { items: incidentMastersSeed },
+        "/api/held-events": {
+          items: [makeHeldEventResponse({ matchCount: 2 })],
+          pagination: pagination(1, 10, 1),
+          totalMatchCount: 2,
+        },
+        "/api/held-events/held-1": makeHeldEventDetailResponse({ matchCount: 2 }),
+        "/api/held-events/held-1/summary": makeHeldEventResponse({ matchCount: 2 }),
+        "/api/matches/summary": { incompleteCount: 0, needsReviewCount: 0 },
+      };
+      await context.route("**/api/**", async (route) => {
+        const request = route.request();
+        const url = new URL(request.url());
+        const path = url.pathname;
+        if (request.method() === "GET") {
+          if (path === "/api/matches") {
+            const items = summaries.filter((match) => {
+              for (const key of ["heldEventId", "gameTitleId", "seasonMasterId"] as const) {
+                const requested = url.searchParams.get(key);
+                if (requested && requested !== match[key]) return false;
+              }
+              const status = url.searchParams.get("status");
+              return !status || status === "all" || status === "confirmed";
+            });
+            await route.fulfill({ json: { items, pagination: pagination(1, 100, items.length) } });
+            return;
+          }
+          const identity = matches.find((item) => path === `/api/matches/${item.matchId}/identity`);
+          if (identity) {
+            await route.fulfill({
+              json: {
+                matchId: identity.matchId,
+                matchNoInEvent: identity.matchNoInEvent,
+                playedAt: identity.playedAt,
+                gameTitleName: identity.gameTitleName ?? confirmedContext.gameTitleName,
+                seasonName: identity.seasonName ?? confirmedContext.seasonName,
+              } satisfies components["schemas"]["MatchIdentityResponse"],
+            });
+            return;
+          }
+          const match = matches.find((item) => path === `/api/matches/${item.matchId}`);
+          if (match) {
+            await route.fulfill({ json: match });
+            return;
+          }
+          if (path === "/api/analytics/series-comparison/v2/status") {
+            await route.fulfill({
+              json: makeSeriesAnalysisStatus({
+                artifactFreshness: "unavailable",
+                calculation: null,
+                currentArtifact: null,
+                gameTitleId: url.searchParams.get("gameTitleId") ?? confirmedContext.gameTitleId,
+              }),
+            });
+            return;
+          }
+          if (path in readResponses) {
+            await route.fulfill({ json: readResponses[path] });
+            return;
+          }
+        }
+        unexpected.push(`${request.method()} ${path}`);
+        await route.abort("blockedbyclient");
+      });
+      await use();
+      expect(unexpected, "UI tests must explicitly mock every API request").toEqual([]);
+    },
+    { auto: true },
+  ],
+});
+
+function pagination(page: number, pageSize: number, totalItems: number) {
+  return {
+    hasNextPage: false,
+    hasPreviousPage: false,
+    lastCursor: null,
+    nextCursor: null,
+    page,
+    pageSize,
+    previousCursor: null,
+    totalItems,
+    totalPages: totalItems ? 1 : 0,
+  };
+}
+
+export async function installUiAuth(page: Page): Promise<void> {
+  await page.addInitScript(() =>
+    window.localStorage.setItem("momoresult.devUser", "account_ponta"),
+  );
+}
+
+/** Exercise selection by its stable identity, preserving the native focus behavior. */
+export async function selectControlOption(page: Page, trigger: Locator, value: string) {
+  await trigger.click();
+  const option = page
+    .getByRole("option")
+    .and(page.locator(`[data-value=${JSON.stringify(value)}]`));
+  const label = await option.textContent();
+  await option.click();
+  await expect(trigger).toHaveText(label ?? "");
+}

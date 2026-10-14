@@ -101,11 +101,11 @@ final class PostgresSourceImagesRepositorySpec extends IntegrationSuite:
     val quota = SourceImageQuota(unreferencedCountLimit = 1, unreferencedBytesLimit = 128)
     val insertReference = sql"""
       INSERT INTO ocr_jobs (
-        id, draft_id, image_id, source_image_id, queue_schema_version,
+        id, draft_id, image_id, source_image_id, input_snapshot,
         requested_screen_type, status, attempt_count, created_at, updated_at
       ) VALUES (
         'job-source-quota-reference', 'draft-source-quota-reference',
-        ${referenced.id}, ${referenced.id}, 2, 'total_assets', 'queued', 0, $now, $now
+        ${referenced.id}, ${referenced.id}, '{"schemaVersion":"2"}'::jsonb, 'total_assets', 'queued', 0, $now, $now
       )
     """.update.run.transact(transactor)
 
@@ -189,10 +189,10 @@ final class PostgresSourceImagesRepositorySpec extends IntegrationSuite:
     val candidate = reservation("source-referenced", "1" * 64)
     val insertReference = sql"""
       INSERT INTO ocr_jobs (
-        id, draft_id, image_id, source_image_id, queue_schema_version,
+        id, draft_id, image_id, source_image_id, input_snapshot,
         requested_screen_type, status, attempt_count, created_at, updated_at
       ) VALUES (
-        'job-source-reference', 'draft-source-reference', ${candidate.id}, ${candidate.id}, 2,
+        'job-source-reference', 'draft-source-reference', ${candidate.id}, ${candidate.id}, '{"schemaVersion":"2"}'::jsonb,
         'total_assets', 'queued', 0, $now, $now
       )
     """.update.run.transact(transactor)
@@ -211,19 +211,19 @@ final class PostgresSourceImagesRepositorySpec extends IntegrationSuite:
       assertEquals(guarded, SourceImageDeleteResult.NotReady(SourceImageStatus.Available))
       assert(isPending(pending))
 
-  test("reference guard covers legacy and v2 OCR image columns"):
+  test("terminal legacy input releases its image while a queued snapshot retains its source"):
     val legacy = reservation("source-reference-legacy", "3" * 64)
     val v2 = reservation("source-reference-v2", "4" * 64)
     val insertReferences = sql"""
       INSERT INTO ocr_jobs (
-        id, draft_id, image_id, image_path, source_image_id, queue_schema_version,
+        id, draft_id, image_id, image_path, source_image_id, input_snapshot,
         requested_screen_type, status, attempt_count, created_at, updated_at
       ) VALUES
         ('job-source-reference-legacy', 'draft-source-reference-legacy', ${legacy.id},
          '/tmp/source-reference-legacy.png',
-         NULL, 1, 'total_assets', 'queued', 0, $now, $now),
+         NULL, NULL, 'total_assets', 'failed', 0, $now, $now),
         ('job-source-reference-v2', 'draft-source-reference-v2', 'legacy-v2-placeholder',
-         NULL, ${v2.id}, 2, 'total_assets', 'queued', 0, $now, $now)
+         NULL, ${v2.id}, '{"schemaVersion":"2"}'::jsonb, 'total_assets', 'queued', 0, $now, $now)
     """.update.run.transact(transactor)
 
     for
@@ -235,7 +235,7 @@ final class PostgresSourceImagesRepositorySpec extends IntegrationSuite:
       legacyDeletion <- repository.beginDeleteUnreferenced(legacy.id, now.plusSeconds(1))
       v2Deletion <- repository.beginDeleteUnreferenced(v2.id, now.plusSeconds(1))
     yield
-      assertEquals(legacyDeletion, SourceImageDeleteResult.NotReady(SourceImageStatus.Available))
+      assert(isPending(legacyDeletion))
       assertEquals(v2Deletion, SourceImageDeleteResult.NotReady(SourceImageStatus.Available))
 
   test("draft reference guard is released only by the source-images-deleted marker"):
@@ -272,12 +272,12 @@ final class PostgresSourceImagesRepositorySpec extends IntegrationSuite:
     val draftImage = reservation("source-reference-terminal-draft", "c" * 64)
     val insertTerminalJob = sql"""
       INSERT INTO ocr_jobs (
-        id, draft_id, image_id, source_image_id, queue_schema_version,
+        id, draft_id, image_id, source_image_id, input_snapshot,
         requested_screen_type, detected_screen_type, status, attempt_count,
         started_at, finished_at, duration_ms, created_at, updated_at
       ) VALUES (
         'job-source-reference-terminal', 'draft-source-reference-terminal', ${jobImage.id},
-        ${jobImage.id}, 2, 'total_assets', 'total_assets', 'succeeded', 1,
+        ${jobImage.id}, '{"schemaVersion":"2"}'::jsonb, 'total_assets', 'total_assets', 'succeeded', 1,
         $now, $now, 1, $now, $now
       )
     """.update.run.transact(transactor)

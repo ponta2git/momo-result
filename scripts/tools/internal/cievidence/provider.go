@@ -16,6 +16,7 @@ var candidateTag = regexp.MustCompile(`^registry\.fly\.io/momo-result(-analysis)
 func provider(command string, args []string, in io.Reader, out io.Writer) error {
 	counts := map[string]int{"resolve-pushed-image": 1, "resolve-deployment-run": 1, "verify-manifest-artifact": 2,
 		"runtime-machine-evidence": 1, "runtime-machine-id": 1, "analysis-reusable-release": 1,
+		"runtime-machine-start-id": 1, "analysis-machine-start-id": 4,
 		"analysis-machine-identity": 0, "analysis-machine-evidence": 4, "analysis-secrets": 1,
 		"canonical-json": 0, "public-edge-evidence": 0}
 	n, ok := counts[command]
@@ -126,7 +127,7 @@ func secrets(v any, mode string) error {
 			return invalid
 		}
 		staged = staged || status == "Staged"
-		ready = ready || name == "MOMO_ANALYSIS_OUTBOX_LISTENER_DATABASE_URL" && (status == "Deployed" || status == "Staged")
+		ready = ready || name == "MOMO_PROCESSING_LISTENER_DATABASE_URL" && (status == "Deployed" || status == "Staged")
 	}
 	if (mode == "ready" && !ready) || (mode == "unstaged" && staged) {
 		return invalid

@@ -1,6 +1,10 @@
 //! `PostgreSQL` connection and TLS setup, independent of capability and delivery policy.
 
-use std::{path::Path, time::Duration};
+use std::{
+    ops::{Deref, DerefMut},
+    path::Path,
+    time::Duration,
+};
 
 use openssl::{
     error::ErrorStack,
@@ -40,14 +44,18 @@ impl PostgresError {
     }
 }
 
+pub(crate) fn is_lock_contention(error: &tokio_postgres::Error) -> bool {
+    matches!(error.code(),Some(code) if *code == tokio_postgres::error::SqlState::LOCK_NOT_AVAILABLE || *code == tokio_postgres::error::SqlState::T_R_DEADLOCK_DETECTED)
+}
+
 /// Opens a bounded asynchronous `PostgreSQL` connection and drives its I/O on the current runtime.
 ///
 /// # Errors
 ///
 /// Returns a safe error when configuration, trust roots, or the connection are invalid.
-pub(crate) async fn connect(database_url: &str) -> Result<Client, PostgresError> {
+pub(crate) async fn connect(database_url: &str) -> Result<ConnectedClient, PostgresError> {
     let (client, connection) = open(database_url).await?;
-    tokio::spawn(async move {
+    let driver = tokio::spawn(async move {
         if let Err(_connection_error) = connection.await {
             error!(
                 event = "worker_dependency_connection_stopped",
@@ -57,7 +65,37 @@ pub(crate) async fn connect(database_url: &str) -> Result<Client, PostgresError>
             );
         }
     });
-    Ok(client)
+    Ok(ConnectedClient { client, driver })
+}
+
+/// Owns the connection driver as well as its request handle. A cancelled query does not cancel
+/// the PostgreSQL request, and Client drop alone waits for unanswered responses before closing.
+/// Scope exit must therefore stop the driver too, including on timeouts and reconnect paths.
+pub(crate) struct ConnectedClient {
+    client: Client,
+    driver: tokio::task::JoinHandle<()>,
+}
+
+impl Deref for ConnectedClient {
+    type Target = Client;
+
+    fn deref(&self) -> &Self::Target {
+        &self.client
+    }
+}
+
+impl DerefMut for ConnectedClient {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.client
+    }
+}
+
+impl Drop for ConnectedClient {
+    fn drop(&mut self) {
+        // This closes local I/O; it deliberately makes no claim about a sent COMMIT's result.
+        // Callers must still reconcile uncertain writes against durable state.
+        self.driver.abort();
+    }
 }
 
 /// The caller owns polling the driver; ordinary queries use `connect` instead.
@@ -112,6 +150,9 @@ fn tls_connector(ca_file: Option<&Path>) -> Result<MakeTlsConnector, PostgresErr
     }
     Ok(MakeTlsConnector::new(builder.build()))
 }
+
+#[cfg(test)]
+pub(crate) mod test_support;
 
 #[cfg(test)]
 mod tests {
@@ -192,6 +233,47 @@ mod tests {
             }
         }
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn cancelled_session_closes_the_socket_with_an_unanswered_query() -> Result<(), TestError>
+    {
+        use tokio::io::AsyncReadExt as _;
+
+        let listener = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await?;
+        let configuration = format!(
+            "host=127.0.0.1 port={} user=test dbname=test sslmode=disable",
+            listener.local_addr()?.port()
+        );
+        let peer = async {
+            let mut socket = super::test_support::accept_startup(&listener).await?;
+            let mut query = [0; 14];
+            socket.read_exact(&mut query).await?;
+            if query != *b"Q\0\0\0\rSELECT 1\0" {
+                return Err("expected query was not sent before cancellation".into());
+            }
+            // Receive the request without answering it. A detached connection driver would
+            // keep waiting for the response even after the query future and Client are dropped.
+            tokio::io::copy(&mut socket, &mut tokio::io::sink()).await?;
+            Ok::<_, TestError>(())
+        };
+        let session = async {
+            let client = super::connect(&configuration).await?;
+            let query = async move { client.batch_execute("SELECT 1").await };
+            if tokio::time::timeout(Duration::from_millis(250), query)
+                .await
+                .is_ok()
+            {
+                return Err("silent query unexpectedly completed".into());
+            }
+            Ok::<_, TestError>(())
+        };
+        let (session, peer) = tokio::time::timeout(Duration::from_secs(3), async {
+            tokio::join!(session, peer)
+        })
+        .await?;
+        session?;
+        peer
     }
 
     #[tokio::test]

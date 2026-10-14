@@ -70,7 +70,6 @@ export const matchKeys = {
   summary: (params: unknown) => ["matches", "collections", "summary", params] as const,
   exports: (params: unknown) => ["matches", "collections", "exports", params] as const,
   detailRoot: () => ["matches", "detail"] as const,
-  identity: (matchId: string | undefined) => ["matches", "detail", matchId, "identity"] as const,
   identityRead: (matchId: string | undefined) =>
     ["matches", "detail", matchId, "identity", "read-result"] as const,
   resource: (matchId: string | undefined) => ["matches", "detail", matchId] as const,

@@ -54,6 +54,23 @@ function submission(): OcrSubmissionWorkflowParams {
 }
 
 describe("runOcrSubmissionWorkflow", () => {
+  it("stops an abandoned upload before registering jobs or uploading another image", async () => {
+    const input = submission();
+    const controller = new AbortController();
+    input.signal = controller.signal;
+    input.uploadImage = vi.fn(async () => {
+      controller.abort();
+      return { imageId: "accepted-before-owner-ended" };
+    });
+
+    await expect(runOcrSubmissionWorkflow(input)).rejects.toMatchObject({ name: "AbortError" });
+
+    expect(input.state.slots.total_assets?.upload?.imageId).toBe("accepted-before-owner-ended");
+    expect(input.createJob).not.toHaveBeenCalled();
+    expect(input.uploadImage).toHaveBeenCalledTimes(1);
+    expect(input.updateSlot).toHaveBeenCalledTimes(1);
+  });
+
   it("uses the confirmation timestamp and explicit screen hints for the complete draft", async () => {
     const input = submission();
     expect(await runOcrSubmissionWorkflow(input)).toEqual({

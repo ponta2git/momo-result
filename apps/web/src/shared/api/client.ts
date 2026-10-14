@@ -46,11 +46,6 @@ function getStoredDevUserValue(): string | null | undefined {
   }
 }
 
-export function getStoredDevUser(): string | undefined {
-  const value = getStoredDevUserValue();
-  return value === noDevUserSelectedValue ? undefined : (value ?? undefined);
-}
-
 export function resolveDevUser(): string | undefined {
   const storedValue = getStoredDevUserValue();
   if (storedValue === noDevUserSelectedValue) {

@@ -38,7 +38,8 @@ export function useAuth() {
         setDevUser("");
       }
       await clearPrincipalClientState(queryClient, {
-        loggedOutAuthQueryKey: authMeQueryKeyFor(devUser),
+        queryKey: authMeQueryKeyFor(devUser),
+        state: "logged-out",
       });
     },
   });

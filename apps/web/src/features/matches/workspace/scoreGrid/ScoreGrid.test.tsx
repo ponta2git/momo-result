@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -326,6 +326,17 @@ describe("ScoreGrid", () => {
     expect(screen.getByRole("textbox", { name: "あかねまみ 順位" })).toHaveFocus();
   });
 
+  it.each(["ArrowLeft", "ArrowRight"])("keeps focus during IME composition with %s", (key) => {
+    render(<ScoreGridHarness onPlayerChange={vi.fn()} />);
+    const rank = screen.getByRole<HTMLInputElement>("textbox", { name: "ぽんた 順位" });
+    rank.focus();
+    rank.setSelectionRange(0, rank.value.length);
+
+    fireEvent.keyDown(rank, { isComposing: true, key });
+
+    expect(rank).toHaveFocus();
+  });
+
   it("exposes invalid score cells through native ARIA", () => {
     const errorPathSet = new Set(["players.0.playOrder", "players.0.rank"]);
 
@@ -338,7 +349,11 @@ describe("ScoreGrid", () => {
     expect(rankInput).toHaveAttribute("aria-invalid", "true");
   });
 
-  it("does not commit NaN when a mobile numeric draft is incomplete", async () => {
+  it.each([
+    { name: "incomplete", value: "-" },
+    { name: "unsafe integer", value: "9007199254740993" },
+    { name: "overflowing", value: "9".repeat(310) },
+  ])("preserves a $name numeric draft without committing a lossy value", async ({ value }) => {
     matchMedia = installMatchMediaController(true);
     const user = userEvent.setup();
     const onPlayerChange =
@@ -351,10 +366,10 @@ describe("ScoreGrid", () => {
     });
 
     await user.clear(revenueInput);
-    await user.type(revenueInput, "-");
+    await user.paste(value);
     await user.tab();
 
-    expect(revenueInput).toHaveValue("-");
+    expect(revenueInput).toHaveValue(value);
     expect(onPlayerChange).not.toHaveBeenCalled();
   });
 

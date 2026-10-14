@@ -4,13 +4,20 @@ import java.time.Instant
 
 import cats.~>
 
+import momo.api.domain.OcrJob
 import momo.api.domain.ids.{AccountId, OcrDraftId, OcrJobId}
-import momo.api.domain.{OcrFailure, OcrJob}
+
+final case class OcrJobBacklogSnapshot(
+    queuedCount: Long,
+    runningCount: Long,
+    oldestReadyAt: Option[Instant],
+) derives CanEqual:
+  def activeCount: Long = queuedCount + runningCount
 
 trait OcrJobsAlg[F0[_]]:
   def find(jobId: OcrJobId): F0[Option[OcrJob]]
   def countActive: F0[Long]
-  def markFailed(jobId: OcrJobId, failure: OcrFailure, now: Instant): F0[Unit]
+  def backlogSnapshot(now: Instant): F0[OcrJobBacklogSnapshot]
   def cancelQueued(jobId: OcrJobId, now: Instant): F0[Boolean]
   def cancelQueuedOwned(
       jobId: OcrJobId,
@@ -29,8 +36,7 @@ object OcrJobsRepository:
     new OcrJobsRepository[F]:
       def find(jobId: OcrJobId): F[Option[OcrJob]] = liftK(alg.find(jobId))
       def countActive: F[Long] = liftK(alg.countActive)
-      def markFailed(jobId: OcrJobId, failure: OcrFailure, now: Instant): F[Unit] =
-        liftK(alg.markFailed(jobId, failure, now))
+      def backlogSnapshot(now: Instant): F[OcrJobBacklogSnapshot] = liftK(alg.backlogSnapshot(now))
       def cancelQueued(jobId: OcrJobId, now: Instant): F[Boolean] =
         liftK(alg.cancelQueued(jobId, now))
       def cancelQueuedOwned(

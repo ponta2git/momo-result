@@ -1,9 +1,7 @@
 use super::*;
 use crate::{
-    notifications::{
-        NotificationSink,
-        test_support::{CommitFault, DelayedDatabase},
-    },
+    notifications::NotificationSink,
+    postgres::test_support::{CommitFault, DelayedDatabase},
     series_analysis::{
         control::HeartbeatResult,
         heartbeat::{HeartbeatConnection, HeartbeatFailure},

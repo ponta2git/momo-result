@@ -2,7 +2,7 @@ use tokio_postgres::{Row, Transaction};
 
 use super::{OcrClaimResult, OcrControlError};
 use crate::ocr::contract::{
-    OcrMediaType, RequestedScreenType, SourceImageClaims, ValidatedOcrDelivery,
+    OcrMediaType, RequestedScreenType, SourceImageClaims, ValidatedOcrInput,
     parse_persisted_payload,
 };
 
@@ -14,12 +14,12 @@ pub(super) struct OcrClaimCandidate {
     pub(super) height: u32,
     pub(super) requested_screen_type: RequestedScreenType,
     pub(super) attempt_count: i32,
-    authoritative_delivery: ValidatedOcrDelivery,
+    pub(super) input: ValidatedOcrInput,
 }
 
 impl OcrClaimCandidate {
-    pub(super) fn matches(&self, delivery: &ValidatedOcrDelivery) -> bool {
-        let payload = delivery.payload();
+    pub(super) fn matches(&self) -> bool {
+        let payload = self.input.payload();
         self.draft_id == payload.draft_id()
             && self.source_image_id == payload.source_image_id()
             && self.source_image.object_key() == payload.image_object_key()
@@ -27,7 +27,6 @@ impl OcrClaimCandidate {
             && self.source_image.byte_length() == payload.byte_length()
             && self.source_image.media_type() == payload.media_type()
             && self.requested_screen_type == payload.requested_screen_type()
-            && self.authoritative_delivery == *delivery
     }
 }
 
@@ -44,7 +43,7 @@ pub(super) async fn load_candidate(
     let job = transaction
         .query_opt(
             "SELECT draft_id, source_image_id, requested_screen_type, status,\x20\
-                    available_at <= clock_timestamp(), queue_schema_version, attempt_count\x20\
+                    available_at <= clock_timestamp(), input_snapshot, attempt_count\x20\
              FROM ocr_jobs WHERE id = $1 FOR UPDATE",
             &[&job_id],
         )
@@ -71,11 +70,6 @@ pub(super) async fn load_candidate(
     if status != "queued" {
         return Err(OcrControlError::InvalidState);
     }
-    if job.try_get::<_, i16>(5)? != 2 {
-        return Ok(CandidateResult::Rejected(
-            OcrClaimResult::UnsupportedQueueSchema,
-        ));
-    }
     if !job.try_get::<_, bool>(4)? {
         return Ok(CandidateResult::Rejected(OcrClaimResult::NotYetAvailable));
     }
@@ -85,34 +79,36 @@ pub(super) async fn load_candidate(
     let source = transaction
         .query_opt(
             "SELECT image.status, image.object_key, image.sha256_hex, image.byte_length,\x20\
-                    image.media_type, image.width, image.height, outbox.stream_payload\x20\
+                    image.media_type, image.width, image.height\x20\
              FROM source_images image\x20\
-             JOIN ocr_queue_outbox outbox ON outbox.id = 'ocr-outbox-' || $2\x20\
-               AND outbox.job_id = $2 AND outbox.schema_version = 2\x20\
              WHERE image.id = $1 FOR UPDATE OF image",
-            &[&source_image_id, &job_id],
+            &[&source_image_id],
         )
         .await?;
     let Some(source) = source else {
         return Ok(CandidateResult::InvalidPersistedContract);
     };
-    let outbox_payload = source.try_get::<_, serde_json::Value>(7)?;
-    let Ok(authoritative_delivery) = parse_persisted_payload(&outbox_payload) else {
+    let Some(snapshot) = job.try_get::<_, Option<serde_json::Value>>(5)? else {
         return Ok(CandidateResult::InvalidPersistedContract);
     };
-    Ok(
-        decode_candidate(&job, source_image_id, &source, authoritative_delivery)?.map_or(
-            CandidateResult::InvalidPersistedContract,
-            CandidateResult::Ready,
-        ),
-    )
+    let Ok(authoritative_input) = parse_persisted_payload(&snapshot) else {
+        return Ok(CandidateResult::InvalidPersistedContract);
+    };
+    let Some(candidate) = decode_candidate(&job, source_image_id, &source, authoritative_input)?
+    else {
+        return Ok(CandidateResult::InvalidPersistedContract);
+    };
+    if candidate.input.payload().job_id() != job_id || !candidate.matches() {
+        return Ok(CandidateResult::InvalidPersistedContract);
+    }
+    Ok(CandidateResult::Ready(candidate))
 }
 
 fn decode_candidate(
     job: &Row,
     source_image_id: String,
     source: &Row,
-    authoritative_delivery: ValidatedOcrDelivery,
+    input: ValidatedOcrInput,
 ) -> Result<Option<OcrClaimCandidate>, OcrControlError> {
     if source.try_get::<_, String>(0)? != "AVAILABLE" {
         return Ok(None);
@@ -151,77 +147,43 @@ fn decode_candidate(
         height,
         requested_screen_type,
         attempt_count: job.try_get(6)?,
-        authoritative_delivery,
+        input,
     }))
 }
 
 #[cfg(test)]
 #[expect(
-    clippy::panic,
-    reason = "a malformed checked-in wire fixture must stop this contract test with context"
+    clippy::panic_in_result_fn,
+    reason = "fixture setup errors use Result while assertions describe the input boundary"
 )]
 mod tests {
     use super::*;
     use serde_json::json;
 
-    fn delivery(
-        hints_json: &str,
-        attempt: &str,
-        enqueued_at: &str,
-        request_id: &str,
-    ) -> ValidatedOcrDelivery {
-        let persisted = json!({
-            "schemaVersion": "2",
-            "jobId": "ocr-job-1",
-            "draftId": "ocr-draft-1",
-            "sourceImageId": "source-image-1",
-            "imageObjectKey": "source-images/ocr-job-1.png",
-            "sha256": "ab".repeat(32),
-            "byteLength": "68",
-            "mediaType": "image/png",
-            "requestedScreenType": "total_assets",
-            "attempt": attempt,
-            "enqueuedAt": enqueued_at,
-            "ocrHintsJson": hints_json,
-            "requestId": request_id,
-        });
-        parse_persisted_payload(&persisted)
-            .unwrap_or_else(|error| panic!("valid delivery fixture: {error}"))
-    }
-
     #[test]
-    fn candidate_requires_the_complete_immutable_outbox_wire_projection() {
-        let authoritative = delivery("{}", "1", "2026-08-11T00:00:00Z", "request-1");
-        let payload = authoritative.payload();
-        let source_image = SourceImageClaims::try_from_payload(payload);
-        assert!(source_image.is_some());
-        let Some(source_image) = source_image else {
-            return;
-        };
-        let candidate = OcrClaimCandidate {
-            draft_id: String::from(payload.draft_id()),
-            source_image_id: String::from(payload.source_image_id()),
+    fn candidate_requires_snapshot_and_source_image_to_agree()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let snapshot = json!({"schemaVersion":"2","jobId":"ocr-job-1","draftId":"ocr-draft-1","sourceImageId":"source-image-1","imageObjectKey":"source-images/ocr-job-1.png","sha256":"ab".repeat(32),"byteLength":"68","mediaType":"image/png","requestedScreenType":"total_assets"});
+        let input = parse_persisted_payload(&snapshot)?;
+        let payload = input.payload();
+        let source_image =
+            SourceImageClaims::try_from_payload(payload).ok_or("invalid fixture image claims")?;
+        let mut candidate = OcrClaimCandidate {
+            draft_id: payload.draft_id().to_owned(),
+            source_image_id: payload.source_image_id().to_owned(),
             source_image,
             width: 1920,
             height: 1080,
             requested_screen_type: payload.requested_screen_type(),
             attempt_count: 0,
-            authoritative_delivery: authoritative.clone(),
+            input,
         };
-        assert!(candidate.matches(&authoritative));
-
-        for changed in [
-            delivery(
-                r#"{"layoutFamily":"world"}"#,
-                "1",
-                "2026-08-11T00:00:00Z",
-                "request-1",
-            ),
-            delivery("{}", "2", "2026-08-11T00:00:00Z", "request-1"),
-            delivery("{}", "1", "2026-08-11T00:00:01Z", "request-1"),
-            delivery("{}", "1", "2026-08-11T00:00:00Z", "request-2"),
-        ] {
-            assert!(!candidate.matches(&changed));
-        }
+        assert!(candidate.matches());
+        candidate.source_image_id = "different-source".into();
+        assert!(!candidate.matches());
+        candidate.source_image_id = "source-image-1".into();
+        candidate.draft_id = "different-draft".into();
+        assert!(!candidate.matches());
+        Ok(())
     }
 }

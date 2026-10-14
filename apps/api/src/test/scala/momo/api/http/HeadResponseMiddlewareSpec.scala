@@ -28,7 +28,7 @@ final class HeadResponseMiddlewareSpec extends MomoCatsEffectSuite with HttpAppT
             )
         )
       }
-      app = RequestDurationLoggingMiddleware(HeadResponseMiddleware(admission(underlying)))
+      app = HeadResponseMiddleware(RequestDurationLoggingMiddleware(underlying, admission.apply))
       responses <- List.fill(3)(Request[IO](Method.HEAD, uri"/api/matches"))
         .traverse(app.run)
       bodies <- responses.traverse(_.body.compile.toVector)

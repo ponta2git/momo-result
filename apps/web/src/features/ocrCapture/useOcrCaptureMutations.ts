@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 
 import type { OcrSubmissionPlan } from "@/features/ocrCapture/ocrSubmissionPlan";
 import {
@@ -15,6 +15,7 @@ import { invalidateAfterOcrSubmissionStarted } from "@/shared/api/cacheInvalidat
 import { createMatchDraft } from "@/shared/api/matchDrafts";
 import { createOcrJob, getOcrJob, uploadImage } from "@/shared/api/ocrJobs";
 import { putOcrSubmission } from "@/shared/api/ocrSubmissions";
+import { principalRequestSignal } from "@/shared/api/principalRequestScope";
 
 export type OcrCaptureSubmitParams = Pick<
   OcrSubmissionWorkflowParams,
@@ -34,6 +35,12 @@ export function useOcrCaptureMutations(): OcrCaptureMutations {
   const queryClient = useQueryClient();
   const checkpoints = useRef(new WeakMap<OcrSubmissionPlan, OcrSubmissionState>());
   const inFlightRef = useRef(false);
+  const owner = useRef<AbortSignal | undefined>(undefined);
+  useLayoutEffect(() => {
+    const controller = new AbortController();
+    owner.current = AbortSignal.any([controller.signal, principalRequestSignal(queryClient)]);
+    return () => controller.abort();
+  }, [queryClient]);
   const submission = useMutation({
     mutationFn: ({ plan, restart, ...params }: OcrCaptureSubmitParams) => {
       let state = checkpoints.current.get(plan) ?? createOcrSubmissionState();
@@ -50,6 +57,7 @@ export function useOcrCaptureMutations(): OcrCaptureMutations {
         ...plan,
         ...params,
         state,
+        signal: owner.current,
         createDraft: createMatchDraft,
         uploadImage,
         createJob: createOcrJob,

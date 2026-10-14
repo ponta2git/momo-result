@@ -85,7 +85,7 @@ struct BusyRecheck {
 
 struct Session {
     listener: Listener,
-    database: Client,
+    database: postgres::ConnectedClient,
     wake: watch::Receiver<()>,
 }
 
@@ -198,7 +198,7 @@ async fn run_with_schedule(
 }
 
 async fn coordinate(
-    mut database: Client,
+    mut database: postgres::ConnectedClient,
     mut wake: watch::Receiver<()>,
     mut shutdown: watch::Receiver<bool>,
     timeout: Duration,

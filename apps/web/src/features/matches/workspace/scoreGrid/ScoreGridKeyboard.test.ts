@@ -272,8 +272,15 @@ describe("handleScoreGridKeydown", () => {
     expect(context.onRevertCell).toHaveBeenCalledOnce();
   });
 
-  it("does not handle composing text input", () => {
-    const context = buildArgs({ event: { key: "Enter", nativeEvent: { isComposing: true } } });
+  it.each([
+    { key: "Enter" },
+    { key: "Enter", ctrlKey: true },
+    { key: "Enter", metaKey: true },
+    { key: "Escape" },
+    { key: "ArrowUp" },
+    { key: "ArrowDown" },
+  ])("does not handle composing text input ($key, $ctrlKey, $metaKey)", (event) => {
+    const context = buildArgs({ event: { ...event, nativeEvent: { isComposing: true } } });
 
     handleScoreGridKeydown(context.args);
 

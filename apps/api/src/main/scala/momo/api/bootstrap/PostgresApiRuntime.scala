@@ -34,12 +34,7 @@ import momo.api.ports.storage.{
 import momo.api.repositories.*
 import momo.api.usecases.images.ImageStorageAdmission
 import momo.api.usecases.ocr.*
-import momo.api.usecases.queue.{
-  OutboxKind,
-  OutboxWakeCoordinator,
-  OutboxWakeCoordinatorConfig,
-  OutboxWakeup
-}
+import momo.api.usecases.queue.{WorkerWakeKind, WorkerWakeRelay, WorkerWakeup}
 
 private[bootstrap] object PostgresApiRuntime:
   def resource[F[_]: Async: SecureRandom](
@@ -51,16 +46,14 @@ private[bootstrap] object PostgresApiRuntime:
     RuntimeInfrastructure.resource[F](config, Clock[F].realTimeInstant),
   ).tupled.flatMap { (transactor, infrastructure) =>
     given LoggerFactory[F] = Slf4jFactory.create[F]
-    val queue = infrastructure.queue
     val jobsBase: OcrJobsRepository[F] = PostgresOcrJobsRepository[F](transactor)
     val drafts: OcrDraftsRepository[F] = PostgresOcrDraftsRepository[F](transactor)
     val ocrJobCreationStoreBase: OcrJobCreationStore[F] =
       PostgresOcrJobCreationStore[F](transactor)
-    val ocrQueueOutbox = PostgresOcrQueueOutboxRepository[F](transactor)
-    val analysisOutboxNotifier =
-      PostgresOutboxNotifier[F](transactor, PostgresOutboxNotifier.Channel.SeriesAnalysis)
+    val jobNotifier =
+      PostgresWorkerNotifier[F](transactor, PostgresWorkerNotifier.Channel.ProcessingJobs)
     val submissionNotifier =
-      PostgresOutboxNotifier[F](transactor, PostgresOutboxNotifier.Channel.OcrSubmissions)
+      PostgresWorkerNotifier[F](transactor, PostgresWorkerNotifier.Channel.OcrSubmissions)
     val heldEvents: HeldEventsRepository[F] = PostgresHeldEventsRepository[F](transactor)
     val heldEventDeletion: HeldEventDeletionRepository[F] =
       PostgresHeldEventDeletionRepository[F](transactor)
@@ -78,7 +71,7 @@ private[bootstrap] object PostgresApiRuntime:
     val members: MembersRepository[F] = PostgresMembersRepository[F](transactor)
     val loginAccounts: LoginAccountsRepository[F] =
       PostgresLoginAccountsRepository[F](transactor)
-    val loginAccountAdministration: LoginAccountAdministrationRepository[F] =
+    val loginAccountAdministration =
       PostgresLoginAccountAdministrationRepository[F](transactor)
     val gameTitles: GameTitlesRepository[F] = PostgresGameTitlesRepository[F](transactor)
     val mapMasters: MapMastersRepository[F] = PostgresMapMastersRepository[F](transactor)
@@ -90,50 +83,30 @@ private[bootstrap] object PostgresApiRuntime:
       PostgresMemberAliasesRepository[F](transactor)
     val idempotency: IdempotencyRepository[F] = PostgresIdempotencyRepository[F](transactor)
     val sourceImages: SourceImagesRepository[F] = PostgresSourceImagesRepository[F](transactor)
-    val ocrMaintenanceBase: OcrJobMaintenanceRepository[F] =
-      PostgresOcrJobMaintenanceRepository[F](transactor)
     val ocrAdmissionGuard = OcrAdmissionGuard.from[F](
-      ocrQueueOutbox.backlogSnapshot,
-      infrastructure.queueHealth.deadLetterLength,
+      jobsBase.backlogSnapshot,
       ApiApp.ocrAdmissionGuardConfig(config.resourceLimits),
     )
     val health = RuntimeHealthDetails.build[F](
       Some(Database.ping[F](transactor)),
-      config.redis.map(_ => infrastructure.queueHealth.ping),
+      config.redis.map(_ => infrastructure.redisHealth),
       Some(ocrAdmissionGuard.healthStatus),
     )
 
-    val outboxRuntime = OutboxWakeup.resource[F].flatMap { wakeup =>
+    val wakeRuntime = WorkerWakeup.resource[F].flatMap { wakeup =>
       Resource.eval(Deferred[F, Throwable]).flatMap { backgroundFailure =>
         val reportCoordinatorFailure = (error: Throwable) => backgroundFailure.complete(error).void
-        val wakingOcrOutbox = OutboxWakingRepositories.ocrOutbox(
-          ocrQueueOutbox,
-          wakeup,
-          reportCoordinatorFailure(new OutboxWakeRuntimeFailure),
-        )
         (
-          OcrQueueOutboxDispatcher.resource[F](
-            wakingOcrOutbox,
-            queue,
-            OcrQueueOutboxDispatcherConfig(
-              redeliveryAfter = config.resourceLimits.ocrOutboxSemanticRedeliveryInterval,
-              coldRecoveryInterval = config.resourceLimits.ocrOutboxRecoveryInterval,
-            ),
+          WorkerWakeRelay.resource[F](
+            WorkerWakeKind.ProcessingJobs,
             wakeup,
+            jobNotifier.notifyWorker,
             reportCoordinatorFailure,
           ),
-          OutboxWakeCoordinator.resource[F](
-            OutboxKind.SeriesAnalysis,
+          WorkerWakeRelay.resource[F](
+            WorkerWakeKind.OcrSubmissions,
             wakeup,
-            analysisOutboxNotifier,
-            OutboxWakeCoordinatorConfig(coldRecoveryInterval = None),
-            reportCoordinatorFailure,
-          ),
-          OutboxWakeCoordinator.resource[F](
-            OutboxKind.OcrSubmissions,
-            wakeup,
-            submissionNotifier,
-            OutboxWakeCoordinatorConfig(coldRecoveryInterval = None),
+            submissionNotifier.notifyWorker,
             reportCoordinatorFailure,
           ),
           PostgresSeriesAnalysisReaderCapability.resource[F](transactor),
@@ -142,43 +115,37 @@ private[bootstrap] object PostgresApiRuntime:
     }
 
     imageStorageResource(config, sourceImages).flatMap { imageStorage =>
-      outboxRuntime.flatMap { (outboxWakeup, backgroundFailure) =>
+      wakeRuntime.flatMap { (workerWakeup, backgroundFailure) =>
         val signalBackgroundFailure = backgroundFailure
-          .complete(new OutboxWakeRuntimeFailure).void
-        val jobs = OutboxWakingRepositories.ocrJobs(
+          .complete(new WorkerWakeRuntimeFailure).void
+        val jobs = WorkerWakingRepositories.ocrJobs(
           jobsBase,
-          outboxWakeup,
+          workerWakeup,
           signalBackgroundFailure,
         )
-        val ocrSubmissions = OutboxWakingRepositories.ocrSubmissions(
+        val ocrSubmissions = WorkerWakingRepositories.ocrSubmissions(
           PostgresOcrSubmissionsRepository[F](transactor),
-          outboxWakeup,
+          workerWakeup,
           signalBackgroundFailure,
         )
-        val ocrMaintenance = OutboxWakingRepositories.ocrMaintenance(
-          ocrMaintenanceBase,
-          outboxWakeup,
-          signalBackgroundFailure,
-        )
-        val ocrJobCreationStore = OutboxWakingRepositories.ocrJobCreation(
+        val ocrJobCreationStore = WorkerWakingRepositories.ocrJobCreation(
           ocrJobCreationStoreBase,
-          outboxWakeup,
+          workerWakeup,
           signalBackgroundFailure,
         )
-        val matches = OutboxWakingRepositories.matches(
+        val matches = WorkerWakingRepositories.matches(
           matchesBase,
-          outboxWakeup,
+          workerWakeup,
           signalBackgroundFailure,
         )
-        val matchConfirmation = OutboxWakingRepositories.matchConfirmation(
+        val matchConfirmation = WorkerWakingRepositories.matchConfirmation(
           matchConfirmationBase,
-          outboxWakeup,
+          workerWakeup,
           signalBackgroundFailure,
         )
         RuntimeMaintenance.resource(
           config = config,
           imageOrphanCleaner = imageStorage.cleaner,
-          ocrMaintenance = ocrMaintenance,
           appSessions = appSessions,
           idempotency = idempotency,
           now = Clock[F].realTimeInstant,
@@ -188,16 +155,16 @@ private[bootstrap] object PostgresApiRuntime:
               transactor,
               config.seriesAnalysisRead,
             )
-            wakingSeriesAnalysis = OutboxWakingRepositories.seriesAnalysis(
+            wakingSeriesAnalysis = WorkerWakingRepositories.seriesAnalysis(
               seriesAnalysis,
-              outboxWakeup,
+              workerWakeup,
               signalBackgroundFailure,
             )
             seriesPlayerRadar <-
               PostgresSeriesPlayerRadarRepository.create[F](transactor, config.seriesAnalysisRead)
-            wakingSeriesPlayerRadar = OutboxWakingRepositories.seriesPlayerRadar(
+            wakingSeriesPlayerRadar = WorkerWakingRepositories.seriesPlayerRadar(
               seriesPlayerRadar,
-              outboxWakeup,
+              workerWakeup,
               signalBackgroundFailure,
             )
             cachedMembers <- CachedReferenceRepositories.members(members)
@@ -234,6 +201,7 @@ private[bootstrap] object PostgresApiRuntime:
                 matchConfirmation = matchConfirmation,
                 appSessions = appSessions,
                 sessionAccounts = sessionAccounts,
+                sessionCreation = loginAccountAdministration,
                 members = cachedMembers,
                 loginAccounts = loginAccounts,
                 loginAccountAdministration = loginAccountAdministration,
@@ -247,11 +215,10 @@ private[bootstrap] object PostgresApiRuntime:
               ),
               services = UseCaseWiring.RuntimeServices(
                 healthDetails = health,
-                ocrQueueSubmitter = OcrJobQueueSubmitter.durable[F],
                 ocrAdmissionGuard = ocrAdmissionGuard,
                 oauthClient = oauthClient,
                 loginRateLimiter = infrastructure.loginRateLimiter,
-                authCallbackStateRateLimiter = infrastructure.authCallbackStateRateLimiter,
+                oauthStateReplayGuard = infrastructure.oauthStateReplayGuard,
                 oauthProviderBackoff = infrastructure.oauthProviderBackoff,
                 rateLimiters = infrastructure.rateLimiters,
               ),
@@ -272,8 +239,8 @@ private[bootstrap] object PostgresApiRuntime:
       cleaner: ImageOrphanCleaner[F],
   )
 
-  private final class OutboxWakeRuntimeFailure
-      extends RuntimeException("outbox wake coordination stopped")
+  private final class WorkerWakeRuntimeFailure
+      extends RuntimeException("worker wake relay stopped")
 
   private def imageStorageResource[F[_]: Async: SecureRandom: LoggerFactory](
       config: AppConfig,

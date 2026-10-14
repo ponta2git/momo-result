@@ -8,18 +8,16 @@ import com.networknt.schema.{InputFormat, SchemaRegistry, SpecificationVersion}
 import io.circe.Json
 import munit.Assertions
 
-import momo.api.contracts.ocrworker.OcrWorkerJobMessageV2
+import momo.api.contracts.ocrworker.OcrJobInputSnapshot
 
 trait JsonSchemaAssertions extends Assertions:
-  protected def assertOcrWorkerJobMessageV2SchemaValid(payloadJson: Json): Unit =
-    assertJsonSchemaValid(streamPayloadV2SchemaPath, payloadJson.noSpaces)
-    OcrWorkerJobMessageV2.fromJson(payloadJson) match
-      case Left(reason) => fail(s"stream payload is not an OcrWorkerJobMessageV2: $reason")
-      case Right(payload) => payload.fields.get(OcrWorkerJobMessageV2.HintsKey)
-          .foreach(hintsJson => assertJsonSchemaValid(ocrHintsSchemaPath, hintsJson))
+  protected def assertOcrJobInputSnapshotSchemaValid(payloadJson: Json): Unit =
+    assertJsonSchemaValid(ocrJobInputSchemaPath, payloadJson.noSpaces)
+    payloadJson.hcursor.get[String](OcrJobInputSnapshot.HintsKey).toOption
+      .foreach(hintsJson => assertJsonSchemaValid(ocrHintsSchemaPath, hintsJson))
 
-  protected def assertOcrWorkerJobMessageV2SchemaValid(payload: OcrWorkerJobMessageV2): Unit =
-    assertOcrWorkerJobMessageV2SchemaValid(OcrWorkerJobMessageV2.fieldsAsJson(payload))
+  protected def assertOcrJobInputSnapshotSchemaValid(payload: OcrJobInputSnapshot): Unit =
+    assertOcrJobInputSnapshotSchemaValid(OcrJobInputSnapshot.toJson(payload))
 
   protected def assertJsonSchemaValid(schemaPath: Path, inputJson: String): Unit =
     val errors = jsonSchemaErrors(schemaPath, inputJson)
@@ -49,16 +47,10 @@ trait JsonSchemaAssertions extends Assertions:
       s"JSON Schema validation failed for $schemaName: ${errors.mkString("; ")}",
     )
 
-  protected def streamPayloadV2SchemaPath: Path =
-    repoPath("docs/schemas/ocr-queue-payload-v2.schema.json")
+  protected def ocrJobInputSchemaPath: Path =
+    repoPath("docs/schemas/ocr-job-input-v2.schema.json")
 
   protected def ocrHintsSchemaPath: Path = repoPath("docs/schemas/ocr-hints-v1.schema.json")
-
-  protected def seriesAnalysisArtifactSchemaPath: Path =
-    repoPath("docs/schemas/series-analysis-artifact-v6.schema.json")
-
-  protected def seriesAnalysisQueueSchemaPath: Path =
-    repoPath("docs/schemas/series-analysis-queue-payload-v1.schema.json")
 
   protected def repositoryFile(relativePath: String): Path = repoPath(relativePath)
 

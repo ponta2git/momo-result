@@ -11,7 +11,7 @@ use aws_sdk_s3::{
     types::ChecksumMode,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
-use image::{ImageFormat, ImageReader};
+use image::{ImageFormat, ImageReader, Limits};
 use sha2::{Digest as _, Sha256};
 use thiserror::Error;
 use url::Url;
@@ -392,22 +392,39 @@ fn verify_bytes(
     {
         return Err(OcrObjectStoreError::Integrity);
     }
-    let expected_format = image_format(claims.media_type());
-    let detected_format =
-        image::guess_format(&bytes).map_err(|_error| OcrObjectStoreError::Integrity)?;
-    if detected_format != expected_format {
-        return Err(OcrObjectStoreError::Integrity);
-    }
-    let reader = ImageReader::with_format(Cursor::new(&bytes), detected_format);
-    let (width, height) = reader
-        .into_dimensions()
-        .map_err(|_error| OcrObjectStoreError::Integrity)?;
-    validate_dimensions(width, height)?;
+    let (width, height) = inspect_dimensions(&bytes, claims.media_type())?;
     Ok(VerifiedSourceImage {
         bytes,
         width,
         height,
     })
+}
+
+fn inspect_dimensions(
+    bytes: &[u8],
+    media_type: OcrMediaType,
+) -> Result<(u32, u32), OcrObjectStoreError> {
+    let detected_format =
+        image::guess_format(bytes).map_err(|_error| OcrObjectStoreError::Integrity)?;
+    if detected_format != image_format(media_type) {
+        return Err(OcrObjectStoreError::Integrity);
+    }
+    let mut reader = ImageReader::with_format(Cursor::new(bytes), detected_format);
+    // Header inspection constructs a decoder and may expand compressed PNG metadata before
+    // reporting dimensions. This runs in the parent, outside the OCR child's cgroup, so it must
+    // not inherit the decoder's much larger default allocation budget. Pixel decoding remains
+    // inside the isolated child; the parent grants metadata only the encoded-image byte budget.
+    let mut limits = Limits::default();
+    limits.max_image_width = Some(MAXIMUM_WIDTH);
+    limits.max_image_height = Some(MAXIMUM_HEIGHT);
+    limits.max_alloc =
+        Some(u64::try_from(MAXIMUM_IMAGE_BYTES).map_err(|_error| OcrObjectStoreError::Integrity)?);
+    reader.limits(limits);
+    let (width, height) = reader
+        .into_dimensions()
+        .map_err(|_error| OcrObjectStoreError::Integrity)?;
+    validate_dimensions(width, height)?;
+    Ok((width, height))
 }
 
 const fn image_format(media_type: OcrMediaType) -> ImageFormat {

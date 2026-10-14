@@ -1,6 +1,7 @@
 package momo.api.adapters.inmemory
 
-import cats.effect.{Ref, Sync}
+import cats.effect.std.Mutex
+import cats.effect.{Async, Ref, Sync}
 import cats.syntax.all.*
 
 import momo.api.domain.*
@@ -9,7 +10,8 @@ import momo.api.errors.AppError
 import momo.api.repositories.*
 
 final class InMemoryLoginAccountsRepository[F[_]: Sync] private (
-    ref: Ref[F, Map[AccountId, LoginAccount]]
+    ref: Ref[F, Map[AccountId, LoginAccount]],
+    lifecycle: Mutex[F],
 ) extends LoginAccountsRepository[F]:
   override def list: F[List[LoginAccount]] = ref.get
     .map(_.values.toList.sortBy { account =>
@@ -44,6 +46,10 @@ final class InMemoryLoginAccountsRepository[F[_]: Sync] private (
         )
       else (accounts.updated(created.id, created), Right(created))
     }
+
+  private[inmemory] def withLifecycleLock[A](operation: F[A]): F[A] =
+    lifecycle.lock.surround(Sync[F].uncancelable(_ => operation))
+
   private[inmemory] def updateUnchecked(
       id: AccountId,
       data: UpdateLoginAccountData,
@@ -74,17 +80,28 @@ final class InMemoryLoginAccountsRepository[F[_]: Sync] private (
 final class InMemoryLoginAccountAdministrationRepository[F[_]: Sync](
     accounts: InMemoryLoginAccountsRepository[F],
     sessions: AppSessionsRepository[F],
-) extends LoginAccountAdministrationRepository[F]:
+) extends LoginAccountAdministrationRepository[F], LoginSessionCreationRepository[F]:
+  override def createIfAccountCurrent(
+      session: AppSession,
+      expectedAccountUpdatedAt: java.time.Instant,
+  ): F[Boolean] = accounts.withLifecycleLock(accounts.find(session.accountId).flatMap {
+    case Some(current)
+        if current.loginEnabled && current.updatedAt.equals(expectedAccountUpdatedAt) =>
+      sessions.upsert(session).as(true)
+    case _ => false.pure[F]
+  })
+
   override def updateAndRevokeSessionsWhenDisabled(
       id: AccountId,
       data: UpdateLoginAccountData,
-  ): F[LoginAccountAdministrationUpdateResult] = accounts
-    .updateUnchecked(id, data).flatMap { case (result, revokeSessions) =>
+  ): F[LoginAccountAdministrationUpdateResult] = accounts.withLifecycleLock(
+    accounts.updateUnchecked(id, data).flatMap { case (result, revokeSessions) =>
       if revokeSessions then sessions.deleteByAccount(id).as(result)
       else Sync[F].pure(result)
     }
+  )
 
 object InMemoryLoginAccountsRepository:
-  def create[F[_]: Sync](accounts: List[LoginAccount]): F[InMemoryLoginAccountsRepository[F]] = Ref
-    .of[F, Map[AccountId, LoginAccount]](accounts.map(a => a.id -> a).toMap)
-    .map(new InMemoryLoginAccountsRepository(_))
+  def create[F[_]: Async](accounts: List[LoginAccount]): F[InMemoryLoginAccountsRepository[F]] =
+    (Ref.of[F, Map[AccountId, LoginAccount]](accounts.map(a => a.id -> a).toMap), Mutex[F])
+      .mapN(new InMemoryLoginAccountsRepository(_, _))

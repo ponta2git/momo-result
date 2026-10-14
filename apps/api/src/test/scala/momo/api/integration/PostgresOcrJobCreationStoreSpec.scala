@@ -17,9 +17,9 @@ import momo.api.adapters.postgres.{
   PostgresOcrSubmissionsRepository,
   PostgresSourceImagesRepository
 }
-import momo.api.domain.*
+import momo.api.contracts.ocrworker.OcrJobInputSnapshot
 import momo.api.domain.ids.*
-import momo.api.ports.queue.OcrJobEnqueueRequest
+import momo.api.domain.{OcrJobInput, *}
 import momo.api.ports.storage.{Sha256Hex, SourceImageIdempotencyHash, SourceImageObjectKey}
 import momo.api.repositories.OcrJobCreationStore.OcrJobCreationRejection
 import momo.api.repositories.contract.OcrJobCreationStoreContract
@@ -29,7 +29,6 @@ import momo.api.repositories.{
   OcrJobCreationStore,
   OcrJobDraftAttachment,
   OcrJobSubmissionBinding,
-  OcrQueueDispatchIntent,
   SourceImageDeleteResult,
   SourceImageQuota,
   SourceImageReservation,
@@ -41,9 +40,9 @@ final class PostgresOcrJobCreationStoreSpec
     extends IntegrationSuite with JsonSchemaAssertions with OcrJobCreationStoreContract:
 
   private def now = Instant.parse("2026-05-08T10:00:00Z")
-  private def jobId = OcrJobId.unsafeFromString("job-outbox-1")
-  private def draftId = OcrDraftId.unsafeFromString("draft-outbox-1")
-  private def imageId = ImageId.unsafeFromString("img-outbox-1")
+  private def jobId = OcrJobId.unsafeFromString("job-snapshot-1")
+  private def draftId = OcrDraftId.unsafeFromString("draft-snapshot-1")
+  private def imageId = ImageId.unsafeFromString("img-snapshot-1")
   private def imageSha256 = "a" * 64
   private def imageObjectKey = SourceImageObjectKey.forImage(imageId, "png")
     .fold(fail(_), identity)
@@ -122,7 +121,7 @@ final class PostgresOcrJobCreationStoreSpec
     updatedAt = now,
   )
 
-  private def enqueueRequest: OcrJobEnqueueRequest = OcrJobEnqueueRequest(
+  private def enqueueRequest: OcrJobInput = OcrJobInput(
     jobId = jobId,
     draftId = draftId,
     imageId = imageId,
@@ -131,8 +130,6 @@ final class PostgresOcrJobCreationStoreSpec
     imageByteLength = 128,
     imageMediaType = "image/png",
     requestedScreenType = ScreenType.TotalAssets,
-    attempt = 1,
-    enqueuedAt = now,
     hints = OcrJobHints(
       gameTitle = Some("桃鉄2"),
       layoutFamily = Some("momotetsu_2"),
@@ -140,25 +137,29 @@ final class PostgresOcrJobCreationStoreSpec
         List(PlayerAliasHint(MemberId.unsafeFromString("member-ponta"), List("ぽんた", "ぽんた社長"))),
       computerPlayerAliases = List("さくま"),
     ),
-    requestId = Some("req-outbox-1"),
+    requestId = Some("req-snapshot-1"),
   )
 
-  test("store inserts OCR records and durable outbox intent in one transaction"):
+  test("store inserts OCR records and immutable input snapshot in one transaction"):
     for
       result <- store(plan(job, draft, attachment, activeJobLimit = 12))
       row <- sql"""
-        SELECT status, attempt_count, stream_payload->>'jobId', stream_payload->>'requestId',
-               stream_payload
-        FROM ocr_queue_outbox
-        WHERE job_id = ${jobId.value}
+        SELECT status, attempt_count, input_snapshot->>'jobId', input_snapshot->>'requestId',
+               input_snapshot
+        FROM ocr_jobs
+        WHERE id = ${jobId.value}
       """.query[(String, Int, String, String, Json)].unique.transact(transactor)
     yield
       assertEquals(result.map(_.created), Right(true))
-      assertEquals(row._1, "PENDING")
+      assertEquals(row._1, "queued")
       assertEquals(row._2, 0)
       assertEquals(row._3, jobId.value)
-      assertEquals(row._4, "req-outbox-1")
-      assertOcrWorkerJobMessageV2SchemaValid(row._5)
+      assertEquals(row._4, "req-snapshot-1")
+      assertOcrJobInputSnapshotSchemaValid(row._5)
+      assertEquals(
+        Right(row._5),
+        OcrJobInputSnapshot.fromInput(enqueueRequest).map(OcrJobInputSnapshot.toJson)
+      )
 
   test("job creation rechecks the source draft creator while holding its write lock"):
     for
@@ -170,7 +171,7 @@ final class PostgresOcrJobCreationStoreSpec
       counts <- sql"""
         SELECT (SELECT count(*) FROM ocr_jobs WHERE id = ${jobId.value}),
                (SELECT count(*) FROM ocr_drafts WHERE id = ${draftId.value}),
-               (SELECT count(*) FROM ocr_queue_outbox WHERE job_id = ${jobId.value})
+               (SELECT count(*) FROM ocr_jobs WHERE id = ${jobId.value} AND input_snapshot IS NOT NULL)
       """.query[(Long, Long, Long)].unique.transact(transactor)
     yield
       assertEquals(result, Left(OcrJobCreationRejection.SubmissionRejected))
@@ -196,7 +197,7 @@ final class PostgresOcrJobCreationStoreSpec
       counts <- sql"""
         SELECT (SELECT count(*) FROM ocr_jobs WHERE status IN ('queued', 'running')),
                (SELECT count(*) FROM ocr_drafts WHERE id = ${draftId.value}),
-               (SELECT count(*) FROM ocr_queue_outbox WHERE job_id = ${jobId.value})
+               (SELECT count(*) FROM ocr_jobs WHERE id = ${jobId.value} AND input_snapshot IS NOT NULL)
       """.query[(Long, Long, Long)].unique.transact(transactor)
     yield
       assertActiveLimit(result, 1)
@@ -210,19 +211,15 @@ final class PostgresOcrJobCreationStoreSpec
         SELECT
           (SELECT count(*) FROM ocr_drafts WHERE id = ${draftId.value}),
           (SELECT count(*) FROM ocr_jobs WHERE id = ${jobId.value}),
-          (SELECT count(*) FROM ocr_queue_outbox WHERE job_id = ${jobId.value})
+          (SELECT count(*) FROM ocr_jobs WHERE id = ${jobId.value} AND input_snapshot IS NOT NULL)
       """.query[(Long, Long, Long)].unique.transact(transactor)
     yield
       assert(result.left.exists(_.getMessage.contains("payloadJson")))
       assertEquals(counts, (0L, 0L, 0L))
 
-  test("store rejects queue metadata that disagrees with the locked source image"):
+  test("store rejects input metadata that disagrees with the locked source image"):
     val valid = plan(job, draft, attachment, activeJobLimit = 12)
-    val invalid = valid.copy(queueDispatch =
-      valid.queueDispatch.copy(
-        enqueueRequest = valid.queueDispatch.enqueueRequest.copy(imageSha256 = "b" * 64)
-      )
-    )
+    val invalid = valid.copy(input = valid.input.copy(imageSha256 = "b" * 64))
 
     for
       result <- store(invalid)
@@ -230,7 +227,7 @@ final class PostgresOcrJobCreationStoreSpec
         SELECT
           (SELECT count(*) FROM ocr_drafts WHERE id = ${draftId.value}),
           (SELECT count(*) FROM ocr_jobs WHERE id = ${jobId.value}),
-          (SELECT count(*) FROM ocr_queue_outbox WHERE job_id = ${jobId.value})
+          (SELECT count(*) FROM ocr_jobs WHERE id = ${jobId.value} AND input_snapshot IS NOT NULL)
       """.query[(Long, Long, Long)].unique.transact(transactor)
     yield
       assertEquals(result, Left(OcrJobCreationRejection.InvalidPlan))
@@ -256,7 +253,7 @@ final class PostgresOcrJobCreationStoreSpec
         SELECT
           (SELECT count(*) FROM ocr_drafts WHERE id = ${draftId.value}),
           (SELECT count(*) FROM ocr_jobs WHERE id = ${jobId.value}),
-          (SELECT count(*) FROM ocr_queue_outbox WHERE job_id = ${jobId.value})
+          (SELECT count(*) FROM ocr_jobs WHERE id = ${jobId.value} AND input_snapshot IS NOT NULL)
       """.query[(Long, Long, Long)].unique.transact(transactor)
     yield
       assertEquals(beforeCommit, None)
@@ -287,14 +284,23 @@ final class PostgresOcrJobCreationStoreSpec
       first <- store(plan(job, draft, attachment, activeJobLimit = 12))
       _ <- sql"""UPDATE ocr_submissions SET status = 'settled', finished_at = clock_timestamp()
         WHERE id = '00000000-0000-4000-8000-000000000001'""".update.run.transact(transactor)
-      replay <- repo.store(plan(job, draft, attachment, activeJobLimit = 0))
-      counts <- sql"SELECT (SELECT count(*) FROM ocr_jobs), (SELECT count(*) FROM ocr_queue_outbox)"
-        .query[(Long, Long)].unique.transact(transactor)
+      replay <- repo.store(plan(job, draft, attachment, activeJobLimit = 0).copy(
+        input = enqueueRequest.copy(hints = OcrJobHints.empty, requestId = Some("later-request"))
+      ))
+      input <- sql"SELECT input_snapshot FROM ocr_jobs WHERE id = ${jobId.value}"
+        .query[Json].unique.transact(transactor)
+      counts <-
+        sql"SELECT (SELECT count(*) FROM ocr_jobs), (SELECT count(*) FROM ocr_jobs WHERE input_snapshot IS NOT NULL)"
+          .query[(Long, Long)].unique.transact(transactor)
     yield
       assertEquals(first.map(_.created), Right(true))
       assertEquals(replay.map(_.created), Right(false))
       assertEquals(replay.map(_.job.id), first.map(_.job.id))
       assertEquals(counts, (1L, 1L))
+      assertEquals(
+        Right(input),
+        OcrJobInputSnapshot.fromInput(enqueueRequest).map(OcrJobInputSnapshot.toJson)
+      )
 
   test("an expired pending member cannot register a late image job"):
     for
@@ -383,9 +389,9 @@ final class PostgresOcrJobCreationStoreSpec
 
         val insert = connection.prepareStatement(
           """INSERT INTO ocr_jobs (
-            |  id, draft_id, image_id, source_image_id, queue_schema_version,
+            |  id, draft_id, image_id, source_image_id, input_snapshot,
             |  requested_screen_type, status, attempt_count, created_at, updated_at
-            |) VALUES (?, ?, ?, ?, 2, 'total_assets', 'queued', 0, ?, ?)""".stripMargin
+            |) VALUES (?, ?, ?, ?, '{"schemaVersion":"2"}'::jsonb, 'total_assets', 'queued', 0, ?, ?)""".stripMargin
         )
         try
           insert.setString(1, competingJobId.getOrElse(jobId).value)
@@ -436,10 +442,6 @@ final class PostgresOcrJobCreationStoreSpec
       attachment: OcrJobDraftAttachment,
       activeJobLimit: Int,
   ): OcrJobCreationPlan =
-    val dispatch = OcrQueueDispatchIntent(
-      enqueueRequest = enqueueRequest,
-      matchDraftId = attachment.draftId,
-    )
     OcrJobCreationPlan(
       submission = OcrJobSubmissionBinding(
         "00000000-0000-4000-8000-000000000001",
@@ -448,6 +450,6 @@ final class PostgresOcrJobCreationStoreSpec
       draft = draft,
       job = job,
       matchDraftAttachment = attachment,
-      queueDispatch = dispatch,
+      input = enqueueRequest,
       activeJobLimit = activeJobLimit,
     )

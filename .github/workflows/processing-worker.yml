@@ -1,4 +1,4 @@
-name: Analysis worker
+name: Processing worker
 
 on:
   workflow_call:
@@ -48,18 +48,8 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
-      redis:
-        image: redis:7-alpine
-        ports:
-          - "6379:6379"
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
     env:
       DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/momo_result
-      REDIS_URL: redis://127.0.0.1:6379
     defaults:
       run:
         working-directory: apps/processing-worker
@@ -123,23 +113,21 @@ jobs:
           MOMO_DB_BOOTSTRAP_IS_FRESH: "true"
         run: ../../scripts/ci/apply-momo-db-migrations.sh
 
-      - name: Rust Analysis PostgreSQL and Redis control-plane smoke
+      - name: Rust Analysis PostgreSQL control-plane smoke
         env:
           ANALYSIS_CONTROL_SMOKE_DATABASE_URL: ${{ env.DATABASE_URL }}
-          ANALYSIS_OUTBOX_SMOKE_DATABASE_URL: ${{ env.DATABASE_URL }}
-          ANALYSIS_OUTBOX_SMOKE_REDIS_URL: ${{ env.REDIS_URL }}
+          PROCESSING_SCHEDULER_SMOKE_DATABASE_URL: ${{ env.DATABASE_URL }}
           ANALYSIS_SMOKE_SERVICES_ARE_ISOLATED: "true"
         run: ../../scripts/ci/analysis-rust-control-plane-smoke.sh
 
-      - name: Rust OCR PostgreSQL and Redis control-plane smoke
+      - name: Rust OCR PostgreSQL control-plane smoke
         env:
           OCR_CONTROL_SMOKE_DATABASE_URL: ${{ env.DATABASE_URL }}
-          OCR_CONTROL_SMOKE_REDIS_URL: ${{ env.REDIS_URL }}
           ANALYSIS_SMOKE_SERVICES_ARE_ISOLATED: "true"
         run: ../../scripts/ci/ocr-rust-control-plane-smoke.sh
 
   runtime-image:
-    name: Build, scan, and package analysis image
+    name: Build, scan, and package processing image
     runs-on: ubuntu-latest
     timeout-minutes: 45
     if: inputs.verify_image || inputs.package_image
@@ -162,15 +150,6 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
-      redis:
-        image: redis:7-alpine
-        ports:
-          - "6379:6379"
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
     env:
       ANALYSIS_SMOKE_SERVICES_ARE_ISOLATED: "true"
       ANALYSIS_IMAGE_ARTIFACT_NAME: analysis-worker-image-${{ github.run_id }}-${{ github.run_attempt }}
@@ -178,9 +157,7 @@ jobs:
       ANALYSIS_IMAGE_REF: ${{ inputs.package_image && format('registry.fly.io/momo-result-analysis:{0}-{1}-{2}', github.sha, github.run_id, github.run_attempt) || 'momo-analysis-worker:test' }}
       DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/momo_result
       MOMO_DB_BOOTSTRAP_IS_FRESH: "true"
-      REDIS_URL: redis://127.0.0.1:6379
       WORKER_DATABASE_URL: postgres://postgres:postgres@host.docker.internal:5432/momo_result
-      WORKER_REDIS_URL: redis://host.docker.internal:6379
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -238,11 +215,10 @@ jobs:
           ANALYSIS_SMOKE_DATABASE_ATTESTATION_FILE: ${{ runner.temp }}/momo-analysis-db-bootstrap.identity
         run: node scripts/e2e/analysis-release-db-smoke.mts
 
-      - name: Worker PostgreSQL and Redis control-plane smoke through the runtime image
+      - name: Worker PostgreSQL control-plane smoke through the runtime image
         env:
           ANALYSIS_WORKER_IMAGE: ${{ env.ANALYSIS_IMAGE_REF }}
           ANALYSIS_SMOKE_DATABASE_ATTESTATION_FILE: ${{ runner.temp }}/momo-analysis-db-bootstrap.identity
-          ANALYSIS_SMOKE_REDIS_STREAM: momo:analysis:control-plane-smoke:${{ github.run_id }}-${{ github.run_attempt }}
         run: node scripts/e2e/series-analysis-control-plane-smoke.mts
 
       - name: Combined analysis and OCR preemption smoke

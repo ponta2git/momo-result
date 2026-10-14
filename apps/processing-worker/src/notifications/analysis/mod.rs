@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use tokio::time::{Instant, timeout};
-use tokio_postgres::{Client, Transaction};
+use tokio_postgres::Transaction;
 
 use super::{
     NotificationKind, NotificationReservation, NotificationSink, PreparedNotification, SkipReason,
@@ -52,7 +52,7 @@ pub(crate) async fn load(
     source: AnalysisSource<'_>,
     candidate_id: &str,
     deadline: Instant,
-) -> Option<(Client, Option<Box<Comparison>>)> {
+) -> Option<(crate::postgres::ConnectedClient, Option<Box<Comparison>>)> {
     let started = Instant::now();
     let attempt = async {
         let reservation = sink.reserve(

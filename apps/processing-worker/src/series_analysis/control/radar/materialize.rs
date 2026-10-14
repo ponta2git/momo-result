@@ -1,7 +1,7 @@
 use momo_analysis_core::contract::{ARTIFACT_SCHEMA_VERSION, ARTIFACT_VALIDATION_CONTRACT_ID};
 use tokio_postgres::{Client, Transaction};
 
-use super::super::{ALGORITHM_VERSION, DeliveryReason, transaction::stable_id};
+use super::super::{ALGORITHM_VERSION, transaction::stable_id};
 
 /// Both maintenance recovery and radar preparation use the same oldest pending title intent.
 pub(crate) async fn materialize_pending(
@@ -10,18 +10,27 @@ pub(crate) async fn materialize_pending(
 ) -> Result<usize, tokio_postgres::Error> {
     let titles = client.query(
         "SELECT s.game_title_id FROM series_analysis_title_states s WHERE \
+         s.algorithm_version=$2 AND s.artifact_schema_version=$3::bigint::integer AND s.validation_contract_id=$4 AND \
          (EXISTS (SELECT 1 FROM series_radar_operations o WHERE o.game_title_id=s.game_title_id AND o.status='pending' AND o.job_id IS NULL AND o.kind IN ('candidate','manual','preview','restore','apply')) \
           OR EXISTS (SELECT 1 FROM series_analysis_job_requests r WHERE r.game_title_id=s.game_title_id AND r.status='pending')) \
          AND NOT EXISTS (SELECT 1 FROM series_analysis_jobs j WHERE j.game_title_id=s.game_title_id AND j.status IN ('queued','running')) \
-         ORDER BY s.game_title_id LIMIT $1", &[&limit]).await?;
+         ORDER BY s.game_title_id LIMIT $1 FOR UPDATE OF s SKIP LOCKED", &[&limit, &ALGORITHM_VERSION, &i64::from(ARTIFACT_SCHEMA_VERSION), &ARTIFACT_VALIDATION_CONTRACT_ID]).await?;
     let mut count = 0;
     for title in titles {
         let title: String = title.try_get(0)?;
         let tx = client.transaction().await?;
-        tx.batch_execute("SET LOCAL statement_timeout='10000ms'; SET LOCAL lock_timeout='5000ms'")
+        tx.batch_execute("SET LOCAL statement_timeout='10000ms'; SET LOCAL lock_timeout='10ms'")
             .await?;
-        count += usize::from(materialize_next(&tx, &title).await?);
-        tx.commit().await?;
+        match materialize_next(&tx, &title).await {
+            Ok(changed) => {
+                count += usize::from(changed);
+                tx.commit().await?;
+            }
+            Err(error) if crate::postgres::is_lock_contention(&error) => {
+                tx.rollback().await?;
+            }
+            Err(error) => return Err(error),
+        }
     }
     Ok(count)
 }
@@ -77,9 +86,5 @@ pub(in crate::series_analysis::control) async fn materialize_next(
         tx.execute("UPDATE series_analysis_title_states SET pending_work=true,pending_forced_run_count=0,updated_at=clock_timestamp() WHERE game_title_id=$1", &[&title]).await?;
         tx.execute("UPDATE series_analysis_campaign_targets t SET status='expanded',updated_at=clock_timestamp() FROM series_analysis_job_requests r WHERE t.job_request_id=r.id AND r.assigned_job_id=$1", &[&job_id]).await?;
     }
-    let delivery_reason = DeliveryReason::FollowUp.wire();
-    let outbox_id = stable_id("analysis-outbox", &[&job_id, delivery_reason, "0"]);
-    let dedupe = format!("{job_id}:{delivery_reason}:0");
-    tx.execute("INSERT INTO series_analysis_queue_outbox (id,job_id,dedupe_key,next_attempt_at) VALUES ($1,$2,$3,(SELECT available_at FROM series_analysis_jobs WHERE id=$2)) ON CONFLICT(dedupe_key) DO NOTHING", &[&outbox_id,&job_id,&dedupe]).await?;
     Ok(true)
 }

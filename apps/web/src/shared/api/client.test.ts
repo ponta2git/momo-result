@@ -3,8 +3,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { getAuthMe } from "@/shared/api/auth";
-import { apiDownload, apiRequest, getStoredDevUser } from "@/shared/api/client";
-import { cancelOcrJob } from "@/shared/api/ocrJobs";
+import { apiDownload, apiRequest, resolveDevUser } from "@/shared/api/client";
 import { setDevUser } from "@/test/auth";
 import { fetchCallsOf, installFetchMock } from "@/test/doubles/dom";
 
@@ -21,7 +20,7 @@ describe("apiRequest", () => {
       throw new DOMException("blocked", "SecurityError");
     });
 
-    expect(getStoredDevUser()).toBeUndefined();
+    expect(resolveDevUser()).toBeUndefined();
   });
 
   it("adds dev auth and csrf headers only when appropriate", async () => {
@@ -226,20 +225,6 @@ describe("apiRequest", () => {
     const headers = requireInit(calls[0]?.[1]).headers as Headers;
     expect(headers.get("Idempotency-Key")).toBe("upload-key-1");
     expect(headers.has("Content-Type")).toBe(false);
-  });
-
-  it("sends OCR cancellation to the encoded job resource", async () => {
-    const fetchMock = installFetchMock(async () =>
-      Response.json({ jobId: "job/with-boundary", status: "cancelled" }),
-    );
-
-    await cancelOcrJob("job/with-boundary", { idempotencyKey: "cancel-key-1" });
-
-    const calls = fetchCallsOf(fetchMock);
-    expect(calls[0]?.[0]).toBe("/api/ocr-jobs/job%2Fwith-boundary");
-    expect(requireInit(calls[0]?.[1]).method).toBe("DELETE");
-    const headers = requireInit(calls[0]?.[1]).headers as Headers;
-    expect(headers.get("Idempotency-Key")).toBe("cancel-key-1");
   });
 
   it("downloads non-JSON files with dev auth and filename metadata", async () => {

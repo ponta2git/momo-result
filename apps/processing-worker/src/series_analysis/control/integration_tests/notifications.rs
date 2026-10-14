@@ -157,7 +157,7 @@ async fn verify_delayed_database(
     config: &AnalysisConsumerConfig,
     claim: &ClaimedJob,
 ) -> SmokeResult {
-    let proxy = crate::notifications::test_support::DelayedDatabase::start(
+    let proxy = crate::postgres::test_support::DelayedDatabase::start(
         database_url,
         Duration::from_millis(300),
     )
@@ -445,11 +445,8 @@ pub(super) fn config(
     let bound = |value| NonZeroU64::new(value).ok_or("positive fixture bound");
     Ok(AnalysisConsumerConfig {
         database_url: database_url.to_owned(),
-        outbox_listener_database_url: database_url.to_owned(),
+        listener_database_url: database_url.to_owned(),
         read_database_url: database_url.to_owned(),
-        redis_url: String::new(),
-        redis_stream: "fixture".to_owned(),
-        redis_group: "fixture".to_owned(),
         worker_id: OLD_WORKER_ID.to_owned(),
         temporary_root: directory.to_path_buf(),
         effective_config_version: "notification-test".to_owned(),
@@ -457,8 +454,8 @@ pub(super) fn config(
         heartbeat_interval: Duration::from_secs(1),
         heartbeat_timeout: Duration::from_secs(5),
         child_stop_grace: Duration::from_secs(1),
-        redis_block: Duration::from_millis(100),
-        pel_recovery_interval: Duration::from_secs(5),
+        recovery_interval: Duration::from_secs(5),
+        ocr_stale_after: Duration::from_secs(300),
         notifications,
         child_cgroup: ChildCgroup::open_fixture(
             CgroupHierarchy::V2,

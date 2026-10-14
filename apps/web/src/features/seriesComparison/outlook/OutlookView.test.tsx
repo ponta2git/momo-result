@@ -285,6 +285,26 @@ describe("OutlookView input and update boundaries", () => {
     expect(meanField(rivalName)).toHaveValue("2.55");
   });
 
+  it("preserves a composing mean through IME Enter and Escape until explicitly committed", async () => {
+    const user = userEvent.setup();
+    renderOutlook(await makeSeriesAnalysisOutlookSummary());
+    const before = resultCells();
+    const input = meanField();
+    await user.clear(input);
+    await user.type(input, "2.60");
+    fireEvent.compositionStart(input);
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+    fireEvent.keyDown(input, { key: "Escape", isComposing: true });
+    expect(input).toHaveValue("2.60");
+    expect(resultCells()).toEqual(before);
+    expect(undo()).toBeDisabled();
+    fireEvent.compositionEnd(input);
+    await user.keyboard("{Enter}");
+    expect(resultCells()).toEqual(["2.31位", "2.42位"]);
+    await user.click(undo());
+    expect(input).toHaveValue("2.85");
+  });
+
   it("preserves an exact allocation when a count dialog opens or a gesture makes no change", async () => {
     const user = userEvent.setup();
     renderOutlook(await makeSeriesAnalysisOutlookSummary());

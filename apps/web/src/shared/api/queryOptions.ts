@@ -197,17 +197,6 @@ export function heldEventSummaryQueryOptions(heldEventId: string | undefined, en
   });
 }
 
-export function matchIdentityQueryOptions(matchId: string | undefined, enabled = true) {
-  return queryOptions({
-    queryKey: matchKeys.identity(matchId),
-    queryFn: ({ signal }) => {
-      if (!matchId) throw new Error("match identity query is not ready");
-      return getMatchIdentity(matchId, { signal });
-    },
-    enabled: enabled && Boolean(matchId),
-  });
-}
-
 export function heldEventSummaryReadQueryOptions(heldEventId: string | undefined, enabled = true) {
   return queryOptions({
     queryKey: heldEventKeys.summaryRead(heldEventId),

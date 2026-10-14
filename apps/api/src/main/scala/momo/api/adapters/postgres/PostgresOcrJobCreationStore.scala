@@ -18,7 +18,6 @@ import momo.api.repositories.{
   OcrJobCreationPlan,
   OcrJobCreationStore,
   OcrJobDraftAttachment,
-  OcrQueueOutboxDraft,
   SourceImageStatus,
   StoredOcrJob
 }
@@ -37,9 +36,6 @@ final class PostgresOcrJobCreationStore[F[_]: Async](transactor: Transactor[F])
 
   override def store(plan: OcrJobCreationPlan): F[OcrJobCreationStore.OcrJobCreationResult] =
     val attachment = plan.matchDraftAttachment
-    val dispatch = plan.queueDispatch
-    val outbox =
-      OcrQueueOutboxDraft.forJob(dispatch.jobId, dispatch.enqueueRequest, dispatch.createdAt)
     val program =
       for
         _ <-
@@ -96,13 +92,12 @@ final class PostgresOcrJobCreationStore[F[_]: Async](transactor: Transactor[F])
                   _ <- EitherT(attachmentGuard(attachment))
                   _ <- EitherT(sourceImageGuard(plan))
                   _ <- EitherT.liftF(PostgresOcrDrafts.alg.create(plan.draft))
-                  _ <- EitherT.liftF(PostgresOcrJobs.createV2(plan.job))
+                  _ <- EitherT.liftF(PostgresOcrJobs.create(plan.job, plan.input))
                   _ <- EitherT.liftF(attachMatchDraft(attachment))
                   _ <- EitherT.liftF(sql"""UPDATE ocr_submission_members
                 SET status = 'registered', job_id = ${plan.job.id}
                 WHERE submission_id = ${plan.submission.submissionId}
                   AND screen_type = ${attachment.screenType} AND status = 'pending'""".update.run)
-                  _ <- EitherT.liftF(PostgresOcrQueueOutbox.insertIntent(outbox))
                 yield StoredOcrJob(plan.job, plan.draft, true)).value
       yield result
     program.transact(transactor)
@@ -153,7 +148,7 @@ final class PostgresOcrJobCreationStore[F[_]: Async](transactor: Transactor[F])
       byteLength: Long,
       mediaType: String,
   ): Boolean =
-    val request = plan.queueDispatch.enqueueRequest
+    val request = plan.input
     plan.job.imageLocation.value == objectKey.value &&
     request.imageLocation.value == objectKey.value &&
     request.imageSha256 == sha256.value &&

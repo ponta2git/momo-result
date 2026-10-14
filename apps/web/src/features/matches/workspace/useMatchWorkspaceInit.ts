@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 import { draftToMatchForm } from "@/features/matches/workspace/draftToMatchForm";
 import { matchDetailToMatchForm } from "@/features/matches/workspace/matchDetailToMatchForm";
@@ -45,7 +45,7 @@ export type MatchWorkspaceInitParams = {
  * - semantic workspace の切替は owning component の key で分離する
  * - 編集を開始できる snapshot で一度だけ初期化し、後続の取得で入力を置き換えない
  * - 初期化結果は呼び出し側の安定した onInitialize command で一括反映する
- * - effect の多重実行は ref で防ぎ、描画に使う初期化状態は state で公開する
+ * - 同じ component の state を readiness と一緒に更新し、未初期化の入力を子へ描画しない
  */
 export function useMatchWorkspaceInit({
   draftDetail,
@@ -62,53 +62,38 @@ export function useMatchWorkspaceInit({
   emptyFormFactory,
   nowIsoFactory,
 }: MatchWorkspaceInitParams) {
-  const initializedRef = useRef(false);
   const [initializedSnapshot, setInitializedSnapshot] = useState<{
     sourceImages: MatchDraftSourceImageResponse[];
     revision: string | undefined;
   } | null>(null);
-  useEffect(() => {
-    if (initializedRef.current || (mode !== "edit" && isOcrRunning(draftDetail?.status))) {
-      return;
-    }
+  const ready =
+    mode === "edit"
+      ? Boolean(matchDetail)
+      : !isOcrRunning(draftDetail?.status) &&
+        ((mode === "review" && useSampleDrafts) || !matchDraftId || Boolean(draftDetail)) &&
+        (mode !== "review" ||
+          useSampleDrafts ||
+          reviewDraftIdList.length === 0 ||
+          Boolean(ocrDrafts));
 
-    if (mode === "edit") {
-      if (!matchDetail) {
-        return;
-      }
+  // onInitialize updates state owned by this same component. React retries its render
+  // before committing children, so form values and readiness share one snapshot.
+  if (initializedSnapshot === null && ready) {
+    if (mode === "edit" && matchDetail) {
       onInitialize(matchDetailToMatchForm(matchDetail), null);
-      initializedRef.current = true;
-      // Publish readiness after the form initialization command has run in this commit.
-      // oxlint-disable-next-line react/set-state-in-effect
-      setInitializedSnapshot({ sourceImages: [], revision: undefined });
-      return;
-    }
-
-    if (mode === "create") {
-      if (matchDraftId && !draftDetail) return;
+    } else if (mode === "create") {
       const base = prefillFromDraftSummary(
         {
           ...emptyFormFactory(),
           ...(matchDraftId ? { matchDraftId } : {}),
         },
-        draftDetail ?? undefined,
+        draftDetail,
       );
       onInitialize(base, null);
-      initializedRef.current = true;
-      setInitializedSnapshot({
-        sourceImages: sourceImages ?? [],
-        revision: draftDetail?.updatedAt,
-      });
-      return;
-    }
-
-    if (mode === "review") {
-      if (!useSampleDrafts && matchDraftId && !draftDetail) return;
-      if (!useSampleDrafts && reviewDraftIdList.length > 0 && !ocrDrafts) return;
+    } else {
       const draftByKind = useSampleDrafts
         ? createSampleDraftMap()
         : draftsByKind(reviewDraftIds, ocrDrafts?.items);
-
       const prepared = draftToMatchForm({
         attachDraftIds: !useSampleDrafts,
         draftByKind,
@@ -117,29 +102,13 @@ export function useMatchWorkspaceInit({
         memberDirectory: buildMemberAliasDirectory(memberAliases),
         nowIso: nowIsoFactory(),
       });
-
       onInitialize(prepared.values, prepared.initialData);
-      initializedRef.current = true;
-      setInitializedSnapshot({
-        sourceImages: sourceImages ?? [],
-        revision: draftDetail?.updatedAt,
-      });
     }
-  }, [
-    draftDetail,
-    matchDetail,
-    matchDraftId,
-    memberAliases,
-    mode,
-    ocrDrafts,
-    onInitialize,
-    reviewDraftIdList,
-    reviewDraftIds,
-    sourceImages,
-    useSampleDrafts,
-    emptyFormFactory,
-    nowIsoFactory,
-  ]);
+    setInitializedSnapshot({
+      sourceImages: mode === "edit" ? [] : (sourceImages ?? []),
+      revision: mode === "edit" ? undefined : draftDetail?.updatedAt,
+    });
+  }
 
   return { isInitialized: initializedSnapshot !== null, initializedSnapshot };
 }

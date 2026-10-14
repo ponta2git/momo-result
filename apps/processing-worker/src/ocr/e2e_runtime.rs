@@ -1,9 +1,9 @@
 //! An opt-in test process that replaces only native OCR execution. Real image downloads,
-//! Redis consumption, database fencing, submission coordination and notification HTTP remain.
+//! durable job selection, database fencing, submission coordination and notification HTTP remain.
 
 use super::{
     consumer::{
-        self, OcrChildHandle, OcrChildLauncher, OcrChildLiveness, OcrChildProcessFailure,
+        OcrChildHandle, OcrChildLauncher, OcrChildLiveness, OcrChildProcessFailure,
         OcrChildTerminationFuture, OcrChildWaitFuture,
     },
     contract::{OcrHints, RequestedScreenType},
@@ -13,7 +13,7 @@ use super::{
 };
 use crate::{
     notifications::{NotificationDriver, config_from_environment},
-    outbox::PostCommitSink,
+    scheduler::PostCommitSink,
 };
 use std::{
     error::Error,
@@ -39,11 +39,9 @@ async fn controlled_worker_process() -> TestResult {
         return Err("test control directory is required".into());
     }
     let database = std::env::var("OCR_CONTROL_SMOKE_DATABASE_URL")?;
-    let redis = std::env::var("OCR_CONTROL_SMOKE_REDIS_URL")?;
     let OcrConsumerRuntimeConfig::Enabled(config) = OcrConsumerRuntimeConfig::from_environment(
         OcrConsumerMode::Enabled,
         database.clone(),
-        redis,
         Duration::from_secs(5),
     )?
     else {
@@ -55,13 +53,14 @@ async fn controlled_worker_process() -> TestResult {
         finalization_timeout: config.shutdown_finalization_bound(),
     };
     let (notifications, driver) = NotificationDriver::new(config_from_environment()?)?;
-    let (sink, _wake) = PostCommitSink::channel();
+    let (sink, wake) = PostCommitSink::channel();
     let (shutdown, stop) = watch::channel(false);
     let launcher = Launcher {
         directory: control_dir.clone(),
         sequence: AtomicU64::new(0),
     };
-    let computation = consumer::run(*config, &launcher, sink, stop.clone());
+    let computation =
+        crate::scheduler::run_ocr_only(*config, Box::new(launcher), sink, wake, stop.clone());
     let (observed, mut checkpoints) = watch::channel(0_u64);
     let coordination = submissions::runtime::run_observed(
         submission_config,
@@ -98,7 +97,7 @@ async fn controlled_worker_process() -> TestResult {
     let work = async {
         let result = tokio::try_join!(
             async {
-                computation
+                Box::pin(computation)
                     .await
                     .map_err(|error| -> Box<dyn Error + Send + Sync> { Box::new(error) })
             },

@@ -108,7 +108,7 @@ func workerReadiness(args []string) (string, error) {
 		return "", fail
 	}
 	defer file.Close()
-	events := []string{"analysis_worker_ready", "ocr_rust_v2_worker_ready", "analysis_outbox_notification_route_ready", "analysis_outbox_ready"}
+	events := []string{"analysis_worker_ready", "ocr_rust_v2_worker_ready", "processing_jobs_notification_route_ready", "processing_scheduler_ready"}
 	workers := []string{args[2], args[3], args[2], args[2]}
 	checks := make([]*readinessCheck, len(events))
 	decoder := json.NewDecoder(file)

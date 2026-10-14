@@ -33,14 +33,13 @@ fn runtime_environment() -> Environment {
         [
             ("DATABASE_URL", "postgresql://control.invalid/momo"),
             (
-                OUTBOX_LISTENER_DATABASE_URL_ENV,
+                LISTENER_DATABASE_URL_ENV,
                 "postgresql://listener.invalid/momo",
             ),
             (
                 "MOMO_ANALYSIS_READ_DATABASE_URL",
                 "postgresql://reader.invalid/momo",
             ),
-            ("REDIS_URL", "redis://queue.invalid/"),
             ("MOMO_ANALYSIS_WORKER_ID", "worker-1"),
             ("MOMO_ANALYSIS_TEMPORARY_ROOT", "/var/lib/momo-analysis"),
             ("MOMO_ANALYSIS_CONFIG_VERSION", "config-v1"),
@@ -48,8 +47,6 @@ fn runtime_environment() -> Environment {
             ("MOMO_ANALYSIS_HEARTBEAT_INTERVAL_MS", "5000"),
             ("MOMO_ANALYSIS_HEARTBEAT_TIMEOUT_MS", "5000"),
             ("MOMO_ANALYSIS_CHILD_STOP_GRACE_MS", "5000"),
-            ("MOMO_ANALYSIS_REDIS_BLOCK_MS", "5000"),
-            ("MOMO_ANALYSIS_PEL_RECOVERY_INTERVAL_MS", "300000"),
         ]
         .into_iter()
         .map(|(name, value)| (name, String::from(value))),
@@ -92,30 +89,28 @@ fn runtime(
 }
 
 #[test]
-fn runtime_requires_and_preserves_the_dedicated_outbox_listener_url() {
+fn runtime_requires_and_preserves_the_dedicated_listener_url() {
     let mut environment = runtime_environment();
     let cgroup = cgroup_fixture();
-    environment.remove(OUTBOX_LISTENER_DATABASE_URL_ENV);
+    environment.remove(LISTENER_DATABASE_URL_ENV);
     assert_eq!(
         runtime(&environment, cgroup.path()).err(),
         Some(AnalysisConfigError::MissingRuntime {
-            name: OUTBOX_LISTENER_DATABASE_URL_ENV,
+            name: LISTENER_DATABASE_URL_ENV,
         })
     );
 
     environment.insert(
-        OUTBOX_LISTENER_DATABASE_URL_ENV,
+        LISTENER_DATABASE_URL_ENV,
         String::from("postgresql://listener.invalid/momo"),
     );
     let config = runtime(&environment, cgroup.path()).expect("complete runtime configuration");
     assert_eq!(config.database_url, "postgresql://control.invalid/momo");
     assert_eq!(
-        config.outbox_listener_database_url,
+        config.listener_database_url,
         "postgresql://listener.invalid/momo"
     );
     assert_eq!(config.read_database_url, "postgresql://reader.invalid/momo");
-    assert_eq!(config.redis_stream, "momo:analysis:jobs");
-    assert_eq!(config.redis_group, "momo-analysis-v1");
 }
 
 #[test]
@@ -261,12 +256,6 @@ fn runtime_accepts_only_timing_that_preserves_lease_recovery_margin() {
             "30000",
             Some(AnalysisConfigError::UnsafeLeaseRelationship),
         ),
-        ("MOMO_ANALYSIS_REDIS_BLOCK_MS", "10000", None),
-        (
-            "MOMO_ANALYSIS_REDIS_BLOCK_MS",
-            "10001",
-            Some(AnalysisConfigError::UnsafeRedisBlock),
-        ),
         (
             "MOMO_ANALYSIS_FINALIZATION_TIMEOUT_MS",
             "56000",
@@ -301,4 +290,36 @@ fn runtime_preserves_the_cgroup_safety_gate() {
             kind: "cgroup_limit_mismatch"
         })
     );
+}
+
+#[test]
+fn scheduler_deadlines_default_independently_and_require_positive_overrides() {
+    let environment = runtime_environment();
+    let cgroup = cgroup_fixture();
+    let config = runtime(&environment, cgroup.path()).expect("default scheduler deadlines");
+    assert_eq!(config.recovery_interval, Duration::from_secs(30));
+    assert_eq!(config.ocr_stale_after, Duration::from_secs(300));
+    for name in [
+        "MOMO_PROCESSING_RECOVERY_INTERVAL_MS",
+        "MOMO_OCR_STALE_JOB_AFTER_MS",
+    ] {
+        for value in ["0", "-1", "18446744073709551616", ""] {
+            let mut invalid = environment.clone();
+            invalid.insert(name, String::from(value));
+            assert_eq!(
+                runtime(&invalid, cgroup.path()).err(),
+                Some(AnalysisConfigError::InvalidPositiveInteger { name })
+            );
+        }
+    }
+    let mut overridden = environment;
+    overridden.insert(
+        "MOMO_PROCESSING_RECOVERY_INTERVAL_MS",
+        String::from("15000"),
+    );
+    overridden.insert("MOMO_OCR_STALE_JOB_AFTER_MS", String::from("600000"));
+    let overridden_config =
+        runtime(&overridden, cgroup.path()).expect("explicit scheduler deadlines");
+    assert_eq!(overridden_config.recovery_interval, Duration::from_secs(15));
+    assert_eq!(overridden_config.ocr_stale_after, Duration::from_secs(600));
 }

@@ -1,3 +1,5 @@
+import { useId } from "react";
+
 import {
   matchNoteMaximumCharacters,
   normalizeMatchNote,
@@ -55,4 +57,3 @@ export function MatchNoteField({ error, onChange, value }: MatchNoteFieldProps) 
     </section>
   );
 }
-import { useId } from "react";

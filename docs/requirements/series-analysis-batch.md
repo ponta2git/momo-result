@@ -12,7 +12,7 @@
 | ロール、管理操作の権限 | [基本要求の認証・権限](base.md#3-認証権限) |
 | runtime / parent-child | `docs/architecture.md` |
 | DB / migration | `docs/db-rule.md` と `../momo-db` |
-| artifact / queue / HTTP shape | JSON Schema、Tapir endpoint。本書の Artifact Contract |
+| artifact / 入力 / HTTP shape | JSON Schema、Tapir endpoint。本書の Artifact Contract |
 | UI / test / command | `docs/ui-rule.md`、`docs/test-rule.md`、`docs/dev-rule.md` |
 
 本書は指標の数式、推薦候補、画面構成、wire fieldを複製しない。
@@ -26,7 +26,7 @@ provider固有値、費用、実測、昇格・復旧手順は public docs へ�
 - 通常集計、振り返り、高度分析、drilldown、試合文脈は作品単位で事前計算し、API は保存済み成果物だけを読む。同期 fallback を持たない。
 - production の分析計算は Rust に統一し、Scala engine を HTTP / worker runtimeへ戻さない。
 - 通常分析の1 job は1作品の全有効 scope と全表示用途を同じ入力 snapshot から計算し、作品単位で原子的に公開する。レーダーの基準準備は別の実行目的として同じqueue・共有枠を利用し、候補と比較結果を保存する。準備だけでは公開成果物・通常の再計算要求・通知基準を更新しない。
-- DB を revision、request、job、attempt、slot、outbox、artifact、公開状態の正本とし、Redis Streams は少なくとも1回の配送路に限定する。
+- DB を revision、request、job、attempt、slot、artifact、公開状態の正本とし、Worker が既存 job を直接取得する。
 - 全 runtime を通じた分析実行枠は1件とし、DB lease と単調増加 fence で保証する。
 - OCR 同居時も共有枠は1件とする。OCRだけが分析を preempt でき、分析はOCRをpreemptしない。
 - resource上限、timeout、reader / worker / schema互換性が検証されるまで publication を fail closed にする。
@@ -79,20 +79,18 @@ provider固有値、費用、実測、昇格・復旧手順は public docs へ�
 | 正常公開・成果物再利用 | `succeeded` | 終端 |
 | supersede（入力・対象 version の更新） | 古い candidate を公開せず、最新の対象で `queued` | 失敗回数へ加算しない |
 | OCR preemption / graceful 停止 | `queued` | 失敗回数へ加算しない |
-| 一時的な DB / queue 障害 | `queued`、retry 上限で `failed` | 計算 retry は最大3回 |
+| 一時的な DB 障害 | `queued`、retry 上限で `failed` | 計算 retry は最大3回 |
 | lease 期限切れ | 回収条件を満たす場合に `queued`、回収上限で `failed` | 計算 retry と別の回数で有界化 |
 | hard timeout | `timed_out` | retry しない |
 | 入力契約違反・決定論的失敗 | `failed` | retry しない |
 
 - 再実行・終端更新は DB の所有権と整合性条件を満たす場合だけ行う。stale owner が自己判断で再実行や公開を確定しない。
-- worker は対応する algorithm / artifact schema version の job だけを claim する。非対応 job を terminal 化せず、compatible workerへ再配送可能な `queued` に保つ。
-- queue payload は version と opaque job ID だけを運び、業務状態を信用しない。厳密なshapeはqueue schemaを正本とする。
-- work と outbox は同じ transaction で確定し、commit 後にだけ typed wake を送る。wake はcoalescing hintであり、durable outboxの代わりにしない。
-- dispatcher は startup、wake、retry / semantic deadline、低頻度 recovery を待って bounded drain する。固定短周期 polling と rowごとの timer を作らない。
-- Redis append と outbox delivery確定の両方が成功して配送完了とする。append後のDB失敗や重複 delivery はDB claimで収束させる。
-- Redis appendにも応答期限を設け、timeoutを未送信の証拠にしない。配送路が失敗したbatchはそこで打ち切り、未試行分をdurable claim期限から回収する。件数分の依存待ちを重ねてshutdown期限を超えず、再試行時の重複は同じjobのclaimで収束させる。
-- ACK する処理結果では、attempt の終了に伴う DB 更新と必要な次outboxを先に確定する。supersede、transient retry、OCR preemption で job が `queued` へ戻る場合も ACK する。graceful 停止では同じ再queueの確定後、元 delivery を ACK せず consumer loop を終了する。commit成否不明時はDBを再読し、結果を推測しない。
-- stale PEL は bounded recovery と新規 delivery の公平性を保つ。shared slot busyやunsupported versionで delivery を失わない。
+- Worker は対応する algorithm / artifact schema / validation contract の組だけを候補・claim の両方で検証する。非対応 job を終端化せず queued に保ち、後続の対応 job の走査を妨げない。
+- job / request と業務状態を同じ transaction で確定し、commit 後にだけ payloadless wake を送る。wake は永続状態の代わりにしない。
+- scheduler は起動、再接続、wake、実行可能時刻、lease 回復、保守の期限で動き、低頻度走査で hint 欠落を補う。一回の候補・要求展開件数を制限し、全 job をメモリへ積まない。
+- supersede、transient retry、OCR preemption、graceful 停止は必要な状態を DB に確定して queued へ戻す。失敗予算の扱いは理由ごとに分け、commit 成否不明なら結果を推測しない。
+- 期限切れの共有枠は queued 候補がなくても回復する。claim の lock 順は slot → title state → job とし、候補選択時に job lock を先取りしない。
+- 枠が使用中のときは解放通知・lease 期限・有限の競合待ちで再確認する。期限を過ぎた queued job による hot loop を作らない。
 
 ## 4. Execution / Publication
 
@@ -100,10 +98,10 @@ provider固有値、費用、実測、昇格・復旧手順は public docs へ�
 - heartbeat、terminal遷移、publication、slot解放はowner / job / attempt / fence / lease / target versionの一致を必須にする。stale ownerは正しいcandidateでも公開できない。
 - leaseはDB clock、process timeoutはmonotonic clockで判断する。lease維持不能を検知したparentはchildを停止しpublicationしない。
 - heartbeatの周期と通信全体の期限は独立した必須設定とする。更新完了から次の周期を開始し、更新の重複・追い付き実行をしない。両者の最大値を基にchild livenessと停止・公開を含むlease余白を検証する。
-- 更新の期限超過・通信失敗はowner喪失の確定と区別する。結果不明の接続はdriverごと破棄し、そのattemptは公開・ACKせずdurable recoveryへ渡す。COMMITの成否をFutureの破棄から推測しない。
+- 更新の期限超過・通信失敗はowner喪失の確定と区別する。結果不明の接続はdriverごと破棄し、そのattemptは公開せずdurable recoveryへ渡す。COMMITの成否をFutureの破棄から推測しない。
 - child成功後は短時間の計算でも公開前にleaseとpreemptionを再確認し、確定した更新後にfinalization期限を開始する。
 - OCR preempt intentはDBへ保存する。分析childを回収しjobを `queued` へ戻してslotを解放した後にOCRを開始する。publicationの短いcommit区間はpreemptしない。
-- childはread-onlyで一貫した入力を読み、boundedで非authoritativeなcandidate / manifestだけを返す。外部I/O、ACK、outbox、current pointerを変更しない。
+- childはread-onlyで一貫した入力を読み、boundedで非authoritativeなcandidate / manifestだけを返す。外部I/O、job / request、current pointerを変更しない。
 - parentはpath、schema、件数、byte数、深さ、checksum、参照整合性を検証し、失敗・timeout・preemption・owner喪失で部分公開しない。
 - 大容量 staging と短い fenced publication を分ける。stagingはcurrentから不可視とし、fresh transactionで完全性と実行権を再検証してからcurrent / previousを切り替える。
 - publication失敗やcommit成否不明はcurrentを維持し、fresh connection上の永続状態から再開する。
@@ -121,7 +119,7 @@ DB lock順とstaging transactionの規則は `docs/db-rule.md`、process責務�
 - 平均と対象数はoverall / seasonの保存済みaggregateから取り出し、APIやSummitで平均を計算しない。丸め前の差分を保持し、比較可能・初回・対象なし・比較不能を区別する。空のscopeを平均0で補わない。
 - 通知用の比較準備は公開lock前に上限付きで行う。業務更新・slot解放の後、共通gate取得後の一括SELECTで設定世代と保存済み順位・銀次・メモ・表示名を固定する。取得後からcommitまでの編集を含める保証は求めない。
 - 新規通知の掲載件数・文字数・最終envelopeの上限は[通知サイズと送出可否](base.md#通知サイズと送出可否)に従う。比較履歴の読取範囲は掲載上限とは独立に維持し、通知対象を上限内の一部へ絞り直さない。
-- 通知準備の通常失敗・上限超過・通信失敗は分析成功へ波及させない。内容を切り捨てて送らず、通知全体を省略する。DB接続喪失やcommit不明を成功確認済みと扱わない。HTTPはcommit後に一度だけ試み、ACK・次の計算を通信完了で待たせない。
+- 通知準備の通常失敗・上限超過・通信失敗は分析成功へ波及させない。内容を切り捨てて送らず、通知全体を省略する。DB接続喪失やcommit不明を成功確認済みと扱わない。HTTPはcommit後に一度だけ試み、次の計算を通信完了で待たせない。
 - 永続受付前の欠落は許容し、producer outbox・HTTP再試行・未受付通知の再構築を追加しない。永続受付後の保存・配送・取消はSummitが担う。wireとconsumer間の排他契約は `../momo-db/docs/discord-notifications.md` を正本とする。
 
 基準の適用・取消はtitle単位の同じ競合制御に参加する。通常分析は希望基準と適用世代を固定して計算し、全resourceと基準を一緒に公開する。基準の内容は計算checksumへ含めるが、適用日時・operation IDは含めない。適用日時はそのartifactの公開metadataとして保存する。候補の無効化・取消・適用の終端失敗では、対象世代が一致する場合だけ希望基準を現行へ戻し、未反映の通常intentを維持する。詳細な状態と数値契約は[プレーヤーレーダー](series-player-radar.md)を正本とする。
@@ -184,7 +182,7 @@ DB lock順とstaging transactionの規則は `docs/db-rule.md`、process責務�
 - overviewは選択作品のstatus、未充足手動run、slot / queue / campaign要約、全作品横断の直近10件を表示する。
 - 履歴は作品、状態、要求元、時刻、経過時間、version、attempt / recovery、safe failure codeを安全な範囲で示す。内部例外、接続先、artifact本文を返さない。
 - admin履歴の`elapsedMilliseconds`はterminal jobのDB記録の`finished_at - started_at`とし、「最終試行の経過」と表示する。phase別計測の保存値とは区別し、最終COMMIT応答や後処理まで含む実時間を保証しない。未開始・未終了はnullで、0やbrowser時計による推定値に置換しない。
-- `queueWaitMilliseconds`は`started_at - requested_at`とし、「受付から開始まで」と表示する。配送・claim・再試行を含み、他jobだけの待機時間ではない。未開始はnullとする。
+- `queueWaitMilliseconds`は`started_at - requested_at`とし、「受付から開始まで」と表示する。claim・再試行を含み、他jobだけの待機時間ではない。未開始はnullとする。
 - 診断logの時間は単調時計で測り、claim、child、更新、検証、staging、公開、commit、cleanupを分離する。全体と部分区間は加算しない。通常のheartbeatはattempt単位に集約し、SQL・parameter・成果物本文は記録しない。
 
 ## 7. Correctness / Resource / OCR
@@ -208,9 +206,9 @@ OCR同居を有効化する場合は、共通parent-child境界、単一slot、�
 - release promotionはfreshな全reader / workerのcapabilityをtransaction内で凍結して完全一致を確認し、release singleton、既存titleのdesired tuple、campaignを原子的に進める。登録作品0件のinitial backfillもtarget 0のterminal operationとして確定し、その後の新規作品はsingletonを継承する。
 - idle capabilityの更新間隔はactive jobのlease heartbeatと分離し、freshness期限に失敗・遅延の余裕を残す。世代不一致や期限切れのcapabilityで昇格しない。
 - 自動保守は稼働世代とsingletonのexact tuple差分を昇格対象とし、既知の過去世代への自動復帰を拒否する。previewとapplyの間で対象作品・input revision・世代が変われば適用しない。自動・手動の再実行は同じdurable operationを参照する。
-- release完了は受理snapshotのtargetが公開済みまたは作品削除で終端したことと整合性監査で判定する。failed target、current / previousの不正契約、failed outboxは要対応とする。通常の更新では後続入力によるpending workを別に扱い、非互換切替では公開再開前に対象全作品の現行成果物を確認する。
+- release完了は受理snapshotのtargetが公開済みまたは作品削除で終端したことと整合性監査で判定する。failed target、current / previousの不正契約は要対応とする。通常の更新では後続入力によるpending workを別に扱い、非互換切替では公開再開前に対象全作品の現行成果物を確認する。
 - HTTP wireはOpenAPI・生成型と同時更新する。artifactからwireへのprojectionはrename、enum mapping、metadata hydrate、revision整合を確認した試合属性の付加、用途に対応する保存済み項目の選択に限定する。[見通しreference](series-rank-outlook.md#13-実績データと読取契約)では指定窓長の保存済み1項目を抽出できる。API / Webで欠けた分析値を計算したり、実績の意味順を並べ直したりしない。保存artifactを変えないHTTP-onlyの非互換変更は、対応API/Webの切替とrollbackを一体で扱い、成果物移行・全件再計算を要求しない。
-- 通常rollbackはDB契約・lease fenceと現行publicationを扱えるreleaseに限定し、current artifact、request、campaign、job、outboxを維持する。未対応jobを旧algorithmで処理せずqueuedに保つ。
+- 通常rollbackはDB契約・lease fenceと現行publicationを扱えるreleaseに限定し、current artifact、request、campaign、jobを維持する。未対応jobを旧algorithmで処理せずqueuedに保つ。
 - 非互換切替を切り戻す場合は、公開を停止したままDB snapshotとimmutable releaseを整合する組合せへ戻す。部分的な世代の組合せでは再開せず、再開後のデータを守る修復はforward fixを原則とする。
 - release候補はmigration、runtimeのexact capability、immutable provenance、resource hard limit、timeout、artifact / API上限を確認してから昇格する。本番操作の承認境界は公開運用規約に従う。
 
@@ -221,7 +219,7 @@ OCR同居を有効化する場合は、共通parent-child境界、単一slot、�
 | 変更領域 | 受入条件 / production boundary |
 | --- | --- |
 | revision / trigger / campaign | 同一transaction、A→B移動、同時mutation、target snapshot、idempotency、crash recovery |
-| job / queue / outbox | coalescing、unsupported version、duplicate delivery、append後DB失敗、attempt確定後のACK / graceful停止時の保留、retry上限 |
+| job / scheduler | coalescing、unsupported version、重複 wake、通知欠落、commit 不明、期限切れ回復、graceful 停止、retry 上限 |
 | slot / lease / child / preemption | 複数worker、stale fence、owner喪失、timeout、OOM、process group回収、一方向preemption |
 | calculation / artifact | 文書化した数式・性質・canonicalization、上限、部分公開拒否、current 維持 |
 | API / Web | bounded read、artifact pinning、expired retry、revision mismatch、状態decision table、意味再計算禁止 |
@@ -229,4 +227,4 @@ OCR同居を有効化する場合は、共通parent-child境界、単一slot、�
 | compatibility / release | 単一世代切替の再開条件、exact capability、旧契約の拒否、rollback時のデータ保全、旧engine不在 |
 | resource | 定義した上限負荷を production 同等 runtime で処理し、worker / API / browser 別の resource と timeout 要求を満たす。実測は private evidence に置く |
 
-外部DB、Redis、Linux process、browser、resource gateをskipした場合、その境界は未検証として報告する。完了前に `docs/post-mortem/lessons.md` の該当カードを確認する。
+外部 DB、Linux process、browser、resource gateをskipした場合、その境界は未検証として報告する。完了前に `docs/post-mortem/lessons.md` の該当カードを確認する。

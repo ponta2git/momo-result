@@ -47,7 +47,6 @@ export type AdminAccountListModel =
 export type AdminAccountCreateDialogModel = {
   action: (formData: FormData) => void;
   error: string;
-  formKey: number;
   open: boolean;
   pending: boolean;
   setOpen: (open: boolean) => void;
@@ -65,8 +64,6 @@ export type AccountSettingsModel = {
   pending: boolean;
   update: AdminAccountUpdateModel;
 };
-
-const initialCreateAccountState = { error: "", formKey: 0 };
 
 /** Keeps account workflows alive while the user moves between settings tabs. */
 export function useAccountSettingsModel(queryEnabled = true): AccountSettingsModel {
@@ -95,9 +92,7 @@ export function useAccountSettingsModel(queryEnabled = true): AccountSettingsMod
       authorization.canRead("admin", adminLoginAccountsQueryOptions().queryKey),
   });
 
-  const [createState, createAction, createPending] = useAuthorizedAction<
-    typeof initialCreateAccountState
-  >(
+  const [createError, createAction, createPending] = useAuthorizedAction(
     authorization,
     "admin",
     async (previous, formData, lease) => {
@@ -105,7 +100,7 @@ export function useAccountSettingsModel(queryEnabled = true): AccountSettingsMod
       const role = accountRoleOptions.find(
         (option) => option.value === formData.get("role"),
       )?.value;
-      if (!role) return { error: "ロールを選択してください", formKey: previous.formKey };
+      if (!role) return "ロールを選択してください";
       const request: CreateLoginAccountRequest = {
         discordUserId: String(formData.get("discordUserId") ?? ""),
         displayName: String(formData.get("displayName") ?? ""),
@@ -122,17 +117,14 @@ export function useAccountSettingsModel(queryEnabled = true): AccountSettingsMod
           (options) => createLoginAccount(request, options),
         );
         if (authorization.isCurrent(lease)) setCreatedReceipt({ saved: created, lease });
-        return { error: "", formKey: previous.formKey };
+        return "";
       } catch (error) {
         authorization.reportError(error, lease);
         if (!authorization.isCurrent(lease)) return previous;
-        return {
-          error: formatApiError(error, "ログインアカウントの作成に失敗しました"),
-          formKey: previous.formKey,
-        };
+        return formatApiError(error, "ログインアカウントの作成に失敗しました");
       }
     },
-    initialCreateAccountState,
+    "",
   );
 
   const updateMutation = useMutation({
@@ -245,8 +237,7 @@ export function useAccountSettingsModel(queryEnabled = true): AccountSettingsMod
   return {
     create: {
       action: createAction,
-      error: createState.error,
-      formKey: createState.formKey,
+      error: createError,
       open: authorization.retained.admin && createOpen,
       pending: currentCreatePending,
       setOpen: (open) => {

@@ -1,0 +1,443 @@
+package momo.api.bootstrap
+
+import java.time.Instant
+
+import cats.effect.testkit.TestControl
+import cats.effect.{Deferred, IO, Ref}
+import org.typelevel.log4cats.LoggerFactory
+import org.typelevel.log4cats.noop.NoOpFactory
+
+import momo.api.MomoCatsEffectSuite
+import momo.api.domain.ids.*
+import momo.api.domain.{OcrJobInput, *}
+import momo.api.errors.AppError
+import momo.api.repositories.*
+import momo.api.repositories.OcrJobCreationStore.OcrJobCreationRejection
+import momo.api.usecases.queue.{
+  PostCommitEffects,
+  WorkerWakeKind,
+  WorkerWakeRelay,
+  WorkerWakeSink,
+  WorkerWakeSubmitResult,
+  WorkerWakeup
+}
+import momo.api.usecases.testing.MatchFixtures
+
+final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
+  private given LoggerFactory[IO] = NoOpFactory[IO]
+
+  private val now = Instant.parse("2026-08-15T00:00:00Z")
+  private val titleId = GameTitleId.unsafeFromString("title-worker-wake")
+  private val accountId = AccountId.unsafeFromString("account-worker-wake")
+
+  test("OCR creation wakes only after an accepted durable result"):
+    for
+      result <- Ref.of[IO, OcrJobCreationStore.OcrJobCreationResult](Right(StoredOcrJob(
+        ocrPlan.job,
+        ocrPlan.draft,
+        true
+      )))
+      sink <- RecordingSink.create
+      closed <- Ref.of[IO, Int](0)
+      store = WorkerWakingRepositories.ocrJobCreation(
+        ocrCreationStore(result),
+        sink,
+        closed.update(_ + 1),
+      )
+      accepted <- store.store(ocrPlan)
+      _ <- result.set(Right(StoredOcrJob(ocrPlan.job, ocrPlan.draft, false)))
+      replayed <- store.store(ocrPlan)
+      _ <- result.set(Left(OcrJobCreationRejection.InvalidPlan))
+      rejected <- store.store(ocrPlan)
+      effects <- sink.effects
+    yield
+      assertEquals(accepted.map(_.created), Right(true))
+      assertEquals(replayed.map(_.created), Right(false))
+      assertEquals(rejected, Left(OcrJobCreationRejection.InvalidPlan))
+      assertEquals(
+        effects,
+        List(PostCommitEffects.wakeAll(
+          WorkerWakeKind.ProcessingJobs,
+          WorkerWakeKind.OcrSubmissions
+        ))
+      )
+
+  test("match update and actual deletion wake analysis while false deletion does not"):
+    for
+      updateResult <- Ref.of[IO, Either[AppError, Unit]](Right(()))
+      deleteResult <- Ref.of[IO, Boolean](true)
+      sink <- RecordingSink.create
+      closed <- Ref.of[IO, Int](0)
+      repository = WorkerWakingRepositories.matches(
+        matchesRepository(updateResult, deleteResult),
+        sink,
+        closed.update(_ + 1),
+      )
+      _ <- repository.update(matchRecord, now)
+      _ <- updateResult.set(Left(AppError.Conflict("rejected")))
+      rejected <- repository.update(matchRecord, now)
+      deleted <- repository.delete(matchRecord.id)
+      _ <- deleteResult.set(false)
+      missing <- repository.delete(matchRecord.id)
+      effects <- sink.effects
+    yield
+      assert(deleted)
+      assert(!missing)
+      assertEquals(rejected, Left(AppError.Conflict("rejected")))
+      assertEquals(
+        effects,
+        List.fill(2)(PostCommitEffects.wake(WorkerWakeKind.ProcessingJobs)),
+      )
+
+  test("confirmation and recalculation wake only on accepted state transitions"):
+    for
+      confirmationResult <- Ref.of[IO, Either[AppError, MatchConfirmationResult]](
+        Right(MatchConfirmationResult.Confirmed)
+      )
+      recalculationResult <- Ref.of[IO, Either[AppError, SeriesAnalysisRecalculationAccepted]](
+        Right(acceptedRecalculation)
+      )
+      sink <- RecordingSink.create
+      closed <- Ref.of[IO, Int](0)
+      confirmations = WorkerWakingRepositories.matchConfirmation(
+        confirmationRepository(confirmationResult),
+        sink,
+        closed.update(_ + 1),
+      )
+      analysis = WorkerWakingRepositories.seriesAnalysis(
+        seriesAnalysisRepository(recalculationResult),
+        sink,
+        closed.update(_ + 1),
+      )
+      _ <- confirmations.confirm(matchRecord, None, now)
+      _ <- confirmationResult.set(Right(MatchConfirmationResult.DraftSnapshotMismatch))
+      _ <- confirmations.confirm(matchRecord, None, now)
+      _ <- confirmationResult.set(Left(AppError.Conflict("rejected")))
+      rejectedConfirmation <- confirmations.confirm(matchRecord, None, now)
+      _ <- analysis.requestTitleRecalculation(titleId, accountId, "title-key")
+      _ <- recalculationResult.set(Left(AppError.Conflict("rejected")))
+      _ <- analysis.requestAllRecalculation(accountId, "all-key")
+      effects <- sink.effects
+    yield
+      assertEquals(rejectedConfirmation, Left(AppError.Conflict("rejected")))
+      assertEquals(
+        effects,
+        List.fill(2)(PostCommitEffects.wake(WorkerWakeKind.ProcessingJobs)),
+      )
+
+  test("a closed sink escalates runtime failure without changing the committed result"):
+    for
+      result <- Ref.of[IO, OcrJobCreationStore.OcrJobCreationResult](Right(StoredOcrJob(
+        ocrPlan.job,
+        ocrPlan.draft,
+        true
+      )))
+      sink <- RecordingSink.closed
+      closed <- Ref.of[IO, Int](0)
+      store = WorkerWakingRepositories.ocrJobCreation(
+        ocrCreationStore(result),
+        sink,
+        closed.update(_ + 1),
+      )
+      actual <- store.store(ocrPlan)
+      escalations <- closed.get
+    yield
+      assertEquals(actual.map(_.created), Right(true))
+      assertEquals(escalations, 1)
+
+  test("a failed local analysis hint preserves the committed mutation result"):
+    for
+      updateResult <- Ref.of[IO, Either[AppError, Unit]](Right(()))
+      deleteResult <- Ref.of[IO, Boolean](false)
+      escalations <- Ref.of[IO, Int](0)
+      repository = WorkerWakingRepositories.matches(
+        matchesRepository(updateResult, deleteResult),
+        FailingSink,
+        escalations.update(_ + 1),
+      )
+      actual <- repository.update(matchRecord, now)
+      escalationCount <- escalations.get
+    yield
+      assertEquals(actual, Right(()))
+      assertEquals(escalationCount, 1)
+
+  test("analysis commits return during stalled notification I/O and shutdown cancels the relay"):
+    TestControl.executeEmbed {
+      WorkerWakeup.resource[IO].use { wakeup =>
+        for
+          updateResult <- Ref.of[IO, Either[AppError, Unit]](Right(()))
+          deleteResult <- Ref.of[IO, Boolean](false)
+          notificationStarted <- Deferred[IO, Unit]
+          notificationCancelled <- Deferred[IO, Unit]
+          notifier = (notificationStarted.complete(()).void *> IO.never[Unit])
+            .onCancel(notificationCancelled.complete(()).void)
+          repository = WorkerWakingRepositories.matches(
+            matchesRepository(updateResult, deleteResult),
+            wakeup,
+            IO.raiseError(new IllegalStateException("unexpected sink closure")),
+          )
+          results <- WorkerWakeRelay.resource[IO](
+            WorkerWakeKind.ProcessingJobs,
+            wakeup,
+            notifier,
+            IO.raiseError[Unit],
+          ).use(_ => notificationStarted.get *> repository.update(matchRecord, now).replicateA(32))
+          _ <- notificationCancelled.get
+        yield assertEquals(results, List.fill(32)(Right(())))
+      }
+    }
+
+  test("a failed durable operation emits no wake"):
+    for
+      sink <- RecordingSink.create
+      closed <- Ref.of[IO, Int](0)
+      repository = WorkerWakingRepositories.matches(
+        failingMatchesRepository,
+        sink,
+        closed.update(_ + 1),
+      )
+      result <- repository.update(matchRecord, now).attempt
+      effects <- sink.effects
+    yield
+      assert(result.isLeft)
+      assertEquals(effects, Nil)
+
+  test("OCR admission returns while the submission notifier stalls and shutdown cancels the relay"):
+    TestControl.executeEmbed {
+      WorkerWakeup.resource[IO].use { wakeup =>
+        for
+          notificationStarted <- Deferred[IO, Unit]
+          notificationCancelled <- Deferred[IO, Unit]
+          notifier = (notificationStarted.complete(()).void *> IO.never[Unit])
+            .onCancel(notificationCancelled.complete(()).void)
+          delegate = new OcrSubmissionsRepository[IO]:
+            def find(id: String, owner: AccountId) = IO.pure(None)
+            def put(submission: OcrSubmission) = IO.pure(Right(submission))
+            def failAdmission(owner: AccountId, keyHash: String, sha256: String, byteLength: Int) =
+              IO.unit
+          repository = WorkerWakingRepositories.ocrSubmissions(delegate, wakeup, IO.unit)
+          results <- WorkerWakeRelay.resource[IO](
+            WorkerWakeKind.OcrSubmissions,
+            wakeup,
+            notifier,
+            IO.raiseError[Unit],
+          ).use(_ => notificationStarted.get *> repository.put(ocrSubmission).replicateA(32))
+          _ <- notificationCancelled.get
+        yield assertEquals(results, List.fill(32)(Right(ocrSubmission)))
+      }
+    }
+
+  test("a rejected OCR submission emits no notification while a completed admission failure does"):
+    for
+      sink <- RecordingSink.create
+      delegate = new OcrSubmissionsRepository[IO]:
+        def find(id: String, owner: AccountId) = IO.pure(None)
+        def put(submission: OcrSubmission) = IO.pure(Left(AppError.Forbidden("another creator")))
+        def failAdmission(owner: AccountId, keyHash: String, sha256: String, byteLength: Int) =
+          IO.unit
+      repository = WorkerWakingRepositories.ocrSubmissions(delegate, sink, IO.unit)
+      rejected <- repository.put(ocrSubmission)
+      before <- sink.effects
+      _ <- repository.failAdmission(accountId, "key", "digest", 1)
+      after <- sink.effects
+    yield
+      assertEquals(rejected.left.map(_.code), Left("FORBIDDEN"))
+      assertEquals(before, Nil)
+      assertEquals(after, List(PostCommitEffects.wake(WorkerWakeKind.OcrSubmissions)))
+
+  private def ocrCreationStore(
+      result: Ref[IO, OcrJobCreationStore.OcrJobCreationResult]
+  ): OcrJobCreationStore[IO] = new OcrJobCreationStore[IO]:
+    override def store(plan: OcrJobCreationPlan): IO[OcrJobCreationStore.OcrJobCreationResult] =
+      result.get
+
+  private def matchesRepository(
+      updateResult: Ref[IO, Either[AppError, Unit]],
+      deleteResult: Ref[IO, Boolean],
+  ): MatchesRepository[IO] =
+    new StubMatchesRepository:
+      override def update(
+          record: MatchRecord,
+          updatedAt: Instant,
+      ): IO[Either[AppError, Unit]] = updateResult.get
+      override def delete(id: MatchId): IO[Boolean] = deleteResult.get
+
+  private def failingMatchesRepository: MatchesRepository[IO] = new StubMatchesRepository:
+    override def update(
+        record: MatchRecord,
+        updatedAt: Instant,
+    ): IO[Either[AppError, Unit]] =
+      IO.raiseError(new IllegalStateException("transaction rolled back"))
+
+  private abstract class StubMatchesRepository extends MatchesRepository[IO]:
+    override def update(
+        record: MatchRecord,
+        updatedAt: Instant,
+    ): IO[Either[AppError, Unit]] = IO.pure(Right(()))
+    override def delete(id: MatchId): IO[Boolean] = IO.pure(false)
+    override def find(id: MatchId): IO[Option[MatchRecord]] = IO.pure(None)
+    override def list(filter: MatchesRepository.ListFilter): IO[List[MatchRecord]] = IO.pure(Nil)
+    override def listByHeldEvent(heldEventId: HeldEventId): IO[List[MatchRecord]] = IO.pure(Nil)
+    override def existsMatchNo(
+        heldEventId: HeldEventId,
+        matchNoInEvent: MatchNoInEvent,
+    ): IO[Boolean] = IO.pure(false)
+    override def existsMatchNoExcept(
+        heldEventId: HeldEventId,
+        matchNoInEvent: MatchNoInEvent,
+        excludeMatchId: MatchId,
+    ): IO[Boolean] = IO.pure(false)
+    override def statsByHeldEvents(
+        heldEventIds: List[HeldEventId]
+    ): IO[Map[HeldEventId, MatchesRepository.HeldEventStats]] = IO.pure(Map.empty)
+
+  private def confirmationRepository(
+      result: Ref[IO, Either[AppError, MatchConfirmationResult]]
+  ): MatchConfirmationRepository[IO] = new MatchConfirmationRepository[IO]:
+    override def confirm(
+        record: MatchRecord,
+        draft: Option[MatchDraftConfirmation],
+        updatedAt: Instant,
+    ): IO[Either[AppError, MatchConfirmationResult]] = result.get
+
+  private def seriesAnalysisRepository(
+      result: Ref[IO, Either[AppError, SeriesAnalysisRecalculationAccepted]]
+  ): SeriesAnalysisRepository[IO] = new SeriesAnalysisRepository[IO]:
+    override def options: IO[Either[AppError, SeriesAnalysisOptions]] =
+      IO.raiseError(new AssertionError("unused"))
+    override def status(gameTitleId: GameTitleId): IO[Either[AppError, SeriesAnalysisStatus]] =
+      IO.raiseError(new AssertionError("unused"))
+    override def scopeStatus(request: SeriesAnalysisScopeStatusRequest)
+        : IO[Either[AppError, SeriesAnalysisScopeStatus]] =
+      IO.raiseError(new AssertionError("unused"))
+    override def chunk(
+        request: SeriesAnalysisChunkRequest
+    ): IO[Either[AppError, SeriesAnalysisChunk]] = IO.raiseError(new AssertionError("unused"))
+    override def adminOverview(
+        gameTitleId: Option[GameTitleId]
+    ): IO[Either[AppError, SeriesAnalysisAdminOverview]] =
+      IO.raiseError(new AssertionError("unused"))
+    override def requestTitleRecalculation(
+        gameTitleId: GameTitleId,
+        requestedBy: AccountId,
+        idempotencyKeyHash: String,
+    ): IO[Either[AppError, SeriesAnalysisRecalculationAccepted]] = result.get
+    override def requestAllRecalculation(
+        requestedBy: AccountId,
+        idempotencyKeyHash: String,
+    ): IO[Either[AppError, SeriesAnalysisRecalculationAccepted]] = result.get
+
+  private def acceptedRecalculation = SeriesAnalysisRecalculationAccepted(
+    requestId = "request-worker-wake",
+    acceptedAt = now,
+    targetCount = 1,
+    campaign = None,
+    target = Some(SeriesAnalysisAcceptedTarget(titleId, Some("job-worker-wake"), "queued")),
+  )
+
+  private def matchRecord = MatchFixtures.matchRecord(
+    id = MatchId.unsafeFromString("match-worker-wake"),
+    heldEventId = HeldEventId.unsafeFromString("event-worker-wake"),
+    matchNoInEvent = 1,
+    titleId = titleId,
+    seasonId = SeasonMasterId.unsafeFromString("season-worker-wake"),
+    mapId = MapMasterId.unsafeFromString("map-worker-wake"),
+    playedAt = now,
+    createdAt = now,
+    memberValues = List("member-1", "member-2", "member-3", "member-4"),
+    totalAssetsDraftId = None,
+    revenueDraftId = None,
+    incidentLogDraftId = None,
+  )
+
+  private def ocrPlan =
+    val jobId = OcrJobId.unsafeFromString("job-worker-wake")
+    val draftId = OcrDraftId.unsafeFromString("draft-worker-wake")
+    val imageId = ImageId.unsafeFromString("image-worker-wake")
+    val imageLocation = StoredImageLocation.unsafeFromString("source-images/worker-wake.png")
+    val draft = OcrDraft(
+      draftId,
+      jobId,
+      ScreenType.TotalAssets,
+      None,
+      None,
+      "{}",
+      "[]",
+      "{}",
+      now,
+      now,
+    )
+    val job = OcrJob.Queued(
+      jobId,
+      draftId,
+      imageId,
+      imageLocation,
+      ScreenType.TotalAssets,
+      0,
+      now,
+      now,
+    )
+    val request = OcrJobInput(
+      jobId,
+      draftId,
+      imageId,
+      imageLocation,
+      "a" * 64,
+      1L,
+      "image/png",
+      ScreenType.TotalAssets,
+      OcrJobHints.empty,
+      None,
+    )
+    OcrJobCreationPlan(
+      OcrJobSubmissionBinding("00000000-0000-4000-8000-000000000001", accountId),
+      draft,
+      job,
+      OcrJobDraftAttachment(
+        MatchDraftId.unsafeFromString("match-draft-wake"),
+        ScreenType.TotalAssets,
+        imageId,
+        draftId,
+        now
+      ),
+      request,
+      12,
+    )
+
+  private def ocrSubmission = OcrSubmission(
+    ocrPlan.submission.submissionId,
+    accountId,
+    ocrPlan.matchDraftAttachment.draftId,
+    OcrJobHints.empty,
+    "open",
+    now.plusSeconds(600),
+    now,
+    None,
+    List(OcrSubmissionMember(ScreenType.TotalAssets, "b" * 64, "a" * 64, 1)),
+  )
+
+  private final class RecordingSink private (
+      ref: Ref[IO, List[PostCommitEffects]],
+      result: WorkerWakeSubmitResult,
+  ) extends WorkerWakeSink[IO]:
+    override def submit(effects: PostCommitEffects): IO[WorkerWakeSubmitResult] =
+      ref.update(_ :+ effects).as(result)
+
+    def effects: IO[List[PostCommitEffects]] = ref.get
+
+  private object RecordingSink:
+    def create: IO[RecordingSink] =
+      Ref.of[IO, List[PostCommitEffects]](Nil).map(
+        new RecordingSink(_, WorkerWakeSubmitResult.Accepted)
+      )
+
+    def closed: IO[RecordingSink] =
+      Ref.of[IO, List[PostCommitEffects]](Nil).map(
+        new RecordingSink(_, WorkerWakeSubmitResult.Closed)
+      )
+
+  private object FailingSink extends WorkerWakeSink[IO]:
+    override def submit(effects: PostCommitEffects): IO[WorkerWakeSubmitResult] =
+      IO.raiseError(new IllegalStateException("notification connection unavailable"))
+
+end WorkerWakingRepositoriesSpec

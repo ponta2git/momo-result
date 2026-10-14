@@ -179,6 +179,7 @@ const ScoreGridContent = memo(function ScoreGridContent({
 
   const handleKeyboard = useCallback<ScoreGridKeyboardHandler>(
     (args) => {
+      if (args.event.nativeEvent.isComposing) return;
       const target = args.event.currentTarget;
 
       if (args.event.key === "ArrowLeft" || args.event.key === "ArrowRight") {

@@ -68,6 +68,7 @@ export type OcrSubmissionWorkflowParams = OcrSubmissionInput & {
   getJob: (id: string) => Promise<OcrJobResponse>;
   hints: OcrJobHintsRequest;
   playedAt: string;
+  signal?: AbortSignal | undefined;
   state: OcrSubmissionState;
   onProgress?: ((progress: OcrSubmissionProgress) => void) | undefined;
   updateSlot: (slot: CaptureSlotState) => void;
@@ -81,6 +82,7 @@ export async function runOcrSubmissionWorkflow({
   getJob,
   hints,
   playedAt,
+  signal,
   state,
   onProgress,
   selectedGameTitle,
@@ -89,6 +91,7 @@ export async function runOcrSubmissionWorkflow({
   slots,
   updateSlot,
 }: OcrSubmissionWorkflowParams): Promise<OcrSubmissionResult> {
+  signal?.throwIfAborted();
   const targetSlots = pickOcrTargets(slots).filter(
     (slot) => !state.targetKinds || state.targetKinds.includes(slot.kind),
   );
@@ -132,12 +135,14 @@ export async function runOcrSubmissionWorkflow({
         }),
       ));
   } catch {
+    signal?.throwIfAborted();
     return {
       status: "invalid",
       message: "画像を読み込めませんでした。画像を選び直してお試しください。",
     };
   }
 
+  signal?.throwIfAborted();
   let matchDraftId: string | null;
   try {
     const matchDraft =
@@ -164,23 +169,27 @@ export async function runOcrSubmissionWorkflow({
     state.draft = matchDraft;
     matchDraftId = matchDraft.matchDraftId;
   } catch (error) {
+    signal?.throwIfAborted();
     return { error, status: "draft_create_failed" };
   }
   if (!matchDraftId) {
     return { error: new Error("matchDraftId was not returned"), status: "draft_create_failed" };
   }
 
+  signal?.throwIfAborted();
   let submission: OcrSubmissionResponse;
   try {
     state.request ??= { matchDraftId, ocrHints: hints, members };
     submission = await putSubmission(state.submissionId, state.request);
   } catch (error) {
+    signal?.throwIfAborted();
     const { status } = normalizeUnknownApiError(error);
     if (status === 404 || status === 409) {
       return { status: "submission_closed", canRestart: false };
     }
     return { matchDraftId, status: "submission_failed" };
   }
+  signal?.throwIfAborted();
   const unregistered = targetSlots.filter((slot) =>
     submission.members?.some(
       (member) =>
@@ -198,6 +207,7 @@ export async function runOcrSubmissionWorkflow({
   let createdJobCount = 0;
   let failedJobCount = 0;
   for (const [index, slot] of targetSlots.entries()) {
+    signal?.throwIfAborted();
     if (!slot.file) continue;
     onProgress?.({
       current: index + 1,
@@ -224,11 +234,13 @@ export async function runOcrSubmissionWorkflow({
       if (accepted?.status === "failed") throw new Error("image admission closed");
       if (!checkpoint.job) {
         const upload = (checkpoint.upload ??= await uploadImage(slot.file, options));
+        signal?.throwIfAborted();
         checkpoint.job = await createJob(
           ocrJobRequestForSlot(state.submissionId, slot, upload.imageId),
           options,
         );
       }
+      signal?.throwIfAborted();
       const job = checkpoint.job;
       const status = parseOcrJobStatus(job.status);
       updateSlot({
@@ -240,6 +252,7 @@ export async function runOcrSubmissionWorkflow({
       });
       createdJobCount += 1;
     } catch (error) {
+      signal?.throwIfAborted();
       failedJobCount += 1;
       updateSlot({
         ...uploadingSlot,

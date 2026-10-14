@@ -15,6 +15,7 @@ import type { PutOcrSubmissionRequest } from "@/shared/api/ocrSubmissions";
 import { gameTitlesQueryOptions } from "@/shared/api/queryOptions";
 import { authMeQueryKeyFor } from "@/shared/auth/authQueries";
 import { DevUserPicker } from "@/shared/auth/DevUserPicker";
+import { clearPrincipalClientState } from "@/shared/auth/principalClientState";
 import { setDevUser, testDevUserAccountId } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { installObjectUrlMock } from "@/test/doubles/dom";
@@ -210,11 +211,12 @@ describe("OcrCapturePage", () => {
     expect(await screen.findByText("matches-page")).toBeInTheDocument();
   });
 
-  it("releases the old principal's capture and ignores its late submission navigation", async () => {
+  it("releases the old principal's capture and stops its late submission before further writes", async () => {
     setDevUser();
     const objectUrls = installObjectUrlMock();
     const draftResponse = createDeferred();
     let draftStarted = false;
+    let admissionRequests = 0;
     server.use(
       http.post("/api/match-drafts", async () => {
         draftStarted = true;
@@ -225,6 +227,10 @@ describe("OcrCapturePage", () => {
           createdAt: "2026-01-01T00:00:00.000Z",
           updatedAt: "2026-01-01T00:00:00.000Z",
         });
+      }),
+      http.put("/api/ocr-submissions/:submissionId", () => {
+        admissionRequests += 1;
+        return HttpResponse.json({ detail: "old admission must not continue" }, { status: 409 });
       }),
     );
     const { router } = renderCaptureRoute();
@@ -237,6 +243,16 @@ describe("OcrCapturePage", () => {
     );
     await startOcrAllowingPartialTray();
     await waitFor(() => expect(draftStarted).toBe(true));
+    await act(async () => {
+      const clearing = clearPrincipalClientState(queryClient, {
+        queryKey: authMeQueryKeyFor(testDevUserAccountId),
+        state: "authenticated",
+      });
+      draftResponse.resolve();
+      await clearing;
+    });
+    await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+    expect(admissionRequests).toBe(0);
     act(() => {
       queryClient.setQueryData<AuthMeResponse>(
         authMeQueryKeyFor(testDevUserAccountId),
@@ -245,8 +261,6 @@ describe("OcrCapturePage", () => {
     });
     expect(await screen.findByText("配置済み0件／全3件")).toBeVisible();
     expect(objectUrls.revokeObjectURL).toHaveBeenCalled();
-    draftResponse.resolve();
-    await waitFor(() => expect(queryClient.isMutating()).toBe(0));
     expect(router.state.location.pathname).toBe("/ocr/new");
     expect(screen.getByText("配置済み0件／全3件")).toBeVisible();
     expect(screen.queryByText("matches-page")).not.toBeInTheDocument();

@@ -54,6 +54,7 @@ export function OutlookHorizonControl({
               }}
               onBlur={() => setValidateBlank(true)}
               onKeyDown={(event) => {
+                if (event.nativeEvent.isComposing) return;
                 if (event.key === "Enter") setValidateBlank(true);
                 if (event.key === "Escape") {
                   setValidateBlank(false);

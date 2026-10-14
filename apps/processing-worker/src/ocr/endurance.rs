@@ -1,15 +1,14 @@
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashSet},
     path::PathBuf,
     time::Duration,
 };
 
-use redis::{Value, streams::StreamId};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::{
-    contract::{OcrQueuePayload, SourceImageClaims, parse_delivery},
+    contract::{OcrJobInput, SourceImageClaims, parse_persisted_payload},
     object_store::R2ObjectStoreConfig,
 };
 
@@ -207,7 +206,7 @@ struct ManifestObject {
 
 struct PreparedObject {
     label: String,
-    payload: OcrQueuePayload,
+    payload: OcrJobInput,
     source_image: SourceImageClaims,
 }
 
@@ -295,22 +294,17 @@ fn prepare_objects(manifest: EnduranceManifest) -> Result<Vec<PreparedObject>, O
                 ("byteLength", object.byte_length.to_string()),
                 ("mediaType", object.media_type),
                 ("requestedScreenType", object.requested_screen_type),
-                ("attempt", String::from("1")),
-                ("enqueuedAt", String::from("1970-01-01T00:00:00Z")),
                 ("ocrHintsJson", hints),
             ];
-            let delivery = StreamId {
-                id: format!("0-{index}"),
-                map: fields
+            let snapshot = serde_json::Value::Object(
+                fields
                     .into_iter()
-                    .map(|(name, value)| {
-                        (String::from(name), Value::BulkString(value.into_bytes()))
-                    })
-                    .collect::<HashMap<_, _>>(),
-                ..StreamId::default()
-            };
-            let payload =
-                parse_delivery(&delivery).map_err(|_error| OcrEnduranceError::Manifest)?;
+                    .map(|(name, value)| (String::from(name), serde_json::Value::String(value)))
+                    .collect(),
+            );
+            let input =
+                parse_persisted_payload(&snapshot).map_err(|_error| OcrEnduranceError::Manifest)?;
+            let payload = input.payload().clone();
             let source_image =
                 SourceImageClaims::try_from_payload(&payload).ok_or(OcrEnduranceError::Manifest)?;
             Ok(PreparedObject {

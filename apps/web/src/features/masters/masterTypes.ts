@@ -10,13 +10,3 @@ export type MasterViewModelInput = {
   seasonMasters: SeasonMasterResponse[];
   selectedGameTitleId: string;
 };
-
-export type MasterViewModel = {
-  canCreateScopedMasters: boolean;
-  scopedDisabledReason: string | undefined;
-  selectedGameTitle: GameTitleResponse | undefined;
-  selectedGameTitleId: string;
-  selectedMapMasters: MapMasterResponse[];
-  selectedSeasonMasters: SeasonMasterResponse[];
-  shouldPromptGameTitleCreation: boolean;
-};

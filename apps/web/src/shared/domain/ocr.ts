@@ -15,8 +15,6 @@ export const layoutFamilyLabels = {
   world: "ワールド向け",
 } as const satisfies Record<LayoutFamily, string>;
 
-export const terminalJobStatuses = ["succeeded", "failed", "cancelled"] as const;
-
 function isOneOf<const T extends readonly string[]>(value: unknown, list: T): value is T[number] {
   return typeof value === "string" && list.includes(value);
 }
@@ -31,8 +29,4 @@ export function parseOcrJobStatus(value: unknown): OcrJobStatus | "unknown" {
 
 export function parseLayoutFamily(value: unknown): LayoutFamily | undefined {
   return isOneOf(value, layoutFamilies) ? value : undefined;
-}
-
-export function isTerminalJobStatus(value: unknown): value is (typeof terminalJobStatuses)[number] {
-  return isOneOf(value, terminalJobStatuses);
 }

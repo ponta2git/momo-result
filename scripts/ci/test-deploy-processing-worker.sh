@@ -31,7 +31,7 @@ case "$1" in
   secrets)
     status=Deployed
     [[ ! -f "${TEST_STATE}/staged" ]] || status=Staged
-    jq -n --arg status "${status}" '[{name:"MOMO_ANALYSIS_OUTBOX_LISTENER_DATABASE_URL",status:$status}]'
+    jq -n --arg status "${status}" '[{name:"MOMO_PROCESSING_LISTENER_DATABASE_URL",status:$status}]'
     ;;
   machine)
     digest=1

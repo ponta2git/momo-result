@@ -6,6 +6,7 @@ import scala.concurrent.duration.DurationInt
 
 import cats.effect.IO
 import doobie.implicits.*
+import doobie.postgres.implicits.*
 import munit.AnyFixture
 
 import momo.api.MomoCatsEffectSuite
@@ -46,6 +47,16 @@ abstract class IntegrationSuite extends MomoCatsEffectSuite:
 
   protected def transactor: doobie.Transactor[IO] = dbFixture().transactor
   protected def dataSource: javax.sql.DataSource = dbFixture().transactor.kernel
+
+  protected def insertOcrSourceImage(id: String, now: java.time.Instant): IO[Int] = sql"""
+    INSERT INTO source_images (
+      id, owner_account_id, object_key, idempotency_key_hash, status,
+      media_type, byte_length, sha256_hex, width, height, available_at, created_at, updated_at
+    ) VALUES (
+      $id, 'account_ponta', ${s"source-images/$id.png"}, md5($id) || md5($id), 'AVAILABLE',
+      'image/png', 128, repeat('b', 64), 1, 1, $now, $now, $now
+    ) ON CONFLICT (id) DO NOTHING
+  """.update.run.transact(transactor)
 
   /** Observe the transaction used by the public read facade before its normal commit. */
   protected def assertReadSnapshot[A](read: doobie.Transactor[IO] => IO[A]): IO[A] =

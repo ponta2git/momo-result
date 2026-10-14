@@ -8,7 +8,6 @@ import {
   command,
   eventFields,
   report,
-  redisGroupDrained,
   requireSuccess,
   safeDiagnostics,
   startCommand,
@@ -160,39 +159,17 @@ test(
   },
 );
 
-test("Redis group drain reads the redis-cli JSON object wire and rejects unknown lag", () => {
-  // Captured shape from the isolated Redis 7 CLI, with only fixture identities.
-  const group = {
-    name: "parser-group",
-    consumers: 0,
-    pending: 0,
-    "last-delivered-id": "0-0",
-    "entries-read": null,
-    lag: 0,
-  };
-  assert.equal(redisGroupDrained(JSON.stringify([group]), "parser-group"), true);
-  assert.equal(redisGroupDrained(JSON.stringify([group]), "other-group"), false);
-  assert.equal(
-    redisGroupDrained(JSON.stringify([{ ...group, pending: 1 }]), "parser-group"),
-    false,
-  );
-  assert.equal(redisGroupDrained(JSON.stringify([{ ...group, lag: null }]), "parser-group"), false);
-  assert.throws(() => redisGroupDrained("[null]", "parser-group"), /Invalid Redis group fields/);
-});
-
 test("worker correlation fields are read from the current tracing span", () => {
   const [event] = eventFields(
     JSON.stringify({
       span: {
         name: "analysis_attempt",
-        delivery_message_id: "1-0",
         attempt_id: "fixture-attempt",
         worker_id: "fixture-worker",
       },
       fields: { event: "analysis_child_report_accepted", artifact_payload_bytes: 128 },
     }),
   );
-  assert.equal(event?.delivery_message_id, "1-0");
   assert.equal(event?.attempt_id, "fixture-attempt");
   assert.equal(event?.artifact_payload_bytes, 128);
 });

@@ -73,7 +73,8 @@ object PostgresAppSessions:
         expiresAt: Instant,
     ): ConnectionIO[Unit] = sql"""
         UPDATE app_sessions
-        SET last_seen_at = $lastSeenAt, expires_at = $expiresAt
+        SET last_seen_at = GREATEST(last_seen_at, $lastSeenAt),
+            expires_at = GREATEST(expires_at, $expiresAt)
         WHERE id_hash = $idHash
       """.update.run.void
 

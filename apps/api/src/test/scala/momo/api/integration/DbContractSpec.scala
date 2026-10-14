@@ -388,7 +388,7 @@ final class DbContractSpec extends IntegrationSuite:
       assertEquals(deleted, 4)
       assertEquals(remainingChildren, 0L)
 
-  test("OCR migration accepts complete v1 and v2 inputs but rejects incomplete v2 input"):
+  test("OCR jobs accept terminal legacy data and queued snapshots but reject missing live input"):
     val accountId = "account_ponta"
     val insertSource = sql"""
       INSERT INTO source_images (
@@ -405,25 +405,25 @@ final class DbContractSpec extends IntegrationSuite:
         attempt_count, created_at, updated_at
       ) VALUES (
         'job-contract-v1', 'draft-contract-v1', 'image-contract-v1',
-        '/tmp/image-contract-v1.png', 'total_assets', 'queued', 0, now(), now()
+        '/tmp/image-contract-v1.png', 'total_assets', 'failed', 0, now(), now()
       )
     """.update.run
     val insertV2 = sql"""
       INSERT INTO ocr_jobs (
-        id, draft_id, image_id, source_image_id, queue_schema_version,
+        id, draft_id, image_id, source_image_id, input_snapshot,
         requested_screen_type, status, attempt_count, created_at, updated_at
       ) VALUES (
         'job-contract-v2', 'draft-contract-v2', 'source-contract-v2',
-        'source-contract-v2', 2, 'revenue', 'queued', 0, now(), now()
+        'source-contract-v2', '{"schemaVersion":"2"}'::jsonb, 'revenue', 'queued', 0, now(), now()
       )
     """.update.run
     val insertInvalidV2 = sql"""
       INSERT INTO ocr_jobs (
-        id, draft_id, image_id, queue_schema_version, requested_screen_type,
+        id, draft_id, image_id, input_snapshot, requested_screen_type,
         status, attempt_count, created_at, updated_at
       ) VALUES (
         'job-contract-v2-invalid', 'draft-contract-v2-invalid', 'image-contract-v2-invalid',
-        2, 'incident_log', 'queued', 0, now(), now()
+        NULL, 'incident_log', 'queued', 0, now(), now()
       )
     """.update.run
 

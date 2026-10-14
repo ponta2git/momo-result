@@ -101,6 +101,7 @@ lazy val root = (project in file("."))
   .enablePlugins(JavaAppPackaging)
   .settings(
     inConfig(OpenApi)(Defaults.compileSettings),
+    inConfig(OpenApi)(sbt.plugins.SemanticdbPlugin.configurationSettings),
     org.scalafmt.sbt.ScalafmtPlugin.scalafmtConfigSettings(OpenApi),
     scalafixConfigSettings(OpenApi),
     inConfig(DbTest)(serviceTestSettings("DbIntegration")),

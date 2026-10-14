@@ -534,7 +534,9 @@ jobs:
       - name: Deploy to Fly.io
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        run: flyctl deploy --image "${{ steps.registry.outputs.registry_ref }}" --yes
+        run: |
+          flyctl deploy --image "${{ steps.registry.outputs.registry_ref }}" --yes
+          scripts/ci/start-deployed-machine.sh runtime momo-result "${{ steps.registry.outputs.registry_ref }}"
 
       - name: Verify deployed image identity
         env:

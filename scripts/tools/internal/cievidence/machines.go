@@ -53,6 +53,27 @@ func machines(command string, value any, args []string, out io.Writer) error {
 	}
 	m := list[0]
 	id, image := str(field(m, "id")), str(field(m, "config", "image"))
+	if command == "runtime-machine-start-id" || command == "analysis-machine-start-id" {
+		state := field(m, "state")
+		if (state != "stopped" && state != "started") || !machineID.MatchString(id) {
+			return invalid
+		}
+		// Apply the same image/configuration contract before starting a stopped
+		// deployment. This is a start target, never evidence of a running machine.
+		objectMap(m)["state"] = "started"
+		validator := "runtime-machine-id"
+		if command == "analysis-machine-start-id" {
+			validator = "analysis-machine-evidence"
+		}
+		if err := machines(validator, list, args, io.Discard); err != nil {
+			return err
+		}
+		if state == "stopped" {
+			_, err := fmt.Fprintln(out, id)
+			return err
+		}
+		return nil
+	}
 	switch command {
 	case "runtime-machine-evidence", "runtime-machine-id":
 		if !immutableImage(args[0], "momo-result") || field(m, "state") != "started" || image != args[0] {

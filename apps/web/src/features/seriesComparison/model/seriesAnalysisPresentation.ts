@@ -1,7 +1,6 @@
 import type {
   ChangeDirection,
   SeriesAnalysisPlayer,
-  RelativeIntensity,
   SeriesAnalysisPlaybookCategory,
   SeriesAnalysisPlaybookClassification,
   SeriesAnalysisPlaybookEvidenceStrength,
@@ -45,19 +44,6 @@ export function formatPercent(value: number | null | undefined): string {
 
 export function formatDateTime(value: string | null | undefined): string {
   return formatDateTimeLong(value ?? undefined, "—");
-}
-
-export function intensityClassName(intensity: RelativeIntensity): string {
-  switch (intensity) {
-    case "high":
-      return "bg-[var(--color-analysis-emphasis)]/24";
-    case "medium":
-      return "bg-[var(--color-analysis-emphasis)]/16";
-    case "low":
-      return "bg-[var(--color-analysis-emphasis)]/8";
-    case "none":
-      return "bg-[var(--color-surface)]";
-  }
 }
 
 export function directionLabel(direction: ChangeDirection | "unavailable"): string {

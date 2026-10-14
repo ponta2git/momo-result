@@ -44,12 +44,6 @@ export const ocrHandlers = [
       updatedAt: now,
     }),
   ),
-  http.delete("/api/ocr-jobs/:jobId", ({ params }) =>
-    HttpResponse.json({
-      jobId: params["jobId"],
-      status: "cancelled",
-    }),
-  ),
   http.get("/api/ocr-drafts/:draftId", () =>
     HttpResponse.json({
       createdAt: now,

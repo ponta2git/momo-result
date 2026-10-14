@@ -8,7 +8,6 @@ export type CreateOcrJobResponse = components["schemas"]["CreateOcrJobResponse"]
 export type OcrJobResponse = components["schemas"]["OcrJobResponse"];
 export type OcrFailureResponse = components["schemas"]["OcrFailureResponse"];
 export type OcrJobHintsRequest = components["schemas"]["OcrJobHintsRequest"];
-export type CancelOcrJobResponse = components["schemas"]["CancelOcrJobResponse"];
 
 export async function uploadImage(
   file: File,
@@ -39,14 +38,4 @@ export async function getOcrJob(
   options: ApiSignalOptions = {},
 ): Promise<OcrJobResponse> {
   return apiRequest<OcrJobResponse>(`/api/ocr-jobs/${encodeURIComponent(jobId)}`, options);
-}
-
-export async function cancelOcrJob(
-  jobId: string,
-  options: IdempotencyRequestOptions,
-): Promise<CancelOcrJobResponse> {
-  return apiRequest<CancelOcrJobResponse>(`/api/ocr-jobs/${encodeURIComponent(jobId)}`, {
-    method: "DELETE",
-    idempotency: { key: options.idempotencyKey },
-  });
 }

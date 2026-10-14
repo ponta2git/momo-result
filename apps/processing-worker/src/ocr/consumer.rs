@@ -2,7 +2,7 @@ use std::{future::Future, pin::Pin, time::Duration};
 
 use thiserror::Error;
 use tokio::{sync::watch, time};
-use tracing::{info, warn};
+use tracing::{Instrument, info, info_span, warn};
 
 use crate::postgres;
 
@@ -286,6 +286,15 @@ impl Runner {
         claim: ClaimedOcrJob,
         mut shutdown: watch::Receiver<bool>,
     ) -> Result<(), OcrConsumerError> {
+        let span = info_span!(
+            "ocr_attempt",
+            worker_id = %self.config.control.worker_id(),
+            job_id = %claim.job_id,
+            attempt_id = %claim.attempt_id,
+            draft_id = %claim.draft_id,
+            attempt_no = claim.attempt_count,
+            fencing_token = claim.fencing_token,
+        );
         process_claimed(
             &mut self.control_client,
             &mut self.heartbeat_client,
@@ -296,6 +305,7 @@ impl Runner {
             &claim.hints,
             &mut shutdown,
         )
+        .instrument(span)
         .await
         .map(|_| ())
     }

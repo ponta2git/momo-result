@@ -2,7 +2,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use thiserror::Error;
 use tokio::sync::watch;
-use tracing::{error, info, warn};
+use tracing::{Instrument, error, info, info_span, warn};
 
 pub(crate) mod artifact;
 pub(crate) mod child;
@@ -263,16 +263,41 @@ impl Runner {
         claim: control::ClaimedJob,
         mut shutdown: watch::Receiver<bool>,
     ) -> Result<(), ConsumerError> {
-        execute_claimed_job(
-            &mut self.control_client,
-            &mut self.heartbeat_client,
-            &self.config,
-            &self.post_commit_sink,
-            &claim,
-            &mut shutdown,
-        )
+        let span = info_span!(
+            "analysis_attempt",
+            worker_id = %self.config.worker_id,
+            job_id = %claim.job_id,
+            attempt_id = %claim.attempt_id,
+            game_title_id = %claim.game_title_id,
+            attempt_no = claim.attempt_no,
+            input_revision = claim.input_revision,
+            algorithm_version = %claim.algorithm_version,
+            artifact_schema_version = claim.artifact_schema_version,
+            validation_contract_id = claim.validation_contract_id.as_deref().unwrap_or("missing"),
+            fencing_token = claim.fencing_token,
+        );
+        async {
+            let result = execute_claimed_job(
+                &mut self.control_client,
+                &mut self.heartbeat_client,
+                &self.config,
+                &self.post_commit_sink,
+                &claim,
+                &mut shutdown,
+            )
+            .await;
+            if let Err(error) = &result {
+                error!(
+                    event = "analysis_attempt_runtime_failed",
+                    phase = "control_plane",
+                    error_kind = error.kind(),
+                    "analysis attempt could not complete its control-plane transition"
+                );
+            }
+            result.map(|_| ())
+        }
+        .instrument(span)
         .await
-        .map(|_| ())
     }
 
     pub(crate) async fn drain(self) -> Result<(), ConsumerError> {

@@ -9,7 +9,7 @@ use crate::{
         ExecutionTaskKind, NewExecutionSlotHolder, SlotAcquisition, acquire_analysis,
         clear_stale_preemption, lock as lock_execution_slot,
     },
-    outbox::ControlOutcome,
+    scheduler::ControlOutcome,
     series_analysis::config::AnalysisConsumerConfig,
 };
 
@@ -34,15 +34,6 @@ pub(crate) async fn claim_job(
     claim_job_with_diagnostics(client, job_id, config, true).await
 }
 
-/// Rechecks a locally pending delivery without emitting phase logs for every busy retry.
-pub(crate) async fn retry_busy_job(
-    client: &mut Client,
-    job_id: &str,
-    config: &AnalysisConsumerConfig,
-) -> Result<ControlOutcome<ClaimResult>, ControlError> {
-    claim_job_with_diagnostics(client, job_id, config, false).await
-}
-
 async fn claim_job_with_diagnostics(
     client: &mut Client,
     job_id: &str,
@@ -51,6 +42,9 @@ async fn claim_job_with_diagnostics(
 ) -> Result<ControlOutcome<ClaimResult>, ControlError> {
     let transaction =
         bounded_transaction(client, config.execution_limits.finalization_timeout).await?;
+    transaction
+        .batch_execute("SET LOCAL lock_timeout='100ms'")
+        .await?;
     let lease_milliseconds = duration_milliseconds(config.lease_duration)?;
     let (candidate, effects) = match measure_claim(
         diagnostics,
@@ -62,10 +56,10 @@ async fn claim_job_with_diagnostics(
         ClaimPreparation::Ready { candidate, effects } => (candidate, effects),
         ClaimPreparation::RecoveredExpiredHolder {
             effects,
-            current_delivery_resolved,
+            current_candidate_resolved,
         } => {
             measure_claim(diagnostics, "claim_commit", transaction.commit()).await?;
-            let result = if current_delivery_resolved {
+            let result = if current_candidate_resolved {
                 ClaimResult::RecoveredCurrentJob
             } else {
                 ClaimResult::Busy
@@ -171,7 +165,7 @@ pub(super) enum ClaimPreparation {
     },
     RecoveredExpiredHolder {
         effects: TransactionEffects,
-        current_delivery_resolved: bool,
+        current_candidate_resolved: bool,
     },
     Rejected(ClaimResult),
 }
@@ -198,12 +192,12 @@ pub(super) async fn prepare_claim(
             return Ok(ClaimPreparation::Rejected(ClaimResult::Busy));
         }
         let recovery_effects = recover_expired_analysis_holder(transaction, holder).await?;
-        let current_delivery_resolved =
-            recovery_resolves_delivery(transaction, &holder.job_id, job_id, recovery_effects)
+        let current_candidate_resolved =
+            recovery_resolves_candidate(transaction, &holder.job_id, job_id, recovery_effects)
                 .await?;
         effects.merge(recovery_effects);
         return Ok(ClaimPreparation::RecoveredExpiredHolder {
-            current_delivery_resolved,
+            current_candidate_resolved,
             effects,
         });
     }
@@ -276,30 +270,30 @@ fn supports_candidate(candidate: &ClaimCandidate, expected_schema: i32) -> bool 
             .is_some_and(|contract| contract == ARTIFACT_VALIDATION_CONTRACT_ID)
 }
 
-async fn recovery_resolves_delivery(
+async fn recovery_resolves_candidate(
     transaction: &Transaction<'_>,
     holder_job_id: &str,
-    delivery_job_id: &str,
+    candidate_job_id: &str,
     recovery_effects: TransactionEffects,
 ) -> Result<bool, ControlError> {
-    if holder_job_id != delivery_job_id {
+    if holder_job_id != candidate_job_id {
         return Ok(false);
     }
     let status = transaction
         .query_opt(
             "SELECT status FROM series_analysis_jobs WHERE id = $1",
-            &[&delivery_job_id],
+            &[&candidate_job_id],
         )
         .await?
         .map(|row| row.try_get::<_, String>(0))
         .transpose()?;
-    Ok(recovered_job_state_resolves_delivery(
+    Ok(recovered_job_state_resolves_candidate(
         status.as_deref(),
         recovery_effects,
     ))
 }
 
-fn recovered_job_state_resolves_delivery(
+fn recovered_job_state_resolves_candidate(
     status: Option<&str>,
     recovery_effects: TransactionEffects,
 ) -> bool {
@@ -630,29 +624,29 @@ mod tests {
     }
 
     #[test]
-    fn recovered_current_delivery_requires_terminal_state_or_durable_replacement() {
+    fn recovered_current_candidate_requires_terminal_state_or_durable_retry() {
         let no_effects = TransactionEffects::empty();
         let mut replacement = TransactionEffects::empty();
         replacement.record_series_analysis();
 
-        assert!(recovered_job_state_resolves_delivery(None, no_effects));
-        assert!(recovered_job_state_resolves_delivery(
+        assert!(recovered_job_state_resolves_candidate(None, no_effects));
+        assert!(recovered_job_state_resolves_candidate(
             Some("failed"),
             no_effects
         ));
-        assert!(recovered_job_state_resolves_delivery(
+        assert!(recovered_job_state_resolves_candidate(
             Some("succeeded"),
             no_effects
         ));
-        assert!(recovered_job_state_resolves_delivery(
+        assert!(recovered_job_state_resolves_candidate(
             Some("queued"),
             replacement
         ));
-        assert!(!recovered_job_state_resolves_delivery(
+        assert!(!recovered_job_state_resolves_candidate(
             Some("queued"),
             no_effects
         ));
-        assert!(!recovered_job_state_resolves_delivery(
+        assert!(!recovered_job_state_resolves_candidate(
             Some("running"),
             replacement
         ));

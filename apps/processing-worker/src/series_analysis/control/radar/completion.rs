@@ -15,7 +15,7 @@ pub(in crate::series_analysis::control) async fn complete_preparation(
     config: &crate::series_analysis::config::AnalysisConsumerConfig,
     directory: &std::path::Path,
     metrics: &control::AttemptMetrics,
-) -> Result<crate::outbox::ControlOutcome<control::PublicationResult>, ControlError> {
+) -> Result<crate::scheduler::ControlOutcome<control::PublicationResult>, ControlError> {
     let started = Instant::now();
     let prepared = radar_prepare::read(
         directory,

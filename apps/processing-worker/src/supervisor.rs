@@ -1,4 +1,4 @@
-use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
+use std::{future::Future, pin::Pin, time::Duration};
 
 use futures_util::{StreamExt, stream::FuturesUnordered};
 use thiserror::Error;
@@ -10,14 +10,10 @@ use crate::{
         OcrConsumerMode, OcrConsumerRuntimeConfig, OcrRuntimeConfigError,
         consumer_mode_from_environment,
     },
-    outbox::PostCommitSink,
-    series_analysis::{
-        self, ConsumerError as SeriesAnalysisConsumerError,
-        config::{
-            AnalysisActivationConfig, AnalysisConfigError, AnalysisConsumerConfig,
-            AnalysisPublicationMode,
-        },
-        outbox::runtime as analysis_outbox,
+    scheduler::PostCommitSink,
+    series_analysis::config::{
+        AnalysisActivationConfig, AnalysisConfigError, AnalysisConsumerConfig,
+        AnalysisPublicationMode,
     },
 };
 
@@ -57,14 +53,13 @@ impl WorkerRuntimePlan {
         let ocr = OcrConsumerRuntimeConfig::from_environment(
             ocr_mode,
             series_analysis.database_url.clone(),
-            series_analysis.redis_url.clone(),
             series_analysis.child_stop_grace,
         )?;
-        // Idle delivery reads observe shutdown before starting a claim. Owned work can instead
+        // Idle scheduler scans observe shutdown before starting a claim. Owned work can instead
         // have a claim/heartbeat operation in flight, then stop its child and durably finalize.
         // Analysis subsequently persists its capability's draining state.
         let analysis_shutdown_timeout = composed_shutdown_drain_timeout(
-            crate::stream_connection::RESPONSE_TIMEOUT,
+            Duration::from_secs(10),
             series_analysis.renewal_window(),
             series_analysis.child_stop_grace,
             series_analysis.execution_limits.finalization_timeout,
@@ -74,7 +69,7 @@ impl WorkerRuntimePlan {
             OcrConsumerRuntimeConfig::Disabled => analysis_shutdown_timeout,
             OcrConsumerRuntimeConfig::Enabled(ocr) => {
                 analysis_shutdown_timeout.max(composed_shutdown_drain_timeout(
-                    crate::stream_connection::RESPONSE_TIMEOUT,
+                    Duration::from_secs(10),
                     ocr.shutdown_attempt_operation_bound(),
                     series_analysis.child_stop_grace,
                     ocr.shutdown_finalization_bound(),
@@ -109,12 +104,7 @@ impl WorkerRuntimePlan {
     }
 }
 
-/// Runs the configured consumers and their process-local outbox coordinator under one lifecycle
-/// boundary.
-///
-/// The supervisor knows which long-lived peers exist, but not their queue payloads, claim SQL, or
-/// durable state transitions. Analysis and OCR submit the same typed post-commit effects to one
-/// process-local Analysis outbox sink.
+/// Supervises durable processing, submission coordination, and outbound notifications together.
 ///
 /// # Errors
 ///
@@ -139,16 +129,13 @@ pub(crate) async fn run(
         shutdown_drain_timeout,
     } = enabled;
     let (notification_sink, notification_driver) = NotificationDriver::new(notifications)?;
-    let outbox_config = analysis_outbox::RuntimeConfig::from(&series_analysis);
     let (sink, wake) = PostCommitSink::channel();
     let (shutdown_sender, shutdown) = watch::channel(false);
-    let (outbox_shutdown_sender, outbox_shutdown) = watch::channel(false);
-    let outbox_producers = Arc::new(OutboxShutdownAfterProducers(outbox_shutdown_sender));
-    let mut peers = Vec::with_capacity(4);
-    if let OcrConsumerRuntimeConfig::Enabled(ocr) = ocr {
+    let mut peers = Vec::with_capacity(2);
+    if let OcrConsumerRuntimeConfig::Enabled(ocr) = &ocr {
         let submission_config = crate::ocr::submissions::runtime::Config {
             database_url: series_analysis.database_url.clone(),
-            listener_database_url: series_analysis.outbox_listener_database_url.clone(),
+            listener_database_url: series_analysis.listener_database_url.clone(),
             finalization_timeout: ocr.shutdown_finalization_bound(),
         };
         let submission_sink = notification_sink.clone();
@@ -162,29 +149,17 @@ pub(crate) async fn run(
             .await
             .map_err(SupervisorError::OcrSubmissions)
         }));
-        peers.push(outbox_producer(
-            ocr_peer(&series_analysis, *ocr, sink.clone(), shutdown.clone())?,
-            Arc::clone(&outbox_producers),
-        ));
     }
-    let analysis_sink = sink.clone();
-    let analysis_shutdown = shutdown.clone();
-    peers.push(outbox_producer(
-        runtime_peer("analysis", async move {
-            series_analysis::run(
-                series_analysis.with_notifications(notification_sink),
-                analysis_sink,
-                analysis_shutdown,
-            )
-            .await
-            .map_err(SupervisorError::SeriesAnalysis)
-        }),
-        outbox_producers,
-    ));
-    peers.push(runtime_peer("analysis_outbox", async move {
-        analysis_outbox::run(outbox_config, wake, sink, outbox_shutdown)
-            .await
-            .map_err(SupervisorError::AnalysisOutbox)
+    peers.push(runtime_peer("processing_scheduler", async move {
+        Box::pin(crate::scheduler::run(
+            series_analysis.with_notifications(notification_sink),
+            ocr,
+            sink,
+            wake,
+            shutdown,
+        ))
+        .await
+        .map_err(SupervisorError::Scheduler)
     }));
     supervise_peers(
         peers,
@@ -196,61 +171,8 @@ pub(crate) async fn run(
     .await
 }
 
-#[cfg_attr(
-    target_os = "linux",
-    expect(
-        clippy::unnecessary_wraps,
-        reason = "other targets reject OCR before any runtime peer starts"
-    )
-)]
-fn ocr_peer(
-    analysis: &AnalysisConsumerConfig,
-    config: crate::ocr::consumer::OcrConsumerConfig,
-    sink: PostCommitSink,
-    shutdown: watch::Receiver<bool>,
-) -> Result<RuntimePeer, SupervisorError> {
-    #[cfg(target_os = "linux")]
-    {
-        let launcher = crate::ocr::IsolatedOcrChildLauncher::new(
-            analysis.child_cgroup.clone(),
-            None,
-            analysis.child_stop_grace,
-            config.child_liveness_timeout(),
-        );
-        Ok(runtime_peer("ocr", async move {
-            crate::ocr::consumer::run(config, &launcher, sink, shutdown)
-                .await
-                .map_err(SupervisorError::Ocr)
-        }))
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        drop((analysis, config, sink, shutdown));
-        Err(SupervisorError::UnsupportedPlatform)
-    }
-}
-
 type RuntimePeer =
     Pin<Box<dyn Future<Output = (&'static str, Result<(), SupervisorError>)> + Send>>;
-
-// Consumers can commit a final requeue after receiving shutdown. Keep the outbox sink alive
-// until every producer has finished that transition, then stop its listener and coordinator.
-// The supervisor's existing common deadline still bounds the entire drain.
-struct OutboxShutdownAfterProducers(watch::Sender<bool>);
-
-impl Drop for OutboxShutdownAfterProducers {
-    fn drop(&mut self) {
-        signal_shutdown(&self.0);
-    }
-}
-
-fn outbox_producer(peer: RuntimePeer, lifetime: Arc<OutboxShutdownAfterProducers>) -> RuntimePeer {
-    Box::pin(async move {
-        let result = peer.await;
-        drop(lifetime);
-        result
-    })
-}
 
 fn runtime_peer(
     name: &'static str,
@@ -391,16 +313,8 @@ pub(crate) enum SupervisorError {
     OcrConfiguration(#[from] OcrRuntimeConfigError),
     #[error("Rust OCR v2 requires the shared series-analysis runtime to be enabled")]
     OcrRequiresSeriesAnalysisRuntime,
-    #[error("series-analysis consumer failed: {0}")]
-    SeriesAnalysis(SeriesAnalysisConsumerError),
-    #[cfg_attr(
-        not(target_os = "linux"),
-        expect(dead_code, reason = "combined OCR supervision runs only on Linux")
-    )]
-    #[error("OCR consumer failed: {0}")]
-    Ocr(crate::ocr::consumer::OcrConsumerError),
-    #[error("series-analysis outbox runtime failed: {0}")]
-    AnalysisOutbox(#[source] series_analysis::outbox::runtime::RuntimeError),
+    #[error("processing scheduler failed: {0}")]
+    Scheduler(#[source] crate::scheduler::SchedulerError),
     #[error("OCR submission coordinator failed: {0}")]
     OcrSubmissions(#[source] crate::ocr::submissions::runtime::RuntimeError),
     #[error("{peer} runtime peer exited without a shutdown request")]
@@ -409,15 +323,6 @@ pub(crate) enum SupervisorError {
     ShutdownDrainBudgetBound,
     #[error("runtime peers exceeded their bounded shutdown drain")]
     ShutdownDrainTimeout,
-    #[cfg_attr(
-        target_os = "linux",
-        expect(
-            dead_code,
-            reason = "the fail-closed combined-runtime stub is only built on non-Linux"
-        )
-    )]
-    #[error("combined worker runtime is supported only on Linux")]
-    UnsupportedPlatform,
 }
 
 fn composed_shutdown_drain_timeout(
@@ -444,62 +349,6 @@ mod tests {
     use super::*;
 
     const TEST_SHUTDOWN_DRAIN_TIMEOUT: Duration = Duration::from_secs(1);
-
-    #[tokio::test]
-    async fn shutdown_keeps_outbox_open_for_the_last_producers_committed_requeue() {
-        let (_external_sender, external_shutdown) = watch::channel(true);
-        let (shutdown_sender, mut producer_shutdown) = watch::channel(false);
-        let (outbox_shutdown_sender, mut outbox_shutdown) = watch::channel(false);
-        let lifetime = Arc::new(OutboxShutdownAfterProducers(outbox_shutdown_sender));
-        let (sink, mut wake) = PostCommitSink::channel();
-        let (first_stopped, first_observed) = oneshot::channel();
-        let first = outbox_producer(
-            runtime_peer(
-                "ocr",
-                stop_on_shutdown(producer_shutdown.clone(), first_stopped),
-            ),
-            Arc::clone(&lifetime),
-        );
-        let last = outbox_producer(
-            runtime_peer("analysis", async move {
-                producer_shutdown
-                    .changed()
-                    .await
-                    .map_err(|_error| SupervisorError::ShutdownDrainBudgetBound)?;
-                first_observed
-                    .await
-                    .map_err(|_error| SupervisorError::ShutdownDrainBudgetBound)?;
-                // Give the coordinator a chance to observe a premature shutdown before the
-                // still-running producer commits its final durable requeue and submits its wake.
-                tokio::task::yield_now().await;
-                sink.submit(crate::outbox::PostCommitEffects::WakeAnalysis)
-                    .map_err(SeriesAnalysisConsumerError::PostCommitSink)
-                    .map_err(SupervisorError::SeriesAnalysis)
-            }),
-            lifetime,
-        );
-        let coordinator = runtime_peer("analysis_outbox", async move {
-            outbox_shutdown
-                .changed()
-                .await
-                .map_err(|_error| SupervisorError::ShutdownDrainBudgetBound)?;
-            assert!(*outbox_shutdown.borrow());
-            assert_eq!(wake.try_recv(), Ok(()));
-            Ok(())
-        });
-        let result = supervise_peers(
-            [first, last, coordinator],
-            shutdown_sender,
-            external_shutdown,
-            TEST_SHUTDOWN_DRAIN_TIMEOUT,
-            NotificationDriver::disabled(),
-        )
-        .await;
-        assert!(
-            result.is_ok(),
-            "last committed wake must survive shutdown: {result:?}"
-        );
-    }
 
     #[tokio::test]
     async fn last_committed_notification_is_admitted_and_cannot_fail_business_shutdown()
@@ -640,7 +489,7 @@ mod tests {
             [
                 runtime_peer("analysis", future::ready(Ok(()))),
                 runtime_peer(
-                    "analysis_outbox",
+                    "processing_scheduler",
                     stop_on_shutdown(shutdown_receiver, observed_sender),
                 ),
             ],
@@ -664,10 +513,9 @@ mod tests {
         let (shutdown_sender, shutdown_receiver) = watch::channel(false);
         let (analysis_observed_sender, analysis_observed_receiver) = oneshot::channel();
         let (ocr_observed_sender, ocr_observed_receiver) = oneshot::channel();
-        let coordinator_failure =
-            SupervisorError::AnalysisOutbox(analysis_outbox::RuntimeError::Coordinator(
-                crate::outbox::coordinator::CoordinatorError::WakeChannelClosed,
-            ));
+        let coordinator_failure = SupervisorError::Scheduler(
+            crate::scheduler::SchedulerError::Sink(crate::scheduler::PostCommitSinkClosed),
+        );
 
         let result = supervise_peers(
             [
@@ -679,7 +527,10 @@ mod tests {
                     "ocr",
                     stop_on_shutdown(shutdown_receiver, ocr_observed_sender),
                 ),
-                runtime_peer("analysis_outbox", future::ready(Err(coordinator_failure))),
+                runtime_peer(
+                    "processing_scheduler",
+                    future::ready(Err(coordinator_failure)),
+                ),
             ],
             shutdown_sender,
             external_shutdown,
@@ -690,10 +541,8 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(SupervisorError::AnalysisOutbox(
-                analysis_outbox::RuntimeError::Coordinator(
-                    crate::outbox::coordinator::CoordinatorError::WakeChannelClosed
-                )
+            Err(SupervisorError::Scheduler(
+                crate::scheduler::SchedulerError::Sink(_)
             ))
         ));
         assert!(analysis_observed_receiver.await.is_ok());
@@ -715,7 +564,7 @@ mod tests {
                     stop_on_shutdown(shutdown_receiver.clone(), first_observed_sender),
                 ),
                 runtime_peer(
-                    "analysis_outbox",
+                    "processing_scheduler",
                     stop_on_shutdown(shutdown_receiver, second_observed_sender),
                 ),
             ],
@@ -744,7 +593,7 @@ mod tests {
                     "analysis",
                     stop_on_shutdown(shutdown_receiver.clone(), observed_sender),
                 ),
-                runtime_peer("analysis_outbox", fail_on_shutdown(shutdown_receiver)),
+                runtime_peer("processing_scheduler", fail_on_shutdown(shutdown_receiver)),
             ],
             shutdown_sender,
             external_shutdown,

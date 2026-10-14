@@ -1,12 +1,10 @@
 use std::collections::BTreeMap;
 
-use redis::{Value, streams::StreamId};
-
 use super::*;
-use crate::ocr::contract::{OcrQueuePayload, parse_delivery};
+use crate::ocr::contract::{OcrJobInput, parse_persisted_payload};
 
 const VALID_PAYLOAD: &str =
-    include_str!("../../../../../docs/schemas/fixtures/ocr-worker/valid-queue-payload-v2.json");
+    include_str!("../../../../../docs/schemas/fixtures/ocr-worker/valid-job-input-v2.json");
 const PNG_1X1_BASE64: &str =
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 
@@ -320,31 +318,23 @@ fn valid_config(
     }
 }
 
-fn payload() -> OcrQueuePayload {
+fn payload() -> OcrJobInput {
     let fields = match serde_json::from_str::<BTreeMap<String, String>>(VALID_PAYLOAD) {
         Ok(fields) => fields,
         Err(error) => panic!("shared OCR v2 fixture is invalid: {error}"),
     };
-    let delivery = StreamId {
-        id: String::from("1-0"),
-        map: fields
-            .into_iter()
-            .map(|(key, value)| (key, Value::BulkString(value.into_bytes())))
-            .collect(),
-        ..StreamId::default()
-    };
-    match parse_delivery(&delivery) {
-        Ok(payload) => payload,
+    match parse_persisted_payload(&serde_json::json!(fields)) {
+        Ok(payload) => payload.payload().clone(),
         Err(error) => panic!("shared OCR v2 fixture violates the contract: {error}"),
     }
 }
 
 fn payload_with_image_claims(
-    payload: &OcrQueuePayload,
+    payload: &OcrJobInput,
     byte_length: usize,
     sha256: &str,
     media_type: &str,
-) -> OcrQueuePayload {
+) -> OcrJobInput {
     let fields = BTreeMap::from([
         (String::from("schemaVersion"), String::from("2")),
         (String::from("jobId"), String::from(payload.job_id())),
@@ -364,22 +354,9 @@ fn payload_with_image_claims(
             String::from("requestedScreenType"),
             String::from(payload.requested_screen_type().wire()),
         ),
-        (String::from("attempt"), String::from("1")),
-        (
-            String::from("enqueuedAt"),
-            String::from("2026-08-11T00:00:00Z"),
-        ),
     ]);
-    let delivery = StreamId {
-        id: String::from("1-0"),
-        map: fields
-            .into_iter()
-            .map(|(key, value)| (key, Value::BulkString(value.into_bytes())))
-            .collect(),
-        ..StreamId::default()
-    };
-    match parse_delivery(&delivery) {
-        Ok(parsed) => parsed,
+    match parse_persisted_payload(&serde_json::json!(fields)) {
+        Ok(parsed) => parsed.payload().clone(),
         Err(error) => panic!("image claim fixture violates the contract: {error}"),
     }
 }

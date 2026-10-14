@@ -15,8 +15,8 @@ use tempfile::TempDir;
 use tokio_postgres::{Client, Transaction};
 
 use super::{
-    ALGORITHM_VERSION, AttemptMetrics, ClaimResult, ClaimedJob, ControlError, DeliveryReason,
-    ResultDisposition, SafeFailureCode, TransactionEffects,
+    ALGORITHM_VERSION, AttemptMetrics, ClaimResult, ClaimedJob, ControlError, ResultDisposition,
+    SafeFailureCode, TransactionEffects,
     claim::{ClaimPreparation, prepare_claim},
     completion::{reconcile_staging, validate_authoritative_manifest},
     publication::{
@@ -25,7 +25,7 @@ use super::{
     },
     recovery::recover_expired_analysis_holder,
     staging_metadata::validate_staged_resource_metadata,
-    transaction::{artifact_id_for_attempt, enqueue_delivery, lock_owned},
+    transaction::{artifact_id_for_attempt, lock_owned},
 };
 use crate::series_analysis::artifact::{
     ArtifactBuildRequest, ValidatedArtifact, build_artifact, validate_artifact_directory,
@@ -74,7 +74,6 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
     assert_eq!(input, analysis_input().try_into_normalized()?);
     primary.batch_execute("RESET TIME ZONE").await?;
     assert_claim_reports_database_availability_delay(&mut primary).await?;
-    assert_delivery_deadline_follows_job_availability(&mut primary).await?;
     assert_recovery_locks_title_before_job(&mut primary, &mut secondary).await?;
     assert_recovery_rejects_a_mismatched_job_owner(&mut primary, &secondary).await?;
 
@@ -308,7 +307,7 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
     assert_recovery_defers_then_allows_the_next_claim(&mut primary, &secondary).await?;
     cleanup_database(&secondary).await?;
     prepare_owned_attempt(&secondary).await?;
-    assert_exhausted_recovery_resolves_the_current_delivery(&mut primary, &secondary).await?;
+    assert_exhausted_recovery_resolves_the_current_candidate(&mut primary, &secondary).await?;
     cleanup_database(&secondary).await?;
     Ok(())
 }
@@ -629,52 +628,6 @@ async fn prepare_owned_attempt(client: &Client) -> SmokeResult {
     Ok(())
 }
 
-async fn assert_delivery_deadline_follows_job_availability(client: &mut Client) -> SmokeResult {
-    let transaction = client.transaction().await?;
-    let mut effects = TransactionEffects::empty();
-    enqueue_delivery(
-        &transaction,
-        JOB_ID,
-        DeliveryReason::GracefulStop,
-        99,
-        &mut effects,
-    )
-    .await?;
-    transaction
-        .execute(
-            "UPDATE series_analysis_jobs SET\x20\
-               available_at = clock_timestamp() + interval '30 seconds' WHERE id = $1",
-            &[&JOB_ID],
-        )
-        .await?;
-    enqueue_delivery(
-        &transaction,
-        JOB_ID,
-        DeliveryReason::TransientRetry,
-        99,
-        &mut effects,
-    )
-    .await?;
-
-    let deadlines = transaction
-        .query_one(
-            "SELECT COUNT(*)::int,\x20\
-               BOOL_AND(q.next_attempt_at = j.available_at),\x20\
-               BOOL_AND(q.next_attempt_at > clock_timestamp())\x20\
-             FROM series_analysis_queue_outbox q\x20\
-             JOIN series_analysis_jobs j ON j.id = q.job_id\x20\
-             WHERE q.job_id = $1 AND q.status = 'pending'",
-            &[&JOB_ID],
-        )
-        .await?;
-    assert_eq!(deadlines.try_get::<_, i32>(0)?, 2);
-    assert!(deadlines.try_get::<_, bool>(1)?);
-    assert!(deadlines.try_get::<_, bool>(2)?);
-    assert_ne!(effects, TransactionEffects::empty());
-    transaction.rollback().await?;
-    Ok(())
-}
-
 async fn assert_claim_reports_database_availability_delay(client: &mut Client) -> SmokeResult {
     let transaction = client.transaction().await?;
     transaction
@@ -864,9 +817,9 @@ async fn assert_recovery_defers_then_allows_the_next_claim(
     let recovery_effects = match prepare_claim(&recovery_transaction, JOB_ID, 60_000).await? {
         ClaimPreparation::RecoveredExpiredHolder {
             effects,
-            current_delivery_resolved,
+            current_candidate_resolved,
         } => {
-            assert!(current_delivery_resolved);
+            assert!(current_candidate_resolved);
             effects
         }
         ClaimPreparation::Ready { .. } | ClaimPreparation::Rejected(_) => {
@@ -878,10 +831,7 @@ async fn assert_recovery_defers_then_allows_the_next_claim(
 
     let recovered = secondary
         .query_one(
-            "SELECT j.status, s.owner, EXISTS (\x20\
-               SELECT 1 FROM series_analysis_queue_outbox q\x20\
-               WHERE q.job_id = j.id AND q.status = 'pending'\x20\
-             )\x20\
+            "SELECT j.status, s.owner, j.available_at <= clock_timestamp()\x20\
              FROM series_analysis_jobs j\x20\
              JOIN worker_execution_slots s ON s.slot_key = 'shared-heavy-work'\x20\
              WHERE j.id = $1",
@@ -901,7 +851,7 @@ async fn assert_recovery_defers_then_allows_the_next_claim(
     Ok(())
 }
 
-async fn assert_exhausted_recovery_resolves_the_current_delivery(
+async fn assert_exhausted_recovery_resolves_the_current_candidate(
     primary: &mut Client,
     observer: &Client,
 ) -> SmokeResult {
@@ -919,13 +869,13 @@ async fn assert_exhausted_recovery_resolves_the_current_delivery(
     let recovery_effects = match prepare_claim(&transaction, JOB_ID, 60_000).await? {
         ClaimPreparation::RecoveredExpiredHolder {
             effects,
-            current_delivery_resolved,
+            current_candidate_resolved,
         } => {
-            assert!(current_delivery_resolved);
+            assert!(current_candidate_resolved);
             effects
         }
         ClaimPreparation::Ready { .. } | ClaimPreparation::Rejected(_) => {
-            return Err("exhausted lease recovery did not resolve the current delivery".into());
+            return Err("exhausted lease recovery did not resolve the current candidate".into());
         }
     };
     assert_eq!(recovery_effects, TransactionEffects::empty());

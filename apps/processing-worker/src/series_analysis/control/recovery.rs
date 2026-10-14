@@ -5,16 +5,23 @@ use crate::execution_slot::{
 };
 
 use super::{
-    AttemptOutcome, ClaimedJob, ControlError, DeliveryReason, RequestOutcome, SafeFailureCode,
-    TransactionEffects,
+    AttemptOutcome, ClaimedJob, ControlError, RequestOutcome, SafeFailureCode, TransactionEffects,
     transaction::{
-        enqueue_delivery, fulfill_requests, refresh_operation_projections, schedule_follow_up,
+        fulfill_requests, refresh_operation_projections, request_scheduler_wake, schedule_follow_up,
     },
 };
 
 pub(crate) async fn recover_expired_analysis_holder(
     transaction: &Transaction<'_>,
     holder: &ExecutionSlotHolder,
+) -> Result<TransactionEffects, ControlError> {
+    recover_expired_analysis_job(transaction, holder, true).await
+}
+
+pub(crate) async fn recover_expired_analysis_job(
+    transaction: &Transaction<'_>,
+    holder: &ExecutionSlotHolder,
+    clear_slot: bool,
 ) -> Result<TransactionEffects, ControlError> {
     if holder.task_kind != ExecutionTaskKind::Analysis || !holder.expired {
         return Err(ControlError::OwnerLost);
@@ -29,7 +36,7 @@ pub(crate) async fn recover_expired_analysis_holder(
         )
         .await?;
     let Some(job_preview) = job_preview else {
-        if !clear_expired_slot(transaction, holder).await? {
+        if clear_slot && !clear_expired_slot(transaction, holder).await? {
             return Err(ControlError::OwnerLost);
         }
         return Ok(TransactionEffects::empty());
@@ -102,7 +109,7 @@ pub(crate) async fn recover_expired_analysis_holder(
         )
         .await?;
     }
-    if !clear_expired_slot(transaction, holder).await? {
+    if clear_slot && !clear_expired_slot(transaction, holder).await? {
         return Err(ControlError::OwnerLost);
     }
     Ok(effects)
@@ -195,14 +202,8 @@ async fn requeue_expired_job(
             &[&job_id],
         )
         .await?;
-    enqueue_delivery(
-        transaction,
-        job_id,
-        DeliveryReason::LeaseRecovery,
-        recovery_count,
-        effects,
-    )
-    .await
+    request_scheduler_wake(effects);
+    Ok(())
 }
 
 async fn fail_expired_job(

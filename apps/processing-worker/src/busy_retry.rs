@@ -1,6 +1,6 @@
 //! Small, consumer-owned budgets for optional early rechecks of busy work.
 //!
-//! Ordinary delivery and recovery remain responsible for progress after this budget is spent.
+//! Ordinary submission scans and recovery remain responsible for progress after this budget is spent.
 //! Keep the budget across deliveries and reconnects; only an actual extra DB attempt spends it.
 
 use std::time::Duration;
@@ -73,6 +73,7 @@ impl BusyRetry {
         true
     }
 
+    #[cfg(test)]
     pub(crate) const fn attempts(&self) -> u8 {
         self.attempts
     }

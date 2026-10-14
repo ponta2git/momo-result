@@ -9,7 +9,7 @@ use std::{collections::BTreeSet, error::Error, time::Duration};
 use momo_analysis_core::contract::{ARTIFACT_SCHEMA_VERSION, ARTIFACT_VALIDATION_CONTRACT_ID};
 use tokio_postgres::Client;
 
-use super::{candidates, next_due, recover};
+use super::{candidates, next_due, recover, recover_page};
 use crate::{scheduler::PostCommitSink, series_analysis::control::ALGORITHM_VERSION};
 
 type TestResult<T = ()> = Result<T, Box<dyn Error + Send + Sync>>;
@@ -75,6 +75,7 @@ async fn real_postgres_selects_due_work_and_recovers_orphans() -> TestResult {
         .await?;
     verify_recovery(&mut client, true).await?;
     verify_recovery(&mut client, false).await?;
+    verify_supported_intent_is_not_hidden(&mut client).await?;
     cleanup(&client).await?;
     Ok(())
 }
@@ -107,6 +108,20 @@ async fn verify_recovery(client: &mut Client, held: bool) -> TestResult {
     client.execute("UPDATE worker_execution_slots SET task_kind='analysis',owner=$1,job_id=$2,attempt_id=$3,holder_preemptible=true,lease_expires_at=clock_timestamp()+$4::bigint*interval '1 second',fencing_token=$5 WHERE slot_key='shared-heavy-work' AND owner IS NULL", &[&OWNER,&slot_job,&attempt,&if held {-1_i64} else {60_i64},&fence]).await?;
     assert!(candidates(client, false, None).await?.is_empty());
     let (sink, mut wake) = PostCommitSink::channel();
+    if held {
+        let database_url = std::env::var("PROCESSING_SCHEDULER_SMOKE_DATABASE_URL")?;
+        let mut blocker = crate::postgres::connect(&database_url).await?;
+        let lock = blocker.transaction().await?;
+        lock.query_one("SELECT game_title_id FROM series_analysis_title_states WHERE game_title_id=$1 FOR UPDATE", &[&TITLE]).await?;
+        let progress = recover_page(client, &sink, 1, &mut None).await?;
+        assert!(
+            progress.deferred,
+            "ordinary recovery contention must remain retryable"
+        );
+        assert!(!progress.more);
+        assert!(wake.try_recv().is_err());
+        lock.rollback().await?;
+    }
     recover(client, &sink, 1).await?;
     assert!(wake.try_recv().is_ok());
     let row = client.query_one("SELECT j.status,j.lease_recovery_count,a.status,a.outcome FROM series_analysis_jobs j JOIN series_analysis_job_attempts a ON a.job_id=j.id WHERE j.id=$1", &[&job]).await?;
@@ -140,17 +155,45 @@ async fn verify_recovery(client: &mut Client, held: bool) -> TestResult {
     Ok(())
 }
 
+async fn verify_supported_intent_is_not_hidden(client: &mut Client) -> TestResult {
+    let schema = i32::try_from(ARTIFACT_SCHEMA_VERSION)?;
+    let supported = format!("{PREFIX}zz-supported");
+    client.execute("UPDATE series_analysis_title_states SET algorithm_version='unsupported-scheduler-smoke',artifact_schema_version=$2,validation_contract_id=$3 WHERE game_title_id LIKE $1", &[&format!("{PREFIX}%"),&schema,&ARTIFACT_VALIDATION_CONTRACT_ID]).await?;
+    client.execute("INSERT INTO game_titles (id,name,layout_family,display_order) VALUES ($1,'Scheduler supported intent','momotetsu2',20000)", &[&supported]).await?;
+    client.execute("UPDATE series_analysis_title_states SET algorithm_version=$2,artifact_schema_version=$3,validation_contract_id=$4 WHERE game_title_id=$1", &[&supported,&ALGORITHM_VERSION,&schema,&ARTIFACT_VALIDATION_CONTRACT_ID]).await?;
+    client.execute("INSERT INTO series_analysis_job_requests (id,game_title_id,input_revision,algorithm_version,artifact_schema_version,validation_contract_id,trigger) SELECT game_title_id || '-request',game_title_id,input_revision,algorithm_version,artifact_schema_version,validation_contract_id,'manual' FROM series_analysis_title_states WHERE game_title_id LIKE $1", &[&format!("{PREFIX}%")]).await?;
+    assert_eq!(
+        crate::series_analysis::control::radar::materialize_pending(client, 64).await?,
+        1,
+        "incompatible pending titles must not hide a later supported intent"
+    );
+    let materialized = client
+        .query_one(
+            "SELECT game_title_id FROM series_analysis_jobs WHERE game_title_id LIKE $1",
+            &[&format!("{PREFIX}%")],
+        )
+        .await?;
+    assert_eq!(materialized.try_get::<_, String>(0)?, supported);
+    Ok(())
+}
+
 async fn cleanup(client: &Client) -> TestResult {
+    client
+        .execute(
+            "DELETE FROM series_analysis_job_requests WHERE game_title_id LIKE $1",
+            &[&format!("{PREFIX}%")],
+        )
+        .await?;
     client.execute("UPDATE worker_execution_slots SET task_kind=NULL,owner=NULL,job_id=NULL,attempt_id=NULL,holder_preemptible=NULL,lease_expires_at=NULL,preempt_requested_by=NULL,preempt_requested_at=NULL WHERE slot_key='shared-heavy-work' AND owner=$1", &[&OWNER]).await?;
     client
         .execute(
-            "DELETE FROM series_analysis_job_attempts WHERE job_id LIKE $1",
+            "DELETE FROM series_analysis_job_attempts WHERE job_id IN (SELECT id FROM series_analysis_jobs WHERE game_title_id LIKE $1)",
             &[&format!("{PREFIX}%")],
         )
         .await?;
     client
         .execute(
-            "DELETE FROM series_analysis_jobs WHERE id LIKE $1",
+            "DELETE FROM series_analysis_jobs WHERE game_title_id LIKE $1",
             &[&format!("{PREFIX}%")],
         )
         .await?;

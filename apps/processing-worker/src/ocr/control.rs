@@ -10,15 +10,14 @@ use crate::execution_slot::{
     NewExecutionSlotHolder, SlotAcquisition, SlotRenewal, acquire_ocr, lock as lock_execution_slot,
     lock_owned as lock_owned_slot, release_owned, renew_owned, request_analysis_preemption,
 };
-use crate::outbox::ControlOutcome;
+use crate::scheduler::ControlOutcome;
 use crate::series_analysis::control::TransactionEffects;
 
-use super::contract::{
-    OcrHints, OcrQueuePayload, RequestedScreenType, SourceImageClaims, ValidatedOcrDelivery,
-};
+use super::contract::{OcrHints, RequestedScreenType, SourceImageClaims};
 
 mod candidate;
-mod recovery;
+pub(crate) mod maintenance;
+pub(crate) mod recovery;
 
 use candidate::{CandidateResult, OcrClaimCandidate, load_candidate};
 use recovery::recover_expired_holder;
@@ -31,6 +30,8 @@ pub(crate) struct OcrControlConfig {
     lease_duration: Duration,
     finalization_timeout: Duration,
     retry_delay: Duration,
+    pub(crate) maximum_failure_retries: i32,
+    pub(crate) maximum_lease_recoveries: i32,
 }
 
 impl OcrControlConfig {
@@ -53,6 +54,8 @@ impl OcrControlConfig {
             lease_duration,
             finalization_timeout,
             retry_delay,
+            maximum_failure_retries: 1,
+            maximum_lease_recoveries: 1,
         })
     }
 
@@ -77,6 +80,7 @@ pub(crate) struct ClaimedOcrJob {
     pub(crate) expected_width: u32,
     pub(crate) expected_height: u32,
     pub(crate) requested_screen_type: RequestedScreenType,
+    pub(crate) hints: Box<OcrHints>,
     pub(crate) attempt_id: String,
     lease_token: String,
     pub(crate) attempt_count: i32,
@@ -103,8 +107,7 @@ pub(crate) enum OcrClaimResult {
     MissingOrTerminal,
     AlreadyRunning,
     NotYetAvailable,
-    UnsupportedQueueSchema,
-    QueueContractMismatch,
+    InvalidInput,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -158,7 +161,7 @@ impl OcrFailureCode {
             Self::OcrTimeout => "OCR processing exceeded its deadline.",
             Self::OcrEngineUnavailable => "The OCR dependency is temporarily unavailable.",
             Self::ParserFailed => "The OCR result could not be parsed safely.",
-            Self::QueueFailure => "The OCR queue delivery failed its persisted contract.",
+            Self::QueueFailure => "The persisted OCR input is invalid.",
         }
     }
 
@@ -189,9 +192,9 @@ pub(crate) enum OcrControlError {
     #[error("OCR PostgreSQL state transition failed")]
     Postgres(#[from] tokio_postgres::Error),
     #[error("OCR shared execution-slot transition failed: {0}")]
-    ExecutionSlot(&'static str),
+    ExecutionSlot(#[source] ExecutionSlotError),
     #[error("OCR could not recover an expired analysis holder: {0}")]
-    AnalysisRecovery(&'static str),
+    AnalysisRecovery(#[source] crate::series_analysis::control::ControlError),
     #[error("OCR worker lost its fenced ownership")]
     OwnerLost,
     #[error("OCR control-plane numeric value exceeds its supported bound")]
@@ -208,15 +211,32 @@ pub(crate) enum OcrControlError {
 
 impl From<ExecutionSlotError> for OcrControlError {
     fn from(error: ExecutionSlotError) -> Self {
-        Self::ExecutionSlot(error.kind())
+        Self::ExecutionSlot(error)
     }
 }
 
 impl OcrControlError {
+    pub(crate) fn is_contention(&self) -> bool {
+        match self {
+            Self::Postgres(error) | Self::ExecutionSlot(ExecutionSlotError::Postgres(error)) => {
+                crate::postgres::is_lock_contention(error)
+            }
+            Self::AnalysisRecovery(error) => error.is_contention(),
+            Self::ExecutionSlot(ExecutionSlotError::InvalidState)
+            | Self::OwnerLost
+            | Self::NumericBound
+            | Self::InvalidState
+            | Self::InvalidConfiguration
+            | Self::InvalidCompletion
+            | Self::FinalizationTimeout => false,
+        }
+    }
+
     pub(crate) const fn kind(&self) -> &'static str {
         match self {
             Self::Postgres(_) => "ocr_postgres_transition",
-            Self::ExecutionSlot(kind) | Self::AnalysisRecovery(kind) => kind,
+            Self::ExecutionSlot(error) => error.kind(),
+            Self::AnalysisRecovery(error) => error.kind(),
             Self::OwnerLost => "ocr_fencing_owner_lost",
             Self::NumericBound => "ocr_numeric_bound",
             Self::InvalidState => "ocr_persisted_state",
@@ -229,13 +249,15 @@ impl OcrControlError {
 
 pub(crate) async fn claim_job(
     client: &mut Client,
-    delivery: &ValidatedOcrDelivery,
+    job_id: &str,
     config: &OcrControlConfig,
 ) -> Result<ControlOutcome<OcrClaimResult>, OcrControlError> {
-    let payload = delivery.payload();
     let transaction = bounded_transaction(client, config.finalization_timeout).await?;
+    transaction
+        .batch_execute("SET LOCAL lock_timeout='100ms'")
+        .await?;
     let slot = lock_execution_slot(&transaction).await?;
-    let mut draft_lock_job_ids = vec![String::from(payload.job_id())];
+    let mut draft_lock_job_ids = vec![String::from(job_id)];
     if let Some(holder) = &slot.holder
         && holder.expired
         && holder.task_kind == ExecutionTaskKind::Ocr
@@ -245,46 +267,33 @@ pub(crate) async fn claim_job(
     draft_lock_job_ids.sort_unstable();
     draft_lock_job_ids.dedup();
     lock_match_drafts_for_jobs(&transaction, &draft_lock_job_ids).await?;
+    let recovered = slot.holder.as_ref().is_some_and(|holder| holder.expired);
     let recovery_effects = if let Some(holder) = &slot.holder
         && holder.expired
     {
-        recover_expired_holder(&transaction, holder).await?
+        recover_expired_holder(&transaction, holder, config.maximum_lease_recoveries).await?
     } else {
         TransactionEffects::default()
     };
 
-    let candidate = match load_candidate(&transaction, payload.job_id()).await? {
+    let candidate = match load_candidate(&transaction, job_id).await? {
         CandidateResult::Ready(candidate) => candidate,
         CandidateResult::Rejected(result) => {
+            if recovered {
+                transaction.commit().await?;
+                super::submissions::wake(client).await;
+                return Ok(recovery_effects.committed(result));
+            }
             transaction.rollback().await?;
             return Ok(ControlOutcome::without_effects(result));
         }
         CandidateResult::InvalidPersistedContract => {
-            fail_locked_queued_job(
-                &transaction,
-                payload.job_id(),
-                OcrFailureCode::QueueFailure,
-                0,
-            )
-            .await?;
+            fail_locked_queued_job(&transaction, job_id, OcrFailureCode::QueueFailure, 0).await?;
             transaction.commit().await?;
             super::submissions::wake(client).await;
-            return Ok(recovery_effects.committed(OcrClaimResult::QueueContractMismatch));
+            return Ok(recovery_effects.committed(OcrClaimResult::InvalidInput));
         }
     };
-    if !candidate.matches(delivery) {
-        fail_locked_queued_job(
-            &transaction,
-            payload.job_id(),
-            OcrFailureCode::QueueFailure,
-            0,
-        )
-        .await?;
-        transaction.commit().await?;
-        super::submissions::wake(client).await;
-        return Ok(recovery_effects.committed(OcrClaimResult::QueueContractMismatch));
-    }
-
     if let Some(holder) = &slot.holder
         && !holder.expired
     {
@@ -295,7 +304,7 @@ pub(crate) async fn claim_job(
     acquire_candidate(
         transaction,
         slot.fencing_token,
-        payload,
+        job_id,
         candidate,
         config,
         recovery_effects,
@@ -303,10 +312,42 @@ pub(crate) async fn claim_job(
     .await
 }
 
+/// Validates a due OCR candidate before requesting preemption, without acquiring new work.
+pub(crate) async fn request_preemption(
+    client: &mut Client,
+    job_id: &str,
+    config: &OcrControlConfig,
+) -> Result<bool, OcrControlError> {
+    let transaction = bounded_transaction(client, config.finalization_timeout).await?;
+    transaction
+        .batch_execute("SET LOCAL lock_timeout='100ms'")
+        .await?;
+    let slot = lock_execution_slot(&transaction).await?;
+    let Some(holder) = &slot.holder else {
+        transaction.rollback().await?;
+        return Ok(false);
+    };
+    if holder.expired || holder.task_kind != ExecutionTaskKind::Analysis {
+        transaction.rollback().await?;
+        return Ok(false);
+    }
+    lock_match_drafts_for_job(&transaction, job_id).await?;
+    if matches!(
+        load_candidate(&transaction, job_id).await?,
+        CandidateResult::Ready(_)
+    ) {
+        handle_active_holder(transaction, &slot, holder, config).await?;
+        Ok(true)
+    } else {
+        transaction.rollback().await?;
+        Ok(false)
+    }
+}
+
 async fn acquire_candidate(
     transaction: Transaction<'_>,
     slot_fencing_token: i64,
-    payload: &OcrQueuePayload,
+    job_id: &str,
     candidate: OcrClaimCandidate,
     config: &OcrControlConfig,
     transaction_effects: TransactionEffects,
@@ -318,7 +359,7 @@ async fn acquire_candidate(
         slot_fencing_token,
         NewExecutionSlotHolder {
             owner: &config.worker_id,
-            job_id: payload.job_id(),
+            job_id,
             attempt_id: &attempt_id,
         },
         lease_milliseconds,
@@ -344,7 +385,7 @@ async fn acquire_candidate(
                lease_token = $4::text::uuid,\x20\
                lease_expires_at = clock_timestamp() + ($5::bigint * interval '1 millisecond'),\x20\
                lease_fencing_token = $6, updated_at = clock_timestamp()\x20\
-             WHERE id = $7 AND status = 'queued' AND queue_schema_version = 2\x20\
+             WHERE id = $7 AND status = 'queued'\x20\
                AND available_at <= clock_timestamp() RETURNING attempt_count",
             &[
                 &config.worker_id,
@@ -353,7 +394,7 @@ async fn acquire_candidate(
                 &lease_token,
                 &lease_milliseconds,
                 &fencing_token,
-                &payload.job_id(),
+                &job_id,
             ],
         )
         .await?;
@@ -368,12 +409,13 @@ async fn acquire_candidate(
     transaction.commit().await?;
     Ok(
         transaction_effects.committed(OcrClaimResult::Claimed(ClaimedOcrJob {
-            job_id: String::from(payload.job_id()),
+            job_id: String::from(job_id),
             draft_id: candidate.draft_id,
             source_image: candidate.source_image,
             expected_width: candidate.width,
             expected_height: candidate.height,
             requested_screen_type: candidate.requested_screen_type,
+            hints: Box::new(candidate.input.payload().hints().clone()),
             attempt_id,
             lease_token,
             attempt_count,
@@ -555,12 +597,55 @@ pub(crate) async fn requeue_transient(
     claim: &ClaimedOcrJob,
     config: &OcrControlConfig,
 ) -> Result<(), OcrControlError> {
+    requeue(client, claim, config, true).await
+}
+
+pub(crate) async fn requeue_interrupted(
+    client: &mut Client,
+    claim: &ClaimedOcrJob,
+    config: &OcrControlConfig,
+) -> Result<(), OcrControlError> {
+    requeue(client, claim, config, false).await
+}
+
+async fn requeue(
+    client: &mut Client,
+    claim: &ClaimedOcrJob,
+    config: &OcrControlConfig,
+    failed: bool,
+) -> Result<(), OcrControlError> {
     let transaction = bounded_transaction(client, config.finalization_timeout).await?;
     lock_owned_job(&transaction, claim, config).await?;
-    let retry_delay_milliseconds = duration_milliseconds(config.retry_delay)?;
+    let retries: i32 = transaction
+        .query_one(
+            "SELECT failure_retry_count FROM ocr_jobs WHERE id=$1",
+            &[&claim.job_id],
+        )
+        .await?
+        .try_get(0)?;
+    if failed && retries >= config.maximum_failure_retries {
+        update_owned_failure(
+            &transaction,
+            claim,
+            config,
+            OcrFailureCode::OcrEngineUnavailable,
+            0,
+        )
+        .await?;
+        sync_match_draft_status(&transaction, &claim.job_id).await?;
+        release_slot(&transaction, claim, config).await?;
+        transaction.commit().await?;
+        super::submissions::wake(client).await;
+        return Ok(());
+    }
+    let retry_delay_milliseconds = duration_milliseconds(if failed {
+        config.retry_delay
+    } else {
+        Duration::ZERO
+    })?;
     let updated = transaction
         .execute(
-            "UPDATE ocr_jobs SET status = 'queued', worker_id = NULL, available_at =\x20\
+            "UPDATE ocr_jobs SET status = 'queued', worker_id = NULL, failure_retry_count = failure_retry_count + $7::int, available_at =\x20\
                clock_timestamp() + ($1::bigint * interval '1 millisecond'), started_at = NULL,\x20\
                finished_at = NULL, duration_ms = NULL, failure_code = NULL, failure_message = NULL,\x20\
                failure_retryable = NULL, failure_user_action = NULL, attempt_id = NULL,\x20\
@@ -576,6 +661,7 @@ pub(crate) async fn requeue_transient(
                 &claim.attempt_id,
                 &claim.lease_token,
                 &claim.fencing_token,
+                &i32::from(failed),
             ],
         )
         .await?;
@@ -583,35 +669,6 @@ pub(crate) async fn requeue_transient(
         return Err(OcrControlError::OwnerLost);
     }
     release_slot(&transaction, claim, config).await?;
-    transaction.commit().await?;
-    super::submissions::wake(client).await;
-    Ok(())
-}
-
-pub(crate) async fn record_queue_failure(
-    client: &mut Client,
-    job_id: &str,
-    finalization_timeout: Duration,
-) -> Result<(), OcrControlError> {
-    let transaction = bounded_transaction(client, finalization_timeout).await?;
-    lock_match_drafts_for_job(&transaction, job_id).await?;
-    let row = transaction
-        .query_opt(
-            "SELECT status, queue_schema_version FROM ocr_jobs WHERE id = $1 FOR UPDATE",
-            &[&job_id],
-        )
-        .await?;
-    let Some(row) = row else {
-        transaction.rollback().await?;
-        return Ok(());
-    };
-    let status = row.try_get::<_, String>(0)?;
-    let schema_version = row.try_get::<_, i16>(1)?;
-    if status != "queued" || schema_version != 2 {
-        transaction.rollback().await?;
-        return Ok(());
-    }
-    fail_locked_queued_job(&transaction, job_id, OcrFailureCode::QueueFailure, 0).await?;
     transaction.commit().await?;
     super::submissions::wake(client).await;
     Ok(())
@@ -736,7 +793,7 @@ async fn fail_locked_queued_job(
             "UPDATE ocr_jobs SET status = 'failed', failure_code = $1, failure_message = $2,\x20\
                failure_retryable = $3, failure_user_action = $4, finished_at = clock_timestamp(),\x20\
                duration_ms = $5, updated_at = clock_timestamp()\x20\
-             WHERE id = $6 AND status = 'queued' AND queue_schema_version = 2",
+             WHERE id = $6 AND status = 'queued'",
             &[
                 &code,
                 &message,
@@ -792,14 +849,14 @@ async fn sync_match_draft_status(
 
 // Cross-language lock order: match_drafts -> ocr_jobs. The API cancellation path deletes/locks the
 // match draft before cancelling jobs, so every worker terminal path must acquire the same row first.
-async fn lock_match_drafts_for_job(
+pub(crate) async fn lock_match_drafts_for_job(
     transaction: &Transaction<'_>,
     job_id: &str,
 ) -> Result<(), OcrControlError> {
     lock_match_drafts_for_jobs(transaction, &[String::from(job_id)]).await
 }
 
-async fn lock_match_drafts_for_jobs(
+pub(crate) async fn lock_match_drafts_for_jobs(
     transaction: &Transaction<'_>,
     job_ids: &[String],
 ) -> Result<(), OcrControlError> {

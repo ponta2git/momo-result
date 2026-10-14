@@ -44,6 +44,10 @@ impl PostgresError {
     }
 }
 
+pub(crate) fn is_lock_contention(error: &tokio_postgres::Error) -> bool {
+    matches!(error.code(),Some(code) if *code == tokio_postgres::error::SqlState::LOCK_NOT_AVAILABLE || *code == tokio_postgres::error::SqlState::T_R_DEADLOCK_DETECTED)
+}
+
 /// Opens a bounded asynchronous `PostgreSQL` connection and drives its I/O on the current runtime.
 ///
 /// # Errors

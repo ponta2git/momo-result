@@ -7,17 +7,15 @@ use crate::{
     series_analysis::config::AnalysisConsumerConfig,
 };
 
-use crate::outbox::ControlOutcome;
+use crate::scheduler::ControlOutcome;
 
 use super::{
-    AttemptFailure, AttemptMetrics, AttemptOutcome, ClaimedJob, ControlError, DeliveryReason,
-    HeartbeatResult, RequestOutcome, RequeueCause, SafeFailureCode, TransactionEffects,
-    TransientRetryResult,
+    AttemptFailure, AttemptMetrics, AttemptOutcome, ClaimedJob, ControlError, HeartbeatResult,
+    RequestOutcome, RequeueCause, SafeFailureCode, TransactionEffects, TransientRetryResult,
     capability::refresh_heartbeat,
     transaction::{
-        bounded_transaction, duration_milliseconds, enqueue_delivery, finish_attempt,
-        fulfill_requests, lock_owned, refresh_operation_projections, release_slot,
-        schedule_follow_up,
+        bounded_transaction, duration_milliseconds, finish_attempt, fulfill_requests, lock_owned,
+        refresh_operation_projections, release_slot, request_scheduler_wake, schedule_follow_up,
     },
 };
 
@@ -135,14 +133,7 @@ pub(crate) async fn supersede(
         )
         .await?;
     let mut effects = TransactionEffects::empty();
-    enqueue_delivery(
-        &transaction,
-        &claim.job_id,
-        DeliveryReason::Superseded,
-        claim.attempt_no,
-        &mut effects,
-    )
-    .await?;
+    request_scheduler_wake(&mut effects);
     release_slot(&transaction, claim, &config.worker_id).await?;
     transaction.commit().await?;
     Ok(effects.committed(()))
@@ -281,14 +272,7 @@ pub(crate) async fn retry_transient_failure(
                 &[&claim.job_id],
             )
             .await?;
-        enqueue_delivery(
-            &transaction,
-            &claim.job_id,
-            DeliveryReason::TransientRetry,
-            next_retry,
-            &mut effects,
-        )
-        .await?;
+        request_scheduler_wake(&mut effects);
         release_slot(&transaction, claim, &config.worker_id).await?;
         transaction.commit().await?;
         return Ok(effects.committed(TransientRetryResult::Requeued));
@@ -349,14 +333,7 @@ pub(crate) async fn requeue_interrupted(
         )
         .await?;
     let mut effects = TransactionEffects::empty();
-    enqueue_delivery(
-        &transaction,
-        &claim.job_id,
-        cause.delivery_reason(),
-        claim.attempt_no,
-        &mut effects,
-    )
-    .await?;
+    request_scheduler_wake(&mut effects);
     release_slot(&transaction, claim, &config.worker_id).await?;
     transaction.commit().await?;
     Ok(effects.committed(()))

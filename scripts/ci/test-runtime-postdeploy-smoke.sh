@@ -51,11 +51,11 @@ for TEST_SCENARIO in transient failure missing-edge; do
     test ! -f runtime-production-evidence/public-health.json
     if [[ "${TEST_SCENARIO}" == failure ]]; then
       test "$(cat attempt)" = 2
-      rg -q HealthContractError errors
-      rg -q 'readiness deadline' errors
+      grep -q HealthContractError errors
+      grep -q 'readiness deadline' errors
     else
       test "$(cat attempt)" = 1
-      rg -q MissingRequiredChecks errors
+      grep -q MissingRequiredChecks errors
     fi
   fi
   test ! -f runtime-production-evidence/postdeploy-smoke.pending.json

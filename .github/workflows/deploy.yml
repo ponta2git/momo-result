@@ -551,15 +551,8 @@ jobs:
       - name: Run post-deploy dependency, process, and public edge smoke
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        run: |
-          flyctl ssh console --app momo-result --pty=false --quiet \
-            --command "/opt/momo-result/bin/momo-runtime-tool smoke local" \
-            > runtime-production-evidence/postdeploy-smoke.json
-          scripts/ci/ci-tool.sh postdeploy-evidence \
-            runtime-production-evidence/postdeploy-smoke.json \
-            --require-check publicEdge \
-            > runtime-production-evidence/public-health.json
-        timeout-minutes: 2
+        run: scripts/ci/runtime-postdeploy-smoke.sh
+        timeout-minutes: 3
 
       - name: Upload production verification evidence
         if: always()

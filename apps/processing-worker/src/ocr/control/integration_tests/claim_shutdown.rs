@@ -43,9 +43,10 @@ pub(super) async fn verify(database_url: &str, observer: &Client) -> SmokeResult
             .is_err()
     );
     release.notify_one();
-    let (mut client, outcome) = time::timeout(Duration::from_secs(3), claim_task).await???;
+    let (mut committed_client, outcome) =
+        time::timeout(Duration::from_secs(3), claim_task).await???;
     let claim = claimed(outcome)?;
-    requeue_interrupted(&mut client, &claim, &config).await?;
+    requeue_interrupted(&mut committed_client, &claim, &config).await?;
     let state = observer.query_one(
         "SELECT j.status, s.owner IS NULL, j.failure_retry_count, j.lease_recovery_count FROM ocr_jobs j CROSS JOIN worker_execution_slots s WHERE j.id=$1 AND s.slot_key='shared-heavy-work'", &[&TAKEOVER.job_id],
     ).await?;
@@ -70,12 +71,12 @@ pub(super) async fn verify(database_url: &str, observer: &Client) -> SmokeResult
             .await??
             .is_err()
     );
-    let state = observer.query_one(
+    let uncertain_state = observer.query_one(
         "SELECT j.status, s.owner IS NOT NULL, j.failure_retry_count, j.lease_recovery_count FROM ocr_jobs j CROSS JOIN worker_execution_slots s WHERE j.id=$1 AND s.slot_key='shared-heavy-work'", &[&TAKEOVER.job_id],
     ).await?;
-    assert_eq!(state.try_get::<_, String>(0)?, "running");
-    assert!(state.try_get::<_, bool>(1)?);
-    assert_eq!(state.try_get::<_, i32>(2)?, 0);
-    assert_eq!(state.try_get::<_, i32>(3)?, 0);
+    assert_eq!(uncertain_state.try_get::<_, String>(0)?, "running");
+    assert!(uncertain_state.try_get::<_, bool>(1)?);
+    assert_eq!(uncertain_state.try_get::<_, i32>(2)?, 0);
+    assert_eq!(uncertain_state.try_get::<_, i32>(3)?, 0);
     Ok(())
 }

@@ -275,15 +275,13 @@ fn optional_duration_millis(
     name: &'static str,
     default: Duration,
 ) -> Result<Duration, AnalysisConfigError> {
-    match lookup(name) {
-        None => Ok(default),
-        Some(raw) => raw
-            .parse::<u64>()
+    lookup(name).map_or(Ok(default), |raw| {
+        raw.parse::<u64>()
             .ok()
             .filter(|value| *value > 0)
             .map(Duration::from_millis)
-            .ok_or(AnalysisConfigError::InvalidPositiveInteger { name }),
-    }
+            .ok_or(AnalysisConfigError::InvalidPositiveInteger { name })
+    })
 }
 
 fn required_string(

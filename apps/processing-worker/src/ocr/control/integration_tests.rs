@@ -459,8 +459,8 @@ async fn verify_analysis_preemption_and_stale_intent(primary: &mut Client) -> Sm
 
 async fn verify_transient_retry_budget(primary: &mut Client) -> SmokeResult {
     let config = control_config("ocr-c2-transient")?;
-    let claim = claimed(claim_job(primary, TRANSIENT.job_id, &config).await?)?;
-    requeue_interrupted(primary, &claim, &config).await?;
+    let interrupted_claim = claimed(claim_job(primary, TRANSIENT.job_id, &config).await?)?;
+    requeue_interrupted(primary, &interrupted_claim, &config).await?;
     let counters = primary
         .query_one(
             "SELECT failure_retry_count, lease_recovery_count FROM ocr_jobs WHERE id=$1",
@@ -469,8 +469,8 @@ async fn verify_transient_retry_budget(primary: &mut Client) -> SmokeResult {
         .await?;
     assert_eq!(counters.try_get::<_, i32>(0)?, 0);
     assert_eq!(counters.try_get::<_, i32>(1)?, 0);
-    let claim = claimed(claim_job(primary, TRANSIENT.job_id, &config).await?)?;
-    requeue_transient(primary, &claim, &config).await?;
+    let first_failure_claim = claimed(claim_job(primary, TRANSIENT.job_id, &config).await?)?;
+    requeue_transient(primary, &first_failure_claim, &config).await?;
     let row = primary.query_one("SELECT status, available_at > clock_timestamp(), failure_retry_count, lease_recovery_count FROM ocr_jobs WHERE id=$1", &[&TRANSIENT.job_id]).await?;
     assert_eq!(row.try_get::<_, String>(0)?, "queued");
     assert!(row.try_get::<_, bool>(1)?);
@@ -482,18 +482,18 @@ async fn verify_transient_retry_budget(primary: &mut Client) -> SmokeResult {
             &[&TRANSIENT.job_id],
         )
         .await?;
-    let claim = claimed(claim_job(primary, TRANSIENT.job_id, &config).await?)?;
-    requeue_transient(primary, &claim, &config).await?;
-    let row = primary
+    let second_failure_claim = claimed(claim_job(primary, TRANSIENT.job_id, &config).await?)?;
+    requeue_transient(primary, &second_failure_claim, &config).await?;
+    let terminal = primary
         .query_one(
             "SELECT status, failure_retry_count, input_snapshot FROM ocr_jobs WHERE id=$1",
             &[&TRANSIENT.job_id],
         )
         .await?;
-    assert_eq!(row.try_get::<_, String>(0)?, "failed");
-    assert_eq!(row.try_get::<_, i32>(1)?, 1);
+    assert_eq!(terminal.try_get::<_, String>(0)?, "failed");
+    assert_eq!(terminal.try_get::<_, i32>(1)?, 1);
     assert_eq!(
-        row.try_get::<_, serde_json::Value>(2)?,
+        terminal.try_get::<_, serde_json::Value>(2)?,
         persisted_payload(&TRANSIENT)
     );
     assert_match_draft_status(primary, &TRANSIENT, "ocr_failed").await?;

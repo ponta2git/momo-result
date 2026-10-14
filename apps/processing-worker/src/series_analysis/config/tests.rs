@@ -318,7 +318,8 @@ fn scheduler_deadlines_default_independently_and_require_positive_overrides() {
         String::from("15000"),
     );
     overridden.insert("MOMO_OCR_STALE_JOB_AFTER_MS", String::from("600000"));
-    let config = runtime(&overridden, cgroup.path()).expect("explicit scheduler deadlines");
-    assert_eq!(config.recovery_interval, Duration::from_secs(15));
-    assert_eq!(config.ocr_stale_after, Duration::from_secs(600));
+    let overridden_config =
+        runtime(&overridden, cgroup.path()).expect("explicit scheduler deadlines");
+    assert_eq!(overridden_config.recovery_interval, Duration::from_secs(15));
+    assert_eq!(overridden_config.ocr_stale_after, Duration::from_secs(600));
 }

@@ -136,15 +136,13 @@ fn retry_limit<F>(lookup: &mut F, name: &'static str) -> Result<Option<i32>, Ocr
 where
     F: FnMut(&'static str) -> Option<String>,
 {
-    match lookup(name) {
-        None => Ok(None),
-        Some(raw) => raw
-            .parse::<i32>()
+    lookup(name).map_or(Ok(None), |raw| {
+        raw.parse::<i32>()
             .ok()
             .filter(|value| (0..=10).contains(value))
             .map(Some)
-            .ok_or(OcrRuntimeConfigError::InvalidRetryLimit { name }),
-    }
+            .ok_or(OcrRuntimeConfigError::InvalidRetryLimit { name })
+    })
 }
 
 fn duration<F>(lookup: &mut F, name: &'static str) -> Result<Duration, OcrRuntimeConfigError>

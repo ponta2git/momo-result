@@ -8,7 +8,6 @@ SET task_kind = NULL, owner = NULL, job_id = NULL, attempt_id = NULL,
     updated_at = clock_timestamp()
 WHERE slot_key = 'shared-heavy-work'
   AND (owner IS NULL OR owner IN (:'analysis_worker_id','ci-preemption-ocr-worker'));
-DELETE FROM ocr_queue_outbox WHERE job_id = 'ci-preemption-ocr-job';
 DELETE FROM ocr_drafts WHERE job_id = 'ci-preemption-ocr-job';
 DELETE FROM ocr_submission_members WHERE submission_id = '00000000-0024-4000-8000-000000000099';
 DELETE FROM ocr_submissions WHERE id = '00000000-0024-4000-8000-000000000099';

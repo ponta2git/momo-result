@@ -282,13 +282,7 @@ export async function withSystemEnvironment(
     notificationUrl.hostname = workerHost;
     const workerEnv = join(runDir, "worker.env");
     await writeEnvironment(workerEnv, {
-      ...analysisEnvironment(
-        containerURL(databaseUrl, workerHost),
-        containerURL(redisUrl, workerHost),
-        "momo:analysis:jobs",
-        "momo-system-e2e",
-        `system-${basename(runDir)}`,
-      ),
+      ...analysisEnvironment(containerURL(databaseUrl, workerHost), `system-${basename(runDir)}`),
       ...workerTiming(),
       ...storage.r2,
       SOURCE_IMAGE_R2_ENDPOINT:
@@ -308,7 +302,6 @@ export async function withSystemEnvironment(
             ANALYSIS_SMOKE_SERVICES_ARE_ISOLATED: "true",
             MOM24_E2E_CONTROL_DIR: "/mom24-control",
             OCR_CONTROL_SMOKE_DATABASE_URL: containerURL(databaseUrl, workerHost),
-            OCR_CONTROL_SMOKE_REDIS_URL: containerURL(redisUrl, workerHost),
           }
         : {}),
     });

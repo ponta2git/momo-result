@@ -210,34 +210,12 @@ export function safeDiagnostics(text: string) {
     .filter((fields) => Object.keys(fields).length > 0);
 }
 
-// redis-cli --json renders XINFO GROUPS as an array of objects, including
-// null lag when Redis cannot determine it. Unknown lag is not a drained group.
-export function redisGroupDrained(text: string, name: string): boolean {
-  let groups: unknown;
-  try {
-    groups = JSON.parse(text);
-  } catch {
-    throw new Error("Invalid Redis group response.");
-  }
-  check(Array.isArray(groups), "Invalid Redis group response.");
-  for (const value of groups) {
-    check(
-      value !== null && typeof value === "object" && !Array.isArray(value),
-      "Invalid Redis group fields.",
-    );
-  }
-  const group = (groups as Record<string, unknown>[]).find((value) => value.name === name);
-  return group?.lag === 0 && group.pending === 0;
-}
-
 export class Smoke {
   readonly signal: AbortSignal;
   readonly root: string;
   readonly log: string;
   readonly database = process.env.DATABASE_URL ?? "";
-  readonly redisURL = process.env.REDIS_URL ?? "";
   readonly postgresImage = process.env.POSTGRES_IMAGE ?? "postgres:18-alpine";
-  readonly redisImage = process.env.REDIS_IMAGE ?? "redis:7-alpine";
   readonly contract: { artifactSchemaVersion: number; validationContractId: string };
   constructor(signal: AbortSignal) {
     this.signal = signal;
@@ -262,39 +240,26 @@ export class Smoke {
   capability(worker: string) {
     return `${worker}@${algorithmVersion}@${this.contract.artifactSchemaVersion}@${this.contract.validationContractId}`;
   }
-  async isolated(postgres: Record<string, string>, redis: Record<string, string> = {}) {
-    // Existing guards remain the single isolation authority for both shell and
-    // Node smoke consumers. Inputs use argv/env, never shell interpolation.
-    const args = [
-      this.postgresImage,
-      ...Object.entries(postgres).flat(),
-      "--redis",
-      this.redisImage,
-      ...Object.entries(redis).flat(),
-    ];
+  async isolated(postgres: Record<string, string>) {
     requireSuccess(
       await command(
         "bash",
         [
           "-euc",
           `
-      source scripts/ci/analysis-smoke-safety.sh
-      analysis_smoke_require_isolated_services
-      analysis_smoke_require_bootstrapped_postgres "$1" "$DATABASE_URL"
-      postgres_image="$1"; shift
-      pairs=()
-      while [[ "$1" != --redis ]]; do pairs+=("$1" "$2"); shift 2; done
-      analysis_smoke_require_same_postgres_database "$postgres_image" "$DATABASE_URL" "${"${pairs[@]}"}"
-      shift
-      redis_image="$1"; shift
-      if (( $# )); then analysis_smoke_require_same_redis_database "$redis_image" "$REDIS_URL" "$@"; fi
-    `,
+        source scripts/ci/analysis-smoke-safety.sh
+        analysis_smoke_require_isolated_services
+        analysis_smoke_require_bootstrapped_postgres "$1" "$DATABASE_URL"
+        postgres_image="$1"; shift
+        analysis_smoke_require_same_postgres_database "$postgres_image" "$DATABASE_URL" "$@"
+      `,
           "worker-smoke-isolation",
-          ...args,
+          this.postgresImage,
+          ...Object.entries(postgres).flat(),
         ],
         { signal: this.signal },
       ),
-      "Isolated service verification",
+      "Isolated database verification",
     );
   }
   sqlArgs(variables: Record<string, string | number> = {}) {
@@ -331,28 +296,6 @@ export class Smoke {
   async sqlFile(name: string, variables: Record<string, string | number> = {}, cleanup = false) {
     const input = readFileSync(new URL(`sql/${name}.sql`, import.meta.url), "utf8");
     return this.sql(input, variables, cleanup ? null : this.signal);
-  }
-  async redis(args: string[], signal: AbortSignal | null = this.signal) {
-    return requireSuccess(
-      await containerCommand(
-        [
-          "run",
-          "--rm",
-          "--network",
-          "host",
-          "--add-host",
-          "host.docker.internal:host-gateway",
-          this.redisImage,
-          "redis-cli",
-          "--raw",
-          "-u",
-          this.redisURL,
-          ...args,
-        ],
-        { signal: signal ?? undefined },
-      ),
-      "Redis command",
-    );
   }
   async release(image: string, database: string, args: string[], binary = "") {
     return image
@@ -452,18 +395,12 @@ export async function runSmoke(name: string, action: (signal: AbortSignal) => Pr
   }
 }
 
-export function analysisEnvironment(
-  database: string,
-  redis: string,
-  stream: string,
-  group: string,
-  worker: string,
-): Record<string, string> {
+export function analysisEnvironment(database: string, worker: string): Record<string, string> {
   return {
     DATABASE_URL: database,
-    MOMO_ANALYSIS_OUTBOX_LISTENER_DATABASE_URL: database,
+    MOMO_PROCESSING_LISTENER_DATABASE_URL: database,
     MOMO_ANALYSIS_READ_DATABASE_URL: database,
-    REDIS_URL: redis,
+    MOMO_PROCESSING_RECOVERY_INTERVAL_MS: "1000",
     MOMO_ANALYSIS_PUBLICATION_MODE: "enabled",
     MOMO_ANALYSIS_RUNTIME_MEMORY_LIMIT_BYTES: "268435456",
     MOMO_ANALYSIS_CHILD_MEMORY_LIMIT_BYTES: "201326592",
@@ -474,16 +411,12 @@ export function analysisEnvironment(
     MOMO_ANALYSIS_CHUNK_MAX_BYTES: "8388608",
     MOMO_ANALYSIS_CHUNK_COUNT_MAX: "4096",
     MOMO_ANALYSIS_TEMPORARY_FILE_COUNT_MAX: "4097",
-    MOMO_REDIS_ANALYSIS_STREAM: stream,
-    MOMO_ANALYSIS_REDIS_GROUP: group,
     MOMO_ANALYSIS_WORKER_ID: worker,
     MOMO_ANALYSIS_TEMPORARY_ROOT: "/var/lib/momo-analysis",
     MOMO_ANALYSIS_LEASE_DURATION_MS: "70000",
     MOMO_ANALYSIS_HEARTBEAT_INTERVAL_MS: "1000",
     MOMO_ANALYSIS_HEARTBEAT_TIMEOUT_MS: "5000",
     MOMO_ANALYSIS_CHILD_STOP_GRACE_MS: "1000",
-    MOMO_ANALYSIS_REDIS_BLOCK_MS: "10000",
-    MOMO_ANALYSIS_PEL_RECOVERY_INTERVAL_MS: "300000",
     MOMO_HEAVY_CGROUP_V2_VALIDATED: "true",
     MOMO_OCR_V2_CONSUMER_MODE: "disabled",
     MOMO_LOG_FORMAT: "json",

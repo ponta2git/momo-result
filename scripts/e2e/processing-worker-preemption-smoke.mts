@@ -21,14 +21,8 @@ await runSmoke("Combined analysis/OCR preemption smoke", async (signal) => {
   const image = process.argv[2]!;
   const smoke = new Smoke(signal);
   const worker_database = process.env.WORKER_DATABASE_URL ?? "";
-  const worker_redis = process.env.WORKER_REDIS_URL ?? "";
   const worker_container = `momo-analysis-preemption-smoke-worker-${process.pid}`;
   const lockContainer = `${worker_container}-lock`;
-  const analysis_stream = "momo:analysis:preemption-smoke";
-  const analysis_group = "momo-analysis-preemption-smoke";
-  const ocr_stream = "momo:ocr:v2:preemption-smoke";
-  const ocr_group = "momo-ocr-v2-preemption-smoke";
-  const ocr_dead_stream = "momo:ocr:v2:preemption-smoke:dead";
   const analysis_job = "ci-preemption-analysis-job";
   const ocr_job = "ci-preemption-ocr-job";
   const title_id = "ci-preemption-title";
@@ -84,17 +78,10 @@ await runSmoke("Combined analysis/OCR preemption smoke", async (signal) => {
   };
   await withCleanup(
     async () => {
-      check(
-        worker_database && worker_redis && smoke.redisURL,
-        "Worker database and Redis URLs are required.",
-      );
-      await smoke.isolated(
-        { WORKER_DATABASE_URL: worker_database },
-        { WORKER_REDIS_URL: worker_redis },
-      );
+      check(worker_database, "Worker database URL is required.");
+      await smoke.isolated({ WORKER_DATABASE_URL: worker_database });
       ownsFixtures = true;
       await cleanupDB();
-      await smoke.redis(["DEL", analysis_stream, ocr_stream, ocr_dead_stream]);
       check(
         (await smoke.sql(
           "SELECT COALESCE(owner, '') FROM worker_execution_slots WHERE slot_key = 'shared-heavy-work';",
@@ -127,20 +114,11 @@ await runSmoke("Combined analysis/OCR preemption smoke", async (signal) => {
         `the deterministic analysis input lock`,
       );
       worker = startWorker(smoke, worker_container, image, {
-        ...analysisEnvironment(
-          worker_database,
-          worker_redis,
-          analysis_stream,
-          analysis_group,
-          analysis_worker_id,
-        ),
+        ...analysisEnvironment(worker_database, analysis_worker_id),
         MOMO_ANALYSIS_CALCULATION_TIMEOUT_MS: "30000",
         MOMO_ANALYSIS_FINALIZATION_TIMEOUT_MS: "45000",
         MOMO_ANALYSIS_CONFIG_VERSION: "ci-preemption-v1",
         MOMO_OCR_V2_CONSUMER_MODE: "enabled",
-        OCR_REDIS_V2_STREAM: ocr_stream,
-        MOMO_OCR_V2_REDIS_GROUP: ocr_group,
-        OCR_REDIS_V2_DEAD_LETTER_STREAM: ocr_dead_stream,
         MOMO_OCR_V2_WORKER_ID: "ci-preemption-ocr-worker",
         SOURCE_IMAGE_R2_ENDPOINT: "http://127.0.0.1:9",
         SOURCE_IMAGE_R2_BUCKET: "ci-preemption",
@@ -153,12 +131,7 @@ await runSmoke("Combined analysis/OCR preemption smoke", async (signal) => {
         MOMO_OCR_V2_HEARTBEAT_INTERVAL_MS: "200",
         MOMO_OCR_V2_FINALIZATION_TIMEOUT_MS: "1000",
         MOMO_OCR_V2_RETRY_DELAY_MS: "60000",
-        MOMO_OCR_V2_REDIS_BLOCK_MS: "10000",
-        MOMO_OCR_V2_PEL_RECOVERY_INTERVAL_MS: "300000",
-        MOMO_OCR_V2_CLAIM_IDLE_MS: "15000",
         MOMO_OCR_V2_TIMEOUT_MS: "5000",
-        MOMO_OCR_V2_MAXIMUM_DELIVERY_ATTEMPTS: "2",
-        MOMO_OCR_V2_PENDING_SCAN_COUNT: "10",
       });
       await worker.ready();
       await waitEvent("event", "analysis_worker_ready", "analysis readiness");
@@ -176,15 +149,7 @@ await runSmoke("Combined analysis/OCR preemption smoke", async (signal) => {
 `,
         `the scoped analysis capability registration`,
       );
-      await smoke.redis([
-        "XADD",
-        analysis_stream,
-        "*",
-        "schemaVersion",
-        "1",
-        "jobId",
-        analysis_job,
-      ]);
+      await smoke.sql("SELECT pg_notify('processing_jobs', '');");
       await waitSQL(
         `analysis|${analysis_worker_id}|true`,
         `
@@ -234,33 +199,9 @@ await runSmoke("Combined analysis/OCR preemption smoke", async (signal) => {
           `committed analysis renewal ${renewal} with the child alive`,
         );
       }
-      await smoke.redis([
-        "XADD",
-        ocr_stream,
-        "*",
-        "schemaVersion",
-        "2",
-        "jobId",
-        ocr_job,
-        "draftId",
-        "ci-preemption-draft",
-        "sourceImageId",
-        "ci-preemption-source-image",
-        "imageObjectKey",
-        "source-images/ci-preemption-source.png",
-        "sha256",
-        "ab".repeat(32),
-        "byteLength",
-        "68",
-        "mediaType",
-        "image/png",
-        "requestedScreenType",
-        "total_assets",
-        "attempt",
-        "1",
-        "enqueuedAt",
-        "2026-08-12T00:00:00Z",
-      ]);
+      await smoke.sql(
+        `UPDATE ocr_jobs SET available_at = clock_timestamp() WHERE id = '${ocr_job}'; SELECT pg_notify('processing_jobs', '');`,
+      );
       await waitSQL(
         `true|0|true|1`,
         `
@@ -314,7 +255,7 @@ await runSmoke("Combined analysis/OCR preemption smoke", async (signal) => {
         "The preempted analysis process group was not reaped.",
       );
       await releaseLock();
-      // Include the real Redis idle threshold and bounded processing time.
+      // Include child shutdown, DB retry deadlines and bounded processing time.
       await waitSQL(
         `succeeded|2|1|1`,
         `
@@ -358,10 +299,6 @@ await runSmoke("Combined analysis/OCR preemption smoke", async (signal) => {
       await cleanups([
         releaseLock,
         () => worker?.stop(),
-        () =>
-          ownsFixtures
-            ? smoke.redis(["DEL", analysis_stream, ocr_stream, ocr_dead_stream], null)
-            : undefined,
         () => (ownsFixtures ? cleanupDB() : undefined),
         () => smoke.remove(),
       ]);

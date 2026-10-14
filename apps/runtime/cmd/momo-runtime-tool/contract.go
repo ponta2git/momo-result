@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"sort"
 	"strings"
 )
 
@@ -107,14 +106,5 @@ func stringSet(values []string) map[string]struct{} {
 	for _, value := range values {
 		result[value] = struct{}{}
 	}
-	return result
-}
-
-func sortedKeys(values map[string]struct{}) []string {
-	result := make([]string, 0, len(values))
-	for value := range values {
-		result = append(result, value)
-	}
-	sort.Strings(result)
 	return result
 }

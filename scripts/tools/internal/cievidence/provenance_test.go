@@ -262,7 +262,7 @@ func TestRuntimeCandidateAndPatchExactShape(t *testing.T) {
 		validate func([]byte) error
 	}{
 		{data, func(b []byte) error { return parseRuntimeCandidate(b, patch, expected) }},
-		{patch, func(b []byte) error { _, err := http4sPatch(b, fixturePin); return err }},
+		{patch, func(b []byte) error { return parseRuntimeCandidate(data, b, expected) }},
 	} {
 		value, _ := decodeObject(target.data)
 		for key := range value {

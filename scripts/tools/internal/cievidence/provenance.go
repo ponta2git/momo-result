@@ -54,17 +54,6 @@ func normalizeArtifactDigest(value string) (string, error) {
 	return "", errors.New("Artifact digest must be a lowercase SHA-256 value.")
 }
 
-func http4sPatch(data []byte, expectedSourceSHA string) (object, error) {
-	patch, err := decodeObject(data)
-	if err != nil {
-		return nil, err
-	}
-	if err := validateHTTP4SPatch(patch, expectedSourceSHA); err != nil {
-		return nil, err
-	}
-	return patch, nil
-}
-
 func validateHTTP4SPatch(patch object, expectedSourceSHA string) error {
 	if !commitPattern.MatchString(expectedSourceSHA) ||
 		!patch.keys("repository", "scalaVersion", "sourceSha", "version") ||

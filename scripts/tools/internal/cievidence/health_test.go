@@ -88,7 +88,7 @@ func TestWorkerReadinessProviderWireAndLastOccurrence(t *testing.T) {
 	if result.SchemaVersion != 1 || result.MachineID != args[1] || result.AnalysisWorkerID != args[2] || result.OCRWorkerID != args[3] || len(result.Checks) != 4 {
 		t.Fatalf("unexpected readiness: %s", out)
 	}
-	want := []string{"analysis_worker_ready", "ocr_rust_v2_worker_ready", "analysis_outbox_notification_route_ready", "analysis_outbox_ready"}
+	want := []string{"analysis_worker_ready", "ocr_rust_v2_worker_ready", "processing_jobs_notification_route_ready", "processing_scheduler_ready"}
 	for index, event := range want {
 		if result.Checks[index].Event != event {
 			t.Fatal("wrong check order")

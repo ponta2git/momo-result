@@ -394,7 +394,7 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 125
     needs:
       - release-ready
       - runtime-image
@@ -520,6 +520,16 @@ jobs:
             echo "A newer release superseded this candidate; use its deploy run." >&2
             exit 1
           }
+
+      - name: Stop old consumers and wait for the DB-job migration
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOBS_CUTOVER_COMPLETE: ${{ vars.JOBS_CUTOVER_COMPLETE }}
+          JOBS_CUTOVER_DB_RUN_ID: ${{ vars.JOBS_CUTOVER_DB_RUN_ID }}
+          RUNTIME_FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          WORKER_FLY_API_TOKEN: ${{ secrets.ANALYSIS_FLY_API_TOKEN }}
+        run: scripts/ci/job-scheduler-cutover.sh
+        timeout-minutes: 35
 
       - name: Deploy to Fly.io
         env:

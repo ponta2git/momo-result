@@ -43,11 +43,11 @@ write_log() {
         (app("ocr_rust_v2_worker_ready"; $ocrWorkerId) | tojson)),
       if $includeNotificationRoute == "true" then
         outer($machineId; "app"; "2026-08-24T12:00:03Z";
-          (app("analysis_outbox_notification_route_ready"; $analysisWorkerId) | tojson))
+          (app("processing_jobs_notification_route_ready"; $analysisWorkerId) | tojson))
       else empty end,
       if $includeOutbox == "true" then
         outer($machineId; "app"; "2026-08-24T12:00:04Z";
-          (app("analysis_outbox_ready"; $analysisWorkerId) | tojson))
+          (app("processing_scheduler_ready"; $analysisWorkerId) | tojson))
       else empty end
     ' > "${log_file}"
 }
@@ -76,8 +76,8 @@ jq -e \
     (.checks | map(.event)) == [
       "analysis_worker_ready",
       "ocr_rust_v2_worker_ready",
-      "analysis_outbox_notification_route_ready",
-      "analysis_outbox_ready"
+      "processing_jobs_notification_route_ready",
+      "processing_scheduler_ready"
     ]
   ' <<< "${actual}" > /dev/null
 

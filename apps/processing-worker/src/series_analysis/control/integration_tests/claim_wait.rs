@@ -223,42 +223,42 @@ async fn real_postgres_and_redis_busy_rechecks_preserve_pending_and_owned_claims
     )
     .await?;
     let mut uncertain = crate::postgres::connect(&proxy.url).await?;
-    let mut bounded_config = config.clone();
-    bounded_config.execution_limits.finalization_timeout = Duration::from_millis(500);
+    // Keep the normal control bound so container round trips can reach COMMIT. The signal below
+    // proves the tested timeout happens after the proxy has received its successful reply.
+    let observation_timeout = config.control_response_timeout() + Duration::from_secs(2);
     let mut budget = BusyRetryBudget::new(config.lease_duration);
     let (result, held) = tokio::join!(
         time::timeout(
-            Duration::from_secs(2),
+            observation_timeout,
             Box::pin(claim_delivery(
                 &mut uncertain,
                 JOB_ID,
-                &bounded_config,
+                &config,
                 &sink,
                 Instant::now() + config.lease_duration,
                 &mut budget,
                 &mut shutdown,
             )),
         ),
-        time::timeout(Duration::from_secs(2), committed.notified()),
+        time::timeout(observation_timeout, committed.notified()),
     );
-    held?;
+    held.map_err(|_elapsed| "fixture did not observe the committed claim")?;
     assert!(
         matches!(result, Ok(Err(ConsumerError::ControlTimeout))),
         "an unanswered COMMIT must fail within the operation bound"
     );
     assert!(matches!(
         time::timeout(
-            Duration::from_secs(2),
+            observation_timeout,
             crate::series_analysis::finish_consumer(
                 &uncertain,
-                &bounded_config,
+                &config,
                 Err(ConsumerError::ControlTimeout),
             ),
         )
         .await?,
         Err(ConsumerError::ControlTimeout)
     ));
-    drop(bounded_config);
     drop(uncertain);
     let row = client
         .query_one(

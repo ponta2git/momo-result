@@ -80,7 +80,7 @@ jobs:
           printf 'run_attempt=%s\n' "${run_attempt}" >> "${GITHUB_OUTPUT}"
 
       - name: Download deployment provenance
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: runtime-deployment-metadata-${{ inputs.target_run_id }}-${{ steps.run.outputs.run_attempt }}
           path: runtime-deployment-metadata
@@ -144,7 +144,7 @@ jobs:
           printf 'MOMO_CI_TOOL=%s\n' "${RUNNER_TEMP}/ci-tool" >> "${GITHUB_ENV}"
 
       - name: Download deployed registry manifest
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ${{ needs.resolve-target.outputs.manifest_artifact_name }}
           path: rollback-manifest
@@ -262,7 +262,7 @@ jobs:
 
       - name: Upload rollback verification evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: runtime-rollback-${{ github.run_id }}-${{ github.run_attempt }}
           path: runtime-rollback-evidence/

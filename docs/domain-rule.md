@@ -1,6 +1,6 @@
 # ドメインルール
 
-目的: 用語、不変条件、状態遷移、識別子の意味を定義する。CSV / TSV は `docs/requirements/base.md`、DB 所有権は `docs/db-rule.md`、queue は `docs/redis-streams-ocr-contract.md` を正本とする。
+目的: 用語、不変条件、状態遷移、識別子の意味を定義する。CSV / TSV は `docs/requirements/base.md`、DB 所有権は `docs/db-rule.md`、OCR job は `docs/ocr-job-contract.md` を正本とする。
 
 ## 1. Terms
 
@@ -61,13 +61,13 @@
 
 | 状態 | 意味 | 終端 |
 | --- | --- | --- |
-| `queued` | 配送・実行待ち、または一時失敗後の再実行待ち | No |
+| `queued` | 実行待ち、または一時失敗後の再実行待ち | No |
 | `running` | worker が処理中 | No |
 | `succeeded` | draft を保存済み | Yes |
 | `failed` | 失敗を保存済み | Yes |
 | `cancelled` | 処理前に中止 | Yes |
 
-- 状態の正本は DB、Redis Streams は配送路とする。
+- 状態と実行待ちの正本は DB とし、Worker が直接取得する。
 - claim と terminal 遷移は atomic に行い、terminal は `queued` / `running` からだけ許可する。
 - success は保存した draft と報告値が一致する。non-success は failure metadata を持ち、draft payload を持たない。
 

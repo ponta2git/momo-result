@@ -143,23 +143,23 @@ test、suite、lint / checker、manual review は、守る価値に対して必�
 
 Analysis / OCR の共通 contract として、次を固定する。
 
-- claim して child を実行する経路の `consume -> claim / lease / slot -> child -> candidate validation -> durable commit -> post-commit effect -> delivery disposition` の順序。claim 前に完結する ACK / 保留は各配送契約に従う。
-- parent が DB、Redis、object、process、timeout、fence、outbox、ACK を所有し、child は1 attempt の bounded candidate だけを返すこと。
-- 処理結果の ACK 前に必要な DB 更新と次outboxを確定すること、再queue時の ACK / 保留を各配送契約どおりに扱うこと、rollback では wake しないこと、append 後の DB failure と重複 delivery が安全に収束すること。
-- startup / PEL recovery、wake coalescing、deadline、bounded drain、backoff を制御可能 clock と signal で検証し、idle 時の無条件 polling を許さないこと。
-- 分析outboxはworkerによるcampaign展開とdispatchを実DB / Redisで通し、process外commit後のhint、hint喪失後の低頻度recovery、旧dispatcherとのrolling overlapが同じdurable stateへ収束すること。
+- `DB candidate -> claim / lease / slot -> child -> candidate validation -> durable commit -> post-commit effect` の順序。
+- parent が DB、object、process、timeout、fence、結果確定を所有し、child は1 attempt の bounded candidate だけを返すこと。
+- retry / followup を durable に保存し、rollback では wake しないこと。commit 応答不明や重複 wake が二重実行権・二重公開にならないこと。
+- 起動・再接続、wake coalescing、deadline、bounded drain、backoff を確認し、通知欠落は低頻度の補完走査で回復すること。
+- campaign 展開と直接 claim を実 DB で通すこと。queued がなく期限切れ running だけが残る場合、先頭が非対応・lock 中の場合、将来の retry、複数親の競合を含める。
 - PostgreSQL通知をwakeに使う場合、productionと同じpooling modeでsession-bound listenerへの別接続commitを通す。startupの`LISTEN`成功や直接DBだけのtestを、通知routeのreadiness evidenceにしない。
 - supervisor の shutdown、unexpected child / coordinator exit、sibling 停止、process group 回収。
-- DB / Redis / Linux process / native engine は通常 unit test から分離し、検証済み runtime image と隔離 service で通すこと。
+- DB / Linux process / native engine は通常 unit test から分離し、検証済み runtime image と隔離 service で通すこと。
 
-OCR は schema / screen type、object metadata、parser / postprocess、failure mapping、ACK / pending / DLQ、draft payload を外部 oracle にする。accuracy は version 固定 dataset と項目別 oracle で測り、未知画像への一般化を保証したと報告しない。
+OCR は schema / screen type、object metadata、parser / postprocess、failure mapping、retry / lease 回復、draft payload を外部 oracle にする。accuracy は version 固定 dataset と項目別 oracle で測り、未知画像への一般化を保証したと報告しない。
 
 ## 7. Analysis Capability / Worker Evidence Catalog
 
 - 純粋計算は table / property / golden test で、分母、同値、丸め、入力順、seed、品質状態を固定する。浮動小数点の oracle は手計算、高精度参照、数学的性質のいずれかを使う。
 - 意図した結果変更は根拠、影響 fixture、algorithm version を同じ変更に含める。既存実装の値だけを唯一の正解にしない。
-- DB job / intent / slot / lease / fence / artifact は実 PostgreSQL、delivery / pending / ACK は実 Redis、timeout / OOM / kill / reap / preemption は実 process で検証する。
-- stale fence、重複 delivery、commit 応答不明、unsupported version、partial staging、publication rollback、cleanup 競合を直接通し、部分公開・二重公開・孤立 job を残さない。
+- DB job / intent / slot / lease / fence / artifact と通知は実 PostgreSQL、timeout / OOM / kill / reap / preemption は実 process で検証する。
+- stale fence、重複 wake、commit 応答不明、unsupported version、partial staging、publication rollback、cleanup 競合を直接通し、部分公開・二重公開・孤立 job を残さない。
 - child の resource limit は対象 cgroup の readback / event と parent 生存を同時に確認する。host 上の制限や runtime 全体 OOM で代用しない。
 - artifact materialization は byte / node / depth / UTF-8 / checksum / path / symlink / disk 境界を検証する。
 - artifact publicationはRustのfull semantic validatorを唯一の意味oracleとし、exact validation contract、published rowのimmutability、APIのbounded shape / identity defenseをそれぞれの境界で検証する。

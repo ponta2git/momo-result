@@ -6,22 +6,22 @@
 
 - 実装境界: `docs/architecture.md`
 - DB / migration: `docs/db-rule.md`
-- OCR queue: `docs/redis-streams-ocr-contract.md`
+- OCR job: `docs/ocr-job-contract.md`
 - 戦績分析: `docs/requirements/series-analysis-batch.md`
 - UI / test / command: `docs/ui-rule.md`、`docs/test-rule.md`、`docs/dev-rule.md`
 
 現在のframework version、directory、env名、threshold、workflow、provider設定は実装・設定を正本とし、この文書へ複製しない。
 
-採用する構成は React/Vite のSPA、Fly.io、Neon、Upstash Redis Streams とする。APIとOCRワーカーは同一リポジトリ・同一Fly.io構成内で分離する。
+採用する構成は React/Vite の SPA、API、Processing Worker、共有 PostgreSQL、認証・レート制限用 Redis とする。APIとOCRワーカーは同一リポジトリで分離する。
 
 ## 1. System Boundaries
 
-- Web、API、Processing Worker、共有DB、queue、object storageを独立した責務として扱う。
+- Web、API、Processing Worker、共有DB、認証・レート制限用Redis、object storageを独立した責務として扱う。
 - WebとAPIだけが利用者向けHTTP runtimeを構成する。OCRと戦績分析は高負荷処理がHTTP可用性を巻き込まない独立Rust runtimeへ置く。
 - APIは認証、入力検証、業務usecase、保存済み状態の読み取りを担う。OCR / 分析engineをHTTP request内で実行しない。
 - DBはsummitと共有するPostgreSQLを使い、schema / migrationは`../momo-db`が所有する。
-- Redis StreamsはOCR / 分析jobの少なくとも1回の配送に使い、状態の正本にしない。
-- upload画像は非公開object storageへ置き、DB / queueにはopaque keyと検証metadataだけを保存する。
+- OCR / 分析は既存 DB の job を直接取得し、通知欠落からも回復する。
+- upload画像は非公開object storageへ置き、DB / jobにはopaque keyと検証metadataだけを保存する。
 - provider固有のtopology、resource、費用、実測、復旧手順はprivateに置く。
 
 ## 2. Web / API Contract
@@ -39,11 +39,10 @@
 
 ## 3. Asynchronous Processing
 
-- OCR / 分析job、outbox、業務状態は同じDB transactionでdurableに確定し、Redis publishを業務transactionの成功条件にしない。
-- commit後のwakeは低遅延化のhintとし、startup / bounded recoveryで失われたwakeや重複deliveryから回復する。
-- dispatcherはidle時に短周期pollingせず、wake、deadline、低頻度recoveryで動く。
-- 処理結果に必要なDB更新と再配送intentを確定してからACKする。claim前の重複配送、保留、再試行はOCR queue・分析jobの専門契約に従い、DB claim、lease、fenceで収束させる。
-- parent processが外部I/O、lease、timeout、子process、durable write、ACKを所有し、attempt childはboundedで非authoritativeなcandidateだけを返す。
+- OCR / 分析 job・request・入力と業務状態を同じ DB transaction で確定する。
+- commit 後の wake は低遅延化の hint とし、startup / reconnect / deadline / 低頻度走査で欠落から回復する。
+- scheduler は候補を上限付きで取得し、DB claim、lease、fence で競合を制御する。実行前に job lock を先取りせず、共有枠から順に取得する。
+- parent process が外部 I/O、lease、timeout、子 process、durable write を所有し、attempt child は bounded な candidate だけを返す。
 - OCRと分析は共有実行枠を1件とし、OCRだけが分析をpreemptできる。詳細は各専門正本に従う。
 
 ## 4. Image / Object Lifecycle
@@ -54,14 +53,14 @@
 - 画像は下書き確定または削除まで保持し、その後削除する。OCR完了だけでは削除しない。
 - object writeとDB commitの片側成功、orphan、削除失敗、retry / cleanup競合をreconcilerが冪等に収束させる。
 - object-backed uploadとreconcilerは同じrelease単位で有効化し、cleanup不能な部分切替をしない。
-- 画像実体、内部path、長寿命URL、credentialをDB、queue、公開DTOへ置かない。
+- 画像実体、内部path、長寿命URL、credentialをDB、公開DTOへ置かない。
 - 認証済み利用者は下書きに属する元画像をpreview / downloadできるが、件数・byte数・rateを上限化する。
 
 ## 5. Availability / Degradation
 
-- APIとDBが利用可能なら、既存結果の閲覧と画像なしの手入力をOCR / queue / object storageなしで継続できること。
+- APIとDBが利用可能なら、既存結果の閲覧と画像なしの手入力をOCR / object storage なしで継続できること。
 - 共有rate limiter障害時、通常read / mutationは短いtimeout後に同じ設定上限のprocess-local limiterへ縮退できる。ただし分散上限からinstance単位へ弱まった状態を観測可能にする。
-- OCR受付、upload、source image取得はlocal fallbackの対象にせず、queue / storageを確認できなければ受付を停止する。
+- OCR受付、upload、source image取得はlocal fallbackの対象にせず、job DB / storage を確認できなければ受付を停止する。
 - dependency readiness、process liveness、機能応答、resource / performanceを別の健康状態として扱う。
 - failure時も秘密情報を含まないProblem Detailsと安全な運用情報を返し、内部例外やprovider情報を公開しない。
 
@@ -95,7 +94,7 @@
 
 - production logはstructured eventとし、相関ID、分類、件数、byte数、処理時間、状態遷移を必要最小限で記録する。
 - stream responseはhandler完了と転送完了を分け、body終了時にsuccess / error / cancelと実転送byte数をexactly once記録する。
-- DBのjob / outbox / artifact、Redis stream / PEL / DLQ、worker heartbeat、queue待機、resourceを別々に観測し、transportから業務状態を推測しない。
+- DB の job / request / artifact、Worker heartbeat、実行待ち、resource を別々に観測する。起床通知の有無から job の成否を推測しない。
 - public healthは粗いstatus / reasonに限定し、内部件数や攻撃面を公開しない。詳細は管理下のlog / metric / DBで確認する。
 - metric labelにaccount、job、作品など高cardinality IDを入れず、安全なopaque IDでlog相関する。
 - DB backup / restoreはDB providerの機能を利用し、復旧可能性を定期的に確認する。アプリの削除確認とprovider backupを混同しない。
@@ -105,7 +104,7 @@
 ## 9. Performance / Client Quality
 
 - 通常画面 / APIは体感1秒以内、同期CSV / TSV exportは数秒以内を目標とする。利用者の待ち方を判断する目安であり、測定条件のない厳密なSLOや使いやすさ全体の合格点として扱わない。具体的な遅さを調べる場合は対象の操作・負荷・環境を定めて測定し、操作の継続性や負担も確認する。
-- OCRは非同期とし、timeout / retry / DLQは実測とjob lifecycleに基づいて調整する。
+- OCRは非同期とし、timeout / retry / lease 回復は実測とjob lifecycleに基づいて調整する。
 - 戦績比較は保存済みartifactだけを読み、worker、API decode / response、browser parse / renderを別々に測定する。
 - 戦績分析のfixture、連続実行、timeout、resource条件は`docs/requirements/series-analysis-batch.md`を正本とする。
 - target OS / architecture上のruntime imageでmemory hard limit、peak headroom、OOM、shutdown、主要E2Eを検証する。
@@ -119,7 +118,7 @@
 | 変更境界 | 受入に必要な観測 |
 | --- | --- |
 | Web / API contract | Tapir endpoint、生成 artifact、Web consumer が同じ契約を表し、代表 user flow の request / response が意図した結果へ到達する |
-| DB / queue / object | migration 適用済みの production boundary で transaction、recovery、wire の意味が保たれる |
+| DB / job / object | migration 適用済みの production boundary で transaction、recovery、wire の意味が保たれる |
 | worker / native / isolation | production 相当 image で native dependency、process / cgroup、timeout、preemption の契約が成立する |
 | runtime / protocol | 配置対象 image が各 hop の protocol、health、shutdown、主要 user flow を保ち、既知の重大な image 脆弱性を含まない |
 | security / limits | boundary、concurrency、retry、dependency failure が安全に失敗し、secret を露出しない |

@@ -152,7 +152,7 @@
 - DB変更はmomo-dbでadditiveに行い、既存試合を本文なし、最終更新情報なし、決定的な初期versionを持つメモ状態として読めるようにする。保存済みメモを破棄するdown migrationを通常のrollback手段にしない。
 - DBは本文のabsence、負でない内部version counter、本文・最終更新情報のshapeを制約できる範囲で保証する。150 Unicode code pointsの上限、Unicode whitespace判定、改行統一はAPI境界のvalidated valueが所有し、DBの文字数constraintとして重ねて実装しない。repositoryはvalidated valueだけを受け取り、wireではcounterをopaqueなversionとして扱う。
 - 試合作成・確定requestへのメモ追加と、試合一覧responseへのメモ有無追加はadditive変更とする。メモを送らない既存clientと既存試合を引き続き受理し、旧clientは一覧の追加fieldを無視できるようにする。OpenAPI、生成型、request変換、readerを同じ契約変更として更新する。
-- メモ専用mutationは、構造化された試合更新と分析再計算を一体で行う既存persistence経路へ流さない。本文とメモ状態だけを更新したこと、および分析用outboxを書かなかったことをDB-backed evidenceで直接観測できる境界を持つ。
+- メモ専用mutationは、構造化された試合更新と分析再計算を一体で行う既存persistence経路へ流さない。本文とメモ状態だけを更新したこと、および分析request / jobを書かなかったことをDB-backed evidenceで直接観測できる境界を持つ。
 - 既存のidempotency保存領域にはrequest hashと本文を含まない成功responseだけを保持し、メモ本文を重複保存しない。競合回復に必要な最新本文は試合詳細readから取得する。
 - 試合詳細、開催詳細、試合一覧は、API境界で正規化された同じ本文有無を基準にする。試合詳細は最終更新accountの表示名を読み取り時にhydrateし、開催詳細は本文だけ、試合一覧は有無だけをboundedなreadでまとめて取得する。いずれも試合ごとの追加requestを発生させない。
 - WebとAPIの文字数判定は同じ契約例を共有する。契約例はLF / CRLF、空、Unicode whitespace、通常の日本語、BMP外文字、結合文字、150 / 151 code pointsを含む。DB evidenceはこの可変な入力方針を再判定せず、APIで検証済みの本文を欠損や変形なく保存できることと、version、外部key、本文・最終更新情報のshapeを観測する。
@@ -164,7 +164,7 @@
 ## 9. Analysis / Export Boundary
 
 - 初版のメモ本文と更新metadataは、戦績分析の入力、source input checksum、semantic checksum、artifact、match contextに含めない。
-- メモ専用mutationは作品のinput revisionを進めず、再計算intent、outbox、分析jobを作成しない。
+- メモ専用mutationは作品のinput revisionを進めず、再計算intent、分析jobを作成しない。
 - 初回メモを伴う試合作成・確定では、構造化された試合結果の追加を理由に通常の分析再計算を行う。メモ本文の有無や内容は、その計算結果へ影響させない。
 - 試合削除は構造化された分析入力の削除であるため、メモの有無にかかわらず通常の再計算対象とする。
 - 既存CSV / TSVは1行1プレーヤーの契約と列順を維持し、試合単位のメモを4行へ複製しない。
@@ -187,7 +187,7 @@
 | 冪等性 | 保存commit後のresponse消失を同じkeyで再送すると先の成功を再生し、別operationによる古いversionだけを競合にする |
 | 本文保持 | mutation成功response、idempotency保存、problem detail、通常logへメモ本文を複製せず、競合時は試合詳細readから最新本文を取得する |
 | 閲覧整合 | 保存後の試合詳細と開催詳細が同じ本文またはabsenceを返し、試合一覧の「メモあり」が追加・削除へ追従し、メモなしと取得失敗を混同しない |
-| 分析分離 | メモだけの追加、編集、削除でinput revision、source input checksum、再計算intent、outbox、job、artifactが変わらない |
+| 分析分離 | メモだけの追加、編集、削除でinput revision、source input checksum、再計算intent、job、artifactが変わらない |
 | 互換性 | migration前の全既存試合をメモなしで読め、旧clientの確定を受理し、rollbackで保存済みメモを破棄しない |
 | Release / rollback | pinnedしたmomo-db migrationを隔離DBへ適用したruntime gateが通り、必要columnがないDBではrelease preflightが失敗する。本番migrationの適用済み確認後、APIとWebを含む同一runtimeを通常workflowでdeployし、通常rollbackでは以前の成功runtimeを復元してadditive columnと保存済みメモを残す |
 | 出力 | 既存CSV / TSVの列順、行数、内容がメモの有無で変わらない |

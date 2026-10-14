@@ -183,12 +183,12 @@ impl OcrConsumerConfig {
         })
     }
 
-    /// Returns the longest configured OCR dependency or heartbeat operation that can already be
-    /// in progress when the process-level supervisor requests shutdown.
-    pub(crate) fn shutdown_dependency_or_heartbeat_bound(&self) -> Duration {
+    /// Returns the longest OCR operation in a claimed delivery that can already be in progress
+    /// when the process-level supervisor requests shutdown.
+    pub(crate) fn shutdown_attempt_operation_bound(&self) -> Duration {
         self.object_download_timeout
             .max(self.heartbeat_interval)
-            .max(stream_connection::RESPONSE_TIMEOUT)
+            .max(self.control.finalization_timeout())
     }
 
     /// Returns the existing durable-finalization bound for process-level shutdown composition.

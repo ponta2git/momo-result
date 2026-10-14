@@ -1,17 +1,22 @@
 //! A real `PostgreSQL` connection with controlled response latency, without changing SQL semantics.
 
-use std::{error::Error, io, time::Duration};
+use std::{error::Error, io, sync::Arc, time::Duration};
 
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
+    sync::Notify,
     task::{JoinHandle, JoinSet},
 };
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(crate) enum CommitFault {
     BeforeCommit,
     LostReply,
+    HoldReply {
+        committed: Arc<Notify>,
+        release: Arc<Notify>,
+    },
 }
 
 pub(crate) struct DelayedDatabase {
@@ -57,6 +62,7 @@ impl DelayedDatabase {
                     accepted = listener.accept() => {
                         let Ok((client, _address)) = accepted else { break };
                         let host = host.clone();
+                        let fault = fault.clone();
                         connections.spawn(async move {
                             let server = TcpStream::connect((host.as_str(), port)).await?;
                             match fault {
@@ -136,11 +142,21 @@ async fn relay_commit_fault(
             }
         },
         async {
+            let mut reply_held = false;
             loop {
                 let tag = server_read.read_u8().await?;
                 let body = read_body(&mut server_read).await?;
                 if matches!(fault, CommitFault::LostReply) && tag == b'C' && body == b"COMMIT\0" {
                     return Err::<(), _>(io::Error::other("test lost commit response"));
+                }
+                if let CommitFault::HoldReply { committed, release } = &fault
+                    && !reply_held
+                    && tag == b'C'
+                    && body == b"COMMIT\0"
+                {
+                    reply_held = true;
+                    committed.notify_one();
+                    release.notified().await;
                 }
                 client_write.write_u8(tag).await?;
                 write_body(&mut client_write, &body).await?;

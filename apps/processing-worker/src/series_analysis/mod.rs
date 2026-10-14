@@ -63,6 +63,8 @@ pub(crate) enum ConsumerError {
     Database(#[from] PostgresError),
     #[error("analysis control-plane transition failed")]
     Control(#[from] ControlError),
+    #[error("analysis control-plane operation exceeded its deadline")]
+    ControlTimeout,
     #[error("analysis Redis operation failed")]
     Redis(#[from] RedisError),
     #[error("analysis child process operation failed")]
@@ -85,6 +87,7 @@ impl ConsumerError {
         match self {
             Self::Database(error) => error.kind(),
             Self::Control(error) => error.kind(),
+            Self::ControlTimeout => "control_timeout",
             Self::Redis(_) => "redis_operation",
             Self::Process(error) => error.kind(),
             Self::Temporary(_) => "temporary_storage_io",
@@ -306,9 +309,9 @@ pub(crate) async fn run(
             "analysis worker delivery loop stopped unexpectedly"
         );
     }
-    if let Err(error) = mark_draining(&control_client, &config.worker_id).await {
+    if let Err(error) = mark_draining_with_deadline(&control_client, &config).await {
         if result.is_ok() {
-            return Err(error.into());
+            return Err(error);
         }
         error!(
             event = "analysis_worker_draining_persist_failed",
@@ -323,6 +326,21 @@ pub(crate) async fn run(
         worker_id = %config.worker_id,
         "analysis worker drained"
     );
+    Ok(())
+}
+
+async fn mark_draining_with_deadline(
+    client: &tokio_postgres::Client,
+    config: &AnalysisConsumerConfig,
+) -> Result<(), ConsumerError> {
+    // A failed claim can leave a response unread. Draining is best-effort after failure and
+    // must not keep the consumer alive indefinitely on that same connection.
+    tokio::time::timeout(
+        config.control_response_timeout(),
+        mark_draining(client, &config.worker_id),
+    )
+    .await
+    .map_err(|_elapsed| ConsumerError::ControlTimeout)??;
     Ok(())
 }
 

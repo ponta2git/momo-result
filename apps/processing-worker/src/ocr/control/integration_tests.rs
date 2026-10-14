@@ -90,6 +90,8 @@ const EXPIRED_ANALYSIS_ATTEMPT_ID: &str = "c2-smoke-analysis-recovery-attempt";
 const EXPIRED_ANALYSIS_WORKER_ID: &str = "c2-smoke-analysis-recovery-worker";
 const EXPIRED_ANALYSIS_FENCE: i64 = 2_000_001;
 
+mod claim_shutdown;
+
 struct Fixture {
     job_id: &'static str,
     draft_id: &'static str,
@@ -106,6 +108,8 @@ async fn real_postgres_and_redis_preserve_ocr_fencing_and_delivery_order() -> Sm
     let redis_url = std::env::var("OCR_CONTROL_SMOKE_REDIS_URL")?;
     let mut primary = crate::postgres::connect(&database_url).await?;
     let mut stale = crate::postgres::connect(&database_url).await?;
+    prepare_database(&primary).await?;
+    claim_shutdown::verify(&database_url, &redis_url, &primary).await?;
     prepare_database(&primary).await?;
     for fixture in [
         &TAKEOVER,

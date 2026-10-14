@@ -41,20 +41,18 @@ pub(super) async fn wait_for_claim(
         if shutdown_requested(shutdown) {
             return Ok(ClaimDecision::StopWaiting);
         }
-        let claim = claim_job(client, delivery, &config.control);
-        tokio::pin!(claim);
-        let claim_outcome = loop {
-            tokio::select! {
-                biased;
-                result = shutdown.changed() => {
-                    if result.is_err() || *shutdown.borrow() {
-                        return Ok(ClaimDecision::StopWaiting);
-                    }
-                }
-                () = &mut deadline => return Ok(ClaimDecision::RetryAtIdleThreshold),
-                outcome = &mut claim => break outcome?,
-            }
-        };
+        if time::Instant::now() >= deadline_at {
+            return Ok(ClaimDecision::RetryAtIdleThreshold);
+        }
+        // Once a claim starts, receive its COMMIT result before observing shutdown or the
+        // retry-start deadline. An acquired claim must reach the normal shutdown requeue path.
+        // An unknown result is a consumer failure, never a clean stop or an acknowledged job.
+        let claim_outcome = time::timeout(
+            config.control.finalization_timeout(),
+            claim_job(client, delivery, &config.control),
+        )
+        .await
+        .map_err(|_elapsed| OcrConsumerError::Control("ocr_claim_timeout"))??;
         match submit_claim_outcome(post_commit_sink, claim_outcome)? {
             ClaimAttempt::Complete(decision) => return Ok(decision),
             ClaimAttempt::Retry => {}

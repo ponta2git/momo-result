@@ -1,7 +1,10 @@
-use std::time::Instant;
+use std::{sync::Arc, time::Instant};
 
 use redis::{AsyncCommands, aio::ConnectionManager, streams::StreamPendingCountReply};
-use tokio::{sync::watch, time};
+use tokio::{
+    sync::{Notify, watch},
+    time,
+};
 
 use super::{
     ClaimResult, ClaimedJob, Client, Duration, JOB_ID, SmokeResult, TempDir, cleanup_database,
@@ -210,6 +213,60 @@ async fn real_postgres_and_redis_busy_rechecks_preserve_pending_and_owned_claims
         assert_eq!(row.try_get::<_, i32>(1)?, i32::from(committed));
         assert_pending_once(&mut redis, &config, &next_message).await?;
     }
+
+    reset_queued_job(&client).await?;
+    let committed = Arc::new(Notify::new());
+    let proxy = DelayedDatabase::commit_fault(
+        &database_url,
+        CommitFault::HoldReply {
+            committed: Arc::clone(&committed),
+            release: Arc::new(Notify::new()),
+        },
+    )
+    .await?;
+    let mut uncertain = crate::postgres::connect(&proxy.url).await?;
+    let mut bounded_config = config.clone();
+    bounded_config.execution_limits.finalization_timeout = Duration::from_millis(500);
+    let mut budget = BusyRetryBudget::new(config.lease_duration);
+    let (result, held) = tokio::join!(
+        time::timeout(
+            Duration::from_secs(2),
+            Box::pin(claim_delivery(
+                &mut uncertain,
+                JOB_ID,
+                &bounded_config,
+                &sink,
+                Instant::now() + config.lease_duration,
+                &mut budget,
+                &mut shutdown,
+            )),
+        ),
+        time::timeout(Duration::from_secs(2), committed.notified()),
+    );
+    held?;
+    assert!(
+        matches!(result, Ok(Err(ConsumerError::ControlTimeout))),
+        "an unanswered COMMIT must fail within the operation bound"
+    );
+    assert!(matches!(
+        time::timeout(
+            Duration::from_secs(2),
+            crate::series_analysis::mark_draining_with_deadline(&uncertain, &bounded_config),
+        )
+        .await?,
+        Err(ConsumerError::ControlTimeout)
+    ));
+    drop(bounded_config);
+    drop(uncertain);
+    let row = client
+        .query_one(
+            "SELECT status, attempt_count FROM series_analysis_jobs WHERE id = $1",
+            &[&JOB_ID],
+        )
+        .await?;
+    assert_eq!(row.try_get::<_, String>(0)?, "running");
+    assert_eq!(row.try_get::<_, i32>(1)?, 1);
+    assert_pending_once(&mut redis, &config, &next_message).await?;
 
     reset_queued_job(&client).await?;
     cleanup_database(&client).await?;

@@ -60,21 +60,25 @@ impl WorkerRuntimePlan {
             series_analysis.redis_url.clone(),
             series_analysis.child_stop_grace,
         )?;
-        // A peer can have one dependency/heartbeat operation in flight before it observes
-        // shutdown, then must stop its child and durably finalize. Compose those already-validated
-        // bounds once here so callers cannot configure an independent supervisor timeout.
+        // Idle delivery reads observe shutdown before starting a claim. Owned work can instead
+        // have a claim/heartbeat operation in flight, then stop its child and durably finalize.
+        // Analysis subsequently persists its capability's draining state.
         let analysis_shutdown_timeout = composed_shutdown_drain_timeout(
-            crate::stream_connection::RESPONSE_TIMEOUT.max(series_analysis.renewal_window()),
+            crate::stream_connection::RESPONSE_TIMEOUT,
+            series_analysis.renewal_window(),
             series_analysis.child_stop_grace,
             series_analysis.execution_limits.finalization_timeout,
+            series_analysis.control_response_timeout(),
         )?;
         let shutdown_drain_timeout = match &ocr {
             OcrConsumerRuntimeConfig::Disabled => analysis_shutdown_timeout,
             OcrConsumerRuntimeConfig::Enabled(ocr) => {
                 analysis_shutdown_timeout.max(composed_shutdown_drain_timeout(
-                    ocr.shutdown_dependency_or_heartbeat_bound(),
+                    crate::stream_connection::RESPONSE_TIMEOUT,
+                    ocr.shutdown_attempt_operation_bound(),
                     series_analysis.child_stop_grace,
                     ocr.shutdown_finalization_bound(),
+                    Duration::ZERO,
                 )?)
             }
         };
@@ -417,13 +421,17 @@ pub(crate) enum SupervisorError {
 }
 
 fn composed_shutdown_drain_timeout(
-    dependency_or_heartbeat: Duration,
+    idle_dependency: Duration,
+    attempt_operation: Duration,
     child_stop: Duration,
     finalization: Duration,
+    capability_drain: Duration,
 ) -> Result<Duration, SupervisorError> {
-    dependency_or_heartbeat
+    attempt_operation
         .checked_add(child_stop)
         .and_then(|duration| duration.checked_add(finalization))
+        .map(|duration| duration.max(idle_dependency))
+        .and_then(|duration| duration.checked_add(capability_drain))
         .ok_or(SupervisorError::ShutdownDrainBudgetBound)
 }
 
@@ -589,17 +597,35 @@ mod tests {
     }
 
     #[test]
-    fn shutdown_budget_composes_existing_bounds_once_and_rejects_overflow() {
+    fn shutdown_budget_includes_sequential_capability_drain_and_rejects_overflow() {
         assert!(matches!(
             composed_shutdown_drain_timeout(
+                Duration::from_secs(11),
                 Duration::from_secs(2),
                 Duration::from_secs(3),
                 Duration::from_secs(5),
+                Duration::ZERO,
             ),
-            Ok(duration) if duration == Duration::from_secs(10)
+            Ok(duration) if duration == Duration::from_secs(11)
         ));
         assert!(matches!(
-            composed_shutdown_drain_timeout(Duration::MAX, Duration::from_nanos(1), Duration::ZERO,),
+            composed_shutdown_drain_timeout(
+                Duration::from_secs(11),
+                Duration::from_secs(5),
+                Duration::from_secs(1),
+                Duration::from_secs(45),
+                Duration::from_secs(5),
+            ),
+            Ok(duration) if duration == Duration::from_secs(56)
+        ));
+        assert!(matches!(
+            composed_shutdown_drain_timeout(
+                Duration::ZERO,
+                Duration::MAX,
+                Duration::ZERO,
+                Duration::ZERO,
+                Duration::from_nanos(1),
+            ),
             Err(SupervisorError::ShutdownDrainBudgetBound)
         ));
     }

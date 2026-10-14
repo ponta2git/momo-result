@@ -157,6 +157,13 @@ impl AnalysisConsumerConfig {
         self.heartbeat_interval.max(self.heartbeat_timeout)
     }
 
+    /// Short ownership and capability operations use the existing renewal response window;
+    /// artifact publication retains the full durable-finalization budget.
+    pub(crate) fn control_response_timeout(&self) -> Duration {
+        self.renewal_window()
+            .min(self.execution_limits.finalization_timeout)
+    }
+
     pub(crate) fn with_notifications(
         mut self,
         notifications: crate::notifications::NotificationSink,

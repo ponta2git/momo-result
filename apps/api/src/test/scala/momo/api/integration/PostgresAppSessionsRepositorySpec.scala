@@ -55,13 +55,14 @@ final class PostgresAppSessionsRepositorySpec extends IntegrationSuite:
       assertEquals(found, Some(session))
       assertEquals(rawTokenRows, 0)
 
-  test("renew updates only last_seen_at and expires_at"):
+  test("renew advances only last_seen_at and expires_at and ignores delayed older renewals"):
     for
       session <- buildSession("renew-session-token", "renew-csrf-token", now.plusSeconds(3600))
       _ <- repo.upsert(session)
       renewedAt = now.plusSeconds(600)
       renewedExpiresAt = now.plusSeconds(7200)
       _ <- repo.renew(session.idHash, renewedAt, renewedExpiresAt)
+      _ <- repo.renew(session.idHash, now.plusSeconds(300), now.plusSeconds(6900))
       found <- repo.find(session.idHash)
     yield
       val got = found.getOrElse(fail("session not found after renew"))

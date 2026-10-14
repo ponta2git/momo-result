@@ -347,8 +347,14 @@ final class RecordingAppSessionsRepository private (ref: Ref[IO, AppSessionsSnap
   override def renew(idHash: String, lastSeenAt: Instant, expiresAt: Instant): IO[Unit] = ref
     .update { s =>
       s.copy(
-        sessions = s.sessions
-          .updatedWith(idHash)(_.map(_.copy(lastSeenAt = lastSeenAt, expiresAt = expiresAt))),
+        sessions = s.sessions.updatedWith(idHash)(_.map(session =>
+          session.copy(
+            lastSeenAt = if lastSeenAt.isAfter(session.lastSeenAt) then lastSeenAt
+            else session.lastSeenAt,
+            expiresAt = if expiresAt.isAfter(session.expiresAt) then expiresAt
+            else session.expiresAt,
+          )
+        )),
         renews = s.renews + 1,
       )
     }

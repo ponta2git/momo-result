@@ -20,12 +20,13 @@ import scala.concurrent.duration.*
 import scala.jdk.CollectionConverters.*
 import scala.util.Failure
 
-import cats.effect.IO
+import cats.effect.{Deferred, IO}
 import cats.syntax.all.*
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.discord.JavaDiscordOAuthClient
 import momo.api.adapters.inmemory.{
+  InMemoryAppSessionsRepository,
   InMemoryLoginAccountAdministrationRepository,
   InMemoryLoginAccountsRepository
 }
@@ -518,7 +519,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       assertEquals(stored.lastSeenAt, instant.plusSeconds(6.minutes.toSeconds))
       assertEquals(stored.expiresAt, instant.plusSeconds(16.minutes.toSeconds))
 
-  test("SessionService deletes expired sessions during authentication"):
+  test("SessionService rejects expired sessions and leaves cleanup to expiry pruning"):
     for
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
@@ -530,10 +531,108 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       _ <- nowRef.set(instant.plusSeconds(config.sessionTtl.toSeconds + 1L))
       result <- service.authenticate(Some(created.cookieValue))
       after <- repo.snapshot
+      pruned <- repo.deleteExpired(instant.plusSeconds(config.sessionTtl.toSeconds + 1L))
+      remaining <- repo.find(stored.idHash)
     yield
       assertEquals(result, Left(AppError.Unauthorized("Session has expired.")))
-      assertEquals(after.sessions.get(stored.idHash), None)
-      assertEquals(after.deletes, List(stored.idHash))
+      assertEquals(after.sessions.get(stored.idHash), Some(stored))
+      assertEquals(after.deletes, Nil)
+      assertEquals(pruned, 1)
+      assertEquals(remaining, None)
+
+  test("SessionService expiry rejection cannot revoke a concurrently renewed session"):
+    val renewingAt = instant.plusSeconds(config.sessionTtl.toSeconds - 1L)
+    val expiredAt = instant.plusSeconds(config.sessionTtl.toSeconds + 1L)
+    for
+      repo <- InMemoryAppSessionsRepository.create[IO]
+      accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
+      created <- createdSession(sessionService(repo, accounts, IO.pure(instant)), account)
+      renewingLookupStarted <- Deferred[IO, Unit]
+      releaseRenewingLookup <- Deferred[IO, Unit]
+      expiredSnapshotRead <- Deferred[IO, Unit]
+      releaseExpiredSnapshot <- Deferred[IO, Unit]
+      lookup = SessionAccountLookup.fromRepositories(repo, accounts)
+      renewingLookup = new SessionAccountLookup[IO]:
+        def find(idHash: String) =
+          renewingLookupStarted.complete(()) *> releaseRenewingLookup.get *> lookup.find(idHash)
+      expiredLookup = new SessionAccountLookup[IO]:
+        def find(idHash: String) = lookup.find(idHash).flatTap(_ =>
+          expiredSnapshotRead.complete(()) *> releaseExpiredSnapshot.get
+        )
+      creation = InMemoryLoginAccountAdministrationRepository(accounts, repo)
+      renewing = SessionService[IO](
+        repo,
+        config.sessionTtl,
+        IO.pure(renewingAt),
+        renewingLookup,
+        creation,
+      )
+      expiring = SessionService[IO](
+        repo,
+        config.sessionTtl,
+        IO.pure(expiredAt),
+        expiredLookup,
+        creation,
+      )
+      results <- renewing.authenticate(Some(created.cookieValue)).background.use { renewed =>
+        renewingLookupStarted.get *>
+          expiring.authenticate(Some(created.cookieValue)).background.use { expired =>
+            for
+              _ <- expiredSnapshotRead.get
+              _ <- releaseRenewingLookup.complete(())
+              renewedResult <- renewed.flatMap(_.embedNever)
+              _ <- releaseExpiredSnapshot.complete(())
+              expiredResult <- expired.flatMap(_.embedNever)
+              freshResult <- sessionService(repo, accounts, IO.pure(expiredAt))
+                .authenticate(Some(created.cookieValue))
+            yield (renewedResult, expiredResult, freshResult)
+          }
+      }
+    yield
+      assertEquals(
+        results._1.map(_.session.expiresAt),
+        Right(renewingAt.plusSeconds(config.sessionTtl.toSeconds)),
+      )
+      assertEquals(results._2, Left(AppError.Unauthorized("Session has expired.")))
+      assertEquals(results._3.map(_.account.accountId), Right(account.id))
+
+  test("SessionService delayed renewal cannot shorten a newer session lifetime"):
+    val earlierAt = instant.plusSeconds(6.minutes.toSeconds)
+    val laterAt = earlierAt.plusSeconds(2)
+    val afterEarlierExpiry = earlierAt.plusSeconds(config.sessionTtl.toSeconds + 1L)
+    for
+      repo <- InMemoryAppSessionsRepository.create[IO]
+      accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
+      created <- createdSession(sessionService(repo, accounts, IO.pure(instant)), account)
+      earlierSnapshotRead <- Deferred[IO, Unit]
+      releaseEarlierSnapshot <- Deferred[IO, Unit]
+      lookup = SessionAccountLookup.fromRepositories(repo, accounts)
+      earlierLookup = new SessionAccountLookup[IO]:
+        def find(idHash: String) = lookup.find(idHash).flatTap(_ =>
+          earlierSnapshotRead.complete(()) *> releaseEarlierSnapshot.get
+        )
+      earlier = SessionService[IO](
+        repo,
+        config.sessionTtl,
+        IO.pure(earlierAt),
+        earlierLookup,
+        InMemoryLoginAccountAdministrationRepository(accounts, repo),
+      )
+      results <- earlier.authenticate(Some(created.cookieValue)).background.use { completion =>
+        for
+          _ <- earlierSnapshotRead.get
+          laterResult <- sessionService(repo, accounts, IO.pure(laterAt))
+            .authenticate(Some(created.cookieValue))
+          _ <- releaseEarlierSnapshot.complete(())
+          earlierResult <- completion.flatMap(_.embedNever)
+          freshResult <- sessionService(repo, accounts, IO.pure(afterEarlierExpiry))
+            .authenticate(Some(created.cookieValue))
+        yield (earlierResult, laterResult, freshResult)
+      }
+    yield
+      assertEquals(results._1.map(_.account.accountId), Right(account.id))
+      assertEquals(results._2.map(_.account.accountId), Right(account.id))
+      assertEquals(results._3.map(_.account.accountId), Right(account.id))
 
   test("SessionService deletes sessions for disabled accounts during authentication"):
     val disabled = account.copy(loginEnabled = false)

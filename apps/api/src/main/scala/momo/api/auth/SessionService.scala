@@ -69,7 +69,11 @@ final class SessionService[F[_]: Sync: SecureRandom](
       csrfMatches <- EitherT.liftF(
         SessionTokenHash.matches[F](tokens.csrfToken, session.csrfSecretHash)
       )
-      _ <- EitherT(rejectExpired(session, current))
+      _ <- EitherT.cond[F](
+        session.expiresAt.isAfter(current),
+        (),
+        AppError.Unauthorized("Session has expired."),
+      )
       _ <- EitherT.cond[F](csrfMatches, (), AppError.Unauthorized())
       account <- EitherT(requireEnabledAccount(session, sessionAccount.account))
       authenticated <-
@@ -77,10 +81,6 @@ final class SessionService[F[_]: Sync: SecureRandom](
     yield authenticated).value
 
   def delete(idHash: String): F[Unit] = sessions.delete(idHash)
-
-  private def rejectExpired(session: AppSession, current: Instant): F[Either[AppError, Unit]] =
-    if session.expiresAt.isAfter(current) then ().asRight[AppError].pure[F]
-    else sessions.delete(session.idHash).as(AppError.Unauthorized("Session has expired.").asLeft)
 
   private def requireEnabledAccount(
       session: AppSession,

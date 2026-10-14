@@ -23,7 +23,13 @@ final class InMemoryAppSessionsRepository[F[_]: Sync] private (ref: Ref[F, Map[S
 
   override def renew(idHash: String, lastSeenAt: Instant, expiresAt: Instant): F[Unit] = ref
     .update(sessions =>
-      sessions.updatedWith(idHash)(_.map(_.copy(lastSeenAt = lastSeenAt, expiresAt = expiresAt)))
+      sessions.updatedWith(idHash)(_.map(session =>
+        session.copy(
+          lastSeenAt = if lastSeenAt.isAfter(session.lastSeenAt) then lastSeenAt
+          else session.lastSeenAt,
+          expiresAt = if expiresAt.isAfter(session.expiresAt) then expiresAt else session.expiresAt,
+        )
+      ))
     )
 
   override def deleteExpired(now: Instant): F[Int] = ref.modify { sessions =>

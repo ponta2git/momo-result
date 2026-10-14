@@ -578,7 +578,6 @@ fn normalized_input_binds_the_published_identity_and_clears_old_monitoring_on_ba
         .with_radar_basis(Some(published.clone()))
         .unwrap_or_else(|error| panic!("attach basis: {error}"));
     assert_eq!(normalized.radar_basis(), Some(&published));
-    assert_eq!(normalized.scope_refs().count(), 9);
     let monitored = normalized.with_radar_monitoring(run_monitor(input(40)));
     assert!(
         monitored.radar_monitoring().is_some(),

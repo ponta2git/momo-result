@@ -9,7 +9,6 @@ import {
   useOcrCaptureAuth,
   useOcrCapturePageModel,
 } from "@/features/ocrCapture/useOcrCapturePageModel";
-import { AuthPanel } from "@/shared/auth/AuthPanel";
 import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
 import { inlineActionGroupClass, taskActionPanelClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
@@ -33,8 +32,7 @@ export function OcrCapturePage() {
 }
 
 function OcrCapturePageContent({ auth }: { auth: ReturnType<typeof useOcrCaptureAuth> }) {
-  const { capture, feedback, navigation, setup, submission, startError } =
-    useOcrCapturePageModel(auth);
+  const { capture, navigation, setup, submission, startError } = useOcrCapturePageModel(auth);
 
   return (
     <PageFrame>
@@ -44,44 +42,6 @@ function OcrCapturePageContent({ auth }: { auth: ReturnType<typeof useOcrCapture
         </LinkButton>
       </nav>
       <PageContentSurface aria-label="OCR取り込み" className="grid gap-6" role="region">
-        {feedback.auth.error ? (
-          <div className="flex min-w-0 flex-wrap items-center gap-4 rounded-md border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 p-4">
-            <div className="min-w-0 flex-[2_1_20rem]">
-              <Notice
-                action={
-                  feedback.auth.error.status === 403 ? undefined : (
-                    <Button
-                      pending={feedback.auth.retrying}
-                      pendingLabel="確認中"
-                      size="sm"
-                      variant="secondary"
-                      onClick={feedback.auth.retry}
-                    >
-                      ログイン状態を再確認
-                    </Button>
-                  )
-                }
-                presentation="bare"
-                tone="danger"
-                title={feedback.auth.error.title}
-              >
-                <p>
-                  {feedback.auth.error.status === 403
-                    ? "この操作用アカウントでは利用できません。管理者に確認してください。"
-                    : feedback.auth.error.detail}
-                </p>
-              </Notice>
-            </div>
-            <div className="min-w-0 flex-[1_1_18rem]">
-              <AuthPanel
-                auth={feedback.auth.data}
-                embedded
-                forceDevPicker={feedback.auth.error.status === 401}
-              />
-            </div>
-          </div>
-        ) : null}
-
         <section className={panelClass} aria-labelledby="ocr-record-destination">
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <h2 id="ocr-record-destination" className={panelTitleClass}>

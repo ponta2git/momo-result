@@ -13,7 +13,6 @@ import { useOcrCaptureDraftFlow } from "@/features/ocrCapture/useOcrCaptureDraft
 import { useOcrCaptureMutations } from "@/features/ocrCapture/useOcrCaptureMutations";
 import { useOcrSetupOptions } from "@/features/ocrCapture/useOcrSetupOptions";
 import { useOcrStartFlow } from "@/features/ocrCapture/useOcrStartFlow";
-import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { authQueryOptions } from "@/shared/auth/authQueries";
 import { useDevUser } from "@/shared/auth/useDevUser";
 import type { SlotKind } from "@/shared/domain/ocr";
@@ -28,12 +27,6 @@ export function useOcrCaptureAuth() {
   return {
     accountId: query.data?.accountId,
     ready: query.isSuccess && query.data !== null,
-    feedback: {
-      data: query.data,
-      error: query.error ? normalizeUnknownApiError(query.error) : undefined,
-      retry: () => void query.refetch(),
-      retrying: query.isFetching,
-    },
   };
 }
 
@@ -171,9 +164,6 @@ export function useOcrCapturePageModel(auth: ReturnType<typeof useOcrCaptureAuth
         slots: draftFlow.slots,
         statusRefreshing: draftFlow.statusRefreshing,
       },
-    },
-    feedback: {
-      auth: auth.feedback,
     },
     navigation: {
       guard: {

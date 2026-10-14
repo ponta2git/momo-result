@@ -195,7 +195,9 @@ export function AuthenticatedRoute({ children }: { children: ReactNode }) {
     return <Navigate to={buildLoginPath(next, "forbidden")} replace />;
   }
 
-  if (auth.error && !(authorization.paused && location.pathname.startsWith("/admin/"))) {
+  // A failed refresh does not end the confirmed account's ordinary editing session.
+  // Management routes retain their separate permission pause below AppShell.
+  if (auth.error && !auth.auth) {
     return (
       <ProtectedRouteMain>
         <AuthUnavailable pending={auth.isRefetching} onRetry={() => void auth.refetch()} />

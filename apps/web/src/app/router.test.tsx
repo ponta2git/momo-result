@@ -556,6 +556,73 @@ describe("app routing", () => {
     expect(screen.getByText("保存済みのメモ")).toBeVisible();
   });
 
+  it.each(["same", "other", "expired", "forbidden"] as const)(
+    "reconciles unsaved input after a transient auth failure (%s account)",
+    async (outcome) => {
+      vi.stubEnv("DEV", false);
+      let phase: "initial" | "unavailable" | "recovered" = "initial";
+      server.use(
+        http.get("/api/auth/me", () => {
+          if (phase === "unavailable")
+            return HttpResponse.json({ detail: "temporarily unavailable" }, { status: 503 });
+          if (phase === "recovered" && (outcome === "expired" || outcome === "forbidden"))
+            return HttpResponse.json(
+              { detail: "session rejected" },
+              { status: outcome === "expired" ? 401 : 403 },
+            );
+          return HttpResponse.json({
+            accountId:
+              phase === "recovered" && outcome === "other" ? "account-next" : "account-first",
+            displayName: "利用者",
+            role: "user",
+          });
+        }),
+        http.get("/api/matches/match-1", () =>
+          HttpResponse.json(
+            makeMatchDetail({
+              note: { body: "保存済みのメモ", version: "1" },
+              players: makeFourPlayerResults(),
+            }),
+          ),
+        ),
+      );
+      const { queryClient, router } = renderApp("/matches/match-1");
+      await user.click(await screen.findByRole("button", { name: "編集" }));
+      const input = screen.getByRole("textbox", { name: "試合メモ" });
+      await user.clear(input);
+      await user.type(input, "接続が戻るまで保持するメモ");
+
+      phase = "unavailable";
+      await act(async () => queryClient.refetchQueries({ queryKey: authMeQueryKey }));
+      expect(
+        await screen.findByRole("heading", { name: "ログイン状態を確認できません" }),
+      ).toBeVisible();
+      expect(screen.getByRole("textbox", { name: "試合メモ" })).toBe(input);
+      expect(input).toHaveValue("接続が戻るまで保持するメモ");
+
+      phase = "recovered";
+      await user.click(screen.getByRole("button", { name: "ログイン状態を再確認" }));
+      await waitFor(() =>
+        expect(
+          screen.queryByRole("heading", { name: "ログイン状態を確認できません" }),
+        ).not.toBeInTheDocument(),
+      );
+      if (outcome === "same") {
+        expect(screen.getByRole("textbox", { name: "試合メモ" })).toBe(input);
+        expect(input).toHaveValue("接続が戻るまで保持するメモ");
+      } else {
+        expect(screen.queryByRole("textbox", { name: "試合メモ" })).not.toBeInTheDocument();
+        expect(screen.queryByText("接続が戻るまで保持するメモ")).not.toBeInTheDocument();
+        if (outcome === "other") {
+          expect(await screen.findByText("保存済みのメモ")).toBeVisible();
+        } else {
+          expect(await screen.findByRole("region", { name: "ログイン" })).toBeVisible();
+          expect(router.state.location.pathname).toBe("/login");
+        }
+      }
+    },
+  );
+
   it("waits for the login session before exposing protected content", async () => {
     setDevUser();
     const responseGate = createDeferred();

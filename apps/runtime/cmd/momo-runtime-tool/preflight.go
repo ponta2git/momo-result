@@ -63,13 +63,12 @@ func inspectRuntimeDatabase(ctx context.Context, databaseURL string) (databaseSn
 	if err != nil {
 		return databaseSnapshot{}, err
 	}
-	defer func() { _ = connection.Close(context.Background()) }()
+	defer func() { _ = connection.Close(ctx) }()
 
 	transaction, err := connection.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return databaseSnapshot{}, err
 	}
-	defer func() { _ = transaction.Rollback(context.Background()) }()
 	if _, err := transaction.Exec(ctx, "SET LOCAL statement_timeout = 10000"); err != nil {
 		return databaseSnapshot{}, err
 	}
@@ -101,6 +100,9 @@ func inspectRuntimeDatabase(ctx context.Context, databaseURL string) (databaseSn
 	}
 	members, err := queryStrings(ctx, transaction, "SELECT id FROM members")
 	if err != nil {
+		return databaseSnapshot{}, err
+	}
+	if err := transaction.Rollback(ctx); err != nil {
 		return databaseSnapshot{}, err
 	}
 	return databaseSnapshot{

@@ -332,12 +332,11 @@ func probeDatabase(ctx context.Context, databaseURL string) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = connection.Close(context.Background()) }()
+	defer func() { _ = connection.Close(operationCtx) }()
 	transaction, err := connection.BeginTx(operationCtx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return err
 	}
-	defer func() { _ = transaction.Rollback(context.Background()) }()
 	if _, err := transaction.Exec(operationCtx, "SET LOCAL statement_timeout = 5000"); err != nil {
 		return err
 	}
@@ -348,7 +347,7 @@ func probeDatabase(ctx context.Context, databaseURL string) error {
 	if value != 1 {
 		return errors.New("database health contract failed")
 	}
-	return nil
+	return transaction.Rollback(operationCtx)
 }
 
 func probeRedis(ctx context.Context, redisURL string) error {

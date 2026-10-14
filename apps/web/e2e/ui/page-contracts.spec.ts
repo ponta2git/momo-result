@@ -81,7 +81,9 @@ test("asks before discarding an OCR image and retains it when navigation is canc
   await page.goto("/ocr/new");
   const exit = page.getByRole("link", { name: "取り込みをやめる" });
   await page.getByRole("button", { name: "カメラが使えない場合" }).click();
-  await page.getByLabel("OCRの画像をアップロード").setInputFiles("public/station.png");
+  await page
+    .getByLabel("OCRの画像をアップロード")
+    .setInputFiles("e2e/fixtures/ocr/total-assets.png");
   await expect(page.getByText(/配置済み\s*1\s*件/u)).toBeVisible();
   await exit.click();
   const confirmation = page.getByRole("alertdialog", { name: "未保存の変更を破棄しますか？" });

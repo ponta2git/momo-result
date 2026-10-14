@@ -31,6 +31,8 @@ var usages = map[string]string{
 	"verify-manifest-artifact":   "DEPLOYMENT_JSON RUN_ID < github-artifact.json",
 	"runtime-machine-evidence":   "IMAGE_REF < machines.json",
 	"runtime-machine-id":         "IMAGE_REF < machines.json",
+	"runtime-machine-start-id":   "IMAGE_REF < machines.json",
+	"analysis-machine-start-id":  "IMAGE_REF RELEASE_SHA ANALYSIS_WORKER_ID OCR_WORKER_ID < machines.json",
 	"analysis-reusable-release":  "IMAGE_REF < machines.json",
 	"analysis-machine-identity":  "< machines.json",
 	"analysis-machine-evidence":  "IMAGE_REF RELEASE_SHA ANALYSIS_WORKER_ID OCR_WORKER_ID < machines.json",

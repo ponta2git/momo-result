@@ -66,6 +66,8 @@ provider-owned fields but publishing only selected evidence:
 | `verify-manifest-artifact` | `DEPLOYMENT_JSON RUN_ID` | No output; verifies provider artifact identity, digest, name, expiry, and workflow run |
 | `runtime-machine-evidence` | `IMAGE_REF` | v1 `singleStartedExactImage` evidence |
 | `runtime-machine-id` | `IMAGE_REF` | Validated ID of the single started exact-image machine |
+| `runtime-machine-start-id` | `IMAGE_REF` | ID of the single stopped exact-image machine; empty output if already started |
+| `analysis-machine-start-id` | `IMAGE_REF RELEASE_SHA ANALYSIS_WORKER_ID OCR_WORKER_ID` | Stopped machine ID after the enabled deployment configuration and generation checks; empty output if already started |
 | `analysis-machine-identity` | None | Tab-separated ID, immutable image, config version for maintenance identity rechecks |
 | `analysis-reusable-release` | `IMAGE_REF` | Prior release SHA when the enabled immutable machine/config is reusable; otherwise an empty line |
 | `analysis-machine-evidence` | `IMAGE_REF RELEASE_SHA ANALYSIS_WORKER_ID OCR_WORKER_ID` | Allowlisted enabled deployment state after exact image, configuration, and worker generation checks |

@@ -42,6 +42,9 @@ flyctl deploy --app "${ANALYSIS_APP}" --config fly.analysis.toml --image "${ANAL
   --env MOMO_OCR_V2_CONSUMER_MODE=enabled \
   --env MOMO_OCR_V2_WORKER_ID="${OCR_WORKER_ID}" --ha=false --yes
 
+scripts/ci/start-deployed-machine.sh analysis "${ANALYSIS_APP}" \
+  "${ANALYSIS_IMAGE_REF}" "${ANALYSIS_RELEASE_SHA}" "${ANALYSIS_WORKER_ID}" "${OCR_WORKER_ID}"
+
 deployment_state="${RUNNER_TEMP}/analysis-machine-state.json"
 readiness_log="${RUNNER_TEMP}/analysis-worker-readiness.json"
 readiness_evidence="analysis-production-artifact/worker-readiness.json"

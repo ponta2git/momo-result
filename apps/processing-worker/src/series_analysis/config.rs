@@ -7,13 +7,10 @@ use std::{
 
 use thiserror::Error;
 
-use crate::{
-    cgroup::{CgroupError, ChildCgroup},
-    pel_recovery::MAXIMUM_READ_BLOCK,
-};
+use crate::cgroup::{CgroupError, ChildCgroup};
 
 const PUBLICATION_MODE_ENV: &str = "MOMO_ANALYSIS_PUBLICATION_MODE";
-const OUTBOX_LISTENER_DATABASE_URL_ENV: &str = "MOMO_ANALYSIS_OUTBOX_LISTENER_DATABASE_URL";
+const LISTENER_DATABASE_URL_ENV: &str = "MOMO_PROCESSING_LISTENER_DATABASE_URL";
 pub(crate) const CHILD_MEMORY_LIMIT_ENV: &str = "MOMO_ANALYSIS_CHILD_MEMORY_LIMIT_BYTES";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -44,11 +41,8 @@ pub(crate) struct AnalysisActivationConfig {
 #[derive(Clone)]
 pub(crate) struct AnalysisConsumerConfig {
     pub(crate) database_url: String,
-    pub(crate) outbox_listener_database_url: String,
+    pub(crate) listener_database_url: String,
     pub(crate) read_database_url: String,
-    pub(crate) redis_url: String,
-    pub(crate) redis_stream: String,
-    pub(crate) redis_group: String,
     pub(crate) worker_id: String,
     pub(crate) temporary_root: PathBuf,
     pub(crate) effective_config_version: String,
@@ -56,8 +50,8 @@ pub(crate) struct AnalysisConsumerConfig {
     pub(crate) heartbeat_interval: Duration,
     pub(crate) heartbeat_timeout: Duration,
     pub(crate) child_stop_grace: Duration,
-    pub(crate) redis_block: Duration,
-    pub(crate) pel_recovery_interval: Duration,
+    pub(crate) recovery_interval: Duration,
+    pub(crate) ocr_stale_after: Duration,
     pub(crate) execution_limits: AnalysisExecutionLimits,
     pub(crate) child_cgroup: ChildCgroup,
     pub(crate) notifications: crate::notifications::NotificationSink,
@@ -79,8 +73,6 @@ pub(crate) enum AnalysisConfigError {
     MissingRuntime { name: &'static str },
     #[error("analysis worker lease, heartbeat, and shutdown intervals are unsafe")]
     UnsafeLeaseRelationship,
-    #[error("analysis Redis read block exceeds the shutdown wait bound")]
-    UnsafeRedisBlock,
     #[error("{name} contains an unsafe runtime identifier")]
     UnsafeRuntimeIdentifier { name: &'static str },
     #[error("analysis temporary root must be a dedicated absolute path")]
@@ -204,9 +196,6 @@ impl AnalysisConsumerConfig {
         let heartbeat_interval = duration_millis(lookup, "MOMO_ANALYSIS_HEARTBEAT_INTERVAL_MS")?;
         let heartbeat_timeout = duration_millis(lookup, "MOMO_ANALYSIS_HEARTBEAT_TIMEOUT_MS")?;
         let child_stop_grace = duration_millis(lookup, "MOMO_ANALYSIS_CHILD_STOP_GRACE_MS")?;
-        let redis_block = duration_millis(lookup, "MOMO_ANALYSIS_REDIS_BLOCK_MS")?;
-        let pel_recovery_interval =
-            duration_millis(lookup, "MOMO_ANALYSIS_PEL_RECOVERY_INTERVAL_MS")?;
         let required_margin = heartbeat_interval
             .max(heartbeat_timeout)
             .checked_mul(3)
@@ -215,18 +204,9 @@ impl AnalysisConsumerConfig {
         if required_margin.is_none_or(|required| required >= lease_duration) {
             return Err(AnalysisConfigError::UnsafeLeaseRelationship);
         }
-        if redis_block > MAXIMUM_READ_BLOCK {
-            return Err(AnalysisConfigError::UnsafeRedisBlock);
-        }
-        let redis_stream = lookup("MOMO_REDIS_ANALYSIS_STREAM")
-            .unwrap_or_else(|| String::from("momo:analysis:jobs"));
-        let redis_group =
-            lookup("MOMO_ANALYSIS_REDIS_GROUP").unwrap_or_else(|| String::from("momo-analysis-v1"));
         let worker_id = required_string(lookup, "MOMO_ANALYSIS_WORKER_ID")?;
         let effective_config_version = required_string(lookup, "MOMO_ANALYSIS_CONFIG_VERSION")?;
         for (name, value) in [
-            ("MOMO_REDIS_ANALYSIS_STREAM", redis_stream.as_str()),
-            ("MOMO_ANALYSIS_REDIS_GROUP", redis_group.as_str()),
             ("MOMO_ANALYSIS_WORKER_ID", worker_id.as_str()),
             (
                 "MOMO_ANALYSIS_CONFIG_VERSION",
@@ -246,14 +226,8 @@ impl AnalysisConsumerConfig {
             .map_err(|error| AnalysisConfigError::ChildCgroup { kind: error.kind() })?;
         Ok(Self {
             database_url: required_string(lookup, "DATABASE_URL")?,
-            outbox_listener_database_url: required_string(
-                lookup,
-                OUTBOX_LISTENER_DATABASE_URL_ENV,
-            )?,
+            listener_database_url: required_string(lookup, LISTENER_DATABASE_URL_ENV)?,
             read_database_url: required_string(lookup, "MOMO_ANALYSIS_READ_DATABASE_URL")?,
-            redis_url: required_string(lookup, "REDIS_URL")?,
-            redis_stream,
-            redis_group,
             worker_id,
             temporary_root,
             effective_config_version,
@@ -261,8 +235,16 @@ impl AnalysisConsumerConfig {
             heartbeat_interval,
             heartbeat_timeout,
             child_stop_grace,
-            redis_block,
-            pel_recovery_interval,
+            recovery_interval: optional_duration_millis(
+                lookup,
+                "MOMO_PROCESSING_RECOVERY_INTERVAL_MS",
+                Duration::from_secs(30),
+            )?,
+            ocr_stale_after: optional_duration_millis(
+                lookup,
+                "MOMO_OCR_STALE_JOB_AFTER_MS",
+                Duration::from_secs(300),
+            )?,
             execution_limits,
             child_cgroup,
             notifications: crate::notifications::NotificationSink::default(),
@@ -286,6 +268,22 @@ fn duration_millis(
     name: &'static str,
 ) -> Result<Duration, AnalysisConfigError> {
     positive(lookup, name).map(|value| Duration::from_millis(value.get()))
+}
+
+fn optional_duration_millis(
+    lookup: &impl Fn(&str) -> Option<String>,
+    name: &'static str,
+    default: Duration,
+) -> Result<Duration, AnalysisConfigError> {
+    match lookup(name) {
+        None => Ok(default),
+        Some(raw) => raw
+            .parse::<u64>()
+            .ok()
+            .filter(|value| *value > 0)
+            .map(Duration::from_millis)
+            .ok_or(AnalysisConfigError::InvalidPositiveInteger { name }),
+    }
 }
 
 fn required_string(

@@ -6,7 +6,6 @@ use super::{
     consumer::{OcrConsumerConfig, OcrConsumerError, OcrConsumerTiming},
     control::OcrControlConfig,
     object_store::{R2ObjectStoreConfig, R2ObjectStoreConfigError},
-    queue::OcrQueueConfig,
 };
 
 const CONSUMER_MODE_ENV: &str = "MOMO_OCR_V2_CONSUMER_MODE";
@@ -26,10 +25,9 @@ impl OcrConsumerRuntimeConfig {
     pub(crate) fn from_environment(
         mode: OcrConsumerMode,
         database_url: String,
-        redis_url: String,
         child_stop_grace: Duration,
     ) -> Result<Self, OcrRuntimeConfigError> {
-        Self::from_lookup(mode, database_url, redis_url, child_stop_grace, |name| {
+        Self::from_lookup(mode, database_url, child_stop_grace, |name| {
             env::var(name).ok()
         })
     }
@@ -37,7 +35,6 @@ impl OcrConsumerRuntimeConfig {
     fn from_lookup<F>(
         mode: OcrConsumerMode,
         database_url: String,
-        redis_url: String,
         child_stop_grace: Duration,
         mut lookup: F,
     ) -> Result<Self, OcrRuntimeConfigError>
@@ -58,9 +55,6 @@ impl OcrConsumerRuntimeConfig {
                     duration(&mut lookup, "MOMO_OCR_V2_R2_ATTEMPT_TIMEOUT_MS")?,
                     positive(&mut lookup, "MOMO_OCR_V2_R2_MAXIMUM_ATTEMPTS")?,
                 )?;
-                let stream = required(&mut lookup, "OCR_REDIS_V2_STREAM")?;
-                let group = required(&mut lookup, "MOMO_OCR_V2_REDIS_GROUP")?;
-                let dead_letter_stream = required(&mut lookup, "OCR_REDIS_V2_DEAD_LETTER_STREAM")?;
                 let worker_id = required(&mut lookup, "MOMO_OCR_V2_WORKER_ID")?;
                 let lease_duration = duration(&mut lookup, "MOMO_OCR_V2_LEASE_DURATION_MS")?;
                 let heartbeat_interval =
@@ -68,47 +62,24 @@ impl OcrConsumerRuntimeConfig {
                 let finalization_timeout =
                     duration(&mut lookup, "MOMO_OCR_V2_FINALIZATION_TIMEOUT_MS")?;
                 let retry_delay = duration(&mut lookup, "MOMO_OCR_V2_RETRY_DELAY_MS")?;
-                let redis_block = duration(&mut lookup, "MOMO_OCR_V2_REDIS_BLOCK_MS")?;
-                let pel_recovery_interval =
-                    duration(&mut lookup, "MOMO_OCR_V2_PEL_RECOVERY_INTERVAL_MS")?;
-                let claim_idle = duration(&mut lookup, "MOMO_OCR_V2_CLAIM_IDLE_MS")?;
                 let ocr_timeout = duration(&mut lookup, "MOMO_OCR_V2_TIMEOUT_MS")?;
-                let maximum_delivery_attempts =
-                    positive_usize(&mut lookup, "MOMO_OCR_V2_MAXIMUM_DELIVERY_ATTEMPTS")?;
-                let pending_scan_count =
-                    positive_usize(&mut lookup, "MOMO_OCR_V2_PENDING_SCAN_COUNT")?;
-                let queue = OcrQueueConfig::new(
-                    stream,
-                    group,
-                    dead_letter_stream,
-                    worker_id.clone(),
-                    claim_idle,
-                    redis_block,
-                    maximum_delivery_attempts,
-                    pending_scan_count,
-                )
-                .map_err(OcrConsumerError::from)?;
-                let control = OcrControlConfig::new(
+                let mut control = OcrControlConfig::new(
                     worker_id,
                     lease_duration,
                     finalization_timeout,
                     retry_delay,
                 )
                 .map_err(OcrConsumerError::from)?;
-                let timing = OcrConsumerTiming::new(
-                    heartbeat_interval,
-                    pel_recovery_interval,
-                    ocr_timeout,
-                    child_stop_grace,
-                )?;
-                let config = OcrConsumerConfig::new(
-                    database_url,
-                    redis_url,
-                    queue,
-                    control,
-                    object_store,
-                    timing,
-                )?;
+                if let Some(limit) = retry_limit(&mut lookup, "MOMO_OCR_MAXIMUM_FAILURE_RETRIES")? {
+                    control.maximum_failure_retries = limit;
+                }
+                if let Some(limit) = retry_limit(&mut lookup, "MOMO_OCR_MAXIMUM_LEASE_RECOVERIES")?
+                {
+                    control.maximum_lease_recoveries = limit;
+                }
+                let timing =
+                    OcrConsumerTiming::new(heartbeat_interval, ocr_timeout, child_stop_grace)?;
+                let config = OcrConsumerConfig::new(database_url, control, object_store, timing)?;
                 Ok(Self::Enabled(Box::new(config)))
             }
         }
@@ -161,13 +132,19 @@ where
         .ok_or(OcrRuntimeConfigError::InvalidPositiveInteger { name })
 }
 
-fn positive_usize<F>(lookup: &mut F, name: &'static str) -> Result<usize, OcrRuntimeConfigError>
+fn retry_limit<F>(lookup: &mut F, name: &'static str) -> Result<Option<i32>, OcrRuntimeConfigError>
 where
     F: FnMut(&'static str) -> Option<String>,
 {
-    positive_u64(lookup, name)?
-        .try_into()
-        .map_err(|_error| OcrRuntimeConfigError::InvalidPositiveInteger { name })
+    match lookup(name) {
+        None => Ok(None),
+        Some(raw) => raw
+            .parse::<i32>()
+            .ok()
+            .filter(|value| (0..=10).contains(value))
+            .map(Some)
+            .ok_or(OcrRuntimeConfigError::InvalidRetryLimit { name }),
+    }
 }
 
 fn duration<F>(lookup: &mut F, name: &'static str) -> Result<Duration, OcrRuntimeConfigError>
@@ -185,6 +162,8 @@ pub(crate) enum OcrRuntimeConfigError {
     Missing { name: &'static str },
     #[error("{name} must be a positive integer")]
     InvalidPositiveInteger { name: &'static str },
+    #[error("{name} must be an integer between 0 and 10")]
+    InvalidRetryLimit { name: &'static str },
     #[error("Rust OCR v2 object-store configuration is unsafe")]
     ObjectStore(#[from] R2ObjectStoreConfigError),
     #[error("Rust OCR v2 worker configuration is unsafe")]
@@ -207,7 +186,6 @@ mod tests {
         let result = OcrConsumerRuntimeConfig::from_lookup(
             OcrConsumerMode::Disabled,
             String::from("postgresql://localhost/test"),
-            String::from("redis://localhost/"),
             Duration::from_secs(5),
             |_name| {
                 reads.set(reads.get().saturating_add(1));
@@ -236,15 +214,6 @@ mod tests {
         ));
 
         drop(result);
-        let mut missing_interval = complete_values();
-        missing_interval.remove("MOMO_OCR_V2_PEL_RECOVERY_INTERVAL_MS");
-        assert!(matches!(
-            build(&missing_interval),
-            Err(OcrRuntimeConfigError::Missing {
-                name: "MOMO_OCR_V2_PEL_RECOVERY_INTERVAL_MS"
-            })
-        ));
-
         let complete = build(&complete_values());
         assert!(matches!(complete, Ok(OcrConsumerRuntimeConfig::Enabled(_))));
         drop(complete);
@@ -259,7 +228,7 @@ mod tests {
         ));
 
         let mut values = complete_values();
-        values.insert("MOMO_OCR_V2_CLAIM_IDLE_MS", "110000");
+        values.insert("MOMO_OCR_V2_LEASE_DURATION_MS", "25000");
         assert!(matches!(
             build(&values),
             Err(OcrRuntimeConfigError::Consumer(
@@ -269,15 +238,38 @@ mod tests {
     }
 
     #[test]
-    fn idle_read_block_is_independent_of_active_heartbeats_and_remains_bounded() {
-        let mut values = complete_values();
-        values.insert("MOMO_OCR_V2_REDIS_BLOCK_MS", "10000");
-        assert!(matches!(
-            build(&values),
-            Ok(OcrConsumerRuntimeConfig::Enabled(_))
-        ));
-        values.insert("MOMO_OCR_V2_REDIS_BLOCK_MS", "10001");
-        assert!(build(&values).is_err());
+    fn retry_budgets_allow_no_retry_but_reject_unbounded_or_malformed_limits() {
+        for name in [
+            "MOMO_OCR_MAXIMUM_FAILURE_RETRIES",
+            "MOMO_OCR_MAXIMUM_LEASE_RECOVERIES",
+        ] {
+            assert_eq!(retry_limit(&mut |_| None, name).ok(), Some(None));
+            for (value, expected) in [("0", 0), ("1", 1), ("10", 10)] {
+                let mut values = complete_values();
+                values.insert(name, value);
+                let result = build(&values);
+                assert!(
+                    matches!(&result, Ok(OcrConsumerRuntimeConfig::Enabled(_))),
+                    "bounded retry limit {name}={value}"
+                );
+                if let Ok(OcrConsumerRuntimeConfig::Enabled(config)) = result {
+                    let actual = if name == "MOMO_OCR_MAXIMUM_FAILURE_RETRIES" {
+                        config.control.maximum_failure_retries
+                    } else {
+                        config.control.maximum_lease_recoveries
+                    };
+                    assert_eq!(actual, expected);
+                }
+            }
+            for value in ["-1", "11", "2147483648", "", "retry"] {
+                let mut values = complete_values();
+                values.insert(name, value);
+                assert!(matches!(
+                    build(&values),
+                    Err(OcrRuntimeConfigError::InvalidRetryLimit { .. })
+                ));
+            }
+        }
     }
 
     fn build(
@@ -286,7 +278,6 @@ mod tests {
         OcrConsumerRuntimeConfig::from_lookup(
             OcrConsumerMode::Enabled,
             String::from("postgresql://localhost/test"),
-            String::from("redis://localhost/"),
             Duration::from_secs(5),
             |name| values.get(name).map(|value| String::from(*value)),
         )
@@ -302,20 +293,12 @@ mod tests {
             ("MOMO_OCR_V2_R2_OPERATION_TIMEOUT_MS", "10000"),
             ("MOMO_OCR_V2_R2_ATTEMPT_TIMEOUT_MS", "5000"),
             ("MOMO_OCR_V2_R2_MAXIMUM_ATTEMPTS", "1"),
-            ("OCR_REDIS_V2_STREAM", "momo:ocr:v2:jobs"),
-            ("MOMO_OCR_V2_REDIS_GROUP", "momo-ocr-rust-v2"),
-            ("OCR_REDIS_V2_DEAD_LETTER_STREAM", "momo:ocr:v2:jobs:dead"),
             ("MOMO_OCR_V2_WORKER_ID", "ocr-worker-1"),
             ("MOMO_OCR_V2_LEASE_DURATION_MS", "60000"),
             ("MOMO_OCR_V2_HEARTBEAT_INTERVAL_MS", "5000"),
             ("MOMO_OCR_V2_FINALIZATION_TIMEOUT_MS", "5000"),
             ("MOMO_OCR_V2_RETRY_DELAY_MS", "1000"),
-            ("MOMO_OCR_V2_REDIS_BLOCK_MS", "1000"),
-            ("MOMO_OCR_V2_PEL_RECOVERY_INTERVAL_MS", "300000"),
-            ("MOMO_OCR_V2_CLAIM_IDLE_MS", "116000"),
             ("MOMO_OCR_V2_TIMEOUT_MS", "30000"),
-            ("MOMO_OCR_V2_MAXIMUM_DELIVERY_ATTEMPTS", "2"),
-            ("MOMO_OCR_V2_PENDING_SCAN_COUNT", "10"),
         ])
     }
 }

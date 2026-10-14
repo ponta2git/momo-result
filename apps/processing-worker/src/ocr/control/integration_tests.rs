@@ -1,9 +1,5 @@
-use std::{collections::HashMap, error::Error, io, time::Duration};
+use std::{error::Error, io, time::Duration};
 
-use redis::{
-    AsyncCommands, Value,
-    streams::{StreamId, StreamPendingReply, StreamRangeReply},
-};
 use serde_json::json;
 use tokio_postgres::Client;
 
@@ -13,14 +9,6 @@ use super::*;
 use crate::{
     execution_slot::{
         ExecutionSlotIdentity, ExecutionTaskKind, clear_stale_preemption, release_owned,
-    },
-    ocr::{
-        contract::{ValidatedOcrDelivery, parse_validated_delivery},
-        queue::{
-            OcrQueueConfig, OcrQueueDelivery, OcrQueueDeliveryBody, PendingRecoveryCursor,
-            acknowledge, dead_letter_and_acknowledge, ensure_consumer_group, read_new_delivery,
-            recover_cold_page,
-        },
     },
     series_analysis::control::ALGORITHM_VERSION,
 };
@@ -102,14 +90,13 @@ struct Fixture {
 }
 
 #[tokio::test]
-#[ignore = "requires explicitly isolated OCR_CONTROL_SMOKE_DATABASE_URL and OCR_CONTROL_SMOKE_REDIS_URL"]
-async fn real_postgres_and_redis_preserve_ocr_fencing_and_delivery_order() -> SmokeResult {
+#[ignore = "requires explicitly isolated OCR_CONTROL_SMOKE_DATABASE_URL"]
+async fn real_postgres_preserves_ocr_fencing_and_bounded_recovery() -> SmokeResult {
     let database_url = std::env::var("OCR_CONTROL_SMOKE_DATABASE_URL")?;
-    let redis_url = std::env::var("OCR_CONTROL_SMOKE_REDIS_URL")?;
     let mut primary = crate::postgres::connect(&database_url).await?;
     let mut stale = crate::postgres::connect(&database_url).await?;
     prepare_database(&primary).await?;
-    claim_shutdown::verify(&database_url, &redis_url, &primary).await?;
+    claim_shutdown::verify(&database_url, &primary).await?;
     prepare_database(&primary).await?;
     for fixture in [
         &TAKEOVER,
@@ -129,7 +116,8 @@ async fn real_postgres_and_redis_preserve_ocr_fencing_and_delivery_order() -> Sm
     verify_success_with_warnings(&mut primary).await?;
     verify_expired_analysis_recovery_emits_wake(&mut primary).await?;
     verify_analysis_preemption_and_stale_intent(&mut primary).await?;
-    verify_redis_failure_order(&mut primary, &redis_url).await?;
+    verify_transient_retry_budget(&mut primary).await?;
+    verify_malformed_snapshot(&mut primary).await?;
 
     cleanup_database(&primary).await?;
     Ok(())
@@ -137,7 +125,7 @@ async fn real_postgres_and_redis_preserve_ocr_fencing_and_delivery_order() -> Sm
 
 async fn verify_candidate_integrity(primary: &mut Client) -> SmokeResult {
     for invalid_state in [
-        "DELETE FROM ocr_queue_outbox WHERE job_id = $1",
+        "UPDATE ocr_jobs SET input_snapshot = jsonb_build_object('schemaVersion', '2') WHERE id = $1",
         "UPDATE source_images SET status = 'DELETE_PENDING', delete_pending_at = clock_timestamp() \
          WHERE id = (SELECT source_image_id FROM ocr_jobs WHERE id = $1)",
     ] {
@@ -150,7 +138,7 @@ async fn verify_candidate_integrity(primary: &mut Client) -> SmokeResult {
                 load_candidate(&transaction, SUCCESS.job_id).await?,
                 CandidateResult::InvalidPersistedContract
             ),
-            "missing immutable delivery or unavailable source must fail before acquiring ownership"
+            "invalid immutable input or unavailable source must fail before acquiring ownership"
         );
         transaction.rollback().await?;
     }
@@ -158,22 +146,22 @@ async fn verify_candidate_integrity(primary: &mut Client) -> SmokeResult {
     let CandidateResult::Ready(candidate) = load_candidate(&transaction, SUCCESS.job_id).await?
     else {
         return Err(
-            smoke_error("restored source and outbox did not yield a ready candidate").into(),
+            smoke_error("restored source and snapshot did not yield a ready candidate").into(),
         );
     };
-    assert!(candidate.matches(&payload(&SUCCESS)?));
+    assert!(candidate.matches());
     transaction.rollback().await?;
     Ok(())
 }
 
 async fn verify_expired_takeover(primary: &mut Client, stale: &mut Client) -> SmokeResult {
-    let payload = payload(&TAKEOVER)?;
+    let job_id = TAKEOVER.job_id;
     let config_a = control_config("ocr-c2-worker-a")?;
     let config_b = control_config("ocr-c2-worker-b")?;
-    let stale_claim = claimed(claim_job(primary, &payload, &config_a).await?)?;
+    let stale_claim = claimed(claim_job(primary, job_id, &config_a).await?)?;
     assert_eq!(stale_claim.attempt_count, 1);
     assert!(matches!(
-        claim_result(claim_job(primary, &payload, &config_b).await?)?,
+        claim_result(claim_job(primary, job_id, &config_b).await?)?,
         OcrClaimResult::AlreadyRunning
     ));
 
@@ -204,7 +192,7 @@ async fn verify_expired_takeover(primary: &mut Client, stale: &mut Client) -> Sm
         )
         .await?;
 
-    let current_claim = claimed(claim_job(primary, &payload, &config_b).await?)?;
+    let current_claim = claimed(claim_job(primary, job_id, &config_b).await?)?;
     assert_eq!(current_claim.attempt_count, 2);
     assert!(current_claim.fencing_token > stale_claim.fencing_token);
     assert_eq!(
@@ -223,35 +211,35 @@ async fn verify_expired_takeover(primary: &mut Client, stale: &mut Client) -> Sm
         Err(OcrControlError::OwnerLost)
     ));
 
-    finish_failure(
-        primary,
-        &current_claim,
-        &config_b,
-        OcrFailureCode::OcrTimeout,
-        10,
-    )
-    .await?;
+    primary.execute("UPDATE worker_execution_slots SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE slot_key='shared-heavy-work' AND job_id=$1", &[&TAKEOVER.job_id]).await?;
+    primary.execute("UPDATE ocr_jobs SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", &[&TAKEOVER.job_id]).await?;
+    assert!(matches!(
+        claim_result(claim_job(primary, job_id, &config_a).await?)?,
+        OcrClaimResult::MissingOrTerminal
+    ));
     let row = primary
         .query_one(
-            "SELECT status, failure_code, attempt_count FROM ocr_jobs WHERE id = $1",
+            "SELECT status, failure_code, attempt_count, lease_recovery_count, failure_retry_count FROM ocr_jobs WHERE id = $1",
             &[&TAKEOVER.job_id],
         )
         .await?;
     assert_eq!(row.try_get::<_, String>(0)?, "failed");
     assert_eq!(row.try_get::<_, String>(1)?, "OCR_TIMEOUT");
     assert_eq!(row.try_get::<_, i32>(2)?, 2);
+    assert_eq!(row.try_get::<_, i32>(3)?, 1);
+    assert_eq!(row.try_get::<_, i32>(4)?, 0);
     assert_match_draft_status(primary, &TAKEOVER, "ocr_failed").await?;
     assert!(matches!(
-        claim_result(claim_job(primary, &payload, &config_a).await?)?,
+        claim_result(claim_job(primary, job_id, &config_a).await?)?,
         OcrClaimResult::MissingOrTerminal
     ));
     Ok(())
 }
 
 async fn verify_success_and_terminal_duplicate(primary: &mut Client) -> SmokeResult {
-    let payload = payload(&SUCCESS)?;
+    let job_id = SUCCESS.job_id;
     let config = control_config("ocr-c2-worker-success")?;
-    let claim = claimed(claim_job(primary, &payload, &config).await?)?;
+    let claim = claimed(claim_job(primary, job_id, &config).await?)?;
     let completion = tests::valid_completion(RequestedScreenType::TotalAssets);
     finish_success(primary, &claim, &config, &OcrHints::default(), &completion).await?;
     let row = primary
@@ -265,16 +253,16 @@ async fn verify_success_and_terminal_duplicate(primary: &mut Client) -> SmokeRes
     assert_eq!(row.try_get::<_, i64>(1)?, 1);
     assert_match_draft_status(primary, &SUCCESS, "draft_ready").await?;
     assert!(matches!(
-        claim_result(claim_job(primary, &payload, &config).await?)?,
+        claim_result(claim_job(primary, job_id, &config).await?)?,
         OcrClaimResult::MissingOrTerminal
     ));
     Ok(())
 }
 
 async fn verify_success_with_warnings(primary: &mut Client) -> SmokeResult {
-    let payload = payload(&SUCCESS_WITH_WARNINGS)?;
+    let job_id = SUCCESS_WITH_WARNINGS.job_id;
     let config = control_config("ocr-c2-worker-success-warnings")?;
-    let claim = claimed(claim_job(primary, &payload, &config).await?)?;
+    let claim = claimed(claim_job(primary, job_id, &config).await?)?;
     let completion = tests::completion_with_missing_amount_warning();
     finish_success(primary, &claim, &config, &OcrHints::default(), &completion).await?;
     assert_match_draft_status(primary, &SUCCESS_WITH_WARNINGS, "needs_review").await?;
@@ -361,13 +349,12 @@ async fn prepare_expired_analysis_holder(primary: &Client) -> SmokeResult {
 
 async fn verify_expired_analysis_recovery_emits_wake(primary: &mut Client) -> SmokeResult {
     prepare_expired_analysis_holder(primary).await?;
-    let payload = payload(&ANALYSIS_RECOVERY)?;
+    let job_id = ANALYSIS_RECOVERY.job_id;
     let config = control_config("ocr-c2-analysis-recovery")?;
-    let claim = claimed_with_analysis_wake(claim_job(primary, &payload, &config).await?)?;
+    let claim = claimed_with_analysis_wake(claim_job(primary, job_id, &config).await?)?;
     let recovered = primary
         .query_one(
-            "SELECT j.status, j.lease_recovery_count, a.status, a.outcome,\x20\
-               (SELECT COUNT(*)::bigint FROM series_analysis_queue_outbox q WHERE q.job_id = j.id)\x20\
+            "SELECT j.status, j.lease_recovery_count, a.status, a.outcome\x20\
              FROM series_analysis_jobs j JOIN series_analysis_job_attempts a ON a.job_id = j.id\x20\
              WHERE j.id = $1 AND a.id = $2",
             &[&EXPIRED_ANALYSIS_JOB_ID, &EXPIRED_ANALYSIS_ATTEMPT_ID],
@@ -377,7 +364,6 @@ async fn verify_expired_analysis_recovery_emits_wake(primary: &mut Client) -> Sm
     assert_eq!(recovered.try_get::<_, i32>(1)?, 1);
     assert_eq!(recovered.try_get::<_, String>(2)?, "terminal");
     assert_eq!(recovered.try_get::<_, String>(3)?, "owner_lost");
-    assert_eq!(recovered.try_get::<_, i64>(4)?, 1);
 
     finish_failure(
         primary,
@@ -392,7 +378,7 @@ async fn verify_expired_analysis_recovery_emits_wake(primary: &mut Client) -> Sm
 }
 
 async fn verify_analysis_preemption_and_stale_intent(primary: &mut Client) -> SmokeResult {
-    let payload = payload(&PREEMPT)?;
+    let job_id = PREEMPT.job_id;
     let config = control_config("ocr-c2-priority")?;
     let row = primary
         .query_opt(
@@ -408,7 +394,7 @@ async fn verify_analysis_preemption_and_stale_intent(primary: &mut Client) -> Sm
         .ok_or_else(|| smoke_error("analysis preemption fixture could not acquire the empty slot"))?;
     let analysis_fence = row.try_get::<_, i64>(0)?;
     assert!(matches!(
-        claim_result(claim_job(primary, &payload, &config).await?)?,
+        claim_result(claim_job(primary, job_id, &config).await?)?,
         OcrClaimResult::PreemptionRequested
     ));
     let requester = primary
@@ -436,7 +422,7 @@ async fn verify_analysis_preemption_and_stale_intent(primary: &mut Client) -> Sm
         .await?
     );
     release_transaction.commit().await?;
-    let claim = claimed(claim_job(primary, &payload, &config).await?)?;
+    let claim = claimed(claim_job(primary, job_id, &config).await?)?;
     let slot = primary
         .query_one(
             "SELECT task_kind, holder_preemptible, preempt_requested_by IS NULL\x20\
@@ -471,242 +457,67 @@ async fn verify_analysis_preemption_and_stale_intent(primary: &mut Client) -> Sm
     Ok(())
 }
 
-async fn verify_transient_requeue_preserves_pending(
-    primary: &mut Client,
-    redis: &mut redis::aio::ConnectionManager,
-    queue: &OcrQueueConfig,
-    stream: &str,
-    group: &str,
-) -> SmokeResult {
-    let _transient_message_id: String = redis::cmd("XADD")
-        .arg(stream)
-        .arg("*")
-        .arg("schemaVersion")
-        .arg("2")
-        .arg("jobId")
-        .arg(TRANSIENT.job_id)
-        .arg("draftId")
-        .arg(TRANSIENT.draft_id)
-        .arg("sourceImageId")
-        .arg(TRANSIENT.source_image_id)
-        .arg("imageObjectKey")
-        .arg(TRANSIENT.object_key)
-        .arg("sha256")
-        .arg("ab".repeat(32))
-        .arg("byteLength")
-        .arg("68")
-        .arg("mediaType")
-        .arg("image/png")
-        .arg("requestedScreenType")
-        .arg("total_assets")
-        .arg("attempt")
-        .arg("1")
-        .arg("enqueuedAt")
-        .arg("2026-08-12T00:00:00Z")
-        .query_async(redis)
-        .await?;
-    let transient = read_new_delivery(redis, queue, queue.block())
-        .await?
-        .ok_or_else(|| smoke_error("transient OCR delivery was not read"))?;
-    let OcrQueueDeliveryBody::Job(transient_payload) = &transient.body else {
-        return Err(smoke_error("transient OCR fixture did not decode as a job").into());
-    };
-    let transient_config = control_config("ocr-c2-transient")?;
-    let transient_claim = claimed(claim_job(primary, transient_payload, &transient_config).await?)?;
-    requeue_transient(primary, &transient_claim, &transient_config).await?;
-    let transient_state = primary
+async fn verify_transient_retry_budget(primary: &mut Client) -> SmokeResult {
+    let config = control_config("ocr-c2-transient")?;
+    let claim = claimed(claim_job(primary, TRANSIENT.job_id, &config).await?)?;
+    requeue_interrupted(primary, &claim, &config).await?;
+    let counters = primary
         .query_one(
-            "SELECT status, available_at > clock_timestamp() FROM ocr_jobs WHERE id = $1",
+            "SELECT failure_retry_count, lease_recovery_count FROM ocr_jobs WHERE id=$1",
             &[&TRANSIENT.job_id],
         )
         .await?;
-    assert_eq!(transient_state.try_get::<_, String>(0)?, "queued");
-    assert!(transient_state.try_get::<_, bool>(1)?);
-    let pending_after_requeue: StreamPendingReply = redis.xpending(stream, group).await?;
-    assert_eq!(pending_after_requeue.count(), 1);
-    acknowledge(redis, queue, &transient.message_id).await?;
+    assert_eq!(counters.try_get::<_, i32>(0)?, 0);
+    assert_eq!(counters.try_get::<_, i32>(1)?, 0);
+    let claim = claimed(claim_job(primary, TRANSIENT.job_id, &config).await?)?;
+    requeue_transient(primary, &claim, &config).await?;
+    let row = primary.query_one("SELECT status, available_at > clock_timestamp(), failure_retry_count, lease_recovery_count FROM ocr_jobs WHERE id=$1", &[&TRANSIENT.job_id]).await?;
+    assert_eq!(row.try_get::<_, String>(0)?, "queued");
+    assert!(row.try_get::<_, bool>(1)?);
+    assert_eq!(row.try_get::<_, i32>(2)?, 1);
+    assert_eq!(row.try_get::<_, i32>(3)?, 0);
+    primary
+        .execute(
+            "UPDATE ocr_jobs SET available_at=clock_timestamp() WHERE id=$1",
+            &[&TRANSIENT.job_id],
+        )
+        .await?;
+    let claim = claimed(claim_job(primary, TRANSIENT.job_id, &config).await?)?;
+    requeue_transient(primary, &claim, &config).await?;
+    let row = primary
+        .query_one(
+            "SELECT status, failure_retry_count, input_snapshot FROM ocr_jobs WHERE id=$1",
+            &[&TRANSIENT.job_id],
+        )
+        .await?;
+    assert_eq!(row.try_get::<_, String>(0)?, "failed");
+    assert_eq!(row.try_get::<_, i32>(1)?, 1);
+    assert_eq!(
+        row.try_get::<_, serde_json::Value>(2)?,
+        persisted_payload(&TRANSIENT)
+    );
+    assert_match_draft_status(primary, &TRANSIENT, "ocr_failed").await?;
     Ok(())
 }
 
-async fn verify_redis_failure_order(primary: &mut Client, redis_url: &str) -> SmokeResult {
-    let redis_client = redis::Client::open(redis_url)?;
-    let mut redis = redis_client.get_connection_manager().await?;
-    let stream = "momo:ocr:c2-smoke";
-    let group = "momo-ocr-c2-smoke";
-    let dead = "momo:ocr:c2-smoke:dead";
-    let _: usize = redis.del(&[stream, dead]).await?;
-    let queue = OcrQueueConfig::new(
-        String::from(stream),
-        String::from(group),
-        String::from(dead),
-        String::from("ocr-c2-consumer"),
-        Duration::from_millis(20),
-        Duration::from_millis(5),
-        1,
-        10,
-    )?;
-    ensure_consumer_group(&mut redis, &queue).await?;
-    verify_transient_requeue_preserves_pending(primary, &mut redis, &queue, stream, group).await?;
-
-    let _malformed_message_id: String = redis::cmd("XADD")
-        .arg(stream)
-        .arg("*")
-        .arg("jobId")
-        .arg(MALFORMED.job_id)
-        .query_async(&mut redis)
-        .await?;
-    let malformed = read_new_delivery(&mut redis, &queue, queue.block())
-        .await?
-        .ok_or_else(|| smoke_error("malformed OCR delivery was not read"))?;
+async fn verify_malformed_snapshot(primary: &mut Client) -> SmokeResult {
+    primary.execute("UPDATE ocr_jobs SET input_snapshot=jsonb_build_object('schemaVersion','2') WHERE id=$1", &[&MALFORMED.job_id]).await?;
+    let config = control_config("ocr-c2-transient")?;
     assert!(matches!(
-        &malformed.body,
-        OcrQueueDeliveryBody::Malformed {
-            recoverable_job_id: Some(job_id),
-            ..
-        } if job_id == MALFORMED.job_id
+        claim_result(claim_job(primary, MALFORMED.job_id, &config).await?)?,
+        OcrClaimResult::InvalidInput
     ));
-    let pending_before_db: StreamPendingReply = redis.xpending(stream, group).await?;
-    assert_eq!(pending_before_db.count(), 1);
-    record_queue_failure(primary, MALFORMED.job_id, Duration::from_secs(1)).await?;
-    let status = primary
+    let row = primary
         .query_one(
-            "SELECT status, failure_code FROM ocr_jobs WHERE id = $1",
+            "SELECT status, failure_code, attempt_count FROM ocr_jobs WHERE id=$1",
             &[&MALFORMED.job_id],
         )
         .await?;
-    assert_eq!(status.try_get::<_, String>(0)?, "failed");
-    assert_eq!(status.try_get::<_, String>(1)?, "QUEUE_FAILURE");
+    assert_eq!(row.try_get::<_, String>(0)?, "failed");
+    assert_eq!(row.try_get::<_, String>(1)?, "QUEUE_FAILURE");
+    assert_eq!(row.try_get::<_, i32>(2)?, 0);
     assert_match_draft_status(primary, &MALFORMED, "ocr_failed").await?;
-    acknowledge(&mut redis, &queue, &malformed.message_id).await?;
-    let pending_after_ack: StreamPendingReply = redis.xpending(stream, group).await?;
-    assert_eq!(pending_after_ack.count(), 0);
-
-    let _poison_message_id: String = redis::cmd("XADD")
-        .arg(stream)
-        .arg("*")
-        .arg("credential")
-        .arg("must-not-enter-dlq")
-        .query_async(&mut redis)
-        .await?;
-    let poison = read_new_delivery(&mut redis, &queue, queue.block())
-        .await?
-        .ok_or_else(|| smoke_error("poison OCR delivery was not read"))?;
-    assert!(matches!(
-        poison.body,
-        OcrQueueDeliveryBody::Malformed {
-            recoverable_job_id: None,
-            ..
-        }
-    ));
-    let aged: Vec<String> = redis::cmd("XCLAIM")
-        .arg(stream)
-        .arg(group)
-        .arg("ocr-c2-consumer")
-        .arg(0)
-        .arg(&poison.message_id)
-        .arg("IDLE")
-        .arg(25)
-        .arg("JUSTID")
-        .query_async(&mut redis)
-        .await?;
-    assert_eq!(aged, vec![poison.message_id.clone()]);
-    let mut recovery_cursor = PendingRecoveryCursor::start();
-    let exhausted = recover_cold_page(&mut redis, &queue, &mut recovery_cursor)
-        .await?
-        .delivery
-        .ok_or_else(|| smoke_error("stale OCR delivery was not reclaimed"))?;
-    assert!(matches!(
-        exhausted.body,
-        OcrQueueDeliveryBody::MaximumAttempts { .. }
-    ));
-    verify_dead_letter_failure_order(&mut redis, &queue, &exhausted, stream, group, dead).await?;
-    let _: usize = redis.del(&[stream, dead]).await?;
     Ok(())
-}
-
-async fn verify_dead_letter_failure_order(
-    redis: &mut redis::aio::ConnectionManager,
-    queue: &OcrQueueConfig,
-    exhausted: &OcrQueueDelivery,
-    stream: &str,
-    group: &str,
-    dead: &str,
-) -> SmokeResult {
-    let _: () = redis.set(dead, "wrong-type-fixture").await?;
-    assert!(
-        dead_letter_and_acknowledge(redis, queue, exhausted)
-            .await
-            .is_err()
-    );
-    let pending_after_failure: StreamPendingReply = redis.xpending(stream, group).await?;
-    assert_eq!(
-        pending_after_failure.count(),
-        1,
-        "failed DLQ publication must leave the source pending"
-    );
-    let _: usize = redis.del(dead).await?;
-    dead_letter_and_acknowledge(redis, queue, exhausted).await?;
-    let pending_after_dlq: StreamPendingReply = redis.xpending(stream, group).await?;
-    assert_eq!(pending_after_dlq.count(), 0);
-    assert!(
-        dead_letter_and_acknowledge(redis, queue, exhausted)
-            .await
-            .is_err(),
-        "an already-acknowledged delivery must not append a duplicate diagnostic"
-    );
-    let dead_letters: StreamRangeReply = redis.xrange_all(dead).await?;
-    assert_dead_letter_fields(only_dead_letter(&dead_letters)?, &exhausted.message_id);
-    Ok(())
-}
-
-fn only_dead_letter(dead_letters: &StreamRangeReply) -> SmokeResult<&StreamId> {
-    match dead_letters.ids.as_slice() {
-        [dead_letter] => Ok(dead_letter),
-        entries => Err(smoke_error(format!(
-            "expected one OCR DLQ entry, found {}",
-            entries.len()
-        ))
-        .into()),
-    }
-}
-
-fn assert_dead_letter_fields(dead_letter: &StreamId, source_id: &str) {
-    assert_eq!(
-        dead_letter
-            .map
-            .keys()
-            .map(String::as_str)
-            .collect::<std::collections::BTreeSet<_>>(),
-        std::collections::BTreeSet::from([
-            "deadLetterContractError",
-            "deadLetterDeliveries",
-            "deadLetterMessage",
-            "deadLetterReason",
-            "deadLetterSourceId",
-        ])
-    );
-    assert_eq!(
-        dead_letter.get::<String>("deadLetterReason").as_deref(),
-        Some("QUEUE_FAILURE")
-    );
-    assert_eq!(
-        dead_letter
-            .get::<String>("deadLetterContractError")
-            .as_deref(),
-        Some("closed_field_set")
-    );
-    assert_eq!(
-        dead_letter.get::<String>("deadLetterSourceId").as_deref(),
-        Some(source_id)
-    );
-    assert_eq!(
-        dead_letter.get::<String>("deadLetterDeliveries").as_deref(),
-        Some("1")
-    );
-    assert_eq!(
-        dead_letter.get::<String>("deadLetterMessage").as_deref(),
-        Some("OCR queue delivery exceeded its bounded attempts.")
-    );
 }
 
 async fn prepare_database(client: &Client) -> SmokeResult {
@@ -762,9 +573,14 @@ async fn insert_fixture(client: &Client, fixture: &Fixture) -> SmokeResult {
     client
         .execute(
             "INSERT INTO ocr_jobs (id, draft_id, image_id, image_path, requested_screen_type,\x20\
-               status, source_image_id, queue_schema_version, available_at)\x20\
-             VALUES ($1, $2, $3, NULL, 'total_assets', 'queued', $3, 2, clock_timestamp())",
-            &[&fixture.job_id, &fixture.draft_id, &fixture.source_image_id],
+               status, source_image_id, input_snapshot, available_at)\x20\
+             VALUES ($1, $2, $3, NULL, 'total_assets', 'queued', $3, $4, clock_timestamp())",
+            &[
+                &fixture.job_id,
+                &fixture.draft_id,
+                &fixture.source_image_id,
+                &persisted_payload(fixture),
+            ],
         )
         .await?;
     let submission_id = format!(
@@ -773,19 +589,6 @@ async fn insert_fixture(client: &Client, fixture: &Fixture) -> SmokeResult {
     );
     client.execute("INSERT INTO ocr_submissions (id, owner_account_id, match_draft_id, ocr_hints_json, status, admission_deadline) VALUES ($1, 'account_ponta', $2, '{}'::jsonb, 'open', clock_timestamp() + interval '10 minutes')", &[&submission_id, &fixture.match_draft_id]).await?;
     client.execute("INSERT INTO ocr_submission_members (submission_id, screen_type, upload_idempotency_key_hash, image_sha256_hex, image_byte_length, status, job_id) VALUES ($1, 'total_assets', $2, $3, 68, 'registered', $4)", &[&submission_id, &idempotency_hash, &sha256, &fixture.job_id]).await?;
-    let stream_payload = persisted_payload(fixture);
-    client
-        .execute(
-            "INSERT INTO ocr_queue_outbox (
-               id, job_id, dedupe_key, stream_payload, schema_version, status,
-               attempt_count, next_attempt_at, delivered_at
-             ) VALUES (
-               'ocr-outbox-' || $1, $1, 'ocr-job:' || $1, $2, 2, 'DELIVERED', 0,
-               clock_timestamp(), clock_timestamp()
-             )",
-            &[&fixture.job_id, &stream_payload],
-        )
-        .await?;
     Ok(())
 }
 
@@ -811,10 +614,6 @@ async fn cleanup_database(client: &Client) -> SmokeResult {
                'c2-smoke-job-takeover','c2-smoke-job-success','c2-smoke-job-success-warnings',\x20\
                'c2-smoke-job-preempt','c2-smoke-job-malformed',\x20\
                'c2-smoke-job-analysis-recovery','c2-smoke-job-transient');\x20\
-             DELETE FROM ocr_queue_outbox WHERE job_id IN (\x20\
-               'c2-smoke-job-takeover','c2-smoke-job-success','c2-smoke-job-success-warnings',\x20\
-               'c2-smoke-job-preempt','c2-smoke-job-malformed',\x20\
-               'c2-smoke-job-analysis-recovery','c2-smoke-job-transient');\x20\
              DELETE FROM ocr_submission_members WHERE submission_id IN (SELECT id FROM ocr_submissions WHERE match_draft_id LIKE 'c2-smoke-match-draft-%');\x20\
              DELETE FROM ocr_submissions WHERE match_draft_id LIKE 'c2-smoke-match-draft-%';\x20\
              DELETE FROM ocr_jobs WHERE id IN (\x20\
@@ -826,8 +625,6 @@ async fn cleanup_database(client: &Client) -> SmokeResult {
                'c2-smoke-source-success-warnings',\x20\
                'c2-smoke-source-preempt','c2-smoke-source-malformed',\x20\
                'c2-smoke-source-analysis-recovery','c2-smoke-source-transient');\x20\
-             DELETE FROM series_analysis_queue_outbox\x20\
-               WHERE job_id = 'c2-smoke-analysis-recovery-job';\x20\
              DELETE FROM series_analysis_job_attempts\x20\
                WHERE job_id = 'c2-smoke-analysis-recovery-job';\x20\
              DELETE FROM series_analysis_jobs WHERE id = 'c2-smoke-analysis-recovery-job';\x20\
@@ -853,29 +650,6 @@ async fn assert_match_draft_status(
     Ok(())
 }
 
-fn payload(fixture: &Fixture) -> SmokeResult<ValidatedOcrDelivery> {
-    let fields = persisted_payload(fixture)
-        .as_object()
-        .ok_or("persisted OCR fixture is not an object")?
-        .iter()
-        .map(|(name, value)| {
-            value
-                .as_str()
-                .map(|value| (name.clone(), String::from(value)))
-                .ok_or("persisted OCR fixture field is not a string")
-        })
-        .collect::<Result<HashMap<_, _>, _>>()?;
-    let delivery = StreamId {
-        id: String::from("1-0"),
-        map: fields
-            .into_iter()
-            .map(|(name, value)| (name, Value::BulkString(value.into_bytes())))
-            .collect(),
-        ..StreamId::default()
-    };
-    parse_validated_delivery(&delivery).map_err(Into::into)
-}
-
 fn persisted_payload(fixture: &Fixture) -> serde_json::Value {
     json!({
         "schemaVersion": "2",
@@ -887,8 +661,6 @@ fn persisted_payload(fixture: &Fixture) -> serde_json::Value {
         "byteLength": "68",
         "mediaType": "image/png",
         "requestedScreenType": "total_assets",
-        "attempt": "1",
-        "enqueuedAt": "2026-08-12T00:00:00Z",
     })
 }
 
@@ -905,7 +677,7 @@ fn control_config(worker_id: &str) -> SmokeResult<OcrControlConfig> {
 fn claimed_with_analysis_wake(
     outcome: ControlOutcome<OcrClaimResult>,
 ) -> SmokeResult<ClaimedOcrJob> {
-    if outcome.effects != crate::outbox::PostCommitEffects::WakeAnalysis {
+    if outcome.effects != crate::scheduler::PostCommitEffects::WakeJobs {
         return Err(smoke_error("expired Analysis recovery did not emit its shared wake").into());
     }
     match outcome.value {
@@ -915,8 +687,7 @@ fn claimed_with_analysis_wake(
         | OcrClaimResult::MissingOrTerminal
         | OcrClaimResult::AlreadyRunning
         | OcrClaimResult::NotYetAvailable
-        | OcrClaimResult::UnsupportedQueueSchema
-        | OcrClaimResult::QueueContractMismatch) => Err(smoke_error(format!(
+        | OcrClaimResult::InvalidInput) => Err(smoke_error(format!(
             "expected OCR claim after expired Analysis recovery, got {other:?}"
         ))
         .into()),
@@ -924,8 +695,8 @@ fn claimed_with_analysis_wake(
 }
 
 fn claim_result(outcome: ControlOutcome<OcrClaimResult>) -> SmokeResult<OcrClaimResult> {
-    if outcome.effects == crate::outbox::PostCommitEffects::WakeAnalysis {
-        return Err(smoke_error("normal OCR claim unexpectedly emitted an outbox wake").into());
+    if outcome.effects == crate::scheduler::PostCommitEffects::WakeJobs {
+        return Err(smoke_error("normal OCR claim unexpectedly emitted an scheduler wake").into());
     }
     Ok(outcome.value)
 }
@@ -938,8 +709,7 @@ fn claimed(outcome: ControlOutcome<OcrClaimResult>) -> SmokeResult<ClaimedOcrJob
         | OcrClaimResult::MissingOrTerminal
         | OcrClaimResult::AlreadyRunning
         | OcrClaimResult::NotYetAvailable
-        | OcrClaimResult::UnsupportedQueueSchema
-        | OcrClaimResult::QueueContractMismatch) => {
+        | OcrClaimResult::InvalidInput) => {
             Err(smoke_error(format!("expected claimed OCR job, got {other:?}")).into())
         }
     }

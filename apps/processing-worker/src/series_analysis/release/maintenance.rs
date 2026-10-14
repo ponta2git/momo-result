@@ -9,9 +9,9 @@ use tokio_postgres::Transaction;
 use super::{
     ALGORITHM_VERSION, ARTIFACT_SCHEMA_VERSION, ARTIFACT_VALIDATION_CONTRACT_ID, PromotionRequest,
     PromotionTrigger, ReleaseError, begin_promotion_transaction, canonical, connect, database_url,
-    enqueue_dispatcher_wake, existing_operation, inspect_completeness, lock_targets,
-    promote_transaction, reader_capabilities, stable_id, title_audit_rows, validate_existing,
-    validate_readers, validate_workers, worker_capabilities,
+    existing_operation, inspect_completeness, lock_targets, notify_scheduler, promote_transaction,
+    reader_capabilities, stable_id, title_audit_rows, validate_existing, validate_readers,
+    validate_workers, worker_capabilities,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
@@ -82,6 +82,9 @@ pub(crate) async fn reconcile(
     let transaction = begin_promotion_transaction(&mut client).await?;
     let report =
         reconcile_transaction(transaction, operation, release_id, apply, expected_plan).await?;
+    if apply && report.status == "running" {
+        notify_scheduler(&client).await;
+    }
     Ok(report)
 }
 
@@ -186,12 +189,11 @@ async fn reconcile_transaction(
                 report.status = "attention_required";
                 report.reason = "release_integrity_audit_failed";
             }
-            // The ordinary dispatcher also recovers lost hints. An explicit apply
-            // replay supplies an immediate wake without creating another campaign.
+            // The caller wakes the scheduler only after this transaction ends.
+            // Replaying an operation does not create another campaign.
             if apply && report.status == "running" {
                 validate_readers(reader_capabilities(&transaction).await?)?;
                 validate_workers(worker_capabilities(&transaction).await?)?;
-                enqueue_dispatcher_wake(&transaction).await?;
                 transaction.commit().await?;
                 return Ok(report);
             }
@@ -282,7 +284,6 @@ async fn reconcile_transaction(
             report.status = "attention_required";
             report.reason = "reader_or_worker_incompatible";
         } else if apply {
-            enqueue_dispatcher_wake(&transaction).await?;
             transaction.commit().await?;
             return Ok(report);
         }

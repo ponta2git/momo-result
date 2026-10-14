@@ -96,6 +96,8 @@ async fn real_postgres_preserves_ocr_fencing_and_bounded_recovery() -> SmokeResu
     let mut primary = crate::postgres::connect(&database_url).await?;
     let mut stale = crate::postgres::connect(&database_url).await?;
     prepare_database(&primary).await?;
+    verify_stale_maintenance(&mut primary).await?;
+    prepare_database(&primary).await?;
     claim_shutdown::verify(&database_url, &primary).await?;
     prepare_database(&primary).await?;
     for fixture in [
@@ -120,6 +122,37 @@ async fn real_postgres_preserves_ocr_fencing_and_bounded_recovery() -> SmokeResu
     verify_malformed_snapshot(&mut primary).await?;
 
     cleanup_database(&primary).await?;
+    Ok(())
+}
+
+async fn verify_stale_maintenance(primary: &mut Client) -> SmokeResult {
+    let stale_after = Duration::from_secs(300);
+    let timeout = Duration::from_secs(5);
+    maintenance::reap_stale(primary, stale_after, timeout).await?;
+    insert_fixture(primary, &TAKEOVER).await?;
+    insert_fixture(primary, &SUCCESS).await?;
+    let config = control_config("ocr-c2-worker-success")?;
+    let live = claimed(claim_job(primary, SUCCESS.job_id, &config).await?)?;
+    primary.execute("UPDATE ocr_jobs SET created_at=clock_timestamp()-interval '1 hour',started_at=CASE WHEN status='running' THEN clock_timestamp()-interval '1 hour' ELSE NULL END WHERE id IN ($1,$2)", &[&TAKEOVER.job_id,&SUCCESS.job_id]).await?;
+    maintenance::reap_stale(primary, stale_after, timeout).await?;
+    let stale = primary
+        .query_one(
+            "SELECT status,failure_code FROM ocr_jobs WHERE id=$1",
+            &[&TAKEOVER.job_id],
+        )
+        .await?;
+    assert_eq!(stale.try_get::<_, String>(0)?, "failed");
+    assert_eq!(stale.try_get::<_, String>(1)?, "OCR_TIMEOUT");
+    assert_match_draft_status(primary, &TAKEOVER, "ocr_failed").await?;
+    let active = primary
+        .query_one(
+            "SELECT status,attempt_id::text FROM ocr_jobs WHERE id=$1",
+            &[&SUCCESS.job_id],
+        )
+        .await?;
+    assert_eq!(active.try_get::<_, String>(0)?, "running");
+    assert_eq!(active.try_get::<_, String>(1)?, live.attempt_id);
+    assert_match_draft_status(primary, &SUCCESS, "ocr_running").await?;
     Ok(())
 }
 

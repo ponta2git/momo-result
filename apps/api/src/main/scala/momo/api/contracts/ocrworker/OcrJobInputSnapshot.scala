@@ -1,19 +1,10 @@
 package momo.api.contracts.ocrworker
 
-
-import cats.syntax.either.*
 import io.circe.Json
 
 import momo.api.codec.OcrHintsCodec
-import momo.api.codec.OcrHintsCodec.given
 import momo.api.domain.ids.*
-import momo.api.domain.{
-  OcrJobHints,
-  OcrJobInput,
-  RequestId,
-  ScreenType,
-  StoredImageLocation
-}
+import momo.api.domain.{OcrJobHints, OcrJobInput, RequestId, ScreenType}
 
 /** Immutable OCR input saved with its job. Values preserve the accepted image and hints. */
 final class OcrJobInputSnapshot private (
@@ -30,22 +21,6 @@ final class OcrJobInputSnapshot private (
 ):
   def fields: Map[String, String] = OcrJobInputSnapshot.snapshotFields(this)
 
-  def toInput: Either[String, OcrJobInput] =
-    StoredImageLocation.fromString(imageObjectKey).map(location =>
-      OcrJobInput(
-        jobId = jobId,
-        draftId = draftId,
-        imageId = sourceImageId,
-        imageLocation = location,
-        imageSha256 = sha256,
-        imageByteLength = byteLength,
-        imageMediaType = mediaType,
-        requestedScreenType = requestedScreenType,
-        hints = hints,
-        requestId = requestId,
-      )
-    )
-
 object OcrJobInputSnapshot:
   val SchemaVersionKey = "schemaVersion"
   val SchemaVersion = "2"
@@ -55,18 +30,6 @@ object OcrJobInputSnapshot:
   val MaxIdLength = 128
   val MaxObjectKeyLength = 512
   val MaxHintsUtf8Bytes = OcrHintsCodec.MaxUtf8Bytes
-
-  val RequiredKeys: Set[String] = Set(
-    SchemaVersionKey,
-    "jobId",
-    "draftId",
-    "sourceImageId",
-    "imageObjectKey",
-    "sha256",
-    "byteLength",
-    "mediaType",
-    "requestedScreenType",
-  )
 
   private val AllowedMediaTypes = Set("image/png", "image/jpeg", "image/webp")
   private val ObjectKeyCharacters = "^[A-Za-z0-9][A-Za-z0-9._/-]*$".r
@@ -158,65 +121,6 @@ object OcrJobInputSnapshot:
     .obj(message.fields.toSeq.sortBy(_._1).map { case (key, value) =>
       key -> Json.fromString(value)
     }*)
-
-  def fromJson(json: Json): Either[String, OcrJobInputSnapshot] = json.asObject
-    .toRight("input snapshot must be a JSON object").flatMap { obj =>
-      val fields = obj.toMap
-      val allowed = RequiredKeys + HintsKey + RequestIdKey
-      val unknown = fields.keySet.diff(allowed)
-      if unknown.nonEmpty then
-        Left(s"unknown input snapshot field(s): ${unknown.toList.sorted.mkString(",")}")
-      else parseSnapshotFields(fields.map { case (key, value) => key -> value.asString })
-    }
-
-  private def parseSnapshotFields(
-      fields: Map[String, Option[String]]
-  ): Either[String, OcrJobInputSnapshot] =
-    def required(key: String): Either[String, String] = fields.get(key).flatten
-      .toRight(s"field $key must be a string")
-
-    def optional(key: String): Either[String, Option[String]] = fields.get(key) match
-      case None => Right(None)
-      case Some(Some(value)) => Right(Some(value))
-      case Some(None) => Left(s"field $key must be a string")
-
-    for
-      version <- required(SchemaVersionKey)
-      _ <- Either.cond(version == SchemaVersion, (), s"schemaVersion must be $SchemaVersion")
-      jobId <- required("jobId")
-      draftId <- required("draftId")
-      sourceImageId <- required("sourceImageId")
-      parsedJobId <- OcrJobId.fromString(jobId).leftMap(_ => "jobId must not be blank")
-      parsedDraftId <- OcrDraftId.fromString(draftId).leftMap(_ => "draftId must not be blank")
-      parsedSourceImageId <- ImageId.fromString(sourceImageId)
-        .leftMap(_ => "sourceImageId must not be blank")
-      imageObjectKey <- required("imageObjectKey")
-      sha256 <- required("sha256")
-      byteLength <- required("byteLength").flatMap(value =>
-        value.toLongOption.toRight("byteLength must be an integer string")
-      )
-      mediaType <- required("mediaType")
-      requested <- required("requestedScreenType")
-      screenType <- ScreenType.fromExplicitWire(requested)
-        .toRight(s"unknown requestedScreenType=$requested")
-      hintsJson <- optional(HintsKey)
-      hints <- hintsJson match
-        case None => Right(OcrJobHints.empty)
-        case Some(raw) => io.circe.parser.decode[OcrJobHints](raw).left.map(_.getMessage)
-      requestId <- optional(RequestIdKey)
-      message <- build(
-        jobId = parsedJobId,
-        draftId = parsedDraftId,
-        sourceImageId = parsedSourceImageId,
-        imageObjectKey = imageObjectKey,
-        sha256 = sha256,
-        byteLength = byteLength,
-        mediaType = mediaType,
-        requestedScreenType = screenType,
-        hints = hints,
-        requestId = requestId,
-      )
-    yield message
 
   private def validateObjectKey(value: String): Either[String, Unit] =
     val segments = value.split("/", -1).toList

@@ -145,11 +145,6 @@ object InMemoryOcrJobsRepository:
     .of[F, State](empty)
     .map(new InMemoryOcrJobsRepository(_, (_, _) => Sync[F].unit, None))
 
-  def createWithCancelSync[F[_]: Sync](
-      onQueuedCancel: (OcrJob.Cancelled, List[OcrJob]) => F[Unit]
-  ): F[InMemoryOcrJobsRepository[F]] = Ref.of[F, State](empty)
-    .map(new InMemoryOcrJobsRepository(_, onQueuedCancel, None))
-
   def createWithDraftCancelSync[F[_]: Sync](
       matchDrafts: MatchDraftsRepository[F]
   ): F[InMemoryOcrJobsRepository[F]] = Ref.of[F, State](empty)

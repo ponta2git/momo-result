@@ -26,10 +26,6 @@ private[api] object PostgresMatchDraftStatusSync:
     if draftIds.isEmpty then ().pure[ConnectionIO]
     else recompute(touchedByDrafts(draftIds), now)
 
-  def recomputeMatchDrafts(draftIds: List[MatchDraftId], now: Instant): ConnectionIO[Unit] =
-    if draftIds.isEmpty then ().pure[ConnectionIO]
-    else recompute(touchedMatchDrafts(draftIds), now)
-
   /**
    * All cross-language terminal writers acquire these rows before locking/updating OCR jobs. The
    * recomputation runs in a later statement, so a waiter also gets a fresh READ COMMITTED snapshot
@@ -59,10 +55,6 @@ private[api] object PostgresMatchDraftStatusSync:
       OR md.revenue_draft_id = ANY($ids)
       OR md.incident_log_draft_id = ANY($ids)
     )"""
-
-  private def touchedMatchDrafts(draftIds: List[MatchDraftId]): Fragment =
-    val ids = draftIds.map(_.value).distinct.toArray
-    fr"md.id = ANY($ids)"
 
   private def recompute(touchedCondition: Fragment, now: Instant): ConnectionIO[Unit] =
     (fr"""WITH touched AS (

@@ -156,7 +156,10 @@ final class PostgresOcrJobCreationStoreSpec
       assertEquals(row._3, jobId.value)
       assertEquals(row._4, "req-snapshot-1")
       assertOcrJobInputSnapshotSchemaValid(row._5)
-      assertEquals(OcrJobInputSnapshot.fromJson(row._5).flatMap(_.toInput), Right(enqueueRequest))
+      assertEquals(
+        Right(row._5),
+        OcrJobInputSnapshot.fromInput(enqueueRequest).map(OcrJobInputSnapshot.toJson)
+      )
 
   test("job creation rechecks the source draft creator while holding its write lock"):
     for
@@ -294,7 +297,10 @@ final class PostgresOcrJobCreationStoreSpec
       assertEquals(replay.map(_.created), Right(false))
       assertEquals(replay.map(_.job.id), first.map(_.job.id))
       assertEquals(counts, (1L, 1L))
-      assertEquals(OcrJobInputSnapshot.fromJson(input).flatMap(_.toInput), Right(enqueueRequest))
+      assertEquals(
+        Right(input),
+        OcrJobInputSnapshot.fromInput(enqueueRequest).map(OcrJobInputSnapshot.toJson)
+      )
 
   test("an expired pending member cannot register a late image job"):
     for

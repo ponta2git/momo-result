@@ -56,7 +56,10 @@ final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
       assertEquals(rejected, Left(OcrJobCreationRejection.InvalidPlan))
       assertEquals(
         effects,
-        List(PostCommitEffects.wakeAll(WorkerWakeKind.ProcessingJobs, WorkerWakeKind.OcrSubmissions))
+        List(PostCommitEffects.wakeAll(
+          WorkerWakeKind.ProcessingJobs,
+          WorkerWakeKind.OcrSubmissions
+        ))
       )
 
   test("match update and actual deletion wake analysis while false deletion does not"):

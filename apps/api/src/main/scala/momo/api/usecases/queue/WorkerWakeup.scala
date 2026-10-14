@@ -78,7 +78,8 @@ final class WorkerWakeup[F[_]] private (
 object WorkerWakeup:
   def create[F[_]: Concurrent]: F[WorkerWakeup[F]] =
     for
-      queues <- WorkerWakeKind.values.toList.traverse(kind => Queue.bounded[F, Unit](1).tupleLeft(kind))
+      queues <-
+        WorkerWakeKind.values.toList.traverse(kind => Queue.bounded[F, Unit](1).tupleLeft(kind))
       closed <- Ref.of[F, Boolean](false)
     yield new WorkerWakeup(queues.toMap, closed)
 

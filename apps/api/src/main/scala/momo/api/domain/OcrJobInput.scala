@@ -1,6 +1,5 @@
 package momo.api.domain
 
-
 import momo.api.domain.ids.*
 
 final case class OcrJobInput(

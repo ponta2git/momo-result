@@ -13,10 +13,8 @@ import momo.api.contracts.ocrworker.OcrJobInputSnapshot
 trait JsonSchemaAssertions extends Assertions:
   protected def assertOcrJobInputSnapshotSchemaValid(payloadJson: Json): Unit =
     assertJsonSchemaValid(ocrJobInputSchemaPath, payloadJson.noSpaces)
-    OcrJobInputSnapshot.fromJson(payloadJson) match
-      case Left(reason) => fail(s"job input snapshot is not an OcrJobInputSnapshot: $reason")
-      case Right(payload) => payload.fields.get(OcrJobInputSnapshot.HintsKey)
-          .foreach(hintsJson => assertJsonSchemaValid(ocrHintsSchemaPath, hintsJson))
+    payloadJson.hcursor.get[String](OcrJobInputSnapshot.HintsKey).toOption
+      .foreach(hintsJson => assertJsonSchemaValid(ocrHintsSchemaPath, hintsJson))
 
   protected def assertOcrJobInputSnapshotSchemaValid(payload: OcrJobInputSnapshot): Unit =
     assertOcrJobInputSnapshotSchemaValid(OcrJobInputSnapshot.toJson(payload))
@@ -53,9 +51,6 @@ trait JsonSchemaAssertions extends Assertions:
     repoPath("docs/schemas/ocr-job-input-v2.schema.json")
 
   protected def ocrHintsSchemaPath: Path = repoPath("docs/schemas/ocr-hints-v1.schema.json")
-
-  protected def seriesAnalysisArtifactSchemaPath: Path =
-    repoPath("docs/schemas/series-analysis-artifact-v6.schema.json")
 
   protected def repositoryFile(relativePath: String): Path = repoPath(relativePath)
 

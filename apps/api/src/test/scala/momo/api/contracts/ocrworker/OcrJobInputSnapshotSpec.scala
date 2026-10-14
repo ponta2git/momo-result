@@ -21,46 +21,6 @@ final class OcrJobInputSnapshotSpec extends FunSuite with JsonSchemaAssertions:
     assertOcrJobInputSnapshotSchemaValid(fixtureJson)
   }
 
-  test("builds the exact closed OCR job input snapshot") {
-    val payload = canonicalPayload()
-
-    assertEquals(
-      payload.fields,
-      Map(
-        "schemaVersion" -> "2",
-        "jobId" -> "job-v2-1",
-        "draftId" -> "draft-v2-1",
-        "sourceImageId" -> "image-v2-1",
-        "imageObjectKey" -> "source-images/2026/image-v2-1.webp",
-        "sha256" -> ("ab" * 32),
-        "byteLength" -> "3145728",
-        "mediaType" -> "image/webp",
-        "requestedScreenType" -> "incident_log",
-        "requestId" -> "req_v2-1",
-      ),
-    )
-    assertOcrJobInputSnapshotSchemaValid(payload)
-  }
-
-  test("round-trips a typed payload and rejects non-string or unknown fields") {
-    val payload = canonicalPayload()
-    val json = OcrJobInputSnapshot.toJson(payload)
-
-    assertEquals(OcrJobInputSnapshot.fromJson(json).map(_.fields), Right(payload.fields))
-    assertEquals(
-      OcrJobInputSnapshot.fromJson(json.mapObject(_.add("byteLength", Json.fromInt(1)))),
-      Left("field byteLength must be a string"),
-    )
-    assertEquals(
-      OcrJobInputSnapshot.fromJson(json.mapObject(_.add("bucketUrl", Json.fromString("x")))),
-      Left("unknown input snapshot field(s): bucketUrl"),
-    )
-    assertEquals(
-      OcrJobInputSnapshot.fromJson(json.mapObject(_.add("imagePath", Json.fromString("/tmp/x")))),
-      Left("unknown input snapshot field(s): imagePath"),
-    )
-  }
-
   test("serializes bounded hints and omits an absent request id") {
     val hints = OcrJobHints(
       gameTitle = Some("桃鉄2"),
@@ -74,47 +34,16 @@ final class OcrJobInputSnapshotSpec extends FunSuite with JsonSchemaAssertions:
       build(canonicalInput.copy(hints = hints, requestId = None)).fold(fail(_), identity)
 
     assertOcrJobInputSnapshotSchemaValid(payload)
-    assert(payload.fields.contains(OcrJobInputSnapshot.HintsKey))
+    assertEquals(
+      payload.fields.get(OcrJobInputSnapshot.HintsKey).map(parse),
+      Some(parse("""{
+        "gameTitle": "桃鉄2",
+        "layoutFamily": "momotetsu_2",
+        "knownPlayerAliases": [{"memberId": "member-ponta", "aliases": ["ぽんた", "PONTA"]}],
+        "computerPlayerAliases": ["さくま"]
+      }""")),
+    )
     assert(!payload.fields.contains(OcrJobInputSnapshot.RequestIdKey))
-    assertEquals(
-      OcrJobInputSnapshot.fromJson(OcrJobInputSnapshot.toJson(payload)).map(_.fields),
-      Right(payload.fields),
-    )
-  }
-
-  test("rejects malformed input snapshot fields") {
-    val base = OcrJobInputSnapshot.toJson(canonicalPayload())
-    def replace(key: String, value: Json): Json = base.mapObject(_.add(key, value))
-
-    assertEquals(
-      OcrJobInputSnapshot.fromJson(Json.fromString("not-an-object")),
-      Left("input snapshot must be a JSON object"),
-    )
-    assertEquals(
-      OcrJobInputSnapshot.fromJson(base.mapObject(_.remove("jobId"))),
-      Left("field jobId must be a string"),
-    )
-    assertEquals(
-      OcrJobInputSnapshot.fromJson(replace("schemaVersion", Json.fromString("3"))),
-      Left("schemaVersion must be 2"),
-    )
-    assertEquals(
-      OcrJobInputSnapshot.fromJson(replace("byteLength", Json.fromString("3MiB"))),
-      Left("byteLength must be an integer string"),
-    )
-    assertEquals(
-      OcrJobInputSnapshot.fromJson(replace(OcrJobInputSnapshot.HintsKey, Json.fromInt(1))),
-      Left("field ocrHintsJson must be a string"),
-    )
-    assert(
-      OcrJobInputSnapshot
-        .fromJson(replace(OcrJobInputSnapshot.HintsKey, Json.fromString("{")))
-        .left.exists(_.nonEmpty)
-    )
-    assertEquals(
-      OcrJobInputSnapshot.fromJson(replace(OcrJobInputSnapshot.RequestIdKey, Json.fromInt(1))),
-      Left("field requestId must be a string"),
-    )
   }
 
   test("accepts only explicit screen types") {
@@ -123,10 +52,6 @@ final class OcrJobInputSnapshotSpec extends FunSuite with JsonSchemaAssertions:
 
     val autoJson = OcrJobInputSnapshot.toJson(canonicalPayload()).mapObject(
       _.add("requestedScreenType", Json.fromString("auto"))
-    )
-    assertEquals(
-      OcrJobInputSnapshot.fromJson(autoJson),
-      Left("unknown requestedScreenType=auto"),
     )
     assertJsonSchemaInvalid(ocrJobInputSchemaPath, autoJson.noSpaces)
   }

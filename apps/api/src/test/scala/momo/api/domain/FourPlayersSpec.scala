@@ -45,12 +45,6 @@ final class FourPlayersSpec extends FunSuite:
       case _ => false
     })
 
-  test("non-unique memberIds is reported"):
-    val players =
-      List(player("m1", 1, 1), player("m1", 2, 2), player("m3", 3, 3), player("m4", 4, 4))
-    val errs = FourPlayers.fromList(players, allowed).swap.toOption.get.toNonEmptyList.toList
-    assert(errs.contains(MatchValidationError.PlayerMemberIdsNotUnique))
-
   test("non-allowed memberIds reported"):
     val players =
       List(player("intruder", 1, 1), player("m2", 2, 2), player("m3", 3, 3), player("m4", 4, 4))

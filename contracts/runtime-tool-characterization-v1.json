@@ -102,7 +102,6 @@
           "http",
           "http2",
           "processes",
-          "redis",
           "web"
         ]
       },
@@ -114,7 +113,6 @@
           "http2",
           "processes",
           "publicEdge",
-          "redis",
           "web"
         ]
       }

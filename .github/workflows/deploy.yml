@@ -139,20 +139,9 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
-      redis:
-        image: redis:7-alpine
-        ports:
-          - "6379:6379"
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-
     env:
       DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/momo_result
       DEV_MEMBER_IDS: member_ponta,member_akane_mami,member_otaka,member_eu
-      REDIS_URL: redis://127.0.0.1:6379/0
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -231,6 +220,9 @@ jobs:
           IMAGE_UPLOAD_STORAGE_MIN_FREE_BYTES: "1"
           MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
           MUTATION_RATE_LIMIT_PER_MINUTE: "240"
+          MUTATION_ATTEMPT_RATE_LIMIT_PER_MINUTE: "720"
+          # The isolated memory probe must exercise accepted reads, not rate-limit responses.
+          READ_API_RATE_LIMIT_PER_MINUTE: "3600"
           RUNTIME_CPU_LIMIT: "2"
           RUNTIME_MEMORY_LIMIT: "512m"
         timeout-minutes: 3

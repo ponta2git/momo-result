@@ -21,7 +21,7 @@ func postdeployEvidence(args []string) (string, error) {
 	if len(args) == 0 || args[0] == "" || len(args)%2 != 1 {
 		return "", &postdeployError{"InvalidArguments", 2}
 	}
-	required := []string{"database", "http", "http2", "processes", "redis", "web"}
+	required := []string{"database", "http", "http2", "processes", "web"}
 	for index := 1; index < len(args); index += 2 {
 		if args[index] != "--require-check" {
 			return "", &postdeployError{"InvalidArguments", 2}

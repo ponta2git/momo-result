@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/redis/go-redis/v9"
 )
 
 const (
@@ -38,11 +37,10 @@ type http2ProbePayload struct {
 
 func runLocalSmoke(ctx context.Context, stdout io.Writer, stderr io.Writer) int {
 	databaseURL := os.Getenv("DATABASE_URL")
-	redisURL := os.Getenv("REDIS_URL")
 	originToken := os.Getenv("MOMO_ORIGIN_LOCK_TOKEN")
 	host := environmentOrDefault("MOMO_CANONICAL_HOST", defaultCanonicalHost)
 	edgeMode := environmentOrDefault("MOMO_POSTDEPLOY_PUBLIC_EDGE", "required")
-	if databaseURL == "" || redisURL == "" || originToken == "" || validateHost(host) != nil ||
+	if databaseURL == "" || originToken == "" || validateHost(host) != nil ||
 		(edgeMode != "deferred" && edgeMode != "required") {
 		writeResult(stderr, failureResult(localSmokeEvent, "MissingOrInvalidConfiguration"))
 		return 1
@@ -63,10 +61,6 @@ func runLocalSmoke(ctx context.Context, stdout io.Writer, stderr io.Writer) int 
 	}
 	if err := probeDatabase(ctx, databaseURL); err != nil {
 		writeResult(stderr, failureResult(localSmokeEvent, "DatabaseContractError"))
-		return 1
-	}
-	if err := probeRedis(ctx, redisURL); err != nil {
-		writeResult(stderr, failureResult(localSmokeEvent, "RedisContractError"))
 		return 1
 	}
 	commandLines, err := processCommandLines()
@@ -351,26 +345,10 @@ func probeDatabase(ctx context.Context, databaseURL string) error {
 	return transaction.Rollback(operationCtx)
 }
 
-func probeRedis(ctx context.Context, redisURL string) error {
-	options, err := redis.ParseURL(redisURL)
-	if err != nil {
-		return err
-	}
-	options.DialTimeout = 5 * time.Second
-	options.ReadTimeout = 5 * time.Second
-	options.WriteTimeout = 5 * time.Second
-	options.ContextTimeoutEnabled = true
-	client := redis.NewClient(options)
-	defer client.Close()
-	operationCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	return client.Ping(operationCtx).Err()
-}
-
 func localSmokeChecks(edgeMode string) []string {
 	checks := []string{"database", "http", "http2", "processes"}
 	if edgeMode == "required" {
 		checks = append(checks, "publicEdge")
 	}
-	return append(checks, "redis", "web")
+	return append(checks, "web")
 }

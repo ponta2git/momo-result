@@ -17,8 +17,8 @@ if [[ "${TEST_SCENARIO}" == failure || ( "${TEST_SCENARIO}" == transient && "${a
   echo '{"event":"runtime_postdeploy_smoke","status":"failed","errorClass":"HealthContractError"}' >&2
   exit 1
 fi
-checks='["database","http","http2","processes","publicEdge","redis","web"]'
-if [[ "${TEST_SCENARIO}" == missing-edge ]]; then checks='["database","http","http2","processes","redis","web"]'; fi
+checks='["database","http","http2","processes","publicEdge","web"]'
+if [[ "${TEST_SCENARIO}" == missing-edge ]]; then checks='["database","http","http2","processes","web"]'; fi
 printf '{"event":"runtime_postdeploy_smoke","schemaVersion":1,"status":"ok","checks":%s}\n' "${checks}"
 MOCK
 chmod +x "${task_tmp}/bin/flyctl"
@@ -43,7 +43,7 @@ for TEST_SCENARIO in transient failure missing-edge; do
   if [[ "${TEST_SCENARIO}" == transient ]]; then
     test "${status}" = 0
     test "$(cat attempt)" = 2
-    jq -e '.status == "ok" and (.checks | length) == 7' runtime-production-evidence/postdeploy-smoke.json > /dev/null
+    jq -e '.status == "ok" and (.checks | length) == 6' runtime-production-evidence/postdeploy-smoke.json > /dev/null
     jq -e '. == {schemaVersion:1,status:"ok"}' runtime-production-evidence/public-health.json > /dev/null
   else
     test "${status}" != 0

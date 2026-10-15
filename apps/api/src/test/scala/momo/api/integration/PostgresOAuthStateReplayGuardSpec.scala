@@ -78,7 +78,9 @@ final class PostgresOAuthStateReplayGuardSpec extends IntegrationSuite:
         expiresAt = now.plusSeconds(2)
         _ <- guard.consume("cleanup-race", expiresAt)
         _ <- IO.blocking(connection.setAutoCommit(false))
-        _ <- direct.rawTrans.apply(sql"DELETE FROM oauth_state_consumptions WHERE state_hash = 'cleanup-race'".update.run)
+        _ <- direct.rawTrans.apply(
+          sql"DELETE FROM oauth_state_consumptions WHERE state_hash = 'cleanup-race'".update.run
+        )
         blocker <- direct.rawTrans.apply(sql"SELECT pg_backend_pid()".query[Int].unique)
         result <- guard.consume("cleanup-race", expiresAt).background.use { callback =>
           (for

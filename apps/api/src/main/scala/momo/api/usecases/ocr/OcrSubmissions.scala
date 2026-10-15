@@ -20,11 +20,15 @@ final case class PutOcrSubmissionCommand(
 )
 
 final class OcrSubmissions[F[_]: Monad](repository: OcrSubmissionsRepository[F], now: F[Instant]):
-  def put(command: PutOcrSubmissionCommand, owner: AccountId): F[Either[AppError, OcrSubmission]] =
+  def put(
+      command: PutOcrSubmissionCommand,
+      owner: AccountId,
+      admitNew: F[Either[AppError, Unit]],
+  ): F[Either[AppError, OcrSubmission]] =
     OcrSubmissions.validate(command) match
       case Left(error) => error.asLeft[OcrSubmission].pure[F]
-      case Right(_) => now.flatMap(timestamp =>
-          repository.put(OcrSubmission(
+      case Right(_) => now.flatMap { timestamp =>
+          val submission = OcrSubmission(
             command.id,
             owner,
             command.matchDraftId,
@@ -34,8 +38,23 @@ final class OcrSubmissions[F[_]: Monad](repository: OcrSubmissionsRepository[F],
             timestamp,
             None,
             command.members,
-          ))
-        )
+          )
+          repository.find(command.id, owner).flatMap {
+            case Some(saved) =>
+              // Replays retain the original deadline and current member outcomes.
+              Either.cond(
+                saved.sameRequest(submission),
+                saved,
+                AppError.Conflict("This submissionId belongs to another request.")
+              )
+                .pure[F]
+            case None => admitNew.flatMap {
+                case Left(error) => error.asLeft[OcrSubmission].pure[F]
+                // The atomic put still guards races and ownership after this lookup.
+                case Right(_) => repository.put(submission)
+              }
+          }
+        }
 
   def failAdmission(owner: AccountId, keyHash: String, sha256: String, byteLength: Int): F[Unit] =
     repository.failAdmission(owner, keyHash, sha256, byteLength)

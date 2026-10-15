@@ -4,7 +4,6 @@ import cats.effect.Async
 import cats.syntax.all.*
 import sttp.tapir.server.ServerEndpoint
 
-import momo.api.auth.RateLimiter
 import momo.api.domain.{SeriesPlayerRadarHistoryRequest, SeriesPlayerRadarPreviewRequest}
 import momo.api.endpoints.*
 import momo.api.endpoints.codec.{SeriesAnalysisCodec, SeriesPlayerRadarCodec}
@@ -19,13 +18,12 @@ object SeriesPlayerRadarModule:
       getPreview: GetSeriesPlayerRadarPreview[F],
       getOperation: GetSeriesPlayerRadarOperation[F],
       requestOperation: RequestSeriesPlayerRadarOperation[F],
-      readRateLimiter: RateLimiter[F],
       idempotencyGuard: IdempotencyReplay.Guard[F],
       now: F[java.time.Instant],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(
     SecuredEndpoint.operatorReadLogic(security, SeriesPlayerRadarEndpoints.history) {
-      account => input =>
+      _ => input =>
         val decoded =
           for
             title <- input.gameTitleId.traverse(SeriesAnalysisCodec.gameTitleId)
@@ -37,73 +35,43 @@ object SeriesPlayerRadarModule:
               AppError.ValidationFailed("limit must be between 1 and 50.")
             )
           yield SeriesPlayerRadarHistoryRequest(title, limit, cursor)
-        ReadRateLimit.enforce(
-          readRateLimiter,
-          account.accountId.value,
-          HttpOperation.GetRadarHistory
-        )(
-          security.decode(decoded)(request => security.respond(getHistory.list(request))(_.payload))
-        )
+        security.decode(decoded)(request => security.respond(getHistory.list(request))(_.payload))
     },
     SecuredEndpoint.operatorReadLogic(security, SeriesPlayerRadarEndpoints.revision) {
-      account => id =>
-        ReadRateLimit.enforce(
-          readRateLimiter,
-          account.accountId.value,
-          HttpOperation.GetRadarRevision
-        )(
-          security.decode(SeriesPlayerRadarCodec.opaqueId("revisionId", id))(revision =>
-            security.respond(getHistory.detail(revision))(_.payload)
-          )
+      _ => id =>
+        security.decode(SeriesPlayerRadarCodec.opaqueId("revisionId", id))(revision =>
+          security.respond(getHistory.detail(revision))(_.payload)
         )
     },
     SecuredEndpoint.operatorReadLogic(security, SeriesPlayerRadarEndpoints.state) {
-      account => rawTitle =>
-        ReadRateLimit.enforce(
-          readRateLimiter,
-          account.accountId.value,
-          HttpOperation.GetRadarState
-        )(
-          security.decode(SeriesAnalysisCodec.gameTitleId(rawTitle))(title =>
-            security.respond(getState.run(title))(_.payload)
-          )
+      _ => rawTitle =>
+        security.decode(SeriesAnalysisCodec.gameTitleId(rawTitle))(title =>
+          security.respond(getState.run(title))(_.payload)
         )
     },
     SecuredEndpoint.operatorReadLogic(security, SeriesPlayerRadarEndpoints.preview) {
-      account => input =>
+      _ => input =>
         val decoded =
           for
             title <- SeriesAnalysisCodec.gameTitleId(input.gameTitleId)
             preview <- SeriesPlayerRadarCodec.opaqueId("previewId", input.previewId)
             scope <- SeriesAnalysisCodec.scope(input.seasonMasterId, input.mapMasterId)
           yield SeriesPlayerRadarPreviewRequest(title, preview, scope)
-        ReadRateLimit.enforce(
-          readRateLimiter,
-          account.accountId.value,
-          HttpOperation.GetRadarPreview
-        )(
-          security.decode(decoded)(request => security.respond(getPreview.run(request))(_.payload))
-        )
+        security.decode(decoded)(request => security.respond(getPreview.run(request))(_.payload))
     },
     SecuredEndpoint.operatorReadLogic(security, SeriesPlayerRadarEndpoints.operation) {
-      account => input =>
+      _ => input =>
         val decoded =
           for
             title <- SeriesAnalysisCodec.gameTitleId(input.gameTitleId)
             operation <- SeriesPlayerRadarCodec.opaqueId("operationId", input.operationId)
           yield (title, operation)
-        ReadRateLimit.enforce(
-          readRateLimiter,
-          account.accountId.value,
-          HttpOperation.GetRadarOperation
-        )(
-          security.decode(decoded) { case (title, operation) =>
-            security.respond(getOperation.run(
-              title,
-              operation
-            ))(SeriesPlayerRadarOperationResponse.from)
-          }
-        )
+        security.decode(decoded) { case (title, operation) =>
+          security.respond(getOperation.run(
+            title,
+            operation
+          ))(SeriesPlayerRadarOperationResponse.from)
+        }
     },
     SecuredEndpoint.operatorMutationLogic(security, SeriesPlayerRadarEndpoints.requestOperation) {
       account => input =>

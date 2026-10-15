@@ -47,38 +47,33 @@ object OcrModule:
       getOcrDraftsBulk: GetOcrDraftsBulk[F],
       createRateLimiter: RateLimiter[F],
       globalCreateRateLimiter: RateLimiter[F],
-      readRateLimiter: RateLimiter[F],
       idempotency: IdempotencyReplay.Guard[F],
       nowF: F[Instant],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(
     SecuredEndpoint.mutationLogic(security, OcrSubmissionEndpoints.put) { member =>
       { case (id, request) =>
-        createRateLimiter.allow(s"ocr-submission-create:${member.accountId.value}").flatMap {
-          case false => ocrCreateRateLimited(
-              "account",
-              member.accountId.value,
-              "Too many reading operations. Try again later."
-            )
-          case true =>
-            security.decode(momo.api.endpoints.codec.OcrSubmissionCodec.command(id, request))(
-              command =>
-                security.respond(submissions.put(
-                  command,
-                  member.accountId
-                ))(OcrSubmissionResponse.from)
+        security.decode(momo.api.endpoints.codec.OcrSubmissionCodec.command(id, request)) {
+          command =>
+            val admitNew: F[Either[AppError, Unit]] =
+              createRateLimiter.allow(s"ocr-submission-create:${member.accountId.value}")
+                .map(allowed =>
+                  Either.cond(
+                    allowed,
+                    (),
+                    AppError.TooManyRequests(
+                      "Too many reading operations. Try again later."
+                    )
+                  )
+                )
+            security.respond(submissions.put(command, member.accountId, admitNew))(
+              OcrSubmissionResponse.from
             )
         }
       }
     },
     SecuredEndpoint.readLogic(security, OcrSubmissionEndpoints.get) { member => id =>
-      ReadRateLimit.enforce(
-        readRateLimiter,
-        member.accountId.value,
-        HttpOperation.GetOcrSubmission
-      ) {
-        security.respond(submissions.get(id, member.accountId))(OcrSubmissionResponse.from)
-      }
+      security.respond(submissions.get(id, member.accountId))(OcrSubmissionResponse.from)
     },
     SecuredEndpoint.mutationLogic(security, OcrJobEndpoints.create) { member => input =>
       IdempotencyReplay.wrap[F, CreateOcrJobRequest, CreateOcrJobResponse](
@@ -113,12 +108,10 @@ object OcrModule:
         ),
       )
     },
-    SecuredEndpoint.readLogic(security, OcrJobEndpoints.get) { member => jobId =>
-      ReadRateLimit.enforce(readRateLimiter, member.accountId.value, HttpOperation.GetOcrJob) {
-        security.decode(
-          BoundaryId.required("jobId", jobId)(OcrJobId.fromString)
-        )(id => security.respond(getOcrJob.run(id))(OcrJobResponse.from))
-      }
+    SecuredEndpoint.readLogic(security, OcrJobEndpoints.get) { _ => jobId =>
+      security.decode(
+        BoundaryId.required("jobId", jobId)(OcrJobId.fromString)
+      )(id => security.respond(getOcrJob.run(id))(OcrJobResponse.from))
     },
     SecuredEndpoint.mutationLogic(security, OcrJobEndpoints.cancel) { member =>
       {
@@ -138,23 +131,19 @@ object OcrModule:
           )
       }
     },
-    SecuredEndpoint.readLogic(security, OcrDraftEndpoints.get) { member => draftId =>
-      ReadRateLimit.enforce(readRateLimiter, member.accountId.value, HttpOperation.GetOcrDraft) {
-        security.decode(BoundaryId.required("draftId", draftId)(OcrDraftId.fromString))(id =>
-          security.respond(getOcrDraft.run(id).map(_.flatMap(OcrDraftResponse.from)))(identity)
-        )
-      }
+    SecuredEndpoint.readLogic(security, OcrDraftEndpoints.get) { _ => draftId =>
+      security.decode(BoundaryId.required("draftId", draftId)(OcrDraftId.fromString))(id =>
+        security.respond(getOcrDraft.run(id).map(_.flatMap(OcrDraftResponse.from)))(identity)
+      )
     },
-    SecuredEndpoint.readLogic(security, OcrDraftEndpoints.listByIds) { member => ids =>
-      ReadRateLimit.enforce(readRateLimiter, member.accountId.value, HttpOperation.ListOcrDrafts) {
-        security.respond(
-          OcrDraftCodec.toDraftIds(ids) match
-            case Left(error) => Async[F].pure(Left(error))
-            case Right(draftIds) => getOcrDraftsBulk.run(draftIds).map(_.flatMap(items =>
-                items.traverse(OcrDraftResponse.from).map(OcrDraftListResponse(_))
-              ))
-        )(identity)
-      }
+    SecuredEndpoint.readLogic(security, OcrDraftEndpoints.listByIds) { _ => ids =>
+      security.respond(
+        OcrDraftCodec.toDraftIds(ids) match
+          case Left(error) => Async[F].pure(Left(error))
+          case Right(draftIds) => getOcrDraftsBulk.run(draftIds).map(_.flatMap(items =>
+              items.traverse(OcrDraftResponse.from).map(OcrDraftListResponse(_))
+            ))
+      )(identity)
     },
   )
 

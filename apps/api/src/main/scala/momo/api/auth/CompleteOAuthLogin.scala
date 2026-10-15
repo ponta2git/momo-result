@@ -40,7 +40,6 @@ final class CompleteOAuthLogin[F[_]: Sync](
     oauth: DiscordOAuthClient[F],
     sessions: SessionService[F],
     accounts: LoginAccountsRepository[F],
-    providerBackoff: OAuthProviderBackoff[F],
 ):
   private val logger = LoggerFactory.getLogger("momo.api.auth.CompleteOAuthLogin")
 
@@ -51,19 +50,7 @@ final class CompleteOAuthLogin[F[_]: Sync](
     }
 
   private def fetchDiscordUser(code: String): F[Either[OAuthLoginFailure, DiscordUser]] =
-    providerBackoff.isBlocked.flatMap {
-      case true => Sync[F].delay(logger.warn("auth_oauth_provider_backoff_active")) *>
-          OAuthLoginFailure.ProviderError(AppError.DependencyFailed(
-            "Discord OAuth provider is temporarily unavailable. Try again later."
-          )).asLeft[DiscordUser].pure[F]
-      case false => oauth.fetchUser(code).flatTap {
-          case Left(error) => providerBackoff.recordFailure(error).flatMap { opened =>
-              if opened then Sync[F].delay(logger.warn("auth_oauth_provider_backoff_opened"))
-              else Sync[F].unit
-            }
-          case Right(_) => providerBackoff.recordSuccess
-        }.map(_.leftMap(OAuthLoginFailure.ProviderError.apply))
-    }
+    oauth.fetchUser(code).map(_.leftMap(OAuthLoginFailure.ProviderError.apply))
 
   private def completeForDiscordUser(
       discordUser: DiscordUser

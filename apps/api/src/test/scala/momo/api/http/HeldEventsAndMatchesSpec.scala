@@ -554,12 +554,11 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
         )
   }
 
-  app.test("manual match recording and display work with OCR and Redis disabled") { httpApp =>
+  app.test("manual match recording and display work with OCR disabled") { httpApp =>
     for
       healthRes <- httpApp.run(Request[IO](Method.GET, uri"/healthz/details"))
       healthBody <- healthRes.as[Json]
       _ = assertEquals(healthRes.status, Status.Ok)
-      _ = assertEquals(jsonField[String](healthBody, "redis"), "disabled")
       _ = assertEquals(jsonField[String](healthBody, "ocrAdmission"), "disabled")
       heldEventId <- createEvent(httpApp)
       createRes <- httpApp.run(writePost(uri"/api/matches", confirmBody(heldEventId)))

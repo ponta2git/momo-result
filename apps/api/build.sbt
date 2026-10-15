@@ -12,10 +12,9 @@ addCommandAlias("apiFormatCheck", "scalafmtCheckAll")
 addCommandAlias("apiLint", "scalafixAll --check")
 addCommandAlias("apiQuality", "apiFormatCheck; apiLint; apiOpenApiCheck")
 addCommandAlias("apiCheck", "apiQuality; testFull")
-addCommandAlias("apiFullCheck", "apiCheck; apiDbQuality; apiRedisQuality")
+addCommandAlias("apiFullCheck", "apiCheck; apiDbQuality")
 // sbt 2's `test` is incremental/cached; CI and coverage need each test's actual execution.
 addCommandAlias("apiCoverage", "coverage; clean; testFull; coverageReport; coverageOff")
-addCommandAlias("apiRedisQuality", "RedisTest / testFull")
 addCommandAlias("apiR2Quality", "R2Test / testFull")
 addCommandAlias("apiDbQuality", "DbTest / testFull")
 
@@ -23,7 +22,6 @@ lazy val apiOpenApi = taskKey[File]("Generate OpenAPI from Tapir endpoint defini
 lazy val apiOpenApiCheck = taskKey[Unit]("Check that openapi.yaml matches generated Tapir output")
 lazy val OpenApi = config("openapi").hide.extend(Compile)
 lazy val DbTest = config("dbTest").hide.extend(Test)
-lazy val RedisTest = config("redisTest").hide.extend(Test)
 lazy val R2Test = config("r2Test").hide.extend(Test)
 
 // Reuse the compiled suite while isolating runner settings. Command aliases using `set Test / ...`
@@ -97,7 +95,7 @@ lazy val sharedScalacOptions = Seq(
 )
 
 lazy val root = (project in file("."))
-  .configs(OpenApi, DbTest, RedisTest, R2Test)
+  .configs(OpenApi, DbTest, R2Test)
   .enablePlugins(JavaAppPackaging)
   .settings(
     inConfig(OpenApi)(Defaults.compileSettings),
@@ -105,10 +103,9 @@ lazy val root = (project in file("."))
     org.scalafmt.sbt.ScalafmtPlugin.scalafmtConfigSettings(OpenApi),
     scalafixConfigSettings(OpenApi),
     inConfig(DbTest)(serviceTestSettings("DbIntegration")),
-    inConfig(RedisTest)(serviceTestSettings("RedisIntegration")),
     inConfig(R2Test)(serviceTestSettings("R2Integration")),
     // These suites share one migrated database and truncate app tables before each case.
-    // Serialize only the DB configuration; Redis keys and R2 object keys are test-owned.
+    // Serialize only the DB configuration; R2 object keys are test-owned.
     DbTest / parallelExecution := false,
     OpenApi / compile := Def.uncached((OpenApi / compile).dependsOn(Compile / compile).value),
     name := "momo-result-api",
@@ -172,7 +169,7 @@ lazy val root = (project in file("."))
         (if (isMacOs) Seq("--enable-native-access=ALL-UNNAMED") else Seq.empty),
     Test / testOptions += Tests.Argument(
       TestFrameworks.MUnit,
-      "--exclude-tags=DbIntegration,RedisIntegration,R2Integration",
+      "--exclude-tags=DbIntegration,R2Integration",
     ),
     Test / parallelExecution := true,
     // Scoverage retains open measurement writers; isolate them from earlier runs in the sbt JVM.
@@ -194,10 +191,7 @@ lazy val root = (project in file("."))
       else cacheStores.value
     },
     coverageExcludedPackages := "momo\\.api\\.Main",
-    coverageExcludedFiles := Seq(
-      ".*/momo/api/adapters/postgres/.*",
-      ".*/momo/api/adapters/redis/.*",
-    ).mkString(";"),
+    coverageExcludedFiles := ".*/momo/api/adapters/postgres/.*",
     libraryDependencies ++= {
       val catsEffectVersion = "3.7.1"
       val apiSpecVersion = "0.11.10"
@@ -212,7 +206,6 @@ lazy val root = (project in file("."))
       val log4catsVersion = "2.8.0"
       val munitCatsEffectVersion = "2.2.1"
       val munitVersion = "1.3.6"
-      val redis4catsVersion = "2.0.6"
       val tapirVersion = "1.13.31"
       val testcontainersVersion = "2.0.5"
 
@@ -240,7 +233,6 @@ lazy val root = (project in file("."))
         "org.tpolecat" %% "doobie-postgres" % doobieVersion,
         "org.tpolecat" %% "doobie-postgres-circe" % doobieVersion,
         "org.tpolecat" %% "doobie-hikari" % doobieVersion,
-        "dev.profunktor" %% "redis4cats-effects" % redis4catsVersion,
         "ch.qos.logback" % "logback-classic" % logbackVersion,
         "net.logstash.logback" % "logstash-logback-encoder" % logstashEncoderVersion,
         "com.networknt" % "json-schema-validator" % jsonSchemaValidatorVersion,

@@ -4,7 +4,6 @@ import cats.effect.Async
 import cats.syntax.all.*
 import sttp.tapir.server.ServerEndpoint
 
-import momo.api.auth.RateLimiter
 import momo.api.domain.{
   SeriesAnalysisChunkKind,
   SeriesAnalysisChunkProjection,
@@ -23,7 +22,6 @@ object SeriesAnalysisModule:
       getChunk: GetSeriesAnalysisChunk[F],
       getAdminOverview: GetSeriesAnalysisAdminOverview[F],
       requestRecalculation: RequestSeriesAnalysisRecalculation[F],
-      readRateLimiter: RateLimiter[F],
       idempotencyGuard: IdempotencyReplay.Guard[F],
       now: F[java.time.Instant],
       security: EndpointSecurity[F],
@@ -33,13 +31,9 @@ object SeriesAnalysisModule:
           SeriesAnalysisEndpoints.ScopedArtifactInput,
           Array[Byte]
         ],
-        operation: String,
         kind: SeriesAnalysisChunkKind,
-    ): ServerEndpoint[Any, F] = SecuredEndpoint.readLogic(security, endpoint) { member => input =>
+    ): ServerEndpoint[Any, F] = SecuredEndpoint.readLogic(security, endpoint) { _ => input =>
       readChunk(
-        readRateLimiter,
-        member.accountId.value,
-        operation,
         getChunk,
         SeriesAnalysisCodec.chunk(
           kind,
@@ -51,62 +45,42 @@ object SeriesAnalysisModule:
           None,
           None
         ),
-        security,
+        security
       )
     }
 
     List(
-      SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.options) { member => _ =>
-        read(
-          readRateLimiter,
-          member.accountId.value,
-          HttpOperation.GetSeriesAnalysisOptions,
-          security.respond(getOptions.run)(SeriesAnalysisOptionsResponse.from),
+      SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.options) { _ => _ =>
+        security.respond(getOptions.run)(SeriesAnalysisOptionsResponse.from)
+      },
+      SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.status) { _ => rawTitleId =>
+        security.decode(SeriesAnalysisCodec.gameTitleId(rawTitleId))(titleId =>
+          security.respond(getStatus.run(titleId))(SeriesAnalysisStatusResponse.from)
         )
       },
-      SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.status) { member => rawTitleId =>
-        read(
-          readRateLimiter,
-          member.accountId.value,
-          HttpOperation.GetSeriesAnalysisStatus,
-          security.decode(SeriesAnalysisCodec.gameTitleId(rawTitleId))(titleId =>
-            security.respond(getStatus.run(titleId))(SeriesAnalysisStatusResponse.from)
-          )
-        )
-      },
-      SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.scopeStatus) { member => input =>
+      SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.scopeStatus) { _ => input =>
         val decoded =
           for
             title <- SeriesAnalysisCodec.gameTitleId(input.gameTitleId)
             artifact <- input.artifactId.traverse(SeriesPlayerRadarCodec.opaqueId("artifactId", _))
             scope <- SeriesAnalysisCodec.scope(input.seasonMasterId, input.mapMasterId)
           yield SeriesAnalysisScopeStatusRequest(title, artifact, scope)
-        read(
-          readRateLimiter,
-          member.accountId.value,
-          HttpOperation.GetSeriesAnalysisScopeStatus,
-          security.decode(decoded)(request =>
-            security.respond(getStatus.scope(request))(
-              SeriesAnalysisScopeStatusResponse.from
-            )
+        security.decode(decoded)(request =>
+          security.respond(getStatus.scope(request))(
+            SeriesAnalysisScopeStatusResponse.from
           )
         )
       },
       scoped(
         SeriesAnalysisEndpoints.aggregateV5,
-        HttpOperation.GetSeriesAnalysisAggregateV5,
         SeriesAnalysisChunkKind.Aggregate,
       ),
       scoped(
         SeriesAnalysisEndpoints.reviewV3,
-        HttpOperation.GetSeriesAnalysisReviewV3,
         SeriesAnalysisChunkKind.Review,
       ),
-      SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.drilldown) { member => input =>
+      SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.drilldown) { _ => input =>
         readChunk(
-          readRateLimiter,
-          member.accountId.value,
-          HttpOperation.GetSeriesAnalysisDrilldown,
           getChunk,
           SeriesAnalysisCodec.chunk(
             kind = SeriesAnalysisChunkKind.Drilldown,
@@ -118,14 +92,11 @@ object SeriesAnalysisModule:
             rawMetricId = Some(input.metricId),
             rawMatchId = None,
           ),
-          security,
+          security
         )
       },
-      SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.matchContext) { member => input =>
+      SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.matchContext) { _ => input =>
         readChunk(
-          readRateLimiter,
-          member.accountId.value,
-          HttpOperation.GetSeriesAnalysisMatchContext,
           getChunk,
           SeriesAnalysisCodec.chunk(
             kind = SeriesAnalysisChunkKind.MatchContext,
@@ -137,14 +108,11 @@ object SeriesAnalysisModule:
             rawMetricId = None,
             rawMatchId = Some(input.matchId),
           ),
-          security,
+          security
         )
       },
-      SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.outlookSummary) { member => input =>
+      SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.outlookSummary) { _ => input =>
         readChunk(
-          readRateLimiter,
-          member.accountId.value,
-          HttpOperation.GetSeriesAnalysisOutlookSummary,
           getChunk,
           SeriesAnalysisCodec.outlook(
             input.gameTitleId,
@@ -157,11 +125,8 @@ object SeriesAnalysisModule:
           security
         )
       },
-      SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.outlookWindow) { member => input =>
+      SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.outlookWindow) { _ => input =>
         readChunk(
-          readRateLimiter,
-          member.accountId.value,
-          HttpOperation.GetSeriesAnalysisOutlookWindow,
           getChunk,
           SeriesAnalysisCodec.outlook(
             input.gameTitleId,
@@ -175,11 +140,8 @@ object SeriesAnalysisModule:
         )
       },
       SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.outlookExamples) {
-        member => input =>
+        _ => input =>
           readChunk(
-            readRateLimiter,
-            member.accountId.value,
-            HttpOperation.GetSeriesAnalysisOutlookExamples,
             getChunk,
             SeriesAnalysisCodec.outlook(
               input.gameTitleId,
@@ -193,16 +155,11 @@ object SeriesAnalysisModule:
           )
       },
       SecuredEndpoint.operatorReadLogic(security, SeriesAnalysisEndpoints.adminOverview) {
-        member => rawTitleId =>
-          read(
-            readRateLimiter,
-            member.accountId.value,
-            HttpOperation.GetSeriesAnalysisAdminOverview,
-            security.decode(SeriesAnalysisCodec.optionalGameTitleId(rawTitleId))(titleId =>
-              security.respond(
-                getAdminOverview.run(titleId)
-              )(SeriesAnalysisAdminOverviewResponse.from)
-            )
+        _ => rawTitleId =>
+          security.decode(SeriesAnalysisCodec.optionalGameTitleId(rawTitleId))(titleId =>
+            security.respond(
+              getAdminOverview.run(titleId)
+            )(SeriesAnalysisAdminOverviewResponse.from)
           )
       },
       SecuredEndpoint.operatorMutationLogic(security, SeriesAnalysisEndpoints.recalculateTitle) {
@@ -248,28 +205,12 @@ object SeriesAnalysisModule:
       },
     )
 
-  private def read[F[_]: Async, A](
-      limiter: RateLimiter[F],
-      accountId: String,
-      operation: String,
-      result: F[Either[ProblemDetails.ProblemResponse, A]],
-  ): F[Either[ProblemDetails.ProblemResponse, A]] = ReadRateLimit
-    .enforce(limiter, accountId, operation)(result)
-
-  private def readChunk[F[_]: Async](
-      limiter: RateLimiter[F],
-      accountId: String,
-      operation: String,
+  private def readChunk[F[_]](
       getChunk: GetSeriesAnalysisChunk[F],
       decoded: Either[AppError, momo.api.domain.SeriesAnalysisChunkRequest],
       security: EndpointSecurity[F],
-  ): F[Either[ProblemDetails.ProblemResponse, Array[Byte]]] = read(
-    limiter,
-    accountId,
-    operation,
-    security.decode(decoded)(request =>
-      security.respond(getChunk.run(request))(_.payload)
-    ),
+  ): F[Either[ProblemDetails.ProblemResponse, Array[Byte]]] = security.decode(decoded)(request =>
+    security.respond(getChunk.run(request))(_.payload)
   )
 
   private def requiredIdempotencyKey[F[_]: Async, A](

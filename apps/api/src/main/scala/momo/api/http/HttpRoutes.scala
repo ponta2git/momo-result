@@ -190,6 +190,8 @@ object HttpRoutes:
         deps.auth.accountAccess,
         deps.auth.sessionService,
         deps.auth.csrfTokenService,
+        deps.rateLimiters.readApi,
+        deps.rateLimiters.mutationAttempt,
       ))
     val idempotencyGuard = IdempotencyReplay.Guard(
       repository = deps.idempotency,
@@ -216,7 +218,6 @@ object HttpRoutes:
         deps.ocr.getOcrDraftsBulk,
         deps.rateLimiters.ocrJobCreate,
         deps.rateLimiters.ocrJobCreateGlobal,
-        deps.rateLimiters.readApi,
         idempotencyGuard,
         deps.nowF,
         security,
@@ -254,7 +255,6 @@ object HttpRoutes:
         deps.matches.updateMatch,
         deps.matches.replaceMatchNote,
         deps.matches.deleteMatch,
-        deps.rateLimiters.readApi,
         idempotencyGuard,
         deps.nowF,
         security,
@@ -265,7 +265,6 @@ object HttpRoutes:
         deps.analytics.getSeriesAnalysisChunk,
         deps.analytics.getSeriesAnalysisAdminOverview,
         deps.analytics.requestSeriesAnalysisRecalculation,
-        deps.rateLimiters.readApi,
         idempotencyGuard,
         deps.nowF,
         security,
@@ -276,7 +275,6 @@ object HttpRoutes:
         deps.analytics.getSeriesPlayerRadarPreview,
         deps.analytics.getSeriesPlayerRadarOperation,
         deps.analytics.requestSeriesPlayerRadarOperation,
-        deps.rateLimiters.readApi,
         idempotencyGuard,
         deps.nowF,
         security,
@@ -336,6 +334,7 @@ object HttpRoutes:
       csrf = deps.auth.csrfTokenService,
       accounts = deps.auth.accountAccess,
       rateLimiter = deps.auth.loginRateLimiter,
+      authSessionRateLimiter = deps.rateLimiters.authSession,
       completeOAuthCallback = deps.auth.completeOAuthCallback,
     )
     val authRoutes = interpreter.toRoutes(authEndpoints)

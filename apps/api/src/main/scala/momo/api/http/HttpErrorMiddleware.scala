@@ -35,7 +35,6 @@ private[http] object HttpErrorMiddleware:
     causes.collectFirst { case app: AppException => app.error } match
       case Some(appError) => appError
       case _ if causes.exists(isSqlError) => AppError.DependencyFailed("Database operation failed.")
-      case _ if causes.exists(isRedisError) => AppError.DependencyFailed("Queue operation failed.")
       case _ if causes.exists(isIoError) => AppError.Internal("File operation failed.")
       case _ => AppError.Internal("Unexpected server error.")
 
@@ -66,7 +65,3 @@ private[http] object HttpErrorMiddleware:
   private def isIoError(error: Throwable): Boolean = error match
     case _: IOException => true
     case _ => false
-
-  private def isRedisError(error: Throwable): Boolean =
-    val name = error.getClass.getName.toLowerCase
-    name.contains("redis") || name.contains("lettuce") || name.contains("upstash")

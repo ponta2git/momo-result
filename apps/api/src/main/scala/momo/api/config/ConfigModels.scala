@@ -6,9 +6,6 @@ final case class DatabaseConfig(jdbcUrl: String, user: String, password: String,
   override def toString: String =
     s"DatabaseConfig(jdbcUrl=[REDACTED], user=[REDACTED], password=[REDACTED], poolSize=$poolSize)"
 
-final case class RedisConfig(url: String):
-  override def toString: String = "RedisConfig(url=[REDACTED])"
-
 final case class SeriesAnalysisReadConfig(
     maxEncodedBytes: Long,
     maxDecodedBytes: Long,
@@ -41,6 +38,8 @@ final case class ResourceLimitsConfig(
     readApiRateLimitPerMinute: Int,
     sourceImageArchiveMaxBytes: Long,
     mutationRateLimitPerMinute: Int,
+    mutationAttemptRateLimitPerMinute: Int,
+    authSessionRateLimitPerMinute: Int,
     idempotencyActiveKeyLimitPerAccount: Int,
     ocrJobCreateRateLimitPerMinute: Int,
     ocrJobCreateGlobalRateLimitPerMinute: Int,
@@ -67,8 +66,6 @@ final case class AuthConfig(
     sessionTtl: FiniteDuration,
     stateTtl: FiniteDuration,
     rateLimitPerMinute: Int,
-    providerFailureThreshold: Int,
-    providerBackoff: FiniteDuration,
     callbackRedirectPath: String,
     useSecureCookies: Boolean,
 ):
@@ -80,7 +77,6 @@ final case class AuthConfig(
     s"AuthConfig(discordConfigured=$discordConfigured, credentials=[REDACTED], " +
       s"sessionCookieName=$sessionCookieName, stateCookieName=$stateCookieName, " +
       s"sessionTtl=$sessionTtl, stateTtl=$stateTtl, rateLimitPerMinute=$rateLimitPerMinute, " +
-      s"providerFailureThreshold=$providerFailureThreshold, providerBackoff=$providerBackoff, " +
       s"useSecureCookies=$useSecureCookies)"
 
 enum AppEnv derives CanEqual:
@@ -105,8 +101,6 @@ object AuthConfig:
     sessionTtl = 30.days,
     stateTtl = 300.seconds,
     rateLimitPerMinute = 10,
-    providerFailureThreshold = 3,
-    providerBackoff = 60.seconds,
     callbackRedirectPath = "/",
     useSecureCookies = appEnv == AppEnv.Prod,
   )
@@ -148,6 +142,8 @@ object ResourceLimitsConfig:
     readApiRateLimitPerMinute = 120,
     sourceImageArchiveMaxBytes = DefaultSourceImageArchiveMaxBytes,
     mutationRateLimitPerMinute = 60,
+    mutationAttemptRateLimitPerMinute = 180,
+    authSessionRateLimitPerMinute = 120,
     idempotencyActiveKeyLimitPerAccount = 240,
     ocrJobCreateRateLimitPerMinute = 10,
     ocrJobCreateGlobalRateLimitPerMinute = 20,

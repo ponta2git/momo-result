@@ -57,7 +57,7 @@ test、suite、lint / checker、manual review は、守る価値に対して必�
 
 同じ詳細を全層で重複検証せず、下位層で固定した分岐は上位層では接続と代表経路に絞る。
 
-- unit test は純粋な分岐と状態遷移、integration test は DB / Redis / filesystem / process / wire、E2E は利用者の主要契約を主な対象とする。ただし、test size を小さくするために production の失敗境界を double へ置き換えない。
+- unit test は純粋な分岐と状態遷移、integration test は DB / filesystem / process / wire、E2E は利用者の主要契約を主な対象とする。ただし、test size を小さくするために production の失敗境界を double へ置き換えない。
 - clock、ID、乱数、外部応答、非同期待ちは制御可能にし、実時間 sleep と test 順序へ依存しない。
 - test の size、隔離、並列実行、直列化の例外は `docs/test-architecture.md` に従う。
 - skip / 未実行の外部依存は未検証と報告する。mock の成功を live wire の成功として扱わない。

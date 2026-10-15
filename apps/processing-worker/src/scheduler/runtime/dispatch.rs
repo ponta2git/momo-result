@@ -64,6 +64,7 @@ async fn claim_ocr(
         .clone()
         .ok_or(SchedulerError::UnsupportedPlatform)?;
     let timeout = scheduler.settings.operation_timeout;
+    let mut attempted = false;
     for _ in 0..4 {
         let jobs = bounded(
             timeout,
@@ -75,9 +76,11 @@ async fn claim_ocr(
             if stopping(shutdown) {
                 return Ok(false);
             }
-            if budget.exhausted() {
+            if attempted && budget.exhausted() {
                 return Ok(true);
             }
+            // A slow candidate query must not consume the chance to make progress.
+            attempted = true;
             let id = cursor.id.clone();
             scheduler.ocr_cursor = Some(cursor);
             if scheduler.active.is_some() {
@@ -147,6 +150,7 @@ async fn claim_analysis(
         return Ok(false);
     };
     let timeout = scheduler.settings.operation_timeout;
+    let mut attempted = false;
     for _ in 0..4 {
         let jobs = bounded(
             timeout,
@@ -162,9 +166,11 @@ async fn claim_analysis(
             if stopping(shutdown) {
                 return Ok(false);
             }
-            if budget.exhausted() {
+            if attempted && budget.exhausted() {
                 return Ok(true);
             }
+            // OCR discovery may already have exhausted the shared soft budget.
+            attempted = true;
             let id = cursor.id.clone();
             scheduler.analysis_cursor = Some(cursor);
             let outcome = match bounded(
@@ -239,3 +245,7 @@ fn start_analysis(
     }));
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "dispatch_tests.rs"]
+mod tests;

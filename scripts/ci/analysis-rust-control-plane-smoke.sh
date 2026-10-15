@@ -50,6 +50,7 @@ tests=(
   "series_analysis::release::maintenance::tests::real_postgres_reconcile_preserves_preview_and_replays_an_applied_operation"
   "scheduler::tests::subscribed_postgres_listener_delivers_the_next_commit_hint"
   "scheduler::selection::selection_tests::real_postgres_selects_due_work_and_recovers_orphans"
+  "scheduler::runtime::dispatch::tests::real_postgres_delayed_candidates_still_attempt_durable_claims"
   "series_analysis::materialization::tests::real_postgres_preserves_campaign_acceptance_and_assignment"
 )
 

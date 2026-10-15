@@ -20,6 +20,7 @@ final class OAuthStateCodec[F[_]: Sync: SecureRandom](
     now: F[Instant],
 ):
   private val separator = "."
+  private val formatVersion = "v2"
   private val silentMarker = "1"
   private val interactiveMarker = "0"
 
@@ -36,7 +37,7 @@ final class OAuthStateCodec[F[_]: Sync: SecureRandom](
         )
         .map(path => Base64Url.encode(path.getBytes(StandardCharsets.UTF_8))).getOrElse("")
       payload =
-        s"$nonce:${current.plusSeconds(ttl.toSeconds).getEpochSecond}:$marker:$redirect"
+        s"$formatVersion:$nonce:${current.plusSeconds(ttl.toSeconds).getEpochSecond}:$marker:$redirect"
       sig <- sign(payload)
     yield s"${Base64Url.encode(payload.getBytes(StandardCharsets.UTF_8))}$separator$sig"
 
@@ -47,8 +48,8 @@ final class OAuthStateCodec[F[_]: Sync: SecureRandom](
         case payloadEncoded :: signature :: Nil if signature.length == 43 =>
           decodeCanonicalPayload(payloadEncoded) match
             case None => Sync[F].pure(None)
-            case Some(payload) => payload.split(":", 4).toList match
-                case _ :: expires :: marker :: redirect :: Nil =>
+            case Some(payload) => payload.split(":", 5).toList match
+                case `formatVersion` :: _ :: expires :: marker :: redirect :: Nil =>
                   validatePayload(
                     payload,
                     signature,

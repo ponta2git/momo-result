@@ -3,11 +3,13 @@
 //! Database job rows remain the source of truth. Values in this module are deliberately
 //! payload-free hints that let a process inspect durable work promptly after a successful commit.
 
+mod plan;
 mod runtime;
+pub(crate) use plan::WorkerRuntimePlan;
 mod selection;
 #[cfg(test)]
 pub(crate) use runtime::run_ocr_only;
-pub(crate) use runtime::{SchedulerError, run};
+pub(crate) use runtime::{WorkerError, run};
 pub(crate) mod listener;
 
 use thiserror::Error;

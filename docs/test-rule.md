@@ -149,7 +149,7 @@ Analysis / OCR の共通 contract として、次を固定する。
 - 起動・再接続、wake coalescing、deadline、bounded drain、backoff を確認し、通知欠落は低頻度の補完走査で回復すること。
 - campaign 展開と直接 claim を実 DB で通すこと。queued がなく期限切れ running だけが残る場合、先頭が非対応・lock 中の場合、将来の retry、複数親の競合を含める。
 - PostgreSQL通知をwakeに使う場合、productionと同じpooling modeでsession-bound listenerへの別接続commitを通す。startupの`LISTEN`成功や直接DBだけのtestを、通知routeのreadiness evidenceにしない。
-- supervisor の shutdown、unexpected child / coordinator exit、sibling 停止、process group 回収。
+- worker runtimeの起動途中・稼働中の異常からの共通停止、単一期限内の子process・補助task回収。listenerの一時切断と構造異常、通知sender単独の異常は、それぞれの回復境界で確認する。
 - DB / Linux process / native engine は通常 unit test から分離し、検証済み runtime image と隔離 service で通すこと。
 
 OCR は schema / screen type、object metadata、parser / postprocess、failure mapping、retry / lease 回復、draft payload を外部 oracle にする。accuracy は version 固定 dataset と項目別 oracle で測り、未知画像への一般化を保証したと報告しない。

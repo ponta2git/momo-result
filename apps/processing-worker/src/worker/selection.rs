@@ -1,5 +1,5 @@
 //! Non-locking candidate discovery. Claims revalidate under slot -> title/draft -> job locks.
-use super::{PostCommitSink, runtime::SchedulerError};
+use super::{PostCommitSink, runtime::WorkerError};
 use crate::{
     execution_slot::{self, ExecutionSlotHolder, ExecutionTaskKind},
     series_analysis::control::ALGORITHM_VERSION,
@@ -66,7 +66,7 @@ pub(super) async fn recover(
     client: &mut Client,
     sink: &PostCommitSink,
     maximum_recoveries: i32,
-) -> Result<(), SchedulerError> {
+) -> Result<(), WorkerError> {
     recover_page(client, sink, maximum_recoveries, &mut None)
         .await
         .map(|_| ())
@@ -77,7 +77,7 @@ pub(super) async fn recover_page(
     sink: &PostCommitSink,
     maximum_recoveries: i32,
     after: &mut Option<RecoveryCursor>,
-) -> Result<RecoveryProgress, SchedulerError> {
+) -> Result<RecoveryProgress, WorkerError> {
     match recover_slot(client, sink, maximum_recoveries).await {
         Ok(()) => {}
         Err(error) if error.is_contention() => {
@@ -111,7 +111,7 @@ async fn recover_slot(
     client: &mut Client,
     sink: &PostCommitSink,
     maximum_recoveries: i32,
-) -> Result<(), SchedulerError> {
+) -> Result<(), WorkerError> {
     let tx = client.transaction().await?;
     tx.batch_execute("SET LOCAL statement_timeout='10000ms'; SET LOCAL lock_timeout='100ms'")
         .await?;
@@ -144,7 +144,7 @@ async fn recover_orphan(
     sink: &PostCommitSink,
     maximum_recoveries: i32,
     row: &tokio_postgres::Row,
-) -> Result<(), SchedulerError> {
+) -> Result<(), WorkerError> {
     let kind: String = row.try_get(0)?;
     let holder = ExecutionSlotHolder {
         task_kind: if kind == "ocr" {

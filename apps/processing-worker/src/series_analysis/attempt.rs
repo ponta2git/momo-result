@@ -7,7 +7,7 @@ use tracing::{error, info, warn};
 use crate::{
     postgres,
     process::{ProcessError, current_process_peak_resident_bytes},
-    scheduler::ControlOutcome,
+    worker::ControlOutcome,
 };
 
 use super::{
@@ -743,6 +743,12 @@ async fn finish_successful_child(
                 error_kind = "finalization_timeout",
                 "analysis publication exceeded its finalization deadline"
             );
+            if crate::blocking::has_pending_work() {
+                // A cancelled wait cannot stop a synchronous validator/read. Retain the
+                // durable lease and stop this worker rather than admitting another attempt
+                // while the old one still consumes resources. Recovery owns the outcome.
+                return Err(ConsumerError::BlockingWorkUnfinished);
+            }
             finish_publication_failure(config, claim, metrics).await
         }
     }

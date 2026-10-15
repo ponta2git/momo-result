@@ -96,7 +96,7 @@ fn child_with_closed_liveness()
     Ok((
         temporary,
         ManagedAnalysisChild {
-            child,
+            child: crate::process::RecoverableChild::new(child, cgroup.clone())?,
             process_id,
             peak_resident_bytes: None,
             cgroup,

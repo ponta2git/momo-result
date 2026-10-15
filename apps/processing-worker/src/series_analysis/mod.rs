@@ -1,10 +1,11 @@
+//! Passive analysis lifecycle state and the typed claimed-attempt execution boundary.
 use std::time::{Duration, Instant, SystemTime};
 
 use thiserror::Error;
-use tokio::sync::watch;
-use tracing::{Instrument, error, info, info_span, warn};
+use tracing::{info, warn};
 
 pub(crate) mod artifact;
+pub(crate) mod bootstrap;
 pub(crate) mod child;
 mod child_process;
 pub(crate) mod child_report;
@@ -14,35 +15,24 @@ pub(crate) mod endurance;
 pub(crate) mod materialization;
 pub(crate) mod release;
 
-use crate::{
-    postgres::{self, PostgresError},
-    process::ProcessError,
-    scheduler::{ControlOutcome, PostCommitSink, PostCommitSinkClosed},
-};
-
-use self::{
-    config::AnalysisConsumerConfig,
-    control::{
-        AttemptFailure, ControlError, IdleRefreshSchedule, SafeFailureCode, finish_failure,
-        mark_draining, register_capability,
-    },
-};
-
 mod attempt;
 mod attempt_directory;
 mod campaign;
 mod heartbeat;
 mod input_repository;
-mod radar_prepare;
-use heartbeat::HeartbeatConnection;
 mod metrics;
 mod policy;
+mod radar_prepare;
+mod runner;
 
-use attempt::{child_spec, finish_attempt_result, run_claimed_child};
-use attempt_directory::{
-    cleanup_stale_attempt_directories, create_attempt_directory, validate_temporary_root,
+pub(crate) use runner::Runner;
+
+use self::{
+    attempt_directory::cleanup_stale_attempt_directories,
+    config::AnalysisConsumerConfig,
+    control::{ControlError, IdleRefreshSchedule, mark_draining, register_capability},
 };
-use metrics::{PhaseTimer, elapsed_metrics, measure};
+use crate::{postgres::PostgresError, process::ProcessError, worker::PostCommitSinkClosed};
 
 #[derive(Debug, Error)]
 pub(crate) enum ConsumerError {
@@ -62,6 +52,8 @@ pub(crate) enum ConsumerError {
     DurationConversion(#[from] std::num::TryFromIntError),
     #[error("analysis temporary storage does not meet the configured bound")]
     TemporaryStorageBound,
+    #[error("analysis blocking work outlived its finalization deadline")]
+    BlockingWorkUnfinished,
     #[error("analysis post-commit coordination channel is closed")]
     PostCommitSink(#[from] PostCommitSinkClosed),
 }
@@ -78,6 +70,7 @@ impl ConsumerError {
             Self::DurationBound => "duration_bound",
             Self::DurationConversion(_) => "duration_conversion",
             Self::TemporaryStorageBound => "temporary_storage_bound",
+            Self::BlockingWorkUnfinished => "blocking_work_unfinished",
             Self::PostCommitSink(_) => "post_commit_sink_closed",
         }
     }
@@ -169,176 +162,59 @@ impl AttemptInterruption {
     }
 }
 
-/// Runs the durable analysis consumer with the process-local post-commit coordinator sink.
-///
-/// # Errors
-///
-/// Returns a structural error when the coordinator has stopped accepting committed work. The
-/// durable database transition is not rolled back and the durable state remains recoverable.
-pub(crate) struct Runner {
-    control_client: postgres::ConnectedClient,
-    heartbeat_client: HeartbeatConnection,
+/// Owns idle maintenance and capability lifetime independently of an active attempt task.
+/// Campaign/radar preparation uses the worker's control connection and remains runnable
+/// while the attempt resources are temporarily owned by that task.
+pub(crate) struct Module {
     config: AnalysisConsumerConfig,
     maintenance: MaintenanceSchedules,
-    post_commit_sink: PostCommitSink,
+    runner: Option<Runner>,
 }
 
-impl Runner {
-    pub(crate) async fn new(
-        config: AnalysisConsumerConfig,
-        post_commit_sink: PostCommitSink,
-    ) -> Result<Self, ConsumerError> {
-        if !child_process::managed_analysis_runtime_supported() {
-            let error = ConsumerError::Process(ProcessError::UnsupportedPlatform);
-            log_startup_failure("platform_contract", &error);
-            return Err(error);
-        }
-        if !crate::process::worker_identity_supported() {
-            let error = ConsumerError::Process(ProcessError::InvalidWorkerIdentity);
-            log_startup_failure("worker_identity", &error);
-            return Err(error);
-        }
-        startup_result(
-            config
-                .child_cgroup
-                .ensure_empty()
-                .map_err(ProcessError::from),
-            "child_cgroup_validation",
-        )?;
-        startup_result(
-            validate_temporary_root(&config).await,
-            "temporary_storage_validation",
-        )?;
-        let control_client = startup_result(
-            postgres::connect(&config.database_url).await,
-            "control_database_connect",
-        )?;
-        let heartbeat_client = startup_result(
-            HeartbeatConnection::connect(&config.database_url).await,
-            "heartbeat_database_connect",
-        )?;
-        let read_client = startup_result(
-            postgres::connect(&config.read_database_url).await,
-            "read_database_connect",
-        )?;
-        // A fresh startup must authenticate every configured database credential. The calculation
-        // child opens its own read-only connection later, so this probe is intentionally not retained.
-        drop(read_client);
-        let stale_attempt_cleanup_due = startup_result(
-            cleanup_stale_attempt_directories(&config, &control_client).await,
-            "temporary_storage_recovery",
-        )?;
-        startup_result(
-            register_capability(&control_client, &config.worker_id).await,
-            "capability_registration",
-        )?;
-        let maintenance = MaintenanceSchedules {
-            capability_refresh: IdleRefreshSchedule::after_success(Instant::now()),
-            stale_attempt_cleanup_due,
-            history_cleanup_due: Instant::now(),
-        };
-
-        info!(event = "analysis_worker_ready", worker_id = %config.worker_id, "analysis worker is ready");
-        Ok(Self {
-            control_client,
-            heartbeat_client,
-            config,
-            maintenance,
-            post_commit_sink,
-        })
+impl Module {
+    pub(crate) const fn take_runner(&mut self) -> Option<Runner> {
+        self.runner.take()
     }
 
-    pub(crate) fn maintenance_due_in(&self) -> Duration {
-        self.maintenance.next_due_in(Instant::now())
+    pub(crate) fn restore_runner(&mut self, runner: Runner) {
+        self.runner = Some(runner);
+    }
+
+    /// Active attempts renew capability through their heartbeat. Idle maintenance resumes
+    /// when their resources return, including any deadline that elapsed during calculation.
+    pub(crate) fn maintenance_due_in(&self) -> Option<Duration> {
+        self.runner
+            .as_ref()
+            .map(|_| self.maintenance.next_due_in(Instant::now()))
     }
 
     pub(crate) async fn maintain(&mut self) -> Result<(), ConsumerError> {
-        self.maintenance
-            .run_due(&mut self.control_client, &self.config)
-            .await
+        if let Some(runner) = &mut self.runner {
+            self.maintenance
+                .run_due(&mut runner.control_client, &self.config)
+                .await?;
+        }
+        Ok(())
     }
 
-    pub(crate) async fn execute(
+    /// Uses the lifecycle owner's connection, so an unwound attempt need not return its
+    /// resources before this worker generation can be marked draining.
+    #[expect(
+        clippy::needless_pass_by_ref_mut,
+        reason = "an exclusive module borrow keeps the drain future Send while runner resources are not Sync"
+    )]
+    pub(crate) async fn drain(
         &mut self,
-        claim: control::ClaimedJob,
-        mut shutdown: watch::Receiver<bool>,
+        control_client: &tokio_postgres::Client,
     ) -> Result<(), ConsumerError> {
-        let span = info_span!(
-            "analysis_attempt",
-            worker_id = %self.config.worker_id,
-            job_id = %claim.job_id,
-            attempt_id = %claim.attempt_id,
-            game_title_id = %claim.game_title_id,
-            attempt_no = claim.attempt_no,
-            input_revision = claim.input_revision,
-            algorithm_version = %claim.algorithm_version,
-            artifact_schema_version = claim.artifact_schema_version,
-            validation_contract_id = claim.validation_contract_id.as_deref().unwrap_or("missing"),
-            fencing_token = claim.fencing_token,
-        );
-        async {
-            let result = execute_claimed_job(
-                &mut self.control_client,
-                &mut self.heartbeat_client,
-                &self.config,
-                &self.post_commit_sink,
-                &claim,
-                &mut shutdown,
-            )
-            .await;
-            if let Err(error) = &result {
-                error!(
-                    event = "analysis_attempt_runtime_failed",
-                    phase = "control_plane",
-                    error_kind = error.kind(),
-                    "analysis attempt could not complete its control-plane transition"
-                );
-            }
-            result.map(|_| ())
-        }
-        .instrument(span)
-        .await
+        control_operation(
+            &self.config,
+            mark_draining(control_client, &self.config.worker_id),
+        )
+        .await?;
+        info!(event = "analysis_worker_drained", worker_id = %self.config.worker_id, "analysis worker drained");
+        Ok(())
     }
-
-    pub(crate) async fn drain(self) -> Result<(), ConsumerError> {
-        finish_consumer(&self.control_client, &self.config, Ok(())).await
-    }
-}
-
-async fn finish_consumer(
-    control_client: &tokio_postgres::Client,
-    config: &AnalysisConsumerConfig,
-    result: Result<(), ConsumerError>,
-) -> Result<(), ConsumerError> {
-    if let Err(error) = &result {
-        error!(
-            event = "analysis_worker_runtime_failed",
-            phase = "execution_loop",
-            error_kind = error.kind(),
-            "analysis worker execution loop stopped unexpectedly"
-        );
-    }
-    // A failed claim can leave a response unread. Draining is best-effort after failure and
-    // must not keep the consumer alive indefinitely on that same connection.
-    let draining = mark_draining(control_client, &config.worker_id);
-    if let Err(error) = control_operation(config, draining).await {
-        if result.is_ok() {
-            return Err(error);
-        }
-        error!(
-            event = "analysis_worker_draining_persist_failed",
-            worker_id = %config.worker_id,
-            error_kind = error.kind(),
-            "analysis worker failed to persist its draining state after a runtime error"
-        );
-    }
-    result?;
-    info!(
-        event = "analysis_worker_drained",
-        worker_id = %config.worker_id,
-        "analysis worker drained"
-    );
-    Ok(())
 }
 
 async fn control_operation<T>(
@@ -349,126 +225,4 @@ async fn control_operation<T>(
         .await
         .map_err(|_elapsed| ConsumerError::ControlTimeout)?
         .map_err(ConsumerError::Control)
-}
-
-fn startup_result<T, E>(result: Result<T, E>, phase: &'static str) -> Result<T, ConsumerError>
-where
-    E: Into<ConsumerError>,
-{
-    result.map_err(|source| {
-        let error = source.into();
-        log_startup_failure(phase, &error);
-        error
-    })
-}
-
-fn log_startup_failure(phase: &'static str, error: &ConsumerError) {
-    error!(
-        event = "analysis_worker_startup_failed",
-        phase,
-        error_kind = error.kind(),
-        "analysis worker startup boundary failed"
-    );
-}
-
-fn submit_control_outcome<T>(
-    sink: &PostCommitSink,
-    outcome: ControlOutcome<T>,
-) -> Result<T, ConsumerError> {
-    sink.submit(outcome.effects)?;
-    Ok(outcome.value)
-}
-
-async fn execute_claimed_job(
-    control_client: &mut tokio_postgres::Client,
-    heartbeat_client: &mut HeartbeatConnection,
-    config: &AnalysisConsumerConfig,
-    post_commit_sink: &PostCommitSink,
-    claim: &control::ClaimedJob,
-    shutdown: &mut watch::Receiver<bool>,
-) -> Result<AttemptResult, ConsumerError> {
-    info!(
-        event = "analysis_attempt_claimed",
-        phase = "claim",
-        state = "running",
-        "analysis attempt claimed"
-    );
-
-    let attempt_timer = PhaseTimer::start("attempt_after_claim");
-    let started = Instant::now();
-    let attempt_directory = match create_attempt_directory(config, claim).await {
-        Ok(directory) => directory,
-        Err(_error) => {
-            let metrics = elapsed_metrics(started, None);
-            let failure = AttemptFailure::failed(SafeFailureCode::TemporaryStorageExhausted);
-            let outcome = finish_failure(control_client, claim, config, failure, &metrics).await?;
-            submit_control_outcome(post_commit_sink, outcome)?;
-            warn!(
-                event = "analysis_attempt_finished",
-                phase = "temporary_storage_prepare",
-                outcome = failure.outcome_wire(),
-                safe_failure_code = failure.code_wire(),
-                elapsed_milliseconds = metrics.elapsed_milliseconds,
-                "analysis attempt failed before child startup"
-            );
-            return Ok(AttemptResult::Completed);
-        }
-    };
-    let attempt_result = async {
-        let child_spec = child_spec(config, claim, &attempt_directory)?;
-        let result = run_claimed_child(
-            heartbeat_client,
-            config,
-            claim,
-            &child_spec,
-            shutdown,
-            started,
-        )
-        .await;
-        let result =
-            attempt::renew_before_publication(heartbeat_client, config, claim, shutdown, result)
-                .await;
-        let outcome = finish_attempt_result(
-            control_client,
-            config,
-            claim,
-            &attempt_directory,
-            started,
-            result,
-        )
-        .await?;
-        submit_control_outcome(post_commit_sink, outcome)
-    }
-    .await;
-    heartbeat_client.finish_attempt();
-    let result = measure(
-        "attempt_cleanup",
-        cleanup_attempt_directory(&attempt_directory, attempt_result),
-    )
-    .await;
-    if result.is_ok() {
-        attempt_timer.complete();
-    }
-    result
-}
-
-/// Removes a completed attempt's non-authoritative files without hiding its control-plane result.
-async fn cleanup_attempt_directory<T>(
-    attempt_directory: &std::path::Path,
-    attempt_result: Result<T, ConsumerError>,
-) -> Result<T, ConsumerError> {
-    let cleanup_result = tokio::fs::remove_dir_all(attempt_directory).await;
-    if let Err(cleanup_error) = cleanup_result {
-        error!(
-            event = "analysis_attempt_cleanup_failed",
-            phase = "temporary_storage_cleanup",
-            error_kind = "temporary_storage_io",
-            "analysis attempt directory cleanup failed"
-        );
-        return match attempt_result {
-            Ok(_value) => Err(ConsumerError::Temporary(cleanup_error)),
-            Err(attempt_error) => Err(attempt_error),
-        };
-    }
-    attempt_result
 }

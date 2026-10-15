@@ -18,6 +18,7 @@ if ! cmp -s "${shared_fixture}" "${repo_root}/apps/processing-worker/testdata/oc
 fi
 
 tests=(
+  "worker::runtime::reconciliation_tests::real_postgres_reconciliation_continues_during_a_waiting_worker_operation"
   "ocr::submissions::runtime::integration_tests::real_postgres_preserves_submission_finalization_and_recovery"
   "ocr::control::integration_tests::real_postgres_preserves_ocr_fencing_and_bounded_recovery"
 )

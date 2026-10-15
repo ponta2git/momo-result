@@ -10,7 +10,7 @@ use momo_analysis_core::contract::{ARTIFACT_SCHEMA_VERSION, ARTIFACT_VALIDATION_
 use tokio_postgres::Client;
 
 use super::{candidates, next_due, recover, recover_page};
-use crate::{scheduler::PostCommitSink, series_analysis::control::ALGORITHM_VERSION};
+use crate::{series_analysis::control::ALGORITHM_VERSION, worker::PostCommitSink};
 
 type TestResult<T = ()> = Result<T, Box<dyn Error + Send + Sync>>;
 const TITLE: &str = "scheduler-selection-smoke-title";

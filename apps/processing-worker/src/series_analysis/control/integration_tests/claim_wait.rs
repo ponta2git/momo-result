@@ -61,7 +61,7 @@ async fn real_postgres_claims_preserve_busy_deadlines_and_uncertain_commits() ->
     .await?;
     assert_eq!(
         interrupted.effects,
-        crate::scheduler::PostCommitEffects::WakeJobs
+        crate::worker::PostCommitEffects::WakeJobs
     );
     let row = client
         .query_one(

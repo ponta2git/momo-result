@@ -10,8 +10,8 @@ use crate::execution_slot::{
     NewExecutionSlotHolder, SlotAcquisition, SlotRenewal, acquire_ocr, lock as lock_execution_slot,
     lock_owned as lock_owned_slot, release_owned, renew_owned, request_analysis_preemption,
 };
-use crate::scheduler::ControlOutcome;
 use crate::series_analysis::control::TransactionEffects;
+use crate::worker::ControlOutcome;
 
 use super::contract::{OcrHints, RequestedScreenType, SourceImageClaims};
 

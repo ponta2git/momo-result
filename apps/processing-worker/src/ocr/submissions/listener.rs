@@ -82,7 +82,7 @@ fn notify(
     match message {
         Some(Ok(AsyncMessage::Notification(notification))) => {
             if notification.channel() != CHANNEL || !notification.payload().is_empty() {
-                return Err(RuntimeError::Dependency("invalid_notification"));
+                return Err(RuntimeError::Protocol("invalid_notification"));
             }
             wake.send_replace(());
             Ok(true)

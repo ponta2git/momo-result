@@ -8,7 +8,10 @@ use tokio::{sync::watch, time};
 use tokio_postgres::{AsyncMessage, Client};
 
 use super::{PostCommitEffects, PostCommitSink, PostCommitSinkClosed};
-use crate::postgres::{self, PostgresError};
+use crate::{
+    ocr::submissions::CHANNEL as SUBMISSIONS_CHANNEL,
+    postgres::{self, PostgresError},
+};
 
 const ROUTE_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 const SUBSCRIPTION_TIMEOUT: Duration = Duration::from_secs(10);
@@ -39,6 +42,7 @@ pub(crate) struct Listener {
     _client: Client,
     connection: postgres::Driver,
     sink: PostCommitSink,
+    submissions_enabled: bool,
 }
 
 impl ListenerError {
@@ -67,13 +71,23 @@ impl ListenerError {
 ///
 /// Returns a safe structural error when setup, the connection, notification protocol, or sink
 /// stops satisfying the coordination contract.
+#[cfg(test)]
 pub(crate) async fn subscribe(
     database_url: &str,
     sink: PostCommitSink,
 ) -> Result<Listener, ListenerError> {
+    subscribe_routes(database_url, sink, false).await
+}
+
+/// Registers only the enabled domain routes on a single session before any discovery runs.
+pub(crate) async fn subscribe_routes(
+    database_url: &str,
+    sink: PostCommitSink,
+    submissions_enabled: bool,
+) -> Result<Listener, ListenerError> {
     let setup = async {
         let (client, connection) = postgres::open(database_url).await?;
-        subscribe_connection(client, connection, sink).await
+        subscribe_connection(client, connection, sink, submissions_enabled).await
     };
     // Socket connection deadlines do not cover the subsequent LISTEN response. Keep setup
     // bounded as one operation; on expiry this future owns and closes both client and driver.
@@ -86,10 +100,15 @@ async fn subscribe_connection(
     client: Client,
     mut connection: postgres::Driver,
     sink: PostCommitSink,
+    submissions_enabled: bool,
 ) -> Result<Listener, ListenerError> {
     // PostgreSQL identifiers cannot be bind parameters. The interpolated value is a private
     // compile-time constant, never configuration or request input.
-    let listen_statement = format!("LISTEN {CHANNEL}");
+    let listen_statement = if submissions_enabled {
+        format!("LISTEN {CHANNEL}; LISTEN {SUBMISSIONS_CHANNEL}")
+    } else {
+        format!("LISTEN {CHANNEL}")
+    };
     {
         let subscription = client.batch_execute(&listen_statement);
         tokio::pin!(subscription);
@@ -101,7 +120,7 @@ async fn subscribe_connection(
                     break;
                 }
                 message = poll_fn(|context| connection.poll_message(context)) => {
-                    handle_async_message(message, &sink)?;
+                    handle_async_message(message, &sink, submissions_enabled)?;
                 }
             }
         }
@@ -110,6 +129,7 @@ async fn subscribe_connection(
         _client: client,
         connection,
         sink,
+        submissions_enabled,
     })
 }
 
@@ -126,9 +146,21 @@ impl Listener {
         &mut self,
         publisher: &Client,
     ) -> Result<(), ListenerError> {
+        self.verify_route(publisher, CHANNEL).await?;
+        if self.submissions_enabled {
+            self.verify_route(publisher, SUBMISSIONS_CHANNEL).await?;
+        }
+        Ok(())
+    }
+
+    async fn verify_route(
+        &mut self,
+        publisher: &Client,
+        channel: &'static str,
+    ) -> Result<(), ListenerError> {
         let probe = async {
             publisher
-                .execute("SELECT pg_notify($1, '')", &[&CHANNEL])
+                .execute("SELECT pg_notify($1, '')", &[&channel])
                 .await
                 .map_err(PostgresError::from)?;
             loop {
@@ -137,10 +169,10 @@ impl Listener {
                     message.as_ref(),
                     Some(Ok(AsyncMessage::Notification(notification)))
                         if notification.channel()
-                            == CHANNEL
+                            == channel
                             && notification.payload().is_empty()
                 );
-                handle_async_message(message, &self.sink)?;
+                handle_async_message(message, &self.sink, self.submissions_enabled)?;
                 if received {
                     return Ok(());
                 }
@@ -175,7 +207,7 @@ impl Listener {
                     }
                 }
                 message = poll_fn(|context| self.connection.poll_message(context)) => {
-                    handle_async_message(message, &self.sink)?;
+                    handle_async_message(message, &self.sink, self.submissions_enabled)?;
                 }
             }
         }
@@ -185,12 +217,16 @@ impl Listener {
 fn handle_async_message(
     message: Option<Result<AsyncMessage, tokio_postgres::Error>>,
     sink: &PostCommitSink,
+    submissions_enabled: bool,
 ) -> Result<(), ListenerError> {
     match message {
         Some(Ok(message)) => match message {
-            AsyncMessage::Notification(notification) => {
-                submit_job_notification(notification.channel(), notification.payload(), sink)
-            }
+            AsyncMessage::Notification(notification) => submit_job_notification(
+                notification.channel(),
+                notification.payload(),
+                sink,
+                submissions_enabled,
+            ),
             AsyncMessage::Notice(_) | _ => Ok(()),
         },
         Some(Err(error)) => Err(ListenerError::Postgres(PostgresError::Postgres(error))),
@@ -202,8 +238,11 @@ fn submit_job_notification(
     channel: &str,
     payload: &str,
     sink: &PostCommitSink,
+    submissions_enabled: bool,
 ) -> Result<(), ListenerError> {
-    if channel != CHANNEL || !payload.is_empty() {
+    if !(channel == CHANNEL || submissions_enabled && channel == SUBMISSIONS_CHANNEL)
+        || !payload.is_empty()
+    {
         return Err(ListenerError::InvalidNotification);
     }
     let received_at = std::time::Instant::now();
@@ -212,7 +251,7 @@ fn submit_job_notification(
         event = "processing_jobs_wake_received",
         admission_microseconds =
             u64::try_from(received_at.elapsed().as_micros()).unwrap_or(u64::MAX),
-        "analysis commit hint admitted to the local coordinator"
+        "processing commit hint admitted to the local coordinator"
     );
     Ok(())
 }
@@ -262,7 +301,7 @@ mod tests {
             let (client, connection) = postgres::open(&database_url).await?;
             time::timeout(
                 Duration::from_millis(250),
-                subscribe_connection(client, connection, sink),
+                subscribe_connection(client, connection, sink, false),
             )
             .await
             .map_err(|_elapsed| ListenerError::SubscriptionTimeout)?
@@ -276,32 +315,112 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test]
+    #[ignore = "requires explicitly isolated PROCESSING_SCHEDULER_SMOKE_DATABASE_URL"]
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "the route assertions observe real PostgreSQL subscription and protocol failures"
+    )]
+    async fn both_enabled_routes_are_verified_and_protocol_errors_are_fatal()
+    -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let url = std::env::var("PROCESSING_SCHEDULER_SMOKE_DATABASE_URL")?;
+        let publisher = postgres::connect(&url).await?;
+        for channel in [CHANNEL, SUBMISSIONS_CHANNEL] {
+            let (sink, mut wake) = PostCommitSink::channel();
+            let mut listener = subscribe_routes(&url, sink, true).await?;
+            listener.verify_notification_round_trip(&publisher).await?;
+            assert_eq!(wake.try_recv(), Ok(()));
+            let (_stop, stopped) = watch::channel(false);
+            let listener = tokio::spawn(listener.run(stopped));
+            publisher
+                .execute("SELECT pg_notify($1, '')", &[&channel])
+                .await?;
+            assert_eq!(
+                time::timeout(Duration::from_secs(2), wake.recv()).await?,
+                Some(())
+            );
+            publisher
+                .execute("SELECT pg_notify($1, 'invalid')", &[&channel])
+                .await?;
+            assert!(matches!(
+                time::timeout(Duration::from_secs(2), listener).await?,
+                Ok(Err(ListenerError::InvalidNotification))
+            ));
+        }
+
+        let (sink, _wake) = PostCommitSink::channel();
+        let mut listener = subscribe_routes(&url, sink, true).await?;
+        {
+            // Simulate a route that accepts LISTEN but does not retain the OCR subscription.
+            let Listener {
+                _client: client,
+                connection,
+                sink: listener_sink,
+                ..
+            } = &mut listener;
+            let unlisten = client.batch_execute("UNLISTEN ocr_submissions");
+            tokio::pin!(unlisten);
+            loop {
+                tokio::select! {
+                    result = &mut unlisten => { result?; break; }
+                    message = poll_fn(|context| connection.poll_message(context)) => {
+                        handle_async_message(message, listener_sink, true)?;
+                    }
+                }
+            }
+        }
+        assert!(
+            matches!(
+                listener.verify_notification_round_trip(&publisher).await,
+                Err(ListenerError::RouteProbeTimeout)
+            ),
+            "a working processing_jobs route cannot hide a missing OCR route"
+        );
+        Ok(())
+    }
+
     #[test]
     fn job_notifications_are_fixed_and_payload_free() {
         let (sink, wake) = PostCommitSink::channel();
 
         assert_eq!(CHANNEL, "processing_jobs");
-        assert!(submit_job_notification(CHANNEL, "", &sink,).is_ok());
+        assert!(submit_job_notification(CHANNEL, "", &sink, false).is_ok());
         assert!(
-            submit_job_notification(CHANNEL, "", &sink,).is_ok(),
+            submit_job_notification(CHANNEL, "", &sink, false).is_ok(),
             "a repeated commit hint must coalesce in the capacity-one sink"
         );
         assert!(matches!(
-            submit_job_notification("another_channel", "", &sink),
+            submit_job_notification("another_channel", "", &sink, false),
             Err(ListenerError::InvalidNotification)
         ));
         assert!(matches!(
-            submit_job_notification(CHANNEL, "job-identity-is-forbidden", &sink,),
+            submit_job_notification(CHANNEL, "job-identity-is-forbidden", &sink, false),
             Err(ListenerError::InvalidNotification)
         ));
         assert!(matches!(
-            handle_async_message(None, &sink),
+            handle_async_message(None, &sink, false),
             Err(ListenerError::ConnectionClosed)
         ));
 
+        assert!(submit_job_notification(SUBMISSIONS_CHANNEL, "", &sink, true).is_ok());
+        assert!(
+            matches!(
+                submit_job_notification(SUBMISSIONS_CHANNEL, "", &sink, false),
+                Err(ListenerError::InvalidNotification)
+            ),
+            "a disabled route is not accepted"
+        );
+        assert!(
+            matches!(
+                submit_job_notification(SUBMISSIONS_CHANNEL, "submission-id", &sink, true),
+                Err(ListenerError::InvalidNotification)
+            ),
+            "OCR hints are payload-free too"
+        );
+
         drop(wake);
         assert!(matches!(
-            submit_job_notification(CHANNEL, "", &sink,),
+            submit_job_notification(CHANNEL, "", &sink, false),
             Err(ListenerError::SinkClosed(_))
         ));
     }

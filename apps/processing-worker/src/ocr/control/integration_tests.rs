@@ -710,7 +710,7 @@ fn control_config(worker_id: &str) -> SmokeResult<OcrControlConfig> {
 fn claimed_with_analysis_wake(
     outcome: ControlOutcome<OcrClaimResult>,
 ) -> SmokeResult<ClaimedOcrJob> {
-    if outcome.effects != crate::scheduler::PostCommitEffects::WakeJobs {
+    if outcome.effects != crate::worker::PostCommitEffects::WakeJobs {
         return Err(smoke_error("expired Analysis recovery did not emit its shared wake").into());
     }
     match outcome.value {
@@ -728,7 +728,7 @@ fn claimed_with_analysis_wake(
 }
 
 fn claim_result(outcome: ControlOutcome<OcrClaimResult>) -> SmokeResult<OcrClaimResult> {
-    if outcome.effects == crate::scheduler::PostCommitEffects::WakeJobs {
+    if outcome.effects == crate::worker::PostCommitEffects::WakeJobs {
         return Err(smoke_error("normal OCR claim unexpectedly emitted an scheduler wake").into());
     }
     Ok(outcome.value)

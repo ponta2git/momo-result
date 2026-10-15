@@ -13,7 +13,7 @@ use super::{
 };
 use crate::{
     notifications::{NotificationDriver, config_from_environment},
-    scheduler::PostCommitSink,
+    worker::PostCommitSink,
 };
 use std::{
     error::Error,
@@ -60,7 +60,7 @@ async fn controlled_worker_process() -> TestResult {
         sequence: AtomicU64::new(0),
     };
     let computation =
-        crate::scheduler::run_ocr_only(*config, Box::new(launcher), sink, wake, stop.clone());
+        crate::worker::run_ocr_only(*config, Box::new(launcher), sink, wake, stop.clone());
     let (observed, mut checkpoints) = watch::channel(0_u64);
     let coordination = submissions::runtime::run_observed(
         submission_config,

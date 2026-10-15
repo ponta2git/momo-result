@@ -1,5 +1,5 @@
 //! Bounded candidate selection; active attempts retain their own heartbeat and child task.
-use super::{FinishedRunner, Scheduler, SchedulerError, bounded, ocr, selection, series_analysis};
+use super::{PendingExecution, WorkState, WorkerError, bounded, ocr, selection, series_analysis};
 use std::time::Duration;
 use tokio::{sync::watch, time};
 
@@ -12,14 +12,14 @@ impl ScanBudget {
         time::Instant::now() >= self.until
     }
 }
-fn stopping(shutdown: &watch::Receiver<bool>) -> bool {
+pub(super) fn stopping(shutdown: &watch::Receiver<bool>) -> bool {
     *shutdown.borrow() || shutdown.has_changed().is_err()
 }
 
 pub(super) async fn claim_next(
-    scheduler: &mut Scheduler,
+    scheduler: &mut WorkState,
     shutdown: &watch::Receiver<bool>,
-) -> Result<bool, SchedulerError> {
+) -> Result<bool, WorkerError> {
     if scheduler
         .retry_after
         .is_some_and(|deadline| deadline > time::Instant::now())
@@ -27,7 +27,7 @@ pub(super) async fn claim_next(
         return Ok(false);
     }
     scheduler.retry_after = None;
-    if scheduler.active.is_some() && scheduler.ocr.is_none() {
+    if scheduler.active && scheduler.ocr.is_none() {
         return Ok(false);
     }
     let mut budget = ScanBudget {
@@ -37,7 +37,7 @@ pub(super) async fn claim_next(
     if scheduler.ocr.is_some() && claim_ocr(scheduler, shutdown, &mut budget).await? {
         return Ok(true);
     }
-    if stopping(shutdown) || scheduler.active.is_some() || scheduler.retry_after.is_some() {
+    if stopping(shutdown) || scheduler.active || scheduler.retry_after.is_some() {
         if budget.contended && scheduler.retry_after.is_none() {
             defer_claims(scheduler);
         }
@@ -50,19 +50,19 @@ pub(super) async fn claim_next(
     Ok(more)
 }
 
-fn defer_claims(scheduler: &mut Scheduler) {
+fn defer_claims(scheduler: &mut WorkState) {
     scheduler.retry_after = Some(time::Instant::now() + Duration::from_secs(1));
 }
 
 async fn claim_ocr(
-    scheduler: &mut Scheduler,
+    scheduler: &mut WorkState,
     shutdown: &watch::Receiver<bool>,
     budget: &mut ScanBudget,
-) -> Result<bool, SchedulerError> {
+) -> Result<bool, WorkerError> {
     let config = scheduler
         .ocr_config
         .clone()
-        .ok_or(SchedulerError::UnsupportedPlatform)?;
+        .ok_or(WorkerError::UnsupportedPlatform)?;
     let timeout = scheduler.settings.operation_timeout;
     let mut attempted = false;
     for _ in 0..4 {
@@ -83,7 +83,7 @@ async fn claim_ocr(
             attempted = true;
             let id = cursor.id.clone();
             scheduler.ocr_cursor = Some(cursor);
-            if scheduler.active.is_some() {
+            if scheduler.active {
                 match bounded(
                     timeout,
                     ocr::control::request_preemption(&mut scheduler.database, &id, &config),
@@ -142,10 +142,10 @@ async fn claim_ocr(
 }
 
 async fn claim_analysis(
-    scheduler: &mut Scheduler,
+    scheduler: &mut WorkState,
     shutdown: &watch::Receiver<bool>,
     budget: &mut ScanBudget,
-) -> Result<bool, SchedulerError> {
+) -> Result<bool, WorkerError> {
     let Some(config) = &scheduler.config else {
         return Ok(false);
     };
@@ -212,37 +212,30 @@ async fn claim_analysis(
 }
 
 fn start_ocr(
-    scheduler: &mut Scheduler,
+    scheduler: &mut WorkState,
     claim: ocr::control::ClaimedOcrJob,
-) -> Result<(), SchedulerError> {
-    let Some(mut runner) = scheduler.ocr.take() else {
-        return Err(SchedulerError::UnsupportedPlatform);
+) -> Result<(), WorkerError> {
+    let Some(runner) = scheduler.ocr.take() else {
+        return Err(WorkerError::UnsupportedPlatform);
     };
-    let stopped = scheduler.stopped.clone();
-    scheduler.active = Some(tokio::spawn(async move {
-        let result = runner
-            .execute(claim, stopped)
-            .await
-            .map_err(SchedulerError::from);
-        (FinishedRunner::Ocr(runner), result)
-    }));
+    scheduler.active = true;
+    scheduler.pending = Some(PendingExecution::Ocr(runner, claim));
     Ok(())
 }
+
 fn start_analysis(
-    scheduler: &mut Scheduler,
+    scheduler: &mut WorkState,
     claim: series_analysis::control::ClaimedJob,
-) -> Result<(), SchedulerError> {
-    let Some(mut runner) = scheduler.analysis.take() else {
-        return Err(SchedulerError::UnsupportedPlatform);
+) -> Result<(), WorkerError> {
+    let Some(runner) = scheduler
+        .analysis
+        .as_mut()
+        .and_then(series_analysis::Module::take_runner)
+    else {
+        return Err(WorkerError::UnsupportedPlatform);
     };
-    let stopped = scheduler.stopped.clone();
-    scheduler.active = Some(tokio::spawn(async move {
-        let result = runner
-            .execute(claim, stopped)
-            .await
-            .map_err(SchedulerError::from);
-        (FinishedRunner::Analysis(runner), result)
-    }));
+    scheduler.active = true;
+    scheduler.pending = Some(PendingExecution::Analysis(runner, claim));
     Ok(())
 }
 

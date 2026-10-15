@@ -139,9 +139,9 @@ impl<'a> ResourceCopyRow<'a> {
         let path = directory.join(&common.path);
         let expected_bytes = common.encoded_bytes;
         let expected_checksum = common.checksum.clone();
-        // One blocking task owns metadata, read, and hashing for this file. Only one bounded
-        // payload is in flight; cancellation can leave a read running, never a database write.
-        let payload = tokio::task::spawn_blocking(move || {
+        // Admission belongs to the blocking task across caller cancellation, keeping bounded
+        // reads from overlapping. The task only reads; database writes stay in this future.
+        let payload = crate::blocking::run(move || {
             read_resource_payload(&path, expected_bytes, &expected_checksum)
         })
         .await

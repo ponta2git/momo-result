@@ -9,8 +9,8 @@ use crate::{
         ExecutionTaskKind, NewExecutionSlotHolder, SlotAcquisition, acquire_analysis,
         clear_stale_preemption, lock as lock_execution_slot,
     },
-    scheduler::ControlOutcome,
     series_analysis::config::AnalysisConsumerConfig,
+    worker::ControlOutcome,
 };
 
 use super::{

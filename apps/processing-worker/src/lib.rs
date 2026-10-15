@@ -8,9 +8,11 @@
 //! [`entrypoint`]; capability and infrastructure modules stay private so deployment commands cannot
 //! bypass the CLI boundary.
 
+mod blocking;
 mod busy_retry;
 mod cgroup;
 mod cli;
+mod execution;
 mod execution_slot;
 mod notifications;
 mod ocr;
@@ -21,8 +23,7 @@ mod postgres;
 )]
 mod process;
 mod runtime_identifier;
-mod scheduler;
 mod series_analysis;
-mod supervisor;
+mod worker;
 
 pub use cli::entrypoint;

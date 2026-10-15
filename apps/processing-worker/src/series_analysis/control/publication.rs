@@ -47,8 +47,8 @@ pub(super) async fn validated_artifact(
     let expected_basis_id = claim.radar_basis_id.clone();
     // Validation performs bounded synchronous file reads and JSON decoding. Keeping that work off
     // the current-thread runtime lets the enclosing finalization timeout and sibling coordinators
-    // continue. The task is read-only, so timeout cancellation cannot publish or mutate a candidate.
-    tokio::task::spawn_blocking(move || {
+    // continue. The shared admission guard remains in the read-only task after cancellation.
+    crate::blocking::run(move || {
         let artifact = validate_artifact_directory(
             &artifact_directory,
             maximum_chunk_count,

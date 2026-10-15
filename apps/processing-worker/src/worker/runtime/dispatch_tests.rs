@@ -11,17 +11,17 @@ use tempfile::TempDir;
 use tokio::sync::watch;
 use tokio_postgres::Client;
 
-use super::{ScanBudget, Scheduler, SchedulerError, claim_analysis, claim_ocr, time};
+use super::{ScanBudget, WorkState, WorkerError, claim_analysis, claim_ocr, time};
 use crate::{
     cgroup::{CgroupHierarchy, ChildCgroup},
     notifications::NotificationSink,
     ocr::control::OcrControlConfig,
     postgres::{self, test_support::DelayedDatabase},
-    scheduler::{PostCommitSink, runtime::Settings},
     series_analysis::{
         config::{AnalysisConsumerConfig, AnalysisExecutionLimits},
         control::ALGORITHM_VERSION,
     },
+    worker::{PostCommitSink, WakeReceiver, runtime::Settings},
 };
 
 type TestResult<T = ()> = Result<T, Box<dyn Error + Send + Sync>>;
@@ -50,8 +50,11 @@ async fn real_postgres_delayed_candidates_still_attempt_durable_claims() -> Test
     insert_analysis(&observer).await?;
     let proxy = DelayedDatabase::start(&database_url, Duration::from_millis(150)).await?;
     let directory = TempDir::new()?;
-    let config = analysis_config(&database_url, directory.path())?;
-    let mut scheduler = fixture(&proxy.url, config).await?;
+    let (mut scheduler, _wake) = fixture(
+        &proxy.url,
+        analysis_config(&database_url, directory.path())?,
+    )
+    .await?;
     let (shutdown, stopped) = watch::channel(true);
 
     // Shutdown takes precedence over the first-attempt guarantee.
@@ -69,7 +72,7 @@ async fn real_postgres_delayed_candidates_still_attempt_durable_claims() -> Test
     let analysis_claim = Box::pin(claim_analysis(&mut scheduler, &stopped, &mut shared)).await;
     assert!(matches!(
         analysis_claim,
-        Err(SchedulerError::UnsupportedPlatform)
+        Err(WorkerError::UnsupportedPlatform)
     ));
     assert_job(&observer, ANALYSIS, "running", 1).await?;
     let attempt_count: i64 = observer
@@ -84,25 +87,17 @@ async fn real_postgres_delayed_candidates_still_attempt_durable_claims() -> Test
 
     // An active analysis must still receive the first slow OCR preemption request.
     insert_ocr(&observer).await?;
-    scheduler.active = Some(tokio::spawn(std::future::pending()));
+    scheduler.active = true;
     assert!(!claim_ocr(&mut scheduler, &stopped, &mut budget()).await?);
     let requester: Option<String> = observer.query_one("SELECT preempt_requested_by FROM worker_execution_slots WHERE slot_key='shared-heavy-work'", &[]).await?.try_get(0)?;
     assert_eq!(requester.as_deref(), Some(WORKER));
     assert_slot(&observer, "analysis", ANALYSIS).await?;
-    let active = scheduler
-        .active
-        .take()
-        .ok_or("missing fixture active task")?;
-    active.abort();
-    assert!(active.await.is_err());
+    scheduler.active = false;
     clear_slot(&observer).await?;
 
     // No child is installed: UnsupportedPlatform occurs only after the real DB claim commits.
     let ocr_claim = claim_ocr(&mut scheduler, &stopped, &mut budget()).await;
-    assert!(matches!(
-        ocr_claim,
-        Err(SchedulerError::UnsupportedPlatform)
-    ));
+    assert!(matches!(ocr_claim, Err(WorkerError::UnsupportedPlatform)));
     let row = observer
         .query_one(
             "SELECT status,attempt_count FROM ocr_jobs WHERE id=$1",
@@ -136,7 +131,7 @@ async fn verify_cursor_yield(
 ) -> TestResult {
     insert_analysis(observer).await?;
     let directory = TempDir::new()?;
-    let mut scheduler = fixture(
+    let (mut scheduler, _wake) = fixture(
         delayed_url,
         analysis_config(database_url, directory.path())?,
     )
@@ -162,7 +157,7 @@ async fn verify_cursor_yield(
     held_title.rollback().await?;
 
     let advanced = Box::pin(claim_analysis(&mut scheduler, &stopped, &mut budget())).await;
-    assert!(matches!(advanced, Err(SchedulerError::UnsupportedPlatform)));
+    assert!(matches!(advanced, Err(WorkerError::UnsupportedPlatform)));
     assert_job(observer, WAITING, "running", 1).await?;
     assert_job(observer, ANALYSIS, "queued", 0).await?;
     assert_slot(observer, "analysis", WAITING).await?;
@@ -173,7 +168,7 @@ async fn verify_cursor_yield(
     assert!(scheduler.analysis_cursor.is_none());
     let wrapped = Box::pin(claim_analysis(&mut scheduler, &stopped, &mut budget())).await;
     drop(scheduler);
-    assert!(matches!(wrapped, Err(SchedulerError::UnsupportedPlatform)));
+    assert!(matches!(wrapped, Err(WorkerError::UnsupportedPlatform)));
     assert_job(observer, ANALYSIS, "running", 1).await?;
     assert_slot(observer, "analysis", ANALYSIS).await?;
     Ok(())
@@ -186,33 +181,36 @@ fn budget() -> ScanBudget {
     }
 }
 
-async fn fixture(database_url: &str, config: AnalysisConsumerConfig) -> TestResult<Scheduler> {
+async fn fixture(
+    database_url: &str,
+    config: AnalysisConsumerConfig,
+) -> TestResult<(WorkState, WakeReceiver)> {
     let settings = Settings::from(&config);
     let (sink, wake) = PostCommitSink::channel();
-    let (stop, stopped) = watch::channel(false);
-    Ok(Scheduler {
-        config: Some(config),
-        settings,
-        database: postgres::connect(database_url).await?,
-        analysis: None,
-        ocr: None,
-        ocr_config: Some(OcrControlConfig::new(
-            WORKER.to_owned(),
-            Duration::from_mins(5),
-            Duration::from_secs(30),
-            Duration::from_secs(1),
-        )?),
-        active: None,
-        ocr_cursor: None,
-        analysis_cursor: None,
-        retry_after: None,
-        recovery_cursor: None,
-        sink,
+    Ok((
+        WorkState {
+            config: Some(config),
+            settings,
+            database: postgres::connect(database_url).await?,
+            analysis: None,
+            ocr: None,
+            ocr_config: Some(OcrControlConfig::new(
+                WORKER.to_owned(),
+                Duration::from_mins(5),
+                Duration::from_secs(30),
+                Duration::from_secs(1),
+            )?),
+            active: false,
+            pending: None,
+            ocr_cursor: None,
+            analysis_cursor: None,
+            retry_after: None,
+            recovery_cursor: None,
+            sink,
+            maintenance_at: time::Instant::now(),
+        },
         wake,
-        stopped,
-        stop,
-        listener: None,
-    })
+    ))
 }
 
 fn analysis_config(database_url: &str, directory: &Path) -> TestResult<AnalysisConsumerConfig> {

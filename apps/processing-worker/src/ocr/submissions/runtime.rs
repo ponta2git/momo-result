@@ -1,20 +1,20 @@
-//! Fair, bounded recovery of open submissions. Settled submissions are never replayed.
+//! Finite submission reconciliation, independent of the heavy image/analysis slot.
 
 use super::{
     PAGE_SIZE, SAFETY_INTERVAL,
     control::{self, Settlement},
-    listener::Listener,
 };
 use crate::{
     busy_retry::{BusyRetry, BusyRetryBudget},
     notifications::NotificationSink,
     postgres,
 };
-use std::time::Duration;
+use std::{collections::VecDeque, time::Duration};
 use thiserror::Error;
 use tokio::{sync::watch, time};
 use tokio_postgres::{Client, types::Type};
 
+#[cfg(test)]
 pub(crate) struct Config {
     pub(crate) database_url: String,
     pub(crate) listener_database_url: String,
@@ -27,6 +27,8 @@ pub(crate) enum RuntimeError {
     Dependency(&'static str),
     #[error("OCR submission control failed")]
     Control(#[from] control::SubmissionError),
+    #[error("OCR submission protocol failed ({0})")]
+    Protocol(&'static str),
 }
 
 #[derive(Clone)]
@@ -37,7 +39,6 @@ struct Schedule {
     #[cfg(test)]
     rechecked: Option<watch::Sender<u64>>,
 }
-
 impl Default for Schedule {
     fn default() -> Self {
         Self {
@@ -54,232 +55,391 @@ impl Default for Schedule {
 struct ScanCursor {
     after: String,
     upper: Option<String>,
+    pending: VecDeque<String>,
+    last_page: bool,
 }
 
 struct Recovery {
     cursor: ScanCursor,
     busy_budget: BusyRetryBudget,
+    rechecks: Vec<BusyRecheck>,
+    busy: Vec<BusySubmission>,
 }
-
 impl Default for Recovery {
     fn default() -> Self {
         Self {
             cursor: ScanCursor::default(),
             busy_budget: BusyRetryBudget::new(SAFETY_INTERVAL),
+            rechecks: Vec::new(),
+            busy: Vec::new(),
         }
     }
 }
-
 const MAX_BUSY_SUBMISSIONS: usize = 3;
+// A scheduling yield, not an operation deadline. Every step may finish at least one receipt.
+const CONTINUATION_DELAY: Duration = Duration::from_millis(10);
+const STEP_SOFT_BUDGET: Duration = Duration::from_millis(250);
 
 struct BusySubmission {
     id: String,
     observed_at: time::Instant,
 }
-
 struct BusyRecheck {
     id: String,
     retry: BusyRetry,
     next_at: Option<time::Instant>,
 }
 
-struct Session {
-    listener: Listener,
-    database: postgres::ConnectedClient,
-    wake: watch::Receiver<()>,
-}
-
-pub(crate) async fn run(
-    config: Config,
-    sink: NotificationSink,
-    shutdown: watch::Receiver<bool>,
-) -> Result<(), RuntimeError> {
-    run_with_schedule(config, sink, shutdown, Schedule::default()).await
-}
-
-#[cfg(test)]
-pub(crate) async fn run_observed(
-    config: Config,
-    sink: NotificationSink,
-    shutdown: watch::Receiver<bool>,
-    observed: watch::Sender<u64>,
-) -> Result<(), RuntimeError> {
-    run_with_schedule(
-        config,
-        sink,
-        shutdown,
-        Schedule {
-            safety_interval: SAFETY_INTERVAL,
-            observed: Some(observed),
-            rechecked: None,
-        },
-    )
-    .await
-}
-
-async fn connect(config: &Config) -> Result<Session, RuntimeError> {
-    let (wake, receiver) = watch::channel(());
-    let mut listener = Listener::subscribe(&config.listener_database_url, wake).await?;
-    let database = postgres::connect(&config.database_url)
-        .await
-        .map_err(|error| RuntimeError::Dependency(error.kind()))?;
-    listener.verify(&database).await?;
-    time::timeout(config.finalization_timeout, database.query_typed("SELECT s.status, s.match_draft_id, s.admission_deadline, s.finished_at, m.screen_type, m.status, m.failure_code, m.job_id FROM ocr_submissions s LEFT JOIN ocr_submission_members m ON m.submission_id = s.id LIMIT 0", &[])).await
-        .map_err(|_elapsed| RuntimeError::Dependency("schema_probe_timeout"))?.map_err(|_error| RuntimeError::Dependency("schema_contract"))?;
-    Ok(Session {
-        listener,
-        database,
-        wake: receiver,
-    })
-}
-
-async fn run_with_schedule(
-    config: Config,
-    sink: NotificationSink,
-    mut shutdown: watch::Receiver<bool>,
-    schedule: Schedule,
-) -> Result<(), RuntimeError> {
-    if *shutdown.borrow() || shutdown.has_changed().is_err() {
-        return Ok(());
-    }
-    // The first verified route is a readiness requirement. A broken initial route fails closed;
-    // after readiness, transient connection loss recovers inside this peer without stopping OCR.
-    let mut session = tokio::select! {
-        result = connect(&config) => result?,
-        _changed = shutdown.changed() => return Ok(()),
-    };
-    let mut recovery = Recovery::default();
-    loop {
-        let Session {
-            listener,
-            database,
-            wake,
-        } = session;
-        let result = tokio::try_join!(
-            listener.run(shutdown.clone()),
-            coordinate(
-                database,
-                wake,
-                shutdown.clone(),
-                config.finalization_timeout,
-                sink.clone(),
-                schedule.clone(),
-                &mut recovery
-            )
-        );
-        if *shutdown.borrow() || shutdown.has_changed().is_err() {
-            return Ok(());
-        }
-        if let Err(error) = result {
-            tracing::warn!(event = "ocr_submission_reconnecting", error = %error);
-        }
-        let mut backoff = Duration::from_millis(100);
-        loop {
-            tokio::select! {
-                () = time::sleep(backoff) => (),
-                _changed = shutdown.changed() => return Ok(()),
-            }
-            let reconnected = tokio::select! {
-                connection_result = connect(&config) => connection_result,
-                _changed = shutdown.changed() => return Ok(()),
-            };
-            match reconnected {
-                Ok(next) => {
-                    session = next;
-                    break;
-                }
-                Err(error) => {
-                    tracing::warn!(event = "ocr_submission_reconnect_deferred", error = %error);
-                }
-            }
-            backoff = backoff.saturating_mul(2).min(Duration::from_secs(5));
-        }
-    }
-}
-
-async fn coordinate(
-    mut database: postgres::ConnectedClient,
-    mut wake: watch::Receiver<()>,
-    mut shutdown: watch::Receiver<bool>,
+/// Owns only submission resources: an image attempt can borrow no part of this state.
+/// The worker moves this value into at most one finite task, then takes it back unchanged.
+pub(crate) struct Reconciler {
+    database_url: String,
+    database: Option<postgres::ConnectedClient>,
     timeout: Duration,
     sink: NotificationSink,
     schedule: Schedule,
-    recovery: &mut Recovery,
-) -> Result<(), RuntimeError> {
-    let mut rechecks = Vec::new();
-    loop {
-        if *shutdown.borrow() {
+    recovery: Recovery,
+    scan_at: time::Instant,
+    requested: bool,
+    reconnect_at: Option<time::Instant>,
+    reconnect_delay: Duration,
+}
+
+impl Reconciler {
+    /// The shared listener must already be subscribed and verified before discovery begins.
+    #[cfg_attr(
+        all(not(target_os = "linux"), not(test)),
+        expect(
+            dead_code,
+            reason = "production OCR bootstrap is Linux-only; tests exercise discovery on other hosts"
+        )
+    )]
+    pub(crate) async fn initialize(
+        database_url: String,
+        timeout: Duration,
+        sink: NotificationSink,
+    ) -> Result<Self, RuntimeError> {
+        let database = connect_database(&database_url, timeout).await?;
+        let mut state = Self::with_database(
+            database_url,
+            database,
+            timeout,
+            sink,
+            Schedule::default(),
+            Recovery::default(),
+        );
+        // Only one page is discovered; startup never waits for submission settlement.
+        let connected = state
+            .database
+            .as_ref()
+            .ok_or(RuntimeError::Protocol("database_missing"))?;
+        discover(connected, timeout, &mut state.recovery.cursor).await?;
+        Ok(state)
+    }
+
+    #[cfg_attr(
+        all(not(target_os = "linux"), not(test)),
+        expect(
+            dead_code,
+            reason = "production OCR bootstrap is Linux-only; tests share the finite step state"
+        )
+    )]
+    fn with_database(
+        database_url: String,
+        database: postgres::ConnectedClient,
+        timeout: Duration,
+        sink: NotificationSink,
+        schedule: Schedule,
+        recovery: Recovery,
+    ) -> Self {
+        Self {
+            database_url,
+            database: Some(database),
+            timeout,
+            sink,
+            schedule,
+            recovery,
+            scan_at: time::Instant::now(),
+            requested: false,
+            reconnect_at: None,
+            reconnect_delay: Duration::from_millis(100),
+        }
+    }
+
+    pub(crate) fn request_scan(&mut self) {
+        // Never reset the current cursor, busy episode, or connection backoff on a hint.
+        self.requested = true;
+        if self.recovery.cursor.upper.is_none() {
+            self.scan_at = time::Instant::now();
+        }
+    }
+
+    pub(crate) fn next_at(&self) -> time::Instant {
+        if let Some(at) = self.reconnect_at {
+            return at;
+        }
+        self.next_retry()
+            .map_or(self.scan_at, |(_, at)| at.min(self.scan_at))
+    }
+
+    fn next_retry(&self) -> Option<(usize, time::Instant)> {
+        if self.recovery.cursor.upper.is_some()
+            || !self.recovery.busy_budget.available(time::Instant::now())
+        {
+            return None;
+        }
+        self.recovery
+            .rechecks
+            .iter()
+            .enumerate()
+            .filter_map(|(index, retry)| retry.next_at.map(|at| (index, at)))
+            .min_by_key(|(_, at)| *at)
+    }
+
+    /// Completes its current database command before observing stop; callers must not cancel
+    /// this future on ordinary wakes. The worker's common shutdown deadline remains the limit.
+    pub(crate) async fn step(
+        &mut self,
+        shutdown: &watch::Receiver<bool>,
+    ) -> Result<(), RuntimeError> {
+        if stopping(shutdown) {
             return Ok(());
         }
-        wake.borrow_and_update();
-        let busy = sweep(
-            &mut database,
-            timeout,
-            &sink,
-            &shutdown,
-            &mut recovery.cursor,
-        )
-        .await?;
-        let delay = next_delay(&database, timeout)
-            .await?
-            .min(schedule.safety_interval);
-        let recovery_at = time::Instant::now() + delay;
-        retain_busy(&mut rechecks, busy, recovery_at);
-        #[cfg(test)]
-        if let Some(observed) = &schedule.observed {
-            observed.send_modify(|count| *count += 1);
+        if self
+            .reconnect_at
+            .is_some_and(|at| at > time::Instant::now())
+        {
+            return Ok(());
         }
-        loop {
-            let next = if recovery.busy_budget.available(time::Instant::now()) {
-                rechecks
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(index, retry)| retry.next_at.map(|at| (index, at)))
-                    .min_by_key(|(_, at)| *at)
-            } else {
-                None
-            };
-            tokio::select! {
-                biased;
-                changed = shutdown.changed() => { if changed.is_err() || *shutdown.borrow() { return Ok(()); } }
-                () = time::sleep_until(recovery_at) => {
-                    rechecks.clear();
-                    break;
+        if self.database.is_none() {
+            match connect_database(&self.database_url, self.timeout).await {
+                Ok(database) => {
+                    self.database = Some(database);
+                    self.reconnect_at = None;
+                    self.scan_at = time::Instant::now();
                 }
-                changed = wake.changed() => {
-                    if changed.is_err() { return Err(RuntimeError::Dependency("wake_closed")); }
-                    break;
-                }
-                () = time::sleep_until(next.map_or(recovery_at, |(_, at)| at)), if next.is_some() => {
-                    let Some((index, _)) = next else { continue; };
-                    let Some(retry) = rechecks.get_mut(index) else { continue; };
-                    let now = time::Instant::now();
-                    if now >= recovery_at {
-                        rechecks.clear();
-                        break;
-                    }
-                    if !retry.retry.try_start(now, &mut recovery.busy_budget) {
-                        retry.next_at = None;
-                        continue;
-                    }
-                    // An optional attempt never extends the already-scheduled safety/admission scan.
-                    let attempt_timeout = timeout.min(recovery_at.saturating_duration_since(now));
-                    let remains_busy = settle_and_dispatch(&mut database, &retry.id, attempt_timeout, &sink).await?;
-                    if remains_busy {
-                        retry.next_at = retry.retry.next_at(time::Instant::now());
-                    }
-                    #[cfg(test)]
-                    if let Some(rechecked) = &schedule.rechecked {
-                        rechecked.send_modify(|count| *count += 1);
-                    }
-                    if !remains_busy {
-                        rechecks.remove(index);
-                    }
+                Err(error) => {
+                    self.defer_reconnect(&error);
+                    return Ok(());
                 }
             }
         }
+        match self.advance(shutdown).await {
+            Ok(()) => {
+                self.reconnect_delay = Duration::from_millis(100);
+                Ok(())
+            }
+            Err(error @ RuntimeError::Protocol(_)) => Err(error),
+            Err(error) => {
+                self.defer_reconnect(&error);
+                Ok(())
+            }
+        }
+    }
+
+    fn defer_reconnect(&mut self, error: &RuntimeError) {
+        tracing::warn!(event = "ocr_submission_reconnecting", error = %error);
+        // Closing the owned driver also closes a timed-out request with an unknown commit.
+        self.database = None;
+        self.reconnect_at = Some(time::Instant::now() + self.reconnect_delay);
+        self.reconnect_delay = self
+            .reconnect_delay
+            .saturating_mul(2)
+            .min(Duration::from_secs(5));
+    }
+
+    async fn advance(&mut self, shutdown: &watch::Receiver<bool>) -> Result<(), RuntimeError> {
+        if stopping(shutdown) {
+            return Ok(());
+        }
+        let next_retry = self.next_retry();
+        let database = self
+            .database
+            .as_mut()
+            .ok_or(RuntimeError::Protocol("database_missing"))?;
+        let now = time::Instant::now();
+        if now < self.scan_at {
+            if let Some((index, _)) = next_retry.filter(|(_, at)| *at <= now) {
+                let retry = self
+                    .recovery
+                    .rechecks
+                    .get_mut(index)
+                    .ok_or(RuntimeError::Protocol("busy_retry_missing"))?;
+                if !retry.retry.try_start(now, &mut self.recovery.busy_budget) {
+                    retry.next_at = None;
+                    return Ok(());
+                }
+                // Optional retries use the normal operation bound. A nearly-due scan must not
+                // turn that bound into a tiny hard timeout which repeatedly discards progress.
+                let busy =
+                    settle_and_dispatch(database, &retry.id, self.timeout, &self.sink).await?;
+                if busy {
+                    retry.next_at = retry.retry.next_at(time::Instant::now());
+                } else {
+                    self.recovery.rechecks.remove(index);
+                }
+                #[cfg(test)]
+                if let Some(observed) = &self.schedule.rechecked {
+                    observed.send_modify(|count| *count += 1);
+                }
+            }
+            return Ok(());
+        }
+        if self.recovery.cursor.upper.is_none() {
+            self.requested = false;
+            self.recovery.busy.clear();
+        }
+        let complete = sweep_page(
+            database,
+            self.timeout,
+            &self.sink,
+            shutdown,
+            &mut self.recovery.cursor,
+            &mut self.recovery.busy,
+        )
+        .await?;
+        if !complete {
+            self.scan_at = time::Instant::now() + CONTINUATION_DELAY;
+            return Ok(());
+        }
+        if stopping(shutdown) {
+            return Ok(());
+        }
+        let delay = next_delay(database, self.timeout)
+            .await?
+            .min(self.schedule.safety_interval);
+        self.scan_at = time::Instant::now() + delay;
+        retain_busy(
+            &mut self.recovery.rechecks,
+            std::mem::take(&mut self.recovery.busy),
+            self.scan_at,
+        );
+        if self.requested {
+            self.scan_at = time::Instant::now() + CONTINUATION_DELAY;
+        }
+        #[cfg(test)]
+        if let Some(observed) = &self.schedule.observed {
+            observed.send_modify(|count| *count += 1);
+        }
+        Ok(())
     }
 }
+
+fn stopping(shutdown: &watch::Receiver<bool>) -> bool {
+    *shutdown.borrow() || shutdown.has_changed().is_err()
+}
+
+async fn connect_database(
+    url: &str,
+    timeout: Duration,
+) -> Result<postgres::ConnectedClient, RuntimeError> {
+    let database = postgres::connect(url)
+        .await
+        .map_err(|error| RuntimeError::Dependency(error.kind()))?;
+    time::timeout(timeout, database.query_typed("SELECT s.status, s.match_draft_id, s.admission_deadline, s.finished_at, m.screen_type, m.status, m.failure_code, m.job_id FROM ocr_submissions s LEFT JOIN ocr_submission_members m ON m.submission_id = s.id LIMIT 0", &[])).await
+        .map_err(|_error| RuntimeError::Dependency("schema_probe_timeout"))?.map_err(|_error| RuntimeError::Dependency("schema_contract"))?;
+    Ok(database)
+}
+
+async fn discover(
+    database: &Client,
+    timeout: Duration,
+    cursor: &mut ScanCursor,
+) -> Result<(), RuntimeError> {
+    if cursor.upper.is_none() {
+        cursor.upper = time::timeout(
+            timeout,
+            database.query_typed_one(
+                "SELECT max(id) FROM ocr_submissions WHERE status = 'open'",
+                &[],
+            ),
+        )
+        .await
+        .map_err(|_error| RuntimeError::Dependency("scan_timeout"))?
+        .map_err(|_error| RuntimeError::Dependency("scan"))?
+        .try_get(0)
+        .map_err(|_error| RuntimeError::Protocol("scan_decode"))?;
+    }
+    let Some(upper) = &cursor.upper else {
+        cursor.last_page = true;
+        return Ok(());
+    };
+    let rows = time::timeout(timeout, database.query_typed("SELECT id FROM ocr_submissions WHERE status = 'open' AND id > $1 AND id <= $2 ORDER BY id LIMIT $3", &[(&cursor.after, Type::TEXT), (&upper, Type::TEXT), (&PAGE_SIZE, Type::INT8)])).await
+        .map_err(|_error| RuntimeError::Dependency("scan_timeout"))?.map_err(|_error| RuntimeError::Dependency("scan"))?;
+    cursor.last_page = rows.len() < usize::try_from(PAGE_SIZE).unwrap_or(32);
+    cursor.pending = rows
+        .into_iter()
+        .map(|row| {
+            row.try_get(0)
+                .map_err(|_error| RuntimeError::Protocol("scan_decode"))
+        })
+        .collect::<Result<_, _>>()?;
+    Ok(())
+}
+
+async fn sweep_page(
+    database: &mut Client,
+    timeout: Duration,
+    sink: &NotificationSink,
+    shutdown: &watch::Receiver<bool>,
+    cursor: &mut ScanCursor,
+    busy: &mut Vec<BusySubmission>,
+) -> Result<bool, RuntimeError> {
+    if cursor.pending.is_empty() {
+        discover(database, timeout, cursor).await?;
+    }
+    // Start the soft scheduling budget after discovery and always attempt the first receipt.
+    let until = time::Instant::now() + STEP_SOFT_BUDGET;
+    while !stopping(shutdown) {
+        let Some(id) = cursor.pending.pop_front() else {
+            break;
+        };
+        cursor.after.clone_from(&id);
+        if settle_and_dispatch(database, &id, timeout, sink).await?
+            && busy.len() < MAX_BUSY_SUBMISSIONS
+        {
+            busy.push(BusySubmission {
+                id,
+                observed_at: time::Instant::now(),
+            });
+        }
+        if time::Instant::now() >= until {
+            break;
+        }
+    }
+    if cursor.pending.is_empty() && cursor.last_page {
+        *cursor = ScanCursor::default();
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+#[cfg(test)]
+async fn sweep(
+    database: &mut Client,
+    timeout: Duration,
+    sink: &NotificationSink,
+    shutdown: &watch::Receiver<bool>,
+    cursor: &mut ScanCursor,
+) -> Result<Vec<BusySubmission>, RuntimeError> {
+    let mut busy = Vec::new();
+    while !sweep_page(database, timeout, sink, shutdown, cursor, &mut busy).await? {
+        if stopping(shutdown) {
+            break;
+        }
+    }
+    Ok(busy)
+}
+
+#[cfg(test)]
+mod test_support;
+#[cfg(test)]
+use super::listener::Listener;
+#[cfg(test)]
+use test_support::coordinate;
+#[cfg(test)]
+pub(crate) use test_support::run_observed;
 
 fn retain_busy(
     rechecks: &mut Vec<BusyRecheck>,
@@ -334,63 +494,6 @@ async fn settle_and_dispatch(
     }
 }
 
-async fn sweep(
-    database: &mut Client,
-    timeout: Duration,
-    sink: &NotificationSink,
-    shutdown: &watch::Receiver<bool>,
-    cursor: &mut ScanCursor,
-) -> Result<Vec<BusySubmission>, RuntimeError> {
-    let mut busy = Vec::new();
-    // The upper bound and last attempted ID survive connection replacement. A row whose command
-    // times out is retried next pass, while later submissions can finish during the resumed pass.
-    if cursor.upper.is_none() {
-        cursor.upper = time::timeout(
-            timeout,
-            database.query_typed_one(
-                "SELECT max(id) FROM ocr_submissions WHERE status = 'open'",
-                &[],
-            ),
-        )
-        .await
-        .map_err(|_elapsed| RuntimeError::Dependency("scan_timeout"))?
-        .map_err(|_error| RuntimeError::Dependency("scan"))?
-        .try_get(0)
-        .map_err(|_error| RuntimeError::Dependency("scan_decode"))?;
-    }
-    let Some(upper) = &cursor.upper else {
-        return Ok(busy);
-    };
-    loop {
-        if *shutdown.borrow() {
-            return Ok(busy);
-        }
-        let rows = time::timeout(timeout, database.query_typed("SELECT id FROM ocr_submissions WHERE status = 'open' AND id > $1 AND id <= $2 ORDER BY id LIMIT $3", &[(&cursor.after, Type::TEXT), (&upper, Type::TEXT), (&PAGE_SIZE, Type::INT8)])).await
-            .map_err(|_elapsed| RuntimeError::Dependency("scan_timeout"))?.map_err(|_error| RuntimeError::Dependency("scan"))?;
-        if rows.is_empty() {
-            *cursor = ScanCursor::default();
-            return Ok(busy);
-        }
-        for row in rows {
-            if *shutdown.borrow() {
-                return Ok(busy);
-            }
-            cursor.after = row
-                .try_get(0)
-                .map_err(|_error| RuntimeError::Dependency("scan_decode"))?;
-            if settle_and_dispatch(database, &cursor.after, timeout, sink).await?
-                && busy.len() < MAX_BUSY_SUBMISSIONS
-            {
-                busy.push(BusySubmission {
-                    id: cursor.after.clone(),
-                    observed_at: time::Instant::now(),
-                });
-            }
-        }
-        tokio::task::yield_now().await;
-    }
-}
-
 async fn next_delay(database: &Client, timeout: Duration) -> Result<Duration, RuntimeError> {
     let row = time::timeout(timeout, database.query_typed_one("SELECT EXTRACT(EPOCH FROM (min(s.admission_deadline) - clock_timestamp()))::double precision \
         FROM ocr_submissions s WHERE s.status = 'open' AND s.admission_deadline > clock_timestamp() \
@@ -398,7 +501,7 @@ async fn next_delay(database: &Client, timeout: Duration) -> Result<Duration, Ru
         .map_err(|_elapsed| RuntimeError::Dependency("deadline_read_timeout"))?.map_err(|_error| RuntimeError::Dependency("deadline_read"))?;
     let seconds: Option<f64> = row
         .try_get(0)
-        .map_err(|_error| RuntimeError::Dependency("deadline_decode"))?;
+        .map_err(|_error| RuntimeError::Protocol("deadline_decode"))?;
     Ok(seconds
         .and_then(|value| Duration::try_from_secs_f64(value).ok())
         .map_or(SAFETY_INTERVAL, |value| {

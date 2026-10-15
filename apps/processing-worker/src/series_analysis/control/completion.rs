@@ -5,8 +5,8 @@ use tokio_postgres::{Client, Transaction};
 
 use crate::{
     process::current_process_peak_resident_bytes,
-    scheduler::ControlOutcome,
     series_analysis::{artifact::ValidatedArtifact, config::AnalysisConsumerConfig},
+    worker::ControlOutcome,
 };
 
 use super::{

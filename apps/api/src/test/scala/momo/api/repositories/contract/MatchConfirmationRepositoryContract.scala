@@ -34,10 +34,14 @@ trait MatchConfirmationRepositoryContract:
     assertStatusRejected(MatchDraftStatus.Cancelled)
 
   test("confirmation rejects a stale timestamp without changing stored state"):
-    assertSnapshotRejected(snapshot => snapshot.copy(updatedAt = snapshot.updatedAt.minusSeconds(1)))
+    assertSnapshotRejected(snapshot =>
+      snapshot.copy(updatedAt = snapshot.updatedAt.minusSeconds(1))
+    )
 
   test("confirmation rejects different OCR references without changing stored state"):
-    assertSnapshotRejected(_.copy(totalAssetsDraftId = Some(OcrDraftId.unsafeFromString("other-ocr"))))
+    assertSnapshotRejected(_.copy(totalAssetsDraftId =
+      Some(OcrDraftId.unsafeFromString("other-ocr"))
+    ))
 
   private def assertAccepted(status: MatchDraftStatus): IO[Unit] =
     for

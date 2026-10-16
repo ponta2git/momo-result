@@ -37,7 +37,9 @@ final class EndpointExecutionSpec extends MomoCatsEffectSuite:
   private def mustNotDecode: Either[AppError, String] =
     fail("rejected and replayed requests must not decode a command")
 
-  test("replay and rejection precede command decoding while path and raw payload identify retries") {
+  test(
+    "replay and rejection precede command decoding while path and raw payload identify retries"
+  ) {
     for
       http <- execution(1)
       calls <- IO.ref(0)
@@ -62,7 +64,10 @@ final class EndpointExecutionSpec extends MomoCatsEffectSuite:
       assertEquals(first, Right(response))
       assertEquals(replay, first)
       assertEquals(anotherPath.left.toOption.map(_.body.code), Some("IDEMPOTENCY_PAYLOAD_MISMATCH"))
-      assertEquals(normalizedPayload.left.toOption.map(_.body.code), Some("IDEMPOTENCY_PAYLOAD_MISMATCH"))
+      assertEquals(
+        normalizedPayload.left.toOption.map(_.body.code),
+        Some("IDEMPOTENCY_PAYLOAD_MISMATCH")
+      )
       assertEquals(fresh.left.toOption.map(_.body.code), Some("TOO_MANY_REQUESTS"))
       assertEquals(count, 1)
   }
@@ -88,4 +93,6 @@ final class EndpointExecutionSpec extends MomoCatsEffectSuite:
   private object UnusedAuthPolicy extends AuthPolicy[IO]:
     def authenticate(context: AuthRequestContext)
         : IO[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]] =
-      IO.raiseError(new IllegalStateException("authentication belongs to the endpoint security phase"))
+      IO.raiseError(
+        new IllegalStateException("authentication belongs to the endpoint security phase")
+      )

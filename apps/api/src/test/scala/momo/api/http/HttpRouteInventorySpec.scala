@@ -3,13 +3,12 @@ package momo.api.http
 import cats.effect.IO
 import sttp.tapir.AnyEndpoint
 
-import momo.api.MomoCatsEffectSuite
-import momo.api.bootstrap.ApiApp
 import momo.api.config.{AppConfig, AppEnv}
 import momo.api.endpoints.ApiEndpoints
+import momo.api.integration.PostgresHttpAppTestFixtures
 
-final class HttpRouteInventorySpec extends MomoCatsEffectSuite:
-  test("each runtime registers documented endpoints exactly once"):
+final class HttpRouteInventorySpec extends PostgresHttpAppTestFixtures:
+  test("each PostgreSQL runtime registers documented endpoints exactly once"):
     for
       _ <- assertRuntimeInventory(AppEnv.Test, "http-route-inventory-test")
       _ <- assertRuntimeInventory(AppEnv.Prod, "http-route-inventory-prod")
@@ -17,7 +16,7 @@ final class HttpRouteInventorySpec extends MomoCatsEffectSuite:
 
   private def assertRuntimeInventory(appEnv: AppEnv, prefix: String): IO[Unit] =
     tempDirectory(prefix).flatMap { imageDirectory =>
-      ApiApp.wiredWithHandles[IO](AppConfig(
+      runtimeResource(AppConfig(
         appEnv = appEnv,
         httpHost = "127.0.0.1",
         httpPort = 0,

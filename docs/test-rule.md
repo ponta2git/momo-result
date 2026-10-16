@@ -103,7 +103,7 @@ test、suite、lint / checker、manual review は、守る価値に対して必�
 
 - fixture は生成型 / domain 型に追従させ、意味のある factory へ集約する。大量の inline payload や型 cast で契約を迂回しない。
 - MSW / store / storage / timer は test lifecycle で reset し、test 間で状態を共有しない。
-- double は production adapter の guard と失敗型を表現する。double 独自の簡略状態を期待値にしない。
+- double は test が扱う操作の guard と失敗型を表現し、未実装の保存・副作用を成功として扱わない。production 全体の再現を目指さず、double 独自の簡略状態を期待値にしない。
 - async は Promise、MSW、fake clock で決定論的に進める。
 
 ### Locator / E2E
@@ -124,7 +124,8 @@ test、suite、lint / checker、manual review は、守る価値に対して必�
 - endpoint は wire validation、auth / CSRF、status / Problem Details、usecase 接続を検証する。
 - usecase は状態遷移、競合、transaction 内の副作用、port failure mapping を検証する。
 - HTTP 契約の正本と OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary に従う。構造 lint と freshness は pipeline integrity、代表 request / response と利用者に現れる意味は contract / integration evidence として区別する。
-- in-memory adapter と repository の guard が一致する代表ケースを共有 contract として持つ。
+- InMemory は HTTP / application の限定した double とし、永続化仕様の正本にしない。存続が必要な同一 port に条件ずれがある場合だけ、consumer が依存する代表的な受理・拒否と保存結果を小さい共有 contract で検証する。全 repository の二重実装・二重 suite を義務化しない。
+- lock、rollback、競合、永続 job / replay の詳細を double へ追加する前に、該当 test を実 PostgreSQL へ移す。移行後は不要な simulator、fixture、重複 assertion を削除し、単なる test の移動で二重保守を残さない。
 
 ### DB-backed API
 

@@ -13,12 +13,15 @@ import org.typelevel.ci.CIString
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.auth.AuthHeaderNames
-import momo.api.bootstrap.ApiApp
+import momo.api.bootstrap.{ApiApp, HttpTestRuntime}
 import momo.api.config.{AppConfig, AppEnv}
 import momo.api.testing.TestImages
 
 trait HttpAppTestFixtures:
   this: MomoCatsEffectSuite =>
+
+  protected def runtimeResource(config: AppConfig): Resource[IO, ApiApp.WiredRuntime[IO]] =
+    HttpTestRuntime.wiredWithHandles[IO](config)
 
   protected type TestHttpApp = Http4sApp[IO]
   protected final case class FileBackedTestHttpApp(app: TestHttpApp, imageRoot: Path)
@@ -41,7 +44,10 @@ trait HttpAppTestFixtures:
 
   protected def fileBackedHttpAppResource(prefix: String): Resource[IO, FileBackedTestHttpApp] =
     tempDirectory(prefix).flatMap { dir =>
-      ApiApp.resource[IO](defaultConfig(dir, AppEnv.Test)).map(FileBackedTestHttpApp(_, dir))
+      runtimeResource(defaultConfig(dir, AppEnv.Test)).map(_.runtime.app).map(FileBackedTestHttpApp(
+        _,
+        dir
+      ))
     }
 
   protected def seededWiredHttpAppResource(
@@ -183,14 +189,14 @@ trait HttpAppTestFixtures:
       appEnv: AppEnv,
       configure: AppConfig => AppConfig,
   ): Resource[IO, TestHttpApp] = tempDirectory(prefix)
-    .flatMap(dir => ApiApp.resource[IO](configure(defaultConfig(dir, appEnv))))
+    .flatMap(dir => runtimeResource(configure(defaultConfig(dir, appEnv))).map(_.runtime.app))
 
   private def wiredHttpAppResourceWith(
       prefix: String,
       configure: AppConfig => AppConfig,
       seed: ApiApp.RuntimeHandles[IO] => IO[Unit],
   ): Resource[IO, TestHttpApp] = tempDirectory(prefix).flatMap { dir =>
-    ApiApp.wiredWithHandles[IO](configure(defaultConfig(dir, AppEnv.Test)))
+    runtimeResource(configure(defaultConfig(dir, AppEnv.Test)))
       .evalTap(wired => seed(wired.handles)).map(_.runtime.app)
   }
 

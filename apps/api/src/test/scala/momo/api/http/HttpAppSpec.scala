@@ -14,7 +14,7 @@ import org.typelevel.ci.CIString
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.auth.SessionCookieCodec
-import momo.api.bootstrap.ApiApp
+import momo.api.bootstrap.HttpTestRuntime
 import momo.api.config.{AppConfig, AppEnv, ResourceLimitsConfig}
 import momo.api.domain.ids.AccountId
 import momo.api.http.HttpAssertions.{assertProblem, headerValue, jsonField, optionalHeaderValue}
@@ -34,7 +34,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   private val prodHttpApp = ResourceFunFixture(prodHttpAppResource("momo-api-prod-http"))
   private val sessionBackedApp = ResourceFunFixture(
     tempDirectory("momo-api-session-auth").flatMap { dir =>
-      ApiApp.wiredWithHandles[IO](AppConfig(
+      HttpTestRuntime.wiredWithHandles[IO](AppConfig(
         appEnv = AppEnv.Test,
         httpHost = "127.0.0.1",
         httpPort = 0,

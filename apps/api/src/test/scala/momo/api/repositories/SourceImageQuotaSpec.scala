@@ -11,7 +11,11 @@ final class SourceImageQuotaSpec extends FunSuite:
 
   test("overflow cannot turn usage into available capacity"):
     val quota = SourceImageQuota(Int.MaxValue, Long.MaxValue - 1)
-    assertEquals(quota.evaluate(0, Long.MaxValue - 2, 10),
-      Some(SourceImageQuotaRejection.BytesExceeded(Long.MaxValue, Long.MaxValue - 1)))
-    assertEquals(quota.evaluate(Long.MaxValue, 0, 0),
-      Some(SourceImageQuotaRejection.CountExceeded(Long.MaxValue, Int.MaxValue)))
+    assertEquals(
+      quota.evaluate(0, Long.MaxValue - 2, 10),
+      Some(SourceImageQuotaRejection.BytesExceeded(Long.MaxValue, Long.MaxValue - 1))
+    )
+    assertEquals(
+      quota.evaluate(Long.MaxValue, 0, 0),
+      Some(SourceImageQuotaRejection.CountExceeded(Long.MaxValue, Int.MaxValue))
+    )

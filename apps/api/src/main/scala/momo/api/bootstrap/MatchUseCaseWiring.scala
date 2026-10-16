@@ -83,7 +83,8 @@ private[bootstrap] object MatchUseCaseWiring:
       ),
       listMatches = ListMatches[F](list),
       getMatch = GetMatch[F](details),
-      updateMatch = UpdateMatch[F](events, matches, gameTitles, maps, seasons, now, allowedMemberIds),
+      updateMatch =
+        UpdateMatch[F](events, matches, gameTitles, maps, seasons, now, allowedMemberIds),
       replaceMatchNote = ReplaceMatchNote[F](notes, now),
       deleteMatch = DeleteMatch[F](matches),
     )

@@ -50,6 +50,13 @@
 - 依存方向は `http → auth / usecases → domain + ports / repositories`、`adapters → domain + ports / repositories` とする。外部通信・永続化の実装は adapter に置き、`bootstrap` だけが実装を選ぶ。認証の account 判定と callback の組み立ても HTTP module へ戻さない。
 - 外部境界には利用側が必要とする操作・値だけを公開する。セッションには有効期間、OAuth state には署名鍵と有効期間、OCR受付には別名の snapshot を渡し、全体設定や未使用の更新操作を運搬しない。SDK client、SQL、provider wire DTO は adapter 内に閉じる。
 
+### Bootstrap / HTTP execution
+
+- PostgreSQL を通常 runtime の永続化境界とし、DB 設定の欠落を InMemory へ fallback させない。接続 pool、storage、cache、wake とその Resource は runtime が一度だけ生成・所有する。
+- feature ごとの bootstrap が必要な repository / service から usecase を組み立て、HTTP module が所有する UseCases の束をそのまま渡す。中央で同じ一覧を展開・再包装しない。個々の usecase は必要な port だけを受け取り、runtime 全体の依存 container を参照しない。
+- 共通 HTTP 入口は認可、replay、decode、usecase 実行、response 変換の接続を扱い、業務判断や transaction を所有しない。endpoint ごとの codec・実行関数・response の指定は composition として明示し、用途の異なる手順を切替 flag の組合せへ押し込まない。
+- 処理順は認証・認可、入力上限、replay、新規操作の受付・業務検証の意味から決める。既存の並び自体を互換契約にせず、保存済み idempotency key / fingerprint や有効な client 契約を変える場合だけ必要な移行を設ける。時計、ID、member / alias の読取りは操作時に評価し、bootstrap で snapshot 化しない。
+
 ### Usecase / Repository
 
 - domain は不変条件、状態の優先順位、範囲判定、純粋な組み立てを所有する。usecase はそれらを使った手順と副作用を所有し、repository は必要な整合性を保証する永続化操作を公開する。SQL行の型変換とI/O失敗の扱いはadapterに置く。
@@ -65,7 +72,7 @@
 - 通常制御フローは型で返し、予期しない不整合や外部I/O失敗と区別する。
 - 部分更新は既存値と入力を合わせた実効状態で検証する。読み取り後の前提を更新に使う場合は、同じ更新条件で再検証する。
 - 下書きの変更・取消とOCRの受付・取消は、認証主体の所有権をusecaseと原子的な保存操作で確認する。共同編集可能な確定済み試合の契約とは分ける。
-- in-memory adapter は production adapter と同じ状態遷移 guard を持つ。単純化した double を正本にしない。
+- InMemory は test source の限定した HTTP / application double とし、第二の永続化実装として育てない。必要な状態条件は domain policy を使い、lock・rollback・制約・永続 job の意味は実 PostgreSQL で検証する。複雑な保存条件を必要とする test は実 DB へ移し、不要になった double と重複 test を削除する。
 - 分析読み取りは保存済み成果物を返すだけにし、関連する読み取りを同じ artifact version へ固定する。詳細は `docs/requirements/series-analysis-batch.md` を正本とする。
 
 ### Transaction / Job Wake

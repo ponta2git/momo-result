@@ -10,12 +10,12 @@ import org.http4s.implicits.*
 import org.http4s.{Method, Request, Status, Uri}
 import org.typelevel.ci.CIString
 
-import momo.api.MomoCatsEffectSuite
 import momo.api.domain.GameTitle
 import momo.api.domain.ids.GameTitleId
 import momo.api.http.HttpAssertions.{assertProblem, jsonField, optionalHeaderValue}
+import momo.api.integration.PostgresHttpAppTestFixtures
 
-final class SeriesAnalysisHttpSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
+final class SeriesAnalysisHttpSpec extends PostgresHttpAppTestFixtures:
   private val titleId = GameTitleId.unsafeFromString("title-http-analysis")
   private val app = ResourceFunFixture(seededWiredHttpAppResource(
     "momo-series-analysis-http",

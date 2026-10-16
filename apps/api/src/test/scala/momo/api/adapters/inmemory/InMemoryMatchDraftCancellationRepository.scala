@@ -25,7 +25,7 @@ final class InMemoryMatchDraftCancellationRepository[F[_]: Sync](
       case Left(result) => result.pure[F]
       case Right(draft) =>
         ocrJobs.cancelQueuedByDraftIds(draft.ocrDraftIds, updatedAt)
-          .as(MatchDraftCancellationResult.Cancelled(draft.sourceImageIds))
+          .as(MatchDraftCancellationResult.Cancelled)
     }
   }
 end InMemoryMatchDraftCancellationRepository

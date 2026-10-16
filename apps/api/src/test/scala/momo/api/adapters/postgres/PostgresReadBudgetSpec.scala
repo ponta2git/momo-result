@@ -134,6 +134,30 @@ final class PostgresReadBudgetSpec extends IntegrationSuite:
       assertEquals(summary.map(_.draftCount), Some(maximum + 1))
   }
 
+  test("whole-event detail validates active draft labels and ignores discarded drafts") {
+    val name = "🚀" * PostgresReadBudget.NameCodePoints
+    val detail = PostgresHeldEventDetailReadModel[IO](transactor)
+    for
+      _ <- seedCatalog
+      _ <- PostgresHeldEventsRepository[IO](transactor).create(HeldEvent(eventId, now))
+      _ <- insertDrafts(1, 1)
+      _ <- sql"UPDATE match_drafts SET game_title_id = $titleId WHERE held_event_id = $eventId"
+        .update.run.transact(transactor)
+      _ <- sql"UPDATE game_titles SET name = $name WHERE id = $titleId".update.run
+        .transact(transactor)
+      accepted <- detail.find(eventId)
+      _ <- sql"UPDATE game_titles SET name = name || 'a' WHERE id = $titleId".update.run
+        .transact(transactor)
+      rejected <- detail.find(eventId).attempt
+      _ <- sql"UPDATE match_drafts SET status = 'cancelled' WHERE held_event_id = $eventId"
+        .update.run.transact(transactor)
+      discarded <- detail.find(eventId)
+    yield
+      assertEquals(accepted.toList.flatMap(_.drafts).flatMap(_.labels.gameTitleName), List(name))
+      assertAppException(rejected, "PAYLOAD_TOO_LARGE", "oversized stored text")
+      assertEquals(discarded.map(_.drafts), Some(Nil))
+  }
+
   test("held-event scope aggregation rejects excessive groups without returning partial counts") {
     val maximum = PostgresReadBudget.ScopeRows
     for
@@ -166,7 +190,9 @@ final class PostgresReadBudgetSpec extends IntegrationSuite:
         VALUES ('budget_match', $eventId, 1, $titleId, 'world', 'budget_season', 'member_ponta',
           'budget_map', $now, 'account_ponta', 'member_ponta', $now)
       """.update.run.transact(transactor)
-      // This extra parent has no child rows: the count guard must reject before decoding children.
+      _ <- sql"UPDATE game_titles SET name = repeat('x', 4096) WHERE id = $titleId".update.run
+        .transact(transactor)
+      // Count overflow takes precedence over oversized text and the parent's missing child rows.
       rejected <- PostgresHeldEventDetailReadModel[IO](transactor).find(eventId).attempt
     yield assertAppException(rejected, "PAYLOAD_TOO_LARGE", "too many records")
   }

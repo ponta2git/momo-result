@@ -37,7 +37,6 @@ private[bootstrap] object MatchUseCaseWiring:
       reviews: MatchDraftReviewReadModel[F],
       cancellation: MatchDraftCancellationRepository[F],
       images: ImageStorage[F],
-      retention: PurgeSourceImages[F],
       archiveMaxBytes: Long,
       now: F[Instant],
       nextId: F[MatchDraftId],
@@ -46,7 +45,7 @@ private[bootstrap] object MatchUseCaseWiring:
     getMatchDraft = GetMatchDraft[F](drafts),
     getMatchDraftReview = GetMatchDraftReview[F](reviews),
     updateMatchDraft = UpdateMatchDraft[F](events, gameTitles, maps, seasons, drafts, now),
-    cancelMatchDraft = CancelMatchDraft[F](cancellation, retention, now),
+    cancelMatchDraft = CancelMatchDraft[F](cancellation, now),
     getMatchDraftSourceImages = GetMatchDraftSourceImages[F](drafts, images, archiveMaxBytes),
   )
 

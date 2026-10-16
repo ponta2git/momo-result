@@ -27,7 +27,8 @@ final class PurgeSourceImages[F[_]: Sync](
           deletedAt = Some(now),
           updatedAt = now,
         ).flatMap {
-          case MatchDraftSourceImageRetentionResult.Updated => deleteSourceImages(draft)
+          case MatchDraftSourceImageRetentionResult.Updated =>
+            deleteSourceImages(draft.sourceImageIds)
           case MatchDraftSourceImageRetentionResult.NotFound => Sync[F].unit
         }
       )
@@ -39,16 +40,6 @@ final class PurgeSourceImages[F[_]: Sync](
       Sync[F].delay(logger.error(s"Source image retention cleanup failed draftId=${draftId
           .value} errorClasses=$classes"))
     }
-
-  def deleteKnownBestEffort(draftId: MatchDraftId, imageIds: List[ImageId]): F[Unit] =
-    deleteSourceImages(imageIds).handleErrorWith { error =>
-      val classes = SafeLog.throwableClasses(error)
-      Sync[F].delay(logger.error(s"Source image delete failed draftId=${draftId
-          .value} errorClasses=$classes"))
-    }
-
-  private def deleteSourceImages(draft: momo.api.domain.MatchDraft): F[Unit] =
-    deleteSourceImages(draft.sourceImageIds)
 
   private def deleteSourceImages(imageIds: List[ImageId]): F[Unit] = imageIds.distinct
     .traverse_(rawId => imageStore.delete(rawId).void)

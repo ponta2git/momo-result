@@ -38,7 +38,7 @@ object PostgresMatchDraftCancellation:
           PostgresOcrJobs.alg.cancelQueuedByDraftIds(deleted.ocrDraftIds, updatedAt) *>
           PostgresSourceImageLifecycle.stageDeletion(deleted.sourceImageIds, updatedAt) *>
           PostgresResultNotificationCancellation.draftsUnavailable(List(draftId), updatedAt)
-            .as(MatchDraftCancellationResult.Cancelled(deleted.sourceImageIds))
+            .as(MatchDraftCancellationResult.Cancelled)
       case None => classifyCurrent(draftId, actorAccountId)
     }
 

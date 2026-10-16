@@ -47,7 +47,10 @@ final class PostgresSeriesAnalysisOutlookSpec extends IntegrationSuite with Json
     val reference = withTitle(fixture("outlook-reference-payload-v1.json"))
       .mapObject(_.add("memberId", Json.fromString(member.value)))
     val count = reference.hcursor.downField("source").get[Int]("titleMatchCount").toOption.get
-    val read = request(SeriesAnalysisChunkKind.OutlookReference).copy(memberId = Some(member))
+    val read = request(SeriesAnalysisChunkKind.OutlookReference).copy(
+      memberId = Some(member),
+      projection = SeriesAnalysisChunkProjection.OutlookExamples,
+    )
     for
       _ <- seed(None, Some(reference))
       repository <-
@@ -88,6 +91,37 @@ final class PostgresSeriesAnalysisOutlookSpec extends IntegrationSuite with Json
       )
       assertEquals(expired, Left(AppError.AnalysisArtifactExpired()))
       assertEquals(unknown, Left(AppError.NotFound("member", "unknown-member")))
+
+  test("outlook projections keep the member name from the artifact read in one transaction"):
+    val reference = withTitle(fixture("outlook-reference-payload-v1.json"))
+      .mapObject(_.add("memberId", Json.fromString(member.value)))
+    val read = request(SeriesAnalysisChunkKind.OutlookReference).copy(memberId = Some(member))
+    val transactions = new java.util.concurrent.atomic.AtomicInteger(0)
+    val after =
+      doobie.free.connection.delay(transactions.incrementAndGet()).flatMap {
+        case 1 =>
+          sql"UPDATE members SET display_name = '読取後の名前' WHERE id = $member".update.run.void
+        case _ => ().pure[ConnectionIO]
+      } *> doobie.free.connection.commit
+    for
+      _ <- seed(None, Some(reference))
+      _ <- sql"UPDATE members SET display_name = '読取時の名前' WHERE id = $member"
+        .update.run.transact(transactor)
+      repository <- PostgresSeriesAnalysisRepository.create[IO](
+        Transactor.after.set(transactor, after),
+        SeriesAnalysisReadConfig.defaults,
+      )
+      examples <-
+        repository.chunk(read.copy(projection = SeriesAnalysisChunkProjection.OutlookExamples))
+      currentName <- sql"SELECT display_name FROM members WHERE id = $member"
+        .query[String].unique.transact(transactor)
+      window <-
+        repository.chunk(read.copy(projection = SeriesAnalysisChunkProjection.OutlookWindow(1)))
+    yield
+      assertEquals(json(examples).hcursor.get[String]("displayName"), Right("読取時の名前"))
+      assertEquals(currentName, "読取後の名前")
+      assertEquals(json(window).hcursor.get[String]("displayName"), Right("読取後の名前"))
+      assertEquals(transactions.get(), 2)
 
   private def seed(summary: Option[Json], reference: Option[Json]): IO[Unit] =
     val version = SeriesAnalysisArtifactContract.ArtifactSchemaVersion

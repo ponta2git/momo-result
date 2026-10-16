@@ -13,7 +13,11 @@ import momo.api.domain.ids.{GameTitleId, MapMasterId, MatchId, MemberId, SeasonM
 import momo.api.errors.AppError
 
 private[postgres] object PostgresSeriesAnalysisChunkOps:
-  final case class LoadedChunk(request: SeriesAnalysisChunkRequest, material: ChunkMaterial)
+  final case class LoadedChunk(
+      request: SeriesAnalysisChunkRequest,
+      material: ChunkMaterial,
+      displayMetadata: Option[DisplayMetadata] = None,
+  )
 
   enum ChunkMaterial:
     case Stored(
@@ -97,22 +101,41 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
       config: SeriesAnalysisReadConfig,
   ): ConnectionIO[Either[AppError, LoadedChunk]] =
     val exists = PostgresSeriesAnalysisScopeOps.valid(request.gameTitleId, request.scope)
-    val memberExists = if request.kind == SeriesAnalysisChunkKind.OutlookReference then
+    val preloadDisplayMetadata = request.kind == SeriesAnalysisChunkKind.OutlookReference &&
+      request.scope == SeriesAnalysisScope.Overall && request.memberId.nonEmpty &&
+      (request.projection match
+        case SeriesAnalysisChunkProjection.OutlookExamples |
+            SeriesAnalysisChunkProjection.OutlookWindow(_) => true
+        case SeriesAnalysisChunkProjection.Stored => false)
+    val memberExists = if preloadDisplayMetadata then fr"snapshot_member.id IS NOT NULL"
+    else if request.kind == SeriesAnalysisChunkKind.OutlookReference then
       fr"EXISTS (SELECT 1 FROM members WHERE id = ${request.memberId.map(_.value)})"
     else fr"true"
+    val memberColumns = if preloadDisplayMetadata then
+      fr"snapshot_member.id, snapshot_member.display_name"
+    else fr"NULL::text, NULL::text"
+    val memberJoin = if preloadDisplayMetadata then
+      fr"LEFT JOIN members snapshot_member ON snapshot_member.id = ${request.memberId.map(_.value)}"
+    else Fragment.empty
     // An empty title has no aggregate scope index, but its no-target outlook summary is mandatory.
     val overallOutlook = request.kind == SeriesAnalysisChunkKind.OutlookSummary &&
       request.scope == SeriesAnalysisScope.Overall
     val query = fr"SELECT" ++ exists ++ fr"," ++ memberExists ++
       fr", ${request.scope.key} = ANY(a.scope_keys)," ++
-      storedColumns(config) ++
-      readableArtifact(request) ++ chunkJoin(request)
-    query.query[(Boolean, Boolean, Option[Boolean], Option[SeriesAnalysisStoredChunk])].unique.map {
-      case (false, _, _, _) => AppError.AnalysisScopeNotFound().asLeft
-      case (_, false, _, _) =>
+      storedColumns(config) ++ fr"," ++ memberColumns ++
+      readableArtifact(request) ++ chunkJoin(request) ++ memberJoin
+    query.query[(
+        Boolean,
+        Boolean,
+        Option[Boolean],
+        Option[SeriesAnalysisStoredChunk],
+        Option[MemberDisplayNameRow]
+    )].unique.map {
+      case (false, _, _, _, _) => AppError.AnalysisScopeNotFound().asLeft
+      case (_, false, _, _, _) =>
         AppError.NotFound("member", request.memberId.fold("")(_.value)).asLeft
-      case (_, _, _, None) => AppError.AnalysisArtifactExpired().asLeft
-      case (_, _, indexed, Some(row))
+      case (_, _, _, None, _) => AppError.AnalysisArtifactExpired().asLeft
+      case (_, _, indexed, Some(row), _)
           if row.scopeKind.isEmpty &&
             (overallOutlook ||
               (indexed.contains(true) &&
@@ -121,9 +144,15 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
                   request.kind == SeriesAnalysisChunkKind.OutlookSummary ||
                   request.kind == SeriesAnalysisChunkKind.OutlookReference))) =>
         AppError.Internal("A published analysis scope resource is missing.").asLeft
-      case (_, _, Some(false), Some(row)) if row.scopeKind.nonEmpty && !overallOutlook =>
+      case (_, _, Some(false), Some(row), _) if row.scopeKind.nonEmpty && !overallOutlook =>
         AppError.Internal("The published analysis scope index is inconsistent.").asLeft
-      case (_, _, _, Some(row)) => LoadedChunk(request, ChunkMaterial.Stored(row, None)).asRight
+      case (_, _, _, Some(row), member) =>
+        val metadata = Option.when(preloadDisplayMetadata)(DisplayMetadata(
+          member.toList.map(value => value.id -> value.displayName).toMap,
+          Some("総合"),
+          Map.empty,
+        ))
+        LoadedChunk(request, ChunkMaterial.Stored(row, None), metadata).asRight
     }
 
   /**

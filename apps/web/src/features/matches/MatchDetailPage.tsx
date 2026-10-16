@@ -10,6 +10,7 @@ import {
   MatchDetailLoading,
 } from "@/features/matches/MatchDetailStatusViews";
 import { MatchFeatureSection } from "@/features/matches/MatchFeatureSection";
+import type { MatchNoteEditor } from "@/features/matches/matchNoteModel";
 import {
   MatchNoteSection,
   MatchNoteNavigationGuard,
@@ -17,11 +18,8 @@ import {
 } from "@/features/matches/MatchNoteSection";
 import { MatchRecordMetadata } from "@/features/matches/MatchRecordMetadata";
 import { useMatchDetailPageModel } from "@/features/matches/useMatchDetailPageModel";
-import { useMatchNoteEditor } from "@/features/matches/useMatchNoteEditor";
-import type { MatchNoteEditor } from "@/features/matches/useMatchNoteEditor";
 import { incidentColumns } from "@/shared/domain/incidents";
 import { formatMatchNoInEvent, formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
-import { memberDisplayName } from "@/shared/domain/members";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { MatchResultLedger } from "@/shared/matches/MatchResultLedger";
 import { useAdjacentNavigationFocus } from "@/shared/navigation/useAdjacentNavigationFocus";
@@ -40,11 +38,7 @@ export function MatchDetailPage() {
 
 function MatchDetailScreen() {
   const page = useMatchDetailPageModel();
-  const editor = useMatchNoteEditor({
-    matchId: page.matchId,
-    match: page.kind === "ready" ? page.match : undefined,
-    ...page.note,
-  });
+  const { editor } = page;
   const titleRef = useAdjacentNavigationFocus(page.kind !== "loading");
 
   return (
@@ -77,37 +71,22 @@ function MatchDetailReadyContent({
   titleRef: Ref<HTMLHeadingElement>;
 }) {
   const { analysis, deletion, identity, match, navigation } = page;
-  const ledgerRows = (
-    analysis.performanceContext?.rows ??
-    (match.players ?? []).map((player) => ({
-      memberId: player.memberId,
-      rank: player.rank,
-      revenueManYen: player.revenueManYen,
-      totalAssetsManYen: player.totalAssetsManYen,
-      trend: "unavailable" as const,
-    }))
-  ).map((row) => {
-    const player = match.players?.find((candidate) => candidate.memberId === row.memberId);
-    return Object.assign({}, row, {
-      displayName: memberDisplayName(row.memberId),
-      playOrder: player?.playOrder,
-      details: player ? (
-        <dl
-          aria-label={`${memberDisplayName(row.memberId)}の事件簿`}
-          className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,5rem),1fr))] gap-2"
-        >
-          {incidentColumns.map(([key, label]) => (
-            <div key={key} className="min-w-0">
-              <dt className={contentText.supporting}>{label}</dt>
-              <dd className={cn(contentText.body, "mt-1 tabular-nums")}>
-                {player.incidents[key]}回
-              </dd>
-            </div>
-          ))}
-        </dl>
-      ) : null,
-    });
-  });
+  const ledgerRows = page.ledgerRows.map(({ incidents, ...row }) => ({
+    ...row,
+    details: incidents ? (
+      <dl
+        aria-label={`${row.displayName}の事件簿`}
+        className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,5rem),1fr))] gap-2"
+      >
+        {incidentColumns.map(([key, label]) => (
+          <div key={key} className="min-w-0">
+            <dt className={contentText.supporting}>{label}</dt>
+            <dd className={cn(contentText.body, "mt-1 tabular-nums")}>{incidents[key]}回</dd>
+          </div>
+        ))}
+      </dl>
+    ) : null,
+  }));
 
   return (
     <PageFrame className="min-w-0" width="wide">
@@ -186,13 +165,7 @@ function MatchDetailReadyContent({
 
         <MatchRecordMetadata
           confirmDelete={deletion.confirm}
-          deleteDisabledReason={
-            editor.pending
-              ? "メモの保存・削除が完了するまで、試合は削除できません。"
-              : editor.dirty
-                ? "メモを保存するか、編集をキャンセルすると試合を削除できます。"
-                : undefined
-          }
+          deleteDisabledReason={deletion.disabledReason}
           errorMessage={deletion.errorMessage}
           isDeletePending={deletion.pending}
           match={match}

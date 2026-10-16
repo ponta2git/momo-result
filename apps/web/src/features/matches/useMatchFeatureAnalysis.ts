@@ -1,6 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { buildMatchFeatureBadges } from "@/features/matches/matchDetailViewModel";
+import {
+  buildMatchFeatureAnalysis,
+  matchFeatureAnalysisQuery,
+} from "@/features/matches/matchDetailViewModel";
 import type { MatchDetailResponse } from "@/shared/api/matches";
 import { seriesAnalysisKeys } from "@/shared/api/queryKeys";
 import { readSeriesAnalysisMatchContext } from "@/shared/api/seriesAnalysisMatchContextState";
@@ -9,7 +12,6 @@ import {
   seriesAnalysisStatusQueryOptions,
 } from "@/shared/api/seriesAnalysisQueryOptions";
 import { useAnalysisArtifactRecovery } from "@/shared/api/useAnalysisArtifactRecovery";
-import { matchPerformanceContextFromArtifact } from "@/shared/matches/matchPerformanceContext";
 
 export function useMatchFeatureAnalysis(match: MatchDetailResponse | undefined) {
   const statusQuery = useQuery(seriesAnalysisStatusQueryOptions(match?.gameTitleId));
@@ -20,16 +22,7 @@ export function useMatchFeatureAnalysis(match: MatchDetailResponse | undefined) 
     refetch: refetchStatus,
   } = statusQuery;
   const currentArtifactId = statusData?.currentArtifact?.artifactId;
-  const contextQueryParams =
-    match && currentArtifactId
-      ? {
-          artifactId: currentArtifactId,
-          gameTitleId: match.gameTitleId,
-          mapMasterId: match.mapMasterId,
-          matchId: match.matchId,
-          seasonMasterId: match.seasonMasterId,
-        }
-      : undefined;
+  const contextQueryParams = matchFeatureAnalysisQuery(match, currentArtifactId);
   const contextQuery = useQuery(seriesAnalysisMatchContextQueryOptions(contextQueryParams));
   const {
     isFetching: contextIsFetching,
@@ -38,13 +31,6 @@ export function useMatchFeatureAnalysis(match: MatchDetailResponse | undefined) 
   } = contextQuery;
   const { context: contextData, error: contextError } =
     readSeriesAnalysisMatchContext(contextQuery);
-  const context =
-    match &&
-    contextData &&
-    contextData?.artifact.artifactId === currentArtifactId &&
-    contextData.matchId === match.matchId
-      ? contextData
-      : undefined;
   useAnalysisArtifactRecovery({
     artifactId: contextQueryParams?.artifactId,
     error: contextError,
@@ -53,21 +39,12 @@ export function useMatchFeatureAnalysis(match: MatchDetailResponse | undefined) 
     refetchStatus,
   });
 
-  const performanceContext = matchPerformanceContextFromArtifact(context);
-  const badges = buildMatchFeatureBadges({
-    features: context?.inclusion.status === "included" ? context.match?.features : undefined,
+  return buildMatchFeatureAnalysis({
+    match,
+    artifactId: currentArtifactId,
+    context: contextData,
+    calculationStatus: statusData?.calculation?.status,
+    statusLoading: statusIsPending || statusIsFetching,
+    contextLoading: contextQueryParams !== undefined && (contextIsPending || contextIsFetching),
   });
-  const calculationStatus = statusData?.calculation?.status;
-  const needsManualRefresh = calculationStatus === "queued" || calculationStatus === "running";
-  const loading =
-    statusIsPending ||
-    statusIsFetching ||
-    needsManualRefresh ||
-    (contextQueryParams !== undefined && (contextIsPending || contextIsFetching));
-  return {
-    comparisonContextStatus:
-      performanceContext === undefined ? (loading ? "loading" : "unavailable") : "ready",
-    badges,
-    performanceContext,
-  } as const;
 }

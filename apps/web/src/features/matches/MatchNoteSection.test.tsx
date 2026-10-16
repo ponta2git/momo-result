@@ -6,13 +6,13 @@ import { useState } from "react";
 import { createMemoryRouter, Link, RouterProvider } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { MatchNoteCommit, MatchNoteReadResult } from "@/features/matches/matchNoteModel";
 import {
   MatchNoteNavigationGuard,
   MatchNoteRecovery,
   MatchNoteSection,
 } from "@/features/matches/MatchNoteSection";
 import { useMatchNoteEditor } from "@/features/matches/useMatchNoteEditor";
-import type { MatchNoteCommit, MatchNoteReadResult } from "@/features/matches/useMatchNoteEditor";
 import type { MatchDetailResponse } from "@/shared/api/matches";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";

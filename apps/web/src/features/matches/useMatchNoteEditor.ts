@@ -1,6 +1,12 @@
 import { useMutation } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 
+import type {
+  MatchNoteCommit,
+  MatchNoteConflictState,
+  MatchNoteEditor,
+  MatchNoteReadResult,
+} from "@/features/matches/matchNoteModel";
 import {
   matchNoteMaximumCharacters,
   normalizeMatchNote,
@@ -11,29 +17,11 @@ import type { MatchDetailResponse } from "@/shared/api/matches";
 import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 
-/** A failed refresh must never expose cached data as the latest saved note. */
-export type MatchNoteReadResult =
-  | { kind: "found"; match: MatchDetailResponse }
-  | { kind: "notFound" }
-  | { kind: "failed" };
-
-export type MatchNoteCommit = {
-  matchId: string;
-  expectedVersion: string;
-  version: string;
-  body?: string | undefined;
-};
-
 type MatchNoteEditorOptions = {
   matchId: string;
   match: MatchDetailResponse | undefined;
   readLatest: () => Promise<MatchNoteReadResult>;
   commitSavedNote: (commit: MatchNoteCommit) => Promise<MatchNoteReadResult>;
-};
-
-export type MatchNoteConflictState = {
-  draft: string;
-  latest: MatchDetailResponse["note"];
 };
 
 type NoteSnapshot = { body: string; version: string };
@@ -55,7 +43,7 @@ export function useMatchNoteEditor({
   match,
   readLatest,
   commitSavedNote,
-}: MatchNoteEditorOptions) {
+}: MatchNoteEditorOptions): MatchNoteEditor {
   const idempotencyKeys = useIdempotencyKeyStore();
   const navigationAllowedRef = useRef(false);
   const requestPendingRef = useRef(false);
@@ -215,5 +203,3 @@ export function useMatchNoteEditor({
     tooLong,
   };
 }
-
-export type MatchNoteEditor = ReturnType<typeof useMatchNoteEditor>;

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { MatchNoteEditor } from "@/features/matches/useMatchNoteEditor";
+import type { MatchNoteEditor } from "@/features/matches/matchNoteModel";
 import { matchNoteMaximumCharacters } from "@/features/matches/workspace/review/confirmMatchFormSchema";
 import type { MatchDetailResponse } from "@/shared/api/matches";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";

@@ -81,6 +81,8 @@ private[config] object ResourceLimitsConfigLoader:
           readApiRateLimitPerMinute = apiLimits.readRateLimitPerMinute,
           sourceImageArchiveMaxBytes = sourceImageArchiveMaxBytes,
           mutationRateLimitPerMinute = apiLimits.mutationRateLimitPerMinute,
+          mutationAttemptRateLimitPerMinute = apiLimits.mutationAttemptRateLimitPerMinute,
+          authSessionRateLimitPerMinute = apiLimits.authSessionRateLimitPerMinute,
           idempotencyActiveKeyLimitPerAccount = apiLimits.idempotencyActiveKeyLimitPerAccount,
           ocrJobCreateRateLimitPerMinute = ocrJobCreateRateLimit,
           ocrJobCreateGlobalRateLimitPerMinute = ocrJobCreateGlobalRateLimit,
@@ -109,6 +111,8 @@ private[config] object ResourceLimitsConfigLoader:
   private final case class ApiResourceLimits(
       readRateLimitPerMinute: Int,
       mutationRateLimitPerMinute: Int,
+      mutationAttemptRateLimitPerMinute: Int,
+      authSessionRateLimitPerMinute: Int,
       idempotencyActiveKeyLimitPerAccount: Int,
   )
 
@@ -126,5 +130,15 @@ private[config] object ResourceLimitsConfigLoader:
   ): ConfigValue[Effect, ApiResourceLimits] = (
     parseNonNegativeInt(env, "READ_API_RATE_LIMIT_PER_MINUTE", default = 120),
     parseNonNegativeInt(env, "MUTATION_RATE_LIMIT_PER_MINUTE", default = 60),
+    parseNonNegativeInt(
+      env,
+      "MUTATION_ATTEMPT_RATE_LIMIT_PER_MINUTE",
+      default = ResourceLimitsConfig.defaults.mutationAttemptRateLimitPerMinute
+    ),
+    parseNonNegativeInt(
+      env,
+      "AUTH_SESSION_RATE_LIMIT_PER_MINUTE",
+      default = ResourceLimitsConfig.defaults.authSessionRateLimitPerMinute
+    ),
     parseNonNegativeInt(env, "IDEMPOTENCY_ACTIVE_KEY_LIMIT_PER_ACCOUNT", default = 240),
   ).mapN(ApiResourceLimits.apply)

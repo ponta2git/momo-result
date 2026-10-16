@@ -11,7 +11,6 @@ class AppConfigSpec extends CatsEffectSuite:
   private val prodEnv: Map[String, String] = Map(
     "APP_ENV" -> "prod",
     "DATABASE_URL" -> "postgres://u:p@db.example.com/momo?sslmode=verify-full",
-    "REDIS_URL" -> "rediss://default:secret@redis.example.com:6379",
     "DISCORD_CLIENT_ID" -> "client-id",
     "DISCORD_CLIENT_SECRET" -> "client-secret",
     "DISCORD_REDIRECT_URI" -> "https://example.com/api/auth/callback",
@@ -138,58 +137,6 @@ class AppConfigSpec extends CatsEffectSuite:
     assertEquals(result, Right("jdbc:postgresql://localhost:5432/mydb"))
   }
 
-  test("ensureProdRedisUrl: rejects insecure Redis URLs in prod") {
-    val result = RedisUrlConfig.ensureProdRedisUrl(
-      "redis://redis.example.com:6379",
-      AppEnv.Prod,
-      allowPlaintextInProd = false,
-    )
-    assertEquals(
-      result.left.map(_.getMessage),
-      Left("REDIS_URL must use rediss:// in prod APP_ENV."),
-    )
-  }
-
-  test("ensureProdRedisUrl: allows plaintext Redis in prod only when explicitly enabled") {
-    val url = "redis://default:secret@fly-upstash-redis.example.com:6379"
-    val result = RedisUrlConfig.ensureProdRedisUrl(url, AppEnv.Prod, allowPlaintextInProd = true)
-    assertEquals(result, Right(url))
-  }
-
-  test("loadFromEnv allows plaintext Redis in prod only with explicit flag") {
-    val env = prodEnv ++ Map(
-      "REDIS_URL" -> "redis://default:secret@fly-upstash-redis.example.com:6379",
-      "REDIS_ALLOW_PLAINTEXT_IN_PROD" -> "true",
-    )
-
-    load(env).map { result =>
-      assertEquals(
-        result.flatMap(_.redis.map(_.url).toRight(new RuntimeException())),
-        Right(env("REDIS_URL")),
-      )
-    }
-  }
-
-  test("loadFromEnv rejects malformed plaintext Redis override") {
-    val env = prodEnv ++ Map(
-      "REDIS_URL" -> "redis://default:secret@fly-upstash-redis.example.com:6379",
-      "REDIS_ALLOW_PLAINTEXT_IN_PROD" -> "maybe",
-    )
-
-    load(env).map { result =>
-      assert(result.left.exists(_.getMessage.contains("REDIS_ALLOW_PLAINTEXT_IN_PROD")))
-    }
-  }
-
-  test("ensureProdRedisUrl: allows local Redis URLs outside prod") {
-    val result = RedisUrlConfig.ensureProdRedisUrl(
-      "redis://localhost:6379/0",
-      AppEnv.Dev,
-      allowPlaintextInProd = false,
-    )
-    assertEquals(result, Right("redis://localhost:6379/0"))
-  }
-
   test("numeric env parsing rejects malformed values instead of silently using defaults") {
     for
       invalidLong <- loadConfig(
@@ -285,7 +232,6 @@ class AppConfigSpec extends CatsEffectSuite:
         config.toString,
         config.auth.toString,
         config.database.fold("")(_.toString),
-        config.redis.fold("")(_.toString),
         config.sourceImageStorage.toString,
         JavaDiscordOAuthClient.Config(
           config.auth.discordClientId.getOrElse(""),
@@ -298,8 +244,6 @@ class AppConfigSpec extends CatsEffectSuite:
       List(
         "u:p",
         "db.example.com",
-        "default:secret",
-        "redis.example.com",
         "client-id",
         "client-secret",
         "https://example.com/api/auth/callback",
@@ -331,15 +275,14 @@ class AppConfigSpec extends CatsEffectSuite:
     ))
   }
 
-  test("loadFromEnv reads OAuth abuse protection limits") {
-    load(
-      prodEnv ++ Map(
-        "AUTH_PROVIDER_FAILURE_THRESHOLD" -> "4",
-        "AUTH_PROVIDER_BACKOFF_SECONDS" -> "120",
-      )
-    ).map { result =>
-      assertEquals(result.map(_.auth.providerFailureThreshold), Right(4))
-      assertEquals(result.map(_.auth.providerBackoff.toSeconds), Right(120L))
+  test("loadFromEnv reads independent request admission limits") {
+    load(prodEnv ++ Map(
+      "MUTATION_ATTEMPT_RATE_LIMIT_PER_MINUTE" -> "180",
+      "AUTH_SESSION_RATE_LIMIT_PER_MINUTE" -> "90",
+    )).map { result =>
+      assertEquals(result.map(_.resourceLimits.mutationAttemptRateLimitPerMinute), Right(180))
+      assertEquals(result.map(_.resourceLimits.authSessionRateLimitPerMinute), Right(90))
+      assertEquals(result.map(_.resourceLimits.mutationRateLimitPerMinute), Right(60))
     }
   }
 

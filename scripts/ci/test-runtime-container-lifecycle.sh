@@ -20,7 +20,18 @@ cat >"${test_dir}/bin/docker" <<'EOF'
 set -euo pipefail
 printf '%s\n' "$1" >>"${TEST_CALLS}"
 case "$1" in
-  run) ;;
+  run)
+    for setting in \
+      MUTATION_RATE_LIMIT_PER_MINUTE \
+      MUTATION_ATTEMPT_RATE_LIMIT_PER_MINUTE \
+      READ_API_RATE_LIMIT_PER_MINUTE \
+      AUTH_SESSION_RATE_LIMIT_PER_MINUTE; do
+      [[ " $* " == *" -e ${setting}=${!setting} "* ]] || {
+        echo "Runtime container did not receive ${setting}." >&2
+        exit 1
+      }
+    done
+    ;;
   inspect)
     if [[ "$*" == *'{{.State.Running}}'* ]]; then
       if [[ "${TEST_SCENARIO}" == "stopped" || -f "${TEST_CALLS}.invalid-edge" ]]; then
@@ -62,7 +73,9 @@ chmod +x "${test_dir}/bin/docker" "${test_dir}/bin/sleep"
 export PATH="${test_dir}/bin:${PATH}"
 export TEST_CALLS="${test_dir}/calls"
 export IMAGE_REF=ci-runtime-test
-export DATABASE_URL=ci-database DEV_MEMBER_IDS=ci-member REDIS_URL=ci-redis
+export DATABASE_URL=ci-database DEV_MEMBER_IDS=ci-member
+export MUTATION_RATE_LIMIT_PER_MINUTE=240 MUTATION_ATTEMPT_RATE_LIMIT_PER_MINUTE=720
+export READ_API_RATE_LIMIT_PER_MINUTE=3600 AUTH_SESSION_RATE_LIMIT_PER_MINUTE=360
 export MOMO_ORIGIN_LOCK_TOKEN=ci-token
 
 run_probe() {

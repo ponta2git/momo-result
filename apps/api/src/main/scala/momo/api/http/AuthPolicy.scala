@@ -10,6 +10,7 @@ import momo.api.auth.{
   AuthenticatedSession,
   CsrfTokenService,
   MemberRoster,
+  RateLimiter,
   SessionService
 }
 import momo.api.config.{AppConfig, AppEnv}
@@ -43,14 +44,32 @@ object AuthPolicy:
       accounts: AccountAccess[F],
       sessions: SessionService[F],
       csrf: CsrfTokenService,
+      readRateLimiter: RateLimiter[F],
+      mutationAttemptRateLimiter: RateLimiter[F],
   ): AuthPolicy[F] = config.appEnv match
-    case AppEnv.Prod => new ProductionAuthPolicy[F](config, sessions, csrf)
-    case AppEnv.Dev | AppEnv.Test => new DevAuthPolicy[F](config, roster, accounts, sessions, csrf)
+    case AppEnv.Prod => new ProductionAuthPolicy[F](
+        config,
+        sessions,
+        csrf,
+        readRateLimiter,
+        mutationAttemptRateLimiter
+      )
+    case AppEnv.Dev | AppEnv.Test => new DevAuthPolicy[F](
+        config,
+        roster,
+        accounts,
+        sessions,
+        csrf,
+        readRateLimiter,
+        mutationAttemptRateLimiter
+      )
 
 private final class ProductionAuthPolicy[F[_]: Async](
     config: AppConfig,
     sessions: SessionService[F],
     csrf: CsrfTokenService,
+    readRateLimiter: RateLimiter[F],
+    mutationAttemptRateLimiter: RateLimiter[F],
 ) extends AuthPolicy[F]:
   override def authenticate(
       context: AuthRequestContext
@@ -59,6 +78,7 @@ private final class ProductionAuthPolicy[F[_]: Async](
     sessions,
     csrf,
     context,
+    attemptLimiter(context, readRateLimiter, mutationAttemptRateLimiter),
   ).map(_.map(_.account))
 
 private final class DevAuthPolicy[F[_]: Async](
@@ -67,6 +87,8 @@ private final class DevAuthPolicy[F[_]: Async](
     accounts: AccountAccess[F],
     sessions: SessionService[F],
     csrf: CsrfTokenService,
+    readRateLimiter: RateLimiter[F],
+    mutationAttemptRateLimiter: RateLimiter[F],
 ) extends AuthPolicy[F]:
   override def authenticate(
       context: AuthRequestContext
@@ -77,25 +99,43 @@ private final class DevAuthPolicy[F[_]: Async](
             case Left(error) => Left(problem(error)).pure[F]
             case Right(account) => authorizeAccount(account, context)
           }
-    case None => authenticateSession(config, sessions, csrf, context).map(_.map(_.account))
+    case None => authenticateSession(
+        config,
+        sessions,
+        csrf,
+        context,
+        attemptLimiter(context, readRateLimiter, mutationAttemptRateLimiter)
+      ).map(_.map(_.account))
 
   private def authorizeAccount(
       account: AuthenticatedAccount,
       context: AuthRequestContext,
   ): F[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]] =
-    verifyDevelopmentCsrf(context).map(_ => account).leftMap(problem).pure[F]
+    HttpRateLimiters.checkAttempt(
+      attemptLimiter(context, readRateLimiter, mutationAttemptRateLimiter),
+      account.accountId.value
+    ).map(_.flatMap(_ => verifyDevelopmentCsrf(context)).map(_ => account).leftMap(problem))
 
 private def authenticateSession[F[_]: Async](
     config: AppConfig,
     sessions: SessionService[F],
     csrf: CsrfTokenService,
     context: AuthRequestContext,
+    limiter: RateLimiter[F],
 ): F[Either[ProblemDetails.ProblemResponse, AuthenticatedSession]] =
-  sessions.authenticate(sessionCookie(config, context.request)).map {
-    case Left(error) => Left(problem(error))
-    case Right(authenticated) => verifySessionCsrf(authenticated, csrf, context)
-        .map(_ => authenticated).leftMap(problem)
+  sessions.authenticate(sessionCookie(config, context.request)).flatMap {
+    case Left(error) => Left(problem(error)).pure[F]
+    case Right(authenticated) => HttpRateLimiters
+        .checkAttempt(limiter, authenticated.account.accountId.value)
+        .map(_.flatMap(_ => verifySessionCsrf(authenticated, csrf, context))
+          .map(_ => authenticated).leftMap(problem))
   }
+
+private def attemptLimiter[F[_]](
+    context: AuthRequestContext,
+    read: RateLimiter[F],
+    mutation: RateLimiter[F],
+): RateLimiter[F] = if isMutating(context.request) then mutation else read
 
 private def verifySessionCsrf(
     authenticated: AuthenticatedSession,

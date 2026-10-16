@@ -11,7 +11,6 @@ import type { CommandOptions } from "../process.mts";
 export { createInterruptionSignal, runCommand, stopProcessGroup } from "../process.mts";
 
 const POSTGRES_IMAGE = process.env["MOMO_E2E_POSTGRES_IMAGE"] ?? "postgres:18-alpine";
-const REDIS_IMAGE = process.env["MOMO_E2E_REDIS_IMAGE"] ?? "redis:7-alpine";
 const POSTGRES_DB = "momo_result";
 const POSTGRES_USER = "postgres";
 const POSTGRES_PASSWORD = "postgres";
@@ -96,16 +95,6 @@ export async function startPostgres(databaseName = POSTGRES_DB) {
     .withExposedPorts(5432)
     .withStartupTimeout(120_000)
     .withWaitStrategy(Wait.forLogMessage(/database system is ready to accept connections/u, 2))
-    .start();
-}
-
-export async function startRedis() {
-  configureDockerHost();
-  const { GenericContainer, Wait } = await import("testcontainers");
-  return new GenericContainer(REDIS_IMAGE)
-    .withExposedPorts(6379)
-    .withStartupTimeout(120_000)
-    .withWaitStrategy(Wait.forLogMessage(/Ready to accept connections/u))
     .start();
 }
 

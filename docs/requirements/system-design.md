@@ -12,11 +12,11 @@
 
 現在のframework version、directory、env名、threshold、workflow、provider設定は実装・設定を正本とし、この文書へ複製しない。
 
-採用する構成は React/Vite の SPA、API、Processing Worker、共有 PostgreSQL、認証・レート制限用 Redis とする。APIとOCRワーカーは同一リポジトリで分離する。
+採用する構成は React/Vite の SPA、API、Processing Worker、共有 PostgreSQL とする。APIとOCRワーカーは同一リポジトリで分離する。
 
 ## 1. System Boundaries
 
-- Web、API、Processing Worker、共有DB、認証・レート制限用Redis、object storageを独立した責務として扱う。
+- Web、API、Processing Worker、共有DB、object storageを独立した責務として扱う。
 - WebとAPIだけが利用者向けHTTP runtimeを構成する。OCRと戦績分析は高負荷処理がHTTP可用性を巻き込まない独立Rust runtimeへ置く。
 - APIは認証、入力検証、業務usecase、保存済み状態の読み取りを担う。OCR / 分析engineをHTTP request内で実行しない。
 - DBはsummitと共有するPostgreSQLを使い、schema / migrationは`../momo-db`が所有する。
@@ -59,8 +59,8 @@
 ## 5. Availability / Degradation
 
 - APIとDBが利用可能なら、既存結果の閲覧と画像なしの手入力をOCR / object storage なしで継続できること。
-- 共有rate limiter障害時、通常read / mutationは短いtimeout後に同じ設定上限のprocess-local limiterへ縮退できる。ただし分散上限からinstance単位へ弱まった状態を観測可能にする。
-- OCR受付、upload、source image取得はlocal fallbackの対象にせず、job DB / storage を確認できなければ受付を停止する。
+- rate limiterは単一API processのメモリで保持する。再起動によるカウンタ初期化と、複数processでは上限を共有しない性質を前提とし、永続quotaやOCRの同時job上限を代替しない。
+- OCR受付、upload、source image取得は、必要なjob DB / storageを確認できなければ受付を停止する。
 - dependency readiness、process liveness、機能応答、resource / performanceを別の健康状態として扱う。
 - failure時も秘密情報を含まないProblem Detailsと安全な運用情報を返し、内部例外やprovider情報を公開しない。
 
@@ -83,8 +83,9 @@
 - sessionはserver sideで管理し、cookieのSecure / HttpOnly / SameSiteとCSRF防御を適用する。
 - login、OAuth callback、upload、画像取得、JSON mutation、CSV / TSV exportをaccount / IP / operationの適切なscopeでrate limitする。
 - retry済みidempotent operationを新規操作と同じrate / key上限で誤拒否しない。
+- 受信処理の負荷制限と新規操作数の制限を分ける。認証済みreadと本文decode前のmutation試行は別の上限を持ち、入口では再送も数える。本人情報取得・logoutは専用枠を持つ。入口上限は通常の再試行を妨げない余裕を持たせ、本文未照合の冪等keyだけでreplayを許可しない。
 - exportはscope指定と全件を別のcostとして制限し、生成前後にrow / byte上限を検証する。同期上限を超える需要は認可・保持・再生成を設計した非同期処理として扱う。
-- provider連続障害はbounded backoffし、callback replayをprovider呼出し前に抑止する。
+- OAuth callbackはstateの使用をPostgreSQLで原子的に確定してからproviderを呼ぶ。同じstateの再利用は有効期間全体で拒否し、DBへ記録できなければログインを進めない。provider障害はエラーとして返し、後続の新しいログインは入口のrate limitに従う。
 - secret、session / CSRF / OAuth token、接続URL、画像内容、OCR raw text、分析成果物本文、例外全文をlog / responseへ出さない。
 - security gateを通すためにedge policyや認証要件を弱めない。
 

@@ -8,7 +8,7 @@ import org.typelevel.log4cats.slf4j.Slf4jFactory
 
 import momo.api.adapters.inmemory.*
 import momo.api.adapters.storage.local.LocalFsImageStore
-import momo.api.auth.{DiscordOAuthClient, MemberRoster}
+import momo.api.auth.{DiscordOAuthClient, InMemoryOAuthStateReplayGuard, MemberRoster}
 import momo.api.config.AppConfig
 import momo.api.domain.{LoginAccount, Member}
 import momo.api.ports.storage.ImageStorage
@@ -33,7 +33,10 @@ private[bootstrap] object InMemoryApiRuntime:
       given LoggerFactory[F] = Slf4jFactory.create[F]
       val imageStore = LocalFsImageStore[F](config.imageTmpDir)
 
-      Resource.eval(createParts[F](config, imageStore)).flatMap { parts =>
+      Resource.eval((
+        createParts[F](config, imageStore),
+        InMemoryOAuthStateReplayGuard.create[F](Clock[F].realTimeInstant)
+      ).tupled).flatMap { (parts, oauthStateReplayGuard) =>
         val imageCleaner = SourceImageOrphanReaper.referenceAwareCleaner(
           imageStore,
           parts.imageReferences,
@@ -48,7 +51,6 @@ private[bootstrap] object InMemoryApiRuntime:
         val health =
           RuntimeHealthDetails.build[F](
             None,
-            config.redis.map(_ => infrastructure.redisHealth),
             None
           )
         RuntimeMaintenance.resource(
@@ -56,6 +58,7 @@ private[bootstrap] object InMemoryApiRuntime:
           imageOrphanCleaner = imageCleaner,
           appSessions = parts.repositories.appSessions,
           idempotency = parts.repositories.idempotency,
+          oauthStateCleanup = Async[F].pure(0),
           now = Clock[F].realTimeInstant,
         ).evalMap { _ =>
           UseCaseWiring.assemble(
@@ -70,8 +73,7 @@ private[bootstrap] object InMemoryApiRuntime:
               ocrAdmissionGuard = parts.ocrAdmissionGuard,
               oauthClient = oauthClient,
               loginRateLimiter = infrastructure.loginRateLimiter,
-              oauthStateReplayGuard = infrastructure.oauthStateReplayGuard,
-              oauthProviderBackoff = infrastructure.oauthProviderBackoff,
+              oauthStateReplayGuard = oauthStateReplayGuard,
               rateLimiters = infrastructure.rateLimiters,
             ),
           )

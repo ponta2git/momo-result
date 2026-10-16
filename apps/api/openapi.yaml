@@ -6405,7 +6405,6 @@
         "required" : [
           "status",
           "database",
-          "redis",
           "ocrAdmission"
         ],
         "properties" : {
@@ -6413,9 +6412,6 @@
             "type" : "string"
           },
           "database" : {
-            "type" : "string"
-          },
-          "redis" : {
             "type" : "string"
           },
           "ocrAdmission" : {

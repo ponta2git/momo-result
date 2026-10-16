@@ -46,6 +46,7 @@ private[bootstrap] object PostgresApiRuntime:
     RuntimeInfrastructure.resource[F](config, Clock[F].realTimeInstant),
   ).tupled.flatMap { (transactor, infrastructure) =>
     given LoggerFactory[F] = Slf4jFactory.create[F]
+    val oauthStateReplayGuard = new PostgresOAuthStateReplayGuard[F](transactor)
     val jobsBase: OcrJobsRepository[F] = PostgresOcrJobsRepository[F](transactor)
     val drafts: OcrDraftsRepository[F] = PostgresOcrDraftsRepository[F](transactor)
     val ocrJobCreationStoreBase: OcrJobCreationStore[F] =
@@ -89,7 +90,6 @@ private[bootstrap] object PostgresApiRuntime:
     )
     val health = RuntimeHealthDetails.build[F](
       Some(Database.ping[F](transactor)),
-      config.redis.map(_ => infrastructure.redisHealth),
       Some(ocrAdmissionGuard.healthStatus),
     )
 
@@ -148,6 +148,7 @@ private[bootstrap] object PostgresApiRuntime:
           imageOrphanCleaner = imageStorage.cleaner,
           appSessions = appSessions,
           idempotency = idempotency,
+          oauthStateCleanup = oauthStateReplayGuard.deleteExpired,
           now = Clock[F].realTimeInstant,
         ).evalMap { _ =>
           for
@@ -218,8 +219,7 @@ private[bootstrap] object PostgresApiRuntime:
                 ocrAdmissionGuard = ocrAdmissionGuard,
                 oauthClient = oauthClient,
                 loginRateLimiter = infrastructure.loginRateLimiter,
-                oauthStateReplayGuard = infrastructure.oauthStateReplayGuard,
-                oauthProviderBackoff = infrastructure.oauthProviderBackoff,
+                oauthStateReplayGuard = oauthStateReplayGuard,
                 rateLimiters = infrastructure.rateLimiters,
               ),
             )

@@ -23,7 +23,6 @@ import {
   configureDockerHost,
   runCommand,
   startPostgres,
-  startRedis,
   stopProcessGroup,
 } from "../../apps/web/scripts/e2e/runtime.mts";
 import { settle } from "../../apps/web/scripts/e2e/settle.mts";
@@ -155,9 +154,8 @@ export async function withSystemEnvironment(
     remember();
     await mkdir(controlDir);
     phase = "start dependencies";
-    const [postgres, redis, storage, images] = await settle([
+    const [postgres, storage, images] = await settle([
       ownedContainer(() => startPostgres(databaseName)),
-      ownedContainer(startRedis),
       prepareStorage(),
       writeImages(runDir),
     ]);
@@ -166,7 +164,6 @@ export async function withSystemEnvironment(
     // namespace preserves that contract while exposing the candidate proxy on 8080.
     const webOrigin = `http://127.0.0.1:${storage.minio.getMappedPort(8080)}`;
     const databaseUrl = `postgres://postgres:postgres@127.0.0.1:${postgres.getMappedPort(5432)}/${databaseName}`;
-    const redisUrl = `redis://127.0.0.1:${redis.getMappedPort(6379)}/0`;
     phase = "migrate disposable database";
     await applyMigrations(postgres, databaseName, signal);
     phase = "prepare session fixtures";
@@ -177,7 +174,6 @@ export async function withSystemEnvironment(
         APP_ENV: "dev",
         DATABASE_URL: databaseUrl,
         DEV_MEMBER_IDS: devMembers,
-        REDIS_URL: redisUrl,
         E2E_SERVICES_ARE_ISOLATED: "true",
         E2E_SESSION_FIXTURE_PATH: sessionsFile,
         MOMO_HTTP4S_PATCHED_VERSION: process.env["MOMO_HTTP4S_PATCHED_VERSION"],
@@ -239,11 +235,12 @@ export async function withSystemEnvironment(
     await writeEnvironment(runtimeEnv, {
       APP_ENV: "dev",
       DATABASE_URL: containerURL(databaseUrl),
-      REDIS_URL: containerURL(redisUrl),
       DEV_MEMBER_IDS: devMembers,
       ...storage.r2,
       SOURCE_IMAGE_R2_ENDPOINT: "http://127.0.0.1:9000",
       MUTATION_RATE_LIMIT_PER_MINUTE: "240",
+      MUTATION_ATTEMPT_RATE_LIMIT_PER_MINUTE: "720",
+      READ_API_RATE_LIMIT_PER_MINUTE: "3600",
       OCR_JOB_CREATE_RATE_LIMIT_PER_MINUTE: "240",
       OCR_JOB_CREATE_GLOBAL_RATE_LIMIT_PER_MINUTE: "240",
       IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT: "100",
@@ -269,9 +266,7 @@ export async function withSystemEnvironment(
           typeof details === "object" &&
           details !== null &&
           "database" in details &&
-          details.database === "ok" &&
-          "redis" in details &&
-          details.redis === "ok"
+          details.database === "ok"
         );
       },
       "candidate Runtime",

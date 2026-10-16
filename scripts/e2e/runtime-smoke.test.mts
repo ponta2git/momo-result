@@ -50,7 +50,7 @@ async function fixture(t: TestContext, broken = "") {
       response.setHeader("Cache-Control", ["no-store", "no-store"]);
     }
     if (path === "/healthz") response.end('{"status":"ok"}');
-    else if (path === "/healthz/details") response.end('{"database":"ok","redis":"ok"}');
+    else if (path === "/healthz/details") response.end('{"database":"ok"}');
     else if (path === "/api/auth/me")
       response.end(JSON.stringify({ accountId: request.headers["x-momo-account-id"] }));
     else if (path === "/assets/missing.js") response.writeHead(405).end();

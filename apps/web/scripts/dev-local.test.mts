@@ -19,7 +19,7 @@ function repos(t: TestContext) {
   const sharedDbRoot = join(parent, "momo-db");
   mkdirSync(repoRoot);
   mkdirSync(sharedDbRoot);
-  writeFileSync(join(repoRoot, ".env.example"), "APP_ENV=dev\nREDIS_URL=redis://example\n");
+  writeFileSync(join(repoRoot, ".env.example"), "APP_ENV=dev\n");
   return { repoRoot, sharedDbRoot };
 }
 
@@ -35,7 +35,6 @@ test("development environment keeps process, root and sibling precedence", (t) =
   assert.equal(env["DATABASE_URL"], "postgres://local");
   assert.equal(env["APP_ENV"], "dev");
   assert.equal(env["MOMO_LOG_FORMAT"], "text");
-  assert.equal(env["REDIS_URL"], "redis://example");
   assert.equal(env["CUSTOM"], "quoted # value");
   assert.equal(env["PATH"], "/bin");
   // Explicit configuration must not depend on being able to read a sibling file.

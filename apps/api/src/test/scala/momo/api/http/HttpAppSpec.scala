@@ -133,7 +133,6 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
           assertEquals(response.status, Status.Ok)
           assertEquals(jsonField[String](body, "status"), "ok")
           assertEquals(jsonField[String](body, "database"), "disabled")
-          assertEquals(jsonField[String](body, "redis"), "disabled")
           assertEquals(jsonField[String](body, "ocrAdmission"), "disabled")
         }
       }
@@ -688,7 +687,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   readRateLimitApp.test("matches list endpoint applies per-member read rate limits") { httpApp =>
     val request = readGet(uri"/api/matches")
     httpApp.run(request).flatMap(response =>
-      assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "Too many read requests")
+      assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "Too many API requests")
     )
   }
 

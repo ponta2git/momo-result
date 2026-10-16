@@ -10,7 +10,6 @@ object HealthEndpoints:
   final case class HealthDetailsResponse(
       status: String,
       database: String,
-      redis: String,
       ocrAdmission: String,
   ) derives Codec.AsObject
 

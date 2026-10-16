@@ -32,7 +32,7 @@ func TestPostdeployFailureClassesAndOutputIsolation(t *testing.T) {
 		name, kind string
 		data       []byte
 	}{
-		{"missing-check", "MissingRequiredChecks", mutated(t, data, func(o object) { o["checks"] = []string{"database", "http", "processes", "redis", "web"} })},
+		{"missing-check", "MissingRequiredChecks", mutated(t, data, func(o object) { o["checks"] = []string{"database", "http", "processes", "web"} })},
 		{"duplicate", "DuplicateChecks", mutated(t, data, func(o object) { o["checks"] = append(o["checks"].([]any), "http") })},
 		{"newline", "InvalidChecks", mutated(t, data, func(o object) { o["checks"] = append(o["checks"].([]any), "bad\n") })},
 		{"wrong-check-type", "InvalidChecks", mutated(t, data, func(o object) { o["checks"] = append(o["checks"].([]any), nil) })},

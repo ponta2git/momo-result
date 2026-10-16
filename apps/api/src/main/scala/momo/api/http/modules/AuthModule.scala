@@ -22,7 +22,7 @@ import momo.api.auth.{
 import momo.api.config.{AppConfig, AppEnv, RedirectPath}
 import momo.api.endpoints.{AuthEndpoints, AuthMeResponse, AuthPaths, CommonEndpoint, ProblemDetails}
 import momo.api.errors.AppError
-import momo.api.http.{AuthCookies, AuthPolicy, ClientIp}
+import momo.api.http.{AuthCookies, AuthPolicy, ClientIp, HttpRateLimiters}
 
 object AuthModule:
   private val logger = LoggerFactory.getLogger("momo.api.http.modules.AuthModule")
@@ -35,6 +35,7 @@ object AuthModule:
       csrf: CsrfTokenService,
       accounts: AccountAccess[F],
       rateLimiter: RateLimiter[F],
+      authSessionRateLimiter: RateLimiter[F],
       completeOAuthCallback: CompleteOAuthCallback[F],
   ): List[ServerEndpoint[Any, F]] =
     List(
@@ -64,7 +65,14 @@ object AuthModule:
       AuthEndpoints.logout
         .securityIn(CommonEndpoint.serverRequest)
         .serverSecurityLogic { case (input, request) =>
-          authenticateLogout(config, sessions, csrf, input.csrfToken, request)
+          authenticateLogout(
+            config,
+            sessions,
+            csrf,
+            input.csrfToken,
+            request,
+            authSessionRateLimiter
+          )
         }
         .serverLogic(authenticated =>
           _ =>
@@ -74,7 +82,15 @@ object AuthModule:
       AuthEndpoints.me
         .securityIn(CommonEndpoint.serverRequest)
         .serverSecurityLogic { case (input, request) =>
-          authenticateMe(config, sessions, csrf, accounts, input.accountHeader, request)
+          authenticateMe(
+            config,
+            sessions,
+            csrf,
+            accounts,
+            input.accountHeader,
+            request,
+            authSessionRateLimiter
+          )
         }
         .serverLogic(authMe => _ => Async[F].pure(Right(authMe))),
     )
@@ -146,12 +162,14 @@ object AuthModule:
       csrf: CsrfTokenService,
       csrfToken: Option[String],
       request: ServerRequest,
+      limiter: RateLimiter[F],
   ): F[Either[AuthEndpoints.AuthProblemResponse, AuthenticatedSession]] =
-    sessions.authenticate(AuthCookies.value(request, config.auth.sessionCookieName)).map {
-      case Left(error) => Left(authProblem(error, List(clearSessionCookie(config))))
-      case Right(authenticated) => csrf.verify(authenticated.session, csrfToken) match
-          case Left(error) => Left(authProblem(error, Nil))
-          case Right(_) => Right(authenticated)
+    sessions.authenticate(AuthCookies.value(request, config.auth.sessionCookieName)).flatMap {
+      case Left(error) => Async[F].pure(Left(authProblem(error, List(clearSessionCookie(config)))))
+      case Right(authenticated) =>
+        HttpRateLimiters.checkAttempt(limiter, authenticated.account.accountId.value)
+          .map(_.flatMap(_ => csrf.verify(authenticated.session, csrfToken))
+            .map(_ => authenticated).leftMap(error => authProblem(error, Nil)))
     }
 
   private def authenticateMe[F[_]: Async](
@@ -161,37 +179,45 @@ object AuthModule:
       accounts: AccountAccess[F],
       accountHeader: Option[String],
       request: ServerRequest,
+      limiter: RateLimiter[F],
   ): F[Either[AuthEndpoints.AuthProblemResponse, AuthMeResponse]] = config.appEnv match
     case AppEnv.Dev | AppEnv.Test => accountHeader match
-        case Some(accountId) => accounts.find(accountId).map {
-            _.leftMap(error => authProblem(error, Nil)).map(account =>
-              AuthMeResponse(
-                accountId = account.accountId.value,
-                displayName = account.displayName,
-                role = account.role,
-                memberId = account.playerMemberId.map(_.value),
-                csrfToken = Some(AuthPolicy.DevelopmentCsrfToken),
-              )
-            )
+        case Some(accountId) => accounts.find(accountId).flatMap {
+            case Left(error) => Async[F].pure(Left(authProblem(error, Nil)))
+            case Right(account) =>
+              HttpRateLimiters.checkAttempt(limiter, account.accountId.value).map(_.map(_ =>
+                AuthMeResponse(
+                  accountId = account.accountId.value,
+                  displayName = account.displayName,
+                  role = account.role,
+                  memberId = account.playerMemberId.map(_.value),
+                  csrfToken = Some(AuthPolicy.DevelopmentCsrfToken),
+                )
+              ).leftMap(error => authProblem(error, Nil)))
           }
-        case None => sessionAuthMe(config, sessions, csrf, request)
-    case AppEnv.Prod => sessionAuthMe(config, sessions, csrf, request)
+        case None => sessionAuthMe(config, sessions, csrf, request, limiter)
+    case AppEnv.Prod => sessionAuthMe(config, sessions, csrf, request, limiter)
 
   private def sessionAuthMe[F[_]: Async](
       config: AppConfig,
       sessions: SessionService[F],
       csrf: CsrfTokenService,
       request: ServerRequest,
+      limiter: RateLimiter[F],
   ): F[Either[AuthEndpoints.AuthProblemResponse, AuthMeResponse]] =
-    sessions.authenticate(AuthCookies.value(request, config.auth.sessionCookieName)).map {
-      case Left(error) => Left(authProblem(error, Nil))
-      case Right(authenticated) => Right(AuthMeResponse(
-          accountId = authenticated.account.accountId.value,
-          displayName = authenticated.account.displayName,
-          role = authenticated.account.role,
-          memberId = authenticated.account.playerMemberId.map(_.value),
-          csrfToken = Some(csrf.issue(authenticated)),
-        ))
+    sessions.authenticate(AuthCookies.value(request, config.auth.sessionCookieName)).flatMap {
+      case Left(error) => Async[F].pure(Left(authProblem(error, Nil)))
+      case Right(authenticated) =>
+        HttpRateLimiters.checkAttempt(limiter, authenticated.account.accountId.value)
+          .map(_.map(_ =>
+            AuthMeResponse(
+              accountId = authenticated.account.accountId.value,
+              displayName = authenticated.account.displayName,
+              role = authenticated.account.role,
+              memberId = authenticated.account.playerMemberId.map(_.value),
+              csrfToken = Some(csrf.issue(authenticated)),
+            )
+          ).leftMap(error => authProblem(error, Nil)))
     }
 
   private def rateLimit[F[_]: Async](

@@ -13,7 +13,6 @@ import momo.api.auth.{
   CsrfTokenService,
   DiscordOAuthClient,
   MemberRoster,
-  OAuthProviderBackoff,
   OAuthStateCodec,
   OAuthStateReplayGuard,
   RateLimiter,
@@ -136,7 +135,6 @@ private[bootstrap] object UseCaseWiring:
       oauthClient: DiscordOAuthClient[F],
       loginRateLimiter: RateLimiter[F],
       oauthStateReplayGuard: OAuthStateReplayGuard[F],
-      oauthProviderBackoff: OAuthProviderBackoff[F],
       rateLimiters: HttpRateLimiters[F],
   )
 
@@ -184,7 +182,6 @@ private[bootstrap] object UseCaseWiring:
             services.oauthClient,
             authServices.sessionService,
             repositories.loginAccounts,
-            services.oauthProviderBackoff
           ),
           services.oauthStateReplayGuard,
           config.auth.callbackRedirectPath,

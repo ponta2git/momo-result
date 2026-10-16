@@ -11,8 +11,7 @@
 | Web | SPA、入力、表示、画面状態 | `apps/web/src/` |
 | API | HTTP、認証、usecase、DB adapter | Tapir endpoint、`apps/api/` |
 | Processing Worker | OCR / 分析の非同期実行、lease、外部I/O | `apps/processing-worker/` |
-| DB | 業務状態、job、入力、成果物 | `../momo-db` migration |
-| Redis | 認証・レート制限 | API adapter と設定 |
+| DB | 業務状態、session、OAuth state使用済み記録、job、入力、成果物 | `../momo-db` migration |
 | public HTTP runtime | Web 配信、API、reverse proxy | `Dockerfile`、`deploy/`、runtime tool |
 
 - public HTTP runtime に OCR / 分析処理を同居させず、HTTP request 内で高負荷分析を実行しない。
@@ -22,7 +21,7 @@
 ### Storage / Resource Boundaries
 
 - 業務ルール・再試行方針・集計状態の更新手順はアプリが所有する。DBにはFK、一意性、改変不能性、原子的な条件付き更新を残す。複数consumerの整合性やrollback互換を守るtriggerは、置換する契約と移行順が揃うまで削除しない。
-- Redisへ業務状態や長期履歴を複製しない。Luaはカウンタと期限など小さな原子操作に限定し、業務分岐や無制限の走査を持ち込まない。pipelineによる往復削減とtransactionの原子性を区別する。
+- rate limitのカウンタはAPI process内で保持し、scopeごとのkey数と有効期間を制限する。process間では共有せず、再起動で初期化される。永続するquotaや同時job上限はDBの原子的な操作で別に守る。
 - 接続poolはruntimeで再利用し、取得待ちの実行枠もpool上限へ合わせる。利用しない接続の常時補充やkeepalive queryを避ける一方、requestごとの接続開閉へ置き換えない。
 - 受付判定は必要な外部状態の取得結果から行う。直前のPINGを成功保証とせず、外部状態をcacheしてquotaやfail-closedの意味を弱めない。
 - 処理中のlease heartbeat、待機中のcapability更新、jobの起床通知、実行可能時刻、履歴保持は別の目的を持つ。閾値は相互の期限・shutdown予算・利用者の待ち時間と合わせて調整し、コマンド数やquery負荷だけで決めない。
@@ -38,8 +37,9 @@
 - 分析結果の分類・根拠はWorkerが所有し、画面内の遷移先、リンク文言、固定の指標説明はWebが所有する。保存成果物へ画面構造を埋め込まず、Webは分類から遷移先を決める。
 - `apps/api/openapi.yaml` は内部 Web codegen 用の追跡する派生物であり、契約や公開 API documentation の正本ではない。Tapir から一時生成した spec を保守された OpenAPI-aware linter で構造検証し、tracked artifact と一致させ、その artifact から Web 型を生成する。手編集で差分を解消しない。
 - OpenAPI lint は unresolved reference、path / parameter、schema、operation identity など構造整合性に限定する。field の公開可否、認証、業務意味は endpoint、DTO、要求・domain 規約で決め、legacy 名や source 断片の文字列検査を契約にしない。
-- HTTP 層は入力・認証・エラー変換に閉じ、DB、Redis、業務分岐を直接持たない。
+- HTTP 層は入力・認証・エラー変換に閉じ、DB操作、業務分岐を直接持たない。
 - request body のサイズ上限はHTTP methodに関係なく適用し、Content-Lengthがない場合も読取byte数で制限する。decode 前に同時実行数を制限し、画像uploadと通常mutationを分離する。満杯の場合は本文を保持して待機せず再試行可能な応答を返す。
+- 認証済みreadとmutation試行は別の入口rate limitで制限する。mutation試行は本文decode前に判定し、再送やCSRF拒否も数える。新規処理用のmutation / upload / OCR制限とは分け、通常の再試行に余裕を持たせる。冪等replayは本文hash照合後に決め、再送で新規処理用の枠を消費しない。本人情報取得・logoutは通常read / mutationと別の認証操作枠を持つ。
 - JSON readの待機件数と時間を制限し、待機上限では再試行可能な応答を返す。JSON・画像・exportの応答は転送終了まで同時実行枠を保持する。DB projectionは全量取得後の検査に頼らず、件数・文字数・保存JSONのbyte数を転送前に検証する。
 - 応答を返す前の失敗・取消ではHTTP層が取得済みの枠を解放し、応答を返した後はbodyの解放scopeへ引き継ぐ。ログなどのbody wrapperはそのscopeを通常の効果の後へ隠さず、本文開始前の送信失敗でもserverが解放できる形を保つ。応答生成後の補助処理は取消で応答の所有権を失わないようにする。
 - HEAD応答はエラーを含めて本文を送らず、本文に引き継いだresourceも解放する。405応答のAllowは対象routeで許可するmethodから求める。HTTP/2のframe、flow control、stream reset、GOAWAYはHTTPライブラリが所有し、アプリケーションで接続全体の切断や未読本文の無制限drainへ置き換えない（[RFC 9110 §9.3.2](https://www.rfc-editor.org/rfc/rfc9110.html#section-9.3.2)、[RFC 9113 §8.1](https://www.rfc-editor.org/rfc/rfc9113.html#section-8.1)）。
@@ -85,9 +85,9 @@
 ### Error / Auth
 
 - 業務、認証、権限、入力、外部依存のエラーを区別し、UI が扱える Problem Details へ正規化する。
-- account、session、provider backoff の判断は auth service に閉じ、Discord HTTP client と Redis実装は adapter に置く。HTTP module は cookie / redirect / wire 変換を担う。
+- account、session、OAuth callbackの判断はauth serviceに閉じ、Discord HTTP clientとOAuth state使用済み記録の永続化はadapterに置く。HTTP moduleはcookie / redirect / wire変換を担う。
 - 認証主体と試合参加者を混同しない。状態変更 API は CSRF 対策を必須とし、dev/test 認証を本番経路へ混ぜない。
-- 認証cookieは形式と重複を検証してから扱い、API応答は共有cacheへ保存しない。OAuth stateは署名・期限・サイズを検証した後に一回限りの使用を確定する。
+- 認証cookieは形式と重複を検証してから扱い、API応答は共有cacheへ保存しない。OAuth stateは署名対象の形式識別子・署名・期限・サイズを検証し、provider呼出し前にDBで一回限りの使用を確定する。使用済み記録はhashと期限だけを保持し、有効期間中はAPI再起動で失わず、保存不能時はcallbackを進めない。旧形式のstateは再ログインで作り直し、既存sessionの形式と有効性は維持する。
 - UI が回復方法を変える HTTP status を汎用内部エラーへ潰さない。
 
 ## 3. Web
@@ -223,7 +223,7 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 - 計算attemptは種類ごとの型付きRunnerで実行し、停止・終了・子と補助taskの回収は共通の実行管理handleで監視する。通常のErrでもRunner資源を返してtaskのpanicと区別し、完了待ちが中断されても回収の所有権を失わない。実行の正常終了と成果物公開の成功を同一視しない。業務固有のclaimや成果物を共通handleへ持ち込まず、回収未確認の資源や実行枠を次のattemptへ渡さない。
 - moduleのbootstrapは接続・capability・入力前提を整え、未完了仕事も通常運転の有限な発見・実行経路へ渡す。全件列挙や全受付の終端を起動条件にしない。取得済みの資源はbootstrap全体の成功前から回収可能にし、登録済みcapabilityは後続の起動失敗時にもdrainingへ移す。分析のmodule stateはwork準備・保守・drainingと再利用資源を所有し、Runnerはclaim済みattemptに絞る。実行中も後続workの準備を進め、attempt間に履歴と一時領域を整理する。起動時に残った一時領域の再確認期限も通常運転へ引き継ぐ。
 - 分析のterminal履歴と未参照artifactの保持・整理はWorkerのcontrol処理が所有し、APIの起動に依存しない。保持条件は分析batch要求を正本とし、公開済みcurrent / previousの保護とbounded cleanupを同じDB境界で保証する。
-- capability crate は決定論的な domain / 計算 / version 付き論理契約を所有し、DB、Redis、filesystem、clock、async runtime に依存しない。runtime から capability への一方向依存とする。
+- capability crate は決定論的な domain / 計算 / version 付き論理契約を所有し、DB、filesystem、clock、async runtime に依存しない。runtime から capability への一方向依存とする。
 - 通知基盤の `momo-notifications` は件数・bytesの予約、envelopeのserialize、呼出側transactionによる最終JSONBサイズ検証、transport設定の検証とHTTP送信を所有する。通知内容を作るproducer、業務SQL、DB接続、SAVEPOINTとcommit、環境変数の読取り、senderの監督・停止期限はworkerが所有する。workerから通知基盤への一方向依存とする。
 - production の OS FFI と `unsafe` は process adapter に隔離し、他 module へ checked な safe API を公開する。TERM・KILL・process groupの回収は共通化し、分析の入力設定・終了分類とOCRのframe・結果decodeは各capabilityのprocess adapterに残す。
 - 子 process の resource 制限は実 runtime の cgroup で保証する。非対応 OS では job claim 前に fail closed にする。
@@ -264,7 +264,7 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 ## 5. Runtime / Security
 
 - secret、session / CSRF token、接続 URL、画像内容、OCR raw text、分析成果物本文をログへ出さない。例外は安全な分類情報へ正規化する。
-- production の DB / Redis は暗号化と相手検証を維持し、接続のために認証要件を暗黙に弱めない。
+- productionのDB接続は暗号化と相手検証を維持し、接続のために認証要件を暗黙に弱めない。
 - upload は許可形式、byte 数、寸法、内容 fingerprint を完全 decode 前後の境界で検証し、画像実体や長寿命 URL を DB / 公開 DTO に置かない。
 - 画像objectは作成後に上書きせず、再送は保存済みの内容と照合する。localとobject storageで読取上限と整合性検証を共有し、未検証のdescriptorから任意のfileを読まない。
 - health、dependency readiness、機能応答、resource / performance を別の証拠として扱う。

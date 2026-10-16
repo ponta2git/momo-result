@@ -20,7 +20,7 @@ import momo.api.domain.RequestId
  *     reporting issues.
  *
  * The normalized request id is also written back into the request headers before routing, so Tapir
- * endpoints can thread it into background payloads (Redis, DB) without relying on thread-local MDC.
+ * endpoints can thread it into background payloads without relying on thread-local MDC.
  *
  * MDC is thread-local, while request fibers can suspend and resume on different threads. Carry the
  * identifier as request data and install MDC only during a synchronous log call via `logWithMdc`.

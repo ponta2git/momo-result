@@ -11,7 +11,7 @@
 - worker container へ OAuth など無関係な secret を渡さず、接続値を docs、tracked file、shell history へ書かない。
 - DB を使う前に sibling `momo-db` の migration が接続先へ適用済みであることを確認する。
 - 隔離testの既定migration選択は共通resolverで `.momo-db-ref` の内容と照合し、異なるcheckoutや未追跡SQLを拒否する。固定revisionのarchiveや意図したschema実験は `MOMO_DB_MIGRATIONS_DIR` で明示し、検証した前提を区別する。
-- integration / E2E は普段使いの DB、Redis、bucket と分離する。外部依存 gate の未実行は、その wire 動作を未検証として報告する。
+- integration / E2E は普段使いの DB、bucket と分離する。外部依存 gate の未実行は、その wire 動作を未検証として報告する。
 - Web / runtime E2Eのfresh DB bootstrapは `web-e2e` profileで現行の分析公開契約を初期化する。migrationだけのbaselineと区別し、既存DBの正式なpromotionや本番切替を代用しない。
 
 上記の隔離と接続先を確認できるローカル検証は、依頼された変更の検証・失敗修正・影響範囲の再実行まで個別承認なしで進める。任意 target や live provider を使う command にはこの前提を持ち込まず、実際の接続先と副作用を確認する。
@@ -46,7 +46,7 @@ Runtime と Worker の production image、回復・通知契約用の Worker `e2
 | 領域 | 品質 command |
 | --- | --- |
 | Web | `pnpm --filter web format:check`、`lint`、`contract:check`、`typecheck`、`test:run`、`scripts:check`、必要に応じ `build` / `e2e:ui` |
-| API | `sbt --server --batch apiQuality`、`sbt --server --batch testFull`、同じオプションで必要に応じ `apiCoverage` / `apiDbQuality` / `apiRedisQuality` / `apiR2Quality` |
+| API | `sbt --server --batch apiQuality`、`sbt --server --batch testFull`、同じオプションで必要に応じ `apiCoverage` / `apiDbQuality` / `apiR2Quality` |
 | Processing Worker | `cargo fmt --all -- --check`、`cargo clippy --locked --workspace --all-targets`、`cargo test --locked --workspace`、production image build |
 | Go runtime / tools | 変更対象の `apps/runtime` または `scripts/tools` で `go test ./... && go vet ./...` |
 | Workflow / policy scripts | `pnpm actionlint`、`pnpm test:policy` |
@@ -81,7 +81,6 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 | login、試合記録、OCR、比較、export の主要 UI flow | Web gate + 影響する利用者契約の Playwright |
 | API endpoint / usecase / domain / codec | API quality + 選択した unit / contract evidence |
 | PostgreSQL repository / DB 前提 | API gate + 変更経路の DB quality |
-| Redis | API gate + 変更経路の Redis quality |
 | OCR job / scheduler | API / Worker gate + 変更経路の DB / process contract |
 | R2 image storage | API / DB gate + 変更経路の R2 quality / reconciler readiness |
 | Processing Worker production | format、Clippy、production image build + 選択した target / feature evidence |
@@ -111,7 +110,7 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 - CI は変更範囲を fail closed で分類し、対象 subsystem の gate を通す。workflow、service、timeout、artifact path の一覧は docs へ写さない。
 - チケット完了前には最終差分が影響する基本操作・回復経路を同じ suite で確認する。PR を経由しない `develop` マージ前は、最新 `develop` とのマージ予定結果を隔離 checkout で作り、そのコードから build した候補で基本操作一式と関連する回復・契約を通す。検証後に対象コードや候補が変わった場合は、無効になった範囲を再実行する。
 - 手動結果にも対象 commit（未commit差分があればその範囲）、Runtime / Worker image ID、suite・ケース、成否と未確認事項を残す。結果のためだけの恒久的な記録帳は増やさず、チケット・PR・作業報告へ記載する。
-- PR では compile / lint / generation などの pipeline integrity、選択した S / M evidence、変更境界に応じた DB / Redis contract、影響する主要 user flow を優先する。endurance、resource limit、live provider は、PR でしか検出できない変更を除き release evidence へ分離する。
+- PR では compile / lint / generation などの pipeline integrity、選択した S / M evidence、変更境界に応じた DB contract、影響する主要 user flow を優先する。endurance、resource limit、live provider は、PR でしか検出できない変更を除き release evidence へ分離する。
 - release PR は snapshot、branch policy、公開情報を検証する。アプリ・image の gate は通常 PR と exact `master` commit の本番候補で実行し、release PR で重複させない。最終 gate の失敗は merge 後に判明するが、必要な候補の検証がすべて成功するまで本番変更を開始しない。
 - retry の結果分類と report artifact は `docs/test-architecture.md` の CI Artifacts に従う。
 - release 候補は一度だけ build し、commit、設定、immutable artifact identity、digest、producer attempt を記録する。後続 smoke / deploy / rollback は同じ候補を使う。

@@ -8,7 +8,6 @@
     "http2",
     "processes",
     "publicEdge",
-    "redis",
     "web"
   ]
 }

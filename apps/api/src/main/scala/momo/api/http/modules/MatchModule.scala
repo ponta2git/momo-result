@@ -6,7 +6,6 @@ import java.time.format.DateTimeFormatter
 import cats.effect.Async
 import sttp.tapir.server.ServerEndpoint
 
-import momo.api.auth.RateLimiter
 import momo.api.domain.ids.MatchId
 import momo.api.endpoints.codec.{BoundaryId, MatchCodec, MatchListCodec}
 import momo.api.endpoints.{
@@ -44,7 +43,6 @@ object MatchModule:
       updateMatch: UpdateMatch[F],
       replaceMatchNote: ReplaceMatchNote[F],
       deleteMatch: DeleteMatch[F],
-      readRateLimiter: RateLimiter[F],
       idempotency: IdempotencyReplay.Guard[F],
       nowF: F[Instant],
       security: EndpointSecurity[F],
@@ -75,41 +73,36 @@ object MatchModule:
       }
     },
     SecuredEndpoint.readLogic(security, MatchesEndpoints.list) { member => input =>
-      ReadRateLimit.enforce(readRateLimiter, member.accountId.value, HttpOperation.ListMatches) {
-        security.decode(MatchListCodec.toListCommand(
+      security.decode(MatchListCodec.toListCommand(
+        heldEventId = input.heldEventId,
+        gameTitleId = input.gameTitleId,
+        seasonMasterId = input.seasonMasterId,
+        status = input.status,
+        kind = input.kind,
+        pageSize = input.pageSize,
+        cursor = input.cursor,
+        sort = input.sort,
+      ))(command =>
+        security.respond(listMatches.run(command, member.accountId))(result =>
+          MatchListResponse(
+            items = result.items.map(MatchSummaryResponse.from),
+            pagination = paginationResponse(result.pagination),
+          )
+        )
+      )
+    },
+    SecuredEndpoint.readLogic(security, MatchesEndpoints.summary) { _ => input =>
+      security.decode(
+        MatchListCodec.parseSummaryFilter(
           heldEventId = input.heldEventId,
           gameTitleId = input.gameTitleId,
           seasonMasterId = input.seasonMasterId,
-          status = input.status,
-          kind = input.kind,
-          pageSize = input.pageSize,
-          cursor = input.cursor,
-          sort = input.sort,
-        ))(command =>
-          security.respond(listMatches.run(command, member.accountId))(result =>
-            MatchListResponse(
-              items = result.items.map(MatchSummaryResponse.from),
-              pagination = paginationResponse(result.pagination),
-            )
-          )
         )
+      ) { case (parsedHeldEventId, parsedGameTitleId, parsedSeasonMasterId) =>
+        security.respond(
+          listMatches.summarize(parsedHeldEventId, parsedGameTitleId, parsedSeasonMasterId)
+        )(MatchListSummaryResponse.from)
       }
-    },
-    SecuredEndpoint.readLogic(security, MatchesEndpoints.summary) { member => input =>
-      ReadRateLimit
-        .enforce(readRateLimiter, member.accountId.value, HttpOperation.SummarizeMatches) {
-          security.decode(
-            MatchListCodec.parseSummaryFilter(
-              heldEventId = input.heldEventId,
-              gameTitleId = input.gameTitleId,
-              seasonMasterId = input.seasonMasterId,
-            )
-          ) { case (parsedHeldEventId, parsedGameTitleId, parsedSeasonMasterId) =>
-            security.respond(
-              listMatches.summarize(parsedHeldEventId, parsedGameTitleId, parsedSeasonMasterId)
-            )(MatchListSummaryResponse.from)
-          }
-        }
     },
     SecuredEndpoint.readLogic(security, MatchesEndpoints.get) { _ => matchId =>
       security.decode(

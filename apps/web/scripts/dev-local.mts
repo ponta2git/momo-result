@@ -46,7 +46,6 @@ export function resolveDevEnvironment({
   for (const [key, fallback] of [
     ["APP_ENV", "dev"],
     ["MOMO_LOG_FORMAT", "text"],
-    ["REDIS_URL", undefined],
   ] as const) {
     const value =
       nonEmpty(baseEnv[key]) ?? nonEmpty(local[key]) ?? nonEmpty(example[key]) ?? fallback;

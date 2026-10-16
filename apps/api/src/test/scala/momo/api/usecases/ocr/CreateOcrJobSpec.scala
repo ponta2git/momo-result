@@ -275,7 +275,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       }
   }
 
-  test("rejects OCR hints that exceed Redis payload contract limits") {
+  test("rejects OCR hints that exceed input snapshot contract limits") {
     inMemoryFixture(
       prefix = "momo-api-create-job-hints-limit",
       idSeed = List("job-1", "draft-1"),
@@ -643,7 +643,10 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
           pngBytes.length
         ))
       )
-      new OcrSubmissions[IO](submissions, IO.pure(now)).put(command, owner).flatMap {
+      new OcrSubmissions[IO](
+        submissions,
+        IO.pure(now)
+      ).put(command, owner, IO.pure(Right(()))).flatMap {
         case Left(error) => IO.pure(Left(error))
         case Right(_) => delegate.run(
             CreateOcrJobCommand(request.imageId, request.requestedScreenType, id),

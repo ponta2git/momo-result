@@ -16,14 +16,18 @@ private[integration] object PostgresNotificationListener:
   ): Resource[IO, Connection] = Resource
     .fromAutoCloseable(IO.blocking(dataSource.getConnection))
     .flatMap { connection =>
-      Resource.make(IO.unit)(_ => IO.blocking {
-        execute(connection, "UNLISTEN *")
-        // UNLISTEN stops new delivery; consume notifications already buffered by the driver.
-        val _ = connection.unwrap(classOf[PGConnection]).getNotifications()
-      }).evalTap(_ => IO.blocking {
+      Resource.make(IO.unit)(_ =>
+        IO.blocking {
+          execute(connection, "UNLISTEN *")
+          // UNLISTEN stops new delivery; consume notifications already buffered by the driver.
+          val _ = connection.unwrap(classOf[PGConnection]).getNotifications()
+        }
+      ).evalTap(_ =>
+        IO.blocking {
           connection.setAutoCommit(true)
           execute(connection, s"LISTEN ${channel.value}")
-      }).map(_ => connection)
+        }
+      ).map(_ => connection)
     }
 
   private def execute(connection: Connection, sql: String): Unit =

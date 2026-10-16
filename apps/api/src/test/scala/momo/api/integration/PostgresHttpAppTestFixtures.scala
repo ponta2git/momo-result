@@ -26,8 +26,8 @@ abstract class PostgresHttpAppTestFixtures extends IntegrationSuite with HttpApp
     val accounts = new PostgresLoginAccountsRepository[IO](transactor)
     dbFixture().cleanup() *> accounts.list.flatMap { current =>
       val originalIds = original.map(_.id).toSet
-      val remove = current.filterNot(account => originalIds.contains(account.id)).traverse_ { account =>
-        sql"DELETE FROM momo_login_accounts WHERE id = ${account.id}".update.run.void
+      val remove = current.filterNot(account => originalIds.contains(account.id)).traverse_ {
+        account => sql"DELETE FROM momo_login_accounts WHERE id = ${account.id}".update.run.void
       }
       val restore = original.traverse_ { account =>
         sql"""

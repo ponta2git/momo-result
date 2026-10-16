@@ -38,6 +38,10 @@ private[bootstrap] object UnsupportedAnalysisRepositories:
         : F[Either[AppError, SeriesPlayerRadarDocument]] = unsupported
     override def radarOperation(title: GameTitleId, id: String)
         : F[Either[AppError, SeriesPlayerRadarOperation]] = unsupported
-    override def requestRadarOperation(command: SeriesPlayerRadarCommand, actor: AccountId,
-        key: String, fingerprint: String)
+    override def requestRadarOperation(
+        command: SeriesPlayerRadarCommand,
+        actor: AccountId,
+        key: String,
+        fingerprint: String
+    )
         : F[Either[AppError, SeriesPlayerRadarOperation]] = unsupported

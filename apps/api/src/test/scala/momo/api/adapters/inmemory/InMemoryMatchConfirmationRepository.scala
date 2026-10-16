@@ -43,7 +43,8 @@ final class InMemoryMatchConfirmationRepository[F[_]: MonadCancelThrow](
           if current.exists(draft =>
               MatchDraftConfirmability.allows(draft.status) &&
                 MatchDraftConfirmation.from(draft) == expected
-            ) then
+            )
+          then
             createAndConfirm(record, expected, updatedAt)
           else false.pure[F]
       yield updated match

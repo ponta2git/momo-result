@@ -154,11 +154,13 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
   const resource = seriesAnalysisBundleResource(bundle);
   const { matchContext } = bundle;
   const artifactId = resource.artifact.artifactId;
-  const scopeIdentity = seriesAnalysisScopeSignature({
+  // A retained summary must not initialize the newly requested scope's trial.
+  const displayedScope = {
     gameTitleId: resource.artifact.gameTitleId,
     mapMasterId: "mapMasterId" in resource.scope ? resource.scope.mapMasterId : undefined,
     seasonMasterId: "seasonMasterId" in resource.scope ? resource.scope.seasonMasterId : undefined,
-  });
+  };
+  const scopeIdentity = seriesAnalysisScopeSignature(displayedScope);
   const contentIdentity = `${artifactId}:${scopeIdentity}:${bundle.view}`;
   const root = useRef<HTMLDivElement>(null);
 
@@ -191,7 +193,7 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
               <Suspense fallback={<OutlookLoading />}>
                 <OutlookView
                   response={bundle.outlook}
-                  selection={outlookSelection}
+                  selection={{ ...outlookSelection, ...displayedScope }}
                   onMemberChange={onOutlookMemberChange}
                 />
                 <SeriesAnalysisArrival ready={navigationReady} root={root} />

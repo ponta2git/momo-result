@@ -9,19 +9,18 @@ import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{
   MapMastersRepository,
   MatchExportsRepository,
-  MatchesRepository,
   MembersRepository,
   SeasonMastersRepository
 }
 
 final class InMemoryMatchExportsRepository[F[_]: MonadThrow](
-    matches: MatchesRepository[F],
+    matches: MatchFixtureStore[F],
     members: MembersRepository[F],
     maps: MapMastersRepository[F],
     seasons: SeasonMastersRepository[F],
 ) extends MatchExportsRepository[F]:
   override def project(selection: MatchExportsRepository.Selection): F[List[MatchExportRow]] =
-    matches.list(MatchesRepository.ListFilter()).flatMap { all =>
+    matches.list(MatchFixtureStore.ListFilter()).flatMap { all =>
       val seasonSequence = sequenceBy(all)(_.seasonMasterId)
       val titleSequence = sequenceBy(all)(_.gameTitleId)
       val selected = all.filter(record =>

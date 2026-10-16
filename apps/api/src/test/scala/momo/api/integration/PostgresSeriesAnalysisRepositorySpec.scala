@@ -1,5 +1,7 @@
 package momo.api.integration
 
+import momo.api.usecases.testing.MatchFixtures
+
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.security.MessageDigest
@@ -895,7 +897,8 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
       saved <- matches.find(MatchId.unsafeFromString("match-1"))
       record = saved.getOrElse(fail("seeded match is missing"))
       _ <- matches.update(
-        record.copy(ownerMemberId = MemberId.unsafeFromString("member_eu")),
+        record.id,
+        MatchFixtures.update(record.copy(ownerMemberId = MemberId.unsafeFromString("member_eu"))),
         now.plusSeconds(1)
       )
       revised <- sql"SELECT owner_member_id, analysis_revision FROM matches WHERE id = 'match-1'"

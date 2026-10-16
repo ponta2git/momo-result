@@ -12,7 +12,7 @@ import momo.api.repositories.*
 
 final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
     ref: Ref[F, Map[MatchDraftId, MatchDraft]]
-) extends MatchDraftsRepository[F]:
+) extends MatchDraftFixtureStore[F]:
   override def create(draft: MatchDraft): F[Either[AppError, Unit]] = ref.modify { current =>
     if current.contains(draft.id) then
       (current, Left(AppError.Conflict(s"match draft already exists: ${draft.id.value}")))
@@ -31,7 +31,7 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
 
   override def find(id: MatchDraftId): F[Option[MatchDraft]] = ref.get.map(_.get(id))
 
-  override def list(filter: MatchDraftsRepository.ListFilter): F[List[MatchDraft]] = ref.get
+  override def list(filter: MatchDraftFixtureStore.ListFilter): F[List[MatchDraft]] = ref.get
     .map { all =>
       val filtered = all.values.filter { draft =>
         filter.heldEventId.forall(v => draft.heldEventId.contains(v)) &&
@@ -44,7 +44,7 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
 
   override def statsByHeldEvents(
       heldEventIds: List[HeldEventId]
-  ): F[Map[HeldEventId, MatchDraftsRepository.HeldEventStats]] = ref.get.map { drafts =>
+  ): F[Map[HeldEventId, MatchDraftFixtureStore.HeldEventStats]] = ref.get.map { drafts =>
     val ids = heldEventIds.toSet
     val grouped = drafts.values.filter { draft =>
       draft.heldEventId.exists(ids.contains) &&
@@ -52,7 +52,7 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
     }.toList.groupBy(_.heldEventId.get)
     heldEventIds.map { id =>
       val scoped = grouped.getOrElse(id, Nil)
-      id -> MatchDraftsRepository.HeldEventStats(
+      id -> MatchDraftFixtureStore.HeldEventStats(
         draftCount = scoped.size,
         maxMatchNo = scoped.flatMap(_.matchNoInEvent.map(_.value)).maxOption.getOrElse(0),
         scopes = scoped.map(draft =>
@@ -199,5 +199,5 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
       (draft.status == MatchDraftStatus.Confirmed && draft.confirmedMatchId.isEmpty)
 
 object InMemoryMatchDraftsRepository:
-  def create[F[_]: Sync]: F[InMemoryMatchDraftsRepository[F]] = Ref
+  def create[F[_]: Sync]: F[InMemoryMatchDraftFixtureStore[F]] = Ref
     .of[F, Map[MatchDraftId, MatchDraft]](Map.empty).map(new InMemoryMatchDraftsRepository(_))

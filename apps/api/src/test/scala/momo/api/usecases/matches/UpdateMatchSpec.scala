@@ -20,6 +20,7 @@ import momo.api.domain.{
   MatchNoteBody,
   MatchNoteVersion,
   MatchRecord,
+  MatchUpdate,
   PlayerResult
 }
 import momo.api.errors.AppError
@@ -218,15 +219,12 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
   private final class MatchesRepositoryWithUpdateConflict(delegate: MatchesRepository[IO])
       extends MatchesRepository[IO]:
     override def update(
-        record: MatchRecord,
+        id: MatchId,
+        change: MatchUpdate,
         updatedAt: Instant,
-    ): IO[Either[AppError, Unit]] = IO.pure(Left(AppError.Conflict("repository conflict")))
+    ): IO[Either[AppError, MatchRecord]] = IO.pure(Left(AppError.Conflict("repository conflict")))
     override def delete(id: MatchId): IO[Boolean] = delegate.delete(id)
     override def find(id: MatchId): IO[Option[MatchRecord]] = delegate.find(id)
-    override def list(filter: MatchesRepository.ListFilter): IO[List[MatchRecord]] = delegate
-      .list(filter)
-    override def listByHeldEvent(heldEventId: HeldEventId): IO[List[MatchRecord]] = delegate
-      .listByHeldEvent(heldEventId)
     override def existsMatchNo(
         heldEventId: HeldEventId,
         matchNoInEvent: MatchNoInEvent,
@@ -236,10 +234,6 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
         matchNoInEvent: MatchNoInEvent,
         excludeMatchId: MatchId,
     ): IO[Boolean] = IO.pure(false)
-    override def statsByHeldEvents(
-        heldEventIds: List[HeldEventId]
-    ): IO[Map[HeldEventId, MatchesRepository.HeldEventStats]] =
-      delegate.statsByHeldEvents(heldEventIds)
 
   private object MatchesRepositoryWithUpdateConflict:
     def apply(delegate: MatchesRepository[IO]): MatchesRepositoryWithUpdateConflict =

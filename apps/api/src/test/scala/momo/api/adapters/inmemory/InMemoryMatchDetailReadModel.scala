@@ -12,15 +12,15 @@ import momo.api.domain.{
   RecordNavigation,
   RecordNavigationOrder
 }
-import momo.api.repositories.{LoginAccountsRepository, MatchDetailReadModel, MatchesRepository}
+import momo.api.repositories.{LoginAccountsRepository, MatchDetailReadModel}
 
 final class InMemoryMatchDetailReadModel[F[_]: MonadThrow](
-    matches: MatchesRepository[F],
+    matches: MatchFixtureStore[F],
     accounts: LoginAccountsRepository[F],
     metadata: InMemoryMatchMetadata[F],
 ) extends MatchDetailReadModel[F]:
   override def find(id: MatchId): F[Option[MatchDetail]] =
-    matches.list(MatchesRepository.ListFilter()).map(records =>
+    matches.list(MatchFixtureStore.ListFilter()).map(records =>
       RecordNavigation.select(records.sorted(using RecordNavigationOrder.matches))(_.id == id)
     ).flatMap(_.traverse { case (record, navigation) =>
       for

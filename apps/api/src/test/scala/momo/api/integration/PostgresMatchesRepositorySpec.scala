@@ -1,9 +1,12 @@
 package momo.api.integration
 
+import momo.api.usecases.testing.MatchFixtures
+
 import java.time.Instant
 
-import cats.effect.IO
+import cats.effect.{Deferred, IO, Resource}
 import cats.syntax.all.*
+import doobie.Transactor
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
@@ -24,6 +27,7 @@ import momo.api.repositories.{
   MatchListReadModel
 }
 import momo.api.testing.AppErrorAssertions.assertAppException
+import momo.api.usecases.matches.{MatchDraftRefs, UpdateMatch, UpdateMatchCommand}
 
 final class PostgresMatchesRepositorySpec extends IntegrationSuite
     with MatchConfirmationRepositoryContract:
@@ -203,7 +207,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
         WHERE game_title_id IN ($gameTitleId, $secondGameTitleId)
       """.update.run.transact(transactor)
       _ <- createMatch(rec)
-      _ <- matches.update(moved, now.plusSeconds(1))
+      _ <- matches.update(moved.id, MatchFixtures.update(moved), now.plusSeconds(1))
       matchRevision <- sql"SELECT analysis_revision FROM matches WHERE id = ${rec.id}"
         .query[Long].unique.transact(transactor)
       deleted <- matches.delete(rec.id)
@@ -265,16 +269,6 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
         assertEquals(revision, 0L)
         assertEquals(counts, (0, 0, 0, 0, 0, 0))
   }
-
-  test("listByHeldEvent orders by match_no_in_event"):
-    for
-      _ <- seedPrereqs
-      _ <- createMatch(sampleMatch("match_b", 2))
-      _ <- createMatch(sampleMatch("match_a", 1))
-      list <- matches.listByHeldEvent(heldEventId)
-    yield
-      assertEquals(list.map(_.id.value), List("match_a", "match_b"))
-      assertEquals(list.map(_.matchNoInEvent.value), List(1, 2))
 
   test(
     "held-event detail reads ordered results, notes and active drafts in one read-only snapshot"
@@ -426,7 +420,11 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       all <- ordered.traverse(record => details.find(record.id))
       _ <- matches.delete(gap.id)
       afterDelete <- details.find(second.id)
-      _ <- matches.update(otherScope.copy(playedAt = now.minusNanos(1000)), now)
+      _ <- matches.update(
+        otherScope.id,
+        MatchFixtures.update(otherScope.copy(playedAt = now.minusNanos(1000))),
+        now
+      )
       afterMove <- details.find(first.id)
       missing <- details.find(gap.id)
     yield
@@ -450,7 +448,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       assertEquals(afterMove.flatMap(_.navigation.previous).map(_.matchId), Some(otherScope.id))
       assertEquals(missing, None)
 
-  test("held-event neighbours include empty events and agree with both list reads"):
+  test("held-event neighbours include empty events and agree with the list read model"):
     val details = new PostgresHeldEventDetailReadModel[IO](transactor)
     val reader = new PostgresHeldEventListReadModel[IO](transactor)
     val bmp = HeldEvent(HeldEventId.unsafeFromString("neighbour_\uE000"), now)
@@ -464,7 +462,6 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       _ <- heldEvents.create(supplementary)
       all <- ordered.traverse(event => details.find(event.id))
       list <- reader.list(None, PageRequest(1, 10))
-      ids <- heldEvents.listIds(None)
     yield
       assertEquals(single.map(_.navigation), Some(RecordNavigation(None, None)))
       all.zipWithIndex.foreach { case (detail, index) =>
@@ -475,7 +472,6 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
         assertEquals(value.drafts, Nil)
       }
       assertEquals(list.page.items.map(_.event.id), ordered.reverse.map(_.id))
-      assertEquals(ids, ordered.reverse.map(_.id))
 
   test("held-event pages project only their scopes while totals cover all matching events"):
     val latestId = HeldEventId.unsafeFromString("held_latest")
@@ -771,7 +767,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
     for
       _ <- seedPrereqs
       _ <- createMatch(rec)
-      _ <- matches.update(updated, now.plusSeconds(60))
+      _ <- matches.update(updated.id, MatchFixtures.update(updated), now.plusSeconds(60))
       found <- matches.find(rec.id)
     yield
       val got = found.getOrElse(fail("match_001 not found after update"))
@@ -787,11 +783,89 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       assertEquals(ponta.totalAssetsManYen.value, 1000)
       assertEquals(ponta.incidents.destination.value, 0)
 
+  test("update merges omitted references and returns the note committed while it waits"):
+    val rec = sampleMatch("match_concurrent_update", 1)
+    val precedingRef = OcrDraftId.unsafeFromString("preceding-total-assets")
+    val requestedRef = OcrDraftId.unsafeFromString("requested-revenue")
+    val note = MatchNoteBody.fromRequiredString("Concurrent note").toOption.get
+    val revisions = sql"""
+      SELECT m.analysis_revision, s.input_revision,
+        (SELECT COUNT(*) FROM series_analysis_job_requests WHERE game_title_id = $gameTitleId)
+      FROM matches m
+      JOIN series_analysis_title_states s ON s.game_title_id = m.game_title_id
+      WHERE m.id = ${rec.id}
+    """.query[(Long, Long, Long)].unique.transact(transactor)
+    for
+      _ <- seedPrereqs
+      _ <- createMatch(rec)
+      before <- revisions
+      ready <- Deferred[IO, Unit]
+      save <- Deferred[IO, Unit]
+      usecase = UpdateMatch[IO](
+        heldEvents,
+        matches,
+        gameTitles,
+        mapMasters,
+        seasonMasters,
+        ready.complete(()).void *> save.get.as(now.plusSeconds(3)),
+        IO.pure(rec.players.toList.map(_.memberId).toSet),
+      )
+      command = UpdateMatchCommand(
+        rec.heldEventId,
+        rec.matchNoInEvent.value,
+        rec.gameTitleId,
+        rec.seasonMasterId,
+        rec.ownerMemberId,
+        rec.mapMasterId,
+        rec.playedAt,
+        MatchDraftRefs(None, Some(requestedRef), None),
+        MatchFixtures.defaultPlayerInputs(MatchFixtures.DbMemberValues),
+      )
+      result <- usecase.run(rec.id, command).background.use { completed =>
+        ready.get *> Resource.fromAutoCloseable(IO.blocking(dataSource.getConnection))
+          .use { connection =>
+            val xa = Transactor.fromConnection[IO](connection, None)
+            (for
+              _ <- IO.blocking(connection.setAutoCommit(false))
+              _ <- xa.rawTrans.apply(PostgresMatches.alg.update(
+                rec.id,
+                MatchFixtures.update(rec).copy(totalAssetsDraftId = Some(precedingRef)),
+                now.plusSeconds(1),
+              ))
+              _ <- xa.rawTrans.apply(PostgresMatchNotes.replace(
+                rec.id,
+                MatchNoteVersion.Initial,
+                Some(note),
+                rec.createdByAccountId,
+                now.plusSeconds(2),
+              ))
+              blocker <- xa.rawTrans.apply(sql"SELECT pg_backend_pid()".query[Int].unique)
+              _ <- save.complete(())
+              _ <- awaitBackendBlockedBy(blocker)
+              _ <- IO.blocking(connection.commit())
+              saved <- completed.flatMap(_.embedNever)
+            yield saved).onError(_ => IO.blocking(connection.rollback()))
+          }
+      }
+      persisted <- matches.find(rec.id)
+      after <- revisions
+    yield
+      val returned = result.fold(error => fail(s"update rejected: $error"), identity)
+      assertEquals(persisted, Some(returned))
+      assertEquals(returned.totalAssetsDraftId, Some(precedingRef))
+      assertEquals(returned.revenueDraftId, Some(requestedRef))
+      assertEquals(returned.incidentLogDraftId, rec.incidentLogDraftId)
+      assertEquals(returned.note.body, Some(note))
+      assertEquals(returned.note.version, MatchNoteVersion.Initial.next)
+      assertEquals(returned.createdAt, rec.createdAt)
+      assertEquals(returned.players.toList.map(_.totalAssetsManYen.value), List.fill(4)(100))
+      assertEquals(after, (before._1 + 2, before._2 + 2, before._3 + 2))
+
   test("update maps concurrently missing match to NotFound"):
     val rec = sampleMatch("match_missing_update", 1)
     for
       _ <- seedPrereqs
-      result <- matches.update(rec, now.plusSeconds(60))
+      result <- matches.update(rec.id, MatchFixtures.update(rec), now.plusSeconds(60))
     yield assertEquals(result, Left(AppError.NotFound("match", rec.id.value)))
 
   test("update rejects a disappearing prerequisite without changing players or analysis work"):
@@ -813,7 +887,11 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       before <- analysisState
       _ <- sql"DELETE FROM held_events WHERE id = $disappearingEventId".update.run
         .transact(transactor)
-      result <- matches.update(rec.copy(heldEventId = disappearingEventId), now.plusSeconds(60))
+      result <- matches.update(
+        rec.id,
+        MatchFixtures.update(rec.copy(heldEventId = disappearingEventId)),
+        now.plusSeconds(60)
+      )
       persisted <- matches.find(rec.id)
       after <- analysisState
     yield
@@ -825,32 +903,6 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       )
       assertEquals(persisted, expected)
       assertEquals(after, before)
-
-  test("statsByHeldEvents returns count and maximum match number including gaps"):
-    val missing = HeldEventId.unsafeFromString("missing_event")
-    for
-      _ <- seedPrereqs
-      _ <- createMatch(sampleMatch("match_stats_001", 1))
-      _ <- createMatch(sampleMatch("match_stats_004", 4))
-      _ <- seedSecondTitle
-      _ <- createMatch(sampleMatch("match_stats_002", 2).copy(
-        gameTitleId = secondGameTitleId,
-        mapMasterId = secondMapMasterId,
-        seasonMasterId = secondSeasonMasterId,
-      ))
-      stats <- matches.statsByHeldEvents(List(heldEventId, missing))
-    yield
-      assertEquals(stats(heldEventId).matchCount, 3)
-      assertEquals(
-        stats(heldEventId).scopes.toSet,
-        Set(
-          HeldEventScope(Some(gameTitleId), Some(seasonMasterId)),
-          HeldEventScope(Some(secondGameTitleId), Some(secondSeasonMasterId)),
-        )
-      )
-      assertEquals(stats(heldEventId).maxMatchNo, 4)
-      assertEquals(stats(missing).matchCount, 0)
-      assertEquals(stats(missing).maxMatchNo, 0)
 
   test("confirmation maps duplicate match_no_in_event to Conflict"):
     val rec1 = sampleMatch("match_confirm_001", 1)

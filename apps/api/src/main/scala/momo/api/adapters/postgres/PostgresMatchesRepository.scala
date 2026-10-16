@@ -10,20 +10,19 @@ import doobie.enumerated.SqlState
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 import doobie.postgres.sqlstate
-import doobie.util.fragments
 
 import momo.api.adapters.postgres.PostgresMatchInsertOps.replaceMatchChildren
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.adapters.postgres.PostgresSeriesAnalysisMutationOps.enqueueMatchMutation
 import momo.api.domain.ids.*
-import momo.api.domain.{HeldEventScope, MatchNoInEvent, MatchRecord}
+import momo.api.domain.{MatchNoInEvent, MatchRecord, MatchUpdate}
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{MatchesAlg, MatchesRepository}
 
 /**
  * Persists `matches` along with their dependent `match_players` (4 rows) and `match_incidents` (4 ×
- * 6 = 24 rows) atomically in a single connection. List/find load player rows in batch (single SQL
- * regardless of result cardinality) to avoid N+1.
+ * 6 = 24 rows) atomically in a single connection. Updates merge omitted fields from the locked
+ * parent; reads batch the player and incident rows.
  */
 object PostgresMatches extends PostgresMatchesReadSupport:
   private def isUniqueViolation(state: SqlState): Boolean = state.value ==
@@ -36,17 +35,16 @@ object PostgresMatches extends PostgresMatchesReadSupport:
     .raiseError[A](new AppException(AppError.NotFound(resource, id)))
 
   val alg: MatchesAlg[ConnectionIO] = new MatchesAlg[ConnectionIO]:
-    override def update(record: MatchRecord, updatedAt: Instant): ConnectionIO[Unit] =
-      val previousTitle = sql"""
-        SELECT game_title_id
-        FROM matches
-        WHERE id = ${record.id}
-        FOR UPDATE
-      """.query[GameTitleId].option.flatMap {
-        case Some(value) => value.pure[ConnectionIO]
-        case None => notFound[GameTitleId]("match", record.id.value)
+    override def update(
+        id: MatchId,
+        change: MatchUpdate,
+        updatedAt: Instant
+    ): ConnectionIO[MatchRecord] =
+      val current = (selectMatch ++ fr"WHERE id = $id FOR UPDATE").query[MatchRow].option.flatMap {
+        case Some(row) => toRecord(row, change.input.players).liftTo[ConnectionIO]
+        case None => notFound[MatchRecord]("match", id.value)
       }
-      val updateMatch = sql"""
+      def updateMatch(record: MatchRecord) = sql"""
         UPDATE matches
         SET held_event_id = ${record.heldEventId},
             match_no_in_event = ${record.matchNoInEvent},
@@ -64,9 +62,11 @@ object PostgresMatches extends PostgresMatchesReadSupport:
         WHERE id = ${record.id}
       """.update.run
       (for
-        oldTitle <- previousTitle
+        previous <- current
+        oldTitle = previous.gameTitleId
+        record = change.applyTo(previous)
         previousRadarInput <- PostgresSeriesPlayerRadarMutationOps.inputIdentity(record.id)
-        affected <- updateMatch
+        affected <- updateMatch(record)
         _ <- if affected == 1 then replaceMatchChildren(record)
         else notFound[Unit]("match", record.id.value)
         _ <- enqueueMatchMutation(List(oldTitle, record.gameTitleId))
@@ -78,12 +78,12 @@ object PostgresMatches extends PostgresMatchesReadSupport:
             true
           )
         else ().pure[ConnectionIO]
-      yield ()).exceptSomeSqlState {
+      yield record).exceptSomeSqlState {
         case state if isUniqueViolation(state) =>
-          conflict[Unit](s"matchNoInEvent ${record.matchNoInEvent.value
-              .toString} already exists for held event ${record.heldEventId.value}.")
+          conflict[MatchRecord](s"matchNoInEvent ${change.input.matchNoInEvent.value
+              .toString} already exists for held event ${change.input.heldEventId.value}.")
         case state if isForeignKeyViolation(state) =>
-          conflict[Unit]("Match prerequisites changed before the update completed.")
+          conflict[MatchRecord]("Match prerequisites changed before the update completed.")
       }
 
     override def delete(id: MatchId): ConnectionIO[Boolean] =
@@ -116,33 +116,6 @@ object PostgresMatches extends PostgresMatchesReadSupport:
             .flatMap(byMid => byMid.get(id).traverse(p => toRecord(row, p).liftTo[ConnectionIO]))
       }
 
-    override def list(filter: MatchesRepository.ListFilter): ConnectionIO[List[MatchRecord]] =
-      val conditions = List(
-        filter.heldEventId.map(id => fr"held_event_id = $id"),
-        filter.gameTitleId.map(id => fr"game_title_id = $id"),
-        filter.seasonMasterId.map(id => fr"season_master_id = $id"),
-        filter.matchId.map(id => fr"id = $id"),
-      ).flatten
-      val where = fragments.whereAndOpt(conditions)
-      val limit = filter.limit.map(n => fr"LIMIT $n").getOrElse(Fragment.empty)
-      for
-        rows <- (selectMatch ++ where ++ fr"ORDER BY played_at DESC, created_at DESC" ++ limit)
-          .query[MatchRow].to[List]
-        byMid <- loadPlayersBatch(rows.map(_.id))
-        records <-
-          rows.traverse(r => byMid.get(r.id).traverse(p => toRecord(r, p).liftTo[ConnectionIO]))
-      yield records.flatten
-
-    override def listByHeldEvent(heldEventId: HeldEventId): ConnectionIO[List[MatchRecord]] =
-      for
-        rows <-
-        (selectMatch ++ fr"WHERE held_event_id = $heldEventId" ++ fr"ORDER BY match_no_in_event")
-          .query[MatchRow].to[List]
-        byMid <- loadPlayersBatch(rows.map(_.id))
-        records <-
-          rows.traverse(r => byMid.get(r.id).traverse(p => toRecord(r, p).liftTo[ConnectionIO]))
-      yield records.flatten
-
     override def existsMatchNo(
         heldEventId: HeldEventId,
         matchNoInEvent: MatchNoInEvent,
@@ -166,35 +139,6 @@ object PostgresMatches extends PostgresMatchesReadSupport:
         )
       """.query[Boolean].unique
 
-    override def statsByHeldEvents(
-        heldEventIds: List[HeldEventId]
-    ): ConnectionIO[Map[HeldEventId, MatchesRepository.HeldEventStats]] =
-      if heldEventIds.isEmpty then
-        Map.empty[HeldEventId, MatchesRepository.HeldEventStats].pure[ConnectionIO]
-      else
-        val ids = heldEventIds.map(_.value).toArray
-        PostgresReadBudget.rows[HeldEventMatchStatsRow](
-          sql"""
-            SELECT held_event_id, COUNT(*)::int, COALESCE(MAX(match_no_in_event), 0)::int,
-                   game_title_id, season_master_id
-            FROM matches
-            WHERE held_event_id = ANY($ids)
-            GROUP BY held_event_id, game_title_id, season_master_id
-          """,
-          PostgresReadBudget.ScopeRows,
-          "Held-event match scopes"
-        ).map { rows =>
-          val seen = rows.groupBy(_.heldEventId).map { case (id, grouped) =>
-            id -> MatchesRepository.HeldEventStats(
-              matchCount = grouped.map(_.count).sum,
-              maxMatchNo = grouped.map(_.maxMatchNo).max,
-              scopes =
-                grouped.map(row => HeldEventScope(Some(row.gameTitleId), Some(row.seasonMasterId))),
-            )
-          }
-          heldEventIds.map(id => id -> seen.getOrElse(id, MatchesRepository.HeldEventStats(0, 0)))
-            .toMap
-        }
 end PostgresMatches
 
 final class PostgresMatchesRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
@@ -202,16 +146,10 @@ final class PostgresMatchesRepository[F[_]: MonadCancelThrow](transactor: Transa
   private val delegate: MatchesRepository[F] = MatchesRepository
     .fromAlg(PostgresMatches.alg, transactor.trans)
 
-  export delegate.{update, delete, existsMatchNo, existsMatchNoExcept, statsByHeldEvents}
+  export delegate.{update, delete, existsMatchNo, existsMatchNoExcept}
 
   override def find(id: MatchId): F[Option[MatchRecord]] =
     readSnapshot(PostgresMatches.alg.find(id))
-
-  override def list(filter: MatchesRepository.ListFilter): F[List[MatchRecord]] =
-    readSnapshot(PostgresMatches.alg.list(filter))
-
-  override def listByHeldEvent(id: HeldEventId): F[List[MatchRecord]] =
-    readSnapshot(PostgresMatches.alg.listByHeldEvent(id))
 
   private def readSnapshot[A](read: ConnectionIO[A]): F[A] =
     (sql"SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY".update.run *> read)

@@ -151,8 +151,7 @@ final class PostgresReadBudgetSpec extends IntegrationSuite:
       """.update.run.transact(transactor)
       rejected <- PostgresHeldEventListReadModel[IO](transactor)
         .list(None, PageRequest(1, 1)).attempt
-    yield
-      assertAppException(rejected, "PAYLOAD_TOO_LARGE", "too many records")
+    yield assertAppException(rejected, "PAYLOAD_TOO_LARGE", "too many records")
   }
 
   test("whole-event detail applies one combined budget before loading match children") {

@@ -13,7 +13,7 @@ import doobie.postgres.sqlstate
 
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.ids.{HeldEventId, MatchDraftId}
-import momo.api.domain.{HeldEvent, PageRequest, PagedResult}
+import momo.api.domain.HeldEvent
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{
   HeldEventDeletionAlg,
@@ -44,31 +44,7 @@ object PostgresHeldEvents:
   private def conflict[A](detail: String): ConnectionIO[A] = MonadThrow[ConnectionIO]
     .raiseError[A](new AppException(AppError.Conflict(detail)))
 
-  private def whereQuery(query: Option[String]): Fragment = query.map(_.trim).filter(_.nonEmpty)
-    .fold(Fragment.empty) { q =>
-      val like = s"%$q%"
-      fr"WHERE id ILIKE $like"
-    }
-
   val alg: HeldEventsAlg[ConnectionIO] = new HeldEventsAlg[ConnectionIO]:
-    override def listPage(
-        query: Option[String],
-        page: PageRequest,
-    ): ConnectionIO[PagedResult[HeldEvent]] =
-      val where = whereQuery(query)
-      val order = fr"""ORDER BY start_at DESC, id COLLATE "C" DESC"""
-      val pageLimit = fr"LIMIT ${page.pageSize} OFFSET ${page.offset}"
-      for
-        total <- (fr"SELECT COUNT(*)::int FROM held_events" ++ where).query[Int].unique
-        items <- (selectAll ++ where ++ order ++ pageLimit).query[HeldEventRow].to[List]
-          .map(_.map(fromRow))
-      yield PagedResult(items, page, total)
-
-    override def listIds(query: Option[String]): ConnectionIO[List[HeldEventId]] =
-      (fr"SELECT id FROM held_events" ++ whereQuery(query) ++
-        fr"""ORDER BY start_at DESC, id COLLATE "C" DESC""")
-        .query[HeldEventId].to[List]
-
     override def find(id: HeldEventId): ConnectionIO[Option[HeldEvent]] =
       (selectAll ++ fr"WHERE id = $id").query[HeldEventRow].option.map(_.map(fromRow))
 
@@ -141,11 +117,7 @@ final class PostgresHeldEventsRepository[F[_]: MonadCancelThrow](transactor: Tra
   private val delegate: HeldEventsRepository[F] = HeldEventsRepository
     .fromAlg(PostgresHeldEvents.alg, transactor.trans)
 
-  export delegate.{listIds, find, create}
-
-  override def listPage(query: Option[String], page: PageRequest): F[PagedResult[HeldEvent]] =
-    (sql"SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY".update.run *>
-      PostgresHeldEvents.alg.listPage(query, page)).transact(transactor)
+  export delegate.*
 end PostgresHeldEventsRepository
 
 final class PostgresHeldEventDeletionRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])

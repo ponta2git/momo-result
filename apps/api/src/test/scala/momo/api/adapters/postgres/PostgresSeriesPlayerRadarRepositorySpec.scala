@@ -1,5 +1,7 @@
 package momo.api.adapters.postgres
 
+import momo.api.usecases.testing.MatchFixtures
+
 import java.nio.file.Files
 import java.time.Instant
 
@@ -195,7 +197,7 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
       _ <- seedReady
       repository <- repo
       matches = new PostgresMatchesRepository[IO](transactor)
-      _ <- matches.update(ownerEdit, now.plusSeconds(1))
+      _ <- matches.update(ownerEdit.id, MatchFixtures.update(ownerEdit), now.plusSeconds(1))
       retained <- sql"""
         SELECT c.status, p.status FROM series_radar_candidates c
         JOIN series_radar_previews p ON p.candidate_id = c.id WHERE c.id = $candidateId
@@ -205,7 +207,7 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
         account,
         "owner-safe-apply"
       )
-      _ <- matches.update(resultEdit, now.plusSeconds(2))
+      _ <- matches.update(resultEdit.id, MatchFixtures.update(resultEdit), now.plusSeconds(2))
       candidate <- sql"SELECT status FROM series_radar_candidates WHERE id = $candidateId"
         .query[String].unique.transact(transactor)
       application <- accepted.traverse(value => repository.radarOperation(title, value.operationId))
@@ -470,7 +472,8 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
         "manual-restore-apply"
       )
       _ <- new PostgresMatchesRepository[IO](transactor).update(
-        matchRecord.copy(playedAt = now.plusSeconds(1)),
+        matchRecord.id,
+        MatchFixtures.update(matchRecord.copy(playedAt = now.plusSeconds(1))),
         now.plusSeconds(1)
       )
       candidate <- sql"SELECT status FROM series_radar_candidates WHERE id='manual-restore'".query[

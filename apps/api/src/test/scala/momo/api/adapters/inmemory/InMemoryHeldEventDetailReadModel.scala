@@ -5,11 +5,11 @@ import cats.syntax.all.*
 
 import momo.api.domain.ids.HeldEventId
 import momo.api.domain.{HeldEventDetail, HeldEventSummary, RecordNavigation, RecordNavigationOrder}
-import momo.api.repositories.{HeldEventDetailReadModel, MatchListReadModel, MatchesRepository}
+import momo.api.repositories.{HeldEventDetailReadModel, MatchListReadModel}
 
 final class InMemoryHeldEventDetailReadModel[F[_]: Monad](
     events: InMemoryHeldEventsRepository[F],
-    matches: MatchesRepository[F],
+    matches: MatchFixtureStore[F],
     matchList: MatchListReadModel[F],
     metadata: InMemoryMatchMetadata[F],
 ) extends HeldEventDetailReadModel[F]:

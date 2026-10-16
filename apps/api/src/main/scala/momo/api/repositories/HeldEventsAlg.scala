@@ -1,7 +1,7 @@
 package momo.api.repositories
 
 import momo.api.domain.ids.HeldEventId
-import momo.api.domain.{HeldEvent, PageRequest, PagedResult}
+import momo.api.domain.HeldEvent
 
 /**
  * Pure algebra for `held_events` access.
@@ -13,7 +13,5 @@ import momo.api.domain.{HeldEvent, PageRequest, PagedResult}
  * Knows nothing about transactions — see [[HeldEventsRepository]] for the transactional facade.
  */
 trait HeldEventsAlg[F0[_]]:
-  def listPage(query: Option[String], page: PageRequest): F0[PagedResult[HeldEvent]]
-  def listIds(query: Option[String]): F0[List[HeldEventId]]
   def find(id: HeldEventId): F0[Option[HeldEvent]]
   def create(event: HeldEvent): F0[Unit]

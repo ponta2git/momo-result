@@ -88,10 +88,11 @@ private[bootstrap] object WorkerWakingRepositories:
     val wake = WakeAfterCommit(sink, onSinkClosed)
     new MatchesRepository[F]:
       override def update(
-          record: MatchRecord,
+          id: MatchId,
+          change: MatchUpdate,
           updatedAt: Instant,
-      ): F[Either[AppError, Unit]] = wake(
-        delegate.update(record, updatedAt),
+      ): F[Either[AppError, MatchRecord]] = wake(
+        delegate.update(id, change, updatedAt),
         WorkerWakeKind.ProcessingJobs,
       )(_.isRight)
 
@@ -101,12 +102,6 @@ private[bootstrap] object WorkerWakingRepositories:
       )(identity)
 
       override def find(id: MatchId): F[Option[MatchRecord]] = delegate.find(id)
-
-      override def list(filter: MatchesRepository.ListFilter): F[List[MatchRecord]] =
-        delegate.list(filter)
-
-      override def listByHeldEvent(heldEventId: HeldEventId): F[List[MatchRecord]] =
-        delegate.listByHeldEvent(heldEventId)
 
       override def existsMatchNo(
           heldEventId: HeldEventId,
@@ -118,11 +113,6 @@ private[bootstrap] object WorkerWakingRepositories:
           matchNoInEvent: MatchNoInEvent,
           excludeMatchId: MatchId,
       ): F[Boolean] = delegate.existsMatchNoExcept(heldEventId, matchNoInEvent, excludeMatchId)
-
-      override def statsByHeldEvents(
-          heldEventIds: List[HeldEventId]
-      ): F[Map[HeldEventId, MatchesRepository.HeldEventStats]] =
-        delegate.statsByHeldEvents(heldEventIds)
 
   def matchConfirmation[F[_]: Async: LoggerFactory](
       delegate: MatchConfirmationRepository[F],

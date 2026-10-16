@@ -6,6 +6,7 @@ import cats.effect.IO
 
 import momo.api.adapters.postgres.{
   PostgresGameTitlesRepository,
+  PostgresHeldEventListReadModel,
   PostgresHeldEventsRepository,
   PostgresSeriesAnalysisRepository
 }
@@ -23,11 +24,11 @@ final class PostgresReadSnapshotsSpec extends IntegrationSuite:
       _ <- PostgresHeldEventsRepository[IO](transactor).create(earlier)
       _ <- PostgresHeldEventsRepository[IO](transactor).create(later)
       page <- assertReadSnapshot(xa =>
-        PostgresHeldEventsRepository[IO](xa).listPage(None, PageRequest(1, 1))
+        PostgresHeldEventListReadModel[IO](xa).list(None, PageRequest(1, 1)).map(_.page)
       )
     yield
       assertEquals(page.totalItems, 2)
-      assertEquals(page.items, List(later))
+      assertEquals(page.items.map(_.event), List(later))
       assertEquals(page.hasNextPage, true)
 
   test("analysis overview pins options, job history, audit and selected status to one snapshot"):

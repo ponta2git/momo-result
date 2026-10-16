@@ -1,16 +1,16 @@
 import { useState } from "react";
 
 import {
+  changeOcrSetupValue,
   deriveValidSetupValue,
+  resolveOcrSetupValidation,
   sameSetupValue,
-} from "@/features/ocrCapture/ocrSetupOptionResolution";
+} from "@/features/ocrCapture/ocrSetupModel";
+import type { OcrSetupChange } from "@/features/ocrCapture/ocrSetupModel";
 import { buildOcrSetupPanelFields } from "@/features/ocrCapture/ocrSetupPanelModel";
 import type { OcrSetupPanelModel } from "@/features/ocrCapture/ocrSetupPanelModel";
-import { setupSchema } from "@/features/ocrCapture/schema";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import { useOcrSetupOptions } from "@/features/ocrCapture/useOcrSetupOptions";
-
-type OcrSetupResolution = { kind: "ready"; value: SetupFormValues } | { kind: "blocked" };
 
 /** Owns editable setup and reconciles candidate reads without replacing a newer input. */
 export function useOcrSetup({
@@ -34,34 +34,21 @@ export function useOcrSetup({
   });
   if (!sameSetupValue(next, value)) setValue(next);
 
-  const validation = setupSchema.safeParse(value);
-  const resolution: OcrSetupResolution =
-    options.ready && validation.success ? { kind: "ready", value } : { kind: "blocked" };
-  const blockedReason = enabled
-    ? options.loading || options.refreshing
-      ? "試合設定の選択肢を確認しています。"
-      : validation.success
-        ? undefined
-        : (validation.error.issues[0]?.message ?? "試合設定を確認してください。")
-    : "ログイン状態を確認中です。";
-  const patchValue = (patch: Partial<SetupFormValues>) => {
-    setValue((current) => ({ ...current, ...patch }));
+  const { resolution, blockedReason } = resolveOcrSetupValidation(value, enabled, options);
+  const change = (intent: OcrSetupChange) => {
+    setValue((current) => changeOcrSetupValue(current, intent));
   };
   const panel: OcrSetupPanelModel = {
     fields: buildOcrSetupPanelFields({ enabled, options, value }),
     intents: {
-      changeGameTitle: (gameTitleId) =>
-        patchValue({ gameTitleId, mapMasterId: "", seasonMasterId: "" }),
+      changeGameTitle: (gameTitleId) => change({ kind: "gameTitle", id: gameTitleId }),
       changeHeldEvent: (heldEventId, selected) =>
-        patchValue({ heldEventId, matchNoInEvent: selected?.nextMatchNo }),
+        change({ kind: "heldEvent", id: heldEventId, nextMatchNo: selected?.nextMatchNo }),
       changeHeldEventPage: options.heldEventPicker.onPageChange,
-      changeMap: (mapMasterId) => patchValue({ mapMasterId }),
-      changeMatchNo: (nextValue) =>
-        patchValue({
-          matchNoInEvent: nextValue ? Math.trunc(Number(nextValue)) : undefined,
-        }),
-      changeOwner: (ownerMemberId) => patchValue({ ownerMemberId }),
-      changeSeason: (seasonMasterId) => patchValue({ seasonMasterId }),
+      changeMap: (id) => change({ kind: "map", id }),
+      changeMatchNo: (input) => change({ kind: "matchNo", value: input }),
+      changeOwner: (id) => change({ kind: "owner", id }),
+      changeSeason: (id) => change({ kind: "season", id }),
     },
   };
 

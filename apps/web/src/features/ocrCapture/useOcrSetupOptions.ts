@@ -1,6 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { resolveHeldEventContext } from "@/features/ocrCapture/ocrSetupOptionResolution";
+import {
+  areOcrSetupChoicesReady,
+  resolveHeldEventContext,
+} from "@/features/ocrCapture/ocrSetupModel";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import { mergeHeldEventItems } from "@/shared/api/heldEventCache";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
@@ -132,21 +135,16 @@ export function useOcrSetupOptions({ enabled, value }: OcrSetupOptionsParams) {
     heldEventContextLoading ||
     mapMastersQuery.isFetching ||
     seasonMastersQuery.isFetching;
-  const ready =
-    enabled &&
-    !loading &&
-    !gameTitlesLoadFailed &&
-    !heldEventContextNotFound &&
-    !heldEventContextFailed &&
-    !mapMastersLoadFailed &&
-    !seasonMastersLoadFailed &&
-    Boolean(selectedGameTitle && value.ownerMemberId) &&
-    mapMasters.some(
-      (item) => item.id === value.mapMasterId && item.gameTitleId === value.gameTitleId,
-    ) &&
-    seasonMasters.some(
-      (item) => item.id === value.seasonMasterId && item.gameTitleId === value.gameTitleId,
-    );
+  const ready = areOcrSetupChoicesReady({
+    enabled,
+    loading,
+    failed: gameTitlesLoadFailed || mapMastersLoadFailed || seasonMastersLoadFailed,
+    heldEventContext,
+    selectedGameTitle,
+    mapMasters,
+    seasonMasters,
+    value,
+  });
   const hasError =
     gameTitlesLoadFailed ||
     heldEventsLoadFailed ||

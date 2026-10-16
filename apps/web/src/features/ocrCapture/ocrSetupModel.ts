@@ -1,3 +1,4 @@
+import { setupSchema } from "@/features/ocrCapture/schema";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type {
@@ -7,6 +8,95 @@ import type {
 } from "@/shared/api/masters";
 
 export type HeldEventContextState = "idle" | "pending" | "resolved" | "notFound" | "failed";
+
+export type OcrSetupResolution = { kind: "ready"; value: SetupFormValues } | { kind: "blocked" };
+
+export type OcrSetupChange =
+  | { kind: "gameTitle"; id: string }
+  | { kind: "heldEvent"; id: string; nextMatchNo: number | undefined }
+  | { kind: "map"; id: string }
+  | { kind: "season"; id: string }
+  | { kind: "owner"; id: string }
+  | { kind: "matchNo"; value: string };
+
+/** Applies one user choice together with the dependent fields it invalidates. */
+export function changeOcrSetupValue(
+  value: SetupFormValues,
+  change: OcrSetupChange,
+): SetupFormValues {
+  switch (change.kind) {
+    case "gameTitle":
+      return { ...value, gameTitleId: change.id, mapMasterId: "", seasonMasterId: "" };
+    case "heldEvent":
+      return { ...value, heldEventId: change.id, matchNoInEvent: change.nextMatchNo };
+    case "map":
+      return { ...value, mapMasterId: change.id };
+    case "season":
+      return { ...value, seasonMasterId: change.id };
+    case "owner":
+      return { ...value, ownerMemberId: change.id };
+    case "matchNo":
+      return {
+        ...value,
+        matchNoInEvent: change.value ? Math.trunc(Number(change.value)) : undefined,
+      };
+  }
+}
+
+export function resolveOcrSetupValidation(
+  value: SetupFormValues,
+  enabled: boolean,
+  choices: { ready: boolean; loading: boolean; refreshing: boolean },
+): { resolution: OcrSetupResolution; blockedReason: string | undefined } {
+  const validation = setupSchema.safeParse(value);
+  return {
+    resolution:
+      choices.ready && validation.success ? { kind: "ready", value } : { kind: "blocked" },
+    blockedReason: enabled
+      ? choices.loading || choices.refreshing
+        ? "試合設定の選択肢を確認しています。"
+        : validation.success
+          ? undefined
+          : (validation.error.issues[0]?.message ?? "試合設定を確認してください。")
+      : "ログイン状態を確認中です。",
+  };
+}
+
+/** Candidate reads can enable submission only when the selected masters belong to the title. */
+export function areOcrSetupChoicesReady({
+  enabled,
+  loading,
+  failed,
+  heldEventContext,
+  selectedGameTitle,
+  mapMasters,
+  seasonMasters,
+  value,
+}: {
+  enabled: boolean;
+  loading: boolean;
+  failed: boolean;
+  heldEventContext: HeldEventContextState;
+  selectedGameTitle: GameTitleResponse | undefined;
+  mapMasters: readonly MapMasterResponse[];
+  seasonMasters: readonly SeasonMasterResponse[];
+  value: SetupFormValues;
+}): boolean {
+  return (
+    enabled &&
+    !loading &&
+    !failed &&
+    heldEventContext !== "notFound" &&
+    heldEventContext !== "failed" &&
+    Boolean(selectedGameTitle && value.ownerMemberId) &&
+    mapMasters.some(
+      (item) => item.id === value.mapMasterId && item.gameTitleId === value.gameTitleId,
+    ) &&
+    seasonMasters.some(
+      (item) => item.id === value.seasonMasterId && item.gameTitleId === value.gameTitleId,
+    )
+  );
+}
 
 export function resolveHeldEventContext(input: {
   detailErrorStatus?: number | undefined;

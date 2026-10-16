@@ -6,7 +6,7 @@ import {
   confirmedDraftDestination,
   confirmedDraftMessages,
 } from "@/features/matches/confirmedDraftNavigation";
-import type { WorkspaceNoticeTone } from "@/features/matches/workspace/useWorkspaceNotice";
+import type { WorkspaceNoticeTone } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
 import { invalidateAfterMatchConfirmed } from "@/shared/api/cacheInvalidation";
 import { getMatchDraftDetail } from "@/shared/api/matchDrafts";
 import type { MatchDraftDetailResponse } from "@/shared/api/matchDrafts";

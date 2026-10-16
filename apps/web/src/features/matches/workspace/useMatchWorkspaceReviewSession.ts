@@ -7,10 +7,10 @@ import type {
   MatchWorkspaceInitialData,
   WorkspaceMode,
 } from "@/features/matches/workspace/matchFormTypes";
+import type { WorkspaceNoticeTone } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
 import type { MatchWorkspaceSessionDraft } from "@/features/matches/workspace/matchWorkspaceSessionDraft";
 import { useMatchWorkspaceReviewState } from "@/features/matches/workspace/useMatchWorkspaceReviewState";
 import { useMatchWorkspaceSessionDraft } from "@/features/matches/workspace/useMatchWorkspaceSessionDraft";
-import type { WorkspaceNoticeTone } from "@/features/matches/workspace/useWorkspaceNotice";
 
 export function useMatchWorkspaceReviewSession({
   accountId,

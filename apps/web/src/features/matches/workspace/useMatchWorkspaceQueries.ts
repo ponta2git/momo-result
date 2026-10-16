@@ -41,11 +41,11 @@ import {
 import { isOcrRunning } from "@/shared/domain/draftStatus";
 import { slotKinds } from "@/shared/domain/ocr";
 import type { SlotMap } from "@/shared/domain/slotMap";
+import type { HeldEventPickerDirectory } from "@/shared/heldEvents/heldEventPickerTypes";
 import {
   heldEventPickerPageSize,
   useHeldEventPickerDirectory,
 } from "@/shared/heldEvents/useHeldEventPickerDirectory";
-import type { HeldEventPickerDirectory } from "@/shared/heldEvents/useHeldEventPickerDirectory";
 
 type MatchWorkspaceQueriesParams = {
   gameTitleId: string;

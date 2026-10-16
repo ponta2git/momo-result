@@ -4,7 +4,7 @@ import type { Dispatch, SetStateAction } from "react";
 
 import type { MatchFormAction } from "@/features/matches/workspace/matchFormReducer";
 import type { MatchWorkspaceOperationError } from "@/features/matches/workspace/matchWorkspaceOperationError";
-import type { WorkspaceNoticeTone } from "@/features/matches/workspace/useWorkspaceNotice";
+import type { WorkspaceNoticeTone } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
 import { syncHeldEventCreatedCache } from "@/shared/api/heldEventCache";
 import { createHeldEvent } from "@/shared/api/heldEvents";
 import { runIdempotentMutation } from "@/shared/api/idempotency";

@@ -5,6 +5,7 @@ import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { heldEventSummaryQueryOptions, heldEventsQueryOptions } from "@/shared/api/queryOptions";
+import type { HeldEventPickerDirectory } from "@/shared/heldEvents/heldEventPickerTypes";
 import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 export const heldEventPickerPageSize = 20;
@@ -32,7 +33,7 @@ export function useHeldEventPickerDirectory({
   enabled?: boolean | undefined;
   selectedEvent?: HeldEventResponse | undefined;
   selectedId: string;
-}) {
+}): HeldEventPickerDirectory {
   const [page, setPage] = useState(1);
   const directoryQuery = useQuery({
     ...heldEventsQueryOptions({ page, pageSize: heldEventPickerPageSize }),
@@ -86,5 +87,3 @@ export function useHeldEventPickerDirectory({
     scopeChanging,
   };
 }
-
-export type HeldEventPickerDirectory = ReturnType<typeof useHeldEventPickerDirectory>;

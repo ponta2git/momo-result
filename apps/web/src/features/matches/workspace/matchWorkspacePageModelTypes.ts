@@ -11,7 +11,6 @@ import type {
   SourceImageItem,
   SourceImageKind,
 } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
-import type { WorkspaceNotice } from "@/features/matches/workspace/useWorkspaceNotice";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type {
   GameTitleResponse,
@@ -19,8 +18,11 @@ import type {
   SeasonMasterResponse,
 } from "@/shared/api/masters";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
-import type { HeldEventPickerDirectory } from "@/shared/heldEvents/useHeldEventPickerDirectory";
+import type { HeldEventPickerDirectory } from "@/shared/heldEvents/heldEventPickerTypes";
 import type { UnsavedChangesGuardModel } from "@/shared/navigation/UnsavedChangesGuard";
+
+export type WorkspaceNoticeTone = "info" | "success" | "warning";
+export type WorkspaceNotice = { message: string; tone: WorkspaceNoticeTone };
 
 export type MatchWorkspaceMastersNavigationModel = {
   pending: boolean;

@@ -6,7 +6,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { AppGlobalNav } from "@/app/AppGlobalNav";
 import { AppPageCanvas } from "@/app/AppPageCanvas";
 import { RouteErrorBoundary } from "@/app/RouteErrorBoundary";
-import { preloadRouteForPath, OutlookSessionOwner } from "@/app/routeModules";
+import { preloadRouteForPath } from "@/app/routeModules";
 import { RouteSuspenseFallback } from "@/app/RouteSuspenseFallback";
 import { useAuth } from "@/shared/auth/useAuth";
 import { Button } from "@/shared/ui/actions/Button";
@@ -135,38 +135,33 @@ export function AppShell() {
             </Notice>
           </div>
         ) : null}
-        <OutlookSessionOwner key={auth.auth?.accountId ?? "anonymous"}>
-          <QueryErrorResetBoundary>
-            {({ reset }) => (
-              <RouteQueryResetBridge
+        <QueryErrorResetBoundary key={auth.auth?.accountId ?? "anonymous"}>
+          {({ reset }) => (
+            <RouteQueryResetBridge
+              pathname={location.pathname}
+              reset={reset}
+              resetKey={routeResetKey}
+              search={location.search}
+            >
+              <RouteErrorBoundary
+                onReset={reset}
                 pathname={location.pathname}
-                reset={reset}
-                resetKey={routeResetKey}
                 search={location.search}
               >
-                <RouteErrorBoundary
-                  onReset={reset}
-                  pathname={location.pathname}
-                  search={location.search}
+                <Suspense
+                  fallback={
+                    <RouteSuspenseFallback pathname={location.pathname} search={location.search} />
+                  }
                 >
-                  <Suspense
-                    fallback={
-                      <RouteSuspenseFallback
-                        pathname={location.pathname}
-                        search={location.search}
-                      />
-                    }
-                  >
-                    {/* Route availability must not depend on an exit-animation lifecycle. */}
-                    <div className="grid min-w-0">
-                      <Outlet />
-                    </div>
-                  </Suspense>
-                </RouteErrorBoundary>
-              </RouteQueryResetBridge>
-            )}
-          </QueryErrorResetBoundary>
-        </OutlookSessionOwner>
+                  {/* Route availability must not depend on an exit-animation lifecycle. */}
+                  <div className="grid min-w-0">
+                    <Outlet />
+                  </div>
+                </Suspense>
+              </RouteErrorBoundary>
+            </RouteQueryResetBridge>
+          )}
+        </QueryErrorResetBoundary>
       </AppPageCanvas>
       <ToastHost key={auth.auth?.accountId ?? "anonymous"} />
     </>

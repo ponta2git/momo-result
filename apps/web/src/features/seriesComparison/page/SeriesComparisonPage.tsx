@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 
 import { matchesSeriesAnalysisScope } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import { SeriesAnalysisNavigation } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
-import { OutlookSessionBoundary } from "@/features/seriesComparison/outlook/OutlookSessionOwner";
+import { OutlookSessionOwner } from "@/features/seriesComparison/outlook/OutlookSessionOwner";
 import {
   preloadSeriesAnalysisView,
   SeriesAnalysisContent,
@@ -26,9 +26,9 @@ import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
 export function SeriesComparisonPage() {
   return (
-    <OutlookSessionBoundary>
+    <OutlookSessionOwner>
       <SeriesComparisonPageContent />
-    </OutlookSessionBoundary>
+    </OutlookSessionOwner>
   );
 }
 
@@ -182,7 +182,7 @@ function SeriesComparisonPageContent() {
                 status.data?.currentArtifact) ? (
                 <ComparisonSkeleton view={filters.activeView} />
               ) : null}
-              {filters.activeView === "outlook" && filters.state.mapMasterId ? (
+              {resource.unavailableReason === "outlook_map" ? (
                 <Notice
                   tone="info"
                   title="見通しは全マップの総合成績で試します"

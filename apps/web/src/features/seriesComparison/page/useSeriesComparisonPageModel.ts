@@ -27,11 +27,11 @@ export function useSeriesComparisonPageModel() {
     deferredState: selection.deferredState,
     state: selection.state,
     selectionStatus:
-      selectionResolution.kind !== "pending"
-        ? "ready"
-        : selection.options.hasError && !selection.options.refreshing
+      selectionResolution.kind === "pending"
+        ? selection.options.hasError && !selection.options.refreshing
           ? "blocked"
-          : "pending",
+          : "pending"
+        : "ready",
     deferOutlookAdoption,
   });
   const refreshAnalysis = analysis.refresh;

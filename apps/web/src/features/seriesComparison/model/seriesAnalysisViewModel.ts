@@ -1,7 +1,4 @@
-import {
-  defaultOwnerMetric,
-  isOwnerMetricId,
-} from "@/features/seriesComparison/model/seriesAnalysisOwnerMetrics";
+import { defaultOwnerMetric } from "@/features/seriesComparison/model/seriesAnalysisOwnerMetrics";
 import type { OwnerMetricId } from "@/features/seriesComparison/model/seriesAnalysisOwnerMetrics";
 import type {
   SeriesAnalysisOptionsResponse,
@@ -17,7 +14,7 @@ export type SeriesAnalysisViewId =
   | "review"
   | "outlook";
 
-export type SeriesAnalysisUrlState = {
+export type SeriesAnalysisSelection = {
   ownerMetric?: OwnerMetricId | undefined;
   focusMatchId?: string | undefined;
   focusMemberId?: string | undefined;
@@ -27,6 +24,57 @@ export type SeriesAnalysisUrlState = {
   seasonMasterId?: string | undefined;
   view?: SeriesAnalysisViewId | undefined;
 };
+
+export type SeriesAnalysisSelectionChange =
+  | { kind: "title"; gameTitleId: string }
+  | { kind: "season"; seasonMasterId: string }
+  | { kind: "map"; mapMasterId: string }
+  | { kind: "view"; view: SeriesAnalysisViewId }
+  | { kind: "ownerMetric"; ownerMetric: OwnerMetricId }
+  | { kind: "focus"; matchId: string | undefined }
+  | { kind: "clearScope" }
+  | { kind: "member"; role: "focus" | "rival"; memberId: string };
+
+/** A changed scope cannot inherit a match from the previous comparison. */
+export function changeSeriesAnalysisSelection(
+  current: SeriesAnalysisSelection,
+  change: SeriesAnalysisSelectionChange,
+): SeriesAnalysisSelection {
+  switch (change.kind) {
+    case "title":
+      return {
+        gameTitleId: change.gameTitleId,
+        view: current.view ?? defaultSeriesAnalysisView,
+        ownerMetric: current.ownerMetric,
+      };
+    case "season":
+      return {
+        ...current,
+        focusMatchId: undefined,
+        seasonMasterId: change.seasonMasterId || undefined,
+      };
+    case "map":
+      return { ...current, focusMatchId: undefined, mapMasterId: change.mapMasterId || undefined };
+    case "view":
+      return { ...current, view: change.view };
+    case "ownerMetric":
+      return { ...current, ownerMetric: change.ownerMetric };
+    case "focus":
+      return { ...current, focusMatchId: change.matchId };
+    case "clearScope":
+      return {
+        ...current,
+        focusMatchId: undefined,
+        mapMasterId: undefined,
+        seasonMasterId: undefined,
+      };
+    case "member":
+      return {
+        ...current,
+        [change.role === "focus" ? "focusMemberId" : "rivalMemberId"]: change.memberId,
+      };
+  }
+}
 
 const viewIds = new Set(["review", "overview", "flow", "drivers", "context", "outlook"]);
 
@@ -55,45 +103,8 @@ export function isSeriesAnalysisViewId(
   return viewIds.has(value ?? "");
 }
 
-function normalizeView(value: string | undefined): SeriesAnalysisViewId {
+export function normalizeSeriesAnalysisView(value: string | undefined): SeriesAnalysisViewId {
   return isSeriesAnalysisViewId(value) ? value : defaultSeriesAnalysisView;
-}
-
-export function parseSeriesAnalysisSearchParams(params: URLSearchParams): SeriesAnalysisUrlState {
-  const gameTitleId = params.get("gameTitleId")?.trim() || undefined;
-  const seasonMasterId = params.get("seasonMasterId")?.trim() || undefined;
-  const mapMasterId = params.get("mapMasterId")?.trim() || undefined;
-  const focusMatchId = params.get("focusMatchId")?.trim() || undefined;
-  const view = normalizeView(params.get("view")?.trim());
-  const rawMetric = params.get("ownerMetric");
-  const ownerMetric = isOwnerMetricId(rawMetric) ? rawMetric : defaultOwnerMetric;
-  const focusMemberId = params.get("focusMemberId")?.trim() || undefined;
-  const rivalMemberId = params.get("rivalMemberId")?.trim() || undefined;
-  return {
-    focusMatchId,
-    gameTitleId,
-    mapMasterId,
-    seasonMasterId,
-    view,
-    ownerMetric,
-    ...(focusMemberId ? { focusMemberId } : {}),
-    ...(rivalMemberId ? { rivalMemberId } : {}),
-  };
-}
-
-export function buildSeriesAnalysisSearchParams(state: SeriesAnalysisUrlState): URLSearchParams {
-  const params = new URLSearchParams();
-  if (state.ownerMetric && state.ownerMetric !== defaultOwnerMetric)
-    params.set("ownerMetric", state.ownerMetric);
-  if (state.gameTitleId) params.set("gameTitleId", state.gameTitleId);
-  if (state.seasonMasterId) params.set("seasonMasterId", state.seasonMasterId);
-  if (state.mapMasterId) params.set("mapMasterId", state.mapMasterId);
-  if (state.focusMatchId) params.set("focusMatchId", state.focusMatchId);
-  if (state.focusMemberId) params.set("focusMemberId", state.focusMemberId);
-  if (state.rivalMemberId) params.set("rivalMemberId", state.rivalMemberId);
-  const view = normalizeView(state.view);
-  if (view !== defaultSeriesAnalysisView) params.set("view", view);
-  return params;
 }
 
 export function findSeriesAnalysisTitle(
@@ -105,14 +116,14 @@ export function findSeriesAnalysisTitle(
 
 export function normalizeSeriesAnalysisSelection(
   options: SeriesAnalysisOptionsResponse | undefined,
-  state: SeriesAnalysisUrlState,
-): SeriesAnalysisUrlState {
+  state: SeriesAnalysisSelection,
+): SeriesAnalysisSelection {
   const titles = options?.titles ?? [];
   const selectedTitle =
     titles.find((title) => title.gameTitleId === state.gameTitleId) ??
     titles.find((title) => title.gameTitleId === options?.defaultGameTitleId) ??
     titles[0];
-  const view = normalizeView(state.view);
+  const view = normalizeSeriesAnalysisView(state.view);
   const ownerMetric = state.ownerMetric ?? defaultOwnerMetric;
   if (!selectedTitle) return { view, ownerMetric };
 
@@ -142,7 +153,7 @@ export function normalizeSeriesAnalysisSelection(
 }
 
 export function seriesAnalysisQueryFromState(
-  state: SeriesAnalysisUrlState,
+  state: SeriesAnalysisSelection,
   artifactId: string | undefined,
 ): SeriesAnalysisQuery | undefined {
   if (!state.gameTitleId || !artifactId) return undefined;

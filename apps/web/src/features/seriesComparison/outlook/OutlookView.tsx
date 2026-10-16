@@ -11,7 +11,7 @@ import {
 import type { CumulativePair } from "@/features/seriesComparison/model/outlook";
 import { seriesAnalysisScopeSignature } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import { normalizeOutlookPair } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
-import type { SeriesAnalysisUrlState } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import type { SeriesAnalysisSelection } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { OutlookGoalPanel } from "@/features/seriesComparison/outlook/OutlookGoalPanel";
 import { OutlookHorizonControl } from "@/features/seriesComparison/outlook/OutlookHorizonControl";
 import { outlookOutcome } from "@/features/seriesComparison/outlook/outlookOutcome";
@@ -62,7 +62,7 @@ export function OutlookView({
   onMemberChange,
 }: {
   response: SeriesAnalysisOutlookSummary;
-  selection: SeriesAnalysisUrlState;
+  selection: SeriesAnalysisSelection;
   onMemberChange?: ((role: "focus" | "rival", memberId: string) => void) | undefined;
 }) {
   const { store, session: storedSession } = useOutlookSession();
@@ -118,7 +118,7 @@ function OutlookWorkspace({
   onMemberChange,
 }: {
   response: SeriesAnalysisOutlookSummary;
-  selection: SeriesAnalysisUrlState;
+  selection: SeriesAnalysisSelection;
   session: OutlookSession;
   change: (update: (current: OutlookSession) => OutlookSession) => void;
   onMemberChange: ((role: "focus" | "rival", memberId: string) => void) | undefined;

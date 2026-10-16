@@ -15,7 +15,7 @@ import type {
   SeriesAnalysisDisplayBundle,
 } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import type {
-  SeriesAnalysisUrlState,
+  SeriesAnalysisSelection,
   SeriesAnalysisViewId,
 } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { seriesAnalysisQueryFromState } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
@@ -45,8 +45,8 @@ export function useSeriesAnalysisResource({
   deferOutlookAdoption = false,
 }: {
   activeView: SeriesAnalysisViewId;
-  deferredState: SeriesAnalysisUrlState;
-  state: SeriesAnalysisUrlState;
+  deferredState: SeriesAnalysisSelection;
+  state: SeriesAnalysisSelection;
   selectionReady?: boolean;
   deferOutlookAdoption?: boolean;
 }) {

@@ -9,7 +9,7 @@ import {
 } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import type { OwnerMetricId } from "@/features/seriesComparison/model/seriesAnalysisOwnerMetrics";
 import type {
-  SeriesAnalysisUrlState,
+  SeriesAnalysisSelection,
   SeriesAnalysisViewId,
 } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/model/seriesAnalysisViewTypes";
@@ -77,7 +77,7 @@ const SeriesAnalysisDrilldownContent = lazy(() =>
     ),
   ),
 );
-const emptyOutlookSelection: SeriesAnalysisUrlState = {};
+const emptyOutlookSelection: SeriesAnalysisSelection = {};
 const noFocusedItemIds: readonly string[] = [];
 
 function drilldownTitle(metricId: SeriesAnalysisDrilldownMetricId): string {
@@ -111,7 +111,7 @@ export function preloadSeriesAnalysisView(view: SeriesAnalysisViewId): void {
 
 type SeriesAnalysisContentProps = {
   showPurposeTabs?: boolean;
-  outlookSelection?: SeriesAnalysisUrlState;
+  outlookSelection?: SeriesAnalysisSelection;
   onOutlookMemberChange?: (role: "focus" | "rival", memberId: string) => void;
   ownerMetric?: OwnerMetricId | undefined;
   onOwnerMetricChange?: ((metric: OwnerMetricId) => void) | undefined;

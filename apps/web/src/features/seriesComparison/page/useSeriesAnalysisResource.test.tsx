@@ -6,7 +6,7 @@ import { Suspense, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import type { SeriesAnalysisUrlState } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import type { SeriesAnalysisSelection } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { useSeriesAnalysisResource } from "@/features/seriesComparison/page/useSeriesAnalysisResource";
 import { invalidateAfterMatchUpdated } from "@/shared/api/cacheInvalidation";
 import { seriesAnalysisKeys, seriesPlayerRadarKeys } from "@/shared/api/queryKeys";
@@ -120,7 +120,7 @@ describe("useSeriesAnalysisResource", () => {
         return HttpResponse.json(initial);
       }),
     );
-    const state: SeriesAnalysisUrlState = {
+    const state: SeriesAnalysisSelection = {
       gameTitleId: initial.artifact.gameTitleId,
       view: "outlook",
     };
@@ -218,7 +218,7 @@ describe("useSeriesAnalysisResource", () => {
         return HttpResponse.json(initial);
       }),
     );
-    const state: SeriesAnalysisUrlState = {
+    const state: SeriesAnalysisSelection = {
       gameTitleId: initial.artifact.gameTitleId,
       view: "outlook",
     };
@@ -286,13 +286,13 @@ describe("useSeriesAnalysisResource", () => {
         });
       }),
     );
-    const initialState: SeriesAnalysisUrlState = {
+    const initialState: SeriesAnalysisSelection = {
       gameTitleId: analysisArtifact.gameTitleId,
       focusMatchId: "match-12",
       view: "overview",
     };
     const { result, rerender } = renderHook(
-      (state: SeriesAnalysisUrlState) =>
+      (state: SeriesAnalysisSelection) =>
         useSeriesAnalysisResource({
           activeView: state.view ?? "overview",
           deferredState: state,
@@ -384,13 +384,13 @@ describe("useSeriesAnalysisResource", () => {
           });
         }),
       );
-      const initialState: SeriesAnalysisUrlState = {
+      const initialState: SeriesAnalysisSelection = {
         gameTitleId: analysisArtifact.gameTitleId,
         focusMatchId: "match-12",
         view: "overview",
       };
       const { result, rerender } = renderHook(
-        (state: SeriesAnalysisUrlState) =>
+        (state: SeriesAnalysisSelection) =>
           useSeriesAnalysisResource({ activeView: "overview", deferredState: state, state }),
         {
           initialProps: initialState,
@@ -477,7 +477,7 @@ describe("useSeriesAnalysisResource", () => {
       return <p>表示範囲: {kind}</p>;
     }
     function Harness() {
-      const [state, setState] = useState<SeriesAnalysisUrlState>({
+      const [state, setState] = useState<SeriesAnalysisSelection>({
         gameTitleId: query.gameTitleId,
       });
       const analysis = useSeriesAnalysisResource({
@@ -563,7 +563,7 @@ describe("useSeriesAnalysisResource", () => {
           });
         }),
       );
-      const state: SeriesAnalysisUrlState = {
+      const state: SeriesAnalysisSelection = {
         gameTitleId: analysisArtifact.gameTitleId,
         focusMatchId: "match-12",
         view: "overview",
@@ -616,9 +616,9 @@ describe("useSeriesAnalysisResource", () => {
           );
         }),
       );
-      const initialState: SeriesAnalysisUrlState = { gameTitleId: analysisArtifact.gameTitleId };
+      const initialState: SeriesAnalysisSelection = { gameTitleId: analysisArtifact.gameTitleId };
       const { result, rerender, unmount } = renderHook(
-        (state: SeriesAnalysisUrlState) =>
+        (state: SeriesAnalysisSelection) =>
           useSeriesAnalysisResource({ activeView: "overview", deferredState: state, state }),
         {
           initialProps: initialState,
@@ -660,7 +660,7 @@ describe("useSeriesAnalysisResource", () => {
         );
       }),
     );
-    const state: SeriesAnalysisUrlState = {
+    const state: SeriesAnalysisSelection = {
       gameTitleId: analysisArtifact.gameTitleId,
       focusMatchId: "match-12",
       view: "overview",
@@ -724,12 +724,12 @@ describe("useSeriesAnalysisResource", () => {
           });
         }),
       );
-      const initialState: SeriesAnalysisUrlState = {
+      const initialState: SeriesAnalysisSelection = {
         gameTitleId: analysisArtifact.gameTitleId,
         view: "overview",
       };
       const { result, rerender, unmount } = renderHook(
-        (state: SeriesAnalysisUrlState) =>
+        (state: SeriesAnalysisSelection) =>
           useSeriesAnalysisResource({ activeView: "overview", deferredState: state, state }),
         {
           initialProps: initialState,

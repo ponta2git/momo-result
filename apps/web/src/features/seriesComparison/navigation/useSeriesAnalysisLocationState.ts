@@ -10,19 +10,22 @@ import {
 } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
-import { isOwnerMetricId } from "@/features/seriesComparison/model/seriesAnalysisOwnerMetrics";
 import type { OwnerMetricId } from "@/features/seriesComparison/model/seriesAnalysisOwnerMetrics";
 import {
-  buildSeriesAnalysisSearchParams,
   defaultSeriesAnalysisView,
-  isSeriesAnalysisViewId,
+  changeSeriesAnalysisSelection,
   normalizeSeriesAnalysisSelection,
-  parseSeriesAnalysisSearchParams,
 } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import type {
-  SeriesAnalysisUrlState,
+  SeriesAnalysisSelection,
+  SeriesAnalysisSelectionChange,
   SeriesAnalysisViewId,
 } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import {
+  buildSeriesAnalysisSearchParams,
+  parseSeriesAnalysisSearchParams,
+  seriesAnalysisNormalizationNotice,
+} from "@/features/seriesComparison/navigation/seriesAnalysisUrl";
 import type { SeriesAnalysisOptionsResponse } from "@/shared/api/seriesAnalysis";
 
 /** One page-local operation; only the matching REPLACE commit can inherit its source position. */
@@ -35,7 +38,7 @@ export type SeriesAnalysisDisplayIntent = {
 type PendingLocation = {
   sourceKey: string;
   target: string;
-  state: SeriesAnalysisUrlState;
+  state: SeriesAnalysisSelection;
   hash: string;
 };
 
@@ -61,42 +64,8 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
   }>();
   const href = `${location.pathname}${location.search}${location.hash}`;
   if (options && normalization?.source !== location.key) {
-    const reasons: string[] = [];
-    if (rawState.gameTitleId && rawState.gameTitleId !== urlState.gameTitleId) {
-      reasons.push(
-        urlState.gameTitleId
-          ? "指定された作品は比較できないため、選択可能な作品に切り替えました。"
-          : "指定された作品は比較できないため、作品の選択を解除しました。",
-      );
-    }
-    if (rawState.seasonMasterId && rawState.seasonMasterId !== urlState.seasonMasterId) {
-      reasons.push("指定されたシーズンは比較できないため、全シーズンに戻しました。");
-    }
-    if (rawState.mapMasterId && rawState.mapMasterId !== urlState.mapMasterId) {
-      reasons.push("指定されたマップは現在の比較条件で利用できないため、全マップに戻しました。");
-    }
-    const rawView = searchParams.get("view");
-    if (rawView !== null && !isSeriesAnalysisViewId(rawView.trim())) {
-      reasons.push("指定された表示は利用できないため、振り返りに戻しました。");
-    }
-    const rawMetric = searchParams.get("ownerMetric");
-    if (rawMetric !== null && !isOwnerMetricId(rawMetric)) {
-      reasons.push("オーナー比較の指標を平均順位に戻しました。");
-    }
-    if (rawState.focusMatchId && !urlState.focusMatchId) {
-      reasons.push("比較条件が変わったため、選択試合の強調表示を解除しました。");
-    }
-    if (
-      (rawState.focusMemberId && rawState.focusMemberId !== urlState.focusMemberId) ||
-      (rawState.rivalMemberId && rawState.rivalMemberId !== urlState.rivalMemberId)
-    ) {
-      reasons.push(
-        "比較する人物を、異なる固定メンバーに調整しました。新しい2名の直近成績から試します。",
-      );
-    }
-    if (reasons.length > 0) {
-      setNormalization({ source: location.key, message: reasons.join(" ") });
-    }
+    const message = seriesAnalysisNormalizationNotice(searchParams, rawState, urlState);
+    if (message) setNormalization({ source: location.key, message });
   }
 
   useEffect(() => {
@@ -125,7 +94,7 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
 
   const update = useCallback(
     (
-      change: (current: SeriesAnalysisUrlState) => SeriesAnalysisUrlState,
+      change: SeriesAnalysisSelectionChange,
       updateOptions: { replace?: boolean; displayOnly?: boolean } = {},
     ) => {
       const previous = pending.current;
@@ -135,7 +104,7 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
           : undefined;
       const normalized = normalizeSeriesAnalysisSelection(
         options,
-        change(inFlight?.state ?? urlState),
+        changeSeriesAnalysisSelection(inFlight?.state ?? urlState, change),
       );
       const params = buildSeriesAnalysisSearchParams(normalized);
       const hash = updateOptions.displayOnly ? "#metric-owner" : (inFlight?.hash ?? location.hash);
@@ -179,88 +148,42 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
   );
 
   const updateGameTitle = useCallback(
-    (gameTitleId: string) =>
-      update(
-        (current) => ({
-          gameTitleId,
-          view: current.view ?? defaultSeriesAnalysisView,
-          ownerMetric: current.ownerMetric,
-        }),
-        { replace: false },
-      ),
+    (gameTitleId: string) => update({ kind: "title", gameTitleId }, { replace: false }),
     [update],
   );
   const updateSeasonMasterId = useCallback(
-    (seasonMasterId: string) =>
-      update(
-        (current) => {
-          const nextSeason = seasonMasterId || undefined;
-          return {
-            ...current,
-            focusMatchId: undefined,
-            seasonMasterId: nextSeason,
-          };
-        },
-        { replace: false },
-      ),
+    (seasonMasterId: string) => update({ kind: "season", seasonMasterId }, { replace: false }),
     [update],
   );
   const updateMapMasterId = useCallback(
-    (mapMasterId: string) =>
-      update(
-        (current) => {
-          const nextMap = mapMasterId || undefined;
-          return {
-            ...current,
-            focusMatchId: undefined,
-            mapMasterId: nextMap,
-          };
-        },
-        { replace: false },
-      ),
+    (mapMasterId: string) => update({ kind: "map", mapMasterId }, { replace: false }),
     [update],
   );
   const updateView = useCallback(
     (view: SeriesAnalysisViewId, updateOptions?: { replace?: boolean }) =>
-      update((current) => ({ ...current, view }), updateOptions),
+      update({ kind: "view", view }, updateOptions),
     [update],
   );
   const updateOwnerMetric = useCallback(
     (ownerMetric: OwnerMetricId) =>
-      update((current) => ({ ...current, ownerMetric }), { displayOnly: true }),
+      update({ kind: "ownerMetric", ownerMetric }, { displayOnly: true }),
     [update],
   );
   const focusMatch = useCallback(
-    (focusMatchId: string) =>
-      update((current) => ({ ...current, focusMatchId }), { replace: false }),
+    (matchId: string) => update({ kind: "focus", matchId }, { replace: false }),
     [update],
   );
   const clearFocusedMatch = useCallback(
-    () => update((current) => ({ ...current, focusMatchId: undefined })),
+    () => update({ kind: "focus", matchId: undefined }),
     [update],
   );
   const clearScope = useCallback(
-    () =>
-      update(
-        (current) => ({
-          ...current,
-          focusMatchId: undefined,
-          mapMasterId: undefined,
-          seasonMasterId: undefined,
-        }),
-        { replace: false },
-      ),
+    () => update({ kind: "clearScope" }, { replace: false }),
     [update],
   );
   const updateOutlookMember = useCallback(
     (role: "focus" | "rival", memberId: string) =>
-      update(
-        (current) => ({
-          ...current,
-          [role === "focus" ? "focusMemberId" : "rivalMemberId"]: memberId,
-        }),
-        { replace: false },
-      ),
+      update({ kind: "member", role, memberId }, { replace: false }),
     [update],
   );
 

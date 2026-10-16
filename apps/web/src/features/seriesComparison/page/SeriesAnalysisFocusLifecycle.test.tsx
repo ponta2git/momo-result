@@ -6,7 +6,7 @@ import { useState } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import type { SeriesAnalysisUrlState } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import type { SeriesAnalysisSelection } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { SeriesAnalysisContent } from "@/features/seriesComparison/page/SeriesAnalysisContent";
 import { useSeriesAnalysisResource } from "@/features/seriesComparison/page/useSeriesAnalysisResource";
 import { seriesAnalysisKeys } from "@/shared/api/queryKeys";
@@ -43,7 +43,7 @@ beforeEach(() => {
 });
 
 function Harness() {
-  const [state, setState] = useState<SeriesAnalysisUrlState>({
+  const [state, setState] = useState<SeriesAnalysisSelection>({
     gameTitleId: analysisArtifact.gameTitleId,
     focusMatchId: "match-12",
     view: "context",

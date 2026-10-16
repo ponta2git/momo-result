@@ -1,5 +1,5 @@
 import type {
-  SeriesAnalysisUrlState,
+  SeriesAnalysisSelection,
   SeriesAnalysisViewId,
 } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import type {
@@ -104,7 +104,7 @@ export function seriesAnalysisFocusExclusionNotice(
   }
 }
 
-export function seriesAnalysisScopeSignature(state: SeriesAnalysisUrlState): string {
+export function seriesAnalysisScopeSignature(state: SeriesAnalysisSelection): string {
   return [state.gameTitleId ?? "", state.seasonMasterId ?? "", state.mapMasterId ?? ""].join("|");
 }
 
@@ -124,7 +124,7 @@ function scopeMapMasterId(scope: ArtifactScopedResource["scope"]): string | unde
 export function matchesSeriesAnalysisResource(
   resource: ArtifactScopedResource | undefined,
   artifactId: string | undefined,
-  state: SeriesAnalysisUrlState,
+  state: SeriesAnalysisSelection,
 ): boolean {
   return Boolean(
     resource &&
@@ -136,7 +136,7 @@ export function matchesSeriesAnalysisResource(
 
 export function matchesSeriesAnalysisScope(
   resource: ArtifactScopedResource | undefined,
-  state: SeriesAnalysisUrlState,
+  state: SeriesAnalysisSelection,
 ): boolean {
   return Boolean(
     resource &&
@@ -192,7 +192,7 @@ export function resolveSeriesAnalysisDisplayBundle({
   matchContext: SeriesAnalysisMatchContextV3 | undefined;
   review: SeriesComparisonReviewV3 | undefined;
   outlook?: SeriesAnalysisOutlookSummary | undefined;
-  state: SeriesAnalysisUrlState;
+  state: SeriesAnalysisSelection;
 }): SeriesAnalysisBundleResolution {
   if (activeView === "outlook")
     return readyBundle(

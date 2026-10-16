@@ -1,4 +1,5 @@
 import { MasterResourceRefreshNotice } from "@/features/masters/MasterResourceRefreshNotice";
+import { incidentMasterCountIssue } from "@/features/masters/masterViewModel";
 import type { IncidentMasterResponse } from "@/shared/api/masters";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { contentText } from "@/shared/ui/typography";
@@ -16,7 +17,7 @@ export function IncidentMasterPanel({
   refreshing,
   stale,
 }: IncidentMasterPanelProps) {
-  const hasExpectedCount = items.length === 6;
+  const countIssue = incidentMasterCountIssue(items.length, stale);
 
   return (
     <section className="grid min-w-0 gap-4">
@@ -34,13 +35,13 @@ export function IncidentMasterPanel({
         />
       </div>
 
-      {hasExpectedCount || stale ? null : (
+      {countIssue ? (
         <div>
           <Notice tone="warning" title="事件簿の項目数を確認してください">
-            現在 {items.length} 件です。期待値は6件です。
+            現在 {countIssue.actualCount} 件です。期待値は{countIssue.expectedCount}件です。
           </Notice>
         </div>
-      )}
+      ) : null}
 
       <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((item) => (

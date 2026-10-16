@@ -3,6 +3,7 @@ import { startTransition, useState } from "react";
 
 import { MasterDeleteDialog, MasterEditDialog } from "@/features/masters/MasterActionDialogs";
 import { MasterResourceRefreshNotice } from "@/features/masters/MasterResourceRefreshNotice";
+import { masterGameTitleChoices } from "@/features/masters/masterViewModel";
 import type { GameTitleResponse } from "@/shared/api/masters";
 import { layoutFamilies, layoutFamilyLabels } from "@/shared/domain/ocr";
 import type { LayoutFamily } from "@/shared/domain/ocr";
@@ -54,11 +55,11 @@ export function GameTitleList({
   refreshing,
   stale,
 }: GameTitleListProps) {
-  const choices = items.map((item) => {
-    const isPending = item.pending === true;
+  const choices = masterGameTitleChoices(items, canEdit).map((choice) => {
+    const { item, pending: isPending } = choice;
     return {
-      accessibleLabel: `${item.name}${isPending ? "（追加中）" : ""}`,
-      description: `読み取り方式: ${layoutFamilyLabels[item.layoutFamily as LayoutFamily] ?? "未設定"}`,
+      accessibleLabel: choice.accessibleLabel,
+      description: choice.description,
       label: (
         <>
           {item.name}
@@ -66,25 +67,24 @@ export function GameTitleList({
         </>
       ),
       disabled: isPending,
-      trailingAction:
-        isPending || !canEdit ? undefined : (
-          <div className="flex items-center gap-2">
-            <MasterEditDialog
-              initialLayoutFamily={item.layoutFamily}
-              initialName={item.name}
-              label="作品"
-              onSave={async (values) => {
-                await onUpdate(item.id, {
-                  name: values.name,
-                  layoutFamily: values.layoutFamily ?? item.layoutFamily,
-                });
-              }}
-              showLayoutFamily
-              title="作品を編集"
-            />
-            <MasterDeleteDialog label="作品" name={item.name} onDelete={() => onDelete(item.id)} />
-          </div>
-        ),
+      trailingAction: choice.editable ? (
+        <div className="flex items-center gap-2">
+          <MasterEditDialog
+            initialLayoutFamily={item.layoutFamily}
+            initialName={item.name}
+            label="作品"
+            onSave={async (values) => {
+              await onUpdate(item.id, {
+                name: values.name,
+                layoutFamily: values.layoutFamily ?? item.layoutFamily,
+              });
+            }}
+            showLayoutFamily
+            title="作品を編集"
+          />
+          <MasterDeleteDialog label="作品" name={item.name} onDelete={() => onDelete(item.id)} />
+        </div>
+      ) : undefined,
       value: item.id,
     };
   });

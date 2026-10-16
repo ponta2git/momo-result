@@ -1,6 +1,6 @@
 import { useRef } from "react";
 
-import type { NotificationSettingsModel } from "@/features/masters/notifications/useNotificationSettingsModel";
+import type { NotificationSettingsModel } from "@/features/masters/notifications/notificationSettingsModel";
 import { actionRowClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
@@ -31,9 +31,7 @@ export function NotificationSettingsPanel({ model: page }: { model: Notification
   const saveButtonRef = useRef<HTMLButtonElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const resource = page.resource;
-  const issue = page.feedback?.tone === "success" ? undefined : page.feedback;
-  const completion = page.feedback?.tone === "success" ? page.feedback.message : undefined;
-  const checking = page.refreshing && !page.pending && !page.needsReload && !page.stale;
+  const { issue, status } = page;
   const reloadButton = (
     <Button
       pending={page.refreshing}
@@ -136,7 +134,7 @@ export function NotificationSettingsPanel({ model: page }: { model: Notification
               <div className="grid gap-2">
                 <div className={actionRowClass}>
                   <Button
-                    disabled={!page.dirty || page.disabled}
+                    disabled={page.actionsDisabled}
                     pending={page.pending && !page.confirmation.open}
                     pendingLabel="保存中"
                     ref={saveButtonRef}
@@ -144,21 +142,19 @@ export function NotificationSettingsPanel({ model: page }: { model: Notification
                   >
                     保存
                   </Button>
-                  <Button
-                    disabled={!page.dirty || page.disabled}
-                    variant="secondary"
-                    onClick={page.reset}
-                  >
+                  <Button disabled={page.actionsDisabled} variant="secondary" onClick={page.reset}>
                     変更を破棄
                   </Button>
                 </div>
                 <p className={cn("min-h-4", contentText.supporting)} role="status">
                   {page.pending ? null : (
                     <>
-                      {completion ? <span>{completion}</span> : null}
-                      {checking ? (
-                        <span>{completion ? " " : null}保存済みの設定を確認しています。</span>
-                      ) : !page.feedback && !page.needsReload && page.dirty ? (
+                      {status.completion ? <span>{status.completion}</span> : null}
+                      {status.checking ? (
+                        <span>
+                          {status.completion ? " " : null}保存済みの設定を確認しています。
+                        </span>
+                      ) : status.unsaved ? (
                         "未保存の変更があります"
                       ) : null}
                     </>

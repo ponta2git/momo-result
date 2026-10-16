@@ -12,3 +12,7 @@ export const accountRoleOptions = (["user", "operator", "admin"] as const).map((
   label: accountRoleLabels[value],
   value,
 }));
+
+export function accountRoleFromInput(value: unknown): AccountRole | undefined {
+  return accountRoleOptions.find((option) => option.value === value)?.value;
+}

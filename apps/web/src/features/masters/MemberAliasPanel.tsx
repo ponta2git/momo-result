@@ -1,7 +1,9 @@
 import { Pencil, Trash2 } from "lucide-react";
 import { startTransition, useRef, useState } from "react";
 
+import { readMemberAliasForm } from "@/features/masters/masterFormModel";
 import { MasterResourceRefreshNotice } from "@/features/masters/MasterResourceRefreshNotice";
+import { masterAliasGroups } from "@/features/masters/masterViewModel";
 import type { MemberAliasResponse } from "@/shared/api/masters";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { canonicalResultMembers, memberDisplayName } from "@/shared/domain/members";
@@ -41,10 +43,7 @@ export function MemberAliasPanel({
   refreshing,
   stale,
 }: MemberAliasPanelProps) {
-  const aliasesByMember = canonicalResultMembers.map((member) => ({
-    member,
-    aliases: aliases.filter((alias) => alias.memberId === member.memberId),
-  }));
+  const aliasesByMember = masterAliasGroups(aliases);
 
   return (
     <section className="grid min-w-0 gap-4">
@@ -161,19 +160,13 @@ function AliasEditDialog({
   alias: MemberAliasResponse;
   onUpdate: (id: string, request: { memberId: string; alias: string }) => Promise<void>;
 }) {
-  const [open, setOpen] = useState(false);
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string>();
-  const submitting = useRef(false);
+  const editor = useAliasEditDialog(alias.id, onUpdate);
 
   return (
     <Dialog
-      busy={pending}
-      open={open}
-      onOpenChange={(next) => {
-        if (next) setError(undefined);
-        setOpen(next);
-      }}
+      busy={editor.pending}
+      open={editor.open}
+      onOpenChange={editor.setOpen}
       title="別名を編集"
       trigger={
         <IconButton
@@ -187,30 +180,14 @@ function AliasEditDialog({
     >
       <form
         className="grid gap-6"
-        onSubmit={async (event) => {
+        onSubmit={(event) => {
           event.preventDefault();
-          if (submitting.current) return;
-          submitting.current = true;
-          setError(undefined);
-          setPending(true);
-          const formData = new FormData(event.currentTarget);
-          try {
-            await onUpdate(alias.id, {
-              memberId: String(formData.get("memberId") ?? ""),
-              alias: String(formData.get("alias") ?? ""),
-            });
-            setOpen(false);
-          } catch (caught) {
-            setError(formatApiError(caught, "別名の更新に失敗しました"));
-          } finally {
-            submitting.current = false;
-            setPending(false);
-          }
+          void editor.submit(new FormData(event.currentTarget));
         }}
       >
         <div className="grid gap-4">
           <SelectField
-            disabled={pending}
+            disabled={editor.pending}
             defaultValue={alias.memberId}
             label="プレーヤー"
             name="memberId"
@@ -220,23 +197,67 @@ function AliasEditDialog({
             }))}
           />
           <TextField
-            disabled={pending}
+            disabled={editor.pending}
             defaultValue={alias.alias}
-            error={error}
+            error={editor.error}
             label="別名"
             name="alias"
             required
           />
         </div>
         <DialogFooter>
-          <Button disabled={pending} variant="secondary" onClick={() => setOpen(false)}>
+          <Button
+            disabled={editor.pending}
+            variant="secondary"
+            onClick={() => editor.setOpen(false)}
+          >
             キャンセル
           </Button>
-          <Button disabled={pending} pending={pending} pendingLabel="保存中" type="submit">
+          <Button
+            disabled={editor.pending}
+            pending={editor.pending}
+            pendingLabel="保存中"
+            type="submit"
+          >
             保存
           </Button>
         </DialogFooter>
       </form>
     </Dialog>
   );
+}
+
+function useAliasEditDialog(
+  aliasId: string,
+  onUpdate: (id: string, request: { memberId: string; alias: string }) => Promise<void>,
+) {
+  const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string>();
+  const submitting = useRef(false);
+
+  return {
+    open,
+    pending,
+    error,
+    setOpen: (next: boolean) => {
+      if (next) setError(undefined);
+      setOpen(next);
+    },
+    submit: async (formData: FormData) => {
+      if (submitting.current) return;
+      submitting.current = true;
+      setError(undefined);
+      setPending(true);
+      try {
+        await onUpdate(aliasId, readMemberAliasForm(formData));
+        setOpen(false);
+      } catch (caught) {
+        setError(formatApiError(caught, "別名の更新に失敗しました"));
+      } finally {
+        submitting.current = false;
+        setPending(false);
+      }
+    },
+  };
 }

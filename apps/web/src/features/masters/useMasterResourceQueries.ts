@@ -7,6 +7,7 @@ import {
   selectMemberAliases,
   selectSeasonMasters,
 } from "@/features/masters/masterQueries";
+import { resolveMasterSelectionId } from "@/features/masters/masterViewModel";
 import type {
   GameTitleResponse,
   IncidentMasterResponse,
@@ -50,11 +51,7 @@ export function useMasterResourceQueries(
     enabled: () => enabled.aliases && authorization.can("admin"),
   });
   const gameTitles = gameTitlesQuery.data ?? noGameTitles;
-  const effectiveSelectedGameTitleId = gameTitles.some(
-    (gameTitle) => gameTitle.id === selectedGameTitleId,
-  )
-    ? selectedGameTitleId
-    : (gameTitles[0]?.id ?? "");
+  const effectiveSelectedGameTitleId = resolveMasterSelectionId(gameTitles, selectedGameTitleId);
 
   const mapMastersQuery = useQuery({
     ...mapMastersQueryOptions(

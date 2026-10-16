@@ -2,11 +2,15 @@ import type { QueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 
 import {
+  normalizeGameTitleEdit,
+  normalizeMasterNameEdit,
+  normalizeMemberAliasEdit,
+} from "@/features/masters/masterFormModel";
+import {
   cacheMasterUpdate,
   invalidateMasterResourceCaches,
   invalidateMemberAliasCaches,
 } from "@/features/masters/masterResourceCache";
-import { parseLayoutFamily, normalizeName } from "@/features/masters/masterValidation";
 import type { IdempotencyKeyStore } from "@/shared/api/idempotency";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import {
@@ -77,15 +81,12 @@ export function useMasterEditCommands(input: {
     ) => {
       onFeedback("gameTitle", "", "");
       setOperationError(undefined);
-      const layoutFamily = parseLayoutFamily(request.layoutFamily);
-      if (!layoutFamily) {
-        setOperationError("読み取り方式を選択してください");
+      const parsed = normalizeGameTitleEdit(request);
+      if (parsed.kind === "invalid") {
+        setOperationError(parsed.error);
         return;
       }
-      const normalizedRequest = {
-        name: normalizeName(request.name),
-        layoutFamily,
-      };
+      const normalizedRequest = parsed.request;
       const updated = await runIdempotentMutation(
         idempotencyKeys,
         "masters.updateGameTitle",
@@ -109,7 +110,7 @@ export function useMasterEditCommands(input: {
     async (lease: AuthorizationLease, id: string, request: { name: string }) => {
       onFeedback("map", selectedGameTitleId, "");
       setOperationError(undefined);
-      const normalizedRequest = { name: normalizeName(request.name) };
+      const normalizedRequest = normalizeMasterNameEdit(request);
       const updated = await runIdempotentMutation(
         idempotencyKeys,
         "masters.updateMapMaster",
@@ -141,7 +142,7 @@ export function useMasterEditCommands(input: {
     async (lease: AuthorizationLease, id: string, request: { name: string }) => {
       onFeedback("season", selectedGameTitleId, "");
       setOperationError(undefined);
-      const normalizedRequest = { name: normalizeName(request.name) };
+      const normalizedRequest = normalizeMasterNameEdit(request);
       const updated = await runIdempotentMutation(
         idempotencyKeys,
         "masters.updateSeasonMaster",
@@ -173,10 +174,7 @@ export function useMasterEditCommands(input: {
     async (lease: AuthorizationLease, id: string, request: { memberId: string; alias: string }) => {
       onFeedback("aliases", "", "");
       setOperationError(undefined);
-      const normalizedRequest = {
-        memberId: normalizeName(request.memberId),
-        alias: normalizeName(request.alias),
-      };
+      const normalizedRequest = normalizeMemberAliasEdit(request);
       const updated = await runIdempotentMutation(
         idempotencyKeys,
         "masters.updateMemberAlias",

@@ -1,5 +1,6 @@
 import { MasterDeleteDialog, MasterEditDialog } from "@/features/masters/MasterActionDialogs";
 import { MasterCreateForm } from "@/features/masters/MasterCreateForm";
+import { scopedMasterPanelView } from "@/features/masters/masterViewModel";
 import type { MapMasterResponse, SeasonMasterResponse } from "@/shared/api/masters";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
@@ -55,9 +56,8 @@ export function ScopedMasterPanel({
   labels,
   list,
 }: ScopedMasterPanelProps) {
-  const loading = list.loading ?? false;
-  const loadBlocked = list.loadFailed && !list.hasData;
-  const showStaleError = list.stale && list.hasData && Boolean(list.error);
+  const { loading, loadBlocked, showStaleError, createDisabled, createDisabledReason } =
+    scopedMasterPanelView(list, labels.itemLabel, disabledReason);
   const retryAction = (
     <Button
       pending={Boolean(list.retrying)}
@@ -156,14 +156,8 @@ export function ScopedMasterPanel({
       <div>
         <MasterCreateForm
           action={create.action}
-          disabled={loading || loadBlocked || Boolean(disabledReason)}
-          disabledReason={
-            loading
-              ? `${labels.itemLabel}を読み込み中です。`
-              : loadBlocked
-                ? `${labels.itemLabel}を読み込んでから追加できます。`
-                : disabledReason
-          }
+          disabled={createDisabled}
+          disabledReason={createDisabledReason}
           error={create.error}
           formKey={create.formKey}
           scopeKey={create.scopeKey}

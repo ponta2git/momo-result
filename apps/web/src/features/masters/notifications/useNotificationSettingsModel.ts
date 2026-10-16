@@ -1,13 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
+import {
+  buildNotificationSettingsView,
+  changeNotificationDraft,
+  notificationSaveError,
+} from "@/features/masters/notifications/notificationSettingsModel";
+import type {
+  NotificationDraft,
+  NotificationFeedback,
+  NotificationKind,
+  NotificationSettingsModel,
+} from "@/features/masters/notifications/notificationSettingsModel";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { updateNotificationSettings } from "@/shared/api/notificationSettings";
 import type {
   NotificationSettings,
   NotificationSettingsUpdate,
 } from "@/shared/api/notificationSettings";
-import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { notificationSettingsKeys } from "@/shared/api/queryKeys";
 import { notificationSettingsQueryOptions } from "@/shared/api/queryOptions";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
@@ -15,51 +25,8 @@ import type { AuthorizationLease } from "@/shared/auth/authorization";
 import { useAuthorization } from "@/shared/auth/useAuthorization";
 import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
-type Kind = keyof NotificationSettings;
-type Values = Record<Kind, boolean>;
-type Draft = { base: NotificationSettings; values: Values };
-type Feedback = {
-  tone: "success" | "danger" | "warning";
-  message: string;
-  requiresReload?: true;
-};
-type SettingsResource =
-  | { status: "loading" | "failed" }
-  | { status: "ready"; confirmed: NotificationSettings; values: Values };
-
-function valuesOf(settings: NotificationSettings): Values {
-  return {
-    ocrCompleted: settings.ocrCompleted.enabled,
-    analysisCompleted: settings.analysisCompleted.enabled,
-  };
-}
-
-function saveErrorFeedback(error: unknown): Feedback {
-  const problem = normalizeUnknownApiError(error);
-  if (problem.code === "NOTIFICATION_SETTINGS_VERSION_CONFLICT") {
-    return {
-      tone: "warning",
-      requiresReload: true,
-      message: "通知設定が別の画面で更新されています。現在の設定を読み込んで選び直してください。",
-    };
-  }
-  if (
-    problem.status === undefined ||
-    problem.status >= 500 ||
-    problem.code === "IDEMPOTENCY_IN_PROGRESS"
-  ) {
-    return {
-      tone: "warning",
-      requiresReload: true,
-      message:
-        "保存結果を確認できません。現在の設定を読み込んで、反映された内容を確認してください。",
-    };
-  }
-  return { tone: "danger", message: `保存できませんでした。${problem.detail}` };
-}
-
 /** Keeps editable choices tied to the confirmed generations from which editing began. */
-export function useNotificationSettingsModel(queryEnabled = true) {
+export function useNotificationSettingsModel(queryEnabled = true): NotificationSettingsModel {
   const authorization = useAuthorization();
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
@@ -71,8 +38,8 @@ export function useNotificationSettingsModel(queryEnabled = true) {
       canReadSettings &&
       authorization.canRead("admin", notificationSettingsKeys.all()),
   });
-  const [draft, setDraft] = useState<Draft>();
-  const [feedback, setFeedback] = useState<Feedback>();
+  const [draft, setDraft] = useState<NotificationDraft>();
+  const [feedback, setFeedback] = useState<NotificationFeedback>();
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const saving = useRef<AuthorizationLease | undefined>(undefined);
   const isSaving = () => Boolean(saving.current && authorization.isCurrent(saving.current));
@@ -108,7 +75,7 @@ export function useNotificationSettingsModel(queryEnabled = true) {
     },
     onError: (error, { lease }) => {
       authorization.reportError(error, lease);
-      if (authorization.isCurrent(lease)) setFeedback(saveErrorFeedback(error));
+      if (authorization.isCurrent(lease)) setFeedback(notificationSaveError(error));
     },
     onSettled: (_data, _error, { lease }) => {
       if (saving.current === lease) saving.current = undefined;
@@ -137,54 +104,34 @@ export function useNotificationSettingsModel(queryEnabled = true) {
 
   const confirmed = authorization.retained.admin ? query.data : undefined;
   const failed = useRetryNotice(query.isError, query.isFetching);
-  const resource: SettingsResource = confirmed
-    ? { status: "ready", confirmed, values: draft?.values ?? valuesOf(confirmed) }
-    : { status: failed ? "failed" : "loading" };
-  const dirty = Boolean(
-    draft &&
-    (draft.values.ocrCompleted !== draft.base.ocrCompleted.enabled ||
-      draft.values.analysisCompleted !== draft.base.analysisCompleted.enabled),
-  );
-  const needsReload = Boolean(feedback?.requiresReload || query.isError);
-  const disabled = !authorization.allowed.admin || pending || query.isFetching || needsReload;
-  const turnsOff = Boolean(
-    draft &&
-    (Object.keys(draft.values) as Kind[]).some(
-      (kind) => draft.base[kind].enabled && !draft.values[kind],
-    ),
-  );
+  const { savePlan, ...view } = buildNotificationSettingsView({
+    confirmed,
+    draft,
+    feedback,
+    canEdit: authorization.allowed.admin,
+    retainEdits: authorization.retained.admin,
+    pending,
+    fetching: query.isFetching,
+    failed,
+    queryError: query.isError,
+  });
 
-  const change = (kind: Kind, enabled: boolean) => {
-    if (!authorization.can("admin") || !confirmed || disabled || isSaving()) return;
-    setDraft((current) => ({
-      base: current?.base ?? confirmed,
-      values: { ...(current?.values ?? valuesOf(confirmed)), [kind]: enabled },
-    }));
+  const change = (kind: NotificationKind, enabled: boolean) => {
+    if (!authorization.can("admin") || !confirmed || view.disabled || isSaving()) return;
+    setDraft((current) => changeNotificationDraft(current, confirmed, kind, enabled));
     setFeedback(undefined);
   };
 
   const save = () => {
     const lease = authorization.begin("admin");
-    if (!lease || !draft || !dirty || disabled || isSaving()) return;
+    if (!lease || savePlan.kind === "blocked" || isSaving()) return;
     saving.current = lease;
-    mutation.mutate({
-      lease,
-      request: {
-        ocrCompleted: {
-          enabled: draft.values.ocrCompleted,
-          expectedGeneration: draft.base.ocrCompleted.generation,
-        },
-        analysisCompleted: {
-          enabled: draft.values.analysisCompleted,
-          expectedGeneration: draft.base.analysisCompleted.generation,
-        },
-      },
-    });
+    mutation.mutate({ lease, request: savePlan.request });
   };
 
   const submit = () => {
-    if (!authorization.can("admin") || !draft || !dirty || disabled) return;
-    if (turnsOff) setConfirmationOpen(true);
+    if (!authorization.can("admin") || savePlan.kind === "blocked") return;
+    if (savePlan.requiresConfirmation) setConfirmationOpen(true);
     else save();
   };
 
@@ -202,16 +149,9 @@ export function useNotificationSettingsModel(queryEnabled = true) {
   };
 
   return {
-    resource,
-    dirty: authorization.retained.admin && dirty,
-    disabled,
-    feedback,
+    ...view,
     change,
     submit,
-    pending,
-    stale: confirmed !== undefined && failed,
-    needsReload,
-    refreshing: query.isFetching,
     reload,
     reset: () => {
       setDraft(undefined);
@@ -224,5 +164,3 @@ export function useNotificationSettingsModel(queryEnabled = true) {
     },
   };
 }
-
-export type NotificationSettingsModel = ReturnType<typeof useNotificationSettingsModel>;

@@ -1,15 +1,16 @@
 import { useMemo, useOptimistic } from "react";
 
-import { buildMasterViewModel } from "@/features/masters/masterViewModel";
+import type {
+  OptimisticGameTitle,
+  OptimisticMapMaster,
+  OptimisticSeasonMaster,
+} from "@/features/masters/masterTypes";
+import { buildMasterViewModel, resolveMasterSelectionId } from "@/features/masters/masterViewModel";
 import type {
   GameTitleResponse,
   MapMasterResponse,
   SeasonMasterResponse,
 } from "@/shared/api/masters";
-
-export type OptimisticGameTitle = GameTitleResponse & { pending?: boolean };
-export type OptimisticMapMaster = MapMasterResponse & { pending?: boolean };
-export type OptimisticSeasonMaster = SeasonMasterResponse & { pending?: boolean };
 
 function appendOptimisticItem<T extends { id: string }>(state: T[], item: T): T[] {
   return state.some((current) => current.id === item.id) ? state : [...state, item];
@@ -36,11 +37,11 @@ export function useMasterOptimisticCatalog(input: {
     OptimisticSeasonMaster[],
     OptimisticSeasonMaster
   >(input.seasonMasters, appendOptimisticItem);
-  const selectedGameTitleId = optimisticGameTitles.some(
-    (gameTitle) => gameTitle.id === input.selectedGameTitleId,
-  )
-    ? input.selectedGameTitleId
-    : input.fallbackSelectedGameTitleId;
+  const selectedGameTitleId = resolveMasterSelectionId(
+    optimisticGameTitles,
+    input.selectedGameTitleId,
+    input.fallbackSelectedGameTitleId,
+  );
 
   const viewModel = useMemo(
     () =>

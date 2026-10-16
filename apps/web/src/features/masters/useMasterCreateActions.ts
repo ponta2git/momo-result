@@ -1,21 +1,22 @@
 import type { QueryClient } from "@tanstack/react-query";
 
 import {
-  createGameTitleId,
-  createMapMasterId,
-  createSeasonMasterId,
-} from "@/features/masters/masterId";
+  parseGameTitleCreate,
+  parseMemberAliasCreate,
+  parseScopedMasterCreate,
+  prepareGameTitleCreation,
+  prepareScopedMasterCreation,
+} from "@/features/masters/masterFormModel";
 import {
   cacheCreatedMaster,
   invalidateMasterResourceCaches,
   invalidateMemberAliasCaches,
 } from "@/features/masters/masterResourceCache";
-import { parseLayoutFamily, isNameValid, normalizeName } from "@/features/masters/masterValidation";
 import type {
   OptimisticGameTitle,
   OptimisticMapMaster,
   OptimisticSeasonMaster,
-} from "@/features/masters/useMasterOptimisticCatalog";
+} from "@/features/masters/masterTypes";
 import type { IdempotencyKeyStore } from "@/shared/api/idempotency";
 import { runIdempotentMutation, runIdempotentOperationAttempt } from "@/shared/api/idempotency";
 import {
@@ -54,32 +55,17 @@ export function useMasterCreateActions(input: {
       "admin",
       async (prev, formData, lease) => {
         input.onFeedback("gameTitle", "", "");
-        const name = normalizeName(String(formData.get("name") ?? ""));
-        if (!isNameValid(name)) {
-          return { ...prev, error: "作品名を入力してください" };
-        }
-        const layoutFamily = parseLayoutFamily(String(formData.get("layoutFamily") ?? ""));
-        if (!layoutFamily) {
-          return { ...prev, error: "読み取り方式を選択してください" };
-        }
-        const intent = { layoutFamily, name };
-        const attempt = input.idempotencyKeys.begin("masters.createGameTitle", intent);
-        const draftId = createGameTitleId(name, attempt.key);
-        const createdAt = input.nowIsoFactory();
-        input.addOptimisticGameTitle({
-          id: draftId,
-          layoutFamily,
-          name,
-          displayOrder: input.optimisticGameTitleCount,
-          createdAt,
-          pending: true,
-        });
+        const parsed = parseGameTitleCreate(formData);
+        if (parsed.kind === "invalid") return { ...prev, error: parsed.error };
+        const attempt = input.idempotencyKeys.begin("masters.createGameTitle", parsed.request);
+        const { request, optimistic } = prepareGameTitleCreation(
+          parsed.request,
+          attempt.key,
+          input.nowIsoFactory(),
+          input.optimisticGameTitleCount,
+        );
+        input.addOptimisticGameTitle(optimistic);
         try {
-          const request = {
-            id: draftId,
-            layoutFamily,
-            name,
-          };
           const created = await runIdempotentOperationAttempt(attempt, (options) =>
             createGameTitle(request, options),
           );
@@ -112,29 +98,21 @@ export function useMasterCreateActions(input: {
       const scope = input.selectedGameTitleId;
       const prev = states[scope] ?? initialCreateState;
       input.onFeedback("map", input.selectedGameTitleId, "");
-      const name = normalizeName(String(formData.get("name") ?? ""));
-      if (!isNameValid(name) || !input.selectedGameTitleId) {
-        return { ...states, [scope]: { ...prev, error: "マップ名を入力してください" } };
+      const parsed = parseScopedMasterCreate("map", scope, formData);
+      if (parsed.kind === "invalid") {
+        return { ...states, [scope]: { ...prev, error: parsed.error } };
       }
-      const gameTitleId = input.selectedGameTitleId;
-      const intent = { gameTitleId, name };
-      const attempt = input.idempotencyKeys.begin("masters.createMapMaster", intent);
-      const draftId = createMapMasterId(name, attempt.key);
-      const createdAt = input.nowIsoFactory();
-      input.addOptimisticMapMaster({
-        id: draftId,
-        gameTitleId,
-        name,
-        displayOrder: input.selectedMapMasterCount,
-        createdAt,
-        pending: true,
-      });
+      const gameTitleId = parsed.request.gameTitleId;
+      const attempt = input.idempotencyKeys.begin("masters.createMapMaster", parsed.request);
+      const { request, optimistic } = prepareScopedMasterCreation(
+        "map",
+        parsed.request,
+        attempt.key,
+        input.nowIsoFactory(),
+        input.selectedMapMasterCount,
+      );
+      input.addOptimisticMapMaster(optimistic);
       try {
-        const request = {
-          id: draftId,
-          gameTitleId,
-          name,
-        };
         const created = await runIdempotentOperationAttempt(attempt, (options) =>
           createMapMaster(request, options),
         );
@@ -172,29 +150,21 @@ export function useMasterCreateActions(input: {
       const scope = input.selectedGameTitleId;
       const prev = states[scope] ?? initialCreateState;
       input.onFeedback("season", input.selectedGameTitleId, "");
-      const name = normalizeName(String(formData.get("name") ?? ""));
-      if (!isNameValid(name) || !input.selectedGameTitleId) {
-        return { ...states, [scope]: { ...prev, error: "シーズン名を入力してください" } };
+      const parsed = parseScopedMasterCreate("season", scope, formData);
+      if (parsed.kind === "invalid") {
+        return { ...states, [scope]: { ...prev, error: parsed.error } };
       }
-      const gameTitleId = input.selectedGameTitleId;
-      const intent = { gameTitleId, name };
-      const attempt = input.idempotencyKeys.begin("masters.createSeasonMaster", intent);
-      const draftId = createSeasonMasterId(name, attempt.key);
-      const createdAt = input.nowIsoFactory();
-      input.addOptimisticSeasonMaster({
-        id: draftId,
-        gameTitleId,
-        name,
-        displayOrder: input.selectedSeasonMasterCount,
-        createdAt,
-        pending: true,
-      });
+      const gameTitleId = parsed.request.gameTitleId;
+      const attempt = input.idempotencyKeys.begin("masters.createSeasonMaster", parsed.request);
+      const { request, optimistic } = prepareScopedMasterCreation(
+        "season",
+        parsed.request,
+        attempt.key,
+        input.nowIsoFactory(),
+        input.selectedSeasonMasterCount,
+      );
+      input.addOptimisticSeasonMaster(optimistic);
       try {
-        const request = {
-          id: draftId,
-          gameTitleId,
-          name,
-        };
         const created = await runIdempotentOperationAttempt(attempt, (options) =>
           createSeasonMaster(request, options),
         );
@@ -229,13 +199,10 @@ export function useMasterCreateActions(input: {
       "admin",
       async (prev, formData, lease) => {
         input.onFeedback("aliases", "", "");
-        const memberId = normalizeName(String(formData.get("memberId") ?? ""));
-        const alias = normalizeName(String(formData.get("alias") ?? ""));
-        if (!memberId || !alias) {
-          return { ...prev, error: "プレーヤーと別名を入力してください" };
-        }
+        const parsed = parseMemberAliasCreate(formData);
+        if (parsed.kind === "invalid") return { ...prev, error: parsed.error };
+        const { request } = parsed;
         try {
-          const request = { memberId, alias };
           const created = await runIdempotentMutation(
             input.idempotencyKeys,
             "masters.createMemberAlias",

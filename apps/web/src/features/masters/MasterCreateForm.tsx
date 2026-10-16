@@ -1,5 +1,7 @@
 import { startTransition, useState } from "react";
 
+import { masterCreateDraftValue } from "@/features/masters/masterFormModel";
+import type { MasterCreateDrafts } from "@/features/masters/masterFormModel";
 import { Button } from "@/shared/ui/actions/Button";
 import { TextField } from "@/shared/ui/forms/TextField";
 
@@ -34,11 +36,7 @@ export function MasterCreateForm({
 }: MasterCreateFormProps) {
   const buttonLabel = submitLabel ?? actionLabel;
   const pendingLabel = submitLabel ? `${submitLabel}中` : `${actionLabel}中`;
-  const [drafts, setDrafts] = useState<Record<string, { value: string; version: typeof formKey }>>(
-    {},
-  );
-  const draft = drafts[scopeKey];
-  const value = draft && draft.version === formKey ? draft.value : "";
+  const input = useMasterCreateInput(scopeKey, formKey);
 
   return (
     <form
@@ -61,14 +59,8 @@ export function MasterCreateForm({
         name={inputName}
         placeholder={placeholder}
         type="text"
-        value={value}
-        onChange={(event) => {
-          const nextValue = event.target.value;
-          setDrafts((current) => ({
-            ...current,
-            [scopeKey]: { value: nextValue, version: formKey },
-          }));
-        }}
+        value={input.value}
+        onChange={(event) => input.change(event.target.value)}
       />
       <div className="grid md:col-start-2 md:row-start-2">
         <Button
@@ -83,4 +75,15 @@ export function MasterCreateForm({
       </div>
     </form>
   );
+}
+
+/** Each title retains its own input; only its confirmed creation advances the reset version. */
+function useMasterCreateInput(scope: string, version: string | number | undefined) {
+  const [drafts, setDrafts] = useState<MasterCreateDrafts>({});
+  return {
+    value: masterCreateDraftValue(drafts, scope, version),
+    change: (value: string) => {
+      setDrafts((current) => ({ ...current, [scope]: { value, version } }));
+    },
+  };
 }

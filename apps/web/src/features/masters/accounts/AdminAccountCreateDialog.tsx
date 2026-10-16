@@ -2,7 +2,7 @@ import { UserPlus } from "lucide-react";
 import { startTransition } from "react";
 
 import { accountRoleOptions } from "@/features/masters/accounts/accountRoles";
-import type { AdminAccountCreateDialogModel } from "@/features/masters/accounts/useAccountSettingsModel";
+import type { AdminAccountCreateDialogModel } from "@/features/masters/accounts/accountSettingsModel";
 import { canonicalResultMembers } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
@@ -19,14 +19,8 @@ const accountPlayerOptions = [
   })),
 ];
 
-export function AdminAccountCreateDialog({
-  disabled,
-  model,
-}: {
-  disabled: boolean;
-  model: AdminAccountCreateDialogModel;
-}) {
-  const { action, error, open, pending, setOpen } = model;
+export function AdminAccountCreateDialog({ model }: { model: AdminAccountCreateDialogModel }) {
+  const { action, disabled, error, open, pending, setOpen } = model;
   return (
     <Dialog
       busy={pending}

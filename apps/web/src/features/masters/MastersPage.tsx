@@ -1,11 +1,11 @@
 import { AccountSettingsPanel } from "@/features/masters/accounts/AccountSettingsPanel";
 import { IncidentMasterPanel } from "@/features/masters/IncidentMasterPanel";
+import type { MasterTabId } from "@/features/masters/masterNavigationModel";
 import { MasterPanelContent } from "@/features/masters/MasterPanelContent";
 import { MasterRelationBoard } from "@/features/masters/MasterRelationBoard";
 import { MemberAliasPanel } from "@/features/masters/MemberAliasPanel";
 import { NotificationSettingsPanel } from "@/features/masters/notifications/NotificationSettingsPanel";
 import { useMastersPageModel } from "@/features/masters/useMastersPageModel";
-import type { MasterTabId } from "@/features/masters/useMastersPageModel";
 import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -20,7 +20,6 @@ export function MastersPage() {
     <PageFrame>
       <UnsavedChangesGuard
         {...page.guard}
-        preservesInput={(current, next) => current.pathname === next.pathname}
         showPendingDialog={false}
         description="変更した通知設定はまだ保存されていません。このページに残れば、設定タブを切り替えても編集を続けられます。"
         pendingDescription="設定の追加・保存・削除の結果を確認しています。このページでお待ちください。"

@@ -1,20 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
-import { accountRoleOptions } from "@/features/masters/accounts/accountRoles";
+import {
+  accountUpdateConsequence,
+  buildAccountSettingsView,
+  parseAccountCreateForm,
+} from "@/features/masters/accounts/accountSettingsModel";
+import type { AccountSettingsModel } from "@/features/masters/accounts/accountSettingsModel";
 import {
   cacheSavedAccount,
   invalidateAdminAccountCaches,
 } from "@/features/masters/accounts/adminAccountCache";
 import { createLoginAccount, updateLoginAccount } from "@/shared/api/adminAccounts";
-import type {
-  CreateLoginAccountRequest,
-  LoginAccountResponse,
-  UpdateLoginAccountRequest,
-} from "@/shared/api/adminAccounts";
+import type { LoginAccountResponse, UpdateLoginAccountRequest } from "@/shared/api/adminAccounts";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
-import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
-import type { NormalizedApiError } from "@/shared/api/problemDetails";
+import { formatApiError } from "@/shared/api/problemDetails";
 import {
   isInitialQueryLoading,
   shouldShowBlockingQueryError,
@@ -28,42 +28,6 @@ import { useAuthorization } from "@/shared/auth/useAuthorization";
 import { useAuthorizedAction } from "@/shared/auth/useAuthorizedAction";
 import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 import { showToast } from "@/shared/ui/feedback/Toast";
-
-type AccountListRefresh = {
-  pending: boolean;
-  run: () => Promise<boolean>;
-};
-
-export type AdminAccountListModel =
-  | { kind: "loading" }
-  | { error: NormalizedApiError | undefined; kind: "loadFailed"; refresh: AccountListRefresh }
-  | {
-      items: LoginAccountResponse[];
-      kind: "ready";
-      refresh: AccountListRefresh;
-      stale: boolean;
-    };
-
-export type AdminAccountCreateDialogModel = {
-  action: (formData: FormData) => void;
-  error: string;
-  open: boolean;
-  pending: boolean;
-  setOpen: (open: boolean) => void;
-};
-
-type AdminAccountUpdateModel = {
-  pending: boolean;
-  pendingRequestFor: (accountId: string) => UpdateLoginAccountRequest | undefined;
-  run: (accountId: string, request: UpdateLoginAccountRequest) => Promise<void>;
-};
-
-export type AccountSettingsModel = {
-  create: AdminAccountCreateDialogModel;
-  list: AdminAccountListModel;
-  pending: boolean;
-  update: AdminAccountUpdateModel;
-};
 
 /** Keeps account workflows alive while the user moves between settings tabs. */
 export function useAccountSettingsModel(queryEnabled = true): AccountSettingsModel {
@@ -96,18 +60,9 @@ export function useAccountSettingsModel(queryEnabled = true): AccountSettingsMod
     authorization,
     "admin",
     async (previous, formData, lease) => {
-      const playerMemberId = String(formData.get("playerMemberId") ?? "");
-      const role = accountRoleOptions.find(
-        (option) => option.value === formData.get("role"),
-      )?.value;
-      if (!role) return "ロールを選択してください";
-      const request: CreateLoginAccountRequest = {
-        discordUserId: String(formData.get("discordUserId") ?? ""),
-        displayName: String(formData.get("displayName") ?? ""),
-        role,
-        loginEnabled: formData.get("loginEnabled") === "on",
-        ...(playerMemberId ? { playerMemberId } : {}),
-      };
+      const parsed = parseAccountCreateForm(formData);
+      if (parsed.kind === "invalid") return parsed.error;
+      const { request } = parsed;
 
       try {
         const created = await runIdempotentMutation(
@@ -148,13 +103,12 @@ export function useAccountSettingsModel(queryEnabled = true): AccountSettingsMod
     },
     onSuccess: async (saved, { accountId, request, lease }) => {
       if (!authorization.isSameAccount(lease)) return;
-      const selfDisabled = accountId === lease.accountId && request.loginEnabled === false;
-      const selfDemoted = accountId === lease.accountId && saved.role !== "admin";
-      if (selfDisabled) {
+      const consequence = accountUpdateConsequence(lease.accountId, accountId, request, saved);
+      if (consequence.kind === "selfDisabled") {
         if (authorization.isCurrent(lease)) reportSelfAccountDisabled(accountId);
         await authorization.recheck();
-      } else if (selfDemoted) {
-        await authorization.acceptSelfRole(lease, saved.role);
+      } else if (consequence.kind === "selfRoleChanged") {
+        await authorization.acceptSelfRole(lease, consequence.role);
       }
     },
     onError: (error, { lease }) => authorization.reportError(error, lease),
@@ -204,10 +158,6 @@ export function useAccountSettingsModel(queryEnabled = true): AccountSettingsMod
 
   const accounts = authorization.retained.admin ? (accountsQuery.data?.items ?? []) : [];
 
-  const refresh = {
-    pending: accountsQuery.isFetching && !currentCreatePending && !currentUpdatePending,
-    run: refreshAccounts,
-  };
   const loadFailed = useRetryNotice(
     canManageAccounts && shouldShowBlockingQueryError(accountsQuery),
     accountsQuery.isFetching,
@@ -216,27 +166,23 @@ export function useAccountSettingsModel(queryEnabled = true): AccountSettingsMod
     canManageAccounts && shouldShowQueryError(accountsQuery),
     accountsQuery.isFetching,
   );
-  let list: AdminAccountListModel;
-  if (auth.isChecking || (isInitialQueryLoading(accountsQuery) && !loadFailed)) {
-    list = { kind: "loading" };
-  } else if (loadFailed) {
-    list = {
-      error: accountsQuery.error ? normalizeUnknownApiError(accountsQuery.error) : undefined,
-      kind: "loadFailed",
-      refresh,
-    };
-  } else {
-    list = {
-      items: accounts,
-      kind: "ready",
-      refresh,
-      stale,
-    };
-  }
+  const view = buildAccountSettingsView({
+    authChecking: auth.isChecking,
+    initialLoading: isInitialQueryLoading(accountsQuery),
+    loadFailed,
+    stale,
+    error: accountsQuery.error,
+    items: accounts,
+    fetching: accountsQuery.isFetching,
+    createPending: currentCreatePending,
+    updatePending: currentUpdatePending,
+    refresh: refreshAccounts,
+  });
 
   return {
     create: {
       action: createAction,
+      disabled: view.createDisabled,
       error: createError,
       open: authorization.retained.admin && createOpen,
       pending: currentCreatePending,
@@ -244,8 +190,8 @@ export function useAccountSettingsModel(queryEnabled = true): AccountSettingsMod
         if (!open || authorization.can("admin")) setCreateOpen(open);
       },
     },
-    list,
-    pending: currentCreatePending || currentUpdatePending,
+    list: view.list,
+    pending: view.pending,
     update: {
       pending: currentUpdatePending,
       pendingRequestFor: (accountId) =>

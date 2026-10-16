@@ -1,6 +1,7 @@
 import { Pencil, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
 
+import { readMasterEditForm } from "@/features/masters/masterFormModel";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { layoutFamilies, layoutFamilyLabels } from "@/shared/domain/ocr";
 import type { LayoutFamily } from "@/shared/domain/ocr";
@@ -27,19 +28,13 @@ export function MasterEditDialog({
   showLayoutFamily = false,
   title,
 }: MasterEditDialogProps) {
-  const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string>();
-  const [pending, setPending] = useState(false);
-  const submitting = useRef(false);
+  const editor = useMasterEditDialog({ initialLayoutFamily, label, onSave, showLayoutFamily });
 
   return (
     <Dialog
-      busy={pending}
-      open={open}
-      onOpenChange={(next) => {
-        if (next) setError(undefined);
-        setOpen(next);
-      }}
+      busy={editor.pending}
+      open={editor.open}
+      onOpenChange={editor.setOpen}
       title={title}
       trigger={
         <IconButton
@@ -53,41 +48,23 @@ export function MasterEditDialog({
     >
       <form
         className="grid gap-6"
-        onSubmit={async (event) => {
+        onSubmit={(event) => {
           event.preventDefault();
-          if (submitting.current) return;
-          submitting.current = true;
-          setError(undefined);
-          setPending(true);
-          const formData = new FormData(event.currentTarget);
-          try {
-            await onSave({
-              name: String(formData.get("name") ?? ""),
-              layoutFamily: showLayoutFamily
-                ? String(formData.get("layoutFamily") ?? initialLayoutFamily ?? "")
-                : undefined,
-            });
-            setOpen(false);
-          } catch (caught) {
-            setError(formatApiError(caught, `${label}の更新に失敗しました`));
-          } finally {
-            submitting.current = false;
-            setPending(false);
-          }
+          void editor.submit(new FormData(event.currentTarget));
         }}
       >
         <div className="grid gap-4">
           <TextField
-            disabled={pending}
+            disabled={editor.pending}
             defaultValue={initialName}
-            error={error}
+            error={editor.error}
             label={`${label}名`}
             name="name"
             required
           />
           {showLayoutFamily ? (
             <SelectField
-              disabled={pending}
+              disabled={editor.pending}
               label="読み取り方式"
               description="作品ごとの画面構造に合わせて、読み取り方を切り替えます。"
               defaultValue={initialLayoutFamily ?? layoutFamilies[0]}
@@ -100,16 +77,64 @@ export function MasterEditDialog({
           ) : null}
         </div>
         <DialogFooter>
-          <Button disabled={pending} variant="secondary" onClick={() => setOpen(false)}>
+          <Button
+            disabled={editor.pending}
+            variant="secondary"
+            onClick={() => editor.setOpen(false)}
+          >
             キャンセル
           </Button>
-          <Button disabled={pending} pending={pending} pendingLabel="保存中" type="submit">
+          <Button
+            disabled={editor.pending}
+            pending={editor.pending}
+            pendingLabel="保存中"
+            type="submit"
+          >
             保存
           </Button>
         </DialogFooter>
       </form>
     </Dialog>
   );
+}
+
+function useMasterEditDialog({
+  initialLayoutFamily,
+  label,
+  onSave,
+  showLayoutFamily,
+}: Pick<MasterEditDialogProps, "initialLayoutFamily" | "label" | "onSave"> & {
+  showLayoutFamily: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string>();
+  const [pending, setPending] = useState(false);
+  const submitting = useRef(false);
+
+  return {
+    open,
+    error,
+    pending,
+    setOpen: (next: boolean) => {
+      if (next) setError(undefined);
+      setOpen(next);
+    },
+    submit: async (formData: FormData) => {
+      if (submitting.current) return;
+      submitting.current = true;
+      setError(undefined);
+      setPending(true);
+      try {
+        await onSave(readMasterEditForm(formData, showLayoutFamily, initialLayoutFamily));
+        setOpen(false);
+      } catch (caught) {
+        setError(formatApiError(caught, `${label}の更新に失敗しました`));
+      } finally {
+        submitting.current = false;
+        setPending(false);
+      }
+    },
+  };
 }
 
 type MasterDeleteDialogProps = {

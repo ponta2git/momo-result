@@ -1,9 +1,9 @@
 import { useRef } from "react";
 
 import { accountRoleLabels } from "@/features/masters/accounts/accountRoles";
+import type { AccountSettingsModel } from "@/features/masters/accounts/accountSettingsModel";
 import { AdminAccountActions } from "@/features/masters/accounts/AdminAccountActions";
 import { AdminAccountCreateDialog } from "@/features/masters/accounts/AdminAccountCreateDialog";
-import type { AccountSettingsModel } from "@/features/masters/accounts/useAccountSettingsModel";
 import { memberDisplayName } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
@@ -35,14 +35,7 @@ export function AccountSettingsPanel({ model: page }: { model: AccountSettingsMo
 
   return (
     <section aria-label="アカウント設定" className="grid min-w-0 gap-4">
-      <ContentWithActions
-        actions={
-          <AdminAccountCreateDialog
-            disabled={page.list.kind !== "ready" || page.pending}
-            model={page.create}
-          />
-        }
-      >
+      <ContentWithActions actions={<AdminAccountCreateDialog model={page.create} />}>
         <header className="grid gap-1">
           <h2 className={contentText.heading} ref={headingRef} tabIndex={-1}>
             ログインと権限

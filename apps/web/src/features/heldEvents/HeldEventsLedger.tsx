@@ -1,6 +1,7 @@
 import { Camera, ClipboardList, Download, Trash2 } from "lucide-react";
 
 import { heldEventOcrCaptureHref } from "@/features/heldEvents/heldEventNavigation";
+import { canDeleteHeldEvent } from "@/features/heldEvents/heldEventViewModel";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
@@ -276,10 +277,6 @@ function HeldEventExportLink({ disabled, event }: HeldEventLinkProps) {
       variant="quiet"
     />
   );
-}
-
-function canDeleteHeldEvent(event: HeldEventResponse) {
-  return event.matchCount === 0 && event.draftCount === 0;
 }
 
 function HeldEventDeleteButton({

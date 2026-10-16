@@ -14,26 +14,20 @@ import { PageFrame } from "@/shared/ui/layout/PageFrame";
 
 export function HeldEventsPage() {
   const page = useHeldEventsPageModel();
-  const dialogPending = page.create.pending || page.deleteDialog.pending;
-  const toolbarPending =
-    page.refresh.pending &&
-    !dialogPending &&
-    page.list.kind === "ready" &&
-    page.list.freshness === "current";
 
   return (
     <PageFrame>
       <UnsavedChangesGuard
         model={page.navigationGuard}
-        pending={dialogPending}
+        pending={page.controls.dialogPending}
         showPendingDialog={false}
       />
       <PageContentSurface aria-label="開催履歴" className="grid gap-4" role="region">
         <div aria-label="開催履歴の操作" className={cn(actionRowClass, "justify-end")} role="group">
           <Button
             icon={<RefreshCw aria-hidden="true" />}
-            disabled={page.refresh.pending || dialogPending}
-            pending={toolbarPending}
+            disabled={page.controls.refreshDisabled}
+            pending={page.controls.refreshPending}
             pendingLabel="更新中…"
             size="sm"
             variant="quiet"
@@ -41,7 +35,7 @@ export function HeldEventsPage() {
           >
             更新
           </Button>
-          {page.list.kind === "ready" && page.list.rows.length > 0 ? (
+          {page.controls.showCreate ? (
             <Button
               icon={<CalendarPlus aria-hidden="true" />}
               variant="secondary"
@@ -52,9 +46,9 @@ export function HeldEventsPage() {
           ) : null}
         </div>
 
-        {page.feedback.errorMessage && !page.create.open && !page.deleteDialog.target ? (
+        {page.controls.errorMessage ? (
           <Notice tone="danger" title="操作に失敗しました">
-            {page.feedback.errorMessage}
+            {page.controls.errorMessage}
           </Notice>
         ) : null}
 

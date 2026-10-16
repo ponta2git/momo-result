@@ -6,11 +6,11 @@ import {
   HeldEventDetailLoading,
   HeldEventDetailUnavailable,
 } from "@/features/heldEvents/HeldEventDetailStatusViews";
+import type { HeldEventDetailReadyPageModel } from "@/features/heldEvents/heldEventDetailViewModel";
 import { HeldEventDraftsSection } from "@/features/heldEvents/HeldEventDraftsSection";
 import { HeldEventMatchTimeline } from "@/features/heldEvents/HeldEventMatchTimeline";
 import { HeldEventPlayerRecap } from "@/features/heldEvents/HeldEventPlayerRecap";
 import { useHeldEventDetailPageModel } from "@/features/heldEvents/useHeldEventDetailPageModel";
-import type { HeldEventDetailReadyPageModel } from "@/features/heldEvents/useHeldEventDetailPageModel";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { useAdjacentNavigationFocus } from "@/shared/navigation/useAdjacentNavigationFocus";
 import { Button } from "@/shared/ui/actions/Button";

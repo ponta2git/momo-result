@@ -85,11 +85,9 @@ export function HeldEventsListCard({
           ) : (
             <HeldEventsLedger
               actionsDisabled={model.scopeChanging}
-              deleteDisabled={
-                model.deletePending || model.freshness === "stale" || model.scopeChanging
-              }
+              deleteDisabled={model.deleteDisabled}
               events={model.rows}
-              firstRowIsLatest={model.page === 1}
+              firstRowIsLatest={model.firstRowIsLatest}
 
               onDelete={model.onRequestDelete}
             />

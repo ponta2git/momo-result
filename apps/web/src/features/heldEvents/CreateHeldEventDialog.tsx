@@ -32,7 +32,7 @@ export function CreateHeldEventDialog({ model }: { model: HeldEventCreateFormMod
           onChange={(event) => model.setHeldAtDraft(event.target.value)}
         />
         <CreateHeldEventDialogActions
-          canSubmit={Boolean(model.heldAtDraft)}
+          canSubmit={model.canSubmit}
           close={() => model.setOpen(false)}
         />
       </form>

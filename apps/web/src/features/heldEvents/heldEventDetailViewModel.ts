@@ -1,6 +1,149 @@
-import type { HeldEventDraftResponse, HeldEventMatchResponse } from "@/shared/api/heldEvents";
+import { heldEventOcrCaptureHref } from "@/features/heldEvents/heldEventNavigation";
+import type { DetailNavigation, HeldEventNeighbor } from "@/shared/api/detailReadResult";
+import type {
+  HeldEventDetailResponse,
+  HeldEventDraftResponse,
+  HeldEventMatchResponse,
+} from "@/shared/api/heldEvents";
 import { memberDisplayName, orderFixedMembers } from "@/shared/domain/members";
-import { formatDateTimeCompact } from "@/shared/lib/dateTime";
+import { formatDateTimeCompact, formatNavigationDateTime } from "@/shared/lib/dateTime";
+import type { AdjacentDestination } from "@/shared/ui/navigation/AdjacentNavigation";
+
+type RefreshModel = {
+  disabled?: boolean;
+  pending: boolean;
+  run: () => void;
+};
+
+export type HeldEventDetailReadyPageModel = {
+  event: {
+    detail: HeldEventDetailResponse;
+    drafts: HeldEventDraftResponse[];
+    emphasizeNewMatch: boolean;
+    matches: HeldEventMatchResponse[];
+    playerRecaps: HeldEventPlayerRecap[];
+  };
+  freshness: { kind: "current" } | { kind: "stale"; refresh: RefreshModel };
+  kind: "ready";
+  navigation: {
+    adjacent: {
+      previous: AdjacentDestination;
+      next: AdjacentDestination;
+      disabled: boolean;
+      status: "ready" | "refreshing" | "failed" | "unavailable";
+    };
+    currentDateTime: string;
+    exportHref: string;
+    manualEntryHref: string;
+    ocrCaptureHref: string;
+  };
+  refresh: RefreshModel;
+};
+
+export type HeldEventDetailPageModel =
+  | { kind: "loading" }
+  | { kind: "notFound" }
+  | { kind: "loadFailed"; refresh: RefreshModel }
+  | HeldEventDetailReadyPageModel;
+
+/** Resolves display availability and projects one detail snapshot without owning its lifetime. */
+export function buildHeldEventDetailPageModel({
+  heldEventId,
+  detail,
+  navigation,
+  notFound,
+  error,
+  pending,
+  initialPending,
+  stale,
+  refresh,
+}: {
+  heldEventId: string;
+  detail: HeldEventDetailResponse | undefined;
+  navigation: DetailNavigation<HeldEventNeighbor> | undefined;
+  notFound: boolean;
+  error: unknown;
+  pending: boolean;
+  initialPending: boolean;
+  stale: boolean;
+  refresh: RefreshModel;
+}): HeldEventDetailPageModel {
+  if (notFound) return { kind: "notFound" };
+  if (!detail && initialPending && !error && heldEventId.trim().length > 0) {
+    return { kind: "loading" };
+  }
+  if (!detail || heldEventId.trim().length === 0) return { kind: "loadFailed", refresh };
+
+  const matches = (detail.matches ?? []).toSorted(compareHeldEventMatches);
+  const drafts = (detail.drafts ?? []).toSorted(
+    (left, right) =>
+      (left.matchNoInEvent ?? Number.MAX_SAFE_INTEGER) -
+        (right.matchNoInEvent ?? Number.MAX_SAFE_INTEGER) ||
+      right.updatedAt.localeCompare(left.updatedAt),
+  );
+  const available = navigation?.kind === "available";
+  const previous = available ? navigation.previous : undefined;
+  const next = available ? navigation.next : undefined;
+  const peers = [
+    detail.heldAt,
+    ...(previous ? [previous.heldAt] : []),
+    ...(next ? [next.heldAt] : []),
+  ];
+  const encodedHeldEventId = encodeURIComponent(detail.id);
+  return {
+    event: {
+      detail,
+      drafts,
+      emphasizeNewMatch: drafts.length === 0 && matches.length === 0,
+      matches,
+      playerRecaps: buildHeldEventPlayerRecaps(matches),
+    },
+    freshness: stale ? { kind: "stale", refresh } : { kind: "current" },
+    kind: "ready",
+    navigation: {
+      adjacent: {
+        previous: adjacentDestination(previous, "previous", detail, peers, available),
+        next: adjacentDestination(next, "next", detail, peers, available),
+        disabled: pending || Boolean(error) || !available,
+        status: pending ? "refreshing" : error ? "failed" : available ? "ready" : "unavailable",
+      },
+      currentDateTime: formatNavigationDateTime(detail.heldAt, peers),
+      exportHref: `/exports?heldEventId=${encodedHeldEventId}&format=csv`,
+      manualEntryHref: `/matches/new?heldEventId=${encodedHeldEventId}`,
+      ocrCaptureHref: heldEventOcrCaptureHref(detail.id),
+    },
+    refresh,
+  };
+}
+
+function adjacentDestination(
+  neighbor: HeldEventNeighbor | undefined,
+  direction: "previous" | "next",
+  current: HeldEventDetailResponse,
+  peers: string[],
+  available: boolean,
+): AdjacentDestination {
+  const label = direction === "previous" ? "前の開催" : "次の開催";
+  if (!neighbor) {
+    return {
+      label,
+      description: available
+        ? direction === "previous"
+          ? "最初の開催です"
+          : "最後の開催です"
+        : "行き先を確認できません",
+    };
+  }
+  return {
+    label,
+    description: `${formatNavigationDateTime(neighbor.heldAt, peers)}${neighbor.heldAt === current.heldAt ? `（同日時の${label}）` : ""}`,
+    href: `/held-events/${encodeURIComponent(neighbor.id)}`,
+  };
+}
+
+function compareHeldEventMatches(left: HeldEventMatchResponse, right: HeldEventMatchResponse) {
+  return left.matchNoInEvent - right.matchNoInEvent;
+}
 
 export type HeldEventPlayerRecap = {
   averageRank: number;
@@ -21,9 +164,7 @@ export function buildHeldEventPlayerRecaps(
 ): HeldEventPlayerRecap[] {
   const ranksByMember = new Map<string, number[]>();
 
-  for (const match of matches.toSorted(
-    (left, right) => left.matchNoInEvent - right.matchNoInEvent,
-  )) {
+  for (const match of matches.toSorted(compareHeldEventMatches)) {
     for (const player of match.players ?? []) {
       const ranks = ranksByMember.get(player.memberId) ?? [];
       ranks.push(player.rank);

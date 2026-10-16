@@ -10,7 +10,6 @@ import scala.concurrent.duration.*
 import cats.effect.{Deferred, IO, Resource}
 import cats.syntax.all.*
 import doobie.implicits.*
-import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.{
   PostgresMatchDraftCancellationRepository,

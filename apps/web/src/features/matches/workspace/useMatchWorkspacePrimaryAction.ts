@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 
 import type { MatchFormValues, WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
-import { validateMatchForm } from "@/features/matches/workspace/matchFormValidation";
+import { prepareMatchWorkspacePrimaryAction } from "@/features/matches/workspace/matchFormValidation";
 
 export function useMatchWorkspacePrimaryAction(input: {
   mode: WorkspaceMode;
@@ -23,17 +23,17 @@ export function useMatchWorkspacePrimaryAction(input: {
   } = input;
 
   return useCallback(() => {
-    const nextValidation = validateMatchForm(values);
-    if (!nextValidation.success) {
+    const action = prepareMatchWorkspacePrimaryAction(mode, values);
+    if (action.kind === "invalid") {
       setShowValidationErrors(true);
-      setValidationMessage(nextValidation.firstMessage ?? "入力内容に不足があります");
-      onValidationFailure(nextValidation.firstPath ?? "form");
+      setValidationMessage(action.message);
+      onValidationFailure(action.path);
       return;
     }
     setShowValidationErrors(false);
     setValidationMessage("");
-    if (mode === "edit") {
-      update(values);
+    if (action.kind === "update") {
+      update(action.values);
       return;
     }
     setConfirmOpen(true);

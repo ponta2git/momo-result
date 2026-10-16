@@ -1,12 +1,16 @@
 import { confirmedDraftDestination } from "@/features/matches/confirmedDraftNavigation";
 import type { MatchFormValues, WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
+import { toSourceImageDescriptor } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type {
   GameTitleResponse,
   MapMasterResponse,
   SeasonMasterResponse,
 } from "@/shared/api/masters";
-import type { MatchDraftDetailResponse } from "@/shared/api/matchDrafts";
+import type {
+  MatchDraftDetailResponse,
+  MatchDraftSourceImageResponse,
+} from "@/shared/api/matchDrafts";
 import { isCancelableDraftStatus } from "@/shared/domain/draftStatus";
 
 const noGameTitles: GameTitleResponse[] = [];
@@ -19,9 +23,11 @@ export function buildMatchWorkspaceView({
   gameTitleItems,
   heldEventItems,
   mapItems,
+  matchId,
   mode,
   reviewStatus,
   seasonItems,
+  sourceImages,
   useSampleDrafts,
   values,
 }: {
@@ -29,9 +35,11 @@ export function buildMatchWorkspaceView({
   gameTitleItems: GameTitleResponse[] | undefined;
   heldEventItems: HeldEventResponse[] | undefined;
   mapItems: MapMasterResponse[] | undefined;
+  matchId: string | undefined;
   mode: WorkspaceMode;
   reviewStatus: string | undefined;
   seasonItems: SeasonMasterResponse[] | undefined;
+  sourceImages: MatchDraftSourceImageResponse[] | undefined;
   useSampleDrafts: boolean;
   values: MatchFormValues;
 }) {
@@ -44,6 +52,12 @@ export function buildMatchWorkspaceView({
     mode !== "edit" && !useSampleDrafts && Boolean(confirmedDraftDestination(draftDetail));
 
   return {
+    exitHref:
+      mode === "edit" && matchId
+        ? `/matches/${encodeURIComponent(matchId)}`
+        : values.heldEventId
+          ? `/held-events/${encodeURIComponent(values.heldEventId)}`
+          : "/matches",
     canCancelDraft:
       mode !== "edit" &&
       !useSampleDrafts &&
@@ -57,9 +71,29 @@ export function buildMatchWorkspaceView({
     mapItems: maps,
     matchDraftIdForImages,
     seasonItems: seasons,
+    sourceImages: matchDraftIdForImages
+      ? (sourceImages ?? []).flatMap((item) => {
+          const descriptor = toSourceImageDescriptor(matchDraftIdForImages, item);
+          return descriptor ? [descriptor] : [];
+        })
+      : [],
     selectedGameTitle: gameTitles.find((item) => item.id === values.gameTitleId),
     selectedHeldEvent: heldEvents.find((event) => event.id === values.heldEventId),
     selectedMap: maps.find((item) => item.id === values.mapMasterId),
     selectedSeason: seasons.find((item) => item.id === values.seasonMasterId),
   };
+}
+
+export function isMatchWorkspaceLoading(input: {
+  confirmedDraftRedirecting: boolean;
+  confirmedDraftLoaded: boolean;
+  waitingForData: boolean;
+  reviewBlocked: boolean;
+  initializationFailed: boolean;
+}) {
+  return (
+    input.confirmedDraftRedirecting ||
+    input.confirmedDraftLoaded ||
+    (input.waitingForData && !input.reviewBlocked && !input.initializationFailed)
+  );
 }

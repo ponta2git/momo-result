@@ -36,7 +36,6 @@ export function useMatchWorkspaceLocalState() {
     cancelDraftConfirmOpen,
     confirmOpen,
     dispatch,
-    emptyFormFactory,
     eventDraftValue,
     nowIsoFactory,
     operationError,

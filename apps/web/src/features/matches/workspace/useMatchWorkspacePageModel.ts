@@ -9,8 +9,10 @@ import type {
 } from "@/features/matches/workspace/matchFormTypes";
 import { toMatchWorkspaceOperationErrorView } from "@/features/matches/workspace/matchWorkspaceOperationError";
 import type { MatchWorkspacePageModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
-import { buildMatchWorkspaceView } from "@/features/matches/workspace/matchWorkspaceView";
-import { toSourceImageDescriptor } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
+import {
+  buildMatchWorkspaceView,
+  isMatchWorkspaceLoading,
+} from "@/features/matches/workspace/matchWorkspaceView";
 import { useMatchWorkspaceFormHandlers } from "@/features/matches/workspace/useMatchWorkspaceFormHandlers";
 import { useMatchWorkspaceInit } from "@/features/matches/workspace/useMatchWorkspaceInit";
 import { useMatchWorkspaceLifecycleEffects } from "@/features/matches/workspace/useMatchWorkspaceLifecycleEffects";
@@ -107,7 +109,6 @@ export function useMatchWorkspacePageModel({
   const initialization = useMatchWorkspaceInit({
     dispatch,
     draftDetail,
-    emptyFormFactory: local.emptyFormFactory,
     heldEventId: state.values.heldEventId,
     heldEvents: heldEventItems,
     matchDetail,
@@ -135,9 +136,11 @@ export function useMatchWorkspacePageModel({
     gameTitleItems,
     heldEventItems,
     mapItems,
+    matchId,
     mode,
     reviewStatus: remoteReview.status,
     seasonItems,
+    sourceImages: initialization.snapshot?.sourceImages,
     useSampleDrafts,
     values: state.values,
   });
@@ -180,13 +183,6 @@ export function useMatchWorkspacePageModel({
     notify,
     saveBeforeNavigate: sessionDraft.saveBeforeNavigate,
   });
-  const sourceImageDraftId = view.matchDraftIdForImages;
-  const sourceImages = sourceImageDraftId
-    ? (initialization.snapshot?.sourceImages ?? []).flatMap((item) => {
-        const descriptor = toSourceImageDescriptor(sourceImageDraftId, item);
-        return descriptor ? [descriptor] : [];
-      })
-    : [];
   const formActions = useMatchWorkspaceFormHandlers({
     createHeldEvent: createEventMutation.mutate,
     dispatch,
@@ -212,18 +208,13 @@ export function useMatchWorkspacePageModel({
     update: mutations.updateMutation.mutate,
     values: state.values,
   });
-  const workspaceLoading =
-    confirmedDraftRedirecting ||
-    view.confirmedDraftLoaded ||
-    (initialization.status === "waiting-for-data" &&
-      !remoteReview.blocked &&
-      !load.initializationFailed);
-  const exitHref =
-    mode === "edit" && matchId
-      ? `/matches/${encodeURIComponent(matchId)}`
-      : state.values.heldEventId
-        ? `/held-events/${encodeURIComponent(state.values.heldEventId)}`
-        : "/matches";
+  const workspaceLoading = isMatchWorkspaceLoading({
+    confirmedDraftRedirecting,
+    confirmedDraftLoaded: view.confirmedDraftLoaded,
+    waitingForData: initialization.status === "waiting-for-data",
+    reviewBlocked: remoteReview.blocked,
+    initializationFailed: load.initializationFailed,
+  });
 
   const busy =
     mutations.isMutating || submitFlow.confirmation.pending || masterNavigation.isPending;
@@ -365,7 +356,7 @@ export function useMatchWorkspacePageModel({
               loading: load.sourceImagesLoading,
               matchDraftId: view.matchDraftIdForImages,
               preferredKind: local.preferredImageKind,
-              sourceImages: sourceImages,
+              sourceImages: view.sourceImages,
               snapshotChanged: initialization.snapshot?.revision !== draftDetail?.updatedAt,
             }
           : null,
@@ -391,7 +382,7 @@ export function useMatchWorkspacePageModel({
       },
       toolbar: {
         exit: {
-          href: exitHref,
+          href: view.exitHref,
           label: mode === "edit" ? "編集をやめる" : "入力をやめる",
         },
         sample: useSampleDrafts,

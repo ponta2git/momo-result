@@ -58,8 +58,13 @@ final class HttpAttemptAdmissionSpec extends MomoCatsEffectSuite with HttpAppTes
         second <- status(app, readGet(uri"/api/game-titles"))
         blocked <- status(app, readGet(uri"/api/held-events"))
         otherAccount <- status(app, readGet(uri"/api/game-titles", "account_otaka"))
-        mutation <- status(app, writePost(uri"/api/held-events",
-          HttpRequestBodies.Matches.createHeldEvent("2024-01-01T00:00:00Z")))
+        mutation <- status(
+          app,
+          writePost(
+            uri"/api/held-events",
+            HttpRequestBodies.Matches.createHeldEvent("2024-01-01T00:00:00Z")
+          )
+        )
       yield
         assertEquals(first, Status.Ok)
         assertEquals(second, Status.Ok)
@@ -93,38 +98,50 @@ final class HttpAttemptAdmissionSpec extends MomoCatsEffectSuite with HttpAppTes
       "/api/exports/matches?format=csv",
     )
     appWith(ResourceLimitsConfig.defaults.copy(readApiRateLimitPerMinute = 0)).use { app =>
-      paths.traverse_(path => status(app, readGet(Uri.unsafeFromString(path))).map { result =>
-        assertEquals(result, Status.TooManyRequests, path)
-      })
+      paths.traverse_(path =>
+        status(app, readGet(Uri.unsafeFromString(path))).map { result =>
+          assertEquals(result, Status.TooManyRequests, path)
+        }
+      )
     }
   }
 
-  test("session mutation attempts precede CSRF and body; unauthenticated requests do not consume them") {
-    sessionApp(ResourceLimitsConfig.defaults.copy(mutationAttemptRateLimitPerMinute = 1)).use { fixture =>
-      for
-        pulled <- IO.ref(0)
-        body = Stream.eval(pulled.update(_ + 1)).drain ++ Stream.emits("invalid JSON".getBytes).covary[IO]
-        request = Request[IO](Method.POST, uri"/api/held-events")
-          .withEntity(Json.obj()).withBodyStream(body)
-        unauthenticated <- status(fixture.app, request)
-        missingCsrf <- status(fixture.app, request.putHeaders(fixture.cookie))
-        blocked <- status(fixture.app, request.putHeaders(fixture.cookie, fixture.csrf))
-        multipart = Request[IO](Method.POST, uri"/api/uploads/images")
-          .putHeaders(fixture.cookie, fixture.csrf,
-            Header.Raw(CIString("Content-Type"), "multipart/form-data; boundary=attempt-boundary"))
-          .withBodyStream(Stream.eval(pulled.update(_ + 1)).drain ++ Stream.emits(
-            "--attempt-boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"test.png\"\r\nContent-Type: image/png\r\n\r\nimage\r\n--attempt-boundary--\r\n".getBytes
-          ).covary[IO])
-        blockedUpload <- status(fixture.app, multipart)
-        pulls <- pulled.get
-        read <- status(fixture.app, Request[IO](Method.GET, uri"/api/game-titles").putHeaders(fixture.cookie))
-      yield
-        assertEquals(unauthenticated, Status.Unauthorized)
-        assertEquals(missingCsrf, Status.Forbidden)
-        assertEquals(blocked, Status.TooManyRequests)
-        assertEquals(blockedUpload, Status.TooManyRequests)
-        assertEquals(pulls, 0)
-        assertEquals(read, Status.Ok)
+  test(
+    "session mutation attempts precede CSRF and body; unauthenticated requests do not consume them"
+  ) {
+    sessionApp(ResourceLimitsConfig.defaults.copy(mutationAttemptRateLimitPerMinute = 1)).use {
+      fixture =>
+        for
+          pulled <- IO.ref(0)
+          body = Stream.eval(pulled.update(_ + 1)).drain ++
+            Stream.emits("invalid JSON".getBytes).covary[IO]
+          request = Request[IO](Method.POST, uri"/api/held-events")
+            .withEntity(Json.obj()).withBodyStream(body)
+          unauthenticated <- status(fixture.app, request)
+          missingCsrf <- status(fixture.app, request.putHeaders(fixture.cookie))
+          blocked <- status(fixture.app, request.putHeaders(fixture.cookie, fixture.csrf))
+          multipart = Request[IO](Method.POST, uri"/api/uploads/images")
+            .putHeaders(
+              fixture.cookie,
+              fixture.csrf,
+              Header.Raw(CIString("Content-Type"), "multipart/form-data; boundary=attempt-boundary")
+            )
+            .withBodyStream(Stream.eval(pulled.update(_ + 1)).drain ++ Stream.emits(
+              "--attempt-boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"test.png\"\r\nContent-Type: image/png\r\n\r\nimage\r\n--attempt-boundary--\r\n".getBytes
+            ).covary[IO])
+          blockedUpload <- status(fixture.app, multipart)
+          pulls <- pulled.get
+          read <- status(
+            fixture.app,
+            Request[IO](Method.GET, uri"/api/game-titles").putHeaders(fixture.cookie)
+          )
+        yield
+          assertEquals(unauthenticated, Status.Unauthorized)
+          assertEquals(missingCsrf, Status.Forbidden)
+          assertEquals(blocked, Status.TooManyRequests)
+          assertEquals(blockedUpload, Status.TooManyRequests)
+          assertEquals(pulls, 0)
+          assertEquals(read, Status.Ok)
     }
   }
 
@@ -149,8 +166,13 @@ final class HttpAttemptAdmissionSpec extends MomoCatsEffectSuite with HttpAppTes
         .withBodyStream(Stream.emits("{".getBytes).covary[IO])
       for
         invalid <- status(app, malformed)
-        valid <- status(app, writePost(uri"/api/held-events",
-          HttpRequestBodies.Matches.createHeldEvent("2024-01-01T00:00:00Z")))
+        valid <- status(
+          app,
+          writePost(
+            uri"/api/held-events",
+            HttpRequestBodies.Matches.createHeldEvent("2024-01-01T00:00:00Z")
+          )
+        )
         next <- status(app, malformed)
       yield
         assertEquals(invalid, Status.BadRequest)
@@ -164,13 +186,22 @@ final class HttpAttemptAdmissionSpec extends MomoCatsEffectSuite with HttpAppTes
       mutationAttemptRateLimitPerMinute = 4,
       mutationRateLimitPerMinute = 1,
     )).use { app =>
-      val request = writePost(uri"/api/held-events",
-        HttpRequestBodies.Matches.createHeldEvent("2024-01-01T00:00:00Z"), Some("attempt-replay"))
+      val request = writePost(
+        uri"/api/held-events",
+        HttpRequestBodies.Matches.createHeldEvent("2024-01-01T00:00:00Z"),
+        Some("attempt-replay")
+      )
       for
         first <- app.run(request)
         firstBody <- first.as[Json]
-        fresh <- status(app, writePost(uri"/api/held-events",
-          HttpRequestBodies.Matches.createHeldEvent("2024-02-01T00:00:00Z"), Some("attempt-new")))
+        fresh <- status(
+          app,
+          writePost(
+            uri"/api/held-events",
+            HttpRequestBodies.Matches.createHeldEvent("2024-02-01T00:00:00Z"),
+            Some("attempt-new")
+          )
+        )
         replay <- app.run(request)
         replayBody <- replay.as[Json]
         replayAgain <- status(app, request)
@@ -185,19 +216,34 @@ final class HttpAttemptAdmissionSpec extends MomoCatsEffectSuite with HttpAppTes
     }
   }
 
-  test("auth session operations have their own shared account budget and logout checks it before CSRF") {
+  test(
+    "auth session operations have their own shared account budget and logout checks it before CSRF"
+  ) {
     sessionApp(ResourceLimitsConfig.defaults.copy(
       readApiRateLimitPerMinute = 0,
       mutationAttemptRateLimitPerMinute = 0,
       authSessionRateLimitPerMinute = 2,
     )).use { fixture =>
       for
-        read <- status(fixture.app, Request[IO](Method.GET, uri"/api/game-titles").putHeaders(fixture.cookie))
-        me <- status(fixture.app, Request[IO](Method.GET, uri"/api/auth/me").putHeaders(fixture.cookie))
-        missingCsrf <- status(fixture.app, Request[IO](Method.POST, uri"/api/auth/logout").putHeaders(fixture.cookie))
-        blocked <- status(fixture.app, Request[IO](Method.POST, uri"/api/auth/logout").putHeaders(fixture.cookie))
+        read <- status(
+          fixture.app,
+          Request[IO](Method.GET, uri"/api/game-titles").putHeaders(fixture.cookie)
+        )
+        me <-
+          status(fixture.app, Request[IO](Method.GET, uri"/api/auth/me").putHeaders(fixture.cookie))
+        missingCsrf <- status(
+          fixture.app,
+          Request[IO](Method.POST, uri"/api/auth/logout").putHeaders(fixture.cookie)
+        )
+        blocked <- status(
+          fixture.app,
+          Request[IO](Method.POST, uri"/api/auth/logout").putHeaders(fixture.cookie)
+        )
         publicHealth <- status(fixture.app, Request[IO](Method.GET, uri"/healthz"))
-        details <- status(fixture.app, Request[IO](Method.GET, uri"/healthz/details").putHeaders(fixture.cookie))
+        details <- status(
+          fixture.app,
+          Request[IO](Method.GET, uri"/healthz/details").putHeaders(fixture.cookie)
+        )
       yield
         assertEquals(read, Status.TooManyRequests)
         assertEquals(me, Status.Ok)
@@ -215,21 +261,28 @@ final class HttpAttemptAdmissionSpec extends MomoCatsEffectSuite with HttpAppTes
       authSessionRateLimitPerMinute = 1,
     )).use { fixture =>
       for
-        loggedOut <- status(fixture.app, Request[IO](Method.POST, uri"/api/auth/logout")
-          .putHeaders(fixture.cookie, fixture.csrf))
-        me <- status(fixture.app, Request[IO](Method.GET, uri"/api/auth/me").putHeaders(fixture.cookie))
+        loggedOut <- status(
+          fixture.app,
+          Request[IO](Method.POST, uri"/api/auth/logout")
+            .putHeaders(fixture.cookie, fixture.csrf)
+        )
+        me <-
+          status(fixture.app, Request[IO](Method.GET, uri"/api/auth/me").putHeaders(fixture.cookie))
       yield
         assertEquals(loggedOut, Status.NoContent)
         assertEquals(me, Status.Unauthorized)
     }
   }
 
-  test("OCR submission replay skips fresh admission but conflicting and new requests remain guarded") {
+  test(
+    "OCR submission replay skips fresh admission but conflicting and new requests remain guarded"
+  ) {
     appWith(ResourceLimitsConfig.defaults.copy(ocrJobCreateRateLimitPerMinute = 1)).use { app =>
       val id = java.util.UUID.randomUUID().toString
       val uri = Uri.unsafeFromString(s"/api/ocr-submissions/$id")
       for
-        draft <- app.run(writePost(uri"/api/match-drafts", HttpRequestBodies.Matches.emptyMatchDraft))
+        draft <-
+          app.run(writePost(uri"/api/match-drafts", HttpRequestBodies.Matches.emptyMatchDraft))
         draftBody <- draft.as[Json]
         draftId = HttpAssertions.jsonField[String](draftBody, "matchDraftId")
         body = Json.obj(
@@ -246,12 +299,21 @@ final class HttpAttemptAdmissionSpec extends MomoCatsEffectSuite with HttpAppTes
         firstBody <- first.as[Json]
         replay <- app.run(request)
         replayBody <- replay.as[Json]
-        conflict <- status(app, writeRequest(Method.PUT, uri).withEntity(
-          body.deepMerge(Json.obj("matchDraftId" -> Json.fromString("different-draft")))))
+        conflict <- status(
+          app,
+          writeRequest(Method.PUT, uri).withEntity(
+            body.deepMerge(Json.obj("matchDraftId" -> Json.fromString("different-draft")))
+          )
+        )
         otherAccount <- status(app, writeRequest(Method.PUT, uri, "account_otaka").withEntity(body))
-        fresh <- status(app, writeRequest(Method.PUT,
-          Uri.unsafeFromString(s"/api/ocr-submissions/${java.util.UUID.randomUUID()}"))
-          .withEntity(body))
+        fresh <- status(
+          app,
+          writeRequest(
+            Method.PUT,
+            Uri.unsafeFromString(s"/api/ocr-submissions/${java.util.UUID.randomUUID()}")
+          )
+            .withEntity(body)
+        )
       yield
         assertEquals(first.status, Status.Ok)
         assertEquals(replay.status, Status.Ok)

@@ -19,9 +19,17 @@ final class OcrSubmissionsSpec extends MomoCatsEffectSuite:
     List(OcrSubmissionMember(ScreenType.TotalAssets, "a" * 64, "b" * 64, 1)),
   )
   private val createdAt = Instant.parse("2024-01-01T00:00:00Z")
-  private val saved = OcrSubmission(command.id, owner, command.matchDraftId, command.hints,
-    "settled", createdAt.plusSeconds(OcrSubmissions.AdmissionSeconds), createdAt,
-    Some(createdAt.plusSeconds(30)), command.members.map(_.copy(status = "failed")))
+  private val saved = OcrSubmission(
+    command.id,
+    owner,
+    command.matchDraftId,
+    command.hints,
+    "settled",
+    createdAt.plusSeconds(OcrSubmissions.AdmissionSeconds),
+    createdAt,
+    Some(createdAt.plusSeconds(30)),
+    command.members.map(_.copy(status = "failed"))
+  )
 
   private val repository = new OcrSubmissionsRepository[IO]:
     def find(id: String, account: AccountId): IO[Option[OcrSubmission]] =
@@ -35,7 +43,9 @@ final class OcrSubmissionsSpec extends MomoCatsEffectSuite:
   private val mustNotAdmit: IO[Either[AppError, Unit]] =
     IO.raiseError(new IllegalStateException("existing requests must not consume admission quota"))
 
-  test("replaying an expired settled submission preserves its deadline and outcomes without admission") {
+  test(
+    "replaying an expired settled submission preserves its deadline and outcomes without admission"
+  ) {
     service.put(command, owner, mustNotAdmit).map(result => assertEquals(result, Right(saved)))
   }
 

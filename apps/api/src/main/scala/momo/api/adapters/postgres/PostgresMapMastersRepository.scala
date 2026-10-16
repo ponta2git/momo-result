@@ -47,7 +47,7 @@ object PostgresMapMasters:
     override def find(id: MapMasterId): ConnectionIO[Option[MapMaster]] =
       val nameLimit = PostgresReadBudget.NameCodePoints
       PostgresReadBudget.guardedRows[MapMasterRow](
-        sql"""SELECT char_length(name) <= $nameLimit,
+        fr"""SELECT char_length(name) <= $nameLimit,
           id, game_title_id, LEFT(name, $nameLimit), display_order, created_at FROM map_masters WHERE id = $id""",
         1,
         "Map detail",

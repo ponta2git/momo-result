@@ -821,7 +821,13 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
         MatchFixtures.defaultPlayerInputs(MatchFixtures.DbMemberValues),
       )
       result <- usecase.run(rec.id, command).background.use { completed =>
-        ready.get *> Resource.fromAutoCloseable(IO.blocking(dataSource.getConnection))
+        val awaitReady = IO.race(ready.get, completed.flatMap(_.embedNever)).flatMap {
+          case Left(_) => IO.unit
+          case Right(result) => IO.raiseError(new AssertionError(
+              s"update completed before reaching the concurrent-write barrier: $result"
+            ))
+        }
+        awaitReady *> Resource.fromAutoCloseable(IO.blocking(dataSource.getConnection))
           .use { connection =>
             val xa = Transactor.fromConnection[IO](connection, None)
             (for
@@ -843,7 +849,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
               _ <- awaitBackendBlockedBy(blocker)
               _ <- IO.blocking(connection.commit())
               saved <- completed.flatMap(_.embedNever)
-            yield saved).onError(_ => IO.blocking(connection.rollback()))
+            yield saved).guarantee(IO.blocking(connection.rollback()))
           }
       }
       persisted <- matches.find(rec.id)

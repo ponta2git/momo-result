@@ -47,7 +47,7 @@ object PostgresSeasonMasters:
     override def find(id: SeasonMasterId): ConnectionIO[Option[SeasonMaster]] =
       val nameLimit = PostgresReadBudget.NameCodePoints
       PostgresReadBudget.guardedRows[SeasonMasterRow](
-        sql"""SELECT char_length(name) <= $nameLimit,
+        fr"""SELECT char_length(name) <= $nameLimit,
           id, game_title_id, LEFT(name, $nameLimit), display_order, created_at FROM season_masters WHERE id = $id""",
         1,
         "Season detail",

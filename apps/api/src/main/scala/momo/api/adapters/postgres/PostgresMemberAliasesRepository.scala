@@ -51,7 +51,7 @@ object PostgresMemberAliases:
     override def find(id: MemberAliasId): ConnectionIO[Option[MemberAlias]] =
       val nameLimit = PostgresReadBudget.NameCodePoints
       PostgresReadBudget.guardedRows[MemberAliasRow](
-        sql"""SELECT char_length(alias) <= $nameLimit,
+        fr"""SELECT char_length(alias) <= $nameLimit,
           id, member_id, LEFT(alias, $nameLimit), created_at FROM member_aliases WHERE id = $id""",
         1,
         "Member alias detail",

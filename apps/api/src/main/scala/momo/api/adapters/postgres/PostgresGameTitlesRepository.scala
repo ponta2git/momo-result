@@ -49,7 +49,7 @@ object PostgresGameTitles:
       val nameLimit = PostgresReadBudget.NameCodePoints
       val keyLimit = PostgresReadBudget.KeyCodePoints
       PostgresReadBudget.guardedRows[GameTitleRow](
-        sql"""SELECT char_length(name) <= $nameLimit AND char_length(layout_family) <= $keyLimit,
+        fr"""SELECT char_length(name) <= $nameLimit AND char_length(layout_family) <= $keyLimit,
           id, LEFT(name, $nameLimit), LEFT(layout_family, $keyLimit), display_order, created_at FROM game_titles WHERE id = $id""",
         1,
         "Game-title detail",

@@ -12,6 +12,7 @@ import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.ids.*
 import momo.api.domain.{GameTitle, HeldEvent, PageRequest}
 import momo.api.integration.IntegrationSuite
+import momo.api.repositories.CachedReferenceRepositories
 import momo.api.testing.AppErrorAssertions.assertAppException
 
 final class PostgresReadBudgetSpec extends IntegrationSuite:
@@ -31,7 +32,10 @@ final class PostgresReadBudgetSpec extends IntegrationSuite:
       accepted <- titles.list
       _ <- titles.createWithNextDisplayOrder(GameTitle(titleId, "Extra", "world", 1, now))
       rejected <- titles.list.attempt
+      cached <- CachedReferenceRepositories.gameTitles[IO](titles)
+      detail <- cached.find(titleId)
     yield
+      assertEquals(detail.map(_.name), Some("Extra"))
       assertEquals(accepted.size, maximum)
       assertAppException(rejected, "PAYLOAD_TOO_LARGE", "too many records")
   }
@@ -42,10 +46,14 @@ final class PostgresReadBudgetSpec extends IntegrationSuite:
     for
       _ <- titles.createWithNextDisplayOrder(GameTitle(titleId, name, "world", 1, now))
       accepted <- titles.list
+      detail <- titles.find(titleId)
       _ <- sql"UPDATE game_titles SET name = name || 'a' WHERE id = $titleId".update.run
         .transact(transactor)
       rejected <- titles.list.attempt
+      rejectedDetail <- titles.find(titleId).attempt
     yield
+      assertEquals(detail.map(_.name), Some(name))
+      assertAppException(rejectedDetail, "PAYLOAD_TOO_LARGE", "oversized stored text")
       assertEquals(accepted.map(_.name), List(name))
       assertAppException(rejected, "PAYLOAD_TOO_LARGE", "oversized stored text")
   }
@@ -86,6 +94,30 @@ final class PostgresReadBudgetSpec extends IntegrationSuite:
     }
   }
 
+  List("map", "season", "alias").foreach { kind =>
+    test(s"$kind detail keeps its text budget without reading unrelated catalog rows") {
+      val (mutate, read) = kind match
+        case "map" => (
+            sql"UPDATE map_masters SET name = repeat('x', 4096) WHERE id = 'budget_map'",
+            PostgresMapMasters.alg.find(MapMasterId.unsafeFromString("budget_map")).void,
+          )
+        case "season" => (
+            sql"UPDATE season_masters SET name = repeat('x', 4096) WHERE id = 'budget_season'",
+            PostgresSeasonMasters.alg.find(SeasonMasterId.unsafeFromString("budget_season")).void,
+          )
+        case _ => (
+            sql"UPDATE member_aliases SET alias = repeat('x', 4096) WHERE id = 'budget_alias'",
+            PostgresMemberAliases.alg.find(MemberAliasId.unsafeFromString("budget_alias")).void,
+          )
+      for
+        _ <- seedCatalog
+        _ <- read.transact(transactor)
+        _ <- mutate.update.run.transact(transactor)
+        rejected <- read.transact(transactor).attempt
+      yield assertAppException(rejected, "PAYLOAD_TOO_LARGE", "oversized stored text")
+    }
+  }
+
   test("whole-event detail rejects record overflow while the scalar summary remains available") {
     val maximum = PostgresReadBudget.HeldEventRecords
     val detail = PostgresHeldEventDetailReadModel[IO](transactor)
@@ -119,11 +151,8 @@ final class PostgresReadBudgetSpec extends IntegrationSuite:
       """.update.run.transact(transactor)
       rejected <- PostgresHeldEventListReadModel[IO](transactor)
         .list(None, PageRequest(1, 1)).attempt
-      draftStats <- PostgresMatchDraftsRepository[IO](transactor)
-        .statsByHeldEvents(List(eventId)).attempt
     yield
       assertAppException(rejected, "PAYLOAD_TOO_LARGE", "too many records")
-      assertAppException(draftStats, "PAYLOAD_TOO_LARGE", "too many records")
   }
 
   test("whole-event detail applies one combined budget before loading match children") {

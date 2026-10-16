@@ -23,9 +23,6 @@ object PostgresSeasonMasters:
       createdAt: Instant,
   )
 
-  private val selectAll =
-    fr"SELECT id, game_title_id, name, display_order, created_at FROM season_masters"
-
   private def fromRow(row: SeasonMasterRow): SeasonMaster = SeasonMaster(
     id = row.id,
     gameTitleId = row.gameTitleId,
@@ -48,7 +45,13 @@ object PostgresSeasonMasters:
       ).map(_.map(fromRow))
 
     override def find(id: SeasonMasterId): ConnectionIO[Option[SeasonMaster]] =
-      (selectAll ++ fr"WHERE id = $id").query[SeasonMasterRow].option.map(_.map(fromRow))
+      val nameLimit = PostgresReadBudget.NameCodePoints
+      PostgresReadBudget.guardedRows[SeasonMasterRow](
+        sql"""SELECT char_length(name) <= $nameLimit,
+          id, game_title_id, LEFT(name, $nameLimit), display_order, created_at FROM season_masters WHERE id = $id""",
+        1,
+        "Season detail",
+      ).map(_.headOption.map(fromRow))
 
     override def createWithNextDisplayOrder(season: SeasonMaster): ConnectionIO[SeasonMaster] =
       val lockKey = s"momo:season_masters:${season.gameTitleId.value}:display_order"

@@ -28,8 +28,6 @@ object PostgresMemberAliases:
       createdAt: Instant,
   )
 
-  private val selectAll = fr"SELECT id, member_id, alias, created_at FROM member_aliases"
-
   private def fromRow(row: MemberAliasRow): MemberAlias = MemberAlias(
     id = row.id,
     memberId = row.memberId,
@@ -51,7 +49,13 @@ object PostgresMemberAliases:
       ).map(_.map(fromRow))
 
     override def find(id: MemberAliasId): ConnectionIO[Option[MemberAlias]] =
-      (selectAll ++ fr"WHERE id = $id").query[MemberAliasRow].option.map(_.map(fromRow))
+      val nameLimit = PostgresReadBudget.NameCodePoints
+      PostgresReadBudget.guardedRows[MemberAliasRow](
+        sql"""SELECT char_length(alias) <= $nameLimit,
+          id, member_id, LEFT(alias, $nameLimit), created_at FROM member_aliases WHERE id = $id""",
+        1,
+        "Member alias detail",
+      ).map(_.headOption.map(fromRow))
 
     override def create(alias: MemberAlias): ConnectionIO[Unit] = (for
       _ <- lockAliasWrites

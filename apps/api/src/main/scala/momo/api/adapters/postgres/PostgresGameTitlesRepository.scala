@@ -22,9 +22,6 @@ object PostgresGameTitles:
       createdAt: Instant,
   )
 
-  private val selectAll =
-    fr"SELECT id, name, layout_family, display_order, created_at FROM game_titles"
-
   private def fromRow(row: GameTitleRow): GameTitle = GameTitle(
     id = row.id,
     name = row.name,
@@ -48,7 +45,14 @@ object PostgresGameTitles:
       ).map(_.map(fromRow))
 
     override def find(id: GameTitleId): ConnectionIO[Option[GameTitle]] =
-      (selectAll ++ fr"WHERE id = $id").query[GameTitleRow].option.map(_.map(fromRow))
+      val nameLimit = PostgresReadBudget.NameCodePoints
+      val keyLimit = PostgresReadBudget.KeyCodePoints
+      PostgresReadBudget.guardedRows[GameTitleRow](
+        sql"""SELECT char_length(name) <= $nameLimit AND char_length(layout_family) <= $keyLimit,
+          id, LEFT(name, $nameLimit), LEFT(layout_family, $keyLimit), display_order, created_at FROM game_titles WHERE id = $id""",
+        1,
+        "Game-title detail",
+      ).map(_.headOption.map(fromRow))
 
     override def createWithNextDisplayOrder(title: GameTitle): ConnectionIO[GameTitle] =
       val lockKey = "momo:game_titles:display_order"

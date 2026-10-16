@@ -23,9 +23,6 @@ object PostgresMapMasters:
       createdAt: Instant,
   )
 
-  private val selectAll =
-    fr"SELECT id, game_title_id, name, display_order, created_at FROM map_masters"
-
   private def fromRow(row: MapMasterRow): MapMaster = MapMaster(
     id = row.id,
     gameTitleId = row.gameTitleId,
@@ -48,7 +45,13 @@ object PostgresMapMasters:
       ).map(_.map(fromRow))
 
     override def find(id: MapMasterId): ConnectionIO[Option[MapMaster]] =
-      (selectAll ++ fr"WHERE id = $id").query[MapMasterRow].option.map(_.map(fromRow))
+      val nameLimit = PostgresReadBudget.NameCodePoints
+      PostgresReadBudget.guardedRows[MapMasterRow](
+        sql"""SELECT char_length(name) <= $nameLimit,
+          id, game_title_id, LEFT(name, $nameLimit), display_order, created_at FROM map_masters WHERE id = $id""",
+        1,
+        "Map detail",
+      ).map(_.headOption.map(fromRow))
 
     override def createWithNextDisplayOrder(map: MapMaster): ConnectionIO[MapMaster] =
       val lockKey = s"momo:map_masters:${map.gameTitleId.value}:display_order"

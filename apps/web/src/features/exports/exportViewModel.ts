@@ -1,7 +1,13 @@
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
 import type { PaginationState } from "@/shared/lib/pagination";
 
-import type { ExportCandidate, ExportFormat, ExportScope } from "./exportTypes";
+import type {
+  ExportCandidate,
+  ExportDownloadOutcome,
+  ExportFormat,
+  ExportScope,
+} from "./exportTypes";
+import { isExportSelectionReady } from "./exportUrlState";
 import type { ExportUrlState } from "./exportUrlState";
 
 export const exportFormats = [
@@ -233,16 +239,11 @@ export function buildExportViewModel(input: {
   urlState: ExportUrlState;
 }): ExportViewModel {
   const formatLabel = input.urlState.format.toUpperCase();
-  const candidateReady =
-    input.urlState.scope === "all" ||
-    (input.candidate.kind === "ready" &&
-      input.candidate.selectionState === "resolved" &&
-      input.candidate.selectedId.length > 0);
   return {
     actionLabel: `${actionSubject(input.urlState.scope)}を${formatLabel}でダウンロード`,
     candidate: input.candidate,
     candidateRefreshing: input.candidateRefreshing === true,
-    canDownload: !input.isPending && input.urlState.errors.length === 0 && candidateReady,
+    canDownload: !input.isPending && isExportSelectionReady(input.urlState, input.candidate),
     errors: input.urlState.errors,
     format: input.urlState.format,
     formatLabel,
@@ -263,4 +264,22 @@ export function failedResultView(
     kind: "failed",
     title: localized.title,
   };
+}
+
+export function exportDownloadResultView(
+  outcome: ExportDownloadOutcome,
+): ExportDownloadResultView | undefined {
+  if (outcome.kind === "cancelled") return undefined;
+  if (outcome.kind === "download_started") {
+    return {
+      fileName: outcome.fileName,
+      format: outcome.format,
+      kind: "success",
+      startedAt: outcome.startedAt,
+    };
+  }
+  if (outcome.kind === "timeout") {
+    return { detail: outcome.detail, kind: "timeout", title: outcome.title };
+  }
+  return failedResultView(outcome.error);
 }

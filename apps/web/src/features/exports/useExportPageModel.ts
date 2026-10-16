@@ -1,24 +1,12 @@
-import { useEffect, useMemo } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-
 import {
   DEFAULT_EXPORT_SLOW_THRESHOLD_MS,
   DEFAULT_EXPORT_TIMEOUT_MS,
 } from "@/features/exports/exportDownload";
-import type {
-  ExportFormat,
-  ExportMatchesRequest,
-  ExportScope,
-} from "@/features/exports/exportTypes";
-import {
-  buildExportSearchParams,
-  parseExportSearchParams,
-  selectedIdForScope,
-} from "@/features/exports/exportUrlState";
+import type { ExportFormat, ExportScope } from "@/features/exports/exportTypes";
 import { buildExportViewModel } from "@/features/exports/exportViewModel";
 import type { ExportViewModel } from "@/features/exports/exportViewModel";
-import { useExportCandidates } from "@/features/exports/useExportCandidates";
 import { useExportDownload } from "@/features/exports/useExportDownload";
+import { useExportSelection } from "@/features/exports/useExportSelection";
 
 export type ExportPageModelParams = {
   downloadTimeoutMs?: number | undefined;
@@ -50,105 +38,29 @@ export function useExportPageModel({
   downloadTimeoutMs = DEFAULT_EXPORT_TIMEOUT_MS,
   slowThresholdMs = DEFAULT_EXPORT_SLOW_THRESHOLD_MS,
 }: ExportPageModelParams): ExportPageModel {
-  const [searchParams] = useSearchParams();
-  const { hash } = useLocation();
-  const navigate = useNavigate();
-  const serializedSearch = searchParams.toString();
-  const urlState = useMemo(
-    () => parseExportSearchParams(new URLSearchParams(serializedSearch)),
-    [serializedSearch],
-  );
-  const selectedId = selectedIdForScope(urlState, urlState.scope);
-  const candidates = useExportCandidates({ scope: urlState.scope, selectedId });
-  const defaultCandidateId =
-    candidates.view.kind === "ready" ? candidates.view.selectedId : undefined;
-  const requestSelectedId = selectedId || defaultCandidateId;
-  const request: ExportMatchesRequest | undefined =
-    urlState.errors.length === 0 && (urlState.scope === "all" || requestSelectedId)
-      ? {
-          format: urlState.format,
-          scope: urlState.scope,
-          heldEventId: urlState.scope === "heldEvent" ? requestSelectedId : undefined,
-          matchId: urlState.scope === "match" ? requestSelectedId : undefined,
-          seasonMasterId: urlState.scope === "season" ? requestSelectedId : undefined,
-        }
-      : undefined;
+  const selection = useExportSelection();
   const download = useExportDownload({
-    request,
+    request: selection.request,
+    available: selection.available,
     slowThresholdMs,
     timeoutMs: downloadTimeoutMs,
   });
 
-  useEffect(() => {
-    if (
-      urlState.errors.length > 0 ||
-      urlState.scope === "all" ||
-      selectedId ||
-      !defaultCandidateId
-    ) {
-      return;
-    }
-
-    const nextParams = buildExportSearchParams({
-      format: urlState.format,
-      scope: urlState.scope,
-      selectedId: defaultCandidateId,
-    });
-    void navigate({ search: nextParams.toString(), hash }, { replace: true });
-  }, [
-    defaultCandidateId,
-    hash,
-    selectedId,
-    navigate,
-    urlState.errors.length,
-    urlState.format,
-    urlState.scope,
-  ]);
-
-  const updateSearch = (
-    format: ExportFormat,
-    scope: ExportScope,
-    nextSelectedId?: string,
-  ): void => {
-    const nextParams = buildExportSearchParams({ format, scope, selectedId: nextSelectedId });
-    void navigate({ search: nextParams.toString(), hash }, { replace: true });
-  };
   const view = buildExportViewModel({
-    candidate: candidates.view,
-    candidateRefreshing: candidates.refreshing,
+    candidate: selection.candidateView,
+    candidateRefreshing: selection.candidateRefreshing,
     isPending: download.pending,
     isSlow: download.slow,
     lastResult: download.result,
-    urlState,
+    urlState: selection.state,
   });
 
   return {
-    candidate: {
-      change: (nextSelectedId) => {
-        if (!candidates.selectCandidate(nextSelectedId)) return;
-        updateSearch(urlState.format, urlState.scope, nextSelectedId);
-      },
-      changePage: candidates.setPage,
-      retryDirectory: candidates.retry,
-      retrySelection: candidates.retrySelectedCandidate,
-      scopeChanging: candidates.scopeChanging,
-    },
-    conditions: {
-      changeFormat: (nextFormat) => updateSearch(nextFormat, urlState.scope, selectedId),
-      changeScope: (nextScope) => {
-        candidates.reset();
-        updateSearch(urlState.format, nextScope);
-      },
-      reset: () => {
-        candidates.reset();
-        updateSearch("csv", "all");
-      },
-    },
+    candidate: selection.candidate,
+    conditions: selection.conditions,
     download: {
       pending: download.pending,
-      start: () => {
-        if (view.canDownload) download.start();
-      },
+      start: download.start,
     },
     view,
   };

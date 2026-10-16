@@ -2,12 +2,14 @@ import { useMutation } from "@tanstack/react-query";
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { downloadExportMatches } from "@/features/exports/exportDownload";
-import type { ExportDownloadOutcome, ExportMatchesRequest } from "@/features/exports/exportTypes";
-import { failedResultView } from "@/features/exports/exportViewModel";
+import type { ExportMatchesRequest } from "@/features/exports/exportTypes";
+import { exportRequestIdentity } from "@/features/exports/exportUrlState";
+import { exportDownloadResultView, failedResultView } from "@/features/exports/exportViewModel";
 import type { ExportDownloadResultView } from "@/features/exports/exportViewModel";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 
 type ExportDownloadOptions = {
+  available: boolean;
   request: ExportMatchesRequest | undefined;
   slowThresholdMs: number;
   timeoutMs: number;
@@ -43,41 +45,14 @@ function clearSlowTimer(attempt: DownloadAttempt) {
   attempt.slowTimer = undefined;
 }
 
-function toResultView(outcome: ExportDownloadOutcome): ExportDownloadResultView | undefined {
-  if (outcome.kind === "cancelled") return undefined;
-  if (outcome.kind === "download_started") {
-    return {
-      fileName: outcome.fileName,
-      format: outcome.format,
-      kind: "success",
-      startedAt: outcome.startedAt,
-    };
-  }
-  if (outcome.kind === "timeout") {
-    return {
-      detail: outcome.detail,
-      kind: "timeout",
-      title: outcome.title,
-    };
-  }
-  return failedResultView(outcome.error);
-}
-
 /** Download effects and progress belong to the selected request, including browser-history changes. */
 export function useExportDownload({
+  available,
   request,
   slowThresholdMs,
   timeoutMs,
 }: ExportDownloadOptions): ExportDownloadWorkflow {
-  const scope = request
-    ? JSON.stringify([
-        request.format,
-        request.scope,
-        request.heldEventId,
-        request.matchId,
-        request.seasonMasterId,
-      ])
-    : "invalid";
+  const scope = exportRequestIdentity(request);
   const activeAttemptRef = useRef<DownloadAttempt | null>(null);
   const [presentation, setPresentation] = useState(() => emptyPresentation(scope));
   if (presentation.scope !== scope) setPresentation(emptyPresentation(scope));
@@ -105,7 +80,9 @@ export function useExportDownload({
       activeAttemptRef.current = null;
       setPresentation({
         pending: false,
-        result: outcome ? toResultView(outcome) : failedResultView(normalizeUnknownApiError(error)),
+        result: outcome
+          ? exportDownloadResultView(outcome)
+          : failedResultView(normalizeUnknownApiError(error)),
         scope: attempt.scope,
         slow: false,
       });
@@ -117,7 +94,7 @@ export function useExportDownload({
     result: presentation.result,
     slow: presentation.slow,
     start: () => {
-      if (!request || activeAttemptRef.current) return;
+      if (!available || !request || activeAttemptRef.current) return;
       const attempt: DownloadAttempt = {
         controller: new AbortController(),
         request,

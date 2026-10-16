@@ -103,6 +103,40 @@ final class MatchDraftLifecycleSpec extends FunSuite:
       MatchDraftStatus.NeedsReview,
     )
 
+  test("confirmation requires each requested OCR reference to match the draft"):
+    import MatchDraftConfirmability.Rejection
+    val ref = Some(OcrDraftId.unsafeFromString("ocr-reference"))
+    val draft = newEditing(MatchDraftStatus.DraftReady).withCommon(_.copy(
+      totalAssetsDraftId = ref,
+      revenueDraftId = ref,
+      incidentLogDraftId = ref,
+    ))
+    assertEquals(MatchDraftConfirmability.validate(draft, ref, ref, ref), Right(()))
+    assertEquals(
+      MatchDraftConfirmability.validate(draft, None, ref, ref),
+      Left(Rejection.TotalAssetsReference),
+    )
+    assertEquals(
+      MatchDraftConfirmability.validate(draft, ref, None, ref),
+      Left(Rejection.RevenueReference),
+    )
+    assertEquals(
+      MatchDraftConfirmability.validate(draft, ref, ref, None),
+      Left(Rejection.IncidentLogReference),
+    )
+
+  test("confirmation rejects running and terminal drafts even with matching references"):
+    val running = newEditing(MatchDraftStatus.OcrRunning)
+    val confirmed =
+      MatchDraft.Confirmed(running.common, MatchId.unsafeFromString("match-confirmed"))
+    val cancelled = MatchDraft.Cancelled(running.common)
+    List(running, confirmed, cancelled).foreach { draft =>
+      assertEquals(
+        MatchDraftConfirmability.validate(draft, None, None, None),
+        Left(MatchDraftConfirmability.Rejection.Status(draft.status)),
+      )
+    }
+
   test("slot accessors expose source images and OCR drafts in screen order"):
     val totalImage = ImageId.unsafeFromString("image-total")
     val revenueImage = ImageId.unsafeFromString("image-revenue")

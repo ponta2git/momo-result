@@ -2,6 +2,7 @@ package momo.api.usecases.common
 
 import cats.syntax.all.*
 
+import momo.api.domain.MatchNoInEvent
 import momo.api.domain.constraints.TextLimits
 import momo.api.errors.AppError
 
@@ -48,3 +49,8 @@ private[usecases] object UseCaseField:
         ),
       )
   }
+
+  def optionalMatchNoInEvent(value: Option[Int]): Either[AppError, Option[MatchNoInEvent]] =
+    value.traverse(number =>
+      MatchNoInEvent.fromInt(number).leftMap(error => AppError.ValidationFailed(error.message))
+    )

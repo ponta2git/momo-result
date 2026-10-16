@@ -68,7 +68,9 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
       updatedAt: Instant,
   ): F[Boolean] = ref.modify { current =>
     current.get(expected.draftId) match
-      case Some(e: MatchDraft.Editable) if MatchDraftConfirmation.from(e) == expected =>
+      case Some(e: MatchDraft.Editable)
+          if momo.api.domain.MatchDraftConfirmability.allows(e.status) &&
+            MatchDraftConfirmation.from(e) == expected =>
         val next = MatchDraft.Confirmed(
           common = e.common.copy(updatedAt = updatedAt),
           confirmedMatchIdValue = confirmedMatchId,

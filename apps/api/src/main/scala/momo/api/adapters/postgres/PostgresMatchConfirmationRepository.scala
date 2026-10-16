@@ -12,12 +12,13 @@ import doobie.enumerated.SqlState
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 import doobie.postgres.sqlstate
+import doobie.util.fragments
 
 import momo.api.adapters.postgres.PostgresMatchInsertOps.insertMatchCascade
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.adapters.postgres.PostgresSeriesAnalysisMutationOps.enqueueMatchMutation
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchDraftStatus, MatchRecord}
+import momo.api.domain.{MatchDraftConfirmability, MatchDraftStatus, MatchRecord}
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{
   MatchConfirmationRepository,
@@ -51,7 +52,8 @@ final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transact
       case None => insert(record, updatedAt).as(MatchConfirmationResult.Confirmed)
       case Some(expected) =>
         for
-          updatedImages <- sql"""
+          updatedImages <-
+          (fr"""
             UPDATE match_drafts SET
               status = ${MatchDraftStatus.Confirmed},
               source_images_retained_until = $updatedAt,
@@ -62,10 +64,9 @@ final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transact
               AND total_assets_draft_id IS NOT DISTINCT FROM ${expected.totalAssetsDraftId}
               AND revenue_draft_id IS NOT DISTINCT FROM ${expected.revenueDraftId}
               AND incident_log_draft_id IS NOT DISTINCT FROM ${expected.incidentLogDraftId}
-              AND status IN (${MatchDraftStatus.DraftReady}, ${MatchDraftStatus
-              .NeedsReview}, ${MatchDraftStatus.OcrFailed})
+              AND """ ++ fragments.in(fr"status", MatchDraftConfirmability.statuses) ++ fr"""
             RETURNING total_assets_image_id, revenue_image_id, incident_log_image_id
-          """.query[ConfirmedDraftSourceImagesRow].option
+          """).query[ConfirmedDraftSourceImagesRow].option
           _ <- updatedImages match
             case Some(images) =>
               PostgresOcrSubmissions.abortForDrafts(List(expected.draftId), updatedAt) *>

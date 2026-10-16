@@ -4,10 +4,9 @@ import java.time.Instant
 
 import cats.Monad
 import cats.data.EitherT
-import cats.syntax.all.*
 
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchDraft, MatchDraftStatus, MatchNoInEvent}
+import momo.api.domain.{MatchDraft, MatchDraftStatus}
 import momo.api.errors.AppError
 import momo.api.repositories.{
   GameTitlesRepository,
@@ -47,7 +46,8 @@ final class CreateMatchDraft[F[_]: Monad](
       createdBy: AccountId,
       playerMemberId: Option[MemberId],
   ): F[Either[AppError, MatchDraft]] = (for
-    matchNoInEvent <- EitherT.fromEither[F](validateMatchNo(command.matchNoInEvent))
+    matchNoInEvent <-
+      EitherT.fromEither[F](UseCaseField.optionalMatchNoInEvent(command.matchNoInEvent))
     layoutFamily <- EitherT
       .fromEither[F](UseCaseField.optionalStableKey("layoutFamily", command.layoutFamily))
     status <- EitherT.fromEither[F](validateInitialStatus(command.status))
@@ -83,12 +83,6 @@ final class CreateMatchDraft[F[_]: Monad](
     )
     _ <- EitherT(matchDrafts.create(draft))
   yield draft).value
-
-  private def validateMatchNo(
-      matchNoInEvent: Option[Int]
-  ): Either[AppError, Option[MatchNoInEvent]] = matchNoInEvent.traverse(value =>
-    MatchNoInEvent.fromInt(value).left.map(err => AppError.ValidationFailed(err.message))
-  )
 
   private def validateInitialStatus(
       status: Option[MatchDraftStatus]

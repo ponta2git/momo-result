@@ -1,6 +1,4 @@
 import { Activity, Play, RefreshCw, RotateCw } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 
 import { PlayerRadarAdministration } from "@/features/seriesAnalysisAdmin/PlayerRadarAdministration";
 import { PlayerRadarHistory } from "@/features/seriesAnalysisAdmin/PlayerRadarHistory";
@@ -17,7 +15,6 @@ import { Button } from "@/shared/ui/actions/Button";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
-import { showToast } from "@/shared/ui/feedback/Toast";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
@@ -26,39 +23,8 @@ import { contentText } from "@/shared/ui/typography";
 
 export function SeriesAnalysisAdminPage() {
   const page = useSeriesAnalysisAdminPageModel();
-  const [allDialog, setAllDialog] = useState({ epoch: page.authorization.adminEpoch, open: false });
-  const allDialogOpen =
-    page.authorization.retainAdmin &&
-    allDialog.epoch === page.authorization.adminEpoch &&
-    allDialog.open;
-  const [searchParams, setSearchParams] = useSearchParams();
-  const requestedTab = searchParams.get("tab");
-  const activeTab =
-    requestedTab === "radar" || requestedTab === "history" ? "radar" : "recalculation";
-  const radarView =
-    requestedTab === "history" || searchParams.get("radarView") === "history"
-      ? "history"
-      : "current";
-  const setActiveTab = (value: string) => {
-    const next = new URLSearchParams(searchParams);
-    next.set("tab", value);
-    setSearchParams(next);
-  };
-  const setRadarView = (value: string) => {
-    const next = new URLSearchParams(searchParams);
-    next.set("tab", "radar");
-    if (value === "history") next.set("radarView", "history");
-    else next.delete("radarView");
-    setSearchParams(next);
-  };
-  const radarVisible = activeTab === "radar" && radarView === "current";
-  const previouslyVisible = useRef(radarVisible);
-  useEffect(() => {
-    if (radarVisible && !previouslyVisible.current) page.actions.refreshRadar();
-    previouslyVisible.current = radarVisible;
-  }, [radarVisible, page.actions]);
-  const recalculationTabRef = useRef<HTMLElement>(null);
-  const applyFocusRef = useRef<HTMLElement | null>(null);
+  const { activeTab, radarView, allDialogOpen, setActiveTab, setRadarView, recalculationTabRef } =
+    page.navigation;
   const { data } = page.resource;
   const { selectedTitle } = page.selection;
   return (
@@ -154,9 +120,7 @@ export function SeriesAnalysisAdminPage() {
                       {page.authorization.retainAdmin ? (
                         <AlertDialog
                           open={allDialogOpen}
-                          onOpenChange={(open) =>
-                            setAllDialog({ epoch: page.authorization.adminEpoch, open })
-                          }
+                          onOpenChange={page.navigation.setAllDialogOpen}
                           confirmDisabled={!page.authorization.canRecalculateAll}
                           confirmLabel="全作品を再計算"
                           description={`${data.titleOptions.length}作品を対象として予約します。実行中の作品は完了後に再計算されます。`}
@@ -225,23 +189,9 @@ export function SeriesAnalysisAdminPage() {
                         key={selectedTitle.gameTitleId}
                         gameTitleId={selectedTitle.gameTitleId}
                         gameTitleName={selectedTitle.gameTitleName}
-                        active={activeTab === "radar" && radarView === "current"}
-                        onApplyAccepted={(operationId) => {
-                          applyFocusRef.current = recalculationTabRef.current;
-                          page.actions.clearRecalculationFeedback();
-                          setActiveTab("recalculation");
-                          recalculationTabRef.current?.focus();
-                          showToast({
-                            id: `radar-apply-accepted:${operationId}`,
-                            title: "採点基準の適用を受け付けました",
-                            description: `${selectedTitle.gameTitleName}の再計算状況を表示しています。`,
-                          });
-                        }}
-                        applyFinalFocus={() => {
-                          const destination = applyFocusRef.current;
-                          applyFocusRef.current = null;
-                          return destination;
-                        }}
+                        active={page.navigation.radarVisible}
+                        onApplyAccepted={page.navigation.onApplyAccepted}
+                        applyFinalFocus={page.navigation.applyFinalFocus}
                       />
                     </div>
                   ) : null}

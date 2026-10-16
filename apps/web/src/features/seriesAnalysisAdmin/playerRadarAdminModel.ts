@@ -1,4 +1,11 @@
 import type { RadarEditingModel } from "@/features/seriesAnalysisAdmin/radarThresholdEditorModel";
+import type { SeriesAnalysisOptionsResponse } from "@/shared/api/seriesAnalysis";
+import type {
+  SeriesPlayerRadarCommand,
+  SeriesPlayerRadarOperation,
+  SeriesPlayerRadarPreview,
+  SeriesPlayerRadarState,
+} from "@/shared/api/seriesPlayerRadar";
 import type {
   PlayerRadarAxisId,
   PlayerRadarBasis,
@@ -107,3 +114,48 @@ export type PlayerRadarAdminModel = {
     resetPreviewFilter: () => void;
   };
 };
+
+export type RadarPreviewScope = {
+  seasonMasterId: string;
+  mapMasterId: string;
+  seasonName: string;
+  mapName: string;
+};
+
+export type RadarAdminResource = {
+  state: SeriesPlayerRadarState | undefined;
+  title: SeriesAnalysisOptionsResponse["titles"][number] | undefined;
+  scope: RadarPreviewScope;
+  preview: SeriesPlayerRadarPreview | undefined;
+  previewFetching: boolean;
+  previewFailed: boolean;
+  stateFetching: boolean;
+  stateFailed: boolean;
+};
+
+export type RadarAdminReceipt = {
+  accepted: SeriesPlayerRadarOperation | undefined;
+  creationAccepted: SeriesPlayerRadarOperation | undefined;
+  submittedRequest: SeriesPlayerRadarCommand | undefined;
+  canCommit: boolean;
+  pending: boolean;
+  creationFailed: boolean;
+};
+
+export type RadarAdminHandlers = {
+  refresh: PlayerRadarAdminAction["run"];
+  generate: PlayerRadarAdminAction["run"];
+  rebuildPreview: PlayerRadarAdminAction["run"];
+  withdraw: PlayerRadarAdminAction["run"];
+  restore: PlayerRadarAdminAction["run"];
+  retry: PlayerRadarAdminAction["run"];
+  checkOperation: PlayerRadarAdminAction["run"];
+} & Pick<
+  PlayerRadarAdminModel["actions"],
+  "apply" | "acknowledge" | "selectSeason" | "selectMap" | "resetPreviewFilter"
+>;
+
+export type RadarEditingHandlers = Pick<
+  RadarEditingModel,
+  "onActiveChange" | "save" | "discard" | "reuseCandidate"
+>;

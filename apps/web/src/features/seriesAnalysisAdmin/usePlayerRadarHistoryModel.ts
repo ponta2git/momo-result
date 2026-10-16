@@ -1,21 +1,36 @@
 import { useQuery } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
 
+import type { SeriesAnalysisAdminNavigation } from "@/features/seriesAnalysisAdmin/seriesAnalysisAdminUrlState";
+import { useSeriesAnalysisAdminLocation } from "@/features/seriesAnalysisAdmin/useSeriesAnalysisAdminLocation";
 import { normalizeDisplayApiError } from "@/shared/api/problemDetails";
 import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
 import {
   playerRadarHistoryQueryOptions,
   playerRadarRevisionQueryOptions,
 } from "@/shared/api/seriesPlayerRadarHistory";
+import type {
+  PlayerRadarRevisionList,
+  PlayerRadarRevisionDetail,
+} from "@/shared/api/seriesPlayerRadarHistory";
 import { useAuthorization } from "@/shared/auth/useAuthorization";
 
 /** History navigation never changes the title or scope of the threshold editor. */
 export function usePlayerRadarHistoryModel() {
   const authorization = useAuthorization();
-  const [params, setParams] = useSearchParams();
-  const gameTitleId = params.get("historyGameTitleId") || undefined;
-  const cursor = params.get("historyCursor") || undefined;
-  const revisionId = params.get("historyRevisionId") || undefined;
+  const location = useSeriesAnalysisAdminLocation();
+  const owner = usePlayerRadarHistory(authorization, location);
+  return {
+    ...location.history,
+    ...historyPresentation(owner),
+    actions: owner.actions,
+  };
+}
+
+function usePlayerRadarHistory(
+  authorization: ReturnType<typeof useAuthorization>,
+  location: ReturnType<typeof useSeriesAnalysisAdminLocation>,
+) {
+  const { gameTitleId, cursor, revisionId } = location.history;
   const listOptions = playerRadarHistoryQueryOptions({ gameTitleId, cursor });
   const detailOptions = playerRadarRevisionQueryOptions(revisionId);
   const list = useQuery({
@@ -28,44 +43,52 @@ export function usePlayerRadarHistoryModel() {
       Boolean(revisionId) && authorization.canRead("operations", detailOptions.queryKey),
   });
   const result = revisionId ? detail : list;
-  const update = (values: Record<string, string | undefined>) => {
-    if (!authorization.begin("operations")) return;
-    const next = new URLSearchParams(params);
-    for (const [key, value] of Object.entries(values)) {
-      if (value) next.set(key, value);
-      else next.delete(key);
-    }
-    setParams(next);
+  const update = (action: SeriesAnalysisAdminNavigation) => {
+    if (authorization.begin("operations")) location.update(action);
   };
   return {
-    gameTitleId,
-    cursor,
-    revisionId,
-    data: authorization.allowed.operations ? list.data : undefined,
-    revision: authorization.allowed.operations ? detail.data : undefined,
-    loading: authorization.auth.isChecking || isInitialQueryLoading(result),
+    allowed: authorization.allowed.operations,
+    checking: authorization.auth.isChecking,
+    list,
+    detail,
+    result,
+    actions: {
+      showList: () => update({ kind: "historyList" }),
+      selectRevision: (value: string) => update({ kind: "historyRevision", value }),
+      selectTitle: (value: string) => update({ kind: "historyTitle", value }),
+      selectCursor: (value: string | undefined) => update({ kind: "historyCursor", value }),
+      refresh: () => {
+        if (authorization.begin("operations")) void result.refetch();
+      },
+    },
+  };
+}
+
+function historyPresentation({
+  allowed,
+  checking,
+  list,
+  detail,
+  result,
+}: {
+  allowed: boolean;
+  checking: boolean;
+  list: { data: PlayerRadarRevisionList | undefined };
+  detail: { data: PlayerRadarRevisionDetail | undefined };
+  result: { data: unknown; error: unknown; isFetching: boolean; isLoading: boolean };
+}) {
+  return {
+    data: allowed ? list.data : undefined,
+    revision: allowed ? detail.data : undefined,
+    loading: checking || isInitialQueryLoading(result),
     refreshing: result.isFetching,
-    disabled: !authorization.allowed.operations,
-    refreshDisabled: !authorization.allowed.operations || result.isFetching,
+    disabled: !allowed,
+    refreshDisabled: !allowed || result.isFetching,
     error: shouldShowQueryError(result)
       ? {
           ...normalizeDisplayApiError(result.error, "改訂履歴を読み込めません"),
           tone: result.data ? ("warning" as const) : ("danger" as const),
         }
       : null,
-    actions: {
-      showList: () => update({ historyRevisionId: undefined }),
-      selectRevision: (value: string) => update({ historyRevisionId: value }),
-      selectTitle: (value: string) =>
-        update({
-          historyGameTitleId: value,
-          historyCursor: undefined,
-          historyRevisionId: undefined,
-        }),
-      selectCursor: (value: string | undefined) => update({ historyCursor: value }),
-      refresh: () => {
-        if (authorization.begin("operations")) void result.refetch();
-      },
-    },
   };
 }

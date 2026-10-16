@@ -64,3 +64,36 @@ final class OcrSubmissionsSpec extends MomoCatsEffectSuite:
     service.put(command, AccountId.unsafeFromString("account-2"), IO.pure(Left(denied)))
       .map(result => assertEquals(result, Left(denied)))
   }
+
+  test("new submission input cannot inject persisted member outcomes") {
+    val invalid = command.copy(members = command.members.map(_.copy(status = "registered")))
+    service.put(invalid, owner, mustNotAdmit).map(result =>
+      assertEquals(result.left.toOption.map(_.code), Some("VALIDATION_FAILED"))
+    )
+  }
+
+  test("request identity ignores member order and outcomes but preserves hint order") {
+    val member = OcrSubmissionMember(ScreenType.Revenue, "c" * 64, "d" * 64, 2)
+    val original = saved.copy(
+      members = command.members :+ member,
+      ocrHints = OcrJobHints.empty.copy(computerPlayerAliases = List("first", "second"))
+    )
+    val reordered = original.copy(
+      members =
+        original.members.reverse.map(_.copy(status = "failed", failureCode = Some("failed"))),
+      status = "aborted",
+      admissionDeadline = createdAt,
+    )
+    assert(original.sameRequest(reordered))
+    assert(!original.sameRequest(reordered.copy(
+      ocrHints = original.ocrHints.copy(computerPlayerAliases = List("second", "first"))
+    )))
+  }
+
+  test("fresh admission excludes the exact deadline and closed members") {
+    val open = saved.copy(status = "open", members = command.members)
+    assert(open.canAdmit(ScreenType.TotalAssets, open.admissionDeadline.minusNanos(1)))
+    assert(!open.canAdmit(ScreenType.TotalAssets, open.admissionDeadline))
+    assert(!open.copy(members = saved.members).canAdmit(ScreenType.TotalAssets, createdAt))
+    assert(!saved.canAdmit(ScreenType.TotalAssets, createdAt))
+  }

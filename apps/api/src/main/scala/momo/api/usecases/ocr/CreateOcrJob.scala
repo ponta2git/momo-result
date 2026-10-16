@@ -90,8 +90,7 @@ final class CreateOcrJob[F[_]: MonadThrow](
     )
     timestamp <- EitherT.liftF(now)
     _ <- EitherT.cond[F](
-      submission.status == "open" && member.status == "pending" &&
-        timestamp.isBefore(submission.admissionDeadline),
+      submission.canAdmit(member.screenType, timestamp),
       (),
       AppError.Conflict("This OCR submission is closed. Start a new reading operation.")
     )

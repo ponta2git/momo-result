@@ -8,7 +8,6 @@ import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
 import momo.api.repositories.OcrSubmissionsRepository
-import momo.api.usecases.ocr.OcrSubmissions
 
 final class InMemoryOcrSubmissionsRepository[F[_]: Async] private (
     state: Ref[F, Map[String, OcrSubmission]],
@@ -35,7 +34,7 @@ final class InMemoryOcrSubmissionsRepository[F[_]: Async] private (
                     draft.status != MatchDraftStatus.Cancelled =>
                 if saved.values.count(s =>
                     s.ownerAccountId == submission.ownerAccountId && s.status == "open"
-                  ) >= OcrSubmissions.OpenLimit
+                  ) >= OcrSubmissionsRepository.OpenLimit
                 then
                   Left(AppError.TooManyRequests("Too many unfinished OCR submissions.")).pure[F]
                 else

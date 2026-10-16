@@ -61,7 +61,24 @@ final case class SourceImageReservation(
 final case class SourceImageQuota(
     unreferencedCountLimit: Int,
     unreferencedBytesLimit: Long,
-) derives CanEqual
+) derives CanEqual:
+  /** Call with usage read inside the same lock/transaction as a new reservation. */
+  def evaluate(
+      fileCount: Long,
+      sizeBytes: Long,
+      incomingBytes: Long
+  ): Option[SourceImageQuotaRejection] =
+    val countAfter = saturatedAdd(fileCount, 1L)
+    val bytesAfter = saturatedAdd(sizeBytes, incomingBytes)
+    if countAfter > unreferencedCountLimit.toLong then
+      Some(SourceImageQuotaRejection.CountExceeded(countAfter, unreferencedCountLimit))
+    else
+      Option.when(bytesAfter > unreferencedBytesLimit)(
+        SourceImageQuotaRejection.BytesExceeded(bytesAfter, unreferencedBytesLimit)
+      )
+
+  private def saturatedAdd(left: Long, right: Long): Long =
+    if right > 0L && left > Long.MaxValue - right then Long.MaxValue else left + right
 
 enum SourceImageQuotaRejection derives CanEqual:
   case CountExceeded(countAfter: Long, limit: Int)

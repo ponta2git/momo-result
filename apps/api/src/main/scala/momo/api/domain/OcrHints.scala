@@ -2,14 +2,14 @@ package momo.api.domain
 
 import momo.api.domain.ids.MemberId
 
-final case class PlayerAliasHint(memberId: MemberId, aliases: List[String])
+final case class PlayerAliasHint(memberId: MemberId, aliases: List[String]) derives CanEqual
 
 final case class OcrJobHints(
     gameTitle: Option[String],
     layoutFamily: Option[String],
     knownPlayerAliases: List[PlayerAliasHint],
     computerPlayerAliases: List[String],
-):
+) derives CanEqual:
   def isEmpty: Boolean = gameTitle.isEmpty && layoutFamily.isEmpty && knownPlayerAliases.isEmpty &&
     computerPlayerAliases.isEmpty
 

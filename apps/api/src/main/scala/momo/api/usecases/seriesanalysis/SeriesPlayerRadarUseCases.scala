@@ -1,12 +1,13 @@
 package momo.api.usecases.seriesanalysis
 
-import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
+import cats.Monad
+import cats.syntax.all.*
 
 import momo.api.domain.*
 import momo.api.domain.ids.{AccountId, GameTitleId}
 import momo.api.errors.AppError
 import momo.api.repositories.SeriesPlayerRadarRepository
+import momo.api.util.Sha256
 
 final class GetSeriesPlayerRadarState[F[_]](repository: SeriesPlayerRadarRepository[F]):
   def run(gameTitleId: GameTitleId): F[Either[AppError, SeriesPlayerRadarDocument]] =
@@ -31,17 +32,21 @@ final class GetSeriesPlayerRadarHistory[F[_]](repository: SeriesPlayerRadarRepos
   def detail(revisionId: String): F[Either[AppError, SeriesPlayerRadarDocument]] =
     repository.radarRevision(revisionId)
 
-final class RequestSeriesPlayerRadarOperation[F[_]](repository: SeriesPlayerRadarRepository[F]):
+final class RequestSeriesPlayerRadarOperation[F[_]: Monad](
+    repository: SeriesPlayerRadarRepository[F]
+):
   def run(
       command: SeriesPlayerRadarCommand,
       requestedBy: AccountId,
       idempotencyKey: String,
-  ): F[Either[AppError, SeriesPlayerRadarOperation]] = repository.requestRadarOperation(
-    command,
-    requestedBy,
-    sha256(idempotencyKey),
-    fingerprint(command),
-  )
+  ): F[Either[AppError, SeriesPlayerRadarOperation]] = command.validated match
+    case Left(error) => error.asLeft[SeriesPlayerRadarOperation].pure[F]
+    case Right(validated) => repository.requestRadarOperation(
+        validated,
+        requestedBy,
+        Sha256.hexUtf8(idempotencyKey),
+        fingerprint(validated),
+      )
 
   private def fingerprint(command: SeriesPlayerRadarCommand): String =
     val fields = List(
@@ -63,7 +68,4 @@ final class RequestSeriesPlayerRadarOperation[F[_]](repository: SeriesPlayerRada
            ).mkString("|")),
          )
        else Nil)
-    sha256(fields.map(_.fold("-")(value => s"${value.length}:$value")).mkString("|"))
-
-  private def sha256(value: String): String = MessageDigest.getInstance("SHA-256")
-    .digest(value.getBytes(StandardCharsets.UTF_8)).map(byte => f"${byte & 0xff}%02x").mkString
+    Sha256.hexUtf8(fields.map(_.fold("-")(value => s"${value.length}:$value")).mkString("|"))

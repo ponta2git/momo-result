@@ -174,6 +174,29 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         active.map(_.calculation.map(value => value.status -> value.trigger)),
         Right(Some("queued" -> "algorithm_update"))
       )
+      assertEquals(active.map(_.calculation.flatMap(_.finishedAt)), Right(None))
+
+  test("status chooses the latest terminal completion with a stable job-id tie break"):
+    for
+      _ <- seedTitle
+      _ <- sql"""
+        INSERT INTO series_analysis_jobs (
+          id, game_title_id, input_revision, algorithm_version, artifact_schema_version,
+          status, trigger, requested_at, finished_at
+        ) VALUES
+          ('job-terminal-a', $titleId, 0, 'series-analysis-v7', 6,
+           'succeeded', 'match_mutation', $now, $now),
+          ('job-terminal-b', $titleId, 0, 'series-analysis-v7', 6,
+           'failed', 'manual', $now, $now),
+          ('job-terminal-z', $titleId, 0, 'series-analysis-v7', 6,
+           'timed_out', 'algorithm_update', $now, ${now.minusSeconds(1)})
+      """.update.run.transact(transactor)
+      repo <- repository
+      status <- repo.status(titleId)
+    yield assertEquals(
+      status.map(_.calculation.map(value => value.status -> value.trigger)),
+      Right(Some("failed" -> "manual")),
+    )
 
   test("admin history keeps each job's coalesced manual requests separate"):
     val otherTitleId = GameTitleId.unsafeFromString("title-other-audit")
@@ -741,6 +764,50 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         expired,
         Left(AppError.AnalysisArtifactExpired()),
       )
+
+  test("chunk display metadata uses one read-only repeatable-read transaction"):
+    val payload = Files.readAllBytes(
+      repositoryFile("docs/schemas/fixtures/series-analysis/aggregate-payload-v6.json")
+    )
+    val depth = parser.parse(new String(payload, StandardCharsets.UTF_8))
+      .fold(error => fail(s"invalid aggregate fixture: $error"), jsonDepth)
+    val transactions = new java.util.concurrent.atomic.AtomicInteger(0)
+    val after =
+      for
+        isolation <- sql"SHOW transaction_isolation".query[String].unique
+        readOnly <- sql"SHOW transaction_read_only".query[String].unique
+        _ <- doobie.free.connection.delay {
+          if transactions.incrementAndGet() == 2 then
+            assertEquals(isolation, "repeatable read")
+            assertEquals(readOnly, "on")
+        }
+        _ <- doobie.free.connection.commit
+      yield ()
+    for
+      _ <- seedTitle
+      _ <- insertPublishedArtifact(
+        "artifact-metadata-snapshot",
+        payload,
+        0,
+        depth,
+        Some("series-analysis-artifact-v6-full-validation-v2"),
+        None,
+        6,
+      )
+      _ <- pointToArtifacts("artifact-metadata-snapshot", None)
+      repo <- PostgresSeriesAnalysisRepository.create[IO](
+        Transactor.after.set(transactor, after),
+        SeriesAnalysisReadConfig.defaults,
+      )
+      result <- repo.chunk(SeriesAnalysisChunkRequest(
+        SeriesAnalysisChunkKind.Aggregate,
+        titleId,
+        "artifact-metadata-snapshot",
+        SeriesAnalysisScope.Overall,
+      ))
+    yield
+      assertHydratedAggregate(result, "artifact-metadata-snapshot")
+      assertEquals(transactions.get(), 2)
 
   List(2, 3).foreach { obsoleteVersion =>
     test(s"reader rejects stored generation $obsoleteVersion without deleting history"):

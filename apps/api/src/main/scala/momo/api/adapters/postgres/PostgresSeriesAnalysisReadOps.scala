@@ -140,7 +140,9 @@ private[postgres] object PostgresSeriesAnalysisReadOps:
           rb.created_at, a.radar_applied_at,
           (a.radar_basis_id IS NOT DISTINCT FROM r.desired_basis_id AND
             COALESCE(a.radar_generation, 0) = COALESCE(r.generation, 0)),
-          j.status, j.trigger, j.requested_at, j.started_at, j.finished_at,
+          COALESCE(active.status, latest.status), COALESCE(active.trigger, latest.trigger),
+          COALESCE(active.requested_at, latest.requested_at),
+          COALESCE(active.started_at, latest.started_at), COALESCE(active.finished_at, latest.finished_at),
           p.trigger, p.accepted_at
         FROM game_titles gt
         LEFT JOIN series_analysis_title_states s ON s.game_title_id = gt.id
@@ -148,16 +150,20 @@ private[postgres] object PostgresSeriesAnalysisReadOps:
         LEFT JOIN series_radar_title_states r ON r.game_title_id = gt.id
         LEFT JOIN series_radar_bases rb ON rb.id = a.radar_basis_id AND rb.game_title_id = gt.id
         LEFT JOIN LATERAL (
+          SELECT id, status, trigger, requested_at, started_at, finished_at
+          FROM series_analysis_jobs
+          WHERE game_title_id = gt.id AND work_kind = 'analysis'
+            AND status IN ('running', 'queued')
+        ) active ON true
+        LEFT JOIN LATERAL (
           SELECT status, trigger, requested_at, started_at, finished_at
           FROM series_analysis_jobs
           WHERE game_title_id = gt.id AND work_kind = 'analysis'
-          ORDER BY
-            CASE status WHEN 'running' THEN 0 WHEN 'queued' THEN 1 ELSE 2 END,
-            CASE WHEN status IN ('running', 'queued') THEN requested_at END ASC NULLS LAST,
-            finished_at DESC NULLS LAST,
-            id DESC
+            AND status IN ('succeeded', 'failed', 'timed_out')
+            AND active.id IS NULL
+          ORDER BY finished_at DESC NULLS LAST, id DESC
           LIMIT 1
-        ) j ON true
+        ) latest ON true
         LEFT JOIN LATERAL (
           SELECT trigger, accepted_at
           FROM series_analysis_job_requests

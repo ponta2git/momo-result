@@ -1,7 +1,5 @@
 package momo.api.integration
 
-import momo.api.usecases.testing.MatchFixtures
-
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.security.MessageDigest
@@ -31,6 +29,7 @@ import momo.api.domain.{
 }
 import momo.api.errors.AppError
 import momo.api.testing.{JsonSchemaAssertions, SeriesAnalysisPublicationFixtures}
+import momo.api.usecases.testing.MatchFixtures
 
 final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with JsonSchemaAssertions:
   private val now = Instant.parse("2026-08-09T00:00:00Z")

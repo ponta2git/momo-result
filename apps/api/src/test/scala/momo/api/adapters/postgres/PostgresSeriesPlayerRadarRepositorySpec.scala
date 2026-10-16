@@ -1,7 +1,5 @@
 package momo.api.adapters.postgres
 
-import momo.api.usecases.testing.MatchFixtures
-
 import java.nio.file.Files
 import java.time.Instant
 
@@ -18,6 +16,7 @@ import momo.api.domain.ids.*
 import momo.api.integration.IntegrationSuite
 import momo.api.testing.{JsonSchemaAssertions, SeriesAnalysisPublicationFixtures}
 import momo.api.usecases.seriesanalysis.RequestSeriesPlayerRadarOperation
+import momo.api.usecases.testing.MatchFixtures
 
 final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
     with JsonSchemaAssertions:

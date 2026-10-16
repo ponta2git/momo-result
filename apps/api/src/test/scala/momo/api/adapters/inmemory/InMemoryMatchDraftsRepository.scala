@@ -199,5 +199,5 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
       (draft.status == MatchDraftStatus.Confirmed && draft.confirmedMatchId.isEmpty)
 
 object InMemoryMatchDraftsRepository:
-  def create[F[_]: Sync]: F[InMemoryMatchDraftFixtureStore[F]] = Ref
+  def create[F[_]: Sync]: F[InMemoryMatchDraftsRepository[F]] = Ref
     .of[F, Map[MatchDraftId, MatchDraft]](Map.empty).map(new InMemoryMatchDraftsRepository(_))

@@ -1,7 +1,7 @@
 package momo.api.repositories
 
-import momo.api.domain.ids.HeldEventId
 import momo.api.domain.HeldEvent
+import momo.api.domain.ids.HeldEventId
 
 /**
  * Pure algebra for `held_events` access.

@@ -12,8 +12,8 @@ import doobie.postgres.implicits.*
 import doobie.postgres.sqlstate
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.domain.ids.{HeldEventId, MatchDraftId}
 import momo.api.domain.HeldEvent
+import momo.api.domain.ids.{HeldEventId, MatchDraftId}
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{
   HeldEventDeletionAlg,

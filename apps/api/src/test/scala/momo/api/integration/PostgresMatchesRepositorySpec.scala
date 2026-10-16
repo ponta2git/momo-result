@@ -1,7 +1,5 @@
 package momo.api.integration
 
-import momo.api.usecases.testing.MatchFixtures
-
 import java.time.Instant
 
 import cats.effect.{Deferred, IO, Resource}
@@ -28,6 +26,7 @@ import momo.api.repositories.{
 }
 import momo.api.testing.AppErrorAssertions.assertAppException
 import momo.api.usecases.matches.{MatchDraftRefs, UpdateMatch, UpdateMatchCommand}
+import momo.api.usecases.testing.MatchFixtures
 
 final class PostgresMatchesRepositorySpec extends IntegrationSuite
     with MatchConfirmationRepositoryContract:

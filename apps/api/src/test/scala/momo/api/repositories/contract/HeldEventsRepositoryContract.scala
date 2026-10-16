@@ -5,8 +5,8 @@ import java.time.Instant
 import cats.effect.IO
 import munit.CatsEffectSuite
 
-import momo.api.domain.ids.HeldEventId
 import momo.api.domain.HeldEvent
+import momo.api.domain.ids.HeldEventId
 import momo.api.errors.AppError
 import momo.api.repositories.HeldEventsRepository
 

@@ -8,7 +8,7 @@ import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.adapters.postgres.{PostgresHeldEvents, PostgresMatchDraftsRepository}
-import momo.api.domain.ids.{AccountId, ImageId, MatchDraftId, MemberId, OcrDraftId}
+import momo.api.domain.ids.{AccountId, HeldEventId, ImageId, MatchDraftId, MemberId, OcrDraftId}
 import momo.api.domain.{HeldEvent, MatchDraft, MatchDraftStatus, ScreenType}
 import momo.api.errors.AppError
 import momo.api.repositories.{

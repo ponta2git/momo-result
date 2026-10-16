@@ -27,7 +27,11 @@ final class PostgresGameTitleDeletionConcurrencySpec extends IntegrationSuite:
     new PostgresGameTitlesRepository[IO](transactor),
     new PostgresMapMastersRepository[IO](transactor),
     new PostgresSeasonMastersRepository[IO](transactor),
-    eventId, titleId, mapId, seasonId, now,
+    eventId,
+    titleId,
+    mapId,
+    seasonId,
+    now,
   ) *> sql"""
     INSERT INTO series_analysis_job_requests (
       id, game_title_id, input_revision, algorithm_version, artifact_schema_version,
@@ -39,8 +43,18 @@ final class PostgresGameTitleDeletionConcurrencySpec extends IntegrationSuite:
   """.update.run.transact(transactor).void
 
   private def record: MatchRecord = MatchFixtures.matchRecord(
-    MatchId.unsafeFromString("match-delete-contention"), eventId, 1,
-    titleId, seasonId, mapId, now, now, MatchFixtures.DbMemberValues, None, None, None,
+    MatchId.unsafeFromString("match-delete-contention"),
+    eventId,
+    1,
+    titleId,
+    seasonId,
+    mapId,
+    now,
+    now,
+    MatchFixtures.DbMemberValues,
+    None,
+    None,
+    None,
   ).copy(createdByAccountId = AccountId.unsafeFromString("account_ponta"))
 
   /** The writer reaches the real enqueue path while retaining its parent FK lock. */
@@ -59,7 +73,8 @@ final class PostgresGameTitleDeletionConcurrencySpec extends IntegrationSuite:
         pid <- xa.rawTrans.apply(sql"SELECT pg_backend_pid()".query[Int].unique)
         results <- write.background.use { completed =>
           for
-            deletion <- (awaitBackendBlockedBy(pid) *>
+            deletion <-
+            (awaitBackendBlockedBy(pid) *>
               new PostgresGameTitlesRepository[IO](xa).delete(titleId)).guarantee(rollback)
             mutation <- completed.flatMap(_.embedNever)
           yield deletion -> mutation
@@ -85,7 +100,9 @@ final class PostgresGameTitleDeletionConcurrencySpec extends IntegrationSuite:
       )
       _ <- assertRetained
     yield
-      assert(result._1.left.exists(_.isInstanceOf[AppError.Conflict]))
+      assert(result._1 match
+        case Left(AppError.Conflict(_)) => true
+        case _ => false)
       assert(result._2.isRight)
 
   test("title deletion rolls back with conflict while a title-changing update waits for state"):
@@ -93,7 +110,9 @@ final class PostgresGameTitleDeletionConcurrencySpec extends IntegrationSuite:
     val sourceMap = MapMasterId.unsafeFromString("map-source")
     val sourceSeason = SeasonMasterId.unsafeFromString("season-source")
     val original = record.copy(
-      gameTitleId = sourceTitle, mapMasterId = sourceMap, seasonMasterId = sourceSeason,
+      gameTitleId = sourceTitle,
+      mapMasterId = sourceMap,
+      seasonMasterId = sourceSeason,
     )
     for
       _ <- seed
@@ -115,7 +134,9 @@ final class PostgresGameTitleDeletionConcurrencySpec extends IntegrationSuite:
       )
       _ <- assertRetained
     yield
-      assert(result._1.left.exists(_.isInstanceOf[AppError.Conflict]))
+      assert(result._1 match
+        case Left(AppError.Conflict(_)) => true
+        case _ => false)
       assert(result._2.isRight)
 
   test("referenced-title deletion releases state for an ordinary match update"):
@@ -128,10 +149,13 @@ final class PostgresGameTitleDeletionConcurrencySpec extends IntegrationSuite:
         new PostgresMatchesRepository[IO](transactor)
           .update(record.id, MatchFixtures.update(record), now.plusSeconds(1))
       )
-      revision <- sql"SELECT input_revision FROM series_analysis_title_states WHERE game_title_id = $titleId"
-        .query[Long].unique.transact(transactor)
+      revision <-
+        sql"SELECT input_revision FROM series_analysis_title_states WHERE game_title_id = $titleId"
+          .query[Long].unique.transact(transactor)
     yield
-      assert(result._1.left.exists(_.isInstanceOf[AppError.Conflict]))
+      assert(result._1 match
+        case Left(AppError.Conflict(_)) => true
+        case _ => false)
       assert(result._2.isRight)
       assertEquals(revision, 2L)
 
@@ -147,7 +171,9 @@ final class PostgresGameTitleDeletionConcurrencySpec extends IntegrationSuite:
       remaining <- sql"SELECT COUNT(*)::int FROM matches WHERE id = ${record.id}"
         .query[Int].unique.transact(transactor)
     yield
-      assert(result._1.left.exists(_.isInstanceOf[AppError.Conflict]))
+      assert(result._1 match
+        case Left(AppError.Conflict(_)) => true
+        case _ => false)
       assertEquals(result._2, Right(true))
       assertEquals(remaining, 0)
 
@@ -156,20 +182,22 @@ final class PostgresGameTitleDeletionConcurrencySpec extends IntegrationSuite:
       _ <- new PostgresGameTitlesRepository[IO](transactor).createWithNextDisplayOrder(
         GameTitle(titleId, "Worker title", "world", 1, now)
       )
-      deleted <- Resource.fromAutoCloseable(IO.blocking(dataSource.getConnection)).use { connection =>
-        val xa = Transactor.fromConnection[IO](connection, None)
-        for
-          _ <- IO.blocking(connection.setAutoCommit(false))
-          _ <- xa.rawTrans.apply(sql"""
+      deleted <-
+        Resource.fromAutoCloseable(IO.blocking(dataSource.getConnection)).use { connection =>
+          val xa = Transactor.fromConnection[IO](connection, None)
+          for
+            _ <- IO.blocking(connection.setAutoCommit(false))
+            _ <- xa.rawTrans.apply(sql"""
             SELECT game_title_id FROM series_analysis_title_states
             WHERE game_title_id = $titleId FOR UPDATE
           """.query[GameTitleId].unique)
-          pid <- xa.rawTrans.apply(sql"SELECT pg_backend_pid()".query[Int].unique)
-          result <- new PostgresGameTitlesRepository[IO](transactor).delete(titleId).background.use {
-            completed =>
-              (for
-                _ <- awaitBackendBlockedBy(pid)
-                _ <- xa.rawTrans.apply(sql"""
+            pid <- xa.rawTrans.apply(sql"SELECT pg_backend_pid()".query[Int].unique)
+            result <-
+              new PostgresGameTitlesRepository[IO](transactor).delete(titleId).background.use {
+                completed =>
+                  (for
+                    _ <- awaitBackendBlockedBy(pid)
+                    _ <- xa.rawTrans.apply(sql"""
                   INSERT INTO series_analysis_jobs (
                     id, game_title_id, input_revision, algorithm_version,
                     artifact_schema_version, status, trigger, requested_at
@@ -178,12 +206,12 @@ final class PostgresGameTitleDeletionConcurrencySpec extends IntegrationSuite:
                     6, 'queued', 'match_mutation', $now
                   )
                 """.update.run)
-                _ <- IO.blocking(connection.commit())
-                value <- completed.flatMap(_.embedNever)
-              yield value).guarantee(IO.blocking(connection.rollback()))
-          }
-        yield result
-      }
+                    _ <- IO.blocking(connection.commit())
+                    value <- completed.flatMap(_.embedNever)
+                  yield value).guarantee(IO.blocking(connection.rollback()))
+              }
+          yield result
+        }
       counts <- sql"""
         SELECT
           (SELECT COUNT(*)::int FROM game_titles WHERE id = $titleId),

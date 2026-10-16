@@ -2,8 +2,8 @@ package momo.api.repositories
 
 import cats.{~>, MonadThrow}
 
-import momo.api.domain.ids.HeldEventId
 import momo.api.domain.HeldEvent
+import momo.api.domain.ids.HeldEventId
 import momo.api.errors.AppError
 
 /** Usecase-facing facade: expected create rejections are values; unexpected failures remain in F. */

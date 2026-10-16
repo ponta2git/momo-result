@@ -154,7 +154,7 @@ private[bootstrap] object UseCaseWiring:
         config.auth,
         now,
       )
-    val routeUseCases = UseCaseRouteBundles.from[F](
+    val routeUseCases = HttpUseCaseWiring.from[F](
       config = config,
       storage = storage,
       repositories = repositories,
@@ -190,16 +190,7 @@ private[bootstrap] object UseCaseWiring:
       val (app, registeredEndpoints) = HttpRoutes.routesWithEndpoints(HttpRoutes.Dependencies(
         config = config,
         auth = authDependencies,
-        upload = routeUseCases.upload,
-        ocr = routeUseCases.ocr,
-        heldEvents = routeUseCases.heldEvents,
-        matchDrafts = routeUseCases.matchDrafts,
-        matches = routeUseCases.matches,
-        exportMatches = routeUseCases.exportMatches,
-        analytics = routeUseCases.analytics,
-        masters = routeUseCases.masters,
-        adminAccounts = routeUseCases.adminAccounts,
-        notificationSettings = routeUseCases.notificationSettings,
+        useCases = routeUseCases,
         rateLimiters = services.rateLimiters,
         bodyAdmission = bodyAdmission,
         idempotency = repositories.idempotency,

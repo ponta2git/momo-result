@@ -12,6 +12,11 @@ import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
+import momo.api.repositories.contract.MatchConfirmationRepositoryContract
+import momo.api.repositories.contract.MatchConfirmationRepositoryContract.{
+  Fixture as ConfirmationFixture,
+  State
+}
 import momo.api.repositories.{
   MatchConfirmationResult,
   MatchDraftConfirmation,
@@ -20,16 +25,17 @@ import momo.api.repositories.{
 }
 import momo.api.testing.AppErrorAssertions.assertAppException
 
-final class PostgresMatchesRepositorySpec extends IntegrationSuite:
+final class PostgresMatchesRepositorySpec extends IntegrationSuite
+    with MatchConfirmationRepositoryContract:
 
-  private val now = Instant.parse("2026-04-30T00:00:00Z")
-  private val gameTitleId = GameTitleId.unsafeFromString("title_world")
-  private val mapMasterId = MapMasterId.unsafeFromString("map_east")
-  private val seasonMasterId = SeasonMasterId.unsafeFromString("season_2024_spring")
-  private val heldEventId = HeldEventId.unsafeFromString("held_2026_04_30")
-  private val secondGameTitleId = GameTitleId.unsafeFromString("title_world_2")
-  private val secondMapMasterId = MapMasterId.unsafeFromString("map_west")
-  private val secondSeasonMasterId = SeasonMasterId.unsafeFromString("season_2025_spring")
+  private def now = Instant.parse("2026-04-30T00:00:00Z")
+  private def gameTitleId = GameTitleId.unsafeFromString("title_world")
+  private def mapMasterId = MapMasterId.unsafeFromString("map_east")
+  private def seasonMasterId = SeasonMasterId.unsafeFromString("season_2024_spring")
+  private def heldEventId = HeldEventId.unsafeFromString("held_2026_04_30")
+  private def secondGameTitleId = GameTitleId.unsafeFromString("title_world_2")
+  private def secondMapMasterId = MapMasterId.unsafeFromString("map_west")
+  private def secondSeasonMasterId = SeasonMasterId.unsafeFromString("season_2025_spring")
 
   private def gameTitles = new PostgresGameTitlesRepository[IO](transactor)
   private def mapMasters = new PostgresMapMastersRepository[IO](transactor)
@@ -42,6 +48,28 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
   private def createMatch(record: MatchRecord): IO[Unit] = confirmations
     .confirm(record, None, record.createdAt)
     .flatMap(_.leftMap(error => new AssertionError(error.toString)).liftTo[IO]).void
+
+  override protected def confirmationFixture(status: MatchDraftStatus): IO[ConfirmationFixture] =
+    val draftId = MatchDraftId.unsafeFromString("draft-confirm-contract")
+    val rec = sampleMatch("match-confirm-contract", 1)
+    for
+      _ <- seedPrereqs
+      _ <- insertMatchDraft(draftId, now)
+      _ <- sql"UPDATE match_drafts SET status = $status WHERE id = $draftId".update.run
+        .transact(transactor)
+    yield ConfirmationFixture(
+      snapshot = MatchDraftConfirmation(draftId, now, None, None, None),
+      matchId = rec.id,
+      confirmedAt = now.plusSeconds(60),
+      confirm = expected => confirmations.confirm(rec, Some(expected), now.plusSeconds(60)),
+      readState =
+        for
+          saved <-
+            sql"SELECT status, confirmed_match_id, updated_at FROM match_drafts WHERE id = $draftId"
+              .query[(MatchDraftStatus, Option[MatchId], Instant)].unique.transact(transactor)
+          found <- matches.find(rec.id)
+        yield State(saved._1, saved._2, saved._3, found.nonEmpty),
+    )
 
   /** Insert a complete prerequisite graph: game/map/season/held_event. */
   private def seedPrereqs: IO[Unit] =

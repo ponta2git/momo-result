@@ -1,7 +1,5 @@
 package momo.api.http.modules
 
-import java.time.Instant
-
 import cats.effect.Async
 import cats.syntax.all.*
 import sttp.tapir.server.ServerEndpoint
@@ -18,36 +16,44 @@ import momo.api.endpoints.{
   NotificationSettingsUpdateRequest
 }
 import momo.api.errors.AppError
-import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay, SecuredEndpoint}
+import momo.api.http.{HttpOperation, HttpRouteContext, SecuredEndpoint}
 import momo.api.usecases.admin.{GetNotificationSettings, UpdateNotificationSettings}
 
 object NotificationSettingsModule:
-  def routes[F[_]: Async](
+  final case class UseCases[F[_]](
       getSettings: GetNotificationSettings[F],
       updateSettings: UpdateNotificationSettings[F],
-      idempotency: IdempotencyReplay.Guard[F],
-      nowF: F[Instant],
-      security: EndpointSecurity[F],
-  ): List[ServerEndpoint[Any, F]] = List(
-    SecuredEndpoint.adminReadLogic(security, NotificationSettingsEndpoints.get) { _ => _ =>
-      getSettings.run.map(settings => Right(NotificationSettingsResponse.from(settings)))
-    },
-    SecuredEndpoint.adminMutationLogic(security, NotificationSettingsEndpoints.update) { account =>
-      { case (key, request) =>
-        IdempotencyReplay.wrap[F, NotificationSettingsUpdateRequest, NotificationSettingsResponse](
-          idempotency,
-          key,
-          account,
-          HttpOperation.UpdateNotificationSettings,
-          request,
-          nowF,
-          security.decode(toCommand(request))(command =>
-            security.respond(updateSettings.run(command))(NotificationSettingsResponse.from)
-          ),
-        )
-      }
-    },
   )
+
+  def routes[F[_]: Async](
+      useCases: UseCases[F],
+      context: HttpRouteContext[F],
+  ): List[ServerEndpoint[Any, F]] =
+    import useCases.*
+    val security = context.security
+    val execution = context.execution
+    List(
+      SecuredEndpoint.adminReadLogic(security, NotificationSettingsEndpoints.get) { _ => _ =>
+        getSettings.run.map(settings => Right(NotificationSettingsResponse.from(settings)))
+      },
+      SecuredEndpoint.adminMutationLogic(security, NotificationSettingsEndpoints.update) {
+        account =>
+          { case (key, request) =>
+            execution.mutation(
+              HttpOperation.UpdateNotificationSettings,
+              key,
+              account,
+              request,
+            )(
+              toCommand(request)
+            )(command =>
+              updateSettings.run(command)
+            )(
+              NotificationSettingsResponse.from
+            )
+          }
+      },
+    )
 
   private def toCommand(request: NotificationSettingsUpdateRequest)
       : Either[AppError, NotificationSettingsUpdate] =

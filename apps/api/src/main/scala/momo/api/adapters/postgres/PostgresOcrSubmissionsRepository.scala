@@ -16,7 +16,6 @@ import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
 import momo.api.repositories.OcrSubmissionsRepository
-import momo.api.usecases.ocr.OcrSubmissions
 
 final class PostgresOcrSubmissionsRepository[F[_]: Async](transactor: Transactor[F])
     extends OcrSubmissionsRepository[F]:
@@ -68,7 +67,7 @@ final class PostgresOcrSubmissionsRepository[F[_]: Async](transactor: Transactor
         else if !draft.exists { case (status, _) => status != "confirmed" && status != "cancelled" }
         then
           Left(AppError.Conflict("The match draft cannot accept OCR.")).pure[ConnectionIO]
-        else if count >= OcrSubmissions.OpenLimit then
+        else if count >= OcrSubmissionsRepository.OpenLimit then
           Left(AppError.TooManyRequests(
             "Too many unfinished OCR submissions. Retry after they finish."
           )).pure[ConnectionIO]

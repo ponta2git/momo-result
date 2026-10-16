@@ -1,6 +1,5 @@
 package momo.api.adapters.postgres
 
-import java.security.MessageDigest
 import java.time.Instant
 
 import scala.collection.mutable
@@ -15,6 +14,7 @@ import momo.api.contracts.seriesanalysis.SeriesAnalysisArtifactContract
 import momo.api.domain.*
 import momo.api.domain.ids.{GameTitleId, MatchId, MemberId}
 import momo.api.errors.AppError
+import momo.api.util.Sha256
 
 /** Owner and revision were read in the same statement snapshot as the pinned chunk. */
 private[postgres] final case class SeriesAnalysisMatchSnapshot(
@@ -514,8 +514,7 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
   )
 
   private def sha256(bytes: Array[Byte]): String =
-    val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
-    s"sha256:${digest.map(value => f"${value & 0xff}%02x").mkString}"
+    s"sha256:${Sha256.hex(bytes)}"
 
   private def artifactJson(value: SeriesAnalysisArtifactRef): Json = Json.obj(
     "artifactId" -> Json.fromString(value.artifactId),

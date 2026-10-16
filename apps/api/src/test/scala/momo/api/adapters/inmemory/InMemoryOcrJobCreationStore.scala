@@ -60,13 +60,12 @@ final class InMemoryOcrJobCreationStore[F[_]: Async](
               )
             yield StoredOcrJob(job, draft, false)).value
           case Some(member)
-              if submission.status == "open" && member.status == "pending" &&
-                member.imageSha256 == plan.input.imageSha256 &&
+              if member.imageSha256 == plan.input.imageSha256 &&
                 member.imageByteLength.toLong ==
                 plan.input.imageByteLength =>
             (now, matchDrafts.find(plan.matchDraftAttachment.draftId)).tupled.flatMap {
               case (currentTime, Some(draft))
-                  if currentTime.isBefore(submission.admissionDeadline) &&
+                  if submission.canAdmit(member.screenType, currentTime) &&
                     draft.createdByAccountId == plan.submission.ownerAccountId =>
                 create(plan)
               case _ => OcrJobCreationRejection.SubmissionRejected.asLeft[StoredOcrJob].pure[F]

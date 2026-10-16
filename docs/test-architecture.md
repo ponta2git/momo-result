@@ -61,7 +61,9 @@ coverage は未確認の経路を探す補助であり、品質を一つの数�
 ### API / Workerの実行境界
 
 - APIのservice suiteは通常testとコンパイル結果を共有しても、tag選択、fork、直列化を独立した設定scopeに置く。外部gateを実行した順序で後続の通常testの対象・隔離が変わらないようにする。
-- 複数adapterが同じportを実装する場合、consumerが依存する受理・拒否、返却identity、保存結果の共通契約を共有できる。DB固有のtransaction、lock、rollback、jobは実DB suiteが所有し、非永続adapterとの共通化のためにoracleを弱めない。
+- 軽量 HTTP test は test source の `HttpTestRuntime` を明示して使う。InMemory adapter は test source に閉じ、production runtime の選択肢にしない。分析・Radar の状態再現は持たず、その保存状態を使う HTTP test は `PostgresHttpAppTestFixtures` で通常の `ApiApp` を組み立てる。
+- 実 DB の HTTP fixture は既存 `IntegrationSuite` の隔離 DB と直列化を共有し、各 test の保存状態と変更した account を回収する。DB 固有の transaction、lock、rollback、job は実 DB suite が所有する。
+- 存続する double と production adapter に共通する consumer 契約は必要な代表例だけ共有できる。全 adapter の対になる suite を作らず、非永続 adapter との共通化のために oracle を弱めない。
 - 設定の解釈は入力を注入できる純粋境界で検証し、process全体の環境変数を書き換えて並列testを制御しない。filesystem / cgroup / child processの観測は実adapterを通す証拠として分ける。
 
 ## 4. Cross-System Contract Evidence

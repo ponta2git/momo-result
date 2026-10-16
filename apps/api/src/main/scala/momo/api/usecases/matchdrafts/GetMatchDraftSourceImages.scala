@@ -61,26 +61,19 @@ final class GetMatchDraftSourceImages[F[_]: Async](
 
   def list(draftId: MatchDraftId): F[Either[AppError, List[MatchDraftSourceImage]]] = (for
     draft <- EitherT(loadDraft(draftId))
-    entries <-
-      if draft.sourceImagesDeletedAt.nonEmpty then
-        EitherT.rightT[F, AppError](List.empty[Option[MatchDraftSourceImage]])
+    entries <- EitherT.liftF(
+      if draft.sourceImagesDeletedAt.nonEmpty then List.empty[MatchDraftSourceImage].pure[F]
       else
-        EitherT.liftF(
-          MatchDraftSourceImageKind.values.toList
-            .map(kind => kind -> draft.sourceImageId(kind.screenType)).traverse {
-              case (_, None) => Option.empty[MatchDraftSourceImage].pure[F]
-              case (kind, Some(imageId)) => imageStore.find(imageId).map {
-                  case None => Option.empty[MatchDraftSourceImage]
-                  case Some(image) => Some(MatchDraftSourceImage(
-                      kind = kind,
-                      imageId = image.imageId,
-                      contentType = Some(image.mediaType),
-                      createdAt = draft.updatedAt,
-                    ))
-                }
-            }
-        )
-  yield entries.flatten).value
+        sourceMetadata(draft).map(_.map { case (kind, image) =>
+          MatchDraftSourceImage(
+            kind = kind,
+            imageId = image.imageId,
+            contentType = Some(image.mediaType),
+            createdAt = draft.updatedAt,
+          )
+        })
+    )
+  yield entries).value
 
   def stream(
       draftId: MatchDraftId,
@@ -160,18 +153,22 @@ final class GetMatchDraftSourceImages[F[_]: Async](
 
   private final case class ArchiveSource(name: String, image: StoredImage)
 
-  private def archiveSources(draft: momo.api.domain.MatchDraft): F[List[ArchiveSource]] =
-    MatchDraftSourceImageKind.values.toList.zipWithIndex.traverse { case (kind, index) =>
+  private def sourceMetadata(
+      draft: momo.api.domain.MatchDraft
+  ): F[List[(MatchDraftSourceImageKind, StoredImage)]] =
+    MatchDraftSourceImageKind.values.toList.traverse { kind =>
       draft.sourceImageId(kind.screenType) match
-        case None => Option.empty[ArchiveSource].pure[F]
-        case Some(imageId) => imageStore.find(imageId).flatMap {
-            case None => Option.empty[ArchiveSource].pure[F]
-            case Some(image) => Some(ArchiveSource(
-                name = archiveEntryName(kind, index + 1, image.mediaType),
-                image = image,
-              )).pure[F]
-          }
+        case None => Option.empty[(MatchDraftSourceImageKind, StoredImage)].pure[F]
+        case Some(imageId) => imageStore.find(imageId).map(_.map(kind -> _))
     }.map(_.flatten)
+
+  private def archiveSources(draft: momo.api.domain.MatchDraft): F[List[ArchiveSource]] =
+    sourceMetadata(draft).map(_.map { case (kind, image) =>
+      ArchiveSource(
+        name = archiveEntryName(kind, kind.ordinal + 1, image.mediaType),
+        image = image,
+      )
+    })
 
   private def zipStream(sources: List[ArchiveSource]): Stream[F, Byte] =
     val chunkSize = 32 * 1024

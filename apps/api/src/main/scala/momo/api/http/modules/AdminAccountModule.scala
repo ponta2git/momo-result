@@ -1,7 +1,5 @@
 package momo.api.http.modules
 
-import java.time.Instant
-
 import cats.effect.Async
 import cats.syntax.all.*
 import sttp.tapir.server.ServerEndpoint
@@ -16,7 +14,7 @@ import momo.api.endpoints.{
   UpdateLoginAccountRequest
 }
 import momo.api.errors.AppError
-import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay, SecuredEndpoint}
+import momo.api.http.{HttpOperation, HttpRouteContext, SecuredEndpoint}
 import momo.api.usecases.admin.{
   CreateLoginAccount,
   CreateLoginAccountCommand,
@@ -26,55 +24,62 @@ import momo.api.usecases.admin.{
 }
 
 object AdminAccountModule:
-  def routes[F[_]: Async](
+  final case class UseCases[F[_]](
       listLoginAccounts: ListLoginAccounts[F],
       createLoginAccount: CreateLoginAccount[F],
       updateLoginAccount: UpdateLoginAccount[F],
-      idempotency: IdempotencyReplay.Guard[F],
-      nowF: F[Instant],
-      security: EndpointSecurity[F],
-  ): List[ServerEndpoint[Any, F]] = List(
-    SecuredEndpoint.adminReadLogic(security, AdminAccountEndpoints.list) { _ => _ =>
-      listLoginAccounts.run
-        .map(items => Right(LoginAccountListResponse(items.map(LoginAccountResponse.from))))
-    },
-    SecuredEndpoint.adminMutationLogic(security, AdminAccountEndpoints.create) { account =>
-      {
-        case (idemKey, request) =>
-          IdempotencyReplay.wrap[F, CreateLoginAccountRequest, LoginAccountResponse](
-            idempotency,
-            idemKey,
-            account,
-            HttpOperation.CreateLoginAccount,
-            request,
-            nowF,
-            security.decode(
+  )
+
+  def routes[F[_]: Async](
+      useCases: UseCases[F],
+      context: HttpRouteContext[F],
+  ): List[ServerEndpoint[Any, F]] =
+    import useCases.*
+    val security = context.security
+    val execution = context.execution
+    List(
+      SecuredEndpoint.adminReadLogic(security, AdminAccountEndpoints.list) { _ => _ =>
+        listLoginAccounts.run
+          .map(items => Right(LoginAccountListResponse(items.map(LoginAccountResponse.from))))
+      },
+      SecuredEndpoint.adminMutationLogic(security, AdminAccountEndpoints.create) { account =>
+        {
+          case (idemKey, request) =>
+            execution.mutation(
+              HttpOperation.CreateLoginAccount,
+              idemKey,
+              account,
+              request,
+            )(
               toCommand(request)
             )(command =>
-              security.respond(createLoginAccount.run(command))(LoginAccountResponse.from)
-            ),
-          )
-      }
-    },
-    SecuredEndpoint.adminMutationLogic(security, AdminAccountEndpoints.update) { account =>
-      {
-        case (accountId, idemKey, request) =>
-          IdempotencyReplay.wrap[F, (String, UpdateLoginAccountRequest), LoginAccountResponse](
-            idempotency,
-            idemKey,
-            account,
-            HttpOperation.UpdateLoginAccount,
-            (accountId, request),
-            nowF,
-            security.decode(BoundaryId.required("accountId", accountId)(AccountId.fromString)) { id =>
-              security.decode(toCommand(request))(command =>
-                security.respond(updateLoginAccount.run(id, command))(LoginAccountResponse.from)
-              )
-            },
-          )
-      }
-    },
-  )
+              createLoginAccount.run(command)
+            )(
+              LoginAccountResponse.from
+            )
+        }
+      },
+      SecuredEndpoint.adminMutationLogic(security, AdminAccountEndpoints.update) { account =>
+        {
+          case (accountId, idemKey, request) =>
+            execution.mutation(
+              HttpOperation.UpdateLoginAccount,
+              idemKey,
+              account,
+              (accountId, request),
+            )(
+              for
+                id <- BoundaryId.required("accountId", accountId)(AccountId.fromString)
+                command <- toCommand(request)
+              yield (id, command)
+            ) { case (id, command) =>
+              updateLoginAccount.run(id, command)
+            }(
+              LoginAccountResponse.from
+            )
+        }
+      },
+    )
 
   private def toCommand(
       request: CreateLoginAccountRequest

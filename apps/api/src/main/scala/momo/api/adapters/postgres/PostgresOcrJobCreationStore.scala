@@ -73,18 +73,12 @@ final class PostgresOcrJobCreationStore[F[_]: Async](transactor: Transactor[F])
               case Some(_) =>
                 OcrJobCreationRejection.SubmissionRejected.asLeft[StoredOcrJob].pure[ConnectionIO]
               case None =>
-                val admission = draftOwner.contains(plan.submission.ownerAccountId) &&
-                  submission.exists(s =>
-                    s.status == "open" &&
-                      s.members.exists(m =>
-                        m.screenType == attachment.screenType && m.status == "pending"
-                      )
-                  )
                 (for
                   currentTime <-
                     EitherT.liftF(sql"SELECT clock_timestamp()".query[java.time.Instant].unique)
                   _ <- EitherT.cond[ConnectionIO](
-                    admission && submission.exists(s => currentTime.isBefore(s.admissionDeadline)),
+                    draftOwner.contains(plan.submission.ownerAccountId) &&
+                      submission.exists(_.canAdmit(attachment.screenType, currentTime)),
                     (),
                     OcrJobCreationRejection.SubmissionRejected
                   )

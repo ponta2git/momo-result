@@ -4,7 +4,6 @@ import java.time.Instant
 
 import cats.Monad
 import cats.data.EitherT
-import cats.syntax.all.*
 
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchPolicy, MatchRecord, PlayerResult}
@@ -40,32 +39,26 @@ final class UpdateMatch[F[_]: Monad](
     now: F[Instant],
     allowedMemberIds: F[Set[MemberId]],
 ):
-  private val referenceValidation =
+  private val inputValidation = MatchInputValidation(
     MatchReferenceValidation(heldEvents, gameTitles, mapMasters, seasonMasters)
+  )
 
   def run(matchId: MatchId, command: UpdateMatchCommand): F[Either[AppError, MatchRecord]] = (for
     allowed <- EitherT.liftF(allowedMemberIds)
     existing <- matches.find(matchId).orNotFound("match", matchId.value)
-    validated <- EitherT.fromEither[F](
-      MatchPolicy.validate(
-        MatchPolicy.Input(
-          heldEventId = command.heldEventId,
-          matchNoInEvent = command.matchNoInEvent,
-          gameTitleId = command.gameTitleId,
-          seasonMasterId = command.seasonMasterId,
-          ownerMemberId = command.ownerMemberId,
-          mapMasterId = command.mapMasterId,
-          players = command.players,
-        ),
-        allowed,
-      ).leftMap(errors => AppError.ValidationFailed(MatchPolicy.toMessage(errors)))
+    validation <- inputValidation.validate(
+      MatchPolicy.Input(
+        heldEventId = command.heldEventId,
+        matchNoInEvent = command.matchNoInEvent,
+        gameTitleId = command.gameTitleId,
+        seasonMasterId = command.seasonMasterId,
+        ownerMemberId = command.ownerMemberId,
+        mapMasterId = command.mapMasterId,
+        players = command.players,
+      ),
+      allowed,
     )
-    title <- referenceValidation.validateRequired(
-      command.heldEventId,
-      command.gameTitleId,
-      command.mapMasterId,
-      command.seasonMasterId,
-    )
+    (validated, title) = validation
     duplicate <- EitherT
       .liftF(matches.existsMatchNoExcept(command.heldEventId, validated.matchNoInEvent, matchId))
     _ <- EitherT.fromEither[F](

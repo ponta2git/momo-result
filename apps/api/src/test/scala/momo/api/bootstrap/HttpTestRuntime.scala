@@ -6,6 +6,7 @@ import cats.syntax.all.*
 import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 
+import momo.api.adapters.discord.JavaDiscordOAuthClient
 import momo.api.adapters.inmemory.*
 import momo.api.adapters.storage.local.LocalFsImageStore
 import momo.api.auth.{DiscordOAuthClient, InMemoryOAuthStateReplayGuard, MemberRoster}
@@ -17,7 +18,18 @@ import momo.api.usecases.images.ImageStorageAdmission
 import momo.api.usecases.maintenance.SourceImageOrphanReaper
 import momo.api.usecases.ocr.OcrAdmissionGuard
 
-private[bootstrap] object InMemoryApiRuntime:
+/** Lightweight HTTP/application fixture. Persistence behavior belongs to PostgreSQL tests. */
+private[api] object HttpTestRuntime:
+  def wiredWithHandles[F[_]: Async](config: AppConfig): Resource[F, ApiApp.WiredRuntime[F]] =
+    Resource.eval(SecureRandom.javaSecuritySecureRandom[F]).flatMap { case given SecureRandom[F] =>
+      JavaDiscordOAuthClient.resource[F](JavaDiscordOAuthClient.Config(
+        clientId = config.auth.discordClientId.getOrElse(""),
+        clientSecret = config.auth.discordClientSecret.getOrElse(""),
+        redirectUri = config.auth.discordRedirectUri.getOrElse(""),
+        scope = config.auth.discordScope,
+      )).flatMap(client => resource(config, client))
+    }
+
   private final case class RuntimeParts[F[_]](
       repositories: UseCaseWiring.RuntimeRepositories[F],
       imageReferences: ImageReferenceRepository[F],
@@ -149,12 +161,6 @@ private[bootstrap] object InMemoryApiRuntime:
           matchDrafts,
         )
       )
-      seriesAnalysis <- InMemorySeriesAnalysisRepository.create[F](
-        gameTitles,
-        Clock[F].realTimeInstant,
-      )
-      seriesPlayerRadar <-
-        InMemorySeriesPlayerRadarRepository.create[F](gameTitles, Clock[F].realTimeInstant)
       incidentMasters <- InMemoryIncidentMastersRepository.create[F]
       memberAliases <- InMemoryMemberAliasesRepository.create[F]
       idempotency <- InMemoryIdempotencyRepository.create[F]
@@ -200,8 +206,8 @@ private[bootstrap] object InMemoryApiRuntime:
         matchDraftReviews = InMemoryMatchDraftReviewReadModel[F](matchDrafts, drafts, imageStore),
         matchDraftCancellation = matchDraftCancellation,
         matchList = matchList,
-        seriesAnalysis = seriesAnalysis,
-        seriesPlayerRadar = seriesPlayerRadar,
+        seriesAnalysis = UnsupportedAnalysisRepositories.analysis[F],
+        seriesPlayerRadar = UnsupportedAnalysisRepositories.radar[F],
         matchConfirmation = matchConfirmation,
         appSessions = appSessions,
         sessionAccounts = sessionAccounts,

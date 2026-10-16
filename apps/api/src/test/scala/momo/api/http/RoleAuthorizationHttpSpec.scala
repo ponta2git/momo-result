@@ -8,13 +8,13 @@ import org.http4s.circe.*
 import org.http4s.implicits.*
 import org.http4s.{Method, Status, Uri}
 
-import momo.api.MomoCatsEffectSuite
 import momo.api.domain.ids.{AccountId, GameTitleId, UserId}
 import momo.api.domain.{AccountRole, GameTitle}
 import momo.api.http.HttpAssertions.{assertProblem, jsonField}
+import momo.api.integration.PostgresHttpAppTestFixtures
 import momo.api.repositories.CreateLoginAccountData
 
-final class RoleAuthorizationHttpSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
+final class RoleAuthorizationHttpSpec extends PostgresHttpAppTestFixtures:
   private val operator = "account_operator"
   private val otherOperator = "account_other_operator"
   private val managingAdmin = "account_managing_admin"

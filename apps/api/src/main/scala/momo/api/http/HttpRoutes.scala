@@ -38,15 +38,7 @@ import momo.api.http.modules.{
   UploadModule
 }
 import momo.api.repositories.IdempotencyRepository
-import momo.api.usecases.admin.*
-import momo.api.usecases.exports.*
-import momo.api.usecases.heldevents.*
-import momo.api.usecases.images.*
-import momo.api.usecases.masters.*
-import momo.api.usecases.matchdrafts.*
-import momo.api.usecases.matches.*
-import momo.api.usecases.ocr.*
-import momo.api.usecases.seriesanalysis.*
+import momo.api.usecases.exports.ExportMatches
 
 object HttpRoutes:
   /** Let the outer middleware own safe error logging and Problem Details for failed effects. */
@@ -77,99 +69,24 @@ object HttpRoutes:
       completeOAuthCallback: CompleteOAuthCallback[F],
   )
 
-  final case class UploadUseCases[F[_]](uploadImage: UploadImage[F])
-
-  final case class OcrUseCases[F[_]](
-      createOcrJob: CreateOcrJob[F],
-      submissions: OcrSubmissions[F],
-      getOcrJob: GetOcrJob[F],
-      getOcrDraft: GetOcrDraft[F],
-      getOcrDraftsBulk: GetOcrDraftsBulk[F],
-      cancelOcrJob: CancelOcrJob[F],
-  )
-
-  final case class HeldEventUseCases[F[_]](
-      listHeldEvents: ListHeldEvents[F],
-      getHeldEventDetail: GetHeldEventDetail[F],
-      createHeldEvent: CreateHeldEvent[F],
-      deleteHeldEvent: DeleteHeldEvent[F],
-  )
-
-  final case class MatchDraftUseCases[F[_]](
-      createMatchDraft: CreateMatchDraft[F],
-      getMatchDraft: GetMatchDraft[F],
-      getMatchDraftReview: GetMatchDraftReview[F],
-      updateMatchDraft: UpdateMatchDraft[F],
-      cancelMatchDraft: CancelMatchDraft[F],
-      getMatchDraftSourceImages: GetMatchDraftSourceImages[F],
-  )
-
-  final case class MatchUseCases[F[_]](
-      confirmMatch: ConfirmMatch[F],
-      listMatches: ListMatches[F],
-      getMatch: GetMatch[F],
-      updateMatch: UpdateMatch[F],
-      replaceMatchNote: ReplaceMatchNote[F],
-      deleteMatch: DeleteMatch[F],
-  )
-
-  final case class AnalyticsUseCases[F[_]](
-      getSeriesAnalysisOptions: GetSeriesAnalysisOptions[F],
-      getSeriesAnalysisStatus: GetSeriesAnalysisStatus[F],
-      getSeriesAnalysisChunk: GetSeriesAnalysisChunk[F],
-      getSeriesAnalysisAdminOverview: GetSeriesAnalysisAdminOverview[F],
-      requestSeriesAnalysisRecalculation: RequestSeriesAnalysisRecalculation[F],
-      getSeriesPlayerRadarHistory: GetSeriesPlayerRadarHistory[F],
-      getSeriesPlayerRadarState: GetSeriesPlayerRadarState[F],
-      getSeriesPlayerRadarPreview: GetSeriesPlayerRadarPreview[F],
-      getSeriesPlayerRadarOperation: GetSeriesPlayerRadarOperation[F],
-      requestSeriesPlayerRadarOperation: RequestSeriesPlayerRadarOperation[F],
-  )
-
-  final case class MasterUseCases[F[_]](
-      listGameTitles: ListGameTitles[F],
-      listMapMasters: ListMapMasters[F],
-      listSeasonMasters: ListSeasonMasters[F],
-      listIncidentMasters: ListIncidentMasters[F],
-      createGameTitle: CreateGameTitle[F],
-      createMapMaster: CreateMapMaster[F],
-      createSeasonMaster: CreateSeasonMaster[F],
-      updateGameTitle: UpdateGameTitle[F],
-      updateMapMaster: UpdateMapMaster[F],
-      updateSeasonMaster: UpdateSeasonMaster[F],
-      deleteGameTitle: DeleteGameTitle[F],
-      deleteMapMaster: DeleteMapMaster[F],
-      deleteSeasonMaster: DeleteSeasonMaster[F],
-      listMemberAliases: ListMemberAliases[F],
-      createMemberAlias: CreateMemberAlias[F],
-      updateMemberAlias: UpdateMemberAlias[F],
-      deleteMemberAlias: DeleteMemberAlias[F],
-  )
-
-  final case class AdminAccountUseCases[F[_]](
-      listLoginAccounts: ListLoginAccounts[F],
-      createLoginAccount: CreateLoginAccount[F],
-      updateLoginAccount: UpdateLoginAccount[F],
-  )
-
-  final case class NotificationSettingsUseCases[F[_]](
-      get: GetNotificationSettings[F],
-      update: UpdateNotificationSettings[F],
+  final case class UseCases[F[_]](
+      upload: UploadModule.UseCases[F],
+      ocr: OcrModule.UseCases[F],
+      heldEvents: HeldEventModule.UseCases[F],
+      matchDrafts: MatchDraftModule.UseCases[F],
+      matches: MatchModule.UseCases[F],
+      exportMatches: ExportMatches[F],
+      seriesAnalysis: SeriesAnalysisModule.UseCases[F],
+      seriesPlayerRadar: SeriesPlayerRadarModule.UseCases[F],
+      masters: MasterModule.UseCases[F],
+      adminAccounts: AdminAccountModule.UseCases[F],
+      notificationSettings: NotificationSettingsModule.UseCases[F],
   )
 
   final case class Dependencies[F[_]](
       config: AppConfig,
       auth: AuthDependencies[F],
-      upload: UploadUseCases[F],
-      ocr: OcrUseCases[F],
-      heldEvents: HeldEventUseCases[F],
-      matchDrafts: MatchDraftUseCases[F],
-      matches: MatchUseCases[F],
-      exportMatches: ExportMatches[F],
-      analytics: AnalyticsUseCases[F],
-      masters: MasterUseCases[F],
-      adminAccounts: AdminAccountUseCases[F],
-      notificationSettings: NotificationSettingsUseCases[F],
+      useCases: UseCases[F],
       rateLimiters: HttpRateLimiters[F],
       bodyAdmission: RequestBodyAdmission[F],
       idempotency: IdempotencyRepository[F],
@@ -199,125 +116,34 @@ object HttpRoutes:
       activeKeyLimitPerAccount = deps.config.resourceLimits.idempotencyActiveKeyLimitPerAccount,
     )
 
+    val context =
+      HttpRouteContext(security, new EndpointExecution(security, idempotencyGuard, deps.nowF))
+    val useCases = deps.useCases
     val endpoints: List[ServerEndpoint[Any, F]] = HealthModule
       .routes[F](deps.config, deps.healthDetails, security) :::
-      UploadModule.routes[F](
-        deps.upload.uploadImage,
-        deps.ocr.submissions,
-        deps.rateLimiters.upload,
-        idempotencyGuard,
-        deps.nowF,
-        security,
-      ) :::
-      OcrModule.routes[F](
-        deps.ocr.createOcrJob,
-        deps.ocr.submissions,
-        deps.ocr.getOcrJob,
-        deps.ocr.cancelOcrJob,
-        deps.ocr.getOcrDraft,
-        deps.ocr.getOcrDraftsBulk,
+      UploadModule.routes(useCases.upload, deps.rateLimiters.upload, context) :::
+      OcrModule.routes(
+        useCases.ocr,
         deps.rateLimiters.ocrJobCreate,
         deps.rateLimiters.ocrJobCreateGlobal,
-        idempotencyGuard,
-        deps.nowF,
-        security,
+        context,
       ) :::
-      HeldEventModule.routes[F](
-        deps.heldEvents.listHeldEvents,
-        deps.heldEvents.getHeldEventDetail,
-        deps.heldEvents.createHeldEvent,
-        deps.heldEvents.deleteHeldEvent,
-        idempotencyGuard,
-        deps.nowF,
-        security,
-      ) :::
-      MatchDraftModule.routes[F](
-        deps.matchDrafts.createMatchDraft,
-        deps.matchDrafts.getMatchDraft,
-        deps.matchDrafts.getMatchDraftReview,
-        deps.matchDrafts.updateMatchDraft,
-        deps.matchDrafts.cancelMatchDraft,
-        deps.matchDrafts.getMatchDraftSourceImages,
-        idempotencyGuard,
-        deps.nowF,
-        security,
-      ) :::
-      ExportModule.routes[F](
-        deps.exportMatches,
+      HeldEventModule.routes(useCases.heldEvents, context) :::
+      MatchDraftModule.routes(useCases.matchDrafts, context) :::
+      ExportModule.routes(
+        useCases.exportMatches,
         deps.rateLimiters.matchExport,
         deps.rateLimiters.matchExportAll,
         security,
       ) :::
-      MatchModule.routes[F](
-        deps.matches.confirmMatch,
-        deps.matches.listMatches,
-        deps.matches.getMatch,
-        deps.matches.updateMatch,
-        deps.matches.replaceMatchNote,
-        deps.matches.deleteMatch,
-        idempotencyGuard,
-        deps.nowF,
-        security,
-      ) :::
-      SeriesAnalysisModule.routes[F](
-        deps.analytics.getSeriesAnalysisOptions,
-        deps.analytics.getSeriesAnalysisStatus,
-        deps.analytics.getSeriesAnalysisChunk,
-        deps.analytics.getSeriesAnalysisAdminOverview,
-        deps.analytics.requestSeriesAnalysisRecalculation,
-        idempotencyGuard,
-        deps.nowF,
-        security,
-      ) :::
-      SeriesPlayerRadarModule.routes[F](
-        deps.analytics.getSeriesPlayerRadarHistory,
-        deps.analytics.getSeriesPlayerRadarState,
-        deps.analytics.getSeriesPlayerRadarPreview,
-        deps.analytics.getSeriesPlayerRadarOperation,
-        deps.analytics.requestSeriesPlayerRadarOperation,
-        idempotencyGuard,
-        deps.nowF,
-        security,
-      ) :::
-      MasterModule.routes[F](
-        deps.masters.listGameTitles,
-        deps.masters.listMapMasters,
-        deps.masters.listSeasonMasters,
-        deps.masters.listIncidentMasters,
-        deps.masters.createGameTitle,
-        deps.masters.createMapMaster,
-        deps.masters.createSeasonMaster,
-        deps.masters.updateGameTitle,
-        deps.masters.updateMapMaster,
-        deps.masters.updateSeasonMaster,
-        deps.masters.deleteGameTitle,
-        deps.masters.deleteMapMaster,
-        deps.masters.deleteSeasonMaster,
-        deps.masters.listMemberAliases,
-        deps.masters.createMemberAlias,
-        deps.masters.updateMemberAlias,
-        deps.masters.deleteMemberAlias,
-        idempotencyGuard,
-        deps.nowF,
-        security,
-      ) :::
-      AdminAccountModule.routes[F](
-        deps.adminAccounts.listLoginAccounts,
-        deps.adminAccounts.createLoginAccount,
-        deps.adminAccounts.updateLoginAccount,
-        idempotencyGuard,
-        deps.nowF,
-        security,
-      ) :::
-      NotificationSettingsModule.routes[F](
-        deps.notificationSettings.get,
-        deps.notificationSettings.update,
-        idempotencyGuard,
-        deps.nowF,
-        security,
-      )
+      MatchModule.routes(useCases.matches, context) :::
+      SeriesAnalysisModule.routes(useCases.seriesAnalysis, context) :::
+      SeriesPlayerRadarModule.routes(useCases.seriesPlayerRadar, context) :::
+      MasterModule.routes(useCases.masters, context) :::
+      AdminAccountModule.routes(useCases.adminAccounts, context) :::
+      NotificationSettingsModule.routes(useCases.notificationSettings, context)
     val sourceImageEndpoints = MatchDraftModule.sourceImageRoutes[F](
-      deps.matchDrafts.getMatchDraftSourceImages,
+      useCases.matchDrafts.getMatchDraftSourceImages,
       deps.rateLimiters.sourceImageDownload,
       security,
     )

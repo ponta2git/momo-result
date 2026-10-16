@@ -8,7 +8,7 @@ import momo.api.domain.ids.AccountId
 import momo.api.errors.AppError
 import momo.api.logging.SafeLog
 import momo.api.ports.storage.{ImageDiskUsage, ImageStorageCapacityInspector, ImageStorageInspector}
-import momo.api.repositories.{ImageReferenceRepository, SourceImageQuota}
+import momo.api.repositories.{ImageReferenceRepository, SourceImageQuota, SourceImageQuotaRejection}
 
 trait ImageStorageAdmission[F[_]]:
   def ensureCanAccept(ownerAccountId: AccountId, incomingBytes: Long): F[Either[AppError, Unit]]
@@ -111,19 +111,12 @@ private final class ReferenceAwareImageStorageAdmission[F[_]: MonadThrow: Logger
               Rejection.UsageStatusUnavailable(SafeLog.throwableClasses(error)),
             )
           case Right(usage) =>
-            val countAfter = usage.fileCount.toLong + 1L
-            val bytesAfter = saturatedAdd(usage.sizeBytes, incomingBytes)
-            if countAfter > config.unreferencedCountLimit.toLong then
-              reject(
-                ownerAccountId,
-                Rejection.UnreferencedCountExceeded(countAfter, config.unreferencedCountLimit),
-              )
-            else if bytesAfter > config.unreferencedBytesLimit then
-              reject(
-                ownerAccountId,
-                Rejection.UnreferencedBytesExceeded(bytesAfter, config.unreferencedBytesLimit),
-              )
-            else capacity.ensureCanAccept(ownerAccountId, incomingBytes)
+            config.quota.evaluate(usage.fileCount.toLong, usage.sizeBytes, incomingBytes) match
+              case Some(SourceImageQuotaRejection.CountExceeded(countAfter, limit)) =>
+                reject(ownerAccountId, Rejection.UnreferencedCountExceeded(countAfter, limit))
+              case Some(SourceImageQuotaRejection.BytesExceeded(bytesAfter, limit)) =>
+                reject(ownerAccountId, Rejection.UnreferencedBytesExceeded(bytesAfter, limit))
+              case None => capacity.ensureCanAccept(ownerAccountId, incomingBytes)
         }
   }
 
@@ -132,9 +125,6 @@ private final class ReferenceAwareImageStorageAdmission[F[_]: MonadThrow: Logger
   private def reject(ownerAccountId: AccountId, rejection: Rejection): F[Either[AppError, Unit]] =
     logger.warn(s"image_upload_admission rejected accountId=${ownerAccountId.value} ${rejection
         .logFields}") >> rejection.error.asLeft[Unit].pure[F]
-
-  private def saturatedAdd(left: Long, right: Long): Long =
-    if right > 0L && left > Long.MaxValue - right then Long.MaxValue else left + right
 
 private final class CapacityImageStorageAdmission[F[_]: MonadThrow: LoggerFactory](
     inspector: ImageStorageCapacityInspector[F],

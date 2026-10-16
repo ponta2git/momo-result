@@ -7,7 +7,7 @@ import cats.syntax.applicative.*
 import cats.syntax.flatMap.*
 import cats.syntax.functor.*
 
-import momo.api.domain.MatchRecord
+import momo.api.domain.{MatchDraftConfirmability, MatchRecord}
 import momo.api.errors.AppError
 import momo.api.repositories.{
   MatchConfirmationRepository,
@@ -40,7 +40,11 @@ final class InMemoryMatchConfirmationRepository[F[_]: MonadCancelThrow](
       for
         current <- matchDrafts.find(expected.draftId)
         updated <-
-          if current.exists(MatchDraftConfirmation.from(_) == expected) then
+          if current.exists(draft =>
+              MatchDraftConfirmability.allows(draft.status) &&
+                MatchDraftConfirmation.from(draft) == expected
+            )
+          then
             createAndConfirm(record, expected, updatedAt)
           else false.pure[F]
       yield updated match

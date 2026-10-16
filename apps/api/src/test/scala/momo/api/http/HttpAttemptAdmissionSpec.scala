@@ -11,7 +11,7 @@ import org.typelevel.ci.CIString
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.auth.SessionCookieCodec
-import momo.api.bootstrap.ApiApp
+import momo.api.bootstrap.HttpTestRuntime
 import momo.api.config.{AppConfig, AppEnv, AuthConfig, ResourceLimitsConfig}
 import momo.api.domain.ids.AccountId
 
@@ -27,7 +27,7 @@ final class HttpAttemptAdmissionSpec extends MomoCatsEffectSuite with HttpAppTes
   private def sessionApp(limits: ResourceLimitsConfig): Resource[IO, SessionApp] =
     tempDirectory("momo-api-session-attempt").flatMap { dir =>
       val auth = AuthConfig.defaults(AppEnv.Prod)
-      ApiApp.wiredWithHandles[IO](AppConfig(
+      HttpTestRuntime.wiredWithHandles[IO](AppConfig(
         appEnv = AppEnv.Prod,
         httpHost = "127.0.0.1",
         httpPort = 0,

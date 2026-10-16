@@ -8,12 +8,12 @@ import org.http4s.circe.*
 import org.http4s.implicits.*
 import org.http4s.{Status, Uri}
 
-import momo.api.MomoCatsEffectSuite
 import momo.api.domain.GameTitle
 import momo.api.domain.ids.GameTitleId
 import momo.api.http.HttpAssertions.{assertProblem, jsonField}
+import momo.api.integration.PostgresHttpAppTestFixtures
 
-final class SeriesPlayerRadarHttpSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
+final class SeriesPlayerRadarHttpSpec extends PostgresHttpAppTestFixtures:
   private val title = GameTitleId.unsafeFromString("title-radar-http")
   private val stateUri =
     Uri.unsafeFromString(s"/api/admin/series-analysis/radar?gameTitleId=${title.value}")

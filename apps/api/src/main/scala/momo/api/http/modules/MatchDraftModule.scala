@@ -1,7 +1,5 @@
 package momo.api.http.modules
 
-import java.time.Instant
-
 import cats.effect.Async
 import cats.syntax.all.*
 import org.slf4j.LoggerFactory
@@ -14,21 +12,19 @@ import momo.api.domain.ids.{ImageId, MatchDraftId}
 import momo.api.endpoints.codec.{BoundaryId, MatchDraftCodec}
 import momo.api.endpoints.{
   CancelMatchDraftResponse,
-  CreateMatchDraftRequest,
   MatchDraftDetailResponse,
   MatchDraftEndpoints,
   MatchDraftResponse,
   MatchDraftReviewResponse,
   MatchDraftSourceImageListResponse,
   MatchDraftSourceImageResponse,
-  ProblemDetails,
-  UpdateMatchDraftRequest
+  ProblemDetails
 }
 import momo.api.http.{
   EndpointSecurity,
   HttpDownloadHeaders,
   HttpOperation,
-  IdempotencyReplay,
+  HttpRouteContext,
   SecuredEndpoint,
   SourceImageTransferContext,
   SourceImageTransferLogging
@@ -43,105 +39,108 @@ import momo.api.usecases.matchdrafts.{
 }
 
 object MatchDraftModule:
-  private val logger = LoggerFactory.getLogger("momo.api.http.modules.MatchDraftModule")
-
-  def routes[F[_]: Async](
+  final case class UseCases[F[_]](
       createMatchDraft: CreateMatchDraft[F],
       getMatchDraft: GetMatchDraft[F],
       getMatchDraftReview: GetMatchDraftReview[F],
       updateMatchDraft: UpdateMatchDraft[F],
       cancelMatchDraft: CancelMatchDraft[F],
       getMatchDraftSourceImages: GetMatchDraftSourceImages[F],
-      idempotency: IdempotencyReplay.Guard[F],
-      nowF: F[Instant],
-      security: EndpointSecurity[F],
-  ): List[ServerEndpoint[Any, F]] = List(
-    SecuredEndpoint.mutationLogic(security, MatchDraftEndpoints.create) { member =>
-      {
-        case (idemKey, request) =>
-          IdempotencyReplay.wrap[F, CreateMatchDraftRequest, MatchDraftResponse](
-            idempotency,
-            idemKey,
-            member,
-            HttpOperation.CreateMatchDraft,
-            request,
-            nowF,
-            security.decode(
+  )
+
+  private val logger = LoggerFactory.getLogger("momo.api.http.modules.MatchDraftModule")
+
+  def routes[F[_]: Async](
+      useCases: UseCases[F],
+      context: HttpRouteContext[F],
+  ): List[ServerEndpoint[Any, F]] =
+    import useCases.*
+    val security = context.security
+    val execution = context.execution
+    List(
+      SecuredEndpoint.mutationLogic(security, MatchDraftEndpoints.create) { member =>
+        {
+          case (idemKey, request) =>
+            execution.mutation(
+              HttpOperation.CreateMatchDraft,
+              idemKey,
+              member,
+              request,
+            )(
               MatchDraftCodec.parseInstantOption("playedAt", request.playedAt)
                 .flatMap(MatchDraftCodec.toCreateCommand(request, _))
             )(command =>
-              security.respond(
-                createMatchDraft.run(command, member.accountId, member.playerMemberId)
-              )(MatchDraftResponse.from)
-            ),
-          )
-      }
-    },
-    SecuredEndpoint.mutationLogic(security, MatchDraftEndpoints.update) { member =>
-      {
-        case (draftId, idemKey, request) =>
-          IdempotencyReplay.wrap[F, (String, UpdateMatchDraftRequest), MatchDraftResponse](
-            idempotency,
-            idemKey,
-            member,
-            HttpOperation.UpdateMatchDraft,
-            (draftId, request),
-            nowF,
-            security.decode(
+              createMatchDraft.run(command, member.accountId, member.playerMemberId)
+            )(
+              MatchDraftResponse.from
+            )
+        }
+      },
+      SecuredEndpoint.mutationLogic(security, MatchDraftEndpoints.update) { member =>
+        {
+          case (draftId, idemKey, request) =>
+            execution.mutation(
+              HttpOperation.UpdateMatchDraft,
+              idemKey,
+              member,
+              (draftId, request),
+            )(
               for
                 id <- BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString)
                 playedAt <- MatchDraftCodec.parseInstantOption("playedAt", request.playedAt)
                 command <- MatchDraftCodec.toUpdateCommand(request, playedAt)
               yield (id, command)
             ) { case (id, command) =>
-              security.respond(updateMatchDraft.run(
+              updateMatchDraft.run(
                 id,
                 command,
                 member.accountId
-              ))(MatchDraftResponse.from)
-            },
-          )
-      }
-    },
-    SecuredEndpoint.readLogic(security, MatchDraftEndpoints.get) { _ => draftId =>
-      security.decode(
-        BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString)
-      )(id => security.respond(getMatchDraft.run(id))(MatchDraftDetailResponse.from))
-    },
-    SecuredEndpoint.readLogic(security, MatchDraftEndpoints.review) { _ => draftId =>
-      security.decode(BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString))(id =>
-        security.respond(getMatchDraftReview.run(id).map(_.flatMap(MatchDraftReviewResponse.from)))(
+              )
+            }(
+              MatchDraftResponse.from
+            )
+        }
+      },
+      SecuredEndpoint.readLogic(security, MatchDraftEndpoints.get) { _ => draftId =>
+        execution.execute(
+          BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString)
+        )(id => getMatchDraft.run(id))(
+          MatchDraftDetailResponse.from
+        )
+      },
+      SecuredEndpoint.readLogic(security, MatchDraftEndpoints.review) { _ => draftId =>
+        execution.execute(
+          BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString)
+        )(id => getMatchDraftReview.run(id).map(_.flatMap(MatchDraftReviewResponse.from)))(
           identity
         )
-      )
-    },
-    SecuredEndpoint.mutationLogic(security, MatchDraftEndpoints.cancel) { member =>
-      {
-        case (draftId, idemKey) =>
-          IdempotencyReplay.wrap[F, String, CancelMatchDraftResponse](
-            idempotency,
-            idemKey,
-            member,
-            HttpOperation.CancelMatchDraft,
-            draftId,
-            nowF,
-            security
-              .decode(BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString)) { id =>
-                security.respond(
-                  cancelMatchDraft.run(id, member.accountId)
-                )(_ => CancelMatchDraftResponse(matchDraftId = draftId, status = "cancelled"))
-              },
-          )
-      }
-    },
-    SecuredEndpoint.readLogic(security, MatchDraftEndpoints.listSourceImages) { _ => draftId =>
-      security.decode(BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString))(id =>
-        security.respond(getMatchDraftSourceImages.list(id))(items =>
-          MatchDraftSourceImageListResponse(items.map(MatchDraftSourceImageResponse.from(id, _)))
-        )
-      )
-    },
-  )
+      },
+      SecuredEndpoint.mutationLogic(security, MatchDraftEndpoints.cancel) { member =>
+        {
+          case (draftId, idemKey) =>
+            execution.mutation(
+              HttpOperation.CancelMatchDraft,
+              idemKey,
+              member,
+              draftId,
+            )(
+              BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString)
+            )(id =>
+              cancelMatchDraft.run(id, member.accountId)
+            )(_ => CancelMatchDraftResponse(matchDraftId = draftId, status = "cancelled"))
+        }
+      },
+      SecuredEndpoint.readLogic(security, MatchDraftEndpoints.listSourceImages) { _ => draftId =>
+        execution.execute(BoundaryId.required(
+          "matchDraftId",
+          draftId
+        )(MatchDraftId.fromString))(id =>
+          getMatchDraftSourceImages.list(id).map(_.map(items =>
+            MatchDraftSourceImageListResponse(items.map(MatchDraftSourceImageResponse.from(id, _)))
+          ))
+        )(identity)
+      },
+    )
 
   def sourceImageRoutes[F[_]: Async](
       getMatchDraftSourceImages: GetMatchDraftSourceImages[F],

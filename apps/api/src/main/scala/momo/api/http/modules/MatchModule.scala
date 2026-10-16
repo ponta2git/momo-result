@@ -1,15 +1,12 @@
 package momo.api.http.modules
 
-import java.time.Instant
 import java.time.format.DateTimeFormatter
 
-import cats.effect.Async
 import sttp.tapir.server.ServerEndpoint
 
 import momo.api.domain.ids.MatchId
 import momo.api.endpoints.codec.{BoundaryId, MatchCodec, MatchListCodec}
 import momo.api.endpoints.{
-  ConfirmMatchRequest,
   ConfirmMatchResponse,
   DeleteMatchResponse,
   MatchDetailResponse,
@@ -19,12 +16,10 @@ import momo.api.endpoints.{
   MatchListSummaryResponse,
   MatchSummaryResponse,
   MatchesEndpoints,
-  ReplaceMatchNoteRequest,
   ReplaceMatchNoteResponse,
-  UpdateMatchRequest,
   UpdateMatchResponse
 }
-import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay, SecuredEndpoint}
+import momo.api.http.{HttpOperation, HttpRouteContext, SecuredEndpoint}
 import momo.api.usecases.matches.{
   ConfirmMatch,
   DeleteMatch,
@@ -36,150 +31,156 @@ import momo.api.usecases.matches.{
 }
 
 object MatchModule:
-  def routes[F[_]: Async](
+  final case class UseCases[F[_]](
       confirmMatch: ConfirmMatch[F],
       listMatches: ListMatches[F],
       getMatch: GetMatch[F],
       updateMatch: UpdateMatch[F],
       replaceMatchNote: ReplaceMatchNote[F],
       deleteMatch: DeleteMatch[F],
-      idempotency: IdempotencyReplay.Guard[F],
-      nowF: F[Instant],
-      security: EndpointSecurity[F],
-  ): List[ServerEndpoint[Any, F]] = List(
-    SecuredEndpoint.mutationLogic(security, MatchesEndpoints.confirm) { member =>
-      {
-        case (idemKey, request) =>
-          IdempotencyReplay.wrap[F, ConfirmMatchRequest, ConfirmMatchResponse](
-            idempotency,
-            idemKey,
-            member,
-            HttpOperation.ConfirmMatch,
-            request,
-            nowF,
-            security.decode(MatchCodec.toConfirmCommand(request))(command =>
-              security
-                .respond(confirmMatch.run(command, member.accountId, member.playerMemberId))(
-                  record =>
-                    ConfirmMatchResponse(
-                      matchId = record.id.value,
-                      heldEventId = record.heldEventId.value,
-                      matchNoInEvent = record.matchNoInEvent.value,
-                      createdAt = DateTimeFormatter.ISO_INSTANT.format(record.createdAt),
-                    )
-                )
-            ),
+  )
+
+  def routes[F[_]](
+      useCases: UseCases[F],
+      context: HttpRouteContext[F],
+  ): List[ServerEndpoint[Any, F]] =
+    import useCases.*
+    val security = context.security
+    val execution = context.execution
+    List(
+      SecuredEndpoint.mutationLogic(security, MatchesEndpoints.confirm) { member =>
+        {
+          case (idemKey, request) =>
+            execution.mutation(
+              HttpOperation.ConfirmMatch,
+              idemKey,
+              member,
+              request,
+            )(
+              MatchCodec.toConfirmCommand(request)
+            )(command =>
+              confirmMatch.run(command, member.accountId, member.playerMemberId)
+            )(record =>
+              ConfirmMatchResponse(
+                matchId = record.id.value,
+                heldEventId = record.heldEventId.value,
+                matchNoInEvent = record.matchNoInEvent.value,
+                createdAt = DateTimeFormatter.ISO_INSTANT.format(record.createdAt),
+              )
+            )
+        }
+      },
+      SecuredEndpoint.readLogic(security, MatchesEndpoints.list) { member => input =>
+        execution.execute(
+          MatchListCodec.toListCommand(
+            heldEventId = input.heldEventId,
+            gameTitleId = input.gameTitleId,
+            seasonMasterId = input.seasonMasterId,
+            status = input.status,
+            kind = input.kind,
+            pageSize = input.pageSize,
+            cursor = input.cursor,
+            sort = input.sort,
           )
-      }
-    },
-    SecuredEndpoint.readLogic(security, MatchesEndpoints.list) { member => input =>
-      security.decode(MatchListCodec.toListCommand(
-        heldEventId = input.heldEventId,
-        gameTitleId = input.gameTitleId,
-        seasonMasterId = input.seasonMasterId,
-        status = input.status,
-        kind = input.kind,
-        pageSize = input.pageSize,
-        cursor = input.cursor,
-        sort = input.sort,
-      ))(command =>
-        security.respond(listMatches.run(command, member.accountId))(result =>
+        )(command => listMatches.run(command, member.accountId))(result =>
           MatchListResponse(
             items = result.items.map(MatchSummaryResponse.from),
             pagination = paginationResponse(result.pagination),
           )
         )
-      )
-    },
-    SecuredEndpoint.readLogic(security, MatchesEndpoints.summary) { _ => input =>
-      security.decode(
-        MatchListCodec.parseSummaryFilter(
-          heldEventId = input.heldEventId,
-          gameTitleId = input.gameTitleId,
-          seasonMasterId = input.seasonMasterId,
-        )
-      ) { case (parsedHeldEventId, parsedGameTitleId, parsedSeasonMasterId) =>
-        security.respond(
+      },
+      SecuredEndpoint.readLogic(security, MatchesEndpoints.summary) { _ => input =>
+        execution.execute(
+          MatchListCodec.parseSummaryFilter(
+            heldEventId = input.heldEventId,
+            gameTitleId = input.gameTitleId,
+            seasonMasterId = input.seasonMasterId,
+          )
+        ) { case (parsedHeldEventId, parsedGameTitleId, parsedSeasonMasterId) =>
           listMatches.summarize(parsedHeldEventId, parsedGameTitleId, parsedSeasonMasterId)
-        )(MatchListSummaryResponse.from)
-      }
-    },
-    SecuredEndpoint.readLogic(security, MatchesEndpoints.get) { _ => matchId =>
-      security.decode(
-        BoundaryId.required("matchId", matchId)(MatchId.fromString)
-      )(id => security.respond(getMatch.run(id))(MatchDetailResponse.from))
-    },
-    SecuredEndpoint.readLogic(security, MatchesEndpoints.identity) { _ => matchId =>
-      security.decode(BoundaryId.required("matchId", matchId)(MatchId.fromString))(id =>
-        security.respond(getMatch.identity(id))(MatchIdentityResponse.from)
-      )
-    },
-    SecuredEndpoint.mutationLogic(security, MatchesEndpoints.update) { member =>
-      {
-        case (matchId, idemKey, request) =>
-          IdempotencyReplay.wrap[F, (String, UpdateMatchRequest), UpdateMatchResponse](
-            idempotency,
-            idemKey,
-            member,
-            HttpOperation.UpdateMatch,
-            (matchId, request),
-            nowF,
-            security.decode(BoundaryId.required("matchId", matchId)(MatchId.fromString)) { id =>
-              security.decode(MatchCodec.toUpdateCommand(request))(command =>
-                security.respond(updateMatch.run(id, command))(record =>
-                  UpdateMatchResponse(
-                    matchId = record.id.value,
-                    heldEventId = record.heldEventId.value,
-                    matchNoInEvent = record.matchNoInEvent.value,
-                  )
-                )
+        }(
+          MatchListSummaryResponse.from
+        )
+      },
+      SecuredEndpoint.readLogic(security, MatchesEndpoints.get) { _ => matchId =>
+        execution.execute(
+          BoundaryId.required("matchId", matchId)(MatchId.fromString)
+        )(id => getMatch.run(id))(
+          MatchDetailResponse.from
+        )
+      },
+      SecuredEndpoint.readLogic(security, MatchesEndpoints.identity) { _ => matchId =>
+        execution.execute(
+          BoundaryId.required("matchId", matchId)(MatchId.fromString)
+        )(id => getMatch.identity(id))(
+          MatchIdentityResponse.from
+        )
+      },
+      SecuredEndpoint.mutationLogic(security, MatchesEndpoints.update) { member =>
+        {
+          case (matchId, idemKey, request) =>
+            execution.mutation(
+              HttpOperation.UpdateMatch,
+              idemKey,
+              member,
+              (matchId, request),
+            )(
+              for
+                id <- BoundaryId.required("matchId", matchId)(MatchId.fromString)
+                command <- MatchCodec.toUpdateCommand(request)
+              yield (id, command)
+            ) { case (id, command) =>
+              updateMatch.run(id, command)
+            }(record =>
+              UpdateMatchResponse(
+                matchId = record.id.value,
+                heldEventId = record.heldEventId.value,
+                matchNoInEvent = record.matchNoInEvent.value,
               )
-            },
-          )
-      }
-    },
-    SecuredEndpoint.mutationLogic(security, MatchesEndpoints.replaceNote) { member =>
-      {
-        case (matchId, idemKey, request) =>
-          IdempotencyReplay.wrap[F, (String, ReplaceMatchNoteRequest), ReplaceMatchNoteResponse](
-            idempotency,
-            idemKey,
-            member,
-            HttpOperation.ReplaceMatchNote,
-            (matchId, request),
-            nowF,
-            security.decode(BoundaryId.required("matchId", matchId)(MatchId.fromString)) { id =>
-              security.decode(MatchCodec.toReplaceNoteCommand(request)) { command =>
-                security.respond(replaceMatchNote.run(id, command, member.accountId))(note =>
-                  ReplaceMatchNoteResponse(
-                    matchId = matchId,
-                    version = note.version.value.toString,
-                  )
-                )
-              }
-            },
-          )
-      }
-    },
-    SecuredEndpoint.mutationLogic(security, MatchesEndpoints.delete) { member =>
-      {
-        case (matchId, idemKey) =>
-          IdempotencyReplay.wrap[F, String, DeleteMatchResponse](
-            idempotency,
-            idemKey,
-            member,
-            HttpOperation.DeleteMatch,
-            matchId,
-            nowF,
-            security.decode(BoundaryId.required("matchId", matchId)(MatchId.fromString))(id =>
-              security.respond(deleteMatch.run(id))(_ =>
-                DeleteMatchResponse(matchId, deleted = true)
+            )
+        }
+      },
+      SecuredEndpoint.mutationLogic(security, MatchesEndpoints.replaceNote) { member =>
+        {
+          case (matchId, idemKey, request) =>
+            execution.mutation(
+              HttpOperation.ReplaceMatchNote,
+              idemKey,
+              member,
+              (matchId, request),
+            )(
+              for
+                id <- BoundaryId.required("matchId", matchId)(MatchId.fromString)
+                command <- MatchCodec.toReplaceNoteCommand(request)
+              yield (id, command)
+            ) { case (id, command) =>
+              replaceMatchNote.run(id, command, member.accountId)
+            }(note =>
+              ReplaceMatchNoteResponse(
+                matchId = matchId,
+                version = note.version.value.toString,
               )
-            ),
-          )
-      }
-    },
-  )
+            )
+        }
+      },
+      SecuredEndpoint.mutationLogic(security, MatchesEndpoints.delete) { member =>
+        {
+          case (matchId, idemKey) =>
+            execution.mutation(
+              HttpOperation.DeleteMatch,
+              idemKey,
+              member,
+              matchId,
+            )(
+              BoundaryId.required("matchId", matchId)(MatchId.fromString)
+            )(id =>
+              deleteMatch.run(id)
+            )(_ =>
+              DeleteMatchResponse(matchId, deleted = true)
+            )
+        }
+      },
+    )
 
   private def paginationResponse(value: ListMatchesPagination): MatchListPaginationResponse =
     MatchListPaginationResponse(

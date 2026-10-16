@@ -1,7 +1,5 @@
 package momo.api.http.modules
 
-import java.time.Instant
-
 import cats.effect.Async
 import cats.syntax.all.*
 import sttp.tapir.server.ServerEndpoint
@@ -9,9 +7,6 @@ import sttp.tapir.server.ServerEndpoint
 import momo.api.domain.ids.{GameTitleId, MapMasterId, SeasonMasterId}
 import momo.api.endpoints.codec.{BoundaryId, MasterCodec}
 import momo.api.endpoints.{
-  CreateGameTitleRequest,
-  CreateMapMasterRequest,
-  CreateSeasonMasterRequest,
   DeleteMasterResponse,
   GameTitleListResponse,
   GameTitleResponse,
@@ -24,34 +19,27 @@ import momo.api.endpoints.{
   MapMastersEndpoints,
   SeasonMasterListResponse,
   SeasonMasterResponse,
-  SeasonMastersEndpoints,
-  UpdateGameTitleRequest,
-  UpdateMapMasterRequest,
-  UpdateSeasonMasterRequest
+  SeasonMastersEndpoints
 }
-import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay, SecuredEndpoint}
+import momo.api.http.{HttpOperation, HttpRouteContext, SecuredEndpoint}
 import momo.api.usecases.masters.{
   CreateGameTitle,
   CreateMapMaster,
-  CreateMemberAlias,
   CreateSeasonMaster,
   DeleteGameTitle,
   DeleteMapMaster,
-  DeleteMemberAlias,
   DeleteSeasonMaster,
   ListGameTitles,
   ListIncidentMasters,
   ListMapMasters,
-  ListMemberAliases,
   ListSeasonMasters,
   UpdateGameTitle,
   UpdateMapMaster,
-  UpdateMemberAlias,
   UpdateSeasonMaster
 }
 
 object MasterModule:
-  def routes[F[_]: Async](
+  final case class UseCases[F[_]](
       listGameTitles: ListGameTitles[F],
       listMapMasters: ListMapMasters[F],
       listSeasonMasters: ListSeasonMasters[F],
@@ -65,196 +53,188 @@ object MasterModule:
       deleteGameTitle: DeleteGameTitle[F],
       deleteMapMaster: DeleteMapMaster[F],
       deleteSeasonMaster: DeleteSeasonMaster[F],
-      listMemberAliases: ListMemberAliases[F],
-      createMemberAlias: CreateMemberAlias[F],
-      updateMemberAlias: UpdateMemberAlias[F],
-      deleteMemberAlias: DeleteMemberAlias[F],
-      idempotency: IdempotencyReplay.Guard[F],
-      nowF: F[Instant],
-      security: EndpointSecurity[F],
-  ): List[ServerEndpoint[Any, F]] = List(
-    SecuredEndpoint.readLogic(security, GameTitlesEndpoints.list) { _ => _ =>
-      listGameTitles.run
-        .map(items => Right(GameTitleListResponse(items.map(GameTitleResponse.from))))
-    },
-    SecuredEndpoint.adminMutationLogic(security, GameTitlesEndpoints.create) { member =>
-      {
-        case (idemKey, request) =>
-          IdempotencyReplay.wrap[F, CreateGameTitleRequest, GameTitleResponse](
-            idempotency,
-            idemKey,
-            member,
-            HttpOperation.CreateGameTitle,
-            request,
-            nowF,
-            security.decode(
+      aliases: MasterMemberAliasRoutes.UseCases[F],
+  )
+
+  def routes[F[_]: Async](
+      useCases: UseCases[F],
+      context: HttpRouteContext[F],
+  ): List[ServerEndpoint[Any, F]] =
+    import useCases.*
+    val security = context.security
+    val execution = context.execution
+    List(
+      SecuredEndpoint.readLogic(security, GameTitlesEndpoints.list) { _ => _ =>
+        listGameTitles.run
+          .map(items => Right(GameTitleListResponse(items.map(GameTitleResponse.from))))
+      },
+      SecuredEndpoint.adminMutationLogic(security, GameTitlesEndpoints.create) { member =>
+        {
+          case (idemKey, request) =>
+            execution.mutation(
+              HttpOperation.CreateGameTitle,
+              idemKey,
+              member,
+              request,
+            )(
               MasterCodec.toCreateGameTitleCommand(request)
-            )(command => security.respond(createGameTitle.run(command))(GameTitleResponse.from)),
-          )
-      }
-    },
-    SecuredEndpoint.adminMutationLogic(security, GameTitlesEndpoints.update) { member =>
-      {
-        case (id, idemKey, request) =>
-          IdempotencyReplay.wrap[F, (String, UpdateGameTitleRequest), GameTitleResponse](
-            idempotency,
-            idemKey,
-            member,
-            HttpOperation.UpdateGameTitle,
-            (id, request),
-            nowF,
-            security.decode(
+            )(command =>
+              createGameTitle.run(command)
+            )(
+              GameTitleResponse.from
+            )
+        }
+      },
+      SecuredEndpoint.adminMutationLogic(security, GameTitlesEndpoints.update) { member =>
+        {
+          case (id, idemKey, request) =>
+            execution.mutation(
+              HttpOperation.UpdateGameTitle,
+              idemKey,
+              member,
+              (id, request),
+            )(
               MasterCodec.toUpdateGameTitleCommand(id, request)
-            )(command => security.respond(updateGameTitle.run(command))(GameTitleResponse.from)),
-          )
-      }
-    },
-    SecuredEndpoint.adminMutationLogic(security, GameTitlesEndpoints.delete) { member =>
-      {
-        case (id, idemKey) =>
-          IdempotencyReplay.wrap[F, String, DeleteMasterResponse](
-            idempotency,
-            idemKey,
-            member,
-            HttpOperation.DeleteGameTitle,
-            id,
-            nowF,
-            security.decode(BoundaryId.required("id", id)(GameTitleId.fromString))(parsedId =>
-              security
-                .respond(deleteGameTitle.run(parsedId))(_ =>
-                  DeleteMasterResponse(id, deleted = true)
-                )
-            ),
-          )
-      }
-    },
-    SecuredEndpoint.readLogic(security, MapMastersEndpoints.list) { _ => gameTitleId =>
-      security.decode(BoundaryId.optional("gameTitleId", gameTitleId)(GameTitleId.fromString)) {
-        parsedGameTitleId =>
-          listMapMasters.run(parsedGameTitleId)
-            .map(items => Right(MapMasterListResponse(items.map(MapMasterResponse.from))))
-      }
-    },
-    SecuredEndpoint.operatorMutationLogic(security, MapMastersEndpoints.create) { member =>
-      {
-        case (idemKey, request) =>
-          IdempotencyReplay.wrap[F, CreateMapMasterRequest, MapMasterResponse](
-            idempotency,
-            idemKey,
-            member,
-            HttpOperation.CreateMapMaster,
-            request,
-            nowF,
-            security.decode(
+            )(command =>
+              updateGameTitle.run(command)
+            )(
+              GameTitleResponse.from
+            )
+        }
+      },
+      SecuredEndpoint.adminMutationLogic(security, GameTitlesEndpoints.delete) { member =>
+        {
+          case (id, idemKey) =>
+            execution.mutation(
+              HttpOperation.DeleteGameTitle,
+              idemKey,
+              member,
+              id,
+            )(
+              BoundaryId.required("id", id)(GameTitleId.fromString)
+            )(parsedId =>
+              deleteGameTitle.run(parsedId)
+            )(_ =>
+              DeleteMasterResponse(id, deleted = true)
+            )
+        }
+      },
+      SecuredEndpoint.readLogic(security, MapMastersEndpoints.list) { _ => gameTitleId =>
+        security.decode(BoundaryId.optional("gameTitleId", gameTitleId)(GameTitleId.fromString)) {
+          parsedGameTitleId =>
+            listMapMasters.run(parsedGameTitleId)
+              .map(items => Right(MapMasterListResponse(items.map(MapMasterResponse.from))))
+        }
+      },
+      SecuredEndpoint.operatorMutationLogic(security, MapMastersEndpoints.create) { member =>
+        {
+          case (idemKey, request) =>
+            execution.mutation(
+              HttpOperation.CreateMapMaster,
+              idemKey,
+              member,
+              request,
+            )(
               MasterCodec.toCreateMapMasterCommand(request)
-            )(command => security.respond(createMapMaster.run(command))(MapMasterResponse.from)),
-          )
-      }
-    },
-    SecuredEndpoint.operatorMutationLogic(security, MapMastersEndpoints.update) { member =>
-      {
-        case (id, idemKey, request) =>
-          IdempotencyReplay.wrap[F, (String, UpdateMapMasterRequest), MapMasterResponse](
-            idempotency,
-            idemKey,
-            member,
-            HttpOperation.UpdateMapMaster,
-            (id, request),
-            nowF,
-            security.decode(
+            )(command =>
+              createMapMaster.run(command)
+            )(
+              MapMasterResponse.from
+            )
+        }
+      },
+      SecuredEndpoint.operatorMutationLogic(security, MapMastersEndpoints.update) { member =>
+        {
+          case (id, idemKey, request) =>
+            execution.mutation(
+              HttpOperation.UpdateMapMaster,
+              idemKey,
+              member,
+              (id, request),
+            )(
               MasterCodec.toUpdateMapMasterCommand(id, request)
-            )(command => security.respond(updateMapMaster.run(command))(MapMasterResponse.from)),
-          )
-      }
-    },
-    SecuredEndpoint.operatorMutationLogic(security, MapMastersEndpoints.delete) { member =>
-      {
-        case (id, idemKey) =>
-          IdempotencyReplay.wrap[F, String, DeleteMasterResponse](
-            idempotency,
-            idemKey,
-            member,
-            HttpOperation.DeleteMapMaster,
-            id,
-            nowF,
-            security.decode(BoundaryId.required("id", id)(MapMasterId.fromString))(parsedId =>
-              security
-                .respond(deleteMapMaster.run(parsedId))(_ =>
-                  DeleteMasterResponse(id, deleted = true)
-                )
-            ),
-          )
-      }
-    },
-    SecuredEndpoint.readLogic(security, SeasonMastersEndpoints.list) { _ => gameTitleId =>
-      security.decode(BoundaryId.optional("gameTitleId", gameTitleId)(GameTitleId.fromString)) {
-        parsedGameTitleId =>
-          listSeasonMasters.run(parsedGameTitleId)
-            .map(items => Right(SeasonMasterListResponse(items.map(SeasonMasterResponse.from))))
-      }
-    },
-    SecuredEndpoint.operatorMutationLogic(security, SeasonMastersEndpoints.create) { member =>
-      {
-        case (idemKey, request) =>
-          IdempotencyReplay.wrap[F, CreateSeasonMasterRequest, SeasonMasterResponse](
-            idempotency,
-            idemKey,
-            member,
-            HttpOperation.CreateSeasonMaster,
-            request,
-            nowF,
-            security.decode(
+            )(command =>
+              updateMapMaster.run(command)
+            )(
+              MapMasterResponse.from
+            )
+        }
+      },
+      SecuredEndpoint.operatorMutationLogic(security, MapMastersEndpoints.delete) { member =>
+        {
+          case (id, idemKey) =>
+            execution.mutation(
+              HttpOperation.DeleteMapMaster,
+              idemKey,
+              member,
+              id,
+            )(
+              BoundaryId.required("id", id)(MapMasterId.fromString)
+            )(parsedId =>
+              deleteMapMaster.run(parsedId)
+            )(_ =>
+              DeleteMasterResponse(id, deleted = true)
+            )
+        }
+      },
+      SecuredEndpoint.readLogic(security, SeasonMastersEndpoints.list) { _ => gameTitleId =>
+        security.decode(BoundaryId.optional("gameTitleId", gameTitleId)(GameTitleId.fromString)) {
+          parsedGameTitleId =>
+            listSeasonMasters.run(parsedGameTitleId)
+              .map(items => Right(SeasonMasterListResponse(items.map(SeasonMasterResponse.from))))
+        }
+      },
+      SecuredEndpoint.operatorMutationLogic(security, SeasonMastersEndpoints.create) { member =>
+        {
+          case (idemKey, request) =>
+            execution.mutation(
+              HttpOperation.CreateSeasonMaster,
+              idemKey,
+              member,
+              request,
+            )(
               MasterCodec.toCreateSeasonMasterCommand(request)
             )(command =>
-              security.respond(createSeasonMaster.run(command))(SeasonMasterResponse.from)
-            ),
-          )
-      }
-    },
-    SecuredEndpoint.operatorMutationLogic(security, SeasonMastersEndpoints.update) { member =>
-      {
-        case (id, idemKey, request) =>
-          IdempotencyReplay.wrap[F, (String, UpdateSeasonMasterRequest), SeasonMasterResponse](
-            idempotency,
-            idemKey,
-            member,
-            HttpOperation.UpdateSeasonMaster,
-            (id, request),
-            nowF,
-            security.decode(MasterCodec.toUpdateSeasonMasterCommand(id, request))(command =>
-              security.respond(updateSeasonMaster.run(command))(SeasonMasterResponse.from)
-            ),
-          )
-      }
-    },
-    SecuredEndpoint.operatorMutationLogic(security, SeasonMastersEndpoints.delete) { member =>
-      {
-        case (id, idemKey) =>
-          IdempotencyReplay.wrap[F, String, DeleteMasterResponse](
-            idempotency,
-            idemKey,
-            member,
-            HttpOperation.DeleteSeasonMaster,
-            id,
-            nowF,
-            security.decode(BoundaryId.required("id", id)(SeasonMasterId.fromString))(parsedId =>
-              security.respond(
-                deleteSeasonMaster.run(parsedId)
-              )(_ => DeleteMasterResponse(id, deleted = true))
-            ),
-          )
-      }
-    },
-    SecuredEndpoint.readLogic(security, IncidentMastersEndpoints.list) { _ => _ =>
-      listIncidentMasters.run
-        .map(items => Right(IncidentMasterListResponse(items.map(IncidentMasterResponse.from))))
-    },
-  ) ::: MasterMemberAliasRoutes.routes(
-    listMemberAliases = listMemberAliases,
-    createMemberAlias = createMemberAlias,
-    updateMemberAlias = updateMemberAlias,
-    deleteMemberAlias = deleteMemberAlias,
-    idempotency = idempotency,
-    nowF = nowF,
-    security = security,
-  )
+              createSeasonMaster.run(command)
+            )(
+              SeasonMasterResponse.from
+            )
+        }
+      },
+      SecuredEndpoint.operatorMutationLogic(security, SeasonMastersEndpoints.update) { member =>
+        {
+          case (id, idemKey, request) =>
+            execution.mutation(
+              HttpOperation.UpdateSeasonMaster,
+              idemKey,
+              member,
+              (id, request),
+            )(
+              MasterCodec.toUpdateSeasonMasterCommand(id, request)
+            )(command =>
+              updateSeasonMaster.run(command)
+            )(
+              SeasonMasterResponse.from
+            )
+        }
+      },
+      SecuredEndpoint.operatorMutationLogic(security, SeasonMastersEndpoints.delete) { member =>
+        {
+          case (id, idemKey) =>
+            execution.mutation(
+              HttpOperation.DeleteSeasonMaster,
+              idemKey,
+              member,
+              id,
+            )(
+              BoundaryId.required("id", id)(SeasonMasterId.fromString)
+            )(parsedId =>
+              deleteSeasonMaster.run(parsedId)
+            )(_ => DeleteMasterResponse(id, deleted = true))
+        }
+      },
+      SecuredEndpoint.readLogic(security, IncidentMastersEndpoints.list) { _ => _ =>
+        listIncidentMasters.run
+          .map(items => Right(IncidentMasterListResponse(items.map(IncidentMasterResponse.from))))
+      },
+    ) ::: MasterMemberAliasRoutes.routes(aliases, context)

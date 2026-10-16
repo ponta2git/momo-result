@@ -15,7 +15,7 @@ final case class OcrJobDraftAttachment(
 
 final case class OcrJobSubmissionBinding(submissionId: String, ownerAccountId: AccountId)
 
-final case class StoredOcrJob(job: OcrJob, draft: OcrDraft, created: Boolean)
+final case class StoredOcrJob(job: OcrJobAcceptance, created: Boolean)
 
 final case class OcrJobCreationPlan(
     submission: OcrJobSubmissionBinding,

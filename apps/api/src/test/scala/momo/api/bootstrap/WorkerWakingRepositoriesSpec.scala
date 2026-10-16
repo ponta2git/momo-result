@@ -33,8 +33,7 @@ final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
   test("OCR creation wakes only after an accepted durable result"):
     for
       result <- Ref.of[IO, OcrJobCreationStore.OcrJobCreationResult](Right(StoredOcrJob(
-        ocrPlan.job,
-        ocrPlan.draft,
+        OcrJobAcceptance.fromJob(ocrPlan.job),
         true
       )))
       sink <- RecordingSink.create
@@ -45,7 +44,7 @@ final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
         closed.update(_ + 1),
       )
       accepted <- store.store(ocrPlan)
-      _ <- result.set(Right(StoredOcrJob(ocrPlan.job, ocrPlan.draft, false)))
+      _ <- result.set(Right(StoredOcrJob(OcrJobAcceptance.fromJob(ocrPlan.job), false)))
       replayed <- store.store(ocrPlan)
       _ <- result.set(Left(OcrJobCreationRejection.InvalidPlan))
       rejected <- store.store(ocrPlan)
@@ -128,8 +127,7 @@ final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
   test("a closed sink escalates runtime failure without changing the committed result"):
     for
       result <- Ref.of[IO, OcrJobCreationStore.OcrJobCreationResult](Right(StoredOcrJob(
-        ocrPlan.job,
-        ocrPlan.draft,
+        OcrJobAcceptance.fromJob(ocrPlan.job),
         true
       )))
       sink <- RecordingSink.closed

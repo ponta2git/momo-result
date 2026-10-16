@@ -41,7 +41,6 @@ private[bootstrap] object OcrUseCaseWiring:
       creationStore = creation,
       submissions = submissionRepository,
       jobs = jobs,
-      drafts = drafts,
       matchDrafts = matchDrafts,
       admissionGuard = admission,
       now = now,

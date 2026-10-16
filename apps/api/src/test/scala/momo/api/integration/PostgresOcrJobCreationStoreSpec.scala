@@ -2,6 +2,8 @@ package momo.api.integration
 import java.sql.Connection
 import java.time.Instant
 
+import scala.concurrent.duration.*
+
 import cats.effect.{Deferred, IO, Resource}
 import cats.syntax.all.*
 import doobie.implicits.*
@@ -284,9 +286,17 @@ final class PostgresOcrJobCreationStoreSpec
       first <- store(plan(job, draft, attachment, activeJobLimit = 12))
       _ <- sql"""UPDATE ocr_submissions SET status = 'settled', finished_at = clock_timestamp()
         WHERE id = '00000000-0000-4000-8000-000000000001'""".update.run.transact(transactor)
-      replay <- repo.store(plan(job, draft, attachment, activeJobLimit = 0).copy(
-        input = enqueueRequest.copy(hints = OcrJobHints.empty, requestId = Some("later-request"))
-      ))
+      _ <- sql"""UPDATE ocr_drafts
+        SET payload_json = jsonb_build_object('text', repeat('x', 1048577))
+        WHERE id = ${draftId.value}""".update.run.transact(transactor)
+      replay <- withDatabaseLock(
+        "SELECT pg_advisory_xact_lock(hashtext('momo:ocr_jobs:active_limit')::bigint)"
+      ) { (_, _) =>
+        repo.store(plan(job, draft, attachment, activeJobLimit = 0).copy(
+          input = enqueueRequest.copy(hints = OcrJobHints.empty, requestId = Some("later-request"))
+        )).timeout(2.seconds)
+      }
+      receipt <- PostgresOcrJobsRepository[IO](transactor).findAcceptance(jobId)
       input <- sql"SELECT input_snapshot FROM ocr_jobs WHERE id = ${jobId.value}"
         .query[Json].unique.transact(transactor)
       counts <-
@@ -296,11 +306,66 @@ final class PostgresOcrJobCreationStoreSpec
       assertEquals(first.map(_.created), Right(true))
       assertEquals(replay.map(_.created), Right(false))
       assertEquals(replay.map(_.job.id), first.map(_.job.id))
+      assertEquals(receipt, first.toOption.map(_.job))
       assertEquals(counts, (1L, 1L))
       assertEquals(
         Right(input),
         OcrJobInputSnapshot.fromInput(enqueueRequest).map(OcrJobInputSnapshot.toJson)
       )
+
+  test("a creator waiting for its source draft does not hold the global admission gate"):
+    for
+      _ <- prepareMatchDraft
+      _ <- prepareSourceImage
+      result <- withDatabaseLock(
+        s"SELECT id FROM match_drafts WHERE id = '${matchDraftId.value}' FOR UPDATE"
+      ) { (connection, blocker) =>
+        repo.store(plan(job, draft, attachment, activeJobLimit = 12)).background.use { creation =>
+          (for
+            _ <- awaitBackendBlockedBy(blocker)
+            gateAvailable <- sql"""SELECT pg_try_advisory_xact_lock(
+              hashtext('momo:ocr_jobs:active_limit')::bigint)"""
+              .query[Boolean].unique.transact(transactor)
+            _ = assert(gateAvailable, "a busy draft must not block unrelated OCR admission")
+            _ <- IO.blocking(connection.commit())
+            accepted <- creation.flatMap(_.embedNever)
+          yield accepted).guarantee(IO.blocking(connection.rollback()))
+        }
+      }
+    yield assertEquals(result.map(_.created), Right(true))
+
+  test("admission expires while waiting for the global gate without inserting a late job"):
+    for
+      _ <- prepareMatchDraft
+      _ <- prepareSourceImage
+      result <- withDatabaseLock(
+        "SELECT pg_advisory_xact_lock(hashtext('momo:ocr_jobs:active_limit')::bigint)"
+      ) { (connection, blocker) =>
+        for
+          deadline <- sql"""UPDATE ocr_submissions
+            SET admission_deadline = clock_timestamp() + interval '3 seconds'
+            WHERE id = '00000000-0000-4000-8000-000000000001'
+            RETURNING admission_deadline""".query[Instant].unique.transact(transactor)
+          rejected <- repo.store(plan(job, draft, attachment, activeJobLimit = 12))
+            .background.use { creation =>
+              (for
+                _ <- awaitBackendBlockedBy(blocker)
+                stillOpen <- sql"SELECT clock_timestamp() < $deadline".query[Boolean].unique
+                  .transact(transactor)
+                _ = assert(stillOpen, "the creator must reach the gate before admission expires")
+                _ <- awaitDatabaseDeadline(deadline)
+                _ <- IO.blocking(connection.commit())
+                result <- creation.flatMap(_.embedNever)
+              yield result).guarantee(IO.blocking(connection.rollback()))
+            }
+        yield rejected
+      }
+      counts <- sql"""SELECT (SELECT count(*) FROM ocr_jobs), (SELECT count(*) FROM ocr_drafts),
+        (SELECT count(*) FROM ocr_submission_members WHERE status = 'pending')"""
+        .query[(Long, Long, Long)].unique.transact(transactor)
+    yield
+      assertEquals(result, Left(OcrJobCreationRejection.SubmissionRejected))
+      assertEquals(counts, (0L, 0L, 1L))
 
   test("an expired pending member cannot register a late image job"):
     for
@@ -453,3 +518,22 @@ final class PostgresOcrJobCreationStoreSpec
       input = enqueueRequest,
       activeJobLimit = activeJobLimit,
     )
+
+  private def withDatabaseLock[A](query: String)(run: (Connection, Int) => IO[A]): IO[A] =
+    Resource.fromAutoCloseable(IO.blocking(dataSource.getConnection)).use { connection =>
+      (IO.blocking {
+        connection.setAutoCommit(false)
+        val statement = connection.createStatement()
+        try statement.executeQuery(query).close()
+        finally statement.close()
+      } *> backendPid(connection).flatMap(pid => run(connection, pid)))
+        .guarantee(IO.blocking(connection.rollback()))
+    }
+
+  private def awaitDatabaseDeadline(deadline: Instant): IO[Unit] =
+    def poll: IO[Unit] = sql"SELECT clock_timestamp() >= $deadline".query[Boolean].unique
+      .transact(transactor).flatMap {
+        case true => IO.unit
+        case false => IO.cede *> IO.defer(poll)
+      }
+    poll.timeout(5.seconds)

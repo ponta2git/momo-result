@@ -63,7 +63,7 @@ private[bootstrap] object WorkerWakingRepositories:
   ): OcrJobsRepository[F] =
     val wake = WakeAfterCommit(sink, onSinkClosed)
     new OcrJobsRepository[F]:
-      export delegate.{find, countActive, backlogSnapshot}
+      export delegate.{find, findAcceptance, countActive, backlogSnapshot}
 
       override def cancelQueued(jobId: OcrJobId, now: Instant): F[Boolean] =
         wake(delegate.cancelQueued(jobId, now), WorkerWakeKind.OcrSubmissions)(identity)

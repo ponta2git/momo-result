@@ -23,10 +23,10 @@ import momo.api.endpoints.{
 }
 import momo.api.errors.AppError
 import momo.api.http.{EndpointSecurity, HttpOperation, HttpRouteContext, SecuredEndpoint}
+import momo.api.repositories.OcrJobAcceptance
 import momo.api.usecases.ocr.{
   CancelOcrJob,
   CreateOcrJob,
-  CreatedOcrJob,
   GetOcrDraft,
   GetOcrDraftsBulk,
   GetOcrJob,
@@ -154,7 +154,7 @@ object OcrModule:
     )
 
   private def respondCreate[F[_]: Async](
-      result: F[Either[AppError, CreatedOcrJob]],
+      result: F[Either[AppError, OcrJobAcceptance]],
       accountId: String,
       request: CreateOcrJobRequest,
       requestId: Option[String],
@@ -165,8 +165,8 @@ object OcrModule:
       val response = OcrJobCodec.toCreateResponse(created)
       val submissionId = request.submissionId
       val requestIdValue = requestId.getOrElse("none")
-      val event = s"ocr_job_accepted accountId=$accountId jobId=${created.job.id.value} " +
-        s"draftId=${created.draft.id.value} imageId=${request.imageId} " +
+      val event = s"ocr_job_accepted accountId=$accountId jobId=${created.id.value} " +
+        s"draftId=${created.draftId.value} imageId=${request.imageId} " +
         s"requestedScreenType=${request.requestedScreenType} submissionId=$submissionId " +
         s"requestId=$requestIdValue"
       Async[F].delay(logger.info(event)) *> Async[F].pure(Right(response))

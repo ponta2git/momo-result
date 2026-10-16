@@ -113,9 +113,9 @@
   | `ui` | 汎用の構造・操作・アクセシビリティ・表示補間 | `ui`、`lib` |
 
   `shared/matches`、`heldEvents`、`masters`、`navigation` などの業務別 module はこれらを組み合わせる。順位・メンバー identity を知る結果台帳は `shared/matches`、API の候補を選択部品へ接続する処理は `shared/heldEvents`、分析専用チャートは `features/seriesComparison` が所有する。配置名が shared であることを汎用性の根拠にしない。
-- Page は composition とページ状態に寄せ、取得、mutation、複雑な状態機械、純粋変換を分離する。
-- 複雑な Page は feature 固有の PageModel から表示・操作の契約を受け取り、TanStack Query の result や mutation object を直接受け取らない。feature 内は、選択、整合した表示結果、編集セッションなど一緒に守る条件ごとに組み立てる。location / resource / PageModel を全機能の必須層にせず、同じ更新を複数の setter / effect へ分散させない。
-- 選択の遷移、取得可否、結果の採用などの判断は、値を受けて結果を返す純粋な model に置く。URL の読み書き、query、保存とその寿命は対応する owner が扱う。未解決・利用不可・利用可能など意味の異なる結果を型で区別し、通信中かどうかは別に扱う。外部入力や応答の対象・世代の一致は実行時にも検証する。
+- すべての feature で、入口が処理の流れを組み立て、純粋な model が判断・変換を、owner が状態・入出力・寿命を、UI が表示と利用者の操作を担当する。規模によって変えるのは分割量であり、この責務分担ではない。
+- Page は feature 固有の PageModel から表示・操作の契約を受け取り、TanStack Query の result や mutation object を直接受け取らない。PageModel は選択、整合した表示結果、編集セッション、保存など、一緒に守る条件ごとの owner と model を合成する。小さい機能は同じファイルの名前付き関数で分けてよく、location / resource など同じ数・名前の層を全機能へ追加しない。
+- 入力の正規化、選択の遷移、初期化、取得・保存可否、結果の採用、表示への変換は、値を受けて結果を返す純粋な model で読めるようにする。URL の読み書き、query、保存、時刻の取得と状態への反映は対応する owner が扱う。同じ更新を複数の setter / effect へ分散させない。未解決・利用不可・利用可能など意味の異なる結果を型で区別し、通信中かどうかは別に扱う。外部入力や応答の対象・世代の一致は実行時にも検証する。
 - 戦績比較は URL を確定した選択の正本とし、要求中・確認済み・表示中の条件を区別する。選択は候補との整合と URL 更新、結果は取得した成果物の採用と表示、見通しセッションは採用済み要約と試算入力をそれぞれ所有する。試合一覧の更新も対象付きの読取結果を選択へ渡し、取得処理から URL を直接変更しない。
 - hook が計算済みの値を別の builder へ渡し、そのまま同じ画面モデルへ詰め直す層は置かない。子の契約は使用する値・操作だけで表し、設定欄へ全 player 入力、チャートへ全 artifact、command へ全 page model を運ばない。純粋な表示変換・型は hook や page component へ依存せず、consumer と取得処理の共通の下位に置く。
 - ファイル行数は責務混在を見つける signal とし、行数だけを理由に浅い module へ分割しない。

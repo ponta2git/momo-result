@@ -65,7 +65,7 @@ enum MatchDraftSourceImageRetentionResult derives CanEqual:
   case NotFound
 
 enum MatchDraftCancellationResult derives CanEqual:
-  case Cancelled(sourceImageIds: List[ImageId])
+  case Cancelled
   case NotFound
   case Forbidden
   case NotCancellable(status: MatchDraftStatus)

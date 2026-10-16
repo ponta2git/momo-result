@@ -12,15 +12,13 @@ import momo.api.repositories.{MatchDraftCancellationRepository, MatchDraftCancel
 
 final class CancelMatchDraft[F[_]: MonadThrow](
     cancellation: MatchDraftCancellationRepository[F],
-    sourceImageRetention: PurgeSourceImages[F],
     now: F[Instant],
 ):
   def run(draftId: MatchDraftId, actorAccountId: AccountId): F[Either[AppError, Unit]] = (for
     at <- EitherT.liftF(now)
     result <- EitherT.liftF(cancellation.cancelDraftAndQueuedOcrJobs(draftId, at, actorAccountId))
     _ <- result match
-      case MatchDraftCancellationResult.Cancelled(sourceImageIds) => EitherT
-          .liftF(sourceImageRetention.deleteKnownBestEffort(draftId, sourceImageIds))
+      case MatchDraftCancellationResult.Cancelled => EitherT.rightT[F, AppError](())
       case MatchDraftCancellationResult.NotFound => EitherT
           .leftT[F, Unit](AppError.NotFound("match draft", draftId.value))
       case MatchDraftCancellationResult.Forbidden => EitherT

@@ -11,6 +11,7 @@ import doobie.postgres.implicits.*
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.*
 import momo.api.domain.ids.*
+import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.*
 
 object PostgresGameTitles:
@@ -112,6 +113,10 @@ object PostgresGameTitles:
         WHERE game_title_id = $id
         FOR UPDATE
       """.query[GameTitleId].option
+      // A match writer can already own the title's FK KEY SHARE while waiting for the
+      // analysis state above. Never wait for that writer while holding its next lock.
+      _ <- sql"SELECT id FROM game_titles WHERE id = $id FOR UPDATE NOWAIT"
+        .query[GameTitleId].option
       _ <- sql"""
         SELECT id
         FROM series_analysis_jobs
@@ -164,5 +169,16 @@ final class PostgresGameTitlesRepository[F[_]: MonadCancelThrow](transactor: Tra
   private val delegate: GameTitlesRepository[F] = GameTitlesRepository
     .fromAlg(PostgresGameTitles.alg, transactor.trans)
 
-  export delegate.*
+  export delegate.{list, find, createWithNextDisplayOrder, update}
+
+  override def delete(id: GameTitleId): F[Either[AppError, Unit]] =
+    // Translate contention only after transact has rolled back and released the title state.
+    RepositoryResult.capture(
+      PostgresGameTitles.alg.delete(id).transact(transactor).exceptSomeSqlState {
+        case state if state.value == "55P03" =>
+          new AppException(AppError.Conflict(
+            "The game title is being changed. Retry the deletion."
+          )).raiseError[F, Unit]
+      }
+    )
 end PostgresGameTitlesRepository

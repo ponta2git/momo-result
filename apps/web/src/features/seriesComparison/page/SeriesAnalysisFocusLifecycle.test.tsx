@@ -8,7 +8,7 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import type { SeriesAnalysisSelection } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { SeriesAnalysisContent } from "@/features/seriesComparison/page/SeriesAnalysisContent";
-import { useSeriesAnalysisResource } from "@/features/seriesComparison/page/useSeriesAnalysisResource";
+import { useSeriesAnalysisResult } from "@/features/seriesComparison/page/useSeriesAnalysisResult";
 import { seriesAnalysisKeys } from "@/shared/api/queryKeys";
 import { decodeSeriesAnalysisArtifact } from "@/shared/api/seriesAnalysisArtifactDecoder";
 import { setDevUser } from "@/test/auth";
@@ -48,7 +48,7 @@ function Harness() {
     focusMatchId: "match-12",
     view: "context",
   });
-  const analysis = useSeriesAnalysisResource({
+  const analysis = useSeriesAnalysisResult({
     activeView: "context",
     state,
     deferredState: state,

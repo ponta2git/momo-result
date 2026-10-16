@@ -5,6 +5,7 @@ import {
   incompatibleRanks,
 } from "@/features/seriesComparison/model/outlook";
 import type { RankDistribution } from "@/features/seriesComparison/model/outlook";
+import { outlookComparisonKey } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
 
 export type OutlookRole = 0 | 1;
@@ -127,7 +128,7 @@ export function adoptOutlookSummary(
     memberIds.some((id) => !response.recent.players.some((player) => player.memberId === id))
   )
     return undefined;
-  const key = `${scopeKey}|${memberIds.join("|")}`;
+  const key = outlookComparisonKey(scopeKey, memberIds);
   const artifactId = response.artifact.artifactId;
   if (current?.key === key && current.artifactId === artifactId) return current;
   const recent = memberIds.map((id) => recentEntry(response, id)) as OutlookSession["entries"];

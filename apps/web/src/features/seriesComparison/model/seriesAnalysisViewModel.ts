@@ -95,6 +95,11 @@ export function normalizeOutlookPair(focus?: string, rival?: string) {
   return { focusMemberId, rivalMemberId };
 }
 
+/** Scope and ordered people define one comparison, independently of its current artifact. */
+export function outlookComparisonKey(scopeKey: string, memberIds: readonly [string, string]) {
+  return `${scopeKey}|${memberIds.join("|")}`;
+}
+
 export const defaultSeriesAnalysisView: SeriesAnalysisViewId = "review";
 
 export function isSeriesAnalysisViewId(

@@ -3,13 +3,28 @@ import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider, useLocation } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
-import { useSeriesAnalysisLocationState } from "@/features/seriesComparison/navigation/useSeriesAnalysisLocationState";
+import {
+  changeSeriesAnalysisSelection,
+  normalizeSeriesAnalysisSelection,
+} from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import {
+  useSeriesAnalysisLocationRequest,
+  useSeriesAnalysisLocationState,
+} from "@/features/seriesComparison/navigation/useSeriesAnalysisLocationState";
 import { createDeferred } from "@/test/deferred";
 import { makeSeriesAnalysisOptions } from "@/test/msw/seriesAnalysisFixtures";
 
 function LocationStateHarness() {
   const location = useLocation();
-  const model = useSeriesAnalysisLocationState(makeSeriesAnalysisOptions());
+  const request = useSeriesAnalysisLocationRequest();
+  const options = makeSeriesAnalysisOptions();
+  const model = useSeriesAnalysisLocationState({
+    request,
+    normalizedSelection: normalizeSeriesAnalysisSelection(options, request.selection),
+    canonicalizationEnabled: true,
+    changeSelection: (current, change) =>
+      normalizeSeriesAnalysisSelection(options, changeSeriesAnalysisSelection(current, change)),
+  });
 
   return (
     <>

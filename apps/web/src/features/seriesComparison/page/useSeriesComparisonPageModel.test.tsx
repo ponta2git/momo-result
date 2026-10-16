@@ -24,6 +24,7 @@ import {
   makeSeriesAnalysisAggregate,
   makeSeriesAnalysisExcludedMatchContext,
   makeSeriesAnalysisOptions,
+  makeSeriesAnalysisScopeStatus,
 } from "@/test/msw/seriesAnalysisFixtures";
 import { makeSeriesAnalysisOutlookSummary } from "@/test/msw/seriesAnalysisOutlookFixtures";
 import { server } from "@/test/msw/server";
@@ -72,6 +73,9 @@ function RetainedOutlookHarness({ initial }: { initial: OutlookSession }) {
       <Link to="/analytics/series?gameTitleId=gt_momotetsu_2&view=outlook&seasonMasterId=season_current">
         シーズンを変更
       </Link>
+      <Link to="/analytics/series?gameTitleId=gt_momotetsu_2&view=outlook&seasonMasterId=season_without_matches">
+        一覧にないシーズンを指定
+      </Link>
       <Link to="/analytics/series?gameTitleId=gt_momotetsu_2&view=review">目的だけ変更</Link>
       <Link
         to={`/analytics/series?gameTitleId=gt_momotetsu_2&view=review&focusMemberId=${canonicalResultMemberIds[0]}&rivalMemberId=${canonicalResultMemberIds[2]}`}
@@ -83,6 +87,85 @@ function RetainedOutlookHarness({ initial }: { initial: OutlookSession }) {
 }
 
 describe("useSeriesComparisonPageModel", () => {
+  it.each([true, false])(
+    "keeps the trial while a URL-only scope is unverified and changes it only for a valid new scope: %s",
+    async (validIdentity) => {
+      const user = userEvent.setup();
+      const summary = await makeSeriesAnalysisOutlookSummary();
+      const adopted = adoptOutlookSummary(undefined, summary, "gt_momotetsu_2||", [
+        canonicalResultMemberIds[0],
+        canonicalResultMemberIds[1],
+      ]);
+      if (!adopted) throw new Error("Synthetic fixture must contain the selected people");
+      const initial = updateOutlookEntry(adopted, 0, { meanDraft: "2.30" });
+      const identityGate = createDeferred();
+      let identityRequested = false;
+      server.use(
+        http.get("/api/analytics/series-comparison/v2/scope-status", async ({ request }) => {
+          const params = new URL(request.url).searchParams;
+          const seasonMasterId = params.get("seasonMasterId");
+          if (seasonMasterId === "season_without_matches") {
+            identityRequested = true;
+            await identityGate.promise;
+            return HttpResponse.json(
+              makeSeriesAnalysisScopeStatus({
+                artifactId: params.get("artifactId"),
+                seasonMasterId,
+                seasonName: validIdentity ? "記録のないシーズン" : null,
+                state: validIdentity ? "empty" : "invalid",
+                invalidFields: validIdentity ? [] : ["seasonMasterId"],
+                currentHasMatches: false,
+                publishedHasMatches: false,
+              }),
+            );
+          }
+          return HttpResponse.json(
+            makeSeriesAnalysisScopeStatus({ artifactId: params.get("artifactId") }),
+          );
+        }),
+      );
+      const queryClient = createTestQueryClient();
+      render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter
+            initialEntries={["/analytics/series?gameTitleId=gt_momotetsu_2&view=outlook"]}
+          >
+            <OutlookSessionOwner>
+              <RetainedOutlookHarness initial={initial} />
+              <PageModelHarness onFocusChange={() => undefined} />
+            </OutlookSessionOwner>
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+      await waitFor(() =>
+        expect(screen.getByLabelText("analysis readiness")).toHaveTextContent("ready"),
+      );
+      await user.click(screen.getByRole("button", { name: "試算を用意" }));
+      await user.click(screen.getByRole("link", { name: "一覧にないシーズンを指定" }));
+      await waitFor(() => expect(identityRequested).toBe(true));
+      expect(screen.getByLabelText("retained average input")).toHaveTextContent("2.30");
+      expect(screen.getByLabelText("analysis location")).toHaveTextContent(
+        "season_without_matches",
+      );
+      await act(async () => identityGate.resolve());
+      if (validIdentity) {
+        await waitFor(() =>
+          expect(screen.getByLabelText("retained average input")).toBeEmptyDOMElement(),
+        );
+        expect(screen.getByLabelText("analysis location")).toHaveTextContent(
+          "season_without_matches",
+        );
+      } else {
+        await waitFor(() =>
+          expect(screen.getByLabelText("analysis location")).not.toHaveTextContent(
+            "seasonMasterId",
+          ),
+        );
+        expect(screen.getByLabelText("retained average input")).toHaveTextContent("2.30");
+      }
+    },
+  );
+
   it("preserves input for a purpose change but discards it when the pair changes while outlook is hidden", async () => {
     const user = userEvent.setup();
     const summary = await makeSeriesAnalysisOutlookSummary();

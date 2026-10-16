@@ -11,11 +11,7 @@ import {
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import type { OwnerMetricId } from "@/features/seriesComparison/model/seriesAnalysisOwnerMetrics";
-import {
-  defaultSeriesAnalysisView,
-  changeSeriesAnalysisSelection,
-  normalizeSeriesAnalysisSelection,
-} from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import { defaultSeriesAnalysisView } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import type {
   SeriesAnalysisSelection,
   SeriesAnalysisSelectionChange,
@@ -26,7 +22,6 @@ import {
   parseSeriesAnalysisSearchParams,
   seriesAnalysisNormalizationNotice,
 } from "@/features/seriesComparison/navigation/seriesAnalysisUrl";
-import type { SeriesAnalysisOptionsResponse } from "@/shared/api/seriesAnalysis";
 
 /** One page-local operation; only the matching REPLACE commit can inherit its source position. */
 export type SeriesAnalysisDisplayIntent = {
@@ -42,18 +37,33 @@ type PendingLocation = {
   hash: string;
 };
 
-/** Owns parsing, canonicalization, and atomic URL updates, including uncommitted successive actions. */
-export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsResponse | undefined) {
+/** Read once so scope verification and URL updates share the same requested selection. */
+export function useSeriesAnalysisLocationRequest() {
   const [searchParams] = useSearchParams();
+  const selection = useMemo(() => parseSeriesAnalysisSearchParams(searchParams), [searchParams]);
+  return useMemo(() => ({ searchParams, selection }), [searchParams, selection]);
+}
+
+/** Owns canonical URL commits and atomic updates, including uncommitted successive actions. */
+export function useSeriesAnalysisLocationState({
+  request,
+  normalizedSelection,
+  canonicalizationEnabled,
+  changeSelection,
+}: {
+  request: ReturnType<typeof useSeriesAnalysisLocationRequest>;
+  normalizedSelection: SeriesAnalysisSelection;
+  canonicalizationEnabled: boolean;
+  changeSelection: (
+    current: SeriesAnalysisSelection,
+    change: SeriesAnalysisSelectionChange,
+  ) => SeriesAnalysisSelection;
+}) {
+  const { searchParams, selection: requestedSelection } = request;
   const location = useLocation();
   const navigate = useNavigate();
-  const rawState = useMemo(() => parseSeriesAnalysisSearchParams(searchParams), [searchParams]);
   const [, startStateTransition] = useTransition();
-  const urlState = useMemo(
-    () => normalizeSeriesAnalysisSelection(options, rawState),
-    [options, rawState],
-  );
-  const [state, setOptimisticState] = useOptimistic(urlState);
+  const [state, setOptimisticState] = useOptimistic(normalizedSelection);
   const deferredState = useDeferredValue(state);
   const pending = useRef<PendingLocation | undefined>(undefined);
   const operation = useRef(0);
@@ -63,17 +73,21 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
     message: string | undefined;
   }>();
   const href = `${location.pathname}${location.search}${location.hash}`;
-  if (options && normalization?.source !== location.key) {
-    const message = seriesAnalysisNormalizationNotice(searchParams, rawState, urlState);
+  if (canonicalizationEnabled && normalization?.source !== location.key) {
+    const message = seriesAnalysisNormalizationNotice(
+      searchParams,
+      requestedSelection,
+      normalizedSelection,
+    );
     if (message) setNormalization({ source: location.key, message });
   }
 
   useEffect(() => {
-    if (!options) return;
+    if (!canonicalizationEnabled) return;
     // A canonicalization based on the old visit cannot overwrite a user action in flight.
     if (pending.current?.sourceKey === location.key && pending.current.target !== href) return;
     pending.current = undefined;
-    const next = buildSeriesAnalysisSearchParams(urlState);
+    const next = buildSeriesAnalysisSearchParams(normalizedSelection);
     if (next.toString() !== searchParams.toString()) {
       void navigate(
         { pathname: location.pathname, search: `?${next.toString()}`, hash: location.hash },
@@ -87,9 +101,9 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
     location.pathname,
     location.state,
     navigate,
-    options,
+    canonicalizationEnabled,
     searchParams,
-    urlState,
+    normalizedSelection,
   ]);
 
   const update = useCallback(
@@ -102,10 +116,7 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
         previous && (previous.sourceKey === location.key || previous.target === href)
           ? previous
           : undefined;
-      const normalized = normalizeSeriesAnalysisSelection(
-        options,
-        changeSeriesAnalysisSelection(inFlight?.state ?? urlState, change),
-      );
+      const normalized = changeSelection(inFlight?.state ?? normalizedSelection, change);
       const params = buildSeriesAnalysisSearchParams(normalized);
       const hash = updateOptions.displayOnly ? "#metric-owner" : (inFlight?.hash ?? location.hash);
       const target = `${location.pathname}?${params.toString()}${hash}`;
@@ -141,9 +152,9 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
       location.pathname,
       location.state,
       navigate,
-      options,
+      changeSelection,
       setOptimisticState,
-      urlState,
+      normalizedSelection,
     ],
   );
 

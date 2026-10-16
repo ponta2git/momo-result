@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import type { SeriesAnalysisSelection } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
-import { useSeriesAnalysisResource } from "@/features/seriesComparison/page/useSeriesAnalysisResource";
+import { useSeriesAnalysisResult } from "@/features/seriesComparison/page/useSeriesAnalysisResult";
 import { invalidateAfterMatchUpdated } from "@/shared/api/cacheInvalidation";
 import { seriesAnalysisKeys, seriesPlayerRadarKeys } from "@/shared/api/queryKeys";
 import type {
@@ -41,7 +41,7 @@ beforeAll(() =>
   ]),
 );
 
-describe("useSeriesAnalysisResource", () => {
+describe("useSeriesAnalysisResult", () => {
   it("holds a fully loaded replacement outlook during a gesture and adopts its complete summary on release", async () => {
     setDevUser();
     const queryClient = createTestQueryClient();
@@ -127,7 +127,7 @@ describe("useSeriesAnalysisResource", () => {
     const displayed: Array<{ held: boolean; summary: SeriesAnalysisOutlookSummary }> = [];
     const { result, rerender } = renderHook(
       (held: boolean) => {
-        const resource = useSeriesAnalysisResource({
+        const resource = useSeriesAnalysisResult({
           activeView: "outlook",
           state,
           deferredState: state,
@@ -224,7 +224,7 @@ describe("useSeriesAnalysisResource", () => {
     };
     const { result, rerender } = renderHook(
       (held: boolean) =>
-        useSeriesAnalysisResource({
+        useSeriesAnalysisResult({
           activeView: "outlook",
           state,
           deferredState: state,
@@ -293,7 +293,7 @@ describe("useSeriesAnalysisResource", () => {
     };
     const { result, rerender } = renderHook(
       (state: SeriesAnalysisSelection) =>
-        useSeriesAnalysisResource({
+        useSeriesAnalysisResult({
           activeView: state.view ?? "overview",
           deferredState: state,
           state,
@@ -391,7 +391,7 @@ describe("useSeriesAnalysisResource", () => {
       };
       const { result, rerender } = renderHook(
         (state: SeriesAnalysisSelection) =>
-          useSeriesAnalysisResource({ activeView: "overview", deferredState: state, state }),
+          useSeriesAnalysisResult({ activeView: "overview", deferredState: state, state }),
         {
           initialProps: initialState,
           wrapper: ({ children }: { children: ReactNode }) => (
@@ -480,7 +480,7 @@ describe("useSeriesAnalysisResource", () => {
       const [state, setState] = useState<SeriesAnalysisSelection>({
         gameTitleId: query.gameTitleId,
       });
-      const analysis = useSeriesAnalysisResource({
+      const analysis = useSeriesAnalysisResult({
         activeView: "overview",
         state,
         deferredState: state,
@@ -569,7 +569,7 @@ describe("useSeriesAnalysisResource", () => {
         view: "overview",
       };
       const { result } = renderHook(
-        () => useSeriesAnalysisResource({ activeView: "overview", deferredState: state, state }),
+        () => useSeriesAnalysisResult({ activeView: "overview", deferredState: state, state }),
         {
           wrapper: ({ children }: { children: ReactNode }) => (
             <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
@@ -619,7 +619,7 @@ describe("useSeriesAnalysisResource", () => {
       const initialState: SeriesAnalysisSelection = { gameTitleId: analysisArtifact.gameTitleId };
       const { result, rerender, unmount } = renderHook(
         (state: SeriesAnalysisSelection) =>
-          useSeriesAnalysisResource({ activeView: "overview", deferredState: state, state }),
+          useSeriesAnalysisResult({ activeView: "overview", deferredState: state, state }),
         {
           initialProps: initialState,
           wrapper: ({ children }: { children: ReactNode }) => (
@@ -666,7 +666,7 @@ describe("useSeriesAnalysisResource", () => {
       view: "overview",
     };
     const { result } = renderHook(
-      () => useSeriesAnalysisResource({ activeView: "overview", deferredState: state, state }),
+      () => useSeriesAnalysisResult({ activeView: "overview", deferredState: state, state }),
       {
         wrapper: ({ children }: { children: ReactNode }) => (
           <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
@@ -730,7 +730,7 @@ describe("useSeriesAnalysisResource", () => {
       };
       const { result, rerender, unmount } = renderHook(
         (state: SeriesAnalysisSelection) =>
-          useSeriesAnalysisResource({ activeView: "overview", deferredState: state, state }),
+          useSeriesAnalysisResult({ activeView: "overview", deferredState: state, state }),
         {
           initialProps: initialState,
           reactStrictMode: true,

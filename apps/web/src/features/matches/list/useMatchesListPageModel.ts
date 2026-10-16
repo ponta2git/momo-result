@@ -12,7 +12,6 @@ import { useConfirmedDraftNavigationCommand } from "@/features/matches/list/useC
 import { useMatchListLocationState } from "@/features/matches/list/useMatchListLocationState";
 import { useMatchListRefresh } from "@/features/matches/list/useMatchListRefresh";
 import { useMatchListResource } from "@/features/matches/list/useMatchListResource";
-import { cursorForPage } from "@/shared/lib/cursorPagination";
 import type { PaginationState } from "@/shared/lib/pagination";
 
 type RefreshModel = {
@@ -90,11 +89,9 @@ export function useMatchesListPageModel(): MatchesListPageModel {
   const pagination = paginationValue
     ? {
         changePage: (page: number) => {
-          const cursor = cursorForPage(paginationValue, page);
-          if (cursor !== undefined) location.apply({ ...location.current, cursor });
+          location.change({ kind: "page", page, pagination: paginationValue });
         },
-        changePageSize: (pageSize: number) =>
-          location.apply({ ...location.current, cursor: "", pageSize }),
+        changePageSize: (pageSize: number) => location.change({ kind: "pageSize", pageSize }),
         value: paginationValue,
       }
     : undefined;

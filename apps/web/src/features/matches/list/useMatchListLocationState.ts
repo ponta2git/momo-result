@@ -20,10 +20,13 @@ import {
   hasMatchListFilters,
   parseMatchListSearchParams,
 } from "@/features/matches/list/matchListSearchParams";
+import { changeMatchListSelection } from "@/features/matches/list/matchListSelection";
+import type { MatchListSelectionChange } from "@/features/matches/list/matchListSelection";
 import type { MatchListSearch } from "@/features/matches/list/matchListTypes";
 
 export type MatchListLocationState = {
   apply: (search: MatchListSearch) => void;
+  change: (change: MatchListSelectionChange) => void;
   clear: () => void;
   current: MatchListSearch;
   deferred: MatchListSearch;
@@ -67,6 +70,13 @@ export function useMatchListLocationState(): MatchListLocationState {
     [hash, navigate, setOptimisticSearch],
   );
   const clear = useCallback(() => apply(defaultMatchListSearch), [apply]);
+  const change = useCallback(
+    (intent: MatchListSelectionChange) => {
+      const next = changeMatchListSelection(latestSearchRef.current, intent);
+      if (next) apply(next);
+    },
+    [apply],
+  );
   const applyRefresh = useCallback(
     (result: MatchListRefreshResult) => {
       const resolved = resolveMatchListRefresh(latestSearchRef.current, result);
@@ -78,6 +88,7 @@ export function useMatchListLocationState(): MatchListLocationState {
 
   return {
     apply,
+    change,
     clear,
     current,
     deferred,

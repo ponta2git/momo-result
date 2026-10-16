@@ -14,10 +14,64 @@ import {
 } from "@/features/matches/list/matchListStatusPolicy";
 import type {
   MatchListItemView,
+  MatchListSearch,
   MatchListSourceItem,
 } from "@/features/matches/list/matchListTypes";
+import type { HeldEventResponse } from "@/shared/api/heldEvents";
+import type { MatchListResponse, MatchListSummaryResponse } from "@/shared/api/matches";
+import { isInitialQueryLoading, shouldShowStaleShield } from "@/shared/api/queryErrorState";
 import { memberDisplayName } from "@/shared/domain/members";
 import { compact } from "@/shared/lib/compact";
+
+type ListRead<T> = {
+  data: T | undefined;
+  isFetching: boolean;
+  isLoading: boolean;
+  isPlaceholderData: boolean;
+};
+
+/** Relates requested filters to retained reads before exposing rows, counts, or actions. */
+export function resolveMatchListDisplay({
+  current,
+  deferred,
+  locationSettling,
+  list,
+  summary,
+}: {
+  current: MatchListSearch;
+  deferred: MatchListSearch;
+  locationSettling: boolean;
+  list: ListRead<MatchListResponse>;
+  summary: ListRead<MatchListSummaryResponse>;
+}) {
+  const initialLoading = isInitialQueryLoading(list);
+  const scopeChanging = locationSettling || list.isPlaceholderData;
+  const listRefreshing = list.isFetching && !initialLoading;
+  const summaryRefreshing = summary.isFetching && summary.data !== undefined;
+  return {
+    initialLoading,
+    scopeChanging,
+    sameScopeRefreshing: !scopeChanging && (listRefreshing || summaryRefreshing),
+    summaryMasked:
+      current.gameTitleId !== deferred.gameTitleId ||
+      current.heldEventId !== deferred.heldEventId ||
+      current.seasonMasterId !== deferred.seasonMasterId ||
+      summary.isPlaceholderData,
+    updating: shouldShowStaleShield({
+      hasVisibleData: list.data !== undefined,
+      isPlaceholderData: list.isPlaceholderData,
+      isRefreshing: listRefreshing,
+      isSettling: locationSettling,
+    }),
+  };
+}
+
+export function matchListHeldEventChoices(
+  events: HeldEventResponse[],
+  selected: HeldEventResponse | undefined,
+): HeldEventResponse[] {
+  return selected ? [selected, ...events.filter((event) => event.id !== selected.id)] : events;
+}
 
 export function toMatchListItemView(item: MatchListSourceItem): MatchListItemView {
   const status = normalizeMatchListStatus(item.status);

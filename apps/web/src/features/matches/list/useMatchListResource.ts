@@ -13,12 +13,12 @@ import type {
   MatchListSearch,
   MatchListSummaryCounts,
 } from "@/features/matches/list/matchListTypes";
-import { toMatchListItemViews } from "@/features/matches/list/matchListViewModel";
 import {
-  isInitialQueryLoading,
-  shouldShowBlockingQueryError,
-  shouldShowStaleShield,
-} from "@/shared/api/queryErrorState";
+  matchListHeldEventChoices,
+  resolveMatchListDisplay,
+  toMatchListItemViews,
+} from "@/features/matches/list/matchListViewModel";
+import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
 import {
   gameTitlesQueryOptions,
   seasonMastersQueryOptions,
@@ -59,14 +59,6 @@ export type MatchListResource = {
   };
 };
 
-function summaryScopeChanged(current: MatchListSearch, deferred: MatchListSearch): boolean {
-  return (
-    current.gameTitleId !== deferred.gameTitleId ||
-    current.heldEventId !== deferred.heldEventId ||
-    current.seasonMasterId !== deferred.seasonMasterId
-  );
-}
-
 /**
  * Owns list resources and filter candidates, placeholder shielding, and coordinated resource reads.
  * Callers receive display-ready data and refresh intent rather than TanStack Query results.
@@ -101,19 +93,12 @@ export function useMatchListResource({
     [matchesQuery.data],
   );
 
-  const initialLoading = isInitialQueryLoading(matchesQuery);
-  const listScopeChanging = locationSettling || matchesQuery.isPlaceholderData;
-  const summaryMasked =
-    summaryScopeChanged(currentSearch, deferredSearch) || summaryQuery.isPlaceholderData;
-  const listBackgroundRefreshing = matchesQuery.isFetching && !initialLoading;
-  const summaryBackgroundRefreshing = summaryQuery.isFetching && summaryQuery.data !== undefined;
-  const sameScopeRefreshing =
-    !listScopeChanging && (listBackgroundRefreshing || summaryBackgroundRefreshing);
-  const updating = shouldShowStaleShield({
-    hasVisibleData: matchesQuery.data !== undefined,
-    isPlaceholderData: matchesQuery.isPlaceholderData,
-    isRefreshing: listBackgroundRefreshing,
-    isSettling: locationSettling,
+  const display = resolveMatchListDisplay({
+    current: currentSearch,
+    deferred: deferredSearch,
+    locationSettling,
+    list: matchesQuery,
+    summary: summaryQuery,
   });
   const listFailed = useRetryNotice(
     shouldShowBlockingQueryError(matchesQuery),
@@ -133,7 +118,7 @@ export function useMatchListResource({
   );
   const refreshFailed = useRetryNotice(
     manualRefresh.failed || matchesQuery.isRefetchError || summaryQuery.isRefetchError,
-    manualRefresh.pending || sameScopeRefreshing,
+    manualRefresh.pending || display.sameScopeRefreshing,
     currentSearchScope,
   );
 
@@ -158,14 +143,10 @@ export function useMatchListResource({
     filters: {
       candidates: {
         gameTitles: gameTitlesQuery.data?.items ?? [],
-        heldEvents: heldEventPicker.selectedHeldEvent
-          ? [
-              heldEventPicker.selectedHeldEvent,
-              ...heldEventPicker.heldEvents.filter(
-                (event) => event.id !== heldEventPicker.selectedHeldEvent?.id,
-              ),
-            ]
-          : heldEventPicker.heldEvents,
+        heldEvents: matchListHeldEventChoices(
+          heldEventPicker.heldEvents,
+          heldEventPicker.selectedHeldEvent,
+        ),
         heldEventPicker: {
           error: heldEventPicker.error,
           heldEvents: heldEventPicker.heldEvents,
@@ -190,19 +171,19 @@ export function useMatchListResource({
     list: {
       items,
       loadFailed: listFailed,
-      loading: initialLoading && !listFailed,
+      loading: display.initialLoading && !listFailed,
       pagination: matchesQuery.data?.pagination,
       refreshFailed: refreshFailed && !listFailed,
-      sameScopeRefreshing,
-      scopeChanging: listScopeChanging,
-      updating,
+      sameScopeRefreshing: display.sameScopeRefreshing,
+      scopeChanging: display.scopeChanging,
+      updating: display.updating,
     },
     refresh,
     summary: {
       counts: summaryQuery.data,
       loadFailed: summaryFailed,
       loading: isInitialQueryLoading(summaryQuery) && !summaryFailed,
-      masked: summaryMasked,
+      masked: display.summaryMasked,
       retryPending: summaryQuery.isFetching && !manualRefresh.pending,
       retry: () => void summaryQuery.refetch(),
     },

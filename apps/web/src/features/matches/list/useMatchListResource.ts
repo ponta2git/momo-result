@@ -1,10 +1,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 
 import {
   buildMatchListApiQuery,
   buildMatchListSummaryQuery,
 } from "@/features/matches/list/matchListQuery";
+import type { MatchListRefreshResult } from "@/features/matches/list/matchListRefresh";
 import { buildMatchListSearchParams } from "@/features/matches/list/matchListSearchParams";
 import type {
   MatchListFilterCandidates,
@@ -46,11 +47,8 @@ export type MatchListResource = {
     scopeChanging: boolean;
     updating: boolean;
   };
-  refresh: {
-    pending: boolean;
-    /** Resolves after every request settles; failures are exposed through list.refreshFailed. */
-    run: () => Promise<void>;
-  };
+  /** Reads the first page and summary without changing the selected URL. */
+  refresh: () => Promise<MatchListRefreshResult>;
   summary: {
     counts: MatchListSummaryCounts | undefined;
     loadFailed: boolean;
@@ -69,33 +67,22 @@ function summaryScopeChanged(current: MatchListSearch, deferred: MatchListSearch
   );
 }
 
-type ManualRefreshFailure = {
-  originScope: string;
-  targetScope: string;
-};
-
 /**
- * Owns list resources and filter candidates, placeholder shielding, and coordinated manual refresh.
+ * Owns list resources and filter candidates, placeholder shielding, and coordinated resource reads.
  * Callers receive display-ready data and refresh intent rather than TanStack Query results.
  */
 export function useMatchListResource({
   currentSearch,
   deferredSearch,
   locationSettling,
-  resetCursorIfUnchanged,
+  manualRefresh,
 }: {
   currentSearch: MatchListSearch;
   deferredSearch: MatchListSearch;
   locationSettling: boolean;
-  resetCursorIfUnchanged: (expectedSearch: MatchListSearch) => boolean;
+  manualRefresh: { pending: boolean; failed: boolean };
 }): MatchListResource {
   const queryClient = useQueryClient();
-  const [manualRefreshing, setManualRefreshing] = useState(false);
-  const [manualRefreshFailure, setManualRefreshFailure] = useState<ManualRefreshFailure | null>(
-    null,
-  );
-  const manualRefreshingRef = useRef(false);
-  const lifecycleGenerationRef = useRef(0);
 
   const heldEventPicker = useHeldEventPickerDirectory({ selectedId: currentSearch.heldEventId });
   const gameTitlesQuery = useQuery(gameTitlesQueryOptions());
@@ -108,24 +95,6 @@ export function useMatchListResource({
     matchListSummaryQueryOptions(buildMatchListSummaryQuery(deferredSearch)),
   );
   const currentSearchScope = buildMatchListSearchParams(currentSearch).toString();
-  const manualRefreshFailed = manualRefreshFailure?.targetScope === currentSearchScope;
-
-  if (
-    manualRefreshFailure !== null &&
-    manualRefreshFailure.originScope !== currentSearchScope &&
-    manualRefreshFailure.targetScope !== currentSearchScope
-  ) {
-    setManualRefreshFailure(null);
-  }
-
-  useEffect(() => {
-    const generation = lifecycleGenerationRef.current;
-    return () => {
-      if (lifecycleGenerationRef.current === generation) {
-        lifecycleGenerationRef.current += 1;
-      }
-    };
-  }, []);
 
   const items = useMemo(
     () => toMatchListItemViews(matchesQuery.data?.items ?? []),
@@ -148,7 +117,7 @@ export function useMatchListResource({
   });
   const listFailed = useRetryNotice(
     shouldShowBlockingQueryError(matchesQuery),
-    matchesQuery.isFetching || manualRefreshing,
+    matchesQuery.isFetching || manualRefresh.pending,
     currentSearchScope,
   );
   const summaryFailed = useRetryNotice(
@@ -163,54 +132,26 @@ export function useMatchListResource({
     gameTitlesQuery.isFetching || seasonsQuery.isFetching || heldEventPicker.pending,
   );
   const refreshFailed = useRetryNotice(
-    manualRefreshFailed || matchesQuery.isRefetchError || summaryQuery.isRefetchError,
-    manualRefreshing || sameScopeRefreshing,
+    manualRefresh.failed || matchesQuery.isRefetchError || summaryQuery.isRefetchError,
+    manualRefresh.pending || sameScopeRefreshing,
     currentSearchScope,
   );
 
-  const refresh = async () => {
-    if (manualRefreshingRef.current) return;
-    manualRefreshingRef.current = true;
-    setManualRefreshing(true);
-    const refreshGeneration = lifecycleGenerationRef.current;
-    const refreshStartScope = currentSearchScope;
+  const refresh = async (): Promise<MatchListRefreshResult> => {
     const refreshedSearch = { ...currentSearch, cursor: "" };
-    const refreshScope = buildMatchListSearchParams(refreshedSearch).toString();
-    try {
-      const listRefresh = currentSearch.cursor
-        ? queryClient.fetchQuery({
-            ...matchListQueryOptions(buildMatchListApiQuery(refreshedSearch)),
-            staleTime: 0,
-          })
-        : matchesQuery.refetch({ throwOnError: true });
-      const refreshResults = await Promise.allSettled([
-        listRefresh,
-        summaryQuery.refetch({ throwOnError: true }),
-      ]);
-      if (lifecycleGenerationRef.current !== refreshGeneration) return;
-      const listRefreshSucceeded = refreshResults[0]?.status === "fulfilled";
-      const cursorReset = Boolean(
-        currentSearch.cursor && listRefreshSucceeded && resetCursorIfUnchanged(currentSearch),
-      );
-      if (refreshResults.some((result) => result.status === "rejected")) {
-        setManualRefreshFailure({
-          originScope: refreshStartScope,
-          targetScope: cursorReset ? refreshScope : refreshStartScope,
-        });
-      } else {
-        setManualRefreshFailure(null);
-      }
-    } catch {
-      if (lifecycleGenerationRef.current === refreshGeneration) {
-        setManualRefreshFailure({
-          originScope: refreshStartScope,
-          targetScope: refreshStartScope,
-        });
-      }
-    } finally {
-      manualRefreshingRef.current = false;
-      if (lifecycleGenerationRef.current === refreshGeneration) setManualRefreshing(false);
-    }
+    const listRefresh = currentSearch.cursor
+      ? queryClient.fetchQuery({
+          ...matchListQueryOptions(buildMatchListApiQuery(refreshedSearch)),
+          staleTime: 0,
+        })
+      : matchesQuery.refetch({ throwOnError: true });
+    const [list, summary] = await Promise.allSettled([
+      listRefresh,
+      summaryQuery.refetch({ throwOnError: true }),
+    ]);
+    return list.status === "fulfilled"
+      ? { kind: "refreshed", origin: currentSearch, summaryFailed: summary.status === "rejected" }
+      : { kind: "failed", origin: currentSearch };
   };
 
   return {
@@ -256,13 +197,13 @@ export function useMatchListResource({
       scopeChanging: listScopeChanging,
       updating,
     },
-    refresh: { pending: manualRefreshing, run: refresh },
+    refresh,
     summary: {
       counts: summaryQuery.data,
       loadFailed: summaryFailed,
       loading: isInitialQueryLoading(summaryQuery) && !summaryFailed,
       masked: summaryMasked,
-      retryPending: summaryQuery.isFetching && !manualRefreshing,
+      retryPending: summaryQuery.isFetching && !manualRefresh.pending,
       retry: () => void summaryQuery.refetch(),
     },
   };

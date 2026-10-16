@@ -9,6 +9,11 @@ import {
 } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
+import { resolveMatchListRefresh } from "@/features/matches/list/matchListRefresh";
+import type {
+  MatchListRefreshFailure,
+  MatchListRefreshResult,
+} from "@/features/matches/list/matchListRefresh";
 import {
   buildMatchListSearchParams,
   defaultMatchListSearch,
@@ -23,7 +28,7 @@ export type MatchListLocationState = {
   current: MatchListSearch;
   deferred: MatchListSearch;
   hasFilters: boolean;
-  resetCursorIfUnchanged: (expectedSearch: MatchListSearch) => boolean;
+  applyRefresh: (result: MatchListRefreshResult) => MatchListRefreshFailure | null;
   settling: boolean;
 };
 
@@ -62,12 +67,11 @@ export function useMatchListLocationState(): MatchListLocationState {
     [hash, navigate, setOptimisticSearch],
   );
   const clear = useCallback(() => apply(defaultMatchListSearch), [apply]);
-  const resetCursorIfUnchanged = useCallback(
-    (expectedSearch: MatchListSearch) => {
-      const latestSearch = latestSearchRef.current;
-      if (searchSignature(latestSearch) !== searchSignature(expectedSearch)) return false;
-      apply({ ...latestSearch, cursor: "" });
-      return true;
+  const applyRefresh = useCallback(
+    (result: MatchListRefreshResult) => {
+      const resolved = resolveMatchListRefresh(latestSearchRef.current, result);
+      if (resolved.nextSearch) apply(resolved.nextSearch);
+      return resolved.failure;
     },
     [apply],
   );
@@ -78,7 +82,7 @@ export function useMatchListLocationState(): MatchListLocationState {
     current,
     deferred,
     hasFilters: hasMatchListFilters(current),
-    resetCursorIfUnchanged,
+    applyRefresh,
     settling: isTransitionPending || searchSignature(current) !== searchSignature(deferred),
   };
 }

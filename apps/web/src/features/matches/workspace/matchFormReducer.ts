@@ -8,6 +8,7 @@ import { emptyIncidentCountsByKey, incidentCountsByLabelToKey } from "@/shared/d
 export type MatchFormAction =
   | { path: string; type: "set_numeric_draft"; value: string | undefined }
   | { patch: Partial<MatchFormValues>; type: "patch_root" }
+  | { gameTitleId: string; type: "change_game_title" }
   | { index: number; patch: Partial<MatchFormValues["players"][number]>; type: "patch_player" }
   | { index: number; key: IncidentKey; type: "patch_incident"; value: number }
   | { index: number; playOrder: number; type: "set_play_order" }
@@ -63,6 +64,16 @@ export function matchFormReducer(
         values: {
           ...state.values,
           ...action.patch,
+        },
+      };
+    case "change_game_title":
+      return {
+        ...state,
+        values: {
+          ...state.values,
+          gameTitleId: action.gameTitleId,
+          mapMasterId: "",
+          seasonMasterId: "",
         },
       };
     case "patch_player":

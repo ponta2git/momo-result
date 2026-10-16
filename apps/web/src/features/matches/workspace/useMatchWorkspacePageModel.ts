@@ -23,10 +23,6 @@ import { useMatchWorkspaceSubmitFlow } from "@/features/matches/workspace/useMat
 import { useMatchWorkspaceValidation } from "@/features/matches/workspace/useMatchWorkspaceValidation";
 import { useWorkspaceHeldEventCreation } from "@/features/matches/workspace/useWorkspaceHeldEventCreation";
 import { useWorkspaceNotice } from "@/features/matches/workspace/useWorkspaceNotice";
-import {
-  heldEventPatchById,
-  latestHeldEventPatch,
-} from "@/features/matches/workspace/workspaceViewModel";
 
 type MatchWorkspacePageModelParams = {
   accountId?: string | undefined;
@@ -108,9 +104,12 @@ export function useMatchWorkspacePageModel({
     },
     [dispatch, setWorkspaceData],
   );
-  const { isInitialized, initializedSnapshot } = useMatchWorkspaceInit({
+  const initialization = useMatchWorkspaceInit({
+    dispatch,
     draftDetail,
     emptyFormFactory: local.emptyFormFactory,
+    heldEventId: state.values.heldEventId,
+    heldEvents: heldEventItems,
     matchDetail,
     matchDraftId,
     memberAliases,
@@ -118,6 +117,8 @@ export function useMatchWorkspacePageModel({
     ocrDrafts,
     onInitialize: initializeWorkspace,
     nowIsoFactory: local.nowIsoFactory,
+    preferredHeldEventId,
+    preferredHeldEventPending: load.preferredHeldEventPending,
     reviewDraftIdList: remoteReview.draftIdList,
     reviewDraftIds: remoteReview.draftIds,
     sourceImages: sourceImageItems,
@@ -140,18 +141,11 @@ export function useMatchWorkspacePageModel({
     useSampleDrafts,
     values: state.values,
   });
-  const initialHeldEventPatch =
-    isInitialized && mode !== "edit" && !state.values.heldEventId && !load.preferredHeldEventPending
-      ? (heldEventPatchById(view.heldEvents, preferredHeldEventId) ??
-        latestHeldEventPatch(view.heldEvents))
-      : undefined;
-  const draftTrackingEnabled =
-    isInitialized && !load.preferredHeldEventPending && initialHeldEventPatch === undefined;
   const reviewSession = useMatchWorkspaceReviewSession({
     accountId,
     confirmedDraftLoaded: view.confirmedDraftLoaded,
     dispatch,
-    draftTrackingEnabled,
+    draftTrackingEnabled: initialization.status === "ready",
     mode,
     notify,
     reviewKey: workspaceKey,
@@ -174,9 +168,7 @@ export function useMatchWorkspacePageModel({
   } = submitFlow;
 
   useMatchWorkspaceLifecycleEffects({
-    dispatch,
     draftDetail,
-    initialHeldEventPatch,
     mode,
     redirectConfirmedDraft,
     useSampleDrafts,
@@ -190,7 +182,7 @@ export function useMatchWorkspacePageModel({
   });
   const sourceImageDraftId = view.matchDraftIdForImages;
   const sourceImages = sourceImageDraftId
-    ? (initializedSnapshot?.sourceImages ?? []).flatMap((item) => {
+    ? (initialization.snapshot?.sourceImages ?? []).flatMap((item) => {
         const descriptor = toSourceImageDescriptor(sourceImageDraftId, item);
         return descriptor ? [descriptor] : [];
       })
@@ -223,7 +215,9 @@ export function useMatchWorkspacePageModel({
   const workspaceLoading =
     confirmedDraftRedirecting ||
     view.confirmedDraftLoaded ||
-    (!isInitialized && !remoteReview.blocked && !load.initializationFailed);
+    (initialization.status === "waiting-for-data" &&
+      !remoteReview.blocked &&
+      !load.initializationFailed);
   const exitHref =
     mode === "edit" && matchId
       ? `/matches/${encodeURIComponent(matchId)}`
@@ -372,7 +366,7 @@ export function useMatchWorkspacePageModel({
               matchDraftId: view.matchDraftIdForImages,
               preferredKind: local.preferredImageKind,
               sourceImages: sourceImages,
-              snapshotChanged: initializedSnapshot?.revision !== draftDetail?.updatedAt,
+              snapshotChanged: initialization.snapshot?.revision !== draftDetail?.updatedAt,
             }
           : null,
       warnings: local.workspaceData?.warnings ?? [],

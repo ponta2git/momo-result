@@ -33,14 +33,7 @@ export function useMatchWorkspaceFormHandlers({
 
   const onGameTitleChange = useCallback(
     (gameTitleId: string) => {
-      dispatch({
-        patch: {
-          gameTitleId,
-          mapMasterId: "",
-          seasonMasterId: "",
-        },
-        type: "patch_root",
-      });
+      dispatch({ gameTitleId, type: "change_game_title" });
     },
     [dispatch],
   );

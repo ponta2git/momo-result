@@ -27,6 +27,32 @@ function entry(counts: Partial<IncidentLookupEntry["counts"]>): IncidentLookupEn
 }
 
 describe("matchFormReducer", () => {
+  it("clears game-dependent selections while preserving other input when the game changes", () => {
+    const values = {
+      ...createEmptyMatchForm(baseIso),
+      gameTitleId: "previous-game",
+      mapMasterId: "previous-map",
+      seasonMasterId: "previous-season",
+      numericDrafts: { "players.0.revenueManYen": "-" },
+      noteBody: "保持する入力",
+    };
+    const initial = createMatchFormReducerState(values);
+
+    const next = matchFormReducer(initial, {
+      gameTitleId: "next-game",
+      type: "change_game_title",
+    });
+
+    expect(next.values).toEqual({
+      ...values,
+      gameTitleId: "next-game",
+      mapMasterId: "",
+      seasonMasterId: "",
+    });
+    expect(values.mapMasterId).toBe("previous-map");
+    expect(values.seasonMasterId).toBe("previous-season");
+  });
+
   it("set_play_order preserves incidents and does not mark the row as synced", () => {
     const seed = createEmptyMatchForm(baseIso);
     seed.players[2]!.incidents.destination = 7;

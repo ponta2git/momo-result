@@ -1,11 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
 
-import {
-  deriveValidSetupValue,
-  resolveHeldEventContext,
-  sameSetupValue,
-} from "@/features/ocrCapture/ocrSetupOptionResolution";
+import { resolveHeldEventContext } from "@/features/ocrCapture/ocrSetupOptionResolution";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import { mergeHeldEventItems } from "@/shared/api/heldEventCache";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
@@ -31,7 +26,6 @@ import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 type OcrSetupOptionsParams = {
   enabled: boolean;
-  onChange: (value: SetupFormValues) => void;
   value: SetupFormValues;
 };
 
@@ -76,7 +70,7 @@ function scopedMastersPlaceholder(args: {
   return args.failed ? "読み込みに失敗" : args.loading ? "読み込み中…" : "未登録";
 }
 
-export function useOcrSetupOptions({ enabled, onChange, value }: OcrSetupOptionsParams) {
+export function useOcrSetupOptions({ enabled, value }: OcrSetupOptionsParams) {
   const gameTitlesQuery = useQuery({ ...gameTitlesQueryOptions(), enabled });
   const heldEventsQuery = useQuery({
     ...heldEventsQueryOptions({ page: 1, pageSize: heldEventPickerPageSize }),
@@ -171,28 +165,6 @@ export function useOcrSetupOptions({ enabled, onChange, value }: OcrSetupOptions
     ]);
   };
 
-  useEffect(() => {
-    const next = deriveValidSetupValue({
-      gameTitles,
-      heldEventNotFound: heldEventContextNotFound,
-      heldEvents,
-      mapMasters,
-      seasonMasters,
-      value,
-    });
-    if (!sameSetupValue(next, value)) {
-      onChange(next);
-    }
-  }, [
-    gameTitles,
-    heldEvents,
-    heldEventContextNotFound,
-    mapMasters,
-    onChange,
-    seasonMasters,
-    value,
-  ]);
-
   return {
     gameTitles,
     gameTitlesError: useRetryNotice(
@@ -206,6 +178,7 @@ export function useOcrSetupOptions({ enabled, onChange, value }: OcrSetupOptions
       loading: gameTitlesQuery.isLoading,
     }),
     heldEvents,
+    heldEventContext,
     heldEventPicker,
     hasError: useRetryNotice(
       hasError,
@@ -261,5 +234,3 @@ export function useOcrSetupOptions({ enabled, onChange, value }: OcrSetupOptions
     loading,
   };
 }
-
-export type OcrSetupOptions = ReturnType<typeof useOcrSetupOptions>;

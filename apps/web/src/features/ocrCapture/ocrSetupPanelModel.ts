@@ -1,5 +1,4 @@
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
-import type { OcrSetupOptions } from "@/features/ocrCapture/useOcrSetupOptions";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { canonicalResultMembers } from "@/shared/domain/members";
 import type { PaginationState } from "@/shared/lib/pagination";
@@ -14,6 +13,31 @@ type SetupSelectFieldModel = {
   error?: string | undefined;
   options: SelectOption[];
   value: string;
+};
+
+type NamedOption = { id: string; name: string };
+
+type SetupPanelOptions = {
+  gameTitles: readonly NamedOption[];
+  gameTitlesError: string | undefined;
+  gameTitlesPlaceholder: string;
+  heldEventPicker: {
+    error: string | undefined;
+    heldEvents: HeldEventResponse[];
+    pagination: PaginationState | undefined;
+    pending: boolean;
+    scopeChanging: boolean;
+    selectedHeldEvent: HeldEventResponse | undefined;
+  };
+  heldEventsError: string | undefined;
+  heldEventsPlaceholder: string;
+  mapMasters: readonly NamedOption[];
+  mapMastersError: string | undefined;
+  mapMastersPlaceholder: string;
+  seasonMasters: readonly NamedOption[];
+  seasonMastersError: string | undefined;
+  seasonMastersPlaceholder: string;
+  selectedHeldEvent: HeldEventResponse | undefined;
 };
 
 export type OcrSetupPanelModel = {
@@ -54,84 +78,59 @@ const ownerOptions = canonicalResultMembers.map((member) => ({
   value: member.memberId,
 }));
 
-function selectOptions(
-  items: Array<{ id: string; name: string }>,
-  placeholder: string,
-): SelectOption[] {
+function selectOptions(items: readonly NamedOption[], placeholder: string): SelectOption[] {
   return items.length === 0
     ? [{ label: placeholder, value: "" }]
     : items.map((item) => ({ label: item.name, value: item.id }));
 }
 
-/** Adapts setup query data and form state to the fields and intents rendered by SetupPanel. */
-export function buildOcrSetupPanelModel({
+/** Projects resolved choices and the current input into the fields rendered by SetupPanel. */
+export function buildOcrSetupPanelFields({
   enabled,
   options,
-  setValue,
   value,
 }: {
   enabled: boolean;
-  options: OcrSetupOptions;
-  setValue: (value: SetupFormValues) => void;
+  options: SetupPanelOptions;
   value: SetupFormValues;
-}): OcrSetupPanelModel {
-  const patchValue = (patch: Partial<SetupFormValues>) => {
-    setValue({ ...value, ...patch });
-  };
-
+}): OcrSetupPanelModel["fields"] {
   return {
-    fields: {
-      gameTitle: {
-        disabled: !enabled || options.gameTitles.length === 0,
-        error: options.gameTitlesError,
-        options: selectOptions(options.gameTitles, options.gameTitlesPlaceholder),
-        value: value.gameTitleId,
-      },
-      heldEvent: {
-        disabled: !enabled,
-        error: options.heldEventPicker.error ?? options.heldEventsError,
-        heldEvents: options.heldEventPicker.heldEvents,
-        pagination: options.heldEventPicker.pagination,
-        pending: options.heldEventPicker.pending,
-        scopeChanging: options.heldEventPicker.scopeChanging,
-        selectedHeldEvent: options.heldEventPicker.selectedHeldEvent ?? options.selectedHeldEvent,
-        unavailableLabel: options.heldEventsPlaceholder,
-        value: value.heldEventId ?? "",
-      },
-      map: {
-        disabled: !enabled || options.mapMasters.length === 0,
-        error: options.mapMastersError,
-        options: selectOptions(options.mapMasters, options.mapMastersPlaceholder),
-        value: value.mapMasterId,
-      },
-      matchNo: {
-        disabled: !enabled || !value.heldEventId,
-        value: value.matchNoInEvent ?? "",
-      },
-      owner: {
-        options: ownerOptions,
-        value: value.ownerMemberId,
-      },
-      season: {
-        disabled: !enabled || options.seasonMasters.length === 0,
-        error: options.seasonMastersError,
-        options: selectOptions(options.seasonMasters, options.seasonMastersPlaceholder),
-        value: value.seasonMasterId,
-      },
+    gameTitle: {
+      disabled: !enabled || options.gameTitles.length === 0,
+      error: options.gameTitlesError,
+      options: selectOptions(options.gameTitles, options.gameTitlesPlaceholder),
+      value: value.gameTitleId,
     },
-    intents: {
-      changeGameTitle: (gameTitleId) =>
-        patchValue({ gameTitleId, mapMasterId: "", seasonMasterId: "" }),
-      changeHeldEvent: (heldEventId, selected) =>
-        patchValue({ heldEventId, matchNoInEvent: selected?.nextMatchNo }),
-      changeHeldEventPage: options.heldEventPicker.onPageChange,
-      changeMap: (mapMasterId) => patchValue({ mapMasterId }),
-      changeMatchNo: (nextValue) =>
-        patchValue({
-          matchNoInEvent: nextValue ? Math.trunc(Number(nextValue)) : undefined,
-        }),
-      changeOwner: (ownerMemberId) => patchValue({ ownerMemberId }),
-      changeSeason: (seasonMasterId) => patchValue({ seasonMasterId }),
+    heldEvent: {
+      disabled: !enabled,
+      error: options.heldEventPicker.error ?? options.heldEventsError,
+      heldEvents: options.heldEventPicker.heldEvents,
+      pagination: options.heldEventPicker.pagination,
+      pending: options.heldEventPicker.pending,
+      scopeChanging: options.heldEventPicker.scopeChanging,
+      selectedHeldEvent: options.heldEventPicker.selectedHeldEvent ?? options.selectedHeldEvent,
+      unavailableLabel: options.heldEventsPlaceholder,
+      value: value.heldEventId ?? "",
+    },
+    map: {
+      disabled: !enabled || options.mapMasters.length === 0,
+      error: options.mapMastersError,
+      options: selectOptions(options.mapMasters, options.mapMastersPlaceholder),
+      value: value.mapMasterId,
+    },
+    matchNo: {
+      disabled: !enabled || !value.heldEventId,
+      value: value.matchNoInEvent ?? "",
+    },
+    owner: {
+      options: ownerOptions,
+      value: value.ownerMemberId,
+    },
+    season: {
+      disabled: !enabled || options.seasonMasters.length === 0,
+      error: options.seasonMastersError,
+      options: selectOptions(options.seasonMasters, options.seasonMastersPlaceholder),
+      value: value.seasonMasterId,
     },
   };
 }

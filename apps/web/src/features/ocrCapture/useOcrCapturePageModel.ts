@@ -4,14 +4,12 @@ import { useSearchParams } from "react-router-dom";
 
 import { slotDefinitions } from "@/features/ocrCapture/captureState";
 import type { InputSource } from "@/features/ocrCapture/captureState";
-import { buildOcrSetupPanelModel } from "@/features/ocrCapture/ocrSetupPanelModel";
 import { buildOcrSubmissionPlan } from "@/features/ocrCapture/ocrSubmissionPlan";
-import { defaultSetupValues, setupSchema } from "@/features/ocrCapture/schema";
-import type { SetupFormValues } from "@/features/ocrCapture/schema";
+import { defaultSetupValues } from "@/features/ocrCapture/schema";
 import { isWorkingStatus } from "@/features/ocrCapture/slotPolicy";
 import { useOcrCaptureDraftFlow } from "@/features/ocrCapture/useOcrCaptureDraftFlow";
 import { useOcrCaptureMutations } from "@/features/ocrCapture/useOcrCaptureMutations";
-import { useOcrSetupOptions } from "@/features/ocrCapture/useOcrSetupOptions";
+import { useOcrSetup } from "@/features/ocrCapture/useOcrSetup";
 import { useOcrStartFlow } from "@/features/ocrCapture/useOcrStartFlow";
 import { authQueryOptions } from "@/shared/auth/authQueries";
 import { useDevUser } from "@/shared/auth/useDevUser";
@@ -35,18 +33,16 @@ export function useOcrCapturePageModel(authReady: boolean) {
   const [startError, setStartError] = useState<string>();
   const [searchParams] = useSearchParams();
   const requestedHeldEventId = trimSearchParam(searchParams.get("heldEventId"));
-  const [setupValue, setSetupValue] = useState<SetupFormValues>(() => ({
-    ...defaultSetupValues,
-    ...(requestedHeldEventId ? { heldEventId: requestedHeldEventId } : {}),
-  }));
+  const setup = useOcrSetup({
+    enabled: authReady,
+    initialValue: {
+      ...defaultSetupValues,
+      ...(requestedHeldEventId ? { heldEventId: requestedHeldEventId } : {}),
+    },
+  });
   const [captureTargetKind, setCaptureTargetKind] = useState<SlotKind>("total_assets");
   const [captureActionFeedback, setCaptureActionFeedback] = useState<string>();
 
-  const setupOptions = useOcrSetupOptions({
-    enabled: authReady,
-    onChange: setSetupValue,
-    value: setupValue,
-  });
   const draftFlow = useOcrCaptureDraftFlow({
     onDraftLoadError: (error) => setCaptureActionFeedback(error.detail || error.title),
   });
@@ -72,15 +68,6 @@ export function useOcrCapturePageModel(authReady: boolean) {
   const selectedImageCount = draftFlow.slots.filter((slot) => Boolean(slot.file)).length;
   const hasWorkingSlot = draftFlow.slots.some((slot) => isWorkingStatus(slot.status));
   const cameraDisabled = startFlow.locked || hasWorkingSlot;
-  const setupValidation = setupSchema.safeParse(setupValue);
-  const setupReady = setupOptions.ready && setupValidation.success;
-  const setupBlockedReason = authReady
-    ? setupOptions.loading || setupOptions.refreshing
-      ? "試合設定の選択肢を確認しています。"
-      : setupValidation.success
-        ? undefined
-        : (setupValidation.error.issues[0]?.message ?? "試合設定を確認してください。")
-    : "ログイン状態を確認中です。";
 
   const selectCaptureTarget = (kind: SlotKind) => {
     const slot = draftFlow.slots.find((candidate) => candidate.kind === kind);
@@ -103,8 +90,8 @@ export function useOcrCapturePageModel(authReady: boolean) {
   };
 
   const startOcr = () => {
-    if (!setupReady) {
-      setStartError(setupBlockedReason ?? "試合設定を確認してください。");
+    if (setup.resolution.kind !== "ready") {
+      setStartError(setup.blockedReason ?? "試合設定を確認してください。");
       return;
     }
     if (readySlots.length === 0) {
@@ -115,8 +102,8 @@ export function useOcrCapturePageModel(authReady: boolean) {
     startFlow.open(
       buildOcrSubmissionPlan({
         selectedSlotLabels,
-        setup: setupValue,
-        setupOptions,
+        setup: setup.resolution.value,
+        setupOptions: setup.options,
         slots: readySlots,
       }),
     );
@@ -174,16 +161,11 @@ export function useOcrCapturePageModel(authReady: boolean) {
     },
     setup: {
       choices: {
-        failed: setupOptions.hasError,
-        refresh: setupOptions.retry,
-        refreshing: setupOptions.refreshing,
+        failed: setup.options.hasError,
+        refresh: setup.options.retry,
+        refreshing: setup.options.refreshing,
       },
-      panel: buildOcrSetupPanelModel({
-        enabled: authReady,
-        options: setupOptions,
-        setValue: setSetupValue,
-        value: setupValue,
-      }),
+      panel: setup.panel,
     },
     submission: {
       dialog: {
@@ -195,7 +177,7 @@ export function useOcrCapturePageModel(authReady: boolean) {
       },
       start: {
         badgeLabel: readySlots.length === 0 ? "画像未選択" : `${readySlots.length}件を送信`,
-        blockedReason: setupBlockedReason,
+        blockedReason: setup.blockedReason,
         buttonLabel:
           readySlots.length === 0 ? "読み取りを開始" : `${readySlots.length}件で読み取りを開始`,
         description: selectedDescription,
@@ -204,7 +186,7 @@ export function useOcrCapturePageModel(authReady: boolean) {
           readySlots.length === 0 ||
           hasWorkingSlot ||
           captureSubmission.isSubmitting ||
-          !setupReady,
+          setup.resolution.kind !== "ready",
         run: startOcr,
       },
     },

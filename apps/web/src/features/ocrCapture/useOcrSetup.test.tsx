@@ -2,15 +2,18 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { useState } from "react";
 import { describe, expect, it } from "vitest";
 
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
-import { useOcrSetupOptions } from "@/features/ocrCapture/useOcrSetupOptions";
+import { SetupPanel } from "@/features/ocrCapture/SetupPanel";
+import { useOcrSetup } from "@/features/ocrCapture/useOcrSetup";
 import { heldEventKeys, masterKeys } from "@/shared/api/queryKeys";
+import { createDeferred } from "@/test/deferred";
+import { makeHeldEventResponse } from "@/test/factories/heldEvents";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
+import { selectOption } from "@/test/selectOption";
 
 setupMsw();
 
@@ -39,22 +42,26 @@ const seasonMaster = {
 };
 
 function SetupOptionsHarness({ initialValue }: { initialValue: SetupFormValues }) {
-  const [value, setValue] = useState(initialValue);
-  const options = useOcrSetupOptions({
+  const setup = useOcrSetup({
     enabled: true,
-    onChange: setValue,
-    value,
+    initialValue,
   });
+  const { options, value } = setup;
 
   return (
     <>
-      <output aria-label="setup value" data-error={options.heldEventsError ?? ""}>
+      <SetupPanel model={setup.panel} />
+      <output
+        aria-label="setup value"
+        data-error={options.heldEventsError ?? ""}
+        data-refreshing={options.refreshing}
+      >
         {JSON.stringify(value)}
       </output>
       <button type="button" onClick={options.retry}>
         選択肢を再取得
       </button>
-      <button type="button" disabled={!options.ready}>
+      <button type="button" disabled={setup.resolution.kind !== "ready"}>
         読み取りを開始
       </button>
     </>
@@ -65,7 +72,7 @@ function readSetupValue(): SetupFormValues {
   return JSON.parse(screen.getByLabelText("setup value").textContent ?? "{}") as SetupFormValues;
 }
 
-describe("useOcrSetupOptions", () => {
+describe("useOcrSetup", () => {
   it.each(["map", "season"] as const)(
     "keeps OCR unavailable when the selected %s no longer exists, and recovers on reload",
     async (missing) => {
@@ -226,6 +233,94 @@ describe("useOcrSetupOptions", () => {
         matchNoInEvent: 8,
       }),
     );
+  });
+
+  it("retains edits made while setup choices are refreshing", async () => {
+    const user = userEvent.setup();
+    const queryClient = createTestQueryClient();
+    const otherMap = { ...mapMaster, id: "map_west", name: "西日本編" };
+    const otherSeason = { ...seasonMaster, id: "season_previous", name: "前シーズン" };
+    const heldEvent = makeHeldEventResponse({ id: "held-editing", nextMatchNo: 8 });
+    queryClient.setQueryDefaults(masterKeys.all(), { staleTime: Number.POSITIVE_INFINITY });
+    queryClient.setQueryDefaults(heldEventKeys.all(), { staleTime: Number.POSITIVE_INFINITY });
+    queryClient.setQueryData(masterKeys.gameTitles.list(), { items: [gameTitle] });
+    queryClient.setQueryData(masterKeys.mapMasters.list(gameTitle.id), {
+      items: [mapMaster, otherMap],
+    });
+    queryClient.setQueryData(masterKeys.seasonMasters.list(gameTitle.id), {
+      items: [seasonMaster, otherSeason],
+    });
+    queryClient.setQueryData(heldEventKeys.list({ page: 1, pageSize: 20 }), {
+      items: [heldEvent],
+    });
+    queryClient.setQueryData(heldEventKeys.summary(heldEvent.id), heldEvent);
+
+    const refreshStarted = createDeferred();
+    const refreshResponse = createDeferred();
+    server.use(
+      http.get("/api/game-titles", async () => {
+        refreshStarted.resolve();
+        await refreshResponse.promise;
+        return HttpResponse.json({ items: [gameTitle] });
+      }),
+      http.get("/api/map-masters", async () => {
+        await refreshResponse.promise;
+        return HttpResponse.json({ items: [mapMaster, otherMap] });
+      }),
+      http.get("/api/season-masters", async () => {
+        await refreshResponse.promise;
+        return HttpResponse.json({ items: [seasonMaster, otherSeason] });
+      }),
+      http.get("/api/held-events", async () => {
+        await refreshResponse.promise;
+        return HttpResponse.json({ items: [{ ...heldEvent, nextMatchNo: 9 }] });
+      }),
+      http.get(`/api/held-events/${heldEvent.id}/summary`, async () => {
+        await refreshResponse.promise;
+        return HttpResponse.json({ ...heldEvent, nextMatchNo: 9 });
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SetupOptionsHarness
+          initialValue={{
+            gameTitleId: gameTitle.id,
+            heldEventId: heldEvent.id,
+            mapMasterId: mapMaster.id,
+            ownerMemberId: "member_ponta",
+            seasonMasterId: seasonMaster.id,
+          }}
+        />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(screen.getByLabelText("試合番号")).toHaveValue(8));
+
+    try {
+      await user.click(screen.getByRole("button", { name: "選択肢を再取得" }));
+      await refreshStarted.promise;
+      await selectOption(user, screen.getByRole("combobox", { name: "マップ" }), otherMap.id);
+      await selectOption(user, screen.getByRole("combobox", { name: "シーズン" }), otherSeason.id);
+      await selectOption(user, screen.getByRole("combobox", { name: "オーナー" }), "member_eu");
+      await user.tripleClick(screen.getByLabelText("試合番号"));
+      await user.keyboard("12");
+      expect(screen.getByLabelText("試合番号")).toHaveValue(12);
+    } finally {
+      refreshResponse.resolve();
+    }
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("setup value")).toHaveAttribute("data-refreshing", "false"),
+    );
+    expect(readSetupValue()).toEqual({
+      gameTitleId: gameTitle.id,
+      heldEventId: heldEvent.id,
+      mapMasterId: otherMap.id,
+      matchNoInEvent: 12,
+      ownerMemberId: "member_eu",
+      seasonMasterId: otherSeason.id,
+    });
+    expect(screen.getByRole("button", { name: "読み取りを開始" })).toBeEnabled();
   });
 
   it("preserves the selected held event when its detail request fails transiently", async () => {

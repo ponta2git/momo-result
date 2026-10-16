@@ -6,7 +6,7 @@ import org.http4s.HttpApp as Http4sApp
 import sttp.tapir.AnyEndpoint
 
 import momo.api.adapters.discord.JavaDiscordOAuthClient
-import momo.api.auth.{CreatedSession, DiscordOAuthClient}
+import momo.api.auth.CreatedSession
 import momo.api.config.{AppConfig, ResourceLimitsConfig}
 import momo.api.domain.LoginAccount
 import momo.api.usecases.ocr.OcrAdmissionGuard
@@ -37,10 +37,7 @@ object ApiApp:
   def resource[F[_]: Async](config: AppConfig): Resource[F, Http4sApp[F]] = wired[F](config)
     .map(_.app)
 
-  /**
-   * Build all dependencies. When `config.database` is set we use PostgreSQL repositories backed by
-   * HikariCP; otherwise we wire up InMemory adapters (used by tests and the early dev environment).
-   */
+  /** Build the application against its PostgreSQL persistence boundary. */
   def wired[F[_]: Async](config: AppConfig): Resource[F, Runtime[F]] = wiredWithHandles(config)
     .map(_.runtime)
 
@@ -54,15 +51,14 @@ object ApiApp:
         redirectUri = config.auth.discordRedirectUri.getOrElse(""),
         scope = config.auth.discordScope,
       ))
-        .flatMap(oauthClient => wiredInner[F](config, oauthClient))
+        .flatMap { oauthClient =>
+          config.database match
+            case Some(db) => PostgresApiRuntime.resource[F](config, db, oauthClient)
+            case None => Resource.eval(Async[F].raiseError[WiredRuntime[F]](
+                new IllegalArgumentException("API runtime requires a database configuration.")
+              ))
+        }
     }
-
-  private def wiredInner[F[_]: Async: SecureRandom](
-      config: AppConfig,
-      oauthClient: DiscordOAuthClient[F],
-  ): Resource[F, WiredRuntime[F]] = config.database match
-    case Some(db) => PostgresApiRuntime.resource[F](config, db, oauthClient)
-    case None => InMemoryApiRuntime.resource[F](config, oauthClient)
 
   private[bootstrap] def ocrAdmissionGuardConfig(
       limits: ResourceLimitsConfig

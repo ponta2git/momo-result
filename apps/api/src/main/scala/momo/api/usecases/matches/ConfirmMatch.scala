@@ -8,6 +8,7 @@ import cats.syntax.all.*
 
 import momo.api.domain.ids.*
 import momo.api.domain.{
+  MatchDraftConfirmability,
   MatchNote,
   MatchNoteBody,
   MatchNoteVersion,
@@ -66,8 +67,9 @@ final class ConfirmMatch[F[_]: Monad](
 ):
   import ConfirmMatch.*
 
-  private val referenceValidation =
+  private val inputValidation = MatchInputValidation(
     MatchReferenceValidation(heldEvents, gameTitles, mapMasters, seasonMasters)
+  )
 
   def run(
       command: ConfirmMatchCommand,
@@ -75,26 +77,19 @@ final class ConfirmMatch[F[_]: Monad](
       playerMemberId: Option[MemberId],
   ): F[Either[AppError, MatchRecord]] = (for
     allowed <- EitherT.liftF(allowedMemberIds)
-    validated <- EitherT.fromEither[F](
-      MatchPolicy.validate(
-        MatchPolicy.Input(
-          heldEventId = command.heldEventId,
-          matchNoInEvent = command.matchNoInEvent,
-          gameTitleId = command.gameTitleId,
-          seasonMasterId = command.seasonMasterId,
-          ownerMemberId = command.ownerMemberId,
-          mapMasterId = command.mapMasterId,
-          players = command.players,
-        ),
-        allowed,
-      ).leftMap(errors => AppError.ValidationFailed(MatchPolicy.toMessage(errors)))
+    validation <- inputValidation.validate(
+      MatchPolicy.Input(
+        heldEventId = command.heldEventId,
+        matchNoInEvent = command.matchNoInEvent,
+        gameTitleId = command.gameTitleId,
+        seasonMasterId = command.seasonMasterId,
+        ownerMemberId = command.ownerMemberId,
+        mapMasterId = command.mapMasterId,
+        players = command.players,
+      ),
+      allowed,
     )
-    title <- referenceValidation.validateRequired(
-      command.heldEventId,
-      command.gameTitleId,
-      command.mapMasterId,
-      command.seasonMasterId,
-    )
+    (validated, title) = validation
     duplicate <- EitherT.liftF(matches.existsMatchNo(command.heldEventId, validated.matchNoInEvent))
     _ <- EitherT.fromEither[F](
       if duplicate then
@@ -176,21 +171,18 @@ object ConfirmMatch:
       draft: momo.api.domain.MatchDraft,
       draftRefs: MatchDraftRefs,
   ): Either[AppError, Unit] =
-    val allowedStatuses = Set(
-      momo.api.domain.MatchDraftStatus.DraftReady,
-      momo.api.domain.MatchDraftStatus.NeedsReview,
-      momo.api.domain.MatchDraftStatus.OcrFailed,
-    )
-    if !allowedStatuses.contains(draft.status) then
-      Left(AppError.Conflict(s"match draft in status=${draft.status.wire} cannot be confirmed."))
-    else if draft.totalAssetsDraftId != draftRefs.totalAssets then
-      Left(
+    MatchDraftConfirmability.validate(
+      draft,
+      draftRefs.totalAssets,
+      draftRefs.revenue,
+      draftRefs.incidentLog,
+    ).leftMap {
+      case MatchDraftConfirmability.Rejection.Status(status) =>
+        AppError.Conflict(s"match draft in status=${status.wire} cannot be confirmed.")
+      case MatchDraftConfirmability.Rejection.TotalAssetsReference =>
         AppError.ValidationFailed("draftIds.totalAssets does not match the match draft snapshot.")
-      )
-    else if draft.revenueDraftId != draftRefs.revenue then
-      Left(AppError.ValidationFailed("draftIds.revenue does not match the match draft snapshot."))
-    else if draft.incidentLogDraftId != draftRefs.incidentLog then
-      Left(
+      case MatchDraftConfirmability.Rejection.RevenueReference =>
+        AppError.ValidationFailed("draftIds.revenue does not match the match draft snapshot.")
+      case MatchDraftConfirmability.Rejection.IncidentLogReference =>
         AppError.ValidationFailed("draftIds.incidentLog does not match the match draft snapshot.")
-      )
-    else Right(())
+    }

@@ -48,9 +48,10 @@ tests=(
   "series_analysis::release::tests::real_postgres_audit_reports_a_release_state_mismatch"
   "series_analysis::release::tests::real_postgres_release_lock_serializes_new_title_state_inheritance"
   "series_analysis::release::maintenance::tests::real_postgres_reconcile_preserves_preview_and_replays_an_applied_operation"
-  "scheduler::tests::subscribed_postgres_listener_delivers_the_next_commit_hint"
-  "scheduler::selection::selection_tests::real_postgres_selects_due_work_and_recovers_orphans"
-  "scheduler::runtime::dispatch::tests::real_postgres_delayed_candidates_still_attempt_durable_claims"
+  "worker::tests::subscribed_postgres_listener_delivers_the_next_commit_hint"
+  "worker::listener::tests::both_enabled_routes_are_verified_and_protocol_errors_are_fatal"
+  "worker::selection::selection_tests::real_postgres_selects_due_work_and_recovers_orphans"
+  "worker::runtime::dispatch::tests::real_postgres_delayed_candidates_still_attempt_durable_claims"
   "series_analysis::materialization::tests::real_postgres_preserves_campaign_acceptance_and_assignment"
 )
 

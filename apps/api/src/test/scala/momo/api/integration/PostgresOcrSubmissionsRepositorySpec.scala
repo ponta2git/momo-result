@@ -1,8 +1,11 @@
 package momo.api.integration
 
+import java.sql.Connection
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.UUID
+
+import scala.concurrent.duration.*
 
 import cats.effect.{Deferred, IO, Resource}
 import cats.syntax.all.*
@@ -47,13 +50,15 @@ final class PostgresOcrSubmissionsRepositorySpec extends IntegrationSuite:
     (id, created_by_account_id, status) VALUES (${draft.value}, ${owner.value}, 'draft_ready')"""
     .update.run.transact(transactor).void
 
-  private def seedImage: IO[Unit] =
+  private def seedImage: IO[Unit] = seedImage(image, key)
+
+  private def seedImage(id: ImageId, hash: SourceImageIdempotencyHash): IO[Unit] =
     val now = Instant.now()
     val reservation = SourceImageReservation(
-      image,
+      id,
       owner,
-      SourceImageObjectKey.forImage(image, "png").fold(fail(_), identity),
-      key,
+      SourceImageObjectKey.forImage(id, "png").fold(fail(_), identity),
+      hash,
       "image/png",
       128,
       Sha256Hex.fromString(digest).fold(fail(_), identity),
@@ -62,7 +67,7 @@ final class PostgresOcrSubmissionsRepositorySpec extends IntegrationSuite:
       now
     )
     images.reserveWithinQuota(reservation, SourceImageQuota(100, 1024 * 1024)) *>
-      images.markAvailable(image, None, now).void
+      images.markAvailable(id, None, now).void
 
   test("only accepted admission moves an empty draft into OCR running") {
     val refusedDraft = MatchDraftId.unsafeFromString("submission-refused-draft")
@@ -183,6 +188,100 @@ final class PostgresOcrSubmissionsRepositorySpec extends IntegrationSuite:
         case other => fail(s"expected reclaimable image, got $other")
   }
 
+  List(false, true).foreach { stale =>
+    test(s"admission refuses a FAILED image with a purge claim, including stale=$stale") {
+      val claimedAt = Instant.now().minusSeconds(if stale then 300 else 0)
+      for
+        _ <- seedDraft
+        _ <- seedFailedImage
+        claimed <-
+          images.claimFailedPurge(image, Instant.now(), claimedAt.minusSeconds(1), claimedAt)
+        admitted <- repository.put(submission())
+        count <- sql"SELECT count(*) FROM ocr_submissions".query[Long].unique.transact(transactor)
+        status <- sql"SELECT status FROM match_drafts WHERE id = ${draft.value}"
+          .query[String].unique.transact(transactor)
+      yield
+        assertEquals(claimed.map(_.id), Some(image))
+        assertEquals(admitted.left.map(_.code), Left("CONFLICT"))
+        assertEquals(count, 0L)
+        assertEquals(status, "draft_ready")
+    }
+  }
+
+  test("a FAILED purge waiting behind admission sees the committed pending reference") {
+    val proposed = submission()
+    for
+      _ <- seedDraft
+      _ <- seedFailedImage
+      // The FK lock pauses the real admission after it has locked its source image, before commit.
+      result <-
+        withRowLock("SELECT id FROM momo_login_accounts WHERE id = 'account_ponta' FOR UPDATE") {
+          (connection, blocker) =>
+            repository.put(proposed).background.use { admission =>
+              for
+                _ <- awaitBackendBlockedBy(blocker)
+                admissionPid <- sql"""SELECT pid FROM pg_stat_activity
+                WHERE $blocker = ANY(pg_blocking_pids(pid))""".query[Int].unique.transact(
+                  transactor
+                )
+                result <-
+                  images.claimFailedPurge(image, Instant.now(), Instant.now(), Instant.now())
+                    .background.use { purge =>
+                      (for
+                        _ <- awaitBlockedBy(connection, admissionPid)
+                        _ <- IO.blocking(connection.commit())
+                        accepted <- admission.flatMap(_.embedNever)
+                        claimed <- purge.flatMap(_.embedNever)
+                      yield (accepted, claimed)).guarantee(IO.blocking(connection.rollback()))
+                    }
+              yield result
+            }
+        }
+      saved <- repository.find(proposed.id, owner)
+      retry <- images.retryFailed(image, Instant.now())
+    yield
+      assert(result._1.isRight)
+      assertEquals(result._2, None)
+      assertEquals(saved.map(_.members.head.status), Some("pending"))
+      assert(retry, "accepted admission must retain the ability to retry its failed upload")
+  }
+
+  test("admission locks existing images in ID order even when members arrive in reverse order") {
+    val laterImage = ImageId.unsafeFromString("submission-contract-image-z")
+    val laterKey = SourceImageIdempotencyHash.fromRawKey("submission-later-upload")
+    val proposed = submission().copy(members =
+      List(
+        OcrSubmissionMember(ScreenType.Revenue, laterKey.value, digest, 128),
+        OcrSubmissionMember(ScreenType.TotalAssets, key.value, digest, 128),
+        OcrSubmissionMember(ScreenType.IncidentLog, "c" * 64, digest, 128),
+      )
+    )
+    for
+      _ <- seedDraft
+      _ <- seedImage
+      _ <- seedImage(laterImage, laterKey)
+      accepted <-
+        withRowLock(s"SELECT id FROM source_images WHERE id = '${image.value}' FOR UPDATE") {
+          (connection, blocker) =>
+            repository.put(proposed).background.use { admission =>
+              (for
+                _ <- awaitBackendBlockedBy(blocker)
+                // Cleanup takes the same ID order. Keeping the later image unlocked while waiting
+                // for the first prevents a cycle with that cleanup's next image lock.
+                probe <- sql"""SELECT id FROM source_images
+                WHERE id = ${laterImage.value} FOR UPDATE NOWAIT"""
+                  .query[String].unique.transact(transactor)
+                _ = assertEquals(probe, laterImage.value)
+                _ <- IO.blocking(connection.commit())
+                result <- admission.flatMap(_.embedNever)
+              yield result).guarantee(IO.blocking(connection.rollback()))
+            }
+        }
+    yield
+      assert(accepted.isRight)
+      assertEquals(accepted.toOption.map(_.members.size), Some(3))
+  }
+
   test("GET waits for a terminal writer and returns one consistent header and member state") {
     val proposed = submission()
     for
@@ -254,3 +353,46 @@ final class PostgresOcrSubmissionsRepositorySpec extends IntegrationSuite:
       assertEquals(replay.map(_.status), Right("aborted"))
       assert(state.flatMap(_.finishedAt).nonEmpty)
   }
+
+  private def seedFailedImage: IO[Unit] = seedImage *> sql"""
+    UPDATE source_images SET status = 'FAILED', failure_code = 'OBJECT_MISSING',
+      updated_at = clock_timestamp() - interval '1 day' WHERE id = ${image.value}
+  """.update.run.transact(transactor).void
+
+  private def withRowLock[A](query: String)(run: (Connection, Int) => IO[A]): IO[A] =
+    Resource.fromAutoCloseable(IO.blocking(dataSource.getConnection)).use { connection =>
+      IO.blocking {
+        connection.setAutoCommit(false)
+        val statement = connection.createStatement()
+        try
+          statement.executeQuery(query).close()
+          val rows = statement.executeQuery("SELECT pg_backend_pid()")
+          try
+            assert(rows.next())
+            rows.getInt(1)
+          finally rows.close()
+        finally statement.close()
+      }.flatMap(pid => run(connection, pid))
+        .guarantee(IO.blocking(connection.rollback()))
+    }
+
+  // This scenario occupies all three pool connections. Observe the lock on the existing blocker
+  // connection instead of making the observation itself wait for a fourth connection.
+  private def awaitBlockedBy(connection: Connection, blockerPid: Int): IO[Unit] =
+    def poll: IO[Unit] = IO.blocking {
+      val statement = connection.prepareStatement(
+        "SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE ? = ANY(pg_blocking_pids(pid)))"
+      )
+      try
+        statement.setInt(1, blockerPid)
+        val rows = statement.executeQuery()
+        try
+          assert(rows.next())
+          rows.getBoolean(1)
+        finally rows.close()
+      finally statement.close()
+    }.flatMap {
+      case true => IO.unit
+      case false => IO.cede *> IO.defer(poll)
+    }
+    poll.timeout(5.seconds)

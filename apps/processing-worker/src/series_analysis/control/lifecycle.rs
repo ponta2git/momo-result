@@ -7,7 +7,7 @@ use crate::{
     series_analysis::config::AnalysisConsumerConfig,
 };
 
-use crate::scheduler::ControlOutcome;
+use crate::worker::ControlOutcome;
 
 use super::{
     AttemptFailure, AttemptMetrics, AttemptOutcome, ClaimedJob, ControlError, HeartbeatResult,

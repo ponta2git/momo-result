@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use thiserror::Error;
 
-use crate::scheduler::{ControlOutcome, PostCommitEffects};
+use crate::worker::{ControlOutcome, PostCommitEffects};
 
 pub(crate) const ALGORITHM_VERSION: &str = "series-analysis-v7";
 

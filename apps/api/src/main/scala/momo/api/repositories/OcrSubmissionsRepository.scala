@@ -10,3 +10,7 @@ trait OcrSubmissionsRepository[F[_]]:
 
   /** Only an authenticated upload whose bytes match the immutable member may close admission. */
   def failAdmission(owner: AccountId, keyHash: String, sha256: String, byteLength: Int): F[Unit]
+
+object OcrSubmissionsRepository:
+  /** Shared acceptance limit for atomic repository admission. */
+  val OpenLimit = 4

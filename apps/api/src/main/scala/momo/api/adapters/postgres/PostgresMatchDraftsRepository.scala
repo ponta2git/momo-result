@@ -9,11 +9,10 @@ import doobie.enumerated.SqlState
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 import doobie.postgres.sqlstate
-import doobie.util.fragments
 
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.ids.*
-import momo.api.domain.{HeldEventScope, MatchDraft, MatchDraftStatus, ScreenType}
+import momo.api.domain.{MatchDraft, MatchDraftStatus, ScreenType}
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.*
 
@@ -23,14 +22,6 @@ import momo.api.repositories.*
  * single style.
  */
 object PostgresMatchDrafts extends PostgresMatchDraftsRowSupport:
-  private final case class HeldEventDraftStatsRow(
-      heldEventId: HeldEventId,
-      count: Int,
-      maxMatchNo: Int,
-      gameTitleId: Option[GameTitleId],
-      seasonMasterId: Option[SeasonMasterId],
-  )
-
   private def isUniqueViolation(state: SqlState): Boolean = state.value ==
     sqlstate.class23.UNIQUE_VIOLATION.value
 
@@ -118,55 +109,6 @@ object PostgresMatchDrafts extends PostgresMatchDraftsRowSupport:
 
     override def find(id: MatchDraftId): ConnectionIO[Option[MatchDraft]] =
       (selectAll ++ fr"WHERE id = $id").query[Row].option.flatMap(_.traverse(toDraft))
-
-    override def list(filter: MatchDraftsRepository.ListFilter): ConnectionIO[List[MatchDraft]] =
-      val conditions = List(
-        filter.heldEventId.map(v => fr"held_event_id = $v"),
-        filter.gameTitleId.map(v => fr"game_title_id = $v"),
-        filter.seasonMasterId.map(v => fr"season_master_id = $v"),
-        Option
-          .when(filter.statuses.nonEmpty)(fr"status = ANY(${filter.statuses.map(_.wire).toArray})"),
-      ).flatten
-      val where = fragments.whereAndOpt(conditions)
-      val limit = filter.limit.map(v => fr"LIMIT $v").getOrElse(Fragment.empty)
-      (selectAll ++ where ++ fr"ORDER BY updated_at DESC, created_at DESC" ++ limit).query[Row]
-        .to[List].flatMap(_.traverse(toDraft))
-
-    override def statsByHeldEvents(
-        heldEventIds: List[HeldEventId]
-    ): ConnectionIO[Map[HeldEventId, MatchDraftsRepository.HeldEventStats]] =
-      if heldEventIds.isEmpty then
-        Map.empty[HeldEventId, MatchDraftsRepository.HeldEventStats].pure[ConnectionIO]
-      else
-        val ids = heldEventIds.map(_.value).toArray
-        PostgresReadBudget.rows[HeldEventDraftStatsRow](
-          sql"""
-          SELECT held_event_id, COUNT(*)::int, COALESCE(MAX(match_no_in_event), 0)::int,
-                 game_title_id, season_master_id
-          FROM match_drafts
-          WHERE held_event_id = ANY($ids)
-            AND status <> ${MatchDraftStatus.Cancelled}
-            AND status <> ${MatchDraftStatus.Confirmed}
-          GROUP BY held_event_id, game_title_id, season_master_id
-        """,
-          PostgresReadBudget.ScopeRows,
-          "Held-event draft scopes"
-        ).map { rows =>
-          val seen = rows.groupBy(_.heldEventId).map { case (id, grouped) =>
-            id -> MatchDraftsRepository.HeldEventStats(
-              draftCount = grouped.map(_.count).sum,
-              maxMatchNo = grouped.map(_.maxMatchNo).max,
-              scopes = grouped.map(row => HeldEventScope(row.gameTitleId, row.seasonMasterId))
-                .filter(_.isDefined),
-            )
-          }
-          heldEventIds.map(id =>
-            id -> seen.getOrElse(
-              id,
-              MatchDraftsRepository.HeldEventStats(0, 0),
-            )
-          ).toMap
-        }
 
     override def markOcrFailed(
         draftId: MatchDraftId,

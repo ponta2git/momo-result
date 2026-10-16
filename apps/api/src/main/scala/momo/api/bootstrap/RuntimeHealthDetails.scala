@@ -8,7 +8,6 @@ import momo.api.endpoints.HealthEndpoints.HealthDetailsResponse
 private[bootstrap] object RuntimeHealthDetails:
   def build[F[_]: Async](
       database: Option[F[Unit]],
-      redis: Option[F[Unit]],
       ocrAdmission: Option[F[String]],
   ): F[HealthDetailsResponse] =
     def check(probe: Option[F[Unit]]): F[String] = probe match
@@ -19,10 +18,10 @@ private[bootstrap] object RuntimeHealthDetails:
       case None => Async[F].pure("disabled")
       case Some(value) => value.handleError(_ => "unavailable")
 
-    (check(database), check(redis), checkStatus(ocrAdmission)).mapN {
-      (databaseStatus, redisStatus, ocrAdmissionStatus) =>
-        val required = List(databaseStatus, redisStatus, ocrAdmissionStatus)
+    (check(database), checkStatus(ocrAdmission)).mapN {
+      (databaseStatus, ocrAdmissionStatus) =>
+        val required = List(databaseStatus, ocrAdmissionStatus)
           .filterNot(_ == "disabled")
         val status = if required.forall(_ == "ok") then "ok" else "degraded"
-        HealthDetailsResponse(status, databaseStatus, redisStatus, ocrAdmissionStatus)
+        HealthDetailsResponse(status, databaseStatus, ocrAdmissionStatus)
     }

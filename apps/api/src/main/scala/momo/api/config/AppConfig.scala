@@ -17,14 +17,13 @@ final case class AppConfig(
     sourceImageStorage: SourceImageStorageConfig = SourceImageStorageConfig.Local,
     seriesAnalysisRead: SeriesAnalysisReadConfig = SeriesAnalysisReadConfig.defaults,
     database: Option[DatabaseConfig] = None,
-    redis: Option[RedisConfig] = None,
 ):
   override def toString: String =
     val sourceImageStorageMode = sourceImageStorage match
       case SourceImageStorageConfig.Local => "local"
       case SourceImageStorageConfig.R2(_) => "r2"
     s"AppConfig(appEnv=$appEnv, httpPort=$httpPort, " +
-      s"databaseConfigured=${database.nonEmpty}, redisConfigured=${redis.nonEmpty}, " +
+      s"databaseConfigured=${database.nonEmpty}, " +
       s"sourceImageStorageMode=$sourceImageStorageMode)"
 
 object AppConfig:
@@ -47,12 +46,11 @@ object AppConfig:
         .flatMap { appEnv =>
           (
             DatabaseConfigLoader.load[F](env, appEnv),
-            RedisConfigLoader.load[F](env, appEnv),
             AuthConfigLoader.load[F](env, appEnv),
             ResourceLimitsConfigLoader.load[F](env),
             SourceImageStorageConfigLoader.load[F](env, appEnv),
             SeriesAnalysisReadConfigLoader.load[F](env),
-          ).mapN { (database, redis, auth, resourceLimits, sourceImageStorage, seriesAnalysisRead) =>
+          ).mapN { (database, auth, resourceLimits, sourceImageStorage, seriesAnalysisRead) =>
             AppConfig(
               appEnv = appEnv,
               httpHost = base.httpHost,
@@ -66,7 +64,6 @@ object AppConfig:
               sourceImageStorage = sourceImageStorage,
               seriesAnalysisRead = seriesAnalysisRead,
               database = database,
-              redis = redis,
             )
           }
         }

@@ -18,8 +18,6 @@
   <!-- Library noise reduction. -->
   <logger name="org.http4s" level="WARN" />
   <logger name="com.zaxxer.hikari" level="WARN" />
-  <logger name="io.lettuce" level="WARN" />
-  <logger name="dev.profunktor.redis4cats" level="WARN" />
 
   <condition class="momo.api.logging.TextLogFormatCondition" />
   <if>

@@ -70,6 +70,21 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
       yield assertAppError(result, "NOT_FOUND", "held event was not found")
     }
 
+  test("rejects invalid players without persisting a match"):
+    Fixture.resource.use { fixture =>
+      for
+        _ <- fixture.seedPrereqs()
+        result <- fixture.usecase.run(
+          command().copy(players = MatchFixtures.duplicateRankPlayerInputs(memberValues)),
+          AccountId.unsafeFromString("ponta"),
+          Some(MemberId.unsafeFromString("ponta")),
+        )
+        found <- fixture.matches.find(MatchId.unsafeFromString("match-1"))
+      yield
+        assertAppError(result, "VALIDATION_FAILED", "players.rank")
+        assertEquals(found, None)
+    }
+
   test("rejects duplicate match number for the same held event"):
     Fixture.resource.use { fixture =>
       for

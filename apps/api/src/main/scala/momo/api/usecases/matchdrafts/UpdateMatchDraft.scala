@@ -7,7 +7,7 @@ import cats.data.EitherT
 import cats.syntax.all.*
 
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchDraft, MatchDraftStatus, MatchNoInEvent}
+import momo.api.domain.{MatchDraft, MatchDraftStatus}
 import momo.api.errors.AppError
 import momo.api.repositories.{
   GameTitlesRepository,
@@ -55,7 +55,8 @@ final class UpdateMatchDraft[F[_]: Monad](
       AppError.Forbidden("Only the creator can update this match draft."),
     )
     _ <- EitherT.fromEither[F](ensureEditable(existing.status))
-    matchNoInEvent <- EitherT.fromEither[F](validateMatchNo(command.matchNoInEvent))
+    matchNoInEvent <-
+      EitherT.fromEither[F](UseCaseField.optionalMatchNoInEvent(command.matchNoInEvent))
     layoutFamily <- EitherT
       .fromEither[F](UseCaseField.optionalStableKey("layoutFamily", command.layoutFamily))
     _ <- validateForeignKeys(nextReferences(command, existing))
@@ -94,12 +95,6 @@ final class UpdateMatchDraft[F[_]: Monad](
     MatchDraftStatus.userEditableStatuses.contains(status),
     (),
     AppError.Conflict(s"match draft in status=${status.wire} cannot be edited."),
-  )
-
-  private def validateMatchNo(
-      matchNoInEvent: Option[Int]
-  ): Either[AppError, Option[MatchNoInEvent]] = matchNoInEvent.traverse(value =>
-    MatchNoInEvent.fromInt(value).left.map(err => AppError.ValidationFailed(err.message))
   )
 
   private def resolveStatus(

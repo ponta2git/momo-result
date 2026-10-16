@@ -15,9 +15,11 @@ mod allocation;
 #[cfg(target_os = "linux")]
 mod bootstrap_config;
 mod probe;
+mod recovery;
 
 pub(crate) use allocation::allocate_and_touch;
 pub(crate) use probe::run_cgroup_hard_limit_probe;
+pub(crate) use recovery::{EmergencyChild, RecoverableChild, RecoveredChild};
 
 pub(crate) const RESOURCE_LIMIT_HIT_EXIT_CODE: i32 = 73;
 pub(crate) const CHILD_DEPENDENCY_FAILED_EXIT_CODE: i32 = 82;
@@ -95,6 +97,8 @@ pub(crate) enum ProcessError {
     StopTimeoutBound,
     #[error("child process did not expose a process id")]
     MissingProcessId,
+    #[error("child cleanup ownership was not retained by its execution")]
+    ChildCleanupOwnership,
     #[error("failed to establish or refresh child liveness: {0}")]
     Liveness(io::Error),
     #[error("failed to release the isolated child start barrier: {0}")]
@@ -158,6 +162,7 @@ impl ProcessError {
             Self::StopTimeout => "child_stop_timeout",
             Self::StopTimeoutBound => "child_stop_timeout_bound",
             Self::MissingProcessId => "child_process_id_missing",
+            Self::ChildCleanupOwnership => "child_cleanup_ownership",
             Self::Liveness(_) => "child_liveness",
             Self::StartBarrier(_) => "child_start_barrier",
             Self::SpawnCleanupUnverified { .. } => "child_spawn_cleanup_unverified",
@@ -180,9 +185,16 @@ impl ProcessError {
     pub(crate) const fn spawn_cleanup_unverified(&self) -> bool {
         matches!(
             self,
-            Self::MissingProcessId | Self::SpawnCleanupUnverified { .. }
+            Self::MissingProcessId
+                | Self::ChildCleanupOwnership
+                | Self::SpawnCleanupUnverified { .. }
         )
     }
+}
+
+/// Whether the host implements the complete production child-isolation contract.
+pub(crate) const fn managed_child_runtime_supported() -> bool {
+    cfg!(target_os = "linux")
 }
 
 impl From<CgroupError> for ProcessError {

@@ -33,8 +33,7 @@ final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
   test("OCR creation wakes only after an accepted durable result"):
     for
       result <- Ref.of[IO, OcrJobCreationStore.OcrJobCreationResult](Right(StoredOcrJob(
-        ocrPlan.job,
-        ocrPlan.draft,
+        OcrJobAcceptance.fromJob(ocrPlan.job),
         true
       )))
       sink <- RecordingSink.create
@@ -45,7 +44,7 @@ final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
         closed.update(_ + 1),
       )
       accepted <- store.store(ocrPlan)
-      _ <- result.set(Right(StoredOcrJob(ocrPlan.job, ocrPlan.draft, false)))
+      _ <- result.set(Right(StoredOcrJob(OcrJobAcceptance.fromJob(ocrPlan.job), false)))
       replayed <- store.store(ocrPlan)
       _ <- result.set(Left(OcrJobCreationRejection.InvalidPlan))
       rejected <- store.store(ocrPlan)
@@ -64,7 +63,7 @@ final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
 
   test("match update and actual deletion wake analysis while false deletion does not"):
     for
-      updateResult <- Ref.of[IO, Either[AppError, Unit]](Right(()))
+      updateResult <- Ref.of[IO, Either[AppError, MatchRecord]](Right(matchRecord))
       deleteResult <- Ref.of[IO, Boolean](true)
       sink <- RecordingSink.create
       closed <- Ref.of[IO, Int](0)
@@ -73,9 +72,9 @@ final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
         sink,
         closed.update(_ + 1),
       )
-      _ <- repository.update(matchRecord, now)
+      _ <- repository.update(matchRecord.id, MatchFixtures.update(matchRecord), now)
       _ <- updateResult.set(Left(AppError.Conflict("rejected")))
-      rejected <- repository.update(matchRecord, now)
+      rejected <- repository.update(matchRecord.id, MatchFixtures.update(matchRecord), now)
       deleted <- repository.delete(matchRecord.id)
       _ <- deleteResult.set(false)
       missing <- repository.delete(matchRecord.id)
@@ -128,8 +127,7 @@ final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
   test("a closed sink escalates runtime failure without changing the committed result"):
     for
       result <- Ref.of[IO, OcrJobCreationStore.OcrJobCreationResult](Right(StoredOcrJob(
-        ocrPlan.job,
-        ocrPlan.draft,
+        OcrJobAcceptance.fromJob(ocrPlan.job),
         true
       )))
       sink <- RecordingSink.closed
@@ -147,7 +145,7 @@ final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
 
   test("a failed local analysis hint preserves the committed mutation result"):
     for
-      updateResult <- Ref.of[IO, Either[AppError, Unit]](Right(()))
+      updateResult <- Ref.of[IO, Either[AppError, MatchRecord]](Right(matchRecord))
       deleteResult <- Ref.of[IO, Boolean](false)
       escalations <- Ref.of[IO, Int](0)
       repository = WorkerWakingRepositories.matches(
@@ -155,17 +153,17 @@ final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
         FailingSink,
         escalations.update(_ + 1),
       )
-      actual <- repository.update(matchRecord, now)
+      actual <- repository.update(matchRecord.id, MatchFixtures.update(matchRecord), now)
       escalationCount <- escalations.get
     yield
-      assertEquals(actual, Right(()))
+      assertEquals(actual, Right(matchRecord))
       assertEquals(escalationCount, 1)
 
   test("analysis commits return during stalled notification I/O and shutdown cancels the relay"):
     TestControl.executeEmbed {
       WorkerWakeup.resource[IO].use { wakeup =>
         for
-          updateResult <- Ref.of[IO, Either[AppError, Unit]](Right(()))
+          updateResult <- Ref.of[IO, Either[AppError, MatchRecord]](Right(matchRecord))
           deleteResult <- Ref.of[IO, Boolean](false)
           notificationStarted <- Deferred[IO, Unit]
           notificationCancelled <- Deferred[IO, Unit]
@@ -181,9 +179,15 @@ final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
             wakeup,
             notifier,
             IO.raiseError[Unit],
-          ).use(_ => notificationStarted.get *> repository.update(matchRecord, now).replicateA(32))
+          ).use(_ =>
+            notificationStarted.get *> repository.update(
+              matchRecord.id,
+              MatchFixtures.update(matchRecord),
+              now
+            ).replicateA(32)
+          )
           _ <- notificationCancelled.get
-        yield assertEquals(results, List.fill(32)(Right(())))
+        yield assertEquals(results, List.fill(32)(Right(matchRecord)))
       }
     }
 
@@ -196,7 +200,7 @@ final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
         sink,
         closed.update(_ + 1),
       )
-      result <- repository.update(matchRecord, now).attempt
+      result <- repository.update(matchRecord.id, MatchFixtures.update(matchRecord), now).attempt
       effects <- sink.effects
     yield
       assert(result.isLeft)
@@ -252,32 +256,33 @@ final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
       result.get
 
   private def matchesRepository(
-      updateResult: Ref[IO, Either[AppError, Unit]],
+      updateResult: Ref[IO, Either[AppError, MatchRecord]],
       deleteResult: Ref[IO, Boolean],
   ): MatchesRepository[IO] =
     new StubMatchesRepository:
       override def update(
-          record: MatchRecord,
+          id: MatchId,
+          change: MatchUpdate,
           updatedAt: Instant,
-      ): IO[Either[AppError, Unit]] = updateResult.get
+      ): IO[Either[AppError, MatchRecord]] = updateResult.get
       override def delete(id: MatchId): IO[Boolean] = deleteResult.get
 
   private def failingMatchesRepository: MatchesRepository[IO] = new StubMatchesRepository:
     override def update(
-        record: MatchRecord,
+        id: MatchId,
+        change: MatchUpdate,
         updatedAt: Instant,
-    ): IO[Either[AppError, Unit]] =
+    ): IO[Either[AppError, MatchRecord]] =
       IO.raiseError(new IllegalStateException("transaction rolled back"))
 
   private abstract class StubMatchesRepository extends MatchesRepository[IO]:
     override def update(
-        record: MatchRecord,
+        id: MatchId,
+        change: MatchUpdate,
         updatedAt: Instant,
-    ): IO[Either[AppError, Unit]] = IO.pure(Right(()))
+    ): IO[Either[AppError, MatchRecord]] = IO.pure(Right(matchRecord))
     override def delete(id: MatchId): IO[Boolean] = IO.pure(false)
     override def find(id: MatchId): IO[Option[MatchRecord]] = IO.pure(None)
-    override def list(filter: MatchesRepository.ListFilter): IO[List[MatchRecord]] = IO.pure(Nil)
-    override def listByHeldEvent(heldEventId: HeldEventId): IO[List[MatchRecord]] = IO.pure(Nil)
     override def existsMatchNo(
         heldEventId: HeldEventId,
         matchNoInEvent: MatchNoInEvent,
@@ -287,9 +292,6 @@ final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
         matchNoInEvent: MatchNoInEvent,
         excludeMatchId: MatchId,
     ): IO[Boolean] = IO.pure(false)
-    override def statsByHeldEvents(
-        heldEventIds: List[HeldEventId]
-    ): IO[Map[HeldEventId, MatchesRepository.HeldEventStats]] = IO.pure(Map.empty)
 
   private def confirmationRepository(
       result: Ref[IO, Either[AppError, MatchConfirmationResult]]

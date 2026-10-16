@@ -139,13 +139,11 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
     for
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
-      backoff <- InMemoryOAuthProviderBackoff.create[IO](1, 60.seconds, IO.pure(instant))
       sessions = sessionService(repo, accounts, IO.pure(instant))
       service = CompleteOAuthLogin[IO](
         SuccessfulDiscordOAuthClient(account.discordUserId.value),
         sessions,
         accounts,
-        backoff,
       )
       result <- service.run("code")
       completion <- result match
@@ -162,13 +160,11 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
     for
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](Nil)
-      backoff <- InMemoryOAuthProviderBackoff.create[IO](1, 60.seconds, IO.pure(instant))
       sessions = sessionService(repo, accounts, IO.pure(instant))
       service = CompleteOAuthLogin[IO](
         SuccessfulDiscordOAuthClient("223456789012345678"),
         sessions,
         accounts,
-        backoff,
       )
       result <- service.run("code")
     yield result match
@@ -176,29 +172,27 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       case other => fail(s"expected DiscordUserNotAllowed, got $other")
   }
 
-  test("CompleteOAuthLogin opens provider backoff after dependency failures") {
+  test("CompleteOAuthLogin returns provider failures without blocking later login attempts") {
     for
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
       oauth <- RecordingDiscordOAuthClient
         .create(Left(AppError.DependencyFailed("Discord OAuth provider request failed.")))
-      backoff <- InMemoryOAuthProviderBackoff.create[IO](1, 60.seconds, IO.pure(instant))
       sessions = sessionService(repo, accounts, IO.pure(instant))
-      service = CompleteOAuthLogin[IO](oauth, sessions, accounts, backoff)
+      service = CompleteOAuthLogin[IO](oauth, sessions, accounts)
       first <- service.run("first")
       second <- service.run("second")
       fetchCalls <- oauth.fetchCalls
     yield
       assertProviderFailure(first, "Discord OAuth provider request failed")
-      assertProviderFailure(second, "temporarily unavailable")
-      assertEquals(fetchCalls, 1)
+      assertProviderFailure(second, "Discord OAuth provider request failed")
+      assertEquals(fetchCalls, 2)
   }
 
   test("CompleteOAuthCallback validates signatures before consuming state") {
     for
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
-      backoff <- InMemoryOAuthProviderBackoff.create[IO](1, 60.seconds, IO.pure(instant))
       reservations <- IO.ref(0)
       guard = new OAuthStateReplayGuard[IO]:
         def consume(stateHash: String, expiresAt: Instant): IO[Boolean] =
@@ -212,7 +206,6 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
           SuccessfulDiscordOAuthClient(account.discordUserId.value),
           sessions,
           accounts,
-          backoff
         ),
         guard,
         "/",
@@ -235,7 +228,6 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
     for
       repo <- RecordingAppSessionsRepository.create
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
-      backoff <- InMemoryOAuthProviderBackoff.create[IO](1, 60.seconds, IO.pure(instant))
       oauth <- RecordingDiscordOAuthClient.create(Right(DiscordUser(account.discordUserId.value)))
       guard = new OAuthStateReplayGuard[IO]:
         def consume(stateHash: String, expiresAt: Instant): IO[Boolean] =
@@ -245,7 +237,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       codec = stateCodec(IO.pure(instant))
       service = CompleteOAuthCallback[IO](
         codec,
-        CompleteOAuthLogin[IO](oauth, sessions, accounts, backoff),
+        CompleteOAuthLogin[IO](oauth, sessions, accounts),
         guard,
         "/",
       )
@@ -763,32 +755,6 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
     yield
       assert(first && later)
       assert(!backwards)
-  }
-
-  test("InMemoryOAuthProviderBackoff opens after dependency failures and resets after cooldown") {
-    for
-      nowRef <- IO.ref(Instant.parse("2026-01-01T00:00:00Z"))
-      backoff <- InMemoryOAuthProviderBackoff.create[IO](2, 60.seconds, nowRef.get)
-      initiallyBlocked <- backoff.isBlocked
-      firstOpened <- backoff.recordFailure(AppError.DependencyFailed("provider failed"))
-      blockedAfterFirst <- backoff.isBlocked
-      secondOpened <- backoff.recordFailure(AppError.DependencyFailed("provider failed"))
-      blockedAfterSecond <- backoff.isBlocked
-      _ <- nowRef.set(Instant.parse("2026-01-01T00:00:30Z"))
-      reopenedWhileBlocked <- backoff.recordFailure(AppError.DependencyFailed("provider failed"))
-      _ <- backoff.recordSuccess
-      blockedAfterConcurrentSuccess <- backoff.isBlocked
-      _ <- nowRef.set(Instant.parse("2026-01-01T00:01:01Z"))
-      blockedAfterCooldown <- backoff.isBlocked
-    yield
-      assert(!initiallyBlocked)
-      assert(!firstOpened)
-      assert(!blockedAfterFirst)
-      assert(secondOpened)
-      assert(blockedAfterSecond)
-      assert(!reopenedWhileBlocked)
-      assert(blockedAfterConcurrentSuccess)
-      assert(!blockedAfterCooldown)
   }
 
   private def assertProviderFailure(

@@ -123,11 +123,13 @@ impl IsolatedOcrChildLauncher {
         preserve_native_runtime_environment(&mut command);
         crate::process::configure_parent_death_signal(&mut command);
         crate::process::configure_inherited_liveness(&mut command, child_liveness_fd);
-        let mut child = command.spawn().map_err(|_error| "ocr_child_spawn")?;
+        let child = command.spawn().map_err(|_error| "ocr_child_spawn")?;
+        let mut child = crate::process::RecoverableChild::new(child, self.cgroup.clone())
+            .map_err(|error| error.kind())?;
         drop(child_liveness);
-        let process_id = child.id().ok_or("ocr_child_process_id")?;
-        let stdin = child.stdin.take();
-        let stdout = child.stdout.take();
+        let process_id = child.process_id();
+        let stdin = child.take_stdin();
+        let stdout = child.take_stdout();
         let start_error = match (&stdin, &stdout) {
             (None, _) => Some("ocr_child_stdin"),
             (_, None) => Some("ocr_child_stdout"),
@@ -138,12 +140,15 @@ impl IsolatedOcrChildLauncher {
                 .map(|error| error.kind()),
         };
         let writer = if start_error.is_none() {
-            stdin.map(|input| tokio::spawn(write_framed_input(input, prefix, image)))
+            stdin.map(|input| {
+                crate::execution::spawn_child_io(write_framed_input(input, prefix, image))
+            })
         } else {
             drop(stdin);
             None
         };
-        let reader = stdout.map(|output| tokio::spawn(read_bounded_output(output)));
+        let reader =
+            stdout.map(|output| crate::execution::spawn_child_io(read_bounded_output(output)));
         Ok(ManagedOcrChild {
             child: Some(child),
             process_id,
@@ -154,14 +159,13 @@ impl IsolatedOcrChildLauncher {
             reader,
             parent_liveness,
             start_error,
-            cleanup_complete: false,
         })
     }
 }
 
 #[cfg(target_os = "linux")]
 struct ManagedOcrChild {
-    child: Option<tokio::process::Child>,
+    child: Option<crate::process::RecoverableChild>,
     process_id: u32,
     cgroup: crate::cgroup::ChildCgroup,
     oom_kill_count_before: u64,
@@ -170,7 +174,6 @@ struct ManagedOcrChild {
     reader: Option<JoinHandle<Result<Vec<u8>, io::Error>>>,
     parent_liveness: UnixStream,
     start_error: Option<&'static str>,
-    cleanup_complete: bool,
 }
 
 #[cfg(target_os = "linux")]
@@ -234,7 +237,6 @@ impl ManagedOcrChild {
                 return Err(OcrChildProcessFailure::ProcessBoundary("ocr_child_wait"));
             }
         };
-        drop(self.child.take());
         let cleanup_deadline = crate::process::child_stop_deadlines(self.stop_grace)
             .map_err(|error| OcrChildProcessFailure::ProcessBoundary(error.kind()))?
             .overall;
@@ -247,7 +249,11 @@ impl ManagedOcrChild {
         .await;
         let remaining_process = match remaining_process {
             Ok(value) => {
-                self.cleanup_complete = true;
+                if let Some(child) = self.child.as_mut() {
+                    child
+                        .verify_cleanup()
+                        .map_err(|error| OcrChildProcessFailure::ProcessBoundary(error.kind()))?;
+                }
                 value
             }
             Err(error) => {
@@ -295,14 +301,14 @@ impl ManagedOcrChild {
         let deadlines =
             crate::process::child_stop_deadlines(self.stop_grace).map_err(|error| error.kind())?;
         let termination_result = if let Some(child) = self.child.as_mut() {
-            crate::process::stop_and_reap_child(child, self.process_id, deadlines)
+            child
+                .stop_and_reap(deadlines)
                 .await
                 .map(|_status| ())
                 .map_err(|error| error.kind())
         } else {
             Ok(())
         };
-        drop(self.child.take());
         self.abort_io_tasks().await;
         crate::process::stop_remaining_process_group(
             self.process_id,
@@ -311,7 +317,11 @@ impl ManagedOcrChild {
         )
         .await
         .map_err(|error| error.kind())?;
-        self.cleanup_complete = true;
+        if termination_result.is_ok()
+            && let Some(child) = self.child.as_mut()
+        {
+            child.verify_cleanup().map_err(|error| error.kind())?;
+        }
         termination_result
     }
 
@@ -363,16 +373,8 @@ async fn finish_io_task<T>(
 #[cfg(target_os = "linux")]
 impl Drop for ManagedOcrChild {
     fn drop(&mut self) {
-        if !self.cleanup_complete {
-            drop(crate::process::terminate_process_group(
-                self.process_id,
-                libc::SIGKILL,
-            ));
-            // A child can leave its original process group with setsid while remaining in the
-            // dedicated cgroup. Drop cannot await verification, so run the same authoritative
-            // cgroup-wide hard-stop pass as a synchronous fail-closed fallback.
-            drop(self.cgroup.hard_kill());
-        }
+        // RecoverableChild retains the right to reap and verify the cgroup outside a panicking
+        // business future. Standalone launchers keep its synchronous hard-stop fallback.
         if let Some(writer) = &self.writer {
             writer.abort();
         }

@@ -1106,7 +1106,6 @@ export interface components {
         HealthDetailsResponse: {
             status: string;
             database: string;
-            redis: string;
             ocrAdmission: string;
         };
         /** HealthResponse */

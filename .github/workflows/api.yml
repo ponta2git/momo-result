@@ -191,7 +191,7 @@ jobs:
           retention-days: 30
 
   external-services:
-    name: PostgreSQL and Redis
+    name: PostgreSQL
     needs: http4s-patch
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -246,4 +246,4 @@ jobs:
 
       - name: External-service quality gates
         timeout-minutes: 15
-        run: sbt --server --batch "apiDbQuality; apiRedisQuality"
+        run: sbt --server --batch apiDbQuality

@@ -91,7 +91,6 @@ export async function runSmoke(options: SmokeOptions): Promise<void> {
   await body("health", "/healthz", '"status":"ok"');
   await checkHTTP2(`${baseUrl}/healthz`, options.canonicalHost, options.originLockToken, timeoutMs);
   await body("database health", "/healthz/details", '"database":"ok"');
-  await body("redis health", "/healthz/details", '"redis":"ok"');
   await body("account authentication", "/api/auth/me", `"accountId":"${options.accountId}"`);
   await status("index", "/", 200);
   await status("SPA deep link", "/matches/e2e-deep-link", 200);

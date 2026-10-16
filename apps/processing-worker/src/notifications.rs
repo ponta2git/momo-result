@@ -3,11 +3,13 @@
 pub(crate) mod analysis;
 pub(crate) mod ocr;
 mod preparation;
+mod runtime;
+
+pub(crate) use runtime::{NotificationDriver, NotificationHandle};
 
 pub(crate) use momo_notifications::{
-    NotificationConfig, NotificationConfigError, NotificationDriver, NotificationEnvelope,
-    NotificationKind, NotificationRejection, NotificationReservation, NotificationSink,
-    PreparedNotification,
+    NotificationConfig, NotificationConfigError, NotificationEnvelope, NotificationKind,
+    NotificationRejection, NotificationReservation, NotificationSink, PreparedNotification,
 };
 
 pub(crate) fn config_from_environment() -> Result<NotificationConfig, NotificationConfigError> {

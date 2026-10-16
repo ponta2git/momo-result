@@ -4,10 +4,11 @@ use std::time::Duration;
 use tokio_postgres::{Client, types::Type};
 
 pub(crate) mod control;
+#[cfg(test)]
 mod listener;
 pub(crate) mod runtime;
 
-pub(super) const CHANNEL: &str = "ocr_submissions";
+pub(crate) const CHANNEL: &str = "ocr_submissions";
 pub(super) const PAGE_SIZE: i64 = 32;
 pub(super) const SAFETY_INTERVAL: Duration = Duration::from_secs(30);
 

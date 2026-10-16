@@ -57,7 +57,7 @@ test、suite、lint / checker、manual review は、守る価値に対して必�
 
 同じ詳細を全層で重複検証せず、下位層で固定した分岐は上位層では接続と代表経路に絞る。
 
-- unit test は純粋な分岐と状態遷移、integration test は DB / Redis / filesystem / process / wire、E2E は利用者の主要契約を主な対象とする。ただし、test size を小さくするために production の失敗境界を double へ置き換えない。
+- unit test は純粋な分岐と状態遷移、integration test は DB / filesystem / process / wire、E2E は利用者の主要契約を主な対象とする。ただし、test size を小さくするために production の失敗境界を double へ置き換えない。
 - clock、ID、乱数、外部応答、非同期待ちは制御可能にし、実時間 sleep と test 順序へ依存しない。
 - test の size、隔離、並列実行、直列化の例外は `docs/test-architecture.md` に従う。
 - skip / 未実行の外部依存は未検証と報告する。mock の成功を live wire の成功として扱わない。
@@ -103,7 +103,7 @@ test、suite、lint / checker、manual review は、守る価値に対して必�
 
 - fixture は生成型 / domain 型に追従させ、意味のある factory へ集約する。大量の inline payload や型 cast で契約を迂回しない。
 - MSW / store / storage / timer は test lifecycle で reset し、test 間で状態を共有しない。
-- double は production adapter の guard と失敗型を表現する。double 独自の簡略状態を期待値にしない。
+- double は test が扱う操作の guard と失敗型を表現し、未実装の保存・副作用を成功として扱わない。production 全体の再現を目指さず、double 独自の簡略状態を期待値にしない。
 - async は Promise、MSW、fake clock で決定論的に進める。
 
 ### Locator / E2E
@@ -124,7 +124,8 @@ test、suite、lint / checker、manual review は、守る価値に対して必�
 - endpoint は wire validation、auth / CSRF、status / Problem Details、usecase 接続を検証する。
 - usecase は状態遷移、競合、transaction 内の副作用、port failure mapping を検証する。
 - HTTP 契約の正本と OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary に従う。構造 lint と freshness は pipeline integrity、代表 request / response と利用者に現れる意味は contract / integration evidence として区別する。
-- in-memory adapter と repository の guard が一致する代表ケースを共有 contract として持つ。
+- InMemory は HTTP / application の限定した double とし、永続化仕様の正本にしない。存続が必要な同一 port に条件ずれがある場合だけ、consumer が依存する代表的な受理・拒否と保存結果を小さい共有 contract で検証する。全 repository の二重実装・二重 suite を義務化しない。
+- lock、rollback、競合、永続 job / replay の詳細を double へ追加する前に、該当 test を実 PostgreSQL へ移す。移行後は不要な simulator、fixture、重複 assertion を削除し、単なる test の移動で二重保守を残さない。
 
 ### DB-backed API
 
@@ -149,7 +150,7 @@ Analysis / OCR の共通 contract として、次を固定する。
 - 起動・再接続、wake coalescing、deadline、bounded drain、backoff を確認し、通知欠落は低頻度の補完走査で回復すること。
 - campaign 展開と直接 claim を実 DB で通すこと。queued がなく期限切れ running だけが残る場合、先頭が非対応・lock 中の場合、将来の retry、複数親の競合を含める。
 - PostgreSQL通知をwakeに使う場合、productionと同じpooling modeでsession-bound listenerへの別接続commitを通す。startupの`LISTEN`成功や直接DBだけのtestを、通知routeのreadiness evidenceにしない。
-- supervisor の shutdown、unexpected child / coordinator exit、sibling 停止、process group 回収。
+- worker runtimeの起動途中・稼働中の異常からの共通停止、単一期限内の子process・補助task回収。listenerの一時切断と構造異常、通知sender単独の異常は、それぞれの回復境界で確認する。
 - DB / Linux process / native engine は通常 unit test から分離し、検証済み runtime image と隔離 service で通すこと。
 
 OCR は schema / screen type、object metadata、parser / postprocess、failure mapping、retry / lease 回復、draft payload を外部 oracle にする。accuracy は version 固定 dataset と項目別 oracle で測り、未知画像への一般化を保証したと報告しない。

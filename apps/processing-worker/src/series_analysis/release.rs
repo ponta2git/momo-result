@@ -12,7 +12,7 @@ use thiserror::Error;
 use tokio_postgres::{Client, Row, Transaction};
 
 use crate::postgres::{PostgresError, connect};
-use crate::scheduler::listener::CHANNEL;
+use crate::worker::listener::CHANNEL;
 
 use super::control::{ALGORITHM_VERSION, CAPABILITY_FRESH_SECONDS};
 

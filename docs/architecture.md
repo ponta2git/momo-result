@@ -11,8 +11,7 @@
 | Web | SPA、入力、表示、画面状態 | `apps/web/src/` |
 | API | HTTP、認証、usecase、DB adapter | Tapir endpoint、`apps/api/` |
 | Processing Worker | OCR / 分析の非同期実行、lease、外部I/O | `apps/processing-worker/` |
-| DB | 業務状態、job、入力、成果物 | `../momo-db` migration |
-| Redis | 認証・レート制限 | API adapter と設定 |
+| DB | 業務状態、session、OAuth state使用済み記録、job、入力、成果物 | `../momo-db` migration |
 | public HTTP runtime | Web 配信、API、reverse proxy | `Dockerfile`、`deploy/`、runtime tool |
 
 - public HTTP runtime に OCR / 分析処理を同居させず、HTTP request 内で高負荷分析を実行しない。
@@ -22,7 +21,7 @@
 ### Storage / Resource Boundaries
 
 - 業務ルール・再試行方針・集計状態の更新手順はアプリが所有する。DBにはFK、一意性、改変不能性、原子的な条件付き更新を残す。複数consumerの整合性やrollback互換を守るtriggerは、置換する契約と移行順が揃うまで削除しない。
-- Redisへ業務状態や長期履歴を複製しない。Luaはカウンタと期限など小さな原子操作に限定し、業務分岐や無制限の走査を持ち込まない。pipelineによる往復削減とtransactionの原子性を区別する。
+- rate limitのカウンタはAPI process内で保持し、scopeごとのkey数と有効期間を制限する。process間では共有せず、再起動で初期化される。永続するquotaや同時job上限はDBの原子的な操作で別に守る。
 - 接続poolはruntimeで再利用し、取得待ちの実行枠もpool上限へ合わせる。利用しない接続の常時補充やkeepalive queryを避ける一方、requestごとの接続開閉へ置き換えない。
 - 受付判定は必要な外部状態の取得結果から行う。直前のPINGを成功保証とせず、外部状態をcacheしてquotaやfail-closedの意味を弱めない。
 - 処理中のlease heartbeat、待機中のcapability更新、jobの起床通知、実行可能時刻、履歴保持は別の目的を持つ。閾値は相互の期限・shutdown予算・利用者の待ち時間と合わせて調整し、コマンド数やquery負荷だけで決めない。
@@ -38,8 +37,9 @@
 - 分析結果の分類・根拠はWorkerが所有し、画面内の遷移先、リンク文言、固定の指標説明はWebが所有する。保存成果物へ画面構造を埋め込まず、Webは分類から遷移先を決める。
 - `apps/api/openapi.yaml` は内部 Web codegen 用の追跡する派生物であり、契約や公開 API documentation の正本ではない。Tapir から一時生成した spec を保守された OpenAPI-aware linter で構造検証し、tracked artifact と一致させ、その artifact から Web 型を生成する。手編集で差分を解消しない。
 - OpenAPI lint は unresolved reference、path / parameter、schema、operation identity など構造整合性に限定する。field の公開可否、認証、業務意味は endpoint、DTO、要求・domain 規約で決め、legacy 名や source 断片の文字列検査を契約にしない。
-- HTTP 層は入力・認証・エラー変換に閉じ、DB、Redis、業務分岐を直接持たない。
+- HTTP 層は入力・認証・エラー変換に閉じ、DB操作、業務分岐を直接持たない。
 - request body のサイズ上限はHTTP methodに関係なく適用し、Content-Lengthがない場合も読取byte数で制限する。decode 前に同時実行数を制限し、画像uploadと通常mutationを分離する。満杯の場合は本文を保持して待機せず再試行可能な応答を返す。
+- 認証済みreadとmutation試行は別の入口rate limitで制限する。mutation試行は本文decode前に判定し、再送やCSRF拒否も数える。新規処理用のmutation / upload / OCR制限とは分け、通常の再試行に余裕を持たせる。冪等replayは本文hash照合後に決め、再送で新規処理用の枠を消費しない。本人情報取得・logoutは通常read / mutationと別の認証操作枠を持つ。
 - JSON readの待機件数と時間を制限し、待機上限では再試行可能な応答を返す。JSON・画像・exportの応答は転送終了まで同時実行枠を保持する。DB projectionは全量取得後の検査に頼らず、件数・文字数・保存JSONのbyte数を転送前に検証する。
 - 応答を返す前の失敗・取消ではHTTP層が取得済みの枠を解放し、応答を返した後はbodyの解放scopeへ引き継ぐ。ログなどのbody wrapperはそのscopeを通常の効果の後へ隠さず、本文開始前の送信失敗でもserverが解放できる形を保つ。応答生成後の補助処理は取消で応答の所有権を失わないようにする。
 - HEAD応答はエラーを含めて本文を送らず、本文に引き継いだresourceも解放する。405応答のAllowは対象routeで許可するmethodから求める。HTTP/2のframe、flow control、stream reset、GOAWAYはHTTPライブラリが所有し、アプリケーションで接続全体の切断や未読本文の無制限drainへ置き換えない（[RFC 9110 §9.3.2](https://www.rfc-editor.org/rfc/rfc9110.html#section-9.3.2)、[RFC 9113 §8.1](https://www.rfc-editor.org/rfc/rfc9113.html#section-8.1)）。
@@ -49,6 +49,13 @@
 - optional field が mode や副作用を変える場合は discriminator として要件または domain 文書にも意味を残す。
 - 依存方向は `http → auth / usecases → domain + ports / repositories`、`adapters → domain + ports / repositories` とする。外部通信・永続化の実装は adapter に置き、`bootstrap` だけが実装を選ぶ。認証の account 判定と callback の組み立ても HTTP module へ戻さない。
 - 外部境界には利用側が必要とする操作・値だけを公開する。セッションには有効期間、OAuth state には署名鍵と有効期間、OCR受付には別名の snapshot を渡し、全体設定や未使用の更新操作を運搬しない。SDK client、SQL、provider wire DTO は adapter 内に閉じる。
+
+### Bootstrap / HTTP execution
+
+- PostgreSQL を通常 runtime の永続化境界とし、DB 設定の欠落を InMemory へ fallback させない。接続 pool、storage、cache、wake とその Resource は runtime が一度だけ生成・所有する。
+- feature ごとの bootstrap が必要な repository / service から usecase を組み立て、HTTP module が所有する UseCases の束をそのまま渡す。中央で同じ一覧を展開・再包装しない。個々の usecase は必要な port だけを受け取り、runtime 全体の依存 container を参照しない。
+- 共通 HTTP 入口は認可、replay、decode、usecase 実行、response 変換の接続を扱い、業務判断や transaction を所有しない。endpoint ごとの codec・実行関数・response の指定は composition として明示し、用途の異なる手順を切替 flag の組合せへ押し込まない。
+- 処理順は認証・認可、入力上限、replay、新規操作の受付・業務検証の意味から決める。既存の並び自体を互換契約にせず、保存済み idempotency key / fingerprint や有効な client 契約を変える場合だけ必要な移行を設ける。時計、ID、member / alias の読取りは操作時に評価し、bootstrap で snapshot 化しない。
 
 ### Usecase / Repository
 
@@ -65,7 +72,7 @@
 - 通常制御フローは型で返し、予期しない不整合や外部I/O失敗と区別する。
 - 部分更新は既存値と入力を合わせた実効状態で検証する。読み取り後の前提を更新に使う場合は、同じ更新条件で再検証する。
 - 下書きの変更・取消とOCRの受付・取消は、認証主体の所有権をusecaseと原子的な保存操作で確認する。共同編集可能な確定済み試合の契約とは分ける。
-- in-memory adapter は production adapter と同じ状態遷移 guard を持つ。単純化した double を正本にしない。
+- InMemory は test source の限定した HTTP / application double とし、第二の永続化実装として育てない。必要な状態条件は domain policy を使い、lock・rollback・制約・永続 job の意味は実 PostgreSQL で検証する。複雑な保存条件を必要とする test は実 DB へ移し、不要になった double と重複 test を削除する。
 - 分析読み取りは保存済み成果物を返すだけにし、関連する読み取りを同じ artifact version へ固定する。詳細は `docs/requirements/series-analysis-batch.md` を正本とする。
 
 ### Transaction / Job Wake
@@ -75,19 +82,19 @@
 - 管理者のDiscord通知設定はAPIのapplication commandとして扱う。domainが世代競合と変更・取消対象を決め、PostgreSQL adapterがgate取得、最新状態の読取り、設定と取消の一括保存を行う。DBは永続化と排他を担い、Summitの稼働は設定保存の前提にしない。
 - wake は commit 後に実行する。rollback 時は post-commit effect を返さない。
 - wake は業務 payload を持たない coalescing signal とし、永続 job / request の代わりにしない。
-- API の commit 後 handoff は process-local wake までとし、外部通知の I/O は Resource が所有する coordinator で実行する。通知の遅延・失敗で確定済み更新の応答を待たせず、再試行と停止は coordinator、通知喪失後の回収は Worker scheduler が所有する。
-- scheduler は起動・再接続時の走査、bounded drain、実行可能時刻、lease 回復、backoff を扱い、低頻度走査で通知欠落を補う。
+- API の commit 後 handoff は process-local wake までとし、外部通知の I/O は Resource が所有する coordinator で実行する。通知の遅延・失敗で確定済み更新の応答を待たせず、再試行と停止は coordinator、通知喪失後の回収は Worker runtime が所有する。
+- Worker runtime は起動・再接続時の走査、bounded drain、実行可能時刻、lease 回復、backoff を扱い、低頻度走査で通知欠落を補う。
 - 候補選択と実行権取得を分け、claim / fence で複数親の競合と古い owner の更新を制御する。
 - 手動再計算のidempotencyは永続したoperationを正本とし、同じkeyの並行受付を直列化して対象を照合する。HTTP予約の期限切れ後も別対象へのkey流用を受理しない。
 - 分析では API と release controller が durable request を保存し、Worker が campaign 展開・job 作成・実行を所有する。通知に業務 payload を持たせず、展開途中の要求は DB に残す。
-- PostgreSQLのsession stateへ依存するjob scheduler listenerは、通常query用のtransaction-pooled接続と設定を分離したsession-capable接続を所有する。workerは別接続からの通知round tripをstartup readiness前に確認し、`LISTEN`文の成功だけを機能成立と扱わない。
+- PostgreSQLのsession stateへ依存するworker listenerは、通常query用のtransaction-pooled接続と設定を分離したsession-capable接続を所有する。workerは別接続からの通知round tripをstartup readiness前に確認し、`LISTEN`文の成功だけを機能成立と扱わない。
 
 ### Error / Auth
 
 - 業務、認証、権限、入力、外部依存のエラーを区別し、UI が扱える Problem Details へ正規化する。
-- account、session、provider backoff の判断は auth service に閉じ、Discord HTTP client と Redis実装は adapter に置く。HTTP module は cookie / redirect / wire 変換を担う。
+- account、session、OAuth callbackの判断はauth serviceに閉じ、Discord HTTP clientとOAuth state使用済み記録の永続化はadapterに置く。HTTP moduleはcookie / redirect / wire変換を担う。
 - 認証主体と試合参加者を混同しない。状態変更 API は CSRF 対策を必須とし、dev/test 認証を本番経路へ混ぜない。
-- 認証cookieは形式と重複を検証してから扱い、API応答は共有cacheへ保存しない。OAuth stateは署名・期限・サイズを検証した後に一回限りの使用を確定する。
+- 認証cookieは形式と重複を検証してから扱い、API応答は共有cacheへ保存しない。OAuth stateは署名対象の形式識別子・署名・期限・サイズを検証し、provider呼出し前にDBで一回限りの使用を確定する。使用済み記録はhashと期限だけを保持し、有効期間中はAPI再起動で失わず、保存不能時はcallbackを進めない。旧形式のstateは再ログインで作り直し、既存sessionの形式と有効性は維持する。
 - UI が回復方法を変える HTTP status を汎用内部エラーへ潰さない。
 
 ## 3. Web
@@ -216,15 +223,22 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 | 完了 | durable commit、post-commit effect、slot 解放 | job 終端、公開、要求を変更しない |
 
 - Analysis / OCR は同じ parent lifecycle を共有し、種類固有の入力、claim、状態遷移、計算を分ける。
-- supervisorは稼働するpeerと共通の停止期限を組み立てる。各capabilityが外部接続・driver・listenerの寿命を所有し、汎用 PostgreSQL 接続層へ scheduler や分析の知識を持ち込まない。commit 後の wake は job の再確認と submission の確定処理を区別し、payload を運搬しない。
+- `worker` の単一runtimeが構成、共通preflight、moduleのbootstrap、job選択、所有taskの監視と停止を管理する。独立したsupervisorとschedulerのrun loopは置かない。停止・業務側の回復不能な異常を検知した時点で新規claimと調停stepの開始を止め、一つの絶対期限で終了する。通常の確定処理の予算に強制停止・回収確認の猶予を加え、同じ期限内に予約する。DB処理中も停止・task異常を監視し、進行中のtransactionは通常のwakeで破棄しない。
+- 停止signal・回収handle・最初の異常原因は、起動・通常運転のFutureが捕捉可能なpanicで失われても保持する。panicの捕捉は終了処理へ移るために使い、失われた業務状態を再利用して通常運転へ戻らない。後始末の成功で業務異常を成功扱いにせず、二次的な失敗で最初の原因や停止期限を上書きしない。commit成否不明の仕事は推測で確定せず、DBのlease・fenceと次回起動時の復旧に委ねる。
+- 共通listener taskはjobと有効なOCR受付のpayload-free routeを同じ接続で購読し、各routeの初回round tripを確認してから発見処理へ進む。初回の購読・疎通確認の失敗は起動失敗とし、両routeは一つの再確認signalへまとめる。稼働後の一時切断は停止可能な局所再接続と疎通確認後の補完走査で回復し、protocol違反・panic・内部経路の予期しない破損はworker全体の停止へ進める。再接続中もlistenerは一世代だけとし、通常停止によるchannel終了を異常と混同しない。汎用PostgreSQL接続層へ業務やschedulerの知識を持ち込まない。
+- 親の非同期実行はcurrent-thread runtimeを使う。bootstrapと資源を保持するmodule stateは独立taskではない。taskの分離は専用threadやprocessの隔離ではなく、OOM・process abort・同期ハング・終了処理自体のpanicでgracefulな完了を保証しない。
+- 計算attemptは種類ごとの型付きRunnerで実行し、停止・終了・子と補助taskの回収は共通の実行管理handleで監視する。通常のErrでもRunner資源を返してtaskのpanicと区別し、完了待ちが中断されても回収の所有権を失わない。実行の正常終了と成果物公開の成功を同一視しない。業務固有のclaimや成果物を共通handleへ持ち込まず、回収未確認の資源や実行枠を次のattemptへ渡さない。
+- moduleのbootstrapは接続・capability・入力前提を整え、未完了仕事も通常運転の有限な発見・実行経路へ渡す。全件列挙や全受付の終端を起動条件にしない。取得済みの資源はbootstrap全体の成功前から回収可能にし、登録済みcapabilityは後続の起動失敗時にもdrainingへ移す。分析のmodule stateはwork準備・保守・drainingと再利用資源を所有し、Runnerはclaim済みattemptに絞る。実行中も後続workの準備を進め、attempt間に履歴と一時領域を整理する。起動時に残った一時領域の再確認期限も通常運転へ引き継ぐ。
 - 分析のterminal履歴と未参照artifactの保持・整理はWorkerのcontrol処理が所有し、APIの起動に依存しない。保持条件は分析batch要求を正本とし、公開済みcurrent / previousの保護とbounded cleanupを同じDB境界で保証する。
-- capability crate は決定論的な domain / 計算 / version 付き論理契約を所有し、DB、Redis、filesystem、clock、async runtime に依存しない。runtime から capability への一方向依存とする。
+- capability crate は決定論的な domain / 計算 / version 付き論理契約を所有し、DB、filesystem、clock、async runtime に依存しない。runtime から capability への一方向依存とする。
 - 通知基盤の `momo-notifications` は件数・bytesの予約、envelopeのserialize、呼出側transactionによる最終JSONBサイズ検証、transport設定の検証とHTTP送信を所有する。通知内容を作るproducer、業務SQL、DB接続、SAVEPOINTとcommit、環境変数の読取り、senderの監督・停止期限はworkerが所有する。workerから通知基盤への一方向依存とする。
 - production の OS FFI と `unsafe` は process adapter に隔離し、他 module へ checked な safe API を公開する。TERM・KILL・process groupの回収は共通化し、分析の入力設定・終了分類とOCRのframe・結果decodeは各capabilityのprocess adapterに残す。
 - 子 process の resource 制限は実 runtime の cgroup で保証する。非対応 OS では job claim 前に fail closed にする。
 - 同時実行や publication は DB lease と fencing token で世代をまたいで保証する。process 内 semaphore や台数を正本にしない。
-- Busy後の早期再確認はconsumerごとの共有予算で回数・開始期限・同時数を制限し、新しい配送や再接続で予算を作り直さない。上限到達時は元の回復・保守期限へ戻す。分析は受信済みdeliveryを保持したままDB claimだけを再試行し、開始済みclaimの確定とpost-commit effectを処理してから配送を判断する。
+- 候補走査のsoftな時間予算は一回の処理量を区切る目安とし、候補取得だけで予算を使い切っても候補があれば少なくとも一件を試みる。続きはcursorと次回期限へ引き継ぐ。停止要求、SQLの上限、lease・fenceなどの実行権の条件を緩める理由にはしない。
+- Busy後の早期再確認はconsumerごとの共有予算で回数・開始期限・同時数を制限し、新しい配送や再接続で予算を作り直さない。上限到達時は元の回復・保守期限へ戻す。開始済みclaimの確定とpost-commit effectを処理してから次の候補へ進み、wakeを実行権として扱わない。
 - 子 process の成果物は上限、path、件数、schema、checksum を親が検証し、失敗時に部分公開しない。
+- 親の重いblocking処理は一つの実行枠を実処理の完了まで保持する。呼出Futureのtimeoutだけで枠を再利用せず、処理が残る場合はworkerを停止する。Tokio runtimeの終了も同じ停止期限の残り時間を使い、blocking taskの待機で無期限に延長しない。
 - 分析worker内のRust validatorをpayload意味、canonical encoding、resource集合・相互参照の単一ownerとする。parentは完全検証を通ったopaque artifactだけをversion付きで公開し、APIはそのimmutable publication attestation、生成schema、reader resource上限、request identityだけを独立に検証する。
 - 分析成果物の公開とレーダー基準準備を実行目的で区別する。基準準備も同じqueue・共有実行枠・親子process境界を使い、保存元と全scopeの比較を検証する。準備の成功を通常の分析要求の充足や公開完了として扱わない。
 - 分析release controllerはactiveなalgorithm / artifact schema / validation contract singletonと全titleへのpromotionを所有する。API / workerのcapability registryを検査中だけ凍結し、互換判定とdesired-state切替の間へ別世代を割り込ませない。
@@ -246,16 +260,18 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 - OCR・分析通知のenvelopeは `momo-notifications` が種類とsource identityから通知IDとwire versionを構築する。OCRは送出単位のv2、分析は論理job単位のv1。各producerは固定dataと確定時刻・世代を渡し、commit後のhandoffは制御側が所有する。
 - 新規producer送出は[通知サイズと送出可否](requirements/base.md#通知サイズと送出可否)に従い、最終envelopeのHTTP本文・JSONB text表現と掲載内容を制限する。共有wireの保存互換や分析の比較履歴読取と、新規送出上限を混同しない。上限超過は通知全体の省略とし、業務成功と分析の入力基準更新を維持する。描画後の投稿数検証はSummitが所有する。
 - APIは `ocr_submissions` / `ocr_submission_members` に所有者・固定画像集合・受付期限を原子的に保存し、job登録とmember対応を一つのtransactionにする。同一操作のPUTと登録済みmemberの再送は同じ識別子へ収束する。Webは全画像の内容識別とupload keyを送出受付前に固定する。
-- OCR専用coordinatorは現在の下書きslotではなく固定memberと対応jobの終端を読み、全員終了後だけ送出を確定する。下書き→送出の順にlockし、業務更新後の最後にresult gateと設定を読む。ONなら文脈と失敗だけを固定し、OFFでも送出は終端にして後から再構築しない。画像0件の期限終了も回収し、後の送出・slot状態を上書きしない。
-- coordinatorはLISTEN確立後の初回・再接続・期限・低頻度の安全走査でopenを巡回する。Busyだった送出だけを上限付きで保持して早期再確認し、通常の安全走査・受付期限を後ろへ延ばさない。commit後のwake hintは損失可能で、正本は保存状態。画像の実行slotと独立し、各送出を短いtransactionで扱う。共有wire・宣言的な保存構造と排他契約は `../momo-db/docs/discord-notifications.md` を正本とし、DBへ終了policyやtriggerを置かない。
+- OCRの受付調停は現在の下書きslotではなく固定memberと対応jobの終端を読み、全員終了後だけ送出を確定する。下書き→送出の順にlockし、業務更新後の最後にresult gateと設定を読む。ONなら文脈と失敗だけを固定し、OFFでも送出は終端にして後から再構築しない。画像0件の期限終了も回収し、後の送出・slot状態を上書きしない。
+- 受付調停は共通listener確立後の初回・再接続・期限・低頻度の安全走査でopenを巡回する。workerが最大一つの有限stepを駆動し、cursor・上限付きの発見済みID・Busy再確認予算をwakeと接続交換の間も保持する。softな走査予算を使い切っても先頭の一件は試み、途中の進捗を次のstepへ渡す。Busyだった送出だけを早期再確認し、通常の安全走査・受付期限を後ろへ延ばさない。
+- 受付調停と画像Runnerは可変資源を別々に所有し、OCR画像・分析の共通実行枠と独立して調停を進める。受付数に比例するtask・接続・全件待機一覧は作らない。画像Runnerの生成と呼出しはOCR orchestratorに閉じ、各画像はworkerが共有枠をclaimした後だけ実行する。未到着memberの受付期限と登録済み画像jobの実行期限を混同しない。
+- commit後のwake hintは損失可能で、正本は保存状態。各送出を有限のtransactionで扱い、settled commitを確認した経路だけが通知をdispatchする。共有wire・宣言的な保存構造と排他契約は `../momo-db/docs/discord-notifications.md` を正本とし、DBへ終了policyやtriggerを置かない。
 - 通知準備は確定処理と同じ絶対期限から残り時間を計算し、実行中SQLの終了・SAVEPOINT復旧・業務commitの時間を確保する。余裕がなければ通知用SQLを実行せず、復旧可能な準備失敗では業務成功を保って通知を省略する。commit成功後だけ、件数・bytes・同時接続数に上限を持つ共通senderへ渡す。OCR の実行枠解放はHTTP完了を待たない。
 - 通知の一回限りのSQLはパラメータ型を明示し、statementの準備・実行を分ける不要なDB往復を避ける。共有gate取得とsnapshot取得は別statementのまま維持する。比較・準備のtimeout、残時間不足、DBエラーは区別し、準備失敗には処理段階・時間予算・経過時間・SQLSTATEを記録する。DB例外本文やbind値は出力しない。
-- senderはDNS・接続・応答を含む単一のrequest期限内で一度だけHTTPを試み、整合する受付応答を永続受付の証拠として扱う。予約からdispatch、送信queue待ち、HTTP処理の時間を既存のattempt・receipt記録で区別する。接続だけを先に打ち切る短い期限を重ねず、TCPの一時的な停滞からの回復も同じ期限に含める。応答不明時も通知outbox・再試行・再起動時の再構築は行わない。停止時はproducerの確定を優先し、残りの共通期限で通知をdrainする。
+- senderはDNS・接続・応答を含む単一のrequest期限内で一度だけHTTPを試み、整合する受付応答を永続受付の証拠として扱う。予約からdispatch、送信queue待ち、HTTP処理の時間を既存のattempt・receipt記録で区別する。接続だけを先に打ち切る短い期限を重ねず、TCPの一時的な停滞からの回復も同じ期限に含める。応答不明時も通知outbox・再試行・再起動時の再構築は行わない。停止時はproducerの確定と最後のdispatchまで通知受付を保ち、producerのsink・予約を解放してから、残りの共通期限で通知をdrainしてtask終了を確認する。通知待ちだけの期限切れで正常な業務停止を失敗にしない。senderは独立したtaskとして監視し、捕捉可能なpanic・予期しない終了では通知受付を閉じて業務を継続する。通知taskを自動再起動せず、所有者の破棄だけで終了確認済みと扱わない。この異常隔離は稼働中のsenderが対象で、通知設定不正やHTTP client初期化失敗は起動失敗として扱う。
 
 ## 5. Runtime / Security
 
 - secret、session / CSRF token、接続 URL、画像内容、OCR raw text、分析成果物本文をログへ出さない。例外は安全な分類情報へ正規化する。
-- production の DB / Redis は暗号化と相手検証を維持し、接続のために認証要件を暗黙に弱めない。
+- productionのDB接続は暗号化と相手検証を維持し、接続のために認証要件を暗黙に弱めない。
 - upload は許可形式、byte 数、寸法、内容 fingerprint を完全 decode 前後の境界で検証し、画像実体や長寿命 URL を DB / 公開 DTO に置かない。
 - 画像objectは作成後に上書きせず、再送は保存済みの内容と照合する。localとobject storageで読取上限と整合性検証を共有し、未検証のdescriptorから任意のfileを読まない。
 - health、dependency readiness、機能応答、resource / performance を別の証拠として扱う。

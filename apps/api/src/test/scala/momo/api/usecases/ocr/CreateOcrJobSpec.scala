@@ -72,15 +72,15 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
           ),
           fixture.requestId,
         ).flatMap(fromAppEither)
-        foundJob <- fixture.jobs.find(created.job.id)
-        foundDraft <- fixture.drafts.find(created.draft.id)
+        foundJob <- fixture.jobs.find(created.id)
+        foundDraft <- fixture.drafts.find(created.draftId)
         inputs <- fixture.jobs.inputs
         matchDraft <- fixture.matchDrafts.find(defaultMatchDraftId)
       yield
         assertEquals(matchDraft.flatMap(_.heldEventId), None)
-        assertEquals(matchDraft.flatMap(_.totalAssetsDraftId), Some(created.draft.id))
+        assertEquals(matchDraft.flatMap(_.totalAssetsDraftId), Some(created.draftId))
         assertEquals(foundJob.map(_.status.wire), Some("queued"))
-        assertEquals(foundDraft.map(_.id), Some(created.draft.id))
+        assertEquals(foundDraft.map(_.id), Some(created.draftId))
         assertEquals(inputs.map(_.jobId.value), Vector("job-1"))
         assertEquals(inputs.head.requestedScreenType, ScreenType.TotalAssets)
         assertEquals(inputs.head.requestId, Some("test-req-id"))
@@ -275,7 +275,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       }
   }
 
-  test("rejects OCR hints that exceed Redis payload contract limits") {
+  test("rejects OCR hints that exceed input snapshot contract limits") {
     inMemoryFixture(
       prefix = "momo-api-create-job-hints-limit",
       idSeed = List("job-1", "draft-1"),
@@ -463,7 +463,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         found <- fixture.matchDrafts.find(matchDraftId)
         inputs <- fixture.jobs.inputs
       yield
-        assertEquals(created.draft.id, newDraftId)
+        assertEquals(created.draftId, newDraftId)
         assertEquals(found.flatMap(_.totalAssetsDraftId), Some(newDraftId))
         assertEquals(found.map(_.status), Some(MatchDraftStatus.OcrRunning))
         assertEquals(inputs.map(_.jobId.value), Vector("job-new-slot"))
@@ -597,7 +597,6 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
           matchDrafts = matchDrafts,
           submissions = submissions,
           jobs = jobs,
-          drafts = drafts,
           admissionGuard = admissionGuard,
           now = IO.pure(now),
           nextJobId = ids.modify {
@@ -629,7 +628,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
     def run(
         request: RequestedOcrJob,
         requestId: Option[String]
-    ): IO[Either[AppError, CreatedOcrJob]] =
+    ): IO[Either[AppError, momo.api.repositories.OcrJobAcceptance]] =
       val id = java.util.UUID.randomUUID().toString
       val owner = AccountId.unsafeFromString("account-1")
       val command = PutOcrSubmissionCommand(
@@ -643,7 +642,10 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
           pngBytes.length
         ))
       )
-      new OcrSubmissions[IO](submissions, IO.pure(now)).put(command, owner).flatMap {
+      new OcrSubmissions[IO](
+        submissions,
+        IO.pure(now)
+      ).put(command, owner, IO.pure(Right(()))).flatMap {
         case Left(error) => IO.pure(Left(error))
         case Right(_) => delegate.run(
             CreateOcrJobCommand(request.imageId, request.requestedScreenType, id),

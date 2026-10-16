@@ -47,7 +47,7 @@ final class PostgresSourceImagesRepository[F[_]: MonadCancelThrow](transactor: T
         result: SourceImageReservationResult <- current match
           case Some(row) => SourceImageReservationResult.Existing(row.toRecord).pure[ConnectionIO]
           case None => unreferencedUsageCio(reservation.ownerAccountId).flatMap { usage =>
-              evaluateQuota(usage, reservation.sizeBytes, quota) match
+              quota.evaluate(usage.fileCount, usage.sizeBytes, reservation.sizeBytes) match
                 case Some(rejection) => SourceImageReservationResult.Rejected(rejection)
                     .pure[ConnectionIO]
                 case None => insert.flatMap {
@@ -99,6 +99,8 @@ final class PostgresSourceImagesRepository[F[_]: MonadCancelThrow](transactor: T
       claimStaleBefore: Instant,
       claimedAt: Instant,
   ): F[Option[SourceImageRecord]] =
+    val lock = sql"SELECT id FROM source_images WHERE id = $id FOR UPDATE"
+      .query[ImageId].option
     val claim = (fr"""
       UPDATE source_images AS candidate
       SET delete_pending_at = $claimedAt
@@ -110,7 +112,9 @@ final class PostgresSourceImagesRepository[F[_]: MonadCancelThrow](transactor: T
           OR candidate.delete_pending_at <= $claimStaleBefore
         )
     """ ++ unreferencedGuard ++ returningAll).query[Row].option
-    claim.map(_.map(_.toRecord)).transact(transactor)
+    // Admission can add a pending reference while holding only this image's row lock.
+    // Read references in a fresh statement after waiting for that writer to commit.
+    (lock *> claim).map(_.map(_.toRecord)).transact(transactor)
 
   override def purgeClaimedFailed(id: ImageId, claimedAt: Instant): F[Boolean] = (fr"""
       DELETE FROM source_images AS candidate
@@ -191,23 +195,6 @@ final class PostgresSourceImagesRepository[F[_]: MonadCancelThrow](transactor: T
       -- can only serialize unrelated accounts; they cannot weaken the quota decision.
       SELECT pg_advisory_xact_lock(hashtext(${ownerAccountId.value}), 1)
     """.query[Unit].unique.void
-
-  private def evaluateQuota(
-      usage: UsageRow,
-      incomingBytes: Long,
-      quota: SourceImageQuota,
-  ): Option[SourceImageQuotaRejection] =
-    val countAfter = usage.fileCount + 1L
-    val bytesAfter = saturatedAdd(usage.sizeBytes, incomingBytes)
-    if countAfter > quota.unreferencedCountLimit.toLong then
-      Some(SourceImageQuotaRejection.CountExceeded(countAfter, quota.unreferencedCountLimit))
-    else
-      Option.when(bytesAfter > quota.unreferencedBytesLimit)(
-        SourceImageQuotaRejection.BytesExceeded(bytesAfter, quota.unreferencedBytesLimit)
-      )
-
-  private def saturatedAdd(left: Long, right: Long): Long =
-    if right > 0L && left > Long.MaxValue - right then Long.MaxValue else left + right
 
 private[postgres] object PostgresSourceImageLifecycle:
   /**

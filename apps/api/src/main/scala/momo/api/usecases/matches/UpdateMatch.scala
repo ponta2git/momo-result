@@ -4,10 +4,9 @@ import java.time.Instant
 
 import cats.Monad
 import cats.data.EitherT
-import cats.syntax.all.*
 
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchPolicy, MatchRecord, PlayerResult}
+import momo.api.domain.{MatchPolicy, MatchRecord, MatchUpdate, PlayerResult}
 import momo.api.errors.AppError
 import momo.api.repositories.{
   GameTitlesRepository,
@@ -17,7 +16,6 @@ import momo.api.repositories.{
   SeasonMastersRepository
 }
 import momo.api.usecases.common.MatchReferenceValidation
-import momo.api.usecases.syntax.UseCaseSyntax.*
 
 final case class UpdateMatchCommand(
     heldEventId: HeldEventId,
@@ -40,32 +38,25 @@ final class UpdateMatch[F[_]: Monad](
     now: F[Instant],
     allowedMemberIds: F[Set[MemberId]],
 ):
-  private val referenceValidation =
+  private val inputValidation = MatchInputValidation(
     MatchReferenceValidation(heldEvents, gameTitles, mapMasters, seasonMasters)
+  )
 
   def run(matchId: MatchId, command: UpdateMatchCommand): F[Either[AppError, MatchRecord]] = (for
     allowed <- EitherT.liftF(allowedMemberIds)
-    existing <- matches.find(matchId).orNotFound("match", matchId.value)
-    validated <- EitherT.fromEither[F](
-      MatchPolicy.validate(
-        MatchPolicy.Input(
-          heldEventId = command.heldEventId,
-          matchNoInEvent = command.matchNoInEvent,
-          gameTitleId = command.gameTitleId,
-          seasonMasterId = command.seasonMasterId,
-          ownerMemberId = command.ownerMemberId,
-          mapMasterId = command.mapMasterId,
-          players = command.players,
-        ),
-        allowed,
-      ).leftMap(errors => AppError.ValidationFailed(MatchPolicy.toMessage(errors)))
+    validation <- inputValidation.validate(
+      MatchPolicy.Input(
+        heldEventId = command.heldEventId,
+        matchNoInEvent = command.matchNoInEvent,
+        gameTitleId = command.gameTitleId,
+        seasonMasterId = command.seasonMasterId,
+        ownerMemberId = command.ownerMemberId,
+        mapMasterId = command.mapMasterId,
+        players = command.players,
+      ),
+      allowed,
     )
-    title <- referenceValidation.validateRequired(
-      command.heldEventId,
-      command.gameTitleId,
-      command.mapMasterId,
-      command.seasonMasterId,
-    )
+    (validated, title) = validation
     duplicate <- EitherT
       .liftF(matches.existsMatchNoExcept(command.heldEventId, validated.matchNoInEvent, matchId))
     _ <- EitherT.fromEither[F](
@@ -75,20 +66,13 @@ final class UpdateMatch[F[_]: Monad](
       else Right(())
     )
     updatedAt <- EitherT.liftF(now)
-    record = existing.copy(
-      heldEventId = validated.heldEventId,
-      matchNoInEvent = validated.matchNoInEvent,
-      gameTitleId = validated.gameTitleId,
+    change = MatchUpdate(
+      input = validated,
       layoutFamily = title.layoutFamily,
-      seasonMasterId = validated.seasonMasterId,
-      ownerMemberId = validated.ownerMemberId,
-      mapMasterId = validated.mapMasterId,
       playedAt = command.playedAt,
-      // Preserve existing draft refs unless caller explicitly provides new ones.
-      totalAssetsDraftId = command.draftRefs.totalAssets.orElse(existing.totalAssetsDraftId),
-      revenueDraftId = command.draftRefs.revenue.orElse(existing.revenueDraftId),
-      incidentLogDraftId = command.draftRefs.incidentLog.orElse(existing.incidentLogDraftId),
-      players = validated.players,
+      totalAssetsDraftId = command.draftRefs.totalAssets,
+      revenueDraftId = command.draftRefs.revenue,
+      incidentLogDraftId = command.draftRefs.incidentLog,
     )
-    _ <- EitherT(matches.update(record, updatedAt))
+    record <- EitherT(matches.update(matchId, change, updatedAt))
   yield record).value

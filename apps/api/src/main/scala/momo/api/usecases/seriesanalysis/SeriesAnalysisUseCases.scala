@@ -1,12 +1,10 @@
 package momo.api.usecases.seriesanalysis
 
-import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
-
 import momo.api.domain.*
 import momo.api.domain.ids.{AccountId, GameTitleId}
 import momo.api.errors.AppError
 import momo.api.repositories.SeriesAnalysisRepository
+import momo.api.util.Sha256
 
 final class GetSeriesAnalysisOptions[F[_]](repository: SeriesAnalysisRepository[F]):
   def run: F[Either[AppError, SeriesAnalysisOptions]] = repository.options
@@ -37,15 +35,10 @@ final class RequestSeriesAnalysisRecalculation[F[_]](
       accountId: AccountId,
       idempotencyKey: String,
   ): F[Either[AppError, SeriesAnalysisRecalculationAccepted]] = repository
-    .requestTitleRecalculation(gameTitleId, accountId, hashKey(idempotencyKey))
+    .requestTitleRecalculation(gameTitleId, accountId, Sha256.hexUtf8(idempotencyKey))
 
   def all(
       accountId: AccountId,
       idempotencyKey: String,
   ): F[Either[AppError, SeriesAnalysisRecalculationAccepted]] = repository
-    .requestAllRecalculation(accountId, hashKey(idempotencyKey))
-
-  private def hashKey(value: String): String =
-    val bytes = value.getBytes(StandardCharsets.UTF_8)
-    MessageDigest.getInstance("SHA-256").digest(bytes)
-      .map(byte => f"${byte & 0xff}%02x").mkString
+    .requestAllRecalculation(accountId, Sha256.hexUtf8(idempotencyKey))

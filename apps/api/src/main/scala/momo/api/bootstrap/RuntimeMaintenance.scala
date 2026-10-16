@@ -19,6 +19,7 @@ private[bootstrap] object RuntimeMaintenance:
       imageOrphanCleaner: ImageOrphanCleaner[F],
       appSessions: AppSessionsRepository[F],
       idempotency: IdempotencyRepository[F],
+      oauthStateCleanup: F[Int],
       now: F[java.time.Instant],
   ): Resource[F, Unit] =
     val logger = LoggerFactory[F].getLogger
@@ -38,4 +39,12 @@ private[bootstrap] object RuntimeMaintenance:
       now.flatMap(idempotency.cleanup)
         .flatMap(deleted => logger.info(s"idempotency_key_pruner deleted=${deleted.toString}"))
     )
-    imageOrphanReaper *> expiredSessionPruner *> idempotencyKeyPruner
+    val oauthStatePruner = PeriodicMaintenance.resource(
+      "oauth_state_pruner",
+      config.resourceLimits.sessionPruneInterval,
+    )(
+      oauthStateCleanup.flatMap(deleted =>
+        logger.info(s"oauth_state_pruner deleted=${deleted.toString}")
+      )
+    )
+    imageOrphanReaper *> expiredSessionPruner *> idempotencyKeyPruner *> oauthStatePruner

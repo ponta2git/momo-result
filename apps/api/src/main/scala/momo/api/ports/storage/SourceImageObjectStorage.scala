@@ -1,9 +1,9 @@
 package momo.api.ports.storage
 
 import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
 
 import momo.api.domain.ids.ImageId
+import momo.api.util.Sha256
 
 final case class SourceImageObjectKey private (value: String) derives CanEqual
 
@@ -51,7 +51,7 @@ object Sha256Hex:
   )
 
   def digest(bytes: Array[Byte]): Sha256Hex = Sha256Hex(
-    MessageDigest.getInstance("SHA-256").digest(bytes).map(byte => f"${byte & 0xff}%02x").mkString
+    Sha256.hex(bytes)
   )
 
 final case class SourceImageIdempotencyHash private (value: String) derives CanEqual
@@ -72,8 +72,7 @@ object SourceImageIdempotencyHash:
   )
 
   private def digest(value: String): SourceImageIdempotencyHash = SourceImageIdempotencyHash(
-    MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))
-      .map(byte => f"${byte & 0xff}%02x").mkString
+    Sha256.hexUtf8(value)
   )
 
 final case class SourceImageObjectMetadata(
@@ -107,3 +106,7 @@ trait SourceImageObjectStorage[F[_]]:
   def get(key: SourceImageObjectKey): F[Either[SourceImageObjectFailure, SourceImageObject]]
 
   def delete(key: SourceImageObjectKey): F[Either[SourceImageObjectFailure, Unit]]
+
+object SourceImageObjectStorage:
+  /** Upload acceptance limit; existing metadata is restored without applying it. */
+  val MaxUploadBytes = 3 * 1024 * 1024

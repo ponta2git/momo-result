@@ -4,7 +4,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 test_dir="$(mktemp -d)"
 trap 'rm -rf "${test_dir}"' EXIT
 validator=("${repo_root}/scripts/ci/ci-tool.sh" postdeploy-evidence)
-valid='{"event":"runtime_postdeploy_smoke","schemaVersion":1,"status":"ok","checks":["database","http","http2","processes","publicEdge","redis","web"]}'
+valid='{"event":"runtime_postdeploy_smoke","schemaVersion":1,"status":"ok","checks":["database","http","http2","processes","publicEdge","web"]}'
 printf '%s\n' "${valid}" > "${test_dir}/evidence.json"
 "${validator[@]}" "${test_dir}/evidence.json" --require-check publicEdge > "${test_dir}/out"
 jq -e '. == {schemaVersion: 1, status: "ok"}' "${test_dir}/out" >/dev/null

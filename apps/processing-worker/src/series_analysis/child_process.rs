@@ -16,10 +16,7 @@ use crate::process::{
     preserve_dynamic_runtime_environment,
 };
 #[cfg(unix)]
-use crate::process::{
-    child_stop_deadlines, stop_and_reap_child, stop_remaining_process_group,
-    terminate_process_group,
-};
+use crate::process::{child_stop_deadlines, stop_remaining_process_group};
 
 #[cfg(test)]
 #[cfg(unix)]
@@ -77,7 +74,7 @@ impl AnalysisChildOutcome {
 }
 
 pub(crate) struct ManagedAnalysisChild {
-    child: tokio::process::Child,
+    child: crate::process::RecoverableChild,
     process_id: u32,
     peak_resident_bytes: Option<u64>,
     cgroup: ChildCgroup,
@@ -154,8 +151,9 @@ impl ManagedAnalysisChild {
         configure_parent_death_signal(&mut command);
         configure_inherited_liveness(&mut command, child_liveness_fd);
         let child = command.spawn().map_err(ProcessError::Spawn)?;
+        let child = crate::process::RecoverableChild::new(child, cgroup.clone())?;
         drop(child_liveness);
-        let process_id = child.id().ok_or(ProcessError::MissingProcessId)?;
+        let process_id = child.process_id();
         let mut managed = Self {
             child,
             process_id,
@@ -168,7 +166,7 @@ impl ManagedAnalysisChild {
             let setup_error = ProcessError::from(error);
             return Err(managed.resolve_setup_failure(setup_error, stop_grace).await);
         }
-        let Some(mut start_barrier) = managed.child.stdin.take() else {
+        let Some(mut start_barrier) = managed.child.take_stdin() else {
             let setup_error = ProcessError::StartBarrier(io::Error::new(
                 io::ErrorKind::BrokenPipe,
                 "child start barrier was unavailable",
@@ -278,9 +276,12 @@ impl ManagedAnalysisChild {
         self.completed_outcome(status).map(Some)
     }
 
-    fn completed_outcome(&self, status: ExitStatus) -> Result<AnalysisChildOutcome, ProcessError> {
+    fn completed_outcome(
+        &mut self,
+        status: ExitStatus,
+    ) -> Result<AnalysisChildOutcome, ProcessError> {
         let memory_after = self.cgroup.snapshot()?;
-        self.cgroup.ensure_empty()?;
+        self.child.verify_cleanup()?;
         Ok(classify_analysis_status(
             status,
             memory_after.oom_kill_count > self.oom_kill_count_before,
@@ -295,8 +296,11 @@ impl ManagedAnalysisChild {
     #[cfg(unix)]
     pub(crate) async fn terminate(&mut self, grace: Duration) -> Result<ExitStatus, ProcessError> {
         let deadlines = child_stop_deadlines(grace)?;
-        let status = stop_and_reap_child(&mut self.child, self.process_id, deadlines).await;
+        let status = self.child.stop_and_reap(deadlines).await;
         stop_remaining_process_group(self.process_id, &self.cgroup, deadlines.overall).await?;
+        if status.is_ok() {
+            self.child.verify_cleanup()?;
+        }
         status
     }
 
@@ -324,31 +328,6 @@ fn resolve_spawn_setup_failure(
             cleanup_kind: cleanup_error.kind(),
         },
     }
-}
-
-#[cfg(unix)]
-impl Drop for ManagedAnalysisChild {
-    fn drop(&mut self) {
-        let leader_reaped = matches!(self.child.try_wait(), Ok(Some(_status)));
-        let cleanup_verified = self.cgroup.ensure_empty().is_ok();
-        if drop_requires_group_kill(leader_reaped, cleanup_verified) {
-            drop(terminate_process_group(self.process_id, libc::SIGKILL));
-            // Drop cannot await the verified cleanup loop, but the same cgroup-wide hard-stop pass
-            // prevents a setsid descendant from escaping the synchronous fail-closed fallback.
-            drop(self.cgroup.hard_kill());
-        }
-    }
-}
-
-#[cfg(unix)]
-const fn drop_requires_group_kill(leader_reaped: bool, cleanup_verified: bool) -> bool {
-    !leader_reaped || !cleanup_verified
-}
-
-/// Returns whether this host implements the complete production child-isolation contract.
-#[must_use]
-pub(crate) const fn managed_analysis_runtime_supported() -> bool {
-    cfg!(target_os = "linux")
 }
 
 fn classify_analysis_status(
@@ -381,17 +360,7 @@ mod child_cleanup_tests {
 
     #[cfg(unix)]
     use super::child_stop_deadlines;
-    #[cfg(unix)]
-    use super::drop_requires_group_kill;
     use super::{ProcessError, resolve_spawn_setup_failure};
-
-    #[cfg(unix)]
-    #[test]
-    fn drop_kills_when_leader_or_cgroup_cleanup_is_unverified() {
-        assert!(!drop_requires_group_kill(true, true));
-        assert!(drop_requires_group_kill(false, true));
-        assert!(drop_requires_group_kill(true, false));
-    }
 
     #[test]
     fn verified_spawn_cleanup_preserves_the_original_setup_failure() {

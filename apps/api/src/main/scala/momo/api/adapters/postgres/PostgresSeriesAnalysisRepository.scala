@@ -52,14 +52,15 @@ final class PostgresSeriesAnalysisRepository[F[_]: Async] private (
     case Left(error) => error.asLeft[SeriesAnalysisChunk].pure[F]
     case Right(chunk) =>
       transactChunk(
-        PostgresSeriesAnalysisChunkOps
-          .displayMetadata(
-            chunk.artifact,
-            chunk.scope,
-            chunk.memberIds,
-            readConfig,
-            PostgresSeriesAnalysisChunkCodec.radarMapIds(chunk.payload),
-          ).map(_.asRight[AppError])
+        sql"SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY".update.run *>
+          PostgresSeriesAnalysisChunkOps
+            .displayMetadata(
+              chunk.artifact,
+              chunk.scope,
+              chunk.memberIds,
+              readConfig,
+              PostgresSeriesAnalysisChunkCodec.radarMapIds(chunk.payload),
+            ).map(_.asRight[AppError])
       ).flatMap {
         case Left(error) => error.asLeft[SeriesAnalysisChunk].pure[F]
         case Right(metadata) => Async[F].blocking(

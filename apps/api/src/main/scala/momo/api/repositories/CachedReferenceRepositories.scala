@@ -83,7 +83,7 @@ object CachedReferenceRepositories:
   ): F[MembersRepository[F]] = ReferenceCache.create(ttl, delegate.list).map { cache =>
     new MembersRepository[F]:
       def list: F[List[Member]] = cache.get
-      def find(id: MemberId): F[Option[Member]] = cache.get.map(_.find(_.id == id))
+      def find(id: MemberId): F[Option[Member]] = delegate.find(id)
   }
 
   def gameTitles[F[_]: Async](
@@ -96,7 +96,7 @@ object CachedReferenceRepositories:
   ): F[GameTitlesRepository[F]] = ReferenceCache.create(ttl, delegate.list).map { cache =>
     new GameTitlesRepository[F]:
       def list: F[List[GameTitle]] = cache.get
-      def find(id: GameTitleId): F[Option[GameTitle]] = cache.get.map(_.find(_.id == id))
+      def find(id: GameTitleId): F[Option[GameTitle]] = delegate.find(id)
       def createWithNextDisplayOrder(title: GameTitle) = cache
         .invalidateAfterSuccess(delegate.createWithNextDisplayOrder(title))
       def update(title: GameTitle) = cache.invalidateAfterSuccess(delegate.update(title))
@@ -113,8 +113,8 @@ object CachedReferenceRepositories:
   ): F[MapMastersRepository[F]] = ReferenceCache.create(ttl, delegate.list(None)).map { cache =>
     new MapMastersRepository[F]:
       def list(gameTitleId: Option[GameTitleId]): F[List[MapMaster]] =
-        cache.get.map(rows => gameTitleId.fold(rows)(id => rows.filter(_.gameTitleId == id)))
-      def find(id: MapMasterId): F[Option[MapMaster]] = cache.get.map(_.find(_.id == id))
+        gameTitleId.fold(cache.get)(id => delegate.list(Some(id)))
+      def find(id: MapMasterId): F[Option[MapMaster]] = delegate.find(id)
       def createWithNextDisplayOrder(map: MapMaster) = cache
         .invalidateAfterSuccess(delegate.createWithNextDisplayOrder(map))
       def update(map: MapMaster) = cache.invalidateAfterSuccess(delegate.update(map))
@@ -131,8 +131,8 @@ object CachedReferenceRepositories:
   ): F[SeasonMastersRepository[F]] = ReferenceCache.create(ttl, delegate.list(None)).map { cache =>
     new SeasonMastersRepository[F]:
       def list(gameTitleId: Option[GameTitleId]): F[List[SeasonMaster]] =
-        cache.get.map(rows => gameTitleId.fold(rows)(id => rows.filter(_.gameTitleId == id)))
-      def find(id: SeasonMasterId): F[Option[SeasonMaster]] = cache.get.map(_.find(_.id == id))
+        gameTitleId.fold(cache.get)(id => delegate.list(Some(id)))
+      def find(id: SeasonMasterId): F[Option[SeasonMaster]] = delegate.find(id)
       def createWithNextDisplayOrder(season: SeasonMaster) = cache
         .invalidateAfterSuccess(delegate.createWithNextDisplayOrder(season))
       def update(season: SeasonMaster) = cache.invalidateAfterSuccess(delegate.update(season))
@@ -161,8 +161,8 @@ object CachedReferenceRepositories:
   ): F[MemberAliasesRepository[F]] = ReferenceCache.create(ttl, delegate.list(None)).map { cache =>
     new MemberAliasesRepository[F]:
       def list(memberId: Option[MemberId]): F[List[MemberAlias]] =
-        cache.get.map(rows => memberId.fold(rows)(id => rows.filter(_.memberId == id)))
-      def find(id: MemberAliasId): F[Option[MemberAlias]] = cache.get.map(_.find(_.id == id))
+        memberId.fold(cache.get)(id => delegate.list(Some(id)))
+      def find(id: MemberAliasId): F[Option[MemberAlias]] = delegate.find(id)
       def create(alias: MemberAlias) = cache.invalidateAfterSuccess(delegate.create(alias))
       def update(alias: MemberAlias) = cache.invalidateAfterSuccess(delegate.update(alias))
       def delete(id: MemberAliasId) = cache.invalidateAfterSuccess(delegate.delete(id))

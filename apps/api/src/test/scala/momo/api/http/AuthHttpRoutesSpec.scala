@@ -2,8 +2,6 @@ package momo.api.http
 
 import java.time.Instant
 
-import scala.concurrent.duration.*
-
 import cats.effect.std.SecureRandom
 import cats.effect.{IO, Resource}
 import cats.syntax.all.*
@@ -25,7 +23,6 @@ import momo.api.auth.{
   CsrfTokenService,
   DiscordOAuthClient,
   DiscordUser,
-  InMemoryOAuthProviderBackoff,
   InMemoryOAuthStateReplayGuard,
   LoginRateLimiter,
   OAuthStateCodec,
@@ -209,14 +206,13 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
     }
   }
 
-  test("OAuth provider dependency failures open a short backoff before the next provider call") {
-    val backoffConfig = authConfig.copy(providerFailureThreshold = 1, providerBackoff = 60.seconds)
+  test("OAuth failures consume state but allow a new login attempt") {
     RecordingDiscordOAuthClient
       .create(Left(AppError.DependencyFailed("Discord OAuth provider request failed."))).flatMap {
         oauth =>
-          authAppWith(oauth, backoffConfig).use { app =>
+          authAppWith(oauth, authConfig).use { app =>
             for
-              firstCookie <- loginStateCookie(app, backoffConfig)
+              firstCookie <- loginStateCookie(app, authConfig)
               firstResponse <- app.run(callbackRequest(firstCookie))
               _ <- assertProblem(
                 firstResponse,
@@ -231,19 +227,19 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
                 "FORBIDDEN",
                 "OAuth state is no longer available. Start login again.",
               )
-              secondCookie <- loginStateCookie(app, backoffConfig)
+              secondCookie <- loginStateCookie(app, authConfig)
               secondResponse <- app.run(callbackRequest(secondCookie))
               _ <- assertProblem(
                 secondResponse,
                 Status.ServiceUnavailable,
                 "DEPENDENCY_FAILED",
-                "temporarily unavailable",
+                "Discord OAuth provider request failed",
               )
               fetchCalls <- oauth.fetchCalls
             yield
-              assertStateCookieCleared(firstResponse, backoffConfig)
-              assertStateCookieCleared(secondResponse, backoffConfig)
-              assertEquals(fetchCalls, 1)
+              assertStateCookieCleared(firstResponse, authConfig)
+              assertStateCookieCleared(secondResponse, authConfig)
+              assertEquals(fetchCalls, 2)
           }
       }
   }
@@ -268,12 +264,8 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
           sessionsRepo <- InMemoryAppSessionsRepository.create[IO]
           accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
           limiter <- LoginRateLimiter.create[IO](10, nowF)
+          sessionLimiter <- LoginRateLimiter.create[IO](120, nowF)
           stateReplayGuard <- InMemoryOAuthStateReplayGuard.create[IO](nowF)
-          providerBackoff <- InMemoryOAuthProviderBackoff.create[IO](
-            authConfigValue.providerFailureThreshold,
-            authConfigValue.providerBackoff,
-            nowF,
-          )
           sessions =
             SessionService[IO](
               sessionsRepo,
@@ -295,9 +287,10 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
           csrf = CsrfTokenService(),
           accounts = AccountAccess[IO](accounts),
           rateLimiter = limiter,
+          authSessionRateLimiter = sessionLimiter,
           completeOAuthCallback = CompleteOAuthCallback[IO](
             stateCodec,
-            CompleteOAuthLogin[IO](oauth, sessions, accounts, providerBackoff),
+            CompleteOAuthLogin[IO](oauth, sessions, accounts),
             stateReplayGuard,
             authConfigValue.callbackRedirectPath,
           ),

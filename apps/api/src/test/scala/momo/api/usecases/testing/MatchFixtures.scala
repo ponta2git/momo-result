@@ -13,6 +13,7 @@ import momo.api.domain.{
   MapMaster,
   MatchNoInEvent,
   MatchRecord,
+  MatchUpdate,
   Member,
   PlayerResult,
   SeasonMaster
@@ -25,6 +26,23 @@ import momo.api.repositories.{
 }
 
 object MatchFixtures:
+  def update(record: MatchRecord): MatchUpdate = MatchUpdate(
+    MatchRecord.ValidatedInput(
+      record.heldEventId,
+      record.matchNoInEvent,
+      record.gameTitleId,
+      record.seasonMasterId,
+      record.ownerMemberId,
+      record.mapMasterId,
+      record.players,
+    ),
+    record.layoutFamily,
+    record.playedAt,
+    record.totalAssetsDraftId,
+    record.revenueDraftId,
+    record.incidentLogDraftId,
+  )
+
   val DevMemberValues: List[String] = List("ponta", "akane-mami", "otaka", "eu")
   val DbMemberValues: List[String] =
     List("member_ponta", "member_akane_mami", "member_otaka", "member_eu")

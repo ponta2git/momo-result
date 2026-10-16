@@ -62,14 +62,6 @@ private[postgres] trait PostgresMatchesReadSupport:
       count: Int,
   )
 
-  protected final case class HeldEventMatchStatsRow(
-      heldEventId: HeldEventId,
-      count: Int,
-      maxMatchNo: Int,
-      gameTitleId: GameTitleId,
-      seasonMasterId: SeasonMasterId,
-  )
-
   protected val selectMatch = fr"""SELECT
            id, held_event_id, match_no_in_event,
            game_title_id, layout_family, season_master_id,

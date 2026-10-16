@@ -1,13 +1,10 @@
 package momo.api.adapters.storage.local
 
-import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
-
 import momo.api.domain.ids.ImageId
+import momo.api.util.Sha256
 
 private[storage] object LocalFsImageStoreSupport:
-  private[adapters] def sha256Hex(value: String): String = MessageDigest.getInstance("SHA-256")
-    .digest(value.getBytes(StandardCharsets.UTF_8)).map(byte => f"${byte & 0xff}%02x").mkString
+  private[adapters] def sha256Hex(value: String): String = Sha256.hexUtf8(value)
 
   private[adapters] def safeImageFileStem(imageId: ImageId): Option[String] = Option
     .when(isSafeImageFileStem(imageId.value))(imageId.value)

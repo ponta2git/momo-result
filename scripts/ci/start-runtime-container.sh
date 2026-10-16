@@ -5,7 +5,6 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 image_ref="${IMAGE_REF:?IMAGE_REF is required.}"
 database_url="${DATABASE_URL:?DATABASE_URL is required.}"
 dev_member_ids="${DEV_MEMBER_IDS:?DEV_MEMBER_IDS is required.}"
-redis_url="${REDIS_URL:?REDIS_URL is required.}"
 origin_lock_token="${MOMO_ORIGIN_LOCK_TOKEN:?MOMO_ORIGIN_LOCK_TOKEN is required.}"
 
 canonical_host="${MOMO_CANONICAL_HOST:-momo-result.ponta.me}"
@@ -29,6 +28,15 @@ fi
 if [[ -n "${MUTATION_RATE_LIMIT_PER_MINUTE:-}" ]]; then
   runtime_env_args+=(-e "MUTATION_RATE_LIMIT_PER_MINUTE=${MUTATION_RATE_LIMIT_PER_MINUTE}")
 fi
+if [[ -n "${MUTATION_ATTEMPT_RATE_LIMIT_PER_MINUTE:-}" ]]; then
+  runtime_env_args+=(-e "MUTATION_ATTEMPT_RATE_LIMIT_PER_MINUTE=${MUTATION_ATTEMPT_RATE_LIMIT_PER_MINUTE}")
+fi
+if [[ -n "${READ_API_RATE_LIMIT_PER_MINUTE:-}" ]]; then
+  runtime_env_args+=(-e "READ_API_RATE_LIMIT_PER_MINUTE=${READ_API_RATE_LIMIT_PER_MINUTE}")
+fi
+if [[ -n "${AUTH_SESSION_RATE_LIMIT_PER_MINUTE:-}" ]]; then
+  runtime_env_args+=(-e "AUTH_SESSION_RATE_LIMIT_PER_MINUTE=${AUTH_SESSION_RATE_LIMIT_PER_MINUTE}")
+fi
 
 docker run -d \
   "${runtime_args[@]}" \
@@ -36,7 +44,6 @@ docker run -d \
   -e DEV_MEMBER_IDS="${dev_member_ids}" \
   -e MOMO_CANONICAL_HOST="${canonical_host}" \
   -e MOMO_ORIGIN_LOCK_TOKEN="${origin_lock_token}" \
-  -e REDIS_URL="${redis_url}" \
   "${runtime_env_args[@]}" \
   "${image_ref}"
 

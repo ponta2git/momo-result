@@ -20,7 +20,12 @@ import momo.api.domain.{
   ScreenType,
   StoredImageLocation
 }
-import momo.api.repositories.{OcrJobBacklogSnapshot, OcrJobsAlg, OcrJobsRepository}
+import momo.api.repositories.{
+  OcrJobAcceptance,
+  OcrJobBacklogSnapshot,
+  OcrJobsAlg,
+  OcrJobsRepository
+}
 
 object PostgresOcrJobs:
 
@@ -172,6 +177,10 @@ object PostgresOcrJobs:
       }
 
   val alg: OcrJobsAlg[ConnectionIO] = new OcrJobsAlg[ConnectionIO]:
+    override def findAcceptance(jobId: OcrJobId): ConnectionIO[Option[OcrJobAcceptance]] =
+      sql"""SELECT id, draft_id, image_id, status FROM ocr_jobs WHERE id = $jobId"""
+        .query[OcrJobAcceptance].option
+
     override def find(jobId: OcrJobId): ConnectionIO[Option[OcrJob]] =
       (selectAll ++ fr"WHERE id = $jobId").query[Row].option.flatMap {
         case None => Option.empty[OcrJob].pure[ConnectionIO]
@@ -277,6 +286,8 @@ final class PostgresOcrJobsRepository[F[_]: Async](transactor: Transactor[F])
     .fromAlg(PostgresOcrJobs.alg, transactor.trans)
 
   override def find(jobId: OcrJobId): F[Option[OcrJob]] = delegate.find(jobId)
+  override def findAcceptance(jobId: OcrJobId): F[Option[OcrJobAcceptance]] =
+    delegate.findAcceptance(jobId)
   override def countActive: F[Long] = delegate.countActive
   override def backlogSnapshot(now: Instant): F[OcrJobBacklogSnapshot] =
     delegate.backlogSnapshot(now)

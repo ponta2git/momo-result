@@ -1,0 +1,230 @@
+package momo.api.bootstrap
+
+import cats.effect.std.SecureRandom
+import cats.effect.{Async, Clock, Resource}
+import cats.syntax.all.*
+import org.typelevel.log4cats.LoggerFactory
+import org.typelevel.log4cats.slf4j.Slf4jFactory
+
+import momo.api.adapters.discord.JavaDiscordOAuthClient
+import momo.api.adapters.inmemory.*
+import momo.api.adapters.storage.local.LocalFsImageStore
+import momo.api.auth.{DiscordOAuthClient, InMemoryOAuthStateReplayGuard, MemberRoster}
+import momo.api.config.AppConfig
+import momo.api.domain.{LoginAccount, Member}
+import momo.api.ports.storage.ImageStorage
+import momo.api.repositories.{ImageReferenceRepository, MatchNotesRepository, SessionAccountLookup}
+import momo.api.usecases.images.ImageStorageAdmission
+import momo.api.usecases.maintenance.SourceImageOrphanReaper
+import momo.api.usecases.ocr.OcrAdmissionGuard
+
+/** Lightweight HTTP/application fixture. Persistence behavior belongs to PostgreSQL tests. */
+private[api] object HttpTestRuntime:
+  def wiredWithHandles[F[_]: Async](config: AppConfig): Resource[F, ApiApp.WiredRuntime[F]] =
+    Resource.eval(SecureRandom.javaSecuritySecureRandom[F]).flatMap { case given SecureRandom[F] =>
+      JavaDiscordOAuthClient.resource[F](JavaDiscordOAuthClient.Config(
+        clientId = config.auth.discordClientId.getOrElse(""),
+        clientSecret = config.auth.discordClientSecret.getOrElse(""),
+        redirectUri = config.auth.discordRedirectUri.getOrElse(""),
+        scope = config.auth.discordScope,
+      )).flatMap(client => resource(config, client))
+    }
+
+  private final case class RuntimeParts[F[_]](
+      repositories: UseCaseWiring.RuntimeRepositories[F],
+      imageReferences: ImageReferenceRepository[F],
+      ocrAdmissionGuard: OcrAdmissionGuard[F],
+  )
+
+  def resource[F[_]: Async: SecureRandom](
+      config: AppConfig,
+      oauthClient: DiscordOAuthClient[F],
+  ): Resource[F, ApiApp.WiredRuntime[F]] = RuntimeInfrastructure
+    .resource[F](config, Clock[F].realTimeInstant)
+    .flatMap { infrastructure =>
+      given LoggerFactory[F] = Slf4jFactory.create[F]
+      val imageStore = LocalFsImageStore[F](config.imageTmpDir)
+
+      Resource.eval((
+        createParts[F](config, imageStore),
+        InMemoryOAuthStateReplayGuard.create[F](Clock[F].realTimeInstant)
+      ).tupled).flatMap { (parts, oauthStateReplayGuard) =>
+        val imageCleaner = SourceImageOrphanReaper.referenceAwareCleaner(
+          imageStore,
+          parts.imageReferences,
+          config.resourceLimits.imageOrphanOlderThan,
+          Clock[F].realTimeInstant,
+        )
+        val imageAdmission = ImageStorageAdmission.referenceAware[F](
+          imageStore,
+          parts.imageReferences,
+          UseCaseWiring.imageStorageAdmissionConfig(config.resourceLimits),
+        )
+        val health =
+          RuntimeHealthDetails.build[F](
+            None,
+            None
+          )
+        RuntimeMaintenance.resource(
+          config = config,
+          imageOrphanCleaner = imageCleaner,
+          appSessions = parts.repositories.appSessions,
+          idempotency = parts.repositories.idempotency,
+          oauthStateCleanup = Async[F].pure(0),
+          now = Clock[F].realTimeInstant,
+        ).evalMap { _ =>
+          UseCaseWiring.assemble(
+            config = config,
+            storage = UseCaseWiring.RuntimeStorage(
+              imageStorage = imageStore,
+              imageStorageAdmission = imageAdmission,
+            ),
+            repositories = parts.repositories,
+            services = UseCaseWiring.RuntimeServices(
+              healthDetails = health,
+              ocrAdmissionGuard = parts.ocrAdmissionGuard,
+              oauthClient = oauthClient,
+              loginRateLimiter = infrastructure.loginRateLimiter,
+              oauthStateReplayGuard = oauthStateReplayGuard,
+              rateLimiters = infrastructure.rateLimiters,
+            ),
+          )
+        }
+      }
+    }
+
+  private def createParts[F[_]: Async](
+      config: AppConfig,
+      imageStore: ImageStorage[F],
+  ): F[RuntimeParts[F]] =
+    for
+      matchDrafts <- InMemoryMatchDraftsRepository.create[F]
+      jobs <- InMemoryOcrJobsRepository.createWithDraftCancelSync[F](matchDrafts)
+      matchDraftCancellation =
+        InMemoryMatchDraftCancellationRepository[F](matchDrafts, jobs)
+      drafts <- InMemoryOcrDraftsRepository.create[F]
+      heldEvents <- InMemoryHeldEventsRepository.create[F]
+      matchesBase <- InMemoryMatchesRepository.create[F]
+      matches = InMemoryMatchesRepository
+        .withConfirmedDraftCleanup[F](matchesBase, matchDrafts)
+      matchNotes: MatchNotesRepository[F] = matchesBase
+      matchConfirmation = InMemoryMatchConfirmationRepository[F](
+        matches,
+        matchesBase.create,
+        matchDrafts,
+      )
+      heldEventDeletion =
+        InMemoryHeldEventDeletionRepository[F](heldEvents, matches, matchDrafts)
+      appSessions <- InMemoryAppSessionsRepository.create[F]
+      devIdentities <- MemberRoster.devIdentities(config.devMemberIds)
+        .leftMap(new IllegalArgumentException(_)).liftTo[F]
+      members <- InMemoryMembersRepository.create[F](devIdentities.map(identity =>
+        Member(
+          identity.memberId,
+          identity.userId,
+          identity.displayName,
+          java.time.Instant.EPOCH,
+        )
+      ))
+      loginAccounts <- InMemoryLoginAccountsRepository
+        .create[F](devIdentities.map { identity =>
+          LoginAccount(
+            identity.accountId,
+            identity.userId,
+            identity.displayName,
+            Some(identity.memberId),
+            loginEnabled = true,
+            role = identity.role,
+            createdAt = java.time.Instant.EPOCH,
+            updatedAt = java.time.Instant.EPOCH,
+          )
+        })
+      sessionAccounts = SessionAccountLookup.fromRepositories[F](appSessions, loginAccounts)
+      loginAccountAdministration =
+        InMemoryLoginAccountAdministrationRepository[F](loginAccounts, appSessions)
+      mapMasters <- InMemoryMapMastersRepository.createWithDeleteGuard[F](mapMasterId =>
+        InMemoryMasterDeleteGuards.ensureMapMasterCanDelete(mapMasterId, matches, matchDrafts)
+      )
+      seasonMasters <- InMemorySeasonMastersRepository.createWithDeleteGuard[F](seasonMasterId =>
+        InMemoryMasterDeleteGuards.ensureSeasonMasterCanDelete(
+          seasonMasterId,
+          matches,
+          matchDrafts
+        )
+      )
+      gameTitles <- InMemoryGameTitlesRepository.createWithDeleteGuard[F](gameTitleId =>
+        InMemoryMasterDeleteGuards.ensureGameTitleCanDelete(
+          gameTitleId,
+          mapMasters,
+          seasonMasters,
+          matches,
+          matchDrafts,
+        )
+      )
+      incidentMasters <- InMemoryIncidentMastersRepository.create[F]
+      memberAliases <- InMemoryMemberAliasesRepository.create[F]
+      idempotency <- InMemoryIdempotencyRepository.create[F]
+      metadata = InMemoryMatchMetadata[F](heldEvents, gameTitles, seasonMasters, mapMasters)
+      matchList = InMemoryMatchListReadModel[F](matches, matchDrafts, metadata)
+      notificationSettings <- InMemoryNotificationSettingsRepository.create[F]
+      ocrSubmissions <- InMemoryOcrSubmissionsRepository.create[F](matchDrafts)
+      ocrJobCreationStore = InMemoryOcrJobCreationStore[F](
+        drafts,
+        drafts.create,
+        jobs,
+        jobs.createWithInput,
+        matchDrafts,
+        jobs.existsActiveByDraft,
+        ocrSubmissions,
+        Clock[F].realTimeInstant,
+      )
+      imageReferences: ImageReferenceRepository[F] =
+        InMemoryImageReferenceRepository[F](jobs, matchDrafts)
+      ocrAdmissionGuard = OcrAdmissionGuard.allowAll[F]
+      repositories = UseCaseWiring.RuntimeRepositories(
+        ocrJobCreationStore = ocrJobCreationStore,
+        ocrSubmissions = ocrSubmissions,
+        jobs = jobs,
+        drafts = drafts,
+        heldEvents = heldEvents,
+        heldEventList = InMemoryHeldEventListReadModel[F](
+          heldEvents,
+          matches,
+          matchDrafts,
+          gameTitles,
+          seasonMasters,
+        ),
+        heldEventDetails =
+          InMemoryHeldEventDetailReadModel[F](heldEvents, matches, matchList, metadata),
+        heldEventDeletion = heldEventDeletion,
+        matches = matches,
+        matchDetails = InMemoryMatchDetailReadModel[F](matches, loginAccounts, metadata),
+        matchNotes = matchNotes,
+        matchExports =
+          InMemoryMatchExportsRepository[F](matches, members, mapMasters, seasonMasters),
+        matchDrafts = matchDrafts,
+        matchDraftReviews = InMemoryMatchDraftReviewReadModel[F](matchDrafts, drafts, imageStore),
+        matchDraftCancellation = matchDraftCancellation,
+        matchList = matchList,
+        seriesAnalysis = UnsupportedAnalysisRepositories.analysis[F],
+        seriesPlayerRadar = UnsupportedAnalysisRepositories.radar[F],
+        matchConfirmation = matchConfirmation,
+        appSessions = appSessions,
+        sessionAccounts = sessionAccounts,
+        sessionCreation = loginAccountAdministration,
+        members = members,
+        loginAccounts = loginAccounts,
+        loginAccountAdministration = loginAccountAdministration,
+        notificationSettings = notificationSettings,
+        gameTitles = gameTitles,
+        mapMasters = mapMasters,
+        seasonMasters = seasonMasters,
+        incidentMasters = incidentMasters,
+        memberAliases = memberAliases,
+        idempotency = idempotency,
+      )
+    yield RuntimeParts(
+      repositories = repositories,
+      imageReferences = imageReferences,
+      ocrAdmissionGuard = ocrAdmissionGuard,
+    )

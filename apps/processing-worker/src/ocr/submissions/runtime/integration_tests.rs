@@ -76,6 +76,7 @@ async fn verify(
     url: &str,
     sink: &NotificationSink,
 ) -> TestResult {
+    verify_finite_bootstrap_and_continuation(primary, peer, url).await?;
     verify_outcomes(primary, sink).await?;
     verify_concurrency(primary, peer, sink).await?;
     let [_, _, _, _, _, _, _, preparation] = IDS;
@@ -343,6 +344,7 @@ async fn member(client: &Client, id: &str, screen: &str, job_status: Option<&str
 }
 
 async fn cleanup(client: &Client) -> TestResult {
+    let finite = finite_ids();
     let ids: Vec<&str> = IDS
         .iter()
         .chain(EXTRA_IDS.iter())
@@ -350,6 +352,7 @@ async fn cleanup(client: &Client) -> TestResult {
         .chain(RECOVERY_IDS.iter())
         .chain(busy_rechecks::IDS.iter())
         .copied()
+        .chain(finite.iter().map(String::as_str))
         .collect();
     let jobs: Vec<String> = ids
         .iter()
@@ -686,5 +689,75 @@ async fn verify_deadline_reconnect(primary: &Client, peer: &mut Client, url: &st
         ),
         "timed-out open submission remains recoverable",
     )?;
+    Ok(())
+}
+
+fn finite_ids() -> Vec<String> {
+    (0..41)
+        .map(|index| format!("00000000-0024-4001-8000-{index:012}"))
+        .collect()
+}
+
+async fn verify_finite_bootstrap_and_continuation(
+    primary: &Client,
+    peer: &mut Client,
+    url: &str,
+) -> TestResult {
+    let ids = finite_ids();
+    let late = ids.first().ok_or("missing late submission ID")?;
+    let initial = ids.get(1..).ok_or("missing initial IDs")?;
+    for id in initial {
+        create(primary, id, -1).await?;
+        member(primary, id, "total_assets", None).await?;
+    }
+    let mut reconciler =
+        Reconciler::initialize(url.to_owned(), TIMEOUT, NotificationSink::default()).await?;
+    let count = |state: &'static str| async move {
+        let row = primary
+            .query_one(
+                "SELECT count(*) FROM ocr_submissions WHERE id = ANY($1) AND status = $2",
+                &[&initial, &state],
+            )
+            .await?;
+        Ok::<i64, Box<dyn Error + Send + Sync>>(row.get(0))
+    };
+    ensure(
+        count("open").await? == 40,
+        "bootstrap discovers bounded IDs without settling or waiting for all receipts",
+    )?;
+    let (_shutdown, stopped) = watch::channel(false);
+    let barrier = peer.transaction().await?;
+    barrier
+        .batch_execute("LOCK TABLE ocr_submission_members IN ACCESS EXCLUSIVE MODE")
+        .await?;
+    let (step, released) = tokio::join!(reconciler.step(&stopped), async {
+        // The first receipt takes longer than the scheduling budget, but is not cancelled.
+        time::sleep(STEP_SOFT_BUDGET * 2).await;
+        barrier.commit().await
+    });
+    released?;
+    step?;
+    let completed = count("settled").await?;
+    ensure(
+        (1..=PAGE_SIZE).contains(&completed),
+        "one finite step must progress but never settle more than a page",
+    )?;
+    let after = reconciler.recovery.cursor.after.clone();
+    create(primary, late, -1).await?;
+    member(primary, late, "total_assets", None).await?;
+    reconciler.request_scan();
+    ensure(
+        reconciler.recovery.cursor.after == after,
+        "wake must not reset an unfinished scan",
+    )?;
+    time::timeout(Duration::from_secs(10), async {
+        loop {
+            time::sleep_until(reconciler.next_at()).await;
+            reconciler.step(&stopped).await?;
+            let settled: i64 = primary.query_one("SELECT count(*) FROM ocr_submissions WHERE id = ANY($1) AND status = 'settled'", &[&ids]).await?.get(0);
+            if settled == 41 { return Ok::<(), Box<dyn Error + Send + Sync>>(()); }
+        }
+    }).await??;
+    drop(reconciler);
     Ok(())
 }

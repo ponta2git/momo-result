@@ -13,7 +13,7 @@
 
 ## 1. Ownership
 
-API は job、受付時の入力 snapshot、下書きとの関連を同じ DB transaction で保存する。Worker 親プロセスは DB の job を直接取得し、共有実行枠、lease、子プロセス、結果確定、再試行、期限回復を所有する。子プロセスは1回の計算結果だけを返す。ジョブ配送専用の outbox や Redis Streams は使わない。
+API は job、受付時の入力 snapshot、下書きとの関連を同じ DB transaction で保存する。Worker 親プロセスは DB の job を直接取得し、共有実行枠、lease、子プロセス、結果確定、再試行、期限回復を所有する。子プロセスは1回の計算結果だけを返す。ジョブ配送専用の outbox は使わない。
 
 永続状態は既存の `ocr_jobs` に置く。メモリには「DB を再確認する」という起床通知だけを保持し、job の全件一覧や実行順序を正本として持たない。分析も同じ DB と共有実行枠を使うが、入力検証と状態遷移は種類ごとに所有する。
 
@@ -41,7 +41,7 @@ HTTP success は入力と業務状態の DB commit を意味し、Worker の開�
 
 - scheduler は共有実行枠の期限切れを、新しい queued job がなくても回復する。候補は DB 時刻と `available_at` を使って上限付きで選ぶ。
 - 候補選択は実行権を与えない。claim は共有枠 → 下書き → job の順で lock を取り、状態・入力・実行可能時刻を再検証して lease と fence を確定する。
-- claim の commit 成否が不明なら child を起動しない。旧 owner の更新を fence で拒否する一方、物理的な child 停止は process supervisor が担う。
+- claim の commit 成否が不明なら child を起動しない。旧 owner の更新を fence で拒否する一方、物理的な child 停止は parent の実行管理と process adapter が担う。
 - 使用中の枠、重複 wake、未到来の期限を失敗にしない。非対応の分析 job や lock 中の先頭候補で、対応する後続 job の走査を止めない。
 - OCR は分析に中断を要求できる。旧 child の回収と durable な再queueを確認してから枠を譲る。この優先制御だけで分析の待ち時間上限を保証したと扱わない。
 - 結果の検証、OCR draft 保存、job 終端、下書き表示状態の更新を同じ整合性境界で確定する。DB write 失敗を成功扱いにしない。

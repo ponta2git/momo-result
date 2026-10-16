@@ -8,7 +8,12 @@ import munit.CatsEffectSuite
 import momo.api.domain.ids.{AccountId, MatchDraftId}
 import momo.api.domain.{MatchDraft, OcrDraft, OcrJob, OcrSubmission}
 import momo.api.repositories.OcrJobCreationStore.OcrJobCreationRejection
-import momo.api.repositories.{OcrJobCreationPlan, OcrJobCreationStore, StoredOcrJob}
+import momo.api.repositories.{
+  OcrJobAcceptance,
+  OcrJobCreationPlan,
+  OcrJobCreationStore,
+  StoredOcrJob
+}
 
 /**
  * Shared admission and replay semantics for the HTTP test adapter and the durable adapter.
@@ -31,7 +36,7 @@ trait OcrJobCreationStoreContract:
       created <- f.store.store(f.plan)
       saved <- f.readState
     yield
-      assertEquals(created, Right(StoredOcrJob(f.plan.job, f.plan.draft, true)))
+      assertEquals(created, Right(StoredOcrJob(OcrJobAcceptance.fromJob(f.plan.job), true)))
       assertEquals(saved.job, Some(f.plan.job))
       assertEquals(saved.ocrDraft, Some(f.plan.draft))
       assertEquals(saved.matchDraft.flatMap(_.totalAssetsImageId), Some(f.plan.job.imageId))
@@ -81,7 +86,7 @@ trait OcrJobCreationStoreContract:
       wrongDraft <- f.store.store(otherSourceDraft(f.plan))
       after <- f.readState
     yield
-      assertEquals(replay, Right(StoredOcrJob(f.plan.job, f.plan.draft, false)))
+      assertEquals(replay, Right(StoredOcrJob(OcrJobAcceptance.fromJob(f.plan.job), false)))
       assertEquals(wrongDraft, Left(OcrJobCreationRejection.SubmissionRejected))
       assertEquals(after, before)
 

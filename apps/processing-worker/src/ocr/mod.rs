@@ -1,5 +1,6 @@
 //! Durable OCR processing around the isolated `momo-ocr` capability.
 
+pub(crate) mod bootstrap;
 pub(crate) mod child;
 mod child_launcher;
 #[cfg_attr(
@@ -36,6 +37,7 @@ mod native_engine;
     )
 )]
 pub(crate) mod object_store;
+pub(crate) mod orchestrator;
 mod runtime_config;
 pub(crate) mod submissions;
 

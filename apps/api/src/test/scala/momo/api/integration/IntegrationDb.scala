@@ -180,6 +180,7 @@ object IntegrationDb:
         map_masters,
         game_titles,
         idempotency_keys,
+        oauth_state_consumptions,
         app_sessions
       RESTART IDENTITY CASCADE
     """.update.run.void *> sql"""

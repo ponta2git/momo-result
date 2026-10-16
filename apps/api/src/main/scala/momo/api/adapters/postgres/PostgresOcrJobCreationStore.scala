@@ -9,12 +9,13 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.domain.{MatchDraftStatus, OcrJobStatus, ScreenType}
+import momo.api.domain.{MatchDraftStatus, OcrJobStatus, OcrSubmissionMember, ScreenType}
 import momo.api.errors.{AppError, AppException}
 import momo.api.ports.storage.{Sha256Hex, SourceImageObjectKey}
 import momo.api.repositories.OcrJobCreationStore.OcrJobCreationRejection
 import momo.api.repositories.{
   MatchDraftAttachmentResult,
+  OcrJobAcceptance,
   OcrJobCreationPlan,
   OcrJobCreationStore,
   OcrJobDraftAttachment,
@@ -38,25 +39,14 @@ final class PostgresOcrJobCreationStore[F[_]: Async](transactor: Transactor[F])
     val attachment = plan.matchDraftAttachment
     val program =
       for
-        _ <-
-          sql"SELECT pg_advisory_xact_lock(hashtext('momo:ocr_jobs:active_limit')::bigint)".query[
-            Unit
-          ].unique
-        _ <- PostgresOcrSubmissions.lockDraft(attachment.draftId)
         draftOwner <-
-          sql"SELECT created_by_account_id FROM match_drafts WHERE id = ${attachment.draftId}"
+          sql"SELECT created_by_account_id FROM match_drafts WHERE id = ${attachment.draftId} FOR UPDATE"
             .query[momo.api.domain.ids.AccountId].option
         _ <- PostgresOcrSubmissions.lock(plan.submission.submissionId)
         submission <- PostgresOcrSubmissions.read(plan.submission.submissionId)
-        existing <- submission.flatMap(_.members.find(_.screenType ==
-          attachment.screenType)).flatMap(_.jobId)
-          .traverse(id =>
-            PostgresOcrJobs.alg.find(id).flatMap(_.traverse(job =>
-              PostgresOcrDrafts.alg.find(job.draftId).map(_.map(draft =>
-                StoredOcrJob(job, draft, false)
-              ))
-            )).map(_.flatten)
-          ).map(_.flatten)
+        member = submission.flatMap(_.members.find(_.screenType == attachment.screenType))
+        existing <- member.flatMap(_.jobId).traverse(PostgresOcrJobs.alg.findAcceptance)
+          .map(_.flatten.map(StoredOcrJob(_, false)))
         result <-
           if !OcrJobCreationPlan.isConsistent(plan) then
             OcrJobCreationRejection.InvalidPlan.asLeft[StoredOcrJob].pure[ConnectionIO]
@@ -73,24 +63,31 @@ final class PostgresOcrJobCreationStore[F[_]: Async](transactor: Transactor[F])
               case Some(_) =>
                 OcrJobCreationRejection.SubmissionRejected.asLeft[StoredOcrJob].pure[ConnectionIO]
               case None =>
-                val admission = draftOwner.contains(plan.submission.ownerAccountId) &&
-                  submission.exists(s =>
-                    s.status == "open" &&
-                      s.members.exists(m =>
-                        m.screenType == attachment.screenType && m.status == "pending"
-                      )
-                  )
                 (for
+                  _ <- EitherT.cond[ConnectionIO](
+                    draftOwner.contains(plan.submission.ownerAccountId) &&
+                      submission.exists(_.status == "open") && member.exists(_.status == "pending"),
+                    (),
+                    OcrJobCreationRejection.SubmissionRejected,
+                  )
+                  _ <- EitherT(attachmentGuard(attachment))
+                  _ <- EitherT(sourceImageGuard(plan, member))
+                  // Unrelated creators must not hold this global gate while waiting for a draft,
+                  // submission, or image. Replays never consume an admission slot.
+                  _ <- EitherT.liftF(sql"""
+                    SELECT pg_advisory_xact_lock(hashtext('momo:ocr_jobs:active_limit')::bigint)
+                  """.query[Unit].unique)
+                  // The gate wait may cross the admission deadline. Both time and active count
+                  // must be read only after the wait, in fresh READ COMMITTED statements.
                   currentTime <-
                     EitherT.liftF(sql"SELECT clock_timestamp()".query[java.time.Instant].unique)
                   _ <- EitherT.cond[ConnectionIO](
-                    admission && submission.exists(s => currentTime.isBefore(s.admissionDeadline)),
+                    draftOwner.contains(plan.submission.ownerAccountId) &&
+                      submission.exists(_.canAdmit(attachment.screenType, currentTime)),
                     (),
                     OcrJobCreationRejection.SubmissionRejected
                   )
                   _ <- EitherT(activeLimitGuard(plan.activeJobLimit))
-                  _ <- EitherT(attachmentGuard(attachment))
-                  _ <- EitherT(sourceImageGuard(plan))
                   _ <- EitherT.liftF(PostgresOcrDrafts.alg.create(plan.draft))
                   _ <- EitherT.liftF(PostgresOcrJobs.create(plan.job, plan.input))
                   _ <- EitherT.liftF(attachMatchDraft(attachment))
@@ -98,12 +95,13 @@ final class PostgresOcrJobCreationStore[F[_]: Async](transactor: Transactor[F])
                 SET status = 'registered', job_id = ${plan.job.id}
                 WHERE submission_id = ${plan.submission.submissionId}
                   AND screen_type = ${attachment.screenType} AND status = 'pending'""".update.run)
-                yield StoredOcrJob(plan.job, plan.draft, true)).value
+                yield StoredOcrJob(OcrJobAcceptance.fromJob(plan.job), true)).value
       yield result
     program.transact(transactor)
 
   private def sourceImageGuard(
-      plan: OcrJobCreationPlan
+      plan: OcrJobCreationPlan,
+      member: Option[OcrSubmissionMember],
   ): ConnectionIO[Either[OcrJobCreationRejection, Unit]] =
     sql"""
       SELECT owner_account_id, idempotency_key_hash, status, object_key, sha256_hex, byte_length::bigint, media_type
@@ -112,14 +110,13 @@ final class PostgresOcrJobCreationStore[F[_]: Async](transactor: Transactor[F])
       FOR UPDATE
     """.query[SourceImageGuardRow].option.flatMap {
       case Some(row) =>
-        PostgresOcrSubmissions.read(plan.submission.submissionId).map { submission =>
-          val matchesMember = submission.flatMap(_.members.find(_.screenType ==
-            plan.job.requestedScreenType)).exists(m =>
-            row.owner == plan.submission.ownerAccountId &&
-              row.idempotencyHash == m.uploadIdempotencyKeyHash &&
-              row.sha256.exists(_.value == m.imageSha256) &&
-              row.byteLength.contains(m.imageByteLength.toLong)
-          )
+        val matchesMember = member.exists(m =>
+          row.owner == plan.submission.ownerAccountId &&
+            row.idempotencyHash == m.uploadIdempotencyKeyHash &&
+            row.sha256.exists(_.value == m.imageSha256) &&
+            row.byteLength.contains(m.imageByteLength.toLong)
+        )
+        val result: Either[OcrJobCreationRejection, Unit] =
           if !matchesMember then Left(OcrJobCreationRejection.SubmissionRejected)
           else
             row match
@@ -136,7 +133,7 @@ final class PostgresOcrJobCreationStore[F[_]: Async](transactor: Transactor[F])
               case SourceImageGuardRow(_, _, SourceImageStatus.Available, _, _, _, _) =>
                 Left(OcrJobCreationRejection.InvalidPlan)
               case _ => Left(OcrJobCreationRejection.SourceImageUnavailable(plan.job.imageId))
-        }
+        result.pure[ConnectionIO]
       case None =>
         Left(OcrJobCreationRejection.SourceImageUnavailable(plan.job.imageId)).pure[ConnectionIO]
     }

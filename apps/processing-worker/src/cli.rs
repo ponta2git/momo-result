@@ -291,7 +291,24 @@ struct OcrLocalEnduranceArgs {
 }
 
 /// Parses the process command line and runs the selected worker operation.
-pub async fn entrypoint() -> ExitCode {
+#[must_use]
+pub fn entrypoint() -> ExitCode {
+    let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    else {
+        return ExitCode::FAILURE;
+    };
+    let mut shutdown_deadline = None;
+    let result = runtime.block_on(execute_cli(&mut shutdown_deadline));
+    let remaining = shutdown_deadline.map_or(Duration::ZERO, |deadline: tokio::time::Instant| {
+        deadline.saturating_duration_since(tokio::time::Instant::now())
+    });
+    runtime.shutdown_timeout(remaining);
+    result
+}
+
+async fn execute_cli(shutdown_deadline: &mut Option<tokio::time::Instant>) -> ExitCode {
     let cli = Cli::parse();
     match &cli.command {
         Command::Bootstrap { arguments } => {
@@ -379,7 +396,7 @@ pub async fn entrypoint() -> ExitCode {
     }
 
     initialize_logging();
-    match Box::pin(run(cli.command)).await {
+    match Box::pin(run(cli.command, shutdown_deadline)).await {
         Ok(()) => ExitCode::SUCCESS,
         Err(message) => {
             error!(
@@ -392,9 +409,12 @@ pub async fn entrypoint() -> ExitCode {
     }
 }
 
-async fn run(command: Command) -> Result<(), String> {
+async fn run(
+    command: Command,
+    shutdown_deadline: &mut Option<tokio::time::Instant>,
+) -> Result<(), String> {
     match command {
-        Command::Worker => Box::pin(run_worker()).await,
+        Command::Worker => Box::pin(run_worker(shutdown_deadline)).await,
         Command::ReleaseAudit {
             require_current,
             require_quiescent,
@@ -712,14 +732,13 @@ fn exit_code(code: i32) -> ExitCode {
     u8::try_from(code).map_or(ExitCode::FAILURE, ExitCode::from)
 }
 
-async fn run_worker() -> Result<(), String> {
+async fn run_worker(shutdown_deadline: &mut Option<tokio::time::Instant>) -> Result<(), String> {
     let analysis_activation =
         AnalysisActivationConfig::from_environment().map_err(|error| error.to_string())?;
     let (shutdown_sender, shutdown_receiver) = tokio::sync::watch::channel(false);
-    let supervised_runtime = {
-        let runtime_plan =
-            crate::supervisor::WorkerRuntimePlan::from_environment(&analysis_activation)
-                .map_err(|error| error.to_string())?;
+    let worker_runtime = {
+        let runtime_plan = crate::worker::WorkerRuntimePlan::from_environment(&analysis_activation)
+            .map_err(|error| error.to_string())?;
         info!(
             event = "analysis_configuration_accepted",
             publication_mode = ?analysis_activation.publication_mode,
@@ -727,15 +746,15 @@ async fn run_worker() -> Result<(), String> {
             ocr_v2_enabled = runtime_plan.ocr_enabled(),
             "combined worker configuration accepted"
         );
-        crate::supervisor::run(runtime_plan, shutdown_receiver)
+        crate::worker::run(runtime_plan, shutdown_receiver, shutdown_deadline)
     };
-    tokio::pin!(supervised_runtime);
+    tokio::pin!(worker_runtime);
     tokio::select! {
-        result = &mut supervised_runtime => result.map_err(|error| error.to_string()),
+        result = &mut worker_runtime => result.map_err(|error| error.to_string()),
         signal = wait_for_shutdown() => {
             signal.map_err(|error| error.to_string())?;
             if let Err(_receiver_closed) = shutdown_sender.send(true) {}
-            supervised_runtime.await.map_err(|error| error.to_string())
+            worker_runtime.await.map_err(|error| error.to_string())
         }
     }
 }

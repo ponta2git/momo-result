@@ -17,11 +17,11 @@ import momo.api.domain.{
   MatchListStatusFilter,
   MatchListSummary
 }
-import momo.api.repositories.{MatchDraftsRepository, MatchListReadModel, MatchesRepository}
+import momo.api.repositories.MatchListReadModel
 
 final class InMemoryMatchListReadModel[F[_]: Monad](
-    matches: MatchesRepository[F],
-    matchDrafts: MatchDraftsRepository[F],
+    matches: MatchFixtureStore[F],
+    matchDrafts: MatchDraftFixtureStore[F],
     metadata: InMemoryMatchMetadata[F],
 ) extends MatchListReadModel[F]:
   override def list(
@@ -123,13 +123,13 @@ final class InMemoryMatchListReadModel[F[_]: Monad](
       kind: MatchListKindFilter,
   ): F[List[MatchListItem]] =
     for
-      confirmed <- matches.list(MatchesRepository.ListFilter(
+      confirmed <- matches.list(MatchFixtureStore.ListFilter(
         heldEventId = heldEventId,
         gameTitleId = gameTitleId,
         seasonMasterId = seasonMasterId,
         limit = None,
       ))
-      drafts <- matchDrafts.list(MatchDraftsRepository.ListFilter(
+      drafts <- matchDrafts.list(MatchDraftFixtureStore.ListFilter(
         heldEventId = heldEventId,
         gameTitleId = gameTitleId,
         seasonMasterId = seasonMasterId,

@@ -4,7 +4,8 @@ import momo.api.domain.ScreenType
 import momo.api.domain.ids.*
 import momo.api.endpoints.{CreateOcrJobRequest, CreateOcrJobResponse}
 import momo.api.errors.AppError
-import momo.api.usecases.ocr.{CreateOcrJobCommand, CreatedOcrJob}
+import momo.api.repositories.OcrJobAcceptance
+import momo.api.usecases.ocr.CreateOcrJobCommand
 
 /** DTO ↔ usecase command conversions for `OcrJobEndpoints`. */
 object OcrJobCodec:
@@ -28,9 +29,9 @@ object OcrJobCodec:
       submissionId = request.submissionId,
     )
 
-  def toCreateResponse(created: CreatedOcrJob): CreateOcrJobResponse = CreateOcrJobResponse(
-    jobId = created.job.id.value,
-    draftId = created.draft.id.value,
-    status = created.job.status.wire,
+  def toCreateResponse(created: OcrJobAcceptance): CreateOcrJobResponse = CreateOcrJobResponse(
+    jobId = created.id.value,
+    draftId = created.draftId.value,
+    status = created.status.wire,
   )
 end OcrJobCodec

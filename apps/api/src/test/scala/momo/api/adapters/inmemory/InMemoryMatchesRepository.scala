@@ -10,13 +10,14 @@ import momo.api.domain.{
   MatchNote,
   MatchNoteBody,
   MatchNoteVersion,
-  MatchRecord
+  MatchRecord,
+  MatchUpdate
 }
 import momo.api.errors.{AppError, AppException}
-import momo.api.repositories.{MatchNotesRepository, MatchesRepository, ReplaceMatchNoteResult}
+import momo.api.repositories.{MatchNotesRepository, ReplaceMatchNoteResult}
 
 final class InMemoryMatchesRepository[F[_]: Sync] private (ref: Ref[F, Map[MatchId, MatchRecord]])
-    extends MatchesRepository[F], MatchNotesRepository[F]:
+    extends MatchFixtureStore[F], MatchNotesRepository[F]:
   def create(record: MatchRecord): F[Unit] = ref.modify { current =>
     if current.contains(record.id) || containsMatchNo(current, record, excluding = None) then
       (current, Left(conflict(record)))
@@ -24,14 +25,17 @@ final class InMemoryMatchesRepository[F[_]: Sync] private (ref: Ref[F, Map[Match
   }.flatMap(complete)
 
   override def update(
-      record: MatchRecord,
+      id: MatchId,
+      change: MatchUpdate,
       updatedAt: java.time.Instant,
-  ): F[Either[AppError, Unit]] = ref.modify { current =>
-    if !current.contains(record.id) then
-      (current, Left(AppError.NotFound("match", record.id.value)))
-    else if containsMatchNo(current, record, excluding = Some(record.id)) then
-      (current, Left(conflictError(record)))
-    else (current.updated(record.id, record), Right(()))
+  ): F[Either[AppError, MatchRecord]] = ref.modify { current =>
+    current.get(id) match
+      case None => (current, Left(AppError.NotFound("match", id.value)))
+      case Some(existing) =>
+        val record = change.applyTo(existing)
+        if containsMatchNo(current, record, excluding = Some(id)) then
+          (current, Left(conflictError(record)))
+        else (current.updated(id, record), Right(record))
   }
 
   override def delete(id: MatchId): F[Boolean] = ref
@@ -58,7 +62,7 @@ final class InMemoryMatchesRepository[F[_]: Sync] private (ref: Ref[F, Map[Match
 
   override def find(id: MatchId): F[Option[MatchRecord]] = ref.get.map(_.get(id))
 
-  override def list(filter: MatchesRepository.ListFilter): F[List[MatchRecord]] = ref.get.map { m =>
+  override def list(filter: MatchFixtureStore.ListFilter): F[List[MatchRecord]] = ref.get.map { m =>
     val filtered = m.values.filter { r =>
       filter.heldEventId.forall(_ == r.heldEventId) &&
       filter.gameTitleId.forall(_ == r.gameTitleId) &&
@@ -84,13 +88,13 @@ final class InMemoryMatchesRepository[F[_]: Sync] private (ref: Ref[F, Map[Match
 
   override def statsByHeldEvents(
       heldEventIds: List[HeldEventId]
-  ): F[Map[HeldEventId, MatchesRepository.HeldEventStats]] = ref.get.map { records =>
+  ): F[Map[HeldEventId, MatchFixtureStore.HeldEventStats]] = ref.get.map { records =>
     val ids = heldEventIds.toSet
     val grouped = records.values.filter(record => ids.contains(record.heldEventId)).toList
       .groupBy(_.heldEventId)
     heldEventIds.map { id =>
       val scoped = grouped.getOrElse(id, Nil)
-      id -> MatchesRepository.HeldEventStats(
+      id -> MatchFixtureStore.HeldEventStats(
         matchCount = scoped.size,
         maxMatchNo = scoped.map(_.matchNoInEvent.value).maxOption.getOrElse(0),
         scopes = scoped.map(record =>
@@ -128,11 +132,12 @@ object InMemoryMatchesRepository:
   def withConfirmedDraftCleanup[F[_]: Sync](
       matches: InMemoryMatchesRepository[F],
       matchDrafts: InMemoryMatchDraftsRepository[F],
-  ): MatchesRepository[F] = new MatchesRepository[F]:
+  ): MatchFixtureStore[F] = new MatchFixtureStore[F]:
     override def update(
-        record: MatchRecord,
+        id: MatchId,
+        change: MatchUpdate,
         updatedAt: java.time.Instant,
-    ): F[Either[AppError, Unit]] = matches.update(record, updatedAt)
+    ): F[Either[AppError, MatchRecord]] = matches.update(id, change, updatedAt)
 
     override def delete(id: MatchId): F[Boolean] = matches.delete(id).flatTap {
       case true => matchDrafts.deleteConfirmedByMatchId(id).void
@@ -141,7 +146,7 @@ object InMemoryMatchesRepository:
 
     override def find(id: MatchId): F[Option[MatchRecord]] = matches.find(id)
 
-    override def list(filter: MatchesRepository.ListFilter): F[List[MatchRecord]] = matches
+    override def list(filter: MatchFixtureStore.ListFilter): F[List[MatchRecord]] = matches
       .list(filter)
 
     override def listByHeldEvent(heldEventId: HeldEventId): F[List[MatchRecord]] = matches
@@ -160,5 +165,5 @@ object InMemoryMatchesRepository:
 
     override def statsByHeldEvents(
         heldEventIds: List[HeldEventId]
-    ): F[Map[HeldEventId, MatchesRepository.HeldEventStats]] =
+    ): F[Map[HeldEventId, MatchFixtureStore.HeldEventStats]] =
       matches.statsByHeldEvents(heldEventIds)

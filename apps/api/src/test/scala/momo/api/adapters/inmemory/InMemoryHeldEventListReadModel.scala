@@ -10,31 +10,30 @@ import momo.api.domain.{
   PageRequest,
   PagedResult
 }
-import momo.api.repositories.{
-  GameTitlesRepository,
-  HeldEventListReadModel,
-  HeldEventsRepository,
-  MatchDraftsRepository,
-  MatchesRepository,
-  SeasonMastersRepository
-}
+import momo.api.repositories.{GameTitlesRepository, HeldEventListReadModel, SeasonMastersRepository}
 
 final class InMemoryHeldEventListReadModel[F[_]: Monad](
-    events: HeldEventsRepository[F],
-    matches: MatchesRepository[F],
-    drafts: MatchDraftsRepository[F],
+    events: InMemoryHeldEventsRepository[F],
+    matches: MatchFixtureStore[F],
+    drafts: MatchDraftFixtureStore[F],
     gameTitles: GameTitlesRepository[F],
     seasons: SeasonMastersRepository[F],
 ) extends HeldEventListReadModel[F]:
   override def list(query: Option[String], page: PageRequest): F[HeldEventListPage] =
     for
-      result <- events.listPage(query, page)
-      allIds <- events.listIds(query)
+      snapshot <- events.snapshot
+      all = InMemoryHeldEventsRepository.filterAndSort(snapshot, query)
+      result = PagedResult(
+        all.slice(page.offset.toInt, page.offset.toInt + page.pageSize),
+        page,
+        all.size
+      )
+      allIds = all.map(_.id)
       matchStats <- matches.statsByHeldEvents(allIds)
       draftStats <- drafts.statsByHeldEvents(result.items.map(_.id))
       items <- result.items.traverse { event =>
-        val confirmed = matchStats.getOrElse(event.id, MatchesRepository.HeldEventStats(0, 0))
-        val pending = draftStats.getOrElse(event.id, MatchDraftsRepository.HeldEventStats(0, 0))
+        val confirmed = matchStats.getOrElse(event.id, MatchFixtureStore.HeldEventStats(0, 0))
+        val pending = draftStats.getOrElse(event.id, MatchDraftFixtureStore.HeldEventStats(0, 0))
         (confirmed.scopes ++ pending.scopes).distinct.traverse { scope =>
           for
             title <- scope.gameTitleId.traverse(gameTitles.find).map(_.flatten)

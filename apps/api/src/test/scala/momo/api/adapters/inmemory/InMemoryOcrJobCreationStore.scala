@@ -15,6 +15,7 @@ import momo.api.repositories.{
   MatchDraftAttachmentResult,
   MatchDraftsRepository,
   OcrDraftsRepository,
+  OcrJobAcceptance,
   OcrJobCreationPlan,
   OcrJobCreationStore,
   OcrJobDraftAttachment,
@@ -48,17 +49,16 @@ final class InMemoryOcrJobCreationStore[F[_]: Async](
           case Some(member) if member.jobId.nonEmpty =>
             (for
               job <- EitherT(
-                jobs.find(member.jobId.get).map(_.toRight(OcrJobCreationRejection.InvalidPlan))
-              )
-              draft <- EitherT(
-                drafts.find(job.draftId).map(_.toRight(OcrJobCreationRejection.InvalidPlan))
+                jobs.findAcceptance(
+                  member.jobId.get
+                ).map(_.toRight(OcrJobCreationRejection.InvalidPlan))
               )
               _ <- EitherT.cond[F](
                 job.imageId == plan.job.imageId,
                 (),
                 OcrJobCreationRejection.SubmissionRejected
               )
-            yield StoredOcrJob(job, draft, false)).value
+            yield StoredOcrJob(job, false)).value
           case Some(member)
               if member.imageSha256 == plan.input.imageSha256 &&
                 member.imageByteLength.toLong ==
@@ -95,7 +95,7 @@ final class InMemoryOcrJobCreationStore[F[_]: Async](
         job.requestedScreenType,
         job.id
       ))
-    yield StoredOcrJob(job, draft, true)).value
+    yield StoredOcrJob(OcrJobAcceptance.fromJob(job), true)).value
 
   private def activeLimitGuard(
       activeJobLimit: Int

@@ -3,24 +3,24 @@ package momo.api.bootstrap
 import cats.effect.Async
 import cats.syntax.all.*
 
-import momo.api.adapters.inmemory.InMemoryMatchDraftsRepository
+import momo.api.adapters.inmemory.{InMemoryMatchDraftsRepository, MatchFixtureStore}
 import momo.api.domain.ids.*
 import momo.api.errors.{AppError, AppException}
-import momo.api.repositories.{MapMastersRepository, MatchesRepository, SeasonMastersRepository}
+import momo.api.repositories.{MapMastersRepository, SeasonMastersRepository}
 
 private[bootstrap] object InMemoryMasterDeleteGuards:
   def ensureGameTitleCanDelete[F[_]: Async](
       gameTitleId: GameTitleId,
       mapMasters: MapMastersRepository[F],
       seasonMasters: SeasonMastersRepository[F],
-      matches: MatchesRepository[F],
+      matches: MatchFixtureStore[F],
       matchDrafts: InMemoryMatchDraftsRepository[F],
   ): F[Unit] =
     for
       scopedMaps <- mapMasters.list(Some(gameTitleId))
       scopedSeasons <- seasonMasters.list(Some(gameTitleId))
       matchRefs <- matches
-        .list(MatchesRepository.ListFilter(gameTitleId = Some(gameTitleId), limit = Some(1)))
+        .list(MatchFixtureStore.ListFilter(gameTitleId = Some(gameTitleId), limit = Some(1)))
       draftRefs <- matchDrafts.existsBlockingReferenceToGameTitle(gameTitleId)
       _ <-
         if scopedMaps.nonEmpty || scopedSeasons.nonEmpty || matchRefs.nonEmpty || draftRefs then
@@ -30,11 +30,11 @@ private[bootstrap] object InMemoryMasterDeleteGuards:
 
   def ensureMapMasterCanDelete[F[_]: Async](
       mapMasterId: MapMasterId,
-      matches: MatchesRepository[F],
+      matches: MatchFixtureStore[F],
       matchDrafts: InMemoryMatchDraftsRepository[F],
   ): F[Unit] =
     for
-      matchRefs <- matches.list(MatchesRepository.ListFilter())
+      matchRefs <- matches.list(MatchFixtureStore.ListFilter())
         .map(_.exists(_.mapMasterId == mapMasterId))
       draftRefs <- matchDrafts.existsBlockingReferenceToMapMaster(mapMasterId)
       _ <-
@@ -45,12 +45,12 @@ private[bootstrap] object InMemoryMasterDeleteGuards:
 
   def ensureSeasonMasterCanDelete[F[_]: Async](
       seasonMasterId: SeasonMasterId,
-      matches: MatchesRepository[F],
+      matches: MatchFixtureStore[F],
       matchDrafts: InMemoryMatchDraftsRepository[F],
   ): F[Unit] =
     for
       matchRefs <- matches
-        .list(MatchesRepository.ListFilter(seasonMasterId = Some(seasonMasterId), limit = Some(1)))
+        .list(MatchFixtureStore.ListFilter(seasonMasterId = Some(seasonMasterId), limit = Some(1)))
       draftRefs <- matchDrafts.existsBlockingReferenceToSeasonMaster(seasonMasterId)
       _ <-
         if matchRefs.nonEmpty || draftRefs then

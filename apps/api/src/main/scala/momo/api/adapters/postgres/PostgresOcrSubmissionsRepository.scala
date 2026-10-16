@@ -51,6 +51,7 @@ final class PostgresOcrSubmissionsRepository[F[_]: Async](transactor: Transactor
     program.transact(transactor)
 
   private def admit(submission: OcrSubmission): ConnectionIO[Either[AppError, OcrSubmission]] =
+    val imageKeys = submission.members.map(_.uploadIdempotencyKeyHash).toArray
     for
       draft <-
         sql"""SELECT status, created_by_account_id FROM match_drafts WHERE id = ${submission.matchDraftId} FOR UPDATE"""
@@ -73,14 +74,18 @@ final class PostgresOcrSubmissionsRepository[F[_]: Async](transactor: Transactor
           )).pure[ConnectionIO]
         else
           for
-            usable <- submission.members.traverse { member =>
-              sql"""SELECT status FROM source_images
-            WHERE owner_account_id = ${submission.ownerAccountId}
-              AND idempotency_key_hash = ${member.uploadIdempotencyKeyHash} FOR UPDATE"""
-                .query[String].option.map(_.forall(s => s != "DELETE_PENDING" && s != "DELETED"))
-            }
+            // Match terminal draft cleanup's image-ID lock order. Missing rows are expected:
+            // submission admission precedes upload. A purge claim cannot be reused for upload,
+            // even when stale, because its previous owner may still delete the same object.
+            images <- sql"""SELECT status, delete_pending_at FROM source_images
+              WHERE owner_account_id = ${submission.ownerAccountId}
+                AND idempotency_key_hash = ANY($imageKeys)
+              ORDER BY id FOR UPDATE""".query[(String, Option[Instant])].to[List]
             admitted <-
-              if usable.contains(false) then
+              if images.exists { case (status, deletionClaim) =>
+                  status == "DELETE_PENDING" || status == "DELETED" || deletionClaim.nonEmpty
+                }
+              then
                 Left(
                   AppError.Conflict("An image from this request is no longer available.")
                 ).pure[ConnectionIO]

@@ -15,15 +15,7 @@ final class PostgresMatchDraftsRepository[F[_]: MonadCancelThrow](transactor: Tr
   private val delegate: MatchDraftsRepository[F] = MatchDraftsRepository
     .fromAlg(PostgresMatchDrafts.alg, transactor.trans)
 
-  export delegate.{
-    create,
-    find,
-    list,
-    statsByHeldEvents,
-    markOcrFailed,
-    attachOcrArtifacts,
-    markSourceImagesRetention
-  }
+  export delegate.{create, find, markOcrFailed, attachOcrArtifacts, markSourceImagesRetention}
 
   override def update(draft: MatchDraft, updatedAt: Instant): F[MatchDraftUpdateResult] =
     // Translate expected constraint races only after the complete transaction rolled back.

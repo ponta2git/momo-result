@@ -22,19 +22,18 @@ final class CachedReferenceRepositoriesSpec extends MomoCatsEffectSuite:
   private val aliasId = MemberAliasId.unsafeFromString("alias-1")
   private val alias = MemberAlias(aliasId, memberId, "ぽんた", now)
 
-  test("members cache resolves list and find from a single delegate load"):
+  test("member detail remains available when the complete catalog cannot be loaded"):
     for
       rows <- Ref.of[IO, List[Member]](List(member))
-      listCalls <- Ref.of[IO, Int](0)
-      delegate = CountingMembersRepository(rows, listCalls)
+      delegate = new MembersRepository[IO]:
+        def list = IO.raiseError(new IllegalStateException("catalog unavailable"))
+        def find(id: MemberId) = rows.get.map(_.find(_.id == id))
       cached <- CachedReferenceRepositories.members[IO](delegate, 1.hour)
       foundById <- cached.find(memberId)
-      listed <- cached.list
-      calls <- listCalls.get
+      listed <- cached.list.attempt
     yield
       assertEquals(foundById, Some(member))
-      assertEquals(listed, List(member))
-      assertEquals(calls, 1)
+      assert(listed.isLeft)
 
   test("concurrent cache misses share one successful delegate load"):
     for
@@ -84,11 +83,11 @@ final class CachedReferenceRepositoriesSpec extends MomoCatsEffectSuite:
       listCalls <- Ref.of[IO, Int](0)
       delegate = CountingGameTitlesRepository(rows, listCalls)
       cached <- CachedReferenceRepositories.gameTitles[IO](delegate, 1.hour)
-      first <- cached.find(titleId)
-      _ <- cached.find(titleId)
+      first <- cached.list.map(_.headOption)
+      _ <- cached.list.map(_.headOption)
       beforeWriteCalls <- listCalls.get
       _ <- cached.update(renamed)
-      second <- cached.find(titleId)
+      second <- cached.list.map(_.headOption)
       afterWriteCalls <- listCalls.get
     yield
       assertEquals(first.map(_.name), Some("桃鉄2"))
@@ -105,7 +104,7 @@ final class CachedReferenceRepositoriesSpec extends MomoCatsEffectSuite:
       releaseSnapshot <- Deferred[IO, Unit]
       delegate = RacingGameTitlesRepository(rows, listCalls, snapshotTaken, releaseSnapshot)
       cached <- CachedReferenceRepositories.gameTitles[IO](delegate, 1.hour)
-      loading <- cached.find(titleId).start
+      loading <- cached.list.map(_.headOption).start
       _ <- snapshotTaken.get
       updated <- cached.update(renamed)
       _ <- releaseSnapshot.complete(())
@@ -124,9 +123,9 @@ final class CachedReferenceRepositoriesSpec extends MomoCatsEffectSuite:
       delegate = new CountingGameTitlesRepository(rows, listCalls):
         override def update(title: GameTitle): IO[Either[AppError, Unit]] = IO.pure(Left(rejection))
       cached <- CachedReferenceRepositories.gameTitles[IO](delegate, 1.hour)
-      _ <- cached.find(titleId)
+      _ <- cached.list.map(_.headOption)
       result <- cached.update(title.copy(name = "ignored"))
-      second <- cached.find(titleId)
+      second <- cached.list.map(_.headOption)
       calls <- listCalls.get
     yield
       assertEquals(result, Left(rejection))
@@ -145,34 +144,58 @@ final class CachedReferenceRepositoriesSpec extends MomoCatsEffectSuite:
           .update(_.map(row => if row.id == title.id then title else row)) *>
           writeCommitted.complete(()).void *> awaitCancellation.get.as(Right(()))
       cached <- CachedReferenceRepositories.gameTitles[IO](delegate, 1.hour)
-      _ <- cached.find(titleId)
+      _ <- cached.list.map(_.headOption)
       updating <- cached.update(renamed).start
       _ <- writeCommitted.get
       _ <- updating.cancel
-      found <- cached.find(titleId)
+      found <- cached.list.map(_.headOption)
       calls <- listCalls.get
     yield
       assertEquals(found.map(_.name), Some("桃鉄2改"))
       assertEquals(calls, 2)
 
-  test("member aliases cache filters from all aliases and invalidates after create"):
+  test("member alias catalog invalidates after create"):
     val secondAlias = MemberAlias(MemberAliasId.unsafeFromString("alias-2"), memberId, "ponta", now)
     for
       rows <- Ref.of[IO, List[MemberAlias]](List(alias))
       listCalls <- Ref.of[IO, Int](0)
       delegate = CountingMemberAliasesRepository(rows, listCalls)
       cached <- CachedReferenceRepositories.memberAliases[IO](delegate, 1.hour)
-      first <- cached.list(Some(memberId))
+      first <- cached.list(None)
       _ <- cached.find(aliasId)
       beforeWriteCalls <- listCalls.get
       _ <- cached.create(secondAlias)
-      second <- cached.list(Some(memberId))
+      second <- cached.list(None)
       afterWriteCalls <- listCalls.get
     yield
       assertEquals(first, List(alias))
       assertEquals(beforeWriteCalls, 1)
       assertEquals(second, List(alias, secondAlias))
       assertEquals(afterWriteCalls, 2)
+
+  test("filtered aliases and single records do not depend on the full catalog budget"):
+    for
+      rows <- Ref.of[IO, List[MemberAlias]](List(alias))
+      delegate = new MemberAliasesRepository[IO]:
+        def list(id: Option[MemberId]) = id match
+          case None => IO.raiseError(new IllegalStateException("catalog exceeds budget"))
+          case Some(value) => rows.get.map(_.filter(_.memberId == value))
+        def find(id: MemberAliasId) = rows.get.map(_.find(_.id == id))
+        def create(value: MemberAlias) = rows.update(_ :+ value).as(Right(()))
+        def update(value: MemberAlias) = rows.set(List(value)).as(Right(()))
+        def delete(id: MemberAliasId) = rows.update(_.filterNot(_.id == id)).as(Right(()))
+      cached <- CachedReferenceRepositories.memberAliases[IO](delegate, 1.hour)
+      all <- cached.list(None).attempt
+      filtered <- cached.list(Some(memberId))
+      found <- cached.find(aliasId)
+      deleted <- cached.delete(aliasId)
+      after <- cached.find(aliasId)
+    yield
+      assert(all.isLeft)
+      assertEquals(filtered, List(alias))
+      assertEquals(found, Some(alias))
+      assertEquals(deleted, Right(()))
+      assertEquals(after, None)
 
   test("a lost write response cannot preserve cached rows from before the commit"):
     val renamed = title.copy(name = "桃鉄2改")
@@ -184,24 +207,13 @@ final class CachedReferenceRepositoriesSpec extends MomoCatsEffectSuite:
         override def update(value: GameTitle): IO[Either[AppError, Unit]] =
           rows.set(List(value)) *> IO.raiseError(connectionLost)
       cached <- CachedReferenceRepositories.gameTitles[IO](delegate, 1.hour)
-      before <- cached.find(titleId)
+      before <- cached.list.map(_.headOption)
       result <- cached.update(renamed).attempt
-      after <- cached.find(titleId)
+      after <- cached.list.map(_.headOption)
     yield
       assertEquals(before, Some(title))
       assertEquals(result, Left(connectionLost))
       assertEquals(after, Some(renamed))
-
-  private final class CountingMembersRepository(
-      rows: Ref[IO, List[Member]],
-      listCalls: Ref[IO, Int],
-  ) extends MembersRepository[IO]:
-    def list: IO[List[Member]] = listCalls.update(_ + 1) *> rows.get
-    def find(id: MemberId): IO[Option[Member]] = rows.get.map(_.find(_.id == id))
-
-  private object CountingMembersRepository:
-    def apply(rows: Ref[IO, List[Member]], listCalls: Ref[IO, Int]): CountingMembersRepository =
-      new CountingMembersRepository(rows, listCalls)
 
   private class CountingGameTitlesRepository(
       rows: Ref[IO, List[GameTitle]],

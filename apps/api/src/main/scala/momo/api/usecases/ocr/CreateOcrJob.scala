@@ -15,7 +15,7 @@ import momo.api.ports.storage.ImageStorage
 import momo.api.repositories.OcrJobCreationStore.OcrJobCreationRejection
 import momo.api.repositories.{
   MatchDraftsRepository,
-  OcrDraftsRepository,
+  OcrJobAcceptance,
   OcrJobCreationPlan,
   OcrJobCreationStore,
   OcrJobDraftAttachment,
@@ -32,15 +32,12 @@ final case class CreateOcrJobCommand(
     submissionId: String,
 )
 
-final case class CreatedOcrJob(job: OcrJob, draft: OcrDraft)
-
 final class CreateOcrJob[F[_]: MonadThrow](
     imageStore: ImageStorage[F],
     creationStore: OcrJobCreationStore[F],
     matchDrafts: MatchDraftsRepository[F],
     submissions: OcrSubmissionsRepository[F],
     jobs: OcrJobsRepository[F],
-    drafts: OcrDraftsRepository[F],
     admissionGuard: OcrAdmissionGuard[F],
     now: F[Instant],
     nextJobId: F[OcrJobId],
@@ -56,25 +53,24 @@ final class CreateOcrJob[F[_]: MonadThrow](
       command: CreateOcrJobCommand,
       requestId: Option[String],
       owner: AccountId,
-  ): F[Either[AppError, CreatedOcrJob]] =
+  ): F[Either[AppError, OcrJobAcceptance]] =
     submissions.find(command.submissionId, owner).flatMap {
       case None =>
-        AppError.NotFound("OCR submission", command.submissionId).asLeft[CreatedOcrJob].pure[F]
+        AppError.NotFound("OCR submission", command.submissionId).asLeft[OcrJobAcceptance].pure[F]
       case Some(submission) =>
         submission.members.find(_.screenType == command.requestedScreenType) match
           case None => AppError.Conflict(
               "This image is not a member of the submission."
-            ).asLeft[CreatedOcrJob].pure[F]
+            ).asLeft[OcrJobAcceptance].pure[F]
           case Some(member) => member.jobId match
               case Some(id) => (for
-                  job <- jobs.find(id).orNotFound("OCR job", id.value)
+                  job <- jobs.findAcceptance(id).orNotFound("OCR job", id.value)
                   _ <- EitherT.cond[F](
                     job.imageId == command.imageId,
                     (),
                     AppError.Conflict("This member already has another image.")
                   )
-                  draft <- drafts.find(job.draftId).orNotFound("OCR draft", job.draftId.value)
-                yield CreatedOcrJob(job, draft)).value
+                yield job).value
               case None => create(command, requestId, owner, submission, member)
     }
 
@@ -84,7 +80,7 @@ final class CreateOcrJob[F[_]: MonadThrow](
       owner: AccountId,
       submission: OcrSubmission,
       member: OcrSubmissionMember,
-  ): F[Either[AppError, CreatedOcrJob]] = (for
+  ): F[Either[AppError, OcrJobAcceptance]] = (for
     _ <- EitherT.fromEither[F](
       validateNewRequestScreenType(command.requestedScreenType)
     )
@@ -136,7 +132,7 @@ final class CreateOcrJob[F[_]: MonadThrow](
       activeJobLimit = activeJobLimit,
     )
     stored <- storeDbRecords(creationPlan)
-  yield CreatedOcrJob(stored.job, stored.draft)).value
+  yield stored.job).value
 
   private def storeDbRecords(
       plan: OcrJobCreationPlan

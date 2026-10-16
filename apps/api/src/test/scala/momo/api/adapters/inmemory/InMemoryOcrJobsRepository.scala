@@ -17,7 +17,7 @@ import momo.api.domain.{
 }
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{
-  MatchDraftsRepository,
+  OcrJobAcceptance,
   OcrJobBacklogSnapshot,
   OcrJobCancellationResult,
   OcrJobsRepository
@@ -26,8 +26,11 @@ import momo.api.repositories.{
 final class InMemoryOcrJobsRepository[F[_]: Sync] private (
     ref: Ref[F, InMemoryOcrJobsRepository.State],
     onQueuedCancel: (OcrJob.Cancelled, List[OcrJob]) => F[Unit],
-    matchDrafts: Option[MatchDraftsRepository[F]],
+    matchDrafts: Option[MatchDraftFixtureStore[F]],
 ) extends OcrJobsRepository[F]:
+  override def findAcceptance(jobId: OcrJobId): F[Option[OcrJobAcceptance]] =
+    find(jobId).map(_.map(OcrJobAcceptance.fromJob))
+
   def create(job: OcrJob): F[Unit] = createRecord(job, None)
 
   def createWithInput(job: OcrJob, input: OcrJobInput): F[Unit] = createRecord(job, Some(input))
@@ -120,7 +123,7 @@ final class InMemoryOcrJobsRepository[F[_]: Sync] private (
   ): F[OcrJobCancellationResult] = find(jobId).flatMap {
     case None => OcrJobCancellationResult.NotFound.pure[F]
     case Some(job) =>
-      matchDrafts.traverse(_.list(MatchDraftsRepository.ListFilter())).map(_.toList.flatten.exists(
+      matchDrafts.traverse(_.list(MatchDraftFixtureStore.ListFilter())).map(_.toList.flatten.exists(
         draft => draft.createdByAccountId == owner && draft.ocrDraftIds.contains(job.draftId)
       )).flatMap {
         case false => OcrJobCancellationResult.Forbidden.pure[F]
@@ -146,7 +149,7 @@ object InMemoryOcrJobsRepository:
     .map(new InMemoryOcrJobsRepository(_, (_, _) => Sync[F].unit, None))
 
   def createWithDraftCancelSync[F[_]: Sync](
-      matchDrafts: MatchDraftsRepository[F]
+      matchDrafts: MatchDraftFixtureStore[F]
   ): F[InMemoryOcrJobsRepository[F]] = Ref.of[F, State](empty)
     .map(new InMemoryOcrJobsRepository(
       _,
@@ -155,10 +158,10 @@ object InMemoryOcrJobsRepository:
     ))
 
   private def syncCancelledOcrJob[F[_]: Sync](
-      matchDrafts: MatchDraftsRepository[F],
+      matchDrafts: MatchDraftFixtureStore[F],
       cancelled: OcrJob.Cancelled,
       jobs: List[OcrJob],
-  ): F[Unit] = matchDrafts.list(MatchDraftsRepository.ListFilter()).flatMap { drafts =>
+  ): F[Unit] = matchDrafts.list(MatchDraftFixtureStore.ListFilter()).flatMap { drafts =>
     drafts.find(draft => draftOcrDraftIds(draft).contains(cancelled.draftId)) match
       case Some(draft) if draft.status == MatchDraftStatus.OcrRunning =>
         val slotDraftIds = draftOcrDraftIds(draft)

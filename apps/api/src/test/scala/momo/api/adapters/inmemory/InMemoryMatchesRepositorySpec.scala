@@ -34,7 +34,7 @@ final class InMemoryMatchesRepositorySpec extends MomoCatsEffectSuite:
     for
       matches <- InMemoryMatchesRepository.create[IO]
       missing = record("match-in-memory-missing", 1)
-      result <- matches.update(missing, now.plusSeconds(60))
+      result <- matches.update(missing.id, MatchFixtures.update(missing), now.plusSeconds(60))
       found <- matches.find(missing.id)
     yield
       assertEquals(result, Left(AppError.NotFound("match", missing.id.value)))
@@ -47,7 +47,11 @@ final class InMemoryMatchesRepositorySpec extends MomoCatsEffectSuite:
       second = record("match-in-memory-2", 2)
       _ <- matches.create(first)
       _ <- matches.create(second)
-      result <- matches.update(first.copy(matchNoInEvent = second.matchNoInEvent), now)
+      result <- matches.update(
+        first.id,
+        MatchFixtures.update(first.copy(matchNoInEvent = second.matchNoInEvent)),
+        now
+      )
       found <- matches.find(first.id)
     yield
       assertEquals(

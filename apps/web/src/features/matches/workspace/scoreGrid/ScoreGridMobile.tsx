@@ -41,11 +41,21 @@ type ScoreGridMobileCardsProps = Pick<ScoreGridData, "rows" | "errorPathSet"> &
     onTogglePlayer: (index: number) => void;
   };
 
-export function ScoreGridMobileCards({ rows, ...props }: ScoreGridMobileCardsProps) {
+export function ScoreGridMobileCards({
+  rows,
+  expandedMobilePlayer,
+  ...props
+}: ScoreGridMobileCardsProps) {
   return (
     <div className="grid gap-4">
       {rows.map((row, index) => (
-        <ScoreGridMobileRow {...props} key={playerSlotKey(index)} row={row} index={index} />
+        <ScoreGridMobileRow
+          {...props}
+          key={playerSlotKey(index)}
+          row={row}
+          index={index}
+          expanded={expandedMobilePlayer === index}
+        />
       ))}
     </div>
   );
@@ -55,7 +65,7 @@ const ScoreGridMobileRow = memo(function ScoreGridMobileRow({
   row,
   index,
   errorPathSet,
-  expandedMobilePlayer,
+  expanded,
   getCellId,
   handleIncidentNumericCommit,
   handlePlayerNumericCommit,
@@ -66,9 +76,10 @@ const ScoreGridMobileRow = memo(function ScoreGridMobileRow({
   onReviewCellFocus,
   onTogglePlayer,
   registerCellRef,
-}: Omit<ScoreGridMobileCardsProps, "rows"> & {
+}: Omit<ScoreGridMobileCardsProps, "rows" | "expandedMobilePlayer"> & {
   row: WorkspaceReadView<MatchWorkspaceScoreRowView>;
   index: number;
+  expanded: boolean;
 }) {
   const {
     player,
@@ -85,7 +96,7 @@ const ScoreGridMobileRow = memo(function ScoreGridMobileRow({
   return (
     <article className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
       <Disclosure
-        open={expandedMobilePlayer === index}
+        open={expanded}
         panelSpacing="md"
         summary={
           <span className="flex min-w-0 items-center justify-between gap-3">
@@ -103,13 +114,13 @@ const ScoreGridMobileRow = memo(function ScoreGridMobileRow({
               </span>
             </span>
             <span className="shrink-0 text-xs text-[var(--color-text-secondary)]">
-              {expandedMobilePlayer === index ? "閉じる" : "詳細"}
+              {expanded ? "閉じる" : "詳細"}
             </span>
           </span>
         }
         triggerLayout="flush"
         onOpenChange={(open) => {
-          if (open !== (expandedMobilePlayer === index)) {
+          if (open !== expanded) {
             onTogglePlayer(index);
           }
         }}

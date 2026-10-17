@@ -48,6 +48,10 @@ export function useMatchNoteEditor({
     current.current = changeMatchNoteEditing(current.current, intent);
     setState(current.current);
   }, []);
+  const isNavigationAllowed = useCallback(
+    () => !requestPendingRef.current && !matchNoteInputView(current.current, undefined).dirty,
+    [],
+  );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const view = matchNoteInputView(state, match?.note);
 
@@ -160,8 +164,7 @@ export function useMatchNoteEditor({
     errorMessage,
     guard: {
       dirty: view.dirty,
-      isNavigationAllowed: () =>
-        !requestPendingRef.current && !matchNoteInputView(current.current, undefined).dirty,
+      isNavigationAllowed,
       onDiscard: cancel,
     },
     pending,

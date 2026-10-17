@@ -25,12 +25,7 @@ import { contentText } from "@/shared/ui/typography";
 
 /** Keep unrelated note/setup edits out of the score editor's urgent render. */
 export function ScoreGrid({ actions, data }: ScoreGridProps) {
-  const { acknowledgedCellIds, activeCellId, items } = data.review;
-  const review = useMemo(
-    () => ({ acknowledgedCellIds, activeCellId, items }),
-    [acknowledgedCellIds, activeCellId, items],
-  );
-  return <ScoreGridContent {...actions} {...data} review={review} />;
+  return <ScoreGridContent {...actions} {...data} />;
 }
 
 const ScoreGridContent = memo(function ScoreGridContent({

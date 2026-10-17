@@ -10,7 +10,7 @@ import type {
   PlayerRadarRevision,
   PlayerRadarRevisionDetail,
 } from "@/shared/api/seriesPlayerRadarHistory";
-import { getAuthorization } from "@/shared/auth/authorization";
+import { getAuthorization } from "@/shared/auth/authorizationQueryAdapter";
 import { AppMotionProvider } from "@/shared/ui/motion/AppMotionProvider";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";

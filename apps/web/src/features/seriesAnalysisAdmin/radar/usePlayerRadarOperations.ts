@@ -1,36 +1,27 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
 import {
   radarBasisPresentation,
   radarOperationState,
   radarDraftNoLongerOwned,
+  isRadarOperationInProgress,
 } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminPresentation";
 import type {
-  RadarAdminResource,
   RadarAdminHandlers,
   RadarEditingHandlers,
 } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminTypes";
-import { useRadarEditingEvaluation } from "@/features/seriesAnalysisAdmin/radar/useRadarEditingEvaluation";
-import { runIdempotentMutation } from "@/shared/api/idempotency";
-import { normalizeDisplayApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
-import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
-import { seriesAnalysisKeys, seriesPlayerRadarKeys } from "@/shared/api/queryKeys";
-import { seriesAnalysisOptionsQueryOptions } from "@/shared/api/seriesAnalysisQueryOptions";
 import {
-  requestSeriesPlayerRadarOperation,
-  seriesPlayerRadarOperationQueryOptions,
-  seriesPlayerRadarPreviewQueryOptions,
-  seriesPlayerRadarStateQueryOptions,
-} from "@/shared/api/seriesPlayerRadar";
+  useRadarAdministrationReads,
+  useRadarCommandSubmission,
+  useRadarCreationRead,
+} from "@/features/seriesAnalysisAdmin/radar/playerRadarQueryAdapter";
+import { useRadarEditingEvaluation } from "@/features/seriesAnalysisAdmin/radar/useRadarEditingEvaluation";
+import { normalizeDisplayApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import type {
   SeriesPlayerRadarCommand,
   SeriesPlayerRadarOperation,
 } from "@/shared/api/seriesPlayerRadar";
-import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
-import type { AuthorizationLease, AuthorizationAccess } from "@/shared/auth/authorization";
-
-type RadarCommandRequest = { request: SeriesPlayerRadarCommand; lease: AuthorizationLease };
+import type { AuthorizationAccess } from "@/shared/auth/authorization";
 
 /** Each mounted instance owns one title; scope changes never retarget a submitted command. */
 export function usePlayerRadarOperations(
@@ -38,8 +29,6 @@ export function usePlayerRadarOperations(
   authorization: AuthorizationAccess,
   onApplyAccepted?: (operationId: string) => void,
 ) {
-  const queryClient = useQueryClient();
-  const keys = useIdempotencyKeyStore();
   const commandPending = useRef(false);
   const mounted = useRef(false);
   const notifiedOperationId = useRef<string | null>(null);
@@ -59,49 +48,19 @@ export function usePlayerRadarOperations(
   const [editorActive, setEditorActive] = useState(false);
   const [checkingOperation, setCheckingOperation] = useState(false);
   const [checkError, setCheckError] = useState<unknown>();
-  const optionsQuery = useQuery(seriesAnalysisOptionsQueryOptions());
-  const stateOptions = seriesPlayerRadarStateQueryOptions(gameTitleId);
-  const canReadState = authorization.canRead("operations", stateOptions.queryKey);
-  const stateQuery = useQuery({
-    ...stateOptions,
-    enabled: () => canReadState && authorization.canRead("operations", stateOptions.queryKey),
-  });
-  const state = authorization.retained.operations ? stateQuery.data : undefined;
-  const title = optionsQuery.data?.titles.find((entry) => entry.gameTitleId === gameTitleId);
+  const reads = useRadarAdministrationReads(gameTitleId, scope, authorization);
+  const { resource, publishAcceptance, refreshAfterCreation } = reads;
+  const { title, state } = resource;
   const maps = title?.maps ?? [];
   const candidate = state?.candidate;
   const previewId = candidate?.latestPreview?.previewId;
-  const previewOptions = seriesPlayerRadarPreviewQueryOptions(
-    previewId
-      ? {
-          gameTitleId,
-          previewId,
-          seasonMasterId: scope.seasonMasterId || undefined,
-          mapMasterId: scope.mapMasterId || undefined,
-        }
-      : undefined,
-  );
-  const previewQuery = useQuery({
-    ...previewOptions,
-    enabled: () =>
-      authorization.allowed.operations &&
-      Boolean(previewOptions.enabled) &&
-      authorization.canRead("operations", previewOptions.queryKey),
-  });
-
-  const command = useMutation({
-    mutationFn: ({ request, lease }: RadarCommandRequest) => {
-      if (!mounted.current || !authorization.canCommit(lease))
-        throw new DOMException("権限を確認できません", "AbortError");
-      return runIdempotentMutation(keys, "seriesAnalysis.radarOperation", request, (options) =>
-        requestSeriesPlayerRadarOperation(request, options),
-      );
-    },
-    onMutate: () => setCheckError(undefined),
-    onError: (error, { lease }) => {
+  const command = useRadarCommandSubmission({
+    canSubmit: ({ lease }) => mounted.current && authorization.canCommit(lease),
+    onStart: () => setCheckError(undefined),
+    onFailure: (error, { lease }) => {
       if (mounted.current) authorization.reportError(error, lease);
     },
-    onSettled: () => {
+    onFinish: () => {
       commandPending.current = false;
     },
   });
@@ -109,8 +68,8 @@ export function usePlayerRadarOperations(
   // Keep a confirmed receipt during temporary auth checks. Its cache updates and navigation
   // resume once for the same authorized owner; a revoked owner never recreates protected data.
   useEffect(() => {
-    const response = command.data;
-    const submitted = command.variables;
+    const response = command.accepted;
+    const submitted = command.submitted;
     if (
       !response ||
       !submitted ||
@@ -120,17 +79,7 @@ export function usePlayerRadarOperations(
       return;
     handledAcceptance.current = response;
     const { request } = submitted;
-    queryClient.setQueryData(
-      seriesPlayerRadarKeys.operation(request.gameTitleId, response.operationId),
-      response,
-    );
-    // Read reconciliation does not keep the already accepted confirmation submitting.
-    void Promise.all([
-      queryClient.invalidateQueries({ queryKey: seriesPlayerRadarKeys.title(request.gameTitleId) }),
-      queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.adminRoot() }),
-      queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.statusRoot() }),
-      queryClient.invalidateQueries({ queryKey: seriesPlayerRadarKeys.scopeStatusRoot() }),
-    ]);
+    publishAcceptance(request, response);
     if (
       request.kind === "apply" &&
       ["pending", "running", "succeeded"].includes(response.status) &&
@@ -139,79 +88,46 @@ export function usePlayerRadarOperations(
       notifiedOperationId.current = response.operationId;
       onApplyAccepted?.(response.operationId);
     }
-  }, [authorization, command.data, command.variables, onApplyAccepted, queryClient]);
+  }, [authorization, command.accepted, command.submitted, onApplyAccepted, publishAcceptance]);
 
-  const currentCommand = command.variables
-    ? authorization.isCurrent(command.variables.lease)
+  const currentCommand = command.submitted
+    ? authorization.isCurrent(command.submitted.lease)
     : false;
-  const submittedRequest = command.variables?.request;
+  const submittedRequest = command.submitted?.request;
   const commandError = currentCommand ? command.error : undefined;
-  const accepted = currentCommand ? command.data : undefined;
+  const accepted = currentCommand ? command.accepted : undefined;
   const creationAccepted =
     accepted && (accepted.kind === "candidate" || accepted.kind === "restore")
       ? accepted
       : undefined;
-  const creationOptions = seriesPlayerRadarOperationQueryOptions(
-    gameTitleId,
-    creationAccepted?.operationId ?? "",
-  );
-  const creationQuery = useQuery({
-    ...creationOptions,
-    enabled: (query) => {
-      const status = query.state.data?.status ?? creationAccepted?.status;
-      return (
-        Boolean(creationAccepted) &&
-        authorization.canRead("operations", creationOptions.queryKey) &&
-        (status === "pending" || status === "running")
-      );
-    },
-    refetchOnWindowFocus: false,
-    refetchIntervalInBackground: false,
-    refetchInterval: (query) => {
-      if (query.state.status === "error") return false;
-      const status = query.state.data?.status ?? creationAccepted?.status;
-      return status === "pending" || status === "running" ? 2000 : false;
-    },
-  });
+  const creation = useRadarCreationRead(gameTitleId, creationAccepted, authorization);
   const completedCreation = useRef<string | null>(null);
   useEffect(() => {
-    const operation = creationQuery.data;
+    const operation = creation.operation;
     if (
       !creationAccepted ||
       !operation ||
       !authorization.allowed.operations ||
-      operation.status === "pending" ||
-      operation.status === "running" ||
+      isRadarOperationInProgress(operation.status) ||
       completedCreation.current === operation.operationId
     )
       return;
     completedCreation.current = operation.operationId;
-    void queryClient.invalidateQueries({ queryKey: seriesPlayerRadarKeys.title(gameTitleId) });
+    refreshAfterCreation();
   }, [
     authorization.allowed.operations,
     creationAccepted,
-    creationQuery.data,
-    gameTitleId,
-    queryClient,
+    creation.operation,
+    refreshAfterCreation,
   ]);
-  const resource: RadarAdminResource = {
-    state,
-    title,
-    scope,
-    preview: previewQuery.data,
-    previewFetching: previewQuery.isFetching,
-    previewFailed: previewQuery.isError,
-    stateFetching: stateQuery.isFetching,
-    stateFailed: stateQuery.isError,
-  };
   const basis = radarBasisPresentation(resource);
   const operation = radarOperationState({
     resource,
     previewState: basis.previewState,
     accepted,
-    creationOperation: creationQuery.data,
+    creationOperation: creation.operation,
     commandError,
-    pending: command.isPending,
+    pending: command.pending,
     checkingOperation,
     allowed: authorization.allowed.operations,
     paused: authorization.paused,
@@ -236,14 +152,14 @@ export function usePlayerRadarOperations(
     const lease = authorization.begin("operations");
     if (!lease) return;
     commandPending.current = true;
-    command.mutate({ request, lease });
+    command.submit({ request, lease });
   };
   const submitAsync = async (request: SeriesPlayerRadarCommand) => {
     if (commandPending.current) throw new Error("操作を受け付けています。");
     const lease = authorization.begin("operations");
     if (!lease) throw new DOMException("権限を確認できません", "AbortError");
     commandPending.current = true;
-    const response = await command.mutateAsync({ request, lease });
+    const response = await command.submitAndWait({ request, lease });
     if (!mounted.current || !authorization.canCommit(lease))
       throw new DOMException("権限を確認できません", "AbortError");
     return response;
@@ -252,17 +168,17 @@ export function usePlayerRadarOperations(
     const lease = authorization.begin("operations");
     if (!lease) return;
     setCheckError(undefined);
-    if (creationAccepted && creationQuery.isError) await creationQuery.refetch();
+    if (creationAccepted && creation.failed) await creation.refresh();
     if (!mounted.current || !authorization.canCommit(lease)) return;
-    const result = await stateQuery.refetch();
+    const result = await reads.refreshState();
     if (!mounted.current || !authorization.canCommit(lease)) return;
-    await optionsQuery.refetch();
+    await reads.refreshOptions();
     if (!mounted.current || !authorization.canCommit(lease)) return;
-    if (result.data?.candidate?.latestPreview?.previewId === previewId && previewId)
-      await previewQuery.refetch();
+    if (result.state?.candidate?.latestPreview?.previewId === previewId && previewId)
+      await reads.refreshPreview();
     await editingEvaluation.refresh(() => mounted.current && authorization.canCommit(lease));
     if (!mounted.current || !authorization.canCommit(lease)) return;
-    if (result.isSuccess && conflictNeedsRefresh) command.reset();
+    if (result.confirmed && conflictNeedsRefresh) command.clear();
   };
   const checkOperation = async () => {
     if (checkingOperation || commandPending.current) return;
@@ -275,11 +191,9 @@ export function usePlayerRadarOperations(
         // The same key recovers the durable acceptance when its response was lost.
         await submitAsync(submittedRequest);
       } else if (latestOperation) {
-        await queryClient.fetchQuery(
-          seriesPlayerRadarOperationQueryOptions(gameTitleId, latestOperation.operationId),
-        );
+        await reads.readOperation(latestOperation.operationId);
         if (!mounted.current || !authorization.canCommit(lease)) return;
-        await stateQuery.refetch();
+        await reads.refreshState();
       }
     } catch (error) {
       if (mounted.current && authorization.isCurrent(lease)) {
@@ -315,13 +229,12 @@ export function usePlayerRadarOperations(
           throw new DOMException("権限を確認できません", "AbortError");
         // The save receipt can precede the state cache. Only a fresh read after
         // the guarded rejection can prove this edit no longer owns a live draft.
-        const result = await stateQuery.refetch({ throwOnError: true });
+        const fresh = await reads.confirmState();
         if (!mounted.current || !authorization.canCommit(lease))
           throw new DOMException("権限を確認できません", "AbortError");
-        const fresh = result.isSuccess ? result.data : undefined;
         if (!radarDraftNoLongerOwned(fresh, gameTitleId, prepared.candidateId)) throw error;
         // Preserve the newer/shared server candidate; only this local edit ends.
-        command.reset();
+        command.clear();
       }
     },
     reuseCandidate: async (id) => {
@@ -398,23 +311,22 @@ export function usePlayerRadarOperations(
       accepted,
       creationAccepted,
       submittedRequest,
-      canCommit: Boolean(command.variables && authorization.canCommit(command.variables.lease)),
-      pending: command.isPending,
-      creationFailed: creationQuery.isError,
+      canCommit: Boolean(command.submitted && authorization.canCommit(command.submitted.lease)),
+      pending: command.pending,
+      creationFailed: creation.failed,
     },
     errors: {
       check: checkError,
-      creation: creationAccepted && creationQuery.isError ? creationQuery.error : null,
+      creation: creationAccepted && creation.failed ? creation.error : null,
       command: commandError,
-      state: shouldShowQueryError(stateQuery) ? stateQuery.error : null,
-      options: shouldShowQueryError(optionsQuery) ? optionsQuery.error : null,
+      ...reads.errors,
     },
     editingEvaluation,
     handlers,
     editingHandlers,
-    loading: isInitialQueryLoading(stateQuery),
-    error: shouldShowQueryError(stateQuery) ? normalizeDisplayApiError(stateQuery.error) : null,
-    refreshing: stateQuery.isFetching,
+    loading: reads.loading,
+    error: reads.errors.state ? normalizeDisplayApiError(reads.errors.state) : null,
+    refreshing: resource.stateFetching,
     refresh,
   };
 }

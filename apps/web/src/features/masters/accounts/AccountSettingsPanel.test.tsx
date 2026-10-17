@@ -12,7 +12,7 @@ import type {
   UpdateLoginAccountRequest,
 } from "@/shared/api/adminAccounts";
 import { adminAccountKeys } from "@/shared/api/queryKeys";
-import { getAuthorization } from "@/shared/auth/authorization";
+import { getAuthorization } from "@/shared/auth/authorizationQueryAdapter";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { mswState } from "@/test/msw/fixtures";

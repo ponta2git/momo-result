@@ -8,7 +8,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { OperationsRoute } from "@/app/routeGuards";
 import { SeriesAnalysisAdminPage } from "@/features/seriesAnalysisAdmin/SeriesAnalysisAdminPage";
 import { seriesPlayerRadarKeys } from "@/shared/api/queryKeys";
-import { getAuthorization } from "@/shared/auth/authorization";
+import { getAuthorization } from "@/shared/auth/authorizationQueryAdapter";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import { AppMotionProvider } from "@/shared/ui/motion/AppMotionProvider";
 import { setDevUser } from "@/test/auth";

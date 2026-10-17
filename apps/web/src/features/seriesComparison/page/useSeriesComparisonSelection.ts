@@ -1,12 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 
 import { seriesAnalysisScopeSignature } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import { buildSeriesAnalysisFilterOptions } from "@/features/seriesComparison/model/seriesAnalysisFilterOptions";
-import {
-  resolveSeriesAnalysisScopeIdentity,
-  seriesAnalysisScopeIdentityQuery,
-} from "@/features/seriesComparison/model/seriesAnalysisScopeIdentity";
+import { resolveSeriesAnalysisScopeIdentity } from "@/features/seriesComparison/model/seriesAnalysisScopeIdentity";
 import {
   changeSeriesAnalysisSelection,
   normalizeOutlookPair,
@@ -21,9 +17,7 @@ import {
   useSeriesAnalysisLocationRequest,
   useSeriesAnalysisLocationState,
 } from "@/features/seriesComparison/navigation/useSeriesAnalysisLocationState";
-import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
-import { seriesAnalysisOptionsQueryOptions } from "@/shared/api/seriesAnalysisQueryOptions";
-import { seriesAnalysisScopeStatusQueryOptions } from "@/shared/api/seriesPlayerRadar";
+import { useSeriesAnalysisSelectionReads } from "@/features/seriesComparison/page/useSeriesAnalysisReads";
 import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 type SeriesComparisonSelectionResolution =
@@ -34,21 +28,16 @@ type SeriesComparisonSelectionResolution =
 /** Resolves the requested scope before it can replace an existing comparison. */
 export function useSeriesComparisonSelection() {
   const request = useSeriesAnalysisLocationRequest();
-  const optionsQuery = useQuery(seriesAnalysisOptionsQueryOptions());
-  const identityQuery = useQuery(
-    seriesAnalysisScopeStatusQueryOptions(
-      seriesAnalysisScopeIdentityQuery(optionsQuery.data, request.selection),
-    ),
-  );
+  const reads = useSeriesAnalysisSelectionReads(request.selection);
   const scopeIdentity = useMemo(
     () =>
       resolveSeriesAnalysisScopeIdentity({
-        options: optionsQuery.data,
+        options: reads.options,
         requested: request.selection,
-        identity: identityQuery.data,
-        identityFailed: identityQuery.isError,
+        identity: reads.identity,
+        identityFailed: reads.identityFailed,
       }),
-    [identityQuery.data, identityQuery.isError, optionsQuery.data, request.selection],
+    [reads.identity, reads.identityFailed, reads.options, request.selection],
   );
   const normalizedSelection = useMemo(
     () => normalizeSeriesAnalysisSelection(scopeIdentity.options, request.selection),
@@ -86,17 +75,7 @@ export function useSeriesComparisonSelection() {
     () => buildSeriesAnalysisFilterOptions(scopeIdentity.options, location.state),
     [location.state, scopeIdentity.options],
   );
-  const { refetch: refetchOptions } = optionsQuery;
-  const { isEnabled: identityEnabled, refetch: refetchIdentity } = identityQuery;
-  const refresh = useCallback(() => {
-    void refetchOptions();
-    if (identityEnabled) void refetchIdentity();
-  }, [identityEnabled, refetchIdentity, refetchOptions]);
-  const refreshing = optionsQuery.isFetching || identityQuery.isFetching;
-  const optionsFailed = useRetryNotice(
-    shouldShowQueryError(optionsQuery) || shouldShowQueryError(identityQuery),
-    refreshing,
-  );
+  const optionsFailed = useRetryNotice(reads.failed, reads.refreshing);
 
   return {
     ...location,
@@ -113,11 +92,11 @@ export function useSeriesComparisonSelection() {
     },
     options: {
       hasError: optionsFailed,
-      hasVisibleData: optionsQuery.data !== undefined,
-      loading: !optionsFailed && isInitialQueryLoading(optionsQuery),
-      refreshing,
+      hasVisibleData: reads.options !== undefined,
+      loading: !optionsFailed && reads.loading,
+      refreshing: reads.refreshing,
     },
-    refresh,
+    refresh: reads.refresh,
     resolution,
   };
 }

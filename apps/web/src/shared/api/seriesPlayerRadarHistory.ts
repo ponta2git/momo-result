@@ -1,9 +1,6 @@
-import { queryOptions } from "@tanstack/react-query";
-
 import { apiRequest } from "@/shared/api/client";
 import type { ApiSignalOptions } from "@/shared/api/client";
 import type { components } from "@/shared/api/generated";
-import { seriesPlayerRadarKeys } from "@/shared/api/queryKeys";
 import { decodeSeriesAnalysisContract } from "@/shared/api/seriesAnalysisContractDecoder";
 
 export type PlayerRadarRevision = components["schemas"]["SeriesPlayerRadarRevisionResponse"];
@@ -58,24 +55,4 @@ export function getPlayerRadarRevision(
         ),
     },
   );
-}
-
-export function playerRadarHistoryQueryOptions(query: PlayerRadarHistoryQuery) {
-  return queryOptions({
-    queryKey: [...seriesPlayerRadarKeys.all(), "revisions-v1", query] as const,
-    queryFn: ({ signal }) => getPlayerRadarHistory(query, { signal }),
-    staleTime: 0,
-    placeholderData: () => undefined,
-  });
-}
-
-export function playerRadarRevisionQueryOptions(revisionId: string | undefined) {
-  return queryOptions({
-    queryKey: [...seriesPlayerRadarKeys.all(), "revision-v1", revisionId] as const,
-    queryFn: ({ signal }) => {
-      if (!revisionId) throw new Error("radar revision is not selected");
-      return getPlayerRadarRevision(revisionId, { signal });
-    },
-    placeholderData: () => undefined,
-  });
 }

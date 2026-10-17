@@ -12,6 +12,7 @@ import type {
   NotificationSettingsUpdate,
 } from "@/shared/api/notificationSettings";
 import { notificationSettingsKeys } from "@/shared/api/queryKeys";
+import { getAuthorization } from "@/shared/auth/authorizationQueryAdapter";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { setupMsw } from "@/test/msw/lifecycle";
@@ -176,6 +177,80 @@ describe("NotificationSettingsPanel", () => {
     expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
     expect(screen.queryByText("未保存の変更があります")).not.toBeInTheDocument();
   });
+
+  it.each(["admin", "operator"] as const)(
+    "accepts a confirmed save only when an authorization recheck retains admin access (%s)",
+    async (role) => {
+      const submitted = createDeferred();
+      const committed = createDeferred();
+      const permissionReadStarted = createDeferred();
+      const permissionChecked = createDeferred();
+      const submissions: NotificationSettingsUpdate[] = [];
+      let reads = 0;
+      server.use(
+        http.get(path, () => {
+          reads += 1;
+          return HttpResponse.json(structuredClone(saved));
+        }),
+        http.put(path, async ({ request }) => {
+          submissions.push((await request.json()) as NotificationSettingsUpdate);
+          submitted.resolve();
+          await committed.promise;
+          saved.ocrCompleted = { enabled: false, generation: "1" };
+          return HttpResponse.json(structuredClone(saved));
+        }),
+      );
+      renderPage();
+      await chooseOcrOff();
+      await confirmOff();
+      await submitted.promise;
+      server.use(
+        http.get("/api/auth/me", async () => {
+          permissionReadStarted.resolve();
+          await permissionChecked.promise;
+          return HttpResponse.json({ accountId: "account_ponta", displayName: "ぽんた", role });
+        }),
+      );
+      const authorization = getAuthorization(queryClient, "account_ponta");
+      let recheck: Promise<void> | undefined;
+      act(() => {
+        recheck = authorization.recheck();
+      });
+      await permissionReadStarted.promise;
+      await act(async () => committed.resolve());
+      await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+      expectSaved("ON", "ON");
+      expect(screen.getByRole("checkbox", { name: "OCR完了" })).toBeDisabled();
+      expect(screen.queryByText("通知設定を保存しました。")).not.toBeInTheDocument();
+      expect(reads).toBe(1);
+
+      await act(async () => {
+        permissionChecked.resolve();
+        await recheck;
+      });
+      if (role === "admin") {
+        expect(await screen.findByText("通知設定を保存しました。")).toBeInTheDocument();
+        expectSaved("OFF", "ON");
+        await waitFor(() =>
+          expect(screen.getByRole("checkbox", { name: "OCR完了" })).toBeEnabled(),
+        );
+        expect(queryClient.getQueryData(notificationSettingsKeys.all())).toEqual(saved);
+      } else {
+        await waitFor(() =>
+          expect(queryClient.getQueryData(notificationSettingsKeys.all())).toBeUndefined(),
+        );
+        expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+        expect(screen.queryByText("通知設定を保存しました。")).not.toBeInTheDocument();
+        expect(reads).toBe(1);
+      }
+      expect(submissions).toEqual([
+        {
+          ocrCompleted: { enabled: false, expectedGeneration: "0" },
+          analysisCompleted: { enabled: true, expectedGeneration: "0" },
+        },
+      ]);
+    },
+  );
 
   it("keeps controls unavailable on initial failure and can reload", async () => {
     server.use(http.get(path, () => problem(503, "DEPENDENCY_FAILED")));

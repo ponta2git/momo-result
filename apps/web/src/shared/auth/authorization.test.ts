@@ -22,8 +22,8 @@ import {
 import {
   seriesAnalysisScopeStatusQueryOptions,
   seriesPlayerRadarStateQueryOptions,
-} from "@/shared/api/seriesPlayerRadar";
-import { getAuthorization } from "@/shared/auth/authorization";
+} from "@/shared/api/seriesPlayerRadarQueryOptions";
+import { getAuthorization } from "@/shared/auth/authorizationQueryAdapter";
 import { authMeQueryKeyFor, authQueryOptions } from "@/shared/auth/authQueries";
 import { createDeferred } from "@/test/deferred";
 import { setupMsw } from "@/test/msw/lifecycle";

@@ -1,26 +1,12 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
+import { useAnalysisRecalculationSubmission } from "@/features/seriesAnalysisAdmin/analysisAdminQueryAdapter";
 import { recalculationTargetForTitle } from "@/features/seriesAnalysisAdmin/seriesAnalysisAdminPresentation";
-import type {
-  AnalysisAdminTitle,
-  RecalculationTarget,
-} from "@/features/seriesAnalysisAdmin/seriesAnalysisAdminPresentation";
-import { runIdempotentMutation } from "@/shared/api/idempotency";
-import { seriesAnalysisKeys } from "@/shared/api/queryKeys";
-import {
-  requestAllSeriesAnalysisRecalculation,
-  requestSeriesAnalysisRecalculation,
-} from "@/shared/api/seriesAnalysis";
+import type { AnalysisAdminTitle } from "@/features/seriesAnalysisAdmin/seriesAnalysisAdminPresentation";
 import type { SeriesAnalysisRecalculationAccepted } from "@/shared/api/seriesAnalysis";
-import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import type { AuthorizationLease, AuthorizationOperations } from "@/shared/auth/authorization";
 
-type RecalculationRequest = { target: RecalculationTarget; lease: AuthorizationLease };
-
 export function useSeriesAnalysisRecalculation(authorization: AuthorizationOperations) {
-  const queryClient = useQueryClient();
-  const idempotencyKeys = useIdempotencyKeyStore();
   const activeCommand = useRef<AuthorizationLease | undefined>(undefined);
   const hasPendingCommand = () =>
     Boolean(activeCommand.current && authorization.isCurrent(activeCommand.current));
@@ -32,35 +18,20 @@ export function useSeriesAnalysisRecalculation(authorization: AuthorizationOpera
       mounted.current = false;
     };
   }, []);
-  const mutation = useMutation({
-    mutationFn: ({ target, lease }: RecalculationRequest) => {
-      if (!mounted.current || !authorization.canCommit(lease))
-        throw new DOMException("権限を確認できません", "AbortError");
-      return target.kind === "title"
-        ? runIdempotentMutation(
-            idempotencyKeys,
-            "seriesAnalysis.recalculateTitle",
-            { gameTitleId: target.gameTitleId },
-            (options) => requestSeriesAnalysisRecalculation(target.gameTitleId, options),
-          )
-        : runIdempotentMutation(
-            idempotencyKeys,
-            "seriesAnalysis.recalculateAll",
-            { confirmation: "all_titles" },
-            requestAllSeriesAnalysisRecalculation,
-          );
-    },
-    onError: (error, { lease }) => {
+  const submission = useAnalysisRecalculationSubmission({
+    canSubmit: ({ lease }) => mounted.current && authorization.canCommit(lease),
+    onFailure: (error, { lease }) => {
       if (mounted.current) authorization.reportError(error, lease);
     },
-    onSettled: (_data, _error, { lease }) => {
+    onFinish: ({ lease }) => {
       if (activeCommand.current === lease) activeCommand.current = undefined;
     },
   });
+  const { reconcileAcceptance } = submission;
   // A 202 received during an auth check remains a receipt; only its authorized owner reconciles it.
   useEffect(() => {
-    const response = mutation.data;
-    const request = mutation.variables;
+    const response = submission.accepted;
+    const request = submission.submitted;
     if (
       !response ||
       !request ||
@@ -69,26 +40,25 @@ export function useSeriesAnalysisRecalculation(authorization: AuthorizationOpera
     )
       return;
     handledAcceptance.current = response;
-    void Promise.all([
-      queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.adminRoot() }),
-      queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.statusRoot() }),
-    ]);
-  }, [authorization, mutation.data, mutation.variables, queryClient]);
-  const current = mutation.variables ? authorization.isCurrent(mutation.variables.lease) : false;
+    reconcileAcceptance();
+  }, [authorization, submission.accepted, submission.submitted, reconcileAcceptance]);
+  const current = submission.submitted
+    ? authorization.isCurrent(submission.submitted.lease)
+    : false;
   return {
-    target: mutation.variables?.target,
-    response: current ? mutation.data : undefined,
-    error: current ? mutation.error : null,
-    pending: current && mutation.isPending,
+    target: submission.submitted?.target,
+    response: current ? submission.accepted : undefined,
+    error: current ? submission.error : null,
+    pending: current && submission.pending,
     clearFeedback: () => {
-      if (!hasPendingCommand()) mutation.reset();
+      if (!hasPendingCommand()) submission.clear();
     },
     recalculateAll: async (titleCount: number) => {
       if (hasPendingCommand() || !titleCount) return;
       const lease = authorization.begin("admin");
       if (!lease) return;
       activeCommand.current = lease;
-      await mutation.mutateAsync({ target: { kind: "all" }, lease });
+      await submission.submitAndWait({ target: { kind: "all" }, lease });
     },
     recalculateTitle: (title: AnalysisAdminTitle | null) => {
       const target = recalculationTargetForTitle(title);
@@ -96,7 +66,7 @@ export function useSeriesAnalysisRecalculation(authorization: AuthorizationOpera
       const lease = authorization.begin("operations");
       if (!lease) return;
       activeCommand.current = lease;
-      mutation.mutate({ target, lease });
+      submission.submit({ target, lease });
     },
   };
 }

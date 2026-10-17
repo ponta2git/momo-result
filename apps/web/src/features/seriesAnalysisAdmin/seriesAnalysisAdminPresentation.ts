@@ -9,33 +9,16 @@ export type RecalculationTarget =
   | { kind: "all" }
   | { kind: "title"; gameTitleId: string; gameTitleName: string };
 
-export function selectAnalysisAdminOverview({
-  requestedTitleId,
-  source,
-  sourceUpdatedAt,
-  canonical,
-  canonicalUpdatedAt,
-  retained,
-}: {
-  requestedTitleId: string | undefined;
-  source: SeriesAnalysisAdminOverview | undefined;
-  sourceUpdatedAt: number;
-  canonical: SeriesAnalysisAdminOverview | undefined;
-  canonicalUpdatedAt: number;
-  retained: boolean;
-}) {
-  const canonicalTitleId = source?.selectedTitle?.gameTitleId;
-  const hasNewerCanonical =
-    !requestedTitleId && canonicalTitleId && canonicalUpdatedAt > sourceUpdatedAt;
-  const data = retained ? (hasNewerCanonical ? canonical : source) : undefined;
-  const gameTitleId = requestedTitleId ?? canonicalTitleId;
+export function selectAnalysisAdminOverview(
+  data: SeriesAnalysisAdminOverview | undefined,
+  gameTitleId: string | undefined,
+) {
   const selectedTitle =
     data?.selectedTitle && data.selectedTitle.gameTitleId === gameTitleId
       ? data.selectedTitle
       : null;
   return {
     data,
-    canonicalTitleId,
     selection: {
       gameTitleId,
       selectedTitle,

@@ -6,7 +6,7 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { PlayerRadarAdministration } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarAdministration";
 import { seriesPlayerRadarKeys } from "@/shared/api/queryKeys";
-import { getAuthorization } from "@/shared/auth/authorization";
+import { getAuthorization } from "@/shared/auth/authorizationQueryAdapter";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { mswState } from "@/test/msw/fixtures";

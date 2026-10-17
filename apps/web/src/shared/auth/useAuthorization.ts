@@ -1,12 +1,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useSyncExternalStore } from "react";
 
-import { getAuthorization } from "@/shared/auth/authorization";
 import type {
   AuthorizationAccess,
   AuthorizationOperations,
   PermissionFacts,
 } from "@/shared/auth/authorization";
+import { getAuthorization } from "@/shared/auth/authorizationQueryAdapter";
 import { authQueryOptions } from "@/shared/auth/authQueries";
 import type { ManagementPermission } from "@/shared/auth/permissions";
 import { useAuthStatus } from "@/shared/auth/useAuthStatus";

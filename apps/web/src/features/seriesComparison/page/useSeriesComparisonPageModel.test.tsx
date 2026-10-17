@@ -33,7 +33,15 @@ import { createTestQueryClient } from "@/test/queryClient";
 setupMsw();
 
 // Query lifecycle is the oracle here; prepare the large generated validator before timed UI waits.
-beforeAll(() => decodeSeriesAnalysisArtifact("aggregateV5", makeSeriesAnalysisAggregate()));
+beforeAll(() =>
+  Promise.all([
+    decodeSeriesAnalysisArtifact("aggregateV5", makeSeriesAnalysisAggregate()),
+    decodeSeriesAnalysisArtifact(
+      "matchContext",
+      makeSeriesAnalysisExcludedMatchContext("not_in_scope"),
+    ),
+  ]),
+);
 
 function PageModelHarness({
   onFocusChange,

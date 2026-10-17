@@ -31,6 +31,12 @@ import {
 } from "@/shared/seriesAnalysis/playerRadarDisplay";
 import { playerRadarAxes } from "@/shared/seriesAnalysis/playerRadarPresentation";
 
+export function isRadarOperationInProgress(
+  status: SeriesPlayerRadarOperation["status"] | undefined,
+): boolean {
+  return status === "pending" || status === "running";
+}
+
 export function radarSubmissionUncertain(error: unknown): boolean {
   if (!error) return false;
   const normalized = normalizeUnknownApiError(error);

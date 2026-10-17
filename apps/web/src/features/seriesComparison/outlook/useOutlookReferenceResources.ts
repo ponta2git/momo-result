@@ -2,7 +2,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 
 import type { OutlookReferenceResources } from "@/features/seriesComparison/outlook/outlookReferenceTypes";
-import { seriesAnalysisKeys } from "@/shared/api/queryKeys";
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
 import {
   seriesAnalysisOutlookExamplesQueryOptions,
@@ -47,28 +46,26 @@ export function useOutlookReferenceResources(
   const retryExamples = useCallback(async () => {
     await refetchExamples();
   }, [refetchExamples]);
-  const refetchStatus = useCallback(
-    async () => ({
-      data: await queryClient.fetchQuery({
-        ...seriesAnalysisStatusQueryOptions(response.artifact.gameTitleId),
-        staleTime: 0,
-      }),
-    }),
-    [queryClient, response.artifact.gameTitleId],
-  );
+  const refreshPublication = useCallback(async () => {
+    const status = await queryClient.fetchQuery({
+      ...seriesAnalysisStatusQueryOptions(response.artifact.gameTitleId),
+      staleTime: 0,
+    });
+    return status.currentArtifact?.artifactId;
+  }, [queryClient, response.artifact.gameTitleId]);
   useAnalysisArtifactRecovery({
     artifactId: windowParams?.artifactId,
     error: window.error,
-    queryKey: seriesAnalysisKeys.outlookWindow(windowParams),
-    refetchArtifact: window.refetch,
-    refetchStatus,
+    resourceId: JSON.stringify(["outlook-window", windowParams]),
+    refreshResource: retryWindow,
+    refreshPublication,
   });
   useAnalysisArtifactRecovery({
     artifactId: examplesParams?.artifactId,
     error: examples.error,
-    queryKey: seriesAnalysisKeys.outlookExamples(examplesParams),
-    refetchArtifact: examples.refetch,
-    refetchStatus,
+    resourceId: JSON.stringify(["outlook-examples", examplesParams]),
+    refreshResource: retryExamples,
+    refreshPublication,
   });
   return {
     window: {

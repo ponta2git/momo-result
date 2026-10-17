@@ -1,4 +1,3 @@
-import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 
 import type {
@@ -9,24 +8,15 @@ import type {
 import { defaultLayoutFamily } from "@/features/masters/catalog/catalogValidation";
 import { useMasterCatalogCreateActions } from "@/features/masters/catalog/useMasterCatalogCreateActions";
 import { useMasterCatalogMutations } from "@/features/masters/catalog/useMasterCatalogMutations";
-import { useMasterCatalogQueries } from "@/features/masters/catalog/useMasterCatalogQueries";
+import { useMasterCatalogResource } from "@/features/masters/catalog/useMasterCatalogResource";
 import { useMasterOptimisticCatalog } from "@/features/masters/catalog/useMasterOptimisticCatalog";
-import {
-  masterDirectoryState,
-  masterResourceErrorMessage,
-} from "@/features/masters/masterDirectoryState";
-import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
-import { useAuthorizationOperations, usePermissionFacts } from "@/shared/auth/useAuthorization";
-import { useRetryNotice } from "@/shared/lib/useRetryNotice";
+import { usePermissionFacts } from "@/shared/auth/useAuthorization";
 
 /** Owns the selected title and its related catalog, including optimistic and confirmed changes. */
 export function useMasterCatalog(enabled: boolean) {
-  const authorization = useAuthorizationOperations();
   const admin = usePermissionFacts("admin");
   const operations = usePermissionFacts("operations");
-  const authScope = String(operations.epoch);
-  const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
   const nowIsoFactory = useCallback(() => new Date().toISOString(), []);
   const [selectedGameTitleId, setSelectedGameTitleId] = useState("");
@@ -35,16 +25,15 @@ export function useMasterCatalog(enabled: boolean) {
     setCompletions((current) => ({ ...current, [`${kind}:${scope}`]: message }));
   }, []);
 
-  const resourceQueries = useMasterCatalogQueries(
-    selectedGameTitleId,
-    operations.allowed && enabled,
-  );
-  const { gameTitles, mapMasters, seasonMasters } = resourceQueries;
+  const resource = useMasterCatalogResource(selectedGameTitleId, operations.allowed && enabled);
+  const { refresh: refreshGameTitles, ...gameTitles } = resource.gameTitles;
+  const { refresh: refreshMapMasters, ...mapMasters } = resource.mapMasters;
+  const { refresh: refreshSeasonMasters, ...seasonMasters } = resource.seasonMasters;
   const optimisticCatalog = useMasterOptimisticCatalog({
-    fallbackSelectedGameTitleId: resourceQueries.selectedGameTitleId,
-    gameTitles,
-    mapMasters,
-    seasonMasters,
+    fallbackSelectedGameTitleId: resource.selectedGameTitleId,
+    gameTitles: gameTitles.items,
+    mapMasters: mapMasters.items,
+    seasonMasters: seasonMasters.items,
     selectedGameTitleId,
   });
   const { selection } = optimisticCatalog;
@@ -57,7 +46,6 @@ export function useMasterCatalog(enabled: boolean) {
     idempotencyKeys,
     nowIsoFactory,
     optimisticGameTitleCount: optimisticCatalog.optimisticGameTitles.length,
-    queryClient,
     selectedMapMasterCount: selection.selectedMapMasters.length,
     selectedSeasonMasterCount: selection.selectedSeasonMasters.length,
     onGameTitleCreated: setSelectedGameTitleId,
@@ -67,7 +55,6 @@ export function useMasterCatalog(enabled: boolean) {
   const mutations = useMasterCatalogMutations({
     onFeedback,
     idempotencyKeys,
-    queryClient,
     selectedGameTitleId: selection.selectedGameTitleId,
     onGameTitleDeleted: (id) =>
       setSelectedGameTitleId((current) => (current === id ? "" : current)),
@@ -77,46 +64,6 @@ export function useMasterCatalog(enabled: boolean) {
     (admin.retained && createActions.gameTitleCreatePending) ||
     (operations.retained &&
       (createActions.mapCreatePending || createActions.seasonCreatePending || mutations.pending));
-  const gameTitlesHasError = useRetryNotice(
-    shouldShowQueryError(resourceQueries.gameTitlesQuery),
-    resourceQueries.gameTitlesQuery.isFetching,
-    authScope,
-  );
-  const mapMastersHasError = useRetryNotice(
-    shouldShowQueryError(resourceQueries.mapMastersQuery),
-    resourceQueries.mapMastersQuery.isFetching,
-    `${authScope}:${resourceQueries.selectedGameTitleId}`,
-  );
-  const seasonMastersHasError = useRetryNotice(
-    shouldShowQueryError(resourceQueries.seasonMastersQuery),
-    resourceQueries.seasonMastersQuery.isFetching,
-    `${authScope}:${resourceQueries.selectedGameTitleId}`,
-  );
-
-  const mapError = useRetryNotice(
-    masterResourceErrorMessage(resourceQueries.mapMastersQuery.error),
-    resourceQueries.mapMastersQuery.isFetching,
-    resourceQueries.selectedGameTitleId,
-  );
-  const seasonError = useRetryNotice(
-    masterResourceErrorMessage(resourceQueries.seasonMastersQuery.error),
-    resourceQueries.seasonMastersQuery.isFetching,
-    resourceQueries.selectedGameTitleId,
-  );
-  const mapState = masterDirectoryState({
-    hasData: resourceQueries.mapMastersQuery.data !== undefined,
-    failed: mapMastersHasError,
-    initialLoading: isInitialQueryLoading(resourceQueries.mapMastersQuery),
-    fetching: resourceQueries.mapMastersQuery.isFetching,
-    mutationPending: hasPendingMutation,
-  });
-  const seasonState = masterDirectoryState({
-    hasData: resourceQueries.seasonMastersQuery.data !== undefined,
-    failed: seasonMastersHasError,
-    initialLoading: isInitialQueryLoading(resourceQueries.seasonMastersQuery),
-    fetching: resourceQueries.seasonMastersQuery.isFetching,
-    mutationPending: hasPendingMutation,
-  });
   const gameTitleItems: readonly OptimisticGameTitle[] = optimisticCatalog.optimisticGameTitles;
   const mapItems: readonly OptimisticMapMaster[] = selection.selectedMapMasters;
   const seasonItems: readonly OptimisticSeasonMaster[] = selection.selectedSeasonMasters;
@@ -124,13 +71,8 @@ export function useMasterCatalog(enabled: boolean) {
   return {
     catalog: {
       gameTitle: {
-        ...masterDirectoryState({
-          hasData: resourceQueries.gameTitlesQuery.data !== undefined,
-          failed: gameTitlesHasError,
-          initialLoading: isInitialQueryLoading(resourceQueries.gameTitlesQuery),
-          fetching: resourceQueries.gameTitlesQuery.isFetching,
-          mutationPending: hasPendingMutation,
-        }),
+        ...gameTitles,
+        refreshing: gameTitles.refreshing && !hasPendingMutation,
         canEdit: admin.retained,
         completion: completions["gameTitle:"],
         create: {
@@ -142,15 +84,14 @@ export function useMasterCatalog(enabled: boolean) {
         defaultLayoutFamily,
         items: gameTitleItems,
         onDelete: mutations.deleteGameTitle,
-        onRetry: async () =>
-          Boolean(authorization.begin("operations")) &&
-          (await resourceQueries.gameTitlesQuery.refetch()).isSuccess,
+        onRetry: refreshGameTitles,
         onSelect: (id: string) => setSelectedGameTitleId(id),
         onUpdate: mutations.updateGameTitle,
         selectedId: selection.selectedGameTitleId,
       },
       map: {
-        ...mapState,
+        ...mapMasters,
+        refreshing: mapMasters.refreshing && !hasPendingMutation,
         completion: completions[`map:${selection.selectedGameTitleId}`],
         create: {
           scopeKey: selection.selectedGameTitleId,
@@ -159,18 +100,16 @@ export function useMasterCatalog(enabled: boolean) {
           formKey: createActions.mapCreateState.version,
           pending: createActions.mapCreatePending,
         },
-        error: mapMastersHasError ? mapError : undefined,
         items: mapItems,
         onDelete: mutations.deleteMapMaster,
-        onRetry: () => {
-          if (authorization.begin("operations")) void resourceQueries.mapMastersQuery.refetch();
-        },
+        onRetry: refreshMapMasters,
         onUpdate: mutations.updateMapMaster,
-        retrying: mapState.refreshing,
+        retrying: mapMasters.refreshing && !hasPendingMutation,
       },
       scopedDisabledReason: selection.scopedDisabledReason,
       season: {
-        ...seasonState,
+        ...seasonMasters,
+        refreshing: seasonMasters.refreshing && !hasPendingMutation,
         completion: completions[`season:${selection.selectedGameTitleId}`],
         create: {
           scopeKey: selection.selectedGameTitleId,
@@ -179,14 +118,11 @@ export function useMasterCatalog(enabled: boolean) {
           formKey: createActions.seasonCreateState.version,
           pending: createActions.seasonCreatePending,
         },
-        error: seasonMastersHasError ? seasonError : undefined,
         items: seasonItems,
         onDelete: mutations.deleteSeasonMaster,
-        onRetry: () => {
-          if (authorization.begin("operations")) void resourceQueries.seasonMastersQuery.refetch();
-        },
+        onRetry: refreshSeasonMasters,
         onUpdate: mutations.updateSeasonMaster,
-        retrying: seasonState.refreshing,
+        retrying: seasonMasters.refreshing && !hasPendingMutation,
       },
     },
     pending: hasPendingMutation,

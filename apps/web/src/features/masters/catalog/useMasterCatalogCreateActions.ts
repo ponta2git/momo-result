@@ -1,5 +1,3 @@
-import type { QueryClient } from "@tanstack/react-query";
-
 import {
   parseGameTitleCreate,
   parseScopedMasterCreate,
@@ -11,15 +9,9 @@ import type {
   OptimisticMapMaster,
   OptimisticSeasonMaster,
 } from "@/features/masters/catalog/catalogTypes";
-import {
-  cacheCreatedMaster,
-  invalidateMasterResourceCaches,
-} from "@/features/masters/masterResourceCache";
+import { useMasterCatalogWrites } from "@/features/masters/catalog/useMasterCatalogWrites";
 import type { IdempotencyKeyStore } from "@/shared/api/idempotency";
-import { runIdempotentOperationAttempt } from "@/shared/api/idempotency";
-import { createGameTitle, createMapMaster, createSeasonMaster } from "@/shared/api/masters";
 import { formatApiError } from "@/shared/api/problemDetails";
-import { masterKeys } from "@/shared/api/queryKeys";
 import { useAuthorizationOperations } from "@/shared/auth/useAuthorization";
 import { useAuthorizedAction } from "@/shared/auth/useAuthorizedAction";
 
@@ -35,13 +27,13 @@ export function useMasterCatalogCreateActions(input: {
   idempotencyKeys: IdempotencyKeyStore;
   nowIsoFactory: () => string;
   optimisticGameTitleCount: number;
-  queryClient: QueryClient;
   selectedMapMasterCount: number;
   selectedSeasonMasterCount: number;
   onGameTitleCreated: (id: string) => void;
   selectedGameTitleId: string;
 }) {
   const authorization = useAuthorizationOperations();
+  const writes = useMasterCatalogWrites(input.idempotencyKeys);
   const [gameTitleCreateState, gameTitleCreateAction, gameTitleCreatePending] =
     useAuthorizedAction<MasterCreateState>(
       authorization,
@@ -59,17 +51,7 @@ export function useMasterCatalogCreateActions(input: {
         );
         input.addOptimisticGameTitle(optimistic);
         try {
-          const created = await runIdempotentOperationAttempt(attempt, (options) =>
-            createGameTitle(request, options),
-          );
-          if (!authorization.isSameAccount(lease)) return prev;
-          await cacheCreatedMaster(input.queryClient, masterKeys.gameTitles.list(), created, () =>
-            authorization.isSameAccount(lease),
-          );
-          if (authorization.canCommit(lease)) input.onGameTitleCreated(created.id);
-          await invalidateMasterResourceCaches(input.queryClient, "game-titles", () =>
-            authorization.canCommit(lease),
-          );
+          await writes.createGameTitle(attempt, request, lease, input.onGameTitleCreated);
           if (!authorization.isCurrent(lease)) return prev;
           input.onFeedback("gameTitle", "", "作品を追加しました");
           return { error: undefined, version: prev.version + 1 };
@@ -106,19 +88,7 @@ export function useMasterCatalogCreateActions(input: {
       );
       input.addOptimisticMapMaster(optimistic);
       try {
-        const created = await runIdempotentOperationAttempt(attempt, (options) =>
-          createMapMaster(request, options),
-        );
-        if (!authorization.isSameAccount(lease)) return states;
-        await cacheCreatedMaster(
-          input.queryClient,
-          masterKeys.mapMasters.list(gameTitleId),
-          created,
-          () => authorization.isSameAccount(lease),
-        );
-        await invalidateMasterResourceCaches(input.queryClient, "map-masters", () =>
-          authorization.canCommit(lease),
-        );
+        await writes.createMapMaster(attempt, request, lease);
         if (!authorization.isCurrent(lease)) return states;
         input.onFeedback("map", gameTitleId, "マップを追加しました");
         return { ...states, [scope]: { version: prev.version + 1 } };
@@ -158,19 +128,7 @@ export function useMasterCatalogCreateActions(input: {
       );
       input.addOptimisticSeasonMaster(optimistic);
       try {
-        const created = await runIdempotentOperationAttempt(attempt, (options) =>
-          createSeasonMaster(request, options),
-        );
-        if (!authorization.isSameAccount(lease)) return states;
-        await cacheCreatedMaster(
-          input.queryClient,
-          masterKeys.seasonMasters.list(gameTitleId),
-          created,
-          () => authorization.isSameAccount(lease),
-        );
-        await invalidateMasterResourceCaches(input.queryClient, "season-masters", () =>
-          authorization.canCommit(lease),
-        );
+        await writes.createSeasonMaster(attempt, request, lease);
         if (!authorization.isCurrent(lease)) return states;
         input.onFeedback("season", gameTitleId, "シーズンを追加しました");
         return { ...states, [scope]: { version: prev.version + 1 } };

@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
+import { useCallback } from "react";
 
 import {
   buildMatchAnalysis,
   matchAnalysisQuery,
 } from "@/features/matches/detail/matchDetailPresentation";
 import type { MatchDetailResponse } from "@/shared/api/matches";
-import { seriesAnalysisKeys } from "@/shared/api/queryKeys";
 import { readSeriesAnalysisMatchContext } from "@/shared/api/seriesAnalysisMatchContextState";
 import {
   seriesAnalysisMatchContextQueryOptions,
@@ -31,12 +31,19 @@ export function useMatchAnalysis(match: MatchDetailResponse | undefined) {
   } = contextQuery;
   const { context: contextData, error: contextError } =
     readSeriesAnalysisMatchContext(contextQuery);
+  const refreshResource = useCallback(async () => {
+    await refetchContext();
+  }, [refetchContext]);
+  const refreshPublication = useCallback(async () => {
+    const result = await refetchStatus({ cancelRefetch: false });
+    return result.data?.currentArtifact?.artifactId;
+  }, [refetchStatus]);
   useAnalysisArtifactRecovery({
     artifactId: contextQueryParams?.artifactId,
     error: contextError,
-    queryKey: seriesAnalysisKeys.matchContext(contextQueryParams),
-    refetchArtifact: refetchContext,
-    refetchStatus,
+    resourceId: JSON.stringify(["match-context", contextQueryParams]),
+    refreshResource,
+    refreshPublication,
   });
 
   return buildMatchAnalysis({

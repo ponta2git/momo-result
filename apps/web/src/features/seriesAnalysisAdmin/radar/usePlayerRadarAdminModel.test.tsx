@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { usePlayerRadarAdminModel } from "@/features/seriesAnalysisAdmin/radar/usePlayerRadarAdminModel";
-import { getAuthorization } from "@/shared/auth/authorization";
+import { getAuthorization } from "@/shared/auth/authorizationQueryAdapter";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { mswState } from "@/test/msw/fixtures";

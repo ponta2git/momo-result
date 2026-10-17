@@ -10,5 +10,5 @@ export type AuthStatus = {
   readonly isForbidden: boolean;
   readonly isRefetching: boolean;
   readonly isUnauthorized: boolean;
-  readonly refetch: () => Promise<unknown>;
+  readonly refetch: () => Promise<void>;
 };

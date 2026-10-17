@@ -68,8 +68,8 @@ export function parseAccountCreateForm(
   };
 }
 
-/** Initial failure, cached empty data, and an in-flight write remain distinct. */
-export function buildAccountSettingsView(input: {
+/** Initial failure and a cached empty account list remain distinct. */
+export function buildAccountListView(input: {
   authChecking: boolean;
   initialLoading: boolean;
   loadFailed: boolean;
@@ -77,12 +77,9 @@ export function buildAccountSettingsView(input: {
   error: unknown;
   items: ReadonlyArray<Readonly<LoginAccountResponse>>;
   fetching: boolean;
-  createPending: boolean;
-  updatePending: boolean;
   refresh: () => Promise<boolean>;
-}) {
-  const pending = input.createPending || input.updatePending;
-  const refresh = { pending: input.fetching && !pending, run: input.refresh };
+}): AdminAccountListView {
+  const refresh = { pending: input.fetching, run: input.refresh };
   let list: AdminAccountListView;
   if (input.authChecking || (input.initialLoading && !input.loadFailed)) {
     list = { kind: "loading" };
@@ -95,6 +92,22 @@ export function buildAccountSettingsView(input: {
   } else {
     list = { items: input.items, kind: "ready", refresh, stale: input.stale };
   }
+  return list;
+}
+
+export function buildAccountSettingsView(input: {
+  list: AdminAccountListView;
+  createPending: boolean;
+  updatePending: boolean;
+}) {
+  const pending = input.createPending || input.updatePending;
+  const list: AdminAccountListView =
+    input.list.kind === "loading"
+      ? input.list
+      : {
+          ...input.list,
+          refresh: { ...input.list.refresh, pending: input.list.refresh.pending && !pending },
+        };
   return { list, pending, createDisabled: list.kind !== "ready" || pending };
 }
 

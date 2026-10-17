@@ -12,6 +12,13 @@ export type NotificationFeedback = {
   message: string;
   requiresReload?: true;
 };
+export type NotificationSettingsRead = {
+  readonly refreshing: boolean;
+  readonly reloadRequired: boolean;
+} & (
+  | { readonly kind: "loading" | "failed" }
+  | { readonly kind: "ready"; readonly confirmed: NotificationSettings; readonly stale: boolean }
+);
 type SettingsResource =
   | { readonly status: "loading" | "failed" }
   | { readonly status: "ready"; readonly savedValues: Values; readonly values: Values };
@@ -81,31 +88,29 @@ export function notificationSaveError(error: unknown): NotificationFeedback {
 
 /** Resolves the editable resource and the exact versioned save represented by the draft. */
 export function buildNotificationSettingsView(input: {
-  confirmed: NotificationSettings | undefined;
+  read: NotificationSettingsRead;
   draft: NotificationDraft | undefined;
   feedback: NotificationFeedback | undefined;
   canEdit: boolean;
   retainEdits: boolean;
   pending: boolean;
-  fetching: boolean;
-  failed: boolean;
-  queryError: boolean;
 }): NotificationSettingsView & { readonly savePlan: SavePlan } {
-  const { confirmed, draft, feedback } = input;
+  const { read, draft, feedback } = input;
+  const confirmed = read.kind === "ready" ? read.confirmed : undefined;
   const resource: SettingsResource = confirmed
     ? {
         status: "ready",
         savedValues: valuesOf(confirmed),
         values: draft?.values ?? valuesOf(confirmed),
       }
-    : { status: input.failed ? "failed" : "loading" };
+    : { status: read.kind === "failed" ? "failed" : "loading" };
   const dirty = Boolean(
     draft &&
     (draft.values.ocrCompleted !== draft.base.ocrCompleted.enabled ||
       draft.values.analysisCompleted !== draft.base.analysisCompleted.enabled),
   );
-  const needsReload = Boolean(feedback?.requiresReload || input.queryError);
-  const disabled = !input.canEdit || input.pending || input.fetching || needsReload;
+  const needsReload = Boolean(feedback?.requiresReload || read.reloadRequired);
+  const disabled = !input.canEdit || input.pending || read.refreshing || needsReload;
   const turnsOff = Boolean(
     draft &&
     (Object.keys(draft.values) as NotificationKind[]).some(
@@ -129,7 +134,7 @@ export function buildNotificationSettingsView(input: {
           },
         }
       : { kind: "blocked" };
-  const stale = confirmed !== undefined && input.failed;
+  const stale = read.kind === "ready" && read.stale;
   const retainedDirty = input.retainEdits && dirty;
 
   return {
@@ -140,13 +145,13 @@ export function buildNotificationSettingsView(input: {
     issue: feedback?.tone === "success" ? undefined : feedback,
     status: {
       completion: !input.pending && feedback?.tone === "success" ? feedback.message : undefined,
-      checking: input.fetching && !input.pending && !needsReload && !stale,
+      checking: read.refreshing && !input.pending && !needsReload && !stale,
       unsaved: !input.pending && !feedback && !needsReload && retainedDirty,
     },
     pending: input.pending,
     stale,
     needsReload,
-    refreshing: input.fetching,
+    refreshing: read.refreshing,
     savePlan,
   };
 }

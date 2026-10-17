@@ -11,12 +11,12 @@ import {
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import type { OwnerMetricId } from "@/features/seriesComparison/model/seriesAnalysisOwnerMetrics";
-import { defaultSeriesAnalysisView } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import { defaultSeriesAnalysisView } from "@/features/seriesComparison/model/seriesAnalysisSelection";
 import type {
   SeriesAnalysisSelection,
   SeriesAnalysisSelectionChange,
   SeriesAnalysisViewId,
-} from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+} from "@/features/seriesComparison/model/seriesAnalysisSelection";
 import {
   buildSeriesAnalysisSearchParams,
   parseSeriesAnalysisSearchParams,

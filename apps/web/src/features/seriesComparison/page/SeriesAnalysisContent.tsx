@@ -12,7 +12,7 @@ import type { OwnerMetricId } from "@/features/seriesComparison/model/seriesAnal
 import type {
   SeriesAnalysisSelection,
   SeriesAnalysisViewId,
-} from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+} from "@/features/seriesComparison/model/seriesAnalysisSelection";
 import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/model/seriesAnalysisViewTypes";
 import { SeriesAnalysisArrival } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
 import { OutlookLoading } from "@/features/seriesComparison/outlook/OutlookLoading";

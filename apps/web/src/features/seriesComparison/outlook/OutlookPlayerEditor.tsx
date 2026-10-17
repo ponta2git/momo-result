@@ -1,7 +1,7 @@
-import type { CumulativePair } from "@/features/seriesComparison/model/outlook";
+import type { CumulativePair } from "@/features/seriesComparison/outlook/calculation";
 import { OutlookEditor } from "@/features/seriesComparison/outlook/OutlookEditor";
-import type { OutlookRole } from "@/features/seriesComparison/outlook/outlookSession";
-import { useOutlookPlayerModel } from "@/features/seriesComparison/outlook/useOutlookPlayerModel";
+import type { OutlookRole } from "@/features/seriesComparison/outlook/outlookWorkspaceState";
+import { useOutlookPlayerEditor } from "@/features/seriesComparison/outlook/useOutlookPlayerEditor";
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { Button } from "@/shared/ui/actions/Button";
@@ -21,7 +21,7 @@ type Props = {
 /** A named player's condition stays next to both ways of changing it. */
 export function OutlookPlayerEditor(props: Props) {
   const { response, cumulative, role, names, memberIds, showComparison = false } = props;
-  const model = useOutlookPlayerModel({
+  const playerEditor = useOutlookPlayerEditor({
     response,
     cumulative,
     role,
@@ -29,7 +29,7 @@ export function OutlookPlayerEditor(props: Props) {
     memberId: memberIds[role],
     showComparison,
   });
-  const { editor, dialog } = model;
+  const { editor, dialog } = playerEditor;
   const proposal = dialog.proposal;
   return (
     <section className="grid min-w-0 grid-cols-1 gap-2" aria-label={`${names[role]}の成績を試す`}>
@@ -48,7 +48,7 @@ export function OutlookPlayerEditor(props: Props) {
         method="mean"
         name={names[role]}
         label="これからの平均順位"
-        edit={model.edit}
+        edit={playerEditor.edit}
       />
       <div className="grid gap-1">
         <p className={contentText.supporting} aria-label={`${names[role]}の直近からの差`}>
@@ -61,7 +61,7 @@ export function OutlookPlayerEditor(props: Props) {
             variant="quiet"
             disabled={editor.unchanged}
             aria-label={`${names[role]}を直近の成績に戻す`}
-            onClick={model.resetRecent}
+            onClick={playerEditor.resetRecent}
           >
             直近に戻す
           </Button>

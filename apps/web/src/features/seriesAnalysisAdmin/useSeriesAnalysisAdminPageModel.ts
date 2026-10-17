@@ -1,4 +1,4 @@
-import { recalculationPresentation } from "@/features/seriesAnalysisAdmin/seriesAnalysisAdminModel";
+import { recalculationPresentation } from "@/features/seriesAnalysisAdmin/seriesAnalysisAdminPresentation";
 import { useSeriesAnalysisAdminLocation } from "@/features/seriesAnalysisAdmin/useSeriesAnalysisAdminLocation";
 import { useSeriesAnalysisAdminNavigation } from "@/features/seriesAnalysisAdmin/useSeriesAnalysisAdminNavigation";
 import { useSeriesAnalysisAdminOverview } from "@/features/seriesAnalysisAdmin/useSeriesAnalysisAdminOverview";

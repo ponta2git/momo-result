@@ -1,8 +1,8 @@
-import { seriesAnalysisQueryFromState } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import { seriesAnalysisQueryFromSelection } from "@/features/seriesComparison/model/seriesAnalysisSelection";
 import type {
   SeriesAnalysisSelection,
   SeriesAnalysisViewId,
-} from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+} from "@/features/seriesComparison/model/seriesAnalysisSelection";
 import type {
   SeriesAnalysisMatchContextQuery,
   SeriesAnalysisOutlookSummaryQuery,
@@ -46,11 +46,11 @@ export function planSeriesAnalysisRead({
   if (scopeState !== "available" && !emptyTitleOutlook) {
     return { kind: "unavailable", reason: scopeState };
   }
-  const context = seriesAnalysisQueryFromState(state, artifactId);
+  const context = seriesAnalysisQueryFromSelection(state, artifactId);
   if (!context) return { kind: "waiting" };
   if (activeView === "outlook") return { kind: "outlook", query: context };
   const query =
-    activeView === "review" ? context : seriesAnalysisQueryFromState(deferredState, artifactId);
+    activeView === "review" ? context : seriesAnalysisQueryFromSelection(deferredState, artifactId);
   if (!query) return { kind: "waiting" };
   return {
     kind: activeView === "review" ? "review" : "analysis",

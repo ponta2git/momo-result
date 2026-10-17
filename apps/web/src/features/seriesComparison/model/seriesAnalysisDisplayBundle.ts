@@ -1,7 +1,7 @@
 import type {
   SeriesAnalysisSelection,
   SeriesAnalysisViewId,
-} from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+} from "@/features/seriesComparison/model/seriesAnalysisSelection";
 import type {
   SeriesAnalysisMatchContextV3,
   SeriesAnalysisScope,

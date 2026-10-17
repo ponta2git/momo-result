@@ -5,8 +5,8 @@ import { http, HttpResponse } from "msw";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { OutlookSessionOwner } from "@/features/seriesComparison/outlook/OutlookSessionOwner";
 import { OutlookView } from "@/features/seriesComparison/outlook/OutlookView";
+import { OutlookWorkspaceProvider } from "@/features/seriesComparison/outlook/OutlookWorkspaceProvider";
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
 import { setDevUser } from "@/test/auth";
 import { setupMsw } from "@/test/msw/lifecycle";
@@ -70,9 +70,9 @@ function renderOutlook(
           `/analytics/series?gameTitleId=${response.artifact.gameTitleId}&view=outlook`,
         ]}
       >
-        <OutlookSessionOwner>
+        <OutlookWorkspaceProvider>
           <RoutedWorkspace response={summary} memberIds={people} />
-        </OutlookSessionOwner>
+        </OutlookWorkspaceProvider>
       </MemoryRouter>
     </QueryClientProvider>
   );

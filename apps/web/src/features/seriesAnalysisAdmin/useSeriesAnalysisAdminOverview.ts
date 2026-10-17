@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 
-import { selectAnalysisAdminOverview } from "@/features/seriesAnalysisAdmin/seriesAnalysisAdminModel";
+import { selectAnalysisAdminOverview } from "@/features/seriesAnalysisAdmin/seriesAnalysisAdminPresentation";
 import type { useSeriesAnalysisAdminLocation } from "@/features/seriesAnalysisAdmin/useSeriesAnalysisAdminLocation";
 import { normalizeDisplayApiError } from "@/shared/api/problemDetails";
 import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";

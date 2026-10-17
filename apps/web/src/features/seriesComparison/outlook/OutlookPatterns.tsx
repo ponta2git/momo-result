@@ -10,20 +10,20 @@ import {
   projectOutlook,
   rational,
   rationalToNumber,
-} from "@/features/seriesComparison/model/outlook";
+} from "@/features/seriesComparison/outlook/calculation";
 import type {
   CumulativePair,
   OutlookExample,
   RankDistribution,
   Rational,
-} from "@/features/seriesComparison/model/outlook";
+} from "@/features/seriesComparison/outlook/calculation";
 import { OutlookChart } from "@/features/seriesComparison/outlook/OutlookChart";
 import type {
   OutlookChartPattern,
   OutlookChartPoint,
   OutlookChartSelection,
 } from "@/features/seriesComparison/outlook/OutlookChart";
-import type { OutlookResultView } from "@/features/seriesComparison/outlook/outlookViews";
+import type { OutlookResultView } from "@/features/seriesComparison/outlook/outlookProjections";
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
 import { canonicalResultMemberIds, orderFixedMembers } from "@/shared/domain/members";
 import {

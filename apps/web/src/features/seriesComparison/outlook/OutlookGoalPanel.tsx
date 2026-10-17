@@ -5,12 +5,15 @@ import {
   areDistributionsCompatible,
   distributionMean,
   formatRational,
-} from "@/features/seriesComparison/model/outlook";
-import type { CumulativePair, RankDistribution } from "@/features/seriesComparison/model/outlook";
+} from "@/features/seriesComparison/outlook/calculation";
+import type {
+  CumulativePair,
+  RankDistribution,
+} from "@/features/seriesComparison/outlook/calculation";
+import { OutlookPastExamples } from "@/features/seriesComparison/outlook/OutlookPastExamples";
 import { outlookAverage } from "@/features/seriesComparison/outlook/outlookPresentation";
-import { OutlookPastExamples } from "@/features/seriesComparison/outlook/OutlookReferences";
 import { OutlookUndoButton } from "@/features/seriesComparison/outlook/OutlookScenarioComparison";
-import { useOutlookGoalModel } from "@/features/seriesComparison/outlook/useOutlookGoalModel";
+import { useOutlookGoal } from "@/features/seriesComparison/outlook/useOutlookGoal";
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
 import { formatDateOnly } from "@/shared/lib/dateTime";
 import { Button } from "@/shared/ui/actions/Button";
@@ -43,7 +46,7 @@ export function OutlookGoalPanel({
   const headingId = useId();
   const conditionId = useId();
   const pendingId = useId();
-  const model = useOutlookGoalModel({ response, cumulative, memberIds, recent });
+  const goal = useOutlookGoal({ response, cumulative, memberIds, recent });
   const {
     goalHorizon,
     valid,
@@ -60,7 +63,7 @@ export function OutlookGoalPanel({
     reviewHeading,
     historical,
     window,
-  } = model;
+  } = goal;
   return (
     <section className="grid min-w-0 gap-6" aria-labelledby={headingId} data-outlook-preserve-draft>
       <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[minmax(18rem,2fr)_minmax(0,3fr)]">
@@ -109,7 +112,7 @@ export function OutlookGoalPanel({
               disabled={!valid || opponentPending || (!reaches && maximum === null)}
               aria-describedby={opponentPending ? `${conditionId} ${pendingId}` : conditionId}
               onClick={() => {
-                if (model.apply()) onUsePerformance();
+                if (goal.apply()) onUsePerformance();
               }}
             >
               {performanceMean === undefined

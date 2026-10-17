@@ -8,7 +8,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import {
   changeSeriesAnalysisSelection,
   normalizeSeriesAnalysisSelection,
-} from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+} from "@/features/seriesComparison/model/seriesAnalysisSelection";
 import { SeriesAnalysisNavigation } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
 import {
   useSeriesAnalysisLocationRequest,

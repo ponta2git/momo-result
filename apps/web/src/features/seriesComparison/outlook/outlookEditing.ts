@@ -8,7 +8,7 @@ import {
   meanInput,
   nearestWholeCounts,
   wholeCountCapacities,
-} from "@/features/seriesComparison/model/outlook";
+} from "@/features/seriesComparison/outlook/calculation";
 import {
   applyOutlookDistribution,
   beginOutlookGesture,
@@ -17,12 +17,12 @@ import {
   pinOutlook,
   undoOutlook,
   updateOutlookEntry,
-} from "@/features/seriesComparison/outlook/outlookSession";
+} from "@/features/seriesComparison/outlook/outlookWorkspaceState";
 import type {
   OutlookRankIndex,
   OutlookRole,
-  OutlookSession,
-} from "@/features/seriesComparison/outlook/outlookSession";
+  OutlookWorkspaceState,
+} from "@/features/seriesComparison/outlook/outlookWorkspaceState";
 
 export function parseOutlookHorizon(text: string) {
   const value = Number(text);
@@ -48,7 +48,7 @@ export type OutlookEdit =
   | { kind: "chart-range"; range: 50 | 100 | 200 }
   | { kind: "examples-open"; role: OutlookRole; open: boolean };
 
-function setMean(current: OutlookSession, role: OutlookRole, hundredths: number) {
+function setMean(current: OutlookWorkspaceState, role: OutlookRole, hundredths: number) {
   const start = current.gesture?.before[role].distribution ?? current.entries[role].distribution;
   const startMean = distributionMean(start);
   if (startMean.numerator * 100n === BigInt(hundredths) * startMean.denominator)
@@ -70,7 +70,7 @@ function setMean(current: OutlookSession, role: OutlookRole, hundredths: number)
       });
 }
 
-function commitMean(current: OutlookSession, role: OutlookRole) {
+function commitMean(current: OutlookWorkspaceState, role: OutlookRole) {
   const edited = current.entries[role];
   if (edited.meanDraft === undefined) return current;
   const mean = distributionMean(edited.distribution);
@@ -93,7 +93,7 @@ function commitMean(current: OutlookSession, role: OutlookRole) {
       });
 }
 
-function transferCount(current: OutlookSession, role: OutlookRole, value: number) {
+function transferCount(current: OutlookWorkspaceState, role: OutlookRole, value: number) {
   const [gain, lose] = current.transfer;
   const origin = current.gesture?.before[role].distribution ?? current.entries[role].distribution;
   const other = current.entries[otherRole(role)].distribution;
@@ -116,7 +116,10 @@ function transferCount(current: OutlookSession, role: OutlookRole, value: number
 }
 
 /** Every editing intent is resolved against the latest complete pair before one commit. */
-export function editOutlook(current: OutlookSession, edit: OutlookEdit): OutlookSession {
+export function editOutlook(
+  current: OutlookWorkspaceState,
+  edit: OutlookEdit,
+): OutlookWorkspaceState {
   switch (edit.kind) {
     case "mean-draft":
       return updateOutlookEntry(current, edit.role, { meanDraft: edit.text, error: undefined });

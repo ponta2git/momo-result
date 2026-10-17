@@ -1,36 +1,40 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { seriesAnalysisFocusExclusionNotice } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
-import { useOutlookComparisonLifecycle } from "@/features/seriesComparison/outlook/OutlookSessionOwner";
-import { useSeriesAnalysisResult } from "@/features/seriesComparison/page/useSeriesAnalysisResult";
+import { useOutlookComparisonLifecycle } from "@/features/seriesComparison/outlook/OutlookWorkspaceProvider";
+import { useSeriesAnalysisDisplay } from "@/features/seriesComparison/page/useSeriesAnalysisDisplay";
 import { useSeriesComparisonSelection } from "@/features/seriesComparison/page/useSeriesComparisonSelection";
 
-/** Composes location, option, and artifact owners into the display-ready page contract. */
+/** Composes selection controls and the accepted comparison into the display-ready page contract. */
 export function useSeriesComparisonPageModel() {
   const [focusNotice, setFocusNotice] = useState<string | undefined>();
-  const selection = useSeriesComparisonSelection();
-  const { clearFocusedMatch, clearScope, focusMatch: focusMatchInLocation } = selection.actions;
-  const selectionResolution = selection.resolution;
+  const selectionControls = useSeriesComparisonSelection();
+  const {
+    clearFocusedMatch,
+    clearScope,
+    focusMatch: focusMatchInLocation,
+  } = selectionControls.actions;
+  const selectionResolution = selectionControls.resolution;
   const deferOutlookAdoption = useOutlookComparisonLifecycle(selectionResolution);
-  const analysis = useSeriesAnalysisResult({
-    activeView: selection.activeView,
-    deferredState: selection.deferredState,
-    state: selection.state,
+  const display = useSeriesAnalysisDisplay({
+    activeView: selectionControls.activeView,
+    deferredState: selectionControls.deferredState,
+    state: selectionControls.state,
     selectionStatus:
       selectionResolution.kind === "pending"
-        ? selection.options.hasError && !selection.options.refreshing
+        ? selectionControls.options.hasError && !selectionControls.options.refreshing
           ? "blocked"
           : "pending"
         : "ready",
     deferOutlookAdoption,
   });
-  const refreshAnalysis = analysis.refresh;
+  const refreshDisplay = display.refresh;
 
   const excludedFocusNotice =
-    analysis.resolution.kind === "excluded" &&
-    selection.state.focusMatchId &&
-    analysis.candidateArtifactId
-      ? seriesAnalysisFocusExclusionNotice(analysis.resolution.status)
+    display.resolution.kind === "excluded" &&
+    selectionControls.state.focusMatchId &&
+    display.candidateArtifactId
+      ? seriesAnalysisFocusExclusionNotice(display.resolution.status)
       : undefined;
   if (excludedFocusNotice !== undefined && focusNotice !== excludedFocusNotice) {
     setFocusNotice(excludedFocusNotice);
@@ -46,11 +50,11 @@ export function useSeriesComparisonPageModel() {
     },
     [focusMatchInLocation],
   );
-  const refreshSelection = selection.refresh;
+  const refreshSelection = selectionControls.refresh;
   const refresh = useCallback(() => {
     refreshSelection();
-    refreshAnalysis();
-  }, [refreshAnalysis, refreshSelection]);
+    refreshDisplay();
+  }, [refreshDisplay, refreshSelection]);
 
   return {
     actions: {
@@ -59,15 +63,15 @@ export function useSeriesComparisonPageModel() {
       focusMatch,
       refresh,
     },
-    filters: selection.filters,
+    filters: selectionControls.filters,
     focus: {
-      ...analysis.focus,
+      ...display.focus,
       notice: focusNotice,
     },
-    options: selection.options,
-    resource: analysis.resource,
-    displayIntent: selection.displayIntent,
-    normalizationNotice: selection.normalizationNotice,
-    status: analysis.status,
+    options: selectionControls.options,
+    resource: display.resource,
+    displayIntent: selectionControls.displayIntent,
+    normalizationNotice: selectionControls.normalizationNotice,
+    status: display.status,
   };
 }

@@ -1,5 +1,5 @@
-import type { PlayerRadarAdminModel } from "@/features/seriesAnalysisAdmin/playerRadarAdminModel";
-import { radarBasisInput } from "@/features/seriesAnalysisAdmin/radarThresholdInput";
+import type { PlayerRadarAdminModel } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminTypes";
+import { radarBasisInput } from "@/features/seriesAnalysisAdmin/radar/radarThresholdInput";
 import {
   playerRadarBasisDisplay,
   playerRadarEvaluationDisplay,

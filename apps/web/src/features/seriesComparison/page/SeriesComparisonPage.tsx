@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 
 import { matchesSeriesAnalysisScope } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import { SeriesAnalysisNavigation } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
-import { OutlookSessionOwner } from "@/features/seriesComparison/outlook/OutlookSessionOwner";
+import { OutlookWorkspaceProvider } from "@/features/seriesComparison/outlook/OutlookWorkspaceProvider";
 import {
   preloadSeriesAnalysisView,
   SeriesAnalysisContent,
@@ -26,9 +26,9 @@ import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
 export function SeriesComparisonPage() {
   return (
-    <OutlookSessionOwner>
+    <OutlookWorkspaceProvider>
       <SeriesComparisonPageContent />
-    </OutlookSessionOwner>
+    </OutlookWorkspaceProvider>
   );
 }
 
@@ -52,10 +52,10 @@ function SeriesComparisonPageContent() {
     resource.shielded ||
     focus.shielded ||
     focus.loading;
-  const [requestedRetryOwner, setRequestedRetryOwner] = useState<
+  const [requestedRetryTarget, setRequestedRetryTarget] = useState<
     "options" | "status" | "resource"
   >();
-  const defaultRetryOwner = options.hasError
+  const defaultRetryTarget = options.hasError
     ? "options"
     : status.hasError || (!status.loading && !status.data?.currentArtifact)
       ? "status"
@@ -64,16 +64,16 @@ function SeriesComparisonPageContent() {
         : undefined;
 
   const requestedRetryStillVisible =
-    requestedRetryOwner === "options"
+    requestedRetryTarget === "options"
       ? options.hasError
-      : requestedRetryOwner === "status"
+      : requestedRetryTarget === "status"
         ? status.hasError || (!status.loading && !status.data?.currentArtifact)
-        : requestedRetryOwner === "resource"
+        : requestedRetryTarget === "resource"
           ? resource.hasError && !resource.data
           : false;
-  const retryOwner = requestedRetryStillVisible ? requestedRetryOwner : defaultRetryOwner;
-  const retry = (owner: "options" | "status" | "resource") => {
-    setRequestedRetryOwner(owner);
+  const retryTarget = requestedRetryStillVisible ? requestedRetryTarget : defaultRetryTarget;
+  const retry = (target: "options" | "status" | "resource") => {
+    setRequestedRetryTarget(target);
     page.actions.refresh();
   };
 
@@ -104,7 +104,7 @@ function SeriesComparisonPageContent() {
             <Notice
               action={
                 <Button
-                  pending={updating && retryOwner === "options"}
+                  pending={updating && retryTarget === "options"}
                   pendingLabel="再読み込み中"
                   size="sm"
                   variant={options.hasVisibleData ? "secondary" : "primary"}
@@ -142,11 +142,11 @@ function SeriesComparisonPageContent() {
                 canRefresh={
                   (resource.canRefresh || Boolean(filters.state.gameTitleId)) &&
                   !updating &&
-                  !retryOwner
+                  !retryTarget
                 }
                 mapOptions={filters.mapOptions}
                 mapValue={filters.state.mapMasterId ?? ""}
-                refreshing={updating && !retryOwner && Boolean(resource.data) && !purposeChanging}
+                refreshing={updating && !retryTarget && Boolean(resource.data) && !purposeChanging}
                 response={
                   matchesSeriesAnalysisScope(resource.data, filters.state)
                     ? resource.data
@@ -170,7 +170,7 @@ function SeriesComparisonPageContent() {
                 confirmedMatchCount={filters.confirmedMatchCount}
                 hasError={status.hasError}
                 loading={status.loading}
-                refreshing={updating && retryOwner === "status"}
+                refreshing={updating && retryTarget === "status"}
                 status={status.data}
                 onRefresh={() => retry("status")}
               />
@@ -228,7 +228,7 @@ function SeriesComparisonPageContent() {
                 <Notice
                   action={
                     <Button
-                      pending={updating && retryOwner === "resource"}
+                      pending={updating && retryTarget === "resource"}
                       pendingLabel="再読み込み中"
                       size="sm"
                       onClick={() => retry("resource")}

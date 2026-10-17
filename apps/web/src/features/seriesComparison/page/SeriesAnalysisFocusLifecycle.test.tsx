@@ -6,9 +6,9 @@ import { useState } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import type { SeriesAnalysisSelection } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import type { SeriesAnalysisSelection } from "@/features/seriesComparison/model/seriesAnalysisSelection";
 import { SeriesAnalysisContent } from "@/features/seriesComparison/page/SeriesAnalysisContent";
-import { useSeriesAnalysisResult } from "@/features/seriesComparison/page/useSeriesAnalysisResult";
+import { useSeriesAnalysisDisplay } from "@/features/seriesComparison/page/useSeriesAnalysisDisplay";
 import { seriesAnalysisKeys } from "@/shared/api/queryKeys";
 import { decodeSeriesAnalysisArtifact } from "@/shared/api/seriesAnalysisArtifactDecoder";
 import { setDevUser } from "@/test/auth";
@@ -48,7 +48,7 @@ function Harness() {
     focusMatchId: "match-12",
     view: "context",
   });
-  const analysis = useSeriesAnalysisResult({
+  const analysis = useSeriesAnalysisDisplay({
     activeView: "context",
     state,
     deferredState: state,

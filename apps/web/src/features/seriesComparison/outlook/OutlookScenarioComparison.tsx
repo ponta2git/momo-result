@@ -1,6 +1,6 @@
 import { Undo2 } from "lucide-react";
 
-import type { CumulativePair } from "@/features/seriesComparison/model/outlook";
+import type { CumulativePair } from "@/features/seriesComparison/outlook/calculation";
 import {
   compareOutlookOutcomes,
   outlookOutcome,
@@ -8,7 +8,7 @@ import {
 import {
   useOutlookResultView,
   useOutlookToolbar,
-} from "@/features/seriesComparison/outlook/useOutlookViewModels";
+} from "@/features/seriesComparison/outlook/useOutlookWorkspace";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { contentText } from "@/shared/ui/typography";

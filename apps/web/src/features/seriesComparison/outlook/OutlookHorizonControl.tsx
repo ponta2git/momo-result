@@ -2,7 +2,7 @@ import { useId, useState } from "react";
 import type { ReactNode } from "react";
 
 import { parseOutlookHorizon } from "@/features/seriesComparison/outlook/outlookEditing";
-import { useOutlookGoalHorizon } from "@/features/seriesComparison/outlook/useOutlookViewModels";
+import { useOutlookGoalHorizon } from "@/features/seriesComparison/outlook/useOutlookWorkspace";
 import { cn } from "@/shared/ui/cn";
 import { InputControl } from "@/shared/ui/forms/Control";
 import { buildFieldDescribedBy, Field } from "@/shared/ui/forms/Field";

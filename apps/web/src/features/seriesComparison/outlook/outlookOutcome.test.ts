@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { distributionFromCounts } from "@/features/seriesComparison/model/outlook";
+import { distributionFromCounts } from "@/features/seriesComparison/outlook/calculation";
 import {
   compareOutlookOutcomes,
   outlookOutcome,

@@ -6,8 +6,8 @@ import {
   defaultSeriesAnalysisView,
   normalizeSeriesAnalysisView,
   isSeriesAnalysisViewId,
-} from "@/features/seriesComparison/model/seriesAnalysisViewModel";
-import type { SeriesAnalysisSelection } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+} from "@/features/seriesComparison/model/seriesAnalysisSelection";
+import type { SeriesAnalysisSelection } from "@/features/seriesComparison/model/seriesAnalysisSelection";
 
 export function parseSeriesAnalysisSearchParams(params: URLSearchParams): SeriesAnalysisSelection {
   const gameTitleId = params.get("gameTitleId")?.trim() || undefined;

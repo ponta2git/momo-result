@@ -1,4 +1,4 @@
-import type { SeriesAnalysisSelection } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import type { SeriesAnalysisSelection } from "@/features/seriesComparison/model/seriesAnalysisSelection";
 import type { SeriesAnalysisOptionsResponse } from "@/shared/api/seriesAnalysis";
 import type {
   SeriesAnalysisScopeStatus,

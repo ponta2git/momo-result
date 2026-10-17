@@ -7,7 +7,7 @@ import {
   playbookCategoryLabel,
   reviewEvidenceLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
-import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisSelection";
 import { useSeriesAnalysisNavigation } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
 import { SeriesAnalysisSectionLink } from "@/features/seriesComparison/navigation/SeriesAnalysisSectionLink";
 import { SeriesAnalysisReviewHelpDialog } from "@/features/seriesComparison/page/SeriesAnalysisReviewHelpDialog";

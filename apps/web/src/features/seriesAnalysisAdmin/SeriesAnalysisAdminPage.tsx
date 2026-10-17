@@ -1,7 +1,7 @@
 import { Activity, Play, RefreshCw, RotateCw } from "lucide-react";
 
-import { PlayerRadarAdministration } from "@/features/seriesAnalysisAdmin/PlayerRadarAdministration";
-import { PlayerRadarHistory } from "@/features/seriesAnalysisAdmin/PlayerRadarHistory";
+import { PlayerRadarAdministration } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarAdministration";
+import { PlayerRadarHistory } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarHistory";
 import {
   AdminSkeleton,
   ExecutionStatus,

@@ -7,14 +7,14 @@ import { Link, MemoryRouter, Route, Routes, useLocation } from "react-router-dom
 import { beforeAll, describe, expect, it } from "vitest";
 
 import {
+  OutlookWorkspaceProvider,
+  useOutlookWorkspaceStore,
+} from "@/features/seriesComparison/outlook/OutlookWorkspaceProvider";
+import {
   adoptOutlookSummary,
   updateOutlookEntry,
-} from "@/features/seriesComparison/outlook/outlookSession";
-import type { OutlookSession } from "@/features/seriesComparison/outlook/outlookSession";
-import {
-  OutlookSessionOwner,
-  useOutlookInternalStore,
-} from "@/features/seriesComparison/outlook/OutlookSessionOwner";
+} from "@/features/seriesComparison/outlook/outlookWorkspaceState";
+import type { OutlookWorkspaceState } from "@/features/seriesComparison/outlook/outlookWorkspaceState";
 import { useSeriesComparisonPageModel } from "@/features/seriesComparison/page/useSeriesComparisonPageModel";
 import { decodeSeriesAnalysisArtifact } from "@/shared/api/seriesAnalysisArtifactDecoder";
 import { canonicalResultMemberIds } from "@/shared/domain/members";
@@ -61,15 +61,15 @@ function PageModelHarness({
   );
 }
 
-function RetainedOutlookHarness({ initial }: { initial: OutlookSession }) {
-  const store = useOutlookInternalStore();
-  const session = useSyncExternalStore(store.subscribe, store.read);
+function RetainedOutlookHarness({ initial }: { initial: OutlookWorkspaceState }) {
+  const store = useOutlookWorkspaceStore();
+  const state = useSyncExternalStore(store.subscribe, store.read);
   return (
     <>
       <button type="button" onClick={() => store.commit(initial)}>
         試算を用意
       </button>
-      <output aria-label="retained average input">{session?.entries[0].meanDraft ?? ""}</output>
+      <output aria-label="retained average input">{state?.entries[0].meanDraft ?? ""}</output>
       <Link to="/analytics/series?gameTitleId=gt_momotetsu_2&view=outlook">同じ比較へ戻る</Link>
       <Link to="/analytics/series?gameTitleId=gt_momotetsu_2&view=outlook&seasonMasterId=season_current">
         シーズンを変更
@@ -131,10 +131,10 @@ describe("useSeriesComparisonPageModel", () => {
           <MemoryRouter
             initialEntries={["/analytics/series?gameTitleId=gt_momotetsu_2&view=outlook"]}
           >
-            <OutlookSessionOwner>
+            <OutlookWorkspaceProvider>
               <RetainedOutlookHarness initial={initial} />
               <PageModelHarness onFocusChange={() => undefined} />
-            </OutlookSessionOwner>
+            </OutlookWorkspaceProvider>
           </MemoryRouter>
         </QueryClientProvider>,
       );
@@ -182,10 +182,10 @@ describe("useSeriesComparisonPageModel", () => {
         <MemoryRouter
           initialEntries={["/analytics/series?gameTitleId=gt_momotetsu_2&view=outlook"]}
         >
-          <OutlookSessionOwner>
+          <OutlookWorkspaceProvider>
             <RetainedOutlookHarness initial={initial} />
             <PageModelHarness onFocusChange={() => undefined} />
-          </OutlookSessionOwner>
+          </OutlookWorkspaceProvider>
         </MemoryRouter>
       </QueryClientProvider>,
     );
@@ -231,7 +231,7 @@ describe("useSeriesComparisonPageModel", () => {
     render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={["/matches"]}>
-          <OutlookSessionOwner>
+          <OutlookWorkspaceProvider>
             <RetainedOutlookHarness initial={initial} />
             <Routes>
               <Route path="/matches" element={<p>戦績を確認中</p>} />
@@ -240,7 +240,7 @@ describe("useSeriesComparisonPageModel", () => {
                 element={<PageModelHarness onFocusChange={() => undefined} />}
               />
             </Routes>
-          </OutlookSessionOwner>
+          </OutlookWorkspaceProvider>
         </MemoryRouter>
       </QueryClientProvider>,
     );

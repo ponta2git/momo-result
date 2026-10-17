@@ -13,11 +13,11 @@ import {
   meanLimits,
   nextMeanHundredths,
   rationalToNumber,
-} from "@/features/seriesComparison/model/outlook";
+} from "@/features/seriesComparison/outlook/calculation";
 import type { OutlookEdit } from "@/features/seriesComparison/outlook/outlookEditing";
 import { outlookAverage } from "@/features/seriesComparison/outlook/outlookPresentation";
-import type { OutlookRankIndex } from "@/features/seriesComparison/outlook/outlookSession";
-import type { OutlookEditorView } from "@/features/seriesComparison/outlook/outlookViews";
+import type { OutlookEditorView } from "@/features/seriesComparison/outlook/outlookProjections";
+import type { OutlookRankIndex } from "@/features/seriesComparison/outlook/outlookWorkspaceState";
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { cn } from "@/shared/ui/cn";

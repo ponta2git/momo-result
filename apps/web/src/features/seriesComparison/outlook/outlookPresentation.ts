@@ -1,6 +1,6 @@
-import { formatRational, rationalToNumber } from "@/features/seriesComparison/model/outlook";
-import type { RankDistribution, Rational } from "@/features/seriesComparison/model/outlook";
-import type { OutlookSource } from "@/features/seriesComparison/outlook/outlookSession";
+import { formatRational, rationalToNumber } from "@/features/seriesComparison/outlook/calculation";
+import type { RankDistribution, Rational } from "@/features/seriesComparison/outlook/calculation";
+import type { OutlookSource } from "@/features/seriesComparison/outlook/outlookWorkspaceState";
 
 export function outlookAverage(value: Rational) {
   const n = rationalToNumber(value);

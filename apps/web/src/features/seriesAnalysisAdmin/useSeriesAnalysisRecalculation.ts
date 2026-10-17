@@ -1,11 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
-import { recalculationTargetForTitle } from "@/features/seriesAnalysisAdmin/seriesAnalysisAdminModel";
+import { recalculationTargetForTitle } from "@/features/seriesAnalysisAdmin/seriesAnalysisAdminPresentation";
 import type {
   AnalysisAdminTitle,
   RecalculationTarget,
-} from "@/features/seriesAnalysisAdmin/seriesAnalysisAdminModel";
+} from "@/features/seriesAnalysisAdmin/seriesAnalysisAdminPresentation";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { seriesAnalysisKeys } from "@/shared/api/queryKeys";
 import {

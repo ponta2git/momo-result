@@ -1,26 +1,26 @@
 import { useCallback, useRef } from "react";
 
-import { formatRational } from "@/features/seriesComparison/model/outlook";
-import type { SeriesAnalysisSelection } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import type { SeriesAnalysisSelection } from "@/features/seriesComparison/model/seriesAnalysisSelection";
+import { formatRational } from "@/features/seriesComparison/outlook/calculation";
 import { OutlookGoalPanel } from "@/features/seriesComparison/outlook/OutlookGoalPanel";
 import {
   OutlookHorizonControl,
   OutlookGoalHorizonControl,
 } from "@/features/seriesComparison/outlook/OutlookHorizonControl";
+import { OutlookPastExamples } from "@/features/seriesComparison/outlook/OutlookPastExamples";
 import { OutlookPatterns } from "@/features/seriesComparison/outlook/OutlookPatterns";
 import { OutlookPlayerEditor } from "@/features/seriesComparison/outlook/OutlookPlayerEditor";
 import {
   exactAverageFraction,
   outlookAverage,
 } from "@/features/seriesComparison/outlook/outlookPresentation";
-import { OutlookPastExamples } from "@/features/seriesComparison/outlook/OutlookReferences";
 import {
   OutlookComparisonControls,
   OutlookUndoButton,
   OutlookScenarioComparison,
 } from "@/features/seriesComparison/outlook/OutlookScenarioComparison";
-import { OutlookWorkspaceOwner } from "@/features/seriesComparison/outlook/OutlookSessionOwner";
-import { useOutlookWorkspaceModel } from "@/features/seriesComparison/outlook/useOutlookViewModels";
+import { OutlookSummaryBoundary } from "@/features/seriesComparison/outlook/OutlookWorkspaceProvider";
+import { useOutlookWorkspace } from "@/features/seriesComparison/outlook/useOutlookWorkspace";
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
 import { orderFixedMembers } from "@/shared/domain/members";
 import { formatDateOnly } from "@/shared/lib/dateTime";
@@ -46,7 +46,7 @@ export function OutlookView({
   onMemberChange?: ((role: "focus" | "rival", memberId: string) => void) | undefined;
 }) {
   return (
-    <OutlookWorkspaceOwner
+    <OutlookSummaryBoundary
       response={response}
       selection={selection}
       empty={
@@ -56,7 +56,7 @@ export function OutlookView({
       }
     >
       <OutlookWorkspace response={response} selection={selection} onMemberChange={onMemberChange} />
-    </OutlookWorkspaceOwner>
+    </OutlookSummaryBoundary>
   );
 }
 
@@ -83,7 +83,7 @@ function OutlookWorkspace({
     nextOutcomes,
     reviewHref,
     matchHref,
-  } = useOutlookWorkspaceModel(response, selection);
+  } = useOutlookWorkspace(response, selection);
   const resultHeading = useRef<HTMLHeadingElement>(null);
   const chartHeading = useRef<HTMLDivElement>(null);
   const selectHorizon = useCallback(

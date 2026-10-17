@@ -12,11 +12,11 @@ import {
   normalizeOutlookPair,
   normalizeSeriesAnalysisSelection,
   outlookComparisonKey,
-} from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+} from "@/features/seriesComparison/model/seriesAnalysisSelection";
 import type {
   SeriesAnalysisSelection,
   SeriesAnalysisSelectionChange,
-} from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+} from "@/features/seriesComparison/model/seriesAnalysisSelection";
 import {
   useSeriesAnalysisLocationRequest,
   useSeriesAnalysisLocationState,

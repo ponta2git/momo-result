@@ -3,7 +3,7 @@ import { useCallback, useState } from "react";
 import type { MasterCatalogView } from "@/features/masters/catalog/catalogTypes";
 import { defaultLayoutFamily } from "@/features/masters/catalog/catalogValidation";
 import { useMasterCatalogCreateActions } from "@/features/masters/catalog/useMasterCatalogCreateActions";
-import { useMasterCatalogMutations } from "@/features/masters/catalog/useMasterCatalogMutations";
+import { useMasterCatalogEdits } from "@/features/masters/catalog/useMasterCatalogEdits";
 import { useMasterCatalogResource } from "@/features/masters/catalog/useMasterCatalogResource";
 import { useMasterOptimisticCatalog } from "@/features/masters/catalog/useMasterOptimisticCatalog";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
@@ -14,7 +14,7 @@ export function useMasterCatalog(enabled: boolean) {
   const admin = usePermissionFacts("admin");
   const operations = usePermissionFacts("operations");
   const idempotencyKeys = useIdempotencyKeyStore();
-  const nowIsoFactory = useCallback(() => new Date().toISOString(), []);
+  const readNowIso = useCallback(() => new Date().toISOString(), []);
   const [selectedGameTitleId, setSelectedGameTitleId] = useState("");
   const [completions, setCompletions] = useState<Record<string, string>>({});
   const onFeedback = useCallback((kind: string, scope: string, message: string) => {
@@ -40,7 +40,7 @@ export function useMasterCatalog(enabled: boolean) {
     addOptimisticMapMaster: optimisticCatalog.addOptimisticMapMaster,
     addOptimisticSeasonMaster: optimisticCatalog.addOptimisticSeasonMaster,
     idempotencyKeys,
-    nowIsoFactory,
+    readNowIso,
     optimisticGameTitleCount: optimisticCatalog.optimisticGameTitles.length,
     selectedMapMasterCount: selection.selectedMapMasters.length,
     selectedSeasonMasterCount: selection.selectedSeasonMasters.length,
@@ -48,7 +48,7 @@ export function useMasterCatalog(enabled: boolean) {
     selectedGameTitleId: selection.selectedGameTitleId,
   });
 
-  const mutations = useMasterCatalogMutations({
+  const edits = useMasterCatalogEdits({
     onFeedback,
     idempotencyKeys,
     selectedGameTitleId: selection.selectedGameTitleId,
@@ -59,7 +59,7 @@ export function useMasterCatalog(enabled: boolean) {
   const hasPendingMutation =
     (admin.retained && createActions.gameTitleCreatePending) ||
     (operations.retained &&
-      (createActions.mapCreatePending || createActions.seasonCreatePending || mutations.pending));
+      (createActions.mapCreatePending || createActions.seasonCreatePending || edits.pending));
   const catalog: MasterCatalogView = {
     gameTitle: {
       ...gameTitles,
@@ -74,16 +74,16 @@ export function useMasterCatalog(enabled: boolean) {
       },
       defaultLayoutFamily,
       items: optimisticCatalog.optimisticGameTitles,
-      onDelete: mutations.deleteGameTitle,
+      onDelete: edits.deleteGameTitle,
       onRetry: refreshGameTitles,
       onSelect: setSelectedGameTitleId,
-      onUpdate: mutations.updateGameTitle,
+      onUpdate: edits.updateGameTitle,
       selectedGameTitleId: selection.selectedGameTitleId,
     },
     map: {
       actions: {
-        onDelete: mutations.deleteMapMaster,
-        onUpdate: mutations.updateMapMaster,
+        onDelete: edits.deleteMapMaster,
+        onUpdate: edits.updateMapMaster,
       },
       create: {
         scopeKey: selection.selectedGameTitleId,
@@ -103,8 +103,8 @@ export function useMasterCatalog(enabled: boolean) {
     scopedDisabledReason: selection.scopedDisabledReason,
     season: {
       actions: {
-        onDelete: mutations.deleteSeasonMaster,
-        onUpdate: mutations.updateSeasonMaster,
+        onDelete: edits.deleteSeasonMaster,
+        onUpdate: edits.updateSeasonMaster,
       },
       create: {
         scopeKey: selection.selectedGameTitleId,
@@ -126,6 +126,6 @@ export function useMasterCatalog(enabled: boolean) {
   return {
     catalog,
     pending: hasPendingMutation,
-    operationError: mutations.operationError,
+    operationError: edits.operationError,
   } as const;
 }

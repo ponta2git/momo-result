@@ -1,8 +1,11 @@
 import { Plus } from "lucide-react";
 import { startTransition, useState } from "react";
 
-import { masterGameTitleChoices } from "@/features/masters/catalog/catalogPresentation";
-import type { GameTitleCatalogView, MasterCreation } from "@/features/masters/catalog/catalogTypes";
+import { buildGameTitleChoices } from "@/features/masters/catalog/catalogPresentation";
+import type {
+  GameTitleCatalogView,
+  MasterCreateFormView,
+} from "@/features/masters/catalog/catalogTypes";
 import {
   MasterDeleteDialog,
   MasterEditDialog,
@@ -34,7 +37,7 @@ export function GameTitleList({
   refreshing,
   stale,
 }: GameTitleCatalogView) {
-  const choices = masterGameTitleChoices(items, canEdit).map((choice) => {
+  const choices = buildGameTitleChoices(items, canEdit).map((choice) => {
     const { item, pending: isPending } = choice;
     return {
       accessibleLabel: choice.accessibleLabel,
@@ -132,7 +135,7 @@ function GameTitleCreateDialog({
   create,
   defaultLayoutFamily,
 }: {
-  create: MasterCreation;
+  create: MasterCreateFormView;
   defaultLayoutFamily: LayoutFamily;
 }) {
   const [open, setOpen] = useState(false);

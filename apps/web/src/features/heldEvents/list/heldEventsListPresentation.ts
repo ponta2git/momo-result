@@ -133,7 +133,7 @@ export function buildHeldEventsListView(
     : { ...snapshot, refresh };
 }
 
-export function heldEventsPageControls({
+export function buildHeldEventsActionView({
   list,
   create,
   deleteDialog,

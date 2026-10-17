@@ -10,7 +10,7 @@ import { heldEventDetailQueryOptions } from "@/shared/api/queryOptions";
 import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 /** Composes the route's read owner with the pure detail presentation. */
-export function useHeldEventDetailPageModel(): HeldEventDetailView {
+export function useHeldEventDetail(): HeldEventDetailView {
   const { heldEventId = "" } = useParams<{ heldEventId: string }>();
   const read = useHeldEventDetailRead(heldEventId);
   return buildHeldEventDetailView({ heldEventId, ...read });

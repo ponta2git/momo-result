@@ -39,7 +39,7 @@ export function resolveMasterSelectionId(
   return titles.some((title) => title.id === selectedId) ? selectedId : fallbackId;
 }
 
-export function scopedMasterPanelView(
+export function buildScopedMasterPanelView(
   list: {
     loading?: boolean | undefined;
     loadFailed: boolean;
@@ -65,7 +65,7 @@ export function scopedMasterPanelView(
   };
 }
 
-export function masterGameTitleChoices(
+export function buildGameTitleChoices(
   items: ReadonlyArray<Readonly<GameTitleResponse & { pending?: boolean }>>,
   canEdit: boolean,
 ) {

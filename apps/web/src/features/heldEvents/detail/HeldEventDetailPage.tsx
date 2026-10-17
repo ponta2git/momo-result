@@ -10,7 +10,7 @@ import {
 import { HeldEventDraftsSection } from "@/features/heldEvents/detail/HeldEventDraftsSection";
 import { HeldEventMatchTimeline } from "@/features/heldEvents/detail/HeldEventMatchTimeline";
 import { HeldEventPlayerRecap } from "@/features/heldEvents/detail/HeldEventPlayerRecap";
-import { useHeldEventDetailPageModel } from "@/features/heldEvents/detail/useHeldEventDetailPageModel";
+import { useHeldEventDetail } from "@/features/heldEvents/detail/useHeldEventDetail";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { useAdjacentNavigationFocus } from "@/shared/navigation/useAdjacentNavigationFocus";
 import { Button } from "@/shared/ui/actions/Button";
@@ -23,7 +23,7 @@ import { AdjacentNavigation } from "@/shared/ui/navigation/AdjacentNavigation";
 import { contentText } from "@/shared/ui/typography";
 
 export function HeldEventDetailPage() {
-  const view = useHeldEventDetailPageModel();
+  const view = useHeldEventDetail();
   const titleRef = useAdjacentNavigationFocus(view.kind !== "loading");
 
   if (view.kind === "loading") {

@@ -1,11 +1,11 @@
 import type { CreateHeldEventRequest, HeldEventResponse } from "@/shared/api/heldEvents";
 import { toIsoFromLocalDateTime } from "@/shared/lib/dateTime";
 
-export function createHeldEventRequest(
-  heldAt: string,
+export function parseHeldEventCreate(
+  heldAtInput: string,
 ): { kind: "invalid"; message: string } | { kind: "ready"; request: CreateHeldEventRequest } {
-  return heldAt
-    ? { kind: "ready", request: { heldAt: toIsoFromLocalDateTime(heldAt) } }
+  return heldAtInput
+    ? { kind: "ready", request: { heldAt: toIsoFromLocalDateTime(heldAtInput) } }
     : { kind: "invalid", message: "開催日時を入力してください。" };
 }
 

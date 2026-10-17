@@ -1,20 +1,20 @@
 import {
   buildHeldEventsListView,
-  heldEventsPageControls,
+  buildHeldEventsActionView,
 } from "@/features/heldEvents/list/heldEventsListPresentation";
 import { useHeldEventActions } from "@/features/heldEvents/list/useHeldEventActions";
 import { useHeldEventsList } from "@/features/heldEvents/list/useHeldEventsList";
 
 /** Composes list navigation/read state and held-event creation and deletion into one screen. */
-export function useHeldEventsPageModel() {
-  const events = useHeldEventsList();
+export function useHeldEvents() {
+  const directory = useHeldEventsList();
   const actions = useHeldEventActions();
   const list = buildHeldEventsListView(
-    events.snapshot,
-    events.refresh,
+    directory.snapshot,
+    directory.refresh,
     {
-      onPageChange: events.updatePage,
-      onPageSizeChange: events.updatePageSize,
+      onPageChange: directory.updatePage,
+      onPageSizeChange: directory.updatePageSize,
       onRequestDelete: actions.requestDelete,
     },
     actions.deleteDialog.pending,
@@ -23,15 +23,15 @@ export function useHeldEventsPageModel() {
     create: actions.create,
     deleteDialog: actions.deleteDialog,
     list,
-    controls: heldEventsPageControls({
+    actionView: buildHeldEventsActionView({
       list,
       create: actions.create,
       deleteDialog: actions.deleteDialog,
-      refresh: events.refresh,
+      refresh: directory.refresh,
       errorMessage: actions.errorMessage,
     }),
     navigationGuard: actions.navigationGuard,
     openCreate: actions.openCreate,
-    refresh: events.refresh,
+    refresh: directory.refresh,
   } as const;
 }

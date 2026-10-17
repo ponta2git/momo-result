@@ -264,7 +264,7 @@ export function buildExportSelectionView(input: {
   };
 }
 
-export function failedResultView(
+export function buildExportDownloadFailureView(
   error: NormalizedApiError,
 ): Extract<ExportDownloadResultView, { kind: "failed" }> {
   const localized = localizedDownloadError(error);
@@ -275,7 +275,7 @@ export function failedResultView(
   };
 }
 
-export function exportDownloadResultView(
+export function buildExportDownloadResultView(
   outcome: ExportDownloadOutcome,
 ): ExportDownloadResultView | undefined {
   if (outcome.kind === "cancelled") return undefined;
@@ -290,5 +290,5 @@ export function exportDownloadResultView(
   if (outcome.kind === "timeout") {
     return { detail: outcome.detail, kind: "timeout", title: outcome.title };
   }
-  return failedResultView(outcome.error);
+  return buildExportDownloadFailureView(outcome.error);
 }

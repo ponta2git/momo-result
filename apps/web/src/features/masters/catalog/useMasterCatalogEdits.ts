@@ -11,7 +11,7 @@ import type { ManagementPermission } from "@/shared/auth/permissions";
 import { useAuthorizationOperations } from "@/shared/auth/useAuthorization";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
-export function useMasterCatalogMutations(input: {
+export function useMasterCatalogEdits(input: {
   onFeedback: (kind: string, scope: string, message: string) => void;
   idempotencyKeys: IdempotencyKeyStore;
   selectedGameTitleId: string;
@@ -23,7 +23,7 @@ export function useMasterCatalogMutations(input: {
   const [pendingLeases, setPendingLeases] = useState<AuthorizationLease[]>([]);
   const [operationError, setOperationError] = useState<string>();
 
-  const trackMutation = async <Result>(
+  const runEdit = async <Result>(
     permission: ManagementPermission,
     action: (lease: AuthorizationLease) => Promise<Result>,
   ) => {
@@ -81,21 +81,21 @@ export function useMasterCatalogMutations(input: {
   return {
     operationError,
     deleteGameTitle: (id: string) =>
-      trackMutation("admin", async (lease) => {
+      runEdit("admin", async (lease) => {
         onFeedback("gameTitle", "", "");
         await writes.deleteGameTitle(id, lease, onGameTitleDeleted);
         if (authorization.canCommit(lease))
           showToast({ title: "作品を削除しました", tone: "success" });
       }),
     deleteMapMaster: (id: string) =>
-      trackMutation("operations", async (lease) => {
+      runEdit("operations", async (lease) => {
         onFeedback("map", selectedGameTitleId, "");
         await writes.deleteMapMaster(id, lease);
         if (authorization.canCommit(lease))
           showToast({ title: "マップを削除しました", tone: "success" });
       }),
     deleteSeasonMaster: (id: string) =>
-      trackMutation("operations", async (lease) => {
+      runEdit("operations", async (lease) => {
         onFeedback("season", selectedGameTitleId, "");
         await writes.deleteSeasonMaster(id, lease);
         if (authorization.canCommit(lease))
@@ -103,10 +103,10 @@ export function useMasterCatalogMutations(input: {
       }),
     pending: pendingLeases.some(authorization.isCurrent),
     updateGameTitle: (id: string, request: { name: string; layoutFamily: string }) =>
-      trackMutation("admin", (lease) => updateGameTitle(lease, id, request)),
+      runEdit("admin", (lease) => updateGameTitle(lease, id, request)),
     updateMapMaster: (id: string, request: { name: string }) =>
-      trackMutation("operations", (lease) => updateMapMaster(lease, id, request)),
+      runEdit("operations", (lease) => updateMapMaster(lease, id, request)),
     updateSeasonMaster: (id: string, request: { name: string }) =>
-      trackMutation("operations", (lease) => updateSeasonMaster(lease, id, request)),
+      runEdit("operations", (lease) => updateSeasonMaster(lease, id, request)),
   };
 }

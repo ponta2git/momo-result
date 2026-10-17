@@ -1,4 +1,4 @@
-import { scopedMasterPanelView } from "@/features/masters/catalog/catalogPresentation";
+import { buildScopedMasterPanelView } from "@/features/masters/catalog/catalogPresentation";
 import type { ScopedMasterCatalogView } from "@/features/masters/catalog/catalogTypes";
 import {
   MasterDeleteDialog,
@@ -23,7 +23,7 @@ export function ScopedMasterPanel({
   labels: Readonly<{ itemLabel: string; title: string }>;
 }) {
   const { loading, loadBlocked, showStaleError, createDisabled, createDisabledReason } =
-    scopedMasterPanelView(list, labels.itemLabel, disabledReason);
+    buildScopedMasterPanelView(list, labels.itemLabel, disabledReason);
   const retryAction = (
     <Button
       pending={Boolean(list.retrying)}

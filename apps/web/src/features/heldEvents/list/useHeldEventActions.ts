@@ -1,7 +1,7 @@
 import { useActionState, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { createHeldEventRequest } from "@/features/heldEvents/list/heldEventActions";
+import { parseHeldEventCreate } from "@/features/heldEvents/list/heldEventActions";
 import type {
   HeldEventCreateForm,
   HeldEventDeleteConfirmation,
@@ -49,13 +49,13 @@ export function useHeldEventActions(): {
     typeof initialCreateState,
     FormData
   >(async (previous, formData) => {
-    const creation = createHeldEventRequest(String(formData.get("heldAt") ?? ""));
-    if (creation.kind === "invalid") {
-      setErrorMessage(creation.message);
+    const parsed = parseHeldEventCreate(String(formData.get("heldAt") ?? ""));
+    if (parsed.kind === "invalid") {
+      setErrorMessage(parsed.message);
       return previous;
     }
     try {
-      const event = await writes.create(creation.request);
+      const event = await writes.create(parsed.request);
       if (!mountedRef.current) return { version: previous.version + 1 };
       setErrorMessage("");
       setCreateOpen(false);

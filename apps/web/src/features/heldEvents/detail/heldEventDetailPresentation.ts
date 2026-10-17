@@ -28,7 +28,7 @@ export type HeldEventDetailReadyView = {
     readonly drafts: ReadonlyArray<Readonly<HeldEventDraftResponse>>;
     readonly emphasizeNewMatch: boolean;
     readonly matches: readonly HeldEventMatchView[];
-    readonly playerRecaps: readonly HeldEventPlayerRecap[];
+    readonly playerRecaps: readonly HeldEventPlayerRecapView[];
   };
   readonly freshness:
     | { readonly kind: "current" }
@@ -154,7 +154,7 @@ function compareHeldEventMatches(left: HeldEventMatchView, right: HeldEventMatch
   return left.matchNoInEvent - right.matchNoInEvent;
 }
 
-export type HeldEventPlayerRecap = {
+export type HeldEventPlayerRecapView = {
   readonly averageRank: number;
   readonly displayName: string;
   readonly matchCount: number;
@@ -163,14 +163,14 @@ export type HeldEventPlayerRecap = {
   readonly wins: number;
 };
 
-export type HeldEventDraftAction = {
+export type HeldEventDraftActionView = {
   readonly href?: string;
   readonly label: string;
 };
 
 export function buildHeldEventPlayerRecaps(
   matches: readonly HeldEventMatchView[],
-): readonly HeldEventPlayerRecap[] {
+): readonly HeldEventPlayerRecapView[] {
   const ranksByMember = new Map<string, number[]>();
 
   for (const match of matches.toSorted(compareHeldEventMatches)) {
@@ -193,7 +193,9 @@ export function buildHeldEventPlayerRecaps(
   );
 }
 
-export function heldEventDraftAction(draft: HeldEventDraftResponse): HeldEventDraftAction {
+export function buildHeldEventDraftActionView(
+  draft: HeldEventDraftResponse,
+): HeldEventDraftActionView {
   if (draft.status === "ocr_running") {
     return { label: "読み取り中" };
   }

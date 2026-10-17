@@ -1,6 +1,6 @@
 import {
   formatHeldEventShortDateTime,
-  heldEventDraftAction,
+  buildHeldEventDraftActionView,
   heldEventDraftScopeLabel,
 } from "@/features/heldEvents/detail/heldEventDetailPresentation";
 import type { HeldEventDraftResponse } from "@/shared/api/heldEvents";
@@ -21,7 +21,9 @@ export function HeldEventDraftsSection({
   if (drafts.length === 0) {
     return null;
   }
-  const primaryDraftId = drafts.find((draft) => heldEventDraftAction(draft).href)?.matchDraftId;
+  const primaryDraftId = drafts.find(
+    (draft) => buildHeldEventDraftActionView(draft).href,
+  )?.matchDraftId;
 
   return (
     <section aria-labelledby="held-event-drafts-heading" className="min-w-0">
@@ -33,24 +35,24 @@ export function HeldEventDraftsSection({
       </p>
       <ul className="mt-4 divide-y divide-[var(--color-border)]">
         {drafts.map((draft) => {
-          const action = heldEventDraftAction(draft);
+          const actionView = buildHeldEventDraftActionView(draft);
           const scopeLabel = heldEventDraftScopeLabel(draft);
           const updatedAt = formatHeldEventShortDateTime(draft.updatedAt);
           return (
             <li key={draft.matchDraftId} className="py-3">
               <ContentWithActions
                 actions={
-                  action.href ? (
+                  actionView.href ? (
                     <LinkButton
                       size="sm"
-                      to={action.href}
+                      to={actionView.href}
                       variant={draft.matchDraftId === primaryDraftId ? "primary" : "secondary"}
                     >
-                      {action.label}
+                      {actionView.label}
                     </LinkButton>
                   ) : (
                     <Button disabled size="sm" variant="secondary">
-                      {action.label}
+                      {actionView.label}
                     </Button>
                   )
                 }

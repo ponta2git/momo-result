@@ -111,7 +111,7 @@ export function buildAccountSettingsView(input: {
   return { list, pending, createDisabled: list.kind !== "ready" || pending };
 }
 
-export function accountActionView(
+export function buildAccountActionView(
   account: Readonly<LoginAccountResponse>,
   selectedRole: AccountRole,
   pendingOperation: AccountOperation | undefined,

@@ -1,11 +1,11 @@
-import type { HeldEventPlayerRecap as PlayerRecap } from "@/features/heldEvents/detail/heldEventDetailPresentation";
+import type { HeldEventPlayerRecapView } from "@/features/heldEvents/detail/heldEventDetailPresentation";
 import { formatAverageRank } from "@/features/heldEvents/detail/heldEventDetailPresentation";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { RankTrail } from "@/shared/matches/RankBadge";
 import { cn } from "@/shared/ui/cn";
 import { contentText } from "@/shared/ui/typography";
 
-export function HeldEventPlayerRecap({ recaps }: { recaps: readonly PlayerRecap[] }) {
+export function HeldEventPlayerRecap({ recaps }: { recaps: readonly HeldEventPlayerRecapView[] }) {
   if (recaps.length === 0) {
     return null;
   }

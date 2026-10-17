@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { accountRoleFromInput, accountRoleOptions } from "@/features/masters/accounts/accountRoles";
 import type { AccountRole } from "@/features/masters/accounts/accountRoles";
-import { accountActionView } from "@/features/masters/accounts/accountSettingsEditing";
+import { buildAccountActionView } from "@/features/masters/accounts/accountSettingsEditing";
 import type { AccountOperation } from "@/features/masters/accounts/accountSettingsEditing";
 import type { LoginAccountResponse } from "@/shared/api/adminAccounts";
 import { formatApiError } from "@/shared/api/problemDetails";
@@ -83,7 +83,7 @@ function useAccountActions(
   onChangeLoginEnabled: (enabled: boolean) => Promise<void>,
 ) {
   const [selectedRole, setSelectedRole] = useState<AccountRole>(account.role);
-  const view = accountActionView(account, selectedRole, pendingOperation);
+  const view = buildAccountActionView(account, selectedRole, pendingOperation);
   return {
     ...view,
     selectedRole,

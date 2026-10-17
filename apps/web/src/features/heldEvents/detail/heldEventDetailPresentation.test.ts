@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildHeldEventPlayerRecaps,
-  heldEventDraftAction,
+  buildHeldEventDraftActionView,
   heldEventDraftScopeLabel,
   heldEventScopeLabel,
 } from "@/features/heldEvents/detail/heldEventDetailPresentation";
@@ -71,12 +71,12 @@ describe("held event detail presentation", () => {
   });
 
   it("selects a safe continuation route for every active draft status", () => {
-    expect(heldEventDraftAction(draft("ocr_running"))).toEqual({ label: "読み取り中" });
-    expect(heldEventDraftAction(draft("ocr_failed"))).toEqual({
+    expect(buildHeldEventDraftActionView(draft("ocr_running"))).toEqual({ label: "読み取り中" });
+    expect(buildHeldEventDraftActionView(draft("ocr_failed"))).toEqual({
       href: "/matches/new?matchDraftId=draft%2F1",
       label: "手入力で続ける",
     });
-    expect(heldEventDraftAction(draft("needs_review"))).toEqual({
+    expect(buildHeldEventDraftActionView(draft("needs_review"))).toEqual({
       href: "/review/draft%2F1",
       label: "確認事項を直す",
     });

@@ -2,7 +2,7 @@ import { CalendarPlus } from "lucide-react";
 import { useState } from "react";
 import { useFormStatus } from "react-dom";
 
-import { createHeldEventRequest } from "@/features/heldEvents/list/heldEventActions";
+import { parseHeldEventCreate } from "@/features/heldEvents/list/heldEventActions";
 import type { HeldEventCreateForm } from "@/features/heldEvents/list/heldEventActions";
 import { toLocalDateTimeInputValue } from "@/shared/lib/dateTime";
 import { Button } from "@/shared/ui/actions/Button";
@@ -18,7 +18,7 @@ export function CreateHeldEventDialog({ form }: { form: HeldEventCreateForm }) {
   if (draft.version !== form.formKey) {
     setDraft({ version: form.formKey, heldAt: toLocalDateTimeInputValue() });
   }
-  const canSubmit = createHeldEventRequest(draft.heldAt).kind === "ready";
+  const canSubmit = parseHeldEventCreate(draft.heldAt).kind === "ready";
   return (
     <Dialog
       busy={form.pending}

@@ -25,7 +25,7 @@ export function useMasterCatalogCreateActions(input: {
   addOptimisticMapMaster: (item: OptimisticMapMaster) => void;
   addOptimisticSeasonMaster: (item: OptimisticSeasonMaster) => void;
   idempotencyKeys: IdempotencyKeyStore;
-  nowIsoFactory: () => string;
+  readNowIso: () => string;
   optimisticGameTitleCount: number;
   selectedMapMasterCount: number;
   selectedSeasonMasterCount: number;
@@ -46,7 +46,7 @@ export function useMasterCatalogCreateActions(input: {
         const { request, optimistic } = prepareGameTitleCreation(
           parsed.request,
           attempt.key,
-          input.nowIsoFactory(),
+          input.readNowIso(),
           input.optimisticGameTitleCount,
         );
         input.addOptimisticGameTitle(optimistic);
@@ -83,7 +83,7 @@ export function useMasterCatalogCreateActions(input: {
         "map",
         parsed.request,
         attempt.key,
-        input.nowIsoFactory(),
+        input.readNowIso(),
         input.selectedMapMasterCount,
       );
       input.addOptimisticMapMaster(optimistic);
@@ -123,7 +123,7 @@ export function useMasterCatalogCreateActions(input: {
         "season",
         parsed.request,
         attempt.key,
-        input.nowIsoFactory(),
+        input.readNowIso(),
         input.selectedSeasonMasterCount,
       );
       input.addOptimisticSeasonMaster(optimistic);

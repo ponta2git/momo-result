@@ -16,7 +16,7 @@ export type MasterCatalogSelectionInput = {
   selectedGameTitleId: string;
 };
 
-export type MasterCreation = Readonly<{
+export type MasterCreateFormView = Readonly<{
   action: (formData: FormData) => void | Promise<void>;
   error?: string | undefined;
   formKey?: string | number | undefined;
@@ -27,7 +27,7 @@ export type MasterCreation = Readonly<{
 export type GameTitleCatalogView = Readonly<{
   canEdit: boolean;
   completion?: string | undefined;
-  create: MasterCreation;
+  create: MasterCreateFormView;
   defaultLayoutFamily: LayoutFamily;
   hasData: boolean;
   items: readonly OptimisticGameTitle[];
@@ -46,7 +46,7 @@ export type ScopedMasterCatalogView = Readonly<{
     onDelete: (id: string) => Promise<void> | void;
     onUpdate: (id: string, request: { name: string }) => Promise<void>;
   }>;
-  create: Readonly<MasterCreation & { scopeKey: string }>;
+  create: Readonly<MasterCreateFormView & { scopeKey: string }>;
   list: Readonly<{
     completion?: string | undefined;
     error?: string | undefined;

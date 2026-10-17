@@ -5,7 +5,7 @@ import { RankTrail } from "@/shared/matches/RankBadge";
 import { cn } from "@/shared/ui/cn";
 import { contentText } from "@/shared/ui/typography";
 
-export function HeldEventPlayerRecap({ recaps }: { recaps: PlayerRecap[] }) {
+export function HeldEventPlayerRecap({ recaps }: { recaps: readonly PlayerRecap[] }) {
   if (recaps.length === 0) {
     return null;
   }

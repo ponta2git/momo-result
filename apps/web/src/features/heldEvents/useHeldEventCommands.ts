@@ -13,28 +13,27 @@ import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
-import { toLocalDateTimeInputValue } from "@/shared/lib/dateTime";
 import type { UnsavedChangesGuardModel } from "@/shared/navigation/UnsavedChangesGuard";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 const initialCreateState = { version: 0 };
+type DeleteTarget = Readonly<Pick<HeldEventResponse, "id" | "heldAt">>;
 
 /** Owns create/delete dialogs and writes; committed cache changes outlive this screen. */
 export function useHeldEventCommands(): {
-  create: HeldEventCreateFormModel;
-  deleteDialog: HeldEventDeleteDialogModel;
-  errorMessage: string;
-  navigationGuard: UnsavedChangesGuardModel;
-  openCreate: () => void;
-  requestDelete: (event: HeldEventResponse) => void;
+  readonly create: HeldEventCreateFormModel;
+  readonly deleteDialog: HeldEventDeleteDialogModel;
+  readonly errorMessage: string;
+  readonly navigationGuard: UnsavedChangesGuardModel;
+  readonly openCreate: () => void;
+  readonly requestDelete: (event: DeleteTarget) => void;
 } {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const idempotencyKeys = useIdempotencyKeyStore();
-  const [heldAtDraft, setHeldAtDraft] = useState(toLocalDateTimeInputValue);
   const [errorMessage, setErrorMessage] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<HeldEventResponse | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const mountedRef = useRef(false);
   const navigationAllowedRef = useRef(false);
   useEffect(() => {
@@ -62,7 +61,6 @@ export function useHeldEventCommands(): {
       );
       await syncHeldEventCreatedCache(queryClient, event);
       if (!mountedRef.current) return { version: previous.version + 1 };
-      setHeldAtDraft(toLocalDateTimeInputValue());
       setErrorMessage("");
       setCreateOpen(false);
       showToast({ title: "開催を作成しました。", tone: "success" });
@@ -75,7 +73,7 @@ export function useHeldEventCommands(): {
     }
   }, initialCreateState);
   const { isPending: deletePending, mutateAsync: deleteEventAsync } = useMutation({
-    mutationFn: (event: HeldEventResponse) =>
+    mutationFn: (event: DeleteTarget) =>
       runIdempotentMutation(
         idempotencyKeys,
         "heldEvents.deleteHeldEvent",
@@ -99,38 +97,32 @@ export function useHeldEventCommands(): {
   }, []);
   const openCreate = useCallback(() => updateCreateOpen(true), [updateCreateOpen]);
   const cancelDelete = useCallback(() => setDeleteTarget(null), []);
-  const confirmDelete = useCallback(
-    async (event: HeldEventResponse) => {
-      await deleteEventAsync(event);
-    },
-    [deleteEventAsync],
-  );
+  const confirmDelete = useCallback(async () => {
+    if (deleteTarget) await deleteEventAsync(deleteTarget);
+  }, [deleteEventAsync, deleteTarget]);
 
   return {
     create: {
       action: createAction,
-      canSubmit: createHeldEventRequest(heldAtDraft).kind === "ready",
       errorMessage,
       formKey: createState.version,
-      heldAtDraft,
       open: createOpen,
       pending: createPending,
-      setHeldAtDraft,
-      setOpen: updateCreateOpen,
+      close: () => updateCreateOpen(false),
     },
     deleteDialog: {
       cancel: cancelDelete,
       confirm: confirmDelete,
       pending: deletePending,
-      target: deleteTarget,
+      target: deleteTarget ? { heldAt: deleteTarget.heldAt } : null,
     },
     errorMessage,
     navigationGuard: {
       dirty: false,
-      navigationAllowedRef,
+      isNavigationAllowed: () => navigationAllowedRef.current,
       onDiscard: () => setCreateOpen(false),
     },
     openCreate,
-    requestDelete: setDeleteTarget,
+    requestDelete: (event) => setDeleteTarget({ id: event.id, heldAt: event.heldAt }),
   };
 }

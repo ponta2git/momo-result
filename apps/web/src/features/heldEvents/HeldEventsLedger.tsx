@@ -2,7 +2,7 @@ import { Camera, ClipboardList, Download, Trash2 } from "lucide-react";
 
 import { heldEventOcrCaptureHref } from "@/features/heldEvents/heldEventNavigation";
 import { canDeleteHeldEvent } from "@/features/heldEvents/heldEventViewModel";
-import type { HeldEventResponse } from "@/shared/api/heldEvents";
+import type { HeldEventListItem } from "@/features/heldEvents/heldEventViewModel";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
 import { IconButton } from "@/shared/ui/actions/IconButton";
@@ -16,9 +16,9 @@ import { contentText } from "@/shared/ui/typography";
 type HeldEventsLedgerProps = {
   actionsDisabled: boolean;
   deleteDisabled: boolean;
-  events: HeldEventResponse[];
+  events: readonly HeldEventListItem[];
   firstRowIsLatest: boolean;
-  onDelete: (event: HeldEventResponse) => void;
+  onDelete: (event: HeldEventListItem) => void;
 };
 
 export function HeldEventsLedger(props: HeldEventsLedgerProps) {
@@ -35,7 +35,7 @@ function HeldEventsTable({
   onDelete,
 }: HeldEventsLedgerProps) {
   const latestEventId = firstRowIsLatest ? events[0]?.id : undefined;
-  const columns: Array<DataTableColumn<HeldEventResponse>> = [
+  const columns: Array<DataTableColumn<HeldEventListItem>> = [
     {
       header: "開催日時",
       key: "heldAt",
@@ -66,7 +66,7 @@ function HeldEventsTable({
             header: "OCR",
             key: "capture",
             width: "4.5rem",
-            renderCell: (event: HeldEventResponse) =>
+            renderCell: (event: HeldEventListItem) =>
               event.id === latestEventId ? (
                 <HeldEventCaptureLink disabled={actionsDisabled} event={event} />
               ) : null,
@@ -94,7 +94,7 @@ function HeldEventsTable({
             header: "削除",
             key: "delete",
             width: "4.5rem",
-            renderCell: (event: HeldEventResponse) => (
+            renderCell: (event: HeldEventListItem) => (
               <HeldEventDeleteButton disabled={deleteDisabled} event={event} onDelete={onDelete} />
             ),
           },
@@ -147,9 +147,9 @@ function HeldEventRow({
 }: {
   actionsDisabled: boolean;
   deleteDisabled: boolean;
-  event: HeldEventResponse;
+  event: HeldEventListItem;
   latest: boolean;
-  onDelete: (event: HeldEventResponse) => void;
+  onDelete: (event: HeldEventListItem) => void;
 }) {
   return (
     <li>
@@ -177,7 +177,7 @@ function HeldEventRow({
   );
 }
 
-function HeldEventIdentity({ event, latest }: { event: HeldEventResponse; latest: boolean }) {
+function HeldEventIdentity({ event, latest }: { event: HeldEventListItem; latest: boolean }) {
   return (
     <div className="grid min-w-0 gap-1">
       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
@@ -221,9 +221,9 @@ function HeldEventActions({
 }: {
   actionsDisabled: boolean;
   deleteDisabled: boolean;
-  event: HeldEventResponse;
+  event: HeldEventListItem;
   latest: boolean;
-  onDelete: (event: HeldEventResponse) => void;
+  onDelete: (event: HeldEventListItem) => void;
 }) {
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2 md:justify-end">
@@ -237,7 +237,7 @@ function HeldEventActions({
 
 type HeldEventLinkProps = {
   disabled: boolean;
-  event: HeldEventResponse;
+  event: HeldEventListItem;
 };
 
 function HeldEventCaptureLink({ disabled, event }: HeldEventLinkProps) {
@@ -285,8 +285,8 @@ function HeldEventDeleteButton({
   onDelete,
 }: {
   disabled: boolean;
-  event: HeldEventResponse;
-  onDelete: (event: HeldEventResponse) => void;
+  event: HeldEventListItem;
+  onDelete: (event: HeldEventListItem) => void;
 }) {
   if (!canDeleteHeldEvent(event)) return null;
   return (

@@ -6,12 +6,16 @@ import type {
 import { toIsoFromLocalDateTime } from "@/shared/lib/dateTime";
 import { parsePositiveIntSearchParam } from "@/shared/lib/searchParams";
 
-export const emptyHeldEvents: HeldEventResponse[] = [];
+export type HeldEventListItem = Readonly<Omit<HeldEventResponse, "scopes">> & {
+  readonly scopes?: ReadonlyArray<Readonly<NonNullable<HeldEventResponse["scopes"]>[number]>>;
+};
+
+export const emptyHeldEvents: readonly HeldEventListItem[] = [];
 export const heldEventPageSizeOptions = [10, 25, 50] as const;
 const defaultPagination = { page: 1, pageSize: 10 };
 const pageSizeOptions = new Set<number>(heldEventPageSizeOptions);
 
-export type HeldEventsPagination = { page: number; pageSize: number };
+export type HeldEventsPagination = { readonly page: number; readonly pageSize: number };
 
 export function readHeldEventsPagination(params: URLSearchParams): HeldEventsPagination {
   const pageSize = parsePositiveIntSearchParam(params.get("pageSize"), defaultPagination.pageSize);
@@ -55,61 +59,60 @@ export function createHeldEventRequest(
     : { kind: "invalid", message: "開催日時を入力してください。" };
 }
 
-export function canDeleteHeldEvent(event: HeldEventResponse): boolean {
+export function canDeleteHeldEvent(
+  event: Readonly<Pick<HeldEventResponse, "matchCount" | "draftCount">>,
+): boolean {
   return event.matchCount === 0 && event.draftCount === 0;
 }
 
 export type HeldEventCreateFormModel = {
-  action: (formData: FormData) => void | Promise<void>;
-  canSubmit: boolean;
-  errorMessage: string;
-  formKey: number;
-  heldAtDraft: string;
-  open: boolean;
-  pending: boolean;
-  setHeldAtDraft: (value: string) => void;
-  setOpen: (open: boolean) => void;
+  readonly action: (formData: FormData) => void | Promise<void>;
+  readonly errorMessage: string;
+  readonly formKey: number;
+  readonly open: boolean;
+  readonly pending: boolean;
+  readonly close: () => void;
 };
 
 export type HeldEventDeleteDialogModel = {
-  cancel: () => void;
-  confirm: (event: HeldEventResponse) => Promise<void>;
-  pending: boolean;
-  target: HeldEventResponse | null;
+  readonly cancel: () => void;
+  readonly confirm: () => Promise<void>;
+  readonly pending: boolean;
+  readonly target: { readonly heldAt: string } | null;
 };
 
 export type HeldEventsListRefreshModel = {
-  pending: boolean;
-  run: () => void;
+  readonly pending: boolean;
+  readonly run: () => void;
 };
 
 export type HeldEventsListSnapshot =
-  | { kind: "loading" }
-  | { kind: "loadFailed" }
+  | { readonly kind: "loading" }
+  | { readonly kind: "loadFailed" }
   | {
-      freshness: "current" | "stale";
-      kind: "ready";
-      page: number;
-      pageSize: number;
-      pagination: HeldEventListResponse["pagination"] | undefined;
-      rows: HeldEventResponse[];
-      scopeChanging: boolean;
+      readonly freshness: "current" | "stale";
+      readonly kind: "ready";
+      readonly page: number;
+      readonly pageSize: number;
+      readonly pagination: Readonly<HeldEventListResponse["pagination"]> | undefined;
+      readonly rows: readonly HeldEventListItem[];
+      readonly scopeChanging: boolean;
     };
 
 export type HeldEventsListActions = {
-  onPageChange: (page: number) => void;
-  onPageSizeChange: (pageSize: number) => void;
-  onRequestDelete: (event: HeldEventResponse) => void;
+  readonly onPageChange: (page: number) => void;
+  readonly onPageSizeChange: (pageSize: number) => void;
+  readonly onRequestDelete: (event: Readonly<Pick<HeldEventResponse, "id" | "heldAt">>) => void;
 };
 
 export type HeldEventsListModel =
-  | { kind: "loading"; refresh: HeldEventsListRefreshModel }
-  | { kind: "loadFailed"; refresh: HeldEventsListRefreshModel }
+  | { readonly kind: "loading"; readonly refresh: HeldEventsListRefreshModel }
+  | { readonly kind: "loadFailed"; readonly refresh: HeldEventsListRefreshModel }
   | (Extract<HeldEventsListSnapshot, { kind: "ready" }> &
       HeldEventsListActions & {
-        deleteDisabled: boolean;
-        firstRowIsLatest: boolean;
-        refresh: HeldEventsListRefreshModel;
+        readonly deleteDisabled: boolean;
+        readonly firstRowIsLatest: boolean;
+        readonly refresh: HeldEventsListRefreshModel;
       });
 
 export function buildHeldEventsListSnapshot({
@@ -141,7 +144,7 @@ export function buildHeldEventsListSnapshot({
     pagination: data?.pagination,
     rows: data?.items ?? emptyHeldEvents,
     scopeChanging: placeholder && fetching,
-  };
+  } as const;
 }
 
 export function buildHeldEventsListModel(
@@ -182,5 +185,5 @@ export function heldEventsPageControls({
       refresh.pending && !dialogPending && list.kind === "ready" && list.freshness === "current",
     showCreate: list.kind === "ready" && list.rows.length > 0,
     errorMessage: !create.open && !deleteDialog.target ? errorMessage : "",
-  };
+  } as const;
 }

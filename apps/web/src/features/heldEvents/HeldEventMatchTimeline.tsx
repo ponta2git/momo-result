@@ -1,8 +1,8 @@
 import { BarChart3, Trophy } from "lucide-react";
 
 import { heldEventScopeLabel } from "@/features/heldEvents/heldEventDetailViewModel";
+import type { HeldEventMatchView } from "@/features/heldEvents/heldEventDetailViewModel";
 import { HeldEventMatchNotePreview } from "@/features/heldEvents/HeldEventMatchNotePreview";
-import type { HeldEventMatchResponse } from "@/shared/api/heldEvents";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { memberDisplayName } from "@/shared/domain/members";
 import { formatManYen } from "@/shared/lib/formatters";
@@ -15,7 +15,7 @@ import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
 import { contentText } from "@/shared/ui/typography";
 
-export function HeldEventMatchTimeline({ matches }: { matches: HeldEventMatchResponse[] }) {
+export function HeldEventMatchTimeline({ matches }: { matches: readonly HeldEventMatchView[] }) {
   return (
     <section aria-labelledby="held-event-timeline-heading" className="grid gap-4">
       <h2 id="held-event-timeline-heading" className={contentText.heading}>

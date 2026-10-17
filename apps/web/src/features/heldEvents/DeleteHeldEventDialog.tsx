@@ -22,11 +22,7 @@ export function DeleteHeldEventDialog({ model }: DeleteHeldEventDialogProps) {
       description={`${formatDateTimeLong(model.target.heldAt)}の開催を削除します。この操作は取り消せません。`}
       open
       title="開催を削除しますか？"
-      onConfirm={async () => {
-        if (model.target) {
-          await model.confirm(model.target);
-        }
-      }}
+      onConfirm={model.confirm}
       onOpenChange={(open) => {
         if (!open) {
           model.cancel();

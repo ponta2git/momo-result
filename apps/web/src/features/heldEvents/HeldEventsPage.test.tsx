@@ -496,17 +496,22 @@ describe("HeldEventsPage", () => {
     });
   });
 
-  it("opens creation only on request and allows cancelling", async () => {
+  it("keeps the entered date when creation is cancelled and reopened", async () => {
     renderPage();
 
     expect(await screen.findByRole("link", { name: /の開催詳細$/u })).toBeInTheDocument();
     expect(screen.queryByLabelText("開催日時")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "開催を作成" }));
     expect(screen.getByRole("dialog", { name: "新しい開催を作成" })).toBeInTheDocument();
+    const heldAt = screen.getByLabelText(/開催日時/u);
+    await user.clear(heldAt);
+    await user.type(heldAt, "2026-04-02T19:30");
     await user.click(screen.getByRole("button", { name: "キャンセル" }));
     await waitFor(() =>
       expect(screen.queryByRole("dialog", { name: "新しい開催を作成" })).not.toBeInTheDocument(),
     );
+    await user.click(screen.getByRole("button", { name: "開催を作成" }));
+    expect(screen.getByLabelText(/開催日時/u)).toHaveValue("2026-04-02T19:30");
   });
 
   it.each(["browser back", "wait"])(

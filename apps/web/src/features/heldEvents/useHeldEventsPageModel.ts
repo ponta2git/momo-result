@@ -33,7 +33,5 @@ export function useHeldEventsPageModel() {
     navigationGuard: commands.navigationGuard,
     openCreate: commands.openCreate,
     refresh: events.refresh,
-  };
+  } as const;
 }
-
-export type HeldEventsPageModel = ReturnType<typeof useHeldEventsPageModel>;

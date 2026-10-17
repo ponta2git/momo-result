@@ -1,20 +1,33 @@
 import { CalendarPlus } from "lucide-react";
+import { useState } from "react";
 import { useFormStatus } from "react-dom";
 
+import { createHeldEventRequest } from "@/features/heldEvents/heldEventViewModel";
 import type { HeldEventCreateFormModel } from "@/features/heldEvents/heldEventViewModel";
+import { toLocalDateTimeInputValue } from "@/shared/lib/dateTime";
 import { Button } from "@/shared/ui/actions/Button";
 import { Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { TextField } from "@/shared/ui/forms/TextField";
 
 export function CreateHeldEventDialog({ model }: { model: HeldEventCreateFormModel }) {
+  const [draft, setDraft] = useState(() => ({
+    version: model.formKey,
+    heldAt: toLocalDateTimeInputValue(),
+  }));
+  if (draft.version !== model.formKey) {
+    setDraft({ version: model.formKey, heldAt: toLocalDateTimeInputValue() });
+  }
+  const canSubmit = createHeldEventRequest(draft.heldAt).kind === "ready";
   return (
     <Dialog
       busy={model.pending}
       description="開催日時を決めると、試合をまとめて記録・閲覧する場所ができます。"
       open={model.open}
       title="新しい開催を作成"
-      onOpenChange={model.setOpen}
+      onOpenChange={(open) => {
+        if (!open) model.close();
+      }}
     >
       <form key={model.formKey} action={model.action} className="grid gap-4">
         {model.errorMessage ? (
@@ -28,13 +41,10 @@ export function CreateHeldEventDialog({ model }: { model: HeldEventCreateFormMod
           label="開催日時"
           name="heldAt"
           type="datetime-local"
-          value={model.heldAtDraft}
-          onChange={(event) => model.setHeldAtDraft(event.target.value)}
+          value={draft.heldAt}
+          onChange={(event) => setDraft({ version: model.formKey, heldAt: event.target.value })}
         />
-        <CreateHeldEventDialogActions
-          canSubmit={model.canSubmit}
-          close={() => model.setOpen(false)}
-        />
+        <CreateHeldEventDialogActions canSubmit={canSubmit} close={model.close} />
       </form>
     </Dialog>
   );

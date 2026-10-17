@@ -13,7 +13,11 @@ import { cn } from "@/shared/ui/cn";
 import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
 import { contentText } from "@/shared/ui/typography";
 
-export function HeldEventDraftsSection({ drafts }: { drafts: HeldEventDraftResponse[] }) {
+export function HeldEventDraftsSection({
+  drafts,
+}: {
+  drafts: ReadonlyArray<Readonly<HeldEventDraftResponse>>;
+}) {
   if (drafts.length === 0) {
     return null;
   }

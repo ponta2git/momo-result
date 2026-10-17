@@ -4,46 +4,55 @@ import type {
   HeldEventDetailResponse,
   HeldEventDraftResponse,
   HeldEventMatchResponse,
+  HeldEventPlayerResultResponse,
 } from "@/shared/api/heldEvents";
 import { memberDisplayName, orderFixedMembers } from "@/shared/domain/members";
 import { formatDateTimeCompact, formatNavigationDateTime } from "@/shared/lib/dateTime";
 import type { AdjacentDestination } from "@/shared/ui/navigation/AdjacentNavigation";
 
 type RefreshModel = {
-  disabled?: boolean;
-  pending: boolean;
-  run: () => void;
+  readonly disabled?: boolean;
+  readonly pending: boolean;
+  readonly run: () => void;
+};
+
+export type HeldEventMatchView = Readonly<Omit<HeldEventMatchResponse, "players">> & {
+  readonly players?: ReadonlyArray<Readonly<HeldEventPlayerResultResponse>>;
 };
 
 export type HeldEventDetailReadyPageModel = {
-  event: {
-    detail: HeldEventDetailResponse;
-    drafts: HeldEventDraftResponse[];
-    emphasizeNewMatch: boolean;
-    matches: HeldEventMatchResponse[];
-    playerRecaps: HeldEventPlayerRecap[];
+  readonly event: {
+    readonly detail: Readonly<
+      Pick<HeldEventDetailResponse, "matchCount" | "draftCount" | "nextMatchNo">
+    >;
+    readonly drafts: ReadonlyArray<Readonly<HeldEventDraftResponse>>;
+    readonly emphasizeNewMatch: boolean;
+    readonly matches: readonly HeldEventMatchView[];
+    readonly playerRecaps: readonly HeldEventPlayerRecap[];
   };
-  freshness: { kind: "current" } | { kind: "stale"; refresh: RefreshModel };
-  kind: "ready";
-  navigation: {
-    adjacent: {
-      previous: AdjacentDestination;
-      next: AdjacentDestination;
-      disabled: boolean;
-      status: "ready" | "refreshing" | "failed" | "unavailable";
+  readonly freshness:
+    | { readonly kind: "current" }
+    | { readonly kind: "stale"; readonly refresh: RefreshModel };
+  readonly kind: "ready";
+  readonly navigation: {
+    readonly adjacent: {
+      readonly previous: Readonly<AdjacentDestination>;
+      readonly next: Readonly<AdjacentDestination>;
+      readonly disabled: boolean;
+      readonly status: "ready" | "refreshing" | "failed" | "unavailable";
     };
-    currentDateTime: string;
-    exportHref: string;
-    manualEntryHref: string;
-    ocrCaptureHref: string;
+    readonly currentDateTime: string;
+    readonly exportHref: string;
+    readonly manualEntryHref: string;
+    readonly ocrCaptureHref: string;
   };
-  refresh: RefreshModel;
+  readonly refresh: RefreshModel;
 };
 
 export type HeldEventDetailPageModel =
-  | { kind: "loading" }
-  | { kind: "notFound" }
-  | { kind: "loadFailed"; refresh: RefreshModel }
+  | { readonly kind: "loading" }
+  | { readonly kind: "notFound" }
+  | { readonly kind: "loadFailed"; readonly refresh: RefreshModel }
   | HeldEventDetailReadyPageModel;
 
 /** Resolves display availability and projects one detail snapshot without owning its lifetime. */
@@ -141,27 +150,27 @@ function adjacentDestination(
   };
 }
 
-function compareHeldEventMatches(left: HeldEventMatchResponse, right: HeldEventMatchResponse) {
+function compareHeldEventMatches(left: HeldEventMatchView, right: HeldEventMatchView) {
   return left.matchNoInEvent - right.matchNoInEvent;
 }
 
 export type HeldEventPlayerRecap = {
-  averageRank: number;
-  displayName: string;
-  matchCount: number;
-  memberId: string;
-  ranks: number[];
-  wins: number;
+  readonly averageRank: number;
+  readonly displayName: string;
+  readonly matchCount: number;
+  readonly memberId: string;
+  readonly ranks: readonly number[];
+  readonly wins: number;
 };
 
 export type HeldEventDraftAction = {
-  href?: string;
-  label: string;
+  readonly href?: string;
+  readonly label: string;
 };
 
 export function buildHeldEventPlayerRecaps(
-  matches: readonly HeldEventMatchResponse[],
-): HeldEventPlayerRecap[] {
+  matches: readonly HeldEventMatchView[],
+): readonly HeldEventPlayerRecap[] {
   const ranksByMember = new Map<string, number[]>();
 
   for (const match of matches.toSorted(compareHeldEventMatches)) {

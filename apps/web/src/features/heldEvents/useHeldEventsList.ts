@@ -78,5 +78,5 @@ export function useHeldEventsList() {
     refresh: { pending: isFetching, run: refresh },
     updatePage,
     updatePageSize,
-  };
+  } as const;
 }

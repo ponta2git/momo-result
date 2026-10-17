@@ -58,7 +58,7 @@ describe("useMatchListLocationState", () => {
         <LocationStateHarness />
       </MemoryRouter>,
     );
-    await user.click(screen.getByRole("button", { name: "change title", exact: true }));
+    await user.click(screen.getByRole("button", { name: "change title" }));
     expect(JSON.parse(screen.getByLabelText("current search").textContent ?? "{}")).toMatchObject({
       gameTitleId: "game-2",
       seasonMasterId: "",

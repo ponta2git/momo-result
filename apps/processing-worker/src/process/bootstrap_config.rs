@@ -13,6 +13,7 @@ pub(super) fn command_allowed(arguments: &[OsString]) -> bool {
             | "maintenance-readiness"
             | "maintenance-status"
             | "maintenance-drain"
+            | "maintenance-analysis"
             | "release-audit"
             | "release-promote"
             | "release-reconcile"
@@ -29,15 +30,17 @@ pub(super) fn requires_child_cgroup(arguments: &[OsString]) -> bool {
         .first()
         .and_then(|value| value.to_str())
         .is_some_and(|command| {
-            matches!(
-                command,
-                "worker"
-                    | "shadow-endurance"
-                    | "probe-cgroup-limit"
-                    | "probe-ocr-child-lifecycle"
-                    | "ocr-r2-endurance"
-                    | "ocr-local-endurance"
-            )
+            (command == "maintenance-analysis"
+                && arguments.iter().any(|argument| argument == "--apply"))
+                || matches!(
+                    command,
+                    "worker"
+                        | "shadow-endurance"
+                        | "probe-cgroup-limit"
+                        | "probe-ocr-child-lifecycle"
+                        | "ocr-r2-endurance"
+                        | "ocr-local-endurance"
+                )
         })
 }
 
@@ -60,6 +63,7 @@ mod tests {
             "maintenance-readiness",
             "maintenance-status",
             "maintenance-drain",
+            "maintenance-analysis",
             "release-audit",
             "release-promote",
             "release-reconcile",
@@ -101,6 +105,7 @@ mod tests {
             "maintenance-readiness",
             "maintenance-status",
             "maintenance-drain",
+            "maintenance-analysis",
             "release-audit",
             "release-promote",
             "release-reconcile",
@@ -110,5 +115,12 @@ mod tests {
                 "{command}"
             );
         }
+        assert!(
+            requires_child_cgroup(&[
+                OsString::from("maintenance-analysis"),
+                OsString::from("--apply")
+            ]),
+            "scoped apply must retain child isolation"
+        );
     }
 }

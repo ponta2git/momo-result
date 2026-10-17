@@ -1,5 +1,30 @@
 use super::*;
 
+#[test]
+fn scoped_work_requires_the_same_frozen_fully_settled_barrier() {
+    let control = Control::new(true, Duration::from_secs(1));
+    assert_eq!(control.snapshot().frozen_process("cutover-test", 1), None);
+    assert!(
+        control.request(request(Stage::All)).is_ok(),
+        "frozen drain rejected"
+    );
+    let snapshot = control.snapshot();
+    assert_eq!(
+        snapshot.frozen_process("cutover-test", 1),
+        Some(std::process::id())
+    );
+    assert_eq!(snapshot.frozen_process("other", 1), None);
+    assert_eq!(snapshot.frozen_process("cutover-test", 8), None);
+    let normal = Control::new(false, Duration::from_secs(1));
+    assert!(
+        normal.request(request(Stage::All)).is_ok(),
+        "normal drain rejected"
+    );
+    normal.admission_settled();
+    normal.runtime_settled(Ok(()));
+    assert_eq!(normal.snapshot().frozen_process("cutover-test", 1), None);
+}
+
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 fn request(stage: Stage) -> Request {

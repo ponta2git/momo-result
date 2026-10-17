@@ -210,7 +210,10 @@ impl From<CgroupError> for ProcessError {
 ///
 /// Returns an error when the command, cgroup, identity transition, or exec boundary is invalid.
 #[cfg(target_os = "linux")]
-pub(crate) fn bootstrap_and_exec(arguments: &[OsString]) -> Result<(), ProcessError> {
+pub(crate) fn bootstrap_and_exec(
+    arguments: &[OsString],
+    frozen_daemon: Option<u32>,
+) -> Result<(), ProcessError> {
     use std::{os::unix::process::CommandExt, process::Command};
 
     if !bootstrap_config::command_allowed(arguments) {
@@ -228,8 +231,17 @@ pub(crate) fn bootstrap_and_exec(arguments: &[OsString]) -> Result<(), ProcessEr
     command.args(arguments);
     if bootstrap_config::requires_child_cgroup(arguments) {
         let child_limit = bootstrap_config::child_memory_limit()?;
-        let prepared =
-            crate::cgroup::prepare_production_child_cgroup(child_limit, WORKER_UID, WORKER_GID)?;
+        let prepared = match frozen_daemon {
+            Some(process_id) => crate::cgroup::maintenance::join_frozen_daemon(
+                process_id,
+                child_limit,
+                WORKER_UID,
+                WORKER_GID,
+            )?,
+            None => {
+                crate::cgroup::prepare_production_child_cgroup(child_limit, WORKER_UID, WORKER_GID)?
+            }
+        };
         command.envs(prepared.environment());
     }
     drop_worker_privileges()?;
@@ -243,7 +255,10 @@ pub(crate) fn bootstrap_and_exec(arguments: &[OsString]) -> Result<(), ProcessEr
 ///
 /// Always returns [`ProcessError::UnsupportedPlatform`].
 #[cfg(not(target_os = "linux"))]
-pub(crate) const fn bootstrap_and_exec(_arguments: &[OsString]) -> Result<(), ProcessError> {
+pub(crate) const fn bootstrap_and_exec(
+    _arguments: &[OsString],
+    _frozen_daemon: Option<u32>,
+) -> Result<(), ProcessError> {
     Err(ProcessError::UnsupportedPlatform)
 }
 

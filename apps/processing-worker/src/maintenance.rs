@@ -1,5 +1,6 @@
 //! Frozen startup and read-only readiness, independent of normal worker construction.
 
+pub(crate) mod analysis;
 pub(crate) mod drain;
 
 use std::{ffi::OsStr, time::Duration};

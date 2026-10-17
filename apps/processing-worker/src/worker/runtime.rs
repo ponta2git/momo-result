@@ -18,6 +18,8 @@ use tokio::{sync::watch, time};
 
 #[derive(Debug, Error)]
 pub(crate) enum WorkerError {
+    #[error(transparent)]
+    MaintenanceScope(#[from] crate::maintenance::analysis::ScopeError),
     #[error("processing worker database dependency failed")]
     Database(#[from] postgres::PostgresError),
     #[error("processing worker database transition failed")]
@@ -105,6 +107,7 @@ enum PendingExecution {
     Ocr(ocr::orchestrator::ImageRunner, ocr::control::ClaimedOcrJob),
 }
 mod dispatch;
+pub(crate) mod maintenance;
 
 struct WorkState {
     config: Option<AnalysisConsumerConfig>,
@@ -345,7 +348,8 @@ impl WorkerError {
             ) => postgres::is_lock_contention(error),
             Self::OcrControl(error) => error.is_contention(),
             Self::AnalysisControl(error) => error.is_contention(),
-            Self::Database(_)
+            Self::MaintenanceScope(_)
+            | Self::Database(_)
             | Self::Listener(_)
             | Self::Analysis(_)
             | Self::Ocr(_)
@@ -393,6 +397,7 @@ struct Runtime {
     admission_stop: watch::Sender<bool>,
     admission_stopped: watch::Receiver<bool>,
     maintenance: Option<Control>,
+    advertise_capability: bool,
     timeout: Duration,
     cleanup_grace: Duration,
     deadline: Option<time::Instant>,
@@ -418,6 +423,7 @@ impl Runtime {
             admission_stop,
             admission_stopped,
             maintenance: None,
+            advertise_capability: true,
             timeout,
             cleanup_grace,
             deadline: None,
@@ -774,7 +780,9 @@ async fn finish(runtime: &mut Runtime, state: &mut Option<WorkState>) -> Result<
         if let Some(runner) = runtime.returned.take() {
             work.restore(runner);
         }
-        if let Some(analysis) = &mut work.analysis {
+        if let Some(analysis) = &mut work.analysis
+            && runtime.advertise_capability
+        {
             if let Err(error) = runtime
                 .observe(
                     async {
@@ -789,7 +797,9 @@ async fn finish(runtime: &mut Runtime, state: &mut Option<WorkState>) -> Result<
             {
                 runtime.fail(error);
             }
-        } else if let Some(config) = &work.config {
+        } else if let Some(config) = &work.config
+            && runtime.advertise_capability
+        {
             // Registration can have committed before a lost startup response. The worker ID
             // survives the startup unwind, so cleanup does not require the module to return.
             if let Err(error) = runtime

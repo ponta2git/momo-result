@@ -11,7 +11,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use momo_ocr::OcrOutput;
 
 use crate::{
-    maintenance::{Mode, drain},
+    maintenance::{Mode, analysis, drain},
     ocr::{
         contract::{OcrHints, RequestedScreenType},
         endurance::{
@@ -63,6 +63,8 @@ enum Command {
         #[arg(long, value_enum)]
         stage: drain::Stage,
     },
+    /// Inspect or continue one existing release campaign under the live frozen barrier.
+    MaintenanceAnalysis(analysis::Arguments),
     ReleaseAudit {
         #[arg(long)]
         require_current: bool,
@@ -341,10 +343,7 @@ async fn execute_cli(
 ) -> ExitCode {
     match &command {
         Command::Bootstrap { arguments } => {
-            return match crate::process::bootstrap_and_exec(arguments) {
-                Ok(()) => ExitCode::SUCCESS,
-                Err(_error) => ExitCode::FAILURE,
-            };
+            return bootstrap_command(arguments).await;
         }
         Command::ChildCgroupAllocate { allocation_bytes } => {
             if crate::process::wait_for_child_start_barrier().is_err() {
@@ -414,6 +413,7 @@ async fn execute_cli(
         | Command::MaintenanceReadiness
         | Command::MaintenanceStatus
         | Command::MaintenanceDrain { .. }
+        | Command::MaintenanceAnalysis(_)
         | Command::ReleaseAudit { .. }
         | Command::ReleasePromote { .. }
         | Command::ReleaseReconcile { .. }
@@ -427,8 +427,39 @@ async fn execute_cli(
         | Command::ChildWait { .. } => {}
     }
 
-    initialize_logging();
+    initialize_logging(matches!(&command, Command::MaintenanceAnalysis(_)));
     command_exit(Box::pin(run(command, mode, shutdown_deadline)).await)
+}
+
+async fn bootstrap_command(arguments: &[OsString]) -> ExitCode {
+    let nested = Cli::try_parse_from(
+        std::iter::once(OsString::from("momo-processing-worker")).chain(arguments.iter().cloned()),
+    );
+    let frozen_process = if let Ok(Cli {
+        command: Command::MaintenanceAnalysis(analysis),
+    }) = nested
+        && analysis.apply
+    {
+        match analysis::bootstrap_process(&analysis).await {
+            Ok(process_id) => Some(process_id),
+            Err(error) => {
+                let _result = writeln!(io::stderr().lock(), "{error}");
+                return ExitCode::FAILURE;
+            }
+        }
+    } else {
+        None
+    };
+    match crate::process::bootstrap_and_exec(arguments, frozen_process) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(_error) => {
+            let _result = writeln!(
+                io::stderr().lock(),
+                "processing worker bootstrap isolation failed"
+            );
+            ExitCode::FAILURE
+        }
+    }
 }
 
 fn command_exit(result: Result<(), String>) -> ExitCode {
@@ -457,6 +488,9 @@ async fn run(
         },
         Command::MaintenanceReadiness => maintenance_readiness().await,
         Command::MaintenanceStatus => maintenance_control(None).await,
+        Command::MaintenanceAnalysis(arguments) => {
+            Box::pin(maintenance_analysis(arguments, shutdown_deadline)).await
+        }
         Command::MaintenanceDrain {
             cutover_id,
             stop_epoch,
@@ -530,12 +564,7 @@ async fn run(
         | Command::ChildOcr { .. }
         | Command::ChildCompute { .. } => Err(String::from("child command dispatch failed")),
         Command::Bootstrap { .. } => Err(String::from("bootstrap command dispatch failed")),
-        Command::ProbeParentDeath => {
-            let probe =
-                crate::process::spawn_parent_death_probe().map_err(|error| error.to_string())?;
-            write_stdout_line(probe.process_id())?;
-            wait_for_shutdown().await.map_err(|error| error.to_string())
-        }
+        Command::ProbeParentDeath => run_parent_death_probe().await,
         Command::ChildWait {
             parent_liveness_fd,
             parent_liveness_timeout_ms,
@@ -548,6 +577,12 @@ async fn run(
             wait_for_shutdown().await.map_err(|error| error.to_string())
         }
     }
+}
+
+async fn run_parent_death_probe() -> Result<(), String> {
+    let probe = crate::process::spawn_parent_death_probe().map_err(|error| error.to_string())?;
+    write_stdout_line(probe.process_id())?;
+    wait_for_shutdown().await.map_err(|error| error.to_string())
 }
 
 async fn run_cgroup_hard_limit_probe(allocation_bytes: u64, timeout_ms: u64) -> Result<(), String> {
@@ -669,11 +704,15 @@ async fn run_ocr_local_endurance(arguments: OcrLocalEnduranceArgs) -> Result<(),
 
 fn validate_mode_command(mode: Mode, command: &Command) -> Result<(), &'static str> {
     if mode == Mode::Normal {
-        return if matches!(command, Command::MaintenanceReadiness) {
-            Err("maintenance readiness requires frozen mode")
-        } else {
-            Ok(())
-        };
+        if matches!(command, Command::MaintenanceReadiness) {
+            return Err("maintenance readiness requires frozen mode");
+        }
+        if matches!(command, Command::MaintenanceAnalysis(_))
+            || matches!(command, Command::Bootstrap { arguments } if arguments.first().is_some_and(|value| value == "maintenance-analysis"))
+        {
+            return Err("scoped analysis requires frozen mode");
+        }
+        return Ok(());
     }
     if let Command::Bootstrap { arguments } = command {
         let nested = Cli::try_parse_from(
@@ -692,6 +731,7 @@ fn validate_mode_command(mode: Mode, command: &Command) -> Result<(), &'static s
             | Command::MaintenanceReadiness
             | Command::MaintenanceStatus
             | Command::MaintenanceDrain { .. }
+            | Command::MaintenanceAnalysis(_)
             | Command::ReleaseAudit { .. }
     ) {
         Ok(())
@@ -732,6 +772,34 @@ async fn run_frozen_worker() -> Result<(), String> {
 
 async fn maintenance_control(request: Option<drain::Request>) -> Result<(), String> {
     write_json_line(&drain::command(request).await.map_err(String::from)?)
+}
+
+async fn maintenance_analysis(
+    arguments: analysis::Arguments,
+    shutdown_deadline: &mut Option<tokio::time::Instant>,
+) -> Result<(), String> {
+    let apply = arguments.apply;
+    let (stop, stopped) = tokio::sync::watch::channel(false);
+    let operation = analysis::execute(arguments, stopped, shutdown_deadline);
+    tokio::pin!(operation);
+    let report = tokio::select! {
+        result = &mut operation => result?,
+        result = wait_for_shutdown() => {
+            stop.send_replace(true);
+            result.map_err(|_error| String::from("maintenance shutdown signal failed"))?;
+            operation.await?
+        }
+    };
+    let complete = report.status == "complete";
+    let acceptable = report.status != "attention_required";
+    write_json_line(&report)?;
+    if acceptable && (!apply || complete) {
+        Ok(())
+    } else {
+        Err(String::from(
+            "scoped analysis requires attention; inspect the operation report",
+        ))
+    }
 }
 
 async fn serve_maintenance(server: Option<&drain::Server>) -> Result<(), String> {
@@ -932,17 +1000,26 @@ async fn wait_for_shutdown() -> Result<(), io::Error> {
     }
 }
 
-fn initialize_logging() {
+fn initialize_logging(structured_output: bool) {
+    use tracing_subscriber::fmt::writer::BoxMakeWriter;
+
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let writer = if structured_output {
+        BoxMakeWriter::new(io::stderr)
+    } else {
+        BoxMakeWriter::new(io::stdout)
+    };
     let text_format =
         std::env::var("MOMO_LOG_FORMAT").is_ok_and(|value| value.eq_ignore_ascii_case("text"));
     if text_format {
         tracing_subscriber::fmt()
+            .with_writer(writer)
             .with_env_filter(filter)
             .compact()
             .init();
     } else {
         tracing_subscriber::fmt()
+            .with_writer(writer)
             .with_env_filter(filter)
             .json()
             .with_current_span(true)
@@ -954,6 +1031,39 @@ fn initialize_logging() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scoped_analysis_is_frozen_only_before_bootstrap_or_runtime_setup() {
+        let arguments = [
+            "maintenance-analysis",
+            "--cutover-id",
+            "scope-1",
+            "--stop-epoch",
+            "1",
+            "--operation-id",
+            "analysis-release-operation-1",
+            "--campaign-id",
+            "analysis-campaign-1",
+        ];
+        for prefix in [
+            vec!["momo-processing-worker"],
+            vec!["momo-processing-worker", "bootstrap", "--"],
+        ] {
+            let parsed = Cli::try_parse_from(prefix.into_iter().chain(arguments)).ok();
+            assert_eq!(
+                parsed
+                    .as_ref()
+                    .map(|cli| validate_mode_command(Mode::Normal, &cli.command)),
+                Some(Err("scoped analysis requires frozen mode"))
+            );
+            assert_eq!(
+                parsed
+                    .as_ref()
+                    .map(|cli| validate_mode_command(Mode::Frozen, &cli.command)),
+                Some(Ok(()))
+            );
+        }
+    }
 
     #[test]
     fn frozen_command_guard_allows_read_only_boundaries_and_closes_mutating_commands() {

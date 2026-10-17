@@ -78,7 +78,7 @@ struct Writer {
     failure: Option<Failure>,
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct InFlight {
     pub(crate) operations: u8,
@@ -99,6 +99,35 @@ pub(crate) struct Snapshot {
     phase: String,
     writers: Vec<Writer>,
     in_flight: InFlight,
+}
+
+impl Snapshot {
+    /// Binds an explicitly scoped operation to the running frozen daemon's settled barrier.
+    pub(crate) fn frozen_process(&self, cutover_id: &str, stop_epoch: u64) -> Option<u32> {
+        (self.mode == "frozen"
+            && self.consumer == "momo-processing-worker"
+            && self.scope == "process"
+            && self.cutover_id.as_deref() == Some(cutover_id)
+            && self.stop_epoch == Some(stop_epoch)
+            && self.stage == Some(Stage::All)
+            && self.phase == "drained"
+            && self.writers.len() == 2
+            && self
+                .writers
+                .iter()
+                .zip([
+                    ("scheduler_and_attempts", Stage::Admission),
+                    ("runtime_and_notifications", Stage::All),
+                ])
+                .all(|(writer, (name, stage))| {
+                    writer.name == name
+                        && writer.stage == stage
+                        && writer.status == Status::Drained
+                        && writer.failure.is_none()
+                })
+            && self.in_flight == InFlight::default())
+        .then_some(self.process_id)
+    }
 }
 
 struct State {

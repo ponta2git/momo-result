@@ -9,6 +9,36 @@ import { createDeferred } from "@/test/deferred";
 import { makePlayerRadarEditorModel } from "@/test/fixtures/playerRadarEditorModel";
 
 describe("radar editor saved identity", () => {
+  it("keeps the settled preview while draft text changes and publishes it after the debounce", () => {
+    vi.useFakeTimers();
+    try {
+      const model = makePlayerRadarEditorModel();
+      const { result } = renderHook(() => useRadarThresholdEditor(model));
+      act(() => result.current.beginFromCurrent());
+      act(() => vi.advanceTimersByTime(300));
+      const settled = result.current.preview;
+      expect(settled).not.toBeNull();
+      expect(result.current.ready).toBe(true);
+
+      act(() => result.current.change("averageRank", 0, "4.9"));
+      expect(result.current.drafts?.averageRank[0]).toBe("4.9");
+      expect(result.current.ready).toBe(false);
+      expect(result.current.preview).toBe(settled);
+      act(() => result.current.change("averageRank", 0, "4.95"));
+      expect(result.current.preview).toBe(settled);
+
+      act(() => vi.advanceTimersByTime(300));
+      expect(result.current.ready).toBe(true);
+      expect(result.current.preview).not.toBe(settled);
+      expect(
+        result.current.preview?.candidateBasis.axes.find((axis) => axis.axisId === "averageRank")
+          ?.thresholds[0]?.rawValue,
+      ).toBe(4.95);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("settles preparation while Activity is hidden and recovers its authorized receipt with the input intact", async () => {
     const model = makePlayerRadarEditorModel();
     const editing = model.editing!;
@@ -25,11 +55,11 @@ describe("radar editor saved identity", () => {
         <Activity mode={visible ? "visible" : "hidden"}>{children}</Activity>
       ),
     });
-    act(() => result.current.begin(editing.current!));
+    act(() => result.current.beginFromCurrent());
     act(() => result.current.change("averageRank", 0, "4.950"));
     let pending: Promise<unknown> | undefined;
     act(() => {
-      pending = result.current.prepareApply();
+      pending = result.current.requestApply();
     });
     expect(result.current.preparingApply).toBe(true);
     const request = save.mock.calls[0]![0];
@@ -61,8 +91,8 @@ describe("radar editor saved identity", () => {
       },
     });
     expect(result.current.preparingApply).toBe(false);
-    expect(result.current.session?.saved?.candidateId).toBe(candidate.candidateId);
-    expect(result.current.session?.drafts.averageRank[0]).toBe("4.950");
+    expect(result.current.replacesCandidate).toBe(true);
+    expect(result.current.drafts?.averageRank[0]).toBe("4.950");
     expect(result.current.contextChanged).toBe(false);
     expect(result.current.applyError).toBeNull();
     expect(save).toHaveBeenCalledTimes(1);
@@ -78,10 +108,10 @@ describe("radar editor saved identity", () => {
       });
       editing.discard = discard;
       const { result } = renderHook(() => useRadarThresholdEditor(model));
-      act(() => result.current.begin(editing.current!));
+      act(() => result.current.beginFromCurrent());
       act(() => result.current.change("averageRank", 0, "4.95"));
       await act(async () => {
-        await result.current.prepareApply();
+        await result.current.requestApply();
       });
       await act(async () => {
         if (fails) await expect(result.current.discard()).rejects.toThrow();
@@ -92,7 +122,7 @@ describe("radar editor saved identity", () => {
         operationId: "saved-operation",
       });
       expect(result.current.active).toBe(fails);
-      if (fails) expect(result.current.session?.drafts.averageRank[0]).toBe("4.95");
+      if (fails) expect(result.current.drafts?.averageRank[0]).toBe("4.95");
     },
   );
 
@@ -102,7 +132,7 @@ describe("radar editor saved identity", () => {
     const current = editing?.current;
     const evaluation = editing?.evaluation;
     if (!editing || !current || !evaluation) throw new Error("Missing editor fixture");
-    const source = { ...current, expectedCandidateId: "saved", savedCandidateId: "saved" };
+    editing.current = { ...current, expectedCandidateId: "saved", savedCandidateId: "saved" };
     model.candidate = {
       candidateId: "saved",
       status: "ready",
@@ -124,12 +154,11 @@ describe("radar editor saved identity", () => {
     const { result, rerender } = renderHook((value) => useRadarThresholdEditor(value), {
       initialProps: model,
     });
-    act(() => result.current.begin(source));
+    act(() => result.current.beginFromCurrent());
     await act(async () => {
-      await result.current.prepareApply();
+      await result.current.requestApply();
     });
     expect(result.current.canApply).toBe(true);
-    expect(result.current.session?.confirmedPreviewId).toBe("formal-one");
 
     const scoped = { ...model, previewFilter: { ...model.previewFilter, mapMasterId: "east" } };
     rerender(scoped);
@@ -140,11 +169,10 @@ describe("radar editor saved identity", () => {
     expect(result.current.canApply).toBe(false);
     expect(result.current.comparisonChanged).toBe(true);
     await act(async () => {
-      await result.current.prepareApply();
+      await result.current.requestApply();
     });
     expect(result.current.canApply).toBe(true);
     expect(result.current.comparisonChanged).toBe(false);
-    expect(result.current.session?.confirmedPreviewId).toBe("formal-two");
   });
 
   it.each([
@@ -168,14 +196,14 @@ describe("radar editor saved identity", () => {
       const { result, rerender } = renderHook((value) => useRadarThresholdEditor(value), {
         initialProps: model,
       });
-      act(() => result.current.begin(source));
+      act(() => result.current.beginFromCurrent());
       act(() => result.current.change("averageRank", 0, "4.95"));
       await act(async () => {
-        await result.current.prepareApply();
+        await result.current.requestApply();
       });
       const request = save.mock.calls[0]?.[0];
       if (!request) throw new Error("Save request was not captured");
-      expect(result.current.session?.saved).toBeNull();
+      expect(result.current.replacesCandidate).toBe(false);
       expect(result.current.applyError).toContain("受付結果はまだ不明");
 
       const candidate = {
@@ -198,7 +226,7 @@ describe("radar editor saved identity", () => {
           },
         },
       });
-      expect(result.current.session?.saved).toBeNull();
+      expect(result.current.replacesCandidate).toBe(false);
       expect(result.current.contextChanged).toBe(true);
 
       const receipt = {
@@ -215,12 +243,11 @@ describe("radar editor saved identity", () => {
           permissionReason: "権限確認中",
         },
       });
-      expect(result.current.session?.saved).toBeNull();
+      expect(result.current.replacesCandidate).toBe(false);
 
       rerender({ ...model, candidate, editing: { ...editing, acceptedSave: receipt } });
-      expect(result.current.session?.saved?.candidateId).toBe(candidate.candidateId);
-      expect(result.current.session?.confirmed).toBe(true);
-      expect(result.current.session?.drafts.averageRank[0]).toBe("4.95");
+      expect(result.current.replacesCandidate).toBe(true);
+      expect(result.current.drafts?.averageRank[0]).toBe("4.95");
       expect(result.current.contextChanged).toBe(false);
       expect(result.current.applyError).toBeNull();
       expect(result.current.canApply).toBe(false);
@@ -236,10 +263,10 @@ describe("radar editor saved identity", () => {
       const { result, rerender } = renderHook((value) => useRadarThresholdEditor(value), {
         initialProps: model,
       });
-      act(() => result.current.begin(editing.current!));
+      act(() => result.current.beginFromCurrent());
       act(() => result.current.change("averageRank", 0, "4.95"));
       await act(async () => {
-        await result.current.prepareApply();
+        await result.current.requestApply();
       });
       if (editedAgain) act(() => result.current.change("averageRank", 0, "5.1"));
       const acceptedApply = { operationId: "recovered-apply", candidateId: "saved-candidate" };
@@ -250,8 +277,8 @@ describe("radar editor saved identity", () => {
       expect(result.current.active).toBe(true);
       rerender({ ...model, editing: { ...editing, acceptedApply } });
       expect(result.current.active).toBe(editedAgain);
-      expect(result.current.navigationAllowedRef.current).toBe(!editedAgain);
-      if (editedAgain) expect(result.current.session?.drafts.averageRank[0]).toBe("5.1");
+      expect(result.current.isNavigationAllowed()).toBe(!editedAgain);
+      if (editedAgain) expect(result.current.drafts?.averageRank[0]).toBe("5.1");
     },
   );
 
@@ -268,7 +295,7 @@ describe("radar editor saved identity", () => {
       unavailableAxes: [],
     };
     const { result } = renderHook(() => useRadarThresholdEditor(model));
-    act(() => result.current.begin(source));
+    act(() => result.current.beginFromCurrent());
     expect(result.current.contextChanged).toBe(false);
   });
 });

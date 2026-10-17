@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 import type { PlayerRadarAdminModel } from "@/features/seriesAnalysisAdmin/playerRadarAdminModel";
 import { PlayerRadarCommandButton } from "@/features/seriesAnalysisAdmin/PlayerRadarCommandButton";
-import type { RadarThresholdEditor } from "@/features/seriesAnalysisAdmin/useRadarThresholdEditor";
+import type { RadarEditingControls } from "@/features/seriesAnalysisAdmin/radarThresholdEditorModel";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
@@ -18,35 +18,10 @@ export function PlayerRadarChangeMethod({
   active,
 }: {
   model: PlayerRadarAdminModel;
-  editor: RadarThresholdEditor;
+  editor: RadarEditingControls;
   active: boolean;
 }) {
-  const currentSource = model.editing?.current;
-  const candidateSource = model.editing?.candidate;
-  const enteredCandidate = useRef<string | null>(null);
-  useEffect(() => {
-    const id = model.autoEditCandidateId;
-    if (
-      !active ||
-      editor.active ||
-      !id ||
-      enteredCandidate.current === id ||
-      model.candidate?.candidateId !== id ||
-      model.candidate.status !== "ready" ||
-      !candidateSource ||
-      model.editing?.saveDisabledReason
-    )
-      return;
-    enteredCandidate.current = id;
-    editor.begin(candidateSource);
-  }, [
-    active,
-    candidateSource,
-    editor,
-    model.autoEditCandidateId,
-    model.candidate,
-    model.editing?.saveDisabledReason,
-  ]);
+  const currentSource = editor.currentSourceAvailable;
   const [changeMethod, setChangeMethod] = useState<"current" | "generate" | "restore">(
     currentSource ? "current" : "generate",
   );
@@ -54,9 +29,9 @@ export function PlayerRadarChangeMethod({
   const creationAction =
     changeMethod === "current" && currentSource
       ? {
-          disabledReason: model.editing?.saveDisabledReason ?? null,
+          disabledReason: editor.saveDisabledReason,
           pending: false,
-          run: () => editor.begin(currentSource),
+          run: editor.beginFromCurrent,
         }
       : changeMethod === "restore" && model.previousBasis
         ? model.actions.restore
@@ -136,7 +111,7 @@ export function PlayerRadarChangeMethod({
                       : "最新の記録から作成"
                 }
                 pendingLabel="変更案を作成中"
-                primary={!model.editing?.current}
+                primary={!editor.currentSourceAvailable}
               />
               {creationAction.disabledReason &&
               !operationInProgress &&

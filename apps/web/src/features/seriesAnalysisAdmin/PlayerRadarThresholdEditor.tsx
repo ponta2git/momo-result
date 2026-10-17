@@ -3,8 +3,8 @@ import type { Ref } from "react";
 
 import type { PlayerRadarAdminModel } from "@/features/seriesAnalysisAdmin/playerRadarAdminModel";
 import { PlayerRadarPreview } from "@/features/seriesAnalysisAdmin/PlayerRadarPreview";
+import type { RadarThresholdEditor } from "@/features/seriesAnalysisAdmin/radarThresholdEditorModel";
 import type { RadarThresholdError } from "@/features/seriesAnalysisAdmin/radarThresholdInput";
-import type { RadarThresholdEditor } from "@/features/seriesAnalysisAdmin/useRadarThresholdEditor";
 import { playerRadarAxes } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { actionRowClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
@@ -42,11 +42,9 @@ export function PlayerRadarThresholdEditor({
     if (!focusRequest) return;
     inputs.current.get(`${focusRequest.axisId}:${focusRequest.index}`)?.focus();
   }, [focusRequest]);
-  const { session } = editor;
-  if (!session || !model.editing) return null;
-  const data = model.editing;
+  if (!editor.active || !editor.drafts) return null;
   const pending = editor.preparingApply || model.communicationUnknown;
-  const disabled = pending || editor.discarding || Boolean(data.permissionReason);
+  const disabled = pending || editor.discarding || Boolean(editor.permissionReason);
   const selectedAxis =
     playerRadarAxes.find((axis) => axis.id === editor.axis) ?? playerRadarAxes[0];
   const unit = editor.axis === "averageRank" ? "位以下" : "万円以上";
@@ -54,12 +52,10 @@ export function PlayerRadarThresholdEditor({
   const currentValues = model.currentBasis?.axes.find(
     (axis) => axis.axisId === editor.axis,
   )?.thresholds;
-  const originalValues = session.source.basis.axes.find(
-    (axis) => axis.axisId === editor.axis,
-  )?.thresholds;
+  const originalValues = editor.referenceThresholds?.[editor.axis];
   const errors = editor.composing
     ? []
-    : (editor.parsed?.errors ?? []).filter(
+    : editor.errors.filter(
         (error) =>
           error.kind !== "numeric" ||
           editor.showErrors ||
@@ -70,13 +66,7 @@ export function PlayerRadarThresholdEditor({
     editor.setAxis(error.axisId);
     setFocusRequest({ ...error });
   };
-  const applyReason =
-    data.saveDisabledReason ??
-    (editor.contextChanged
-      ? "最新の基準・共有案を確認してください。"
-      : editor.noChangeFromCurrent
-        ? "適用中の境界と同じ値です。"
-        : null);
+  const applyReason = editor.applyReason;
   const comparisonLabel =
     errors.length > 0
       ? "入力に不備があるため、比較を更新できません。各欄の案内を確認してください。表示中の比較は現在の入力を反映していません。"
@@ -85,7 +75,7 @@ export function PlayerRadarThresholdEditor({
         : editor.awaitingValidation
           ? "適用前に点数の変化を確認しています。"
           : !editor.ready
-            ? editor.composing || editor.parsed?.errors.length
+            ? editor.composing || editor.errors.length > 0
               ? "入力を確認中です。表示中の比較は現在の入力を反映していません。"
               : "入力の反映待ちです。表示中の比較は前回の入力によるものです。"
             : "入力中の比較です。まだ適用されていません。";
@@ -94,7 +84,7 @@ export function PlayerRadarThresholdEditor({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="grid gap-1">
           <h3 className={contentText.heading}>採点境界を調整</h3>
-          <p className={contentText.supporting}>編集元: {session.source.label}</p>
+          <p className={contentText.supporting}>編集元: {editor.sourceLabel}</p>
         </div>
         <div className={actionRowClass}>
           <Button disabled={disabled} size="sm" variant="quiet" onClick={editor.reset}>
@@ -127,7 +117,7 @@ export function PlayerRadarThresholdEditor({
           title="適用中の基準または共有案が変わりました"
           action={
             <Button
-              disabled={disabled || (!data.current && !data.candidate)}
+              disabled={disabled || !editor.latestSourceAvailable}
               variant="secondary"
               onClick={editor.adoptCurrentSource}
             >
@@ -204,7 +194,7 @@ export function PlayerRadarThresholdEditor({
                   </div>
                   <fieldset disabled={disabled} className="grid min-w-0 gap-4">
                     <legend className="sr-only">{selectedAxis.label}の9境界</legend>
-                    {session.drafts[axis.id].map((text, index) => {
+                    {editor.drafts?.[axis.id].map((text, index) => {
                       const key = `${axis.id}:${index}`;
                       const inputId = `${id}-${axis.id}-${index}`;
                       const fieldErrors = errors.filter(
@@ -230,7 +220,7 @@ export function PlayerRadarThresholdEditor({
                                 : "未適用"}
                               {showReference ? (
                                 <span className="block">
-                                  編集元: {originalValues?.[index]?.rawValue}
+                                  編集元: {originalValues?.[index]}
                                   {unit}
                                 </span>
                               ) : null}
@@ -276,7 +266,7 @@ export function PlayerRadarThresholdEditor({
                     })}
                   </fieldset>
                   <div className="grid justify-items-start gap-2">
-                    {session.source.expectedCandidateId ? (
+                    {editor.replacesCandidate ? (
                       <p className={contentText.supporting}>
                         適用の確認に進むと、現在の変更案をこの入力で置き換えます。適用中の基準は変わりません。
                       </p>
@@ -304,8 +294,8 @@ export function PlayerRadarThresholdEditor({
                   >
                     {comparisonLabel}
                   </p>
-                  {data.evaluationMessage ? (
-                    <Notice tone="info" title={data.evaluationMessage}>
+                  {editor.evaluationMessage ? (
+                    <Notice tone="info" title={editor.evaluationMessage}>
                       {null}
                     </Notice>
                   ) : null}
@@ -314,7 +304,7 @@ export function PlayerRadarThresholdEditor({
                       preview={preview}
                       axisId={editor.axis}
                       filter={model.previewFilter}
-                      updating={data.evaluationUpdating}
+                      updating={editor.evaluationUpdating}
                       onSeasonChange={model.actions.selectSeason}
                       onMapChange={model.actions.selectMap}
                       onResetFilter={model.actions.resetPreviewFilter}

@@ -7,9 +7,11 @@ import { PlayerRadarChangeMethod } from "@/features/seriesAnalysisAdmin/PlayerRa
 import { PlayerRadarCommandButton } from "@/features/seriesAnalysisAdmin/PlayerRadarCommandButton";
 import { PlayerRadarCriteria } from "@/features/seriesAnalysisAdmin/PlayerRadarCriteria";
 import { PlayerRadarEditingWorkspace } from "@/features/seriesAnalysisAdmin/PlayerRadarEditingWorkspace";
-import { useRadarThresholdEditor } from "@/features/seriesAnalysisAdmin/useRadarThresholdEditor";
+import {
+  RadarThresholdEditingOwner,
+  useRadarEditingControls,
+} from "@/features/seriesAnalysisAdmin/RadarThresholdEditingOwner";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
-import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
 import { playerRadarAxes } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { actionRowClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
@@ -21,16 +23,26 @@ import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { contentText } from "@/shared/ui/typography";
 
-export function PlayerRadarAdminPanel({
-  model,
-  active = true,
-  applyFinalFocus,
-}: {
+type Props = {
   model: PlayerRadarAdminModel;
   active?: boolean;
   applyFinalFocus?: (() => HTMLElement | null) | undefined;
-}) {
-  const editor = useRadarThresholdEditor(model);
+};
+
+export function PlayerRadarAdminPanel({ model, active = true, applyFinalFocus }: Props) {
+  return (
+    <RadarThresholdEditingOwner model={model} active={active}>
+      <PlayerRadarAdminPanelContent
+        model={model}
+        active={active}
+        applyFinalFocus={applyFinalFocus}
+      />
+    </RadarThresholdEditingOwner>
+  );
+}
+
+function PlayerRadarAdminPanelContent({ model, active = true, applyFinalFocus }: Props) {
+  const editor = useRadarEditingControls();
   const headingRef = useRef<HTMLHeadingElement>(null);
   const withdrawTriggerRef = useRef<HTMLButtonElement>(null);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
@@ -47,18 +59,6 @@ export function PlayerRadarAdminPanel({
 
   return (
     <section aria-labelledby="radar-administration-heading" className="grid min-w-0 gap-6">
-      <UnsavedChangesGuard
-        // Recreate the router subscription after an authorization Activity resumes.
-        // The input remains in this panel; an old blocked destination must not resume.
-        key={model.authorizationRevision}
-        description="採点境界の変更はまだ適用されていません。このページに残れば編集を続けられます。"
-        model={{
-          dirty: editor.active,
-          navigationAllowedRef: editor.navigationAllowedRef,
-          onDiscard: editor.discard,
-        }}
-        pending={editor.preparingApply || model.applyPending || model.communicationUnknown}
-      />
       <ContentWithActions
         actions={
           <Button
@@ -154,19 +154,18 @@ export function PlayerRadarAdminPanel({
       ) : null}
       <PlayerRadarEditingWorkspace
         model={model}
-        editor={editor}
         active={active}
         applyFinalFocus={applyFinalFocus}
       />
       {!editor.active ? (
         <>
           <PlayerRadarCriteria currentBasis={model.currentBasis} proposedBasis={null} />
-          {model.editing?.candidate ? (
+          {editor.candidateSourceAvailable ? (
             <div className={actionRowClass}>
               <Button
-                disabled={Boolean(model.editing.saveDisabledReason)}
-                variant={model.editing.current ? "secondary" : "primary"}
-                onClick={() => model.editing?.candidate && editor.begin(model.editing.candidate)}
+                disabled={Boolean(editor.saveDisabledReason)}
+                variant={editor.currentSourceAvailable ? "secondary" : "primary"}
+                onClick={editor.beginFromCandidate}
               >
                 変更案を編集
               </Button>

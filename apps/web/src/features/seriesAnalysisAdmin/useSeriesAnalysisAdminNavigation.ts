@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { useSeriesAnalysisAdminLocation } from "@/features/seriesAnalysisAdmin/useSeriesAnalysisAdminLocation";
-import type { useAuthorization } from "@/shared/auth/useAuthorization";
+import type { AuthorizationAccess } from "@/shared/auth/authorization";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 export function useSeriesAnalysisAdminNavigation({
@@ -12,7 +12,7 @@ export function useSeriesAnalysisAdminNavigation({
   clearRecalculationFeedback,
 }: {
   location: ReturnType<typeof useSeriesAnalysisAdminLocation>;
-  authorization: ReturnType<typeof useAuthorization>;
+  authorization: Pick<AuthorizationAccess, "epoch" | "retained">;
   selectedTitleName: string | undefined;
   refreshRadar: () => void;
   clearRecalculationFeedback: () => void;

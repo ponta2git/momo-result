@@ -8,10 +8,7 @@ import {
   playerRadarHistoryQueryOptions,
   playerRadarRevisionQueryOptions,
 } from "@/shared/api/seriesPlayerRadarHistory";
-import type {
-  PlayerRadarRevisionList,
-  PlayerRadarRevisionDetail,
-} from "@/shared/api/seriesPlayerRadarHistory";
+import type { AuthorizationAccess } from "@/shared/auth/authorization";
 import { useAuthorization } from "@/shared/auth/useAuthorization";
 
 /** History navigation never changes the title or scope of the threshold editor. */
@@ -21,13 +18,12 @@ export function usePlayerRadarHistoryModel() {
   const owner = usePlayerRadarHistory(authorization, location);
   return {
     ...location.history,
-    ...historyPresentation(owner),
-    actions: owner.actions,
+    ...owner,
   };
 }
 
 function usePlayerRadarHistory(
-  authorization: ReturnType<typeof useAuthorization>,
+  authorization: Pick<AuthorizationAccess, "canRead" | "allowed" | "auth" | "begin">,
   location: ReturnType<typeof useSeriesAnalysisAdminLocation>,
 ) {
   const { gameTitleId, cursor, revisionId } = location.history;
@@ -47,11 +43,18 @@ function usePlayerRadarHistory(
     if (authorization.begin("operations")) location.update(action);
   };
   return {
-    allowed: authorization.allowed.operations,
-    checking: authorization.auth.isChecking,
-    list,
-    detail,
-    result,
+    data: authorization.allowed.operations ? list.data : undefined,
+    revision: authorization.allowed.operations ? detail.data : undefined,
+    loading: authorization.auth.isChecking || isInitialQueryLoading(result),
+    refreshing: result.isFetching,
+    disabled: !authorization.allowed.operations,
+    refreshDisabled: !authorization.allowed.operations || result.isFetching,
+    error: shouldShowQueryError(result)
+      ? {
+          ...normalizeDisplayApiError(result.error, "改訂履歴を読み込めません"),
+          tone: result.data ? ("warning" as const) : ("danger" as const),
+        }
+      : null,
     actions: {
       showList: () => update({ kind: "historyList" }),
       selectRevision: (value: string) => update({ kind: "historyRevision", value }),
@@ -61,34 +64,5 @@ function usePlayerRadarHistory(
         if (authorization.begin("operations")) void result.refetch();
       },
     },
-  };
-}
-
-function historyPresentation({
-  allowed,
-  checking,
-  list,
-  detail,
-  result,
-}: {
-  allowed: boolean;
-  checking: boolean;
-  list: { data: PlayerRadarRevisionList | undefined };
-  detail: { data: PlayerRadarRevisionDetail | undefined };
-  result: { data: unknown; error: unknown; isFetching: boolean; isLoading: boolean };
-}) {
-  return {
-    data: allowed ? list.data : undefined,
-    revision: allowed ? detail.data : undefined,
-    loading: checking || isInitialQueryLoading(result),
-    refreshing: result.isFetching,
-    disabled: !allowed,
-    refreshDisabled: !allowed || result.isFetching,
-    error: shouldShowQueryError(result)
-      ? {
-          ...normalizeDisplayApiError(result.error, "改訂履歴を読み込めません"),
-          tone: result.data ? ("warning" as const) : ("danger" as const),
-        }
-      : null,
   };
 }

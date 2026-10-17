@@ -28,15 +28,14 @@ import type {
   SeriesPlayerRadarOperation,
 } from "@/shared/api/seriesPlayerRadar";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
-import type { AuthorizationLease } from "@/shared/auth/authorization";
-import type { useAuthorization } from "@/shared/auth/useAuthorization";
+import type { AuthorizationLease, AuthorizationAccess } from "@/shared/auth/authorization";
 
 type RadarCommandRequest = { request: SeriesPlayerRadarCommand; lease: AuthorizationLease };
 
 /** Each mounted instance owns one title; scope changes never retarget a submitted command. */
 export function usePlayerRadarAdminOwner(
   gameTitleId: string,
-  authorization: ReturnType<typeof useAuthorization>,
+  authorization: AuthorizationAccess,
   onApplyAccepted?: (operationId: string) => void,
 ) {
   const queryClient = useQueryClient();

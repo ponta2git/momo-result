@@ -14,12 +14,11 @@ import {
 } from "@/shared/api/seriesAnalysis";
 import type { SeriesAnalysisRecalculationAccepted } from "@/shared/api/seriesAnalysis";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
-import type { AuthorizationLease } from "@/shared/auth/authorization";
-import type { useAuthorization } from "@/shared/auth/useAuthorization";
+import type { AuthorizationLease, AuthorizationOperations } from "@/shared/auth/authorization";
 
 type RecalculationRequest = { target: RecalculationTarget; lease: AuthorizationLease };
 
-export function useSeriesAnalysisRecalculation(authorization: ReturnType<typeof useAuthorization>) {
+export function useSeriesAnalysisRecalculation(authorization: AuthorizationOperations) {
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
   const activeCommand = useRef<AuthorizationLease | undefined>(undefined);

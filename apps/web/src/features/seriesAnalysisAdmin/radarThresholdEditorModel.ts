@@ -1,4 +1,9 @@
-import type { RadarManualInput } from "@/features/seriesAnalysisAdmin/radarThresholdInput";
+import type { PlayerRadarPreviewModel } from "@/features/seriesAnalysisAdmin/playerRadarAdminModel";
+import type {
+  RadarManualInput,
+  RadarThresholdDrafts,
+  RadarThresholdError,
+} from "@/features/seriesAnalysisAdmin/radarThresholdInput";
 import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import type {
   SeriesAnalysisScopeStatus,
@@ -8,7 +13,73 @@ import { playerRadarAggregateDisplay } from "@/shared/seriesAnalysis/playerRadar
 import type {
   PlayerRadarBasis,
   PlayerRadarDisplay,
+  PlayerRadarAxisId,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
+
+export type RadarApplyConfirmationView = Readonly<{
+  open: boolean;
+  disabled: boolean;
+  changed: boolean;
+  gameTitleName: string;
+  facts: Readonly<{ createdAt: string | null; matchCount: number; heldEventCount: number }> | null;
+  waitingMessage: string | null;
+}>;
+
+export type RadarThresholdEditorView = Readonly<{
+  active: boolean;
+  drafts: RadarThresholdDrafts | null;
+  errors: ReadonlyArray<Readonly<RadarThresholdError>>;
+  inputValid: boolean;
+  sourceLabel: string;
+  referenceThresholds: Readonly<Partial<Record<PlayerRadarAxisId, readonly number[]>>> | null;
+  replacesCandidate: boolean;
+  preview: PlayerRadarPreviewModel | null;
+  axis: PlayerRadarAxisId;
+  ready: boolean;
+  composing: boolean;
+  showErrors: boolean;
+  preparingApply: boolean;
+  discarding: boolean;
+  applyError: string | null;
+  changed: boolean;
+  canApply: boolean;
+  awaitingValidation: boolean;
+  formalMismatch: boolean;
+  comparisonChanged: boolean;
+  noChangeFromCurrent: boolean;
+  contextChanged: boolean;
+  waitingForSavedState: boolean;
+  permissionReason: string | null;
+  applyReason: string | null;
+  evaluationMessage: string | null;
+  evaluationUpdating: boolean;
+  latestSourceAvailable: boolean;
+}>;
+
+export type RadarEditingControls = Readonly<{
+  active: boolean;
+  currentSourceAvailable: boolean;
+  candidateSourceAvailable: boolean;
+  saveDisabledReason: string | null;
+  beginFromCurrent: () => void;
+  beginFromCandidate: () => void;
+}>;
+
+export type RadarThresholdEditor = RadarThresholdEditorView &
+  RadarEditingControls &
+  Readonly<{
+    confirmation: RadarApplyConfirmationView;
+    setAxis: (axis: PlayerRadarAxisId) => void;
+    setComposing: (value: boolean) => void;
+    change: (axis: PlayerRadarAxisId, index: number, text: string) => void;
+    reset: () => void;
+    adoptCurrentSource: () => void;
+    discard: () => Promise<void>;
+    requestApply: () => Promise<RadarThresholdError | null>;
+    confirmApply: () => Promise<void>;
+    setConfirmationOpen: (open: boolean) => void;
+    isNavigationAllowed: () => boolean;
+  }>;
 
 export type RadarEditingSource = {
   label: string;

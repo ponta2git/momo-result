@@ -7,7 +7,7 @@ import { normalizeDisplayApiError } from "@/shared/api/problemDetails";
 import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { seriesPlayerRadarKeys } from "@/shared/api/queryKeys";
 import { seriesAnalysisAdminOverviewQueryOptions } from "@/shared/api/seriesAnalysisQueryOptions";
-import type { useAuthorization } from "@/shared/auth/useAuthorization";
+import type { AuthorizationAccess } from "@/shared/auth/authorization";
 import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 /** Owns overview reads and the default-title handoff to its canonical URL/cache. */
@@ -16,7 +16,7 @@ export function useSeriesAnalysisAdminOverview({
   location,
   onTitleChange,
 }: {
-  authorization: ReturnType<typeof useAuthorization>;
+  authorization: Pick<AuthorizationAccess, "canRead" | "retained" | "auth" | "allowed" | "begin">;
   location: ReturnType<typeof useSeriesAnalysisAdminLocation>;
   onTitleChange: () => void;
 }) {

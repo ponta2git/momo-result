@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 import type {
   PlayerRadarPreviewFilter,
   PlayerRadarPreviewModel,
@@ -36,7 +38,7 @@ function isReferenceScore(cell: PlayerRadarCell | undefined): boolean {
   return cell?.sampleQuality === "reference" && cell.score !== null;
 }
 
-export function PlayerRadarPreview({
+export const PlayerRadarPreview = memo(function PlayerRadarPreview({
   preview,
   filter,
   updating,
@@ -282,4 +284,4 @@ export function PlayerRadarPreview({
       </div>
     </div>
   );
-}
+});

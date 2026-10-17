@@ -10,6 +10,7 @@ pub(super) fn command_allowed(arguments: &[OsString]) -> bool {
     matches!(
         command,
         "worker"
+            | "maintenance-readiness"
             | "release-audit"
             | "release-promote"
             | "release-reconcile"
@@ -54,6 +55,7 @@ mod tests {
     fn bootstrap_command_allowlist_excludes_hidden_children_and_recursion() {
         for command in [
             "worker",
+            "maintenance-readiness",
             "release-audit",
             "release-promote",
             "release-reconcile",
@@ -91,7 +93,12 @@ mod tests {
                 "{command}"
             );
         }
-        for command in ["release-audit", "release-promote", "release-reconcile"] {
+        for command in [
+            "maintenance-readiness",
+            "release-audit",
+            "release-promote",
+            "release-reconcile",
+        ] {
             assert!(
                 !requires_child_cgroup(&[OsString::from(command)]),
                 "{command}"

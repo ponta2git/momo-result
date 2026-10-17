@@ -7,7 +7,7 @@ import sttp.tapir.AnyEndpoint
 
 import momo.api.adapters.discord.JavaDiscordOAuthClient
 import momo.api.auth.CreatedSession
-import momo.api.config.{AppConfig, ResourceLimitsConfig}
+import momo.api.config.{AppConfig, MaintenanceMode, ResourceLimitsConfig}
 import momo.api.domain.LoginAccount
 import momo.api.usecases.ocr.OcrAdmissionGuard
 
@@ -38,12 +38,20 @@ object ApiApp:
     .map(_.app)
 
   /** Build the application against its PostgreSQL persistence boundary. */
-  def wired[F[_]: Async](config: AppConfig): Resource[F, Runtime[F]] = wiredWithHandles(config)
-    .map(_.runtime)
+  def wired[F[_]: Async](config: AppConfig): Resource[F, Runtime[F]] = config.maintenanceMode match
+    case MaintenanceMode.Normal => wiredWithHandles(config).map(_.runtime)
+    case MaintenanceMode.Frozen => FrozenApiRuntime.resource(config)
 
   private[api] def wiredWithHandles[F[_]: Async](
       config: AppConfig
-  ): Resource[F, WiredRuntime[F]] = Resource
+  ): Resource[F, WiredRuntime[F]] =
+    if config.maintenanceMode != MaintenanceMode.Normal then
+      Resource.eval(Async[F].raiseError(new IllegalArgumentException(
+        "Normal runtime handles are unavailable during maintenance."
+      )))
+    else normalRuntime(config)
+
+  private def normalRuntime[F[_]: Async](config: AppConfig): Resource[F, WiredRuntime[F]] = Resource
     .eval(SecureRandom.javaSecuritySecureRandom[F]).flatMap { case given SecureRandom[F] =>
       JavaDiscordOAuthClient.resource[F](JavaDiscordOAuthClient.Config(
         clientId = config.auth.discordClientId.getOrElse(""),

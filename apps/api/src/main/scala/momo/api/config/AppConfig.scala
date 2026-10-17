@@ -17,6 +17,7 @@ final case class AppConfig(
     sourceImageStorage: SourceImageStorageConfig = SourceImageStorageConfig.Local,
     seriesAnalysisRead: SeriesAnalysisReadConfig = SeriesAnalysisReadConfig.defaults,
     database: Option[DatabaseConfig] = None,
+    maintenanceMode: MaintenanceMode = MaintenanceMode.Normal,
 ):
   override def toString: String =
     val sourceImageStorageMode = sourceImageStorage match
@@ -41,33 +42,41 @@ object AppConfig:
   )
 
   private[config] def loadFromEnv[F[_]: Async](env: Map[String, String]): F[AppConfig] =
-    baseConfig(env).load[F].flatMap { base =>
-      AppEnv.fromString(base.rawAppEnv).leftMap(new IllegalArgumentException(_)).liftTo[F]
-        .flatMap { appEnv =>
-          (
-            DatabaseConfigLoader.load[F](env, appEnv),
-            AuthConfigLoader.load[F](env, appEnv),
-            ResourceLimitsConfigLoader.load[F](env),
-            SourceImageStorageConfigLoader.load[F](env, appEnv),
-            SeriesAnalysisReadConfigLoader.load[F](env),
-          ).mapN { (database, auth, resourceLimits, sourceImageStorage, seriesAnalysisRead) =>
-            AppConfig(
-              appEnv = appEnv,
-              httpHost = base.httpHost,
-              httpPort = base.httpPort,
-              imageTmpDir = Path.of(base.imageTmpDir).toAbsolutePath,
-              devMemberIds = base.rawDevMemberIds.map(parseDevMemberIds).getOrElse(
-                DefaultDevMemberIds
-              ),
-              auth = auth,
-              resourceLimits = resourceLimits,
-              sourceImageStorage = sourceImageStorage,
-              seriesAnalysisRead = seriesAnalysisRead,
-              database = database,
-            )
-          }
-        }
+    MaintenanceMode.parse(env.get("MOMO_MAINTENANCE_MODE")).liftTo[F].flatMap { maintenanceMode =>
+      loadConfiguredEnv[F](env, maintenanceMode)
     }
+
+  private def loadConfiguredEnv[F[_]: Async](
+      env: Map[String, String],
+      maintenanceMode: MaintenanceMode,
+  ): F[AppConfig] = baseConfig(env).load[F].flatMap { base =>
+    AppEnv.fromString(base.rawAppEnv).leftMap(new IllegalArgumentException(_)).liftTo[F]
+      .flatMap { appEnv =>
+        (
+          DatabaseConfigLoader.load[F](env, appEnv),
+          AuthConfigLoader.load[F](env, appEnv),
+          ResourceLimitsConfigLoader.load[F](env),
+          SourceImageStorageConfigLoader.load[F](env, appEnv),
+          SeriesAnalysisReadConfigLoader.load[F](env),
+        ).mapN { (database, auth, resourceLimits, sourceImageStorage, seriesAnalysisRead) =>
+          AppConfig(
+            appEnv = appEnv,
+            httpHost = base.httpHost,
+            httpPort = base.httpPort,
+            imageTmpDir = Path.of(base.imageTmpDir).toAbsolutePath,
+            devMemberIds = base.rawDevMemberIds.map(parseDevMemberIds).getOrElse(
+              DefaultDevMemberIds
+            ),
+            auth = auth,
+            resourceLimits = resourceLimits,
+            sourceImageStorage = sourceImageStorage,
+            seriesAnalysisRead = seriesAnalysisRead,
+            database = database,
+            maintenanceMode = maintenanceMode,
+          )
+        }
+      }
+  }
 
   private def baseConfig(env: Map[String, String]): ConfigValue[Effect, BaseConfigInput] =
     (

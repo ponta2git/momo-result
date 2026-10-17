@@ -11,6 +11,11 @@ func main() {
 }
 
 func runCLI(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer) int {
+	mode, err := maintenanceModeFromEnvironment()
+	if err != nil {
+		writeResult(stderr, failureResult("runtime_tool", "InvalidMaintenanceMode"))
+		return 1
+	}
 	if len(args) == 0 {
 		writeResult(stderr, failureResult("runtime_tool", "InvalidArguments"))
 		return 2
@@ -40,7 +45,17 @@ func runCLI(ctx context.Context, args []string, stdout io.Writer, stderr io.Writ
 			writeResult(stderr, failureResult("runtime_smoke", "InvalidArguments"))
 			return 2
 		}
+		if (mode == maintenanceFrozen) != (args[1] == "maintenance") {
+			writeResult(stderr, failureResult("runtime_smoke", "MaintenanceModeMismatch"))
+			return 1
+		}
 		switch args[1] {
+		case "maintenance":
+			if len(args) != 2 {
+				writeResult(stderr, failureResult(maintenanceSmokeEvent, "InvalidArguments"))
+				return 2
+			}
+			return runMaintenanceSmoke(ctx, stdout, stderr)
 		case "local":
 			if len(args) != 2 {
 				writeResult(stderr, failureResult(localSmokeEvent, "InvalidArguments"))

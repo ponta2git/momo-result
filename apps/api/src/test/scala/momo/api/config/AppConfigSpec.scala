@@ -33,6 +33,30 @@ class AppConfigSpec extends CatsEffectSuite:
       .toJdbcUrl(raw)
       .fold(error => fail(s"expected valid DATABASE_URL: ${error.getMessage}"), identity)
 
+  test("maintenance mode defaults only when absent and accepts explicit modes") {
+    for
+      unset <- load(Map.empty)
+      normal <- load(Map("MOMO_MAINTENANCE_MODE" -> "normal"))
+      frozen <- load(prodEnv + ("MOMO_MAINTENANCE_MODE" -> "frozen"))
+    yield
+      assertEquals(unset.map(_.maintenanceMode), Right(MaintenanceMode.Normal))
+      assertEquals(normal.map(_.maintenanceMode), Right(MaintenanceMode.Normal))
+      assertEquals(frozen.map(_.maintenanceMode), Right(MaintenanceMode.Frozen))
+  }
+
+  test("unknown maintenance modes fail before other configuration and do not echo input") {
+    List("", "NORMAL", " frozen", "frozen ", "drain", "invalid-secret").traverse_ { value =>
+      load(Map("APP_ENV" -> "prod", "MOMO_MAINTENANCE_MODE" -> value)).map { result =>
+        assertEquals(
+          result.left.map(_.getMessage),
+          Left(
+            "MOMO_MAINTENANCE_MODE must be normal or frozen."
+          )
+        )
+      }
+    }
+  }
+
   test("toJdbcUrl: converts postgres:// URL and extracts credentials") {
     val (url, user, pass) = parsedDatabaseUrl("postgres://summit:summit@localhost:5433/summit")
     assertEquals(url, "jdbc:postgresql://localhost:5433/summit")

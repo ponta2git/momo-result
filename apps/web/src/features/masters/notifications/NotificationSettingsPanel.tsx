@@ -1,6 +1,6 @@
 import { useRef } from "react";
 
-import type { NotificationSettingsModel } from "@/features/masters/notifications/notificationSettingsModel";
+import type { NotificationSettingsEditor } from "@/features/masters/notifications/notificationSettingsEditing";
 import { actionRowClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
@@ -27,22 +27,22 @@ const settings = [
 
 const notificationFieldsClass = "grid min-w-0 gap-x-6 gap-y-4 md:grid-cols-2";
 
-export function NotificationSettingsPanel({ model: page }: { model: NotificationSettingsModel }) {
+export function NotificationSettingsPanel({ editor }: { editor: NotificationSettingsEditor }) {
   const saveButtonRef = useRef<HTMLButtonElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
-  const resource = page.resource;
-  const { issue, status } = page;
+  const resource = editor.resource;
+  const { issue, status } = editor;
   const reloadButton = (
     <Button
-      pending={page.refreshing}
+      pending={editor.refreshing}
       pendingLabel="読み込み中"
       size="sm"
       variant="secondary"
       onClick={async () => {
-        if (await page.reload()) headingRef.current?.focus();
+        if (await editor.reload()) headingRef.current?.focus();
       }}
     >
-      {page.dirty ? "現在の設定を読み込んで選び直す" : "現在の設定を読み込む"}
+      {editor.dirty ? "現在の設定を読み込んで選び直す" : "現在の設定を読み込む"}
     </Button>
   );
 
@@ -77,22 +77,22 @@ export function NotificationSettingsPanel({ model: page }: { model: Notification
             className="grid min-w-0 gap-6"
             onSubmit={(event) => {
               event.preventDefault();
-              page.submit();
+              editor.submit();
             }}
           >
             <fieldset
               aria-labelledby="notification-kinds-heading"
               className={notificationFieldsClass}
-              disabled={page.disabled}
+              disabled={editor.disabled}
             >
               {settings.map(({ kind, label, description }) => (
                 <CheckboxField
                   key={kind}
                   checked={resource.values[kind]}
                   description={description}
-                  disabled={page.disabled}
+                  disabled={editor.disabled}
                   label={label}
-                  onChange={(event) => page.change(kind, event.target.checked)}
+                  onChange={(event) => editor.change(kind, event.target.checked)}
                   status={
                     <FactList
                       ariaLabel={`${label}の保存済み設定`}
@@ -116,17 +116,17 @@ export function NotificationSettingsPanel({ model: page }: { model: Notification
                 </p>
                 <p>ONにしても、過去の通知は送信されません。</p>
               </div>
-              {issue || page.stale ? (
+              {issue || editor.stale ? (
                 <Notice
-                  action={page.needsReload || page.stale ? reloadButton : undefined}
-                  title={!issue && page.stale ? "現在の設定を確認できません" : undefined}
+                  action={editor.needsReload || editor.stale ? reloadButton : undefined}
+                  title={!issue && editor.stale ? "現在の設定を確認できません" : undefined}
                   tone={issue?.tone ?? "warning"}
                 >
                   {issue ? <p>{issue.message}</p> : null}
-                  {page.stale ? (
+                  {editor.stale ? (
                     <p>
                       最後に確認できた保存内容を表示しています。
-                      {page.dirty ? "編集中の選択は保持しています。" : null}
+                      {editor.dirty ? "編集中の選択は保持しています。" : null}
                     </p>
                   ) : null}
                 </Notice>
@@ -134,8 +134,8 @@ export function NotificationSettingsPanel({ model: page }: { model: Notification
               <div className="grid gap-2">
                 <div className={actionRowClass}>
                   <Button
-                    disabled={page.actionsDisabled}
-                    pending={page.pending && !page.confirmation.open}
+                    disabled={editor.actionsDisabled}
+                    pending={editor.pending && !editor.confirmation.open}
                     pendingLabel="保存中"
                     ref={saveButtonRef}
                     type="submit"
@@ -143,15 +143,15 @@ export function NotificationSettingsPanel({ model: page }: { model: Notification
                     保存
                   </Button>
                   <Button
-                    disabled={page.actionsDisabled}
+                    disabled={editor.actionsDisabled}
                     variant="secondary"
-                    onClick={page.discardChanges}
+                    onClick={editor.discardChanges}
                   >
                     変更を破棄
                   </Button>
                 </div>
                 <p className={cn("min-h-4", contentText.supporting)} role="status">
-                  {page.pending ? null : (
+                  {editor.pending ? null : (
                     <>
                       {status.completion ? <span>{status.completion}</span> : null}
                       {status.checking ? (
@@ -170,14 +170,14 @@ export function NotificationSettingsPanel({ model: page }: { model: Notification
         ) : null}
       </section>
       <AlertDialog
-        open={page.confirmation.open}
+        open={editor.confirmation.open}
         onOpenChange={(open) => {
-          if (!open) page.confirmation.cancel();
+          if (!open) editor.confirmation.cancel();
         }}
         title="通知をOFFにして保存しますか？"
         description="全利用者に共通の通知設定を、次の内容で保存します。"
         confirmLabel="OFFにして保存"
-        pending={page.pending}
+        pending={editor.pending}
         pendingLabel="保存中"
         closeOnSuccess={false}
         finalFocus={() =>
@@ -185,7 +185,7 @@ export function NotificationSettingsPanel({ model: page }: { model: Notification
             ? saveButtonRef.current
             : headingRef.current
         }
-        onConfirm={page.confirmation.save}
+        onConfirm={editor.confirmation.save}
       >
         {resource.status === "ready" ? (
           <FactList

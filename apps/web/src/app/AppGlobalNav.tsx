@@ -11,7 +11,7 @@ import {
 import { useMatch } from "react-router-dom";
 
 import { hasOperationsRole } from "@/shared/auth/permissions";
-import { useAuth } from "@/shared/auth/useAuth";
+import { useAuthSession } from "@/shared/auth/useAuthSession";
 import { GlobalNav } from "@/shared/navigation/GlobalNav";
 import type { GlobalNavItem } from "@/shared/navigation/GlobalNav";
 import { Button } from "@/shared/ui/actions/Button";
@@ -32,7 +32,7 @@ const managementItems = [
 const noManagementItems: readonly GlobalNavItem[] = [];
 
 export function AppGlobalNav() {
-  const auth = useAuth();
+  const auth = useAuthSession();
   const reviewingMatch = useMatch("/review/:matchSessionId") !== null;
   const canLogout = import.meta.env.DEV && auth.isAuthenticated && Boolean(auth.logout);
   const logoutFailed = Boolean(auth.logoutError);

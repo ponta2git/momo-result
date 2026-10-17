@@ -6,7 +6,7 @@ import { http, HttpResponse } from "msw";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { NotificationSettingsPanel } from "@/features/masters/notifications/NotificationSettingsPanel";
-import { useNotificationSettingsModel } from "@/features/masters/notifications/useNotificationSettingsModel";
+import { useNotificationSettingsEditor } from "@/features/masters/notifications/useNotificationSettingsEditor";
 import type {
   NotificationSettings,
   NotificationSettingsUpdate,
@@ -26,8 +26,8 @@ let user: ReturnType<typeof userEvent.setup>;
 let saved: NotificationSettings;
 
 function NotificationSettingsHarness() {
-  const model = useNotificationSettingsModel();
-  return <NotificationSettingsPanel model={model} />;
+  const editor = useNotificationSettingsEditor();
+  return <NotificationSettingsPanel editor={editor} />;
 }
 
 function renderPage() {

@@ -8,7 +8,7 @@ import { AppPageCanvas } from "@/app/AppPageCanvas";
 import { RouteErrorBoundary } from "@/app/RouteErrorBoundary";
 import { preloadRouteForPath } from "@/app/routeModules";
 import { RouteSuspenseFallback } from "@/app/RouteSuspenseFallback";
-import { useAuthRead } from "@/shared/auth/useAuth";
+import { useAuthStatus } from "@/shared/auth/useAuthStatus";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
@@ -65,7 +65,7 @@ function RouteQueryResetBridge({
 }
 
 export function AppShell() {
-  const auth = useAuthRead();
+  const auth = useAuthStatus();
   const location = useLocation();
   const routeResetKey = location.pathname;
 

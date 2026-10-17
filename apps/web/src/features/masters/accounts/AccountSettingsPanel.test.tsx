@@ -6,7 +6,7 @@ import { http, HttpResponse } from "msw";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { AccountSettingsPanel } from "@/features/masters/accounts/AccountSettingsPanel";
-import { useAccountSettingsModel } from "@/features/masters/accounts/useAccountSettingsModel";
+import { useAccountSettings } from "@/features/masters/accounts/useAccountSettings";
 import type {
   CreateLoginAccountRequest,
   UpdateLoginAccountRequest,
@@ -27,8 +27,8 @@ let queryClient: QueryClient;
 let user: ReturnType<typeof userEvent.setup>;
 
 function AccountSettingsHarness() {
-  const model = useAccountSettingsModel();
-  return <AccountSettingsPanel model={model} />;
+  const settings = useAccountSettings();
+  return <AccountSettingsPanel settings={settings} />;
 }
 
 function renderPage() {

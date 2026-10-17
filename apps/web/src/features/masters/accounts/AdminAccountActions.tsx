@@ -2,8 +2,8 @@ import { useState } from "react";
 
 import { accountRoleFromInput, accountRoleOptions } from "@/features/masters/accounts/accountRoles";
 import type { AccountRole } from "@/features/masters/accounts/accountRoles";
-import { accountActionView } from "@/features/masters/accounts/accountSettingsModel";
-import type { AccountOperation } from "@/features/masters/accounts/accountSettingsModel";
+import { accountActionView } from "@/features/masters/accounts/accountSettingsEditing";
+import type { AccountOperation } from "@/features/masters/accounts/accountSettingsEditing";
 import type { LoginAccountResponse } from "@/shared/api/adminAccounts";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { Button } from "@/shared/ui/actions/Button";

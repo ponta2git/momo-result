@@ -15,8 +15,8 @@ const authMock = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@/shared/auth/useAuth", () => ({
-  useAuth: () => authMock.current,
+vi.mock("@/shared/auth/useAuthSession", () => ({
+  useAuthSession: () => authMock.current,
 }));
 
 describe("AppGlobalNav", () => {

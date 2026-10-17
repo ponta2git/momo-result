@@ -13,8 +13,8 @@ import {
   currentAppPath,
   sanitizeAppRedirectPath,
 } from "@/shared/auth/redirectPath";
-import { useAuthRead } from "@/shared/auth/useAuth";
 import { useAuthorization } from "@/shared/auth/useAuthorization";
+import { useAuthStatus } from "@/shared/auth/useAuthStatus";
 import { GlobalNav } from "@/shared/navigation/GlobalNav";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
@@ -116,7 +116,7 @@ function AuthUnavailable({ pending, onRetry }: { pending: boolean; onRetry: () =
 }
 
 export function RootRedirect() {
-  const auth = useAuthRead();
+  const auth = useAuthStatus();
 
   if (auth.isChecking) {
     return <AuthLoading message="ログイン状態を確認中…" standalone />;
@@ -142,7 +142,7 @@ export function RootRedirect() {
 }
 
 export function PublicOnlyRoute({ children }: { children: ReactNode }) {
-  const auth = useAuthRead();
+  const auth = useAuthStatus();
   const [searchParams] = useSearchParams();
 
   if (auth.isChecking) {
@@ -210,7 +210,7 @@ export function AuthenticatedRoute({ children }: { children: ReactNode }) {
 
 /** Keep an invalid URL inspectable and offer a known destination without silently redirecting. */
 export function NotFoundRoute() {
-  const auth = useAuthRead();
+  const auth = useAuthStatus();
   const content = (
     <PageFrame width="narrow">
       <PageHeader title="ページが見つかりません" />

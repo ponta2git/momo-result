@@ -9,7 +9,7 @@ import {
   seriesPlayerRadarKeys,
 } from "@/shared/api/queryKeys";
 import { authMeQueryKeyFor, authQueryOptions } from "@/shared/auth/authQueries";
-import type { AuthReadModel } from "@/shared/auth/authReadModel";
+import type { AuthStatus } from "@/shared/auth/authStatus";
 import { hasAdminRole, hasOperationsRole } from "@/shared/auth/permissions";
 import type { ManagementPermission } from "@/shared/auth/permissions";
 
@@ -46,7 +46,7 @@ export type PermissionFacts = {
 /** Full route/recovery facts. Ordinary command owners can depend only on operations. */
 export type AuthorizationAccess = AuthorizationOperations & {
   readonly revision: number;
-  readonly auth: AuthReadModel;
+  readonly auth: AuthStatus;
   readonly allowed: Readonly<Record<ManagementPermission, boolean>>;
   readonly retained: Readonly<Record<ManagementPermission, boolean>>;
   readonly paused: boolean;

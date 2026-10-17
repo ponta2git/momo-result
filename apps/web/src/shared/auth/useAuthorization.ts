@@ -9,7 +9,7 @@ import type {
 } from "@/shared/auth/authorization";
 import { authQueryOptions } from "@/shared/auth/authQueries";
 import type { ManagementPermission } from "@/shared/auth/permissions";
-import { useAuthRead } from "@/shared/auth/useAuth";
+import { useAuthStatus } from "@/shared/auth/useAuthStatus";
 import { useDevUser } from "@/shared/auth/useDevUser";
 
 function useAuthorizationOwner() {
@@ -32,7 +32,7 @@ export function usePermissionFacts(permission: ManagementPermission): Permission
 }
 
 export function useAuthorization(): AuthorizationAccess {
-  const auth = useAuthRead();
+  const auth = useAuthStatus();
   const owner = useAuthorizationOwner();
   const revision = useSyncExternalStore(owner.subscribe, owner.snapshot, owner.snapshot);
   const allowed = { admin: owner.can("admin"), operations: owner.can("operations") };

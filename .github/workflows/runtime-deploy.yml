@@ -3,6 +3,12 @@ name: Deploy verified runtime candidates
 on:
   workflow_call:
     inputs:
+      deployment_mode:
+        type: string
+        default: normal
+      receipt_artifact_id:
+        type: string
+        default: ''
       producer_run_id:
         required: true
         type: string
@@ -49,6 +55,8 @@ jobs:
       name: production
       url: https://momo-result.ponta.me
     env:
+      DEPLOYMENT_MODE: ${{ inputs.deployment_mode }}
+      MAINTENANCE_RECEIPT: maintenance-receipt/receipt.json
       IMAGE_ARTIFACT_NAME: ${{ inputs.runtime_artifact_name }}
       IMAGE_REF: ${{ inputs.runtime_image_ref }}
       RUNTIME_CANDIDATE_RUN_ID: ${{ inputs.producer_run_id }}
@@ -61,6 +69,20 @@ jobs:
 
       - name: Build structured CI tool
         uses: ./.github/actions/setup-ci-tool
+
+      - uses: ./.github/actions/setup-maintenance-control
+
+      - name: Download the bound maintenance receipt
+        if: inputs.deployment_mode == 'frozen'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ inputs.receipt_artifact_id }}
+          path: maintenance-receipt
+
+      - name: Recheck exact deployment permission after approval
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/ci/deployment-permission.sh "${DEPLOYMENT_MODE}" "${MAINTENANCE_RECEIPT}"
 
       - name: Download smoke-tested image
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -120,7 +142,10 @@ jobs:
 
       - name: Push smoke-tested image
         id: registry
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          scripts/ci/deployment-permission.sh "${DEPLOYMENT_MODE}" "${MAINTENANCE_RECEIPT}"
           docker push "${IMAGE_REF}"
           registry_ref="$(scripts/ci/resolve-pushed-runtime-image.sh "${IMAGE_REF}")"
           docker manifest inspect "${registry_ref}" | scripts/ci/ci-tool.sh canonical-json \
@@ -156,6 +181,7 @@ jobs:
             > runtime-deployment-metadata/deployment.json
 
       - name: Upload immutable deployment provenance
+        id: provenance-upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: runtime-deployment-metadata-${{ github.run_id }}-${{ github.run_attempt }}
@@ -164,6 +190,7 @@ jobs:
           retention-days: 30
 
       - name: Reject a stale runtime release
+        if: inputs.deployment_mode == 'normal'
         run: |
           GIT_TERMINAL_PROMPT=0 git fetch --no-tags origin refs/heads/master
           test "${GITHUB_SHA}" = "$(git rev-parse FETCH_HEAD)" || {
@@ -172,23 +199,32 @@ jobs:
           }
 
       - name: Stop old consumers and wait for the DB-job migration
+        if: inputs.deployment_mode == 'normal'
         env:
           GH_TOKEN: ${{ github.token }}
           JOBS_CUTOVER_COMPLETE: ${{ vars.JOBS_CUTOVER_COMPLETE }}
           JOBS_CUTOVER_DB_RUN_ID: ${{ vars.JOBS_CUTOVER_DB_RUN_ID }}
           RUNTIME_FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           WORKER_FLY_API_TOKEN: ${{ secrets.ANALYSIS_FLY_API_TOKEN }}
-        run: scripts/ci/job-scheduler-cutover.sh
+        run: |
+          scripts/ci/deployment-permission.sh "${DEPLOYMENT_MODE}" "${MAINTENANCE_RECEIPT}"
+          scripts/ci/job-scheduler-cutover.sh
         timeout-minutes: 35
 
       - name: Deploy to Fly.io
         env:
+          GH_TOKEN: ${{ github.token }}
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          flyctl deploy --image "${{ steps.registry.outputs.registry_ref }}" --yes
-          scripts/ci/start-deployed-machine.sh runtime momo-result "${{ steps.registry.outputs.registry_ref }}"
+          scripts/ci/deployment-permission.sh "${DEPLOYMENT_MODE}" "${MAINTENANCE_RECEIPT}"
+          flyctl deploy --image "${{ steps.registry.outputs.registry_ref }}" --env "MOMO_MAINTENANCE_MODE=${DEPLOYMENT_MODE}" --yes
+          kind=runtime
+          [[ "${DEPLOYMENT_MODE}" != frozen ]] || kind=frozen-runtime
+          scripts/ci/deployment-permission.sh "${DEPLOYMENT_MODE}" "${MAINTENANCE_RECEIPT}"
+          scripts/ci/start-deployed-machine.sh "${kind}" momo-result "${{ steps.registry.outputs.registry_ref }}"
 
       - name: Verify deployed image identity
+        if: inputs.deployment_mode == 'normal'
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
@@ -199,9 +235,20 @@ jobs:
         timeout-minutes: 2
 
       - name: Run post-deploy dependency, process, and public edge smoke
+        if: inputs.deployment_mode == 'normal'
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: scripts/ci/runtime-postdeploy-smoke.sh
+        timeout-minutes: 3
+
+      - name: Verify frozen API and Web readiness
+        if: inputs.deployment_mode == 'frozen'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          mkdir -p runtime-production-evidence
+          scripts/ci/frozen-readiness.sh runtime "${{ steps.registry.outputs.registry_ref }}" \
+            runtime-production-evidence/frozen-readiness.json
         timeout-minutes: 3
 
       - name: Upload production verification evidence
@@ -215,20 +262,27 @@ jobs:
 
       - name: Deploy and verify Processing Worker
         env:
+          GH_TOKEN: ${{ github.token }}
           ANALYSIS_IMAGE_REF: ${{ steps.analysis-candidate.outputs.image_ref }}
           ANALYSIS_RELEASE_SHA: ${{ github.sha }}
           FLY_API_TOKEN: ${{ secrets.ANALYSIS_FLY_API_TOKEN }}
-        run: scripts/ci/deploy-processing-worker.sh
+        run: |
+          scripts/ci/deployment-permission.sh "${DEPLOYMENT_MODE}" "${MAINTENANCE_RECEIPT}"
+          scripts/ci/deploy-processing-worker.sh
         timeout-minutes: 25
 
       - name: Reconcile analysis promotion and backfill
+        if: inputs.deployment_mode == 'normal'
         env:
+          GH_TOKEN: ${{ github.token }}
           FLY_API_TOKEN: ${{ secrets.ANALYSIS_FLY_API_TOKEN }}
-        run: scripts/ops/analysis-maintain.sh auto
+        run: |
+          scripts/ci/maintenance-control.sh normal-guard
+          scripts/ops/analysis-maintain.sh auto
         timeout-minutes: 35
 
       - name: Summarize maintenance and required follow-up
-        if: always()
+        if: always() && inputs.deployment_mode == 'normal'
         env:
           OPERATION_RESULT: ${{ job.status }}
         run: scripts/ci/analysis-maintenance-summary.sh
@@ -241,3 +295,50 @@ jobs:
           path: analysis-production-artifact/
           if-no-files-found: ignore
           retention-days: 7
+
+      - name: Record the completed normal deployment
+        if: inputs.deployment_mode == 'normal'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          scripts/ci/maintenance-control.sh normal-guard
+          jq -n --arg runId "${GITHUB_RUN_ID}" --arg attempt "${GITHUB_RUN_ATTEMPT}" --arg commit "${GITHUB_SHA}" \
+            '{schemaVersion:1,status:"complete",mode:"normal",runId:$runId,runAttempt:$attempt,commit:$commit}' \
+            > normal-deployment-completion.json
+          scripts/ci/ci-tool.sh normal-deployment-completion \
+            "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" "${GITHUB_SHA}" < normal-deployment-completion.json
+
+      - name: Upload immutable normal deployment completion
+        if: inputs.deployment_mode == 'normal'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: normal-deployment-completion-${{ github.run_id }}-${{ github.run_attempt }}
+          path: normal-deployment-completion.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Record the verified frozen consumers
+        if: inputs.deployment_mode == 'frozen'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROVENANCE_ARTIFACT_ID: ${{ steps.provenance-upload.outputs.artifact-id }}
+          PROVENANCE_ARTIFACT_DIGEST: ${{ steps.provenance-upload.outputs.artifact-digest }}
+        run: |
+          scripts/ci/deployment-permission.sh "${DEPLOYMENT_MODE}" "${MAINTENANCE_RECEIPT}"
+          artifact_digest="$(scripts/ci/ci-tool.sh artifact-digest "${PROVENANCE_ARTIFACT_DIGEST}")"
+          jq -n --slurpfile receipt "${MAINTENANCE_RECEIPT}" \
+            --arg runId "${GITHUB_RUN_ID}" --arg attempt "${GITHUB_RUN_ATTEMPT}" --arg commit "${GITHUB_SHA}" \
+            --arg artifactId "${PROVENANCE_ARTIFACT_ID}" --arg artifactDigest "${artifact_digest}" \
+            '{schemaVersion:1,status:"ready",mode:"frozen",runId:$runId,runAttempt:$attempt,commit:$commit,
+              cutoverId:$receipt[0].cutoverId,stopEpoch:$receipt[0].stopEpoch,
+              provenanceArtifactId:$artifactId,provenanceArtifactDigest:$artifactDigest}' \
+            > frozen-consumers-completion.json
+
+      - name: Upload immutable frozen consumers completion
+        if: inputs.deployment_mode == 'frozen'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: frozen-consumers-completion-${{ github.run_id }}-${{ github.run_attempt }}
+          path: frozen-consumers-completion.json
+          if-no-files-found: error
+          retention-days: 30

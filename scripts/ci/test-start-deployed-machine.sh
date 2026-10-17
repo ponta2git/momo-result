@@ -27,9 +27,9 @@ MOCK
 chmod +x "${task_tmp}/bin/flyctl"
 cd "${task_tmp}"
 sha=0123456789abcdef0123456789abcdef01234567
-for kind in runtime analysis; do
+for kind in runtime analysis frozen-runtime frozen-analysis; do
   repository=momo-result
-  [[ "${kind}" != analysis ]] || repository=momo-result-analysis
+  [[ "${kind}" != *analysis ]] || repository=momo-result-analysis
   image="registry.fly.io/${repository}@sha256:$(printf '%064d' 1)"
   args=("${kind}" fixture-app "${image}")
   if [[ "${kind}" == analysis ]]; then args+=("${sha}" worker-101-2 ocr-101-2); fi
@@ -38,7 +38,7 @@ for kind in runtime analysis; do
       guest:{cpu_kind:"shared",cpus:1,memory_mb:256},env:{
         MOMO_ANALYSIS_CONFIG_VERSION:("series-analysis-v1-"+$sha),
         MOMO_ANALYSIS_PUBLICATION_MODE:"enabled",MOMO_OCR_V2_CONSUMER_MODE:"enabled",
-        MOMO_ANALYSIS_WORKER_ID:"worker-101-2",MOMO_OCR_V2_WORKER_ID:"ocr-101-2"
+        MOMO_ANALYSIS_WORKER_ID:"worker-101-2",MOMO_OCR_V2_WORKER_ID:"ocr-101-2",MOMO_MAINTENANCE_MODE:"frozen"
       }}
   }]' > baseline.json
   cp baseline.json machines.json
@@ -54,6 +54,9 @@ for kind in runtime analysis; do
     mutations+=('.[0].config.env.MOMO_ANALYSIS_WORKER_ID = "worker-101-1"'
       '.[0].config.env.MOMO_OCR_V2_CONSUMER_MODE = "disabled"'
       '.[0].config.env.MOMO_ANALYSIS_CONFIG_VERSION = "old"')
+  fi
+  if [[ "${kind}" == frozen-* ]]; then
+    mutations+=('.[0].config.env.MOMO_MAINTENANCE_MODE = "normal"')
   fi
   for mutation in "${mutations[@]}"; do
     jq "${mutation}" baseline.json > machines.json

@@ -385,9 +385,27 @@ jobs:
       - name: Confirm release gates
         run: echo "All release gates passed for ${IMAGE_REF}."
 
-  deploy:
-    needs: [release-ready, runtime-image, analysis-candidate]
+  normal-permission:
+    needs: release-ready
     if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      allowed: ${{ steps.control.outputs.allowed }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-maintenance-control
+      - name: Check whether normal deployment is held
+        id: control
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/ci/maintenance-control.sh normal-status >> "${GITHUB_OUTPUT}"
+
+  deploy:
+    needs: [release-ready, runtime-image, analysis-candidate, normal-permission]
+    if: github.event_name != 'pull_request' && needs.normal-permission.outputs.allowed == 'true'
     uses: ./.github/workflows/runtime-deploy.yml
     secrets: inherit
     with:

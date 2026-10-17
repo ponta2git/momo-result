@@ -98,5 +98,6 @@ jobs:
         with:
           go-version-file: scripts/tools/go.mod
           cache-dependency-path: scripts/tools/go.sum
+      - uses: ./.github/actions/setup-maintenance-control
       - name: Test workflow policy scripts
         run: scripts/ci/check-policy.sh

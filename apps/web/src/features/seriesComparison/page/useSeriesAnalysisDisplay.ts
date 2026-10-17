@@ -1,19 +1,14 @@
 import { useDeferredValue, useMemo, useState } from "react";
 
 import {
-  displaySeriesAnalysisBundleWithoutContext,
-  matchesSeriesAnalysisResource,
-  resolveSeriesAnalysisDisplayBundle,
+  prepareSeriesAnalysisDisplayBundle,
   retainSeriesAnalysisDisplayBundle,
   resolveSeriesAnalysisVisibleBundle,
   sameSeriesAnalysisDisplayBundle,
   seriesAnalysisScopeSignature,
   seriesAnalysisBundleResource,
 } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
-import type {
-  SeriesAnalysisBundleResolution,
-  SeriesAnalysisDisplayBundle,
-} from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
+import type { SeriesAnalysisDisplayBundle } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import type {
   SeriesAnalysisSelection,
   SeriesAnalysisViewId,
@@ -39,57 +34,33 @@ export function useSeriesAnalysisDisplay({
   const { publishedArtifactId, active, scope, matchContext } = reads;
   const [lastSuccessfulBundle, setLastSuccessfulBundle] = useState<SeriesAnalysisDisplayBundle>();
   const [contextInvalidationPending, setContextInvalidationPending] = useState(false);
-  const candidateAggregate = matchesSeriesAnalysisResource(
-    reads.aggregate,
-    publishedArtifactId,
-    state,
-  )
-    ? reads.aggregate
-    : undefined;
-  const candidateReview = matchesSeriesAnalysisResource(reads.review, publishedArtifactId, state)
-    ? reads.review
-    : undefined;
-  const candidateOutlook = matchesSeriesAnalysisResource(reads.outlook, publishedArtifactId, state)
-    ? reads.outlook
-    : undefined;
-  const candidateResource =
-    activeView === "outlook"
-      ? candidateOutlook
-      : activeView === "review"
-        ? candidateReview
-        : candidateAggregate;
-  const candidateArtifactId = candidateResource?.artifact.artifactId;
-
-  const bundleResolution = useMemo<SeriesAnalysisBundleResolution>(
+  const { candidate, resolution: bundleResolution } = useMemo(
     () =>
-      resolveSeriesAnalysisDisplayBundle({
+      prepareSeriesAnalysisDisplayBundle({
         activeView,
-        aggregate: candidateAggregate,
+        aggregate: reads.aggregate,
         artifactId: publishedArtifactId,
-        matchContext: reads.matchContext.context,
-        review: candidateReview,
-        outlook: candidateOutlook,
+        matchContext: matchContext.context,
+        review: reads.review,
+        outlook: reads.outlook,
         state,
       }),
     [
       activeView,
-      candidateAggregate,
-      candidateReview,
-      candidateOutlook,
-      reads.matchContext.context,
+      reads.aggregate,
+      reads.review,
+      reads.outlook,
+      matchContext.context,
       publishedArtifactId,
       state,
     ],
   );
+  const candidateResource = seriesAnalysisBundleResource(candidate);
+  const candidateArtifactId = candidateResource?.artifact.artifactId;
 
   const adoption = retainSeriesAnalysisDisplayBundle({
     activeView,
-    candidate: displaySeriesAnalysisBundleWithoutContext(
-      activeView,
-      candidateAggregate,
-      candidateReview,
-      candidateOutlook,
-    ),
+    candidate,
     deferOutlookAdoption,
     failed: active.failed,
     matchContextFailed: matchContext.failed,

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   matchesSeriesAnalysisResource,
-  resolveSeriesAnalysisDisplayBundle,
+  prepareSeriesAnalysisDisplayBundle,
 } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import {
   makeSeriesAnalysisAggregate,
@@ -26,7 +26,7 @@ describe("series analysis display bundle", () => {
     const nextArtifact = { ...review.artifact, artifactId: "artifact-next" };
 
     expect(
-      resolveSeriesAnalysisDisplayBundle({
+      prepareSeriesAnalysisDisplayBundle({
         activeView: "review",
         aggregate: undefined,
         artifactId: nextArtifact.artifactId,
@@ -34,11 +34,25 @@ describe("series analysis display bundle", () => {
         review,
         state,
       }),
-    ).toEqual({ kind: "waiting" });
+    ).toEqual({ candidate: undefined, resolution: { kind: "waiting" } });
 
     review.artifact = nextArtifact;
+    const waiting = prepareSeriesAnalysisDisplayBundle({
+      activeView: "review",
+      aggregate: undefined,
+      artifactId: nextArtifact.artifactId,
+      matchContext,
+      review,
+      state,
+    });
+    expect(waiting.resolution).toEqual({ kind: "waiting" });
+    expect(waiting.candidate?.kind).toBe("review");
+    if (waiting.candidate?.kind !== "review") throw new Error("review candidate expected");
+    expect(waiting.candidate.review).toBe(review);
+    expect(waiting.candidate.matchContext).toBeUndefined();
+
     matchContext.artifact = nextArtifact;
-    const resolved = resolveSeriesAnalysisDisplayBundle({
+    const { resolution: resolved } = prepareSeriesAnalysisDisplayBundle({
       activeView: "review",
       aggregate: undefined,
       artifactId: nextArtifact.artifactId,
@@ -68,20 +82,20 @@ describe("series analysis display bundle", () => {
 
     const matchContext = makeSeriesAnalysisExcludedMatchContext("not_in_scope");
     expect(
-      resolveSeriesAnalysisDisplayBundle({
+      prepareSeriesAnalysisDisplayBundle({
         activeView: "overview",
         aggregate: makeSeriesAnalysisAggregate(),
         artifactId: aggregate.artifact.artifactId,
         matchContext,
         review: undefined,
         state: { ...state, view: "overview" },
-      }),
+      }).resolution,
     ).toEqual({ kind: "excluded", status: "not_in_scope" });
   });
 
   it("resolves aggregate without requiring review outside the next-match purpose", () => {
     const aggregate = makeSeriesAnalysisAggregate();
-    const resolved = resolveSeriesAnalysisDisplayBundle({
+    const { resolution: resolved } = prepareSeriesAnalysisDisplayBundle({
       activeView: "flow",
       aggregate,
       artifactId: aggregate.artifact.artifactId,

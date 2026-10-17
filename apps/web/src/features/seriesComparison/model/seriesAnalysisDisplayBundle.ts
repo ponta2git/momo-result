@@ -68,7 +68,8 @@ export type SeriesAnalysisBundleResolution =
   | { kind: "ready"; value: SeriesAnalysisDisplayBundle }
   | { kind: "waiting" };
 
-export function displaySeriesAnalysisBundleWithoutContext(
+/** Builds a view bundle without deciding whether a new publication may be adopted. */
+function displaySeriesAnalysisBundleWithoutContext(
   activeView: SeriesAnalysisViewId,
   aggregate: SeriesComparisonAggregate | undefined,
   review: SeriesComparisonReviewV3 | undefined,
@@ -161,37 +162,8 @@ export function matchesSeriesAnalysisScope(
   );
 }
 
-function readyBundle(
-  activeView: SeriesAnalysisViewId,
-  aggregate: SeriesComparisonAggregate | undefined,
-  review: SeriesComparisonReviewV3 | undefined,
-  matchContext: SeriesAnalysisMatchContextV3 | undefined,
-  outlook?: SeriesAnalysisOutlookSummary | undefined,
-): SeriesAnalysisBundleResolution {
-  if (activeView === "outlook")
-    return outlook
-      ? {
-          kind: "ready",
-          value: { kind: "outlook", outlook, matchContext: undefined, view: "outlook" },
-        }
-      : { kind: "waiting" };
-  if (activeView === "review") {
-    return review
-      ? {
-          kind: "ready",
-          value: { kind: "review", matchContext, review, view: "review" },
-        }
-      : { kind: "waiting" };
-  }
-  return aggregate
-    ? {
-        kind: "ready",
-        value: { aggregate, kind: "analysis", matchContext, view: activeView },
-      }
-    : { kind: "waiting" };
-}
-
-export function resolveSeriesAnalysisDisplayBundle({
+/** Verifies the selected candidate before resolving its independently loaded match context. */
+export function prepareSeriesAnalysisDisplayBundle({
   activeView,
   aggregate,
   artifactId,
@@ -207,28 +179,39 @@ export function resolveSeriesAnalysisDisplayBundle({
   review: SeriesComparisonReviewV3 | undefined;
   outlook?: SeriesAnalysisOutlookSummary | undefined;
   state: SeriesAnalysisSelection;
-}): SeriesAnalysisBundleResolution {
-  if (activeView === "outlook")
-    return readyBundle(
-      activeView,
-      undefined,
-      undefined,
-      undefined,
-      matchesSeriesAnalysisResource(outlook, artifactId, state) ? outlook : undefined,
-    );
-  const matchingAggregate = matchesSeriesAnalysisResource(aggregate, artifactId, state)
-    ? aggregate
+}): {
+  candidate: SeriesAnalysisDisplayBundle | undefined;
+  resolution: SeriesAnalysisBundleResolution;
+} {
+  const received = displaySeriesAnalysisBundleWithoutContext(
+    activeView,
+    aggregate,
+    review,
+    outlook,
+  );
+  const candidate = matchesSeriesAnalysisResource(
+    seriesAnalysisBundleResource(received),
+    artifactId,
+    state,
+  )
+    ? received
     : undefined;
-  const matchingReview = matchesSeriesAnalysisResource(review, artifactId, state)
-    ? review
-    : undefined;
-  if (activeView === "review" ? !matchingReview : !matchingAggregate) {
-    return { kind: "waiting" };
-  }
+  // Context failure can still expose this verified candidate without selected-match markers.
+  return {
+    candidate,
+    resolution: resolveSeriesAnalysisBundleContext(candidate, matchContext, state),
+  };
+}
 
-  if (!state.focusMatchId) {
-    return readyBundle(activeView, matchingAggregate, matchingReview, undefined);
-  }
+function resolveSeriesAnalysisBundleContext(
+  candidate: SeriesAnalysisDisplayBundle | undefined,
+  matchContext: SeriesAnalysisMatchContextV3 | undefined,
+  state: SeriesAnalysisSelection,
+): SeriesAnalysisBundleResolution {
+  if (!candidate) return { kind: "waiting" };
+  if (candidate.kind === "outlook" || !state.focusMatchId)
+    return { kind: "ready", value: candidate };
+  const artifactId = seriesAnalysisBundleResource(candidate).artifact.artifactId;
   if (
     !matchesSeriesAnalysisResource(matchContext, artifactId, state) ||
     matchContext?.matchId !== state.focusMatchId
@@ -239,7 +222,7 @@ export function resolveSeriesAnalysisDisplayBundle({
     return { kind: "excluded", status: matchContext.inclusion.status };
   }
   if (!matchContext.match) return { kind: "waiting" };
-  return readyBundle(activeView, matchingAggregate, matchingReview, matchContext);
+  return { kind: "ready", value: { ...candidate, matchContext } };
 }
 
 type SeriesAnalysisDisplayAdoption =

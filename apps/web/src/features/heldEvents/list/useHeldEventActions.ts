@@ -1,4 +1,3 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useActionState, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -7,12 +6,9 @@ import type {
   HeldEventCreateForm,
   HeldEventDeleteConfirmation,
 } from "@/features/heldEvents/list/heldEventActions";
-import { syncHeldEventCreatedCache, syncHeldEventDeletedCache } from "@/shared/api/heldEventCache";
-import { createHeldEvent, deleteHeldEvent } from "@/shared/api/heldEvents";
+import { useHeldEventWrites } from "@/features/heldEvents/list/useHeldEventWrites";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
-import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { formatApiError } from "@/shared/api/problemDetails";
-import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import type { UnsavedChangesGuardModel } from "@/shared/navigation/UnsavedChangesGuard";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
@@ -28,14 +24,20 @@ export function useHeldEventActions(): {
   readonly openCreate: () => void;
   readonly requestDelete: (event: DeleteTarget) => void;
 } {
-  const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const idempotencyKeys = useIdempotencyKeyStore();
   const [errorMessage, setErrorMessage] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const mountedRef = useRef(false);
   const navigationAllowedRef = useRef(false);
+  const onRemoved = useCallback(() => {
+    if (!mountedRef.current) return;
+    setDeleteTarget(null);
+    setErrorMessage("");
+    showToast({ title: "開催を削除しました。", tone: "success" });
+  }, []);
+  const writes = useHeldEventWrites(onRemoved);
+  const { removing: deletePending, remove: deleteEvent } = writes;
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -53,13 +55,7 @@ export function useHeldEventActions(): {
       return previous;
     }
     try {
-      const event = await runIdempotentMutation(
-        idempotencyKeys,
-        "heldEvents.createHeldEvent",
-        creation.request,
-        (options) => createHeldEvent(creation.request, options),
-      );
-      await syncHeldEventCreatedCache(queryClient, event);
+      const event = await writes.create(creation.request);
       if (!mountedRef.current) return { version: previous.version + 1 };
       setErrorMessage("");
       setCreateOpen(false);
@@ -72,22 +68,6 @@ export function useHeldEventActions(): {
       return previous;
     }
   }, initialCreateState);
-  const { isPending: deletePending, mutateAsync: deleteEventAsync } = useMutation({
-    mutationFn: (event: DeleteTarget) =>
-      runIdempotentMutation(
-        idempotencyKeys,
-        "heldEvents.deleteHeldEvent",
-        { heldEventId: event.id },
-        (options) => deleteHeldEvent(event.id, options),
-      ),
-    onSuccess: async (_response, event) => {
-      await syncHeldEventDeletedCache(queryClient, event.id);
-      if (!mountedRef.current) return;
-      setDeleteTarget(null);
-      setErrorMessage("");
-      showToast({ title: "開催を削除しました。", tone: "success" });
-    },
-  });
   const updateCreateOpen = useCallback((open: boolean) => {
     setCreateOpen(open);
     if (open) {
@@ -98,8 +78,8 @@ export function useHeldEventActions(): {
   const openCreate = useCallback(() => updateCreateOpen(true), [updateCreateOpen]);
   const cancelDelete = useCallback(() => setDeleteTarget(null), []);
   const confirmDelete = useCallback(async () => {
-    if (deleteTarget) await deleteEventAsync(deleteTarget);
-  }, [deleteEventAsync, deleteTarget]);
+    if (deleteTarget) await deleteEvent(deleteTarget.id);
+  }, [deleteEvent, deleteTarget]);
 
   return {
     create: {

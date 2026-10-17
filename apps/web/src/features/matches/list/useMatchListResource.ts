@@ -93,12 +93,21 @@ export function useMatchListResource({
     [matchesQuery.data],
   );
 
+  const listLoading = isInitialQueryLoading(matchesQuery);
   const display = resolveMatchListDisplay({
     current: currentSearch,
     deferred: deferredSearch,
     locationSettling,
-    list: matchesQuery,
-    summary: summaryQuery,
+    list: {
+      available: matchesQuery.data !== undefined,
+      loading: listLoading,
+      refreshing: matchesQuery.isFetching && !listLoading,
+      fromPreviousSelection: matchesQuery.isPlaceholderData,
+    },
+    summary: {
+      refreshing: summaryQuery.isFetching && summaryQuery.data !== undefined,
+      fromPreviousSelection: summaryQuery.isPlaceholderData,
+    },
   });
   const listFailed = useRetryNotice(
     shouldShowBlockingQueryError(matchesQuery),
@@ -164,7 +173,7 @@ export function useMatchListResource({
         run: () => {
           if (shouldShowBlockingQueryError(gameTitlesQuery)) void gameTitlesQuery.refetch();
           if (shouldShowBlockingQueryError(seasonsQuery)) void seasonsQuery.refetch();
-          if (heldEventPicker.error) void heldEventPicker.refetch();
+          if (heldEventPicker.error) void heldEventPicker.refresh();
         },
       },
     },

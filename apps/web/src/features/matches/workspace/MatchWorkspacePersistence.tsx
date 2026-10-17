@@ -151,7 +151,7 @@ export function MatchWorkspacePersistence({
     setConfirmOpen: setConfirmOpen,
     setShowValidationErrors: setShowValidationErrors,
     setValidationMessage: setValidationMessage,
-    update: submit.mutations.updateMutation.mutate,
+    update: submit.update,
     readLatestValues: editing.readLatestValues,
   });
   const validation = useMatchWorkspaceValidation({
@@ -165,8 +165,7 @@ export function MatchWorkspacePersistence({
     () => new Set<string>(JSON.parse(errorPathsKey) as string[]),
     [errorPathsKey],
   );
-  const busy =
-    submit.mutations.isMutating || submit.confirmation.pending || masterNavigation.isPending;
+  const busy = submit.pending || submit.confirmation.pending || masterNavigation.isPending;
   const operationError = useMemo(
     () =>
       currentOperationError ? toMatchWorkspaceOperationErrorView(currentOperationError) : null,
@@ -215,7 +214,7 @@ export function MatchWorkspacePersistence({
           allowed: view.canCancelDraft,
           dialog: {
             open: cancelDraftConfirmOpen,
-            pending: submit.mutations.cancelDraftMutation.isPending,
+            pending: submit.cancelDraftPending,
             onConfirm: submit.cancelDraftConfirmed,
             onOpenChange: setCancelDraftConfirmOpen,
           },
@@ -244,7 +243,7 @@ export function MatchWorkspacePersistence({
       view.canCancelDraft,
       cancelDraftConfirmOpen,
       setCancelDraftConfirmOpen,
-      submit.mutations.cancelDraftMutation.isPending,
+      submit.cancelDraftPending,
       submit.cancelDraftConfirmed,
       busy,
       input.createEventPending,

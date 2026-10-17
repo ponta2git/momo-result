@@ -105,7 +105,7 @@ export function useMatchWorkspacePageModel(input: {
     accountId,
     canManageMasters,
     canNavigateToMasters,
-    createEventPending: createEvent.isPending,
+    createEventPending: createEvent.pending,
     draftDetail: resources.draftDetail,
     editing,
     enabled: initialization.status === "ready",
@@ -127,8 +127,8 @@ export function useMatchWorkspacePageModel(input: {
       setup: {
         eventCreation: {
           action: {
-            pending: createEvent.isPending,
-            onCreate: () => createEvent.mutate({ heldAt: toIsoFromLocalDateTime(eventDraftValue) }),
+            pending: createEvent.pending,
+            onCreate: () => createEvent.create({ heldAt: toIsoFromLocalDateTime(eventDraftValue) }),
           },
           feedback: { error: eventError ? toMatchWorkspaceOperationErrorView(eventError) : null },
           input: { value: eventDraftValue, onChange: setEventDraftValue },

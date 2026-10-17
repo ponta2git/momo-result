@@ -15,6 +15,11 @@ export type MatchNoteCommit = {
   body?: string | undefined;
 };
 
+export type MatchNoteSaveResult =
+  | { kind: "saved"; commit: MatchNoteCommit }
+  | { kind: "conflict" }
+  | { kind: "failed"; message: string };
+
 type MatchNoteConflictState = {
   draft: string;
   latest: MatchDetailResponse["note"];
@@ -23,6 +28,7 @@ type MatchNoteConflictState = {
 export type MatchNoteEditorSource = {
   matchId: string;
   match: MatchDetailResponse | undefined;
+  saveNote: (intent: MatchNoteIntent) => Promise<MatchNoteSaveResult>;
   readLatest: () => Promise<MatchNoteReadResult>;
   commitSavedNote: (commit: MatchNoteCommit) => Promise<MatchNoteReadResult>;
 };

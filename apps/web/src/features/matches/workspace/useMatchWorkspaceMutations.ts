@@ -1,23 +1,12 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useLayoutEffect, useRef, useTransition } from "react";
+import { useCallback, useLayoutEffect, useRef, useTransition } from "react";
 import type { NavigateOptions } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 
 import { toUpdateMatchRequest } from "@/features/matches/workspace/matchFormToRequest";
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import type { MatchWorkspaceOperationErrorKind } from "@/features/matches/workspace/matchWorkspaceOperationError";
-import {
-  invalidateAfterDraftCancelled,
-  invalidateAfterMatchConfirmed,
-  invalidateAfterMatchUpdated,
-} from "@/shared/api/cacheInvalidation";
-import { runIdempotentMutation } from "@/shared/api/idempotency";
-import { cancelMatchDraft } from "@/shared/api/matchDrafts";
-import { confirmMatch, updateMatch } from "@/shared/api/matches";
+import { useMatchWorkspaceWrites } from "@/features/matches/workspace/useMatchWorkspaceWrites";
 import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
-import { evictDraftSourceImageBlobs } from "@/shared/api/sourceImageQueries";
-import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
-import { assertDefined } from "@/shared/lib/invariant";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 export type MatchWorkspaceMutationsParams = {
@@ -35,11 +24,7 @@ function isConflict(error: unknown): boolean {
   return normalized.status === 409 || normalized.code === "CONFLICT";
 }
 
-/**
- * confirm / update / cancel の 3 つの副作用を持つ操作を集約する。
- * 各 onSuccess はキャッシュ整合と完了通知を実行し、
- * 成功時のナビゲーションも内部で完結させる。
- */
+/** Owns conflict recovery, completion feedback, and navigation for workspace writes. */
 export function useMatchWorkspaceMutations({
   heldEventId,
   matchId,
@@ -63,105 +48,51 @@ export function useMatchWorkspaceMutations({
       await navigate(destination, options);
     });
   };
-  const queryClient = useQueryClient();
-  const idempotencyKeys = useIdempotencyKeyStore();
-
-  const confirmMutation = useMutation({
-    onMutate: () => onOperationStart("confirm"),
-    mutationFn: async (request: Parameters<typeof confirmMatch>[0]) => {
-      return runIdempotentMutation(
-        idempotencyKeys,
-        "matchWorkspace.confirmMatch",
-        request,
-        (options) => confirmMatch(request, options),
-      );
-    },
-    onSuccess: async (response, request) => {
-      if (request.matchDraftId) evictDraftSourceImageBlobs(queryClient, request.matchDraftId);
-      await invalidateAfterMatchConfirmed(queryClient);
+  const writes = useMatchWorkspaceWrites({
+    started: onOperationStart,
+    saved: (result) => {
       if (!activeRef.current) return;
-      showToast({ title: "試合を確定しました", tone: "success" });
-      onConfirmSuccess();
-      onPersistedSuccess();
-      navigateAfterSuccess(`/matches/${encodeURIComponent(response.matchId)}`);
-    },
-    onError: async (error, request) => {
-      if (!activeRef.current) return;
-      if (request.matchDraftId && isConflict(error)) {
-        const handled = await onConfirmConflict?.(request.matchDraftId);
-        if (handled || !activeRef.current) {
-          return;
-        }
+      if (result.kind === "cancelDraft") {
+        showToast({ title: "確定前の記録を削除しました", tone: "success" });
+        onPersistedSuccess();
+        navigateAfterSuccess(
+          heldEventId ? `/held-events/${encodeURIComponent(heldEventId)}` : "/matches",
+          { replace: true },
+        );
+        return;
       }
-      onError("confirm", formatApiError(error, "確定に失敗しました"));
-    },
-  });
-
-  const updateMutation = useMutation({
-    onMutate: () => onOperationStart("update"),
-    mutationFn: (values: MatchFormValues) => {
-      assertDefined(matchId, "matchId");
-      const request = toUpdateMatchRequest(values);
-      const payload = { matchId, request };
-      return runIdempotentMutation(
-        idempotencyKeys,
-        "matchWorkspace.updateMatch",
-        payload,
-        (options) => updateMatch(matchId, request, options),
-      );
-    },
-    onSuccess: async (response) => {
-      assertDefined(matchId, "matchId");
-      await invalidateAfterMatchUpdated(queryClient, matchId);
-      if (!activeRef.current) return;
-      showToast({ title: "試合を保存しました", tone: "success" });
+      showToast({
+        title: result.kind === "confirm" ? "試合を確定しました" : "試合を保存しました",
+        tone: "success",
+      });
+      if (result.kind === "confirm") onConfirmSuccess();
       onPersistedSuccess();
-      navigateAfterSuccess(`/matches/${encodeURIComponent(response.matchId)}`);
+      navigateAfterSuccess(`/matches/${encodeURIComponent(result.matchId)}`);
     },
-    onError: (error) => {
+    failed: async (failure) => {
       if (!activeRef.current) return;
-      onError("update", formatApiError(error, "更新に失敗しました"));
+      if (failure.kind === "confirm" && failure.draftId && isConflict(failure.error)) {
+        const handled = await onConfirmConflict?.(failure.draftId);
+        if (handled || !activeRef.current) return;
+      }
+      const fallback = {
+        confirm: "確定に失敗しました",
+        update: "更新に失敗しました",
+        cancelDraft: "確定前の記録を削除できませんでした",
+      }[failure.kind];
+      onError(failure.kind, formatApiError(failure.error, fallback));
     },
   });
-
-  const cancelDraftMutation = useMutation({
-    onMutate: () => onOperationStart("cancelDraft"),
-    mutationFn: async (draftId: string) => {
-      const payload = { draftId };
-      return runIdempotentMutation(
-        idempotencyKeys,
-        "matchWorkspace.cancelMatchDraft",
-        payload,
-        (options) => cancelMatchDraft(draftId, options),
-      );
-    },
-    onSuccess: async (_, draftId) => {
-      evictDraftSourceImageBlobs(queryClient, draftId);
-      await invalidateAfterDraftCancelled(queryClient);
-      if (!activeRef.current) return;
-      showToast({ title: "確定前の記録を削除しました", tone: "success" });
-      onPersistedSuccess();
-      navigateAfterSuccess(
-        heldEventId ? `/held-events/${encodeURIComponent(heldEventId)}` : "/matches",
-        { replace: true },
-      );
-    },
-    onError: (error) => {
-      if (!activeRef.current) return;
-      onError("cancelDraft", formatApiError(error, "確定前の記録を削除できませんでした"));
-    },
-  });
-
-  const isMutating =
-    isNavigating ||
-    confirmMutation.isPending ||
-    updateMutation.isPending ||
-    cancelDraftMutation.isPending;
-
+  const { update: updateMatch } = writes;
+  const update = useCallback(
+    (values: MatchFormValues) => updateMatch(matchId, toUpdateMatchRequest(values)),
+    [matchId, updateMatch],
+  );
   return {
-    cancelDraftMutation,
-    confirmMutation,
-    isMutating,
-    updateMutation,
+    cancelDraft: writes.cancelDraft,
+    cancelDraftPending: writes.cancelDraftPending,
+    confirm: writes.confirm,
+    pending: isNavigating || writes.pending,
+    update,
   };
 }

@@ -23,12 +23,44 @@ type MatchDeletionCommandOptions = {
   matchId: string;
 };
 
-/** Owns deletion state, route ownership, and the post-delete cache/navigation transaction. */
+/** Invalidates before handing off navigation, then removes the deleted resource. */
+function useMatchDeletionWrite({
+  onDeleted,
+  onFailure,
+}: {
+  onDeleted: (command: MatchDeletionCommand) => void;
+  onFailure: (error: unknown) => void;
+}): { pending: boolean; run: (command: MatchDeletionCommand) => Promise<void> } {
+  const queryClient = useQueryClient();
+  const idempotencyKeys = useIdempotencyKeyStore();
+  const { isPending: pending, mutateAsync } = useMutation({
+    mutationFn: async ({ targetMatchId }: MatchDeletionCommand) => {
+      const payload = { matchId: targetMatchId };
+      return runIdempotentMutation(idempotencyKeys, "matchDetail.deleteMatch", payload, (request) =>
+        deleteMatch(targetMatchId, request),
+      );
+    },
+    onError: onFailure,
+    onSuccess: async (_response, command) => {
+      const invalidation = invalidateAfterMatchDeleted(queryClient, command.targetMatchId);
+      onDeleted(command);
+      evictDeletedMatchDetail(queryClient, command.targetMatchId);
+      await invalidation;
+    },
+  });
+  const run = useCallback(
+    async (command: MatchDeletionCommand) => {
+      await mutateAsync(command);
+    },
+    [mutateAsync],
+  );
+  return { pending, run };
+}
+
+/** Owns deletion confirmation, route ownership, and completion feedback. */
 export function useMatchDeletionCommand(options: MatchDeletionCommandOptions): MatchDeletionModel {
   const { matchId } = options;
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const idempotencyKeys = useIdempotencyKeyStore();
   const mountedRef = useRef(false);
   const [open, setOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -43,31 +75,22 @@ export function useMatchDeletionCommand(options: MatchDeletionCommandOptions): M
     };
   }, []);
 
-  const { isPending: pending, mutateAsync } = useMutation({
-    mutationFn: async ({ targetMatchId }: MatchDeletionCommand) => {
-      const payload = { matchId: targetMatchId };
-      return runIdempotentMutation(idempotencyKeys, "matchDetail.deleteMatch", payload, (request) =>
-        deleteMatch(targetMatchId, request),
-      );
-    },
-    onError: (error) => {
+  const { pending, run } = useMatchDeletionWrite({
+    onFailure: (error) => {
       if (mountedRef.current) setErrorMessage(formatApiError(error, "削除に失敗しました"));
     },
-    onSuccess: async (_response, command) => {
-      const invalidation = invalidateAfterMatchDeleted(queryClient, command.targetMatchId);
+    onDeleted: (command) => {
       if (mountedRef.current) {
         showToast({ title: "試合を削除しました", tone: "success" });
         navigate(command.destination, { flushSync: true, replace: true });
       }
-      evictDeletedMatchDetail(queryClient, command.targetMatchId);
-      await invalidation;
     },
   });
 
   const confirm = useCallback(async () => {
     setErrorMessage(null);
-    await mutateAsync({ destination, targetMatchId: matchId });
-  }, [destination, matchId, mutateAsync]);
+    await run({ destination, targetMatchId: matchId });
+  }, [destination, matchId, run]);
 
   return { confirm, errorMessage, open, pending, setOpen };
 }

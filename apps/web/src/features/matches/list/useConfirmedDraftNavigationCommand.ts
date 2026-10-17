@@ -1,4 +1,3 @@
-import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -7,8 +6,7 @@ import {
   confirmedDraftMessages,
 } from "@/features/matches/confirmedDraftNavigation";
 import type { MatchListAction } from "@/features/matches/list/matchListTypes";
-import { invalidateAfterMatchConfirmed } from "@/shared/api/cacheInvalidation";
-import { matchDraftDetailQueryOptions } from "@/shared/api/queryOptions";
+import { useMatchDraftResource } from "@/features/matches/useMatchDraftResource";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 export type ConfirmedDraftNavigationCommand = {
@@ -32,7 +30,7 @@ function emptyPresentation(scope: string) {
 export function useConfirmedDraftNavigationCommand(): ConfirmedDraftNavigationCommand {
   const navigate = useNavigate();
   const { key: scope } = useLocation();
-  const queryClient = useQueryClient();
+  const { readLatest, confirmationRecorded } = useMatchDraftResource();
   const ownerRef = useRef<NavigationOwner | null>(null);
   const [presentation, setPresentation] = useState(() => emptyPresentation(scope));
   if (presentation.scope !== scope) setPresentation(emptyPresentation(scope));
@@ -69,14 +67,11 @@ export function useConfirmedDraftNavigationCommand(): ConfirmedDraftNavigationCo
         return { scope, errors, checkingIds: new Set(owner.checkingIds) };
       });
       try {
-        const detail = await queryClient.fetchQuery({
-          ...matchDraftDetailQueryOptions(draftId),
-          staleTime: 0,
-        });
+        const detail = await readLatest(draftId);
         if (!ownsNavigation()) return;
         const destination = confirmedDraftDestination(detail);
         if (destination) {
-          void invalidateAfterMatchConfirmed(queryClient);
+          confirmationRecorded();
           showToast({ title: confirmedDraftMessages.listRedirect, tone: "warning" });
           navigate(destination.path);
           return;
@@ -99,7 +94,7 @@ export function useConfirmedDraftNavigationCommand(): ConfirmedDraftNavigationCo
         }
       }
     },
-    [navigate, queryClient, scope],
+    [confirmationRecorded, navigate, readLatest, scope],
   );
 
   return { checkingIds: presentation.checkingIds, errors: presentation.errors, run };

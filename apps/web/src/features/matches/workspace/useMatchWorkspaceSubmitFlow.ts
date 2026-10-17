@@ -43,7 +43,7 @@ export function useMatchWorkspaceSubmitFlow({
     },
     [setConfirmOpen, setOperationError],
   );
-  const mutations = useMatchWorkspaceMutations({
+  const operations = useMatchWorkspaceMutations({
     heldEventId: values.heldEventId,
     matchId,
     onConfirmConflict: confirmedDraft.handleConfirmConflict,
@@ -53,11 +53,10 @@ export function useMatchWorkspaceSubmitFlow({
     onPersistedSuccess,
   });
   const confirmation = useMatchWorkspaceConfirmAction({
-    confirmMutation: mutations.confirmMutation,
+    confirm: operations.confirm,
     readLatestValues,
   });
-  const { cancelDraftMutation } = mutations;
-  const cancelDraft = cancelDraftMutation.mutateAsync;
+  const { cancelDraft } = operations;
   const cancelDraftConfirmed = useCallback(async () => {
     if (!values.matchDraftId) {
       return;
@@ -67,5 +66,12 @@ export function useMatchWorkspaceSubmitFlow({
     await cancelDraft(values.matchDraftId);
   }, [cancelDraft, setOperationError, setValidationMessage, values.matchDraftId]);
 
-  return { cancelDraftConfirmed, confirmation, confirmedDraft, mutations };
+  return {
+    cancelDraftConfirmed,
+    cancelDraftPending: operations.cancelDraftPending,
+    confirmation,
+    confirmedDraft,
+    pending: operations.pending,
+    update: operations.update,
+  };
 }

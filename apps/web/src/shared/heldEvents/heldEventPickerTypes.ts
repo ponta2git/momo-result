@@ -10,7 +10,7 @@ export type HeldEventPickerDirectory = {
   heldEvents: HeldEventResponse[];
   pagination: HeldEventListResponse["pagination"] | undefined;
   pending: boolean;
-  refetch: (options?: { throwOnError?: boolean }) => Promise<void>;
+  refresh: () => Promise<void>;
   selectedHeldEvent: HeldEventResponse | HeldEventSummaryResponse | undefined;
   onPageChange: (page: number) => void;
   scopeChanging: boolean;

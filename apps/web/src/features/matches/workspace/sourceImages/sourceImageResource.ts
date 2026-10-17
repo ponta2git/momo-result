@@ -1,18 +1,17 @@
-import { isCancelledError } from "@tanstack/react-query";
-import type { QueryClient } from "@tanstack/react-query";
-
+import { SourceImageDownloadError } from "@/features/matches/workspace/sourceImages/sourceImageDownloads";
+import type {
+  SourceImageDownload,
+  SourceImageDownloads,
+} from "@/features/matches/workspace/sourceImages/sourceImageDownloads";
 import type {
   SourceImageItem,
   SourceImageKind,
 } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import { sourceImageKinds } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
-import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
-import { sourceImageBlobKeys } from "@/shared/api/queryKeys";
-import { sourceImageBlobQueryOptions } from "@/shared/api/sourceImageQueries";
 
 type Entry = {
   item: SourceImageItem;
-  options: ReturnType<typeof sourceImageBlobQueryOptions>;
+  download: SourceImageDownload;
   foregroundAttempted: boolean;
   backgroundAttempted: boolean;
   replaced?: boolean;
@@ -26,12 +25,9 @@ type ImageSnapshot = {
 };
 type Snapshot = Partial<Record<SourceImageKind, ImageSnapshot>>;
 
-/** One review scope: Query owns bytes/state; this resource owns scheduling and URLs. */
+/** One review scope: downloads own bytes/state; this resource owns scheduling and URLs. */
 export class SourceImageResource {
-  private client: QueryClient;
-  private draftId: string;
-  private accountId: string | undefined;
-  private scope: string;
+  private downloads: SourceImageDownloads;
   private entries = new Map<SourceImageKind, Entry>();
   private listeners = new Set<() => void>();
   private unsubscribe: (() => void) | undefined;
@@ -42,11 +38,8 @@ export class SourceImageResource {
   private backgroundBlocked = false;
   private snapshot: Snapshot = {};
 
-  constructor(client: QueryClient, draftId: string, accountId: string | undefined, scope: string) {
-    this.client = client;
-    this.draftId = draftId;
-    this.accountId = accountId;
-    this.scope = scope;
+  constructor(downloads: SourceImageDownloads) {
+    this.downloads = downloads;
   }
 
   subscribe = (listener: () => void) => {
@@ -59,16 +52,8 @@ export class SourceImageResource {
   connect = () => {
     this.stopped = false;
     this.backgroundBlocked = false;
-    this.unsubscribe = this.client.getQueryCache().subscribe((event) => {
-      if (
-        event.type === "removed" &&
-        [...this.entries.values()].some((entry) => entry.options.queryKey === event.query.queryKey)
-      ) {
-        // Principal clearing and successful confirm/delete must also stop work
-        // that would otherwise enqueue another query after the current promise.
-        this.dispose();
-      }
-    });
+    // Scope clearing must stop the scheduler before a completed read queues another image.
+    this.unsubscribe = this.downloads.subscribeToClear(this.dispose);
     return this.dispose;
   };
 
@@ -97,7 +82,6 @@ export class SourceImageResource {
           item.createdAt !== previous.item.createdAt ||
           item.contentType !== previous.item.contentType)
       ) {
-        // Detach before our own removal, so it cannot close the whole scope.
         this.entries.delete(kind);
         if (this.running?.entry === previous) this.running = undefined;
         this.release(previous);
@@ -105,17 +89,7 @@ export class SourceImageResource {
       if (item?.imageUrl && !this.entries.has(kind)) {
         this.entries.set(kind, {
           item,
-          options: sourceImageBlobQueryOptions(
-            sourceImageBlobKeys.image(
-              this.draftId,
-              this.accountId,
-              this.scope,
-              kind,
-              item.imageUrl,
-              JSON.stringify([item.createdAt, item.contentType]),
-            ),
-            item.imageUrl,
-          ),
+          download: this.downloads.acquire(item),
           foregroundAttempted: false,
           backgroundAttempted: false,
         });
@@ -133,7 +107,7 @@ export class SourceImageResource {
   };
 
   private release(entry: Entry) {
-    this.client.removeQueries({ queryKey: entry.options.queryKey, exact: true });
+    entry.download.release();
     if (entry.objectUrl) URL.revokeObjectURL(entry.objectUrl);
   }
 
@@ -150,7 +124,7 @@ export class SourceImageResource {
       const obsolete = this.running.entry;
       this.running = undefined;
       obsolete.foregroundAttempted = false;
-      void this.client.cancelQueries({ queryKey: obsolete.options.queryKey, exact: true });
+      obsolete.download.cancel();
     }
     if (!this.running) {
       if (needsActive) {
@@ -170,8 +144,8 @@ export class SourceImageResource {
     if (foreground) entry.foregroundAttempted = true;
     const run = { entry, foreground };
     this.running = run;
-    void this.client
-      .fetchQuery(entry.options)
+    void entry.download
+      .load()
       .then((blob) => {
         if (this.stopped || this.running !== run) return null;
         entry.objectUrl = URL.createObjectURL(blob);
@@ -179,13 +153,13 @@ export class SourceImageResource {
       })
       .catch((error: unknown) => {
         if (this.stopped || this.running !== run) return;
-        if (isCancelledError(error)) {
+        if (!(error instanceof SourceImageDownloadError)) return;
+        if (error.reason === "cancelled") {
           this.dispose();
           return;
         }
-        const { status } = normalizeUnknownApiError(error);
-        if (status === 409) entry.replaced = true;
-        if (status === 401 || status === 403 || status === 429) this.backgroundBlocked = true;
+        if (error.reason === "replaced") entry.replaced = true;
+        if (error.reason === "paused") this.backgroundBlocked = true;
       })
       .finally(() => {
         if (this.stopped || this.running !== run) return;
@@ -198,14 +172,13 @@ export class SourceImageResource {
   private publish() {
     const next: Snapshot = {};
     for (const [kind, entry] of this.entries) {
-      const state = this.client.getQueryState(entry.options.queryKey);
       next[kind] = {
         descriptor: entry.item,
         status: entry.replaced
           ? "replaced"
           : entry.objectUrl
             ? "ready"
-            : state?.status === "error" && entry.foregroundAttempted
+            : entry.download.hasFailed() && entry.foregroundAttempted
               ? "error"
               : "loading",
         displayUrl: entry.objectUrl,

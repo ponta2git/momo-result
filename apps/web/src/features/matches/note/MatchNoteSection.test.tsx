@@ -6,6 +6,7 @@ import { useState } from "react";
 import { createMemoryRouter, Link, RouterProvider } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { useMatchDetailResource } from "@/features/matches/detail/useMatchDetailResource";
 import type {
   MatchNoteCommit,
   MatchNoteReadResult,
@@ -48,11 +49,14 @@ function renderNote({
   readLatest?: () => Promise<MatchNoteReadResult>;
   commitSavedNote?: (commit: MatchNoteCommit) => Promise<MatchNoteReadResult>;
 } = {}) {
+  server.use(http.get("/api/matches/:matchId", () => HttpResponse.json(initialMatch)));
   function NoteRoute() {
+    const { noteSource } = useMatchDetailResource(initialMatch.matchId);
     const [match, setMatch] = useState<MatchDetailResponse | undefined>(initialMatch);
     const editor = useMatchNoteEditor({
       matchId: initialMatch.matchId,
       match,
+      saveNote: noteSource.saveNote,
       readLatest,
       commitSavedNote: async (commit) => {
         // The real screen's cache callback owns this committed projection and its refresh.

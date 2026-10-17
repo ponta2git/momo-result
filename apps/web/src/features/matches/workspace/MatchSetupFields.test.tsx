@@ -15,7 +15,7 @@ function createModel(errorPathSet = new Set<string>()): MatchWorkspaceSetupField
         heldEvents: [],
         pagination: undefined,
         pending: false,
-        refetch: vi.fn(async () => undefined),
+        refresh: vi.fn(async () => undefined),
         scopeChanging: false,
         selectedHeldEvent: undefined,
         onPageChange: vi.fn(),

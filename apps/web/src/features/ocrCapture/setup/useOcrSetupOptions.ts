@@ -156,7 +156,7 @@ export function useOcrSetupOptions({ enabled, value }: OcrSetupOptionsParams) {
     void Promise.all([
       gameTitlesQuery.refetch(),
       heldEventsQuery.refetch({ cancelRefetch: false }),
-      heldEventPicker.refetch(),
+      heldEventPicker.refresh(),
       ...(value.heldEventId ? [preferredHeldEventQuery.refetch({ cancelRefetch: false })] : []),
       mapMastersQuery.refetch(),
       seasonMastersQuery.refetch(),

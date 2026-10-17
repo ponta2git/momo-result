@@ -149,7 +149,7 @@ jobs:
           mkdir -p runtime-deployment-metadata
           scripts/ci/ci-tool.sh create-runtime-deployment \
             --candidate "${IMAGE_ARTIFACT_NAME}/candidate.json" \
-            --run-attempt "${GITHUB_RUN_ATTEMPT}" --registry-ref "${REGISTRY_REF}" \
+            --run-id "${GITHUB_RUN_ID}" --run-attempt "${GITHUB_RUN_ATTEMPT}" --registry-ref "${REGISTRY_REF}" \
             --source-artifact-id "${SOURCE_ARTIFACT_ID}" --source-artifact-digest "${SOURCE_ARTIFACT_DIGEST}" \
             --manifest "${IMAGE_ARTIFACT_NAME}/registry-manifest.json" \
             --manifest-artifact-id "${MANIFEST_ARTIFACT_ID}" --manifest-artifact-digest "${MANIFEST_ARTIFACT_DIGEST}" \

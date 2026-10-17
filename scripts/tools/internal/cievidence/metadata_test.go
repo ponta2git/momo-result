@@ -85,7 +85,7 @@ func evidenceCall(command string, args []string, root string) (int, string, stri
 	code := Run(command, args, strings.NewReader(""), &out, &diagnostics, root)
 	return code, out.String(), diagnostics.String()
 }
-func TestDeploymentProducerAndHistoricalWire(t *testing.T) {
+func TestDeploymentProducerKeepsSourceSeparateFromExecution(t *testing.T) {
 	root, dir, args := metadataFixture(t, false)
 	code, candidate, diagnostics := call(t, "create-runtime-candidate", args, "", root)
 	if code != 0 {
@@ -93,16 +93,16 @@ func TestDeploymentProducerAndHistoricalWire(t *testing.T) {
 	}
 	put(t, filepath.Join(dir, "candidate.json"), candidate)
 	put(t, filepath.Join(dir, "registry-manifest.json"), "{\"schemaVersion\":2}\n")
-	deploymentArgs := []string{"--candidate", filepath.Join(dir, "candidate.json"), "--run-attempt", "3", "--registry-ref", runtimeRef, "--source-artifact-id", "456", "--source-artifact-digest", testDigest, "--manifest", filepath.Join(dir, "registry-manifest.json"), "--manifest-artifact-id", "789", "--manifest-artifact-digest", strings.TrimPrefix(testDigest, "sha256:")}
+	deploymentArgs := []string{"--candidate", filepath.Join(dir, "candidate.json"), "--run-id", "909", "--run-attempt", "3", "--registry-ref", runtimeRef, "--source-artifact-id", "456", "--source-artifact-digest", testDigest, "--manifest", filepath.Join(dir, "registry-manifest.json"), "--manifest-artifact-id", "789", "--manifest-artifact-digest", strings.TrimPrefix(testDigest, "sha256:")}
 	code, out, diagnostics := call(t, "create-runtime-deployment", deploymentArgs, "", root)
 	if code != 0 {
 		t.Fatal(diagnostics)
 	}
-	if err := checkRuntimeDeployment([]byte(out), runIdentity{RunID: "123", RunAttempt: "3", Commit: testCommit}); err != nil {
+	if err := checkRuntimeDeployment([]byte(out), runIdentity{RunID: "909", RunAttempt: "3", Commit: testCommit}); err != nil {
 		t.Fatal(err)
 	}
-	// This frozen v3 fixture is the pre-refactor jq writer's wire document.
-	want, err := os.ReadFile("testdata/produced-runtime-deployment-v3.json")
+	// The deployment keeps the verified producer while naming its own run.
+	want, err := os.ReadFile("testdata/produced-runtime-deployment-v4.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,9 +111,9 @@ func TestDeploymentProducerAndHistoricalWire(t *testing.T) {
 		t.Fatalf("deployment wire changed:\n%s", out)
 	}
 	put(t, filepath.Join(dir, "deployment.json"), out)
-	provider := `{"id":789,"name":"runtime-image-registry-manifest-123-3","digest":"` + testDigest + `","expired":false,"workflow_run":{"id":123},"secret":"never-print"}`
-	for _, input := range []string{provider, strings.Replace(provider, `"expired":false`, `"expired":true`, 1), strings.Replace(provider, `"id":123`, `"id":124`, 1)} {
-		code, result, diagnostics := call(t, "verify-manifest-artifact", []string{filepath.Join(dir, "deployment.json"), "123"}, input, root)
+	provider := `{"id":789,"name":"runtime-image-registry-manifest-909-3","digest":"` + testDigest + `","expired":false,"workflow_run":{"id":909},"secret":"never-print"}`
+	for _, input := range []string{provider, strings.Replace(provider, `"expired":false`, `"expired":true`, 1), strings.Replace(provider, `"id":909`, `"id":910`, 1)} {
+		code, result, diagnostics := call(t, "verify-manifest-artifact", []string{filepath.Join(dir, "deployment.json"), "909"}, input, root)
 		if (code == 0) != (input == provider) || result != "" || strings.Contains(diagnostics, "never-print") {
 			t.Fatal(code, result, diagnostics)
 		}

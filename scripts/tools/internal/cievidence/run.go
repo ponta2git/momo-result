@@ -25,7 +25,7 @@ var usages = map[string]string{
 	"create-http4s-patch":        "--repository URL --scala-version VERSION --source-sha SHA --version VERSION",
 	"create-runtime-candidate":   "--artifact-dir DIR --run-id ID --run-attempt N --commit SHA --image-ref REF",
 	"create-analysis-candidate":  "--artifact-dir DIR --run-id ID --run-attempt N --commit SHA --image-ref REF --artifact-id ID --artifact-digest DIGEST",
-	"create-runtime-deployment":  "--candidate FILE --run-attempt N --registry-ref REF --source-artifact-id ID --source-artifact-digest DIGEST --manifest FILE --manifest-artifact-id ID --manifest-artifact-digest DIGEST",
+	"create-runtime-deployment":  "--candidate FILE --run-id ID --run-attempt N --registry-ref REF --source-artifact-id ID --source-artifact-digest DIGEST --manifest FILE --manifest-artifact-id ID --manifest-artifact-digest DIGEST",
 	"resolve-pushed-image":       "IMAGE_TAG < docker-repo-digests.json",
 	"resolve-deployment-run":     "REPOSITORY < github-run.json",
 	"verify-manifest-artifact":   "DEPLOYMENT_JSON RUN_ID < github-artifact.json",

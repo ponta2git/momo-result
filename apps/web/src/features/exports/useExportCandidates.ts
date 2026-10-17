@@ -1,32 +1,15 @@
-import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
-import {
-  candidateFromHeldEventSummary,
-  candidateFromMatchIdentity,
-  resolveExportCandidate,
-  toHeldEventCandidates,
-  toMatchCandidates,
-  toSeasonCandidates,
-} from "@/features/exports/exportCandidateData";
+import { resolveExportCandidate } from "@/features/exports/exportCandidateData";
 import {
   buildCandidateSupportIssue,
   buildCandidateView,
 } from "@/features/exports/exportPresentation";
 import type { ExportCandidate, ExportScope } from "@/features/exports/exportTypes";
-import { shouldShowQueryError } from "@/shared/api/queryErrorState";
-import {
-  heldEventSummaryReadQueryOptions,
-  heldEventsQueryOptions,
-  matchExportCandidatesQueryOptions,
-  matchIdentityReadQueryOptions,
-  seasonMastersQueryOptions,
-} from "@/shared/api/queryOptions";
-import { cursorForPage } from "@/shared/lib/cursorPagination";
+import { useExportCandidateResource } from "@/features/exports/useExportCandidateResource";
 import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
-const CANDIDATE_PAGE_SIZE = 20;
-
+/** Retains the selected candidate while its directory moves between pages or retries. */
 export function useExportCandidates({
   scope,
   selectedId,
@@ -40,95 +23,8 @@ export function useExportCandidates({
     candidate: ExportCandidate;
     scope: ExportScope;
   } | null>(null);
-
-  const seasonsQuery = useQuery(seasonMastersQueryOptions(undefined, scope === "season"));
-  const heldEventsOptions = heldEventsQueryOptions({
-    page: heldEventPage,
-    pageSize: CANDIDATE_PAGE_SIZE,
-  });
-  const heldEventsQuery = useQuery({
-    ...heldEventsOptions,
-    enabled: scope === "heldEvent",
-  });
-  const matchesOptions = matchExportCandidatesQueryOptions({
-    kind: "match",
-    ...(matchCursor ? { cursor: matchCursor } : {}),
-    pageSize: CANDIDATE_PAGE_SIZE,
-    sort: "held_desc",
-    status: "confirmed",
-  });
-  const matchesQuery = useQuery({
-    ...matchesOptions,
-    enabled: scope === "match",
-  });
-
-  const hasCurrentHeldEventData =
-    heldEventsQuery.data !== undefined && !heldEventsQuery.isPlaceholderData;
-  const hasCurrentMatchData = matchesQuery.data !== undefined && !matchesQuery.isPlaceholderData;
-  const seasons = seasonsQuery.data?.items ?? [];
-  const heldEvents =
-    hasCurrentHeldEventData || !shouldShowQueryError(heldEventsQuery)
-      ? (heldEventsQuery.data?.items ?? [])
-      : [];
-  const matches =
-    hasCurrentMatchData || !shouldShowQueryError(matchesQuery)
-      ? (matchesQuery.data?.items ?? [])
-      : [];
-  const candidates =
-    scope === "season"
-      ? toSeasonCandidates(seasons)
-      : scope === "heldEvent"
-        ? toHeldEventCandidates(heldEvents)
-        : scope === "match"
-          ? toMatchCandidates(matches)
-          : [];
-  const selectedOnCurrentPage = candidates.find((candidate) => candidate.value === selectedId);
-  const selectedIsOnCurrentPage = selectedOnCurrentPage !== undefined;
-  const shouldResolveHeldEvent =
-    scope === "heldEvent" && Boolean(selectedId) && !selectedIsOnCurrentPage;
-  const shouldResolveMatch = scope === "match" && Boolean(selectedId) && !selectedIsOnCurrentPage;
-
-  // A cached directory row cannot disable revalidation of a target already confirmed absent.
-  const heldEventSummaryQuery = useQuery({
-    ...heldEventSummaryReadQueryOptions(scope === "heldEvent" ? selectedId : undefined),
-    enabled: (query) =>
-      shouldResolveHeldEvent ||
-      (scope === "heldEvent" && Boolean(selectedId) && query.state.data?.kind === "notFound"),
-  });
-  const matchIdentityQuery = useQuery({
-    ...matchIdentityReadQueryOptions(scope === "match" ? selectedId : undefined),
-    enabled: (query) =>
-      shouldResolveMatch ||
-      (scope === "match" && Boolean(selectedId) && query.state.data?.kind === "notFound"),
-  });
-  const canonicalResolvedCandidate =
-    selectedOnCurrentPage ??
-    (scope === "heldEvent"
-      ? candidateFromHeldEventSummary(
-          heldEventSummaryQuery.data?.kind === "found"
-            ? heldEventSummaryQuery.data.value
-            : undefined,
-        )
-      : scope === "match"
-        ? candidateFromMatchIdentity(
-            matchIdentityQuery.data?.kind === "found" ? matchIdentityQuery.data.value : undefined,
-          )
-        : undefined);
-  const selectedDetailQuery =
-    scope === "heldEvent"
-      ? heldEventSummaryQuery
-      : scope === "match"
-        ? matchIdentityQuery
-        : undefined;
-  const shouldResolveSelectedTarget = shouldResolveHeldEvent || shouldResolveMatch;
-  const selectedDetailFailure =
-    selectedDetailQuery?.data?.kind === "notFound"
-      ? ("not-found" as const)
-      : shouldResolveSelectedTarget &&
-          selectedDetailQuery &&
-          shouldShowQueryError(selectedDetailQuery)
-        ? ("load-failed" as const)
-        : null;
+  const resource = useExportCandidateResource({ scope, selectedId, heldEventPage, matchCursor });
+  const { directory, target } = resource;
   const snapshotCandidate =
     selectionSnapshot?.scope === scope && selectionSnapshot.candidate.value === selectedId
       ? selectionSnapshot.candidate
@@ -136,111 +32,54 @@ export function useExportCandidates({
   const selected =
     scope === "season"
       ? {
-          candidate: selectedOnCurrentPage,
+          candidate: target.onCurrentPage,
           state:
-            selectedId && !selectedIsOnCurrentPage ? ("not-found" as const) : ("resolved" as const),
+            selectedId && !target.onCurrentPage ? ("not-found" as const) : ("resolved" as const),
         }
       : resolveExportCandidate({
-          canonicalCandidate: canonicalResolvedCandidate,
-          detailFailure: selectedDetailFailure,
-          detailFetching: selectedDetailQuery?.isFetching === true,
+          canonicalCandidate: target.candidate,
+          detailFailure: target.failure,
+          detailFetching: target.refreshing,
           selectedId,
-          shouldResolve: shouldResolveSelectedTarget,
+          shouldResolve: target.requiresLookup,
           snapshotCandidate,
         });
   const resolvedCandidate = selected.candidate;
   const retrySelectionFailed = useRetryNotice(
     selected.state === "load-failed",
-    selectedDetailQuery?.isFetching === true,
-    `${scope}:${selectedId}`,
+    target.refreshing,
+    scope + ":" + selectedId,
   );
   const selectedResolution =
     selected.state === "resolving" && retrySelectionFailed ? "load-failed" : selected.state;
   const hasResolvedTarget = Boolean(selectedId && resolvedCandidate?.value === selectedId);
-  const scopeChanging =
-    scope === "heldEvent"
-      ? Boolean(heldEventsQuery.isPlaceholderData && heldEventsQuery.isFetching)
-      : scope === "match"
-        ? Boolean(matchesQuery.isPlaceholderData && matchesQuery.isFetching)
-        : false;
-  const pagination =
-    scope === "heldEvent"
-      ? heldEventsQuery.data?.pagination
-      : scope === "match"
-        ? matchesQuery.data?.pagination
-        : undefined;
-  const loading =
-    scope === "season"
-      ? seasonsQuery.isLoading
-      : scope === "heldEvent"
-        ? heldEventsQuery.isLoading && !hasResolvedTarget
-        : scope === "match"
-          ? !hasResolvedTarget && matchesQuery.isLoading
-          : false;
+  const loading = directory.activity === "loading" && (scope === "season" || !hasResolvedTarget);
   const refreshing =
-    scope === "season"
-      ? seasonsQuery.isFetching && !seasonsQuery.isLoading
-      : scope === "heldEvent"
-        ? heldEventsQuery.isFetching && (!heldEventsQuery.isLoading || hasResolvedTarget)
-        : scope === "match"
-          ? matchesQuery.isFetching && (!matchesQuery.isLoading || hasResolvedTarget)
-          : false;
-  const seasonError = useRetryNotice(
-    shouldShowQueryError(seasonsQuery),
-    seasonsQuery.isFetching,
-    scope,
-  );
-  const heldEventError = useRetryNotice(
-    shouldShowQueryError(heldEventsQuery),
-    heldEventsQuery.isFetching,
-    String(heldEventPage),
-  );
-  const matchError = useRetryNotice(
-    shouldShowQueryError(matchesQuery),
-    matchesQuery.isFetching,
-    matchCursor,
-  );
-  const selectedDetailRefreshFailed = Boolean(
-    selectedDetailFailure === "load-failed" && resolvedCandidate?.value === selectedId,
-  );
-  const directoryError =
-    scope === "season"
-      ? seasonError
-      : scope === "heldEvent"
-        ? heldEventError
-        : scope === "match"
-          ? matchError
-          : false;
-  const hasCurrentDirectoryData =
-    scope === "season"
-      ? seasonsQuery.data !== undefined
-      : scope === "heldEvent"
-        ? hasCurrentHeldEventData
-        : scope === "match"
-          ? hasCurrentMatchData
-          : true;
-  const error = directoryError && !hasCurrentDirectoryData && !hasResolvedTarget;
+    directory.activity === "refreshing" ||
+    (directory.activity === "loading" && scope !== "season" && hasResolvedTarget);
+  const selectedDetailRefreshFailed =
+    target.failure === "load-failed" && resolvedCandidate?.value === selectedId;
+  const error = directory.failed && !directory.hasCurrentData && !hasResolvedTarget;
   const supportIssue = buildCandidateSupportIssue({
     directoryBlocking: error,
-    directoryError,
-    hasCurrentDirectoryData,
+    directoryError: directory.failed,
+    hasCurrentDirectoryData: directory.hasCurrentData,
     selectedTargetRefreshFailed: selectedDetailRefreshFailed,
   });
   const view = buildCandidateView({
     candidates:
-      selectedDetailFailure === "not-found"
-        ? candidates.filter((candidate) => candidate.value !== selectedId)
-        : candidates,
+      target.failure === "not-found"
+        ? directory.candidates.filter((candidate) => candidate.value !== selectedId)
+        : directory.candidates,
     error,
     loading: loading && !error,
-    pagination,
+    pagination: directory.pagination,
     resolvedCandidate,
     selectedResolution,
     scope,
     selectedId,
     supportIssue,
   });
-
   const reset = () => {
     setHeldEventPage(1);
     setMatchCursor("");
@@ -251,17 +90,16 @@ export function useExportCandidates({
       setSelectionSnapshot({ candidate: resolvedCandidate, scope });
     }
   };
-
   return {
     refreshing:
       refreshing ||
       (loading && error) ||
-      Boolean(selectedDetailQuery?.isFetching && selectedResolution === "load-failed"),
+      (target.refreshing && selectedResolution === "load-failed"),
     reset,
-    scopeChanging,
+    scopeChanging: directory.scopeChanging,
     selectCandidate: (nextSelectedId: string) => {
       if (refreshing) return false;
-      const candidate = candidates.find((item) => item.value === nextSelectedId);
+      const candidate = directory.candidates.find((item) => item.value === nextSelectedId);
       if (candidate) setSelectionSnapshot({ candidate, scope });
       return true;
     },
@@ -269,31 +107,16 @@ export function useExportCandidates({
       if (refreshing || page < 1) return;
       rememberCurrentSelection();
       if (scope === "heldEvent") setHeldEventPage(page);
-      if (scope === "match" && matchesQuery.data) {
-        const cursor = cursorForPage(matchesQuery.data.pagination, page);
+      if (scope === "match") {
+        const cursor = resource.matchCursorForPage(page);
         if (cursor !== undefined) setMatchCursor(cursor);
       }
     },
     retry: () => {
       rememberCurrentSelection();
-      if (scope === "season") void seasonsQuery.refetch();
-      if (scope === "heldEvent") {
-        void heldEventsQuery.refetch();
-        if (shouldResolveHeldEvent && shouldShowQueryError(heldEventSummaryQuery)) {
-          void heldEventSummaryQuery.refetch();
-        }
-      }
-      if (scope === "match") {
-        void matchesQuery.refetch();
-        if (shouldResolveMatch && shouldShowQueryError(matchIdentityQuery)) {
-          void matchIdentityQuery.refetch();
-        }
-      }
+      resource.refreshDirectory();
     },
-    retrySelectedCandidate: () => {
-      if (shouldResolveHeldEvent) void heldEventSummaryQuery.refetch();
-      if (shouldResolveMatch) void matchIdentityQuery.refetch();
-    },
+    retrySelectedCandidate: resource.refreshSelection,
     view,
   };
 }

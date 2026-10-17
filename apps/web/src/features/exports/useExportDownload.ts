@@ -1,4 +1,3 @@
-import { useMutation } from "@tanstack/react-query";
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { downloadExportMatches } from "@/features/exports/exportDownload";
@@ -68,27 +67,6 @@ export function useExportDownload({
     [scope],
   );
 
-  const mutation = useMutation({
-    mutationFn: (attempt: DownloadAttempt) =>
-      downloadExportMatches(attempt.request, {
-        signal: attempt.controller.signal,
-        timeoutMs,
-      }),
-    onSettled: (outcome, error, attempt) => {
-      clearSlowTimer(attempt);
-      if (activeAttemptRef.current !== attempt) return;
-      activeAttemptRef.current = null;
-      setPresentation({
-        pending: false,
-        result: outcome
-          ? exportDownloadResultView(outcome)
-          : failedResultView(normalizeUnknownApiError(error)),
-        scope: attempt.scope,
-        slow: false,
-      });
-    },
-  });
-
   return {
     pending: presentation.pending,
     result: presentation.result,
@@ -117,7 +95,19 @@ export function useExportDownload({
           setPresentation((current) => ({ ...current, slow: true }));
         }
       }, slowThresholdMs);
-      mutation.mutate(attempt);
+      const finish = (result: ExportDownloadResultView | undefined) => {
+        clearSlowTimer(attempt);
+        if (activeAttemptRef.current !== attempt) return;
+        activeAttemptRef.current = null;
+        setPresentation({ pending: false, result, scope: attempt.scope, slow: false });
+      };
+      void downloadExportMatches(attempt.request, {
+        signal: attempt.controller.signal,
+        timeoutMs,
+      }).then(
+        (outcome) => finish(exportDownloadResultView(outcome)),
+        (error: unknown) => finish(failedResultView(normalizeUnknownApiError(error))),
+      );
     },
   };
 }

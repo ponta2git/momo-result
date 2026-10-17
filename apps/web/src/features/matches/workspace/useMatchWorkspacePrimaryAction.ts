@@ -10,7 +10,7 @@ export function useMatchWorkspacePrimaryAction(input: {
   setShowValidationErrors: (show: boolean) => void;
   setValidationMessage: (message: string) => void;
   update: (values: MatchFormValues) => void;
-  values: MatchFormValues;
+  readLatestValues: () => MatchFormValues;
 }) {
   const {
     mode,
@@ -19,11 +19,11 @@ export function useMatchWorkspacePrimaryAction(input: {
     setShowValidationErrors,
     setValidationMessage,
     update,
-    values,
+    readLatestValues,
   } = input;
 
   return useCallback(() => {
-    const action = prepareMatchWorkspacePrimaryAction(mode, values);
+    const action = prepareMatchWorkspacePrimaryAction(mode, readLatestValues());
     if (action.kind === "invalid") {
       setShowValidationErrors(true);
       setValidationMessage(action.message);
@@ -44,6 +44,6 @@ export function useMatchWorkspacePrimaryAction(input: {
     setShowValidationErrors,
     setValidationMessage,
     update,
-    values,
+    readLatestValues,
   ]);
 }

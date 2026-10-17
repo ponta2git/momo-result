@@ -19,6 +19,7 @@ export function useMatchWorkspaceSubmitFlow({
   setOperationError,
   setValidationMessage,
   values,
+  readLatestValues,
 }: {
   matchId: string | undefined;
   notify: (message: string, tone?: WorkspaceNoticeTone) => void;
@@ -26,7 +27,8 @@ export function useMatchWorkspaceSubmitFlow({
   setConfirmOpen: Dispatch<SetStateAction<boolean>>;
   setOperationError: Dispatch<SetStateAction<MatchWorkspaceOperationError | null>>;
   setValidationMessage: Dispatch<SetStateAction<string>>;
-  values: MatchFormValues;
+  values: Pick<MatchFormValues, "heldEventId" | "matchDraftId">;
+  readLatestValues: () => MatchFormValues;
 }) {
   const handleOperationStart = useCallback(() => setOperationError(null), [setOperationError]);
   const confirmedDraft = useConfirmedDraftRedirect({
@@ -52,7 +54,7 @@ export function useMatchWorkspaceSubmitFlow({
   });
   const confirmation = useMatchWorkspaceConfirmAction({
     confirmMutation: mutations.confirmMutation,
-    values,
+    readLatestValues,
   });
   const { cancelDraftMutation } = mutations;
   const cancelDraft = cancelDraftMutation.mutateAsync;

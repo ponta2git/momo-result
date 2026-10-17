@@ -1,6 +1,5 @@
 import { AlertTriangle, Check } from "lucide-react";
 
-import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import type { MatchWorkspaceConfirmationDialogModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
@@ -47,7 +46,7 @@ function MatchConfirmSummary({
   mapName,
   seasonName,
   values,
-}: MatchConfirmSummaryProps & { values: MatchFormValues }) {
+}: MatchConfirmSummaryProps & { values: MatchWorkspaceConfirmationDialogModel["values"] }) {
   return (
     <FactList
       ariaLabel="確定する試合の開催条件"
@@ -72,7 +71,7 @@ function MatchConfirmSummary({
   );
 }
 
-function PlayerLedger({ values }: { values: MatchFormValues }) {
+function PlayerLedger({ values }: { values: MatchWorkspaceConfirmationDialogModel["values"] }) {
   return (
     <DataTable
       caption={{ content: "確定する4人分の結果" }}

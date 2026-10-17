@@ -27,6 +27,7 @@ export function useMatchWorkspaceSessionDraft({
   enabled,
   mode,
   onRestore,
+  readCurrentDraft,
   values,
   workspaceKey,
 }: {
@@ -35,6 +36,7 @@ export function useMatchWorkspaceSessionDraft({
   enabled: boolean;
   mode: WorkspaceMode;
   onRestore: (draft: MatchWorkspaceSessionDraft) => void;
+  readCurrentDraft: () => { values: MatchFormValues; acknowledgedCellIds: readonly string[] };
   values: MatchFormValues;
   workspaceKey: string;
 }) {
@@ -78,20 +80,25 @@ export function useMatchWorkspaceSessionDraft({
     currentFingerprint !== activeState.baselineDraftFingerprint,
   );
 
-  const saveCurrentDraft = useCallback(
-    (resumeAutomatically = false) => {
+  const saveDraftSnapshot = useCallback(
+    (current: ReturnType<typeof readCurrentDraft>, resumeAutomatically = false) => {
       if (!enabled || !activeState || !storageScope) return false;
       return saveMatchWorkspaceSessionDraft(storageScope, {
         accountId: storageScope.accountId,
-        acknowledgedCellIds: [...acknowledgedCellIds],
+        acknowledgedCellIds: [...current.acknowledgedCellIds],
         baselineFingerprint: activeState.baselineValuesFingerprint,
         resumeAutomatically,
         savedAt: new Date().toISOString(),
-        values,
+        values: current.values,
         version: 2,
       });
     },
-    [acknowledgedCellIds, activeState, enabled, storageScope, values],
+    [activeState, enabled, storageScope],
+  );
+
+  const saveCurrentDraft = useCallback(
+    (resumeAutomatically = false) => saveDraftSnapshot(readCurrentDraft(), resumeAutomatically),
+    [readCurrentDraft, saveDraftSnapshot],
   );
 
   useEffect(() => {
@@ -102,8 +109,8 @@ export function useMatchWorkspaceSessionDraft({
       removeMatchWorkspaceSessionDraft(storageScope);
       return;
     }
-    saveCurrentDraft();
-  }, [activeState, dirty, saveCurrentDraft, storageScope]);
+    saveDraftSnapshot({ values, acknowledgedCellIds });
+  }, [acknowledgedCellIds, activeState, dirty, saveDraftSnapshot, storageScope, values]);
 
   const restoreRecovery = useCallback(() => {
     const recovery = sessionState?.key === storageKey ? sessionState.recovery : null;
@@ -152,7 +159,7 @@ export function useMatchWorkspaceSessionDraft({
     dirty,
     discardRecovery,
     markCommitted,
-    navigationAllowedRef,
+    isNavigationAllowed: useCallback(() => navigationAllowedRef.current, []),
     recovery: activeState?.recovery?.resumeAutomatically ? null : (activeState?.recovery ?? null),
     restoreRecovery,
     saveBeforeLeave: saveCurrentDraft,

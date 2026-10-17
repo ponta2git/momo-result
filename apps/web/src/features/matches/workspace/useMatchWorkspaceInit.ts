@@ -1,7 +1,5 @@
-import { useEffect, useState } from "react";
-import type { Dispatch } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 
-import type { MatchFormAction } from "@/features/matches/workspace/matchFormReducer";
 import type {
   MatchFormValues,
   MatchWorkspaceInitialData,
@@ -23,7 +21,8 @@ export type MatchWorkspaceInitialization =
   | { status: "ready"; snapshot: InitializedWorkspaceSnapshot };
 
 export type MatchWorkspaceInitParams = MatchWorkspaceInitializationSource & {
-  dispatch: Dispatch<MatchFormAction>;
+  onSelectHeldEvent: (id: string, event: HeldEventResponse | undefined) => void;
+  initialized: boolean;
   heldEventId: string;
   heldEvents: readonly HeldEventResponse[];
   onInitialize: (values: MatchFormValues, workspaceData: MatchWorkspaceInitialData | null) => void;
@@ -36,17 +35,15 @@ export type MatchWorkspaceInitParams = MatchWorkspaceInitializationSource & {
 export function useMatchWorkspaceInit(
   params: MatchWorkspaceInitParams,
 ): MatchWorkspaceInitialization {
-  const { dispatch, onInitialize, nowIsoFactory, preferredHeldEventPending } = params;
-  const [initializedSnapshot, setInitializedSnapshot] =
-    useState<InitializedWorkspaceSnapshot | null>(null);
-
-  // The command updates state owned by this component. React retries its render before
-  // committing children, so initial values and readiness become visible together.
-  if (initializedSnapshot === null && isWorkspaceInitialDataReady(params)) {
-    const initial = buildWorkspaceInitialData(params, nowIsoFactory());
-    onInitialize(initial.values, initial.workspaceData);
-    setInitializedSnapshot(initial.snapshot);
+  const { onSelectHeldEvent, onInitialize, nowIsoFactory, preferredHeldEventPending } = params;
+  const [initial, setInitial] = useState<ReturnType<typeof buildWorkspaceInitialData> | null>(null);
+  if (initial === null && isWorkspaceInitialDataReady(params)) {
+    setInitial(buildWorkspaceInitialData(params, nowIsoFactory()));
   }
+  useLayoutEffect(() => {
+    if (initial && !params.initialized) onInitialize(initial.values, initial.workspaceData);
+  }, [initial, onInitialize, params.initialized]);
+  const initializedSnapshot = params.initialized ? (initial?.snapshot ?? null) : null;
 
   const initialHeldEventPatch = initialWorkspaceHeldEventPatch({
     initialized: initializedSnapshot !== null,
@@ -58,8 +55,13 @@ export function useMatchWorkspaceInit(
   });
   useEffect(() => {
     if (!initialHeldEventPatch) return;
-    dispatch({ patch: initialHeldEventPatch, type: "patch_root" });
-  }, [dispatch, initialHeldEventPatch]);
+    const id = initialHeldEventPatch.heldEventId;
+    if (id)
+      onSelectHeldEvent(
+        id,
+        params.heldEvents.find((event) => event.id === id),
+      );
+  }, [onSelectHeldEvent, initialHeldEventPatch, params.heldEvents]);
 
   if (!initializedSnapshot) return { status: "waiting-for-data", snapshot: null };
   return {

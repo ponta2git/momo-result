@@ -7,7 +7,7 @@ import type { MatchWorkspaceSetupFieldsModel } from "@/features/matches/workspac
 
 function createModel(errorPathSet = new Set<string>()): MatchWorkspaceSetupFieldsModel {
   return {
-    actions: { onGameTitleChange: vi.fn(), onPatchRoot: vi.fn() },
+    actions: { onSelectHeldEvent: vi.fn(), onChangeField: vi.fn() },
     options: {
       gameTitleItems: [],
       heldEventPicker: {
@@ -68,9 +68,9 @@ describe("MatchSetupFields", () => {
     for (const value of ["9007199254740993", "9".repeat(310)]) {
       fireEvent.change(matchNumber, { target: { value } });
     }
-    expect(model.actions.onPatchRoot).not.toHaveBeenCalled();
+    expect(model.actions.onChangeField).not.toHaveBeenCalled();
 
     fireEvent.change(matchNumber, { target: { value: "31" } });
-    expect(model.actions.onPatchRoot).toHaveBeenCalledExactlyOnceWith({ matchNoInEvent: 31 });
+    expect(model.actions.onChangeField).toHaveBeenCalledExactlyOnceWith("matchNoInEvent", 31);
   });
 });

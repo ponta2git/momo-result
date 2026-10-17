@@ -1,6 +1,7 @@
 import type {
   MatchFormValues,
   MatchSetupValues,
+  WorkspaceMode,
 } from "@/features/matches/workspace/matchFormTypes";
 import type { MatchWorkspaceOperationErrorView } from "@/features/matches/workspace/matchWorkspaceOperationError";
 import type {
@@ -56,8 +57,11 @@ type MatchWorkspaceLoadingModel = {
 
 export type MatchWorkspaceSetupFieldsModel = {
   actions: {
-    onGameTitleChange: (gameTitleId: string) => void;
-    onPatchRoot: (patch: Partial<MatchSetupValues>) => void;
+    onSelectHeldEvent: (id: string, event: HeldEventResponse | undefined) => void;
+    onChangeField: <K extends Exclude<keyof MatchSetupValues, "heldEventId">>(
+      field: K,
+      value: MatchSetupValues[K],
+    ) => void;
   };
   options: {
     gameTitleItems: GameTitleResponse[];
@@ -67,7 +71,7 @@ export type MatchWorkspaceSetupFieldsModel = {
     seasonItems: SeasonMasterResponse[];
   };
   validation: {
-    errorPathSet: Set<string>;
+    errorPathSet: ReadonlySet<string>;
     focusRequest?: { path: string; sequence: number } | null;
   };
   values: MatchSetupValues;
@@ -157,7 +161,7 @@ export type MatchWorkspaceConfirmationDialogModel = {
     mapName: string | undefined;
     seasonName: string | undefined;
   };
-  values: MatchFormValues;
+  values: Pick<MatchFormValues, "matchNoInEvent" | "noteBody" | "players">;
 };
 
 export type MatchWorkspaceBlockedReviewModel = {
@@ -179,4 +183,18 @@ export type MatchWorkspacePageModel = {
   persistence: { confirmation: MatchWorkspaceConfirmationDialogModel | null };
   review: { blocked: MatchWorkspaceBlockedReviewModel | null };
   validationFocusRequest: { path: string; sequence: number } | null;
+};
+
+export type MatchWorkspaceEditorLayoutModel = {
+  mode: WorkspaceMode;
+  notice: WorkspaceNotice | null;
+  warnings: string[];
+  setup: {
+    eventCreation: MatchWorkspaceSetupSectionModel["eventCreation"];
+    options: MatchWorkspaceSetupFieldsModel["options"];
+  };
+  sourceImagePanel: Omit<
+    NonNullable<MatchWorkspaceEditorModel["sourceImagePanel"]>,
+    "preferredKind"
+  > | null;
 };

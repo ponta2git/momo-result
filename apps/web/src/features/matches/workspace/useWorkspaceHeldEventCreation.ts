@@ -1,11 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLayoutEffect, useRef } from "react";
-import type { Dispatch, SetStateAction } from "react";
 
-import type { MatchFormAction } from "@/features/matches/workspace/matchFormReducer";
 import type { MatchWorkspaceOperationError } from "@/features/matches/workspace/matchWorkspaceOperationError";
 import type { WorkspaceNoticeTone } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
 import { syncHeldEventCreatedCache } from "@/shared/api/heldEventCache";
+import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { createHeldEvent } from "@/shared/api/heldEvents";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { formatApiError } from "@/shared/api/problemDetails";
@@ -14,13 +13,13 @@ import { formatDateTimeLong } from "@/shared/lib/dateTime";
 
 /** Owns the complete held-event creation workflow used by the match workspace. */
 export function useWorkspaceHeldEventCreation({
-  dispatch,
+  onCreated,
   notify,
   setOperationError,
 }: {
-  dispatch: Dispatch<MatchFormAction>;
+  onCreated: (event: HeldEventResponse) => void;
   notify: (message: string, tone?: WorkspaceNoticeTone) => void;
-  setOperationError: Dispatch<SetStateAction<MatchWorkspaceOperationError | null>>;
+  setOperationError: (error: MatchWorkspaceOperationError | null) => void;
 }) {
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
@@ -48,14 +47,7 @@ export function useWorkspaceHeldEventCreation({
     onSuccess: async (event) => {
       await syncHeldEventCreatedCache(queryClient, event);
       if (!activeRef.current) return;
-      dispatch({
-        patch: {
-          heldEventId: event.id,
-          matchNoInEvent: event.nextMatchNo,
-          playedAt: event.heldAt,
-        },
-        type: "patch_root",
-      });
+      onCreated(event);
       notify(`開催（${formatDateTimeLong(event.heldAt)}）を作成して選択しました。`, "success");
     },
     onError: (error) => {

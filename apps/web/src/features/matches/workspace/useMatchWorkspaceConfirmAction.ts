@@ -9,13 +9,13 @@ type ConfirmMutation = {
 
 export function useMatchWorkspaceConfirmAction({
   confirmMutation,
-  values,
+  readLatestValues,
 }: {
   confirmMutation: ConfirmMutation;
-  values: MatchFormValues;
+  readLatestValues: () => MatchFormValues;
 }) {
   const [, action, pending] = useActionState<null, FormData>(async () => {
-    const request = toConfirmMatchRequest(values);
+    const request = toConfirmMatchRequest(readLatestValues());
     await confirmMutation.mutateAsync(request).catch(() => undefined);
     return null;
   }, null);

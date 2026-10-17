@@ -23,7 +23,7 @@ export type MatchListSort =
   | "held_asc"
   | "match_no_asc";
 
-export type MatchListSearch = {
+export type MatchListSearch = Readonly<{
   gameTitleId: string;
   heldEventId: string;
   cursor: string;
@@ -31,10 +31,17 @@ export type MatchListSearch = {
   seasonMasterId: string;
   sort: MatchListSort;
   status: MatchListStatusFilter;
-};
+}>;
+
+export type MatchListFilterChange =
+  | { kind: "status"; status: MatchListStatusFilter }
+  | { kind: "sort"; sort: MatchListSort }
+  | { kind: "heldEvent"; heldEventId: string }
+  | { kind: "gameTitle"; gameTitleId: string }
+  | { kind: "season"; seasonMasterId: string };
 
 export type MatchListFilterActions = {
-  onApply: (nextSearch: MatchListSearch) => void;
+  onChange: (change: MatchListFilterChange) => void;
   onClear: () => void;
 };
 

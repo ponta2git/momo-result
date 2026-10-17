@@ -29,7 +29,7 @@ function RefreshHarness({
       </button>
       <button
         type="button"
-        onClick={() => selection.apply({ ...selection.current, cursor: "", sort: "updated_desc" })}
+        onClick={() => selection.change({ kind: "sort", sort: "updated_desc" })}
       >
         change sort
       </button>

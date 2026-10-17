@@ -49,14 +49,14 @@ const candidates: MatchListFilterCandidates = {
 };
 
 describe("MatchesFilterBar", () => {
-  it("clears the cursor when status or sort changes", async () => {
+  it("sends the selected status and sort without reconstructing the URL", async () => {
     const user = userEvent.setup();
-    const onApply = vi.fn();
+    const onChange = vi.fn();
     const search = { ...initialSearch, cursor: "opaque-cursor", status: "incomplete" as const };
 
     const { rerender } = render(
       <MatchesFilterBar
-        actions={{ onApply, onClear: vi.fn() }}
+        actions={{ onChange, onClear: vi.fn() }}
         candidates={candidates}
         counts={counts}
         search={search}
@@ -64,18 +64,18 @@ describe("MatchesFilterBar", () => {
     );
 
     await selectOption(user, screen.getByLabelText("確定状況"), "ocr_running");
-    expect(onApply).toHaveBeenLastCalledWith({ ...search, cursor: "", status: "ocr_running" });
+    expect(onChange).toHaveBeenLastCalledWith({ kind: "status", status: "ocr_running" });
 
-    onApply.mockClear();
+    onChange.mockClear();
     rerender(
       <MatchesFilterBar
-        actions={{ onApply, onClear: vi.fn() }}
+        actions={{ onChange, onClear: vi.fn() }}
         candidates={candidates}
         counts={counts}
         search={search}
       />,
     );
     await selectOption(user, screen.getByLabelText("並び順"), "updated_desc");
-    expect(onApply).toHaveBeenLastCalledWith({ ...search, cursor: "", sort: "updated_desc" });
+    expect(onChange).toHaveBeenLastCalledWith({ kind: "sort", sort: "updated_desc" });
   });
 });

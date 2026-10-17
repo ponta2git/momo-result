@@ -25,7 +25,6 @@ import type { MatchListSelectionChange } from "@/features/matches/list/matchList
 import type { MatchListSearch } from "@/features/matches/list/matchListTypes";
 
 export type MatchListLocationState = {
-  apply: (search: MatchListSearch) => void;
   change: (change: MatchListSelectionChange) => void;
   clear: () => void;
   current: MatchListSearch;
@@ -87,7 +86,6 @@ export function useMatchListLocationState(): MatchListLocationState {
   );
 
   return {
-    apply,
     change,
     clear,
     current,

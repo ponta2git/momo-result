@@ -101,7 +101,7 @@ export function useMatchesListPageModel(): MatchesListPageModel {
       rowActions,
     },
     filters: {
-      actions: { onApply: location.apply, onClear: location.clear },
+      actions: { onChange: location.change, onClear: location.clear },
       candidates: resource.filters.candidates,
       hasActive: location.hasFilters,
       loadFailed: resource.filters.loadFailed,

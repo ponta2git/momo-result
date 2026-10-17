@@ -66,7 +66,7 @@ const candidates: MatchListFilterCandidates = {
 describe("MatchesListFilters", () => {
   it("offers only seasons belonging to the selected title and all seasons when no title is selected", async () => {
     const user = userEvent.setup();
-    const actions = { onApply: vi.fn(), onClear: vi.fn() };
+    const actions = { onChange: vi.fn(), onClear: vi.fn() };
     const { rerender } = render(
       <MatchesListFilters
         actions={actions}
@@ -88,15 +88,15 @@ describe("MatchesListFilters", () => {
       <MatchesListFilters actions={actions} candidates={candidates} search={initialSearch} />,
     );
     await selectOption(user, screen.getByRole("combobox", { name: "シーズン" }), "season-2");
-    expect(actions.onApply).toHaveBeenLastCalledWith({
-      ...initialSearch,
+    expect(actions.onChange).toHaveBeenLastCalledWith({
+      kind: "season",
       seasonMasterId: "season-2",
     });
   });
 
-  it("clears cursor and an incompatible season when the game title changes", async () => {
+  it("sends the changed game title without deciding paging or season state", async () => {
     const user = userEvent.setup();
-    const onApply = vi.fn();
+    const onChange = vi.fn();
     const search = {
       ...initialSearch,
       cursor: "opaque-cursor",
@@ -106,7 +106,7 @@ describe("MatchesListFilters", () => {
 
     render(
       <MatchesListFilters
-        actions={{ onApply, onClear: vi.fn() }}
+        actions={{ onChange, onClear: vi.fn() }}
         candidates={candidates}
         search={search}
       />,
@@ -114,21 +114,19 @@ describe("MatchesListFilters", () => {
 
     await selectOption(user, screen.getByLabelText("作品"), "game-2");
 
-    expect(onApply).toHaveBeenCalledWith({
-      ...search,
-      cursor: "",
+    expect(onChange).toHaveBeenCalledWith({
+      kind: "gameTitle",
       gameTitleId: "game-2",
-      seasonMasterId: "",
     });
   });
 
   it("selects a held event from the shared descriptive dialog", async () => {
     const user = userEvent.setup();
-    const onApply = vi.fn();
+    const onChange = vi.fn();
 
     render(
       <MatchesListFilters
-        actions={{ onApply, onClear: vi.fn() }}
+        actions={{ onChange, onClear: vi.fn() }}
         candidates={candidates}
         search={initialSearch}
       />,
@@ -140,9 +138,8 @@ describe("MatchesListFilters", () => {
     );
     await user.click(screen.getByRole("radio", { name: /2026\/08\/09/u }));
 
-    expect(onApply).toHaveBeenCalledWith({
-      ...initialSearch,
-      cursor: "",
+    expect(onChange).toHaveBeenCalledWith({
+      kind: "heldEvent",
       heldEventId: "held-1",
     });
   });

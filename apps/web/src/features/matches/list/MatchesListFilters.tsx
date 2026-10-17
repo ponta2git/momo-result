@@ -84,10 +84,6 @@ export function MatchesListFilters({
     : {};
   const seasonsErrorProps = selectionErrors?.seasons ? { error: selectionErrors.seasons } : {};
 
-  function patchSearch(patch: Partial<MatchListSearch>) {
-    actions.onApply({ ...search, ...patch, cursor: "" });
-  }
-
   return (
     <>
       <HeldEventPickerField
@@ -106,7 +102,7 @@ export function MatchesListFilters({
         {...(heldEventPicker ? {} : heldEventsErrorProps)}
         onPageChange={heldEventPicker?.onPageChange}
         onValueChange={(heldEventId) => {
-          patchSearch({ heldEventId });
+          actions.onChange({ kind: "heldEvent", heldEventId });
         }}
       />
       <SelectField
@@ -115,11 +111,7 @@ export function MatchesListFilters({
         value={search.gameTitleId}
         {...gameTitlesErrorProps}
         onValueChange={(nextValue) => {
-          const value = nextValue;
-          patchSearch({
-            gameTitleId: value,
-            seasonMasterId: value && search.gameTitleId === value ? search.seasonMasterId : "",
-          });
+          actions.onChange({ kind: "gameTitle", gameTitleId: nextValue });
         }}
       />
       <SelectField
@@ -128,7 +120,7 @@ export function MatchesListFilters({
         value={search.seasonMasterId}
         {...seasonsErrorProps}
         onValueChange={(nextValue) => {
-          patchSearch({ seasonMasterId: nextValue });
+          actions.onChange({ kind: "season", seasonMasterId: nextValue });
         }}
       />
     </>

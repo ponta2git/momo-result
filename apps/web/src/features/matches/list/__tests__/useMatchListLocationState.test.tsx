@@ -12,12 +12,12 @@ function LocationStateHarness() {
   return (
     <>
       <output aria-label="settling">{String(state.settling)}</output>
-      <button type="button" onClick={() => state.apply({ ...state.current, status: "confirmed" })}>
+      <button type="button" onClick={() => state.change({ kind: "status", status: "confirmed" })}>
         confirmed
       </button>
       <button
         type="button"
-        onClick={() => state.apply({ ...state.current, status: "needs_review" })}
+        onClick={() => state.change({ kind: "status", status: "needs_review" })}
       >
         needs review
       </button>
@@ -26,11 +26,56 @@ function LocationStateHarness() {
       <button type="button" onClick={state.clear}>
         clear
       </button>
+      <button
+        type="button"
+        onClick={() => state.change({ kind: "gameTitle", gameTitleId: "game-2" })}
+      >
+        change title
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          state.change({ kind: "gameTitle", gameTitleId: "game-2" });
+          state.change({ kind: "season", seasonMasterId: "season-2" });
+          state.change({ kind: "sort", sort: "updated_desc" });
+        }}
+      >
+        change consecutive conditions
+      </button>
     </>
   );
 }
 
 describe("useMatchListLocationState", () => {
+  it("applies consecutive field intents to the latest selection and resets incompatible paging", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter
+        initialEntries={[
+          "/matches?gameTitleId=game-1&seasonMasterId=season-1&cursor=old&status=confirmed",
+        ]}
+      >
+        <LocationStateHarness />
+      </MemoryRouter>,
+    );
+    await user.click(screen.getByRole("button", { name: "change title", exact: true }));
+    expect(JSON.parse(screen.getByLabelText("current search").textContent ?? "{}")).toMatchObject({
+      gameTitleId: "game-2",
+      seasonMasterId: "",
+      cursor: "",
+      status: "confirmed",
+    });
+    await user.click(screen.getByRole("button", { name: "change consecutive conditions" }));
+    await waitFor(() => expect(screen.getByLabelText("settling")).toHaveTextContent("false"));
+    expect(JSON.parse(screen.getByLabelText("current search").textContent ?? "{}")).toMatchObject({
+      gameTitleId: "game-2",
+      seasonMasterId: "season-2",
+      cursor: "",
+      status: "confirmed",
+      sort: "updated_desc",
+    });
+  });
+
   it.each(["commit", "supersede"] as const)(
     "keeps the selected filter consistent when a pending navigation must %s",
     async (completion) => {

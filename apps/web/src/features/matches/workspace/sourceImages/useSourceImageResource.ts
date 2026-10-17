@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useMemo, useSyncExternalStore } from "react";
 
+import { createSourceImageQueryDownloads } from "@/features/matches/workspace/sourceImages/sourceImageQueryDownloads";
 import { SourceImageResource } from "@/features/matches/workspace/sourceImages/sourceImageResource";
 import type {
   SourceImageItem,
@@ -23,7 +24,10 @@ export function useSourceImageResource({
   const client = useQueryClient();
   const scope = useId();
   const resource = useMemo(
-    () => new SourceImageResource(client, matchDraftId, accountId, scope),
+    () =>
+      new SourceImageResource(
+        createSourceImageQueryDownloads(client, matchDraftId, accountId, scope),
+      ),
     [client, matchDraftId, accountId, scope],
   );
   const images = useSyncExternalStore(resource.subscribe, resource.getSnapshot);

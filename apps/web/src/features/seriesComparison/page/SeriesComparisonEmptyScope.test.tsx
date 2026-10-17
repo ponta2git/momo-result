@@ -214,5 +214,6 @@ describe("SeriesComparison empty scope", () => {
       "season_current",
     );
     expect(await screen.findByText(/表示条件を調整しました/u)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "プレーヤーレーダー" })).toBeInTheDocument();
   });
 });

@@ -6,12 +6,13 @@ import type { SeriesAnalysisDisplayBundle } from "@/features/seriesComparison/mo
 import {
   seriesAnalysisScopeSignature,
   seriesAnalysisBundleResource,
+  seriesAnalysisDisplayedSelection,
 } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import type { OwnerMetricId } from "@/features/seriesComparison/model/seriesAnalysisOwnerMetrics";
 import type {
-  SeriesAnalysisUrlState,
+  SeriesAnalysisSelection,
   SeriesAnalysisViewId,
-} from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+} from "@/features/seriesComparison/model/seriesAnalysisSelection";
 import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/model/seriesAnalysisViewTypes";
 import { SeriesAnalysisArrival } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
 import { OutlookLoading } from "@/features/seriesComparison/outlook/OutlookLoading";
@@ -77,7 +78,7 @@ const SeriesAnalysisDrilldownContent = lazy(() =>
     ),
   ),
 );
-const emptyOutlookSelection: SeriesAnalysisUrlState = {};
+const emptyOutlookSelection: SeriesAnalysisSelection = {};
 const noFocusedItemIds: readonly string[] = [];
 
 function drilldownTitle(metricId: SeriesAnalysisDrilldownMetricId): string {
@@ -111,7 +112,7 @@ export function preloadSeriesAnalysisView(view: SeriesAnalysisViewId): void {
 
 type SeriesAnalysisContentProps = {
   showPurposeTabs?: boolean;
-  outlookSelection?: SeriesAnalysisUrlState;
+  outlookSelection?: SeriesAnalysisSelection;
   onOutlookMemberChange?: (role: "focus" | "rival", memberId: string) => void;
   ownerMetric?: OwnerMetricId | undefined;
   onOwnerMetricChange?: ((metric: OwnerMetricId) => void) | undefined;
@@ -154,11 +155,8 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
   const resource = seriesAnalysisBundleResource(bundle);
   const { matchContext } = bundle;
   const artifactId = resource.artifact.artifactId;
-  const scopeIdentity = seriesAnalysisScopeSignature({
-    gameTitleId: resource.artifact.gameTitleId,
-    mapMasterId: "mapMasterId" in resource.scope ? resource.scope.mapMasterId : undefined,
-    seasonMasterId: "seasonMasterId" in resource.scope ? resource.scope.seasonMasterId : undefined,
-  });
+  const displayedSelection = seriesAnalysisDisplayedSelection(bundle, outlookSelection);
+  const scopeIdentity = seriesAnalysisScopeSignature(displayedSelection);
   const contentIdentity = `${artifactId}:${scopeIdentity}:${bundle.view}`;
   const root = useRef<HTMLDivElement>(null);
 
@@ -190,8 +188,8 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
             >
               <Suspense fallback={<OutlookLoading />}>
                 <OutlookView
-                  response={bundle.outlook}
-                  selection={outlookSelection}
+                  summary={bundle.outlook}
+                  selection={displayedSelection}
                   onMemberChange={onOutlookMemberChange}
                 />
                 <SeriesAnalysisArrival ready={navigationReady} root={root} />

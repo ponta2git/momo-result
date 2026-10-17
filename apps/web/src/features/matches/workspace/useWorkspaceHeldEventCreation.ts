@@ -1,29 +1,57 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLayoutEffect, useRef } from "react";
-import type { Dispatch, SetStateAction } from "react";
 
-import type { MatchFormAction } from "@/features/matches/workspace/matchFormReducer";
 import type { MatchWorkspaceOperationError } from "@/features/matches/workspace/matchWorkspaceOperationError";
-import type { WorkspaceNoticeTone } from "@/features/matches/workspace/useWorkspaceNotice";
+import type { WorkspaceNoticeTone } from "@/features/matches/workspace/matchWorkspacePanelViews";
 import { syncHeldEventCreatedCache } from "@/shared/api/heldEventCache";
+import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { createHeldEvent } from "@/shared/api/heldEvents";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 
-/** Owns the complete held-event creation workflow used by the match workspace. */
+type WorkspaceHeldEventCreation = {
+  create: (request: Parameters<typeof createHeldEvent>[0]) => void;
+  pending: boolean;
+};
+
+function useHeldEventCreationWrite({
+  started,
+  saved,
+  failed,
+}: {
+  started: () => void;
+  saved: (event: HeldEventResponse) => void;
+  failed: (error: unknown) => void;
+}): WorkspaceHeldEventCreation {
+  const queryClient = useQueryClient();
+  const idempotencyKeys = useIdempotencyKeyStore();
+  const creation = useMutation({
+    onMutate: started,
+    mutationFn: (request: Parameters<typeof createHeldEvent>[0]) =>
+      runIdempotentMutation(idempotencyKeys, "matchWorkspace.createHeldEvent", request, (options) =>
+        createHeldEvent(request, options),
+      ),
+    onSuccess: async (event) => {
+      await syncHeldEventCreatedCache(queryClient, event);
+      saved(event);
+    },
+    onError: failed,
+  });
+  return { create: creation.mutate, pending: creation.isPending };
+}
+
+/** Owns selection and feedback when the workspace creates a held event. */
 export function useWorkspaceHeldEventCreation({
-  dispatch,
+  onCreated,
   notify,
   setOperationError,
 }: {
-  dispatch: Dispatch<MatchFormAction>;
+  onCreated: (event: HeldEventResponse) => void;
   notify: (message: string, tone?: WorkspaceNoticeTone) => void;
-  setOperationError: Dispatch<SetStateAction<MatchWorkspaceOperationError | null>>;
-}) {
-  const queryClient = useQueryClient();
-  const idempotencyKeys = useIdempotencyKeyStore();
+  setOperationError: (error: MatchWorkspaceOperationError | null) => void;
+}): WorkspaceHeldEventCreation {
   const activeRef = useRef(true);
   useLayoutEffect(() => {
     activeRef.current = true;
@@ -32,33 +60,17 @@ export function useWorkspaceHeldEventCreation({
     };
   }, []);
 
-  return useMutation({
-    onMutate: () => {
+  return useHeldEventCreationWrite({
+    started: () => {
       notify("");
       setOperationError(null);
     },
-    mutationFn: async (request: Parameters<typeof createHeldEvent>[0]) => {
-      return runIdempotentMutation(
-        idempotencyKeys,
-        "matchWorkspace.createHeldEvent",
-        request,
-        (options) => createHeldEvent(request, options),
-      );
-    },
-    onSuccess: async (event) => {
-      await syncHeldEventCreatedCache(queryClient, event);
+    saved: (event) => {
       if (!activeRef.current) return;
-      dispatch({
-        patch: {
-          heldEventId: event.id,
-          matchNoInEvent: event.nextMatchNo,
-          playedAt: event.heldAt,
-        },
-        type: "patch_root",
-      });
+      onCreated(event);
       notify(`開催（${formatDateTimeLong(event.heldAt)}）を作成して選択しました。`, "success");
     },
-    onError: (error) => {
+    failed: (error) => {
       if (!activeRef.current) return;
       setOperationError({
         kind: "heldEventCreation",

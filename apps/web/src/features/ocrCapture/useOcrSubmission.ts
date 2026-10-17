@@ -1,0 +1,93 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useLayoutEffect, useRef } from "react";
+
+import type { OcrSubmissionPlan } from "@/features/ocrCapture/ocrSubmissionPlan";
+import {
+  createOcrSubmissionState,
+  runOcrSubmissionWorkflow,
+} from "@/features/ocrCapture/ocrSubmissionWorkflow";
+import type {
+  OcrSubmissionState,
+  OcrSubmissionResult,
+  OcrSubmissionWorkflowParams,
+} from "@/features/ocrCapture/ocrSubmissionWorkflow";
+import { invalidateAfterOcrSubmissionStarted } from "@/shared/api/cacheInvalidation";
+import { createMatchDraft } from "@/shared/api/matchDrafts";
+import { createOcrJob, getOcrJob, uploadImage } from "@/shared/api/ocrJobs";
+import { putOcrSubmission } from "@/shared/api/ocrSubmissions";
+import { principalRequestSignal } from "@/shared/api/principalRequestScope";
+
+export type OcrSubmitOptions = Pick<OcrSubmissionWorkflowParams, "onProgress" | "onSlotReceipt"> & {
+  plan: OcrSubmissionPlan;
+  restart?: boolean;
+};
+
+export type OcrSubmission = {
+  isSubmitting: boolean;
+  submit: (params: OcrSubmitOptions) => Promise<OcrSubmissionResult | undefined>;
+};
+
+/** One mutation owns the entire draft/upload/job workflow, including cache reconciliation. */
+export function useOcrSubmission(): OcrSubmission {
+  const queryClient = useQueryClient();
+  const checkpoints = useRef(new WeakMap<OcrSubmissionPlan, OcrSubmissionState>());
+  const inFlightRef = useRef(false);
+  const submissionSignal = useRef<AbortSignal | undefined>(undefined);
+  useLayoutEffect(() => {
+    const controller = new AbortController();
+    submissionSignal.current = AbortSignal.any([
+      controller.signal,
+      principalRequestSignal(queryClient),
+    ]);
+    return () => controller.abort();
+  }, [queryClient]);
+  const { isPending, mutateAsync } = useMutation({
+    mutationFn: ({ plan, restart, ...params }: OcrSubmitOptions) => {
+      let state = checkpoints.current.get(plan) ?? createOcrSubmissionState();
+      if (restart && state.retryKinds?.length && state.draft) {
+        state = {
+          ...createOcrSubmissionState(),
+          draftKey: state.draftKey,
+          draft: state.draft,
+          targetKinds: state.retryKinds,
+        };
+      }
+      checkpoints.current.set(plan, state);
+      return runOcrSubmissionWorkflow({
+        ...plan,
+        ...params,
+        state,
+        signal: submissionSignal.current,
+        createDraft: createMatchDraft,
+        uploadImage,
+        createJob: createOcrJob,
+        getJob: getOcrJob,
+        putSubmission: putOcrSubmission,
+      });
+    },
+    onSuccess: async (result) => {
+      if (
+        result.status === "started" ||
+        result.status === "partial_started" ||
+        result.status === "submission_closed" ||
+        result.status === "draft_create_failed" ||
+        result.status === "submission_failed"
+      ) {
+        await invalidateAfterOcrSubmissionStarted(queryClient).catch(() => undefined);
+      }
+    },
+  });
+
+  const submit = useCallback(
+    (params: OcrSubmitOptions) => {
+      // Guard synchronous repeat clicks before the pending render commits.
+      if (inFlightRef.current) return Promise.resolve(undefined);
+      inFlightRef.current = true;
+      return mutateAsync(params).finally(() => {
+        inFlightRef.current = false;
+      });
+    },
+    [mutateAsync],
+  );
+  return { isSubmitting: isPending, submit };
+}

@@ -1,9 +1,10 @@
 import { useCallback, useState } from "react";
 
+import type {
+  WorkspaceNotice,
+  WorkspaceNoticeTone,
+} from "@/features/matches/workspace/matchWorkspacePanelViews";
 import { showToast } from "@/shared/ui/feedback/Toast";
-
-export type WorkspaceNoticeTone = "info" | "success" | "warning";
-export type WorkspaceNotice = { message: string; tone: WorkspaceNoticeTone };
 
 export function useWorkspaceNotice() {
   const [notice, setNotice] = useState<WorkspaceNotice | null>(null);

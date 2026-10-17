@@ -22,8 +22,8 @@ import {
 import {
   seriesAnalysisScopeStatusQueryOptions,
   seriesPlayerRadarStateQueryOptions,
-} from "@/shared/api/seriesPlayerRadar";
-import { getAuthorization } from "@/shared/auth/authorization";
+} from "@/shared/api/seriesPlayerRadarQueryOptions";
+import { getAuthorization } from "@/shared/auth/authorizationQueryAdapter";
 import { authMeQueryKeyFor, authQueryOptions } from "@/shared/auth/authQueries";
 import { createDeferred } from "@/test/deferred";
 import { setupMsw } from "@/test/msw/lifecycle";
@@ -95,6 +95,27 @@ describe("authorization", () => {
       http.get("/api/auth/me", () => HttpResponse.json(authResponse())),
       http.get("/api/admin/notification-settings", () => HttpResponse.json(settings)),
     );
+  });
+
+  it("keeps permission snapshots stable when unrelated account facts change", () => {
+    const client = createTestQueryClient();
+    client.setQueryData(authMeQueryKeyFor(undefined), authResponse());
+    const authorization = getAuthorization(client);
+    const operations = authorization.permissionSnapshot("operations");
+    const admin = authorization.permissionSnapshot("admin");
+    client.setQueryData(authMeQueryKeyFor(undefined), {
+      ...authResponse(),
+      displayName: "更新後の表示名",
+    });
+    expect(authorization.permissionSnapshot("operations")).toBe(operations);
+    expect(authorization.permissionSnapshot("admin")).toBe(admin);
+    client.setQueryData(authMeQueryKeyFor(undefined), authResponse("operator"));
+    expect(authorization.permissionSnapshot("operations")).toBe(operations);
+    expect(authorization.permissionSnapshot("admin")).toEqual({
+      allowed: false,
+      retained: false,
+      epoch: admin.epoch + 1,
+    });
   });
 
   it.each([

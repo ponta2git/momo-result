@@ -5,8 +5,8 @@ import { cn } from "@/shared/ui/cn";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 import { contentText } from "@/shared/ui/typography";
 
+import { exportFormats } from "./exportPresentation";
 import type { ExportFormat } from "./exportTypes";
-import { exportFormats } from "./exportViewModel";
 
 type ExportFormatTabsProps = {
   children: ReactNode;

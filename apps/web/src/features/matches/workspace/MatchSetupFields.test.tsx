@@ -3,11 +3,11 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createEmptyMatchForm } from "@/features/matches/workspace/matchFormTypes";
 import { MatchSetupFields } from "@/features/matches/workspace/MatchSetupFields";
-import type { MatchWorkspaceSetupFieldsModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
+import type { MatchWorkspaceSetupFieldsView } from "@/features/matches/workspace/matchWorkspacePanelViews";
 
-function createModel(errorPathSet = new Set<string>()): MatchWorkspaceSetupFieldsModel {
+function createView(errorPathSet = new Set<string>()): MatchWorkspaceSetupFieldsView {
   return {
-    actions: { onGameTitleChange: vi.fn(), onPatchRoot: vi.fn() },
+    actions: { onSelectHeldEvent: vi.fn(), onChangeField: vi.fn() },
     options: {
       gameTitleItems: [],
       heldEventPicker: {
@@ -15,7 +15,7 @@ function createModel(errorPathSet = new Set<string>()): MatchWorkspaceSetupField
         heldEvents: [],
         pagination: undefined,
         pending: false,
-        refetch: vi.fn(async () => undefined),
+        refresh: vi.fn(async () => undefined),
         scopeChanging: false,
         selectedHeldEvent: undefined,
         onPageChange: vi.fn(),
@@ -41,7 +41,7 @@ describe("MatchSetupFields", () => {
       "ownerMemberId",
     ];
 
-    render(<MatchSetupFields model={createModel(new Set(paths))} />);
+    render(<MatchSetupFields view={createView(new Set(paths))} />);
 
     const controls = [
       screen.getByRole("button", { name: "開催（必須）を変更" }),
@@ -61,16 +61,16 @@ describe("MatchSetupFields", () => {
   });
 
   it("rejects match numbers that cannot be represented without losing their digits", () => {
-    const model = createModel();
-    render(<MatchSetupFields model={model} />);
+    const view = createView();
+    render(<MatchSetupFields view={view} />);
     const matchNumber = screen.getByLabelText("試合番号");
 
     for (const value of ["9007199254740993", "9".repeat(310)]) {
       fireEvent.change(matchNumber, { target: { value } });
     }
-    expect(model.actions.onPatchRoot).not.toHaveBeenCalled();
+    expect(view.actions.onChangeField).not.toHaveBeenCalled();
 
     fireEvent.change(matchNumber, { target: { value: "31" } });
-    expect(model.actions.onPatchRoot).toHaveBeenCalledExactlyOnceWith({ matchNoInEvent: 31 });
+    expect(view.actions.onChangeField).toHaveBeenCalledExactlyOnceWith("matchNoInEvent", 31);
   });
 });

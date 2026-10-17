@@ -10,6 +10,7 @@ import {
   adminLoginAccountsQueryOptions,
   notificationSettingsQueryOptions,
 } from "@/shared/api/queryOptions";
+import { canReadProtectedQuery } from "@/shared/auth/authorizationQueryAdapter";
 import { useAuthorization } from "@/shared/auth/useAuthorization";
 import { createDeferred } from "@/test/deferred";
 import { setupMsw } from "@/test/msw/lifecycle";
@@ -74,11 +75,16 @@ describe("useAuthorization protected reads", () => {
         const notificationOptions = notificationSettingsQueryOptions();
         const accounts = useQuery({
           ...accountOptions,
-          enabled: authorization.canRead("admin", accountOptions.queryKey),
+          enabled: canReadProtectedQuery(authorization, client, "admin", accountOptions.queryKey),
         });
         const notifications = useQuery({
           ...notificationOptions,
-          enabled: authorization.canRead("admin", notificationOptions.queryKey),
+          enabled: canReadProtectedQuery(
+            authorization,
+            client,
+            "admin",
+            notificationOptions.queryKey,
+          ),
         });
         return { authorization, accounts, notifications };
       },
@@ -107,10 +113,20 @@ describe("useAuthorization protected reads", () => {
       await client.invalidateQueries({ queryKey: ["admin"] });
     });
     expect(
-      result.current.authorization.canRead("admin", adminLoginAccountsQueryOptions().queryKey),
+      canReadProtectedQuery(
+        result.current.authorization,
+        client,
+        "admin",
+        adminLoginAccountsQueryOptions().queryKey,
+      ),
     ).toBe(false);
     expect(
-      result.current.authorization.canRead("admin", notificationSettingsQueryOptions().queryKey),
+      canReadProtectedQuery(
+        result.current.authorization,
+        client,
+        "admin",
+        notificationSettingsQueryOptions().queryKey,
+      ),
     ).toBe(false);
     expect(client.isFetching()).toBe(0);
     expect(requests).toEqual({ auth: 2, accounts: 1, notifications: 1 });

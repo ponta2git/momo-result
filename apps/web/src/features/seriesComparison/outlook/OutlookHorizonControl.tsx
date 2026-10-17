@@ -1,15 +1,12 @@
 import { useId, useState } from "react";
 import type { ReactNode } from "react";
 
+import { parseOutlookHorizon } from "@/features/seriesComparison/outlook/outlookEditing";
+import { useOutlookGoalHorizon } from "@/features/seriesComparison/outlook/useOutlookWorkspace";
 import { cn } from "@/shared/ui/cn";
 import { InputControl } from "@/shared/ui/forms/Control";
 import { buildFieldDescribedBy, Field } from "@/shared/ui/forms/Field";
 import { fieldText } from "@/shared/ui/typography";
-
-export function parseOutlookHorizon(text: string) {
-  const value = Number(text);
-  return /^\d+$/u.test(text) && value >= 1 && value <= 1000 ? value : undefined;
-}
 
 /** Keep unfinished text separate from the last valid horizon for each task. */
 export function OutlookHorizonControl({
@@ -81,4 +78,9 @@ export function OutlookHorizonControl({
       </p>
     </div>
   );
+}
+
+export function OutlookGoalHorizonControl() {
+  const { view, change } = useOutlookGoalHorizon();
+  return <OutlookHorizonControl label="目標の戦数" {...view} onChange={change} />;
 }

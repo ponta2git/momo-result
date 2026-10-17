@@ -1,27 +1,21 @@
-import { hashKey } from "@tanstack/react-query";
-import type { QueryKey } from "@tanstack/react-query";
 import { useEffect, useEffectEvent, useLayoutEffect, useRef } from "react";
 
 import { isAnalysisArtifactExpired } from "@/shared/api/problemDetails";
-import type { SeriesAnalysisStatusResponse } from "@/shared/api/seriesAnalysis";
 
-type StatusResult = { data: SeriesAnalysisStatusResponse | undefined };
-
-/** Rechecks publication and retries an expired resource once while that exact query is active. */
+/** Rechecks publication and retries an expired resource once while that selection is active. */
 export function useAnalysisArtifactRecovery({
   artifactId,
   error,
-  queryKey,
-  refetchArtifact,
-  refetchStatus,
+  resourceId,
+  refreshResource,
+  refreshPublication,
 }: {
   artifactId: string | undefined;
   error: unknown;
-  queryKey: QueryKey;
-  refetchArtifact: () => Promise<unknown>;
-  refetchStatus: (options: { cancelRefetch: false }) => Promise<StatusResult>;
+  resourceId: string;
+  refreshResource: () => Promise<void>;
+  refreshPublication: () => Promise<string | undefined>;
 }) {
-  const resourceKey = hashKey(queryKey);
   const handledResources = useRef(new Set<string>());
   const mounted = useRef(false);
 
@@ -32,16 +26,20 @@ export function useAnalysisArtifactRecovery({
     };
   }, []);
 
-  // Query observers retain refetch identity when their key changes. Read the committed selection
-  // before using it, so an old status request cannot start work for another scope or after unmount.
+  // A refresh may settle after the selection changes. Consult the committed resource
+  // before retrying, so an old publication read cannot restart another scope or an unmounted owner.
   const retryCurrentResource = useEffectEvent(
-    (requestedKey: string, requestedArtifactId: string, result: StatusResult) => {
+    (
+      requestedResourceId: string,
+      requestedArtifactId: string,
+      publishedArtifactId: string | undefined,
+    ) => {
       if (
         mounted.current &&
-        requestedKey === resourceKey &&
-        result.data?.currentArtifact?.artifactId === requestedArtifactId
+        requestedResourceId === resourceId &&
+        publishedArtifactId === requestedArtifactId
       ) {
-        return refetchArtifact();
+        return refreshResource();
       }
       return undefined;
     },
@@ -51,16 +49,18 @@ export function useAnalysisArtifactRecovery({
     if (
       !artifactId ||
       !isAnalysisArtifactExpired(error) ||
-      handledResources.current.has(resourceKey)
+      handledResources.current.has(resourceId)
     ) {
       return;
     }
-    handledResources.current.add(resourceKey);
-    // Active analysis and match context can expire together; share their in-flight status read.
-    void refetchStatus({ cancelRefetch: false })
-      .then((result) => retryCurrentResource(resourceKey, artifactId, result))
+    handledResources.current.add(resourceId);
+    // The read adapter shares an in-flight publication check across expired resources.
+    void refreshPublication()
+      .then((publishedArtifactId) =>
+        retryCurrentResource(resourceId, artifactId, publishedArtifactId),
+      )
       .catch(() => {
-        // The failed query retains its error for the consumer's explicit retry.
+        // The read adapter retains the error for the consumer's explicit retry.
       });
-  }, [artifactId, error, refetchStatus, resourceKey]);
+  }, [artifactId, error, refreshPublication, resourceId]);
 }

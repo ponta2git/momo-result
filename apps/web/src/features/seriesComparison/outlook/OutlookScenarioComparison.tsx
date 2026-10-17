@@ -1,51 +1,55 @@
-import type { CumulativePair } from "@/features/seriesComparison/model/outlook";
+import { Undo2 } from "lucide-react";
+
+import type { CumulativePair } from "@/features/seriesComparison/outlook/calculation";
 import {
   compareOutlookOutcomes,
   outlookOutcome,
 } from "@/features/seriesComparison/outlook/outlookOutcome";
-import { canPinOutlook, pinOutlook } from "@/features/seriesComparison/outlook/outlookSession";
-import type { OutlookSession } from "@/features/seriesComparison/outlook/outlookSession";
+import {
+  useOutlookResultView,
+  useOutlookToolbar,
+} from "@/features/seriesComparison/outlook/useOutlookWorkspace";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { contentText } from "@/shared/ui/typography";
 
-export function OutlookComparisonControls({
-  session,
-  change,
-}: {
-  session: OutlookSession;
-  change: (update: (current: OutlookSession) => OutlookSession) => void;
-}) {
-  const pending = session.entries.some(
-    (entry) => entry.meanDraft !== undefined || entry.error !== undefined,
+export function OutlookUndoButton() {
+  const { view, undo } = useOutlookToolbar();
+  return (
+    <Button
+      variant="quiet"
+      size="sm"
+      disabled={!view.canUndo}
+      icon={<Undo2 aria-hidden="true" className="size-4" />}
+      onClick={undo}
+    >
+      成績を1つ戻す
+    </Button>
   );
+}
+
+export function OutlookComparisonControls() {
+  const { view, pin, unpin } = useOutlookToolbar();
   return (
     <div className="grid min-w-0 gap-2" data-outlook-preserve-draft>
       <div className="flex flex-wrap gap-2">
         <Button
           size="sm"
           variant="secondary"
-          disabled={!canPinOutlook(session)}
-          aria-label={
-            session.pinned ? "基準を更新（今の成績を基準にする）" : "この成績を残して比べる"
-          }
-          onClick={() => change(pinOutlook)}
+          disabled={!view.canPin}
+          aria-label={view.pinned ? "基準を更新（今の成績を基準にする）" : "この成績を残して比べる"}
+          onClick={pin}
         >
-          {session.pinned ? "基準を更新" : "残して比べる"}
+          {view.pinned ? "基準を更新" : "残して比べる"}
         </Button>
-        <span className={session.pinned ? undefined : "invisible"}>
-          <Button
-            size="sm"
-            variant="quiet"
-            disabled={!session.pinned}
-            onClick={() => change((current) => ({ ...current, pinned: undefined }))}
-          >
+        <span className={view.pinned ? undefined : "invisible"}>
+          <Button size="sm" variant="quiet" disabled={!view.pinned} onClick={unpin}>
             比較を終える
           </Button>
         </span>
       </div>
       <p className={cn(contentText.supporting, "min-h-8")}>
-        {pending ? "成績を残す前に、入力を反映するか取り消してください。" : null}
+        {view.pending ? "成績を残す前に、入力を反映するか取り消してください。" : null}
       </p>
     </div>
   );
@@ -53,18 +57,16 @@ export function OutlookComparisonControls({
 
 /** The baseline stays fixed while the page's two existing inputs remain editable. */
 export function OutlookScenarioComparison({
-  session,
   cumulative,
   names,
 }: {
-  session: OutlookSession;
   cumulative: CumulativePair;
   names: readonly [string, string];
 }) {
-  const baseline = session.pinned;
-  if (!baseline) return null;
-  const beforePair = [baseline[0].distribution, baseline[1].distribution] as const;
-  const afterPair = [session.entries[0].distribution, session.entries[1].distribution] as const;
+  const view = useOutlookResultView();
+  if (!view.pinnedFocus || !view.pinnedRival) return null;
+  const beforePair = [view.pinnedFocus, view.pinnedRival] as const;
+  const afterPair = [view.focus, view.rival] as const;
   const before = outlookOutcome(cumulative, beforePair, names);
   const after = outlookOutcome(cumulative, afterPair, names);
   return (

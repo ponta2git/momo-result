@@ -138,9 +138,13 @@ function AnalysisJobStatusBadge({
   announceChanges?: boolean | undefined;
   status: SeriesAnalysisJobStatus | "not_run";
 }) {
-  const model: AnalysisJobStatusViewModel = analysisJobStatusViewModel[status];
+  const presentation: AnalysisJobStatusPresentation = analysisJobStatusPresentation[status];
   return (
-    <StatusBadge announceChanges={announceChanges} label={statusLabel(status)} tone={model.tone} />
+    <StatusBadge
+      announceChanges={announceChanges}
+      label={statusLabel(status)}
+      tone={presentation.tone}
+    />
   );
 }
 
@@ -180,18 +184,18 @@ const statusLabels = {
   timed_out: "タイムアウト",
 } as const satisfies Record<SeriesAnalysisJobStatus | "not_run", string>;
 
-type AnalysisJobStatusViewModel = {
+type AnalysisJobStatusPresentation = {
   tone: StatusBadgeTone;
 };
 
-const analysisJobStatusViewModel = {
+const analysisJobStatusPresentation = {
   failed: { tone: "danger" },
   not_run: { tone: "neutral" },
   queued: { tone: "info" },
   running: { tone: "info" },
   succeeded: { tone: "success" },
   timed_out: { tone: "danger" },
-} as const satisfies Record<SeriesAnalysisJobStatus | "not_run", AnalysisJobStatusViewModel>;
+} as const satisfies Record<SeriesAnalysisJobStatus | "not_run", AnalysisJobStatusPresentation>;
 
 const triggerLabels = {
   algorithm_update: "計算版更新",

@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { CaptureSlotCard } from "@/features/ocrCapture/CaptureSlotCard";
+import { buildCaptureSlotView } from "@/features/ocrCapture/captureSlotView";
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 
 function renderCard(slot: CaptureSlotState, captureTarget = false, statusRefreshing = false) {
@@ -23,8 +24,7 @@ function renderCard(slot: CaptureSlotState, captureTarget = false, statusRefresh
         label: "総資産",
         total: 3,
       }}
-      statusRefreshing={statusRefreshing}
-      slot={slot}
+      slot={buildCaptureSlotView(slot, undefined, statusRefreshing)}
     />,
   );
   return { ...view, onRefreshStatus };

@@ -59,10 +59,6 @@ export function MatchesFilterBar({
     hasDetailFilters || search.status !== "all" || search.sort !== "held_desc";
   const [detailOpen, setDetailOpen] = useState(hasDetailFilters);
 
-  function patchSearch(patch: Partial<MatchListSearch>) {
-    actions.onApply({ ...search, ...patch, cursor: "" });
-  }
-
   return (
     <FilterBar
       ariaLabel="試合の表示条件"
@@ -98,14 +94,16 @@ export function MatchesFilterBar({
             retryPending={summaryRetryPending}
             unavailable={summaryError}
             onRetry={onRetrySummary}
-            onSelectStatus={(status) => patchSearch({ status })}
+            onSelectStatus={(status) => actions.onChange({ kind: "status", status })}
           />
           <div className="min-w-0">
             <SelectField
               label="並び順"
               options={sortOptions}
               value={search.sort}
-              onValueChange={(nextValue) => patchSearch({ sort: nextValue as MatchListSort })}
+              onValueChange={(nextValue) =>
+                actions.onChange({ kind: "sort", sort: nextValue as MatchListSort })
+              }
             />
           </div>
         </div>

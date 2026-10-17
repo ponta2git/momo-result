@@ -57,9 +57,11 @@ export function MobileMemberSelect({
         tone={selectCellTone({ changed, reviewItem, reviewed })}
         value={memberId}
         onValueChange={(nextValue) => {
-          onPlayerChange(index, {
-            memberId: nextValue as MatchFormValues["players"][number]["memberId"],
-          });
+          onPlayerChange(
+            index,
+            "memberId",
+            nextValue as MatchFormValues["players"][number]["memberId"],
+          );
         }}
         onFocus={() => {
           onPreferImageKindChange?.("total_assets");

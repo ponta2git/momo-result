@@ -1,14 +1,6 @@
-import type { Query, QueryClient, QueryKey } from "@tanstack/react-query";
-
 import type { AuthMeResponse } from "@/shared/api/auth";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
-import {
-  adminAccountKeys,
-  notificationSettingsKeys,
-  seriesAnalysisKeys,
-  seriesPlayerRadarKeys,
-} from "@/shared/api/queryKeys";
-import { authMeQueryKeyFor, authQueryOptions } from "@/shared/auth/authQueries";
+import type { AuthStatus } from "@/shared/auth/authStatus";
 import { hasAdminRole, hasOperationsRole } from "@/shared/auth/permissions";
 import type { ManagementPermission } from "@/shared/auth/permissions";
 
@@ -20,27 +12,64 @@ export type AuthorizationLease = {
   recovery: number;
 };
 
-function startsWith(key: QueryKey, prefix: QueryKey) {
-  return prefix.every((value, index) => key[index] === value);
-}
+/** Stable operations always consult the current account and permission generation. */
+export type AuthorizationOperations = {
+  readonly begin: (permission: ManagementPermission) => AuthorizationLease | undefined;
+  readonly can: (permission: ManagementPermission) => boolean;
+  readonly isCurrent: (lease: AuthorizationLease) => boolean;
+  readonly isSameAccount: (lease: AuthorizationLease) => boolean;
+  readonly canCommit: (lease: AuthorizationLease) => boolean;
+  readonly reportError: (error: unknown, lease: AuthorizationLease) => void;
+  readonly recheck: () => Promise<void>;
+  readonly acceptSelfRole: (
+    lease: AuthorizationLease,
+    role: AuthMeResponse["role"],
+  ) => Promise<void>;
+};
 
-function queryPermission(key: QueryKey): ManagementPermission | undefined {
-  if (startsWith(key, adminAccountKeys.all()) || startsWith(key, notificationSettingsKeys.all()))
-    return "admin";
-  if (
-    startsWith(key, seriesAnalysisKeys.adminRoot()) ||
-    startsWith(key, seriesPlayerRadarKeys.all())
-  )
-    return "operations";
-  return undefined;
-}
+export type PermissionFacts = {
+  readonly allowed: boolean;
+  readonly retained: boolean;
+  readonly epoch: number;
+};
+
+/** Full route/recovery facts. Ordinary command owners can depend only on operations. */
+export type AuthorizationAccess = AuthorizationOperations & {
+  readonly revision: number;
+  readonly auth: AuthStatus;
+  readonly allowed: Readonly<Record<ManagementPermission, boolean>>;
+  readonly retained: Readonly<Record<ManagementPermission, boolean>>;
+  readonly paused: boolean;
+  readonly epoch: Readonly<Record<ManagementPermission, number>>;
+};
+
+export type AuthorizationEvents = {
+  authenticationChanged: (change: "accepted" | "removed" | "changed") => void;
+  captureRead: (permission: ManagementPermission) => AuthorizationLease | undefined;
+  readFailed: (error: unknown, lease: AuthorizationLease) => void;
+};
+
+/** The session's storage owns reads and cancellation; authorization owns permission lifetimes. */
+export type AuthorizationSessionSource = {
+  read: () => {
+    account: AuthMeResponse | null | undefined;
+    rejected: boolean;
+    ready: boolean;
+  };
+  observe: (events: AuthorizationEvents) => void;
+  clearProtectedReads: (permissions: readonly ManagementPermission[]) => void;
+  cancelAuthentication: () => Promise<void>;
+  refreshAuthentication: () => Promise<void>;
+  replaceSelfRole: (accountId: string, role: AuthMeResponse["role"]) => void;
+};
 
 /**
- * Auth query data remains the authority. This owner only tracks interrupted reads and
+ * The current session remains the authority. This owner only tracks interrupted reads and
  * capability lifetimes so a late completion cannot revive a revoked workflow.
  */
-class Authorization {
+export class Authorization {
   private listeners = new Set<() => void>();
+  private permissionViews = new Map<ManagementPermission, PermissionFacts>();
   private version = 0;
   private generations = { admin: 0, operations: 0 };
   private confirmed = { accountId: "", admin: false, operations: false };
@@ -49,38 +78,23 @@ class Authorization {
   private recoveryHandled = false;
   private recovering = false;
   private applyingSelfRole = false;
-  private queryAttempts = new WeakMap<Query, AuthorizationLease>();
-  private authKey: QueryKey;
-  private client: QueryClient;
-  private devUser: string | undefined;
+  private source: AuthorizationSessionSource;
 
-  constructor(client: QueryClient, devUser: string | undefined) {
-    this.client = client;
-    this.devUser = devUser;
-    this.authKey = authMeQueryKeyFor(devUser);
+  constructor(source: AuthorizationSessionSource) {
+    this.source = source;
     this.updateConfirmed();
-    client.getQueryCache().subscribe((event) => {
-      if (event.type !== "updated" && event.type !== "removed") return;
-      if (startsWith(event.query.queryKey, this.authKey)) {
-        if (event.type === "updated" && event.action.type === "success") {
+    source.observe({
+      authenticationChanged: (change) => {
+        if (change === "accepted") {
           this.authRevision += 1;
           this.updateConfirmed();
           if (!this.recovering) this.recoveryHandled = false;
         }
-        if (event.type === "removed" || this.authRejected()) this.updateConfirmed();
+        if (change === "removed" || source.read().rejected) this.updateConfirmed();
         this.emit();
-        return;
-      }
-      const permission = queryPermission(event.query.queryKey);
-      if (!permission || event.type !== "updated") return;
-      if (event.action.type === "fetch") {
-        const lease = this.capture(permission);
-        if (lease) this.queryAttempts.set(event.query, lease);
-      }
-      if (event.action.type === "error") {
-        const lease = this.queryAttempts.get(event.query);
-        if (lease) this.reportError(event.action.error, lease);
-      }
+      },
+      captureRead: (permission) => this.capture(permission),
+      readFailed: (error, lease) => this.reportError(error, lease),
     });
   }
 
@@ -89,19 +103,24 @@ class Authorization {
     return () => this.listeners.delete(listener);
   };
   snapshot = () => this.version;
+  permissionSnapshot = (permission: ManagementPermission): PermissionFacts => {
+    const previous = this.permissionViews.get(permission);
+    const allowed = this.can(permission);
+    const retained = this.has(permission);
+    const epoch = this.epoch(permission);
+    if (previous?.allowed === allowed && previous.retained === retained && previous.epoch === epoch)
+      return previous;
+    const next = { allowed, retained, epoch };
+    this.permissionViews.set(permission, next);
+    return next;
+  };
   private emit() {
     this.version += 1;
     this.listeners.forEach((listener) => listener());
   }
-  private authState() {
-    return this.client.getQueryState<AuthMeResponse | null>(this.authKey);
-  }
-  private authRejected() {
-    const status = normalizeUnknownApiError(this.authState()?.error).status;
-    return status === 401 || status === 403;
-  }
   private updateConfirmed() {
-    const auth = this.authRejected() ? undefined : this.authState()?.data;
+    const session = this.source.read();
+    const auth = session.rejected ? undefined : session.account;
     const next = {
       accountId: auth?.accountId ?? "",
       admin: hasAdminRole(auth?.role),
@@ -116,44 +135,14 @@ class Authorization {
     this.confirmed = next;
     for (const permission of lost) this.generations[permission] += 1;
     if (lost.length > 0) {
-      const queries = this.client.getQueryCache().findAll({
-        predicate: (query) => {
-          const permission = queryPermission(query.queryKey);
-          return Boolean(permission && lost.includes(permission));
-        },
-      });
-      // Cancellation reaches the fetch signal immediately. Remove only these old owners,
-      // never a new query created after a subsequent grant.
-      void Promise.all(
-        queries.map((query) =>
-          this.client.cancelQueries({ queryKey: query.queryKey, exact: true }),
-        ),
-      ).then(() => {
-        const cache = this.client.getQueryCache();
-        queries.forEach((query) => {
-          if (cache.get(query.queryHash) === query) cache.remove(query);
-        });
-        return undefined;
-      });
+      this.source.clearProtectedReads(lost);
     }
   }
 
   has = (permission: ManagementPermission) => this.confirmed[permission];
   epoch = (permission: ManagementPermission) => this.generations[permission];
-  can = (permission: ManagementPermission) => {
-    const state = this.authState();
-    return (
-      this.has(permission) &&
-      state?.status === "success" &&
-      state.fetchStatus === "idle" &&
-      !this.recovering &&
-      !this.applyingSelfRole
-    );
-  };
-  canRead = (permission: ManagementPermission, queryKey: QueryKey) => {
-    const status = normalizeUnknownApiError(this.client.getQueryState(queryKey)?.error).status;
-    return this.can(permission) && status !== 401 && status !== 403;
-  };
+  can = (permission: ManagementPermission) =>
+    this.has(permission) && this.source.read().ready && !this.recovering && !this.applyingSelfRole;
   private capture(permission: ManagementPermission): AuthorizationLease | undefined {
     if (!this.has(permission)) return undefined;
     return {
@@ -196,10 +185,10 @@ class Authorization {
     this.recovering = true;
     this.emit();
     try {
-      await this.client.cancelQueries({ queryKey: this.authKey, exact: true });
-      await this.client.fetchQuery({ ...authQueryOptions(this.devUser), staleTime: 0 });
+      await this.source.cancelAuthentication();
+      await this.source.refreshAuthentication();
     } catch {
-      // The auth query owns the retryable error and any terminal login rejection.
+      // The session source retains the retryable error and any terminal login rejection.
     } finally {
       this.recovering = false;
       this.emit();
@@ -212,36 +201,28 @@ class Authorization {
       await this.recheck();
       return;
     }
-    // Cancellation restores the old auth query's idle state. Keep commands and reads
+    // Cancellation can restore the old session's ready state. Keep commands and reads
     // paused until the confirmed self-change replaces that old role.
     this.applyingSelfRole = true;
     this.emit();
     try {
-      await this.client.cancelQueries({ queryKey: this.authKey, exact: true });
+      await this.source.cancelAuthentication();
       if (!this.isSameAccount(lease) || lease.authRevision !== this.authRevision) return;
-      this.client.setQueryData<AuthMeResponse | null>(this.authKey, (current) =>
-        current?.accountId === lease.accountId ? { ...current, role } : current,
-      );
+      this.source.replaceSelfRole(lease.accountId, role);
     } finally {
       this.applyingSelfRole = false;
       this.emit();
     }
   };
-}
 
-const owners = new WeakMap<QueryClient, Map<string, Authorization>>();
-
-export function getAuthorization(client: QueryClient, devUser?: string) {
-  let byPrincipal = owners.get(client);
-  if (!byPrincipal) {
-    byPrincipal = new Map();
-    owners.set(client, byPrincipal);
-  }
-  const key = authMeQueryKeyFor(devUser).join(":");
-  let owner = byPrincipal.get(key);
-  if (!owner) {
-    owner = new Authorization(client, devUser);
-    byPrincipal.set(key, owner);
-  }
-  return owner;
+  readonly operations: AuthorizationOperations = {
+    begin: this.begin,
+    can: this.can,
+    isCurrent: this.isCurrent,
+    isSameAccount: this.isSameAccount,
+    canCommit: this.canCommit,
+    reportError: this.reportError,
+    recheck: this.recheck,
+    acceptSelfRole: this.acceptSelfRole,
+  };
 }

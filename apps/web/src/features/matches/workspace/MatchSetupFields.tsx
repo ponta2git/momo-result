@@ -1,15 +1,15 @@
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
-import type { MatchWorkspaceSetupFieldsModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
+import type { MatchWorkspaceSetupFieldsView } from "@/features/matches/workspace/matchWorkspacePanelViews";
 import { canonicalResultMembers } from "@/shared/domain/members";
 import { HeldEventPickerField } from "@/shared/heldEvents/HeldEventPickerField";
 import { toLocalDateTimeInputValue } from "@/shared/lib/dateTime";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
 
-export function MatchSetupFields({ model }: { model: MatchWorkspaceSetupFieldsModel }) {
-  const { actions, options, values } = model;
+export function MatchSetupFields({ view }: { view: MatchWorkspaceSetupFieldsView }) {
+  const { actions, options, values } = view;
   const fieldError = (path: string) =>
-    model.validation.errorPathSet.has(path) ? "未入力です" : undefined;
+    view.validation.errorPathSet.has(path) ? "未入力です" : undefined;
 
   return (
     <div className="grid gap-4 lg:grid-cols-12">
@@ -31,14 +31,11 @@ export function MatchSetupFields({ model }: { model: MatchWorkspaceSetupFieldsMo
           value={values.heldEventId}
           onPageChange={options.heldEventPicker?.onPageChange}
           onValueChange={(heldEventId, pickerSelection) => {
-            const selected =
-              pickerSelection ??
-              options.heldEvents.find((candidate) => candidate.id === heldEventId);
-            actions.onPatchRoot({
+            actions.onSelectHeldEvent(
               heldEventId,
-              matchNoInEvent: selected?.nextMatchNo ?? 1,
-              playedAt: selected?.heldAt ?? values.playedAt,
-            });
+              pickerSelection ??
+                options.heldEvents.find((candidate) => candidate.id === heldEventId),
+            );
           }}
         />
       </div>
@@ -54,7 +51,8 @@ export function MatchSetupFields({ model }: { model: MatchWorkspaceSetupFieldsMo
           value={Number.isFinite(values.matchNoInEvent) ? String(values.matchNoInEvent) : ""}
           onChange={(event) => {
             const matchNoInEvent = Number(event.currentTarget.value.replaceAll(/\D/gu, ""));
-            if (Number.isSafeInteger(matchNoInEvent)) actions.onPatchRoot({ matchNoInEvent });
+            if (Number.isSafeInteger(matchNoInEvent))
+              actions.onChangeField("matchNoInEvent", matchNoInEvent);
           }}
         />
       </div>
@@ -66,7 +64,7 @@ export function MatchSetupFields({ model }: { model: MatchWorkspaceSetupFieldsMo
           label="開催日時（必須）"
           type="datetime-local"
           value={toLocalDateTimeInputValue(values.playedAt)}
-          onChange={(event) => actions.onPatchRoot({ playedAt: event.currentTarget.value })}
+          onChange={(event) => actions.onChangeField("playedAt", event.currentTarget.value)}
         />
       </div>
 
@@ -83,7 +81,7 @@ export function MatchSetupFields({ model }: { model: MatchWorkspaceSetupFieldsMo
             })),
           ]}
           value={values.gameTitleId}
-          onValueChange={(nextValue) => actions.onGameTitleChange(nextValue)}
+          onValueChange={(nextValue) => actions.onChangeField("gameTitleId", nextValue)}
         />
       </div>
 
@@ -101,7 +99,7 @@ export function MatchSetupFields({ model }: { model: MatchWorkspaceSetupFieldsMo
             })),
           ]}
           value={values.seasonMasterId}
-          onValueChange={(nextValue) => actions.onPatchRoot({ seasonMasterId: nextValue })}
+          onValueChange={(nextValue) => actions.onChangeField("seasonMasterId", nextValue)}
         />
       </div>
 
@@ -119,7 +117,7 @@ export function MatchSetupFields({ model }: { model: MatchWorkspaceSetupFieldsMo
             })),
           ]}
           value={values.mapMasterId}
-          onValueChange={(nextValue) => actions.onPatchRoot({ mapMasterId: nextValue })}
+          onValueChange={(nextValue) => actions.onChangeField("mapMasterId", nextValue)}
         />
       </div>
 
@@ -134,9 +132,7 @@ export function MatchSetupFields({ model }: { model: MatchWorkspaceSetupFieldsMo
           }))}
           value={values.ownerMemberId}
           onValueChange={(nextValue) =>
-            actions.onPatchRoot({
-              ownerMemberId: nextValue as MatchFormValues["ownerMemberId"],
-            })
+            actions.onChangeField("ownerMemberId", nextValue as MatchFormValues["ownerMemberId"])
           }
         />
       </div>

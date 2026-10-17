@@ -15,7 +15,7 @@ const test = base.extend<{ outlook: OutlookContext }>({
   },
 });
 
-test("retains an edited outlook through personal review and match-list navigation", async ({
+test("retains an edited outlook within comparison and resets it after match-list navigation", async ({
   outlook,
   page,
 }) => {
@@ -34,6 +34,7 @@ test("retains an edited outlook through personal review and match-list navigatio
   await slider.press("ArrowRight");
   await expect(average).toHaveValue(editedMean);
   await expect(page.getByRole("heading", { name: "平均どおりに進むと" })).toBeVisible();
+  await page.getByRole("button", { name: "この成績を残して比べる" }).click();
 
   const charts = page.getByRole("img", { name: /。この先100戦の2人の総合平均順位。/u });
   await expect(charts).toHaveCount(4);
@@ -42,6 +43,9 @@ test("retains an edited outlook through personal review and match-list navigatio
   const goalTab = page.getByRole("tab", { name: "戦数から考える" });
   await goalTab.click();
   await expect(charts).toHaveCount(0);
+  const goal = page.getByRole("textbox", { name: "目標の戦数", exact: true });
+  await goal.fill("75");
+  await goal.press("Enter");
 
   const outlookUrl = page.url();
   await page.getByRole("link", { name: "ぽんたの行動仮説を見る" }).click();
@@ -61,8 +65,10 @@ test("retains an edited outlook through personal review and match-list navigatio
   await page.goBack();
   await expect(page).toHaveURL(outlookUrl);
   await expect(goalTab).toHaveAttribute("aria-selected", "true");
+  await expect(goal).toHaveValue("75");
   await performanceTab.click();
   await expect(average).toHaveValue(editedMean);
+  await expect(page.getByRole("button", { name: "比較を終える" })).toBeVisible();
   await expect(charts).toHaveCount(4);
 
   await goalTab.click();
@@ -92,10 +98,13 @@ test("retains an edited outlook through personal review and match-list navigatio
   ).toHaveAttribute("href", `/matches/${outlook.matchId}`);
   await page.goBack();
   await expect(page).toHaveURL(outlookUrl);
-  await expect(goalTab).toHaveAttribute("aria-selected", "true");
-  await performanceTab.click();
-  await expect(average).toHaveValue(editedMean);
+  await expect(performanceTab).toHaveAttribute("aria-selected", "true");
+  await expect(average).toHaveValue(originalMean.toFixed(2));
+  await expect(page.getByRole("button", { name: "この成績を残して比べる" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "成績を1つ戻す" })).toBeDisabled();
   await expect(charts).toHaveCount(4);
+  await goalTab.click();
+  await expect(goal).toHaveValue("100");
 });
 
 test("keeps the season when explicitly leaving a map filter at mobile width", async ({

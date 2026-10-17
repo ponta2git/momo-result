@@ -4,15 +4,69 @@ import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { draftToMatchForm } from "@/features/matches/workspace/draftToMatchForm";
-import type { IncidentKey, MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
+import type {
+  IncidentKey,
+  MatchFormValues,
+  OriginalPlayerSnapshot,
+} from "@/features/matches/workspace/matchFormTypes";
 import { emptyPlayers } from "@/features/matches/workspace/matchFormTypes";
+import { createMatchWorkspaceEditingStore } from "@/features/matches/workspace/matchWorkspaceEditingStore";
 import { createSampleDraftMap } from "@/features/matches/workspace/review/sampleDrafts";
-import { ScoreGrid } from "@/features/matches/workspace/scoreGrid/ScoreGrid";
+import { ScoreGrid as ConnectedScoreGrid } from "@/features/matches/workspace/scoreGrid/ScoreGrid";
 import type { ScoreGridProps } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
-import { useMatchWorkspaceReviewState } from "@/features/matches/workspace/useMatchWorkspaceReviewState";
+import { useWorkspaceSnapshot } from "@/features/matches/workspace/useWorkspaceSnapshot";
 import { installMatchMediaController } from "@/test/doubles/dom";
 import type { MatchMediaController } from "@/test/doubles/dom";
 import { selectOption } from "@/test/selectOption";
+
+// UI-only fixtures publish immutable row views; workflow tests use the real editing store.
+function ScoreGrid({
+  actions,
+  data,
+}: {
+  actions: Omit<ScoreGridProps["actions"], "onNumericDraftChange">;
+  data: Omit<ScoreGridProps["data"], "rows"> & {
+    players: MatchFormValues["players"];
+    originalPlayers: OriginalPlayerSnapshot[] | undefined;
+    lastIncidentSyncPlayerIndex: number | null;
+  };
+}) {
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const rows = data.players.map((player, index) => {
+    const snapshot = {
+      player,
+      originalPlayer: data.originalPlayers?.[index],
+      originalByOrder: data.originalPlayers?.find(
+        (original) => original.playOrder === player.playOrder,
+      ),
+      numericDrafts: drafts,
+      items: data.review.items.filter((item) => item.row === index),
+      acknowledgedCellIds: data.review.acknowledgedCellIds,
+      synced: data.lastIncidentSyncPlayerIndex === index,
+    };
+    return { getSnapshot: () => snapshot, subscribe: () => () => undefined };
+  });
+  return (
+    <ConnectedScoreGrid
+      actions={{
+        ...actions,
+        onNumericDraftChange: (path, value) =>
+          setDrafts((current) => {
+            const next = { ...current };
+            if (value === undefined) delete next[path];
+            else next[path] = value;
+            return next;
+          }),
+      }}
+      data={{
+        rows,
+        review: data.review,
+        errorPathSet: data.errorPathSet,
+        validationFocusRequest: data.validationFocusRequest,
+      }}
+    />
+  );
+}
 
 const noErrorPaths = new Set<string>();
 const noReview: ScoreGridProps["data"]["review"] = {
@@ -27,32 +81,26 @@ const reviewSample = draftToMatchForm({
 });
 
 function GuidedReviewHarness() {
-  const [values, setValues] = useState(reviewSample.values);
-  const review = useMatchWorkspaceReviewState({
-    values,
-    workspaceData: reviewSample.initialData,
+  const [editing] = useState(() => {
+    const store = createMatchWorkspaceEditingStore("2026-01-01T00:00:00.000Z");
+    store.initialize(reviewSample.values, reviewSample.initialData);
+    return store;
   });
+  const review = useWorkspaceSnapshot(editing.review);
   return (
-    <ScoreGrid
+    <ConnectedScoreGrid
       actions={{
-        onAcknowledgeReviewCell: review.acknowledgeCell,
-        onIncidentChange: () => undefined,
-        onPlayerChange: (index, patch) =>
-          setValues((current) => ({
-            ...current,
-            players: current.players.map((player, row) =>
-              row === index ? { ...player, ...patch } : player,
-            ),
-          })),
+        onAcknowledgeReviewCell: editing.actions.acknowledge,
+        onIncidentChange: editing.actions.changeIncident,
+        onNumericDraftChange: editing.actions.changeNumericDraft,
+        onPlayerChange: editing.actions.changePlayer,
         onPlayOrderChange: () => undefined,
         onRequestSubmitFocus: () => undefined,
-        onReviewCellFocus: review.focusCell,
+        onReviewCellFocus: editing.actions.focus,
       }}
       data={{
         errorPathSet: noErrorPaths,
-        lastSyncedPlayerIndex: null,
-        originalPlayers: reviewSample.initialData.originalPlayers,
-        players: values.players,
+        rows: editing.scoreRows,
         review,
       }}
     />
@@ -89,7 +137,8 @@ function ScoreGridHarness({
             ),
           );
         },
-        onPlayerChange: (index, patch) => {
+        onPlayerChange: (index, field, value) => {
+          const patch = { [field]: value };
           onPlayerChange(index, patch);
           setPlayers((current) =>
             current.map((player, playerIndex) =>
@@ -109,7 +158,7 @@ function ScoreGridHarness({
       }}
       data={{
         errorPathSet,
-        lastSyncedPlayerIndex: null,
+        lastIncidentSyncPlayerIndex: null,
         originalPlayers: undefined,
         players,
         review,
@@ -134,7 +183,7 @@ function FinalAcknowledgementHarness() {
         }}
         data={{
           errorPathSet: new Set(),
-          lastSyncedPlayerIndex: null,
+          lastIncidentSyncPlayerIndex: null,
           originalPlayers: undefined,
           players: emptyPlayers(),
           review: {
@@ -260,7 +309,7 @@ describe("ScoreGrid", () => {
           }}
           data={{
             errorPathSet: new Set(),
-            lastSyncedPlayerIndex: null,
+            lastIncidentSyncPlayerIndex: null,
             originalPlayers: undefined,
             players,
             review: { acknowledgedCellIds: [], activeCellId: null, items: [] },

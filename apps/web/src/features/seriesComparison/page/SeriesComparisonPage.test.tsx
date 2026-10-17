@@ -14,7 +14,7 @@ import {
   seriesAnalysisOptionsQueryOptions,
   seriesAnalysisStatusQueryOptions,
 } from "@/shared/api/seriesAnalysisQueryOptions";
-import { seriesAnalysisScopeStatusQueryOptions } from "@/shared/api/seriesPlayerRadar";
+import { seriesAnalysisScopeStatusQueryOptions } from "@/shared/api/seriesPlayerRadarQueryOptions";
 import { createDeferred } from "@/test/deferred";
 import { setupMsw } from "@/test/msw/lifecycle";
 import {

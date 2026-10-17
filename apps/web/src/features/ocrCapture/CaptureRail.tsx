@@ -1,17 +1,13 @@
 import { CaptureSlotCard } from "@/features/ocrCapture/CaptureSlotCard";
-import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
+import type { CaptureSlotView } from "@/features/ocrCapture/captureSlotView";
 import { slotDefinitions } from "@/features/ocrCapture/captureState";
-import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 import type { SlotKind } from "@/shared/domain/ocr";
-import type { SlotMap } from "@/shared/domain/slotMap";
 import { cn } from "@/shared/ui/cn";
 
 type CaptureRailProps = {
   captureTargetKind: SlotKind;
   layout?: "rail" | "stack";
-  slots: CaptureSlotState[];
-  drafts: SlotMap<OcrDraftResponse>;
-  statusRefreshing: SlotMap<boolean>;
+  slots: readonly CaptureSlotView[];
   onClear: (kind: SlotKind) => void;
   onDropImage: (sourceKind: SlotKind, targetKind: SlotKind) => void;
   onMoveImage: (kind: SlotKind, direction: -1 | 1) => void;
@@ -23,8 +19,6 @@ export function CaptureRail({
   captureTargetKind,
   layout = "rail",
   slots,
-  drafts,
-  statusRefreshing,
   onClear,
   onDropImage,
   onMoveImage,
@@ -41,35 +35,63 @@ export function CaptureRail({
         if (!slot) {
           return null;
         }
-        const actions = {
-          onClear: () => onClear(definition.kind),
-          onDropImage,
-          onRefreshStatus: () => onRefreshStatus(definition.kind),
-          onMoveImage: (direction: -1 | 1) => onMoveImage(definition.kind, direction),
-          onSelectCapture: () => onSelectCaptureTarget(definition.kind),
-        };
-        const presentation = {
-          accentClass: definition.accentClass,
-          captureTarget: definition.kind === captureTargetKind,
-          index,
-          label: definition.label,
-          nextLabel: slotDefinitions[index + 1]?.label,
-          previousLabel: slotDefinitions[index - 1]?.label,
-          total: slotDefinitions.length,
-        };
-
         return (
-          <div key={definition.kind} className="relative">
-            <CaptureSlotCard
-              actions={actions}
-              draft={drafts[definition.kind]}
-              presentation={presentation}
-              statusRefreshing={statusRefreshing[definition.kind] ?? false}
-              slot={slot}
-            />
-          </div>
+          <CaptureRailSlot
+            key={definition.kind}
+            slot={slot}
+            index={index}
+            captureTarget={definition.kind === captureTargetKind}
+            onClear={onClear}
+            onDropImage={onDropImage}
+            onMoveImage={onMoveImage}
+            onRefreshStatus={onRefreshStatus}
+            onSelectCaptureTarget={onSelectCaptureTarget}
+          />
         );
       })}
     </section>
   );
 }
+import { memo } from "react";
+
+const CaptureRailSlot = memo(function CaptureRailSlot({
+  slot,
+  index,
+  captureTarget,
+  onClear,
+  onDropImage,
+  onMoveImage,
+  onRefreshStatus,
+  onSelectCaptureTarget,
+}: Pick<
+  CaptureRailProps,
+  "onClear" | "onDropImage" | "onMoveImage" | "onRefreshStatus" | "onSelectCaptureTarget"
+> & {
+  slot: CaptureSlotView;
+  index: number;
+  captureTarget: boolean;
+}) {
+  const definition = slotDefinitions[index];
+  if (!definition) return null;
+  const actions = {
+    onClear: () => onClear(slot.kind),
+    onDropImage,
+    onRefreshStatus: () => onRefreshStatus(slot.kind),
+    onMoveImage: (direction: -1 | 1) => onMoveImage(slot.kind, direction),
+    onSelectCapture: () => onSelectCaptureTarget(slot.kind),
+  };
+  const presentation = {
+    accentClass: definition.accentClass,
+    captureTarget,
+    index,
+    label: definition.label,
+    nextLabel: slotDefinitions[index + 1]?.label,
+    previousLabel: slotDefinitions[index - 1]?.label,
+    total: slotDefinitions.length,
+  };
+  return (
+    <div className="relative">
+      <CaptureSlotCard actions={actions} presentation={presentation} slot={slot} />
+    </div>
+  );
+});

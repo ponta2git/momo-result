@@ -4,7 +4,7 @@ import { MatchesFilterBar } from "@/features/matches/list/MatchesFilterBar";
 import { MatchesTable } from "@/features/matches/list/MatchesTable";
 import { matchListPageSizeOptions } from "@/features/matches/list/matchListSearchParams";
 import { MatchMobileCard } from "@/features/matches/list/MatchMobileCard";
-import { useMatchesListPageModel } from "@/features/matches/list/useMatchesListPageModel";
+import { useMatchesList } from "@/features/matches/list/useMatchesList";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
 import { inlineActionGroupClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
@@ -44,7 +44,7 @@ function ListSkeleton({ showDesktopTable }: { showDesktopTable: boolean }) {
 
 export function MatchesListPage() {
   const showDesktopTable = useMediaQuery("(min-width: 1024px)");
-  const { drafts, filters, list, navigation, summary } = useMatchesListPageModel();
+  const { draftNavigation, filters, list, navigation, summary } = useMatchesList();
   const retryOwnsFeedback = list.loadFailed || list.refreshFailed;
   const listPending = list.refresh.pending || list.scopeChanging || list.sameScopeRefreshing;
   const toolbarPending =
@@ -214,12 +214,12 @@ export function MatchesListPage() {
                 ) : (
                   <>
                     {showDesktopTable ? (
-                      <MatchesTable items={list.items} rowActions={drafts.rowActions} />
+                      <MatchesTable items={list.items} rowActions={draftNavigation.rowActions} />
                     ) : (
                       <div className="grid gap-4">
                         {list.items.map((item) => (
                           <div className="grid min-h-48" key={item.id}>
-                            <MatchMobileCard item={item} rowActions={drafts.rowActions} />
+                            <MatchMobileCard item={item} rowActions={draftNavigation.rowActions} />
                           </div>
                         ))}
                       </div>

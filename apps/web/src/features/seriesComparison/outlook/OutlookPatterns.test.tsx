@@ -3,23 +3,28 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import * as outlookModel from "@/features/seriesComparison/model/outlook";
+import * as outlookCalculation from "@/features/seriesComparison/outlook/calculation";
+import { editOutlook } from "@/features/seriesComparison/outlook/outlookEditing";
 import { OutlookEditor } from "@/features/seriesComparison/outlook/OutlookEditor";
 import { OutlookHorizonControl } from "@/features/seriesComparison/outlook/OutlookHorizonControl";
 import { OutlookPatterns } from "@/features/seriesComparison/outlook/OutlookPatterns";
 import {
+  outlookEditorView,
+  outlookResultView,
+} from "@/features/seriesComparison/outlook/outlookProjections";
+import {
   adoptOutlookSummary,
   applyOutlookDistribution,
   outlookPlayer,
-} from "@/features/seriesComparison/outlook/outlookSession";
+} from "@/features/seriesComparison/outlook/outlookWorkspaceState";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { makeSeriesAnalysisOutlookSummary } from "@/test/msw/seriesAnalysisOutlookFixtures";
 import { selectOption } from "@/test/selectOption";
 
 async function patternProps(memberIds: readonly [string, string] = ["member_eu", "member_ponta"]) {
   const response = await makeSeriesAnalysisOutlookSummary();
-  const session = adoptOutlookSummary(undefined, response, "scope", [...memberIds]);
-  if (!session) throw new Error("The outlook fixture must contain a comparable pair.");
+  const state = adoptOutlookSummary(undefined, response, "scope", [...memberIds]);
+  if (!state) throw new Error("The outlook fixture must contain a comparable pair.");
   const focus = outlookPlayer(response.players, memberIds[0]);
   const rival = outlookPlayer(response.players, memberIds[1]);
   return {
@@ -29,7 +34,7 @@ async function patternProps(memberIds: readonly [string, string] = ["member_eu",
       focusRankSum: focus.rankSum,
       rivalRankSum: rival.rankSum,
     },
-    session,
+    state,
     names: [focus.displayName, rival.displayName] as const,
     memberIds,
   };
@@ -38,41 +43,41 @@ async function patternProps(memberIds: readonly [string, string] = ["member_eu",
 type PatternProps = Awaited<ReturnType<typeof patternProps>>;
 
 function PatternsHarness({ props, editor = false }: { props: PatternProps; editor?: boolean }) {
-  const [session, setSession] = useState(props.session);
+  const [state, setState] = useState(props.state);
   const onHorizonChange = (next: { horizon: number; horizonText: string }) =>
-    setSession((current) => ({ ...current, ...next }));
+    setState((current) => ({ ...current, ...next }));
   return (
     <>
       {editor ? (
         <OutlookEditor
-          session={session}
+          view={outlookEditorView(state, 0)}
           role={0}
           method="mean"
           name={props.names[0]}
-          change={setSession}
+          edit={(intent) => setState((current) => editOutlook(current, intent))}
         />
       ) : null}
       <OutlookPatterns
         {...props}
-        session={session}
+        view={outlookResultView(state)}
         active
         marker={null}
         onHorizonChange={onHorizonChange}
         horizonControl={
           <OutlookHorizonControl
-            horizon={session.horizon}
-            horizonText={session.horizonText}
+            horizon={state.horizon}
+            horizonText={state.horizonText}
             onChange={onHorizonChange}
             rangeControl={
               <SelectField
                 label="表示範囲"
-                value={String(session.chartRange)}
+                value={String(state.chartRange)}
                 options={[50, 100, 200].map((range) => ({
                   value: String(range),
                   label: `${range}戦`,
                 }))}
                 onValueChange={(value) =>
-                  setSession((current) => ({
+                  setState((current) => ({
                     ...current,
                     chartRange: Number(value) as 50 | 100 | 200,
                   }))
@@ -129,7 +134,7 @@ describe("OutlookPatterns", () => {
   it("shows all four patterns together and shares the 1000-game observation across their table and graphs", async () => {
     const user = userEvent.setup();
     const props = await patternProps();
-    const generate = vi.spyOn(outlookModel, "generateOutlookExamples");
+    const generate = vi.spyOn(outlookCalculation, "generateOutlookExamples");
     render(<PatternsHarness props={props} />);
     expect(
       resultTable()
@@ -200,11 +205,11 @@ describe("OutlookPatterns", () => {
 
   it("stops calculation while inactive and uses the current conditions when shown again", async () => {
     const props = await patternProps();
-    const generate = vi.spyOn(outlookModel, "generateOutlookExamples");
-    const tree = (active: boolean, session = props.session) => (
+    const generate = vi.spyOn(outlookCalculation, "generateOutlookExamples");
+    const tree = (active: boolean, state = props.state) => (
       <OutlookPatterns
         {...props}
-        session={session}
+        view={outlookResultView(state)}
         active={active}
         marker={null}
         horizonControl={null}
@@ -223,9 +228,9 @@ describe("OutlookPatterns", () => {
     expect(exampleValues()).toEqual(original);
     expect(generate).toHaveBeenCalledTimes(2);
     const changed = applyOutlookDistribution(
-      props.session,
+      props.state,
       0,
-      outlookModel.distributionFromCounts([4, 8, 5, 3]),
+      outlookCalculation.distributionFromCounts([4, 8, 5, 3]),
       { kind: "counts" },
     );
     view.rerender(tree(false, changed));
@@ -239,7 +244,7 @@ describe("OutlookPatterns", () => {
   it("shares fitted axes across all patterns and changes them for conditions, not the observation position", async () => {
     const user = userEvent.setup();
     const props = await patternProps();
-    props.session.chartRange = 200;
+    props.state.chartRange = 200;
     render(<PatternsHarness props={props} editor />);
     const axes = axisLabels(screen.getByRole("figure", { name: "平均" }));
     expect(Number(axes[0])).toBeGreaterThan(1);
@@ -259,7 +264,7 @@ describe("OutlookPatterns", () => {
 
   it("keeps canonical person columns and line identities when focus and rival are reversed", async () => {
     const props = await patternProps();
-    const view = render(<PatternsHarness key={props.session.key} props={props} />);
+    const view = render(<PatternsHarness key={props.state.key} props={props} />);
     const eu = memberLines("いーゆー", "実線");
     const ponta = memberLines("ぽんた", "破線");
     const favorable = rowValues("有利な例");
@@ -268,7 +273,7 @@ describe("OutlookPatterns", () => {
       within(resultRow("現在").getAllByRole("cell")[0]!).getByLabelText("相手との差 +0.13位"),
     ).toBeVisible();
     const reversed = await patternProps(["member_ponta", "member_eu"]);
-    view.rerender(<PatternsHarness key={reversed.session.key} props={reversed} />);
+    view.rerender(<PatternsHarness key={reversed.state.key} props={reversed} />);
     expect(
       resultTable()
         .getAllByRole("columnheader")
@@ -290,15 +295,15 @@ describe("OutlookPatterns", () => {
     const user = userEvent.setup();
     const props = await patternProps();
     props.cumulative = { games: 1000, focusRankSum: 2497, rivalRankSum: 2502 };
-    props.session.horizon = 1;
-    props.session.horizonText = "1";
-    props.session.entries = [
+    props.state.horizon = 1;
+    props.state.horizonText = "1";
+    props.state.entries = [
       {
-        distribution: outlookModel.distributionFromCounts([0, 20, 0, 0]),
+        distribution: outlookCalculation.distributionFromCounts([0, 20, 0, 0]),
         source: { kind: "counts" },
       },
       {
-        distribution: outlookModel.distributionFromCounts([20, 0, 0, 0]),
+        distribution: outlookCalculation.distributionFromCounts([20, 0, 0, 0]),
         source: { kind: "counts" },
       },
     ];
@@ -325,13 +330,13 @@ describe("OutlookPatterns", () => {
 
   it("uses neutral labels when all examples have the same difference trajectory", async () => {
     const props = await patternProps();
-    props.session.entries = [
+    props.state.entries = [
       {
-        distribution: outlookModel.distributionFromCounts([20, 0, 0, 0]),
+        distribution: outlookCalculation.distributionFromCounts([20, 0, 0, 0]),
         source: { kind: "counts" },
       },
       {
-        distribution: outlookModel.distributionFromCounts([0, 20, 0, 0]),
+        distribution: outlookCalculation.distributionFromCounts([0, 20, 0, 0]),
         source: { kind: "counts" },
       },
     ];
@@ -354,7 +359,7 @@ describe("OutlookPatterns", () => {
     "updates example values after a %s gesture finishes while the average stays live",
     async (method) => {
       const props = await patternProps();
-      const generate = vi.spyOn(outlookModel, "generateOutlookExamples");
+      const generate = vi.spyOn(outlookCalculation, "generateOutlookExamples");
       render(<PatternsHarness props={props} editor />);
       const examples = exampleValues();
       const average = rowValues("平均");

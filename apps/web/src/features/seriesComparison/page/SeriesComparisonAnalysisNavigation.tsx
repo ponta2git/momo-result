@@ -1,7 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 
-import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
-import { isSeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisSelection";
+import { isSeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisSelection";
 import { useSeriesAnalysisNavigation } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
 import { TabsList, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 

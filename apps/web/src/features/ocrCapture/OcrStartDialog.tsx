@@ -1,8 +1,8 @@
 import { Check } from "lucide-react";
+import { memo } from "react";
 
 import { slotDefinitions } from "@/features/ocrCapture/captureState";
-import type { OcrSubmissionPlan } from "@/features/ocrCapture/ocrSubmissionPlan";
-import type { OcrStartDialogState } from "@/features/ocrCapture/useOcrStartFlow";
+import type { OcrStartDialogView, OcrStartSummary } from "@/features/ocrCapture/ocrStartState";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { FactList } from "@/shared/ui/data/FactList";
@@ -17,17 +17,17 @@ type OcrStartDialogProps = {
   onClose: () => void;
   onConfirm: () => Promise<void>;
   onViewMatches: () => void;
-  state: OcrStartDialogState;
+  view: OcrStartDialogView;
 };
 
-function SetupSummary({ plan }: { plan: OcrSubmissionPlan }) {
+function SetupSummary({ summary }: { summary: OcrStartSummary }) {
   const items = [
-    ["開催", plan.setupSummary.heldEvent],
-    ["試合番号", plan.setupSummary.matchNo],
-    ["作品", plan.setupSummary.gameTitle],
-    ["シーズン", plan.setupSummary.season],
-    ["マップ", plan.setupSummary.map],
-    ["オーナー", plan.setupSummary.owner],
+    ["開催", summary.setup.heldEvent],
+    ["試合番号", summary.setup.matchNo],
+    ["作品", summary.setup.gameTitle],
+    ["シーズン", summary.setup.season],
+    ["マップ", summary.setup.map],
+    ["オーナー", summary.setup.owner],
   ] as const;
 
   return (
@@ -40,12 +40,8 @@ function SetupSummary({ plan }: { plan: OcrSubmissionPlan }) {
   );
 }
 
-function resultDestinationLabel(plan: OcrSubmissionPlan): string {
-  return plan.setup.heldEventId ? "開催詳細で確認" : "試合一覧で確認";
-}
-
-function TraySummary({ plan }: { plan: OcrSubmissionPlan }) {
-  const selectedKinds = new Set(plan.slots.map((slot) => slot.kind));
+function TraySummary({ summary }: { summary: OcrStartSummary }) {
+  const selectedKinds = new Set(summary.selectedKinds);
 
   return (
     <ol aria-label="送信する分類" className="grid gap-2 sm:grid-cols-3">
@@ -78,20 +74,20 @@ function TraySummary({ plan }: { plan: OcrSubmissionPlan }) {
 function ConfirmingContent({
   onClose,
   onConfirm,
-  plan,
+  summary,
 }: {
   onClose: () => void;
   onConfirm: () => Promise<void>;
-  plan: OcrSubmissionPlan;
+  summary: OcrStartSummary;
 }) {
-  const isPartial = plan.slots.length < slotDefinitions.length;
+  const isPartial = summary.selectedKinds.length < slotDefinitions.length;
 
   return (
     <div className="grid gap-6">
-      <SetupSummary plan={plan} />
-      <TraySummary plan={plan} />
+      <SetupSummary summary={summary} />
+      <TraySummary summary={summary} />
       {isPartial ? (
-        <Notice tone="warning" title={`${plan.slots.length}件だけで開始します`}>
+        <Notice tone="warning" title={`${summary.selectedKinds.length}件だけで開始します`}>
           <p>未配置の分類は読み取られません。あとから確認画面で手入力できます。</p>
         </Notice>
       ) : null}
@@ -99,47 +95,25 @@ function ConfirmingContent({
         <Button variant="secondary" onClick={onClose}>
           戻って確認
         </Button>
-        <Button onClick={() => void onConfirm()}>{plan.slots.length}件で読み取りを開始</Button>
+        <Button onClick={() => void onConfirm()}>
+          {summary.selectedKinds.length}件で読み取りを開始
+        </Button>
       </DialogFooter>
     </div>
   );
 }
 
-function progressView(state: Extract<OcrStartDialogState, { status: "submitting" }>) {
-  const { progress } = state;
-  const total = progress?.total ?? state.plan.slots.length;
-  if (!progress || progress.phase === "creating_draft") {
-    return { kind: "preparing", label: "試合の記録を準備しています" } as const;
-  }
-  if (progress.phase === "finalizing") {
-    return {
-      kind: "determinate",
-      label: "読み取りの受け付けを確認しています",
-      value: progress.completed,
-      total,
-    } as const;
-  }
-  const slotLabel =
-    slotDefinitions.find((definition) => definition.kind === progress.slotKind)?.label ?? "画像";
-  return {
-    kind: "determinate",
-    label: `${progress.current}/${progress.total}件目・${slotLabel}を送信しています`,
-    value: progress.current - 1,
-    total,
-  } as const;
-}
-
-export function OcrStartDialog({
+export const OcrStartDialog = memo(function OcrStartDialog({
   navigationPending = false,
   onClose,
   onConfirm,
   onViewMatches,
-  state,
+  view,
 }: OcrStartDialogProps) {
-  if (state.status === "closed") return null;
+  if (view.status === "closed") return null;
 
-  if (state.status === "submitting") {
-    const progress = progressView(state);
+  if (view.status === "submitting") {
+    const progress = view.progress;
     return (
       <Dialog
         busy
@@ -176,7 +150,7 @@ export function OcrStartDialog({
     );
   }
 
-  if (state.status === "partial_result") {
+  if (view.status === "partial_result") {
     return (
       <Dialog
         open
@@ -187,7 +161,7 @@ export function OcrStartDialog({
         <div className="grid gap-4">
           <Notice
             tone="warning"
-            title={`${state.createdJobCount}件を開始・${state.failedJobCount}件は受付未確認`}
+            title={`${view.createdJobCount}件を開始・${view.failedJobCount}件は受付未確認`}
           >
             <p>
               同じ内容で再試行すると、受け付け済みの画像を再送せずに続けられます。確認画面で手入力することもできます。
@@ -200,7 +174,7 @@ export function OcrStartDialog({
               pendingLabel="移動中…"
               onClick={onViewMatches}
             >
-              {resultDestinationLabel(state.plan)}
+              {view.destinationLabel}
             </Button>
             <Button onClick={() => void onConfirm()}>残りをもう一度試す</Button>
           </DialogFooter>
@@ -209,7 +183,7 @@ export function OcrStartDialog({
     );
   }
 
-  if (state.status === "submission_closed") {
+  if (view.status === "submission_closed") {
     return (
       <Dialog
         open
@@ -219,7 +193,7 @@ export function OcrStartDialog({
       >
         <div className="grid gap-4">
           <p className={contentText.body}>
-            {state.canRestart
+            {view.canRestart
               ? "未受付の画像は、新しい読み取りとして送信できます。完了通知も別になります。"
               : "この記録への送信は続けられません。記録の状態を確認してください。"}
           </p>
@@ -230,9 +204,9 @@ export function OcrStartDialog({
               pendingLabel="移動中…"
               onClick={onViewMatches}
             >
-              {resultDestinationLabel(state.plan)}
+              {view.destinationLabel}
             </Button>
-            {state.canRestart ? (
+            {view.canRestart ? (
               <Button onClick={() => void onConfirm()}>未受付の画像を新しく送信</Button>
             ) : null}
           </DialogFooter>
@@ -241,29 +215,29 @@ export function OcrStartDialog({
     );
   }
 
-  if (state.status === "recoverable_failure") {
+  if (view.status === "recoverable_failure") {
     return (
       <Dialog
         open
-        dismissible={state.canEdit}
+        dismissible={view.canEdit}
         onOpenChange={(open) => {
-          if (!open && state.canEdit) onClose();
+          if (!open && view.canEdit) onClose();
         }}
         description={
-          state.canEdit
+          view.canEdit
             ? "読み取りは開始されていません。画像を保持したまま、設定を確認してやり直せます。"
             : "画像と受付状況は保持されています。同じ内容で再試行するか、作成された記録を確認できます。"
         }
         title={
-          state.canEdit ? "読み取りを開始できませんでした" : "読み取りの受付を確認できませんでした"
+          view.canEdit ? "読み取りを開始できませんでした" : "読み取りの受付を確認できませんでした"
         }
       >
         <div className="grid gap-4">
           <Notice tone="danger" title="送信を完了できませんでした">
-            <p>{state.message}</p>
+            <p>{view.message}</p>
           </Notice>
           <DialogFooter>
-            {state.canEdit ? (
+            {view.canEdit ? (
               <Button variant="secondary" onClick={onClose}>
                 戻って確認
               </Button>
@@ -274,7 +248,7 @@ export function OcrStartDialog({
                 pendingLabel="移動中…"
                 onClick={onViewMatches}
               >
-                {resultDestinationLabel(state.plan)}
+                {view.destinationLabel}
               </Button>
             )}
             <Button onClick={() => void onConfirm()}>もう一度試す</Button>
@@ -293,7 +267,7 @@ export function OcrStartDialog({
         if (!open) onClose();
       }}
     >
-      <ConfirmingContent plan={state.plan} onClose={onClose} onConfirm={onConfirm} />
+      <ConfirmingContent summary={view.summary} onClose={onClose} onConfirm={onConfirm} />
     </Dialog>
   );
-}
+});

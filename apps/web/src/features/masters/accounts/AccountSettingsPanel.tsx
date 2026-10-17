@@ -1,9 +1,9 @@
 import { useRef } from "react";
 
 import { accountRoleLabels } from "@/features/masters/accounts/accountRoles";
+import type { AccountSettingsControls } from "@/features/masters/accounts/accountSettingsEditing";
 import { AdminAccountActions } from "@/features/masters/accounts/AdminAccountActions";
 import { AdminAccountCreateDialog } from "@/features/masters/accounts/AdminAccountCreateDialog";
-import type { AccountSettingsModel } from "@/features/masters/accounts/useAccountSettingsModel";
 import { memberDisplayName } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
@@ -16,9 +16,9 @@ import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { StatusBadge } from "@/shared/ui/status/StatusBadge";
 import { contentText } from "@/shared/ui/typography";
 
-export function AccountSettingsPanel({ model: page }: { model: AccountSettingsModel }) {
+export function AccountSettingsPanel({ settings }: { settings: AccountSettingsControls }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
-  const refresh = page.list.kind === "loading" ? undefined : page.list.refresh;
+  const refresh = settings.list.kind === "loading" ? undefined : settings.list.refresh;
   const retryButton = (
     <Button
       pending={refresh?.pending ?? false}
@@ -35,14 +35,7 @@ export function AccountSettingsPanel({ model: page }: { model: AccountSettingsMo
 
   return (
     <section aria-label="アカウント設定" className="grid min-w-0 gap-4">
-      <ContentWithActions
-        actions={
-          <AdminAccountCreateDialog
-            disabled={page.list.kind !== "ready" || page.pending}
-            model={page.create}
-          />
-        }
-      >
+      <ContentWithActions actions={<AdminAccountCreateDialog form={settings.create} />}>
         <header className="grid gap-1">
           <h2 className={contentText.heading} ref={headingRef} tabIndex={-1}>
             ログインと権限
@@ -52,23 +45,23 @@ export function AccountSettingsPanel({ model: page }: { model: AccountSettingsMo
           </p>
         </header>
       </ContentWithActions>
-      {page.list.kind === "loading" ? (
+      {settings.list.kind === "loading" ? (
         <div className="grid gap-4" aria-label="アカウントを読み込み中" role="status">
           <Skeleton className="min-h-10" />
           <Skeleton className="min-h-16" />
           <Skeleton className="min-h-16" />
         </div>
-      ) : page.list.kind === "loadFailed" ? (
+      ) : settings.list.kind === "loadFailed" ? (
         <Notice
           action={retryButton}
           tone="danger"
-          title={page.list.error?.title ?? "アカウントを読み込めません"}
+          title={settings.list.error?.title ?? "アカウントを読み込めません"}
         >
-          <p>{page.list.error?.detail ?? "通信状態を確認して、もう一度お試しください。"}</p>
+          <p>{settings.list.error?.detail ?? "通信状態を確認して、もう一度お試しください。"}</p>
         </Notice>
       ) : (
         <div className="grid gap-4">
-          {page.list.stale ? (
+          {settings.list.stale ? (
             <Notice
               action={retryButton}
               tone="warning"
@@ -77,12 +70,12 @@ export function AccountSettingsPanel({ model: page }: { model: AccountSettingsMo
               <p>直前に取得した内容を表示しています。</p>
             </Notice>
           ) : null}
-          {page.list.items.length === 0 ? (
+          {settings.list.items.length === 0 ? (
             <EmptyState
               description="利用を許可するDiscordアカウントを登録します。"
               placement="embedded"
               title={
-                page.list.stale
+                settings.list.stale
                   ? "前回取得時点では登録されたアカウントがありません"
                   : "登録されたアカウントはありません"
               }
@@ -131,18 +124,21 @@ export function AccountSettingsPanel({ model: page }: { model: AccountSettingsMo
                   renderCell: (account) => (
                     <AdminAccountActions
                       account={account}
-                      isPending={page.pending}
-                      pendingRequest={page.update.pendingRequestFor(account.accountId)}
-                      onPatch={(request) => page.update.run(account.accountId, request)}
+                      isPending={settings.pending}
+                      pendingOperation={settings.update.operationFor(account.accountId)}
+                      onChangeRole={(role) => settings.update.changeRole(account.accountId, role)}
+                      onChangeLoginEnabled={(enabled) =>
+                        settings.update.changeLoginEnabled(account.accountId, enabled)
+                      }
                     />
                   ),
                 },
               ]}
               density="compact"
               getRowKey={(account) => account.accountId}
-              isRowBusy={(account) => Boolean(page.update.pendingRequestFor(account.accountId))}
+              isRowBusy={(account) => Boolean(settings.update.operationFor(account.accountId))}
               minWidth="44rem"
-              rows={page.list.items}
+              rows={settings.list.items}
               stickyRowHeader
             />
           )}

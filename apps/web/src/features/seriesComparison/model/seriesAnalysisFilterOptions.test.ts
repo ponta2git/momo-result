@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildSeriesAnalysisFilterOptions } from "@/features/seriesComparison/model/seriesAnalysisFilterOptions";
-import { normalizeSeriesAnalysisSelection } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import { normalizeSeriesAnalysisSelection } from "@/features/seriesComparison/model/seriesAnalysisSelection";
 import { makeSeriesAnalysisOptions } from "@/test/msw/seriesAnalysisFixtures";
 
 describe("series analysis empty filter combinations", () => {

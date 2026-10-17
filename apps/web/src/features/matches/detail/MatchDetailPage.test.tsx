@@ -1,0 +1,885 @@
+import { QueryClientProvider } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { http, HttpResponse } from "msw";
+import {
+  createMemoryRouter,
+  MemoryRouter,
+  Outlet,
+  Route,
+  RouterProvider,
+  Routes,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { MatchDetailPage } from "@/features/matches/detail/MatchDetailPage";
+import { matchKeys, seriesAnalysisKeys } from "@/shared/api/queryKeys";
+import { setDevUser } from "@/test/auth";
+import { createDeferred } from "@/test/deferred";
+import { makeFourPlayerResults, makeIncidents, makeMatchDetail } from "@/test/factories";
+import { setupMsw } from "@/test/msw/lifecycle";
+import {
+  analysisArtifact,
+  makeSeriesAnalysisExcludedMatchContext,
+  makeSeriesAnalysisMatchContext,
+  makeSeriesAnalysisStatus,
+} from "@/test/msw/seriesAnalysisFixtures";
+import { server } from "@/test/msw/server";
+import { createTestQueryClient } from "@/test/queryClient";
+
+setupMsw();
+
+let user: ReturnType<typeof userEvent.setup>;
+
+function LocationProbe() {
+  const location = useLocation();
+  return <output aria-label="current location">{`${location.pathname}${location.search}`}</output>;
+}
+
+function GlobalNavigationButton({ destination = "/other" }: { destination?: string }) {
+  const navigate = useNavigate();
+  return (
+    <button data-testid="leave-match-detail" type="button" onClick={() => navigate(destination)}>
+      leave detail
+    </button>
+  );
+}
+
+// Deletion relies on navigate({ flushSync: true }) before evicting the detail.
+// Use the same data-router boundary as the app so the old route has unmounted.
+function renderDeletionPage(
+  queryClient: QueryClient,
+  initialEntry = "/matches/match-1",
+  leaveDestination = "/other",
+) {
+  const router = createMemoryRouter(
+    [
+      {
+        element: (
+          <>
+            <GlobalNavigationButton destination={leaveDestination} />
+            <LocationProbe />
+            <Outlet />
+          </>
+        ),
+        children: [
+          { path: "/matches/:matchId", element: <MatchDetailPage /> },
+          { path: "/matches", element: <p>filtered-list</p> },
+          { path: "/held-events/:heldEventId", element: <p>held-event-page</p> },
+          { path: "/other", element: <p>other-page</p> },
+        ],
+      },
+    ],
+    { initialEntries: [initialEntry] },
+  );
+  render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  );
+}
+
+async function dispatchPassiveRefreshSignals() {
+  vi.useFakeTimers();
+  try {
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+      document.dispatchEvent(new Event("visibilitychange"));
+      await vi.advanceTimersByTimeAsync(10 * 60 * 1_000);
+    });
+  } finally {
+    vi.useRealTimers();
+  }
+}
+
+describe("MatchDetailPage", () => {
+  let queryClient: QueryClient;
+  beforeEach(() => {
+    queryClient = createTestQueryClient();
+    user = userEvent.setup();
+  });
+
+  it("exposes result navigation and confirms deletion before acting", async () => {
+    setDevUser();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/match-1"]}>
+          <Routes>
+            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
+            <Route path="/matches" element={<p>list</p>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "前後の戦績を見る" })).toHaveAttribute(
+      "href",
+      "/analytics/series?gameTitleId=gt_momotetsu_2&seasonMasterId=season_current&mapMasterId=map_east&focusMatchId=match-1&view=flow",
+    );
+    expect(screen.getByRole("link", { name: "この試合の開催を見る" })).toHaveAttribute(
+      "href",
+      "/held-events/held-1",
+    );
+    const relatedActions = within(screen.getByRole("navigation", { name: "この試合の関連操作" }));
+    expect(relatedActions.getByRole("link", { name: "この試合を出力" })).toHaveAttribute(
+      "href",
+      "/exports?matchId=match-1",
+    );
+    expect(relatedActions.getByRole("link", { name: "試合結果を編集" })).toHaveAttribute(
+      "href",
+      "/matches/match-1/edit",
+    );
+
+    await user.click(screen.getByRole("button", { name: "削除" }));
+    expect(screen.getByRole("heading", { name: "試合を削除しますか？" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "削除する" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "キャンセル" }));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("heading", { name: "試合を削除しますか？" }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
+  it("keeps a failed delete in the dialog and allows retrying it", async () => {
+    setDevUser();
+    let deleteAttempts = 0;
+    server.use(
+      http.delete("/api/matches/:matchId", ({ params }) => {
+        deleteAttempts += 1;
+        if (deleteAttempts === 1) {
+          return HttpResponse.json(
+            {
+              code: "INTERNAL_ERROR",
+              detail: "delete failed",
+              status: 500,
+              title: "Delete failed",
+              type: "about:blank",
+            },
+            { status: 500 },
+          );
+        }
+        return HttpResponse.json({ deleted: true, matchId: params["matchId"] });
+      }),
+    );
+
+    renderDeletionPage(queryClient);
+
+    expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "削除" }));
+    await user.click(screen.getByRole("button", { name: "削除する" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "予期しないエラーが発生しました。もう一度お試しください。",
+    );
+    expect(screen.getByRole("heading", { name: "試合を削除しますか？" })).toBeInTheDocument();
+    const retry = screen.getByRole("button", { name: "削除する" });
+    expect(retry).toBeEnabled();
+
+    await user.click(retry);
+
+    expect(await screen.findByText("held-event-page")).toBeInTheDocument();
+    expect(deleteAttempts).toBe(2);
+    expect(screen.queryByRole("heading", { name: "試合を削除しますか？" })).not.toBeInTheDocument();
+  });
+
+  it("distinguishes missing matches and retries transient detail failures", async () => {
+    setDevUser();
+    let attempts = 0;
+    server.use(
+      http.get("/api/matches/:matchId", () => {
+        attempts += 1;
+        return attempts === 1
+          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
+          : HttpResponse.json(makeMatchDetail());
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/match-1"]}>
+          <Routes>
+            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("試合詳細を読み込めませんでした")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "試合詳細を再読み込み" }));
+
+    expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
+    expect(attempts).toBe(2);
+  });
+
+  it("reads names and old-event time from the match snapshot without auxiliary directories", async () => {
+    setDevUser();
+    const extraRequests: string[] = [];
+    server.use(
+      ...["held-events", "game-titles", "season-masters", "map-masters"].map((resource) =>
+        http.get(`/api/${resource}`, () => {
+          extraRequests.push(resource);
+          return HttpResponse.json({ detail: "unavailable" }, { status: 500 });
+        }),
+      ),
+      http.get("/api/matches/:matchId", () =>
+        HttpResponse.json(
+          makeMatchDetail({
+            heldEventId: "held-outside-latest-100",
+            heldAt: "2020-01-02T03:04:00.000Z",
+            gameTitleName: "対象作品",
+            seasonName: "対象シーズン",
+            mapName: "対象マップ",
+            players: makeFourPlayerResults(),
+          }),
+        ),
+      ),
+    );
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/match-1"]}>
+          <Routes>
+            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
+    const identity = screen.getByRole("region", { name: "第1試合の開催条件" });
+    expect(identity).toHaveTextContent("対象作品");
+    expect(identity).toHaveTextContent("対象シーズン");
+    expect(identity).toHaveTextContent("対象マップ");
+    expect(identity).toHaveTextContent("2020");
+    expect(extraRequests).toEqual([]);
+  });
+
+  it("shows confirmed absence and a safe return for a missing match", async () => {
+    setDevUser();
+    server.use(
+      http.get("/api/matches/:matchId", () =>
+        HttpResponse.json(
+          {
+            type: "about:blank",
+            title: "Not Found",
+            detail: "not found",
+            status: 404,
+            code: "NOT_FOUND",
+          },
+          { status: 404 },
+        ),
+      ),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/missing"]}>
+          <Routes>
+            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("試合が見つかりません")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "試合詳細を再読み込み" })).not.toBeInTheDocument();
+  });
+
+  it("returns to the held event after deleting a match", async () => {
+    setDevUser();
+    const invalidationGate = createDeferred();
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries").mockImplementation(async () => {
+      await invalidationGate.promise;
+    });
+
+    renderDeletionPage(queryClient);
+
+    expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "削除" }));
+    await user.click(screen.getByRole("button", { name: "削除する" }));
+
+    await waitFor(() => expect(invalidate).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).toHaveTextContent("/held-events/held-1"),
+    );
+    expect(screen.getByText("held-event-page")).toBeInTheDocument();
+    expect(queryClient.getQueryData(matchKeys.detail("match-1"))).toBeUndefined();
+
+    await act(async () => invalidationGate.resolve());
+    await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+  });
+
+  it("does not navigate back after leaving the detail while delete invalidation is pending", async () => {
+    setDevUser();
+    // The detail route must release its observer before its cache is removed.
+    const evictionRoutes: Array<string | null> = [];
+    const originalRemoveQueries = queryClient.removeQueries.bind(queryClient);
+    vi.spyOn(queryClient, "removeQueries").mockImplementation((filters) => {
+      evictionRoutes.push(screen.getByLabelText("current location").textContent);
+      return originalRemoveQueries(filters);
+    });
+    const invalidationGate = createDeferred();
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries").mockImplementation(async () => {
+      await invalidationGate.promise;
+    });
+
+    renderDeletionPage(queryClient);
+
+    expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "削除" }));
+    await user.click(screen.getByRole("button", { name: "削除する" }));
+    await waitFor(() => expect(invalidate).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).toHaveTextContent("/held-events/held-1"),
+    );
+    expect(queryClient.getQueryData(matchKeys.detail("match-1"))).toBeUndefined();
+
+    expect(evictionRoutes).toEqual(["/held-events/held-1"]);
+    act(() => screen.getByTestId("leave-match-detail").click());
+    expect(screen.getByLabelText("current location")).toHaveTextContent("/other");
+    expect(screen.getByText("other-page")).toBeInTheDocument();
+
+    await act(async () => invalidationGate.resolve());
+    await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+    expect(queryClient.getQueryData(matchKeys.detail("match-1"))).toBeUndefined();
+
+    expect(screen.getByLabelText("current location")).toHaveTextContent("/other");
+    expect(screen.getByText("other-page")).toBeInTheDocument();
+    expect(screen.queryByText("held-event-page")).not.toBeInTheDocument();
+  });
+
+  it("does not navigate after a pending delete succeeds on a page that has unmounted", async () => {
+    setDevUser();
+    const deleteGate = createDeferred();
+    let deleteStarted = false;
+    server.use(
+      http.delete("/api/matches/:matchId", async ({ params }) => {
+        deleteStarted = true;
+        await deleteGate.promise;
+        return HttpResponse.json({ deleted: true, matchId: params["matchId"] });
+      }),
+    );
+
+    renderDeletionPage(queryClient);
+
+    expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "削除" }));
+    await user.click(screen.getByRole("button", { name: "削除する" }));
+    await waitFor(() => expect(deleteStarted).toBe(true));
+
+    act(() => screen.getByTestId("leave-match-detail").click());
+    expect(screen.getByLabelText("current location")).toHaveTextContent("/other");
+
+    await act(async () => deleteGate.resolve());
+    await waitFor(() =>
+      expect(queryClient.getQueryData(matchKeys.detail("match-1"))).toBeUndefined(),
+    );
+
+    expect(screen.getByLabelText("current location")).toHaveTextContent("/other");
+    expect(screen.getByText("other-page")).toBeInTheDocument();
+    expect(screen.queryByText("held-event-page")).not.toBeInTheDocument();
+  });
+
+  it("does not surface a pending delete failure on a different match detail", async () => {
+    setDevUser();
+    const deleteGate = createDeferred();
+    let deleteStarted = false;
+    server.use(
+      http.delete("/api/matches/:matchId", async () => {
+        deleteStarted = true;
+        await deleteGate.promise;
+        return HttpResponse.json({ detail: "delete failed" }, { status: 500 });
+      }),
+    );
+
+    renderDeletionPage(queryClient, "/matches/match-1", "/matches/match-2");
+
+    expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "削除" }));
+    await user.click(screen.getByRole("button", { name: "削除する" }));
+    await waitFor(() => expect(deleteStarted).toBe(true));
+
+    act(() => screen.getByTestId("leave-match-detail").click());
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).toHaveTextContent("/matches/match-2"),
+    );
+    expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "試合を削除しますか？" })).not.toBeInTheDocument();
+
+    await act(async () => deleteGate.resolve());
+    await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+
+    expect(screen.getByLabelText("current location")).toHaveTextContent("/matches/match-2");
+    expect(screen.queryByText("削除に失敗しました")).not.toBeInTheDocument();
+    expect(screen.queryByText("delete failed")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "試合を削除しますか？" })).not.toBeInTheDocument();
+  });
+
+  it("shows match feature badges supplied by the pinned analysis artifact", async () => {
+    setDevUser();
+    const contextSearches: string[] = [];
+    server.use(
+      http.get("/api/matches/:matchId", () =>
+        HttpResponse.json(
+          makeMatchDetail({
+            players: makeFourPlayerResults([
+              {
+                incidents: makeIncidents({ suriNoGinji: 1 }),
+                rank: 2,
+                revenueManYen: 900,
+                totalAssetsManYen: -100,
+              },
+              {
+                incidents: makeIncidents({ suriNoGinji: 1 }),
+                rank: 1,
+                revenueManYen: 300,
+                totalAssetsManYen: 1000,
+              },
+              { rank: 3, revenueManYen: 700, totalAssetsManYen: 500 },
+              { rank: 4, revenueManYen: 600, totalAssetsManYen: 400 },
+            ]),
+          }),
+        ),
+      ),
+      http.get("/api/analytics/series-comparison/v3/match-context", ({ request }) => {
+        contextSearches.push(new URL(request.url).search);
+        const context = makeSeriesAnalysisMatchContext();
+        if (!context.match) throw new Error("fixture must include a match");
+        return HttpResponse.json({
+          ...context,
+          matchId: "match-1",
+          match: {
+            ...context.match,
+            features: [
+              {
+                evidence: [],
+                featureCode: "close_finish",
+                memberIds: [],
+                priority: 1,
+                source: "match",
+                tone: "neutral",
+              },
+              {
+                evidence: [],
+                featureCode: "revenue_top_no_win",
+                memberIds: [],
+                priority: 2,
+                source: "match",
+                tone: "notice",
+              },
+              {
+                evidence: [],
+                featureCode: "ginji_storm",
+                memberIds: [],
+                priority: 3,
+                source: "match",
+                tone: "notice",
+              },
+              {
+                evidence: [],
+                featureCode: "negative_assets",
+                memberIds: [],
+                priority: 4,
+                source: "match",
+                tone: "notice",
+              },
+              {
+                evidence: [],
+                featureCode: "no_destination",
+                memberIds: [],
+                priority: 5,
+                source: "match",
+                tone: "neutral",
+              },
+              {
+                evidence: [],
+                featureCode: "asset_blowout",
+                memberIds: [],
+                priority: 6,
+                source: "match",
+                tone: "neutral",
+              },
+            ],
+            matchIndex: 1,
+          },
+        });
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/match-1"]}>
+          <Routes>
+            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("list", { name: "試合の特徴" })).toBeInTheDocument();
+    expect(await screen.findByText("接戦")).toBeInTheDocument();
+    expect(screen.getByText("物件収益ねじれ")).toBeInTheDocument();
+    expect(screen.getByText("スリの銀次多発")).toBeInTheDocument();
+    expect(screen.getByText("借金あり")).toBeInTheDocument();
+    expect(screen.getByText("目的地なし決着")).toBeInTheDocument();
+    expect(screen.getByText("大差")).toBeInTheDocument();
+    expect(screen.getByText(/同じ作品・シーズン・マップの初戦から集計/u)).toBeInTheDocument();
+    const contextParams = new URLSearchParams(contextSearches.at(-1));
+    expect(contextParams.get("artifactId")).toBe("artifact-current");
+    expect(contextParams.get("gameTitleId")).toBe("gt_momotetsu_2");
+    expect(contextParams.get("seasonMasterId")).toBe("season_current");
+    expect(contextParams.get("mapMasterId")).toBe("map_east");
+    expect(contextParams.get("matchId")).toBe("match-1");
+  });
+
+  it.each([
+    {
+      name: "refetches the same context when status still points to the expired artifact",
+      replace: false,
+    },
+    {
+      name: "moves to the replacement context when status points to a new artifact",
+      replace: true,
+    },
+  ])("$name", async ({ replace }) => {
+    setDevUser();
+    const replacementArtifact = {
+      ...analysisArtifact,
+      artifactId: "artifact-replacement",
+      inputRevision: "13",
+      publishedAt: "2026-08-09T03:00:00.000Z",
+    };
+    const recoveredArtifact = replace ? replacementArtifact : analysisArtifact;
+    let statusAttempts = 0;
+    const contextArtifactIds: string[] = [];
+    server.use(
+      http.get("/api/analytics/series-comparison/v2/status", () => {
+        statusAttempts += 1;
+        return HttpResponse.json(
+          makeSeriesAnalysisStatus({
+            currentArtifact: statusAttempts === 1 ? analysisArtifact : recoveredArtifact,
+            desired: {
+              algorithmVersion: recoveredArtifact.algorithmVersion,
+              artifactSchemaVersion: recoveredArtifact.artifactSchemaVersion,
+              inputRevision: recoveredArtifact.inputRevision,
+            },
+          }),
+        );
+      }),
+      http.get("/api/analytics/series-comparison/v3/match-context", ({ request }) => {
+        const artifactId = new URL(request.url).searchParams.get("artifactId") ?? "";
+        contextArtifactIds.push(artifactId);
+        if (contextArtifactIds.length === 1) {
+          return HttpResponse.json(
+            {
+              code: "ANALYSIS_ARTIFACT_EXPIRED",
+              detail: "The requested artifact is no longer retained.",
+              status: 410,
+              title: "Artifact expired",
+              type: "about:blank",
+            },
+            { status: 410 },
+          );
+        }
+        return HttpResponse.json({
+          ...makeSeriesAnalysisMatchContext(),
+          artifact: recoveredArtifact,
+          matchId: "match-1",
+        });
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/match-1"]}>
+          <Routes>
+            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("接戦")).toBeInTheDocument();
+    expect(statusAttempts).toBe(2);
+    expect(contextArtifactIds).toEqual([analysisArtifact.artifactId, recoveredArtifact.artifactId]);
+  });
+
+  it("shows feature badges without update controls or passive polling", async () => {
+    setDevUser();
+    let statusAttempts = 0;
+    server.use(
+      http.get("/api/analytics/series-comparison/v2/status", () => {
+        statusAttempts += 1;
+        return HttpResponse.json(makeSeriesAnalysisStatus());
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/match-1"]}>
+          <Routes>
+            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("接戦")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "試合の特徴" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /特徴を/u })).not.toBeInTheDocument();
+    expect(statusAttempts).toBe(1);
+    await dispatchPassiveRefreshSignals();
+    expect(statusAttempts).toBe(1);
+  });
+
+  it("omits feature content while the first analysis is queued", async () => {
+    setDevUser();
+    let statusAttempts = 0;
+    server.use(
+      http.get("/api/analytics/series-comparison/v2/status", () => {
+        statusAttempts += 1;
+        return HttpResponse.json(
+          statusAttempts === 1
+            ? makeSeriesAnalysisStatus({
+                artifactFreshness: "unavailable",
+                calculation: {
+                  finishedAt: null,
+                  requestedAt: "2026-08-09T01:00:00.000Z",
+                  startedAt: null,
+                  status: "queued",
+                  trigger: "match_mutation",
+                },
+                currentArtifact: null,
+              })
+            : makeSeriesAnalysisStatus(),
+        );
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/match-1"]}>
+          <Routes>
+            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findAllByText("比較データを読み込み中")).toHaveLength(4);
+    expect(screen.queryByRole("list", { name: "試合の特徴" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /特徴を/u })).not.toBeInTheDocument();
+    expect(statusAttempts).toBe(1);
+    await dispatchPassiveRefreshSignals();
+    expect(statusAttempts).toBe(1);
+  });
+
+  it("keeps published badges visible while replacement analysis is queued", async () => {
+    setDevUser();
+    server.use(
+      http.get("/api/analytics/series-comparison/v2/status", () =>
+        HttpResponse.json(
+          makeSeriesAnalysisStatus({
+            artifactFreshness: "stale",
+            calculation: {
+              finishedAt: null,
+              requestedAt: "2026-08-09T01:30:00.000Z",
+              startedAt: null,
+              status: "queued",
+              trigger: "match_mutation",
+            },
+          }),
+        ),
+      ),
+    );
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/match-1"]}>
+          <Routes>
+            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText("接戦")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /特徴を/u })).not.toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "試合の特徴" }).children).toHaveLength(1);
+  });
+
+  it("keeps each player’s saved results and incidents together when analysis fails", async () => {
+    setDevUser();
+    let contextAttempts = 0;
+    server.use(
+      http.get("/api/matches/:matchId", () =>
+        HttpResponse.json(
+          makeMatchDetail({
+            players: makeFourPlayerResults([
+              {
+                rank: 1,
+                revenueManYen: 300,
+                incidents: {
+                  destination: 1,
+                  plusStation: 2,
+                  minusStation: 3,
+                  cardStation: 4,
+                  cardShop: 5,
+                  suriNoGinji: 6,
+                },
+              },
+              { rank: 2, revenueManYen: 400 },
+              { rank: 3, revenueManYen: 200 },
+              { rank: 4, revenueManYen: 100 },
+            ]),
+          }),
+        ),
+      ),
+      http.get("/api/analytics/series-comparison/v3/match-context", () => {
+        contextAttempts += 1;
+        return contextAttempts === 1
+          ? HttpResponse.json({ title: "series unavailable" }, { status: 500 })
+          : HttpResponse.json({
+              ...makeSeriesAnalysisMatchContext(),
+              matchId: "match-1",
+            });
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/match-1"]}>
+          <Routes>
+            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
+    expect(await screen.findAllByText("比較データなし")).toHaveLength(4);
+    const ledger = screen.getByRole("list", { name: "試合の順位と成績" });
+    expect(ledger.children).toHaveLength(4);
+    const player = within(ledger).getByRole("heading", { name: "ぽんた" }).closest("li")!;
+    expect(within(player).getByText("1位")).toBeInTheDocument();
+    expect(within(player).getByText("300万円")).toBeInTheDocument();
+    expect(within(player).getByText("プレー順1")).toBeInTheDocument();
+    const incidents = within(player).getByLabelText("ぽんたの事件簿");
+    for (const [label, count] of [
+      ["目的地", 1],
+      ["プラス駅", 2],
+      ["マイナス駅", 3],
+      ["カード駅", 4],
+      ["カード売り場", 5],
+      ["スリの銀次", 6],
+    ] as const) {
+      expect(within(incidents).getByText(label).nextElementSibling).toHaveTextContent(`${count}回`);
+    }
+    expect(screen.queryByRole("list", { name: "試合の特徴" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /特徴を/u })).not.toBeInTheDocument();
+    expect(screen.queryByText("接戦")).not.toBeInTheDocument();
+    expect(contextAttempts).toBe(1);
+  });
+
+  it("keeps primary match rows but hides stale analysis after a match revision mismatch", async () => {
+    setDevUser();
+    server.use(
+      http.get("/api/analytics/series-comparison/v3/match-context", () => {
+        return HttpResponse.json(
+          makeSeriesAnalysisExcludedMatchContext("match_changed_since_artifact", "match-1"),
+        );
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/match-1"]}>
+          <Routes>
+            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findAllByText("比較データなし")).toHaveLength(4);
+    expect(screen.queryByRole("list", { name: "試合の特徴" })).not.toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "試合の順位と成績" }).children).toHaveLength(4);
+    expect(screen.getAllByText("比較データなし")).toHaveLength(4);
+    expect(screen.queryByText("1.82 → 1.75")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    [404, "NOT_FOUND"],
+    [410, "ANALYSIS_ARTIFACT_EXPIRED"],
+  ] as const)(
+    "removes derived values after a definitive %s while keeping recorded match results",
+    async (status, code) => {
+      setDevUser();
+      let response: "success" | "invalid" | "transient" | "waiting" = "success";
+      const gate = createDeferred();
+      server.use(
+        http.get("/api/analytics/series-comparison/v3/match-context", async () => {
+          if (response === "waiting") await gate.promise;
+          if (response === "invalid" || response === "transient") {
+            const responseStatus = response === "invalid" ? status : 503;
+            return HttpResponse.json(
+              {
+                type: "about:blank",
+                title: "Unavailable",
+                detail: "Unavailable",
+                status: responseStatus,
+                code: response === "invalid" ? code : "SERVICE_UNAVAILABLE",
+              },
+              { status: responseStatus },
+            );
+          }
+          return HttpResponse.json({ ...makeSeriesAnalysisMatchContext(), matchId: "match-1" });
+        }),
+      );
+      render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={["/matches/match-1"]}>
+            <Routes>
+              <Route path="/matches/:matchId" element={<MatchDetailPage />} />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+
+      expect(await screen.findByText("接戦")).toBeInTheDocument();
+      expect(screen.getByText("1.82 → 1.75")).toBeInTheDocument();
+      expect(screen.getByText("0.07改善")).toBeInTheDocument();
+      response = "transient";
+      await act(async () =>
+        queryClient.refetchQueries({ queryKey: seriesAnalysisKeys.matchContextRoot() }),
+      );
+      expect(screen.getByText("1.82 → 1.75")).toBeInTheDocument();
+      response = "invalid";
+      await act(async () =>
+        queryClient.refetchQueries({ queryKey: seriesAnalysisKeys.matchContextRoot() }),
+      );
+      await waitFor(() => {
+        expect(queryClient.isFetching()).toBe(0);
+        expect(screen.queryByText("接戦")).not.toBeInTheDocument();
+        expect(screen.queryByText("1.82 → 1.75")).not.toBeInTheDocument();
+      });
+      expect(screen.getByRole("list", { name: "試合の順位と成績" }).children).toHaveLength(4);
+      response = "waiting";
+      let refetch: Promise<void> | undefined;
+      act(() => {
+        refetch = queryClient.refetchQueries({ queryKey: seriesAnalysisKeys.matchContextRoot() });
+      });
+      await waitFor(() => expect(queryClient.isFetching()).toBeGreaterThan(0));
+      expect(screen.queryByText("1.82 → 1.75")).not.toBeInTheDocument();
+      await act(async () => {
+        gate.resolve();
+        await refetch;
+      });
+      await waitFor(() => expect(screen.getByText("1.82 → 1.75")).toBeInTheDocument());
+      expect(screen.getByText("接戦")).toBeInTheDocument();
+    },
+  );
+});

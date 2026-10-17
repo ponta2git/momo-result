@@ -3,11 +3,12 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useRef } from "react";
 
 import { detectedKindFromResponse } from "@/features/ocrCapture/captureState";
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
-import { useOcrJobStatus } from "@/features/ocrCapture/useOcrJobStatus";
 import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
+import { getOcrJob } from "@/shared/api/ocrJobs";
 import type { OcrJobResponse } from "@/shared/api/ocrJobs";
 import { normalizeDisplayApiError } from "@/shared/api/problemDetails";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
+import { ocrJobKeys } from "@/shared/api/queryKeys";
 import { ocrDraftDetailQueryOptions } from "@/shared/api/queryOptions";
 import { parseOcrJobStatus } from "@/shared/domain/ocr";
 
@@ -137,7 +138,17 @@ export function useOcrJobSlotResource(
   slot: CaptureSlotState,
   onDraftLoadError?: ((error: NormalizedApiError) => void) | undefined,
 ): OcrJobSlotResource {
-  const job = useOcrJobStatus({ jobId: slot.jobId });
+  // Read on receiving a job ID or an explicit refresh, never on timer/focus/reconnect.
+  const job = useQuery({
+    queryKey: ocrJobKeys.detail(slot.jobId),
+    queryFn: ({ signal }) => getOcrJob(slot.jobId ?? "", { signal }),
+    enabled: Boolean(slot.jobId),
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
+    retry: false,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
   const matchingJob = job.data?.jobId === slot.jobId ? job.data : undefined;
   const expectedDraftId =
     matchingJob && parseOcrJobStatus(matchingJob.status) === "succeeded"

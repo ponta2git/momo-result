@@ -1,13 +1,50 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useActionState, useEffect, useRef, useState } from "react";
-import { createMemoryRouter, Link, RouterProvider } from "react-router-dom";
+import { createMemoryRouter, Link, RouterProvider, useNavigate } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
 import { createDeferred } from "@/test/deferred";
 
 describe("UnsavedChangesGuard", () => {
+  it("reads leave permission synchronously when saving and navigating in the same operation", async () => {
+    const user = userEvent.setup();
+    const discard = vi.fn();
+    function EditingPage() {
+      const saved = useRef(false);
+      const navigate = useNavigate();
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              saved.current = true;
+              void navigate("/next");
+            }}
+          >
+            保存して移動
+          </button>
+          <UnsavedChangesGuard
+            model={{ dirty: true, isNavigationAllowed: () => saved.current, onDiscard: discard }}
+          />
+        </>
+      );
+    }
+    const router = createMemoryRouter(
+      [
+        { path: "/edit", element: <EditingPage /> },
+        { path: "/next", element: <p>保存後の画面</p> },
+      ],
+      { initialEntries: ["/edit"] },
+    );
+    render(<RouterProvider router={router} />);
+    await user.click(screen.getByRole("button", { name: "保存して移動" }));
+    expect(await screen.findByText("保存後の画面")).toBeVisible();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(discard).not.toHaveBeenCalled();
+  });
+
   it("does not resume an old destination after its guard is replaced during discard", async () => {
     const user = userEvent.setup();
     const discarded = createDeferred();
@@ -23,7 +60,11 @@ describe("UnsavedChangesGuard", () => {
           <Link to="/next">次の画面へ</Link>
           <UnsavedChangesGuard
             key={generation}
-            model={{ dirty: true, navigationAllowedRef, onDiscard: () => discarded.promise }}
+            model={{
+              dirty: true,
+              isNavigationAllowed: () => navigationAllowedRef.current,
+              onDiscard: () => discarded.promise,
+            }}
           />
         </>
       );
@@ -63,7 +104,7 @@ describe("UnsavedChangesGuard", () => {
             <UnsavedChangesGuard
               model={{
                 dirty,
-                navigationAllowedRef,
+                isNavigationAllowed: () => navigationAllowedRef.current,
                 onDiscard: async () => {
                   await discard.promise;
                   setDirty(false);
@@ -110,7 +151,13 @@ describe("UnsavedChangesGuard", () => {
         <>
           <p>編集中</p>
           <Link to="/next">次の画面へ</Link>
-          <UnsavedChangesGuard model={{ dirty: true, navigationAllowedRef, onDiscard }} />
+          <UnsavedChangesGuard
+            model={{
+              dirty: true,
+              isNavigationAllowed: () => navigationAllowedRef.current,
+              onDiscard,
+            }}
+          />
         </>
       );
     }
@@ -153,7 +200,11 @@ describe("UnsavedChangesGuard", () => {
           <Link to="/next">別の画面へ</Link>
           <UnsavedChangesGuard
             preservesInput={(current, next) => current.pathname === next.pathname}
-            model={{ dirty: true, navigationAllowedRef, onDiscard }}
+            model={{
+              dirty: true,
+              isNavigationAllowed: () => navigationAllowedRef.current,
+              onDiscard,
+            }}
           />
         </>
       );
@@ -193,7 +244,7 @@ describe("UnsavedChangesGuard", () => {
               <UnsavedChangesGuard
                 model={{
                   dirty: true,
-                  navigationAllowedRef: { current: false },
+                  isNavigationAllowed: () => false,
                   onDiscard,
                   saveBeforeLeave,
                 }}
@@ -224,7 +275,7 @@ describe("UnsavedChangesGuard", () => {
         <UnsavedChangesGuard
           model={{
             dirty: true,
-            navigationAllowedRef: { current: false },
+            isNavigationAllowed: () => false,
             onDiscard: vi.fn(),
             saveBeforeLeave,
           }}
@@ -256,7 +307,12 @@ describe("UnsavedChangesGuard", () => {
           </form>
           <Link to="/next">次の画面へ</Link>
           <UnsavedChangesGuard
-            model={{ dirty: true, navigationAllowedRef, onDiscard, saveBeforeLeave }}
+            model={{
+              dirty: true,
+              isNavigationAllowed: () => navigationAllowedRef.current,
+              onDiscard,
+              saveBeforeLeave,
+            }}
             pending={pending}
             showPendingDialog={false}
           />

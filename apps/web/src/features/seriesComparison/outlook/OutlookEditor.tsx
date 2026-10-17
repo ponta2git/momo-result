@@ -3,32 +3,21 @@ import { useId, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import {
-  countsFromMean,
   countsPerTwenty,
   distributionFromCounts,
-  distributionsEqual,
   exactWholeCounts,
   nearestWholeCounts,
   wholeCountCapacities,
   distributionMean,
   formatRational,
-  meanInput,
   meanLimits,
   nextMeanHundredths,
   rationalToNumber,
-} from "@/features/seriesComparison/model/outlook";
+} from "@/features/seriesComparison/outlook/calculation";
+import type { OutlookEdit } from "@/features/seriesComparison/outlook/outlookEditing";
 import { outlookAverage } from "@/features/seriesComparison/outlook/outlookPresentation";
-import {
-  applyOutlookDistribution,
-  beginOutlookGesture,
-  finishOutlookGesture,
-  otherRole,
-  updateOutlookEntry,
-} from "@/features/seriesComparison/outlook/outlookSession";
-import type {
-  OutlookSession,
-  OutlookRankIndex,
-} from "@/features/seriesComparison/outlook/outlookSession";
+import type { OutlookEditorView } from "@/features/seriesComparison/outlook/outlookProjections";
+import type { OutlookRankIndex } from "@/features/seriesComparison/outlook/outlookWorkspaceState";
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { cn } from "@/shared/ui/cn";
@@ -50,18 +39,18 @@ const rangeKeys = new Set([
   "PageDown",
 ]);
 type Props = {
-  session: OutlookSession;
+  view: OutlookEditorView;
   role: 0 | 1;
   method: "mean" | "counts";
   name: string;
   label?: ReactNode;
-  change: (update: (session: OutlookSession) => OutlookSession) => void;
+  edit: (intent: OutlookEdit) => void;
 };
 
-export function OutlookEditor({ session, role, method, name, label, change }: Props) {
-  const entry = session.entries[role];
+export function OutlookEditor({ view, role, method, name, label, edit }: Props) {
+  const entry = view;
   const meanPending = entry.meanDraft !== undefined || entry.error !== undefined;
-  const opponent = session.entries[otherRole(role)].distribution;
+  const opponent = view.opponent;
   const currentMean = distributionMean(entry.distribution);
   const limits = meanLimits(opponent);
   const sliderId = useId();
@@ -69,64 +58,14 @@ export function OutlookEditor({ session, role, method, name, label, change }: Pr
   const meanInputRef = useRef<HTMLInputElement>(null);
   const descriptionId = `${meanId}-description`;
   const errorId = entry.error ? `${meanId}-error` : undefined;
-  const setMean = (hundredths: number) =>
-    change((current) => {
-      const start =
-        current.gesture?.before[role].distribution ?? current.entries[role].distribution;
-      const startMean = distributionMean(start);
-      if (startMean.numerator * 100n === BigInt(hundredths) * startMean.denominator) {
-        return applyOutlookDistribution(
-          current,
-          role,
-          start,
-          current.gesture?.before[role].source ?? current.entries[role].source,
-        );
-      }
-      const distribution = countsFromMean(
-        hundredths,
-        current.entries[otherRole(role)].distribution,
-        start,
-      );
-      return distribution
-        ? applyOutlookDistribution(current, role, distribution, { kind: "average" })
-        : updateOutlookEntry(current, role, {
-            error: "この平均は相手の成績と両立しません。設定できる範囲で調整してください。",
-          });
-    });
-  const begin = () => change((current) => beginOutlookGesture(current, role));
-  const finish = (cancel = false) => change((current) => finishOutlookGesture(current, cancel));
+  const setMean = (hundredths: number) => edit({ kind: "mean", role, hundredths });
+  const begin = () => edit({ kind: "begin-gesture", role });
+  const finish = (cancel = false) => edit({ kind: "finish-gesture", cancel });
   const cancelMean = () => {
-    change((current) =>
-      updateOutlookEntry(current, role, { meanDraft: undefined, error: undefined }),
-    );
+    edit({ kind: "cancel-mean", role });
     meanInputRef.current?.focus({ preventScroll: true });
   };
-  const commitMean = () =>
-    change((current) => {
-      const edited = current.entries[role];
-      if (edited.meanDraft === undefined) return current;
-      const mean = distributionMean(edited.distribution);
-      if (edited.meanDraft === formatRational(mean, 4))
-        return updateOutlookEntry(current, role, { meanDraft: undefined, error: undefined });
-      const input = meanInput(edited.meanDraft, mean);
-      if (input.kind === "unchanged")
-        return updateOutlookEntry(current, role, { meanDraft: undefined, error: undefined });
-      if (input.kind === "invalid")
-        return updateOutlookEntry(current, role, {
-          error: "平均順位は1.00〜4.00の範囲で、0.01刻みで入力してください。",
-        });
-      const distribution = countsFromMean(
-        input.hundredths,
-        current.entries[otherRole(role)].distribution,
-        edited.distribution,
-      );
-      return distribution
-        ? applyOutlookDistribution(current, role, distribution, { kind: "average" })
-        : updateOutlookEntry(current, role, {
-            error:
-              "この平均は相手の成績と両立しません。相手の指定は変えず、入力を見直してください。",
-          });
-    });
+  const commitMean = () => edit({ kind: "commit-mean", role });
   return (
     <div className="grid min-w-0 gap-2">
       {method === "mean" ? (
@@ -162,12 +101,7 @@ export function OutlookEditor({ session, role, method, name, label, change }: Pr
                 }
                 onChange={(event) => {
                   const text = event.target.value;
-                  change((current) =>
-                    updateOutlookEntry(current, role, {
-                      meanDraft: text,
-                      error: undefined,
-                    }),
-                  );
+                  edit({ kind: "mean-draft", role, text });
                 }}
                 onKeyDown={(event) => {
                   if (event.nativeEvent.isComposing) return;
@@ -252,23 +186,17 @@ export function OutlookEditor({ session, role, method, name, label, change }: Pr
           </div>
         </Field>
       ) : (
-        <WholeCountEditor
-          session={session}
-          role={role}
-          method={method}
-          name={name}
-          change={change}
-        />
+        <WholeCountEditor view={view} role={role} method={method} name={name} edit={edit} />
       )}
     </div>
   );
 }
 
 /** Move games between two named ranks; every accepted input is a complete distribution. */
-function WholeCountEditor({ session, role, name, change }: Props) {
-  const entry = session.entries[role];
-  const opponent = session.entries[otherRole(role)].distribution;
-  const [gain, lose] = session.transfer;
+function WholeCountEditor({ view, role, name, edit }: Props) {
+  const entry = view;
+  const opponent = view.opponent;
+  const [gain, lose] = view.transfer;
   const { exact, counts } = useMemo(() => {
     const wholeCounts = exactWholeCounts(entry.distribution);
     return {
@@ -289,37 +217,9 @@ function WholeCountEditor({ session, role, name, change }: Props) {
   const errorId = entry.error ? `${countId}-error` : undefined;
   const roundingId = wholeStart ? `${countId}-rounding` : undefined;
   const [text, setText] = useState<string>();
-  const begin = () => change((current) => beginOutlookGesture(current, role));
-  const finish = (cancel = false) => change((current) => finishOutlookGesture(current, cancel));
-  const transfer = (value: number) =>
-    change((current) => {
-      const origin =
-        current.gesture?.before[role].distribution ?? current.entries[role].distribution;
-      const other = current.entries[otherRole(role)].distribution;
-      const base = exactWholeCounts(origin) ?? nearestWholeCounts(origin, other);
-      if (!base || !Number.isInteger(value)) return current;
-      const limits = wholeCountCapacities(other);
-      const pairTotal = base[gain] + base[lose];
-      const next = [...base];
-      next[gain] = value;
-      next[lose] = pairTotal - value;
-      if (
-        next[gain] < 0 ||
-        next[lose] < 0 ||
-        next[gain] > limits[gain] ||
-        next[lose] > limits[lose]
-      )
-        return updateOutlookEntry(current, role, {
-          error: `${gain + 1}位は${Math.max(0, pairTotal - limits[lose])}〜${Math.min(limits[gain], pairTotal)}回で指定してください。`,
-        });
-      if (value === base[gain])
-        return distributionsEqual(current.entries[role].distribution, origin) || !current.gesture
-          ? updateOutlookEntry(current, role, { error: undefined })
-          : applyOutlookDistribution(current, role, origin, current.gesture.before[role].source);
-      return applyOutlookDistribution(current, role, distributionFromCounts(next), {
-        kind: "counts",
-      });
-    });
+  const begin = () => edit({ kind: "begin-gesture", role });
+  const finish = (cancel = false) => edit({ kind: "finish-gesture", cancel });
+  const transfer = (value: number) => edit({ kind: "transfer", role, value });
   if (!counts)
     return (
       <p className={contentText.body}>
@@ -386,13 +286,12 @@ function WholeCountEditor({ session, role, name, change }: Props) {
               }))}
               onValueChange={(value) => {
                 setText(undefined);
-                change((current) => ({
-                  ...updateOutlookEntry(finishOutlookGesture(current), role, { error: undefined }),
-                  transfer: (index === 0 ? [gain, Number(value)] : [Number(value), lose]) as [
-                    OutlookRankIndex,
-                    OutlookRankIndex,
-                  ],
-                }));
+                edit({
+                  kind: "transfer-rank",
+                  role,
+                  side: index === 0 ? "lose" : "gain",
+                  rank: Number(value) as OutlookRankIndex,
+                });
               }}
             />
             {index === 0 ? (
@@ -442,19 +341,7 @@ function WholeCountEditor({ session, role, name, change }: Props) {
                 onChange={(event) => {
                   const value = event.target.value;
                   setText(value);
-                  if (
-                    /^\d+$/u.test(value) &&
-                    Number(value) >= minimum &&
-                    Number(value) <= maximum
-                  ) {
-                    begin();
-                    transfer(Number(value));
-                  } else
-                    change((current) =>
-                      updateOutlookEntry(current, role, {
-                        error: `${minimum}〜${maximum}の整数を入力してください。`,
-                      }),
-                    );
+                  edit({ kind: "count-input", role, text: value });
                 }}
                 onBlur={(event) => {
                   if (entry.error) return;
@@ -465,9 +352,7 @@ function WholeCountEditor({ session, role, name, change }: Props) {
                   )
                     return;
                   setText(undefined);
-                  change((current) =>
-                    updateOutlookEntry(finishOutlookGesture(current), role, { error: undefined }),
-                  );
+                  edit({ kind: "finish-gesture", cancel: false, clearErrorFor: role });
                 }}
                 onKeyDown={(event) => {
                   if (event.nativeEvent.isComposing) return;
@@ -476,11 +361,7 @@ function WholeCountEditor({ session, role, name, change }: Props) {
                     if (event.key === "Enter" && entry.error) return;
                     setText(undefined);
                     const cancel = event.key === "Escape";
-                    change((current) =>
-                      updateOutlookEntry(finishOutlookGesture(current, cancel), role, {
-                        error: undefined,
-                      }),
-                    );
+                    edit({ kind: "finish-gesture", cancel, clearErrorFor: role });
                   }
                 }}
               />

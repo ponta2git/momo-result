@@ -5,7 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { SeriesAnalysisDisplayBundle } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
-import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisSelection";
 import { SeriesAnalysisNavigation } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
 import { SeriesAnalysisContent } from "@/features/seriesComparison/page/SeriesAnalysisContent";
 import type {

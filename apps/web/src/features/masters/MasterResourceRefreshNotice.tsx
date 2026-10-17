@@ -10,7 +10,7 @@ type MasterResourceRefreshNoticeProps = {
 
 /**
  * Keeps a directory's last settled result visible after a refresh failure.
- * Initial-load failures are owned by the route error boundary; this recovery
+ * Initial-load failures are owned by the tab content; this recovery
  * remains secondary because the cached directory is still usable.
  */
 export function MasterResourceRefreshNotice({

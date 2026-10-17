@@ -1,4 +1,4 @@
-import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisSelection";
 import { OutlookLoading } from "@/features/seriesComparison/outlook/OutlookLoading";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";

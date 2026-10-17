@@ -7,7 +7,7 @@ import {
   playbookCategoryLabel,
   reviewEvidenceLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
-import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisSelection";
 import { useSeriesAnalysisNavigation } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
 import { SeriesAnalysisSectionLink } from "@/features/seriesComparison/navigation/SeriesAnalysisSectionLink";
 import { SeriesAnalysisReviewHelpDialog } from "@/features/seriesComparison/page/SeriesAnalysisReviewHelpDialog";
@@ -131,10 +131,9 @@ export function ReviewView({
               <div className="mt-6 min-h-11">
                 <Disclosure
                   ariaLabel={`${entry.player.displayName}のほかの仮説`}
-                  defaultOpen={navigation?.visit.expandedMembers.has(entry.player.memberId)}
+                  defaultOpen={navigation?.isMemberExpanded(entry.player.memberId)}
                   onOpenChange={(open) => {
-                    if (open) navigation?.visit.expandedMembers.add(entry.player.memberId);
-                    else navigation?.visit.expandedMembers.delete(entry.player.memberId);
+                    navigation?.rememberMemberExpanded(entry.player.memberId, open);
                   }}
                   panelPadding="sm"
                   summary={`ほかの仮説（${entry.secondaryCards.length}件）`}

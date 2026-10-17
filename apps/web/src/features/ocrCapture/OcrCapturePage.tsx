@@ -1,217 +1,73 @@
 import { ArrowLeft, Trash2 } from "lucide-react";
+import { memo } from "react";
 
 import { CameraCapture } from "@/features/ocrCapture/CameraCapture";
 import { CaptureRail } from "@/features/ocrCapture/CaptureRail";
 import { ImageInput } from "@/features/ocrCapture/ImageInput";
+import type {
+  OcrCaptureCameraView,
+  OcrCaptureTrayView,
+  OcrCaptureStartView,
+} from "@/features/ocrCapture/ocrCapturePresentation";
 import { OcrStartDialog } from "@/features/ocrCapture/OcrStartDialog";
-import { SetupPanel } from "@/features/ocrCapture/SetupPanel";
 import {
-  useOcrCaptureAuth,
-  useOcrCapturePageModel,
-} from "@/features/ocrCapture/useOcrCapturePageModel";
+  OcrCaptureSetupProvider,
+  OcrCaptureSetupSection,
+} from "@/features/ocrCapture/setup/OcrCaptureSetup";
+import { useOcrCaptureAuth, useOcrCapture } from "@/features/ocrCapture/useOcrCapture";
 import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
 import { inlineActionGroupClass, taskActionPanelClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
-import { Notice } from "@/shared/ui/feedback/Notice";
-import { PendingStatus } from "@/shared/ui/feedback/PendingStatus";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { contentText } from "@/shared/ui/typography";
 
 const panelClass = "grid min-w-0 gap-4";
-
 const panelTitleClass = contentText.heading;
 const panelLeadClass = cn(contentText.body, "mt-1");
 
-/** Resolve authentication outside the editor whose input belongs to that account. */
 export function OcrCapturePage() {
   const auth = useOcrCaptureAuth();
-  return <OcrCapturePageContent authReady={auth.ready} key={auth.accountId ?? "unresolved"} />;
+  return (
+    <OcrCaptureSetupProvider authReady={auth.ready} key={auth.accountId ?? "unresolved"}>
+      <PageFrame>
+        <nav aria-label="OCR取り込みの移動" className={inlineActionGroupClass}>
+          <LinkButton
+            icon={<ArrowLeft aria-hidden="true" />}
+            size="sm"
+            to="/matches"
+            variant="quiet"
+          >
+            取り込みをやめる
+          </LinkButton>
+        </nav>
+        <PageContentSurface aria-label="OCR取り込み" className="grid gap-6" role="region">
+          <OcrCaptureSetupSection />
+          <OcrCaptureWorkspace />
+        </PageContentSurface>
+      </PageFrame>
+    </OcrCaptureSetupProvider>
+  );
 }
 
-function OcrCapturePageContent({ authReady }: { authReady: boolean }) {
-  const { capture, navigation, setup, submission, startError } = useOcrCapturePageModel(authReady);
-
+function OcrCaptureWorkspace() {
+  const { camera, tray, start, navigation, dialog } = useOcrCapture();
   return (
-    <PageFrame>
-      <nav aria-label="OCR取り込みの移動" className={inlineActionGroupClass}>
-        <LinkButton icon={<ArrowLeft aria-hidden="true" />} size="sm" to="/matches" variant="quiet">
-          取り込みをやめる
-        </LinkButton>
-      </nav>
-      <PageContentSurface aria-label="OCR取り込み" className="grid gap-6" role="region">
-        <section className={panelClass} aria-labelledby="ocr-record-destination">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <h2 id="ocr-record-destination" className={panelTitleClass}>
-              記録先
-            </h2>
-            <PendingStatus
-              idleLabel="読み取り結果に引き継ぐ試合設定"
-              pending={setup.choices.refreshing && !setup.choices.failed}
-            >
-              試合設定の選択肢を確認中
-            </PendingStatus>
-          </div>
-          {setup.choices.failed ? (
-            <Notice
-              action={
-                <Button
-                  pending={setup.choices.refreshing}
-                  pendingLabel="再読み込み中"
-                  size="sm"
-                  variant="secondary"
-                  onClick={setup.choices.refresh}
-                >
-                  選択肢を再読み込み
-                </Button>
-              }
-              tone="warning"
-              title="試合設定の選択肢を読み込めません"
-            >
-              <p>読み込めなかった選択肢を再取得できます。</p>
-            </Notice>
-          ) : null}
-          <SetupPanel model={setup.panel} />
-        </section>
-
-        <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_28rem] xl:items-start">
-          <section className={panelClass} aria-labelledby="ocr-camera-title">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 id="ocr-camera-title" className={panelTitleClass}>
-                  画面を撮影
-                </h2>
-                <p className={panelLeadClass}>ゲーム画面全体が入るようにカメラを合わせます。</p>
-              </div>
-            </div>
-
-            <div className="max-w-[56rem]">
-              <CameraCapture
-                actionVariant={capture.camera.actionVariant}
-                disabled={capture.camera.disabled}
-                slotLabel={capture.camera.target.label}
-                onSelect={capture.camera.selectImage}
-                onValidationError={capture.camera.reportValidationError}
-                renderFallback={(prominent) => (
-                  <ImageInput
-                    disabled={capture.camera.disabled}
-                    prominent={prominent}
-                    slotLabel={capture.camera.target.label}
-                    onSelect={capture.camera.selectImage}
-                    onValidationError={capture.camera.reportValidationError}
-                  />
-                )}
-              />
-            </div>
-          </section>
-
-          <aside className="grid gap-4 xl:sticky xl:top-20" aria-labelledby="ocr-tray-title">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 id="ocr-tray-title" className={panelTitleClass}>
-                  分類トレイ
-                </h2>
-                <p className={panelLeadClass}>撮影先を選び、必要なら画像を入れ替えます。</p>
-              </div>
-              <span className={cn(contentText.supporting, "shrink-0")}>
-                配置済み{capture.selectedImageCount}件／全{capture.totalSlotCount}件
-              </span>
-            </div>
-            <div className="grid gap-1">
-              <CaptureRail
-                captureTargetKind={capture.tray.captureTargetKind}
-                layout="stack"
-                slots={capture.tray.slots}
-                drafts={capture.tray.drafts}
-                statusRefreshing={capture.tray.statusRefreshing}
-                onClear={capture.tray.clear}
-                onDropImage={capture.tray.drop}
-                onMoveImage={capture.tray.move}
-                onRefreshStatus={capture.tray.refreshStatus}
-                onSelectCaptureTarget={capture.tray.selectTarget}
-              />
-              <p
-                aria-label="分類トレイの操作結果"
-                aria-atomic="true"
-                aria-live="polite"
-                className={cn(contentText.body, "min-h-5")}
-                role="status"
-              >
-                {capture.tray.actionFeedback}
-              </p>
-            </div>
-          </aside>
-        </section>
-
-        <section
-          className={cn(
-            taskActionPanelClass,
-            "momo-safe-bottom sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center",
-          )}
-          aria-labelledby="ocr-start-title"
-        >
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 id="ocr-start-title" className={panelTitleClass}>
-                読み取りの準備
-              </h2>
-              <span className="font-plain rounded-full border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-1 text-xs text-[var(--color-text-primary)]">
-                {submission.start.badgeLabel}
-              </span>
-            </div>
-            <p className={panelLeadClass}>{submission.start.description}</p>
-            {startError ? (
-              <p className="text-sm text-[var(--color-danger)]" role="alert">
-                {startError}
-              </p>
-            ) : null}
-            {submission.start.blockedReason && !setup.choices.refreshing ? (
-              <p className="font-emphasis mt-2 text-sm text-[var(--color-review)]">
-                {submission.start.blockedReason}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="flex flex-col gap-2 sm:items-end">
-            <div className="grid w-full sm:w-auto">
-              <Button
-                disabled={submission.start.disabled}
-                size="lg"
-                variant="primary"
-                onClick={submission.start.run}
-              >
-                {submission.start.buttonLabel}
-              </Button>
-            </div>
-            <AlertDialog
-              confirmLabel={`${capture.selectedImageCount}件を破棄`}
-              description="分類トレイから画像を外します。再度使うには、撮影またはファイル選択が必要です。試合設定は残ります。"
-              title="配置した画像をすべて破棄しますか？"
-              trigger={
-                <Button
-                  disabled={capture.tray.resetDisabled}
-                  icon={<Trash2 aria-hidden="true" />}
-                  size="sm"
-                  variant="quiet"
-                >
-                  画像の選択をすべて破棄
-                </Button>
-              }
-              onConfirm={capture.tray.reset}
-            />
-          </div>
-        </section>
-      </PageContentSurface>
-
+    <>
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_28rem] xl:items-start">
+        <OcrCaptureCamera view={camera} />
+        <OcrCaptureTray view={tray} />
+      </section>
+      <OcrCaptureStart view={start} />
       <OcrStartDialog
-        navigationPending={submission.dialog.navigationPending}
-        state={submission.dialog.state}
-        onClose={submission.dialog.close}
-        onConfirm={submission.dialog.confirm}
-        onViewMatches={submission.dialog.viewMatches}
+        navigationPending={dialog.navigationPending}
+        view={dialog.view}
+        onClose={dialog.close}
+        onConfirm={dialog.confirm}
+        onViewMatches={dialog.viewMatches}
       />
       <UnsavedChangesGuard
         preservesInput={(current, next) => current.pathname === next.pathname}
@@ -220,6 +76,142 @@ function OcrCapturePageContent({ authReady }: { authReady: boolean }) {
         pending={navigation.pending}
         showPendingDialog={false}
       />
-    </PageFrame>
+    </>
   );
 }
+
+const OcrCaptureCamera = memo(function OcrCaptureCamera({ view }: { view: OcrCaptureCameraView }) {
+  return (
+    <section className={panelClass} aria-labelledby="ocr-camera-title">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 id="ocr-camera-title" className={panelTitleClass}>
+            画面を撮影
+          </h2>
+          <p className={panelLeadClass}>ゲーム画面全体が入るようにカメラを合わせます。</p>
+        </div>
+      </div>
+
+      <div className="max-w-[56rem]">
+        <CameraCapture
+          actionVariant={view.actionVariant}
+          disabled={view.disabled}
+          slotLabel={view.slotLabel}
+          onSelect={view.selectImage}
+          onValidationError={view.reportValidationError}
+          renderFallback={(prominent) => (
+            <ImageInput
+              disabled={view.disabled}
+              prominent={prominent}
+              slotLabel={view.slotLabel}
+              onSelect={view.selectImage}
+              onValidationError={view.reportValidationError}
+            />
+          )}
+        />
+      </div>
+    </section>
+  );
+});
+
+const OcrCaptureTray = memo(function OcrCaptureTray({ view }: { view: OcrCaptureTrayView }) {
+  return (
+    <aside className="grid gap-4 xl:sticky xl:top-20" aria-labelledby="ocr-tray-title">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 id="ocr-tray-title" className={panelTitleClass}>
+            分類トレイ
+          </h2>
+          <p className={panelLeadClass}>撮影先を選び、必要なら画像を入れ替えます。</p>
+        </div>
+        <span className={cn(contentText.supporting, "shrink-0")}>
+          配置済み{view.selectedImageCount}件／全{view.totalSlotCount}件
+        </span>
+      </div>
+      <div className="grid gap-1">
+        <CaptureRail
+          captureTargetKind={view.captureTargetKind}
+          layout="stack"
+          slots={view.slots}
+          onClear={view.clearImage}
+          onDropImage={view.swapImages}
+          onMoveImage={view.swapWithAdjacentSlot}
+          onRefreshStatus={view.refreshStatus}
+          onSelectCaptureTarget={view.selectTarget}
+        />
+        <p
+          aria-label="分類トレイの操作結果"
+          aria-atomic="true"
+          aria-live="polite"
+          className={cn(contentText.body, "min-h-5")}
+          role="status"
+        >
+          {view.actionFeedback}
+        </p>
+      </div>
+    </aside>
+  );
+});
+
+const OcrCaptureStart = memo(function OcrCaptureStart({ view }: { view: OcrCaptureStartView }) {
+  return (
+    <section
+      className={cn(
+        taskActionPanelClass,
+        "momo-safe-bottom sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center",
+      )}
+      aria-labelledby="ocr-start-title"
+    >
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 id="ocr-start-title" className={panelTitleClass}>
+            読み取りの準備
+          </h2>
+          <span className="font-plain rounded-full border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-1 text-xs text-[var(--color-text-primary)]">
+            {view.badgeLabel}
+          </span>
+        </div>
+        <p className={panelLeadClass}>{view.description}</p>
+        {view.error ? (
+          <p className="text-sm text-[var(--color-danger)]" role="alert">
+            {view.error}
+          </p>
+        ) : null}
+        {view.blockedReason ? (
+          <p className="font-emphasis mt-2 text-sm text-[var(--color-review)]">
+            {view.blockedReason}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="flex flex-col gap-2 sm:items-end">
+        <div className="grid w-full sm:w-auto">
+          <Button
+            disabled={view.disabled}
+            size="lg"
+            variant="primary"
+            onClick={view.reviewSubmission}
+          >
+            {view.buttonLabel}
+          </Button>
+        </div>
+        <AlertDialog
+          confirmLabel={`${view.selectedImageCount}件を破棄`}
+          description="分類トレイから画像を外します。再度使うには、撮影またはファイル選択が必要です。試合設定は残ります。"
+          title="配置した画像をすべて破棄しますか？"
+          trigger={
+            <Button
+              disabled={view.clearAllDisabled}
+              icon={<Trash2 aria-hidden="true" />}
+              size="sm"
+              variant="quiet"
+            >
+              画像の選択をすべて破棄
+            </Button>
+          }
+          onConfirm={view.clearAllImages}
+        />
+      </div>
+    </section>
+  );
+});

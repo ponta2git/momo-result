@@ -113,8 +113,11 @@
   | `ui` | 汎用の構造・操作・アクセシビリティ・表示補間 | `ui`、`lib` |
 
   `shared/matches`、`heldEvents`、`masters`、`navigation` などの業務別 module はこれらを組み合わせる。順位・メンバー identity を知る結果台帳は `shared/matches`、API の候補を選択部品へ接続する処理は `shared/heldEvents`、分析専用チャートは `features/seriesComparison` が所有する。配置名が shared であることを汎用性の根拠にしない。
-- Page は composition とページ状態に寄せ、取得、mutation、複雑な状態機械、純粋変換を分離する。
-- 複雑な Page は feature 固有の PageModel から resource、command、location、feedback など画面の意味を受け取り、TanStack Query の result や mutation object を直接受け取らない。PageModel 内は lifecycle と変更理由が異なる関心事だけを hook / 純粋変換へ分け、単なる転送層は作らない。
+- すべての feature で、入口が処理の流れを組み立て、純粋な model が判断・変換を、owner が状態・入出力・寿命を、UI が表示と利用者の操作を担当する。規模によって変えるのは分割量であり、この責務分担ではない。
+- 画面の合成 hook は選択、整合した表示結果、編集、保存などの owner を組み合わせ、画面全体に必要な値だけを購読する。各表示領域は必要な readonly view と意味のある操作を受け取り、Query result、mutation object、内部 session、任意 updater、業務状態を書き換える ref を受け取らない。小さい機能は同じファイルの名前付き関数で分けてよく、同じ数・名前の層を全機能へ追加しない。
+- 入力の正規化、選択の遷移、初期化、取得・保存可否、結果の採用、表示への変換は、値を受けて結果を返す純粋な model で読めるようにする。URL の読み書き、query、保存、時刻の取得と状態への反映は対応する owner が扱う。同じ更新を複数の setter / effect へ分散させない。未解決・利用不可・利用可能など意味の異なる結果を型で区別し、通信中かどうかは別に扱う。外部入力や応答の対象・世代の一致は実行時にも検証する。
+- 最新状態の読取り、純粋な遷移・実行判断、commit と入出力への接続は、対象の状態を所有する境界に閉じる。一緒に整合を守る入力・確認状態は一度に更新し、独立した取得・送信・表示資源まで一つの owner に集めない。owner の寿命と購読範囲は別に決め、表示を分割しても進行中の操作や編集の所有期間を短くしない。
+- 戦績比較は URL を確定した選択の正本とし、要求中・確認済み・表示中の条件を区別する。選択は候補との整合と URL 更新、結果は取得した成果物の採用と表示、見通しセッションは採用済み要約と試算入力をそれぞれ所有する。試合一覧の更新も対象付きの読取結果を選択へ渡し、取得処理から URL を直接変更しない。
 - hook が計算済みの値を別の builder へ渡し、そのまま同じ画面モデルへ詰め直す層は置かない。子の契約は使用する値・操作だけで表し、設定欄へ全 player 入力、チャートへ全 artifact、command へ全 page model を運ばない。純粋な表示変換・型は hook や page component へ依存せず、consumer と取得処理の共通の下位に置く。
 - ファイル行数は責務混在を見つける signal とし、行数だけを理由に浅い module へ分割しない。
 - 本節を依存方向の正本とする。静的 gate へ投影する場合は `docs/dev-rule.md` の採用基準に従い、module graph から判定できる import 規則だけを syntax-aware な tool で検査する。本番コードから test 専用 module を参照しない。
@@ -129,6 +132,7 @@
 ### Server State
 
 - server state は TanStack Query の cache lifecycle に従い、Page/UI component から query 基盤を直接操作しない。
+- 取得・保存担当の公開契約は用途別の data、取得・操作状態、結果、操作に絞る。Query result、mutation object、QueryClient、query key、再取得 options を業務判断や編集状態へ渡さない。キャッシュ通知・更新・破棄と再取得の実装は取得・保存 adapter に閉じ、認可の所有期間、結果の採用、競合解消などの判断はその契約を通して行う。同じファイルの名前付き関数でも境界は表せるため、endpoint ごとの中継や Query API を写した汎用 wrapper は増やさない。
 - 結果確認の元画像も、取得状態とBlobをTanStack Queryが所有する。画像一覧と画像本体は異なるquery keyを持ち、本体は認証主体・画面scope・下書き・画像descriptorの世代を区別する。Object URLは画面の表示資源として生成・解放し、Blobや取得状態を別のcacheへ複製しない。
 - 元画像の先読みは初回表示または利用者の画像選択に続く有限の処理として許可する。featureの取得処理が表示対象を優先して直列化し、同一取得の引継ぎ、中断、容量、scope終了時のquery破棄を所有する。自動retryや回線復帰による取得再開を起こさず、確定・削除成功時は関連cacheの更新より先に画像の寿命を閉じる。
 - query key は cache 内の runtime data shape まで区別する。backend resource が同じでも raw response と ViewModel を同じ key に置かない。
@@ -148,6 +152,7 @@
 ### React 更新の優先度
 
 - 入力値、選択 intent、focus は即時に反映する。`useDeferredValue` は追従を遅らせてもよい検証表示・一覧・図表に使い、送信時の validation と request は最新値から同期的に組み立てる。
+- 入力や処理状況の購読は、それを表示する領域へ置く。独立した表示が一つの編集状態を共有するときは、必要に応じて画面寿命の store と用途別 snapshot を使い、変更のない view の参照を保つ。単独の入力・dialog は局所 state のままとし、Query の server data を別 store に複製しない。性能は必要な経路の観測で判断し、store・selector・memo を全機能へ一律に追加しない。
 - 遅延する表示は `memo` と安定した props の境界を組み合わせ、urgent render で前の重い subtree を再描画しない。小さい値の加工へ一律に memo を足さず、state の局所化・不要な依存の削減を先に検討する。deferred value は debounce、通信回数の制限、計算量の削減ではない。
 - 表示 bundle を遅延する場合は data、scope、view の identity を一緒に保つ。要求中の条件を古い図表の見出し・操作へ混ぜず、追従中の表示と操作制限は既存の stale 表示へ接続する。
 - `useOptimistic` の更新は Action 内で行い、操作に属する非同期処理を await する。navigation の Promise は Router の完了境界であり、任意の `React.lazy` subtree の描画完了を保証しない。取得は Query、code readiness は Suspense が引き続き所有する。
@@ -189,7 +194,7 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 - toast は feature が確定した実行結果から発火し、render、汎用 query observer、cache invalidation ごとの成功通知にしない。通常の route content の境界から共通 host を分離し、rendererはhostと同期で準備する。最初の通知から同じ描画経路を使い、準備用表示との交換で見た目・focus・表示寿命を作り直さない。通知の一意性は実行結果に結び付け、server state や操作の完了判定を toast の状態に移さない。
 - 有限で局所的な motion の標準実装は Motion for React とする。app の一つの provider で同期 `LazyMotion`、animation と renderer だけを含む `domMin`、`strict`、`m` component を構成する。provider が `prefers-reduced-motion` を購読し、変更を `MotionConfig` と描画済みの末端 component へ反映する。`motion` component、`domAnimation` / `domMax` の gesture feature、layout / shared layout、drag / pan は初期 scope に含めず、必要性、操作契約、bundle 差分、主要 device の実測を伴う別の architecture decision とする。
 - 面のhoverはshared UIの`useSurfaceFeedback`がnative DOMのpointer進入・離脱・cancelを観測し、Motion `animate`で内部のhover量だけを補間する。CSSは意味に対応した色対と、pressed・focus・操作制限の即時表示を所有する。click、keyboard、選択、openをこの接続で再実装しない。Motionのhover gestureは押下中のleaveを遅らせるため、この用途では使わず、`domMin`を維持する。有限CSS transitionの例外は設けない。外部refの接続・cleanupと動きを減らす設定の変更も接続側が扱い、画面へ時間・色・hover状態を公開しない。
-- Motion の宣言は、変化する pixel と semantic state を所有する shared UI primitive または feature の末端 visual component に置く。PageModel、resource / command / query hook、router は Motion を import しない。`Fade`、`Slide`、`Scale` のように effect 名だけを隠す pass-through wrapper は作らず、複数用途の accessibility、state mapping、interruption を一つの小さい契約で隠せる場合だけ shared abstraction にする。
+- Motion の宣言は、変化する pixel と semantic state を所有する shared UI primitive または feature の末端 visual component に置く。画面の合成 hook、resource / command / query hook、router は Motion を import しない。`Fade`、`Slide`、`Scale` のように effect 名だけを隠す pass-through wrapper は作らず、複数用途の accessibility、state mapping、interruption を一つの小さい契約で隠せる場合だけ shared abstraction にする。
 - application code は Motion の完了 callback を、data、cache、route、open、focus、pending、error、操作可能性を進める唯一の条件にしない。callback が所有してよいのは、中断または未実行でも application state を誤らせない冪等な表示上の後始末に限る。exit のため一時保持する node は非対話的かつ accessibility tree の対象外とし、先に確定した state と focus を巻き戻さない。
 - presence による一時保持は、shared dialog と toast が通常の close / remove 後に非対話的な exit snapshot を描く場合だけ許可する。親 subtree、route、artifact、view の identity が失われた場合は exit を省略してよく、表示補間のためにそれらの lifecycle を遅らせない。
 - 処理時間が不定な Spinner / Skeleton の loop だけは shared loading primitive 内の CSS を使ってよい。それ以外の新しい有限 motion は Motion に統一し、同じ transition に CSS、timer、Web Animations API、別の motion engine を混ぜない。Motion 導入時は既存の有限 CSS transition もこの境界へ移し、CSS loop の feature 直書きを shared loading primitive へ集約する。

@@ -1,17 +1,13 @@
-import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
   confirmedDraftDestination,
   confirmedDraftMessages,
 } from "@/features/matches/confirmedDraftNavigation";
-import type { WorkspaceNoticeTone } from "@/features/matches/workspace/useWorkspaceNotice";
-import { invalidateAfterMatchConfirmed } from "@/shared/api/cacheInvalidation";
-import { getMatchDraftDetail } from "@/shared/api/matchDrafts";
+import { useMatchDraftResource } from "@/features/matches/useMatchDraftResource";
+import type { WorkspaceNoticeTone } from "@/features/matches/workspace/matchWorkspacePanelViews";
 import type { MatchDraftDetailResponse } from "@/shared/api/matchDrafts";
-import { matchKeys } from "@/shared/api/queryKeys";
-import { evictDraftSourceImageBlobs } from "@/shared/api/sourceImageQueries";
 
 export function useConfirmedDraftRedirect({
   notify,
@@ -21,8 +17,7 @@ export function useConfirmedDraftRedirect({
   onBeforeRedirect?: () => void;
 }) {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const [confirmedDraftRedirecting, setConfirmedDraftRedirecting] = useState(false);
+  const { readLatest, confirmationRecorded, releaseReviewImages } = useMatchDraftResource();
   const redirectedConfirmedDraftRef = useRef<string | null>(null);
   const activeRef = useRef(true);
   useLayoutEffect(() => {
@@ -31,16 +26,6 @@ export function useConfirmedDraftRedirect({
       activeRef.current = false;
     };
   }, []);
-
-  const fetchLatestDraftDetail = useCallback(
-    (draftId: string) =>
-      queryClient.fetchQuery({
-        queryKey: matchKeys.draft.detail(draftId),
-        queryFn: ({ signal }) => getMatchDraftDetail(draftId, { signal }),
-        staleTime: 0,
-      }),
-    [queryClient],
-  );
 
   const redirectConfirmedDraft = useCallback(
     (detail: MatchDraftDetailResponse | undefined, message: string): boolean => {
@@ -54,31 +39,29 @@ export function useConfirmedDraftRedirect({
       }
 
       redirectedConfirmedDraftRef.current = destination.matchId;
-      if (detail) evictDraftSourceImageBlobs(queryClient, detail.matchDraftId);
-      setConfirmedDraftRedirecting(true);
-      void invalidateAfterMatchConfirmed(queryClient);
+      if (detail) releaseReviewImages(detail.matchDraftId);
+      confirmationRecorded();
       notify(message, "warning");
       onBeforeRedirect?.();
       navigate(destination.path, { replace: true });
       return true;
     },
-    [navigate, notify, onBeforeRedirect, queryClient],
+    [confirmationRecorded, navigate, notify, onBeforeRedirect, releaseReviewImages],
   );
 
   const handleConfirmConflict = useCallback(
     async (draftId: string): Promise<boolean> => {
       try {
-        const detail = await fetchLatestDraftDetail(draftId);
+        const detail = await readLatest(draftId);
         return redirectConfirmedDraft(detail, confirmedDraftMessages.confirmConflict);
       } catch {
         return false;
       }
     },
-    [fetchLatestDraftDetail, redirectConfirmedDraft],
+    [readLatest, redirectConfirmedDraft],
   );
 
   return {
-    confirmedDraftRedirecting,
     handleConfirmConflict,
     redirectConfirmedDraft,
   };

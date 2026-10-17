@@ -16,7 +16,8 @@ private[api] object FrozenHttpApp:
     if request.method === Method.GET && path == ReadinessPath &&
       request.headers.get(RuntimeHttp2ProbeMiddleware.HeaderName)
         .exists(_.head.value == RuntimeHttp2ProbeMiddleware.HeaderValue)
-    then readiness.attempt.map {
+    then
+      readiness.attempt.map {
         case Right(_) => response(Status.Ok, "ready")
         case Left(_) => response(Status.ServiceUnavailable, "unavailable")
       }

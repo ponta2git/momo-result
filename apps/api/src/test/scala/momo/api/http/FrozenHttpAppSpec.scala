@@ -8,20 +8,26 @@ import org.http4s.{Header, Method, Request, Status, Uri}
 import momo.api.MomoCatsEffectSuite
 
 final class FrozenHttpAppSpec extends MomoCatsEffectSuite:
-  private val readinessRequest = Request[IO](uri = Uri.unsafeFromString(FrozenHttpApp.ReadinessPath))
-    .putHeaders(Header.Raw(
-      RuntimeHttp2ProbeMiddleware.HeaderName,
-      RuntimeHttp2ProbeMiddleware.HeaderValue,
-    ))
+  private val readinessRequest =
+    Request[IO](uri = Uri.unsafeFromString(FrozenHttpApp.ReadinessPath))
+      .putHeaders(Header.Raw(
+        RuntimeHttp2ProbeMiddleware.HeaderName,
+        RuntimeHttp2ProbeMiddleware.HeaderValue,
+      ))
 
   test("all normal routes and methods close before authentication or readiness work"):
     for
       calls <- Ref.of[IO, Int](0)
       app = FrozenHttpApp(calls.update(_ + 1))
       _ <- List(
-        "/api/auth/me", "/api/auth/callback", "/api/ocr/jobs", "/api/images",
-        "/api/match-drafts/draft", "/api/admin/series-analysis/recalculations",
-        "/healthz/details", FrozenHttpApp.ReadinessPath,
+        "/api/auth/me",
+        "/api/auth/callback",
+        "/api/ocr/jobs",
+        "/api/images",
+        "/api/match-drafts/draft",
+        "/api/admin/series-analysis/recalculations",
+        "/healthz/details",
+        FrozenHttpApp.ReadinessPath,
       ).traverse_ { path =>
         List(Method.GET, Method.POST, Method.PUT, Method.PATCH, Method.DELETE).traverse_ { method =>
           for

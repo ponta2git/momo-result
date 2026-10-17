@@ -6,6 +6,7 @@ import type { SeriesAnalysisDisplayBundle } from "@/features/seriesComparison/mo
 import {
   seriesAnalysisScopeSignature,
   seriesAnalysisBundleResource,
+  seriesAnalysisDisplayedSelection,
 } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import type { OwnerMetricId } from "@/features/seriesComparison/model/seriesAnalysisOwnerMetrics";
 import type {
@@ -154,13 +155,8 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
   const resource = seriesAnalysisBundleResource(bundle);
   const { matchContext } = bundle;
   const artifactId = resource.artifact.artifactId;
-  // A retained summary must not initialize the newly requested scope's trial.
-  const displayedScope = {
-    gameTitleId: resource.artifact.gameTitleId,
-    mapMasterId: "mapMasterId" in resource.scope ? resource.scope.mapMasterId : undefined,
-    seasonMasterId: "seasonMasterId" in resource.scope ? resource.scope.seasonMasterId : undefined,
-  };
-  const scopeIdentity = seriesAnalysisScopeSignature(displayedScope);
+  const displayedSelection = seriesAnalysisDisplayedSelection(bundle, outlookSelection);
+  const scopeIdentity = seriesAnalysisScopeSignature(displayedSelection);
   const contentIdentity = `${artifactId}:${scopeIdentity}:${bundle.view}`;
   const root = useRef<HTMLDivElement>(null);
 
@@ -193,7 +189,7 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
               <Suspense fallback={<OutlookLoading />}>
                 <OutlookView
                   response={bundle.outlook}
-                  selection={{ ...outlookSelection, ...displayedScope }}
+                  selection={displayedSelection}
                   onMemberChange={onOutlookMemberChange}
                 />
                 <SeriesAnalysisArrival ready={navigationReady} root={root} />

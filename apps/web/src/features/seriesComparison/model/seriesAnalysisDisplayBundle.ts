@@ -46,6 +46,20 @@ export function seriesAnalysisBundleResource(bundle: SeriesAnalysisDisplayBundle
       : bundle?.aggregate;
 }
 
+/** A retained publication supplies its own scope, even while controls request another one. */
+export function seriesAnalysisDisplayedSelection(
+  bundle: SeriesAnalysisDisplayBundle,
+  selection: SeriesAnalysisSelection,
+): SeriesAnalysisSelection {
+  const resource = seriesAnalysisBundleResource(bundle);
+  return {
+    ...selection,
+    gameTitleId: resource.artifact.gameTitleId,
+    mapMasterId: "mapMasterId" in resource.scope ? resource.scope.mapMasterId : undefined,
+    seasonMasterId: "seasonMasterId" in resource.scope ? resource.scope.seasonMasterId : undefined,
+  };
+}
+
 export type SeriesAnalysisBundleResolution =
   | {
       kind: "excluded";

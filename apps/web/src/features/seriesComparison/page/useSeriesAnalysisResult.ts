@@ -19,7 +19,6 @@ import type {
   SeriesAnalysisViewId,
 } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { useSeriesAnalysisResource } from "@/features/seriesComparison/page/useSeriesAnalysisResource";
-import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
 
 /** Owns the accepted/displayed comparison snapshot, independently from read execution. */
 export function useSeriesAnalysisResult({
@@ -37,7 +36,7 @@ export function useSeriesAnalysisResult({
 }) {
   const selectionReady = selectionStatus === "ready";
   const read = useSeriesAnalysisResource({ activeView, deferredState, state, selectionReady });
-  const { publishedArtifactId, activeQuery, scopeQuery, matchContext } = read;
+  const { publishedArtifactId, active, scope, matchContext } = read;
   const [lastSuccessfulBundle, setLastSuccessfulBundle] = useState<SeriesAnalysisDisplayBundle>();
   const [contextInvalidationPending, setContextInvalidationPending] = useState(false);
   const candidateAggregate = matchesSeriesAnalysisResource(
@@ -92,7 +91,7 @@ export function useSeriesAnalysisResult({
       candidateOutlook,
     ),
     deferOutlookAdoption,
-    failed: shouldShowQueryError(activeQuery),
+    failed: active.failed,
     matchContextFailed: matchContext.failed,
     matchContextRequested: matchContext.requested,
     matchContextUnavailable: matchContext.unavailable,
@@ -127,8 +126,7 @@ export function useSeriesAnalysisResult({
     [deferredBundle, suppressDeferredContext],
   );
   const displaySettling = deferredBundle !== currentDisplayBundle;
-  const bundleFetching =
-    activeQuery.isFetching || (matchContext.requested && matchContext.fetching);
+  const bundleFetching = active.fetching || (matchContext.requested && matchContext.fetching);
   const visible = resolveSeriesAnalysisVisibleBundle({
     activeView,
     artifactId: publishedArtifactId,
@@ -138,7 +136,7 @@ export function useSeriesAnalysisResult({
     outlookAdoptionDeferred: adoption.kind === "outlook-deferred",
     resolution: bundleResolution,
     scopeAvailable: "query" in read.plan,
-    scopePending: selectionReady && scopeQuery.isFetching && !scopeQuery.data,
+    scopePending: selectionReady && scope.fetching && !scope.hasData,
     scopeSettling:
       seriesAnalysisScopeSignature(state) !== seriesAnalysisScopeSignature(deferredState),
     state,
@@ -152,7 +150,7 @@ export function useSeriesAnalysisResult({
         matchContext.requested &&
         (matchContext.failed ||
           Boolean(
-            activeQuery.error && !bundleFetching && visible.bundle && !visible.bundle.matchContext,
+            active.failed && !bundleFetching && visible.bundle && !visible.bundle.matchContext,
           )),
       loading: matchContext.requested && matchContext.loading,
       refreshing: matchContext.fetching && matchContext.context !== undefined,
@@ -173,16 +171,15 @@ export function useSeriesAnalysisResult({
           ? adoption.bundle.outlook.scope.matchCount === 0
             ? ("empty" as const)
             : ("available" as const)
-          : scopeQuery.data?.state,
+          : scope.state,
       loading:
         adoption.kind !== "outlook-deferred" &&
         (selectionStatus === "pending" ||
-          isInitialQueryLoading(scopeQuery) ||
-          isInitialQueryLoading(activeQuery) ||
-          (!candidateResource && activeQuery.isFetching) ||
+          scope.loading ||
+          active.loading ||
+          (!candidateResource && active.fetching) ||
           (displaySettling && displayedBundle === undefined)),
-      refreshing:
-        (activeQuery.isFetching && activeQuery.data !== undefined) || scopeQuery.isFetching,
+      refreshing: (active.fetching && active.hasData) || scope.fetching,
       shielded: visible.shielded,
     },
     status: read.status,

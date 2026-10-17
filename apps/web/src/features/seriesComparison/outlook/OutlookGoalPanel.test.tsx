@@ -2,13 +2,14 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { useLayoutEffect } from "react";
+import { useLayoutEffect, useSyncExternalStore } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   distributionFromCounts,
   distributionMean,
 } from "@/features/seriesComparison/model/outlook";
+import { editOutlook } from "@/features/seriesComparison/outlook/outlookEditing";
 import { OutlookEditor } from "@/features/seriesComparison/outlook/OutlookEditor";
 import { OutlookGoalPanel } from "@/features/seriesComparison/outlook/OutlookGoalPanel";
 import { OutlookHorizonControl } from "@/features/seriesComparison/outlook/OutlookHorizonControl";
@@ -20,8 +21,10 @@ import {
 import type { OutlookSession } from "@/features/seriesComparison/outlook/outlookSession";
 import {
   OutlookSessionOwner,
-  useOutlookSession,
+  useOutlookInternalStore,
+  OutlookWorkspaceOwner,
 } from "@/features/seriesComparison/outlook/OutlookSessionOwner";
+import { outlookEditorView } from "@/features/seriesComparison/outlook/outlookViews";
 import type {
   SeriesAnalysisOutlookExamples,
   SeriesAnalysisOutlookSummary,
@@ -67,7 +70,9 @@ function pastExamples(name: string) {
 }
 
 function initialSession(response: SeriesAnalysisOutlookSummary) {
-  return adoptOutlookSummary(undefined, response, "scope", [...memberIds])!;
+  return adoptOutlookSummary(undefined, response, `${response.artifact.gameTitleId}||`, [
+    ...memberIds,
+  ])!;
 }
 
 function renderGoal(response: SeriesAnalysisOutlookSummary, initial = initialSession(response)) {
@@ -84,22 +89,21 @@ function renderGoal(response: SeriesAnalysisOutlookSummary, initial = initialSes
     distributionFromCounts(outlookPlayer(response.recent.players, memberIds[1]).rankCounts),
   ] as const;
   function Workspace() {
-    const { store, session: stored } = useOutlookSession();
-    const session = stored ?? initial;
+    const store = useOutlookInternalStore();
+    const session = useSyncExternalStore(store.subscribe, () => store.read() ?? initial);
     useLayoutEffect(() => {
-      readSession = () => store.getSnapshot() ?? initial;
+      store.commit(initial);
+      readSession = () => store.read() ?? initial;
     }, [store]);
     const change = (update: (current: OutlookSession) => OutlookSession) =>
-      store.update((current) => update(current ?? initial));
+      store.commit(update(store.read() ?? initial));
     return (
       <OutlookGoalPanel
         response={response}
         cumulative={cumulative}
-        session={session}
         names={names}
         memberIds={memberIds}
         recent={recent}
-        change={change}
         horizonControl={
           <OutlookHorizonControl
             horizon={session.goalHorizon}
@@ -115,7 +119,13 @@ function renderGoal(response: SeriesAnalysisOutlookSummary, initial = initialSes
           />
         }
         opponentEditor={
-          <OutlookEditor session={session} role={1} method="mean" name={names[1]} change={change} />
+          <OutlookEditor
+            view={outlookEditorView(session, 1)}
+            role={1}
+            method="mean"
+            name={names[1]}
+            edit={(intent) => change((current) => editOutlook(current, intent))}
+          />
         }
         onUsePerformance={onUsePerformance}
       />
@@ -124,7 +134,17 @@ function renderGoal(response: SeriesAnalysisOutlookSummary, initial = initialSes
   render(
     <QueryClientProvider client={queryClient}>
       <OutlookSessionOwner>
-        <Workspace />
+        <OutlookWorkspaceOwner
+          response={response}
+          selection={{
+            gameTitleId: response.artifact.gameTitleId,
+            focusMemberId: memberIds[0],
+            rivalMemberId: memberIds[1],
+          }}
+          empty={null}
+        >
+          <Workspace />
+        </OutlookWorkspaceOwner>
       </OutlookSessionOwner>
     </QueryClientProvider>,
   );
@@ -191,7 +211,8 @@ describe("OutlookGoalPanel", () => {
       expect(undoOutlook(result).entries.map((entry) => entry.distribution)).toEqual(
         ready.entries.map((entry) => entry.distribution),
       );
-      expect(result.horizon).toBe(20);
+      expect(result.horizon).toBe(result.goalHorizon);
+      expect(result.task).toBe("performance");
       expect(view.onUsePerformance).toHaveBeenCalledOnce();
     },
   );
@@ -329,7 +350,12 @@ describe("OutlookGoalPanel", () => {
         expect(usePerformance).toBeDisabled();
       }
       await user.click(usePerformance);
-      expect(view.readSession()).toEqual(initial);
+      const result = view.readSession();
+      expect(result.entries.map((entry) => entry.distribution)).toEqual(
+        initial.entries.map((entry) => entry.distribution),
+      );
+      expect(result.history).toEqual(initial.history);
+      expect(result.horizon).toBe(alreadyReaches ? initial.goalHorizon : initial.horizon);
       expect(view.onUsePerformance).toHaveBeenCalledTimes(alreadyReaches ? 1 : 0);
     },
   );
@@ -392,7 +418,8 @@ describe("OutlookGoalPanel", () => {
     expect(result.entries[0].source).toMatchObject({ kind: "example", matchCount: 20 });
     expect(result.entries[1]).toEqual(ready.entries[1]);
     expect(result.history).toHaveLength(1);
-    expect(result.horizon).toBe(1);
+    expect(result.horizon).toBe(result.goalHorizon);
+    expect(result.task).toBe("performance");
     expect(view.onUsePerformance).toHaveBeenCalledOnce();
   });
 

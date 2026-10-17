@@ -2,7 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { Link, MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeAll, describe, expect, it } from "vitest";
 
@@ -13,7 +13,7 @@ import {
 import type { OutlookSession } from "@/features/seriesComparison/outlook/outlookSession";
 import {
   OutlookSessionOwner,
-  useOutlookSession,
+  useOutlookInternalStore,
 } from "@/features/seriesComparison/outlook/OutlookSessionOwner";
 import { useSeriesComparisonPageModel } from "@/features/seriesComparison/page/useSeriesComparisonPageModel";
 import { decodeSeriesAnalysisArtifact } from "@/shared/api/seriesAnalysisArtifactDecoder";
@@ -62,10 +62,11 @@ function PageModelHarness({
 }
 
 function RetainedOutlookHarness({ initial }: { initial: OutlookSession }) {
-  const { session, store } = useOutlookSession();
+  const store = useOutlookInternalStore();
+  const session = useSyncExternalStore(store.subscribe, store.read);
   return (
     <>
-      <button type="button" onClick={() => store.update(() => initial)}>
+      <button type="button" onClick={() => store.commit(initial)}>
         試算を用意
       </button>
       <output aria-label="retained average input">{session?.entries[0].meanDraft ?? ""}</output>

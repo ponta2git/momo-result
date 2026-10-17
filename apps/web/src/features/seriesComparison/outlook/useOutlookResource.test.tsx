@@ -118,20 +118,16 @@ describe("useOutlookResource", () => {
         queryClient.getQueryState(seriesAnalysisKeys.status(summary.artifact.gameTitleId)),
       ).toMatchObject({ status: "error", fetchStatus: "idle" }),
     );
-    expect(result.current.window.isError).toBe(true);
-    expect(result.current.window.error).toMatchObject({
-      code: "ANALYSIS_ARTIFACT_EXPIRED",
-      status: 410,
-    });
+    expect(result.current.window.hasError).toBe(true);
     expect(result.current.window.data).toBeUndefined();
     expect(windowRequests).toBe(1);
 
     availableOnRetry = true;
     await act(async () => {
-      await result.current.window.refetch();
+      await result.current.window.retry();
     });
-    await waitFor(() => expect(result.current.window.isSuccess).toBe(true));
+    await waitFor(() => expect(result.current.window.data).toEqual(available));
     expect(result.current.window.data).toEqual(available);
-    expect(result.current.window.error).toBeNull();
+    expect(result.current.window.hasError).toBe(false);
   });
 });

@@ -1,30 +1,16 @@
-import { Undo2 } from "lucide-react";
-import { useId, useMemo } from "react";
+import { useId } from "react";
 import type { ReactNode } from "react";
 
 import {
   areDistributionsCompatible,
-  compareRationals,
-  countsFromMean,
   distributionMean,
-  distributionsEqual,
   formatRational,
-  rational,
-  requiredMean,
-  subtractRationals,
 } from "@/features/seriesComparison/model/outlook";
 import type { CumulativePair, RankDistribution } from "@/features/seriesComparison/model/outlook";
-import { parseOutlookHorizon } from "@/features/seriesComparison/outlook/OutlookHorizonControl";
 import { outlookAverage } from "@/features/seriesComparison/outlook/outlookPresentation";
 import { OutlookPastExamples } from "@/features/seriesComparison/outlook/OutlookReferences";
-import {
-  applyOutlookDistribution,
-  finishOutlookGesture,
-  undoOutlook,
-  updateOutlookEntry,
-} from "@/features/seriesComparison/outlook/outlookSession";
-import type { OutlookSession } from "@/features/seriesComparison/outlook/outlookSession";
-import { useOutlookResource } from "@/features/seriesComparison/outlook/useOutlookResource";
+import { OutlookUndoButton } from "@/features/seriesComparison/outlook/OutlookScenarioComparison";
+import { useOutlookGoalModel } from "@/features/seriesComparison/outlook/useOutlookGoalModel";
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
 import { formatDateOnly } from "@/shared/lib/dateTime";
 import { Button } from "@/shared/ui/actions/Button";
@@ -36,11 +22,9 @@ import { contentText } from "@/shared/ui/typography";
 export function OutlookGoalPanel({
   response,
   cumulative,
-  session,
   names,
   memberIds,
   recent,
-  change,
   horizonControl,
   opponentEditor,
   onUsePerformance,
@@ -48,11 +32,9 @@ export function OutlookGoalPanel({
 }: {
   response: SeriesAnalysisOutlookSummary;
   cumulative: CumulativePair;
-  session: OutlookSession;
   names: readonly [string, string];
   memberIds: readonly [string, string];
   recent: readonly [RankDistribution, RankDistribution];
-  change: (update: (current: OutlookSession) => OutlookSession) => void;
   horizonControl: ReactNode;
   opponentEditor: ReactNode;
   onUsePerformance: () => void;
@@ -61,116 +43,31 @@ export function OutlookGoalPanel({
   const headingId = useId();
   const conditionId = useId();
   const pendingId = useId();
-  const { goalHorizon } = session;
-  const valid = parseOutlookHorizon(session.goalHorizonText) === goalHorizon;
-  const focus = session.entries[0].distribution;
-  const rival = session.entries[1].distribution;
-  const required = useMemo(
-    () => requiredMean(cumulative, rival, goalHorizon),
-    [cumulative, rival, goalHorizon],
-  );
-  const maximum = required.maximumHundredths;
-  const ahead = cumulative.focusRankSum < cumulative.rivalRankSum;
-  const reaches =
-    compareRationals(distributionMean(focus), required.threshold) < 0 &&
-    areDistributionsCompatible(focus, rival);
-  const opponentPending =
-    session.entries[1].meanDraft !== undefined ||
-    session.entries[1].error !== undefined ||
-    Boolean(session.gesture);
-  const performanceMean = reaches
-    ? outlookAverage(distributionMean(focus))
-    : maximum === null
-      ? undefined
-      : (maximum / 100).toFixed(2);
-  const recentMean = distributionMean(recent[0]);
-  const recentWithinMean = compareRationals(recentMean, required.threshold) < 0;
-  const improvement =
-    maximum === null ? null : subtractRationals(recentMean, rational(BigInt(maximum), 100n));
-  const chosenCounts = ["counts", "example"].includes(session.entries[0].source.kind);
-  const fewerLowerRanks =
-    (focus.weights[2] + focus.weights[3]) * recent[0].denominator <
-    (recent[0].weights[2] + recent[0].weights[3]) * focus.denominator;
-  const moreWins =
-    focus.weights[0] * recent[0].denominator > recent[0].weights[0] * focus.denominator;
-  const reviewHeading =
-    chosenCounts && fewerLowerRanks
-      ? "下位だった試合を振り返る"
-      : chosenCounts && moreWins
-        ? "勝ち切れなかった試合を振り返る"
-        : recentWithinMean && areDistributionsCompatible(recent[0], rival)
-          ? "今の成績を続ける手掛かりを探す"
-          : "改善の手掛かりを探す";
-  const { window } = useOutlookResource(response, memberIds[0], goalHorizon, false);
-  const historical =
-    goalHorizon === 50 || goalHorizon === 100
-      ? response.bestWindows.find(
-          (item) => item.memberId === memberIds[0] && item.windowSize === goalHorizon,
-        )
-      : window.data;
-
-  const usePerformance = () => {
-    if (!valid || opponentPending || (!reaches && maximum === null)) return;
-    let accepted = false;
-    // The session store applies this update synchronously, before changing the visible task.
-    change((current) => {
-      if (
-        current.artifactId !== response.artifact.artifactId ||
-        current.key !== session.key ||
-        current.entries[1].meanDraft !== undefined ||
-        current.entries[1].error !== undefined ||
-        current.gesture !== undefined ||
-        parseOutlookHorizon(current.goalHorizonText) !== current.goalHorizon
-      )
-        return current;
-      const latest = requiredMean(cumulative, current.entries[1].distribution, current.goalHorizon);
-      if (
-        current.goalHorizon !== goalHorizon ||
-        !distributionsEqual(current.entries[1].distribution, rival) ||
-        latest.maximumHundredths !== maximum
-      )
-        return {
-          ...current,
-          notice: "条件が変わりました。必要な平均を確認して、もう一度試してください。",
-        };
-      const currentFocus = current.entries[0].distribution;
-      if (
-        compareRationals(distributionMean(currentFocus), latest.threshold) < 0 &&
-        areDistributionsCompatible(currentFocus, current.entries[1].distribution)
-      ) {
-        accepted = true;
-        return updateOutlookEntry(current, 0, { meanDraft: undefined, error: undefined });
-      }
-      if (latest.maximumHundredths === null) return current;
-      const distribution = countsFromMean(
-        latest.maximumHundredths,
-        current.entries[1].distribution,
-        currentFocus,
-      );
-      if (!distribution) return current;
-      accepted = true;
-      return applyOutlookDistribution(finishOutlookGesture(current), 0, distribution, {
-        kind: "average",
-      });
-    });
-    if (accepted) onUsePerformance();
-  };
-
+  const model = useOutlookGoalModel({ response, cumulative, memberIds, recent });
+  const {
+    goalHorizon,
+    valid,
+    required,
+    maximum,
+    ahead,
+    reaches,
+    opponentPending,
+    performanceMean,
+    recentMean,
+    recentWithinMean,
+    improvement,
+    rival,
+    reviewHeading,
+    historical,
+    window,
+  } = model;
   return (
     <section className="grid min-w-0 gap-6" aria-labelledby={headingId} data-outlook-preserve-draft>
       <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[minmax(18rem,2fr)_minmax(0,3fr)]">
         <div className="grid min-w-0 grid-cols-1 content-start gap-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className={contentText.heading}>目標と相手の成績</h2>
-            <Button
-              variant="quiet"
-              size="sm"
-              disabled={session.history.length === 0 && !session.gesture}
-              icon={<Undo2 aria-hidden="true" className="size-4" />}
-              onClick={() => change(undoOutlook)}
-            >
-              成績を1つ戻す
-            </Button>
+            <OutlookUndoButton />
           </div>
           {horizonControl}
           {opponentEditor}
@@ -179,8 +76,6 @@ export function OutlookGoalPanel({
             memberId={memberIds[1]}
             memberName={names[1]}
             condition={{ kind: "mean", role: 1 }}
-            session={session}
-            change={change}
           />
         </div>
         <div className="grid min-w-0 grid-cols-1 content-start gap-4">
@@ -213,7 +108,9 @@ export function OutlookGoalPanel({
               variant="secondary"
               disabled={!valid || opponentPending || (!reaches && maximum === null)}
               aria-describedby={opponentPending ? `${conditionId} ${pendingId}` : conditionId}
-              onClick={usePerformance}
+              onClick={() => {
+                if (model.apply()) onUsePerformance();
+              }}
             >
               {performanceMean === undefined
                 ? "推移を見る"
@@ -260,14 +157,14 @@ export function OutlookGoalPanel({
                   </span>
                 ) : historical?.status === "insufficient" ? (
                   `作品の実績${response.source.titleMatchCount}戦では不足`
-                ) : window.isError ? (
+                ) : window.hasError ? (
                   <div className="grid justify-items-start gap-1">
                     <span>過去実績を取得できません。</span>
                     <Button
                       size="sm"
                       variant="quiet"
-                      pending={window.isFetching}
-                      onClick={() => void window.refetch()}
+                      pending={window.refreshing}
+                      onClick={() => void window.retry()}
                     >
                       過去実績を再読み込み
                     </Button>
@@ -289,8 +186,6 @@ export function OutlookGoalPanel({
               onUsePerformance,
               pendingDescriptionId: opponentPending ? pendingId : undefined,
             }}
-            session={session}
-            change={change}
           />
         </div>
       </div>

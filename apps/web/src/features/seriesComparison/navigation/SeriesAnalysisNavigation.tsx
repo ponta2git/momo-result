@@ -45,7 +45,8 @@ class Visit {
 type Navigation = {
   arrive: (root: HTMLElement) => void;
   rememberOrigin: (id: string) => void;
-  visit: Visit;
+  isMemberExpanded: (memberId: string) => boolean;
+  rememberMemberExpanded: (memberId: string, expanded: boolean) => void;
 };
 
 const NavigationContext = createContext<Navigation | null>(null);
@@ -210,7 +211,15 @@ export function SeriesAnalysisNavigation({
     [visit],
   );
   const navigation = useMemo(
-    () => ({ arrive, rememberOrigin, visit }),
+    () => ({
+      arrive,
+      rememberOrigin,
+      isMemberExpanded: (memberId: string) => visit.expandedMembers.has(memberId),
+      rememberMemberExpanded: (memberId: string, expanded: boolean) => {
+        if (expanded) visit.expandedMembers.add(memberId);
+        else visit.expandedMembers.delete(memberId);
+      },
+    }),
     [arrive, rememberOrigin, visit],
   );
   return <NavigationContext value={navigation}>{children}</NavigationContext>;

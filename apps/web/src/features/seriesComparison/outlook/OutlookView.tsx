@@ -1,20 +1,12 @@
-import { Undo2 } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
-import { useLocation } from "react-router-dom";
+import { useCallback, useRef } from "react";
 
-import {
-  distributionFromCounts,
-  formatRational,
-  nextMatchOutcomes,
-  projectOutlook,
-} from "@/features/seriesComparison/model/outlook";
-import type { CumulativePair } from "@/features/seriesComparison/model/outlook";
-import { seriesAnalysisScopeSignature } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
-import { normalizeOutlookPair } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import { formatRational } from "@/features/seriesComparison/model/outlook";
 import type { SeriesAnalysisSelection } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { OutlookGoalPanel } from "@/features/seriesComparison/outlook/OutlookGoalPanel";
-import { OutlookHorizonControl } from "@/features/seriesComparison/outlook/OutlookHorizonControl";
-import { outlookOutcome } from "@/features/seriesComparison/outlook/outlookOutcome";
+import {
+  OutlookHorizonControl,
+  OutlookGoalHorizonControl,
+} from "@/features/seriesComparison/outlook/OutlookHorizonControl";
 import { OutlookPatterns } from "@/features/seriesComparison/outlook/OutlookPatterns";
 import { OutlookPlayerEditor } from "@/features/seriesComparison/outlook/OutlookPlayerEditor";
 import {
@@ -24,19 +16,11 @@ import {
 import { OutlookPastExamples } from "@/features/seriesComparison/outlook/OutlookReferences";
 import {
   OutlookComparisonControls,
+  OutlookUndoButton,
   OutlookScenarioComparison,
 } from "@/features/seriesComparison/outlook/OutlookScenarioComparison";
-import {
-  adoptOutlookSummary,
-  finishOutlookGesture,
-  outlookPlayer,
-  undoOutlook,
-} from "@/features/seriesComparison/outlook/outlookSession";
-import type {
-  OutlookRole,
-  OutlookSession,
-} from "@/features/seriesComparison/outlook/outlookSession";
-import { useOutlookSession } from "@/features/seriesComparison/outlook/OutlookSessionOwner";
+import { OutlookWorkspaceOwner } from "@/features/seriesComparison/outlook/OutlookSessionOwner";
+import { useOutlookWorkspaceModel } from "@/features/seriesComparison/outlook/useOutlookViewModels";
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
 import { orderFixedMembers } from "@/shared/domain/members";
 import { formatDateOnly } from "@/shared/lib/dateTime";
@@ -52,10 +36,6 @@ import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { revealPageElement } from "@/shared/ui/layout/revealPageElement";
 import { contentText } from "@/shared/ui/typography";
 
-function rangeFor(horizon: number): 50 | 100 | 200 {
-  return horizon <= 50 ? 50 : horizon <= 100 ? 100 : 200;
-}
-
 export function OutlookView({
   response,
   selection,
@@ -65,121 +45,58 @@ export function OutlookView({
   selection: SeriesAnalysisSelection;
   onMemberChange?: ((role: "focus" | "rival", memberId: string) => void) | undefined;
 }) {
-  const { store, session: storedSession } = useOutlookSession();
-  const pairIds = normalizeOutlookPair(selection.focusMemberId, selection.rivalMemberId);
-  const scopeKey = seriesAnalysisScopeSignature(selection);
-  const session = adoptOutlookSummary(storedSession, response, scopeKey, [
-    pairIds.focusMemberId,
-    pairIds.rivalMemberId,
-  ]);
-  useLayoutEffect(() => {
-    store.update((current) =>
-      adoptOutlookSummary(current, response, scopeKey, [
-        pairIds.focusMemberId,
-        pairIds.rivalMemberId,
-      ]),
-    );
-  }, [store, response, scopeKey, pairIds.focusMemberId, pairIds.rivalMemberId]);
-  useEffect(
-    () => () => {
-      store.update((current) => (current ? finishOutlookGesture(current) : current));
-    },
-    [store],
-  );
-  const change = useCallback(
-    (update: (current: OutlookSession) => OutlookSession) => {
-      store.update((current) => (current ? update(current) : current));
-    },
-    [store],
-  );
-  if (!session)
-    return (
-      <p className={cn(contentText.body, readableTextWidthClass)}>
-        この範囲に確定済みの試合がありません。
-      </p>
-    );
   return (
-    <OutlookWorkspace
-      key={session.key}
+    <OutlookWorkspaceOwner
       response={response}
       selection={selection}
-      session={session}
-      change={change}
-      onMemberChange={onMemberChange}
-    />
+      empty={
+        <p className={cn(contentText.body, readableTextWidthClass)}>
+          この範囲に確定済みの試合がありません。
+        </p>
+      }
+    >
+      <OutlookWorkspace response={response} selection={selection} onMemberChange={onMemberChange} />
+    </OutlookWorkspaceOwner>
   );
 }
 
 function OutlookWorkspace({
   response,
   selection,
-  session,
-  change,
   onMemberChange,
 }: {
   response: SeriesAnalysisOutlookSummary;
   selection: SeriesAnalysisSelection;
-  session: OutlookSession;
-  change: (update: (current: OutlookSession) => OutlookSession) => void;
   onMemberChange: ((role: "focus" | "rival", memberId: string) => void) | undefined;
 }) {
-  const location = useLocation();
+  const {
+    view,
+    edit,
+    ids,
+    names,
+    displayRoles,
+    recent,
+    cumulative,
+    outcome,
+    eventHorizon,
+    numericRows,
+    nextOutcomes,
+    reviewHref,
+    matchHref,
+  } = useOutlookWorkspaceModel(response, selection);
   const resultHeading = useRef<HTMLHeadingElement>(null);
   const chartHeading = useRef<HTMLDivElement>(null);
-  const { focusMemberId, rivalMemberId } = normalizeOutlookPair(
-    selection.focusMemberId,
-    selection.rivalMemberId,
-  );
-  const ids = useMemo(
-    () => [focusMemberId, rivalMemberId] as const,
-    [focusMemberId, rivalMemberId],
-  );
-  const names = [
-    outlookPlayer(response.players, focusMemberId).displayName,
-    outlookPlayer(response.players, rivalMemberId).displayName,
-  ] as const;
-  const displayRoles = orderFixedMembers(
-    ids.map((memberId, role) => ({ memberId, role: role as OutlookRole })),
-  );
-  const recent = useMemo(
-    () =>
-      [
-        distributionFromCounts(outlookPlayer(response.recent.players, focusMemberId).rankCounts),
-        distributionFromCounts(outlookPlayer(response.recent.players, rivalMemberId).rankCounts),
-      ] as const,
-    [response.recent.players, focusMemberId, rivalMemberId],
-  );
-  const cumulative: CumulativePair = useMemo(
-    () => ({
-      games: response.scope.matchCount,
-      focusRankSum: outlookPlayer(response.players, focusMemberId).rankSum,
-      rivalRankSum: outlookPlayer(response.players, rivalMemberId).rankSum,
-    }),
-    [response.scope.matchCount, response.players, focusMemberId, rivalMemberId],
-  );
-  const distributions = [session.entries[0].distribution, session.entries[1].distribution] as const;
-  const outcome = outlookOutcome(cumulative, distributions, names);
-  const eventHorizon =
-    outcome.eventHorizon !== null && outcome.eventHorizon <= 1000n
-      ? Number(outcome.eventHorizon)
-      : null;
   const selectHorizon = useCallback(
-    (next: Pick<OutlookSession, "horizon" | "horizonText">) => {
-      change((current) => ({
-        ...current,
-        ...next,
-      }));
-    },
-    [change],
+    (next: { horizon: number; horizonText: string }) =>
+      edit({
+        kind: "horizon",
+        target: "performance",
+        horizon: next.horizon,
+        text: next.horizonText,
+      }),
+    [edit],
   );
   const usePerformance = () => {
-    change((current) => ({
-      ...current,
-      task: "performance",
-      horizon: current.goalHorizon,
-      horizonText: String(current.goalHorizon),
-      chartRange: Math.max(current.chartRange, rangeFor(current.goalHorizon)) as 50 | 100 | 200,
-    }));
     requestAnimationFrame(() => {
       if (resultHeading.current) {
         resultHeading.current.focus({ preventScroll: true });
@@ -187,26 +104,7 @@ function OutlookWorkspace({
       }
     });
   };
-  const numericRows = [...new Set([0, 10, 20, 50, 100, session.horizon])]
-    .toSorted((a, b) => a - b)
-    .map((h) => ({ h, ...projectOutlook(cumulative, distributions[0], distributions[1], h) }));
-  const reviewSearch = new URLSearchParams(location.search);
-  reviewSearch.set("view", "review");
-  const reviewHref = `${location.pathname}?${reviewSearch}#review-member-${focusMemberId}`;
-  const matchParams = new URLSearchParams({
-    gameTitleId: response.artifact.gameTitleId,
-    status: "confirmed",
-  });
-  if (selection.seasonMasterId) matchParams.set("seasonMasterId", selection.seasonMasterId);
-  const matchHref = `/matches?${matchParams}`;
-  const nextOutcomes = nextMatchOutcomes(cumulative).filter((next) =>
-    outcome.crossing.current === "ahead"
-      ? next.relation !== "ahead"
-      : outcome.crossing.current === "behind"
-        ? next.relation !== "behind"
-        : true,
-  );
-  const playerProps = { response, cumulative, session, names, memberIds: ids, change };
+  const playerProps = { response, cumulative, names, memberIds: ids };
 
   return (
     <div className="grid min-w-0 grid-cols-1 gap-6">
@@ -230,16 +128,14 @@ function OutlookWorkspace({
           ))}
         </div>
       </div>
-      {session.notice ? (
+      {view.notice ? (
         <p className={contentText.body} role="status">
-          {session.notice}
+          {view.notice}
         </p>
       ) : null}
       <TabsRoot
-        value={session.task}
-        onValueChange={(task) =>
-          change((current) => ({ ...current, task: task as OutlookSession["task"] }))
-        }
+        value={view.task}
+        onValueChange={(task) => edit({ kind: "task", task: task as "performance" | "goal" })}
       >
         <TabsList aria-label="見通しの使い方" variant="underline">
           <TabsTab value="performance">成績から試す</TabsTab>
@@ -256,15 +152,7 @@ function OutlookWorkspace({
                   <h2 id="outlook-assumptions" className={contentText.heading}>
                     これからの成績
                   </h2>
-                  <Button
-                    variant="quiet"
-                    size="sm"
-                    disabled={session.history.length === 0 && !session.gesture}
-                    icon={<Undo2 aria-hidden="true" className="size-4" />}
-                    onClick={() => change(undoOutlook)}
-                  >
-                    成績を1つ戻す
-                  </Button>
+                  <OutlookUndoButton />
                 </div>
                 <p className={contentText.supporting}>
                   小さいほど上位。初期値は作品全体の直近{response.recent.matchCount}戦です。
@@ -274,20 +162,18 @@ function OutlookWorkspace({
                 {displayRoles.map(({ memberId, role }) => (
                   <div key={memberId} className="grid min-w-0 gap-4">
                     <OutlookPlayerEditor {...playerProps} role={role} showComparison />
-                    {session.task === "performance" ? (
+                    {view.task === "performance" ? (
                       <OutlookPastExamples
                         response={response}
                         memberId={memberId}
                         memberName={names[role]}
                         condition={{ kind: "mean", role }}
-                        session={session}
-                        change={change}
                       />
                     ) : null}
                   </div>
                 ))}
               </div>
-              <OutlookComparisonControls session={session} change={change} />
+              <OutlookComparisonControls />
               {response.recent.qualityStatus === "reference" ? (
                 <p className={contentText.supporting}>
                   直近の実績が少ないため、見通しは参考値です。
@@ -302,14 +188,10 @@ function OutlookWorkspace({
                   tabIndex={-1}
                   className={contentText.heading}
                 >
-                  {session.pinned ? "平均どおりに進んだときの差" : "平均どおりに進むと"}
+                  {view.pinnedFocus ? "平均どおりに進んだときの差" : "平均どおりに進むと"}
                 </h2>
-                {session.pinned ? (
-                  <OutlookScenarioComparison
-                    session={session}
-                    cumulative={cumulative}
-                    names={names}
-                  />
+                {view.pinnedFocus ? (
+                  <OutlookScenarioComparison cumulative={cumulative} names={names} />
                 ) : (
                   <>
                     <p className={cn(contentText.primary, "min-h-14")}>{outcome.headline}</p>
@@ -325,15 +207,7 @@ function OutlookWorkspace({
                       size="sm"
                       variant="quiet"
                       onClick={() => {
-                        change((current) => ({
-                          ...current,
-                          horizon: eventHorizon,
-                          horizonText: String(eventHorizon),
-                          chartRange: Math.max(current.chartRange, rangeFor(eventHorizon)) as
-                            | 50
-                            | 100
-                            | 200,
-                        }));
+                        edit({ kind: "show-horizon", horizon: eventHorizon });
                         requestAnimationFrame(() => {
                           if (chartHeading.current) revealPageElement(chartHeading.current);
                         });
@@ -347,7 +221,8 @@ function OutlookWorkspace({
               <div ref={chartHeading} className="min-w-0">
                 <OutlookPatterns
                   {...playerProps}
-                  active={session.task === "performance"}
+                  view={view}
+                  active={view.task === "performance"}
                   onHorizonChange={selectHorizon}
                   marker={
                     eventHorizon === null
@@ -356,22 +231,19 @@ function OutlookWorkspace({
                   }
                   horizonControl={
                     <OutlookHorizonControl
-                      horizon={session.horizon}
-                      horizonText={session.horizonText}
+                      horizon={view.horizon}
+                      horizonText={view.horizonText}
                       onChange={selectHorizon}
                       rangeControl={
                         <SelectField
                           label="表示範囲"
-                          value={String(session.chartRange)}
+                          value={String(view.chartRange)}
                           options={[50, 100, 200].map((range) => ({
                             value: String(range),
                             label: `${range}戦`,
                           }))}
                           onValueChange={(value) =>
-                            change((current) => ({
-                              ...current,
-                              chartRange: Number(value) as 50 | 100 | 200,
-                            }))
+                            edit({ kind: "chart-range", range: Number(value) as 50 | 100 | 200 })
                           }
                         />
                       }
@@ -384,24 +256,11 @@ function OutlookWorkspace({
         </TabsPanel>
         <TabsPanel value="goal" keepMounted>
           <div className="min-w-0 pt-6">
-            {session.task === "goal" ? (
+            {view.task === "goal" ? (
               <OutlookGoalPanel
                 {...playerProps}
                 recent={recent}
-                horizonControl={
-                  <OutlookHorizonControl
-                    label="目標の戦数"
-                    horizon={session.goalHorizon}
-                    horizonText={session.goalHorizonText}
-                    onChange={({ horizon, horizonText }) =>
-                      change((current) => ({
-                        ...current,
-                        goalHorizon: horizon,
-                        goalHorizonText: horizonText,
-                      }))
-                    }
-                  />
-                }
+                horizonControl={<OutlookGoalHorizonControl />}
                 opponentEditor={<OutlookPlayerEditor {...playerProps} role={1} />}
                 onUsePerformance={usePerformance}
                 reviewLinks={

@@ -23,7 +23,7 @@ import type {
   OutlookChartPoint,
   OutlookChartSelection,
 } from "@/features/seriesComparison/outlook/OutlookChart";
-import type { OutlookSession } from "@/features/seriesComparison/outlook/outlookSession";
+import type { OutlookResultView } from "@/features/seriesComparison/outlook/outlookViews";
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
 import { canonicalResultMemberIds, orderFixedMembers } from "@/shared/domain/members";
 import {
@@ -84,7 +84,7 @@ export function OutlookPatterns({
   active,
   response,
   cumulative,
-  session,
+  view,
   names,
   memberIds,
   horizonControl,
@@ -94,7 +94,7 @@ export function OutlookPatterns({
   active: boolean;
   response: SeriesAnalysisOutlookSummary;
   cumulative: CumulativePair;
-  session: OutlookSession;
+  view: OutlookResultView;
   names: readonly [string, string];
   memberIds: readonly [string, string];
   horizonControl: ReactNode;
@@ -102,12 +102,11 @@ export function OutlookPatterns({
   marker: { h: number; label: string } | null;
 }) {
   const helpId = useId();
-  const entries = session.gesture?.before ?? session.entries;
-  const focus = entries[0].distribution;
-  const rival = entries[1].distribution;
-  const liveFocus = session.entries[0].distribution;
-  const liveRival = session.entries[1].distribution;
-  const range = session.chartRange;
+  const focus = view.originFocus;
+  const rival = view.originRival;
+  const liveFocus = view.focus;
+  const liveRival = view.rival;
+  const range = view.chartRange;
   const examples = useMemo(() => {
     if (!active) return undefined;
     const record = response.recent.jointRanks.find(
@@ -202,7 +201,7 @@ export function OutlookPatterns({
       id: "average",
       label: "平均",
       points: meanPoints,
-      selected: averageSelection(cumulative, liveFocus, liveRival, session.horizon),
+      selected: averageSelection(cumulative, liveFocus, liveRival, view.horizon),
     },
     ...exampleSeries.map(({ example, points }, index): OutlookChartPattern => ({
       id: `example-${index}`,
@@ -214,7 +213,7 @@ export function OutlookPatterns({
             ? "中間の例"
             : "不利な例",
       points,
-      selected: exampleSelection(cumulative, example, session.horizon),
+      selected: exampleSelection(cumulative, example, view.horizon),
     })),
   ];
   const people = orderFixedMembers(
@@ -234,7 +233,7 @@ export function OutlookPatterns({
     <div className="@container/outlook-patterns grid min-w-0 grid-cols-1 gap-4">
       {horizonControl}
       <DataTable
-        caption={{ content: `現在と${session.horizon}戦後の総合平均順位`, visibility: "visible" }}
+        caption={{ content: `現在と${view.horizon}戦後の総合平均順位`, visibility: "visible" }}
         density="compact"
         verticalAlign="top"
         layout="fixed"
@@ -299,12 +298,12 @@ export function OutlookPatterns({
         <p
           id={helpId}
           className={cn(contentText.supporting, "min-h-8")}
-          role={session.gesture ? "status" : undefined}
+          role={view.gesturing ? "status" : undefined}
         >
-          {session.gesture
+          {view.gesturing
             ? "展開例は操作後に更新します。"
-            : session.horizon > range
-              ? `グラフは${range}戦までです。表は${session.horizon}戦後を表示しています。`
+            : view.horizon > range
+              ? `グラフは${range}戦までです。表は${view.horizon}戦後を表示しています。`
               : "タップ・横ドラッグ・矢印キーで戦数を選べます。"}
         </p>
       </div>
@@ -315,8 +314,8 @@ export function OutlookPatterns({
             pattern={pattern}
             names={names}
             memberIds={memberIds}
-            horizon={session.horizon}
-            horizonText={session.horizonText}
+            horizon={view.horizon}
+            horizonText={view.horizonText}
             range={range}
             ticks={ticks}
             descriptionId={helpId}

@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 
+import type { OutlookResourceView } from "@/features/seriesComparison/outlook/outlookResourceModel";
 import { seriesAnalysisKeys } from "@/shared/api/queryKeys";
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
 import {
@@ -15,7 +16,7 @@ export function useOutlookResource(
   memberId: string,
   windowSize: number | undefined,
   examplesOpen: boolean,
-) {
+): OutlookResourceView {
   const queryClient = useQueryClient();
   const [settledSize, setSettledSize] = useState(windowSize);
   useEffect(() => {
@@ -38,6 +39,14 @@ export function useOutlookResource(
   const examplesParams = examplesOpen ? identity : undefined;
   const window = useQuery(seriesAnalysisOutlookWindowQueryOptions(windowParams));
   const examples = useQuery(seriesAnalysisOutlookExamplesQueryOptions(examplesParams));
+  const { refetch: refetchWindow } = window;
+  const { refetch: refetchExamples } = examples;
+  const retryWindow = useCallback(async () => {
+    await refetchWindow();
+  }, [refetchWindow]);
+  const retryExamples = useCallback(async () => {
+    await refetchExamples();
+  }, [refetchExamples]);
   const refetchStatus = useCallback(
     async () => ({
       data: await queryClient.fetchQuery({
@@ -61,5 +70,18 @@ export function useOutlookResource(
     refetchArtifact: examples.refetch,
     refetchStatus,
   });
-  return { window, examples };
+  return {
+    window: {
+      data: window.data,
+      hasError: window.isError,
+      refreshing: window.isFetching,
+      retry: retryWindow,
+    },
+    examples: {
+      data: examples.data,
+      hasError: examples.isError,
+      refreshing: examples.isFetching,
+      retry: retryExamples,
+    },
+  };
 }

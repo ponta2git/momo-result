@@ -4,6 +4,7 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import * as outlookModel from "@/features/seriesComparison/model/outlook";
+import { editOutlook } from "@/features/seriesComparison/outlook/outlookEditing";
 import { OutlookEditor } from "@/features/seriesComparison/outlook/OutlookEditor";
 import { OutlookHorizonControl } from "@/features/seriesComparison/outlook/OutlookHorizonControl";
 import { OutlookPatterns } from "@/features/seriesComparison/outlook/OutlookPatterns";
@@ -12,6 +13,10 @@ import {
   applyOutlookDistribution,
   outlookPlayer,
 } from "@/features/seriesComparison/outlook/outlookSession";
+import {
+  outlookEditorView,
+  outlookResultView,
+} from "@/features/seriesComparison/outlook/outlookViews";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { makeSeriesAnalysisOutlookSummary } from "@/test/msw/seriesAnalysisOutlookFixtures";
 import { selectOption } from "@/test/selectOption";
@@ -45,16 +50,16 @@ function PatternsHarness({ props, editor = false }: { props: PatternProps; edito
     <>
       {editor ? (
         <OutlookEditor
-          session={session}
+          view={outlookEditorView(session, 0)}
           role={0}
           method="mean"
           name={props.names[0]}
-          change={setSession}
+          edit={(intent) => setSession((current) => editOutlook(current, intent))}
         />
       ) : null}
       <OutlookPatterns
         {...props}
-        session={session}
+        view={outlookResultView(session)}
         active
         marker={null}
         onHorizonChange={onHorizonChange}
@@ -204,7 +209,7 @@ describe("OutlookPatterns", () => {
     const tree = (active: boolean, session = props.session) => (
       <OutlookPatterns
         {...props}
-        session={session}
+        view={outlookResultView(session)}
         active={active}
         marker={null}
         horizonControl={null}

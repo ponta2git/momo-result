@@ -199,7 +199,7 @@ while IFS= read -r -d '' path; do
       ;;
     .github/workflows/analysis-production.yml)
       ;;
-    .github/workflows/deploy.yml)
+    .github/workflows/deploy.yml | .github/workflows/runtime-deploy.yml)
       runtime=true
       ;;
     .github/workflows/runtime-rollback.yml)

@@ -128,6 +128,7 @@ jobs:
         env:
           IMAGE_ARTIFACT_NAME: ${{ inputs.runtime_artifact_name }}
           IMAGE_REF: ${{ inputs.runtime_image_ref }}
+          RUNTIME_CANDIDATE_RUN_ID: ${{ github.run_id }}
           RUNTIME_CANDIDATE_RUN_ATTEMPT: ${{ inputs.runtime_run_attempt }}
         run: scripts/ci/load-runtime-image-artifact.sh
       - name: Download exact Worker producer metadata

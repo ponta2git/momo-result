@@ -9,12 +9,12 @@ export const loadExportPage = () =>
   import("@/features/exports/ExportPage").then((module) => ({ default: module.ExportPage }));
 
 export const loadHeldEventsPage = () =>
-  import("@/features/heldEvents/HeldEventsPage").then((module) => ({
+  import("@/features/heldEvents/list/HeldEventsPage").then((module) => ({
     default: module.HeldEventsPage,
   }));
 
 export const loadHeldEventDetailPage = () =>
-  import("@/features/heldEvents/HeldEventDetailPage").then((module) => ({
+  import("@/features/heldEvents/detail/HeldEventDetailPage").then((module) => ({
     default: module.HeldEventDetailPage,
   }));
 
@@ -22,12 +22,12 @@ export const loadMastersPage = () =>
   import("@/features/masters/MastersPage").then((module) => ({ default: module.MastersPage }));
 
 export const loadMatchCreatePage = () =>
-  import("@/features/matches/MatchCreatePage").then((module) => ({
+  import("@/features/matches/workspace/MatchCreatePage").then((module) => ({
     default: module.MatchCreatePage,
   }));
 
 export const loadMatchDetailPage = () =>
-  import("@/features/matches/MatchDetailPage").then((module) => ({
+  import("@/features/matches/detail/MatchDetailPage").then((module) => ({
     default: module.MatchDetailPage,
   }));
 
@@ -37,7 +37,7 @@ export const loadMatchesListPage = () =>
   }));
 
 export const loadMatchEditPage = () =>
-  import("@/features/matches/MatchEditPage").then((module) => ({
+  import("@/features/matches/workspace/MatchEditPage").then((module) => ({
     default: module.MatchEditPage,
   }));
 

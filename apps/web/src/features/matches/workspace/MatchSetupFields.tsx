@@ -1,5 +1,5 @@
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
-import type { MatchWorkspaceSetupFieldsModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
+import type { MatchWorkspaceSetupFieldsModel } from "@/features/matches/workspace/matchWorkspacePanelTypes";
 import { canonicalResultMembers } from "@/shared/domain/members";
 import { HeldEventPickerField } from "@/shared/heldEvents/HeldEventPickerField";
 import { toLocalDateTimeInputValue } from "@/shared/lib/dateTime";

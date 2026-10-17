@@ -14,36 +14,37 @@ export function useMatchListRefresh(
 ) {
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<MatchListRefreshFailure | null>(null);
-  const running = useRef(false);
-  const generation = useRef(0);
-  const scope = buildMatchListSearchParams(search).toString();
+  const refreshInFlightRef = useRef(false);
+  const refreshGenerationRef = useRef(0);
+  const selectionKey = buildMatchListSearchParams(search).toString();
 
-  if (failure && failure.originScope !== scope && failure.targetScope !== scope) setFailure(null);
+  if (failure && failure.originScope !== selectionKey && failure.targetScope !== selectionKey)
+    setFailure(null);
 
   useEffect(() => {
-    const currentGeneration = generation.current;
+    const currentGeneration = refreshGenerationRef.current;
     return () => {
-      if (generation.current === currentGeneration) generation.current += 1;
+      if (refreshGenerationRef.current === currentGeneration) refreshGenerationRef.current += 1;
     };
   }, []);
 
   const run = async (read: () => Promise<MatchListRefreshResult>) => {
-    if (running.current) return;
-    running.current = true;
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
     setPending(true);
-    const refreshGeneration = generation.current;
+    const refreshGeneration = refreshGenerationRef.current;
     try {
       const result = await read();
-      if (generation.current === refreshGeneration) setFailure(applyResult(result));
+      if (refreshGenerationRef.current === refreshGeneration) setFailure(applyResult(result));
     } catch {
-      if (generation.current === refreshGeneration) {
-        setFailure({ originScope: scope, targetScope: scope });
+      if (refreshGenerationRef.current === refreshGeneration) {
+        setFailure({ originScope: selectionKey, targetScope: selectionKey });
       }
     } finally {
-      running.current = false;
-      if (generation.current === refreshGeneration) setPending(false);
+      refreshInFlightRef.current = false;
+      if (refreshGenerationRef.current === refreshGeneration) setPending(false);
     }
   };
 
-  return { pending, failed: failure?.targetScope === scope, run };
+  return { pending, failed: failure?.targetScope === selectionKey, run };
 }

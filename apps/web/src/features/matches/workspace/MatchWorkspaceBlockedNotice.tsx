@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 
-import type { MatchWorkspaceBlockedReviewModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
+import type { MatchWorkspaceBlockedReviewModel } from "@/features/matches/workspace/matchWorkspacePanelTypes";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { Notice } from "@/shared/ui/feedback/Notice";

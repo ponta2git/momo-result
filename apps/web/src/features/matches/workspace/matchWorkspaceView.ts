@@ -2,7 +2,7 @@ import { confirmedDraftDestination } from "@/features/matches/confirmedDraftNavi
 import type { MatchFormValues, WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
 import { toMatchWorkspaceOperationErrorView } from "@/features/matches/workspace/matchWorkspaceOperationError";
 import type { MatchWorkspaceOperationError } from "@/features/matches/workspace/matchWorkspaceOperationError";
-import type { MatchWorkspaceSubmitModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
+import type { MatchWorkspaceSubmitModel } from "@/features/matches/workspace/matchWorkspacePanelTypes";
 import { toSourceImageDescriptor } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type {

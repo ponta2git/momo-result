@@ -1,6 +1,6 @@
 import { ArrowLeft } from "lucide-react";
 
-import type { MatchWorkspaceToolbarModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
+import type { MatchWorkspaceToolbarModel } from "@/features/matches/workspace/matchWorkspacePanelTypes";
 import { actionRowClass } from "@/shared/ui/actions/actionGroup";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";

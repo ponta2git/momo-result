@@ -1,9 +1,6 @@
 import { useId } from "react";
 
-import {
-  matchNoteMaximumCharacters,
-  normalizeMatchNote,
-} from "@/features/matches/workspace/review/confirmMatchFormSchema";
+import { matchNoteMaximumCharacters, normalizeMatchNote } from "@/features/matches/matchNoteText";
 import { cn } from "@/shared/ui/cn";
 import { TextareaControl } from "@/shared/ui/forms/Control";
 import { fieldText } from "@/shared/ui/typography";

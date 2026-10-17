@@ -6,7 +6,7 @@ import type {
   MatchWorkspaceOperationError,
   MatchWorkspaceOperationErrorKind,
 } from "@/features/matches/workspace/matchWorkspaceOperationError";
-import type { WorkspaceNoticeTone } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
+import type { WorkspaceNoticeTone } from "@/features/matches/workspace/matchWorkspacePanelTypes";
 import { useConfirmedDraftRedirect } from "@/features/matches/workspace/useConfirmedDraftRedirect";
 import { useMatchWorkspaceConfirmAction } from "@/features/matches/workspace/useMatchWorkspaceConfirmAction";
 import { useMatchWorkspaceMutations } from "@/features/matches/workspace/useMatchWorkspaceMutations";

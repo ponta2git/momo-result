@@ -6,7 +6,7 @@ import type {
   MatchWorkspaceCancellationModel,
   MatchWorkspaceMastersNavigationModel,
   MatchWorkspaceSetupSectionModel,
-} from "@/features/matches/workspace/matchWorkspacePageModelTypes";
+} from "@/features/matches/workspace/matchWorkspacePanelTypes";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";

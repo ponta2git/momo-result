@@ -5,8 +5,8 @@ import { describe, expect, it } from "vitest";
 
 import type { MatchListRefreshResult } from "@/features/matches/list/matchListRefresh";
 import type { MatchListSearch } from "@/features/matches/list/matchListTypes";
-import { useMatchListLocationState } from "@/features/matches/list/useMatchListLocationState";
 import { useMatchListRefresh } from "@/features/matches/list/useMatchListRefresh";
+import { useMatchListSelection } from "@/features/matches/list/useMatchListSelection";
 import { createDeferred } from "@/test/deferred";
 
 function RefreshHarness({
@@ -14,7 +14,7 @@ function RefreshHarness({
 }: {
   read: (origin: MatchListSearch) => Promise<MatchListRefreshResult>;
 }) {
-  const selection = useMatchListLocationState();
+  const selection = useMatchListSelection();
   const refresh = useMatchListRefresh(selection.current, selection.applyRefresh);
   return (
     <>

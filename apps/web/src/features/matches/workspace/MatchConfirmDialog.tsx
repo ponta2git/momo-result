@@ -1,6 +1,6 @@
 import { AlertTriangle, Check } from "lucide-react";
 
-import type { MatchWorkspaceConfirmationDialogModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
+import type { MatchWorkspaceConfirmationDialogModel } from "@/features/matches/workspace/matchWorkspacePanelTypes";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { memberDisplayName, orderFixedMembers } from "@/shared/domain/members";

@@ -1,6 +1,6 @@
 import type { Ref } from "react";
 
-import type { MatchWorkspaceSubmitModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
+import type { MatchWorkspaceSubmitModel } from "@/features/matches/workspace/matchWorkspacePanelTypes";
 import { taskActionPanelClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";

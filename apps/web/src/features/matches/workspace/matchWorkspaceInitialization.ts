@@ -1,4 +1,8 @@
 import { draftToMatchForm } from "@/features/matches/workspace/draftToMatchForm";
+import {
+  heldEventDefaultsById,
+  latestHeldEventDefaults,
+} from "@/features/matches/workspace/heldEventDefaults";
 import { matchDetailToMatchForm } from "@/features/matches/workspace/matchDetailToMatchForm";
 import { createEmptyMatchForm } from "@/features/matches/workspace/matchFormTypes";
 import type {
@@ -11,10 +15,6 @@ import {
   draftsByKind,
   prefillFromDraftSummary,
 } from "@/features/matches/workspace/workspaceDerivations";
-import {
-  heldEventPatchById,
-  latestHeldEventPatch,
-} from "@/features/matches/workspace/workspaceViewModel";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type {
   MatchDraftDetailResponse,
@@ -116,7 +116,7 @@ export function initialWorkspaceHeldEventPatch(input: {
     input.mode !== "edit" &&
     !input.heldEventId &&
     !input.preferredHeldEventPending
-    ? (heldEventPatchById(input.heldEvents, input.preferredHeldEventId) ??
-        latestHeldEventPatch(input.heldEvents))
+    ? (heldEventDefaultsById(input.heldEvents, input.preferredHeldEventId) ??
+        latestHeldEventDefaults(input.heldEvents))
     : undefined;
 }

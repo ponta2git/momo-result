@@ -7,14 +7,17 @@ import type { WorkspaceMode } from "@/features/matches/workspace/matchFormTypes"
 import type { MatchWorkspaceEditingStore } from "@/features/matches/workspace/matchWorkspaceEditingStore";
 import { toMatchWorkspaceOperationErrorView } from "@/features/matches/workspace/matchWorkspaceOperationError";
 import type {
-  MatchWorkspaceEditorModel,
+  MatchWorkspaceCancellationModel,
+  MatchWorkspaceMastersNavigationModel,
+  MatchWorkspaceRecoveryModel,
+  MatchWorkspaceSubmitModel,
   WorkspaceNoticeTone,
-} from "@/features/matches/workspace/matchWorkspacePageModelTypes";
+} from "@/features/matches/workspace/matchWorkspacePanelTypes";
 import { workspaceSubmissionView } from "@/features/matches/workspace/matchWorkspaceView";
 import type { buildMatchWorkspaceView } from "@/features/matches/workspace/matchWorkspaceView";
 import { useMatchWorkspaceLifecycleEffects } from "@/features/matches/workspace/useMatchWorkspaceLifecycleEffects";
-import { useMatchWorkspaceLocalState } from "@/features/matches/workspace/useMatchWorkspaceLocalState";
 import { useMatchWorkspaceMasterNavigation } from "@/features/matches/workspace/useMatchWorkspaceMasterNavigation";
+import { useMatchWorkspacePersistenceUi } from "@/features/matches/workspace/useMatchWorkspacePersistenceUi";
 import { useMatchWorkspacePrimaryAction } from "@/features/matches/workspace/useMatchWorkspacePrimaryAction";
 import { useMatchWorkspaceSessionDraft } from "@/features/matches/workspace/useMatchWorkspaceSessionDraft";
 import { useMatchWorkspaceSubmitFlow } from "@/features/matches/workspace/useMatchWorkspaceSubmitFlow";
@@ -42,8 +45,12 @@ export type MatchWorkspacePersistenceInput = {
 };
 
 type WorkspacePersistenceControls = {
-  persistence: MatchWorkspaceEditorModel["persistence"];
-  masters: MatchWorkspaceEditorModel["navigation"]["masters"];
+  persistence: {
+    cancellation: MatchWorkspaceCancellationModel;
+    recovery: MatchWorkspaceRecoveryModel | null;
+    submit: MatchWorkspaceSubmitModel;
+  };
+  masters: MatchWorkspaceMastersNavigationModel;
 };
 type WorkspaceInteraction = {
   disabled: boolean;
@@ -87,7 +94,7 @@ export function MatchWorkspacePersistence({
     showValidationErrors,
     validationFocusRequest,
     validationMessage,
-  } = useMatchWorkspaceLocalState();
+  } = useMatchWorkspacePersistenceUi();
   const notify = input.notify;
   const draft = useWorkspaceReadView(editing.persistence);
   const confirmation = useWorkspaceReadView(editing.confirmation);

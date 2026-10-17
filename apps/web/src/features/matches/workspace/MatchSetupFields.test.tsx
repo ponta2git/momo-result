@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createEmptyMatchForm } from "@/features/matches/workspace/matchFormTypes";
 import { MatchSetupFields } from "@/features/matches/workspace/MatchSetupFields";
-import type { MatchWorkspaceSetupFieldsModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
+import type { MatchWorkspaceSetupFieldsModel } from "@/features/matches/workspace/matchWorkspacePanelTypes";
 
 function createModel(errorPathSet = new Set<string>()): MatchWorkspaceSetupFieldsModel {
   return {

@@ -1,6 +1,6 @@
 import { RotateCcw } from "lucide-react";
 
-import type { MatchWorkspaceRecoveryModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
+import type { MatchWorkspaceRecoveryModel } from "@/features/matches/workspace/matchWorkspacePanelTypes";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";

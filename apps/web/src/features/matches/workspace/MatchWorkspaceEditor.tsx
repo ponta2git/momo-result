@@ -5,7 +5,7 @@ import { MatchFormActions } from "@/features/matches/workspace/MatchFormActions"
 import { MatchNoteField } from "@/features/matches/workspace/MatchNoteField";
 import { MatchSetupSection } from "@/features/matches/workspace/MatchSetupSection";
 import type { MatchWorkspaceEditingViews } from "@/features/matches/workspace/matchWorkspaceEditingStore";
-import type { MatchWorkspaceEditorLayoutModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
+import type { MatchWorkspaceEditorLayoutModel } from "@/features/matches/workspace/matchWorkspacePanelTypes";
 import {
   useWorkspaceInteraction,
   useWorkspacePersistenceControls,

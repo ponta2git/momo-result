@@ -9,9 +9,9 @@ import type {
   MatchListSummaryCounts,
 } from "@/features/matches/list/matchListTypes";
 import { useConfirmedDraftNavigationCommand } from "@/features/matches/list/useConfirmedDraftNavigationCommand";
-import { useMatchListLocationState } from "@/features/matches/list/useMatchListLocationState";
 import { useMatchListRefresh } from "@/features/matches/list/useMatchListRefresh";
 import { useMatchListResource } from "@/features/matches/list/useMatchListResource";
+import { useMatchListSelection } from "@/features/matches/list/useMatchListSelection";
 import type { PaginationState } from "@/shared/lib/pagination";
 
 type RefreshModel = {
@@ -64,12 +64,12 @@ export type MatchesListPageModel = {
 
 /** Composes URL, resources, and draft navigation into the list page's render contract. */
 export function useMatchesListPageModel(): MatchesListPageModel {
-  const location = useMatchListLocationState();
-  const refresh = useMatchListRefresh(location.current, location.applyRefresh);
-  const resource = useMatchListResource({
-    currentSearch: location.current,
-    deferredSearch: location.deferred,
-    locationSettling: location.settling,
+  const selection = useMatchListSelection();
+  const refresh = useMatchListRefresh(selection.current, selection.applyRefresh);
+  const resources = useMatchListResource({
+    currentSearch: selection.current,
+    deferredSearch: selection.deferred,
+    locationSettling: selection.settling,
     manualRefresh: refresh,
   });
   const draftNavigation = useConfirmedDraftNavigationCommand();
@@ -79,19 +79,19 @@ export function useMatchesListPageModel(): MatchesListPageModel {
     () => ({
       checkingDraftIds: checkingIds,
       draftErrors: errors,
-      disabled: resource.list.scopeChanging,
+      disabled: resources.list.scopeChanging,
       onDraftStatusCheckAction: (action) => void checkDraftStatus(action),
     }),
-    [checkingIds, errors, resource.list.scopeChanging, checkDraftStatus],
+    [checkingIds, errors, resources.list.scopeChanging, checkDraftStatus],
   );
 
-  const paginationValue = resource.list.pagination;
+  const paginationValue = resources.list.pagination;
   const pagination = paginationValue
     ? {
         changePage: (page: number) => {
-          location.change({ kind: "page", page, pagination: paginationValue });
+          selection.change({ kind: "page", page, pagination: paginationValue });
         },
-        changePageSize: (pageSize: number) => location.change({ kind: "pageSize", pageSize }),
+        changePageSize: (pageSize: number) => selection.change({ kind: "pageSize", pageSize }),
         value: paginationValue,
       }
     : undefined;
@@ -101,30 +101,30 @@ export function useMatchesListPageModel(): MatchesListPageModel {
       rowActions,
     },
     filters: {
-      actions: { onChange: location.change, onClear: location.clear },
-      candidates: resource.filters.candidates,
-      hasActive: location.hasFilters,
-      loadFailed: resource.filters.loadFailed,
-      pending: resource.list.scopeChanging,
-      refresh: resource.filters.refresh,
-      search: location.current,
+      actions: { onChange: selection.change, onClear: selection.clear },
+      candidates: resources.filters.candidates,
+      hasActive: selection.hasFilters,
+      loadFailed: resources.filters.loadFailed,
+      pending: resources.list.scopeChanging,
+      refresh: resources.filters.refresh,
+      search: selection.current,
     },
     list: {
-      items: resource.list.items,
-      loadFailed: resource.list.loadFailed,
-      loading: resource.list.loading,
+      items: resources.list.items,
+      loadFailed: resources.list.loadFailed,
+      loading: resources.list.loading,
       pagination,
-      refresh: { pending: refresh.pending, run: () => refresh.run(resource.refresh) },
-      refreshFailed: resource.list.refreshFailed,
-      sameScopeRefreshing: resource.list.sameScopeRefreshing,
-      scopeChanging: resource.list.scopeChanging,
-      updating: resource.list.updating,
+      refresh: { pending: refresh.pending, run: () => refresh.run(resources.refresh) },
+      refreshFailed: resources.list.refreshFailed,
+      sameScopeRefreshing: resources.list.sameScopeRefreshing,
+      scopeChanging: resources.list.scopeChanging,
+      updating: resources.list.updating,
     },
     navigation: {
       exportHref: "/exports",
       manualCreateHref: "/matches/new",
       ocrHref: "/ocr/new",
     },
-    summary: resource.summary,
+    summary: resources.summary,
   };
 }

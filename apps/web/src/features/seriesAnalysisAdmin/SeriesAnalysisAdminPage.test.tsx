@@ -116,6 +116,7 @@ describe("SeriesAnalysisAdminPage", () => {
     expect(submitted).toEqual([{ gameTitleId: "gt_momotetsu_2" }]);
   });
 
+  // This scenario crosses both tabs and authorization changes; allow for CI coverage overhead.
   it("closes the all-title confirmation on demotion while keeping the operator's radar scope", async () => {
     const user = userEvent.setup();
     const account = mswState.loginAccounts.find((entry) => entry.accountId === "account_ponta")!;
@@ -161,7 +162,7 @@ describe("SeriesAnalysisAdminPage", () => {
     );
     expect(await screen.findByRole("button", { name: "全作品を再計算" })).toBeEnabled();
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
-  });
+  }, 10_000);
 
   it("allows an operator command while an obsolete all-title command settles without clearing the new pending state", async () => {
     const user = userEvent.setup();

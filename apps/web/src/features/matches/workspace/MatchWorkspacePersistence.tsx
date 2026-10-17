@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo } from "react";
+import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { Location } from "react-router-dom";
 
@@ -6,6 +6,7 @@ import { MatchConfirmDialog } from "@/features/matches/workspace/MatchConfirmDia
 import type { WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
 import type { MatchWorkspaceEditingStore } from "@/features/matches/workspace/matchWorkspaceEditingStore";
 import { toMatchWorkspaceOperationErrorView } from "@/features/matches/workspace/matchWorkspaceOperationError";
+import type { MatchWorkspaceOperationError } from "@/features/matches/workspace/matchWorkspaceOperationError";
 import type {
   MatchWorkspaceCancellationModel,
   MatchWorkspaceMastersNavigationModel,
@@ -17,7 +18,6 @@ import { workspaceSubmissionView } from "@/features/matches/workspace/matchWorks
 import type { buildMatchWorkspaceView } from "@/features/matches/workspace/matchWorkspaceView";
 import { useMatchWorkspaceLifecycleEffects } from "@/features/matches/workspace/useMatchWorkspaceLifecycleEffects";
 import { useMatchWorkspaceMasterNavigation } from "@/features/matches/workspace/useMatchWorkspaceMasterNavigation";
-import { useMatchWorkspacePersistenceUi } from "@/features/matches/workspace/useMatchWorkspacePersistenceUi";
 import { useMatchWorkspacePrimaryAction } from "@/features/matches/workspace/useMatchWorkspacePrimaryAction";
 import { useMatchWorkspaceSessionDraft } from "@/features/matches/workspace/useMatchWorkspaceSessionDraft";
 import { useMatchWorkspaceSubmitFlow } from "@/features/matches/workspace/useMatchWorkspaceSubmitFlow";
@@ -81,20 +81,17 @@ export function MatchWorkspacePersistence({
   children: ReactNode;
 }) {
   const { editing, mode, view } = input;
-  const {
-    cancelDraftConfirmOpen,
-    confirmOpen,
-    operationError: currentOperationError,
-    setCancelDraftConfirmOpen,
-    setConfirmOpen,
-    setOperationError,
-    setShowValidationErrors,
-    setValidationFocusRequest,
-    setValidationMessage,
-    showValidationErrors,
-    validationFocusRequest,
-    validationMessage,
-  } = useMatchWorkspacePersistenceUi();
+  const [validationMessage, setValidationMessage] = useState("");
+  const [currentOperationError, setOperationError] = useState<MatchWorkspaceOperationError | null>(
+    null,
+  );
+  const [showValidationErrors, setShowValidationErrors] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [cancelDraftConfirmOpen, setCancelDraftConfirmOpen] = useState(false);
+  const [validationFocusRequest, setValidationFocusRequest] = useState<{
+    path: string;
+    sequence: number;
+  } | null>(null);
   const notify = input.notify;
   const draft = useWorkspaceReadView(editing.persistence);
   const confirmation = useWorkspaceReadView(editing.confirmation);

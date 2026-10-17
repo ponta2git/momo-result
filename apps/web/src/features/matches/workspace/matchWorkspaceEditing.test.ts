@@ -1,12 +1,15 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
-import {
-  createMatchFormReducerState,
-  matchFormReducer,
-} from "@/features/matches/workspace/matchFormReducer";
 import { createEmptyMatchForm } from "@/features/matches/workspace/matchFormTypes";
-import type { IncidentLookupEntry } from "@/features/matches/workspace/matchFormTypes";
+import type {
+  IncidentLookupEntry,
+  MatchFormValues,
+} from "@/features/matches/workspace/matchFormTypes";
+import {
+  createMatchWorkspaceEditingState,
+  transitionMatchWorkspaceEditing as editWorkspace,
+} from "@/features/matches/workspace/matchWorkspaceEditing";
 
 const baseIso = "2026-01-01T09:00";
 
@@ -26,7 +29,18 @@ function entry(counts: Partial<IncidentLookupEntry["counts"]>): IncidentLookupEn
   };
 }
 
-describe("matchFormReducer", () => {
+function reviewState(
+  values: MatchFormValues,
+  incidentByPlayOrder = new Map<number, IncidentLookupEntry>(),
+) {
+  return editWorkspace(createMatchWorkspaceEditingState(values), {
+    type: "initialize",
+    values,
+    initialData: { draftByKind: {}, incidentByPlayOrder, originalPlayers: [], warnings: [] },
+  });
+}
+
+describe("workspace editing transitions", () => {
   it("clears game-dependent selections while preserving other input when the game changes", () => {
     const values = {
       ...createEmptyMatchForm(baseIso),
@@ -36,11 +50,12 @@ describe("matchFormReducer", () => {
       numericDrafts: { "players.0.revenueManYen": "-" },
       noteBody: "保持する入力",
     };
-    const initial = createMatchFormReducerState(values);
+    const initial = createMatchWorkspaceEditingState(values);
 
-    const next = matchFormReducer(initial, {
-      gameTitleId: "next-game",
-      type: "change_game_title",
+    const next = editWorkspace(initial, {
+      field: "gameTitleId",
+      value: "next-game",
+      type: "change-setup",
     });
 
     expect(next.values).toEqual({
@@ -53,15 +68,15 @@ describe("matchFormReducer", () => {
     expect(values.seasonMasterId).toBe("previous-season");
   });
 
-  it("set_play_order preserves incidents and does not mark the row as synced", () => {
+  it("keeps manually entered incidents when the play order changes without OCR input", () => {
     const seed = createEmptyMatchForm(baseIso);
     seed.players[2]!.incidents.destination = 7;
-    const initial = createMatchFormReducerState(seed);
+    const initial = createMatchWorkspaceEditingState(seed);
 
-    const next = matchFormReducer(initial, {
-      type: "set_play_order",
+    const next = editWorkspace(initial, {
+      type: "change-play-order",
       index: 2,
-      playOrder: 4,
+      value: 4,
     });
 
     expect(next.lastSyncedPlayerIndex).toBeNull();
@@ -69,16 +84,15 @@ describe("matchFormReducer", () => {
     expect(next.values.players[2]!.incidents.destination).toBe(7);
   });
 
-  it("sync_incidents_from_play_order without lookup zeroes incidents explicitly", () => {
+  it("clears incidents when the chosen play order has no OCR incident row", () => {
     const seed = createEmptyMatchForm(baseIso);
     seed.players[2]!.incidents.destination = 7;
-    const initial = createMatchFormReducerState(seed);
+    const initial = reviewState(seed);
 
-    const next = matchFormReducer(initial, {
-      type: "sync_incidents_from_play_order",
+    const next = editWorkspace(initial, {
+      type: "change-play-order",
       index: 2,
-      playOrder: 4,
-      incidentByPlayOrder: new Map(),
+      value: 4,
     });
 
     expect(next.lastSyncedPlayerIndex).toBe(2);
@@ -102,11 +116,18 @@ describe("matchFormReducer", () => {
         "players.1.incidents.destination": "",
       },
     };
-    const next = matchFormReducer(createMatchFormReducerState(values), {
-      type: "sync_incidents_from_play_order",
+    const initial = reviewState(
+      values,
+      new Map([[2, entry({ 目的地: 9, プラス駅: 1, スリの銀次: 2 })]]),
+    );
+    const reviewed = editWorkspace(initial, {
+      type: "acknowledge",
+      cellId: "player-0-incident.destination",
+    });
+    const next = editWorkspace(reviewed, {
+      type: "change-play-order",
       index: 0,
-      playOrder: 2,
-      incidentByPlayOrder: new Map([[2, entry({ 目的地: 9, プラス駅: 1, スリの銀次: 2 })]]),
+      value: 2,
     });
 
     expect(next.lastSyncedPlayerIndex).toBe(0);
@@ -120,12 +141,14 @@ describe("matchFormReducer", () => {
       suriNoGinji: 2,
     });
     expect(next.values.players.slice(1)).toEqual(values.players.slice(1));
+    expect(next.values.players[1]).toBe(values.players[1]);
+    expect(next.acknowledgedCellIds).toEqual(["player-0-playOrder"]);
     expect(next.values.numericDrafts).toEqual({
       "players.0.revenueManYen": "-",
       "players.1.incidents.destination": "",
     });
-    const editedElsewhere = matchFormReducer(next, {
-      type: "patch_incident",
+    const editedElsewhere = editWorkspace(next, {
+      type: "change-incident",
       index: 1,
       key: "destination",
       value: 3,
@@ -133,8 +156,8 @@ describe("matchFormReducer", () => {
     expect(editedElsewhere.lastSyncedPlayerIndex).toBe(0);
     expect(editedElsewhere.values.players[1]?.incidents.destination).toBe(3);
 
-    const edited = matchFormReducer(editedElsewhere, {
-      type: "patch_incident",
+    const edited = editWorkspace(editedElsewhere, {
+      type: "change-incident",
       index: 0,
       key: "destination",
       value: 1,
@@ -144,27 +167,30 @@ describe("matchFormReducer", () => {
     expect(values.players[0]?.incidents.destination).toBe(0);
   });
 
-  it("replace resets the entire state and clears lastSyncedPlayerIndex", () => {
-    const initial = createMatchFormReducerState({
+  it("initialization replaces input and resets the previous review state", () => {
+    const initial = reviewState({
       ...createEmptyMatchForm(baseIso),
       numericDrafts: { "players.0.revenueManYen": "-" },
       noteBody: "以前の入力",
     });
-    const synced = matchFormReducer(initial, {
-      type: "sync_incidents_from_play_order",
+    const synced = editWorkspace(initial, {
+      type: "change-play-order",
       index: 1,
-      playOrder: 4,
-      incidentByPlayOrder: new Map(),
+      value: 4,
     });
     expect(synced.lastSyncedPlayerIndex).toBe(1);
 
     const replacement = createEmptyMatchForm("2026-02-02T10:00");
-    const next = matchFormReducer(synced, {
-      type: "replace",
-      payload: replacement,
+    const next = editWorkspace(synced, {
+      type: "initialize",
+      values: replacement,
+      initialData: null,
     });
 
     expect(next.lastSyncedPlayerIndex).toBeNull();
     expect(next.values).toEqual(replacement);
+    expect(next.acknowledgedCellIds).toEqual([]);
+    expect(next.activeCellId).toBeNull();
+    expect(next.initialData).toBeNull();
   });
 });

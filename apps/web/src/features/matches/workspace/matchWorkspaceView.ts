@@ -91,14 +91,12 @@ export function buildMatchWorkspaceView({
 }
 
 export function isMatchWorkspaceLoading(input: {
-  confirmedDraftRedirecting: boolean;
   confirmedDraftLoaded: boolean;
   waitingForData: boolean;
   reviewBlocked: boolean;
   initializationFailed: boolean;
 }) {
   return (
-    input.confirmedDraftRedirecting ||
     input.confirmedDraftLoaded ||
     (input.waitingForData && !input.reviewBlocked && !input.initializationFailed)
   );

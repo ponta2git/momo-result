@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
@@ -18,7 +18,6 @@ export function useConfirmedDraftRedirect({
 }) {
   const navigate = useNavigate();
   const { readLatest, confirmationRecorded, releaseReviewImages } = useMatchDraftResource();
-  const [confirmedDraftRedirecting, setConfirmedDraftRedirecting] = useState(false);
   const redirectedConfirmedDraftRef = useRef<string | null>(null);
   const activeRef = useRef(true);
   useLayoutEffect(() => {
@@ -41,7 +40,6 @@ export function useConfirmedDraftRedirect({
 
       redirectedConfirmedDraftRef.current = destination.matchId;
       if (detail) releaseReviewImages(detail.matchDraftId);
-      setConfirmedDraftRedirecting(true);
       confirmationRecorded();
       notify(message, "warning");
       onBeforeRedirect?.();
@@ -64,7 +62,6 @@ export function useConfirmedDraftRedirect({
   );
 
   return {
-    confirmedDraftRedirecting,
     handleConfirmConflict,
     redirectConfirmedDraft,
   };

@@ -1,22 +1,24 @@
-import {
-  createMatchFormReducerState,
-  matchFormReducer,
-} from "@/features/matches/workspace/matchFormReducer";
-import type { MatchFormReducerState } from "@/features/matches/workspace/matchFormReducer";
 import type {
   IncidentKey,
   MatchFormValues,
   MatchSetupValues,
   MatchWorkspaceInitialData,
 } from "@/features/matches/workspace/matchFormTypes";
+import type { MatchNumericDrafts } from "@/features/matches/workspace/matchNumericDrafts";
 import { buildReviewItems } from "@/features/matches/workspace/review/reviewProgress";
 import { reviewCellId } from "@/features/matches/workspace/review/reviewWarningModel";
 import type { ReviewFieldKey } from "@/features/matches/workspace/review/reviewWarningModel";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
-import { incidentDefinitions } from "@/shared/domain/incidents";
+import {
+  emptyIncidentCountsByKey,
+  incidentCountsByLabelToKey,
+  incidentDefinitions,
+} from "@/shared/domain/incidents";
 
 export type EditablePlayerField = "memberId" | "rank" | "revenueManYen" | "totalAssetsManYen";
-export type MatchWorkspaceEditingState = MatchFormReducerState & {
+export type MatchWorkspaceEditingState = {
+  values: MatchFormValues;
+  lastSyncedPlayerIndex: number | null;
   acknowledgedCellIds: string[];
   activeCellId: string | null;
   initialData: MatchWorkspaceInitialData | null;
@@ -43,11 +45,37 @@ export function createMatchWorkspaceEditingState(
   values: MatchFormValues,
 ): MatchWorkspaceEditingState {
   return {
-    ...createMatchFormReducerState(values),
+    values,
+    lastSyncedPlayerIndex: null,
     acknowledgedCellIds: [],
     activeCellId: null,
     initialData: null,
     initialized: false,
+  };
+}
+
+function replaceNumericDrafts(values: MatchFormValues, numericDrafts: MatchNumericDrafts) {
+  const { numericDrafts: _previous, ...committed } = values;
+  return Object.keys(numericDrafts).length > 0 ? { ...committed, numericDrafts } : committed;
+}
+
+function setNumericDraft(values: MatchFormValues, path: string, value: string | undefined) {
+  if (values.numericDrafts?.[path] === value) return values;
+  const numericDrafts = { ...values.numericDrafts };
+  if (value === undefined) delete numericDrafts[path];
+  else numericDrafts[path] = value;
+  return replaceNumericDrafts(values, numericDrafts);
+}
+
+/** Preserve every other row's identity so one edit only updates its own subscribers. */
+function updatePlayer(
+  values: MatchFormValues,
+  index: number,
+  update: (player: MatchFormValues["players"][number]) => MatchFormValues["players"][number],
+): MatchFormValues {
+  return {
+    ...values,
+    players: values.players.map((player, row) => (row === index ? update(player) : player)),
   };
 }
 
@@ -87,88 +115,93 @@ export function transitionMatchWorkspaceEditing(
       );
       return {
         ...state,
-        ...createMatchFormReducerState(values),
+        values,
+        lastSyncedPlayerIndex: null,
         acknowledgedCellIds: [...new Set(edit.acknowledgedCellIds.filter((id) => known.has(id)))],
       };
     }
     case "select-held-event":
       return {
         ...state,
-        ...matchFormReducer(state, {
-          type: "patch_root",
-          patch: {
-            heldEventId: edit.id,
-            matchNoInEvent: edit.event?.nextMatchNo ?? 1,
-            playedAt: edit.event?.heldAt ?? state.values.playedAt,
-          },
-        }),
+        values: {
+          ...state.values,
+          heldEventId: edit.id,
+          matchNoInEvent: edit.event?.nextMatchNo ?? 1,
+          playedAt: edit.event?.heldAt ?? state.values.playedAt,
+        },
       };
     case "change-setup":
       return {
         ...state,
-        ...matchFormReducer(
-          state,
-          edit.field === "gameTitleId"
-            ? { type: "change_game_title", gameTitleId: String(edit.value) }
-            : { type: "patch_root", patch: { [edit.field]: edit.value } },
-        ),
+        values: {
+          ...state.values,
+          ...(edit.field === "gameTitleId"
+            ? { gameTitleId: String(edit.value), mapMasterId: "", seasonMasterId: "" }
+            : { [edit.field]: edit.value }),
+        },
       };
     case "change-note":
       return {
         ...state,
-        ...matchFormReducer(state, { type: "patch_root", patch: { noteBody: edit.value } }),
+        values: { ...state.values, noteBody: edit.value },
       };
     case "change-numeric-draft": {
-      const next = matchFormReducer(state, {
-        type: "set_numeric_draft",
-        path: edit.path,
-        value: edit.value,
-      });
-      return next === state ? state : { ...state, ...next };
+      const values = setNumericDraft(state.values, edit.path, edit.value);
+      return values === state.values ? state : { ...state, values };
     }
     case "change-player": {
-      const changed = matchFormReducer(state, {
-        type: "patch_player",
-        index: edit.index,
-        patch: { [edit.field]: edit.value },
-      });
-      const committed = matchFormReducer(changed, {
-        type: "set_numeric_draft",
-        path: `players.${edit.index}.${edit.field}`,
-        value: undefined,
-      });
-      return acknowledge({ ...state, ...committed }, reviewCellId(edit.index, edit.field));
+      const changed = updatePlayer(state.values, edit.index, (player) => ({
+        ...player,
+        [edit.field]: edit.value,
+      }));
+      const values = setNumericDraft(changed, `players.${edit.index}.${edit.field}`, undefined);
+      return acknowledge({ ...state, values }, reviewCellId(edit.index, edit.field));
     }
     case "change-incident": {
-      const changed = matchFormReducer(state, {
-        type: "patch_incident",
-        index: edit.index,
-        key: edit.key,
-        value: edit.value,
-      });
-      const committed = matchFormReducer(changed, {
-        type: "set_numeric_draft",
-        path: `players.${edit.index}.incidents.${edit.key}`,
-        value: undefined,
-      });
+      const changed = updatePlayer(state.values, edit.index, (player) => ({
+        ...player,
+        incidents: { ...player.incidents, [edit.key]: edit.value },
+      }));
+      const values = setNumericDraft(
+        changed,
+        `players.${edit.index}.incidents.${edit.key}`,
+        undefined,
+      );
       return acknowledge(
-        { ...state, ...committed },
+        {
+          ...state,
+          values,
+          lastSyncedPlayerIndex:
+            state.lastSyncedPlayerIndex === edit.index ? null : state.lastSyncedPlayerIndex,
+        },
         reviewCellId(edit.index, `incident.${edit.key}`),
       );
     }
     case "change-play-order": {
       const incidentByPlayOrder = state.initialData?.incidentByPlayOrder;
-      const form = matchFormReducer(
-        state,
-        incidentByPlayOrder
+      const source = incidentByPlayOrder?.get(edit.value);
+      let values = updatePlayer(state.values, edit.index, (player) => ({
+        ...player,
+        playOrder: edit.value,
+        ...(incidentByPlayOrder
           ? {
-              type: "sync_incidents_from_play_order",
-              index: edit.index,
-              playOrder: edit.value,
-              incidentByPlayOrder,
+              incidents: source
+                ? incidentCountsByLabelToKey(source.counts)
+                : emptyIncidentCountsByKey(),
             }
-          : { type: "set_play_order", index: edit.index, playOrder: edit.value },
-      );
+          : {}),
+      }));
+      // OCR incidents replace the row's visible incident input, including unfinished text.
+      if (incidentByPlayOrder) {
+        values = replaceNumericDrafts(
+          values,
+          Object.fromEntries(
+            Object.entries(values.numericDrafts ?? {}).filter(
+              ([path]) => !path.startsWith(`players.${edit.index}.incidents.`),
+            ),
+          ),
+        );
+      }
       const invalidated = new Set(
         incidentDefinitions.map((definition) =>
           reviewCellId(edit.index, `incident.${definition.key}`),
@@ -177,7 +210,8 @@ export function transitionMatchWorkspaceEditing(
       return acknowledge(
         {
           ...state,
-          ...form,
+          values,
+          lastSyncedPlayerIndex: incidentByPlayOrder ? edit.index : state.lastSyncedPlayerIndex,
           acknowledgedCellIds: state.acknowledgedCellIds.filter((id) => !invalidated.has(id)),
         },
         reviewCellId(edit.index, "playOrder"),

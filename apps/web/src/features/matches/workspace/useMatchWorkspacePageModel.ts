@@ -95,7 +95,6 @@ export function useMatchWorkspacePageModel(input: {
     values: selection,
   });
   const workspaceLoading = isMatchWorkspaceLoading({
-    confirmedDraftRedirecting: false,
     confirmedDraftLoaded: view.confirmedDraftLoaded,
     waitingForData: initialization.status === "waiting-for-data",
     reviewBlocked: remoteReview.blocked,

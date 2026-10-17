@@ -1,16 +1,25 @@
-import { useCallback } from "react";
-import type { Dispatch, SetStateAction } from "react";
+import { useActionState, useCallback, useLayoutEffect, useRef, useTransition } from "react";
+import { useNavigate } from "react-router-dom";
+import type { NavigateOptions } from "react-router-dom";
 
+import {
+  toConfirmMatchRequest,
+  toUpdateMatchRequest,
+} from "@/features/matches/workspace/matchFormToRequest";
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
-import type {
-  MatchWorkspaceOperationError,
-  MatchWorkspaceOperationErrorKind,
-} from "@/features/matches/workspace/matchWorkspaceOperationError";
+import type { MatchWorkspaceOperationError } from "@/features/matches/workspace/matchWorkspaceOperationError";
 import type { WorkspaceNoticeTone } from "@/features/matches/workspace/matchWorkspacePanelTypes";
 import { useConfirmedDraftRedirect } from "@/features/matches/workspace/useConfirmedDraftRedirect";
-import { useMatchWorkspaceConfirmAction } from "@/features/matches/workspace/useMatchWorkspaceConfirmAction";
-import { useMatchWorkspaceMutations } from "@/features/matches/workspace/useMatchWorkspaceMutations";
+import { useMatchWorkspaceWrites } from "@/features/matches/workspace/useMatchWorkspaceWrites";
+import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import { showToast } from "@/shared/ui/feedback/Toast";
 
+function isConflict(error: unknown): boolean {
+  const normalized = normalizeUnknownApiError(error);
+  return normalized.status === 409 || normalized.code === "CONFLICT";
+}
+
+/** Owns confirmation, conflict recovery and navigation after Writes reconciles a saved result. */
 export function useMatchWorkspaceSubmitFlow({
   matchId,
   notify,
@@ -24,39 +33,78 @@ export function useMatchWorkspaceSubmitFlow({
   matchId: string | undefined;
   notify: (message: string, tone?: WorkspaceNoticeTone) => void;
   onPersistedSuccess: () => void;
-  setConfirmOpen: Dispatch<SetStateAction<boolean>>;
-  setOperationError: Dispatch<SetStateAction<MatchWorkspaceOperationError | null>>;
-  setValidationMessage: Dispatch<SetStateAction<string>>;
+  setConfirmOpen: (open: boolean) => void;
+  setOperationError: (error: MatchWorkspaceOperationError | null) => void;
+  setValidationMessage: (message: string) => void;
   values: Pick<MatchFormValues, "heldEventId" | "matchDraftId">;
   readLatestValues: () => MatchFormValues;
 }) {
-  const handleOperationStart = useCallback(() => setOperationError(null), [setOperationError]);
+  const navigate = useNavigate();
+  const activeRef = useRef(true);
+  useLayoutEffect(() => {
+    activeRef.current = true;
+    return () => {
+      activeRef.current = false;
+    };
+  }, []);
+  const [isNavigating, startNavigation] = useTransition();
+  const navigateAfterSuccess = (destination: string, options?: NavigateOptions) => {
+    startNavigation(async () => {
+      await navigate(destination, options);
+    });
+  };
   const confirmedDraft = useConfirmedDraftRedirect({
     notify,
     onBeforeRedirect: onPersistedSuccess,
   });
-  const handleConfirmSuccess = useCallback(() => setConfirmOpen(false), [setConfirmOpen]);
-  const handleMutationError = useCallback(
-    (kind: MatchWorkspaceOperationErrorKind, message: string) => {
-      if (kind === "confirm") setConfirmOpen(false);
-      setOperationError({ kind, message });
+  const writes = useMatchWorkspaceWrites({
+    started: () => setOperationError(null),
+    saved: (result) => {
+      if (!activeRef.current) return;
+      if (result.kind === "cancelDraft") {
+        showToast({ title: "確定前の記録を削除しました", tone: "success" });
+        onPersistedSuccess();
+        navigateAfterSuccess(
+          values.heldEventId
+            ? `/held-events/${encodeURIComponent(values.heldEventId)}`
+            : "/matches",
+          { replace: true },
+        );
+        return;
+      }
+      showToast({
+        title: result.kind === "confirm" ? "試合を確定しました" : "試合を保存しました",
+        tone: "success",
+      });
+      if (result.kind === "confirm") setConfirmOpen(false);
+      onPersistedSuccess();
+      navigateAfterSuccess(`/matches/${encodeURIComponent(result.matchId)}`);
     },
-    [setConfirmOpen, setOperationError],
+    failed: async (failure) => {
+      if (!activeRef.current) return;
+      if (failure.kind === "confirm" && failure.draftId && isConflict(failure.error)) {
+        const handled = await confirmedDraft.handleConfirmConflict(failure.draftId);
+        if (handled || !activeRef.current) return;
+      }
+      const fallback = {
+        confirm: "確定に失敗しました",
+        update: "更新に失敗しました",
+        cancelDraft: "確定前の記録を削除できませんでした",
+      }[failure.kind];
+      if (failure.kind === "confirm") setConfirmOpen(false);
+      setOperationError({ kind: failure.kind, message: formatApiError(failure.error, fallback) });
+    },
+  });
+  const { confirm, cancelDraft, update: updateMatch } = writes;
+  const [, confirmAction, confirmationPending] = useActionState<null, FormData>(async () => {
+    const request = toConfirmMatchRequest(readLatestValues());
+    await confirm(request).catch(() => undefined);
+    return null;
+  }, null);
+  const update = useCallback(
+    (latestValues: MatchFormValues) => updateMatch(matchId, toUpdateMatchRequest(latestValues)),
+    [matchId, updateMatch],
   );
-  const operations = useMatchWorkspaceMutations({
-    heldEventId: values.heldEventId,
-    matchId,
-    onConfirmConflict: confirmedDraft.handleConfirmConflict,
-    onConfirmSuccess: handleConfirmSuccess,
-    onError: handleMutationError,
-    onOperationStart: handleOperationStart,
-    onPersistedSuccess,
-  });
-  const confirmation = useMatchWorkspaceConfirmAction({
-    confirm: operations.confirm,
-    readLatestValues,
-  });
-  const { cancelDraft } = operations;
   const cancelDraftConfirmed = useCallback(async () => {
     if (!values.matchDraftId) {
       return;
@@ -68,10 +116,10 @@ export function useMatchWorkspaceSubmitFlow({
 
   return {
     cancelDraftConfirmed,
-    cancelDraftPending: operations.cancelDraftPending,
-    confirmation,
+    cancelDraftPending: writes.cancelDraftPending,
+    confirmation: { action: confirmAction, pending: confirmationPending },
     confirmedDraft,
-    pending: operations.pending,
-    update: operations.update,
+    pending: isNavigating || writes.pending,
+    update,
   };
 }

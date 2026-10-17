@@ -10,12 +10,12 @@ import {
   MatchDetailLoading,
 } from "@/features/matches/MatchDetailStatusViews";
 import { MatchFeatureSection } from "@/features/matches/MatchFeatureSection";
-import type { MatchNoteEditor } from "@/features/matches/matchNoteModel";
 import {
-  MatchNoteSection,
-  MatchNoteNavigationGuard,
-  MatchNoteRecovery,
-} from "@/features/matches/MatchNoteSection";
+  MatchNoteOwner,
+  MatchNotePanel,
+  MatchNoteRecoveryPanel,
+  useMatchDeletionRestriction,
+} from "@/features/matches/MatchNoteOwner";
 import { MatchRecordMetadata } from "@/features/matches/MatchRecordMetadata";
 import { useMatchDetailPageModel } from "@/features/matches/useMatchDetailPageModel";
 import { incidentColumns } from "@/shared/domain/incidents";
@@ -38,39 +38,35 @@ export function MatchDetailPage() {
 
 function MatchDetailScreen() {
   const page = useMatchDetailPageModel();
-  const { editor } = page;
   const titleRef = useAdjacentNavigationFocus(page.kind !== "loading");
 
   return (
-    <>
-      <MatchNoteNavigationGuard editor={editor} />
+    <MatchNoteOwner source={page.note}>
       {page.kind === "loading" ? (
         <MatchDetailLoading />
       ) : page.kind === "ready" ? (
-        <MatchDetailReadyContent page={page} editor={editor} titleRef={titleRef} />
+        <MatchDetailReadyContent page={page} titleRef={titleRef} />
       ) : (
         <MatchDetailLoadFailed
           notFound={page.kind === "notFound"}
           retrying={page.refresh.pending}
           onRetry={page.refresh.run}
           titleRef={titleRef}
-          recovery={editor.dirty ? <MatchNoteRecovery editor={editor} /> : undefined}
+          recovery={<MatchNoteRecoveryPanel />}
         />
       )}
-    </>
+    </MatchNoteOwner>
   );
 }
 
 function MatchDetailReadyContent({
   page,
-  editor,
   titleRef,
 }: {
   page: MatchDetailReadyPageModel;
-  editor: MatchNoteEditor;
   titleRef: Ref<HTMLHeadingElement>;
 }) {
-  const { analysis, deletion, identity, match, navigation } = page;
+  const { analysis, identity, match, navigation } = page;
   const ledgerRows = page.ledgerRows.map(({ incidents, ...row }) => ({
     ...row,
     details: incidents ? (
@@ -161,20 +157,28 @@ function MatchDetailReadyContent({
           </div>
         </section>
 
-        <MatchNoteSection match={match} editor={editor} />
+        <MatchNotePanel />
 
-        <MatchRecordMetadata
-          confirmDelete={deletion.confirm}
-          deleteDisabledReason={deletion.disabledReason}
-          errorMessage={deletion.errorMessage}
-          isDeletePending={deletion.pending}
-          match={match}
-          setShowConfirm={deletion.setOpen}
-          showConfirm={deletion.open}
-        />
+        <MatchDetailRecordActions page={page} />
       </PageContentSurface>
 
       <MatchDetailAdjacentNavigation page={page} />
     </PageFrame>
+  );
+}
+
+function MatchDetailRecordActions({ page }: { page: MatchDetailReadyPageModel }) {
+  const restriction = useMatchDeletionRestriction();
+  const { deletion, match } = page;
+  return (
+    <MatchRecordMetadata
+      confirmDelete={deletion.confirm}
+      deleteDisabledReason={restriction}
+      errorMessage={deletion.errorMessage}
+      isDeletePending={deletion.pending}
+      match={match}
+      setShowConfirm={deletion.setOpen}
+      showConfirm={deletion.open}
+    />
   );
 }

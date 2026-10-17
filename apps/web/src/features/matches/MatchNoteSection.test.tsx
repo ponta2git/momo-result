@@ -77,11 +77,7 @@ function renderNote({
         <button onClick={() => setMatch(undefined)} type="button">
           試合の削除を検知
         </button>
-        {match ? (
-          <MatchNoteSection editor={editor} match={match} />
-        ) : (
-          <MatchNoteRecovery editor={editor} />
-        )}
+        {match ? <MatchNoteSection editor={editor} /> : <MatchNoteRecovery editor={editor} />}
       </>
     );
   }

@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 
 import type { MatchNoteEditor } from "@/features/matches/matchNoteModel";
 import { matchNoteMaximumCharacters } from "@/features/matches/workspace/review/confirmMatchFormSchema";
-import type { MatchDetailResponse } from "@/shared/api/matches";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
 import { Button } from "@/shared/ui/actions/Button";
@@ -15,11 +14,10 @@ import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { contentText, fieldText } from "@/shared/ui/typography";
 
 type MatchNoteSectionProps = {
-  match: MatchDetailResponse;
   editor: MatchNoteEditor;
 };
 
-export function MatchNoteSection({ match, editor }: MatchNoteSectionProps) {
+export function MatchNoteSection({ editor }: MatchNoteSectionProps) {
   const editActionRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const restoreActionFocus = useRef(false);
@@ -28,16 +26,16 @@ export function MatchNoteSection({ match, editor }: MatchNoteSectionProps) {
     conflict,
     count,
     deleteOpen,
-    dirty,
     draft,
     editing,
     errorMessage,
-    normalizedDraft,
     pending,
     remove,
     save,
-    setDeleteOpen,
-    setDraft,
+    requestDelete,
+    cancelDelete,
+    changeDraft,
+    canSave,
     startEditing,
     tooLong,
   } = editor;
@@ -69,14 +67,14 @@ export function MatchNoteSection({ match, editor }: MatchNoteSectionProps) {
                 variant="secondary"
                 onClick={startEditing}
               >
-                {match.note.body ? "編集" : "メモを追加"}
+                {editor.savedNote.body ? "編集" : "メモを追加"}
               </Button>
-              {match.note.body ? (
+              {editor.savedNote.body ? (
                 <Button
                   disabled={pending || editor.refreshing}
                   size="sm"
                   variant="dangerQuiet"
-                  onClick={() => setDeleteOpen(true)}
+                  onClick={requestDelete}
                 >
                   メモを削除
                 </Button>
@@ -113,7 +111,7 @@ export function MatchNoteSection({ match, editor }: MatchNoteSectionProps) {
                   resize="vertical"
                   textFlow="relaxed"
                   value={draft}
-                  onChange={(event) => setDraft(event.currentTarget.value)}
+                  onChange={(event) => changeDraft(event.currentTarget.value)}
                 />
                 {tooLong ? (
                   <p className={fieldText.error} id="match-note-detail-error" role="alert">
@@ -133,7 +131,7 @@ export function MatchNoteSection({ match, editor }: MatchNoteSectionProps) {
                           readableTextWidthClass,
                         )}
                       >
-                        {conflict.latest.body ?? "（メモなし）"}
+                        {conflict.latestBody ?? "（メモなし）"}
                       </p>
                     </div>
                     <div>
@@ -155,23 +153,12 @@ export function MatchNoteSection({ match, editor }: MatchNoteSectionProps) {
                 <Button disabled={pending} variant="quiet" onClick={cancel}>
                   キャンセル
                 </Button>
-                <Button
-                  disabled={
-                    pending ||
-                    editor.refreshing ||
-                    tooLong ||
-                    normalizedDraft.trim().length === 0 ||
-                    (!dirty && !conflict)
-                  }
-                  pending={pending}
-                  pendingLabel="保存中…"
-                  onClick={save}
-                >
+                <Button disabled={!canSave} pending={pending} pendingLabel="保存中…" onClick={save}>
                   {conflict ? "この入力で再試行" : "保存"}
                 </Button>
               </div>
             </div>
-          ) : match.note.body ? (
+          ) : editor.savedNote.body ? (
             <div className="grid gap-1">
               <p
                 className={cn(
@@ -180,12 +167,12 @@ export function MatchNoteSection({ match, editor }: MatchNoteSectionProps) {
                   readableTextWidthClass,
                 )}
               >
-                {match.note.body}
+                {editor.savedNote.body}
               </p>
-              {match.note.updatedAt ? (
+              {editor.savedNote.updatedAt ? (
                 <p className={contentText.supporting}>
-                  {match.note.updatedByDisplayName ?? "利用者"}が
-                  {formatDateTimeLong(match.note.updatedAt)}に更新
+                  {editor.savedNote.updatedByDisplayName ?? "利用者"}が
+                  {formatDateTimeLong(editor.savedNote.updatedAt)}に更新
                 </p>
               ) : null}
             </div>
@@ -243,7 +230,9 @@ export function MatchNoteSection({ match, editor }: MatchNoteSectionProps) {
           restoreActionFocus.current = true;
           remove();
         }}
-        onOpenChange={setDeleteOpen}
+        onOpenChange={(open) => {
+          if (!open) cancelDelete();
+        }}
       />
     </section>
   );
@@ -254,11 +243,7 @@ export function MatchNoteNavigationGuard({ editor }: { editor: MatchNoteEditor }
   return (
     <UnsavedChangesGuard
       description="入力した試合メモはまだ保存されていません。このページに残れば編集を続けられます。"
-      model={{
-        dirty: editor.dirty,
-        navigationAllowedRef: editor.navigationAllowedRef,
-        onDiscard: editor.cancel,
-      }}
+      model={editor.guard}
       pending={editor.pending}
       pendingDescription="試合メモの処理結果が分かるまで、このページでお待ちください。送信済みの保存や削除を移動操作で取り消すことはできません。"
     />

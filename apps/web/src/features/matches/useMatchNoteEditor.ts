@@ -1,31 +1,22 @@
 import { useMutation } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import type {
-  MatchNoteCommit,
-  MatchNoteConflictState,
   MatchNoteEditor,
+  MatchNoteEditorSource,
+  MatchNoteIntent,
   MatchNoteReadResult,
 } from "@/features/matches/matchNoteModel";
 import {
-  matchNoteMaximumCharacters,
-  normalizeMatchNote,
-} from "@/features/matches/workspace/review/confirmMatchFormSchema";
+  changeMatchNoteEditing,
+  emptyMatchNoteEditingState,
+  matchNoteInputView,
+  prepareMatchNoteSave,
+} from "@/features/matches/matchNoteModel";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { replaceMatchNote } from "@/shared/api/matches";
-import type { MatchDetailResponse } from "@/shared/api/matches";
 import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
-
-type MatchNoteEditorOptions = {
-  matchId: string;
-  match: MatchDetailResponse | undefined;
-  readLatest: () => Promise<MatchNoteReadResult>;
-  commitSavedNote: (commit: MatchNoteCommit) => Promise<MatchNoteReadResult>;
-};
-
-type NoteSnapshot = { body: string; version: string };
-type NoteIntent = { body?: string; expectedVersion: string };
 
 async function readNoteSafely(
   read: () => Promise<MatchNoteReadResult>,
@@ -43,26 +34,22 @@ export function useMatchNoteEditor({
   match,
   readLatest,
   commitSavedNote,
-}: MatchNoteEditorOptions): MatchNoteEditor {
+}: MatchNoteEditorSource): MatchNoteEditor {
   const idempotencyKeys = useIdempotencyKeyStore();
-  const navigationAllowedRef = useRef(false);
   const requestPendingRef = useRef(false);
   const editingSessionRef = useRef(0);
   const [pending, setPending] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshFailed, setRefreshFailed] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
-  const [snapshot, setSnapshot] = useState<NoteSnapshot | null>(null);
-  const [editingDraft, setEditingDraft] = useState("");
-  const [conflict, setConflict] = useState<MatchNoteConflictState | null>(null);
+  const [state, setState] = useState(emptyMatchNoteEditingState);
+  const current = useRef(state);
+  const change = useCallback((intent: Parameters<typeof changeMatchNoteEditing>[1]) => {
+    current.current = changeMatchNoteEditing(current.current, intent);
+    setState(current.current);
+  }, []);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [deleteSnapshot, setDeleteSnapshot] = useState<NoteSnapshot | null>(null);
-  const editing = snapshot !== null;
-  const draft = editing ? editingDraft : (match?.note.body ?? "");
-  const normalizedDraft = normalizeMatchNote(draft);
-  const count = Array.from(normalizedDraft).length;
-  const tooLong = count > matchNoteMaximumCharacters;
-  const dirty = snapshot !== null && normalizedDraft !== snapshot.body;
+  const view = matchNoteInputView(state, match?.note);
 
   const finishRequest = () => {
     requestPendingRef.current = false;
@@ -70,7 +57,7 @@ export function useMatchNoteEditor({
   };
 
   const mutation = useMutation({
-    mutationFn: async ({ body, expectedVersion }: NoteIntent) => {
+    mutationFn: async ({ body, expectedVersion }: MatchNoteIntent) => {
       const payload = { body, expectedVersion, matchId };
       return runIdempotentMutation(
         idempotencyKeys,
@@ -103,22 +90,19 @@ export function useMatchNoteEditor({
         return;
       }
       if (variables.body === undefined) {
-        setDeleteSnapshot(null);
+        change({ kind: "cancelDelete" });
         setErrorMessage(
           "試合メモが更新されているため削除できませんでした。最新版を確認して、もう一度実行してください。",
         );
         return;
       }
-      setConflict({ draft: variables.body, latest: latest.match.note });
+      change({ kind: "conflict", draft: variables.body, latest: latest.match.note });
     },
     onSuccess: async (response, variables) => {
       // The write is committed. The following display refresh does not block navigation.
       finishRequest();
-      setConflict(null);
       setErrorMessage(null);
-      setDeleteSnapshot(null);
-      setSnapshot(null);
-      setEditingDraft("");
+      change({ kind: "saved" });
       setSuccessMessage(variables.body === undefined ? "メモを削除しました" : "保存しました");
       setRefreshing(true);
       setRefreshFailed(false);
@@ -133,30 +117,26 @@ export function useMatchNoteEditor({
   const cancel = () => {
     if (requestPendingRef.current) return;
     editingSessionRef.current += 1;
-    setEditingDraft("");
-    setConflict(null);
     setErrorMessage(null);
-    setSnapshot(null);
+    change({ kind: "cancel" });
   };
-  const submit = (intent: NoteIntent) => {
-    if (requestPendingRef.current || refreshing || !match) return;
+  const submit = (intent: MatchNoteIntent) => {
+    if (requestPendingRef.current || refreshing || !match) return false;
     requestPendingRef.current = true;
     setPending(true);
     setErrorMessage(null);
     setSuccessMessage("");
     setRefreshFailed(false);
     mutation.mutate(intent);
+    return true;
   };
   const save = () => {
-    if (!snapshot || tooLong || normalizedDraft.trim().length === 0 || (!dirty && !conflict))
-      return;
-    const baseline = conflict?.latest;
-    if (baseline) setSnapshot({ body: baseline.body ?? "", version: baseline.version });
-    submit({ body: normalizedDraft, expectedVersion: baseline?.version ?? snapshot.version });
+    const intent = prepareMatchNoteSave(current.current);
+    if (intent && submit(intent)) change({ kind: "retryConflict" });
   };
   const remove = () => {
-    if (!deleteSnapshot) return;
-    submit({ expectedVersion: deleteSnapshot.version });
+    const deletion = current.current.deletion;
+    if (deletion) submit({ expectedVersion: deletion.version });
   };
   const retryDisplayRefresh = async () => {
     if (requestPendingRef.current || refreshing) return;
@@ -167,39 +147,48 @@ export function useMatchNoteEditor({
   };
 
   return {
+    ...view,
     cancel,
-    conflict,
-    count,
-    deleteOpen: deleteSnapshot !== null,
-    dirty,
-    draft,
-    editing,
+    canSave: view.canSave && !pending && !refreshing && Boolean(match),
+    changeDraft: (draft) => {
+      if (!requestPendingRef.current) change({ kind: "changeDraft", draft });
+    },
+    conflict: state.conflict
+      ? { draft: state.conflict.draft, latestBody: state.conflict.latest.body }
+      : null,
+    deleteOpen: state.deletion !== null,
     errorMessage,
-    navigationAllowedRef,
-    normalizedDraft,
+    guard: {
+      dirty: view.dirty,
+      isNavigationAllowed: () =>
+        !requestPendingRef.current && !matchNoteInputView(current.current, undefined).dirty,
+      onDiscard: cancel,
+    },
     pending,
     refreshing,
     refreshFailed: refreshFailed && !match?.note.updatedAt,
     retryDisplayRefresh,
     remove,
     save,
-    setDeleteOpen: (open: boolean) => {
+    requestDelete: () => {
       if (requestPendingRef.current) return;
-      setDeleteSnapshot(
-        open && match ? { body: match.note.body ?? "", version: match.note.version } : null,
-      );
+      if (match) change({ kind: "requestDelete", note: match.note });
     },
-    setDraft: setEditingDraft,
+    cancelDelete: () => {
+      if (!requestPendingRef.current) change({ kind: "cancelDelete" });
+    },
+    savedNote: {
+      body: match?.note.body,
+      updatedAt: match?.note.updatedAt,
+      updatedByDisplayName: match?.note.updatedByDisplayName,
+    },
     successMessage,
     startEditing: () => {
       if (!match || requestPendingRef.current || refreshing) return;
       editingSessionRef.current += 1;
-      navigationAllowedRef.current = false;
       setSuccessMessage("");
       setRefreshFailed(false);
-      setEditingDraft(match.note.body ?? "");
-      setSnapshot({ body: match.note.body ?? "", version: match.note.version });
+      change({ kind: "begin", note: match.note });
     },
-    tooLong,
   };
 }

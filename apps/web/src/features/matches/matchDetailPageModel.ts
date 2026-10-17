@@ -1,13 +1,12 @@
 import {
   buildMatchDetailLedgerRows,
-  matchDeletionDisabledReason,
   seriesComparisonHrefForMatch,
 } from "@/features/matches/matchDetailViewModel";
 import type {
   MatchDetailLedgerRow,
   MatchFeatureBadge,
 } from "@/features/matches/matchDetailViewModel";
-import type { MatchNoteEditor } from "@/features/matches/matchNoteModel";
+import type { MatchNoteEditorSource } from "@/features/matches/matchNoteModel";
 import type { DetailNavigation, MatchNeighbor } from "@/shared/api/detailReadResult";
 import type { MatchDetailResponse } from "@/shared/api/matches";
 import type { matchPerformanceContextFromArtifact } from "@/shared/matches/matchPerformanceContext";
@@ -31,7 +30,7 @@ export type MatchDetailReadyPageModel = {
     badges: MatchFeatureBadge[];
     performanceContext: ReturnType<typeof matchPerformanceContextFromArtifact>;
   };
-  deletion: MatchDeletionModel & { disabledReason: string | undefined };
+  deletion: MatchDeletionModel;
   identity: {
     gameTitle: string;
     heldAt: string;
@@ -66,7 +65,7 @@ type MatchDetailScreenState =
 
 export type MatchDetailPageModel = MatchDetailScreenState & {
   matchId: string;
-  editor: MatchNoteEditor;
+  note: MatchNoteEditorSource;
 };
 
 /** Resolves screen availability and combines recorded/derived values with current edit policy. */
@@ -80,7 +79,7 @@ export function buildMatchDetailPageModel({
   error,
   analysis,
   deletion,
-  editor,
+  note,
   refresh,
 }: {
   matchId: string;
@@ -92,10 +91,10 @@ export function buildMatchDetailPageModel({
   error: unknown;
   analysis: MatchDetailReadyPageModel["analysis"];
   deletion: MatchDeletionModel;
-  editor: MatchNoteEditor;
+  note: MatchNoteEditorSource;
   refresh: MatchDetailRefreshModel;
 }): MatchDetailPageModel {
-  const common = { matchId, editor };
+  const common = { matchId, note };
   if (notFound) return { ...common, kind: "notFound", refresh };
   if (!match && initialPending && matchId.trim()) return { ...common, kind: "loading" };
   if (!match) return { ...common, kind: "loadFailed", refresh };
@@ -104,7 +103,7 @@ export function buildMatchDetailPageModel({
   return {
     ...common,
     analysis,
-    deletion: { ...deletion, disabledReason: matchDeletionDisabledReason(editor) },
+    deletion,
     identity: {
       gameTitle: match.gameTitleName ?? "未取得",
       heldAt: match.heldAt ?? match.playedAt,

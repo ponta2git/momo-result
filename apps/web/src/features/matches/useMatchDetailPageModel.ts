@@ -7,7 +7,6 @@ import type { MatchDetailPageModel } from "@/features/matches/matchDetailPageMod
 import type { MatchNoteCommit, MatchNoteReadResult } from "@/features/matches/matchNoteModel";
 import { useMatchDeletionCommand } from "@/features/matches/useMatchDeletionCommand";
 import { useMatchFeatureAnalysis } from "@/features/matches/useMatchFeatureAnalysis";
-import { useMatchNoteEditor } from "@/features/matches/useMatchNoteEditor";
 import { invalidateAfterMatchNoteReplaced } from "@/shared/api/cacheInvalidation";
 import { readDetailQuery } from "@/shared/api/detailReadResult";
 import { commitMatchNoteCache } from "@/shared/api/matchNoteCache";
@@ -19,8 +18,13 @@ export function useMatchDetailPageModel(): MatchDetailPageModel {
   const read = useMatchDetailRead(matchId);
   const analysis = useMatchFeatureAnalysis(read.detail);
   const deletion = useMatchDeletionCommand({ heldEventId: read.detail?.heldEventId, matchId });
-  const editor = useMatchNoteEditor({ matchId, match: read.detail, ...read.note });
-  return buildMatchDetailPageModel({ matchId, ...read, analysis, deletion, editor });
+  return buildMatchDetailPageModel({
+    matchId,
+    ...read,
+    analysis,
+    deletion,
+    note: { matchId, match: read.detail, ...read.note },
+  });
 }
 
 /** The cache owns confirmed absence and saved notes; notices never validate cached details. */

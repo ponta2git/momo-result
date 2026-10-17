@@ -15,16 +15,17 @@ const ANALYSIS_INPUT_QUERY: &str = r#"SELECT
        m.season_master_id, m.map_master_id,
        mp.member_id, mp.play_order, mp.rank,
        mp.total_assets_man_yen, mp.revenue_man_yen,
-       COALESCE(SUM(mi.count) FILTER (WHERE mi.incident_master_id = 'incident_destination'), 0)::int,
-       COALESCE(SUM(mi.count) FILTER (WHERE mi.incident_master_id = 'incident_plus_station'), 0)::int,
-       COALESCE(SUM(mi.count) FILTER (WHERE mi.incident_master_id = 'incident_minus_station'), 0)::int,
-       COALESCE(SUM(mi.count) FILTER (WHERE mi.incident_master_id = 'incident_card_station'), 0)::int,
-       COALESCE(SUM(mi.count) FILTER (WHERE mi.incident_master_id = 'incident_card_shop'), 0)::int,
-       COALESCE(SUM(mi.count) FILTER (WHERE mi.incident_master_id = 'incident_suri_no_ginji'), 0)::int,
+       COALESCE(SUM(mi.count) FILTER (WHERE im.key = 'destination'), 0)::int,
+       COALESCE(SUM(mi.count) FILTER (WHERE im.key = 'plus_station'), 0)::int,
+       COALESCE(SUM(mi.count) FILTER (WHERE im.key = 'minus_station'), 0)::int,
+       COALESCE(SUM(mi.count) FILTER (WHERE im.key = 'card_station'), 0)::int,
+       COALESCE(SUM(mi.count) FILTER (WHERE im.key = 'card_shop'), 0)::int,
+       COALESCE(SUM(mi.count) FILTER (WHERE im.key = 'suri_no_ginji'), 0)::int,
        m.owner_member_id
      FROM matches m
      JOIN match_players mp ON mp.match_id = m.id
      LEFT JOIN match_incidents mi ON mi.match_id = mp.match_id AND mi.member_id = mp.member_id
+     LEFT JOIN incident_masters im ON im.id = mi.incident_master_id
      WHERE m.game_title_id = $1
      GROUP BY m.id, m.analysis_revision, m.played_at, m.held_event_id,
        m.match_no_in_event, m.season_master_id,
@@ -154,13 +155,22 @@ async fn validate_input_shape(
                       COALESCE(MAX(octet_length(m.season_master_id)), 0)::int,
                       COALESCE(MAX(octet_length(m.map_master_id)), 0)::int,
                       COALESCE(MAX(octet_length(mp.member_id)), 0)::int,
-                      COALESCE(MAX(octet_length(m.owner_member_id)), 0)::int
+                      COALESCE(MAX(octet_length(m.owner_member_id)), 0)::int,
+                      (SELECT count(*) = 6 AND COALESCE(bool_and(key IN (
+                         'destination','plus_station','minus_station',
+                         'card_station','card_shop','suri_no_ginji')),false)
+                       FROM incident_masters)
                FROM matches m
                JOIN match_players mp ON mp.match_id = m.id
                WHERE m.game_title_id = $1",
             &[&game_title_id],
         )
         .await?;
+    if !row.try_get::<_, bool>(7)? {
+        return Err(InputRepositoryError::InputContract(
+            "the six fixed incident keys are required",
+        ));
+    }
     let player_match_count = row.try_get::<_, i64>(0)?;
     let maximum_lengths = [
         row.try_get::<_, i32>(1)?,

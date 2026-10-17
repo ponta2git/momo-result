@@ -64,6 +64,12 @@ provider-owned fields but publishing only selected evidence:
 | `resolve-pushed-image` | `IMAGE_TAG` | Unique matching immutable repository digest; duplicate identical entries are allowed |
 | `resolve-deployment-run` | `OWNER/REPOSITORY` | `candidate_sha` and `run_attempt` output lines after trusted successful deploy-run checks |
 | `verify-manifest-artifact` | `DEPLOYMENT_JSON RUN_ID` | No output; verifies provider artifact identity, digest, name, expiry, and workflow run |
+| `normal-deployment-completion` | `RUN_ID RUN_ATTEMPT COMMIT` | No output; requires the exact completed normal deployment. A candidate-only or frozen run cannot authorize the ordinary publisher. |
+| `frozen-machine-id` / `frozen-machine-start-id` | `runtime\|analysis IMAGE_REF` | Selects the single exact-image machine only when its persistent maintenance mode is frozen; the start selector returns a stopped target or no output for a started target. |
+| `frozen-readiness-evidence` | `runtime\|analysis` | Projects successful dedicated readiness into four public fields; ordinary health checks cannot substitute for it. |
+| `maintenance-operation-scope` | `RECEIPT_JSON analysis\|publish` | Validated fixed operation arguments as output lines. This does not grant permission; the shared controller validates the receipt and live permit. |
+| `maintenance-analysis-evidence` | `RECEIPT_JSON plan\|complete` | Requires the same cutover, epoch, operation, campaign, and plan; completion also requires all targets successful. A read-only plan may report already complete. |
+| `maintenance-publish-evidence` | `RECEIPT_JSON run\|artifact\|completion\|provenance` | No output; validates the actual frozen deployment attempt, immutable provenance artifact, completion identity, or original producer binding. All four are required before publication. |
 | `runtime-machine-evidence` | `IMAGE_REF` | v1 `singleStartedExactImage` evidence |
 | `runtime-machine-id` | `IMAGE_REF` | Validated ID of the single started exact-image machine |
 | `runtime-machine-start-id` | `IMAGE_REF` | ID of the single stopped exact-image machine; empty output if already started |

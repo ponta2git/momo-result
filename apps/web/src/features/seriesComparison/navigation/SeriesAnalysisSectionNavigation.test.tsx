@@ -62,7 +62,7 @@ function Harness({ gate }: { gate?: Promise<void> | undefined }) {
     <SeriesAnalysisNavigation displayIntent={location.displayIntent}>
       <button type="button">別の操作</button>
       <SeriesAnalysisContent
-        ownerMetric={location.state.ownerMetric}
+        ownerMetric={location.selection.ownerMetric}
         onOwnerMetricChange={location.actions.updateOwnerMetric}
         bundle={
           location.activeView === "review"

@@ -1,6 +1,6 @@
 import type {
-  PlayerRadarAdminModel,
-  PlayerRadarPreviewModel,
+  PlayerRadarAdministrationView,
+  PlayerRadarPreviewView,
 } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminTypes";
 import type {
   RadarEditingSource,
@@ -35,9 +35,9 @@ export type RadarEditSession = {
   confirmedPreviewId: string | null;
   comparisonChanged: boolean;
 };
-export type RadarReadyInput = {
+export type RadarSettledInput = {
   input: RadarManualInput;
-  context: string;
+  evaluationKey: string;
   drafts: RadarThresholdDrafts;
 };
 
@@ -156,60 +156,66 @@ export function radarSaveRequest(
 }
 
 /** Only settled input and its evaluation context affect the expensive local comparison. */
-export function radarReadyPreview({
+export function buildRadarInputPreview({
   basis,
   currentBasis,
-  ready,
+  settledInput,
   evaluation,
   permissionReason,
 }: {
   basis: PlayerRadarBasis | undefined;
   currentBasis: PlayerRadarBasis | null;
-  ready: RadarReadyInput | null;
+  settledInput: RadarSettledInput | null;
   evaluation: RadarEditingModel["evaluation"] | undefined;
   permissionReason: string | null | undefined;
-}): PlayerRadarPreviewModel | null {
-  if (!basis || !ready || !evaluation || ready.context !== evaluation.key || permissionReason)
+}): PlayerRadarPreviewView | null {
+  if (
+    !basis ||
+    !settledInput ||
+    !evaluation ||
+    settledInput.evaluationKey !== evaluation.key ||
+    permissionReason
+  )
     return null;
   return {
     previewId: `local:${evaluation.key}`,
     createdAt: evaluation.createdAt,
     evaluationState: evaluation.raw.sample.matchCount ? "ready" : "empty",
     before: evaluation.before,
-    after: previewRadarThresholds(evaluation.raw, basis, ready.input),
+    after: previewRadarThresholds(evaluation.raw, basis, settledInput.input),
     beforeBasis: currentBasis,
-    candidateBasis: radarInputBasis(basis, ready.input),
+    candidateBasis: radarInputBasis(basis, settledInput.input),
   };
 }
 
 /** Saved, debounced, and visible input remain distinct until their identities match. */
-export function radarEditingView(
+export function buildRadarThresholdEditorView(
   session: RadarEditSession | null,
-  model: PlayerRadarAdminModel,
-  ready: RadarReadyInput | null,
+  administration: PlayerRadarAdministrationView,
+  settledInput: RadarSettledInput | null,
   composing: boolean,
   applyError: string | null,
-  localPreview: PlayerRadarPreviewModel | null,
+  localPreview: PlayerRadarPreviewView | null,
 ) {
-  const editing = model.editing;
+  const editing = administration.editing;
   const parsed = session ? parseRadarThresholdDrafts(session.drafts) : null;
-  const context = editing?.evaluation?.key ?? "";
+  const evaluationKey = editing?.evaluation?.key ?? "";
   const candidateId =
-    model.candidate &&
-    ["pending", "ready", "unavailable", "failed"].includes(model.candidate.status)
-      ? model.candidate.candidateId
+    administration.candidate &&
+    ["pending", "ready", "unavailable", "failed"].includes(administration.candidate.status)
+      ? administration.candidate.candidateId
       : null;
   const contextChanged = Boolean(
     session &&
-    (session.source.expectedCurrentBasisId !== (model.currentBasis?.basisId ?? null) ||
+    (session.source.expectedCurrentBasisId !== (administration.currentBasis?.basisId ?? null) ||
       session.source.expectedCandidateId !== candidateId),
   );
   const waitingForSavedState = Boolean(
     session?.saved &&
     candidateId !== session.saved.candidateId &&
-    model.operation &&
-    ["pending", "running"].includes(model.operation.status) &&
-    model.operation.kind === "manual",
+    administration.operation &&
+    ["pending", "running"].includes(administration.operation.status) &&
+    administration.operation.kind === "manual",
   );
   const matchesSaved = Boolean(
     session?.saved &&
@@ -217,7 +223,8 @@ export function radarEditingView(
     sameRadarThresholds(parsed.input, session.saved.input) &&
     candidateId === session.saved.candidateId,
   );
-  const formal = matchesSaved && model.previewState === "ready" ? model.preview : null;
+  const formal =
+    matchesSaved && administration.previewState === "ready" ? administration.preview : null;
   const formalMismatch = Boolean(
     formal?.after &&
     parsed?.input &&
@@ -245,8 +252,8 @@ export function radarEditingView(
   const noChangeFromCurrent = Boolean(
     !matchesSaved &&
     parsed?.input &&
-    model.currentBasis &&
-    sameRadarThresholds(parsed.input, radarBasisInput(model.currentBasis)),
+    administration.currentBasis &&
+    sameRadarThresholds(parsed.input, radarBasisInput(administration.currentBasis)),
   );
   return {
     parsed,
@@ -269,10 +276,10 @@ export function radarEditingView(
       replacesCandidate: Boolean(session?.source.expectedCandidateId),
       preview: session?.confirmed && formal ? formal : localPreview,
       ready: Boolean(
-        ready &&
+        settledInput &&
         session &&
-        ready.drafts === session.drafts &&
-        ready.context === context &&
+        settledInput.drafts === session.drafts &&
+        settledInput.evaluationKey === evaluationKey &&
         !composing &&
         !editing?.permissionReason,
       ),
@@ -285,9 +292,9 @@ export function radarEditingView(
         !formal &&
         !applyError &&
         !contextChanged &&
-        model.operation &&
-        ["manual", "preview", "retry"].includes(model.operation.kind) &&
-        ["pending", "running"].includes(model.operation.status),
+        administration.operation &&
+        ["manual", "preview", "retry"].includes(administration.operation.kind) &&
+        ["pending", "running"].includes(administration.operation.status),
       ),
       formalMismatch,
       comparisonChanged: session?.comparisonChanged ?? false,

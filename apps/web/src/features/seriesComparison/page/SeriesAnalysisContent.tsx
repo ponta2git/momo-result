@@ -188,7 +188,7 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
             >
               <Suspense fallback={<OutlookLoading />}>
                 <OutlookView
-                  response={bundle.outlook}
+                  summary={bundle.outlook}
                   selection={displayedSelection}
                   onMemberChange={onOutlookMemberChange}
                 />

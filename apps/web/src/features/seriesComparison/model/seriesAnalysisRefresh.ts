@@ -9,21 +9,21 @@ import type { SeriesAnalysisScopeStatus } from "@/shared/api/seriesPlayerRadar";
 export async function refreshSeriesAnalysis({
   activeView,
   artifactId,
-  deferredState,
-  state,
+  deferredSelection,
+  selection,
   refreshPublication,
   refreshScope,
   refreshVisibleResources,
 }: {
   activeView: SeriesAnalysisViewId;
   artifactId: string | undefined;
-  deferredState: SeriesAnalysisSelection;
-  state: SeriesAnalysisSelection;
+  deferredSelection: SeriesAnalysisSelection;
+  selection: SeriesAnalysisSelection;
   refreshPublication: () => Promise<{ artifactId: string | undefined } | undefined>;
   refreshScope: (() => Promise<SeriesAnalysisScopeStatus>) | undefined;
   refreshVisibleResources: () => Promise<void>;
 }): Promise<void> {
-  if (!state.gameTitleId) return;
+  if (!selection.gameTitleId) return;
   const publication = await refreshPublication();
   if (!publication || publication.artifactId !== artifactId) return;
   if (refreshScope) {
@@ -32,9 +32,9 @@ export async function refreshSeriesAnalysis({
       const plan = planSeriesAnalysisRead({
         activeView,
         artifactId,
-        deferredState,
+        deferredSelection,
         scopeState: scope.state,
-        state,
+        selection,
       });
       if (!("query" in plan)) return;
     } catch {

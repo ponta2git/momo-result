@@ -129,8 +129,8 @@ describe("useSeriesAnalysisDisplay", () => {
       (held: boolean) => {
         const resource = useSeriesAnalysisDisplay({
           activeView: "outlook",
-          state,
-          deferredState: state,
+          selection: state,
+          deferredSelection: state,
           deferOutlookAdoption: held,
         });
         const bundle = resource.resource.bundle;
@@ -226,8 +226,8 @@ describe("useSeriesAnalysisDisplay", () => {
       (held: boolean) =>
         useSeriesAnalysisDisplay({
           activeView: "outlook",
-          state,
-          deferredState: state,
+          selection: state,
+          deferredSelection: state,
           deferOutlookAdoption: held,
         }),
       {
@@ -295,8 +295,8 @@ describe("useSeriesAnalysisDisplay", () => {
       (state: SeriesAnalysisSelection) =>
         useSeriesAnalysisDisplay({
           activeView: state.view ?? "overview",
-          deferredState: state,
-          state,
+          deferredSelection: state,
+          selection: state,
         }),
       {
         initialProps: initialState,
@@ -391,7 +391,11 @@ describe("useSeriesAnalysisDisplay", () => {
       };
       const { result, rerender } = renderHook(
         (state: SeriesAnalysisSelection) =>
-          useSeriesAnalysisDisplay({ activeView: "overview", deferredState: state, state }),
+          useSeriesAnalysisDisplay({
+            activeView: "overview",
+            deferredSelection: state,
+            selection: state,
+          }),
         {
           initialProps: initialState,
           wrapper: ({ children }: { children: ReactNode }) => (
@@ -482,8 +486,8 @@ describe("useSeriesAnalysisDisplay", () => {
       });
       const analysis = useSeriesAnalysisDisplay({
         activeView: "overview",
-        state,
-        deferredState: state,
+        selection: state,
+        deferredSelection: state,
       });
       return (
         <>
@@ -569,7 +573,12 @@ describe("useSeriesAnalysisDisplay", () => {
         view: "overview",
       };
       const { result } = renderHook(
-        () => useSeriesAnalysisDisplay({ activeView: "overview", deferredState: state, state }),
+        () =>
+          useSeriesAnalysisDisplay({
+            activeView: "overview",
+            deferredSelection: state,
+            selection: state,
+          }),
         {
           wrapper: ({ children }: { children: ReactNode }) => (
             <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
@@ -619,7 +628,11 @@ describe("useSeriesAnalysisDisplay", () => {
       const initialState: SeriesAnalysisSelection = { gameTitleId: analysisArtifact.gameTitleId };
       const { result, rerender, unmount } = renderHook(
         (state: SeriesAnalysisSelection) =>
-          useSeriesAnalysisDisplay({ activeView: "overview", deferredState: state, state }),
+          useSeriesAnalysisDisplay({
+            activeView: "overview",
+            deferredSelection: state,
+            selection: state,
+          }),
         {
           initialProps: initialState,
           wrapper: ({ children }: { children: ReactNode }) => (
@@ -666,7 +679,12 @@ describe("useSeriesAnalysisDisplay", () => {
       view: "overview",
     };
     const { result } = renderHook(
-      () => useSeriesAnalysisDisplay({ activeView: "overview", deferredState: state, state }),
+      () =>
+        useSeriesAnalysisDisplay({
+          activeView: "overview",
+          deferredSelection: state,
+          selection: state,
+        }),
       {
         wrapper: ({ children }: { children: ReactNode }) => (
           <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
@@ -730,7 +748,11 @@ describe("useSeriesAnalysisDisplay", () => {
       };
       const { result, rerender, unmount } = renderHook(
         (state: SeriesAnalysisSelection) =>
-          useSeriesAnalysisDisplay({ activeView: "overview", deferredState: state, state }),
+          useSeriesAnalysisDisplay({
+            activeView: "overview",
+            deferredSelection: state,
+            selection: state,
+          }),
         {
           initialProps: initialState,
           reactStrictMode: true,

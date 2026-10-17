@@ -15,7 +15,7 @@ import {
   updateOutlookEntry,
 } from "@/features/seriesComparison/outlook/outlookWorkspaceState";
 import type { OutlookWorkspaceState } from "@/features/seriesComparison/outlook/outlookWorkspaceState";
-import { useSeriesComparisonPageModel } from "@/features/seriesComparison/page/useSeriesComparisonPageModel";
+import { useSeriesComparison } from "@/features/seriesComparison/page/useSeriesComparison";
 import { decodeSeriesAnalysisArtifact } from "@/shared/api/seriesAnalysisArtifactDecoder";
 import { canonicalResultMemberIds } from "@/shared/domain/members";
 import { createDeferred } from "@/test/deferred";
@@ -43,26 +43,28 @@ beforeAll(() =>
   ]),
 );
 
-function PageModelHarness({
+function ComparisonHarness({
   onFocusChange,
 }: {
   onFocusChange: (matchId: string | undefined) => void;
 }) {
   const location = useLocation();
-  const page = useSeriesComparisonPageModel();
+  const comparison = useSeriesComparison();
 
   useEffect(
-    () => onFocusChange(page.filters.state.focusMatchId),
-    [onFocusChange, page.filters.state.focusMatchId],
+    () => onFocusChange(comparison.filters.selection.focusMatchId),
+    [onFocusChange, comparison.filters.selection.focusMatchId],
   );
 
   return (
     <>
-      <output aria-label="analysis readiness">{page.resource.data ? "ready" : "loading"}</output>
+      <output aria-label="analysis readiness">
+        {comparison.resource.data ? "ready" : "loading"}
+      </output>
       <output aria-label="analysis location">{location.search}</output>
-      <output aria-label="analysis focus">{page.filters.state.focusMatchId ?? ""}</output>
-      {page.focus.notice ? <p aria-label="focus notice">{page.focus.notice}</p> : null}
-      <button type="button" onClick={() => page.actions.focusMatch("match-excluded")}>
+      <output aria-label="analysis focus">{comparison.filters.selection.focusMatchId ?? ""}</output>
+      {comparison.focus.notice ? <p aria-label="focus notice">{comparison.focus.notice}</p> : null}
+      <button type="button" onClick={() => comparison.actions.focusMatch("match-excluded")}>
         対象外の試合を選択
       </button>
     </>
@@ -95,7 +97,7 @@ function RetainedOutlookHarness({ initial }: { initial: OutlookWorkspaceState })
   );
 }
 
-describe("useSeriesComparisonPageModel", () => {
+describe("useSeriesComparison", () => {
   it.each([true, false])(
     "keeps the trial while a URL-only scope is unverified and changes it only for a valid new scope: %s",
     async (validIdentity) => {
@@ -141,7 +143,7 @@ describe("useSeriesComparisonPageModel", () => {
           >
             <OutlookWorkspaceProvider>
               <RetainedOutlookHarness initial={initial} />
-              <PageModelHarness onFocusChange={() => undefined} />
+              <ComparisonHarness onFocusChange={() => undefined} />
             </OutlookWorkspaceProvider>
           </MemoryRouter>
         </QueryClientProvider>,
@@ -192,7 +194,7 @@ describe("useSeriesComparisonPageModel", () => {
         >
           <OutlookWorkspaceProvider>
             <RetainedOutlookHarness initial={initial} />
-            <PageModelHarness onFocusChange={() => undefined} />
+            <ComparisonHarness onFocusChange={() => undefined} />
           </OutlookWorkspaceProvider>
         </MemoryRouter>
       </QueryClientProvider>,
@@ -245,7 +247,7 @@ describe("useSeriesComparisonPageModel", () => {
               <Route path="/matches" element={<p>戦績を確認中</p>} />
               <Route
                 path="/analytics/series"
-                element={<PageModelHarness onFocusChange={() => undefined} />}
+                element={<ComparisonHarness onFocusChange={() => undefined} />}
               />
             </Routes>
           </OutlookWorkspaceProvider>
@@ -287,7 +289,7 @@ describe("useSeriesComparisonPageModel", () => {
     render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={["/analytics/series?gameTitleId=gt_momotetsu_2&view=flow"]}>
-          <PageModelHarness onFocusChange={recordFocus} />
+          <ComparisonHarness onFocusChange={recordFocus} />
         </MemoryRouter>
       </QueryClientProvider>,
     );

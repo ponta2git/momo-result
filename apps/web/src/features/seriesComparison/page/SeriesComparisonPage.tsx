@@ -15,7 +15,7 @@ import {
   ComparisonSkeleton,
   PageSkeleton,
 } from "@/features/seriesComparison/page/SeriesComparisonSkeletons";
-import { useSeriesComparisonPageModel } from "@/features/seriesComparison/page/useSeriesComparisonPageModel";
+import { useSeriesComparison } from "@/features/seriesComparison/page/useSeriesComparison";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
@@ -33,8 +33,8 @@ export function SeriesComparisonPage() {
 }
 
 function SeriesComparisonPageContent() {
-  const page = useSeriesComparisonPageModel();
-  const { filters, focus, options, resource, status } = page;
+  const comparison = useSeriesComparison();
+  const { filters, focus, options, resource, status } = comparison;
   const purposeChanging =
     resource.bundle !== undefined &&
     (filters.activeView === "outlook"
@@ -74,7 +74,7 @@ function SeriesComparisonPageContent() {
   const retryTarget = requestedRetryStillVisible ? requestedRetryTarget : defaultRetryTarget;
   const retry = (target: "options" | "status" | "resource") => {
     setRequestedRetryTarget(target);
-    page.actions.refresh();
+    comparison.actions.refresh();
   };
 
   useEffect(() => {
@@ -86,7 +86,7 @@ function SeriesComparisonPageContent() {
 
   return (
     <SeriesAnalysisNavigation
-      displayIntent={page.displayIntent}
+      displayIntent={comparison.displayIntent}
       failed={options.hasError || status.hasError || resource.hasError}
     >
       <PageFrame width="wide">
@@ -95,9 +95,9 @@ function SeriesComparisonPageContent() {
           className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4"
           role="region"
         >
-          {page.normalizationNotice ? (
+          {comparison.normalizationNotice ? (
             <Notice tone="info" title="表示条件を調整しました">
-              {page.normalizationNotice}
+              {comparison.normalizationNotice}
             </Notice>
           ) : null}
           {options.hasError ? (
@@ -140,30 +140,30 @@ function SeriesComparisonPageContent() {
                 scopeEmpty={resource.scopeState === "empty"}
                 loading={updating}
                 canRefresh={
-                  (resource.canRefresh || Boolean(filters.state.gameTitleId)) &&
+                  (resource.canRefresh || Boolean(filters.selection.gameTitleId)) &&
                   !updating &&
                   !retryTarget
                 }
                 mapOptions={filters.mapOptions}
-                mapValue={filters.state.mapMasterId ?? ""}
+                mapValue={filters.selection.mapMasterId ?? ""}
                 refreshing={updating && !retryTarget && Boolean(resource.data) && !purposeChanging}
                 response={
-                  matchesSeriesAnalysisScope(resource.data, filters.state)
+                  matchesSeriesAnalysisScope(resource.data, filters.selection)
                     ? resource.data
                     : undefined
                 }
                 seasonOptions={filters.seasonOptions}
-                seasonValue={filters.state.seasonMasterId ?? ""}
+                seasonValue={filters.selection.seasonMasterId ?? ""}
                 seriesOptions={filters.seriesOptions}
-                seriesValue={filters.state.gameTitleId ?? ""}
+                seriesValue={filters.selection.gameTitleId ?? ""}
                 onMapChange={filters.updateMapMasterId}
-                onRefresh={page.actions.refresh}
+                onRefresh={comparison.actions.refresh}
                 onSeasonChange={filters.updateSeasonMasterId}
                 onSeriesChange={filters.updateGameTitle}
               />
               <SeriesAnalysisStatusFeedback
                 displayedPublishedAt={
-                  matchesSeriesAnalysisScope(resource.data, filters.state)
+                  matchesSeriesAnalysisScope(resource.data, filters.selection)
                     ? resource.data?.artifact.publishedAt
                     : undefined
                 }
@@ -200,7 +200,7 @@ function SeriesComparisonPageContent() {
                   title="この範囲に確定済みの試合がありません"
                   description="シーズン・マップの選択は保持しています。条件を変更すると別の記録を確認できます。"
                   action={
-                    <Button variant="secondary" onClick={page.actions.clearScope}>
+                    <Button variant="secondary" onClick={comparison.actions.clearScope}>
                       全シーズン・全マップに戻す
                     </Button>
                   }
@@ -214,7 +214,7 @@ function SeriesComparisonPageContent() {
                   tone="warning"
                   title="この比較条件は現在利用できません"
                   action={
-                    <Button variant="secondary" onClick={page.actions.clearScope}>
+                    <Button variant="secondary" onClick={comparison.actions.clearScope}>
                       全シーズン・全マップに戻す
                     </Button>
                   }
@@ -267,8 +267,8 @@ function SeriesComparisonPageContent() {
                     >
                       <EmptyState
                         action={
-                          filters.state.mapMasterId || filters.state.seasonMasterId ? (
-                            <Button variant="secondary" onClick={page.actions.clearScope}>
+                          filters.selection.mapMasterId || filters.selection.seasonMasterId ? (
+                            <Button variant="secondary" onClick={comparison.actions.clearScope}>
                               全シーズン・全マップに戻す
                             </Button>
                           ) : (
@@ -284,9 +284,9 @@ function SeriesComparisonPageContent() {
                   ) : (
                     <SeriesAnalysisContent
                       showPurposeTabs={false}
-                      outlookSelection={filters.state}
+                      outlookSelection={filters.selection}
                       onOutlookMemberChange={filters.updateOutlookMember}
-                      ownerMetric={filters.state.ownerMetric}
+                      ownerMetric={filters.selection.ownerMetric}
                       onOwnerMetricChange={filters.updateOwnerMetric}
                       activeView={filters.activeView}
                       bundle={resource.bundle}
@@ -297,11 +297,11 @@ function SeriesComparisonPageContent() {
                         !focus.shielded &&
                         !focus.loading &&
                         resource.bundle.view === filters.activeView &&
-                        matchesSeriesAnalysisScope(resource.data, filters.state)
+                        matchesSeriesAnalysisScope(resource.data, filters.selection)
                       }
-                      onArtifactExpired={page.actions.refresh}
-                      onClearFocusedMatch={page.actions.clearFocusedMatch}
-                      onFocusMatch={page.actions.focusMatch}
+                      onArtifactExpired={comparison.actions.refresh}
+                      onClearFocusedMatch={comparison.actions.clearFocusedMatch}
+                      onFocusMatch={comparison.actions.focusMatch}
                       onViewChange={filters.updateView}
                     />
                   )}

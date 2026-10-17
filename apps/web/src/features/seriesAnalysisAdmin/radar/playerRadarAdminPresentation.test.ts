@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { radarReviewPresentation } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminPresentation";
+import { buildRadarReviewView } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminPresentation";
 import type { SeriesPlayerRadarState } from "@/shared/api/seriesPlayerRadar";
 import {
   makePlayerRadarEvaluation,
@@ -64,12 +64,12 @@ function monitoredState(): SeriesPlayerRadarState & { monitor: Monitor } {
   };
 }
 
-describe("radarReviewPresentation", () => {
+describe("buildRadarReviewView", () => {
   it("shows the saved windows and unique event count without adding overlapping event counts", () => {
     const state = monitoredState();
     state.acknowledgedEvidenceKeys = ["high-score-evidence"];
 
-    const result = radarReviewPresentation(state);
+    const result = buildRadarReviewView(state);
 
     expect(result.explanation).toBeNull();
     expect(result.reasons[0]).toMatchObject({
@@ -98,10 +98,7 @@ describe("radarReviewPresentation", () => {
       { kind: "new_map", axisIds: [], mapMasterIds: ["map-2"], evidenceChecksum: "map" },
     ];
 
-    expect(radarReviewPresentation(state).reasons.map((reason) => reason.evidence)).toEqual([
-      [],
-      [],
-    ]);
+    expect(buildRadarReviewView(state).reasons.map((reason) => reason.evidence)).toEqual([[], []]);
   });
 
   it("explains insufficient events using the evaluated windows rather than all later matches", () => {
@@ -110,7 +107,7 @@ describe("radarReviewPresentation", () => {
     state.monitor.evaluatedHeldEventCount = 6;
     state.monitor.reasons = [];
 
-    const result = radarReviewPresentation(state);
+    const result = buildRadarReviewView(state);
 
     expect(result.explanation).toContain("対象40試合は6開催分");
     expect(result.explanation).toContain("8開催以上で判定");

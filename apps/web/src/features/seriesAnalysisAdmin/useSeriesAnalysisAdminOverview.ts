@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 
 import { useAnalysisAdminOverviewRead } from "@/features/seriesAnalysisAdmin/analysisAdminQueryAdapter";
-import { selectAnalysisAdminOverview } from "@/features/seriesAnalysisAdmin/seriesAnalysisAdminPresentation";
+import { buildAnalysisAdminOverviewView } from "@/features/seriesAnalysisAdmin/seriesAnalysisAdminPresentation";
 import type { useSeriesAnalysisAdminLocation } from "@/features/seriesAnalysisAdmin/useSeriesAnalysisAdminLocation";
 import { normalizeDisplayApiError } from "@/shared/api/problemDetails";
 import type { AuthorizationAccess } from "@/shared/auth/authorization";
@@ -18,24 +18,29 @@ export function useSeriesAnalysisAdminOverview({
   onTitleChange: () => void;
 }) {
   const { gameTitleId, selectTitle } = location;
-  const read = useAnalysisAdminOverviewRead(gameTitleId, authorization);
-  const resolved = selectAnalysisAdminOverview(read.data, read.selectedTitleId);
+  const overviewRead = useAnalysisAdminOverviewRead(gameTitleId, authorization);
+  const overviewView = buildAnalysisAdminOverviewView(
+    overviewRead.data,
+    overviewRead.selectedTitleId,
+  );
   useEffect(() => {
-    if (read.defaultTitleId) selectTitle(read.defaultTitleId);
-  }, [read.defaultTitleId, selectTitle]);
+    if (overviewRead.defaultTitleId) selectTitle(overviewRead.defaultTitleId);
+  }, [overviewRead.defaultTitleId, selectTitle]);
 
-  const error = read.error ? normalizeDisplayApiError(read.error) : undefined;
-  const errorTitle = useRetryNotice(error?.title, read.fetching, gameTitleId ?? "");
-  const errorDetail = useRetryNotice(error?.detail, read.fetching, gameTitleId ?? "");
-  const selectedGameTitleId = resolved.selection.gameTitleId;
+  const error = overviewRead.error ? normalizeDisplayApiError(overviewRead.error) : undefined;
+  const errorTitle = useRetryNotice(error?.title, overviewRead.fetching, gameTitleId ?? "");
+  const errorDetail = useRetryNotice(error?.detail, overviewRead.fetching, gameTitleId ?? "");
+  const selectedGameTitleId = overviewView.selection.gameTitleId;
   return {
-    data: resolved.data,
-    selection: resolved.selection,
+    data: overviewView.data,
+    selection: overviewView.selection,
     error: errorTitle ? { title: errorTitle, detail: errorDetail } : undefined,
-    loading: (authorization.auth.isChecking || read.loading) && !errorTitle,
-    fetching: read.fetching,
+    loading: (authorization.auth.isChecking || overviewRead.loading) && !errorTitle,
+    fetching: overviewRead.fetching,
     refreshDisabled:
-      !authorization.allowed.operations || read.fetching || read.resolvingDefaultTitle,
+      !authorization.allowed.operations ||
+      overviewRead.fetching ||
+      overviewRead.resolvingDefaultTitle,
     actions: {
       selectTitle: (value: string) => {
         if (!authorization.begin("operations")) return;
@@ -44,11 +49,11 @@ export function useSeriesAnalysisAdminOverview({
       },
       refresh: () => {
         if (!authorization.begin("operations")) return;
-        void read.refresh();
+        void overviewRead.refresh();
       },
       refreshRadar: () => {
         if (!selectedGameTitleId || !authorization.begin("operations")) return;
-        read.refreshRadar();
+        overviewRead.refreshRadar();
       },
     },
   };

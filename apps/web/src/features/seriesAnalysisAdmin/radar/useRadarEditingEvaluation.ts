@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef } from "react";
 
 import { useRadarEvaluationRead } from "@/features/seriesAnalysisAdmin/radar/playerRadarQueryAdapter";
-import { radarEditingEvaluation } from "@/features/seriesAnalysisAdmin/radar/radarThresholdEditorModel";
+import { resolveRadarEditingEvaluation } from "@/features/seriesAnalysisAdmin/radar/radarThresholdEditorModel";
 import type { RadarEditingModel } from "@/features/seriesAnalysisAdmin/radar/radarThresholdEditorModel";
 
 /** Adopts saved evaluation metrics only while their publication and scope still match. */
@@ -29,7 +29,7 @@ export function useRadarEditingEvaluation({
       refreshIdentity.current = undefined;
     };
   }, [resourceId, refreshIdentity]);
-  const presentation = radarEditingEvaluation({
+  const presentation = resolveRadarEditingEvaluation({
     active,
     currentBasisId,
     scope,

@@ -14,7 +14,7 @@ import type {
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import type { SelectOption } from "@/shared/ui/forms/SelectControl";
 
-export type PlayerRadarPreviewModel = {
+export type PlayerRadarPreviewView = {
   previewId: string;
   createdAt: string;
   evaluationState: "ready" | "loading" | "empty" | "awaiting_analysis" | "error";
@@ -44,7 +44,7 @@ export type PlayerRadarAdminAction = {
   run: () => Promise<void> | void;
 };
 
-export type PlayerRadarAdminModel = {
+export type PlayerRadarAdministrationView = {
   authorizationRevision?: number;
   autoEditCandidateId?: string | null;
   creationPending?: boolean;
@@ -63,7 +63,7 @@ export type PlayerRadarAdminModel = {
     failureMessage: string | null;
     unavailableAxes: ReadonlyArray<{ axisId: PlayerRadarAxisId; reason: string }>;
   } | null;
-  preview: PlayerRadarPreviewModel | null;
+  preview: PlayerRadarPreviewView | null;
   previewState: "none" | "pending" | "ready" | "stale" | "invalid" | "failed";
   previewFilter: PlayerRadarPreviewFilter;
   previewUpdating: boolean;
@@ -151,7 +151,7 @@ export type RadarAdminHandlers = {
   retry: PlayerRadarAdminAction["run"];
   checkOperation: PlayerRadarAdminAction["run"];
 } & Pick<
-  PlayerRadarAdminModel["actions"],
+  PlayerRadarAdministrationView["actions"],
   "apply" | "acknowledge" | "selectSeason" | "selectMap" | "resetPreviewFilter"
 >;
 

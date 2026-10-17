@@ -38,34 +38,44 @@ export function useAnalysisAdminOverviewRead(
   const queryClient = useQueryClient();
   const options = seriesAnalysisAdminOverviewQueryOptions(gameTitleId);
   const canRead = canReadProtectedQuery(authorization, queryClient, "operations", options.queryKey);
-  const query = useQuery({
+  const requestedOverviewQuery = useQuery({
     ...options,
     enabled: () =>
       canRead && canReadProtectedQuery(authorization, queryClient, "operations", options.queryKey),
   });
-  const source = authorization.retained.operations ? query.data : undefined;
-  const canonicalTitleId = source?.selectedTitle?.gameTitleId;
+  const requestedOverview = authorization.retained.operations
+    ? requestedOverviewQuery.data
+    : undefined;
+  const canonicalTitleId = requestedOverview?.selectedTitle?.gameTitleId;
   const canonicalQuery = useQuery({
     ...seriesAnalysisAdminOverviewQueryOptions(canonicalTitleId, false),
     placeholderData: () => undefined,
   });
   const hasNewerCanonical =
-    !gameTitleId && canonicalTitleId && canonicalQuery.dataUpdatedAt > query.dataUpdatedAt;
+    !gameTitleId &&
+    canonicalTitleId &&
+    canonicalQuery.dataUpdatedAt > requestedOverviewQuery.dataUpdatedAt;
   const data = authorization.retained.operations
     ? hasNewerCanonical
       ? canonicalQuery.data
-      : source
+      : requestedOverview
     : undefined;
   const defaultTitleId =
-    canRead && !gameTitleId && !query.isPlaceholderData ? canonicalTitleId : undefined;
+    canRead && !gameTitleId && !requestedOverviewQuery.isPlaceholderData
+      ? canonicalTitleId
+      : undefined;
   useEffect(() => {
-    if (!defaultTitleId || !source) return;
+    if (!defaultTitleId || !requestedOverview) return;
     const key = seriesAnalysisAdminOverviewQueryOptions(defaultTitleId).queryKey;
     // Check again at commit so a refresh that settled after render still wins.
-    if ((queryClient.getQueryState(key)?.dataUpdatedAt ?? 0) < query.dataUpdatedAt) {
-      queryClient.setQueryData(key, source, { updatedAt: query.dataUpdatedAt });
+    if (
+      (queryClient.getQueryState(key)?.dataUpdatedAt ?? 0) < requestedOverviewQuery.dataUpdatedAt
+    ) {
+      queryClient.setQueryData(key, requestedOverview, {
+        updatedAt: requestedOverviewQuery.dataUpdatedAt,
+      });
     }
-  }, [defaultTitleId, source, query.dataUpdatedAt, queryClient]);
+  }, [defaultTitleId, requestedOverview, requestedOverviewQuery.dataUpdatedAt, queryClient]);
   const selectedTitleId = gameTitleId ?? canonicalTitleId;
   const refreshRadar = () => {
     if (selectedTitleId)
@@ -79,12 +89,12 @@ export function useAnalysisAdminOverviewRead(
     selectedTitleId,
     defaultTitleId,
     resolvingDefaultTitle: !gameTitleId && canonicalTitleId !== undefined,
-    loading: isInitialQueryLoading(query),
-    fetching: query.isFetching,
-    error: shouldShowQueryError(query) ? query.error : undefined,
+    loading: isInitialQueryLoading(requestedOverviewQuery),
+    fetching: requestedOverviewQuery.isFetching,
+    error: shouldShowQueryError(requestedOverviewQuery) ? requestedOverviewQuery.error : undefined,
     refresh: async () => {
       await Promise.all([
-        query.refetch(),
+        requestedOverviewQuery.refetch(),
         selectedTitleId
           ? queryClient.invalidateQueries({
               queryKey: seriesPlayerRadarKeys.state(selectedTitleId),

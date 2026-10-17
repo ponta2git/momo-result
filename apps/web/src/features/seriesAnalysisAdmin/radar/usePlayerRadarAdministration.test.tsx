@@ -4,7 +4,7 @@ import { http, HttpResponse } from "msw";
 import type { ReactNode } from "react";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { usePlayerRadarAdminModel } from "@/features/seriesAnalysisAdmin/radar/usePlayerRadarAdminModel";
+import { usePlayerRadarAdministration } from "@/features/seriesAnalysisAdmin/radar/usePlayerRadarAdministration";
 import { getAuthorization } from "@/shared/auth/authorizationQueryAdapter";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
@@ -39,14 +39,14 @@ function conflict() {
   );
 }
 
-async function renderModel() {
+async function renderAdministration() {
   const client = createTestQueryClient();
-  const hook = renderHook(() => usePlayerRadarAdminModel("gt_momotetsu_2", "桃太郎電鉄2"), {
+  const hook = renderHook(() => usePlayerRadarAdministration("gt_momotetsu_2", "桃太郎電鉄2"), {
     wrapper: ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
     ),
   });
-  await waitFor(() => expect(hook.result.current.model?.editing?.permissionReason).toBeNull());
+  await waitFor(() => expect(hook.result.current.view?.editing?.permissionReason).toBeNull());
   return { ...hook, client };
 }
 
@@ -83,9 +83,9 @@ describe("prepared radar edit disposal", () => {
           return conflict();
         }),
       );
-      const { result } = await renderModel();
+      const { result } = await renderAdministration();
       await act(async () => {
-        await result.current.model!.editing!.discard(prepared);
+        await result.current.view!.editing!.discard(prepared);
       });
       expect(freshReads).toBe(1);
       expect(requests).toEqual([
@@ -96,7 +96,7 @@ describe("prepared radar edit disposal", () => {
           originOperationId: prepared.operationId,
         },
       ]);
-      expect(result.current.model?.candidate?.candidateId).toBe(fresh.candidate?.candidateId);
+      expect(result.current.view?.candidate?.candidateId).toBe(fresh.candidate?.candidateId);
     },
   );
 
@@ -127,9 +127,9 @@ describe("prepared radar edit disposal", () => {
           return conflict();
         }),
       );
-      const { result } = await renderModel();
+      const { result } = await renderAdministration();
       await act(async () => {
-        await expect(result.current.model!.editing!.discard(prepared)).rejects.toBeDefined();
+        await expect(result.current.view!.editing!.discard(prepared)).rejects.toBeDefined();
       });
       expect(requests).toBe(1);
       expect(freshReads).toBe(1);
@@ -153,9 +153,9 @@ describe("prepared radar edit disposal", () => {
         );
       }),
     );
-    const { result } = await renderModel();
+    const { result } = await renderAdministration();
     await act(async () => {
-      await result.current.model!.editing!.discard(prepared);
+      await result.current.view!.editing!.discard(prepared);
     });
     expect(requests).toHaveLength(1);
     expect(requests[0]).toMatchObject({
@@ -186,11 +186,9 @@ describe("prepared radar edit disposal", () => {
         return conflict();
       }),
     );
-    const { result, client } = await renderModel();
+    const { result, client } = await renderAdministration();
     await act(async () => {
-      const pending = expect(
-        result.current.model!.editing!.discard(prepared),
-      ).rejects.toBeDefined();
+      const pending = expect(result.current.view!.editing!.discard(prepared)).rejects.toBeDefined();
       await readStarted.promise;
       mswState.loginAccounts.find((account) => account.accountId === "account_ponta")!.role =
         "user";
@@ -198,6 +196,6 @@ describe("prepared radar edit disposal", () => {
       readGate.resolve();
       await pending;
     });
-    expect(result.current.model).toBeNull();
+    expect(result.current.view).toBeNull();
   });
 });

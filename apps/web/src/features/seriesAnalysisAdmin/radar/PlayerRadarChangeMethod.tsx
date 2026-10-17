@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import type { PlayerRadarAdminModel } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminTypes";
+import type { PlayerRadarAdministrationView } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminTypes";
 import { PlayerRadarCommandButton } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarCommandButton";
 import type { RadarEditingControls } from "@/features/seriesAnalysisAdmin/radar/radarThresholdEditorModel";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
@@ -13,11 +13,11 @@ import { contentText } from "@/shared/ui/typography";
 
 /** Keep mounted during editing so a completed creation cannot reopen a discarded edit. */
 export function PlayerRadarChangeMethod({
-  model,
+  administration,
   editor,
   active,
 }: {
-  model: PlayerRadarAdminModel;
+  administration: PlayerRadarAdministrationView;
   editor: RadarEditingControls;
   active: boolean;
 }) {
@@ -33,16 +33,17 @@ export function PlayerRadarChangeMethod({
           pending: false,
           run: editor.beginFromCurrent,
         }
-      : changeMethod === "restore" && model.previousBasis
-        ? model.actions.restore
-        : model.actions.generate;
+      : changeMethod === "restore" && administration.previousBasis
+        ? administration.actions.restore
+        : administration.actions.generate;
   const operationInProgress =
-    model.operation?.status === "pending" || model.operation?.status === "running";
+    administration.operation?.status === "pending" ||
+    administration.operation?.status === "running";
 
   return (
     <>
       <Dialog
-        open={active && creationDialogOpen && Boolean(model.creationPending)}
+        open={active && creationDialogOpen && Boolean(administration.creationPending)}
         onOpenChange={setCreationDialogOpen}
         title="変更案を作成しています"
         description="完了後、採点境界の編集を開きます。この画面を閉じても作成は続きます。"
@@ -54,14 +55,16 @@ export function PlayerRadarChangeMethod({
       {editor.active ? null : (
         <section aria-label="採点基準の変更" className="grid min-w-0 gap-4">
           <div className="grid max-w-2xl gap-4">
-            {model.previousBasis || currentSource ? (
+            {administration.previousBasis || currentSource ? (
               <ChoiceList
                 legend="変更方法"
                 name="radar-change-method"
                 value={changeMethod}
                 onValueChange={setChangeMethod}
                 disabled={
-                  operationInProgress || model.communicationUnknown || creationAction.pending
+                  operationInProgress ||
+                  administration.communicationUnknown ||
+                  creationAction.pending
                 }
                 options={[
                   ...(currentSource
@@ -75,14 +78,14 @@ export function PlayerRadarChangeMethod({
                   {
                     value: "generate",
                     label: "最新の記録から作り直す",
-                    description: `作品全体の${model.eligibility.matchCount}試合・${model.eligibility.heldEventCount}開催から境界を計算します。`,
+                    description: `作品全体の${administration.eligibility.matchCount}試合・${administration.eligibility.heldEventCount}開催から境界を計算します。`,
                   },
-                  ...(model.previousBasis
+                  ...(administration.previousBasis
                     ? [
                         {
                           value: "restore",
                           label: "前回の基準に戻す",
-                          description: `${formatDateTimeLong(model.previousBasis.appliedAt ?? undefined, "日時未取得")} 適用の基準`,
+                          description: `${formatDateTimeLong(administration.previousBasis.appliedAt ?? undefined, "日時未取得")} 適用の基準`,
                         } as const,
                       ]
                     : []),
@@ -90,7 +93,8 @@ export function PlayerRadarChangeMethod({
               />
             ) : (
               <p className={cn(contentText.body, readableTextWidthClass, "tabular-nums")}>
-                作品全体の{model.eligibility.matchCount}試合・{model.eligibility.heldEventCount}
+                作品全体の{administration.eligibility.matchCount}試合・
+                {administration.eligibility.heldEventCount}
                 開催から境界を計算します。
               </p>
             )}
@@ -106,7 +110,7 @@ export function PlayerRadarChangeMethod({
                 label={
                   changeMethod === "current" && currentSource
                     ? "調整を始める"
-                    : changeMethod === "restore" && model.previousBasis
+                    : changeMethod === "restore" && administration.previousBasis
                       ? "前回の基準から復元"
                       : "最新の記録から作成"
                 }
@@ -115,7 +119,7 @@ export function PlayerRadarChangeMethod({
               />
               {creationAction.disabledReason &&
               !operationInProgress &&
-              !model.communicationUnknown ? (
+              !administration.communicationUnknown ? (
                 <p className={cn(contentText.supporting, readableTextWidthClass)}>
                   {creationAction.disabledReason}
                 </p>

@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo } from "react";
 import type { ReactNode } from "react";
 
-import type { PlayerRadarAdminModel } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminTypes";
+import type { PlayerRadarAdministrationView } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminTypes";
 import type {
   RadarEditingControls,
   RadarThresholdEditor,
@@ -14,15 +14,15 @@ const ControlsContext = createContext<RadarEditingControls | null>(null);
 
 /** Input changes belong to the editing workspace, not the surrounding administration panel. */
 export function RadarThresholdEditorProvider({
-  model,
+  administration,
   active,
   children,
 }: {
-  model: PlayerRadarAdminModel;
+  administration: PlayerRadarAdministrationView;
   active: boolean;
   children: ReactNode;
 }) {
-  const editor = useRadarThresholdEditor(model, active);
+  const editor = useRadarThresholdEditor(administration, active);
   const {
     active: editingActive,
     currentSourceAvailable,
@@ -54,14 +54,18 @@ export function RadarThresholdEditorProvider({
       <ControlsContext.Provider value={controls}>
         <UnsavedChangesGuard
           // Renew the router subscription when authorization Activity resumes.
-          key={model.authorizationRevision}
+          key={administration.authorizationRevision}
           description="採点境界の変更はまだ適用されていません。このページに残れば編集を続けられます。"
           model={{
             dirty: editor.active,
             isNavigationAllowed: editor.isNavigationAllowed,
             onDiscard: editor.discard,
           }}
-          pending={editor.preparingApply || model.applyPending || model.communicationUnknown}
+          pending={
+            editor.preparingApply ||
+            administration.applyPending ||
+            administration.communicationUnknown
+          }
         />
         {children}
       </ControlsContext.Provider>

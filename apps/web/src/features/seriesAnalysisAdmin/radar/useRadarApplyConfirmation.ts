@@ -1,16 +1,16 @@
 import { useState } from "react";
 
-import type { PlayerRadarAdminModel } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminTypes";
+import type { PlayerRadarAdministrationView } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminTypes";
 import {
   radarApplyConfirmation,
-  radarApplyConfirmationView,
+  buildRadarApplyConfirmationView,
 } from "@/features/seriesAnalysisAdmin/radar/radarApplyConfirmation";
 import type { RadarThresholdEditorView } from "@/features/seriesAnalysisAdmin/radar/radarThresholdEditorModel";
 import type { RadarThresholdError } from "@/features/seriesAnalysisAdmin/radar/radarThresholdInput";
 
 /** The confirmed target belongs to the edit, independently of dialog DOM/focus. */
 export function useRadarApplyConfirmation(
-  model: PlayerRadarAdminModel,
+  administration: PlayerRadarAdministrationView,
   editor: RadarThresholdEditorView,
   active: boolean,
   prepare: () => Promise<RadarThresholdError | null>,
@@ -24,10 +24,10 @@ export function useRadarApplyConfirmation(
     setConfirmation(null);
     setOpen(false);
   }
-  const current = radarApplyConfirmation(model);
+  const current = radarApplyConfirmation(administration);
   if (open && !confirmation && editor.canApply && current) setConfirmation(current);
-  const view = radarApplyConfirmationView({
-    model,
+  const view = buildRadarApplyConfirmationView({
+    administration,
     confirmation,
     current,
     open,
@@ -54,7 +54,7 @@ export function useRadarApplyConfirmation(
     },
     confirm: async () => {
       if (!confirmation || view.disabled) return;
-      await model.actions.apply(confirmation.target);
+      await administration.actions.apply(confirmation.target);
       finish();
     },
   };

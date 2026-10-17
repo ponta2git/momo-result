@@ -1,4 +1,4 @@
-import type { PlayerRadarAdminModel } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminTypes";
+import type { PlayerRadarAdministrationView } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminTypes";
 import { radarBasisInput } from "@/features/seriesAnalysisAdmin/radar/radarThresholdInput";
 import {
   playerRadarBasisDisplay,
@@ -8,7 +8,7 @@ import { makePlayerRadarBasis, makePlayerRadarEvaluation } from "@/test/msw/play
 
 const action = () => ({ disabledReason: null, pending: false, run: () => {} });
 
-export function makePlayerRadarEditorModel(): PlayerRadarAdminModel {
+export function makePlayerRadarEditorView(): PlayerRadarAdministrationView {
   const basis = playerRadarBasisDisplay(makePlayerRadarBasis(), []);
   const display = playerRadarEvaluationDisplay(makePlayerRadarEvaluation(), basis, []);
   return {

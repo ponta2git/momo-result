@@ -30,10 +30,10 @@ export type SeriesAnalysisDisplayIntent = {
   target: string;
   position: { x: number; y: number };
 };
-type PendingLocation = {
+type PendingSelectionNavigation = {
   sourceKey: string;
   target: string;
-  state: SeriesAnalysisSelection;
+  selection: SeriesAnalysisSelection;
   hash: string;
 };
 
@@ -62,10 +62,10 @@ export function useSeriesAnalysisLocationState({
   const { searchParams, selection: requestedSelection } = request;
   const location = useLocation();
   const navigate = useNavigate();
-  const [, startStateTransition] = useTransition();
-  const [state, setOptimisticState] = useOptimistic(normalizedSelection);
-  const deferredState = useDeferredValue(state);
-  const pending = useRef<PendingLocation | undefined>(undefined);
+  const [, startSelectionTransition] = useTransition();
+  const [selection, setOptimisticSelection] = useOptimistic(normalizedSelection);
+  const deferredSelection = useDeferredValue(selection);
+  const pendingNavigation = useRef<PendingSelectionNavigation | undefined>(undefined);
   const operation = useRef(0);
   const [displayIntent, setDisplayIntent] = useState<SeriesAnalysisDisplayIntent>();
   const [normalization, setNormalization] = useState<{
@@ -85,8 +85,12 @@ export function useSeriesAnalysisLocationState({
   useEffect(() => {
     if (!canonicalizationEnabled) return;
     // A canonicalization based on the old visit cannot overwrite a user action in flight.
-    if (pending.current?.sourceKey === location.key && pending.current.target !== href) return;
-    pending.current = undefined;
+    if (
+      pendingNavigation.current?.sourceKey === location.key &&
+      pendingNavigation.current.target !== href
+    )
+      return;
+    pendingNavigation.current = undefined;
     const next = buildSeriesAnalysisSearchParams(normalizedSelection);
     if (next.toString() !== searchParams.toString()) {
       void navigate(
@@ -106,21 +110,21 @@ export function useSeriesAnalysisLocationState({
     normalizedSelection,
   ]);
 
-  const update = useCallback(
+  const commitSelectionChange = useCallback(
     (
       change: SeriesAnalysisSelectionChange,
       updateOptions: { replace?: boolean; displayOnly?: boolean } = {},
     ) => {
-      const previous = pending.current;
+      const previous = pendingNavigation.current;
       const inFlight =
         previous && (previous.sourceKey === location.key || previous.target === href)
           ? previous
           : undefined;
-      const normalized = changeSelection(inFlight?.state ?? normalizedSelection, change);
+      const normalized = changeSelection(inFlight?.selection ?? normalizedSelection, change);
       const params = buildSeriesAnalysisSearchParams(normalized);
       const hash = updateOptions.displayOnly ? "#metric-owner" : (inFlight?.hash ?? location.hash);
       const target = `${location.pathname}?${params.toString()}${hash}`;
-      pending.current = { sourceKey: location.key, target, state: normalized, hash };
+      pendingNavigation.current = { sourceKey: location.key, target, selection: normalized, hash };
       setNormalization({ source: location.key, message: undefined });
       operation.current += 1;
       setDisplayIntent(
@@ -133,8 +137,8 @@ export function useSeriesAnalysisLocationState({
             }
           : undefined,
       );
-      startStateTransition(async () => {
-        setOptimisticState(normalized);
+      startSelectionTransition(async () => {
+        setOptimisticSelection(normalized);
         await navigate(
           { pathname: location.pathname, search: `?${params.toString()}`, hash },
           {
@@ -153,49 +157,52 @@ export function useSeriesAnalysisLocationState({
       location.state,
       navigate,
       changeSelection,
-      setOptimisticState,
+      setOptimisticSelection,
       normalizedSelection,
     ],
   );
 
   const updateGameTitle = useCallback(
-    (gameTitleId: string) => update({ kind: "title", gameTitleId }, { replace: false }),
-    [update],
+    (gameTitleId: string) =>
+      commitSelectionChange({ kind: "title", gameTitleId }, { replace: false }),
+    [commitSelectionChange],
   );
   const updateSeasonMasterId = useCallback(
-    (seasonMasterId: string) => update({ kind: "season", seasonMasterId }, { replace: false }),
-    [update],
+    (seasonMasterId: string) =>
+      commitSelectionChange({ kind: "season", seasonMasterId }, { replace: false }),
+    [commitSelectionChange],
   );
   const updateMapMasterId = useCallback(
-    (mapMasterId: string) => update({ kind: "map", mapMasterId }, { replace: false }),
-    [update],
+    (mapMasterId: string) =>
+      commitSelectionChange({ kind: "map", mapMasterId }, { replace: false }),
+    [commitSelectionChange],
   );
   const updateView = useCallback(
     (view: SeriesAnalysisViewId, updateOptions?: { replace?: boolean }) =>
-      update({ kind: "view", view }, updateOptions),
-    [update],
+      commitSelectionChange({ kind: "view", view }, updateOptions),
+    [commitSelectionChange],
   );
   const updateOwnerMetric = useCallback(
     (ownerMetric: OwnerMetricId) =>
-      update({ kind: "ownerMetric", ownerMetric }, { displayOnly: true }),
-    [update],
+      commitSelectionChange({ kind: "ownerMetric", ownerMetric }, { displayOnly: true }),
+    [commitSelectionChange],
   );
   const focusMatch = useCallback(
-    (matchId: string) => update({ kind: "focus", matchId }, { replace: false }),
-    [update],
+    (matchId: string) => commitSelectionChange({ kind: "focus", matchId }, { replace: false }),
+    [commitSelectionChange],
   );
   const clearFocusedMatch = useCallback(
-    () => update({ kind: "focus", matchId: undefined }),
-    [update],
+    () => commitSelectionChange({ kind: "focus", matchId: undefined }),
+    [commitSelectionChange],
   );
   const clearScope = useCallback(
-    () => update({ kind: "clearScope" }, { replace: false }),
-    [update],
+    () => commitSelectionChange({ kind: "clearScope" }, { replace: false }),
+    [commitSelectionChange],
   );
   const updateOutlookMember = useCallback(
     (role: "focus" | "rival", memberId: string) =>
-      update({ kind: "member", role, memberId }, { replace: false }),
-    [update],
+      commitSelectionChange({ kind: "member", role, memberId }, { replace: false }),
+    [commitSelectionChange],
   );
 
   return {
@@ -210,10 +217,10 @@ export function useSeriesAnalysisLocationState({
       updateOwnerMetric,
       updateOutlookMember,
     },
-    activeView: state.view ?? defaultSeriesAnalysisView,
-    deferredState,
+    activeView: selection.view ?? defaultSeriesAnalysisView,
+    deferredSelection,
     displayIntent,
     normalizationNotice: normalization?.message,
-    state,
+    selection,
   };
 }

@@ -3,10 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { PlayerRadarPreview } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarPreview";
-import { makePlayerRadarEditorModel } from "@/test/fixtures/playerRadarEditorModel";
+import { makePlayerRadarEditorView } from "@/test/fixtures/playerRadarEditorView";
 
 function modelFixture() {
-  const model = makePlayerRadarEditorModel();
+  const model = makePlayerRadarEditorView();
   const before = structuredClone(model.editing!.evaluation!.raw);
   for (const player of before.players) {
     for (const cell of player.axes) {
@@ -48,7 +48,7 @@ function renderPreview(model: ReturnType<typeof modelFixture>) {
 
 describe("radar comparison table", () => {
   it("shows a single value for unchanged scores and unscored cells while retaining changed transitions", () => {
-    const model = makePlayerRadarEditorModel();
+    const model = makePlayerRadarEditorView();
     const before = structuredClone(model.editing!.evaluation!.before!);
     const after = structuredClone(before);
     before.players[0]!.axes[0]!.score = 5;

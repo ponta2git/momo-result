@@ -32,7 +32,7 @@ describe("series analysis display bundle", () => {
         artifactId: nextArtifact.artifactId,
         matchContext,
         review,
-        state,
+        selection: state,
       }),
     ).toEqual({ candidate: undefined, resolution: { kind: "waiting" } });
 
@@ -43,7 +43,7 @@ describe("series analysis display bundle", () => {
       artifactId: nextArtifact.artifactId,
       matchContext,
       review,
-      state,
+      selection: state,
     });
     expect(waiting.resolution).toEqual({ kind: "waiting" });
     expect(waiting.candidate?.kind).toBe("review");
@@ -58,7 +58,7 @@ describe("series analysis display bundle", () => {
       artifactId: nextArtifact.artifactId,
       matchContext,
       review,
-      state,
+      selection: state,
     });
     expect(resolved.kind).toBe("ready");
     if (resolved.kind !== "ready") throw new Error("ready bundle expected");
@@ -88,7 +88,7 @@ describe("series analysis display bundle", () => {
         artifactId: aggregate.artifact.artifactId,
         matchContext,
         review: undefined,
-        state: { ...state, view: "overview" },
+        selection: { ...state, view: "overview" },
       }).resolution,
     ).toEqual({ kind: "excluded", status: "not_in_scope" });
   });
@@ -101,7 +101,7 @@ describe("series analysis display bundle", () => {
       artifactId: aggregate.artifact.artifactId,
       matchContext: undefined,
       review: undefined,
-      state: { gameTitleId: state.gameTitleId, view: "flow" },
+      selection: { gameTitleId: state.gameTitleId, view: "flow" },
     });
     expect(resolved.kind).toBe("ready");
     if (resolved.kind !== "ready") throw new Error("ready bundle expected");

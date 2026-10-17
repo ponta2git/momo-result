@@ -2,11 +2,11 @@ import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { PlayerRadarScoringCurve } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarScoringCurve";
-import { makePlayerRadarEditorModel } from "@/test/fixtures/playerRadarEditorModel";
+import { makePlayerRadarEditorView } from "@/test/fixtures/playerRadarEditorView";
 
 describe("PlayerRadarScoringCurve", () => {
   it("keeps coincident players distinguishable and leaves ineligible scores unscored", () => {
-    const model = makePlayerRadarEditorModel();
+    const model = makePlayerRadarEditorView();
     const before = structuredClone(model.editing!.evaluation!.raw);
     const after = structuredClone(before);
     for (const player of after.players) {
@@ -33,7 +33,7 @@ describe("PlayerRadarScoringCurve", () => {
   });
 
   it("shows the edited curve for an initial basis without inventing current scores or missing raw values", () => {
-    const model = makePlayerRadarEditorModel();
+    const model = makePlayerRadarEditorView();
     const after = structuredClone(model.editing!.evaluation!.raw);
     const missing = after.players[0]!;
     missing.axes[0]!.rawValue = null;

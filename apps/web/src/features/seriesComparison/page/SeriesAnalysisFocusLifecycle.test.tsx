@@ -50,8 +50,8 @@ function Harness() {
   });
   const analysis = useSeriesAnalysisDisplay({
     activeView: "context",
-    state,
-    deferredState: state,
+    selection: state,
+    deferredSelection: state,
   });
   return (
     <>

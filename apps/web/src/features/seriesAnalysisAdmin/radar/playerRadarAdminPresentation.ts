@@ -1,6 +1,6 @@
 import type {
-  PlayerRadarAdminModel,
-  PlayerRadarPreviewModel,
+  PlayerRadarAdministrationView,
+  PlayerRadarPreviewView,
   RadarAdminResource,
   RadarAdminReceipt,
   RadarAdminHandlers,
@@ -82,9 +82,9 @@ export function radarFailureMessage(code: string | null): string {
   }
 }
 
-export function radarOperationPresentation(
+export function buildRadarOperationView(
   operation: SeriesPlayerRadarOperation,
-): NonNullable<PlayerRadarAdminModel["operation"]> {
+): NonNullable<PlayerRadarAdministrationView["operation"]> {
   const name = operationNames[operation.kind];
   const title =
     operation.status === "pending"
@@ -105,9 +105,9 @@ export function radarOperationPresentation(
   };
 }
 
-export function radarReviewPresentation(
+export function buildRadarReviewView(
   state: SeriesPlayerRadarState,
-): PlayerRadarAdminModel["review"] {
+): PlayerRadarAdministrationView["review"] {
   const monitor = state.monitor;
   if (!monitor)
     return {
@@ -156,7 +156,7 @@ export function radarReviewPresentation(
 }
 
 /** Converts server bases and one scope preview into the editor's source identities. */
-export function radarBasisPresentation({
+export function buildRadarBasisView({
   state,
   title,
   scope,
@@ -187,7 +187,7 @@ export function radarBasisPresentation({
           maps,
         )
       : null;
-  const previewState: PlayerRadarAdminModel["previewState"] =
+  const previewState: PlayerRadarAdministrationView["previewState"] =
     preview?.status ?? candidate?.latestPreview?.status ?? "none";
   const beforeBasis =
     preview?.beforeBasisId === currentBasis?.basisId
@@ -195,7 +195,7 @@ export function radarBasisPresentation({
       : preview?.beforeBasisId === previousBasis?.basisId
         ? previousBasis
         : null;
-  const previewDisplay: PlayerRadarPreviewModel | null =
+  const previewDisplay: PlayerRadarPreviewView | null =
     previewId && candidateBasis
       ? {
           previewId,
@@ -301,7 +301,7 @@ export function radarOperationState({
   paused,
 }: {
   resource: RadarAdminResource;
-  previewState: PlayerRadarAdminModel["previewState"];
+  previewState: PlayerRadarAdministrationView["previewState"];
   accepted: SeriesPlayerRadarOperation | undefined;
   creationOperation: SeriesPlayerRadarOperation | undefined;
   commandError: unknown;
@@ -396,7 +396,7 @@ export function radarDraftNoLongerOwned(
   return Boolean(superseded || applicationAccepted);
 }
 
-export function radarAdministrationPresentation({
+export function buildRadarAdministrationView({
   gameTitleId,
   gameTitleName,
   authorizationRevision,
@@ -413,7 +413,7 @@ export function radarAdministrationPresentation({
   gameTitleName: string;
   authorizationRevision: number;
   resource: RadarAdminResource;
-  basis: ReturnType<typeof radarBasisPresentation>;
+  basis: ReturnType<typeof buildRadarBasisView>;
   operation: ReturnType<typeof radarOperationState>;
   receipt: RadarAdminReceipt;
   errors: { check: unknown; creation: unknown; command: unknown; state: unknown; options: unknown };
@@ -424,7 +424,7 @@ export function radarAdministrationPresentation({
   };
   handlers: RadarAdminHandlers;
   editingHandlers: RadarEditingHandlers;
-}): PlayerRadarAdminModel | null {
+}): PlayerRadarAdministrationView | null {
   const { state, title, scope } = resource;
   const candidate = state?.candidate;
   const maps = title?.maps ?? [];
@@ -458,17 +458,17 @@ export function radarAdministrationPresentation({
     errors.state ??
     errors.options;
   const normalizedError = feedbackError ? normalizeDisplayApiError(feedbackError) : null;
-  const feedback: PlayerRadarAdminModel["feedback"] = normalizedError
+  const feedback: PlayerRadarAdministrationView["feedback"] = normalizedError
     ? { title: normalizedError.title, detail: normalizedError.detail, tone: "warning" }
     : accepted && latestOperation?.status === "succeeded"
       ? {
-          title: radarOperationPresentation(acceptedOperation ?? accepted).title,
+          title: buildRadarOperationView(acceptedOperation ?? accepted).title,
           detail: "",
           tone: "success",
         }
       : null;
 
-  const model: PlayerRadarAdminModel | null = state
+  const view: PlayerRadarAdministrationView | null = state
     ? {
         authorizationRevision,
         editing: {
@@ -565,8 +565,8 @@ export function radarAdministrationPresentation({
           ],
         },
         previewUpdating: resource.previewFetching,
-        operation: latestOperation ? radarOperationPresentation(latestOperation) : null,
-        review: radarReviewPresentation(state),
+        operation: latestOperation ? buildRadarOperationView(latestOperation) : null,
+        review: buildRadarReviewView(state),
         feedback,
         communicationUnknown,
         applyDisabledReason,
@@ -643,5 +643,5 @@ export function radarAdministrationPresentation({
         },
       }
     : null;
-  return model;
+  return view;
 }

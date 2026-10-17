@@ -2,12 +2,12 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { PlayerRadarChart } from "@/shared/seriesAnalysis/PlayerRadarChart";
-import { makePlayerRadarEditorModel } from "@/test/fixtures/playerRadarEditorModel";
+import { makePlayerRadarEditorView } from "@/test/fixtures/playerRadarEditorView";
 
 describe("radar chart comparison labels", () => {
   it("shows unchanged scored and unscored values once and keeps the changed transition", () => {
     const before = structuredClone(
-      makePlayerRadarEditorModel().editing!.evaluation!.raw.players[0]!,
+      makePlayerRadarEditorView().editing!.evaluation!.raw.players[0]!,
     );
     before.axes.forEach((cell, index) => {
       cell.score = index === 1 ? null : 5;

@@ -37,17 +37,17 @@ import { revealPageElement } from "@/shared/ui/layout/revealPageElement";
 import { contentText } from "@/shared/ui/typography";
 
 export function OutlookView({
-  response,
+  summary,
   selection,
   onMemberChange,
 }: {
-  response: SeriesAnalysisOutlookSummary;
+  summary: SeriesAnalysisOutlookSummary;
   selection: SeriesAnalysisSelection;
   onMemberChange?: ((role: "focus" | "rival", memberId: string) => void) | undefined;
 }) {
   return (
     <OutlookSummaryBoundary
-      response={response}
+      response={summary}
       selection={selection}
       empty={
         <p className={cn(contentText.body, readableTextWidthClass)}>
@@ -55,35 +55,35 @@ export function OutlookView({
         </p>
       }
     >
-      <OutlookWorkspace response={response} selection={selection} onMemberChange={onMemberChange} />
+      <OutlookWorkspace summary={summary} selection={selection} onMemberChange={onMemberChange} />
     </OutlookSummaryBoundary>
   );
 }
 
 function OutlookWorkspace({
-  response,
+  summary,
   selection,
   onMemberChange,
 }: {
-  response: SeriesAnalysisOutlookSummary;
+  summary: SeriesAnalysisOutlookSummary;
   selection: SeriesAnalysisSelection;
   onMemberChange: ((role: "focus" | "rival", memberId: string) => void) | undefined;
 }) {
   const {
     view,
     edit,
-    ids,
+    memberIds,
     names,
     displayRoles,
     recent,
     cumulative,
     outcome,
     eventHorizon,
-    numericRows,
+    projectionRows,
     nextOutcomes,
     reviewHref,
     matchHref,
-  } = useOutlookWorkspace(response, selection);
+  } = useOutlookWorkspace(summary, selection);
   const resultHeading = useRef<HTMLHeadingElement>(null);
   const chartHeading = useRef<HTMLDivElement>(null);
   const selectHorizon = useCallback(
@@ -96,7 +96,7 @@ function OutlookWorkspace({
       }),
     [edit],
   );
-  const usePerformance = () => {
+  const focusPerformanceResults = () => {
     requestAnimationFrame(() => {
       if (resultHeading.current) {
         resultHeading.current.focus({ preventScroll: true });
@@ -104,7 +104,7 @@ function OutlookWorkspace({
       }
     });
   };
-  const playerProps = { response, cumulative, names, memberIds: ids };
+  const playerProps = { response: summary, cumulative, names, memberIds };
 
   return (
     <div className="grid min-w-0 grid-cols-1 gap-6">
@@ -117,11 +117,11 @@ function OutlookWorkspace({
             <SelectField
               key={role}
               label={role === 0 ? "注目する人" : "比較する相手"}
-              value={ids[role]}
-              options={orderFixedMembers(response.players).map((player) => ({
+              value={memberIds[role]}
+              options={orderFixedMembers(summary.players).map((player) => ({
                 label: player.displayName,
                 value: player.memberId,
-                disabled: player.memberId === ids[role === 0 ? 1 : 0],
+                disabled: player.memberId === memberIds[role === 0 ? 1 : 0],
               }))}
               onValueChange={(id) => onMemberChange?.(role === 0 ? "focus" : "rival", id)}
             />
@@ -155,7 +155,7 @@ function OutlookWorkspace({
                   <OutlookUndoButton />
                 </div>
                 <p className={contentText.supporting}>
-                  小さいほど上位。初期値は作品全体の直近{response.recent.matchCount}戦です。
+                  小さいほど上位。初期値は作品全体の直近{summary.recent.matchCount}戦です。
                 </p>
               </div>
               <div className="grid gap-6">
@@ -164,7 +164,7 @@ function OutlookWorkspace({
                     <OutlookPlayerEditor {...playerProps} role={role} showComparison />
                     {view.task === "performance" ? (
                       <OutlookPastExamples
-                        response={response}
+                        response={summary}
                         memberId={memberId}
                         memberName={names[role]}
                         condition={{ kind: "mean", role }}
@@ -174,7 +174,7 @@ function OutlookWorkspace({
                 ))}
               </div>
               <OutlookComparisonControls />
-              {response.recent.qualityStatus === "reference" ? (
+              {summary.recent.qualityStatus === "reference" ? (
                 <p className={contentText.supporting}>
                   直近の実績が少ないため、見通しは参考値です。
                 </p>
@@ -262,7 +262,7 @@ function OutlookWorkspace({
                 recent={recent}
                 horizonControl={<OutlookGoalHorizonControl />}
                 opponentEditor={<OutlookPlayerEditor {...playerProps} role={1} />}
-                onUsePerformance={usePerformance}
+                onUsePerformance={focusPerformanceResults}
                 reviewLinks={
                   <div className="flex flex-wrap gap-2">
                     <LinkButton variant="secondary" size="sm" to={reviewHref}>
@@ -289,7 +289,7 @@ function OutlookWorkspace({
         <div className="grid min-w-0 grid-cols-1 gap-4">
           <DataTable
             caption={{ content: "今後の総合平均順位の詳しい数値", visibility: "screen-reader" }}
-            rows={numericRows}
+            rows={projectionRows}
             getRowKey={(row) => String(row.h)}
             density="compact"
             minWidth="32rem"
@@ -307,7 +307,7 @@ function OutlookWorkspace({
                   <MemberSequenceLabel memberId={memberId}>{names[role]}</MemberSequenceLabel>
                 ),
                 tabular: true,
-                renderCell: (row: (typeof numericRows)[number]) =>
+                renderCell: (row: (typeof projectionRows)[number]) =>
                   `${outlookAverage(role === 0 ? row.focusAverage : row.rivalAverage)}位`,
               })),
               {
@@ -321,10 +321,10 @@ function OutlookWorkspace({
           />
           <div className={cn("grid gap-2", readableTextWidthClass)}>
             <p className={contentText.body}>
-              累積は選択した範囲の{response.scope.matchCount}戦。初期値は作品全体の直近
-              {response.recent.matchCount}戦
-              {response.recent.period
-                ? `（${formatDateOnly(response.recent.period.startedAt)}〜${formatDateOnly(response.recent.period.endedAt)}）`
+              累積は選択した範囲の{summary.scope.matchCount}戦。初期値は作品全体の直近
+              {summary.recent.matchCount}戦
+              {summary.recent.period
+                ? `（${formatDateOnly(summary.recent.period.startedAt)}〜${formatDateOnly(summary.recent.period.endedAt)}）`
                 : ""}
               です。この先も同じ平均の成績が続く条件で計算しています。
             </p>

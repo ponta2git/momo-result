@@ -9,7 +9,7 @@ export type RecalculationTarget =
   | { kind: "all" }
   | { kind: "title"; gameTitleId: string; gameTitleName: string };
 
-export function selectAnalysisAdminOverview(
+export function buildAnalysisAdminOverviewView(
   data: SeriesAnalysisAdminOverview | undefined,
   gameTitleId: string | undefined,
 ) {
@@ -39,7 +39,7 @@ export function recalculationTargetForTitle(
     : undefined;
 }
 
-export function recalculationPresentation({
+export function buildRecalculationView({
   target,
   response,
   error,

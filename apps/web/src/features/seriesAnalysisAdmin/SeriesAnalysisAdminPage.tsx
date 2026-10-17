@@ -8,7 +8,7 @@ import {
   RecentJobs,
   SelectedTitleStatus,
 } from "@/features/seriesAnalysisAdmin/SeriesAnalysisAdminStatus";
-import { useSeriesAnalysisAdminPageModel } from "@/features/seriesAnalysisAdmin/useSeriesAnalysisAdminPageModel";
+import { useSeriesAnalysisAdmin } from "@/features/seriesAnalysisAdmin/useSeriesAnalysisAdmin";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { inlineActionGroupClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
@@ -22,11 +22,11 @@ import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { contentText } from "@/shared/ui/typography";
 
 export function SeriesAnalysisAdminPage() {
-  const page = useSeriesAnalysisAdminPageModel();
+  const administration = useSeriesAnalysisAdmin();
   const { activeTab, radarView, allDialogOpen, setActiveTab, setRadarView, recalculationTabRef } =
-    page.navigation;
-  const { data } = page.resource;
-  const { selectedTitle } = page.selection;
+    administration.navigation;
+  const { data } = administration.resource;
+  const { selectedTitle } = administration.selection;
   return (
     <PageFrame width="wide">
       <PageContentSurface
@@ -42,27 +42,27 @@ export function SeriesAnalysisAdminPage() {
             <TabsTab value="radar">レーダーの採点基準</TabsTab>
           </TabsList>
           <div className="mt-6 grid min-w-0 gap-6">
-            {page.feedback.resourceError ? (
+            {administration.feedback.resourceError ? (
               <Notice
                 action={
                   <Button
-                    disabled={page.resource.refreshDisabled}
-                    pending={page.resource.refreshing}
+                    disabled={administration.resource.refreshDisabled}
+                    pending={administration.resource.refreshing}
                     pendingLabel="再読み込み中"
                     size="sm"
                     variant={data ? "secondary" : "primary"}
-                    onClick={page.actions.refresh}
+                    onClick={administration.actions.refresh}
                   >
                     状態を再読み込み
                   </Button>
                 }
                 tone={data ? "warning" : "danger"}
-                title={page.feedback.resourceError.title}
+                title={administration.feedback.resourceError.title}
               >
-                <p>{page.feedback.resourceError.detail}</p>
+                <p>{administration.feedback.resourceError.detail}</p>
               </Notice>
             ) : null}
-            {page.resource.loading && !data ? (
+            {administration.resource.loading && !data ? (
               <AdminSkeleton />
             ) : data?.titleOptions.length === 0 ? (
               <EmptyState
@@ -70,7 +70,7 @@ export function SeriesAnalysisAdminPage() {
                 placement="embedded"
                 title="対象作品がありません"
                 description={
-                  page.authorization.retainAdmin
+                  administration.authorization.retainAdmin
                     ? "設定管理で作品を登録してください。"
                     : "管理者による作品の登録が必要です。"
                 }
@@ -79,10 +79,10 @@ export function SeriesAnalysisAdminPage() {
               <div className="max-w-lg">
                 <SelectField
                   label="対象作品"
-                  disabled={!page.authorization.canOperate}
-                  options={page.selection.options}
-                  value={page.selection.gameTitleId ?? ""}
-                  onValueChange={(nextValue) => page.actions.selectTitle(nextValue)}
+                  disabled={!administration.authorization.canOperate}
+                  options={administration.selection.options}
+                  value={administration.selection.gameTitleId ?? ""}
+                  onValueChange={(nextValue) => administration.actions.selectTitle(nextValue)}
                 />
               </div>
             ) : null}
@@ -90,14 +90,14 @@ export function SeriesAnalysisAdminPage() {
           <TabsPanel keepMounted value="recalculation">
             {data && data.titleOptions.length > 0 ? (
               <div className="mt-6 grid min-w-0 gap-6">
-                {page.feedback.mutationError && !allDialogOpen ? (
-                  <Notice tone="danger" title={page.feedback.mutationError.title}>
-                    {page.feedback.mutationError.detail}
+                {administration.feedback.mutationError && !allDialogOpen ? (
+                  <Notice tone="danger" title={administration.feedback.mutationError.title}>
+                    {administration.feedback.mutationError.detail}
                   </Notice>
                 ) : null}
-                {page.feedback.acceptance ? (
-                  <Notice tone="success" title={page.feedback.acceptance.title}>
-                    {page.feedback.acceptance.detail}
+                {administration.feedback.acceptance ? (
+                  <Notice tone="success" title={administration.feedback.acceptance.title}>
+                    {administration.feedback.acceptance.detail}
                   </Notice>
                 ) : null}
                 <section aria-label="再計算の操作" className="grid min-w-0 gap-1">
@@ -105,35 +105,38 @@ export function SeriesAnalysisAdminPage() {
                     <div className={inlineActionGroupClass}>
                       <Button
                         disabled={
-                          !page.authorization.canOperate ||
-                          page.recalculation.titleUnavailable ||
-                          page.recalculation.titleReserved ||
-                          page.recalculation.pending
+                          !administration.authorization.canOperate ||
+                          administration.recalculation.titleUnavailable ||
+                          administration.recalculation.titleReserved ||
+                          administration.recalculation.pending
                         }
                         icon={<Play />}
-                        pending={page.recalculation.titlePending}
-                        pendingLabel={page.recalculation.titlePendingLabel}
-                        onClick={page.actions.recalculateTitle}
+                        pending={administration.recalculation.titlePending}
+                        pendingLabel={administration.recalculation.titlePendingLabel}
+                        onClick={administration.actions.recalculateTitle}
                       >
-                        {page.recalculation.titleReserved ? "再計算を予約済み" : "この作品を再計算"}
+                        {administration.recalculation.titleReserved
+                          ? "再計算を予約済み"
+                          : "この作品を再計算"}
                       </Button>
-                      {page.authorization.retainAdmin ? (
+                      {administration.authorization.retainAdmin ? (
                         <AlertDialog
                           open={allDialogOpen}
-                          onOpenChange={page.navigation.setAllDialogOpen}
-                          confirmDisabled={!page.authorization.canRecalculateAll}
+                          onOpenChange={administration.navigation.setAllDialogOpen}
+                          confirmDisabled={!administration.authorization.canRecalculateAll}
                           confirmLabel="全作品を再計算"
                           description={`${data.titleOptions.length}作品を対象として予約します。実行中の作品は完了後に再計算されます。`}
                           formatError={(error) =>
                             formatApiError(error, "再計算を受け付けられません")
                           }
-                          pending={page.recalculation.allPending}
+                          pending={administration.recalculation.allPending}
                           title="全作品の再計算を予約しますか？"
                           tone="primary"
                           trigger={
                             <Button
                               disabled={
-                                !page.authorization.canRecalculateAll || page.recalculation.pending
+                                !administration.authorization.canRecalculateAll ||
+                                administration.recalculation.pending
                               }
                               icon={<RotateCw />}
                               variant="secondary"
@@ -142,26 +145,26 @@ export function SeriesAnalysisAdminPage() {
                             </Button>
                           }
                           onConfirm={async () => {
-                            await page.actions.recalculateAll();
+                            await administration.actions.recalculateAll();
                           }}
                         />
                       ) : null}
                     </div>
-                    {page.feedback.resourceError ? null : (
+                    {administration.feedback.resourceError ? null : (
                       <Button
                         icon={<RefreshCw aria-hidden="true" />}
-                        disabled={page.resource.refreshDisabled}
-                        pending={page.resource.refreshing}
+                        disabled={administration.resource.refreshDisabled}
+                        pending={administration.resource.refreshing}
                         pendingLabel="状態を更新中"
                         size="sm"
                         variant="secondary"
-                        onClick={page.actions.refresh}
+                        onClick={administration.actions.refresh}
                       >
                         状態を更新
                       </Button>
                     )}
                   </div>
-                  {page.recalculation.titleReserved ? (
+                  {administration.recalculation.titleReserved ? (
                     <p className={contentText.body}>
                       この作品には処理待ちの手動再計算予約があります。完了後にもう一度予約できます。
                     </p>
@@ -178,7 +181,7 @@ export function SeriesAnalysisAdminPage() {
               <TabsRoot value={radarView} onValueChange={(value) => setRadarView(String(value))}>
                 <TabsList aria-label="採点基準の表示切替" variant="underline">
                   <TabsTab value="current">現在の採点境界</TabsTab>
-                  {page.authorization.retainOperations ? (
+                  {administration.authorization.retainOperations ? (
                     <TabsTab value="history">改訂履歴</TabsTab>
                   ) : null}
                 </TabsList>
@@ -189,14 +192,14 @@ export function SeriesAnalysisAdminPage() {
                         key={selectedTitle.gameTitleId}
                         gameTitleId={selectedTitle.gameTitleId}
                         gameTitleName={selectedTitle.gameTitleName}
-                        active={page.navigation.radarVisible}
-                        onApplyAccepted={page.navigation.onApplyAccepted}
-                        applyFinalFocus={page.navigation.applyFinalFocus}
+                        active={administration.navigation.radarVisible}
+                        onApplyAccepted={administration.navigation.onApplyAccepted}
+                        applyFinalFocus={administration.navigation.applyFinalFocus}
                       />
                     </div>
                   ) : null}
                 </TabsPanel>
-                {page.authorization.retainOperations ? (
+                {administration.authorization.retainOperations ? (
                   <TabsPanel value="history">
                     {activeTab === "radar" && radarView === "history" ? (
                       <div className="mt-6 min-w-0">

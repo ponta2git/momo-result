@@ -2,7 +2,7 @@ import { memo } from "react";
 
 import type {
   PlayerRadarPreviewFilter,
-  PlayerRadarPreviewModel,
+  PlayerRadarPreviewView,
 } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminTypes";
 import { PlayerRadarScoringCurve } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarScoringCurve";
 import { orderFixedMembers } from "@/shared/domain/members";
@@ -47,7 +47,7 @@ export const PlayerRadarPreview = memo(function PlayerRadarPreview({
   onMapChange,
   onResetFilter,
 }: {
-  preview: PlayerRadarPreviewModel;
+  preview: PlayerRadarPreviewView;
   filter: PlayerRadarPreviewFilter;
   updating: boolean;
   axisId?: PlayerRadarAxisId;

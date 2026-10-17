@@ -18,21 +18,26 @@ import { useSeriesAnalysisReads } from "@/features/seriesComparison/page/useSeri
 /** Owns the accepted/displayed comparison snapshot, independently from reads execution. */
 export function useSeriesAnalysisDisplay({
   activeView,
-  deferredState,
-  state,
+  deferredSelection,
+  selection,
   selectionStatus = "ready",
   deferOutlookAdoption = false,
 }: {
   activeView: SeriesAnalysisViewId;
-  deferredState: SeriesAnalysisSelection;
-  state: SeriesAnalysisSelection;
+  deferredSelection: SeriesAnalysisSelection;
+  selection: SeriesAnalysisSelection;
   selectionStatus?: "ready" | "pending" | "blocked";
   deferOutlookAdoption?: boolean;
 }) {
   const selectionReady = selectionStatus === "ready";
-  const reads = useSeriesAnalysisReads({ activeView, deferredState, state, selectionReady });
+  const reads = useSeriesAnalysisReads({
+    activeView,
+    deferredSelection,
+    selection,
+    selectionReady,
+  });
   const { publishedArtifactId, active, scope, matchContext } = reads;
-  const [lastSuccessfulBundle, setLastSuccessfulBundle] = useState<SeriesAnalysisDisplayBundle>();
+  const [acceptedBundle, setAcceptedBundle] = useState<SeriesAnalysisDisplayBundle>();
   const [contextInvalidationPending, setContextInvalidationPending] = useState(false);
   const { candidate, resolution: bundleResolution } = useMemo(
     () =>
@@ -43,7 +48,7 @@ export function useSeriesAnalysisDisplay({
         matchContext: matchContext.context,
         review: reads.review,
         outlook: reads.outlook,
-        state,
+        selection,
       }),
     [
       activeView,
@@ -52,7 +57,7 @@ export function useSeriesAnalysisDisplay({
       reads.outlook,
       matchContext.context,
       publishedArtifactId,
-      state,
+      selection,
     ],
   );
   const candidateResource = seriesAnalysisBundleResource(candidate);
@@ -66,25 +71,25 @@ export function useSeriesAnalysisDisplay({
     matchContextFailed: matchContext.failed,
     matchContextRequested: matchContext.requested,
     matchContextUnavailable: matchContext.unavailable,
-    previous: lastSuccessfulBundle,
+    previous: acceptedBundle,
     resolution: bundleResolution,
-    state,
+    selection,
   });
-  const currentDisplayBundle =
-    adoption.bundle && !sameSeriesAnalysisDisplayBundle(lastSuccessfulBundle, adoption.bundle)
+  const nextAcceptedBundle =
+    adoption.bundle && !sameSeriesAnalysisDisplayBundle(acceptedBundle, adoption.bundle)
       ? adoption.bundle
-      : lastSuccessfulBundle;
-  if (currentDisplayBundle !== lastSuccessfulBundle) setLastSuccessfulBundle(currentDisplayBundle);
+      : acceptedBundle;
+  if (nextAcceptedBundle !== acceptedBundle) setAcceptedBundle(nextAcceptedBundle);
 
   // Controls stay urgent while a new immutable snapshot renders in the background.
-  const deferredBundle = useDeferredValue(currentDisplayBundle);
+  const deferredBundle = useDeferredValue(nextAcceptedBundle);
   // A definitive invalidation cannot reappear through a deferred predecessor.
   if (matchContext.unavailable && !contextInvalidationPending) {
     setContextInvalidationPending(true);
   } else if (
     !matchContext.unavailable &&
     contextInvalidationPending &&
-    deferredBundle === currentDisplayBundle
+    deferredBundle === nextAcceptedBundle
   ) {
     setContextInvalidationPending(false);
   }
@@ -96,9 +101,9 @@ export function useSeriesAnalysisDisplay({
         : deferredBundle,
     [deferredBundle, suppressDeferredContext],
   );
-  const displaySettling = deferredBundle !== currentDisplayBundle;
+  const displaySettling = deferredBundle !== nextAcceptedBundle;
   const bundleFetching = active.fetching || (matchContext.requested && matchContext.fetching);
-  const visible = resolveSeriesAnalysisVisibleBundle({
+  const visibility = resolveSeriesAnalysisVisibleBundle({
     activeView,
     artifactId: publishedArtifactId,
     bundle: displayedBundle,
@@ -109,19 +114,22 @@ export function useSeriesAnalysisDisplay({
     scopeAvailable: "query" in reads.plan,
     scopePending: selectionReady && scope.fetching && !scope.hasData,
     scopeSettling:
-      seriesAnalysisScopeSignature(state) !== seriesAnalysisScopeSignature(deferredState),
-    state,
+      seriesAnalysisScopeSignature(selection) !== seriesAnalysisScopeSignature(deferredSelection),
+    selection,
   });
 
   return {
     candidateArtifactId,
     focus: {
-      data: visible.bundle?.matchContext,
+      data: visibility.bundle?.matchContext,
       hasError:
         matchContext.requested &&
         (matchContext.failed ||
           Boolean(
-            active.failed && !bundleFetching && visible.bundle && !visible.bundle.matchContext,
+            active.failed &&
+            !bundleFetching &&
+            visibility.bundle &&
+            !visibility.bundle.matchContext,
           )),
       loading: matchContext.requested && matchContext.loading,
       refreshing: matchContext.fetching && matchContext.context !== undefined,
@@ -131,9 +139,9 @@ export function useSeriesAnalysisDisplay({
     refresh: reads.refresh,
     resolution: bundleResolution,
     resource: {
-      bundle: visible.bundle,
+      bundle: visibility.bundle,
       canRefresh: reads.canRefresh,
-      data: seriesAnalysisBundleResource(visible.bundle),
+      data: seriesAnalysisBundleResource(visibility.bundle),
       hasError: reads.hasError,
       unavailableReason: reads.plan.kind === "unavailable" ? reads.plan.reason : undefined,
       // The accepted scope and input interactivity follow the same gesture adoption gate.
@@ -151,7 +159,7 @@ export function useSeriesAnalysisDisplay({
           (!candidateResource && active.fetching) ||
           (displaySettling && displayedBundle === undefined)),
       refreshing: (active.fetching && active.hasData) || scope.fetching,
-      shielded: visible.shielded,
+      shielded: visibility.shielded,
     },
     status: reads.status,
   };

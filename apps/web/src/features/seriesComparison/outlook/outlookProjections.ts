@@ -348,33 +348,36 @@ export function outlookGoalHorizonView(state: OutlookWorkspaceState) {
   return { horizon: state.goalHorizon, horizonText: state.goalHorizonText };
 }
 
-export function outlookComparisonView(
-  response: SeriesAnalysisOutlookSummary,
-  focus?: string,
-  rival?: string,
+export function buildOutlookComparisonView(
+  summary: SeriesAnalysisOutlookSummary,
+  requestedFocusMemberId?: string,
+  requestedRivalMemberId?: string,
 ) {
-  const { focusMemberId, rivalMemberId } = normalizeOutlookPair(focus, rival);
-  const ids = [focusMemberId, rivalMemberId] as const;
+  const { focusMemberId, rivalMemberId } = normalizeOutlookPair(
+    requestedFocusMemberId,
+    requestedRivalMemberId,
+  );
+  const memberIds = [focusMemberId, rivalMemberId] as const;
   const players = [
-    outlookPlayer(response.players, focusMemberId),
-    outlookPlayer(response.players, rivalMemberId),
+    outlookPlayer(summary.players, focusMemberId),
+    outlookPlayer(summary.players, rivalMemberId),
   ] as const;
   const names = [players[0].displayName, players[1].displayName] as const;
   const displayRoles = orderFixedMembers(
-    ids.map((memberId, role) => ({ memberId, role: role as OutlookRole })),
+    memberIds.map((memberId, role) => ({ memberId, role: role as OutlookRole })),
   );
   const recent = [
-    distributionFromCounts(outlookPlayer(response.recent.players, focusMemberId).rankCounts),
-    distributionFromCounts(outlookPlayer(response.recent.players, rivalMemberId).rankCounts),
+    distributionFromCounts(outlookPlayer(summary.recent.players, focusMemberId).rankCounts),
+    distributionFromCounts(outlookPlayer(summary.recent.players, rivalMemberId).rankCounts),
   ] as const;
   const cumulative: CumulativePair = {
-    games: response.scope.matchCount,
+    games: summary.scope.matchCount,
     focusRankSum: players[0].rankSum,
     rivalRankSum: players[1].rankSum,
   };
-  return { ids, names, displayRoles, recent, cumulative };
+  return { memberIds, names, displayRoles, recent, cumulative };
 }
-export function outlookResultPresentation(
+export function buildOutlookOutcomeView(
   cumulative: CumulativePair,
   focus: RankDistribution,
   rival: RankDistribution,
@@ -386,7 +389,7 @@ export function outlookResultPresentation(
     outcome.eventHorizon !== null && outcome.eventHorizon <= 1000n
       ? Number(outcome.eventHorizon)
       : null;
-  const numericRows = [...new Set([0, 10, 20, 50, 100, horizon])]
+  const projectionRows = [...new Set([0, 10, 20, 50, 100, horizon])]
     .toSorted((a, b) => a - b)
     .map((h) => ({ h, ...projectOutlook(cumulative, focus, rival, h) }));
   const nextOutcomes = nextMatchOutcomes(cumulative).filter((next) =>
@@ -396,9 +399,9 @@ export function outlookResultPresentation(
         ? next.relation !== "behind"
         : true,
   );
-  return { outcome, eventHorizon, numericRows, nextOutcomes };
+  return { outcome, eventHorizon, projectionRows, nextOutcomes };
 }
-export function outlookWorkspaceLinks(
+export function buildOutlookWorkspaceLinks(
   location: { pathname: string; search: string },
   selection: SeriesAnalysisSelection,
   gameTitleId: string,

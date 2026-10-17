@@ -1,5 +1,5 @@
 import { PlayerRadarAdminPanel } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarAdminPanel";
-import { usePlayerRadarAdminModel } from "@/features/seriesAnalysisAdmin/radar/usePlayerRadarAdminModel";
+import { usePlayerRadarAdministration } from "@/features/seriesAnalysisAdmin/radar/usePlayerRadarAdministration";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
@@ -17,11 +17,11 @@ export function PlayerRadarAdministration({
   onApplyAccepted?: ((operationId: string) => void) | undefined;
   applyFinalFocus?: (() => HTMLElement | null) | undefined;
 }) {
-  const administration = usePlayerRadarAdminModel(gameTitleId, gameTitleName, onApplyAccepted);
-  if (administration.model)
+  const administration = usePlayerRadarAdministration(gameTitleId, gameTitleName, onApplyAccepted);
+  if (administration.view)
     return (
       <PlayerRadarAdminPanel
-        model={administration.model}
+        administration={administration.view}
         active={active}
         applyFinalFocus={applyFinalFocus}
       />

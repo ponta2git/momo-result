@@ -1,7 +1,7 @@
 import { useId, useLayoutEffect, useRef, useState } from "react";
 import type { Ref } from "react";
 
-import type { PlayerRadarAdminModel } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminTypes";
+import type { PlayerRadarAdministrationView } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminTypes";
 import { PlayerRadarPreview } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarPreview";
 import type { RadarThresholdEditor } from "@/features/seriesAnalysisAdmin/radar/radarThresholdEditorModel";
 import type { RadarThresholdError } from "@/features/seriesAnalysisAdmin/radar/radarThresholdInput";
@@ -20,13 +20,13 @@ import { contentText } from "@/shared/ui/typography";
 
 export function PlayerRadarThresholdEditor({
   editor,
-  model,
+  administration,
   onApply,
   applyButtonRef,
   active = true,
 }: {
   editor: RadarThresholdEditor;
-  model: PlayerRadarAdminModel;
+  administration: PlayerRadarAdministrationView;
   onApply: () => Promise<RadarThresholdError | null>;
   applyButtonRef: Ref<HTMLButtonElement>;
   active?: boolean;
@@ -43,13 +43,13 @@ export function PlayerRadarThresholdEditor({
     inputs.current.get(`${focusRequest.axisId}:${focusRequest.index}`)?.focus();
   }, [focusRequest]);
   if (!editor.active || !editor.drafts) return null;
-  const pending = editor.preparingApply || model.communicationUnknown;
+  const pending = editor.preparingApply || administration.communicationUnknown;
   const disabled = pending || editor.discarding || Boolean(editor.permissionReason);
   const selectedAxis =
     playerRadarAxes.find((axis) => axis.id === editor.axis) ?? playerRadarAxes[0];
   const unit = editor.axis === "averageRank" ? "位以下" : "万円以上";
   const preview = editor.preview;
-  const currentValues = model.currentBasis?.axes.find(
+  const currentValues = administration.currentBasis?.axes.find(
     (axis) => axis.axisId === editor.axis,
   )?.thresholds;
   const originalValues = editor.referenceThresholds?.[editor.axis];
@@ -128,7 +128,7 @@ export function PlayerRadarThresholdEditor({
           入力値は保持しています。編集元の参照値と置き換える共有案を確認してから適用してください。
         </Notice>
       ) : null}
-      {editor.applyError && !model.communicationUnknown ? (
+      {editor.applyError && !administration.communicationUnknown ? (
         <Notice tone="danger" title="適用前の確認を完了できません">
           {editor.applyError}
         </Notice>
@@ -303,25 +303,25 @@ export function PlayerRadarThresholdEditor({
                     <PlayerRadarPreview
                       preview={preview}
                       axisId={editor.axis}
-                      filter={model.previewFilter}
+                      filter={administration.previewFilter}
                       updating={editor.evaluationUpdating}
-                      onSeasonChange={model.actions.selectSeason}
-                      onMapChange={model.actions.selectMap}
-                      onResetFilter={model.actions.resetPreviewFilter}
+                      onSeasonChange={administration.actions.selectSeason}
+                      onMapChange={administration.actions.selectMap}
+                      onResetFilter={administration.actions.resetPreviewFilter}
                     />
                   ) : (
                     <div className="grid gap-4 sm:grid-cols-2">
                       <SelectField
                         label="比較するシーズン"
-                        options={model.previewFilter.seasonOptions}
-                        value={model.previewFilter.seasonMasterId}
-                        onValueChange={model.actions.selectSeason}
+                        options={administration.previewFilter.seasonOptions}
+                        value={administration.previewFilter.seasonMasterId}
+                        onValueChange={administration.actions.selectSeason}
                       />
                       <SelectField
                         label="比較するマップ"
-                        options={model.previewFilter.mapOptions}
-                        value={model.previewFilter.mapMasterId}
-                        onValueChange={model.actions.selectMap}
+                        options={administration.previewFilter.mapOptions}
+                        value={administration.previewFilter.mapMasterId}
+                        onValueChange={administration.actions.selectMap}
                       />
                     </div>
                   )}

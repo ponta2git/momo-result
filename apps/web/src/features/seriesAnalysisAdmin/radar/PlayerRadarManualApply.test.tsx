@@ -3,20 +3,20 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { PlayerRadarAdminPanel } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarAdminPanel";
-import type { PlayerRadarAdminModel } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminTypes";
+import type { PlayerRadarAdministrationView } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminTypes";
 import type { RadarManualSave } from "@/features/seriesAnalysisAdmin/radar/radarThresholdEditorModel";
 import {
   previewRadarThresholds,
   radarInputBasis,
 } from "@/features/seriesAnalysisAdmin/radar/radarThresholdInput";
 import { createDeferred } from "@/test/deferred";
-import { makePlayerRadarEditorModel } from "@/test/fixtures/playerRadarEditorModel";
+import { makePlayerRadarEditorView } from "@/test/fixtures/playerRadarEditorView";
 
 function comparisonModel(
-  original: PlayerRadarAdminModel,
+  original: PlayerRadarAdministrationView,
   request: RadarManualSave,
   ready: boolean,
-): PlayerRadarAdminModel {
+): PlayerRadarAdministrationView {
   const editing = original.editing;
   const source = editing?.current;
   const evaluation = editing?.evaluation;
@@ -71,7 +71,7 @@ function comparisonModel(
 
 async function startManualApply() {
   const user = userEvent.setup();
-  const model = makePlayerRadarEditorModel();
+  const model = makePlayerRadarEditorView();
   const editing = model.editing;
   if (!editing) throw new Error("Missing editor fixture");
   const accepted = createDeferred<{ candidateId: string; operationId: string }>();
@@ -81,7 +81,7 @@ async function startManualApply() {
   editing.save = save;
   model.actions.apply = apply;
   model.actions.refresh.run = refresh;
-  const rendered = render(<PlayerRadarAdminPanel model={model} />);
+  const rendered = render(<PlayerRadarAdminPanel administration={model} />);
   await user.click(screen.getByRole("button", { name: "調整を始める" }));
   const input = screen.getByRole("textbox", { name: "平均順位 2点の境界（位以下）" });
   fireEvent.change(input, { target: { value: "4.95" } });
@@ -107,7 +107,7 @@ describe("manual radar application confirmation", () => {
       flow.accepted.resolve({ candidateId: "manual-candidate", operationId: "manual-operation" }),
     );
     flow.rendered.rerender(
-      <PlayerRadarAdminPanel model={comparisonModel(flow.model, flow.request, false)} />,
+      <PlayerRadarAdminPanel administration={comparisonModel(flow.model, flow.request, false)} />,
     );
     const confirm = within(flow.dialog).getByRole("button", { name: "作品全体に適用する" });
     expect(confirm).toBeDisabled();
@@ -115,7 +115,7 @@ describe("manual radar application confirmation", () => {
     await flow.user.click(within(flow.dialog).getByRole("button", { name: "確認結果を更新" }));
     expect(flow.refresh).toHaveBeenCalledTimes(1);
     flow.rendered.rerender(
-      <PlayerRadarAdminPanel model={comparisonModel(flow.model, flow.request, true)} />,
+      <PlayerRadarAdminPanel administration={comparisonModel(flow.model, flow.request, true)} />,
     );
     await waitFor(() => expect(confirm).toBeEnabled());
     await flow.user.click(confirm);
@@ -135,7 +135,7 @@ describe("manual radar application confirmation", () => {
       flow.accepted.resolve({ candidateId: "manual-candidate", operationId: "manual-operation" }),
     );
     flow.rendered.rerender(
-      <PlayerRadarAdminPanel model={comparisonModel(flow.model, flow.request, false)} />,
+      <PlayerRadarAdminPanel administration={comparisonModel(flow.model, flow.request, false)} />,
     );
     await flow.user.click(within(flow.dialog).getByRole("button", { name: "キャンセル" }));
     await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
@@ -145,7 +145,7 @@ describe("manual radar application confirmation", () => {
     );
 
     flow.rendered.rerender(
-      <PlayerRadarAdminPanel model={comparisonModel(flow.model, flow.request, true)} />,
+      <PlayerRadarAdminPanel administration={comparisonModel(flow.model, flow.request, true)} />,
     );
     await flow.user.click(screen.getByRole("button", { name: "変更を適用" }));
     const dialog = await screen.findByRole("alertdialog", {

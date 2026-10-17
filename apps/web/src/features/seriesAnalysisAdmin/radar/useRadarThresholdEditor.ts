@@ -4,7 +4,7 @@ import {
   radarCommandErrorMessage,
   radarSubmissionUncertain,
 } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminPresentation";
-import type { PlayerRadarAdminModel } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminTypes";
+import type { PlayerRadarAdministrationView } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminTypes";
 import {
   acceptRadarSaveReceipt,
   adoptRadarEditingSource,
@@ -13,15 +13,15 @@ import {
   confirmRadarSavedInput,
   matchesRadarSaveReceipt,
   radarApplyReceiptMatches,
-  radarEditingView,
-  radarReadyPreview,
+  buildRadarThresholdEditorView,
+  buildRadarInputPreview,
   radarSaveRequest,
   reconcileRadarComparison,
   resetRadarThresholds,
 } from "@/features/seriesAnalysisAdmin/radar/radarEditingSession";
 import type {
   RadarEditSession,
-  RadarReadyInput,
+  RadarSettledInput,
 } from "@/features/seriesAnalysisAdmin/radar/radarEditingSession";
 import type {
   RadarEditingSource,
@@ -38,10 +38,10 @@ import type { PlayerRadarAxisId } from "@/shared/seriesAnalysis/playerRadarPrese
 
 /** Owns input lifetime and asynchronous receipts; projections and transitions stay pure. */
 export function useRadarThresholdEditor(
-  model: PlayerRadarAdminModel,
+  administration: PlayerRadarAdministrationView,
   active = true,
 ): RadarThresholdEditor {
-  const editing = model.editing;
+  const editing = administration.editing;
   const [session, setSession] = useState<RadarEditSession | null>(null);
   const [axis, setAxis] = useState<PlayerRadarAxisId>("averageRank");
   const [composing, setComposing] = useState(false);
@@ -49,7 +49,7 @@ export function useRadarThresholdEditor(
   const [discarding, setDiscarding] = useState(false);
   const [preparingApply, setPreparingApply] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
-  const [ready, setReady] = useState<RadarReadyInput | null>(null);
+  const [settledInput, setSettledInput] = useState<RadarSettledInput | null>(null);
   const navigationAllowed = useRef(false);
   const isNavigationAllowed = useCallback(() => navigationAllowed.current, []);
   const submittedSave = useRef<RadarManualSave | null>(null);
@@ -63,14 +63,14 @@ export function useRadarThresholdEditor(
   }, []);
   const drafts = session?.drafts;
   const parsed = useMemo(() => (drafts ? parseRadarThresholdDrafts(drafts) : null), [drafts]);
-  const context = editing?.evaluation?.key ?? "";
-  const debounce = useDebouncedCallback(setReady, 300);
+  const evaluationKey = editing?.evaluation?.key ?? "";
+  const inputDebounce = useDebouncedCallback(setSettledInput, 300);
   useEffect(() => {
-    debounce.cancel();
-    if (drafts && parsed?.input && context && !composing && !editing?.permissionReason)
-      debounce.schedule({ input: parsed.input, context, drafts });
-    return debounce.cancel;
-  }, [drafts, parsed?.input, context, composing, editing?.permissionReason, debounce]);
+    inputDebounce.cancel();
+    if (drafts && parsed?.input && evaluationKey && !composing && !editing?.permissionReason)
+      inputDebounce.schedule({ input: parsed.input, evaluationKey, drafts });
+    return inputDebounce.cancel;
+  }, [drafts, parsed?.input, evaluationKey, composing, editing?.permissionReason, inputDebounce]);
 
   const acceptedSave = editing?.acceptedSave;
   useEffect(() => {
@@ -99,28 +99,42 @@ export function useRadarThresholdEditor(
     handledApply.current = acceptedApply.operationId;
     if (!radarApplyReceiptMatches(session, acceptedApply)) return;
     navigationAllowed.current = true;
-    debounce.cancel();
+    inputDebounce.cancel();
     submittedSave.current = null;
     // Reconcile an externally recovered receipt after the original event handler ended.
     // oxlint-disable-next-line react/set-state-in-effect
     setSession(null);
-    setReady(null);
+    setSettledInput(null);
     setApplyError(null);
     editing?.onActiveChange(false);
-  }, [acceptedApply, session, debounce, editing]);
+  }, [acceptedApply, session, inputDebounce, editing]);
 
   const sourceBasis = session?.source.basis;
-  const currentBasis = model.currentBasis;
+  const currentBasis = administration.currentBasis;
   const evaluation = editing?.evaluation;
   const permissionReason = editing?.permissionReason;
   const localPreview = useMemo(
     () =>
-      radarReadyPreview({ basis: sourceBasis, currentBasis, ready, evaluation, permissionReason }),
-    [sourceBasis, currentBasis, ready, evaluation, permissionReason],
+      buildRadarInputPreview({
+        basis: sourceBasis,
+        currentBasis,
+        settledInput,
+        evaluation,
+        permissionReason,
+      }),
+    [sourceBasis, currentBasis, settledInput, evaluation, permissionReason],
   );
   const projection = useMemo(
-    () => radarEditingView(session, model, ready, composing, applyError, localPreview),
-    [session, model, ready, composing, applyError, localPreview],
+    () =>
+      buildRadarThresholdEditorView(
+        session,
+        administration,
+        settledInput,
+        composing,
+        applyError,
+        localPreview,
+      ),
+    [session, administration, settledInput, composing, applyError, localPreview],
   );
   const reconciled = reconcileRadarComparison(session, projection.formalPreviewId);
   // Never publish a changed formal comparison as already confirmed.
@@ -145,7 +159,7 @@ export function useRadarThresholdEditor(
       setComposing(false);
       setShowErrors(false);
       setApplyError(null);
-      setReady(null);
+      setSettledInput(null);
       onActiveChange?.(true);
     },
     [permissionReason, preparingApply, onActiveChange],
@@ -159,10 +173,10 @@ export function useRadarThresholdEditor(
     if (candidateSource) begin(candidateSource);
   }, [begin, candidateSource]);
   const enteredCandidate = useRef<string | null>(null);
-  const candidateId = model.candidate?.candidateId;
-  const candidateStatus = model.candidate?.status;
+  const candidateId = administration.candidate?.candidateId;
+  const candidateStatus = administration.candidate?.status;
   useEffect(() => {
-    const id = model.autoEditCandidateId;
+    const id = administration.autoEditCandidateId;
     if (
       !active ||
       view.active ||
@@ -179,7 +193,7 @@ export function useRadarThresholdEditor(
   }, [
     active,
     view.active,
-    model.autoEditCandidateId,
+    administration.autoEditCandidateId,
     candidateId,
     candidateStatus,
     candidateSource,
@@ -188,17 +202,18 @@ export function useRadarThresholdEditor(
   ]);
 
   function finish() {
-    if (preparingApply || model.communicationUnknown) return;
+    if (preparingApply || administration.communicationUnknown) return;
     navigationAllowed.current = true;
-    debounce.cancel();
+    inputDebounce.cancel();
     submittedSave.current = null;
     setSession(null);
-    setReady(null);
+    setSettledInput(null);
     setApplyError(null);
     editing?.onActiveChange(false);
   }
   async function discard() {
-    if (!session || !editing || preparingApply || discarding || model.communicationUnknown) return;
+    if (!session || !editing || preparingApply || discarding || administration.communicationUnknown)
+      return;
     setDiscarding(true);
     try {
       if (session.prepared) await editing.discard(session.prepared);
@@ -210,7 +225,7 @@ export function useRadarThresholdEditor(
     }
   }
   function change(axisId: PlayerRadarAxisId, index: number, value: string) {
-    debounce.cancel();
+    inputDebounce.cancel();
     setSession((current) => changeRadarThreshold(current, axisId, index, value));
     setApplyError(null);
   }
@@ -264,7 +279,13 @@ export function useRadarThresholdEditor(
     }
     return null;
   }
-  const confirmation = useRadarApplyConfirmation(model, view, active, prepareApply, finish);
+  const confirmation = useRadarApplyConfirmation(
+    administration,
+    view,
+    active,
+    prepareApply,
+    finish,
+  );
   return {
     ...view,
     currentSourceAvailable: Boolean(currentSource),
@@ -274,7 +295,7 @@ export function useRadarThresholdEditor(
     beginFromCandidate,
     setAxis,
     setComposing: (value) => {
-      debounce.cancel();
+      inputDebounce.cancel();
       setComposing(value);
     },
     isNavigationAllowed,
@@ -283,7 +304,7 @@ export function useRadarThresholdEditor(
     adoptCurrentSource,
     reset: () => {
       if (!session) return;
-      debounce.cancel();
+      inputDebounce.cancel();
       setSession(resetRadarThresholds);
       setShowErrors(false);
     },

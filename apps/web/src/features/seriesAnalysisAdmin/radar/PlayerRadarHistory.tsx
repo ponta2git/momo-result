@@ -5,7 +5,7 @@ import {
   playerRadarRevisionActor,
   playerRadarRevisionKind,
 } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarHistoryDetail";
-import { usePlayerRadarHistoryModel } from "@/features/seriesAnalysisAdmin/radar/usePlayerRadarHistoryModel";
+import { usePlayerRadarHistory } from "@/features/seriesAnalysisAdmin/radar/usePlayerRadarHistory";
 import type { PlayerRadarRevision } from "@/shared/api/seriesPlayerRadarHistory";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { Button } from "@/shared/ui/actions/Button";
@@ -23,8 +23,8 @@ export function PlayerRadarHistory({
 }: {
   titleOptions: ReadonlyArray<{ gameTitleId: string; gameTitleName: string }>;
 }) {
-  const model = usePlayerRadarHistoryModel();
-  const { gameTitleId, cursor, revisionId, data, revision, error } = model;
+  const history = usePlayerRadarHistory();
+  const { gameTitleId, cursor, revisionId, data, revision, error } = history;
 
   return (
     <section aria-label="採点基準の改訂履歴" className="grid min-w-0 gap-4">
@@ -33,7 +33,7 @@ export function PlayerRadarHistory({
       )}
       {revisionId ? (
         <div>
-          <Button variant="secondary" size="sm" onClick={model.actions.showList}>
+          <Button variant="secondary" size="sm" onClick={history.actions.showList}>
             改訂一覧を表示
           </Button>
         </div>
@@ -44,7 +44,7 @@ export function PlayerRadarHistory({
             <div className="max-w-lg">
               <SelectField
                 label="履歴の作品"
-                disabled={model.disabled}
+                disabled={history.disabled}
                 value={gameTitleId ?? ""}
                 options={[
                   { value: "", label: "全作品" },
@@ -53,7 +53,7 @@ export function PlayerRadarHistory({
                     label: title.gameTitleName,
                   })),
                 ]}
-                onValueChange={model.actions.selectTitle}
+                onValueChange={history.actions.selectTitle}
               />
             </div>
           }
@@ -63,10 +63,10 @@ export function PlayerRadarHistory({
                 icon={<RefreshCw />}
                 variant="secondary"
                 size="sm"
-                disabled={model.refreshDisabled}
-                pending={model.refreshing}
+                disabled={history.refreshDisabled}
+                pending={history.refreshing}
                 pendingLabel="履歴を更新中"
-                onClick={model.actions.refresh}
+                onClick={history.actions.refresh}
               >
                 履歴を更新
               </Button>
@@ -82,8 +82,8 @@ export function PlayerRadarHistory({
             <Button
               size="sm"
               variant="secondary"
-              onClick={model.actions.refresh}
-              disabled={model.refreshDisabled}
+              onClick={history.actions.refresh}
+              disabled={history.refreshDisabled}
             >
               再読み込み
             </Button>
@@ -92,7 +92,7 @@ export function PlayerRadarHistory({
           {error.detail}
         </Notice>
       ) : null}
-      {model.loading ? (
+      {history.loading ? (
         <div role="status" aria-label="改訂履歴を読み込み中" className="grid gap-3">
           <span className="sr-only">読み込み中</span>
           <Skeleton className="h-10 w-full" />
@@ -144,7 +144,7 @@ export function PlayerRadarHistory({
                       size="sm"
                       variant="secondary"
                       aria-label={`${row.gameTitleName} ${formatDateTimeLong(row.appliedAt)}の改訂詳細`}
-                      onClick={() => model.actions.selectRevision(row.revisionId)}
+                      onClick={() => history.actions.selectRevision(row.revisionId)}
                     >
                       採点境界の変更を確認
                     </Button>
@@ -163,14 +163,14 @@ export function PlayerRadarHistory({
           {cursor || data.nextCursor ? (
             <nav aria-label="改訂履歴のページ送り" className="flex flex-wrap gap-2">
               {cursor ? (
-                <Button variant="secondary" onClick={() => model.actions.selectCursor(undefined)}>
+                <Button variant="secondary" onClick={() => history.actions.selectCursor(undefined)}>
                   最新の履歴を表示
                 </Button>
               ) : null}
               {data.nextCursor ? (
                 <Button
                   variant="secondary"
-                  onClick={() => model.actions.selectCursor(data.nextCursor ?? undefined)}
+                  onClick={() => history.actions.selectCursor(data.nextCursor ?? undefined)}
                 >
                   次の20件
                 </Button>

@@ -8,14 +8,14 @@ import {
   radarInputBasis,
 } from "@/features/seriesAnalysisAdmin/radar/radarThresholdInput";
 import type { RadarManualInput } from "@/features/seriesAnalysisAdmin/radar/radarThresholdInput";
-import { makePlayerRadarEditorModel } from "@/test/fixtures/playerRadarEditorModel";
+import { makePlayerRadarEditorView } from "@/test/fixtures/playerRadarEditorView";
 
 afterEach(() => vi.useRealTimers());
 
 describe("radar threshold input workflow", () => {
   it("keeps edits when leaving is cancelled and discards them only after confirmation", async () => {
     const user = userEvent.setup();
-    render(<PlayerRadarAdminPanel model={makePlayerRadarEditorModel()} />);
+    render(<PlayerRadarAdminPanel administration={makePlayerRadarEditorView()} />);
     await user.click(screen.getByRole("button", { name: "調整を始める" }));
     const input = screen.getByRole("textbox", { name: "平均順位 2点の境界（位以下）" });
     await user.clear(input);
@@ -41,7 +41,7 @@ describe("radar threshold input workflow", () => {
 
   it("shows ordering constraints immediately on both affected boundaries without a form notice", async () => {
     const user = userEvent.setup();
-    render(<PlayerRadarAdminPanel model={makePlayerRadarEditorModel()} />);
+    render(<PlayerRadarAdminPanel administration={makePlayerRadarEditorView()} />);
     await user.click(screen.getByRole("button", { name: "調整を始める" }));
     const first = screen.getByRole("textbox", { name: "平均順位 2点の境界（位以下）" });
     const next = screen.getByRole("textbox", { name: "平均順位 3点の境界（位以下）" });
@@ -62,7 +62,7 @@ describe("radar threshold input workflow", () => {
 
   it("waits for blur for incomplete numbers and suppresses error emphasis during IME composition", async () => {
     const user = userEvent.setup();
-    render(<PlayerRadarAdminPanel model={makePlayerRadarEditorModel()} />);
+    render(<PlayerRadarAdminPanel administration={makePlayerRadarEditorView()} />);
     await user.click(screen.getByRole("button", { name: "調整を始める" }));
     const input = screen.getByRole("textbox", { name: "平均順位 2点の境界（位以下）" });
     await user.clear(input);
@@ -86,10 +86,10 @@ describe("radar threshold input workflow", () => {
 
   it("saves visible decimal input before blur, preserves other original values, and supports per-field undo", async () => {
     const user = userEvent.setup();
-    const model = makePlayerRadarEditorModel();
+    const model = makePlayerRadarEditorView();
     const save = vi.fn(model.editing!.save);
     model.editing!.save = save;
-    render(<PlayerRadarAdminPanel model={model} />);
+    render(<PlayerRadarAdminPanel administration={model} />);
     await user.click(screen.getByRole("button", { name: "調整を始める" }));
     expect(screen.getAllByRole("textbox")).toHaveLength(9);
     const first = screen.getByRole("textbox", { name: "平均順位 2点の境界（位以下）" });
@@ -117,10 +117,10 @@ describe("radar threshold input workflow", () => {
 
   it("keeps an incomplete value across axis changes and opens the hidden invalid axis on save", async () => {
     const user = userEvent.setup();
-    const model = makePlayerRadarEditorModel();
+    const model = makePlayerRadarEditorView();
     const save = vi.fn(model.editing!.save);
     model.editing!.save = save;
-    render(<PlayerRadarAdminPanel model={model} />);
+    render(<PlayerRadarAdminPanel administration={model} />);
     await user.click(screen.getByRole("button", { name: "調整を始める" }));
     const comparison = await screen.findByRole("table", { name: "採点基準変更前後の比較" });
     expect(within(comparison).getAllByRole("row")).toHaveLength(2);
@@ -154,10 +154,10 @@ describe("radar threshold input workflow", () => {
 
   it("does not turn IME Enter into navigation, saving, or a valid pending preview", async () => {
     const user = userEvent.setup();
-    const model = makePlayerRadarEditorModel();
+    const model = makePlayerRadarEditorView();
     const save = vi.fn(model.editing!.save);
     model.editing!.save = save;
-    render(<PlayerRadarAdminPanel model={model} />);
+    render(<PlayerRadarAdminPanel administration={model} />);
     await user.click(screen.getByRole("button", { name: "調整を始める" }));
     const input = screen.getByRole("textbox", { name: "平均順位 2点の境界（位以下）" });
     input.focus();
@@ -178,10 +178,10 @@ describe("radar threshold input workflow", () => {
 
   it("starts a usable new edit after discarding an unfinished IME composition", async () => {
     const user = userEvent.setup();
-    const model = makePlayerRadarEditorModel();
+    const model = makePlayerRadarEditorView();
     const save = vi.fn(model.editing!.save);
     model.editing!.save = save;
-    render(<PlayerRadarAdminPanel model={model} />);
+    render(<PlayerRadarAdminPanel administration={model} />);
     await user.click(screen.getByRole("button", { name: "調整を始める" }));
     fireEvent.compositionStart(
       screen.getByRole("textbox", { name: "平均順位 2点の境界（位以下）" }),
@@ -203,7 +203,7 @@ describe("radar threshold input workflow", () => {
 
   it("keeps the previous comparison visibly stale while a now-invalid input cancels the queued preview", async () => {
     const user = userEvent.setup();
-    render(<PlayerRadarAdminPanel model={makePlayerRadarEditorModel()} />);
+    render(<PlayerRadarAdminPanel administration={makePlayerRadarEditorView()} />);
     await user.click(screen.getByRole("button", { name: "調整を始める" }));
     const comparison = await screen.findByRole("table", { name: "採点基準変更前後の比較" });
     const previous = comparison.textContent;
@@ -220,7 +220,7 @@ describe("radar threshold input workflow", () => {
 
   it("requires explicit reconfirmation after editing and reverting a formally compared saved candidate", async () => {
     const user = userEvent.setup();
-    const model = makePlayerRadarEditorModel();
+    const model = makePlayerRadarEditorView();
     const input: RadarManualInput = structuredClone(model.editing!.current!.input);
     input.axes[0]!.thresholds[0] = 5;
     const basis = { ...radarInputBasis(model.currentBasis!, input), basisId: "saved-basis" };
@@ -256,7 +256,7 @@ describe("radar threshold input workflow", () => {
     const save = vi.fn(model.editing!.save);
     model.editing!.reuseCandidate = reuse;
     model.editing!.save = save;
-    render(<PlayerRadarAdminPanel model={model} />);
+    render(<PlayerRadarAdminPanel administration={model} />);
     await user.click(screen.getByRole("button", { name: "変更案を編集" }));
     expect(screen.queryByRole("button", { name: "案を保存して比較" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "この変更案を適用する" })).not.toBeInTheDocument();

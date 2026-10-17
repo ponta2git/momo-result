@@ -7,9 +7,9 @@ import type { SeriesAnalysisRecalculationAccepted } from "@/shared/api/seriesAna
 import type { AuthorizationLease, AuthorizationOperations } from "@/shared/auth/authorization";
 
 export function useSeriesAnalysisRecalculation(authorization: AuthorizationOperations) {
-  const activeCommand = useRef<AuthorizationLease | undefined>(undefined);
+  const activeCommandLease = useRef<AuthorizationLease | undefined>(undefined);
   const hasPendingCommand = () =>
-    Boolean(activeCommand.current && authorization.isCurrent(activeCommand.current));
+    Boolean(activeCommandLease.current && authorization.isCurrent(activeCommandLease.current));
   const mounted = useRef(false);
   const handledAcceptance = useRef<SeriesAnalysisRecalculationAccepted | undefined>(undefined);
   useEffect(() => {
@@ -24,7 +24,7 @@ export function useSeriesAnalysisRecalculation(authorization: AuthorizationOpera
       if (mounted.current) authorization.reportError(error, lease);
     },
     onFinish: ({ lease }) => {
-      if (activeCommand.current === lease) activeCommand.current = undefined;
+      if (activeCommandLease.current === lease) activeCommandLease.current = undefined;
     },
   });
   const { reconcileAcceptance } = submission;
@@ -42,14 +42,14 @@ export function useSeriesAnalysisRecalculation(authorization: AuthorizationOpera
     handledAcceptance.current = response;
     reconcileAcceptance();
   }, [authorization, submission.accepted, submission.submitted, reconcileAcceptance]);
-  const current = submission.submitted
+  const submissionIsCurrent = submission.submitted
     ? authorization.isCurrent(submission.submitted.lease)
     : false;
   return {
     target: submission.submitted?.target,
-    response: current ? submission.accepted : undefined,
-    error: current ? submission.error : null,
-    pending: current && submission.pending,
+    response: submissionIsCurrent ? submission.accepted : undefined,
+    error: submissionIsCurrent ? submission.error : null,
+    pending: submissionIsCurrent && submission.pending,
     clearFeedback: () => {
       if (!hasPendingCommand()) submission.clear();
     },
@@ -57,7 +57,7 @@ export function useSeriesAnalysisRecalculation(authorization: AuthorizationOpera
       if (hasPendingCommand() || !titleCount) return;
       const lease = authorization.begin("admin");
       if (!lease) return;
-      activeCommand.current = lease;
+      activeCommandLease.current = lease;
       await submission.submitAndWait({ target: { kind: "all" }, lease });
     },
     recalculateTitle: (title: AnalysisAdminTitle | null) => {
@@ -65,7 +65,7 @@ export function useSeriesAnalysisRecalculation(authorization: AuthorizationOpera
       if (hasPendingCommand() || !target) return;
       const lease = authorization.begin("operations");
       if (!lease) return;
-      activeCommand.current = lease;
+      activeCommandLease.current = lease;
       submission.submit({ target, lease });
     },
   };

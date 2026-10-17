@@ -1,7 +1,7 @@
 import { useRef } from "react";
 
 import { radarCommandErrorMessage } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminPresentation";
-import type { PlayerRadarAdminModel } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminTypes";
+import type { PlayerRadarAdministrationView } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminTypes";
 import { PlayerRadarCommandButton } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarCommandButton";
 import { PlayerRadarThresholdEditor } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarThresholdEditor";
 import { useRadarEditingWorkspace } from "@/features/seriesAnalysisAdmin/radar/RadarThresholdEditorProvider";
@@ -14,11 +14,11 @@ import { contentText } from "@/shared/ui/typography";
 
 /** Keep the confirmation mounted through acceptance so it can return focus to the destination. */
 export function PlayerRadarEditingWorkspace({
-  model,
+  administration,
   active,
   applyFinalFocus,
 }: {
-  model: PlayerRadarAdminModel;
+  administration: PlayerRadarAdministrationView;
   active: boolean;
   applyFinalFocus?: (() => HTMLElement | null) | undefined;
 }) {
@@ -32,7 +32,7 @@ export function PlayerRadarEditingWorkspace({
         <PlayerRadarThresholdEditor
           editor={editor}
           active={active}
-          model={model}
+          administration={administration}
           applyButtonRef={applyTriggerRef}
           onApply={editor.requestApply}
         />
@@ -51,7 +51,7 @@ export function PlayerRadarEditingWorkspace({
         pendingLabel="適用を受付中"
         description={`${confirmation.gameTitleName}の全シーズン・全マップに適用します。過去の成績もこの基準で再採点します。`}
         formatError={radarCommandErrorMessage}
-        pending={model.applyPending}
+        pending={administration.applyPending}
         title="この基準を作品全体に適用しますか？"
         tone="primary"
         onConfirm={editor.confirmApply}
@@ -61,24 +61,24 @@ export function PlayerRadarEditingWorkspace({
             <p className={contentText.body} role="status">
               {confirmation.waitingMessage}
             </p>
-            {model.communicationUnknown ? (
+            {administration.communicationUnknown ? (
               <PlayerRadarCommandButton
-                action={model.actions.checkOperation}
+                action={administration.actions.checkOperation}
                 label="操作の状態を確認する"
                 pendingLabel="操作の状態を確認中"
               />
-            ) : model.operation?.status === "failed" ? (
+            ) : administration.operation?.status === "failed" ? (
               <>
-                <p className={contentText.body}>{model.operation.detail}</p>
+                <p className={contentText.body}>{administration.operation.detail}</p>
                 <PlayerRadarCommandButton
-                  action={model.actions.retry}
+                  action={administration.actions.retry}
                   label="この処理を再試行する"
                   pendingLabel="再試行を受付中"
                 />
               </>
             ) : (
               <PlayerRadarCommandButton
-                action={model.actions.refresh}
+                action={administration.actions.refresh}
                 label="確認結果を更新"
                 pendingLabel="確認結果を更新中"
               />

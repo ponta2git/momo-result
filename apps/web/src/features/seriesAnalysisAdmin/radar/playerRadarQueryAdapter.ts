@@ -258,28 +258,28 @@ export function useRadarHistoryRead(
   const queryClient = useQueryClient();
   const listOptions = playerRadarHistoryQueryOptions(filters);
   const detailOptions = playerRadarRevisionQueryOptions(revisionId);
-  const list = useQuery({
+  const listQuery = useQuery({
     ...listOptions,
     enabled: () =>
       !revisionId &&
       canReadProtectedQuery(authorization, queryClient, "operations", listOptions.queryKey),
   });
-  const detail = useQuery({
+  const revisionQuery = useQuery({
     ...detailOptions,
     enabled: () =>
       Boolean(revisionId) &&
       canReadProtectedQuery(authorization, queryClient, "operations", detailOptions.queryKey),
   });
-  const result = revisionId ? detail : list;
+  const activeQuery = revisionId ? revisionQuery : listQuery;
   return {
-    data: authorization.allowed.operations ? list.data : undefined,
-    revision: authorization.allowed.operations ? detail.data : undefined,
-    loading: isInitialQueryLoading(result),
-    refreshing: result.isFetching,
-    error: shouldShowQueryError(result) ? result.error : undefined,
-    hasData: Boolean(result.data),
+    data: authorization.allowed.operations ? listQuery.data : undefined,
+    revision: authorization.allowed.operations ? revisionQuery.data : undefined,
+    loading: isInitialQueryLoading(activeQuery),
+    refreshing: activeQuery.isFetching,
+    error: shouldShowQueryError(activeQuery) ? activeQuery.error : undefined,
+    hasData: Boolean(activeQuery.data),
     refresh: async () => {
-      await result.refetch();
+      await activeQuery.refetch();
     },
   };
 }

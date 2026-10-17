@@ -27,34 +27,38 @@ export type SeriesAnalysisReadPlan =
 export function planSeriesAnalysisRead({
   activeView,
   artifactId,
-  deferredState,
+  deferredSelection,
   scopeState,
-  state,
+  selection,
 }: {
   activeView: SeriesAnalysisViewId;
   artifactId: string | undefined;
-  deferredState: SeriesAnalysisSelection;
+  deferredSelection: SeriesAnalysisSelection;
   scopeState: SeriesAnalysisScopeStatus["state"] | undefined;
-  state: SeriesAnalysisSelection;
+  selection: SeriesAnalysisSelection;
 }): SeriesAnalysisReadPlan {
-  if (activeView === "outlook" && state.mapMasterId) {
+  if (activeView === "outlook" && selection.mapMasterId) {
     return { kind: "unavailable", reason: "outlook_map" };
   }
   if (scopeState === undefined) return { kind: "waiting" };
   const emptyTitleOutlook =
-    activeView === "outlook" && scopeState === "empty" && !state.seasonMasterId;
+    activeView === "outlook" && scopeState === "empty" && !selection.seasonMasterId;
   if (scopeState !== "available" && !emptyTitleOutlook) {
     return { kind: "unavailable", reason: scopeState };
   }
-  const context = seriesAnalysisQueryFromSelection(state, artifactId);
-  if (!context) return { kind: "waiting" };
-  if (activeView === "outlook") return { kind: "outlook", query: context };
+  const currentSelectionQuery = seriesAnalysisQueryFromSelection(selection, artifactId);
+  if (!currentSelectionQuery) return { kind: "waiting" };
+  if (activeView === "outlook") return { kind: "outlook", query: currentSelectionQuery };
   const query =
-    activeView === "review" ? context : seriesAnalysisQueryFromSelection(deferredState, artifactId);
+    activeView === "review"
+      ? currentSelectionQuery
+      : seriesAnalysisQueryFromSelection(deferredSelection, artifactId);
   if (!query) return { kind: "waiting" };
   return {
     kind: activeView === "review" ? "review" : "analysis",
     query,
-    matchContext: state.focusMatchId ? { ...context, matchId: state.focusMatchId } : undefined,
+    matchContext: selection.focusMatchId
+      ? { ...currentSelectionQuery, matchId: selection.focusMatchId }
+      : undefined,
   };
 }

@@ -7,10 +7,10 @@ import {
   previewRadarThresholds,
   radarInputBasis,
 } from "@/features/seriesAnalysisAdmin/radar/radarThresholdInput";
-import { makePlayerRadarEditorModel } from "@/test/fixtures/playerRadarEditorModel";
+import { makePlayerRadarEditorView } from "@/test/fixtures/playerRadarEditorView";
 
 function modelFixture() {
-  const model = makePlayerRadarEditorModel();
+  const model = makePlayerRadarEditorView();
   const input = structuredClone(model.editing!.current!.input);
   input.axes[0]!.thresholds[0] = 5;
   const basis = { ...radarInputBasis(model.currentBasis!, input), basisId: "basis-candidate" };
@@ -68,10 +68,10 @@ describe("PlayerRadarAdminPanel", () => {
     const model = modelFixture();
     model.autoEditCandidateId = model.candidate!.candidateId;
     model.candidate!.status = "pending";
-    const view = render(<PlayerRadarAdminPanel model={model} />);
+    const view = render(<PlayerRadarAdminPanel administration={model} />);
     expect(screen.queryByRole("region", { name: "採点境界の編集" })).not.toBeInTheDocument();
     model.candidate!.status = "ready";
-    view.rerender(<PlayerRadarAdminPanel model={{ ...model }} />);
+    view.rerender(<PlayerRadarAdminPanel administration={{ ...model }} />);
     expect(await screen.findByRole("region", { name: "採点境界の編集" })).toBeVisible();
     await user.click(screen.getByRole("button", { name: "編集をやめる" }));
     await user.click(
@@ -80,7 +80,7 @@ describe("PlayerRadarAdminPanel", () => {
     await waitFor(() =>
       expect(screen.queryByRole("region", { name: "採点境界の編集" })).not.toBeInTheDocument(),
     );
-    view.rerender(<PlayerRadarAdminPanel model={{ ...model }} />);
+    view.rerender(<PlayerRadarAdminPanel administration={{ ...model }} />);
     expect(screen.queryByRole("region", { name: "採点境界の編集" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "変更案を編集" })).toBeEnabled();
   });
@@ -88,7 +88,7 @@ describe("PlayerRadarAdminPanel", () => {
   it("shows only current boundaries before editing and opens comparison from the proposal editor", async () => {
     const user = userEvent.setup();
     const model = modelFixture();
-    render(<PlayerRadarAdminPanel model={model} />);
+    render(<PlayerRadarAdminPanel administration={model} />);
     const current = screen.getByRole("table", { name: "適用中の採点境界" });
     expect(current).toBeVisible();
     expect(current.querySelector("caption")).toHaveClass("sr-only");
@@ -108,7 +108,7 @@ describe("PlayerRadarAdminPanel", () => {
 
   it("returns focus to the withdrawal trigger after Escape", async () => {
     const user = userEvent.setup();
-    render(<PlayerRadarAdminPanel model={modelFixture()} />);
+    render(<PlayerRadarAdminPanel administration={modelFixture()} />);
     const trigger = screen.getByRole("button", { name: "変更案を取り下げる" });
     trigger.focus();
     await user.keyboard("{Enter}");
@@ -121,11 +121,11 @@ describe("PlayerRadarAdminPanel", () => {
   it("returns focus to the section heading when the editor apply trigger becomes unavailable", async () => {
     const user = userEvent.setup();
     const model = modelFixture();
-    const { rerender } = render(<PlayerRadarAdminPanel model={model} />);
+    const { rerender } = render(<PlayerRadarAdminPanel administration={model} />);
     await openApply(user);
     rerender(
       <PlayerRadarAdminPanel
-        model={{
+        administration={{
           ...model,
           editing: { ...model.editing!, saveDisabledReason: "最新の状態を確認してください。" },
         }}
@@ -138,7 +138,7 @@ describe("PlayerRadarAdminPanel", () => {
   it("confirms title-wide application from the editor using the reviewed identities", async () => {
     const user = userEvent.setup();
     const model = modelFixture();
-    render(<PlayerRadarAdminPanel model={model} />);
+    render(<PlayerRadarAdminPanel administration={model} />);
     const dialog = await openApply(user);
     expect(dialog).toHaveTextContent("桃太郎電鉄2の全シーズン・全マップに適用します");
     expect(dialog).toHaveTextContent("過去の成績もこの基準で再採点します");
@@ -159,7 +159,7 @@ describe("PlayerRadarAdminPanel", () => {
     const model = modelFixture();
     model.previewState = "stale";
     model.applyDisabledReason = "最新の記録で比較を計算し、内容を確認してください。";
-    render(<PlayerRadarAdminPanel model={model} />);
+    render(<PlayerRadarAdminPanel administration={model} />);
     await user.click(screen.getByRole("button", { name: "変更案を編集" }));
     await user.click(screen.getByRole("button", { name: "変更を適用" }));
     const dialog = screen.getByRole("alertdialog");
@@ -175,11 +175,11 @@ describe("PlayerRadarAdminPanel", () => {
   it("invalidates an open confirmation when the comparison changes", async () => {
     const user = userEvent.setup();
     const model = modelFixture();
-    const { rerender } = render(<PlayerRadarAdminPanel model={model} />);
+    const { rerender } = render(<PlayerRadarAdminPanel administration={model} />);
     const dialog = await openApply(user);
     rerender(
       <PlayerRadarAdminPanel
-        model={{ ...model, preview: { ...model.preview!, previewId: "preview-2" } }}
+        administration={{ ...model, preview: { ...model.preview!, previewId: "preview-2" } }}
       />,
     );
     expect(within(dialog).getByRole("button", { name: "作品全体に適用する" })).toBeDisabled();
@@ -193,7 +193,7 @@ describe("PlayerRadarAdminPanel", () => {
     const user = userEvent.setup();
     const model = modelFixture();
     model.communicationUnknown = true;
-    render(<PlayerRadarAdminPanel model={model} />);
+    render(<PlayerRadarAdminPanel administration={model} />);
     expect(screen.getByText("操作の受付結果をまだ確認できません")).toBeVisible();
     expect(screen.queryByRole("button", { name: "この処理を再試行する" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "操作の状態を確認する" }));
@@ -214,7 +214,7 @@ describe("PlayerRadarAdminPanel", () => {
         },
       ],
     };
-    render(<PlayerRadarAdminPanel model={model} />);
+    render(<PlayerRadarAdminPanel administration={model} />);
     const review = screen.getByRole("region", { name: "見直しの目安" });
     expect(within(review).getByText("40試合・8開催")).toBeVisible();
     await user.click(within(review).getByRole("button", { name: "この目安を確認し、基準を継続" }));

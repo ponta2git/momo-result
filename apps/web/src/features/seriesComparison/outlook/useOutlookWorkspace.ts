@@ -4,9 +4,9 @@ import { useLocation } from "react-router-dom";
 import type { SeriesAnalysisSelection } from "@/features/seriesComparison/model/seriesAnalysisSelection";
 import {
   outlookResultView,
-  outlookComparisonView,
-  outlookResultPresentation,
-  outlookWorkspaceLinks,
+  buildOutlookComparisonView,
+  buildOutlookOutcomeView,
+  buildOutlookWorkspaceLinks,
   outlookGoalHorizonView,
   outlookToolbarView,
 } from "@/features/seriesComparison/outlook/outlookProjections";
@@ -43,27 +43,27 @@ export function useOutlookGoalHorizon() {
 }
 
 export function useOutlookWorkspace(
-  response: SeriesAnalysisOutlookSummary,
+  summary: SeriesAnalysisOutlookSummary,
   selection: SeriesAnalysisSelection,
 ) {
   const view = useOutlookResultView();
   const edit = useOutlookEdit();
   const location = useLocation();
   const comparison = useMemo(
-    () => outlookComparisonView(response, selection.focusMemberId, selection.rivalMemberId),
-    [response, selection.focusMemberId, selection.rivalMemberId],
+    () => buildOutlookComparisonView(summary, selection.focusMemberId, selection.rivalMemberId),
+    [summary, selection.focusMemberId, selection.rivalMemberId],
   );
   const { cumulative, names } = comparison;
   const { focus, rival, horizon } = view;
   const result = useMemo(
-    () => outlookResultPresentation(cumulative, focus, rival, names, horizon),
+    () => buildOutlookOutcomeView(cumulative, focus, rival, names, horizon),
     [cumulative, focus, rival, names, horizon],
   );
-  const links = outlookWorkspaceLinks(
+  const links = buildOutlookWorkspaceLinks(
     location,
     selection,
-    response.artifact.gameTitleId,
-    comparison.ids[0],
+    summary.artifact.gameTitleId,
+    comparison.memberIds[0],
   );
   return { view, edit, ...comparison, ...result, ...links };
 }

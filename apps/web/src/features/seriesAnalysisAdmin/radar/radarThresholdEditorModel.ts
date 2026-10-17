@@ -1,4 +1,4 @@
-import type { PlayerRadarPreviewModel } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminTypes";
+import type { PlayerRadarPreviewView } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminTypes";
 import type {
   RadarManualInput,
   RadarThresholdDrafts,
@@ -33,7 +33,7 @@ export type RadarThresholdEditorView = Readonly<{
   sourceLabel: string;
   referenceThresholds: Readonly<Partial<Record<PlayerRadarAxisId, readonly number[]>>> | null;
   replacesCandidate: boolean;
-  preview: PlayerRadarPreviewModel | null;
+  preview: PlayerRadarPreviewView | null;
   axis: PlayerRadarAxisId;
   ready: boolean;
   composing: boolean;
@@ -124,7 +124,7 @@ export type RadarEditingModel = {
 };
 
 /** Saved evaluations are usable only for the current publication, scope and applied basis. */
-export function radarEditingEvaluation({
+export function resolveRadarEditingEvaluation({
   active,
   currentBasisId,
   scope,

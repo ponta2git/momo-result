@@ -44,7 +44,7 @@ function RoutedWorkspace({
     );
   return (
     <OutlookView
-      response={response}
+      summary={response}
       selection={{
         gameTitleId: response.artifact.gameTitleId,
         ...(response.scope.kind === "season"

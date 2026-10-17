@@ -18,7 +18,7 @@ function LocationStateHarness() {
   const location = useLocation();
   const request = useSeriesAnalysisLocationRequest();
   const options = makeSeriesAnalysisOptions();
-  const model = useSeriesAnalysisLocationState({
+  const selectionLocation = useSeriesAnalysisLocationState({
     request,
     normalizedSelection: normalizeSeriesAnalysisSelection(options, request.selection),
     canonicalizationEnabled: true,
@@ -28,29 +28,32 @@ function LocationStateHarness() {
 
   return (
     <>
-      <output aria-label="normalization notice">{model.normalizationNotice}</output>
+      <output aria-label="normalization notice">{selectionLocation.normalizationNotice}</output>
       <button
         type="button"
         onClick={() => {
-          model.actions.updateOwnerMetric("ginji.average");
-          model.actions.updateSeasonMasterId("season_current");
+          selectionLocation.actions.updateOwnerMetric("ginji.average");
+          selectionLocation.actions.updateSeasonMasterId("season_current");
         }}
       >
         指標と条件を連続変更
       </button>
-      <button type="button" onClick={() => model.actions.updateGameTitle("gt_momotetsu_2")}>
+      <button
+        type="button"
+        onClick={() => selectionLocation.actions.updateGameTitle("gt_momotetsu_2")}
+      >
         作品を変更
       </button>
-      <output aria-label="analysis state">{JSON.stringify(model.state)}</output>
+      <output aria-label="analysis state">{JSON.stringify(selectionLocation.selection)}</output>
       <output aria-label="analysis location">{location.search}</output>
-      <button type="button" onClick={() => model.actions.focusMatch("match-12")}>
+      <button type="button" onClick={() => selectionLocation.actions.focusMatch("match-12")}>
         試合を選択
       </button>
       <button
         type="button"
         onClick={() => {
-          model.actions.updateView("overview");
-          model.actions.updateView("drivers");
+          selectionLocation.actions.updateView("overview");
+          selectionLocation.actions.updateView("drivers");
         }}
       >
         表示を連続変更

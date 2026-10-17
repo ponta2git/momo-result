@@ -66,35 +66,35 @@ type SeriesAnalysisReads = {
 /** Reads a publication and its live overlays, including scoped refresh and expiry recovery. */
 export function useSeriesAnalysisReads({
   activeView,
-  deferredState,
-  state,
+  deferredSelection,
+  selection,
   selectionReady,
 }: {
   activeView: SeriesAnalysisViewId;
-  deferredState: SeriesAnalysisSelection;
-  state: SeriesAnalysisSelection;
+  deferredSelection: SeriesAnalysisSelection;
+  selection: SeriesAnalysisSelection;
   selectionReady: boolean;
 }): SeriesAnalysisReads {
   const queryClient = useQueryClient();
-  const statusQuery = useQuery(seriesAnalysisStatusQueryOptions(state.gameTitleId));
+  const statusQuery = useQuery(seriesAnalysisStatusQueryOptions(selection.gameTitleId));
   const { data: statusData, refetch: refetchStatus } = statusQuery;
   const publishedArtifactId = statusData?.currentArtifact?.artifactId;
   const scopeQueryParams = useMemo(
     () =>
-      selectionReady && state.gameTitleId && statusData
+      selectionReady && selection.gameTitleId && statusData
         ? {
-            gameTitleId: state.gameTitleId,
+            gameTitleId: selection.gameTitleId,
             artifactId: publishedArtifactId,
-            seasonMasterId: state.seasonMasterId,
-            mapMasterId: state.mapMasterId,
+            seasonMasterId: selection.seasonMasterId,
+            mapMasterId: selection.mapMasterId,
           }
         : undefined,
     [
       publishedArtifactId,
       selectionReady,
-      state.gameTitleId,
-      state.mapMasterId,
-      state.seasonMasterId,
+      selection.gameTitleId,
+      selection.mapMasterId,
+      selection.seasonMasterId,
       statusData,
     ],
   );
@@ -105,11 +105,11 @@ export function useSeriesAnalysisReads({
       planSeriesAnalysisRead({
         activeView,
         artifactId: publishedArtifactId,
-        deferredState,
+        deferredSelection,
         scopeState: scopeQuery.data?.state,
-        state,
+        selection,
       }),
-    [activeView, deferredState, publishedArtifactId, scopeQuery.data?.state, state],
+    [activeView, deferredSelection, publishedArtifactId, scopeQuery.data?.state, selection],
   );
   const aggregateParams = plan.kind === "analysis" ? plan.query : undefined;
   const reviewParams = plan.kind === "review" ? plan.query : undefined;
@@ -184,8 +184,8 @@ export function useSeriesAnalysisReads({
     void refreshSeriesAnalysis({
       activeView,
       artifactId: publishedArtifactId,
-      deferredState,
-      state,
+      deferredSelection,
+      selection,
       refreshPublication: async () => {
         const result = await refetchStatus({ cancelRefetch: false });
         return result.isError
@@ -222,24 +222,24 @@ export function useSeriesAnalysisReads({
     activeQueryParams,
     activeKey,
     activeView,
-    deferredState,
+    deferredSelection,
     matchContextParams,
     publishedArtifactId,
     queryClient,
     refetchStatus,
     scopeQueryParams,
-    state,
+    selection,
   ]);
 
   const resourceFailed = useRetryNotice(
     shouldShowQueryError(activeQuery),
     activeQuery.isFetching,
-    `${activeView}:${seriesAnalysisScopeSignature(state)}:${publishedArtifactId ?? ""}`,
+    `${activeView}:${seriesAnalysisScopeSignature(selection)}:${publishedArtifactId ?? ""}`,
   );
   const statusFailed = useRetryNotice(
     shouldShowQueryError(statusQuery),
     statusQuery.isFetching,
-    state.gameTitleId ?? "",
+    selection.gameTitleId ?? "",
   );
 
   return {

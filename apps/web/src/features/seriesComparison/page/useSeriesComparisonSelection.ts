@@ -27,21 +27,26 @@ type SeriesComparisonSelectionResolution =
 
 /** Resolves the requested scope before it can replace an existing comparison. */
 export function useSeriesComparisonSelection() {
-  const request = useSeriesAnalysisLocationRequest();
-  const reads = useSeriesAnalysisSelectionReads(request.selection);
+  const locationRequest = useSeriesAnalysisLocationRequest();
+  const selectionReads = useSeriesAnalysisSelectionReads(locationRequest.selection);
   const scopeIdentity = useMemo(
     () =>
       resolveSeriesAnalysisScopeIdentity({
-        options: reads.options,
-        requested: request.selection,
-        identity: reads.identity,
-        identityFailed: reads.identityFailed,
+        options: selectionReads.options,
+        requested: locationRequest.selection,
+        identity: selectionReads.identity,
+        identityFailed: selectionReads.identityFailed,
       }),
-    [reads.identity, reads.identityFailed, reads.options, request.selection],
+    [
+      selectionReads.identity,
+      selectionReads.identityFailed,
+      selectionReads.options,
+      locationRequest.selection,
+    ],
   );
   const normalizedSelection = useMemo(
-    () => normalizeSeriesAnalysisSelection(scopeIdentity.options, request.selection),
-    [request.selection, scopeIdentity.options],
+    () => normalizeSeriesAnalysisSelection(scopeIdentity.options, locationRequest.selection),
+    [locationRequest.selection, scopeIdentity.options],
   );
   const changeSelection = useCallback(
     (current: SeriesAnalysisSelection, change: SeriesAnalysisSelectionChange) =>
@@ -51,8 +56,8 @@ export function useSeriesComparisonSelection() {
       ),
     [scopeIdentity.options],
   );
-  const location = useSeriesAnalysisLocationState({
-    request,
+  const selectionLocation = useSeriesAnalysisLocationState({
+    request: locationRequest,
     normalizedSelection,
     canonicalizationEnabled: scopeIdentity.options !== undefined,
     changeSelection,
@@ -61,42 +66,45 @@ export function useSeriesComparisonSelection() {
     if (scopeIdentity.kind === "pending") {
       return { kind: "pending", reason: scopeIdentity.reason };
     }
-    if (!location.state.gameTitleId) return { kind: "empty" };
-    const pair = normalizeOutlookPair(location.state.focusMemberId, location.state.rivalMemberId);
+    if (!selectionLocation.selection.gameTitleId) return { kind: "empty" };
+    const pair = normalizeOutlookPair(
+      selectionLocation.selection.focusMemberId,
+      selectionLocation.selection.rivalMemberId,
+    );
     return {
       kind: "ready",
-      comparisonKey: outlookComparisonKey(seriesAnalysisScopeSignature(location.state), [
-        pair.focusMemberId,
-        pair.rivalMemberId,
-      ]),
+      comparisonKey: outlookComparisonKey(
+        seriesAnalysisScopeSignature(selectionLocation.selection),
+        [pair.focusMemberId, pair.rivalMemberId],
+      ),
     };
-  }, [location.state, scopeIdentity]);
+  }, [selectionLocation.selection, scopeIdentity]);
   const filterOptions = useMemo(
-    () => buildSeriesAnalysisFilterOptions(scopeIdentity.options, location.state),
-    [location.state, scopeIdentity.options],
+    () => buildSeriesAnalysisFilterOptions(scopeIdentity.options, selectionLocation.selection),
+    [selectionLocation.selection, scopeIdentity.options],
   );
-  const optionsFailed = useRetryNotice(reads.failed, reads.refreshing);
+  const optionsFailed = useRetryNotice(selectionReads.failed, selectionReads.refreshing);
 
   return {
-    ...location,
+    ...selectionLocation,
     filters: {
-      activeView: location.activeView,
+      activeView: selectionLocation.activeView,
       ...filterOptions,
-      state: location.state,
-      updateGameTitle: location.actions.updateGameTitle,
-      updateMapMasterId: location.actions.updateMapMasterId,
-      updateSeasonMasterId: location.actions.updateSeasonMasterId,
-      updateView: location.actions.updateView,
-      updateOwnerMetric: location.actions.updateOwnerMetric,
-      updateOutlookMember: location.actions.updateOutlookMember,
+      selection: selectionLocation.selection,
+      updateGameTitle: selectionLocation.actions.updateGameTitle,
+      updateMapMasterId: selectionLocation.actions.updateMapMasterId,
+      updateSeasonMasterId: selectionLocation.actions.updateSeasonMasterId,
+      updateView: selectionLocation.actions.updateView,
+      updateOwnerMetric: selectionLocation.actions.updateOwnerMetric,
+      updateOutlookMember: selectionLocation.actions.updateOutlookMember,
     },
     options: {
       hasError: optionsFailed,
-      hasVisibleData: reads.options !== undefined,
-      loading: !optionsFailed && reads.loading,
-      refreshing: reads.refreshing,
+      hasVisibleData: selectionReads.options !== undefined,
+      loading: !optionsFailed && selectionReads.loading,
+      refreshing: selectionReads.refreshing,
     },
-    refresh: reads.refresh,
+    refresh: selectionReads.refresh,
     resolution,
   };
 }

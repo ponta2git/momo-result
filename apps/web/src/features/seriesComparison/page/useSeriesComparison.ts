@@ -6,7 +6,7 @@ import { useSeriesAnalysisDisplay } from "@/features/seriesComparison/page/useSe
 import { useSeriesComparisonSelection } from "@/features/seriesComparison/page/useSeriesComparisonSelection";
 
 /** Composes selection controls and the accepted comparison into the display-ready page contract. */
-export function useSeriesComparisonPageModel() {
+export function useSeriesComparison() {
   const [focusNotice, setFocusNotice] = useState<string | undefined>();
   const selectionControls = useSeriesComparisonSelection();
   const {
@@ -18,8 +18,8 @@ export function useSeriesComparisonPageModel() {
   const deferOutlookAdoption = useOutlookComparisonLifecycle(selectionResolution);
   const display = useSeriesAnalysisDisplay({
     activeView: selectionControls.activeView,
-    deferredState: selectionControls.deferredState,
-    state: selectionControls.state,
+    deferredSelection: selectionControls.deferredSelection,
+    selection: selectionControls.selection,
     selectionStatus:
       selectionResolution.kind === "pending"
         ? selectionControls.options.hasError && !selectionControls.options.refreshing
@@ -32,7 +32,7 @@ export function useSeriesComparisonPageModel() {
 
   const excludedFocusNotice =
     display.resolution.kind === "excluded" &&
-    selectionControls.state.focusMatchId &&
+    selectionControls.selection.focusMatchId &&
     display.candidateArtifactId
       ? seriesAnalysisFocusExclusionNotice(display.resolution.status)
       : undefined;

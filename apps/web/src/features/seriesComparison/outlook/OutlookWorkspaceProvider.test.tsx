@@ -2,7 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
-import { outlookComparisonView } from "@/features/seriesComparison/outlook/outlookProjections";
+import { buildOutlookComparisonView } from "@/features/seriesComparison/outlook/outlookProjections";
 import {
   OutlookWorkspaceProvider,
   OutlookSummaryBoundary,
@@ -20,7 +20,7 @@ describe("Outlook state subscriptions", () => {
       focusMemberId: "member_eu",
       rivalMemberId: "member_ponta",
     };
-    const comparison = outlookComparisonView(
+    const comparison = buildOutlookComparisonView(
       response,
       selection.focusMemberId,
       selection.rivalMemberId,
@@ -32,7 +32,7 @@ describe("Outlook state subscriptions", () => {
         player: useOutlookPlayerEditor({
           response,
           role: 0,
-          memberId: comparison.ids[0],
+          memberId: comparison.memberIds[0],
           cumulative: comparison.cumulative,
           names: comparison.names,
           showComparison: true,

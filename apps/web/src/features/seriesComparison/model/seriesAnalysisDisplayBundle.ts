@@ -10,14 +10,14 @@ import type {
   SeriesAnalysisOutlookSummary,
 } from "@/shared/api/seriesAnalysis";
 
-type SeriesAnalysisAnalysisViewId = Exclude<SeriesAnalysisViewId, "review" | "outlook">;
+type SeriesAnalysisAggregateViewId = Exclude<SeriesAnalysisViewId, "review" | "outlook">;
 
 export type SeriesAnalysisDisplayBundle =
   | {
       aggregate: SeriesComparisonAggregate;
       kind: "analysis";
       matchContext: SeriesAnalysisMatchContextV3 | undefined;
-      view: SeriesAnalysisAnalysisViewId;
+      view: SeriesAnalysisAggregateViewId;
     }
   | {
       kind: "review";
@@ -69,7 +69,7 @@ export type SeriesAnalysisBundleResolution =
   | { kind: "waiting" };
 
 /** Builds a view bundle without deciding whether a new publication may be adopted. */
-function displaySeriesAnalysisBundleWithoutContext(
+function buildSeriesAnalysisBundleWithoutContext(
   activeView: SeriesAnalysisViewId,
   aggregate: SeriesComparisonAggregate | undefined,
   review: SeriesComparisonReviewV3 | undefined,
@@ -119,8 +119,12 @@ export function seriesAnalysisFocusExclusionNotice(
   }
 }
 
-export function seriesAnalysisScopeSignature(state: SeriesAnalysisSelection): string {
-  return [state.gameTitleId ?? "", state.seasonMasterId ?? "", state.mapMasterId ?? ""].join("|");
+export function seriesAnalysisScopeSignature(selection: SeriesAnalysisSelection): string {
+  return [
+    selection.gameTitleId ?? "",
+    selection.seasonMasterId ?? "",
+    selection.mapMasterId ?? "",
+  ].join("|");
 }
 
 type ArtifactScopedResource = {
@@ -139,26 +143,26 @@ function scopeMapMasterId(scope: ArtifactScopedResource["scope"]): string | unde
 export function matchesSeriesAnalysisResource(
   resource: ArtifactScopedResource | undefined,
   artifactId: string | undefined,
-  state: SeriesAnalysisSelection,
+  selection: SeriesAnalysisSelection,
 ): boolean {
   return Boolean(
     resource &&
     artifactId &&
     resource.artifact.artifactId === artifactId &&
-    matchesSeriesAnalysisScope(resource, state),
+    matchesSeriesAnalysisScope(resource, selection),
   );
 }
 
 export function matchesSeriesAnalysisScope(
   resource: ArtifactScopedResource | undefined,
-  state: SeriesAnalysisSelection,
+  selection: SeriesAnalysisSelection,
 ): boolean {
   return Boolean(
     resource &&
-    state.gameTitleId &&
-    resource.artifact.gameTitleId === state.gameTitleId &&
-    scopeSeasonMasterId(resource.scope) === state.seasonMasterId &&
-    scopeMapMasterId(resource.scope) === state.mapMasterId,
+    selection.gameTitleId &&
+    resource.artifact.gameTitleId === selection.gameTitleId &&
+    scopeSeasonMasterId(resource.scope) === selection.seasonMasterId &&
+    scopeMapMasterId(resource.scope) === selection.mapMasterId,
   );
 }
 
@@ -170,7 +174,7 @@ export function prepareSeriesAnalysisDisplayBundle({
   matchContext,
   review,
   outlook,
-  state,
+  selection,
 }: {
   activeView: SeriesAnalysisViewId;
   aggregate: SeriesComparisonAggregate | undefined;
@@ -178,43 +182,43 @@ export function prepareSeriesAnalysisDisplayBundle({
   matchContext: SeriesAnalysisMatchContextV3 | undefined;
   review: SeriesComparisonReviewV3 | undefined;
   outlook?: SeriesAnalysisOutlookSummary | undefined;
-  state: SeriesAnalysisSelection;
+  selection: SeriesAnalysisSelection;
 }): {
   candidate: SeriesAnalysisDisplayBundle | undefined;
   resolution: SeriesAnalysisBundleResolution;
 } {
-  const received = displaySeriesAnalysisBundleWithoutContext(
+  const receivedBundle = buildSeriesAnalysisBundleWithoutContext(
     activeView,
     aggregate,
     review,
     outlook,
   );
   const candidate = matchesSeriesAnalysisResource(
-    seriesAnalysisBundleResource(received),
+    seriesAnalysisBundleResource(receivedBundle),
     artifactId,
-    state,
+    selection,
   )
-    ? received
+    ? receivedBundle
     : undefined;
   // Context failure can still expose this verified candidate without selected-match markers.
   return {
     candidate,
-    resolution: resolveSeriesAnalysisBundleContext(candidate, matchContext, state),
+    resolution: resolveSeriesAnalysisBundleContext(candidate, matchContext, selection),
   };
 }
 
 function resolveSeriesAnalysisBundleContext(
   candidate: SeriesAnalysisDisplayBundle | undefined,
   matchContext: SeriesAnalysisMatchContextV3 | undefined,
-  state: SeriesAnalysisSelection,
+  selection: SeriesAnalysisSelection,
 ): SeriesAnalysisBundleResolution {
   if (!candidate) return { kind: "waiting" };
-  if (candidate.kind === "outlook" || !state.focusMatchId)
+  if (candidate.kind === "outlook" || !selection.focusMatchId)
     return { kind: "ready", value: candidate };
   const artifactId = seriesAnalysisBundleResource(candidate).artifact.artifactId;
   if (
-    !matchesSeriesAnalysisResource(matchContext, artifactId, state) ||
-    matchContext?.matchId !== state.focusMatchId
+    !matchesSeriesAnalysisResource(matchContext, artifactId, selection) ||
+    matchContext?.matchId !== selection.focusMatchId
   ) {
     return { kind: "waiting" };
   }
@@ -240,7 +244,7 @@ export function retainSeriesAnalysisDisplayBundle({
   matchContextUnavailable,
   previous,
   resolution,
-  state,
+  selection,
 }: {
   activeView: SeriesAnalysisViewId;
   candidate: SeriesAnalysisDisplayBundle | undefined;
@@ -251,11 +255,11 @@ export function retainSeriesAnalysisDisplayBundle({
   matchContextUnavailable: boolean;
   previous: SeriesAnalysisDisplayBundle | undefined;
   resolution: SeriesAnalysisBundleResolution;
-  state: SeriesAnalysisSelection;
+  selection: SeriesAnalysisSelection;
 }): SeriesAnalysisDisplayAdoption {
   const previousMatchesScope = matchesSeriesAnalysisScope(
     seriesAnalysisBundleResource(previous),
-    state,
+    selection,
   );
   if (
     activeView === "outlook" &&
@@ -265,7 +269,7 @@ export function retainSeriesAnalysisDisplayBundle({
   ) {
     return { kind: "outlook-deferred", bundle: previous };
   }
-  const resolved =
+  const resolvedBundle =
     resolution.kind === "ready"
       ? resolution.value
       : resolution.kind === "waiting" &&
@@ -274,24 +278,26 @@ export function retainSeriesAnalysisDisplayBundle({
         ? candidate
         : undefined;
   // Definitive context invalidation also applies when its replacement aggregate is missing.
-  if (resolved) return { kind: "accepted", bundle: resolved };
+  if (resolvedBundle) return { kind: "accepted", bundle: resolvedBundle };
   if (matchContextUnavailable && previous?.matchContext) {
     return { kind: "accepted", bundle: { ...previous, matchContext: undefined } };
   }
-  const retained =
+  const retainedBundle =
     failed && previousMatchesScope
-      ? displaySeriesAnalysisBundleWithoutContext(
+      ? buildSeriesAnalysisBundleWithoutContext(
           activeView,
           previous?.kind === "analysis" ? previous.aggregate : undefined,
           previous?.kind === "review" ? previous.review : undefined,
           previous?.kind === "outlook" ? previous.outlook : undefined,
         )
       : undefined;
-  if (retained && retained.kind !== "outlook" && !matchContextUnavailable) {
-    retained.matchContext =
-      previous?.matchContext?.matchId === state.focusMatchId ? previous?.matchContext : undefined;
+  if (retainedBundle && retainedBundle.kind !== "outlook" && !matchContextUnavailable) {
+    retainedBundle.matchContext =
+      previous?.matchContext?.matchId === selection.focusMatchId
+        ? previous?.matchContext
+        : undefined;
   }
-  return { kind: "accepted", bundle: retained ?? previous };
+  return { kind: "accepted", bundle: retainedBundle ?? previous };
 }
 
 /** Retained data stays visible while changing targets, with actions fenced by identity. */
@@ -306,7 +312,7 @@ export function resolveSeriesAnalysisVisibleBundle({
   scopeAvailable,
   scopePending,
   scopeSettling,
-  state,
+  selection,
 }: {
   activeView: SeriesAnalysisViewId;
   artifactId: string | undefined;
@@ -318,27 +324,27 @@ export function resolveSeriesAnalysisVisibleBundle({
   scopeAvailable: boolean;
   scopePending: boolean;
   scopeSettling: boolean;
-  state: SeriesAnalysisSelection;
+  selection: SeriesAnalysisSelection;
 }) {
   const purpose =
     activeView === "outlook" ? "outlook" : activeView === "review" ? "review" : "analysis";
   const resource = seriesAnalysisBundleResource(bundle);
-  const matchesScope = matchesSeriesAnalysisScope(resource, state);
+  const matchesScope = matchesSeriesAnalysisScope(resource, selection);
   const changing = bundleFetching || scopeSettling || displaySettling;
-  const visible =
+  const visibleBundle =
     (outlookAdoptionDeferred || scopeAvailable || scopePending) &&
     ((bundle?.kind === purpose && matchesScope) || scopePending || changing)
       ? bundle
       : undefined;
   const shielded =
-    !(activeView === "outlook" && visible?.kind === "outlook" && matchesScope) &&
-    visible !== undefined &&
+    !(activeView === "outlook" && visibleBundle?.kind === "outlook" && matchesScope) &&
+    visibleBundle !== undefined &&
     (scopePending ||
-      ((!matchesSeriesAnalysisResource(resource, artifactId, state) ||
-        visible.view !== activeView ||
-        (visible.matchContext !== undefined &&
-          visible.matchContext.matchId !== state.focusMatchId)) &&
+      ((!matchesSeriesAnalysisResource(resource, artifactId, selection) ||
+        visibleBundle.view !== activeView ||
+        (visibleBundle.matchContext !== undefined &&
+          visibleBundle.matchContext.matchId !== selection.focusMatchId)) &&
         changing) ||
       (resolution.kind === "waiting" && bundleFetching));
-  return { bundle: visible, shielded };
+  return { bundle: visibleBundle, shielded };
 }

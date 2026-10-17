@@ -6,13 +6,13 @@ import { describe, expect, it, vi } from "vitest";
 import type { RadarManualSave } from "@/features/seriesAnalysisAdmin/radar/radarThresholdEditorModel";
 import { useRadarThresholdEditor } from "@/features/seriesAnalysisAdmin/radar/useRadarThresholdEditor";
 import { createDeferred } from "@/test/deferred";
-import { makePlayerRadarEditorModel } from "@/test/fixtures/playerRadarEditorModel";
+import { makePlayerRadarEditorView } from "@/test/fixtures/playerRadarEditorView";
 
 describe("radar editor saved identity", () => {
   it("keeps the settled preview while draft text changes and publishes it after the debounce", () => {
     vi.useFakeTimers();
     try {
-      const model = makePlayerRadarEditorModel();
+      const model = makePlayerRadarEditorView();
       const { result } = renderHook(() => useRadarThresholdEditor(model));
       act(() => result.current.beginFromCurrent());
       act(() => vi.advanceTimersByTime(300));
@@ -40,7 +40,7 @@ describe("radar editor saved identity", () => {
   });
 
   it("settles preparation while Activity is hidden and recovers its authorized receipt with the input intact", async () => {
-    const model = makePlayerRadarEditorModel();
+    const model = makePlayerRadarEditorView();
     const editing = model.editing!;
     const gate = createDeferred();
     const save = vi.fn(async (_request: RadarManualSave) => {
@@ -101,7 +101,7 @@ describe("radar editor saved identity", () => {
   it.each([false, true])(
     "discards only this edit's prepared candidate and retains input on failure (%s)",
     async (fails) => {
-      const model = makePlayerRadarEditorModel();
+      const model = makePlayerRadarEditorView();
       const editing = model.editing!;
       const discard = vi.fn(async () => {
         if (fails) throw new Error("discard failed");
@@ -127,7 +127,7 @@ describe("radar editor saved identity", () => {
   );
 
   it("requires reconfirmation for a new formal evaluation but preserves it across scope changes", async () => {
-    const model = makePlayerRadarEditorModel();
+    const model = makePlayerRadarEditorView();
     const editing = model.editing;
     const current = editing?.current;
     const evaluation = editing?.evaluation;
@@ -181,7 +181,7 @@ describe("radar editor saved identity", () => {
   ])(
     "recovers an interrupted save only from its matching authorized receipt (%s)",
     async (failure) => {
-      const model = makePlayerRadarEditorModel();
+      const model = makePlayerRadarEditorView();
       const editing = model.editing;
       const source = editing?.current;
       if (!editing || !source) throw new Error("Missing editor fixture");
@@ -258,7 +258,7 @@ describe("radar editor saved identity", () => {
   it.each([false, true])(
     "reconciles a recovered application without discarding newer input (edited again: %s)",
     async (editedAgain) => {
-      const model = makePlayerRadarEditorModel();
+      const model = makePlayerRadarEditorView();
       const editing = model.editing!;
       const { result, rerender } = renderHook((value) => useRadarThresholdEditor(value), {
         initialProps: model,
@@ -283,7 +283,7 @@ describe("radar editor saved identity", () => {
   );
 
   it("does not treat an invalid generated candidate as the active shared save identity", () => {
-    const model = makePlayerRadarEditorModel();
+    const model = makePlayerRadarEditorView();
     const source = model.editing?.current;
     if (!source) throw new Error("Missing editor fixture");
     model.candidate = {

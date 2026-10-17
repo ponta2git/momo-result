@@ -1,5 +1,5 @@
 import type {
-  PlayerRadarAdminModel,
+  PlayerRadarAdministrationView,
   PlayerRadarApplyTarget,
 } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminTypes";
 import type { RadarApplyConfirmationView } from "@/features/seriesAnalysisAdmin/radar/radarThresholdEditorModel";
@@ -12,19 +12,19 @@ type RadarApplyConfirmation = {
   heldEventCount: number;
 };
 export function radarApplyConfirmation(
-  model: PlayerRadarAdminModel,
+  administration: PlayerRadarAdministrationView,
 ): RadarApplyConfirmation | null {
-  if (model.candidate?.status !== "ready" || !model.preview) return null;
-  const basis = model.preview.candidateBasis;
+  if (administration.candidate?.status !== "ready" || !administration.preview) return null;
+  const basis = administration.preview.candidateBasis;
   return {
     target: {
-      gameTitleId: model.gameTitleId,
-      candidateId: model.candidate.candidateId,
-      previewId: model.preview.previewId,
+      gameTitleId: administration.gameTitleId,
+      candidateId: administration.candidate.candidateId,
+      previewId: administration.preview.previewId,
       basisId: basis.basisId,
-      expectedCurrentBasisId: model.currentBasis?.basisId ?? null,
+      expectedCurrentBasisId: administration.currentBasis?.basisId ?? null,
     },
-    gameTitleName: model.gameTitleName,
+    gameTitleName: administration.gameTitleName,
     createdAt: basis.createdAt,
     matchCount: basis.source.matchCount,
     heldEventCount: basis.source.heldEventCount,
@@ -43,8 +43,8 @@ export function radarApplyConfirmationChanged(
     confirmed.target.expectedCurrentBasisId !== current.target.expectedCurrentBasisId
   );
 }
-export function radarApplyConfirmationView({
-  model,
+export function buildRadarApplyConfirmationView({
+  administration,
   confirmation,
   current,
   open,
@@ -56,7 +56,7 @@ export function radarApplyConfirmationView({
   contextChanged,
   comparisonChanged,
 }: {
-  model: PlayerRadarAdminModel;
+  administration: PlayerRadarAdministrationView;
   confirmation: RadarApplyConfirmation | null;
   current: RadarApplyConfirmation | null;
   open: boolean;
@@ -70,13 +70,13 @@ export function radarApplyConfirmationView({
 }): RadarApplyConfirmationView {
   const changed = radarApplyConfirmationChanged(confirmation, current);
   const disabledReason =
-    model.applyDisabledReason ??
+    administration.applyDisabledReason ??
     (editorActive && !canApply ? "入力した境界の確認が必要です。" : null);
   return {
     open: editorActive && active && (open || confirmation !== null),
     disabled: !confirmation || Boolean(disabledReason) || changed,
     changed,
-    gameTitleName: confirmation?.gameTitleName ?? model.gameTitleName,
+    gameTitleName: confirmation?.gameTitleName ?? administration.gameTitleName,
     facts: confirmation
       ? {
           createdAt: confirmation.createdAt,
@@ -86,7 +86,7 @@ export function radarApplyConfirmationView({
       : null,
     waitingMessage:
       editorActive && !canApply
-        ? (model.editing?.permissionReason ??
+        ? (administration.editing?.permissionReason ??
           applyError ??
           (formalMismatch
             ? "比較結果が一致しません。キャンセルして入力と比較を確認してください。"

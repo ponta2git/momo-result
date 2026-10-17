@@ -1,9 +1,9 @@
-import { radarAdministrationPresentation } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminPresentation";
+import { buildRadarAdministrationView } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminPresentation";
 import { usePlayerRadarOperations } from "@/features/seriesAnalysisAdmin/radar/usePlayerRadarOperations";
 import { useAuthorization } from "@/shared/auth/useAuthorization";
 
 /** Composes the title-owned workflow and its pure display contract. */
-export function usePlayerRadarAdminModel(
+export function usePlayerRadarAdministration(
   gameTitleId: string,
   gameTitleName: string,
   onApplyAccepted?: (operationId: string) => void,
@@ -11,7 +11,7 @@ export function usePlayerRadarAdminModel(
   const authorization = useAuthorization();
   const operations = usePlayerRadarOperations(gameTitleId, authorization, onApplyAccepted);
   return {
-    model: radarAdministrationPresentation({
+    view: buildRadarAdministrationView({
       ...operations,
       gameTitleId,
       gameTitleName,

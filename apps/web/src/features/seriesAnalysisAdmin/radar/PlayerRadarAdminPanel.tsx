@@ -2,7 +2,7 @@ import { RefreshCw } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { radarCommandErrorMessage } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminPresentation";
-import type { PlayerRadarAdminModel } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminTypes";
+import type { PlayerRadarAdministrationView } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminTypes";
 import { PlayerRadarChangeMethod } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarChangeMethod";
 import { PlayerRadarCommandButton } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarCommandButton";
 import { PlayerRadarCriteria } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarCriteria";
@@ -24,16 +24,16 @@ import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { contentText } from "@/shared/ui/typography";
 
 type Props = {
-  model: PlayerRadarAdminModel;
+  administration: PlayerRadarAdministrationView;
   active?: boolean;
   applyFinalFocus?: (() => HTMLElement | null) | undefined;
 };
 
-export function PlayerRadarAdminPanel({ model, active = true, applyFinalFocus }: Props) {
+export function PlayerRadarAdminPanel({ administration, active = true, applyFinalFocus }: Props) {
   return (
-    <RadarThresholdEditorProvider model={model} active={active}>
+    <RadarThresholdEditorProvider administration={administration} active={active}>
       <PlayerRadarAdminPanelContent
-        model={model}
+        administration={administration}
         active={active}
         applyFinalFocus={applyFinalFocus}
       />
@@ -41,7 +41,7 @@ export function PlayerRadarAdminPanel({ model, active = true, applyFinalFocus }:
   );
 }
 
-function PlayerRadarAdminPanelContent({ model, active = true, applyFinalFocus }: Props) {
+function PlayerRadarAdminPanelContent({ administration, active = true, applyFinalFocus }: Props) {
   const editor = useRadarEditingControls();
   const headingRef = useRef<HTMLHeadingElement>(null);
   const withdrawTriggerRef = useRef<HTMLButtonElement>(null);
@@ -51,10 +51,11 @@ function PlayerRadarAdminPanelContent({ model, active = true, applyFinalFocus }:
     setPreviousActive(active);
     setWithdrawOpen(false);
   }
-  const candidate = model.candidate;
+  const candidate = administration.candidate;
   const operationInProgress =
-    model.operation?.status === "pending" || model.operation?.status === "running";
-  const applicationInProgress = operationInProgress && model.operation?.kind === "apply";
+    administration.operation?.status === "pending" ||
+    administration.operation?.status === "running";
+  const applicationInProgress = operationInProgress && administration.operation?.kind === "apply";
   const candidateActive = candidate && !["applied", "withdrawn"].includes(candidate.status);
 
   return (
@@ -62,13 +63,13 @@ function PlayerRadarAdminPanelContent({ model, active = true, applyFinalFocus }:
       <ContentWithActions
         actions={
           <Button
-            disabled={Boolean(model.actions.refresh.disabledReason)}
+            disabled={Boolean(administration.actions.refresh.disabledReason)}
             icon={<RefreshCw />}
-            pending={model.actions.refresh.pending}
+            pending={administration.actions.refresh.pending}
             pendingLabel="状態を更新中"
             size="sm"
             variant="secondary"
-            onClick={() => void model.actions.refresh.run()}
+            onClick={() => void administration.actions.refresh.run()}
           >
             基準の状態を更新
           </Button>
@@ -79,30 +80,30 @@ function PlayerRadarAdminPanelContent({ model, active = true, applyFinalFocus }:
             採点境界
           </h2>
           <p className={cn(contentText.supporting, "tabular-nums")}>
-            {model.currentBasis
-              ? `適用日時: ${formatDateTimeLong(model.currentBasis.appliedAt ?? undefined, "日時未取得")}`
+            {administration.currentBasis
+              ? `適用日時: ${formatDateTimeLong(administration.currentBasis.appliedAt ?? undefined, "日時未取得")}`
               : "採点基準は未適用です。"}
           </p>
         </div>
       </ContentWithActions>
-      {model.feedback && !withdrawOpen ? (
-        model.feedback.tone === "success" ? (
+      {administration.feedback && !withdrawOpen ? (
+        administration.feedback.tone === "success" ? (
           <p className={contentText.body} role="status">
-            {model.feedback.title}
+            {administration.feedback.title}
           </p>
         ) : (
-          <Notice tone={model.feedback.tone} title={model.feedback.title}>
-            {model.feedback.detail}
+          <Notice tone={administration.feedback.tone} title={administration.feedback.title}>
+            {administration.feedback.detail}
           </Notice>
         )
       ) : null}
-      {model.communicationUnknown ? (
+      {administration.communicationUnknown ? (
         <Notice
           title="操作の受付結果をまだ確認できません"
           tone="warning"
           action={
             <PlayerRadarCommandButton
-              action={model.actions.checkOperation}
+              action={administration.actions.checkOperation}
               label="操作の状態を確認する"
               pendingLabel="操作の状態を確認中"
             />
@@ -110,24 +111,26 @@ function PlayerRadarAdminPanelContent({ model, active = true, applyFinalFocus }:
         >
           {null}
         </Notice>
-      ) : operationInProgress && model.operation ? (
+      ) : operationInProgress && administration.operation ? (
         <p className={contentText.body} role="status">
-          {model.operation.title}
+          {administration.operation.title}
         </p>
-      ) : model.operation?.status === "failed" ? (
+      ) : administration.operation?.status === "failed" ? (
         <Notice
-          title={model.operation.title}
+          title={administration.operation.title}
           tone="danger"
           action={
             <PlayerRadarCommandButton
-              action={model.actions.retry}
+              action={administration.actions.retry}
               label="この処理を再試行する"
               pendingLabel="再試行を受付中"
             />
           }
         >
-          <p>{model.operation.detail}</p>
-          {model.actions.retry.disabledReason ? <p>{model.actions.retry.disabledReason}</p> : null}
+          <p>{administration.operation.detail}</p>
+          {administration.actions.retry.disabledReason ? (
+            <p>{administration.actions.retry.disabledReason}</p>
+          ) : null}
         </Notice>
       ) : null}
       {candidateActive ? (
@@ -153,13 +156,13 @@ function PlayerRadarAdminPanelContent({ model, active = true, applyFinalFocus }:
         </>
       ) : null}
       <PlayerRadarEditingWorkspace
-        model={model}
+        administration={administration}
         active={active}
         applyFinalFocus={applyFinalFocus}
       />
       {!editor.active ? (
         <>
-          <PlayerRadarCriteria currentBasis={model.currentBasis} proposedBasis={null} />
+          <PlayerRadarCriteria currentBasis={administration.currentBasis} proposedBasis={null} />
           {editor.candidateSourceAvailable ? (
             <div className={actionRowClass}>
               <Button
@@ -192,8 +195,8 @@ function PlayerRadarAdminPanelContent({ model, active = true, applyFinalFocus }:
                   : "この変更案を破棄します。適用中の採点基準は変わりません。"
               }
               formatError={radarCommandErrorMessage}
-              pending={model.actions.withdraw.pending}
-              confirmDisabled={Boolean(model.actions.withdraw.disabledReason)}
+              pending={administration.actions.withdraw.pending}
+              confirmDisabled={Boolean(administration.actions.withdraw.disabledReason)}
               title={
                 applicationInProgress
                   ? "この基準の適用を取り下げますか？"
@@ -201,7 +204,7 @@ function PlayerRadarAdminPanelContent({ model, active = true, applyFinalFocus }:
               }
               trigger={
                 <Button
-                  disabled={Boolean(model.actions.withdraw.disabledReason)}
+                  disabled={Boolean(administration.actions.withdraw.disabledReason)}
                   ref={withdrawTriggerRef}
                   variant="quiet"
                 >
@@ -209,47 +212,47 @@ function PlayerRadarAdminPanelContent({ model, active = true, applyFinalFocus }:
                 </Button>
               }
               onConfirm={async () => {
-                await model.actions.withdraw.run();
+                await administration.actions.withdraw.run();
               }}
             />
           </div>
         </div>
       ) : null}
-      <PlayerRadarChangeMethod model={model} editor={editor} active={active} />
-      {model.review.reasons.length > 0 || model.review.explanation ? (
+      <PlayerRadarChangeMethod administration={administration} editor={editor} active={active} />
+      {administration.review.reasons.length > 0 || administration.review.explanation ? (
         <section aria-labelledby="radar-review-heading" className="grid min-w-0 gap-4">
           <div className="grid gap-2">
             <h3 className={contentText.heading} id="radar-review-heading">
               見直しの目安
             </h3>
-            {model.review.explanation ? (
+            {administration.review.explanation ? (
               <p className={cn(contentText.body, readableTextWidthClass, "text-pretty")}>
-                {model.review.explanation}
+                {administration.review.explanation}
               </p>
             ) : null}
           </div>
-          {model.review.reasons.length > 0 ? (
+          {administration.review.reasons.length > 0 ? (
             <ul className="grid gap-4">
-              {model.review.reasons.map((reason) => (
+              {administration.review.reasons.map((reason) => (
                 <li key={reason.evidenceKey}>
                   <ContentWithActions
                     actions={
                       reason.acknowledged ? (
                         <span className={contentText.supporting}>
-                          {model.currentBasis ? "現在の基準を継続" : "確認済み"}
+                          {administration.currentBasis ? "現在の基準を継続" : "確認済み"}
                         </span>
                       ) : (
                         <Button
                           disabled={
                             operationInProgress ||
-                            model.communicationUnknown ||
-                            model.actions.refresh.disabledReason !== null
+                            administration.communicationUnknown ||
+                            administration.actions.refresh.disabledReason !== null
                           }
                           size="sm"
                           variant="quiet"
-                          onClick={() => model.actions.acknowledge(reason.evidenceKey)}
+                          onClick={() => administration.actions.acknowledge(reason.evidenceKey)}
                         >
-                          {model.currentBasis
+                          {administration.currentBasis
                             ? "この目安を確認し、基準を継続"
                             : "この目安を確認済みにする"}
                         </Button>

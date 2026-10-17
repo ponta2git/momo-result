@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import {
-  radarBasisPresentation,
+  buildRadarBasisView,
   radarOperationState,
   radarDraftNoLongerOwned,
   isRadarOperationInProgress,
@@ -120,7 +120,7 @@ export function usePlayerRadarOperations(
     creation.operation,
     refreshAfterCreation,
   ]);
-  const basis = radarBasisPresentation(resource);
+  const basis = buildRadarBasisView(resource);
   const operation = radarOperationState({
     resource,
     previewState: basis.previewState,

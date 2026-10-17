@@ -2,10 +2,10 @@ import { useMutation } from "@tanstack/react-query";
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { downloadExportMatches } from "@/features/exports/exportDownload";
+import { exportDownloadResultView, failedResultView } from "@/features/exports/exportPresentation";
+import type { ExportDownloadResultView } from "@/features/exports/exportPresentation";
 import type { ExportMatchesRequest } from "@/features/exports/exportTypes";
 import { exportRequestIdentity } from "@/features/exports/exportUrlState";
-import { exportDownloadResultView, failedResultView } from "@/features/exports/exportViewModel";
-import type { ExportDownloadResultView } from "@/features/exports/exportViewModel";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 
 export type ExportDownloadOptions = {

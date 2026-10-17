@@ -3,20 +3,20 @@ import { useState } from "react";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 
-import { ExportDownloadAction } from "./ExportActionPanel";
 import { ExportCandidateSelect } from "./ExportCandidateSelect";
+import { ExportDownloadAction } from "./ExportDownloadAction";
 import { ExportFormatTabs } from "./ExportFormatTabs";
 import { ExportScopeTabs } from "./ExportScopeTabs";
-import type { ExportPageModel } from "./useExportPageModel";
+import type { ExportSetupControls } from "./useExportSetup";
 
-type ExportWorkspaceProps = {
-  model: ExportPageModel;
+type ExportSetupProps = {
+  setup: ExportSetupControls;
 };
 
-export function ExportWorkspace({ model }: ExportWorkspaceProps) {
-  const { candidate, conditions, download, view } = model;
+export function ExportSetup({ setup }: ExportSetupProps) {
+  const { candidate, conditions, download, view } = setup;
   const [downloadPending, setDownloadPending] = useState(false);
-  const showActionPanel =
+  const showDownloadAction =
     view.action.errors.length > 0 ||
     view.candidate.kind === "hidden" ||
     (view.candidate.kind === "ready" && view.candidate.selectionState === "resolved");
@@ -55,7 +55,7 @@ export function ExportWorkspace({ model }: ExportWorkspaceProps) {
         >
           <ExportDownloadAction
             {...download}
-            visible={showActionPanel}
+            visible={showDownloadAction}
             action={view.action}
             onPendingChange={setDownloadPending}
             onResetConditions={conditions.reset}

@@ -8,7 +8,7 @@ import { contentText } from "@/shared/ui/typography";
 
 import { ExportDownloadProgress } from "./ExportDownloadProgress";
 import { ExportDownloadResult } from "./ExportDownloadResult";
-import type { ExportActionAvailability, ExportActionView } from "./exportViewModel";
+import type { ExportActionAvailability, ExportActionView } from "./exportPresentation";
 import { useExportDownload } from "./useExportDownload";
 import type { ExportDownloadOptions } from "./useExportDownload";
 

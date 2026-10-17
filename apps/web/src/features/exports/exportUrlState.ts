@@ -1,12 +1,12 @@
 import { trimSearchParam } from "@/shared/lib/searchParams";
 
+import type { ExportCandidateView } from "./exportPresentation";
 import type {
   ExportFormat,
   ExportMatchesRequest,
   ExportScope,
   ExportScopeIds,
 } from "./exportTypes";
-import type { ExportCandidateView } from "./exportViewModel";
 
 const scopeKeys = ["seasonMasterId", "heldEventId", "matchId"] as const;
 

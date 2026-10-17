@@ -12,9 +12,9 @@ import { SelectField } from "@/shared/ui/forms/SelectField";
 import { contentText, fieldText } from "@/shared/ui/typography";
 
 import { ExportCandidatePickerDialog } from "./ExportCandidatePickerDialog";
+import { candidateDisplayLabel } from "./exportPresentation";
+import type { ExportCandidateSupportIssue, ExportCandidateView } from "./exportPresentation";
 import type { ExportScope } from "./exportTypes";
-import { candidateDisplayLabel } from "./exportViewModel";
-import type { ExportCandidateSupportIssue, ExportCandidateView } from "./exportViewModel";
 
 type ExportCandidateSelectProps = {
   disabled?: boolean;

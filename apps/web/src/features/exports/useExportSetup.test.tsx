@@ -6,7 +6,7 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
 import { useExportDownload } from "@/features/exports/useExportDownload";
-import { useExportPageModel } from "@/features/exports/useExportPageModel";
+import { useExportSetup } from "@/features/exports/useExportSetup";
 import { setDevUser } from "@/test/auth";
 import { installAnchorClickMock } from "@/test/doubles/dom";
 import { makeMatchDetail } from "@/test/factories";
@@ -17,15 +17,15 @@ import { createTestQueryClient } from "@/test/queryClient";
 setupMsw();
 
 function DownloadAtFirstReadyCommit() {
-  const page = useExportPageModel({});
-  const download = useExportDownload(page.download);
+  const setup = useExportSetup({});
+  const download = useExportDownload(setup.download);
   const started = useRef(false);
   useLayoutEffect(() => {
-    if (started.current || !page.view.action.canDownload) return;
+    if (started.current || !setup.view.action.canDownload) return;
     started.current = true;
     download.start();
-  }, [page, download]);
-  return <p>{page.view.action.summaryText}</p>;
+  }, [setup, download]);
+  return <p>{setup.view.action.summaryText}</p>;
 }
 
 describe("export page action contract", () => {

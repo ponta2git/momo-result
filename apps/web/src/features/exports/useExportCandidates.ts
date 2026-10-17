@@ -9,8 +9,11 @@ import {
   toMatchCandidates,
   toSeasonCandidates,
 } from "@/features/exports/exportCandidateData";
+import {
+  buildCandidateSupportIssue,
+  buildCandidateView,
+} from "@/features/exports/exportPresentation";
 import type { ExportCandidate, ExportScope } from "@/features/exports/exportTypes";
-import { buildCandidateSupportIssue, buildCandidateView } from "@/features/exports/exportViewModel";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 import {
   heldEventSummaryReadQueryOptions,

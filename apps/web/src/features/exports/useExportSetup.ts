@@ -2,21 +2,21 @@ import {
   DEFAULT_EXPORT_SLOW_THRESHOLD_MS,
   DEFAULT_EXPORT_TIMEOUT_MS,
 } from "@/features/exports/exportDownload";
+import { buildExportSelectionView } from "@/features/exports/exportPresentation";
+import type { ExportSelectionView } from "@/features/exports/exportPresentation";
 import type {
   ExportFormat,
   ExportScope,
   ExportMatchesRequest,
 } from "@/features/exports/exportTypes";
-import { buildExportSelectionView } from "@/features/exports/exportViewModel";
-import type { ExportSelectionView } from "@/features/exports/exportViewModel";
 import { useExportSelection } from "@/features/exports/useExportSelection";
 
-export type ExportPageModelParams = {
+export type ExportSetupOptions = {
   downloadTimeoutMs?: number | undefined;
   slowThresholdMs?: number | undefined;
 };
 
-export type ExportPageModel = {
+export type ExportSetupControls = {
   readonly candidate: {
     readonly change: (selectedId: string) => void;
     readonly changePage: (page: number) => void;
@@ -39,10 +39,10 @@ export type ExportPageModel = {
 };
 
 /** The page owns URL conditions and candidate selection; the action panel owns downloading. */
-export function useExportPageModel({
+export function useExportSetup({
   downloadTimeoutMs = DEFAULT_EXPORT_TIMEOUT_MS,
   slowThresholdMs = DEFAULT_EXPORT_SLOW_THRESHOLD_MS,
-}: ExportPageModelParams): ExportPageModel {
+}: ExportSetupOptions): ExportSetupControls {
   const selection = useExportSelection();
 
   const view = buildExportSelectionView({

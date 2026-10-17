@@ -1,7 +1,7 @@
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
 
-import type { ExportDownloadResultView } from "./exportViewModel";
+import type { ExportDownloadResultView } from "./exportPresentation";
 
 type ExportDownloadResultProps = {
   onRetry?: (() => void) | undefined;

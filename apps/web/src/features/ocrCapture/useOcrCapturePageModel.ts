@@ -161,7 +161,7 @@ export function useOcrCapturePageModel() {
       selectCaptureTarget,
     ],
   );
-  const blockedReason = setup.options.refreshing ? undefined : setup.blockedReason;
+  const blockedReason = setup.refreshing ? undefined : setup.blockedReason;
   const start = useMemo<OcrCaptureStartModel>(
     () => ({
       badgeLabel: view.start.badgeLabel,

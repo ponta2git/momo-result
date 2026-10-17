@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import {
   changeOcrSetupValue,
@@ -34,7 +34,11 @@ export function useOcrSetup({
   });
   if (!sameSetupValue(next, value)) setValue(next);
 
-  const { resolution, blockedReason } = resolveOcrSetupValidation(value, enabled, options);
+  const { ready, loading, refreshing } = options;
+  const { resolution, blockedReason } = useMemo(
+    () => resolveOcrSetupValidation(value, enabled, { ready, loading, refreshing }),
+    [value, enabled, ready, loading, refreshing],
+  );
   const change = (intent: OcrSetupChange) => {
     setValue((current) => changeOcrSetupValue(current, intent));
   };

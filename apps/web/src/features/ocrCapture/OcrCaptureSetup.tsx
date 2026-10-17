@@ -13,13 +13,19 @@ import { contentText } from "@/shared/ui/typography";
 
 type SetupOwner = ReturnType<typeof useOcrSetup>;
 const SetupDisplay = createContext<{
-  choices: { failed: boolean; refreshing: boolean; refresh: () => void };
+  options: Pick<SetupOwner["options"], "hasError" | "refreshing" | "retry">;
   panel: SetupOwner["panel"];
 } | null>(null);
-const SetupSubmission = createContext<Pick<
-  SetupOwner,
-  "options" | "resolution" | "blockedReason"
-> | null>(null);
+const SetupSubmission = createContext<
+  | (Pick<SetupOwner, "resolution" | "blockedReason"> & {
+      options: Pick<
+        SetupOwner["options"],
+        "mapMasters" | "seasonMasters" | "selectedGameTitle" | "selectedHeldEvent"
+      >;
+      refreshing: boolean;
+    })
+  | null
+>(null);
 
 /** Setup query and editing subscriptions are independent of image/transport updates. */
 export function OcrCaptureSetupProvider({
@@ -38,27 +44,28 @@ export function OcrCaptureSetupProvider({
       ...(requestedHeldEventId ? { heldEventId: requestedHeldEventId } : {}),
     },
   });
+  const { blockedReason, resolution } = setup;
+  const { mapMasters, seasonMasters, selectedGameTitle, selectedHeldEvent, refreshing } =
+    setup.options;
   const submission = useMemo(
     () => ({
-      options: setup.options,
-      resolution: setup.resolution,
-      blockedReason: setup.blockedReason,
+      options: { mapMasters, seasonMasters, selectedGameTitle, selectedHeldEvent },
+      resolution,
+      blockedReason,
+      refreshing,
     }),
-    [setup.options, setup.resolution, setup.blockedReason],
-  );
-  const display = useMemo(
-    () => ({
-      panel: setup.panel,
-      choices: {
-        failed: setup.options.hasError,
-        refreshing: setup.options.refreshing,
-        refresh: setup.options.retry,
-      },
-    }),
-    [setup.panel, setup.options.hasError, setup.options.refreshing, setup.options.retry],
+    [
+      mapMasters,
+      seasonMasters,
+      selectedGameTitle,
+      selectedHeldEvent,
+      resolution,
+      blockedReason,
+      refreshing,
+    ],
   );
   return (
-    <SetupDisplay value={display}>
+    <SetupDisplay value={setup}>
       <SetupSubmission value={submission}>{children}</SetupSubmission>
     </SetupDisplay>
   );
@@ -81,20 +88,20 @@ export function OcrCaptureSetupSection() {
         </h2>
         <PendingStatus
           idleLabel="読み取り結果に引き継ぐ試合設定"
-          pending={setup.choices.refreshing && !setup.choices.failed}
+          pending={setup.options.refreshing && !setup.options.hasError}
         >
           試合設定の選択肢を確認中
         </PendingStatus>
       </div>
-      {setup.choices.failed ? (
+      {setup.options.hasError ? (
         <Notice
           action={
             <Button
-              pending={setup.choices.refreshing}
+              pending={setup.options.refreshing}
               pendingLabel="再読み込み中"
               size="sm"
               variant="secondary"
-              onClick={setup.choices.refresh}
+              onClick={setup.options.retry}
             >
               選択肢を再読み込み
             </Button>

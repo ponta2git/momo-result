@@ -5,8 +5,8 @@ import { http, HttpResponse } from "msw";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { OutlookSessionOwner } from "@/features/seriesComparison/outlook/OutlookSessionOwner";
 import { OutlookView } from "@/features/seriesComparison/outlook/OutlookView";
+import { OutlookWorkspaceProvider } from "@/features/seriesComparison/outlook/OutlookWorkspaceProvider";
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
 import { setDevUser } from "@/test/auth";
 import { setupMsw } from "@/test/msw/lifecycle";
@@ -36,7 +36,7 @@ function RoutedWorkspace({
 }) {
   const location = useLocation();
   const navigate = useNavigate();
-  if (location.pathname === "/matches")
+  if (new URLSearchParams(location.search).get("view") !== "outlook")
     return (
       <button type="button" onClick={() => navigate(-1)}>
         見通しに戻る
@@ -44,7 +44,7 @@ function RoutedWorkspace({
     );
   return (
     <OutlookView
-      response={response}
+      summary={response}
       selection={{
         gameTitleId: response.artifact.gameTitleId,
         ...(response.scope.kind === "season"
@@ -70,9 +70,9 @@ function renderOutlook(
           `/analytics/series?gameTitleId=${response.artifact.gameTitleId}&view=outlook`,
         ]}
       >
-        <OutlookSessionOwner>
+        <OutlookWorkspaceProvider>
           <RoutedWorkspace response={summary} memberIds={people} />
-        </OutlookSessionOwner>
+        </OutlookWorkspaceProvider>
       </MemoryRouter>
     </QueryClientProvider>
   );
@@ -442,7 +442,7 @@ describe("OutlookView input and update boundaries", () => {
     expect(undo()).toBeDisabled();
   });
 
-  it("preserves two independent entries and a pending mean through task and route changes", async () => {
+  it("preserves two independent entries and a pending mean through task and comparison view changes", async () => {
     const user = userEvent.setup();
     renderOutlook(await makeSeriesAnalysisOutlookSummary());
     await setMean(user, "2.70");
@@ -450,7 +450,7 @@ describe("OutlookView input and update boundaries", () => {
     await user.type(meanField(), "2.60");
     await setMean(user, "2.40", rivalName);
     await user.click(screen.getByRole("tab", { name: "戦数から考える" }));
-    await user.click(screen.getByRole("link", { name: "この作品の確定戦績を見る" }));
+    await user.click(screen.getByRole("link", { name: `${focusName}の行動仮説を見る` }));
     await user.click(screen.getByRole("button", { name: "見通しに戻る" }));
     await user.click(screen.getByRole("tab", { name: "成績から試す" }));
     expect(meanField()).toHaveValue("2.60");

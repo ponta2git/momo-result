@@ -1,6 +1,6 @@
 import { memo, useLayoutEffect, useId, useRef, useState } from "react";
 
-import type { OutlookRelation } from "@/features/seriesComparison/model/outlook";
+import type { OutlookRelation } from "@/features/seriesComparison/outlook/calculation";
 import { OutlookChartScrubber } from "@/features/seriesComparison/outlook/OutlookChartScrubber";
 import { orderFixedMembers } from "@/shared/domain/members";
 import { memberSequencePresentation } from "@/shared/matches/MemberSequenceLabel";

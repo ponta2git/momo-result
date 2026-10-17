@@ -10,20 +10,20 @@ import {
   projectOutlook,
   rational,
   rationalToNumber,
-} from "@/features/seriesComparison/model/outlook";
+} from "@/features/seriesComparison/outlook/calculation";
 import type {
   CumulativePair,
   OutlookExample,
   RankDistribution,
   Rational,
-} from "@/features/seriesComparison/model/outlook";
+} from "@/features/seriesComparison/outlook/calculation";
 import { OutlookChart } from "@/features/seriesComparison/outlook/OutlookChart";
 import type {
   OutlookChartPattern,
   OutlookChartPoint,
   OutlookChartSelection,
 } from "@/features/seriesComparison/outlook/OutlookChart";
-import type { OutlookSession } from "@/features/seriesComparison/outlook/outlookSession";
+import type { OutlookResultView } from "@/features/seriesComparison/outlook/outlookProjections";
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
 import { canonicalResultMemberIds, orderFixedMembers } from "@/shared/domain/members";
 import {
@@ -84,7 +84,7 @@ export function OutlookPatterns({
   active,
   response,
   cumulative,
-  session,
+  view,
   names,
   memberIds,
   horizonControl,
@@ -94,7 +94,7 @@ export function OutlookPatterns({
   active: boolean;
   response: SeriesAnalysisOutlookSummary;
   cumulative: CumulativePair;
-  session: OutlookSession;
+  view: OutlookResultView;
   names: readonly [string, string];
   memberIds: readonly [string, string];
   horizonControl: ReactNode;
@@ -102,12 +102,11 @@ export function OutlookPatterns({
   marker: { h: number; label: string } | null;
 }) {
   const helpId = useId();
-  const entries = session.gesture?.before ?? session.entries;
-  const focus = entries[0].distribution;
-  const rival = entries[1].distribution;
-  const liveFocus = session.entries[0].distribution;
-  const liveRival = session.entries[1].distribution;
-  const range = session.chartRange;
+  const focus = view.originFocus;
+  const rival = view.originRival;
+  const liveFocus = view.focus;
+  const liveRival = view.rival;
+  const range = view.chartRange;
   const examples = useMemo(() => {
     if (!active) return undefined;
     const record = response.recent.jointRanks.find(
@@ -194,29 +193,54 @@ export function OutlookPatterns({
     if (last !== undefined && last < high) result.push(4);
     return result;
   }, [active, cumulative, focus, rival, meanPoints, exampleSeries, range]);
+  const patterns = useMemo<OutlookChartPattern[]>(() => {
+    if (!active) return [];
+    return [
+      {
+        id: "average",
+        label: "平均",
+        points: meanPoints,
+        selected: averageSelection(cumulative, liveFocus, liveRival, view.horizon),
+      },
+      ...exampleSeries.map(({ example, points }, index): OutlookChartPattern => ({
+        id: `example-${index}`,
+        label: hasTiedExamples
+          ? `展開例${index + 1}`
+          : index === 0
+            ? "有利な例"
+            : index === 1
+              ? "中間の例"
+              : "不利な例",
+        points,
+        selected: exampleSelection(cumulative, example, view.horizon),
+      })),
+    ];
+  }, [
+    active,
+    cumulative,
+    liveFocus,
+    liveRival,
+    view.horizon,
+    meanPoints,
+    exampleSeries,
+    hasTiedExamples,
+  ]);
+  const markerHorizon = marker?.h;
+  const markerLabel = marker?.label;
+  const averageMarker = useMemo(
+    () =>
+      active && markerHorizon !== undefined && markerLabel !== undefined
+        ? {
+            h: markerHorizon,
+            label: markerLabel,
+            averages: averageSelection(cumulative, liveFocus, liveRival, markerHorizon).averages,
+          }
+        : null,
+    [active, cumulative, liveFocus, liveRival, markerHorizon, markerLabel],
+  );
   if (!active) return null;
 
   const current = averageSelection(cumulative, liveFocus, liveRival, 0);
-  const patterns: OutlookChartPattern[] = [
-    {
-      id: "average",
-      label: "平均",
-      points: meanPoints,
-      selected: averageSelection(cumulative, liveFocus, liveRival, session.horizon),
-    },
-    ...exampleSeries.map(({ example, points }, index): OutlookChartPattern => ({
-      id: `example-${index}`,
-      label: hasTiedExamples
-        ? `展開例${index + 1}`
-        : index === 0
-          ? "有利な例"
-          : index === 1
-            ? "中間の例"
-            : "不利な例",
-      points,
-      selected: exampleSelection(cumulative, example, session.horizon),
-    })),
-  ];
   const people = orderFixedMembers(
     memberIds.map((memberId, role) => ({ memberId, role: role as 0 | 1 })),
   );
@@ -234,7 +258,7 @@ export function OutlookPatterns({
     <div className="@container/outlook-patterns grid min-w-0 grid-cols-1 gap-4">
       {horizonControl}
       <DataTable
-        caption={{ content: `現在と${session.horizon}戦後の総合平均順位`, visibility: "visible" }}
+        caption={{ content: `現在と${view.horizon}戦後の総合平均順位`, visibility: "visible" }}
         density="compact"
         verticalAlign="top"
         layout="fixed"
@@ -299,12 +323,12 @@ export function OutlookPatterns({
         <p
           id={helpId}
           className={cn(contentText.supporting, "min-h-8")}
-          role={session.gesture ? "status" : undefined}
+          role={view.gesturing ? "status" : undefined}
         >
-          {session.gesture
+          {view.gesturing
             ? "展開例は操作後に更新します。"
-            : session.horizon > range
-              ? `グラフは${range}戦までです。表は${session.horizon}戦後を表示しています。`
+            : view.horizon > range
+              ? `グラフは${range}戦までです。表は${view.horizon}戦後を表示しています。`
               : "タップ・横ドラッグ・矢印キーで戦数を選べます。"}
         </p>
       </div>
@@ -315,20 +339,13 @@ export function OutlookPatterns({
             pattern={pattern}
             names={names}
             memberIds={memberIds}
-            horizon={session.horizon}
-            horizonText={session.horizonText}
+            horizon={view.horizon}
+            horizonText={view.horizonText}
             range={range}
             ticks={ticks}
             descriptionId={helpId}
             onHorizonChange={onHorizonChange}
-            marker={
-              pattern.id === "average" && marker
-                ? {
-                    ...marker,
-                    averages: averageSelection(cumulative, liveFocus, liveRival, marker.h).averages,
-                  }
-                : null
-            }
+            marker={pattern.id === "average" ? averageMarker : null}
           />
         ))}
       </div>

@@ -5,8 +5,15 @@ import { StrictMode, useEffect, useState } from "react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { beforeAll, describe, expect, it } from "vitest";
 
+import {
+  changeSeriesAnalysisSelection,
+  normalizeSeriesAnalysisSelection,
+} from "@/features/seriesComparison/model/seriesAnalysisSelection";
 import { SeriesAnalysisNavigation } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
-import { useSeriesAnalysisLocationState } from "@/features/seriesComparison/navigation/useSeriesAnalysisLocationState";
+import {
+  useSeriesAnalysisLocationRequest,
+  useSeriesAnalysisLocationState,
+} from "@/features/seriesComparison/navigation/useSeriesAnalysisLocationState";
 import { SeriesAnalysisContent } from "@/features/seriesComparison/page/SeriesAnalysisContent";
 import { createDeferred } from "@/test/deferred";
 import {
@@ -32,7 +39,14 @@ const aggregate = makeOwnerComparisonAggregate();
 const initialUrl = "/analytics/series?gameTitleId=gt_momotetsu_2&focusMatchId=match-12";
 
 function Harness({ gate }: { gate?: Promise<void> | undefined }) {
-  const location = useSeriesAnalysisLocationState(options);
+  const request = useSeriesAnalysisLocationRequest();
+  const location = useSeriesAnalysisLocationState({
+    request,
+    normalizedSelection: normalizeSeriesAnalysisSelection(options, request.selection),
+    canonicalizationEnabled: true,
+    changeSelection: (current, change) =>
+      normalizeSeriesAnalysisSelection(options, changeSeriesAnalysisSelection(current, change)),
+  });
   const [ready, setReady] = useState(!gate);
   useEffect(() => {
     let mounted = true;
@@ -48,7 +62,7 @@ function Harness({ gate }: { gate?: Promise<void> | undefined }) {
     <SeriesAnalysisNavigation displayIntent={location.displayIntent}>
       <button type="button">別の操作</button>
       <SeriesAnalysisContent
-        ownerMetric={location.state.ownerMetric}
+        ownerMetric={location.selection.ownerMetric}
         onOwnerMetricChange={location.actions.updateOwnerMetric}
         bundle={
           location.activeView === "review"

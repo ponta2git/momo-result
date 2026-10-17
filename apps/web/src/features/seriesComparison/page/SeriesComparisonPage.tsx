@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 
 import { matchesSeriesAnalysisScope } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import { SeriesAnalysisNavigation } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
-import { OutlookSessionBoundary } from "@/features/seriesComparison/outlook/OutlookSessionOwner";
+import { OutlookWorkspaceProvider } from "@/features/seriesComparison/outlook/OutlookWorkspaceProvider";
 import {
   preloadSeriesAnalysisView,
   SeriesAnalysisContent,
@@ -15,7 +15,7 @@ import {
   ComparisonSkeleton,
   PageSkeleton,
 } from "@/features/seriesComparison/page/SeriesComparisonSkeletons";
-import { useSeriesComparisonPageModel } from "@/features/seriesComparison/page/useSeriesComparisonPageModel";
+import { useSeriesComparison } from "@/features/seriesComparison/page/useSeriesComparison";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
@@ -26,15 +26,15 @@ import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
 export function SeriesComparisonPage() {
   return (
-    <OutlookSessionBoundary>
+    <OutlookWorkspaceProvider>
       <SeriesComparisonPageContent />
-    </OutlookSessionBoundary>
+    </OutlookWorkspaceProvider>
   );
 }
 
 function SeriesComparisonPageContent() {
-  const page = useSeriesComparisonPageModel();
-  const { filters, focus, options, resource, status } = page;
+  const comparison = useSeriesComparison();
+  const { filters, focus, options, resource, status } = comparison;
   const purposeChanging =
     resource.bundle !== undefined &&
     (filters.activeView === "outlook"
@@ -52,10 +52,10 @@ function SeriesComparisonPageContent() {
     resource.shielded ||
     focus.shielded ||
     focus.loading;
-  const [requestedRetryOwner, setRequestedRetryOwner] = useState<
+  const [requestedRetryTarget, setRequestedRetryTarget] = useState<
     "options" | "status" | "resource"
   >();
-  const defaultRetryOwner = options.hasError
+  const defaultRetryTarget = options.hasError
     ? "options"
     : status.hasError || (!status.loading && !status.data?.currentArtifact)
       ? "status"
@@ -64,17 +64,17 @@ function SeriesComparisonPageContent() {
         : undefined;
 
   const requestedRetryStillVisible =
-    requestedRetryOwner === "options"
+    requestedRetryTarget === "options"
       ? options.hasError
-      : requestedRetryOwner === "status"
+      : requestedRetryTarget === "status"
         ? status.hasError || (!status.loading && !status.data?.currentArtifact)
-        : requestedRetryOwner === "resource"
+        : requestedRetryTarget === "resource"
           ? resource.hasError && !resource.data
           : false;
-  const retryOwner = requestedRetryStillVisible ? requestedRetryOwner : defaultRetryOwner;
-  const retry = (owner: "options" | "status" | "resource") => {
-    setRequestedRetryOwner(owner);
-    page.actions.refresh();
+  const retryTarget = requestedRetryStillVisible ? requestedRetryTarget : defaultRetryTarget;
+  const retry = (target: "options" | "status" | "resource") => {
+    setRequestedRetryTarget(target);
+    comparison.actions.refresh();
   };
 
   useEffect(() => {
@@ -86,7 +86,7 @@ function SeriesComparisonPageContent() {
 
   return (
     <SeriesAnalysisNavigation
-      displayIntent={page.displayIntent}
+      displayIntent={comparison.displayIntent}
       failed={options.hasError || status.hasError || resource.hasError}
     >
       <PageFrame width="wide">
@@ -95,16 +95,16 @@ function SeriesComparisonPageContent() {
           className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4"
           role="region"
         >
-          {page.normalizationNotice ? (
+          {comparison.normalizationNotice ? (
             <Notice tone="info" title="表示条件を調整しました">
-              {page.normalizationNotice}
+              {comparison.normalizationNotice}
             </Notice>
           ) : null}
           {options.hasError ? (
             <Notice
               action={
                 <Button
-                  pending={updating && retryOwner === "options"}
+                  pending={updating && retryTarget === "options"}
                   pendingLabel="再読み込み中"
                   size="sm"
                   variant={options.hasVisibleData ? "secondary" : "primary"}
@@ -140,37 +140,37 @@ function SeriesComparisonPageContent() {
                 scopeEmpty={resource.scopeState === "empty"}
                 loading={updating}
                 canRefresh={
-                  (resource.canRefresh || Boolean(filters.state.gameTitleId)) &&
+                  (resource.canRefresh || Boolean(filters.selection.gameTitleId)) &&
                   !updating &&
-                  !retryOwner
+                  !retryTarget
                 }
                 mapOptions={filters.mapOptions}
-                mapValue={filters.state.mapMasterId ?? ""}
-                refreshing={updating && !retryOwner && Boolean(resource.data) && !purposeChanging}
+                mapValue={filters.selection.mapMasterId ?? ""}
+                refreshing={updating && !retryTarget && Boolean(resource.data) && !purposeChanging}
                 response={
-                  matchesSeriesAnalysisScope(resource.data, filters.state)
+                  matchesSeriesAnalysisScope(resource.data, filters.selection)
                     ? resource.data
                     : undefined
                 }
                 seasonOptions={filters.seasonOptions}
-                seasonValue={filters.state.seasonMasterId ?? ""}
+                seasonValue={filters.selection.seasonMasterId ?? ""}
                 seriesOptions={filters.seriesOptions}
-                seriesValue={filters.state.gameTitleId ?? ""}
+                seriesValue={filters.selection.gameTitleId ?? ""}
                 onMapChange={filters.updateMapMasterId}
-                onRefresh={page.actions.refresh}
+                onRefresh={comparison.actions.refresh}
                 onSeasonChange={filters.updateSeasonMasterId}
                 onSeriesChange={filters.updateGameTitle}
               />
               <SeriesAnalysisStatusFeedback
                 displayedPublishedAt={
-                  matchesSeriesAnalysisScope(resource.data, filters.state)
+                  matchesSeriesAnalysisScope(resource.data, filters.selection)
                     ? resource.data?.artifact.publishedAt
                     : undefined
                 }
                 confirmedMatchCount={filters.confirmedMatchCount}
                 hasError={status.hasError}
                 loading={status.loading}
-                refreshing={updating && retryOwner === "status"}
+                refreshing={updating && retryTarget === "status"}
                 status={status.data}
                 onRefresh={() => retry("status")}
               />
@@ -182,7 +182,7 @@ function SeriesComparisonPageContent() {
                 status.data?.currentArtifact) ? (
                 <ComparisonSkeleton view={filters.activeView} />
               ) : null}
-              {filters.activeView === "outlook" && filters.state.mapMasterId ? (
+              {resource.unavailableReason === "outlook_map" ? (
                 <Notice
                   tone="info"
                   title="見通しは全マップの総合成績で試します"
@@ -200,7 +200,7 @@ function SeriesComparisonPageContent() {
                   title="この範囲に確定済みの試合がありません"
                   description="シーズン・マップの選択は保持しています。条件を変更すると別の記録を確認できます。"
                   action={
-                    <Button variant="secondary" onClick={page.actions.clearScope}>
+                    <Button variant="secondary" onClick={comparison.actions.clearScope}>
                       全シーズン・全マップに戻す
                     </Button>
                   }
@@ -214,7 +214,7 @@ function SeriesComparisonPageContent() {
                   tone="warning"
                   title="この比較条件は現在利用できません"
                   action={
-                    <Button variant="secondary" onClick={page.actions.clearScope}>
+                    <Button variant="secondary" onClick={comparison.actions.clearScope}>
                       全シーズン・全マップに戻す
                     </Button>
                   }
@@ -228,7 +228,7 @@ function SeriesComparisonPageContent() {
                 <Notice
                   action={
                     <Button
-                      pending={updating && retryOwner === "resource"}
+                      pending={updating && retryTarget === "resource"}
                       pendingLabel="再読み込み中"
                       size="sm"
                       onClick={() => retry("resource")}
@@ -267,8 +267,8 @@ function SeriesComparisonPageContent() {
                     >
                       <EmptyState
                         action={
-                          filters.state.mapMasterId || filters.state.seasonMasterId ? (
-                            <Button variant="secondary" onClick={page.actions.clearScope}>
+                          filters.selection.mapMasterId || filters.selection.seasonMasterId ? (
+                            <Button variant="secondary" onClick={comparison.actions.clearScope}>
                               全シーズン・全マップに戻す
                             </Button>
                           ) : (
@@ -284,9 +284,9 @@ function SeriesComparisonPageContent() {
                   ) : (
                     <SeriesAnalysisContent
                       showPurposeTabs={false}
-                      outlookSelection={filters.state}
+                      outlookSelection={filters.selection}
                       onOutlookMemberChange={filters.updateOutlookMember}
-                      ownerMetric={filters.state.ownerMetric}
+                      ownerMetric={filters.selection.ownerMetric}
                       onOwnerMetricChange={filters.updateOwnerMetric}
                       activeView={filters.activeView}
                       bundle={resource.bundle}
@@ -297,11 +297,11 @@ function SeriesComparisonPageContent() {
                         !focus.shielded &&
                         !focus.loading &&
                         resource.bundle.view === filters.activeView &&
-                        matchesSeriesAnalysisScope(resource.data, filters.state)
+                        matchesSeriesAnalysisScope(resource.data, filters.selection)
                       }
-                      onArtifactExpired={page.actions.refresh}
-                      onClearFocusedMatch={page.actions.clearFocusedMatch}
-                      onFocusMatch={page.actions.focusMatch}
+                      onArtifactExpired={comparison.actions.refresh}
+                      onClearFocusedMatch={comparison.actions.clearFocusedMatch}
+                      onFocusMatch={comparison.actions.focusMatch}
                       onViewChange={filters.updateView}
                     />
                   )}

@@ -44,7 +44,7 @@ final class PostgresMatchDraftCancellationRepositorySpec extends IntegrationSuit
       sourceStatus <- sourceImageStatus(imageId)
       notification <- ResultNotificationFixture.state(transactor)
     yield
-      assertEquals(result, MatchDraftCancellationResult.Cancelled(List(imageId)))
+      assertEquals(result, MatchDraftCancellationResult.Cancelled)
       assertEquals(draftExists, false)
       assertEquals(jobStatus, "cancelled")
       assertEquals(sourceStatus, "DELETE_PENDING")
@@ -67,6 +67,29 @@ final class PostgresMatchDraftCancellationRepositorySpec extends IntegrationSuit
       assertEquals(result, MatchDraftCancellationResult.NotCancellable(MatchDraftStatus.Cancelled))
       assertEquals(draftExists, true)
       assertEquals(jobStatus, "queued")
+
+  test("cancelling a draft preserves its running OCR job and source image"):
+    for
+      _ <- insertSourceImage(imageId)
+      _ <- insertOcrDraft("ocr-draft-cancel-running", "ocr-job-cancel-running")
+      _ <- insertOcrJob("ocr-job-cancel-running", "ocr-draft-cancel-running", imageId.value)
+      _ <- sql"UPDATE ocr_jobs SET status = 'running' WHERE id = 'ocr-job-cancel-running'"
+        .update.run.transact(transactor)
+      _ <- insertMatchDraft(
+        draftId.value,
+        "ocr_running",
+        Some(imageId.value),
+        Some("ocr-draft-cancel-running"),
+      )
+      result <- repo.cancelDraftAndQueuedOcrJobs(draftId, now, owner)
+      draftExists <- matchDraftExists(draftId.value)
+      jobStatus <- ocrJobStatus("ocr-job-cancel-running")
+      imageStatus <- sourceImageStatus(imageId)
+    yield
+      assertEquals(result, MatchDraftCancellationResult.Cancelled)
+      assert(!draftExists)
+      assertEquals(jobStatus, "running")
+      assertEquals(imageStatus, "AVAILABLE")
 
   test(
     "another account cannot delete a draft, cancel its job, or retire its image and notification"
@@ -92,9 +115,12 @@ final class PostgresMatchDraftCancellationRepositorySpec extends IntegrationSuit
       assertEquals(imageStatus, "AVAILABLE")
       assertEquals(notificationAfter, notificationBefore)
 
-  test("a failure after cancellation rolls back both the source draft and notification parts"):
+  test(
+    "a failure after cancellation rolls back the draft, image retirement, and notification parts"
+  ):
     for
-      _ <- insertMatchDraft(draftId.value, "draft_ready", None, None)
+      _ <- insertSourceImage(imageId)
+      _ <- insertMatchDraft(draftId.value, "draft_ready", Some(imageId.value), None)
       _ <- ResultNotificationFixture.seed("match_draft", draftId.value, now).transact(transactor)
       before <- ResultNotificationFixture.state(transactor)
       result <-
@@ -102,10 +128,12 @@ final class PostgresMatchDraftCancellationRepositorySpec extends IntegrationSuit
         new IllegalStateException("abort source command").raiseError[ConnectionIO, Unit])
         .transact(transactor).attempt
       exists <- matchDraftExists(draftId.value)
+      imageStatus <- sourceImageStatus(imageId)
       after <- ResultNotificationFixture.state(transactor)
     yield
       assertEquals(result.left.map(_.getMessage), Left("abort source command"))
       assertEquals(exists, true)
+      assertEquals(imageStatus, "AVAILABLE")
       assertEquals(after, before)
 
   test(
@@ -128,7 +156,7 @@ final class PostgresMatchDraftCancellationRepositorySpec extends IntegrationSuit
     yield
       assertEquals(before, true)
       assertEquals(after, false)
-      assertEquals(result, MatchDraftCancellationResult.Cancelled(Nil))
+      assertEquals(result, MatchDraftCancellationResult.Cancelled)
       assertEquals(notification, ResultNotificationFixture.cancelled("draft_unavailable"))
 
   private def holdNotificationGate(

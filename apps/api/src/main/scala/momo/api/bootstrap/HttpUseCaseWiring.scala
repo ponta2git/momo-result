@@ -56,7 +56,6 @@ private[bootstrap] object HttpUseCaseWiring:
         reviews = matchDraftReviews,
         cancellation = matchDraftCancellation,
         images = imageStorage,
-        retention = retention,
         archiveMaxBytes = config.resourceLimits.sourceImageArchiveMaxBytes,
         now = now,
         nextId = ids.nextMatchDraftId,

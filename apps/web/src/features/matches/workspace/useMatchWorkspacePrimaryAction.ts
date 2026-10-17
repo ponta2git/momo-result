@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 
 import type { MatchFormValues, WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
-import { validateMatchForm } from "@/features/matches/workspace/matchFormValidation";
+import { prepareMatchWorkspacePrimaryAction } from "@/features/matches/workspace/matchFormValidation";
 
 export function useMatchWorkspacePrimaryAction(input: {
   mode: WorkspaceMode;
@@ -9,8 +9,8 @@ export function useMatchWorkspacePrimaryAction(input: {
   setConfirmOpen: (open: boolean) => void;
   setShowValidationErrors: (show: boolean) => void;
   setValidationMessage: (message: string) => void;
-  update: (values: MatchFormValues) => void;
-  values: MatchFormValues;
+  saveChanges: (values: MatchFormValues) => void;
+  readLatestValues: () => MatchFormValues;
 }) {
   const {
     mode,
@@ -18,22 +18,22 @@ export function useMatchWorkspacePrimaryAction(input: {
     setConfirmOpen,
     setShowValidationErrors,
     setValidationMessage,
-    update,
-    values,
+    saveChanges,
+    readLatestValues,
   } = input;
 
   return useCallback(() => {
-    const nextValidation = validateMatchForm(values);
-    if (!nextValidation.success) {
+    const action = prepareMatchWorkspacePrimaryAction(mode, readLatestValues());
+    if (action.kind === "invalid") {
       setShowValidationErrors(true);
-      setValidationMessage(nextValidation.firstMessage ?? "入力内容に不足があります");
-      onValidationFailure(nextValidation.firstPath ?? "form");
+      setValidationMessage(action.message);
+      onValidationFailure(action.path);
       return;
     }
     setShowValidationErrors(false);
     setValidationMessage("");
-    if (mode === "edit") {
-      update(values);
+    if (action.kind === "update") {
+      saveChanges(action.values);
       return;
     }
     setConfirmOpen(true);
@@ -43,7 +43,7 @@ export function useMatchWorkspacePrimaryAction(input: {
     setConfirmOpen,
     setShowValidationErrors,
     setValidationMessage,
-    update,
-    values,
+    saveChanges,
+    readLatestValues,
   ]);
 }

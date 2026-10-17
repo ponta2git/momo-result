@@ -5,13 +5,10 @@ import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { heldEventSummaryQueryOptions, heldEventsQueryOptions } from "@/shared/api/queryOptions";
+import type { HeldEventPickerDirectory } from "@/shared/heldEvents/heldEventPickerTypes";
 import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 export const heldEventPickerPageSize = 20;
-
-type HeldEventPickerRefetchOptions = {
-  throwOnError?: boolean;
-};
 
 function pickerErrorMessage(error: unknown): string {
   const normalized = normalizeUnknownApiError(error);
@@ -32,7 +29,7 @@ export function useHeldEventPickerDirectory({
   enabled?: boolean | undefined;
   selectedEvent?: HeldEventResponse | undefined;
   selectedId: string;
-}) {
+}): HeldEventPickerDirectory {
   const [page, setPage] = useState(1);
   const directoryQuery = useQuery({
     ...heldEventsQueryOptions({ page, pageSize: heldEventPickerPageSize }),
@@ -72,9 +69,9 @@ export function useHeldEventPickerDirectory({
     pending:
       directoryQuery.isFetching ||
       Boolean(selectedId && !resolvedSelection && selectedSummaryQuery.isFetching),
-    refetch: async (options?: HeldEventPickerRefetchOptions) => {
-      await directoryQuery.refetch({ cancelRefetch: false, ...options });
-      if (selectionFailed) await selectedSummaryQuery.refetch({ cancelRefetch: false, ...options });
+    refresh: async () => {
+      await directoryQuery.refetch({ cancelRefetch: false });
+      if (selectionFailed) await selectedSummaryQuery.refetch({ cancelRefetch: false });
     },
     selectedHeldEvent: resolvedSelection,
     onPageChange: (nextPage: number) => {
@@ -86,5 +83,3 @@ export function useHeldEventPickerDirectory({
     scopeChanging,
   };
 }
-
-export type HeldEventPickerDirectory = ReturnType<typeof useHeldEventPickerDirectory>;

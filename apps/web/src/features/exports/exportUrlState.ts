@@ -1,6 +1,12 @@
 import { trimSearchParam } from "@/shared/lib/searchParams";
 
-import type { ExportFormat, ExportScope, ExportScopeIds } from "./exportTypes";
+import type { ExportCandidateView } from "./exportPresentation";
+import type {
+  ExportFormat,
+  ExportMatchesRequest,
+  ExportScope,
+  ExportScopeIds,
+} from "./exportTypes";
 
 const scopeKeys = ["seasonMasterId", "heldEventId", "matchId"] as const;
 
@@ -76,4 +82,55 @@ export function selectedIdForScope(state: ExportScopeIds, scope: ExportScope): s
   if (scope === "heldEvent") return state.heldEventId ?? "";
   if (scope === "match") return state.matchId ?? "";
   return "";
+}
+
+export function isExportSelectionReady(
+  state: ExportUrlState,
+  candidate: ExportCandidateView,
+): boolean {
+  return (
+    state.errors.length === 0 &&
+    (state.scope === "all" ||
+      (candidate.kind === "ready" &&
+        candidate.selectionState === "resolved" &&
+        candidate.selectedId.length > 0))
+  );
+}
+
+/** The displayed default is also the request target before its canonical URL is committed. */
+export function resolveExportSelection(state: ExportUrlState, candidate: ExportCandidateView) {
+  const selectedId = selectedIdForScope(state, state.scope);
+  const defaultId = candidate.kind === "ready" ? candidate.selectedId : undefined;
+  const requestId = selectedId || defaultId;
+  const request: ExportMatchesRequest | undefined =
+    state.errors.length === 0 && (state.scope === "all" || requestId)
+      ? {
+          format: state.format,
+          scope: state.scope,
+          heldEventId: state.scope === "heldEvent" ? requestId : undefined,
+          matchId: state.scope === "match" ? requestId : undefined,
+          seasonMasterId: state.scope === "season" ? requestId : undefined,
+        }
+      : undefined;
+  const normalizedSearch =
+    state.errors.length === 0 && state.scope !== "all" && !selectedId && defaultId
+      ? buildExportSearchParams({
+          format: state.format,
+          scope: state.scope,
+          selectedId: defaultId,
+        }).toString()
+      : undefined;
+  return { available: isExportSelectionReady(state, candidate), normalizedSearch, request };
+}
+
+export function exportRequestIdentity(request: ExportMatchesRequest | undefined): string {
+  return request
+    ? JSON.stringify([
+        request.format,
+        request.scope,
+        request.heldEventId,
+        request.matchId,
+        request.seasonMasterId,
+      ])
+    : "invalid";
 }

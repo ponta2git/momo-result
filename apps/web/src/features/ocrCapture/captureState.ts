@@ -19,6 +19,7 @@ export type SlotStatus =
 
 export type CaptureSlotState = {
   kind: SlotKind;
+  selectionId?: string | undefined;
   source?: InputSource | undefined;
   file?: File | undefined;
   previewUrl?: string | undefined;

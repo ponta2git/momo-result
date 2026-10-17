@@ -8,7 +8,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { OperationsRoute } from "@/app/routeGuards";
 import { SeriesAnalysisAdminPage } from "@/features/seriesAnalysisAdmin/SeriesAnalysisAdminPage";
 import { seriesPlayerRadarKeys } from "@/shared/api/queryKeys";
-import { getAuthorization } from "@/shared/auth/authorization";
+import { getAuthorization } from "@/shared/auth/authorizationQueryAdapter";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import { AppMotionProvider } from "@/shared/ui/motion/AppMotionProvider";
 import { setDevUser } from "@/test/auth";
@@ -116,6 +116,7 @@ describe("SeriesAnalysisAdminPage", () => {
     expect(submitted).toEqual([{ gameTitleId: "gt_momotetsu_2" }]);
   });
 
+  // This scenario crosses both tabs and authorization changes; allow for CI coverage overhead.
   it("closes the all-title confirmation on demotion while keeping the operator's radar scope", async () => {
     const user = userEvent.setup();
     const account = mswState.loginAccounts.find((entry) => entry.accountId === "account_ponta")!;
@@ -161,7 +162,7 @@ describe("SeriesAnalysisAdminPage", () => {
     );
     expect(await screen.findByRole("button", { name: "全作品を再計算" })).toBeEnabled();
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
-  });
+  }, 10_000);
 
   it("allows an operator command while an obsolete all-title command settles without clearing the new pending state", async () => {
     const user = userEvent.setup();

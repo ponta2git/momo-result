@@ -1,41 +1,45 @@
-import { useMutation } from "@tanstack/react-query";
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { downloadExportMatches } from "@/features/exports/exportDownload";
-import type { ExportDownloadOutcome, ExportMatchesRequest } from "@/features/exports/exportTypes";
-import { failedResultView } from "@/features/exports/exportViewModel";
-import type { ExportDownloadResultView } from "@/features/exports/exportViewModel";
+import {
+  buildExportDownloadResultView,
+  buildExportDownloadFailureView,
+} from "@/features/exports/exportPresentation";
+import type { ExportDownloadResultView } from "@/features/exports/exportPresentation";
+import type { ExportMatchesRequest } from "@/features/exports/exportTypes";
+import { exportRequestIdentity } from "@/features/exports/exportUrlState";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 
-type ExportDownloadOptions = {
-  request: ExportMatchesRequest | undefined;
-  slowThresholdMs: number;
-  timeoutMs: number;
+export type ExportDownloadOptions = {
+  readonly available: boolean;
+  readonly request: Readonly<ExportMatchesRequest> | undefined;
+  readonly slowThresholdMs: number;
+  readonly timeoutMs: number;
 };
 
 export type ExportDownloadWorkflow = {
-  pending: boolean;
-  result: ExportDownloadResultView | undefined;
-  slow: boolean;
-  start: () => void;
+  readonly pending: boolean;
+  readonly result: ExportDownloadResultView | undefined;
+  readonly slow: boolean;
+  readonly start: () => void;
 };
 
 type DownloadAttempt = {
   controller: AbortController;
   request: ExportMatchesRequest;
-  scope: string;
+  requestIdentity: string;
   slowTimer: number | undefined;
 };
 
-type DownloadPresentation = {
+type ExportDownloadState = {
   pending: boolean;
   result: ExportDownloadResultView | undefined;
-  scope: string;
+  requestIdentity: string;
   slow: boolean;
 };
 
-function emptyPresentation(scope: string): DownloadPresentation {
-  return { pending: false, result: undefined, scope, slow: false };
+function createIdleDownloadState(requestIdentity: string): ExportDownloadState {
+  return { pending: false, result: undefined, requestIdentity, slow: false };
 }
 
 function clearSlowTimer(attempt: DownloadAttempt) {
@@ -43,104 +47,78 @@ function clearSlowTimer(attempt: DownloadAttempt) {
   attempt.slowTimer = undefined;
 }
 
-function toResultView(outcome: ExportDownloadOutcome): ExportDownloadResultView | undefined {
-  if (outcome.kind === "cancelled") return undefined;
-  if (outcome.kind === "download_started") {
-    return {
-      fileName: outcome.fileName,
-      format: outcome.format,
-      kind: "success",
-      startedAt: outcome.startedAt,
-    };
-  }
-  if (outcome.kind === "timeout") {
-    return {
-      detail: outcome.detail,
-      kind: "timeout",
-      title: outcome.title,
-    };
-  }
-  return failedResultView(outcome.error);
-}
-
 /** Download effects and progress belong to the selected request, including browser-history changes. */
 export function useExportDownload({
+  available,
   request,
   slowThresholdMs,
   timeoutMs,
 }: ExportDownloadOptions): ExportDownloadWorkflow {
-  const scope = request
-    ? JSON.stringify([
-        request.format,
-        request.scope,
-        request.heldEventId,
-        request.matchId,
-        request.seasonMasterId,
-      ])
-    : "invalid";
+  const requestIdentity = exportRequestIdentity(request);
   const activeAttemptRef = useRef<DownloadAttempt | null>(null);
-  const [presentation, setPresentation] = useState(() => emptyPresentation(scope));
-  if (presentation.scope !== scope) setPresentation(emptyPresentation(scope));
+  const [downloadState, setDownloadState] = useState(() =>
+    createIdleDownloadState(requestIdentity),
+  );
+  if (downloadState.requestIdentity !== requestIdentity)
+    setDownloadState(createIdleDownloadState(requestIdentity));
 
   useLayoutEffect(
     () => () => {
       const attempt = activeAttemptRef.current;
-      if (!attempt || attempt.scope !== scope) return;
+      if (!attempt || attempt.requestIdentity !== requestIdentity) return;
       activeAttemptRef.current = null;
       clearSlowTimer(attempt);
       attempt.controller.abort();
     },
-    [scope],
+    [requestIdentity],
   );
 
-  const mutation = useMutation({
-    mutationFn: (attempt: DownloadAttempt) =>
-      downloadExportMatches(attempt.request, {
-        signal: attempt.controller.signal,
-        timeoutMs,
-      }),
-    onSettled: (outcome, error, attempt) => {
-      clearSlowTimer(attempt);
-      if (activeAttemptRef.current !== attempt) return;
-      activeAttemptRef.current = null;
-      setPresentation({
-        pending: false,
-        result: outcome ? toResultView(outcome) : failedResultView(normalizeUnknownApiError(error)),
-        scope: attempt.scope,
-        slow: false,
-      });
-    },
-  });
-
   return {
-    pending: presentation.pending,
-    result: presentation.result,
-    slow: presentation.slow,
+    pending: downloadState.pending,
+    result: downloadState.result,
+    slow: downloadState.slow,
     start: () => {
-      if (!request || activeAttemptRef.current) return;
+      if (!available || !request || activeAttemptRef.current) return;
       const attempt: DownloadAttempt = {
         controller: new AbortController(),
         request,
-        scope,
+        requestIdentity,
         slowTimer: undefined,
       };
       activeAttemptRef.current = attempt;
-      setPresentation((previous) => ({
+      setDownloadState((previous) => ({
         pending: true,
         result:
-          previous.scope === scope && previous.result?.kind !== "success"
+          previous.requestIdentity === requestIdentity && previous.result?.kind !== "success"
             ? previous.result
             : undefined,
-        scope,
+        requestIdentity,
         slow: false,
       }));
       attempt.slowTimer = window.setTimeout(() => {
         attempt.slowTimer = undefined;
         if (activeAttemptRef.current === attempt) {
-          setPresentation((current) => ({ ...current, slow: true }));
+          setDownloadState((current) => ({ ...current, slow: true }));
         }
       }, slowThresholdMs);
-      mutation.mutate(attempt);
+      const finish = (result: ExportDownloadResultView | undefined) => {
+        clearSlowTimer(attempt);
+        if (activeAttemptRef.current !== attempt) return;
+        activeAttemptRef.current = null;
+        setDownloadState({
+          pending: false,
+          result,
+          requestIdentity: attempt.requestIdentity,
+          slow: false,
+        });
+      };
+      void downloadExportMatches(attempt.request, {
+        signal: attempt.controller.signal,
+        timeoutMs,
+      }).then(
+        (outcome) => finish(buildExportDownloadResultView(outcome)),
+        (error: unknown) => finish(buildExportDownloadFailureView(normalizeUnknownApiError(error))),
+      );
     },
   };
 }

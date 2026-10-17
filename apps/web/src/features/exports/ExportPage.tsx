@@ -2,8 +2,8 @@ import {
   DEFAULT_EXPORT_TIMEOUT_MS,
   DEFAULT_EXPORT_SLOW_THRESHOLD_MS,
 } from "@/features/exports/exportDownload";
-import { ExportWorkspace } from "@/features/exports/ExportWorkspace";
-import { useExportPageModel } from "@/features/exports/useExportPageModel";
+import { ExportSetup } from "@/features/exports/ExportSetup";
+import { useExportSetup } from "@/features/exports/useExportSetup";
 
 type ExportPageProps = {
   downloadTimeoutMs?: number | undefined;
@@ -14,7 +14,7 @@ export function ExportPage({
   downloadTimeoutMs = DEFAULT_EXPORT_TIMEOUT_MS,
   slowThresholdMs = DEFAULT_EXPORT_SLOW_THRESHOLD_MS,
 }: ExportPageProps) {
-  const model = useExportPageModel({ downloadTimeoutMs, slowThresholdMs });
+  const setup = useExportSetup({ downloadTimeoutMs, slowThresholdMs });
 
-  return <ExportWorkspace model={model} />;
+  return <ExportSetup setup={setup} />;
 }

@@ -1,7 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
-import type { MatchNumericDrafts } from "@/features/matches/workspace/matchNumericDrafts";
 import type { ReviewItem } from "@/features/matches/workspace/review/reviewProgress";
 import { reviewCellId } from "@/features/matches/workspace/review/reviewWarningModel";
 import type { ReviewFieldKey } from "@/features/matches/workspace/review/reviewWarningModel";
@@ -18,7 +16,6 @@ import type {
   ScoreGridActions,
   ScoreGridData,
   ScoreGridKeyboardHandler,
-  ScoreGridNumericDraftState,
   ScoreGridProps,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
@@ -28,29 +25,7 @@ import { contentText } from "@/shared/ui/typography";
 
 /** Keep unrelated note/setup edits out of the score editor's urgent render. */
 export function ScoreGrid({ actions, data }: ScoreGridProps) {
-  const [localDrafts, setLocalDrafts] = useState<MatchNumericDrafts>({});
-  const changeLocalDraft = useCallback((path: string, value: string | undefined) => {
-    setLocalDrafts((current) => {
-      const next = { ...current };
-      if (value === undefined) delete next[path];
-      else next[path] = value;
-      return next;
-    });
-  }, []);
-  const { acknowledgedCellIds, activeCellId, items } = data.review;
-  const review = useMemo(
-    () => ({ acknowledgedCellIds, activeCellId, items }),
-    [acknowledgedCellIds, activeCellId, items],
-  );
-  return (
-    <ScoreGridContent
-      {...actions}
-      {...data}
-      numericDrafts={data.numericDrafts ?? localDrafts}
-      onNumericDraftChange={actions.onNumericDraftChange ?? changeLocalDraft}
-      review={review}
-    />
-  );
+  return <ScoreGridContent {...actions} {...data} />;
 }
 
 const ScoreGridContent = memo(function ScoreGridContent({
@@ -63,13 +38,10 @@ const ScoreGridContent = memo(function ScoreGridContent({
   onRequestSubmitFocus,
   onReviewCellFocus,
   errorPathSet,
-  lastSyncedPlayerIndex,
-  numericDrafts,
-  originalPlayers,
-  players,
+  rows,
   review,
   validationFocusRequest,
-}: ScoreGridActions & ScoreGridData & ScoreGridNumericDraftState) {
+}: ScoreGridActions & ScoreGridData) {
   const [expandedMobilePlayer, setExpandedMobilePlayer] = useState(0);
   const [pendingFocus, setPendingFocus] = useState<{
     cellId: string;
@@ -89,13 +61,6 @@ const ScoreGridContent = memo(function ScoreGridContent({
   const handledFocus = useRef(pendingFocus);
   const isNarrowViewport = useMediaQuery("(max-width: 1119px)");
   const inputRefs = useRef(new Map<string, HTMLElement>());
-
-  const originalByPlayOrder = useMemo(() => {
-    if (!originalPlayers) {
-      return new Map();
-    }
-    return new Map(originalPlayers.map((player) => [player.playOrder, player]));
-  }, [originalPlayers]);
 
   const getCellId = useCallback(
     (row: number, col: number) => reviewCellId(row, gridColumns[col] as ReviewFieldKey),
@@ -209,17 +174,14 @@ const ScoreGridContent = memo(function ScoreGridContent({
         onRevertCell: args.onRevertCell,
         onSubmitFocus: onRequestSubmitFocus,
         position: { col: args.col, row: args.row },
-        rowCount: players.length,
+        rowCount: rows.length,
       });
     },
-    [players.length, focusCell, getCellId, onRequestSubmitFocus],
+    [rows.length, focusCell, getCellId, onRequestSubmitFocus],
   );
 
   const handlePlayerNumericCommit = useCallback<PlayerNumericCommit>(
-    (index, field, value) =>
-      onPlayerChange(index, {
-        [field]: value,
-      } as Partial<MatchFormValues["players"][number]>),
+    (index, field, value) => onPlayerChange(index, field, value),
     [onPlayerChange],
   );
 
@@ -262,17 +224,12 @@ const ScoreGridContent = memo(function ScoreGridContent({
         <div className="mt-4 overflow-x-auto pb-2">
           <ScoreGridDesktopTable
             errorPathSet={errorPathSet}
+            rows={rows}
             getCellId={getCellId}
             handleIncidentNumericCommit={handleIncidentNumericCommit}
             handleKeyboard={handleKeyboard}
             handlePlayerNumericCommit={handlePlayerNumericCommit}
-            lastSyncedPlayerIndex={lastSyncedPlayerIndex}
-            numericDrafts={numericDrafts}
             onNumericDraftChange={onNumericDraftChange}
-            originalByPlayOrder={originalByPlayOrder}
-            originalPlayers={originalPlayers}
-            players={players}
-            review={review}
             registerCellRef={registerCellRef}
             onPlayerChange={onPlayerChange}
             onPlayOrderChange={onPlayOrderChange}
@@ -286,15 +243,11 @@ const ScoreGridContent = memo(function ScoreGridContent({
         <div className="mt-4">
           <ScoreGridMobileCards
             errorPathSet={errorPathSet}
+            rows={rows}
             expandedMobilePlayer={expandedMobilePlayer}
             handleIncidentNumericCommit={handleIncidentNumericCommit}
             handlePlayerNumericCommit={handlePlayerNumericCommit}
-            lastSyncedPlayerIndex={lastSyncedPlayerIndex}
-            numericDrafts={numericDrafts}
             onNumericDraftChange={onNumericDraftChange}
-            originalPlayers={originalPlayers}
-            players={players}
-            review={review}
             getCellId={getCellId}
             registerCellRef={registerCellRef}
             onPlayerChange={onPlayerChange}

@@ -1,5 +1,8 @@
-import { outlookCrossings } from "@/features/seriesComparison/model/outlook";
-import type { CumulativePair, RankDistribution } from "@/features/seriesComparison/model/outlook";
+import { outlookCrossings } from "@/features/seriesComparison/outlook/calculation";
+import type {
+  CumulativePair,
+  RankDistribution,
+} from "@/features/seriesComparison/outlook/calculation";
 
 type Pair = readonly [RankDistribution, RankDistribution];
 type Names = readonly [string, string];

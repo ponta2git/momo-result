@@ -27,6 +27,7 @@ setupMsw();
 beforeAll(() =>
   Promise.all([
     import("@/features/seriesComparison/page/SeriesAnalysisOverviewView"),
+    import("@/features/seriesComparison/page/SeriesAnalysisFlowView"),
     import("@/features/seriesComparison/page/SeriesAnalysisReviewView"),
     decodeSeriesAnalysisArtifact("aggregateV5", makeSeriesAnalysisAggregate()),
     decodeSeriesAnalysisArtifact("reviewV3", makeSeriesAnalysisReview()),
@@ -206,6 +207,52 @@ describe("SeriesComparisonPage resource lifecycle", () => {
       expect(statusRequests).toBe(2);
     },
   );
+
+  it("does not repeat expired aggregate recovery when switching analysis tabs", async () => {
+    const user = userEvent.setup();
+    let statusRequests = 0;
+    let aggregateRequests = 0;
+    server.use(
+      http.get("/api/analytics/series-comparison/v2/status", () => {
+        statusRequests += 1;
+        return HttpResponse.json(makeSeriesAnalysisStatus());
+      }),
+      http.get("/api/analytics/series-comparison/v5/aggregate", () => {
+        aggregateRequests += 1;
+        return aggregateRequests === 1
+          ? HttpResponse.json(makeSeriesAnalysisAggregate())
+          : HttpResponse.json(
+              {
+                code: "ANALYSIS_ARTIFACT_EXPIRED",
+                status: 410,
+                title: "Artifact expired",
+                detail: "The requested artifact is no longer retained.",
+                type: "about:blank",
+              } satisfies ProblemDetails,
+              { status: 410 },
+            );
+      }),
+    );
+    const { queryClient } = renderPage("/analytics/series?view=overview");
+    await screen.findByRole("tabpanel", { name: "今の差" });
+    await user.click(screen.getByRole("button", { name: "表示を更新" }));
+    await waitFor(() => {
+      expect(statusRequests).toBe(3);
+      expect(aggregateRequests).toBe(3);
+      expect(queryClient.isFetching()).toBe(0);
+    });
+    expect(screen.getByText("最新の戦績データを取得できません")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "推移" }));
+    await waitFor(() => {
+      expect(screen.getByRole("tabpanel", { name: "推移" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "累積入賞率" })).toBeInTheDocument();
+      expect(queryClient.isFetching()).toBe(0);
+    });
+    expect(statusRequests).toBe(3);
+    expect(aggregateRequests).toBe(3);
+    expect(screen.getByRole("button", { name: "表示を更新" })).toBeEnabled();
+  });
 
   it("retries a failed options request without presenting an empty title directory", async () => {
     const user = userEvent.setup();

@@ -3,10 +3,10 @@ import { useState } from "react";
 
 import { MatchSetupFields } from "@/features/matches/workspace/MatchSetupFields";
 import type {
-  MatchWorkspaceCancellationModel,
-  MatchWorkspaceMastersNavigationModel,
-  MatchWorkspaceSetupSectionModel,
-} from "@/features/matches/workspace/matchWorkspacePageModelTypes";
+  MatchWorkspaceCancellationView,
+  MatchWorkspaceMastersNavigationView,
+  MatchWorkspaceSetupSectionView,
+} from "@/features/matches/workspace/matchWorkspacePanelViews";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
@@ -19,17 +19,17 @@ import { TextField } from "@/shared/ui/forms/TextField";
 import { contentText, fieldText } from "@/shared/ui/typography";
 
 type MatchSetupSectionProps = {
-  cancellation: MatchWorkspaceCancellationModel;
-  mastersNavigation: MatchWorkspaceMastersNavigationModel;
-  model: MatchWorkspaceSetupSectionModel;
+  cancellation: MatchWorkspaceCancellationView;
+  mastersNavigation: MatchWorkspaceMastersNavigationView;
+  view: MatchWorkspaceSetupSectionView;
 };
 
 export function MatchSetupSection({
   cancellation,
   mastersNavigation,
-  model,
+  view,
 }: MatchSetupSectionProps) {
-  const { options, values } = model.fields;
+  const { options, values } = view.fields;
   const selectedHeldEvent = options.heldEvents.find((event) => event.id === values.heldEventId);
   const selectedGameTitle = options.gameTitleItems?.find((item) => item.id === values.gameTitleId);
   const selectedSeason = options.seasonItems?.find((item) => item.id === values.seasonMasterId);
@@ -38,11 +38,11 @@ export function MatchSetupSection({
     selectedHeldEvent && selectedGameTitle && selectedSeason && selectedMap && values.playedAt,
   );
   const hasErrors = Object.keys(values).some((path) =>
-    model.fields.validation.errorPathSet.has(path),
+    view.fields.validation.errorPathSet.has(path),
   );
   const [editorOpen, setEditorOpen] = useState(!contextComplete || hasErrors);
   const [previousHasErrors, setPreviousHasErrors] = useState(hasErrors);
-  const focusRequest = model.fields.validation.focusRequest;
+  const focusRequest = view.fields.validation.focusRequest;
   const [handledFocusRequest, setHandledFocusRequest] = useState(focusRequest);
   if (focusRequest && handledFocusRequest !== focusRequest) {
     setHandledFocusRequest(focusRequest);
@@ -96,7 +96,7 @@ export function MatchSetupSection({
         triggerLayout="flush-horizontal"
         onOpenChange={setEditorOpen}
       >
-        <MatchSetupFields model={model.fields} />
+        <MatchSetupFields view={view.fields} />
 
         <div className="mt-4">
           <Disclosure
@@ -114,25 +114,23 @@ export function MatchSetupSection({
                 <TextField
                   label="開催日時"
                   type="datetime-local"
-                  value={model.eventCreation.input.value}
-                  onChange={(event) =>
-                    model.eventCreation.input.onChange(event.currentTarget.value)
-                  }
+                  value={view.eventCreation.input.value}
+                  onChange={(event) => view.eventCreation.input.onChange(event.currentTarget.value)}
                 />
                 <Button
-                  disabled={!model.eventCreation.input.value || model.eventCreation.action.pending}
-                  pending={model.eventCreation.action.pending}
+                  disabled={!view.eventCreation.input.value || view.eventCreation.action.pending}
+                  pending={view.eventCreation.action.pending}
                   pendingLabel="作成中…"
                   variant="secondary"
-                  onClick={model.eventCreation.action.onCreate}
+                  onClick={view.eventCreation.action.onCreate}
                 >
                   作成して選択
                 </Button>
               </div>
-              {model.eventCreation.feedback.error ? (
-                <Notice title={model.eventCreation.feedback.error.title} tone="danger">
-                  <p>{model.eventCreation.feedback.error.detail}</p>
-                  <p className="mt-1">{model.eventCreation.feedback.error.nextStep}</p>
+              {view.eventCreation.feedback.error ? (
+                <Notice title={view.eventCreation.feedback.error.title} tone="danger">
+                  <p>{view.eventCreation.feedback.error.detail}</p>
+                  <p className="mt-1">{view.eventCreation.feedback.error.nextStep}</p>
                 </Notice>
               ) : null}
             </div>

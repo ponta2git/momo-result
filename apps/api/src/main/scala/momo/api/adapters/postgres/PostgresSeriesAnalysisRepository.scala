@@ -9,6 +9,7 @@ import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
 
+import momo.api.adapters.postgres.PostgresSeriesAnalysisChunkOps.DisplayMetadata
 import momo.api.config.SeriesAnalysisReadConfig
 import momo.api.domain.*
 import momo.api.domain.ids.{AccountId, GameTitleId}
@@ -43,25 +44,29 @@ final class PostgresSeriesAnalysisRepository[F[_]: Async] private (
   /**
    * Keeps the memory/decode permit for the complete read while releasing database connections
    * before checksum, JSON decoding, hydration and bounded byte rendering. The first stage returns
-   * only the decoded tree, so the database byte array does not cross the hydration stage boundary.
-   * Display names are intentionally resolved from a second, short live snapshot.
+   * the decoded tree and optional display metadata, so the database byte array does not cross the
+   * hydration stage boundary. Overall outlook projections carry their known member's name from the
+   * artifact statement snapshot; other resources resolve names from a second, short live snapshot.
    */
   private def chunkPipeline(
       request: SeriesAnalysisChunkRequest
   ): F[Either[AppError, SeriesAnalysisChunk]] = decodeChunk(request).flatMap {
     case Left(error) => error.asLeft[SeriesAnalysisChunk].pure[F]
-    case Right(chunk) =>
-      transactChunk(
-        sql"SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY".update.run *>
-          PostgresSeriesAnalysisChunkOps
-            .displayMetadata(
-              chunk.artifact,
-              chunk.scope,
-              chunk.memberIds,
-              readConfig,
-              PostgresSeriesAnalysisChunkCodec.radarMapIds(chunk.payload),
-            ).map(_.asRight[AppError])
-      ).flatMap {
+    case Right((chunk, prefetchedMetadata)) =>
+      val metadata = prefetchedMetadata match
+        case Some(value) => value.asRight[AppError].pure[F]
+        case None => transactChunk(
+            sql"SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY".update.run *>
+              PostgresSeriesAnalysisChunkOps
+                .displayMetadata(
+                  chunk.artifact,
+                  chunk.scope,
+                  chunk.memberIds,
+                  readConfig,
+                  PostgresSeriesAnalysisChunkCodec.radarMapIds(chunk.payload),
+                ).map(_.asRight[AppError])
+          )
+      metadata.flatMap {
         case Left(error) => error.asLeft[SeriesAnalysisChunk].pure[F]
         case Right(metadata) => Async[F].blocking(
             PostgresSeriesAnalysisChunkCodec.hydrateAndRender(
@@ -77,11 +82,13 @@ final class PostgresSeriesAnalysisRepository[F[_]: Async] private (
 
   private def decodeChunk(
       request: SeriesAnalysisChunkRequest
-  ): F[Either[AppError, DecodedSeriesAnalysisChunk]] = transactChunk(
+  ): F[Either[AppError, (DecodedSeriesAnalysisChunk, Option[DisplayMetadata])]] = transactChunk(
     PostgresSeriesAnalysisChunkOps.load(request, readConfig)
   ).flatMap {
-    case Left(error) => error.asLeft[DecodedSeriesAnalysisChunk].pure[F]
-    case Right(loaded) => Async[F].blocking(decodeLoadedChunk(loaded))
+    case Left(error) => error.asLeft[(DecodedSeriesAnalysisChunk, Option[DisplayMetadata])].pure[F]
+    case Right(loaded) => Async[F].blocking(
+        decodeLoadedChunk(loaded).map(_ -> loaded.displayMetadata)
+      )
   }
 
   private def transactChunk[A](

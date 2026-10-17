@@ -1,17 +1,15 @@
-import { useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { Location } from "react-router-dom";
 
-import { MatchConfirmDialog } from "@/features/matches/workspace/MatchConfirmDialog";
 import type { WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
 import { MatchWorkspaceBlockedNotice } from "@/features/matches/workspace/MatchWorkspaceBlockedNotice";
 import { MatchWorkspaceEditor } from "@/features/matches/workspace/MatchWorkspaceEditor";
 import { MatchWorkspaceLoading } from "@/features/matches/workspace/MatchWorkspaceLoading";
+import { MatchWorkspacePersistence } from "@/features/matches/workspace/MatchWorkspacePersistence";
 import { MatchWorkspaceToolbar } from "@/features/matches/workspace/MatchWorkspaceToolbar";
-import { useMatchWorkspacePageModel } from "@/features/matches/workspace/useMatchWorkspacePageModel";
+import { useMatchWorkspace } from "@/features/matches/workspace/useMatchWorkspace";
 import { useAuthorization } from "@/shared/auth/useAuthorization";
 import { trimSearchParam } from "@/shared/lib/searchParams";
-import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
@@ -91,7 +89,7 @@ function MatchWorkspacePageContent({
   canManageMasters: boolean;
   canNavigateToMasters: () => boolean;
 }) {
-  const pageModel = useMatchWorkspacePageModel({
+  const workspace = useMatchWorkspace({
     accountId,
     canManageMasters,
     canNavigateToMasters,
@@ -101,26 +99,10 @@ function MatchWorkspacePageContent({
     mode,
     preferredHeldEventId,
   });
-  const { editor, loading, navigation, persistence, review, validationFocusRequest } = pageModel;
-
-  useEffect(() => {
-    if (!validationFocusRequest || validationFocusRequest.path.startsWith("players.")) {
-      return;
-    }
-    const target = document.querySelector<HTMLElement>(
-      `[data-validation-path="${validationFocusRequest.path}"]`,
-    );
-    target?.scrollIntoView?.({ block: "center" });
-    target?.focus();
-  }, [validationFocusRequest]);
+  const { editor, editing, loading, toolbar, persistence, review } = workspace;
 
   if (loading.edit.loading) {
-    return (
-      <MatchWorkspaceLoading
-        loadingLabel="試合編集を読み込み中"
-        sample={navigation.toolbar.sample}
-      />
-    );
+    return <MatchWorkspaceLoading loadingLabel="試合編集を読み込み中" sample={toolbar.sample} />;
   }
 
   if (loading.edit.failureKind) {
@@ -129,7 +111,7 @@ function MatchWorkspacePageContent({
     return (
       <PageFrame width="workspace">
         <PageContentSurface aria-label="試合内容" className="grid grid-cols-1 gap-6" role="region">
-          <MatchWorkspaceToolbar model={navigation.toolbar} />
+          <MatchWorkspaceToolbar view={toolbar} />
           <Notice
             action={
               notFound ? undefined : (
@@ -159,56 +141,59 @@ function MatchWorkspacePageContent({
 
   if (loading.workspace.loading) {
     return (
-      <MatchWorkspaceLoading
-        loadingLabel={loading.workspace.copy.loadingLabel}
-        sample={navigation.toolbar.sample}
-      />
+      <MatchWorkspacePersistence
+        input={persistence}
+        preservesInput={(current, next) => preservesWorkspaceInput(mode, current, next)}
+      >
+        <MatchWorkspaceLoading
+          loadingLabel={loading.workspace.copy.loadingLabel}
+          sample={toolbar.sample}
+        />
+      </MatchWorkspacePersistence>
     );
   }
 
   return (
-    <PageFrame width="workspace">
-      <PageContentSurface aria-label="試合内容" className="grid grid-cols-1 gap-6" role="region">
-        <MatchWorkspaceToolbar model={navigation.toolbar} />
-        {loading.base.errors.length > 0 ? (
-          <Notice
-            action={
-              <Button
-                pending={loading.base.retrying}
-                pendingLabel="再読み込み中"
-                size="sm"
-                variant="secondary"
-                onClick={() => void loading.base.onRetry()}
-              >
-                失敗したデータを再読み込み
-              </Button>
-            }
-            tone="danger"
-            title="画面データを読み込めません"
-          >
-            <ul className="grid list-disc gap-1 pl-5 text-sm">
-              {loading.base.errors.map((error) => (
-                <li className="momo-break-token" key={`${error.status}-${error.detail}`}>
-                  <span className="font-emphasis">{error.title}</span>：{error.detail}
-                </li>
-              ))}
-            </ul>
-          </Notice>
-        ) : null}
+    <MatchWorkspacePersistence
+      input={persistence}
+      preservesInput={(current, next) => preservesWorkspaceInput(mode, current, next)}
+    >
+      <PageFrame width="workspace">
+        <PageContentSurface aria-label="試合内容" className="grid grid-cols-1 gap-6" role="region">
+          <MatchWorkspaceToolbar view={toolbar} />
+          {loading.base.errors.length > 0 ? (
+            <Notice
+              action={
+                <Button
+                  pending={loading.base.retrying}
+                  pendingLabel="再読み込み中"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => void loading.base.onRetry()}
+                >
+                  失敗したデータを再読み込み
+                </Button>
+              }
+              tone="danger"
+              title="画面データを読み込めません"
+            >
+              <ul className="grid list-disc gap-1 pl-5 text-sm">
+                {loading.base.errors.map((error) => (
+                  <li className="momo-break-token" key={`${error.status}-${error.detail}`}>
+                    <span className="font-emphasis">{error.title}</span>：{error.detail}
+                  </li>
+                ))}
+              </ul>
+            </Notice>
+          ) : null}
 
-        {loading.workspace.blocked ? null : review.blocked ? (
-          <MatchWorkspaceBlockedNotice model={review.blocked} />
-        ) : (
-          <MatchWorkspaceEditor model={editor} />
-        )}
-      </PageContentSurface>
-
-      {persistence.confirmation ? <MatchConfirmDialog model={persistence.confirmation} /> : null}
-      <UnsavedChangesGuard
-        model={navigation.guard}
-        pending={navigation.pending}
-        preservesInput={(current, next) => preservesWorkspaceInput(mode, current, next)}
-      />
-    </PageFrame>
+          {loading.workspace.blocked ? null : review.blocked ? (
+            <MatchWorkspaceBlockedNotice view={review.blocked} />
+          ) : (
+            <MatchWorkspaceEditor editing={editing} view={editor} />
+          )}
+        </PageContentSurface>
+      </PageFrame>
+    </MatchWorkspacePersistence>
   );
 }

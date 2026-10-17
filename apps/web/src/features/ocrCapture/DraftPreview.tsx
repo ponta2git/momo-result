@@ -1,52 +1,23 @@
-import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
+import type { CaptureSlotView } from "@/features/ocrCapture/captureSlotView";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { FactList } from "@/shared/ui/data/FactList";
 
 type DraftPreviewProps = {
-  draft?: OcrDraftResponse | undefined;
+  draft: CaptureSlotView["draft"];
 };
-
-const screenTypeLabels: Record<string, string> = {
-  incident_log: "事件簿",
-  revenue: "収益",
-  total_assets: "総資産",
-};
-
-function screenTypeLabel(value: string | undefined): string {
-  if (!value) {
-    return "判定できませんでした";
-  }
-  return screenTypeLabels[value] ?? "判定できませんでした";
-}
-
-function warningSummary(value: unknown): string | null {
-  if (!value) {
-    return null;
-  }
-  if (Array.isArray(value)) {
-    return value.length === 0 ? null : `${value.length}件の確認事項があります。`;
-  }
-  if (typeof value === "object") {
-    return Object.keys(value).length === 0
-      ? null
-      : "確認事項があります。結果確認画面で内容を確認してください。";
-  }
-  const text = String(value).trim();
-  return text.length > 0 ? text : null;
-}
 
 export function DraftPreview({ draft }: DraftPreviewProps) {
   if (!draft) {
     return null;
   }
-  const warning = warningSummary(draft.warningsJson);
+  const warning = draft.warning;
 
   return (
     <Disclosure panelPadding="sm" presentation="framed" summary="読み取り結果">
       <FactList
         ariaLabel="読み取り結果"
         items={[
-          { id: "screen", label: "読み取り画面", value: screenTypeLabel(draft.detectedScreenType) },
+          { id: "screen", label: "読み取り画面", value: draft.screen },
           ...(warning ? [{ id: "warning", label: "確認事項", value: warning }] : []),
         ]}
         layout="plain"

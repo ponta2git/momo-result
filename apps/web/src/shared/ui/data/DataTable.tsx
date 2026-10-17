@@ -55,7 +55,7 @@ export type DataTableProps<Row> = {
   getRowKey: (row: Row, index: number) => string;
   layout?: "auto" | "fixed";
   minWidth?: string;
-  rows: Row[];
+  rows: readonly Row[];
   isRowBusy?: ((row: Row) => boolean) | undefined;
   verticalAlign?: DataTableVerticalAlign;
   /** Opt in for wide comparisons; row headers stay visible within the named scroll region. */

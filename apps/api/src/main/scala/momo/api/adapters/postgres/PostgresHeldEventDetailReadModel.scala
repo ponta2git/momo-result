@@ -69,8 +69,8 @@ object PostgresHeldEventDetail:
   def find(id: HeldEventId): ConnectionIO[Option[HeldEventDetail]] =
     for
       _ <- sql"SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY".update.run
-      event <- PostgresHeldEvents.alg.find(id)
-      detail <- event.traverse { heldEvent =>
+      event <- eventWithNavigation(id)
+      detail <- event.traverse { case (heldEvent, previous, next) =>
         for
           _ <- validateReadBudget(id)
           matches <- sql"""
@@ -107,8 +107,6 @@ object PostgresHeldEventDetail:
           byMatch = players.groupMap(_._1)(_._2)
           confirmed <-
             matches.traverse(m => m.withPlayers(byMatch.getOrElse(m.id, Nil))).liftTo[ConnectionIO]
-          previous <- adjacent(heldEvent, previous = true)
-          next <- adjacent(heldEvent, previous = false)
         yield HeldEventDetail(heldEvent, confirmed, drafts, RecordNavigation(previous, next))
       }
     yield detail
@@ -117,23 +115,9 @@ object PostgresHeldEventDetail:
     val limit = PostgresReadBudget.HeldEventRecords
     val nameLimit = PostgresReadBudget.NameCodePoints
     val noteLimit = MatchNoteBody.MaximumCodePoints
-    PostgresReadBudget.ensureCount(
-      sql"""
-      SELECT COUNT(*) FROM (
-        SELECT 1 FROM matches WHERE held_event_id = $id
-        UNION ALL
-        SELECT 1 FROM match_drafts WHERE held_event_id = $id
-          AND status <> ${MatchDraftStatus.Cancelled}
-          AND status <> ${MatchDraftStatus.Confirmed}
-        LIMIT ${limit + 1}
-      ) bounded
-    """.query[Long].unique,
-      limit,
-      "Held-event detail"
-    ) *>
-      PostgresReadBudget.ensureText(
-        sql"""
-        SELECT NOT EXISTS (
+    sql"""
+      SELECT counts.records,
+        CASE WHEN counts.records <= $limit THEN NOT EXISTS (
           SELECT 1 FROM matches m
           LEFT JOIN game_titles gt ON gt.id = m.game_title_id
           LEFT JOIN season_masters season ON season.id = m.season_master_id
@@ -152,18 +136,39 @@ object PostgresHeldEventDetail:
             AND d.status <> ${MatchDraftStatus.Confirmed}
             AND (char_length(gt.name) > $nameLimit OR char_length(season.name) > $nameLimit
               OR char_length(map.name) > $nameLimit)
-        )
-      """.query[Boolean].unique,
-        "Held-event detail"
-      )
+        ) ELSE TRUE END
+      FROM (
+        SELECT COUNT(*) AS records FROM (
+          SELECT 1 FROM matches WHERE held_event_id = $id
+          UNION ALL
+          SELECT 1 FROM match_drafts WHERE held_event_id = $id
+            AND status <> ${MatchDraftStatus.Cancelled}
+            AND status <> ${MatchDraftStatus.Confirmed}
+          LIMIT ${limit + 1}
+        ) bounded
+      ) counts
+    """.query[(Long, Boolean)].unique.flatMap { case (count, validText) =>
+      PostgresReadBudget.ensureCount(count.pure[ConnectionIO], limit, "Held-event detail") *>
+        PostgresReadBudget.ensureText(validText.pure[ConnectionIO], "Held-event detail")
+    }
 
-  private def adjacent(event: HeldEvent, previous: Boolean): ConnectionIO[Option[HeldEvent]] =
-    val comparison = if previous then fr"<" else fr">"
-    val order = if previous then fr"""ORDER BY start_at DESC, id COLLATE "C" DESC"""
-    else fr"""ORDER BY start_at ASC, id COLLATE "C" ASC"""
-    (fr"""SELECT id, start_at FROM held_events WHERE (start_at, id COLLATE "C")""" ++
-      comparison ++ fr"(${event.heldAt}, ${event.id})" ++ order ++ fr"LIMIT 1")
-      .query[HeldEvent].option
+  private def eventWithNavigation(
+      id: HeldEventId
+  ): ConnectionIO[Option[(HeldEvent, Option[HeldEvent], Option[HeldEvent])]] = sql"""
+    SELECT current.id, current.start_at, previous.id, previous.start_at, next.id, next.start_at
+    FROM held_events current
+    LEFT JOIN LATERAL (
+      SELECT id, start_at FROM held_events
+      WHERE (start_at, id COLLATE "C") < (current.start_at, current.id COLLATE "C")
+      ORDER BY start_at DESC, id COLLATE "C" DESC LIMIT 1
+    ) previous ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT id, start_at FROM held_events
+      WHERE (start_at, id COLLATE "C") > (current.start_at, current.id COLLATE "C")
+      ORDER BY start_at ASC, id COLLATE "C" ASC LIMIT 1
+    ) next ON TRUE
+    WHERE current.id = $id
+  """.query[(HeldEvent, Option[HeldEvent], Option[HeldEvent])].option
 
   def summary(id: HeldEventId): ConnectionIO[Option[HeldEventSummary]] = sql"""
     SELECT he.id, he.start_at, confirmed.count, draft.count,

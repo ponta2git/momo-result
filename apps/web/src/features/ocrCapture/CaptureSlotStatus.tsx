@@ -2,12 +2,12 @@ import type { SlotStatus } from "@/features/ocrCapture/captureState";
 import { StatusBadge } from "@/shared/ui/status/StatusBadge";
 import type { StatusBadgeTone } from "@/shared/ui/status/StatusBadge";
 
-type CaptureStatusViewModel = {
+type CaptureStatusView = {
   label: string;
   tone: StatusBadgeTone;
 };
 
-const captureStatusViewModel = {
+const captureStatusViews = {
   cancelled: { label: "キャンセル済み", tone: "neutral" },
   empty: { label: "画像待ち", tone: "neutral" },
   failed: { label: "要確認", tone: "danger" },
@@ -18,9 +18,9 @@ const captureStatusViewModel = {
   succeeded: { label: "確認待ち", tone: "success" },
   uploaded: { label: "送信済み", tone: "info" },
   uploading: { label: "画像送信中", tone: "info" },
-} as const satisfies Record<SlotStatus, CaptureStatusViewModel>;
+} as const satisfies Record<SlotStatus, CaptureStatusView>;
 
 export function CaptureStatusBadge({ status }: { status: SlotStatus }) {
-  const model: CaptureStatusViewModel = captureStatusViewModel[status];
-  return <StatusBadge announceChanges label={model.label} tone={model.tone} />;
+  const view: CaptureStatusView = captureStatusViews[status];
+  return <StatusBadge announceChanges label={view.label} tone={view.tone} />;
 }

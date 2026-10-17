@@ -1,8 +1,8 @@
 import { requestedScreenTypeForSlot } from "@/features/ocrCapture/captureState";
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import type { OcrSubmissionInput } from "@/features/ocrCapture/ocrSubmissionPlan";
-import { setupSchema } from "@/features/ocrCapture/schema";
-import { pickOcrTargets, toUploadingSlot } from "@/features/ocrCapture/slotPolicy";
+import { ocrSetupSchema } from "@/features/ocrCapture/setup/ocrSetupSchema";
+import { pickOcrTargets } from "@/features/ocrCapture/slotPolicy";
 import type { IdempotencyRequestOptions } from "@/shared/api/client";
 import { createIdempotencyKey } from "@/shared/api/idempotency";
 import type { CreateMatchDraftRequest, MatchDraftResponse } from "@/shared/api/matchDrafts";
@@ -14,6 +14,7 @@ import type {
 } from "@/shared/api/ocrJobs";
 import type { OcrSubmissionResponse, PutOcrSubmissionRequest } from "@/shared/api/ocrSubmissions";
 import { normalizeDisplayApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import type { NormalizedApiError } from "@/shared/api/problemDetails";
 import { parseOcrJobStatus } from "@/shared/domain/ocr";
 import type { SlotKind } from "@/shared/domain/ocr";
 
@@ -29,6 +30,19 @@ export type OcrSubmissionProgress =
   | { phase: "creating_draft"; total: number }
   | { current: number; phase: "submitting_image"; slotKind: SlotKind; total: number }
   | { completed: number; phase: "finalizing"; total: number };
+
+/** Receipts address the selected image; they never replace resources owned by capture. */
+export type OcrSlotReceipt = { kind: SlotKind; selectionId: string | undefined } & (
+  | { type: "uploading" }
+  | {
+      type: "accepted";
+      imageId: string | undefined;
+      jobId: string;
+      draftId: string | undefined;
+      status: CaptureSlotState["status"];
+    }
+  | { type: "failed"; error: NormalizedApiError }
+);
 
 /** Checkpoints belong to the immutable confirmation plan, including uncertain HTTP outcomes. */
 export type OcrSubmissionState = {
@@ -71,7 +85,7 @@ export type OcrSubmissionWorkflowParams = OcrSubmissionInput & {
   signal?: AbortSignal | undefined;
   state: OcrSubmissionState;
   onProgress?: ((progress: OcrSubmissionProgress) => void) | undefined;
-  updateSlot: (slot: CaptureSlotState) => void;
+  onSlotReceipt: (receipt: OcrSlotReceipt) => void;
 };
 
 export async function runOcrSubmissionWorkflow({
@@ -89,7 +103,7 @@ export async function runOcrSubmissionWorkflow({
   selectedHeldEvent,
   setup,
   slots,
-  updateSlot,
+  onSlotReceipt,
 }: OcrSubmissionWorkflowParams): Promise<OcrSubmissionResult> {
   signal?.throwIfAborted();
   const targetSlots = pickOcrTargets(slots).filter(
@@ -99,7 +113,7 @@ export async function runOcrSubmissionWorkflow({
     return { status: "empty" };
   }
 
-  const setupSubmission = setupSchema.safeParse(setup);
+  const setupSubmission = ocrSetupSchema.safeParse(setup);
   if (!setupSubmission.success) {
     return {
       message: setupSubmission.error.issues[0]?.message ?? "試合設定を確認してください。",
@@ -215,8 +229,8 @@ export async function runOcrSubmissionWorkflow({
       slotKind: slot.kind,
       total: targetSlots.length,
     });
-    const uploadingSlot = toUploadingSlot(slot);
-    updateSlot(uploadingSlot);
+    const target = { kind: slot.kind, selectionId: slot.selectionId };
+    onSlotReceipt({ ...target, type: "uploading" });
     try {
       const checkpoint = (state.slots[slot.kind] ??= { key: createIdempotencyKey() });
       const options = { idempotencyKey: checkpoint.key };
@@ -243,9 +257,10 @@ export async function runOcrSubmissionWorkflow({
       signal?.throwIfAborted();
       const job = checkpoint.job;
       const status = parseOcrJobStatus(job.status);
-      updateSlot({
-        ...uploadingSlot,
-        ...(checkpoint.upload ? { imageId: checkpoint.upload.imageId } : {}),
+      onSlotReceipt({
+        ...target,
+        type: "accepted",
+        imageId: checkpoint.upload?.imageId,
         jobId: job.jobId,
         draftId: job.draftId,
         status: status === "unknown" ? "queued" : status,
@@ -254,10 +269,10 @@ export async function runOcrSubmissionWorkflow({
     } catch (error) {
       signal?.throwIfAborted();
       failedJobCount += 1;
-      updateSlot({
-        ...uploadingSlot,
-        status: "failed",
-        transportError: normalizeDisplayApiError(error, "読み取り処理を開始できませんでした"),
+      onSlotReceipt({
+        ...target,
+        type: "failed",
+        error: normalizeDisplayApiError(error, "読み取り処理を開始できませんでした"),
       });
     }
   }

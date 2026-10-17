@@ -2,26 +2,29 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { useLayoutEffect } from "react";
+import { useLayoutEffect, useSyncExternalStore } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   distributionFromCounts,
   distributionMean,
-} from "@/features/seriesComparison/model/outlook";
+} from "@/features/seriesComparison/outlook/calculation";
+import { editOutlook } from "@/features/seriesComparison/outlook/outlookEditing";
 import { OutlookEditor } from "@/features/seriesComparison/outlook/OutlookEditor";
 import { OutlookGoalPanel } from "@/features/seriesComparison/outlook/OutlookGoalPanel";
 import { OutlookHorizonControl } from "@/features/seriesComparison/outlook/OutlookHorizonControl";
+import { outlookEditorView } from "@/features/seriesComparison/outlook/outlookProjections";
+import {
+  OutlookWorkspaceProvider,
+  useOutlookWorkspaceStore,
+  OutlookSummaryBoundary,
+} from "@/features/seriesComparison/outlook/OutlookWorkspaceProvider";
 import {
   adoptOutlookSummary,
   outlookPlayer,
   undoOutlook,
-} from "@/features/seriesComparison/outlook/outlookSession";
-import type { OutlookSession } from "@/features/seriesComparison/outlook/outlookSession";
-import {
-  OutlookSessionOwner,
-  useOutlookSession,
-} from "@/features/seriesComparison/outlook/OutlookSessionOwner";
+} from "@/features/seriesComparison/outlook/outlookWorkspaceState";
+import type { OutlookWorkspaceState } from "@/features/seriesComparison/outlook/outlookWorkspaceState";
 import type {
   SeriesAnalysisOutlookExamples,
   SeriesAnalysisOutlookSummary,
@@ -66,14 +69,16 @@ function pastExamples(name: string) {
   return within(panel);
 }
 
-function initialSession(response: SeriesAnalysisOutlookSummary) {
-  return adoptOutlookSummary(undefined, response, "scope", [...memberIds])!;
+function initialState(response: SeriesAnalysisOutlookSummary) {
+  return adoptOutlookSummary(undefined, response, `${response.artifact.gameTitleId}||`, [
+    ...memberIds,
+  ])!;
 }
 
-function renderGoal(response: SeriesAnalysisOutlookSummary, initial = initialSession(response)) {
+function renderGoal(response: SeriesAnalysisOutlookSummary, initial = initialState(response)) {
   const onUsePerformance = vi.fn();
   const queryClient = createTestQueryClient();
-  let readSession = () => initial;
+  let readState = () => initial;
   const cumulative = {
     games: response.scope.matchCount,
     focusRankSum: outlookPlayer(response.players, memberIds[0]).rankSum,
@@ -84,26 +89,25 @@ function renderGoal(response: SeriesAnalysisOutlookSummary, initial = initialSes
     distributionFromCounts(outlookPlayer(response.recent.players, memberIds[1]).rankCounts),
   ] as const;
   function Workspace() {
-    const { store, session: stored } = useOutlookSession();
-    const session = stored ?? initial;
+    const store = useOutlookWorkspaceStore();
+    const state = useSyncExternalStore(store.subscribe, () => store.read() ?? initial);
     useLayoutEffect(() => {
-      readSession = () => store.getSnapshot() ?? initial;
+      store.commit(initial);
+      readState = () => store.read() ?? initial;
     }, [store]);
-    const change = (update: (current: OutlookSession) => OutlookSession) =>
-      store.update((current) => update(current ?? initial));
+    const change = (update: (current: OutlookWorkspaceState) => OutlookWorkspaceState) =>
+      store.commit(update(store.read() ?? initial));
     return (
       <OutlookGoalPanel
         response={response}
         cumulative={cumulative}
-        session={session}
         names={names}
         memberIds={memberIds}
         recent={recent}
-        change={change}
         horizonControl={
           <OutlookHorizonControl
-            horizon={session.goalHorizon}
-            horizonText={session.goalHorizonText}
+            horizon={state.goalHorizon}
+            horizonText={state.goalHorizonText}
             label="目標の戦数"
             onChange={({ horizon, horizonText }) =>
               change((current) => ({
@@ -115,7 +119,13 @@ function renderGoal(response: SeriesAnalysisOutlookSummary, initial = initialSes
           />
         }
         opponentEditor={
-          <OutlookEditor session={session} role={1} method="mean" name={names[1]} change={change} />
+          <OutlookEditor
+            view={outlookEditorView(state, 1)}
+            role={1}
+            method="mean"
+            name={names[1]}
+            edit={(intent) => change((current) => editOutlook(current, intent))}
+          />
         }
         onUsePerformance={onUsePerformance}
       />
@@ -123,12 +133,22 @@ function renderGoal(response: SeriesAnalysisOutlookSummary, initial = initialSes
   }
   render(
     <QueryClientProvider client={queryClient}>
-      <OutlookSessionOwner>
-        <Workspace />
-      </OutlookSessionOwner>
+      <OutlookWorkspaceProvider>
+        <OutlookSummaryBoundary
+          response={response}
+          selection={{
+            gameTitleId: response.artifact.gameTitleId,
+            focusMemberId: memberIds[0],
+            rivalMemberId: memberIds[1],
+          }}
+          empty={null}
+        >
+          <Workspace />
+        </OutlookSummaryBoundary>
+      </OutlookWorkspaceProvider>
     </QueryClientProvider>,
   );
-  return { readSession: () => readSession(), onUsePerformance };
+  return { readState: () => readState(), onUsePerformance };
 }
 
 describe("OutlookGoalPanel", () => {
@@ -137,7 +157,7 @@ describe("OutlookGoalPanel", () => {
     async (resolution) => {
       const user = userEvent.setup();
       const response = await makeSeriesAnalysisOutlookSummary();
-      const initial = initialSession(response);
+      const initial = initialState(response);
       initial.entries[0].meanDraft = "2.60";
       if (resolution === "cancel-error") initial.entries[1].error = "相手と両立しない内訳です。";
       else initial.entries[1].meanDraft = "2.30";
@@ -151,14 +171,14 @@ describe("OutlookGoalPanel", () => {
       const pendingAction = screen.getByRole("button", { name: "平均2.48位で推移を見る" });
       expect(pendingAction).toBeDisabled();
       await user.click(pendingAction);
-      expect(view.readSession()).toBe(initial);
+      expect(view.readState()).toBe(initial);
       expect(view.onUsePerformance).not.toHaveBeenCalled();
       await user.click(
         screen.getByRole("button", {
           name: resolution === "reflect" ? "ぽんたの平均順位を反映" : "ぽんたの入力を取り消す",
         }),
       );
-      const ready = view.readSession();
+      const ready = view.readState();
       if (resolution === "reflect") {
         expect(distributionMean(ready.entries[1].distribution)).toEqual({
           numerator: 23n,
@@ -178,7 +198,7 @@ describe("OutlookGoalPanel", () => {
       const apply = screen.getByRole("button", { name: `平均${appliedMean}位で推移を見る` });
       expect(apply).toBeEnabled();
       await user.click(apply);
-      const result = view.readSession();
+      const result = view.readState();
       expect(distributionMean(result.entries[0].distribution)).toEqual(
         resolution === "reflect"
           ? { numerator: 233n, denominator: 100n }
@@ -191,7 +211,8 @@ describe("OutlookGoalPanel", () => {
       expect(undoOutlook(result).entries.map((entry) => entry.distribution)).toEqual(
         ready.entries.map((entry) => entry.distribution),
       );
-      expect(result.horizon).toBe(20);
+      expect(result.horizon).toBe(result.goalHorizon);
+      expect(result.task).toBe("performance");
       expect(view.onUsePerformance).toHaveBeenCalledOnce();
     },
   );
@@ -211,7 +232,7 @@ describe("OutlookGoalPanel", () => {
     await user.keyboard("{/ArrowLeft}");
     expect(apply).toBeEnabled();
     await user.click(apply);
-    const result = view.readSession();
+    const result = view.readState();
     expect(distributionMean(result.entries[0].distribution)).toEqual({
       numerator: 247n,
       denominator: 100n,
@@ -227,7 +248,7 @@ describe("OutlookGoalPanel", () => {
   it("keeps a stronger performance while clearing only its own pending input when applying the goal", async () => {
     const user = userEvent.setup();
     const response = await makeSeriesAnalysisOutlookSummary();
-    const initial = initialSession(response);
+    const initial = initialState(response);
     initial.entries[0] = {
       distribution: distributionFromCounts([7, 6, 4, 3]),
       source: { kind: "counts" },
@@ -237,7 +258,7 @@ describe("OutlookGoalPanel", () => {
     const view = renderGoal(response, initial);
     expect(screen.getByText("今の平均2.15位で維持できます")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "平均2.15位で推移を見る" }));
-    const result = view.readSession();
+    const result = view.readState();
     expect(result.entries[0]).toEqual({
       distribution: initial.entries[0].distribution,
       source: initial.entries[0].source,
@@ -262,9 +283,9 @@ describe("OutlookGoalPanel", () => {
     await user.type(horizon, "50");
     expect(screen.getByText("平均2.52位以下")).toBeVisible();
     expect(usePerformance).toBeEnabled();
-    expect(view.readSession().goalHorizon).toBe(50);
-    expect(view.readSession().horizon).toBe(20);
-    expect(view.readSession().history).toHaveLength(0);
+    expect(view.readState().goalHorizon).toBe(50);
+    expect(view.readState().horizon).toBe(20);
+    expect(view.readState().history).toHaveLength(0);
     await user.clear(horizon);
     await user.paste("1001");
     expect(horizon).toHaveAccessibleDescription(
@@ -272,13 +293,13 @@ describe("OutlookGoalPanel", () => {
     );
     expect(usePerformance).toBeDisabled();
     expect(screen.getByText("平均2.52位以下")).toBeVisible();
-    expect(view.readSession().goalHorizon).toBe(50);
-    expect(view.readSession().horizon).toBe(20);
+    expect(view.readState().goalHorizon).toBe(50);
+    expect(view.readState().horizon).toBe(20);
   });
 
   it("does not recommend a recent distribution that conflicts with the rival", async () => {
     const response = await makeSeriesAnalysisOutlookSummary();
-    const initial = initialSession(response);
+    const initial = initialState(response);
     initial.entries[0].distribution = distributionFromCounts([8, 7, 5, 0]);
     initial.entries[1].distribution = distributionFromCounts([0, 0, 5, 15]);
     renderGoal(response, initial);
@@ -289,7 +310,7 @@ describe("OutlookGoalPanel", () => {
   it("does not offer an application when no compatible performance can meet the goal", async () => {
     const user = userEvent.setup();
     const response = await makeSeriesAnalysisOutlookSummary();
-    const initial = initialSession(response);
+    const initial = initialState(response);
     initial.entries[0].distribution = distributionFromCounts([0, 20, 0, 0]);
     initial.entries[1].distribution = distributionFromCounts([20, 0, 0, 0]);
     const view = renderGoal(response, initial);
@@ -297,7 +318,7 @@ describe("OutlookGoalPanel", () => {
     const usePerformance = screen.getByRole("button", { name: "推移を見る" });
     expect(usePerformance).toBeDisabled();
     await user.click(usePerformance);
-    expect(view.readSession()).toBe(initial);
+    expect(view.readState()).toBe(initial);
     expect(view.onUsePerformance).not.toHaveBeenCalled();
   });
 
@@ -307,7 +328,7 @@ describe("OutlookGoalPanel", () => {
       const user = userEvent.setup();
       const response = await makeSeriesAnalysisOutlookSummary();
       const initial = {
-        ...initialSession(response),
+        ...initialState(response),
         goalHorizon: 1000,
         goalHorizonText: "1000",
       };
@@ -329,7 +350,12 @@ describe("OutlookGoalPanel", () => {
         expect(usePerformance).toBeDisabled();
       }
       await user.click(usePerformance);
-      expect(view.readSession()).toEqual(initial);
+      const result = view.readState();
+      expect(result.entries.map((entry) => entry.distribution)).toEqual(
+        initial.entries.map((entry) => entry.distribution),
+      );
+      expect(result.history).toEqual(initial.history);
+      expect(result.horizon).toBe(alreadyReaches ? initial.goalHorizon : initial.horizon);
       expect(view.onUsePerformance).toHaveBeenCalledTimes(alreadyReaches ? 1 : 0);
     },
   );
@@ -348,7 +374,7 @@ describe("OutlookGoalPanel", () => {
           : HttpResponse.json(available);
       }),
     );
-    renderGoal(response, { ...initialSession(response), goalHorizon: 10, goalHorizonText: "10" });
+    renderGoal(response, { ...initialState(response), goalHorizon: 10, goalHorizonText: "10" });
     const retry = await screen.findByRole("button", { name: "過去実績を再読み込み" });
     expect(screen.getByText("平均2.84位以下")).toBeVisible();
     failed = false;
@@ -363,7 +389,7 @@ describe("OutlookGoalPanel", () => {
   it("uses the goal condition for historical examples and opens the performance after applying one", async () => {
     const user = userEvent.setup();
     const response = await makeSeriesAnalysisOutlookSummary();
-    const initial = { ...initialSession(response), horizon: 1, horizonText: "1" };
+    const initial = { ...initialState(response), horizon: 1, horizonText: "1" };
     initial.entries[1].meanDraft = "2.30";
     const view = renderGoal(response, initial);
     await user.click(screen.getByRole("button", { name: "いーゆーの過去の成績例" }));
@@ -377,22 +403,23 @@ describe("OutlookGoalPanel", () => {
       "ぽんたの入力を反映するか、取り消してください。",
     );
     await user.click(examples[0]!);
-    expect(distributionMean(view.readSession().entries[0].distribution)).toEqual({
+    expect(distributionMean(view.readState().entries[0].distribution)).toEqual({
       numerator: 57n,
       denominator: 20n,
     });
-    expect(view.readSession().entries[1].meanDraft).toBe("2.30");
+    expect(view.readState().entries[1].meanDraft).toBe("2.30");
     expect(view.onUsePerformance).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "ぽんたの入力を取り消す" }));
-    const ready = view.readSession();
+    const ready = view.readState();
     expect(examples[0]).toBeEnabled();
     await user.click(examples[0]!);
-    const result = view.readSession();
+    const result = view.readState();
     expect(result.entries[0].distribution).toEqual(distributionFromCounts([4, 7, 7, 2]));
     expect(result.entries[0].source).toMatchObject({ kind: "example", matchCount: 20 });
     expect(result.entries[1]).toEqual(ready.entries[1]);
     expect(result.history).toHaveLength(1);
-    expect(result.horizon).toBe(1);
+    expect(result.horizon).toBe(result.goalHorizon);
+    expect(result.task).toBe("performance");
     expect(view.onUsePerformance).toHaveBeenCalledOnce();
   });
 
@@ -400,7 +427,7 @@ describe("OutlookGoalPanel", () => {
     const user = userEvent.setup();
     const response = await makeSeriesAnalysisOutlookSummary();
     const initial = {
-      ...initialSession(response),
+      ...initialState(response),
       task: "goal" as const,
       goalHorizon: 80,
       goalHorizonText: "80",
@@ -459,7 +486,7 @@ describe("OutlookGoalPanel", () => {
     async ({ counts, message }) => {
       const user = userEvent.setup();
       const response = await makeSeriesAnalysisOutlookSummary();
-      const initial = initialSession(response);
+      const initial = initialState(response);
       const examples = await historicalExamples(memberIds[1], [counts]);
       server.use(
         http.get("/api/analytics/series-comparison/v1/outlook-examples", () =>
@@ -471,8 +498,8 @@ describe("OutlookGoalPanel", () => {
       const panel = pastExamples(names[1]);
       expect(await panel.findByText(message)).toBeVisible();
       expect(panel.queryByRole("button", { name: "この成績を試す" })).not.toBeInTheDocument();
-      expect(view.readSession().entries).toEqual(initial.entries);
-      expect(view.readSession().history).toEqual(initial.history);
+      expect(view.readState().entries).toEqual(initial.entries);
+      expect(view.readState().history).toEqual(initial.history);
       expect(view.onUsePerformance).not.toHaveBeenCalled();
     },
   );

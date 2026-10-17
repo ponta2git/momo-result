@@ -1,9 +1,6 @@
-import { queryOptions } from "@tanstack/react-query";
-
 import { apiRequest } from "@/shared/api/client";
 import type { ApiSignalOptions, IdempotencyRequestOptions } from "@/shared/api/client";
 import type { components } from "@/shared/api/generated";
-import { seriesPlayerRadarKeys } from "@/shared/api/queryKeys";
 import { decodeSeriesAnalysisContract } from "@/shared/api/seriesAnalysisContractDecoder";
 
 export type SeriesPlayerRadarState = components["schemas"]["SeriesPlayerRadarStateResponse"];
@@ -110,50 +107,5 @@ export function getSeriesAnalysisScopeStatus(
   return apiRequest(`/api/analytics/series-comparison/v2/scope-status?${params}`, {
     ...options,
     decodeResponse: (value) => decode("SeriesAnalysisScopeStatusResponse", value),
-  });
-}
-
-export function seriesPlayerRadarStateQueryOptions(gameTitleId: string | undefined) {
-  return queryOptions({
-    queryKey: seriesPlayerRadarKeys.state(gameTitleId),
-    enabled: Boolean(gameTitleId),
-    queryFn: ({ signal }) => {
-      if (!gameTitleId) throw new Error("radar title is not ready");
-      return getSeriesPlayerRadarState(gameTitleId, { signal });
-    },
-  });
-}
-
-export function seriesPlayerRadarPreviewQueryOptions(
-  query: SeriesPlayerRadarPreviewQuery | undefined,
-) {
-  return queryOptions({
-    queryKey: seriesPlayerRadarKeys.preview(query),
-    enabled: Boolean(query),
-    queryFn: ({ signal }) => {
-      if (!query) throw new Error("radar preview is not ready");
-      return getSeriesPlayerRadarPreview(query, { signal });
-    },
-  });
-}
-
-export function seriesPlayerRadarOperationQueryOptions(gameTitleId: string, operationId: string) {
-  return queryOptions({
-    queryKey: seriesPlayerRadarKeys.operation(gameTitleId, operationId),
-    queryFn: ({ signal }) => getSeriesPlayerRadarOperation(gameTitleId, operationId, { signal }),
-    staleTime: 0,
-  });
-}
-
-export function seriesAnalysisScopeStatusQueryOptions(
-  query: SeriesAnalysisScopeStatusQuery | undefined,
-) {
-  return queryOptions({
-    queryKey: seriesPlayerRadarKeys.scopeStatus(query),
-    enabled: Boolean(query),
-    queryFn: ({ signal }) => {
-      if (!query) throw new Error("series analysis scope is not ready");
-      return getSeriesAnalysisScopeStatus(query, { signal });
-    },
   });
 }

@@ -1,3 +1,4 @@
+import { act, renderHook } from "@testing-library/react";
 import { startTransition, useLayoutEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
@@ -6,13 +7,50 @@ import { useAnalysisArtifactRecovery } from "@/shared/api/useAnalysisArtifactRec
 import { createDeferred } from "@/test/deferred";
 import { makeSeriesAnalysisStatus } from "@/test/msw/seriesAnalysisFixtures";
 
+it("does not retry a different selection when an old publication check completes", async () => {
+  const started = createDeferred();
+  const publication = createDeferred<string | undefined>();
+  const refreshResource = vi.fn(async () => undefined);
+  const refreshPublication = () => {
+    started.resolve();
+    return publication.promise;
+  };
+  const error = {
+    kind: "api",
+    code: "ANALYSIS_ARTIFACT_EXPIRED",
+    title: "expired",
+    detail: "expired",
+  };
+  const initialProps: { resourceId: string; failure: unknown } = {
+    resourceId: "member-a",
+    failure: error,
+  };
+  const { rerender } = renderHook(
+    ({ resourceId, failure }: { resourceId: string; failure: unknown }) =>
+      useAnalysisArtifactRecovery({
+        artifactId: "publication-1",
+        resourceId,
+        error: failure,
+        refreshResource,
+        refreshPublication,
+      }),
+    { initialProps },
+  );
+
+  await started.promise;
+  rerender({ resourceId: "member-b", failure: undefined });
+  await act(async () => publication.resolve("publication-1"));
+
+  expect(refreshResource).not.toHaveBeenCalled();
+});
+
 it("does not restart an expired artifact read when status settles after its owner unmounts", async () => {
   const started = createDeferred();
   const committed = createDeferred();
   const status = makeSeriesAnalysisStatus();
-  const response = createDeferred<{ data: typeof status }>();
-  const refetchArtifact = vi.fn(async () => undefined);
-  const refetchStatus = () => {
+  const response = createDeferred<string | undefined>();
+  const refreshResource = vi.fn(async () => undefined);
+  const refreshPublication = () => {
     started.resolve();
     return response.promise;
   };
@@ -25,15 +63,15 @@ it("does not restart an expired artifact read when status settles after its owne
         title: "expired",
         detail: "expired",
       },
-      queryKey: ["artifact"],
-      refetchArtifact,
-      refetchStatus,
+      resourceId: "artifact",
+      refreshResource,
+      refreshPublication,
     });
     return null;
   }
   function Replacement() {
     useLayoutEffect(() => {
-      response.resolve({ data: status });
+      response.resolve(status.currentArtifact?.artifactId);
       committed.resolve();
     }, []);
     return <p>別の画面</p>;
@@ -51,7 +89,7 @@ it("does not restart an expired artifact read when status settles after its owne
     startTransition(() => root.render(<Replacement />));
     await committed.promise;
     expect(container).toHaveTextContent("別の画面");
-    expect(refetchArtifact).not.toHaveBeenCalled();
+    expect(refreshResource).not.toHaveBeenCalled();
   } finally {
     root.unmount();
     container.remove();

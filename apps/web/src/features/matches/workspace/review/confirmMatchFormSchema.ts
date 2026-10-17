@@ -1,15 +1,11 @@
 import { z } from "zod";
 
+import { matchNoteMaximumCharacters, normalizeMatchNote } from "@/features/matches/matchNoteText";
 import type { ConfirmMatchRequest } from "@/shared/api/matches";
 import { fixedMemberIds } from "@/shared/domain/members";
 import { toIsoFromLocalDateTime } from "@/shared/lib/dateTime";
 
 const memberIds = [...fixedMemberIds] as [string, ...string[]];
-export const matchNoteMaximumCharacters = 150;
-
-export function normalizeMatchNote(value: string): string {
-  return value.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
-}
 
 const incidentSchema = z.object({
   destination: z.number().int().min(0),

@@ -1,4 +1,4 @@
-import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
+import type { MatchFormValues, WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
 import { matchFormInput } from "@/features/matches/workspace/matchNumericDrafts";
 import { confirmMatchSchema } from "@/features/matches/workspace/review/confirmMatchFormSchema";
 
@@ -49,4 +49,23 @@ export function validateMatchForm(values: MatchFormValues): ValidationResult {
     pathSet,
     success: false,
   };
+}
+
+/** Validation and mode jointly determine whether this intent saves or opens confirmation. */
+export function prepareMatchWorkspacePrimaryAction(
+  mode: WorkspaceMode,
+  values: MatchFormValues,
+):
+  | { kind: "invalid"; message: string; path: string }
+  | { kind: "update"; values: MatchFormValues }
+  | { kind: "confirm" } {
+  const validation = validateMatchForm(values);
+  if (!validation.success) {
+    return {
+      kind: "invalid",
+      message: validation.firstMessage ?? "入力内容に不足があります",
+      path: validation.firstPath ?? "form",
+    };
+  }
+  return mode === "edit" ? { kind: "update", values } : { kind: "confirm" };
 }

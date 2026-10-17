@@ -1,46 +1,49 @@
 import { useSearchParams } from "react-router-dom";
 
+import { buildLoginView } from "@/features/auth/loginView";
 import { useSelfAccountDisabledNotice } from "@/shared/auth/accountOperationNotice";
 import { AuthPanel } from "@/shared/auth/AuthPanel";
-import { sanitizeAppRedirectPath } from "@/shared/auth/redirectPath";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { contentText } from "@/shared/ui/typography";
 
-export function LoginPage() {
-  const selfDisabled = useSelfAccountDisabledNotice();
+function useLoginView() {
+  const selfAccountDisabled = useSelfAccountDisabledNotice();
   const [searchParams] = useSearchParams();
-  const reason = searchParams.get("reason");
-  const next = sanitizeAppRedirectPath(searchParams.get("next"));
+  return buildLoginView({
+    reason: searchParams.get("reason"),
+    requestedNextPath: searchParams.get("next"),
+    selfAccountDisabled,
+    isDevelopment: import.meta.env.DEV,
+  });
+}
+
+export function LoginPage() {
+  const view = useLoginView();
 
   return (
     <PageFrame width="narrow">
       <div className="mx-auto w-full max-w-[34rem]">
         <PageContentSurface aria-label="ログイン" className="space-y-4" role="region">
-          {selfDisabled ? (
-            <Notice tone="success" title="アカウント設定を更新しました">
-              このアカウントのログインを無効にしました。
-            </Notice>
-          ) : null}
-          {reason === "forbidden" && !selfDisabled ? (
-            <Notice tone="warning" title="アクセス権限がありません">
-              このアカウントでは利用できません。管理者に確認してください。
+          {view.notice ? (
+            <Notice tone={view.notice.tone} title={view.notice.title}>
+              {view.notice.message}
             </Notice>
           ) : null}
 
           <AuthPanel
             auth={undefined}
             embedded
-            forceDevPicker={import.meta.env.DEV}
-            loginNextPath={next}
+            forceDevPicker={view.forceDevPicker}
+            loginNextPath={view.loginNextPath}
           />
 
-          {import.meta.env.DEV ? null : (
+          {view.showAccountSwitchHint ? (
             <p className={contentText.supporting}>
               別のDiscordアカウントを使う場合は、Discord側でログアウトするか、シークレットウィンドウで開きます。
             </p>
-          )}
+          ) : null}
         </PageContentSurface>
       </div>
     </PageFrame>

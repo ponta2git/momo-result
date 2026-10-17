@@ -1,10 +1,10 @@
-import { findSeriesAnalysisTitle } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
-import type { SeriesAnalysisUrlState } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import { findSeriesAnalysisTitle } from "@/features/seriesComparison/model/seriesAnalysisSelection";
+import type { SeriesAnalysisSelection } from "@/features/seriesComparison/model/seriesAnalysisSelection";
 import type { SeriesAnalysisOptionsResponse } from "@/shared/api/seriesAnalysis";
 
 export function buildSeriesAnalysisFilterOptions(
   options: SeriesAnalysisOptionsResponse | undefined,
-  state: SeriesAnalysisUrlState,
+  state: SeriesAnalysisSelection,
 ) {
   const selectedTitle = findSeriesAnalysisTitle(options, state.gameTitleId);
   return {

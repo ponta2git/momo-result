@@ -5,13 +5,20 @@ import java.time.Instant
 import scala.concurrent.duration.DurationInt
 
 import cats.effect.{Deferred, IO, Ref}
+import doobie.implicits.*
+import doobie.postgres.implicits.*
 
-import momo.api.adapters.postgres.PostgresSourceImagesRepository
+import momo.api.adapters.postgres.PostgresMeta.given
+import momo.api.adapters.postgres.{
+  PostgresMatchDraftCancellationRepository,
+  PostgresSourceImagesRepository
+}
 import momo.api.adapters.storage.objectstore.{
+  ObjectBackedImageStore,
   SourceImageObjectReconciler,
   SourceImageObjectReconcilerConfig
 }
-import momo.api.domain.ids.{AccountId, ImageId}
+import momo.api.domain.ids.{AccountId, ImageId, MatchDraftId}
 import momo.api.ports.storage.{
   Sha256Hex,
   SourceImageIdempotencyHash,
@@ -23,6 +30,7 @@ import momo.api.ports.storage.{
 }
 import momo.api.repositories.*
 import momo.api.testing.{RecordingSourceImageObjectStorage, TestImages}
+import momo.api.usecases.matchdrafts.CancelMatchDraft
 
 final class SourceImageObjectReconcilerSpec extends IntegrationSuite:
   private val now = Instant.parse("2026-08-12T00:00:00Z")
@@ -108,6 +116,66 @@ final class SourceImageObjectReconcilerSpec extends IntegrationSuite:
     yield
       assertEquals(stats.deferred, 1)
       assertEquals(stored.map(_.status), Some(SourceImageStatus.Reserved))
+
+  test("cancellation leaves an inaccessible object charged to quota until later reconciliation"):
+    val candidate = reservation("source-cancel-reconcile", old)
+    val next = reservation("source-after-cancel-reconcile", now)
+    val draftId = MatchDraftId.unsafeFromString("draft-cancel-reconcile")
+    val singleImageQuota = SourceImageQuota(1, Long.MaxValue)
+    val repository = PostgresSourceImagesRepository[IO](transactor)
+
+    for
+      objects <- RecordingSourceImageObjectStorage.create
+      _ <- repository.reserveWithinQuota(candidate, singleImageQuota)
+      _ <- objects.put(candidate.objectKey, candidate.mediaType, bytes, candidate.sha256)
+      _ <- repository.markAvailable(candidate.id, None, old)
+      _ <- sql"""
+        INSERT INTO match_drafts (
+          id, created_by_account_id, created_by_member_id, status, total_assets_image_id,
+          created_at, updated_at
+        ) VALUES ($draftId, $accountId, 'member_ponta', 'draft_ready', ${candidate.id}, $old, $old)
+      """.update.run.transact(transactor)
+      store =
+        ObjectBackedImageStore[IO](repository, objects, IO.pure(candidate.id), IO.pure(old), quota)
+      visibleBefore <- store.find(candidate.id)
+      cancelled <- CancelMatchDraft[IO](
+        PostgresMatchDraftCancellationRepository[IO](transactor),
+        IO.pure(old),
+      ).run(draftId, accountId)
+      pending <- repository.find(candidate.id)
+      visibleAfter <- store.find(candidate.id)
+      retained <- objects.contains(candidate.objectKey)
+      blocked <- repository.reserveWithinQuota(next, singleImageQuota)
+      _ <- objects.failNextDelete(SourceImageObjectFailure.Unavailable)
+      deferred <- reconciler(repository, objects).runOnce
+      afterFailure <- repository.find(candidate.id)
+      retainedAfterFailure <- objects.contains(candidate.objectKey)
+      restartedRepository = PostgresSourceImagesRepository[IO](transactor)
+      recovered <- reconciler(restartedRepository, objects).runOnce
+      deleted <- restartedRepository.find(candidate.id)
+      remains <- objects.contains(candidate.objectKey)
+      admitted <- restartedRepository.reserveWithinQuota(next, singleImageQuota)
+    yield
+      assert(visibleBefore.nonEmpty)
+      assertEquals(cancelled, Right(()))
+      assertEquals(pending.map(_.status), Some(SourceImageStatus.DeletePending))
+      assertEquals(visibleAfter, None)
+      assert(retained)
+      assertEquals(
+        blocked,
+        SourceImageReservationResult.Rejected(
+          SourceImageQuotaRejection.CountExceeded(2L, 1)
+        )
+      )
+      assertEquals(deferred.deferred, 1)
+      assertEquals(afterFailure.map(_.status), Some(SourceImageStatus.DeletePending))
+      assert(retainedAfterFailure)
+      assertEquals(recovered.deleted, 1)
+      assertEquals(deleted.map(_.status), Some(SourceImageStatus.Deleted))
+      assert(!remains)
+      admitted match
+        case SourceImageReservationResult.Reserved(image) => assertEquals(image.id, next.id)
+        case other => fail(s"expected quota to be released after deletion, got $other")
 
   test("a retry that wins after FAILED inspection prevents deletion of the replacement object"):
     val candidate = reservation("source-reconcile-retry-race", old)

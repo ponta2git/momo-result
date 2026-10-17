@@ -1,7 +1,7 @@
 import { ChoicePickerDialogField } from "@/shared/ui/forms/ChoicePickerDialogField";
 
+import type { ExportCandidateView } from "./exportPresentation";
 import type { ExportScope } from "./exportTypes";
-import type { ExportCandidateView } from "./exportViewModel";
 
 type ReadyCandidateView = Extract<ExportCandidateView, { kind: "ready" }>;
 

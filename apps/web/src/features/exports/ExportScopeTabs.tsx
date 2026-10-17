@@ -5,8 +5,8 @@ import { cn } from "@/shared/ui/cn";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 import { contentText } from "@/shared/ui/typography";
 
+import { exportScopes } from "./exportPresentation";
 import type { ExportScope } from "./exportTypes";
-import { exportScopes } from "./exportViewModel";
 
 const exportExclusionNotice = "下書きや確認待ちの試合は含みません。";
 

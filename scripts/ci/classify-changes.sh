@@ -161,7 +161,10 @@ while IFS= read -r -d '' path; do
       ;;
     scripts/ci/check-pr-branch-policy.sh | scripts/ci/check-pr-ready.sh | \
       scripts/ci/classify-changes.sh | scripts/ci/classify-git-range.sh | \
-      scripts/ci/extract-release-notes.sh | scripts/ci/runtime-release-notes.sh)
+      scripts/ci/extract-release-notes.sh | scripts/ci/runtime-release-notes.sh | \
+      scripts/ci/maintenance-control.sh | scripts/ci/maintenance-control-ref.txt | \
+      scripts/ci/maintenance-candidates.sh | scripts/ci/deployment-permission.sh | \
+      scripts/ci/frozen-readiness.sh | scripts/ci/continue-maintenance-analysis.sh | scripts/ci/publish-runtime-release.sh)
       ;;
     scripts/ci/runtime-* | scripts/ci/start-runtime-container.sh | \
       scripts/ci/validate-runtime-image.sh | scripts/ci/dockerfile-lint.sh)
@@ -197,9 +200,9 @@ while IFS= read -r -d '' path; do
       analysis=true
       analysis_image=true
       ;;
-    .github/workflows/analysis-production.yml)
+    .github/workflows/analysis-production.yml | .github/workflows/analysis-maintenance.yml)
       ;;
-    .github/workflows/deploy.yml | .github/workflows/runtime-deploy.yml)
+    .github/workflows/deploy.yml | .github/workflows/runtime-deploy.yml | .github/workflows/deploy-maintenance.yml)
       runtime=true
       ;;
     .github/workflows/runtime-rollback.yml)
@@ -216,6 +219,9 @@ while IFS= read -r -d '' path; do
       ;;
     .github/actions/setup-ci-tool/*)
       go_tools=true
+      policy_scripts=true
+      ;;
+    .github/actions/setup-maintenance-control/*)
       policy_scripts=true
       ;;
     .github/workflows/public-safety.yml | .github/actions/*)

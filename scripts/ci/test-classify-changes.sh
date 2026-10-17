@@ -191,6 +191,7 @@ assert_case deploy-workflow \
   .github/workflows/deploy.yml
 assert_case shared-schema "${all}" docs/schemas/series-analysis-v1.json
 assert_case runtime-deploy-workflow "$(expected runtime workflow actionlint)" .github/workflows/runtime-deploy.yml
+assert_case maintenance-control-pin "${policy_only}" scripts/ci/maintenance-control-ref.txt
 assert_case orchestrator "${orchestrator}" .github/workflows/pr.yml
 assert_case unknown-path "$(expected api web analysis analysis_image runtime system_e2e workflow go_runtime go_tools)" config/unknown-release-input.toml
 

@@ -16,9 +16,9 @@ export type ExportScopeIds = {
 };
 
 export type ExportCandidate = {
-  description?: string | undefined;
-  label: string;
-  value: string;
+  readonly description?: string | undefined;
+  readonly label: string;
+  readonly value: string;
 };
 
 export type ExportDownloadSuccess = {

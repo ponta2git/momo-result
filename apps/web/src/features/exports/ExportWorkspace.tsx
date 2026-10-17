@@ -1,7 +1,9 @@
+import { useState } from "react";
+
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 
-import { ExportActionPanel } from "./ExportActionPanel";
+import { ExportDownloadAction } from "./ExportActionPanel";
 import { ExportCandidateSelect } from "./ExportCandidateSelect";
 import { ExportFormatTabs } from "./ExportFormatTabs";
 import { ExportScopeTabs } from "./ExportScopeTabs";
@@ -13,8 +15,9 @@ type ExportWorkspaceProps = {
 
 export function ExportWorkspace({ model }: ExportWorkspaceProps) {
   const { candidate, conditions, download, view } = model;
+  const [downloadPending, setDownloadPending] = useState(false);
   const showActionPanel =
-    view.errors.length > 0 ||
+    view.action.errors.length > 0 ||
     view.candidate.kind === "hidden" ||
     (view.candidate.kind === "ready" && view.candidate.selectionState === "resolved");
 
@@ -27,12 +30,12 @@ export function ExportWorkspace({ model }: ExportWorkspaceProps) {
         role="region"
       >
         <ExportScopeTabs
-          disabled={download.pending}
+          disabled={downloadPending}
           scope={view.scope}
           onChange={conditions.changeScope}
         >
           <ExportCandidateSelect
-            disabled={download.pending || (view.candidateRefreshing && !candidate.scopeChanging)}
+            disabled={downloadPending || (view.candidateRefreshing && !candidate.scopeChanging)}
             refreshing={view.candidateRefreshing}
             scopeChanging={candidate.scopeChanging}
             scope={view.scope}
@@ -46,18 +49,17 @@ export function ExportWorkspace({ model }: ExportWorkspaceProps) {
         </ExportScopeTabs>
 
         <ExportFormatTabs
-          disabled={download.pending}
+          disabled={downloadPending}
           format={view.format}
           onChange={conditions.changeFormat}
         >
-          {showActionPanel ? (
-            <ExportActionPanel
-              isPending={download.pending}
-              view={view}
-              onDownload={download.start}
-              onResetConditions={conditions.reset}
-            />
-          ) : null}
+          <ExportDownloadAction
+            {...download}
+            visible={showActionPanel}
+            action={view.action}
+            onPendingChange={setDownloadPending}
+            onResetConditions={conditions.reset}
+          />
         </ExportFormatTabs>
       </PageContentSurface>
     </PageFrame>

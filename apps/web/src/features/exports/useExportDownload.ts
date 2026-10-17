@@ -8,18 +8,18 @@ import { exportDownloadResultView, failedResultView } from "@/features/exports/e
 import type { ExportDownloadResultView } from "@/features/exports/exportViewModel";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 
-type ExportDownloadOptions = {
-  available: boolean;
-  request: ExportMatchesRequest | undefined;
-  slowThresholdMs: number;
-  timeoutMs: number;
+export type ExportDownloadOptions = {
+  readonly available: boolean;
+  readonly request: Readonly<ExportMatchesRequest> | undefined;
+  readonly slowThresholdMs: number;
+  readonly timeoutMs: number;
 };
 
 export type ExportDownloadWorkflow = {
-  pending: boolean;
-  result: ExportDownloadResultView | undefined;
-  slow: boolean;
-  start: () => void;
+  readonly pending: boolean;
+  readonly result: ExportDownloadResultView | undefined;
+  readonly slow: boolean;
+  readonly start: () => void;
 };
 
 type DownloadAttempt = {

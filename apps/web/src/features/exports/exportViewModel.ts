@@ -22,8 +22,8 @@ export const exportScopes = [
 ] as const;
 
 export type ExportCandidateSupportIssue = {
-  directory?: "load-failed" | "refresh-failed" | undefined;
-  selectedTarget?: "refresh-failed" | undefined;
+  readonly directory?: "load-failed" | "refresh-failed" | undefined;
+  readonly selectedTarget?: "refresh-failed" | undefined;
 };
 
 export function buildCandidateSupportIssue(input: {
@@ -47,49 +47,63 @@ export function buildCandidateSupportIssue(input: {
 
 export type ExportCandidateView =
   | {
-      action:
-        | { href: string; kind: "link"; label: string }
-        | { kind: "scope"; label: string; scope: Extract<ExportScope, "all"> };
-      kind: "empty";
-      message: string;
-      supportIssue?: ExportCandidateSupportIssue | undefined;
-      title: string;
+      readonly action:
+        | { readonly href: string; readonly kind: "link"; readonly label: string }
+        | {
+            readonly kind: "scope";
+            readonly label: string;
+            readonly scope: Extract<ExportScope, "all">;
+          };
+      readonly kind: "empty";
+      readonly message: string;
+      readonly supportIssue?: ExportCandidateSupportIssue | undefined;
+      readonly title: string;
     }
-  | { kind: "error"; message: string }
-  | { kind: "hidden" }
-  | { kind: "loading" }
+  | { readonly kind: "error"; readonly message: string }
+  | { readonly kind: "hidden" }
+  | { readonly kind: "loading" }
   | {
-      candidates: ExportCandidate[];
-      kind: "ready";
-      pagination?: PaginationState | undefined;
-      selectedId: string;
-      selectedLabel: string;
-      selectionState: "load-failed" | "not-found" | "resolved" | "resolving";
-      supportIssue?: ExportCandidateSupportIssue | undefined;
+      readonly candidates: readonly ExportCandidate[];
+      readonly kind: "ready";
+      readonly pagination?: Readonly<PaginationState> | undefined;
+      readonly selectedId: string;
+      readonly selectedLabel: string;
+      readonly selectionState: "load-failed" | "not-found" | "resolved" | "resolving";
+      readonly supportIssue?: ExportCandidateSupportIssue | undefined;
     };
 
 export type ExportDownloadResultView =
-  | { kind: "failed"; detail: string; title: string }
-  | { fileName: string; format: ExportFormat; kind: "success"; startedAt: string }
-  | { detail: string; kind: "timeout"; title: string };
+  | { readonly kind: "failed"; readonly detail: string; readonly title: string }
+  | {
+      readonly fileName: string;
+      readonly format: ExportFormat;
+      readonly kind: "success";
+      readonly startedAt: string;
+    }
+  | { readonly detail: string; readonly kind: "timeout"; readonly title: string };
 
-export type ExportViewModel = {
-  actionLabel: string;
-  candidate: ExportCandidateView;
-  candidateRefreshing: boolean;
-  canDownload: boolean;
-  errors: string[];
-  format: ExportFormat;
-  formatLabel: string;
-  isSlow: boolean;
-  result?: ExportDownloadResultView | undefined;
-  scope: ExportScope;
-  selectedId: string;
-  summaryText: string;
+export type ExportActionAvailability = {
+  readonly actionLabel: string;
+  readonly canDownload: boolean;
+  readonly errors: readonly string[];
+  readonly summaryText: string;
+};
+
+export type ExportActionView = ExportActionAvailability & {
+  readonly isSlow: boolean;
+  readonly result?: ExportDownloadResultView | undefined;
+};
+
+export type ExportSelectionView = {
+  readonly action: ExportActionAvailability;
+  readonly candidate: ExportCandidateView;
+  readonly candidateRefreshing: boolean;
+  readonly format: ExportFormat;
+  readonly scope: ExportScope;
 };
 
 export function buildCandidateView(input: {
-  candidates: ExportCandidate[];
+  candidates: readonly ExportCandidate[];
   error?: boolean;
   loading: boolean;
   pagination?: PaginationState | undefined;
@@ -230,28 +244,23 @@ function summaryText(
   return `${scopeLabel(scope)}の出力対象を選択してください。`;
 }
 
-export function buildExportViewModel(input: {
+export function buildExportSelectionView(input: {
   candidate: ExportCandidateView;
   candidateRefreshing?: boolean | undefined;
-  isPending: boolean;
-  isSlow: boolean;
-  lastResult?: ExportDownloadResultView | undefined;
   urlState: ExportUrlState;
-}): ExportViewModel {
+}): ExportSelectionView {
   const formatLabel = input.urlState.format.toUpperCase();
   return {
-    actionLabel: `${actionSubject(input.urlState.scope)}を${formatLabel}でダウンロード`,
+    action: {
+      actionLabel: `${actionSubject(input.urlState.scope)}を${formatLabel}でダウンロード`,
+      canDownload: isExportSelectionReady(input.urlState, input.candidate),
+      errors: input.urlState.errors,
+      summaryText: summaryText(input.urlState.scope, input.candidate, formatLabel),
+    },
     candidate: input.candidate,
     candidateRefreshing: input.candidateRefreshing === true,
-    canDownload: !input.isPending && isExportSelectionReady(input.urlState, input.candidate),
-    errors: input.urlState.errors,
     format: input.urlState.format,
-    formatLabel,
-    isSlow: input.isPending && input.isSlow,
-    result: input.lastResult,
     scope: input.urlState.scope,
-    selectedId: input.candidate.kind === "ready" ? input.candidate.selectedId : "",
-    summaryText: summaryText(input.urlState.scope, input.candidate, formatLabel),
   };
 }
 

@@ -2,10 +2,13 @@ import {
   DEFAULT_EXPORT_SLOW_THRESHOLD_MS,
   DEFAULT_EXPORT_TIMEOUT_MS,
 } from "@/features/exports/exportDownload";
-import type { ExportFormat, ExportScope } from "@/features/exports/exportTypes";
-import { buildExportViewModel } from "@/features/exports/exportViewModel";
-import type { ExportViewModel } from "@/features/exports/exportViewModel";
-import { useExportDownload } from "@/features/exports/useExportDownload";
+import type {
+  ExportFormat,
+  ExportScope,
+  ExportMatchesRequest,
+} from "@/features/exports/exportTypes";
+import { buildExportSelectionView } from "@/features/exports/exportViewModel";
+import type { ExportSelectionView } from "@/features/exports/exportViewModel";
 import { useExportSelection } from "@/features/exports/useExportSelection";
 
 export type ExportPageModelParams = {
@@ -14,44 +17,37 @@ export type ExportPageModelParams = {
 };
 
 export type ExportPageModel = {
-  candidate: {
-    change: (selectedId: string) => void;
-    changePage: (page: number) => void;
-    retryDirectory: () => void;
-    retrySelection: () => void;
-    scopeChanging: boolean;
+  readonly candidate: {
+    readonly change: (selectedId: string) => void;
+    readonly changePage: (page: number) => void;
+    readonly retryDirectory: () => void;
+    readonly retrySelection: () => void;
+    readonly scopeChanging: boolean;
   };
-  conditions: {
-    changeFormat: (format: ExportFormat) => void;
-    changeScope: (scope: ExportScope) => void;
-    reset: () => void;
+  readonly conditions: {
+    readonly changeFormat: (format: ExportFormat) => void;
+    readonly changeScope: (scope: ExportScope) => void;
+    readonly reset: () => void;
   };
-  download: {
-    pending: boolean;
-    start: () => void;
+  readonly download: {
+    readonly available: boolean;
+    readonly request: Readonly<ExportMatchesRequest> | undefined;
+    readonly slowThresholdMs: number;
+    readonly timeoutMs: number;
   };
-  view: ExportViewModel;
+  readonly view: ExportSelectionView;
 };
 
-/** Composes URL state and the candidate/download workflows into the export screen contract. */
+/** The page owns URL conditions and candidate selection; the action panel owns downloading. */
 export function useExportPageModel({
   downloadTimeoutMs = DEFAULT_EXPORT_TIMEOUT_MS,
   slowThresholdMs = DEFAULT_EXPORT_SLOW_THRESHOLD_MS,
 }: ExportPageModelParams): ExportPageModel {
   const selection = useExportSelection();
-  const download = useExportDownload({
-    request: selection.request,
-    available: selection.available,
-    slowThresholdMs,
-    timeoutMs: downloadTimeoutMs,
-  });
 
-  const view = buildExportViewModel({
+  const view = buildExportSelectionView({
     candidate: selection.candidateView,
     candidateRefreshing: selection.candidateRefreshing,
-    isPending: download.pending,
-    isSlow: download.slow,
-    lastResult: download.result,
     urlState: selection.state,
   });
 
@@ -59,8 +55,10 @@ export function useExportPageModel({
     candidate: selection.candidate,
     conditions: selection.conditions,
     download: {
-      pending: download.pending,
-      start: download.start,
+      available: selection.available,
+      request: selection.request,
+      slowThresholdMs,
+      timeoutMs: downloadTimeoutMs,
     },
     view,
   };

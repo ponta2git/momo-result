@@ -1,4 +1,5 @@
 import { Download } from "lucide-react";
+import { useLayoutEffect } from "react";
 
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
@@ -7,14 +8,46 @@ import { contentText } from "@/shared/ui/typography";
 
 import { ExportDownloadProgress } from "./ExportDownloadProgress";
 import { ExportDownloadResult } from "./ExportDownloadResult";
-import type { ExportViewModel } from "./exportViewModel";
+import type { ExportActionAvailability, ExportActionView } from "./exportViewModel";
+import { useExportDownload } from "./useExportDownload";
+import type { ExportDownloadOptions } from "./useExportDownload";
 
 type ExportActionPanelProps = {
   isPending: boolean;
   onDownload: () => void;
   onResetConditions: () => void;
-  view: ExportViewModel;
+  view: ExportActionView;
 };
+
+/** Stays mounted while conditions resolve, so scope changes still cancel an in-flight download. */
+export function ExportDownloadAction({
+  action,
+  visible,
+  onPendingChange,
+  onResetConditions,
+  ...options
+}: ExportDownloadOptions & {
+  action: ExportActionAvailability;
+  visible: boolean;
+  onPendingChange: (pending: boolean) => void;
+  onResetConditions: () => void;
+}) {
+  const download = useExportDownload(options);
+  useLayoutEffect(() => onPendingChange(download.pending), [download.pending, onPendingChange]);
+  return visible ? (
+    <ExportActionPanel
+      isPending={download.pending}
+      view={{
+        ...action,
+        canDownload: action.canDownload && !download.pending,
+        isSlow: download.pending && download.slow,
+        result: download.result,
+      }}
+      onDownload={download.start}
+      onResetConditions={onResetConditions}
+    />
+  ) : null;
+}
 
 export function ExportActionPanel({
   isPending,

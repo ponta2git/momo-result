@@ -5,6 +5,7 @@ import { useLayoutEffect, useRef } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
+import { useExportDownload } from "@/features/exports/useExportDownload";
 import { useExportPageModel } from "@/features/exports/useExportPageModel";
 import { setDevUser } from "@/test/auth";
 import { installAnchorClickMock } from "@/test/doubles/dom";
@@ -17,13 +18,14 @@ setupMsw();
 
 function DownloadAtFirstReadyCommit() {
   const page = useExportPageModel({});
+  const download = useExportDownload(page.download);
   const started = useRef(false);
   useLayoutEffect(() => {
-    if (started.current || !page.view.canDownload) return;
+    if (started.current || !page.view.action.canDownload) return;
     started.current = true;
-    page.download.start();
-  }, [page]);
-  return <p>{page.view.summaryText}</p>;
+    download.start();
+  }, [page, download]);
+  return <p>{page.view.action.summaryText}</p>;
 }
 
 describe("export page action contract", () => {

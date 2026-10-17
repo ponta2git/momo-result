@@ -1,10 +1,10 @@
 import { scopedMasterPanelView } from "@/features/masters/catalog/catalogPresentation";
+import type { ScopedMasterCatalogView } from "@/features/masters/catalog/catalogTypes";
 import {
   MasterDeleteDialog,
   MasterEditDialog,
 } from "@/features/masters/catalog/MasterCatalogDialogs";
 import { MasterCreateForm } from "@/features/masters/catalog/MasterCreateForm";
-import type { MapMasterResponse, SeasonMasterResponse } from "@/shared/api/masters";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
@@ -12,55 +12,16 @@ import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { contentText } from "@/shared/ui/typography";
 
-type ScopedMasterItem = Readonly<
-  (MapMasterResponse | SeasonMasterResponse) & { pending?: boolean }
->;
-
-type MasterCreation = Readonly<{
-  scopeKey: string;
-  action: (formData: FormData) => void | Promise<void>;
-  error?: string | undefined;
-  formKey?: string | number | undefined;
-  pending?: boolean | undefined;
-}>;
-
-type ScopedMasterActions = Readonly<{
-  onDelete: (id: string) => Promise<void> | void;
-  onUpdate: (id: string, request: { name: string }) => Promise<void>;
-}>;
-
-type ScopedMasterLabels = Readonly<{
-  itemLabel: string;
-  title: string;
-}>;
-
-type ScopedMasterList = Readonly<{
-  completion?: string | undefined;
-  error?: string | undefined;
-  hasData: boolean;
-  items: readonly ScopedMasterItem[];
-  loadFailed: boolean;
-  loading?: boolean | undefined;
-  onRetry: () => void;
-  retrying?: boolean | undefined;
-  stale: boolean;
-}>;
-
-type ScopedMasterPanelProps = Readonly<{
-  actions: ScopedMasterActions;
-  create: MasterCreation;
-  disabledReason?: string | undefined;
-  labels: ScopedMasterLabels;
-  list: ScopedMasterList;
-}>;
-
 export function ScopedMasterPanel({
   actions,
   create,
   disabledReason,
   labels,
   list,
-}: ScopedMasterPanelProps) {
+}: ScopedMasterCatalogView & {
+  disabledReason?: string | undefined;
+  labels: Readonly<{ itemLabel: string; title: string }>;
+}) {
   const { loading, loadBlocked, showStaleError, createDisabled, createDisabledReason } =
     scopedMasterPanelView(list, labels.itemLabel, disabledReason);
   const retryAction = (

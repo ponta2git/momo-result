@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import {
   normalizeGameTitleEdit,
@@ -29,6 +29,7 @@ export function useMasterCatalogMutations(input: {
   ) => {
     const lease = authorization.begin(permission);
     if (!lease) throw new DOMException("権限を確認できません", "AbortError");
+    setOperationError(undefined);
     setPendingLeases((pending) => [...pending, lease]);
     try {
       return await action(lease);
@@ -40,84 +41,66 @@ export function useMasterCatalogMutations(input: {
     }
   };
 
-  const deleteWithDialogFeedback = useCallback(
-    async (action: () => Promise<unknown>) => {
-      setOperationError(undefined);
-      await action();
-    },
-    [setOperationError],
-  );
+  const updateGameTitle = async (
+    lease: AuthorizationLease,
+    id: string,
+    request: { name: string; layoutFamily: string },
+  ) => {
+    onFeedback("gameTitle", "", "");
+    const parsed = normalizeGameTitleEdit(request);
+    if (parsed.kind === "invalid") {
+      setOperationError(parsed.error);
+      return;
+    }
+    await writes.updateGameTitle(id, parsed.request, lease);
+    if (authorization.isCurrent(lease)) onFeedback("gameTitle", "", "作品を保存しました");
+  };
 
-  const updateGameTitle = useCallback(
-    async (
-      lease: AuthorizationLease,
-      id: string,
-      request: { name: string; layoutFamily: string },
-    ) => {
-      onFeedback("gameTitle", "", "");
-      setOperationError(undefined);
-      const parsed = normalizeGameTitleEdit(request);
-      if (parsed.kind === "invalid") {
-        setOperationError(parsed.error);
-        return;
-      }
-      await writes.updateGameTitle(id, parsed.request, lease);
-      if (authorization.isCurrent(lease)) onFeedback("gameTitle", "", "作品を保存しました");
-    },
-    [authorization, onFeedback, writes],
-  );
+  const updateMapMaster = async (
+    lease: AuthorizationLease,
+    id: string,
+    request: { name: string },
+  ) => {
+    onFeedback("map", selectedGameTitleId, "");
+    await writes.updateMapMaster(id, normalizeMasterNameEdit(request), lease);
+    if (authorization.isCurrent(lease))
+      onFeedback("map", selectedGameTitleId, "マップを保存しました");
+  };
 
-  const updateMapMaster = useCallback(
-    async (lease: AuthorizationLease, id: string, request: { name: string }) => {
-      onFeedback("map", selectedGameTitleId, "");
-      setOperationError(undefined);
-      await writes.updateMapMaster(id, normalizeMasterNameEdit(request), lease);
-      if (authorization.isCurrent(lease))
-        onFeedback("map", selectedGameTitleId, "マップを保存しました");
-    },
-    [authorization, onFeedback, selectedGameTitleId, writes],
-  );
-
-  const updateSeasonMaster = useCallback(
-    async (lease: AuthorizationLease, id: string, request: { name: string }) => {
-      onFeedback("season", selectedGameTitleId, "");
-      setOperationError(undefined);
-      await writes.updateSeasonMaster(id, normalizeMasterNameEdit(request), lease);
-      if (authorization.isCurrent(lease))
-        onFeedback("season", selectedGameTitleId, "シーズンを保存しました");
-    },
-    [authorization, onFeedback, selectedGameTitleId, writes],
-  );
+  const updateSeasonMaster = async (
+    lease: AuthorizationLease,
+    id: string,
+    request: { name: string },
+  ) => {
+    onFeedback("season", selectedGameTitleId, "");
+    await writes.updateSeasonMaster(id, normalizeMasterNameEdit(request), lease);
+    if (authorization.isCurrent(lease))
+      onFeedback("season", selectedGameTitleId, "シーズンを保存しました");
+  };
 
   return {
     operationError,
     deleteGameTitle: (id: string) =>
-      trackMutation("admin", (lease) =>
-        deleteWithDialogFeedback(async () => {
-          onFeedback("gameTitle", "", "");
-          await writes.deleteGameTitle(id, lease, onGameTitleDeleted);
-          if (authorization.canCommit(lease))
-            showToast({ title: "作品を削除しました", tone: "success" });
-        }),
-      ),
+      trackMutation("admin", async (lease) => {
+        onFeedback("gameTitle", "", "");
+        await writes.deleteGameTitle(id, lease, onGameTitleDeleted);
+        if (authorization.canCommit(lease))
+          showToast({ title: "作品を削除しました", tone: "success" });
+      }),
     deleteMapMaster: (id: string) =>
-      trackMutation("operations", (lease) =>
-        deleteWithDialogFeedback(async () => {
-          onFeedback("map", selectedGameTitleId, "");
-          await writes.deleteMapMaster(id, lease);
-          if (authorization.canCommit(lease))
-            showToast({ title: "マップを削除しました", tone: "success" });
-        }),
-      ),
+      trackMutation("operations", async (lease) => {
+        onFeedback("map", selectedGameTitleId, "");
+        await writes.deleteMapMaster(id, lease);
+        if (authorization.canCommit(lease))
+          showToast({ title: "マップを削除しました", tone: "success" });
+      }),
     deleteSeasonMaster: (id: string) =>
-      trackMutation("operations", (lease) =>
-        deleteWithDialogFeedback(async () => {
-          onFeedback("season", selectedGameTitleId, "");
-          await writes.deleteSeasonMaster(id, lease);
-          if (authorization.canCommit(lease))
-            showToast({ title: "シーズンを削除しました", tone: "success" });
-        }),
-      ),
+      trackMutation("operations", async (lease) => {
+        onFeedback("season", selectedGameTitleId, "");
+        await writes.deleteSeasonMaster(id, lease);
+        if (authorization.canCommit(lease))
+          showToast({ title: "シーズンを削除しました", tone: "success" });
+      }),
     pending: pendingLeases.some(authorization.isCurrent),
     updateGameTitle: (id: string, request: { name: string; layoutFamily: string }) =>
       trackMutation("admin", (lease) => updateGameTitle(lease, id, request)),

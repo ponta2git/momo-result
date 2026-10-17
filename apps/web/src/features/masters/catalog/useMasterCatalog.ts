@@ -1,10 +1,6 @@
 import { useCallback, useState } from "react";
 
-import type {
-  OptimisticGameTitle,
-  OptimisticMapMaster,
-  OptimisticSeasonMaster,
-} from "@/features/masters/catalog/catalogTypes";
+import type { MasterCatalogView } from "@/features/masters/catalog/catalogTypes";
 import { defaultLayoutFamily } from "@/features/masters/catalog/catalogValidation";
 import { useMasterCatalogCreateActions } from "@/features/masters/catalog/useMasterCatalogCreateActions";
 import { useMasterCatalogMutations } from "@/features/masters/catalog/useMasterCatalogMutations";
@@ -64,67 +60,71 @@ export function useMasterCatalog(enabled: boolean) {
     (admin.retained && createActions.gameTitleCreatePending) ||
     (operations.retained &&
       (createActions.mapCreatePending || createActions.seasonCreatePending || mutations.pending));
-  const gameTitleItems: readonly OptimisticGameTitle[] = optimisticCatalog.optimisticGameTitles;
-  const mapItems: readonly OptimisticMapMaster[] = selection.selectedMapMasters;
-  const seasonItems: readonly OptimisticSeasonMaster[] = selection.selectedSeasonMasters;
-
-  return {
-    catalog: {
-      gameTitle: {
-        ...gameTitles,
-        refreshing: gameTitles.refreshing && !hasPendingMutation,
-        canEdit: admin.retained,
-        completion: completions["gameTitle:"],
-        create: {
-          action: createActions.gameTitleCreateAction,
-          error: createActions.gameTitleCreateState.error,
-          formKey: createActions.gameTitleCreateState.version,
-          pending: createActions.gameTitleCreatePending,
-        },
-        defaultLayoutFamily,
-        items: gameTitleItems,
-        onDelete: mutations.deleteGameTitle,
-        onRetry: refreshGameTitles,
-        onSelect: (id: string) => setSelectedGameTitleId(id),
-        onUpdate: mutations.updateGameTitle,
-        selectedId: selection.selectedGameTitleId,
+  const catalog: MasterCatalogView = {
+    gameTitle: {
+      ...gameTitles,
+      refreshing: gameTitles.refreshing && !hasPendingMutation,
+      canEdit: admin.retained,
+      completion: completions["gameTitle:"],
+      create: {
+        action: createActions.gameTitleCreateAction,
+        error: createActions.gameTitleCreateState.error,
+        formKey: createActions.gameTitleCreateState.version,
+        pending: createActions.gameTitleCreatePending,
       },
-      map: {
-        ...mapMasters,
-        refreshing: mapMasters.refreshing && !hasPendingMutation,
-        completion: completions[`map:${selection.selectedGameTitleId}`],
-        create: {
-          scopeKey: selection.selectedGameTitleId,
-          action: createActions.mapCreateAction,
-          error: createActions.mapCreateState.error,
-          formKey: createActions.mapCreateState.version,
-          pending: createActions.mapCreatePending,
-        },
-        items: mapItems,
+      defaultLayoutFamily,
+      items: optimisticCatalog.optimisticGameTitles,
+      onDelete: mutations.deleteGameTitle,
+      onRetry: refreshGameTitles,
+      onSelect: setSelectedGameTitleId,
+      onUpdate: mutations.updateGameTitle,
+      selectedGameTitleId: selection.selectedGameTitleId,
+    },
+    map: {
+      actions: {
         onDelete: mutations.deleteMapMaster,
-        onRetry: refreshMapMasters,
         onUpdate: mutations.updateMapMaster,
+      },
+      create: {
+        scopeKey: selection.selectedGameTitleId,
+        action: createActions.mapCreateAction,
+        error: createActions.mapCreateState.error,
+        formKey: createActions.mapCreateState.version,
+        pending: createActions.mapCreatePending,
+      },
+      list: {
+        ...mapMasters,
+        completion: completions[`map:${selection.selectedGameTitleId}`],
+        items: selection.selectedMapMasters,
+        onRetry: refreshMapMasters,
         retrying: mapMasters.refreshing && !hasPendingMutation,
       },
-      scopedDisabledReason: selection.scopedDisabledReason,
-      season: {
-        ...seasonMasters,
-        refreshing: seasonMasters.refreshing && !hasPendingMutation,
-        completion: completions[`season:${selection.selectedGameTitleId}`],
-        create: {
-          scopeKey: selection.selectedGameTitleId,
-          action: createActions.seasonCreateAction,
-          error: createActions.seasonCreateState.error,
-          formKey: createActions.seasonCreateState.version,
-          pending: createActions.seasonCreatePending,
-        },
-        items: seasonItems,
+    },
+    scopedDisabledReason: selection.scopedDisabledReason,
+    season: {
+      actions: {
         onDelete: mutations.deleteSeasonMaster,
-        onRetry: refreshSeasonMasters,
         onUpdate: mutations.updateSeasonMaster,
+      },
+      create: {
+        scopeKey: selection.selectedGameTitleId,
+        action: createActions.seasonCreateAction,
+        error: createActions.seasonCreateState.error,
+        formKey: createActions.seasonCreateState.version,
+        pending: createActions.seasonCreatePending,
+      },
+      list: {
+        ...seasonMasters,
+        completion: completions[`season:${selection.selectedGameTitleId}`],
+        items: selection.selectedSeasonMasters,
+        onRetry: refreshSeasonMasters,
         retrying: seasonMasters.refreshing && !hasPendingMutation,
       },
     },
+  };
+
+  return {
+    catalog,
     pending: hasPendingMutation,
     operationError: mutations.operationError,
   } as const;

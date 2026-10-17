@@ -1,61 +1,7 @@
+import type { MasterCatalogView } from "@/features/masters/catalog/catalogTypes";
 import { GameTitleList } from "@/features/masters/catalog/GameTitleList";
 import { ScopedMasterPanel } from "@/features/masters/catalog/ScopedMasterPanel";
-import type {
-  GameTitleResponse,
-  MapMasterResponse,
-  SeasonMasterResponse,
-} from "@/shared/api/masters";
-import type { LayoutFamily } from "@/shared/domain/ocr";
 import { PendingStatus } from "@/shared/ui/feedback/PendingStatus";
-
-type GameTitleListItem = Readonly<GameTitleResponse & { pending?: boolean }>;
-type ScopedMasterListItem = Readonly<
-  (MapMasterResponse | SeasonMasterResponse) & { pending?: boolean }
->;
-
-type MasterCreation = Readonly<{
-  action: (formData: FormData) => void | Promise<void>;
-  error?: string | undefined;
-  formKey?: string | number | undefined;
-  pending?: boolean | undefined;
-}>;
-
-type GameTitleCatalog = Readonly<{
-  canEdit: boolean;
-  completion?: string | undefined;
-  create: MasterCreation;
-  defaultLayoutFamily: LayoutFamily;
-  items: readonly GameTitleListItem[];
-  onRetry: () => void;
-  onDelete: (id: string) => Promise<void> | void;
-  onSelect: (id: string) => void;
-  onUpdate: (id: string, request: { name: string; layoutFamily: string }) => Promise<void>;
-  selectedId: string;
-  refreshing: boolean;
-  stale: boolean;
-}>;
-
-type ScopedMasterCatalog = Readonly<{
-  completion?: string | undefined;
-  create: Readonly<MasterCreation & { scopeKey: string }>;
-  error?: string | undefined;
-  hasData: boolean;
-  items: readonly ScopedMasterListItem[];
-  loadFailed: boolean;
-  loading?: boolean | undefined;
-  onRetry: () => void;
-  onDelete: (id: string) => Promise<void> | void;
-  onUpdate: (id: string, request: { name: string }) => Promise<void>;
-  retrying?: boolean | undefined;
-  stale: boolean;
-}>;
-
-type MasterCatalogPanelProps = Readonly<{
-  gameTitle: GameTitleCatalog;
-  map: ScopedMasterCatalog;
-  scopedDisabledReason?: string | undefined;
-  season: ScopedMasterCatalog;
-}>;
 
 const mapPanelLabels = {
   title: "マップ",
@@ -71,72 +17,30 @@ export function MasterCatalogPanel({
   map,
   scopedDisabledReason,
   season,
-}: MasterCatalogPanelProps) {
-  const mapActions = { onDelete: map.onDelete, onUpdate: map.onUpdate };
-  const mapList = {
-    error: map.error,
-    completion: map.completion,
-    hasData: map.hasData,
-    items: map.items,
-    loadFailed: map.loadFailed,
-    loading: map.loading,
-    onRetry: map.onRetry,
-    retrying: map.retrying,
-    stale: map.stale,
-  };
-  const seasonActions = { onDelete: season.onDelete, onUpdate: season.onUpdate };
-  const seasonList = {
-    error: season.error,
-    completion: season.completion,
-    hasData: season.hasData,
-    items: season.items,
-    loadFailed: season.loadFailed,
-    loading: season.loading,
-    onRetry: season.onRetry,
-    retrying: season.retrying,
-    stale: season.stale,
-  };
-
+}: MasterCatalogView) {
   return (
     <section className="grid gap-6">
-      <GameTitleList
-        canEdit={gameTitle.canEdit}
-        create={gameTitle.create}
-        completion={gameTitle.completion}
-        defaultLayoutFamily={gameTitle.defaultLayoutFamily}
-        items={gameTitle.items}
-        onDelete={gameTitle.onDelete}
-        onRetry={gameTitle.onRetry}
-        onUpdate={gameTitle.onUpdate}
-        onSelect={gameTitle.onSelect}
-        selectedGameTitleId={gameTitle.selectedId}
-        refreshing={gameTitle.refreshing}
-        stale={gameTitle.stale}
-      />
+      <GameTitleList {...gameTitle} />
 
       <div>
         <PendingStatus
-          pending={Boolean((map.loading || season.loading) && !gameTitle.create.pending)}
+          pending={Boolean((map.list.loading || season.list.loading) && !gameTitle.create.pending)}
         >
           選択した作品の設定を読み込み中
         </PendingStatus>
         <div className="grid min-w-0 gap-6 xl:grid-cols-2">
           <div className="min-w-0">
             <ScopedMasterPanel
-              actions={mapActions}
-              create={map.create}
+              {...map}
               labels={mapPanelLabels}
-              list={mapList}
               disabledReason={scopedDisabledReason}
             />
           </div>
 
           <div className="min-w-0">
             <ScopedMasterPanel
-              actions={seasonActions}
-              create={season.create}
+              {...season}
               labels={seasonPanelLabels}
-              list={seasonList}
               disabledReason={scopedDisabledReason}
             />
           </div>

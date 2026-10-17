@@ -2,12 +2,12 @@ import { Plus } from "lucide-react";
 import { startTransition, useState } from "react";
 
 import { masterGameTitleChoices } from "@/features/masters/catalog/catalogPresentation";
+import type { GameTitleCatalogView, MasterCreation } from "@/features/masters/catalog/catalogTypes";
 import {
   MasterDeleteDialog,
   MasterEditDialog,
 } from "@/features/masters/catalog/MasterCatalogDialogs";
 import { MasterResourceRefreshNotice } from "@/features/masters/MasterResourceRefreshNotice";
-import type { GameTitleResponse } from "@/shared/api/masters";
 import { layoutFamilies, layoutFamilyLabels } from "@/shared/domain/ocr";
 import type { LayoutFamily } from "@/shared/domain/ocr";
 import { Button } from "@/shared/ui/actions/Button";
@@ -19,30 +19,6 @@ import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
 import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
 import { contentText } from "@/shared/ui/typography";
-
-type GameTitleListItem = Readonly<GameTitleResponse & { pending?: boolean }>;
-
-type MasterCreation = Readonly<{
-  action: (formData: FormData) => void | Promise<void>;
-  error?: string | undefined;
-  formKey?: string | number | undefined;
-  pending?: boolean | undefined;
-}>;
-
-type GameTitleListProps = Readonly<{
-  canEdit: boolean;
-  completion?: string | undefined;
-  create: MasterCreation;
-  defaultLayoutFamily: LayoutFamily;
-  items: readonly GameTitleListItem[];
-  onRetry: () => void;
-  onDelete: (id: string) => Promise<void> | void;
-  onUpdate: (id: string, request: { name: string; layoutFamily: string }) => Promise<void>;
-  onSelect: (id: string) => void;
-  selectedGameTitleId: string;
-  refreshing: boolean;
-  stale: boolean;
-}>;
 
 export function GameTitleList({
   canEdit,
@@ -57,7 +33,7 @@ export function GameTitleList({
   selectedGameTitleId,
   refreshing,
   stale,
-}: GameTitleListProps) {
+}: GameTitleCatalogView) {
   const choices = masterGameTitleChoices(items, canEdit).map((choice) => {
     const { item, pending: isPending } = choice;
     return {

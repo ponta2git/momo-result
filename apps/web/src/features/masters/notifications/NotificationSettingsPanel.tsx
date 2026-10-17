@@ -100,7 +100,7 @@ export function NotificationSettingsPanel({ model: page }: { model: Notification
                         {
                           id: kind,
                           label: "保存済み",
-                          value: resource.confirmed[kind].enabled ? "ON" : "OFF",
+                          value: resource.savedValues[kind] ? "ON" : "OFF",
                         },
                       ]}
                       layout="inline"
@@ -142,7 +142,11 @@ export function NotificationSettingsPanel({ model: page }: { model: Notification
                   >
                     保存
                   </Button>
-                  <Button disabled={page.actionsDisabled} variant="secondary" onClick={page.reset}>
+                  <Button
+                    disabled={page.actionsDisabled}
+                    variant="secondary"
+                    onClick={page.discardChanges}
+                  >
                     変更を破棄
                   </Button>
                 </div>
@@ -167,7 +171,9 @@ export function NotificationSettingsPanel({ model: page }: { model: Notification
       </section>
       <AlertDialog
         open={page.confirmation.open}
-        onOpenChange={page.confirmation.setOpen}
+        onOpenChange={(open) => {
+          if (!open) page.confirmation.cancel();
+        }}
         title="通知をOFFにして保存しますか？"
         description="全利用者に共通の通知設定を、次の内容で保存します。"
         confirmLabel="OFFにして保存"

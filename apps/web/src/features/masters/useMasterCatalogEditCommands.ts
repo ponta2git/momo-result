@@ -4,49 +4,39 @@ import { useCallback, useState } from "react";
 import {
   normalizeGameTitleEdit,
   normalizeMasterNameEdit,
-  normalizeMemberAliasEdit,
 } from "@/features/masters/masterFormModel";
 import {
   cacheMasterUpdate,
   invalidateMasterResourceCaches,
-  invalidateMemberAliasCaches,
 } from "@/features/masters/masterResourceCache";
 import type { IdempotencyKeyStore } from "@/shared/api/idempotency";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import {
   deleteGameTitle,
   deleteMapMaster,
-  deleteMemberAlias,
   deleteSeasonMaster,
   updateGameTitle as updateGameTitleResource,
   updateMapMaster as updateMapMasterResource,
-  updateMemberAlias as updateMemberAliasResource,
   updateSeasonMaster as updateSeasonMasterResource,
 } from "@/shared/api/masters";
 import { masterKeys } from "@/shared/api/queryKeys";
 import type { AuthorizationLease } from "@/shared/auth/authorization";
 import type { ManagementPermission } from "@/shared/auth/permissions";
-import { useAuthorization } from "@/shared/auth/useAuthorization";
+import { useAuthorizationOperations } from "@/shared/auth/useAuthorization";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
-export function useMasterEditCommands(input: {
+export function useMasterCatalogEditCommands(input: {
   onFeedback: (kind: string, scope: string, message: string) => void;
   idempotencyKeys: IdempotencyKeyStore;
   queryClient: QueryClient;
   selectedGameTitleId: string;
-  setOperationError: (message: string | undefined) => void;
-  setSelectedGameTitleId: (id: string) => void;
+  onGameTitleDeleted: (id: string) => void;
 }) {
-  const authorization = useAuthorization();
-  const {
-    onFeedback,
-    idempotencyKeys,
-    queryClient,
-    selectedGameTitleId,
-    setOperationError,
-    setSelectedGameTitleId,
-  } = input;
+  const authorization = useAuthorizationOperations();
+  const { onFeedback, idempotencyKeys, queryClient, selectedGameTitleId, onGameTitleDeleted } =
+    input;
   const [pendingMutations, setPendingMutations] = useState<AuthorizationLease[]>([]);
+  const [operationError, setOperationError] = useState<string>();
 
   const trackMutation = async <Result>(
     permission: ManagementPermission,
@@ -128,14 +118,7 @@ export function useMasterEditCommands(input: {
       if (authorization.isCurrent(lease))
         onFeedback("map", selectedGameTitleId, "マップを保存しました");
     },
-    [
-      authorization,
-      onFeedback,
-      idempotencyKeys,
-      queryClient,
-      selectedGameTitleId,
-      setOperationError,
-    ],
+    [authorization, onFeedback, idempotencyKeys, queryClient, selectedGameTitleId],
   );
 
   const updateSeasonMaster = useCallback(
@@ -160,39 +143,11 @@ export function useMasterEditCommands(input: {
       if (authorization.isCurrent(lease))
         onFeedback("season", selectedGameTitleId, "シーズンを保存しました");
     },
-    [
-      authorization,
-      onFeedback,
-      idempotencyKeys,
-      queryClient,
-      selectedGameTitleId,
-      setOperationError,
-    ],
-  );
-
-  const updateMemberAlias = useCallback(
-    async (lease: AuthorizationLease, id: string, request: { memberId: string; alias: string }) => {
-      onFeedback("aliases", "", "");
-      setOperationError(undefined);
-      const normalizedRequest = normalizeMemberAliasEdit(request);
-      const updated = await runIdempotentMutation(
-        idempotencyKeys,
-        "masters.updateMemberAlias",
-        { id, request: normalizedRequest },
-        (options) => updateMemberAliasResource(id, normalizedRequest, options),
-      );
-      if (!authorization.isSameAccount(lease)) return;
-      await cacheMasterUpdate(queryClient, masterKeys.memberAliases.all(), id, updated, () =>
-        authorization.isSameAccount(lease),
-      );
-      if (!authorization.isSameAccount(lease)) return;
-      await invalidateMemberAliasCaches(queryClient);
-      if (authorization.isCurrent(lease)) onFeedback("aliases", "", "別名を保存しました");
-    },
-    [authorization, onFeedback, idempotencyKeys, queryClient, setOperationError],
+    [authorization, onFeedback, idempotencyKeys, queryClient, selectedGameTitleId],
   );
 
   return {
+    operationError,
     deleteGameTitle: (id: string) =>
       trackMutation("admin", (lease) =>
         deleteWithDialogFeedback(async () => {
@@ -208,9 +163,7 @@ export function useMasterEditCommands(input: {
             authorization.isSameAccount(lease),
           );
           if (!authorization.isSameAccount(lease)) return;
-          if (authorization.canCommit(lease) && selectedGameTitleId === id) {
-            setSelectedGameTitleId("");
-          }
+          if (authorization.canCommit(lease)) onGameTitleDeleted(id);
           await invalidateMasterResourceCaches(queryClient, "game-titles", () =>
             authorization.canCommit(lease),
           );
@@ -240,26 +193,6 @@ export function useMasterEditCommands(input: {
             showToast({ title: "マップを削除しました", tone: "success" });
         }),
       ),
-    deleteMemberAlias: (id: string) =>
-      trackMutation("admin", (lease) =>
-        deleteWithDialogFeedback(async () => {
-          onFeedback("aliases", "", "");
-          await runIdempotentMutation(
-            idempotencyKeys,
-            "masters.deleteMemberAlias",
-            { id },
-            (options) => deleteMemberAlias(id, options),
-          );
-          if (!authorization.isSameAccount(lease)) return;
-          await cacheMasterUpdate(queryClient, masterKeys.memberAliases.all(), id, null, () =>
-            authorization.isSameAccount(lease),
-          );
-          if (!authorization.isSameAccount(lease)) return;
-          await invalidateMemberAliasCaches(queryClient);
-          if (authorization.canCommit(lease))
-            showToast({ title: "別名を削除しました", tone: "success" });
-        }),
-      ),
     deleteSeasonMaster: (id: string) =>
       trackMutation("operations", (lease) =>
         deleteWithDialogFeedback(async () => {
@@ -287,8 +220,6 @@ export function useMasterEditCommands(input: {
       trackMutation("admin", (lease) => updateGameTitle(lease, id, request)),
     updateMapMaster: (id: string, request: { name: string }) =>
       trackMutation("operations", (lease) => updateMapMaster(lease, id, request)),
-    updateMemberAlias: (id: string, request: { memberId: string; alias: string }) =>
-      trackMutation("admin", (lease) => updateMemberAlias(lease, id, request)),
     updateSeasonMaster: (id: string, request: { name: string }) =>
       trackMutation("operations", (lease) => updateSeasonMaster(lease, id, request)),
   };

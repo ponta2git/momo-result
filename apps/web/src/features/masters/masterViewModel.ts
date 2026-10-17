@@ -28,7 +28,7 @@ export function masterDirectoryState(input: {
   };
 }
 
-export function masterAliasGroups(aliases: MemberAliasResponse[]) {
+export function masterAliasGroups(aliases: ReadonlyArray<Readonly<MemberAliasResponse>>) {
   return canonicalResultMembers.map((member) => ({
     member,
     aliases: aliases.filter((alias) => alias.memberId === member.memberId),
@@ -98,7 +98,7 @@ export function scopedMasterPanelView(
 }
 
 export function masterGameTitleChoices(
-  items: Array<GameTitleResponse & { pending?: boolean }>,
+  items: ReadonlyArray<Readonly<GameTitleResponse & { pending?: boolean }>>,
   canEdit: boolean,
 ) {
   return items.map((item) => {

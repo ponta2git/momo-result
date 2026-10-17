@@ -5,7 +5,7 @@ import type {
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 
 export type NotificationKind = keyof NotificationSettings;
-type Values = Record<NotificationKind, boolean>;
+type Values = Readonly<Record<NotificationKind, boolean>>;
 export type NotificationDraft = { base: NotificationSettings; values: Values };
 export type NotificationFeedback = {
   tone: "success" | "danger" | "warning";
@@ -13,8 +13,24 @@ export type NotificationFeedback = {
   requiresReload?: true;
 };
 type SettingsResource =
-  | { status: "loading" | "failed" }
-  | { status: "ready"; confirmed: NotificationSettings; values: Values };
+  | { readonly status: "loading" | "failed" }
+  | { readonly status: "ready"; readonly savedValues: Values; readonly values: Values };
+type NotificationSettingsView = {
+  readonly resource: SettingsResource;
+  readonly dirty: boolean;
+  readonly disabled: boolean;
+  readonly actionsDisabled: boolean;
+  readonly issue: Readonly<NotificationFeedback> | undefined;
+  readonly status: {
+    readonly completion: string | undefined;
+    readonly checking: boolean;
+    readonly unsaved: boolean;
+  };
+  readonly pending: boolean;
+  readonly stale: boolean;
+  readonly needsReload: boolean;
+  readonly refreshing: boolean;
+};
 type SavePlan =
   | { kind: "blocked" }
   | { kind: "ready"; requiresConfirmation: boolean; request: NotificationSettingsUpdate };
@@ -74,10 +90,14 @@ export function buildNotificationSettingsView(input: {
   fetching: boolean;
   failed: boolean;
   queryError: boolean;
-}) {
+}): NotificationSettingsView & { readonly savePlan: SavePlan } {
   const { confirmed, draft, feedback } = input;
   const resource: SettingsResource = confirmed
-    ? { status: "ready", confirmed, values: draft?.values ?? valuesOf(confirmed) }
+    ? {
+        status: "ready",
+        savedValues: valuesOf(confirmed),
+        values: draft?.values ?? valuesOf(confirmed),
+      }
     : { status: input.failed ? "failed" : "loading" };
   const dirty = Boolean(
     draft &&
@@ -117,7 +137,6 @@ export function buildNotificationSettingsView(input: {
     dirty: retainedDirty,
     disabled,
     actionsDisabled: !retainedDirty || disabled,
-    feedback,
     issue: feedback?.tone === "success" ? undefined : feedback,
     status: {
       completion: !input.pending && feedback?.tone === "success" ? feedback.message : undefined,
@@ -132,17 +151,14 @@ export function buildNotificationSettingsView(input: {
   };
 }
 
-export type NotificationSettingsModel = Omit<
-  ReturnType<typeof buildNotificationSettingsView>,
-  "savePlan"
-> & {
-  change: (kind: NotificationKind, enabled: boolean) => void;
-  submit: () => void;
-  reload: () => Promise<boolean>;
-  reset: () => void;
-  confirmation: {
-    open: boolean;
-    setOpen: (open: boolean) => void;
-    save: () => void;
+export type NotificationSettingsModel = NotificationSettingsView & {
+  readonly change: (kind: NotificationKind, enabled: boolean) => void;
+  readonly submit: () => void;
+  readonly reload: () => Promise<boolean>;
+  readonly discardChanges: () => void;
+  readonly confirmation: {
+    readonly open: boolean;
+    readonly cancel: () => void;
+    readonly save: () => void;
   };
 };

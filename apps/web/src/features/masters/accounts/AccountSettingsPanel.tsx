@@ -125,15 +125,18 @@ export function AccountSettingsPanel({ model: page }: { model: AccountSettingsMo
                     <AdminAccountActions
                       account={account}
                       isPending={page.pending}
-                      pendingRequest={page.update.pendingRequestFor(account.accountId)}
-                      onPatch={(request) => page.update.run(account.accountId, request)}
+                      pendingOperation={page.update.operationFor(account.accountId)}
+                      onChangeRole={(role) => page.update.changeRole(account.accountId, role)}
+                      onChangeLoginEnabled={(enabled) =>
+                        page.update.changeLoginEnabled(account.accountId, enabled)
+                      }
                     />
                   ),
                 },
               ]}
               density="compact"
               getRowKey={(account) => account.accountId}
-              isRowBusy={(account) => Boolean(page.update.pendingRequestFor(account.accountId))}
+              isRowBusy={(account) => Boolean(page.update.operationFor(account.accountId))}
               minWidth="44rem"
               rows={page.list.items}
               stickyRowHeader

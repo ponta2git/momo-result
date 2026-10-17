@@ -22,15 +22,17 @@ import { notificationSettingsKeys } from "@/shared/api/queryKeys";
 import { notificationSettingsQueryOptions } from "@/shared/api/queryOptions";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import type { AuthorizationLease } from "@/shared/auth/authorization";
-import { useAuthorization } from "@/shared/auth/useAuthorization";
+import { useAuthorizationOperations, usePermissionFacts } from "@/shared/auth/useAuthorization";
 import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 /** Keeps editable choices tied to the confirmed generations from which editing began. */
 export function useNotificationSettingsModel(queryEnabled = true): NotificationSettingsModel {
-  const authorization = useAuthorization();
+  const authorization = useAuthorizationOperations();
+  const permission = usePermissionFacts("admin");
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
-  const canReadSettings = authorization.canRead("admin", notificationSettingsKeys.all());
+  const canReadSettings =
+    permission.allowed && authorization.canRead("admin", notificationSettingsKeys.all());
   const query = useQuery({
     ...notificationSettingsQueryOptions(),
     enabled: () =>
@@ -44,9 +46,9 @@ export function useNotificationSettingsModel(queryEnabled = true): NotificationS
   const saving = useRef<AuthorizationLease | undefined>(undefined);
   const isSaving = () => Boolean(saving.current && authorization.isCurrent(saving.current));
   const applied = useRef<NotificationSettings | undefined>(undefined);
-  const [draftEpoch, setDraftEpoch] = useState(authorization.epoch.admin);
-  if (draftEpoch !== authorization.epoch.admin) {
-    setDraftEpoch(authorization.epoch.admin);
+  const [draftEpoch, setDraftEpoch] = useState(permission.epoch);
+  if (draftEpoch !== permission.epoch) {
+    setDraftEpoch(permission.epoch);
     setDraft(undefined);
     setFeedback(undefined);
     setConfirmationOpen(false);
@@ -86,6 +88,7 @@ export function useNotificationSettingsModel(queryEnabled = true): NotificationS
   const { data: saved, variables } = mutation;
   useEffect(() => {
     if (
+      !permission.allowed ||
       !saved ||
       !variables ||
       applied.current === saved ||
@@ -98,18 +101,18 @@ export function useNotificationSettingsModel(queryEnabled = true): NotificationS
     setFeedback({ tone: "success", message: "通知設定を保存しました。" });
     // Reconcile a confirmed replay only while this same admin workflow is still valid.
     void query.refetch();
-  }, [authorization, query, queryClient, saved, variables]);
+  }, [authorization, permission.allowed, query, queryClient, saved, variables]);
   const pending =
     mutation.isPending && Boolean(variables && authorization.isCurrent(variables.lease));
 
-  const confirmed = authorization.retained.admin ? query.data : undefined;
+  const confirmed = permission.retained ? query.data : undefined;
   const failed = useRetryNotice(query.isError, query.isFetching);
   const { savePlan, ...view } = buildNotificationSettingsView({
     confirmed,
     draft,
     feedback,
-    canEdit: authorization.allowed.admin,
-    retainEdits: authorization.retained.admin,
+    canEdit: permission.allowed,
+    retainEdits: permission.retained,
     pending,
     fetching: query.isFetching,
     failed,
@@ -153,13 +156,13 @@ export function useNotificationSettingsModel(queryEnabled = true): NotificationS
     change,
     submit,
     reload,
-    reset: () => {
+    discardChanges: () => {
       setDraft(undefined);
       setFeedback(undefined);
     },
     confirmation: {
-      open: authorization.retained.admin && confirmationOpen,
-      setOpen: setConfirmationOpen,
+      open: permission.retained && confirmationOpen,
+      cancel: () => setConfirmationOpen(false),
       save,
     },
   };

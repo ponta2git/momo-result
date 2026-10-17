@@ -8,22 +8,24 @@ import type {
 import type { LayoutFamily } from "@/shared/domain/ocr";
 import { PendingStatus } from "@/shared/ui/feedback/PendingStatus";
 
-type GameTitleListItem = GameTitleResponse & { pending?: boolean };
-type ScopedMasterListItem = (MapMasterResponse | SeasonMasterResponse) & { pending?: boolean };
+type GameTitleListItem = Readonly<GameTitleResponse & { pending?: boolean }>;
+type ScopedMasterListItem = Readonly<
+  (MapMasterResponse | SeasonMasterResponse) & { pending?: boolean }
+>;
 
-type MasterCreateBinding = {
+type MasterCreateBinding = Readonly<{
   action: (formData: FormData) => void | Promise<void>;
   error?: string | undefined;
   formKey?: string | number | undefined;
   pending?: boolean | undefined;
-};
+}>;
 
-type GameTitleRelation = {
+type GameTitleRelation = Readonly<{
   canEdit: boolean;
   completion?: string | undefined;
   create: MasterCreateBinding;
   defaultLayoutFamily: LayoutFamily;
-  items: GameTitleListItem[];
+  items: readonly GameTitleListItem[];
   onRetry: () => void;
   onDelete: (id: string) => Promise<void> | void;
   onSelect: (id: string) => void;
@@ -31,14 +33,14 @@ type GameTitleRelation = {
   selectedId: string;
   refreshing: boolean;
   stale: boolean;
-};
+}>;
 
-type ScopedMasterRelation = {
+type ScopedMasterRelation = Readonly<{
   completion?: string | undefined;
-  create: MasterCreateBinding & { scopeKey: string };
+  create: Readonly<MasterCreateBinding & { scopeKey: string }>;
   error?: string | undefined;
   hasData: boolean;
-  items: ScopedMasterListItem[];
+  items: readonly ScopedMasterListItem[];
   loadFailed: boolean;
   loading?: boolean | undefined;
   onRetry: () => void;
@@ -46,14 +48,14 @@ type ScopedMasterRelation = {
   onUpdate: (id: string, request: { name: string }) => Promise<void>;
   retrying?: boolean | undefined;
   stale: boolean;
-};
+}>;
 
-type MasterRelationBoardProps = {
+type MasterRelationBoardProps = Readonly<{
   gameTitle: GameTitleRelation;
   map: ScopedMasterRelation;
   scopedDisabledReason?: string | undefined;
   season: ScopedMasterRelation;
-};
+}>;
 
 const mapPanelLabels = {
   title: "マップ",

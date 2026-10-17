@@ -16,9 +16,9 @@ import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
 import { contentText } from "@/shared/ui/typography";
 
-type MemberAliasPanelProps = {
+type MemberAliasPanelProps = Readonly<{
   completion?: string | undefined;
-  aliases: MemberAliasResponse[];
+  aliases: ReadonlyArray<Readonly<MemberAliasResponse>>;
   createAction: (formData: FormData) => void | Promise<void>;
   createError?: string | undefined;
   createFormKey?: string | number | undefined;
@@ -28,7 +28,7 @@ type MemberAliasPanelProps = {
   onUpdate: (id: string, request: { memberId: string; alias: string }) => Promise<void>;
   refreshing: boolean;
   stale: boolean;
-};
+}>;
 
 export function MemberAliasPanel({
   completion,
@@ -157,7 +157,7 @@ function AliasEditDialog({
   alias,
   onUpdate,
 }: {
-  alias: MemberAliasResponse;
+  alias: Readonly<MemberAliasResponse>;
   onUpdate: (id: string, request: { memberId: string; alias: string }) => Promise<void>;
 }) {
   const editor = useAliasEditDialog(alias.id, onUpdate);

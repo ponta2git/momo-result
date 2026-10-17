@@ -3,7 +3,8 @@ import { useState } from "react";
 import { accountRoleFromInput, accountRoleOptions } from "@/features/masters/accounts/accountRoles";
 import type { AccountRole } from "@/features/masters/accounts/accountRoles";
 import { accountActionView } from "@/features/masters/accounts/accountSettingsModel";
-import type { LoginAccountResponse, UpdateLoginAccountRequest } from "@/shared/api/adminAccounts";
+import type { AccountOperation } from "@/features/masters/accounts/accountSettingsModel";
+import type { LoginAccountResponse } from "@/shared/api/adminAccounts";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { Button } from "@/shared/ui/actions/Button";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
@@ -12,15 +13,17 @@ import { SelectField } from "@/shared/ui/forms/SelectField";
 export function AdminAccountActions({
   account,
   isPending,
-  onPatch,
-  pendingRequest,
+  onChangeRole,
+  onChangeLoginEnabled,
+  pendingOperation,
 }: {
-  account: LoginAccountResponse;
+  account: Readonly<LoginAccountResponse>;
   isPending: boolean;
-  onPatch: (request: UpdateLoginAccountRequest) => Promise<void>;
-  pendingRequest?: UpdateLoginAccountRequest | undefined;
+  onChangeRole: (role: AccountRole) => Promise<void>;
+  onChangeLoginEnabled: (enabled: boolean) => Promise<void>;
+  pendingOperation?: AccountOperation | undefined;
 }) {
-  const actions = useAccountActions(account, pendingRequest, onPatch);
+  const actions = useAccountActions(account, pendingOperation, onChangeRole, onChangeLoginEnabled);
 
   return (
     <div
@@ -74,17 +77,18 @@ export function AdminAccountActions({
 
 /** The role draft belongs to its confirmation dialog and survives a rejected update. */
 function useAccountActions(
-  account: LoginAccountResponse,
-  pendingRequest: UpdateLoginAccountRequest | undefined,
-  onPatch: (request: UpdateLoginAccountRequest) => Promise<void>,
+  account: Readonly<LoginAccountResponse>,
+  pendingOperation: AccountOperation | undefined,
+  onChangeRole: (role: AccountRole) => Promise<void>,
+  onChangeLoginEnabled: (enabled: boolean) => Promise<void>,
 ) {
   const [selectedRole, setSelectedRole] = useState<AccountRole>(account.role);
-  const view = accountActionView(account, selectedRole, pendingRequest);
+  const view = accountActionView(account, selectedRole, pendingOperation);
   return {
     ...view,
     selectedRole,
-    confirmLogin: () => onPatch(view.login.request),
-    confirmRole: () => onPatch(view.role.request),
+    confirmLogin: () => onChangeLoginEnabled(view.login.nextEnabled),
+    confirmRole: () => onChangeRole(selectedRole),
     openRole: (open: boolean) => {
       if (open) setSelectedRole(account.role);
     },

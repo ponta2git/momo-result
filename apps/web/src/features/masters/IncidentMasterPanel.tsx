@@ -4,12 +4,12 @@ import type { IncidentMasterResponse } from "@/shared/api/masters";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { contentText } from "@/shared/ui/typography";
 
-type IncidentMasterPanelProps = {
-  items: IncidentMasterResponse[];
+type IncidentMasterPanelProps = Readonly<{
+  items: ReadonlyArray<Readonly<IncidentMasterResponse>>;
   onRetry: () => void;
   refreshing: boolean;
   stale: boolean;
-};
+}>;
 
 export function IncidentMasterPanel({
   items,

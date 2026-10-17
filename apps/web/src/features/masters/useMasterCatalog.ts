@@ -1,29 +1,31 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 
+import type {
+  OptimisticGameTitle,
+  OptimisticMapMaster,
+  OptimisticSeasonMaster,
+} from "@/features/masters/masterTypes";
 import { defaultLayoutFamily } from "@/features/masters/masterValidation";
 import {
   masterDirectoryState,
   masterResourceErrorMessage,
 } from "@/features/masters/masterViewModel";
-import { useMasterCreateActions } from "@/features/masters/useMasterCreateActions";
-import { useMasterEditCommands } from "@/features/masters/useMasterEditCommands";
+import { useMasterCatalogCreateActions } from "@/features/masters/useMasterCatalogCreateActions";
+import { useMasterCatalogEditCommands } from "@/features/masters/useMasterCatalogEditCommands";
+import { useMasterCatalogQueries } from "@/features/masters/useMasterCatalogQueries";
 import { useMasterOptimisticCatalog } from "@/features/masters/useMasterOptimisticCatalog";
-import { useMasterResourceQueries } from "@/features/masters/useMasterResourceQueries";
 import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
-import { useAuthorization } from "@/shared/auth/useAuthorization";
+import { useAuthorizationOperations, usePermissionFacts } from "@/shared/auth/useAuthorization";
 import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
-/** Owns master directory selection, optimistic changes, and their read/command lifecycles. */
-export function useMasterDirectories(enabled: {
-  catalog: boolean;
-  aliases: boolean;
-  incidents: boolean;
-}) {
-  const authorization = useAuthorization();
-  const { auth } = authorization;
-  const authScope = auth.auth?.accountId ?? "anonymous";
+/** Owns the selected title and its related catalog, including optimistic and confirmed changes. */
+export function useMasterCatalog(enabled: boolean) {
+  const authorization = useAuthorizationOperations();
+  const admin = usePermissionFacts("admin");
+  const operations = usePermissionFacts("operations");
+  const authScope = String(operations.epoch);
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
   const nowIsoFactory = useCallback(() => new Date().toISOString(), []);
@@ -32,13 +34,11 @@ export function useMasterDirectories(enabled: {
   const onFeedback = useCallback((kind: string, scope: string, message: string) => {
     setCompletions((current) => ({ ...current, [`${kind}:${scope}`]: message }));
   }, []);
-  const [operationError, setOperationError] = useState<string>();
 
-  const resourceQueries = useMasterResourceQueries(selectedGameTitleId, {
-    catalog: authorization.allowed.operations && enabled.catalog,
-    aliases: authorization.allowed.admin && enabled.aliases,
-    incidents: authorization.allowed.operations && enabled.incidents,
-  });
+  const resourceQueries = useMasterCatalogQueries(
+    selectedGameTitleId,
+    operations.allowed && enabled,
+  );
   const { gameTitles, mapMasters, seasonMasters } = resourceQueries;
   const optimisticCatalog = useMasterOptimisticCatalog({
     fallbackSelectedGameTitleId: resourceQueries.selectedGameTitleId,
@@ -49,7 +49,7 @@ export function useMasterDirectories(enabled: {
   });
   const { viewModel } = optimisticCatalog;
 
-  const createActions = useMasterCreateActions({
+  const createActions = useMasterCatalogCreateActions({
     onFeedback,
     addOptimisticGameTitle: optimisticCatalog.addOptimisticGameTitle,
     addOptimisticMapMaster: optimisticCatalog.addOptimisticMapMaster,
@@ -60,23 +60,22 @@ export function useMasterDirectories(enabled: {
     queryClient,
     selectedMapMasterCount: viewModel.selectedMapMasters.length,
     selectedSeasonMasterCount: viewModel.selectedSeasonMasters.length,
-    setSelectedGameTitleId,
+    onGameTitleCreated: setSelectedGameTitleId,
     selectedGameTitleId: viewModel.selectedGameTitleId,
   });
 
-  const editCommands = useMasterEditCommands({
+  const editCommands = useMasterCatalogEditCommands({
     onFeedback,
     idempotencyKeys,
     queryClient,
     selectedGameTitleId: viewModel.selectedGameTitleId,
-    setOperationError,
-    setSelectedGameTitleId,
+    onGameTitleDeleted: (id) =>
+      setSelectedGameTitleId((current) => (current === id ? "" : current)),
   });
 
   const hasPendingMutation =
-    (authorization.retained.admin &&
-      (createActions.gameTitleCreatePending || createActions.aliasCreatePending)) ||
-    (authorization.retained.operations &&
+    (admin.retained && createActions.gameTitleCreatePending) ||
+    (operations.retained &&
       (createActions.mapCreatePending ||
         createActions.seasonCreatePending ||
         editCommands.editPending));
@@ -85,20 +84,10 @@ export function useMasterDirectories(enabled: {
     resourceQueries.gameTitlesQuery.isFetching,
     authScope,
   );
-  const incidentMastersHasError = useRetryNotice(
-    shouldShowQueryError(resourceQueries.incidentMastersQuery),
-    resourceQueries.incidentMastersQuery.isFetching,
-    authScope,
-  );
   const mapMastersHasError = useRetryNotice(
     shouldShowQueryError(resourceQueries.mapMastersQuery),
     resourceQueries.mapMastersQuery.isFetching,
     `${authScope}:${resourceQueries.selectedGameTitleId}`,
-  );
-  const memberAliasesHasError = useRetryNotice(
-    shouldShowQueryError(resourceQueries.memberAliasesQuery),
-    resourceQueries.memberAliasesQuery.isFetching,
-    authScope,
   );
   const seasonMastersHasError = useRetryNotice(
     shouldShowQueryError(resourceQueries.seasonMastersQuery),
@@ -130,28 +119,11 @@ export function useMasterDirectories(enabled: {
     fetching: resourceQueries.seasonMastersQuery.isFetching,
     mutationPending: hasPendingMutation,
   });
+  const gameTitleItems: readonly OptimisticGameTitle[] = optimisticCatalog.optimisticGameTitles;
+  const mapItems: readonly OptimisticMapMaster[] = viewModel.selectedMapMasters;
+  const seasonItems: readonly OptimisticSeasonMaster[] = viewModel.selectedSeasonMasters;
 
   return {
-    aliases: {
-      ...masterDirectoryState({
-        hasData: resourceQueries.memberAliasesQuery.data !== undefined,
-        failed: memberAliasesHasError,
-        initialLoading: isInitialQueryLoading(resourceQueries.memberAliasesQuery),
-        fetching: resourceQueries.memberAliasesQuery.isFetching,
-        mutationPending: hasPendingMutation,
-      }),
-      completion: completions["aliases:"],
-      createAction: createActions.aliasCreateAction,
-      createError: createActions.aliasCreateState.error,
-      createFormKey: createActions.aliasCreateState.version,
-      createPending: createActions.aliasCreatePending,
-      items: resourceQueries.memberAliases,
-      onDelete: editCommands.deleteMemberAlias,
-      onRetry: async () =>
-        Boolean(authorization.begin("admin")) &&
-        (await resourceQueries.memberAliasesQuery.refetch()).isSuccess,
-      onUpdate: editCommands.updateMemberAlias,
-    },
     catalog: {
       gameTitle: {
         ...masterDirectoryState({
@@ -161,7 +133,7 @@ export function useMasterDirectories(enabled: {
           fetching: resourceQueries.gameTitlesQuery.isFetching,
           mutationPending: hasPendingMutation,
         }),
-        canEdit: authorization.retained.admin,
+        canEdit: admin.retained,
         completion: completions["gameTitle:"],
         create: {
           action: createActions.gameTitleCreateAction,
@@ -170,12 +142,12 @@ export function useMasterDirectories(enabled: {
           pending: createActions.gameTitleCreatePending,
         },
         defaultLayoutFamily,
-        items: optimisticCatalog.optimisticGameTitles,
+        items: gameTitleItems,
         onDelete: editCommands.deleteGameTitle,
         onRetry: async () =>
           Boolean(authorization.begin("operations")) &&
           (await resourceQueries.gameTitlesQuery.refetch()).isSuccess,
-        onSelect: setSelectedGameTitleId,
+        onSelect: (id: string) => setSelectedGameTitleId(id),
         onUpdate: editCommands.updateGameTitle,
         selectedId: viewModel.selectedGameTitleId,
       },
@@ -190,7 +162,7 @@ export function useMasterDirectories(enabled: {
           pending: createActions.mapCreatePending,
         },
         error: mapMastersHasError ? mapError : undefined,
-        items: viewModel.selectedMapMasters,
+        items: mapItems,
         onDelete: editCommands.deleteMapMaster,
         onRetry: () => {
           if (authorization.begin("operations")) void resourceQueries.mapMastersQuery.refetch();
@@ -210,7 +182,7 @@ export function useMasterDirectories(enabled: {
           pending: createActions.seasonCreatePending,
         },
         error: seasonMastersHasError ? seasonError : undefined,
-        items: viewModel.selectedSeasonMasters,
+        items: seasonItems,
         onDelete: editCommands.deleteSeasonMaster,
         onRetry: () => {
           if (authorization.begin("operations")) void resourceQueries.seasonMastersQuery.refetch();
@@ -219,20 +191,7 @@ export function useMasterDirectories(enabled: {
         retrying: seasonState.refreshing,
       },
     },
-    incidents: {
-      ...masterDirectoryState({
-        hasData: resourceQueries.incidentMastersQuery.data !== undefined,
-        failed: incidentMastersHasError,
-        initialLoading: isInitialQueryLoading(resourceQueries.incidentMastersQuery),
-        fetching: resourceQueries.incidentMastersQuery.isFetching,
-        mutationPending: false,
-      }),
-      items: resourceQueries.incidentMasters,
-      onRetry: async () =>
-        Boolean(authorization.begin("operations")) &&
-        (await resourceQueries.incidentMastersQuery.refetch()).isSuccess,
-    },
     pending: hasPendingMutation,
-    operationError,
-  };
+    operationError: editCommands.operationError,
+  } as const;
 }

@@ -24,27 +24,29 @@ import { adminLoginAccountsQueryOptions } from "@/shared/api/queryOptions";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { reportSelfAccountDisabled } from "@/shared/auth/accountOperationNotice";
 import type { AuthorizationLease } from "@/shared/auth/authorization";
-import { useAuthorization } from "@/shared/auth/useAuthorization";
+import { useAuthRead } from "@/shared/auth/useAuth";
+import { useAuthorizationOperations, usePermissionFacts } from "@/shared/auth/useAuthorization";
 import { useAuthorizedAction } from "@/shared/auth/useAuthorizedAction";
 import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 /** Keeps account workflows alive while the user moves between settings tabs. */
 export function useAccountSettingsModel(queryEnabled = true): AccountSettingsModel {
-  const authorization = useAuthorization();
-  const { auth } = authorization;
+  const authorization = useAuthorizationOperations();
+  const permission = usePermissionFacts("admin");
+  const auth = useAuthRead();
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
   const [createOpen, setCreateOpen] = useState(false);
-  const canManageAccounts = authorization.allowed.admin;
-  const [createEpoch, setCreateEpoch] = useState(authorization.epoch.admin);
+  const canManageAccounts = permission.allowed;
+  const [createEpoch, setCreateEpoch] = useState(permission.epoch);
   const [createdReceipt, setCreatedReceipt] = useState<{
     saved: LoginAccountResponse;
     lease: AuthorizationLease;
   }>();
   const applied = useRef(new WeakSet<LoginAccountResponse>());
-  if (createEpoch !== authorization.epoch.admin) {
-    setCreateEpoch(authorization.epoch.admin);
+  if (createEpoch !== permission.epoch) {
+    setCreateEpoch(permission.epoch);
     setCreateOpen(false);
     setCreatedReceipt(undefined);
   }
@@ -120,7 +122,12 @@ export function useAccountSettingsModel(queryEnabled = true): AccountSettingsMod
     const receipt =
       createdReceipt ??
       (updated && updateVariables ? { saved: updated, lease: updateVariables.lease } : undefined);
-    if (!receipt || applied.current.has(receipt.saved) || !authorization.canCommit(receipt.lease))
+    if (
+      !permission.allowed ||
+      !receipt ||
+      applied.current.has(receipt.saved) ||
+      !authorization.canCommit(receipt.lease)
+    )
       return;
     applied.current.add(receipt.saved);
     void (async () => {
@@ -141,7 +148,7 @@ export function useAccountSettingsModel(queryEnabled = true): AccountSettingsMod
         showToast({ title: "アカウント設定を更新しました", tone: "success" });
       }
     })();
-  }, [authorization, createdReceipt, queryClient, updated, updateVariables]);
+  }, [authorization, permission.allowed, createdReceipt, queryClient, updated, updateVariables]);
 
   const refreshAccounts = async () =>
     Boolean(authorization.begin("admin")) && (await accountsQuery.refetch()).isSuccess;
@@ -156,7 +163,7 @@ export function useAccountSettingsModel(queryEnabled = true): AccountSettingsMod
     updateMutation.isPending &&
     Boolean(updateVariables && authorization.isCurrent(updateVariables.lease));
 
-  const accounts = authorization.retained.admin ? (accountsQuery.data?.items ?? []) : [];
+  const accounts = permission.retained ? (accountsQuery.data?.items ?? []) : [];
 
   const loadFailed = useRetryNotice(
     canManageAccounts && shouldShowBlockingQueryError(accountsQuery),
@@ -184,7 +191,7 @@ export function useAccountSettingsModel(queryEnabled = true): AccountSettingsMod
       action: createAction,
       disabled: view.createDisabled,
       error: createError,
-      open: authorization.retained.admin && createOpen,
+      open: permission.retained && createOpen,
       pending: currentCreatePending,
       setOpen: (open) => {
         if (!open || authorization.can("admin")) setCreateOpen(open);
@@ -194,11 +201,15 @@ export function useAccountSettingsModel(queryEnabled = true): AccountSettingsMod
     pending: view.pending,
     update: {
       pending: currentUpdatePending,
-      pendingRequestFor: (accountId) =>
+      operationFor: (accountId) =>
         currentUpdatePending && updateMutation.variables?.accountId === accountId
-          ? updateMutation.variables.request
+          ? updateMutation.variables.request.role === undefined
+            ? "login"
+            : "role"
           : undefined,
-      run: updateAccount,
+      changeRole: (accountId, role) => updateAccount(accountId, { role }),
+      changeLoginEnabled: (accountId, enabled) =>
+        updateAccount(accountId, { loginEnabled: enabled }),
     },
   };
 }

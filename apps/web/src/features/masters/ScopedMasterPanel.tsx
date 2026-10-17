@@ -9,45 +9,47 @@ import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { contentText } from "@/shared/ui/typography";
 
-type ScopedMasterItem = (MapMasterResponse | SeasonMasterResponse) & { pending?: boolean };
+type ScopedMasterItem = Readonly<
+  (MapMasterResponse | SeasonMasterResponse) & { pending?: boolean }
+>;
 
-type MasterCreateBinding = {
+type MasterCreateBinding = Readonly<{
   scopeKey: string;
   action: (formData: FormData) => void | Promise<void>;
   error?: string | undefined;
   formKey?: string | number | undefined;
   pending?: boolean | undefined;
-};
+}>;
 
-type ScopedMasterActions = {
+type ScopedMasterActions = Readonly<{
   onDelete: (id: string) => Promise<void> | void;
   onUpdate: (id: string, request: { name: string }) => Promise<void>;
-};
+}>;
 
-type ScopedMasterLabels = {
+type ScopedMasterLabels = Readonly<{
   itemLabel: string;
   title: string;
-};
+}>;
 
-type ScopedMasterList = {
+type ScopedMasterList = Readonly<{
   completion?: string | undefined;
   error?: string | undefined;
   hasData: boolean;
-  items: ScopedMasterItem[];
+  items: readonly ScopedMasterItem[];
   loadFailed: boolean;
   loading?: boolean | undefined;
   onRetry: () => void;
   retrying?: boolean | undefined;
   stale: boolean;
-};
+}>;
 
-type ScopedMasterPanelProps = {
+type ScopedMasterPanelProps = Readonly<{
   actions: ScopedMasterActions;
   create: MasterCreateBinding;
   disabledReason?: string | undefined;
   labels: ScopedMasterLabels;
   list: ScopedMasterList;
-};
+}>;
 
 export function ScopedMasterPanel({
   actions,

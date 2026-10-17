@@ -17,21 +17,21 @@ import { TextField } from "@/shared/ui/forms/TextField";
 import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
 import { contentText } from "@/shared/ui/typography";
 
-type GameTitleListItem = GameTitleResponse & { pending?: boolean };
+type GameTitleListItem = Readonly<GameTitleResponse & { pending?: boolean }>;
 
-type MasterCreateBinding = {
+type MasterCreateBinding = Readonly<{
   action: (formData: FormData) => void | Promise<void>;
   error?: string | undefined;
   formKey?: string | number | undefined;
   pending?: boolean | undefined;
-};
+}>;
 
-type GameTitleListProps = {
+type GameTitleListProps = Readonly<{
   canEdit: boolean;
   completion?: string | undefined;
   create: MasterCreateBinding;
   defaultLayoutFamily: LayoutFamily;
-  items: GameTitleListItem[];
+  items: readonly GameTitleListItem[];
   onRetry: () => void;
   onDelete: (id: string) => Promise<void> | void;
   onUpdate: (id: string, request: { name: string; layoutFamily: string }) => Promise<void>;
@@ -39,7 +39,7 @@ type GameTitleListProps = {
   selectedGameTitleId: string;
   refreshing: boolean;
   stale: boolean;
-};
+}>;
 
 export function GameTitleList({
   canEdit,

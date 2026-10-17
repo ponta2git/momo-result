@@ -9,37 +9,44 @@ import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
 
 type AccountListRefresh = {
-  pending: boolean;
-  run: () => Promise<boolean>;
+  readonly pending: boolean;
+  readonly run: () => Promise<boolean>;
 };
 
 export type AdminAccountListModel =
-  | { kind: "loading" }
-  | { error: NormalizedApiError | undefined; kind: "loadFailed"; refresh: AccountListRefresh }
+  | { readonly kind: "loading" }
   | {
-      items: LoginAccountResponse[];
-      kind: "ready";
-      refresh: AccountListRefresh;
-      stale: boolean;
+      readonly error: Readonly<Pick<NormalizedApiError, "title" | "detail">> | undefined;
+      readonly kind: "loadFailed";
+      readonly refresh: AccountListRefresh;
+    }
+  | {
+      readonly items: ReadonlyArray<Readonly<LoginAccountResponse>>;
+      readonly kind: "ready";
+      readonly refresh: AccountListRefresh;
+      readonly stale: boolean;
     };
 
 export type AdminAccountCreateDialogModel = {
-  action: (formData: FormData) => void;
-  disabled: boolean;
-  error: string;
-  open: boolean;
-  pending: boolean;
-  setOpen: (open: boolean) => void;
+  readonly action: (formData: FormData) => void;
+  readonly disabled: boolean;
+  readonly error: string;
+  readonly open: boolean;
+  readonly pending: boolean;
+  readonly setOpen: (open: boolean) => void;
 };
 
+export type AccountOperation = "login" | "role";
+
 export type AccountSettingsModel = {
-  create: AdminAccountCreateDialogModel;
-  list: AdminAccountListModel;
-  pending: boolean;
-  update: {
-    pending: boolean;
-    pendingRequestFor: (accountId: string) => UpdateLoginAccountRequest | undefined;
-    run: (accountId: string, request: UpdateLoginAccountRequest) => Promise<void>;
+  readonly create: AdminAccountCreateDialogModel;
+  readonly list: AdminAccountListModel;
+  readonly pending: boolean;
+  readonly update: {
+    readonly pending: boolean;
+    readonly operationFor: (accountId: string) => AccountOperation | undefined;
+    readonly changeRole: (accountId: string, role: AccountRole) => Promise<void>;
+    readonly changeLoginEnabled: (accountId: string, enabled: boolean) => Promise<void>;
   };
 };
 
@@ -68,7 +75,7 @@ export function buildAccountSettingsView(input: {
   loadFailed: boolean;
   stale: boolean;
   error: unknown;
-  items: LoginAccountResponse[];
+  items: ReadonlyArray<Readonly<LoginAccountResponse>>;
   fetching: boolean;
   createPending: boolean;
   updatePending: boolean;
@@ -92,27 +99,26 @@ export function buildAccountSettingsView(input: {
 }
 
 export function accountActionView(
-  account: LoginAccountResponse,
+  account: Readonly<LoginAccountResponse>,
   selectedRole: AccountRole,
-  pendingRequest: UpdateLoginAccountRequest | undefined,
+  pendingOperation: AccountOperation | undefined,
 ) {
   return {
     login: {
-      pending: pendingRequest?.loginEnabled !== undefined,
+      pending: pendingOperation === "login",
       title: account.loginEnabled ? "ログインを停止しますか？" : "ログインを許可しますか？",
       confirmLabel: account.loginEnabled ? "停止する" : "許可する",
       triggerLabel: account.loginEnabled ? "ログイン停止" : "ログイン許可",
       tone: account.loginEnabled ? ("danger" as const) : ("primary" as const),
-      request: { loginEnabled: !account.loginEnabled },
+      nextEnabled: !account.loginEnabled,
     },
     role: {
-      pending: pendingRequest?.role !== undefined,
+      pending: pendingOperation === "role",
       confirmDisabled: selectedRole === account.role,
       tone:
         account.role === "admin" && selectedRole !== "admin"
           ? ("danger" as const)
           : ("primary" as const),
-      request: { role: selectedRole },
     },
   };
 }

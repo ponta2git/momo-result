@@ -2,7 +2,6 @@ import type { QueryClient } from "@tanstack/react-query";
 
 import {
   parseGameTitleCreate,
-  parseMemberAliasCreate,
   parseScopedMasterCreate,
   prepareGameTitleCreation,
   prepareScopedMasterCreation,
@@ -10,7 +9,6 @@ import {
 import {
   cacheCreatedMaster,
   invalidateMasterResourceCaches,
-  invalidateMemberAliasCaches,
 } from "@/features/masters/masterResourceCache";
 import type {
   OptimisticGameTitle,
@@ -18,23 +16,18 @@ import type {
   OptimisticSeasonMaster,
 } from "@/features/masters/masterTypes";
 import type { IdempotencyKeyStore } from "@/shared/api/idempotency";
-import { runIdempotentMutation, runIdempotentOperationAttempt } from "@/shared/api/idempotency";
-import {
-  createGameTitle,
-  createMapMaster,
-  createMemberAlias,
-  createSeasonMaster,
-} from "@/shared/api/masters";
+import { runIdempotentOperationAttempt } from "@/shared/api/idempotency";
+import { createGameTitle, createMapMaster, createSeasonMaster } from "@/shared/api/masters";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { masterKeys } from "@/shared/api/queryKeys";
-import { useAuthorization } from "@/shared/auth/useAuthorization";
+import { useAuthorizationOperations } from "@/shared/auth/useAuthorization";
 import { useAuthorizedAction } from "@/shared/auth/useAuthorizedAction";
 
 export type CreateState = { error?: string | undefined; version: number };
 
 const initialCreateState: CreateState = { version: 0 };
 
-export function useMasterCreateActions(input: {
+export function useMasterCatalogCreateActions(input: {
   onFeedback: (kind: string, scope: string, message: string) => void;
   addOptimisticGameTitle: (item: OptimisticGameTitle) => void;
   addOptimisticMapMaster: (item: OptimisticMapMaster) => void;
@@ -45,10 +38,10 @@ export function useMasterCreateActions(input: {
   queryClient: QueryClient;
   selectedMapMasterCount: number;
   selectedSeasonMasterCount: number;
-  setSelectedGameTitleId: (id: string) => void;
+  onGameTitleCreated: (id: string) => void;
   selectedGameTitleId: string;
 }) {
-  const authorization = useAuthorization();
+  const authorization = useAuthorizationOperations();
   const [gameTitleCreateState, gameTitleCreateAction, gameTitleCreatePending] =
     useAuthorizedAction<CreateState>(
       authorization,
@@ -73,7 +66,7 @@ export function useMasterCreateActions(input: {
           await cacheCreatedMaster(input.queryClient, masterKeys.gameTitles.list(), created, () =>
             authorization.isSameAccount(lease),
           );
-          if (authorization.canCommit(lease)) input.setSelectedGameTitleId(created.id);
+          if (authorization.canCommit(lease)) input.onGameTitleCreated(created.id);
           await invalidateMasterResourceCaches(input.queryClient, "game-titles", () =>
             authorization.canCommit(lease),
           );
@@ -193,46 +186,7 @@ export function useMasterCreateActions(input: {
     {},
   );
 
-  const [aliasCreateState, aliasCreateAction, aliasCreatePending] =
-    useAuthorizedAction<CreateState>(
-      authorization,
-      "admin",
-      async (prev, formData, lease) => {
-        input.onFeedback("aliases", "", "");
-        const parsed = parseMemberAliasCreate(formData);
-        if (parsed.kind === "invalid") return { ...prev, error: parsed.error };
-        const { request } = parsed;
-        try {
-          const created = await runIdempotentMutation(
-            input.idempotencyKeys,
-            "masters.createMemberAlias",
-            request,
-            (options) => createMemberAlias(request, options),
-          );
-          if (!authorization.isSameAccount(lease)) return prev;
-          await cacheCreatedMaster(
-            input.queryClient,
-            masterKeys.memberAliases.list(),
-            created,
-            () => authorization.isSameAccount(lease),
-          );
-          await invalidateMemberAliasCaches(input.queryClient);
-          if (!authorization.isCurrent(lease)) return prev;
-          input.onFeedback("aliases", "", "別名を追加しました");
-          return { error: undefined, version: prev.version + 1 };
-        } catch (error) {
-          authorization.reportError(error, lease);
-          if (!authorization.isCurrent(lease)) return prev;
-          return { ...prev, error: formatApiError(error, "別名の追加に失敗しました") };
-        }
-      },
-      initialCreateState,
-    );
-
   return {
-    aliasCreateAction,
-    aliasCreatePending,
-    aliasCreateState,
     gameTitleCreateAction,
     gameTitleCreatePending,
     gameTitleCreateState,

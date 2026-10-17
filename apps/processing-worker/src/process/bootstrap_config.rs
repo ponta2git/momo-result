@@ -11,6 +11,8 @@ pub(super) fn command_allowed(arguments: &[OsString]) -> bool {
         command,
         "worker"
             | "maintenance-readiness"
+            | "maintenance-status"
+            | "maintenance-drain"
             | "release-audit"
             | "release-promote"
             | "release-reconcile"
@@ -56,6 +58,8 @@ mod tests {
         for command in [
             "worker",
             "maintenance-readiness",
+            "maintenance-status",
+            "maintenance-drain",
             "release-audit",
             "release-promote",
             "release-reconcile",
@@ -95,6 +99,8 @@ mod tests {
         }
         for command in [
             "maintenance-readiness",
+            "maintenance-status",
+            "maintenance-drain",
             "release-audit",
             "release-promote",
             "release-reconcile",

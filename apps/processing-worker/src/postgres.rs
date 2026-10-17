@@ -3,6 +3,7 @@
 use std::{
     ops::{Deref, DerefMut},
     path::Path,
+    sync::atomic::{AtomicUsize, Ordering},
     time::Duration,
 };
 
@@ -17,6 +18,42 @@ use tracing::error;
 
 const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const DEFAULT_TCP_USER_TIMEOUT: Duration = Duration::from_secs(30);
+static ACTIVE_DRIVERS: AtomicUsize = AtomicUsize::new(0);
+static DRIVERS_CHANGED: tokio::sync::Notify = tokio::sync::Notify::const_new();
+
+struct DriverLifetime;
+
+impl DriverLifetime {
+    fn new() -> Self {
+        ACTIVE_DRIVERS.fetch_add(1, Ordering::SeqCst);
+        Self
+    }
+}
+
+impl Drop for DriverLifetime {
+    fn drop(&mut self) {
+        ACTIVE_DRIVERS.fetch_sub(1, Ordering::SeqCst);
+        DRIVERS_CHANGED.notify_waiters();
+    }
+}
+
+/// Called only after all producers and request handles have been released. An abort request
+/// alone is insufficient: the connection future must actually drop before a drain receipt.
+pub(crate) async fn settle_drivers(deadline: tokio::time::Instant) -> bool {
+    tokio::time::timeout_at(deadline, async {
+        loop {
+            let changed = DRIVERS_CHANGED.notified();
+            tokio::pin!(changed);
+            changed.as_mut().enable();
+            if ACTIVE_DRIVERS.load(Ordering::SeqCst) == 0 {
+                return;
+            }
+            changed.await;
+        }
+    })
+    .await
+    .is_ok()
+}
 #[cfg(target_os = "linux")]
 const SYSTEM_CA_BUNDLE: &str = "/etc/ssl/certs/ca-certificates.crt";
 
@@ -55,7 +92,9 @@ pub(crate) fn is_lock_contention(error: &tokio_postgres::Error) -> bool {
 /// Returns a safe error when configuration, trust roots, or the connection are invalid.
 pub(crate) async fn connect(database_url: &str) -> Result<ConnectedClient, PostgresError> {
     let (client, connection) = open(database_url).await?;
+    let lifetime = DriverLifetime::new();
     let driver = tokio::spawn(async move {
+        let _lifetime = lifetime;
         if let Err(_connection_error) = connection.await {
             error!(
                 event = "worker_dependency_connection_stopped",

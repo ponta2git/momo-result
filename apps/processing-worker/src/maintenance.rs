@@ -1,5 +1,7 @@
 //! Frozen startup and read-only readiness, independent of normal worker construction.
 
+pub(crate) mod drain;
+
 use std::{ffi::OsStr, time::Duration};
 
 use momo_analysis_core::contract::{ARTIFACT_SCHEMA_VERSION, ARTIFACT_VALIDATION_CONTRACT_ID};

@@ -11,7 +11,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use momo_ocr::OcrOutput;
 
 use crate::{
-    maintenance::Mode,
+    maintenance::{Mode, drain},
     ocr::{
         contract::{OcrHints, RequestedScreenType},
         endurance::{
@@ -52,6 +52,17 @@ enum Command {
     Worker,
     /// Check frozen database and reader compatibility without registering a worker.
     MaintenanceReadiness,
+    /// Inspect the running worker's barrier over its private control socket.
+    MaintenanceStatus,
+    /// Close admission or drain all writers in the running worker process.
+    MaintenanceDrain {
+        #[arg(long)]
+        cutover_id: String,
+        #[arg(long)]
+        stop_epoch: u64,
+        #[arg(long, value_enum)]
+        stage: drain::Stage,
+    },
     ReleaseAudit {
         #[arg(long)]
         require_current: bool,
@@ -401,6 +412,8 @@ async fn execute_cli(
         }
         Command::Worker
         | Command::MaintenanceReadiness
+        | Command::MaintenanceStatus
+        | Command::MaintenanceDrain { .. }
         | Command::ReleaseAudit { .. }
         | Command::ReleasePromote { .. }
         | Command::ReleaseReconcile { .. }
@@ -415,7 +428,11 @@ async fn execute_cli(
     }
 
     initialize_logging();
-    match Box::pin(run(command, mode, shutdown_deadline)).await {
+    command_exit(Box::pin(run(command, mode, shutdown_deadline)).await)
+}
+
+fn command_exit(result: Result<(), String>) -> ExitCode {
+    match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(message) => {
             error!(
@@ -439,6 +456,19 @@ async fn run(
             Mode::Frozen => run_frozen_worker().await,
         },
         Command::MaintenanceReadiness => maintenance_readiness().await,
+        Command::MaintenanceStatus => maintenance_control(None).await,
+        Command::MaintenanceDrain {
+            cutover_id,
+            stop_epoch,
+            stage,
+        } => {
+            maintenance_control(Some(drain::Request {
+                cutover_id,
+                stop_epoch,
+                stage,
+            }))
+            .await
+        }
         Command::ReleaseAudit {
             require_current,
             require_quiescent,
@@ -658,7 +688,11 @@ fn validate_mode_command(mode: Mode, command: &Command) -> Result<(), &'static s
     }
     if matches!(
         command,
-        Command::Worker | Command::MaintenanceReadiness | Command::ReleaseAudit { .. }
+        Command::Worker
+            | Command::MaintenanceReadiness
+            | Command::MaintenanceStatus
+            | Command::MaintenanceDrain { .. }
+            | Command::ReleaseAudit { .. }
     ) {
         Ok(())
     } else {
@@ -680,10 +714,34 @@ async fn maintenance_readiness() -> Result<(), String> {
 
 async fn run_frozen_worker() -> Result<(), String> {
     maintenance_readiness().await?;
-    // No WorkerRuntimePlan, capability heartbeat, listener, claim, recovery, or sender exists.
-    wait_for_shutdown()
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    if !crate::postgres::settle_drivers(deadline).await {
+        return Err(String::from(
+            "maintenance readiness connection did not settle",
+        ));
+    }
+    let server = drain::Server::configured(true)
         .await
-        .map_err(|_error| String::from("maintenance shutdown signal failed"))
+        .map_err(String::from)?;
+    // No WorkerRuntimePlan, capability heartbeat, listener, claim, recovery, or sender exists.
+    tokio::select! {
+        result = serve_maintenance(server.as_ref()) => result,
+        result = wait_for_shutdown() => result.map_err(|_error| String::from("maintenance shutdown signal failed")),
+    }
+}
+
+async fn maintenance_control(request: Option<drain::Request>) -> Result<(), String> {
+    write_json_line(&drain::command(request).await.map_err(String::from)?)
+}
+
+async fn serve_maintenance(server: Option<&drain::Server>) -> Result<(), String> {
+    match server {
+        Some(server) => server
+            .serve()
+            .await
+            .map_err(|_error| String::from("maintenance control socket failed")),
+        None => std::future::pending().await,
+    }
 }
 
 fn required_environment(name: &'static str) -> Result<String, String> {
@@ -809,6 +867,10 @@ fn exit_code(code: i32) -> ExitCode {
 }
 
 async fn run_worker(shutdown_deadline: &mut Option<tokio::time::Instant>) -> Result<(), String> {
+    let server = drain::Server::configured(false)
+        .await
+        .map_err(String::from)?;
+    let maintenance = server.as_ref().map(drain::Server::control);
     let analysis_activation =
         AnalysisActivationConfig::from_environment().map_err(|error| error.to_string())?;
     let (shutdown_sender, shutdown_receiver) = tokio::sync::watch::channel(false);
@@ -822,11 +884,29 @@ async fn run_worker(shutdown_deadline: &mut Option<tokio::time::Instant>) -> Res
             ocr_v2_enabled = runtime_plan.ocr_enabled(),
             "combined worker configuration accepted"
         );
-        crate::worker::run(runtime_plan, shutdown_receiver, shutdown_deadline)
+        crate::worker::run(
+            runtime_plan,
+            shutdown_receiver,
+            shutdown_deadline,
+            maintenance.clone(),
+        )
     };
     tokio::pin!(worker_runtime);
     tokio::select! {
-        result = &mut worker_runtime => result.map_err(|error| error.to_string()),
+        result = &mut worker_runtime => {
+            if maintenance.as_ref().is_some_and(drain::Control::all_requested) {
+                tokio::select! {
+                    server_result = serve_maintenance(server.as_ref()) => server_result?,
+                    signal = wait_for_shutdown() => signal.map_err(|error| error.to_string())?,
+                }
+            }
+            result.map_err(|error| error.to_string())
+        },
+        result = serve_maintenance(server.as_ref()) => {
+            shutdown_sender.send_replace(true);
+            let _stopped = worker_runtime.await;
+            result
+        },
         signal = wait_for_shutdown() => {
             signal.map_err(|error| error.to_string())?;
             if let Err(_receiver_closed) = shutdown_sender.send(true) {}

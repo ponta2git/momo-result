@@ -22,6 +22,8 @@ func runCLI(ctx context.Context, args []string, stdout io.Writer, stderr io.Writ
 	}
 
 	switch args[0] {
+	case "maintenance":
+		return runMaintenanceControl(ctx, args[1:], stdout, stderr)
 	case "serve":
 		if len(args) != 1 {
 			writeResult(stderr, failureResult(serveEvent, "InvalidArguments"))

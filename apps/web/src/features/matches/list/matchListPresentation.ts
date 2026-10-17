@@ -21,7 +21,7 @@ import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { memberDisplayName } from "@/shared/domain/members";
 import { compact } from "@/shared/lib/compact";
 
-type ListDisplayRead = {
+type MatchListReadState = {
   available: boolean;
   loading: boolean;
   refreshing: boolean;
@@ -29,7 +29,7 @@ type ListDisplayRead = {
 };
 
 /** Relates requested filters to retained reads before exposing rows, counts, or actions. */
-export function resolveMatchListDisplay({
+export function resolveMatchListDisplayState({
   current,
   deferred,
   locationSettling,
@@ -39,8 +39,8 @@ export function resolveMatchListDisplay({
   current: MatchListSearch;
   deferred: MatchListSearch;
   locationSettling: boolean;
-  list: ListDisplayRead;
-  summary: Pick<ListDisplayRead, "refreshing" | "fromPreviousSelection">;
+  list: MatchListReadState;
+  summary: Pick<MatchListReadState, "refreshing" | "fromPreviousSelection">;
 }) {
   const scopeChanging = locationSettling || list.fromPreviousSelection;
   return {

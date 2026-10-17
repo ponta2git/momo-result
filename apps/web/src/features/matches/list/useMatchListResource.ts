@@ -2,6 +2,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import {
+  matchListHeldEventChoices,
+  resolveMatchListDisplayState,
+  toMatchListItemViews,
+} from "@/features/matches/list/matchListPresentation";
+import {
   buildMatchListApiQuery,
   buildMatchListSummaryQuery,
 } from "@/features/matches/list/matchListQuery";
@@ -13,11 +18,6 @@ import type {
   MatchListSearch,
   MatchListSummaryCounts,
 } from "@/features/matches/list/matchListTypes";
-import {
-  matchListHeldEventChoices,
-  resolveMatchListDisplay,
-  toMatchListItemViews,
-} from "@/features/matches/list/matchListViewModel";
 import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
 import {
   gameTitlesQueryOptions,
@@ -94,7 +94,7 @@ export function useMatchListResource({
   );
 
   const listLoading = isInitialQueryLoading(matchesQuery);
-  const display = resolveMatchListDisplay({
+  const displayState = resolveMatchListDisplayState({
     current: currentSearch,
     deferred: deferredSearch,
     locationSettling,
@@ -127,7 +127,7 @@ export function useMatchListResource({
   );
   const refreshFailed = useRetryNotice(
     manualRefresh.failed || matchesQuery.isRefetchError || summaryQuery.isRefetchError,
-    manualRefresh.pending || display.sameScopeRefreshing,
+    manualRefresh.pending || displayState.sameScopeRefreshing,
     currentSearchScope,
   );
 
@@ -180,19 +180,19 @@ export function useMatchListResource({
     list: {
       items,
       loadFailed: listFailed,
-      loading: display.initialLoading && !listFailed,
+      loading: displayState.initialLoading && !listFailed,
       pagination: matchesQuery.data?.pagination,
       refreshFailed: refreshFailed && !listFailed,
-      sameScopeRefreshing: display.sameScopeRefreshing,
-      scopeChanging: display.scopeChanging,
-      updating: display.updating,
+      sameScopeRefreshing: displayState.sameScopeRefreshing,
+      scopeChanging: displayState.scopeChanging,
+      updating: displayState.updating,
     },
     refresh,
     summary: {
       counts: summaryQuery.data,
       loadFailed: summaryFailed,
       loading: isInitialQueryLoading(summaryQuery) && !summaryFailed,
-      masked: display.summaryMasked,
+      masked: displayState.summaryMasked,
       retryPending: summaryQuery.isFetching && !manualRefresh.pending,
       retry: () => void summaryQuery.refetch(),
     },

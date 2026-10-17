@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import type { MatchDeletionModel } from "@/features/matches/detail/matchDetailPageModel";
+import type { MatchDeletionControls } from "@/features/matches/detail/matchDetailView";
 import {
   evictDeletedMatchDetail,
   invalidateAfterMatchDeleted,
@@ -18,7 +18,7 @@ type MatchDeletionCommand = {
   targetMatchId: string;
 };
 
-type MatchDeletionCommandOptions = {
+type MatchDeletionOptions = {
   heldEventId: string | undefined;
   matchId: string;
 };
@@ -58,7 +58,7 @@ function useMatchDeletionWrite({
 }
 
 /** Owns deletion confirmation, route ownership, and completion feedback. */
-export function useMatchDeletionCommand(options: MatchDeletionCommandOptions): MatchDeletionModel {
+export function useMatchDeletion(options: MatchDeletionOptions): MatchDeletionControls {
   const { matchId } = options;
   const navigate = useNavigate();
   const mountedRef = useRef(false);

@@ -9,34 +9,39 @@ import type { MatchListAction } from "@/features/matches/list/matchListTypes";
 import { useMatchDraftResource } from "@/features/matches/useMatchDraftResource";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
-export type ConfirmedDraftNavigationCommand = {
+export type ConfirmedDraftNavigation = {
   checkingIds: ReadonlySet<string>;
   errors: Readonly<Record<string, string>>;
   run: (action: MatchListAction) => Promise<void>;
 };
 
-type NavigationOwner = {
+type DraftNavigationOwner = {
   active: boolean;
   checkingIds: Set<string>;
-  latestIntent: number;
+  latestIntentId: number;
   scope: string;
 };
 
-function emptyPresentation(scope: string) {
+function emptyNavigationFeedback(scope: string) {
   return { scope, checkingIds: new Set<string>(), errors: {} as Record<string, string> };
 }
 
 /** A read may finish after navigation; only the latest intent in its original route owns UI effects. */
-export function useConfirmedDraftNavigationCommand(): ConfirmedDraftNavigationCommand {
+export function useConfirmedDraftNavigation(): ConfirmedDraftNavigation {
   const navigate = useNavigate();
   const { key: scope } = useLocation();
   const { readLatest, confirmationRecorded } = useMatchDraftResource();
-  const ownerRef = useRef<NavigationOwner | null>(null);
-  const [presentation, setPresentation] = useState(() => emptyPresentation(scope));
-  if (presentation.scope !== scope) setPresentation(emptyPresentation(scope));
+  const ownerRef = useRef<DraftNavigationOwner | null>(null);
+  const [feedback, setFeedback] = useState(() => emptyNavigationFeedback(scope));
+  if (feedback.scope !== scope) setFeedback(emptyNavigationFeedback(scope));
 
   useLayoutEffect(() => {
-    const owner: NavigationOwner = { active: true, checkingIds: new Set(), latestIntent: 0, scope };
+    const owner: DraftNavigationOwner = {
+      active: true,
+      checkingIds: new Set(),
+      latestIntentId: 0,
+      scope,
+    };
     ownerRef.current = owner;
     return () => {
       // Do not cancel the shared cache request: another screen may be using its result.
@@ -58,10 +63,10 @@ export function useConfirmedDraftNavigationCommand(): ConfirmedDraftNavigationCo
       )
         return;
 
-      const intent = ++owner.latestIntent;
-      const ownsNavigation = () => owner.active && owner.latestIntent === intent;
+      const intentId = ++owner.latestIntentId;
+      const ownsNavigation = () => owner.active && owner.latestIntentId === intentId;
       owner.checkingIds.add(draftId);
-      setPresentation((current) => {
+      setFeedback((current) => {
         const errors = { ...current.errors };
         delete errors[draftId];
         return { scope, errors, checkingIds: new Set(owner.checkingIds) };
@@ -79,7 +84,7 @@ export function useConfirmedDraftNavigationCommand(): ConfirmedDraftNavigationCo
         navigate(action.href);
       } catch {
         if (ownsNavigation()) {
-          setPresentation((current) => ({
+          setFeedback((current) => ({
             ...current,
             errors: { ...current.errors, [draftId]: confirmedDraftMessages.statusCheckFailed },
           }));
@@ -87,7 +92,7 @@ export function useConfirmedDraftNavigationCommand(): ConfirmedDraftNavigationCo
       } finally {
         owner.checkingIds.delete(draftId);
         if (owner.active) {
-          setPresentation((current) => ({
+          setFeedback((current) => ({
             ...current,
             checkingIds: new Set(owner.checkingIds),
           }));
@@ -97,5 +102,5 @@ export function useConfirmedDraftNavigationCommand(): ConfirmedDraftNavigationCo
     [confirmationRecorded, navigate, readLatest, scope],
   );
 
-  return { checkingIds: presentation.checkingIds, errors: presentation.errors, run };
+  return { checkingIds: feedback.checkingIds, errors: feedback.errors, run };
 }

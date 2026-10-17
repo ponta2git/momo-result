@@ -1,4 +1,4 @@
-import type { MatchDetailReadyPageModel } from "@/features/matches/detail/matchDetailPageModel";
+import type { MatchDetailReadyView } from "@/features/matches/detail/matchDetailView";
 import type { MatchNeighbor } from "@/shared/api/detailReadResult";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { formatNavigationDateTime } from "@/shared/lib/dateTime";
@@ -6,11 +6,11 @@ import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { AdjacentNavigation } from "@/shared/ui/navigation/AdjacentNavigation";
 
-export function MatchDetailAdjacentNavigation({ page }: { page: MatchDetailReadyPageModel }) {
-  const { adjacent, adjacentState } = page.navigation;
+export function MatchDetailAdjacentNavigation({ view }: { view: MatchDetailReadyView }) {
+  const { adjacent, adjacentState } = view.navigation;
   const previous = adjacent.kind === "available" ? adjacent.previous : undefined;
   const next = adjacent.kind === "available" ? adjacent.next : undefined;
-  const peers = [page.match.playedAt, previous?.playedAt, next?.playedAt].filter(
+  const peers = [view.match.playedAt, previous?.playedAt, next?.playedAt].filter(
     (value): value is string => value !== undefined,
   );
   const destination = (neighbor: MatchNeighbor | undefined, label: string) => ({
@@ -35,7 +35,7 @@ export function MatchDetailAdjacentNavigation({ page }: { page: MatchDetailReady
           <Notice
             tone="warning"
             action={
-              <Button size="sm" pending={page.refresh.pending} onClick={page.refresh.run}>
+              <Button size="sm" pending={view.refresh.pending} onClick={view.refresh.run}>
                 前後の試合を再取得
               </Button>
             }

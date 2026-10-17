@@ -3,18 +3,18 @@ import { sanitizeAppRedirectPath } from "@/shared/auth/redirectPath";
 type LoginNotice = { tone: "success" | "warning"; title: string; message: string };
 
 /** Resolves feature notices and redirect input without owning authentication or navigation. */
-export function buildLoginPageModel({
+export function buildLoginView({
   reason,
-  next,
-  selfDisabled,
-  development,
+  requestedNextPath,
+  selfAccountDisabled,
+  isDevelopment,
 }: {
   reason: string | null;
-  next: string | null;
-  selfDisabled: boolean;
-  development: boolean;
+  requestedNextPath: string | null;
+  selfAccountDisabled: boolean;
+  isDevelopment: boolean;
 }) {
-  const notice: LoginNotice | undefined = selfDisabled
+  const notice: LoginNotice | undefined = selfAccountDisabled
     ? {
         tone: "success",
         title: "アカウント設定を更新しました",
@@ -29,8 +29,8 @@ export function buildLoginPageModel({
       : undefined;
   return {
     notice,
-    loginNextPath: sanitizeAppRedirectPath(next),
-    forceDevPicker: development,
-    showAccountSwitchHint: !development,
+    loginNextPath: sanitizeAppRedirectPath(requestedNextPath),
+    forceDevPicker: isDevelopment,
+    showAccountSwitchHint: !isDevelopment,
   };
 }

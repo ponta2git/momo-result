@@ -1,6 +1,6 @@
 import { useSearchParams } from "react-router-dom";
 
-import { buildLoginPageModel } from "@/features/auth/loginPageModel";
+import { buildLoginView } from "@/features/auth/loginView";
 import { useSelfAccountDisabledNotice } from "@/shared/auth/accountOperationNotice";
 import { AuthPanel } from "@/shared/auth/AuthPanel";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -8,38 +8,38 @@ import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { contentText } from "@/shared/ui/typography";
 
-function useLoginPageModel() {
-  const selfDisabled = useSelfAccountDisabledNotice();
+function useLoginView() {
+  const selfAccountDisabled = useSelfAccountDisabledNotice();
   const [searchParams] = useSearchParams();
-  return buildLoginPageModel({
+  return buildLoginView({
     reason: searchParams.get("reason"),
-    next: searchParams.get("next"),
-    selfDisabled,
-    development: import.meta.env.DEV,
+    requestedNextPath: searchParams.get("next"),
+    selfAccountDisabled,
+    isDevelopment: import.meta.env.DEV,
   });
 }
 
 export function LoginPage() {
-  const page = useLoginPageModel();
+  const view = useLoginView();
 
   return (
     <PageFrame width="narrow">
       <div className="mx-auto w-full max-w-[34rem]">
         <PageContentSurface aria-label="ログイン" className="space-y-4" role="region">
-          {page.notice ? (
-            <Notice tone={page.notice.tone} title={page.notice.title}>
-              {page.notice.message}
+          {view.notice ? (
+            <Notice tone={view.notice.tone} title={view.notice.title}>
+              {view.notice.message}
             </Notice>
           ) : null}
 
           <AuthPanel
             auth={undefined}
             embedded
-            forceDevPicker={page.forceDevPicker}
-            loginNextPath={page.loginNextPath}
+            forceDevPicker={view.forceDevPicker}
+            loginNextPath={view.loginNextPath}
           />
 
-          {page.showAccountSwitchHint ? (
+          {view.showAccountSwitchHint ? (
             <p className={contentText.supporting}>
               別のDiscordアカウントを使う場合は、Discord側でログアウトするか、シークレットウィンドウで開きます。
             </p>

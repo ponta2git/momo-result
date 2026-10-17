@@ -2,8 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useCallback } from "react";
 
 import {
-  buildMatchAnalysis,
-  matchAnalysisQuery,
+  buildMatchAnalysisView,
+  matchAnalysisQueryParams,
 } from "@/features/matches/detail/matchDetailPresentation";
 import type { MatchDetailResponse } from "@/shared/api/matches";
 import { readSeriesAnalysisMatchContext } from "@/shared/api/seriesAnalysisMatchContextState";
@@ -22,7 +22,7 @@ export function useMatchAnalysis(match: MatchDetailResponse | undefined) {
     refetch: refetchStatus,
   } = statusQuery;
   const currentArtifactId = statusData?.currentArtifact?.artifactId;
-  const contextQueryParams = matchAnalysisQuery(match, currentArtifactId);
+  const contextQueryParams = matchAnalysisQueryParams(match, currentArtifactId);
   const contextQuery = useQuery(seriesAnalysisMatchContextQueryOptions(contextQueryParams));
   const {
     isFetching: contextIsFetching,
@@ -46,7 +46,7 @@ export function useMatchAnalysis(match: MatchDetailResponse | undefined) {
     refreshPublication,
   });
 
-  return buildMatchAnalysis({
+  return buildMatchAnalysisView({
     match,
     artifactId: currentArtifactId,
     context: contextData,

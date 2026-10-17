@@ -5,7 +5,7 @@ import { http, HttpResponse } from "msw";
 import { createMemoryRouter, RouterProvider, useNavigate } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { useConfirmedDraftNavigationCommand } from "@/features/matches/list/useConfirmedDraftNavigationCommand";
+import { useConfirmedDraftNavigation } from "@/features/matches/list/useConfirmedDraftNavigation";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { makeMatchDraftReviewResponse } from "@/test/factories/matchDraftReview";
@@ -15,19 +15,19 @@ import { createTestQueryClient } from "@/test/queryClient";
 
 setupMsw();
 
-function CommandHarness({ onRun }: { onRun: (completion: Promise<void>) => void }) {
+function NavigationHarness({ onRun }: { onRun: (completion: Promise<void>) => void }) {
   const navigate = useNavigate();
-  const command = useConfirmedDraftNavigationCommand();
+  const navigation = useConfirmedDraftNavigation();
   return (
     <>
       {["draft-a", "draft-b"].map((draftId) => (
         <div key={draftId}>
           <button
-            disabled={command.checkingIds.has(draftId)}
+            disabled={navigation.checkingIds.has(draftId)}
             type="button"
             onClick={() =>
               onRun(
-                command.run({
+                navigation.run({
                   draftStatusCheck: { draftId },
                   href: `/review/${draftId}`,
                   label: draftId,
@@ -37,7 +37,7 @@ function CommandHarness({ onRun }: { onRun: (completion: Promise<void>) => void 
           >
             {draftId}
           </button>
-          {command.errors[draftId] ? <p role="alert">{command.errors[draftId]}</p> : null}
+          {navigation.errors[draftId] ? <p role="alert">{navigation.errors[draftId]}</p> : null}
         </div>
       ))}
       <button type="button" onClick={() => navigate("/other")}>
@@ -50,14 +50,14 @@ function CommandHarness({ onRun }: { onRun: (completion: Promise<void>) => void 
   );
 }
 
-function renderCommand() {
+function renderNavigation() {
   const queryClient = createTestQueryClient();
-  const commands: Array<Promise<void>> = [];
+  const completions: Array<Promise<void>> = [];
   const router = createMemoryRouter(
     [
       {
         path: "/matches",
-        element: <CommandHarness onRun={(completion) => commands.push(completion)} />,
+        element: <NavigationHarness onRun={(completion) => completions.push(completion)} />,
       },
       { path: "/review/:draftId", element: <p>review</p> },
       { path: "/matches/:matchId", element: <p>result</p> },
@@ -70,7 +70,7 @@ function renderCommand() {
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
-  return { commands, router };
+  return { completions, router };
 }
 
 describe("draft navigation ownership", () => {
@@ -91,7 +91,7 @@ describe("draft navigation ownership", () => {
           );
         }),
       );
-      const { commands, router } = renderCommand();
+      const { completions, router } = renderNavigation();
       const user = userEvent.setup();
 
       await user.click(screen.getByRole("button", { name: "draft-a" }));
@@ -100,7 +100,7 @@ describe("draft navigation ownership", () => {
       const destination = nextAction === "leave" ? "/other" : "/matches?status=confirmed";
       await act(async () => {
         gate.resolve();
-        await Promise.all(commands);
+        await Promise.all(completions);
       });
 
       expect(`${router.state.location.pathname}${router.state.location.search}`).toBe(destination);
@@ -121,21 +121,21 @@ describe("draft navigation ownership", () => {
           return HttpResponse.json(makeMatchDraftReviewResponse(draftId).draft);
         }),
       );
-      const { commands, router } = renderCommand();
+      const { completions, router } = renderNavigation();
       const user = userEvent.setup();
 
       await user.click(screen.getByRole("button", { name: "draft-a" }));
       await user.click(screen.getByRole("button", { name: "draft-b" }));
       await act(async () => {
         gates[firstToFinish === "first" ? "draft-a" : "draft-b"].resolve();
-        await commands[firstToFinish === "first" ? 0 : 1];
+        await completions[firstToFinish === "first" ? 0 : 1];
       });
       expect(router.state.location.pathname).toBe(
         firstToFinish === "first" ? "/matches" : "/review/draft-b",
       );
       await act(async () => {
         gates[firstToFinish === "first" ? "draft-b" : "draft-a"].resolve();
-        await Promise.all(commands);
+        await Promise.all(completions);
       });
       expect(router.state.location.pathname).toBe("/review/draft-b");
     },
@@ -151,7 +151,7 @@ describe("draft navigation ownership", () => {
         return HttpResponse.json(makeMatchDraftReviewResponse("draft-a").draft);
       }),
     );
-    const { commands, router } = renderCommand();
+    const { completions, router } = renderNavigation();
     const user = userEvent.setup();
 
     await user.click(screen.getByRole("button", { name: "draft-a" }));
@@ -162,7 +162,7 @@ describe("draft navigation ownership", () => {
     expect(screen.getByRole("button", { name: "draft-a" })).toBeDisabled();
     await act(async () => {
       retry.resolve();
-      await Promise.all(commands);
+      await Promise.all(completions);
     });
     expect(router.state.location.pathname).toBe("/review/draft-a");
   });

@@ -44,7 +44,7 @@ export function buildMatchDetailLedgerRows(
   });
 }
 
-export function matchAnalysisQuery(
+export function matchAnalysisQueryParams(
   match: MatchDetailResponse | undefined,
   artifactId: string | undefined,
 ): SeriesAnalysisMatchContextQuery | undefined {
@@ -59,7 +59,7 @@ export function matchAnalysisQuery(
     : undefined;
 }
 
-export function buildMatchAnalysis({
+export function buildMatchAnalysisView({
   match,
   artifactId,
   context,

@@ -9,12 +9,12 @@ import type { MatchDetailResponse } from "@/shared/api/matches";
 import type { matchPerformanceContextFromArtifact } from "@/shared/matches/matchPerformanceContext";
 import { seriesComparisonHrefForMatch } from "@/shared/navigation/matchLinks";
 
-export type MatchDetailRefreshModel = {
+export type MatchDetailRefreshAction = {
   pending: boolean;
   run: () => void;
 };
 
-export type MatchDeletionModel = {
+export type MatchDeletionControls = {
   confirm: () => Promise<void>;
   errorMessage: string | null;
   open: boolean;
@@ -22,13 +22,13 @@ export type MatchDeletionModel = {
   setOpen: (open: boolean) => void;
 };
 
-export type MatchDetailReadyPageModel = {
+export type MatchDetailReadyView = {
   analysis: {
     comparisonContextStatus: "loading" | "ready" | "unavailable";
     badges: MatchFeatureBadge[];
     performanceContext: ReturnType<typeof matchPerformanceContextFromArtifact>;
   };
-  deletion: MatchDeletionModel;
+  deletion: MatchDeletionControls;
   identity: {
     gameTitle: string;
     heldAt: string;
@@ -46,28 +46,28 @@ export type MatchDetailReadyPageModel = {
     adjacent: DetailNavigation<MatchNeighbor>;
     adjacentState: "current" | "pending" | "failed" | "unavailable";
   };
-  refresh: MatchDetailRefreshModel;
+  refresh: MatchDetailRefreshAction;
 };
 
-type MatchDetailScreenState =
+type MatchDetailContentView =
   | { kind: "loading" }
   | {
       kind: "notFound";
-      refresh: MatchDetailRefreshModel;
+      refresh: MatchDetailRefreshAction;
     }
   | {
       kind: "loadFailed";
-      refresh: MatchDetailRefreshModel;
+      refresh: MatchDetailRefreshAction;
     }
-  | MatchDetailReadyPageModel;
+  | MatchDetailReadyView;
 
-export type MatchDetailPageModel = MatchDetailScreenState & {
+export type MatchDetailView = MatchDetailContentView & {
   matchId: string;
   noteSource: MatchNoteEditorSource;
 };
 
 /** Resolves screen availability and combines recorded/derived values with current edit policy. */
-export function buildMatchDetailPageModel({
+export function buildMatchDetailView({
   matchId,
   detail: match,
   navigation,
@@ -87,11 +87,11 @@ export function buildMatchDetailPageModel({
   pending: boolean;
   initialPending: boolean;
   error: unknown;
-  analysis: MatchDetailReadyPageModel["analysis"];
-  deletion: MatchDeletionModel;
+  analysis: MatchDetailReadyView["analysis"];
+  deletion: MatchDeletionControls;
   noteSource: MatchNoteEditorSource;
-  refresh: MatchDetailRefreshModel;
-}): MatchDetailPageModel {
+  refresh: MatchDetailRefreshAction;
+}): MatchDetailView {
   const common = { matchId, noteSource };
   if (notFound) return { ...common, kind: "notFound", refresh };
   if (!match && initialPending && matchId.trim()) return { ...common, kind: "loading" };

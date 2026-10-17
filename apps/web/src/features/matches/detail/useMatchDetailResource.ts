@@ -21,9 +21,9 @@ import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 export function useMatchDetailResource(matchId: string) {
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
-  const query = useQuery(matchDetailQueryOptions(matchId, matchId.trim().length > 0));
-  const { refetch, isFetching, isPaused, isPending } = query;
-  const read = readDetailQuery(query);
+  const detailQuery = useQuery(matchDetailQueryOptions(matchId, matchId.trim().length > 0));
+  const { refetch, isFetching, isPaused, isPending } = detailQuery;
+  const detailRead = readDetailQuery(detailQuery);
   const noteWrite = useMutation({
     mutationFn: async ({ body, expectedVersion }: MatchNoteIntent) => {
       const payload = { body, expectedVersion, matchId };
@@ -84,13 +84,13 @@ export function useMatchDetailResource(matchId: string) {
   }, [refetch]);
   const noteSource: MatchNoteEditorSource = {
     matchId,
-    match: read.detail,
+    match: detailRead.detail,
     saveNote,
     readLatest,
     commitSavedNote,
   };
   return {
-    ...read,
+    ...detailRead,
     initialPending: isPending,
     pending: isFetching || isPaused,
     noteSource,

@@ -18,6 +18,7 @@ final case class AppConfig(
     seriesAnalysisRead: SeriesAnalysisReadConfig = SeriesAnalysisReadConfig.defaults,
     database: Option[DatabaseConfig] = None,
     maintenanceMode: MaintenanceMode = MaintenanceMode.Normal,
+    maintenanceOperationsToken: Option[String] = None,
 ):
   override def toString: String =
     val sourceImageStorageMode = sourceImageStorage match
@@ -42,9 +43,24 @@ object AppConfig:
   )
 
   private[config] def loadFromEnv[F[_]: Async](env: Map[String, String]): F[AppConfig] =
-    MaintenanceMode.parse(env.get("MOMO_MAINTENANCE_MODE")).liftTo[F].flatMap { maintenanceMode =>
-      loadConfiguredEnv[F](env, maintenanceMode)
+    (
+      MaintenanceMode.parse(env.get("MOMO_MAINTENANCE_MODE")),
+      maintenanceToken(env.get("MOMO_MAINTENANCE_OPERATIONS_TOKEN")),
+    ).mapN((_, _)).liftTo[F].flatMap { (maintenanceMode, operationsToken) =>
+      loadConfiguredEnv[F](
+        env,
+        maintenanceMode
+      ).map(_.copy(maintenanceOperationsToken = operationsToken))
     }
+
+  private def maintenanceToken(value: Option[String])
+      : Either[IllegalArgumentException, Option[String]] =
+    if value.forall(token =>
+        token.length >= 32 && token.length <= 512 &&
+          token.matches("[A-Za-z0-9._~+/-]+=*")
+      )
+    then Right(value)
+    else Left(new IllegalArgumentException("Invalid maintenance operations token."))
 
   private def loadConfiguredEnv[F[_]: Async](
       env: Map[String, String],

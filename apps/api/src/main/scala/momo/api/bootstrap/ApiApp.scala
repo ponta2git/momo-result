@@ -9,6 +9,7 @@ import momo.api.adapters.discord.JavaDiscordOAuthClient
 import momo.api.auth.CreatedSession
 import momo.api.config.{AppConfig, MaintenanceMode, ResourceLimitsConfig}
 import momo.api.domain.LoginAccount
+import momo.api.maintenance.MaintenanceDrain
 import momo.api.usecases.ocr.OcrAdmissionGuard
 
 object ApiApp:
@@ -49,9 +50,12 @@ object ApiApp:
       Resource.eval(Async[F].raiseError(new IllegalArgumentException(
         "Normal runtime handles are unavailable during maintenance."
       )))
-    else normalRuntime(config)
+    else DrainingApiRuntime.resource(config, normalRuntime(config, _))
 
-  private def normalRuntime[F[_]: Async](config: AppConfig): Resource[F, WiredRuntime[F]] = Resource
+  private def normalRuntime[F[_]: Async](
+      config: AppConfig,
+      maintenance: MaintenanceDrain[F],
+  ): Resource[F, WiredRuntime[F]] = Resource
     .eval(SecureRandom.javaSecuritySecureRandom[F]).flatMap { case given SecureRandom[F] =>
       JavaDiscordOAuthClient.resource[F](JavaDiscordOAuthClient.Config(
         clientId = config.auth.discordClientId.getOrElse(""),
@@ -61,7 +65,7 @@ object ApiApp:
       ))
         .flatMap { oauthClient =>
           config.database match
-            case Some(db) => PostgresApiRuntime.resource[F](config, db, oauthClient)
+            case Some(db) => PostgresApiRuntime.resource[F](config, db, oauthClient, maintenance)
             case None => Resource.eval(Async[F].raiseError[WiredRuntime[F]](
                 new IllegalArgumentException("API runtime requires a database configuration.")
               ))

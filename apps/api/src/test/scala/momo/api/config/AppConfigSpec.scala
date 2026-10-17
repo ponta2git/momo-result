@@ -57,6 +57,24 @@ class AppConfigSpec extends CatsEffectSuite:
     }
   }
 
+  test("maintenance operations tokens are validated without exposing their value") {
+    val token = "maintenance-config-fixture-0000000000"
+    for
+      valid <- load(Map("MOMO_MAINTENANCE_OPERATIONS_TOKEN" -> token))
+      invalid <- List("", "short-secret", "a" * 513, "a" * 32 + " ").traverse(value =>
+        load(Map("APP_ENV" -> "prod", "MOMO_MAINTENANCE_OPERATIONS_TOKEN" -> value))
+      )
+    yield
+      assertEquals(valid.map(_.maintenanceOperationsToken), Right(Some(token)))
+      assert(valid.exists(config => !config.toString.contains(token)))
+      invalid.foreach(result =>
+        assertEquals(
+          result.left.map(_.getMessage),
+          Left("Invalid maintenance operations token.")
+        )
+      )
+  }
+
   test("toJdbcUrl: converts postgres:// URL and extracts credentials") {
     val (url, user, pass) = parsedDatabaseUrl("postgres://summit:summit@localhost:5433/summit")
     assertEquals(url, "jdbc:postgresql://localhost:5433/summit")

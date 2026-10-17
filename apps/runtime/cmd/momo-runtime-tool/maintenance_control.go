@@ -16,7 +16,7 @@ import (
 const maintenanceControlEvent = "runtime_maintenance_control"
 
 var cutoverIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
-var maintenanceTokenPattern = regexp.MustCompile(`^[A-Za-z0-9._~+/=-]{32,512}$`)
+var maintenanceTokenPattern = regexp.MustCompile(`^[A-Za-z0-9._~+/-]+=*$`)
 
 type maintenanceDrainRequest struct {
 	CutoverID string `json:"cutoverId"`
@@ -78,7 +78,7 @@ func runMaintenanceControl(ctx context.Context, args []string, stdout, stderr io
 		return 2
 	}
 	token := os.Getenv("MOMO_MAINTENANCE_OPERATIONS_TOKEN")
-	if !maintenanceTokenPattern.MatchString(token) {
+	if len(token) < 32 || len(token) > 512 || !maintenanceTokenPattern.MatchString(token) {
 		writeResult(stderr, failureResult(maintenanceControlEvent, "MissingOrInvalidConfiguration"))
 		return 1
 	}

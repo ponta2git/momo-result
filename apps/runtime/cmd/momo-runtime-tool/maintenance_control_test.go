@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"net/http"
@@ -73,5 +74,14 @@ func TestMaintenanceControlRejectsMalformedArgumentsBeforeNetwork(t *testing.T) 
 	}
 	if _, err := parseMaintenanceControl([]string{"drain", "--stage", "all", "--stop-epoch", "7", "--cutover-id", "fixture"}); err != nil {
 		t.Fatal("valid control arguments rejected")
+	}
+}
+
+func TestMaintenanceControlRejectsInvalidBearerPaddingWithoutEcho(t *testing.T) {
+	const invalid = "private-fixture-token=with-invalid-padding"
+	t.Setenv("MOMO_MAINTENANCE_OPERATIONS_TOKEN", invalid)
+	var stdout, stderr bytes.Buffer
+	if runMaintenanceControl(context.Background(), []string{"status"}, &stdout, &stderr) != 1 || stdout.Len() != 0 || strings.Contains(stderr.String(), invalid) || !strings.Contains(stderr.String(), "MissingOrInvalidConfiguration") {
+		t.Fatal("invalid bearer token was used or exposed")
 	}
 }

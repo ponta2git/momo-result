@@ -132,6 +132,7 @@
 ### Server State
 
 - server state は TanStack Query の cache lifecycle に従い、Page/UI component から query 基盤を直接操作しない。
+- 取得・保存担当の公開契約は用途別の data、取得・操作状態、結果、操作に絞る。Query result、mutation object、QueryClient、query key、再取得 options を業務判断や編集状態へ渡さない。キャッシュ通知・更新・破棄と再取得の実装は取得・保存 adapter に閉じ、認可の所有期間、結果の採用、競合解消などの判断はその契約を通して行う。同じファイルの名前付き関数でも境界は表せるため、endpoint ごとの中継や Query API を写した汎用 wrapper は増やさない。
 - 結果確認の元画像も、取得状態とBlobをTanStack Queryが所有する。画像一覧と画像本体は異なるquery keyを持ち、本体は認証主体・画面scope・下書き・画像descriptorの世代を区別する。Object URLは画面の表示資源として生成・解放し、Blobや取得状態を別のcacheへ複製しない。
 - 元画像の先読みは初回表示または利用者の画像選択に続く有限の処理として許可する。featureの取得処理が表示対象を優先して直列化し、同一取得の引継ぎ、中断、容量、scope終了時のquery破棄を所有する。自動retryや回線復帰による取得再開を起こさず、確定・削除成功時は関連cacheの更新より先に画像の寿命を閉じる。
 - query key は cache 内の runtime data shape まで区別する。backend resource が同じでも raw response と ViewModel を同じ key に置かない。

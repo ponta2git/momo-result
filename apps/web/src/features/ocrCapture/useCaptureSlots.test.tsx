@@ -21,7 +21,7 @@ const feedback = {
 
 function renderDraftFlow() {
   const queryClient = createTestQueryClient();
-  return renderHook(() => useCaptureSlots(), {
+  return renderHook(() => useCaptureSlots({ feedback }), {
     reactStrictMode: true,
     wrapper: ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
@@ -81,7 +81,6 @@ describe("useCaptureSlots", () => {
         new File(["image"], "image.png", { type: "image/png" }),
         "upload",
         "total_assets",
-        feedback,
       );
     });
     const selectionId = selectedImageId(view.result.current);
@@ -124,7 +123,6 @@ describe("useCaptureSlots", () => {
         new File(["first"], "first.png", { type: "image/png" }),
         "upload",
         "total_assets",
-        feedback,
       );
     });
     const oldSelectionId = selectedImageId(view.result.current);
@@ -135,7 +133,6 @@ describe("useCaptureSlots", () => {
         new File(["second"], "second.png", { type: "image/png" }),
         "upload",
         "total_assets",
-        feedback,
       );
       view.result.current.applyReceipt({
         type: "accepted",
@@ -157,12 +154,7 @@ describe("useCaptureSlots", () => {
     act(() => {
       view.result.current.applyReceipt({ type: "uploading", kind: "total_assets", selectionId });
       expect(
-        addImage(
-          new File(["third"], "third.png", { type: "image/png" }),
-          "upload",
-          "total_assets",
-          feedback,
-        ),
+        addImage(new File(["third"], "third.png", { type: "image/png" }), "upload", "total_assets"),
       ).toBe(false);
     });
     expect(view.result.current.slots[0]).toMatchObject({
@@ -189,7 +181,6 @@ describe("useCaptureSlots", () => {
         new File(["first"], "first.png", { type: "image/png" }),
         "upload",
         "total_assets",
-        feedback,
       );
     });
     expect(view.result.current.slots[0]?.previewUrl).toBe("blob:first.png");
@@ -199,7 +190,6 @@ describe("useCaptureSlots", () => {
         new File(["second"], "second.png", { type: "image/png" }),
         "upload",
         "total_assets",
-        feedback,
       );
     });
     expect(objectUrls.revokeObjectURL).toHaveBeenCalledWith("blob:first.png");
@@ -217,7 +207,6 @@ describe("useCaptureSlots", () => {
         new File(["image"], "image.png", { type: "image/png" }),
         "upload",
         "total_assets",
-        feedback,
       );
       view.unmount();
     });
@@ -237,7 +226,6 @@ describe("useCaptureSlots", () => {
           new File([name], name, { type: "image/png" }),
           "upload",
           "total_assets",
-          feedback,
         );
       }
     });

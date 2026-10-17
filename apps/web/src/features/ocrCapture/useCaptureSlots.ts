@@ -30,21 +30,12 @@ export type CaptureSlotActionFeedback = {
 };
 
 export type CaptureSlots = {
-  addImage: (
-    file: File,
-    source: InputSource,
-    targetKind: SlotKind,
-    feedback: CaptureSlotActionFeedback,
-  ) => boolean;
-  clearImage: (kind: SlotKind, feedback: CaptureSlotActionFeedback) => void;
-  dropImage: (
-    sourceKind: SlotKind,
-    targetKind: SlotKind,
-    feedback: CaptureSlotActionFeedback,
-  ) => void;
+  addImage: (file: File, source: InputSource, targetKind: SlotKind) => boolean;
+  clearImage: (kind: SlotKind) => void;
+  dropImage: (sourceKind: SlotKind, targetKind: SlotKind) => void;
   refreshStatus: (kind: SlotKind) => void;
-  moveImage: (kind: SlotKind, direction: -1 | 1, feedback: CaptureSlotActionFeedback) => void;
-  clearAllImages: (feedback: CaptureSlotActionFeedback) => void;
+  moveImage: (kind: SlotKind, direction: -1 | 1) => void;
+  clearAllImages: () => void;
   slots: readonly CaptureSlotView[];
   applyReceipt: (receipt: OcrSlotReceipt) => void;
   prepareSubmission: (
@@ -58,6 +49,7 @@ export type CaptureSlots = {
 };
 
 type CaptureSlotsOptions = {
+  feedback: CaptureSlotActionFeedback;
   onDraftLoadError?: ((error: NormalizedApiError) => void) | undefined;
 };
 
@@ -71,7 +63,8 @@ function requireSlot(slots: readonly CaptureSlotState[], kind: SlotKind): Captur
  * 撮影スロット (3 枠) の画像リソースと、各スロットに対応する OCR job/draft query lifecycleを所有する。
  * local slotには画像と送信識別子だけを保持し、表示用status/draft/error/pendingはqueryから直接導出する。
  */
-export function useCaptureSlots({ onDraftLoadError }: CaptureSlotsOptions = {}): CaptureSlots {
+export function useCaptureSlots({ feedback, onDraftLoadError }: CaptureSlotsOptions): CaptureSlots {
+  const { reportFailure, reportSuccess } = feedback;
   const [localSlots, setLocalSlots] = useState<CaptureSlotState[]>(() => createInitialSlots());
   const localSlotsRef = useRef(localSlots);
   const totalAssetsResource = useOcrJobSlotResource(
@@ -173,19 +166,14 @@ export function useCaptureSlots({ onDraftLoadError }: CaptureSlotsOptions = {}):
   );
 
   const addImage = useCallback(
-    (
-      file: File,
-      source: InputSource,
-      targetKind: SlotKind,
-      feedback: CaptureSlotActionFeedback,
-    ) => {
+    (file: File, source: InputSource, targetKind: SlotKind) => {
       const targetSlot = readSlots().find((slot) => slot.kind === targetKind);
       if (!targetSlot) {
-        feedback.reportFailure("撮影先を選び直してください。");
+        reportFailure("撮影先を選び直してください。");
         return false;
       }
       if (!captureSlotCapabilities(targetSlot).canSelect) {
-        feedback.reportFailure("読み取り中の分類には画像を配置できません。");
+        reportFailure("読み取り中の分類には画像を配置できません。");
         return false;
       }
       const previewUrl = URL.createObjectURL(file);
@@ -200,56 +188,45 @@ export function useCaptureSlots({ onDraftLoadError }: CaptureSlotsOptions = {}):
       updateSlot(selectedSlot);
       const label =
         slotDefinitions.find((definition) => definition.kind === targetKind)?.label ?? targetKind;
-      feedback.reportSuccess(
-        `${label}に${source === "camera" ? "撮影画像" : "画像"}を配置しました。`,
-      );
+      reportSuccess(`${label}に${source === "camera" ? "撮影画像" : "画像"}を配置しました。`);
       return true;
     },
-    [readSlots, updateSlot],
+    [readSlots, reportFailure, reportSuccess, updateSlot],
   );
 
   const clearImage = useCallback(
-    (kind: SlotKind, feedback: CaptureSlotActionFeedback) => {
+    (kind: SlotKind) => {
       const currentSlot = readSlots().find((slot) => slot.kind === kind);
       if (currentSlot && isWorkingStatus(currentSlot.status)) {
-        feedback.reportFailure(
-          "読み取り中の画像は破棄できません。試合一覧で状態を確認してください。",
-        );
+        reportFailure("読み取り中の画像は破棄できません。試合一覧で状態を確認してください。");
         return;
       }
       updateLocalSlots((current) =>
         current.map((slot) => (slot.kind === kind ? createInitialSlot(kind) : slot)),
       );
-      feedback.reportSuccess("画像を破棄しました。");
+      reportSuccess("画像を破棄しました。");
     },
-    [readSlots, updateLocalSlots],
+    [readSlots, reportFailure, reportSuccess, updateLocalSlots],
   );
 
-  const clearAllImages = useCallback(
-    (feedback: CaptureSlotActionFeedback) => {
-      if (readSlots().some((slot) => isWorkingStatus(slot.status))) {
-        feedback.reportFailure(
-          "読み取り中の画像は破棄できません。試合一覧で状態を確認してください。",
-        );
-        return;
-      }
-      updateLocalSlots(createInitialSlots);
-      feedback.reportSuccess("画像をすべて破棄しました。次の試合を撮影できます。");
-    },
-    [readSlots, updateLocalSlots],
-  );
+  const clearAllImages = useCallback(() => {
+    if (readSlots().some((slot) => isWorkingStatus(slot.status))) {
+      reportFailure("読み取り中の画像は破棄できません。試合一覧で状態を確認してください。");
+      return;
+    }
+    updateLocalSlots(createInitialSlots);
+    reportSuccess("画像をすべて破棄しました。次の試合を撮影できます。");
+  }, [readSlots, reportFailure, reportSuccess, updateLocalSlots]);
 
   const dropImage = useCallback(
-    (sourceKind: SlotKind, targetKind: SlotKind, feedback: CaptureSlotActionFeedback) => {
+    (sourceKind: SlotKind, targetKind: SlotKind) => {
       if (sourceKind === targetKind) return;
       const currentSlots = readSlots();
       const sourceSlot = currentSlots.find((slot) => slot.kind === sourceKind);
       const targetSlot = currentSlots.find((slot) => slot.kind === targetKind);
       if (!sourceSlot || !targetSlot || !sourceSlot.file) return;
       if (isWorkingStatus(sourceSlot.status) || isWorkingStatus(targetSlot.status)) {
-        feedback.reportFailure(
-          "読み取り中は分類を変更できません。試合一覧で状態を確認してください。",
-        );
+        reportFailure("読み取り中は分類を変更できません。試合一覧で状態を確認してください。");
         return;
       }
       updateLocalSlots((current) =>
@@ -263,17 +240,17 @@ export function useCaptureSlots({ onDraftLoadError }: CaptureSlotsOptions = {}):
         slotDefinitions.find((definition) => definition.kind === sourceKind)?.label ?? sourceKind;
       const targetLabel =
         slotDefinitions.find((definition) => definition.kind === targetKind)?.label ?? targetKind;
-      feedback.reportSuccess(`${sourceLabel}と${targetLabel}の画像を入れ替えました。`);
+      reportSuccess(`${sourceLabel}と${targetLabel}の画像を入れ替えました。`);
     },
-    [readSlots, updateLocalSlots],
+    [readSlots, reportFailure, reportSuccess, updateLocalSlots],
   );
 
   const moveImage = useCallback(
-    (kind: SlotKind, direction: -1 | 1, feedback: CaptureSlotActionFeedback) => {
+    (kind: SlotKind, direction: -1 | 1) => {
       const index = slotDefinitions.findIndex((definition) => definition.kind === kind);
       const targetKind = slotDefinitions[index + direction]?.kind;
       if (targetKind) {
-        dropImage(kind, targetKind, feedback);
+        dropImage(kind, targetKind);
       }
     },
     [dropImage],

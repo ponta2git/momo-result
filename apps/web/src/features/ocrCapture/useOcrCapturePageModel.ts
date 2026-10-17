@@ -33,6 +33,10 @@ export function useOcrCapturePageModel() {
   const [captureActionFeedback, setCaptureActionFeedback] = useState<string>();
 
   const captureSlots = useCaptureSlots({
+    feedback: {
+      reportFailure: setCaptureActionFeedback,
+      reportSuccess: setCaptureActionFeedback,
+    },
     onDraftLoadError: (error) => setCaptureActionFeedback(error.detail || error.title),
   });
   const submission = useOcrSubmission();
@@ -40,14 +44,6 @@ export function useOcrCapturePageModel() {
     submission,
     onSlotReceipt: captureSlots.applyReceipt,
   });
-  const slotFeedback = useMemo(
-    () => ({
-      reportFailure: setCaptureActionFeedback,
-      reportSuccess: setCaptureActionFeedback,
-    }),
-    [],
-  );
-
   const view = captureSlots.buildView({
     targetKind: captureTargetKind,
     locked: startFlow.locked,
@@ -57,10 +53,10 @@ export function useOcrCapturePageModel() {
 
   const {
     addImage,
-    clearImage,
-    dropImage,
-    moveImage,
-    clearAllImages,
+    clearImage: clear,
+    dropImage: drop,
+    moveImage: move,
+    clearAllImages: reset,
     nextEmptyTarget,
     prepareSubmission,
     resolveTarget,
@@ -81,13 +77,13 @@ export function useOcrCapturePageModel() {
 
   const selectImage = useCallback(
     (file: File, source: InputSource) => {
-      const added = addImage(file, source, captureTargetKind, slotFeedback);
+      const added = addImage(file, source, captureTargetKind);
       if (!added) return;
 
       const nextEmpty = nextEmptyTarget(captureTargetKind);
       if (nextEmpty) setCaptureTargetKind(nextEmpty);
     },
-    [addImage, nextEmptyTarget, captureTargetKind, slotFeedback],
+    [addImage, nextEmptyTarget, captureTargetKind],
   );
 
   const startOcr = useCallback(() => {
@@ -104,35 +100,15 @@ export function useOcrCapturePageModel() {
     setStartError(undefined);
     openStart(preparation.plan);
   }, [prepareSubmission, setup.resolution, setup.blockedReason, setup.options, openStart]);
-  const clear = useCallback(
-    (kind: SlotKind) => clearImage(kind, slotFeedback),
-    [clearImage, slotFeedback],
-  );
-  const drop = useCallback(
-    (sourceKind: SlotKind, targetKind: SlotKind) => dropImage(sourceKind, targetKind, slotFeedback),
-    [dropImage, slotFeedback],
-  );
-  const move = useCallback(
-    (kind: SlotKind, direction: -1 | 1) => moveImage(kind, direction, slotFeedback),
-    [moveImage, slotFeedback],
-  );
-  const reset = useCallback(() => clearAllImages(slotFeedback), [clearAllImages, slotFeedback]);
-
   const camera = useMemo<OcrCaptureCameraModel>(
     () => ({
       actionVariant: view.camera.actionVariant,
       disabled: view.camera.disabled,
       slotLabel: view.camera.target.label,
-      reportValidationError: slotFeedback.reportFailure,
+      reportValidationError: setCaptureActionFeedback,
       selectImage,
     }),
-    [
-      view.camera.actionVariant,
-      view.camera.disabled,
-      view.camera.target.label,
-      slotFeedback.reportFailure,
-      selectImage,
-    ],
+    [view.camera.actionVariant, view.camera.disabled, view.camera.target.label, selectImage],
   );
   const tray = useMemo<OcrCaptureTrayModel>(
     () => ({

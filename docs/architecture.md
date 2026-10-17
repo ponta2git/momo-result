@@ -114,8 +114,9 @@
 
   `shared/matches`、`heldEvents`、`masters`、`navigation` などの業務別 module はこれらを組み合わせる。順位・メンバー identity を知る結果台帳は `shared/matches`、API の候補を選択部品へ接続する処理は `shared/heldEvents`、分析専用チャートは `features/seriesComparison` が所有する。配置名が shared であることを汎用性の根拠にしない。
 - すべての feature で、入口が処理の流れを組み立て、純粋な model が判断・変換を、owner が状態・入出力・寿命を、UI が表示と利用者の操作を担当する。規模によって変えるのは分割量であり、この責務分担ではない。
-- Page は feature 固有の PageModel から表示・操作の契約を受け取り、TanStack Query の result や mutation object を直接受け取らない。PageModel は選択、整合した表示結果、編集セッション、保存など、一緒に守る条件ごとの owner と model を合成する。小さい機能は同じファイルの名前付き関数で分けてよく、location / resource など同じ数・名前の層を全機能へ追加しない。
+- PageModel は選択、整合した表示結果、編集、保存などの owner を組み合わせ、画面全体に必要な値だけを購読する。各表示領域は必要な readonly view と意味のある操作を受け取り、Query result、mutation object、内部 session、任意 updater、業務状態を書き換える ref を受け取らない。小さい機能は同じファイルの名前付き関数で分けてよく、同じ数・名前の層を全機能へ追加しない。
 - 入力の正規化、選択の遷移、初期化、取得・保存可否、結果の採用、表示への変換は、値を受けて結果を返す純粋な model で読めるようにする。URL の読み書き、query、保存、時刻の取得と状態への反映は対応する owner が扱う。同じ更新を複数の setter / effect へ分散させない。未解決・利用不可・利用可能など意味の異なる結果を型で区別し、通信中かどうかは別に扱う。外部入力や応答の対象・世代の一致は実行時にも検証する。
+- 最新状態の読取り、純粋な遷移・実行判断、commit と入出力への接続は、対象の状態を所有する境界に閉じる。一緒に整合を守る入力・確認状態は一度に更新し、独立した取得・送信・表示資源まで一つの owner に集めない。owner の寿命と購読範囲は別に決め、表示を分割しても進行中の操作や編集の所有期間を短くしない。
 - 戦績比較は URL を確定した選択の正本とし、要求中・確認済み・表示中の条件を区別する。選択は候補との整合と URL 更新、結果は取得した成果物の採用と表示、見通しセッションは採用済み要約と試算入力をそれぞれ所有する。試合一覧の更新も対象付きの読取結果を選択へ渡し、取得処理から URL を直接変更しない。
 - hook が計算済みの値を別の builder へ渡し、そのまま同じ画面モデルへ詰め直す層は置かない。子の契約は使用する値・操作だけで表し、設定欄へ全 player 入力、チャートへ全 artifact、command へ全 page model を運ばない。純粋な表示変換・型は hook や page component へ依存せず、consumer と取得処理の共通の下位に置く。
 - ファイル行数は責務混在を見つける signal とし、行数だけを理由に浅い module へ分割しない。
@@ -150,6 +151,7 @@
 ### React 更新の優先度
 
 - 入力値、選択 intent、focus は即時に反映する。`useDeferredValue` は追従を遅らせてもよい検証表示・一覧・図表に使い、送信時の validation と request は最新値から同期的に組み立てる。
+- 入力や処理状況の購読は、それを表示する領域へ置く。独立した表示が一つの編集状態を共有するときは、必要に応じて画面寿命の store と用途別 snapshot を使い、変更のない view の参照を保つ。単独の入力・dialog は局所 state のままとし、Query の server data を別 store に複製しない。性能は必要な経路の観測で判断し、store・selector・memo を全機能へ一律に追加しない。
 - 遅延する表示は `memo` と安定した props の境界を組み合わせ、urgent render で前の重い subtree を再描画しない。小さい値の加工へ一律に memo を足さず、state の局所化・不要な依存の削減を先に検討する。deferred value は debounce、通信回数の制限、計算量の削減ではない。
 - 表示 bundle を遅延する場合は data、scope、view の identity を一緒に保つ。要求中の条件を古い図表の見出し・操作へ混ぜず、追従中の表示と操作制限は既存の stale 表示へ接続する。
 - `useOptimistic` の更新は Action 内で行い、操作に属する非同期処理を await する。navigation の Promise は Router の完了境界であり、任意の `React.lazy` subtree の描画完了を保証しない。取得は Query、code readiness は Suspense が引き続き所有する。

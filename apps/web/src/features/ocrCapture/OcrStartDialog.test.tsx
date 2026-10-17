@@ -7,8 +7,8 @@ import { createInitialSlot } from "@/features/ocrCapture/captureState";
 import { OcrStartDialog } from "@/features/ocrCapture/OcrStartDialog";
 import type { OcrSubmissionPlan } from "@/features/ocrCapture/ocrSubmissionPlan";
 import type { OcrSubmissionResult } from "@/features/ocrCapture/ocrSubmissionWorkflow";
-import type { OcrCaptureMutations } from "@/features/ocrCapture/useOcrCaptureMutations";
 import { useOcrStartFlow } from "@/features/ocrCapture/useOcrStartFlow";
+import type { OcrSubmission } from "@/features/ocrCapture/useOcrSubmission";
 import { createDeferred } from "@/test/deferred";
 
 const plan: OcrSubmissionPlan = {
@@ -38,7 +38,7 @@ const plan: OcrSubmissionPlan = {
   ],
 };
 
-function FlowHarness({ submit }: { submit: OcrCaptureMutations["submit"] }) {
+function FlowHarness({ submit }: { submit: OcrSubmission["submit"] }) {
   const flow = useOcrStartFlow({
     submission: { isSubmitting: false, submit },
     onSlotReceipt: vi.fn(),
@@ -59,7 +59,7 @@ function FlowHarness({ submit }: { submit: OcrCaptureMutations["submit"] }) {
 }
 
 async function submitResult(...results: Array<OcrSubmissionResult | Promise<OcrSubmissionResult>>) {
-  const submit = vi.fn<OcrCaptureMutations["submit"]>();
+  const submit = vi.fn<OcrSubmission["submit"]>();
   for (const result of results) submit.mockImplementationOnce(async () => result);
   const router = createMemoryRouter([{ path: "/", element: <FlowHarness submit={submit} /> }]);
   render(<RouterProvider router={router} />);

@@ -1,4 +1,4 @@
-import type { SetupFormValues } from "@/features/ocrCapture/schema";
+import type { OcrSetupValues } from "@/features/ocrCapture/setup/ocrSetupSchema";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { canonicalResultMembers } from "@/shared/domain/members";
 import type { PaginationState } from "@/shared/lib/pagination";
@@ -84,7 +84,7 @@ function selectOptions(items: readonly NamedOption[], placeholder: string): Sele
     : items.map((item) => ({ label: item.name, value: item.id }));
 }
 
-/** Projects resolved choices and the current input into the fields rendered by SetupPanel. */
+/** Projects resolved choices and the current input into the fields rendered by OcrSetupPanel. */
 export function buildOcrSetupPanelFields({
   enabled,
   options,
@@ -92,7 +92,7 @@ export function buildOcrSetupPanelFields({
 }: {
   enabled: boolean;
   options: SetupPanelOptions;
-  value: SetupFormValues;
+  value: OcrSetupValues;
 }): OcrSetupPanelModel["fields"] {
   return {
     gameTitle: {

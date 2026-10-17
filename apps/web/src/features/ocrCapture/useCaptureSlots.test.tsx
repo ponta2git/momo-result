@@ -4,8 +4,8 @@ import { http, HttpResponse } from "msw";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import { useOcrCaptureDraftFlow } from "@/features/ocrCapture/useOcrCaptureDraftFlow";
-import type { OcrCaptureDraftFlow } from "@/features/ocrCapture/useOcrCaptureDraftFlow";
+import { useCaptureSlots } from "@/features/ocrCapture/useCaptureSlots";
+import type { CaptureSlots } from "@/features/ocrCapture/useCaptureSlots";
 import { createDeferred } from "@/test/deferred";
 import { installObjectUrlMock } from "@/test/doubles/dom";
 import { setupMsw } from "@/test/msw/lifecycle";
@@ -21,7 +21,7 @@ const feedback = {
 
 function renderDraftFlow() {
   const queryClient = createTestQueryClient();
-  return renderHook(() => useOcrCaptureDraftFlow(), {
+  return renderHook(() => useCaptureSlots(), {
     reactStrictMode: true,
     wrapper: ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
@@ -29,7 +29,7 @@ function renderDraftFlow() {
   });
 }
 
-function selectedImageId(flow: OcrCaptureDraftFlow) {
+function selectedImageId(flow: CaptureSlots) {
   const prepared = flow.prepareSubmission({
     blockedReason: undefined,
     nowIso: "2026-01-01T00:00:00.000Z",
@@ -55,7 +55,7 @@ function selectedImageId(flow: OcrCaptureDraftFlow) {
   return prepared.plan.slots[0].selectionId;
 }
 
-describe("useOcrCaptureDraftFlow", () => {
+describe("useCaptureSlots", () => {
   it("refreshes the same job explicitly while suppressing duplicate in-flight commands", async () => {
     installObjectUrlMock({ createObjectURL: () => "blob:image" });
     const refreshGate = createDeferred<void>();
@@ -77,7 +77,7 @@ describe("useOcrCaptureDraftFlow", () => {
     );
     const view = renderDraftFlow();
     act(() => {
-      view.result.current.handleAddImage(
+      view.result.current.addImage(
         new File(["image"], "image.png", { type: "image/png" }),
         "upload",
         "total_assets",
@@ -101,13 +101,13 @@ describe("useOcrCaptureDraftFlow", () => {
     await waitFor(() => expect(view.result.current.slots[0]?.refreshing).toBe(false));
 
     act(() => {
-      view.result.current.handleRefreshStatus("total_assets");
-      view.result.current.handleRefreshStatus("total_assets");
+      view.result.current.refreshStatus("total_assets");
+      view.result.current.refreshStatus("total_assets");
     });
     await waitFor(() => expect(requestCount).toBe(2));
     expect(view.result.current.slots[0]?.refreshing).toBe(true);
 
-    act(() => view.result.current.handleRefreshStatus("total_assets"));
+    act(() => view.result.current.refreshStatus("total_assets"));
     expect(requestCount).toBe(2);
 
     act(() => refreshGate.resolve());
@@ -120,7 +120,7 @@ describe("useOcrCaptureDraftFlow", () => {
     });
     const view = renderDraftFlow();
     act(() => {
-      view.result.current.handleAddImage(
+      view.result.current.addImage(
         new File(["first"], "first.png", { type: "image/png" }),
         "upload",
         "total_assets",
@@ -129,9 +129,9 @@ describe("useOcrCaptureDraftFlow", () => {
     });
     const oldSelectionId = selectedImageId(view.result.current);
     const revenueView = view.result.current.slots[1];
-    const addImage = view.result.current.handleAddImage;
+    const addImage = view.result.current.addImage;
     act(() => {
-      view.result.current.handleAddImage(
+      view.result.current.addImage(
         new File(["second"], "second.png", { type: "image/png" }),
         "upload",
         "total_assets",
@@ -152,7 +152,7 @@ describe("useOcrCaptureDraftFlow", () => {
       status: "selected",
     });
     expect(view.result.current.slots[1]).toBe(revenueView);
-    expect(view.result.current.handleAddImage).toBe(addImage);
+    expect(view.result.current.addImage).toBe(addImage);
     const selectionId = selectedImageId(view.result.current);
     act(() => {
       view.result.current.applyReceipt({ type: "uploading", kind: "total_assets", selectionId });
@@ -185,7 +185,7 @@ describe("useOcrCaptureDraftFlow", () => {
     const view = renderDraftFlow();
 
     act(() => {
-      view.result.current.handleAddImage(
+      view.result.current.addImage(
         new File(["first"], "first.png", { type: "image/png" }),
         "upload",
         "total_assets",
@@ -195,7 +195,7 @@ describe("useOcrCaptureDraftFlow", () => {
     expect(view.result.current.slots[0]?.previewUrl).toBe("blob:first.png");
 
     act(() => {
-      view.result.current.handleAddImage(
+      view.result.current.addImage(
         new File(["second"], "second.png", { type: "image/png" }),
         "upload",
         "total_assets",
@@ -213,7 +213,7 @@ describe("useOcrCaptureDraftFlow", () => {
     const view = renderDraftFlow();
 
     act(() => {
-      view.result.current.handleAddImage(
+      view.result.current.addImage(
         new File(["image"], "image.png", { type: "image/png" }),
         "upload",
         "total_assets",
@@ -233,7 +233,7 @@ describe("useOcrCaptureDraftFlow", () => {
 
     act(() => {
       for (const name of ["first.png", "second.png"]) {
-        view.result.current.handleAddImage(
+        view.result.current.addImage(
           new File([name], name, { type: "image/png" }),
           "upload",
           "total_assets",

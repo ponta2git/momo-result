@@ -8,12 +8,12 @@ import type {
   OcrCaptureCameraModel,
   OcrCaptureTrayModel,
   OcrCaptureStartModel,
-} from "@/features/ocrCapture/ocrCaptureModel";
+} from "@/features/ocrCapture/ocrCapturePresentation";
+import { OcrStartDialog } from "@/features/ocrCapture/OcrStartDialog";
 import {
   OcrCaptureSetupProvider,
   OcrCaptureSetupSection,
-} from "@/features/ocrCapture/OcrCaptureSetup";
-import { OcrStartDialog } from "@/features/ocrCapture/OcrStartDialog";
+} from "@/features/ocrCapture/setup/OcrCaptureSetup";
 import {
   useOcrCaptureAuth,
   useOcrCapturePageModel,

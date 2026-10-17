@@ -5,12 +5,12 @@ import {
   deriveValidSetupValue,
   resolveOcrSetupValidation,
   sameSetupValue,
-} from "@/features/ocrCapture/ocrSetupModel";
-import type { OcrSetupChange } from "@/features/ocrCapture/ocrSetupModel";
-import { buildOcrSetupPanelFields } from "@/features/ocrCapture/ocrSetupPanelModel";
-import type { OcrSetupPanelModel } from "@/features/ocrCapture/ocrSetupPanelModel";
-import type { SetupFormValues } from "@/features/ocrCapture/schema";
-import { useOcrSetupOptions } from "@/features/ocrCapture/useOcrSetupOptions";
+} from "@/features/ocrCapture/setup/ocrSetupModel";
+import type { OcrSetupChange } from "@/features/ocrCapture/setup/ocrSetupModel";
+import { buildOcrSetupPanelFields } from "@/features/ocrCapture/setup/ocrSetupPanelModel";
+import type { OcrSetupPanelModel } from "@/features/ocrCapture/setup/ocrSetupPanelModel";
+import type { OcrSetupValues } from "@/features/ocrCapture/setup/ocrSetupSchema";
+import { useOcrSetupOptions } from "@/features/ocrCapture/setup/useOcrSetupOptions";
 
 /** Owns editable setup and reconciles candidate reads without replacing a newer input. */
 export function useOcrSetup({
@@ -18,7 +18,7 @@ export function useOcrSetup({
   initialValue,
 }: {
   enabled: boolean;
-  initialValue: SetupFormValues;
+  initialValue: OcrSetupValues;
 }) {
   const [value, setValue] = useState(initialValue);
   const options = useOcrSetupOptions({ enabled, value });

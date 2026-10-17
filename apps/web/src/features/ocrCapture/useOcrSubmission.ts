@@ -17,32 +17,32 @@ import { createOcrJob, getOcrJob, uploadImage } from "@/shared/api/ocrJobs";
 import { putOcrSubmission } from "@/shared/api/ocrSubmissions";
 import { principalRequestSignal } from "@/shared/api/principalRequestScope";
 
-export type OcrCaptureSubmitParams = Pick<
-  OcrSubmissionWorkflowParams,
-  "onProgress" | "onSlotReceipt"
-> & {
+export type OcrSubmitOptions = Pick<OcrSubmissionWorkflowParams, "onProgress" | "onSlotReceipt"> & {
   plan: OcrSubmissionPlan;
   restart?: boolean;
 };
 
-export type OcrCaptureMutations = {
+export type OcrSubmission = {
   isSubmitting: boolean;
-  submit: (params: OcrCaptureSubmitParams) => Promise<OcrSubmissionResult | undefined>;
+  submit: (params: OcrSubmitOptions) => Promise<OcrSubmissionResult | undefined>;
 };
 
 /** One mutation owns the entire draft/upload/job workflow, including cache reconciliation. */
-export function useOcrCaptureMutations(): OcrCaptureMutations {
+export function useOcrSubmission(): OcrSubmission {
   const queryClient = useQueryClient();
   const checkpoints = useRef(new WeakMap<OcrSubmissionPlan, OcrSubmissionState>());
   const inFlightRef = useRef(false);
-  const owner = useRef<AbortSignal | undefined>(undefined);
+  const submissionSignal = useRef<AbortSignal | undefined>(undefined);
   useLayoutEffect(() => {
     const controller = new AbortController();
-    owner.current = AbortSignal.any([controller.signal, principalRequestSignal(queryClient)]);
+    submissionSignal.current = AbortSignal.any([
+      controller.signal,
+      principalRequestSignal(queryClient),
+    ]);
     return () => controller.abort();
   }, [queryClient]);
   const { isPending, mutateAsync } = useMutation({
-    mutationFn: ({ plan, restart, ...params }: OcrCaptureSubmitParams) => {
+    mutationFn: ({ plan, restart, ...params }: OcrSubmitOptions) => {
       let state = checkpoints.current.get(plan) ?? createOcrSubmissionState();
       if (restart && state.retryKinds?.length && state.draft) {
         state = {
@@ -57,7 +57,7 @@ export function useOcrCaptureMutations(): OcrCaptureMutations {
         ...plan,
         ...params,
         state,
-        signal: owner.current,
+        signal: submissionSignal.current,
         createDraft: createMatchDraft,
         uploadImage,
         createJob: createOcrJob,
@@ -79,7 +79,7 @@ export function useOcrCaptureMutations(): OcrCaptureMutations {
   });
 
   const submit = useCallback(
-    (params: OcrCaptureSubmitParams) => {
+    (params: OcrSubmitOptions) => {
       // Guard synchronous repeat clicks before the pending render commits.
       if (inFlightRef.current) return Promise.resolve(undefined);
       inFlightRef.current = true;

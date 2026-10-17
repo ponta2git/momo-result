@@ -2,7 +2,7 @@ import { Check } from "lucide-react";
 import { memo } from "react";
 
 import { slotDefinitions } from "@/features/ocrCapture/captureState";
-import type { OcrStartDialogView, OcrStartSummary } from "@/features/ocrCapture/ocrStartModel";
+import type { OcrStartDialogView, OcrStartSummary } from "@/features/ocrCapture/ocrStartState";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { FactList } from "@/shared/ui/data/FactList";

@@ -1,13 +1,13 @@
-import type { OcrSetupPanelModel } from "@/features/ocrCapture/ocrSetupPanelModel";
+import type { OcrSetupPanelModel } from "@/features/ocrCapture/setup/ocrSetupPanelModel";
 import { HeldEventPickerField } from "@/shared/heldEvents/HeldEventPickerField";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
 
-type SetupPanelProps = {
+type OcrSetupPanelProps = {
   model: OcrSetupPanelModel;
 };
 
-export function SetupPanel({ model }: SetupPanelProps) {
+export function OcrSetupPanel({ model }: OcrSetupPanelProps) {
   const { fields, intents } = model;
 
   return (

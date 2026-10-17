@@ -1,5 +1,5 @@
-import { setupSchema } from "@/features/ocrCapture/schema";
-import type { SetupFormValues } from "@/features/ocrCapture/schema";
+import { ocrSetupSchema } from "@/features/ocrCapture/setup/ocrSetupSchema";
+import type { OcrSetupValues } from "@/features/ocrCapture/setup/ocrSetupSchema";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type {
   GameTitleResponse,
@@ -9,7 +9,7 @@ import type {
 
 export type HeldEventContextState = "idle" | "pending" | "resolved" | "notFound" | "failed";
 
-export type OcrSetupResolution = { kind: "ready"; value: SetupFormValues } | { kind: "blocked" };
+export type OcrSetupResolution = { kind: "ready"; value: OcrSetupValues } | { kind: "blocked" };
 
 export type OcrSetupChange =
   | { kind: "gameTitle"; id: string }
@@ -20,10 +20,7 @@ export type OcrSetupChange =
   | { kind: "matchNo"; value: string };
 
 /** Applies one user choice together with the dependent fields it invalidates. */
-export function changeOcrSetupValue(
-  value: SetupFormValues,
-  change: OcrSetupChange,
-): SetupFormValues {
+export function changeOcrSetupValue(value: OcrSetupValues, change: OcrSetupChange): OcrSetupValues {
   switch (change.kind) {
     case "gameTitle":
       return { ...value, gameTitleId: change.id, mapMasterId: "", seasonMasterId: "" };
@@ -44,11 +41,11 @@ export function changeOcrSetupValue(
 }
 
 export function resolveOcrSetupValidation(
-  value: SetupFormValues,
+  value: OcrSetupValues,
   enabled: boolean,
   choices: { ready: boolean; loading: boolean; refreshing: boolean },
 ): { resolution: OcrSetupResolution; blockedReason: string | undefined } {
-  const validation = setupSchema.safeParse(value);
+  const validation = ocrSetupSchema.safeParse(value);
   return {
     resolution:
       choices.ready && validation.success ? { kind: "ready", value } : { kind: "blocked" },
@@ -80,7 +77,7 @@ export function areOcrSetupChoicesReady({
   selectedGameTitle: GameTitleResponse | undefined;
   mapMasters: readonly MapMasterResponse[];
   seasonMasters: readonly SeasonMasterResponse[];
-  value: SetupFormValues;
+  value: OcrSetupValues;
 }): boolean {
   return (
     enabled &&
@@ -116,7 +113,7 @@ export function resolveHeldEventContext(input: {
   return "failed";
 }
 
-export function sameSetupValue(left: SetupFormValues, right: SetupFormValues): boolean {
+export function sameSetupValue(left: OcrSetupValues, right: OcrSetupValues): boolean {
   return (
     left.gameTitleId === right.gameTitleId &&
     left.heldEventId === right.heldEventId &&
@@ -133,11 +130,11 @@ export function deriveValidSetupValue(args: {
   heldEvents: HeldEventResponse[];
   mapMasters: MapMasterResponse[];
   seasonMasters: SeasonMasterResponse[];
-  value: SetupFormValues;
-}): SetupFormValues {
+  value: OcrSetupValues;
+}): OcrSetupValues {
   const { gameTitles, heldEventNotFound, heldEvents, mapMasters, seasonMasters, value } = args;
   let next = value;
-  const patch = (partial: Partial<SetupFormValues>) => {
+  const patch = (partial: Partial<OcrSetupValues>) => {
     next = { ...next, ...partial };
   };
 

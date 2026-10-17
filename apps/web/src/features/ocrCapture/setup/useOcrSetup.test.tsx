@@ -4,9 +4,9 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 
-import type { SetupFormValues } from "@/features/ocrCapture/schema";
-import { SetupPanel } from "@/features/ocrCapture/SetupPanel";
-import { useOcrSetup } from "@/features/ocrCapture/useOcrSetup";
+import { OcrSetupPanel } from "@/features/ocrCapture/setup/OcrSetupPanel";
+import type { OcrSetupValues } from "@/features/ocrCapture/setup/ocrSetupSchema";
+import { useOcrSetup } from "@/features/ocrCapture/setup/useOcrSetup";
 import { heldEventKeys, masterKeys } from "@/shared/api/queryKeys";
 import { createDeferred } from "@/test/deferred";
 import { makeHeldEventResponse } from "@/test/factories/heldEvents";
@@ -41,7 +41,7 @@ const seasonMaster = {
   name: "今シーズン",
 };
 
-function SetupOptionsHarness({ initialValue }: { initialValue: SetupFormValues }) {
+function SetupOptionsHarness({ initialValue }: { initialValue: OcrSetupValues }) {
   const setup = useOcrSetup({
     enabled: true,
     initialValue,
@@ -50,7 +50,7 @@ function SetupOptionsHarness({ initialValue }: { initialValue: SetupFormValues }
 
   return (
     <>
-      <SetupPanel model={setup.panel} />
+      <OcrSetupPanel model={setup.panel} />
       <output
         aria-label="setup value"
         data-error={options.heldEventsError ?? ""}
@@ -68,8 +68,8 @@ function SetupOptionsHarness({ initialValue }: { initialValue: SetupFormValues }
   );
 }
 
-function readSetupValue(): SetupFormValues {
-  return JSON.parse(screen.getByLabelText("setup value").textContent ?? "{}") as SetupFormValues;
+function readSetupValue(): OcrSetupValues {
+  return JSON.parse(screen.getByLabelText("setup value").textContent ?? "{}") as OcrSetupValues;
 }
 
 describe("useOcrSetup", () => {

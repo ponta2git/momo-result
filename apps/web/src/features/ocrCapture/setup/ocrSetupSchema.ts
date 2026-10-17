@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const setupSchema = z
+export const ocrSetupSchema = z
   .object({
     gameTitleId: z.string().min(1, "作品を選択してください"),
     heldEventId: z.string().optional(),
@@ -19,9 +19,9 @@ export const setupSchema = z
     }
   });
 
-export type SetupFormValues = z.infer<typeof setupSchema>;
+export type OcrSetupValues = z.infer<typeof ocrSetupSchema>;
 
-export const defaultSetupValues: SetupFormValues = {
+export const defaultOcrSetupValues: OcrSetupValues = {
   gameTitleId: "",
   heldEventId: "",
   seasonMasterId: "",

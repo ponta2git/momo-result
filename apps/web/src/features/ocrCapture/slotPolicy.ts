@@ -1,6 +1,7 @@
 import { createInitialSlot } from "@/features/ocrCapture/captureState";
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import type { OcrSlotReceipt } from "@/features/ocrCapture/ocrSubmissionWorkflow";
+import type { SlotKind } from "@/shared/domain/ocr";
 
 /** OCR 送信中とみなすスロット状態。 */
 export function isWorkingStatus(status: CaptureSlotState["status"]): boolean {
@@ -32,6 +33,18 @@ export function captureSlotCapabilities(slot: CaptureSlotState) {
     canRefresh: Boolean(slot.jobId) && (slot.status === "queued" || slot.status === "running"),
     working,
   };
+}
+
+export function resolveCaptureTargetChange(slots: readonly CaptureSlotState[], kind: SlotKind) {
+  const slot = slots.find((candidate) => candidate.kind === kind);
+  return slot && isWorkingStatus(slot.status)
+    ? ({ kind: "blocked", message: "読み取り中の分類は撮影先に変更できません。" } as const)
+    : ({ kind: "selected", target: kind } as const);
+}
+
+export function nextEmptyCaptureTarget(slots: readonly CaptureSlotState[], current: SlotKind) {
+  return slots.find((slot) => slot.kind !== current && !slot.file && !isWorkingStatus(slot.status))
+    ?.kind;
 }
 
 /** OCR ジョブ送信対象とみなすスロット（画像があり、未送信または再試行可能なもの）を抽出する。 */

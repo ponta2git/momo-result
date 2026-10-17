@@ -4,14 +4,14 @@ import { useNavigate } from "react-router-dom";
 import {
   buildOcrStartDialogView,
   resolveOcrStartResult,
-} from "@/features/ocrCapture/ocrStartModel";
-import type { OcrStartState } from "@/features/ocrCapture/ocrStartModel";
+} from "@/features/ocrCapture/ocrStartState";
+import type { OcrStartState } from "@/features/ocrCapture/ocrStartState";
 import type { OcrSubmissionPlan } from "@/features/ocrCapture/ocrSubmissionPlan";
 import type {
   OcrSlotReceipt,
   OcrSubmissionResult,
 } from "@/features/ocrCapture/ocrSubmissionWorkflow";
-import type { OcrCaptureMutations } from "@/features/ocrCapture/useOcrCaptureMutations";
+import type { OcrSubmission } from "@/features/ocrCapture/useOcrSubmission";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
@@ -27,7 +27,7 @@ export function useOcrStartFlow({
   submission,
   onSlotReceipt,
 }: {
-  submission: OcrCaptureMutations;
+  submission: OcrSubmission;
   onSlotReceipt: (receipt: OcrSlotReceipt) => void;
 }) {
   const navigate = useNavigate();

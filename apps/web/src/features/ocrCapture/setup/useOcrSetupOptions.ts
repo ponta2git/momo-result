@@ -3,8 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import {
   areOcrSetupChoicesReady,
   resolveHeldEventContext,
-} from "@/features/ocrCapture/ocrSetupModel";
-import type { SetupFormValues } from "@/features/ocrCapture/schema";
+} from "@/features/ocrCapture/setup/ocrSetupModel";
+import type { OcrSetupValues } from "@/features/ocrCapture/setup/ocrSetupSchema";
 import { mergeHeldEventItems } from "@/shared/api/heldEventCache";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type {
@@ -29,7 +29,7 @@ import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 type OcrSetupOptionsParams = {
   enabled: boolean;
-  value: SetupFormValues;
+  value: OcrSetupValues;
 };
 
 const emptyGameTitles: GameTitleResponse[] = [];

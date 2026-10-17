@@ -2,24 +2,24 @@ import { createContext, useContext, useMemo } from "react";
 import type { ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import { defaultSetupValues } from "@/features/ocrCapture/schema";
-import { SetupPanel } from "@/features/ocrCapture/SetupPanel";
-import { useOcrSetup } from "@/features/ocrCapture/useOcrSetup";
+import { OcrSetupPanel } from "@/features/ocrCapture/setup/OcrSetupPanel";
+import { defaultOcrSetupValues } from "@/features/ocrCapture/setup/ocrSetupSchema";
+import { useOcrSetup } from "@/features/ocrCapture/setup/useOcrSetup";
 import { trimSearchParam } from "@/shared/lib/searchParams";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PendingStatus } from "@/shared/ui/feedback/PendingStatus";
 import { contentText } from "@/shared/ui/typography";
 
-type SetupOwner = ReturnType<typeof useOcrSetup>;
-const SetupDisplay = createContext<{
-  options: Pick<SetupOwner["options"], "hasError" | "refreshing" | "retry">;
-  panel: SetupOwner["panel"];
+type OcrSetup = ReturnType<typeof useOcrSetup>;
+const SetupDisplayContext = createContext<{
+  options: Pick<OcrSetup["options"], "hasError" | "refreshing" | "retry">;
+  panel: OcrSetup["panel"];
 } | null>(null);
-const SetupSubmission = createContext<
-  | (Pick<SetupOwner, "resolution" | "blockedReason"> & {
+const SetupSubmissionContext = createContext<
+  | (Pick<OcrSetup, "resolution" | "blockedReason"> & {
       options: Pick<
-        SetupOwner["options"],
+        OcrSetup["options"],
         "mapMasters" | "seasonMasters" | "selectedGameTitle" | "selectedHeldEvent"
       >;
       refreshing: boolean;
@@ -40,7 +40,7 @@ export function OcrCaptureSetupProvider({
   const setup = useOcrSetup({
     enabled: authReady,
     initialValue: {
-      ...defaultSetupValues,
+      ...defaultOcrSetupValues,
       ...(requestedHeldEventId ? { heldEventId: requestedHeldEventId } : {}),
     },
   });
@@ -65,20 +65,20 @@ export function OcrCaptureSetupProvider({
     ],
   );
   return (
-    <SetupDisplay value={setup}>
-      <SetupSubmission value={submission}>{children}</SetupSubmission>
-    </SetupDisplay>
+    <SetupDisplayContext value={setup}>
+      <SetupSubmissionContext value={submission}>{children}</SetupSubmissionContext>
+    </SetupDisplayContext>
   );
 }
 
 export function useOcrCaptureSetupSubmission() {
-  const setup = useContext(SetupSubmission);
+  const setup = useContext(SetupSubmissionContext);
   if (!setup) throw new Error("OCR setup is unavailable");
   return setup;
 }
 
 export function OcrCaptureSetupSection() {
-  const setup = useContext(SetupDisplay);
+  const setup = useContext(SetupDisplayContext);
   if (!setup) throw new Error("OCR setup is unavailable");
   return (
     <section className="grid min-w-0 gap-4" aria-labelledby="ocr-record-destination">
@@ -112,7 +112,7 @@ export function OcrCaptureSetupSection() {
           <p>読み込めなかった選択肢を再取得できます。</p>
         </Notice>
       ) : null}
-      <SetupPanel model={setup.panel} />
+      <OcrSetupPanel model={setup.panel} />
     </section>
   );
 }

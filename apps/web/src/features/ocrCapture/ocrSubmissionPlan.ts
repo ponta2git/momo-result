@@ -1,7 +1,7 @@
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
-import { ocrSlotLabels } from "@/features/ocrCapture/ocrCaptureModel";
-import type { OcrSetupResolution } from "@/features/ocrCapture/ocrSetupModel";
-import type { SetupFormValues } from "@/features/ocrCapture/schema";
+import { ocrSlotLabels } from "@/features/ocrCapture/ocrCapturePresentation";
+import type { OcrSetupResolution } from "@/features/ocrCapture/setup/ocrSetupModel";
+import type { OcrSetupValues } from "@/features/ocrCapture/setup/ocrSetupSchema";
 import { pickOcrTargets } from "@/features/ocrCapture/slotPolicy";
 import type { OcrJobHintsRequest } from "@/shared/api/ocrJobs";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
@@ -12,7 +12,7 @@ import { formatDateTimeLong } from "@/shared/lib/dateTime";
 export type OcrSubmissionInput = {
   selectedGameTitle: { id: string; layoutFamily?: string | null | undefined } | undefined;
   selectedHeldEvent?: { heldAt: string; id: string } | undefined;
-  setup: SetupFormValues;
+  setup: OcrSetupValues;
   slots: readonly CaptureSlotState[];
 };
 

@@ -1,7 +1,7 @@
 import { requestedScreenTypeForSlot } from "@/features/ocrCapture/captureState";
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import type { OcrSubmissionInput } from "@/features/ocrCapture/ocrSubmissionPlan";
-import { setupSchema } from "@/features/ocrCapture/schema";
+import { ocrSetupSchema } from "@/features/ocrCapture/setup/ocrSetupSchema";
 import { pickOcrTargets } from "@/features/ocrCapture/slotPolicy";
 import type { IdempotencyRequestOptions } from "@/shared/api/client";
 import { createIdempotencyKey } from "@/shared/api/idempotency";
@@ -113,7 +113,7 @@ export async function runOcrSubmissionWorkflow({
     return { status: "empty" };
   }
 
-  const setupSubmission = setupSchema.safeParse(setup);
+  const setupSubmission = ocrSetupSchema.safeParse(setup);
   if (!setupSubmission.success) {
     return {
       message: setupSubmission.error.issues[0]?.message ?? "試合設定を確認してください。",

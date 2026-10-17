@@ -44,18 +44,6 @@ export function ocrSlotLabels(slots: readonly CaptureSlotState[]): string[] {
     .map((definition) => definition.label);
 }
 
-export function resolveCaptureTargetChange(slots: readonly CaptureSlotState[], kind: SlotKind) {
-  const slot = slots.find((candidate) => candidate.kind === kind);
-  return slot && isWorkingStatus(slot.status)
-    ? ({ kind: "blocked", message: "読み取り中の分類は撮影先に変更できません。" } as const)
-    : ({ kind: "selected", target: kind } as const);
-}
-
-export function nextEmptyCaptureTarget(slots: readonly CaptureSlotState[], current: SlotKind) {
-  return slots.find((slot) => slot.kind !== current && !slot.file && !isWorkingStatus(slot.status))
-    ?.kind;
-}
-
 /** Derives capture controls and submission copy from the same slot policy used at submission. */
 export function buildOcrCaptureView({
   slots,

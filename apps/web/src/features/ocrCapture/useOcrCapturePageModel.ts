@@ -6,11 +6,11 @@ import type {
   OcrCaptureCameraModel,
   OcrCaptureStartModel,
   OcrCaptureTrayModel,
-} from "@/features/ocrCapture/ocrCaptureModel";
-import { useOcrCaptureSetupSubmission } from "@/features/ocrCapture/OcrCaptureSetup";
-import { useOcrCaptureDraftFlow } from "@/features/ocrCapture/useOcrCaptureDraftFlow";
-import { useOcrCaptureMutations } from "@/features/ocrCapture/useOcrCaptureMutations";
+} from "@/features/ocrCapture/ocrCapturePresentation";
+import { useOcrCaptureSetupSubmission } from "@/features/ocrCapture/setup/OcrCaptureSetup";
+import { useCaptureSlots } from "@/features/ocrCapture/useCaptureSlots";
 import { useOcrStartFlow } from "@/features/ocrCapture/useOcrStartFlow";
+import { useOcrSubmission } from "@/features/ocrCapture/useOcrSubmission";
 import { authQueryOptions } from "@/shared/auth/authQueries";
 import { useDevUser } from "@/shared/auth/useDevUser";
 import type { SlotKind } from "@/shared/domain/ocr";
@@ -32,15 +32,15 @@ export function useOcrCapturePageModel() {
   const [captureTargetKind, setCaptureTargetKind] = useState<SlotKind>("total_assets");
   const [captureActionFeedback, setCaptureActionFeedback] = useState<string>();
 
-  const draftFlow = useOcrCaptureDraftFlow({
+  const captureSlots = useCaptureSlots({
     onDraftLoadError: (error) => setCaptureActionFeedback(error.detail || error.title),
   });
-  const captureSubmission = useOcrCaptureMutations();
+  const submission = useOcrSubmission();
   const startFlow = useOcrStartFlow({
-    submission: captureSubmission,
-    onSlotReceipt: draftFlow.applyReceipt,
+    submission,
+    onSlotReceipt: captureSlots.applyReceipt,
   });
-  const draftFeedback = useMemo(
+  const slotFeedback = useMemo(
     () => ({
       reportFailure: setCaptureActionFeedback,
       reportSuccess: setCaptureActionFeedback,
@@ -48,27 +48,27 @@ export function useOcrCapturePageModel() {
     [],
   );
 
-  const view = draftFlow.buildView({
+  const view = captureSlots.buildView({
     targetKind: captureTargetKind,
     locked: startFlow.locked,
-    submitting: captureSubmission.isSubmitting,
+    submitting: submission.isSubmitting,
     setupReady: setup.resolution.kind === "ready",
   });
 
   const {
-    handleAddImage,
-    handleClear,
-    handleDropImage,
-    handleMoveImage,
-    handleResetAll,
+    addImage,
+    clearImage,
+    dropImage,
+    moveImage,
+    clearAllImages,
     nextEmptyTarget,
     prepareSubmission,
-    selectTarget,
-  } = draftFlow;
+    resolveTarget,
+  } = captureSlots;
   const openStart = startFlow.open;
   const selectCaptureTarget = useCallback(
     (kind: SlotKind) => {
-      const selection = selectTarget(kind);
+      const selection = resolveTarget(kind);
       if (selection.kind === "blocked") {
         setCaptureActionFeedback(selection.message);
         return;
@@ -76,18 +76,18 @@ export function useOcrCapturePageModel() {
       setCaptureTargetKind(selection.target);
       setCaptureActionFeedback(undefined);
     },
-    [selectTarget],
+    [resolveTarget],
   );
 
   const selectImage = useCallback(
     (file: File, source: InputSource) => {
-      const added = handleAddImage(file, source, captureTargetKind, draftFeedback);
+      const added = addImage(file, source, captureTargetKind, slotFeedback);
       if (!added) return;
 
       const nextEmpty = nextEmptyTarget(captureTargetKind);
       if (nextEmpty) setCaptureTargetKind(nextEmpty);
     },
-    [handleAddImage, nextEmptyTarget, captureTargetKind, draftFeedback],
+    [addImage, nextEmptyTarget, captureTargetKind, slotFeedback],
   );
 
   const startOcr = useCallback(() => {
@@ -105,33 +105,32 @@ export function useOcrCapturePageModel() {
     openStart(preparation.plan);
   }, [prepareSubmission, setup.resolution, setup.blockedReason, setup.options, openStart]);
   const clear = useCallback(
-    (kind: SlotKind) => handleClear(kind, draftFeedback),
-    [handleClear, draftFeedback],
+    (kind: SlotKind) => clearImage(kind, slotFeedback),
+    [clearImage, slotFeedback],
   );
   const drop = useCallback(
-    (sourceKind: SlotKind, targetKind: SlotKind) =>
-      handleDropImage(sourceKind, targetKind, draftFeedback),
-    [handleDropImage, draftFeedback],
+    (sourceKind: SlotKind, targetKind: SlotKind) => dropImage(sourceKind, targetKind, slotFeedback),
+    [dropImage, slotFeedback],
   );
   const move = useCallback(
-    (kind: SlotKind, direction: -1 | 1) => handleMoveImage(kind, direction, draftFeedback),
-    [handleMoveImage, draftFeedback],
+    (kind: SlotKind, direction: -1 | 1) => moveImage(kind, direction, slotFeedback),
+    [moveImage, slotFeedback],
   );
-  const reset = useCallback(() => handleResetAll(draftFeedback), [handleResetAll, draftFeedback]);
+  const reset = useCallback(() => clearAllImages(slotFeedback), [clearAllImages, slotFeedback]);
 
   const camera = useMemo<OcrCaptureCameraModel>(
     () => ({
       actionVariant: view.camera.actionVariant,
       disabled: view.camera.disabled,
       slotLabel: view.camera.target.label,
-      reportValidationError: draftFeedback.reportFailure,
+      reportValidationError: slotFeedback.reportFailure,
       selectImage,
     }),
     [
       view.camera.actionVariant,
       view.camera.disabled,
       view.camera.target.label,
-      draftFeedback.reportFailure,
+      slotFeedback.reportFailure,
       selectImage,
     ],
   );
@@ -141,11 +140,11 @@ export function useOcrCapturePageModel() {
       captureTargetKind,
       selectedImageCount: view.selectedImageCount,
       totalSlotCount: view.totalSlotCount,
-      slots: draftFlow.slots,
+      slots: captureSlots.slots,
       clear,
       drop,
       move,
-      refreshStatus: draftFlow.handleRefreshStatus,
+      refreshStatus: captureSlots.refreshStatus,
       selectTarget: selectCaptureTarget,
     }),
     [
@@ -153,11 +152,11 @@ export function useOcrCapturePageModel() {
       captureTargetKind,
       view.selectedImageCount,
       view.totalSlotCount,
-      draftFlow.slots,
+      captureSlots.slots,
       clear,
       drop,
       move,
-      draftFlow.handleRefreshStatus,
+      captureSlots.refreshStatus,
       selectCaptureTarget,
     ],
   );

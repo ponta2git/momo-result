@@ -11,6 +11,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use momo_ocr::OcrOutput;
 
 use crate::{
+    maintenance::Mode,
     ocr::{
         contract::{OcrHints, RequestedScreenType},
         endurance::{
@@ -49,6 +50,8 @@ enum Command {
         arguments: Vec<OsString>,
     },
     Worker,
+    /// Check frozen database and reader compatibility without registering a worker.
+    MaintenanceReadiness,
     ReleaseAudit {
         #[arg(long)]
         require_current: bool,
@@ -293,6 +296,18 @@ struct OcrLocalEnduranceArgs {
 /// Parses the process command line and runs the selected worker operation.
 #[must_use]
 pub fn entrypoint() -> ExitCode {
+    let mode = match Mode::from_environment() {
+        Ok(mode) => mode,
+        Err(message) => {
+            let _result = writeln!(io::stderr().lock(), "{message}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let cli = Cli::parse();
+    if let Err(message) = validate_mode_command(mode, &cli.command) {
+        let _result = writeln!(io::stderr().lock(), "{message}");
+        return ExitCode::FAILURE;
+    }
     let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -300,7 +315,7 @@ pub fn entrypoint() -> ExitCode {
         return ExitCode::FAILURE;
     };
     let mut shutdown_deadline = None;
-    let result = runtime.block_on(execute_cli(&mut shutdown_deadline));
+    let result = runtime.block_on(execute_cli(cli.command, mode, &mut shutdown_deadline));
     let remaining = shutdown_deadline.map_or(Duration::ZERO, |deadline: tokio::time::Instant| {
         deadline.saturating_duration_since(tokio::time::Instant::now())
     });
@@ -308,9 +323,12 @@ pub fn entrypoint() -> ExitCode {
     result
 }
 
-async fn execute_cli(shutdown_deadline: &mut Option<tokio::time::Instant>) -> ExitCode {
-    let cli = Cli::parse();
-    match &cli.command {
+async fn execute_cli(
+    command: Command,
+    mode: Mode,
+    shutdown_deadline: &mut Option<tokio::time::Instant>,
+) -> ExitCode {
+    match &command {
         Command::Bootstrap { arguments } => {
             return match crate::process::bootstrap_and_exec(arguments) {
                 Ok(()) => ExitCode::SUCCESS,
@@ -382,6 +400,7 @@ async fn execute_cli(shutdown_deadline: &mut Option<tokio::time::Instant>) -> Ex
             );
         }
         Command::Worker
+        | Command::MaintenanceReadiness
         | Command::ReleaseAudit { .. }
         | Command::ReleasePromote { .. }
         | Command::ReleaseReconcile { .. }
@@ -396,7 +415,7 @@ async fn execute_cli(shutdown_deadline: &mut Option<tokio::time::Instant>) -> Ex
     }
 
     initialize_logging();
-    match Box::pin(run(cli.command, shutdown_deadline)).await {
+    match Box::pin(run(command, mode, shutdown_deadline)).await {
         Ok(()) => ExitCode::SUCCESS,
         Err(message) => {
             error!(
@@ -411,10 +430,15 @@ async fn execute_cli(shutdown_deadline: &mut Option<tokio::time::Instant>) -> Ex
 
 async fn run(
     command: Command,
+    mode: Mode,
     shutdown_deadline: &mut Option<tokio::time::Instant>,
 ) -> Result<(), String> {
     match command {
-        Command::Worker => Box::pin(run_worker(shutdown_deadline)).await,
+        Command::Worker => match mode {
+            Mode::Normal => Box::pin(run_worker(shutdown_deadline)).await,
+            Mode::Frozen => run_frozen_worker().await,
+        },
+        Command::MaintenanceReadiness => maintenance_readiness().await,
         Command::ReleaseAudit {
             require_current,
             require_quiescent,
@@ -429,24 +453,7 @@ async fn run(
             release_id,
             apply,
             expected_plan,
-        } => {
-            let report = crate::series_analysis::release::reconcile(
-                operation,
-                &release_id,
-                apply,
-                expected_plan.as_deref(),
-            )
-            .await
-            .map_err(|error| error.to_string())?;
-            write_json_line(&report)?;
-            if report.status == "attention_required" {
-                Err(String::from(
-                    "analysis maintenance requires attention; inspect the operation report",
-                ))
-            } else {
-                Ok(())
-            }
-        }
+        } => release_reconcile(operation, &release_id, apply, expected_plan.as_deref()).await,
         Command::ShadowEndurance {
             game_title_id,
             runs,
@@ -630,6 +637,55 @@ async fn run_ocr_local_endurance(arguments: OcrLocalEnduranceArgs) -> Result<(),
     }
 }
 
+fn validate_mode_command(mode: Mode, command: &Command) -> Result<(), &'static str> {
+    if mode == Mode::Normal {
+        return if matches!(command, Command::MaintenanceReadiness) {
+            Err("maintenance readiness requires frozen mode")
+        } else {
+            Ok(())
+        };
+    }
+    if let Command::Bootstrap { arguments } = command {
+        let nested = Cli::try_parse_from(
+            std::iter::once(OsString::from("momo-processing-worker"))
+                .chain(arguments.iter().cloned()),
+        )
+        .map_err(|_error| "invalid bootstrap command")?;
+        if matches!(nested.command, Command::Bootstrap { .. }) {
+            return Err("invalid bootstrap command");
+        }
+        return validate_mode_command(mode, &nested.command);
+    }
+    if matches!(
+        command,
+        Command::Worker | Command::MaintenanceReadiness | Command::ReleaseAudit { .. }
+    ) {
+        Ok(())
+    } else {
+        Err("command is unavailable in frozen mode")
+    }
+}
+
+async fn maintenance_readiness() -> Result<(), String> {
+    crate::maintenance::readiness(&required_environment("DATABASE_URL")?)
+        .await
+        .map_err(String::from)?;
+    write_json_line(&serde_json::json!({
+        "event": "worker_maintenance_readiness",
+        "schemaVersion": 1,
+        "status": "ready",
+        "mode": "frozen",
+    }))
+}
+
+async fn run_frozen_worker() -> Result<(), String> {
+    maintenance_readiness().await?;
+    // No WorkerRuntimePlan, capability heartbeat, listener, claim, recovery, or sender exists.
+    wait_for_shutdown()
+        .await
+        .map_err(|_error| String::from("maintenance shutdown signal failed"))
+}
+
 fn required_environment(name: &'static str) -> Result<String, String> {
     match std::env::var(name) {
         Ok(value) if !value.trim().is_empty() => Ok(value),
@@ -705,6 +761,26 @@ async fn release_promote(
     .map_err(|error| error.to_string())?;
     write_json_line(&report)?;
     Ok(())
+}
+
+async fn release_reconcile(
+    operation: MaintenanceOperation,
+    release_id: &str,
+    apply: bool,
+    expected_plan: Option<&str>,
+) -> Result<(), String> {
+    let report =
+        crate::series_analysis::release::reconcile(operation, release_id, apply, expected_plan)
+            .await
+            .map_err(|error| error.to_string())?;
+    write_json_line(&report)?;
+    if report.status == "attention_required" {
+        Err(String::from(
+            "analysis maintenance requires attention; inspect the operation report",
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 async fn shadow_endurance(
@@ -798,6 +874,80 @@ fn initialize_logging() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn frozen_command_guard_allows_read_only_boundaries_and_closes_mutating_commands() {
+        for arguments in [
+            vec!["worker"],
+            vec!["maintenance-readiness"],
+            vec!["release-audit", "--require-quiescent"],
+            vec!["bootstrap", "--", "worker"],
+            vec!["bootstrap", "--", "maintenance-readiness"],
+        ] {
+            let cli =
+                Cli::try_parse_from(std::iter::once("momo-processing-worker").chain(arguments))
+                    .ok();
+            assert_eq!(
+                cli.as_ref()
+                    .map(|cli| validate_mode_command(Mode::Frozen, &cli.command)),
+                Some(Ok(())),
+                "frozen read-only operation was rejected"
+            );
+        }
+        for arguments in [
+            vec![
+                "release-promote",
+                "--trigger",
+                "initial-backfill",
+                "--operation-key",
+                "test",
+            ],
+            vec![
+                "release-promote",
+                "--trigger",
+                "initial-backfill",
+                "--operation-key",
+                "test",
+                "--apply",
+            ],
+            vec!["release-reconcile", "--release-id", "test"],
+            vec![
+                "bootstrap",
+                "--",
+                "release-reconcile",
+                "--release-id",
+                "test",
+                "--apply",
+            ],
+            vec!["child-cgroup-allocate", "--allocation-bytes", "1"],
+            vec!["probe-parent-death"],
+        ] {
+            let cli =
+                Cli::try_parse_from(std::iter::once("momo-processing-worker").chain(arguments))
+                    .ok();
+            assert_eq!(
+                cli.as_ref()
+                    .map(|cli| validate_mode_command(Mode::Frozen, &cli.command)),
+                Some(Err("command is unavailable in frozen mode")),
+                "frozen operation reached a writer or child boundary"
+            );
+            assert_eq!(
+                cli.as_ref()
+                    .map(|cli| validate_mode_command(Mode::Normal, &cli.command)),
+                Some(Ok(())),
+                "normal operation must be unchanged"
+            );
+        }
+        let readiness =
+            Cli::try_parse_from(["momo-processing-worker", "maintenance-readiness"]).ok();
+        assert_eq!(
+            readiness
+                .as_ref()
+                .map(|cli| validate_mode_command(Mode::Normal, &cli.command)),
+            Some(Err("maintenance readiness requires frozen mode")),
+            "normal worker must not advertise frozen readiness"
+        );
+    }
 
     #[test]
     fn ocr_pilot_rejects_auto_and_accepts_only_explicit_screen_types() {

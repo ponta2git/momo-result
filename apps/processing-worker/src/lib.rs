@@ -14,6 +14,7 @@ mod cgroup;
 mod cli;
 mod execution;
 mod execution_slot;
+mod maintenance;
 mod notifications;
 mod ocr;
 mod postgres;

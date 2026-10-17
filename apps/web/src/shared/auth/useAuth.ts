@@ -4,17 +4,34 @@ import { logout } from "@/shared/api/auth";
 import { clearCsrfToken } from "@/shared/api/csrfTokenStore";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { authMeQueryKeyFor, authQueryOptions } from "@/shared/auth/authQueries";
+import type { AuthReadModel } from "@/shared/auth/authReadModel";
 import { clearPrincipalClientState } from "@/shared/auth/principalClientState";
 import { useDevUser } from "@/shared/auth/useDevUser";
 
-export function useAuth() {
-  const queryClient = useQueryClient();
-  const { devUser, setDevUser } = useDevUser();
+export function useAuthRead(): AuthReadModel {
+  const { devUser } = useDevUser();
   const authQuery = useQuery(authQueryOptions(devUser));
   const isMissingDevUser = import.meta.env.DEV && !devUser;
   const isLoggedOut = authQuery.data === null;
   const normalizedError = authQuery.error ? normalizeUnknownApiError(authQuery.error) : undefined;
   const isChecking = authQuery.isPending && authQuery.fetchStatus !== "idle";
+
+  return {
+    auth: authQuery.data ?? undefined,
+    error: normalizedError,
+    isAuthenticated: authQuery.isSuccess && !isLoggedOut,
+    isChecking,
+    isForbidden: normalizedError?.status === 403,
+    isRefetching: authQuery.isFetching && !authQuery.isPending,
+    isUnauthorized: normalizedError?.status === 401 || isMissingDevUser || isLoggedOut,
+    refetch: authQuery.refetch,
+  };
+}
+
+export function useAuth() {
+  const queryClient = useQueryClient();
+  const { devUser, setDevUser } = useDevUser();
+  const auth = useAuthRead();
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
@@ -45,16 +62,9 @@ export function useAuth() {
   });
 
   return {
-    auth: authQuery.data ?? undefined,
-    error: normalizedError,
-    isAuthenticated: authQuery.isSuccess && !isLoggedOut,
-    isChecking,
-    isForbidden: normalizedError?.status === 403,
-    isRefetching: authQuery.isFetching && !authQuery.isPending,
-    isUnauthorized: normalizedError?.status === 401 || isMissingDevUser || isLoggedOut,
+    ...auth,
     logoutError: logoutMutation.error ? normalizeUnknownApiError(logoutMutation.error) : undefined,
     isLogoutPending: logoutMutation.isPending,
     logout: () => logoutMutation.mutate(),
-    refetch: authQuery.refetch,
   };
 }

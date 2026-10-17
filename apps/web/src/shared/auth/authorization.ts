@@ -9,6 +9,7 @@ import {
   seriesPlayerRadarKeys,
 } from "@/shared/api/queryKeys";
 import { authMeQueryKeyFor, authQueryOptions } from "@/shared/auth/authQueries";
+import type { AuthReadModel } from "@/shared/auth/authReadModel";
 import { hasAdminRole, hasOperationsRole } from "@/shared/auth/permissions";
 import type { ManagementPermission } from "@/shared/auth/permissions";
 
@@ -18,6 +19,38 @@ export type AuthorizationLease = {
   generation: number;
   authRevision: number;
   recovery: number;
+};
+
+/** Stable operations always consult the current account and permission generation. */
+export type AuthorizationOperations = {
+  readonly begin: (permission: ManagementPermission) => AuthorizationLease | undefined;
+  readonly can: (permission: ManagementPermission) => boolean;
+  readonly canRead: (permission: ManagementPermission, queryKey: QueryKey) => boolean;
+  readonly isCurrent: (lease: AuthorizationLease) => boolean;
+  readonly isSameAccount: (lease: AuthorizationLease) => boolean;
+  readonly canCommit: (lease: AuthorizationLease) => boolean;
+  readonly reportError: (error: unknown, lease: AuthorizationLease) => void;
+  readonly recheck: () => Promise<void>;
+  readonly acceptSelfRole: (
+    lease: AuthorizationLease,
+    role: AuthMeResponse["role"],
+  ) => Promise<void>;
+};
+
+export type PermissionFacts = {
+  readonly allowed: boolean;
+  readonly retained: boolean;
+  readonly epoch: number;
+};
+
+/** Full route/recovery facts. Ordinary command owners can depend only on operations. */
+export type AuthorizationAccess = AuthorizationOperations & {
+  readonly revision: number;
+  readonly auth: AuthReadModel;
+  readonly allowed: Readonly<Record<ManagementPermission, boolean>>;
+  readonly retained: Readonly<Record<ManagementPermission, boolean>>;
+  readonly paused: boolean;
+  readonly epoch: Readonly<Record<ManagementPermission, number>>;
 };
 
 function startsWith(key: QueryKey, prefix: QueryKey) {
@@ -41,6 +74,7 @@ function queryPermission(key: QueryKey): ManagementPermission | undefined {
  */
 class Authorization {
   private listeners = new Set<() => void>();
+  private permissionViews = new Map<ManagementPermission, PermissionFacts>();
   private version = 0;
   private generations = { admin: 0, operations: 0 };
   private confirmed = { accountId: "", admin: false, operations: false };
@@ -89,6 +123,17 @@ class Authorization {
     return () => this.listeners.delete(listener);
   };
   snapshot = () => this.version;
+  permissionSnapshot = (permission: ManagementPermission): PermissionFacts => {
+    const previous = this.permissionViews.get(permission);
+    const allowed = this.can(permission);
+    const retained = this.has(permission);
+    const epoch = this.epoch(permission);
+    if (previous?.allowed === allowed && previous.retained === retained && previous.epoch === epoch)
+      return previous;
+    const next = { allowed, retained, epoch };
+    this.permissionViews.set(permission, next);
+    return next;
+  };
   private emit() {
     this.version += 1;
     this.listeners.forEach((listener) => listener());
@@ -226,6 +271,18 @@ class Authorization {
       this.applyingSelfRole = false;
       this.emit();
     }
+  };
+
+  readonly operations: AuthorizationOperations = {
+    begin: this.begin,
+    can: this.can,
+    canRead: this.canRead,
+    isCurrent: this.isCurrent,
+    isSameAccount: this.isSameAccount,
+    canCommit: this.canCommit,
+    reportError: this.reportError,
+    recheck: this.recheck,
+    acceptSelfRole: this.acceptSelfRole,
   };
 }
 

@@ -1,13 +1,9 @@
 import { useActionState, useOptimistic, useRef } from "react";
 
-import type { AuthorizationLease } from "@/shared/auth/authorization";
+import type { AuthorizationLease, AuthorizationOperations } from "@/shared/auth/authorization";
 import type { ManagementPermission } from "@/shared/auth/permissions";
-import type { useAuthorization } from "@/shared/auth/useAuthorization";
 
-type ActionAuthorization = Pick<
-  ReturnType<typeof useAuthorization>,
-  "begin" | "canCommit" | "isCurrent"
->;
+type ActionAuthorization = Pick<AuthorizationOperations, "begin" | "canCommit" | "isCurrent">;
 type AuthorizedState<State> = { value: State; lease: AuthorizationLease | undefined };
 type ActionRequest<State> = {
   formData: FormData;

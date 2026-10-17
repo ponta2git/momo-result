@@ -97,6 +97,27 @@ describe("authorization", () => {
     );
   });
 
+  it("keeps permission snapshots stable when unrelated account facts change", () => {
+    const client = createTestQueryClient();
+    client.setQueryData(authMeQueryKeyFor(undefined), authResponse());
+    const authorization = getAuthorization(client);
+    const operations = authorization.permissionSnapshot("operations");
+    const admin = authorization.permissionSnapshot("admin");
+    client.setQueryData(authMeQueryKeyFor(undefined), {
+      ...authResponse(),
+      displayName: "更新後の表示名",
+    });
+    expect(authorization.permissionSnapshot("operations")).toBe(operations);
+    expect(authorization.permissionSnapshot("admin")).toBe(admin);
+    client.setQueryData(authMeQueryKeyFor(undefined), authResponse("operator"));
+    expect(authorization.permissionSnapshot("operations")).toBe(operations);
+    expect(authorization.permissionSnapshot("admin")).toEqual({
+      allowed: false,
+      retained: false,
+      epoch: admin.epoch + 1,
+    });
+  });
+
   it.each([
     [401, 1],
     [403, 1],

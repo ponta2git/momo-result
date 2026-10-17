@@ -88,12 +88,15 @@ export function useSeriesAnalysisResource({
         ? reviewQuery
         : aggregateQuery;
   const activeQueryParams = "query" in plan ? plan.query : undefined;
-  const activeKey =
-    activeView === "outlook"
-      ? seriesAnalysisKeys.outlookSummary(outlookParams)
-      : activeView === "review"
-        ? seriesAnalysisKeys.review(reviewParams)
-        : seriesAnalysisKeys.aggregate(aggregateParams);
+  const activeKey = useMemo(
+    () =>
+      activeView === "outlook"
+        ? seriesAnalysisKeys.outlookSummary(outlookParams)
+        : activeView === "review"
+          ? seriesAnalysisKeys.review(reviewParams)
+          : seriesAnalysisKeys.aggregate(aggregateParams),
+    [activeView, aggregateParams, outlookParams, reviewParams],
+  );
   const matchContext = readSeriesAnalysisMatchContext(matchContextQuery);
   const refetchActive = useCallback(
     () =>

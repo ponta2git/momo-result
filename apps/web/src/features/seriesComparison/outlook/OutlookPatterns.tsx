@@ -193,29 +193,54 @@ export function OutlookPatterns({
     if (last !== undefined && last < high) result.push(4);
     return result;
   }, [active, cumulative, focus, rival, meanPoints, exampleSeries, range]);
+  const patterns = useMemo<OutlookChartPattern[]>(() => {
+    if (!active) return [];
+    return [
+      {
+        id: "average",
+        label: "平均",
+        points: meanPoints,
+        selected: averageSelection(cumulative, liveFocus, liveRival, view.horizon),
+      },
+      ...exampleSeries.map(({ example, points }, index): OutlookChartPattern => ({
+        id: `example-${index}`,
+        label: hasTiedExamples
+          ? `展開例${index + 1}`
+          : index === 0
+            ? "有利な例"
+            : index === 1
+              ? "中間の例"
+              : "不利な例",
+        points,
+        selected: exampleSelection(cumulative, example, view.horizon),
+      })),
+    ];
+  }, [
+    active,
+    cumulative,
+    liveFocus,
+    liveRival,
+    view.horizon,
+    meanPoints,
+    exampleSeries,
+    hasTiedExamples,
+  ]);
+  const markerHorizon = marker?.h;
+  const markerLabel = marker?.label;
+  const averageMarker = useMemo(
+    () =>
+      active && markerHorizon !== undefined && markerLabel !== undefined
+        ? {
+            h: markerHorizon,
+            label: markerLabel,
+            averages: averageSelection(cumulative, liveFocus, liveRival, markerHorizon).averages,
+          }
+        : null,
+    [active, cumulative, liveFocus, liveRival, markerHorizon, markerLabel],
+  );
   if (!active) return null;
 
   const current = averageSelection(cumulative, liveFocus, liveRival, 0);
-  const patterns: OutlookChartPattern[] = [
-    {
-      id: "average",
-      label: "平均",
-      points: meanPoints,
-      selected: averageSelection(cumulative, liveFocus, liveRival, view.horizon),
-    },
-    ...exampleSeries.map(({ example, points }, index): OutlookChartPattern => ({
-      id: `example-${index}`,
-      label: hasTiedExamples
-        ? `展開例${index + 1}`
-        : index === 0
-          ? "有利な例"
-          : index === 1
-            ? "中間の例"
-            : "不利な例",
-      points,
-      selected: exampleSelection(cumulative, example, view.horizon),
-    })),
-  ];
   const people = orderFixedMembers(
     memberIds.map((memberId, role) => ({ memberId, role: role as 0 | 1 })),
   );
@@ -320,14 +345,7 @@ export function OutlookPatterns({
             ticks={ticks}
             descriptionId={helpId}
             onHorizonChange={onHorizonChange}
-            marker={
-              pattern.id === "average" && marker
-                ? {
-                    ...marker,
-                    averages: averageSelection(cumulative, liveFocus, liveRival, marker.h).averages,
-                  }
-                : null
-            }
+            marker={pattern.id === "average" ? averageMarker : null}
           />
         ))}
       </div>

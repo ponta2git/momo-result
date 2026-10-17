@@ -15,12 +15,12 @@ import type {
 } from "@/features/matches/workspace/matchWorkspaceInitialization";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 
-export type MatchWorkspaceInitialization =
+export type MatchWorkspaceInitializationState =
   | { status: "waiting-for-data"; snapshot: null }
   | { status: "waiting-for-held-event"; snapshot: InitializedWorkspaceSnapshot }
   | { status: "ready"; snapshot: InitializedWorkspaceSnapshot };
 
-export type MatchWorkspaceInitParams = MatchWorkspaceInitializationSource & {
+export type MatchWorkspaceInitializationOptions = MatchWorkspaceInitializationSource & {
   onSelectHeldEvent: (id: string, event: HeldEventResponse | undefined) => void;
   initialized: boolean;
   heldEventId: string;
@@ -28,17 +28,17 @@ export type MatchWorkspaceInitParams = MatchWorkspaceInitializationSource & {
   onInitialize: (values: MatchFormValues, workspaceData: MatchWorkspaceInitialData | null) => void;
   preferredHeldEventId: string | undefined;
   preferredHeldEventPending: boolean;
-  nowIsoFactory: () => string;
+  readNowIso: () => string;
 };
 
 /** Captures one editable snapshot per keyed workspace; later reads never replace user input. */
-export function useMatchWorkspaceInit(
-  params: MatchWorkspaceInitParams,
-): MatchWorkspaceInitialization {
-  const { onSelectHeldEvent, onInitialize, nowIsoFactory, preferredHeldEventPending } = params;
+export function useMatchWorkspaceInitialization(
+  params: MatchWorkspaceInitializationOptions,
+): MatchWorkspaceInitializationState {
+  const { onSelectHeldEvent, onInitialize, readNowIso, preferredHeldEventPending } = params;
   const [initial, setInitial] = useState<ReturnType<typeof buildWorkspaceInitialData> | null>(null);
   if (initial === null && isWorkspaceInitialDataReady(params)) {
-    setInitial(buildWorkspaceInitialData(params, nowIsoFactory()));
+    setInitial(buildWorkspaceInitialData(params, readNowIso()));
   }
   useLayoutEffect(() => {
     if (initial && !params.initialized) onInitialize(initial.values, initial.workspaceData);

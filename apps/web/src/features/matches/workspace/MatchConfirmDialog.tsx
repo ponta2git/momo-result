@@ -1,6 +1,6 @@
 import { AlertTriangle, Check } from "lucide-react";
 
-import type { MatchWorkspaceConfirmationDialogModel } from "@/features/matches/workspace/matchWorkspacePanelTypes";
+import type { MatchWorkspaceConfirmationDialogView } from "@/features/matches/workspace/matchWorkspacePanelViews";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { memberDisplayName, orderFixedMembers } from "@/shared/domain/members";
@@ -46,7 +46,7 @@ function MatchConfirmSummary({
   mapName,
   seasonName,
   values,
-}: MatchConfirmSummaryProps & { values: MatchWorkspaceConfirmationDialogModel["values"] }) {
+}: MatchConfirmSummaryProps & { values: MatchWorkspaceConfirmationDialogView["values"] }) {
   return (
     <FactList
       ariaLabel="確定する試合の開催条件"
@@ -71,7 +71,7 @@ function MatchConfirmSummary({
   );
 }
 
-function PlayerLedger({ values }: { values: MatchWorkspaceConfirmationDialogModel["values"] }) {
+function PlayerLedger({ values }: { values: MatchWorkspaceConfirmationDialogView["values"] }) {
   return (
     <DataTable
       caption={{ content: "確定する4人分の結果" }}
@@ -153,43 +153,43 @@ function OcrReviewSummary({
   );
 }
 
-export function MatchConfirmDialog({ model }: { model: MatchWorkspaceConfirmationDialogModel }) {
+export function MatchConfirmDialog({ view }: { view: MatchWorkspaceConfirmationDialogView }) {
   return (
     <Dialog
-      busy={model.pending}
+      busy={view.pending}
       open
       title="この内容で確定しますか？"
       onOpenChange={(open) => {
         if (!open) {
-          model.actions.onClose();
+          view.actions.onClose();
         }
       }}
     >
-      <form action={model.actions.onConfirm} className="grid min-w-0 gap-6">
-        <MatchConfirmSummary {...model.summary} values={model.values} />
-        <PlayerLedger values={model.values} />
-        {model.values.noteBody.trim().length > 0 ? (
+      <form action={view.actions.onConfirm} className="grid min-w-0 gap-6">
+        <MatchConfirmSummary {...view.summary} values={view.values} />
+        <PlayerLedger values={view.values} />
+        {view.values.noteBody.trim().length > 0 ? (
           <section aria-labelledby="confirm-match-note-heading" className="grid gap-1">
             <h3 className={contentText.heading} id="confirm-match-note-heading">
               試合メモ
             </h3>
             <p className={cn(contentText.body, "break-words whitespace-pre-wrap")}>
-              {model.values.noteBody}
+              {view.values.noteBody}
             </p>
           </section>
         ) : null}
-        <OcrReviewSummary {...model.review} />
+        <OcrReviewSummary {...view.review} />
 
-        {model.feedback.validationMessage ? (
+        {view.feedback.validationMessage ? (
           <div
             className="rounded-sm border border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 px-3 py-2 text-sm text-[var(--color-text-primary)]"
             role="alert"
           >
-            {model.feedback.validationMessage}
+            {view.feedback.validationMessage}
           </div>
         ) : null}
 
-        <ConfirmActionButtons pending={model.pending} onCancel={model.actions.onClose} />
+        <ConfirmActionButtons pending={view.pending} onCancel={view.actions.onClose} />
       </form>
     </Dialog>
   );

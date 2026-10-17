@@ -14,7 +14,7 @@ import { createMatchWorkspaceEditingStore } from "@/features/matches/workspace/m
 import { createSampleDraftMap } from "@/features/matches/workspace/review/sampleDrafts";
 import { ScoreGrid as ConnectedScoreGrid } from "@/features/matches/workspace/scoreGrid/ScoreGrid";
 import type { ScoreGridProps } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
-import { useWorkspaceReadView } from "@/features/matches/workspace/useWorkspaceReadView";
+import { useWorkspaceSnapshot } from "@/features/matches/workspace/useWorkspaceSnapshot";
 import { installMatchMediaController } from "@/test/doubles/dom";
 import type { MatchMediaController } from "@/test/doubles/dom";
 import { selectOption } from "@/test/selectOption";
@@ -28,7 +28,7 @@ function ScoreGrid({
   data: Omit<ScoreGridProps["data"], "rows"> & {
     players: MatchFormValues["players"];
     originalPlayers: OriginalPlayerSnapshot[] | undefined;
-    lastSyncedPlayerIndex: number | null;
+    lastIncidentSyncPlayerIndex: number | null;
   };
 }) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -42,7 +42,7 @@ function ScoreGrid({
       numericDrafts: drafts,
       items: data.review.items.filter((item) => item.row === index),
       acknowledgedCellIds: data.review.acknowledgedCellIds,
-      synced: data.lastSyncedPlayerIndex === index,
+      synced: data.lastIncidentSyncPlayerIndex === index,
     };
     return { getSnapshot: () => snapshot, subscribe: () => () => undefined };
   });
@@ -86,7 +86,7 @@ function GuidedReviewHarness() {
     store.initialize(reviewSample.values, reviewSample.initialData);
     return store;
   });
-  const review = useWorkspaceReadView(editing.review);
+  const review = useWorkspaceSnapshot(editing.review);
   return (
     <ConnectedScoreGrid
       actions={{
@@ -158,7 +158,7 @@ function ScoreGridHarness({
       }}
       data={{
         errorPathSet,
-        lastSyncedPlayerIndex: null,
+        lastIncidentSyncPlayerIndex: null,
         originalPlayers: undefined,
         players,
         review,
@@ -183,7 +183,7 @@ function FinalAcknowledgementHarness() {
         }}
         data={{
           errorPathSet: new Set(),
-          lastSyncedPlayerIndex: null,
+          lastIncidentSyncPlayerIndex: null,
           originalPlayers: undefined,
           players: emptyPlayers(),
           review: {
@@ -309,7 +309,7 @@ describe("ScoreGrid", () => {
           }}
           data={{
             errorPathSet: new Set(),
-            lastSyncedPlayerIndex: null,
+            lastIncidentSyncPlayerIndex: null,
             originalPlayers: undefined,
             players,
             review: { acknowledgedCellIds: [], activeCellId: null, items: [] },

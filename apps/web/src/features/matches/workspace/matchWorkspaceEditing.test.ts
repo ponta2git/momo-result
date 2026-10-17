@@ -79,7 +79,7 @@ describe("workspace editing transitions", () => {
       value: 4,
     });
 
-    expect(next.lastSyncedPlayerIndex).toBeNull();
+    expect(next.lastIncidentSyncPlayerIndex).toBeNull();
     expect(next.values.players[2]!.playOrder).toBe(4);
     expect(next.values.players[2]!.incidents.destination).toBe(7);
   });
@@ -95,7 +95,7 @@ describe("workspace editing transitions", () => {
       value: 4,
     });
 
-    expect(next.lastSyncedPlayerIndex).toBe(2);
+    expect(next.lastIncidentSyncPlayerIndex).toBe(2);
     expect(next.values.players[2]!.playOrder).toBe(4);
     expect(next.values.players[2]!.incidents).toEqual({
       cardShop: 0,
@@ -130,7 +130,7 @@ describe("workspace editing transitions", () => {
       value: 2,
     });
 
-    expect(next.lastSyncedPlayerIndex).toBe(0);
+    expect(next.lastIncidentSyncPlayerIndex).toBe(0);
     expect(next.values.players[0]?.playOrder).toBe(2);
     expect(next.values.players[0]?.incidents).toEqual({
       cardShop: 0,
@@ -153,7 +153,7 @@ describe("workspace editing transitions", () => {
       key: "destination",
       value: 3,
     });
-    expect(editedElsewhere.lastSyncedPlayerIndex).toBe(0);
+    expect(editedElsewhere.lastIncidentSyncPlayerIndex).toBe(0);
     expect(editedElsewhere.values.players[1]?.incidents.destination).toBe(3);
 
     const edited = editWorkspace(editedElsewhere, {
@@ -162,7 +162,7 @@ describe("workspace editing transitions", () => {
       key: "destination",
       value: 1,
     });
-    expect(edited.lastSyncedPlayerIndex).toBeNull();
+    expect(edited.lastIncidentSyncPlayerIndex).toBeNull();
     expect(edited.values.players[0]?.incidents.destination).toBe(1);
     expect(values.players[0]?.incidents.destination).toBe(0);
   });
@@ -178,7 +178,7 @@ describe("workspace editing transitions", () => {
       index: 1,
       value: 4,
     });
-    expect(synced.lastSyncedPlayerIndex).toBe(1);
+    expect(synced.lastIncidentSyncPlayerIndex).toBe(1);
 
     const replacement = createEmptyMatchForm("2026-02-02T10:00");
     const next = editWorkspace(synced, {
@@ -187,7 +187,7 @@ describe("workspace editing transitions", () => {
       initialData: null,
     });
 
-    expect(next.lastSyncedPlayerIndex).toBeNull();
+    expect(next.lastIncidentSyncPlayerIndex).toBeNull();
     expect(next.values).toEqual(replacement);
     expect(next.acknowledgedCellIds).toEqual([]);
     expect(next.activeCellId).toBeNull();

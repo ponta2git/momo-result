@@ -14,7 +14,7 @@ describe("MatchConfirmDialog", () => {
 
     render(
       <MatchConfirmDialog
-        model={{
+        view={{
           actions: { onClose: vi.fn(), onConfirm: vi.fn() },
           feedback: { validationMessage: "" },
           pending: false,

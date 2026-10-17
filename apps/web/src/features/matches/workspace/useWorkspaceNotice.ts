@@ -3,7 +3,7 @@ import { useCallback, useState } from "react";
 import type {
   WorkspaceNotice,
   WorkspaceNoticeTone,
-} from "@/features/matches/workspace/matchWorkspacePanelTypes";
+} from "@/features/matches/workspace/matchWorkspacePanelViews";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 export function useWorkspaceNotice() {

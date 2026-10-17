@@ -3,7 +3,7 @@ import { memo } from "react";
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import type {
   MatchWorkspaceScoreRowView,
-  WorkspaceReadView,
+  WorkspaceSubscription,
 } from "@/features/matches/workspace/matchWorkspaceEditingStore";
 import {
   incidentScoreGridColumns,
@@ -25,7 +25,7 @@ import type {
   ScoreGridKeyboardHandler,
   ScoreGridNumericHandlers,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
-import { useWorkspaceReadView } from "@/features/matches/workspace/useWorkspaceReadView";
+import { useWorkspaceSnapshot } from "@/features/matches/workspace/useWorkspaceSnapshot";
 import { canonicalResultMembers, memberDisplayName } from "@/shared/domain/members";
 import { PlayOrderMark } from "@/shared/matches/PlayOrderMark";
 import { SelectControl } from "@/shared/ui/forms/SelectControl";
@@ -74,7 +74,7 @@ const ScoreGridDesktopRow = memo(function ScoreGridDesktopRow({
   onReviewCellFocus,
   registerCellRef,
 }: Omit<ScoreGridDesktopTableProps, "rows"> & {
-  row: WorkspaceReadView<MatchWorkspaceScoreRowView>;
+  row: WorkspaceSubscription<MatchWorkspaceScoreRowView>;
   rowIndex: number;
 }) {
   const {
@@ -85,7 +85,7 @@ const ScoreGridDesktopRow = memo(function ScoreGridDesktopRow({
     items,
     acknowledgedCellIds,
     synced,
-  } = useWorkspaceReadView(row);
+  } = useWorkspaceSnapshot(row);
   const reviewItemByCellId = new Map(items.map((item) => [item.cellId, item]));
   const reviewedCellIds = new Set(acknowledgedCellIds);
   const memberCellId = getCellId(rowIndex, 0);

@@ -8,13 +8,13 @@ import type { MatchWorkspaceEditingStore } from "@/features/matches/workspace/ma
 import { toMatchWorkspaceOperationErrorView } from "@/features/matches/workspace/matchWorkspaceOperationError";
 import type { MatchWorkspaceOperationError } from "@/features/matches/workspace/matchWorkspaceOperationError";
 import type {
-  MatchWorkspaceCancellationModel,
-  MatchWorkspaceMastersNavigationModel,
-  MatchWorkspaceRecoveryModel,
-  MatchWorkspaceSubmitModel,
+  MatchWorkspaceCancellationView,
+  MatchWorkspaceMastersNavigationView,
+  MatchWorkspaceRecoveryView,
+  MatchWorkspaceSubmitView,
   WorkspaceNoticeTone,
-} from "@/features/matches/workspace/matchWorkspacePanelTypes";
-import { workspaceSubmissionView } from "@/features/matches/workspace/matchWorkspaceView";
+} from "@/features/matches/workspace/matchWorkspacePanelViews";
+import { buildMatchWorkspaceSubmitView } from "@/features/matches/workspace/matchWorkspaceView";
 import type { buildMatchWorkspaceView } from "@/features/matches/workspace/matchWorkspaceView";
 import { useMatchWorkspaceLifecycleEffects } from "@/features/matches/workspace/useMatchWorkspaceLifecycleEffects";
 import { useMatchWorkspaceMasterNavigation } from "@/features/matches/workspace/useMatchWorkspaceMasterNavigation";
@@ -22,7 +22,7 @@ import { useMatchWorkspacePrimaryAction } from "@/features/matches/workspace/use
 import { useMatchWorkspaceSessionDraft } from "@/features/matches/workspace/useMatchWorkspaceSessionDraft";
 import { useMatchWorkspaceSubmitFlow } from "@/features/matches/workspace/useMatchWorkspaceSubmitFlow";
 import { useMatchWorkspaceValidation } from "@/features/matches/workspace/useMatchWorkspaceValidation";
-import { useWorkspaceReadView } from "@/features/matches/workspace/useWorkspaceReadView";
+import { useWorkspaceSnapshot } from "@/features/matches/workspace/useWorkspaceSnapshot";
 import type { MatchDraftDetailResponse } from "@/shared/api/matchDrafts";
 import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
 
@@ -46,11 +46,11 @@ export type MatchWorkspacePersistenceInput = {
 
 type WorkspacePersistenceControls = {
   persistence: {
-    cancellation: MatchWorkspaceCancellationModel;
-    recovery: MatchWorkspaceRecoveryModel | null;
-    submit: MatchWorkspaceSubmitModel;
+    cancellation: MatchWorkspaceCancellationView;
+    recovery: MatchWorkspaceRecoveryView | null;
+    submit: MatchWorkspaceSubmitView;
   };
-  masters: MatchWorkspaceMastersNavigationModel;
+  masters: MatchWorkspaceMastersNavigationView;
 };
 type WorkspaceInteraction = {
   disabled: boolean;
@@ -82,9 +82,7 @@ export function MatchWorkspacePersistence({
 }) {
   const { editing, mode, view } = input;
   const [validationMessage, setValidationMessage] = useState("");
-  const [currentOperationError, setOperationError] = useState<MatchWorkspaceOperationError | null>(
-    null,
-  );
+  const [operationError, setOperationError] = useState<MatchWorkspaceOperationError | null>(null);
   const [showValidationErrors, setShowValidationErrors] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [cancelDraftConfirmOpen, setCancelDraftConfirmOpen] = useState(false);
@@ -93,8 +91,8 @@ export function MatchWorkspacePersistence({
     sequence: number;
   } | null>(null);
   const notify = input.notify;
-  const draft = useWorkspaceReadView(editing.persistence);
-  const confirmation = useWorkspaceReadView(editing.confirmation);
+  const editingSnapshot = useWorkspaceSnapshot(editing.persistence);
+  const confirmationSnapshot = useWorkspaceSnapshot(editing.confirmation);
   const restore = useCallback(
     (saved: Parameters<typeof editing.restore>[0]) => {
       editing.restore(saved);
@@ -102,19 +100,19 @@ export function MatchWorkspacePersistence({
     },
     [editing, notify],
   );
-  const session = useMatchWorkspaceSessionDraft({
+  const sessionDraft = useMatchWorkspaceSessionDraft({
     accountId: input.accountId,
-    ...draft,
+    ...editingSnapshot,
     enabled: input.enabled && !view.confirmedDraftLoaded,
     mode,
     onRestore: restore,
     readCurrentDraft: editing.persistence.getSnapshot,
     workspaceKey: input.workspaceKey,
   });
-  const submit = useMatchWorkspaceSubmitFlow({
+  const submitFlow = useMatchWorkspaceSubmitFlow({
     matchId: input.matchId,
     notify: input.notifyToast,
-    onPersistedSuccess: session.markCommitted,
+    onPersistedSuccess: sessionDraft.markCommitted,
     setConfirmOpen: setConfirmOpen,
     setOperationError: setOperationError,
     setValidationMessage: setValidationMessage,
@@ -124,7 +122,7 @@ export function MatchWorkspacePersistence({
   useMatchWorkspaceLifecycleEffects({
     draftDetail: input.draftDetail,
     mode,
-    redirectConfirmedDraft: submit.confirmedDraft.redirectConfirmedDraft,
+    redirectConfirmedDraft: submitFlow.confirmedDraft.redirectConfirmedDraft,
     useSampleDrafts: input.useSampleDrafts,
   });
   const masterNavigation = useMatchWorkspaceMasterNavigation({
@@ -132,7 +130,7 @@ export function MatchWorkspacePersistence({
     canNavigateToMasters: input.canNavigateToMasters,
     mode,
     notify: input.notify,
-    saveBeforeNavigate: session.saveBeforeNavigate,
+    saveBeforeNavigate: sessionDraft.saveBeforeNavigate,
   });
   const requestValidationFocus = useCallback(
     (path: string) =>
@@ -148,13 +146,13 @@ export function MatchWorkspacePersistence({
     setConfirmOpen: setConfirmOpen,
     setShowValidationErrors: setShowValidationErrors,
     setValidationMessage: setValidationMessage,
-    update: submit.update,
+    saveChanges: submitFlow.saveChanges,
     readLatestValues: editing.readLatestValues,
   });
   const validation = useMatchWorkspaceValidation({
     mode,
     showValidationErrors: showValidationErrors,
-    values: draft.values,
+    values: editingSnapshot.values,
   });
   // Keep display subscribers stable when validation returns the same set of paths.
   const errorPathsKey = JSON.stringify([...validation.visibleErrorPathSet].toSorted());
@@ -162,22 +160,21 @@ export function MatchWorkspacePersistence({
     () => new Set<string>(JSON.parse(errorPathsKey) as string[]),
     [errorPathsKey],
   );
-  const busy = submit.pending || submit.confirmation.pending || masterNavigation.isPending;
-  const operationError = useMemo(
-    () =>
-      currentOperationError ? toMatchWorkspaceOperationErrorView(currentOperationError) : null,
-    [currentOperationError],
+  const busy = submitFlow.pending || submitFlow.confirmation.pending || masterNavigation.isPending;
+  const operationErrorView = useMemo(
+    () => (operationError ? toMatchWorkspaceOperationErrorView(operationError) : null),
+    [operationError],
   );
   const submissionView = useMemo(
     () =>
-      workspaceSubmissionView({
+      buildMatchWorkspaceSubmitView({
         mode,
         busy,
         createEventPending: input.createEventPending,
         workspaceLoading: input.workspaceLoading,
         confirmOpen,
         cancelDraftConfirmOpen,
-        operationError: currentOperationError,
+        operationError,
         validationMessage,
         valid: validation.validation.success,
         firstValidationMessage: validation.validation.firstMessage,
@@ -189,7 +186,7 @@ export function MatchWorkspacePersistence({
       input.workspaceLoading,
       confirmOpen,
       cancelDraftConfirmOpen,
-      currentOperationError,
+      operationError,
       validationMessage,
       validation.validation.success,
       validation.validation.firstMessage,
@@ -211,19 +208,19 @@ export function MatchWorkspacePersistence({
           allowed: view.canCancelDraft,
           dialog: {
             open: cancelDraftConfirmOpen,
-            pending: submit.cancelDraftPending,
-            onConfirm: submit.cancelDraftConfirmed,
+            pending: submitFlow.cancelDraftPending,
+            onConfirm: submitFlow.cancelDraftConfirmed,
             onOpenChange: setCancelDraftConfirmOpen,
           },
           disabled: busy || input.createEventPending,
-          error: currentOperationError?.kind === "cancelDraft" ? operationError : null,
+          error: operationError?.kind === "cancelDraft" ? operationErrorView : null,
           onTrigger: () => setCancelDraftConfirmOpen(true),
         },
-        recovery: session.recovery
+        recovery: sessionDraft.recovery
           ? {
-              savedAt: session.recovery.savedAt,
-              onDiscard: session.discardRecovery,
-              onRestore: session.restoreRecovery,
+              savedAt: sessionDraft.recovery.savedAt,
+              onDiscard: sessionDraft.discardRecovery,
+              onRestore: sessionDraft.restoreRecovery,
             }
           : null,
         submit: {
@@ -240,15 +237,15 @@ export function MatchWorkspacePersistence({
       view.canCancelDraft,
       cancelDraftConfirmOpen,
       setCancelDraftConfirmOpen,
-      submit.cancelDraftPending,
-      submit.cancelDraftConfirmed,
+      submitFlow.cancelDraftPending,
+      submitFlow.cancelDraftConfirmed,
       busy,
       input.createEventPending,
-      currentOperationError?.kind,
-      operationError,
-      session.recovery,
-      session.discardRecovery,
-      session.restoreRecovery,
+      operationError?.kind,
+      operationErrorView,
+      sessionDraft.recovery,
+      sessionDraft.discardRecovery,
+      sessionDraft.restoreRecovery,
       onPrimaryAction,
       submissionView,
     ],
@@ -258,17 +255,17 @@ export function MatchWorkspacePersistence({
       <ControlsContext value={controls}>{children}</ControlsContext>
       {confirmOpen ? (
         <MatchConfirmDialog
-          model={{
+          view={{
             actions: {
               onClose: () => setConfirmOpen(false),
-              onConfirm: submit.confirmation.action,
+              onConfirm: submitFlow.confirmation.action,
             },
             feedback: { validationMessage: validationMessage },
-            pending: submit.confirmation.pending,
+            pending: submitFlow.confirmation.pending,
             review: {
-              changedCount: confirmation.changedCount,
-              totalCount: confirmation.totalCount,
-              unresolvedCount: confirmation.unresolvedCount,
+              changedCount: confirmationSnapshot.changedCount,
+              totalCount: confirmationSnapshot.totalCount,
+              unresolvedCount: confirmationSnapshot.unresolvedCount,
             },
             summary: {
               gameTitleName: view.selectedGameTitle?.name,
@@ -276,16 +273,16 @@ export function MatchWorkspacePersistence({
               mapName: view.selectedMap?.name,
               seasonName: view.selectedSeason?.name,
             },
-            values: confirmation,
+            values: confirmationSnapshot,
           }}
         />
       ) : null}
       <UnsavedChangesGuard
         model={{
-          dirty: session.dirty,
-          isNavigationAllowed: session.isNavigationAllowed,
-          onDiscard: session.markCommitted,
-          saveBeforeLeave: session.saveBeforeLeave,
+          dirty: sessionDraft.dirty,
+          isNavigationAllowed: sessionDraft.isNavigationAllowed,
+          onDiscard: sessionDraft.markCommitted,
+          saveBeforeLeave: sessionDraft.saveBeforeLeave,
         }}
         pending={busy || input.createEventPending}
         preservesInput={preservesInput}

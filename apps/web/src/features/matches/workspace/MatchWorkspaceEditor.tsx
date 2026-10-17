@@ -4,8 +4,8 @@ import type { RefObject } from "react";
 import { MatchFormActions } from "@/features/matches/workspace/MatchFormActions";
 import { MatchNoteField } from "@/features/matches/workspace/MatchNoteField";
 import { MatchSetupSection } from "@/features/matches/workspace/MatchSetupSection";
-import type { MatchWorkspaceEditingViews } from "@/features/matches/workspace/matchWorkspaceEditingStore";
-import type { MatchWorkspaceEditorLayoutModel } from "@/features/matches/workspace/matchWorkspacePanelTypes";
+import type { MatchWorkspaceEditorBindings } from "@/features/matches/workspace/matchWorkspaceEditingStore";
+import type { MatchWorkspaceEditorLayoutView } from "@/features/matches/workspace/matchWorkspacePanelViews";
 import {
   useWorkspaceInteraction,
   useWorkspacePersistenceControls,
@@ -14,20 +14,20 @@ import { MatchWorkspaceRecoveryNotice } from "@/features/matches/workspace/Match
 import { ScoreGrid } from "@/features/matches/workspace/scoreGrid/ScoreGrid";
 import { SourceImagePanel } from "@/features/matches/workspace/sourceImages/SourceImagePanel";
 import type { SourceImageKind } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
-import { useWorkspaceReadView } from "@/features/matches/workspace/useWorkspaceReadView";
+import { useWorkspaceSnapshot } from "@/features/matches/workspace/useWorkspaceSnapshot";
 import { cn } from "@/shared/ui/cn";
 import { Notice } from "@/shared/ui/feedback/Notice";
 
-type EditingViews = MatchWorkspaceEditingViews;
+type EditorBindings = MatchWorkspaceEditorBindings;
 
 const WorkspaceSetup = memo(function WorkspaceSetup({
   editing,
-  model,
+  view,
 }: {
-  editing: EditingViews;
-  model: MatchWorkspaceEditorLayoutModel["setup"];
+  editing: EditorBindings;
+  view: MatchWorkspaceEditorLayoutView["setup"];
 }) {
-  const values = useWorkspaceReadView(editing.setup);
+  const values = useWorkspaceSnapshot(editing.setup);
   const interaction = useWorkspaceInteraction();
   const { masters, persistence } = useWorkspacePersistenceControls();
   useEffect(() => {
@@ -40,20 +40,20 @@ const WorkspaceSetup = memo(function WorkspaceSetup({
   return (
     <fieldset
       className="min-w-0"
-      disabled={interaction.disabled || model.eventCreation.action.pending}
+      disabled={interaction.disabled || view.eventCreation.action.pending}
     >
       <MatchSetupSection
         cancellation={persistence.cancellation}
         mastersNavigation={masters}
-        model={{
-          eventCreation: model.eventCreation,
+        view={{
+          eventCreation: view.eventCreation,
           fields: {
             values,
             actions: {
               onSelectHeldEvent: editing.actions.selectHeldEvent,
               onChangeField: editing.actions.changeSetup,
             },
-            options: model.options,
+            options: view.options,
             validation: {
               errorPathSet: interaction.errorPathSet,
               focusRequest: interaction.validationFocusRequest,
@@ -69,11 +69,11 @@ const WorkspaceScore = memo(function WorkspaceScore({
   onPreferImageKindChange,
   onRequestSubmitFocus,
 }: {
-  editing: EditingViews;
+  editing: EditorBindings;
   onPreferImageKindChange: (kind: SourceImageKind) => void;
   onRequestSubmitFocus: () => void;
 }) {
-  const review = useWorkspaceReadView(editing.review);
+  const review = useWorkspaceSnapshot(editing.review);
   const interaction = useWorkspaceInteraction();
   return (
     <fieldset className="min-w-0" disabled={interaction.disabled}>
@@ -98,8 +98,8 @@ const WorkspaceScore = memo(function WorkspaceScore({
     </fieldset>
   );
 });
-const WorkspaceNote = memo(function WorkspaceNote({ editing }: { editing: EditingViews }) {
-  const value = useWorkspaceReadView(editing.note);
+const WorkspaceNote = memo(function WorkspaceNote({ editing }: { editing: EditorBindings }) {
+  const value = useWorkspaceSnapshot(editing.note);
   const interaction = useWorkspaceInteraction();
   return (
     <fieldset className="mt-4 min-w-0" disabled={interaction.disabled}>
@@ -113,9 +113,7 @@ const WorkspaceNote = memo(function WorkspaceNote({ editing }: { editing: Editin
 });
 function WorkspaceRecovery() {
   const { persistence } = useWorkspacePersistenceControls();
-  return persistence.recovery ? (
-    <MatchWorkspaceRecoveryNotice model={persistence.recovery} />
-  ) : null;
+  return persistence.recovery ? <MatchWorkspaceRecoveryNotice view={persistence.recovery} /> : null;
 }
 function WorkspaceSubmit({
   primaryActionRef,
@@ -123,15 +121,15 @@ function WorkspaceSubmit({
   primaryActionRef: RefObject<HTMLButtonElement | null>;
 }) {
   const { persistence } = useWorkspacePersistenceControls();
-  return <MatchFormActions model={persistence.submit} primaryActionRef={primaryActionRef} />;
+  return <MatchFormActions view={persistence.submit} primaryActionRef={primaryActionRef} />;
 }
 
 export function MatchWorkspaceEditor({
   editing,
-  model,
+  view,
 }: {
-  editing: EditingViews;
-  model: MatchWorkspaceEditorLayoutModel;
+  editing: EditorBindings;
+  view: MatchWorkspaceEditorLayoutView;
 }) {
   const primaryActionRef = useRef<HTMLButtonElement>(null);
   const [preferredKind, preferImageKind] = useState<SourceImageKind>("total_assets");
@@ -140,13 +138,13 @@ export function MatchWorkspaceEditor({
   }, []);
   return (
     <>
-      <WorkspaceSetup editing={editing} model={model.setup} />
+      <WorkspaceSetup editing={editing} view={view.setup} />
       <WorkspaceRecovery />
-      {model.notice ? <Notice tone={model.notice.tone}>{model.notice.message}</Notice> : null}
-      {model.warnings.length > 0 ? (
+      {view.notice ? <Notice tone={view.notice.tone}>{view.notice.message}</Notice> : null}
+      {view.warnings.length > 0 ? (
         <Notice tone="warning" title="入力内容を確認してください">
           <ul className="list-disc pl-5 text-sm text-[var(--color-text-primary)]">
-            {model.warnings.map((warning) => (
+            {view.warnings.map((warning) => (
               <li key={warning}>{warning}</li>
             ))}
           </ul>
@@ -155,7 +153,7 @@ export function MatchWorkspaceEditor({
       <div
         className={cn(
           "grid min-w-0 grid-cols-1 gap-4",
-          model.sourceImagePanel ? "2xl:grid-cols-[minmax(0,1fr)_minmax(30rem,32rem)]" : "",
+          view.sourceImagePanel ? "2xl:grid-cols-[minmax(0,1fr)_minmax(30rem,32rem)]" : "",
         )}
       >
         <div className="order-2 min-w-0 2xl:order-none">
@@ -164,12 +162,12 @@ export function MatchWorkspaceEditor({
             onPreferImageKindChange={preferImageKind}
             onRequestSubmitFocus={onRequestSubmitFocus}
           />
-          {model.mode === "edit" ? null : <WorkspaceNote editing={editing} />}
+          {view.mode === "edit" ? null : <WorkspaceNote editing={editing} />}
         </div>
         <aside className="contents 2xl:sticky 2xl:top-4 2xl:grid 2xl:h-fit 2xl:gap-4">
-          {model.sourceImagePanel ? (
+          {view.sourceImagePanel ? (
             <div className="order-1 2xl:order-none">
-              <SourceImagePanel {...model.sourceImagePanel} preferredKind={preferredKind} />
+              <SourceImagePanel {...view.sourceImagePanel} preferredKind={preferredKind} />
             </div>
           ) : null}
           <div className="order-3 2xl:order-none">

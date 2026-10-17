@@ -6,7 +6,7 @@ import {
   confirmedDraftMessages,
 } from "@/features/matches/confirmedDraftNavigation";
 import { useMatchDraftResource } from "@/features/matches/useMatchDraftResource";
-import type { WorkspaceNoticeTone } from "@/features/matches/workspace/matchWorkspacePanelTypes";
+import type { WorkspaceNoticeTone } from "@/features/matches/workspace/matchWorkspacePanelViews";
 import type { MatchDraftDetailResponse } from "@/shared/api/matchDrafts";
 
 export function useConfirmedDraftRedirect({

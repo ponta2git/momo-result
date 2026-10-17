@@ -18,7 +18,7 @@ import {
 export type EditablePlayerField = "memberId" | "rank" | "revenueManYen" | "totalAssetsManYen";
 export type MatchWorkspaceEditingState = {
   values: MatchFormValues;
-  lastSyncedPlayerIndex: number | null;
+  lastIncidentSyncPlayerIndex: number | null;
   acknowledgedCellIds: string[];
   activeCellId: string | null;
   initialData: MatchWorkspaceInitialData | null;
@@ -46,7 +46,7 @@ export function createMatchWorkspaceEditingState(
 ): MatchWorkspaceEditingState {
   return {
     values,
-    lastSyncedPlayerIndex: null,
+    lastIncidentSyncPlayerIndex: null,
     acknowledgedCellIds: [],
     activeCellId: null,
     initialData: null,
@@ -116,7 +116,7 @@ export function transitionMatchWorkspaceEditing(
       return {
         ...state,
         values,
-        lastSyncedPlayerIndex: null,
+        lastIncidentSyncPlayerIndex: null,
         acknowledgedCellIds: [...new Set(edit.acknowledgedCellIds.filter((id) => known.has(id)))],
       };
     }
@@ -171,8 +171,10 @@ export function transitionMatchWorkspaceEditing(
         {
           ...state,
           values,
-          lastSyncedPlayerIndex:
-            state.lastSyncedPlayerIndex === edit.index ? null : state.lastSyncedPlayerIndex,
+          lastIncidentSyncPlayerIndex:
+            state.lastIncidentSyncPlayerIndex === edit.index
+              ? null
+              : state.lastIncidentSyncPlayerIndex,
         },
         reviewCellId(edit.index, `incident.${edit.key}`),
       );
@@ -211,7 +213,9 @@ export function transitionMatchWorkspaceEditing(
         {
           ...state,
           values,
-          lastSyncedPlayerIndex: incidentByPlayOrder ? edit.index : state.lastSyncedPlayerIndex,
+          lastIncidentSyncPlayerIndex: incidentByPlayOrder
+            ? edit.index
+            : state.lastIncidentSyncPlayerIndex,
           acknowledgedCellIds: state.acknowledgedCellIds.filter((id) => !invalidated.has(id)),
         },
         reviewCellId(edit.index, "playOrder"),

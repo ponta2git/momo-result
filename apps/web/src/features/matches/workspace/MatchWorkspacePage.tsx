@@ -7,7 +7,7 @@ import { MatchWorkspaceEditor } from "@/features/matches/workspace/MatchWorkspac
 import { MatchWorkspaceLoading } from "@/features/matches/workspace/MatchWorkspaceLoading";
 import { MatchWorkspacePersistence } from "@/features/matches/workspace/MatchWorkspacePersistence";
 import { MatchWorkspaceToolbar } from "@/features/matches/workspace/MatchWorkspaceToolbar";
-import { useMatchWorkspacePageModel } from "@/features/matches/workspace/useMatchWorkspacePageModel";
+import { useMatchWorkspace } from "@/features/matches/workspace/useMatchWorkspace";
 import { useAuthorization } from "@/shared/auth/useAuthorization";
 import { trimSearchParam } from "@/shared/lib/searchParams";
 import { Button } from "@/shared/ui/actions/Button";
@@ -89,7 +89,7 @@ function MatchWorkspacePageContent({
   canManageMasters: boolean;
   canNavigateToMasters: () => boolean;
 }) {
-  const pageModel = useMatchWorkspacePageModel({
+  const workspace = useMatchWorkspace({
     accountId,
     canManageMasters,
     canNavigateToMasters,
@@ -99,7 +99,7 @@ function MatchWorkspacePageContent({
     mode,
     preferredHeldEventId,
   });
-  const { editor, editing, loading, toolbar, persistence, review } = pageModel;
+  const { editor, editing, loading, toolbar, persistence, review } = workspace;
 
   if (loading.edit.loading) {
     return <MatchWorkspaceLoading loadingLabel="試合編集を読み込み中" sample={toolbar.sample} />;
@@ -111,7 +111,7 @@ function MatchWorkspacePageContent({
     return (
       <PageFrame width="workspace">
         <PageContentSurface aria-label="試合内容" className="grid grid-cols-1 gap-6" role="region">
-          <MatchWorkspaceToolbar model={toolbar} />
+          <MatchWorkspaceToolbar view={toolbar} />
           <Notice
             action={
               notFound ? undefined : (
@@ -160,7 +160,7 @@ function MatchWorkspacePageContent({
     >
       <PageFrame width="workspace">
         <PageContentSurface aria-label="試合内容" className="grid grid-cols-1 gap-6" role="region">
-          <MatchWorkspaceToolbar model={toolbar} />
+          <MatchWorkspaceToolbar view={toolbar} />
           {loading.base.errors.length > 0 ? (
             <Notice
               action={
@@ -188,9 +188,9 @@ function MatchWorkspacePageContent({
           ) : null}
 
           {loading.workspace.blocked ? null : review.blocked ? (
-            <MatchWorkspaceBlockedNotice model={review.blocked} />
+            <MatchWorkspaceBlockedNotice view={review.blocked} />
           ) : (
-            <MatchWorkspaceEditor editing={editing} model={editor} />
+            <MatchWorkspaceEditor editing={editing} view={editor} />
           )}
         </PageContentSurface>
       </PageFrame>

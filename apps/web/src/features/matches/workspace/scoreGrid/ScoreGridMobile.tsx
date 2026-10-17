@@ -2,7 +2,7 @@ import { memo } from "react";
 
 import type {
   MatchWorkspaceScoreRowView,
-  WorkspaceReadView,
+  WorkspaceSubscription,
 } from "@/features/matches/workspace/matchWorkspaceEditingStore";
 import {
   incidentScoreGridColumns,
@@ -21,7 +21,7 @@ import type {
   ScoreGridData,
   ScoreGridNumericHandlers,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
-import { useWorkspaceReadView } from "@/features/matches/workspace/useWorkspaceReadView";
+import { useWorkspaceSnapshot } from "@/features/matches/workspace/useWorkspaceSnapshot";
 import { memberDisplayName } from "@/shared/domain/members";
 import { PlayOrderMark } from "@/shared/matches/PlayOrderMark";
 import { RankBadge } from "@/shared/matches/RankBadge";
@@ -77,7 +77,7 @@ const ScoreGridMobileRow = memo(function ScoreGridMobileRow({
   onTogglePlayer,
   registerCellRef,
 }: Omit<ScoreGridMobileCardsProps, "rows" | "expandedMobilePlayer"> & {
-  row: WorkspaceReadView<MatchWorkspaceScoreRowView>;
+  row: WorkspaceSubscription<MatchWorkspaceScoreRowView>;
   index: number;
   expanded: boolean;
 }) {
@@ -89,7 +89,7 @@ const ScoreGridMobileRow = memo(function ScoreGridMobileRow({
     items,
     acknowledgedCellIds,
     synced,
-  } = useWorkspaceReadView(row);
+  } = useWorkspaceSnapshot(row);
   const reviewItemByCellId = new Map(items.map((item) => [item.cellId, item]));
   const reviewedCellIds = new Set(acknowledgedCellIds);
   const unresolvedCount = items.filter((item) => !reviewedCellIds.has(item.cellId)).length;

@@ -9,7 +9,7 @@ export function useMatchWorkspacePrimaryAction(input: {
   setConfirmOpen: (open: boolean) => void;
   setShowValidationErrors: (show: boolean) => void;
   setValidationMessage: (message: string) => void;
-  update: (values: MatchFormValues) => void;
+  saveChanges: (values: MatchFormValues) => void;
   readLatestValues: () => MatchFormValues;
 }) {
   const {
@@ -18,7 +18,7 @@ export function useMatchWorkspacePrimaryAction(input: {
     setConfirmOpen,
     setShowValidationErrors,
     setValidationMessage,
-    update,
+    saveChanges,
     readLatestValues,
   } = input;
 
@@ -33,7 +33,7 @@ export function useMatchWorkspacePrimaryAction(input: {
     setShowValidationErrors(false);
     setValidationMessage("");
     if (action.kind === "update") {
-      update(action.values);
+      saveChanges(action.values);
       return;
     }
     setConfirmOpen(true);
@@ -43,7 +43,7 @@ export function useMatchWorkspacePrimaryAction(input: {
     setConfirmOpen,
     setShowValidationErrors,
     setValidationMessage,
-    update,
+    saveChanges,
     readLatestValues,
   ]);
 }

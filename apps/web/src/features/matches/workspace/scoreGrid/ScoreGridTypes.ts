@@ -4,7 +4,7 @@ import type { MatchFormValues } from "@/features/matches/workspace/matchFormType
 import type { EditablePlayerField } from "@/features/matches/workspace/matchWorkspaceEditing";
 import type {
   MatchWorkspaceScoreRowView,
-  WorkspaceReadView,
+  WorkspaceSubscription,
 } from "@/features/matches/workspace/matchWorkspaceEditingStore";
 import type { ReviewItem } from "@/features/matches/workspace/review/reviewProgress";
 import type { ReviewFieldKey } from "@/features/matches/workspace/review/reviewWarningModel";
@@ -22,7 +22,7 @@ export type ScoreGridProps = {
 export type ScoreGridData = {
   errorPathSet: ReadonlySet<string>;
   validationFocusRequest?: { path: string; sequence: number } | null | undefined;
-  rows: ReadonlyArray<WorkspaceReadView<MatchWorkspaceScoreRowView>>;
+  rows: ReadonlyArray<WorkspaceSubscription<MatchWorkspaceScoreRowView>>;
   review: {
     acknowledgedCellIds: readonly string[];
     activeCellId: string | null;

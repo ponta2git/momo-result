@@ -16,18 +16,18 @@ import type { HeldEventPickerDirectory } from "@/shared/heldEvents/heldEventPick
 export type WorkspaceNoticeTone = "info" | "success" | "warning";
 export type WorkspaceNotice = { message: string; tone: WorkspaceNoticeTone };
 
-export type MatchWorkspaceMastersNavigationModel = {
+export type MatchWorkspaceMastersNavigationView = {
   pending: boolean;
   show: boolean;
   onNavigate: () => void;
 };
 
-export type MatchWorkspaceToolbarModel = {
+export type MatchWorkspaceToolbarView = {
   exit: { href: string; label: string };
   sample: boolean;
 };
 
-export type MatchWorkspaceSetupFieldsModel = {
+export type MatchWorkspaceSetupFieldsView = {
   actions: {
     onSelectHeldEvent: (id: string, event: HeldEventResponse | undefined) => void;
     onChangeField: <K extends Exclude<keyof MatchSetupValues, "heldEventId">>(
@@ -49,16 +49,16 @@ export type MatchWorkspaceSetupFieldsModel = {
   values: MatchSetupValues;
 };
 
-export type MatchWorkspaceSetupSectionModel = {
+export type MatchWorkspaceSetupSectionView = {
   eventCreation: {
     action: { pending: boolean; onCreate: () => void };
     feedback: { error: MatchWorkspaceOperationErrorView | null };
     input: { value: string; onChange: (value: string) => void };
   };
-  fields: MatchWorkspaceSetupFieldsModel;
+  fields: MatchWorkspaceSetupFieldsView;
 };
 
-export type MatchWorkspaceCancellationModel = {
+export type MatchWorkspaceCancellationView = {
   allowed: boolean;
   dialog: {
     open: boolean;
@@ -71,13 +71,13 @@ export type MatchWorkspaceCancellationModel = {
   onTrigger: () => void;
 };
 
-export type MatchWorkspaceRecoveryModel = {
+export type MatchWorkspaceRecoveryView = {
   savedAt: string;
   onDiscard: () => void;
   onRestore: () => void;
 };
 
-export type MatchWorkspaceSubmitModel = {
+export type MatchWorkspaceSubmitView = {
   action: {
     label: "保存" | "確定前の確認へ進む";
     onRun: () => void;
@@ -89,7 +89,7 @@ export type MatchWorkspaceSubmitModel = {
   };
 };
 
-export type MatchWorkspaceConfirmationDialogModel = {
+export type MatchWorkspaceConfirmationDialogView = {
   actions: {
     onClose: () => void;
     onConfirm: (formData: FormData) => void | Promise<void>;
@@ -106,7 +106,7 @@ export type MatchWorkspaceConfirmationDialogModel = {
   values: Pick<MatchFormValues, "matchNoInEvent" | "noteBody" | "players">;
 };
 
-export type MatchWorkspaceBlockedReviewModel = {
+export type MatchWorkspaceBlockedReviewView = {
   feedback: { error: MatchWorkspaceOperationErrorView | null };
   refresh: {
     pending: boolean;
@@ -114,13 +114,13 @@ export type MatchWorkspaceBlockedReviewModel = {
   };
 };
 
-export type MatchWorkspaceEditorLayoutModel = {
+export type MatchWorkspaceEditorLayoutView = {
   mode: WorkspaceMode;
   notice: WorkspaceNotice | null;
   warnings: string[];
   setup: {
-    eventCreation: MatchWorkspaceSetupSectionModel["eventCreation"];
-    options: MatchWorkspaceSetupFieldsModel["options"];
+    eventCreation: MatchWorkspaceSetupSectionView["eventCreation"];
+    options: MatchWorkspaceSetupFieldsView["options"];
   };
   sourceImagePanel: {
     accountId?: string | undefined;

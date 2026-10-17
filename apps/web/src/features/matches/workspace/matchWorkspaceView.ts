@@ -2,7 +2,7 @@ import { confirmedDraftDestination } from "@/features/matches/confirmedDraftNavi
 import type { MatchFormValues, WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
 import { toMatchWorkspaceOperationErrorView } from "@/features/matches/workspace/matchWorkspaceOperationError";
 import type { MatchWorkspaceOperationError } from "@/features/matches/workspace/matchWorkspaceOperationError";
-import type { MatchWorkspaceSubmitModel } from "@/features/matches/workspace/matchWorkspacePanelTypes";
+import type { MatchWorkspaceSubmitView } from "@/features/matches/workspace/matchWorkspacePanelViews";
 import { toSourceImageDescriptor } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type {
@@ -102,7 +102,7 @@ export function isMatchWorkspaceLoading(input: {
   );
 }
 
-export function workspaceSubmissionView(input: {
+export function buildMatchWorkspaceSubmitView(input: {
   mode: WorkspaceMode;
   busy: boolean;
   createEventPending: boolean;
@@ -113,8 +113,8 @@ export function workspaceSubmissionView(input: {
   validationMessage: string;
   valid: boolean;
   firstValidationMessage: string | undefined;
-}): Omit<MatchWorkspaceSubmitModel, "action"> & {
-  label: MatchWorkspaceSubmitModel["action"]["label"];
+}): Omit<MatchWorkspaceSubmitView, "action"> & {
+  label: MatchWorkspaceSubmitView["action"]["label"];
 } {
   const validationError = input.validationMessage
     ? {

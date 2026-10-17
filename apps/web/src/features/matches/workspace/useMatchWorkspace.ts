@@ -10,14 +10,14 @@ import {
   buildMatchWorkspaceView,
   isMatchWorkspaceLoading,
 } from "@/features/matches/workspace/matchWorkspaceView";
-import { useMatchWorkspaceInit } from "@/features/matches/workspace/useMatchWorkspaceInit";
-import { useMatchWorkspaceQueries } from "@/features/matches/workspace/useMatchWorkspaceQueries";
+import { useMatchWorkspaceInitialization } from "@/features/matches/workspace/useMatchWorkspaceInitialization";
+import { useMatchWorkspaceReads } from "@/features/matches/workspace/useMatchWorkspaceReads";
 import { useWorkspaceHeldEventCreation } from "@/features/matches/workspace/useWorkspaceHeldEventCreation";
 import { useWorkspaceNotice } from "@/features/matches/workspace/useWorkspaceNotice";
-import { useWorkspaceReadView } from "@/features/matches/workspace/useWorkspaceReadView";
+import { useWorkspaceSnapshot } from "@/features/matches/workspace/useWorkspaceSnapshot";
 import { toIsoFromLocalDateTime, toLocalDateTimeInputValue } from "@/shared/lib/dateTime";
 
-export function useMatchWorkspacePageModel(input: {
+export function useMatchWorkspace(input: {
   accountId?: string | undefined;
   canManageMasters: boolean;
   canNavigateToMasters: () => boolean;
@@ -39,49 +39,50 @@ export function useMatchWorkspacePageModel(input: {
   } = input;
   const [searchParams] = useSearchParams();
   const { notice, notify, notifyToast } = useWorkspaceNotice();
-  const [editing] = useState(() => createMatchWorkspaceEditingStore(new Date().toISOString()));
-  const selection = useWorkspaceReadView(editing.resourceSelection);
-  const initialData = useWorkspaceReadView(editing.initialData);
-  const initialized = useWorkspaceReadView(editing.initialized);
-  const [eventDraftValue, setEventDraftValue] = useState<string>(toLocalDateTimeInputValue);
-  const [eventError, setEventError] = useState<MatchWorkspaceOperationError | null>(null);
+  const [editingStore] = useState(() => createMatchWorkspaceEditingStore(new Date().toISOString()));
+  const selection = useWorkspaceSnapshot(editingStore.resourceSelection);
+  const initialData = useWorkspaceSnapshot(editingStore.initialData);
+  const initialized = useWorkspaceSnapshot(editingStore.initialized);
+  const [heldAtInput, setHeldAtInput] = useState<string>(toLocalDateTimeInputValue);
+  const [heldEventCreationError, setHeldEventCreationError] =
+    useState<MatchWorkspaceOperationError | null>(null);
   const useSampleDrafts = mode === "review" && searchParams.get("sample") === "1";
   const workspaceKey = matchSessionId ?? matchDraftId ?? matchId ?? mode;
   const {
     heldEventPicker,
     load,
     resources,
-    review: remoteReview,
-  } = useMatchWorkspaceQueries({
+    review: draftReview,
+  } = useMatchWorkspaceReads({
     gameTitleId: selection.gameTitleId,
     heldEventId: selection.heldEventId,
     matchDraftId,
-    matchDraftSourceImagesId: selection.matchDraftId,
+    sourceImagesDraftId: selection.matchDraftId,
     matchId,
     mode,
     preferredHeldEventId,
     useSampleDrafts,
   });
-  const createEvent = useWorkspaceHeldEventCreation({
-    onCreated: (event) => editing.actions.selectHeldEvent(event.id, event),
+  const heldEventCreation = useWorkspaceHeldEventCreation({
+    onCreated: (event) => editingStore.actions.selectHeldEvent(event.id, event),
     notify,
-    setOperationError: setEventError,
+    setOperationError: setHeldEventCreationError,
   });
-  const nowIsoFactory = useCallback(() => new Date().toISOString(), []);
-  const initialization = useMatchWorkspaceInit({
+  const readNowIso = useCallback(() => new Date().toISOString(), []);
+  const initialization = useMatchWorkspaceInitialization({
     ...resources,
     initialized,
     heldEventId: selection.heldEventId,
     heldEvents: resources.heldEventItems,
     matchDraftId,
     mode,
-    onInitialize: editing.initialize,
-    onSelectHeldEvent: editing.actions.selectHeldEvent,
-    nowIsoFactory,
+    onInitialize: editingStore.initialize,
+    onSelectHeldEvent: editingStore.actions.selectHeldEvent,
+    readNowIso,
     preferredHeldEventId,
     preferredHeldEventPending: load.preferredHeldEventPending,
-    reviewDraftIdList: remoteReview.draftIdList,
-    reviewDraftIds: remoteReview.draftIds,
+    reviewDraftIdList: draftReview.draftIdList,
+    reviewDraftIds: draftReview.draftIds,
     sourceImages: resources.sourceImageItems,
     useSampleDrafts,
   });
@@ -89,7 +90,7 @@ export function useMatchWorkspacePageModel(input: {
     ...resources,
     matchId,
     mode,
-    reviewStatus: remoteReview.status,
+    reviewStatus: draftReview.status,
     sourceImages: initialization.snapshot?.sourceImages,
     useSampleDrafts,
     values: selection,
@@ -97,16 +98,16 @@ export function useMatchWorkspacePageModel(input: {
   const workspaceLoading = isMatchWorkspaceLoading({
     confirmedDraftLoaded: view.confirmedDraftLoaded,
     waitingForData: initialization.status === "waiting-for-data",
-    reviewBlocked: remoteReview.blocked,
+    reviewBlocked: draftReview.blocked,
     initializationFailed: load.initializationFailed,
   });
   const persistence: MatchWorkspacePersistenceInput = {
     accountId,
     canManageMasters,
     canNavigateToMasters,
-    createEventPending: createEvent.pending,
+    createEventPending: heldEventCreation.pending,
     draftDetail: resources.draftDetail,
-    editing,
+    editing: editingStore,
     enabled: initialization.status === "ready",
     matchId,
     mode,
@@ -118,7 +119,7 @@ export function useMatchWorkspacePageModel(input: {
     workspaceLoading,
   };
   return {
-    editing,
+    editing: editingStore,
     editor: {
       mode,
       notice,
@@ -126,11 +127,16 @@ export function useMatchWorkspacePageModel(input: {
       setup: {
         eventCreation: {
           action: {
-            pending: createEvent.pending,
-            onCreate: () => createEvent.create({ heldAt: toIsoFromLocalDateTime(eventDraftValue) }),
+            pending: heldEventCreation.pending,
+            onCreate: () =>
+              heldEventCreation.create({ heldAt: toIsoFromLocalDateTime(heldAtInput) }),
           },
-          feedback: { error: eventError ? toMatchWorkspaceOperationErrorView(eventError) : null },
-          input: { value: eventDraftValue, onChange: setEventDraftValue },
+          feedback: {
+            error: heldEventCreationError
+              ? toMatchWorkspaceOperationErrorView(heldEventCreationError)
+              : null,
+          },
+          input: { value: heldAtInput, onChange: setHeldAtInput },
         },
         options: {
           gameTitleItems: view.gameTitleItems,
@@ -173,8 +179,8 @@ export function useMatchWorkspacePageModel(input: {
     },
     persistence,
     review: {
-      blocked: remoteReview.blocked
-        ? { feedback: { error: null }, refresh: remoteReview.refresh }
+      blocked: draftReview.blocked
+        ? { feedback: { error: null }, refresh: draftReview.refresh }
         : null,
     },
   };

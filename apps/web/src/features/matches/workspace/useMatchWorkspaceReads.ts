@@ -47,18 +47,18 @@ import {
   useHeldEventPickerDirectory,
 } from "@/shared/heldEvents/useHeldEventPickerDirectory";
 
-type MatchWorkspaceQueriesParams = {
+type MatchWorkspaceReadOptions = {
   gameTitleId: string;
   heldEventId: string;
   matchDraftId: string | undefined;
-  matchDraftSourceImagesId: string | undefined;
+  sourceImagesDraftId: string | undefined;
   matchId: string | undefined;
   mode: WorkspaceMode;
   preferredHeldEventId: string | undefined;
   useSampleDrafts: boolean;
 };
 
-type MatchWorkspaceQueries = {
+type MatchWorkspaceReads = {
   heldEventPicker: HeldEventPickerDirectory;
   load: {
     base: {
@@ -100,14 +100,12 @@ type MatchWorkspaceQueries = {
  * Match workspace の remote state lifecycle を所有する。
  * Consumer には取得済み resource と workflow 単位の load / retry 契約だけを公開する。
  */
-export function useMatchWorkspaceQueries(
-  params: MatchWorkspaceQueriesParams,
-): MatchWorkspaceQueries {
+export function useMatchWorkspaceReads(params: MatchWorkspaceReadOptions): MatchWorkspaceReads {
   const {
     gameTitleId,
     heldEventId,
     matchDraftId,
-    matchDraftSourceImagesId,
+    sourceImagesDraftId,
     matchId,
     mode,
     preferredHeldEventId,
@@ -121,7 +119,7 @@ export function useMatchWorkspaceQueries(
   const seasonMastersQuery = useQuery(seasonMastersQueryOptions(gameTitleId, Boolean(gameTitleId)));
   const draftReviewQuery = useQuery(
     matchDraftReviewQueryOptions(
-      matchDraftId ?? matchDraftSourceImagesId,
+      matchDraftId ?? sourceImagesDraftId,
       mode !== "edit" && !useSampleDrafts,
     ),
   );

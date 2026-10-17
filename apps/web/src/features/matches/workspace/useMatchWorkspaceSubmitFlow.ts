@@ -8,7 +8,7 @@ import {
 } from "@/features/matches/workspace/matchFormToRequest";
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import type { MatchWorkspaceOperationError } from "@/features/matches/workspace/matchWorkspaceOperationError";
-import type { WorkspaceNoticeTone } from "@/features/matches/workspace/matchWorkspacePanelTypes";
+import type { WorkspaceNoticeTone } from "@/features/matches/workspace/matchWorkspacePanelViews";
 import { useConfirmedDraftRedirect } from "@/features/matches/workspace/useConfirmedDraftRedirect";
 import { useMatchWorkspaceWrites } from "@/features/matches/workspace/useMatchWorkspaceWrites";
 import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
@@ -101,7 +101,7 @@ export function useMatchWorkspaceSubmitFlow({
     await confirm(request).catch(() => undefined);
     return null;
   }, null);
-  const update = useCallback(
+  const saveChanges = useCallback(
     (latestValues: MatchFormValues) => updateMatch(matchId, toUpdateMatchRequest(latestValues)),
     [matchId, updateMatch],
   );
@@ -120,6 +120,6 @@ export function useMatchWorkspaceSubmitFlow({
     confirmation: { action: confirmAction, pending: confirmationPending },
     confirmedDraft,
     pending: isNavigating || writes.pending,
-    update,
+    saveChanges,
   };
 }

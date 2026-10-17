@@ -28,7 +28,7 @@ import type { ReviewItem } from "@/features/matches/workspace/review/reviewProgr
 import type { ReviewFieldKey } from "@/features/matches/workspace/review/reviewWarningModel";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 
-export type WorkspaceReadView<T> = {
+export type WorkspaceSubscription<T> = {
   readonly getSnapshot: () => T;
   readonly subscribe: (listener: () => void) => () => void;
 };
@@ -61,11 +61,11 @@ export type MatchWorkspaceScoreRowView = {
   readonly items: ReadonlyArray<Readonly<ReviewItem>>;
   readonly synced: boolean;
 };
-export type MatchWorkspaceEditingViews = {
-  readonly setup: WorkspaceReadView<Readonly<MatchSetupValues>>;
-  readonly note: WorkspaceReadView<string>;
-  readonly scoreRows: ReadonlyArray<WorkspaceReadView<MatchWorkspaceScoreRowView>>;
-  readonly review: WorkspaceReadView<{
+export type MatchWorkspaceEditorBindings = {
+  readonly setup: WorkspaceSubscription<Readonly<MatchSetupValues>>;
+  readonly note: WorkspaceSubscription<string>;
+  readonly scoreRows: ReadonlyArray<WorkspaceSubscription<MatchWorkspaceScoreRowView>>;
+  readonly review: WorkspaceSubscription<{
     readonly acknowledgedCellIds: readonly string[];
     readonly activeCellId: string | null;
     readonly items: ReadonlyArray<Readonly<ReviewItem>>;
@@ -104,10 +104,10 @@ function sameList<T>(
 export function createMatchWorkspaceEditingStore(nowIso: string) {
   let state = createMatchWorkspaceEditingState(createEmptyMatchForm(nowIso));
   const projections: Array<{ refresh: () => void; notify: () => void }> = [];
-  function view<T>(
+  function createSubscription<T>(
     select: (current: MatchWorkspaceEditingState) => T,
     equal: (left: T, right: T) => boolean = Object.is,
-  ): WorkspaceReadView<T> {
+  ): WorkspaceSubscription<T> {
     let snapshot = select(state);
     let changed = false;
     const listeners = new Set<() => void>();
@@ -150,7 +150,7 @@ export function createMatchWorkspaceEditingStore(nowIso: string) {
     incidentByPlayOrder: undefined,
   });
   let changedCount = 0;
-  function reviewItems(current: MatchWorkspaceEditingState) {
+  function readReviewItems(current: MatchWorkspaceEditingState) {
     if (current.values.players !== previousPlayers || current.initialData !== previousInitialData) {
       previousPlayers = current.values.players;
       previousInitialData = current.initialData;
@@ -165,8 +165,8 @@ export function createMatchWorkspaceEditingStore(nowIso: string) {
     }
     return items;
   }
-  const setup = view((current) => matchSetupValues(current.values), sameFields);
-  const resourceSelection = view(
+  const setup = createSubscription((current) => matchSetupValues(current.values), sameFields);
+  const resourceSelection = createSubscription(
     (current) => ({
       gameTitleId: current.values.gameTitleId,
       heldEventId: current.values.heldEventId,
@@ -176,12 +176,12 @@ export function createMatchWorkspaceEditingStore(nowIso: string) {
     }),
     sameFields,
   );
-  const note = view((current) => current.values.noteBody);
-  const initialized = view((current) => current.initialized);
-  const initialData = view((current) => current.initialData);
-  const review = view(
+  const note = createSubscription((current) => current.values.noteBody);
+  const initialized = createSubscription((current) => current.initialized);
+  const initialData = createSubscription((current) => current.initialData);
+  const review = createSubscription(
     (current) => ({
-      items: reviewItems(current),
+      items: readReviewItems(current),
       acknowledgedCellIds: current.acknowledgedCellIds,
       activeCellId: current.activeCellId,
     }),
@@ -206,7 +206,7 @@ export function createMatchWorkspaceEditingStore(nowIso: string) {
     return originalViews;
   }
   const scoreRows = state.values.players.map((_, index) =>
-    view(
+    createSubscription(
       (current) => {
         const player = current.values.players[index];
         if (!player) throw new Error("Workspace score row is unavailable");
@@ -224,8 +224,8 @@ export function createMatchWorkspaceEditingStore(nowIso: string) {
           acknowledgedCellIds: current.acknowledgedCellIds.filter((id) =>
             id.startsWith(`player-${index}-`),
           ),
-          items: reviewItems(current).filter((item) => item.row === index),
-          synced: current.lastSyncedPlayerIndex === index,
+          items: readReviewItems(current).filter((item) => item.row === index),
+          synced: current.lastIncidentSyncPlayerIndex === index,
         };
       },
       (left, right) =>
@@ -239,12 +239,12 @@ export function createMatchWorkspaceEditingStore(nowIso: string) {
     ),
   );
 
-  const persistence = view(
+  const persistence = createSubscription(
     (current) => ({ values: current.values, acknowledgedCellIds: current.acknowledgedCellIds }),
     sameFields,
   );
-  const confirmation = view((current) => {
-    const reviewList = reviewItems(current);
+  const confirmation = createSubscription((current) => {
+    const reviewList = readReviewItems(current);
     return {
       matchNoInEvent: current.values.matchNoInEvent,
       noteBody: current.values.noteBody,

@@ -1,16 +1,12 @@
 import { Link } from "react-router-dom";
 
-import type { MatchWorkspaceBlockedReviewModel } from "@/features/matches/workspace/matchWorkspacePanelTypes";
+import type { MatchWorkspaceBlockedReviewView } from "@/features/matches/workspace/matchWorkspacePanelViews";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { contentText } from "@/shared/ui/typography";
 
-export function MatchWorkspaceBlockedNotice({
-  model,
-}: {
-  model: MatchWorkspaceBlockedReviewModel;
-}) {
+export function MatchWorkspaceBlockedNotice({ view }: { view: MatchWorkspaceBlockedReviewView }) {
   return (
     <section aria-labelledby="workspace-blocked-heading" className="grid gap-4">
       <div>
@@ -23,11 +19,11 @@ export function MatchWorkspaceBlockedNotice({
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Button
-          disabled={model.refresh.pending}
-          pending={model.refresh.pending}
+          disabled={view.refresh.pending}
+          pending={view.refresh.pending}
           pendingLabel="更新中…"
           variant="secondary"
-          onClick={() => void model.refresh.onRefresh()}
+          onClick={() => void view.refresh.onRefresh()}
         >
           状態を再確認
         </Button>
@@ -38,11 +34,11 @@ export function MatchWorkspaceBlockedNotice({
           試合一覧へ戻る
         </Link>
       </div>
-      {model.feedback.error ? (
+      {view.feedback.error ? (
         <div>
-          <Notice title={model.feedback.error.title} tone="danger">
-            <p>{model.feedback.error.detail}</p>
-            <p className="mt-1">{model.feedback.error.nextStep}</p>
+          <Notice title={view.feedback.error.title} tone="danger">
+            <p>{view.feedback.error.detail}</p>
+            <p className="mt-1">{view.feedback.error.nextStep}</p>
           </Notice>
         </div>
       ) : null}

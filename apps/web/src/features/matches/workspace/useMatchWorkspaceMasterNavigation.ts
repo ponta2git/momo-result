@@ -2,7 +2,7 @@ import { useCallback, useTransition } from "react";
 import { useNavigate } from "react-router-dom";
 
 import type { WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
-import type { WorkspaceNoticeTone } from "@/features/matches/workspace/matchWorkspacePanelTypes";
+import type { WorkspaceNoticeTone } from "@/features/matches/workspace/matchWorkspacePanelViews";
 
 export function useMatchWorkspaceMasterNavigation({
   canManageMasters,

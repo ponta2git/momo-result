@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLayoutEffect, useRef } from "react";
 
 import type { MatchWorkspaceOperationError } from "@/features/matches/workspace/matchWorkspaceOperationError";
-import type { WorkspaceNoticeTone } from "@/features/matches/workspace/matchWorkspacePanelTypes";
+import type { WorkspaceNoticeTone } from "@/features/matches/workspace/matchWorkspacePanelViews";
 import { syncHeldEventCreatedCache } from "@/shared/api/heldEventCache";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { createHeldEvent } from "@/shared/api/heldEvents";

@@ -1,15 +1,15 @@
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
-import type { MatchWorkspaceSetupFieldsModel } from "@/features/matches/workspace/matchWorkspacePanelTypes";
+import type { MatchWorkspaceSetupFieldsView } from "@/features/matches/workspace/matchWorkspacePanelViews";
 import { canonicalResultMembers } from "@/shared/domain/members";
 import { HeldEventPickerField } from "@/shared/heldEvents/HeldEventPickerField";
 import { toLocalDateTimeInputValue } from "@/shared/lib/dateTime";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
 
-export function MatchSetupFields({ model }: { model: MatchWorkspaceSetupFieldsModel }) {
-  const { actions, options, values } = model;
+export function MatchSetupFields({ view }: { view: MatchWorkspaceSetupFieldsView }) {
+  const { actions, options, values } = view;
   const fieldError = (path: string) =>
-    model.validation.errorPathSet.has(path) ? "未入力です" : undefined;
+    view.validation.errorPathSet.has(path) ? "未入力です" : undefined;
 
   return (
     <div className="grid gap-4 lg:grid-cols-12">

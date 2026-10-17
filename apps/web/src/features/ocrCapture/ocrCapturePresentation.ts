@@ -4,7 +4,7 @@ import type { CaptureSlotState, InputSource } from "@/features/ocrCapture/captur
 import { isWorkingStatus, pickOcrTargets } from "@/features/ocrCapture/slotPolicy";
 import type { SlotKind } from "@/shared/domain/ocr";
 
-export type OcrCaptureCameraModel = {
+export type OcrCaptureCameraView = {
   readonly actionVariant: "primary" | "secondary";
   readonly disabled: boolean;
   readonly slotLabel: string;
@@ -12,20 +12,20 @@ export type OcrCaptureCameraModel = {
   readonly reportValidationError: (message: string) => void;
 };
 
-export type OcrCaptureTrayModel = {
+export type OcrCaptureTrayView = {
   readonly actionFeedback: string | undefined;
   readonly captureTargetKind: SlotKind;
   readonly selectedImageCount: number;
   readonly totalSlotCount: number;
   readonly slots: readonly CaptureSlotView[];
-  readonly clear: (kind: SlotKind) => void;
-  readonly drop: (sourceKind: SlotKind, targetKind: SlotKind) => void;
-  readonly move: (kind: SlotKind, direction: -1 | 1) => void;
+  readonly clearImage: (kind: SlotKind) => void;
+  readonly swapImages: (sourceKind: SlotKind, targetKind: SlotKind) => void;
+  readonly swapWithAdjacentSlot: (kind: SlotKind, direction: -1 | 1) => void;
   readonly refreshStatus: (kind: SlotKind) => void;
   readonly selectTarget: (kind: SlotKind) => void;
 };
 
-export type OcrCaptureStartModel = {
+export type OcrCaptureStartView = {
   readonly badgeLabel: string;
   readonly buttonLabel: string;
   readonly description: string;
@@ -33,9 +33,9 @@ export type OcrCaptureStartModel = {
   readonly blockedReason: string | undefined;
   readonly error: string | undefined;
   readonly selectedImageCount: number;
-  readonly resetDisabled: boolean;
-  readonly reset: () => void;
-  readonly run: () => void;
+  readonly clearAllDisabled: boolean;
+  readonly clearAllImages: () => void;
+  readonly reviewSubmission: () => void;
 };
 
 export function ocrSlotLabels(slots: readonly CaptureSlotState[]): string[] {
@@ -76,7 +76,7 @@ export function buildOcrCaptureView({
     },
     selectedImageCount,
     totalSlotCount: slotDefinitions.length,
-    resetDisabled: selectedImageCount === 0 || cameraDisabled,
+    clearAllDisabled: selectedImageCount === 0 || cameraDisabled,
     start: {
       badgeLabel: targets.length === 0 ? "画像未選択" : `${targets.length}件を送信`,
       buttonLabel: targets.length === 0 ? "読み取りを開始" : `${targets.length}件で読み取りを開始`,

@@ -13,12 +13,12 @@ import { cn } from "@/shared/ui/cn";
 import { contentText } from "@/shared/ui/typography";
 
 type CaptureSlotCardProps = {
-  actions: CaptureSlotActionsModel;
+  actions: CaptureSlotActionHandlers;
   presentation: CaptureSlotPresentation;
   slot: CaptureSlotView;
 };
 
-type CaptureSlotActionsModel = {
+type CaptureSlotActionHandlers = {
   onClear: () => void;
   onDropImage: (sourceKind: SlotKind, targetKind: SlotKind) => void;
   onRefreshStatus: () => void;

@@ -86,7 +86,7 @@ describe("useCaptureSlots", () => {
     const selectionId = selectedImageId(view.result.current);
 
     act(() => {
-      view.result.current.applyReceipt({
+      view.result.current.applySubmissionReceipt({
         type: "accepted",
         selectionId,
         imageId: "image-1",
@@ -134,7 +134,7 @@ describe("useCaptureSlots", () => {
         "upload",
         "total_assets",
       );
-      view.result.current.applyReceipt({
+      view.result.current.applySubmissionReceipt({
         type: "accepted",
         kind: "total_assets",
         selectionId: oldSelectionId,
@@ -152,7 +152,11 @@ describe("useCaptureSlots", () => {
     expect(view.result.current.addImage).toBe(addImage);
     const selectionId = selectedImageId(view.result.current);
     act(() => {
-      view.result.current.applyReceipt({ type: "uploading", kind: "total_assets", selectionId });
+      view.result.current.applySubmissionReceipt({
+        type: "uploading",
+        kind: "total_assets",
+        selectionId,
+      });
       expect(
         addImage(new File(["third"], "third.png", { type: "image/png" }), "upload", "total_assets"),
       ).toBe(false);

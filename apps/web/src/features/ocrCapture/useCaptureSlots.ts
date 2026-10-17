@@ -32,12 +32,12 @@ export type CaptureSlotActionFeedback = {
 export type CaptureSlots = {
   addImage: (file: File, source: InputSource, targetKind: SlotKind) => boolean;
   clearImage: (kind: SlotKind) => void;
-  dropImage: (sourceKind: SlotKind, targetKind: SlotKind) => void;
+  swapImages: (sourceKind: SlotKind, targetKind: SlotKind) => void;
   refreshStatus: (kind: SlotKind) => void;
-  moveImage: (kind: SlotKind, direction: -1 | 1) => void;
+  swapWithAdjacentSlot: (kind: SlotKind, direction: -1 | 1) => void;
   clearAllImages: () => void;
   slots: readonly CaptureSlotView[];
-  applyReceipt: (receipt: OcrSlotReceipt) => void;
+  applySubmissionReceipt: (receipt: OcrSlotReceipt) => void;
   prepareSubmission: (
     input: Omit<Parameters<typeof prepareOcrSubmissionPlan>[0], "slots">,
   ) => ReturnType<typeof prepareOcrSubmissionPlan>;
@@ -90,7 +90,7 @@ export function useCaptureSlots({ feedback, onDraftLoadError }: CaptureSlotsOpti
     () => [totalAssetsView, revenueView, incidentLogView],
     [totalAssetsView, revenueView, incidentLogView],
   );
-  const resourceSnapshot = useRef({
+  const resourceSnapshotRef = useRef({
     localSlots,
     slots,
     refreshTotalAssets: totalAssetsResource.refresh,
@@ -98,7 +98,7 @@ export function useCaptureSlots({ feedback, onDraftLoadError }: CaptureSlotsOpti
     refreshIncidentLog: incidentLogResource.refresh,
   });
   useLayoutEffect(() => {
-    resourceSnapshot.current = {
+    resourceSnapshotRef.current = {
       localSlots,
       slots,
       refreshTotalAssets: totalAssetsResource.refresh,
@@ -114,8 +114,8 @@ export function useCaptureSlots({ feedback, onDraftLoadError }: CaptureSlotsOpti
   ]);
   // Commands read the latest owned images, including replacements before React commits.
   // Query-derived status is valid only for the exact local slot used to resolve it.
-  const readSlots = useCallback(() => {
-    const resource = resourceSnapshot.current;
+  const readCurrentSlots = useCallback(() => {
+    const resource = resourceSnapshotRef.current;
     return localSlotsRef.current.map((slot, index) =>
       resource.localSlots[index] === slot ? (resource.slots[index] ?? slot) : slot,
     );
@@ -158,7 +158,7 @@ export function useCaptureSlots({ feedback, onDraftLoadError }: CaptureSlotsOpti
     [updateLocalSlots],
   );
 
-  const applyReceipt = useCallback(
+  const applySubmissionReceipt = useCallback(
     (receipt: OcrSlotReceipt) => {
       updateLocalSlots((current) => current.map((slot) => applyOcrSlotReceipt(slot, receipt)));
     },
@@ -167,7 +167,7 @@ export function useCaptureSlots({ feedback, onDraftLoadError }: CaptureSlotsOpti
 
   const addImage = useCallback(
     (file: File, source: InputSource, targetKind: SlotKind) => {
-      const targetSlot = readSlots().find((slot) => slot.kind === targetKind);
+      const targetSlot = readCurrentSlots().find((slot) => slot.kind === targetKind);
       if (!targetSlot) {
         reportFailure("撮影先を選び直してください。");
         return false;
@@ -191,12 +191,12 @@ export function useCaptureSlots({ feedback, onDraftLoadError }: CaptureSlotsOpti
       reportSuccess(`${label}に${source === "camera" ? "撮影画像" : "画像"}を配置しました。`);
       return true;
     },
-    [readSlots, reportFailure, reportSuccess, updateSlot],
+    [readCurrentSlots, reportFailure, reportSuccess, updateSlot],
   );
 
   const clearImage = useCallback(
     (kind: SlotKind) => {
-      const currentSlot = readSlots().find((slot) => slot.kind === kind);
+      const currentSlot = readCurrentSlots().find((slot) => slot.kind === kind);
       if (currentSlot && isWorkingStatus(currentSlot.status)) {
         reportFailure("読み取り中の画像は破棄できません。試合一覧で状態を確認してください。");
         return;
@@ -206,22 +206,22 @@ export function useCaptureSlots({ feedback, onDraftLoadError }: CaptureSlotsOpti
       );
       reportSuccess("画像を破棄しました。");
     },
-    [readSlots, reportFailure, reportSuccess, updateLocalSlots],
+    [readCurrentSlots, reportFailure, reportSuccess, updateLocalSlots],
   );
 
   const clearAllImages = useCallback(() => {
-    if (readSlots().some((slot) => isWorkingStatus(slot.status))) {
+    if (readCurrentSlots().some((slot) => isWorkingStatus(slot.status))) {
       reportFailure("読み取り中の画像は破棄できません。試合一覧で状態を確認してください。");
       return;
     }
     updateLocalSlots(createInitialSlots);
     reportSuccess("画像をすべて破棄しました。次の試合を撮影できます。");
-  }, [readSlots, reportFailure, reportSuccess, updateLocalSlots]);
+  }, [readCurrentSlots, reportFailure, reportSuccess, updateLocalSlots]);
 
-  const dropImage = useCallback(
+  const swapImages = useCallback(
     (sourceKind: SlotKind, targetKind: SlotKind) => {
       if (sourceKind === targetKind) return;
-      const currentSlots = readSlots();
+      const currentSlots = readCurrentSlots();
       const sourceSlot = currentSlots.find((slot) => slot.kind === sourceKind);
       const targetSlot = currentSlots.find((slot) => slot.kind === targetKind);
       if (!sourceSlot || !targetSlot || !sourceSlot.file) return;
@@ -242,22 +242,22 @@ export function useCaptureSlots({ feedback, onDraftLoadError }: CaptureSlotsOpti
         slotDefinitions.find((definition) => definition.kind === targetKind)?.label ?? targetKind;
       reportSuccess(`${sourceLabel}と${targetLabel}の画像を入れ替えました。`);
     },
-    [readSlots, reportFailure, reportSuccess, updateLocalSlots],
+    [readCurrentSlots, reportFailure, reportSuccess, updateLocalSlots],
   );
 
-  const moveImage = useCallback(
+  const swapWithAdjacentSlot = useCallback(
     (kind: SlotKind, direction: -1 | 1) => {
       const index = slotDefinitions.findIndex((definition) => definition.kind === kind);
       const targetKind = slotDefinitions[index + direction]?.kind;
       if (targetKind) {
-        dropImage(kind, targetKind);
+        swapImages(kind, targetKind);
       }
     },
-    [dropImage],
+    [swapImages],
   );
 
   const refreshStatus = useCallback((kind: SlotKind) => {
-    const resource = resourceSnapshot.current;
+    const resource = resourceSnapshotRef.current;
     switch (kind) {
       case "total_assets":
         resource.refreshTotalAssets();
@@ -271,31 +271,31 @@ export function useCaptureSlots({ feedback, onDraftLoadError }: CaptureSlotsOpti
     }
   }, []);
   const prepareSubmission = useCallback<CaptureSlots["prepareSubmission"]>(
-    (input) => prepareOcrSubmissionPlan({ ...input, slots: readSlots() }),
-    [readSlots],
+    (input) => prepareOcrSubmissionPlan({ ...input, slots: readCurrentSlots() }),
+    [readCurrentSlots],
   );
   const buildView = useCallback<CaptureSlots["buildView"]>(
     (input) => buildOcrCaptureView({ ...input, slots }),
     [slots],
   );
   const resolveTarget = useCallback(
-    (kind: SlotKind) => resolveCaptureTargetChange(readSlots(), kind),
-    [readSlots],
+    (kind: SlotKind) => resolveCaptureTargetChange(readCurrentSlots(), kind),
+    [readCurrentSlots],
   );
   const nextEmptyTarget = useCallback(
-    (current: SlotKind) => nextEmptyCaptureTarget(readSlots(), current),
-    [readSlots],
+    (current: SlotKind) => nextEmptyCaptureTarget(readCurrentSlots(), current),
+    [readCurrentSlots],
   );
 
   return {
     addImage,
     clearImage,
-    dropImage,
+    swapImages,
     refreshStatus,
-    moveImage,
+    swapWithAdjacentSlot,
     clearAllImages,
     slots: slotViews,
-    applyReceipt,
+    applySubmissionReceipt,
     prepareSubmission,
     buildView,
     resolveTarget,

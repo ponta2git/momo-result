@@ -3,9 +3,9 @@ import { useCallback, useMemo, useState } from "react";
 
 import type { InputSource } from "@/features/ocrCapture/captureState";
 import type {
-  OcrCaptureCameraModel,
-  OcrCaptureStartModel,
-  OcrCaptureTrayModel,
+  OcrCaptureCameraView,
+  OcrCaptureStartView,
+  OcrCaptureTrayView,
 } from "@/features/ocrCapture/ocrCapturePresentation";
 import { useOcrCaptureSetupSubmission } from "@/features/ocrCapture/setup/OcrCaptureSetup";
 import { useCaptureSlots } from "@/features/ocrCapture/useCaptureSlots";
@@ -26,8 +26,8 @@ export function useOcrCaptureAuth() {
 }
 
 /** Owns OCR capture screen state and exposes only view-ready slices and user intents. */
-export function useOcrCapturePageModel() {
-  const [startError, setStartError] = useState<string>();
+export function useOcrCapture() {
+  const [preparationError, setPreparationError] = useState<string>();
   const setup = useOcrCaptureSetupSubmission();
   const [captureTargetKind, setCaptureTargetKind] = useState<SlotKind>("total_assets");
   const [captureActionFeedback, setCaptureActionFeedback] = useState<string>();
@@ -42,7 +42,7 @@ export function useOcrCapturePageModel() {
   const submission = useOcrSubmission();
   const startFlow = useOcrStartFlow({
     submission,
-    onSlotReceipt: captureSlots.applyReceipt,
+    onSlotReceipt: captureSlots.applySubmissionReceipt,
   });
   const view = captureSlots.buildView({
     targetKind: captureTargetKind,
@@ -53,15 +53,15 @@ export function useOcrCapturePageModel() {
 
   const {
     addImage,
-    clearImage: clear,
-    dropImage: drop,
-    moveImage: move,
-    clearAllImages: reset,
+    clearImage,
+    swapImages,
+    swapWithAdjacentSlot,
+    clearAllImages,
     nextEmptyTarget,
     prepareSubmission,
     resolveTarget,
   } = captureSlots;
-  const openStart = startFlow.open;
+  const openConfirmation = startFlow.open;
   const selectCaptureTarget = useCallback(
     (kind: SlotKind) => {
       const selection = resolveTarget(kind);
@@ -86,7 +86,7 @@ export function useOcrCapturePageModel() {
     [addImage, nextEmptyTarget, captureTargetKind],
   );
 
-  const startOcr = useCallback(() => {
+  const reviewSubmission = useCallback(() => {
     const preparation = prepareSubmission({
       setupResolution: setup.resolution,
       blockedReason: setup.blockedReason,
@@ -94,13 +94,13 @@ export function useOcrCapturePageModel() {
       nowIso: new Date().toISOString(),
     });
     if (preparation.kind === "blocked") {
-      setStartError(preparation.message);
+      setPreparationError(preparation.message);
       return;
     }
-    setStartError(undefined);
-    openStart(preparation.plan);
-  }, [prepareSubmission, setup.resolution, setup.blockedReason, setup.options, openStart]);
-  const camera = useMemo<OcrCaptureCameraModel>(
+    setPreparationError(undefined);
+    openConfirmation(preparation.plan);
+  }, [prepareSubmission, setup.resolution, setup.blockedReason, setup.options, openConfirmation]);
+  const camera = useMemo<OcrCaptureCameraView>(
     () => ({
       actionVariant: view.camera.actionVariant,
       disabled: view.camera.disabled,
@@ -110,16 +110,16 @@ export function useOcrCapturePageModel() {
     }),
     [view.camera.actionVariant, view.camera.disabled, view.camera.target.label, selectImage],
   );
-  const tray = useMemo<OcrCaptureTrayModel>(
+  const tray = useMemo<OcrCaptureTrayView>(
     () => ({
       actionFeedback: captureActionFeedback,
       captureTargetKind,
       selectedImageCount: view.selectedImageCount,
       totalSlotCount: view.totalSlotCount,
       slots: captureSlots.slots,
-      clear,
-      drop,
-      move,
+      clearImage,
+      swapImages,
+      swapWithAdjacentSlot,
       refreshStatus: captureSlots.refreshStatus,
       selectTarget: selectCaptureTarget,
     }),
@@ -129,26 +129,26 @@ export function useOcrCapturePageModel() {
       view.selectedImageCount,
       view.totalSlotCount,
       captureSlots.slots,
-      clear,
-      drop,
-      move,
+      clearImage,
+      swapImages,
+      swapWithAdjacentSlot,
       captureSlots.refreshStatus,
       selectCaptureTarget,
     ],
   );
   const blockedReason = setup.refreshing ? undefined : setup.blockedReason;
-  const start = useMemo<OcrCaptureStartModel>(
+  const start = useMemo<OcrCaptureStartView>(
     () => ({
       badgeLabel: view.start.badgeLabel,
       buttonLabel: view.start.buttonLabel,
       description: view.start.description,
       disabled: view.start.disabled,
       blockedReason,
-      error: startError,
+      error: preparationError,
       selectedImageCount: view.selectedImageCount,
-      resetDisabled: view.resetDisabled,
-      reset,
-      run: startOcr,
+      clearAllDisabled: view.clearAllDisabled,
+      clearAllImages,
+      reviewSubmission,
     }),
     [
       view.start.badgeLabel,
@@ -156,11 +156,11 @@ export function useOcrCapturePageModel() {
       view.start.description,
       view.start.disabled,
       blockedReason,
-      startError,
+      preparationError,
       view.selectedImageCount,
-      view.resetDisabled,
-      reset,
-      startOcr,
+      view.clearAllDisabled,
+      clearAllImages,
+      reviewSubmission,
     ],
   );
 

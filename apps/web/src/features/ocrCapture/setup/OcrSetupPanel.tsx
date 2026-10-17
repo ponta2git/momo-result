@@ -1,14 +1,14 @@
-import type { OcrSetupPanelModel } from "@/features/ocrCapture/setup/ocrSetupPanelModel";
+import type { OcrSetupPanelView } from "@/features/ocrCapture/setup/ocrSetupPanelView";
 import { HeldEventPickerField } from "@/shared/heldEvents/HeldEventPickerField";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
 
 type OcrSetupPanelProps = {
-  model: OcrSetupPanelModel;
+  view: OcrSetupPanelView;
 };
 
-export function OcrSetupPanel({ model }: OcrSetupPanelProps) {
-  const { fields, intents } = model;
+export function OcrSetupPanel({ view }: OcrSetupPanelProps) {
+  const { fields, intents } = view;
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">

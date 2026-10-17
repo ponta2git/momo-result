@@ -112,7 +112,7 @@ export function OcrCaptureSetupSection() {
           <p>読み込めなかった選択肢を再取得できます。</p>
         </Notice>
       ) : null}
-      <OcrSetupPanel model={setup.panel} />
+      <OcrSetupPanel view={setup.panel} />
     </section>
   );
 }

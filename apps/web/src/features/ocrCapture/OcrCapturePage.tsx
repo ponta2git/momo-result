@@ -5,19 +5,16 @@ import { CameraCapture } from "@/features/ocrCapture/CameraCapture";
 import { CaptureRail } from "@/features/ocrCapture/CaptureRail";
 import { ImageInput } from "@/features/ocrCapture/ImageInput";
 import type {
-  OcrCaptureCameraModel,
-  OcrCaptureTrayModel,
-  OcrCaptureStartModel,
+  OcrCaptureCameraView,
+  OcrCaptureTrayView,
+  OcrCaptureStartView,
 } from "@/features/ocrCapture/ocrCapturePresentation";
 import { OcrStartDialog } from "@/features/ocrCapture/OcrStartDialog";
 import {
   OcrCaptureSetupProvider,
   OcrCaptureSetupSection,
 } from "@/features/ocrCapture/setup/OcrCaptureSetup";
-import {
-  useOcrCaptureAuth,
-  useOcrCapturePageModel,
-} from "@/features/ocrCapture/useOcrCapturePageModel";
+import { useOcrCaptureAuth, useOcrCapture } from "@/features/ocrCapture/useOcrCapture";
 import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
 import { inlineActionGroupClass, taskActionPanelClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
@@ -57,14 +54,14 @@ export function OcrCapturePage() {
 }
 
 function OcrCaptureWorkspace() {
-  const { camera, tray, start, navigation, dialog } = useOcrCapturePageModel();
+  const { camera, tray, start, navigation, dialog } = useOcrCapture();
   return (
     <>
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_28rem] xl:items-start">
-        <OcrCaptureCamera model={camera} />
-        <OcrCaptureTray model={tray} />
+        <OcrCaptureCamera view={camera} />
+        <OcrCaptureTray view={tray} />
       </section>
-      <OcrCaptureStart model={start} />
+      <OcrCaptureStart view={start} />
       <OcrStartDialog
         navigationPending={dialog.navigationPending}
         view={dialog.view}
@@ -83,11 +80,7 @@ function OcrCaptureWorkspace() {
   );
 }
 
-const OcrCaptureCamera = memo(function OcrCaptureCamera({
-  model,
-}: {
-  model: OcrCaptureCameraModel;
-}) {
+const OcrCaptureCamera = memo(function OcrCaptureCamera({ view }: { view: OcrCaptureCameraView }) {
   return (
     <section className={panelClass} aria-labelledby="ocr-camera-title">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -101,18 +94,18 @@ const OcrCaptureCamera = memo(function OcrCaptureCamera({
 
       <div className="max-w-[56rem]">
         <CameraCapture
-          actionVariant={model.actionVariant}
-          disabled={model.disabled}
-          slotLabel={model.slotLabel}
-          onSelect={model.selectImage}
-          onValidationError={model.reportValidationError}
+          actionVariant={view.actionVariant}
+          disabled={view.disabled}
+          slotLabel={view.slotLabel}
+          onSelect={view.selectImage}
+          onValidationError={view.reportValidationError}
           renderFallback={(prominent) => (
             <ImageInput
-              disabled={model.disabled}
+              disabled={view.disabled}
               prominent={prominent}
-              slotLabel={model.slotLabel}
-              onSelect={model.selectImage}
-              onValidationError={model.reportValidationError}
+              slotLabel={view.slotLabel}
+              onSelect={view.selectImage}
+              onValidationError={view.reportValidationError}
             />
           )}
         />
@@ -121,7 +114,7 @@ const OcrCaptureCamera = memo(function OcrCaptureCamera({
   );
 });
 
-const OcrCaptureTray = memo(function OcrCaptureTray({ model }: { model: OcrCaptureTrayModel }) {
+const OcrCaptureTray = memo(function OcrCaptureTray({ view }: { view: OcrCaptureTrayView }) {
   return (
     <aside className="grid gap-4 xl:sticky xl:top-20" aria-labelledby="ocr-tray-title">
       <div className="flex items-start justify-between gap-3">
@@ -132,19 +125,19 @@ const OcrCaptureTray = memo(function OcrCaptureTray({ model }: { model: OcrCaptu
           <p className={panelLeadClass}>撮影先を選び、必要なら画像を入れ替えます。</p>
         </div>
         <span className={cn(contentText.supporting, "shrink-0")}>
-          配置済み{model.selectedImageCount}件／全{model.totalSlotCount}件
+          配置済み{view.selectedImageCount}件／全{view.totalSlotCount}件
         </span>
       </div>
       <div className="grid gap-1">
         <CaptureRail
-          captureTargetKind={model.captureTargetKind}
+          captureTargetKind={view.captureTargetKind}
           layout="stack"
-          slots={model.slots}
-          onClear={model.clear}
-          onDropImage={model.drop}
-          onMoveImage={model.move}
-          onRefreshStatus={model.refreshStatus}
-          onSelectCaptureTarget={model.selectTarget}
+          slots={view.slots}
+          onClear={view.clearImage}
+          onDropImage={view.swapImages}
+          onMoveImage={view.swapWithAdjacentSlot}
+          onRefreshStatus={view.refreshStatus}
+          onSelectCaptureTarget={view.selectTarget}
         />
         <p
           aria-label="分類トレイの操作結果"
@@ -153,14 +146,14 @@ const OcrCaptureTray = memo(function OcrCaptureTray({ model }: { model: OcrCaptu
           className={cn(contentText.body, "min-h-5")}
           role="status"
         >
-          {model.actionFeedback}
+          {view.actionFeedback}
         </p>
       </div>
     </aside>
   );
 });
 
-const OcrCaptureStart = memo(function OcrCaptureStart({ model }: { model: OcrCaptureStartModel }) {
+const OcrCaptureStart = memo(function OcrCaptureStart({ view }: { view: OcrCaptureStartView }) {
   return (
     <section
       className={cn(
@@ -175,35 +168,40 @@ const OcrCaptureStart = memo(function OcrCaptureStart({ model }: { model: OcrCap
             読み取りの準備
           </h2>
           <span className="font-plain rounded-full border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-1 text-xs text-[var(--color-text-primary)]">
-            {model.badgeLabel}
+            {view.badgeLabel}
           </span>
         </div>
-        <p className={panelLeadClass}>{model.description}</p>
-        {model.error ? (
+        <p className={panelLeadClass}>{view.description}</p>
+        {view.error ? (
           <p className="text-sm text-[var(--color-danger)]" role="alert">
-            {model.error}
+            {view.error}
           </p>
         ) : null}
-        {model.blockedReason ? (
+        {view.blockedReason ? (
           <p className="font-emphasis mt-2 text-sm text-[var(--color-review)]">
-            {model.blockedReason}
+            {view.blockedReason}
           </p>
         ) : null}
       </div>
 
       <div className="flex flex-col gap-2 sm:items-end">
         <div className="grid w-full sm:w-auto">
-          <Button disabled={model.disabled} size="lg" variant="primary" onClick={model.run}>
-            {model.buttonLabel}
+          <Button
+            disabled={view.disabled}
+            size="lg"
+            variant="primary"
+            onClick={view.reviewSubmission}
+          >
+            {view.buttonLabel}
           </Button>
         </div>
         <AlertDialog
-          confirmLabel={`${model.selectedImageCount}件を破棄`}
+          confirmLabel={`${view.selectedImageCount}件を破棄`}
           description="分類トレイから画像を外します。再度使うには、撮影またはファイル選択が必要です。試合設定は残ります。"
           title="配置した画像をすべて破棄しますか？"
           trigger={
             <Button
-              disabled={model.resetDisabled}
+              disabled={view.clearAllDisabled}
               icon={<Trash2 aria-hidden="true" />}
               size="sm"
               variant="quiet"
@@ -211,7 +209,7 @@ const OcrCaptureStart = memo(function OcrCaptureStart({ model }: { model: OcrCap
               画像の選択をすべて破棄
             </Button>
           }
-          onConfirm={model.reset}
+          onConfirm={view.clearAllImages}
         />
       </div>
     </section>

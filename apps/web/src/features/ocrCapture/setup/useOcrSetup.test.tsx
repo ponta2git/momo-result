@@ -50,7 +50,7 @@ function SetupOptionsHarness({ initialValue }: { initialValue: OcrSetupValues })
 
   return (
     <>
-      <OcrSetupPanel model={setup.panel} />
+      <OcrSetupPanel view={setup.panel} />
       <output
         aria-label="setup value"
         data-error={options.heldEventsError ?? ""}

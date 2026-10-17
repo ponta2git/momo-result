@@ -7,8 +7,8 @@ import {
   sameSetupValue,
 } from "@/features/ocrCapture/setup/ocrSetupModel";
 import type { OcrSetupChange } from "@/features/ocrCapture/setup/ocrSetupModel";
-import { buildOcrSetupPanelFields } from "@/features/ocrCapture/setup/ocrSetupPanelModel";
-import type { OcrSetupPanelModel } from "@/features/ocrCapture/setup/ocrSetupPanelModel";
+import { buildOcrSetupPanelFields } from "@/features/ocrCapture/setup/ocrSetupPanelView";
+import type { OcrSetupPanelView } from "@/features/ocrCapture/setup/ocrSetupPanelView";
 import type { OcrSetupValues } from "@/features/ocrCapture/setup/ocrSetupSchema";
 import { useOcrSetupOptions } from "@/features/ocrCapture/setup/useOcrSetupOptions";
 
@@ -42,7 +42,7 @@ export function useOcrSetup({
   const change = (intent: OcrSetupChange) => {
     setValue((current) => changeOcrSetupValue(current, intent));
   };
-  const panel: OcrSetupPanelModel = {
+  const panel: OcrSetupPanelView = {
     fields: buildOcrSetupPanelFields({ enabled, options, value }),
     intents: {
       changeGameTitle: (gameTitleId) => change({ kind: "gameTitle", id: gameTitleId }),

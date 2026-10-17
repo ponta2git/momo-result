@@ -8,7 +8,7 @@ type SelectOption = {
   value: string;
 };
 
-type SetupSelectFieldModel = {
+type SetupSelectFieldView = {
   disabled?: boolean | undefined;
   error?: string | undefined;
   options: SelectOption[];
@@ -40,9 +40,9 @@ type SetupPanelOptions = {
   selectedHeldEvent: HeldEventResponse | undefined;
 };
 
-export type OcrSetupPanelModel = {
+export type OcrSetupPanelView = {
   fields: {
-    gameTitle: SetupSelectFieldModel;
+    gameTitle: SetupSelectFieldView;
     heldEvent: {
       disabled: boolean;
       error: string | undefined;
@@ -54,13 +54,13 @@ export type OcrSetupPanelModel = {
       unavailableLabel: string;
       value: string;
     };
-    map: SetupSelectFieldModel;
+    map: SetupSelectFieldView;
     matchNo: {
       disabled: boolean;
       value: number | "";
     };
-    owner: SetupSelectFieldModel;
-    season: SetupSelectFieldModel;
+    owner: SetupSelectFieldView;
+    season: SetupSelectFieldView;
   };
   intents: {
     changeGameTitle: (gameTitleId: string) => void;
@@ -93,7 +93,7 @@ export function buildOcrSetupPanelFields({
   enabled: boolean;
   options: SetupPanelOptions;
   value: OcrSetupValues;
-}): OcrSetupPanelModel["fields"] {
+}): OcrSetupPanelView["fields"] {
   return {
     gameTitle: {
       disabled: !enabled || options.gameTitles.length === 0,

@@ -5,10 +5,8 @@ import { CaptureSlotActions } from "@/features/ocrCapture/CaptureSlotActions";
 import { CaptureSlotFeedback } from "@/features/ocrCapture/CaptureSlotFeedback";
 import { CaptureSlotPreview } from "@/features/ocrCapture/CaptureSlotPreview";
 import { CaptureStatusBadge } from "@/features/ocrCapture/CaptureSlotStatus";
-import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
+import type { CaptureSlotView } from "@/features/ocrCapture/captureSlotView";
 import { DraftPreview } from "@/features/ocrCapture/DraftPreview";
-import { isWorkingStatus } from "@/features/ocrCapture/slotPolicy";
-import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 import type { SlotKind } from "@/shared/domain/ocr";
 import { parseSlotKind } from "@/shared/domain/ocr";
 import { cn } from "@/shared/ui/cn";
@@ -16,10 +14,8 @@ import { contentText } from "@/shared/ui/typography";
 
 type CaptureSlotCardProps = {
   actions: CaptureSlotActionsModel;
-  draft?: OcrDraftResponse | undefined;
   presentation: CaptureSlotPresentation;
-  statusRefreshing: boolean;
-  slot: CaptureSlotState;
+  slot: CaptureSlotView;
 };
 
 type CaptureSlotActionsModel = {
@@ -40,27 +36,21 @@ type CaptureSlotPresentation = {
   captureTarget: boolean;
 };
 
-export function CaptureSlotCard({
-  actions,
-  draft,
-  presentation,
-  statusRefreshing,
-  slot,
-}: CaptureSlotCardProps) {
+export function CaptureSlotCard({ actions, presentation, slot }: CaptureSlotCardProps) {
   const headingId = useId();
-  const mismatch = slot.detectedKind && slot.detectedKind !== slot.kind;
+  const { capabilities } = slot;
   const hasImage = Boolean(slot.previewUrl);
-  const isWorking = isWorkingStatus(slot.status);
+  const isWorking = capabilities.working;
   const [dragOver, setDragOver] = useState(false);
 
   const handleDragStart: DragEventHandler<HTMLDivElement> = (event) => {
-    if (!hasImage || isWorking) return;
+    if (!capabilities.canMove) return;
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", slot.kind);
   };
 
   const handleDragOver: DragEventHandler<HTMLElement> = (event) => {
-    if (isWorking) return;
+    if (!capabilities.canDrop) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
     setDragOver(true);
@@ -69,7 +59,7 @@ export function CaptureSlotCard({
   const handleDrop: DragEventHandler<HTMLElement> = (event) => {
     event.preventDefault();
     setDragOver(false);
-    if (isWorking) return;
+    if (!capabilities.canDrop) return;
     const sourceKind = parseSlotKind(event.dataTransfer.getData("text/plain"));
     if (sourceKind) actions.onDropImage(sourceKind, slot.kind);
   };
@@ -114,12 +104,12 @@ export function CaptureSlotCard({
           onDragStartCapture={handleDragStart}
         />
         <CaptureSlotActions
-          captureDisabled={isWorking}
+          captureDisabled={!capabilities.canSelect}
           captureLabel={hasImage ? "撮り直し先にする" : "撮影先にする"}
           captureSelected={presentation.captureTarget}
-          canMoveBackward={hasImage && !isWorking && presentation.index > 0}
-          canMoveForward={hasImage && !isWorking && presentation.index < presentation.total - 1}
-          clearDisabled={slot.status === "empty" || isWorking}
+          canMoveBackward={capabilities.canMove && presentation.index > 0}
+          canMoveForward={capabilities.canMove && presentation.index < presentation.total - 1}
+          clearDisabled={!capabilities.canClear}
           moveBackwardLabel={presentation.previousLabel}
           moveForwardLabel={presentation.nextLabel}
           onClear={actions.onClear}
@@ -131,13 +121,13 @@ export function CaptureSlotCard({
 
       <div className="grid gap-4 empty:hidden">
         <CaptureSlotFeedback
-          mismatch={Boolean(mismatch)}
-          refreshing={statusRefreshing}
+          mismatch={slot.mismatch}
+          refreshing={slot.refreshing}
           slot={slot}
           onRefreshStatus={actions.onRefreshStatus}
         />
 
-        <DraftPreview draft={draft} />
+        <DraftPreview draft={slot.draft} />
       </div>
     </section>
   );

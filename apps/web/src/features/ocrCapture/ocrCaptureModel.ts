@@ -1,7 +1,42 @@
+import type { CaptureSlotView } from "@/features/ocrCapture/captureSlotView";
 import { slotDefinitions } from "@/features/ocrCapture/captureState";
-import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
+import type { CaptureSlotState, InputSource } from "@/features/ocrCapture/captureState";
 import { isWorkingStatus, pickOcrTargets } from "@/features/ocrCapture/slotPolicy";
 import type { SlotKind } from "@/shared/domain/ocr";
+
+export type OcrCaptureCameraModel = {
+  readonly actionVariant: "primary" | "secondary";
+  readonly disabled: boolean;
+  readonly slotLabel: string;
+  readonly selectImage: (file: File, source: InputSource) => void;
+  readonly reportValidationError: (message: string) => void;
+};
+
+export type OcrCaptureTrayModel = {
+  readonly actionFeedback: string | undefined;
+  readonly captureTargetKind: SlotKind;
+  readonly selectedImageCount: number;
+  readonly totalSlotCount: number;
+  readonly slots: readonly CaptureSlotView[];
+  readonly clear: (kind: SlotKind) => void;
+  readonly drop: (sourceKind: SlotKind, targetKind: SlotKind) => void;
+  readonly move: (kind: SlotKind, direction: -1 | 1) => void;
+  readonly refreshStatus: (kind: SlotKind) => void;
+  readonly selectTarget: (kind: SlotKind) => void;
+};
+
+export type OcrCaptureStartModel = {
+  readonly badgeLabel: string;
+  readonly buttonLabel: string;
+  readonly description: string;
+  readonly disabled: boolean;
+  readonly blockedReason: string | undefined;
+  readonly error: string | undefined;
+  readonly selectedImageCount: number;
+  readonly resetDisabled: boolean;
+  readonly reset: () => void;
+  readonly run: () => void;
+};
 
 export function ocrSlotLabels(slots: readonly CaptureSlotState[]): string[] {
   return slotDefinitions

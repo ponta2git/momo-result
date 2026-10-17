@@ -1,5 +1,6 @@
 import { createInitialSlot } from "@/features/ocrCapture/captureState";
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
+import type { OcrSlotReceipt } from "@/features/ocrCapture/ocrSubmissionWorkflow";
 
 /** OCR 送信中とみなすスロット状態。 */
 export function isWorkingStatus(status: CaptureSlotState["status"]): boolean {
@@ -14,9 +15,22 @@ export function keepImageOnly(slot: CaptureSlotState): CaptureSlotState {
   return {
     ...createInitialSlot(slot.kind),
     source: slot.source,
+    selectionId: slot.selectionId,
     file: slot.file,
     previewUrl: slot.previewUrl,
     status: "selected",
+  };
+}
+
+export function captureSlotCapabilities(slot: CaptureSlotState) {
+  const working = isWorkingStatus(slot.status);
+  return {
+    canSelect: !working,
+    canDrop: !working,
+    canMove: Boolean(slot.previewUrl) && !working,
+    canClear: slot.status !== "empty" && !working,
+    canRefresh: Boolean(slot.jobId) && (slot.status === "queued" || slot.status === "running"),
+    working,
   };
 }
 
@@ -39,4 +53,31 @@ export function toUploadingSlot(slot: CaptureSlotState): CaptureSlotState {
     jobId: undefined,
     draftId: undefined,
   };
+}
+
+export function applyOcrSlotReceipt(
+  slot: CaptureSlotState,
+  receipt: OcrSlotReceipt,
+): CaptureSlotState {
+  if (
+    !receipt.selectionId ||
+    slot.kind !== receipt.kind ||
+    slot.selectionId !== receipt.selectionId
+  )
+    return slot;
+  const uploading = toUploadingSlot(slot);
+  switch (receipt.type) {
+    case "uploading":
+      return uploading;
+    case "accepted":
+      return {
+        ...uploading,
+        imageId: receipt.imageId,
+        jobId: receipt.jobId,
+        draftId: receipt.draftId,
+        status: receipt.status,
+      };
+    case "failed":
+      return { ...uploading, status: "failed", transportError: receipt.error };
+  }
 }

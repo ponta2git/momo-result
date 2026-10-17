@@ -1,4 +1,4 @@
-import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
+import type { CaptureSlotView } from "@/features/ocrCapture/captureSlotView";
 import type { SlotKind } from "@/shared/domain/ocr";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
@@ -14,11 +14,9 @@ const slotKindLabels = {
 type CaptureSlotFeedbackProps = {
   mismatch: boolean;
   refreshing: boolean;
-  slot: CaptureSlotState;
+  slot: CaptureSlotView;
   onRefreshStatus: () => void;
 };
-
-const refreshableStatuses = new Set<CaptureSlotState["status"]>(["queued", "running"]);
 
 export function CaptureSlotFeedback({
   mismatch,
@@ -26,13 +24,13 @@ export function CaptureSlotFeedback({
   slot,
   onRefreshStatus,
 }: CaptureSlotFeedbackProps) {
-  const canRefreshStatus = Boolean(slot.jobId) && refreshableStatuses.has(slot.status);
+  const canRefreshStatus = slot.capabilities.canRefresh;
 
   return (
     <>
       {mismatch ? <CaptureMismatchAlert detectedKind={slot.detectedKind} /> : null}
       {slot.transportError ? <CaptureTransportError error={slot.transportError} /> : null}
-      {slot.jobFailure ? <CaptureJobFailure failure={slot.jobFailure} /> : null}
+      {slot.failureAction ? <CaptureJobFailure action={slot.failureAction} /> : null}
       {canRefreshStatus ? (
         <div
           className={cn(
@@ -70,7 +68,7 @@ function CaptureMismatchAlert({ detectedKind }: { detectedKind?: SlotKind | unde
 function CaptureTransportError({
   error,
 }: {
-  error: NonNullable<CaptureSlotState["transportError"]>;
+  error: NonNullable<CaptureSlotView["transportError"]>;
 }) {
   return (
     <Notice presentation="nested" title={error.title} tone="danger">
@@ -79,13 +77,11 @@ function CaptureTransportError({
   );
 }
 
-function CaptureJobFailure({ failure }: { failure: NonNullable<CaptureSlotState["jobFailure"]> }) {
+function CaptureJobFailure({ action }: { action: string }) {
   return (
     <Notice presentation="nested" title="画像を読み取れませんでした" tone="danger">
       <p>この分類の読み取り結果は作成されていません。</p>
-      <p className="mt-1">
-        {failure.userAction ?? "画像を確認して、もう一度読み取りを開始してください。"}
-      </p>
+      <p className="mt-1">{action}</p>
     </Notice>
   );
 }

@@ -48,7 +48,7 @@ function submission(): OcrSubmissionWorkflowParams {
       seasonMasterId: "season_current",
     },
     slots: [selectedSlot("total_assets"), selectedSlot("revenue")],
-    updateSlot: vi.fn(),
+    onSlotReceipt: vi.fn(),
     onProgress: vi.fn(),
   };
 }
@@ -68,7 +68,7 @@ describe("runOcrSubmissionWorkflow", () => {
     expect(input.state.slots.total_assets?.upload?.imageId).toBe("accepted-before-owner-ended");
     expect(input.createJob).not.toHaveBeenCalled();
     expect(input.uploadImage).toHaveBeenCalledTimes(1);
-    expect(input.updateSlot).toHaveBeenCalledTimes(1);
+    expect(input.onSlotReceipt).toHaveBeenCalledTimes(1);
   });
 
   it("uses the confirmation timestamp and explicit screen hints for the complete draft", async () => {

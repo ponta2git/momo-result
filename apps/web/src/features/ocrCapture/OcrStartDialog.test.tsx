@@ -41,7 +41,7 @@ const plan: OcrSubmissionPlan = {
 function FlowHarness({ submit }: { submit: OcrCaptureMutations["submit"] }) {
   const flow = useOcrStartFlow({
     submission: { isSubmitting: false, submit },
-    updateSlot: vi.fn(),
+    onSlotReceipt: vi.fn(),
   });
   return (
     <>
@@ -49,7 +49,7 @@ function FlowHarness({ submit }: { submit: OcrCaptureMutations["submit"] }) {
         読み取りの確認
       </button>
       <OcrStartDialog
-        state={flow.state}
+        view={flow.dialog}
         onClose={flow.close}
         onConfirm={flow.confirm}
         onViewMatches={flow.viewMatches}

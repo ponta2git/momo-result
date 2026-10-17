@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useLayoutEffect, useRef } from "react";
+import { useCallback, useLayoutEffect, useRef } from "react";
 
 import type { OcrSubmissionPlan } from "@/features/ocrCapture/ocrSubmissionPlan";
 import {
@@ -19,7 +19,7 @@ import { principalRequestSignal } from "@/shared/api/principalRequestScope";
 
 export type OcrCaptureSubmitParams = Pick<
   OcrSubmissionWorkflowParams,
-  "onProgress" | "updateSlot"
+  "onProgress" | "onSlotReceipt"
 > & {
   plan: OcrSubmissionPlan;
   restart?: boolean;
@@ -41,7 +41,7 @@ export function useOcrCaptureMutations(): OcrCaptureMutations {
     owner.current = AbortSignal.any([controller.signal, principalRequestSignal(queryClient)]);
     return () => controller.abort();
   }, [queryClient]);
-  const submission = useMutation({
+  const { isPending, mutateAsync } = useMutation({
     mutationFn: ({ plan, restart, ...params }: OcrCaptureSubmitParams) => {
       let state = checkpoints.current.get(plan) ?? createOcrSubmissionState();
       if (restart && state.retryKinds?.length && state.draft) {
@@ -78,17 +78,16 @@ export function useOcrCaptureMutations(): OcrCaptureMutations {
     },
   });
 
-  return {
-    isSubmitting: submission.isPending,
-    submit: async (params) => {
+  const submit = useCallback(
+    (params: OcrCaptureSubmitParams) => {
       // Guard synchronous repeat clicks before the pending render commits.
-      if (inFlightRef.current) return;
+      if (inFlightRef.current) return Promise.resolve(undefined);
       inFlightRef.current = true;
-      try {
-        return await submission.mutateAsync(params);
-      } finally {
+      return mutateAsync(params).finally(() => {
         inFlightRef.current = false;
-      }
+      });
     },
-  };
+    [mutateAsync],
+  );
+  return { isSubmitting: isPending, submit };
 }

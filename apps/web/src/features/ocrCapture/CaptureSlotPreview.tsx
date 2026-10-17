@@ -1,6 +1,6 @@
 import type { DragEventHandler } from "react";
 
-import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
+import type { CaptureSlotView } from "@/features/ocrCapture/captureSlotView";
 import { cn } from "@/shared/ui/cn";
 import { contentText } from "@/shared/ui/typography";
 
@@ -12,7 +12,7 @@ const sourceLabels = {
 type CaptureSlotPreviewProps = {
   isWorking: boolean;
   label: string;
-  slot: CaptureSlotState;
+  slot: CaptureSlotView;
   onDragStartCapture: DragEventHandler<HTMLDivElement>;
 };
 

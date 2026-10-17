@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
+import { buildCaptureSlotView } from "@/features/ocrCapture/captureSlotView";
+import type { CaptureSlotView } from "@/features/ocrCapture/captureSlotView";
 import {
   createInitialSlot,
   createInitialSlots,
@@ -7,13 +9,22 @@ import {
   slotDefinitions,
 } from "@/features/ocrCapture/captureState";
 import type { CaptureSlotState, InputSource } from "@/features/ocrCapture/captureState";
-import { isWorkingStatus, keepImageOnly } from "@/features/ocrCapture/slotPolicy";
+import {
+  buildOcrCaptureView,
+  nextEmptyCaptureTarget,
+  resolveCaptureTargetChange,
+} from "@/features/ocrCapture/ocrCaptureModel";
+import { prepareOcrSubmissionPlan } from "@/features/ocrCapture/ocrSubmissionPlan";
+import type { OcrSlotReceipt } from "@/features/ocrCapture/ocrSubmissionWorkflow";
+import {
+  applyOcrSlotReceipt,
+  captureSlotCapabilities,
+  isWorkingStatus,
+  keepImageOnly,
+} from "@/features/ocrCapture/slotPolicy";
 import { useOcrJobSlotResource } from "@/features/ocrCapture/useOcrJobSlotResource";
-import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
 import type { SlotKind } from "@/shared/domain/ocr";
-import { bySlot } from "@/shared/domain/slotMap";
-import type { SlotMap } from "@/shared/domain/slotMap";
 
 export type OcrCaptureDraftFeedback = {
   reportFailure: (message: string) => void;
@@ -21,7 +32,6 @@ export type OcrCaptureDraftFeedback = {
 };
 
 export type OcrCaptureDraftFlow = {
-  drafts: SlotMap<OcrDraftResponse>;
   handleAddImage: (
     file: File,
     source: InputSource,
@@ -37,9 +47,16 @@ export type OcrCaptureDraftFlow = {
   handleRefreshStatus: (kind: SlotKind) => void;
   handleMoveImage: (kind: SlotKind, direction: -1 | 1, feedback: OcrCaptureDraftFeedback) => void;
   handleResetAll: (feedback: OcrCaptureDraftFeedback) => void;
-  slots: CaptureSlotState[];
-  statusRefreshing: SlotMap<boolean>;
-  updateSlot: (slot: CaptureSlotState) => void;
+  slots: readonly CaptureSlotView[];
+  applyReceipt: (receipt: OcrSlotReceipt) => void;
+  prepareSubmission: (
+    input: Omit<Parameters<typeof prepareOcrSubmissionPlan>[0], "slots">,
+  ) => ReturnType<typeof prepareOcrSubmissionPlan>;
+  buildView: (
+    input: Omit<Parameters<typeof buildOcrCaptureView>[0], "slots">,
+  ) => ReturnType<typeof buildOcrCaptureView>;
+  selectTarget: (kind: SlotKind) => ReturnType<typeof resolveCaptureTargetChange>;
+  nextEmptyTarget: (current: SlotKind) => SlotKind | undefined;
 };
 
 type OcrCaptureDraftFlowInput = {
@@ -73,17 +90,47 @@ export function useOcrCaptureDraftFlow({
     requireSlot(localSlots, "incident_log"),
     onDraftLoadError,
   );
-  const resources = [totalAssetsResource, revenueResource, incidentLogResource] as const;
-  const slots = resources.map((resource) => resource.slot);
-  const drafts = bySlot<OcrDraftResponse>(
-    resources.map((resource) => [resource.slot.kind, resource.draft] as const),
+  const slots = useMemo(
+    () => [totalAssetsResource.slot, revenueResource.slot, incidentLogResource.slot],
+    [totalAssetsResource.slot, revenueResource.slot, incidentLogResource.slot],
   );
-  const statusRefreshing = bySlot<boolean>(
-    resources.map((resource) => [resource.slot.kind, resource.refreshing] as const),
+  const totalAssetsView = useCaptureSlotView(totalAssetsResource);
+  const revenueView = useCaptureSlotView(revenueResource);
+  const incidentLogView = useCaptureSlotView(incidentLogResource);
+  const slotViews = useMemo(
+    () => [totalAssetsView, revenueView, incidentLogView],
+    [totalAssetsView, revenueView, incidentLogView],
   );
-  const refreshTotalAssets = totalAssetsResource.refresh;
-  const refreshRevenue = revenueResource.refresh;
-  const refreshIncidentLog = incidentLogResource.refresh;
+  const resourceSnapshot = useRef({
+    localSlots,
+    slots,
+    refreshTotalAssets: totalAssetsResource.refresh,
+    refreshRevenue: revenueResource.refresh,
+    refreshIncidentLog: incidentLogResource.refresh,
+  });
+  useLayoutEffect(() => {
+    resourceSnapshot.current = {
+      localSlots,
+      slots,
+      refreshTotalAssets: totalAssetsResource.refresh,
+      refreshRevenue: revenueResource.refresh,
+      refreshIncidentLog: incidentLogResource.refresh,
+    };
+  }, [
+    localSlots,
+    slots,
+    totalAssetsResource.refresh,
+    revenueResource.refresh,
+    incidentLogResource.refresh,
+  ]);
+  // Commands read the latest owned images, including replacements before React commits.
+  // Query-derived status is valid only for the exact local slot used to resolve it.
+  const readSlots = useCallback(() => {
+    const resource = resourceSnapshot.current;
+    return localSlotsRef.current.map((slot, index) =>
+      resource.localSlots[index] === slot ? (resource.slots[index] ?? slot) : slot,
+    );
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -122,14 +169,21 @@ export function useOcrCaptureDraftFlow({
     [updateLocalSlots],
   );
 
+  const applyReceipt = useCallback(
+    (receipt: OcrSlotReceipt) => {
+      updateLocalSlots((current) => current.map((slot) => applyOcrSlotReceipt(slot, receipt)));
+    },
+    [updateLocalSlots],
+  );
+
   const handleAddImage = useCallback(
     (file: File, source: InputSource, targetKind: SlotKind, feedback: OcrCaptureDraftFeedback) => {
-      const targetSlot = slots.find((slot) => slot.kind === targetKind);
+      const targetSlot = readSlots().find((slot) => slot.kind === targetKind);
       if (!targetSlot) {
         feedback.reportFailure("撮影先を選び直してください。");
         return false;
       }
-      if (isWorkingStatus(targetSlot.status)) {
+      if (!captureSlotCapabilities(targetSlot).canSelect) {
         feedback.reportFailure("読み取り中の分類には画像を配置できません。");
         return false;
       }
@@ -137,6 +191,7 @@ export function useOcrCaptureDraftFlow({
       const selectedSlot: CaptureSlotState = {
         ...createInitialSlot(targetKind),
         source,
+        selectionId: crypto.randomUUID(),
         file,
         previewUrl,
         status: "selected",
@@ -149,12 +204,12 @@ export function useOcrCaptureDraftFlow({
       );
       return true;
     },
-    [slots, updateSlot],
+    [readSlots, updateSlot],
   );
 
   const handleClear = useCallback(
     (kind: SlotKind, feedback: OcrCaptureDraftFeedback) => {
-      const currentSlot = slots.find((slot) => slot.kind === kind);
+      const currentSlot = readSlots().find((slot) => slot.kind === kind);
       if (currentSlot && isWorkingStatus(currentSlot.status)) {
         feedback.reportFailure(
           "読み取り中の画像は破棄できません。試合一覧で状態を確認してください。",
@@ -166,12 +221,12 @@ export function useOcrCaptureDraftFlow({
       );
       feedback.reportSuccess("画像を破棄しました。");
     },
-    [slots, updateLocalSlots],
+    [readSlots, updateLocalSlots],
   );
 
   const handleResetAll = useCallback(
     (feedback: OcrCaptureDraftFeedback) => {
-      if (slots.some((slot) => isWorkingStatus(slot.status))) {
+      if (readSlots().some((slot) => isWorkingStatus(slot.status))) {
         feedback.reportFailure(
           "読み取り中の画像は破棄できません。試合一覧で状態を確認してください。",
         );
@@ -180,14 +235,15 @@ export function useOcrCaptureDraftFlow({
       updateLocalSlots(createInitialSlots);
       feedback.reportSuccess("画像をすべて破棄しました。次の試合を撮影できます。");
     },
-    [slots, updateLocalSlots],
+    [readSlots, updateLocalSlots],
   );
 
   const handleDropImage = useCallback(
     (sourceKind: SlotKind, targetKind: SlotKind, feedback: OcrCaptureDraftFeedback) => {
       if (sourceKind === targetKind) return;
-      const sourceSlot = slots.find((slot) => slot.kind === sourceKind);
-      const targetSlot = slots.find((slot) => slot.kind === targetKind);
+      const currentSlots = readSlots();
+      const sourceSlot = currentSlots.find((slot) => slot.kind === sourceKind);
+      const targetSlot = currentSlots.find((slot) => slot.kind === targetKind);
       if (!sourceSlot || !targetSlot || !sourceSlot.file) return;
       if (isWorkingStatus(sourceSlot.status) || isWorkingStatus(targetSlot.status)) {
         feedback.reportFailure(
@@ -208,7 +264,7 @@ export function useOcrCaptureDraftFlow({
         slotDefinitions.find((definition) => definition.kind === targetKind)?.label ?? targetKind;
       feedback.reportSuccess(`${sourceLabel}と${targetLabel}の画像を入れ替えました。`);
     },
-    [slots, updateLocalSlots],
+    [readSlots, updateLocalSlots],
   );
 
   const handleMoveImage = useCallback(
@@ -222,33 +278,54 @@ export function useOcrCaptureDraftFlow({
     [handleDropImage],
   );
 
-  const handleRefreshStatus = useCallback(
-    (kind: SlotKind) => {
-      switch (kind) {
-        case "total_assets":
-          refreshTotalAssets();
-          break;
-        case "revenue":
-          refreshRevenue();
-          break;
-        case "incident_log":
-          refreshIncidentLog();
-          break;
-      }
-    },
-    [refreshIncidentLog, refreshRevenue, refreshTotalAssets],
+  const handleRefreshStatus = useCallback((kind: SlotKind) => {
+    const resource = resourceSnapshot.current;
+    switch (kind) {
+      case "total_assets":
+        resource.refreshTotalAssets();
+        break;
+      case "revenue":
+        resource.refreshRevenue();
+        break;
+      case "incident_log":
+        resource.refreshIncidentLog();
+        break;
+    }
+  }, []);
+  const prepareSubmission = useCallback<OcrCaptureDraftFlow["prepareSubmission"]>(
+    (input) => prepareOcrSubmissionPlan({ ...input, slots: readSlots() }),
+    [readSlots],
+  );
+  const buildView = useCallback<OcrCaptureDraftFlow["buildView"]>(
+    (input) => buildOcrCaptureView({ ...input, slots }),
+    [slots],
+  );
+  const selectTarget = useCallback(
+    (kind: SlotKind) => resolveCaptureTargetChange(readSlots(), kind),
+    [readSlots],
+  );
+  const nextEmptyTarget = useCallback(
+    (current: SlotKind) => nextEmptyCaptureTarget(readSlots(), current),
+    [readSlots],
   );
 
   return {
-    drafts,
     handleAddImage,
     handleClear,
     handleDropImage,
     handleRefreshStatus,
     handleMoveImage,
     handleResetAll,
-    slots,
-    statusRefreshing,
-    updateSlot,
+    slots: slotViews,
+    applyReceipt,
+    prepareSubmission,
+    buildView,
+    selectTarget,
+    nextEmptyTarget,
   };
+}
+
+function useCaptureSlotView(resource: ReturnType<typeof useOcrJobSlotResource>) {
+  const { slot, draft, refreshing } = resource;
+  return useMemo(() => buildCaptureSlotView(slot, draft, refreshing), [slot, draft, refreshing]);
 }

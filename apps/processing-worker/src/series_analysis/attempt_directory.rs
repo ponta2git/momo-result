@@ -34,7 +34,7 @@ pub(super) async fn cleanup_stale_attempt_directories(
 ) -> Result<Option<Instant>, ConsumerError> {
     let active_attempts = client
         .query(
-            "SELECT lease_attempt_id FROM series_analysis_jobs\x20\
+            "SELECT legacy_lease_attempt_id FROM series_analysis_jobs\x20\
              WHERE status = 'running' AND lease_expires_at > clock_timestamp()",
             &[],
         )

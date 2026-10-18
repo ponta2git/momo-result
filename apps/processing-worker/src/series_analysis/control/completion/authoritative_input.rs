@@ -12,22 +12,28 @@ use crate::series_analysis::control::ControlError;
 const INPUT_SHAPE_QUERY: &str = r"SELECT
        COUNT(DISTINCT m.id)::bigint,
        COUNT(mp.member_id)::bigint,
-       COALESCE(MAX(octet_length(m.id)), 0)::int,
-       COALESCE(MAX(octet_length(m.season_master_id)), 0)::int,
-       COALESCE(MAX(octet_length(m.map_master_id)), 0)::int,
-       COALESCE(MAX(octet_length(mp.member_id)), 0)::int
+       COALESCE(MAX(octet_length(m.legacy_id)), 0)::int,
+       COALESCE(MAX(octet_length(season.legacy_id)), 0)::int,
+       COALESCE(MAX(octet_length(map.legacy_id)), 0)::int,
+       COALESCE(MAX(octet_length(member.legacy_id)), 0)::int
      FROM matches m
+     JOIN season_masters season ON season.id=m.season_master_id
+     JOIN map_masters map ON map.id=m.map_master_id
      LEFT JOIN match_players mp ON mp.match_id = m.id
-     WHERE m.game_title_id = $1";
+     LEFT JOIN members member ON member.id=mp.member_id
+     WHERE m.game_title_id = (SELECT id FROM game_titles WHERE legacy_id=$1)";
 
 const MATCH_SNAPSHOT_QUERY: &str = r"SELECT
-       m.id, m.analysis_revision, m.season_master_id, m.map_master_id,
+       m.legacy_id, m.analysis_revision, season.legacy_id, map.legacy_id,
        COUNT(mp.member_id)::bigint
      FROM matches m
+     JOIN season_masters season ON season.id=m.season_master_id
+     JOIN map_masters map ON map.id=m.map_master_id
      LEFT JOIN match_players mp ON mp.match_id = m.id
-     WHERE m.game_title_id = $1
-     GROUP BY m.id, m.analysis_revision, m.season_master_id, m.map_master_id
-     ORDER BY m.id
+     LEFT JOIN members member ON member.id=mp.member_id
+     WHERE m.game_title_id = (SELECT id FROM game_titles WHERE legacy_id=$1)
+     GROUP BY m.id, season.id, map.id
+     ORDER BY m.legacy_id
      LIMIT $2";
 
 #[derive(Debug, Eq, Ord, PartialEq, PartialOrd)]

@@ -12,7 +12,7 @@ use crate::{
 #[ignore = "requires explicitly isolated ANALYSIS_CONTROL_SMOKE_DATABASE_URL"]
 async fn real_postgres_heartbeat_owns_deadline_and_connection() -> SmokeResult {
     let database_url = std::env::var("ANALYSIS_CONTROL_SMOKE_DATABASE_URL")?;
-    let primary = crate::postgres::connect(&database_url).await?;
+    let primary = crate::identity::fixtures::connect(&database_url).await?;
     cleanup_database(&primary).await?;
     prepare_owned_attempt(&primary).await?;
     let directory = TempDir::new()?;
@@ -65,7 +65,16 @@ async fn real_postgres_heartbeat_owns_deadline_and_connection() -> SmokeResult {
         (CommitFault::LostReply, true),
     ] {
         // Give the old lease a distinct value. Independently read durable state after disconnect.
-        primary.execute("UPDATE series_analysis_jobs SET lease_expires_at = clock_timestamp() + interval '10 minutes' WHERE id = $1", &[&claim.job_id]).await?;
+        primary
+            .execute(
+                r"
+            UPDATE series_analysis_jobs
+            SET lease_expires_at = clock_timestamp() + CAST('10 minutes' AS interval)
+            WHERE series_analysis_jobs.legacy_id = $1
+            ",
+                &[&claim.job_id],
+            )
+            .await?;
         let proxy = DelayedDatabase::commit_fault(&database_url, fault).await?;
         config.database_url.clone_from(&proxy.url);
         let mut uncertain = HeartbeatConnection::connect(&config.database_url).await?;
@@ -73,7 +82,17 @@ async fn real_postgres_heartbeat_owns_deadline_and_connection() -> SmokeResult {
             uncertain.renew(&claim, &config).await.is_err(),
             "a lost COMMIT result must not authorize publication"
         );
-        let committed_result: bool = primary.query_one("SELECT lease_expires_at < clock_timestamp() + interval '2 minutes' FROM series_analysis_jobs WHERE id = $1", &[&claim.job_id]).await?.try_get(0)?;
+        let committed_result: bool = primary
+            .query_one(
+                r"
+            SELECT lease_expires_at < clock_timestamp() + CAST('2 minutes' AS interval)
+            FROM series_analysis_jobs
+            WHERE series_analysis_jobs.legacy_id = $1
+            ",
+                &[&claim.job_id],
+            )
+            .await?
+            .try_get(0)?;
         assert_eq!(committed_result, committed);
         assert_current(&primary, None).await?;
         config.database_url.clone_from(&database_url);

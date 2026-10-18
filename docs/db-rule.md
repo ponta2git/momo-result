@@ -40,6 +40,8 @@
 - queuedな通常分析jobのradar basis / generationは、title state lockを保持したtransaction内で`PostgresSeriesAnalysisJobTransitions.bindQueuedRadar`またはRustの`series_analysis::job_transitions::bind_queued_radar`が明示代入する。APIの試合mutation・手動要求・radar apply/withdraw/入力無効化、Workerのcampaign・follow-up・release promotion・supersede・retry・中断・lease回収が対象。runningとradar preparationのsnapshotは変更しない。同じ組への代入はUPDATEを省き、旧binding triggerとの共存や再実行で世代・attempt数を増やさない。
 - runningからqueuedまたはterminalへの全遷移は、owner・attempt・fencing token・期限と`lease_validation_contract_id`を一緒に明示clearする。成功、radar preparation完了、通常失敗、retry上限、lease回収上限にも同じ契約を適用する。
 - artifactのcurrent contract、outlook scope / count、payload間の意味整合性はRustの`ValidatedArtifact`を生成するfull validatorに集約する。staging保存後はmanifestとの全metadata/count一致を確認してからsealし、公開時に再確認する。previous pointerは同じ作品・schema・validation contractのpublished artifactだけを保持する。DBには参照整合性、desired tupleの一致、sealed/published内容の不変性を残し、consumerの全経路を検証するまで既存triggerを撤去しない。
+- mutable entity の保存 ID / FK は native UUID とし、既存の外部 ID は保存された `legacy_id` または保持用 `legacy_*` から復元する。入力 ID は exact alias lookup で解決し、未登録の参照や認証主体を hash で補完しない。新規の構造化 job / attempt ID の割当だけが、momo-db の固定 namespace と共有 fixture に従う mapper を使う。
+- immutable な分析 artifact / radar basis の payload・header・chunk・revision は従来の text ID と checksum を保持する。可変状態からの UUID 参照は型付き identity table を経由し、新規 artifact / basis と identity は同じ transaction で保存する。計算入力、整列、tie-breaker、snapshot は保存された旧 ID の byte 列を使う。
 - DB row は adapter 境界で失敗可能に decode し、不正値や SQL 例外を domain / application failure へ正規化する。
 - dynamic SQL は列挙された fragment から選び、外部入力を SQL text へ連結しない。
 - 複数statementで一つの読み取り結果を組み立てるrepositoryは、read-only / repeatable-readのsnapshotを所有する。読み取り専用の設定をwrite transactionからも呼ばれる共通SQL部品に埋め込まない。
@@ -74,6 +76,8 @@ test の採用・維持・削除は `docs/test-rule.md` に従う。DB contract 
 ## 5. Migration / Deployment
 
 後方互換な変更は migration 適用後に consumer を deploy する。
+
+canonical identity への切替では、全 writer を停止し、旧 schema 用の固定 consumer と停止前 DB を対として保持する。P3 migration の完了後に canonical Worker の通常処理を起動する。Worker は通常接続時に UUID / legacy 列、identity の一意性、FK と保持値の NULL 対応を検査し、旧 schema や部分適用状態を write 前に拒否する。`MOMO_MAINTENANCE_MODE=frozen` の readiness は旧・新 schema の両方で read-only の target / ledger proof だけを返すため、停止状態で先に配備できる。P3 前の通常処理には旧 schema 用 baseline を使い、切戻しもその DB と consumer の組へ戻す。再開後の write は新 schema 上で保全する。
 
 通知用入力基準の導入では、旧writerを停止してから既存成果物を基準へ初期化し、対応するAPI・Workerへ切り替えて再開する。初期化後に基準を更新しない旧Workerが公開すると、古い基準との差分を後続処理で再通知するため、この間の混在稼働を許容しない。切戻しも基準の整合性を保つ組合せで行う。
 

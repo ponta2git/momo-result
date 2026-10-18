@@ -31,8 +31,8 @@ pub(crate) async fn heartbeat(
             "UPDATE series_analysis_jobs SET\x20\
                lease_expires_at = clock_timestamp() + ($1::bigint * interval '1 millisecond'),\x20\
                updated_at = clock_timestamp()\x20\
-             WHERE id = $2 AND status = 'running' AND lease_owner = $3\x20\
-               AND lease_attempt_id = $4 AND lease_fencing_token = $5\x20\
+             WHERE legacy_id = $2 AND status = 'running' AND lease_owner = $3\x20\
+               AND legacy_lease_attempt_id = $4 AND lease_fencing_token = $5\x20\
                AND lease_validation_contract_id IS NOT DISTINCT FROM $6\x20\
                AND lease_expires_at > clock_timestamp()",
             &[
@@ -71,7 +71,7 @@ pub(crate) async fn supersede(
     let desired = transaction
         .query_one(
             "SELECT input_revision, algorithm_version, artifact_schema_version, validation_contract_id\x20\
-             FROM series_analysis_title_states WHERE game_title_id = $1",
+             FROM series_analysis_title_states WHERE game_title_id = (SELECT id FROM game_titles WHERE legacy_id=$1)",
             &[&claim.game_title_id],
         )
         .await?;
@@ -86,10 +86,10 @@ pub(crate) async fn supersede(
                status = 'queued', input_revision = $1, algorithm_version = $2,\x20\
                artifact_schema_version = $3, validation_contract_id = $4,\x20\
                available_at = clock_timestamp(),\x20\
-               started_at = NULL, lease_owner = NULL, lease_attempt_id = NULL,\x20\
+               started_at = NULL, lease_owner = NULL, lease_attempt_id = NULL, legacy_lease_attempt_id = NULL,\x20\
                lease_fencing_token = NULL, lease_expires_at = NULL,\x20\
                lease_validation_contract_id = NULL, updated_at = clock_timestamp()\x20\
-             WHERE id = $5",
+             WHERE legacy_id = $5",
             &[
                 &desired_revision,
                 &desired_algorithm,
@@ -106,8 +106,8 @@ pub(crate) async fn supersede(
     .await?;
     transaction
         .execute(
-            "UPDATE series_analysis_job_requests SET status = 'pending', assigned_attempt_id = NULL\x20\
-             WHERE assigned_attempt_id = $1",
+            "UPDATE series_analysis_job_requests SET status = 'pending', assigned_attempt_id = NULL, legacy_assigned_attempt_id = NULL\x20\
+             WHERE legacy_assigned_attempt_id = $1",
             &[&claim.attempt_id],
         )
         .await?;
@@ -155,10 +155,10 @@ pub(super) async fn finish_terminal_failure(
             "UPDATE series_analysis_jobs SET\x20\
                status = $1, finished_at = clock_timestamp(), safe_failure_code = $2,\x20\
                elapsed_milliseconds = $3, result_disposition = 'none', output_checksum = NULL,\x20\
-               lease_owner = NULL, lease_attempt_id = NULL, lease_fencing_token = NULL,\x20\
+               lease_owner = NULL, lease_attempt_id = NULL, legacy_lease_attempt_id = NULL, lease_fencing_token = NULL,\x20\
                lease_expires_at = NULL, lease_validation_contract_id = NULL,\x20\
                updated_at = clock_timestamp()\x20\
-            WHERE id = $4",
+            WHERE legacy_id = $4",
             &[
                 &outcome_wire,
                 &safe_failure_code,
@@ -174,7 +174,7 @@ pub(super) async fn finish_terminal_failure(
                 "UPDATE series_analysis_title_states SET\x20\
                pending_work = false, last_failure_code = $1,\x20\
                last_failure_at = clock_timestamp(), updated_at = clock_timestamp()\x20\
-             WHERE game_title_id = $2",
+             WHERE game_title_id = (SELECT id FROM game_titles WHERE legacy_id=$2)",
                 &[&safe_failure_code, &claim.game_title_id],
             )
             .await?;
@@ -202,7 +202,7 @@ pub(crate) async fn retry_transient_failure(
     lock_owned(&transaction, claim, &config.worker_id).await?;
     let retry_count = transaction
         .query_one(
-            "SELECT transient_retry_count FROM series_analysis_jobs WHERE id = $1 FOR UPDATE",
+            "SELECT transient_retry_count FROM series_analysis_jobs WHERE legacy_id = $1 FOR UPDATE",
             &[&claim.job_id],
         )
         .await?
@@ -221,9 +221,9 @@ pub(crate) async fn retry_transient_failure(
                 "UPDATE series_analysis_jobs SET status = 'queued', transient_retry_count = $1,\x20\
                    available_at = clock_timestamp() + ($2::bigint * interval '1 second'),\x20\
                    started_at = NULL, finished_at = NULL, safe_failure_code = NULL,\x20\
-                   lease_owner = NULL, lease_attempt_id = NULL, lease_fencing_token = NULL,\x20\
+                   lease_owner = NULL, lease_attempt_id = NULL, legacy_lease_attempt_id = NULL, lease_fencing_token = NULL,\x20\
                    lease_expires_at = NULL, lease_validation_contract_id = NULL,\x20\
-                   updated_at = clock_timestamp() WHERE id = $3",
+                   updated_at = clock_timestamp() WHERE legacy_id = $3",
                 &[&next_retry, &delay_seconds, &claim.job_id],
             )
             .await?;
@@ -234,8 +234,8 @@ pub(crate) async fn retry_transient_failure(
         .await?;
         transaction
             .execute(
-                "UPDATE series_analysis_job_requests SET status = 'pending', assigned_attempt_id = NULL\x20\
-                 WHERE assigned_attempt_id = $1",
+                "UPDATE series_analysis_job_requests SET status = 'pending', assigned_attempt_id = NULL, legacy_assigned_attempt_id = NULL\x20\
+                 WHERE legacy_assigned_attempt_id = $1",
                 &[&claim.attempt_id],
             )
             .await?;
@@ -243,7 +243,7 @@ pub(crate) async fn retry_transient_failure(
             .execute(
                 "UPDATE series_analysis_campaign_targets t SET status = 'expanded', updated_at = clock_timestamp()\x20\
                  FROM series_analysis_job_requests r WHERE t.job_request_id = r.id\x20\
-                   AND r.assigned_job_id = $1",
+                   AND r.assigned_job_id = (SELECT id FROM series_analysis_jobs WHERE legacy_id=$1)",
                 &[&claim.job_id],
             )
             .await?;
@@ -285,9 +285,9 @@ pub(crate) async fn requeue_interrupted(
         .execute(
             "UPDATE series_analysis_jobs SET status = 'queued', available_at = clock_timestamp(),\x20\
                started_at = NULL, finished_at = NULL, safe_failure_code = NULL,\x20\
-               lease_owner = NULL, lease_attempt_id = NULL, lease_fencing_token = NULL,\x20\
+               lease_owner = NULL, lease_attempt_id = NULL, legacy_lease_attempt_id = NULL, lease_fencing_token = NULL,\x20\
                lease_expires_at = NULL, lease_validation_contract_id = NULL,\x20\
-               updated_at = clock_timestamp() WHERE id = $1",
+               updated_at = clock_timestamp() WHERE legacy_id = $1",
             &[&claim.job_id],
         )
         .await?;
@@ -298,8 +298,8 @@ pub(crate) async fn requeue_interrupted(
     .await?;
     transaction
         .execute(
-            "UPDATE series_analysis_job_requests SET status = 'pending', assigned_attempt_id = NULL\x20\
-             WHERE assigned_attempt_id = $1",
+            "UPDATE series_analysis_job_requests SET status = 'pending', assigned_attempt_id = NULL, legacy_assigned_attempt_id = NULL\x20\
+             WHERE legacy_assigned_attempt_id = $1",
             &[&claim.attempt_id],
         )
         .await?;
@@ -307,7 +307,7 @@ pub(crate) async fn requeue_interrupted(
         .execute(
             "UPDATE series_analysis_campaign_targets t SET status = 'expanded', updated_at = clock_timestamp()\x20\
              FROM series_analysis_job_requests r WHERE t.job_request_id = r.id\x20\
-               AND r.assigned_job_id = $1",
+               AND r.assigned_job_id = (SELECT id FROM series_analysis_jobs WHERE legacy_id=$1)",
             &[&claim.job_id],
         )
         .await?;

@@ -25,7 +25,7 @@ pub(super) async fn verify(database_url: &str, observer: &Client) -> SmokeResult
         },
     )
     .await?;
-    let mut client = crate::postgres::connect(&proxy.url).await?;
+    let mut client = crate::identity::fixtures::connect(&proxy.url).await?;
     let config = control_config("ocr-c2-worker-a")?;
     let worker_config = config.clone();
     let mut claim_task = tokio::spawn(async move {
@@ -46,9 +46,16 @@ pub(super) async fn verify(database_url: &str, observer: &Client) -> SmokeResult
         time::timeout(Duration::from_secs(3), claim_task).await???;
     let claim = claimed(outcome)?;
     requeue_interrupted(&mut committed_client, &claim, &config).await?;
-    let state = observer.query_one(
-        "SELECT j.status, j.lease_owner IS NULL, j.failure_retry_count, j.lease_recovery_count FROM ocr_jobs j WHERE j.id=$1", &[&TAKEOVER.job_id],
-    ).await?;
+    let state = observer
+        .query_one(
+            r"
+            SELECT j.status, j.lease_owner IS NULL, j.failure_retry_count, j.lease_recovery_count
+            FROM ocr_jobs AS j
+            WHERE j.legacy_id = $1
+            ",
+            &[&TAKEOVER.job_id],
+        )
+        .await?;
     assert_eq!(state.try_get::<_, String>(0)?, "queued");
     assert!(state.try_get::<_, bool>(1)?);
     assert_eq!(state.try_get::<_, i32>(2)?, 0);
@@ -56,7 +63,7 @@ pub(super) async fn verify(database_url: &str, observer: &Client) -> SmokeResult
 
     prepare_database(observer).await?;
     insert_fixture(observer, &TAKEOVER).await?;
-    let mut uncertain_client = crate::postgres::connect(&proxy.url).await?;
+    let mut uncertain_client = crate::identity::fixtures::connect(&proxy.url).await?;
     let uncertain =
         tokio::spawn(
             async move { claim_job(&mut uncertain_client, TAKEOVER.job_id, &config).await },
@@ -74,7 +81,11 @@ pub(super) async fn verify(database_url: &str, observer: &Client) -> SmokeResult
         "cancellation must finish without receiving the held COMMIT reply"
     );
     let uncertain_state = observer.query_one(
-        "SELECT j.status, j.lease_owner IS NOT NULL, j.failure_retry_count, j.lease_recovery_count FROM ocr_jobs j WHERE j.id=$1", &[&TAKEOVER.job_id],
+        r"
+            SELECT j.status, j.lease_owner IS NOT NULL, j.failure_retry_count, j.lease_recovery_count
+            FROM ocr_jobs AS j
+            WHERE j.legacy_id = $1
+            ", &[&TAKEOVER.job_id],
     ).await?;
     assert_eq!(uncertain_state.try_get::<_, String>(0)?, "running");
     assert!(uncertain_state.try_get::<_, bool>(1)?);

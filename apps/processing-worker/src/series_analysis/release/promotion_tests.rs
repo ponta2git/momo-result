@@ -9,7 +9,7 @@ use super::*;
 async fn real_postgres_promotion_detaches_obsolete_empty_title_pointers_without_deleting_artifacts()
 -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let database_url = env::var("ANALYSIS_CONTROL_SMOKE_DATABASE_URL")?;
-    let mut client = connect(&database_url).await?;
+    let mut client = crate::identity::fixtures::connect(&database_url).await?;
     let transaction = client.transaction().await?;
     transaction
         .batch_execute("TRUNCATE game_titles CASCADE")
@@ -38,10 +38,16 @@ async fn real_postgres_promotion_detaches_obsolete_empty_title_pointers_without_
         },
     )
     .await?;
-    let queued = transaction.query_one(
-        "SELECT algorithm_version, artifact_schema_version, radar_generation FROM series_analysis_jobs WHERE id = 'promotion-queued-job'",
-        &[],
-    ).await?;
+    let queued = transaction
+        .query_one(
+            r"
+            SELECT algorithm_version, artifact_schema_version, radar_generation
+            FROM series_analysis_jobs
+            WHERE series_analysis_jobs.legacy_id = 'promotion-queued-job'
+            ",
+            &[],
+        )
+        .await?;
     assert_eq!(queued.try_get::<_, String>(0)?, ALGORITHM_VERSION);
     assert_eq!(
         queued.try_get::<_, i32>(1)?,
@@ -51,8 +57,21 @@ async fn real_postgres_promotion_detaches_obsolete_empty_title_pointers_without_
     assert_eq!(artifacts(&transaction).await?, before);
     let rows = transaction
         .query(
-            "SELECT game_title_id, current_artifact_id, previous_artifact_id, pending_work \
-         FROM series_analysis_title_states ORDER BY game_title_id",
+            r"
+                SELECT (SELECT fixture_parent.legacy_id
+                        FROM game_titles AS fixture_parent
+                        WHERE fixture_parent.id = series_analysis_title_states.game_title_id) AS game_title_id,
+                       (SELECT fixture_parent.legacy_id
+                        FROM series_analysis_artifact_identities AS fixture_parent
+                        WHERE fixture_parent.id = series_analysis_title_states.current_artifact_id) AS current_artifact_id,
+                       (SELECT fixture_parent.legacy_id
+                        FROM series_analysis_artifact_identities AS fixture_parent
+                        WHERE fixture_parent.id = series_analysis_title_states.previous_artifact_id) AS previous_artifact_id, pending_work
+                FROM series_analysis_title_states
+                ORDER BY (SELECT fixture_parent.legacy_id
+                          FROM game_titles AS fixture_parent
+                          WHERE fixture_parent.id = series_analysis_title_states.game_title_id)
+                ",
             &[],
         )
         .await?;

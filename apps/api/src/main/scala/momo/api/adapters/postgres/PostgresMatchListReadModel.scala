@@ -7,6 +7,7 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 import doobie.util.fragments
 
+import momo.api.adapters.postgres.CanonicalIdentity.Entity
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.matchlist.MatchListProjection
 import momo.api.domain.{
@@ -27,24 +28,38 @@ import momo.api.repositories.{MatchListAlg, MatchListReadModel}
  * round-trip group), preventing read skew between the listing and rank decoration.
  */
 object PostgresMatchList extends PostgresMatchListSupport:
-  val alg: MatchListAlg[ConnectionIO] = withPublicIds(PostgresPublicIds.Legacy)
+  def alg(using ids: PostgresIdentities): MatchListAlg[ConnectionIO] =
+    withPublicIds(PostgresPublicIds.Legacy)
 
-  def withPublicIds(publicIds: PostgresPublicIds): MatchListAlg[ConnectionIO] =
+  def withPublicIds(publicIds: PostgresPublicIds)(using
+      ids: PostgresIdentities): MatchListAlg[ConnectionIO] =
     new MatchListAlg[ConnectionIO]:
       override def list(
           filter: MatchListReadModel.Filter
       ): ConnectionIO[MatchListReadModel.CursorPage[MatchListItem]] =
         val confirmedConditions = List(
-          filter.heldEventId.map(v => fr"m.held_event_id = $v"),
-          filter.gameTitleId.map(v => fr"m.game_title_id = $v"),
-          filter.seasonMasterId.map(v => fr"m.season_master_id = $v"),
+          filter.heldEventId.map(v =>
+            fr"m.held_event_id = ${ids.lookup(Entity.HeldEvents, v.value)}"
+          ),
+          filter.gameTitleId.map(v =>
+            fr"m.game_title_id = ${ids.lookup(Entity.GameTitles, v.value)}"
+          ),
+          filter.seasonMasterId.map(v =>
+            fr"m.season_master_id = ${ids.lookup(Entity.SeasonMasters, v.value)}"
+          ),
         ).flatten
         val confirmedSelect = confirmedBase(publicIds) ++ fragments.whereAndOpt(confirmedConditions)
 
         val draftConditionsCommon = List(
-          filter.heldEventId.map(v => fr"d.held_event_id = $v"),
-          filter.gameTitleId.map(v => fr"d.game_title_id = $v"),
-          filter.seasonMasterId.map(v => fr"d.season_master_id = $v"),
+          filter.heldEventId.map(v =>
+            fr"d.held_event_id = ${ids.lookup(Entity.HeldEvents, v.value)}"
+          ),
+          filter.gameTitleId.map(v =>
+            fr"d.game_title_id = ${ids.lookup(Entity.GameTitles, v.value)}"
+          ),
+          filter.seasonMasterId.map(v =>
+            fr"d.season_master_id = ${ids.lookup(Entity.SeasonMasters, v.value)}"
+          ),
           Some(fr"d.status <> ${MatchDraftStatus.Cancelled}"),
           Some(fr"d.status <> ${MatchDraftStatus.Confirmed}"),
         ).flatten
@@ -147,7 +162,7 @@ object PostgresMatchList extends PostgresMatchListSupport:
       override def listDraftsByHeldEvent(heldEventId: momo.api.domain.ids.HeldEventId)
           : ConnectionIO[List[MatchListItem]] =
         val selected = draftBase(publicIds) ++ fragments.whereAnd(
-          fr"d.held_event_id = $heldEventId",
+          fr"d.held_event_id = ${ids.lookup(Entity.HeldEvents, heldEventId.value)}",
           fr"d.status <> ${MatchDraftStatus.Cancelled}",
           fr"d.status <> ${MatchDraftStatus.Confirmed}",
         )
@@ -166,9 +181,15 @@ object PostgresMatchList extends PostgresMatchListSupport:
           filter: MatchListReadModel.SummaryFilter
       ): ConnectionIO[MatchListSummary] =
         val draftConditionsCommon = List(
-          filter.heldEventId.map(v => fr"d.held_event_id = $v"),
-          filter.gameTitleId.map(v => fr"d.game_title_id = $v"),
-          filter.seasonMasterId.map(v => fr"d.season_master_id = $v"),
+          filter.heldEventId.map(v =>
+            fr"d.held_event_id = ${ids.lookup(Entity.HeldEvents, v.value)}"
+          ),
+          filter.gameTitleId.map(v =>
+            fr"d.game_title_id = ${ids.lookup(Entity.GameTitles, v.value)}"
+          ),
+          filter.seasonMasterId.map(v =>
+            fr"d.season_master_id = ${ids.lookup(Entity.SeasonMasters, v.value)}"
+          ),
           Some(fr"d.status <> ${MatchDraftStatus.Cancelled}"),
           Some(fr"d.status <> ${MatchDraftStatus.Confirmed}"),
         ).flatten
@@ -203,7 +224,9 @@ end PostgresMatchList
 final class PostgresMatchListReadModel[F[_]: MonadCancelThrow](
     transactor: Transactor[F],
     publicIds: PostgresPublicIds = PostgresPublicIds.Legacy,
+    identities: PostgresIdentities = PostgresIdentities.Legacy,
 ) extends MatchListReadModel[F]:
+  private given PostgresIdentities = identities
   private val alg = PostgresMatchList.withPublicIds(publicIds)
   private val delegate: MatchListReadModel[F] = MatchListReadModel
     .fromAlg(alg, transactor.trans)

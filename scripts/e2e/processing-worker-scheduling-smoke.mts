@@ -153,20 +153,14 @@ await runSmoke("Combined analysis/OCR scheduling smoke", async (signal) => {
       await smoke.sql("SELECT pg_notify('processing_jobs', '');");
       await waitSQL(
         `analysis|${analysis_worker_id}|true`,
-        `
-  SELECT 'analysis|' || job.lease_owner || '|' || (
-    job.validation_contract_id = '${validation_contract_id}'
-    AND job.lease_validation_contract_id = '${validation_contract_id}'
-    AND EXISTS (
-      SELECT 1
-      FROM series_analysis_job_attempts attempt
-      WHERE attempt.id = job.lease_attempt_id
-        AND attempt.validation_contract_id = '${validation_contract_id}'
-    )
-  )::text
-  FROM series_analysis_jobs job
-  WHERE job.id = '${analysis_job}' AND job.status = 'running';
-`,
+        `SELECT 'analysis|' || job.lease_owner || '|' || CAST(job.validation_contract_id = '${validation_contract_id}'
+                                                 AND job.lease_validation_contract_id = '${validation_contract_id}'
+                                                 AND EXISTS (SELECT 1
+                                                             FROM series_analysis_job_attempts AS attempt
+                                                             WHERE attempt.legacy_id = job.legacy_lease_attempt_id
+                                                               AND attempt.validation_contract_id = '${validation_contract_id}') AS text)
+FROM series_analysis_jobs AS job
+WHERE job.legacy_id = '${analysis_job}' AND job.status = 'running';`,
         `the running analysis holder`,
       );
       const childResult = await command(
@@ -188,44 +182,48 @@ await runSmoke("Combined analysis/OCR scheduling smoke", async (signal) => {
       // allowing a short child which exits before its first heartbeat to satisfy this.
       for (const renewal of [1, 2]) {
         const previous_lease = await smoke.sql(
-          `SELECT lease_expires_at FROM series_analysis_jobs WHERE id = '${analysis_job}';`,
+          `SELECT lease_expires_at
+FROM series_analysis_jobs
+WHERE series_analysis_jobs.legacy_id = '${analysis_job}';`,
         );
         await waitSQL(
           `true`,
-          `
-    SELECT (lease_expires_at > TIMESTAMPTZ '${previous_lease}')::text
-    FROM series_analysis_jobs WHERE id = '${analysis_job}' AND status = 'running';
-  `,
+          `SELECT CAST(lease_expires_at > CAST('${previous_lease}' AS timestamptz) AS text)
+FROM series_analysis_jobs
+WHERE series_analysis_jobs.legacy_id = '${analysis_job}' AND status = 'running';`,
           `committed analysis renewal ${renewal} with the child alive`,
         );
       }
       await smoke.sql(
-        `UPDATE ocr_jobs SET available_at = clock_timestamp() WHERE id = '${ocr_job}';
-         UPDATE series_analysis_jobs SET available_at = clock_timestamp() WHERE id = '${waiting_job}';
-         SELECT pg_notify('processing_jobs', '');`,
+        `UPDATE ocr_jobs
+SET available_at = clock_timestamp()
+WHERE ocr_jobs.legacy_id = '${ocr_job}';
+UPDATE series_analysis_jobs
+SET available_at = clock_timestamp()
+WHERE series_analysis_jobs.legacy_id = '${waiting_job}';
+SELECT pg_notify('processing_jobs', '');`,
       );
       // Both kinds are now due. Observe real renewals without allowing the queued
       // OCR request to interrupt this child or claim the next analysis attempt.
       for (const renewal of [1, 2]) {
         const previous_lease = await smoke.sql(
-          `SELECT lease_expires_at FROM series_analysis_jobs WHERE id = '${analysis_job}';`,
+          `SELECT lease_expires_at
+FROM series_analysis_jobs
+WHERE series_analysis_jobs.legacy_id = '${analysis_job}';`,
         );
         await waitSQL(
           `true`,
-          `SELECT (lease_expires_at > TIMESTAMPTZ '${previous_lease}')::text
-           FROM series_analysis_jobs WHERE id = '${analysis_job}' AND status = 'running';`,
+          `SELECT CAST(lease_expires_at > CAST('${previous_lease}' AS timestamptz) AS text)
+FROM series_analysis_jobs
+WHERE series_analysis_jobs.legacy_id = '${analysis_job}' AND status = 'running';`,
           `analysis renewal ${renewal} while OCR waits`,
         );
         check(
-          (await smoke.sql(`
-  SELECT analysis.status || '|' || analysis.attempt_count || '|' ||
-         ocr.status || '|' || ocr.attempt_count || '|' ||
-         waiting.status || '|' || waiting.attempt_count || '|' ||
-         (analysis.fencing_counter = analysis.lease_fencing_token)::text
-  FROM series_analysis_jobs analysis, ocr_jobs ocr, series_analysis_jobs waiting
-  WHERE analysis.id = '${analysis_job}' AND ocr.id = '${ocr_job}'
-    AND waiting.id = '${waiting_job}';
-`)) === "running|1|queued|0|queued|0|true",
+          (await smoke.sql(`SELECT analysis.status || '|' || analysis.attempt_count || '|' || ocr.status || '|' || ocr.attempt_count || '|' || waiting.status || '|' || waiting.attempt_count || '|' || CAST(analysis.fencing_counter = analysis.lease_fencing_token AS text)
+FROM series_analysis_jobs AS analysis, ocr_jobs AS ocr, series_analysis_jobs AS waiting
+WHERE analysis.legacy_id = '${analysis_job}'
+  AND ocr.legacy_id = '${ocr_job}'
+  AND waiting.legacy_id = '${waiting_job}';`)) === "running|1|queued|0|queued|0|true",
           "Queued work interrupted the active analysis or bypassed its resource reservation.",
         );
         requireSuccess(
@@ -250,39 +248,41 @@ await runSmoke("Combined analysis/OCR scheduling smoke", async (signal) => {
       await releaseLock();
       await waitSQL(
         `succeeded|1|0|1`,
-        `
-  SELECT job.status || '|' || job.attempt_count || '|' ||
-         COUNT(*) FILTER (WHERE attempt.outcome = 'preempted')::text || '|' ||
-         COUNT(*) FILTER (WHERE attempt.outcome = 'succeeded')::text
-  FROM series_analysis_jobs job
-  JOIN series_analysis_job_attempts attempt ON attempt.job_id = job.id
-  WHERE job.id = '${analysis_job}'
-  GROUP BY job.status, job.attempt_count;
-`,
+        `SELECT job.status || '|' || job.attempt_count || '|' || CAST(count(*) FILTER (WHERE attempt.outcome = 'preempted') AS text) || '|' || CAST(count(*) FILTER (WHERE attempt.outcome = 'succeeded') AS text)
+FROM series_analysis_jobs AS job
+     INNER JOIN series_analysis_job_attempts AS attempt ON (SELECT fixture_parent.legacy_id
+                                                            FROM series_analysis_jobs AS fixture_parent
+                                                            WHERE fixture_parent.id = attempt.job_id) = job.legacy_id
+WHERE job.legacy_id = '${analysis_job}'
+GROUP BY job.status, job.attempt_count;`,
         `the original analysis completes without a discarded attempt`,
         100000,
       );
       await waitSQL(
         `queued|1|true`,
-        `SELECT status || '|' || attempt_count || '|' || (failure_code IS NULL)::text
-         FROM ocr_jobs WHERE id = '${ocr_job}';`,
+        `SELECT status || '|' || attempt_count || '|' || CAST(failure_code IS NULL AS text)
+FROM ocr_jobs
+WHERE ocr_jobs.legacy_id = '${ocr_job}';`,
         `the next OCR attempt reaches its transient R2 requeue`,
       );
       await waitSQL(
         `succeeded|1`,
-        `SELECT status || '|' || attempt_count FROM series_analysis_jobs WHERE id = '${waiting_job}';`,
+        `SELECT status || '|' || attempt_count
+FROM series_analysis_jobs
+WHERE series_analysis_jobs.legacy_id = '${waiting_job}';`,
         `analysis resumes after the queued OCR attempt`,
         100000,
       );
       check(
-        (await smoke.sql(`
-  SELECT (first_attempt.finished_at <= ocr.updated_at
-          AND ocr.updated_at <= next_attempt.started_at)::text
-  FROM series_analysis_job_attempts first_attempt, ocr_jobs ocr,
-       series_analysis_job_attempts next_attempt
-  WHERE first_attempt.job_id = '${analysis_job}' AND ocr.id = '${ocr_job}'
-    AND next_attempt.job_id = '${waiting_job}';
-`)) === "true",
+        (await smoke.sql(`SELECT CAST(first_attempt.finished_at <= ocr.updated_at AND ocr.updated_at <= next_attempt.started_at AS text)
+FROM series_analysis_job_attempts AS first_attempt, ocr_jobs AS ocr, series_analysis_job_attempts AS next_attempt
+WHERE (SELECT fixture_parent.legacy_id
+       FROM series_analysis_jobs AS fixture_parent
+       WHERE fixture_parent.id = first_attempt.job_id) = '${analysis_job}'
+  AND ocr.legacy_id = '${ocr_job}'
+  AND (SELECT fixture_parent.legacy_id
+       FROM series_analysis_jobs AS fixture_parent
+       WHERE fixture_parent.id = next_attempt.job_id) = '${waiting_job}';`)) === "true",
         "Queued OCR did not run between the completed analysis and the next analysis attempt.",
       );
       check(
@@ -306,20 +306,17 @@ await runSmoke("Combined analysis/OCR scheduling smoke", async (signal) => {
         "The completed analysis process group was not reaped.",
       );
       check(
-        (await smoke.sql(`
-  SELECT
-    COUNT(*) FILTER (
-      WHERE attempt.validation_contract_id IS DISTINCT FROM job.validation_contract_id
-    )::int,
-    (SELECT COUNT(*)::int
-     FROM series_analysis_artifacts artifact
-     WHERE artifact.game_title_id = '${title_id}'
-       AND artifact.status = 'published'
-       AND artifact.validation_contract_id = '${validation_contract_id}')
-  FROM series_analysis_job_attempts attempt
-  JOIN series_analysis_jobs job ON job.id = attempt.job_id
-  WHERE job.id = '${analysis_job}';
-`)) === "0|1",
+        (await smoke.sql(`SELECT CAST(count(*) FILTER (WHERE attempt.validation_contract_id IS DISTINCT FROM job.validation_contract_id) AS integer)
+     , (SELECT CAST(count(*) AS integer)
+        FROM series_analysis_artifacts AS artifact
+        WHERE artifact.game_title_id = '${title_id}'
+          AND artifact.status = 'published'
+          AND artifact.validation_contract_id = '${validation_contract_id}')
+FROM series_analysis_job_attempts AS attempt
+     INNER JOIN series_analysis_jobs AS job ON job.legacy_id = (SELECT fixture_parent.legacy_id
+                                                                FROM series_analysis_jobs AS fixture_parent
+                                                                WHERE fixture_parent.id = attempt.job_id)
+WHERE job.legacy_id = '${analysis_job}';`)) === "0|1",
         "Analysis completion lost validation contract provenance.",
       );
       await smoke.running(worker_container);

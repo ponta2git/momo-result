@@ -63,8 +63,8 @@ const MEMBER_IDS: [&str; 4] = [
 #[ignore = "requires explicitly isolated ANALYSIS_CONTROL_SMOKE_DATABASE_URL"]
 async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> SmokeResult {
     let database_url = std::env::var("ANALYSIS_CONTROL_SMOKE_DATABASE_URL")?;
-    let mut primary = crate::postgres::connect(&database_url).await?;
-    let mut secondary = crate::postgres::connect(&database_url).await?;
+    let mut primary = crate::identity::fixtures::connect(&database_url).await?;
+    let mut secondary = crate::identity::fixtures::connect(&database_url).await?;
     cleanup_database(&primary).await?;
     prepare_owned_attempt(&primary).await?;
     primary
@@ -146,7 +146,7 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
     .await;
     fs::rename(saved_path, unavailable_path)?;
     reconciliation?;
-    let mut primary = crate::postgres::connect(&database_url).await?;
+    let mut primary = crate::identity::fixtures::connect(&database_url).await?;
     assert_artifact_shape(&secondary, &old_manifest.manifest().artifact_id, "1|0|4").await?;
 
     let Err(sealed_mutation_error) = secondary
@@ -210,8 +210,11 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
     publish_staged_artifact(&transaction, &new_claim, &new_manifest).await?;
     transaction
         .execute(
-            "UPDATE series_analysis_jobs SET lease_expires_at = clock_timestamp() - interval '1 second'\x20\
-             WHERE id = $1 AND lease_owner = $2",
+            r"
+                UPDATE series_analysis_jobs
+                SET lease_expires_at = clock_timestamp() - CAST('1 second' AS interval)
+                WHERE series_analysis_jobs.legacy_id = $1 AND lease_owner = $2
+                ",
             &[&JOB_ID, &NEW_WORKER_ID],
         )
         .await?;
@@ -236,8 +239,11 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
 
     secondary
         .batch_execute(&format!(
-            "UPDATE series_analysis_jobs SET lease_expires_at = clock_timestamp() + interval '10 minutes'\x20\
-             WHERE id = '{JOB_ID}' AND lease_owner = '{NEW_WORKER_ID}';"
+            r"
+                UPDATE series_analysis_jobs
+                SET lease_expires_at = clock_timestamp() + CAST('10 minutes' AS interval)
+                WHERE series_analysis_jobs.legacy_id = '{JOB_ID}' AND lease_owner = '{NEW_WORKER_ID}';
+                "
         ))
         .await?;
     let publication = primary.transaction().await?;
@@ -289,13 +295,19 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
 
     let cleaned = secondary
         .execute(
-            "DELETE FROM series_analysis_artifacts a\x20\
-             WHERE a.id = $1 AND a.status = 'published'\x20\
-               AND a.published_at < clock_timestamp() - interval '1 day'\x20\
-               AND NOT EXISTS (\x20\
-                 SELECT 1 FROM series_analysis_title_states s\x20\
-                 WHERE a.id IN (s.current_artifact_id, s.previous_artifact_id)\x20\
-               )",
+            r"
+                DELETE FROM series_analysis_artifacts AS a
+                WHERE a.id = $1
+                  AND a.status = 'published'
+                  AND a.published_at < clock_timestamp() - CAST('1 day' AS interval)
+                  AND NOT EXISTS (SELECT 1
+                                  FROM series_analysis_title_states AS s
+                                  WHERE a.id IN ((SELECT fixture_parent.legacy_id
+                                                  FROM series_analysis_artifact_identities AS fixture_parent
+                                                  WHERE fixture_parent.id = s.current_artifact_id), (SELECT fixture_parent.legacy_id
+                                                  FROM series_analysis_artifact_identities AS fixture_parent
+                                                  WHERE fixture_parent.id = s.previous_artifact_id)))
+                ",
             &[&old_manifest.manifest().artifact_id],
         )
         .await?;
@@ -542,14 +554,25 @@ async fn stage_with_control_lock_probe(
     let probe = probe_client.transaction().await?;
     probe
         .query_one(
-            "SELECT 1 FROM series_analysis_title_states\x20\
-             WHERE game_title_id = $1 FOR UPDATE NOWAIT",
+            r"
+                SELECT 1
+                FROM series_analysis_title_states
+                WHERE (SELECT fixture_parent.legacy_id
+                       FROM game_titles AS fixture_parent
+                       WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = $1
+                FOR UPDATE NOWAIT
+                ",
             &[&claim.game_title_id],
         )
         .await?;
     probe
         .query_one(
-            "SELECT 1 FROM series_analysis_jobs WHERE id = $1 FOR UPDATE NOWAIT",
+            r"
+                SELECT 1
+                FROM series_analysis_jobs
+                WHERE series_analysis_jobs.legacy_id = $1
+                FOR UPDATE NOWAIT
+                ",
             &[&claim.job_id],
         )
         .await?;
@@ -561,58 +584,69 @@ async fn stage_with_control_lock_probe(
 async fn prepare_owned_attempt(client: &Client) -> SmokeResult {
     client
         .batch_execute(&format!(
-            "INSERT INTO game_titles (id, name, layout_family, display_order)\x20\
-             VALUES ('{TITLE_ID}', 'Analysis staging smoke', 'momotetsu_2', 9999);\x20\
-             INSERT INTO series_analysis_title_states (game_title_id, algorithm_version, artifact_schema_version, validation_contract_id)\x20\
-             SELECT '{TITLE_ID}', algorithm_version, artifact_schema_version, validation_contract_id\x20\
-             FROM series_analysis_release_state WHERE singleton_key = 'current' ON CONFLICT DO NOTHING;\x20\
-             INSERT INTO held_events (id, session_id, held_date_iso, start_at)\x20\
-             VALUES ('{EVENT_ID}', NULL, DATE '2026-08-14', TIMESTAMPTZ '2026-08-14 00:00:00+00');\x20\
-             INSERT INTO season_masters (id, game_title_id, name, display_order)\x20\
-             VALUES ('{SEASON_ID}', '{TITLE_ID}', 'Analysis staging season', 9999);\x20\
-             INSERT INTO map_masters (id, game_title_id, name, display_order)\x20\
-             VALUES ('{MAP_ID}', '{TITLE_ID}', 'Analysis staging map', 9999);\x20\
-             INSERT INTO matches (\x20\
-               id, held_event_id, match_no_in_event, game_title_id, layout_family,\x20\
-               season_master_id, owner_member_id, map_master_id, played_at,\x20\
-               created_by_account_id, created_by_member_id, analysis_revision\x20\
-             ) VALUES (\x20\
-               '{MATCH_ID}', '{EVENT_ID}', 1, '{TITLE_ID}', 'momotetsu_2', '{SEASON_ID}',\x20\
-               'member_ponta', '{MAP_ID}', TIMESTAMPTZ '2026-08-14 00:00:00+00',\x20\
-               'account_ponta', 'member_ponta', 1\x20\
-             );\x20\
-             INSERT INTO match_players (\x20\
-               match_id, member_id, play_order, rank, total_assets_man_yen, revenue_man_yen\x20\
-             ) VALUES\x20\
-               ('{MATCH_ID}', 'member_ponta', 1, 1, 1000, 100),\x20\
-               ('{MATCH_ID}', 'member_akane_mami', 2, 2, 2000, 200),\x20\
-               ('{MATCH_ID}', 'member_otaka', 3, 3, 3000, 300),\x20\
-               ('{MATCH_ID}', 'member_eu', 4, 4, 4000, 400);\x20\
-             UPDATE series_analysis_title_states SET input_revision = 1,\x20\
-               algorithm_version = '{ALGORITHM_VERSION}', artifact_schema_version = {ARTIFACT_SCHEMA_VERSION},\x20\
-               validation_contract_id = '{ARTIFACT_VALIDATION_CONTRACT_ID}',\x20\
-               pending_work = true WHERE game_title_id = '{TITLE_ID}';\x20\
-             INSERT INTO series_analysis_jobs (\x20\
-               id, game_title_id, input_revision, algorithm_version, artifact_schema_version,\x20\
-               validation_contract_id,\x20\
-               status, trigger, started_at, lease_owner, lease_attempt_id,\x20\
-               lease_fencing_token, lease_expires_at, lease_validation_contract_id, attempt_count, fencing_counter\x20\
-             ) VALUES (\x20\
-               '{JOB_ID}', '{TITLE_ID}', 1, '{ALGORITHM_VERSION}', {ARTIFACT_SCHEMA_VERSION},\x20\
-               '{ARTIFACT_VALIDATION_CONTRACT_ID}',\x20\
-               'running', 'manual', clock_timestamp(), '{OLD_WORKER_ID}', '{OLD_ATTEMPT_ID}',\x20\
-               {OLD_FENCE}, clock_timestamp() + interval '10 minutes',\x20\
-               '{ARTIFACT_VALIDATION_CONTRACT_ID}', 1, {OLD_FENCE}\x20\
-             );\x20\
-             INSERT INTO series_analysis_job_attempts (\x20\
-               id, job_id, attempt_no, owner, fencing_token, input_revision, algorithm_version,\x20\
-               artifact_schema_version, validation_contract_id, status, effective_config_version,\x20\
-               calculation_timeout_milliseconds\x20\
-             ) VALUES (\x20\
-               '{OLD_ATTEMPT_ID}', '{JOB_ID}', 1, '{OLD_WORKER_ID}', {OLD_FENCE}, 1,\x20\
-               '{ALGORITHM_VERSION}', {ARTIFACT_SCHEMA_VERSION},\x20\
-               '{ARTIFACT_VALIDATION_CONTRACT_ID}', 'running', 'staging-smoke', 60000\x20\
-             );"
+            r"
+                WITH fixture_titles AS (
+                       INSERT INTO game_titles (id, legacy_id, name, layout_family, display_order)
+                       VALUES (pg_temp.fixture_uuid('game_titles', '{TITLE_ID}'), '{TITLE_ID}', 'Analysis staging smoke', 'momotetsu_2', 9999)
+                       RETURNING id
+                     )
+                  INSERT INTO series_analysis_title_states (game_title_id, algorithm_version, artifact_schema_version, validation_contract_id)
+                  SELECT fixture_titles.id, release.algorithm_version, release.artifact_schema_version, release.validation_contract_id
+                  FROM fixture_titles CROSS JOIN series_analysis_release_state AS release
+                  WHERE release.singleton_key = 'current'
+                  ON CONFLICT (game_title_id) DO NOTHING;
+                INSERT INTO series_analysis_title_states (game_title_id, algorithm_version, artifact_schema_version, validation_contract_id)
+                SELECT pg_temp.fixture_uuid('game_titles', '{TITLE_ID}'), algorithm_version, artifact_schema_version, validation_contract_id
+                FROM series_analysis_release_state
+                WHERE singleton_key = 'current'
+                ON CONFLICT DO NOTHING;
+                INSERT INTO held_events (id, legacy_id, session_id, held_date_iso, start_at)
+                VALUES (pg_temp.fixture_uuid('held_events', '{EVENT_ID}'), '{EVENT_ID}', NULL, CAST('2026-08-14' AS date),
+                        CAST('2026-08-14 00:00:00+00' AS timestamptz));
+                INSERT INTO season_masters (id, legacy_id, game_title_id, name, display_order)
+                VALUES (pg_temp.fixture_uuid('season_masters', '{SEASON_ID}'), '{SEASON_ID}',
+                        pg_temp.fixture_uuid('game_titles', '{TITLE_ID}'), 'Analysis staging season', 9999);
+                INSERT INTO map_masters (id, legacy_id, game_title_id, name, display_order)
+                VALUES (pg_temp.fixture_uuid('map_masters', '{MAP_ID}'), '{MAP_ID}',
+                        pg_temp.fixture_uuid('game_titles', '{TITLE_ID}'), 'Analysis staging map', 9999);
+                INSERT INTO matches (id, legacy_id, held_event_id, legacy_held_event_id, match_no_in_event, game_title_id,
+                                     layout_family, season_master_id, owner_member_id, map_master_id, played_at, created_by_account_id,
+                                     created_by_member_id, analysis_revision)
+                VALUES (pg_temp.fixture_uuid('matches', '{MATCH_ID}'), '{MATCH_ID}',
+                        pg_temp.fixture_uuid('held_events', '{EVENT_ID}'), '{EVENT_ID}', 1,
+                        pg_temp.fixture_uuid('game_titles', '{TITLE_ID}'), 'momotetsu_2',
+                        pg_temp.fixture_uuid('season_masters', '{SEASON_ID}'), pg_temp.fixture_uuid('members', 'member_ponta'),
+                        pg_temp.fixture_uuid('map_masters', '{MAP_ID}'), CAST('2026-08-14 00:00:00+00' AS timestamptz),
+                        pg_temp.fixture_uuid('momo_login_accounts', 'account_ponta'), pg_temp.fixture_uuid('members', 'member_ponta'), 1);
+                INSERT INTO match_players (match_id, member_id, play_order, rank, total_assets_man_yen, revenue_man_yen)
+                VALUES (pg_temp.fixture_uuid('matches', '{MATCH_ID}'), pg_temp.fixture_uuid('members', 'member_ponta'), 1, 1, 1000, 100),
+                       (pg_temp.fixture_uuid('matches', '{MATCH_ID}'), pg_temp.fixture_uuid('members', 'member_akane_mami'), 2, 2, 2000, 200),
+                       (pg_temp.fixture_uuid('matches', '{MATCH_ID}'), pg_temp.fixture_uuid('members', 'member_otaka'), 3, 3, 3000, 300),
+                       (pg_temp.fixture_uuid('matches', '{MATCH_ID}'), pg_temp.fixture_uuid('members', 'member_eu'), 4, 4, 4000, 400);
+                UPDATE series_analysis_title_states
+                SET input_revision = 1, algorithm_version = '{ALGORITHM_VERSION}',
+                    artifact_schema_version = {ARTIFACT_SCHEMA_VERSION}, validation_contract_id = '{ARTIFACT_VALIDATION_CONTRACT_ID}',
+                    pending_work = TRUE
+                WHERE (SELECT fixture_parent.legacy_id
+                       FROM game_titles AS fixture_parent
+                       WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = '{TITLE_ID}';
+                INSERT INTO series_analysis_jobs (id, legacy_id, game_title_id, input_revision, algorithm_version,
+                                                  artifact_schema_version, validation_contract_id, status, trigger, started_at, lease_owner, lease_attempt_id,
+                                                  legacy_lease_attempt_id, lease_fencing_token, lease_expires_at, lease_validation_contract_id, attempt_count,
+                                                  fencing_counter)
+                VALUES (pg_temp.fixture_uuid('series_analysis_jobs', '{JOB_ID}'), '{JOB_ID}',
+                        pg_temp.fixture_uuid('game_titles', '{TITLE_ID}'), 1, '{ALGORITHM_VERSION}', {ARTIFACT_SCHEMA_VERSION},
+                        '{ARTIFACT_VALIDATION_CONTRACT_ID}', 'running', 'manual', clock_timestamp(), '{OLD_WORKER_ID}',
+                        pg_temp.fixture_uuid('series_analysis_job_attempts', '{OLD_ATTEMPT_ID}'), '{OLD_ATTEMPT_ID}', {OLD_FENCE},
+                        clock_timestamp() + CAST('10 minutes' AS interval), '{ARTIFACT_VALIDATION_CONTRACT_ID}', 1, {OLD_FENCE});
+                INSERT INTO series_analysis_job_attempts (id, legacy_id, job_id, attempt_no, owner, fencing_token, input_revision,
+                                                          algorithm_version, artifact_schema_version, validation_contract_id, status, effective_config_version,
+                                                          calculation_timeout_milliseconds)
+                VALUES (pg_temp.fixture_uuid('series_analysis_job_attempts', '{OLD_ATTEMPT_ID}'), '{OLD_ATTEMPT_ID}',
+                        pg_temp.fixture_uuid('series_analysis_jobs', '{JOB_ID}'), 1, '{OLD_WORKER_ID}', {OLD_FENCE}, 1,
+                        '{ALGORITHM_VERSION}', {ARTIFACT_SCHEMA_VERSION}, '{ARTIFACT_VALIDATION_CONTRACT_ID}', 'running', 'staging-smoke',
+                        60000);
+                "
         ))
         .await?;
     Ok(())
@@ -622,11 +656,13 @@ async fn assert_claim_reports_database_availability_delay(client: &mut Client) -
     let transaction = client.transaction().await?;
     transaction
         .batch_execute(&format!(
-            "UPDATE series_analysis_jobs SET status = 'queued', available_at = clock_timestamp() + interval '1 hour',\x20\
-               started_at = NULL, lease_owner = NULL, lease_attempt_id = NULL,\x20\
-               lease_fencing_token = NULL, lease_expires_at = NULL,\x20\
-               lease_validation_contract_id = NULL, updated_at = clock_timestamp()\x20\
-             WHERE id = '{JOB_ID}';"
+            r"
+                UPDATE series_analysis_jobs
+                SET status = 'queued', available_at = clock_timestamp() + CAST('1 hour' AS interval), started_at = NULL,
+                    lease_owner = NULL, lease_attempt_id = NULL, legacy_lease_attempt_id = NULL, lease_fencing_token = NULL,
+                    lease_expires_at = NULL, lease_validation_contract_id = NULL, updated_at = clock_timestamp()
+                WHERE series_analysis_jobs.legacy_id = '{JOB_ID}';
+                "
         ))
         .await?;
 
@@ -661,9 +697,11 @@ async fn assert_recovery_rejects_a_mismatched_job_owner(
 ) -> SmokeResult {
     secondary
         .batch_execute(&format!(
-            "UPDATE series_analysis_jobs SET lease_owner = '{NEW_WORKER_ID}',\x20\
-               lease_expires_at = clock_timestamp() - interval '1 second'\x20\
-             WHERE id = '{JOB_ID}' AND status = 'running';"
+            r"
+                UPDATE series_analysis_jobs
+                SET lease_owner = '{NEW_WORKER_ID}', lease_expires_at = clock_timestamp() - CAST('1 second' AS interval)
+                WHERE series_analysis_jobs.legacy_id = '{JOB_ID}' AND status = 'running';
+                "
         ))
         .await?;
     let transaction = primary.transaction().await?;
@@ -676,10 +714,11 @@ async fn assert_recovery_rejects_a_mismatched_job_owner(
 
     let unchanged = secondary
         .query_one(
-            "SELECT j.status, j.lease_owner, a.status, j.fencing_counter\x20\
-             FROM series_analysis_jobs j\x20\
-             JOIN series_analysis_job_attempts a ON a.id = $2\x20\
-             WHERE j.id = $1",
+            r"
+                SELECT j.status, j.lease_owner, a.status, j.fencing_counter
+                FROM series_analysis_jobs AS j INNER JOIN series_analysis_job_attempts AS a ON a.legacy_id = $2
+                WHERE j.legacy_id = $1
+                ",
             &[&JOB_ID, &OLD_ATTEMPT_ID],
         )
         .await?;
@@ -690,9 +729,11 @@ async fn assert_recovery_rejects_a_mismatched_job_owner(
 
     secondary
         .batch_execute(&format!(
-            "UPDATE series_analysis_jobs SET lease_owner = '{OLD_WORKER_ID}',\x20\
-               lease_expires_at = clock_timestamp() + interval '10 minutes'\x20\
-             WHERE id = '{JOB_ID}' AND status = 'running';"
+            r"
+                UPDATE series_analysis_jobs
+                SET lease_owner = '{OLD_WORKER_ID}', lease_expires_at = clock_timestamp() + CAST('10 minutes' AS interval)
+                WHERE series_analysis_jobs.legacy_id = '{JOB_ID}' AND status = 'running';
+                "
         ))
         .await?;
     Ok(())
@@ -708,16 +749,26 @@ async fn assert_recovery_locks_title_before_job(
         .try_get::<_, i32>(0)?;
     secondary
         .batch_execute(&format!(
-            "UPDATE series_analysis_jobs SET lease_recovery_count = 3,\x20\
-               lease_expires_at = clock_timestamp() - interval '1 second'\x20\
-             WHERE id = '{JOB_ID}' AND status = 'running';"
+            r"
+                UPDATE series_analysis_jobs
+                SET lease_recovery_count = 3, lease_expires_at = clock_timestamp() - CAST('1 second' AS interval)
+                WHERE series_analysis_jobs.legacy_id = '{JOB_ID}' AND status = 'running';
+                "
         ))
         .await?;
     let title_holder = secondary.transaction().await?;
     title_holder
         .query_one(
-            "SELECT game_title_id FROM series_analysis_title_states\x20\
-             WHERE game_title_id = $1 FOR UPDATE",
+            r"
+                SELECT (SELECT fixture_parent.legacy_id
+                        FROM game_titles AS fixture_parent
+                        WHERE fixture_parent.id = series_analysis_title_states.game_title_id) AS game_title_id
+                FROM series_analysis_title_states
+                WHERE (SELECT fixture_parent.legacy_id
+                       FROM game_titles AS fixture_parent
+                       WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = $1
+                FOR UPDATE
+                ",
             &[&TITLE_ID],
         )
         .await?;
@@ -731,7 +782,12 @@ async fn assert_recovery_locks_title_before_job(
 
         title_holder
             .query_one(
-                "SELECT id FROM series_analysis_jobs WHERE id = $1 FOR UPDATE NOWAIT",
+                r"
+                    SELECT series_analysis_jobs.legacy_id AS id
+                    FROM series_analysis_jobs
+                    WHERE series_analysis_jobs.legacy_id = $1
+                    FOR UPDATE NOWAIT
+                    ",
                 &[&JOB_ID],
             )
             .await?;
@@ -742,9 +798,11 @@ async fn assert_recovery_locks_title_before_job(
 
     secondary
         .batch_execute(&format!(
-            "UPDATE series_analysis_jobs SET lease_recovery_count = 0,\x20\
-               lease_expires_at = clock_timestamp() + interval '10 minutes'\x20\
-             WHERE id = '{JOB_ID}' AND status = 'running';"
+            r"
+                UPDATE series_analysis_jobs
+                SET lease_recovery_count = 0, lease_expires_at = clock_timestamp() + CAST('10 minutes' AS interval)
+                WHERE series_analysis_jobs.legacy_id = '{JOB_ID}' AND status = 'running';
+                "
         ))
         .await?;
     Ok(())
@@ -788,8 +846,11 @@ async fn assert_recovery_defers_then_allows_the_next_claim(
 ) -> SmokeResult {
     secondary
         .batch_execute(&format!(
-            "UPDATE series_analysis_jobs SET lease_expires_at = clock_timestamp() - interval '1 second'\x20\
-             WHERE id = '{JOB_ID}' AND status = 'running';"
+            r"
+                UPDATE series_analysis_jobs
+                SET lease_expires_at = clock_timestamp() - CAST('1 second' AS interval)
+                WHERE series_analysis_jobs.legacy_id = '{JOB_ID}' AND status = 'running';
+                "
         ))
         .await?;
 
@@ -811,9 +872,11 @@ async fn assert_recovery_defers_then_allows_the_next_claim(
 
     let recovered = secondary
         .query_one(
-            "SELECT j.status, j.lease_owner, j.available_at <= clock_timestamp()\x20\
-             FROM series_analysis_jobs j\x20\
-             WHERE j.id = $1",
+            r"
+                SELECT j.status, j.lease_owner, j.available_at <= clock_timestamp()
+                FROM series_analysis_jobs AS j
+                WHERE j.legacy_id = $1
+                ",
             &[&JOB_ID],
         )
         .await?;
@@ -836,9 +899,11 @@ async fn assert_exhausted_recovery_resolves_the_current_candidate(
 ) -> SmokeResult {
     observer
         .batch_execute(&format!(
-            "UPDATE series_analysis_jobs SET lease_recovery_count = 3,\x20\
-               lease_expires_at = clock_timestamp() - interval '1 second'\x20\
-             WHERE id = '{JOB_ID}' AND status = 'running';"
+            r"
+                UPDATE series_analysis_jobs
+                SET lease_recovery_count = 3, lease_expires_at = clock_timestamp() - CAST('1 second' AS interval)
+                WHERE series_analysis_jobs.legacy_id = '{JOB_ID}' AND status = 'running';
+                "
         ))
         .await?;
 
@@ -860,11 +925,17 @@ async fn assert_exhausted_recovery_resolves_the_current_candidate(
 
     let terminal = observer
         .query_one(
-            "SELECT j.status, j.lease_recovery_count, j.safe_failure_code,\x20\
-                    a.status, a.outcome, j.lease_owner, j.lease_attempt_id\x20\
-             FROM series_analysis_jobs j\x20\
-             JOIN series_analysis_job_attempts a ON a.id = $2\x20\
-             WHERE j.id = $1",
+            r"
+                SELECT j.status
+                     , j.lease_recovery_count
+                     , j.safe_failure_code
+                     , a.status
+                     , a.outcome
+                     , j.lease_owner
+                     , j.legacy_lease_attempt_id AS lease_attempt_id
+                FROM series_analysis_jobs AS j INNER JOIN series_analysis_job_attempts AS a ON a.legacy_id = $2
+                WHERE j.legacy_id = $1
+                ",
             &[&JOB_ID, &OLD_ATTEMPT_ID],
         )
         .await?;
@@ -884,21 +955,24 @@ async fn assert_exhausted_recovery_resolves_the_current_candidate(
 async fn expire_old_lease_and_prepare_retry(client: &Client) -> SmokeResult {
     client
         .batch_execute(&format!(
-            "UPDATE series_analysis_job_attempts SET status = 'terminal', outcome = 'owner_lost',\x20\
-               finished_at = clock_timestamp() WHERE id = '{OLD_ATTEMPT_ID}';\x20\
-             UPDATE series_analysis_jobs SET lease_owner = '{NEW_WORKER_ID}',\x20\
-               lease_attempt_id = '{NEW_ATTEMPT_ID}', lease_fencing_token = {NEW_FENCE}, fencing_counter = {NEW_FENCE},\x20\
-               lease_expires_at = clock_timestamp() + interval '10 minutes', attempt_count = 2\x20\
-             WHERE id = '{JOB_ID}' AND status = 'running';\x20\
-             INSERT INTO series_analysis_job_attempts (\x20\
-               id, job_id, attempt_no, owner, fencing_token, input_revision, algorithm_version,\x20\
-               artifact_schema_version, validation_contract_id, status, effective_config_version,\x20\
-               calculation_timeout_milliseconds\x20\
-             ) VALUES (\x20\
-               '{NEW_ATTEMPT_ID}', '{JOB_ID}', 2, '{NEW_WORKER_ID}', {NEW_FENCE}, 1,\x20\
-               '{ALGORITHM_VERSION}', {ARTIFACT_SCHEMA_VERSION},\x20\
-               '{ARTIFACT_VALIDATION_CONTRACT_ID}', 'running', 'staging-smoke', 60000\x20\
-             );"
+            r"
+                UPDATE series_analysis_job_attempts
+                SET status = 'terminal', outcome = 'owner_lost', finished_at = clock_timestamp()
+                WHERE series_analysis_job_attempts.legacy_id = '{OLD_ATTEMPT_ID}';
+                UPDATE series_analysis_jobs
+                SET lease_owner = '{NEW_WORKER_ID}',
+                    lease_attempt_id = pg_temp.fixture_uuid('series_analysis_job_attempts', '{NEW_ATTEMPT_ID}'),
+                    legacy_lease_attempt_id = '{NEW_ATTEMPT_ID}', lease_fencing_token = {NEW_FENCE}, fencing_counter = {NEW_FENCE},
+                    lease_expires_at = clock_timestamp() + CAST('10 minutes' AS interval), attempt_count = 2
+                WHERE series_analysis_jobs.legacy_id = '{JOB_ID}' AND status = 'running';
+                INSERT INTO series_analysis_job_attempts (id, legacy_id, job_id, attempt_no, owner, fencing_token, input_revision,
+                                                          algorithm_version, artifact_schema_version, validation_contract_id, status, effective_config_version,
+                                                          calculation_timeout_milliseconds)
+                VALUES (pg_temp.fixture_uuid('series_analysis_job_attempts', '{NEW_ATTEMPT_ID}'), '{NEW_ATTEMPT_ID}',
+                        pg_temp.fixture_uuid('series_analysis_jobs', '{JOB_ID}'), 2, '{NEW_WORKER_ID}', {NEW_FENCE}, 1,
+                        '{ALGORITHM_VERSION}', {ARTIFACT_SCHEMA_VERSION}, '{ARTIFACT_VALIDATION_CONTRACT_ID}', 'running', 'staging-smoke',
+                        60000);
+                "
         ))
         .await?;
     Ok(())
@@ -957,8 +1031,13 @@ async fn seed_unattested_current(client: &mut Client, artifact: &ValidatedArtifa
         .await?;
     transaction
         .execute(
-            "UPDATE series_analysis_title_states SET current_artifact_id = $1\x20\
-             WHERE game_title_id = $2",
+            r"
+                UPDATE series_analysis_title_states
+                SET current_artifact_id = pg_temp.fixture_uuid('series_analysis_artifacts', $1)
+                WHERE (SELECT fixture_parent.legacy_id
+                       FROM game_titles AS fixture_parent
+                       WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = $2
+                ",
             &[artifact_id, &TITLE_ID],
         )
         .await?;
@@ -973,8 +1052,18 @@ async fn assert_artifact_pointers(
 ) -> SmokeResult {
     let row = client
         .query_one(
-            "SELECT current_artifact_id, previous_artifact_id\x20\
-             FROM series_analysis_title_states WHERE game_title_id = $1",
+            r"
+                SELECT (SELECT fixture_parent.legacy_id
+                        FROM series_analysis_artifact_identities AS fixture_parent
+                        WHERE fixture_parent.id = series_analysis_title_states.current_artifact_id) AS current_artifact_id,
+                       (SELECT fixture_parent.legacy_id
+                        FROM series_analysis_artifact_identities AS fixture_parent
+                        WHERE fixture_parent.id = series_analysis_title_states.previous_artifact_id) AS previous_artifact_id
+                FROM series_analysis_title_states
+                WHERE (SELECT fixture_parent.legacy_id
+                       FROM game_titles AS fixture_parent
+                       WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = $1
+                ",
             &[&TITLE_ID],
         )
         .await?;
@@ -992,7 +1081,15 @@ async fn assert_artifact_pointers(
 async fn assert_current(client: &Client, expected: Option<&str>) -> SmokeResult {
     let actual = client
         .query_one(
-            "SELECT current_artifact_id FROM series_analysis_title_states WHERE game_title_id = $1",
+            r"
+                SELECT (SELECT fixture_parent.legacy_id
+                        FROM series_analysis_artifact_identities AS fixture_parent
+                        WHERE fixture_parent.id = series_analysis_title_states.current_artifact_id) AS current_artifact_id
+                FROM series_analysis_title_states
+                WHERE (SELECT fixture_parent.legacy_id
+                       FROM game_titles AS fixture_parent
+                       WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = $1
+                ",
             &[&TITLE_ID],
         )
         .await?
@@ -1004,11 +1101,18 @@ async fn assert_current(client: &Client, expected: Option<&str>) -> SmokeResult 
 async fn cleanup_database(client: &Client) -> SmokeResult {
     client
         .batch_execute(&format!(
-            "DELETE FROM matches WHERE id = '{MATCH_ID}';\x20\
-             DELETE FROM held_events WHERE id = '{EVENT_ID}';\x20\
-             DELETE FROM season_masters WHERE id = '{SEASON_ID}';\x20\
-             DELETE FROM map_masters WHERE id = '{MAP_ID}';\x20\
-             DELETE FROM game_titles WHERE id = '{TITLE_ID}';"
+            r"
+                DELETE FROM matches
+                WHERE matches.legacy_id = '{MATCH_ID}';
+                DELETE FROM held_events
+                WHERE held_events.legacy_id = '{EVENT_ID}';
+                DELETE FROM season_masters
+                WHERE season_masters.legacy_id = '{SEASON_ID}';
+                DELETE FROM map_masters
+                WHERE map_masters.legacy_id = '{MAP_ID}';
+                DELETE FROM game_titles
+                WHERE game_titles.legacy_id = '{TITLE_ID}';
+                "
         ))
         .await?;
     Ok(())

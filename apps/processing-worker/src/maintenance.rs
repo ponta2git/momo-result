@@ -38,7 +38,7 @@ pub(crate) async fn readiness(database_url: &str) -> Result<DatabaseProof, &'sta
 }
 
 async fn check_database(database_url: &str) -> Result<DatabaseProof, &'static str> {
-    let mut client = crate::postgres::connect(database_url)
+    let mut client = crate::postgres::connect_frozen(database_url)
         .await
         .map_err(|_error| "maintenance database connection failed")?;
     let transaction = client

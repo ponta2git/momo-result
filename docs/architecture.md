@@ -53,9 +53,11 @@
 ### Bootstrap / HTTP execution
 
 - PostgreSQL を通常 runtime の永続化境界とし、DB 設定の欠落を InMemory へ fallback させない。接続 pool、storage、cache、wake とその Resource は runtime が一度だけ生成・所有する。
+- identity storage は起動時の read-only snapshot で legacy / canonical の完全な schema 契約を検証し、確定した mode を repository へ渡す。途中の移行状態を列の有無だけで受理しない。canonical の主キー・参照は UUID、既存 HTTP identity と principal は保存した exact legacy alias を使い、通常の参照入力は既存 row の alias / UUID lookup で解決する。
 - feature ごとの bootstrap が必要な repository / service から usecase を組み立て、HTTP module が所有する UseCases の束をそのまま渡す。中央で同じ一覧を展開・再包装しない。個々の usecase は必要な port だけを受け取り、runtime 全体の依存 container を参照しない。
 - 共通 HTTP 入口は認可、replay、decode、usecase 実行、response 変換の接続を扱い、業務判断や transaction を所有しない。endpoint ごとの codec・実行関数・response の指定は composition として明示し、用途の異なる手順を切替 flag の組合せへ押し込まない。
 - 処理順は認証・認可、入力上限、replay、新規操作の受付・業務検証の意味から決める。既存の並び自体を互換契約にせず、保存済み idempotency key / fingerprint や有効な client 契約を変える場合だけ必要な移行を設ける。時計、ID、member / alias の読取りは操作時に評価し、bootstrap で snapshot 化しない。
+- canonical でも旧 raw idempotency key の exact lookup と raw request hash の照合を先に行う。fresh key だけ UUID として受理し、旧 key の UUID 同値表記は別の新規操作にしない。本文内の既存参照は replay 判定後に解決し、旧・新 key の予約と合計 quota は同じ legacy account lock で直列化する。
 
 ### Usecase / Repository
 

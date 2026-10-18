@@ -53,7 +53,7 @@ final class RoleAuthorizationHttpSpec extends PostgresHttpAppTestFixtures:
       } *> runtime.gameTitles.createWithNextDisplayOrder(GameTitle(
         GameTitleId.unsafeFromString(title),
         "Role authorization",
-        "momotetsu2",
+        "momotetsu_2",
         1,
         now,
       )).void,

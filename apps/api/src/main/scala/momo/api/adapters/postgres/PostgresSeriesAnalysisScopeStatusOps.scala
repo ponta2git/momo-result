@@ -4,9 +4,11 @@ import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
 
+import momo.api.adapters.postgres.CanonicalIdentity.Entity
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.contracts.seriesanalysis.SeriesAnalysisArtifactContract
 import momo.api.domain.*
+import momo.api.domain.ids.GameTitleId
 import momo.api.errors.AppError
 
 private[postgres] object PostgresSeriesAnalysisScopeStatusOps:
@@ -18,27 +20,57 @@ private[postgres] object PostgresSeriesAnalysisScopeStatusOps:
       publishedHasMatches: Option[Boolean],
   )
 
-  def read(request: SeriesAnalysisScopeStatusRequest)
+  def read(request: SeriesAnalysisScopeStatusRequest)(using identities: PostgresIdentities)
+      : ConnectionIO[Either[AppError, SeriesAnalysisScopeStatus]] =
+    (
+      identities.normalize(Entity.GameTitles, request.gameTitleId.value),
+      identities.normalize(Entity.AnalysisArtifacts, request.artifactId),
+      PostgresSeriesAnalysisScopeOps.normalize(request.scope)
+    ).tupled.flatMap((title, artifact, scope) =>
+      readNormalized(request.copy(
+        gameTitleId = GameTitleId.unsafeFromString(title),
+        artifactId = artifact,
+        scope = scope
+      ))
+    )
+
+  private def readNormalized(request: SeriesAnalysisScopeStatusRequest)(using
+      identities: PostgresIdentities)
       : ConnectionIO[Either[AppError, SeriesAnalysisScopeStatus]] =
     val season = request.scope.seasonMasterId
     val map = request.scope.mapMasterId
     sql"""
       SELECT a.id, sm.name, mm.name,
         EXISTS(SELECT 1 FROM matches m WHERE m.game_title_id = gt.id
-          AND ($season::text IS NULL OR m.season_master_id = $season)
-          AND ($map::text IS NULL OR m.map_master_id = $map)),
+          AND ($season::text IS NULL OR m.season_master_id = ${identities.lookup(
+        Entity.SeasonMasters,
+        season.map(_.value)
+      )})
+          AND ($map::text IS NULL OR m.map_master_id = ${identities.lookup(
+        Entity.MapMasters,
+        map.map(_.value)
+      )})),
         CASE WHEN a.id IS NULL THEN NULL ELSE
           ${request.scope.key} = ANY(a.scope_keys) AND a.match_context_chunk_count > 0 END
       FROM game_titles gt
       LEFT JOIN series_analysis_title_states s ON s.game_title_id = gt.id
-      LEFT JOIN series_analysis_artifacts a ON a.game_title_id = gt.id
+      LEFT JOIN series_analysis_artifacts a ON a.game_title_id = ${identities.wireId("gt")}
         AND a.id = ${request.artifactId} AND a.status = 'published'
-        AND a.id IN (s.current_artifact_id, s.previous_artifact_id)
+        AND a.id IN (${identities.wireReference(
+        Entity.AnalysisArtifacts,
+        fr"s.current_artifact_id"
+      )}, ${identities.wireReference(Entity.AnalysisArtifacts, fr"s.previous_artifact_id")})
         AND a.artifact_schema_version = ${SeriesAnalysisArtifactContract.ArtifactSchemaVersion}
         AND a.validation_contract_id = ${SeriesAnalysisArtifactContract.ValidationContractId}
-      LEFT JOIN season_masters sm ON sm.game_title_id = gt.id AND sm.id = $season
-      LEFT JOIN map_masters mm ON mm.game_title_id = gt.id AND mm.id = $map
-      WHERE gt.id = ${request.gameTitleId}
+      LEFT JOIN season_masters sm ON sm.game_title_id = gt.id AND sm.id = ${identities.lookup(
+        Entity.SeasonMasters,
+        season.map(_.value)
+      )}
+      LEFT JOIN map_masters mm ON mm.game_title_id = gt.id AND mm.id = ${identities.lookup(
+        Entity.MapMasters,
+        map.map(_.value)
+      )}
+      WHERE gt.id = ${identities.lookup(Entity.GameTitles, request.gameTitleId.value)}
     """.query[ScopeRow].option.map {
       case None => AppError.NotFound("game title", request.gameTitleId.value).asLeft
       case Some(row) if request.artifactId.nonEmpty && row.artifactId.isEmpty =>

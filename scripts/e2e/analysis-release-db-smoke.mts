@@ -152,20 +152,35 @@ await runSmoke("Release control-plane smoke", async (signal) => {
       );
       check(
         (await smoke.sql(
-          `SELECT
-      (SELECT COUNT(*) FROM series_analysis_operation_requests),
-      (SELECT COUNT(*) FROM series_analysis_campaigns),
-      (SELECT COUNT(*) FROM series_analysis_campaign_targets),
-      (SELECT COUNT(*) FROM series_analysis_job_requests),
-      (SELECT COUNT(*) FROM series_analysis_jobs),
-      (SELECT COUNT(*) FROM series_analysis_campaign_targets
-        WHERE status = 'pending' AND job_request_id IS NULL
-          AND algorithm_version = :'algorithm' AND artifact_schema_version = :schema
-          AND validation_contract_id = :'contract'),
-      (SELECT COUNT(*) FROM series_analysis_campaigns WHERE validation_contract_id = :'contract'),
-      (SELECT COUNT(*) FROM series_analysis_campaign_targets WHERE validation_contract_id = :'contract'),
-      (SELECT COUNT(*) FROM series_analysis_title_states
-        WHERE game_title_id IN ('title-release-smoke-a', 'title-release-smoke-b') AND validation_contract_id = :'contract');`,
+          `SELECT (SELECT count(*)
+        FROM series_analysis_operation_requests)
+     , (SELECT count(*)
+        FROM series_analysis_campaigns)
+     , (SELECT count(*)
+        FROM series_analysis_campaign_targets)
+     , (SELECT count(*)
+        FROM series_analysis_job_requests)
+     , (SELECT count(*)
+        FROM series_analysis_jobs)
+     , (SELECT count(*)
+        FROM series_analysis_campaign_targets
+        WHERE status = 'pending'
+          AND series_analysis_campaign_targets.legacy_job_request_id IS NULL
+          AND algorithm_version = :'algorithm'
+          AND artifact_schema_version = :schema
+          AND validation_contract_id = :'contract')
+     , (SELECT count(*)
+        FROM series_analysis_campaigns
+        WHERE validation_contract_id = :'contract')
+     , (SELECT count(*)
+        FROM series_analysis_campaign_targets
+        WHERE validation_contract_id = :'contract')
+     , (SELECT count(*)
+        FROM series_analysis_title_states
+        WHERE (SELECT fixture_parent.legacy_id
+               FROM game_titles AS fixture_parent
+               WHERE fixture_parent.id = series_analysis_title_states.game_title_id) IN ('title-release-smoke-a', 'title-release-smoke-b')
+          AND validation_contract_id = :'contract');`,
           {
             algorithm: algorithmVersion,
             schema: artifactSchemaVersion,

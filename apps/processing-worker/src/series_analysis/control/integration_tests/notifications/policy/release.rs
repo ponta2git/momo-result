@@ -22,7 +22,19 @@ async fn real_postgres_release_detachment_preserves_notification_input_history()
         if mixed {
             add_second(&harness.client).await?;
             source.input_revision += 1;
-            harness.client.execute("UPDATE series_analysis_title_states SET input_revision=$2 WHERE game_title_id=$1", &[&TITLE_ID,&source.input_revision]).await?;
+            harness
+                .client
+                .execute(
+                    r"
+                UPDATE series_analysis_title_states
+                SET input_revision = $2
+                WHERE (SELECT fixture_parent.legacy_id
+                       FROM game_titles AS fixture_parent
+                       WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = $1
+                ",
+                    &[&TITLE_ID, &source.input_revision],
+                )
+                .await?;
         }
         capabilities(&harness.client).await?;
         let report = promote(&PromotionRequest {
@@ -35,7 +47,15 @@ async fn real_postgres_release_detachment_preserves_notification_input_history()
             apply: true,
         })
         .await?;
-        let pointer: Option<String> = harness.client.query_one("SELECT current_artifact_id FROM series_analysis_title_states WHERE game_title_id=$1", &[&TITLE_ID]).await?.try_get(0)?;
+        let pointer: Option<String> = harness.client.query_one(r"
+            SELECT (SELECT fixture_parent.legacy_id
+                    FROM series_analysis_artifact_identities AS fixture_parent
+                    WHERE fixture_parent.id = series_analysis_title_states.current_artifact_id) AS current_artifact_id
+            FROM series_analysis_title_states
+            WHERE (SELECT fixture_parent.legacy_id
+                   FROM game_titles AS fixture_parent
+                   WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = $1
+            ", &[&TITLE_ID]).await?.try_get(0)?;
         assert_eq!(
             pointer, None,
             "the real release transaction detaches the unreadable artifact"
@@ -79,7 +99,10 @@ async fn real_postgres_release_detachment_preserves_notification_input_history()
         harness
             .client
             .execute(
-                "DELETE FROM series_analysis_operation_requests WHERE id=$1",
+                r"
+                    DELETE FROM series_analysis_operation_requests
+                    WHERE series_analysis_operation_requests.legacy_id = $1
+                    ",
                 &[&report.operation_id],
             )
             .await?;
@@ -112,9 +135,27 @@ async fn seed_legacy(client: &Client) -> SmokeResult {
     // Explicit historical fixture: only relational input identity/counts are meaningful. The
     // current binary must never decode its opaque aggregate/context payload as a current schema.
     client
-        .execute("DELETE FROM series_analysis_jobs WHERE id=$1", &[&JOB_ID])
+        .execute(
+            r"
+            DELETE FROM series_analysis_jobs
+            WHERE series_analysis_jobs.legacy_id = $1
+            ",
+            &[&JOB_ID],
+        )
         .await?;
-    client.execute("INSERT INTO series_analysis_artifacts (id,game_title_id,input_revision,algorithm_version,artifact_schema_version,source_input_checksum,root_checksum,aggregate_chunk_count,review_chunk_count,drilldown_chunk_count,match_context_chunk_count,encoded_bytes,decoded_bytes) VALUES ($1,$2,1,$3,3,'sha256:'||repeat('a',64),'sha256:'||repeat('a',64),4,0,0,4,16,16)", &[&LEGACY_ARTIFACT,&TITLE_ID,&ALGORITHM_VERSION]).await?;
+    client.execute(r"
+        WITH fixture_insert AS (
+               INSERT INTO series_analysis_artifacts (id, game_title_id, input_revision, algorithm_version,
+                                                      artifact_schema_version, source_input_checksum, root_checksum, aggregate_chunk_count, review_chunk_count,
+                                                      drilldown_chunk_count, match_context_chunk_count, encoded_bytes, decoded_bytes)
+               VALUES ($1, $2, 1, $3, 3, 'sha256:' || repeat('a', 64), 'sha256:' || repeat('a', 64), 4, 0, 0, 4, 16, 16)
+               RETURNING id, game_title_id
+             )
+          INSERT INTO series_analysis_artifact_identities (id, legacy_id, game_title_id, legacy_game_title_id)
+          SELECT pg_temp.fixture_uuid('series_analysis_artifacts', fixture_insert.id), fixture_insert.id, title.id,
+                 fixture_insert.game_title_id
+          FROM fixture_insert INNER JOIN game_titles AS title ON title.legacy_id = fixture_insert.game_title_id
+        ", &[&LEGACY_ARTIFACT,&TITLE_ID,&ALGORITHM_VERSION]).await?;
     for (scope, kind, season, map) in [
         ("overall".to_owned(), "overall", None, None),
         (
@@ -136,6 +177,15 @@ async fn seed_legacy(client: &Client) -> SmokeResult {
     }
     client.execute("UPDATE series_analysis_artifacts SET validation_contract_id='series-analysis-artifact-v3-full-validation-v1' WHERE id=$1", &[&LEGACY_ARTIFACT]).await?;
     client.execute("UPDATE series_analysis_artifacts SET status='published', published_at=clock_timestamp() WHERE id=$1", &[&LEGACY_ARTIFACT]).await?;
-    client.execute("UPDATE series_analysis_title_states SET artifact_schema_version=3, validation_contract_id='series-analysis-artifact-v3-full-validation-v1', current_artifact_id=$2, notification_baseline_state='artifact', notification_baseline_artifact_id=$2 WHERE game_title_id=$1", &[&TITLE_ID,&LEGACY_ARTIFACT]).await?;
+    client.execute(r"
+        UPDATE series_analysis_title_states
+        SET artifact_schema_version = 3, validation_contract_id = 'series-analysis-artifact-v3-full-validation-v1',
+            current_artifact_id = pg_temp.fixture_uuid('series_analysis_artifacts', $2),
+            notification_baseline_state = 'artifact',
+            notification_baseline_artifact_id = pg_temp.fixture_uuid('series_analysis_artifacts', $2)
+        WHERE (SELECT fixture_parent.legacy_id
+               FROM game_titles AS fixture_parent
+               WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = $1
+        ", &[&TITLE_ID,&LEGACY_ARTIFACT]).await?;
     Ok(())
 }

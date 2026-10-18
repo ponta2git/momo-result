@@ -106,13 +106,13 @@ pub(super) async fn requires_staging(
                     AND s.artifact_schema_version = $4\x20\
                     AND s.validation_contract_id IS NOT DISTINCT FROM $5 AND NOT EXISTS (\x20\
                       SELECT 1 FROM series_analysis_artifacts a\x20\
-                      WHERE a.id = s.current_artifact_id AND a.game_title_id = s.game_title_id AND a.status = 'published'\x20\
+                      WHERE a.id = (SELECT legacy_id FROM series_analysis_artifact_identities WHERE id=s.current_artifact_id) AND a.game_title_id = $1 AND a.status = 'published'\x20\
                         AND a.input_revision = $2 AND a.algorithm_version = $3\x20\
                         AND a.artifact_schema_version = $4\x20\
                         AND a.validation_contract_id = $6\x20\
                         AND a.radar_basis_id IS NOT DISTINCT FROM $7 AND a.radar_generation = $8\x20\
                     )\x20\
-             FROM series_analysis_title_states s WHERE s.game_title_id = $1",
+             FROM series_analysis_title_states s WHERE s.game_title_id = (SELECT id FROM game_titles WHERE legacy_id=$1)",
             &[
                 &claim.game_title_id,
                 &claim.input_revision,
@@ -315,17 +315,17 @@ pub(super) async fn publish_staged_artifact(
         .execute(
             "UPDATE series_analysis_title_states SET\x20\
                previous_artifact_id = CASE\x20\
-                 WHEN current_artifact_id IS DISTINCT FROM $1 AND EXISTS (\x20\
+                 WHEN current_artifact_id IS DISTINCT FROM (SELECT id FROM series_analysis_artifact_identities WHERE legacy_id=$1) AND EXISTS (\x20\
                    SELECT 1 FROM series_analysis_artifacts previous\x20\
-                   WHERE previous.id = current_artifact_id AND previous.status = 'published'\x20\
+                   WHERE previous.id = (SELECT legacy_id FROM series_analysis_artifact_identities WHERE id=current_artifact_id) AND previous.status = 'published'\x20\
                      AND previous.game_title_id = $2 AND previous.artifact_schema_version = $5\x20\
                      AND previous.validation_contract_id = $7\x20\
                  ) THEN current_artifact_id\x20\
-                 WHEN current_artifact_id IS DISTINCT FROM $1 THEN NULL\x20\
+                 WHEN current_artifact_id IS DISTINCT FROM (SELECT id FROM series_analysis_artifact_identities WHERE legacy_id=$1) THEN NULL\x20\
                  ELSE previous_artifact_id END,\x20\
-               current_artifact_id = $1, pending_work = false, pending_forced_run_count = 0,\x20\
+               current_artifact_id = (SELECT id FROM series_analysis_artifact_identities WHERE legacy_id=$1), pending_work = false, pending_forced_run_count = 0,\x20\
                last_failure_code = NULL, last_failure_at = NULL, updated_at = clock_timestamp()\x20\
-             WHERE game_title_id = $2 AND input_revision = $3\x20\
+             WHERE game_title_id = (SELECT id FROM game_titles WHERE legacy_id=$2) AND input_revision = $3\x20\
                AND algorithm_version = $4 AND artifact_schema_version = $5\x20\
                AND validation_contract_id IS NOT DISTINCT FROM $6",
             &[
@@ -359,11 +359,11 @@ pub(super) async fn finish_success(
             "UPDATE series_analysis_jobs SET\x20\
                status = 'succeeded', finished_at = clock_timestamp(),\x20\
                result_disposition = $1, output_checksum = $2, safe_failure_code = NULL,\x20\
-               elapsed_milliseconds = $3, lease_owner = NULL, lease_attempt_id = NULL,\x20\
+               elapsed_milliseconds = $3, lease_owner = NULL, lease_attempt_id = NULL, legacy_lease_attempt_id = NULL,\x20\
                lease_fencing_token = NULL, lease_expires_at = NULL,\x20\
                lease_validation_contract_id = NULL, updated_at = clock_timestamp()\x20\
-             WHERE id = $4 AND status = 'running' AND lease_owner = $5\x20\
-               AND lease_attempt_id = $6 AND lease_fencing_token = $7\x20\
+             WHERE legacy_id = $4 AND status = 'running' AND lease_owner = $5\x20\
+               AND legacy_lease_attempt_id = $6 AND lease_fencing_token = $7\x20\
                AND lease_validation_contract_id IS NOT DISTINCT FROM $8\x20\
                AND lease_expires_at > clock_timestamp()",
             &[
@@ -388,7 +388,7 @@ pub(super) async fn finish_success(
                previous_artifact_id = CASE\x20\
                  WHEN EXISTS (\x20\
                    SELECT 1 FROM series_analysis_artifacts a\x20\
-                   WHERE a.id = series_analysis_title_states.previous_artifact_id\x20\
+                   WHERE a.id = (SELECT legacy_id FROM series_analysis_artifact_identities WHERE id=series_analysis_title_states.previous_artifact_id)\x20\
                      AND a.game_title_id = $1 AND a.artifact_schema_version = $3\x20\
                      AND a.status = 'published' AND a.validation_contract_id = $2\x20\
                  ) THEN previous_artifact_id ELSE NULL END,\x20\
@@ -396,7 +396,7 @@ pub(super) async fn finish_success(
                notification_baseline_artifact_id = current_artifact_id,\x20\
                pending_work = false, pending_forced_run_count = 0,\x20\
                last_failure_code = NULL, last_failure_at = NULL, updated_at = clock_timestamp()\x20\
-             WHERE game_title_id = $1",
+             WHERE game_title_id = (SELECT id FROM game_titles WHERE legacy_id=$1)",
             &[
                 &claim.game_title_id,
                 &ARTIFACT_VALIDATION_CONTRACT_ID,
@@ -487,7 +487,7 @@ async fn insert_artifact_header(
             | ResourceManifest::OutlookReference { .. } => None,
         })
         .collect();
-    Ok(transaction
+    let inserted = transaction
         .execute(
             "INSERT INTO series_analysis_artifacts (\x20\
                id, game_title_id, attempt_id, input_revision, algorithm_version,\x20\
@@ -496,7 +496,7 @@ async fn insert_artifact_header(
                aggregate_chunk_count, review_chunk_count, drilldown_chunk_count,\x20\
                match_context_chunk_count, encoded_bytes, decoded_bytes, radar_basis_id, radar_generation, radar_applied_at, scope_keys, outlook_summary_chunk_count, outlook_reference_chunk_count\x20\
              ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'staging',$10,$11,$12,$13,$14,$15,$16,$17,\x20\
-               (SELECT current_applied_at FROM series_radar_title_states WHERE game_title_id=$2 AND current_basis_id=$16),$18,$19,$20)\x20\
+               (SELECT current_applied_at FROM series_radar_title_states WHERE game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$2) AND current_basis_id=(SELECT id FROM series_radar_basis_identities WHERE legacy_id=$16)),$18,$19,$20)\x20\
              ON CONFLICT (id) DO NOTHING",
             &[
                 &manifest.artifact_id,
@@ -521,7 +521,22 @@ async fn insert_artifact_header(
                 &totals.counts.outlook_references,
             ],
         )
-        .await?)
+        .await?;
+    if inserted == 1 {
+        let canonical = crate::identity::allocate(
+            crate::identity::Entity::AnalysisArtifacts,
+            &manifest.artifact_id,
+        )
+        .map_err(|_error| ControlError::InvalidMetadata)?;
+        transaction
+            .execute(
+                "INSERT INTO series_analysis_artifact_identities (id,legacy_id,game_title_id,legacy_game_title_id) \
+                 VALUES ($1,$2,(SELECT id FROM game_titles WHERE legacy_id=$3),$3)",
+                &[&canonical, &manifest.artifact_id, &claim.game_title_id],
+            )
+            .await?;
+    }
+    Ok(inserted)
 }
 
 async fn replace_staged_artifact(

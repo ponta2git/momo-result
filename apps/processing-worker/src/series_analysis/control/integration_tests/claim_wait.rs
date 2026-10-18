@@ -17,7 +17,7 @@ use tokio::{sync::Notify, time};
 #[ignore = "requires explicitly isolated ANALYSIS_CONTROL_SMOKE_DATABASE_URL"]
 async fn real_postgres_claims_preserve_busy_deadlines_and_uncertain_commits() -> SmokeResult {
     let database_url = std::env::var("ANALYSIS_CONTROL_SMOKE_DATABASE_URL")?;
-    let mut client = crate::postgres::connect(&database_url).await?;
+    let mut client = crate::identity::fixtures::connect(&database_url).await?;
     cleanup_database(&client).await?;
     prepare_owned_attempt(&client).await?;
     let directory = TempDir::new()?;
@@ -28,7 +28,16 @@ async fn real_postgres_claims_preserve_busy_deadlines_and_uncertain_commits() ->
         ClaimResult::Busy
     ));
     reset_queued_job(&client).await?;
-    client.execute("UPDATE series_analysis_jobs SET available_at=clock_timestamp()+interval '1 hour' WHERE id=$1", &[&JOB_ID]).await?;
+    client
+        .execute(
+            r"
+        UPDATE series_analysis_jobs
+        SET available_at = clock_timestamp() + CAST('1 hour' AS interval)
+        WHERE series_analysis_jobs.legacy_id = $1
+        ",
+            &[&JOB_ID],
+        )
+        .await?;
     assert!(matches!(
         claim_job(&mut client, JOB_ID, &config).await?.value,
         ClaimResult::NotYetAvailable { .. }
@@ -53,7 +62,11 @@ async fn real_postgres_claims_preserve_busy_deadlines_and_uncertain_commits() ->
     );
     let row = client
         .query_one(
-            "SELECT transient_retry_count,lease_recovery_count FROM series_analysis_jobs WHERE id=$1",
+            r"
+                SELECT transient_retry_count, lease_recovery_count
+                FROM series_analysis_jobs
+                WHERE series_analysis_jobs.legacy_id = $1
+                ",
             &[&JOB_ID],
         )
         .await?;
@@ -67,13 +80,17 @@ async fn real_postgres_claims_preserve_busy_deadlines_and_uncertain_commits() ->
         reset_queued_job(&client).await?;
         let before_counter: i64 = client
             .query_one(
-                "SELECT fencing_counter FROM series_analysis_jobs WHERE id=$1",
+                r"
+                    SELECT fencing_counter
+                    FROM series_analysis_jobs
+                    WHERE series_analysis_jobs.legacy_id = $1
+                    ",
                 &[&JOB_ID],
             )
             .await?
             .try_get(0)?;
         let proxy = DelayedDatabase::commit_fault(&database_url, fault).await?;
-        let mut uncertain = crate::postgres::connect(&proxy.url).await?;
+        let mut uncertain = crate::identity::fixtures::connect(&proxy.url).await?;
         assert!(
             control_operation(&config, claim_job(&mut uncertain, JOB_ID, &config))
                 .await
@@ -82,7 +99,11 @@ async fn real_postgres_claims_preserve_busy_deadlines_and_uncertain_commits() ->
         drop(uncertain);
         let row = client
             .query_one(
-                "SELECT status='running',attempt_count,fencing_counter FROM series_analysis_jobs WHERE id=$1",
+                r"
+                    SELECT status = 'running', attempt_count, fencing_counter
+                    FROM series_analysis_jobs
+                    WHERE series_analysis_jobs.legacy_id = $1
+                    ",
                 &[&JOB_ID],
             )
             .await?;
@@ -103,7 +124,7 @@ async fn real_postgres_claims_preserve_busy_deadlines_and_uncertain_commits() ->
         },
     )
     .await?;
-    let mut uncertain = crate::postgres::connect(&proxy.url).await?;
+    let mut uncertain = crate::identity::fixtures::connect(&proxy.url).await?;
     let (result, observed) = tokio::join!(
         control_operation(&config, claim_job(&mut uncertain, JOB_ID, &config)),
         time::timeout(
@@ -117,7 +138,11 @@ async fn real_postgres_claims_preserve_busy_deadlines_and_uncertain_commits() ->
     drop(uncertain);
     let row = client
         .query_one(
-            "SELECT status,attempt_count FROM series_analysis_jobs WHERE id=$1",
+            r"
+                SELECT status, attempt_count
+                FROM series_analysis_jobs
+                WHERE series_analysis_jobs.legacy_id = $1
+                ",
             &[&JOB_ID],
         )
         .await?;
@@ -131,7 +156,11 @@ async fn real_postgres_claims_preserve_busy_deadlines_and_uncertain_commits() ->
 async fn assert_queued(client: &Client) -> SmokeResult {
     let row = client
         .query_one(
-            "SELECT status, attempt_count FROM series_analysis_jobs WHERE id = $1",
+            r"
+                SELECT status, attempt_count
+                FROM series_analysis_jobs
+                WHERE series_analysis_jobs.legacy_id = $1
+                ",
             &[&JOB_ID],
         )
         .await?;
@@ -145,7 +174,16 @@ async fn assert_queued(client: &Client) -> SmokeResult {
 }
 
 async fn assert_owned_once(client: &Client, claim: &ClaimedJob) -> SmokeResult {
-    let row = client.query_one("SELECT status, attempt_count, lease_fencing_token FROM series_analysis_jobs WHERE id = $1", &[&JOB_ID]).await?;
+    let row = client
+        .query_one(
+            r"
+        SELECT status, attempt_count, lease_fencing_token
+        FROM series_analysis_jobs
+        WHERE series_analysis_jobs.legacy_id = $1
+        ",
+            &[&JOB_ID],
+        )
+        .await?;
     assert_eq!(row.try_get::<_, String>(0)?, "running");
     assert_eq!(row.try_get::<_, i32>(1)?, 1);
     assert_eq!(row.try_get::<_, i64>(2)?, claim.fencing_token);
@@ -155,10 +193,26 @@ async fn assert_owned_once(client: &Client, claim: &ClaimedJob) -> SmokeResult {
 async fn reset_queued_job(client: &Client) -> SmokeResult {
     client
         .execute(
-            "DELETE FROM series_analysis_job_attempts WHERE job_id = $1",
+            r"
+                DELETE FROM series_analysis_job_attempts
+                WHERE (SELECT fixture_parent.legacy_id
+                       FROM series_analysis_jobs AS fixture_parent
+                       WHERE fixture_parent.id = series_analysis_job_attempts.job_id) = $1
+                ",
             &[&JOB_ID],
         )
         .await?;
-    client.execute("UPDATE series_analysis_jobs SET status='queued', started_at=NULL, finished_at=NULL, lease_owner=NULL, lease_attempt_id=NULL, lease_fencing_token=NULL, lease_expires_at=NULL, lease_validation_contract_id=NULL, attempt_count=0, available_at=clock_timestamp() WHERE id=$1", &[&JOB_ID]).await?;
+    client
+        .execute(
+            r"
+        UPDATE series_analysis_jobs
+        SET status = 'queued', started_at = NULL, finished_at = NULL, lease_owner = NULL, lease_attempt_id = NULL,
+            legacy_lease_attempt_id = NULL, lease_fencing_token = NULL, lease_expires_at = NULL,
+            lease_validation_contract_id = NULL, attempt_count = 0, available_at = clock_timestamp()
+        WHERE series_analysis_jobs.legacy_id = $1
+        ",
+            &[&JOB_ID],
+        )
+        .await?;
     Ok(())
 }

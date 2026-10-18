@@ -20,12 +20,24 @@ pub(super) async fn prepare(client: &mut Client) -> SmokeResult<Vec<(String, Str
     assert_eq!(baseline, expected.try_into_normalized()?);
     transaction
         .execute(
-            "DELETE FROM match_incidents WHERE match_id=$1",
+            r"
+                DELETE FROM match_incidents
+                WHERE (SELECT fixture_parent.legacy_id
+                       FROM matches AS fixture_parent
+                       WHERE fixture_parent.id = match_incidents.match_id) = $1
+                ",
             &[&MATCH_ID],
         )
         .await?;
     let rows = transaction
-        .query("SELECT id, key FROM incident_masters ORDER BY key", &[])
+        .query(
+            r"
+            SELECT incident_masters.legacy_id AS id, key
+            FROM incident_masters
+            ORDER BY key
+            ",
+            &[],
+        )
         .await?;
     let mut catalog = Vec::new();
     for (index, row) in rows.iter().enumerate() {
@@ -34,7 +46,11 @@ pub(super) async fn prepare(client: &mut Client) -> SmokeResult<Vec<(String, Str
         let uuid = format!("00000000-0000-4000-8000-{index:012x}");
         transaction
             .execute(
-                "UPDATE incident_masters SET id=$2 WHERE key=$1",
+                r"
+                    UPDATE incident_masters
+                    SET id = pg_temp.fixture_uuid('incident_masters', $2), legacy_id = $2
+                    WHERE key = $1
+                    ",
                 &[&key, &uuid],
             )
             .await?;
@@ -63,12 +79,18 @@ pub(super) async fn prepare(client: &mut Client) -> SmokeResult<Vec<(String, Str
 async fn insert_counts(transaction: &Transaction<'_>) -> SmokeResult {
     transaction
         .execute(
-            "INSERT INTO match_incidents (match_id,member_id,incident_master_id,count) \
-         SELECT mp.match_id,mp.member_id,im.id,10*mp.play_order+expected.ordinal \
-         FROM match_players mp \
-         CROSS JOIN (VALUES ('destination',1),('plus_station',2),('minus_station',3), \
-           ('card_station',4),('card_shop',5),('suri_no_ginji',6)) AS expected(key,ordinal) \
-         JOIN incident_masters im ON im.key=expected.key WHERE mp.match_id=$1",
+            r"
+                INSERT INTO match_incidents (match_id, member_id, incident_master_id, count)
+                SELECT mp.match_id, mp.member_id, pg_temp.fixture_uuid('incident_masters', im.legacy_id),
+                       10 * mp.play_order + expected.ordinal
+                FROM match_players AS mp
+                     CROSS JOIN ((VALUES ('destination', 1), ('plus_station', 2), ('minus_station', 3), ('card_station', 4),
+                                         ('card_shop', 5), ('suri_no_ginji', 6))) AS expected (key, ordinal)
+                     INNER JOIN incident_masters AS im ON im.key = expected.key
+                WHERE (SELECT fixture_parent.legacy_id
+                       FROM matches AS fixture_parent
+                       WHERE fixture_parent.id = mp.match_id) = $1
+                ",
             &[&MATCH_ID],
         )
         .await?;
@@ -79,7 +101,11 @@ pub(super) async fn restore(client: &Client, catalog: &[(String, String)]) -> Sm
     for (original_id, uuid) in catalog {
         client
             .execute(
-                "UPDATE incident_masters SET id=$2 WHERE id=$1",
+                r"
+                    UPDATE incident_masters
+                    SET id = pg_temp.fixture_uuid('incident_masters', $2), legacy_id = $2
+                    WHERE incident_masters.legacy_id = $1
+                    ",
                 &[uuid, original_id],
             )
             .await?;

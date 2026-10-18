@@ -56,6 +56,17 @@ final class OcrJobInputSnapshotSpec extends FunSuite with JsonSchemaAssertions:
     assertJsonSchemaInvalid(ocrJobInputSchemaPath, autoJson.noSpaces)
   }
 
+  test("accepted legacy hints remain byte-for-byte values in immutable job snapshots") {
+    val hints = OcrJobHints.empty.copy(layoutFamily = Some(" MoMoTeTsU2\t"))
+    val payload = build(canonicalInput.copy(hints = hints)).fold(fail(_), identity)
+    val encoded = payload.fields.get(OcrJobInputSnapshot.HintsKey).getOrElse(fail("missing hints"))
+    assertEquals(
+      parse(encoded).flatMap(_.hcursor.get[String]("layoutFamily")),
+      Right(" MoMoTeTsU2\t")
+    )
+    assertOcrJobInputSnapshotSchemaValid(payload)
+  }
+
   test("rejects URL-like, absolute, ambiguous, or unsafe object keys") {
     val canonicalJson = OcrJobInputSnapshot.toJson(canonicalPayload())
     List(

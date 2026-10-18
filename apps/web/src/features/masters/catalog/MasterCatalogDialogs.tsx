@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 
 import { readMasterEditForm } from "@/features/masters/catalog/catalogForms";
 import { formatApiError } from "@/shared/api/problemDetails";
-import { layoutFamilies, layoutFamilyLabels } from "@/shared/domain/ocr";
+import { layoutFamilies, layoutFamilyLabels, parseLayoutFamily } from "@/shared/domain/ocr";
 import type { LayoutFamily } from "@/shared/domain/ocr";
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
@@ -67,12 +67,16 @@ export function MasterEditDialog({
               disabled={editor.pending}
               label="読み取り方式"
               description="作品ごとの画面構造に合わせて、読み取り方を切り替えます。"
-              defaultValue={initialLayoutFamily ?? layoutFamilies[0]}
+              defaultValue={parseLayoutFamily(initialLayoutFamily) ?? ""}
               name="layoutFamily"
-              options={layoutFamilies.map((family) => ({
-                label: layoutFamilyLabels[family],
-                value: family,
-              }))}
+              required
+              options={[
+                { label: "選択してください", value: "", disabled: true },
+                ...layoutFamilies.map((family) => ({
+                  label: layoutFamilyLabels[family],
+                  value: family,
+                })),
+              ]}
             />
           ) : null}
         </div>

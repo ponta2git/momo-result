@@ -49,7 +49,7 @@ final class CreateMatchDraft[F[_]: Monad](
     matchNoInEvent <-
       EitherT.fromEither[F](UseCaseField.optionalMatchNoInEvent(command.matchNoInEvent))
     layoutFamily <- EitherT
-      .fromEither[F](UseCaseField.optionalStableKey("layoutFamily", command.layoutFamily))
+      .fromEither[F](UseCaseField.optionalLayoutFamily(command.layoutFamily))
     status <- EitherT.fromEither[F](validateInitialStatus(command.status))
     _ <- validateForeignKeys(command)
     id <- EitherT.liftF(nextId)

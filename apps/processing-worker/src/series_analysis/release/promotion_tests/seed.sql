@@ -1,7 +1,7 @@
 INSERT INTO game_titles(id, name, layout_family)
-VALUES ('obsolete-title', 'Obsolete snapshot', 'momotetsu2'),
-       ('current-title', 'Current snapshot', 'momotetsu2'),
-       ('stale-title', 'Current-format stale snapshot', 'momotetsu2');
+VALUES ('obsolete-title', 'Obsolete snapshot', 'momotetsu_2'),
+       ('current-title', 'Current snapshot', 'momotetsu_2'),
+       ('stale-title', 'Current-format stale snapshot', 'momotetsu_2');
 INSERT INTO series_analysis_title_states(game_title_id, algorithm_version, artifact_schema_version, validation_contract_id)
 SELECT t.id, r.algorithm_version, r.artifact_schema_version, r.validation_contract_id
 FROM game_titles t CROSS JOIN series_analysis_release_state r

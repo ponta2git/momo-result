@@ -1,7 +1,7 @@
 import type { ApiSignalOptions } from "@/shared/api/client";
-import { getHeldEventDetail } from "@/shared/api/heldEvents";
+import { getHeldEventByPublicId, getHeldEventDetail } from "@/shared/api/heldEvents";
 import type { HeldEventDetailResponse } from "@/shared/api/heldEvents";
-import { getMatch } from "@/shared/api/matches";
+import { getMatch, getMatchByPublicId } from "@/shared/api/matches";
 import type { MatchDetailResponse } from "@/shared/api/matches";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
@@ -107,6 +107,19 @@ export function loadMatchDetail(
   );
 }
 
+export function loadMatchByPublicId(publicId: string, options: ApiSignalOptions) {
+  return loadDetail(
+    () => getMatchByPublicId(publicId, options),
+    (detail) =>
+      readNavigation(
+        detail.navigation,
+        isMatchNeighbor,
+        (neighbor) => neighbor.matchId,
+        detail.matchId,
+      ),
+  );
+}
+
 export function loadHeldEventDetail(
   heldEventId: string,
   options: ApiSignalOptions,
@@ -120,6 +133,14 @@ export function loadHeldEventDetail(
         (neighbor) => neighbor.id,
         heldEventId,
       ),
+  );
+}
+
+export function loadHeldEventByPublicId(publicId: string, options: ApiSignalOptions) {
+  return loadDetail(
+    () => getHeldEventByPublicId(publicId, options),
+    (detail) =>
+      readNavigation(detail.navigation, isHeldEventNeighbor, (neighbor) => neighbor.id, detail.id),
   );
 }
 

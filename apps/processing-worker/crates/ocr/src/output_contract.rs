@@ -3,7 +3,8 @@ use std::collections::BTreeMap;
 use serde::Deserialize;
 
 use crate::{
-    OcrHints, OcrOutput, RequestedScreenType, core::names_match, result::valid_timing_values,
+    OcrHints, OcrOutput, RequestedScreenType, core::names_match, layout_family::LayoutFamily,
+    result::valid_timing_values,
 };
 
 const INCIDENT_NAMES: [&str; 6] = [
@@ -173,7 +174,8 @@ pub(super) fn valid_output(
     parent_elapsed_milliseconds: u32,
 ) -> bool {
     let expected_profile = expected_screen.expected_profile_id();
-    if output.detected_screen_type != expected_screen
+    if !hints.is_valid()
+        || output.detected_screen_type != expected_screen
         || output.profile_id.as_deref() != Some(expected_profile)
         || output.payload.get("warnings") != Some(&output.warnings)
     {
@@ -427,22 +429,16 @@ fn valid_incident_category(
 }
 
 fn valid_incident_layout(category: &IncidentCategoryCandidate, hints: &OcrHints) -> bool {
-    let normalized = hints
-        .layout_family()
-        .unwrap_or_default()
-        .trim()
-        .to_lowercase();
-    match normalized.as_str() {
-        "world" | "momotetsu_world" | "default" => {
-            category.layout_profile_id == "full-hd-incident-log-v1"
-        }
-        "reiwa" | "momotetsu_reiwa" | "momotetsu_2" | "momotetsu2" | "2" => {
+    match hints.layout_family() {
+        Ok(Some(LayoutFamily::World)) => category.layout_profile_id == "full-hd-incident-log-v1",
+        Ok(Some(LayoutFamily::Reiwa | LayoutFamily::Momotetsu2)) => {
             category.layout_profile_id == "full-hd-incident-log-compact-v1"
         }
-        _ => matches!(
+        Ok(None) => matches!(
             category.layout_profile_id.as_str(),
             "full-hd-incident-log-v1" | "full-hd-incident-log-compact-v1"
         ),
+        Err(()) => false,
     }
 }
 

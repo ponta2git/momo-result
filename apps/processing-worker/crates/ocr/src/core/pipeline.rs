@@ -71,6 +71,7 @@ fn analyze_core(
     recognition: &mut dyn RecognitionPort,
     observe: &mut dyn FnMut(OcrPhaseEvent),
 ) -> Result<OcrAnalysis, CoreOcrError> {
+    let layout_family = hints.layout_family().map_err(|()| CoreOcrError::Layout)?;
     let image = observe_phase(observe, OcrPhase::Decode, || decode_supported_image(bytes))?;
 
     observe_phase(observe, OcrPhase::InitializeEngine, || {
@@ -93,7 +94,7 @@ fn analyze_core(
             recognition,
         ),
         RequestedScreenType::IncidentLog => {
-            incident_pipeline::parse(&image, hints.layout_family(), &player_order, recognition)
+            incident_pipeline::parse(&image, layout_family, &player_order, recognition)
         }
     })?;
 
@@ -249,6 +250,115 @@ mod tests {
             .write_to(&mut encoded, ImageFormat::Png)
             .expect("in-memory PNG fixture must encode");
         encoded.into_inner()
+    }
+
+    #[test]
+    fn legacy_layout_hints_keep_recognition_results_and_profile_identifiers() {
+        let bytes = png_bytes();
+        for (legacy, canonical, expected_layout_profile) in [
+            (
+                " MoMoTeTsU2 ",
+                "momotetsu_2",
+                "full-hd-incident-log-compact-v1",
+            ),
+            ("2", "momotetsu_2", "full-hd-incident-log-compact-v1"),
+            ("default", "world", "full-hd-incident-log-v1"),
+            (" MOMOTETSU_WORLD ", "world", "full-hd-incident-log-v1"),
+            (
+                "momotetsu_reiwa",
+                "reiwa",
+                "full-hd-incident-log-compact-v1",
+            ),
+        ] {
+            let legacy_hints: OcrHints =
+                serde_json::from_value(serde_json::json!({"layoutFamily": legacy}))
+                    .expect("legacy hints decode");
+            let canonical_hints: OcrHints =
+                serde_json::from_value(serde_json::json!({"layoutFamily": canonical}))
+                    .expect("canonical hints decode");
+            let recognize = |hints: &OcrHints| {
+                analyze(
+                    &bytes,
+                    RequestedScreenType::IncidentLog,
+                    hints,
+                    &mut DeterministicRecognizer,
+                    &mut |_| {},
+                )
+                .expect("known layout produces an incident candidate")
+            };
+            let actual = recognize(&legacy_hints);
+            assert_eq!(actual, recognize(&canonical_hints), "{legacy}");
+            assert_eq!(actual.profile_id, "full-hd-incident-log-v1");
+            assert_eq!(
+                actual
+                    .payload
+                    .pointer("/category_payload/layout_profile_id"),
+                Some(&serde_json::json!(expected_layout_profile))
+            );
+            assert_eq!(
+                actual.payload.pointer("/players/0/incidents/目的地/value"),
+                Some(&serde_json::json!(1))
+            );
+            let output = actual.with_timings(
+                crate::OcrTimings::new(0.0, 0.0, 0.0, 0.0, 1.0).expect("valid timing"),
+            );
+            assert!(
+                output.satisfies_contract(RequestedScreenType::IncidentLog, &legacy_hints, 1),
+                "legacy input and candidate validation agree"
+            );
+            assert!(
+                output.satisfies_contract(
+                    RequestedScreenType::IncidentLog,
+                    &OcrHints::default(),
+                    1
+                ),
+                "automatic selection permits a recognized supported profile"
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_layout_fails_before_decode_and_cannot_validate_a_ranked_candidate() {
+        let hints: OcrHints =
+            serde_json::from_value(serde_json::json!({"layoutFamily": "unknown"}))
+                .expect("unvalidated hints decode");
+        for screen in [
+            RequestedScreenType::TotalAssets,
+            RequestedScreenType::Revenue,
+            RequestedScreenType::IncidentLog,
+        ] {
+            let mut recognition = UnavailableRecognizer::default();
+            let mut events = Vec::new();
+            assert_eq!(
+                analyze(
+                    b"unread image",
+                    screen,
+                    &hints,
+                    &mut recognition,
+                    &mut |event| events.push(event)
+                ),
+                Err(OcrFailure::LayoutUnsupported)
+            );
+            assert_eq!(recognition.initialize_calls, 0);
+            assert_eq!(recognition.recognize_calls, 0);
+            assert!(
+                events.is_empty(),
+                "unknown layout must not start image processing"
+            );
+        }
+        let output = analyze(
+            &png_bytes(),
+            RequestedScreenType::TotalAssets,
+            &OcrHints::default(),
+            &mut DeterministicRecognizer,
+            &mut |_| {},
+        )
+        .expect("automatic ranked candidate")
+        .with_timings(crate::OcrTimings::new(0.0, 0.0, 0.0, 0.0, 1.0).expect("valid timing"));
+        assert!(
+            !output.satisfies_contract(RequestedScreenType::TotalAssets, &hints, 1),
+            "unknown layout cannot bypass the output contract for ranked screens"
+        );
     }
 
     #[test]

@@ -163,11 +163,11 @@ async fn real_postgres_preserves_campaign_acceptance_and_assignment() -> SmokeRe
         .batch_execute(
             r"
             INSERT INTO game_titles (id, name, layout_family, display_order) VALUES
-              ('analysis-campaign-smoke-new', 'campaign new', 'momotetsu2', 9901),
-              ('analysis-campaign-smoke-queued', 'campaign queued', 'momotetsu2', 9902),
-              ('analysis-campaign-smoke-before', 'campaign before', 'momotetsu2', 9903),
-              ('analysis-campaign-smoke-after', 'campaign after', 'momotetsu2', 9904),
-              ('analysis-campaign-smoke-deleted', 'campaign deleted', 'momotetsu2', 9905);
+              ('analysis-campaign-smoke-new', 'campaign new', 'momotetsu_2', 9901),
+              ('analysis-campaign-smoke-queued', 'campaign queued', 'momotetsu_2', 9902),
+              ('analysis-campaign-smoke-before', 'campaign before', 'momotetsu_2', 9903),
+              ('analysis-campaign-smoke-after', 'campaign after', 'momotetsu_2', 9904),
+              ('analysis-campaign-smoke-deleted', 'campaign deleted', 'momotetsu_2', 9905);
 
             INSERT INTO series_analysis_title_states (game_title_id, algorithm_version, artifact_schema_version, validation_contract_id)
             SELECT t.id, r.algorithm_version, r.artifact_schema_version, r.validation_contract_id

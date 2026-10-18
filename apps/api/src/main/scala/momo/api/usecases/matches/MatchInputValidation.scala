@@ -7,7 +7,7 @@ import cats.syntax.all.*
 import momo.api.domain.ids.MemberId
 import momo.api.domain.{GameTitle, MatchPolicy, MatchRecord}
 import momo.api.errors.AppError
-import momo.api.usecases.common.MatchReferenceValidation
+import momo.api.usecases.common.{MatchReferenceValidation, UseCaseField}
 
 private[matches] final class MatchInputValidation[F[_]: Monad](
     references: MatchReferenceValidation[F]
@@ -27,4 +27,5 @@ private[matches] final class MatchInputValidation[F[_]: Monad](
         validated.mapMasterId,
         validated.seasonMasterId,
       )
-    yield (validated, title)
+      layoutFamily <- EitherT.fromEither[F](UseCaseField.layoutFamily(title.layoutFamily))
+    yield (validated, title.copy(layoutFamily = layoutFamily))

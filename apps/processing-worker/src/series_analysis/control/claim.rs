@@ -531,7 +531,7 @@ mod tests {
         transaction
             .execute(
                 "INSERT INTO game_titles (id, name, layout_family, display_order)\x20\
-                 VALUES ($1, 'validation lease fence', 'momotetsu2', 9998)",
+                 VALUES ($1, 'validation lease fence', 'momotetsu_2', 9998)",
                 &[&TITLE_ID],
             )
             .await?;

@@ -15,7 +15,7 @@ import type {
 import type { OcrSubmissionResponse, PutOcrSubmissionRequest } from "@/shared/api/ocrSubmissions";
 import { normalizeDisplayApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
-import { parseOcrJobStatus } from "@/shared/domain/ocr";
+import { parseLayoutFamily, parseOcrJobStatus } from "@/shared/domain/ocr";
 import type { SlotKind } from "@/shared/domain/ocr";
 
 export type OcrSubmissionResult =
@@ -123,6 +123,19 @@ export async function runOcrSubmissionWorkflow({
   if (setup.heldEventId && selectedHeldEvent?.id !== setup.heldEventId) {
     return { message: "選択した開催を確認してください。", status: "invalid" };
   }
+  const layoutFamily = parseLayoutFamily(selectedGameTitle?.layoutFamily);
+  const hintLayoutFamily = parseLayoutFamily(hints.layoutFamily);
+  if (
+    !state.request &&
+    ((selectedGameTitle?.layoutFamily != null && !layoutFamily) ||
+      (hints.layoutFamily != null && !hintLayoutFamily))
+  ) {
+    return {
+      message: "作品の読み取り方式を確認してください。設定画面から修正できます。",
+      status: "invalid",
+    };
+  }
+  const canonicalHints = hintLayoutFamily ? { ...hints, layoutFamily: hintLayoutFamily } : hints;
   onProgress?.({ phase: "creating_draft", total: targetSlots.length });
 
   // Hash every selected image before the first write. Neither keys nor membership
@@ -167,9 +180,7 @@ export async function runOcrSubmissionWorkflow({
           ...(setup.heldEventId && setup.matchNoInEvent
             ? { heldEventId: setup.heldEventId, matchNoInEvent: setup.matchNoInEvent }
             : {}),
-          ...(selectedGameTitle?.layoutFamily
-            ? { layoutFamily: selectedGameTitle.layoutFamily }
-            : {}),
+          ...(layoutFamily ? { layoutFamily } : {}),
           mapMasterId: setup.mapMasterId,
           ownerMemberId: setup.ownerMemberId,
           playedAt,
@@ -193,7 +204,7 @@ export async function runOcrSubmissionWorkflow({
   signal?.throwIfAborted();
   let submission: OcrSubmissionResponse;
   try {
-    state.request ??= { matchDraftId, ocrHints: hints, members };
+    state.request ??= { matchDraftId, ocrHints: canonicalHints, members };
     submission = await putSubmission(state.submissionId, state.request);
   } catch (error) {
     signal?.throwIfAborted();

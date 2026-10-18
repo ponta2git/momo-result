@@ -21,6 +21,7 @@ import momo.api.domain.{
   MatchListSummary,
   MatchNoInEvent,
   PlayOrder,
+  PublicId,
   Rank
 }
 import momo.api.repositories.MatchListReadModel
@@ -44,6 +45,8 @@ private[postgres] trait PostgresMatchListSupport:
       hasNote: Option[Boolean],
       heldAtSort: Instant,
       heldAt: Option[Instant],
+      publicId: Option[PublicId],
+      heldEventPublicId: Option[PublicId],
   )
 
   protected final case class CursorRow(
@@ -84,7 +87,8 @@ private[postgres] trait PostgresMatchListSupport:
       needsReviewCount = needsReviewCount,
     )
 
-  protected val confirmedBase = fr"""SELECT
+  protected final def confirmedBase(publicIds: PostgresPublicIds): Fragment =
+    fr"""SELECT
     'match' AS kind,
     m.id AS id,
     m.id AS match_id,
@@ -101,11 +105,14 @@ private[postgres] trait PostgresMatchListSupport:
     m.updated_at,
     (m.note_body IS NOT NULL) AS has_note,
     COALESCE(he.start_at, m.played_at, m.updated_at) AS held_at_sort,
-    he.start_at
+    he.start_at,
+  """ ++ publicIds.column(fr"m.public_id") ++ fr" AS public_id," ++
+      publicIds.column(fr"he.public_id") ++ fr""" AS held_event_public_id
   FROM matches m
   LEFT JOIN held_events he ON he.id = m.held_event_id"""
 
-  protected val draftBase = fr"""SELECT
+  protected final def draftBase(publicIds: PostgresPublicIds): Fragment =
+    fr"""SELECT
     'match_draft' AS kind,
     d.id AS id,
     NULL::text AS match_id,
@@ -122,7 +129,8 @@ private[postgres] trait PostgresMatchListSupport:
     d.updated_at,
     NULL::boolean AS has_note,
     COALESCE(he.start_at, d.played_at, d.updated_at) AS held_at_sort,
-    he.start_at
+    he.start_at, NULL::bigint AS public_id,
+  """ ++ publicIds.column(fr"he.public_id") ++ fr""" AS held_event_public_id
   FROM match_drafts d
   LEFT JOIN held_events he ON he.id = d.held_event_id"""
 
@@ -265,6 +273,8 @@ private[postgres] trait PostgresMatchListSupport:
       hasNote = row.hasNote,
       heldAt = row.heldAt,
       labels = labels,
+      publicId = row.publicId,
+      heldEventPublicId = row.heldEventPublicId,
     )
 
   protected final def statusIn(statuses: Set[MatchDraftStatus]): Fragment =

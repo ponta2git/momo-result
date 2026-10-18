@@ -43,9 +43,9 @@ pub(super) async fn load_candidate(
 ) -> Result<CandidateResult, OcrControlError> {
     let job = transaction
         .query_opt(
-            "SELECT draft_id, source_image_id, requested_screen_type, status,\x20\
+            "SELECT legacy_draft_id, (SELECT legacy_id FROM source_images WHERE id=source_image_id), requested_screen_type, status,\x20\
                     available_at <= clock_timestamp(), input_snapshot, attempt_count, lease_fencing_token\x20\
-             FROM ocr_jobs WHERE id = $1 FOR UPDATE",
+             FROM ocr_jobs WHERE legacy_id = $1 FOR UPDATE",
             &[&job_id],
         )
         .await?;
@@ -58,7 +58,7 @@ pub(super) async fn load_candidate(
     }
     let grouped = transaction
         .query_opt(
-            "SELECT 1 FROM ocr_submission_members WHERE job_id = $1 AND status = 'registered' AND screen_type = $2",
+            "SELECT 1 FROM ocr_submission_members WHERE job_id = (SELECT id FROM ocr_jobs WHERE legacy_id=$1) AND status = 'registered' AND screen_type = $2",
             &[&job_id, &job.try_get::<_, String>(2)?],
         )
         .await?;
@@ -82,7 +82,7 @@ pub(super) async fn load_candidate(
             "SELECT image.status, image.object_key, image.sha256_hex, image.byte_length,\x20\
                     image.media_type, image.width, image.height\x20\
              FROM source_images image\x20\
-             WHERE image.id = $1 FOR UPDATE OF image",
+             WHERE image.legacy_id = $1 FOR UPDATE OF image",
             &[&source_image_id],
         )
         .await?;

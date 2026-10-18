@@ -350,7 +350,7 @@ async fn discover(
         cursor.upper = time::timeout(
             timeout,
             database.query_typed_one(
-                "SELECT max(id) FROM ocr_submissions WHERE status = 'open'",
+                "SELECT max(legacy_id) FROM ocr_submissions WHERE status = 'open'",
                 &[],
             ),
         )
@@ -364,7 +364,7 @@ async fn discover(
         cursor.last_page = true;
         return Ok(());
     };
-    let rows = time::timeout(timeout, database.query_typed("SELECT id FROM ocr_submissions WHERE status = 'open' AND id > $1 AND id <= $2 ORDER BY id LIMIT $3", &[(&cursor.after, Type::TEXT), (&upper, Type::TEXT), (&PAGE_SIZE, Type::INT8)])).await
+    let rows = time::timeout(timeout, database.query_typed("SELECT legacy_id FROM ocr_submissions WHERE status = 'open' AND legacy_id > $1 AND legacy_id <= $2 ORDER BY legacy_id LIMIT $3", &[(&cursor.after, Type::TEXT), (&upper, Type::TEXT), (&PAGE_SIZE, Type::INT8)])).await
         .map_err(|_error| RuntimeError::Dependency("scan_timeout"))?.map_err(|_error| RuntimeError::Dependency("scan"))?;
     cursor.last_page = rows.len() < usize::try_from(PAGE_SIZE).unwrap_or(32);
     cursor.pending = rows

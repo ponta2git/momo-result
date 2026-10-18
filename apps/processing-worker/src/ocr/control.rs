@@ -238,7 +238,7 @@ pub(crate) async fn claim_job(
     let expired = transaction
         .query_opt(
             "SELECT lease_owner, attempt_id::text, lease_fencing_token FROM ocr_jobs \
-             WHERE id=$1 AND status='running' AND lease_expires_at<=clock_timestamp() FOR UPDATE",
+             WHERE legacy_id=$1 AND status='running' AND lease_expires_at<=clock_timestamp() FOR UPDATE",
             &[&job_id],
         )
         .await?;
@@ -301,7 +301,7 @@ async fn acquire_candidate(
                lease_token = $4::text::uuid,\x20\
                lease_expires_at = clock_timestamp() + ($5::bigint * interval '1 millisecond'),\x20\
                lease_fencing_token = $6, updated_at = clock_timestamp()\x20\
-             WHERE id = $7 AND status = 'queued'\x20\
+             WHERE legacy_id = $7 AND status = 'queued'\x20\
                AND available_at <= clock_timestamp() RETURNING attempt_count",
             &[
                 &config.worker_id,
@@ -352,7 +352,7 @@ pub(crate) async fn heartbeat(
             "UPDATE ocr_jobs SET\x20\
                lease_expires_at = clock_timestamp() + ($1::bigint * interval '1 millisecond'),\x20\
                updated_at = clock_timestamp()\x20\
-             WHERE id = $2 AND status = 'running' AND lease_owner = $3\x20\
+             WHERE legacy_id = $2 AND status = 'running' AND lease_owner = $3\x20\
                AND attempt_id = $4::text::uuid AND lease_token = $5::text::uuid\x20\
                AND lease_fencing_token = $6 AND lease_expires_at > clock_timestamp()",
             &[
@@ -409,10 +409,10 @@ async fn finish_success_transaction(
     let detected_screen_type = completion.output.detected_screen_type.wire();
     transaction
         .execute(
-            "INSERT INTO ocr_drafts (id, job_id, requested_screen_type, detected_screen_type,\x20\
+            "INSERT INTO ocr_drafts (id, legacy_id, job_id, legacy_job_id, requested_screen_type, detected_screen_type,\x20\
                profile_id, payload_json, warnings_json, timings_ms_json, created_at, updated_at)\x20\
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, clock_timestamp(), clock_timestamp())\x20\
-             ON CONFLICT (job_id) DO UPDATE SET id = EXCLUDED.id,\x20\
+             VALUES ((SELECT draft_id FROM ocr_jobs WHERE legacy_id=$2 AND legacy_draft_id=$1), $1, (SELECT id FROM ocr_jobs WHERE legacy_id=$2), $2, $3, $4, $5, $6, $7, $8, clock_timestamp(), clock_timestamp())\x20\
+             ON CONFLICT (job_id) DO UPDATE SET id = EXCLUDED.id, legacy_id = EXCLUDED.legacy_id, legacy_job_id = EXCLUDED.legacy_job_id,\x20\
                requested_screen_type = EXCLUDED.requested_screen_type,\x20\
                detected_screen_type = EXCLUDED.detected_screen_type,\x20\
                profile_id = EXCLUDED.profile_id, payload_json = EXCLUDED.payload_json,\x20\
@@ -437,7 +437,7 @@ async fn finish_success_transaction(
                failure_user_action = NULL, finished_at = clock_timestamp(), duration_ms = $2,\x20\
                attempt_id = NULL, lease_owner = NULL, lease_token = NULL,\x20\
                lease_expires_at = NULL, updated_at = clock_timestamp()\x20\
-             WHERE id = $3 AND status = 'running' AND lease_owner = $4\x20\
+             WHERE legacy_id = $3 AND status = 'running' AND lease_owner = $4\x20\
                AND attempt_id = $5::text::uuid AND lease_token = $6::text::uuid\x20\
                AND lease_fencing_token = $7",
             &[
@@ -506,7 +506,7 @@ async fn requeue(
     lock_owned_job(&transaction, claim, config).await?;
     let retries: i32 = transaction
         .query_one(
-            "SELECT failure_retry_count FROM ocr_jobs WHERE id=$1",
+            "SELECT failure_retry_count FROM ocr_jobs WHERE legacy_id=$1",
             &[&claim.job_id],
         )
         .await?
@@ -538,7 +538,7 @@ async fn requeue(
                finished_at = NULL, duration_ms = NULL, failure_code = NULL, failure_message = NULL,\x20\
                failure_retryable = NULL, failure_user_action = NULL, attempt_id = NULL,\x20\
                lease_owner = NULL, lease_token = NULL, lease_expires_at = NULL,\x20\
-               updated_at = clock_timestamp() WHERE id = $2 AND status = 'running'\x20\
+               updated_at = clock_timestamp() WHERE legacy_id = $2 AND status = 'running'\x20\
                AND lease_owner = $3 AND attempt_id = $4::text::uuid\x20\
                AND lease_token = $5::text::uuid\x20\
                AND lease_fencing_token = $6",
@@ -582,7 +582,7 @@ async fn lock_owned_job(
     lock_match_drafts_for_job(transaction, &claim.job_id).await?;
     let job = transaction
         .query_opt(
-            "SELECT 1 FROM ocr_jobs WHERE id = $1 AND status = 'running' AND lease_owner = $2\x20\
+            "SELECT 1 FROM ocr_jobs WHERE legacy_id = $1 AND status = 'running' AND lease_owner = $2\x20\
                AND attempt_id = $3::text::uuid AND lease_token = $4::text::uuid\x20\
                AND lease_fencing_token = $5 AND lease_expires_at > clock_timestamp() FOR UPDATE",
             &[
@@ -616,7 +616,7 @@ async fn update_owned_failure(
             "UPDATE ocr_jobs SET status = 'failed', failure_code = $1, failure_message = $2,\x20\
                failure_retryable = $3, failure_user_action = $4, finished_at = clock_timestamp(),\x20\
                duration_ms = $5, attempt_id = NULL, lease_owner = NULL, lease_token = NULL,\x20\
-               lease_expires_at = NULL, updated_at = clock_timestamp() WHERE id = $6\x20\
+               lease_expires_at = NULL, updated_at = clock_timestamp() WHERE legacy_id = $6\x20\
                AND status = 'running' AND lease_owner = $7 AND attempt_id = $8::text::uuid\x20\
                AND lease_token = $9::text::uuid AND lease_fencing_token = $10",
             &[
@@ -654,7 +654,7 @@ async fn fail_locked_queued_job(
             "UPDATE ocr_jobs SET status = 'failed', failure_code = $1, failure_message = $2,\x20\
                failure_retryable = $3, failure_user_action = $4, finished_at = clock_timestamp(),\x20\
                duration_ms = $5, updated_at = clock_timestamp()\x20\
-             WHERE id = $6 AND status = 'queued'",
+             WHERE legacy_id = $6 AND status = 'queued'",
             &[
                 &code,
                 &message,
@@ -678,7 +678,7 @@ async fn sync_match_draft_status(
     transaction
         .execute(
             "WITH touched AS (\x20\
-               SELECT md.id FROM match_drafts md JOIN ocr_jobs j ON j.id = $1\x20\
+               SELECT md.id FROM match_drafts md JOIN ocr_jobs j ON j.legacy_id = $1\x20\
                WHERE md.status = 'ocr_running' AND j.draft_id IN (\x20\
                  md.total_assets_draft_id, md.revenue_draft_id, md.incident_log_draft_id\x20\
                )\x20\
@@ -724,10 +724,10 @@ pub(crate) async fn lock_match_drafts_for_jobs(
     transaction
         .query(
             "SELECT md.id FROM match_drafts md JOIN ocr_jobs changed_job\x20\
-               ON changed_job.id = ANY($1)\x20\
+               ON changed_job.legacy_id = ANY($1::text[])\x20\
                WHERE md.status = 'ocr_running' AND changed_job.draft_id IN (\x20\
                  md.total_assets_draft_id, md.revenue_draft_id, md.incident_log_draft_id\x20\
-               ) ORDER BY md.id FOR UPDATE OF md",
+               ) ORDER BY md.legacy_id FOR UPDATE OF md",
             &[&job_ids],
         )
         .await?;

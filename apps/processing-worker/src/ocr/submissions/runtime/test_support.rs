@@ -30,11 +30,21 @@ pub(crate) async fn run_observed(
 async fn connect(config: &Config) -> Result<Session, RuntimeError> {
     let (wake, receiver) = watch::channel(());
     let mut listener = Listener::subscribe(&config.listener_database_url, wake).await?;
-    let database = postgres::connect(&config.database_url)
+    let database = crate::identity::fixtures::connect(&config.database_url)
         .await
         .map_err(|error| RuntimeError::Dependency(error.kind()))?;
     listener.verify(&database).await?;
-    time::timeout(config.finalization_timeout, database.query_typed("SELECT s.status, s.match_draft_id, s.admission_deadline, s.finished_at, m.screen_type, m.status, m.failure_code, m.job_id FROM ocr_submissions s LEFT JOIN ocr_submission_members m ON m.submission_id = s.id LIMIT 0", &[])).await
+    time::timeout(config.finalization_timeout, database.query_typed(r"
+        SELECT s.status, s.legacy_match_draft_id AS match_draft_id, s.admission_deadline, s.finished_at, m.screen_type,
+               m.status, m.failure_code, (SELECT fixture_parent.legacy_id
+                FROM ocr_jobs AS fixture_parent
+                WHERE fixture_parent.id = m.job_id) AS job_id
+        FROM ocr_submissions AS s
+             LEFT JOIN ocr_submission_members AS m ON (SELECT fixture_parent.legacy_id
+                                                       FROM ocr_submissions AS fixture_parent
+                                                       WHERE fixture_parent.id = m.submission_id) = s.legacy_id
+        LIMIT 0
+        ", &[])).await
         .map_err(|_elapsed| RuntimeError::Dependency("schema_probe_timeout"))?.map_err(|_error| RuntimeError::Dependency("schema_contract"))?;
     Ok(Session {
         listener,

@@ -569,7 +569,7 @@ async fn prepare_owned_attempt(client: &Client) -> SmokeResult {
     client
         .batch_execute(&format!(
             "INSERT INTO game_titles (id, name, layout_family, display_order)\x20\
-             VALUES ('{TITLE_ID}', 'Analysis staging smoke', 'momotetsu2', 9999);\x20\
+             VALUES ('{TITLE_ID}', 'Analysis staging smoke', 'momotetsu_2', 9999);\x20\
              INSERT INTO held_events (id, session_id, held_date_iso, start_at)\x20\
              VALUES ('{EVENT_ID}', NULL, DATE '2026-08-14', TIMESTAMPTZ '2026-08-14 00:00:00+00');\x20\
              INSERT INTO season_masters (id, game_title_id, name, display_order)\x20\
@@ -581,7 +581,7 @@ async fn prepare_owned_attempt(client: &Client) -> SmokeResult {
                season_master_id, owner_member_id, map_master_id, played_at,\x20\
                created_by_account_id, created_by_member_id, analysis_revision\x20\
              ) VALUES (\x20\
-               '{MATCH_ID}', '{EVENT_ID}', 1, '{TITLE_ID}', 'momotetsu2', '{SEASON_ID}',\x20\
+               '{MATCH_ID}', '{EVENT_ID}', 1, '{TITLE_ID}', 'momotetsu_2', '{SEASON_ID}',\x20\
                'member_ponta', '{MAP_ID}', TIMESTAMPTZ '2026-08-14 00:00:00+00',\x20\
                'account_ponta', 'member_ponta', 1\x20\
              );\x20\

@@ -7,6 +7,7 @@
 
 mod contract;
 mod core;
+mod layout_family;
 mod output_contract;
 pub mod protocol;
 mod result;

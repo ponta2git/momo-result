@@ -20,6 +20,7 @@ import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.ports.storage.{Sha256Hex, SourceImageIdempotencyHash, SourceImageObjectKey}
 import momo.api.repositories.*
+import momo.api.usecases.ocr.{OcrSubmissions, PutOcrSubmissionCommand}
 
 final class PostgresOcrSubmissionsRepositorySpec extends IntegrationSuite:
   private val owner = AccountId.unsafeFromString("account_ponta")
@@ -89,6 +90,33 @@ final class PostgresOcrSubmissionsRepositorySpec extends IntegrationSuite:
       assertEquals(acceptedStatus, "ocr_running")
       assert(refused.isLeft)
       assertEquals(refusedStatus, "draft_ready")
+  }
+
+  List(" MOMOTETSU_WORLD ", "retained-unknown").foreach { layout =>
+    test(s"retained $layout hints survive repository decoding and exact replay unchanged") {
+      val proposed =
+        submission().copy(ocrHints = OcrJobHints.empty.copy(layoutFamily = Some(layout)))
+      val service =
+        OcrSubmissions[IO](repository, IO.pure(proposed.admissionDeadline.plusSeconds(1)))
+      val command = PutOcrSubmissionCommand(proposed.id, draft, proposed.ocrHints, proposed.members)
+      val mustNotAdmit = IO.raiseError[Either[momo.api.errors.AppError, Unit]](
+        new IllegalStateException("retained replay must not consume new admission")
+      )
+      for
+        _ <- seedDraft
+        admitted <- repository.put(proposed)
+        saved <- repository.find(proposed.id, owner)
+        before <- sql"SELECT ocr_hints_json::text FROM ocr_submissions WHERE id = ${proposed.id}"
+          .query[String].unique.transact(transactor)
+        replay <- service.put(command, owner, mustNotAdmit)
+        after <- sql"SELECT ocr_hints_json::text FROM ocr_submissions WHERE id = ${proposed.id}"
+          .query[String].unique.transact(transactor)
+      yield
+        assert(admitted.isRight)
+        assertEquals(saved.map(_.ocrHints), Some(proposed.ocrHints))
+        assertEquals(replay.toOption, saved)
+        assertEquals(before, after)
+    }
   }
 
   test("another account cannot attach an OCR submission to the source draft") {

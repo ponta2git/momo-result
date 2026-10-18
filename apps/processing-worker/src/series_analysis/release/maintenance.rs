@@ -535,7 +535,7 @@ mod tests {
              CREATE TEMP TABLE maintenance_readers AS SELECT reader_id, draining FROM series_analysis_reader_capabilities; \
              CREATE TEMP TABLE maintenance_workers AS SELECT worker_id, draining FROM series_analysis_worker_capabilities; \
              INSERT INTO game_titles (id, name, layout_family, display_order) \
-               VALUES ('maintenance-title', 'maintenance test', 'momotetsu2', 9998);"
+               VALUES ('maintenance-title', 'maintenance test', 'momotetsu_2', 9998);"
         ).await?;
         setup
             .batch_execute(

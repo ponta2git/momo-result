@@ -20,7 +20,7 @@ final class CreateGameTitle[F[_]: Monad](titles: GameTitlesRepository[F], now: F
       for
         id <- UseCaseField.masterId("id", command.id.value)
         name <- UseCaseField.name("name", command.name)
-        layoutFamily <- UseCaseField.stableKey("layoutFamily", command.layoutFamily)
+        layoutFamily <- UseCaseField.layoutFamily(command.layoutFamily)
       yield (GameTitleId.unsafeFromString(id), name, layoutFamily)
 
     validated match

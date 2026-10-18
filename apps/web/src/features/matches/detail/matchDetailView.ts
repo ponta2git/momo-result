@@ -8,6 +8,7 @@ import type { DetailNavigation, MatchNeighbor } from "@/shared/api/detailReadRes
 import type { MatchDetailResponse } from "@/shared/api/matches";
 import type { matchPerformanceContextFromArtifact } from "@/shared/matches/matchPerformanceContext";
 import { seriesComparisonHrefForMatch } from "@/shared/navigation/matchLinks";
+import { heldEventDetailHref } from "@/shared/navigation/publicIdentifiers";
 
 export type MatchDetailRefreshAction = {
   pending: boolean;
@@ -115,7 +116,7 @@ export function buildMatchDetailView({
       comparisonHref: seriesComparisonHrefForMatch(match),
       editHref: `/matches/${encodeURIComponent(match.matchId)}/edit`,
       exportHref: `/exports?matchId=${encodeURIComponent(match.matchId)}`,
-      heldEventHref: `/held-events/${encodeURIComponent(match.heldEventId)}`,
+      heldEventHref: heldEventDetailHref(match.heldEventId, match.heldEventPublicId),
       adjacent,
       adjacentState: pending
         ? "pending"

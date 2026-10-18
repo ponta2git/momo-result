@@ -89,6 +89,16 @@ object MatchesEndpoints:
     .out(jsonBody[MatchIdentityResponse])
     .tag("matches")
 
+  val getByPublicId: CommonEndpoint.SecuredRead[String, MatchDetailResponse] = endpoint
+    .get
+    .in("api" / "public" / "matches" / path[String]("publicId").description(
+      "Canonical positive decimal string, from 1 through 9223372036854775807."
+    ))
+    .securityIn(CommonEndpoint.accountHeader)
+    .errorOut(CommonEndpoint.errorOut)
+    .out(jsonBody[MatchDetailResponse])
+    .tag("matches")
+
   type UpdateInput = (String, Option[String], UpdateMatchRequest)
 
   val update: CommonEndpoint.SecuredMutation[UpdateInput, UpdateMatchResponse] = endpoint

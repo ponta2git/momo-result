@@ -13,7 +13,7 @@ private[bootstrap] object FrozenApiRuntime:
     config.database match
       case Some(database) => Database.transactor[F](database).map { transactor =>
           ApiApp.Runtime(
-            FrozenHttpApp(MaintenanceReadiness.check(transactor)),
+            FrozenHttpApp(MaintenanceReadiness.check(transactor, database.jdbcUrl)),
             Async[F].never[Nothing],
           )
         }

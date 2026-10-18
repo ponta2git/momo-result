@@ -263,7 +263,7 @@ fn analysis_config(database_url: &str, directory: &Path) -> TestResult<AnalysisC
 async fn insert_analysis(client: &Client) -> TestResult {
     let schema = i32::try_from(ARTIFACT_SCHEMA_VERSION)?;
     for id in [ANALYSIS, WAITING] {
-        client.execute("INSERT INTO game_titles(id,name,layout_family,display_order) VALUES ($1,$1,'momotetsu2',9999)", &[&id]).await?;
+        client.execute("INSERT INTO game_titles(id,name,layout_family,display_order) VALUES ($1,$1,'momotetsu_2',9999)", &[&id]).await?;
         client.execute("INSERT INTO series_analysis_jobs(id,game_title_id,input_revision,algorithm_version,artifact_schema_version,validation_contract_id,status,trigger,available_at,requested_at) VALUES ($1,$1,0,$2,$3,$4,'queued','manual',TIMESTAMPTZ '2020-01-01',TIMESTAMPTZ '2020-01-01')", &[&id,&ALGORITHM_VERSION,&schema,&ARTIFACT_VALIDATION_CONTRACT_ID]).await?;
     }
     Ok(())

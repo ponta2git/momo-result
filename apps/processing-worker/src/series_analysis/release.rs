@@ -712,6 +712,7 @@ async fn apply_promotion(
             &[&title_ids],
         )
         .await?;
+    super::job_transitions::bind_queued_radar(transaction, &title_ids).await?;
     transaction
         .execute(
             "INSERT INTO series_analysis_operation_requests ( \
@@ -1470,7 +1471,7 @@ mod tests {
         transaction
             .execute(
                 "INSERT INTO game_titles (id, name, layout_family, display_order) \
-                 VALUES ($1, 'post-promotion title smoke', 'momotetsu2', 9997)",
+                 VALUES ($1, 'post-promotion title smoke', 'momotetsu_2', 9997)",
                 &[&NEW_TITLE_ID],
             )
             .await?;
@@ -1558,7 +1559,7 @@ mod tests {
         let blocked_insert = contender_transaction
             .execute(
                 "INSERT INTO game_titles (id, name, layout_family, display_order) \
-                 VALUES ($1, 'release lock title smoke', 'momotetsu2', 9996)",
+                 VALUES ($1, 'release lock title smoke', 'momotetsu_2', 9996)",
                 &[&TITLE_ID],
             )
             .await;
@@ -1580,7 +1581,7 @@ mod tests {
         contender_transaction
             .execute(
                 "INSERT INTO game_titles (id, name, layout_family, display_order) \
-                 VALUES ($1, 'release lock title smoke', 'momotetsu2', 9996)",
+                 VALUES ($1, 'release lock title smoke', 'momotetsu_2', 9996)",
                 &[&TITLE_ID],
             )
             .await?;

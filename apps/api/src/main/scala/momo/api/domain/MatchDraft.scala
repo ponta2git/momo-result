@@ -269,4 +269,6 @@ final case class MatchListItem(
     hasNote: Option[Boolean] = None,
     heldAt: Option[Instant] = None,
     labels: MatchLabels = MatchLabels.empty,
+    publicId: Option[PublicId] = None,
+    heldEventPublicId: Option[PublicId] = None,
 )

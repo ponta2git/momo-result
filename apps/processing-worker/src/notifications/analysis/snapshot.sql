@@ -48,7 +48,9 @@ LEFT JOIN LATERAL (
       FROM match_players mp
       JOIN members member ON member.id = mp.member_id
       LEFT JOIN match_incidents mi ON mi.match_id = mp.match_id AND mi.member_id = mp.member_id
-        AND mi.incident_master_id = 'incident_suri_no_ginji'
+        AND mi.incident_master_id = (
+          SELECT id FROM incident_masters WHERE key = 'suri_no_ginji'
+        )
       WHERE mp.match_id = m.id
     ) players
   )

@@ -58,7 +58,7 @@ private[postgres] trait PostgresMatchesReadSupport:
   protected final case class IncidentRow(
       matchId: MatchId,
       memberId: MemberId,
-      incidentMasterId: IncidentMasterId,
+      incidentKey: String,
       count: Int,
   )
 
@@ -122,9 +122,10 @@ private[postgres] trait PostgresMatchesReadSupport:
         """.query[PlayerRow].to[List]
 
       val incidentsIO = sql"""
-          SELECT match_id, member_id, incident_master_id, count
-          FROM match_incidents
-          WHERE match_id = ANY($ids)
+          SELECT mi.match_id, mi.member_id, im.key, mi.count
+          FROM match_incidents mi
+          JOIN incident_masters im ON im.id = mi.incident_master_id
+          WHERE mi.match_id = ANY($ids)
         """.query[IncidentRow].to[List]
 
       for
@@ -138,28 +139,35 @@ private[postgres] trait PostgresMatchesReadSupport:
       playerRows: List[PlayerRow],
       incidentRows: List[IncidentRow],
   ): Either[PostgresDataIntegrityException, Map[MatchId, FourPlayers]] =
-    val incidents = incidentRows.groupMap(row => (row.matchId, row.memberId))(identity)
-      .view.mapValues(_.flatMap(row =>
-        IncidentKindMapping.kindOf(row.incidentMasterId).map(_ -> row.count)
-      ).toMap).toMap
-    val playersByMatch = playerRows.groupMap(_.matchId) { row =>
-      PlayerResult(
-        memberId = row.memberId,
-        playOrder = row.playOrder,
-        rank = row.rank,
-        totalAssetsManYen = row.totalAssets,
-        revenueManYen = row.revenue,
-        incidents =
-          IncidentCounts.fromKindMap(incidents.getOrElse((row.matchId, row.memberId), Map.empty)),
-      )
+    incidentRows.traverse { row =>
+      IncidentKindMapping.kindOf(row.incidentKey).toRight(
+        PostgresDataIntegrityException.inconsistentRow(
+          "match_incidents",
+          row.matchId.value,
+          "unknown incident semantic key",
+        )
+      ).map(kind => ((row.matchId, row.memberId), (kind, row.count)))
+    }.flatMap { keyed =>
+      val incidents = keyed.groupMap(_._1)(_._2).view.mapValues(_.toMap).toMap
+      val playersByMatch = playerRows.groupMap(_.matchId) { row =>
+        PlayerResult(
+          memberId = row.memberId,
+          playOrder = row.playOrder,
+          rank = row.rank,
+          totalAssetsManYen = row.totalAssets,
+          revenueManYen = row.revenue,
+          incidents =
+            IncidentCounts.fromKindMap(incidents.getOrElse((row.matchId, row.memberId), Map.empty)),
+        )
+      }
+      matchIds.traverse { id =>
+        FourPlayers.fromTrustedRow(playersByMatch.getOrElse(id, Nil))
+          .leftMap(errors =>
+            PostgresDataIntegrityException.inconsistentRow(
+              "match_players",
+              id.value,
+              errors.toChain.toList.map(_.message).mkString("; "),
+            )
+          ).map(id -> _)
+      }.map(_.toMap)
     }
-    matchIds.traverse { id =>
-      FourPlayers.fromTrustedRow(playersByMatch.getOrElse(id, Nil))
-        .leftMap(errors =>
-          PostgresDataIntegrityException.inconsistentRow(
-            "match_players",
-            id.value,
-            errors.toChain.toList.map(_.message).mkString("; "),
-          )
-        ).map(id -> _)
-    }.map(_.toMap)

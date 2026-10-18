@@ -37,7 +37,7 @@ async fn real_postgres_scoped_plan_preserves_binding_and_refuses_unrelated_work(
 
 async fn create_fixture(client: &mut Client) -> Result<(), tokio_postgres::Error> {
     let transaction = client.transaction().await?;
-    transaction.execute("INSERT INTO game_titles (id,name,layout_family,display_order) VALUES ($1,'Scoped maintenance fixture','momotetsu2',9998)", &[&TITLE]).await?;
+    transaction.execute("INSERT INTO game_titles (id,name,layout_family,display_order) VALUES ($1,'Scoped maintenance fixture','momotetsu_2',9998)", &[&TITLE]).await?;
     transaction.execute(
         "INSERT INTO series_analysis_operation_requests (id,scope,idempotency_key_hash,endpoint,target_count) VALUES ($1,'all_titles',repeat('1',64),'release:initial_backfill',1)", &[&OPERATION]
     ).await?;

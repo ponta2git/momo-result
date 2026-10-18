@@ -54,6 +54,7 @@ final case class HeldEventResponse(
     draftCount: Int,
     nextMatchNo: Int,
     scopes: List[HeldEventScopeResponse] = Nil,
+    publicId: Option[String] = None,
 ) derives Codec.AsObject
 
 object HeldEventResponse:
@@ -70,6 +71,7 @@ object HeldEventResponse:
     draftCount = draftCount,
     nextMatchNo = nextMatchNo,
     scopes = scopes.map(HeldEventScopeResponse.from),
+    publicId = e.publicId.map(_.decimalString),
   )
 
 final case class HeldEventListResponse(
@@ -185,6 +187,8 @@ final case class MatchSummaryResponse(
     gameTitleName: Option[String] = None,
     seasonName: Option[String] = None,
     mapName: Option[String] = None,
+    publicId: Option[String] = None,
+    heldEventPublicId: Option[String] = None,
 ) derives Codec.AsObject
 
 final case class MatchNoteResponse(
@@ -251,6 +255,8 @@ final case class MatchDetailResponse(
     gameTitleName: Option[String] = None,
     seasonName: Option[String] = None,
     mapName: Option[String] = None,
+    publicId: Option[String] = None,
+    heldEventPublicId: Option[String] = None,
 ) derives Codec.AsObject
 
 final case class AdjacentMatchResponse(
@@ -259,6 +265,8 @@ final case class AdjacentMatchResponse(
     playedAt: String,
     heldAt: String,
     matchNoInEvent: Int,
+    publicId: Option[String] = None,
+    heldEventPublicId: Option[String] = None,
 ) derives Codec.AsObject
 
 object AdjacentMatchResponse:
@@ -268,6 +276,8 @@ object AdjacentMatchResponse:
     DateTimeFormatter.ISO_INSTANT.format(record.playedAt),
     DateTimeFormatter.ISO_INSTANT.format(record.heldAt),
     record.matchNoInEvent.value,
+    record.publicId.map(_.decimalString),
+    record.heldEventPublicId.map(_.decimalString),
   )
 
 final case class MatchNavigationResponse(
@@ -315,6 +325,8 @@ object MatchSummaryResponse:
     gameTitleName = item.labels.gameTitleName,
     seasonName = item.labels.seasonName,
     mapName = item.labels.mapName,
+    publicId = item.publicId.map(_.decimalString),
+    heldEventPublicId = item.heldEventPublicId.map(_.decimalString),
   )
 
 object MatchDetailResponse:
@@ -362,6 +374,8 @@ object MatchDetailResponse:
       gameTitleName = detail.labels.gameTitleName,
       seasonName = detail.labels.seasonName,
       mapName = detail.labels.mapName,
+      publicId = detail.publicId.map(_.decimalString),
+      heldEventPublicId = detail.heldEventPublicId.map(_.decimalString),
       note = MatchNoteResponse(
         body = r.note.body.map(_.value),
         version = r.note.version.value.toString,
@@ -380,6 +394,7 @@ final case class MatchIdentityResponse(
     playedAt: String,
     gameTitleName: Option[String],
     seasonName: Option[String],
+    publicId: Option[String] = None,
 ) derives Codec.AsObject
 
 object MatchIdentityResponse:
@@ -389,4 +404,5 @@ object MatchIdentityResponse:
     DateTimeFormatter.ISO_INSTANT.format(identity.playedAt),
     identity.gameTitleName,
     identity.seasonName,
+    identity.publicId.map(_.decimalString),
   )

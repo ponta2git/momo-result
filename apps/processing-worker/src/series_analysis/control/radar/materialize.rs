@@ -79,6 +79,7 @@ pub(in crate::series_analysis::control) async fn materialize_next(
     let trigger = if is_radar { "manual" } else { kind.as_str() };
     let revision: i64 = desired.try_get(0)?;
     tx.execute("INSERT INTO series_analysis_jobs (id,game_title_id,input_revision,algorithm_version,artifact_schema_version,validation_contract_id,status,trigger,work_kind,radar_operation_id) VALUES ($1,$2,$3,$4,$5,$6,'queued',$7,$8,$9)", &[&job_id,&title,&revision,&algorithm,&schema,&contract,&trigger,&purpose,&operation_id]).await?;
+    crate::series_analysis::job_transitions::bind_queued_radar(tx, &[title]).await?;
     if is_radar {
         tx.execute("UPDATE series_radar_operations SET job_id=$2,updated_at=clock_timestamp() WHERE id=$1 AND status='pending' AND job_id IS NULL", &[&id,&job_id]).await?;
     } else {

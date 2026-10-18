@@ -55,6 +55,13 @@ export async function getHeldEventDetail(
   );
 }
 
+export function getHeldEventByPublicId(publicId: string, options: ApiSignalOptions = {}) {
+  return apiRequest<HeldEventDetailResponse>(
+    `/api/public/held-events/${encodeURIComponent(publicId)}`,
+    options,
+  );
+}
+
 export async function deleteHeldEvent(
   heldEventId: string,
   options: IdempotencyRequestOptions,

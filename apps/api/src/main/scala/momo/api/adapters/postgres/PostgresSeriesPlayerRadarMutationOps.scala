@@ -76,11 +76,7 @@ private[postgres] object PostgresSeriesPlayerRadarMutationOps:
         WHERE game_title_id = $title AND active_operation_id = ANY($stoppedIds)
       """.update.run
       _ <- if reset > 0 then
-        // The schema's queued-job guard copies the newly fenced desired basis into queued work.
-        sql"""
-          UPDATE series_analysis_jobs SET updated_at = now()
-          WHERE game_title_id = $title AND status = 'queued' AND work_kind = 'analysis'
-        """.update.run.void
+        PostgresSeriesAnalysisJobTransitions.bindQueuedRadar(title)
       else ().pure[ConnectionIO]
     yield ()
   }

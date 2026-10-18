@@ -92,6 +92,8 @@ pub(crate) async fn recover_expired_analysis_job(
             &mut effects,
         )
         .await?;
+        crate::series_analysis::job_transitions::bind_queued_radar(transaction, &[&game_title_id])
+            .await?;
     }
     Ok(effects)
 }

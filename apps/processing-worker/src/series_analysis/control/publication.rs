@@ -106,7 +106,7 @@ pub(super) async fn requires_staging(
                     AND s.artifact_schema_version = $4\x20\
                     AND s.validation_contract_id IS NOT DISTINCT FROM $5 AND NOT EXISTS (\x20\
                       SELECT 1 FROM series_analysis_artifacts a\x20\
-                      WHERE a.id = s.current_artifact_id AND a.status = 'published'\x20\
+                      WHERE a.id = s.current_artifact_id AND a.game_title_id = s.game_title_id AND a.status = 'published'\x20\
                         AND a.input_revision = $2 AND a.algorithm_version = $3\x20\
                         AND a.artifact_schema_version = $4\x20\
                         AND a.validation_contract_id = $6\x20\
@@ -142,8 +142,8 @@ pub(super) async fn existing_artifact(
         .query_one(
             "SELECT input_revision, algorithm_version, artifact_schema_version,\x20\
                     source_input_checksum, root_checksum, validation_contract_id, radar_basis_id, radar_generation\x20\
-             FROM series_analysis_artifacts WHERE id = $1 AND status = 'published'",
-            &[&current_artifact_id],
+             FROM series_analysis_artifacts WHERE id = $1 AND game_title_id = $2 AND status = 'published'",
+            &[&current_artifact_id, &claim.game_title_id],
         )
         .await?;
     let current_revision = current.try_get::<_, i64>(0)?;
@@ -318,6 +318,7 @@ pub(super) async fn publish_staged_artifact(
                  WHEN current_artifact_id IS DISTINCT FROM $1 AND EXISTS (\x20\
                    SELECT 1 FROM series_analysis_artifacts previous\x20\
                    WHERE previous.id = current_artifact_id AND previous.status = 'published'\x20\
+                     AND previous.game_title_id = $2 AND previous.artifact_schema_version = $5\x20\
                      AND previous.validation_contract_id = $7\x20\
                  ) THEN current_artifact_id\x20\
                  WHEN current_artifact_id IS DISTINCT FROM $1 THEN NULL\x20\
@@ -388,6 +389,7 @@ pub(super) async fn finish_success(
                  WHEN EXISTS (\x20\
                    SELECT 1 FROM series_analysis_artifacts a\x20\
                    WHERE a.id = series_analysis_title_states.previous_artifact_id\x20\
+                     AND a.game_title_id = $1 AND a.artifact_schema_version = $3\x20\
                      AND a.status = 'published' AND a.validation_contract_id = $2\x20\
                  ) THEN previous_artifact_id ELSE NULL END,\x20\
                notification_baseline_state = 'artifact',\x20\
@@ -395,7 +397,11 @@ pub(super) async fn finish_success(
                pending_work = false, pending_forced_run_count = 0,\x20\
                last_failure_code = NULL, last_failure_at = NULL, updated_at = clock_timestamp()\x20\
              WHERE game_title_id = $1",
-            &[&claim.game_title_id, &ARTIFACT_VALIDATION_CONTRACT_ID],
+            &[
+                &claim.game_title_id,
+                &ARTIFACT_VALIDATION_CONTRACT_ID,
+                &claim.artifact_schema_version,
+            ],
         )
         .await?;
     fulfill_requests(transaction, claim, RequestOutcome::Succeeded).await?;

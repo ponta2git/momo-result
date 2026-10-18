@@ -29,7 +29,7 @@ final class UpdateGameTitle[F[_]: Monad](titles: GameTitlesRepository[F]):
     existing <- titles.find(command.id).orNotFound("game title", command.id.value)
     name <- EitherT.fromEither[F](UseCaseField.name("name", command.name))
     layoutFamily <- EitherT
-      .fromEither[F](UseCaseField.stableKey("layoutFamily", command.layoutFamily))
+      .fromEither[F](UseCaseField.layoutFamily(command.layoutFamily))
     updated = existing.copy(name = name, layoutFamily = layoutFamily)
     _ <- EitherT(titles.update(updated))
   yield updated).value

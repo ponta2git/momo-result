@@ -1,7 +1,10 @@
 //! Frozen startup and read-only readiness, independent of normal worker construction.
 
 pub(crate) mod analysis;
+mod database;
 pub(crate) mod drain;
+
+pub(crate) use database::DatabaseProof;
 
 use std::{ffi::OsStr, time::Duration};
 
@@ -28,19 +31,20 @@ impl Mode {
     }
 }
 
-pub(crate) async fn readiness(database_url: &str) -> Result<(), &'static str> {
+pub(crate) async fn readiness(database_url: &str) -> Result<DatabaseProof, &'static str> {
     tokio::time::timeout(Duration::from_secs(20), check_database(database_url))
         .await
         .map_err(|_elapsed| "maintenance readiness timed out")?
 }
 
-async fn check_database(database_url: &str) -> Result<(), &'static str> {
+async fn check_database(database_url: &str) -> Result<DatabaseProof, &'static str> {
     let mut client = crate::postgres::connect(database_url)
         .await
         .map_err(|_error| "maintenance database connection failed")?;
     let transaction = client
         .build_transaction()
         .read_only(true)
+        .isolation_level(tokio_postgres::IsolationLevel::RepeatableRead)
         .start()
         .await
         .map_err(|_error| "maintenance read-only transaction failed")?;
@@ -48,6 +52,7 @@ async fn check_database(database_url: &str) -> Result<(), &'static str> {
         .batch_execute("SET LOCAL statement_timeout = '5s'; SET LOCAL lock_timeout = '3s'")
         .await
         .map_err(|_error| "maintenance read-only transaction failed")?;
+    let database = database::inspect(&transaction, database_url).await?;
     let schema_version = i32::try_from(ARTIFACT_SCHEMA_VERSION)
         .map_err(|_error| "maintenance reader contract is invalid")?;
     let row = transaction
@@ -68,7 +73,7 @@ async fn check_database(database_url: &str) -> Result<(), &'static str> {
         .await
         .map_err(|_error| "maintenance read-only transaction failed")?;
     if compatible {
-        Ok(())
+        Ok(database)
     } else {
         Err("maintenance reader contract is incompatible")
     }

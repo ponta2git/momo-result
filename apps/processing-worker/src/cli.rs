@@ -741,7 +741,7 @@ fn validate_mode_command(mode: Mode, command: &Command) -> Result<(), &'static s
 }
 
 async fn maintenance_readiness() -> Result<(), String> {
-    crate::maintenance::readiness(&required_environment("DATABASE_URL")?)
+    let database = crate::maintenance::readiness(&required_environment("DATABASE_URL")?)
         .await
         .map_err(String::from)?;
     write_json_line(&serde_json::json!({
@@ -749,6 +749,7 @@ async fn maintenance_readiness() -> Result<(), String> {
         "schemaVersion": 1,
         "status": "ready",
         "mode": "frozen",
+        "database": database,
     }))
 }
 

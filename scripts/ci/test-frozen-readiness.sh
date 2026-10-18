@@ -34,8 +34,13 @@ for role in runtime analysis; do
   else
     printf '%s\n' '{"event":"worker_maintenance_readiness","schemaVersion":1,"status":"ready","mode":"frozen"}' > readiness.json
   fi
+  jq --arg target "$(printf '%064d' 1)" --arg ledger "$(printf '%064d' 2)" \
+    '.database = {formatVersion:1,targetFingerprint:$target,ledgerFingerprint:$ledger}' readiness.json > proof.json
+  mv proof.json readiness.json
   scripts/ci/frozen-readiness.sh "${role}" "${image}" evidence.json
-  jq -e --arg role "${role}" '.consumer == $role and .mode == "frozen" and .status == "ready"' evidence.json > /dev/null
+  jq -e --arg role "${role}" '.consumer == $role and .mode == "frozen" and .status == "ready" and
+    .database.formatVersion == 1 and (.database.targetFingerprint | length == 64) and
+    (.database.ledgerFingerprint | length == 64)' evidence.json > /dev/null
   ! grep -q 'MOMO_MAINTENANCE_MODE=' command
   rm command evidence.json
   jq '.[0].config.env.MOMO_MAINTENANCE_MODE = "normal"' baseline.json > machine.json

@@ -47,8 +47,9 @@ func TestFrozenMachineSelectionUsesPersistentModeAndExactImage(t *testing.T) {
 }
 
 func TestFrozenReadinessRequiresEveryDedicatedProbe(t *testing.T) {
-	runtime := `{"event":"runtime_maintenance_readiness","schemaVersion":1,"status":"ok","checks":["frozen_readiness","normal_routes_closed","database_contract","runtime_processes"],"private":"never-print"}`
-	worker := `{"event":"worker_maintenance_readiness","schemaVersion":1,"status":"ready","mode":"frozen","private":"never-print"}`
+	proof := `{"formatVersion":1,"targetFingerprint":"` + strings.Repeat("a", 64) + `","ledgerFingerprint":"` + strings.Repeat("b", 64) + `"}`
+	runtime := `{"event":"runtime_maintenance_readiness","schemaVersion":1,"status":"ok","checks":["frozen_readiness","normal_routes_closed","database_contract","runtime_processes"],"database":` + proof + `,"private":"never-print"}`
+	worker := `{"event":"worker_maintenance_readiness","schemaVersion":1,"status":"ready","mode":"frozen","database":` + proof + `,"private":"never-print"}`
 	for _, tc := range []struct {
 		role, input string
 		valid       bool
@@ -65,8 +66,34 @@ func TestFrozenReadinessRequiresEveryDedicatedProbe(t *testing.T) {
 		}
 		if tc.valid {
 			var evidence map[string]any
-			if json.Unmarshal([]byte(out), &evidence) != nil || len(evidence) != 4 || evidence["consumer"] != tc.role || evidence["status"] != "ready" || evidence["mode"] != "frozen" || evidence["schemaVersion"] != float64(1) {
+			if json.Unmarshal([]byte(out), &evidence) != nil || len(evidence) != 5 || evidence["consumer"] != tc.role || evidence["status"] != "ready" || evidence["mode"] != "frozen" || evidence["schemaVersion"] != float64(1) {
 				t.Fatal(out)
+			}
+			database := objectMap(evidence["database"])
+			if !database.keys("formatVersion", "targetFingerprint", "ledgerFingerprint") || database["formatVersion"] != float64(1) || database["targetFingerprint"] != strings.Repeat("a", 64) || database["ledgerFingerprint"] != strings.Repeat("b", 64) {
+				t.Fatal(out)
+			}
+		}
+	}
+	for _, input := range []string{runtime, worker} {
+		role := "runtime"
+		if input == worker {
+			role = "analysis"
+		}
+		for _, change := range []func(object){
+			func(o object) { delete(o, "database") },
+			func(o object) { o["database"] = nil },
+			func(o object) { delete(objectMap(o["database"]), "ledgerFingerprint") },
+			func(o object) { objectMap(o["database"])["formatVersion"] = 1.0001 },
+			func(o object) { objectMap(o["database"])["targetFingerprint"] = "" },
+			func(o object) { objectMap(o["database"])["targetFingerprint"] = strings.Repeat("A", 64) },
+			func(o object) { objectMap(o["database"])["ledgerFingerprint"] = strings.Repeat("b", 63) },
+			func(o object) { objectMap(o["database"])["databaseName"] = "never-print" },
+		} {
+			invalidInput := mutated(t, []byte(input), change)
+			code, out, diagnostics := call(t, "frozen-readiness-evidence", []string{role}, string(invalidInput), "")
+			if code == 0 || out != "" || strings.Contains(diagnostics, "never-print") {
+				t.Fatal(code, out, diagnostics)
 			}
 		}
 	}

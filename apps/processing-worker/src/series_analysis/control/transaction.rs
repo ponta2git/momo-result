@@ -16,14 +16,14 @@ pub(super) async fn lock_owned(
     let title = transaction
         .query_opt(
             "SELECT game_title_id FROM series_analysis_title_states\x20\
-             WHERE game_title_id = $1 FOR UPDATE",
+             WHERE game_title_id = (SELECT id FROM game_titles WHERE legacy_id=$1) FOR UPDATE",
             &[&claim.game_title_id],
         )
         .await?;
     let job = transaction
         .query_opt(
-            "SELECT id FROM series_analysis_jobs WHERE id = $1 AND status = 'running'\x20\
-               AND lease_owner = $2 AND lease_attempt_id = $3 AND lease_fencing_token = $4\x20\
+            "SELECT id FROM series_analysis_jobs WHERE legacy_id = $1 AND status = 'running'\x20\
+               AND lease_owner = $2 AND legacy_lease_attempt_id = $3 AND lease_fencing_token = $4\x20\
                AND input_revision = $5 AND algorithm_version = $6\x20\
                AND artifact_schema_version = $7\x20\
                AND validation_contract_id IS NOT DISTINCT FROM $8\x20\
@@ -45,7 +45,7 @@ pub(super) async fn lock_owned(
     let attempt = transaction
         .query_opt(
             "SELECT id FROM series_analysis_job_attempts\x20\
-             WHERE id = $1 AND job_id = $2 AND attempt_no = $3 AND owner = $4\x20\
+             WHERE legacy_id = $1 AND job_id = (SELECT id FROM series_analysis_jobs WHERE legacy_id=$2) AND attempt_no = $3 AND owner = $4\x20\
                AND fencing_token = $5 AND input_revision = $6 AND algorithm_version = $7\x20\
                AND artifact_schema_version = $8\x20\
                AND validation_contract_id IS NOT DISTINCT FROM $9\x20\
@@ -83,7 +83,7 @@ pub(super) async fn finish_attempt(
                elapsed_milliseconds = $2, calculation_milliseconds = $3,\x20\
                staging_milliseconds = $4, publication_milliseconds = $5,\x20\
                child_peak_bytes = $6, worker_peak_bytes = $7\x20\
-             WHERE id = $8 AND status = 'running' AND fencing_token = $9",
+             WHERE legacy_id = $8 AND status = 'running' AND fencing_token = $9",
             &[
                 &outcome,
                 &metrics.elapsed_milliseconds,
@@ -112,7 +112,7 @@ pub(super) async fn fulfill_requests(
     transaction
         .execute(
             "UPDATE series_analysis_job_requests SET status = 'fulfilled', fulfilled_at = clock_timestamp()\x20\
-             WHERE status = 'assigned' AND assigned_attempt_id = $1",
+             WHERE status = 'assigned' AND legacy_assigned_attempt_id = $1",
             &[&claim.attempt_id],
         )
         .await?;
@@ -121,7 +121,7 @@ pub(super) async fn fulfill_requests(
             "UPDATE series_analysis_campaign_targets t\x20\
              SET status = $1, updated_at = clock_timestamp()\x20\
              FROM series_analysis_job_requests r\x20\
-             WHERE t.job_request_id = r.id AND r.assigned_attempt_id = $2 AND r.status = 'fulfilled'",
+             WHERE t.job_request_id = r.id AND r.legacy_assigned_attempt_id = $2 AND r.status = 'fulfilled'",
             &[&outcome, &claim.attempt_id],
         )
         .await?;
@@ -145,8 +145,8 @@ pub(super) async fn refresh_operation_projections(
 ) -> Result<(), ControlError> {
     let campaign_ids = transaction
         .query(
-            "SELECT DISTINCT campaign_id FROM series_analysis_job_requests
-             WHERE assigned_attempt_id = $1 AND campaign_id IS NOT NULL",
+            "SELECT DISTINCT (SELECT legacy_id FROM series_analysis_campaigns WHERE id=r.campaign_id) FROM series_analysis_job_requests r
+             WHERE legacy_assigned_attempt_id = $1 AND campaign_id IS NOT NULL",
             &[&attempt_id],
         )
         .await?
@@ -161,7 +161,7 @@ pub(super) async fn refresh_operation_projections(
              WHERE o.status <> 'terminal' AND o.scope = 'title'\x20\
                AND EXISTS (\x20\
                  SELECT 1 FROM series_analysis_job_requests changed\x20\
-                 WHERE changed.operation_request_id = o.id AND changed.assigned_attempt_id = $1\x20\
+                 WHERE changed.operation_request_id = o.id AND changed.legacy_assigned_attempt_id = $1\x20\
                ) AND NOT EXISTS (\x20\
                  SELECT 1 FROM series_analysis_job_requests pending\x20\
                  WHERE pending.operation_request_id = o.id AND pending.status <> 'fulfilled'\x20\

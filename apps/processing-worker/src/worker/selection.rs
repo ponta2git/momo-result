@@ -23,10 +23,10 @@ pub(super) async fn candidates(
     let requested = after.map(|cursor| cursor.requested_at);
     let id = after.map(|cursor| cursor.id.as_str());
     let rows = if ocr {
-        client.query("SELECT id,available_at,created_at FROM ocr_jobs WHERE status='queued' AND available_at <= statement_timestamp() AND ($2::timestamptz IS NULL OR (available_at,created_at,id)>($2,$3,$4)) ORDER BY available_at,created_at,id LIMIT $1", &[&PAGE,&available,&requested,&id]).await?
+        client.query("SELECT legacy_id,available_at,created_at FROM ocr_jobs WHERE status='queued' AND available_at <= statement_timestamp() AND ($2::timestamptz IS NULL OR (available_at,created_at,legacy_id)>($2,$3,$4)) ORDER BY available_at,created_at,legacy_id LIMIT $1", &[&PAGE,&available,&requested,&id]).await?
     } else {
         let schema = i64::from(ARTIFACT_SCHEMA_VERSION);
-        client.query("SELECT id,available_at,requested_at FROM series_analysis_jobs WHERE status='queued' AND available_at <= statement_timestamp() AND ($2::timestamptz IS NULL OR (available_at,requested_at,id)>($2,$3,$4)) AND algorithm_version=$5 AND artifact_schema_version=$6::bigint::integer AND validation_contract_id=$7 ORDER BY available_at,requested_at,id LIMIT $1", &[&PAGE,&available,&requested,&id,&ALGORITHM_VERSION,&schema,&ARTIFACT_VALIDATION_CONTRACT_ID]).await?
+        client.query("SELECT legacy_id,available_at,requested_at FROM series_analysis_jobs WHERE status='queued' AND available_at <= statement_timestamp() AND ($2::timestamptz IS NULL OR (available_at,requested_at,legacy_id)>($2,$3,$4)) AND algorithm_version=$5 AND artifact_schema_version=$6::bigint::integer AND validation_contract_id=$7 ORDER BY available_at,requested_at,legacy_id LIMIT $1", &[&PAGE,&available,&requested,&id,&ALGORITHM_VERSION,&schema,&ARTIFACT_VALIDATION_CONTRACT_ID]).await?
     };
     rows.iter()
         .map(|row| {
@@ -77,7 +77,7 @@ pub(super) async fn recover_page(
 ) -> Result<RecoveryProgress, WorkerError> {
     let kind = after.as_ref().map(|cursor| cursor.0.as_str());
     let id = after.as_ref().map(|cursor| cursor.1.as_str());
-    let rows=client.query("SELECT * FROM (SELECT 'analysis'::text AS kind,id,lease_owner,lease_attempt_id,lease_fencing_token FROM series_analysis_jobs WHERE status='running' AND lease_expires_at<=clock_timestamp() UNION ALL SELECT 'ocr',id,lease_owner,attempt_id::text,lease_fencing_token FROM ocr_jobs WHERE status='running' AND lease_expires_at<=clock_timestamp()) orphan WHERE ($1::text IS NULL OR (kind,id)>($1,$2)) ORDER BY kind,id LIMIT 64", &[&kind,&id]).await?;
+    let rows=client.query("SELECT * FROM (SELECT 'analysis'::text AS kind,legacy_id AS id,lease_owner,legacy_lease_attempt_id,lease_fencing_token FROM series_analysis_jobs WHERE status='running' AND lease_expires_at<=clock_timestamp() UNION ALL SELECT 'ocr',legacy_id,lease_owner,attempt_id::text,lease_fencing_token FROM ocr_jobs WHERE status='running' AND lease_expires_at<=clock_timestamp()) orphan WHERE ($1::text IS NULL OR (kind,id)>($1,$2)) ORDER BY kind,id LIMIT 64", &[&kind,&id]).await?;
     let more = rows.len() == 64;
     let mut deferred = false;
     for row in rows {

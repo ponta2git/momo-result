@@ -18,7 +18,7 @@ pub(super) async fn bind_queued_radar(
                SELECT s.game_title_id, r.desired_basis_id, COALESCE(r.generation, 0) AS generation \
                FROM series_analysis_title_states s \
                LEFT JOIN series_radar_title_states r ON r.game_title_id = s.game_title_id \
-               WHERE s.game_title_id = ANY($1)\
+               WHERE s.game_title_id IN (SELECT id FROM game_titles WHERE legacy_id = ANY($1::text[]))\
              ) desired \
              WHERE j.game_title_id = desired.game_title_id \
                AND j.status = 'queued' AND j.work_kind = 'analysis' \

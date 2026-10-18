@@ -111,6 +111,8 @@ export function MatchWorkspacePersistence({
   });
   const submitFlow = useMatchWorkspaceSubmitFlow({
     matchId: input.matchId,
+    matchPublicId: view.matchPublicId,
+    heldEventPublicId: view.selectedHeldEvent?.publicId,
     notify: input.notifyToast,
     onPersistedSuccess: sessionDraft.markCommitted,
     setConfirmOpen: setConfirmOpen,

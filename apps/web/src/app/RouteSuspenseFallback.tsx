@@ -107,7 +107,7 @@ function routePagePresentation(pathname: string, search = ""): RoutePagePresenta
       width: "standard",
     });
   }
-  if (/^\/matches\/[^/]+$/u.test(normalizedPathname)) {
+  if (/^\/(?:matches|m)\/[^/]+$/u.test(normalizedPathname)) {
     return defineRoutePresentation(
       {
         header: {
@@ -124,7 +124,7 @@ function routePagePresentation(pathname: string, search = ""): RoutePagePresenta
       { preserveHeader: true },
     );
   }
-  if (/^\/held-events\/[^/]+$/u.test(normalizedPathname)) {
+  if (/^\/(?:held-events|e)\/[^/]+$/u.test(normalizedPathname)) {
     return defineRoutePresentation(
       {
         header: {

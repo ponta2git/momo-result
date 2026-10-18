@@ -157,6 +157,8 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
           "playedAt" -> Json.fromString(nextPlayedAt),
           "heldAt" -> Json.fromString(laterHeldAt),
           "matchNoInEvent" -> Json.fromInt(1),
+          "publicId" -> Json.Null,
+          "heldEventPublicId" -> Json.Null,
         )
       )
       assertEquals(
@@ -170,7 +172,8 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
         jsonField[Json](eventNavigation, "next"),
         Json.obj(
           "id" -> Json.fromString(nextEvent),
-          "heldAt" -> Json.fromString(laterHeldAt)
+          "heldAt" -> Json.fromString(laterHeldAt),
+          "publicId" -> Json.Null,
         )
       )
   }

@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import type { APIRequestContext } from "@playwright/test";
 
 import type { components } from "../../src/shared/api/generated";
@@ -6,9 +8,9 @@ import type { E2eRun } from "../support";
 
 export async function seedMasterContext(request: APIRequestContext, e2eRun: E2eRun) {
   const { masterIdSuffix } = e2eRun;
-  const gameTitleId = `gt_e2e_${masterIdSuffix}`;
-  const seasonMasterId = `season_e2e_${masterIdSuffix}`;
-  const mapMasterId = `map_e2e_${masterIdSuffix}`;
+  const gameTitleId = randomUUID();
+  const seasonMasterId = randomUUID();
+  const mapMasterId = randomUUID();
   const gameTitleName = `桃太郎電鉄2 E2E ${masterIdSuffix}`;
   const seasonName = `E2Eシーズン ${masterIdSuffix}`;
   const mapName = `E2Eマップ ${masterIdSuffix}`;
@@ -97,10 +99,10 @@ function makePlayers(): Array<components["schemas"]["PlayerResultRequest"]> {
 
 export async function seedUiContext(request: APIRequestContext, e2eRun: E2eRun) {
   const suffix = e2eRun.masterIdSuffix;
-  const primaryGameTitleId = `gt_ui_a_${suffix}`;
-  const secondaryGameTitleId = `gt_ui_b_${suffix}`;
-  const seasonMasterId = `season_ui_${suffix}`;
-  const mapMasterId = `map_ui_${suffix}`;
+  const primaryGameTitleId = randomUUID();
+  const secondaryGameTitleId = randomUUID();
+  const seasonMasterId = randomUUID();
+  const mapMasterId = randomUUID();
   const primaryGameTitleName = `UI確認作品A ${suffix}`;
   const seasonName = `UI確認シーズン ${suffix}`;
   const mapName = `UI確認マップ ${suffix}`;

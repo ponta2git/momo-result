@@ -11,7 +11,8 @@ import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
 import momo.api.ports.storage.SourceImageObjectStorage
-import momo.api.repositories.OcrSubmissionsRepository
+import momo.api.repositories.{EntityReferenceResolver, OcrSubmissionsRepository}
+import momo.api.usecases.common.ReferenceNormalization
 
 final case class PutOcrSubmissionCommand(
     id: String,
@@ -20,11 +21,25 @@ final case class PutOcrSubmissionCommand(
     members: List[OcrSubmissionMember],
 )
 
-final class OcrSubmissions[F[_]: Monad](repository: OcrSubmissionsRepository[F], now: F[Instant]):
+final class OcrSubmissions[F[_]: Monad](
+    repository: OcrSubmissionsRepository[F],
+    now: F[Instant],
+    references: Option[EntityReferenceResolver[F]] = None
+):
   def put(
       command: PutOcrSubmissionCommand,
       owner: AccountId,
       admitNew: F[Either[AppError, Unit]],
+  ): F[Either[AppError, OcrSubmission]] = ReferenceNormalization.submission(
+    command,
+    references.getOrElse(EntityReferenceResolver.preserve[F])
+  )
+    .flatMap(normalized => putResolved(normalized, owner, admitNew))
+
+  private def putResolved(
+      command: PutOcrSubmissionCommand,
+      owner: AccountId,
+      admitNew: F[Either[AppError, Unit]]
   ): F[Either[AppError, OcrSubmission]] =
     OcrSubmissions.validate(command) match
       case Left(error) => error.asLeft[OcrSubmission].pure[F]

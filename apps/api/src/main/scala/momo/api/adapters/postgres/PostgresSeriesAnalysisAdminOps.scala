@@ -7,6 +7,7 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
+import momo.api.adapters.postgres.CanonicalIdentity.Entity
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.*
 import momo.api.domain.ids.GameTitleId
@@ -61,8 +62,11 @@ private[postgres] object PostgresSeriesAnalysisAdminOps:
 
   def overview(
       selectedId: Option[GameTitleId]
-  ): ConnectionIO[Either[AppError, SeriesAnalysisAdminOverview]] =
+  )(using
+      identities: PostgresIdentities): ConnectionIO[Either[AppError, SeriesAnalysisAdminOverview]] =
     for
+      normalizedSelected <- identities.normalize(Entity.GameTitles, selectedId.map(_.value))
+        .map(_.map(GameTitleId.unsafeFromString))
       optionsResult <- PostgresSeriesAnalysisReadOps.options
       global <- globalCio
       latestCampaign <- latestCampaignCio
@@ -73,7 +77,7 @@ private[postgres] object PostgresSeriesAnalysisAdminOps:
         case (Left(error), _) => error.asLeft[SeriesAnalysisAdminOverview].pure[ConnectionIO]
         case (_, Left(error)) => error.asLeft[SeriesAnalysisAdminOverview].pure[ConnectionIO]
         case (Right(options), Right(summaries)) =>
-          val selected = selectedId.orElse(options.defaultGameTitleId)
+          val selected = normalizedSelected.orElse(options.defaultGameTitleId)
           selected match
             case Some(id) if !options.titles.exists(_.gameTitleId == id) =>
               AppError.NotFound("game title", id.value).asLeft[SeriesAnalysisAdminOverview]
@@ -133,12 +137,13 @@ private[postgres] object PostgresSeriesAnalysisAdminOps:
     )
   )
 
-  private def latestCampaignCio: ConnectionIO[Option[SeriesAnalysisCampaignSummary]] = sql"""
-    SELECT id, target_count, expanded_count, terminal_count,
+  private def latestCampaignCio(using
+      identities: PostgresIdentities): ConnectionIO[Option[SeriesAnalysisCampaignSummary]] = sql"""
+    SELECT ${identities.wireId("c")}, target_count, expanded_count, terminal_count,
            failed_count, skipped_count, accepted_at
-    FROM series_analysis_campaigns
+    FROM series_analysis_campaigns c
     WHERE status <> 'terminal'
-    ORDER BY accepted_at DESC, id DESC
+    ORDER BY accepted_at DESC, ${identities.wireId("c")} DESC
     LIMIT 1
   """.query[CampaignRow].option.map(_.map(row =>
     SeriesAnalysisCampaignSummary(
@@ -152,10 +157,11 @@ private[postgres] object PostgresSeriesAnalysisAdminOps:
     )
   ))
 
-  private def recentJobsCio: ConnectionIO[List[JobRow]] = sql"""
+  private def recentJobsCio(using identities: PostgresIdentities): ConnectionIO[List[JobRow]] =
+    sql"""
     SELECT
-      j.id,
-      j.game_title_id,
+      ${identities.wireId("j")},
+      ${identities.wireId("gt")},
       gt.name,
       j.status,
       j.trigger,
@@ -177,29 +183,34 @@ private[postgres] object PostgresSeriesAnalysisAdminOps:
     FROM series_analysis_jobs j
     JOIN game_titles gt ON gt.id = j.game_title_id
     WHERE j.work_kind = 'analysis'
-    ORDER BY j.created_at DESC, j.id DESC
+    ORDER BY j.created_at DESC, ${identities.wireId("j")} DESC
     LIMIT 10
   """.query[JobRow].to[List]
 
   private def jobAuditsCio(
       jobIds: List[String]
-  ): ConnectionIO[Map[String, JobRequestAudit]] =
+  )(using identities: PostgresIdentities): ConnectionIO[Map[String, JobRequestAudit]] =
     if jobIds.isEmpty then Map.empty[String, JobRequestAudit].pure[ConnectionIO]
     else
-      val ids = jobIds.toArray
+      val ids = identities.lookupArray(Entity.AnalysisJobs, jobIds)
       // Transfer one summary per displayed job, regardless of how many requests it coalesced.
       sql"""
         WITH requesters AS MATERIALIZED (
           SELECT DISTINCT ON (jr.assigned_job_id)
-                 jr.assigned_job_id AS job_id, account.id AS account_id, account.display_name
+                 jr.assigned_job_id AS job_id, ${identities.wireId(
+          "account"
+        )} AS account_id, account.display_name
           FROM series_analysis_job_requests jr
           JOIN series_analysis_operation_requests op ON op.id = jr.operation_request_id
           JOIN momo_login_accounts account ON account.id = op.requested_by_account_id
           WHERE jr.assigned_job_id = ANY($ids) AND jr.trigger = 'manual'
             AND jr.operation_request_id IS NOT NULL AND account.display_name IS NOT NULL
-          ORDER BY jr.assigned_job_id, jr.accepted_at, jr.id
+          ORDER BY jr.assigned_job_id, jr.accepted_at, ${identities.wireId("jr")}
         )
-        SELECT audit.job_id, audit.triggers, audit.manual_request_count,
+        SELECT ${identities.wireReference(
+          Entity.AnalysisJobs,
+          fr"audit.job_id"
+        )}, audit.triggers, audit.manual_request_count,
                requesters.account_id, requesters.display_name
         FROM (
           SELECT assigned_job_id AS job_id, array_agg(DISTINCT trigger) AS triggers,
@@ -252,15 +263,16 @@ private[postgres] object PostgresSeriesAnalysisAdminOps:
 
   private def pendingManualCio(
       gameTitleId: GameTitleId
-  ): ConnectionIO[Option[SeriesAnalysisPendingManualRun]] = sql"""
+  )(using identities: PostgresIdentities): ConnectionIO[Option[SeriesAnalysisPendingManualRun]] =
+    sql"""
     SELECT COUNT(*)::bigint, MIN(accepted_at)
-    FROM series_analysis_job_requests
-    WHERE game_title_id = $gameTitleId
+    FROM series_analysis_job_requests jr
+    WHERE ${identities.retainedMatches("jr", "game_title_id", gameTitleId.value)}
       AND trigger = 'manual'
       AND status <> 'fulfilled'
     HAVING COUNT(*) > 0
   """.query[PendingManualRow].option.map(_.map(row =>
-    SeriesAnalysisPendingManualRun(math.toIntExact(row.requestCount), row.oldestRequestedAt)
-  ))
+      SeriesAnalysisPendingManualRun(math.toIntExact(row.requestCount), row.oldestRequestedAt)
+    ))
 
 end PostgresSeriesAnalysisAdminOps

@@ -10,6 +10,7 @@ import doobie.postgres.circe.jsonb.implicits.*
 import doobie.postgres.implicits.*
 import io.circe.{parser, Json}
 
+import momo.api.adapters.postgres.CanonicalIdentity.Entity
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.ids.*
 import momo.api.domain.{OcrDraft, ScreenType}
@@ -54,55 +55,66 @@ object PostgresOcrDrafts:
       new IllegalArgumentException(s"ocr draft $fieldName must be valid JSON: ${error.message}")
     ).liftTo[ConnectionIO]
 
-  val alg: OcrDraftsAlg[ConnectionIO] = new OcrDraftsAlg[ConnectionIO]:
-    override def create(draft: OcrDraft): ConnectionIO[Unit] =
-      for
-        payload <- asJson(draft.payloadJson, "payloadJson")
-        warnings <- asJson(draft.warningsJson, "warningsJson")
-        timings <- asJson(draft.timingsMsJson, "timingsMsJson")
-        _ <- sql"""
+  def alg(using ids: PostgresIdentities): OcrDraftsAlg[ConnectionIO] =
+    new OcrDraftsAlg[ConnectionIO]:
+      override def create(draft: OcrDraft): ConnectionIO[Unit] =
+        for
+          newId <- ids.newId(draft.id.value)
+          jobId <- ids.retainedValue(Entity.OcrJobs, draft.jobId.value)
+          payload <- asJson(draft.payloadJson, "payloadJson")
+          warnings <- asJson(draft.warningsJson, "warningsJson")
+          timings <- asJson(draft.timingsMsJson, "timingsMsJson")
+          _ <- sql"""
         INSERT INTO ocr_drafts (
-          id, job_id,
+          ${ids.idColumns}, job_id ${ids.legacyColumn("job_id")},
           requested_screen_type, detected_screen_type, profile_id,
           payload_json, warnings_json, timings_ms_json,
           created_at, updated_at
         ) VALUES (
-          ${draft.id}, ${draft.jobId},
+          $newId, $jobId ${ids.legacyValue(draft.jobId.value)},
           ${draft.requestedScreenType}, ${draft.detectedScreenType}, ${draft.profileId},
           $payload, $warnings, $timings,
           ${draft.createdAt}, ${draft.updatedAt}
         )
       """.update.run.void
-      yield ()
+        yield ()
 
-    override def find(draftId: OcrDraftId): ConnectionIO[Option[OcrDraft]] =
-      findMany(List(draftId)).map(_.get(draftId))
+      override def find(draftId: OcrDraftId): ConnectionIO[Option[OcrDraft]] =
+        findMany(List(draftId)).map(_.get(draftId))
 
-    override def findMany(
-        draftIds: List[OcrDraftId]
-    ): ConnectionIO[Map[OcrDraftId, OcrDraft]] =
-      boundedRows(draftIds).flatMap(_.traverse(_.toRight(readTooLarge).liftTo[ConnectionIO]))
-        .map(_.iterator.map(row => row.id -> toDraft(row)).toMap)
+      override def findMany(
+          draftIds: List[OcrDraftId]
+      ): ConnectionIO[Map[OcrDraftId, OcrDraft]] =
+        boundedRequestedRows(draftIds).flatMap(_.traverse { case (requested, row) =>
+          row.toRight(readTooLarge).liftTo[ConnectionIO].map(value => requested -> toDraft(value))
+        }).map(_.toMap)
 
   /** A rejected row is SQL NULL, so neither JSON nor oversized metadata crosses JDBC. */
-  private[postgres] def boundedRows(draftIds: List[OcrDraftId]): ConnectionIO[List[Option[Row]]] =
-    if draftIds.isEmpty then List.empty[Option[Row]].pure[ConnectionIO]
+  private[postgres] def boundedRows(draftIds: List[OcrDraftId])(using
+      ids: PostgresIdentities): ConnectionIO[List[Option[Row]]] =
+    boundedRequestedRows(draftIds).map(_.map(_._2))
+
+  private def boundedRequestedRows(draftIds: List[OcrDraftId])(using
+      ids: PostgresIdentities): ConnectionIO[List[(OcrDraftId, Option[Row])]] =
+    if draftIds.isEmpty then List.empty[(OcrDraftId, Option[Row])].pure[ConnectionIO]
     else if draftIds.length > OcrDraft.MaxBulkIds then
-      readTooLarge.raiseError[ConnectionIO, List[Option[Row]]]
+      readTooLarge.raiseError[ConnectionIO, List[(OcrDraftId, Option[Row])]]
     else
       // Preserve multiplicities: the HTTP bulk response repeats a requested draft for every
       // occurrence, even though storage lookup returns a map of distinct identities.
-      val ids = draftIds.map(_.value).toArray
+      val rawIds = draftIds.map(_.value).toArray
+      val nativeIds = ids.lookupArray(Entity.OcrDrafts, draftIds.map(_.value))
       sql"""
         WITH requested AS (
-          SELECT id, COUNT(*) AS occurrences FROM unnest($ids) AS request(id) GROUP BY id
+          SELECT requested_id, id, COUNT(*) AS occurrences
+          FROM unnest($rawIds, $nativeIds) AS request(requested_id, id) GROUP BY requested_id, id
         ), selected AS MATERIALIZED (
-          SELECT draft.*, requested.occurrences,
+          SELECT draft.*, requested.requested_id, requested.occurrences,
                  octet_length(payload_json::text)::bigint +
                  octet_length(warnings_json::text)::bigint +
                  octet_length(timings_ms_json::text)::bigint AS json_bytes,
-                 octet_length(draft.id) BETWEEN 1 AND 128 AND
-                 octet_length(job_id) BETWEEN 1 AND 128 AND
+                 octet_length(${ids.wireId("draft")}) BETWEEN 1 AND 128 AND
+                 octet_length(${ids.retainedColumn("draft", "job_id")}) BETWEEN 1 AND 128 AND
                  octet_length(requested_screen_type) <= 32 AND
                  COALESCE(octet_length(detected_screen_type), 0) <= 32 AND
                  COALESCE(octet_length(profile_id), 0) <= 128 AS metadata_bounded
@@ -112,8 +124,8 @@ object PostgresOcrDrafts:
                  AND COALESCE(SUM(json_bytes * occurrences), 0) <= $MaximumBatchJsonBytes AS allowed
           FROM selected
         )
-        SELECT CASE WHEN allowed THEN id END,
-               CASE WHEN allowed THEN job_id END,
+        SELECT requested_id, CASE WHEN allowed THEN ${ids.wireId("selected")} END,
+               CASE WHEN allowed THEN ${ids.retainedColumn("selected", "job_id")} END,
                CASE WHEN allowed THEN requested_screen_type END,
                CASE WHEN allowed THEN detected_screen_type END,
                CASE WHEN allowed THEN profile_id END,
@@ -123,15 +135,18 @@ object PostgresOcrDrafts:
                CASE WHEN allowed THEN created_at END,
                CASE WHEN allowed THEN updated_at END
         FROM selected CROSS JOIN budget
-      """.query[Option[Row]].to[List]
+      """.query[(OcrDraftId, Option[Row])].to[List]
 
   private def readTooLarge: AppException = AppException(AppError.PayloadTooLarge(
     "Stored OCR data exceeds the supported read size. Request fewer drafts or run OCR again."
   ))
 end PostgresOcrDrafts
 
-final class PostgresOcrDraftsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
-    extends OcrDraftsRepository[F]:
+final class PostgresOcrDraftsRepository[F[_]: MonadCancelThrow](
+    transactor: Transactor[F],
+    identities: PostgresIdentities = PostgresIdentities.Legacy
+) extends OcrDraftsRepository[F]:
+  private given PostgresIdentities = identities
   private val delegate: OcrDraftsRepository[F] = OcrDraftsRepository
     .fromAlg(PostgresOcrDrafts.alg, transactor.trans)
 

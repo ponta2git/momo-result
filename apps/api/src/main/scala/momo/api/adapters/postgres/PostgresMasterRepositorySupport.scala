@@ -30,12 +30,14 @@ private[postgres] def conflict[A](message: String): ConnectionIO[A] =
 private[postgres] def notFound[A](resource: String, id: String): ConnectionIO[A] =
   appError(AppError.NotFound(resource, id))
 
-private[postgres] def deleteDiscardedDrafts(where: Fragment): ConnectionIO[List[MatchDraftId]] =
+private[postgres] def deleteDiscardedDrafts(where: Fragment)(using
+    ids: PostgresIdentities): ConnectionIO[List[MatchDraftId]] =
   val eligible = where ++ fr"""AND (
     status = ${MatchDraftStatus.Cancelled}
     OR (status = ${MatchDraftStatus.Confirmed} AND confirmed_match_id IS NULL)
   )"""
-  (fr"SELECT id FROM match_drafts WHERE" ++ eligible ++ fr"ORDER BY id FOR UPDATE")
+  (fr"SELECT ${ids.wireId("match_drafts")} FROM match_drafts WHERE" ++ eligible ++
+    fr"ORDER BY ${ids.wireId("match_drafts")} FOR UPDATE")
     .query[MatchDraftId].to[List] *>
-    (fr"DELETE FROM match_drafts WHERE" ++ eligible ++ fr"RETURNING id")
+    (fr"DELETE FROM match_drafts WHERE" ++ eligible ++ fr"RETURNING ${ids.wireId("match_drafts")}")
       .query[MatchDraftId].to[List]

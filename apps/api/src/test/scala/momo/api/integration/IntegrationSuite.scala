@@ -10,22 +10,26 @@ import doobie.postgres.implicits.*
 import munit.AnyFixture
 
 import momo.api.MomoCatsEffectSuite
+import momo.api.adapters.postgres.PostgresIdentities
 import momo.api.testing.TestTags
 
 /**
  * Base for tests that hit an isolated Postgres Testcontainer migrated with momo-db SQL.
  *
  * The Testcontainer and migrated schema are shared by all DB integration suites in the forked test
- * JVM. `apiDbQuality` runs these suites in a single forked JVM so container startup and migration
- * happen once per quality gate.
+ * JVM. Each DB test configuration owns one forked JVM, container and migration sequence.
  *
  * `unsafeRunSync` is permitted here because munit's lifecycle hooks (`beforeAll`/`afterAll`) are
  * `Unit`-returning and cannot accept an `IO`. Production code MUST NOT call `unsafeRunSync`.
  */
 // scalafix:off DisableSyntax.noUnsafeRunSync
 abstract class IntegrationSuite extends MomoCatsEffectSuite:
+  protected def databaseTag: munit.Tag = TestTags.DbIntegration
+  protected def identitySchema: PostgresIdentities = PostgresIdentities.Legacy
+  protected given identityMode: PostgresIdentities = identitySchema
+
   override def munitTests(): Seq[munit.Test] = super.munitTests()
-    .map(_.tag(TestTags.DbIntegration))
+    .map(_.tag(databaseTag))
 
   protected val dbFixture: Fixture[IntegrationDb.DbFixture] =
     new Fixture[IntegrationDb.DbFixture]("momo-it-db"):

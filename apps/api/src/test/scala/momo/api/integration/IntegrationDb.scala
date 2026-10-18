@@ -31,6 +31,9 @@ object IntegrationDb:
   private val DatabaseName = "summit"
   private val Username = "summit"
   private val Password = "summit"
+  private val CanonicalSchema = sys.env.get("MOMO_API_IDENTITY_SCHEMA").contains("canonical")
+  private val LegacyLastMigration = "0082_"
+  private val CanonicalLastMigration = "0093_"
   private val StatementBreakpoint = raw"(?m)-->\s*statement-breakpoint\s*".r
 
   final case class Settings(jdbcUrl: String, user: String, password: String)
@@ -49,7 +52,11 @@ object IntegrationDb:
   private lazy val sharedFixture: DbFixture =
     import cats.effect.unsafe.implicits.global
 
-    val migrations = migrationFiles(migrationsDirectory)
+    val available = migrationFiles(migrationsDirectory)
+    val last = if CanonicalSchema then CanonicalLastMigration else LegacyLastMigration
+    if !available.exists(_.getFileName.toString.startsWith(last)) then
+      sys.error(s"The pinned momo-db history does not contain the required $last schema boundary.")
+    val migrations = available.filter(_.getFileName.toString.take(5) <= last)
     if migrations.isEmpty then sys.error("No momo-db migration SQL files found.")
 
     val container = new PostgreSQLContainer(PostgresImage).withDatabaseName(DatabaseName)
@@ -147,7 +154,8 @@ object IntegrationDb:
    * `0013_login_accounts.sql`), and `incident_masters` (seeded by migration). Order respects FK
    * dependencies; using TRUNCATE ... CASCADE keeps it terse.
    */
-  def truncateAppTables(transactor: Transactor[IO]): IO[Unit] = (sql"""
+  def truncateAppTables(transactor: Transactor[IO]): IO[Unit] =
+    (sql"""
       TRUNCATE TABLE
         discord_notifications,
         series_analysis_match_context_artifacts,
@@ -191,7 +199,10 @@ object IntegrationDb:
           validation_contract_id = 'series-analysis-artifact-v6-full-validation-v2',
           updated_at = clock_timestamp()
       WHERE singleton_key = 'current'
-    """.update.run.void).transact(transactor)
+    """.update.run.void *> (
+      if CanonicalSchema then sql"DELETE FROM idempotency_keys_legacy".update.run.void
+      else ().pure[ConnectionIO]
+    )).transact(transactor)
 end IntegrationDb
 // scalafix:on DisableSyntax.throw
 // scalafix:on DisableSyntax.noUnsafeRunSync

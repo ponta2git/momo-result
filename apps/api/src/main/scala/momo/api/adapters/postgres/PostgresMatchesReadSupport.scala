@@ -5,8 +5,8 @@ import java.time.Instant
 import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
-import doobie.postgres.implicits.*
 
+import momo.api.adapters.postgres.CanonicalIdentity.Entity
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.ids.*
 import momo.api.domain.{
@@ -62,13 +62,28 @@ private[postgres] trait PostgresMatchesReadSupport:
       count: Int,
   )
 
-  protected val selectMatch = fr"""SELECT
-           id, held_event_id, match_no_in_event,
-           game_title_id, layout_family, season_master_id,
-           owner_member_id, map_master_id, played_at,
-           total_assets_draft_id, revenue_draft_id, incident_log_draft_id,
-           created_by_account_id, created_by_member_id, created_at,
-           note_body, note_version, note_updated_by_account_id, note_updated_at
+  protected def selectMatch(using ids: PostgresIdentities) = fr"""SELECT
+           ${ids.wireId("matches")}, ${ids.wireReference(
+      Entity.HeldEvents,
+      fr"matches.held_event_id"
+    )}, match_no_in_event,
+           ${ids.wireReference(
+      Entity.GameTitles,
+      fr"matches.game_title_id"
+    )}, layout_family, ${ids.wireReference(Entity.SeasonMasters, fr"matches.season_master_id")},
+           ${ids.wireReference(
+      Entity.Members,
+      fr"matches.owner_member_id"
+    )}, ${ids.wireReference(Entity.MapMasters, fr"matches.map_master_id")}, played_at,
+           matches.total_assets_draft_id,
+           matches.revenue_draft_id,
+           matches.incident_log_draft_id,
+           ${ids.wireReference(Entity.Accounts, fr"matches.created_by_account_id")},
+           ${ids.wireReference(Entity.Members, fr"matches.created_by_member_id")}, created_at,
+           note_body, note_version, ${ids.wireReference(
+      Entity.Accounts,
+      fr"matches.note_updated_by_account_id"
+    )}, note_updated_at
          FROM matches"""
 
   protected final def toRecord(
@@ -109,23 +124,32 @@ private[postgres] trait PostgresMatchesReadSupport:
    * statements total, then assemble per-match `FourPlayers`. This collapses the prior N+1 (1 +
    * 2*N) into a constant-shaped 2 statements regardless of `matchIds.size`.
    */
-  protected final def loadPlayersBatch(matchIds: List[MatchId])
+  protected final def loadPlayersBatch(matchIds: List[MatchId])(using ids: PostgresIdentities)
       : ConnectionIO[Map[MatchId, FourPlayers]] =
     if matchIds.isEmpty then Map.empty[MatchId, FourPlayers].pure[ConnectionIO]
     else
-      val ids = matchIds.map(_.value).toArray
+      val nativeIds = ids.lookupArray(Entity.Matches, matchIds.map(_.value))
       val playersIO = sql"""
-          SELECT match_id, member_id, play_order, rank, total_assets_man_yen, revenue_man_yen
+          SELECT ${ids.wireReference(
+          Entity.Matches,
+          fr"match_players.match_id"
+        )}, ${ids.wireReference(
+          Entity.Members,
+          fr"match_players.member_id"
+        )}, play_order, rank, total_assets_man_yen, revenue_man_yen
           FROM match_players
-          WHERE match_id = ANY($ids)
-          ORDER BY match_id, play_order
+          WHERE match_id = ANY($nativeIds)
+          ORDER BY ${ids.wireReference(Entity.Matches, fr"match_players.match_id")}, play_order
         """.query[PlayerRow].to[List]
 
       val incidentsIO = sql"""
-          SELECT mi.match_id, mi.member_id, im.key, mi.count
+          SELECT ${ids.wireReference(
+          Entity.Matches,
+          fr"mi.match_id"
+        )}, ${ids.wireReference(Entity.Members, fr"mi.member_id")}, im.key, mi.count
           FROM match_incidents mi
           JOIN incident_masters im ON im.id = mi.incident_master_id
-          WHERE mi.match_id = ANY($ids)
+          WHERE mi.match_id = ANY($nativeIds)
         """.query[IncidentRow].to[List]
 
       for

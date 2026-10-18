@@ -4,18 +4,20 @@ import java.time.Instant
 
 import cats.Monad
 import cats.data.EitherT
+import cats.syntax.all.*
 
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchDraft, MatchDraftStatus}
 import momo.api.errors.AppError
 import momo.api.repositories.{
+  EntityReferenceResolver,
   GameTitlesRepository,
   HeldEventsRepository,
   MapMastersRepository,
   MatchDraftsRepository,
   SeasonMastersRepository
 }
-import momo.api.usecases.common.{MatchReferenceValidation, UseCaseField}
+import momo.api.usecases.common.{MatchReferenceValidation, ReferenceNormalization, UseCaseField}
 
 final case class CreateMatchDraftCommand(
     heldEventId: Option[HeldEventId],
@@ -37,6 +39,7 @@ final class CreateMatchDraft[F[_]: Monad](
     matchDrafts: MatchDraftsRepository[F],
     now: F[Instant],
     nextId: F[MatchDraftId],
+    references: Option[EntityReferenceResolver[F]] = None,
 ):
   private val referenceValidation =
     MatchReferenceValidation(heldEvents, gameTitles, mapMasters, seasonMasters)
@@ -45,6 +48,16 @@ final class CreateMatchDraft[F[_]: Monad](
       command: CreateMatchDraftCommand,
       createdBy: AccountId,
       playerMemberId: Option[MemberId],
+  ): F[Either[AppError, MatchDraft]] = ReferenceNormalization.createDraft(
+    command,
+    references.getOrElse(EntityReferenceResolver.preserve[F])
+  )
+    .flatMap(normalized => runResolved(normalized, createdBy, playerMemberId))
+
+  private def runResolved(
+      command: CreateMatchDraftCommand,
+      createdBy: AccountId,
+      playerMemberId: Option[MemberId]
   ): F[Either[AppError, MatchDraft]] = (for
     matchNoInEvent <-
       EitherT.fromEither[F](UseCaseField.optionalMatchNoInEvent(command.matchNoInEvent))

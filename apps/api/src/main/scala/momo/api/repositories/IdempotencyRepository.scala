@@ -40,6 +40,8 @@ enum IdempotencyReservation derives CanEqual:
   case Replay(response: IdempotencyResponse)
   case InProgress
   case Conflict
+  case LegacyAliasConflict
+  case InvalidKey(reason: String)
   case AccountLimitExceeded
 
 /**

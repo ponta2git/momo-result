@@ -18,7 +18,8 @@ import momo.api.repositories.{
   IdempotencyRecord,
   IdempotencyRepository,
   IdempotencyReservation,
-  IdempotencyResponse
+  IdempotencyResponse,
+  LegacyIdempotencyKey
 }
 
 /**
@@ -29,16 +30,17 @@ import momo.api.repositories.{
  */
 object PostgresIdempotency:
 
-  private def headersToJson(headers: Map[String, String]): Json = headers.asJson
+  private[postgres] def headersToJson(headers: Map[String, String]): Json = headers.asJson
 
-  private def headersFromJson(json: Json): Map[String, String] = json.as[Map[String, String]]
-    .getOrElse(Map.empty)
+  private[postgres] def headersFromJson(json: Json): Map[String, String] =
+    json.as[Map[String, String]]
+      .getOrElse(Map.empty)
 
-  private def bytesToArray(bytes: Vector[Byte]): Array[Byte] = bytes.toArray
+  private[postgres] def bytesToArray(bytes: Vector[Byte]): Array[Byte] = bytes.toArray
 
-  private def arrayToBytes(bytes: Array[Byte]): Vector[Byte] = bytes.toVector
+  private[postgres] def arrayToBytes(bytes: Array[Byte]): Vector[Byte] = bytes.toVector
 
-  private final case class Row(
+  private[postgres] final case class Row(
       key: String,
       accountId: AccountId,
       endpoint: String,
@@ -50,7 +52,7 @@ object PostgresIdempotency:
       expiresAt: Instant,
   )
 
-  private def toRecord(row: Row): IdempotencyRecord = IdempotencyRecord(
+  private[postgres] def toRecord(row: Row): IdempotencyRecord = IdempotencyRecord(
     key = row.key,
     accountId = row.accountId,
     endpoint = row.endpoint,
@@ -64,7 +66,7 @@ object PostgresIdempotency:
     expiresAt = row.expiresAt,
   )
 
-  private def classifyExisting(
+  private[postgres] def classifyExisting(
       existing: IdempotencyRecord,
       entry: IdempotencyRecord,
   ): IdempotencyReservation =
@@ -72,7 +74,7 @@ object PostgresIdempotency:
     else if existing.response.status == 0 then IdempotencyReservation.InProgress
     else IdempotencyReservation.Replay(existing.response)
 
-  private def lockAccount(accountId: AccountId): ConnectionIO[Unit] = sql"""
+  private[postgres] def lockAccount(accountId: AccountId): ConnectionIO[Unit] = sql"""
         SELECT pg_advisory_xact_lock(hashtext(${accountId.value}), 0)
       """.query[Unit].unique.void
 
@@ -130,6 +132,8 @@ object PostgresIdempotency:
     ): ConnectionIO[IdempotencyReservation] = lockAccount(entry.accountId) *>
       lookup(entry.key, entry.accountId, entry.endpoint).flatMap {
         case Some(existing) => classifyExisting(existing, entry).pure[ConnectionIO]
+        case None if !LegacyIdempotencyKey.accepts(entry.key) =>
+          IdempotencyReservation.InvalidKey(LegacyIdempotencyKey.InvalidReason).pure[ConnectionIO]
         case None => activeKeyCount(entry.accountId, now).flatMap { activeCount =>
             if activeCount >= activeKeyLimitPerAccount.toLong then
               IdempotencyReservation.AccountLimitExceeded.pure[ConnectionIO]
@@ -190,10 +194,15 @@ object PostgresIdempotency:
 end PostgresIdempotency
 
 /** Transactor-backed facade for [[IdempotencyRepository]]; each operation runs in a transaction. */
-final class PostgresIdempotencyRepository[F[_]: Async](transactor: Transactor[F])
-    extends IdempotencyRepository[F]:
+final class PostgresIdempotencyRepository[F[_]: Async](
+    transactor: Transactor[F],
+    identities: PostgresIdentities = PostgresIdentities.Legacy,
+) extends IdempotencyRepository[F]:
+  private val algebra = identities match
+    case PostgresIdentities.Legacy => PostgresIdempotency.alg
+    case PostgresIdentities.Canonical => CanonicalPostgresIdempotency.alg
   private val delegate: IdempotencyRepository[F] = IdempotencyRepository
-    .fromAlg(PostgresIdempotency.alg, transactor.trans)
+    .fromAlg(algebra, transactor.trans)
 
   export delegate.{lookup, reserveWithinAccountLimit, cleanup}
 
@@ -220,7 +229,7 @@ final class PostgresIdempotencyRepository[F[_]: Async](transactor: Transactor[F]
       endpoint: String,
       requestHash: Vector[Byte],
       response: IdempotencyResponse,
-  ): F[Unit] = PostgresIdempotency.alg.complete(key, accountId, endpoint, requestHash, response)
+  ): F[Unit] = algebra.complete(key, accountId, endpoint, requestHash, response)
     .transact(recordingTransactor)
 
   override def abandon(
@@ -228,6 +237,6 @@ final class PostgresIdempotencyRepository[F[_]: Async](transactor: Transactor[F]
       accountId: AccountId,
       endpoint: String,
       requestHash: Vector[Byte],
-  ): F[Unit] = PostgresIdempotency.alg.abandon(key, accountId, endpoint, requestHash)
+  ): F[Unit] = algebra.abandon(key, accountId, endpoint, requestHash)
     .transact(recordingTransactor)
 end PostgresIdempotencyRepository

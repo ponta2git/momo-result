@@ -9,6 +9,7 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 import doobie.util.fragments
 
+import momo.api.adapters.postgres.CanonicalIdentity.Entity
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.ids.*
 import momo.api.domain.{
@@ -87,19 +88,20 @@ private[postgres] trait PostgresMatchListSupport:
       needsReviewCount = needsReviewCount,
     )
 
-  protected final def confirmedBase(publicIds: PostgresPublicIds): Fragment =
+  protected final def confirmedBase(publicIds: PostgresPublicIds)(using
+      ids: PostgresIdentities): Fragment =
     fr"""SELECT
     'match' AS kind,
-    m.id AS id,
-    m.id AS match_id,
+    ${ids.wireId("m")} AS id,
+    ${ids.wireId("m")} AS match_id,
     NULL::text AS match_draft_id,
     'confirmed' AS status,
-    m.held_event_id,
+    ${ids.wireReference(Entity.HeldEvents, fr"m.held_event_id")} AS held_event_id,
     m.match_no_in_event,
-    m.game_title_id,
-    m.season_master_id,
-    m.map_master_id,
-    m.owner_member_id,
+    ${ids.wireReference(Entity.GameTitles, fr"m.game_title_id")} AS game_title_id,
+    ${ids.wireReference(Entity.SeasonMasters, fr"m.season_master_id")} AS season_master_id,
+    ${ids.wireReference(Entity.MapMasters, fr"m.map_master_id")} AS map_master_id,
+    ${ids.wireReference(Entity.Members, fr"m.owner_member_id")} AS owner_member_id,
     m.played_at,
     m.created_at,
     m.updated_at,
@@ -111,19 +113,20 @@ private[postgres] trait PostgresMatchListSupport:
   FROM matches m
   LEFT JOIN held_events he ON he.id = m.held_event_id"""
 
-  protected final def draftBase(publicIds: PostgresPublicIds): Fragment =
+  protected final def draftBase(publicIds: PostgresPublicIds)(using
+      ids: PostgresIdentities): Fragment =
     fr"""SELECT
     'match_draft' AS kind,
-    d.id AS id,
+    ${ids.wireId("d")} AS id,
     NULL::text AS match_id,
-    d.id AS match_draft_id,
+    ${ids.wireId("d")} AS match_draft_id,
     d.status AS status,
-    d.held_event_id,
+    ${ids.wireReference(Entity.HeldEvents, fr"d.held_event_id")} AS held_event_id,
     d.match_no_in_event,
-    d.game_title_id,
-    d.season_master_id,
-    d.map_master_id,
-    d.owner_member_id,
+    ${ids.wireReference(Entity.GameTitles, fr"d.game_title_id")} AS game_title_id,
+    ${ids.wireReference(Entity.SeasonMasters, fr"d.season_master_id")} AS season_master_id,
+    ${ids.wireReference(Entity.MapMasters, fr"d.map_master_id")} AS map_master_id,
+    ${ids.wireReference(Entity.Members, fr"d.owner_member_id")} AS owner_member_id,
     d.played_at,
     d.created_at,
     d.updated_at,
@@ -135,16 +138,16 @@ private[postgres] trait PostgresMatchListSupport:
   LEFT JOIN held_events he ON he.id = d.held_event_id"""
 
   /** Decorate after selection so master joins are bounded by the displayed page. */
-  protected final def withLabels(select: Fragment): Fragment =
+  protected final def withLabels(select: Fragment)(using ids: PostgresIdentities): Fragment =
     val nameLimit = PostgresReadBudget.NameCodePoints
     fr"""SELECT COALESCE(char_length(gt.name) <= $nameLimit, true)
         AND COALESCE(char_length(season.name) <= $nameLimit, true)
         AND COALESCE(char_length(map.name) <= $nameLimit, true),
         sortable.*, LEFT(gt.name, $nameLimit), LEFT(season.name, $nameLimit),
         LEFT(map.name, $nameLimit) FROM (""" ++ select ++ fr""") sortable
-      LEFT JOIN game_titles gt ON gt.id = sortable.game_title_id
-      LEFT JOIN season_masters season ON season.id = sortable.season_master_id
-      LEFT JOIN map_masters map ON map.id = sortable.map_master_id
+      LEFT JOIN game_titles gt ON ${ids.wireId("gt")} = sortable.game_title_id
+      LEFT JOIN season_masters season ON ${ids.wireId("season")} = sortable.season_master_id
+      LEFT JOIN map_masters map ON ${ids.wireId("map")} = sortable.map_master_id
     """
 
   protected final def sortable(select: Fragment): Fragment =
@@ -234,16 +237,19 @@ private[postgres] trait PostgresMatchListSupport:
 
   protected final def loadRanks(
       matchIds: List[MatchId]
-  ): ConnectionIO[Map[MatchId, List[MatchListRankEntry]]] =
+  )(using ids: PostgresIdentities): ConnectionIO[Map[MatchId, List[MatchListRankEntry]]] =
     if matchIds.isEmpty then Map.empty[MatchId, List[MatchListRankEntry]].pure[ConnectionIO]
     else
-      val ids = NonEmptyList.fromListUnsafe(matchIds)
-      (fr"""
-        SELECT match_id, member_id, rank, play_order
+      val nativeIds = ids.lookupArray(Entity.Matches, matchIds.map(_.value))
+      fr"""
+        SELECT ${ids.wireReference(
+          Entity.Matches,
+          fr"match_players.match_id"
+        )}, ${ids.wireReference(Entity.Members, fr"match_players.member_id")}, rank, play_order
         FROM match_players
-        WHERE """ ++ fragments.in(fr"match_id", ids) ++ fr"""
-        ORDER BY match_id, play_order
-      """).query[RankRow].to[List].map { rows =>
+        WHERE match_id = ANY($nativeIds)
+        ORDER BY ${ids.wireReference(Entity.Matches, fr"match_players.match_id")}, play_order
+      """.query[RankRow].to[List].map { rows =>
         rows.groupBy(_.matchId).view.mapValues(_.map(_.toEntry)).toMap
       }
 

@@ -8,6 +8,7 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
+import momo.api.adapters.postgres.CanonicalIdentity.Entity
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.{MatchDraftStatus, OcrJobStatus, OcrSubmissionMember, ScreenType}
 import momo.api.errors.{AppError, AppException}
@@ -23,8 +24,11 @@ import momo.api.repositories.{
   StoredOcrJob
 }
 
-final class PostgresOcrJobCreationStore[F[_]: Async](transactor: Transactor[F])
-    extends OcrJobCreationStore[F]:
+final class PostgresOcrJobCreationStore[F[_]: Async](
+    transactor: Transactor[F],
+    identities: PostgresIdentities = PostgresIdentities.Legacy
+) extends OcrJobCreationStore[F]:
+  private given ids: PostgresIdentities = identities
   private final case class SourceImageGuardRow(
       owner: momo.api.domain.ids.AccountId,
       idempotencyHash: String,
@@ -40,7 +44,7 @@ final class PostgresOcrJobCreationStore[F[_]: Async](transactor: Transactor[F])
     val program =
       for
         draftOwner <-
-          sql"SELECT created_by_account_id FROM match_drafts WHERE id = ${attachment.draftId} FOR UPDATE"
+          sql"SELECT ${ids.wireReference(Entity.Accounts, fr"match_drafts.created_by_account_id")} FROM match_drafts WHERE id = ${ids.lookup(Entity.MatchDrafts, attachment.draftId.value)} FOR UPDATE"
             .query[momo.api.domain.ids.AccountId].option
         _ <- PostgresOcrSubmissions.lock(plan.submission.submissionId)
         submission <- PostgresOcrSubmissions.read(plan.submission.submissionId)
@@ -92,8 +96,11 @@ final class PostgresOcrJobCreationStore[F[_]: Async](transactor: Transactor[F])
                   _ <- EitherT.liftF(PostgresOcrJobs.create(plan.job, plan.input))
                   _ <- EitherT.liftF(attachMatchDraft(attachment))
                   _ <- EitherT.liftF(sql"""UPDATE ocr_submission_members
-                SET status = 'registered', job_id = ${plan.job.id}
-                WHERE submission_id = ${plan.submission.submissionId}
+                SET status = 'registered', job_id = ${ids.lookup(Entity.OcrJobs, plan.job.id.value)}
+                WHERE submission_id = ${ids.lookup(
+                      Entity.OcrSubmissions,
+                      plan.submission.submissionId
+                    )}
                   AND screen_type = ${attachment.screenType} AND status = 'pending'""".update.run)
                 yield StoredOcrJob(OcrJobAcceptance.fromJob(plan.job), true)).value
       yield result
@@ -104,9 +111,12 @@ final class PostgresOcrJobCreationStore[F[_]: Async](transactor: Transactor[F])
       member: Option[OcrSubmissionMember],
   ): ConnectionIO[Either[OcrJobCreationRejection, Unit]] =
     sql"""
-      SELECT owner_account_id, idempotency_key_hash, status, object_key, sha256_hex, byte_length::bigint, media_type
+      SELECT ${ids.wireReference(
+        Entity.Accounts,
+        fr"source_images.owner_account_id"
+      )}, idempotency_key_hash, status, object_key, sha256_hex, byte_length::bigint, media_type
       FROM source_images
-      WHERE id = ${plan.job.imageId}
+      WHERE id = ${ids.lookup(Entity.SourceImages, plan.job.imageId.value)}
       FOR UPDATE
     """.query[SourceImageGuardRow].option.flatMap {
       case Some(row) =>
@@ -180,7 +190,7 @@ final class PostgresOcrJobCreationStore[F[_]: Async](transactor: Transactor[F])
         fr"""
         SELECT 1
         FROM match_drafts
-        WHERE id = ${attachment.draftId}
+        WHERE id = ${ids.lookup(Entity.MatchDrafts, attachment.draftId.value)}
           AND status <> ${MatchDraftStatus.Confirmed}
           AND status <> ${MatchDraftStatus.Cancelled}
           AND (

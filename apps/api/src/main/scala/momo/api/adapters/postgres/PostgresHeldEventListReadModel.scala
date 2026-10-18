@@ -35,6 +35,13 @@ object PostgresHeldEventList:
     }
 
   def list(query: Option[String], page: PageRequest): ConnectionIO[HeldEventListPage] =
+    list(query, page, PostgresPublicIds.Legacy)
+
+  def list(
+      query: Option[String],
+      page: PageRequest,
+      publicIds: PostgresPublicIds
+  ): ConnectionIO[HeldEventListPage] =
     val where = matchingEvents(query)
     val matchFilter = query.map(_.trim).filter(_.nonEmpty).fold(Fragment.empty)(_ =>
       fr"JOIN held_events he ON he.id = m.held_event_id" ++ where
@@ -45,7 +52,8 @@ object PostgresHeldEventList:
       _ <- sql"SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY".update.run
       counts <- totals.query[(Int, Int)].unique
       events <-
-      (fr"SELECT he.id, he.start_at FROM held_events he" ++ where ++
+      (fr"SELECT he.id, he.start_at," ++ publicIds.column(fr"he.public_id") ++
+        fr"FROM held_events he" ++ where ++
         fr"""ORDER BY he.start_at DESC, he.id COLLATE "C" DESC LIMIT ${page.pageSize} OFFSET ${page.offset}""")
         .query[HeldEvent].to[List]
       stats <- scopeStats(events.map(_.id))
@@ -91,7 +99,9 @@ object PostgresHeldEventList:
         "Held-event scopes"
       )
 
-final class PostgresHeldEventListReadModel[F[_]: MonadCancelThrow](transactor: Transactor[F])
-    extends HeldEventListReadModel[F]:
+final class PostgresHeldEventListReadModel[F[_]: MonadCancelThrow](
+    transactor: Transactor[F],
+    publicIds: PostgresPublicIds = PostgresPublicIds.Legacy,
+) extends HeldEventListReadModel[F]:
   override def list(query: Option[String], page: PageRequest): F[HeldEventListPage] =
-    PostgresHeldEventList.list(query, page).transact(transactor)
+    PostgresHeldEventList.list(query, page, publicIds).transact(transactor)

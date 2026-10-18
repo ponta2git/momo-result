@@ -18,7 +18,7 @@ final class CreateGameTitle[F[_]: Monad](titles: GameTitlesRepository[F], now: F
   def run(command: CreateGameTitleCommand): F[Either[AppError, GameTitle]] =
     val validated =
       for
-        id <- UseCaseField.slug("id", command.id.value)
+        id <- UseCaseField.masterId("id", command.id.value)
         name <- UseCaseField.name("name", command.name)
         layoutFamily <- UseCaseField.stableKey("layoutFamily", command.layoutFamily)
       yield (GameTitleId.unsafeFromString(id), name, layoutFamily)
@@ -47,8 +47,8 @@ final class CreateMapMaster[F[_]: Monad](
   def run(command: CreateMapMasterCommand): F[Either[AppError, MapMaster]] =
     val validated =
       for
-        id <- UseCaseField.slug("id", command.id.value)
-        gameTitleId <- UseCaseField.slug("gameTitleId", command.gameTitleId.value)
+        id <- UseCaseField.masterId("id", command.id.value)
+        gameTitleId <- UseCaseField.masterId("gameTitleId", command.gameTitleId.value)
         name <- UseCaseField.name("name", command.name)
       yield (MapMasterId.unsafeFromString(id), GameTitleId.unsafeFromString(gameTitleId), name)
 
@@ -81,8 +81,8 @@ final class CreateSeasonMaster[F[_]: Monad](
   def run(command: CreateSeasonMasterCommand): F[Either[AppError, SeasonMaster]] =
     val validated =
       for
-        id <- UseCaseField.slug("id", command.id.value)
-        gameTitleId <- UseCaseField.slug("gameTitleId", command.gameTitleId.value)
+        id <- UseCaseField.masterId("id", command.id.value)
+        gameTitleId <- UseCaseField.masterId("gameTitleId", command.gameTitleId.value)
         name <- UseCaseField.name("name", command.name)
       yield (SeasonMasterId.unsafeFromString(id), GameTitleId.unsafeFromString(gameTitleId), name)
 

@@ -10,4 +10,4 @@ import momo.api.domain.ids.HeldEventId
  * `name` は持たない。表示ラベルは `heldAt` から UI 側で組み立てる。試合数や次の試合番号は
  * 一覧・要約の read model で計算する。
  */
-final case class HeldEvent(id: HeldEventId, heldAt: Instant)
+final case class HeldEvent(id: HeldEventId, heldAt: Instant, publicId: Option[PublicId] = None)

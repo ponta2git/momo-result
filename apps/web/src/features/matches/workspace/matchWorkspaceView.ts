@@ -14,7 +14,9 @@ import type {
   MatchDraftDetailResponse,
   MatchDraftSourceImageResponse,
 } from "@/shared/api/matchDrafts";
+import type { MatchDetailResponse } from "@/shared/api/matches";
 import { isCancelableDraftStatus } from "@/shared/domain/draftStatus";
+import { heldEventDetailHref, matchDetailHref } from "@/shared/navigation/publicIdentifiers";
 
 const noGameTitles: GameTitleResponse[] = [];
 const noHeldEvents: HeldEventResponse[] = [];
@@ -26,6 +28,7 @@ export function buildMatchWorkspaceView({
   gameTitleItems,
   heldEventItems,
   mapItems,
+  matchDetail,
   matchId,
   mode,
   reviewStatus,
@@ -38,6 +41,7 @@ export function buildMatchWorkspaceView({
   gameTitleItems: GameTitleResponse[] | undefined;
   heldEventItems: HeldEventResponse[] | undefined;
   mapItems: MapMasterResponse[] | undefined;
+  matchDetail?: MatchDetailResponse | undefined;
   matchId: string | undefined;
   mode: WorkspaceMode;
   reviewStatus: string | undefined;
@@ -56,13 +60,14 @@ export function buildMatchWorkspaceView({
   const matchDraftIdForImages = values.matchDraftId;
   const confirmedDraftLoaded =
     mode !== "edit" && !useSampleDrafts && Boolean(confirmedDraftDestination(draftDetail));
+  const selectedHeldEvent = heldEvents.find((event) => event.id === values.heldEventId);
 
   return {
     exitHref:
       mode === "edit" && matchId
-        ? `/matches/${encodeURIComponent(matchId)}`
+        ? matchDetailHref(matchId, matchDetail?.publicId)
         : values.heldEventId
-          ? `/held-events/${encodeURIComponent(values.heldEventId)}`
+          ? heldEventDetailHref(values.heldEventId, selectedHeldEvent?.publicId)
           : "/matches",
     canCancelDraft:
       mode !== "edit" &&
@@ -76,6 +81,7 @@ export function buildMatchWorkspaceView({
     heldEvents,
     mapItems: maps,
     matchDraftIdForImages,
+    matchPublicId: matchDetail?.publicId,
     seasonItems: seasons,
     sourceImages: matchDraftIdForImages
       ? (sourceImages ?? []).flatMap((item) => {
@@ -84,7 +90,7 @@ export function buildMatchWorkspaceView({
         })
       : [],
     selectedGameTitle: gameTitles.find((item) => item.id === values.gameTitleId),
-    selectedHeldEvent: heldEvents.find((event) => event.id === values.heldEventId),
+    selectedHeldEvent,
     selectedMap: maps.find((item) => item.id === values.mapMasterId),
     selectedSeason: seasons.find((item) => item.id === values.seasonMasterId),
   };

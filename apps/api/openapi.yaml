@@ -1324,6 +1324,63 @@
         }
       }
     },
+    "/api/public/held-events/{publicId}" : {
+      "get" : {
+        "tags" : [
+          "held-events"
+        ],
+        "operationId" : "getApiPublicHeld-eventsPublicid",
+        "parameters" : [
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "publicId",
+            "in" : "path",
+            "description" : "Canonical positive decimal string, from 1 through 9223372036854775807.",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HeldEventDetailResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "headers" : {
+              "Retry-After" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/held-events/{heldEventId}/summary" : {
       "get" : {
         "tags" : [
@@ -2465,6 +2522,63 @@
               "application/json" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/DeleteMatchResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "headers" : {
+              "Retry-After" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public/matches/{publicId}" : {
+      "get" : {
+        "tags" : [
+          "matches"
+        ],
+        "operationId" : "getApiPublicMatchesPublicid",
+        "parameters" : [
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "publicId",
+            "in" : "path",
+            "description" : "Canonical positive decimal string, from 1 through 9223372036854775807.",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MatchDetailResponse"
                 }
               }
             }
@@ -5926,6 +6040,9 @@
           },
           "heldAt" : {
             "type" : "string"
+          },
+          "publicId" : {
+            "type" : "string"
           }
         }
       },
@@ -5955,6 +6072,12 @@
           "matchNoInEvent" : {
             "type" : "integer",
             "format" : "int32"
+          },
+          "publicId" : {
+            "type" : "string"
+          },
+          "heldEventPublicId" : {
+            "type" : "string"
           }
         }
       },
@@ -6475,6 +6598,9 @@
           },
           "navigation" : {
             "$ref" : "#/components/schemas/HeldEventNavigationResponse"
+          },
+          "publicId" : {
+            "type" : "string"
           }
         }
       },
@@ -6598,6 +6724,9 @@
           },
           "mapName" : {
             "type" : "string"
+          },
+          "publicId" : {
+            "type" : "string"
           }
         }
       },
@@ -6679,6 +6808,9 @@
             "items" : {
               "$ref" : "#/components/schemas/HeldEventScopeResponse"
             }
+          },
+          "publicId" : {
+            "type" : "string"
           }
         }
       },
@@ -6728,6 +6860,9 @@
           "nextMatchNo" : {
             "type" : "integer",
             "format" : "int32"
+          },
+          "publicId" : {
+            "type" : "string"
           }
         }
       },
@@ -7029,6 +7164,12 @@
           },
           "mapName" : {
             "type" : "string"
+          },
+          "publicId" : {
+            "type" : "string"
+          },
+          "heldEventPublicId" : {
+            "type" : "string"
           }
         }
       },
@@ -7208,6 +7349,9 @@
             "type" : "string"
           },
           "seasonName" : {
+            "type" : "string"
+          },
+          "publicId" : {
             "type" : "string"
           }
         }
@@ -7431,6 +7575,12 @@
             "type" : "string"
           },
           "mapName" : {
+            "type" : "string"
+          },
+          "publicId" : {
+            "type" : "string"
+          },
+          "heldEventPublicId" : {
             "type" : "string"
           }
         }

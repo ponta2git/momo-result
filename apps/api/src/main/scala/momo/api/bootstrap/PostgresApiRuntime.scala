@@ -5,6 +5,7 @@ import scala.concurrent.duration.*
 import cats.effect.std.SecureRandom
 import cats.effect.{Async, Clock, Deferred, Resource}
 import cats.syntax.all.*
+import doobie.implicits.*
 import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 
@@ -46,7 +47,11 @@ private[bootstrap] object PostgresApiRuntime:
   ): Resource[F, ApiApp.WiredRuntime[F]] = (
     Database.transactor[F](db),
     RuntimeInfrastructure.resource[F](config, Clock[F].realTimeInstant),
-  ).tupled.flatMap { (transactor, infrastructure) =>
+  ).tupled.evalMap { (transactor, infrastructure) =>
+    PostgresPublicIds.discover.transact(transactor).map(publicIds =>
+      (transactor, infrastructure, publicIds)
+    )
+  }.flatMap { (transactor, infrastructure, publicIds) =>
     given LoggerFactory[F] = Slf4jFactory.create[F]
     val oauthStateReplayGuard = new PostgresOAuthStateReplayGuard[F](transactor)
     val jobsBase: OcrJobsRepository[F] = PostgresOcrJobsRepository[F](transactor)
@@ -57,7 +62,7 @@ private[bootstrap] object PostgresApiRuntime:
       PostgresWorkerNotifier[F](transactor, PostgresWorkerNotifier.Channel.ProcessingJobs)
     val submissionNotifier =
       PostgresWorkerNotifier[F](transactor, PostgresWorkerNotifier.Channel.OcrSubmissions)
-    val heldEvents: HeldEventsRepository[F] = PostgresHeldEventsRepository[F](transactor)
+    val heldEvents: HeldEventsRepository[F] = PostgresHeldEventsRepository[F](transactor, publicIds)
     val heldEventDeletion: HeldEventDeletionRepository[F] =
       PostgresHeldEventDeletionRepository[F](transactor)
     val matchesBase: MatchesRepository[F] = PostgresMatchesRepository[F](transactor)
@@ -66,7 +71,7 @@ private[bootstrap] object PostgresApiRuntime:
     val matchDrafts: MatchDraftsRepository[F] = PostgresMatchDraftsRepository[F](transactor)
     val matchDraftCancellation: MatchDraftCancellationRepository[F] =
       PostgresMatchDraftCancellationRepository[F](transactor)
-    val matchList: MatchListReadModel[F] = PostgresMatchListReadModel[F](transactor)
+    val matchList: MatchListReadModel[F] = PostgresMatchListReadModel[F](transactor, publicIds)
     val matchConfirmationBase: MatchConfirmationRepository[F] =
       PostgresMatchConfirmationRepository[F](transactor)
     val appSessions: AppSessionsRepository[F] = PostgresAppSessionsRepository[F](transactor)
@@ -192,11 +197,11 @@ private[bootstrap] object PostgresApiRuntime:
                 jobs = jobs,
                 drafts = drafts,
                 heldEvents = heldEvents,
-                heldEventDetails = PostgresHeldEventDetailReadModel[F](transactor),
-                heldEventList = PostgresHeldEventListReadModel[F](transactor),
+                heldEventDetails = PostgresHeldEventDetailReadModel[F](transactor, publicIds),
+                heldEventList = PostgresHeldEventListReadModel[F](transactor, publicIds),
                 heldEventDeletion = heldEventDeletion,
                 matches = matches,
-                matchDetails = PostgresMatchDetailReadModel[F](transactor),
+                matchDetails = PostgresMatchDetailReadModel[F](transactor, publicIds),
                 matchNotes = matchNotes,
                 matchExports = matchExports,
                 matchDrafts = matchDrafts,

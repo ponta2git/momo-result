@@ -12,8 +12,8 @@ import doobie.postgres.implicits.*
 import doobie.postgres.sqlstate
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.domain.HeldEvent
 import momo.api.domain.ids.{HeldEventId, MatchDraftId}
+import momo.api.domain.{HeldEvent, PublicId}
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{
   HeldEventDeletionAlg,
@@ -32,11 +32,13 @@ import momo.api.repositories.{
 object PostgresHeldEvents:
 
   private val Jst = ZoneId.of("Asia/Tokyo")
-  private final case class HeldEventRow(id: HeldEventId, heldAt: java.time.Instant)
+  private final case class HeldEventRow(
+      id: HeldEventId,
+      heldAt: java.time.Instant,
+      publicId: Option[PublicId]
+  )
 
-  private val selectAll = fr"SELECT id, start_at FROM held_events"
-
-  private def fromRow(row: HeldEventRow): HeldEvent = HeldEvent(row.id, row.heldAt)
+  private def fromRow(row: HeldEventRow): HeldEvent = HeldEvent(row.id, row.heldAt, row.publicId)
 
   private def isUniqueViolation(state: SqlState): Boolean = state.value ==
     sqlstate.class23.UNIQUE_VIOLATION.value
@@ -44,19 +46,23 @@ object PostgresHeldEvents:
   private def conflict[A](detail: String): ConnectionIO[A] = MonadThrow[ConnectionIO]
     .raiseError[A](new AppException(AppError.Conflict(detail)))
 
-  val alg: HeldEventsAlg[ConnectionIO] = new HeldEventsAlg[ConnectionIO]:
-    override def find(id: HeldEventId): ConnectionIO[Option[HeldEvent]] =
-      (selectAll ++ fr"WHERE id = $id").query[HeldEventRow].option.map(_.map(fromRow))
+  val alg: HeldEventsAlg[ConnectionIO] = withPublicIds(PostgresPublicIds.Legacy)
 
-    override def create(event: HeldEvent): ConnectionIO[Unit] =
-      val heldDateIso: LocalDate = event.heldAt.atZone(Jst).toLocalDate
-      sql"""
+  def withPublicIds(publicIds: PostgresPublicIds): HeldEventsAlg[ConnectionIO] =
+    new HeldEventsAlg[ConnectionIO]:
+      override def find(id: HeldEventId): ConnectionIO[Option[HeldEvent]] =
+        (fr"SELECT id, start_at," ++ publicIds.column(fr"public_id") ++
+          fr"FROM held_events WHERE id = $id").query[HeldEventRow].option.map(_.map(fromRow))
+
+      override def create(event: HeldEvent): ConnectionIO[Unit] =
+        val heldDateIso: LocalDate = event.heldAt.atZone(Jst).toLocalDate
+        sql"""
         INSERT INTO held_events (id, session_id, held_date_iso, start_at, created_at)
         VALUES (${event.id}, NULL, $heldDateIso, ${event.heldAt}, ${event.heldAt})
       """.update.run.void.exceptSomeSqlState {
-        case state if isUniqueViolation(state) =>
-          conflict(s"held event already exists: ${event.id.value}")
-      }
+          case state if isUniqueViolation(state) =>
+            conflict(s"held event already exists: ${event.id.value}")
+        }
 
 end PostgresHeldEvents
 
@@ -112,10 +118,12 @@ object PostgresHeldEventDeletion:
       }
 end PostgresHeldEventDeletion
 
-final class PostgresHeldEventsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
-    extends HeldEventsRepository[F]:
+final class PostgresHeldEventsRepository[F[_]: MonadCancelThrow](
+    transactor: Transactor[F],
+    publicIds: PostgresPublicIds = PostgresPublicIds.Legacy,
+) extends HeldEventsRepository[F]:
   private val delegate: HeldEventsRepository[F] = HeldEventsRepository
-    .fromAlg(PostgresHeldEvents.alg, transactor.trans)
+    .fromAlg(PostgresHeldEvents.withPublicIds(publicIds), transactor.trans)
 
   export delegate.*
 end PostgresHeldEventsRepository

@@ -756,6 +756,9 @@ describe("MastersPage", () => {
     expect(await screen.findByRole("radio", { name: "再送作品" })).toBeChecked();
     expect(submissions).toHaveLength(2);
     expect(submissions[1]).toEqual(submissions[0]);
+    expect(submissions[0]?.payload.id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
+    );
 
     const nextDialog = await openGameTitleCreateDialog();
     expect(within(nextDialog).getByRole("textbox", { name: "作品名" })).toHaveValue("");
@@ -847,6 +850,9 @@ describe("MastersPage", () => {
       });
       expect(submissions).toHaveLength(2);
       expect(submissions[1]).toEqual(submissions[0]);
+      expect(submissions[0]?.payload.id).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
+      );
       expect(submissions[1]?.payload.gameTitleId).toBe("gt_momotetsu_2");
     },
   );

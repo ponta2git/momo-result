@@ -712,6 +712,7 @@ async fn apply_promotion(
             &[&title_ids],
         )
         .await?;
+    super::job_transitions::bind_queued_radar(transaction, &title_ids).await?;
     transaction
         .execute(
             "INSERT INTO series_analysis_operation_requests ( \

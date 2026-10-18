@@ -154,6 +154,7 @@ private[postgres] object PostgresSeriesAnalysisTitleRequestOps:
                 updated_at = now()
             WHERE game_title_id = $gameTitleId
           """.update.run.void
+      _ <- PostgresSeriesAnalysisJobTransitions.bindQueuedRadar(gameTitleId)
       _ <- sql"""
         INSERT INTO series_analysis_job_requests (
           id, game_title_id, operation_request_id, input_revision,

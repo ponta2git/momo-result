@@ -680,10 +680,7 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
   private def markPending(title: GameTitleId): Result[Unit] = EitherT.liftF(sql"""
     UPDATE series_analysis_title_states SET pending_work = true, updated_at = now()
     WHERE game_title_id = $title
-  """.update.run *> sql"""
-    UPDATE series_analysis_jobs SET updated_at = now()
-    WHERE game_title_id = $title AND status = 'queued' AND work_kind = 'analysis'
-  """.update.run.void)
+  """.update.run *> PostgresSeriesAnalysisJobTransitions.bindQueuedRadar(title))
 
   /** A cancellation can precede job materialization, so the intent must outlive its radar operation. */
   private def reserveRecovery(title: GameTitleId, operationId: String): Result[Unit] =

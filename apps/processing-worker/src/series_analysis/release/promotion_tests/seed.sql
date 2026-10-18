@@ -2,6 +2,11 @@ INSERT INTO game_titles(id, name, layout_family)
 VALUES ('obsolete-title', 'Obsolete snapshot', 'momotetsu_2'),
        ('current-title', 'Current snapshot', 'momotetsu_2'),
        ('stale-title', 'Current-format stale snapshot', 'momotetsu_2');
+INSERT INTO series_analysis_title_states(game_title_id, algorithm_version, artifact_schema_version, validation_contract_id)
+SELECT t.id, r.algorithm_version, r.artifact_schema_version, r.validation_contract_id
+FROM game_titles t CROSS JOIN series_analysis_release_state r
+WHERE t.id IN ('obsolete-title', 'current-title', 'stale-title') AND r.singleton_key = 'current'
+ON CONFLICT DO NOTHING;
 UPDATE series_analysis_title_states
 SET algorithm_version = 'series-analysis-v7',
     artifact_schema_version = CASE game_title_id WHEN 'obsolete-title' THEN 3 ELSE 6 END,
@@ -35,3 +40,11 @@ SET current_artifact_id = split_part(game_title_id, '-', 1) || '-current',
 
 -- A new input revision legitimately keeps the previous current snapshot readable.
 UPDATE series_analysis_title_states SET input_revision = 1 WHERE game_title_id = 'stale-title';
+
+INSERT INTO series_radar_title_states(game_title_id, generation) VALUES ('obsolete-title', 3);
+INSERT INTO series_analysis_jobs(id, game_title_id, input_revision, algorithm_version,
+  artifact_schema_version, validation_contract_id, status, trigger)
+SELECT 'promotion-queued-job', game_title_id, input_revision, algorithm_version,
+  artifact_schema_version, validation_contract_id, 'queued', 'manual'
+FROM series_analysis_title_states WHERE game_title_id = 'obsolete-title';
+UPDATE series_radar_title_states SET generation = 4 WHERE game_title_id = 'obsolete-title';

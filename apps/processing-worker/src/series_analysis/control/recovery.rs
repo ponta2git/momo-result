@@ -1,8 +1,6 @@
 use tokio_postgres::{Row, Transaction};
 
-use crate::execution_slot::{
-    ExecutionSlotHolder, ExecutionTaskKind, clear_expired as clear_expired_slot,
-};
+use crate::job_lease::ExpiredJobLease;
 
 use super::{
     AttemptOutcome, ClaimedJob, ControlError, RequestOutcome, SafeFailureCode, TransactionEffects,
@@ -11,56 +9,42 @@ use super::{
     },
 };
 
-pub(crate) async fn recover_expired_analysis_holder(
-    transaction: &Transaction<'_>,
-    holder: &ExecutionSlotHolder,
-) -> Result<TransactionEffects, ControlError> {
-    recover_expired_analysis_job(transaction, holder, true).await
-}
-
 pub(crate) async fn recover_expired_analysis_job(
     transaction: &Transaction<'_>,
-    holder: &ExecutionSlotHolder,
-    clear_slot: bool,
+    holder: &ExpiredJobLease,
 ) -> Result<TransactionEffects, ControlError> {
-    if holder.task_kind != ExecutionTaskKind::Analysis || !holder.expired {
-        return Err(ControlError::OwnerLost);
-    }
     let job_id = &holder.job_id;
     let attempt_id = &holder.attempt_id;
     let fencing_token = holder.fencing_token;
     let job_preview = transaction
         .query_opt(
-            "SELECT game_title_id FROM series_analysis_jobs WHERE id = $1",
+            "SELECT title.legacy_id FROM series_analysis_jobs job JOIN game_titles title ON title.id=job.game_title_id WHERE job.legacy_id = $1",
             &[&job_id],
         )
         .await?;
     let Some(job_preview) = job_preview else {
-        if clear_slot && !clear_expired_slot(transaction, holder).await? {
-            return Err(ControlError::OwnerLost);
-        }
         return Ok(TransactionEffects::empty());
     };
     let game_title_id = job_preview.try_get::<_, String>(0)?;
     let title_exists = transaction
         .query_opt(
             "SELECT game_title_id FROM series_analysis_title_states\x20\
-             WHERE game_title_id = $1 FOR UPDATE",
+             WHERE game_title_id = (SELECT id FROM game_titles WHERE legacy_id=$1) FOR UPDATE",
             &[&game_title_id],
         )
         .await?
         .is_some();
     let job_row = transaction
         .query_opt(
-            "SELECT COALESCE(lease_owner = $2 AND lease_attempt_id = $3\x20\
+            "SELECT COALESCE(lease_owner = $2 AND legacy_lease_attempt_id = $3\x20\
                         AND lease_fencing_token = $4\x20\
                         AND lease_validation_contract_id IS NOT DISTINCT FROM validation_contract_id\x20\
                         AND lease_expires_at <= clock_timestamp(), false),\x20\
-                    lease_recovery_count, game_title_id, input_revision, algorithm_version,\x20\
+                    lease_recovery_count, (SELECT legacy_id FROM game_titles WHERE id=job.game_title_id), input_revision, algorithm_version,\x20\
                     artifact_schema_version, validation_contract_id, attempt_count, work_kind,\x20\
-                    radar_operation_id, radar_basis_id, radar_generation\x20\
-             FROM series_analysis_jobs\x20\
-             WHERE id = $1 AND game_title_id = $5 AND status = 'running' FOR UPDATE",
+                    legacy_radar_operation_id, (SELECT legacy_id FROM series_radar_basis_identities WHERE id=job.radar_basis_id), radar_generation\x20\
+             FROM series_analysis_jobs job\x20\
+             WHERE legacy_id = $1 AND game_title_id = (SELECT id FROM game_titles WHERE legacy_id=$5) AND status = 'running' FOR UPDATE",
             &[
                 &job_id,
                 &holder.owner,
@@ -77,7 +61,7 @@ pub(crate) async fn recover_expired_analysis_job(
         }
         let recoverable = job_row.try_get::<_, bool>(0)?;
         if !recoverable {
-            return Err(ControlError::OwnerLost);
+            return Ok(effects);
         }
         let job = decode_expired_job(&job_row)?;
         let owner_lost = AttemptOutcome::OwnerLost.wire();
@@ -85,7 +69,7 @@ pub(crate) async fn recover_expired_analysis_job(
             .execute(
                 "UPDATE series_analysis_job_attempts SET status = 'terminal', outcome = $1,\x20\
                    finished_at = clock_timestamp()\x20\
-                 WHERE id = $2 AND job_id = $3 AND owner = $4 AND status = 'running'\x20\
+                 WHERE legacy_id = $2 AND job_id = (SELECT id FROM series_analysis_jobs WHERE legacy_id=$3) AND owner = $4 AND status = 'running'\x20\
                    AND fencing_token = $5",
                 &[
                     &owner_lost,
@@ -108,9 +92,8 @@ pub(crate) async fn recover_expired_analysis_job(
             &mut effects,
         )
         .await?;
-    }
-    if clear_slot && !clear_expired_slot(transaction, holder).await? {
-        return Err(ControlError::OwnerLost);
+        crate::series_analysis::job_transitions::bind_queued_radar(transaction, &[&game_title_id])
+            .await?;
     }
     Ok(effects)
 }
@@ -181,16 +164,16 @@ async fn requeue_expired_job(
         .execute(
             "UPDATE series_analysis_jobs SET status = 'queued', lease_recovery_count = $1,\x20\
                available_at = clock_timestamp(), started_at = NULL, lease_owner = NULL,\x20\
-               lease_attempt_id = NULL, lease_fencing_token = NULL, lease_expires_at = NULL,\x20\
+               lease_attempt_id = NULL, legacy_lease_attempt_id = NULL, lease_fencing_token = NULL, lease_expires_at = NULL,\x20\
                lease_validation_contract_id = NULL,\x20\
-               updated_at = clock_timestamp() WHERE id = $2",
+               updated_at = clock_timestamp() WHERE legacy_id = $2",
             &[&recovery_count, &job_id],
         )
         .await?;
     transaction
         .execute(
-            "UPDATE series_analysis_job_requests SET status = 'pending', assigned_attempt_id = NULL\x20\
-             WHERE assigned_attempt_id = $1",
+            "UPDATE series_analysis_job_requests SET status = 'pending', assigned_attempt_id = NULL, legacy_assigned_attempt_id = NULL\x20\
+             WHERE legacy_assigned_attempt_id = $1",
             &[&attempt_id],
         )
         .await?;
@@ -198,7 +181,7 @@ async fn requeue_expired_job(
         .execute(
             "UPDATE series_analysis_campaign_targets t SET status = 'expanded', updated_at = clock_timestamp()\x20\
              FROM series_analysis_job_requests r WHERE t.job_request_id = r.id\x20\
-               AND r.assigned_job_id = $1",
+               AND r.assigned_job_id = (SELECT id FROM series_analysis_jobs WHERE legacy_id=$1)",
             &[&job_id],
         )
         .await?;
@@ -219,9 +202,9 @@ async fn fail_expired_job(
         .execute(
             "UPDATE series_analysis_jobs SET status = 'failed', finished_at = clock_timestamp(),\x20\
                lease_recovery_count = 3, safe_failure_code = $1,\x20\
-               lease_owner = NULL, lease_attempt_id = NULL, lease_fencing_token = NULL,\x20\
+               lease_owner = NULL, lease_attempt_id = NULL, legacy_lease_attempt_id = NULL, lease_fencing_token = NULL,\x20\
                lease_expires_at = NULL, lease_validation_contract_id = NULL,\x20\
-               updated_at = clock_timestamp() WHERE id = $2",
+               updated_at = clock_timestamp() WHERE legacy_id = $2",
             &[&failure_code, &job_id],
         )
         .await?;
@@ -231,7 +214,7 @@ async fn fail_expired_job(
             .execute(
                 "UPDATE series_analysis_title_states SET pending_work = false,\x20\
                last_failure_code = $1, last_failure_at = clock_timestamp(),\x20\
-               updated_at = clock_timestamp() WHERE game_title_id = $2",
+               updated_at = clock_timestamp() WHERE game_title_id = (SELECT id FROM game_titles WHERE legacy_id=$2)",
                 &[&failure_code, &job.game_title_id],
             )
             .await?;

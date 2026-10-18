@@ -29,7 +29,12 @@ async fn verify_targeted_recovery(primary: &Client, peer: &mut Client, url: &str
     }
     let lock = peer.transaction().await?;
     lock.query_one(
-        "SELECT id FROM match_drafts WHERE id = $1 FOR UPDATE",
+        r"
+            SELECT match_drafts.legacy_id AS id
+            FROM match_drafts
+            WHERE match_drafts.legacy_id = $1
+            FOR UPDATE
+            ",
         &[&busy],
     )
     .await?;
@@ -42,7 +47,7 @@ async fn verify_targeted_recovery(primary: &Client, peer: &mut Client, url: &str
         rechecked: Some(rechecked),
         ..Schedule::default()
     };
-    let database = postgres::connect(url).await?;
+    let database = crate::identity::fixtures::connect(url).await?;
     let mut recovery = Recovery::default();
     let runtime = coordinate(
         database,
@@ -56,7 +61,16 @@ async fn verify_targeted_recovery(primary: &Client, peer: &mut Client, url: &str
     let check = async {
         time::timeout(Duration::from_secs(2), scans.changed()).await??;
         // Make the non-Busy submission eligible without a wake. Only the locked ID may be rechecked.
-        primary.execute("UPDATE ocr_submissions SET admission_deadline = clock_timestamp() - interval '1 second' WHERE id = $1", &[&open]).await?;
+        primary
+            .execute(
+                r"
+            UPDATE ocr_submissions
+            SET admission_deadline = clock_timestamp() - CAST('1 second' AS interval)
+            WHERE ocr_submissions.legacy_id = $1
+            ",
+                &[&open],
+            )
+            .await?;
         lock.rollback().await?;
         time::timeout(Duration::from_secs(2), attempts.changed()).await??;
         ensure(
@@ -92,7 +106,13 @@ async fn verify_shared_budget(primary: &Client, peer: &mut Client, url: &str) ->
     }
     let lock = peer.transaction().await?;
     lock.query(
-        "SELECT id FROM match_drafts WHERE id = ANY($1) ORDER BY id FOR UPDATE",
+        r"
+            SELECT match_drafts.legacy_id AS id
+            FROM match_drafts
+            WHERE match_drafts.legacy_id = ANY($1)
+            ORDER BY match_drafts.legacy_id
+            FOR UPDATE
+            ",
         &[&busy.as_slice()],
     )
     .await?;
@@ -105,7 +125,7 @@ async fn verify_shared_budget(primary: &Client, peer: &mut Client, url: &str) ->
         rechecked: Some(rechecked),
         ..Schedule::default()
     };
-    let database = postgres::connect(url).await?;
+    let database = crate::identity::fixtures::connect(url).await?;
     let mut recovery = Recovery::default();
     let runtime = coordinate(
         database,
@@ -164,7 +184,12 @@ async fn verify_admission_deadline(primary: &Client, peer: &mut Client, url: &st
     member(primary, id, "total_assets", None).await?;
     let lock = peer.transaction().await?;
     lock.query_one(
-        "SELECT id FROM match_drafts WHERE id = $1 FOR UPDATE",
+        r"
+            SELECT match_drafts.legacy_id AS id
+            FROM match_drafts
+            WHERE match_drafts.legacy_id = $1
+            FOR UPDATE
+            ",
         &[&id],
     )
     .await?;
@@ -177,7 +202,7 @@ async fn verify_admission_deadline(primary: &Client, peer: &mut Client, url: &st
         rechecked: Some(rechecked),
         ..Schedule::default()
     };
-    let database = postgres::connect(url).await?;
+    let database = crate::identity::fixtures::connect(url).await?;
     let mut recovery = Recovery::default();
     let runtime = coordinate(
         database,
@@ -224,7 +249,13 @@ async fn verify_invalid_target_is_isolated(
     member(primary, healthy, "total_assets", None).await?;
     let lock = peer.transaction().await?;
     lock.query(
-        "SELECT id FROM match_drafts WHERE id = ANY($1) ORDER BY id FOR UPDATE",
+        r"
+            SELECT match_drafts.legacy_id AS id
+            FROM match_drafts
+            WHERE match_drafts.legacy_id = ANY($1)
+            ORDER BY match_drafts.legacy_id
+            FOR UPDATE
+            ",
         &[&[invalid, healthy].as_slice()],
     )
     .await?;
@@ -237,7 +268,7 @@ async fn verify_invalid_target_is_isolated(
         rechecked: Some(rechecked),
         ..Schedule::default()
     };
-    let database = postgres::connect(url).await?;
+    let database = crate::identity::fixtures::connect(url).await?;
     let mut recovery = Recovery::default();
     let runtime = coordinate(
         database,
@@ -284,7 +315,14 @@ async fn verify_invalid_target_is_isolated(
 
 async fn status(client: &Client, id: &str) -> TestResult<String> {
     Ok(client
-        .query_one("SELECT status FROM ocr_submissions WHERE id = $1", &[&id])
+        .query_one(
+            r"
+            SELECT status
+            FROM ocr_submissions
+            WHERE ocr_submissions.legacy_id = $1
+            ",
+            &[&id],
+        )
         .await?
         .get(0))
 }

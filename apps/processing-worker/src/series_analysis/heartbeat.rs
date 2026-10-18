@@ -103,10 +103,7 @@ impl HeartbeatConnection {
         // Only a confirmed transaction result permits reuse. A lost COMMIT response remains
         // unknown even though disconnecting releases the local resource; DB fencing recovers it.
         self.session = Some(session);
-        observation.confirmed = matches!(
-            result,
-            HeartbeatResult::Continue | HeartbeatResult::PreemptRequested
-        );
+        observation.confirmed = result == HeartbeatResult::Continue;
         drop(observation);
         Ok(result)
     }

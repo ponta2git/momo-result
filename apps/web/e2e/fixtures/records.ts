@@ -1,14 +1,16 @@
+import { randomUUID } from "node:crypto";
+
 import type { APIRequestContext } from "@playwright/test";
 
 import type { components } from "../../src/shared/api/generated";
-import { expectGeneratedId, postJson } from "../support";
+import { expectGeneratedId, expectOk, postJson, readJsonObject } from "../support";
 import type { E2eRun } from "../support";
 
 export async function seedMasterContext(request: APIRequestContext, e2eRun: E2eRun) {
   const { masterIdSuffix } = e2eRun;
-  const gameTitleId = `gt_e2e_${masterIdSuffix}`;
-  const seasonMasterId = `season_e2e_${masterIdSuffix}`;
-  const mapMasterId = `map_e2e_${masterIdSuffix}`;
+  const gameTitleId = randomUUID();
+  const seasonMasterId = randomUUID();
+  const mapMasterId = randomUUID();
   const gameTitleName = `桃太郎電鉄2 E2E ${masterIdSuffix}`;
   const seasonName = `E2Eシーズン ${masterIdSuffix}`;
   const mapName = `E2Eマップ ${masterIdSuffix}`;
@@ -72,6 +74,7 @@ export async function seedConfirmedContext(request: APIRequestContext, e2eRun: E
   return {
     ...context,
     matchId,
+    matchPublicId: await readPublicId(request, `/api/matches/${matchId}`),
   };
 }
 
@@ -97,10 +100,10 @@ function makePlayers(): Array<components["schemas"]["PlayerResultRequest"]> {
 
 export async function seedUiContext(request: APIRequestContext, e2eRun: E2eRun) {
   const suffix = e2eRun.masterIdSuffix;
-  const primaryGameTitleId = `gt_ui_a_${suffix}`;
-  const secondaryGameTitleId = `gt_ui_b_${suffix}`;
-  const seasonMasterId = `season_ui_${suffix}`;
-  const mapMasterId = `map_ui_${suffix}`;
+  const primaryGameTitleId = randomUUID();
+  const secondaryGameTitleId = randomUUID();
+  const seasonMasterId = randomUUID();
+  const mapMasterId = randomUUID();
   const primaryGameTitleName = `UI確認作品A ${suffix}`;
   const seasonName = `UI確認シーズン ${suffix}`;
   const mapName = `UI確認マップ ${suffix}`;
@@ -158,6 +161,7 @@ export async function seedUiContext(request: APIRequestContext, e2eRun: E2eRun) 
 
   return {
     heldEventId,
+    heldEventPublicId: await readPublicId(request, `/api/held-events/${heldEventId}`),
     mapName,
     matchIds,
     primaryGameTitleId,
@@ -166,6 +170,16 @@ export async function seedUiContext(request: APIRequestContext, e2eRun: E2eRun) 
     seasonName,
     secondaryGameTitleId,
   };
+}
+
+async function readPublicId(request: APIRequestContext, path: string): Promise<string> {
+  const response = await request.get(path);
+  await expectOk(response, "read fixture public ID");
+  const publicId = (await readJsonObject(response))["publicId"];
+  if (typeof publicId !== "string" || !/^[1-9][0-9]*$/u.test(publicId)) {
+    throw new TypeError("Expected a positive decimal public ID");
+  }
+  return publicId;
 }
 
 function makeUiPlayers(seed: number): Array<components["schemas"]["PlayerResultRequest"]> {

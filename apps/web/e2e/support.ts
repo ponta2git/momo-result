@@ -77,22 +77,11 @@ function createE2eRun(testInfo: TestInfo): { registry: ResourceRegistry; run: E2
     matchIds: [],
     seasonMasterIds: [],
   };
-  let idempotencySequence = 0;
-
   return {
     registry,
     run: {
       masterIdSuffix,
-      nextIdempotencyKey: (operation) => {
-        idempotencySequence += 1;
-        const operationSlug =
-          operation
-            .toLowerCase()
-            .replaceAll(/[^a-z0-9]+/gu, "-")
-            .replaceAll(/^-|-$/gu, "")
-            .slice(0, 32) || "mutation";
-        return `e2e-${masterIdSuffix}-${idempotencySequence.toString(36)}-${operationSlug}`;
-      },
+      nextIdempotencyKey: () => randomUUID(),
       trackAlias: (id) => trackResource(registry.aliasIds, id),
       trackDraft: (id) => trackResource(registry.draftIds, id),
       trackGameTitle: (id) => trackResource(registry.gameTitleIds, id),

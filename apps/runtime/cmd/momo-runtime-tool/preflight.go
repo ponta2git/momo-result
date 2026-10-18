@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"time"
@@ -99,7 +100,18 @@ func inspectRuntimeDatabase(ctx context.Context, databaseURL string) (databaseSn
 	if err != nil {
 		return databaseSnapshot{}, err
 	}
-	members, err := queryStrings(ctx, transaction, "SELECT id FROM members")
+	memberColumns, err := queryStrings(ctx, transaction,
+		"SELECT column_name || ':' || data_type || ':' || is_nullable "+
+			"FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'members' "+
+			"AND column_name IN ('id', 'legacy_id')")
+	if err != nil {
+		return databaseSnapshot{}, err
+	}
+	memberQuery, err := memberSeedQuery(memberColumns)
+	if err != nil {
+		return databaseSnapshot{}, err
+	}
+	members, err := queryStrings(ctx, transaction, memberQuery)
 	if err != nil {
 		return databaseSnapshot{}, err
 	}
@@ -113,6 +125,22 @@ func inspectRuntimeDatabase(ctx context.Context, databaseURL string) (databaseSn
 		HardenedFunctions: stringSet(functions),
 		SeedMemberIDs:     stringSet(members),
 	}, nil
+}
+
+// The fixed roster stays in the legacy identity domain through a native UUID cutover.
+// Do not silently accept an expand/contract midpoint as either supported schema.
+func memberSeedQuery(columns []string) (string, error) {
+	shape := stringSet(columns)
+	_, legacyID := shape["id:text:NO"]
+	_, canonicalID := shape["id:uuid:NO"]
+	_, legacyAlias := shape["legacy_id:text:NO"]
+	if len(shape) == 1 && legacyID {
+		return "SELECT id FROM members", nil
+	}
+	if len(shape) == 2 && canonicalID && legacyAlias {
+		return "SELECT legacy_id FROM members", nil
+	}
+	return "", errors.New("unsupported member identity shape")
 }
 
 type queryExecutor interface {

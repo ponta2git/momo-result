@@ -16,7 +16,7 @@ async fn real_postgres_reconciliation_continues_during_a_waiting_worker_operatio
         return Err("isolated database authorization is required".into());
     }
     let url = std::env::var("OCR_CONTROL_SMOKE_DATABASE_URL")?;
-    let observer = postgres::connect(&url).await?;
+    let observer = crate::identity::fixtures::connect(&url).await?;
     let ids = (0..34)
         .map(|index| format!("00000000-0015-4a00-8000-{index:012}"))
         .collect::<Vec<_>>();
@@ -83,7 +83,11 @@ async fn wait_for_settled(client: &Client, ids: &[String], count: i64) -> TestRe
     loop {
         let settled: i64 = client
             .query_one(
-                "SELECT count(*) FROM ocr_submissions WHERE id = ANY($1) AND status = 'settled'",
+                r"
+                    SELECT count(*)
+                    FROM ocr_submissions
+                    WHERE ocr_submissions.legacy_id = ANY($1) AND status = 'settled'
+                    ",
                 &[&ids],
             )
             .await?
@@ -97,24 +101,66 @@ async fn wait_for_settled(client: &Client, ids: &[String], count: i64) -> TestRe
 
 async fn create(client: &Client, id: &str) -> TestResult {
     let digest = hex::encode(Sha256::digest(id.as_bytes()));
-    client.execute("INSERT INTO match_drafts (id, created_by_account_id, created_by_member_id, status) VALUES ($1, 'account_ponta', 'member_ponta', 'ocr_running')", &[&id]).await?;
-    client.execute("INSERT INTO ocr_submissions (id, owner_account_id, match_draft_id, ocr_hints_json, status, admission_deadline, created_at) VALUES ($1, 'account_ponta', $1, '{}'::jsonb, 'open', clock_timestamp() - interval '1 second', clock_timestamp() - interval '2 seconds')", &[&id]).await?;
-    client.execute("INSERT INTO ocr_submission_members (submission_id, screen_type, upload_idempotency_key_hash, image_sha256_hex, image_byte_length, status) VALUES ($1, 'total_assets', $2, $2, 68, 'pending')", &[&id, &digest]).await?;
+    client.execute(r"
+        INSERT INTO match_drafts (id, legacy_id, created_by_account_id, created_by_member_id, status)
+        VALUES (pg_temp.fixture_uuid('match_drafts', $1), $1, pg_temp.fixture_uuid('momo_login_accounts', 'account_ponta'),
+                pg_temp.fixture_uuid('members', 'member_ponta'), 'ocr_running')
+        ", &[&id]).await?;
+    client
+        .execute(
+            r"
+        INSERT INTO ocr_submissions (id, legacy_id, owner_account_id, match_draft_id, legacy_match_draft_id, ocr_hints_json,
+                                     status, admission_deadline, created_at)
+        VALUES (pg_temp.fixture_uuid('ocr_submissions', $1), $1,
+                pg_temp.fixture_uuid('momo_login_accounts', 'account_ponta'), pg_temp.fixture_uuid('match_drafts', $1), $1,
+                CAST('{}' AS jsonb), 'open', clock_timestamp() - CAST('1 second' AS interval),
+                clock_timestamp() - CAST('2 seconds' AS interval))
+        ",
+            &[&id],
+        )
+        .await?;
+    client
+        .execute(
+            r"
+        INSERT INTO ocr_submission_members (submission_id, screen_type, upload_idempotency_key_hash, image_sha256_hex,
+                                            image_byte_length, status)
+        VALUES (pg_temp.fixture_uuid('ocr_submissions', $1), 'total_assets', $2, $2, 68, 'pending')
+        ",
+            &[&id, &digest],
+        )
+        .await?;
     Ok(())
 }
 
 async fn cleanup(client: &Client, ids: &[String]) -> TestResult {
     client
         .execute(
-            "DELETE FROM ocr_submission_members WHERE submission_id = ANY($1)",
+            r"
+                DELETE FROM ocr_submission_members
+                WHERE (SELECT fixture_parent.legacy_id
+                       FROM ocr_submissions AS fixture_parent
+                       WHERE fixture_parent.id = ocr_submission_members.submission_id) = ANY($1)
+                ",
             &[&ids],
         )
         .await?;
     client
-        .execute("DELETE FROM ocr_submissions WHERE id = ANY($1)", &[&ids])
+        .execute(
+            r"
+            DELETE FROM ocr_submissions
+            WHERE ocr_submissions.legacy_id = ANY($1)
+            ",
+            &[&ids],
+        )
         .await?;
     client
-        .execute("DELETE FROM match_drafts WHERE id = ANY($1)", &[&ids])
+        .execute(
+            r"
+            DELETE FROM match_drafts
+            WHERE match_drafts.legacy_id = ANY($1)
+            ",
+            &[&ids],
+        )
         .await?;
     Ok(())
 }

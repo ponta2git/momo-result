@@ -35,6 +35,7 @@ object HeldEventDetail:
       noteBody: Option[String],
       players: List[Player],
       labels: MatchLabels = MatchLabels.empty,
+      publicId: Option[PublicId] = None,
   )
 
   final case class Draft(

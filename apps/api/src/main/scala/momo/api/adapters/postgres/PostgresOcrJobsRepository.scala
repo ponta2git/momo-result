@@ -8,6 +8,7 @@ import doobie.implicits.*
 import doobie.postgres.circe.jsonb.implicits.*
 import doobie.postgres.implicits.*
 
+import momo.api.adapters.postgres.CanonicalIdentity.Entity
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.contracts.ocrworker.OcrJobInputSnapshot
 import momo.api.domain.ids.*
@@ -136,8 +137,11 @@ object PostgresOcrJobs:
             ).pure[ConnectionIO].widen[OcrJob]
           case None => inconsistent("status=cancelled requires finished_at")
 
-  private val selectAll = fr"""SELECT
-           id, draft_id, image_id, image_path,
+  private def selectAll(using ids: PostgresIdentities) = fr"""SELECT
+           ${ids.wireId("ocr_jobs")}, ${ids.retainedColumn(
+      "ocr_jobs",
+      "draft_id"
+    )}, image_id, image_path,
            requested_screen_type, detected_screen_type,
            status, attempt_count, worker_id,
            failure_code, failure_message, failure_retryable, failure_user_action,
@@ -145,7 +149,7 @@ object PostgresOcrJobs:
            created_at, updated_at
          FROM ocr_jobs"""
 
-  def create(job: OcrJob, input: OcrJobInput): ConnectionIO[Unit] =
+  def create(job: OcrJob, input: OcrJobInput)(using ids: PostgresIdentities): ConnectionIO[Unit] =
     OcrJobInputSnapshot.fromInput(input)
       .leftMap(reason =>
         PostgresDataIntegrityException.invalidPayload(
@@ -156,16 +160,24 @@ object PostgresOcrJobs:
         )
       ).liftTo[ConnectionIO].flatMap { snapshot =>
         val inputJson = OcrJobInputSnapshot.toJson(snapshot)
-        sql"""
+        for
+          newId <- ids.newId(job.id.value)
+          draftId <- ids.retainedValue(Entity.OcrDrafts, job.draftId.value)
+          sourceImageId <- ids.requireReference(Entity.SourceImages, job.imageId.value)
+          _ <- sql"""
       INSERT INTO ocr_jobs (
-        id, draft_id, image_id, image_path, source_image_id, input_snapshot,
+        ${ids.idColumns}, draft_id ${ids.legacyColumn(
+              "draft_id"
+            )}, image_id, image_path, source_image_id, input_snapshot,
         requested_screen_type, detected_screen_type,
         status, attempt_count, worker_id,
         failure_code, failure_message, failure_retryable, failure_user_action,
         started_at, finished_at, duration_ms,
         created_at, updated_at
       ) VALUES (
-        ${job.id}, ${job.draftId}, ${job.imageId}, ${job.imageLocation}, ${job.imageId}, $inputJson,
+        $newId, $draftId ${ids.legacyValue(
+              job.draftId.value
+            )}, ${job.imageId}, ${job.imageLocation}, $sourceImageId, $inputJson,
         ${job.requestedScreenType}, ${OcrJob.detectedScreenType(job)},
         ${job.status}, ${job.attemptCount}, ${OcrJob.workerId(job)},
         ${OcrJob.failure(job).map(_.code)}, ${OcrJob.failure(job).map(_.message)},
@@ -173,28 +185,38 @@ object PostgresOcrJobs:
         ${OcrJob.startedAt(job)}, ${OcrJob.finishedAt(job)}, ${OcrJob.durationMs(job)},
         ${job.createdAt}, ${job.updatedAt}
       )
-    """.update.run.void
+    """.update.run
+        yield ()
       }
 
-  val alg: OcrJobsAlg[ConnectionIO] = new OcrJobsAlg[ConnectionIO]:
-    override def findAcceptance(jobId: OcrJobId): ConnectionIO[Option[OcrJobAcceptance]] =
-      sql"""SELECT id, draft_id, image_id, status FROM ocr_jobs WHERE id = $jobId"""
-        .query[OcrJobAcceptance].option
+  def alg(using ids: PostgresIdentities): OcrJobsAlg[ConnectionIO] =
+    new OcrJobsAlg[ConnectionIO]:
+      override def findAcceptance(jobId: OcrJobId): ConnectionIO[Option[OcrJobAcceptance]] =
+        sql"""SELECT ${ids.wireId("ocr_jobs")}, ${ids.retainedColumn(
+            "ocr_jobs",
+            "draft_id"
+          )}, image_id, status FROM ocr_jobs WHERE id = ${ids.lookup(
+            Entity.OcrJobs,
+            jobId.value
+          )}"""
+          .query[OcrJobAcceptance].option
 
-    override def find(jobId: OcrJobId): ConnectionIO[Option[OcrJob]] =
-      (selectAll ++ fr"WHERE id = $jobId").query[Row].option.flatMap {
-        case None => Option.empty[OcrJob].pure[ConnectionIO]
-        case Some(row) => toJob(row).map(Some(_))
-      }
+      override def find(jobId: OcrJobId): ConnectionIO[Option[OcrJob]] =
+        (selectAll ++ fr"WHERE id = ${ids.lookup(Entity.OcrJobs, jobId.value)}").query[
+          Row
+        ].option.flatMap {
+          case None => Option.empty[OcrJob].pure[ConnectionIO]
+          case Some(row) => toJob(row).map(Some(_))
+        }
 
-    override def countActive: ConnectionIO[Long] = sql"""
+      override def countActive: ConnectionIO[Long] = sql"""
         SELECT COUNT(*)
         FROM ocr_jobs
         WHERE status = ${OcrJobStatus.Queued}
            OR status = ${OcrJobStatus.Running}
       """.query[Long].unique
 
-    override def backlogSnapshot(now: Instant): ConnectionIO[OcrJobBacklogSnapshot] = sql"""
+      override def backlogSnapshot(now: Instant): ConnectionIO[OcrJobBacklogSnapshot] = sql"""
         SELECT
           COUNT(*) FILTER (WHERE status = 'queued'),
           COUNT(*) FILTER (WHERE status = 'running'),
@@ -203,68 +225,74 @@ object PostgresOcrJobs:
         WHERE status IN ('queued', 'running')
       """.query[OcrJobBacklogSnapshot].unique
 
-    override def cancelQueued(jobId: OcrJobId, now: Instant): ConnectionIO[Boolean] =
-      for
-        _ <- PostgresMatchDraftStatusSync.lockForJob(jobId)
-        updated <- sql"""
+      override def cancelQueued(jobId: OcrJobId, now: Instant): ConnectionIO[Boolean] =
+        for
+          _ <- PostgresMatchDraftStatusSync.lockForJob(jobId)
+          updated <- sql"""
         UPDATE ocr_jobs SET
           status = ${OcrJobStatus.Cancelled},
           finished_at = $now,
           updated_at = $now
-        WHERE id = $jobId AND status = ${OcrJobStatus.Queued}
+        WHERE id = ${ids.lookup(Entity.OcrJobs, jobId.value)} AND status = ${OcrJobStatus.Queued}
       """.update.run
-        _ <-
-          if updated == 1 then PostgresMatchDraftStatusSync.recomputeForJob(jobId, now)
-          else ().pure[ConnectionIO]
-      yield updated == 1
+          _ <-
+            if updated == 1 then PostgresMatchDraftStatusSync.recomputeForJob(jobId, now)
+            else ().pure[ConnectionIO]
+        yield updated == 1
 
-    override def cancelQueuedOwned(
-        jobId: OcrJobId,
-        owner: AccountId,
-        now: Instant,
-    ): ConnectionIO[momo.api.repositories.OcrJobCancellationResult] =
-      import momo.api.repositories.OcrJobCancellationResult
-      for
-        _ <- PostgresMatchDraftStatusSync.lockForJob(jobId)
-        ownership <- sql"""
+      override def cancelQueuedOwned(
+          jobId: OcrJobId,
+          owner: AccountId,
+          now: Instant,
+      ): ConnectionIO[momo.api.repositories.OcrJobCancellationResult] =
+        import momo.api.repositories.OcrJobCancellationResult
+        for
+          _ <- PostgresMatchDraftStatusSync.lockForJob(jobId)
+          ownership <- sql"""
           SELECT EXISTS (
             SELECT 1 FROM match_drafts draft
-            WHERE draft.created_by_account_id = $owner
+            WHERE draft.created_by_account_id = ${ids.lookup(Entity.Accounts, owner.value)}
               AND jobs.draft_id IN (
                 draft.total_assets_draft_id, draft.revenue_draft_id, draft.incident_log_draft_id
               )
           ) OR EXISTS (
             SELECT 1 FROM ocr_submission_members member
             JOIN ocr_submissions submission ON submission.id = member.submission_id
-            WHERE member.job_id = jobs.id AND submission.owner_account_id = $owner
+            WHERE member.job_id = jobs.id AND submission.owner_account_id = ${ids.lookup(
+              Entity.Accounts,
+              owner.value
+            )}
           )
-          FROM ocr_jobs jobs WHERE jobs.id = $jobId FOR UPDATE OF jobs
+          FROM ocr_jobs jobs WHERE jobs.id = ${ids.lookup(
+              Entity.OcrJobs,
+              jobId.value
+            )} FOR UPDATE OF jobs
         """.query[Boolean].option
-        result <- ownership match
-          case None => OcrJobCancellationResult.NotFound.pure[ConnectionIO]
-          case Some(false) => OcrJobCancellationResult.Forbidden.pure[ConnectionIO]
-          case Some(true) => cancelQueued(jobId, now).map {
-              case true => OcrJobCancellationResult.Cancelled
-              case false => OcrJobCancellationResult.NotQueued
-            }
-      yield result
+          result <- ownership match
+            case None => OcrJobCancellationResult.NotFound.pure[ConnectionIO]
+            case Some(false) => OcrJobCancellationResult.Forbidden.pure[ConnectionIO]
+            case Some(true) => cancelQueued(jobId, now).map {
+                case true => OcrJobCancellationResult.Cancelled
+                case false => OcrJobCancellationResult.NotQueued
+              }
+        yield result
 
-    override def cancelQueuedByDraftIds(
-        draftIds: List[OcrDraftId],
-        now: Instant,
-    ): ConnectionIO[Int] =
-      if draftIds.isEmpty then 0.pure[ConnectionIO]
-      else
-        val ids = draftIds.map(_.value).toArray
-        for
-          _ <- PostgresMatchDraftStatusSync.lockForDrafts(draftIds)
-          cancelledDraftIds <- sql"""
+      override def cancelQueuedByDraftIds(
+          draftIds: List[OcrDraftId],
+          now: Instant,
+      ): ConnectionIO[Int] =
+        if draftIds.isEmpty then 0.pure[ConnectionIO]
+        else
+          val draftCondition = ids.retainedIn("ocr_jobs", "draft_id", draftIds.map(_.value))
+          for
+            _ <- PostgresMatchDraftStatusSync.lockForDrafts(draftIds)
+            cancelledDraftIds <- sql"""
             WITH candidates AS (
               SELECT id
               FROM ocr_jobs
-              WHERE draft_id = ANY($ids)
+              WHERE $draftCondition
                 AND status = ${OcrJobStatus.Queued}
-              ORDER BY id
+              ORDER BY ${ids.wireId("ocr_jobs")}
               FOR UPDATE
             )
             UPDATE ocr_jobs jobs SET
@@ -274,14 +302,17 @@ object PostgresOcrJobs:
             FROM candidates
             WHERE jobs.id = candidates.id
               AND jobs.status = ${OcrJobStatus.Queued}
-            RETURNING jobs.draft_id
+            RETURNING ${ids.retainedColumn("jobs", "draft_id")}
           """.query[OcrDraftId].to[List]
-          _ <- PostgresMatchDraftStatusSync.recomputeForDrafts(cancelledDraftIds, now)
-        yield cancelledDraftIds.size
+            _ <- PostgresMatchDraftStatusSync.recomputeForDrafts(cancelledDraftIds, now)
+          yield cancelledDraftIds.size
 end PostgresOcrJobs
 
-final class PostgresOcrJobsRepository[F[_]: Async](transactor: Transactor[F])
-    extends OcrJobsRepository[F]:
+final class PostgresOcrJobsRepository[F[_]: Async](
+    transactor: Transactor[F],
+    identities: PostgresIdentities = PostgresIdentities.Legacy
+) extends OcrJobsRepository[F]:
+  private given PostgresIdentities = identities
   private val delegate: OcrJobsRepository[F] = OcrJobsRepository
     .fromAlg(PostgresOcrJobs.alg, transactor.trans)
 

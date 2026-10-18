@@ -31,6 +31,9 @@ object IntegrationDb:
   private val DatabaseName = "summit"
   private val Username = "summit"
   private val Password = "summit"
+  private val CanonicalSchema = sys.env.get("MOMO_API_IDENTITY_SCHEMA").contains("canonical")
+  private val LegacyLastMigration = "0082_"
+  private val CanonicalSchemaBoundary = "0093_"
   private val StatementBreakpoint = raw"(?m)-->\s*statement-breakpoint\s*".r
 
   final case class Settings(jdbcUrl: String, user: String, password: String)
@@ -49,7 +52,15 @@ object IntegrationDb:
   private lazy val sharedFixture: DbFixture =
     import cats.effect.unsafe.implicits.global
 
-    val migrations = migrationFiles(migrationsDirectory)
+    val available = migrationFiles(migrationsDirectory)
+    val requiredBoundary = if CanonicalSchema then CanonicalSchemaBoundary else LegacyLastMigration
+    if !available.exists(_.getFileName.toString.startsWith(requiredBoundary)) then
+      sys.error(
+        s"The pinned momo-db history does not contain the required $requiredBoundary schema boundary."
+      )
+    val migrations =
+      if CanonicalSchema then available
+      else available.filter(_.getFileName.toString.take(5) <= LegacyLastMigration)
     if migrations.isEmpty then sys.error("No momo-db migration SQL files found.")
 
     val container = new PostgreSQLContainer(PostgresImage).withDatabaseName(DatabaseName)
@@ -186,25 +197,16 @@ object IntegrationDb:
     """.update.run.void *> sql"""
       UPDATE discord_notification_settings SET enabled = true, generation = 0
     """.update.run.void *> sql"""
-      UPDATE worker_execution_slots
-      SET task_kind = NULL,
-          owner = NULL,
-          job_id = NULL,
-          attempt_id = NULL,
-          holder_preemptible = NULL,
-          lease_expires_at = NULL,
-          preempt_requested_by = NULL,
-          preempt_requested_at = NULL,
-          updated_at = now()
-      WHERE slot_key = 'shared-heavy-work'
-    """.update.run.void *> sql"""
       UPDATE series_analysis_release_state
       SET algorithm_version = 'series-analysis-v7',
           artifact_schema_version = 6,
           validation_contract_id = 'series-analysis-artifact-v6-full-validation-v2',
           updated_at = clock_timestamp()
       WHERE singleton_key = 'current'
-    """.update.run.void).transact(transactor)
+    """.update.run.void *> (
+      if CanonicalSchema then sql"DELETE FROM idempotency_keys_legacy".update.run.void
+      else ().pure[ConnectionIO]
+    )).transact(transactor)
 end IntegrationDb
 // scalafix:on DisableSyntax.throw
 // scalafix:on DisableSyntax.noUnsafeRunSync

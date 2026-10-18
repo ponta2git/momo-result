@@ -165,6 +165,9 @@ func serveProbeDatabasePeer(connection net.Conn, rollbackReceived chan<- struct{
 			if sql == "select 1" {
 				backend.Send(&pgproto3.DataRow{Values: [][]byte{[]byte("1")}})
 				tag = "SELECT 1"
+			} else if strings.Contains(sql, "column_name || ':' || data_type") {
+				backend.Send(&pgproto3.DataRow{Values: [][]byte{[]byte("id:text:NO")}})
+				tag = "SELECT 1"
 			}
 		default:
 			return fmt.Errorf("unexpected query %q", sql)

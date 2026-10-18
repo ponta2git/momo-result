@@ -32,7 +32,8 @@ func maintenanceScope(path, operation string) (object, object, error) {
 	switch operation {
 	case "analysis":
 		if !s.keys("operationId", "campaignId", "planDigest") || !operationIdentity.MatchString(s.text("operationId")) ||
-			!operationIdentity.MatchString(s.text("campaignId")) || !digestPattern.MatchString(s.text("planDigest")) {
+			!operationIdentity.MatchString(s.text("campaignId")) || !digestPattern.MatchString(s.text("planDigest")) ||
+			!shaPattern.MatchString(str(field(r, "evidence", "previousStage"))) {
 			return nil, nil, invalid
 		}
 	case "publish":
@@ -56,14 +57,15 @@ func maintenanceOperationScope(args []string) (string, error) {
 	}
 	result := fmt.Sprintf("cutover_id=%s\nstop_epoch=%s\nrelease_sha=%s\n", r.text("cutoverId"), number(r["stopEpoch"]), str(field(r, "candidates", "result")))
 	if args[1] == "analysis" {
-		return result + outputFields(s, "operation_id", "operationId", "campaign_id", "campaignId", "plan_digest", "planDigest"), nil
+		return result + outputFields(s, "operation_id", "operationId", "campaign_id", "campaignId", "plan_digest", "planDigest") +
+			fmt.Sprintf("readiness_digest=sha256:%s\n", str(field(r, "evidence", "previousStage"))), nil
 	}
 	result += fmt.Sprintf("deployment_run_id=%s\ndeployment_run_attempt=%s\nprovenance_artifact_id=%s\nprovenance_artifact_digest=sha256:%s\n",
 		s.text("deploymentRunId"), number(s["deploymentRunAttempt"]), s.text("provenanceArtifactId"), s.text("provenanceArtifactDigest"))
 	return result, nil
 }
 
-func maintenanceAnalysisEvidence(value any, path, phase string, out io.Writer) error {
+func maintenanceAnalysisEvidence(value any, path, kind, phase string, out io.Writer) error {
 	r, s, err := maintenanceScope(path, "analysis")
 	if err != nil {
 		return err
@@ -73,10 +75,25 @@ func maintenanceAnalysisEvidence(value any, path, phase string, out io.Writer) e
 	completed, validCompleted := safeInteger(v["completedCount"], false)
 	failed, validFailed := safeInteger(v["failedCount"], false)
 	status := v.text("status")
-	if (phase != "plan" && phase != "complete") ||
-		(status != "planned" && status != "complete") || (phase == "complete" && status != "complete") ||
-		!v.keys("schemaVersion", "cutoverId", "stopEpoch", "operationId", "campaignId", "planDigest", "status", "targetCount", "completedCount", "failedCount") ||
-		!v.numberEquals("schemaVersion", 1) ||
+	keys := []string{"schemaVersion", "kind", "cutoverId", "stopEpoch", "operationId", "campaignId", "planDigest", "status", "targetCount", "completedCount", "failedCount"}
+	if kind == "initialize" {
+		keys = append(keys, "candidateRelease", "readinessDigest")
+		if status == "initialized" {
+			keys = append(keys, "continuationPlanDigest")
+			if !digestPattern.MatchString(v.text("continuationPlanDigest")) || v.text("continuationPlanDigest") == v.text("planDigest") {
+				return invalid
+			}
+		}
+		if (status != "planned" && status != "initialized") || (phase == "complete" && status != "initialized") ||
+			!v.equals("candidateRelease", str(field(r, "candidates", "result"))) ||
+			!v.equals("readinessDigest", "sha256:"+str(field(r, "evidence", "previousStage"))) || failed != 0 {
+			return invalid
+		}
+	} else if kind != "continue" || (status != "planned" && status != "complete") || (phase == "complete" && status != "complete") {
+		return invalid
+	}
+	if (phase != "plan" && phase != "complete") || !v.keys(keys...) ||
+		!v.numberEquals("schemaVersion", 2) || !v.equals("kind", kind) ||
 		!v.equals("cutoverId", r.text("cutoverId")) || number(v["stopEpoch"]) != number(r["stopEpoch"]) ||
 		!v.equals("operationId", s.text("operationId")) || !v.equals("campaignId", s.text("campaignId")) || !v.equals("planDigest", s.text("planDigest")) ||
 		!validTotal || !validCompleted || !validFailed || completed+failed > total ||
@@ -84,6 +101,32 @@ func maintenanceAnalysisEvidence(value any, path, phase string, out io.Writer) e
 		return invalid
 	}
 	return encode(out, v)
+}
+
+// Match an immediately preceding read-only status with the guard's authenticated
+// control head. This narrows initialization to consumersReady without extending
+// the shared receipt scope or weakening the controller's live permit check.
+func maintenanceInitializationGuard(value any, receiptPath, statusPath string) error {
+	r, _, err := maintenanceScope(receiptPath, "analysis")
+	if err != nil {
+		return err
+	}
+	s, err := readObjectFile(statusPath)
+	if err != nil {
+		return err
+	}
+	g := objectMap(value)
+	_, validVersion := safeInteger(s["stateVersion"], true)
+	if !s.keys("head", "stateVersion", "cutoverId", "stopEpoch", "phase") ||
+		!g.keys("controlHead", "cutoverId", "stopEpoch", "stateVersion", "receiptDigest") ||
+		!s.equals("phase", "CONSUMERS_STAGED") || !commitPattern.MatchString(s.text("head")) ||
+		!g.equals("controlHead", s.text("head")) || !validVersion || number(s["stateVersion"]) != number(g["stateVersion"]) ||
+		!s.equals("cutoverId", r.text("cutoverId")) || !g.equals("cutoverId", r.text("cutoverId")) ||
+		number(s["stopEpoch"]) != number(r["stopEpoch"]) || number(g["stopEpoch"]) != number(r["stopEpoch"]) ||
+		!shaPattern.MatchString(g.text("receiptDigest")) {
+		return invalid
+	}
+	return nil
 }
 
 func maintenancePublishEvidence(value any, path, kind string) error {

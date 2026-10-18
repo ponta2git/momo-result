@@ -391,7 +391,6 @@ pub(super) async fn renew_before_publication(
     };
     let interruption = match renewed {
         Ok(HeartbeatResult::Continue) => return result,
-        Ok(HeartbeatResult::PreemptRequested) => AttemptInterruption::Preempted,
         Ok(HeartbeatResult::OwnerLost) => AttemptInterruption::OwnerLost,
         Err(failure) => {
             warn!(
@@ -535,12 +534,6 @@ async fn handle_heartbeat_result(
 ) -> Result<Option<(AnalysisChildOutcome, AttemptMetrics)>, ChildSupervisionFailure> {
     match heartbeat_result {
         Ok(HeartbeatResult::Continue) => refresh_child_liveness(child, started, config).await,
-        Ok(HeartbeatResult::PreemptRequested) => Err(terminate_for(
-            child,
-            config.child_stop_grace,
-            AttemptInterruption::Preempted,
-        )
-        .await),
         Ok(HeartbeatResult::OwnerLost) => {
             warn!(
                 event = "analysis_heartbeat_rejected",
@@ -904,7 +897,6 @@ mod tests {
     fn intended_policy_requires_verified_termination_and_reap() {
         for intended in [
             AttemptInterruption::TimedOut,
-            AttemptInterruption::Preempted,
             AttemptInterruption::Shutdown,
             AttemptInterruption::OwnerLost,
             AttemptInterruption::WorkerCrashed,

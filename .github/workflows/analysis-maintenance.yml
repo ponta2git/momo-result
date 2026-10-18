@@ -1,10 +1,18 @@
-name: Continue one frozen analysis campaign
+name: Initialize or continue one frozen analysis campaign
 
 on:
   workflow_dispatch:
     inputs:
+      phase:
+        description: Initialize a reviewed full campaign or continue an existing campaign
+        required: true
+        type: choice
+        default: continue
+        options:
+          - initialize
+          - continue
       receipt_json:
-        description: Reviewed analysis receipt for one existing operation, campaign, and plan digest
+        description: Reviewed analysis receipt for the selected phase, fixed IDs, and exact plan digest
         required: true
         type: string
 
@@ -65,11 +73,12 @@ jobs:
       - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
         with:
           version: 0.4.79
-      - name: Recheck and continue only the bound campaign
+      - name: Recheck and execute only the bound campaign phase
         env:
           GH_TOKEN: ${{ github.token }}
           FLY_API_TOKEN: ${{ secrets.ANALYSIS_FLY_API_TOKEN }}
-        run: scripts/ci/continue-maintenance-analysis.sh maintenance-receipt/receipt.json
+          ANALYSIS_PHASE: ${{ inputs.phase }}
+        run: scripts/ci/continue-maintenance-analysis.sh maintenance-receipt/receipt.json "${ANALYSIS_PHASE}"
       - name: Upload bounded campaign evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

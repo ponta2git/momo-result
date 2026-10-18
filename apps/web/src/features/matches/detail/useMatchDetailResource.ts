@@ -14,16 +14,17 @@ import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { replaceMatchNote } from "@/shared/api/matches";
 import { commitMatchNoteCache } from "@/shared/api/matchNoteCache";
 import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
-import { matchDetailQueryOptions } from "@/shared/api/queryOptions";
+import { matchRouteDetailQueryOptions } from "@/shared/api/queryOptions";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 
 /** Owns confirmed absence, note writes, and cached reads without deciding the editor's next step. */
-export function useMatchDetailResource(matchId: string) {
+export function useMatchDetailResource(legacyId: string, publicId?: string) {
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
-  const detailQuery = useQuery(matchDetailQueryOptions(matchId, matchId.trim().length > 0));
+  const detailQuery = useQuery(matchRouteDetailQueryOptions(legacyId, publicId));
   const { refetch, isFetching, isPaused, isPending } = detailQuery;
   const detailRead = readDetailQuery(detailQuery);
+  const matchId = detailRead.detail?.matchId ?? legacyId;
   const noteWrite = useMutation({
     mutationFn: async ({ body, expectedVersion }: MatchNoteIntent) => {
       const payload = { body, expectedVersion, matchId };

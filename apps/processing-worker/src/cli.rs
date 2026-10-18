@@ -63,7 +63,7 @@ enum Command {
         #[arg(long, value_enum)]
         stage: drain::Stage,
     },
-    /// Inspect or continue one existing release campaign under the live frozen barrier.
+    /// Inspect, initialize, or continue one separately approved frozen campaign.
     MaintenanceAnalysis(analysis::Arguments),
     ReleaseAudit {
         #[arg(long)]
@@ -791,7 +791,7 @@ async fn maintenance_analysis(
             operation.await?
         }
     };
-    let complete = report.status == "complete";
+    let complete = matches!(report.status, "complete" | "initialized");
     let acceptable = report.status != "attention_required";
     write_json_line(&report)?;
     if acceptable && (!apply || complete) {
@@ -1046,11 +1046,25 @@ mod tests {
             "--campaign-id",
             "analysis-campaign-1",
         ];
-        for prefix in [
-            vec!["momo-processing-worker"],
-            vec!["momo-processing-worker", "bootstrap", "--"],
+        for (phase, prefix) in [
+            ("initialize", vec!["momo-processing-worker"]),
+            ("continue", vec!["momo-processing-worker"]),
+            (
+                "initialize",
+                vec!["momo-processing-worker", "bootstrap", "--"],
+            ),
+            (
+                "continue",
+                vec!["momo-processing-worker", "bootstrap", "--"],
+            ),
         ] {
-            let parsed = Cli::try_parse_from(prefix.into_iter().chain(arguments)).ok();
+            let parsed = Cli::try_parse_from(
+                prefix
+                    .into_iter()
+                    .chain(arguments)
+                    .chain(["--phase", phase]),
+            )
+            .ok();
             assert_eq!(
                 parsed
                     .as_ref()

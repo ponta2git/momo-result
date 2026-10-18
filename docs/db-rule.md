@@ -21,7 +21,7 @@
 - job / request writer は transaction 内で外部 I/O を行わず、commit 後にだけ typed wake を返す。通知失敗は業務 transaction を巻き戻さない。
 - quota、idempotency、job claim、lease、fence、pointer 切替など競合する判断は、事前 read と write を分けず DB の同じ整合性境界へ閉じる。
 - 分析の入力 revision は単調増加値とし、時刻を concurrency token にしない。入力 version、algorithm version、artifact schema version を区別する。
-- 分析の有効なalgorithm / artifact schema / validation contractの組はrelease singletonを正本とし、新規作品のtitle stateは同じtransaction内のtriggerでその組を継承する。個別consumerが新規作品へversion定数を直書きしない。
+- 分析の有効なalgorithm / artifact schema / validation contractの組はrelease singletonを正本とする。作品作成はsingletonを`FOR SHARE`で固定し、作品とtitle stateを同じtransactionで明示保存する。個別consumerが新規作品へversion定数を直書きしない。旧作成triggerとの共存中は既存stateの組が一致する場合だけ初期通知baselineを設定する。
 - 分析成果物は作品単位で原子的に公開し、失敗時は直前の成功成果物を維持する。current / previous の確認と chunk read は cleanup と競合しない read 境界で行う。
 - 分析のpublished artifact headerとchild resourceは改変不能とする。stagingの作成・差し替え、attempt保持cleanupによる許可済みprovenance変更、参照されないparentからのcascade cleanupを、公開内容の単独変更と区別する。
 - terminal job の保持期間と UI の表示件数を別契約として扱い、未完了 job を履歴 cleanup しない。
@@ -33,9 +33,15 @@
 本節は実装が守る契約であり、test の選択によらず適用する。
 
 - 大容量 staging は長い control lock から分離し、短い fenced transaction で完全性を再検証してから公開する。
-- 分析 publication の lock 順は execution slot、title state、job、request / artifact とし、複数 title state は作品ID順に取得する。試合 mutation と campaign 展開は execution slot を取得しない。
+- 分析 claim / publication の lock 順は title state、job、request / artifact とし、複数 title state は作品ID順に取得する。実行資源の予約は各 Worker process が所有し、DB の共有 slot を取得しない。
+- `series_analysis_jobs.fencing_counter` は claim と同じ transaction でのみ増やす。旧 global slot / active lease / retained attempt の最大値を移行時に seed した後は旧 claim writer を再開しない。旧 worker への復帰は停止前 DB との組み合わせで行い、新 counter と旧 slot writer を混在させない。DB の slot 撤去は全 consumer の実経路と保全 gate が通ってから決める。
 - campaign集計はtarget更新と同じREAD COMMITTED transactionに置き、campaign行をID順の `FOR NO KEY UPDATE` で取得してから別statementで再集計する。lock待ちを含む集計UPDATE単独では待機前のsnapshotを使うため、別作品のcommitを取りこぼす。FK挿入のKEY SHAREとは競合させない。
 - 分析release promotionはrelease advisory lock、reader capability registry、worker capability registry、release singleton、作品ID順のtitle stateの順でlockする。capability registryは判定後の登録・heartbeat割込みをcommitまで遮断し、singleton更新と既存title更新を同じtransactionで確定する。
+- queuedな通常分析jobのradar basis / generationは、title state lockを保持したtransaction内で`PostgresSeriesAnalysisJobTransitions.bindQueuedRadar`またはRustの`series_analysis::job_transitions::bind_queued_radar`が明示代入する。APIの試合mutation・手動要求・radar apply/withdraw/入力無効化、Workerのcampaign・follow-up・release promotion・supersede・retry・中断・lease回収が対象。runningとradar preparationのsnapshotは変更しない。同じ組への代入はUPDATEを省き、旧binding triggerとの共存や再実行で世代・attempt数を増やさない。
+- runningからqueuedまたはterminalへの全遷移は、owner・attempt・fencing token・期限と`lease_validation_contract_id`を一緒に明示clearする。成功、radar preparation完了、通常失敗、retry上限、lease回収上限にも同じ契約を適用する。
+- artifactのcurrent contract、outlook scope / count、payload間の意味整合性はRustの`ValidatedArtifact`を生成するfull validatorに集約する。staging保存後はmanifestとの全metadata/count一致を確認してからsealし、公開時に再確認する。previous pointerは同じ作品・schema・validation contractのpublished artifactだけを保持する。DBには参照整合性、desired tupleの一致、sealed/published内容の不変性を残し、consumerの全経路を検証するまで既存triggerを撤去しない。
+- mutable entity の保存 ID / FK は native UUID とし、既存の外部 ID は保存された `legacy_id` または保持用 `legacy_*` から復元する。入力 ID は exact alias lookup で解決し、未登録の参照や認証主体を hash で補完しない。新規の構造化 job / attempt ID の割当だけが、momo-db の固定 namespace と共有 fixture に従う mapper を使う。
+- immutable な分析 artifact / radar basis の payload・header・chunk・revision は従来の text ID と checksum を保持する。可変状態からの UUID 参照は型付き identity table を経由し、新規 artifact / basis と identity は同じ transaction で保存する。計算入力、整列、tie-breaker、snapshot は保存された旧 ID の byte 列を使う。
 - DB row は adapter 境界で失敗可能に decode し、不正値や SQL 例外を domain / application failure へ正規化する。
 - dynamic SQL は列挙された fragment から選び、外部入力を SQL text へ連結しない。
 - 複数statementで一つの読み取り結果を組み立てるrepositoryは、read-only / repeatable-readのsnapshotを所有する。読み取り専用の設定をwrite transactionからも呼ばれる共通SQL部品に埋め込まない。
@@ -57,7 +63,7 @@ test の採用・維持・削除は `docs/test-rule.md` に従う。DB contract 
 - 分析releaseのalgorithm / artifact schema / validation contractは不可分なtupleとして扱う。momo-db revision、各default、またはbaseline migrationを変える場合は、fixtureやcleanupがsingletonを変更する前のfresh DBでexact consumer tupleとの一致を確認し、promotion済みDBの成功を代用しない。
 - 変更した query / repository を migration 適用済みの実 PostgreSQL で実行する。未実行または skip は DB 挙動を未検証として報告する。
 - 複数 table の write は statement / lock 順と、保存後の関連 row を integration test で確認する。
-- lease、fence、slot、pointer、cleanup 競合は複数接続で stale owner と rollback を直接通す。
+- job lease、永続 fence counter、pointer、cleanup 競合は複数接続で stale owner と rollback を直接通す。
 - publication contractを変更した場合は、stagingの更新、published header / childの変更拒否、参照中parentの削除拒否、未参照parentのcascade cleanupを実PostgreSQLで区別して検証する。
 - test が作る row を共通 cleanup の対象へ追加し、並列 test 間で ID、row、stream、file を分離する。
 - 分析通知では実際のrelease promotionと公開成功を通し、画面用参照の切離し後のbackfill抑止、要求合流順に依存しない差分、OFF・送信失敗・公開失敗での入力基準を実PostgreSQLで観測する。比較元の欠落を初回として送るtest oracleを置かない。
@@ -70,6 +76,8 @@ test の採用・維持・削除は `docs/test-rule.md` に従う。DB contract 
 ## 5. Migration / Deployment
 
 後方互換な変更は migration 適用後に consumer を deploy する。
+
+canonical identity への切替では、全 writer を停止し、旧 schema 用の固定 consumer と停止前 DB を対として保持する。P3 migration の完了後に canonical Worker の通常処理を起動する。Worker は通常接続時に UUID / legacy 列、identity の一意性、FK と保持値の NULL 対応を検査し、旧 schema や部分適用状態を write 前に拒否する。`MOMO_MAINTENANCE_MODE=frozen` の readiness は旧・新 schema の両方で read-only の target / ledger proof だけを返すため、停止状態で先に配備できる。P3 前の通常処理には旧 schema 用 baseline を使い、切戻しもその DB と consumer の組へ戻す。再開後の write は新 schema 上で保全する。
 
 通知用入力基準の導入では、旧writerを停止してから既存成果物を基準へ初期化し、対応するAPI・Workerへ切り替えて再開する。初期化後に基準を更新しない旧Workerが公開すると、古い基準との差分を後続処理で再通知するため、この間の混在稼働を許容しない。切戻しも基準の整合性を保つ組合せで行う。
 

@@ -24,7 +24,7 @@ final class SeriesPlayerRadarHttpSpec extends PostgresHttpAppTestFixtures:
       runtime.gameTitles.createWithNextDisplayOrder(GameTitle(
         title,
         "レーダー作品",
-        "momotetsu2",
+        "momotetsu_2",
         1,
         Instant.parse("2026-09-29T00:00:00Z")
       )).void

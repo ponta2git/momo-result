@@ -46,7 +46,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
       WHERE singleton_key = 'current'
     """.update.run.void.transact(transactor)
     activateRelease *> new PostgresGameTitlesRepository[IO](transactor)
-      .createWithNextDisplayOrder(GameTitle(titleId, "分析契約作品", "momotetsu2", 1, now)).void
+      .createWithNextDisplayOrder(GameTitle(titleId, "分析契約作品", "momotetsu_2", 1, now)).void
 
   private def repository: IO[PostgresSeriesAnalysisRepository[IO]] =
     PostgresSeriesAnalysisRepository.create[IO](transactor, SeriesAnalysisReadConfig.defaults)
@@ -70,7 +70,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
       empty <- repo.options
       _ <- seedTitle
       _ <- new PostgresGameTitlesRepository[IO](transactor).createWithNextDisplayOrder(
-        GameTitle(GameTitleId.unsafeFromString("title-empty"), "未記録作品", "momotetsu2", 2, now)
+        GameTitle(GameTitleId.unsafeFromString("title-empty"), "未記録作品", "momotetsu_2", 2, now)
       )
       unplayed <- repo.options
       _ <-
@@ -90,7 +90,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
           id, held_event_id, match_no_in_event, game_title_id, layout_family,
           season_master_id, owner_member_id, map_master_id, played_at, created_by_account_id
         )
-        SELECT 'match-options-' || n, 'event-options', n, $titleId, 'momotetsu2',
+        SELECT 'match-options-' || n, 'event-options', n, $titleId, 'momotetsu_2',
           CASE WHEN n = 1 THEN 'analysis-season-a' ELSE 'analysis-season-b' END,
           'member_ponta', CASE WHEN n = 1 THEN 'analysis-map-a' ELSE 'analysis-map-b' END,
           $now, $accountId
@@ -202,7 +202,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
     for
       _ <- seedTitle
       _ <- new PostgresGameTitlesRepository[IO](transactor).createWithNextDisplayOrder(
-        GameTitle(otherTitleId, "別作品監査", "momotetsu2", 2, now)
+        GameTitle(otherTitleId, "別作品監査", "momotetsu_2", 2, now)
       )
       repo <- repository
       first <- repo.requestTitleRecalculation(titleId, accountId, "audit-first")
@@ -248,7 +248,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
       _ <- seedTitle
       _ <- new PostgresGameTitlesRepository[IO](transactor)
         .createWithNextDisplayOrder(
-          GameTitle(otherTitleId, "別の分析契約作品", "momotetsu2", 2, now)
+          GameTitle(otherTitleId, "別の分析契約作品", "momotetsu_2", 2, now)
         )
         .void
       _ <- jobs.traverse_ { case (jobId, jobTitleId, createdAt) =>
@@ -540,7 +540,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
     for
       _ <- seedTitle
       _ <- new PostgresGameTitlesRepository[IO](transactor)
-        .createWithNextDisplayOrder(GameTitle(secondId, "分析契約作品2", "momotetsu2", 2, now))
+        .createWithNextDisplayOrder(GameTitle(secondId, "分析契約作品2", "momotetsu_2", 2, now))
       _ <- sql"""
         UPDATE series_analysis_title_states
         SET algorithm_version = 'series-analysis-v7',
@@ -615,7 +615,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
       for
         _ <- seedTitle
         _ <- new PostgresGameTitlesRepository[IO](transactor)
-          .createWithNextDisplayOrder(GameTitle(secondId, "未対応作品", "momotetsu2", 2, now))
+          .createWithNextDisplayOrder(GameTitle(secondId, "未対応作品", "momotetsu_2", 2, now))
         _ <- sql"""
           UPDATE series_analysis_title_states SET artifact_schema_version = $version, validation_contract_id = $contract
           WHERE game_title_id = $secondId
@@ -680,7 +680,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
     for
       _ <- seedTitle
       _ <- titles.createWithNextDisplayOrder(
-        GameTitle(otherTitleId, "並行削除作品", "momotetsu2", 2, now)
+        GameTitle(otherTitleId, "並行削除作品", "momotetsu_2", 2, now)
       )
       analysis <- repository
       _ <- analysis.requestAllRecalculation(accountId, "hash-concurrent-delete-campaign")
@@ -928,7 +928,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         sql"""INSERT INTO matches (id, held_event_id, match_no_in_event, game_title_id,
           layout_family, season_master_id, owner_member_id, map_master_id, played_at,
           created_by_account_id, analysis_revision)
-          VALUES ('match-1', 'context-event', 1, $titleId, 'momotetsu2', 'context-season',
+          VALUES ('match-1', 'context-event', 1, $titleId, 'momotetsu_2', 'context-season',
             'member_ponta', 'context-map', $now, $accountId, 1)""".update.run *>
         sql"""INSERT INTO match_players (match_id, member_id, play_order, rank,
           total_assets_man_yen, revenue_man_yen)

@@ -7,6 +7,7 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 import doobie.util.fragments
 
+import momo.api.adapters.postgres.CanonicalIdentity.Entity
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.ids.*
 import momo.api.domain.{FourPlayers, MatchExportContext, MatchExportRow}
@@ -15,21 +16,28 @@ import momo.api.repositories.{MatchExportsAlg, MatchExportsRepository}
 private[api] object PostgresMatchExports extends PostgresMatchesReadSupport:
   private final case class ExportMatchRow(id: MatchId, context: MatchExportContext)
 
-  val alg: MatchExportsAlg[ConnectionIO] = new MatchExportsAlg[ConnectionIO]:
-    override def project(
-        selection: MatchExportsRepository.Selection
-    ): ConnectionIO[List[MatchExportRow]] =
-      val conditions = List(
-        selection.heldEventId.map(id => fr"held_event_id = $id"),
-        selection.seasonMasterId.map(id => fr"season_master_id = $id"),
-        selection.matchId.map(id => fr"id = $id"),
-      ).flatten
-      val where = fragments.whereAndOpt(conditions)
-      val selectedIds = fr"SELECT id FROM matches" ++ where ++
-        fr"""ORDER BY played_at DESC, created_at DESC, id COLLATE "C" DESC LIMIT ${selection.limit}"""
-      val nameLimit = PostgresReadBudget.NameCodePoints
-      // Member display names are already bounded by the schema's varchar(32).
-      val validNames = (fr"""
+  def alg(using ids: PostgresIdentities): MatchExportsAlg[ConnectionIO] =
+    new MatchExportsAlg[ConnectionIO]:
+      override def project(
+          selection: MatchExportsRepository.Selection
+      ): ConnectionIO[List[MatchExportRow]] =
+        val conditions = List(
+          selection.heldEventId.map(id =>
+            fr"held_event_id = ${ids.lookup(Entity.HeldEvents, id.value)}"
+          ),
+          selection.seasonMasterId.map(id =>
+            fr"season_master_id = ${ids.lookup(Entity.SeasonMasters, id.value)}"
+          ),
+          selection.matchId.map(id => fr"id = ${ids.lookup(Entity.Matches, id.value)}"),
+        ).flatten
+        val where = fragments.whereAndOpt(conditions)
+        val selectedIds = fr"SELECT id FROM matches" ++ where ++
+          fr"""ORDER BY played_at DESC, created_at DESC, ${ids.wireId(
+              "matches"
+            )} COLLATE "C" DESC LIMIT ${selection.limit}"""
+        val nameLimit = PostgresReadBudget.NameCodePoints
+        // Member display names are already bounded by the schema's varchar(32).
+        val validNames = (fr"""
         SELECT NOT EXISTS (
           SELECT 1 FROM matches m
           JOIN season_masters season ON season.id = m.season_master_id
@@ -40,20 +48,20 @@ private[api] object PostgresMatchExports extends PostgresMatchesReadSupport:
           )
         )
       """).query[Boolean].unique
-      // Select the bounded export first, then rank full histories only for its titles. Ranking
-      // selected rows alone would reset season/title numbers when exporting a single match.
-      val select =
-        fr"""
+        // Select the bounded export first, then rank full histories only for its titles. Ranking
+        // selected rows alone would reset season/title numbers when exporting a single match.
+        val select =
+          fr"""
         WITH selected_matches AS MATERIALIZED (
           SELECT id, game_title_id
           FROM matches
       """ ++ where ++ fr"""
-          ORDER BY played_at DESC, created_at DESC, id COLLATE "C" DESC
+          ORDER BY played_at DESC, created_at DESC, ${ids.wireId("matches")} COLLATE "C" DESC
           LIMIT ${selection.limit}
         ), ranked_matches AS (
           SELECT
-            id,
-            held_event_id,
+            id, ${ids.wireId("matches")} AS wire_id,
+            held_event_id, ${ids.retainedColumn("matches", "held_event_id")} AS sort_held_event_id,
             match_no_in_event,
             season_master_id,
             owner_member_id,
@@ -63,23 +71,23 @@ private[api] object PostgresMatchExports extends PostgresMatchesReadSupport:
               PARTITION BY season_master_id
               ORDER BY
                 date_trunc('milliseconds', played_at),
-                held_event_id COLLATE "C",
+                ${ids.retainedColumn("matches", "held_event_id")} COLLATE "C",
                 match_no_in_event,
-                id COLLATE "C"
+                ${ids.wireId("matches")} COLLATE "C"
             ) AS integer) AS season_sequence,
             CAST(ROW_NUMBER() OVER (
               PARTITION BY game_title_id
               ORDER BY
                 date_trunc('milliseconds', played_at),
-                held_event_id COLLATE "C",
+                ${ids.retainedColumn("matches", "held_event_id")} COLLATE "C",
                 match_no_in_event,
-                id COLLATE "C"
+                ${ids.wireId("matches")} COLLATE "C"
             ) AS integer) AS game_title_sequence
           FROM matches
           WHERE game_title_id IN (SELECT game_title_id FROM selected_matches)
         )
         SELECT
-          r.id,
+          r.wire_id,
           s.name,
           r.season_sequence,
           owner.display_name,
@@ -93,27 +101,27 @@ private[api] object PostgresMatchExports extends PostgresMatchesReadSupport:
         WHERE r.id IN (SELECT id FROM selected_matches)
         ORDER BY
           date_trunc('milliseconds', r.played_at),
-          r.held_event_id COLLATE "C",
+          r.sort_held_event_id COLLATE "C",
           r.match_no_in_event,
-          r.id COLLATE "C"
+          r.wire_id COLLATE "C"
       """
 
-      for
-        // The ranked parent selection and batched children must describe the same match revision.
-        _ <- sql"SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY".update.run
-        _ <- PostgresReadBudget.ensureText(validNames, "Match export")
-        rows <- select.query[ExportMatchRow].to[List]
-        playersByMatch <- loadPlayersBatch(rows.map(_.id))
-        memberIds =
-          playersByMatch.valuesIterator.flatMap(_.toList.map(_.memberId.value)).toSet.toArray
-        names <- if memberIds.isEmpty then Map.empty[MemberId, String].pure[ConnectionIO]
-        else
-          sql"SELECT id, display_name FROM members WHERE id = ANY($memberIds)"
-            .query[(MemberId, String)].to[List].map(_.toMap)
-        projected <- rows.traverse(row =>
-          toProjection(row, playersByMatch.get(row.id), names)
-        ).liftTo[ConnectionIO]
-      yield projected.flatten
+        for
+          // The ranked parent selection and batched children must describe the same match revision.
+          _ <- sql"SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY".update.run
+          _ <- PostgresReadBudget.ensureText(validNames, "Match export")
+          rows <- select.query[ExportMatchRow].to[List]
+          playersByMatch <- loadPlayersBatch(rows.map(_.id))
+          memberIds =
+            playersByMatch.valuesIterator.flatMap(_.toList.map(_.memberId.value)).toSet.toList
+          names <- if memberIds.isEmpty then Map.empty[MemberId, String].pure[ConnectionIO]
+          else
+            sql"SELECT ${ids.wireId("members")}, display_name FROM members WHERE id = ANY(${ids.lookupArray(Entity.Members, memberIds)})"
+              .query[(MemberId, String)].to[List].map(_.toMap)
+          projected <- rows.traverse(row =>
+            toProjection(row, playersByMatch.get(row.id), names)
+          ).liftTo[ConnectionIO]
+        yield projected.flatten
 
   private def toProjection(
       row: ExportMatchRow,
@@ -134,8 +142,11 @@ private[api] object PostgresMatchExports extends PostgresMatchesReadSupport:
 
 end PostgresMatchExports
 
-final class PostgresMatchExportsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
-    extends MatchExportsRepository[F]:
+final class PostgresMatchExportsRepository[F[_]: MonadCancelThrow](
+    transactor: Transactor[F],
+    identities: PostgresIdentities = PostgresIdentities.Legacy
+) extends MatchExportsRepository[F]:
+  private given PostgresIdentities = identities
   private val delegate = MatchExportsRepository
     .fromAlg(PostgresMatchExports.alg, transactor.trans)
 

@@ -375,9 +375,12 @@ async fn desired_artifact(
     let row = transaction
         .query_one(
             "SELECT input_revision, algorithm_version, artifact_schema_version,\x20\
-                    validation_contract_id, current_artifact_id, notification_baseline_state,\x20\
-                    notification_baseline_artifact_id\x20\
-             FROM series_analysis_title_states WHERE game_title_id = $1",
+                    validation_contract_id, current_artifact.legacy_id, notification_baseline_state,\x20\
+                    baseline_artifact.legacy_id\x20\
+             FROM series_analysis_title_states s\x20\
+             LEFT JOIN series_analysis_artifact_identities current_artifact ON current_artifact.id=s.current_artifact_id\x20\
+             LEFT JOIN series_analysis_artifact_identities baseline_artifact ON baseline_artifact.id=s.notification_baseline_artifact_id\x20\
+             WHERE s.game_title_id = (SELECT id FROM game_titles WHERE legacy_id=$1)",
             &[&claim.game_title_id],
         )
         .await?;

@@ -45,8 +45,8 @@ pub(super) async fn load(
         .map_err(database_error)?;
     let row = transaction
         .query_typed_one(
-            "SELECT notification_baseline_state, notification_baseline_artifact_id \
-             FROM series_analysis_title_states WHERE game_title_id = $1",
+            "SELECT notification_baseline_state, (SELECT legacy_id FROM series_analysis_artifact_identities WHERE id=notification_baseline_artifact_id) \
+             FROM series_analysis_title_states WHERE game_title_id = (SELECT id FROM game_titles WHERE legacy_id=$1)",
             &[(&source.game_title_id, Type::TEXT)],
         )
         .await

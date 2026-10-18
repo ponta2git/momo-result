@@ -68,7 +68,7 @@ pub(in crate::series_analysis::control) async fn complete_preparation(
         control::transaction::lock_owned(&tx, claim, &config.worker_id).await?;
         let revision: i64 = tx
             .query_one(
-                "SELECT input_revision FROM series_analysis_title_states WHERE game_title_id=$1",
+                "SELECT input_revision FROM series_analysis_title_states WHERE game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$1)",
                 &[&claim.game_title_id],
             )
             .await?
@@ -93,7 +93,7 @@ pub(in crate::series_analysis::control) async fn complete_preparation(
             metrics,
         )
         .await?;
-        tx.execute("UPDATE series_analysis_jobs SET status='succeeded',finished_at=clock_timestamp(),result_disposition='none',lease_owner=NULL,lease_attempt_id=NULL,lease_fencing_token=NULL,lease_expires_at=NULL,lease_validation_contract_id=NULL,updated_at=clock_timestamp() WHERE id=$1", &[&claim.job_id]).await?;
+        tx.execute("UPDATE series_analysis_jobs SET status='succeeded',finished_at=clock_timestamp(),result_disposition='none',lease_owner=NULL,lease_attempt_id=NULL,legacy_lease_attempt_id=NULL,lease_fencing_token=NULL,lease_expires_at=NULL,lease_validation_contract_id=NULL,updated_at=clock_timestamp() WHERE legacy_id=$1", &[&claim.job_id]).await?;
         let mut effects = control::TransactionEffects::empty();
         control::transaction::schedule_follow_up(&tx, claim, &mut effects).await?;
 
@@ -135,7 +135,7 @@ async fn save_preparation(
     source_valid: bool,
     evaluation_current: bool,
 ) -> Result<(), ControlError> {
-    let operation = tx.query_opt("SELECT o.status,c.status FROM series_radar_operations o JOIN series_radar_candidates c ON c.id=o.candidate_id WHERE o.id=$1 AND o.job_id=$2 AND c.id=$3 FOR UPDATE OF o,c", &[&prepared.operation_id,&claim.job_id,&prepared.candidate_id]).await?.ok_or(ControlError::InvalidMetadata)?;
+    let operation = tx.query_opt("SELECT o.status,c.status FROM series_radar_operations o JOIN series_radar_candidates c ON c.id=o.candidate_id WHERE o.legacy_id=$1 AND o.legacy_job_id=$2 AND c.legacy_id=$3 FOR UPDATE OF o,c", &[&prepared.operation_id,&claim.job_id,&prepared.candidate_id]).await?.ok_or(ControlError::InvalidMetadata)?;
     let operation_status: String = operation.try_get(0)?;
     let candidate_status: String = operation.try_get(1)?;
     if operation_status == "withdrawn" || candidate_status == "withdrawn" {
@@ -150,7 +150,7 @@ async fn save_preparation(
     } else if context.manual.is_some() && valid {
         save_manual_candidate(tx, claim, prepared, context).await?;
     } else if !valid {
-        tx.execute("UPDATE series_radar_candidates SET status='invalid',safe_failure_code='source_changed',updated_at=clock_timestamp() WHERE id=$1", &[&prepared.candidate_id]).await?;
+        tx.execute("UPDATE series_radar_candidates SET status='invalid',safe_failure_code='source_changed',updated_at=clock_timestamp() WHERE legacy_id=$1", &[&prepared.candidate_id]).await?;
     } else if context.operation_kind.as_deref() == Some("restore") {
         let basis = context
             .basis
@@ -159,16 +159,16 @@ async fn save_preparation(
         let result = basis
             .candidate_summary()
             .map_err(|_invalid| ControlError::InvalidMetadata)?;
-        tx.execute("UPDATE series_radar_candidates c SET status='ready',result=$2,source_input_revision=b.source_input_revision,safe_failure_code=NULL,updated_at=clock_timestamp() FROM series_radar_bases b WHERE c.id=$1 AND c.basis_id=b.id AND b.id=$3", &[&prepared.candidate_id,&json(&result)?,&context.basis_id]).await?;
+        tx.execute("UPDATE series_radar_candidates c SET status='ready',result=$2,source_input_revision=b.source_input_revision,safe_failure_code=NULL,updated_at=clock_timestamp() FROM series_radar_bases b WHERE c.legacy_id=$1 AND c.basis_id=(SELECT id FROM series_radar_basis_identities WHERE legacy_id=b.id) AND b.id=$3", &[&prepared.candidate_id,&json(&result)?,&context.basis_id]).await?;
     } else if context.operation_kind.as_deref() == Some("preview") {
         tx.execute(
-            "UPDATE series_radar_candidates SET safe_failure_code=NULL,updated_at=clock_timestamp() WHERE id=$1",
+            "UPDATE series_radar_candidates SET safe_failure_code=NULL,updated_at=clock_timestamp() WHERE legacy_id=$1",
             &[&prepared.candidate_id],
         ).await?;
     }
     let current_basis: Option<String> = tx
         .query_opt(
-            "SELECT current_basis_id FROM series_radar_title_states WHERE game_title_id=$1",
+            "SELECT (SELECT legacy_id FROM series_radar_basis_identities WHERE id=current_basis_id) FROM series_radar_title_states WHERE game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$1)",
             &[&claim.game_title_id],
         )
         .await?
@@ -180,7 +180,7 @@ async fn save_preparation(
         && current_basis == prepared.before_basis_id
         && (!context.is_manual() || !prepared.evaluation_snapshot.matches.is_empty());
     let preview_id = save_preview(tx, prepared, fresh).await?;
-    tx.execute("UPDATE series_radar_operations SET status='succeeded',preview_id=$2,finished_at=clock_timestamp(),updated_at=clock_timestamp() WHERE id=$1 AND status IN ('pending','running')", &[&prepared.operation_id,&preview_id]).await?;
+    tx.execute("UPDATE series_radar_operations SET status='succeeded',preview_id=(SELECT id FROM series_radar_previews WHERE legacy_id=$2),finished_at=clock_timestamp(),updated_at=clock_timestamp() WHERE legacy_id=$1 AND status IN ('pending','running')", &[&prepared.operation_id,&preview_id]).await?;
     Ok(())
 }
 
@@ -195,7 +195,7 @@ async fn save_manual_candidate(
             .checksum()
             .map_err(|_invalid| ControlError::InvalidMetadata)?;
         let source_checksum = &basis.monitoring_source().source_checksum;
-        tx.execute(
+        let inserted = tx.execute(
             "INSERT INTO series_radar_bases (id,game_title_id,checksum,payload,source_snapshot,source_checksum,source_input_revision) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(id) DO NOTHING",
             &[&prepared.candidate_id,&claim.game_title_id,&checksum,&json(basis)?,&json(&prepared.evaluation_snapshot)?,&source_checksum,&prepared.input_revision],
         ).await?;
@@ -208,23 +208,24 @@ async fn save_manual_candidate(
         {
             return Err(ControlError::InvalidMetadata);
         }
+        save_basis_identity(tx, &prepared.candidate_id, &claim.game_title_id, inserted).await?;
         let result = basis
             .candidate_summary()
             .map_err(|_invalid| ControlError::InvalidMetadata)?;
         tx.execute(
-            "UPDATE series_radar_candidates SET basis_id=$2,status='ready',result=$3,source_input_revision=$4,safe_failure_code=NULL,updated_at=clock_timestamp() WHERE id=$1 AND basis_id IS NULL",
+            "UPDATE series_radar_candidates SET basis_id=(SELECT id FROM series_radar_basis_identities WHERE legacy_id=$2),status='ready',result=$3,source_input_revision=$4,safe_failure_code=NULL,updated_at=clock_timestamp() WHERE legacy_id=$1 AND basis_id IS NULL",
             &[&prepared.candidate_id,&prepared.candidate_id,&json(&result)?,&prepared.input_revision],
         ).await?;
     } else if prepared.evaluation_snapshot.matches.is_empty() {
         // The shared input survives a zero-record comparison. No basis or monitoring start is
         // invented; a later preview can complete the same candidate after records are added.
         tx.execute(
-            "UPDATE series_radar_candidates SET status='unavailable',safe_failure_code='no_matches',updated_at=clock_timestamp() WHERE id=$1",
+            "UPDATE series_radar_candidates SET status='unavailable',safe_failure_code='no_matches',updated_at=clock_timestamp() WHERE legacy_id=$1",
             &[&prepared.candidate_id],
         ).await?;
     } else if context.basis.is_some() {
         tx.execute(
-            "UPDATE series_radar_candidates SET status='ready',safe_failure_code=NULL,updated_at=clock_timestamp() WHERE id=$1",
+            "UPDATE series_radar_candidates SET status='ready',safe_failure_code=NULL,updated_at=clock_timestamp() WHERE legacy_id=$1",
             &[&prepared.candidate_id],
         ).await?;
     } else {
@@ -246,7 +247,7 @@ async fn save_candidate(
             .map_err(|_invalid| ControlError::InvalidMetadata)?;
         let payload = json(basis)?;
         let source = json(&candidate.source)?;
-        tx.execute("INSERT INTO series_radar_bases (id,game_title_id,checksum,payload,source_snapshot,source_checksum,source_input_revision) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(id) DO NOTHING", &[&prepared.candidate_id,&claim.game_title_id,&checksum,&payload,&source,&candidate.source_summary.source_checksum,&claim.input_revision]).await?;
+        let inserted = tx.execute("INSERT INTO series_radar_bases (id,game_title_id,checksum,payload,source_snapshot,source_checksum,source_input_revision) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(id) DO NOTHING", &[&prepared.candidate_id,&claim.game_title_id,&checksum,&payload,&source,&candidate.source_summary.source_checksum,&claim.input_revision]).await?;
         let saved = tx
             .query_one(
                 "SELECT checksum,source_checksum FROM series_radar_bases WHERE id=$1",
@@ -258,6 +259,7 @@ async fn save_candidate(
         {
             return Err(ControlError::InvalidMetadata);
         }
+        save_basis_identity(tx, &prepared.candidate_id, &claim.game_title_id, inserted).await?;
         Some(prepared.candidate_id.as_str())
     } else {
         None
@@ -270,7 +272,7 @@ async fn save_candidate(
         "unavailable"
     };
     let failure_code = (!valid).then_some("source_changed");
-    tx.execute("UPDATE series_radar_candidates SET basis_id=$2,status=$3,result=$4,source_input_revision=$5,safe_failure_code=$6,updated_at=clock_timestamp() WHERE id=$1", &[&prepared.candidate_id,&basis_id,&status,&json(&candidate.summary())?,&claim.input_revision,&failure_code]).await?;
+    tx.execute("UPDATE series_radar_candidates SET basis_id=(SELECT id FROM series_radar_basis_identities WHERE legacy_id=$2),status=$3,result=$4,source_input_revision=$5,safe_failure_code=$6,updated_at=clock_timestamp() WHERE legacy_id=$1", &[&prepared.candidate_id,&basis_id,&status,&json(&candidate.summary())?,&claim.input_revision,&failure_code]).await?;
     Ok(())
 }
 
@@ -292,16 +294,50 @@ async fn save_preview(
         .map(|value| value.scope.key())
         .collect::<Vec<_>>();
     let state = if fresh { "ready" } else { "stale" };
-    tx.execute("INSERT INTO series_radar_previews (id,game_title_id,candidate_id,before_basis_id,input_revision,status,input_checksum,evaluation_snapshot,scope_keys) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(id) DO UPDATE SET before_basis_id=EXCLUDED.before_basis_id,input_revision=EXCLUDED.input_revision,status=EXCLUDED.status,input_checksum=EXCLUDED.input_checksum,evaluation_snapshot=EXCLUDED.evaluation_snapshot,scope_keys=EXCLUDED.scope_keys,updated_at=clock_timestamp()", &[&preview_id,&prepared.game_title_id,&prepared.candidate_id,&prepared.before_basis_id,&prepared.input_revision,&state,&source_summary.source_checksum,&json(&prepared.evaluation_snapshot)?,&keys]).await?;
+    let canonical = if let Some(existing) = tx.query_opt(
+        "SELECT id FROM series_radar_previews WHERE legacy_id=$1 AND game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$2)",
+        &[&preview_id, &prepared.game_title_id],
+    ).await? {
+        existing.try_get::<_, uuid::Uuid>(0)?
+    } else if prepared.preview_id.is_none() {
+        crate::identity::allocate(crate::identity::Entity::RadarPreviews, &preview_id)
+            .map_err(|_error| ControlError::InvalidMetadata)?
+    } else {
+        return Err(ControlError::InvalidMetadata);
+    };
+    tx.execute("INSERT INTO series_radar_previews (id,legacy_id,game_title_id,candidate_id,before_basis_id,input_revision,status,input_checksum,evaluation_snapshot,scope_keys) VALUES ($10,$1,(SELECT id FROM game_titles WHERE legacy_id=$2),(SELECT id FROM series_radar_candidates WHERE legacy_id=$3),(SELECT id FROM series_radar_basis_identities WHERE legacy_id=$4),$5,$6,$7,$8,$9) ON CONFLICT(legacy_id) DO UPDATE SET before_basis_id=EXCLUDED.before_basis_id,input_revision=EXCLUDED.input_revision,status=EXCLUDED.status,input_checksum=EXCLUDED.input_checksum,evaluation_snapshot=EXCLUDED.evaluation_snapshot,scope_keys=EXCLUDED.scope_keys,updated_at=clock_timestamp()", &[&preview_id,&prepared.game_title_id,&prepared.candidate_id,&prepared.before_basis_id,&prepared.input_revision,&state,&source_summary.source_checksum,&json(&prepared.evaluation_snapshot)?,&keys,&canonical]).await?;
     tx.execute(
-        "DELETE FROM series_radar_preview_scopes WHERE preview_id=$1",
+        "DELETE FROM series_radar_preview_scopes WHERE preview_id=(SELECT id FROM series_radar_previews WHERE legacy_id=$1)",
         &[&preview_id],
     )
     .await?;
     for scope in &prepared.scopes {
-        tx.execute("INSERT INTO series_radar_preview_scopes (preview_id,scope_key,payload) VALUES ($1,$2,$3)", &[&preview_id,&scope.scope.key(),&json(&scope.payload)?]).await?;
+        tx.execute("INSERT INTO series_radar_preview_scopes (preview_id,scope_key,payload) VALUES ((SELECT id FROM series_radar_previews WHERE legacy_id=$1),$2,$3)", &[&preview_id,&scope.scope.key(),&json(&scope.payload)?]).await?;
     }
     Ok(preview_id)
+}
+
+async fn save_basis_identity(
+    tx: &Transaction<'_>,
+    basis_id: &str,
+    title_id: &str,
+    inserted: u64,
+) -> Result<(), ControlError> {
+    if inserted == 1 {
+        let canonical = crate::identity::allocate(crate::identity::Entity::RadarBases, basis_id)
+            .map_err(|_error| ControlError::InvalidMetadata)?;
+        tx.execute(
+            "INSERT INTO series_radar_basis_identities (id,legacy_id,game_title_id,legacy_game_title_id) \
+             VALUES ($1,$2,(SELECT id FROM game_titles WHERE legacy_id=$3),$3)",
+            &[&canonical, &basis_id, &title_id],
+        ).await?;
+    } else if inserted != 0 || tx.query_opt(
+        "SELECT id FROM series_radar_basis_identities WHERE legacy_id=$1 AND legacy_game_title_id=$2",
+        &[&basis_id, &title_id],
+    ).await?.is_none() {
+        return Err(ControlError::InvalidMetadata);
+    }
+    Ok(())
 }
 
 fn json(value: &impl serde::Serialize) -> Result<serde_json::Value, ControlError> {

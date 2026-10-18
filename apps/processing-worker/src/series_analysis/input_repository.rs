@@ -9,11 +9,11 @@ use tokio_postgres::{Client, IsolationLevel, Row};
 // The query asks for one sentinel row beyond the capability-owned bound. The database adapter
 // therefore prevents an oversized snapshot from being materialized before domain validation.
 const ANALYSIS_INPUT_QUERY: &str = r#"SELECT
-       m.id, m.analysis_revision,
+       m.legacy_id, m.analysis_revision,
        to_char(m.played_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
-       m.held_event_id, m.match_no_in_event,
-       m.season_master_id, m.map_master_id,
-       mp.member_id, mp.play_order, mp.rank,
+       m.legacy_held_event_id, m.match_no_in_event,
+       season.legacy_id, map.legacy_id,
+       member.legacy_id, mp.play_order, mp.rank,
        mp.total_assets_man_yen, mp.revenue_man_yen,
        COALESCE(SUM(mi.count) FILTER (WHERE im.key = 'destination'), 0)::int,
        COALESCE(SUM(mi.count) FILTER (WHERE im.key = 'plus_station'), 0)::int,
@@ -21,17 +21,21 @@ const ANALYSIS_INPUT_QUERY: &str = r#"SELECT
        COALESCE(SUM(mi.count) FILTER (WHERE im.key = 'card_station'), 0)::int,
        COALESCE(SUM(mi.count) FILTER (WHERE im.key = 'card_shop'), 0)::int,
        COALESCE(SUM(mi.count) FILTER (WHERE im.key = 'suri_no_ginji'), 0)::int,
-       m.owner_member_id
+       owner.legacy_id
      FROM matches m
      JOIN match_players mp ON mp.match_id = m.id
+     JOIN members member ON member.id = mp.member_id
+     LEFT JOIN members owner ON owner.id = m.owner_member_id
+     LEFT JOIN season_masters season ON season.id = m.season_master_id
+     LEFT JOIN map_masters map ON map.id = m.map_master_id
      LEFT JOIN match_incidents mi ON mi.match_id = mp.match_id AND mi.member_id = mp.member_id
      LEFT JOIN incident_masters im ON im.id = mi.incident_master_id
-     WHERE m.game_title_id = $1
+     WHERE m.game_title_id = (SELECT id FROM game_titles WHERE legacy_id = $1)
      GROUP BY m.id, m.analysis_revision, m.played_at, m.held_event_id,
        m.match_no_in_event, m.season_master_id,
        m.map_master_id, mp.member_id, mp.play_order, mp.rank,
-       mp.total_assets_man_yen, mp.revenue_man_yen
-     ORDER BY m.played_at, m.held_event_id, m.match_no_in_event, m.id, mp.play_order
+       mp.total_assets_man_yen, mp.revenue_man_yen, member.id, owner.id, season.id, map.id
+     ORDER BY m.played_at, m.legacy_held_event_id, m.match_no_in_event, m.legacy_id, mp.play_order
      LIMIT $2"#;
 
 #[derive(Debug, Error)]
@@ -71,7 +75,7 @@ async fn load_snapshot(
             "SELECT s.input_revision \
              FROM game_titles gt \
              JOIN series_analysis_title_states s ON s.game_title_id = gt.id \
-             WHERE gt.id = $1",
+             WHERE gt.legacy_id = $1",
             &[&game_title_id],
         )
         .await?
@@ -150,19 +154,23 @@ async fn validate_input_shape(
     let row = transaction
         .query_one(
             r"SELECT COUNT(*)::bigint,
-                      COALESCE(MAX(octet_length(m.id)), 0)::int,
-                      COALESCE(MAX(octet_length(m.held_event_id)), 0)::int,
-                      COALESCE(MAX(octet_length(m.season_master_id)), 0)::int,
-                      COALESCE(MAX(octet_length(m.map_master_id)), 0)::int,
-                      COALESCE(MAX(octet_length(mp.member_id)), 0)::int,
-                      COALESCE(MAX(octet_length(m.owner_member_id)), 0)::int,
+                      COALESCE(MAX(octet_length(m.legacy_id)), 0)::int,
+                      COALESCE(MAX(octet_length(m.legacy_held_event_id)), 0)::int,
+                      COALESCE(MAX(octet_length(season.legacy_id)), 0)::int,
+                      COALESCE(MAX(octet_length(map.legacy_id)), 0)::int,
+                      COALESCE(MAX(octet_length(member.legacy_id)), 0)::int,
+                      COALESCE(MAX(octet_length(owner.legacy_id)), 0)::int,
                       (SELECT count(*) = 6 AND COALESCE(bool_and(key IN (
                          'destination','plus_station','minus_station',
                          'card_station','card_shop','suri_no_ginji')),false)
                        FROM incident_masters)
                FROM matches m
                JOIN match_players mp ON mp.match_id = m.id
-               WHERE m.game_title_id = $1",
+               JOIN members member ON member.id = mp.member_id
+               LEFT JOIN members owner ON owner.id = m.owner_member_id
+               LEFT JOIN season_masters season ON season.id = m.season_master_id
+               LEFT JOIN map_masters map ON map.id = m.map_master_id
+               WHERE m.game_title_id = (SELECT id FROM game_titles WHERE legacy_id = $1)",
             &[&game_title_id],
         )
         .await?;

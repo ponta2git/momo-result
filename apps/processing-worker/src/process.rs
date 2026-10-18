@@ -58,6 +58,8 @@ pub(crate) struct HardLimitProbeResult {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) cgroup_limit_bytes: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) cgroup_cpu_limit_millis: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) cgroup_peak_bytes: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) cgroup_limit_hit_count_delta: Option<u64>,
@@ -842,6 +844,8 @@ mod tests {
         let directory = temporary.path().join(CGROUP_DIRECTORY_NAME);
         fs::create_dir(&directory)?;
         fs::write(directory.join("cgroup.procs"), "")?;
+        fs::write(directory.join("cpu.cfs_quota_us"), "100000")?;
+        fs::write(directory.join("cpu.cfs_period_us"), "100000")?;
         fs::write(directory.join("memory.limit_in_bytes"), "201326592\n")?;
         fs::write(directory.join("memory.usage_in_bytes"), "4096\n")?;
         fs::write(directory.join("memory.max_usage_in_bytes"), "8192\n")?;

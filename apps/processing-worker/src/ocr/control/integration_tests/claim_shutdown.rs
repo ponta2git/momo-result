@@ -47,7 +47,7 @@ pub(super) async fn verify(database_url: &str, observer: &Client) -> SmokeResult
     let claim = claimed(outcome)?;
     requeue_interrupted(&mut committed_client, &claim, &config).await?;
     let state = observer.query_one(
-        "SELECT j.status, s.owner IS NULL, j.failure_retry_count, j.lease_recovery_count FROM ocr_jobs j CROSS JOIN worker_execution_slots s WHERE j.id=$1 AND s.slot_key='shared-heavy-work'", &[&TAKEOVER.job_id],
+        "SELECT j.status, j.lease_owner IS NULL, j.failure_retry_count, j.lease_recovery_count FROM ocr_jobs j WHERE j.id=$1", &[&TAKEOVER.job_id],
     ).await?;
     assert_eq!(state.try_get::<_, String>(0)?, "queued");
     assert!(state.try_get::<_, bool>(1)?);
@@ -74,7 +74,7 @@ pub(super) async fn verify(database_url: &str, observer: &Client) -> SmokeResult
         "cancellation must finish without receiving the held COMMIT reply"
     );
     let uncertain_state = observer.query_one(
-        "SELECT j.status, s.owner IS NOT NULL, j.failure_retry_count, j.lease_recovery_count FROM ocr_jobs j CROSS JOIN worker_execution_slots s WHERE j.id=$1 AND s.slot_key='shared-heavy-work'", &[&TAKEOVER.job_id],
+        "SELECT j.status, j.lease_owner IS NOT NULL, j.failure_retry_count, j.lease_recovery_count FROM ocr_jobs j WHERE j.id=$1", &[&TAKEOVER.job_id],
     ).await?;
     assert_eq!(uncertain_state.try_get::<_, String>(0)?, "running");
     assert!(uncertain_state.try_get::<_, bool>(1)?);

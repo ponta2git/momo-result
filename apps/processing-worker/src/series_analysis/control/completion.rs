@@ -126,7 +126,6 @@ pub(crate) async fn publish(
             return commit_integrity_failure(
                 transaction,
                 claim,
-                worker_id,
                 metrics,
                 super::SafeFailureCode::InputContractInvalid,
             )
@@ -180,14 +179,7 @@ pub(crate) async fn publish(
             ExistingArtifact::IntegrityFailure(failure_code) => {
                 drop(notification);
                 finish_publication_metrics(metrics, publication_started);
-                return commit_integrity_failure(
-                    transaction,
-                    claim,
-                    worker_id,
-                    metrics,
-                    failure_code,
-                )
-                .await;
+                return commit_integrity_failure(transaction, claim, metrics, failure_code).await;
             }
         };
         finish_publication_metrics(metrics, publication_started);
@@ -207,7 +199,6 @@ pub(crate) async fn publish(
 async fn commit_integrity_failure(
     transaction: Transaction<'_>,
     claim: &ClaimedJob,
-    worker_id: &str,
     metrics: &AttemptMetrics,
     failure_code: super::SafeFailureCode,
 ) -> Result<ControlOutcome<PublicationResult>, ControlError> {
@@ -215,7 +206,6 @@ async fn commit_integrity_failure(
     finish_terminal_failure(
         &transaction,
         claim,
-        worker_id,
         AttemptFailure::failed(failure_code),
         metrics,
         &mut effects,

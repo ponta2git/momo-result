@@ -16,7 +16,7 @@ use super::{
     staging_metadata::validate_staged_resource_metadata,
     transaction::{
         artifact_id_for_attempt, finish_attempt, fulfill_requests, refresh_operation_projections,
-        release_slot, schedule_follow_up,
+        schedule_follow_up,
     },
 };
 
@@ -407,7 +407,7 @@ pub(super) async fn finish_success(
     fulfill_requests(transaction, claim, RequestOutcome::Succeeded).await?;
     schedule_follow_up(transaction, claim, effects).await?;
     refresh_operation_projections(transaction, &claim.attempt_id).await?;
-    release_slot(transaction, claim, worker_id).await?;
+
     Ok(())
 }
 

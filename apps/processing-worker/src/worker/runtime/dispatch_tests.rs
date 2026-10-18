@@ -1,7 +1,7 @@
 //! Durable claims must progress even when candidate discovery consumes the soft scan budget.
 #![expect(
     clippy::panic_in_result_fn,
-    reason = "isolated database assertions observe durable job and execution-slot transitions"
+    reason = "isolated database assertions observe durable job and resource reservation transitions"
 )]
 
 use std::{error::Error, fs, num::NonZeroU64, path::Path, time::Duration};
@@ -36,17 +36,6 @@ async fn real_postgres_delayed_candidates_still_attempt_durable_claims() -> Test
     let database_url = std::env::var("PROCESSING_SCHEDULER_SMOKE_DATABASE_URL")?;
     let observer = postgres::connect(&database_url).await?;
     cleanup(&observer).await?;
-    let vacant: bool = observer
-        .query_one(
-            "SELECT owner IS NULL FROM worker_execution_slots WHERE slot_key='shared-heavy-work'",
-            &[],
-        )
-        .await?
-        .try_get(0)?;
-    assert!(
-        vacant,
-        "the scheduler fixture requires an isolated vacant slot"
-    );
     insert_analysis(&observer).await?;
     let proxy = DelayedDatabase::start(&database_url, Duration::from_millis(150)).await?;
     let directory = TempDir::new()?;
@@ -83,17 +72,24 @@ async fn real_postgres_delayed_candidates_still_attempt_durable_claims() -> Test
         .await?
         .try_get(0)?;
     assert_eq!(attempt_count, 1);
-    assert_slot(&observer, "analysis", ANALYSIS).await?;
+    assert_lease(&observer, "analysis", ANALYSIS).await?;
 
-    // An active analysis must still receive the first slow OCR preemption request.
+    // Queued OCR must leave the running analysis and its reservation untouched.
     insert_ocr(&observer).await?;
-    scheduler.active = true;
+    assert!(
+        scheduler.resources.is_reserved(),
+        "a committed claim retains its reservation"
+    );
     assert!(!claim_ocr(&mut scheduler, &stopped, &mut budget()).await?);
-    let requester: Option<String> = observer.query_one("SELECT preempt_requested_by FROM worker_execution_slots WHERE slot_key='shared-heavy-work'", &[]).await?.try_get(0)?;
-    assert_eq!(requester.as_deref(), Some(WORKER));
-    assert_slot(&observer, "analysis", ANALYSIS).await?;
-    scheduler.active = false;
-    clear_slot(&observer).await?;
+    assert!(!Box::pin(claim_analysis(&mut scheduler, &stopped, &mut budget())).await?);
+    assert_job(&observer, WAITING, "queued", 0).await?;
+    let ocr_attempts: i32 = observer
+        .query_one("SELECT attempt_count FROM ocr_jobs WHERE id=$1", &[&OCR])
+        .await?
+        .try_get(0)?;
+    assert_eq!(ocr_attempts, 0);
+    assert_lease(&observer, "analysis", ANALYSIS).await?;
+    scheduler.resources.release();
 
     // No child is installed: UnsupportedPlatform occurs only after the real DB claim commits.
     let ocr_claim = claim_ocr(&mut scheduler, &stopped, &mut budget()).await;
@@ -106,17 +102,19 @@ async fn real_postgres_delayed_candidates_still_attempt_durable_claims() -> Test
         .await?;
     assert_eq!(row.try_get::<_, String>(0)?, "running");
     assert_eq!(row.try_get::<_, i32>(1)?, 1);
-    assert_slot(&observer, "ocr", OCR).await?;
+    assert_lease(&observer, "ocr", OCR).await?;
 
-    // A real busy claim must retain its backoff and leave the waiting attempt untouched.
-    assert!(!Box::pin(claim_analysis(&mut scheduler, &stopped, &mut budget())).await?);
-    assert!(
-        scheduler
-            .retry_after
-            .is_some_and(|retry| retry > time::Instant::now())
-    );
-    assert_job(&observer, WAITING, "queued", 0).await?;
-    assert_slot(&observer, "ocr", OCR).await?;
+    // This fixture installs no child; release only after the test has observed that boundary.
+    scheduler.resources.release();
+
+    // Independent job leases do not replace the process resource reservation.
+    // Releasing this childless fixture's reservation allows another job to claim.
+    let independent = Box::pin(claim_analysis(&mut scheduler, &stopped, &mut budget())).await;
+    assert!(matches!(independent, Err(WorkerError::UnsupportedPlatform)));
+    assert!(scheduler.retry_after.is_none());
+    assert_job(&observer, WAITING, "running", 1).await?;
+    assert_lease(&observer, "analysis", WAITING).await?;
+    assert_lease(&observer, "ocr", OCR).await?;
     drop(scheduler);
     cleanup(&observer).await?;
     Box::pin(verify_cursor_yield(&database_url, &proxy.url, &observer)).await?;
@@ -160,8 +158,8 @@ async fn verify_cursor_yield(
     assert!(matches!(advanced, Err(WorkerError::UnsupportedPlatform)));
     assert_job(observer, WAITING, "running", 1).await?;
     assert_job(observer, ANALYSIS, "queued", 0).await?;
-    assert_slot(observer, "analysis", WAITING).await?;
-    clear_slot(observer).await?;
+    assert_lease(observer, "analysis", WAITING).await?;
+    scheduler.resources.release();
 
     // Exhausting the keyset wraps it, allowing the formerly contended A to run.
     assert!(!Box::pin(claim_analysis(&mut scheduler, &stopped, &mut budget())).await?);
@@ -170,7 +168,7 @@ async fn verify_cursor_yield(
     drop(scheduler);
     assert!(matches!(wrapped, Err(WorkerError::UnsupportedPlatform)));
     assert_job(observer, ANALYSIS, "running", 1).await?;
-    assert_slot(observer, "analysis", ANALYSIS).await?;
+    assert_lease(observer, "analysis", ANALYSIS).await?;
     Ok(())
 }
 
@@ -186,6 +184,7 @@ async fn fixture(
     config: AnalysisConsumerConfig,
 ) -> TestResult<(WorkState, WakeReceiver)> {
     let settings = Settings::from(&config);
+    let resources = crate::resource_budget::ResourceBudget::new(settings.resource_limits);
     let (sink, wake) = PostCommitSink::channel();
     Ok((
         WorkState {
@@ -200,7 +199,7 @@ async fn fixture(
                 Duration::from_secs(30),
                 Duration::from_secs(1),
             )?),
-            active: false,
+            resources,
             pending: None,
             ocr_cursor: None,
             analysis_cursor: None,
@@ -221,6 +220,7 @@ fn analysis_config(database_url: &str, directory: &Path) -> TestResult<AnalysisC
         ("memory.events", "max 0\noom_kill 0\n"),
         ("cgroup.procs", ""),
         ("cgroup.kill", ""),
+        ("cpu.max", "100000 100000"),
     ] {
         fs::write(directory.join(name), content)?;
     }
@@ -245,9 +245,11 @@ fn analysis_config(database_url: &str, directory: &Path) -> TestResult<AnalysisC
             134_217_728,
         )?,
         execution_limits: AnalysisExecutionLimits {
-            runtime_memory_limit: bound(268_435_456)?,
-            child_memory_limit: bound(134_217_728)?,
-            parent_headroom: bound(134_217_728)?,
+            memory: crate::resource_budget::MemoryBudget::new(
+                268_435_456,
+                134_217_728,
+                134_217_728,
+            )?,
             calculation_timeout: Duration::from_mins(1),
             finalization_timeout: Duration::from_secs(30),
             temporary_bytes_limit: bound(67_108_864)?,
@@ -291,22 +293,19 @@ async fn assert_job(client: &Client, id: &str, status: &str, attempts: i32) -> T
     Ok(())
 }
 
-async fn assert_slot(client: &Client, kind: &str, job: &str) -> TestResult {
-    let row = client.query_one("SELECT task_kind,job_id,owner,fencing_token FROM worker_execution_slots WHERE slot_key='shared-heavy-work'", &[]).await?;
-    assert_eq!(row.try_get::<_, String>(0)?, kind);
-    assert_eq!(row.try_get::<_, String>(1)?, job);
-    assert_eq!(row.try_get::<_, String>(2)?, WORKER);
-    assert!(row.try_get::<_, i64>(3)? > 0);
-    Ok(())
-}
-
-async fn clear_slot(client: &Client) -> TestResult {
-    client.execute("UPDATE worker_execution_slots SET task_kind=NULL,owner=NULL,job_id=NULL,attempt_id=NULL,holder_preemptible=NULL,lease_expires_at=NULL,preempt_requested_by=NULL,preempt_requested_at=NULL WHERE slot_key='shared-heavy-work' AND owner=$1", &[&WORKER]).await?;
+async fn assert_lease(client: &Client, kind: &str, job: &str) -> TestResult {
+    let sql = if kind == "ocr" {
+        "SELECT lease_owner,lease_fencing_token FROM ocr_jobs WHERE id=$1 AND status='running'"
+    } else {
+        "SELECT lease_owner,lease_fencing_token FROM series_analysis_jobs WHERE id=$1 AND status='running'"
+    };
+    let row = client.query_one(sql, &[&job]).await?;
+    assert_eq!(row.try_get::<_, String>(0)?, WORKER);
+    assert!(row.try_get::<_, i64>(1)? > 0);
     Ok(())
 }
 
 async fn cleanup(client: &Client) -> TestResult {
-    clear_slot(client).await?;
     client
         .execute(
             "DELETE FROM ocr_submission_members WHERE job_id=$1",

@@ -11,7 +11,6 @@ enum Transition {
     Supersede,
     Retry,
     GracefulStop,
-    Preempt,
     Recover,
     Fail,
     ExhaustRetry,
@@ -33,7 +32,6 @@ async fn real_postgres_requeues_bind_current_radar_and_every_exit_clears_the_lea
         Transition::Supersede,
         Transition::Retry,
         Transition::GracefulStop,
-        Transition::Preempt,
         Transition::Recover,
         Transition::Fail,
         Transition::ExhaustRetry,
@@ -62,27 +60,29 @@ async fn real_postgres_requeues_bind_current_radar_and_every_exit_clears_the_lea
                     retry_transient_failure(&mut client, &claim, &config, &metrics).await?;
                 !exhausted
             }
-            Transition::GracefulStop | Transition::Preempt => {
-                let cause = if matches!(transition, Transition::Preempt) {
-                    RequeueCause::Preempted
-                } else {
-                    RequeueCause::GracefulStop
-                };
-                let _outcome =
-                    requeue_interrupted(&mut client, &claim, &config, cause, &metrics).await?;
+            Transition::GracefulStop => {
+                let _outcome = requeue_interrupted(
+                    &mut client,
+                    &claim,
+                    &config,
+                    RequeueCause::GracefulStop,
+                    &metrics,
+                )
+                .await?;
                 true
             }
             Transition::Recover | Transition::ExhaustRecovery => {
                 let exhausted = matches!(transition, Transition::ExhaustRecovery);
                 let recovery_count = if exhausted { 3 } else { 0 };
                 client.execute("UPDATE series_analysis_jobs SET lease_recovery_count = $2, lease_expires_at = clock_timestamp() - interval '1 second' WHERE id = $1", &[&JOB_ID, &recovery_count]).await?;
-                client.execute("UPDATE worker_execution_slots SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE job_id = $1", &[&JOB_ID]).await?;
                 let transaction = client.transaction().await?;
-                let holder = crate::execution_slot::lock(&transaction)
-                    .await?
-                    .holder
-                    .ok_or("expired analysis holder is missing")?;
-                recover_expired_analysis_holder(&transaction, &holder).await?;
+                let holder = crate::job_lease::ExpiredJobLease {
+                    job_id: String::from(JOB_ID),
+                    owner: String::from(OLD_WORKER_ID),
+                    attempt_id: String::from(OLD_ATTEMPT_ID),
+                    fencing_token: OLD_FENCE,
+                };
+                recover_expired_analysis_job(&transaction, &holder).await?;
                 transaction.commit().await?;
                 !exhausted
             }

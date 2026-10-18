@@ -23,7 +23,7 @@
 `pnpm dev` は Processing Worker を起動しない。worker の process isolation は Linux runtime が前提なので、macOS で host binary を直接実行せず、`apps/processing-worker/Dockerfile` から build した専用 container を使う。
 
 - worker には専用 env file と明示的な memory / cgroup 設定を渡す。root env 全体を渡さない。
-- runtime image は `scripts/ci/`、DB control plane と preemption は `scripts/e2e/` の対応 smoke と同じ境界で検証する。
+- runtime image は `scripts/ci/`、DB control plane と待機優先・実行継続は `scripts/e2e/` の対応 smoke と同じ境界で検証する。
 - algorithm version の昇格は image 更新と別操作とし、reader / worker compatibility を確認してから dry-run、apply の順で行う。DB row を直接書き換えない。
 - local volume のデータが消えたように見えても書込みや volume 削除を続けず、mount と PostgreSQL major version を確認する。異なる major version の data directory を直接 mount しない。
 - システム E2E は毎回新しい隔離環境を作り、終了・失敗・中断時に所有資源を回収する。任意の既存 DB や runtime を対象にしない。
@@ -94,7 +94,7 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 | R2 image storage | API / DB gate + 変更経路の R2 quality / reconciler readiness |
 | Processing Worker production | format、Clippy、production image build + 選択した target / feature evidence |
 | analysis algorithm version | Worker gate + release DB / control-plane compatibility |
-| worker DB / process / isolation | Worker gate + 対象 control-plane、preemption、image smoke |
+| worker DB / process / isolation | Worker gate + 対象 control-plane、scheduling、image smoke |
 | runtime / deploy config | public safety、image build / scan + 変更経路の runtime / memory / shutdown / Playwright evidence |
 | Node 開発 / E2E tool | Web の format、lint、typecheck、scripts:check + 変更した起動・service 境界の検証 |
 | Go runtime / 開発 / ops tool | 対象 module の Go test / vet、CI script を変えた場合は対応 script test |

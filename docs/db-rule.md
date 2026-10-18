@@ -33,7 +33,8 @@
 本節は実装が守る契約であり、test の選択によらず適用する。
 
 - 大容量 staging は長い control lock から分離し、短い fenced transaction で完全性を再検証してから公開する。
-- 分析 publication の lock 順は execution slot、title state、job、request / artifact とし、複数 title state は作品ID順に取得する。試合 mutation と campaign 展開は execution slot を取得しない。
+- 分析 claim / publication の lock 順は title state、job、request / artifact とし、複数 title state は作品ID順に取得する。実行資源の予約は各 Worker process が所有し、DB の共有 slot を取得しない。
+- `series_analysis_jobs.fencing_counter` は claim と同じ transaction でのみ増やす。旧 global slot / active lease / retained attempt の最大値を移行時に seed した後は旧 claim writer を再開しない。旧 worker への復帰は停止前 DB との組み合わせで行い、新 counter と旧 slot writer を混在させない。DB の slot 撤去は全 consumer の実経路と保全 gate が通ってから決める。
 - campaign集計はtarget更新と同じREAD COMMITTED transactionに置き、campaign行をID順の `FOR NO KEY UPDATE` で取得してから別statementで再集計する。lock待ちを含む集計UPDATE単独では待機前のsnapshotを使うため、別作品のcommitを取りこぼす。FK挿入のKEY SHAREとは競合させない。
 - 分析release promotionはrelease advisory lock、reader capability registry、worker capability registry、release singleton、作品ID順のtitle stateの順でlockする。capability registryは判定後の登録・heartbeat割込みをcommitまで遮断し、singleton更新と既存title更新を同じtransactionで確定する。
 - queuedな通常分析jobのradar basis / generationは、title state lockを保持したtransaction内で`PostgresSeriesAnalysisJobTransitions.bindQueuedRadar`またはRustの`series_analysis::job_transitions::bind_queued_radar`が明示代入する。APIの試合mutation・手動要求・radar apply/withdraw/入力無効化、Workerのcampaign・follow-up・release promotion・supersede・retry・中断・lease回収が対象。runningとradar preparationのsnapshotは変更しない。同じ組への代入はUPDATEを省き、旧binding triggerとの共存や再実行で世代・attempt数を増やさない。
@@ -60,7 +61,7 @@ test の採用・維持・削除は `docs/test-rule.md` に従う。DB contract 
 - 分析releaseのalgorithm / artifact schema / validation contractは不可分なtupleとして扱う。momo-db revision、各default、またはbaseline migrationを変える場合は、fixtureやcleanupがsingletonを変更する前のfresh DBでexact consumer tupleとの一致を確認し、promotion済みDBの成功を代用しない。
 - 変更した query / repository を migration 適用済みの実 PostgreSQL で実行する。未実行または skip は DB 挙動を未検証として報告する。
 - 複数 table の write は statement / lock 順と、保存後の関連 row を integration test で確認する。
-- lease、fence、slot、pointer、cleanup 競合は複数接続で stale owner と rollback を直接通す。
+- job lease、永続 fence counter、pointer、cleanup 競合は複数接続で stale owner と rollback を直接通す。
 - publication contractを変更した場合は、stagingの更新、published header / childの変更拒否、参照中parentの削除拒否、未参照parentのcascade cleanupを実PostgreSQLで区別して検証する。
 - test が作る row を共通 cleanup の対象へ追加し、並列 test 間で ID、row、stream、file を分離する。
 - 分析通知では実際のrelease promotionと公開成功を通し、画面用参照の切離し後のbackfill抑止、要求合流順に依存しない差分、OFF・送信失敗・公開失敗での入力基準を実PostgreSQLで観測する。比較元の欠落を初回として送るtest oracleを置かない。

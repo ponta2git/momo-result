@@ -238,7 +238,8 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 - capability crate は決定論的な domain / 計算 / version 付き論理契約を所有し、DB、filesystem、clock、async runtime に依存しない。runtime から capability への一方向依存とする。
 - 通知基盤の `momo-notifications` は件数・bytesの予約、envelopeのserialize、呼出側transactionによる最終JSONBサイズ検証、transport設定の検証とHTTP送信を所有する。通知内容を作るproducer、業務SQL、DB接続、SAVEPOINTとcommit、環境変数の読取り、senderの監督・停止期限はworkerが所有する。workerから通知基盤への一方向依存とする。
 - production の OS FFI と `unsafe` は process adapter に隔離し、他 module へ checked な safe API を公開する。TERM・KILL・process groupの回収は共通化し、分析の入力設定・終了分類とOCRのframe・結果decodeは各capabilityのprocess adapterに残す。
-- 子 process の resource 制限は実 runtime の cgroup で保証する。非対応 OS では job claim 前に fail closed にする。
+- instance の CPU・memory 予算は一つの attempt 全体に予約し、同時実行数は 1 に固定する。予約は claim 前に取得し、claim が成立しなかったと確認できた場合、または子 process と補助 task の回収確認後にだけ返す。lease 失効、timeout、Future の破棄だけでは次の計算を許可しない。将来の子 task も同じ予算を使い、task 分割によって同時実行数を増やさない。
+- 子 process tree の CPU bandwidth と hard memory limit は実 runtime の cgroup で保証する。CPU 予算は `MOMO_PROCESSING_CPU_LIMIT_MILLIS`（既定 1000 millicpus）で指定し、runtime の CPU 割当を超える構成は拒否する。memory は child limit と親用 headroom の合計を runtime budget 内に収める。開始 barrier を開く前に両 controller への所属と制限値を読み戻し、v1 の別 hierarchy も両方が空になるまで回収を続ける。非対応 OS や未検証の制限は job claim 前に fail closed にする。
 - 同時実行や publication は DB lease と fencing token で世代をまたいで保証する。process 内 semaphore や台数を正本にしない。
 - 候補走査のsoftな時間予算は一回の処理量を区切る目安とし、候補取得だけで予算を使い切っても候補があれば少なくとも一件を試みる。続きはcursorと次回期限へ引き継ぐ。停止要求、SQLの上限、lease・fenceなどの実行権の条件を緩める理由にはしない。
 - Busy後の早期再確認はconsumerごとの共有予算で回数・開始期限・同時数を制限し、新しい配送や再接続で予算を作り直さない。上限到達時は元の回復・保守期限へ戻す。開始済みclaimの確定とpost-commit effectを処理してから次の候補へ進み、wakeを実行権として扱わない。
@@ -250,7 +251,7 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 - 入力 version、algorithm version、artifact schema version、固定採点基準を別の識別として扱い、同じ入力・algorithm・基準の内容では決定論的にする。基準の適用日時と公開競合の世代は、計算内容のchecksumから分離する。
 - 計算の中間表現は必要な観測値だけを持ち、fold・bootstrap・permutationごとに識別情報や未使用featureを複製しない。共有できる入力は借用し、計算順序や乱数列に意味がある最適化は出力のcanonical bytesまで比較する。結果の意味を変える場合はalgorithm versionの変更として扱う。
 - 公開前のDB照合はtransaction内で行い、全Rowとdecode後の同じ集合を重ねて保持しない。metadataは借用して逐次照合し、入力は必要なshapeへ集約する。順序の違いを許容する照合でも欠落・余剰・重複・値の不一致を拒否する。
-- OCR だけが分析を preempt できる。共有実行枠、再queue、失敗回数、公開の詳細は `docs/requirements/series-analysis-batch.md` を正本とする。
+- 待機候補では OCR を先に選び、実行中の分析は完了させる。共有実行枠、旧世代の中断 intent の回収、再queue、失敗回数、公開の詳細は `docs/requirements/series-analysis-batch.md` を正本とする。
 
 - 分析完了通知は `notifications/analysis` が実行attemptに結び付いた試合変更要求と前後のimmutable入力を照合し、公開transaction末尾で要求の完了を再確認して表示metadataを固定する。入力が変わらない成果物の再利用は公開制御側で通知準備を省略する。通知準備はOCRと同じ回復可能なSAVEPOINT境界を使い、正常commitを確認した経路だけが共通senderへ渡す。分析child・API・Summitに平均計算やproducer送出の責務を移さない。内容と比較範囲は `docs/requirements/series-analysis-batch.md` を参照する。
 - 通知producerへ渡すのは通知に必要なjob・attempt・作品・成果物versionの識別情報だけとし、DBのclaim型、lease、fenceや全体設定へ逆依存させない。
@@ -267,7 +268,7 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 - APIは `ocr_submissions` / `ocr_submission_members` に所有者・固定画像集合・受付期限を原子的に保存し、job登録とmember対応を一つのtransactionにする。同一操作のPUTと登録済みmemberの再送は同じ識別子へ収束する。Webは全画像の内容識別とupload keyを送出受付前に固定する。
 - OCRの受付調停は現在の下書きslotではなく固定memberと対応jobの終端を読み、全員終了後だけ送出を確定する。下書き→送出の順にlockし、業務更新後の最後にresult gateと設定を読む。ONなら文脈と失敗だけを固定し、OFFでも送出は終端にして後から再構築しない。画像0件の期限終了も回収し、後の送出・slot状態を上書きしない。
 - 受付調停は共通listener確立後の初回・再接続・期限・低頻度の安全走査でopenを巡回する。workerが最大一つの有限stepを駆動し、cursor・上限付きの発見済みID・Busy再確認予算をwakeと接続交換の間も保持する。softな走査予算を使い切っても先頭の一件は試み、途中の進捗を次のstepへ渡す。Busyだった送出だけを早期再確認し、通常の安全走査・受付期限を後ろへ延ばさない。
-- 受付調停と画像Runnerは可変資源を別々に所有し、OCR画像・分析の共通実行枠と独立して調停を進める。受付数に比例するtask・接続・全件待機一覧は作らない。画像Runnerの生成と呼出しはOCR orchestratorに閉じ、各画像はworkerが共有枠をclaimした後だけ実行する。未到着memberの受付期限と登録済み画像jobの実行期限を混同しない。
+- 受付調停と画像Runnerは可変資源を別々に所有し、OCR画像・分析の実行資源予約と独立して調停を進める。受付数に比例するtask・接続・全件待機一覧は作らない。画像Runnerの生成と呼出しはOCR orchestratorに閉じ、各画像はWorkerがprocessの資源を予約してjob leaseをclaimした後だけ実行する。未到着memberの受付期限と登録済み画像jobの実行期限を混同しない。
 - commit後のwake hintは損失可能で、正本は保存状態。各送出を有限のtransactionで扱い、settled commitを確認した経路だけが通知をdispatchする。共有wire・宣言的な保存構造と排他契約は `../momo-db/docs/discord-notifications.md` を正本とし、DBへ終了policyやtriggerを置かない。
 - 通知準備は確定処理と同じ絶対期限から残り時間を計算し、実行中SQLの終了・SAVEPOINT復旧・業務commitの時間を確保する。余裕がなければ通知用SQLを実行せず、復旧可能な準備失敗では業務成功を保って通知を省略する。commit成功後だけ、件数・bytes・同時接続数に上限を持つ共通senderへ渡す。OCR の実行枠解放はHTTP完了を待たない。
 - 通知の一回限りのSQLはパラメータ型を明示し、statementの準備・実行を分ける不要なDB往復を避ける。共有gate取得とsnapshot取得は別statementのまま維持する。比較・準備のtimeout、残時間不足、DBエラーは区別し、準備失敗には処理段階・時間予算・経過時間・SQLSTATEを記録する。DB例外本文やbind値は出力しない。

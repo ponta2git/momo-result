@@ -8,8 +8,9 @@ use std::{
 use super::{
     CGROUP_DIRECTORY_NAME, CGROUP_V2_VALIDATED_ENV, CgroupError, CgroupHierarchy, ChildCgroup,
     DELEGATION_CGROUP_NAME, PreparedChildCgroup, V1_MEMORY_ROOT, V2_ROOT, WORKER_CGROUP_NAME,
-    bounded_read, controller_member_directory, membership_path, read_process_ids,
+    bounded_read, controller_member_directory, cpu, membership_path, read_process_ids,
 };
+use crate::resource_budget::CpuBudget;
 
 pub(crate) fn join_frozen_daemon(
     daemon_pid: u32,
@@ -24,22 +25,7 @@ pub(crate) fn join_frozen_daemon(
     {
         return Err(CgroupError::InvalidMembership);
     }
-    let process_directory = PathBuf::from(format!("/proc/{daemon_pid}"));
-    let status = bounded_read(&process_directory.join("status"))?;
-    for (field, expected) in [("Uid:", service_user_id), ("Gid:", service_group_id)] {
-        let values = status
-            .lines()
-            .find_map(|line| line.strip_prefix(field))
-            .ok_or(CgroupError::InvalidMembership)?;
-        let mut values = values.split_whitespace();
-        if (0..4).any(|_index| {
-            values.next().and_then(|value| value.parse::<u32>().ok()) != Some(expected)
-        }) || values.next().is_some()
-        {
-            return Err(CgroupError::DelegationFailed);
-        }
-    }
-    let membership = bounded_read(&process_directory.join("cgroup"))?;
+    let membership = daemon_membership(daemon_pid, service_user_id, service_group_id)?;
     let hierarchy = if Path::new(V2_ROOT).join("cgroup.controllers").is_file() {
         if env::var(CGROUP_V2_VALIDATED_ENV).as_deref() != Ok("true") {
             return Err(CgroupError::UnsupportedHierarchy);
@@ -59,8 +45,105 @@ pub(crate) fn join_frozen_daemon(
     };
     let worker =
         controller_member_directory(Path::new(root), &membership_path(&membership, hierarchy)?)?;
+    let delegation = delegated_parent(&worker, hierarchy, service_user_id, service_group_id)?;
+    let members = read_process_ids(&worker.join("cgroup.procs"))?;
+    if !members.contains(&daemon_pid)
+        || (hierarchy == CgroupHierarchy::V2
+            && members
+                .iter()
+                .any(|pid| *pid != daemon_pid && *pid != std::process::id()))
+    {
+        return Err(CgroupError::StaleBootstrapGroup);
+    }
+    let directory = delegation.join(CGROUP_DIRECTORY_NAME);
+    let cpu_budget =
+        CpuBudget::from_environment().map_err(|_error| CgroupError::InvalidEnvironment)?;
+    let cpu_worker = match hierarchy {
+        CgroupHierarchy::V1 => cpu::v1_worker_directory(&membership)?,
+        CgroupHierarchy::V2 => worker.clone(),
+    };
+    let cpu_directory = match hierarchy {
+        CgroupHierarchy::V1 => cpu_worker.join(CGROUP_DIRECTORY_NAME),
+        CgroupHierarchy::V2 => directory.clone(),
+    };
+    let cpu = cpu::ChildCpuCgroup::open(hierarchy, cpu_directory.clone(), cpu_budget, true)?;
+    cpu.validate_runtime_budget()?;
+    owned_by(
+        &cpu_directory.join("cgroup.procs"),
+        service_user_id,
+        service_group_id,
+    )?;
+    // Reuse exact limits and delegated files. No hierarchy, ownership, or limit is reconfigured.
+    let child = ChildCgroup::open(hierarchy, directory.clone(), limit_bytes, cpu, true)?;
+    owned_by(
+        &directory.join("cgroup.procs"),
+        service_user_id,
+        service_group_id,
+    )?;
+    if hierarchy == CgroupHierarchy::V2 {
+        owned_by(
+            &directory.join("cgroup.kill"),
+            service_user_id,
+            service_group_id,
+        )?;
+    }
+    drop(child);
+    fs::write(worker.join("cgroup.procs"), std::process::id().to_string())?;
+    if !read_process_ids(&worker.join("cgroup.procs"))?.contains(&std::process::id()) {
+        return Err(CgroupError::AttachFailed);
+    }
+    if hierarchy == CgroupHierarchy::V1 {
+        if !read_process_ids(&cpu_worker.join("cgroup.procs"))?.contains(&daemon_pid) {
+            return Err(CgroupError::InvalidMembership);
+        }
+        fs::write(
+            cpu_worker.join("cgroup.procs"),
+            std::process::id().to_string(),
+        )?;
+        if !read_process_ids(&cpu_worker.join("cgroup.procs"))?.contains(&std::process::id()) {
+            return Err(CgroupError::AttachFailed);
+        }
+    }
+    Ok(PreparedChildCgroup {
+        hierarchy,
+        directory,
+        limit_bytes,
+        cpu_directory,
+        cpu_budget,
+    })
+}
+
+fn daemon_membership(
+    daemon_pid: u32,
+    service_user_id: u32,
+    service_group_id: u32,
+) -> Result<String, CgroupError> {
+    let process_directory = PathBuf::from(format!("/proc/{daemon_pid}"));
+    let status = bounded_read(&process_directory.join("status"))?;
+    for (field, expected) in [("Uid:", service_user_id), ("Gid:", service_group_id)] {
+        let values = status
+            .lines()
+            .find_map(|line| line.strip_prefix(field))
+            .ok_or(CgroupError::InvalidMembership)?;
+        let mut values = values.split_whitespace();
+        if (0..4).any(|_index| {
+            values.next().and_then(|value| value.parse::<u32>().ok()) != Some(expected)
+        }) || values.next().is_some()
+        {
+            return Err(CgroupError::DelegationFailed);
+        }
+    }
+    bounded_read(&process_directory.join("cgroup"))
+}
+
+fn delegated_parent(
+    worker: &Path,
+    hierarchy: CgroupHierarchy,
+    service_user_id: u32,
+    service_group_id: u32,
+) -> Result<&Path, CgroupError> {
     let delegation = match hierarchy {
-        CgroupHierarchy::V1 => worker.as_path(),
+        CgroupHierarchy::V1 => worker,
         CgroupHierarchy::V2 => {
             if worker
                 .file_name()
@@ -83,40 +166,7 @@ pub(crate) fn join_frozen_daemon(
             parent
         }
     };
-    let members = read_process_ids(&worker.join("cgroup.procs"))?;
-    if !members.contains(&daemon_pid)
-        || (hierarchy == CgroupHierarchy::V2
-            && members
-                .iter()
-                .any(|pid| *pid != daemon_pid && *pid != std::process::id()))
-    {
-        return Err(CgroupError::StaleBootstrapGroup);
-    }
-    let directory = delegation.join(CGROUP_DIRECTORY_NAME);
-    // Reuse exact limits and delegated files. No hierarchy, ownership, or limit is reconfigured.
-    let child = ChildCgroup::open(hierarchy, directory.clone(), limit_bytes, true)?;
-    owned_by(
-        &directory.join("cgroup.procs"),
-        service_user_id,
-        service_group_id,
-    )?;
-    if hierarchy == CgroupHierarchy::V2 {
-        owned_by(
-            &directory.join("cgroup.kill"),
-            service_user_id,
-            service_group_id,
-        )?;
-    }
-    drop(child);
-    fs::write(worker.join("cgroup.procs"), std::process::id().to_string())?;
-    if !read_process_ids(&worker.join("cgroup.procs"))?.contains(&std::process::id()) {
-        return Err(CgroupError::AttachFailed);
-    }
-    Ok(PreparedChildCgroup {
-        hierarchy,
-        directory,
-        limit_bytes,
-    })
+    Ok(delegation)
 }
 
 fn owned_by(path: &Path, user_id: u32, group_id: u32) -> Result<(), CgroupError> {

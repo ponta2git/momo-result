@@ -6,12 +6,7 @@ use tokio_postgres::Client;
 use momo_analysis_core::contract::ARTIFACT_SCHEMA_VERSION;
 
 use super::*;
-use crate::{
-    execution_slot::{
-        ExecutionSlotIdentity, ExecutionTaskKind, clear_stale_preemption, release_owned,
-    },
-    series_analysis::control::ALGORITHM_VERSION,
-};
+use crate::series_analysis::control::ALGORITHM_VERSION;
 
 type SmokeResult<T = ()> = Result<T, Box<dyn Error + Send + Sync>>;
 
@@ -117,7 +112,7 @@ async fn real_postgres_preserves_ocr_fencing_and_bounded_recovery() -> SmokeResu
     verify_success_and_terminal_duplicate(&mut primary).await?;
     verify_success_with_warnings(&mut primary).await?;
     verify_expired_analysis_recovery_emits_wake(&mut primary).await?;
-    verify_analysis_preemption_and_stale_intent(&mut primary).await?;
+    verify_independent_jobs_and_counter_exhaustion(&mut primary).await?;
     verify_transient_retry_budget(&mut primary).await?;
     verify_malformed_snapshot(&mut primary).await?;
 
@@ -200,19 +195,6 @@ async fn verify_expired_takeover(primary: &mut Client, stale: &mut Client) -> Sm
 
     primary
         .execute(
-            "UPDATE worker_execution_slots SET lease_expires_at = clock_timestamp() - interval '1 second'\x20\
-             WHERE slot_key = 'shared-heavy-work' AND task_kind = 'ocr' AND owner = $1\x20\
-               AND job_id = $2 AND attempt_id = $3 AND fencing_token = $4",
-            &[
-                &config_a.worker_id,
-                &stale_claim.job_id,
-                &stale_claim.attempt_id,
-                &stale_claim.fencing_token,
-            ],
-        )
-        .await?;
-    primary
-        .execute(
             "UPDATE ocr_jobs SET lease_expires_at = clock_timestamp() - interval '1 second'\x20\
              WHERE id = $1 AND lease_owner = $2 AND attempt_id::text = $3\x20\
                AND lease_fencing_token = $4",
@@ -244,7 +226,6 @@ async fn verify_expired_takeover(primary: &mut Client, stale: &mut Client) -> Sm
         Err(OcrControlError::OwnerLost)
     ));
 
-    primary.execute("UPDATE worker_execution_slots SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE slot_key='shared-heavy-work' AND job_id=$1", &[&TAKEOVER.job_id]).await?;
     primary.execute("UPDATE ocr_jobs SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", &[&TAKEOVER.job_id]).await?;
     assert!(matches!(
         claim_result(claim_job(primary, job_id, &config_a).await?)?,
@@ -356,9 +337,9 @@ async fn prepare_expired_analysis_holder(primary: &Client) -> SmokeResult {
         .execute(
             "INSERT INTO series_analysis_jobs (id, game_title_id, input_revision,\x20\
                algorithm_version, artifact_schema_version, status, trigger, started_at,\x20\
-               lease_owner, lease_attempt_id, lease_fencing_token, lease_expires_at, attempt_count)\x20\
+               lease_owner, lease_attempt_id, lease_fencing_token, lease_expires_at, attempt_count, fencing_counter)\x20\
              VALUES ($1, $2, 1, $3, $4, 'running', 'manual', clock_timestamp(), $5, $6, $7,\x20\
-               clock_timestamp() - interval '1 second', 1)",
+               clock_timestamp() - interval '1 second', 1, $7)",
             &[
                 &EXPIRED_ANALYSIS_JOB_ID,
                 &EXPIRED_ANALYSIS_TITLE_ID,
@@ -386,26 +367,6 @@ async fn prepare_expired_analysis_holder(primary: &Client) -> SmokeResult {
             ],
         )
         .await?;
-    let installed = primary
-        .execute(
-            "UPDATE worker_execution_slots SET task_kind = 'analysis', owner = $1, job_id = $2,\x20\
-               attempt_id = $3, holder_preemptible = true, lease_expires_at =\x20\
-               clock_timestamp() - interval '1 second', fencing_token = $4,\x20\
-               preempt_requested_by = NULL, preempt_requested_at = NULL,\x20\
-               updated_at = clock_timestamp() WHERE slot_key = 'shared-heavy-work' AND owner IS NULL",
-            &[
-                &EXPIRED_ANALYSIS_WORKER_ID,
-                &EXPIRED_ANALYSIS_JOB_ID,
-                &EXPIRED_ANALYSIS_ATTEMPT_ID,
-                &EXPIRED_ANALYSIS_FENCE,
-            ],
-        )
-        .await?;
-    if installed != 1 {
-        return Err(
-            smoke_error("expired Analysis fixture could not acquire the empty slot").into(),
-        );
-    }
     Ok(())
 }
 
@@ -413,7 +374,34 @@ async fn verify_expired_analysis_recovery_emits_wake(primary: &mut Client) -> Sm
     prepare_expired_analysis_holder(primary).await?;
     let job_id = ANALYSIS_RECOVERY.job_id;
     let config = control_config("ocr-c2-analysis-recovery")?;
-    let claim = claimed_with_analysis_wake(claim_job(primary, job_id, &config).await?)?;
+    let claim = claimed(claim_job(primary, job_id, &config).await?)?;
+    let status: String = primary
+        .query_one(
+            "SELECT status FROM series_analysis_jobs WHERE id=$1",
+            &[&EXPIRED_ANALYSIS_JOB_ID],
+        )
+        .await?
+        .try_get(0)?;
+    assert_eq!(
+        status, "running",
+        "an OCR claim must not recover another job"
+    );
+    let transaction = primary.transaction().await?;
+    let effects = crate::series_analysis::control::recovery::recover_expired_analysis_job(
+        &transaction,
+        &ExpiredJobLease {
+            job_id: String::from(EXPIRED_ANALYSIS_JOB_ID),
+            owner: String::from(EXPIRED_ANALYSIS_WORKER_ID),
+            attempt_id: String::from(EXPIRED_ANALYSIS_ATTEMPT_ID),
+            fencing_token: EXPIRED_ANALYSIS_FENCE,
+        },
+    )
+    .await?;
+    transaction.commit().await?;
+    assert_eq!(
+        effects.committed(()).effects,
+        crate::worker::PostCommitEffects::WakeJobs
+    );
     let recovered = primary
         .query_one(
             "SELECT j.status, j.lease_recovery_count, a.status, a.outcome\x20\
@@ -439,83 +427,67 @@ async fn verify_expired_analysis_recovery_emits_wake(primary: &mut Client) -> Sm
     Ok(())
 }
 
-async fn verify_analysis_preemption_and_stale_intent(primary: &mut Client) -> SmokeResult {
-    let job_id = PREEMPT.job_id;
-    let config = control_config("ocr-c2-priority")?;
-    let row = primary
-        .query_opt(
-            "UPDATE worker_execution_slots SET task_kind = 'analysis', owner = 'analysis-c2-holder',\x20\
-               job_id = 'analysis-c2-job', attempt_id = 'analysis-c2-attempt',\x20\
-               holder_preemptible = true, lease_expires_at = clock_timestamp() + interval '1 minute',\x20\
-               fencing_token = fencing_token + 1, preempt_requested_by = NULL,\x20\
-               preempt_requested_at = NULL, updated_at = clock_timestamp()\x20\
-             WHERE slot_key = 'shared-heavy-work' AND owner IS NULL RETURNING fencing_token",
-            &[],
-        )
-        .await?
-        .ok_or_else(|| smoke_error("analysis preemption fixture could not acquire the empty slot"))?;
-    let analysis_fence = row.try_get::<_, i64>(0)?;
-    assert!(matches!(
-        claim_result(claim_job(primary, job_id, &config).await?)?,
-        OcrClaimResult::PreemptionRequested
-    ));
-    let requester = primary
-        .query_one(
-            "SELECT preempt_requested_by FROM worker_execution_slots\x20\
-             WHERE slot_key = 'shared-heavy-work'",
-            &[],
-        )
-        .await?
-        .try_get::<_, Option<String>>(0)?;
-    assert_eq!(requester.as_deref(), Some("ocr-c2-priority"));
-
-    let release_transaction = primary.transaction().await?;
-    assert!(
-        release_owned(
-            &release_transaction,
-            ExecutionSlotIdentity {
-                task_kind: ExecutionTaskKind::Analysis,
-                owner: "analysis-c2-holder",
-                job_id: "analysis-c2-job",
-                attempt_id: "analysis-c2-attempt",
-                fencing_token: analysis_fence,
-            },
-        )
-        .await?
-    );
-    release_transaction.commit().await?;
-    let claim = claimed(claim_job(primary, job_id, &config).await?)?;
-    let slot = primary
-        .query_one(
-            "SELECT task_kind, holder_preemptible, preempt_requested_by IS NULL\x20\
-             FROM worker_execution_slots WHERE slot_key = 'shared-heavy-work'",
-            &[],
+async fn verify_independent_jobs_and_counter_exhaustion(primary: &mut Client) -> SmokeResult {
+    let first_config = control_config("ocr-c2-priority")?;
+    let second_config = control_config("ocr-c2-independent")?;
+    let first = claimed(claim_job(primary, PREEMPT.job_id, &first_config).await?)?;
+    primary
+        .execute(
+            "UPDATE ocr_jobs SET lease_fencing_token=$2 WHERE id=$1",
+            &[&TRANSIENT.job_id, &i64::MAX],
         )
         .await?;
-    assert_eq!(slot.try_get::<_, String>(0)?, "ocr");
-    assert!(!slot.try_get::<_, bool>(1)?);
-    assert!(slot.try_get::<_, bool>(2)?);
+    assert!(matches!(
+        claim_job(primary, TRANSIENT.job_id, &second_config).await,
+        Err(OcrControlError::NumericBound)
+    ));
+    let overflow = primary
+        .query_one(
+            "SELECT status,attempt_count,lease_fencing_token FROM ocr_jobs WHERE id=$1",
+            &[&TRANSIENT.job_id],
+        )
+        .await?;
+    assert_eq!(overflow.try_get::<_, String>(0)?, "queued");
+    assert_eq!(overflow.try_get::<_, i32>(1)?, 0);
+    assert_eq!(overflow.try_get::<_, i64>(2)?, i64::MAX);
+    primary
+        .execute(
+            "UPDATE ocr_jobs SET lease_fencing_token=0 WHERE id=$1",
+            &[&TRANSIENT.job_id],
+        )
+        .await?;
+    let second = claimed(claim_job(primary, TRANSIENT.job_id, &second_config).await?)?;
+    assert_eq!(first.fencing_token, 1);
+    assert_eq!(
+        second.fencing_token, 1,
+        "fences are monotonic within each job"
+    );
+    assert_eq!(
+        heartbeat(primary, &first, &first_config).await?,
+        OcrHeartbeatResult::Continue
+    );
+    assert_eq!(
+        heartbeat(primary, &second, &second_config).await?,
+        OcrHeartbeatResult::Continue
+    );
     finish_failure(
         primary,
-        &claim,
-        &config,
+        &first,
+        &first_config,
         OcrFailureCode::CategoryUndetected,
         1,
     )
     .await?;
-    assert_match_draft_status(primary, &PREEMPT, "ocr_failed").await?;
-
-    primary
-        .execute(
-            "UPDATE worker_execution_slots SET preempt_requested_by = 'ocr-c2-crashed',\x20\
-               preempt_requested_at = clock_timestamp() - interval '2 seconds'\x20\
-             WHERE slot_key = 'shared-heavy-work' AND owner IS NULL",
-            &[],
+    requeue_interrupted(primary, &second, &second_config).await?;
+    let retained: i64 = primary
+        .query_one(
+            "SELECT lease_fencing_token FROM ocr_jobs WHERE id=$1",
+            &[&TRANSIENT.job_id],
         )
-        .await?;
-    let stale_intent_transaction = primary.transaction().await?;
-    assert!(clear_stale_preemption(&stale_intent_transaction, 1_000).await?);
-    stale_intent_transaction.commit().await?;
+        .await?
+        .try_get(0)?;
+    assert_eq!(retained, second.fencing_token);
+    assert_match_draft_status(primary, &PREEMPT, "ocr_failed").await?;
     Ok(())
 }
 
@@ -584,23 +556,6 @@ async fn verify_malformed_snapshot(primary: &mut Client) -> SmokeResult {
 
 async fn prepare_database(client: &Client) -> SmokeResult {
     cleanup_database(client).await?;
-    let owner = client
-        .query_one(
-            "SELECT owner FROM worker_execution_slots WHERE slot_key = 'shared-heavy-work'",
-            &[],
-        )
-        .await?
-        .try_get::<_, Option<String>>(0)?;
-    if owner.is_some() {
-        return Err(smoke_error("shared execution slot is not quiescent").into());
-    }
-    client
-        .execute(
-            "UPDATE worker_execution_slots SET preempt_requested_by = NULL,\x20\
-               preempt_requested_at = NULL WHERE slot_key = 'shared-heavy-work'",
-            &[],
-        )
-        .await?;
     Ok(())
 }
 
@@ -657,17 +612,7 @@ async fn insert_fixture(client: &Client, fixture: &Fixture) -> SmokeResult {
 async fn cleanup_database(client: &Client) -> SmokeResult {
     client
         .batch_execute(
-            "UPDATE worker_execution_slots SET task_kind = NULL, owner = NULL, job_id = NULL,\x20\
-               attempt_id = NULL, holder_preemptible = NULL, lease_expires_at = NULL,\x20\
-               preempt_requested_by = NULL, preempt_requested_at = NULL,\x20\
-               updated_at = clock_timestamp() WHERE slot_key = 'shared-heavy-work' AND (\x20\
-                 owner IN ('ocr-c2-worker-a','ocr-c2-worker-b','ocr-c2-worker-success',\x20\
-                   'ocr-c2-worker-success-warnings',\x20\
-                   'ocr-c2-priority','ocr-c2-analysis-recovery','ocr-c2-transient',\x20\
-                   'analysis-c2-holder','c2-smoke-analysis-recovery-worker')\x20\
-                 OR (owner IS NULL AND preempt_requested_by IN ('ocr-c2-priority','ocr-c2-crashed'))\x20\
-               );\x20\
-             DELETE FROM match_drafts WHERE id IN (\x20\
+            "DELETE FROM match_drafts WHERE id IN (\x20\
                'c2-smoke-match-draft-takeover','c2-smoke-match-draft-success',\x20\
                'c2-smoke-match-draft-success-warnings',\x20\
                'c2-smoke-match-draft-preempt','c2-smoke-match-draft-malformed',\x20\
@@ -736,26 +681,6 @@ fn control_config(worker_id: &str) -> SmokeResult<OcrControlConfig> {
     .map_err(Into::into)
 }
 
-fn claimed_with_analysis_wake(
-    outcome: ControlOutcome<OcrClaimResult>,
-) -> SmokeResult<ClaimedOcrJob> {
-    if outcome.effects != crate::worker::PostCommitEffects::WakeJobs {
-        return Err(smoke_error("expired Analysis recovery did not emit its shared wake").into());
-    }
-    match outcome.value {
-        OcrClaimResult::Claimed(claim) => Ok(claim),
-        other @ (OcrClaimResult::Busy
-        | OcrClaimResult::PreemptionRequested
-        | OcrClaimResult::MissingOrTerminal
-        | OcrClaimResult::AlreadyRunning
-        | OcrClaimResult::NotYetAvailable
-        | OcrClaimResult::InvalidInput) => Err(smoke_error(format!(
-            "expected OCR claim after expired Analysis recovery, got {other:?}"
-        ))
-        .into()),
-    }
-}
-
 fn claim_result(outcome: ControlOutcome<OcrClaimResult>) -> SmokeResult<OcrClaimResult> {
     if outcome.effects == crate::worker::PostCommitEffects::WakeJobs {
         return Err(smoke_error("normal OCR claim unexpectedly emitted an scheduler wake").into());
@@ -766,9 +691,7 @@ fn claim_result(outcome: ControlOutcome<OcrClaimResult>) -> SmokeResult<OcrClaim
 fn claimed(outcome: ControlOutcome<OcrClaimResult>) -> SmokeResult<ClaimedOcrJob> {
     match claim_result(outcome)? {
         OcrClaimResult::Claimed(claim) => Ok(claim),
-        other @ (OcrClaimResult::Busy
-        | OcrClaimResult::PreemptionRequested
-        | OcrClaimResult::MissingOrTerminal
+        other @ (OcrClaimResult::MissingOrTerminal
         | OcrClaimResult::AlreadyRunning
         | OcrClaimResult::NotYetAvailable
         | OcrClaimResult::InvalidInput) => {

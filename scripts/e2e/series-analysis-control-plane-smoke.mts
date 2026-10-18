@@ -182,20 +182,10 @@ await runSmoke("Series-analysis control-plane smoke", async (signal) => {
   WHERE game_title_id = 'title-release-smoke-a' AND status = 'queued';
 `);
       await smoke.sql(`
-  UPDATE worker_execution_slots
-  SET task_kind = 'analysis', owner = 'ci-expired-worker', job_id = '${lease_job}',
-      attempt_id = 'ci-expired-attempt', holder_preemptible = true,
-      lease_expires_at = clock_timestamp() - interval '1 second',
-      fencing_token = fencing_token + 1,
-      preempt_requested_by = NULL, preempt_requested_at = NULL,
-      updated_at = clock_timestamp()
-  WHERE slot_key = 'shared-heavy-work';
   UPDATE series_analysis_jobs
   SET status = 'running', started_at = clock_timestamp() - interval '2 seconds',
       lease_owner = 'ci-expired-worker', lease_attempt_id = 'ci-expired-attempt',
-      lease_fencing_token = (
-        SELECT fencing_token FROM worker_execution_slots WHERE slot_key = 'shared-heavy-work'
-      ),
+      lease_fencing_token = fencing_counter + 1, fencing_counter = fencing_counter + 1,
       lease_expires_at = clock_timestamp() - interval '1 second',
       lease_validation_contract_id = validation_contract_id,
       attempt_count = 1, updated_at = clock_timestamp()

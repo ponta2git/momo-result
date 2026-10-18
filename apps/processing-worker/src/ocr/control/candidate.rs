@@ -14,6 +14,7 @@ pub(super) struct OcrClaimCandidate {
     pub(super) height: u32,
     pub(super) requested_screen_type: RequestedScreenType,
     pub(super) attempt_count: i32,
+    pub(super) fencing_token: i64,
     pub(super) input: ValidatedOcrInput,
 }
 
@@ -43,7 +44,7 @@ pub(super) async fn load_candidate(
     let job = transaction
         .query_opt(
             "SELECT draft_id, source_image_id, requested_screen_type, status,\x20\
-                    available_at <= clock_timestamp(), input_snapshot, attempt_count\x20\
+                    available_at <= clock_timestamp(), input_snapshot, attempt_count, lease_fencing_token\x20\
              FROM ocr_jobs WHERE id = $1 FOR UPDATE",
             &[&job_id],
         )
@@ -147,6 +148,7 @@ fn decode_candidate(
         height,
         requested_screen_type,
         attempt_count: job.try_get(6)?,
+        fencing_token: job.try_get(7)?,
         input,
     }))
 }
@@ -176,6 +178,7 @@ mod tests {
             height: 1080,
             requested_screen_type: payload.requested_screen_type(),
             attempt_count: 0,
+            fencing_token: 0,
             input,
         };
         assert!(candidate.matches());

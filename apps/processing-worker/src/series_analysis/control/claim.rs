@@ -5,22 +5,18 @@ use tokio_postgres::{Client, Transaction};
 use momo_analysis_core::contract::{ARTIFACT_SCHEMA_VERSION, ARTIFACT_VALIDATION_CONTRACT_ID};
 
 use crate::{
-    execution_slot::{
-        ExecutionTaskKind, NewExecutionSlotHolder, SlotAcquisition, acquire_analysis,
-        clear_stale_preemption, lock as lock_execution_slot,
-    },
-    series_analysis::config::AnalysisConsumerConfig,
+    job_lease::ExpiredJobLease, series_analysis::config::AnalysisConsumerConfig,
     worker::ControlOutcome,
 };
 
 use super::{
     ALGORITHM_VERSION, ClaimResult, ClaimedJob, ControlError, TransactionEffects,
     UnsupportedJobVersion,
-    recovery::recover_expired_analysis_holder,
+    recovery::recover_expired_analysis_job,
     transaction::{bounded_transaction, duration_milliseconds, stable_id},
 };
 
-/// Claims one compatible job while atomically acquiring the shared heavy-work slot.
+/// Claims one compatible job and advances its persistent fencing counter atomically.
 ///
 /// # Errors
 ///
@@ -72,7 +68,7 @@ async fn claim_job_with_diagnostics(
     let (candidate, effects) = match measure_claim(
         diagnostics,
         "claim_lock_and_recovery",
-        prepare_claim(&transaction, job_id, lease_milliseconds),
+        prepare_claim(&transaction, job_id),
     )
     .await?
     {
@@ -111,15 +107,10 @@ async fn claim_job_with_diagnostics(
         .ok_or(ControlError::NumericBound)?;
     let attempt_id = stable_id("analysis-attempt", &[job_id, &attempt_no.to_string()]);
     let timeout_milliseconds = duration_milliseconds(config.execution_limits.calculation_timeout)?;
-    let fencing_token = acquire_execution_slot(
-        &transaction,
-        &config.worker_id,
-        job_id,
-        &attempt_id,
-        lease_milliseconds,
-        candidate.slot_fencing_token,
-    )
-    .await?;
+    let fencing_token = candidate
+        .fencing_counter
+        .checked_add(1)
+        .ok_or(ControlError::NumericBound)?;
     let attempt = ClaimAttempt {
         job_id,
         candidate: &candidate,
@@ -159,11 +150,6 @@ async fn validate_scoped_claim(
     scope: &crate::maintenance::analysis::BoundScope,
     job_id: &str,
 ) -> Result<(), ControlError> {
-    // Reject even an expired owner/preemption before prepare_claim can recover any holder.
-    let slot = lock_execution_slot(transaction).await?;
-    if slot.holder.is_some() || slot.preempt_requested_by.is_some() {
-        return Err(crate::maintenance::analysis::ScopeError::Scope.into());
-    }
     crate::maintenance::analysis::scope::validate(transaction, scope).await?;
     let belongs = transaction.query_opt(
         "SELECT 1 FROM series_analysis_campaign_targets t JOIN series_analysis_job_requests r ON r.id=t.job_request_id \
@@ -200,7 +186,7 @@ pub(super) struct ClaimCandidate {
     artifact_schema_version: i32,
     validation_contract_id: Option<String>,
     attempt_count: i32,
-    slot_fencing_token: i64,
+    fencing_counter: i64,
 }
 
 pub(super) enum ClaimPreparation {
@@ -218,7 +204,6 @@ pub(super) enum ClaimPreparation {
 pub(super) async fn prepare_claim(
     transaction: &Transaction<'_>,
     job_id: &str,
-    stale_preemption_milliseconds: i64,
 ) -> Result<ClaimPreparation, ControlError> {
     let preview = transaction
         .query_opt(
@@ -230,27 +215,6 @@ pub(super) async fn prepare_claim(
         return Ok(ClaimPreparation::Rejected(ClaimResult::MissingOrTerminal));
     };
     let game_title_id = preview.try_get::<_, String>(0)?;
-    let slot = lock_execution_slot(transaction).await?;
-    let mut effects = TransactionEffects::empty();
-    if let Some(holder) = &slot.holder {
-        if !holder.expired || holder.task_kind == ExecutionTaskKind::Ocr {
-            return Ok(ClaimPreparation::Rejected(ClaimResult::Busy));
-        }
-        let recovery_effects = recover_expired_analysis_holder(transaction, holder).await?;
-        let current_candidate_resolved =
-            recovery_resolves_candidate(transaction, &holder.job_id, job_id, recovery_effects)
-                .await?;
-        effects.merge(recovery_effects);
-        return Ok(ClaimPreparation::RecoveredExpiredHolder {
-            current_candidate_resolved,
-            effects,
-        });
-    }
-    if slot.preempt_requested_by.is_some()
-        && !clear_stale_preemption(transaction, stale_preemption_milliseconds).await?
-    {
-        return Ok(ClaimPreparation::Rejected(ClaimResult::Busy));
-    }
     let title_exists = transaction
         .query_opt(
             "SELECT game_title_id FROM series_analysis_title_states\x20\
@@ -269,7 +233,9 @@ pub(super) async fn prepare_claim(
                     GREATEST(\x20\
                       CEIL(EXTRACT(EPOCH FROM (available_at - clock_timestamp())) * 1000), 0\x20\
                     )::bigint AS remaining_delay_milliseconds, attempt_count, work_kind,\x20\
-                    radar_operation_id, radar_basis_id, radar_generation\x20\
+                    radar_operation_id, radar_basis_id, radar_generation, fencing_counter,\x20\
+                    lease_owner, lease_attempt_id, lease_fencing_token,\x20\
+                    lease_expires_at <= clock_timestamp() AS expired\x20\
              FROM series_analysis_jobs WHERE id = $1 FOR UPDATE",
             &[&job_id],
         )
@@ -277,6 +243,24 @@ pub(super) async fn prepare_claim(
     let Some(job) = job else {
         return Ok(ClaimPreparation::Rejected(ClaimResult::MissingOrTerminal));
     };
+    if job.try_get::<_, String>(4)? == "running" {
+        if !job.try_get::<_, Option<bool>>(15)?.unwrap_or(false) {
+            return Ok(ClaimPreparation::Rejected(ClaimResult::Busy));
+        }
+        let lease = ExpiredJobLease {
+            job_id: String::from(job_id),
+            owner: job.try_get(12)?,
+            attempt_id: job.try_get(13)?,
+            fencing_token: job.try_get(14)?,
+        };
+        let effects = recover_expired_analysis_job(transaction, &lease).await?;
+        let current_candidate_resolved =
+            recovery_resolves_candidate(transaction, job_id, job_id, effects).await?;
+        return Ok(ClaimPreparation::RecoveredExpiredHolder {
+            effects,
+            current_candidate_resolved,
+        });
+    }
     if job.try_get::<_, String>(4)? != "queued" {
         return Ok(ClaimPreparation::Rejected(ClaimResult::MissingOrTerminal));
     }
@@ -300,9 +284,9 @@ pub(super) async fn prepare_claim(
             artifact_schema_version: job.try_get(2)?,
             validation_contract_id: job.try_get(3)?,
             attempt_count: job.try_get(6)?,
-            slot_fencing_token: slot.fencing_token,
+            fencing_counter: job.try_get(11)?,
         },
-        effects,
+        effects: TransactionEffects::empty(),
     })
 }
 
@@ -349,31 +333,6 @@ fn recovered_job_state_resolves_candidate(
     }
 }
 
-async fn acquire_execution_slot(
-    transaction: &Transaction<'_>,
-    worker_id: &str,
-    job_id: &str,
-    attempt_id: &str,
-    lease_milliseconds: i64,
-    expected_fencing_token: i64,
-) -> Result<i64, ControlError> {
-    match acquire_analysis(
-        transaction,
-        expected_fencing_token,
-        NewExecutionSlotHolder {
-            owner: worker_id,
-            job_id,
-            attempt_id,
-        },
-        lease_milliseconds,
-    )
-    .await?
-    {
-        SlotAcquisition::Acquired(fencing_token) => Ok(fencing_token),
-        SlotAcquisition::Busy => Err(ControlError::OwnerLost),
-    }
-}
-
 struct ClaimAttempt<'a> {
     job_id: &'a str,
     candidate: &'a ClaimCandidate,
@@ -394,7 +353,7 @@ async fn persist_claim(
         .execute(
             "UPDATE series_analysis_jobs SET\x20\
                status = 'running', started_at = clock_timestamp(), finished_at = NULL,\x20\
-               lease_owner = $1, lease_attempt_id = $2, lease_fencing_token = $3,\x20\
+               lease_owner = $1, lease_attempt_id = $2, lease_fencing_token = $3, fencing_counter = $3,\x20\
                lease_expires_at = clock_timestamp() + ($4::bigint * interval '1 millisecond'),\x20\
                lease_validation_contract_id = $5, attempt_count = $6,\x20\
                updated_at = clock_timestamp()\x20\
@@ -494,7 +453,7 @@ mod tests {
             artifact_schema_version: i32::try_from(ARTIFACT_SCHEMA_VERSION).unwrap_or(i32::MAX),
             validation_contract_id: validation_contract_id.map(String::from),
             attempt_count: 0,
-            slot_fencing_token: 0,
+            fencing_counter: 0,
         }
     }
 

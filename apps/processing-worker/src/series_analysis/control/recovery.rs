@@ -1,8 +1,6 @@
 use tokio_postgres::{Row, Transaction};
 
-use crate::execution_slot::{
-    ExecutionSlotHolder, ExecutionTaskKind, clear_expired as clear_expired_slot,
-};
+use crate::job_lease::ExpiredJobLease;
 
 use super::{
     AttemptOutcome, ClaimedJob, ControlError, RequestOutcome, SafeFailureCode, TransactionEffects,
@@ -11,21 +9,10 @@ use super::{
     },
 };
 
-pub(crate) async fn recover_expired_analysis_holder(
-    transaction: &Transaction<'_>,
-    holder: &ExecutionSlotHolder,
-) -> Result<TransactionEffects, ControlError> {
-    recover_expired_analysis_job(transaction, holder, true).await
-}
-
 pub(crate) async fn recover_expired_analysis_job(
     transaction: &Transaction<'_>,
-    holder: &ExecutionSlotHolder,
-    clear_slot: bool,
+    holder: &ExpiredJobLease,
 ) -> Result<TransactionEffects, ControlError> {
-    if holder.task_kind != ExecutionTaskKind::Analysis || !holder.expired {
-        return Err(ControlError::OwnerLost);
-    }
     let job_id = &holder.job_id;
     let attempt_id = &holder.attempt_id;
     let fencing_token = holder.fencing_token;
@@ -36,9 +23,6 @@ pub(crate) async fn recover_expired_analysis_job(
         )
         .await?;
     let Some(job_preview) = job_preview else {
-        if clear_slot && !clear_expired_slot(transaction, holder).await? {
-            return Err(ControlError::OwnerLost);
-        }
         return Ok(TransactionEffects::empty());
     };
     let game_title_id = job_preview.try_get::<_, String>(0)?;
@@ -77,7 +61,7 @@ pub(crate) async fn recover_expired_analysis_job(
         }
         let recoverable = job_row.try_get::<_, bool>(0)?;
         if !recoverable {
-            return Err(ControlError::OwnerLost);
+            return Ok(effects);
         }
         let job = decode_expired_job(&job_row)?;
         let owner_lost = AttemptOutcome::OwnerLost.wire();
@@ -110,9 +94,6 @@ pub(crate) async fn recover_expired_analysis_job(
         .await?;
         crate::series_analysis::job_transitions::bind_queued_radar(transaction, &[&game_title_id])
             .await?;
-    }
-    if clear_slot && !clear_expired_slot(transaction, holder).await? {
-        return Err(ControlError::OwnerLost);
     }
     Ok(effects)
 }

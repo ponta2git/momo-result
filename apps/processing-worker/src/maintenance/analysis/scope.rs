@@ -69,7 +69,7 @@ async fn inspect_in(
         }
     }
     blocked |= !client.query_one(
-        "SELECT count(*)=1 AND COALESCE(bool_and(owner IS NULL AND preempt_requested_by IS NULL),false) FROM worker_execution_slots WHERE slot_key='shared-heavy-work'", &[]
+        "SELECT NOT EXISTS (SELECT 1 FROM series_analysis_jobs WHERE status='running') AND NOT EXISTS (SELECT 1 FROM ocr_jobs WHERE status='running')", &[]
     ).await?.try_get::<_, bool>(0)?;
     let complete = completed_count == target_count && failed_count == 0;
     if complete {

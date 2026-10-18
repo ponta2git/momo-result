@@ -1,11 +1,6 @@
 use tokio_postgres::{Client, Transaction, types::Type};
 
-use crate::{
-    execution_slot::{
-        ExecutionSlotIdentity, ExecutionTaskKind, SlotRenewal, renew_owned as renew_slot,
-    },
-    series_analysis::config::AnalysisConsumerConfig,
-};
+use crate::series_analysis::config::AnalysisConsumerConfig;
 
 use crate::worker::ControlOutcome;
 
@@ -15,12 +10,11 @@ use super::{
     capability::refresh_heartbeat,
     transaction::{
         bounded_transaction, duration_milliseconds, finish_attempt, fulfill_requests, lock_owned,
-        refresh_operation_projections, release_slot, request_scheduler_wake, schedule_follow_up,
+        refresh_operation_projections, request_scheduler_wake, schedule_follow_up,
     },
 };
 
-/// Extends an owned attempt lease and reports whether a future higher-priority holder requested
-/// preemption.
+/// Extends the exact owned job lease without changing its fencing counter.
 ///
 /// # Errors
 ///
@@ -32,22 +26,6 @@ pub(crate) async fn heartbeat(
 ) -> Result<HeartbeatResult, ControlError> {
     let transaction = bounded_transaction(client, config.heartbeat_timeout).await?;
     let lease_milliseconds = duration_milliseconds(config.lease_duration)?;
-    let slot_renewal = renew_slot(
-        &transaction,
-        ExecutionSlotIdentity {
-            task_kind: ExecutionTaskKind::Analysis,
-            owner: &config.worker_id,
-            job_id: &claim.job_id,
-            attempt_id: &claim.attempt_id,
-            fencing_token: claim.fencing_token,
-        },
-        lease_milliseconds,
-    )
-    .await?;
-    if slot_renewal == SlotRenewal::OwnerLost {
-        transaction.rollback().await?;
-        return Ok(HeartbeatResult::OwnerLost);
-    }
     let updated = transaction
         .execute_typed(
             "UPDATE series_analysis_jobs SET\x20\
@@ -73,11 +51,7 @@ pub(crate) async fn heartbeat(
     }
     refresh_heartbeat(&transaction, &config.worker_id).await?;
     transaction.commit().await?;
-    Ok(if slot_renewal == SlotRenewal::PreemptRequested {
-        HeartbeatResult::PreemptRequested
-    } else {
-        HeartbeatResult::Continue
-    })
+    Ok(HeartbeatResult::Continue)
 }
 
 /// Terminates a claimed job whose source revision is no longer current.
@@ -139,7 +113,7 @@ pub(crate) async fn supersede(
         .await?;
     let mut effects = TransactionEffects::empty();
     request_scheduler_wake(&mut effects);
-    release_slot(&transaction, claim, &config.worker_id).await?;
+
     transaction.commit().await?;
     Ok(effects.committed(()))
 }
@@ -160,15 +134,7 @@ pub(crate) async fn finish_failure(
         bounded_transaction(client, config.execution_limits.finalization_timeout).await?;
     lock_owned(&transaction, claim, &config.worker_id).await?;
     let mut effects = TransactionEffects::empty();
-    finish_terminal_failure(
-        &transaction,
-        claim,
-        &config.worker_id,
-        failure,
-        metrics,
-        &mut effects,
-    )
-    .await?;
+    finish_terminal_failure(&transaction, claim, failure, metrics, &mut effects).await?;
     transaction.commit().await?;
     Ok(effects.committed(()))
 }
@@ -176,7 +142,6 @@ pub(crate) async fn finish_failure(
 pub(super) async fn finish_terminal_failure(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
-    worker_id: &str,
     failure: AttemptFailure,
     metrics: &AttemptMetrics,
     effects: &mut TransactionEffects,
@@ -217,7 +182,7 @@ pub(super) async fn finish_terminal_failure(
     fulfill_requests(transaction, claim, RequestOutcome::Failed).await?;
     schedule_follow_up(transaction, claim, effects).await?;
     refresh_operation_projections(transaction, &claim.attempt_id).await?;
-    release_slot(transaction, claim, worker_id).await?;
+
     Ok(())
 }
 
@@ -283,7 +248,7 @@ pub(crate) async fn retry_transient_failure(
             )
             .await?;
         request_scheduler_wake(&mut effects);
-        release_slot(&transaction, claim, &config.worker_id).await?;
+
         transaction.commit().await?;
         return Ok(effects.committed(TransientRetryResult::Requeued));
     }
@@ -291,7 +256,6 @@ pub(crate) async fn retry_transient_failure(
     finish_terminal_failure(
         &transaction,
         claim,
-        &config.worker_id,
         AttemptFailure::failed(SafeFailureCode::DependencyRetryExhausted),
         metrics,
         &mut effects,
@@ -349,7 +313,7 @@ pub(crate) async fn requeue_interrupted(
         .await?;
     let mut effects = TransactionEffects::empty();
     request_scheduler_wake(&mut effects);
-    release_slot(&transaction, claim, &config.worker_id).await?;
+
     transaction.commit().await?;
     Ok(effects.committed(()))
 }

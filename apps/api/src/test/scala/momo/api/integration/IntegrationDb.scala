@@ -147,8 +147,7 @@ object IntegrationDb:
    * `0013_login_accounts.sql`), and `incident_masters` (seeded by migration). Order respects FK
    * dependencies; using TRUNCATE ... CASCADE keeps it terse.
    */
-  def truncateAppTables(transactor: Transactor[IO]): IO[Unit] =
-    (sql"""
+  def truncateAppTables(transactor: Transactor[IO]): IO[Unit] = (sql"""
       TRUNCATE TABLE
         discord_notifications,
         series_analysis_match_context_artifacts,
@@ -185,18 +184,6 @@ object IntegrationDb:
       RESTART IDENTITY CASCADE
     """.update.run.void *> sql"""
       UPDATE discord_notification_settings SET enabled = true, generation = 0
-    """.update.run.void *> sql"""
-      UPDATE worker_execution_slots
-      SET task_kind = NULL,
-          owner = NULL,
-          job_id = NULL,
-          attempt_id = NULL,
-          holder_preemptible = NULL,
-          lease_expires_at = NULL,
-          preempt_requested_by = NULL,
-          preempt_requested_at = NULL,
-          updated_at = now()
-      WHERE slot_key = 'shared-heavy-work'
     """.update.run.void *> sql"""
       UPDATE series_analysis_release_state
       SET algorithm_version = 'series-analysis-v7',

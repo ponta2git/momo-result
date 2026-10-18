@@ -103,7 +103,7 @@ async fn exercise(client: &mut Client) -> Result<(), Box<dyn std::error::Error +
     verify_generation_fence(client, &scope).await?;
     verify_radar_binding(client, &scope).await?;
     verify_foreign_request_fence(client, &scope).await?;
-    verify_slot_fence(client, &scope).await?;
+    verify_running_job_fence(client, &scope).await?;
     assert_eq!(
         inspect(client, &request).await?.plan_digest,
         initial.plan_digest
@@ -171,12 +171,12 @@ async fn verify_foreign_request_fence(
     Ok(())
 }
 
-async fn verify_slot_fence(
+async fn verify_running_job_fence(
     client: &mut Client,
     scope: &BoundScope,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let transaction = client.transaction().await?;
-    transaction.execute("UPDATE worker_execution_slots SET preempt_requested_by='maintenance-foreign-worker',preempt_requested_at=clock_timestamp() WHERE slot_key='shared-heavy-work'", &[]).await?;
+    transaction.execute("UPDATE series_analysis_jobs SET status='running',started_at=clock_timestamp(),lease_owner='maintenance-foreign-worker',lease_attempt_id='maintenance-foreign-attempt',lease_fencing_token=1,fencing_counter=1,lease_expires_at=clock_timestamp()+interval '1 minute',lease_validation_contract_id=validation_contract_id WHERE game_title_id=$1", &[&TITLE]).await?;
     assert_eq!(
         inspect_in(&transaction, &scope.request).await?.status,
         "attention_required"

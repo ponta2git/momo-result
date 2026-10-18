@@ -1,13 +1,6 @@
 BEGIN;
 SET LOCAL statement_timeout = '10s';
 SET LOCAL lock_timeout = '5s';
-UPDATE worker_execution_slots
-SET task_kind = NULL, owner = NULL, job_id = NULL, attempt_id = NULL,
-    holder_preemptible = NULL, lease_expires_at = NULL,
-    preempt_requested_by = NULL, preempt_requested_at = NULL,
-    updated_at = clock_timestamp()
-WHERE slot_key = 'shared-heavy-work'
-  AND (owner IS NULL OR owner = 'ci-analysis-worker');
 UPDATE series_analysis_title_states
 SET current_artifact_id = NULL, previous_artifact_id = NULL,
     notification_baseline_state = 'unknown', notification_baseline_artifact_id = NULL

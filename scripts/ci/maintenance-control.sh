@@ -2,7 +2,7 @@
 set -euo pipefail
 
 case "${1:-}" in
-  normal-status|normal-guard|bind-receipt|maintenance-guard) ;;
+  status|normal-status|normal-guard|bind-receipt|maintenance-guard) ;;
   *) echo 'Unsupported consumer maintenance control operation.' >&2; exit 2 ;;
 esac
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

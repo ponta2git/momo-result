@@ -124,7 +124,7 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 - retry の結果分類と report artifact は `docs/test-architecture.md` の CI Artifacts に従う。
 - release 候補は一度だけ build し、commit、設定、immutable artifact identity、digest、producer attempt を記録する。後続 smoke / deploy / rollback は同じ候補を使う。
 - 永続 maintenance 制御が有効な間も候補作成と品質検証は進め、通常 deploy・分析操作・rollback・Release 発行を保留する。制御記録を読めない場合は変更を許可しない。候補作成だけの成功を配備完了として公開せず、通常の発行には exact deployment run / attempt の完了証拠を必要とする。
-- maintenance の継続は公開可能な identity と digest だけの receipt を実行 run / attempt へ束縛し、承認後も各変更前に許可を再確認する。consumer は検証済み候補を frozen のまま順に配備し、専用 readiness で確認する。限定分析は同じ既存 operation / campaign と plan digest だけを処理し、通常の promotion / backfill を呼ばない。再開後の発行は producer と実際の deployment を区別し、その配備完了と provenance を照合する。
+- maintenance の継続は公開可能な identity と digest だけの receipt を実行 run / attempt へ束縛し、承認後も各変更前に許可を再確認する。consumer は検証済み候補を frozen のまま順に配備し、専用 readiness で確認する。限定分析は明示した初期化・継続 phase と、それぞれ別の plan digest を照合する。初期化は consumer の配備確認後に限り、全作品・入力 revision・保存 pointer を固定した新規 campaign を原子的に作る。継続は承認した既存 operation / campaign だけを処理し、初期化後に得た continuation digest には別 receipt を必要とする。通常の promotion / backfill は frozen 中に呼ばない。再開後の発行は producer と実際の deployment を区別し、その配備完了と provenance を照合する。
 - 外部 action / provider の値は境界で検証・正規化し、consumer 用の表現を推測しない。workflow 再実行時も current attempt から候補 identity を再計算しない。
 - mutable tag や cache hit を provenance / 検証成功の根拠にしない。
 - 通常 release は runtime と Processing Worker の検証済み候補を揃え、同じ承認・排他の中で適用する。分析成果物の非互換変更では、公開を止めて単一世代へ切り替え、再計算と監査を終えてから再開する。独立した worker candidate workflow は重ねない。Worker の image・設定・稼働状態が一致し、未適用の設定がない場合は再配備を省く。

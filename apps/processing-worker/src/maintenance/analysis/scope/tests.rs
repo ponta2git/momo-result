@@ -14,7 +14,7 @@ fn request() -> Request {
 }
 
 #[tokio::test]
-#[ignore = "requires explicitly isolated MAINTENANCE_ANALYSIS_SMOKE_DATABASE_URL with the current publication contract"]
+#[ignore = "requires explicitly isolated MAINTENANCE_ANALYSIS_SMOKE_DATABASE_URL"]
 async fn real_postgres_scoped_plan_preserves_binding_and_refuses_unrelated_work()
 -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let database_url = std::env::var("MAINTENANCE_ANALYSIS_SMOKE_DATABASE_URL")?;
@@ -42,6 +42,14 @@ async fn real_postgres_scoped_plan_preserves_binding_and_refuses_unrelated_work(
             WHERE series_analysis_operation_requests.legacy_id = 'maintenance-scope-test-operation';
             DELETE FROM game_titles
             WHERE game_titles.legacy_id = 'maintenance-scope-test-title';
+            UPDATE series_analysis_release_state r
+            SET algorithm_version = saved.algorithm_version,
+                artifact_schema_version = saved.artifact_schema_version,
+                validation_contract_id = saved.validation_contract_id,
+                updated_at = saved.updated_at
+            FROM maintenance_scope_original_release saved
+            WHERE r.singleton_key = saved.singleton_key;
+            DROP TABLE maintenance_scope_original_release;
             "
     ).await;
     verified?;
@@ -51,6 +59,17 @@ async fn real_postgres_scoped_plan_preserves_binding_and_refuses_unrelated_work(
 
 async fn create_fixture(client: &mut Client) -> Result<(), tokio_postgres::Error> {
     let transaction = client.transaction().await?;
+    // Fresh migrations retain their historical release tuple. This isolated fixture
+    // owns its explicit current-contract setup and restores every singleton column;
+    // it must not depend on a previous promotion test's execution order.
+    transaction.batch_execute(
+        "CREATE TEMPORARY TABLE maintenance_scope_original_release AS SELECT * FROM series_analysis_release_state"
+    ).await?;
+    transaction.execute(
+        "UPDATE series_analysis_release_state SET algorithm_version=$1, artifact_schema_version=$2::bigint::integer, \
+         validation_contract_id=$3, updated_at=clock_timestamp() WHERE singleton_key='current'",
+        &[&ALGORITHM_VERSION, &i64::from(ARTIFACT_SCHEMA_VERSION), &ARTIFACT_VALIDATION_CONTRACT_ID]
+    ).await?;
     transaction.execute(r"
         WITH fixture_titles AS (
                INSERT INTO game_titles (id, legacy_id, name, layout_family, display_order)

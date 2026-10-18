@@ -18,7 +18,7 @@ func provider(command string, args []string, in io.Reader, out io.Writer) error 
 		"runtime-machine-evidence": 1, "runtime-machine-id": 1, "analysis-reusable-release": 1,
 		"runtime-machine-start-id": 1, "analysis-machine-start-id": 4,
 		"frozen-machine-id": 2, "frozen-machine-start-id": 2, "frozen-readiness-evidence": 1,
-		"maintenance-analysis-evidence": 2, "maintenance-publish-evidence": 2,
+		"maintenance-analysis-evidence": 3, "maintenance-initialization-guard": 2, "maintenance-publish-evidence": 2,
 		"analysis-machine-identity": 0, "analysis-machine-evidence": 4, "analysis-secrets": 1,
 		"canonical-json": 0, "public-edge-evidence": 0, "normal-deployment-completion": 3}
 	n, ok := counts[command]
@@ -31,7 +31,9 @@ func provider(command string, args []string, in io.Reader, out io.Writer) error 
 	}
 	switch command {
 	case "maintenance-analysis-evidence":
-		return maintenanceAnalysisEvidence(value, args[0], args[1], out)
+		return maintenanceAnalysisEvidence(value, args[0], args[1], args[2], out)
+	case "maintenance-initialization-guard":
+		return maintenanceInitializationGuard(value, args[0], args[1])
 	case "maintenance-publish-evidence":
 		return maintenancePublishEvidence(value, args[0], args[1])
 	case "frozen-machine-id", "frozen-machine-start-id":

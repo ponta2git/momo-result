@@ -13,6 +13,7 @@ func scopeReceipt(t *testing.T, operation string, scope object) string {
 	t.Helper()
 	r := object{"formatVersion": 1, "operation": operation, "cutoverId": "release-fixture", "stopEpoch": 4,
 		"candidates": object{"result": testCommit}, "scope": scope,
+		"evidence": object{"previousStage": strings.Repeat("c", 64)},
 		"producer": object{"runId": "123456", "runAttempt": 2, "artifacts": []any{object{"id": "111", "digest": strings.Repeat("a", 64)}}}}
 	data, err := json.Marshal(r)
 	if err != nil {
@@ -58,12 +59,14 @@ func TestMaintenanceScopeRejectsUnboundCommands(t *testing.T) {
 
 func TestAnalysisCompletionRequiresTheBoundPlanAndEveryTarget(t *testing.T) {
 	path := scopeReceipt(t, "analysis", analysisScope())
-	valid := fmt.Sprintf(`{"schemaVersion":1,"cutoverId":"release-fixture","stopEpoch":4,"operationId":"analysis-release-operation-fixture","campaignId":"analysis-campaign-fixture","planDigest":%q,"status":"complete","targetCount":2,"completedCount":2,"failedCount":0}`, testDigest)
+	valid := fmt.Sprintf(`{"schemaVersion":2,"kind":"continue","cutoverId":"release-fixture","stopEpoch":4,"operationId":"analysis-release-operation-fixture","campaignId":"analysis-campaign-fixture","planDigest":%q,"status":"complete","targetCount":2,"completedCount":2,"failedCount":0}`, testDigest)
 	for _, change := range []func(object){
 		nil,
 		func(o object) { o["stopEpoch"] = 3 },
 		func(o object) { o["campaignId"] = "other-campaign" },
 		func(o object) { o["planDigest"] = "sha256:" + strings.Repeat("b", 64) },
+		func(o object) { o["kind"] = "initialize" },
+		func(o object) { o["schemaVersion"] = 1 },
 		func(o object) { o["status"] = "attention_required" },
 		func(o object) { o["completedCount"] = 1 },
 		func(o object) { o["completedCount"] = 1; o["failedCount"] = 1 },
@@ -73,20 +76,84 @@ func TestAnalysisCompletionRequiresTheBoundPlanAndEveryTarget(t *testing.T) {
 		if change != nil {
 			input = string(mutated(t, []byte(valid), change))
 		}
-		code, out, diagnostics := call(t, "maintenance-analysis-evidence", []string{path, "complete"}, input, "")
+		code, out, diagnostics := call(t, "maintenance-analysis-evidence", []string{path, "continue", "complete"}, input, "")
 		if (code == 0) != (change == nil) || (change != nil && out != "") || strings.Contains(out+diagnostics, "never-print") {
 			t.Fatal(code, out, diagnostics)
 		}
 	}
 	planned := strings.Replace(valid, `"status":"complete"`, `"status":"planned"`, 1)
 	planned = strings.Replace(planned, `"completedCount":2`, `"completedCount":1`, 1)
-	code, _, diagnostics := call(t, "maintenance-analysis-evidence", []string{path, "plan"}, planned, "")
+	code, _, diagnostics := call(t, "maintenance-analysis-evidence", []string{path, "continue", "plan"}, planned, "")
 	if code != 0 {
 		t.Fatal(diagnostics)
 	}
-	code, _, diagnostics = call(t, "maintenance-analysis-evidence", []string{path, "plan"}, valid, "")
+	code, _, diagnostics = call(t, "maintenance-analysis-evidence", []string{path, "continue", "plan"}, valid, "")
 	if code != 0 {
 		t.Fatal("an already completed read-only plan must remain idempotent", diagnostics)
+	}
+}
+
+func TestInitializationRequiresItsOwnCandidateEvidenceAndContinuationReceipt(t *testing.T) {
+	path := scopeReceipt(t, "analysis", analysisScope())
+	valid := fmt.Sprintf(`{"schemaVersion":2,"kind":"initialize","cutoverId":"release-fixture","stopEpoch":4,"operationId":"analysis-release-operation-fixture","campaignId":"analysis-campaign-fixture","planDigest":%q,"status":"initialized","targetCount":2,"completedCount":0,"failedCount":0,"candidateRelease":%q,"readinessDigest":%q,"continuationPlanDigest":%q}`,
+		testDigest, testCommit, "sha256:"+strings.Repeat("c", 64), "sha256:"+strings.Repeat("d", 64))
+	for _, change := range []func(object){
+		nil,
+		func(o object) { o["kind"] = "continue" },
+		func(o object) { o["candidateRelease"] = strings.Repeat("b", 40) },
+		func(o object) { o["readinessDigest"] = "sha256:" + strings.Repeat("b", 64) },
+		func(o object) { o["continuationPlanDigest"] = testDigest },
+		func(o object) { delete(o, "continuationPlanDigest") },
+		func(o object) { o["failedCount"] = 1 },
+	} {
+		input := valid
+		if change != nil {
+			input = string(mutated(t, []byte(valid), change))
+		}
+		code, out, diagnostics := call(t, "maintenance-analysis-evidence", []string{path, "initialize", "complete"}, input, "")
+		if (code == 0) != (change == nil) || (change != nil && out != "") {
+			t.Fatal(code, out, diagnostics)
+		}
+	}
+	code, _, _ := call(t, "maintenance-analysis-evidence", []string{path, "continue", "plan"}, valid, "")
+	if code == 0 {
+		t.Fatal("initialization cannot authorize continuation")
+	}
+	preview := string(mutated(t, []byte(valid), func(o object) { o["status"] = "planned"; delete(o, "continuationPlanDigest") }))
+	code, _, diagnostics := call(t, "maintenance-analysis-evidence", []string{path, "initialize", "plan"}, preview, "")
+	if code != 0 {
+		t.Fatal(diagnostics)
+	}
+	code, _, _ = call(t, "maintenance-analysis-evidence", []string{path, "initialize", "complete"}, preview, "")
+	if code == 0 {
+		t.Fatal("a preview cannot count as initialization")
+	}
+}
+
+func TestInitializationRequiresTheSameConsumersStagedControlHead(t *testing.T) {
+	path := scopeReceipt(t, "analysis", analysisScope())
+	status := fmt.Sprintf(`{"head":%q,"stateVersion":8,"cutoverId":"release-fixture","stopEpoch":4,"phase":"CONSUMERS_STAGED"}`, testCommit)
+	guard := fmt.Sprintf(`{"controlHead":%q,"stateVersion":8,"cutoverId":"release-fixture","stopEpoch":4,"receiptDigest":%q}`, testCommit, strings.Repeat("e", 64))
+	for _, change := range []func(object){
+		nil,
+		func(o object) { o["phase"] = "READY_TO_RESUME" },
+		func(o object) { o["head"] = strings.Repeat("b", 40) },
+		func(o object) { o["stateVersion"] = 9 },
+		func(o object) { o["stopEpoch"] = 5 },
+		func(o object) { o["cutoverId"] = "another-cutover" },
+	} {
+		data := []byte(status)
+		if change != nil {
+			data = mutated(t, data, change)
+		}
+		statusPath := filepath.Join(t.TempDir(), "status.json")
+		if err := os.WriteFile(statusPath, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		code, out, diagnostics := call(t, "maintenance-initialization-guard", []string{path, statusPath}, guard, "")
+		if (code == 0) != (change == nil) || out != "" {
+			t.Fatal(code, out, diagnostics)
+		}
 	}
 }
 

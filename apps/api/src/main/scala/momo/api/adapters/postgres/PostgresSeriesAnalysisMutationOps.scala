@@ -118,6 +118,7 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
               AND status = 'queued'
           """.update.run.flatMap(requireOne("series_analysis_jobs", job.id, "coalesce queued job"))
         case Some(_) => ().pure[ConnectionIO]
+      _ <- PostgresSeriesAnalysisJobTransitions.bindQueuedRadar(gameTitleId)
       _ <- sql"""
         INSERT INTO series_analysis_job_requests (
           id,

@@ -3,12 +3,17 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+const fixtureDatabaseProofJSON = `{"formatVersion":1,"targetFingerprint":"6771b0dca574fd57070c4e09362db28a2603f50c6a31c7ace1690390a4fa7169","ledgerFingerprint":"6c999946c7604635b2672944e5bd546152a17281205cfb4429ed3df8d20cd5ab"}`
+
+const fixtureMaintenanceReadyJSON = `{"status":"ready","mode":"frozen","database":` + fixtureDatabaseProofJSON + `}`
 
 func TestMaintenanceModeIsStrict(t *testing.T) {
 	t.Parallel()
@@ -67,15 +72,22 @@ func TestMaintenanceProbeRequiresFrozenReadinessAndClosedRoutes(t *testing.T) {
 					status = "ok"
 				}
 				response.WriteHeader(code)
-				_, _ = fmt.Fprintf(response, `{"status":%q,"mode":"frozen"}`, status)
+				if request.URL.Path == maintenanceReadinessPath {
+					_, _ = fmt.Fprintf(response, `{"status":%q,"mode":"frozen","database":%s}`, status, fixtureDatabaseProofJSON)
+				} else {
+					_, _ = fmt.Fprintf(response, `{"status":%q,"mode":"frozen"}`, status)
+				}
 			}))
 			defer server.Close()
-			err := probeMaintenanceHTTP(context.Background(), server.Client(), server.URL, "example.com", "test-token")
+			proof, err := probeMaintenanceHTTP(context.Background(), server.Client(), server.URL, "example.com", "test-token")
 			if (err == nil) != (failingPath == "") {
 				t.Fatalf("unexpected probe result: %v", err)
 			}
 			if failingPath == "" && strings.Join(methods, ",") != "GET,GET,GET,POST" {
 				t.Fatalf("missing route closure checks: %v", methods)
+			}
+			if failingPath == "" && !proof.valid() {
+				t.Fatal("did not retain the validated API connection proof")
 			}
 		})
 	}
@@ -85,12 +97,40 @@ func TestMaintenancePayloadRejectsLeakedFieldsAndTrailingData(t *testing.T) {
 	t.Parallel()
 	for _, payload := range []string{
 		`{"status":"ready","mode":"normal"}`,
+		`{"status":"ready","mode":"frozen"}`,
+		`{"status":"ready","mode":"frozen","database":null}`,
 		`{"status":"ready","mode":"frozen","database":"secret"}`,
-		`{"status":"ready","mode":"frozen"} {}`,
-		`{"status":"ready","mode":"frozen"}` + strings.Repeat(" ", probeBodyLimit),
+		strings.Replace(fixtureMaintenanceReadyJSON, `"formatVersion":1`, `"formatVersion":2`, 1),
+		strings.Replace(fixtureMaintenanceReadyJSON, `"formatVersion":1`, `"formatVersion":1,"role":"secret"`, 1),
+		strings.Replace(fixtureMaintenanceReadyJSON, `"mode":"frozen"`, `"mode":"frozen","host":"secret"`, 1),
+		strings.Replace(fixtureMaintenanceReadyJSON, "6771b0d", "6771B0D", 1),
+		strings.Replace(fixtureMaintenanceReadyJSON, "6c999946", "invalid-", 1),
+		fixtureMaintenanceReadyJSON + ` {}`,
+		fixtureMaintenanceReadyJSON + strings.Repeat(" ", probeBodyLimit),
 	} {
-		if decodeMaintenancePayload(strings.NewReader(payload), "ready") {
+		if _, err := decodeMaintenancePayload(strings.NewReader(payload), "ready"); err == nil {
 			t.Fatal("accepted invalid maintenance payload")
 		}
+	}
+}
+
+func TestMaintenanceResultRetainsOnlyValidatedProof(t *testing.T) {
+	t.Parallel()
+	proof, err := decodeMaintenancePayload(strings.NewReader(fixtureMaintenanceReadyJSON), "ready")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := successResult(maintenanceSmokeEvent)
+	result.Database = proof
+	var output bytes.Buffer
+	writeResult(&output, result)
+	var encoded struct {
+		Database json.RawMessage `json:"database"`
+	}
+	if json.Unmarshal(output.Bytes(), &encoded) != nil || string(encoded.Database) != fixtureDatabaseProofJSON {
+		t.Fatalf("connection proof changed during result serialization: %s", output.String())
+	}
+	if _, err := decodeMaintenancePayload(strings.NewReader(strings.Replace(fixtureMaintenanceReadyJSON, `"ready"`, `"maintenance"`, 1)), "maintenance"); err == nil {
+		t.Fatal("accepted database proof on a normal closed route")
 	}
 }

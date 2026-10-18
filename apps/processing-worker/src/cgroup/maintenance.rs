@@ -25,22 +25,7 @@ pub(crate) fn join_frozen_daemon(
     {
         return Err(CgroupError::InvalidMembership);
     }
-    let process_directory = PathBuf::from(format!("/proc/{daemon_pid}"));
-    let status = bounded_read(&process_directory.join("status"))?;
-    for (field, expected) in [("Uid:", service_user_id), ("Gid:", service_group_id)] {
-        let values = status
-            .lines()
-            .find_map(|line| line.strip_prefix(field))
-            .ok_or(CgroupError::InvalidMembership)?;
-        let mut values = values.split_whitespace();
-        if (0..4).any(|_index| {
-            values.next().and_then(|value| value.parse::<u32>().ok()) != Some(expected)
-        }) || values.next().is_some()
-        {
-            return Err(CgroupError::DelegationFailed);
-        }
-    }
-    let membership = bounded_read(&process_directory.join("cgroup"))?;
+    let membership = daemon_membership(daemon_pid, service_user_id, service_group_id)?;
     let hierarchy = if Path::new(V2_ROOT).join("cgroup.controllers").is_file() {
         if env::var(CGROUP_V2_VALIDATED_ENV).as_deref() != Ok("true") {
             return Err(CgroupError::UnsupportedHierarchy);
@@ -60,30 +45,7 @@ pub(crate) fn join_frozen_daemon(
     };
     let worker =
         controller_member_directory(Path::new(root), &membership_path(&membership, hierarchy)?)?;
-    let delegation = match hierarchy {
-        CgroupHierarchy::V1 => worker.as_path(),
-        CgroupHierarchy::V2 => {
-            if worker
-                .file_name()
-                .is_none_or(|name| name != WORKER_CGROUP_NAME)
-            {
-                return Err(CgroupError::UnsafeDirectory);
-            }
-            let parent = worker.parent().ok_or(CgroupError::UnsafeDirectory)?;
-            if parent
-                .file_name()
-                .is_none_or(|name| name != DELEGATION_CGROUP_NAME)
-            {
-                return Err(CgroupError::UnsafeDirectory);
-            }
-            owned_by(
-                &parent.join("cgroup.procs"),
-                service_user_id,
-                service_group_id,
-            )?;
-            parent
-        }
-    };
+    let delegation = delegated_parent(&worker, hierarchy, service_user_id, service_group_id)?;
     let members = read_process_ids(&worker.join("cgroup.procs"))?;
     if !members.contains(&daemon_pid)
         || (hierarchy == CgroupHierarchy::V2
@@ -149,6 +111,62 @@ pub(crate) fn join_frozen_daemon(
         cpu_directory,
         cpu_budget,
     })
+}
+
+fn daemon_membership(
+    daemon_pid: u32,
+    service_user_id: u32,
+    service_group_id: u32,
+) -> Result<String, CgroupError> {
+    let process_directory = PathBuf::from(format!("/proc/{daemon_pid}"));
+    let status = bounded_read(&process_directory.join("status"))?;
+    for (field, expected) in [("Uid:", service_user_id), ("Gid:", service_group_id)] {
+        let values = status
+            .lines()
+            .find_map(|line| line.strip_prefix(field))
+            .ok_or(CgroupError::InvalidMembership)?;
+        let mut values = values.split_whitespace();
+        if (0..4).any(|_index| {
+            values.next().and_then(|value| value.parse::<u32>().ok()) != Some(expected)
+        }) || values.next().is_some()
+        {
+            return Err(CgroupError::DelegationFailed);
+        }
+    }
+    bounded_read(&process_directory.join("cgroup"))
+}
+
+fn delegated_parent(
+    worker: &Path,
+    hierarchy: CgroupHierarchy,
+    service_user_id: u32,
+    service_group_id: u32,
+) -> Result<&Path, CgroupError> {
+    let delegation = match hierarchy {
+        CgroupHierarchy::V1 => worker,
+        CgroupHierarchy::V2 => {
+            if worker
+                .file_name()
+                .is_none_or(|name| name != WORKER_CGROUP_NAME)
+            {
+                return Err(CgroupError::UnsafeDirectory);
+            }
+            let parent = worker.parent().ok_or(CgroupError::UnsafeDirectory)?;
+            if parent
+                .file_name()
+                .is_none_or(|name| name != DELEGATION_CGROUP_NAME)
+            {
+                return Err(CgroupError::UnsafeDirectory);
+            }
+            owned_by(
+                &parent.join("cgroup.procs"),
+                service_user_id,
+                service_group_id,
+            )?;
+            parent
+        }
+    };
+    Ok(delegation)
 }
 
 fn owned_by(path: &Path, user_id: u32, group_id: u32) -> Result<(), CgroupError> {

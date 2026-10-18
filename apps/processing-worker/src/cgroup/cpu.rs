@@ -194,10 +194,10 @@ fn validate_runtime_budget(
             CgroupHierarchy::V2 => "cpu.max",
         };
         // The system-wide v2 root has no cpu.max. Every non-root ancestor must expose it.
-        if ancestor != root || ancestor.join(controller).is_file() {
-            if !read_bandwidth(hierarchy, ancestor)?.admits(budget) {
-                return Err(CgroupError::LimitMismatch);
-            }
+        if (ancestor != root || ancestor.join(controller).is_file())
+            && !read_bandwidth(hierarchy, ancestor)?.admits(budget)
+        {
+            return Err(CgroupError::LimitMismatch);
         }
         if ancestor == root {
             break;

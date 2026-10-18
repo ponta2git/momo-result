@@ -671,10 +671,9 @@ fn controller_membership_path(
         let Some(path) = fields.next() else {
             continue;
         };
-        let selected = match controller {
-            Some(controller) => controllers.split(',').any(|value| value == controller),
-            None => controllers.is_empty(),
-        };
+        let selected = controller.map_or(controllers.is_empty(), |controller| {
+            controllers.split(',').any(|value| value == controller)
+        });
         if selected {
             let path = PathBuf::from(path);
             if safe_absolute_membership_path(&path) {

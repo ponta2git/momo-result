@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { APIRequestContext } from "@playwright/test";
 
 import type { components } from "../../src/shared/api/generated";
-import { expectGeneratedId, postJson } from "../support";
+import { expectGeneratedId, expectOk, postJson, readJsonObject } from "../support";
 import type { E2eRun } from "../support";
 
 export async function seedMasterContext(request: APIRequestContext, e2eRun: E2eRun) {
@@ -74,6 +74,7 @@ export async function seedConfirmedContext(request: APIRequestContext, e2eRun: E
   return {
     ...context,
     matchId,
+    matchPublicId: await readPublicId(request, `/api/matches/${matchId}`),
   };
 }
 
@@ -160,6 +161,7 @@ export async function seedUiContext(request: APIRequestContext, e2eRun: E2eRun) 
 
   return {
     heldEventId,
+    heldEventPublicId: await readPublicId(request, `/api/held-events/${heldEventId}`),
     mapName,
     matchIds,
     primaryGameTitleId,
@@ -168,6 +170,16 @@ export async function seedUiContext(request: APIRequestContext, e2eRun: E2eRun) 
     seasonName,
     secondaryGameTitleId,
   };
+}
+
+async function readPublicId(request: APIRequestContext, path: string): Promise<string> {
+  const response = await request.get(path);
+  await expectOk(response, "read fixture public ID");
+  const publicId = (await readJsonObject(response))["publicId"];
+  if (typeof publicId !== "string" || !/^[1-9][0-9]*$/u.test(publicId)) {
+    throw new TypeError("Expected a positive decimal public ID");
+  }
+  return publicId;
 }
 
 function makeUiPlayers(seed: number): Array<components["schemas"]["PlayerResultRequest"]> {

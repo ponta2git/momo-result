@@ -94,11 +94,11 @@ test("finds a saved match, edits it and exports the saved values", async ({
     .getByRole("dialog", { name: "開催を選択" })
     .getByRole("radio", { name: fixture.heldEventLabelPrefix, exact: true })
     .press("Space");
-  await page.locator(`a[href="/matches/${fixture.matchId}"]:visible`).click();
+  await page.locator(`a[href="/m/${fixture.matchPublicId}"]:visible`).click();
   await page.getByRole("link", { name: "試合結果を編集" }).click();
   await page.getByLabel("ぽんた 総資産（万円）", { exact: true }).fill("7654");
   await page.getByRole("button", { exact: true, name: "保存" }).click();
-  await expect(page).toHaveURL(`/matches/${fixture.matchId}`);
+  await expect(page).toHaveURL(`/m/${fixture.matchPublicId}`);
   await page.reload();
   const saved = await request.get(`/api/matches/${fixture.matchId}`);
   await expectOk(saved, "read edited match");
@@ -152,7 +152,7 @@ test("deletes only the selected match and leaves the other record usable", async
     .getByRole("alertdialog", { name: "試合を削除しますか？" })
     .getByRole("button", { name: "削除する" })
     .click();
-  await expect(page).toHaveURL(`/held-events/${fixture.heldEventId}`);
+  await expect(page).toHaveURL(`/e/${fixture.heldEventPublicId}`);
   expect((await request.get(`/api/matches/${deletedId}`)).status()).toBe(404);
   const remaining = await request.get(`/api/matches/${remainingId}`);
   await expectOk(remaining, "read record retained after deletion");
@@ -230,7 +230,7 @@ test("keeps edited values after a failed save and completes the retry", async ({
   });
   await page.unroute(endpoint);
   await page.getByRole("button", { exact: true, name: "保存" }).click();
-  await expect(page).toHaveURL(`/matches/${fixture.matchId}`);
+  await expect(page).toHaveURL(`/m/${fixture.matchPublicId}`);
   await page.reload();
   const updated = await request.get(`/api/matches/${fixture.matchId}`);
   expect(await readJsonObject(updated)).toMatchObject({

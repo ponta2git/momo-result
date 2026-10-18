@@ -30,7 +30,7 @@ pub(crate) async fn validate(
     scope.accept(&report)
 }
 
-async fn inspect_in(
+pub(crate) async fn inspect_in(
     client: &(impl GenericClient + Sync),
     request: &Request,
 ) -> Result<Report, ScopeError> {
@@ -75,16 +75,18 @@ async fn inspect_in(
     if complete {
         blocked |= campaign.try_get::<_, &str>("status")? != "terminal"
             || campaign.try_get::<_, &str>("operation_status")? != "terminal";
+        blocked |= !crate::series_analysis::release::audit_frozen_completion(client).await?;
     }
     let binding = json!([
-        1,
+        "momo-maintenance-analysis-continue-v2",
         request,
         campaign.try_get::<_, Value>("binding")?,
         bindings
     ]);
     let digest = Sha256::digest(serde_json::to_vec(&binding).map_err(|_error| ScopeError::Scope)?);
     Ok(Report {
-        schema_version: 1,
+        schema_version: 2,
+        kind: "continue",
         request: request.clone(),
         plan_digest: format!("sha256:{}", hex::encode(digest)),
         status: if blocked || failed_count > 0 {
@@ -97,6 +99,9 @@ async fn inspect_in(
         target_count,
         completed_count,
         failed_count,
+        candidate_release: None,
+        readiness_digest: None,
+        continuation_plan_digest: None,
         next_pending_title,
         next_job,
     })
@@ -112,7 +117,7 @@ async fn campaign(
             c.target_count,extract(epoch FROM c.accepted_at)::text,o.scope,o.endpoint,o.idempotency_key_hash,extract(epoch FROM o.accepted_at)::text, \
             r.algorithm_version,r.artifact_schema_version,r.validation_contract_id,extract(epoch FROM r.updated_at)::text) AS binding, \
           o.legacy_id=$2 AND o.scope='all_titles' AND o.requested_by_account_id IS NULL \
-          AND o.target_count=c.target_count AND o.endpoint='release:'||c.trigger \
+          AND o.target_count=c.target_count AND o.endpoint IN ('release:'||c.trigger,'maintenance:initialize:'||c.trigger) \
           AND c.trigger IN ('algorithm_update','artifact_schema_update','validation_contract_update','initial_backfill') \
           AND c.algorithm_version=$3 AND c.artifact_schema_version=$4::bigint::integer AND c.validation_contract_id=$5 \
           AND r.algorithm_version=c.algorithm_version AND r.artifact_schema_version=c.artifact_schema_version \

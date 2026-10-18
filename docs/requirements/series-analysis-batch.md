@@ -205,9 +205,11 @@ OCR同居を有効化する場合は、共通parent-child境界、processごと�
 - 既存の試合・要求・job・成果物を互換コードの削除に合わせて消さない。旧payload、checksum、検証IDをSQLで現行形式へ偽装しない。promotionでは未対応の成果物pointerを外し、成果物の行は保持する。新しい成果物はRustのfull validatorを通して再計算し、異なる検証契約の旧currentをpreviousへ繰り上げない。参照されなくなった旧成果物は通常の保持・cleanup規則へ委ねる。
 - published rowはimmutableとする。readerはvalidator初期化完了後に現行schemaとvalidation contractのexact pairだけをadvertiseし、workerも対応する計算・公開能力を登録する。
 - release promotionはfreshな全reader / workerのcapabilityをtransaction内で凍結して完全一致を確認し、release singleton、既存titleのdesired tuple、campaignを原子的に進める。登録作品0件のinitial backfillもtarget 0のterminal operationとして確定し、その後の新規作品はsingletonを継承する。
+- frozen の専用初期化は、固定候補の consumer readiness と現行の実行許可を workflow で照合し、同じ停止世代の実 process barrier を維持したまま行う。digest 単独を承認の証明にしない。通常の capability 条件は変更せず、専用経路では全作品・入力 revision・pointer・許可差分を含む preview と transaction 内 snapshot の一致を要求する。同じ初期 plan と IDs の replay は既存 campaign / target 全体との一致を確認し、新たな campaign を作らない。初期化と継続の digest は相互に受理しない。
 - idle capabilityの更新間隔はactive jobのlease heartbeatと分離し、freshness期限に失敗・遅延の余裕を残す。世代不一致や期限切れのcapabilityで昇格しない。
 - 自動保守は稼働世代とsingletonのexact tuple差分を昇格対象とし、既知の過去世代への自動復帰を拒否する。previewとapplyの間で対象作品・input revision・世代が変われば適用しない。自動・手動の再実行は同じdurable operationを参照する。
 - release完了は受理snapshotのtargetが公開済みまたは作品削除で終端したことと整合性監査で判定する。failed target、current / previousの不正契約は要対応とする。通常の更新では後続入力によるpending workを別に扱い、非互換切替では公開再開前に対象全作品の現行成果物を確認する。
+- frozen の完了にも同じ保存契約・pointer・chunk・quiescence の構造監査を要求する。通常 runtime の heartbeat を偽装せず、workflow 側の固定 readiness と組み合わせる。campaign 完了だけで全保存値の保全を証明したとせず、入力・既存要求・immutable 成果物・通知設定と envelope の前後比較を別に保持する。
 - HTTP wireはOpenAPI・生成型と同時更新する。artifactからwireへのprojectionはrename、enum mapping、metadata hydrate、revision整合を確認した試合属性の付加、用途に対応する保存済み項目の選択に限定する。[見通しreference](series-rank-outlook.md#13-実績データと読取契約)では指定窓長の保存済み1項目を抽出できる。API / Webで欠けた分析値を計算したり、実績の意味順を並べ直したりしない。保存artifactを変えないHTTP-onlyの非互換変更は、対応API/Webの切替とrollbackを一体で扱い、成果物移行・全件再計算を要求しない。
 - 通常rollbackはDB契約・lease fenceと現行publicationを扱えるreleaseに限定し、current artifact、request、campaign、jobを維持する。未対応jobを旧algorithmで処理せずqueuedに保つ。
 - 非互換切替を切り戻す場合は、公開を停止したままDB snapshotとimmutable releaseを整合する組合せへ戻す。部分的な世代の組合せでは再開せず、再開後のデータを守る修復はforward fixを原則とする。

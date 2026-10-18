@@ -1,7 +1,7 @@
-//! A frozen runtime may continue only one existing, digest-bound release campaign.
+//! Frozen initialization and continuation are separately digest-bound operations.
 use std::time::Duration;
 
-use clap::Args;
+use clap::{Args, ValueEnum};
 use serde::Serialize;
 use thiserror::Error;
 use tokio::{sync::watch, time};
@@ -15,8 +15,16 @@ use super::drain;
 
 pub(crate) mod scope;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub(crate) enum Phase {
+    Initialize,
+    Continue,
+}
+
 #[derive(Args, Debug)]
 pub(crate) struct Arguments {
+    #[arg(long, value_enum, default_value = "continue")]
+    pub(crate) phase: Phase,
     #[arg(long)]
     pub(crate) cutover_id: String,
     #[arg(long)]
@@ -29,6 +37,10 @@ pub(crate) struct Arguments {
     pub(crate) apply: bool,
     #[arg(long)]
     pub(crate) expected_plan: Option<String>,
+    #[arg(long)]
+    pub(crate) candidate_release: Option<String>,
+    #[arg(long)]
+    pub(crate) readiness_digest: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -44,6 +56,7 @@ pub(crate) struct Request {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Report {
     pub(crate) schema_version: u8,
+    pub(crate) kind: &'static str,
     #[serde(flatten)]
     pub(crate) request: Request,
     pub(crate) plan_digest: String,
@@ -51,6 +64,12 @@ pub(crate) struct Report {
     pub(crate) target_count: u64,
     pub(crate) completed_count: u64,
     pub(crate) failed_count: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) candidate_release: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) readiness_digest: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) continuation_plan_digest: Option<String>,
     #[serde(skip)]
     pub(crate) next_pending_title: Option<String>,
     #[serde(skip)]
@@ -77,6 +96,8 @@ pub(crate) enum ScopeError {
     Configuration,
     #[error("scoped analysis connection cleanup did not settle")]
     Cleanup,
+    #[error("scoped analysis release validation failed")]
+    Release(#[from] crate::series_analysis::release::ReleaseError),
 }
 
 #[derive(Clone)]
@@ -122,7 +143,12 @@ pub(crate) async fn prepare(
         operation_id: arguments.operation_id.clone(),
         campaign_id: arguments.campaign_id.clone(),
     };
-    if !valid_request(&request) || (arguments.apply != arguments.expected_plan.is_some()) {
+    if arguments.phase != Phase::Continue
+        || arguments.candidate_release.is_some()
+        || arguments.readiness_digest.is_some()
+        || !valid_request(&request)
+        || (arguments.apply != arguments.expected_plan.is_some())
+    {
         return Err(ScopeError::InvalidRequest);
     }
     let process_id = frozen_process(&request).await?;
@@ -184,7 +210,7 @@ pub(crate) async fn settled() -> Result<(), ScopeError> {
     }
 }
 
-async fn frozen_process(request: &Request) -> Result<u32, ScopeError> {
+pub(crate) async fn frozen_process(request: &Request) -> Result<u32, ScopeError> {
     drain::command(None)
         .await
         .map_err(|_error| ScopeError::Barrier)?
@@ -192,7 +218,7 @@ async fn frozen_process(request: &Request) -> Result<u32, ScopeError> {
         .ok_or(ScopeError::Barrier)
 }
 
-fn valid_request(request: &Request) -> bool {
+pub(crate) fn valid_request(request: &Request) -> bool {
     identifier(&request.cutover_id, 64)
         && identifier(&request.operation_id, 128)
         && identifier(&request.campaign_id, 128)
@@ -217,6 +243,11 @@ pub(crate) async fn execute(
     shutdown: watch::Receiver<bool>,
     shutdown_deadline: &mut Option<time::Instant>,
 ) -> Result<Report, String> {
+    if arguments.phase == Phase::Initialize {
+        let result = crate::series_analysis::release::initialize_frozen(&arguments).await;
+        settled().await.map_err(|error| error.to_string())?;
+        return result.map_err(|error| error.to_string());
+    }
     let (bound, report, client) = prepare(&arguments)
         .await
         .map_err(|error| error.to_string())?;

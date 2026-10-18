@@ -19,6 +19,7 @@ wrapper="${task_tmp}/scripts/ci/maintenance-control.sh"
 actual="$("${wrapper}" bind-receipt consumers 'input with spaces.json' 'output with spaces.json')"
 [[ "${actual}" == '["bind-receipt","consumers","input with spaces.json","output with spaces.json"]' ]]
 [[ "$("${wrapper}" normal-status)" == '["normal-status"]' ]]
+[[ "$("${wrapper}" status)" == '["status"]' ]]
 
 reject() {
   if "${wrapper}" "$@" > "${task_tmp}/output" 2> "${task_tmp}/error"; then

@@ -37,6 +37,7 @@ mod claim_wait;
 mod heartbeat;
 mod notifications;
 mod radar;
+mod transitions;
 
 const TITLE_ID: &str = "analysis-stage-smoke-title";
 const JOB_ID: &str = "analysis-stage-smoke-job";
@@ -570,6 +571,9 @@ async fn prepare_owned_attempt(client: &Client) -> SmokeResult {
         .batch_execute(&format!(
             "INSERT INTO game_titles (id, name, layout_family, display_order)\x20\
              VALUES ('{TITLE_ID}', 'Analysis staging smoke', 'momotetsu2', 9999);\x20\
+             INSERT INTO series_analysis_title_states (game_title_id, algorithm_version, artifact_schema_version, validation_contract_id)\x20\
+             SELECT '{TITLE_ID}', algorithm_version, artifact_schema_version, validation_contract_id\x20\
+             FROM series_analysis_release_state WHERE singleton_key = 'current' ON CONFLICT DO NOTHING;\x20\
              INSERT INTO held_events (id, session_id, held_date_iso, start_at)\x20\
              VALUES ('{EVENT_ID}', NULL, DATE '2026-08-14', TIMESTAMPTZ '2026-08-14 00:00:00+00');\x20\
              INSERT INTO season_masters (id, game_title_id, name, display_order)\x20\

@@ -125,6 +125,11 @@ pub(crate) async fn supersede(
             ],
         )
         .await?;
+    crate::series_analysis::job_transitions::bind_queued_radar(
+        &transaction,
+        &[&claim.game_title_id],
+    )
+    .await?;
     transaction
         .execute(
             "UPDATE series_analysis_job_requests SET status = 'pending', assigned_attempt_id = NULL\x20\
@@ -257,6 +262,11 @@ pub(crate) async fn retry_transient_failure(
                 &[&next_retry, &delay_seconds, &claim.job_id],
             )
             .await?;
+        crate::series_analysis::job_transitions::bind_queued_radar(
+            &transaction,
+            &[&claim.game_title_id],
+        )
+        .await?;
         transaction
             .execute(
                 "UPDATE series_analysis_job_requests SET status = 'pending', assigned_attempt_id = NULL\x20\
@@ -317,6 +327,11 @@ pub(crate) async fn requeue_interrupted(
             &[&claim.job_id],
         )
         .await?;
+    crate::series_analysis::job_transitions::bind_queued_radar(
+        &transaction,
+        &[&claim.game_title_id],
+    )
+    .await?;
     transaction
         .execute(
             "UPDATE series_analysis_job_requests SET status = 'pending', assigned_attempt_id = NULL\x20\

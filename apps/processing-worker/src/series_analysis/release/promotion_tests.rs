@@ -38,6 +38,16 @@ async fn real_postgres_promotion_detaches_obsolete_empty_title_pointers_without_
         },
     )
     .await?;
+    let queued = transaction.query_one(
+        "SELECT algorithm_version, artifact_schema_version, radar_generation FROM series_analysis_jobs WHERE id = 'promotion-queued-job'",
+        &[],
+    ).await?;
+    assert_eq!(queued.try_get::<_, String>(0)?, ALGORITHM_VERSION);
+    assert_eq!(
+        queued.try_get::<_, i32>(1)?,
+        i32::try_from(ARTIFACT_SCHEMA_VERSION)?
+    );
+    assert_eq!(queued.try_get::<_, i64>(2)?, 4);
     assert_eq!(artifacts(&transaction).await?, before);
     let rows = transaction
         .query(

@@ -21,7 +21,7 @@
 - job / request writer は transaction 内で外部 I/O を行わず、commit 後にだけ typed wake を返す。通知失敗は業務 transaction を巻き戻さない。
 - quota、idempotency、job claim、lease、fence、pointer 切替など競合する判断は、事前 read と write を分けず DB の同じ整合性境界へ閉じる。
 - 分析の入力 revision は単調増加値とし、時刻を concurrency token にしない。入力 version、algorithm version、artifact schema version を区別する。
-- 分析の有効なalgorithm / artifact schema / validation contractの組はrelease singletonを正本とし、新規作品のtitle stateは同じtransaction内のtriggerでその組を継承する。個別consumerが新規作品へversion定数を直書きしない。
+- 分析の有効なalgorithm / artifact schema / validation contractの組はrelease singletonを正本とする。作品作成はsingletonを`FOR SHARE`で固定し、作品とtitle stateを同じtransactionで明示保存する。個別consumerが新規作品へversion定数を直書きしない。旧作成triggerとの共存中は既存stateの組が一致する場合だけ初期通知baselineを設定する。
 - 分析成果物は作品単位で原子的に公開し、失敗時は直前の成功成果物を維持する。current / previous の確認と chunk read は cleanup と競合しない read 境界で行う。
 - 分析のpublished artifact headerとchild resourceは改変不能とする。stagingの作成・差し替え、attempt保持cleanupによる許可済みprovenance変更、参照されないparentからのcascade cleanupを、公開内容の単独変更と区別する。
 - terminal job の保持期間と UI の表示件数を別契約として扱い、未完了 job を履歴 cleanup しない。
@@ -36,6 +36,9 @@
 - 分析 publication の lock 順は execution slot、title state、job、request / artifact とし、複数 title state は作品ID順に取得する。試合 mutation と campaign 展開は execution slot を取得しない。
 - campaign集計はtarget更新と同じREAD COMMITTED transactionに置き、campaign行をID順の `FOR NO KEY UPDATE` で取得してから別statementで再集計する。lock待ちを含む集計UPDATE単独では待機前のsnapshotを使うため、別作品のcommitを取りこぼす。FK挿入のKEY SHAREとは競合させない。
 - 分析release promotionはrelease advisory lock、reader capability registry、worker capability registry、release singleton、作品ID順のtitle stateの順でlockする。capability registryは判定後の登録・heartbeat割込みをcommitまで遮断し、singleton更新と既存title更新を同じtransactionで確定する。
+- queuedな通常分析jobのradar basis / generationは、title state lockを保持したtransaction内で`PostgresSeriesAnalysisJobTransitions.bindQueuedRadar`またはRustの`series_analysis::job_transitions::bind_queued_radar`が明示代入する。APIの試合mutation・手動要求・radar apply/withdraw/入力無効化、Workerのcampaign・follow-up・release promotion・supersede・retry・中断・lease回収が対象。runningとradar preparationのsnapshotは変更しない。同じ組への代入はUPDATEを省き、旧binding triggerとの共存や再実行で世代・attempt数を増やさない。
+- runningからqueuedまたはterminalへの全遷移は、owner・attempt・fencing token・期限と`lease_validation_contract_id`を一緒に明示clearする。成功、radar preparation完了、通常失敗、retry上限、lease回収上限にも同じ契約を適用する。
+- artifactのcurrent contract、outlook scope / count、payload間の意味整合性はRustの`ValidatedArtifact`を生成するfull validatorに集約する。staging保存後はmanifestとの全metadata/count一致を確認してからsealし、公開時に再確認する。previous pointerは同じ作品・schema・validation contractのpublished artifactだけを保持する。DBには参照整合性、desired tupleの一致、sealed/published内容の不変性を残し、consumerの全経路を検証するまで既存triggerを撤去しない。
 - DB row は adapter 境界で失敗可能に decode し、不正値や SQL 例外を domain / application failure へ正規化する。
 - dynamic SQL は列挙された fragment から選び、外部入力を SQL text へ連結しない。
 - 複数statementで一つの読み取り結果を組み立てるrepositoryは、read-only / repeatable-readのsnapshotを所有する。読み取り専用の設定をwrite transactionからも呼ばれる共通SQL部品に埋め込まない。

@@ -6,7 +6,7 @@ image_ref="${IMAGE_REF:?IMAGE_REF is required.}"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 "${script_dir}/ci-tool.sh" runtime-candidate \
-  "${image_artifact_dir}" "${GITHUB_RUN_ID:?GITHUB_RUN_ID is required.}" \
+  "${image_artifact_dir}" "${RUNTIME_CANDIDATE_RUN_ID:?RUNTIME_CANDIDATE_RUN_ID is required.}" \
   "${RUNTIME_CANDIDATE_RUN_ATTEMPT:?RUNTIME_CANDIDATE_RUN_ATTEMPT is required.}" \
   "${GITHUB_SHA:?GITHUB_SHA is required.}" "${image_ref}"
 

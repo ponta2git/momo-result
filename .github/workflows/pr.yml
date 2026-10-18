@@ -119,6 +119,9 @@ jobs:
     name: Runtime smoke
     needs: classify
     if: github.event.pull_request.base.ref != 'master' && needs.classify.outputs.runtime == 'true'
+    permissions:
+      actions: read
+      contents: read
     uses: ./.github/workflows/deploy.yml
     with:
       package_image: ${{ needs.classify.outputs.system_e2e == 'true' }}

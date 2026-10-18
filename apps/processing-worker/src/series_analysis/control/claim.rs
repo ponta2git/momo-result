@@ -31,7 +31,26 @@ pub(crate) async fn claim_job(
     job_id: &str,
     config: &AnalysisConsumerConfig,
 ) -> Result<ControlOutcome<ClaimResult>, ControlError> {
-    claim_job_with_diagnostics(client, job_id, config, true).await
+    Box::pin(claim_job_with_diagnostics(
+        client, job_id, config, true, None,
+    ))
+    .await
+}
+
+pub(crate) async fn claim_scoped_job(
+    client: &mut Client,
+    job_id: &str,
+    config: &AnalysisConsumerConfig,
+    scope: &crate::maintenance::analysis::BoundScope,
+) -> Result<ControlOutcome<ClaimResult>, ControlError> {
+    Box::pin(claim_job_with_diagnostics(
+        client,
+        job_id,
+        config,
+        true,
+        Some(scope),
+    ))
+    .await
 }
 
 async fn claim_job_with_diagnostics(
@@ -39,12 +58,16 @@ async fn claim_job_with_diagnostics(
     job_id: &str,
     config: &AnalysisConsumerConfig,
     diagnostics: bool,
+    scope: Option<&crate::maintenance::analysis::BoundScope>,
 ) -> Result<ControlOutcome<ClaimResult>, ControlError> {
     let transaction =
         bounded_transaction(client, config.execution_limits.finalization_timeout).await?;
     transaction
         .batch_execute("SET LOCAL lock_timeout='100ms'")
         .await?;
+    if let Some(scope) = scope {
+        Box::pin(validate_scoped_claim(&transaction, scope, job_id)).await?;
+    }
     let lease_milliseconds = duration_milliseconds(config.lease_duration)?;
     let (candidate, effects) = match measure_claim(
         diagnostics,
@@ -129,6 +152,28 @@ async fn claim_job_with_diagnostics(
         attempt_no,
         fencing_token,
     })))
+}
+
+async fn validate_scoped_claim(
+    transaction: &Transaction<'_>,
+    scope: &crate::maintenance::analysis::BoundScope,
+    job_id: &str,
+) -> Result<(), ControlError> {
+    // Reject even an expired owner/preemption before prepare_claim can recover any holder.
+    let slot = lock_execution_slot(transaction).await?;
+    if slot.holder.is_some() || slot.preempt_requested_by.is_some() {
+        return Err(crate::maintenance::analysis::ScopeError::Scope.into());
+    }
+    crate::maintenance::analysis::scope::validate(transaction, scope).await?;
+    let belongs = transaction.query_opt(
+        "SELECT 1 FROM series_analysis_campaign_targets t JOIN series_analysis_job_requests r ON r.id=t.job_request_id \
+         WHERE t.campaign_id=$1 AND r.operation_request_id=$2 AND r.assigned_job_id=$3 AND t.status='expanded' AND r.status='pending'",
+        &[&scope.request.campaign_id, &scope.request.operation_id, &job_id],
+    ).await?.is_some();
+    if !belongs {
+        return Err(crate::maintenance::analysis::ScopeError::Scope.into());
+    }
+    Ok(())
 }
 
 async fn measure_claim<T, E>(

@@ -11,34 +11,41 @@ import (
 )
 
 var usages = map[string]string{
-	"runtime-candidate":          "<artifact-directory> <run-id> <run-attempt> <commit> <image-ref>",
-	"analysis-candidate":         "<candidate.json> <run-id> <run-attempt> <commit> [--config file]",
-	"runtime-deployment":         "<deployment.json> <run-id> <run-attempt> <commit> [--config file]",
-	"runtime-release-selection":  "<run-id> <commit> <candidate-run-attempt> <artifact-name> <artifact-id> <artifact-digest> <image-ref>",
-	"postdeploy-evidence":        "<evidence.json> [--require-check name]...",
-	"worker-readiness":           "<provider-json-log> <machine-id> <analysis-worker-id> <ocr-worker-id>",
-	"artifact-digest":            "<artifact-digest>",
-	"analysis-archive":           "<artifact-directory> <expected-image-ref> <expected-tar-sha256>",
-	"image-id-match":             "<expected-id> <actual-id>",
-	"file-digest-match":          "<file> <bare-sha256>",
-	"analysis-release-selection": "<run-id> <producer-attempt> <metadata-name> <metadata-id> <metadata-digest>",
-	"create-http4s-patch":        "--repository URL --scala-version VERSION --source-sha SHA --version VERSION",
-	"create-runtime-candidate":   "--artifact-dir DIR --run-id ID --run-attempt N --commit SHA --image-ref REF",
-	"create-analysis-candidate":  "--artifact-dir DIR --run-id ID --run-attempt N --commit SHA --image-ref REF --artifact-id ID --artifact-digest DIGEST",
-	"create-runtime-deployment":  "--candidate FILE --run-attempt N --registry-ref REF --source-artifact-id ID --source-artifact-digest DIGEST --manifest FILE --manifest-artifact-id ID --manifest-artifact-digest DIGEST",
-	"resolve-pushed-image":       "IMAGE_TAG < docker-repo-digests.json",
-	"resolve-deployment-run":     "REPOSITORY < github-run.json",
-	"verify-manifest-artifact":   "DEPLOYMENT_JSON RUN_ID < github-artifact.json",
-	"runtime-machine-evidence":   "IMAGE_REF < machines.json",
-	"runtime-machine-id":         "IMAGE_REF < machines.json",
-	"runtime-machine-start-id":   "IMAGE_REF < machines.json",
-	"analysis-machine-start-id":  "IMAGE_REF RELEASE_SHA ANALYSIS_WORKER_ID OCR_WORKER_ID < machines.json",
-	"analysis-reusable-release":  "IMAGE_REF < machines.json",
-	"analysis-machine-identity":  "< machines.json",
-	"analysis-machine-evidence":  "IMAGE_REF RELEASE_SHA ANALYSIS_WORKER_ID OCR_WORKER_ID < machines.json",
-	"analysis-secrets":           "ready|unstaged < secrets.json",
-	"canonical-json":             "< manifest.json",
-	"public-edge-evidence":       "< edge-smoke.json",
+	"runtime-candidate":             "<artifact-directory> <run-id> <run-attempt> <commit> <image-ref>",
+	"analysis-candidate":            "<candidate.json> <run-id> <run-attempt> <commit> [--config file]",
+	"runtime-deployment":            "<deployment.json> <run-id> <run-attempt> <commit> [--config file]",
+	"runtime-release-selection":     "<run-id> <commit> <candidate-run-attempt> <artifact-name> <artifact-id> <artifact-digest> <image-ref>",
+	"postdeploy-evidence":           "<evidence.json> [--require-check name]...",
+	"worker-readiness":              "<provider-json-log> <machine-id> <analysis-worker-id> <ocr-worker-id>",
+	"artifact-digest":               "<artifact-digest>",
+	"analysis-archive":              "<artifact-directory> <expected-image-ref> <expected-tar-sha256>",
+	"image-id-match":                "<expected-id> <actual-id>",
+	"file-digest-match":             "<file> <bare-sha256>",
+	"analysis-release-selection":    "<run-id> <producer-attempt> <metadata-name> <metadata-id> <metadata-digest>",
+	"create-http4s-patch":           "--repository URL --scala-version VERSION --source-sha SHA --version VERSION",
+	"create-runtime-candidate":      "--artifact-dir DIR --run-id ID --run-attempt N --commit SHA --image-ref REF",
+	"create-analysis-candidate":     "--artifact-dir DIR --run-id ID --run-attempt N --commit SHA --image-ref REF --artifact-id ID --artifact-digest DIGEST",
+	"create-runtime-deployment":     "--candidate FILE --run-id ID --run-attempt N --registry-ref REF --source-artifact-id ID --source-artifact-digest DIGEST --manifest FILE --manifest-artifact-id ID --manifest-artifact-digest DIGEST",
+	"resolve-pushed-image":          "IMAGE_TAG < docker-repo-digests.json",
+	"resolve-deployment-run":        "REPOSITORY < github-run.json",
+	"verify-manifest-artifact":      "DEPLOYMENT_JSON RUN_ID < github-artifact.json",
+	"normal-deployment-completion":  "RUN_ID RUN_ATTEMPT COMMIT < completion.json",
+	"runtime-machine-evidence":      "IMAGE_REF < machines.json",
+	"runtime-machine-id":            "IMAGE_REF < machines.json",
+	"runtime-machine-start-id":      "IMAGE_REF < machines.json",
+	"frozen-machine-id":             "runtime|analysis IMAGE_REF < machines.json",
+	"frozen-machine-start-id":       "runtime|analysis IMAGE_REF < machines.json",
+	"frozen-readiness-evidence":     "runtime|analysis < readiness.json",
+	"maintenance-operation-scope":   "RECEIPT_JSON analysis|publish",
+	"maintenance-analysis-evidence": "RECEIPT_JSON plan|complete < analysis-result.json",
+	"maintenance-publish-evidence":  "RECEIPT_JSON run|artifact|completion|provenance < evidence.json",
+	"analysis-machine-start-id":     "IMAGE_REF RELEASE_SHA ANALYSIS_WORKER_ID OCR_WORKER_ID < machines.json",
+	"analysis-reusable-release":     "IMAGE_REF < machines.json",
+	"analysis-machine-identity":     "< machines.json",
+	"analysis-machine-evidence":     "IMAGE_REF RELEASE_SHA ANALYSIS_WORKER_ID OCR_WORKER_ID < machines.json",
+	"analysis-secrets":              "ready|unstaged < secrets.json",
+	"canonical-json":                "< manifest.json",
+	"public-edge-evidence":          "< edge-smoke.json",
 }
 
 var argumentCounts = map[string]int{
@@ -46,6 +53,7 @@ var argumentCounts = map[string]int{
 	"runtime-release-selection": 7, "worker-readiness": 4, "artifact-digest": 1,
 	"analysis-archive": 3, "image-id-match": 2,
 	"file-digest-match": 2, "analysis-release-selection": 5,
+	"maintenance-operation-scope": 2,
 }
 
 // Run preserves the validators' positional arguments and stdout contracts.
@@ -71,6 +79,8 @@ func Run(command string, args []string, in io.Reader, out, errOut io.Writer, rep
 	var result string
 	var err error
 	switch command {
+	case "maintenance-operation-scope":
+		result, err = maintenanceOperationScope(args)
 	case "runtime-candidate":
 		err = runtimeCandidate(args, repoRoot)
 	case "analysis-candidate":

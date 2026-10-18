@@ -1,7 +1,7 @@
 INSERT INTO game_titles(id, name, layout_family)
-VALUES ('obsolete-title', 'Obsolete snapshot', 'momotetsu2'),
-       ('current-title', 'Current snapshot', 'momotetsu2'),
-       ('stale-title', 'Current-format stale snapshot', 'momotetsu2');
+VALUES ('obsolete-title', 'Obsolete snapshot', 'momotetsu_2'),
+       ('current-title', 'Current snapshot', 'momotetsu_2'),
+       ('stale-title', 'Current-format stale snapshot', 'momotetsu_2');
 UPDATE series_analysis_title_states
 SET algorithm_version = 'series-analysis-v7',
     artifact_schema_version = CASE game_title_id WHEN 'obsolete-title' THEN 3 ELSE 6 END,

@@ -1,7 +1,7 @@
   INSERT INTO game_titles (id, name, layout_family, display_order)
   VALUES
-    ('title-release-smoke-a', 'Release smoke A', 'momotetsu2', 901),
-    ('title-release-smoke-b', 'Release smoke B', 'momotetsu2', 902);
+    ('title-release-smoke-a', 'Release smoke A', 'momotetsu_2', 901),
+    ('title-release-smoke-b', 'Release smoke B', 'momotetsu_2', 902);
   INSERT INTO map_masters (id, game_title_id, name, display_order)
   VALUES ('map-release-smoke-a', 'title-release-smoke-a', 'Release smoke map', 1);
   INSERT INTO season_masters (id, game_title_id, name, display_order)
@@ -14,7 +14,7 @@
     created_by_member_id, created_by_account_id, analysis_revision
   ) VALUES (
     'match-release-smoke-a', 'event-release-smoke-a', 1,
-    'title-release-smoke-a', 'momotetsu2', 'season-release-smoke-a',
+    'title-release-smoke-a', 'momotetsu_2', 'season-release-smoke-a',
     'member_ponta', 'map-release-smoke-a', TIMESTAMPTZ '2026-08-09T00:00:00Z',
     'member_ponta', 'account_ponta', 1
   );

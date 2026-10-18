@@ -1,5 +1,5 @@
 INSERT INTO game_titles (id, name, layout_family, display_order)
-VALUES ('ci-preemption-title', 'Preemption smoke', 'momotetsu2', 9901);
+VALUES ('ci-preemption-title', 'Preemption smoke', 'momotetsu_2', 9901);
 INSERT INTO map_masters (id, game_title_id, name, display_order)
 VALUES ('ci-preemption-map', 'ci-preemption-title', 'Preemption map', 1);
 INSERT INTO season_masters (id, game_title_id, name, display_order)
@@ -11,7 +11,7 @@ INSERT INTO matches (
   season_master_id, owner_member_id, map_master_id, played_at,
   created_by_member_id, created_by_account_id, analysis_revision
 ) VALUES (
-  'ci-preemption-match', 'ci-preemption-event', 1, 'ci-preemption-title', 'momotetsu2',
+  'ci-preemption-match', 'ci-preemption-event', 1, 'ci-preemption-title', 'momotetsu_2',
   'ci-preemption-season', 'member_ponta', 'ci-preemption-map',
   TIMESTAMPTZ '2026-08-12T00:00:00Z', 'member_ponta', 'account_ponta', 1
 );

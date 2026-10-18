@@ -31,7 +31,7 @@ async fn real_postgres_selects_due_work_and_recovers_orphans() -> TestResult {
         next_due(&client, true, Duration::from_secs(30)).await?,
         Duration::from_secs(30)
     );
-    client.execute("INSERT INTO game_titles (id,name,layout_family,display_order) VALUES ($1,'Scheduler selection smoke','momotetsu2',9999)", &[&TITLE]).await?;
+    client.execute("INSERT INTO game_titles (id,name,layout_family,display_order) VALUES ($1,'Scheduler selection smoke','momotetsu_2',9999)", &[&TITLE]).await?;
     insert_jobs(&client).await?;
     assert!(candidates(&client, false, None).await?.is_empty());
     let due = next_due(&client, true, Duration::from_secs(30)).await?;
@@ -82,7 +82,7 @@ async fn real_postgres_selects_due_work_and_recovers_orphans() -> TestResult {
 
 async fn insert_jobs(client: &Client) -> TestResult {
     let schema = i32::try_from(ARTIFACT_SCHEMA_VERSION)?;
-    client.execute("INSERT INTO game_titles (id,name,layout_family,display_order) SELECT $1 || 'title-' || n::text,'Scheduler page smoke ' || n::text,'momotetsu2',10000+n FROM generate_series(1,301) n", &[&PREFIX]).await?;
+    client.execute("INSERT INTO game_titles (id,name,layout_family,display_order) SELECT $1 || 'title-' || n::text,'Scheduler page smoke ' || n::text,'momotetsu_2',10000+n FROM generate_series(1,301) n", &[&PREFIX]).await?;
     client.execute("INSERT INTO series_analysis_jobs (id,game_title_id,input_revision,algorithm_version,artifact_schema_version,validation_contract_id,status,trigger,available_at) SELECT $1 || n::text,$1 || 'title-' || n::text,n,$2,$3,$4,'queued','manual',clock_timestamp()+interval '20 seconds' FROM generate_series(1,300) n", &[&PREFIX,&ALGORITHM_VERSION,&schema,&ARTIFACT_VALIDATION_CONTRACT_ID]).await?;
     client.execute("INSERT INTO series_analysis_jobs (id,game_title_id,input_revision,algorithm_version,artifact_schema_version,validation_contract_id,status,trigger,available_at) VALUES ('scheduler-selection-smoke-unsupported',$1,301,'unsupported-scheduler-smoke',$2,$3,'queued','manual',clock_timestamp())", &[&format!("{PREFIX}title-301"),&schema,&ARTIFACT_VALIDATION_CONTRACT_ID]).await?;
     Ok(())
@@ -159,7 +159,7 @@ async fn verify_supported_intent_is_not_hidden(client: &mut Client) -> TestResul
     let schema = i32::try_from(ARTIFACT_SCHEMA_VERSION)?;
     let supported = format!("{PREFIX}zz-supported");
     client.execute("UPDATE series_analysis_title_states SET algorithm_version='unsupported-scheduler-smoke',artifact_schema_version=$2,validation_contract_id=$3 WHERE game_title_id LIKE $1", &[&format!("{PREFIX}%"),&schema,&ARTIFACT_VALIDATION_CONTRACT_ID]).await?;
-    client.execute("INSERT INTO game_titles (id,name,layout_family,display_order) VALUES ($1,'Scheduler supported intent','momotetsu2',20000)", &[&supported]).await?;
+    client.execute("INSERT INTO game_titles (id,name,layout_family,display_order) VALUES ($1,'Scheduler supported intent','momotetsu_2',20000)", &[&supported]).await?;
     client.execute("UPDATE series_analysis_title_states SET algorithm_version=$2,artifact_schema_version=$3,validation_contract_id=$4 WHERE game_title_id=$1", &[&supported,&ALGORITHM_VERSION,&schema,&ARTIFACT_VALIDATION_CONTRACT_ID]).await?;
     client.execute("INSERT INTO series_analysis_job_requests (id,game_title_id,input_revision,algorithm_version,artifact_schema_version,validation_contract_id,trigger) SELECT game_title_id || '-request',game_title_id,input_revision,algorithm_version,artifact_schema_version,validation_contract_id,'manual' FROM series_analysis_title_states WHERE game_title_id LIKE $1", &[&format!("{PREFIX}%")]).await?;
     assert_eq!(

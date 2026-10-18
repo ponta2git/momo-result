@@ -1,6 +1,6 @@
 DELETE FROM game_titles WHERE id = 'analysis-history-test-title';
 INSERT INTO game_titles (id, name, layout_family)
-VALUES ('analysis-history-test-title', 'History retention', 'momotetsu2');
+VALUES ('analysis-history-test-title', 'History retention', 'momotetsu_2');
 INSERT INTO series_analysis_jobs (
   id, game_title_id, input_revision, algorithm_version, artifact_schema_version,
   status, trigger, requested_at, available_at, finished_at

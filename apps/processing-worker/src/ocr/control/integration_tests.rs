@@ -336,7 +336,7 @@ async fn prepare_expired_analysis_holder(primary: &Client) -> SmokeResult {
     primary
         .execute(
             "INSERT INTO game_titles (id, name, layout_family, display_order)\x20\
-             VALUES ($1, 'OCR recovery smoke', 'momotetsu2', 9998)",
+             VALUES ($1, 'OCR recovery smoke', 'momotetsu_2', 9998)",
             &[&EXPIRED_ANALYSIS_TITLE_ID],
         )
         .await?;

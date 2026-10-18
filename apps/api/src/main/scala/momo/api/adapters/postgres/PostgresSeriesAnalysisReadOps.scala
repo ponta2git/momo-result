@@ -7,6 +7,7 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
+import momo.api.adapters.postgres.CanonicalIdentity.Entity
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.contracts.seriesanalysis.SeriesAnalysisArtifactContract
 import momo.api.domain.*
@@ -31,7 +32,8 @@ private[postgres] object PostgresSeriesAnalysisReadOps:
       mapOrder: Int,
   )
 
-  def options: ConnectionIO[Either[AppError, SeriesAnalysisOptions]] =
+  def options(using
+      identities: PostgresIdentities): ConnectionIO[Either[AppError, SeriesAnalysisOptions]] =
     sql"""
         WITH match_scopes AS MATERIALIZED (
           SELECT game_title_id, season_master_id, map_master_id,
@@ -45,15 +47,15 @@ private[postgres] object PostgresSeriesAnalysisReadOps:
           GROUP BY game_title_id
         )
         SELECT
-          gt.id,
+          ${identities.wireId("gt")},
           gt.name,
           gt.display_order,
           COALESCE(tm.match_count, 0)::bigint,
           tm.latest_played_at,
-          sm.id,
+          ${identities.wireId("sm")},
           sm.name,
           sm.display_order,
-          mm.id,
+          ${identities.wireId("mm")},
           mm.name,
           mm.display_order
         FROM game_titles gt
@@ -63,11 +65,11 @@ private[postgres] object PostgresSeriesAnalysisReadOps:
         LEFT JOIN map_masters mm ON mm.id = ms.map_master_id
         ORDER BY
           gt.display_order,
-          gt.id,
+          ${identities.wireId("gt")},
           sm.display_order,
-          sm.id,
+          ${identities.wireId("sm")},
           mm.display_order,
-          mm.id
+          ${identities.wireId("mm")}
       """.query[(TitleOptionRow, Option[ScopeOptionRow])].to[List].map { selections =>
       // Counts and scope candidates come from the same scan and statement snapshot.
       val titles = selections.map(_._1).distinct
@@ -121,10 +123,11 @@ private[postgres] object PostgresSeriesAnalysisReadOps:
 
   def status(
       gameTitleId: GameTitleId
-  ): ConnectionIO[Either[AppError, SeriesAnalysisStatus]] =
+  )(using identities: PostgresIdentities): ConnectionIO[Either[AppError, SeriesAnalysisStatus]] =
     // A single statement prevents a publication or job transition from producing a mixed status.
     sql"""
         SELECT
+          ${identities.wireId("gt")},
           s.input_revision,
           s.algorithm_version,
           s.artifact_schema_version,
@@ -138,7 +141,10 @@ private[postgres] object PostgresSeriesAnalysisReadOps:
           a.validation_contract_id,
           a.published_at,
           rb.created_at, a.radar_applied_at,
-          (a.radar_basis_id IS NOT DISTINCT FROM r.desired_basis_id AND
+          (a.radar_basis_id IS NOT DISTINCT FROM ${identities.wireReference(
+        Entity.RadarBases,
+        fr"r.desired_basis_id"
+      )} AND
             COALESCE(a.radar_generation, 0) = COALESCE(r.generation, 0)),
           COALESCE(active.status, latest.status), COALESCE(active.trigger, latest.trigger),
           COALESCE(active.requested_at, latest.requested_at),
@@ -146,40 +152,50 @@ private[postgres] object PostgresSeriesAnalysisReadOps:
           p.trigger, p.accepted_at
         FROM game_titles gt
         LEFT JOIN series_analysis_title_states s ON s.game_title_id = gt.id
-        LEFT JOIN series_analysis_artifacts a ON a.id = s.current_artifact_id
+        LEFT JOIN series_analysis_artifacts a ON a.id = ${identities.wireReference(
+        Entity.AnalysisArtifacts,
+        fr"s.current_artifact_id"
+      )}
         LEFT JOIN series_radar_title_states r ON r.game_title_id = gt.id
-        LEFT JOIN series_radar_bases rb ON rb.id = a.radar_basis_id AND rb.game_title_id = gt.id
+        LEFT JOIN series_radar_bases rb ON rb.id = a.radar_basis_id AND rb.game_title_id = ${identities.wireId(
+        "gt"
+      )}
         LEFT JOIN LATERAL (
           SELECT id, status, trigger, requested_at, started_at, finished_at
-          FROM series_analysis_jobs
+          FROM series_analysis_jobs j
           WHERE game_title_id = gt.id AND work_kind = 'analysis'
             AND status IN ('running', 'queued')
         ) active ON true
         LEFT JOIN LATERAL (
           SELECT status, trigger, requested_at, started_at, finished_at
-          FROM series_analysis_jobs
+          FROM series_analysis_jobs j
           WHERE game_title_id = gt.id AND work_kind = 'analysis'
             AND status IN ('succeeded', 'failed', 'timed_out')
             AND active.id IS NULL
-          ORDER BY finished_at DESC NULLS LAST, id DESC
+          ORDER BY finished_at DESC NULLS LAST, ${identities.wireId("j")} DESC
           LIMIT 1
         ) latest ON true
         LEFT JOIN LATERAL (
           SELECT trigger, accepted_at
-          FROM series_analysis_job_requests
+          FROM series_analysis_job_requests jr
           WHERE game_title_id = gt.id
             AND status = 'pending'
             AND assigned_job_id IS NULL
-          ORDER BY accepted_at, id
+          ORDER BY accepted_at, ${identities.wireId("jr")}
           LIMIT 1
         ) p ON true
-        WHERE gt.id = $gameTitleId
-      """.query[(Option[StateRow], Option[SeriesAnalysisCalculation], Option[PendingProjectionRow])]
+        WHERE gt.id = ${identities.lookup(Entity.GameTitles, gameTitleId.value)}
+      """.query[(
+        GameTitleId,
+        Option[StateRow],
+        Option[SeriesAnalysisCalculation],
+        Option[PendingProjectionRow]
+    )]
       .option.map {
         case None => AppError.NotFound("game title", gameTitleId.value).asLeft
-        case Some((None, _, _)) => AppError.AnalysisStateUnavailable().asLeft
-        case Some((Some(row), activeOrLatest, pending)) =>
-          buildStatus(gameTitleId, row, activeOrLatest, pending)
+        case Some((_, None, _, _)) => AppError.AnalysisStateUnavailable().asLeft
+        case Some((wireTitleId, Some(row), activeOrLatest, pending)) =>
+          buildStatus(wireTitleId, row, activeOrLatest, pending)
       }
 
   private def buildStatus(

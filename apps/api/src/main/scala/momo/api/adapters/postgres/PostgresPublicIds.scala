@@ -16,16 +16,20 @@ enum PostgresPublicIds derives CanEqual:
     case Legacy => fr"NULL::bigint"
     case Available => available
 
-  private[postgres] def matchId(publicId: PublicId): ConnectionIO[Option[MatchId]] = this match
+  private[postgres] def matchId(publicId: PublicId)(using
+      ids: PostgresIdentities): ConnectionIO[Option[MatchId]] = this match
     case Legacy => none[MatchId].pure[ConnectionIO]
     case Available =>
-      sql"SELECT id FROM matches WHERE public_id = $publicId".query[MatchId].option
+      sql"SELECT ${ids.wireId("matches")} FROM matches WHERE public_id = $publicId".query[MatchId].option
 
-  private[postgres] def heldEventId(publicId: PublicId): ConnectionIO[Option[HeldEventId]] =
+  private[postgres] def heldEventId(publicId: PublicId)(using
+      ids: PostgresIdentities): ConnectionIO[Option[HeldEventId]] =
     this match
       case Legacy => none[HeldEventId].pure[ConnectionIO]
       case Available =>
-        sql"SELECT id FROM held_events WHERE public_id = $publicId".query[HeldEventId].option
+        sql"SELECT ${ids.wireId("held_events")} FROM held_events WHERE public_id = $publicId".query[
+          HeldEventId
+        ].option
 
 object PostgresPublicIds:
   private final case class Shape(tableExists: Boolean, columnExists: Boolean, valid: Boolean)

@@ -40,7 +40,6 @@ private[http] object IdempotencyReplay:
     Printer(dropNullValues = false, indent = "", sortKeys = true)
   private val RetentionMillis: Long = 24L * 60L * 60L * 1000L
   private[http] val RecordingTimeout: FiniteDuration = 1.second
-  private val ValidKeyPattern = "^[A-Za-z0-9._:-]{1,128}$".r
 
   final case class Guard[F[_]](
       repository: IdempotencyRepository[F],
@@ -74,10 +73,6 @@ private[http] object IdempotencyReplay:
           case Some(problem) => Async[F].pure(Left(problem))
           case None => run
         }
-    case Some(rawKey) if !isValidKey(rawKey) =>
-      Async[F].pure(Left(ProblemDetails.from(AppError.ValidationFailed(
-        "Idempotency-Key must be 1 to 128 characters using only A-Z, a-z, 0-9, dot, underscore, colon, or hyphen."
-      ))))
     case Some(rawKey) =>
       val requestHash = sha256(canonicalJsonBytes(request.asJson))
       now.flatMap { ts =>
@@ -138,6 +133,14 @@ private[http] object IdempotencyReplay:
           .pure(Left(ProblemDetails.from(AppError.IdempotencyPayloadMismatch(
             "Idempotency-Key was reused with a different request payload."
           ))))
+      case IdempotencyReservation.LegacyAliasConflict => Async[F].pure(Left(ProblemDetails.from(
+          AppError.Conflict(
+            "This UUID belongs to a saved legacy Idempotency-Key. Use its exact original spelling."
+          )
+        )))
+      case IdempotencyReservation.InvalidKey(reason) => Async[F].pure(Left(ProblemDetails.from(
+          AppError.ValidationFailed(reason)
+        )))
       case IdempotencyReservation.AccountLimitExceeded =>
         logAccountLimitExceeded(endpoint, account, guard.activeKeyLimitPerAccount) >>
           Async[F].pure(Left(ProblemDetails.from(AppError.TooManyRequests(
@@ -241,8 +244,6 @@ private[http] object IdempotencyReplay:
 
   private def sha256(bytes: Array[Byte]): Vector[Byte] = MessageDigest.getInstance("SHA-256")
     .digest(bytes).toVector
-
-  private def isValidKey(value: String): Boolean = ValidKeyPattern.matches(value)
 
   private def decodeStoredBody[A: Decoder](bytes: Vector[Byte]): Either[Throwable, A] =
     circeDecode[A](new String(bytes.toArray, StandardCharsets.UTF_8))

@@ -6,7 +6,7 @@ import doobie.Transactor
 import doobie.implicits.*
 import fs2.Stream
 
-import momo.api.adapters.postgres.PostgresMeta.given
+import momo.api.adapters.postgres.PostgresIdentities
 import momo.api.domain.ids.{AccountId, ImageId}
 import momo.api.domain.{OcrSubmission, StoredImage}
 import momo.api.errors.AppError
@@ -44,6 +44,7 @@ private[bootstrap] object DrainingRepositories:
       underlying: ImageStorage[F],
       maintenance: MaintenanceDrain[F],
       transactor: Transactor[F],
+      identities: PostgresIdentities,
   ): ImageStorage[F] = new ImageStorage[F]:
     override def save(
         ownerAccountId: AccountId,
@@ -69,7 +70,9 @@ private[bootstrap] object DrainingRepositories:
           sql"""SELECT EXISTS (
             SELECT 1 FROM ocr_submissions s
             JOIN ocr_submission_members m ON m.submission_id = s.id
-            WHERE s.owner_account_id = $ownerAccountId AND s.status = 'open'
+            WHERE s.owner_account_id = ${identities.accountReference(
+              ownerAccountId.value
+            )} AND s.status = 'open'
               AND s.admission_deadline > clock_timestamp() AND m.status = 'pending'
               AND m.upload_idempotency_key_hash = ${idempotencyHash.value}
               AND m.image_sha256_hex = $digest AND m.image_byte_length = ${bytes.length}

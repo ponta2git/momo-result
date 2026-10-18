@@ -2,6 +2,7 @@ package momo.api.e2e
 
 import java.nio.file.attribute.PosixFilePermissions
 import java.nio.file.{Files, Path}
+import java.util.UUID
 
 import cats.effect.std.SecureRandom
 import cats.effect.{IO, IOApp}
@@ -11,6 +12,7 @@ import io.circe.Json
 
 import momo.api.adapters.postgres.{
   PostgresAppSessionsRepository,
+  PostgresIdentities,
   PostgresLoginAccountAdministrationRepository,
   PostgresLoginAccountsRepository,
   PostgresSessionAccountLookup
@@ -46,60 +48,63 @@ object SessionFixture extends IOApp.Simple:
       random <- SecureRandom.javaSecuritySecureRandom[IO]
       payload <- Database.transactor[IO](database).use { transactor =>
         given SecureRandom[IO] = random
-        val accounts = PostgresLoginAccountsRepository[IO](transactor)
-        val sessions = SessionService[IO](
-          PostgresAppSessionsRepository[IO](transactor),
-          config.auth.sessionTtl,
-          IO.realTimeInstant,
-          PostgresSessionAccountLookup[IO](transactor),
-          PostgresLoginAccountAdministrationRepository[IO](transactor),
-        )
-        def seeded(id: String, role: AccountRole): IO[LoginAccount] =
-          accounts.find(AccountId.unsafeFromString(id)).flatMap { account =>
-            IO.fromOption(account.filter(value => value.loginEnabled && value.role == role))(
-              new IllegalStateException(s"Expected enabled ${role.wire} fixture account $id")
-            )
-          }
-        for
-          databaseName <- sql"SELECT current_database()".query[String].unique.transact(transactor)
-          _ <- IO.raiseUnless(databaseName == "mom24_e2e")(
-            new IllegalArgumentException("Session fixtures require the mom24_e2e database")
+        PostgresIdentities.discover.transact(transactor).flatMap { identities =>
+          val accounts = PostgresLoginAccountsRepository[IO](transactor, identities)
+          val sessions = SessionService[IO](
+            PostgresAppSessionsRepository[IO](transactor, identities),
+            config.auth.sessionTtl,
+            IO.realTimeInstant,
+            PostgresSessionAccountLookup[IO](transactor, identities),
+            PostgresLoginAccountAdministrationRepository[IO](transactor, identities),
           )
-          administrator <- seeded("account_ponta", AccountRole.Admin)
-          user <- seeded("account_eu", AccountRole.User)
-          now <- IO.realTimeInstant
-          operator <- accounts.create(CreateLoginAccountData(
-            id = AccountId.unsafeFromString("account_e2e_operator"),
-            discordUserId = UserId.unsafeFromString("623456789012345679"),
-            displayName = "E2E operator",
-            playerMemberId = None,
-            loginEnabled = true,
-            role = AccountRole.Operator,
-            createdAt = now,
-            updatedAt = now,
-          )).flatMap(result =>
-            IO.fromOption(result.toOption)(
-              new IllegalStateException("Could not create disposable operator fixture")
-            )
-          )
-          credentials <- List(
-            "admin" -> administrator,
-            "operator" -> operator,
-            "user" -> user,
-            "logout" -> administrator,
-          )
-            .traverse { (role, account) =>
-              sessions.create(account).flatMap(_.leftMap(AppException(_)).liftTo[IO]).map(created =>
-                role -> Json.obj(
-                  "accountId" -> Json.fromString(account.id.value),
-                  "cookieValue" -> Json.fromString(created.cookieValue),
-                )
+          def seeded(id: String, role: AccountRole): IO[LoginAccount] =
+            accounts.find(AccountId.unsafeFromString(id)).flatMap { account =>
+              IO.fromOption(account.filter(value => value.loginEnabled && value.role == role))(
+                new IllegalStateException(s"Expected enabled ${role.wire} fixture account $id")
               )
             }
-        yield Json.obj(
-          "cookieName" -> Json.fromString(config.auth.sessionCookieName),
-          "sessions" -> Json.obj(credentials*),
-        )
+          for
+            databaseName <- sql"SELECT current_database()".query[String].unique.transact(transactor)
+            _ <- IO.raiseUnless(databaseName == "mom24_e2e")(
+              new IllegalArgumentException("Session fixtures require the mom24_e2e database")
+            )
+            administrator <- seeded("account_ponta", AccountRole.Admin)
+            user <- seeded("account_eu", AccountRole.User)
+            now <- IO.realTimeInstant
+            operator <- accounts.create(CreateLoginAccountData(
+              id = AccountId.unsafeFromString(UUID.randomUUID().toString),
+              discordUserId = UserId.unsafeFromString("623456789012345679"),
+              displayName = "E2E operator",
+              playerMemberId = None,
+              loginEnabled = true,
+              role = AccountRole.Operator,
+              createdAt = now,
+              updatedAt = now,
+            )).flatMap(result =>
+              IO.fromOption(result.toOption)(
+                new IllegalStateException("Could not create disposable operator fixture")
+              )
+            )
+            credentials <- List(
+              "admin" -> administrator,
+              "operator" -> operator,
+              "user" -> user,
+              "logout" -> administrator,
+            )
+              .traverse { (role, account) =>
+                sessions.create(account).flatMap(_.leftMap(AppException(_)).liftTo[IO]).map(
+                  created =>
+                    role -> Json.obj(
+                      "accountId" -> Json.fromString(account.id.value),
+                      "cookieValue" -> Json.fromString(created.cookieValue),
+                    )
+                )
+              }
+          yield Json.obj(
+            "cookieName" -> Json.fromString(config.auth.sessionCookieName),
+            "sessions" -> Json.obj(credentials*),
+          )
+        }
       }
       _ <- IO.blocking {
         // CREATE_NEW semantics reject existing files and symlinks; permissions precede content.

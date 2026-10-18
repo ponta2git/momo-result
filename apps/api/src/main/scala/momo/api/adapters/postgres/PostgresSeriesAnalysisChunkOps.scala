@@ -5,6 +5,7 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
+import momo.api.adapters.postgres.CanonicalIdentity.Entity
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.config.SeriesAnalysisReadConfig
 import momo.api.contracts.seriesanalysis.SeriesAnalysisArtifactContract
@@ -54,10 +55,31 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
   def load(
       request: SeriesAnalysisChunkRequest,
       config: SeriesAnalysisReadConfig,
-  ): ConnectionIO[Either[AppError, LoadedChunk]] = localStatementTimeout(config) *>
-    (request.kind match
-      case SeriesAnalysisChunkKind.MatchContext => matchContextCio(request, config)
-      case _ => regularChunkCio(request, config))
+  )(using identities: PostgresIdentities): ConnectionIO[Either[AppError, LoadedChunk]] =
+    localStatementTimeout(config) *>
+      normalizeRequest(request).flatMap(normalized =>
+        normalized.kind match
+          case SeriesAnalysisChunkKind.MatchContext => matchContextCio(normalized, config)
+          case _ => regularChunkCio(normalized, config)
+      )
+
+  private def normalizeRequest(request: SeriesAnalysisChunkRequest)(using
+      identities: PostgresIdentities): ConnectionIO[SeriesAnalysisChunkRequest] =
+    (
+      identities.normalize(Entity.GameTitles, request.gameTitleId.value),
+      identities.normalize(Entity.AnalysisArtifacts, request.artifactId),
+      PostgresSeriesAnalysisScopeOps.normalize(request.scope),
+      identities.normalize(Entity.Members, request.memberId.map(_.value)),
+      identities.normalize(Entity.Matches, request.matchId.map(_.value))
+    ).mapN((title, artifact, scope, member, matched) =>
+      request.copy(
+        gameTitleId = GameTitleId.unsafeFromString(title),
+        artifactId = artifact,
+        scope = scope,
+        memberId = member.map(MemberId.unsafeFromString),
+        matchId = matched.map(MatchId.unsafeFromString)
+      )
+    )
 
   def displayMetadata(
       artifact: SeriesAnalysisArtifactRef,
@@ -65,11 +87,13 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
       memberIds: List[String],
       config: SeriesAnalysisReadConfig,
       mapIds: List[String],
-  ): ConnectionIO[DisplayMetadata] =
-    val ids = memberIds.toArray
+  )(using identities: PostgresIdentities): ConnectionIO[DisplayMetadata] =
+    val ids = identities.lookupArray(Entity.Members, memberIds)
     val scopeName = PostgresSeriesAnalysisScopeOps.displayName(artifact.gameTitleId, scope)
-    val query = fr"SELECT m.id, m.display_name, scope.display_name FROM (SELECT" ++ scopeName ++
-      fr"""AS display_name) scope
+    val query =
+      fr"SELECT ${identities.wireId("m")}, m.display_name, scope.display_name FROM (SELECT" ++
+        scopeName ++
+        fr"""AS display_name) scope
         LEFT JOIN members m ON m.id = ANY($ids)
       """
     for
@@ -77,11 +101,14 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
       rows <- query.query[(Option[MemberDisplayNameRow], Option[String])].nel
       maps <- if mapIds.isEmpty then Map.empty[String, String].pure[ConnectionIO]
       else
-        val ids = mapIds.toArray
+        val ids = identities.lookupArray(Entity.MapMasters, mapIds)
         PostgresReadBudget.rows[(String, String)](
           fr"""
-          SELECT id, name FROM map_masters
-          WHERE game_title_id = ${artifact.gameTitleId} AND id = ANY($ids)
+          SELECT ${identities.wireId("mm")}, name FROM map_masters mm
+          WHERE game_title_id = ${identities.lookup(
+              Entity.GameTitles,
+              artifact.gameTitleId.value
+            )} AND id = ANY($ids)
         """,
           PostgresReadBudget.CatalogRows,
           "Analysis map display names"
@@ -99,7 +126,7 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
   private def regularChunkCio(
       request: SeriesAnalysisChunkRequest,
       config: SeriesAnalysisReadConfig,
-  ): ConnectionIO[Either[AppError, LoadedChunk]] =
+  )(using identities: PostgresIdentities): ConnectionIO[Either[AppError, LoadedChunk]] =
     val exists = PostgresSeriesAnalysisScopeOps.valid(request.gameTitleId, request.scope)
     val preloadDisplayMetadata = request.kind == SeriesAnalysisChunkKind.OutlookReference &&
       request.scope == SeriesAnalysisScope.Overall && request.memberId.nonEmpty &&
@@ -109,13 +136,13 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
         case SeriesAnalysisChunkProjection.Stored => false)
     val memberExists = if preloadDisplayMetadata then fr"snapshot_member.id IS NOT NULL"
     else if request.kind == SeriesAnalysisChunkKind.OutlookReference then
-      fr"EXISTS (SELECT 1 FROM members WHERE id = ${request.memberId.map(_.value)})"
+      fr"EXISTS (SELECT 1 FROM members WHERE id = ${identities.lookup(Entity.Members, request.memberId.map(_.value))})"
     else fr"true"
     val memberColumns = if preloadDisplayMetadata then
-      fr"snapshot_member.id, snapshot_member.display_name"
+      fr"${identities.wireId("snapshot_member")}, snapshot_member.display_name"
     else fr"NULL::text, NULL::text"
     val memberJoin = if preloadDisplayMetadata then
-      fr"LEFT JOIN members snapshot_member ON snapshot_member.id = ${request.memberId.map(_.value)}"
+      fr"LEFT JOIN members snapshot_member ON snapshot_member.id = ${identities.lookup(Entity.Members, request.memberId.map(_.value))}"
     else Fragment.empty
     // An empty title has no aggregate scope index, but its no-target outlook summary is mandatory.
     val overallOutlook = request.kind == SeriesAnalysisChunkKind.OutlookSummary &&
@@ -172,18 +199,25 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
     rb.created_at, a.radar_applied_at
   """
 
-  private def readableArtifact(request: SeriesAnalysisChunkRequest): Fragment =
+  private def readableArtifact(request: SeriesAnalysisChunkRequest)(using
+      identities: PostgresIdentities): Fragment =
     fr"""
-    FROM (VALUES (${request.gameTitleId})) requested(game_title_id)
+    FROM (VALUES (${identities.lookup(
+        Entity.GameTitles,
+        request.gameTitleId.value
+      )})) requested(game_title_id)
     LEFT JOIN series_analysis_title_states s ON s.game_title_id = requested.game_title_id
     LEFT JOIN series_analysis_artifacts a
-      ON a.game_title_id = s.game_title_id
+      ON a.game_title_id = ${identities.wireReference(Entity.GameTitles, fr"s.game_title_id")}
      AND a.id = ${request.artifactId}
      AND a.status = 'published'
      AND
   """ ++ readableContract ++
       fr"""
-     AND a.id IN (s.current_artifact_id, s.previous_artifact_id)
+     AND a.id IN (${identities.wireReference(
+          Entity.AnalysisArtifacts,
+          fr"s.current_artifact_id"
+        )}, ${identities.wireReference(Entity.AnalysisArtifacts, fr"s.previous_artifact_id")})
      LEFT JOIN series_radar_bases rb ON rb.id = a.radar_basis_id AND rb.game_title_id = a.game_title_id
   """
 
@@ -225,39 +259,43 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
   private def matchContextCio(
       request: SeriesAnalysisChunkRequest,
       config: SeriesAnalysisReadConfig,
-  ): ConnectionIO[Either[AppError, LoadedChunk]] = request.matchId match
-    case None => AppError.ValidationFailed("matchId is required.").asLeft.pure[ConnectionIO]
-    case Some(matchId) =>
-      val query =
-        fr"""
-        SELECT m.game_title_id, m.season_master_id, m.map_master_id, m.analysis_revision, m.owner_member_id,
+  )(using identities: PostgresIdentities): ConnectionIO[Either[AppError, LoadedChunk]] =
+    request.matchId match
+      case None => AppError.ValidationFailed("matchId is required.").asLeft.pure[ConnectionIO]
+      case Some(matchId) =>
+        val query =
+          fr"""
+        SELECT ${identities.wireReference(Entity.GameTitles, fr"m.game_title_id")},
+          ${identities.wireReference(Entity.SeasonMasters, fr"m.season_master_id")},
+          ${identities.wireReference(Entity.MapMasters, fr"m.map_master_id")}, m.analysis_revision,
+          ${identities.wireReference(Entity.Members, fr"m.owner_member_id")},
       """ ++ storedColumns(config) ++ fr", c.source_match_revision" ++
-          readableArtifact(request) ++ chunkJoin(request) ++
-          fr"LEFT JOIN matches m ON m.id = $matchId"
-      query.query[(Option[MatchIdentityRow], Option[SeriesAnalysisStoredChunk], Option[Long])]
-        .unique.map {
-          case (None, _, _) => AppError.NotFound("match", matchId.value).asLeft
-          case (_, None, _) => AppError.AnalysisArtifactExpired().asLeft
-          case (Some(current), Some(row), sourceRevision) =>
-            val exclusion =
-              if current.gameTitleId != request.gameTitleId then
-                Some(SeriesAnalysisMatchContextExclusion.MatchChangedSinceArtifact)
-              else if !request.scope.contains(
-                  current.seasonMasterId,
-                  current.mapMasterId,
-                )
-              then Some(SeriesAnalysisMatchContextExclusion.NotInScope)
-              else
-                sourceRevision match
-                  case None => Some(SeriesAnalysisMatchContextExclusion.NotInArtifact)
-                  case Some(value) if value != current.analysisRevision =>
-                    Some(SeriesAnalysisMatchContextExclusion.MatchChangedSinceArtifact)
-                  case Some(_) => None
-            val material = exclusion.fold[ChunkMaterial](ChunkMaterial.Stored(
-              row,
-              sourceRevision.map(SeriesAnalysisMatchSnapshot(_, current.ownerMemberId)),
-            ))(reason => ChunkMaterial.Excluded(row.artifact, matchId, reason))
-            LoadedChunk(request, material).asRight
-        }
+            readableArtifact(request) ++ chunkJoin(request) ++
+            fr"LEFT JOIN matches m ON m.id = ${identities.lookup(Entity.Matches, matchId.value)}"
+        query.query[(Option[MatchIdentityRow], Option[SeriesAnalysisStoredChunk], Option[Long])]
+          .unique.map {
+            case (None, _, _) => AppError.NotFound("match", matchId.value).asLeft
+            case (_, None, _) => AppError.AnalysisArtifactExpired().asLeft
+            case (Some(current), Some(row), sourceRevision) =>
+              val exclusion =
+                if current.gameTitleId != request.gameTitleId then
+                  Some(SeriesAnalysisMatchContextExclusion.MatchChangedSinceArtifact)
+                else if !request.scope.contains(
+                    current.seasonMasterId,
+                    current.mapMasterId,
+                  )
+                then Some(SeriesAnalysisMatchContextExclusion.NotInScope)
+                else
+                  sourceRevision match
+                    case None => Some(SeriesAnalysisMatchContextExclusion.NotInArtifact)
+                    case Some(value) if value != current.analysisRevision =>
+                      Some(SeriesAnalysisMatchContextExclusion.MatchChangedSinceArtifact)
+                    case Some(_) => None
+              val material = exclusion.fold[ChunkMaterial](ChunkMaterial.Stored(
+                row,
+                sourceRevision.map(SeriesAnalysisMatchSnapshot(_, current.ownerMemberId)),
+              ))(reason => ChunkMaterial.Excluded(row.artifact, matchId, reason))
+              LoadedChunk(request, material).asRight
+          }
 
 end PostgresSeriesAnalysisChunkOps

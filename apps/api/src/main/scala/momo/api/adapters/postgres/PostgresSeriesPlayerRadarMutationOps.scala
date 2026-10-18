@@ -3,80 +3,135 @@ package momo.api.adapters.postgres
 import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
-import doobie.postgres.implicits.*
 
+import momo.api.adapters.postgres.CanonicalIdentity.Entity
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.ids.{GameTitleId, MatchId}
 
 /** Called after the ordinary mutation intent has acquired the affected title locks. */
 private[postgres] object PostgresSeriesPlayerRadarMutationOps:
   /** Compares only radar inputs; incidents, play order, owners and names do not invalidate a basis. */
-  def inputIdentity(matchId: MatchId): ConnectionIO[Option[String]] = sql"""
+  def inputIdentity(matchId: MatchId)(using
+      identities: PostgresIdentities): ConnectionIO[Option[String]] = sql"""
     SELECT jsonb_build_object(
-      'gameTitleId', m.game_title_id, 'heldEventId', m.held_event_id,
+      'gameTitleId', ${identities.wireReference(
+      Entity.GameTitles,
+      fr"m.game_title_id"
+    )}, 'heldEventId', ${identities.wireReference(Entity.HeldEvents, fr"m.held_event_id")},
       'playedAt', m.played_at, 'matchNoInEvent', m.match_no_in_event,
-      'seasonMasterId', m.season_master_id, 'mapMasterId', m.map_master_id,
-      'players', (SELECT jsonb_agg(jsonb_build_array(member_id, rank,
-        total_assets_man_yen, revenue_man_yen) ORDER BY member_id)
-        FROM match_players WHERE match_id = m.id))::text
-    FROM matches m WHERE m.id = $matchId
+      'seasonMasterId', ${identities.wireReference(
+      Entity.SeasonMasters,
+      fr"m.season_master_id"
+    )}, 'mapMasterId', ${identities.wireReference(Entity.MapMasters, fr"m.map_master_id")},
+      'players', (SELECT jsonb_agg(jsonb_build_array(${identities.wireReference(
+      Entity.Members,
+      fr"mp.member_id"
+    )}, rank,
+        total_assets_man_yen, revenue_man_yen) ORDER BY ${identities.wireReference(
+      Entity.Members,
+      fr"mp.member_id"
+    )})
+        FROM match_players mp WHERE match_id = m.id))::text
+    FROM matches m WHERE m.id = ${identities.lookup(Entity.Matches, matchId.value)}
   """.query[String].option
 
-  def changed(titles: List[GameTitleId], matchId: MatchId, sourceMayHaveChanged: Boolean)
-      : ConnectionIO[Unit] = titles.distinct.sortBy(_.value).traverse_ { title =>
+  def changed(titles: List[GameTitleId], matchId: MatchId, sourceMayHaveChanged: Boolean)(using
+      identities: PostgresIdentities)
+      : ConnectionIO[Unit] = titles.traverse(title =>
+    identities.normalize(Entity.GameTitles, title.value).map(GameTitleId.unsafeFromString)
+  )
+    .flatMap(_.distinct.sortBy(_.value).traverse_(title =>
+      changedTitle(title, matchId, sourceMayHaveChanged)
+    ))
+
+  private def changedTitle(
+      title: GameTitleId,
+      matchId: MatchId,
+      sourceMayHaveChanged: Boolean
+  )(using identities: PostgresIdentities): ConnectionIO[Unit] =
     for
       _ <- sql"""
-        SELECT game_title_id FROM series_radar_title_states
-        WHERE game_title_id = $title FOR UPDATE
+        SELECT ${identities.wireReference(
+          Entity.GameTitles,
+          fr"r.game_title_id"
+        )} FROM series_radar_title_states r
+        WHERE game_title_id = ${identities.lookup(Entity.GameTitles, title.value)} FOR UPDATE
       """.query[GameTitleId].option
       _ <- sql"""
         UPDATE series_radar_previews SET status = 'stale', updated_at = now()
-        WHERE game_title_id = $title AND status = 'ready'
+        WHERE game_title_id = ${identities.lookup(
+          Entity.GameTitles,
+          title.value
+        )} AND status = 'ready'
       """.update.run
-      invalidCandidates <- if sourceMayHaveChanged then sql"""
+      invalidCandidates <- if sourceMayHaveChanged then
+        sql"""
         UPDATE series_radar_candidates c
         SET status = 'invalid', safe_failure_code = 'source_changed', updated_at = now()
         FROM series_radar_bases b
-        WHERE c.game_title_id = $title AND b.game_title_id = $title
-          AND c.basis_id = b.id AND c.status IN ('pending', 'ready', 'unavailable', 'failed')
+        WHERE c.game_title_id = ${identities.lookup(
+            Entity.GameTitles,
+            title.value
+          )} AND b.game_title_id = ${title.value}
+          AND ${identities.wireReference(
+            Entity.RadarBases,
+            fr"c.basis_id"
+          )} = b.id AND c.status IN ('pending', 'ready', 'unavailable', 'failed')
           AND b.payload->'manual' IS NULL
           AND EXISTS(SELECT 1 FROM jsonb_array_elements(b.source_snapshot->'matches') m
             WHERE m->'order'->>'matchId' = ${matchId.value})
-        RETURNING c.id
+        RETURNING ${identities.wireId("c")}
       """.query[String].to[List]
       else List.empty[String].pure[ConnectionIO]
-      invalidIds = invalidCandidates.toArray
+      invalidIds = identities.lookupArray(Entity.RadarCandidates, invalidCandidates)
       stopped <- sql"""
-        UPDATE series_radar_operations
+        UPDATE series_radar_operations o
         SET status = 'failed', safe_failure_code = 'source_changed',
             finished_at = now(), updated_at = now()
-        WHERE game_title_id = $title AND candidate_id = ANY($invalidIds)
+        WHERE game_title_id = ${identities.lookup(
+          Entity.GameTitles,
+          title.value
+        )} AND candidate_id = ANY($invalidIds)
           AND status IN ('pending', 'running')
-        RETURNING id
+        RETURNING ${identities.wireId("o")}
       """.query[String].to[List]
       stoppedManual <- if sourceMayHaveChanged then
         sql"""
         UPDATE series_radar_operations o
         SET status = 'failed', safe_failure_code = 'evaluation_changed', finished_at = now(), updated_at = now()
         FROM series_radar_candidates c, series_radar_previews p, series_radar_bases b
-        WHERE o.game_title_id = $title AND o.kind = 'apply' AND o.status IN ('pending', 'running')
-          AND c.id = o.candidate_id AND c.game_title_id = $title
-          AND b.id = c.basis_id AND b.game_title_id = $title AND b.payload->'manual' IS NOT NULL
-          AND p.id = o.preview_id AND p.game_title_id = $title
+        WHERE o.game_title_id = ${identities.lookup(
+            Entity.GameTitles,
+            title.value
+          )} AND o.kind = 'apply' AND o.status IN ('pending', 'running')
+          AND c.id = o.candidate_id AND c.game_title_id = ${identities.lookup(
+            Entity.GameTitles,
+            title.value
+          )}
+          AND b.id = ${identities.wireReference(
+            Entity.RadarBases,
+            fr"c.basis_id"
+          )} AND b.game_title_id = ${title.value} AND b.payload->'manual' IS NOT NULL
+          AND p.id = o.preview_id AND p.game_title_id = ${identities.lookup(
+            Entity.GameTitles,
+            title.value
+          )}
           AND EXISTS(SELECT 1 FROM jsonb_array_elements(p.evaluation_snapshot->'matches') m
             WHERE m->'order'->>'matchId' = ${matchId.value})
-        RETURNING o.id
+        RETURNING ${identities.wireId("o")}
       """.query[String].to[List]
       else List.empty[String].pure[ConnectionIO]
-      stoppedIds = (stopped ++ stoppedManual).toArray
+      stoppedIds = identities.lookupArray(Entity.RadarOperations, stopped ++ stoppedManual)
       reset <- sql"""
         UPDATE series_radar_title_states
         SET desired_basis_id = current_basis_id, generation = generation + 1,
             active_operation_id = NULL, updated_at = now()
-        WHERE game_title_id = $title AND active_operation_id = ANY($stoppedIds)
+        WHERE game_title_id = ${identities.lookup(
+          Entity.GameTitles,
+          title.value
+        )} AND active_operation_id = ANY($stoppedIds)
       """.update.run
       _ <- if reset > 0 then
         PostgresSeriesAnalysisJobTransitions.bindQueuedRadar(title)
       else ().pure[ConnectionIO]
     yield ()
-  }

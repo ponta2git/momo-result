@@ -7,6 +7,7 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
+import momo.api.adapters.postgres.CanonicalIdentity.Entity
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.ids.{AccountId, GameTitleId}
 
@@ -29,14 +30,17 @@ private[postgres] object PostgresSeriesAnalysisRequestSupport:
       requestedBy: AccountId,
       endpoint: String,
       idempotencyKeyHash: String,
-  ): ConnectionIO[Option[OperationRow]] =
+  )(using identities: PostgresIdentities): ConnectionIO[Option[OperationRow]] =
     // Serialize an account's manual acceptance before taking any title/job locks. Keep lookup in
     // a separate statement so READ COMMITTED sees an operation committed by the previous owner.
     sql"SELECT pg_advisory_xact_lock(hashtext(${requestedBy.value}), 4)".query[Unit].unique *>
       sql"""
-    SELECT id, accepted_at, target_count, game_title_id
-    FROM series_analysis_operation_requests
-    WHERE requested_by_account_id = $requestedBy
+    SELECT ${identities.wireId("op")}, accepted_at, target_count, ${identities.retainedColumn(
+          "op",
+          "game_title_id"
+        )}
+    FROM series_analysis_operation_requests op
+    WHERE requested_by_account_id = ${identities.lookup(Entity.Accounts, requestedBy.value)}
       AND endpoint = $endpoint
       AND idempotency_key_hash = $idempotencyKeyHash
   """.query[OperationRow].option
@@ -46,16 +50,21 @@ private[postgres] object PostgresSeriesAnalysisRequestSupport:
       gameTitleId: GameTitleId,
       version: DesiredRow,
       acceptedAt: Instant,
-  ): ConnectionIO[Unit] = sql"""
+  )(using identities: PostgresIdentities): ConnectionIO[Unit] =
+    for
+      allocated <- identities.newId(jobId)
+      title <- identities.requireReference(Entity.GameTitles, gameTitleId.value)
+      _ <- sql"""
     INSERT INTO series_analysis_jobs (
-      id, game_title_id, input_revision, algorithm_version,
+      ${identities.idColumns}, game_title_id, input_revision, algorithm_version,
       artifact_schema_version, validation_contract_id,
       status, trigger, requested_at, available_at
     ) VALUES (
-      $jobId, $gameTitleId, ${version.inputRevision}, ${version.algorithmVersion},
+      $allocated, $title, ${version.inputRevision}, ${version.algorithmVersion},
       ${version.artifactSchemaVersion}, ${version.validationContractId},
       'queued', 'manual', $acceptedAt, $acceptedAt
     )
   """.update.run.void
+    yield ()
 
 end PostgresSeriesAnalysisRequestSupport

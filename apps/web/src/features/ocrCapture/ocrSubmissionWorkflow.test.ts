@@ -54,6 +54,90 @@ function submission(): OcrSubmissionWorkflowParams {
 }
 
 describe("runOcrSubmissionWorkflow", () => {
+  it("writes canonical layouts for a fresh plan made by an older client", async () => {
+    const input = submission();
+    input.selectedGameTitle = { id: input.setup.gameTitleId, layoutFamily: " MoMoTeTsU2 " };
+    input.hints = { layoutFamily: " MoMoTeTsU2 ", gameTitle: "保存時の作品名" };
+
+    expect((await runOcrSubmissionWorkflow(input)).status).toBe("started");
+    expect(input.createDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ layoutFamily: "momotetsu_2" }),
+      expect.anything(),
+    );
+    expect(input.state.request?.ocrHints).toEqual({
+      layoutFamily: "momotetsu_2",
+      gameTitle: "保存時の作品名",
+    });
+  });
+
+  it.each(["auto", "unknown", ""])(
+    "rejects a fresh unsupported layout %j before writes",
+    async (layoutFamily) => {
+      const input = submission();
+      input.selectedGameTitle = { id: input.setup.gameTitleId, layoutFamily };
+
+      expect(await runOcrSubmissionWorkflow(input)).toMatchObject({ status: "invalid" });
+      expect(input.createDraft).not.toHaveBeenCalled();
+      expect(input.putSubmission).not.toHaveBeenCalled();
+      expect(input.uploadImage).not.toHaveBeenCalled();
+      expect(input.createJob).not.toHaveBeenCalled();
+    },
+  );
+
+  it("omits an absent layout in fresh hints and draft fields", async () => {
+    const input = submission();
+    input.selectedGameTitle = { id: input.setup.gameTitleId };
+
+    expect((await runOcrSubmissionWorkflow(input)).status).toBe("started");
+    expect(vi.mocked(input.createDraft).mock.calls[0]?.[0]).not.toHaveProperty("layoutFamily");
+    expect(input.state.request?.ocrHints).not.toHaveProperty("layoutFamily");
+  });
+
+  it.each(["default", "retained-unknown"])(
+    "replays a retained %s request verbatim",
+    async (layoutFamily) => {
+      const input = submission();
+      input.slots = [selectedSlot("total_assets")];
+      input.state.draft = {
+        matchDraftId: "retained-draft",
+        status: "draft_ready",
+        createdAt: "2026-01-01T00:00:00Z",
+        updatedAt: "2026-01-01T00:00:00Z",
+      };
+      input.hints = { layoutFamily };
+      input.selectedGameTitle = { id: input.setup.gameTitleId, layoutFamily };
+      const request = {
+        matchDraftId: "retained-draft",
+        ocrHints: { layoutFamily },
+        members: [
+          {
+            screenType: "total_assets",
+            uploadIdempotencyKey: "retained-key",
+            imageSha256: "a".repeat(64),
+            imageByteLength: input.slots[0]!.file!.size,
+          },
+        ],
+      };
+      input.state.request = request;
+      input.putSubmission = vi.fn(async (id) => ({
+        submissionId: id,
+        matchDraftId: "retained-draft",
+        status: "settled",
+        admissionDeadline: "2026-02-03T04:15:06.000Z",
+        members: [
+          { screenType: "total_assets", status: "failed", failureCode: "admission_timeout" },
+        ],
+      }));
+
+      expect((await runOcrSubmissionWorkflow(input)).status).toBe("submission_closed");
+      expect(input.putSubmission).toHaveBeenCalledWith(input.state.submissionId, request);
+      expect(input.state.request).toBe(request);
+      expect(input.state.request.ocrHints).toEqual({ layoutFamily });
+      expect(input.createDraft).not.toHaveBeenCalled();
+      expect(input.uploadImage).not.toHaveBeenCalled();
+    },
+  );
+
   it("stops an abandoned upload before registering jobs or uploading another image", async () => {
     const input = submission();
     const controller = new AbortController();

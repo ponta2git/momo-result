@@ -2,19 +2,17 @@ package momo.api.usecases.common
 
 import cats.syntax.all.*
 
-import momo.api.domain.MatchNoInEvent
 import momo.api.domain.constraints.TextLimits
+import momo.api.domain.{MatchNoInEvent, OcrLayoutFamily}
 import momo.api.errors.AppError
 
 /**
  * Field-level validation rules shared by use case boundary inputs.
  *
- * Stable IDs and profile keys become DB values and API contract values; keep them lowercase,
- * URL-safe, and trivially comparable across summit and momo-result.
+ * Stable IDs and code-owned layout values have distinct validation rules.
  */
 private[usecases] object UseCaseField:
   private val SlugPattern = "^[a-z][a-z0-9_]{1,63}$".r
-  private val StableKeyPattern = "^[a-z][a-z0-9_]{0,63}$".r
 
   def slug(field: String, value: String): Either[AppError, String] = SlugPattern.pattern
     .matcher(value).matches() match
@@ -23,16 +21,13 @@ private[usecases] object UseCaseField:
         s"$field must match ^[a-z][a-z0-9_]{1,63}$$ (lowercase, starts with a letter)."
       ))
 
-  def stableKey(field: String, value: String): Either[AppError, String] =
-    val trimmed = value.trim
-    StableKeyPattern.pattern.matcher(trimmed).matches() match
-      case true => Right(trimmed)
-      case false => Left(AppError.ValidationFailed(
-          s"$field must match ^[a-z][a-z0-9_]{0,63}$$ (lowercase, starts with a letter)."
-        ))
+  def layoutFamily(value: String): Either[AppError, String] = OcrLayoutFamily.fromLegacy(value)
+    .map(_.wire).toRight(AppError.ValidationFailed(
+      "layoutFamily must be momotetsu_2, world, or reiwa (known legacy aliases are accepted)."
+    ))
 
-  def optionalStableKey(field: String, value: Option[String]): Either[AppError, Option[String]] =
-    value.traverse(stableKey(field, _))
+  def optionalLayoutFamily(value: Option[String]): Either[AppError, Option[String]] =
+    value.traverse(layoutFamily)
 
   def nonBlank(field: String, value: String): Either[AppError, String] =
     val trimmed = value.trim

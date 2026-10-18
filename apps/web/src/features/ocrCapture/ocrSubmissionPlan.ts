@@ -64,6 +64,12 @@ export function prepareOcrSubmissionPlan({
   const setup = setupResolution.value;
   const { selectedGameTitle, selectedHeldEvent } = setupOptions;
   const layoutFamily = parseLayoutFamily(selectedGameTitle?.layoutFamily);
+  if (selectedGameTitle?.layoutFamily != null && !layoutFamily) {
+    return {
+      kind: "blocked",
+      message: "作品の読み取り方式を確認してください。設定画面から修正できます。",
+    };
+  }
   return {
     kind: "ready",
     plan: {
@@ -75,7 +81,7 @@ export function prepareOcrSubmissionPlan({
         ...(layoutFamily ? { layoutFamily } : {}),
       },
       selectedGameTitle: selectedGameTitle
-        ? { id: selectedGameTitle.id, layoutFamily: selectedGameTitle.layoutFamily }
+        ? { id: selectedGameTitle.id, ...(layoutFamily ? { layoutFamily } : {}) }
         : undefined,
       selectedHeldEvent: selectedHeldEvent
         ? { id: selectedHeldEvent.id, heldAt: selectedHeldEvent.heldAt }

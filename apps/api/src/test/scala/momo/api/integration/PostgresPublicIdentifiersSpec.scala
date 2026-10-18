@@ -37,24 +37,32 @@ final class PostgresPublicIdentifiersSpec extends PostgresHttpAppTestFixtures:
           _ =
             assertEquals(jsonField[String](legacyMatch, "matchId"), "1")
             assertEquals(jsonField[String](legacyEvent, "id"), "1")
-            assertEquals(jsonField[List[Json]](query, "items").map(jsonField[String](_, "id")), List("1"))
+            assertEquals(
+              jsonField[List[Json]](query, "items").map(jsonField[String](_, "id")),
+              List("1")
+            )
           _ <- List("matches", "held-events").traverse_ { entity =>
             for
-              unauthorized <- app.run(Request[IO](Method.GET, Uri.unsafeFromString(s"/api/public/$entity/1")))
+              unauthorized <-
+                app.run(Request[IO](Method.GET, Uri.unsafeFromString(s"/api/public/$entity/1")))
               _ = assertEquals(unauthorized.status, Status.Unauthorized)
               _ <- unauthorized.body.compile.drain
               missing <- app.run(readGet(Uri.unsafeFromString(s"/api/public/$entity/999")))
               _ = assertEquals(missing.status, Status.NotFound)
               _ <- missing.body.compile.drain
               invalid <- app.run(readGet(Uri.unsafeFromString(s"/api/public/$entity/01")))
-              _ <- assertProblem(invalid, Status.UnprocessableContent, "VALIDATION_FAILED", "publicId")
+              _ <-
+                assertProblem(invalid, Status.UnprocessableContent, "VALIDATION_FAILED", "publicId")
             yield ()
           }
           _ <- mode match
             case PostgresPublicIds.Legacy =>
               List("matches", "held-events").traverse_ { entity =>
                 app.run(readGet(Uri.unsafeFromString(s"/api/public/$entity/1")))
-                  .flatMap(response => IO(assertEquals(response.status, Status.NotFound)) *> response.body.compile.drain)
+                  .flatMap(response =>
+                    IO(assertEquals(response.status, Status.NotFound)) *>
+                      response.body.compile.drain
+                  )
               } *> IO {
                 assertEquals(legacyMatch.hcursor.get[Option[String]]("publicId"), Right(None))
                 assertEquals(legacyEvent.hcursor.get[Option[String]]("publicId"), Right(None))
@@ -76,8 +84,14 @@ final class PostgresPublicIdentifiersSpec extends PostgresHttpAppTestFixtures:
               val heldId = s"held-bound-$index"
               val matchId = s"match-bound-$index"
               for
-                _ <- sql"SELECT setval(pg_get_serial_sequence('held_events', 'public_id'), $number, false)".query[Long].unique.transact(transactor)
-                _ <- sql"SELECT setval(pg_get_serial_sequence('matches', 'public_id'), $number, false)".query[Long].unique.transact(transactor)
+                _ <-
+                  sql"SELECT setval(pg_get_serial_sequence('held_events', 'public_id'), $number, false)".query[
+                    Long
+                  ].unique.transact(transactor)
+                _ <-
+                  sql"SELECT setval(pg_get_serial_sequence('matches', 'public_id'), $number, false)".query[
+                    Long
+                  ].unique.transact(transactor)
                 _ <- seedPair(heldId, matchId, index)
                 event <- readJson(app, s"/api/public/held-events/$number")
                 detail <- readJson(app, s"/api/public/matches/$number")
@@ -89,16 +103,25 @@ final class PostgresPublicIdentifiersSpec extends PostgresHttpAppTestFixtures:
                   assertEquals(jsonField[String](detail, "heldEventPublicId"), number.toString)
                 publicId = PublicId.fromLong(number).fold(fail(_), identity)
                 found <- assertReadSnapshot(xa =>
-                  PostgresMatchDetailReadModel[IO](xa, mode).findByPublicId(publicId))
+                  PostgresMatchDetailReadModel[IO](xa, mode).findByPublicId(publicId)
+                )
                 held <- assertReadSnapshot(xa =>
-                  PostgresHeldEventDetailReadModel[IO](xa, mode).findByPublicId(publicId))
+                  PostgresHeldEventDetailReadModel[IO](xa, mode).findByPublicId(publicId)
+                )
                 _ =
                   assertEquals(found.map(_.record.id.value), Some(matchId))
                   assertEquals(held.map(_.event.id.value), Some(heldId))
               yield ()
             } *> List("matches", "held-events").traverse_ { entity =>
               app.run(readGet(Uri.unsafeFromString(s"/api/public/$entity/9223372036854775808")))
-                .flatMap(response => assertProblem(response, Status.UnprocessableContent, "VALIDATION_FAILED", "publicId"))
+                .flatMap(response =>
+                  assertProblem(
+                    response,
+                    Status.UnprocessableContent,
+                    "VALIDATION_FAILED",
+                    "publicId"
+                  )
+                )
             }
           }
     yield ()
@@ -116,16 +139,26 @@ final class PostgresPublicIdentifiersSpec extends PostgresHttpAppTestFixtures:
         assertEquals(jsonField[String](legacyMatch, "publicId"), "2")
         assertEquals(jsonField[String](legacyEvent, "publicId"), "2")
         assertEquals(jsonField[String](identity, "publicId"), "1")
-        assertEquals(jsonField[List[Json]](held, "matches").map(jsonField[String](_, "publicId")), List("1"))
-        assertEquals(jsonField[List[Json]](events, "items").map(jsonField[String](_, "publicId")).toSet, Set("1", "2"))
-        assertEquals(jsonField[List[Json]](listed, "items").map(jsonField[String](_, "publicId")).toSet, Set("1", "2"))
+        assertEquals(
+          jsonField[List[Json]](held, "matches").map(jsonField[String](_, "publicId")),
+          List("1")
+        )
+        assertEquals(
+          jsonField[List[Json]](events, "items").map(jsonField[String](_, "publicId")).toSet,
+          Set("1", "2")
+        )
+        assertEquals(
+          jsonField[List[Json]](listed, "items").map(jsonField[String](_, "publicId")).toSet,
+          Set("1", "2")
+        )
         val nextMatch = jsonField[Json](jsonField[Json](first, "navigation"), "next")
         val nextEvent = jsonField[Json](jsonField[Json](held, "navigation"), "next")
         assertEquals(jsonField[String](nextMatch, "matchId"), "1")
         assertEquals(jsonField[String](nextMatch, "publicId"), "2")
         assertEquals(jsonField[String](nextEvent, "id"), "1")
         assertEquals(jsonField[String](nextEvent, "publicId"), "2")
-      update = HttpRequestBodies.Matches.confirmMatchWithNo(jsonField[String](first, "heldEventId"), 9)
+      update =
+        HttpRequestBodies.Matches.confirmMatchWithNo(jsonField[String](first, "heldEventId"), 9)
       target = Uri.unsafeFromString(s"/api/matches/${jsonField[String](first, "matchId")}")
       saved <- app.run(writePost(target, update, Some("public-route-edit")).withMethod(Method.PUT))
       savedBody <- saved.as[Json]
@@ -151,15 +184,28 @@ final class PostgresPublicIdentifiersSpec extends PostgresHttpAppTestFixtures:
     PostgresGameTitlesRepository[IO](transactor),
     PostgresMapMastersRepository[IO](transactor),
     PostgresSeasonMastersRepository[IO](transactor),
-    titleId, mapId, seasonId, now,
+    titleId,
+    mapId,
+    seasonId,
+    now,
   )
 
   private def seedPair(heldId: String, matchId: String, index: Int): IO[Unit] =
     val heldEventId = HeldEventId.unsafeFromString(heldId)
     val at = now.plusSeconds(index.toLong)
     val record = MatchFixtures.matchRecord(
-      MatchId.unsafeFromString(matchId), heldEventId, 1, titleId, seasonId, mapId, at, at,
-      MatchFixtures.DbMemberValues, None, None, None,
+      MatchId.unsafeFromString(matchId),
+      heldEventId,
+      1,
+      titleId,
+      seasonId,
+      mapId,
+      at,
+      at,
+      MatchFixtures.DbMemberValues,
+      None,
+      None,
+      None,
     ).copy(createdByAccountId = AccountId.unsafeFromString(DefaultAccountId))
     for
       _ <- PostgresHeldEventsRepository[IO](transactor).create(HeldEvent(heldEventId, at))

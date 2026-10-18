@@ -21,10 +21,11 @@ enum PostgresPublicIds derives CanEqual:
     case Available =>
       sql"SELECT id FROM matches WHERE public_id = $publicId".query[MatchId].option
 
-  private[postgres] def heldEventId(publicId: PublicId): ConnectionIO[Option[HeldEventId]] = this match
-    case Legacy => none[HeldEventId].pure[ConnectionIO]
-    case Available =>
-      sql"SELECT id FROM held_events WHERE public_id = $publicId".query[HeldEventId].option
+  private[postgres] def heldEventId(publicId: PublicId): ConnectionIO[Option[HeldEventId]] =
+    this match
+      case Legacy => none[HeldEventId].pure[ConnectionIO]
+      case Available =>
+        sql"SELECT id FROM held_events WHERE public_id = $publicId".query[HeldEventId].option
 
 object PostgresPublicIds:
   private final case class Shape(tableExists: Boolean, columnExists: Boolean, valid: Boolean)

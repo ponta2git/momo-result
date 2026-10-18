@@ -10,6 +10,17 @@ final class PublicIdSpec extends FunSuite:
 
   test("public numbers reject ambiguous spellings and overflow"):
     List(
-      "", "0", "-1", "+1", "01", " 1", "1 ", "1.0", "1e3", "１", "1_000",
-      "9223372036854775808", "18446744073709551615",
+      "",
+      "0",
+      "-1",
+      "+1",
+      "01",
+      " 1",
+      "1 ",
+      "1.0",
+      "1e3",
+      "１",
+      "1_000",
+      "9223372036854775808",
+      "18446744073709551615",
     ).foreach(value => assert(PublicId.fromString(value).isLeft, value))

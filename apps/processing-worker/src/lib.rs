@@ -13,7 +13,7 @@ mod busy_retry;
 mod cgroup;
 mod cli;
 mod execution;
-mod execution_slot;
+mod job_lease;
 mod maintenance;
 mod notifications;
 mod ocr;

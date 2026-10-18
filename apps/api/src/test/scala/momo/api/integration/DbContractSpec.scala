@@ -77,13 +77,6 @@ final class DbContractSpec extends IntegrationSuite:
       assertEquals(state, (0L, release._1, release._2, release._3))
     }
 
-  test("the shared heavy-work slot starts available with its initial fence"):
-    sql"""
-      SELECT slot_key, task_kind, owner, fencing_token
-      FROM worker_execution_slots
-    """.query[(String, Option[String], Option[String], Long)].unique.transact(transactor).map:
-      row => assertEquals(row, ("shared-heavy-work", None, None, 0L))
-
   test("published analysis artifact headers and payloads are immutable until parent cleanup"):
     val artifactId = "artifact-contract-immutable"
     val unattestedArtifactId = "artifact-contract-unattested"

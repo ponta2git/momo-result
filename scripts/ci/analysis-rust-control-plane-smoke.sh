@@ -29,6 +29,7 @@ tests=(
   "series_analysis::control::history::tests::real_postgres_retention_preserves_active_jobs_and_readable_artifacts"
   "series_analysis::control::capability::tests::real_postgres_registration_replaces_the_generation_capability_set"
   "series_analysis::control::claim::tests::real_postgres_keeps_exact_jobs_queued_when_an_old_binary_omits_the_lease_contract"
+  "series_analysis::control::integration_tests::fencing::real_postgres_job_fences_survive_cleanup_recovery_and_independent_workers"
   "series_analysis::control::integration_tests::claim_wait::real_postgres_claims_preserve_busy_deadlines_and_uncertain_commits"
   "series_analysis::control::integration_tests::real_postgres_keeps_staging_separate_from_fenced_publication"
   "series_analysis::control::integration_tests::radar::freshness::real_postgres_radar_preparation_checks_current_source_and_preserves_pending_analysis"
@@ -65,7 +66,7 @@ ignored_test_catalog="$(
     --list
 )"
 
-# These suites mutate shared DB control state, including release and execution-slot
+# These suites mutate shared DB control state, including release and job-lease
 # fixtures. Keep this service scope sequential; the ordinary Rust suite stays parallel.
 for test_name in "${tests[@]}"; do
   if ! grep -Fqx "${test_name}: test" <<<"${ignored_test_catalog}"; then

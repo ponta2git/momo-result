@@ -96,7 +96,7 @@ pub(in crate::series_analysis::control) async fn complete_preparation(
         tx.execute("UPDATE series_analysis_jobs SET status='succeeded',finished_at=clock_timestamp(),result_disposition='none',lease_owner=NULL,lease_attempt_id=NULL,lease_fencing_token=NULL,lease_expires_at=NULL,lease_validation_contract_id=NULL,updated_at=clock_timestamp() WHERE id=$1", &[&claim.job_id]).await?;
         let mut effects = control::TransactionEffects::empty();
         control::transaction::schedule_follow_up(&tx, claim, &mut effects).await?;
-        control::transaction::release_slot(&tx, claim, &config.worker_id).await?;
+
         effects.record_series_analysis();
         tx.commit().await?;
         return Ok(effects.committed(control::PublicationResult::Prepared));

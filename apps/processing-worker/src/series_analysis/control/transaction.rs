@@ -4,11 +4,6 @@ use momo_analysis_core::{canonical, contract::ScopeRef};
 use sha2::{Digest, Sha256};
 use tokio_postgres::{Client, Transaction};
 
-use crate::execution_slot::{
-    ExecutionSlotIdentity, ExecutionTaskKind, lock_owned as lock_owned_slot,
-    release_owned as release_owned_slot,
-};
-
 use super::{
     AttemptMetrics, AttemptOutcome, ClaimedJob, ControlError, RequestOutcome, TransactionEffects,
 };
@@ -18,16 +13,6 @@ pub(super) async fn lock_owned(
     claim: &ClaimedJob,
     worker_id: &str,
 ) -> Result<(), ControlError> {
-    let identity = ExecutionSlotIdentity {
-        task_kind: ExecutionTaskKind::Analysis,
-        owner: worker_id,
-        job_id: &claim.job_id,
-        attempt_id: &claim.attempt_id,
-        fencing_token: claim.fencing_token,
-    };
-    if !lock_owned_slot(transaction, identity).await? {
-        return Err(ControlError::OwnerLost);
-    }
     let title = transaction
         .query_opt(
             "SELECT game_title_id FROM series_analysis_title_states\x20\
@@ -184,24 +169,6 @@ pub(super) async fn refresh_operation_projections(
             &[&attempt_id],
         )
         .await?;
-    Ok(())
-}
-
-pub(super) async fn release_slot(
-    transaction: &Transaction<'_>,
-    claim: &ClaimedJob,
-    worker_id: &str,
-) -> Result<(), ControlError> {
-    let identity = ExecutionSlotIdentity {
-        task_kind: ExecutionTaskKind::Analysis,
-        owner: worker_id,
-        job_id: &claim.job_id,
-        attempt_id: &claim.attempt_id,
-        fencing_token: claim.fencing_token,
-    };
-    if !release_owned_slot(transaction, identity).await? {
-        return Err(ControlError::OwnerLost);
-    }
     Ok(())
 }
 

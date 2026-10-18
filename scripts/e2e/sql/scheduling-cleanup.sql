@@ -1,13 +1,6 @@
 BEGIN;
 SET LOCAL statement_timeout = '10s';
 SET LOCAL lock_timeout = '5s';
-UPDATE worker_execution_slots
-SET task_kind = NULL, owner = NULL, job_id = NULL, attempt_id = NULL,
-    holder_preemptible = NULL, lease_expires_at = NULL,
-    preempt_requested_by = NULL, preempt_requested_at = NULL,
-    updated_at = clock_timestamp()
-WHERE slot_key = 'shared-heavy-work'
-  AND (owner IS NULL OR owner IN (:'analysis_worker_id','ci-scheduling-ocr-worker'));
 DELETE FROM ocr_drafts WHERE job_id = 'ci-scheduling-ocr-job';
 DELETE FROM ocr_submission_members WHERE submission_id = '00000000-0024-4000-8000-000000000099';
 DELETE FROM ocr_submissions WHERE id = '00000000-0024-4000-8000-000000000099';

@@ -41,9 +41,9 @@
 
 - OCR / 分析 job・request・入力と業務状態を同じ DB transaction で確定する。
 - commit 後の wake は低遅延化の hint とし、startup / reconnect / deadline / 低頻度走査で欠落から回復する。
-- scheduler は候補を上限付きで取得し、DB claim、lease、fence で競合を制御する。実行前に job lock を先取りせず、共有枠から順に取得する。
+- scheduler は候補を上限付きで取得し、DB claim、lease、fence で競合を制御する。候補選択では job lock を先取りせず、claim は title state / 下書きから job の順に取得する。
 - parent process が外部 I/O、lease、timeout、子 process、durable write を所有し、attempt child は bounded な candidate だけを返す。
-- OCRと分析は共有実行枠を1件とし、待機候補ではOCRを先に選び、実行中の分析は完了させる。詳細は各専門正本に従う。
+- OCRと分析は各 Worker process の同時実行数を1件とし、CPU・メモリ予算を予約する。待機候補ではOCRを先に選び、実行中の分析は完了させる。詳細は各専門正本に従う。
 
 ## 4. Image / Object Lifecycle
 

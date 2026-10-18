@@ -146,8 +146,6 @@ async fn real_postgres_analysis_notifications_follow_committed_publications() ->
     primary
         .batch_execute("UPDATE discord_notification_settings SET enabled = true, generation = 0")
         .await?;
-    primary.execute("UPDATE worker_execution_slots SET owner = NULL, task_kind = NULL, job_id = NULL, attempt_id = NULL, \
-        holder_preemptible = NULL, lease_expires_at = NULL WHERE job_id = $1", &[&stale.job_id]).await?;
     policy::cleanup(&primary).await?;
     Ok(())
 }
@@ -346,14 +344,11 @@ async fn next_job(client: &Client, previous: &ClaimedJob, label: &str) -> SmokeR
     };
     client.execute("INSERT INTO series_analysis_jobs (id, game_title_id, input_revision, algorithm_version, artifact_schema_version, \
         validation_contract_id, status, trigger, started_at, lease_owner, lease_attempt_id, lease_fencing_token, lease_expires_at, \
-        lease_validation_contract_id, attempt_count) VALUES ($1,$2,$3,$4,$5,$6,'running','manual',clock_timestamp(),$7,$8,$9,clock_timestamp()+interval '10 minutes',$6,1)",
+        lease_validation_contract_id, attempt_count, fencing_counter) VALUES ($1,$2,$3,$4,$5,$6,'running','manual',clock_timestamp(),$7,$8,$9,clock_timestamp()+interval '10 minutes',$6,1,$9)",
         &[&next.job_id, &next.game_title_id, &next.input_revision, &next.algorithm_version, &next.artifact_schema_version, &next.validation_contract_id, &OLD_WORKER_ID, &next.attempt_id, &next.fencing_token]).await?;
     client.execute("INSERT INTO series_analysis_job_attempts (id,job_id,attempt_no,owner,fencing_token,input_revision,algorithm_version,artifact_schema_version,validation_contract_id,status,effective_config_version,calculation_timeout_milliseconds) \
         VALUES ($1,$2,1,$3,$4,$5,$6,$7,$8,'running','notification-test',60000)",
         &[&next.attempt_id,&next.job_id,&OLD_WORKER_ID,&next.fencing_token,&next.input_revision,&next.algorithm_version,&next.artifact_schema_version,&next.validation_contract_id]).await?;
-    client.execute("UPDATE worker_execution_slots SET task_kind='analysis', owner=$1, job_id=$2, attempt_id=$3, fencing_token=$4, \
-        holder_preemptible=true, lease_expires_at=clock_timestamp()+interval '10 minutes' WHERE slot_key='shared-heavy-work'",
-        &[&OLD_WORKER_ID,&next.job_id,&next.attempt_id,&next.fencing_token]).await?;
     Ok(next)
 }
 
@@ -418,8 +413,13 @@ async fn capture(
             .get("sourceJobId")
             .and_then(Value::as_str)
             .ok_or("source ID")?;
-        let row = client.query_one("SELECT j.status, s.owner FROM series_analysis_jobs j CROSS JOIN worker_execution_slots s \
-            WHERE j.id=$1 AND s.slot_key='shared-heavy-work'", &[&id]).await?;
+        let row = client
+            .query_one(
+                "SELECT j.status, j.lease_owner FROM series_analysis_jobs j \
+            WHERE j.id=$1",
+                &[&id],
+            )
+            .await?;
         assert_eq!(row.try_get::<_, String>(0)?, "succeeded");
         assert_eq!(row.try_get::<_, Option<String>>(1)?, None);
         sent.send(payload).await?;

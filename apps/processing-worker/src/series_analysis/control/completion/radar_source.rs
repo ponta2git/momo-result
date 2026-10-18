@@ -9,7 +9,7 @@ use crate::series_analysis::{
     radar_prepare,
 };
 
-/// The caller already owns the execution slot, title revision and desired-generation locks.
+/// The caller already owns the job lease, title revision and desired-generation locks.
 /// Returning false keeps invalidation in the same commit as the existing terminal-failure rollback.
 pub(super) async fn validate(
     transaction: &Transaction<'_>,

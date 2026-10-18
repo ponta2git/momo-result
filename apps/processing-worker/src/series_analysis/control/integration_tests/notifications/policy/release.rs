@@ -111,7 +111,6 @@ async fn capabilities(client: &Client) -> SmokeResult {
 async fn seed_legacy(client: &Client) -> SmokeResult {
     // Explicit historical fixture: only relational input identity/counts are meaningful. The
     // current binary must never decode its opaque aggregate/context payload as a current schema.
-    client.execute("UPDATE worker_execution_slots SET owner=NULL, task_kind=NULL, job_id=NULL, attempt_id=NULL, holder_preemptible=NULL, lease_expires_at=NULL WHERE job_id=$1", &[&JOB_ID]).await?;
     client
         .execute("DELETE FROM series_analysis_jobs WHERE id=$1", &[&JOB_ID])
         .await?;

@@ -23,10 +23,9 @@ async fn real_postgres_selects_due_work_and_recovers_orphans() -> TestResult {
     let database_url = std::env::var("PROCESSING_SCHEDULER_SMOKE_DATABASE_URL")?;
     let mut client = crate::postgres::connect(&database_url).await?;
     cleanup(&client).await?;
-    let baseline = client.query_one("SELECT (SELECT count(*) FROM series_analysis_jobs WHERE status IN ('queued','running')), (SELECT count(*) FROM ocr_jobs WHERE status IN ('queued','running')), (SELECT owner IS NULL FROM worker_execution_slots WHERE slot_key='shared-heavy-work')", &[]).await?;
+    let baseline = client.query_one("SELECT (SELECT count(*) FROM series_analysis_jobs WHERE status IN ('queued','running')), (SELECT count(*) FROM ocr_jobs WHERE status IN ('queued','running'))", &[]).await?;
     assert_eq!(baseline.try_get::<_, i64>(0)?, 0);
     assert_eq!(baseline.try_get::<_, i64>(1)?, 0);
-    assert!(baseline.try_get::<_, bool>(2)?);
     assert_eq!(
         next_due(&client, true, Duration::from_secs(30)).await?,
         Duration::from_secs(30)
@@ -98,14 +97,8 @@ async fn verify_recovery(client: &mut Client, held: bool) -> TestResult {
     let schema = i32::try_from(ARTIFACT_SCHEMA_VERSION)?;
     let revision: i64 = if held { 401 } else { 402 };
     let fence: i64 = 8_000_001;
-    client.execute("INSERT INTO series_analysis_jobs (id,game_title_id,input_revision,algorithm_version,artifact_schema_version,validation_contract_id,status,trigger,started_at,lease_owner,lease_attempt_id,lease_fencing_token,lease_expires_at,lease_validation_contract_id,attempt_count) VALUES ($1,$2,$3,$4,$5,$6,'running','manual',clock_timestamp(),$7,$8,$9,clock_timestamp()-interval '1 second',$6,1)", &[&job,&TITLE,&revision,&ALGORITHM_VERSION,&schema,&ARTIFACT_VALIDATION_CONTRACT_ID,&OWNER,&attempt,&fence]).await?;
+    client.execute("INSERT INTO series_analysis_jobs (id,game_title_id,input_revision,algorithm_version,artifact_schema_version,validation_contract_id,status,trigger,started_at,lease_owner,lease_attempt_id,lease_fencing_token,lease_expires_at,lease_validation_contract_id,attempt_count,fencing_counter) VALUES ($1,$2,$3,$4,$5,$6,'running','manual',clock_timestamp(),$7,$8,$9,clock_timestamp()-interval '1 second',$6,1,$9)", &[&job,&TITLE,&revision,&ALGORITHM_VERSION,&schema,&ARTIFACT_VALIDATION_CONTRACT_ID,&OWNER,&attempt,&fence]).await?;
     client.execute("INSERT INTO series_analysis_job_attempts (id,job_id,attempt_no,owner,fencing_token,input_revision,algorithm_version,artifact_schema_version,validation_contract_id,status,effective_config_version,calculation_timeout_milliseconds) VALUES ($1,$2,1,$3,$4,$5,$6,$7,$8,'running','scheduler-smoke',60000)", &[&attempt,&job,&OWNER,&fence,&revision,&ALGORITHM_VERSION,&schema,&ARTIFACT_VALIDATION_CONTRACT_ID]).await?;
-    let slot_job = if held {
-        job
-    } else {
-        "scheduler-selection-smoke-live"
-    };
-    client.execute("UPDATE worker_execution_slots SET task_kind='analysis',owner=$1,job_id=$2,attempt_id=$3,holder_preemptible=true,lease_expires_at=clock_timestamp()+$4::bigint*interval '1 second',fencing_token=$5 WHERE slot_key='shared-heavy-work' AND owner IS NULL", &[&OWNER,&slot_job,&attempt,&if held {-1_i64} else {60_i64},&fence]).await?;
     assert!(candidates(client, false, None).await?.is_empty());
     let (sink, mut wake) = PostCommitSink::channel();
     if held {
@@ -129,20 +122,17 @@ async fn verify_recovery(client: &mut Client, held: bool) -> TestResult {
     assert_eq!(row.try_get::<_, i32>(1)?, 1);
     assert_eq!(row.try_get::<_, String>(2)?, "terminal");
     assert_eq!(row.try_get::<_, String>(3)?, "owner_lost");
-    let slot = client.query_one("SELECT owner,job_id,fencing_token FROM worker_execution_slots WHERE slot_key='shared-heavy-work'", &[]).await?;
-    assert_eq!(slot.try_get::<_, i64>(2)?, fence);
-    if held {
-        assert!(slot.try_get::<_, Option<String>>(0)?.is_none());
-    } else {
-        assert_eq!(
-            slot.try_get::<_, Option<String>>(0)?.as_deref(),
-            Some(OWNER)
-        );
-        assert_eq!(
-            slot.try_get::<_, Option<String>>(1)?.as_deref(),
-            Some(slot_job)
-        );
-    }
+    let counter: i64 = client
+        .query_one(
+            "SELECT fencing_counter FROM series_analysis_jobs WHERE id=$1",
+            &[&job],
+        )
+        .await?
+        .try_get(0)?;
+    assert_eq!(
+        counter, fence,
+        "recovery must preserve the persistent counter"
+    );
     client
         .execute(
             "DELETE FROM series_analysis_job_attempts WHERE job_id=$1",
@@ -184,7 +174,6 @@ async fn cleanup(client: &Client) -> TestResult {
             &[&format!("{PREFIX}%")],
         )
         .await?;
-    client.execute("UPDATE worker_execution_slots SET task_kind=NULL,owner=NULL,job_id=NULL,attempt_id=NULL,holder_preemptible=NULL,lease_expires_at=NULL,preempt_requested_by=NULL,preempt_requested_at=NULL WHERE slot_key='shared-heavy-work' AND owner=$1", &[&OWNER]).await?;
     client
         .execute(
             "DELETE FROM series_analysis_job_attempts WHERE job_id IN (SELECT id FROM series_analysis_jobs WHERE game_title_id LIKE $1)",

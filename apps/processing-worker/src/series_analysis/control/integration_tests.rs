@@ -23,7 +23,7 @@ use super::{
         finish_success, publish_staged_artifact, requires_staging, stage_artifact,
         validate_staged_artifact,
     },
-    recovery::recover_expired_analysis_holder,
+    recovery::recover_expired_analysis_job,
     staging_metadata::validate_staged_resource_metadata,
     transaction::{artifact_id_for_attempt, lock_owned},
 };
@@ -34,6 +34,7 @@ use crate::series_analysis::artifact::{
 type SmokeResult<T = ()> = Result<T, Box<dyn Error + Send + Sync>>;
 
 mod claim_wait;
+mod fencing;
 mod heartbeat;
 mod notifications;
 mod radar;
@@ -234,9 +235,7 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
 
     secondary
         .batch_execute(&format!(
-            "UPDATE worker_execution_slots SET lease_expires_at = clock_timestamp() + interval '10 minutes'\x20\
-             WHERE slot_key = 'shared-heavy-work' AND owner = '{NEW_WORKER_ID}';\x20\
-             UPDATE series_analysis_jobs SET lease_expires_at = clock_timestamp() + interval '10 minutes'\x20\
+            "UPDATE series_analysis_jobs SET lease_expires_at = clock_timestamp() + interval '10 minutes'\x20\
              WHERE id = '{JOB_ID}' AND lease_owner = '{NEW_WORKER_ID}';"
         ))
         .await?;
@@ -542,13 +541,6 @@ async fn stage_with_control_lock_probe(
     let probe = probe_client.transaction().await?;
     probe
         .query_one(
-            "SELECT 1 FROM worker_execution_slots\x20\
-             WHERE slot_key = 'shared-heavy-work' FOR UPDATE NOWAIT",
-            &[],
-        )
-        .await?;
-    probe
-        .query_one(
             "SELECT 1 FROM series_analysis_title_states\x20\
              WHERE game_title_id = $1 FOR UPDATE NOWAIT",
             &[&claim.game_title_id],
@@ -600,13 +592,13 @@ async fn prepare_owned_attempt(client: &Client) -> SmokeResult {
                id, game_title_id, input_revision, algorithm_version, artifact_schema_version,\x20\
                validation_contract_id,\x20\
                status, trigger, started_at, lease_owner, lease_attempt_id,\x20\
-               lease_fencing_token, lease_expires_at, lease_validation_contract_id, attempt_count\x20\
+               lease_fencing_token, lease_expires_at, lease_validation_contract_id, attempt_count, fencing_counter\x20\
              ) VALUES (\x20\
                '{JOB_ID}', '{TITLE_ID}', 1, '{ALGORITHM_VERSION}', {ARTIFACT_SCHEMA_VERSION},\x20\
                '{ARTIFACT_VALIDATION_CONTRACT_ID}',\x20\
                'running', 'manual', clock_timestamp(), '{OLD_WORKER_ID}', '{OLD_ATTEMPT_ID}',\x20\
                {OLD_FENCE}, clock_timestamp() + interval '10 minutes',\x20\
-               '{ARTIFACT_VALIDATION_CONTRACT_ID}', 1\x20\
+               '{ARTIFACT_VALIDATION_CONTRACT_ID}', 1, {OLD_FENCE}\x20\
              );\x20\
              INSERT INTO series_analysis_job_attempts (\x20\
                id, job_id, attempt_no, owner, fencing_token, input_revision, algorithm_version,\x20\
@@ -616,13 +608,7 @@ async fn prepare_owned_attempt(client: &Client) -> SmokeResult {
                '{OLD_ATTEMPT_ID}', '{JOB_ID}', 1, '{OLD_WORKER_ID}', {OLD_FENCE}, 1,\x20\
                '{ALGORITHM_VERSION}', {ARTIFACT_SCHEMA_VERSION},\x20\
                '{ARTIFACT_VALIDATION_CONTRACT_ID}', 'running', 'staging-smoke', 60000\x20\
-             );\x20\
-             UPDATE worker_execution_slots SET task_kind = 'analysis', owner = '{OLD_WORKER_ID}',\x20\
-               job_id = '{JOB_ID}', attempt_id = '{OLD_ATTEMPT_ID}', holder_preemptible = true,\x20\
-               lease_expires_at = clock_timestamp() + interval '10 minutes',\x20\
-               fencing_token = {OLD_FENCE}, preempt_requested_by = NULL,\x20\
-               preempt_requested_at = NULL, updated_at = clock_timestamp()\x20\
-             WHERE slot_key = 'shared-heavy-work';"
+             );"
         ))
         .await?;
     Ok(())
@@ -632,11 +618,7 @@ async fn assert_claim_reports_database_availability_delay(client: &mut Client) -
     let transaction = client.transaction().await?;
     transaction
         .batch_execute(&format!(
-            "UPDATE worker_execution_slots SET task_kind = NULL, owner = NULL, job_id = NULL,\x20\
-               attempt_id = NULL, holder_preemptible = NULL, lease_expires_at = NULL,\x20\
-               preempt_requested_by = NULL, preempt_requested_at = NULL, updated_at = clock_timestamp()\x20\
-             WHERE slot_key = 'shared-heavy-work' AND job_id = '{JOB_ID}';\x20\
-             UPDATE series_analysis_jobs SET status = 'queued', available_at = clock_timestamp() + interval '1 hour',\x20\
+            "UPDATE series_analysis_jobs SET status = 'queued', available_at = clock_timestamp() + interval '1 hour',\x20\
                started_at = NULL, lease_owner = NULL, lease_attempt_id = NULL,\x20\
                lease_fencing_token = NULL, lease_expires_at = NULL,\x20\
                lease_validation_contract_id = NULL, updated_at = clock_timestamp()\x20\
@@ -644,7 +626,7 @@ async fn assert_claim_reports_database_availability_delay(client: &mut Client) -
         ))
         .await?;
 
-    let remaining_delay = match prepare_claim(&transaction, JOB_ID, 60_000).await? {
+    let remaining_delay = match prepare_claim(&transaction, JOB_ID).await? {
         ClaimPreparation::Rejected(ClaimResult::NotYetAvailable { remaining_delay }) => {
             remaining_delay
         }
@@ -660,35 +642,39 @@ async fn assert_claim_reports_database_availability_delay(client: &mut Client) -
     Ok(())
 }
 
+fn old_job_lease() -> crate::job_lease::ExpiredJobLease {
+    crate::job_lease::ExpiredJobLease {
+        job_id: String::from(JOB_ID),
+        owner: String::from(OLD_WORKER_ID),
+        attempt_id: String::from(OLD_ATTEMPT_ID),
+        fencing_token: OLD_FENCE,
+    }
+}
+
 async fn assert_recovery_rejects_a_mismatched_job_owner(
     primary: &mut Client,
     secondary: &Client,
 ) -> SmokeResult {
     secondary
         .batch_execute(&format!(
-            "UPDATE worker_execution_slots SET lease_expires_at = clock_timestamp() - interval '1 second'\x20\
-             WHERE slot_key = 'shared-heavy-work' AND job_id = '{JOB_ID}';\x20\
-             UPDATE series_analysis_jobs SET lease_owner = '{NEW_WORKER_ID}',\x20\
+            "UPDATE series_analysis_jobs SET lease_owner = '{NEW_WORKER_ID}',\x20\
                lease_expires_at = clock_timestamp() - interval '1 second'\x20\
              WHERE id = '{JOB_ID}' AND status = 'running';"
         ))
         .await?;
     let transaction = primary.transaction().await?;
-    let slot = crate::execution_slot::lock(&transaction).await?;
-    let holder = slot.holder.ok_or("expired analysis holder is missing")?;
-    assert!(holder.expired);
-    assert!(matches!(
-        recover_expired_analysis_holder(&transaction, &holder).await,
-        Err(ControlError::OwnerLost)
-    ));
+    let holder = old_job_lease();
+    assert_eq!(
+        recover_expired_analysis_job(&transaction, &holder).await?,
+        TransactionEffects::empty()
+    );
     transaction.rollback().await?;
 
     let unchanged = secondary
         .query_one(
-            "SELECT j.status, j.lease_owner, a.status, s.owner\x20\
+            "SELECT j.status, j.lease_owner, a.status, j.fencing_counter\x20\
              FROM series_analysis_jobs j\x20\
              JOIN series_analysis_job_attempts a ON a.id = $2\x20\
-             JOIN worker_execution_slots s ON s.slot_key = 'shared-heavy-work'\x20\
              WHERE j.id = $1",
             &[&JOB_ID, &OLD_ATTEMPT_ID],
         )
@@ -696,13 +682,11 @@ async fn assert_recovery_rejects_a_mismatched_job_owner(
     assert_eq!(unchanged.try_get::<_, String>(0)?, "running");
     assert_eq!(unchanged.try_get::<_, String>(1)?, NEW_WORKER_ID);
     assert_eq!(unchanged.try_get::<_, String>(2)?, "running");
-    assert_eq!(unchanged.try_get::<_, String>(3)?, OLD_WORKER_ID);
+    assert_eq!(unchanged.try_get::<_, i64>(3)?, OLD_FENCE);
 
     secondary
         .batch_execute(&format!(
-            "UPDATE worker_execution_slots SET lease_expires_at = clock_timestamp() + interval '10 minutes'\x20\
-             WHERE slot_key = 'shared-heavy-work' AND job_id = '{JOB_ID}';\x20\
-             UPDATE series_analysis_jobs SET lease_owner = '{OLD_WORKER_ID}',\x20\
+            "UPDATE series_analysis_jobs SET lease_owner = '{OLD_WORKER_ID}',\x20\
                lease_expires_at = clock_timestamp() + interval '10 minutes'\x20\
              WHERE id = '{JOB_ID}' AND status = 'running';"
         ))
@@ -720,9 +704,7 @@ async fn assert_recovery_locks_title_before_job(
         .try_get::<_, i32>(0)?;
     secondary
         .batch_execute(&format!(
-            "UPDATE worker_execution_slots SET lease_expires_at = clock_timestamp() - interval '1 second'\x20\
-             WHERE slot_key = 'shared-heavy-work' AND job_id = '{JOB_ID}';\x20\
-             UPDATE series_analysis_jobs SET lease_recovery_count = 3,\x20\
+            "UPDATE series_analysis_jobs SET lease_recovery_count = 3,\x20\
                lease_expires_at = clock_timestamp() - interval '1 second'\x20\
              WHERE id = '{JOB_ID}' AND status = 'running';"
         ))
@@ -737,11 +719,9 @@ async fn assert_recovery_locks_title_before_job(
         .await?;
 
     let recovery_transaction = primary.transaction().await?;
-    let slot = crate::execution_slot::lock(&recovery_transaction).await?;
-    let holder = slot.holder.ok_or("expired analysis holder is missing")?;
-    assert!(holder.expired);
+    let holder = old_job_lease();
     {
-        let recovery = recover_expired_analysis_holder(&recovery_transaction, &holder);
+        let recovery = recover_expired_analysis_job(&recovery_transaction, &holder);
         tokio::pin!(recovery);
         wait_for_backend_lock(&title_holder, recovery_backend_pid, recovery.as_mut()).await?;
 
@@ -758,9 +738,7 @@ async fn assert_recovery_locks_title_before_job(
 
     secondary
         .batch_execute(&format!(
-            "UPDATE worker_execution_slots SET lease_expires_at = clock_timestamp() + interval '10 minutes'\x20\
-             WHERE slot_key = 'shared-heavy-work' AND job_id = '{JOB_ID}';\x20\
-             UPDATE series_analysis_jobs SET lease_recovery_count = 0,\x20\
+            "UPDATE series_analysis_jobs SET lease_recovery_count = 0,\x20\
                lease_expires_at = clock_timestamp() + interval '10 minutes'\x20\
              WHERE id = '{JOB_ID}' AND status = 'running';"
         ))
@@ -806,15 +784,13 @@ async fn assert_recovery_defers_then_allows_the_next_claim(
 ) -> SmokeResult {
     secondary
         .batch_execute(&format!(
-            "UPDATE worker_execution_slots SET lease_expires_at = clock_timestamp() - interval '1 second'\x20\
-             WHERE slot_key = 'shared-heavy-work' AND job_id = '{JOB_ID}';\x20\
-             UPDATE series_analysis_jobs SET lease_expires_at = clock_timestamp() - interval '1 second'\x20\
+            "UPDATE series_analysis_jobs SET lease_expires_at = clock_timestamp() - interval '1 second'\x20\
              WHERE id = '{JOB_ID}' AND status = 'running';"
         ))
         .await?;
 
     let recovery_transaction = primary.transaction().await?;
-    let recovery_effects = match prepare_claim(&recovery_transaction, JOB_ID, 60_000).await? {
+    let recovery_effects = match prepare_claim(&recovery_transaction, JOB_ID).await? {
         ClaimPreparation::RecoveredExpiredHolder {
             effects,
             current_candidate_resolved,
@@ -831,9 +807,8 @@ async fn assert_recovery_defers_then_allows_the_next_claim(
 
     let recovered = secondary
         .query_one(
-            "SELECT j.status, s.owner, j.available_at <= clock_timestamp()\x20\
+            "SELECT j.status, j.lease_owner, j.available_at <= clock_timestamp()\x20\
              FROM series_analysis_jobs j\x20\
-             JOIN worker_execution_slots s ON s.slot_key = 'shared-heavy-work'\x20\
              WHERE j.id = $1",
             &[&JOB_ID],
         )
@@ -844,7 +819,7 @@ async fn assert_recovery_defers_then_allows_the_next_claim(
 
     let next_claim_transaction = primary.transaction().await?;
     assert!(matches!(
-        prepare_claim(&next_claim_transaction, JOB_ID, 60_000).await?,
+        prepare_claim(&next_claim_transaction, JOB_ID).await?,
         ClaimPreparation::Ready { .. }
     ));
     next_claim_transaction.rollback().await?;
@@ -857,16 +832,14 @@ async fn assert_exhausted_recovery_resolves_the_current_candidate(
 ) -> SmokeResult {
     observer
         .batch_execute(&format!(
-            "UPDATE worker_execution_slots SET lease_expires_at = clock_timestamp() - interval '1 second'\x20\
-             WHERE slot_key = 'shared-heavy-work' AND job_id = '{JOB_ID}';\x20\
-             UPDATE series_analysis_jobs SET lease_recovery_count = 3,\x20\
+            "UPDATE series_analysis_jobs SET lease_recovery_count = 3,\x20\
                lease_expires_at = clock_timestamp() - interval '1 second'\x20\
              WHERE id = '{JOB_ID}' AND status = 'running';"
         ))
         .await?;
 
     let transaction = primary.transaction().await?;
-    let recovery_effects = match prepare_claim(&transaction, JOB_ID, 60_000).await? {
+    let recovery_effects = match prepare_claim(&transaction, JOB_ID).await? {
         ClaimPreparation::RecoveredExpiredHolder {
             effects,
             current_candidate_resolved,
@@ -884,10 +857,9 @@ async fn assert_exhausted_recovery_resolves_the_current_candidate(
     let terminal = observer
         .query_one(
             "SELECT j.status, j.lease_recovery_count, j.safe_failure_code,\x20\
-                    a.status, a.outcome, s.owner, s.job_id\x20\
+                    a.status, a.outcome, j.lease_owner, j.lease_attempt_id\x20\
              FROM series_analysis_jobs j\x20\
              JOIN series_analysis_job_attempts a ON a.id = $2\x20\
-             JOIN worker_execution_slots s ON s.slot_key = 'shared-heavy-work'\x20\
              WHERE j.id = $1",
             &[&JOB_ID, &OLD_ATTEMPT_ID],
         )
@@ -911,7 +883,7 @@ async fn expire_old_lease_and_prepare_retry(client: &Client) -> SmokeResult {
             "UPDATE series_analysis_job_attempts SET status = 'terminal', outcome = 'owner_lost',\x20\
                finished_at = clock_timestamp() WHERE id = '{OLD_ATTEMPT_ID}';\x20\
              UPDATE series_analysis_jobs SET lease_owner = '{NEW_WORKER_ID}',\x20\
-               lease_attempt_id = '{NEW_ATTEMPT_ID}', lease_fencing_token = {NEW_FENCE},\x20\
+               lease_attempt_id = '{NEW_ATTEMPT_ID}', lease_fencing_token = {NEW_FENCE}, fencing_counter = {NEW_FENCE},\x20\
                lease_expires_at = clock_timestamp() + interval '10 minutes', attempt_count = 2\x20\
              WHERE id = '{JOB_ID}' AND status = 'running';\x20\
              INSERT INTO series_analysis_job_attempts (\x20\
@@ -922,11 +894,7 @@ async fn expire_old_lease_and_prepare_retry(client: &Client) -> SmokeResult {
                '{NEW_ATTEMPT_ID}', '{JOB_ID}', 2, '{NEW_WORKER_ID}', {NEW_FENCE}, 1,\x20\
                '{ALGORITHM_VERSION}', {ARTIFACT_SCHEMA_VERSION},\x20\
                '{ARTIFACT_VALIDATION_CONTRACT_ID}', 'running', 'staging-smoke', 60000\x20\
-             );\x20\
-             UPDATE worker_execution_slots SET owner = '{NEW_WORKER_ID}',\x20\
-               attempt_id = '{NEW_ATTEMPT_ID}', lease_expires_at = clock_timestamp() + interval '10 minutes',\x20\
-               fencing_token = {NEW_FENCE}, updated_at = clock_timestamp()\x20\
-             WHERE slot_key = 'shared-heavy-work' AND task_kind = 'analysis' AND job_id = '{JOB_ID}';"
+             );"
         ))
         .await?;
     Ok(())
@@ -1032,11 +1000,7 @@ async fn assert_current(client: &Client, expected: Option<&str>) -> SmokeResult 
 async fn cleanup_database(client: &Client) -> SmokeResult {
     client
         .batch_execute(&format!(
-            "UPDATE worker_execution_slots SET task_kind = NULL, owner = NULL, job_id = NULL,\x20\
-               attempt_id = NULL, holder_preemptible = NULL, lease_expires_at = NULL,\x20\
-               preempt_requested_by = NULL, preempt_requested_at = NULL, updated_at = clock_timestamp()\x20\
-             WHERE slot_key = 'shared-heavy-work' AND job_id = '{JOB_ID}';\x20\
-             DELETE FROM matches WHERE id = '{MATCH_ID}';\x20\
+            "DELETE FROM matches WHERE id = '{MATCH_ID}';\x20\
              DELETE FROM held_events WHERE id = '{EVENT_ID}';\x20\
              DELETE FROM season_masters WHERE id = '{SEASON_ID}';\x20\
              DELETE FROM map_masters WHERE id = '{MAP_ID}';\x20\

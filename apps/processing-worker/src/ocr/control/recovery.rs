@@ -1,32 +1,12 @@
 use tokio_postgres::Transaction;
 
 use super::{OcrControlError, OcrFailureCode, sync_match_draft_status};
-use crate::{
-    execution_slot::{ExecutionSlotHolder, ExecutionTaskKind, clear_expired},
-    series_analysis::control::{TransactionEffects, recover_expired_analysis_holder},
-};
-
-pub(crate) async fn recover_expired_holder(
-    transaction: &Transaction<'_>,
-    holder: &ExecutionSlotHolder,
-    maximum_recoveries: i32,
-) -> Result<TransactionEffects, OcrControlError> {
-    match holder.task_kind {
-        ExecutionTaskKind::Analysis => recover_expired_analysis_holder(transaction, holder)
-            .await
-            .map_err(OcrControlError::AnalysisRecovery),
-        ExecutionTaskKind::Ocr => {
-            recover_expired_ocr_holder(transaction, holder, maximum_recoveries, true).await?;
-            Ok(TransactionEffects::default())
-        }
-    }
-}
+use crate::job_lease::ExpiredJobLease;
 
 pub(crate) async fn recover_expired_ocr_holder(
     transaction: &Transaction<'_>,
-    holder: &ExecutionSlotHolder,
+    holder: &ExpiredJobLease,
     maximum_recoveries: i32,
-    clear_slot: bool,
 ) -> Result<(), OcrControlError> {
     let row = transaction
         .query_opt(
@@ -45,7 +25,7 @@ pub(crate) async fn recover_expired_ocr_holder(
         let job_expired = row.try_get::<_, Option<bool>>(4)?.unwrap_or(false);
         if status == "running" {
             if !ownership_matches || !job_expired {
-                return Err(OcrControlError::InvalidState);
+                return Ok(());
             }
             let recoveries: i32 = row.try_get(5)?;
             if recoveries >= maximum_recoveries {
@@ -88,9 +68,6 @@ pub(crate) async fn recover_expired_ocr_holder(
                 )
                 .await?;
         }
-    }
-    if clear_slot && !clear_expired(transaction, holder).await? {
-        return Err(OcrControlError::OwnerLost);
     }
     Ok(())
 }

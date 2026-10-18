@@ -47,7 +47,6 @@ pub(super) async fn assert_baseline(client: &Client, artifact_id: &str) -> Smoke
 }
 
 pub(super) async fn cleanup(client: &Client) -> SmokeResult {
-    client.execute("UPDATE worker_execution_slots SET owner=NULL, task_kind=NULL, job_id=NULL, attempt_id=NULL, holder_preemptible=NULL, lease_expires_at=NULL WHERE job_id IN (SELECT id FROM series_analysis_jobs WHERE game_title_id=$1)", &[&TITLE_ID]).await?;
     client
         .execute(
             "DELETE FROM series_analysis_job_requests WHERE game_title_id=$1",

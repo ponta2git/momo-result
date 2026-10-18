@@ -86,7 +86,6 @@ enum AttemptResult {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum AttemptInterruption {
     TimedOut,
-    Preempted,
     Shutdown,
     OwnerLost,
     HeartbeatUncertain,
@@ -153,7 +152,6 @@ impl AttemptInterruption {
     const fn wire(self) -> &'static str {
         match self {
             Self::TimedOut => "timed_out",
-            Self::Preempted => "preempted",
             Self::Shutdown => "shutdown",
             Self::OwnerLost => "owner_lost",
             Self::HeartbeatUncertain => "heartbeat_uncertain",

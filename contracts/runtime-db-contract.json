@@ -59,6 +59,7 @@
     "series_analysis_campaigns.validation_contract_id",
     "series_analysis_job_attempts.validation_contract_id",
     "series_analysis_job_requests.validation_contract_id",
+    "series_analysis_jobs.fencing_counter",
     "series_analysis_jobs.lease_fencing_token",
     "series_analysis_jobs.lease_validation_contract_id",
     "series_analysis_jobs.status",
@@ -92,9 +93,7 @@
     "source_images.status",
     "source_images.storage_etag",
     "source_images.updated_at",
-    "source_images.width",
-    "worker_execution_slots.fencing_token",
-    "worker_execution_slots.slot_key"
+    "source_images.width"
   ],
   "tables": [
     "incident_masters",
@@ -129,10 +128,5 @@
     "prevent_published_series_analysis_child_mutation",
     "validate_series_analysis_artifact_pointers"
   ],
-  "seedMemberIds": [
-    "member_akane_mami",
-    "member_eu",
-    "member_otaka",
-    "member_ponta"
-  ]
+  "seedMemberIds": ["member_akane_mami", "member_eu", "member_otaka", "member_ponta"]
 }

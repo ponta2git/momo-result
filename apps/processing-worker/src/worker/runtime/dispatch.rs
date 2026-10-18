@@ -107,12 +107,6 @@ async fn claim_ocr(
                     start_ocr(scheduler, claim)?;
                     return Ok(false);
                 }
-                ocr::control::OcrClaimResult::Busy => {
-                    scheduler.resources.release();
-                    defer_claims(scheduler);
-                    scheduler.ocr_cursor = None;
-                    return Ok(false);
-                }
                 ocr::control::OcrClaimResult::MissingOrTerminal
                 | ocr::control::OcrClaimResult::AlreadyRunning
                 | ocr::control::OcrClaimResult::NotYetAvailable

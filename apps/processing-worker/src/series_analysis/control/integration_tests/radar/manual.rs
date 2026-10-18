@@ -335,7 +335,7 @@ async fn real_postgres_manual_radar_empty_first_comparison_and_withdrawal_never_
 
     client
         .execute(
-            "INSERT INTO matches SELECT * FROM radar_manual_matches WHERE game_title_id=$1",
+            "INSERT INTO matches OVERRIDING SYSTEM VALUE SELECT * FROM radar_manual_matches WHERE game_title_id=$1",
             &[&TITLE_ID],
         )
         .await?;

@@ -37,8 +37,6 @@ pub(crate) enum WorkerError {
     Ocr(#[from] ocr::consumer::OcrConsumerError),
     #[error("processing worker OCR control failed")]
     OcrControl(#[from] ocr::control::OcrControlError),
-    #[error("processing worker slot state failed")]
-    Slot(#[from] crate::execution_slot::ExecutionSlotError),
     #[error("processing worker campaign materialization failed")]
     Materialization(#[from] series_analysis::materialization::MaterializationError),
     #[error("processing worker wake route closed")]
@@ -351,7 +349,6 @@ impl WorkerError {
     pub(super) fn is_contention(&self) -> bool {
         match self {
             Self::Postgres(error)
-            | Self::Slot(crate::execution_slot::ExecutionSlotError::Postgres(error))
             | Self::Materialization(
                 series_analysis::materialization::MaterializationError::Postgres(error),
             ) => postgres::is_lock_contention(error),
@@ -363,7 +360,6 @@ impl WorkerError {
             | Self::Listener(_)
             | Self::Analysis(_)
             | Self::Ocr(_)
-            | Self::Slot(_)
             | Self::Materialization(_)
             | Self::Sink(_)
             | Self::Task(_)

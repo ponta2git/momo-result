@@ -19,7 +19,6 @@ mod publication;
 
 async fn clean(client: &Client) -> SmokeResult {
     client.execute("DELETE FROM series_analysis_job_requests WHERE game_title_id=$1 OR id='radar-waiting-normal'", &[&TITLE_ID]).await?;
-    client.execute("UPDATE worker_execution_slots SET task_kind=NULL,owner=NULL,job_id=NULL,attempt_id=NULL,holder_preemptible=NULL,lease_expires_at=NULL,preempt_requested_by=NULL,preempt_requested_at=NULL WHERE job_id IN (SELECT id FROM series_analysis_jobs WHERE game_title_id=$1)", &[&TITLE_ID]).await?;
     client
         .execute("DELETE FROM matches WHERE game_title_id=$1", &[&TITLE_ID])
         .await?;
@@ -35,7 +34,6 @@ async fn clean(client: &Client) -> SmokeResult {
 async fn seed(client: &Client) -> SmokeResult {
     clean(client).await?;
     prepare_owned_attempt(client).await?;
-    client.execute("UPDATE worker_execution_slots SET task_kind=NULL,owner=NULL,job_id=NULL,attempt_id=NULL,holder_preemptible=NULL,lease_expires_at=NULL WHERE job_id=$1", &[&JOB_ID]).await?;
     client
         .execute("DELETE FROM series_analysis_jobs WHERE id=$1", &[&JOB_ID])
         .await?;

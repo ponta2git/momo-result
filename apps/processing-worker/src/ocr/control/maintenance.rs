@@ -18,8 +18,6 @@ pub(crate) async fn reap_stale(
         let result=async {
         let tx = bounded_transaction(client, timeout).await?;
         tx.batch_execute("SET LOCAL lock_timeout='100ms'").await?;
-        let slot = crate::execution_slot::lock(&tx).await?;
-        if slot.holder.as_ref().is_some_and(|holder| holder.job_id == id) { tx.rollback().await?; return Ok(()); }
         lock_match_drafts_for_job(&tx, &id).await?;
         let failure = OcrFailureCode::OcrTimeout;
         tx.execute("UPDATE ocr_jobs SET status='failed',failure_code=$2,failure_message=$3,failure_retryable=$4,failure_user_action=$5,finished_at=clock_timestamp(),duration_ms=0,attempt_id=NULL,lease_owner=NULL,lease_token=NULL,lease_expires_at=NULL,updated_at=clock_timestamp() WHERE id=$1 AND status IN ('queued','running') AND COALESCE(started_at,created_at) < clock_timestamp()-$6::bigint * interval '1 millisecond' AND (lease_expires_at IS NULL OR lease_expires_at <= clock_timestamp())", &[&id,&failure.wire(),&failure.message(),&failure.retryable(),&failure.user_action(),&stale_ms]).await?;

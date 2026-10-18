@@ -268,7 +268,7 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 - APIは `ocr_submissions` / `ocr_submission_members` に所有者・固定画像集合・受付期限を原子的に保存し、job登録とmember対応を一つのtransactionにする。同一操作のPUTと登録済みmemberの再送は同じ識別子へ収束する。Webは全画像の内容識別とupload keyを送出受付前に固定する。
 - OCRの受付調停は現在の下書きslotではなく固定memberと対応jobの終端を読み、全員終了後だけ送出を確定する。下書き→送出の順にlockし、業務更新後の最後にresult gateと設定を読む。ONなら文脈と失敗だけを固定し、OFFでも送出は終端にして後から再構築しない。画像0件の期限終了も回収し、後の送出・slot状態を上書きしない。
 - 受付調停は共通listener確立後の初回・再接続・期限・低頻度の安全走査でopenを巡回する。workerが最大一つの有限stepを駆動し、cursor・上限付きの発見済みID・Busy再確認予算をwakeと接続交換の間も保持する。softな走査予算を使い切っても先頭の一件は試み、途中の進捗を次のstepへ渡す。Busyだった送出だけを早期再確認し、通常の安全走査・受付期限を後ろへ延ばさない。
-- 受付調停と画像Runnerは可変資源を別々に所有し、OCR画像・分析の共通実行枠と独立して調停を進める。受付数に比例するtask・接続・全件待機一覧は作らない。画像Runnerの生成と呼出しはOCR orchestratorに閉じ、各画像はworkerが共有枠をclaimした後だけ実行する。未到着memberの受付期限と登録済み画像jobの実行期限を混同しない。
+- 受付調停と画像Runnerは可変資源を別々に所有し、OCR画像・分析の実行資源予約と独立して調停を進める。受付数に比例するtask・接続・全件待機一覧は作らない。画像Runnerの生成と呼出しはOCR orchestratorに閉じ、各画像はWorkerがprocessの資源を予約してjob leaseをclaimした後だけ実行する。未到着memberの受付期限と登録済み画像jobの実行期限を混同しない。
 - commit後のwake hintは損失可能で、正本は保存状態。各送出を有限のtransactionで扱い、settled commitを確認した経路だけが通知をdispatchする。共有wire・宣言的な保存構造と排他契約は `../momo-db/docs/discord-notifications.md` を正本とし、DBへ終了policyやtriggerを置かない。
 - 通知準備は確定処理と同じ絶対期限から残り時間を計算し、実行中SQLの終了・SAVEPOINT復旧・業務commitの時間を確保する。余裕がなければ通知用SQLを実行せず、復旧可能な準備失敗では業務成功を保って通知を省略する。commit成功後だけ、件数・bytes・同時接続数に上限を持つ共通senderへ渡す。OCR の実行枠解放はHTTP完了を待たない。
 - 通知の一回限りのSQLはパラメータ型を明示し、statementの準備・実行を分ける不要なDB往復を避ける。共有gate取得とsnapshot取得は別statementのまま維持する。比較・準備のtimeout、残時間不足、DBエラーは区別し、準備失敗には処理段階・時間予算・経過時間・SQLSTATEを記録する。DB例外本文やbind値は出力しない。

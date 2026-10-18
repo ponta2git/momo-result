@@ -1,9 +1,6 @@
-//! Non-locking candidate discovery. Claims revalidate under slot -> title/draft -> job locks.
+//! Non-locking candidate discovery. Claims revalidate under title/draft -> job locks.
 use super::{PostCommitSink, runtime::WorkerError};
-use crate::{
-    execution_slot::{self, ExecutionSlotHolder, ExecutionTaskKind},
-    series_analysis::control::ALGORITHM_VERSION,
-};
+use crate::{job_lease::ExpiredJobLease, series_analysis::control::ALGORITHM_VERSION};
 use momo_analysis_core::contract::{ARTIFACT_SCHEMA_VERSION, ARTIFACT_VALIDATION_CONTRACT_ID};
 use std::time::{Duration, SystemTime};
 use tokio_postgres::Client;
@@ -48,7 +45,7 @@ pub(super) async fn next_due(
     maximum: Duration,
 ) -> Result<Duration, tokio_postgres::Error> {
     let schema = i64::from(ARTIFACT_SCHEMA_VERSION);
-    let row = client.query_one("SELECT EXTRACT(EPOCH FROM MIN(due)-statement_timestamp())::double precision FROM (SELECT available_at AS due FROM series_analysis_jobs WHERE status='queued' AND available_at > statement_timestamp() AND algorithm_version=$1 AND artifact_schema_version=$2::bigint::integer AND validation_contract_id=$3 UNION ALL SELECT available_at FROM ocr_jobs WHERE $4 AND status='queued' AND available_at > statement_timestamp() UNION ALL SELECT lease_expires_at FROM worker_execution_slots WHERE lease_expires_at > statement_timestamp()) d", &[&ALGORITHM_VERSION,&schema,&ARTIFACT_VALIDATION_CONTRACT_ID,&include_ocr]).await?;
+    let row = client.query_one("SELECT EXTRACT(EPOCH FROM MIN(due)-statement_timestamp())::double precision FROM (SELECT available_at AS due FROM series_analysis_jobs WHERE status='queued' AND available_at > statement_timestamp() AND algorithm_version=$1 AND artifact_schema_version=$2::bigint::integer AND validation_contract_id=$3 UNION ALL SELECT available_at FROM ocr_jobs WHERE $4 AND status='queued' AND available_at > statement_timestamp() UNION ALL SELECT lease_expires_at FROM series_analysis_jobs WHERE status='running' AND lease_expires_at > statement_timestamp() UNION ALL SELECT lease_expires_at FROM ocr_jobs WHERE status='running' AND lease_expires_at > statement_timestamp()) d", &[&ALGORITHM_VERSION,&schema,&ARTIFACT_VALIDATION_CONTRACT_ID,&include_ocr]).await?;
     let seconds: Option<f64> = row.try_get(0)?;
     Ok(seconds
         .and_then(|seconds| Duration::try_from_secs_f64(seconds.max(0.0)).ok())
@@ -78,16 +75,6 @@ pub(super) async fn recover_page(
     maximum_recoveries: i32,
     after: &mut Option<RecoveryCursor>,
 ) -> Result<RecoveryProgress, WorkerError> {
-    match recover_slot(client, sink, maximum_recoveries).await {
-        Ok(()) => {}
-        Err(error) if error.is_contention() => {
-            return Ok(RecoveryProgress {
-                more: false,
-                deferred: true,
-            });
-        }
-        Err(error) => return Err(error),
-    }
     let kind = after.as_ref().map(|cursor| cursor.0.as_str());
     let id = after.as_ref().map(|cursor| cursor.1.as_str());
     let rows=client.query("SELECT * FROM (SELECT 'analysis'::text AS kind,id,lease_owner,lease_attempt_id,lease_fencing_token FROM series_analysis_jobs WHERE status='running' AND lease_expires_at<=clock_timestamp() UNION ALL SELECT 'ocr',id,lease_owner,attempt_id::text,lease_fencing_token FROM ocr_jobs WHERE status='running' AND lease_expires_at<=clock_timestamp()) orphan WHERE ($1::text IS NULL OR (kind,id)>($1,$2)) ORDER BY kind,id LIMIT 64", &[&kind,&id]).await?;
@@ -107,38 +94,6 @@ pub(super) async fn recover_page(
     Ok(RecoveryProgress { more, deferred })
 }
 
-async fn recover_slot(
-    client: &mut Client,
-    sink: &PostCommitSink,
-    maximum_recoveries: i32,
-) -> Result<(), WorkerError> {
-    let tx = client.transaction().await?;
-    tx.batch_execute("SET LOCAL statement_timeout='10000ms'; SET LOCAL lock_timeout='100ms'")
-        .await?;
-    let slot = execution_slot::lock(&tx).await?;
-    if let Some(holder) = &slot.holder {
-        if holder.expired {
-            if holder.task_kind == ExecutionTaskKind::Ocr {
-                crate::ocr::control::lock_match_drafts_for_job(&tx, &holder.job_id).await?;
-            }
-            let effects = crate::ocr::control::recovery::recover_expired_holder(
-                &tx,
-                holder,
-                maximum_recoveries,
-            )
-            .await?;
-            tx.commit().await?;
-            sink.submit(effects.committed(()).effects)?;
-        } else {
-            tx.rollback().await?;
-        }
-    } else {
-        execution_slot::clear_stale_preemption(&tx, 1).await?;
-        tx.commit().await?;
-    }
-    Ok(())
-}
-
 async fn recover_orphan(
     client: &mut Client,
     sink: &PostCommitSink,
@@ -146,49 +101,22 @@ async fn recover_orphan(
     row: &tokio_postgres::Row,
 ) -> Result<(), WorkerError> {
     let kind: String = row.try_get(0)?;
-    let holder = ExecutionSlotHolder {
-        task_kind: if kind == "ocr" {
-            ExecutionTaskKind::Ocr
-        } else {
-            ExecutionTaskKind::Analysis
-        },
+    let holder = ExpiredJobLease {
         job_id: row.try_get(1)?,
         owner: row.try_get(2)?,
         attempt_id: row.try_get(3)?,
         fencing_token: row.try_get(4)?,
-        expired: true,
     };
     let tx = client.transaction().await?;
     tx.batch_execute("SET LOCAL statement_timeout='10000ms'; SET LOCAL lock_timeout='10ms'")
         .await?;
-    let slot = execution_slot::lock(&tx).await?;
-    if slot.holder.as_ref().is_some_and(|current| {
-        current.job_id == holder.job_id && current.task_kind == holder.task_kind
-    }) {
-        tx.rollback().await?;
-        return Ok(());
-    }
-    let valid = if holder.task_kind == ExecutionTaskKind::Ocr {
-        tx.query_opt("SELECT id FROM ocr_jobs WHERE id=$1 AND status='running' AND lease_owner=$2 AND attempt_id::text=$3 AND lease_fencing_token=$4 AND lease_expires_at<=clock_timestamp()", &[&holder.job_id,&holder.owner,&holder.attempt_id,&holder.fencing_token]).await?.is_some()
-    } else {
-        tx.query_opt("SELECT id FROM series_analysis_jobs WHERE id=$1 AND status='running' AND lease_owner=$2 AND lease_attempt_id=$3 AND lease_fencing_token=$4 AND lease_expires_at<=clock_timestamp()", &[&holder.job_id,&holder.owner,&holder.attempt_id,&holder.fencing_token]).await?.is_some()
-    };
-    if !valid {
-        tx.rollback().await?;
-        return Ok(());
-    }
-    let effects = if holder.task_kind == ExecutionTaskKind::Ocr {
+    let effects = if kind == "ocr" {
         crate::ocr::control::lock_match_drafts_for_job(&tx, &holder.job_id).await?;
-        crate::ocr::control::recovery::recover_expired_ocr_holder(
-            &tx,
-            &holder,
-            maximum_recoveries,
-            false,
-        )
-        .await?;
+        crate::ocr::control::recovery::recover_expired_ocr_holder(&tx, &holder, maximum_recoveries)
+            .await?;
         crate::series_analysis::control::TransactionEffects::default()
     } else {
-        crate::series_analysis::control::recovery::recover_expired_analysis_job(&tx, &holder, false)
+        crate::series_analysis::control::recovery::recover_expired_analysis_job(&tx, &holder)
             .await?
     };
     tx.commit().await?;

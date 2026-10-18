@@ -144,7 +144,7 @@ test、suite、lint / checker、manual review は、守る価値に対して必�
 
 Analysis / OCR の共通 contract として、次を固定する。
 
-- `DB candidate -> claim / lease / slot -> child -> candidate validation -> durable commit -> post-commit effect` の順序。
+- `DB candidate -> instance resource reservation -> job claim / lease / fence -> child -> candidate validation -> durable commit -> post-commit effect` の順序。
 - parent が DB、object、process、timeout、fence、結果確定を所有し、child は1 attempt の bounded candidate だけを返すこと。
 - retry / followup を durable に保存し、rollback では wake しないこと。commit 応答不明や重複 wake が二重実行権・二重公開にならないこと。
 - 起動・再接続、wake coalescing、deadline、bounded drain、backoff を確認し、通知欠落は低頻度の補完走査で回復すること。
@@ -159,7 +159,7 @@ OCR は schema / screen type、object metadata、parser / postprocess、failure 
 
 - 純粋計算は table / property / golden test で、分母、同値、丸め、入力順、seed、品質状態を固定する。浮動小数点の oracle は手計算、高精度参照、数学的性質のいずれかを使う。
 - 意図した結果変更は根拠、影響 fixture、algorithm version を同じ変更に含める。既存実装の値だけを唯一の正解にしない。
-- DB job / intent / slot / lease / fence / artifact と通知は実 PostgreSQL、timeout / OOM / kill / reap / 実行継続は実 process で検証する。
+- DB job / intent / lease / persistent fence counter / artifact と通知は実 PostgreSQL、timeout / OOM / kill / reap / 実行継続は実 process で検証する。
 - stale fence、重複 wake、commit 応答不明、unsupported version、partial staging、publication rollback、cleanup 競合を直接通し、部分公開・二重公開・孤立 job を残さない。
 - child の resource limit は対象 cgroup の readback / event と parent 生存を同時に確認する。host 上の制限や runtime 全体 OOM で代用しない。
 - artifact materialization は byte / node / depth / UTF-8 / checksum / path / symlink / disk 境界を検証する。

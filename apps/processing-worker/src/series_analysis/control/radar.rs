@@ -1,4 +1,4 @@
-//! Radar operations share the existing durable queue and execution slot.
+//! Radar operations share the durable queue and process resource budget.
 
 use tokio_postgres::Transaction;
 

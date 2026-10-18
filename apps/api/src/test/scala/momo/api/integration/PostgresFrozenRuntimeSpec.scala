@@ -99,7 +99,6 @@ final class PostgresFrozenRuntimeSpec extends IntegrationSuite:
     "series_analysis_campaigns",
     "series_analysis_reader_capabilities",
     "series_analysis_worker_capabilities",
-    "worker_execution_slots",
     "discord_notifications",
   ).traverse { table =>
     // Identifiers come only from the fixed fixture table list above.

@@ -85,9 +85,9 @@ await runSmoke("Combined analysis/OCR scheduling smoke", async (signal) => {
       await cleanupDB();
       check(
         (await smoke.sql(
-          "SELECT COALESCE(owner, '') FROM worker_execution_slots WHERE slot_key = 'shared-heavy-work';",
-        )) === "",
-        "Shared heavy-work slot is owned by another runtime.",
+          "SELECT ((SELECT count(*) FROM series_analysis_jobs WHERE status='running') + (SELECT count(*) FROM ocr_jobs WHERE status='running'))::text;",
+        )) === "0",
+        "The isolated fixture contains another running job.",
       );
       await smoke.sqlFile("scheduling-fixture", {
         algorithm_version,
@@ -154,7 +154,7 @@ await runSmoke("Combined analysis/OCR scheduling smoke", async (signal) => {
       await waitSQL(
         `analysis|${analysis_worker_id}|true`,
         `
-  SELECT slot.task_kind || '|' || slot.owner || '|' || (
+  SELECT 'analysis|' || job.lease_owner || '|' || (
     job.validation_contract_id = '${validation_contract_id}'
     AND job.lease_validation_contract_id = '${validation_contract_id}'
     AND EXISTS (
@@ -164,9 +164,8 @@ await runSmoke("Combined analysis/OCR scheduling smoke", async (signal) => {
         AND attempt.validation_contract_id = '${validation_contract_id}'
     )
   )::text
-  FROM worker_execution_slots slot
-  JOIN series_analysis_jobs job ON job.id = slot.job_id
-  WHERE slot.slot_key = 'shared-heavy-work';
+  FROM series_analysis_jobs job
+  WHERE job.id = '${analysis_job}' AND job.status = 'running';
 `,
         `the running analysis holder`,
       );
@@ -222,11 +221,10 @@ await runSmoke("Combined analysis/OCR scheduling smoke", async (signal) => {
   SELECT analysis.status || '|' || analysis.attempt_count || '|' ||
          ocr.status || '|' || ocr.attempt_count || '|' ||
          waiting.status || '|' || waiting.attempt_count || '|' ||
-         (slot.preempt_requested_by IS NULL)::text
-  FROM series_analysis_jobs analysis, ocr_jobs ocr, series_analysis_jobs waiting,
-       worker_execution_slots slot
+         (analysis.fencing_counter = analysis.lease_fencing_token)::text
+  FROM series_analysis_jobs analysis, ocr_jobs ocr, series_analysis_jobs waiting
   WHERE analysis.id = '${analysis_job}' AND ocr.id = '${ocr_job}'
-    AND waiting.id = '${waiting_job}' AND slot.slot_key = 'shared-heavy-work';
+    AND waiting.id = '${waiting_job}';
 `)) === "running|1|queued|0|queued|0|true",
           "Queued work interrupted the active analysis or bypassed its resource reservation.",
         );

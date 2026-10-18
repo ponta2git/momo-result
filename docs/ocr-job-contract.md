@@ -39,13 +39,13 @@ HTTP success は入力と業務状態の DB commit を意味し、Worker の開�
 
 ## 4. Claim and Execution
 
-- scheduler は共有実行枠の期限切れを、新しい queued job がなくても回復する。候補は DB 時刻と `available_at` を使って上限付きで選ぶ。
-- 候補選択は実行権を与えない。claim は共有枠 → 下書き → job の順で lock を取り、状態・入力・実行可能時刻を再検証して lease と fence を確定する。
+- scheduler は各 job lease の期限切れを、新しい queued job がなくても回復する。候補は DB 時刻と `available_at` を使って上限付きで選ぶ。
+- 候補選択は実行権を与えない。claim は下書き → job の順で lock を取り、状態・入力・実行可能時刻を再検証する。OCR の `lease_fencing_token` は終端・再queueでも保持し、新しい claim と同じ transaction で checked +1 する。上限では claim を拒否する。
 - claim の commit 成否が不明なら child を起動しない。旧 owner の更新を fence で拒否する一方、物理的な child 停止は parent の実行管理と process adapter が担う。
 - 使用中の枠、重複 wake、未到来の期限を失敗にしない。非対応の分析 job や lock 中の先頭候補で、対応する後続 job の走査を止めない。
 - 実行可能な待機候補では OCR を分析より先に選ぶ。実行中の分析へ自動中断を要求せず、完了と child の回収を待って次の候補を取得する。この優先順だけで OCR・分析の待ち時間上限を保証したと扱わない。
 - 結果の検証、OCR draft 保存、job 終端、下書き表示状態の更新を同じ整合性境界で確定する。DB write 失敗を成功扱いにしない。
-- listener と lease heartbeat を child の完了待ちで止めない。旧世代が保存した preemption intent の回収は継続する。
+- listener と job lease heartbeat を child の完了待ちで止めない。実行中の job は別 Worker の実行資源を占有しない。
 
 ## 5. Retry, Recovery and Maintenance
 

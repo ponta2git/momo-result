@@ -49,11 +49,13 @@ final class OcrSubmissions[F[_]: Monad](repository: OcrSubmissionsRepository[F],
                 AppError.Conflict("This submissionId belongs to another request.")
               )
                 .pure[F]
-            case None => admitNew.flatMap {
-                case Left(error) => error.asLeft[OcrSubmission].pure[F]
-                // The atomic put still guards races and ownership after this lookup.
-                case Right(_) => repository.put(submission)
-              }
+            case None => OcrHintsCodec.validate(command.hints) match
+                case Left(error) => AppError.ValidationFailed(error).asLeft[OcrSubmission].pure[F]
+                case Right(_) => admitNew.flatMap {
+                    case Left(error) => error.asLeft[OcrSubmission].pure[F]
+                    // The atomic put still guards races and ownership after this lookup.
+                    case Right(_) => repository.put(submission)
+                  }
           }
         }
 
@@ -83,6 +85,6 @@ object OcrSubmissions:
           (),
           "Invalid OCR submission image fingerprint."
         )
-        _ <- OcrHintsCodec.validate(command.hints)
+        _ <- OcrHintsCodec.validateShape(command.hints)
       yield ()
     validation.left.map(AppError.ValidationFailed.apply)

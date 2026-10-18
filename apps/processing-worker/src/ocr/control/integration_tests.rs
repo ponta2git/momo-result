@@ -272,9 +272,38 @@ async fn verify_expired_takeover(primary: &mut Client, stale: &mut Client) -> Sm
 async fn verify_success_and_terminal_duplicate(primary: &mut Client) -> SmokeResult {
     let job_id = SUCCESS.job_id;
     let config = control_config("ocr-c2-worker-success")?;
+    let legacy_hints = r#"{"layoutFamily":" MOMOTETSU_WORLD "}"#;
+    primary.execute(
+        "UPDATE ocr_jobs SET input_snapshot = input_snapshot || jsonb_build_object('ocrHintsJson', $2::text) WHERE id = $1",
+        &[&job_id, &legacy_hints],
+    ).await?;
+    let before = primary
+        .query_one(
+            "SELECT input_snapshot::text FROM ocr_jobs WHERE id = $1",
+            &[&job_id],
+        )
+        .await?
+        .try_get::<_, String>(0)?;
     let claim = claimed(claim_job(primary, job_id, &config).await?)?;
+    assert_eq!(
+        serde_json::to_value(claim.hints.as_ref())?
+            .get("layoutFamily")
+            .and_then(serde_json::Value::as_str),
+        Some(" MOMOTETSU_WORLD ")
+    );
     let completion = tests::valid_completion(RequestedScreenType::TotalAssets);
-    finish_success(primary, &claim, &config, &OcrHints::default(), &completion).await?;
+    finish_success(primary, &claim, &config, &claim.hints, &completion).await?;
+    let after = primary
+        .query_one(
+            "SELECT input_snapshot::text FROM ocr_jobs WHERE id = $1",
+            &[&job_id],
+        )
+        .await?
+        .try_get::<_, String>(0)?;
+    assert_eq!(
+        before, after,
+        "claim and durable completion preserve the old immutable input"
+    );
     let row = primary
         .query_one(
             "SELECT j.status, COUNT(d.id)::bigint FROM ocr_jobs j\x20\

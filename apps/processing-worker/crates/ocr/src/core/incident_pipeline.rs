@@ -3,6 +3,8 @@ use std::collections::BTreeMap;
 use image::{DynamicImage, GrayImage};
 use serde_json::json;
 
+use crate::layout_family::LayoutFamily;
+
 use super::{
     CountRecognition, OcrField, OcrWarning, PlayerDraft, PsmAttempt, RecognitionPort, Rect, crop,
     incident::{is_pure_pipe_noise, parse_count, select_count_recognition, vote_count},
@@ -52,7 +54,7 @@ struct IncidentAttempt {
 
 pub(super) fn parse(
     image: &DynamicImage,
-    layout_family_hint: Option<&str>,
+    layout_family_hint: Option<LayoutFamily>,
     player_order: &PlayerOrderDetection,
     recognition: &mut dyn RecognitionPort,
 ) -> Result<ParsedScreen, CoreOcrError> {
@@ -311,16 +313,10 @@ fn plausibility_warnings(player_counts: &[BTreeMap<String, OcrField<u32>>]) -> V
     warnings
 }
 
-fn selected_profiles(layout_family_hint: Option<&str>) -> Vec<IncidentProfile> {
-    let normalized = layout_family_hint.unwrap_or_default().trim().to_lowercase();
-    if matches!(normalized.as_str(), "world" | "momotetsu_world" | "default") {
-        vec![DEFAULT_PROFILE]
-    } else if matches!(
-        normalized.as_str(),
-        "reiwa" | "momotetsu_reiwa" | "momotetsu_2" | "momotetsu2" | "2"
-    ) {
-        vec![COMPACT_PROFILE]
-    } else {
-        vec![DEFAULT_PROFILE, COMPACT_PROFILE]
+fn selected_profiles(layout_family_hint: Option<LayoutFamily>) -> Vec<IncidentProfile> {
+    match layout_family_hint {
+        Some(LayoutFamily::World) => vec![DEFAULT_PROFILE],
+        Some(LayoutFamily::Momotetsu2 | LayoutFamily::Reiwa) => vec![COMPACT_PROFILE],
+        None => vec![DEFAULT_PROFILE, COMPACT_PROFILE],
     }
 }

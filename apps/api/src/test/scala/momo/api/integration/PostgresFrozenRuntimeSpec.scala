@@ -4,8 +4,8 @@ import java.nio.file.Files
 
 import cats.effect.{IO, Resource}
 import cats.syntax.all.*
+import doobie.Fragment
 import doobie.implicits.*
-import doobie.{Fragment, Transactor}
 import org.http4s.{Header, Method, Request, Status, Uri}
 
 import momo.api.adapters.postgres.MaintenanceReadiness
@@ -21,7 +21,9 @@ final class PostgresFrozenRuntimeSpec extends IntegrationSuite:
         RuntimeHttp2ProbeMiddleware.HeaderValue,
       ))
 
-  test("frozen acquisition, requests, shutdown and restart preserve durable state"):
+  test(
+    "frozen acquisition, requests and restart preserve state when the migration ledger is missing"
+  ):
     // A regular file cannot serve as image storage. Acquiring frozen must not initialize it.
     Resource.make(IO.blocking(Files.createTempFile("momo-frozen-runtime", ".marker")))(path =>
       IO.blocking(Files.deleteIfExists(path)).void
@@ -49,7 +51,10 @@ final class PostgresFrozenRuntimeSpec extends IntegrationSuite:
           ApiApp.wired[IO](config).use { runtime =>
             for
               ready <- runtime.app.run(readinessRequest)
-              _ = assertEquals(ready.status, Status.Ok)
+              readyBody <- ready.as[String]
+              _ =
+                assertEquals(ready.status, Status.ServiceUnavailable)
+                assertEquals(readyBody, "{\"status\":\"unavailable\",\"mode\":\"frozen\"}")
               _ <- List(
                 Method.GET -> "/api/auth/me",
                 Method.GET -> "/api/auth/callback",
@@ -67,24 +72,24 @@ final class PostgresFrozenRuntimeSpec extends IntegrationSuite:
       yield assertEquals(after, before)
     }
 
-  test("maintenance readiness runs in a read-only transaction and refuses incompatible readers"):
-    val checked = Transactor.after.set(
-      transactor,
-      for
-        readOnly <- sql"SHOW transaction_read_only".query[String].unique
-        _ <- doobie.free.connection.delay(assertEquals(readOnly, "on"))
-        _ <- doobie.free.connection.commit
-      yield ()
-    )
+  test("maintenance readiness rejects a missing ledger and incompatible readers"):
+    val configuredUrl = dbFixture().databaseConfig.jdbcUrl
     for
-      _ <- MaintenanceReadiness.check[IO](checked)
+      missing <- MaintenanceReadiness.check[IO](transactor, configuredUrl).attempt
+      _ = assert(missing.left.toOption.exists {
+        case error: java.sql.SQLException => error.getSQLState == "42P01"
+        case _ => false
+      })
       _ <- sql"""
         UPDATE series_analysis_release_state
         SET validation_contract_id = 'incompatible-fixture-contract'
         WHERE singleton_key = 'current'
       """.update.run.transact(transactor)
-      failed <- MaintenanceReadiness.check[IO](checked).attempt
-    yield assert(failed.isLeft)
+      failed <- MaintenanceReadiness.check[IO](transactor, configuredUrl).attempt
+    yield assertEquals(
+      failed.swap.toOption.map(_.getMessage),
+      Some("Reader contract is incompatible.")
+    )
 
   private def durableState: IO[List[(String, String)]] = List(
     "app_sessions",

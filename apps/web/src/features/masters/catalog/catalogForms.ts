@@ -1,9 +1,4 @@
 import {
-  createGameTitleId,
-  createMapMasterId,
-  createSeasonMasterId,
-} from "@/features/masters/catalog/catalogIds";
-import {
   isNameValid,
   normalizeName,
   parseLayoutFamily,
@@ -53,29 +48,24 @@ export function parseScopedMasterCreate(
   return { kind: "ready", request: { name, gameTitleId } };
 }
 
-/** The optimistic row and its submitted request share one stable creation identity. */
+/** The operation's UUID is allocated once and survives retries without depending on the name. */
 export function prepareGameTitleCreation(
   intent: GameTitleIntent,
   attemptKey: string,
   createdAt: string,
   displayOrder: number,
 ) {
-  const request = { id: createGameTitleId(intent.name, attemptKey), ...intent };
+  const request = { id: attemptKey, ...intent };
   return { request, optimistic: { ...request, displayOrder, createdAt, pending: true } };
 }
 
 export function prepareScopedMasterCreation(
-  kind: ScopedMasterKind,
   intent: ScopedMasterIntent,
   attemptKey: string,
   createdAt: string,
   displayOrder: number,
 ) {
-  const id =
-    kind === "map"
-      ? createMapMasterId(intent.name, attemptKey)
-      : createSeasonMasterId(intent.name, attemptKey);
-  const request = { id, ...intent };
+  const request = { id: attemptKey, ...intent };
   return { request, optimistic: { ...request, displayOrder, createdAt, pending: true } };
 }
 

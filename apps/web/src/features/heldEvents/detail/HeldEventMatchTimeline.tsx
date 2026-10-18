@@ -9,6 +9,7 @@ import { formatManYen } from "@/shared/lib/formatters";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { RankBadge } from "@/shared/matches/RankBadge";
 import { seriesComparisonHrefForMatch } from "@/shared/navigation/matchLinks";
+import { matchDetailHref } from "@/shared/navigation/publicIdentifiers";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
@@ -55,7 +56,7 @@ export function HeldEventMatchTimeline({ matches }: { matches: readonly HeldEven
                       <LinkButton
                         aria-label={`${formatMatchNoInEvent(match.matchNoInEvent)}の結果を見る`}
                         size="sm"
-                        to={`/matches/${encodeURIComponent(match.matchId)}`}
+                        to={matchDetailHref(match.matchId, match.publicId)}
                         variant="secondary"
                       >
                         結果を見る

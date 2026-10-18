@@ -6,8 +6,15 @@ import io.circe.parser.parse
 import org.http4s.{Header, Method, Request, Status, Uri}
 
 import momo.api.MomoCatsEffectSuite
+import momo.api.maintenance.DatabaseConnectionProof
 
 final class FrozenHttpAppSpec extends MomoCatsEffectSuite:
+  private val proof = DatabaseConnectionProof.fromSnapshot(
+    "postgresql://fixture.invalid/configured",
+    "actual",
+    List(DatabaseConnectionProof.LedgerRow("a" * 64, "1730000000000")),
+  ).fold(error => fail(error.getMessage), identity)
+
   private val readinessRequest =
     Request[IO](uri = Uri.unsafeFromString(FrozenHttpApp.ReadinessPath))
       .putHeaders(Header.Raw(
@@ -18,7 +25,7 @@ final class FrozenHttpAppSpec extends MomoCatsEffectSuite:
   test("all normal routes and methods close before authentication or readiness work"):
     for
       calls <- Ref.of[IO, Int](0)
-      app = FrozenHttpApp(calls.update(_ + 1))
+      app = FrozenHttpApp(calls.update(_ + 1).as(proof))
       _ <- List(
         "/api/auth/me",
         "/api/auth/callback",
@@ -46,19 +53,25 @@ final class FrozenHttpAppSpec extends MomoCatsEffectSuite:
       assertEquals(health.status, Status.Ok)
       assertEquals(parse(healthBody).flatMap(_.hcursor.get[String]("status")), Right("maintenance"))
 
-  test("dedicated readiness runs its read-only check and returns only fixed state"):
+  test("dedicated readiness returns only fixed state and database fingerprints"):
     for
       calls <- Ref.of[IO, Int](0)
-      response <- FrozenHttpApp(calls.update(_ + 1)).run(readinessRequest)
+      response <- FrozenHttpApp(calls.update(_ + 1).as(proof)).run(readinessRequest)
       body <- response.as[String]
       count <- calls.get
     yield
       assertEquals(count, 1)
       assertEquals(response.status, Status.Ok)
-      assertEquals(body, "{\"status\":\"ready\",\"mode\":\"frozen\"}")
+      assertEquals(
+        parse(body),
+        parse(
+          s"""{"status":"ready","mode":"frozen","database":${proof.toJson.noSpaces}}"""
+        )
+      )
 
   test("readiness failures cannot expose connection or stored data"):
-    val failed = IO.raiseError[Unit](new IllegalStateException("connection-and-row-secret"))
+    val failed =
+      IO.raiseError[DatabaseConnectionProof](new IllegalStateException("connection-and-row-secret"))
     for
       response <- FrozenHttpApp(failed).run(readinessRequest)
       body <- response.as[String]

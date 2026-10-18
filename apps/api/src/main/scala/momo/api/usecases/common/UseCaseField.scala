@@ -9,16 +9,21 @@ import momo.api.errors.AppError
 /**
  * Field-level validation rules shared by use case boundary inputs.
  *
- * Stable IDs and code-owned layout values have distinct validation rules.
+ * Master creation accepts UUIDs and existing client aliases. Code-owned layout values have a
+ * separate canonical contract.
  */
 private[usecases] object UseCaseField:
   private val SlugPattern = "^[a-z][a-z0-9_]{1,63}$".r
+  private val UuidPattern =
+    "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$".r
 
-  def slug(field: String, value: String): Either[AppError, String] = SlugPattern.pattern
-    .matcher(value).matches() match
-    case true => Right(value)
-    case false => Left(AppError.ValidationFailed(
-        s"$field must match ^[a-z][a-z0-9_]{1,63}$$ (lowercase, starts with a letter)."
+  def masterId(field: String, value: String): Either[AppError, String] =
+    if UuidPattern.pattern.matcher(value).matches() ||
+      SlugPattern.pattern.matcher(value).matches()
+    then Right(value)
+    else
+      Left(AppError.ValidationFailed(
+        s"$field must match a UUID or a legacy lowercase identifier."
       ))
 
   def layoutFamily(value: String): Either[AppError, String] = OcrLayoutFamily.fromLegacy(value)

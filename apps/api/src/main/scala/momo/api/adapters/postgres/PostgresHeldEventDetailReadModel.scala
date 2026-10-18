@@ -19,6 +19,7 @@ import momo.api.domain.{
   MatchLabels,
   MatchNoInEvent,
   MatchNoteBody,
+  PublicId,
   RecordNavigation
 }
 import momo.api.repositories.HeldEventDetailReadModel
@@ -34,6 +35,7 @@ object PostgresHeldEventDetail:
       playedAt: Instant,
       noteBody: Option[String],
       labels: MatchLabels,
+      publicId: Option[PublicId],
   ):
     def withPlayers(
         players: List[HeldEventDetail.Player]
@@ -64,25 +66,48 @@ object PostgresHeldEventDetail:
         note.map(_.value),
         players,
         labels,
+        publicId,
       )
 
   def find(id: HeldEventId): ConnectionIO[Option[HeldEventDetail]] =
+    find(id, PostgresPublicIds.Legacy)
+
+  def find(
+      id: HeldEventId,
+      publicIds: PostgresPublicIds
+  ): ConnectionIO[Option[HeldEventDetail]] =
+    readSnapshot(load(id, publicIds))
+
+  def findByPublicId(
+      publicId: PublicId,
+      publicIds: PostgresPublicIds
+  ): ConnectionIO[Option[HeldEventDetail]] = readSnapshot(
+    publicIds.heldEventId(publicId).flatMap(_.traverse(load(_, publicIds))).map(_.flatten)
+  )
+
+  private def readSnapshot[A](read: ConnectionIO[A]): ConnectionIO[A] =
+    sql"SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY".update.run *> read
+
+  private def load(
+      id: HeldEventId,
+      publicIds: PostgresPublicIds
+  ): ConnectionIO[Option[HeldEventDetail]] =
     for
-      _ <- sql"SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY".update.run
-      event <- eventWithNavigation(id)
+      event <- eventWithNavigation(id, publicIds)
       detail <- event.traverse { case (heldEvent, previous, next) =>
         for
           _ <- validateReadBudget(id)
-          matches <- sql"""
+          matches <- (fr"""
             SELECT m.id, m.match_no_in_event, m.game_title_id, m.season_master_id,
                    m.owner_member_id, m.map_master_id, m.played_at, m.note_body,
-                   gt.name, season.name, map.name
+                   gt.name, season.name, map.name,
+          """ ++ publicIds.column(fr"m.public_id") ++ fr"""
             FROM matches m
             LEFT JOIN game_titles gt ON gt.id = m.game_title_id
             LEFT JOIN season_masters season ON season.id = m.season_master_id
             LEFT JOIN map_masters map ON map.id = m.map_master_id
             WHERE m.held_event_id = $id ORDER BY m.match_no_in_event
-          """.query[MatchRow].to[List]
+          """).query[MatchRow].to[List]
           matchIds = matches.map(_.id.value).toArray
           players <- sql"""
             SELECT p.match_id, p.member_id, p.play_order, p.rank,
@@ -153,25 +178,35 @@ object PostgresHeldEventDetail:
     }
 
   private def eventWithNavigation(
-      id: HeldEventId
-  ): ConnectionIO[Option[(HeldEvent, Option[HeldEvent], Option[HeldEvent])]] = sql"""
-    SELECT current.id, current.start_at, previous.id, previous.start_at, next.id, next.start_at
+      id: HeldEventId,
+      publicIds: PostgresPublicIds,
+  ): ConnectionIO[Option[(HeldEvent, Option[HeldEvent], Option[HeldEvent])]] =
+    (fr"""
+    SELECT current.id, current.start_at,
+  """ ++ publicIds.column(fr"current.public_id") ++ fr""",
+    previous.id, previous.start_at, previous.public_id, next.id, next.start_at, next.public_id
     FROM held_events current
     LEFT JOIN LATERAL (
-      SELECT id, start_at FROM held_events
+      SELECT id, start_at,
+  """ ++ publicIds.column(fr"public_id") ++ fr""" AS public_id FROM held_events
       WHERE (start_at, id COLLATE "C") < (current.start_at, current.id COLLATE "C")
       ORDER BY start_at DESC, id COLLATE "C" DESC LIMIT 1
     ) previous ON TRUE
     LEFT JOIN LATERAL (
-      SELECT id, start_at FROM held_events
+      SELECT id, start_at,
+  """ ++ publicIds.column(fr"public_id") ++ fr""" AS public_id FROM held_events
       WHERE (start_at, id COLLATE "C") > (current.start_at, current.id COLLATE "C")
       ORDER BY start_at ASC, id COLLATE "C" ASC LIMIT 1
     ) next ON TRUE
     WHERE current.id = $id
-  """.query[(HeldEvent, Option[HeldEvent], Option[HeldEvent])].option
+  """).query[(HeldEvent, Option[HeldEvent], Option[HeldEvent])].option
 
-  def summary(id: HeldEventId): ConnectionIO[Option[HeldEventSummary]] = sql"""
-    SELECT he.id, he.start_at, confirmed.count, draft.count,
+  def summary(
+      id: HeldEventId,
+      publicIds: PostgresPublicIds
+  ): ConnectionIO[Option[HeldEventSummary]] = (fr"""
+    SELECT he.id, he.start_at,
+  """ ++ publicIds.column(fr"he.public_id") ++ fr""", confirmed.count, draft.count,
            GREATEST(confirmed.max_no, draft.max_no) + 1
     FROM held_events he
     CROSS JOIN LATERAL (
@@ -184,12 +219,17 @@ object PostgresHeldEventDetail:
         AND status <> ${MatchDraftStatus.Cancelled} AND status <> ${MatchDraftStatus.Confirmed}
     ) draft
     WHERE he.id = $id
-  """.query[HeldEventSummary].option
+  """).query[HeldEventSummary].option
 
-final class PostgresHeldEventDetailReadModel[F[_]: MonadCancelThrow](transactor: Transactor[F])
-    extends HeldEventDetailReadModel[F]:
+final class PostgresHeldEventDetailReadModel[F[_]: MonadCancelThrow](
+    transactor: Transactor[F],
+    publicIds: PostgresPublicIds = PostgresPublicIds.Legacy,
+) extends HeldEventDetailReadModel[F]:
   override def find(id: HeldEventId): F[Option[HeldEventDetail]] =
-    PostgresHeldEventDetail.find(id).transact(transactor)
+    PostgresHeldEventDetail.find(id, publicIds).transact(transactor)
+
+  override def findByPublicId(publicId: PublicId): F[Option[HeldEventDetail]] =
+    PostgresHeldEventDetail.findByPublicId(publicId, publicIds).transact(transactor)
 
   override def summary(id: HeldEventId): F[Option[HeldEventSummary]] =
-    PostgresHeldEventDetail.summary(id).transact(transactor)
+    PostgresHeldEventDetail.summary(id, publicIds).transact(transactor)

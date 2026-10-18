@@ -8,7 +8,22 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"regexp"
 )
+
+var databaseFingerprintPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
+
+type databaseConnectionProof struct {
+	FormatVersion     int    `json:"formatVersion"`
+	TargetFingerprint string `json:"targetFingerprint"`
+	LedgerFingerprint string `json:"ledgerFingerprint"`
+}
+
+func (proof *databaseConnectionProof) valid() bool {
+	return proof != nil && proof.FormatVersion == 1 &&
+		databaseFingerprintPattern.MatchString(proof.TargetFingerprint) &&
+		databaseFingerprintPattern.MatchString(proof.LedgerFingerprint)
+}
 
 type maintenanceMode string
 
@@ -44,7 +59,8 @@ func runMaintenanceSmoke(ctx context.Context, stdout io.Writer, stderr io.Writer
 		return 1
 	}
 	client := newProbeHTTPClient(localHTTPTimeout, nil)
-	if err := probeMaintenanceHTTP(ctx, client, "http://127.0.0.1:8080", host, originToken); err != nil {
+	proof, err := probeMaintenanceHTTP(ctx, client, "http://127.0.0.1:8080", host, originToken)
+	if err != nil {
 		writeResult(stderr, failureResult(maintenanceSmokeEvent, "MaintenanceHTTPContractError"))
 		return 1
 	}
@@ -68,11 +84,13 @@ func runMaintenanceSmoke(ctx context.Context, stdout io.Writer, stderr io.Writer
 	}
 	result := successResult(maintenanceSmokeEvent)
 	result.Checks = []string{"frozen_readiness", "normal_routes_closed", "database_contract", "runtime_processes"}
+	result.Database = proof
 	writeResult(stdout, result)
 	return 0
 }
 
-func probeMaintenanceHTTP(ctx context.Context, client *http.Client, baseURL, host, originToken string) error {
+func probeMaintenanceHTTP(ctx context.Context, client *http.Client, baseURL, host, originToken string) (*databaseConnectionProof, error) {
+	var proof *databaseConnectionProof
 	for _, probe := range []struct {
 		method string
 		path   string
@@ -86,36 +104,47 @@ func probeMaintenanceHTTP(ctx context.Context, client *http.Client, baseURL, hos
 	} {
 		request, err := http.NewRequestWithContext(ctx, probe.method, baseURL+probe.path, nil)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		request.Host = host
 		request.Header.Set("X-Momo-Origin-Lock", originToken)
 		response, err := client.Do(request)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		valid := response.StatusCode == probe.code && decodeMaintenancePayload(response.Body, probe.status)
+		database, payloadError := decodeMaintenancePayload(response.Body, probe.status)
+		valid := response.StatusCode == probe.code && payloadError == nil
 		_ = response.Body.Close()
 		if !valid {
-			return errors.New("maintenance HTTP contract mismatch")
+			return nil, errors.New("maintenance HTTP contract mismatch")
+		}
+		if probe.path == maintenanceReadinessPath {
+			proof = database
 		}
 	}
-	return nil
+	return proof, nil
 }
 
-func decodeMaintenancePayload(reader io.Reader, expectedStatus string) bool {
+func decodeMaintenancePayload(reader io.Reader, expectedStatus string) (*databaseConnectionProof, error) {
 	var payload struct {
-		Status string `json:"status"`
-		Mode   string `json:"mode"`
+		Status   string                   `json:"status"`
+		Mode     string                   `json:"mode"`
+		Database *databaseConnectionProof `json:"database"`
 	}
+	invalid := errors.New("invalid maintenance payload")
 	encoded, err := io.ReadAll(io.LimitReader(reader, probeBodyLimit+1))
 	if err != nil || len(encoded) > probeBodyLimit {
-		return false
+		return nil, invalid
 	}
 	decoder := json.NewDecoder(bytes.NewReader(encoded))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&payload) != nil || payload.Status != expectedStatus || payload.Mode != string(maintenanceFrozen) {
-		return false
+		return nil, invalid
 	}
-	return decoder.Decode(new(any)) == io.EOF
+	if decoder.Decode(new(any)) != io.EOF ||
+		(expectedStatus == "ready" && !payload.Database.valid()) ||
+		(expectedStatus != "ready" && payload.Database != nil) {
+		return nil, invalid
+	}
+	return payload.Database, nil
 }

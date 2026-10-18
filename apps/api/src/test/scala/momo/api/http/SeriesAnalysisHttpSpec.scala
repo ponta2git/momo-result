@@ -24,7 +24,7 @@ final class SeriesAnalysisHttpSpec extends PostgresHttpAppTestFixtures:
         GameTitle(
           titleId,
           "分析HTTP作品",
-          "momotetsu2",
+          "momotetsu_2",
           1,
           Instant.parse("2026-08-09T00:00:00Z"),
         )

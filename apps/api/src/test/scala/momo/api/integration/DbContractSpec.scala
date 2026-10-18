@@ -52,7 +52,6 @@ final class DbContractSpec extends IntegrationSuite:
         )
       }
 
-
   test("published analysis artifact headers and payloads are immutable until parent cleanup"):
     val artifactId = "artifact-contract-immutable"
     val unattestedArtifactId = "artifact-contract-unattested"
@@ -65,7 +64,7 @@ final class DbContractSpec extends IntegrationSuite:
       for
         _ <- sql"""
         INSERT INTO game_titles (id, name, layout_family, display_order)
-        VALUES ($titleId, 'Immutable contract title', 'contract', 2)
+        VALUES ($titleId, 'Immutable contract title', 'world', 2)
       """.update.run
         _ <- sql"""
         INSERT INTO series_analysis_jobs (

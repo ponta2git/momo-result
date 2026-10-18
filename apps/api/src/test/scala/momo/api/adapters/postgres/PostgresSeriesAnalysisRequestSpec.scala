@@ -25,7 +25,7 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
       WHERE singleton_key = 'current'
     """.update.run.transact(transactor) *>
       new PostgresGameTitlesRepository[IO](transactor)
-        .createWithNextDisplayOrder(GameTitle(id, "要求整合性作品", "momotetsu2", 1, now)).void
+        .createWithNextDisplayOrder(GameTitle(id, "要求整合性作品", "momotetsu_2", 1, now)).void
 
   test("concurrent title retries replay the committed operation without adding work"):
     for
@@ -147,7 +147,7 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
       assertEquals(after, before, "repeating an already-bound assignment must not write the row")
 
   test("creation waits for release promotion and inherits its committed tuple"):
-    val createdTitle = GameTitle(titleId, "昇格後の作品", "momotetsu2", 1, now)
+    val createdTitle = GameTitle(titleId, "昇格後の作品", "momotetsu_2", 1, now)
     for
       results <- concurrentWithUncommittedFirst(
         sql"""

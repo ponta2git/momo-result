@@ -30,7 +30,7 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
   private def repo =
     PostgresSeriesPlayerRadarRepository.create[IO](transactor, SeriesAnalysisReadConfig.defaults)
   private def seedTitle: IO[Unit] = new PostgresGameTitlesRepository[IO](transactor)
-    .createWithNextDisplayOrder(GameTitle(title, "レーダー契約作品", "momotetsu2", 1, now)).void
+    .createWithNextDisplayOrder(GameTitle(title, "レーダー契約作品", "momotetsu_2", 1, now)).void
 
   private def fixture(kind: String): Json = parser.parse(Files.readString(repositoryFile(
     s"docs/schemas/fixtures/series-analysis/radar-$kind-v1.json"
@@ -788,7 +788,7 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
       HeldEventId.unsafeFromString("event-0000"),
       MatchNoInEvent.unsafeFromInt(1),
       title,
-      "momotetsu2",
+      "momotetsu_2",
       SeasonMasterId.unsafeFromString("winter"),
       MemberId.unsafeFromString("member_ponta"),
       MapMasterId.unsafeFromString("east"),

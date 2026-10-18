@@ -19,22 +19,67 @@ const SECOND_FLOOR: i64 = 9_000_000;
 async fn real_postgres_job_fences_survive_cleanup_recovery_and_independent_workers() -> SmokeResult
 {
     let database_url = std::env::var("ANALYSIS_CONTROL_SMOKE_DATABASE_URL")?;
-    let mut primary = crate::postgres::connect(&database_url).await?;
-    let mut secondary = crate::postgres::connect(&database_url).await?;
+    let mut primary = crate::identity::fixtures::connect(&database_url).await?;
+    let mut secondary = crate::identity::fixtures::connect(&database_url).await?;
     cleanup_database(&primary).await?;
     primary
-        .execute("DELETE FROM game_titles WHERE id=$1", &[&SECOND])
+        .execute(
+            r"
+            DELETE FROM game_titles
+            WHERE game_titles.legacy_id = $1
+            ",
+            &[&SECOND],
+        )
         .await?;
     prepare_owned_attempt(&primary).await?;
     primary
         .execute(
-            "DELETE FROM series_analysis_job_attempts WHERE job_id=$1",
+            r"
+                DELETE FROM series_analysis_job_attempts
+                WHERE (SELECT fixture_parent.legacy_id
+                       FROM series_analysis_jobs AS fixture_parent
+                       WHERE fixture_parent.id = series_analysis_job_attempts.job_id) = $1
+                ",
             &[&JOB_ID],
         )
         .await?;
-    primary.execute("UPDATE series_analysis_jobs SET status='queued',started_at=NULL,lease_owner=NULL,lease_attempt_id=NULL,lease_fencing_token=NULL,lease_expires_at=NULL,lease_validation_contract_id=NULL,attempt_count=0,available_at=clock_timestamp() WHERE id=$1", &[&JOB_ID]).await?;
-    primary.execute("INSERT INTO game_titles (id,name,layout_family,display_order) VALUES ($1,'Independent worker fence','momotetsu_2',9998)", &[&SECOND]).await?;
-    primary.execute("INSERT INTO series_analysis_jobs (id,game_title_id,input_revision,algorithm_version,artifact_schema_version,validation_contract_id,status,trigger,fencing_counter) SELECT $1,$1,input_revision,algorithm_version,artifact_schema_version,validation_contract_id,'queued','manual',$2 FROM series_analysis_jobs WHERE id=$3", &[&SECOND,&SECOND_FLOOR,&JOB_ID]).await?;
+    primary
+        .execute(
+            r"
+        UPDATE series_analysis_jobs
+        SET status = 'queued', started_at = NULL, lease_owner = NULL, lease_attempt_id = NULL,
+            legacy_lease_attempt_id = NULL, lease_fencing_token = NULL, lease_expires_at = NULL,
+            lease_validation_contract_id = NULL, attempt_count = 0, available_at = clock_timestamp()
+        WHERE series_analysis_jobs.legacy_id = $1
+        ",
+            &[&JOB_ID],
+        )
+        .await?;
+    primary.execute(r"
+        WITH fixture_titles AS (
+               INSERT INTO game_titles (id, legacy_id, name, layout_family, display_order)
+               VALUES (pg_temp.fixture_uuid('game_titles', $1), $1, 'Independent worker fence', 'momotetsu_2', 9998)
+               RETURNING id
+             )
+          INSERT INTO series_analysis_title_states (game_title_id, algorithm_version, artifact_schema_version, validation_contract_id)
+          SELECT fixture_titles.id, release.algorithm_version, release.artifact_schema_version, release.validation_contract_id
+          FROM fixture_titles CROSS JOIN series_analysis_release_state AS release
+          WHERE release.singleton_key = 'current'
+          ON CONFLICT (game_title_id) DO NOTHING
+        ", &[&SECOND]).await?;
+    primary
+        .execute(
+            r"
+        INSERT INTO series_analysis_jobs (id, legacy_id, game_title_id, input_revision, algorithm_version,
+                                          artifact_schema_version, validation_contract_id, status, trigger, fencing_counter)
+        SELECT pg_temp.fixture_uuid('series_analysis_jobs', $1), $1, pg_temp.fixture_uuid('game_titles', $1),
+               input_revision, algorithm_version, artifact_schema_version, validation_contract_id, 'queued', 'manual', $2
+        FROM series_analysis_jobs
+        WHERE series_analysis_jobs.legacy_id = $3
+        ",
+            &[&SECOND, &SECOND_FLOOR, &JOB_ID],
+        )
+        .await?;
     let directory = TempDir::new()?;
     let first_config =
         notifications::config(&database_url, NotificationSink::default(), directory.path())?;
@@ -79,13 +124,28 @@ async fn real_postgres_job_fences_survive_cleanup_recovery_and_independent_worke
     // Retention may remove every completed attempt. The job counter remains authoritative.
     primary
         .execute(
-            "DELETE FROM series_analysis_job_attempts WHERE job_id=$1 AND status='terminal'",
+            r"
+                DELETE FROM series_analysis_job_attempts
+                WHERE (SELECT fixture_parent.legacy_id
+                       FROM series_analysis_jobs AS fixture_parent
+                       WHERE fixture_parent.id = series_analysis_job_attempts.job_id) = $1
+                  AND status = 'terminal'
+                ",
             &[&JOB_ID],
         )
         .await?;
     let retry = claimed(claim_job(&mut primary, JOB_ID, &owner).await?.value)?;
     assert_eq!(retry.fencing_token, OLD_FENCE + 2);
-    primary.execute("UPDATE series_analysis_jobs SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", &[&JOB_ID]).await?;
+    primary
+        .execute(
+            r"
+        UPDATE series_analysis_jobs
+        SET lease_expires_at = clock_timestamp() - CAST('1 second' AS interval)
+        WHERE series_analysis_jobs.legacy_id = $1
+        ",
+            &[&JOB_ID],
+        )
+        .await?;
     assert!(matches!(
         claim_job(&mut primary, JOB_ID, &owner).await?.value,
         ClaimResult::RecoveredCurrentJob
@@ -114,7 +174,11 @@ async fn real_postgres_job_fences_survive_cleanup_recovery_and_independent_worke
     .await?;
     primary
         .execute(
-            "UPDATE series_analysis_jobs SET fencing_counter=$2 WHERE id=$1",
+            r"
+                UPDATE series_analysis_jobs
+                SET fencing_counter = $2
+                WHERE series_analysis_jobs.legacy_id = $1
+                ",
             &[&SECOND, &i64::MAX],
         )
         .await?;
@@ -122,7 +186,16 @@ async fn real_postgres_job_fences_survive_cleanup_recovery_and_independent_worke
         claim_job(&mut secondary, SECOND, &second_config).await,
         Err(ControlError::NumericBound)
     ));
-    let exhausted = primary.query_one("SELECT status,attempt_count,fencing_counter,lease_owner FROM series_analysis_jobs WHERE id=$1", &[&SECOND]).await?;
+    let exhausted = primary
+        .query_one(
+            r"
+        SELECT status, attempt_count, fencing_counter, lease_owner
+        FROM series_analysis_jobs
+        WHERE series_analysis_jobs.legacy_id = $1
+        ",
+            &[&SECOND],
+        )
+        .await?;
     assert_eq!(exhausted.try_get::<_, String>(0)?, "queued");
     assert_eq!(exhausted.try_get::<_, i32>(1)?, 1);
     assert_eq!(exhausted.try_get::<_, i64>(2)?, i64::MAX);
@@ -130,7 +203,13 @@ async fn real_postgres_job_fences_survive_cleanup_recovery_and_independent_worke
     drop((owner, first_config, second_config));
     cleanup_database(&primary).await?;
     primary
-        .execute("DELETE FROM game_titles WHERE id=$1", &[&SECOND])
+        .execute(
+            r"
+            DELETE FROM game_titles
+            WHERE game_titles.legacy_id = $1
+            ",
+            &[&SECOND],
+        )
         .await?;
     Ok(())
 }
@@ -151,7 +230,11 @@ fn claimed(result: ClaimResult) -> SmokeResult<ClaimedJob> {
 async fn assert_counter(client: &tokio_postgres::Client, job: &str, expected: i64) -> SmokeResult {
     let stored: i64 = client
         .query_one(
-            "SELECT fencing_counter FROM series_analysis_jobs WHERE id=$1",
+            r"
+                SELECT fencing_counter
+                FROM series_analysis_jobs
+                WHERE series_analysis_jobs.legacy_id = $1
+                ",
             &[&job],
         )
         .await?

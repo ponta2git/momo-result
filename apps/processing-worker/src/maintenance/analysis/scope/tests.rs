@@ -18,17 +18,31 @@ fn request() -> Request {
 async fn real_postgres_scoped_plan_preserves_binding_and_refuses_unrelated_work()
 -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let database_url = std::env::var("MAINTENANCE_ANALYSIS_SMOKE_DATABASE_URL")?;
-    let mut client = crate::postgres::connect(&database_url).await?;
+    let mut client = crate::identity::fixtures::connect(&database_url).await?;
     create_fixture(&mut client).await?;
     let verified = exercise(&mut client).await;
     // Only the named fixture's own rows are removed. An interrupted test never resets a database.
     let cleanup = client.batch_execute(
-        "DELETE FROM series_analysis_campaign_targets WHERE campaign_id='maintenance-scope-test-campaign';
-         DELETE FROM series_analysis_job_requests WHERE campaign_id='maintenance-scope-test-campaign';
-         DELETE FROM series_analysis_jobs WHERE game_title_id='maintenance-scope-test-title';
-         DELETE FROM series_analysis_campaigns WHERE id='maintenance-scope-test-campaign';
-         DELETE FROM series_analysis_operation_requests WHERE id='maintenance-scope-test-operation';
-         DELETE FROM game_titles WHERE id='maintenance-scope-test-title';"
+        r"
+            DELETE FROM series_analysis_campaign_targets
+            WHERE (SELECT fixture_parent.legacy_id
+                   FROM series_analysis_campaigns AS fixture_parent
+                   WHERE fixture_parent.id = series_analysis_campaign_targets.campaign_id) = 'maintenance-scope-test-campaign';
+            DELETE FROM series_analysis_job_requests
+            WHERE (SELECT fixture_parent.legacy_id
+                   FROM series_analysis_campaigns AS fixture_parent
+                   WHERE fixture_parent.id = series_analysis_job_requests.campaign_id) = 'maintenance-scope-test-campaign';
+            DELETE FROM series_analysis_jobs
+            WHERE (SELECT fixture_parent.legacy_id
+                   FROM game_titles AS fixture_parent
+                   WHERE fixture_parent.id = series_analysis_jobs.game_title_id) = 'maintenance-scope-test-title';
+            DELETE FROM series_analysis_campaigns
+            WHERE series_analysis_campaigns.legacy_id = 'maintenance-scope-test-campaign';
+            DELETE FROM series_analysis_operation_requests
+            WHERE series_analysis_operation_requests.legacy_id = 'maintenance-scope-test-operation';
+            DELETE FROM game_titles
+            WHERE game_titles.legacy_id = 'maintenance-scope-test-title';
+            "
     ).await;
     verified?;
     cleanup?;
@@ -37,15 +51,53 @@ async fn real_postgres_scoped_plan_preserves_binding_and_refuses_unrelated_work(
 
 async fn create_fixture(client: &mut Client) -> Result<(), tokio_postgres::Error> {
     let transaction = client.transaction().await?;
-    transaction.execute("INSERT INTO game_titles (id,name,layout_family,display_order) VALUES ($1,'Scoped maintenance fixture','momotetsu_2',9998)", &[&TITLE]).await?;
+    transaction.execute(r"
+        WITH fixture_titles AS (
+               INSERT INTO game_titles (id, legacy_id, name, layout_family, display_order)
+               VALUES (pg_temp.fixture_uuid('game_titles', $1), $1, 'Scoped maintenance fixture', 'momotetsu_2', 9998)
+               RETURNING id
+             )
+          INSERT INTO series_analysis_title_states (game_title_id, algorithm_version, artifact_schema_version, validation_contract_id)
+          SELECT fixture_titles.id, release.algorithm_version, release.artifact_schema_version, release.validation_contract_id
+          FROM fixture_titles CROSS JOIN series_analysis_release_state AS release
+          WHERE release.singleton_key = 'current'
+          ON CONFLICT (game_title_id) DO NOTHING
+        ", &[&TITLE]).await?;
     transaction.execute(
-        "INSERT INTO series_analysis_operation_requests (id,scope,idempotency_key_hash,endpoint,target_count) VALUES ($1,'all_titles',repeat('1',64),'release:initial_backfill',1)", &[&OPERATION]
+        r"
+            INSERT INTO series_analysis_operation_requests (id, legacy_id, scope, idempotency_key_hash, endpoint, target_count)
+            VALUES (pg_temp.fixture_uuid('series_analysis_operation_requests', $1), $1, 'all_titles', repeat('1', 64),
+                    'release:initial_backfill', 1)
+            ", &[&OPERATION]
     ).await?;
+    transaction
+        .execute(
+            r"
+            INSERT INTO series_analysis_campaigns (id, legacy_id, operation_request_id, trigger, algorithm_version,
+                                                   artifact_schema_version, validation_contract_id, target_count)
+            SELECT pg_temp.fixture_uuid('series_analysis_campaigns', $1), $1,
+                   pg_temp.fixture_uuid('series_analysis_operation_requests', $2), 'initial_backfill', algorithm_version,
+                   artifact_schema_version, validation_contract_id, 1
+            FROM series_analysis_release_state
+            WHERE singleton_key = 'current'
+            ",
+            &[&CAMPAIGN, &OPERATION],
+        )
+        .await?;
     transaction.execute(
-        "INSERT INTO series_analysis_campaigns (id,operation_request_id,trigger,algorithm_version,artifact_schema_version,validation_contract_id,target_count) SELECT $1,$2,'initial_backfill',algorithm_version,artifact_schema_version,validation_contract_id,1 FROM series_analysis_release_state WHERE singleton_key='current'", &[&CAMPAIGN,&OPERATION]
-    ).await?;
-    transaction.execute(
-        "INSERT INTO series_analysis_campaign_targets (campaign_id,game_title_id,input_revision,algorithm_version,artifact_schema_version,validation_contract_id) SELECT $1,game_title_id,input_revision,algorithm_version,artifact_schema_version,validation_contract_id FROM series_analysis_title_states WHERE game_title_id=$2", &[&CAMPAIGN,&TITLE]
+        r"
+            INSERT INTO series_analysis_campaign_targets (campaign_id, game_title_id, legacy_game_title_id, input_revision,
+                                                          algorithm_version, artifact_schema_version, validation_contract_id)
+            SELECT pg_temp.fixture_uuid('series_analysis_campaigns', $1), series_analysis_title_states.game_title_id,
+                   (SELECT fixture_parent.legacy_id
+                    FROM game_titles AS fixture_parent
+                    WHERE fixture_parent.id = series_analysis_title_states.game_title_id), input_revision, algorithm_version,
+                   artifact_schema_version, validation_contract_id
+            FROM series_analysis_title_states
+            WHERE (SELECT fixture_parent.legacy_id
+                   FROM game_titles AS fixture_parent
+                   WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = $2
+            ", &[&CAMPAIGN,&TITLE]
     ).await?;
     transaction.commit().await
 }
@@ -118,14 +170,23 @@ async fn verify_radar_binding(
     let transaction = client.transaction().await?;
     transaction
         .execute(
-            "INSERT INTO series_radar_title_states (game_title_id) VALUES ($1)",
+            r"
+                INSERT INTO series_radar_title_states (game_title_id)
+                VALUES (pg_temp.fixture_uuid('game_titles', $1))
+                ",
             &[&TITLE],
         )
         .await?;
     scope.accept(&inspect_in(&transaction, &scope.request).await?)?;
     transaction
         .execute(
-            "UPDATE series_radar_title_states SET generation=generation+1 WHERE game_title_id=$1",
+            r"
+                UPDATE series_radar_title_states
+                SET generation = generation + 1
+                WHERE (SELECT fixture_parent.legacy_id
+                       FROM game_titles AS fixture_parent
+                       WHERE fixture_parent.id = series_radar_title_states.game_title_id) = $1
+                ",
             &[&TITLE],
         )
         .await?;
@@ -161,7 +222,19 @@ async fn verify_foreign_request_fence(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let transaction = client.transaction().await?;
     transaction.execute(
-        "INSERT INTO series_analysis_job_requests (id,game_title_id,input_revision,algorithm_version,artifact_schema_version,validation_contract_id,trigger) SELECT 'maintenance-foreign-request',game_title_id,input_revision,algorithm_version,artifact_schema_version,validation_contract_id,'manual' FROM series_analysis_title_states WHERE game_title_id=$1", &[&TITLE]
+        r"
+            INSERT INTO series_analysis_job_requests (id, legacy_id, game_title_id, legacy_game_title_id, input_revision,
+                                                      algorithm_version, artifact_schema_version, validation_contract_id, trigger)
+            SELECT pg_temp.fixture_uuid('series_analysis_job_requests', 'maintenance-foreign-request'),
+                   'maintenance-foreign-request', series_analysis_title_states.game_title_id, (SELECT fixture_parent.legacy_id
+                    FROM game_titles AS fixture_parent
+                    WHERE fixture_parent.id = series_analysis_title_states.game_title_id), input_revision, algorithm_version,
+                   artifact_schema_version, validation_contract_id, 'manual'
+            FROM series_analysis_title_states
+            WHERE (SELECT fixture_parent.legacy_id
+                   FROM game_titles AS fixture_parent
+                   WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = $1
+            ", &[&TITLE]
     ).await?;
     assert_eq!(
         inspect_in(&transaction, &scope.request).await?.status,
@@ -176,7 +249,17 @@ async fn verify_running_job_fence(
     scope: &BoundScope,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let transaction = client.transaction().await?;
-    transaction.execute("UPDATE series_analysis_jobs SET status='running',started_at=clock_timestamp(),lease_owner='maintenance-foreign-worker',lease_attempt_id='maintenance-foreign-attempt',lease_fencing_token=1,fencing_counter=1,lease_expires_at=clock_timestamp()+interval '1 minute',lease_validation_contract_id=validation_contract_id WHERE game_title_id=$1", &[&TITLE]).await?;
+    transaction.execute(r"
+        UPDATE series_analysis_jobs
+        SET status = 'running', started_at = clock_timestamp(), lease_owner = 'maintenance-foreign-worker',
+            lease_attempt_id = pg_temp.fixture_uuid('series_analysis_job_attempts', 'maintenance-foreign-attempt'),
+            legacy_lease_attempt_id = 'maintenance-foreign-attempt', lease_fencing_token = 1, fencing_counter = 1,
+            lease_expires_at = clock_timestamp() + CAST('1 minute' AS interval),
+            lease_validation_contract_id = validation_contract_id
+        WHERE (SELECT fixture_parent.legacy_id
+               FROM game_titles AS fixture_parent
+               WHERE fixture_parent.id = series_analysis_jobs.game_title_id) = $1
+        ", &[&TITLE]).await?;
     assert_eq!(
         inspect_in(&transaction, &scope.request).await?.status,
         "attention_required"

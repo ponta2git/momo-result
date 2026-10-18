@@ -16,7 +16,7 @@ use crate::{
     cgroup::{CgroupHierarchy, ChildCgroup},
     notifications::NotificationSink,
     ocr::control::OcrControlConfig,
-    postgres::{self, test_support::DelayedDatabase},
+    postgres::test_support::DelayedDatabase,
     series_analysis::{
         config::{AnalysisConsumerConfig, AnalysisExecutionLimits},
         control::ALGORITHM_VERSION,
@@ -34,7 +34,7 @@ const WORKER: &str = "scheduler-dispatch-smoke-worker";
 #[ignore = "requires explicitly isolated PROCESSING_SCHEDULER_SMOKE_DATABASE_URL"]
 async fn real_postgres_delayed_candidates_still_attempt_durable_claims() -> TestResult {
     let database_url = std::env::var("PROCESSING_SCHEDULER_SMOKE_DATABASE_URL")?;
-    let observer = postgres::connect(&database_url).await?;
+    let observer = crate::identity::fixtures::connect(&database_url).await?;
     cleanup(&observer).await?;
     insert_analysis(&observer).await?;
     let proxy = DelayedDatabase::start(&database_url, Duration::from_millis(150)).await?;
@@ -66,7 +66,13 @@ async fn real_postgres_delayed_candidates_still_attempt_durable_claims() -> Test
     assert_job(&observer, ANALYSIS, "running", 1).await?;
     let attempt_count: i64 = observer
         .query_one(
-            "SELECT count(*) FROM series_analysis_job_attempts WHERE job_id=$1",
+            r"
+                SELECT count(*)
+                FROM series_analysis_job_attempts
+                WHERE (SELECT fixture_parent.legacy_id
+                       FROM series_analysis_jobs AS fixture_parent
+                       WHERE fixture_parent.id = series_analysis_job_attempts.job_id) = $1
+                ",
             &[&ANALYSIS],
         )
         .await?
@@ -84,7 +90,14 @@ async fn real_postgres_delayed_candidates_still_attempt_durable_claims() -> Test
     assert!(!Box::pin(claim_analysis(&mut scheduler, &stopped, &mut budget())).await?);
     assert_job(&observer, WAITING, "queued", 0).await?;
     let ocr_attempts: i32 = observer
-        .query_one("SELECT attempt_count FROM ocr_jobs WHERE id=$1", &[&OCR])
+        .query_one(
+            r"
+            SELECT attempt_count
+            FROM ocr_jobs
+            WHERE ocr_jobs.legacy_id = $1
+            ",
+            &[&OCR],
+        )
         .await?
         .try_get(0)?;
     assert_eq!(ocr_attempts, 0);
@@ -96,7 +109,11 @@ async fn real_postgres_delayed_candidates_still_attempt_durable_claims() -> Test
     assert!(matches!(ocr_claim, Err(WorkerError::UnsupportedPlatform)));
     let row = observer
         .query_one(
-            "SELECT status,attempt_count FROM ocr_jobs WHERE id=$1",
+            r"
+                SELECT status, attempt_count
+                FROM ocr_jobs
+                WHERE ocr_jobs.legacy_id = $1
+                ",
             &[&OCR],
         )
         .await?;
@@ -135,9 +152,18 @@ async fn verify_cursor_yield(
     )
     .await?;
     let (_shutdown, stopped) = watch::channel(false);
-    let mut contender = postgres::connect(database_url).await?;
+    let mut contender = crate::identity::fixtures::connect(database_url).await?;
     let held_title = contender.transaction().await?;
-    held_title.query_one("SELECT game_title_id FROM series_analysis_title_states WHERE game_title_id=$1 FOR UPDATE", &[&ANALYSIS]).await?;
+    held_title.query_one(r"
+        SELECT (SELECT fixture_parent.legacy_id
+                FROM game_titles AS fixture_parent
+                WHERE fixture_parent.id = series_analysis_title_states.game_title_id) AS game_title_id
+        FROM series_analysis_title_states
+        WHERE (SELECT fixture_parent.legacy_id
+               FROM game_titles AS fixture_parent
+               WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = $1
+        FOR UPDATE
+        ", &[&ANALYSIS]).await?;
 
     // The first candidate is attempted but contended. Yield before advancing over B.
     let mut scan = budget();
@@ -190,7 +216,7 @@ async fn fixture(
         WorkState {
             config: Some(config),
             settings,
-            database: postgres::connect(database_url).await?,
+            database: crate::identity::fixtures::connect(database_url).await?,
             analysis: None,
             ocr: None,
             ocr_config: Some(OcrControlConfig::new(
@@ -263,8 +289,34 @@ fn analysis_config(database_url: &str, directory: &Path) -> TestResult<AnalysisC
 async fn insert_analysis(client: &Client) -> TestResult {
     let schema = i32::try_from(ARTIFACT_SCHEMA_VERSION)?;
     for id in [ANALYSIS, WAITING] {
-        client.execute("INSERT INTO game_titles(id,name,layout_family,display_order) VALUES ($1,$1,'momotetsu_2',9999)", &[&id]).await?;
-        client.execute("INSERT INTO series_analysis_jobs(id,game_title_id,input_revision,algorithm_version,artifact_schema_version,validation_contract_id,status,trigger,available_at,requested_at) VALUES ($1,$1,0,$2,$3,$4,'queued','manual',TIMESTAMPTZ '2020-01-01',TIMESTAMPTZ '2020-01-01')", &[&id,&ALGORITHM_VERSION,&schema,&ARTIFACT_VALIDATION_CONTRACT_ID]).await?;
+        client.execute(r"
+            WITH fixture_titles AS (
+                   INSERT INTO game_titles (id, legacy_id, name, layout_family, display_order)
+                   VALUES (pg_temp.fixture_uuid('game_titles', $1), $1, $1, 'momotetsu_2', 9999)
+                   RETURNING id
+                 )
+              INSERT INTO series_analysis_title_states (game_title_id, algorithm_version, artifact_schema_version, validation_contract_id)
+              SELECT fixture_titles.id, release.algorithm_version, release.artifact_schema_version, release.validation_contract_id
+              FROM fixture_titles CROSS JOIN series_analysis_release_state AS release
+              WHERE release.singleton_key = 'current'
+              ON CONFLICT (game_title_id) DO NOTHING
+            ", &[&id]).await?;
+        client
+            .execute(
+                r"
+            INSERT INTO series_analysis_jobs (id, legacy_id, game_title_id, input_revision, algorithm_version,
+                                              artifact_schema_version, validation_contract_id, status, trigger, available_at, requested_at)
+            VALUES (pg_temp.fixture_uuid('series_analysis_jobs', $1), $1, pg_temp.fixture_uuid('game_titles', $1), 0, $2, $3,
+                    $4, 'queued', 'manual', CAST('2020-01-01' AS timestamptz), CAST('2020-01-01' AS timestamptz))
+            ",
+                &[
+                    &id,
+                    &ALGORITHM_VERSION,
+                    &schema,
+                    &ARTIFACT_VALIDATION_CONTRACT_ID,
+                ],
+            )
+            .await?;
     }
     Ok(())
 }
@@ -272,19 +324,63 @@ async fn insert_analysis(client: &Client) -> TestResult {
 async fn insert_ocr(client: &Client) -> TestResult {
     let hash = "ab".repeat(32);
     let idempotency = "fe".repeat(32);
-    client.execute("INSERT INTO source_images(id,owner_account_id,object_key,idempotency_key_hash,status,media_type,byte_length,sha256_hex,width,height,storage_etag,available_at) VALUES ($1,'account_ponta','source-images/scheduler-dispatch-smoke.png',$2,'AVAILABLE','image/png',68,$3,1,1,'fixture',clock_timestamp())", &[&OCR,&idempotency,&hash]).await?;
-    client.execute("INSERT INTO match_drafts(id,created_by_account_id,status,total_assets_draft_id) VALUES ($1,'account_ponta','ocr_running',$1)", &[&OCR]).await?;
+    client
+        .execute(
+            r"
+        INSERT INTO source_images (id, legacy_id, owner_account_id, object_key, idempotency_key_hash, status, media_type,
+                                   byte_length, sha256_hex, width, height, storage_etag, available_at)
+        VALUES (pg_temp.fixture_uuid('source_images', $1), $1, pg_temp.fixture_uuid('momo_login_accounts', 'account_ponta'),
+                'source-images/scheduler-dispatch-smoke.png', $2, 'AVAILABLE', 'image/png', 68, $3, 1, 1, 'fixture',
+                clock_timestamp())
+        ",
+            &[&OCR, &idempotency, &hash],
+        )
+        .await?;
+    client.execute(r"
+        INSERT INTO match_drafts (id, legacy_id, created_by_account_id, status, total_assets_draft_id, legacy_total_assets_draft_id)
+        VALUES (pg_temp.fixture_uuid('match_drafts', $1), $1, pg_temp.fixture_uuid('momo_login_accounts', 'account_ponta'),
+                'ocr_running', pg_temp.fixture_uuid('ocr_drafts', $1), $1)
+        ", &[&OCR]).await?;
     let input = serde_json::json!({"schemaVersion":"2","jobId":OCR,"draftId":OCR,"sourceImageId":OCR,"imageObjectKey":"source-images/scheduler-dispatch-smoke.png","sha256":hash,"byteLength":"68","mediaType":"image/png","requestedScreenType":"total_assets"});
-    client.execute("INSERT INTO ocr_jobs(id,draft_id,image_id,requested_screen_type,status,source_image_id,input_snapshot) VALUES ($1,$1,$1,'total_assets','queued',$1,$2)", &[&OCR,&input]).await?;
-    client.execute("INSERT INTO ocr_submissions(id,owner_account_id,match_draft_id,status,admission_deadline) VALUES ('ad15e7ce-0000-4000-8000-000000000001','account_ponta',$1,'open',clock_timestamp()+interval '10 minutes')", &[&OCR]).await?;
-    client.execute("INSERT INTO ocr_submission_members(submission_id,screen_type,upload_idempotency_key_hash,image_sha256_hex,image_byte_length,status,job_id) VALUES ('ad15e7ce-0000-4000-8000-000000000001','total_assets',$1,$2,68,'registered',$3)", &[&idempotency,&"ab".repeat(32),&OCR]).await?;
+    client
+        .execute(
+            r"
+        INSERT INTO ocr_jobs (id, legacy_id, draft_id, legacy_draft_id, image_id, requested_screen_type, status,
+                              source_image_id, input_snapshot)
+        VALUES (pg_temp.fixture_uuid('ocr_jobs', $1), $1, pg_temp.fixture_uuid('ocr_drafts', $1), $1, $1, 'total_assets',
+                'queued', pg_temp.fixture_uuid('source_images', $1), $2)
+        ",
+            &[&OCR, &input],
+        )
+        .await?;
+    client.execute(r"
+        INSERT INTO ocr_submissions (id, legacy_id, owner_account_id, match_draft_id, legacy_match_draft_id, status, admission_deadline)
+        VALUES (pg_temp.fixture_uuid('ocr_submissions', 'ad15e7ce-0000-4000-8000-000000000001'),
+                'ad15e7ce-0000-4000-8000-000000000001', pg_temp.fixture_uuid('momo_login_accounts', 'account_ponta'),
+                pg_temp.fixture_uuid('match_drafts', $1), $1, 'open', clock_timestamp() + CAST('10 minutes' AS interval))
+        ", &[&OCR]).await?;
+    client
+        .execute(
+            r"
+        INSERT INTO ocr_submission_members (submission_id, screen_type, upload_idempotency_key_hash, image_sha256_hex,
+                                            image_byte_length, status, job_id)
+        VALUES (pg_temp.fixture_uuid('ocr_submissions', 'ad15e7ce-0000-4000-8000-000000000001'), 'total_assets', $1, $2, 68,
+                'registered', pg_temp.fixture_uuid('ocr_jobs', $3))
+        ",
+            &[&idempotency, &"ab".repeat(32), &OCR],
+        )
+        .await?;
     Ok(())
 }
 
 async fn assert_job(client: &Client, id: &str, status: &str, attempts: i32) -> TestResult {
     let row = client
         .query_one(
-            "SELECT status,attempt_count FROM series_analysis_jobs WHERE id=$1",
+            r"
+                SELECT status, attempt_count
+                FROM series_analysis_jobs
+                WHERE series_analysis_jobs.legacy_id = $1
+                ",
             &[&id],
         )
         .await?;
@@ -295,9 +391,17 @@ async fn assert_job(client: &Client, id: &str, status: &str, attempts: i32) -> T
 
 async fn assert_lease(client: &Client, kind: &str, job: &str) -> TestResult {
     let sql = if kind == "ocr" {
-        "SELECT lease_owner,lease_fencing_token FROM ocr_jobs WHERE id=$1 AND status='running'"
+        r"
+            SELECT lease_owner, lease_fencing_token
+            FROM ocr_jobs
+            WHERE ocr_jobs.legacy_id = $1 AND status = 'running'
+            "
     } else {
-        "SELECT lease_owner,lease_fencing_token FROM series_analysis_jobs WHERE id=$1 AND status='running'"
+        r"
+            SELECT lease_owner, lease_fencing_token
+            FROM series_analysis_jobs
+            WHERE series_analysis_jobs.legacy_id = $1 AND status = 'running'
+            "
     };
     let row = client.query_one(sql, &[&job]).await?;
     assert_eq!(row.try_get::<_, String>(0)?, WORKER);
@@ -308,37 +412,80 @@ async fn assert_lease(client: &Client, kind: &str, job: &str) -> TestResult {
 async fn cleanup(client: &Client) -> TestResult {
     client
         .execute(
-            "DELETE FROM ocr_submission_members WHERE job_id=$1",
+            r"
+                DELETE FROM ocr_submission_members
+                WHERE (SELECT fixture_parent.legacy_id
+                       FROM ocr_jobs AS fixture_parent
+                       WHERE fixture_parent.id = ocr_submission_members.job_id) = $1
+                ",
             &[&OCR],
         )
         .await?;
     client
         .execute(
-            "DELETE FROM ocr_submissions WHERE match_draft_id=$1",
+            r"
+                DELETE FROM ocr_submissions
+                WHERE ocr_submissions.legacy_match_draft_id = $1
+                ",
             &[&OCR],
         )
         .await?;
     client
-        .execute("DELETE FROM ocr_jobs WHERE id=$1", &[&OCR])
+        .execute(
+            r"
+            DELETE FROM ocr_jobs
+            WHERE ocr_jobs.legacy_id = $1
+            ",
+            &[&OCR],
+        )
         .await?;
     client
-        .execute("DELETE FROM match_drafts WHERE id=$1", &[&OCR])
+        .execute(
+            r"
+            DELETE FROM match_drafts
+            WHERE match_drafts.legacy_id = $1
+            ",
+            &[&OCR],
+        )
         .await?;
     client
-        .execute("DELETE FROM source_images WHERE id=$1", &[&OCR])
+        .execute(
+            r"
+            DELETE FROM source_images
+            WHERE source_images.legacy_id = $1
+            ",
+            &[&OCR],
+        )
         .await?;
     for id in [ANALYSIS, WAITING] {
         client
             .execute(
-                "DELETE FROM series_analysis_job_attempts WHERE job_id=$1",
+                r"
+                    DELETE FROM series_analysis_job_attempts
+                    WHERE (SELECT fixture_parent.legacy_id
+                           FROM series_analysis_jobs AS fixture_parent
+                           WHERE fixture_parent.id = series_analysis_job_attempts.job_id) = $1
+                    ",
                 &[&id],
             )
             .await?;
         client
-            .execute("DELETE FROM series_analysis_jobs WHERE id=$1", &[&id])
+            .execute(
+                r"
+                DELETE FROM series_analysis_jobs
+                WHERE series_analysis_jobs.legacy_id = $1
+                ",
+                &[&id],
+            )
             .await?;
         client
-            .execute("DELETE FROM game_titles WHERE id=$1", &[&id])
+            .execute(
+                r"
+                DELETE FROM game_titles
+                WHERE game_titles.legacy_id = $1
+                ",
+                &[&id],
+            )
             .await?;
     }
     Ok(())

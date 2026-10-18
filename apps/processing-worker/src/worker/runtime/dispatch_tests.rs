@@ -87,12 +87,15 @@ async fn real_postgres_delayed_candidates_still_attempt_durable_claims() -> Test
 
     // An active analysis must still receive the first slow OCR preemption request.
     insert_ocr(&observer).await?;
-    scheduler.active = true;
+    assert!(
+        scheduler.resources.is_reserved(),
+        "a committed claim retains its reservation"
+    );
     assert!(!claim_ocr(&mut scheduler, &stopped, &mut budget()).await?);
     let requester: Option<String> = observer.query_one("SELECT preempt_requested_by FROM worker_execution_slots WHERE slot_key='shared-heavy-work'", &[]).await?.try_get(0)?;
     assert_eq!(requester.as_deref(), Some(WORKER));
     assert_slot(&observer, "analysis", ANALYSIS).await?;
-    scheduler.active = false;
+    scheduler.resources.release();
     clear_slot(&observer).await?;
 
     // No child is installed: UnsupportedPlatform occurs only after the real DB claim commits.
@@ -107,6 +110,9 @@ async fn real_postgres_delayed_candidates_still_attempt_durable_claims() -> Test
     assert_eq!(row.try_get::<_, String>(0)?, "running");
     assert_eq!(row.try_get::<_, i32>(1)?, 1);
     assert_slot(&observer, "ocr", OCR).await?;
+
+    // This fixture installs no child; release only after the test has observed that boundary.
+    scheduler.resources.release();
 
     // A real busy claim must retain its backoff and leave the waiting attempt untouched.
     assert!(!Box::pin(claim_analysis(&mut scheduler, &stopped, &mut budget())).await?);
@@ -162,6 +168,7 @@ async fn verify_cursor_yield(
     assert_job(observer, ANALYSIS, "queued", 0).await?;
     assert_slot(observer, "analysis", WAITING).await?;
     clear_slot(observer).await?;
+    scheduler.resources.release();
 
     // Exhausting the keyset wraps it, allowing the formerly contended A to run.
     assert!(!Box::pin(claim_analysis(&mut scheduler, &stopped, &mut budget())).await?);
@@ -186,6 +193,7 @@ async fn fixture(
     config: AnalysisConsumerConfig,
 ) -> TestResult<(WorkState, WakeReceiver)> {
     let settings = Settings::from(&config);
+    let resources = crate::resource_budget::ResourceBudget::new(settings.resource_limits);
     let (sink, wake) = PostCommitSink::channel();
     Ok((
         WorkState {
@@ -200,7 +208,7 @@ async fn fixture(
                 Duration::from_secs(30),
                 Duration::from_secs(1),
             )?),
-            active: false,
+            resources,
             pending: None,
             ocr_cursor: None,
             analysis_cursor: None,
@@ -221,6 +229,7 @@ fn analysis_config(database_url: &str, directory: &Path) -> TestResult<AnalysisC
         ("memory.events", "max 0\noom_kill 0\n"),
         ("cgroup.procs", ""),
         ("cgroup.kill", ""),
+        ("cpu.max", "100000 100000"),
     ] {
         fs::write(directory.join(name), content)?;
     }
@@ -245,9 +254,11 @@ fn analysis_config(database_url: &str, directory: &Path) -> TestResult<AnalysisC
             134_217_728,
         )?,
         execution_limits: AnalysisExecutionLimits {
-            runtime_memory_limit: bound(268_435_456)?,
-            child_memory_limit: bound(134_217_728)?,
-            parent_headroom: bound(134_217_728)?,
+            memory: crate::resource_budget::MemoryBudget::new(
+                268_435_456,
+                134_217_728,
+                134_217_728,
+            )?,
             calculation_timeout: Duration::from_mins(1),
             finalization_timeout: Duration::from_secs(30),
             temporary_bytes_limit: bound(67_108_864)?,

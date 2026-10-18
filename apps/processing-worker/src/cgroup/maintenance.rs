@@ -8,8 +8,9 @@ use std::{
 use super::{
     CGROUP_DIRECTORY_NAME, CGROUP_V2_VALIDATED_ENV, CgroupError, CgroupHierarchy, ChildCgroup,
     DELEGATION_CGROUP_NAME, PreparedChildCgroup, V1_MEMORY_ROOT, V2_ROOT, WORKER_CGROUP_NAME,
-    bounded_read, controller_member_directory, membership_path, read_process_ids,
+    bounded_read, controller_member_directory, cpu, membership_path, read_process_ids,
 };
+use crate::resource_budget::CpuBudget;
 
 pub(crate) fn join_frozen_daemon(
     daemon_pid: u32,
@@ -93,8 +94,25 @@ pub(crate) fn join_frozen_daemon(
         return Err(CgroupError::StaleBootstrapGroup);
     }
     let directory = delegation.join(CGROUP_DIRECTORY_NAME);
+    let cpu_budget =
+        CpuBudget::from_environment().map_err(|_error| CgroupError::InvalidEnvironment)?;
+    let cpu_worker = match hierarchy {
+        CgroupHierarchy::V1 => cpu::v1_worker_directory(&membership)?,
+        CgroupHierarchy::V2 => worker.clone(),
+    };
+    let cpu_directory = match hierarchy {
+        CgroupHierarchy::V1 => cpu_worker.join(CGROUP_DIRECTORY_NAME),
+        CgroupHierarchy::V2 => directory.clone(),
+    };
+    let cpu = cpu::ChildCpuCgroup::open(hierarchy, cpu_directory.clone(), cpu_budget, true)?;
+    cpu.validate_runtime_budget()?;
+    owned_by(
+        &cpu_directory.join("cgroup.procs"),
+        service_user_id,
+        service_group_id,
+    )?;
     // Reuse exact limits and delegated files. No hierarchy, ownership, or limit is reconfigured.
-    let child = ChildCgroup::open(hierarchy, directory.clone(), limit_bytes, true)?;
+    let child = ChildCgroup::open(hierarchy, directory.clone(), limit_bytes, cpu, true)?;
     owned_by(
         &directory.join("cgroup.procs"),
         service_user_id,
@@ -112,10 +130,24 @@ pub(crate) fn join_frozen_daemon(
     if !read_process_ids(&worker.join("cgroup.procs"))?.contains(&std::process::id()) {
         return Err(CgroupError::AttachFailed);
     }
+    if hierarchy == CgroupHierarchy::V1 {
+        if !read_process_ids(&cpu_worker.join("cgroup.procs"))?.contains(&daemon_pid) {
+            return Err(CgroupError::InvalidMembership);
+        }
+        fs::write(
+            cpu_worker.join("cgroup.procs"),
+            std::process::id().to_string(),
+        )?;
+        if !read_process_ids(&cpu_worker.join("cgroup.procs"))?.contains(&std::process::id()) {
+            return Err(CgroupError::AttachFailed);
+        }
+    }
     Ok(PreparedChildCgroup {
         hierarchy,
         directory,
         limit_bytes,
+        cpu_directory,
+        cpu_budget,
     })
 }
 

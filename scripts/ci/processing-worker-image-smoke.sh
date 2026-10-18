@@ -121,16 +121,40 @@ if [[ "${publication_status}" != "1" ]] || ! jq -es '
   exit 1
 fi
 
-docker run --rm --privileged --cgroupns private \
+resource_report="$(docker run --rm --privileged --cgroupns private --cpus 0.5 \
   --memory "${runtime_memory_limit}" --memory-swap "${runtime_memory_limit}" \
   --env "MOMO_ANALYSIS_CHILD_MEMORY_LIMIT_BYTES=${child_memory_limit_bytes}" \
+  --env MOMO_PROCESSING_CPU_LIMIT_MILLIS=500 \
   --env MOMO_HEAVY_CGROUP_V2_VALIDATED=true \
   "${image_ref}" \
   "${primary_binary}" bootstrap -- probe-cgroup-limit \
   --allocation-bytes "${probe_allocation_bytes}" \
-  --timeout-ms 10000
+  --timeout-ms 10000)"
+if ! jq -e --argjson memory "${child_memory_limit_bytes}" '
+  .outcome == "resource_limit_enforced" and .parentSurvived == true and
+  .cgroupLimitBytes == $memory and .cgroupCpuLimitMillis == 500
+' <<<"${resource_report}" >/dev/null; then
+  echo "processing worker resource limits did not match their controller readback" >&2
+  exit 1
+fi
 
-docker run --rm --privileged --cgroupns private \
+cpu_status=0
+cpu_report="$(docker run --rm --privileged --cgroupns private --cpus 0.5 \
+  --memory "${runtime_memory_limit}" --memory-swap "${runtime_memory_limit}" \
+  --env "MOMO_ANALYSIS_CHILD_MEMORY_LIMIT_BYTES=${child_memory_limit_bytes}" \
+  --env MOMO_PROCESSING_CPU_LIMIT_MILLIS=1000 \
+  --env MOMO_HEAVY_CGROUP_V2_VALIDATED=true \
+  --env MOMO_LOG_FORMAT=json --env RUST_LOG=error \
+  "${image_ref}" \
+  "${primary_binary}" bootstrap -- probe-cgroup-limit \
+  --allocation-bytes "${probe_allocation_bytes}" --timeout-ms 10000 2>&1)" || cpu_status=$?
+if [[ "${cpu_status}" != "1" ]] ||
+  [[ "${cpu_report}" != "processing worker bootstrap isolation failed" ]]; then
+  echo "processing worker admitted more CPU than the runtime quota" >&2
+  exit 1
+fi
+
+docker run --rm --privileged --cgroupns private --cpus 1 \
   --memory "${runtime_memory_limit}" --memory-swap "${runtime_memory_limit}" \
   --env "MOMO_ANALYSIS_CHILD_MEMORY_LIMIT_BYTES=${child_memory_limit_bytes}" \
   --env MOMO_HEAVY_CGROUP_V2_VALIDATED=true \

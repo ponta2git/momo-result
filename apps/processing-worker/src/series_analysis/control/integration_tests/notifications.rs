@@ -439,6 +439,7 @@ pub(super) fn config(
         ("memory.events", "max 0\noom_kill 0\n"),
         ("cgroup.procs", ""),
         ("cgroup.kill", ""),
+        ("cpu.max", "100000 100000"),
     ] {
         fs::write(directory.join(name), content)?;
     }
@@ -463,9 +464,11 @@ pub(super) fn config(
             134_217_728,
         )?,
         execution_limits: AnalysisExecutionLimits {
-            runtime_memory_limit: bound(268_435_456)?,
-            child_memory_limit: bound(134_217_728)?,
-            parent_headroom: bound(134_217_728)?,
+            memory: crate::resource_budget::MemoryBudget::new(
+                268_435_456,
+                134_217_728,
+                134_217_728,
+            )?,
             calculation_timeout: Duration::from_mins(1),
             finalization_timeout: Duration::from_secs(5),
             temporary_bytes_limit: bound(67_108_864)?,

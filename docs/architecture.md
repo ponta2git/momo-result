@@ -238,7 +238,8 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 - capability crate は決定論的な domain / 計算 / version 付き論理契約を所有し、DB、filesystem、clock、async runtime に依存しない。runtime から capability への一方向依存とする。
 - 通知基盤の `momo-notifications` は件数・bytesの予約、envelopeのserialize、呼出側transactionによる最終JSONBサイズ検証、transport設定の検証とHTTP送信を所有する。通知内容を作るproducer、業務SQL、DB接続、SAVEPOINTとcommit、環境変数の読取り、senderの監督・停止期限はworkerが所有する。workerから通知基盤への一方向依存とする。
 - production の OS FFI と `unsafe` は process adapter に隔離し、他 module へ checked な safe API を公開する。TERM・KILL・process groupの回収は共通化し、分析の入力設定・終了分類とOCRのframe・結果decodeは各capabilityのprocess adapterに残す。
-- 子 process の resource 制限は実 runtime の cgroup で保証する。非対応 OS では job claim 前に fail closed にする。
+- instance の CPU・memory 予算は一つの attempt 全体に予約し、同時実行数は 1 に固定する。予約は claim 前に取得し、claim が成立しなかったと確認できた場合、または子 process と補助 task の回収確認後にだけ返す。lease 失効、timeout、Future の破棄だけでは次の計算を許可しない。将来の子 task も同じ予算を使い、task 分割によって同時実行数を増やさない。
+- 子 process tree の CPU bandwidth と hard memory limit は実 runtime の cgroup で保証する。CPU 予算は `MOMO_PROCESSING_CPU_LIMIT_MILLIS`（既定 1000 millicpus）で指定し、runtime の CPU 割当を超える構成は拒否する。memory は child limit と親用 headroom の合計を runtime budget 内に収める。開始 barrier を開く前に両 controller への所属と制限値を読み戻し、v1 の別 hierarchy も両方が空になるまで回収を続ける。非対応 OS や未検証の制限は job claim 前に fail closed にする。
 - 同時実行や publication は DB lease と fencing token で世代をまたいで保証する。process 内 semaphore や台数を正本にしない。
 - 候補走査のsoftな時間予算は一回の処理量を区切る目安とし、候補取得だけで予算を使い切っても候補があれば少なくとも一件を試みる。続きはcursorと次回期限へ引き継ぐ。停止要求、SQLの上限、lease・fenceなどの実行権の条件を緩める理由にはしない。
 - Busy後の早期再確認はconsumerごとの共有予算で回数・開始期限・同時数を制限し、新しい配送や再接続で予算を作り直さない。上限到達時は元の回復・保守期限へ戻す。開始済みclaimの確定とpost-commit effectを処理してから次の候補へ進み、wakeを実行権として扱わない。

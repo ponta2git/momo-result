@@ -192,6 +192,7 @@ DB lock順とstaging transactionの規則は `docs/db-rule.md`、process責務�
 - 性能fixtureは固定4名、全有効scope、現在データ量の2倍かつ最低500試合/作品を満たし、連続100回でOOM、runtime再起動、memory増加傾向を起こさない。
 - worker / child、API decode / response、browser parse / renderを別々に測る。機能test、health、配置成功をresource / performanceの証拠にしない。
 - childのhard memory limit超過時もparentが生存してterminal failureを保存できることを実runtimeで証明する。
+- instance の CPU・memory 予算は claim 前から子 process tree の回収確認まで一つの attempt に予約し、同時実行数は 1 とする。CPU bandwidth の制限と読み戻しを memory 制限と同じ開始 barrier で検証する。DB lease / fence は durable write の所有権を引き続き保証する。
 - artifact / response / temporary storageにbyte、件数、深さ、disk、concurrency上限を設ける。production timeoutは同等runtimeの通常・上限・cold・連続実行測定後に設定する。
 - job / queue / phase / memory / byte数を低cardinality metricと安全なstructured logで観測する。実測値とalert thresholdはprivateに置く。
 

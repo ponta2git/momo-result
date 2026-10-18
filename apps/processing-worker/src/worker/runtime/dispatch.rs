@@ -27,7 +27,7 @@ pub(super) async fn claim_next(
         return Ok(false);
     }
     scheduler.retry_after = None;
-    if scheduler.active && scheduler.ocr.is_none() {
+    if scheduler.resources.is_reserved() && scheduler.ocr.is_none() {
         return Ok(false);
     }
     let mut budget = ScanBudget {
@@ -37,7 +37,7 @@ pub(super) async fn claim_next(
     if scheduler.ocr.is_some() && claim_ocr(scheduler, shutdown, &mut budget).await? {
         return Ok(true);
     }
-    if stopping(shutdown) || scheduler.active || scheduler.retry_after.is_some() {
+    if stopping(shutdown) || scheduler.resources.is_reserved() || scheduler.retry_after.is_some() {
         if budget.contended && scheduler.retry_after.is_none() {
             defer_claims(scheduler);
         }
@@ -83,7 +83,7 @@ async fn claim_ocr(
             attempted = true;
             let id = cursor.id.clone();
             scheduler.ocr_cursor = Some(cursor);
-            if scheduler.active {
+            if scheduler.resources.is_reserved() {
                 match bounded(
                     timeout,
                     ocr::control::request_preemption(&mut scheduler.database, &id, &config),
@@ -102,6 +102,7 @@ async fn claim_ocr(
                 }
                 continue;
             }
+            scheduler.resources.reserve()?;
             let outcome = match bounded(
                 timeout,
                 ocr::control::claim_job(&mut scheduler.database, &id, &config),
@@ -110,6 +111,7 @@ async fn claim_ocr(
             {
                 Ok(outcome) => outcome,
                 Err(error) if error.is_contention() => {
+                    scheduler.resources.release();
                     budget.contended = true;
                     continue;
                 }
@@ -123,6 +125,7 @@ async fn claim_ocr(
                 }
                 ocr::control::OcrClaimResult::Busy
                 | ocr::control::OcrClaimResult::PreemptionRequested => {
+                    scheduler.resources.release();
                     defer_claims(scheduler);
                     scheduler.ocr_cursor = None;
                     return Ok(false);
@@ -130,7 +133,7 @@ async fn claim_ocr(
                 ocr::control::OcrClaimResult::MissingOrTerminal
                 | ocr::control::OcrClaimResult::AlreadyRunning
                 | ocr::control::OcrClaimResult::NotYetAvailable
-                | ocr::control::OcrClaimResult::InvalidInput => {}
+                | ocr::control::OcrClaimResult::InvalidInput => scheduler.resources.release(),
             }
         }
         if complete {
@@ -146,6 +149,9 @@ async fn claim_analysis(
     shutdown: &watch::Receiver<bool>,
     budget: &mut ScanBudget,
 ) -> Result<bool, WorkerError> {
+    if scheduler.resources.is_reserved() {
+        return Ok(false);
+    }
     let Some(config) = &scheduler.config else {
         return Ok(false);
     };
@@ -173,6 +179,7 @@ async fn claim_analysis(
             attempted = true;
             let id = cursor.id.clone();
             scheduler.analysis_cursor = Some(cursor);
+            scheduler.resources.reserve()?;
             let outcome = match bounded(
                 timeout,
                 series_analysis::control::claim_job(&mut scheduler.database, &id, config),
@@ -181,6 +188,7 @@ async fn claim_analysis(
             {
                 Ok(outcome) => outcome,
                 Err(error) if error.is_contention() => {
+                    scheduler.resources.release();
                     budget.contended = true;
                     continue;
                 }
@@ -193,6 +201,7 @@ async fn claim_analysis(
                     return Ok(false);
                 }
                 series_analysis::control::ClaimResult::Busy => {
+                    scheduler.resources.release();
                     defer_claims(scheduler);
                     scheduler.analysis_cursor = None;
                     return Ok(false);
@@ -200,7 +209,9 @@ async fn claim_analysis(
                 series_analysis::control::ClaimResult::MissingOrTerminal
                 | series_analysis::control::ClaimResult::RecoveredCurrentJob
                 | series_analysis::control::ClaimResult::UnsupportedVersion(_)
-                | series_analysis::control::ClaimResult::NotYetAvailable { .. } => {}
+                | series_analysis::control::ClaimResult::NotYetAvailable { .. } => {
+                    scheduler.resources.release();
+                }
             }
         }
         if complete {
@@ -218,7 +229,6 @@ fn start_ocr(
     let Some(runner) = scheduler.ocr.take() else {
         return Err(WorkerError::UnsupportedPlatform);
     };
-    scheduler.active = true;
     scheduler.pending = Some(PendingExecution::Ocr(runner, claim));
     Ok(())
 }
@@ -234,7 +244,6 @@ fn start_analysis(
     else {
         return Err(WorkerError::UnsupportedPlatform);
     };
-    scheduler.active = true;
     scheduler.pending = Some(PendingExecution::Analysis(runner, claim));
     Ok(())
 }

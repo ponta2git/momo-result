@@ -112,6 +112,7 @@ async fn drive(
         }
         let job = report.next_job.ok_or(ScopeError::Plan)?;
         let config = work.config.as_ref().ok_or(WorkerError::UnexpectedExit)?;
+        work.resources.reserve()?;
         let outcome = runtime
             .operation(async {
                 Ok(series_analysis::control::claim_scoped_job(
@@ -131,10 +132,10 @@ async fn drive(
                     .as_mut()
                     .and_then(series_analysis::Module::take_runner)
                     .ok_or(WorkerError::UnexpectedExit)?;
-                work.active = true;
                 runtime.start_attempt(PendingExecution::Analysis(runner, claim));
             }
             ClaimResult::NotYetAvailable { remaining_delay } => {
+                work.resources.release();
                 runtime
                     .observe(
                         async {

@@ -33,7 +33,7 @@ object IntegrationDb:
   private val Password = "summit"
   private val CanonicalSchema = sys.env.get("MOMO_API_IDENTITY_SCHEMA").contains("canonical")
   private val LegacyLastMigration = "0082_"
-  private val CanonicalLastMigration = "0093_"
+  private val CanonicalSchemaBoundary = "0093_"
   private val StatementBreakpoint = raw"(?m)-->\s*statement-breakpoint\s*".r
 
   final case class Settings(jdbcUrl: String, user: String, password: String)
@@ -53,10 +53,14 @@ object IntegrationDb:
     import cats.effect.unsafe.implicits.global
 
     val available = migrationFiles(migrationsDirectory)
-    val last = if CanonicalSchema then CanonicalLastMigration else LegacyLastMigration
-    if !available.exists(_.getFileName.toString.startsWith(last)) then
-      sys.error(s"The pinned momo-db history does not contain the required $last schema boundary.")
-    val migrations = available.filter(_.getFileName.toString.take(5) <= last)
+    val requiredBoundary = if CanonicalSchema then CanonicalSchemaBoundary else LegacyLastMigration
+    if !available.exists(_.getFileName.toString.startsWith(requiredBoundary)) then
+      sys.error(
+        s"The pinned momo-db history does not contain the required $requiredBoundary schema boundary."
+      )
+    val migrations =
+      if CanonicalSchema then available
+      else available.filter(_.getFileName.toString.take(5) <= LegacyLastMigration)
     if migrations.isEmpty then sys.error("No momo-db migration SQL files found.")
 
     val container = new PostgreSQLContainer(PostgresImage).withDatabaseName(DatabaseName)

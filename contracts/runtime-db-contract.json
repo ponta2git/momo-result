@@ -122,8 +122,6 @@
     "source_images_status_updated_at_idx"
   ],
   "hardenedFunctions": [
-    "clear_series_analysis_lease_validation_contract",
-    "ensure_series_analysis_title_state",
     "guard_series_analysis_artifact_publication",
     "prevent_published_series_analysis_child_mutation",
     "validate_series_analysis_artifact_pointers"

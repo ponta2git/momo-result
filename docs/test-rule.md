@@ -166,6 +166,7 @@ OCR は schema / screen type、object metadata、parser / postprocess、failure 
 - artifact publicationはRustのfull semantic validatorを唯一の意味oracleとし、exact validation contract、published rowのimmutability、APIのbounded shape / identity defenseをそれぞれの境界で検証する。
 - analysis releaseのbaseline migrationを変える場合は、全migration直後かつfixture mutation前のsingletonをalgorithm / artifact schema / validation contractのexact tupleとして検証する。legacy singletonからのpromotion test、相対的なtitle inheritance、test内でexact tupleをseedしたrepository testはfresh baselineの代用にしない。
 - release promotionは2接続の実PostgreSQLで、capability検査後の非互換登録がcommitまで待つこと、singleton lock中の新規作品がcommit後のtupleを継承すること、登録作品0件がterminalになることを検証する。
+- 分析の暗黙更新をconsumerへ移す場合、旧triggerが有効なDBで同じtupleへの再代入が行を書き直さないことを確認する。専用のschema実験用fixtureで作成・radar binding・lease cleanup triggerを無効にし、APIの作成/要求/試合mutation/radar commandとWorkerのmaterialize/requeue/recovery/publicationを再実行する。schema変更はmomo-dbの手順に従い、共有DBや普段使いのDBでtriggerを無効化しない。
 - 自動・手動の分析保守は、preview の非更新、対象 snapshot 変更時の拒否、互換性不足、同じ世代の再実行、未完了・失敗 target の識別を実 PostgreSQL で確認する。運用 runner は不正 report、配備世代変更、待機期限を失敗として扱い、enqueue 成功を release 完了にしない。
 - 待機 OCR の優先と実行中の分析の完了を実 process / DB で確認する。旧世代が保存した中断 intent は失敗回数非加算、旧 child 回収後の再実行を保つ。
 - resource / endurance gate は release build、production 相当の上限、代表 data で機能 gate と分けて実行する。

@@ -9,16 +9,14 @@ import doobie.postgres.implicits.*
 import doobie.util.update.Update
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.domain.MatchRecord
 import momo.api.domain.ids.*
+import momo.api.domain.{IncidentKind, MatchRecord}
 
 /**
  * Shared cascade INSERT into `matches` + `match_players` (4 rows) + `match_incidents` (≤24 rows)
  * used by both [[PostgresMatches]] (create/update) and [[PostgresMatchConfirmation]] (confirm).
  *
- * The SQL emitted, ordering, and transaction semantics are identical to the previous in-class
- * implementations: a single INSERT for `matches`, then one `Update.updateMany` each for players
- * and incidents.
+ * Resolves the fixed incident keys in the same transaction, then batches players and incidents.
  */
 object PostgresMatchInsertOps:
 
@@ -50,6 +48,12 @@ object PostgresMatchInsertOps:
       insertMatchChildren(record)
 
   private def insertMatchChildren(record: MatchRecord): ConnectionIO[Unit] =
+    IncidentKindMapping.masterIds.flatMap(ids => insertMatchChildren(record, ids))
+
+  private def insertMatchChildren(
+      record: MatchRecord,
+      incidentIds: Map[IncidentKind, IncidentMasterId],
+  ): ConnectionIO[Unit] =
     val playerRows: List[(MatchId, MemberId, Int, Int, Int, Int, Instant)] = record.players.toList
       .map { p =>
         (
@@ -70,7 +74,7 @@ object PostgresMatchInsertOps:
     val incidentRows: List[(MatchId, MemberId, IncidentMasterId, Int, Instant)] = record.players
       .toList.flatMap { p =>
         p.incidents.entriesByKind.map { case (kind, count) =>
-          (record.id, p.memberId, IncidentKindMapping.masterId(kind), count.value, record.createdAt)
+          (record.id, p.memberId, incidentIds(kind), count.value, record.createdAt)
         }
       }
     val insertIncidents =

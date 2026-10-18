@@ -15,6 +15,7 @@ use crate::{
     series_analysis::config::{AnalysisConsumerConfig, AnalysisExecutionLimits},
 };
 
+mod incidents;
 mod policy;
 
 #[tokio::test]
@@ -26,6 +27,7 @@ async fn real_postgres_analysis_notifications_follow_committed_publications() ->
     let mut peer = crate::postgres::connect(&database_url).await?;
     policy::cleanup(&primary).await?;
     prepare_owned_attempt(&primary).await?;
+    let incident_catalog = incidents::prepare(&mut primary).await?;
     policy::mark_initial(&primary).await?;
     primary
         .batch_execute("UPDATE discord_notification_settings SET enabled = true, generation = 0")
@@ -79,7 +81,7 @@ async fn real_postgres_analysis_notifications_follow_committed_publications() ->
     );
     assert_eq!(
         first_body.pointer("/data/matches/0/ginjiTotal"),
-        Some(&json!(0))
+        Some(&json!(124))
     );
     assert_eq!(
         first_body.pointer("/data/currentAnalysis/artifactId"),
@@ -147,6 +149,7 @@ async fn real_postgres_analysis_notifications_follow_committed_publications() ->
         .batch_execute("UPDATE discord_notification_settings SET enabled = true, generation = 0")
         .await?;
     policy::cleanup(&primary).await?;
+    incidents::restore(&primary, &incident_catalog).await?;
     Ok(())
 }
 

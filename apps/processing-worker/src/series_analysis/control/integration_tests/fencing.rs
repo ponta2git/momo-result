@@ -33,7 +33,7 @@ async fn real_postgres_job_fences_survive_cleanup_recovery_and_independent_worke
         )
         .await?;
     primary.execute("UPDATE series_analysis_jobs SET status='queued',started_at=NULL,lease_owner=NULL,lease_attempt_id=NULL,lease_fencing_token=NULL,lease_expires_at=NULL,lease_validation_contract_id=NULL,attempt_count=0,available_at=clock_timestamp() WHERE id=$1", &[&JOB_ID]).await?;
-    primary.execute("INSERT INTO game_titles (id,name,layout_family,display_order) VALUES ($1,'Independent worker fence','momotetsu2',9998)", &[&SECOND]).await?;
+    primary.execute("INSERT INTO game_titles (id,name,layout_family,display_order) VALUES ($1,'Independent worker fence','momotetsu_2',9998)", &[&SECOND]).await?;
     primary.execute("INSERT INTO series_analysis_jobs (id,game_title_id,input_revision,algorithm_version,artifact_schema_version,validation_contract_id,status,trigger,fencing_counter) SELECT $1,$1,input_revision,algorithm_version,artifact_schema_version,validation_contract_id,'queued','manual',$2 FROM series_analysis_jobs WHERE id=$3", &[&SECOND,&SECOND_FLOOR,&JOB_ID]).await?;
     let directory = TempDir::new()?;
     let first_config =

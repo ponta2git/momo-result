@@ -47,7 +47,7 @@ async fn seed(client: &Client) -> SmokeResult {
         let event = format!("analysis-radar-smoke-event-{}", game.order.held_event_id);
         let id = format!("analysis-radar-smoke-match-{index}");
         client.execute("INSERT INTO held_events (id,session_id,held_date_iso,start_at) VALUES ($1,NULL,($2::text::timestamptz AT TIME ZONE 'UTC')::date,$2::text::timestamptz) ON CONFLICT(id) DO NOTHING", &[&event,&game.order.played_at]).await?;
-        client.execute("INSERT INTO matches (id,held_event_id,match_no_in_event,game_title_id,layout_family,season_master_id,owner_member_id,map_master_id,played_at,created_by_account_id,created_by_member_id,analysis_revision) VALUES ($1,$2,$3,$4,'momotetsu2',$5,'member_ponta',$6,$7::text::timestamptz,'account_ponta','member_ponta',1)", &[&id,&event,&game.order.match_no_in_event,&TITLE_ID,&SEASON_ID,&MAP_ID,&game.order.played_at]).await?;
+        client.execute("INSERT INTO matches (id,held_event_id,match_no_in_event,game_title_id,layout_family,season_master_id,owner_member_id,map_master_id,played_at,created_by_account_id,created_by_member_id,analysis_revision) VALUES ($1,$2,$3,$4,'momotetsu_2',$5,'member_ponta',$6,$7::text::timestamptz,'account_ponta','member_ponta',1)", &[&id,&event,&game.order.match_no_in_event,&TITLE_ID,&SEASON_ID,&MAP_ID,&game.order.played_at]).await?;
         for (position, (player, member)) in game.players.iter().zip(MEMBER_IDS).enumerate() {
             let play_order = i32::try_from(position + 1)?;
             client.execute("INSERT INTO match_players (match_id,member_id,play_order,rank,total_assets_man_yen,revenue_man_yen) VALUES ($1,$2,$3,$4,$5,$6)", &[&id,&member,&play_order,&player.rank,&player.total_assets_man_yen,&player.revenue_man_yen]).await?;

@@ -52,30 +52,6 @@ final class DbContractSpec extends IntegrationSuite:
         )
       }
 
-  test("game-title creation initializes analysis state with an empty caller search path"):
-    val program =
-      for
-        _ <- sql"SELECT set_config('search_path', '', true)".query[String].unique
-        release <- sql"""
-        SELECT algorithm_version, artifact_schema_version, validation_contract_id
-        FROM public.series_analysis_release_state
-        WHERE singleton_key = 'current'
-      """.query[(String, Int, Option[String])].unique
-        _ <- sql"""
-        INSERT INTO public.game_titles (id, name, layout_family, display_order)
-        VALUES ('title_contract', 'Contract title', 'contract', 1)
-      """.update.run
-        state <- sql"""
-        SELECT input_revision, algorithm_version, artifact_schema_version,
-               validation_contract_id
-        FROM public.series_analysis_title_states
-        WHERE game_title_id = 'title_contract'
-      """.query[(Long, String, Int, Option[String])].unique
-      yield (release, state)
-
-    program.transact(transactor).map { case (release, state) =>
-      assertEquals(state, (0L, release._1, release._2, release._3))
-    }
 
   test("published analysis artifact headers and payloads are immutable until parent cleanup"):
     val artifactId = "artifact-contract-immutable"

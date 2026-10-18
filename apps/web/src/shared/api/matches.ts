@@ -66,6 +66,13 @@ export async function getMatch(
   return response.note ? response : { ...response, note: { version: "0" } };
 }
 
+export function getMatchByPublicId(publicId: string, options: ApiSignalOptions = {}) {
+  return apiRequest<MatchDetailResponse>(
+    `/api/public/matches/${encodeURIComponent(publicId)}`,
+    options,
+  );
+}
+
 export async function updateMatch(
   matchId: string,
   request: UpdateMatchRequest,

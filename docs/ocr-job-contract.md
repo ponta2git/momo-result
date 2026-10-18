@@ -27,6 +27,10 @@ API は job、受付時の入力 snapshot、下書きとの関連を同じ DB tr
 - `ocrHintsJson` は補助情報であり、画面種別、player、OCR 結果の正本にしない。API は受付時に不足する既定別名を補い、登録済み別名を統合してから上限を検証する。CPU 名が未指定または空の場合の作品方式ごとの既定値は Worker が補い、明示値は変更しない。
 - 実行対象の job には snapshot を必須とする。旧終端履歴には snapshot なしを許すが、新しい実行入力として扱わない。
 
+`layoutFamily` は `momotetsu_2`、`world`、`reiwa` の3値を正規値とする。既知の旧表記は ASCII の大小文字と前後空白を解決し、`momotetsu2` / `2` を `momotetsu_2`、`momotetsu_world` / `default` を `world`、`momotetsu_reiwa` を `reiwa` として読む。hint の省略だけが方式の自動選択を表し、文字列 `auto`、空文字、未知値は新規受付で拒否する。
+
+API の作品・試合・下書き scalar と Web の新規 hint は正規値で保存する。受付済み submission の完全一致 replay と job の immutable snapshot は旧表記を保持し、Worker は実行時に解決する。正規化のために保存済み hint、OCR profile ID、画像識別情報を変更しない。共通の受理・拒否例は `docs/schemas/fixtures/ocr-worker/layout-families-v1.json` を Scala・TypeScript・Rust で検証する。
+
 ## 3. Acceptance and Wake
 
 HTTP success は入力と業務状態の DB commit を意味し、Worker の開始や外部通知の完了を意味しない。

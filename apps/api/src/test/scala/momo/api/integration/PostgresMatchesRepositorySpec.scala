@@ -188,6 +188,65 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       assertEquals(ponta.incidents.plusStation.value, 2)
       assertEquals(ponta.incidents.suriNoGinji.value, 0)
 
+  test("fixed incident keys preserve every count with unrelated UUID master IDs"):
+    val record = sampleMatch("match-incident-semantic-keys", 1)
+    val countedPlayers = record.players.toList.zipWithIndex.map { case (p, index) =>
+      val offset = index * 6
+      p.copy(incidents =
+        IncidentCounts.unsafeFromInts(
+          destination = offset + 1,
+          plusStation = offset + 2,
+          minusStation = offset + 3,
+          cardStation = offset + 4,
+          cardShop = offset + 5,
+          suriNoGinji = offset + 6,
+        )
+      )
+    }
+    val counted = record.copy(players = FourPlayers.fromTrustedRow(countedPlayers).toOption.get)
+    val catalog = Resource.make(
+      (for
+        rows <- sql"SELECT id, key FROM incident_masters ORDER BY key"
+          .query[(String, String)].to[List]
+        replacements = rows.zipWithIndex.map { case ((id, key), index) =>
+          (id, key, s"00000000-0000-4000-8000-${f"${index + 1}%012d"}")
+        }
+        _ <- replacements.traverse_ { case (id, _, replacement) =>
+          sql"UPDATE incident_masters SET id = $replacement WHERE id = $id".update.run
+        }
+      yield replacements).transact(transactor)
+    )(rows =>
+      dbFixture().cleanup() *> rows.traverse_ { case (id, key, replacement) =>
+        sql"UPDATE incident_masters SET id = $id, key = $key WHERE id = $replacement".update.run
+          .transact(transactor)
+      }
+    )
+    catalog.use { replacements =>
+      for
+        _ <- seedPrereqs
+        _ <- createMatch(counted)
+        found <- matches.find(counted.id)
+        _ = assertEquals(found.map(_.players), Some(counted.players))
+        storedIds <- sql"SELECT DISTINCT incident_master_id FROM match_incidents"
+          .query[String].to[List].transact(transactor)
+        _ = assertEquals(storedIds.toSet, replacements.map(_._3).toSet)
+        _ <- matches.update(counted.id, MatchFixtures.update(record), now.plusSeconds(1))
+        updated <- matches.find(counted.id)
+        _ = assertEquals(updated.map(_.players), Some(record.players))
+        _ <- sql"UPDATE incident_masters SET key = 'unrecognized' WHERE key = 'destination'"
+          .update.run.transact(transactor)
+        rejectedRead <- matches.find(counted.id).attempt
+        rejected <- createMatch(counted.copy(
+          id = MatchId.unsafeFromString("rejected-catalog"),
+          matchNoInEvent = MatchNoInEvent.unsafeFromInt(2)
+        )).attempt
+        count <- sql"SELECT COUNT(*)::int FROM matches".query[Int].unique.transact(transactor)
+      yield
+        assert(rejectedRead.isLeft)
+        assert(rejected.isLeft)
+        assertEquals(count, 1)
+    }
+
   test("confirmed-match mutations atomically advance title and match revisions with durable work"):
     val rec = sampleMatch("match_analysis_intent", 1)
     val moved = rec.copy(

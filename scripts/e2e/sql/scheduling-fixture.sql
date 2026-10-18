@@ -1,5 +1,5 @@
 INSERT INTO game_titles (id, name, layout_family, display_order)
-VALUES ('ci-scheduling-title', 'Scheduling smoke', 'momotetsu2', 9901);
+VALUES ('ci-scheduling-title', 'Scheduling smoke', 'momotetsu_2', 9901);
 INSERT INTO map_masters (id, game_title_id, name, display_order)
 VALUES ('ci-scheduling-map', 'ci-scheduling-title', 'Scheduling map', 1);
 INSERT INTO season_masters (id, game_title_id, name, display_order)
@@ -11,7 +11,7 @@ INSERT INTO matches (
   season_master_id, owner_member_id, map_master_id, played_at,
   created_by_member_id, created_by_account_id, analysis_revision
 ) VALUES (
-  'ci-scheduling-match', 'ci-scheduling-event', 1, 'ci-scheduling-title', 'momotetsu2',
+  'ci-scheduling-match', 'ci-scheduling-event', 1, 'ci-scheduling-title', 'momotetsu_2',
   'ci-scheduling-season', 'member_ponta', 'ci-scheduling-map',
   TIMESTAMPTZ '2026-08-12T00:00:00Z', 'member_ponta', 'account_ponta', 1
 );
@@ -38,7 +38,7 @@ INSERT INTO series_analysis_jobs (
 );
 -- A second title becomes due with OCR only after the first analysis is running.
 INSERT INTO game_titles (id, name, layout_family, display_order)
-VALUES ('ci-scheduling-waiting-title', 'Waiting analysis', 'momotetsu2', 9902);
+VALUES ('ci-scheduling-waiting-title', 'Waiting analysis', 'momotetsu_2', 9902);
 INSERT INTO map_masters (id, game_title_id, name, display_order)
 VALUES ('ci-scheduling-waiting-map', 'ci-scheduling-waiting-title', 'Waiting map', 1);
 INSERT INTO season_masters (id, game_title_id, name, display_order)

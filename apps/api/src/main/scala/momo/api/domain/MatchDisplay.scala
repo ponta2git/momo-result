@@ -21,6 +21,7 @@ final case class MatchIdentity(
     playedAt: Instant,
     gameTitleName: Option[String],
     seasonName: Option[String],
+    publicId: Option[PublicId] = None,
 )
 
 final case class MatchDetail(
@@ -29,6 +30,8 @@ final case class MatchDetail(
     navigation: RecordNavigation[AdjacentMatch],
     heldAt: Option[Instant] = None,
     labels: MatchLabels = MatchLabels.empty,
+    publicId: Option[PublicId] = None,
+    heldEventPublicId: Option[PublicId] = None,
 )
 
 final case class AdjacentMatch(
@@ -37,4 +40,6 @@ final case class AdjacentMatch(
     playedAt: Instant,
     heldAt: Instant,
     matchNoInEvent: MatchNoInEvent,
+    publicId: Option[PublicId] = None,
+    heldEventPublicId: Option[PublicId] = None,
 )

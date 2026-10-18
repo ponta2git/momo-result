@@ -47,6 +47,7 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
       )
       for
         _ <- fixture.seedPrereqs()
+        _ <- fixture.gameTitles.update(GameTitle(titleId, "World", " MOMOTETSU_WORLD ", 1, now))
         result <- manualUsecase.run(
           command(),
           AccountId.unsafeFromString("ponta"),
@@ -56,6 +57,7 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
       yield
         assertEquals(result.map(_.id), Right(MatchId.unsafeFromString("manual-with-storage-down")))
         assertEquals(found.map(_.matchNoInEvent.value), Some(1))
+        assertEquals(found.map(_.layoutFamily), Some("world"))
     }
 
   test("rejects missing held event"):

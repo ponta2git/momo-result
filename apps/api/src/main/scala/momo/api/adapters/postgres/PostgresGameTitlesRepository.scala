@@ -23,6 +23,12 @@ object PostgresGameTitles:
       createdAt: Instant,
   )
 
+  private final case class AnalysisRelease(
+      algorithmVersion: String,
+      artifactSchemaVersion: Int,
+      validationContractId: Option[String],
+  )
+
   private def fromRow(row: GameTitleRow): GameTitle = GameTitle(
     id = row.id,
     name = row.name,
@@ -58,24 +64,40 @@ object PostgresGameTitles:
     override def createWithNextDisplayOrder(title: GameTitle): ConnectionIO[GameTitle] =
       val lockKey = "momo:game_titles:display_order"
       // The allocation needs a new READ COMMITTED snapshot after any lock wait.
-      sql"SELECT pg_advisory_xact_lock(hashtext($lockKey)::bigint)".query[Unit].unique *> sql"""
+      (for
+        _ <- sql"SELECT pg_advisory_xact_lock(hashtext($lockKey)::bigint)".query[Unit].unique
+        // Serialize creation with release promotion before either the title or its state exists.
+        release <- sql"""
+          SELECT algorithm_version, artifact_schema_version, validation_contract_id
+          FROM series_analysis_release_state WHERE singleton_key = 'current' FOR SHARE
+        """.query[AnalysisRelease].unique
+        row <- sql"""
         INSERT INTO game_titles (id, name, layout_family, display_order, created_at)
         SELECT ${title.id}, ${title.name}, ${title.layoutFamily}, COALESCE(MAX(display_order), 0) + 1, ${title
-          .createdAt}
+            .createdAt}
         FROM game_titles
         RETURNING id, name, layout_family, display_order, created_at
-      """.query[GameTitleRow].unique.flatTap { row =>
+      """.query[GameTitleRow].unique
         // Only this creation transaction can prove there was no earlier analysis input.
-        sql"""
-          UPDATE series_analysis_title_states
-          SET notification_baseline_state = 'initial'
-          WHERE game_title_id = ${row.id}
+        // The conflict branch supports the old creation trigger without changing its tuple.
+        _ <- sql"""
+          INSERT INTO series_analysis_title_states
+            (game_title_id, algorithm_version, artifact_schema_version,
+             validation_contract_id, notification_baseline_state)
+          VALUES (${row.id}, ${release.algorithmVersion}, ${release.artifactSchemaVersion},
+            ${release.validationContractId}, 'initial')
+          ON CONFLICT (game_title_id) DO UPDATE SET notification_baseline_state = 'initial'
+          WHERE series_analysis_title_states.algorithm_version = EXCLUDED.algorithm_version
+            AND series_analysis_title_states.artifact_schema_version = EXCLUDED.artifact_schema_version
+            AND series_analysis_title_states.validation_contract_id
+              IS NOT DISTINCT FROM EXCLUDED.validation_contract_id
         """.update.run.flatMap {
           case 1 => ().pure[ConnectionIO]
-          case _ => new IllegalStateException("new game title analysis state is missing")
+          case _ =>
+            new IllegalStateException("new game title analysis state does not match release")
               .raiseError[ConnectionIO, Unit]
         }
-      }.map(fromRow).exceptSomeSqlState {
+      yield fromRow(row)).exceptSomeSqlState {
         case state if isUniqueViolation(state) =>
           conflict(s"game_title already exists: ${title.id.value} or ${title.name}")
       }

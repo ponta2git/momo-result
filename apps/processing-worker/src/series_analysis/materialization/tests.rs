@@ -163,11 +163,20 @@ async fn real_postgres_preserves_campaign_acceptance_and_assignment() -> SmokeRe
         .batch_execute(
             r"
             INSERT INTO game_titles (id, name, layout_family, display_order) VALUES
-              ('analysis-campaign-smoke-new', 'campaign new', 'momotetsu2', 9901),
-              ('analysis-campaign-smoke-queued', 'campaign queued', 'momotetsu2', 9902),
-              ('analysis-campaign-smoke-before', 'campaign before', 'momotetsu2', 9903),
-              ('analysis-campaign-smoke-after', 'campaign after', 'momotetsu2', 9904),
-              ('analysis-campaign-smoke-deleted', 'campaign deleted', 'momotetsu2', 9905);
+              ('analysis-campaign-smoke-new', 'campaign new', 'momotetsu_2', 9901),
+              ('analysis-campaign-smoke-queued', 'campaign queued', 'momotetsu_2', 9902),
+              ('analysis-campaign-smoke-before', 'campaign before', 'momotetsu_2', 9903),
+              ('analysis-campaign-smoke-after', 'campaign after', 'momotetsu_2', 9904),
+              ('analysis-campaign-smoke-deleted', 'campaign deleted', 'momotetsu_2', 9905);
+
+            INSERT INTO series_analysis_title_states (game_title_id, algorithm_version, artifact_schema_version, validation_contract_id)
+            SELECT t.id, r.algorithm_version, r.artifact_schema_version, r.validation_contract_id
+            FROM game_titles t CROSS JOIN series_analysis_release_state r
+            WHERE t.id LIKE 'analysis-campaign-smoke-%' AND r.singleton_key = 'current'
+            ON CONFLICT DO NOTHING;
+            INSERT INTO series_radar_title_states (game_title_id, generation)
+            SELECT game_title_id, 7 FROM series_analysis_title_states
+            WHERE game_title_id LIKE 'analysis-campaign-smoke-%';
 
             UPDATE series_analysis_title_states
             SET algorithm_version = 'series-analysis-v5',
@@ -250,6 +259,7 @@ async fn real_postgres_preserves_campaign_acceptance_and_assignment() -> SmokeRe
         )
         .await?;
 
+    database.execute("UPDATE series_radar_title_states SET generation = 8 WHERE game_title_id LIKE 'analysis-campaign-smoke-%'", &[]).await?;
     let mut peer = crate::postgres::connect(&database_url).await?;
     let (first, second) = tokio::join!(
         expand_pending_campaign_targets(&mut database, 64),
@@ -367,6 +377,14 @@ async fn real_postgres_preserves_campaign_acceptance_and_assignment() -> SmokeRe
     );
     assert!(projection.try_get::<_, bool>("request_tuple_propagated")?);
 
+    let queued_bindings: bool = database.query_one(
+        "SELECT bool_and(radar_basis_id IS NULL AND radar_generation = 8) FROM series_analysis_jobs WHERE game_title_id LIKE 'analysis-campaign-smoke-%' AND status = 'queued'",
+        &[],
+    ).await?.try_get(0)?;
+    assert!(
+        queued_bindings,
+        "new and coalesced campaign jobs must inherit current radar intent"
+    );
     cleanup_campaign_expansion_fixture(&database).await?;
     Ok(())
 }

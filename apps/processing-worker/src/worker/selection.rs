@@ -156,7 +156,6 @@ async fn recover_orphan(
         owner: row.try_get(2)?,
         attempt_id: row.try_get(3)?,
         fencing_token: row.try_get(4)?,
-        preemptible: true,
         expired: true,
     };
     let tx = client.transaction().await?;

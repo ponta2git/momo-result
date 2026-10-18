@@ -32,7 +32,6 @@ pub(crate) struct ExecutionSlotHolder {
     pub(crate) owner: String,
     pub(crate) job_id: String,
     pub(crate) attempt_id: String,
-    pub(crate) preemptible: bool,
     pub(crate) fencing_token: i64,
     pub(crate) expired: bool,
 }
@@ -135,7 +134,6 @@ fn decode_locked_slot(row: &Row) -> Result<LockedExecutionSlot, ExecutionSlotErr
                 owner,
                 job_id,
                 attempt_id,
-                preemptible,
                 fencing_token,
                 expired,
             })
@@ -383,34 +381,6 @@ pub(crate) async fn clear_stale_preemption(
         )
         .await?;
     Ok(cleared == 1)
-}
-
-pub(crate) async fn request_analysis_preemption(
-    transaction: &Transaction<'_>,
-    holder: &ExecutionSlotHolder,
-    requested_by: &str,
-) -> Result<bool, ExecutionSlotError> {
-    if holder.task_kind != ExecutionTaskKind::Analysis || holder.expired || !holder.preemptible {
-        return Ok(false);
-    }
-    let requested = transaction
-        .execute(
-            "UPDATE worker_execution_slots SET preempt_requested_by = $1,\x20\
-               preempt_requested_at = clock_timestamp(), updated_at = clock_timestamp()\x20\
-             WHERE slot_key = $2 AND task_kind = 'analysis' AND owner = $3 AND job_id = $4\x20\
-               AND attempt_id = $5 AND fencing_token = $6 AND holder_preemptible = true\x20\
-               AND lease_expires_at > clock_timestamp() AND preempt_requested_by IS NULL",
-            &[
-                &requested_by,
-                &SLOT_KEY,
-                &holder.owner,
-                &holder.job_id,
-                &holder.attempt_id,
-                &holder.fencing_token,
-            ],
-        )
-        .await?;
-    Ok(requested == 1)
 }
 
 #[cfg(test)]

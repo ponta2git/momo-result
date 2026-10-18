@@ -28,7 +28,7 @@ provider固有値、費用、実測、昇格・復旧手順は public docs へ�
 - 通常分析の1 job は1作品の全有効 scope と全表示用途を同じ入力 snapshot から計算し、作品単位で原子的に公開する。レーダーの基準準備は別の実行目的として同じqueue・共有枠を利用し、候補と比較結果を保存する。準備だけでは公開成果物・通常の再計算要求・通知基準を更新しない。
 - DB を revision、request、job、attempt、slot、artifact、公開状態の正本とし、Worker が既存 job を直接取得する。
 - 全 runtime を通じた分析実行枠は1件とし、DB lease と単調増加 fence で保証する。
-- OCR 同居時も共有枠は1件とする。OCRだけが分析を preempt でき、分析はOCRをpreemptしない。
+- OCR 同居時も共有枠は1件とする。実行可能な待機候補では OCR を先に選び、実行中の分析は完了させる。
 - resource上限、timeout、reader / worker / schema互換性が検証されるまで publication を fail closed にする。
 
 ## 2. Version / Recalculation Intent
@@ -78,7 +78,7 @@ provider固有値、費用、実測、昇格・復旧手順は public docs へ�
 | --- | --- | --- |
 | 正常公開・成果物再利用 | `succeeded` | 終端 |
 | supersede（入力・対象 version の更新） | 古い candidate を公開せず、最新の対象で `queued` | 失敗回数へ加算しない |
-| OCR preemption / graceful 停止 | `queued` | 失敗回数へ加算しない |
+| 旧世代の preemption intent / graceful 停止 | `queued` | 失敗回数へ加算しない |
 | 一時的な DB 障害 | `queued`、retry 上限で `failed` | 計算 retry は最大3回 |
 | lease 期限切れ | 回収条件を満たす場合に `queued`、回収上限で `failed` | 計算 retry と別の回数で有界化 |
 | hard timeout | `timed_out` | retry しない |
@@ -88,7 +88,7 @@ provider固有値、費用、実測、昇格・復旧手順は public docs へ�
 - Worker は対応する algorithm / artifact schema / validation contract の組だけを候補・claim の両方で検証する。非対応 job を終端化せず queued に保ち、後続の対応 job の走査を妨げない。
 - job / request と業務状態を同じ transaction で確定し、commit 後にだけ payloadless wake を送る。wake は永続状態の代わりにしない。
 - scheduler は起動、再接続、wake、実行可能時刻、lease 回復、保守の期限で動き、低頻度走査で hint 欠落を補う。一回の候補・要求展開件数を制限し、全 job をメモリへ積まない。
-- supersede、transient retry、OCR preemption、graceful 停止は必要な状態を DB に確定して queued へ戻す。失敗予算の扱いは理由ごとに分け、commit 成否不明なら結果を推測しない。
+- supersede、transient retry、旧世代の preemption intent、graceful 停止は必要な状態を DB に確定して queued へ戻す。失敗予算の扱いは理由ごとに分け、commit 成否不明なら結果を推測しない。
 - 期限切れの共有枠は queued 候補がなくても回復する。claim の lock 順は slot → title state → job とし、候補選択時に job lock を先取りしない。
 - 枠が使用中のときは解放通知・lease 期限・有限の競合待ちで再確認する。期限を過ぎた queued job による hot loop を作らない。
 
@@ -99,8 +99,8 @@ provider固有値、費用、実測、昇格・復旧手順は public docs へ�
 - leaseはDB clock、process timeoutはmonotonic clockで判断する。lease維持不能を検知したparentはchildを停止しpublicationしない。
 - heartbeatの周期と通信全体の期限は独立した必須設定とする。更新完了から次の周期を開始し、更新の重複・追い付き実行をしない。両者の最大値を基にchild livenessと停止・公開を含むlease余白を検証する。
 - 更新の期限超過・通信失敗はowner喪失の確定と区別する。結果不明の接続はdriverごと破棄し、そのattemptは公開せずdurable recoveryへ渡す。COMMITの成否をFutureの破棄から推測しない。
-- child成功後は短時間の計算でも公開前にleaseとpreemptionを再確認し、確定した更新後にfinalization期限を開始する。
-- OCR preempt intentはDBへ保存する。分析childを回収しjobを `queued` へ戻してslotを解放した後にOCRを開始する。publicationの短いcommit区間はpreemptしない。
+- child成功後は短時間の計算でも公開前にleaseと旧世代のpreemption intentを再確認し、確定した更新後にfinalization期限を開始する。
+- 新しい OCR は実行中の分析へ preemption intent を保存しない。旧世代が保存済みの intent は引き続き処理し、分析 child の回収と durable な再queue後にslotを解放する。publicationの短いcommit区間は中断しない。
 - childはread-onlyで一貫した入力を読み、boundedで非authoritativeなcandidate / manifestだけを返す。外部I/O、job / request、current pointerを変更しない。
 - parentはpath、schema、件数、byte数、深さ、checksum、参照整合性を検証し、失敗・timeout・preemption・owner喪失で部分公開しない。
 - 大容量 staging と短い fenced publication を分ける。stagingはcurrentから不可視とし、fresh transactionで完全性と実行権を再検証してからcurrent / previousを切り替える。
@@ -196,7 +196,7 @@ DB lock順とstaging transactionの規則は `docs/db-rule.md`、process責務�
 - artifact / response / temporary storageにbyte、件数、深さ、disk、concurrency上限を設ける。production timeoutは同等runtimeの通常・上限・cold・連続実行測定後に設定する。
 - job / queue / phase / memory / byte数を低cardinality metricと安全なstructured logで観測する。実測値とalert thresholdはprivateに置く。
 
-OCR同居を有効化する場合は、共通parent-child境界、単一slot、一方向preemption、子process回収、非authoritative candidateを維持する。OCR payloadは共有storageのopaque keyを使い、local volume共有や一時HTTP配信へ依存しない。activationはversion固定datasetの項目別精度、native依存、object storage、process isolation、resourceを実runtimeで確認して判断する。
+OCR同居を有効化する場合は、共通parent-child境界、単一slot、待機OCRの優先と実行中の分析の継続、子process回収、非authoritative candidateを維持する。OCR payloadは共有storageのopaque keyを使い、local volume共有や一時HTTP配信へ依存しない。activationはversion固定datasetの項目別精度、native依存、object storage、process isolation、resourceを実runtimeで確認して判断する。
 
 ## 8. Compatibility / Release / Rollback
 
@@ -221,7 +221,7 @@ OCR同居を有効化する場合は、共通parent-child境界、単一slot、�
 | --- | --- |
 | revision / trigger / campaign | 同一transaction、A→B移動、同時mutation、target snapshot、idempotency、crash recovery |
 | job / scheduler | coalescing、unsupported version、重複 wake、通知欠落、commit 不明、期限切れ回復、graceful 停止、retry 上限 |
-| slot / lease / child / preemption | 複数worker、stale fence、owner喪失、timeout、OOM、process group回収、一方向preemption |
+| slot / lease / child / priority | 複数worker、stale fence、owner喪失、timeout、OOM、process group回収、待機OCR優先、分析の完了、旧世代の中断 intent の回収 |
 | calculation / artifact | 文書化した数式・性質・canonicalization、上限、部分公開拒否、current 維持 |
 | API / Web | bounded read、artifact pinning、expired retry、revision mismatch、状態decision table、意味再計算禁止 |
 | admin / retention | ロール別の閲覧・1作品run・全作品runの認可、CSRF / idempotency、target snapshot、未充足run、直近10件、45日cleanup |

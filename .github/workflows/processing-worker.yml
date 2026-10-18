@@ -221,10 +221,10 @@ jobs:
           ANALYSIS_SMOKE_DATABASE_ATTESTATION_FILE: ${{ runner.temp }}/momo-analysis-db-bootstrap.identity
         run: node scripts/e2e/series-analysis-control-plane-smoke.mts
 
-      - name: Combined analysis and OCR preemption smoke
+      - name: Combined analysis and queued OCR priority smoke
         env:
           ANALYSIS_SMOKE_DATABASE_ATTESTATION_FILE: ${{ runner.temp }}/momo-analysis-db-bootstrap.identity
-        run: node scripts/e2e/processing-worker-preemption-smoke.mts "${ANALYSIS_IMAGE_REF}"
+        run: node scripts/e2e/processing-worker-scheduling-smoke.mts "${ANALYSIS_IMAGE_REF}"
 
       - name: Scan worker image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25

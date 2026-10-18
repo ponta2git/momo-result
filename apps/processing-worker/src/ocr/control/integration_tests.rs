@@ -117,7 +117,7 @@ async fn real_postgres_preserves_ocr_fencing_and_bounded_recovery() -> SmokeResu
     verify_success_and_terminal_duplicate(&mut primary).await?;
     verify_success_with_warnings(&mut primary).await?;
     verify_expired_analysis_recovery_emits_wake(&mut primary).await?;
-    verify_analysis_preemption_and_stale_intent(&mut primary).await?;
+    verify_analysis_completes_before_ocr_and_clears_legacy_intent(&mut primary).await?;
     verify_transient_retry_budget(&mut primary).await?;
     verify_malformed_snapshot(&mut primary).await?;
 
@@ -410,7 +410,9 @@ async fn verify_expired_analysis_recovery_emits_wake(primary: &mut Client) -> Sm
     Ok(())
 }
 
-async fn verify_analysis_preemption_and_stale_intent(primary: &mut Client) -> SmokeResult {
+async fn verify_analysis_completes_before_ocr_and_clears_legacy_intent(
+    primary: &mut Client,
+) -> SmokeResult {
     let job_id = PREEMPT.job_id;
     let config = control_config("ocr-c2-priority")?;
     let row = primary
@@ -424,11 +426,11 @@ async fn verify_analysis_preemption_and_stale_intent(primary: &mut Client) -> Sm
             &[],
         )
         .await?
-        .ok_or_else(|| smoke_error("analysis preemption fixture could not acquire the empty slot"))?;
+        .ok_or_else(|| smoke_error("analysis priority fixture could not acquire the empty slot"))?;
     let analysis_fence = row.try_get::<_, i64>(0)?;
     assert!(matches!(
         claim_result(claim_job(primary, job_id, &config).await?)?,
-        OcrClaimResult::PreemptionRequested
+        OcrClaimResult::Busy
     ));
     let requester = primary
         .query_one(
@@ -438,7 +440,7 @@ async fn verify_analysis_preemption_and_stale_intent(primary: &mut Client) -> Sm
         )
         .await?
         .try_get::<_, Option<String>>(0)?;
-    assert_eq!(requester.as_deref(), Some("ocr-c2-priority"));
+    assert!(requester.is_none());
 
     let release_transaction = primary.transaction().await?;
     assert!(
@@ -716,7 +718,6 @@ fn claimed_with_analysis_wake(
     match outcome.value {
         OcrClaimResult::Claimed(claim) => Ok(claim),
         other @ (OcrClaimResult::Busy
-        | OcrClaimResult::PreemptionRequested
         | OcrClaimResult::MissingOrTerminal
         | OcrClaimResult::AlreadyRunning
         | OcrClaimResult::NotYetAvailable
@@ -738,7 +739,6 @@ fn claimed(outcome: ControlOutcome<OcrClaimResult>) -> SmokeResult<ClaimedOcrJob
     match claim_result(outcome)? {
         OcrClaimResult::Claimed(claim) => Ok(claim),
         other @ (OcrClaimResult::Busy
-        | OcrClaimResult::PreemptionRequested
         | OcrClaimResult::MissingOrTerminal
         | OcrClaimResult::AlreadyRunning
         | OcrClaimResult::NotYetAvailable

@@ -85,7 +85,7 @@ async fn real_postgres_delayed_candidates_still_attempt_durable_claims() -> Test
     assert_eq!(attempt_count, 1);
     assert_slot(&observer, "analysis", ANALYSIS).await?;
 
-    // An active analysis must still receive the first slow OCR preemption request.
+    // Queued OCR must leave the running analysis and its reservation untouched.
     insert_ocr(&observer).await?;
     assert!(
         scheduler.resources.is_reserved(),
@@ -93,7 +93,14 @@ async fn real_postgres_delayed_candidates_still_attempt_durable_claims() -> Test
     );
     assert!(!claim_ocr(&mut scheduler, &stopped, &mut budget()).await?);
     let requester: Option<String> = observer.query_one("SELECT preempt_requested_by FROM worker_execution_slots WHERE slot_key='shared-heavy-work'", &[]).await?.try_get(0)?;
-    assert_eq!(requester.as_deref(), Some(WORKER));
+    assert!(requester.is_none());
+    assert!(!Box::pin(claim_analysis(&mut scheduler, &stopped, &mut budget())).await?);
+    assert_job(&observer, WAITING, "queued", 0).await?;
+    let ocr_attempts: i32 = observer
+        .query_one("SELECT attempt_count FROM ocr_jobs WHERE id=$1", &[&OCR])
+        .await?
+        .try_get(0)?;
+    assert_eq!(ocr_attempts, 0);
     assert_slot(&observer, "analysis", ANALYSIS).await?;
     scheduler.resources.release();
     clear_slot(&observer).await?;

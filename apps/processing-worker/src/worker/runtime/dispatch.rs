@@ -27,7 +27,7 @@ pub(super) async fn claim_next(
         return Ok(false);
     }
     scheduler.retry_after = None;
-    if scheduler.resources.is_reserved() && scheduler.ocr.is_none() {
+    if scheduler.resources.is_reserved() {
         return Ok(false);
     }
     let mut budget = ScanBudget {
@@ -59,6 +59,9 @@ async fn claim_ocr(
     shutdown: &watch::Receiver<bool>,
     budget: &mut ScanBudget,
 ) -> Result<bool, WorkerError> {
+    if scheduler.resources.is_reserved() {
+        return Ok(false);
+    }
     let config = scheduler
         .ocr_config
         .clone()
@@ -83,25 +86,6 @@ async fn claim_ocr(
             attempted = true;
             let id = cursor.id.clone();
             scheduler.ocr_cursor = Some(cursor);
-            if scheduler.resources.is_reserved() {
-                match bounded(
-                    timeout,
-                    ocr::control::request_preemption(&mut scheduler.database, &id, &config),
-                )
-                .await
-                {
-                    Ok(true) => {
-                        scheduler.ocr_cursor = None;
-                        return Ok(false);
-                    }
-                    Ok(false) => {}
-                    Err(error) if error.is_contention() => {
-                        budget.contended = true;
-                    }
-                    Err(error) => return Err(error),
-                }
-                continue;
-            }
             scheduler.resources.reserve()?;
             let outcome = match bounded(
                 timeout,
@@ -123,8 +107,7 @@ async fn claim_ocr(
                     start_ocr(scheduler, claim)?;
                     return Ok(false);
                 }
-                ocr::control::OcrClaimResult::Busy
-                | ocr::control::OcrClaimResult::PreemptionRequested => {
+                ocr::control::OcrClaimResult::Busy => {
                     scheduler.resources.release();
                     defer_claims(scheduler);
                     scheduler.ocr_cursor = None;

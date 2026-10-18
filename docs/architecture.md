@@ -251,7 +251,7 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 - 入力 version、algorithm version、artifact schema version、固定採点基準を別の識別として扱い、同じ入力・algorithm・基準の内容では決定論的にする。基準の適用日時と公開競合の世代は、計算内容のchecksumから分離する。
 - 計算の中間表現は必要な観測値だけを持ち、fold・bootstrap・permutationごとに識別情報や未使用featureを複製しない。共有できる入力は借用し、計算順序や乱数列に意味がある最適化は出力のcanonical bytesまで比較する。結果の意味を変える場合はalgorithm versionの変更として扱う。
 - 公開前のDB照合はtransaction内で行い、全Rowとdecode後の同じ集合を重ねて保持しない。metadataは借用して逐次照合し、入力は必要なshapeへ集約する。順序の違いを許容する照合でも欠落・余剰・重複・値の不一致を拒否する。
-- OCR だけが分析を preempt できる。共有実行枠、再queue、失敗回数、公開の詳細は `docs/requirements/series-analysis-batch.md` を正本とする。
+- 待機候補では OCR を先に選び、実行中の分析は完了させる。共有実行枠、旧世代の中断 intent の回収、再queue、失敗回数、公開の詳細は `docs/requirements/series-analysis-batch.md` を正本とする。
 
 - 分析完了通知は `notifications/analysis` が実行attemptに結び付いた試合変更要求と前後のimmutable入力を照合し、公開transaction末尾で要求の完了を再確認して表示metadataを固定する。入力が変わらない成果物の再利用は公開制御側で通知準備を省略する。通知準備はOCRと同じ回復可能なSAVEPOINT境界を使い、正常commitを確認した経路だけが共通senderへ渡す。分析child・API・Summitに平均計算やproducer送出の責務を移さない。内容と比較範囲は `docs/requirements/series-analysis-batch.md` を参照する。
 - 通知producerへ渡すのは通知に必要なjob・attempt・作品・成果物versionの識別情報だけとし、DBのclaim型、lease、fenceや全体設定へ逆依存させない。

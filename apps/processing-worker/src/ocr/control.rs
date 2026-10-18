@@ -6,9 +6,9 @@ use tokio::time::{Instant, timeout_at};
 use tokio_postgres::{Client, Transaction};
 
 use crate::execution_slot::{
-    ExecutionSlotError, ExecutionSlotHolder, ExecutionSlotIdentity, ExecutionTaskKind,
-    NewExecutionSlotHolder, SlotAcquisition, SlotRenewal, acquire_ocr, lock as lock_execution_slot,
-    lock_owned as lock_owned_slot, release_owned, renew_owned, request_analysis_preemption,
+    ExecutionSlotError, ExecutionSlotIdentity, ExecutionTaskKind, NewExecutionSlotHolder,
+    SlotAcquisition, SlotRenewal, acquire_ocr, lock as lock_execution_slot,
+    lock_owned as lock_owned_slot, release_owned, renew_owned,
 };
 use crate::series_analysis::control::TransactionEffects;
 use crate::worker::ControlOutcome;
@@ -103,7 +103,6 @@ impl fmt::Debug for ClaimedOcrJob {
 pub(crate) enum OcrClaimResult {
     Claimed(ClaimedOcrJob),
     Busy,
-    PreemptionRequested,
     MissingOrTerminal,
     AlreadyRunning,
     NotYetAvailable,
@@ -297,8 +296,8 @@ pub(crate) async fn claim_job(
     if let Some(holder) = &slot.holder
         && !holder.expired
     {
-        let result = handle_active_holder(transaction, &slot, holder, config).await?;
-        return Ok(ControlOutcome::without_effects(result));
+        transaction.rollback().await?;
+        return Ok(ControlOutcome::without_effects(OcrClaimResult::Busy));
     }
 
     acquire_candidate(
@@ -310,38 +309,6 @@ pub(crate) async fn claim_job(
         recovery_effects,
     )
     .await
-}
-
-/// Validates a due OCR candidate before requesting preemption, without acquiring new work.
-pub(crate) async fn request_preemption(
-    client: &mut Client,
-    job_id: &str,
-    config: &OcrControlConfig,
-) -> Result<bool, OcrControlError> {
-    let transaction = bounded_transaction(client, config.finalization_timeout).await?;
-    transaction
-        .batch_execute("SET LOCAL lock_timeout='100ms'")
-        .await?;
-    let slot = lock_execution_slot(&transaction).await?;
-    let Some(holder) = &slot.holder else {
-        transaction.rollback().await?;
-        return Ok(false);
-    };
-    if holder.expired || holder.task_kind != ExecutionTaskKind::Analysis {
-        transaction.rollback().await?;
-        return Ok(false);
-    }
-    lock_match_drafts_for_job(&transaction, job_id).await?;
-    if matches!(
-        load_candidate(&transaction, job_id).await?,
-        CandidateResult::Ready(_)
-    ) {
-        handle_active_holder(transaction, &slot, holder, config).await?;
-        Ok(true)
-    } else {
-        transaction.rollback().await?;
-        Ok(false)
-    }
 }
 
 async fn acquire_candidate(
@@ -422,29 +389,6 @@ async fn acquire_candidate(
             fencing_token,
         })),
     )
-}
-
-async fn handle_active_holder(
-    transaction: Transaction<'_>,
-    slot: &crate::execution_slot::LockedExecutionSlot,
-    holder: &ExecutionSlotHolder,
-    config: &OcrControlConfig,
-) -> Result<OcrClaimResult, OcrControlError> {
-    if holder.task_kind != ExecutionTaskKind::Analysis {
-        transaction.rollback().await?;
-        return Ok(OcrClaimResult::Busy);
-    }
-    if slot.preempt_requested_by.is_some() {
-        transaction.rollback().await?;
-        return Ok(OcrClaimResult::Busy);
-    }
-    if request_analysis_preemption(&transaction, holder, &config.worker_id).await? {
-        transaction.commit().await?;
-        Ok(OcrClaimResult::PreemptionRequested)
-    } else {
-        transaction.rollback().await?;
-        Ok(OcrClaimResult::Busy)
-    }
 }
 
 pub(crate) async fn heartbeat(

@@ -16,17 +16,18 @@ import {
   withCleanup,
 } from "./worker-smoke-support.mts";
 
-await runSmoke("Combined analysis/OCR preemption smoke", async (signal) => {
+await runSmoke("Combined analysis/OCR scheduling smoke", async (signal) => {
   check(process.argv.length === 3, "A processing worker image argument is required.");
   const image = process.argv[2]!;
   const smoke = new Smoke(signal);
   const worker_database = process.env.WORKER_DATABASE_URL ?? "";
-  const worker_container = `momo-analysis-preemption-smoke-worker-${process.pid}`;
+  const worker_container = `momo-analysis-scheduling-smoke-worker-${process.pid}`;
   const lockContainer = `${worker_container}-lock`;
-  const analysis_job = "ci-preemption-analysis-job";
-  const ocr_job = "ci-preemption-ocr-job";
-  const title_id = "ci-preemption-title";
-  const analysis_worker_id = "ci-preemption-analysis-worker";
+  const analysis_job = "ci-scheduling-analysis-job";
+  const ocr_job = "ci-scheduling-ocr-job";
+  const waiting_job = "ci-scheduling-waiting-analysis-job";
+  const title_id = "ci-scheduling-title";
+  const analysis_worker_id = "ci-scheduling-analysis-worker";
   const analysis_capability_id = smoke.capability(analysis_worker_id);
   const algorithm_version = algorithmVersion;
   const artifact_schema_version = smoke.contract.artifactSchemaVersion;
@@ -35,7 +36,7 @@ await runSmoke("Combined analysis/OCR preemption smoke", async (signal) => {
   let worker: ReturnType<typeof startWorker> | undefined;
   let lock: ReturnType<typeof startCommand> | undefined;
   const cleanupDB = () =>
-    smoke.sqlFile("preemption-cleanup", { analysis_worker_id, analysis_capability_id }, true);
+    smoke.sqlFile("scheduling-cleanup", { analysis_worker_id, analysis_capability_id }, true);
   const waitSQL = (expected: string, query: string, description: string, timeoutMs = 60_000) =>
     smoke.waitSQL(expected, query, description, {
       timeoutMs,
@@ -70,7 +71,7 @@ await runSmoke("Combined analysis/OCR preemption smoke", async (signal) => {
       },
       () =>
         smoke.sql(
-          "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE application_name = 'ci-preemption-lock' AND pid <> pg_backend_pid();",
+          "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE application_name = 'ci-scheduling-lock' AND pid <> pg_backend_pid();",
           {},
           null,
         ),
@@ -88,7 +89,7 @@ await runSmoke("Combined analysis/OCR preemption smoke", async (signal) => {
         )) === "",
         "Shared heavy-work slot is owned by another runtime.",
       );
-      await smoke.sqlFile("preemption-fixture", {
+      await smoke.sqlFile("scheduling-fixture", {
         algorithm_version,
         artifact_schema_version,
         validation_contract_id,
@@ -97,7 +98,7 @@ await runSmoke("Combined analysis/OCR preemption smoke", async (signal) => {
       lockArgs.splice(1, 0, "--name", lockContainer);
       lock = startCommand("docker", lockArgs, {
         input:
-          "SET application_name = 'ci-preemption-lock'; BEGIN; LOCK TABLE matches IN ACCESS EXCLUSIVE MODE; SELECT pg_sleep(120);",
+          "SET application_name = 'ci-scheduling-lock'; BEGIN; LOCK TABLE matches IN ACCESS EXCLUSIVE MODE; SELECT pg_sleep(120);",
         log: join(smoke.root, "lock.log"),
       });
       await waitSQL(
@@ -106,7 +107,7 @@ await runSmoke("Combined analysis/OCR preemption smoke", async (signal) => {
   SELECT COUNT(*)::int
   FROM pg_locks lock
   JOIN pg_stat_activity activity ON activity.pid = lock.pid
-  WHERE activity.application_name = 'ci-preemption-lock'
+  WHERE activity.application_name = 'ci-scheduling-lock'
     AND lock.relation = 'matches'::regclass
     AND lock.mode = 'AccessExclusiveLock'
     AND lock.granted;
@@ -117,11 +118,11 @@ await runSmoke("Combined analysis/OCR preemption smoke", async (signal) => {
         ...analysisEnvironment(worker_database, analysis_worker_id),
         MOMO_ANALYSIS_CALCULATION_TIMEOUT_MS: "30000",
         MOMO_ANALYSIS_FINALIZATION_TIMEOUT_MS: "45000",
-        MOMO_ANALYSIS_CONFIG_VERSION: "ci-preemption-v1",
+        MOMO_ANALYSIS_CONFIG_VERSION: "ci-scheduling-v1",
         MOMO_OCR_V2_CONSUMER_MODE: "enabled",
-        MOMO_OCR_V2_WORKER_ID: "ci-preemption-ocr-worker",
+        MOMO_OCR_V2_WORKER_ID: "ci-scheduling-ocr-worker",
         SOURCE_IMAGE_R2_ENDPOINT: "http://127.0.0.1:9",
-        SOURCE_IMAGE_R2_BUCKET: "ci-preemption",
+        SOURCE_IMAGE_R2_BUCKET: "ci-scheduling",
         SOURCE_IMAGE_R2_ACCESS_KEY_ID: "ci-access-key",
         SOURCE_IMAGE_R2_SECRET_ACCESS_KEY: "ci-secret-key",
         MOMO_OCR_V2_R2_OPERATION_TIMEOUT_MS: "1000",
@@ -200,40 +201,92 @@ await runSmoke("Combined analysis/OCR preemption smoke", async (signal) => {
         );
       }
       await smoke.sql(
-        `UPDATE ocr_jobs SET available_at = clock_timestamp() WHERE id = '${ocr_job}'; SELECT pg_notify('processing_jobs', '');`,
+        `UPDATE ocr_jobs SET available_at = clock_timestamp() WHERE id = '${ocr_job}';
+         UPDATE series_analysis_jobs SET available_at = clock_timestamp() WHERE id = '${waiting_job}';
+         SELECT pg_notify('processing_jobs', '');`,
       );
+      // Both kinds are now due. Observe real renewals without allowing the queued
+      // OCR request to interrupt this child or claim the next analysis attempt.
+      for (const renewal of [1, 2]) {
+        const previous_lease = await smoke.sql(
+          `SELECT lease_expires_at FROM series_analysis_jobs WHERE id = '${analysis_job}';`,
+        );
+        await waitSQL(
+          `true`,
+          `SELECT (lease_expires_at > TIMESTAMPTZ '${previous_lease}')::text
+           FROM series_analysis_jobs WHERE id = '${analysis_job}' AND status = 'running';`,
+          `analysis renewal ${renewal} while OCR waits`,
+        );
+        check(
+          (await smoke.sql(`
+  SELECT analysis.status || '|' || analysis.attempt_count || '|' ||
+         ocr.status || '|' || ocr.attempt_count || '|' ||
+         waiting.status || '|' || waiting.attempt_count || '|' ||
+         (slot.preempt_requested_by IS NULL)::text
+  FROM series_analysis_jobs analysis, ocr_jobs ocr, series_analysis_jobs waiting,
+       worker_execution_slots slot
+  WHERE analysis.id = '${analysis_job}' AND ocr.id = '${ocr_job}'
+    AND waiting.id = '${waiting_job}' AND slot.slot_key = 'shared-heavy-work';
+`)) === "running|1|queued|0|queued|0|true",
+          "Queued work interrupted the active analysis or bypassed its resource reservation.",
+        );
+        requireSuccess(
+          await command(
+            "docker",
+            [
+              "exec",
+              "--user",
+              "10001:10001",
+              worker_container,
+              "sh",
+              "-c",
+              'kill -0 "$1"',
+              "--",
+              child,
+            ],
+            { signal },
+          ),
+          "The original analysis child must remain alive while OCR waits",
+        );
+      }
+      await releaseLock();
       await waitSQL(
-        `true|0|true|1`,
+        `succeeded|1|0|1`,
         `
-  SELECT (job.status IN ('queued', 'running'))::text || '|' ||
-         job.transient_retry_count || '|' || (job.safe_failure_code IS NULL)::text || '|' ||
-         COUNT(*) FILTER (WHERE attempt.outcome = 'preempted')::text
+  SELECT job.status || '|' || job.attempt_count || '|' ||
+         COUNT(*) FILTER (WHERE attempt.outcome = 'preempted')::text || '|' ||
+         COUNT(*) FILTER (WHERE attempt.outcome = 'succeeded')::text
   FROM series_analysis_jobs job
   JOIN series_analysis_job_attempts attempt ON attempt.job_id = job.id
-  WHERE job.id = 'ci-preemption-analysis-job'
-  GROUP BY job.status, job.transient_retry_count, job.safe_failure_code;
+  WHERE job.id = '${analysis_job}'
+  GROUP BY job.status, job.attempt_count;
 `,
-        `analysis preemption without failure accounting`,
+        `the original analysis completes without a discarded attempt`,
+        100000,
       );
-      await waitEvent("reason", "preempted", "the analysis preemption requeue event");
       await waitSQL(
         `queued|1|true`,
-        `
-  SELECT status || '|' || attempt_count || '|' || (failure_code IS NULL)::text
-  FROM ocr_jobs WHERE id = 'ci-preemption-ocr-job';
-`,
-        `the transient R2 failure requeue`,
+        `SELECT status || '|' || attempt_count || '|' || (failure_code IS NULL)::text
+         FROM ocr_jobs WHERE id = '${ocr_job}';`,
+        `the next OCR attempt reaches its transient R2 requeue`,
       );
       await waitSQL(
-        `true`,
-        `
-  SELECT (owner IS DISTINCT FROM 'ci-preemption-ocr-worker'
-          AND preempt_requested_by IS NULL)::text
-  FROM worker_execution_slots WHERE slot_key = 'shared-heavy-work';
-`,
-        `the released OCR execution slot`,
+        `succeeded|1`,
+        `SELECT status || '|' || attempt_count FROM series_analysis_jobs WHERE id = '${waiting_job}';`,
+        `analysis resumes after the queued OCR attempt`,
+        100000,
       );
-      // A replacement may already run; inspect the interrupted child's exact PID.
+      check(
+        (await smoke.sql(`
+  SELECT (first_attempt.finished_at <= ocr.updated_at
+          AND ocr.updated_at <= next_attempt.started_at)::text
+  FROM series_analysis_job_attempts first_attempt, ocr_jobs ocr,
+       series_analysis_job_attempts next_attempt
+  WHERE first_attempt.job_id = '${analysis_job}' AND ocr.id = '${ocr_job}'
+    AND next_attempt.job_id = '${waiting_job}';
+`)) === "true",
+        "Queued OCR did not run between the completed analysis and the next analysis attempt.",
+      );
       check(
         (
           await command(
@@ -252,23 +305,7 @@ await runSmoke("Combined analysis/OCR preemption smoke", async (signal) => {
             { signal },
           )
         ).code !== 0,
-        "The preempted analysis process group was not reaped.",
-      );
-      await releaseLock();
-      // Include child shutdown, DB retry deadlines and bounded processing time.
-      await waitSQL(
-        `succeeded|2|1|1`,
-        `
-  SELECT job.status || '|' || job.attempt_count || '|' ||
-         COUNT(*) FILTER (WHERE attempt.outcome = 'preempted')::text || '|' ||
-         COUNT(*) FILTER (WHERE attempt.outcome = 'succeeded')::text
-  FROM series_analysis_jobs job
-  JOIN series_analysis_job_attempts attempt ON attempt.job_id = job.id
-  WHERE job.id = 'ci-preemption-analysis-job'
-  GROUP BY job.status, job.attempt_count;
-`,
-        `same-cgroup analysis recovery after preemption`,
-        100000,
+        "The completed analysis process group was not reaped.",
       );
       check(
         (await smoke.sql(`
@@ -285,7 +322,7 @@ await runSmoke("Combined analysis/OCR preemption smoke", async (signal) => {
   JOIN series_analysis_jobs job ON job.id = attempt.job_id
   WHERE job.id = '${analysis_job}';
 `)) === "0|1",
-        "Preemption recovery lost validation contract provenance.",
+        "Analysis completion lost validation contract provenance.",
       );
       await smoke.running(worker_container);
       check(

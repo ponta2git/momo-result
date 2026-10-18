@@ -41,6 +41,13 @@ func frozenReadiness(value any, role string, out io.Writer) error {
 	if number(field(value, "schemaVersion")) != "1" {
 		return invalid
 	}
+	database := objectMap(field(value, "database"))
+	if !database.keys("formatVersion", "targetFingerprint", "ledgerFingerprint") ||
+		!database.numberEquals("formatVersion", 1) ||
+		!shaPattern.MatchString(database.text("targetFingerprint")) ||
+		!shaPattern.MatchString(database.text("ledgerFingerprint")) {
+		return invalid
+	}
 	switch role {
 	case "runtime":
 		if field(value, "event") != "runtime_maintenance_readiness" || field(value, "status") != "ok" {
@@ -66,5 +73,5 @@ func frozenReadiness(value any, role string, out io.Writer) error {
 	default:
 		return invalid
 	}
-	return encode(out, map[string]any{"schemaVersion": 1, "consumer": role, "mode": "frozen", "status": "ready"})
+	return encode(out, map[string]any{"schemaVersion": 1, "consumer": role, "mode": "frozen", "status": "ready", "database": database})
 }

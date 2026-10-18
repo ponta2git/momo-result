@@ -6,6 +6,9 @@ use std::{
 
 use thiserror::Error;
 
+#[cfg(target_os = "linux")]
+pub(crate) mod maintenance;
+
 pub(crate) const CGROUP_DIRECTORY_NAME: &str = "momo-heavy-child";
 pub(crate) const CGROUP_HIERARCHY_ENV: &str = "MOMO_HEAVY_CGROUP_HIERARCHY";
 pub(crate) const CGROUP_DIRECTORY_ENV: &str = "MOMO_HEAVY_CGROUP_DIRECTORY";

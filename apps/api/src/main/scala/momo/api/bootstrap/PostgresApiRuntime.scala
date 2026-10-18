@@ -25,6 +25,7 @@ import momo.api.auth.DiscordOAuthClient
 import momo.api.config.{AppConfig, DatabaseConfig, SourceImageStorageConfig}
 import momo.api.db.Database
 import momo.api.domain.ids.ImageId
+import momo.api.maintenance.MaintenanceDrain
 import momo.api.ports.storage.{
   ImageDiskUsage,
   ImageOrphanCleaner,
@@ -41,6 +42,7 @@ private[bootstrap] object PostgresApiRuntime:
       config: AppConfig,
       db: DatabaseConfig,
       oauthClient: DiscordOAuthClient[F],
+      maintenance: MaintenanceDrain[F],
   ): Resource[F, ApiApp.WiredRuntime[F]] = (
     Database.transactor[F](db),
     RuntimeInfrastructure.resource[F](config, Clock[F].realTimeInstant),
@@ -124,7 +126,10 @@ private[bootstrap] object PostgresApiRuntime:
           signalBackgroundFailure,
         )
         val ocrSubmissions = WorkerWakingRepositories.ocrSubmissions(
-          PostgresOcrSubmissionsRepository[F](transactor),
+          DrainingRepositories.submissions(
+            PostgresOcrSubmissionsRepository[F](transactor),
+            maintenance
+          ),
           workerWakeup,
           signalBackgroundFailure,
         )
@@ -177,7 +182,8 @@ private[bootstrap] object PostgresApiRuntime:
             runtime <- UseCaseWiring.assemble(
               config = config,
               storage = UseCaseWiring.RuntimeStorage(
-                imageStorage = imageStorage.store,
+                imageStorage =
+                  DrainingRepositories.images(imageStorage.store, maintenance, transactor),
                 imageStorageAdmission = imageStorage.admission,
               ),
               repositories = UseCaseWiring.RuntimeRepositories(

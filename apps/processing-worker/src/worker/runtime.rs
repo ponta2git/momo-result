@@ -5,6 +5,7 @@ use super::{
 };
 use crate::{
     execution::ExecutionHandle,
+    maintenance::drain::{Control, FailureKind, InFlight},
     notifications::{NotificationDriver, NotificationHandle},
     ocr::{self, OcrConsumerRuntimeConfig},
     postgres,
@@ -17,6 +18,8 @@ use tokio::{sync::watch, time};
 
 #[derive(Debug, Error)]
 pub(crate) enum WorkerError {
+    #[error(transparent)]
+    MaintenanceScope(#[from] crate::maintenance::analysis::ScopeError),
     #[error("processing worker database dependency failed")]
     Database(#[from] postgres::PostgresError),
     #[error("processing worker database transition failed")]
@@ -104,6 +107,7 @@ enum PendingExecution {
     Ocr(ocr::orchestrator::ImageRunner, ocr::control::ClaimedOcrJob),
 }
 mod dispatch;
+pub(crate) mod maintenance;
 
 struct WorkState {
     config: Option<AnalysisConsumerConfig>,
@@ -344,7 +348,8 @@ impl WorkerError {
             ) => postgres::is_lock_contention(error),
             Self::OcrControl(error) => error.is_contention(),
             Self::AnalysisControl(error) => error.is_contention(),
-            Self::Database(_)
+            Self::MaintenanceScope(_)
+            | Self::Database(_)
             | Self::Listener(_)
             | Self::Analysis(_)
             | Self::Ocr(_)
@@ -389,6 +394,10 @@ struct Runtime {
     external: watch::Receiver<bool>,
     stop: watch::Sender<bool>,
     stopped: watch::Receiver<bool>,
+    admission_stop: watch::Sender<bool>,
+    admission_stopped: watch::Receiver<bool>,
+    maintenance: Option<Control>,
+    advertise_capability: bool,
     timeout: Duration,
     cleanup_grace: Duration,
     deadline: Option<time::Instant>,
@@ -406,10 +415,15 @@ struct Runtime {
 impl Runtime {
     fn new(external: watch::Receiver<bool>, timeout: Duration, cleanup_grace: Duration) -> Self {
         let (stop, stopped) = watch::channel(false);
+        let (admission_stop, admission_stopped) = watch::channel(false);
         Self {
             external,
             stop,
             stopped,
+            admission_stop,
+            admission_stopped,
+            maintenance: None,
+            advertise_capability: true,
             timeout,
             cleanup_grace,
             deadline: None,
@@ -441,6 +455,7 @@ impl Runtime {
             }
         }
         self.stop.send_replace(true);
+        self.admission_stop.send_replace(true);
     }
     fn fail(&mut self, error: WorkerError) {
         if self.failure.is_none() {
@@ -456,12 +471,48 @@ impl Runtime {
         operation: impl Future<Output = Result<T, WorkerError>> + Send,
         observation: Observation,
     ) -> Result<Option<T>, WorkerError> {
+        self.report_progress(
+            observation == Observation::Operation || observation == Observation::Cleanup,
+        );
+        let result = Box::pin(self.observe_inner(operation, observation)).await;
+        self.report_progress(false);
+        result
+    }
+
+    fn report_progress(&self, operation: bool) {
+        if let Some(control) = &self.maintenance {
+            control.counts(InFlight {
+                operations: u8::from(operation),
+                attempts: u8::from(self.active.is_some()),
+                reconciliations: u8::from(self.reconcile.is_some()),
+            });
+        }
+    }
+
+    async fn observe_inner<T: Send>(
+        &mut self,
+        operation: impl Future<Output = Result<T, WorkerError>> + Send,
+        observation: Observation,
+    ) -> Result<Option<T>, WorkerError> {
         let guarded = AssertUnwindSafe(operation).catch_unwind();
         tokio::pin!(guarded);
+        let mut admission = self.maintenance.as_ref().map(Control::admission_receiver);
+        let mut all = self.maintenance.as_ref().map(Control::all_receiver);
         loop {
+            if self
+                .maintenance
+                .as_ref()
+                .is_some_and(Control::admission_closed)
+            {
+                self.admission_stop.send_replace(true);
+            }
             if *self.external.borrow()
                 || self.external.has_changed().is_err()
                 || *self.stopped.borrow()
+                || self
+                    .maintenance
+                    .as_ref()
+                    .is_some_and(Control::all_requested)
             {
                 self.request_stop();
             }
@@ -483,6 +534,11 @@ impl Runtime {
                 changed = self.stopped.changed(), if !self.stopping() => {
                     if changed.is_err() || *self.stopped.borrow() { self.request_stop(); }
                 }
+                _changed = async { match &mut admission { Some(receiver) => receiver.changed().await, None => std::future::pending().await } }, if !*self.admission_stopped.borrow() => {
+                    self.admission_stop.send_replace(true);
+                    if observation == Observation::Idle { return Ok(None); }
+                }
+                _changed = async { match &mut all { Some(receiver) => receiver.changed().await, None => std::future::pending().await } }, if !self.stopping() => self.request_stop(),
                 result = async { match &mut self.listener { Some(handle)=>handle.completed().await, None=>std::future::pending().await } } => {
                     self.listener = None;
                     match result {
@@ -518,7 +574,7 @@ impl Runtime {
                     self.submissions_dirty=true;
                     if observation==Observation::Idle {return Ok(None);}
                 }
-                ()=async {match &self.submissions {Some(state)=>time::sleep_until(state.next_at()).await,None=>std::future::pending().await}}, if !self.stopping() && self.reconcile.is_none()=>{}
+                ()=async {match &self.submissions {Some(state)=>time::sleep_until(state.next_at()).await,None=>std::future::pending().await}}, if !self.stopping() && !*self.admission_stopped.borrow() && self.reconcile.is_none()=>{}
 
             }
         }
@@ -564,7 +620,7 @@ impl Runtime {
         });
     }
     fn start_reconciliation(&mut self) {
-        if self.stopping() || self.reconcile.is_some() {
+        if self.stopping() || *self.admission_stopped.borrow() || self.reconcile.is_some() {
             return;
         }
         if let Some(state) = &mut self.submissions {
@@ -630,8 +686,30 @@ pub(crate) async fn run(
     plan: WorkerRuntimePlan,
     mut external: watch::Receiver<bool>,
     shutdown_deadline: &mut Option<time::Instant>,
+    maintenance: Option<Control>,
 ) -> Result<(), WorkerError> {
     let Some(enabled) = plan.enabled_consumers else {
+        if let Some(control) = maintenance {
+            let mut admission = control.admission_receiver();
+            let mut all = control.all_receiver();
+            loop {
+                if control.admission_closed() {
+                    control.admission_settled();
+                }
+                if control.all_requested() {
+                    control.runtime_settled(Ok(()));
+                    return Ok(());
+                }
+                if *external.borrow() {
+                    return Ok(());
+                }
+                tokio::select! {
+                    changed = external.changed() => if changed.is_err() { return Ok(()); },
+                    _changed = admission.changed(), if !control.admission_closed() => {},
+                    _changed = all.changed() => {},
+                }
+            }
+        }
         while !*external.borrow() {
             if external.changed().await.is_err() {
                 break;
@@ -644,6 +722,7 @@ pub(crate) async fn run(
         enabled.shutdown_drain_timeout,
         enabled.series_analysis.child_stop_grace,
     );
+    runtime.maintenance = maintenance;
     let (sink, wake) = PostCommitSink::channel();
     runtime.wake = Some(wake);
     let mut state = None;
@@ -666,7 +745,25 @@ pub(crate) async fn run(
             Err(_panic) => runtime.fail(WorkerError::Panicked),
         }
     }
-    let result = finish(&mut runtime, &mut state).await;
+    let mut result = finish(&mut runtime, &mut state).await;
+    if let Some(control) = &runtime.maintenance {
+        if let Some(deadline) = runtime.deadline
+            && !postgres::settle_drivers(deadline).await
+            && result.is_ok()
+        {
+            result = Err(WorkerError::ShutdownDrainTimeout);
+        }
+        if result.is_ok() {
+            control.counts(InFlight::default());
+        }
+        control.runtime_settled(result.as_ref().copied().map_err(|error| {
+            if matches!(error, WorkerError::ShutdownDrainTimeout) {
+                FailureKind::TimedOut
+            } else {
+                FailureKind::Failed
+            }
+        }));
+    }
     *shutdown_deadline = runtime.deadline;
     result
 }
@@ -683,7 +780,9 @@ async fn finish(runtime: &mut Runtime, state: &mut Option<WorkState>) -> Result<
         if let Some(runner) = runtime.returned.take() {
             work.restore(runner);
         }
-        if let Some(analysis) = &mut work.analysis {
+        if let Some(analysis) = &mut work.analysis
+            && runtime.advertise_capability
+        {
             if let Err(error) = runtime
                 .observe(
                     async {
@@ -698,7 +797,9 @@ async fn finish(runtime: &mut Runtime, state: &mut Option<WorkState>) -> Result<
             {
                 runtime.fail(error);
             }
-        } else if let Some(config) = &work.config {
+        } else if let Some(config) = &work.config
+            && runtime.advertise_capability
+        {
             // Registration can have committed before a lost startup response. The worker ID
             // survives the startup unwind, so cleanup does not require the module to return.
             if let Err(error) = runtime
@@ -725,6 +826,9 @@ async fn finish(runtime: &mut Runtime, state: &mut Option<WorkState>) -> Result<
         (&mut runtime.notifications, graceful_until, runtime.deadline)
     {
         sender.drain_until(graceful_until, deadline).await;
+        if runtime.maintenance.is_some() && !sender.is_settled() {
+            runtime.fail(WorkerError::ShutdownDrainTimeout);
+        }
     }
     runtime.failure.take().map_or(Ok(()), Err)
 }
@@ -835,8 +939,31 @@ async fn drive(runtime: &mut Runtime, state: &mut Option<WorkState>) -> Result<(
             if let Some(runner) = runtime.returned.take() {
                 work.restore(runner);
             }
+            if runtime
+                .maintenance
+                .as_ref()
+                .is_some_and(Control::admission_closed)
+            {
+                runtime.admission_stop.send_replace(true);
+            }
+            if *runtime.admission_stopped.borrow() {
+                runtime.report_progress(false);
+                if runtime.active.is_none()
+                    && runtime.reconcile.is_none()
+                    && let Some(control) = &runtime.maintenance
+                {
+                    control.admission_settled();
+                }
+                runtime
+                    .observe(
+                        std::future::pending::<Result<(), WorkerError>>(),
+                        Observation::Idle,
+                    )
+                    .await?;
+                continue;
+            }
             runtime.start_reconciliation();
-            let stopped = runtime.stopped.clone();
+            let stopped = runtime.admission_stopped.clone();
             let step = runtime.operation(Box::pin(work.step(&stopped))).await;
             // A claim that committed while stop arrived still needs typed durable finalization.
             if let Some(pending) = work.pending.take() {

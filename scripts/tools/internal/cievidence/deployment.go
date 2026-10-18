@@ -7,7 +7,7 @@ import (
 )
 
 func deployment(args []string, out io.Writer, root string) error {
-	v, err := options("create-runtime-deployment", args, "candidate", "run-attempt", "registry-ref", "source-artifact-id", "source-artifact-digest", "manifest", "manifest-artifact-id", "manifest-artifact-digest")
+	v, err := options("create-runtime-deployment", args, "candidate", "run-id", "run-attempt", "registry-ref", "source-artifact-id", "source-artifact-digest", "manifest", "manifest-artifact-id", "manifest-artifact-digest")
 	if err != nil {
 		return err
 	}
@@ -33,13 +33,14 @@ func deployment(args []string, out io.Writer, root string) error {
 	if !immutableImage(v["registry-ref"], "momo-result") {
 		return invalid
 	}
-	runID, sourceAttempt := str(m["runId"]), str(m["runAttempt"])
+	sourceID, sourceAttempt := str(m["runId"]), str(m["runAttempt"])
 	delete(m, "tarSha256")
-	m["schemaVersion"], m["sourceRunAttempt"], m["runAttempt"] = json.Number("3"), sourceAttempt, v["run-attempt"]
+	m["schemaVersion"], m["sourceRunId"], m["sourceRunAttempt"] = json.Number("4"), sourceID, sourceAttempt
+	m["runId"], m["runAttempt"] = v["run-id"], v["run-attempt"]
 	m["registryRef"], m["registryDigest"] = v["registry-ref"], strings.SplitN(v["registry-ref"], "@", 2)[1]
-	m["sourceArtifactName"] = "runtime-image-" + runID + "-" + sourceAttempt
+	m["sourceArtifactName"] = "runtime-image-" + sourceID + "-" + sourceAttempt
 	m["sourceArtifactId"], m["sourceArtifactDigest"] = v["source-artifact-id"], sourceDigest
-	m["manifestArtifactName"] = "runtime-image-registry-manifest-" + runID + "-" + v["run-attempt"]
+	m["manifestArtifactName"] = "runtime-image-registry-manifest-" + v["run-id"] + "-" + v["run-attempt"]
 	m["manifestArtifactId"], m["manifestArtifactDigest"], m["manifestSha256"] = v["manifest-artifact-id"], manifestDigest, manifestSHA
 	if _, _, err = validateRuntimeDeployment(m, identity(m)); err != nil {
 		return err

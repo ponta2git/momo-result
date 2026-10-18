@@ -275,6 +275,11 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 
 ## 5. Runtime / Security
 
+- 保守中の停止境界は API / runtime tool / Worker で同じ起動契約を使い、未知値を通常稼働へ fallback させない。未指定または通常 mode は既存動作を保つ。
+- frozen の API は通常の認証、業務 route、storage、wake、定期 cleanup を配線しない。Worker は通常 runtime を生成せず、claim、回復、materialization、capability heartbeat、通知送信を開始しない。再起動でもこの境界を保つ。
+- frozen の生存確認、read-only readiness、通常稼働の smoke は別の結果として扱う。readiness は既存 schema と reader 契約を確認し、接続値・世代値・業務 data を応答や error へ出さない。新しい保守 table の存在を起動条件にしない。
+- frozen では既存の read-only audit だけを許し、release の変更・preview や子 process の起動を通常 command から通さない。限定した保守書込みには別の明示契約が必要であり、frozen の指定だけでは許可しない。drain と再開の判断はこの停止境界から独立させる。
+
 - secret、session / CSRF token、接続 URL、画像内容、OCR raw text、分析成果物本文をログへ出さない。例外は安全な分類情報へ正規化する。
 - productionのDB接続は暗号化と相手検証を維持し、接続のために認証要件を暗黙に弱めない。
 - upload は許可形式、byte 数、寸法、内容 fingerprint を完全 decode 前後の境界で検証し、画像実体や長寿命 URL を DB / 公開 DTO に置かない。

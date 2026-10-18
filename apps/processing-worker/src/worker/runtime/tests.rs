@@ -30,6 +30,74 @@ fn runtime() -> (watch::Sender<bool>, Runtime) {
 }
 
 #[tokio::test]
+async fn maintenance_admission_retains_owned_work_without_sending_final_stop() {
+    let (_external, mut runtime) = runtime();
+    let control = Control::new(false, Duration::from_secs(1));
+    runtime.maintenance = Some(control.clone());
+    let mut admission_stopped = runtime.admission_stopped.clone();
+    let stopped = runtime.stopped.clone();
+    let (started, start) = oneshot::channel();
+    let (release, released) = oneshot::channel();
+    let dropped = Arc::new(AtomicBool::new(false));
+    let operation_dropped = Arc::clone(&dropped);
+    let operation = runtime.operation(async move {
+        let _guard = Dropped(operation_dropped);
+        started.send(()).unwrap();
+        released.await.unwrap();
+        Ok(41)
+    });
+    let controller = async {
+        start.await.unwrap();
+        control
+            .request(crate::maintenance::drain::Request {
+                cutover_id: String::from("test-cutover"),
+                stop_epoch: 1,
+                stage: crate::maintenance::drain::Stage::Admission,
+            })
+            .unwrap();
+        admission_stopped.wait_for(|closed| *closed).await.unwrap();
+        assert!(
+            !*stopped.borrow(),
+            "admission stop interrupted an owned attempt"
+        );
+        assert!(
+            !dropped.load(Ordering::SeqCst),
+            "admission cancelled a durable operation"
+        );
+        let snapshot = serde_json::to_value(control.snapshot()).unwrap();
+        assert_eq!(
+            snapshot.get("phase").and_then(serde_json::Value::as_str),
+            Some("draining"),
+            "receipt preceded operation completion"
+        );
+        assert_eq!(
+            snapshot
+                .pointer("/inFlight/operations")
+                .and_then(serde_json::Value::as_u64),
+            Some(1),
+            "owned operation disappeared"
+        );
+        release.send(()).unwrap();
+    };
+    let (result, ()) = time::timeout(Duration::from_secs(2), async {
+        tokio::join!(operation, controller)
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        result.unwrap(),
+        41,
+        "admission changed the operation result"
+    );
+    assert!(dropped.load(Ordering::SeqCst), "operation did not finish");
+    assert!(!runtime.stopping(), "admission started final shutdown");
+    assert!(
+        finish(&mut runtime, &mut None).await.is_ok(),
+        "fixture finalization failed"
+    );
+}
+
+#[tokio::test]
 async fn stop_signals_siblings_without_dropping_the_in_flight_operation() {
     let (external, mut runtime) = runtime();
     let mut stopped = runtime.stopped.clone();

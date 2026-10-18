@@ -1,0 +1,22 @@
+name: Set up pinned maintenance control
+description: Check out the shared control implementation at the reviewed immutable revision
+runs:
+  using: composite
+  steps:
+    - name: Read the pinned control revision
+      id: revision
+      shell: bash
+      run: |
+        revision="$(tr -d '\r\n' < scripts/ci/maintenance-control-ref.txt)"
+        [[ "${revision}" =~ ^[a-f0-9]{40}$ ]] || { echo 'Invalid maintenance control revision.' >&2; exit 1; }
+        printf 'revision=%s\n' "${revision}" >> "${GITHUB_OUTPUT}"
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        repository: ponta2git/momo-db
+        ref: ${{ steps.revision.outputs.revision }}
+        path: _deps/momo-maintenance-control
+        sparse-checkout: scripts/maintenance
+        persist-credentials: false
+    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      with:
+        node-version: 24

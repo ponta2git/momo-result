@@ -406,6 +406,7 @@ async fn materialize_campaign_target(
     let new_job_id = campaign_stable_id("analysis-job", target);
     let assignment =
         assign_campaign_target(transaction, target, desired, active, &new_job_id).await?;
+    super::job_transitions::bind_queued_radar(transaction, &[&target.game_title_id]).await?;
     transaction
         .execute(
             r"

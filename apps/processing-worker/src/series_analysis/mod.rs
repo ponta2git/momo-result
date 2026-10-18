@@ -20,6 +20,7 @@ mod attempt_directory;
 mod campaign;
 mod heartbeat;
 mod input_repository;
+mod job_transitions;
 mod metrics;
 mod policy;
 mod radar_prepare;

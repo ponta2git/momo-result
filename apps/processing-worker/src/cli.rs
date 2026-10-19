@@ -311,12 +311,7 @@ pub fn entrypoint() -> ExitCode {
 async fn execute_cli(shutdown_deadline: &mut Option<tokio::time::Instant>) -> ExitCode {
     let cli = Cli::parse();
     match &cli.command {
-        Command::Bootstrap { arguments } => {
-            return match crate::process::bootstrap_and_exec(arguments) {
-                Ok(()) => ExitCode::SUCCESS,
-                Err(_error) => ExitCode::FAILURE,
-            };
-        }
+        Command::Bootstrap { arguments } => return bootstrap_command(arguments),
         Command::ChildCgroupAllocate { allocation_bytes } => {
             if crate::process::wait_for_child_start_barrier().is_err() {
                 return exit_code(crate::process::CHILD_START_BARRIER_FAILED_EXIT_CODE);
@@ -403,6 +398,19 @@ async fn execute_cli(shutdown_deadline: &mut Option<tokio::time::Instant>) -> Ex
                 event = "analysis_command_failed",
                 error = %message,
                 "analysis worker command failed"
+            );
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn bootstrap_command(arguments: &[OsString]) -> ExitCode {
+    match crate::process::bootstrap_and_exec(arguments) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(_error) => {
+            let _result = writeln!(
+                io::stderr().lock(),
+                "processing worker bootstrap isolation failed"
             );
             ExitCode::FAILURE
         }

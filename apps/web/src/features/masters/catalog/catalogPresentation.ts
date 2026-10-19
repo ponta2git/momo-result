@@ -1,6 +1,7 @@
 import type { MasterCatalogSelectionInput } from "@/features/masters/catalog/catalogTypes";
 import type { GameTitleResponse } from "@/shared/api/masters";
-import { layoutFamilyLabels, parseLayoutFamily } from "@/shared/domain/ocr";
+import { layoutFamilyLabels } from "@/shared/domain/ocr";
+import type { LayoutFamily } from "@/shared/domain/ocr";
 
 export function selectMasterCatalog({
   gameTitles,
@@ -70,13 +71,12 @@ export function buildGameTitleChoices(
 ) {
   return items.map((item) => {
     const pending = item.pending === true;
-    const layoutFamily = parseLayoutFamily(item.layoutFamily);
     return {
       item,
       pending,
       editable: canEdit && !pending,
       accessibleLabel: `${item.name}${pending ? "（追加中）" : ""}`,
-      description: `読み取り方式: ${layoutFamily ? layoutFamilyLabels[layoutFamily] : "未対応"}`,
+      description: `読み取り方式: ${layoutFamilyLabels[item.layoutFamily as LayoutFamily] ?? "未設定"}`,
     };
   });
 }

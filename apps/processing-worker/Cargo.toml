@@ -49,11 +49,10 @@ sha2.workspace = true
 tesseract = "0.15.2"
 thiserror.workspace = true
 tokio = { workspace = true, features = ["fs", "io-util", "macros", "process", "rt", "signal", "sync", "time"] }
-tokio-postgres = { workspace = true, features = ["with-serde_json-1", "with-uuid-1"] }
+tokio-postgres = { workspace = true, features = ["with-serde_json-1"] }
 tracing.workspace = true
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 url.workspace = true
-uuid = { version = "1.26.1", features = ["serde"] }
 
 [dev-dependencies]
 momo-notifications = { path = "crates/notifications", features = ["test-fixtures"] }

@@ -5,7 +5,6 @@ import { canDeleteHeldEvent } from "@/features/heldEvents/list/heldEventActions"
 import type { HeldEventListItem } from "@/features/heldEvents/list/heldEventsListPresentation";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
-import { heldEventDetailHref } from "@/shared/navigation/publicIdentifiers";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { IconLink } from "@/shared/ui/actions/IconLink";
 import { cn } from "@/shared/ui/cn";
@@ -260,7 +259,7 @@ function HeldEventResultLink({ disabled, event }: HeldEventLinkProps) {
       aria-label={`${formatDateTimeLong(event.heldAt)}の開催詳細`}
       disabled={disabled}
       icon={<ClipboardList />}
-      to={heldEventDetailHref(event.id, event.publicId)}
+      to={`/held-events/${encodeURIComponent(event.id)}`}
       tooltip="開催結果を見る"
       variant="quiet"
     />

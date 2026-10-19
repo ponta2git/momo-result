@@ -13,8 +13,7 @@ const (
 	http4sScalaVersion = "3.3.6"
 )
 
-// runIdentity names one recorded run and attempt. Candidate provenance uses the
-// producer; deployment provenance keeps that source separately from its deployer.
+// runIdentity names the producing run, not the current workflow's retry attempt.
 type runIdentity struct {
 	RunID      string
 	RunAttempt string
@@ -151,17 +150,13 @@ func validateRuntimeDeployment(deployment object, expected runIdentity) (object,
 		return nil, "", fail
 	}
 	keys := []string{"commit", "configSha256", "imageId", "imageRef", "manifestArtifactDigest", "manifestArtifactId", "manifestArtifactName", "manifestSha256", "registryDigest", "registryRef", "runAttempt", "runId", "schemaVersion", "sourceArtifactDigest", "sourceArtifactId", "sourceArtifactName"}
-	sourceID, sourceAttempt := expected.RunID, expected.RunAttempt
+	sourceAttempt := expected.RunAttempt
 	switch {
 	case deployment.numberEquals("schemaVersion", 1):
-	case deployment.numberEquals("schemaVersion", 2), deployment.numberEquals("schemaVersion", 3), deployment.numberEquals("schemaVersion", 4):
+	case deployment.numberEquals("schemaVersion", 2), deployment.numberEquals("schemaVersion", 3):
 		keys = append(keys, "sourceRunAttempt")
 		sourceAttempt = deployment.text("sourceRunAttempt")
-		if deployment.numberEquals("schemaVersion", 4) {
-			keys = append(keys, "sourceRunId")
-			sourceID = deployment.text("sourceRunId")
-		}
-		if deployment.numberEquals("schemaVersion", 3) || deployment.numberEquals("schemaVersion", 4) {
+		if deployment.numberEquals("schemaVersion", 3) {
 			keys = append(keys, "http4sPatchRepository", "http4sPatchScalaVersion", "http4sPatchSourceSha", "http4sPatchVersion")
 			if !deployment.equals("http4sPatchRepository", http4sRepository) ||
 				!deployment.equals("http4sPatchScalaVersion", http4sScalaVersion) ||
@@ -173,7 +168,7 @@ func validateRuntimeDeployment(deployment object, expected runIdentity) (object,
 	default:
 		return nil, "", fail
 	}
-	source := runIdentity{sourceID, sourceAttempt, expected.Commit}
+	source := runIdentity{expected.RunID, sourceAttempt, expected.Commit}
 	if !source.valid() || !deployment.keys(keys...) ||
 		!deployment.equals("commit", expected.Commit) || !deployment.equals("runId", expected.RunID) ||
 		!deployment.equals("runAttempt", expected.RunAttempt) || !deployment.equals("imageRef", source.imageRef(runtimeRepository)) ||
@@ -215,11 +210,8 @@ func runtimeDeployment(args []string) (string, error) {
 		}
 	}
 	deployment["sourceRunAttempt"] = sourceAttempt
-	if !deployment.numberEquals("schemaVersion", 4) {
-		deployment["sourceRunId"] = args[1]
-	}
 	return outputFields(deployment,
-		"candidate_sha", "commit", "source_run_id", "sourceRunId", "source_run_attempt", "sourceRunAttempt", "config_sha256", "configSha256",
+		"candidate_sha", "commit", "source_run_attempt", "sourceRunAttempt", "config_sha256", "configSha256",
 		"image_ref", "imageRef", "manifest_artifact_digest", "manifestArtifactDigest",
 		"manifest_artifact_id", "manifestArtifactId", "manifest_artifact_name", "manifestArtifactName",
 		"manifest_sha256", "manifestSha256", "registry_digest", "registryDigest", "registry_ref", "registryRef"), nil

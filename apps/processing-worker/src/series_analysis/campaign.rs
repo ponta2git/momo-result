@@ -14,7 +14,7 @@ pub(super) async fn refresh(
     transaction
         .query(
             "SELECT id FROM series_analysis_campaigns
-             WHERE legacy_id = ANY($1::text[]) ORDER BY legacy_id FOR NO KEY UPDATE",
+             WHERE id = ANY($1) ORDER BY id FOR NO KEY UPDATE",
             &[&campaign_ids],
         )
         .await?;
@@ -29,7 +29,7 @@ pub(super) async fn refresh(
                  COUNT(*) FILTER (WHERE status = 'failed')::int AS failed_count,
                  COUNT(*) FILTER (WHERE status = 'skipped_title_deleted')::int AS skipped_count
                FROM series_analysis_campaign_targets
-               WHERE campaign_id IN (SELECT id FROM series_analysis_campaigns WHERE legacy_id=ANY($1::text[])) GROUP BY campaign_id
+               WHERE campaign_id = ANY($1) GROUP BY campaign_id
              )
              UPDATE series_analysis_campaigns c SET
                expanded_count = counts.expanded_count, terminal_count = counts.terminal_count,
@@ -58,7 +58,7 @@ pub(super) async fn refresh(
                    ELSE NULL
                  END
              FROM series_analysis_campaigns c
-             WHERE c.legacy_id = ANY($1::text[]) AND o.id = c.operation_request_id",
+             WHERE c.id = ANY($1) AND o.id = c.operation_request_id",
             &[&campaign_ids],
         )
         .await?;

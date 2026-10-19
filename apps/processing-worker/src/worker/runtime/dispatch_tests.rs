@@ -1,7 +1,7 @@
 //! Durable claims must progress even when candidate discovery consumes the soft scan budget.
 #![expect(
     clippy::panic_in_result_fn,
-    reason = "isolated database assertions observe durable job and resource reservation transitions"
+    reason = "isolated database assertions observe durable job and execution-slot transitions"
 )]
 
 use std::{error::Error, fs, num::NonZeroU64, path::Path, time::Duration};
@@ -16,7 +16,7 @@ use crate::{
     cgroup::{CgroupHierarchy, ChildCgroup},
     notifications::NotificationSink,
     ocr::control::OcrControlConfig,
-    postgres::test_support::DelayedDatabase,
+    postgres::{self, test_support::DelayedDatabase},
     series_analysis::{
         config::{AnalysisConsumerConfig, AnalysisExecutionLimits},
         control::ALGORITHM_VERSION,
@@ -34,8 +34,19 @@ const WORKER: &str = "scheduler-dispatch-smoke-worker";
 #[ignore = "requires explicitly isolated PROCESSING_SCHEDULER_SMOKE_DATABASE_URL"]
 async fn real_postgres_delayed_candidates_still_attempt_durable_claims() -> TestResult {
     let database_url = std::env::var("PROCESSING_SCHEDULER_SMOKE_DATABASE_URL")?;
-    let observer = crate::identity::fixtures::connect(&database_url).await?;
+    let observer = postgres::connect(&database_url).await?;
     cleanup(&observer).await?;
+    let vacant: bool = observer
+        .query_one(
+            "SELECT owner IS NULL FROM worker_execution_slots WHERE slot_key='shared-heavy-work'",
+            &[],
+        )
+        .await?
+        .try_get(0)?;
+    assert!(
+        vacant,
+        "the scheduler fixture requires an isolated vacant slot"
+    );
     insert_analysis(&observer).await?;
     let proxy = DelayedDatabase::start(&database_url, Duration::from_millis(150)).await?;
     let directory = TempDir::new()?;
@@ -66,72 +77,46 @@ async fn real_postgres_delayed_candidates_still_attempt_durable_claims() -> Test
     assert_job(&observer, ANALYSIS, "running", 1).await?;
     let attempt_count: i64 = observer
         .query_one(
-            r"
-                SELECT count(*)
-                FROM series_analysis_job_attempts
-                WHERE (SELECT fixture_parent.legacy_id
-                       FROM series_analysis_jobs AS fixture_parent
-                       WHERE fixture_parent.id = series_analysis_job_attempts.job_id) = $1
-                ",
+            "SELECT count(*) FROM series_analysis_job_attempts WHERE job_id=$1",
             &[&ANALYSIS],
         )
         .await?
         .try_get(0)?;
     assert_eq!(attempt_count, 1);
-    assert_lease(&observer, "analysis", ANALYSIS).await?;
+    assert_slot(&observer, "analysis", ANALYSIS).await?;
 
-    // Queued OCR must leave the running analysis and its reservation untouched.
+    // An active analysis must still receive the first slow OCR preemption request.
     insert_ocr(&observer).await?;
-    assert!(
-        scheduler.resources.is_reserved(),
-        "a committed claim retains its reservation"
-    );
+    scheduler.active = true;
     assert!(!claim_ocr(&mut scheduler, &stopped, &mut budget()).await?);
-    assert!(!Box::pin(claim_analysis(&mut scheduler, &stopped, &mut budget())).await?);
-    assert_job(&observer, WAITING, "queued", 0).await?;
-    let ocr_attempts: i32 = observer
-        .query_one(
-            r"
-            SELECT attempt_count
-            FROM ocr_jobs
-            WHERE ocr_jobs.legacy_id = $1
-            ",
-            &[&OCR],
-        )
-        .await?
-        .try_get(0)?;
-    assert_eq!(ocr_attempts, 0);
-    assert_lease(&observer, "analysis", ANALYSIS).await?;
-    scheduler.resources.release();
+    let requester: Option<String> = observer.query_one("SELECT preempt_requested_by FROM worker_execution_slots WHERE slot_key='shared-heavy-work'", &[]).await?.try_get(0)?;
+    assert_eq!(requester.as_deref(), Some(WORKER));
+    assert_slot(&observer, "analysis", ANALYSIS).await?;
+    scheduler.active = false;
+    clear_slot(&observer).await?;
 
     // No child is installed: UnsupportedPlatform occurs only after the real DB claim commits.
     let ocr_claim = claim_ocr(&mut scheduler, &stopped, &mut budget()).await;
     assert!(matches!(ocr_claim, Err(WorkerError::UnsupportedPlatform)));
     let row = observer
         .query_one(
-            r"
-                SELECT status, attempt_count
-                FROM ocr_jobs
-                WHERE ocr_jobs.legacy_id = $1
-                ",
+            "SELECT status,attempt_count FROM ocr_jobs WHERE id=$1",
             &[&OCR],
         )
         .await?;
     assert_eq!(row.try_get::<_, String>(0)?, "running");
     assert_eq!(row.try_get::<_, i32>(1)?, 1);
-    assert_lease(&observer, "ocr", OCR).await?;
+    assert_slot(&observer, "ocr", OCR).await?;
 
-    // This fixture installs no child; release only after the test has observed that boundary.
-    scheduler.resources.release();
-
-    // Independent job leases do not replace the process resource reservation.
-    // Releasing this childless fixture's reservation allows another job to claim.
-    let independent = Box::pin(claim_analysis(&mut scheduler, &stopped, &mut budget())).await;
-    assert!(matches!(independent, Err(WorkerError::UnsupportedPlatform)));
-    assert!(scheduler.retry_after.is_none());
-    assert_job(&observer, WAITING, "running", 1).await?;
-    assert_lease(&observer, "analysis", WAITING).await?;
-    assert_lease(&observer, "ocr", OCR).await?;
+    // A real busy claim must retain its backoff and leave the waiting attempt untouched.
+    assert!(!Box::pin(claim_analysis(&mut scheduler, &stopped, &mut budget())).await?);
+    assert!(
+        scheduler
+            .retry_after
+            .is_some_and(|retry| retry > time::Instant::now())
+    );
+    assert_job(&observer, WAITING, "queued", 0).await?;
+    assert_slot(&observer, "ocr", OCR).await?;
     drop(scheduler);
     cleanup(&observer).await?;
     Box::pin(verify_cursor_yield(&database_url, &proxy.url, &observer)).await?;
@@ -152,18 +137,9 @@ async fn verify_cursor_yield(
     )
     .await?;
     let (_shutdown, stopped) = watch::channel(false);
-    let mut contender = crate::identity::fixtures::connect(database_url).await?;
+    let mut contender = postgres::connect(database_url).await?;
     let held_title = contender.transaction().await?;
-    held_title.query_one(r"
-        SELECT (SELECT fixture_parent.legacy_id
-                FROM game_titles AS fixture_parent
-                WHERE fixture_parent.id = series_analysis_title_states.game_title_id) AS game_title_id
-        FROM series_analysis_title_states
-        WHERE (SELECT fixture_parent.legacy_id
-               FROM game_titles AS fixture_parent
-               WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = $1
-        FOR UPDATE
-        ", &[&ANALYSIS]).await?;
+    held_title.query_one("SELECT game_title_id FROM series_analysis_title_states WHERE game_title_id=$1 FOR UPDATE", &[&ANALYSIS]).await?;
 
     // The first candidate is attempted but contended. Yield before advancing over B.
     let mut scan = budget();
@@ -184,8 +160,8 @@ async fn verify_cursor_yield(
     assert!(matches!(advanced, Err(WorkerError::UnsupportedPlatform)));
     assert_job(observer, WAITING, "running", 1).await?;
     assert_job(observer, ANALYSIS, "queued", 0).await?;
-    assert_lease(observer, "analysis", WAITING).await?;
-    scheduler.resources.release();
+    assert_slot(observer, "analysis", WAITING).await?;
+    clear_slot(observer).await?;
 
     // Exhausting the keyset wraps it, allowing the formerly contended A to run.
     assert!(!Box::pin(claim_analysis(&mut scheduler, &stopped, &mut budget())).await?);
@@ -194,7 +170,7 @@ async fn verify_cursor_yield(
     drop(scheduler);
     assert!(matches!(wrapped, Err(WorkerError::UnsupportedPlatform)));
     assert_job(observer, ANALYSIS, "running", 1).await?;
-    assert_lease(observer, "analysis", ANALYSIS).await?;
+    assert_slot(observer, "analysis", ANALYSIS).await?;
     Ok(())
 }
 
@@ -210,13 +186,12 @@ async fn fixture(
     config: AnalysisConsumerConfig,
 ) -> TestResult<(WorkState, WakeReceiver)> {
     let settings = Settings::from(&config);
-    let resources = crate::resource_budget::ResourceBudget::new(settings.resource_limits);
     let (sink, wake) = PostCommitSink::channel();
     Ok((
         WorkState {
             config: Some(config),
             settings,
-            database: crate::identity::fixtures::connect(database_url).await?,
+            database: postgres::connect(database_url).await?,
             analysis: None,
             ocr: None,
             ocr_config: Some(OcrControlConfig::new(
@@ -225,7 +200,7 @@ async fn fixture(
                 Duration::from_secs(30),
                 Duration::from_secs(1),
             )?),
-            resources,
+            active: false,
             pending: None,
             ocr_cursor: None,
             analysis_cursor: None,
@@ -246,7 +221,6 @@ fn analysis_config(database_url: &str, directory: &Path) -> TestResult<AnalysisC
         ("memory.events", "max 0\noom_kill 0\n"),
         ("cgroup.procs", ""),
         ("cgroup.kill", ""),
-        ("cpu.max", "100000 100000"),
     ] {
         fs::write(directory.join(name), content)?;
     }
@@ -271,11 +245,9 @@ fn analysis_config(database_url: &str, directory: &Path) -> TestResult<AnalysisC
             134_217_728,
         )?,
         execution_limits: AnalysisExecutionLimits {
-            memory: crate::resource_budget::MemoryBudget::new(
-                268_435_456,
-                134_217_728,
-                134_217_728,
-            )?,
+            runtime_memory_limit: bound(268_435_456)?,
+            child_memory_limit: bound(134_217_728)?,
+            parent_headroom: bound(134_217_728)?,
             calculation_timeout: Duration::from_mins(1),
             finalization_timeout: Duration::from_secs(30),
             temporary_bytes_limit: bound(67_108_864)?,
@@ -289,34 +261,8 @@ fn analysis_config(database_url: &str, directory: &Path) -> TestResult<AnalysisC
 async fn insert_analysis(client: &Client) -> TestResult {
     let schema = i32::try_from(ARTIFACT_SCHEMA_VERSION)?;
     for id in [ANALYSIS, WAITING] {
-        client.execute(r"
-            WITH fixture_titles AS (
-                   INSERT INTO game_titles (id, legacy_id, name, layout_family, display_order)
-                   VALUES (pg_temp.fixture_uuid('game_titles', $1), $1, $1, 'momotetsu_2', 9999)
-                   RETURNING id
-                 )
-              INSERT INTO series_analysis_title_states (game_title_id, algorithm_version, artifact_schema_version, validation_contract_id)
-              SELECT fixture_titles.id, release.algorithm_version, release.artifact_schema_version, release.validation_contract_id
-              FROM fixture_titles CROSS JOIN series_analysis_release_state AS release
-              WHERE release.singleton_key = 'current'
-              ON CONFLICT (game_title_id) DO NOTHING
-            ", &[&id]).await?;
-        client
-            .execute(
-                r"
-            INSERT INTO series_analysis_jobs (id, legacy_id, game_title_id, input_revision, algorithm_version,
-                                              artifact_schema_version, validation_contract_id, status, trigger, available_at, requested_at)
-            VALUES (pg_temp.fixture_uuid('series_analysis_jobs', $1), $1, pg_temp.fixture_uuid('game_titles', $1), 0, $2, $3,
-                    $4, 'queued', 'manual', CAST('2020-01-01' AS timestamptz), CAST('2020-01-01' AS timestamptz))
-            ",
-                &[
-                    &id,
-                    &ALGORITHM_VERSION,
-                    &schema,
-                    &ARTIFACT_VALIDATION_CONTRACT_ID,
-                ],
-            )
-            .await?;
+        client.execute("INSERT INTO game_titles(id,name,layout_family,display_order) VALUES ($1,$1,'momotetsu2',9999)", &[&id]).await?;
+        client.execute("INSERT INTO series_analysis_jobs(id,game_title_id,input_revision,algorithm_version,artifact_schema_version,validation_contract_id,status,trigger,available_at,requested_at) VALUES ($1,$1,0,$2,$3,$4,'queued','manual',TIMESTAMPTZ '2020-01-01',TIMESTAMPTZ '2020-01-01')", &[&id,&ALGORITHM_VERSION,&schema,&ARTIFACT_VALIDATION_CONTRACT_ID]).await?;
     }
     Ok(())
 }
@@ -324,63 +270,19 @@ async fn insert_analysis(client: &Client) -> TestResult {
 async fn insert_ocr(client: &Client) -> TestResult {
     let hash = "ab".repeat(32);
     let idempotency = "fe".repeat(32);
-    client
-        .execute(
-            r"
-        INSERT INTO source_images (id, legacy_id, owner_account_id, object_key, idempotency_key_hash, status, media_type,
-                                   byte_length, sha256_hex, width, height, storage_etag, available_at)
-        VALUES (pg_temp.fixture_uuid('source_images', $1), $1, pg_temp.fixture_uuid('momo_login_accounts', 'account_ponta'),
-                'source-images/scheduler-dispatch-smoke.png', $2, 'AVAILABLE', 'image/png', 68, $3, 1, 1, 'fixture',
-                clock_timestamp())
-        ",
-            &[&OCR, &idempotency, &hash],
-        )
-        .await?;
-    client.execute(r"
-        INSERT INTO match_drafts (id, legacy_id, created_by_account_id, status, total_assets_draft_id, legacy_total_assets_draft_id)
-        VALUES (pg_temp.fixture_uuid('match_drafts', $1), $1, pg_temp.fixture_uuid('momo_login_accounts', 'account_ponta'),
-                'ocr_running', pg_temp.fixture_uuid('ocr_drafts', $1), $1)
-        ", &[&OCR]).await?;
+    client.execute("INSERT INTO source_images(id,owner_account_id,object_key,idempotency_key_hash,status,media_type,byte_length,sha256_hex,width,height,storage_etag,available_at) VALUES ($1,'account_ponta','source-images/scheduler-dispatch-smoke.png',$2,'AVAILABLE','image/png',68,$3,1,1,'fixture',clock_timestamp())", &[&OCR,&idempotency,&hash]).await?;
+    client.execute("INSERT INTO match_drafts(id,created_by_account_id,status,total_assets_draft_id) VALUES ($1,'account_ponta','ocr_running',$1)", &[&OCR]).await?;
     let input = serde_json::json!({"schemaVersion":"2","jobId":OCR,"draftId":OCR,"sourceImageId":OCR,"imageObjectKey":"source-images/scheduler-dispatch-smoke.png","sha256":hash,"byteLength":"68","mediaType":"image/png","requestedScreenType":"total_assets"});
-    client
-        .execute(
-            r"
-        INSERT INTO ocr_jobs (id, legacy_id, draft_id, legacy_draft_id, image_id, requested_screen_type, status,
-                              source_image_id, input_snapshot)
-        VALUES (pg_temp.fixture_uuid('ocr_jobs', $1), $1, pg_temp.fixture_uuid('ocr_drafts', $1), $1, $1, 'total_assets',
-                'queued', pg_temp.fixture_uuid('source_images', $1), $2)
-        ",
-            &[&OCR, &input],
-        )
-        .await?;
-    client.execute(r"
-        INSERT INTO ocr_submissions (id, legacy_id, owner_account_id, match_draft_id, legacy_match_draft_id, status, admission_deadline)
-        VALUES (pg_temp.fixture_uuid('ocr_submissions', 'ad15e7ce-0000-4000-8000-000000000001'),
-                'ad15e7ce-0000-4000-8000-000000000001', pg_temp.fixture_uuid('momo_login_accounts', 'account_ponta'),
-                pg_temp.fixture_uuid('match_drafts', $1), $1, 'open', clock_timestamp() + CAST('10 minutes' AS interval))
-        ", &[&OCR]).await?;
-    client
-        .execute(
-            r"
-        INSERT INTO ocr_submission_members (submission_id, screen_type, upload_idempotency_key_hash, image_sha256_hex,
-                                            image_byte_length, status, job_id)
-        VALUES (pg_temp.fixture_uuid('ocr_submissions', 'ad15e7ce-0000-4000-8000-000000000001'), 'total_assets', $1, $2, 68,
-                'registered', pg_temp.fixture_uuid('ocr_jobs', $3))
-        ",
-            &[&idempotency, &"ab".repeat(32), &OCR],
-        )
-        .await?;
+    client.execute("INSERT INTO ocr_jobs(id,draft_id,image_id,requested_screen_type,status,source_image_id,input_snapshot) VALUES ($1,$1,$1,'total_assets','queued',$1,$2)", &[&OCR,&input]).await?;
+    client.execute("INSERT INTO ocr_submissions(id,owner_account_id,match_draft_id,status,admission_deadline) VALUES ('ad15e7ce-0000-4000-8000-000000000001','account_ponta',$1,'open',clock_timestamp()+interval '10 minutes')", &[&OCR]).await?;
+    client.execute("INSERT INTO ocr_submission_members(submission_id,screen_type,upload_idempotency_key_hash,image_sha256_hex,image_byte_length,status,job_id) VALUES ('ad15e7ce-0000-4000-8000-000000000001','total_assets',$1,$2,68,'registered',$3)", &[&idempotency,&"ab".repeat(32),&OCR]).await?;
     Ok(())
 }
 
 async fn assert_job(client: &Client, id: &str, status: &str, attempts: i32) -> TestResult {
     let row = client
         .query_one(
-            r"
-                SELECT status, attempt_count
-                FROM series_analysis_jobs
-                WHERE series_analysis_jobs.legacy_id = $1
-                ",
+            "SELECT status,attempt_count FROM series_analysis_jobs WHERE id=$1",
             &[&id],
         )
         .await?;
@@ -389,103 +291,55 @@ async fn assert_job(client: &Client, id: &str, status: &str, attempts: i32) -> T
     Ok(())
 }
 
-async fn assert_lease(client: &Client, kind: &str, job: &str) -> TestResult {
-    let sql = if kind == "ocr" {
-        r"
-            SELECT lease_owner, lease_fencing_token
-            FROM ocr_jobs
-            WHERE ocr_jobs.legacy_id = $1 AND status = 'running'
-            "
-    } else {
-        r"
-            SELECT lease_owner, lease_fencing_token
-            FROM series_analysis_jobs
-            WHERE series_analysis_jobs.legacy_id = $1 AND status = 'running'
-            "
-    };
-    let row = client.query_one(sql, &[&job]).await?;
-    assert_eq!(row.try_get::<_, String>(0)?, WORKER);
-    assert!(row.try_get::<_, i64>(1)? > 0);
+async fn assert_slot(client: &Client, kind: &str, job: &str) -> TestResult {
+    let row = client.query_one("SELECT task_kind,job_id,owner,fencing_token FROM worker_execution_slots WHERE slot_key='shared-heavy-work'", &[]).await?;
+    assert_eq!(row.try_get::<_, String>(0)?, kind);
+    assert_eq!(row.try_get::<_, String>(1)?, job);
+    assert_eq!(row.try_get::<_, String>(2)?, WORKER);
+    assert!(row.try_get::<_, i64>(3)? > 0);
+    Ok(())
+}
+
+async fn clear_slot(client: &Client) -> TestResult {
+    client.execute("UPDATE worker_execution_slots SET task_kind=NULL,owner=NULL,job_id=NULL,attempt_id=NULL,holder_preemptible=NULL,lease_expires_at=NULL,preempt_requested_by=NULL,preempt_requested_at=NULL WHERE slot_key='shared-heavy-work' AND owner=$1", &[&WORKER]).await?;
     Ok(())
 }
 
 async fn cleanup(client: &Client) -> TestResult {
+    clear_slot(client).await?;
     client
         .execute(
-            r"
-                DELETE FROM ocr_submission_members
-                WHERE (SELECT fixture_parent.legacy_id
-                       FROM ocr_jobs AS fixture_parent
-                       WHERE fixture_parent.id = ocr_submission_members.job_id) = $1
-                ",
+            "DELETE FROM ocr_submission_members WHERE job_id=$1",
             &[&OCR],
         )
         .await?;
     client
         .execute(
-            r"
-                DELETE FROM ocr_submissions
-                WHERE ocr_submissions.legacy_match_draft_id = $1
-                ",
+            "DELETE FROM ocr_submissions WHERE match_draft_id=$1",
             &[&OCR],
         )
         .await?;
     client
-        .execute(
-            r"
-            DELETE FROM ocr_jobs
-            WHERE ocr_jobs.legacy_id = $1
-            ",
-            &[&OCR],
-        )
+        .execute("DELETE FROM ocr_jobs WHERE id=$1", &[&OCR])
         .await?;
     client
-        .execute(
-            r"
-            DELETE FROM match_drafts
-            WHERE match_drafts.legacy_id = $1
-            ",
-            &[&OCR],
-        )
+        .execute("DELETE FROM match_drafts WHERE id=$1", &[&OCR])
         .await?;
     client
-        .execute(
-            r"
-            DELETE FROM source_images
-            WHERE source_images.legacy_id = $1
-            ",
-            &[&OCR],
-        )
+        .execute("DELETE FROM source_images WHERE id=$1", &[&OCR])
         .await?;
     for id in [ANALYSIS, WAITING] {
         client
             .execute(
-                r"
-                    DELETE FROM series_analysis_job_attempts
-                    WHERE (SELECT fixture_parent.legacy_id
-                           FROM series_analysis_jobs AS fixture_parent
-                           WHERE fixture_parent.id = series_analysis_job_attempts.job_id) = $1
-                    ",
+                "DELETE FROM series_analysis_job_attempts WHERE job_id=$1",
                 &[&id],
             )
             .await?;
         client
-            .execute(
-                r"
-                DELETE FROM series_analysis_jobs
-                WHERE series_analysis_jobs.legacy_id = $1
-                ",
-                &[&id],
-            )
+            .execute("DELETE FROM series_analysis_jobs WHERE id=$1", &[&id])
             .await?;
         client
-            .execute(
-                r"
-                DELETE FROM game_titles
-                WHERE game_titles.legacy_id = $1
-                ",
-                &[&id],
-            )
+            .execute("DELETE FROM game_titles WHERE id=$1", &[&id])
             .await?;
     }
     Ok(())

@@ -60,12 +60,6 @@ describe("held event cache contract", () => {
     const pageListKey = heldEventKeys.list({ page: 2, pageSize: 25 });
     const pageList = { items: [newerEvent] };
     queryClient.setQueryData(heldEventKeys.detail(newerEvent.id), newerEvent);
-    queryClient.setQueryData(heldEventKeys.publicDetail("1"), {
-      kind: "found",
-      detail: { ...newerEvent, publicId: "1" },
-      navigation: { kind: "unavailable" },
-    });
-    queryClient.setQueryData(heldEventKeys.detail("1"), { id: "1", publicId: "2" });
     queryClient.setQueryData(heldEventKeys.summary(newerEvent.id), newerEvent);
     queryClient.setQueryData(heldEventKeys.summaryRead(newerEvent.id), {
       kind: "found",
@@ -77,8 +71,6 @@ describe("held event cache contract", () => {
     await syncHeldEventDeletedCache(queryClient, newerEvent.id);
 
     expect(queryClient.getQueryData(heldEventKeys.detail(newerEvent.id))).toBeUndefined();
-    expect(queryClient.getQueryData(heldEventKeys.publicDetail("1"))).toBeUndefined();
-    expect(queryClient.getQueryData(heldEventKeys.detail("1"))).toEqual({ id: "1", publicId: "2" });
     expect(queryClient.getQueryData(heldEventKeys.summary(newerEvent.id))).toBeUndefined();
     expect(queryClient.getQueryData(heldEventKeys.summaryRead(newerEvent.id))).toBeUndefined();
     expect(queryClient.getQueryData(heldEventKeys.summary(olderEvent.id))).toEqual(olderEvent);

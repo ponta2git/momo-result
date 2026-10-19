@@ -7,31 +7,28 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
-import momo.api.adapters.postgres.CanonicalIdentity.Entity
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.ids.{AccountId, MemberId, UserId}
 import momo.api.domain.{AccountRole, LoginAccount}
 import momo.api.repositories.{AppSession, SessionAccount, SessionAccountLookup}
 
-final class PostgresSessionAccountLookup[F[_]: MonadCancelThrow](
-    transactor: Transactor[F],
-    identities: PostgresIdentities = PostgresIdentities.Legacy,
-) extends SessionAccountLookup[F]:
+final class PostgresSessionAccountLookup[F[_]: MonadCancelThrow](transactor: Transactor[F])
+    extends SessionAccountLookup[F]:
   import PostgresSessionAccountLookup.*
 
   override def find(idHash: String): F[Option[SessionAccount]] = sql"""
       SELECT
         s.id_hash,
-        ${identities.wireId("a")},
-        ${identities.retainedColumn("s", "member_id")},
+        s.account_id,
+        s.member_id,
         s.csrf_secret_hash,
         s.created_at,
         s.last_seen_at,
         s.expires_at,
-        ${identities.wireId("a")},
+        a.id,
         a.discord_user_id,
         a.display_name,
-        ${identities.wireReference(Entity.Members, fr"a.player_member_id")},
+        a.player_member_id,
         a.login_enabled,
         a.role,
         a.created_at,

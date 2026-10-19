@@ -9,7 +9,6 @@ import momo.api.domain.{
   MatchDetail,
   MatchIdentity,
   MatchRecord,
-  PublicId,
   RecordNavigation,
   RecordNavigationOrder
 }
@@ -20,10 +19,6 @@ final class InMemoryMatchDetailReadModel[F[_]: MonadThrow](
     accounts: LoginAccountsRepository[F],
     metadata: InMemoryMatchMetadata[F],
 ) extends MatchDetailReadModel[F]:
-  // This fixture models the legacy schema; public-number reads are covered by real DB tests.
-  override def findByPublicId(publicId: PublicId): F[Option[MatchDetail]] =
-    none[MatchDetail].pure[F]
-
   override def find(id: MatchId): F[Option[MatchDetail]] =
     matches.list(MatchFixtureStore.ListFilter()).map(records =>
       RecordNavigation.select(records.sorted(using RecordNavigationOrder.matches))(_.id == id)

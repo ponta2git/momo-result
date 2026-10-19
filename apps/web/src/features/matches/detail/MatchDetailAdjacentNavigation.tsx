@@ -2,7 +2,6 @@ import type { MatchDetailReadyView } from "@/features/matches/detail/matchDetail
 import type { MatchNeighbor } from "@/shared/api/detailReadResult";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { formatNavigationDateTime } from "@/shared/lib/dateTime";
-import { matchDetailHref } from "@/shared/navigation/publicIdentifiers";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { AdjacentNavigation } from "@/shared/ui/navigation/AdjacentNavigation";
@@ -21,7 +20,7 @@ export function MatchDetailAdjacentNavigation({ view }: { view: MatchDetailReady
       : adjacent.kind === "available"
         ? `${label}はありません`
         : "前後情報を確認できません",
-    href: neighbor ? matchDetailHref(neighbor.matchId, neighbor.publicId) : undefined,
+    href: neighbor ? `/matches/${encodeURIComponent(neighbor.matchId)}` : undefined,
   });
   return (
     <AdjacentNavigation

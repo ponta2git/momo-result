@@ -9,7 +9,6 @@ import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
 
-import momo.api.adapters.postgres.CanonicalIdentity.Entity
 import momo.api.adapters.postgres.PostgresSeriesAnalysisChunkOps.DisplayMetadata
 import momo.api.config.SeriesAnalysisReadConfig
 import momo.api.domain.*
@@ -21,10 +20,7 @@ final class PostgresSeriesAnalysisRepository[F[_]: Async] private (
     transactor: Transactor[F],
     readConfig: SeriesAnalysisReadConfig,
     decodeSemaphore: Semaphore[F],
-    identities: PostgresIdentities,
 ) extends SeriesAnalysisRepository[F]:
-
-  private given PostgresIdentities = identities
 
   override def options: F[Either[AppError, SeriesAnalysisOptions]] =
     PostgresSeriesAnalysisReadOps.options.transact(transactor)
@@ -131,15 +127,13 @@ final class PostgresSeriesAnalysisRepository[F[_]: Async] private (
   ): F[Either[AppError, SeriesAnalysisRecalculationAccepted]] =
     (freshId, freshId, freshId).tupled.flatMap {
       case (operationId, requestId, jobId) =>
-        identities.normalize(Entity.GameTitles, gameTitleId.value).flatMap(title =>
-          PostgresSeriesAnalysisTitleRequestOps.requestTitle(
-            GameTitleId.unsafeFromString(title),
-            requestedBy,
-            idempotencyKeyHash,
-            operationId,
-            requestId,
-            jobId,
-          )
+        PostgresSeriesAnalysisTitleRequestOps.requestTitle(
+          gameTitleId,
+          requestedBy,
+          idempotencyKeyHash,
+          operationId,
+          requestId,
+          jobId,
         ).transact(transactor)
     }
 
@@ -161,16 +155,9 @@ object PostgresSeriesAnalysisRepository:
       transactor: Transactor[F],
       readConfig: SeriesAnalysisReadConfig,
   ): F[PostgresSeriesAnalysisRepository[F]] =
-    create(transactor, readConfig, PostgresIdentities.Legacy)
-
-  def create[F[_]: Async](
-      transactor: Transactor[F],
-      readConfig: SeriesAnalysisReadConfig,
-      identities: PostgresIdentities,
-  ): F[PostgresSeriesAnalysisRepository[F]] =
     Async[F].delay(SeriesAnalysisPayloadValidator.ensureReady()) *>
       Semaphore[F](readConfig.decodeConcurrency.toLong)
-        .map(new PostgresSeriesAnalysisRepository(transactor, readConfig, _, identities))
+        .map(new PostgresSeriesAnalysisRepository(transactor, readConfig, _))
 
   private[postgres] def boundedChunkRead[F[_]: Async](
       semaphore: Semaphore[F],

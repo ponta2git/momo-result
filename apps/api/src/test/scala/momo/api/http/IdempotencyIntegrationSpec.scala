@@ -18,7 +18,7 @@ import momo.api.domain.AccountRole
 import momo.api.domain.ids.{AccountId, MemberId}
 import momo.api.endpoints.ProblemDetails
 import momo.api.http.HttpAssertions.{assertProblem, jsonField}
-import momo.api.repositories.{IdempotencyRecord, IdempotencyRepository, IdempotencyResponse}
+import momo.api.repositories.{IdempotencyRepository, IdempotencyResponse}
 
 final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
 
@@ -161,80 +161,6 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
         assertEquals(problem.status, sttp.model.StatusCode.Conflict)
         assertEquals(problem.body.code, "IDEMPOTENCY_IN_PROGRESS")
       case Right(value) => fail(s"expected in-progress problem, got replay: $value")
-  }
-
-  test("idempotency: saved raw keys replay before fresh validation and preserve legacy body IDs") {
-    val account = AuthenticatedAccount(
-      accountId = AccountId.unsafeFromString("account_ponta"),
-      displayName = "ponta",
-      role = AccountRole.Admin,
-      playerMemberId = None,
-    )
-    val endpoint = "POST /api/testing/idempotency"
-    val request = Json.obj("memberId" -> Json.fromString("member_ponta"))
-    val result = Json.obj("id" -> Json.fromString("legacy-result"))
-    val rawKey = "saved legacy key with spaces"
-    for
-      underlying <- InMemoryIdempotencyRepository.create[IO]
-      initialGuard <- idempotencyGuard(underlying)
-      _ <- IdempotencyReplay.wrap[IO, Json, Json](
-        initialGuard,
-        Some("seed-key"),
-        account,
-        endpoint,
-        request,
-        IO.pure(directLimiterNow),
-        IO.pure(Right(result)),
-      )
-      saved <- underlying.lookup("seed-key", account.accountId, endpoint)
-        .map(_.getOrElse(fail("missing saved response")).copy(key = rawKey))
-      repository = new IdempotencyRepository[IO]:
-        export underlying.{reserveWithinAccountLimit, complete, abandon, cleanup}
-        def lookup(key: String, accountId: AccountId, path: String): IO[Option[IdempotencyRecord]] =
-          IO.pure(
-            Option.when(key == rawKey && accountId == account.accountId && path == endpoint)(saved)
-          )
-      guard <- idempotencyGuard(repository, mutationLimit = 0, activeKeyLimit = 0)
-      attempts <- IO.ref(0)
-      replay <- IdempotencyReplay.wrap[IO, Json, Json](
-        guard,
-        Some(rawKey),
-        account,
-        endpoint,
-        request,
-        IO.pure(directLimiterNow),
-        attempts.update(_ + 1).as(Right(result)),
-      )
-      changed <- IdempotencyReplay.wrap[IO, Json, Json](
-        guard,
-        Some(rawKey),
-        account,
-        endpoint,
-        Json.obj("memberId" -> Json.fromString("00112233-4455-6677-8899-aabbccddeeff")),
-        IO.pure(directLimiterNow),
-        attempts.update(_ + 1).as(Right(result)),
-      )
-      freshGuard <- idempotencyGuard(repository)
-      invalid <- IdempotencyReplay.wrap[IO, Json, Json](
-        freshGuard,
-        Some("fresh key with spaces"),
-        account,
-        endpoint,
-        request,
-        IO.pure(directLimiterNow),
-        attempts.update(_ + 1).as(Right(result)),
-      )
-      count <- attempts.get
-      storedAfter <- underlying.lookup("seed-key", account.accountId, endpoint)
-    yield
-      assertEquals(replay, Right(result))
-      assertEquals(changed.left.toOption.map(_.body.code), Some("IDEMPOTENCY_PAYLOAD_MISMATCH"))
-      assertEquals(
-        invalid.left.toOption.map(_.status),
-        Some(sttp.model.StatusCode.UnprocessableEntity)
-      )
-      assertEquals(count, 0)
-      assertEquals(storedAfter.map(_.response), Some(saved.response))
   }
 
   test("idempotency: raised mutation errors keep the reservation when commit status is unknown") {

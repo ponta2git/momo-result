@@ -77,10 +77,6 @@ impl NotificationHandle {
         self.task.as_ref().is_none_or(JoinHandle::is_finished)
     }
 
-    pub(crate) const fn is_settled(&self) -> bool {
-        self.task.is_none()
-    }
-
     fn abort(&mut self) {
         self.abort_requested = true;
         if let Some(task) = &self.task {

@@ -7,7 +7,6 @@ mod plan;
 mod runtime;
 pub(crate) use plan::WorkerRuntimePlan;
 mod selection;
-pub(crate) use runtime::maintenance::run as run_maintenance_analysis;
 #[cfg(test)]
 pub(crate) use runtime::run_ocr_only;
 pub(crate) use runtime::{WorkerError, run};
@@ -130,7 +129,7 @@ mod tests {
         let database_url = std::env::var("PROCESSING_SCHEDULER_SMOKE_DATABASE_URL")?;
         let (sink, mut wake) = PostCommitSink::channel();
         let mut listener = listener::subscribe(&database_url, sink).await?;
-        let publisher = crate::identity::fixtures::connect(&database_url).await?;
+        let publisher = crate::postgres::connect(&database_url).await?;
         listener.verify_notification_round_trip(&publisher).await?;
         let verified = tokio::time::timeout(Duration::from_secs(2), wake.recv()).await?;
         assert_eq!(

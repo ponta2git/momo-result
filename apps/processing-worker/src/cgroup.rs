@@ -4,20 +4,12 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-use crate::resource_budget::CpuBudget;
 use thiserror::Error;
-
-mod cpu;
-
-#[cfg(target_os = "linux")]
-pub(crate) mod maintenance;
 
 pub(crate) const CGROUP_DIRECTORY_NAME: &str = "momo-heavy-child";
 pub(crate) const CGROUP_HIERARCHY_ENV: &str = "MOMO_HEAVY_CGROUP_HIERARCHY";
 pub(crate) const CGROUP_DIRECTORY_ENV: &str = "MOMO_HEAVY_CGROUP_DIRECTORY";
 pub(crate) const CGROUP_LIMIT_ENV: &str = "MOMO_HEAVY_CGROUP_LIMIT_BYTES";
-const CPU_DIRECTORY_ENV: &str = "MOMO_HEAVY_CPU_CGROUP_DIRECTORY";
-const CPU_LIMIT_ENV: &str = "MOMO_HEAVY_CPU_LIMIT_MILLIS";
 #[cfg(target_os = "linux")]
 const CGROUP_V2_VALIDATED_ENV: &str = "MOMO_HEAVY_CGROUP_V2_VALIDATED";
 
@@ -83,7 +75,6 @@ pub(crate) struct ChildCgroup {
     hierarchy: CgroupHierarchy,
     directory: PathBuf,
     expected_limit_bytes: u64,
-    cpu: cpu::ChildCpuCgroup,
 }
 
 #[derive(Debug, Error)]
@@ -154,13 +145,11 @@ pub(crate) struct PreparedChildCgroup {
     hierarchy: CgroupHierarchy,
     directory: PathBuf,
     limit_bytes: u64,
-    cpu_directory: PathBuf,
-    cpu_budget: CpuBudget,
 }
 
 #[cfg(target_os = "linux")]
 impl PreparedChildCgroup {
-    pub(crate) fn environment(&self) -> [(String, String); 5] {
+    pub(crate) fn environment(&self) -> [(String, String); 3] {
         [
             (
                 String::from(CGROUP_HIERARCHY_ENV),
@@ -171,17 +160,6 @@ impl PreparedChildCgroup {
                 self.directory.as_os_str().to_string_lossy().into_owned(),
             ),
             (String::from(CGROUP_LIMIT_ENV), self.limit_bytes.to_string()),
-            (
-                String::from(CPU_DIRECTORY_ENV),
-                self.cpu_directory
-                    .as_os_str()
-                    .to_string_lossy()
-                    .into_owned(),
-            ),
-            (
-                String::from(CPU_LIMIT_ENV),
-                self.cpu_budget.millis().to_string(),
-            ),
         ]
     }
 }
@@ -204,34 +182,18 @@ impl ChildCgroup {
         if configured_limit != expected_limit_bytes {
             return Err(CgroupError::LimitMismatch);
         }
-        let cpu_budget =
-            CpuBudget::from_environment().map_err(|_error| CgroupError::InvalidEnvironment)?;
-        let configured_cpu = env::var(CPU_LIMIT_ENV)
-            .ok()
-            .and_then(|value| value.parse::<u32>().ok())
-            .ok_or(CgroupError::InvalidEnvironment)?;
-        if configured_cpu != cpu_budget.millis() {
-            return Err(CgroupError::LimitMismatch);
-        }
-        let cpu_directory = env::var(CPU_DIRECTORY_ENV)
-            .ok()
-            .map(PathBuf::from)
-            .ok_or(CgroupError::InvalidEnvironment)?;
-        let cpu = cpu::ChildCpuCgroup::open(hierarchy, cpu_directory, cpu_budget, !cfg!(test))?;
-        Self::open(hierarchy, directory, expected_limit_bytes, cpu, !cfg!(test))
+        Self::open(hierarchy, directory, expected_limit_bytes, !cfg!(test))
     }
 
     fn open(
         hierarchy: CgroupHierarchy,
         directory: PathBuf,
         expected_limit_bytes: u64,
-        cpu: cpu::ChildCpuCgroup,
         enforce_production_path: bool,
     ) -> Result<Self, CgroupError> {
         if expected_limit_bytes == 0
             || !safe_absolute_path(&directory)
             || (enforce_production_path && !production_cgroup_path(&directory))
-            || (hierarchy == CgroupHierarchy::V2 && cpu.directory() != directory)
         {
             return Err(CgroupError::UnsafeDirectory);
         }
@@ -239,7 +201,6 @@ impl ChildCgroup {
             hierarchy,
             directory,
             expected_limit_bytes,
-            cpu,
         };
         cgroup.validate_limit()?;
         cgroup.ensure_empty()?;
@@ -274,21 +235,15 @@ impl ChildCgroup {
         if attached.len() != 1 || attached.first().copied() != Some(process_id) {
             return Err(CgroupError::AttachFailed);
         }
-        // v1 has separate CPU and memory membership. Both are verified while the child is still
-        // behind its start barrier; v2 moves all resource controllers in the first attachment.
-        if self.hierarchy == CgroupHierarchy::V1 {
-            self.cpu.attach(process_id)?;
-        }
-        self.validate_limit()?;
-        self.cpu.validate_limit()?;
         Ok(())
     }
 
     pub(crate) fn ensure_empty(&self) -> Result<(), CgroupError> {
-        if !read_process_ids(&self.processes_path())?.is_empty() {
-            return Err(CgroupError::UnexpectedProcess);
+        if read_process_ids(&self.processes_path())?.is_empty() {
+            Ok(())
+        } else {
+            Err(CgroupError::UnexpectedProcess)
         }
-        self.cpu.ensure_empty()
     }
 
     /// Runs one authoritative hard-stop pass over every process currently in this cgroup.
@@ -304,12 +259,7 @@ impl ChildCgroup {
     /// Returns an error when membership cannot be read or a member cannot be killed.
     #[cfg(unix)]
     pub(crate) fn hard_kill(&self) -> Result<bool, CgroupError> {
-        let mut process_ids = read_process_ids(&self.processes_path())?;
-        if self.hierarchy == CgroupHierarchy::V1 {
-            process_ids.extend(self.cpu.process_ids()?);
-            process_ids.sort_unstable();
-            process_ids.dedup();
-        }
+        let process_ids = read_process_ids(&self.processes_path())?;
         if process_ids.is_empty() {
             return Ok(false);
         }
@@ -349,34 +299,6 @@ impl ChildCgroup {
                 oom_kill_count: read_named_u64(&self.directory.join("memory.events"), "oom_kill")?,
             }),
         }
-    }
-
-    pub(crate) const fn cpu_budget(&self) -> CpuBudget {
-        self.cpu.budget()
-    }
-
-    #[cfg(target_os = "linux")]
-    pub(crate) fn verified_cpu_limit_millis(&self) -> Result<u32, CgroupError> {
-        self.cpu.validate_limit()?;
-        Ok(self.cpu.budget().millis())
-    }
-
-    #[cfg(target_os = "linux")]
-    pub(crate) fn validate_resource_budget(
-        &self,
-        memory: crate::resource_budget::MemoryBudget,
-    ) -> Result<(), CgroupError> {
-        if self.expected_limit_bytes != memory.child_bytes()
-            || self
-                .runtime_snapshot()?
-                .limit_bytes
-                .is_some_and(|limit| memory.runtime_bytes() > limit)
-        {
-            return Err(CgroupError::LimitMismatch);
-        }
-        self.validate_limit()?;
-        self.cpu.validate_limit()?;
-        self.cpu.validate_runtime_budget()
     }
 
     /// Reads the enclosing runtime cgroup that accounts for both the worker and its child.
@@ -421,9 +343,7 @@ impl ChildCgroup {
         directory: PathBuf,
         expected_limit_bytes: u64,
     ) -> Result<Self, CgroupError> {
-        let cpu =
-            cpu::ChildCpuCgroup::open(hierarchy, directory.clone(), CpuBudget::DEFAULT, false)?;
-        Self::open(hierarchy, directory, expected_limit_bytes, cpu, false)
+        Self::open(hierarchy, directory, expected_limit_bytes, false)
     }
 }
 
@@ -459,31 +379,17 @@ pub(crate) fn prepare_production_child_cgroup(
     if limit_bytes == 0 || !limit_bytes.is_multiple_of(4096) {
         return Err(CgroupError::InvalidControllerValue);
     }
-    let cpu_budget =
-        CpuBudget::from_environment().map_err(|_error| CgroupError::InvalidEnvironment)?;
     let membership = bounded_read(Path::new(PROC_SELF_CGROUP))?;
     if Path::new(V2_ROOT).join("cgroup.controllers").is_file() {
         if env::var(CGROUP_V2_VALIDATED_ENV).as_deref() != Ok("true") {
             return Err(CgroupError::UnsupportedHierarchy);
         }
-        prepare_v2(
-            &membership,
-            limit_bytes,
-            cpu_budget,
-            service_user_id,
-            service_group_id,
-        )
+        prepare_v2(&membership, limit_bytes, service_user_id, service_group_id)
     } else if Path::new(V1_MEMORY_ROOT)
         .join("memory.limit_in_bytes")
         .is_file()
     {
-        prepare_v1(
-            &membership,
-            limit_bytes,
-            cpu_budget,
-            service_user_id,
-            service_group_id,
-        )
+        prepare_v1(&membership, limit_bytes, service_user_id, service_group_id)
     } else {
         Err(CgroupError::UnsupportedHierarchy)
     }
@@ -493,7 +399,6 @@ pub(crate) fn prepare_production_child_cgroup(
 fn prepare_v1(
     membership: &str,
     limit_bytes: u64,
-    cpu_budget: CpuBudget,
     service_user_id: u32,
     service_group_id: u32,
 ) -> Result<PreparedChildCgroup, CgroupError> {
@@ -511,13 +416,10 @@ fn prepare_v1(
         fs::write(directory.join("memory.max_usage_in_bytes"), "0")?;
     }
     delegate_process_attachment(&directory, service_user_id, service_group_id)?;
-    let cpu = cpu::prepare_v1(membership, cpu_budget, service_user_id, service_group_id)?;
     Ok(PreparedChildCgroup {
         hierarchy: CgroupHierarchy::V1,
         directory,
         limit_bytes,
-        cpu_directory: cpu.directory().to_owned(),
-        cpu_budget,
     })
 }
 
@@ -525,15 +427,12 @@ fn prepare_v1(
 fn prepare_v2(
     membership: &str,
     limit_bytes: u64,
-    cpu_budget: CpuBudget,
     service_user_id: u32,
     service_group_id: u32,
 ) -> Result<PreparedChildCgroup, CgroupError> {
     let member_path = membership_path(membership, CgroupHierarchy::V2)?;
     let parent = controller_member_directory(Path::new(V2_ROOT), &member_path)?;
-    for controller in ["memory", "cpu"] {
-        require_controller_token(&parent.join("cgroup.controllers"), controller)?;
-    }
+    require_controller_token(&parent.join("cgroup.controllers"), "memory")?;
 
     let parent_processes = read_process_ids(&parent.join("cgroup.procs"))?;
     if parent_processes.as_slice() != [std::process::id()] {
@@ -558,11 +457,9 @@ fn prepare_v2(
         return Err(CgroupError::StaleBootstrapGroup);
     }
 
-    for controller in ["memory", "cpu"] {
-        enable_controller_for_children(&parent, controller)?;
-        require_controller_token(&delegation.join("cgroup.controllers"), controller)?;
-        enable_controller_for_children(&delegation, controller)?;
-    }
+    enable_controller_for_children(&parent, "memory")?;
+    require_controller_token(&delegation.join("cgroup.controllers"), "memory")?;
+    enable_controller_for_children(&delegation, "memory")?;
 
     let directory = prepare_empty_child_directory(&delegation, CGROUP_DIRECTORY_NAME)?;
     write_exact_u64(&directory.join("memory.max"), limit_bytes)?;
@@ -579,13 +476,10 @@ fn prepare_v2(
         service_user_id,
         service_group_id,
     )?;
-    let cpu = cpu::prepare_v2(&directory, cpu_budget)?;
     Ok(PreparedChildCgroup {
         hierarchy: CgroupHierarchy::V2,
         directory,
         limit_bytes,
-        cpu_directory: cpu.directory().to_owned(),
-        cpu_budget,
     })
 }
 
@@ -646,20 +540,6 @@ fn delegate_controller_write(
 
 #[cfg(target_os = "linux")]
 fn membership_path(membership: &str, hierarchy: CgroupHierarchy) -> Result<PathBuf, CgroupError> {
-    controller_membership_path(
-        membership,
-        match hierarchy {
-            CgroupHierarchy::V1 => Some("memory"),
-            CgroupHierarchy::V2 => None,
-        },
-    )
-}
-
-#[cfg(target_os = "linux")]
-fn controller_membership_path(
-    membership: &str,
-    controller: Option<&str>,
-) -> Result<PathBuf, CgroupError> {
     for line in membership.lines() {
         let mut fields = line.splitn(3, ':');
         let Some(_hierarchy_id) = fields.next() else {
@@ -671,9 +551,10 @@ fn controller_membership_path(
         let Some(path) = fields.next() else {
             continue;
         };
-        let selected = controller.map_or(controllers.is_empty(), |controller| {
-            controllers.split(',').any(|value| value == controller)
-        });
+        let selected = match hierarchy {
+            CgroupHierarchy::V1 => controllers.split(',').any(|value| value == "memory"),
+            CgroupHierarchy::V2 => controllers.is_empty(),
+        };
         if selected {
             let path = PathBuf::from(path);
             if safe_absolute_membership_path(&path) {
@@ -848,10 +729,6 @@ mod tests {
         fs::write(directory.join("cgroup.procs"), "").expect("process fixture must be written");
         match hierarchy {
             CgroupHierarchy::V1 => {
-                fs::write(directory.join("cpu.cfs_quota_us"), "100000")
-                    .expect("v1 CPU quota fixture must be written");
-                fs::write(directory.join("cpu.cfs_period_us"), "100000")
-                    .expect("v1 CPU period fixture must be written");
                 fs::write(directory.join("memory.limit_in_bytes"), "201326592\n")
                     .expect("v1 limit fixture must be written");
                 fs::write(directory.join("memory.usage_in_bytes"), "4096\n")
@@ -867,8 +744,6 @@ mod tests {
                 .expect("v1 event fixture must be written");
             }
             CgroupHierarchy::V2 => {
-                fs::write(directory.join("cpu.max"), "100000 100000")
-                    .expect("v2 CPU quota fixture must be written");
                 fs::write(directory.join("cgroup.kill"), "")
                     .expect("v2 kill fixture must be written");
                 fs::write(directory.join("memory.max"), "201326592\n")
@@ -917,41 +792,6 @@ mod tests {
         ));
         fs::write(directory.join("cgroup.procs"), "").expect("fixture must be emptied");
         cgroup.ensure_empty().expect("empty group must be accepted");
-    }
-
-    #[test]
-    fn v1_separate_cpu_membership_is_attached_and_must_be_reaped() {
-        let (_memory_root, memory) = fixture(CgroupHierarchy::V1);
-        let (_cpu_root, cpu_directory) = fixture(CgroupHierarchy::V1);
-        let cpu = cpu::ChildCpuCgroup::open(
-            CgroupHierarchy::V1,
-            cpu_directory.clone(),
-            CpuBudget::DEFAULT,
-            false,
-        )
-        .expect("separate CPU controller must open");
-        let cgroup =
-            ChildCgroup::open(CgroupHierarchy::V1, memory.clone(), 201_326_592, cpu, false)
-                .expect("separate controller memberships must open");
-
-        cgroup.attach(42).expect("both controllers must attach");
-        for directory in [&memory, &cpu_directory] {
-            assert_eq!(
-                read_process_ids(&directory.join("cgroup.procs")).expect("membership is readable"),
-                [42]
-            );
-        }
-        fs::write(memory.join("cgroup.procs"), "").expect("memory fixture must be emptied");
-        assert!(matches!(
-            cgroup.ensure_empty(),
-            Err(CgroupError::UnexpectedProcess)
-        ));
-        assert!(matches!(
-            cgroup.attach(43),
-            Err(CgroupError::UnexpectedProcess)
-        ));
-        fs::write(cpu_directory.join("cgroup.procs"), "").expect("CPU fixture must be emptied");
-        cgroup.ensure_empty().expect("both controllers are empty");
     }
 
     #[test]

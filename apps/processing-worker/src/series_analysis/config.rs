@@ -8,7 +8,6 @@ use std::{
 use thiserror::Error;
 
 use crate::cgroup::{CgroupError, ChildCgroup};
-use crate::resource_budget::MemoryBudget;
 
 const PUBLICATION_MODE_ENV: &str = "MOMO_ANALYSIS_PUBLICATION_MODE";
 const LISTENER_DATABASE_URL_ENV: &str = "MOMO_PROCESSING_LISTENER_DATABASE_URL";
@@ -22,7 +21,9 @@ pub(crate) enum AnalysisPublicationMode {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct AnalysisExecutionLimits {
-    pub(crate) memory: MemoryBudget,
+    pub(crate) runtime_memory_limit: NonZeroU64,
+    pub(crate) child_memory_limit: NonZeroU64,
+    pub(crate) parent_headroom: NonZeroU64,
     pub(crate) calculation_timeout: Duration,
     pub(crate) finalization_timeout: Duration,
     pub(crate) temporary_bytes_limit: NonZeroU64,
@@ -108,12 +109,9 @@ impl AnalysisActivationConfig {
         }
 
         let execution_limits = AnalysisExecutionLimits {
-            memory: MemoryBudget::new(
-                positive(lookup, "MOMO_ANALYSIS_RUNTIME_MEMORY_LIMIT_BYTES")?.get(),
-                positive(lookup, CHILD_MEMORY_LIMIT_ENV)?.get(),
-                positive(lookup, "MOMO_ANALYSIS_PARENT_HEADROOM_BYTES")?.get(),
-            )
-            .map_err(|_error| AnalysisConfigError::UnsafeMemoryRelationship)?,
+            runtime_memory_limit: positive(lookup, "MOMO_ANALYSIS_RUNTIME_MEMORY_LIMIT_BYTES")?,
+            child_memory_limit: positive(lookup, CHILD_MEMORY_LIMIT_ENV)?,
+            parent_headroom: positive(lookup, "MOMO_ANALYSIS_PARENT_HEADROOM_BYTES")?,
             calculation_timeout: duration_millis(lookup, "MOMO_ANALYSIS_CALCULATION_TIMEOUT_MS")?,
             finalization_timeout: duration_millis(lookup, "MOMO_ANALYSIS_FINALIZATION_TIMEOUT_MS")?,
             temporary_bytes_limit: positive(lookup, "MOMO_ANALYSIS_TEMPORARY_MAX_BYTES")?,
@@ -121,6 +119,14 @@ impl AnalysisActivationConfig {
             chunk_count_limit: positive(lookup, "MOMO_ANALYSIS_CHUNK_COUNT_MAX")?,
             temporary_file_count_limit: positive(lookup, "MOMO_ANALYSIS_TEMPORARY_FILE_COUNT_MAX")?,
         };
+        if execution_limits
+            .child_memory_limit
+            .get()
+            .checked_add(execution_limits.parent_headroom.get())
+            .is_none_or(|required| required > execution_limits.runtime_memory_limit.get())
+        {
+            return Err(AnalysisConfigError::UnsafeMemoryRelationship);
+        }
         if execution_limits
             .chunk_count_limit
             .get()
@@ -216,7 +222,7 @@ impl AnalysisConsumerConfig {
         if !dedicated_absolute_path(&temporary_root) {
             return Err(AnalysisConfigError::UnsafeTemporaryRoot);
         }
-        let child_cgroup = open_cgroup(execution_limits.memory.child_bytes())
+        let child_cgroup = open_cgroup(execution_limits.child_memory_limit.get())
             .map_err(|error| AnalysisConfigError::ChildCgroup { kind: error.kind() })?;
         Ok(Self {
             database_url: required_string(lookup, "DATABASE_URL")?,

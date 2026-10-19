@@ -51,17 +51,13 @@ const {
 );
 const {
   assertNewNotificationPartLimit,
-  resultNotificationRenderers,
+  planResultNotification,
 }: {
   assertNewNotificationPartLimit(notification: AnalysisNotification, origin: string): void;
-  resultNotificationRenderers: {
-    analysis_completed: {
-      plan(
-        notification: AnalysisNotification,
-        origin: string,
-      ): { partCount: number; parts(): Iterable<{ content: string }> };
-    };
-  };
+  planResultNotification(
+    notification: AnalysisNotification,
+    origin: string,
+  ): { partCount: number; parts(): Iterable<{ content: string }> };
 } = await import(source("features/result-notifications/render.ts"));
 const fixture: { schemaVersion: number; body: string; wireBytes: number; jsonbBytes: number } =
   JSON.parse(await readFile(fixturePath, "utf8"));
@@ -95,7 +91,7 @@ for (const match of notification.data.matches) {
   for (const player of match.players) points(player.displayName, 32);
 }
 assertNewNotificationPartLimit(notification, webOrigin);
-const plan = resultNotificationRenderers.analysis_completed.plan(notification, webOrigin);
+const plan = planResultNotification(notification, webOrigin);
 const parts = [...plan.parts()];
 assert.equal(parts.length, plan.partCount);
 assert.ok(parts.length > 1 && parts.length <= 128);

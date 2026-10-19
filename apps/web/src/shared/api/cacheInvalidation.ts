@@ -1,6 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import { matchDetailCacheFilter } from "@/shared/api/detailCache";
 import {
   heldEventKeys,
   matchKeys,
@@ -43,23 +42,21 @@ export async function invalidateAfterMatchDeleted(
   queryClient: QueryClient,
   matchId?: string,
 ): Promise<void> {
-  if (matchId) await queryClient.cancelQueries(matchDetailCacheFilter(matchId));
+  if (matchId) await queryClient.cancelQueries({ queryKey: matchKeys.resource(matchId) });
   await Promise.all([
     invalidateMatchCollections(queryClient),
     invalidateAnalysisState(queryClient),
     resetMatchContexts(queryClient, matchId),
     queryClient.invalidateQueries({
       queryKey: matchKeys.detailRoot(),
-      predicate: (query) =>
-        query.queryKey.at(-1) === "read-result" &&
-        (matchId === undefined || !matchDetailCacheFilter(matchId).predicate(query)),
+      predicate: ({ queryKey }) => queryKey[2] !== matchId && queryKey.at(-1) === "read-result",
     }),
     queryClient.invalidateQueries({ queryKey: heldEventKeys.all() }),
   ]);
 }
 
 export function evictDeletedMatchDetail(queryClient: QueryClient, matchId: string): void {
-  queryClient.removeQueries(matchDetailCacheFilter(matchId));
+  queryClient.removeQueries({ queryKey: matchKeys.resource(matchId) });
 }
 
 export async function invalidateAfterDraftCancelled(queryClient: QueryClient): Promise<void> {
@@ -99,7 +96,8 @@ export async function invalidateAfterMatchNoteReplaced(
   await Promise.all([
     // The editor owns the fresh detail read and its separate post-save failure state.
     queryClient.invalidateQueries({
-      ...matchDetailCacheFilter(matchId),
+      exact: true,
+      queryKey: matchKeys.detail(matchId),
       refetchType: "none",
     }),
     queryClient.invalidateQueries({ queryKey: matchKeys.collections() }),

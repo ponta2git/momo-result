@@ -10,10 +10,6 @@ pub(super) fn command_allowed(arguments: &[OsString]) -> bool {
     matches!(
         command,
         "worker"
-            | "maintenance-readiness"
-            | "maintenance-status"
-            | "maintenance-drain"
-            | "maintenance-analysis"
             | "release-audit"
             | "release-promote"
             | "release-reconcile"
@@ -30,17 +26,15 @@ pub(super) fn requires_child_cgroup(arguments: &[OsString]) -> bool {
         .first()
         .and_then(|value| value.to_str())
         .is_some_and(|command| {
-            (command == "maintenance-analysis"
-                && arguments.iter().any(|argument| argument == "--apply"))
-                || matches!(
-                    command,
-                    "worker"
-                        | "shadow-endurance"
-                        | "probe-cgroup-limit"
-                        | "probe-ocr-child-lifecycle"
-                        | "ocr-r2-endurance"
-                        | "ocr-local-endurance"
-                )
+            matches!(
+                command,
+                "worker"
+                    | "shadow-endurance"
+                    | "probe-cgroup-limit"
+                    | "probe-ocr-child-lifecycle"
+                    | "ocr-r2-endurance"
+                    | "ocr-local-endurance"
+            )
         })
 }
 
@@ -60,10 +54,6 @@ mod tests {
     fn bootstrap_command_allowlist_excludes_hidden_children_and_recursion() {
         for command in [
             "worker",
-            "maintenance-readiness",
-            "maintenance-status",
-            "maintenance-drain",
-            "maintenance-analysis",
             "release-audit",
             "release-promote",
             "release-reconcile",
@@ -101,26 +91,11 @@ mod tests {
                 "{command}"
             );
         }
-        for command in [
-            "maintenance-readiness",
-            "maintenance-status",
-            "maintenance-drain",
-            "maintenance-analysis",
-            "release-audit",
-            "release-promote",
-            "release-reconcile",
-        ] {
+        for command in ["release-audit", "release-promote", "release-reconcile"] {
             assert!(
                 !requires_child_cgroup(&[OsString::from(command)]),
                 "{command}"
             );
         }
-        assert!(
-            requires_child_cgroup(&[
-                OsString::from("maintenance-analysis"),
-                OsString::from("--apply")
-            ]),
-            "scoped apply must retain child isolation"
-        );
     }
 }

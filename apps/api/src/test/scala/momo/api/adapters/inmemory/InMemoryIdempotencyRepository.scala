@@ -11,8 +11,7 @@ import momo.api.repositories.{
   IdempotencyRecord,
   IdempotencyRepository,
   IdempotencyReservation,
-  IdempotencyResponse,
-  LegacyIdempotencyKey
+  IdempotencyResponse
 }
 
 /** In-memory adapter for [[IdempotencyRepository]], used by tests and local development runs. */
@@ -39,8 +38,6 @@ final class InMemoryIdempotencyRepository[F[_]: Functor] private (
         case Some(existing) if existing.response.status == 0 =>
           state -> IdempotencyReservation.InProgress
         case Some(existing) => state -> IdempotencyReservation.Replay(existing.response)
-        case None if !LegacyIdempotencyKey.accepts(entry.key) =>
-          state -> IdempotencyReservation.InvalidKey(LegacyIdempotencyKey.InvalidReason)
         case None =>
           val activeCount = state.values
             .count(record => record.accountId == entry.accountId && record.expiresAt.isAfter(now))

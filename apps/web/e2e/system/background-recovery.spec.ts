@@ -46,7 +46,7 @@ test("record editing and reading continue while the Worker and notification rece
     await page.getByRole("link", { name: "試合結果を編集" }).click();
     await page.getByLabel("ぽんた 総資産（万円）", { exact: true }).fill("2468");
     await page.getByRole("button", { exact: true, name: "保存" }).click();
-    await expect(page).toHaveURL(`/m/${fixture.matchPublicId}`);
+    await expect(page).toHaveURL(`/matches/${fixture.matchId}`);
     await page.reload();
     await expect(page.getByRole("heading", { name: "第1試合の結果" })).toBeVisible();
     const saved = await request.get(`/api/matches/${fixture.matchId}`);

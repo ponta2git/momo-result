@@ -241,22 +241,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/public/held-events/{publicId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["getApiPublicHeld-eventsPublicid"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/held-events/{heldEventId}/summary": {
         parameters: {
             query?: never;
@@ -428,22 +412,6 @@ export interface paths {
         put: operations["putApiMatchesMatchid"];
         post?: never;
         delete: operations["deleteApiMatchesMatchid"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/public/matches/{publicId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["getApiPublicMatchesPublicid"];
-        put?: never;
-        post?: never;
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -985,7 +953,6 @@ export interface components {
         AdjacentHeldEventResponse: {
             id: string;
             heldAt: string;
-            publicId?: string;
         };
         /** AdjacentMatchResponse */
         AdjacentMatchResponse: {
@@ -995,8 +962,6 @@ export interface components {
             heldAt: string;
             /** Format: int32 */
             matchNoInEvent: number;
-            publicId?: string;
-            heldEventPublicId?: string;
         };
         /** AuthMeResponse */
         AuthMeResponse: {
@@ -1160,7 +1125,6 @@ export interface components {
             matches?: components["schemas"]["HeldEventMatchResponse"][];
             drafts?: components["schemas"]["HeldEventDraftResponse"][];
             navigation: components["schemas"]["HeldEventNavigationResponse"];
-            publicId?: string;
         };
         /** HeldEventDraftResponse */
         HeldEventDraftResponse: {
@@ -1199,7 +1163,6 @@ export interface components {
             gameTitleName?: string;
             seasonName?: string;
             mapName?: string;
-            publicId?: string;
         };
         /** HeldEventNavigationResponse */
         HeldEventNavigationResponse: {
@@ -1229,7 +1192,6 @@ export interface components {
             /** Format: int32 */
             nextMatchNo: number;
             scopes?: components["schemas"]["HeldEventScopeResponse"][];
-            publicId?: string;
         };
         /** HeldEventScopeResponse */
         HeldEventScopeResponse: {
@@ -1248,7 +1210,6 @@ export interface components {
             draftCount: number;
             /** Format: int32 */
             nextMatchNo: number;
-            publicId?: string;
         };
         /** IncidentCountsRequest */
         IncidentCountsRequest: {
@@ -1346,8 +1307,6 @@ export interface components {
             gameTitleName?: string;
             seasonName?: string;
             mapName?: string;
-            publicId?: string;
-            heldEventPublicId?: string;
         };
         /** MatchDraftDetailResponse */
         MatchDraftDetailResponse: {
@@ -1404,7 +1363,6 @@ export interface components {
             playedAt: string;
             gameTitleName?: string;
             seasonName?: string;
-            publicId?: string;
         };
         /** MatchListPaginationResponse */
         MatchListPaginationResponse: {
@@ -1481,8 +1439,6 @@ export interface components {
             gameTitleName?: string;
             seasonName?: string;
             mapName?: string;
-            publicId?: string;
-            heldEventPublicId?: string;
         };
         /** MemberAliasListResponse */
         MemberAliasListResponse: {
@@ -7267,39 +7223,6 @@ export interface operations {
             };
         };
     };
-    "getApiPublicHeld-eventsPublicid": {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-Momo-Account-Id"?: string;
-            };
-            path: {
-                /** @description Canonical positive decimal string, from 1 through 9223372036854775807. */
-                publicId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HeldEventDetailResponse"];
-                };
-            };
-            default: {
-                headers: {
-                    "Retry-After"?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
     "getApiHeld-eventsHeldeventidSummary": {
         parameters: {
             query?: never;
@@ -7862,39 +7785,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeleteMatchResponse"];
-                };
-            };
-            default: {
-                headers: {
-                    "Retry-After"?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    getApiPublicMatchesPublicid: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-Momo-Account-Id"?: string;
-            };
-            path: {
-                /** @description Canonical positive decimal string, from 1 through 9223372036854775807. */
-                publicId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MatchDetailResponse"];
                 };
             };
             default: {

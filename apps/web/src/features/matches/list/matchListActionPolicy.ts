@@ -3,7 +3,10 @@ import type {
   MatchListSourceItem,
   MatchListStatus,
 } from "@/features/matches/list/matchListTypes";
-import { matchDetailHref } from "@/shared/navigation/publicIdentifiers";
+
+function matchDetailHref(matchId: string): string {
+  return `/matches/${encodeURIComponent(matchId)}`;
+}
 
 function reviewHref(matchDraftId: string): string {
   return `/review/${encodeURIComponent(matchDraftId)}`;
@@ -49,7 +52,7 @@ export function buildMatchListPrimaryAction(
   switch (status) {
     case "confirmed":
       return matchId
-        ? { href: matchDetailHref(matchId, item.publicId), label: "詳細を見る" }
+        ? { href: matchDetailHref(matchId), label: "詳細を見る" }
         : { disabled: true, label: "詳細を見る" };
     case "draft_ready":
       return draftAction(matchDraftId, "内容を確認");
@@ -80,11 +83,8 @@ export function buildMatchListSecondaryActions(
   return [{ href: exportHref(item.matchId), label: "出力", variant: "secondary" }];
 }
 
-export function matchListDetailHref(
-  matchId: string | undefined,
-  publicId?: string,
-): string | undefined {
-  return matchId ? matchDetailHref(matchId, publicId) : undefined;
+export function matchListDetailHref(matchId: string | undefined): string | undefined {
+  return matchId ? matchDetailHref(matchId) : undefined;
 }
 
 export function matchListExportHref(matchId: string | undefined): string | undefined {

@@ -5,7 +5,6 @@ import org.typelevel.log4cats.LoggerFactory
 
 import momo.api.config.AppConfig
 import momo.api.http.HttpRoutes
-import momo.api.repositories.EntityReferenceResolver
 import momo.api.usecases.exports.ExportMatches
 import momo.api.usecases.matchdrafts.PurgeSourceImages
 import momo.api.usecases.ocr.OcrSubmissions
@@ -22,8 +21,7 @@ private[bootstrap] object HttpUseCaseWiring:
     import repositories.*
     import storage.*
 
-    val references = identityReferences.getOrElse(EntityReferenceResolver.preserve[F])
-    val submissions = OcrSubmissions[F](ocrSubmissions, now, Some(references))
+    val submissions = OcrSubmissions[F](ocrSubmissions, now)
     val retention = PurgeSourceImages[F](matchDrafts, imageStorage)
     HttpRoutes.UseCases(
       upload = OcrUseCaseWiring.upload(imageStorage, imageStorageAdmission, submissions),
@@ -61,7 +59,6 @@ private[bootstrap] object HttpUseCaseWiring:
         archiveMaxBytes = config.resourceLimits.sourceImageArchiveMaxBytes,
         now = now,
         nextId = ids.nextMatchDraftId,
-        references = references,
       ),
       matches = MatchUseCaseWiring.matches(
         events = heldEvents,
@@ -78,7 +75,6 @@ private[bootstrap] object HttpUseCaseWiring:
         members = members,
         now = now,
         nextId = ids.nextMatchId,
-        references = references,
       ),
       exportMatches = ExportMatches[F](
         matchExports,

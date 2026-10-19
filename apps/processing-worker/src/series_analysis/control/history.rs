@@ -13,7 +13,7 @@ const DELETE_HISTORY: [&str; 5] = [
       WITH victims AS MATERIALIZED (
         SELECT id FROM series_analysis_operation_requests
         WHERE status = 'terminal' AND finished_at < ($1::timestamptz - interval '45 days')
-        ORDER BY finished_at, legacy_id
+        ORDER BY finished_at, id
         LIMIT $2
         FOR UPDATE SKIP LOCKED
       )
@@ -28,7 +28,7 @@ const DELETE_HISTORY: [&str; 5] = [
           AND fulfilled_at < ($1::timestamptz - interval '45 days')
           AND operation_request_id IS NULL
           AND campaign_id IS NULL
-        ORDER BY fulfilled_at, legacy_id
+        ORDER BY fulfilled_at, id
         LIMIT $2
         FOR UPDATE SKIP LOCKED
       )
@@ -41,7 +41,7 @@ const DELETE_HISTORY: [&str; 5] = [
         SELECT id FROM series_analysis_jobs
         WHERE status IN ('succeeded', 'failed', 'timed_out')
           AND finished_at < ($1::timestamptz - interval '45 days')
-        ORDER BY finished_at, legacy_id
+        ORDER BY finished_at, id
         LIMIT $2
         FOR UPDATE SKIP LOCKED
       )
@@ -55,7 +55,7 @@ const DELETE_HISTORY: [&str; 5] = [
         WHERE a.status = 'staging' AND a.created_at < ($1::timestamptz - interval '1 day')
           AND NOT EXISTS (
             SELECT 1 FROM series_analysis_title_states s
-            WHERE (SELECT id FROM series_analysis_artifact_identities WHERE legacy_id=a.id) IN (s.current_artifact_id, s.previous_artifact_id, s.notification_baseline_artifact_id)
+            WHERE a.id IN (s.current_artifact_id, s.previous_artifact_id, s.notification_baseline_artifact_id)
           )
         ORDER BY a.created_at, a.id
         LIMIT $2
@@ -71,7 +71,7 @@ const DELETE_HISTORY: [&str; 5] = [
         WHERE a.status = 'published' AND a.published_at < ($1::timestamptz - interval '45 days')
           AND NOT EXISTS (
             SELECT 1 FROM series_analysis_title_states s
-            WHERE (SELECT id FROM series_analysis_artifact_identities WHERE legacy_id=a.id) IN (s.current_artifact_id, s.previous_artifact_id, s.notification_baseline_artifact_id)
+            WHERE a.id IN (s.current_artifact_id, s.previous_artifact_id, s.notification_baseline_artifact_id)
           )
         ORDER BY a.published_at, a.id
         LIMIT $2
@@ -119,8 +119,8 @@ async fn cleanup_radar_payloads(
         SELECT p.id FROM series_radar_previews p JOIN series_radar_candidates c ON c.id=p.candidate_id
         WHERE p.updated_at < ($1::timestamptz - interval '45 days') AND p.evaluation_snapshot IS NOT NULL
           AND NOT EXISTS (SELECT 1 FROM series_radar_operations o WHERE o.preview_id=p.id AND o.status IN ('pending','running'))
-          AND (c.status IN ('withdrawn','invalid','applied') OR EXISTS (SELECT 1 FROM series_radar_previews newer WHERE newer.candidate_id=p.candidate_id AND (newer.created_at,newer.legacy_id)>(p.created_at,p.legacy_id)))
-        ORDER BY p.updated_at,p.legacy_id LIMIT $2 FOR UPDATE OF p SKIP LOCKED
+          AND (c.status IN ('withdrawn','invalid','applied') OR EXISTS (SELECT 1 FROM series_radar_previews newer WHERE newer.candidate_id=p.candidate_id AND (newer.created_at,newer.id)>(p.created_at,p.id)))
+        ORDER BY p.updated_at,p.id LIMIT $2 FOR UPDATE OF p SKIP LOCKED
       ), removed_scopes AS (
         DELETE FROM series_radar_preview_scopes s USING victims WHERE s.preview_id=victims.id RETURNING s.preview_id
       )
@@ -131,11 +131,11 @@ async fn cleanup_radar_payloads(
       WITH victims AS MATERIALIZED (
         SELECT b.id FROM series_radar_bases b
         WHERE b.created_at < ($1::timestamptz - interval '45 days') AND b.source_snapshot IS NOT NULL
-          AND NOT EXISTS (SELECT 1 FROM series_radar_title_states s WHERE (SELECT id FROM series_radar_basis_identities WHERE legacy_id=b.id) IN (s.current_basis_id,s.previous_basis_id,s.desired_basis_id))
+          AND NOT EXISTS (SELECT 1 FROM series_radar_title_states s WHERE b.id IN (s.current_basis_id,s.previous_basis_id,s.desired_basis_id))
           AND NOT EXISTS (SELECT 1 FROM series_analysis_artifacts a WHERE a.radar_basis_id=b.id)
-          AND NOT EXISTS (SELECT 1 FROM series_analysis_jobs j WHERE j.radar_basis_id=(SELECT id FROM series_radar_basis_identities WHERE legacy_id=b.id) AND j.status IN ('queued','running','publishing'))
-          AND NOT EXISTS (SELECT 1 FROM series_radar_candidates c WHERE c.basis_id=(SELECT id FROM series_radar_basis_identities WHERE legacy_id=b.id) AND c.status IN ('pending','ready','unavailable','failed'))
-          AND NOT EXISTS (SELECT 1 FROM series_radar_operations o WHERE o.basis_id=(SELECT id FROM series_radar_basis_identities WHERE legacy_id=b.id) AND o.status IN ('pending','running'))
+          AND NOT EXISTS (SELECT 1 FROM series_analysis_jobs j WHERE j.radar_basis_id=b.id AND j.status IN ('queued','running','publishing'))
+          AND NOT EXISTS (SELECT 1 FROM series_radar_candidates c WHERE c.basis_id=b.id AND c.status IN ('pending','ready','unavailable','failed'))
+          AND NOT EXISTS (SELECT 1 FROM series_radar_operations o WHERE o.basis_id=b.id AND o.status IN ('pending','running'))
         ORDER BY b.created_at,b.id LIMIT $2 FOR UPDATE OF b SKIP LOCKED
       )
       UPDATE series_radar_bases b SET source_snapshot=NULL FROM victims WHERE b.id=victims.id

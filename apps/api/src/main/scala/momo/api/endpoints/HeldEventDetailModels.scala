@@ -37,7 +37,6 @@ final case class HeldEventMatchResponse(
     gameTitleName: Option[String] = None,
     seasonName: Option[String] = None,
     mapName: Option[String] = None,
-    publicId: Option[String] = None,
 ) derives Codec.AsObject
 
 object HeldEventMatchResponse:
@@ -54,7 +53,6 @@ object HeldEventMatchResponse:
     gameTitleName = record.labels.gameTitleName,
     seasonName = record.labels.seasonName,
     mapName = record.labels.mapName,
-    publicId = record.publicId.map(_.decimalString),
   )
 
 final case class HeldEventDraftResponse(
@@ -95,20 +93,14 @@ final case class HeldEventDetailResponse(
     matches: List[HeldEventMatchResponse],
     drafts: List[HeldEventDraftResponse],
     navigation: HeldEventNavigationResponse,
-    publicId: Option[String] = None,
 ) derives Codec.AsObject
 
-final case class AdjacentHeldEventResponse(
-    id: String,
-    heldAt: String,
-    publicId: Option[String] = None
-) derives Codec.AsObject
+final case class AdjacentHeldEventResponse(id: String, heldAt: String) derives Codec.AsObject
 
 object AdjacentHeldEventResponse:
   def from(event: momo.api.domain.HeldEvent): AdjacentHeldEventResponse = AdjacentHeldEventResponse(
     event.id.value,
     DateTimeFormatter.ISO_INSTANT.format(event.heldAt),
-    event.publicId.map(_.decimalString),
   )
 
 final case class HeldEventNavigationResponse(
@@ -129,7 +121,6 @@ object HeldEventDetailResponse:
       detail.navigation.previous.map(AdjacentHeldEventResponse.from),
       detail.navigation.next.map(AdjacentHeldEventResponse.from),
     ),
-    publicId = detail.event.publicId.map(_.decimalString),
   )
 
 final case class HeldEventSummaryResponse(
@@ -138,7 +129,6 @@ final case class HeldEventSummaryResponse(
     matchCount: Int,
     draftCount: Int,
     nextMatchNo: Int,
-    publicId: Option[String] = None,
 ) derives Codec.AsObject
 
 object HeldEventSummaryResponse:
@@ -149,5 +139,4 @@ object HeldEventSummaryResponse:
       summary.matchCount,
       summary.draftCount,
       summary.nextMatchNo,
-      summary.event.publicId.map(_.decimalString),
     )

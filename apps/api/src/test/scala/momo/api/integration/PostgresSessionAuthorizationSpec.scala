@@ -210,7 +210,7 @@ final class PostgresSessionAuthorizationSpec extends IntegrationSuite:
           _ <- wired.handles.gameTitles.createWithNextDisplayOrder(GameTitle(
             titleId,
             "Session roles",
-            "momotetsu_2",
+            "momotetsu2",
             1,
             now,
           )).map(_.fold(error => fail(s"could not create title fixture: $error"), identity))

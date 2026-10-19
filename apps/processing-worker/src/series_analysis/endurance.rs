@@ -164,7 +164,7 @@ pub(crate) async fn run(request: &ShadowRequest) -> Result<ShadowReport, ShadowE
     let client = connect(&read_database_url).await?;
     let input_revision = client
         .query_opt(
-            "SELECT input_revision FROM series_analysis_title_states WHERE game_title_id = (SELECT id FROM game_titles WHERE legacy_id=$1)",
+            "SELECT input_revision FROM series_analysis_title_states WHERE game_title_id = $1",
             &[&request.game_title_id],
         )
         .await?

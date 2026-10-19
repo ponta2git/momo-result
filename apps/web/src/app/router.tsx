@@ -82,22 +82,12 @@ export const appRoutes: RouteObject[] = [
             element: <HeldEventDetailPage />,
           },
           {
-            path: "e/:publicId",
-            handle: { title: "開催詳細" },
-            element: <HeldEventDetailPage />,
-          },
-          {
             path: "matches/new",
             handle: { title: "試合を手入力" },
             element: <MatchCreatePage />,
           },
           {
             path: "matches/:matchId",
-            handle: { title: "試合詳細" },
-            element: <MatchDetailPage />,
-          },
-          {
-            path: "m/:publicId",
             handle: { title: "試合詳細" },
             element: <MatchDetailPage />,
           },

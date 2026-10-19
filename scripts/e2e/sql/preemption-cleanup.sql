@@ -1,0 +1,32 @@
+BEGIN;
+SET LOCAL statement_timeout = '10s';
+SET LOCAL lock_timeout = '5s';
+UPDATE worker_execution_slots
+SET task_kind = NULL, owner = NULL, job_id = NULL, attempt_id = NULL,
+    holder_preemptible = NULL, lease_expires_at = NULL,
+    preempt_requested_by = NULL, preempt_requested_at = NULL,
+    updated_at = clock_timestamp()
+WHERE slot_key = 'shared-heavy-work'
+  AND (owner IS NULL OR owner IN (:'analysis_worker_id','ci-preemption-ocr-worker'));
+DELETE FROM ocr_drafts WHERE job_id = 'ci-preemption-ocr-job';
+DELETE FROM ocr_submission_members WHERE submission_id = '00000000-0024-4000-8000-000000000099';
+DELETE FROM ocr_submissions WHERE id = '00000000-0024-4000-8000-000000000099';
+DELETE FROM match_drafts WHERE id = 'ci-preemption-match-draft';
+DELETE FROM ocr_jobs WHERE id = 'ci-preemption-ocr-job';
+DELETE FROM source_images WHERE id = 'ci-preemption-source-image';
+UPDATE series_analysis_title_states
+SET current_artifact_id = NULL, previous_artifact_id = NULL,
+    notification_baseline_state = 'unknown', notification_baseline_artifact_id = NULL
+WHERE game_title_id = 'ci-preemption-title';
+DELETE FROM series_analysis_artifacts WHERE game_title_id = 'ci-preemption-title';
+DELETE FROM series_analysis_jobs WHERE id = 'ci-preemption-analysis-job';
+DELETE FROM series_analysis_worker_capabilities
+WHERE worker_id IN (:'analysis_worker_id', :'analysis_capability_id');
+DELETE FROM match_incidents WHERE match_id = 'ci-preemption-match';
+DELETE FROM match_players WHERE match_id = 'ci-preemption-match';
+DELETE FROM matches WHERE id = 'ci-preemption-match';
+DELETE FROM held_events WHERE id = 'ci-preemption-event';
+DELETE FROM season_masters WHERE id = 'ci-preemption-season';
+DELETE FROM map_masters WHERE id = 'ci-preemption-map';
+DELETE FROM game_titles WHERE id = 'ci-preemption-title';
+COMMIT;

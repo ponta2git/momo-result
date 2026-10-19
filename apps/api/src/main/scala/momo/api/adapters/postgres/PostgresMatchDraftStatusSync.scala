@@ -7,26 +7,22 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
-import momo.api.adapters.postgres.CanonicalIdentity.Entity
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.MatchDraftStatus
 import momo.api.domain.ids.{MatchDraftId, OcrDraftId, OcrJobId}
 
 /** Serializes terminal OCR slot projection onto the owning persisted match-draft status. */
 private[api] object PostgresMatchDraftStatusSync:
-  def lockForJob(jobId: OcrJobId)(using ids: PostgresIdentities): ConnectionIO[Unit] =
-    lock(touchedByJob(jobId))
+  def lockForJob(jobId: OcrJobId): ConnectionIO[Unit] = lock(touchedByJob(jobId))
 
-  def recomputeForJob(jobId: OcrJobId, now: Instant)(using
-      ids: PostgresIdentities): ConnectionIO[Unit] =
+  def recomputeForJob(jobId: OcrJobId, now: Instant): ConnectionIO[Unit] =
     recompute(touchedByJob(jobId), now)
 
-  def lockForDrafts(draftIds: List[OcrDraftId])(using ids: PostgresIdentities): ConnectionIO[Unit] =
+  def lockForDrafts(draftIds: List[OcrDraftId]): ConnectionIO[Unit] =
     if draftIds.isEmpty then ().pure[ConnectionIO]
     else lock(touchedByDrafts(draftIds))
 
-  def recomputeForDrafts(draftIds: List[OcrDraftId], now: Instant)(using
-      ids: PostgresIdentities): ConnectionIO[Unit] =
+  def recomputeForDrafts(draftIds: List[OcrDraftId], now: Instant): ConnectionIO[Unit] =
     if draftIds.isEmpty then ().pure[ConnectionIO]
     else recompute(touchedByDrafts(draftIds), now)
 
@@ -35,17 +31,16 @@ private[api] object PostgresMatchDraftStatusSync:
    * recomputation runs in a later statement, so a waiter also gets a fresh READ COMMITTED snapshot
    * after the previous writer commits.
    */
-  private def lock(touchedCondition: Fragment)(using ids: PostgresIdentities): ConnectionIO[Unit] =
-    (fr"""SELECT ${ids.wireId("md")}
+  private def lock(touchedCondition: Fragment): ConnectionIO[Unit] = (fr"""SELECT md.id
       FROM match_drafts md
       WHERE md.status = ${MatchDraftStatus.OcrRunning}
-        AND (""" ++ touchedCondition ++ fr") ORDER BY ${ids.wireId("md")} FOR UPDATE OF md")
-      .query[MatchDraftId].stream.compile.drain
+        AND (""" ++ touchedCondition ++ fr") ORDER BY md.id FOR UPDATE OF md")
+    .query[MatchDraftId].stream.compile.drain
 
-  private def touchedByJob(jobId: OcrJobId)(using ids: PostgresIdentities): Fragment = fr"""EXISTS (
+  private def touchedByJob(jobId: OcrJobId): Fragment = fr"""EXISTS (
     SELECT 1
     FROM ocr_jobs changed_job
-    WHERE changed_job.id = ${ids.lookup(Entity.OcrJobs, jobId.value)}
+    WHERE changed_job.id = $jobId
       AND changed_job.draft_id IN (
         md.total_assets_draft_id,
         md.revenue_draft_id,
@@ -53,12 +48,12 @@ private[api] object PostgresMatchDraftStatusSync:
       )
   )"""
 
-  private def touchedByDrafts(draftIds: List[OcrDraftId])(using ids: PostgresIdentities): Fragment =
-    val values = draftIds.map(_.value).distinct
+  private def touchedByDrafts(draftIds: List[OcrDraftId]): Fragment =
+    val ids = draftIds.map(_.value).distinct.toArray
     fr"""(
-      ${ids.retainedIn("md", "total_assets_draft_id", values)}
-      OR ${ids.retainedIn("md", "revenue_draft_id", values)}
-      OR ${ids.retainedIn("md", "incident_log_draft_id", values)}
+      md.total_assets_draft_id = ANY($ids)
+      OR md.revenue_draft_id = ANY($ids)
+      OR md.incident_log_draft_id = ANY($ids)
     )"""
 
   private def recompute(touchedCondition: Fragment, now: Instant): ConnectionIO[Unit] =

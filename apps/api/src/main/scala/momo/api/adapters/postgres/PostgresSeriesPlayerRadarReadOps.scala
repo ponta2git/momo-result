@@ -7,7 +7,6 @@ import doobie.postgres.implicits.*
 import io.circe.Json
 import io.circe.parser.parse
 
-import momo.api.adapters.postgres.CanonicalIdentity.Entity
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.*
 import momo.api.domain.ids.GameTitleId
@@ -16,37 +15,26 @@ import momo.api.errors.AppError
 private[postgres] object PostgresSeriesPlayerRadarReadOps:
   val MaximumDocumentBytes = 262144
 
-  def operationColumns(using identities: PostgresIdentities): Fragment = fr"""
-    ${identities.wireId("o")}, ${identities.retainedColumn("o", "game_title_id")}, o.kind, o.status,
-    ${identities.wireReference(Entity.RadarCandidates, fr"o.candidate_id")},
-    ${identities.wireReference(Entity.RadarPreviews, fr"o.preview_id")},
-    ${identities.wireReference(Entity.RadarBases, fr"o.basis_id")},
-    ${identities.retainedColumn(
-      "o",
-      "origin_operation_id"
-    )}, o.safe_failure_code, o.requested_at, o.finished_at
+  val operationColumns: Fragment = fr"""
+    id, game_title_id, kind, status, candidate_id, preview_id, basis_id,
+    origin_operation_id, safe_failure_code, requested_at, finished_at
   """
 
   def operation(
       title: GameTitleId,
       id: String,
-  )(using
-      identities: PostgresIdentities): ConnectionIO[Either[AppError, SeriesPlayerRadarOperation]] =
+  ): ConnectionIO[Either[AppError, SeriesPlayerRadarOperation]] =
     (fr"SELECT" ++ operationColumns ++ fr"""
-      FROM series_radar_operations o WHERE o.game_title_id = ${identities.lookup(
-        Entity.GameTitles,
-        title.value
-      )} AND o.id = ${identities.lookup(Entity.RadarOperations, id)}
+      FROM series_radar_operations WHERE game_title_id = $title AND id = $id
     """).query[SeriesPlayerRadarOperation].option.map(
       _.toRight(AppError.NotFound("radar operation", id))
     )
 
   /** All selected payloads are bounded summaries; source/evaluation snapshots stay in the Worker. */
-  def state(title: GameTitleId)(using
-      identities: PostgresIdentities): ConnectionIO[Either[AppError, SeriesPlayerRadarDocument]] =
+  def state(title: GameTitleId): ConnectionIO[Either[AppError, SeriesPlayerRadarDocument]] =
     val query = fr"""
       SELECT jsonb_build_object(
-        'schemaVersion', 1, 'gameTitleId', ${identities.wireId("gt")},
+        'schemaVersion', 1, 'gameTitleId', gt.id,
         'inputRevision', a.input_revision::text,
         'generation', COALESCE(r.generation, 0)::text,
         'currentBasis', CASE WHEN cb.id IS NULL THEN NULL ELSE jsonb_build_object(
@@ -58,12 +46,7 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
           'appliedAt', r.previous_applied_at, 'sourceInputRevision', pb.source_input_revision::text,
           'basis', pb.payload) END,
         'candidate', CASE WHEN c.id IS NULL THEN NULL ELSE jsonb_build_object(
-          'candidateId', ${identities.wireId(
-        "c"
-      )}, 'status', c.status, 'basisId', ${identities.wireReference(
-        Entity.RadarBases,
-        fr"c.basis_id"
-      )},
+          'candidateId', c.id, 'status', c.status, 'basisId', c.basis_id,
           'sourceInputRevision', c.source_input_revision::text,
           'safeFailureCode', c.safe_failure_code, 'createdAt', c.created_at,
           'updatedAt', c.updated_at, 'result', c.result,
@@ -76,10 +59,7 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
             'appliedAt', NULL, 'sourceInputRevision', sb.source_input_revision::text,
             'basis', sb.payload) END,
           'latestPreview', CASE WHEN p.id IS NULL THEN NULL ELSE jsonb_build_object(
-            'previewId', ${identities.wireId("p")}, 'beforeBasisId', ${identities.wireReference(
-        Entity.RadarBases,
-        fr"p.before_basis_id"
-      )},
+            'previewId', p.id, 'beforeBasisId', p.before_basis_id,
             'inputRevision', p.input_revision::text,
             'status', CASE WHEN p.status = 'ready' AND (
               p.before_basis_id IS DISTINCT FROM r.current_basis_id
@@ -94,46 +74,33 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
       FROM game_titles gt
       JOIN series_analysis_title_states a ON a.game_title_id = gt.id
       LEFT JOIN series_radar_title_states r ON r.game_title_id = gt.id
-      LEFT JOIN series_radar_bases cb ON cb.id = ${identities.wireReference(
-        Entity.RadarBases,
-        fr"r.current_basis_id"
-      )} AND cb.game_title_id = ${identities.wireId("gt")}
-      LEFT JOIN series_radar_bases pb ON pb.id = ${identities.wireReference(
-        Entity.RadarBases,
-        fr"r.previous_basis_id"
-      )} AND pb.game_title_id = ${identities.wireId("gt")}
+      LEFT JOIN series_radar_bases cb ON cb.id = r.current_basis_id AND cb.game_title_id = gt.id
+      LEFT JOIN series_radar_bases pb ON pb.id = r.previous_basis_id AND pb.game_title_id = gt.id
       LEFT JOIN LATERAL (
-        SELECT candidate.* FROM series_radar_candidates candidate WHERE game_title_id = gt.id
-        ORDER BY created_at DESC, ${identities.wireId("candidate")} DESC LIMIT 1
+        SELECT id, status, basis_id, source_input_revision, safe_failure_code,
+               created_at, updated_at, result, origin_kind, manual_input, source_basis_id,
+               source_candidate_id, saved_by, saved_by_display_name
+        FROM series_radar_candidates WHERE game_title_id = gt.id
+        ORDER BY created_at DESC, id DESC LIMIT 1
       ) c ON true
-      LEFT JOIN series_radar_bases sb ON sb.id = c.source_basis_id AND sb.game_title_id = ${identities.wireId(
-        "gt"
-      )}
+      LEFT JOIN series_radar_bases sb ON sb.id = c.source_basis_id AND sb.game_title_id = gt.id
       LEFT JOIN LATERAL (
-        SELECT preview.* FROM series_radar_previews preview WHERE candidate_id = c.id AND game_title_id = gt.id
-        ORDER BY created_at DESC, ${identities.wireId("preview")} DESC LIMIT 1
+        SELECT id, before_basis_id, input_revision, status, created_at
+        FROM series_radar_previews WHERE candidate_id = c.id AND game_title_id = gt.id
+        ORDER BY created_at DESC, id DESC LIMIT 1
       ) p ON true
       LEFT JOIN LATERAL (
         SELECT jsonb_agg(jsonb_build_object(
-          'schemaVersion', 1, 'operationId', ${identities.wireId(
-        "o"
-      )}, 'gameTitleId', ${identities.retainedColumn("o", "game_title_id")},
-          'kind', o.kind, 'status', o.status, 'candidateId', ${identities.wireReference(
-        Entity.RadarCandidates,
-        fr"o.candidate_id"
-      )},
-          'previewId', ${identities.wireReference(
-        Entity.RadarPreviews,
-        fr"o.preview_id"
-      )}, 'basisId', ${identities.wireReference(Entity.RadarBases, fr"o.basis_id")},
-          'originOperationId', ${identities.retainedColumn(
-        "o",
-        "origin_operation_id"
-      )}, 'safeFailureCode', o.safe_failure_code,
+          'schemaVersion', 1, 'operationId', o.id, 'gameTitleId', o.game_title_id,
+          'kind', o.kind, 'status', o.status, 'candidateId', o.candidate_id,
+          'previewId', o.preview_id, 'basisId', o.basis_id,
+          'originOperationId', o.origin_operation_id, 'safeFailureCode', o.safe_failure_code,
           'requestedAt', o.requested_at, 'finishedAt', o.finished_at)
-          ORDER BY o.requested_at DESC, ${identities.wireId("o")} DESC) AS items
-        FROM (SELECT operation.* FROM series_radar_operations operation WHERE game_title_id = gt.id
-              ORDER BY requested_at DESC, ${identities.wireId("operation")} DESC LIMIT 10) o
+          ORDER BY o.requested_at DESC, o.id DESC) AS items
+        FROM (SELECT id, game_title_id, kind, status, candidate_id, preview_id, basis_id,
+                     origin_operation_id, safe_failure_code, requested_at, finished_at
+              FROM series_radar_operations WHERE game_title_id = gt.id
+              ORDER BY requested_at DESC, id DESC LIMIT 10) o
       ) ops ON true
       LEFT JOIN LATERAL (
         SELECT jsonb_agg(evidence_key ORDER BY evidence_key) AS keys
@@ -148,39 +115,23 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
                count(DISTINCT held_event_id)::bigint AS held_event_count
         FROM matches WHERE game_title_id = gt.id
       ) counts ON true
-      WHERE gt.id = ${identities.lookup(Entity.GameTitles, title.value)}
+      WHERE gt.id = $title
     """
     document(query, AppError.NotFound("game title", title.value))
 
   def preview(
       request: SeriesPlayerRadarPreviewRequest
-  )(using
-      identities: PostgresIdentities): ConnectionIO[Either[AppError, SeriesPlayerRadarDocument]] =
-    PostgresSeriesAnalysisScopeOps.normalize(request.scope).flatMap(scope =>
-      previewNormalized(request.copy(scope = scope))
-    )
-
-  private def previewNormalized(request: SeriesPlayerRadarPreviewRequest)(using
-      identities: PostgresIdentities): ConnectionIO[Either[AppError, SeriesPlayerRadarDocument]] =
+  ): ConnectionIO[Either[AppError, SeriesPlayerRadarDocument]] =
     val validScope = PostgresSeriesAnalysisScopeOps.valid(request.gameTitleId, request.scope)
     val scopeName = PostgresSeriesAnalysisScopeOps.displayName(request.gameTitleId, request.scope)
     val scope = request.scope
     val query =
       fr"""
       SELECT jsonb_build_object(
-        'schemaVersion', 1, 'gameTitleId', ${identities.wireReference(
-          Entity.GameTitles,
-          fr"p.game_title_id"
-        )}, 'previewId', ${identities.wireId("p")},
-        'candidateId', ${identities.wireReference(
-          Entity.RadarCandidates,
-          fr"p.candidate_id"
-        )}, 'inputRevision', p.input_revision::text,
+        'schemaVersion', 1, 'gameTitleId', p.game_title_id, 'previewId', p.id,
+        'candidateId', p.candidate_id, 'inputRevision', p.input_revision::text,
         'currentInputRevision', a.input_revision::text,
-        'beforeBasisId', ${identities.wireReference(
-          Entity.RadarBases,
-          fr"p.before_basis_id"
-        )}, 'candidateBasisId', ${identities.wireReference(Entity.RadarBases, fr"c.basis_id")},
+        'beforeBasisId', p.before_basis_id, 'candidateBasisId', c.basis_id,
         'status', CASE WHEN c.status = 'invalid' THEN 'invalid'
           WHEN p.status = 'ready' AND
             p.before_basis_id IS DISTINCT FROM r.current_basis_id THEN 'stale'
@@ -204,10 +155,7 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
       JOIN series_radar_candidates c ON c.id = p.candidate_id AND c.game_title_id = p.game_title_id
       LEFT JOIN series_radar_title_states r ON r.game_title_id = p.game_title_id
       LEFT JOIN series_radar_preview_scopes s ON s.preview_id = p.id AND s.scope_key = ${scope.key}
-      WHERE p.game_title_id = ${identities.lookup(
-          Entity.GameTitles,
-          request.gameTitleId.value
-        )} AND p.id = ${identities.lookup(Entity.RadarPreviews, request.previewId)}
+      WHERE p.game_title_id = ${request.gameTitleId} AND p.id = ${request.previewId}
     """
     document(query, AppError.NotFound("radar preview", request.previewId)).map(_.flatMap { value =>
       parse(new String(value.payload, java.nio.charset.StandardCharsets.UTF_8))

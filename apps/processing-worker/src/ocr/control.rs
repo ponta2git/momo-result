@@ -5,7 +5,11 @@ use thiserror::Error;
 use tokio::time::{Instant, timeout_at};
 use tokio_postgres::{Client, Transaction};
 
-use crate::job_lease::ExpiredJobLease;
+use crate::execution_slot::{
+    ExecutionSlotError, ExecutionSlotHolder, ExecutionSlotIdentity, ExecutionTaskKind,
+    NewExecutionSlotHolder, SlotAcquisition, SlotRenewal, acquire_ocr, lock as lock_execution_slot,
+    lock_owned as lock_owned_slot, release_owned, renew_owned, request_analysis_preemption,
+};
 use crate::series_analysis::control::TransactionEffects;
 use crate::worker::ControlOutcome;
 
@@ -16,7 +20,7 @@ pub(crate) mod maintenance;
 pub(crate) mod recovery;
 
 use candidate::{CandidateResult, OcrClaimCandidate, load_candidate};
-use recovery::recover_expired_ocr_holder;
+use recovery::recover_expired_holder;
 
 const MAXIMUM_DRAFT_JSON_BYTES: usize = 512 * 1024;
 
@@ -98,6 +102,8 @@ impl fmt::Debug for ClaimedOcrJob {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum OcrClaimResult {
     Claimed(ClaimedOcrJob),
+    Busy,
+    PreemptionRequested,
     MissingOrTerminal,
     AlreadyRunning,
     NotYetAvailable,
@@ -185,6 +191,10 @@ pub(crate) struct OcrDraftCompletion {
 pub(crate) enum OcrControlError {
     #[error("OCR PostgreSQL state transition failed")]
     Postgres(#[from] tokio_postgres::Error),
+    #[error("OCR shared execution-slot transition failed: {0}")]
+    ExecutionSlot(#[source] ExecutionSlotError),
+    #[error("OCR could not recover an expired analysis holder: {0}")]
+    AnalysisRecovery(#[source] crate::series_analysis::control::ControlError),
     #[error("OCR worker lost its fenced ownership")]
     OwnerLost,
     #[error("OCR control-plane numeric value exceeds its supported bound")]
@@ -199,11 +209,21 @@ pub(crate) enum OcrControlError {
     FinalizationTimeout,
 }
 
+impl From<ExecutionSlotError> for OcrControlError {
+    fn from(error: ExecutionSlotError) -> Self {
+        Self::ExecutionSlot(error)
+    }
+}
+
 impl OcrControlError {
     pub(crate) fn is_contention(&self) -> bool {
         match self {
-            Self::Postgres(error) => crate::postgres::is_lock_contention(error),
-            Self::OwnerLost
+            Self::Postgres(error) | Self::ExecutionSlot(ExecutionSlotError::Postgres(error)) => {
+                crate::postgres::is_lock_contention(error)
+            }
+            Self::AnalysisRecovery(error) => error.is_contention(),
+            Self::ExecutionSlot(ExecutionSlotError::InvalidState)
+            | Self::OwnerLost
             | Self::NumericBound
             | Self::InvalidState
             | Self::InvalidConfiguration
@@ -215,6 +235,8 @@ impl OcrControlError {
     pub(crate) const fn kind(&self) -> &'static str {
         match self {
             Self::Postgres(_) => "ocr_postgres_transition",
+            Self::ExecutionSlot(error) => error.kind(),
+            Self::AnalysisRecovery(error) => error.kind(),
             Self::OwnerLost => "ocr_fencing_owner_lost",
             Self::NumericBound => "ocr_numeric_bound",
             Self::InvalidState => "ocr_persisted_state",
@@ -234,25 +256,25 @@ pub(crate) async fn claim_job(
     transaction
         .batch_execute("SET LOCAL lock_timeout='100ms'")
         .await?;
-    lock_match_drafts_for_job(&transaction, job_id).await?;
-    let expired = transaction
-        .query_opt(
-            "SELECT lease_owner, attempt_id::text, lease_fencing_token FROM ocr_jobs \
-             WHERE legacy_id=$1 AND status='running' AND lease_expires_at<=clock_timestamp() FOR UPDATE",
-            &[&job_id],
-        )
-        .await?;
-    let recovered = expired.is_some();
-    if let Some(expired) = expired {
-        let lease = ExpiredJobLease {
-            job_id: String::from(job_id),
-            owner: expired.try_get(0)?,
-            attempt_id: expired.try_get(1)?,
-            fencing_token: expired.try_get(2)?,
-        };
-        recover_expired_ocr_holder(&transaction, &lease, config.maximum_lease_recoveries).await?;
+    let slot = lock_execution_slot(&transaction).await?;
+    let mut draft_lock_job_ids = vec![String::from(job_id)];
+    if let Some(holder) = &slot.holder
+        && holder.expired
+        && holder.task_kind == ExecutionTaskKind::Ocr
+    {
+        draft_lock_job_ids.push(holder.job_id.clone());
     }
-    let recovery_effects = TransactionEffects::default();
+    draft_lock_job_ids.sort_unstable();
+    draft_lock_job_ids.dedup();
+    lock_match_drafts_for_jobs(&transaction, &draft_lock_job_ids).await?;
+    let recovered = slot.holder.as_ref().is_some_and(|holder| holder.expired);
+    let recovery_effects = if let Some(holder) = &slot.holder
+        && holder.expired
+    {
+        recover_expired_holder(&transaction, holder, config.maximum_lease_recoveries).await?
+    } else {
+        TransactionEffects::default()
+    };
 
     let candidate = match load_candidate(&transaction, job_id).await? {
         CandidateResult::Ready(candidate) => candidate,
@@ -272,11 +294,59 @@ pub(crate) async fn claim_job(
             return Ok(recovery_effects.committed(OcrClaimResult::InvalidInput));
         }
     };
-    acquire_candidate(transaction, job_id, candidate, config, recovery_effects).await
+    if let Some(holder) = &slot.holder
+        && !holder.expired
+    {
+        let result = handle_active_holder(transaction, &slot, holder, config).await?;
+        return Ok(ControlOutcome::without_effects(result));
+    }
+
+    acquire_candidate(
+        transaction,
+        slot.fencing_token,
+        job_id,
+        candidate,
+        config,
+        recovery_effects,
+    )
+    .await
+}
+
+/// Validates a due OCR candidate before requesting preemption, without acquiring new work.
+pub(crate) async fn request_preemption(
+    client: &mut Client,
+    job_id: &str,
+    config: &OcrControlConfig,
+) -> Result<bool, OcrControlError> {
+    let transaction = bounded_transaction(client, config.finalization_timeout).await?;
+    transaction
+        .batch_execute("SET LOCAL lock_timeout='100ms'")
+        .await?;
+    let slot = lock_execution_slot(&transaction).await?;
+    let Some(holder) = &slot.holder else {
+        transaction.rollback().await?;
+        return Ok(false);
+    };
+    if holder.expired || holder.task_kind != ExecutionTaskKind::Analysis {
+        transaction.rollback().await?;
+        return Ok(false);
+    }
+    lock_match_drafts_for_job(&transaction, job_id).await?;
+    if matches!(
+        load_candidate(&transaction, job_id).await?,
+        CandidateResult::Ready(_)
+    ) {
+        handle_active_holder(transaction, &slot, holder, config).await?;
+        Ok(true)
+    } else {
+        transaction.rollback().await?;
+        Ok(false)
+    }
 }
 
 async fn acquire_candidate(
     transaction: Transaction<'_>,
+    slot_fencing_token: i64,
     job_id: &str,
     candidate: OcrClaimCandidate,
     config: &OcrControlConfig,
@@ -284,10 +354,24 @@ async fn acquire_candidate(
 ) -> Result<ControlOutcome<OcrClaimResult>, OcrControlError> {
     let (attempt_id, lease_token) = new_lease_identity(&transaction).await?;
     let lease_milliseconds = duration_milliseconds(config.lease_duration)?;
-    let fencing_token = candidate
-        .fencing_token
-        .checked_add(1)
-        .ok_or(OcrControlError::NumericBound)?;
+    let fencing_token = match acquire_ocr(
+        &transaction,
+        slot_fencing_token,
+        NewExecutionSlotHolder {
+            owner: &config.worker_id,
+            job_id,
+            attempt_id: &attempt_id,
+        },
+        lease_milliseconds,
+    )
+    .await?
+    {
+        SlotAcquisition::Acquired(fencing_token) => fencing_token,
+        SlotAcquisition::Busy => {
+            transaction.rollback().await?;
+            return Ok(ControlOutcome::without_effects(OcrClaimResult::Busy));
+        }
+    };
     let attempt_count = candidate
         .attempt_count
         .checked_add(1)
@@ -301,7 +385,7 @@ async fn acquire_candidate(
                lease_token = $4::text::uuid,\x20\
                lease_expires_at = clock_timestamp() + ($5::bigint * interval '1 millisecond'),\x20\
                lease_fencing_token = $6, updated_at = clock_timestamp()\x20\
-             WHERE legacy_id = $7 AND status = 'queued'\x20\
+             WHERE id = $7 AND status = 'queued'\x20\
                AND available_at <= clock_timestamp() RETURNING attempt_count",
             &[
                 &config.worker_id,
@@ -340,6 +424,29 @@ async fn acquire_candidate(
     )
 }
 
+async fn handle_active_holder(
+    transaction: Transaction<'_>,
+    slot: &crate::execution_slot::LockedExecutionSlot,
+    holder: &ExecutionSlotHolder,
+    config: &OcrControlConfig,
+) -> Result<OcrClaimResult, OcrControlError> {
+    if holder.task_kind != ExecutionTaskKind::Analysis {
+        transaction.rollback().await?;
+        return Ok(OcrClaimResult::Busy);
+    }
+    if slot.preempt_requested_by.is_some() {
+        transaction.rollback().await?;
+        return Ok(OcrClaimResult::Busy);
+    }
+    if request_analysis_preemption(&transaction, holder, &config.worker_id).await? {
+        transaction.commit().await?;
+        Ok(OcrClaimResult::PreemptionRequested)
+    } else {
+        transaction.rollback().await?;
+        Ok(OcrClaimResult::Busy)
+    }
+}
+
 pub(crate) async fn heartbeat(
     client: &mut Client,
     claim: &ClaimedOcrJob,
@@ -347,12 +454,17 @@ pub(crate) async fn heartbeat(
 ) -> Result<OcrHeartbeatResult, OcrControlError> {
     let transaction = bounded_transaction(client, config.finalization_timeout).await?;
     let lease_milliseconds = duration_milliseconds(config.lease_duration)?;
+    let renewal = renew_owned(&transaction, identity(claim, config), lease_milliseconds).await?;
+    if renewal != SlotRenewal::Continue {
+        transaction.rollback().await?;
+        return Ok(OcrHeartbeatResult::OwnerLost);
+    }
     let updated = transaction
         .execute(
             "UPDATE ocr_jobs SET\x20\
                lease_expires_at = clock_timestamp() + ($1::bigint * interval '1 millisecond'),\x20\
                updated_at = clock_timestamp()\x20\
-             WHERE legacy_id = $2 AND status = 'running' AND lease_owner = $3\x20\
+             WHERE id = $2 AND status = 'running' AND lease_owner = $3\x20\
                AND attempt_id = $4::text::uuid AND lease_token = $5::text::uuid\x20\
                AND lease_fencing_token = $6 AND lease_expires_at > clock_timestamp()",
             &[
@@ -409,10 +521,10 @@ async fn finish_success_transaction(
     let detected_screen_type = completion.output.detected_screen_type.wire();
     transaction
         .execute(
-            "INSERT INTO ocr_drafts (id, legacy_id, job_id, legacy_job_id, requested_screen_type, detected_screen_type,\x20\
+            "INSERT INTO ocr_drafts (id, job_id, requested_screen_type, detected_screen_type,\x20\
                profile_id, payload_json, warnings_json, timings_ms_json, created_at, updated_at)\x20\
-             VALUES ((SELECT draft_id FROM ocr_jobs WHERE legacy_id=$2 AND legacy_draft_id=$1), $1, (SELECT id FROM ocr_jobs WHERE legacy_id=$2), $2, $3, $4, $5, $6, $7, $8, clock_timestamp(), clock_timestamp())\x20\
-             ON CONFLICT (job_id) DO UPDATE SET id = EXCLUDED.id, legacy_id = EXCLUDED.legacy_id, legacy_job_id = EXCLUDED.legacy_job_id,\x20\
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, clock_timestamp(), clock_timestamp())\x20\
+             ON CONFLICT (job_id) DO UPDATE SET id = EXCLUDED.id,\x20\
                requested_screen_type = EXCLUDED.requested_screen_type,\x20\
                detected_screen_type = EXCLUDED.detected_screen_type,\x20\
                profile_id = EXCLUDED.profile_id, payload_json = EXCLUDED.payload_json,\x20\
@@ -437,7 +549,7 @@ async fn finish_success_transaction(
                failure_user_action = NULL, finished_at = clock_timestamp(), duration_ms = $2,\x20\
                attempt_id = NULL, lease_owner = NULL, lease_token = NULL,\x20\
                lease_expires_at = NULL, updated_at = clock_timestamp()\x20\
-             WHERE legacy_id = $3 AND status = 'running' AND lease_owner = $4\x20\
+             WHERE id = $3 AND status = 'running' AND lease_owner = $4\x20\
                AND attempt_id = $5::text::uuid AND lease_token = $6::text::uuid\x20\
                AND lease_fencing_token = $7",
             &[
@@ -455,7 +567,7 @@ async fn finish_success_transaction(
         return Err(OcrControlError::OwnerLost);
     }
     sync_match_draft_status(&transaction, &claim.job_id).await?;
-
+    release_slot(&transaction, claim, config).await?;
     transaction.commit().await?;
     Ok(())
 }
@@ -474,7 +586,7 @@ pub(crate) async fn finish_failure(
     lock_owned_job(&transaction, claim, config).await?;
     update_owned_failure(&transaction, claim, config, failure, duration_milliseconds).await?;
     sync_match_draft_status(&transaction, &claim.job_id).await?;
-
+    release_slot(&transaction, claim, config).await?;
     transaction.commit().await?;
     super::submissions::wake(client).await;
     Ok(())
@@ -506,7 +618,7 @@ async fn requeue(
     lock_owned_job(&transaction, claim, config).await?;
     let retries: i32 = transaction
         .query_one(
-            "SELECT failure_retry_count FROM ocr_jobs WHERE legacy_id=$1",
+            "SELECT failure_retry_count FROM ocr_jobs WHERE id=$1",
             &[&claim.job_id],
         )
         .await?
@@ -521,7 +633,7 @@ async fn requeue(
         )
         .await?;
         sync_match_draft_status(&transaction, &claim.job_id).await?;
-
+        release_slot(&transaction, claim, config).await?;
         transaction.commit().await?;
         super::submissions::wake(client).await;
         return Ok(());
@@ -538,7 +650,7 @@ async fn requeue(
                finished_at = NULL, duration_ms = NULL, failure_code = NULL, failure_message = NULL,\x20\
                failure_retryable = NULL, failure_user_action = NULL, attempt_id = NULL,\x20\
                lease_owner = NULL, lease_token = NULL, lease_expires_at = NULL,\x20\
-               updated_at = clock_timestamp() WHERE legacy_id = $2 AND status = 'running'\x20\
+               updated_at = clock_timestamp() WHERE id = $2 AND status = 'running'\x20\
                AND lease_owner = $3 AND attempt_id = $4::text::uuid\x20\
                AND lease_token = $5::text::uuid\x20\
                AND lease_fencing_token = $6",
@@ -556,7 +668,7 @@ async fn requeue(
     if updated != 1 {
         return Err(OcrControlError::OwnerLost);
     }
-
+    release_slot(&transaction, claim, config).await?;
     transaction.commit().await?;
     super::submissions::wake(client).await;
     Ok(())
@@ -579,10 +691,13 @@ async fn lock_owned_job(
     claim: &ClaimedOcrJob,
     config: &OcrControlConfig,
 ) -> Result<(), OcrControlError> {
+    if !lock_owned_slot(transaction, identity(claim, config)).await? {
+        return Err(OcrControlError::OwnerLost);
+    }
     lock_match_drafts_for_job(transaction, &claim.job_id).await?;
     let job = transaction
         .query_opt(
-            "SELECT 1 FROM ocr_jobs WHERE legacy_id = $1 AND status = 'running' AND lease_owner = $2\x20\
+            "SELECT 1 FROM ocr_jobs WHERE id = $1 AND status = 'running' AND lease_owner = $2\x20\
                AND attempt_id = $3::text::uuid AND lease_token = $4::text::uuid\x20\
                AND lease_fencing_token = $5 AND lease_expires_at > clock_timestamp() FOR UPDATE",
             &[
@@ -598,6 +713,30 @@ async fn lock_owned_job(
         return Err(OcrControlError::OwnerLost);
     }
     Ok(())
+}
+
+async fn release_slot(
+    transaction: &Transaction<'_>,
+    claim: &ClaimedOcrJob,
+    config: &OcrControlConfig,
+) -> Result<(), OcrControlError> {
+    if !release_owned(transaction, identity(claim, config)).await? {
+        return Err(OcrControlError::OwnerLost);
+    }
+    Ok(())
+}
+
+fn identity<'a>(
+    claim: &'a ClaimedOcrJob,
+    config: &'a OcrControlConfig,
+) -> ExecutionSlotIdentity<'a> {
+    ExecutionSlotIdentity {
+        task_kind: ExecutionTaskKind::Ocr,
+        owner: &config.worker_id,
+        job_id: &claim.job_id,
+        attempt_id: &claim.attempt_id,
+        fencing_token: claim.fencing_token,
+    }
 }
 
 async fn update_owned_failure(
@@ -616,7 +755,7 @@ async fn update_owned_failure(
             "UPDATE ocr_jobs SET status = 'failed', failure_code = $1, failure_message = $2,\x20\
                failure_retryable = $3, failure_user_action = $4, finished_at = clock_timestamp(),\x20\
                duration_ms = $5, attempt_id = NULL, lease_owner = NULL, lease_token = NULL,\x20\
-               lease_expires_at = NULL, updated_at = clock_timestamp() WHERE legacy_id = $6\x20\
+               lease_expires_at = NULL, updated_at = clock_timestamp() WHERE id = $6\x20\
                AND status = 'running' AND lease_owner = $7 AND attempt_id = $8::text::uuid\x20\
                AND lease_token = $9::text::uuid AND lease_fencing_token = $10",
             &[
@@ -654,7 +793,7 @@ async fn fail_locked_queued_job(
             "UPDATE ocr_jobs SET status = 'failed', failure_code = $1, failure_message = $2,\x20\
                failure_retryable = $3, failure_user_action = $4, finished_at = clock_timestamp(),\x20\
                duration_ms = $5, updated_at = clock_timestamp()\x20\
-             WHERE legacy_id = $6 AND status = 'queued'",
+             WHERE id = $6 AND status = 'queued'",
             &[
                 &code,
                 &message,
@@ -678,7 +817,7 @@ async fn sync_match_draft_status(
     transaction
         .execute(
             "WITH touched AS (\x20\
-               SELECT md.id FROM match_drafts md JOIN ocr_jobs j ON j.legacy_id = $1\x20\
+               SELECT md.id FROM match_drafts md JOIN ocr_jobs j ON j.id = $1\x20\
                WHERE md.status = 'ocr_running' AND j.draft_id IN (\x20\
                  md.total_assets_draft_id, md.revenue_draft_id, md.incident_log_draft_id\x20\
                )\x20\
@@ -724,10 +863,10 @@ pub(crate) async fn lock_match_drafts_for_jobs(
     transaction
         .query(
             "SELECT md.id FROM match_drafts md JOIN ocr_jobs changed_job\x20\
-               ON changed_job.legacy_id = ANY($1::text[])\x20\
+               ON changed_job.id = ANY($1)\x20\
                WHERE md.status = 'ocr_running' AND changed_job.draft_id IN (\x20\
                  md.total_assets_draft_id, md.revenue_draft_id, md.incident_log_draft_id\x20\
-               ) ORDER BY md.legacy_id FOR UPDATE OF md",
+               ) ORDER BY md.id FOR UPDATE OF md",
             &[&job_ids],
         )
         .await?;

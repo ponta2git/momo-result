@@ -58,8 +58,6 @@ pub(crate) struct HardLimitProbeResult {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) cgroup_limit_bytes: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) cgroup_cpu_limit_millis: Option<u32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) cgroup_peak_bytes: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) cgroup_limit_hit_count_delta: Option<u64>,
@@ -212,10 +210,7 @@ impl From<CgroupError> for ProcessError {
 ///
 /// Returns an error when the command, cgroup, identity transition, or exec boundary is invalid.
 #[cfg(target_os = "linux")]
-pub(crate) fn bootstrap_and_exec(
-    arguments: &[OsString],
-    frozen_daemon: Option<u32>,
-) -> Result<(), ProcessError> {
+pub(crate) fn bootstrap_and_exec(arguments: &[OsString]) -> Result<(), ProcessError> {
     use std::{os::unix::process::CommandExt, process::Command};
 
     if !bootstrap_config::command_allowed(arguments) {
@@ -233,17 +228,8 @@ pub(crate) fn bootstrap_and_exec(
     command.args(arguments);
     if bootstrap_config::requires_child_cgroup(arguments) {
         let child_limit = bootstrap_config::child_memory_limit()?;
-        let prepared = match frozen_daemon {
-            Some(process_id) => crate::cgroup::maintenance::join_frozen_daemon(
-                process_id,
-                child_limit,
-                WORKER_UID,
-                WORKER_GID,
-            )?,
-            None => {
-                crate::cgroup::prepare_production_child_cgroup(child_limit, WORKER_UID, WORKER_GID)?
-            }
-        };
+        let prepared =
+            crate::cgroup::prepare_production_child_cgroup(child_limit, WORKER_UID, WORKER_GID)?;
         command.envs(prepared.environment());
     }
     drop_worker_privileges()?;
@@ -257,10 +243,7 @@ pub(crate) fn bootstrap_and_exec(
 ///
 /// Always returns [`ProcessError::UnsupportedPlatform`].
 #[cfg(not(target_os = "linux"))]
-pub(crate) const fn bootstrap_and_exec(
-    _arguments: &[OsString],
-    _frozen_daemon: Option<u32>,
-) -> Result<(), ProcessError> {
+pub(crate) const fn bootstrap_and_exec(_arguments: &[OsString]) -> Result<(), ProcessError> {
     Err(ProcessError::UnsupportedPlatform)
 }
 
@@ -844,8 +827,6 @@ mod tests {
         let directory = temporary.path().join(CGROUP_DIRECTORY_NAME);
         fs::create_dir(&directory)?;
         fs::write(directory.join("cgroup.procs"), "")?;
-        fs::write(directory.join("cpu.cfs_quota_us"), "100000")?;
-        fs::write(directory.join("cpu.cfs_period_us"), "100000")?;
         fs::write(directory.join("memory.limit_in_bytes"), "201326592\n")?;
         fs::write(directory.join("memory.usage_in_bytes"), "4096\n")?;
         fs::write(directory.join("memory.max_usage_in_bytes"), "8192\n")?;

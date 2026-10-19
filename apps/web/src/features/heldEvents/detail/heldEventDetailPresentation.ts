@@ -8,7 +8,6 @@ import type {
 } from "@/shared/api/heldEvents";
 import { memberDisplayName, orderFixedMembers } from "@/shared/domain/members";
 import { formatDateTimeCompact, formatNavigationDateTime } from "@/shared/lib/dateTime";
-import { heldEventDetailHref } from "@/shared/navigation/publicIdentifiers";
 import type { AdjacentDestination } from "@/shared/ui/navigation/AdjacentNavigation";
 
 type HeldEventDetailRefresh = {
@@ -147,7 +146,7 @@ function adjacentDestination(
   return {
     label,
     description: `${formatNavigationDateTime(neighbor.heldAt, peers)}${neighbor.heldAt === current.heldAt ? `（同日時の${label}）` : ""}`,
-    href: heldEventDetailHref(neighbor.id, neighbor.publicId),
+    href: `/held-events/${encodeURIComponent(neighbor.id)}`,
   };
 }
 

@@ -11,10 +11,9 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 import doobie.postgres.sqlstate
 
-import momo.api.adapters.postgres.CanonicalIdentity.Entity
 import momo.api.adapters.postgres.PostgresMeta.given
+import momo.api.domain.HeldEvent
 import momo.api.domain.ids.{HeldEventId, MatchDraftId}
-import momo.api.domain.{HeldEvent, PublicId}
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{
   HeldEventDeletionAlg,
@@ -33,13 +32,11 @@ import momo.api.repositories.{
 object PostgresHeldEvents:
 
   private val Jst = ZoneId.of("Asia/Tokyo")
-  private final case class HeldEventRow(
-      id: HeldEventId,
-      heldAt: java.time.Instant,
-      publicId: Option[PublicId]
-  )
+  private final case class HeldEventRow(id: HeldEventId, heldAt: java.time.Instant)
 
-  private def fromRow(row: HeldEventRow): HeldEvent = HeldEvent(row.id, row.heldAt, row.publicId)
+  private val selectAll = fr"SELECT id, start_at FROM held_events"
+
+  private def fromRow(row: HeldEventRow): HeldEvent = HeldEvent(row.id, row.heldAt)
 
   private def isUniqueViolation(state: SqlState): Boolean = state.value ==
     sqlstate.class23.UNIQUE_VIOLATION.value
@@ -47,29 +44,19 @@ object PostgresHeldEvents:
   private def conflict[A](detail: String): ConnectionIO[A] = MonadThrow[ConnectionIO]
     .raiseError[A](new AppException(AppError.Conflict(detail)))
 
-  def alg(using identities: PostgresIdentities): HeldEventsAlg[ConnectionIO] =
-    withPublicIds(PostgresPublicIds.Legacy)
+  val alg: HeldEventsAlg[ConnectionIO] = new HeldEventsAlg[ConnectionIO]:
+    override def find(id: HeldEventId): ConnectionIO[Option[HeldEvent]] =
+      (selectAll ++ fr"WHERE id = $id").query[HeldEventRow].option.map(_.map(fromRow))
 
-  def withPublicIds(publicIds: PostgresPublicIds)(using
-      ids: PostgresIdentities): HeldEventsAlg[ConnectionIO] =
-    new HeldEventsAlg[ConnectionIO]:
-      override def find(id: HeldEventId): ConnectionIO[Option[HeldEvent]] =
-        (fr"SELECT ${ids.wireId("held_events")}, start_at," ++ publicIds.column(fr"public_id") ++
-          fr"FROM held_events WHERE id = ${ids.lookup(Entity.HeldEvents, id.value)}").query[
-          HeldEventRow
-        ].option.map(_.map(fromRow))
-
-      override def create(event: HeldEvent): ConnectionIO[Unit] =
-        val heldDateIso: LocalDate = event.heldAt.atZone(Jst).toLocalDate
-        ids.newId(event.id.value).flatMap { newId =>
-          sql"""
-        INSERT INTO held_events (${ids.idColumns}, session_id, held_date_iso, start_at, created_at)
-        VALUES ($newId, NULL, $heldDateIso, ${event.heldAt}, ${event.heldAt})
-      """.update.run.void
-        }.exceptSomeSqlState {
-          case state if isUniqueViolation(state) =>
-            conflict(s"held event already exists: ${event.id.value}")
-        }
+    override def create(event: HeldEvent): ConnectionIO[Unit] =
+      val heldDateIso: LocalDate = event.heldAt.atZone(Jst).toLocalDate
+      sql"""
+        INSERT INTO held_events (id, session_id, held_date_iso, start_at, created_at)
+        VALUES (${event.id}, NULL, $heldDateIso, ${event.heldAt}, ${event.heldAt})
+      """.update.run.void.exceptSomeSqlState {
+        case state if isUniqueViolation(state) =>
+          conflict(s"held event already exists: ${event.id.value}")
+      }
 
 end PostgresHeldEvents
 
@@ -84,41 +71,27 @@ object PostgresHeldEventDeletion:
       deleted: Boolean,
   )
 
-  private def deleteDiscardedForEvent(id: HeldEventId)(using
-      ids: PostgresIdentities): ConnectionIO[List[MatchDraftId]] =
-    deleteDiscardedDrafts(fr"held_event_id = ${ids.lookup(Entity.HeldEvents, id.value)}")
+  private def deleteDiscardedForEvent(id: HeldEventId): ConnectionIO[List[MatchDraftId]] =
+    deleteDiscardedDrafts(fr"held_event_id = $id")
 
-  def alg(using ids: PostgresIdentities): HeldEventDeletionAlg[ConnectionIO] =
-    new HeldEventDeletionAlg[ConnectionIO]:
-      override def deleteIfUnreferenced(id: HeldEventId): ConnectionIO[HeldEventDeletionResult] =
-        deleteDiscardedForEvent(id).flatMap { deletedDrafts =>
-          sql"""
+  val alg: HeldEventDeletionAlg[ConnectionIO] = new HeldEventDeletionAlg[ConnectionIO]:
+    override def deleteIfUnreferenced(id: HeldEventId): ConnectionIO[HeldEventDeletionResult] =
+      deleteDiscardedForEvent(id).flatMap { deletedDrafts =>
+        sql"""
         WITH target AS (
-          SELECT id FROM held_events WHERE id = ${ids.lookup(Entity.HeldEvents, id.value)}
+          SELECT id FROM held_events WHERE id = $id
         ),
         reference_state AS (
           SELECT
-            EXISTS(SELECT 1 FROM matches WHERE held_event_id = ${ids.lookup(
-              Entity.HeldEvents,
-              id.value
-            )}) AS has_matches,
-            EXISTS(SELECT 1 FROM match_drafts WHERE held_event_id = ${ids.lookup(
-              Entity.HeldEvents,
-              id.value
-            )}) AS has_drafts
+            EXISTS(SELECT 1 FROM matches WHERE held_event_id = $id) AS has_matches,
+            EXISTS(SELECT 1 FROM match_drafts WHERE held_event_id = $id) AS has_drafts
         ),
         deleted AS (
           DELETE FROM held_events
-          WHERE id = ${ids.lookup(Entity.HeldEvents, id.value)}
+          WHERE id = $id
             AND EXISTS (SELECT 1 FROM target)
-            AND NOT EXISTS (SELECT 1 FROM matches WHERE held_event_id = ${ids.lookup(
-              Entity.HeldEvents,
-              id.value
-            )})
-            AND NOT EXISTS (SELECT 1 FROM match_drafts WHERE held_event_id = ${ids.lookup(
-              Entity.HeldEvents,
-              id.value
-            )})
+            AND NOT EXISTS (SELECT 1 FROM matches WHERE held_event_id = $id)
+            AND NOT EXISTS (SELECT 1 FROM match_drafts WHERE held_event_id = $id)
           RETURNING id
         )
         SELECT
@@ -127,35 +100,28 @@ object PostgresHeldEventDeletion:
           (SELECT has_drafts FROM reference_state) AS has_drafts,
           EXISTS(SELECT 1 FROM deleted) AS deleted
       """.query[DeletionState].unique.map {
-            case state if state.deleted => HeldEventDeletionResult.Deleted
-            case state if !state.found => HeldEventDeletionResult.NotFound
-            case state if state.hasMatches => HeldEventDeletionResult.HasConfirmedMatches
-            case state if state.hasDrafts => HeldEventDeletionResult.HasMatchDrafts
-            case _ => HeldEventDeletionResult.Referenced
-          }.flatTap(_ => PostgresResultNotificationCancellation.afterDeletion(deletedDrafts, Nil))
-        }.exceptSomeSqlState {
-          case state if isForeignKeyViolation(state) =>
-            MonadThrow[ConnectionIO].pure(HeldEventDeletionResult.Referenced)
-        }
+          case state if state.deleted => HeldEventDeletionResult.Deleted
+          case state if !state.found => HeldEventDeletionResult.NotFound
+          case state if state.hasMatches => HeldEventDeletionResult.HasConfirmedMatches
+          case state if state.hasDrafts => HeldEventDeletionResult.HasMatchDrafts
+          case _ => HeldEventDeletionResult.Referenced
+        }.flatTap(_ => PostgresResultNotificationCancellation.afterDeletion(deletedDrafts, Nil))
+      }.exceptSomeSqlState {
+        case state if isForeignKeyViolation(state) =>
+          MonadThrow[ConnectionIO].pure(HeldEventDeletionResult.Referenced)
+      }
 end PostgresHeldEventDeletion
 
-final class PostgresHeldEventsRepository[F[_]: MonadCancelThrow](
-    transactor: Transactor[F],
-    publicIds: PostgresPublicIds = PostgresPublicIds.Legacy,
-    identities: PostgresIdentities = PostgresIdentities.Legacy,
-) extends HeldEventsRepository[F]:
-  private given PostgresIdentities = identities
+final class PostgresHeldEventsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
+    extends HeldEventsRepository[F]:
   private val delegate: HeldEventsRepository[F] = HeldEventsRepository
-    .fromAlg(PostgresHeldEvents.withPublicIds(publicIds), transactor.trans)
+    .fromAlg(PostgresHeldEvents.alg, transactor.trans)
 
   export delegate.*
 end PostgresHeldEventsRepository
 
-final class PostgresHeldEventDeletionRepository[F[_]: MonadCancelThrow](
-    transactor: Transactor[F],
-    identities: PostgresIdentities = PostgresIdentities.Legacy
-) extends HeldEventDeletionRepository[F]:
-  private given PostgresIdentities = identities
+final class PostgresHeldEventDeletionRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
+    extends HeldEventDeletionRepository[F]:
   private val delegate: HeldEventDeletionRepository[F] = HeldEventDeletionRepository
     .fromAlg(PostgresHeldEventDeletion.alg, transactor.trans)
 

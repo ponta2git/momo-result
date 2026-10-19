@@ -97,57 +97,6 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixt
     }
   }
 
-  app.test("UUID master creation replays the same identities and preserves legacy references") {
-    http =>
-      val titleId = "46ae0b20-1929-4c42-b601-5989f110ac19"
-      val mapId = "780bfcf9-7e18-4ac1-bb80-e81b5f77478e"
-      val seasonId = "4c35a86d-01cc-49dd-a70f-4590133e85fd"
-      def create(path: String, id: String, fields: (String, Json)*) = writePost(
-        Uri.unsafeFromString(path),
-        Json.obj((("id" -> Json.fromString(id)) +: fields)*),
-        idempotencyKey = Some(id),
-      )
-      val title = create(
-        "/api/game-titles",
-        titleId,
-        "name" -> Json.fromString("名前と独立した作品"),
-        "layoutFamily" -> Json.fromString("world"),
-      )
-      val map = create(
-        "/api/map-masters",
-        mapId,
-        "name" -> Json.fromString("新しいマップ"),
-        "gameTitleId" -> Json.fromString(titleId),
-      )
-      val season = create(
-        "/api/season-masters",
-        seasonId,
-        "name" -> Json.fromString("新しいシーズン"),
-        "gameTitleId" -> Json.fromString("title_world"),
-      )
-      for
-        legacy <-
-          http.run(writePost(uri"/api/game-titles", HttpRequestBodies.Master.gameTitleWorld))
-        _ = assertEquals(legacy.status, Status.Ok)
-        created <- http.run(title).flatMap(_.as[GameTitleResponse])
-        replayed <- http.run(title).flatMap(_.as[GameTitleResponse])
-        createdMap <- http.run(map).flatMap(_.as[MapMasterResponse])
-        replayedMap <- http.run(map).flatMap(_.as[MapMasterResponse])
-        createdSeason <- http.run(season).flatMap(_.as[SeasonMasterResponse])
-        replayedSeason <- http.run(season).flatMap(_.as[SeasonMasterResponse])
-        listed <- http.run(readGet(uri"/api/game-titles")).flatMap(_.as[GameTitleListResponse])
-      yield
-        assertEquals(created.id, titleId)
-        assertEquals(replayed, created)
-        assertEquals(createdMap.id, mapId)
-        assertEquals(createdMap.gameTitleId, titleId)
-        assertEquals(replayedMap, createdMap)
-        assertEquals(createdSeason.id, seasonId)
-        assertEquals(createdSeason.gameTitleId, "title_world")
-        assertEquals(replayedSeason, createdSeason)
-        assertEquals(listed.items.map(_.id), List("title_world", titleId))
-  }
-
   app.test("POST /api/game-titles is restricted to administrators") { http =>
     val req = writePost(
       uri"/api/game-titles",

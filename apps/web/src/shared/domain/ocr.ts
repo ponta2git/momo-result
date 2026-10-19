@@ -28,21 +28,5 @@ export function parseOcrJobStatus(value: unknown): OcrJobStatus | "unknown" {
 }
 
 export function parseLayoutFamily(value: unknown): LayoutFamily | undefined {
-  if (typeof value !== "string") return undefined;
-  const normalized = value.replaceAll(/^[ \t\r\n\f\v]+|[ \t\r\n\f\v]+$/gu, "").toLowerCase();
-  switch (normalized) {
-    case "momotetsu_2":
-    case "momotetsu2":
-    case "2":
-      return "momotetsu_2";
-    case "world":
-    case "momotetsu_world":
-    case "default":
-      return "world";
-    case "reiwa":
-    case "momotetsu_reiwa":
-      return "reiwa";
-    default:
-      return undefined;
-  }
+  return isOneOf(value, layoutFamilies) ? value : undefined;
 }

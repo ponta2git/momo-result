@@ -12,14 +12,7 @@ async fn real_postgres_maximum_standard_notification_exports_consumer_fixture() 
     let mut harness = Harness::start().await?;
     let names = harness
         .client
-        .query(
-            r"
-            SELECT members.legacy_id AS id, display_name
-            FROM members
-            ORDER BY members.legacy_id
-            ",
-            &[],
-        )
+        .query("SELECT id, display_name FROM members ORDER BY id", &[])
         .await?
         .into_iter()
         .map(|row| Ok((row.try_get::<_, String>(0)?, row.try_get::<_, String>(1)?)))
@@ -29,11 +22,7 @@ async fn real_postgres_maximum_standard_notification_exports_consumer_fixture() 
         harness
             .client
             .execute(
-                r"
-                    UPDATE members
-                    SET display_name = $2
-                    WHERE members.legacy_id = $1
-                    ",
+                "UPDATE members SET display_name=$2 WHERE id=$1",
                 &[&id, &name],
             )
             .await?;
@@ -48,7 +37,7 @@ async fn maximum_snapshot(harness: &mut Harness) -> SmokeResult {
         harness
             .client
             .execute(
-                &format!("UPDATE {table} SET name=$2 WHERE legacy_id=$1"),
+                &format!("UPDATE {table} SET name=$2 WHERE id=$1"),
                 &[&id, &boundary_text(256, index)?],
             )
             .await?;
@@ -56,14 +45,7 @@ async fn maximum_snapshot(harness: &mut Harness) -> SmokeResult {
     let seasons = harness
         .client
         .query(
-            r"
-                SELECT season_masters.legacy_id AS id
-                FROM season_masters
-                WHERE (SELECT fixture_parent.legacy_id
-                       FROM game_titles AS fixture_parent
-                       WHERE fixture_parent.id = season_masters.game_title_id) = $1
-                ORDER BY season_masters.legacy_id
-                ",
+            "SELECT id FROM season_masters WHERE game_title_id=$1 ORDER BY id",
             &[&TITLE_ID],
         )
         .await?;
@@ -71,11 +53,7 @@ async fn maximum_snapshot(harness: &mut Harness) -> SmokeResult {
         harness
             .client
             .execute(
-                r"
-                    UPDATE season_masters
-                    SET name = $2
-                    WHERE season_masters.legacy_id = $1
-                    ",
+                "UPDATE season_masters SET name=$2 WHERE id=$1",
                 &[
                     &season.try_get::<_, String>(0)?,
                     &boundary_text(256, index)?,
@@ -87,25 +65,14 @@ async fn maximum_snapshot(harness: &mut Harness) -> SmokeResult {
         harness
             .client
             .execute(
-                r"
-                    UPDATE members
-                    SET display_name = $2
-                    WHERE members.legacy_id = $1
-                    ",
+                "UPDATE members SET display_name=$2 WHERE id=$1",
                 &[&id, &boundary_text(32, index)?],
             )
             .await?;
     }
     harness.client.execute(
-        r"
-            UPDATE matches
-            SET note_body = $2, note_version = 1,
-                note_updated_by_account_id = pg_temp.fixture_uuid('momo_login_accounts', 'account_ponta'),
-                note_updated_at = clock_timestamp()
-            WHERE (SELECT fixture_parent.legacy_id
-                   FROM game_titles AS fixture_parent
-                   WHERE fixture_parent.id = matches.game_title_id) = $1
-            ",
+        "UPDATE matches SET note_body=$2, note_version=1, note_updated_by_account_id='account_ponta', \
+         note_updated_at=clock_timestamp() WHERE game_title_id=$1",
         &[&TITLE_ID, &boundary_text(150, 0)?],
     ).await?;
     let first = claim(OLD_ATTEMPT_ID, 1, OLD_FENCE)?;
@@ -201,11 +168,8 @@ async fn real_postgres_notification_limits_preserve_success_and_baseline() -> Sm
 pub(super) async fn assert_business_success(client: &Client, claim: &ClaimedJob) -> SmokeResult {
     let row = client
         .query_one(
-            r"
-                SELECT j.status, a.status, a.outcome
-                FROM series_analysis_jobs AS j INNER JOIN series_analysis_job_attempts AS a ON a.legacy_id = $2
-                WHERE j.legacy_id = $1
-                ",
+            "SELECT j.status, a.status, a.outcome FROM series_analysis_jobs j \
+         JOIN series_analysis_job_attempts a ON a.id=$2 WHERE j.id=$1",
             &[&claim.job_id, &claim.attempt_id],
         )
         .await?;
@@ -222,50 +186,25 @@ pub(super) async fn seed_matches(
 ) -> SmokeResult {
     client
         .execute(
-            r"
-                INSERT INTO season_masters (id, legacy_id, game_title_id, name, display_order)
-                SELECT pg_temp.fixture_uuid('season_masters', 'analysis-notification-limit-season-' || n),
-                       'analysis-notification-limit-season-' || n, pg_temp.fixture_uuid('game_titles', $1), 'Limit season ' || n,
-                       10000 + n
-                FROM generate_series(1, CAST($2 AS integer) - 1) AS n
-                ",
+            "INSERT INTO season_masters (id, game_title_id, name, display_order) \
+         SELECT 'analysis-notification-limit-season-' || n, $1, 'Limit season ' || n, 10000+n \
+         FROM generate_series(1,$2::integer-1) n",
             &[&TITLE_ID, &season_count],
         )
         .await?;
     client.execute(
-        r"
-            INSERT INTO matches (id, legacy_id, held_event_id, legacy_held_event_id, match_no_in_event, game_title_id,
-                                 layout_family, season_master_id, owner_member_id, map_master_id, played_at, created_by_account_id,
-                                 created_by_member_id, analysis_revision)
-            SELECT pg_temp.fixture_uuid('matches', 'analysis-notification-limit-match-' || n),
-                   'analysis-notification-limit-match-' || n, pg_temp.fixture_uuid('held_events', m.legacy_held_event_id),
-                   m.legacy_held_event_id, n + 1, m.game_title_id, m.layout_family, pg_temp.fixture_uuid('season_masters', CASE
-                                          WHEN n % CAST($3 AS integer) = 0
-                                            THEN (SELECT fixture_parent.legacy_id
-                                                  FROM season_masters AS fixture_parent
-                                                  WHERE fixture_parent.id = m.season_master_id)
-                                          ELSE 'analysis-notification-limit-season-' || n % CAST($3 AS integer)
-                                        END), m.owner_member_id, m.map_master_id, m.played_at + n * CAST('1 day' AS interval), m.created_by_account_id,
-                   m.created_by_member_id, 1
-            FROM matches AS m CROSS JOIN generate_series(1, CAST($2 AS integer) - 1) AS n
-            WHERE m.legacy_id = $1
-            ",
+        "INSERT INTO matches (id,held_event_id,match_no_in_event,game_title_id,layout_family, \
+         season_master_id,owner_member_id,map_master_id,played_at,created_by_account_id,created_by_member_id,analysis_revision) \
+         SELECT 'analysis-notification-limit-match-' || n, m.held_event_id, n+1, m.game_title_id, m.layout_family, \
+         CASE WHEN n % $3::integer = 0 THEN m.season_master_id ELSE 'analysis-notification-limit-season-' || (n % $3::integer) END, \
+         m.owner_member_id,m.map_master_id,m.played_at + n * interval '1 day',m.created_by_account_id,m.created_by_member_id,1 \
+         FROM matches m CROSS JOIN generate_series(1,$2::integer-1) n WHERE m.id=$1",
         &[&MATCH_ID, &match_count, &season_count],
     ).await?;
     client.execute(
-        r"
-            INSERT INTO match_players (match_id, member_id, play_order, rank, total_assets_man_yen, revenue_man_yen)
-            SELECT pg_temp.fixture_uuid('matches', m.legacy_id), p.member_id, p.play_order, p.rank, p.total_assets_man_yen,
-                   p.revenue_man_yen
-            FROM matches AS m CROSS JOIN match_players AS p
-            WHERE (SELECT fixture_parent.legacy_id
-                   FROM game_titles AS fixture_parent
-                   WHERE fixture_parent.id = m.game_title_id) = $1
-              AND m.legacy_id <> $2
-              AND (SELECT fixture_parent.legacy_id
-                   FROM matches AS fixture_parent
-                   WHERE fixture_parent.id = p.match_id) = $2
-            ",
+        "INSERT INTO match_players (match_id,member_id,play_order,rank,total_assets_man_yen,revenue_man_yen) \
+         SELECT m.id,p.member_id,p.play_order,p.rank,p.total_assets_man_yen,p.revenue_man_yen \
+         FROM matches m CROSS JOIN match_players p WHERE m.game_title_id=$1 AND m.id<>$2 AND p.match_id=$2",
         &[&TITLE_ID, &MATCH_ID],
     ).await?;
     Ok(())

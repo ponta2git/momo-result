@@ -63,15 +63,12 @@ const routePreloaders: Array<{
   { matches: (pathname) => pathname === "/matches", preload: loadMatchesListPage },
   { matches: (pathname) => pathname === "/held-events", preload: loadHeldEventsPage },
   {
-    matches: (pathname) => /^\/(?:held-events|e)\/[^/]+$/u.test(pathname),
+    matches: (pathname) => /^\/held-events\/[^/]+$/u.test(pathname),
     preload: loadHeldEventDetailPage,
   },
   { matches: (pathname) => pathname === "/matches/new", preload: loadMatchCreatePage },
   { matches: (pathname) => /^\/matches\/[^/]+\/edit$/u.test(pathname), preload: loadMatchEditPage },
-  {
-    matches: (pathname) => /^\/(?:matches|m)\/[^/]+$/u.test(pathname),
-    preload: loadMatchDetailPage,
-  },
+  { matches: (pathname) => /^\/matches\/[^/]+$/u.test(pathname), preload: loadMatchDetailPage },
   { matches: (pathname) => pathname === "/ocr/new", preload: loadOcrCapturePage },
   { matches: (pathname) => /^\/review\/[^/]+$/u.test(pathname), preload: loadDraftReviewPage },
   { matches: (pathname) => pathname === "/analytics/series", preload: loadSeriesComparisonPage },

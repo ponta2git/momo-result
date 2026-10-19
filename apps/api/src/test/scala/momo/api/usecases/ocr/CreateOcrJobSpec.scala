@@ -173,7 +173,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
     }
   }
 
-  List("reiwa", "world", "momotetsu_2", " MOMOTETSU_REIWA ").foreach { layout =>
+  List("reiwa", "world", "momotetsu_2").foreach { layout =>
     test(s"preserves $layout hints without applying worker computer-player defaults") {
       inMemoryFixture("momo-ocr-layout-hints", List("job-1", "draft-1"), None, 12)
         .use { fixture =>
@@ -313,7 +313,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         val requested = List.tabulate(4) { index =>
           PlayerAliasHint(MemberId.unsafeFromString(s"member-$index-" + "x" * 119), List(wide))
         }
-        val hints = OcrJobHints(Some(wide), Some("world"), requested, List.fill(8)(wide))
+        val hints = OcrJobHints(Some(wide), Some(wide), requested, List.fill(8)(wide))
         for
           _ <- requested.zipWithIndex.traverse_ { case (player, memberIndex) =>
             (1 to 7).toList.traverse_ { aliasIndex =>

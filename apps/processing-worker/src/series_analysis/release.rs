@@ -16,11 +16,9 @@ use crate::worker::listener::CHANNEL;
 
 use super::control::{ALGORITHM_VERSION, CAPABILITY_FRESH_SECONDS};
 
-mod frozen;
 mod maintenance;
 #[cfg(test)]
 mod promotion_tests;
-pub(crate) use frozen::initialize as initialize_frozen;
 pub(crate) use maintenance::{MaintenanceOperation, reconcile};
 
 const RELEASE_TRANSACTION_LIMITS: &str = "SET LOCAL lock_timeout = '5s'; SET LOCAL statement_timeout = '30s'; \
@@ -371,49 +369,6 @@ where
 {
     let readers = reader_capabilities(client).await?;
     let workers = worker_capabilities(client).await?;
-    let mut report =
-        inspect_storage_completeness(client, require_current, require_quiescent).await?;
-    report.compatible_reader_count = readers.compatible;
-    report.compatible_worker_count = workers.compatible;
-    if readers.compatible == 0 {
-        report.violations.push(global_violation("reader_not_ready"));
-    }
-    if readers.incompatible > 0 {
-        report
-            .violations
-            .push(global_violation("reader_incompatible"));
-    }
-    if workers.compatible == 0 {
-        report.violations.push(global_violation("worker_not_ready"));
-    }
-    if workers.incompatible > 0 {
-        report
-            .violations
-            .push(global_violation("worker_incompatible"));
-    }
-    report.passed = report.violations.is_empty();
-    Ok(report)
-}
-
-/// Structural acceptance for the frozen workflow. Its live permit and fixed consumer
-/// readiness are checked by that workflow; this does not attest GitHub authorization.
-pub(crate) async fn audit_frozen_completion<C>(client: &C) -> Result<bool, ReleaseError>
-where
-    C: tokio_postgres::GenericClient + Sync,
-{
-    Ok(inspect_storage_completeness(client, true, true)
-        .await?
-        .passed)
-}
-
-async fn inspect_storage_completeness<C>(
-    client: &C,
-    require_current: bool,
-    require_quiescent: bool,
-) -> Result<CompletenessReport, ReleaseError>
-where
-    C: tokio_postgres::GenericClient + Sync,
-{
     let release_state_matches = release_state_matches(client).await?;
     let rows = title_audit_rows(client).await?;
     let active_job_count = client
@@ -426,6 +381,18 @@ where
     let mut violations = Vec::new();
     if !release_state_matches {
         violations.push(global_violation("release_state_mismatch"));
+    }
+    if readers.compatible == 0 {
+        violations.push(global_violation("reader_not_ready"));
+    }
+    if readers.incompatible > 0 {
+        violations.push(global_violation("reader_incompatible"));
+    }
+    if workers.compatible == 0 {
+        violations.push(global_violation("worker_not_ready"));
+    }
+    if workers.incompatible > 0 {
+        violations.push(global_violation("worker_incompatible"));
     }
     if require_quiescent && active_job_count > 0 {
         violations.push(global_violation("active_jobs"));
@@ -443,8 +410,8 @@ where
             .filter(|row| row.current_artifact_id.is_some())
             .count(),
         active_job_count,
-        compatible_reader_count: 0,
-        compatible_worker_count: 0,
+        compatible_reader_count: readers.compatible,
+        compatible_worker_count: workers.compatible,
         violations,
     };
     Ok(report)
@@ -595,11 +562,11 @@ async fn existing_operation(
 ) -> Result<Option<ExistingOperation>, tokio_postgres::Error> {
     let row = transaction
         .query_opt(
-            "SELECT o.endpoint, o.idempotency_key_hash, o.target_count, c.legacy_id, c.trigger, \
+            "SELECT o.endpoint, o.idempotency_key_hash, o.target_count, c.id, c.trigger, \
                c.algorithm_version, c.artifact_schema_version, c.validation_contract_id \
              FROM series_analysis_operation_requests o \
              JOIN series_analysis_campaigns c ON c.operation_request_id = o.id \
-             WHERE o.legacy_id = $1",
+             WHERE o.id = $1",
             &[&operation_id],
         )
         .await?;
@@ -644,12 +611,12 @@ async fn lock_targets(
 ) -> Result<Vec<TargetRow>, tokio_postgres::Error> {
     let rows = transaction
         .query(
-            "SELECT title.legacy_id, \
+            "SELECT s.game_title_id, \
                     $1::text <> 'initial_backfill' OR EXISTS (\
                       SELECT 1 FROM matches m WHERE m.game_title_id = s.game_title_id\
                     ), s.input_revision \
-             FROM series_analysis_title_states s JOIN game_titles title ON title.id=s.game_title_id \
-             ORDER BY title.legacy_id FOR UPDATE OF s",
+             FROM series_analysis_title_states s \
+             ORDER BY s.game_title_id FOR UPDATE",
             &[&trigger.wire()],
         )
         .await?;
@@ -692,16 +659,6 @@ async fn apply_promotion(
         .map(|target| target.game_title_id.as_str())
         .collect::<Vec<_>>();
     let target_count = i32::try_from(target_ids.len())?;
-    let operation_identity = crate::identity::allocate(
-        crate::identity::Entity::AnalysisOperations,
-        identity.operation_id,
-    )
-    .map_err(|_error| ReleaseError::InvalidOperationKey)?;
-    let campaign_identity = crate::identity::allocate(
-        crate::identity::Entity::AnalysisCampaigns,
-        identity.campaign_id,
-    )
-    .map_err(|_error| ReleaseError::InvalidOperationKey)?;
     transaction
         .execute(
             "UPDATE series_analysis_release_state \
@@ -728,9 +685,9 @@ async fn apply_promotion(
             "UPDATE series_analysis_title_states s \
              SET algorithm_version = $1, artifact_schema_version = $2, \
                  validation_contract_id = $3, \
-                 pending_work = pending_work OR game_title_id IN (SELECT id FROM game_titles WHERE legacy_id=ANY($5::text[])), \
+                 pending_work = pending_work OR game_title_id = ANY($5), \
                  updated_at = clock_timestamp() \
-             WHERE game_title_id IN (SELECT id FROM game_titles WHERE legacy_id=ANY($4::text[]))",
+             WHERE game_title_id = ANY($4)",
             &[
                 &ALGORITHM_VERSION,
                 &schema,
@@ -749,20 +706,19 @@ async fn apply_promotion(
                  artifact_schema_version = s.artifact_schema_version, \
                  validation_contract_id = s.validation_contract_id, \
                  updated_at = clock_timestamp() \
-             FROM series_analysis_title_states s JOIN game_titles title ON title.id=s.game_title_id \
+             FROM series_analysis_title_states s \
              WHERE j.game_title_id = s.game_title_id AND j.status = 'queued' \
-               AND s.game_title_id IN (SELECT id FROM game_titles WHERE legacy_id=ANY($1::text[]))",
+               AND s.game_title_id = ANY($1)",
             &[&title_ids],
         )
         .await?;
-    super::job_transitions::bind_queued_radar(transaction, &title_ids).await?;
     transaction
         .execute(
             "INSERT INTO series_analysis_operation_requests ( \
-               id, legacy_id, scope, requested_by_account_id, idempotency_key_hash, endpoint, status, \
+               id, scope, requested_by_account_id, idempotency_key_hash, endpoint, status, \
                target_count, accepted_at, finished_at \
              ) VALUES (\
-               $5, $1, 'all_titles', NULL, $2, $3, \
+               $1, 'all_titles', NULL, $2, $3, \
                CASE WHEN $4 = 0 THEN 'terminal' ELSE 'running' END, \
                $4, clock_timestamp(), \
                CASE WHEN $4 = 0 THEN clock_timestamp() ELSE NULL END\
@@ -772,17 +728,16 @@ async fn apply_promotion(
                 &identity.key_hash,
                 &identity.endpoint,
                 &target_count,
-                &operation_identity,
             ],
         )
         .await?;
     transaction
         .execute(
             "INSERT INTO series_analysis_campaigns ( \
-               id, legacy_id, operation_request_id, trigger, algorithm_version, artifact_schema_version, \
+               id, operation_request_id, trigger, algorithm_version, artifact_schema_version, \
                validation_contract_id, status, target_count, accepted_at, finished_at \
              ) VALUES (\
-               $8, $1, (SELECT id FROM series_analysis_operation_requests WHERE legacy_id=$2), $3, $4, $5, $6, \
+               $1, $2, $3, $4, $5, $6, \
                CASE WHEN $7 = 0 THEN 'terminal' ELSE 'expanding' END, \
                $7, clock_timestamp(), \
                CASE WHEN $7 = 0 THEN clock_timestamp() ELSE NULL END\
@@ -795,22 +750,21 @@ async fn apply_promotion(
                 &schema,
                 &ARTIFACT_VALIDATION_CONTRACT_ID,
                 &target_count,
-                &campaign_identity,
             ],
         )
         .await?;
     transaction
         .execute(
             "INSERT INTO series_analysis_campaign_targets ( \
-               campaign_id, game_title_id, legacy_game_title_id, input_revision, algorithm_version, \
+               campaign_id, game_title_id, input_revision, algorithm_version, \
                artifact_schema_version, validation_contract_id, status, job_request_id, accepted_at \
-             ) SELECT c.id, s.game_title_id, title.legacy_id, s.input_revision, s.algorithm_version, \
+             ) SELECT $1, s.game_title_id, s.input_revision, s.algorithm_version, \
                       s.artifact_schema_version, s.validation_contract_id, \
                       'pending', NULL, c.accepted_at \
-               FROM series_analysis_title_states s JOIN game_titles title ON title.id=s.game_title_id \
+               FROM series_analysis_title_states s \
                CROSS JOIN series_analysis_campaigns c \
-              WHERE c.legacy_id = $1 AND title.legacy_id = ANY($2::text[]) \
-              ORDER BY title.legacy_id",
+              WHERE c.id = $1 AND s.game_title_id = ANY($2) \
+              ORDER BY s.game_title_id",
             &[&identity.campaign_id, &target_ids],
         )
         .await?;
@@ -823,13 +777,13 @@ where
 {
     let rows = client
         .query(
-            "SELECT title.legacy_id, \
+            "SELECT s.game_title_id, \
                (SELECT COUNT(*)::bigint FROM matches m WHERE m.game_title_id = s.game_title_id), \
                s.input_revision, s.algorithm_version, s.artifact_schema_version, \
                s.validation_contract_id, s.pending_work, \
-               a.id, a.status, a.input_revision, a.algorithm_version, \
+               s.current_artifact_id, a.status, a.input_revision, a.algorithm_version, \
                a.artifact_schema_version, a.validation_contract_id, \
-               p.id, p.status, p.artifact_schema_version, \
+               s.previous_artifact_id, p.status, p.artifact_schema_version, \
                p.validation_contract_id, \
                a.aggregate_chunk_count, a.review_chunk_count, a.drilldown_chunk_count, \
                a.match_context_chunk_count, \
@@ -848,12 +802,10 @@ where
                  UNION ALL SELECT encoded_bytes, decoded_bytes, payload FROM series_analysis_match_context_artifacts WHERE artifact_id = a.id \
                ) chunks WHERE chunks.encoded_bytes <> chunks.decoded_bytes \
                  OR chunks.encoded_bytes <> octet_length(chunks.payload)) \
-             FROM series_analysis_title_states s JOIN game_titles title ON title.id=s.game_title_id \
-             LEFT JOIN series_analysis_artifact_identities current_identity ON current_identity.id=s.current_artifact_id \
-             LEFT JOIN series_analysis_artifacts a ON a.id = current_identity.legacy_id \
-             LEFT JOIN series_analysis_artifact_identities previous_identity ON previous_identity.id=s.previous_artifact_id \
-             LEFT JOIN series_analysis_artifacts p ON p.id = previous_identity.legacy_id \
-             ORDER BY title.legacy_id",
+             FROM series_analysis_title_states s \
+             LEFT JOIN series_analysis_artifacts a ON a.id = s.current_artifact_id \
+             LEFT JOIN series_analysis_artifacts p ON p.id = s.previous_artifact_id \
+             ORDER BY s.game_title_id",
             &[],
         )
         .await?;
@@ -1240,7 +1192,7 @@ mod tests {
     async fn real_postgres_release_capabilities_require_exact_singleton_arrays()
     -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let database_url = env::var("ANALYSIS_CONTROL_SMOKE_DATABASE_URL")?;
-        let mut client = crate::identity::fixtures::connect(&database_url).await?;
+        let mut client = connect(&database_url).await?;
         let transaction = client.transaction().await?;
         transaction
             .execute(
@@ -1357,8 +1309,8 @@ mod tests {
     -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         const READER_ID: &str = "analysis-release-capability-lock-smoke-reader";
         let database_url = env::var("ANALYSIS_CONTROL_SMOKE_DATABASE_URL")?;
-        let mut promoter = crate::identity::fixtures::connect(&database_url).await?;
-        let contender = crate::identity::fixtures::connect(&database_url).await?;
+        let mut promoter = connect(&database_url).await?;
+        let contender = connect(&database_url).await?;
         let contender_pid = contender
             .query_one("SELECT pg_backend_pid()", &[])
             .await?
@@ -1448,7 +1400,6 @@ mod tests {
     #[ignore = "requires explicitly isolated ANALYSIS_CONTROL_SMOKE_DATABASE_URL"]
     #[expect(
         clippy::panic_in_result_fn,
-        clippy::too_many_lines,
         reason = "the isolated database test keeps zero-title promotion and subsequent title inheritance in one rollback-scoped transaction"
     )]
     async fn real_postgres_zero_title_backfill_is_terminal_and_updates_the_release_generation()
@@ -1458,17 +1409,14 @@ mod tests {
         const NEW_TITLE_ID: &str = "analysis-release-post-promotion-title-smoke";
         let database_url = env::var("ANALYSIS_CONTROL_SMOKE_DATABASE_URL")?;
         let schema = i32::try_from(ARTIFACT_SCHEMA_VERSION)?;
-        let mut client = crate::identity::fixtures::connect(&database_url).await?;
+        let mut client = connect(&database_url).await?;
         let transaction = client.transaction().await?;
         transaction
             .batch_execute("TRUNCATE TABLE game_titles CASCADE")
             .await?;
         transaction
             .execute(
-                r"
-                    DELETE FROM series_analysis_operation_requests
-                    WHERE series_analysis_operation_requests.legacy_id = $1
-                    ",
+                "DELETE FROM series_analysis_operation_requests WHERE id = $1",
                 &[&OPERATION_ID],
             )
             .await?;
@@ -1500,19 +1448,13 @@ mod tests {
 
         let terminal = transaction
             .query_one(
-                r"
-                    SELECT o.status, o.target_count, o.finished_at IS NOT NULL, c.status, c.target_count, c.finished_at IS NOT NULL,
-                           (SELECT CAST(count(*) AS bigint)
-                            FROM series_analysis_campaign_targets AS t
-                            WHERE (SELECT fixture_parent.legacy_id
-                                   FROM series_analysis_campaigns AS fixture_parent
-                                   WHERE fixture_parent.id = t.campaign_id) = c.legacy_id)
-                    FROM series_analysis_operation_requests AS o
-                         INNER JOIN series_analysis_campaigns AS c ON (SELECT fixture_parent.legacy_id
-                                                                       FROM series_analysis_operation_requests AS fixture_parent
-                                                                       WHERE fixture_parent.id = c.operation_request_id) = o.legacy_id
-                    WHERE o.legacy_id = $1 AND c.legacy_id = $2
-                    ",
+                "SELECT o.status, o.target_count, o.finished_at IS NOT NULL, \
+                        c.status, c.target_count, c.finished_at IS NOT NULL, \
+                        (SELECT COUNT(*)::bigint FROM series_analysis_campaign_targets t \
+                         WHERE t.campaign_id = c.id) \
+                 FROM series_analysis_operation_requests o \
+                 JOIN series_analysis_campaigns c ON c.operation_request_id = o.id \
+                 WHERE o.id = $1 AND c.id = $2",
                 &[&OPERATION_ID, &CAMPAIGN_ID],
             )
             .await?;
@@ -1527,30 +1469,16 @@ mod tests {
 
         transaction
             .execute(
-                r"
-                    WITH fixture_titles AS (
-                           INSERT INTO game_titles (id, legacy_id, name, layout_family, display_order)
-                           VALUES (pg_temp.fixture_uuid('game_titles', $1), $1, 'post-promotion title smoke', 'momotetsu_2', 9997)
-                           RETURNING id
-                         )
-                      INSERT INTO series_analysis_title_states (game_title_id, algorithm_version, artifact_schema_version, validation_contract_id)
-                      SELECT fixture_titles.id, release.algorithm_version, release.artifact_schema_version, release.validation_contract_id
-                      FROM fixture_titles CROSS JOIN series_analysis_release_state AS release
-                      WHERE release.singleton_key = 'current'
-                      ON CONFLICT (game_title_id) DO NOTHING
-                    ",
+                "INSERT INTO game_titles (id, name, layout_family, display_order) \
+                 VALUES ($1, 'post-promotion title smoke', 'momotetsu2', 9997)",
                 &[&NEW_TITLE_ID],
             )
             .await?;
         let inherited = transaction
             .query_one(
-                r"
-                    SELECT algorithm_version, artifact_schema_version, validation_contract_id, pending_work
-                    FROM series_analysis_title_states
-                    WHERE (SELECT fixture_parent.legacy_id
-                           FROM game_titles AS fixture_parent
-                           WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = $1
-                    ",
+                "SELECT algorithm_version, artifact_schema_version, validation_contract_id, \
+                        pending_work \
+                 FROM series_analysis_title_states WHERE game_title_id = $1",
                 &[&NEW_TITLE_ID],
             )
             .await?;
@@ -1575,7 +1503,7 @@ mod tests {
     async fn real_postgres_audit_reports_a_release_state_mismatch()
     -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let database_url = env::var("ANALYSIS_CONTROL_SMOKE_DATABASE_URL")?;
-        let mut client = crate::identity::fixtures::connect(&database_url).await?;
+        let mut client = connect(&database_url).await?;
         let transaction = client.transaction().await?;
         transaction
             .batch_execute(RELEASE_TRANSACTION_LIMITS)
@@ -1602,6 +1530,74 @@ mod tests {
         assert!(report.violations.iter().any(|violation| {
             violation.code == "release_state_mismatch" && violation.game_title_id.is_none()
         }));
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[ignore = "requires explicitly isolated ANALYSIS_CONTROL_SMOKE_DATABASE_URL"]
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "the two-connection database test uses exact SQLSTATE and rollback-scoped state assertions"
+    )]
+    async fn real_postgres_release_lock_serializes_new_title_state_inheritance()
+    -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        const TITLE_ID: &str = "analysis-release-lock-title-smoke";
+        let database_url = env::var("ANALYSIS_CONTROL_SMOKE_DATABASE_URL")?;
+        let mut blocker = connect(&database_url).await?;
+        let mut contender = connect(&database_url).await?;
+        let contender_transaction = contender.transaction().await?;
+        contender_transaction
+            .execute("DELETE FROM game_titles WHERE id = $1", &[&TITLE_ID])
+            .await?;
+
+        let blocker_transaction = blocker.transaction().await?;
+        lock_release_state(&blocker_transaction).await?;
+        contender_transaction
+            .batch_execute("SET LOCAL lock_timeout = '250ms'; SAVEPOINT blocked_insert")
+            .await?;
+        let blocked_insert = contender_transaction
+            .execute(
+                "INSERT INTO game_titles (id, name, layout_family, display_order) \
+                 VALUES ($1, 'release lock title smoke', 'momotetsu2', 9996)",
+                &[&TITLE_ID],
+            )
+            .await;
+        blocker_transaction.rollback().await?;
+        contender_transaction
+            .batch_execute("ROLLBACK TO SAVEPOINT blocked_insert; SET LOCAL lock_timeout = '5s'")
+            .await?;
+
+        let Err(blocked_error) = blocked_insert else {
+            return Err(std::io::Error::other(
+                "the game-title trigger did not wait for the release singleton",
+            )
+            .into());
+        };
+        assert_eq!(
+            blocked_error.code(),
+            Some(&tokio_postgres::error::SqlState::LOCK_NOT_AVAILABLE)
+        );
+        contender_transaction
+            .execute(
+                "INSERT INTO game_titles (id, name, layout_family, display_order) \
+                 VALUES ($1, 'release lock title smoke', 'momotetsu2', 9996)",
+                &[&TITLE_ID],
+            )
+            .await?;
+        let inherits_current_release = contender_transaction
+            .query_one(
+                "SELECT s.algorithm_version = r.algorithm_version \
+                        AND s.artifact_schema_version = r.artifact_schema_version \
+                        AND s.validation_contract_id IS NOT DISTINCT FROM r.validation_contract_id \
+                 FROM series_analysis_title_states s \
+                 CROSS JOIN series_analysis_release_state r \
+                 WHERE s.game_title_id = $1 AND r.singleton_key = 'current'",
+                &[&TITLE_ID],
+            )
+            .await?
+            .try_get::<_, bool>(0)?;
+        contender_transaction.rollback().await?;
+        assert!(inherits_current_release);
         Ok(())
     }
 }

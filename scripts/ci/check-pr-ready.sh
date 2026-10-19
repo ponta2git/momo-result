@@ -31,15 +31,14 @@ require_success classify "${CLASSIFY_RESULT:?}"
 require_success branch-policy "${BRANCH_POLICY_RESULT:?}"
 require_success public-safety "${PUBLIC_SAFETY_RESULT:?}"
 
-# Release branches contain only a verified develop snapshot (and possibly its
-# tree-preserving base sync). The exact master commit receives the final gates
-# before any production mutation; do not repeat the application suites here.
+# The exact master commit receives the final gates before any production
+# mutation; do not repeat the application suites on release PRs.
 if [[ "${PR_BASE_REF:-develop}" == "master" ]]; then
   for result in "${WORKFLOW_LINT_RESULT:?}" "${API_RESULT:?}" "${WEB_RESULT:?}" \
     "${ANALYSIS_RESULT:?}" "${RUNTIME_RESULT:?}" "${SYSTEM_E2E_RESULT:?}"; do
     require_optional release-suite false "${result}"
   done
-  echo "Release snapshot and public release information passed. Production gates run after merge."
+  echo "Release branch policy and public release information passed. Production gates run after merge."
   exit 0
 fi
 

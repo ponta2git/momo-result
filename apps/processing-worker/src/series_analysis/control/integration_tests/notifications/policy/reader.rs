@@ -36,11 +36,7 @@ async fn real_postgres_notification_reader_preserves_history_and_selects_affecte
     // Moving the only match out of a season removes that new aggregate. Both old and new
     // season IDs must still be selected, with an empty result for the removed season.
     harness.client.execute(
-        r"
-            UPDATE matches
-            SET season_master_id = pg_temp.fixture_uuid('season_masters', $2), analysis_revision = analysis_revision + 1
-            WHERE matches.legacy_id = $1
-            ",
+        "UPDATE matches SET season_master_id=$2, analysis_revision=analysis_revision+1 WHERE id=$1",
         &[&MATCH_ID, &DESTINATION_SEASON],
     ).await?;
     let moved = next_revision(&harness.client, &noop, "reader-moved").await?;
@@ -60,10 +56,7 @@ async fn real_postgres_notification_reader_preserves_history_and_selects_affecte
     harness
         .client
         .execute(
-            r"
-                DELETE FROM matches
-                WHERE matches.legacy_id = ANY(CAST($1 AS text[]))
-                ",
+            "DELETE FROM matches WHERE id=ANY($1::text[])",
             &[&vec![MATCH_ID, DESTINATION_MATCH]],
         )
         .await?;

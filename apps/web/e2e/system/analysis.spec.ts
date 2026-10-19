@@ -31,7 +31,7 @@ test("saved and edited results reach worker analysis, the browser and the origin
   await page.getByRole("link", { name: "試合結果を編集" }).click();
   await page.getByLabel("ぽんた 総資産（万円）", { exact: true }).fill("7654");
   await page.getByRole("button", { exact: true, name: "保存" }).click();
-  await expect(page).toHaveURL(`/m/${fixture.matchPublicId}`);
+  await expect(page).toHaveURL(`/matches/${fixture.matchId}`);
   const updated = await waitForPublished(request, fixture.gameTitleId, first.artifactId);
   expect(updated.inputRevision).not.toBe(first.inputRevision);
   const aggregate = await readAggregate(request, fixture, updated);
@@ -172,11 +172,11 @@ test("an unavailable analysis read does not prevent saving and reading match res
   await page.goto(`/analytics/series?gameTitleId=${fixture.gameTitleId}`);
   await expect(page.getByRole("heading", { name: "戦績データを取得できません" })).toBeVisible();
   await page.getByRole("link", { exact: true, name: "試合" }).click();
-  await page.locator(`a[href="/m/${fixture.matchPublicId}"]:visible`).click();
+  await page.locator(`a[href="/matches/${fixture.matchId}"]:visible`).click();
   await page.getByRole("link", { name: "試合結果を編集" }).click();
   await page.getByLabel("ぽんた 総資産（万円）", { exact: true }).fill("5432");
   await page.getByRole("button", { exact: true, name: "保存" }).click();
-  await expect(page).toHaveURL(`/m/${fixture.matchPublicId}`);
+  await expect(page).toHaveURL(`/matches/${fixture.matchId}`);
   await page.reload();
   await expect(page.getByRole("heading", { name: "第1試合の結果" })).toBeVisible();
   const response = await request.get(`/api/matches/${fixture.matchId}`);

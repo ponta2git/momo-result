@@ -1,37 +1,26 @@
 package momo.api.adapters.postgres
 
-import cats.syntax.all.*
-import doobie.*
-import doobie.implicits.*
-
-import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.IncidentKind
 import momo.api.domain.ids.IncidentMasterId
 
 /**
- * The six semantic keys identify the fixed categories independently of their stored row IDs.
+ * Maps the pure-domain [[IncidentKind]] to/from the DB seed value of `incident_masters.id`.
+ *
+ * The wire strings here MUST match the seed in `momo-db/drizzle/0008_foamy_nekra.sql`. Domain code
+ * does not depend on these strings; only this repository-layer mapping does.
  */
 private[postgres] object IncidentKindMapping:
-  private val byKey: Map[String, IncidentKind] = Map(
-    "destination" -> IncidentKind.Destination,
-    "plus_station" -> IncidentKind.PlusStation,
-    "minus_station" -> IncidentKind.MinusStation,
-    "card_station" -> IncidentKind.CardStation,
-    "card_shop" -> IncidentKind.CardShop,
-    "suri_no_ginji" -> IncidentKind.SuriNoGinji,
+  private val toWire: Map[IncidentKind, IncidentMasterId] = Map(
+    IncidentKind.Destination -> IncidentMasterId.unsafeFromString("incident_destination"),
+    IncidentKind.PlusStation -> IncidentMasterId.unsafeFromString("incident_plus_station"),
+    IncidentKind.MinusStation -> IncidentMasterId.unsafeFromString("incident_minus_station"),
+    IncidentKind.CardStation -> IncidentMasterId.unsafeFromString("incident_card_station"),
+    IncidentKind.CardShop -> IncidentMasterId.unsafeFromString("incident_card_shop"),
+    IncidentKind.SuriNoGinji -> IncidentMasterId.unsafeFromString("incident_suri_no_ginji"),
   )
 
-  def kindOf(key: String): Option[IncidentKind] = byKey.get(key)
+  private val fromWire: Map[IncidentMasterId, IncidentKind] = toWire.map(_.swap)
 
-  def masterIds(using ids: PostgresIdentities): ConnectionIO[Map[IncidentKind, IncidentMasterId]] =
-    sql"SELECT ${ids.wireId("incident_masters")}, key FROM incident_masters ORDER BY key LIMIT 7"
-      .query[(IncidentMasterId, String)].to[List].flatMap { rows =>
-        if rows.size == byKey.size && rows.map(_._2).toSet == byKey.keySet then
-          rows.map { case (id, key) => byKey(key) -> id }.toMap.pure[ConnectionIO]
-        else
-          PostgresDataIntegrityException.inconsistentRow(
-            "incident_masters",
-            "catalog",
-            "the six fixed semantic keys are required",
-          ).raiseError[ConnectionIO, Map[IncidentKind, IncidentMasterId]]
-      }
+  def masterId(kind: IncidentKind): IncidentMasterId = toWire(kind)
+
+  def kindOf(id: IncidentMasterId): Option[IncidentKind] = fromWire.get(id)

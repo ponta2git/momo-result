@@ -104,27 +104,6 @@ func TestPublicEvidenceProjection(t *testing.T) {
 	}
 }
 
-func TestNormalPublisherRequiresTheCompletedDeploymentAttempt(t *testing.T) {
-	valid := `{"schemaVersion":1,"status":"complete","mode":"normal","runId":"123","runAttempt":"3","commit":"` + testCommit + `"}`
-	for _, change := range []func(object){
-		nil,
-		func(o object) { o["mode"] = "frozen" },
-		func(o object) { o["runId"] = "456" },
-		func(o object) { o["runAttempt"] = "2" },
-		func(o object) { o["status"] = "draining" },
-		func(o object) { o["providerSecret"] = "never-print" },
-	} {
-		input := valid
-		if change != nil {
-			input = string(mutated(t, []byte(valid), change))
-		}
-		code, out, diagnostics := call(t, "normal-deployment-completion", []string{"123", "3", testCommit}, input, "")
-		if (code == 0) != (change == nil) || out != "" || strings.Contains(diagnostics, "never-print") {
-			t.Fatal(code, out, diagnostics)
-		}
-	}
-}
-
 func TestProviderJSONRejectsInvalidUTF8(t *testing.T) {
 	code, out, diagnostics := call(t, "canonical-json", nil, "{\"value\":\"\xff\"}", "")
 	if code != 1 || out != "" || strings.Contains(diagnostics, "\xff") {

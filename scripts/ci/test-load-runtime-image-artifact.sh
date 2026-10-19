@@ -78,9 +78,8 @@ run_loader() {
     cd "${test_dir}"
     PATH="${fake_bin}:${PATH}" FAKE_IMAGE_ID="${1:-${image_id}}" \
       IMAGE_ARTIFACT_NAME="${artifact_dir}" IMAGE_REF="${image_ref}" \
-      GITHUB_RUN_ID=654321 GITHUB_RUN_ATTEMPT="${current_run_attempt}" \
-      GITHUB_SHA="${commit}" RUNTIME_CANDIDATE_RUN_ID="${2:-${run_id}}" \
-      RUNTIME_CANDIDATE_RUN_ATTEMPT="${run_attempt}" \
+      GITHUB_RUN_ID="${run_id}" GITHUB_RUN_ATTEMPT="${current_run_attempt}" \
+      GITHUB_SHA="${commit}" RUNTIME_CANDIDATE_RUN_ATTEMPT="${run_attempt}" \
       "${loader}"
   )
 }
@@ -96,7 +95,6 @@ expect_rejected() {
 
 write_valid_artifact
 run_loader
-expect_rejected wrong-producer-run-id "${image_id}" 999999
 expect_rejected mismatched-image-id sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 
 printf '%s\n' tampered >> "${artifact_dir}/momo-result-image.tar.gz"

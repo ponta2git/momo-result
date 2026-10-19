@@ -144,7 +144,7 @@ test、suite、lint / checker、manual review は、守る価値に対して必�
 
 Analysis / OCR の共通 contract として、次を固定する。
 
-- `DB candidate -> instance resource reservation -> job claim / lease / fence -> child -> candidate validation -> durable commit -> post-commit effect` の順序。
+- `DB candidate -> claim / lease / slot -> child -> candidate validation -> durable commit -> post-commit effect` の順序。
 - parent が DB、object、process、timeout、fence、結果確定を所有し、child は1 attempt の bounded candidate だけを返すこと。
 - retry / followup を durable に保存し、rollback では wake しないこと。commit 応答不明や重複 wake が二重実行権・二重公開にならないこと。
 - 起動・再接続、wake coalescing、deadline、bounded drain、backoff を確認し、通知欠落は低頻度の補完走査で回復すること。
@@ -159,16 +159,15 @@ OCR は schema / screen type、object metadata、parser / postprocess、failure 
 
 - 純粋計算は table / property / golden test で、分母、同値、丸め、入力順、seed、品質状態を固定する。浮動小数点の oracle は手計算、高精度参照、数学的性質のいずれかを使う。
 - 意図した結果変更は根拠、影響 fixture、algorithm version を同じ変更に含める。既存実装の値だけを唯一の正解にしない。
-- DB job / intent / lease / persistent fence counter / artifact と通知は実 PostgreSQL、timeout / OOM / kill / reap / 実行継続は実 process で検証する。
+- DB job / intent / slot / lease / fence / artifact と通知は実 PostgreSQL、timeout / OOM / kill / reap / preemption は実 process で検証する。
 - stale fence、重複 wake、commit 応答不明、unsupported version、partial staging、publication rollback、cleanup 競合を直接通し、部分公開・二重公開・孤立 job を残さない。
 - child の resource limit は対象 cgroup の readback / event と parent 生存を同時に確認する。host 上の制限や runtime 全体 OOM で代用しない。
 - artifact materialization は byte / node / depth / UTF-8 / checksum / path / symlink / disk 境界を検証する。
 - artifact publicationはRustのfull semantic validatorを唯一の意味oracleとし、exact validation contract、published rowのimmutability、APIのbounded shape / identity defenseをそれぞれの境界で検証する。
 - analysis releaseのbaseline migrationを変える場合は、全migration直後かつfixture mutation前のsingletonをalgorithm / artifact schema / validation contractのexact tupleとして検証する。legacy singletonからのpromotion test、相対的なtitle inheritance、test内でexact tupleをseedしたrepository testはfresh baselineの代用にしない。
 - release promotionは2接続の実PostgreSQLで、capability検査後の非互換登録がcommitまで待つこと、singleton lock中の新規作品がcommit後のtupleを継承すること、登録作品0件がterminalになることを検証する。
-- 分析の暗黙更新をconsumerへ移す場合、旧triggerが有効なDBで同じtupleへの再代入が行を書き直さないことを確認する。専用のschema実験用fixtureで作成・radar binding・lease cleanup triggerを無効にし、APIの作成/要求/試合mutation/radar commandとWorkerのmaterialize/requeue/recovery/publicationを再実行する。schema変更はmomo-dbの手順に従い、共有DBや普段使いのDBでtriggerを無効化しない。
 - 自動・手動の分析保守は、preview の非更新、対象 snapshot 変更時の拒否、互換性不足、同じ世代の再実行、未完了・失敗 target の識別を実 PostgreSQL で確認する。運用 runner は不正 report、配備世代変更、待機期限を失敗として扱い、enqueue 成功を release 完了にしない。
-- 待機 OCR の優先と実行中の分析の完了を実 process / DB で確認する。旧世代が保存した中断 intent は失敗回数非加算、旧 child 回収後の再実行を保つ。
+- OCR preemption は一方向、失敗回数非加算、旧 child 回収後の再実行を実 process / DB で確認する。
 - resource / endurance gate は release build、production 相当の上限、代表 data で機能 gate と分けて実行する。
 - 分析通知の通常更新は追加・変更試合数だけでなく、比較対象となる既存履歴の量とDB往復も含めて確認する。有限の設定競合待ち後に通知が成立すること、残時間不足・長期競合では業務成功を保ち通知を省略することを実DBで区別する。
 - 分析通知の対象や比較元を変える場合は、純粋な差分testに加えて要求の合流・releaseの参照切離し・公開成功を通す実DB経路を選ぶ。実送信はローカルreceiverで固定本文とcommit後の状態を観測し、保守処理の抑止や設定・送信結果に依存しない入力基準を確認する。

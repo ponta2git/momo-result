@@ -106,11 +106,9 @@ pub struct OcrHints {
 }
 
 impl OcrHints {
-    pub(crate) fn layout_family(&self) -> Result<Option<crate::layout_family::LayoutFamily>, ()> {
-        self.layout_family
-            .as_deref()
-            .map(|value| crate::layout_family::LayoutFamily::from_legacy(value).ok_or(()))
-            .transpose()
+    #[must_use]
+    pub(crate) fn layout_family(&self) -> Option<&str> {
+        self.layout_family.as_deref()
     }
 
     #[must_use]
@@ -123,9 +121,8 @@ impl OcrHints {
             .iter()
             .map(String::as_str)
             .chain(
-                (self.computer_player_aliases.is_empty()
-                    && self.layout_family() == Ok(Some(crate::layout_family::LayoutFamily::Reiwa)))
-                .then_some("さくま"),
+                (self.computer_player_aliases.is_empty() && self.layout_family() == Some("reiwa"))
+                    .then_some("さくま"),
             )
     }
 
@@ -134,7 +131,6 @@ impl OcrHints {
     pub fn is_valid(&self) -> bool {
         self.game_title.as_deref().is_none_or(valid_hint_text)
             && self.layout_family.as_deref().is_none_or(valid_hint_text)
-            && self.layout_family().is_ok()
             && self.known_player_aliases.len() <= MAXIMUM_KNOWN_PLAYERS
             && self.known_player_aliases.iter().all(|hint| {
                 valid_bounded_text(&hint.member_id, MAXIMUM_MEMBER_ID_CHARACTERS)
@@ -256,7 +252,6 @@ mod tests {
     fn computer_player_defaults_belong_to_recognition_and_preserve_explicit_aliases() {
         for (layout, supplied, expected) in [
             ("reiwa", vec![], vec!["さくま"]),
-            (" MOMOTETSU_REIWA ", vec![], vec!["さくま"]),
             ("world", vec![], vec![]),
             ("momotetsu_2", vec![], vec![]),
             ("reiwa", vec!["えんま"], vec!["えんま"]),

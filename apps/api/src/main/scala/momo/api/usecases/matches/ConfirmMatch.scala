@@ -18,7 +18,6 @@ import momo.api.domain.{
 }
 import momo.api.errors.AppError
 import momo.api.repositories.{
-  EntityReferenceResolver,
   GameTitlesRepository,
   HeldEventsRepository,
   MapMastersRepository,
@@ -29,7 +28,7 @@ import momo.api.repositories.{
   MatchesRepository,
   SeasonMastersRepository
 }
-import momo.api.usecases.common.{MatchReferenceValidation, ReferenceNormalization}
+import momo.api.usecases.common.MatchReferenceValidation
 import momo.api.usecases.matchdrafts.PurgeSourceImages
 import momo.api.usecases.syntax.UseCaseSyntax.*
 
@@ -65,7 +64,6 @@ final class ConfirmMatch[F[_]: Monad](
     now: F[Instant],
     nextId: F[MatchId],
     allowedMemberIds: F[Set[MemberId]],
-    references: Option[EntityReferenceResolver[F]] = None,
 ):
   import ConfirmMatch.*
 
@@ -77,16 +75,6 @@ final class ConfirmMatch[F[_]: Monad](
       command: ConfirmMatchCommand,
       createdBy: AccountId,
       playerMemberId: Option[MemberId],
-  ): F[Either[AppError, MatchRecord]] = ReferenceNormalization.confirm(
-    command,
-    references.getOrElse(EntityReferenceResolver.preserve[F])
-  )
-    .flatMap(normalized => runResolved(normalized, createdBy, playerMemberId))
-
-  private def runResolved(
-      command: ConfirmMatchCommand,
-      createdBy: AccountId,
-      playerMemberId: Option[MemberId]
   ): F[Either[AppError, MatchRecord]] = (for
     allowed <- EitherT.liftF(allowedMemberIds)
     validation <- inputValidation.validate(

@@ -65,12 +65,8 @@ final class CreateOcrJob[F[_]: MonadThrow](
           case Some(member) => member.jobId match
               case Some(id) => (for
                   job <- jobs.findAcceptance(id).orNotFound("OCR job", id.value)
-                  sameImage <- EitherT.liftF(
-                    if job.imageId == command.imageId then true.pure[F]
-                    else imageStore.find(command.imageId).map(_.exists(_.imageId == job.imageId))
-                  )
                   _ <- EitherT.cond[F](
-                    sameImage,
+                    job.imageId == command.imageId,
                     (),
                     AppError.Conflict("This member already has another image.")
                   )
@@ -112,25 +108,18 @@ final class CreateOcrJob[F[_]: MonadThrow](
           ))
         else EitherT.rightT[F, AppError](draft)
       }
-    image <- imageStore.find(command.imageId).orNotFound("image", command.imageId.value)
+    imageId = command.imageId
+    image <- imageStore.find(imageId).orNotFound("image", command.imageId.value)
     createdAt <- EitherT.liftF(now)
     jobId <- EitherT.liftF(nextJobId)
     draftId <- EitherT.liftF(nextDraftId)
     draft = initialDraft(draftId, jobId, command.requestedScreenType, createdAt)
-    job =
-      queuedJob(
-        jobId,
-        draftId,
-        image.imageId,
-        image.location,
-        command.requestedScreenType,
-        createdAt
-      )
+    job = queuedJob(jobId, draftId, imageId, image.location, command.requestedScreenType, createdAt)
     input = OcrJobInput.initial(job, image, enrichedHints, requestId)
     attachment = OcrJobDraftAttachment(
       draftId = draftForMatch.id,
       screenType = command.requestedScreenType,
-      sourceImageId = image.imageId,
+      sourceImageId = command.imageId,
       ocrDraftId = draft.id,
       updatedAt = createdAt,
     )

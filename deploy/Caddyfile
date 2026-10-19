@@ -47,7 +47,7 @@
 (protected_routes) {
 	route {
 		@loopbackRuntimeProbe {
-			path /api/__momo_runtime/http2-probe /api/__momo_runtime/maintenance-readiness
+			path /api/__momo_runtime/http2-probe
 			remote_ip 127.0.0.1 ::1
 		}
 		request_header @loopbackRuntimeProbe X-Momo-Runtime-Probe "v1"
@@ -119,16 +119,6 @@ http://:8080 {
 			max_size 4MB
 		}
 		request_header -X-Momo-Runtime-Probe
-
-		@maintenanceControl {
-			path /internal/maintenance/drain
-			remote_ip 127.0.0.1 ::1
-		}
-		handle @maintenanceControl {
-			import api_proxy
-		}
-		@externalMaintenanceControl path /internal/maintenance/*
-		respond @externalMaintenanceControl 404
 
 		@invalidHost not host __MOMO_ALLOWED_HOSTS__
 		respond @invalidHost 421

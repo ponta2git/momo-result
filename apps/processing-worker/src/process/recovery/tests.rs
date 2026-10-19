@@ -24,8 +24,6 @@ fn fixture() -> Result<(tempfile::TempDir, ChildCgroup, PathBuf), Box<dyn Error>
     // descendants, and hard limits remain the Linux image smoke's responsibility.
     for (name, value) in [
         ("cgroup.procs", ""),
-        ("cpu.cfs_quota_us", "100000"),
-        ("cpu.cfs_period_us", "100000"),
         ("memory.limit_in_bytes", "201326592\n"),
         ("memory.usage_in_bytes", "4096\n"),
         ("memory.max_usage_in_bytes", "8192\n"),

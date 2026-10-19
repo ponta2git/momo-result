@@ -1,6 +1,11 @@
 use tokio_postgres::{Client, Transaction, types::Type};
 
-use crate::series_analysis::config::AnalysisConsumerConfig;
+use crate::{
+    execution_slot::{
+        ExecutionSlotIdentity, ExecutionTaskKind, SlotRenewal, renew_owned as renew_slot,
+    },
+    series_analysis::config::AnalysisConsumerConfig,
+};
 
 use crate::worker::ControlOutcome;
 
@@ -10,11 +15,12 @@ use super::{
     capability::refresh_heartbeat,
     transaction::{
         bounded_transaction, duration_milliseconds, finish_attempt, fulfill_requests, lock_owned,
-        refresh_operation_projections, request_scheduler_wake, schedule_follow_up,
+        refresh_operation_projections, release_slot, request_scheduler_wake, schedule_follow_up,
     },
 };
 
-/// Extends the exact owned job lease without changing its fencing counter.
+/// Extends an owned attempt lease and reports whether a future higher-priority holder requested
+/// preemption.
 ///
 /// # Errors
 ///
@@ -26,13 +32,29 @@ pub(crate) async fn heartbeat(
 ) -> Result<HeartbeatResult, ControlError> {
     let transaction = bounded_transaction(client, config.heartbeat_timeout).await?;
     let lease_milliseconds = duration_milliseconds(config.lease_duration)?;
+    let slot_renewal = renew_slot(
+        &transaction,
+        ExecutionSlotIdentity {
+            task_kind: ExecutionTaskKind::Analysis,
+            owner: &config.worker_id,
+            job_id: &claim.job_id,
+            attempt_id: &claim.attempt_id,
+            fencing_token: claim.fencing_token,
+        },
+        lease_milliseconds,
+    )
+    .await?;
+    if slot_renewal == SlotRenewal::OwnerLost {
+        transaction.rollback().await?;
+        return Ok(HeartbeatResult::OwnerLost);
+    }
     let updated = transaction
         .execute_typed(
             "UPDATE series_analysis_jobs SET\x20\
                lease_expires_at = clock_timestamp() + ($1::bigint * interval '1 millisecond'),\x20\
                updated_at = clock_timestamp()\x20\
-             WHERE legacy_id = $2 AND status = 'running' AND lease_owner = $3\x20\
-               AND legacy_lease_attempt_id = $4 AND lease_fencing_token = $5\x20\
+             WHERE id = $2 AND status = 'running' AND lease_owner = $3\x20\
+               AND lease_attempt_id = $4 AND lease_fencing_token = $5\x20\
                AND lease_validation_contract_id IS NOT DISTINCT FROM $6\x20\
                AND lease_expires_at > clock_timestamp()",
             &[
@@ -51,7 +73,11 @@ pub(crate) async fn heartbeat(
     }
     refresh_heartbeat(&transaction, &config.worker_id).await?;
     transaction.commit().await?;
-    Ok(HeartbeatResult::Continue)
+    Ok(if slot_renewal == SlotRenewal::PreemptRequested {
+        HeartbeatResult::PreemptRequested
+    } else {
+        HeartbeatResult::Continue
+    })
 }
 
 /// Terminates a claimed job whose source revision is no longer current.
@@ -71,7 +97,7 @@ pub(crate) async fn supersede(
     let desired = transaction
         .query_one(
             "SELECT input_revision, algorithm_version, artifact_schema_version, validation_contract_id\x20\
-             FROM series_analysis_title_states WHERE game_title_id = (SELECT id FROM game_titles WHERE legacy_id=$1)",
+             FROM series_analysis_title_states WHERE game_title_id = $1",
             &[&claim.game_title_id],
         )
         .await?;
@@ -86,10 +112,10 @@ pub(crate) async fn supersede(
                status = 'queued', input_revision = $1, algorithm_version = $2,\x20\
                artifact_schema_version = $3, validation_contract_id = $4,\x20\
                available_at = clock_timestamp(),\x20\
-               started_at = NULL, lease_owner = NULL, lease_attempt_id = NULL, legacy_lease_attempt_id = NULL,\x20\
+               started_at = NULL, lease_owner = NULL, lease_attempt_id = NULL,\x20\
                lease_fencing_token = NULL, lease_expires_at = NULL,\x20\
                lease_validation_contract_id = NULL, updated_at = clock_timestamp()\x20\
-             WHERE legacy_id = $5",
+             WHERE id = $5",
             &[
                 &desired_revision,
                 &desired_algorithm,
@@ -99,21 +125,16 @@ pub(crate) async fn supersede(
             ],
         )
         .await?;
-    crate::series_analysis::job_transitions::bind_queued_radar(
-        &transaction,
-        &[&claim.game_title_id],
-    )
-    .await?;
     transaction
         .execute(
-            "UPDATE series_analysis_job_requests SET status = 'pending', assigned_attempt_id = NULL, legacy_assigned_attempt_id = NULL\x20\
-             WHERE legacy_assigned_attempt_id = $1",
+            "UPDATE series_analysis_job_requests SET status = 'pending', assigned_attempt_id = NULL\x20\
+             WHERE assigned_attempt_id = $1",
             &[&claim.attempt_id],
         )
         .await?;
     let mut effects = TransactionEffects::empty();
     request_scheduler_wake(&mut effects);
-
+    release_slot(&transaction, claim, &config.worker_id).await?;
     transaction.commit().await?;
     Ok(effects.committed(()))
 }
@@ -134,7 +155,15 @@ pub(crate) async fn finish_failure(
         bounded_transaction(client, config.execution_limits.finalization_timeout).await?;
     lock_owned(&transaction, claim, &config.worker_id).await?;
     let mut effects = TransactionEffects::empty();
-    finish_terminal_failure(&transaction, claim, failure, metrics, &mut effects).await?;
+    finish_terminal_failure(
+        &transaction,
+        claim,
+        &config.worker_id,
+        failure,
+        metrics,
+        &mut effects,
+    )
+    .await?;
     transaction.commit().await?;
     Ok(effects.committed(()))
 }
@@ -142,6 +171,7 @@ pub(crate) async fn finish_failure(
 pub(super) async fn finish_terminal_failure(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
+    worker_id: &str,
     failure: AttemptFailure,
     metrics: &AttemptMetrics,
     effects: &mut TransactionEffects,
@@ -155,10 +185,10 @@ pub(super) async fn finish_terminal_failure(
             "UPDATE series_analysis_jobs SET\x20\
                status = $1, finished_at = clock_timestamp(), safe_failure_code = $2,\x20\
                elapsed_milliseconds = $3, result_disposition = 'none', output_checksum = NULL,\x20\
-               lease_owner = NULL, lease_attempt_id = NULL, legacy_lease_attempt_id = NULL, lease_fencing_token = NULL,\x20\
+               lease_owner = NULL, lease_attempt_id = NULL, lease_fencing_token = NULL,\x20\
                lease_expires_at = NULL, lease_validation_contract_id = NULL,\x20\
                updated_at = clock_timestamp()\x20\
-            WHERE legacy_id = $4",
+            WHERE id = $4",
             &[
                 &outcome_wire,
                 &safe_failure_code,
@@ -174,7 +204,7 @@ pub(super) async fn finish_terminal_failure(
                 "UPDATE series_analysis_title_states SET\x20\
                pending_work = false, last_failure_code = $1,\x20\
                last_failure_at = clock_timestamp(), updated_at = clock_timestamp()\x20\
-             WHERE game_title_id = (SELECT id FROM game_titles WHERE legacy_id=$2)",
+             WHERE game_title_id = $2",
                 &[&safe_failure_code, &claim.game_title_id],
             )
             .await?;
@@ -182,7 +212,7 @@ pub(super) async fn finish_terminal_failure(
     fulfill_requests(transaction, claim, RequestOutcome::Failed).await?;
     schedule_follow_up(transaction, claim, effects).await?;
     refresh_operation_projections(transaction, &claim.attempt_id).await?;
-
+    release_slot(transaction, claim, worker_id).await?;
     Ok(())
 }
 
@@ -202,7 +232,7 @@ pub(crate) async fn retry_transient_failure(
     lock_owned(&transaction, claim, &config.worker_id).await?;
     let retry_count = transaction
         .query_one(
-            "SELECT transient_retry_count FROM series_analysis_jobs WHERE legacy_id = $1 FOR UPDATE",
+            "SELECT transient_retry_count FROM series_analysis_jobs WHERE id = $1 FOR UPDATE",
             &[&claim.job_id],
         )
         .await?
@@ -221,21 +251,16 @@ pub(crate) async fn retry_transient_failure(
                 "UPDATE series_analysis_jobs SET status = 'queued', transient_retry_count = $1,\x20\
                    available_at = clock_timestamp() + ($2::bigint * interval '1 second'),\x20\
                    started_at = NULL, finished_at = NULL, safe_failure_code = NULL,\x20\
-                   lease_owner = NULL, lease_attempt_id = NULL, legacy_lease_attempt_id = NULL, lease_fencing_token = NULL,\x20\
+                   lease_owner = NULL, lease_attempt_id = NULL, lease_fencing_token = NULL,\x20\
                    lease_expires_at = NULL, lease_validation_contract_id = NULL,\x20\
-                   updated_at = clock_timestamp() WHERE legacy_id = $3",
+                   updated_at = clock_timestamp() WHERE id = $3",
                 &[&next_retry, &delay_seconds, &claim.job_id],
             )
             .await?;
-        crate::series_analysis::job_transitions::bind_queued_radar(
-            &transaction,
-            &[&claim.game_title_id],
-        )
-        .await?;
         transaction
             .execute(
-                "UPDATE series_analysis_job_requests SET status = 'pending', assigned_attempt_id = NULL, legacy_assigned_attempt_id = NULL\x20\
-                 WHERE legacy_assigned_attempt_id = $1",
+                "UPDATE series_analysis_job_requests SET status = 'pending', assigned_attempt_id = NULL\x20\
+                 WHERE assigned_attempt_id = $1",
                 &[&claim.attempt_id],
             )
             .await?;
@@ -243,12 +268,12 @@ pub(crate) async fn retry_transient_failure(
             .execute(
                 "UPDATE series_analysis_campaign_targets t SET status = 'expanded', updated_at = clock_timestamp()\x20\
                  FROM series_analysis_job_requests r WHERE t.job_request_id = r.id\x20\
-                   AND r.assigned_job_id = (SELECT id FROM series_analysis_jobs WHERE legacy_id=$1)",
+                   AND r.assigned_job_id = $1",
                 &[&claim.job_id],
             )
             .await?;
         request_scheduler_wake(&mut effects);
-
+        release_slot(&transaction, claim, &config.worker_id).await?;
         transaction.commit().await?;
         return Ok(effects.committed(TransientRetryResult::Requeued));
     }
@@ -256,6 +281,7 @@ pub(crate) async fn retry_transient_failure(
     finish_terminal_failure(
         &transaction,
         claim,
+        &config.worker_id,
         AttemptFailure::failed(SafeFailureCode::DependencyRetryExhausted),
         metrics,
         &mut effects,
@@ -285,21 +311,16 @@ pub(crate) async fn requeue_interrupted(
         .execute(
             "UPDATE series_analysis_jobs SET status = 'queued', available_at = clock_timestamp(),\x20\
                started_at = NULL, finished_at = NULL, safe_failure_code = NULL,\x20\
-               lease_owner = NULL, lease_attempt_id = NULL, legacy_lease_attempt_id = NULL, lease_fencing_token = NULL,\x20\
+               lease_owner = NULL, lease_attempt_id = NULL, lease_fencing_token = NULL,\x20\
                lease_expires_at = NULL, lease_validation_contract_id = NULL,\x20\
-               updated_at = clock_timestamp() WHERE legacy_id = $1",
+               updated_at = clock_timestamp() WHERE id = $1",
             &[&claim.job_id],
         )
         .await?;
-    crate::series_analysis::job_transitions::bind_queued_radar(
-        &transaction,
-        &[&claim.game_title_id],
-    )
-    .await?;
     transaction
         .execute(
-            "UPDATE series_analysis_job_requests SET status = 'pending', assigned_attempt_id = NULL, legacy_assigned_attempt_id = NULL\x20\
-             WHERE legacy_assigned_attempt_id = $1",
+            "UPDATE series_analysis_job_requests SET status = 'pending', assigned_attempt_id = NULL\x20\
+             WHERE assigned_attempt_id = $1",
             &[&claim.attempt_id],
         )
         .await?;
@@ -307,13 +328,13 @@ pub(crate) async fn requeue_interrupted(
         .execute(
             "UPDATE series_analysis_campaign_targets t SET status = 'expanded', updated_at = clock_timestamp()\x20\
              FROM series_analysis_job_requests r WHERE t.job_request_id = r.id\x20\
-               AND r.assigned_job_id = (SELECT id FROM series_analysis_jobs WHERE legacy_id=$1)",
+               AND r.assigned_job_id = $1",
             &[&claim.job_id],
         )
         .await?;
     let mut effects = TransactionEffects::empty();
     request_scheduler_wake(&mut effects);
-
+    release_slot(&transaction, claim, &config.worker_id).await?;
     transaction.commit().await?;
     Ok(effects.committed(()))
 }

@@ -84,7 +84,7 @@ job は1作品の計算を管理し、attempt は lease を持つ1回の実行�
 - 試合確定、確定済み試合の分析入力となる項目の更新、試合削除は、対象作品の再計算 intent と同じ transaction で確定する。初版の試合メモだけの更新は分析入力を変えず、再計算 intent を作らない。
 - 1 attempt は一貫した入力 snapshot から1作品を計算し、部分成果物を公開しない。失敗や timeout は直前成功成果物を変更しない。
 - 対象なし、分母0、件数不足、定義済みの model 非採用は、品質状態を持つ正常成果物とする。予期しない scope 失敗は job 全体を失敗させる。
-- 実行可能な待機候補では OCR を先に選び、実行中の分析は完了させる。
+- OCR だけが分析を preempt でき、分析から OCR を preempt しない。
 - 入力 version、algorithm version、artifact schema version を混同しない。詳細な job / artifact 要求は `docs/requirements/series-analysis-batch.md` を正本とする。
 
 ## 7. Masters / Held Events

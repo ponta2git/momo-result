@@ -9,7 +9,6 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 import io.circe.parser.decode
 
-import momo.api.adapters.postgres.CanonicalIdentity.Entity
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.codec.OcrHintsCodec
 import momo.api.codec.OcrHintsCodec.given
@@ -18,18 +17,12 @@ import momo.api.domain.ids.*
 import momo.api.errors.AppError
 import momo.api.repositories.OcrSubmissionsRepository
 
-final class PostgresOcrSubmissionsRepository[F[_]: Async](
-    transactor: Transactor[F],
-    identities: PostgresIdentities = PostgresIdentities.Legacy
-) extends OcrSubmissionsRepository[F]:
-  private given ids: PostgresIdentities = identities
+final class PostgresOcrSubmissionsRepository[F[_]: Async](transactor: Transactor[F])
+    extends OcrSubmissionsRepository[F]:
   import PostgresOcrSubmissions.*
 
   override def find(id: String, owner: AccountId): F[Option[OcrSubmission]] =
-    sql"""SELECT ${ids.wireId("ocr_submissions")} FROM ocr_submissions WHERE id = ${ids.lookup(
-        Entity.OcrSubmissions,
-        id
-      )} AND owner_account_id = ${ids.lookup(Entity.Accounts, owner.value)}
+    sql"""SELECT id FROM ocr_submissions WHERE id = $id AND owner_account_id = $owner
       FOR SHARE""".query[String].option.flatMap {
       case None => Option.empty[OcrSubmission].pure[ConnectionIO]
       case Some(_) => read(id)
@@ -43,9 +36,8 @@ final class PostgresOcrSubmissionsRepository[F[_]: Async](
           .query[Unit].unique
         _ <- sql"SELECT pg_advisory_xact_lock(hashtext(${submission.id}), 3)".query[Unit].unique
         // Replays read header and members while terminal/admission writers cannot interleave.
-        _ <-
-          sql"SELECT ${ids.wireId("ocr_submissions")} FROM ocr_submissions WHERE id = ${ids.lookup(Entity.OcrSubmissions, submission.id)} FOR SHARE"
-            .query[String].option
+        _ <- sql"SELECT id FROM ocr_submissions WHERE id = ${submission.id} FOR SHARE"
+          .query[String].option
         existing <- read(submission.id)
         result <- existing match
           case Some(saved) =>
@@ -62,19 +54,10 @@ final class PostgresOcrSubmissionsRepository[F[_]: Async](
     val imageKeys = submission.members.map(_.uploadIdempotencyKeyHash).toArray
     for
       draft <-
-        sql"""SELECT status, ${ids.wireReference(
-            Entity.Accounts,
-            fr"match_drafts.created_by_account_id"
-          )} FROM match_drafts WHERE id = ${ids.lookup(
-            Entity.MatchDrafts,
-            submission.matchDraftId.value
-          )} FOR UPDATE"""
+        sql"""SELECT status, created_by_account_id FROM match_drafts WHERE id = ${submission.matchDraftId} FOR UPDATE"""
           .query[(String, AccountId)].option
       count <- sql"""SELECT COUNT(*) FROM ocr_submissions
-      WHERE owner_account_id = ${ids.lookup(
-          Entity.Accounts,
-          submission.ownerAccountId.value
-        )} AND status = 'open'""".query[Long].unique
+      WHERE owner_account_id = ${submission.ownerAccountId} AND status = 'open'""".query[Long].unique
       result <-
         if draft.isEmpty then
           Left(AppError.NotFound("match draft", submission.matchDraftId.value)).pure[ConnectionIO]
@@ -95,15 +78,9 @@ final class PostgresOcrSubmissionsRepository[F[_]: Async](
             // submission admission precedes upload. A purge claim cannot be reused for upload,
             // even when stale, because its previous owner may still delete the same object.
             images <- sql"""SELECT status, delete_pending_at FROM source_images
-              WHERE owner_account_id = ${ids.lookup(
-                Entity.Accounts,
-                submission.ownerAccountId.value
-              )}
+              WHERE owner_account_id = ${submission.ownerAccountId}
                 AND idempotency_key_hash = ANY($imageKeys)
-              ORDER BY ${ids.wireId("source_images")} FOR UPDATE""".query[(
-                String,
-                Option[Instant]
-            )].to[List]
+              ORDER BY id FOR UPDATE""".query[(String, Option[Instant])].to[List]
             admitted <-
               if images.exists { case (status, deletionClaim) =>
                   status == "DELETE_PENDING" || status == "DELETED" || deletionClaim.nonEmpty
@@ -118,10 +95,7 @@ final class PostgresOcrSubmissionsRepository[F[_]: Async](
                 insert(submission).flatTap { _ =>
                   sql"""UPDATE match_drafts SET status = 'ocr_running',
               updated_at = clock_timestamp()
-              WHERE id = ${ids.lookup(
-                      Entity.MatchDrafts,
-                      submission.matchDraftId.value
-                    )} AND status <> 'ocr_running'
+              WHERE id = ${submission.matchDraftId} AND status <> 'ocr_running'
                 AND total_assets_image_id IS NULL AND revenue_image_id IS NULL
                 AND incident_log_image_id IS NULL AND total_assets_draft_id IS NULL
                 AND revenue_draft_id IS NULL AND incident_log_draft_id IS NULL""".update.run
@@ -138,31 +112,19 @@ final class PostgresOcrSubmissionsRepository[F[_]: Async](
   ): F[Unit] =
     val program =
       for
-        affected <- sql"""SELECT ${ids.wireId("s")}, ${ids.retainedColumn(
-            "s",
-            "match_draft_id"
-          )} FROM ocr_submissions s
+        ids <- sql"""SELECT s.id, s.match_draft_id FROM ocr_submissions s
         JOIN ocr_submission_members m ON m.submission_id = s.id
-        WHERE s.owner_account_id = ${ids.lookup(
-            Entity.Accounts,
-            owner.value
-          )} AND s.status = 'open' AND m.status = 'pending'
+        WHERE s.owner_account_id = $owner AND s.status = 'open' AND m.status = 'pending'
           AND m.upload_idempotency_key_hash = $keyHash
           AND m.image_sha256_hex = $sha256 AND m.image_byte_length = $byteLength
-        ORDER BY ${ids.retainedColumn(
-            "s",
-            "match_draft_id"
-          )}, ${ids.wireId("s")}""".query[(String, MatchDraftId)].to[List]
-        _ <- affected.map(_._2).distinct.sortBy(_.value).traverse_(lockDraft)
-        _ <- affected.map(_._1).distinct.sorted.traverse_(lock)
-        _ <- affected.traverse_ { case (id, _) =>
+        ORDER BY s.match_draft_id, s.id""".query[(String, MatchDraftId)].to[List]
+        _ <- ids.map(_._2).distinct.sortBy(_.value).traverse_(lockDraft)
+        _ <- ids.map(_._1).distinct.sorted.traverse_(lock)
+        _ <- ids.traverse_ { case (id, _) =>
           sql"""
           UPDATE ocr_submission_members m SET status = 'failed', failure_code = 'admission_failed'
           FROM ocr_submissions s
-          WHERE m.submission_id = s.id AND s.id = ${ids.lookup(
-              Entity.OcrSubmissions,
-              id
-            )} AND s.owner_account_id = ${ids.lookup(Entity.Accounts, owner.value)}
+          WHERE m.submission_id = s.id AND s.id = $id AND s.owner_account_id = $owner
             AND s.status = 'open' AND m.status = 'pending'
             AND s.admission_deadline > clock_timestamp()
             AND m.upload_idempotency_key_hash = $keyHash
@@ -184,16 +146,9 @@ private[api] object PostgresOcrSubmissions:
       finishedAt: Option[Instant],
   )
 
-  def read(id: String)(using ids: PostgresIdentities): ConnectionIO[Option[OcrSubmission]] =
-    sql"""SELECT ${ids.wireId("ocr_submissions")}, ${ids.wireReference(
-        Entity.Accounts,
-        fr"ocr_submissions.owner_account_id"
-      )},
-      ${ids.retainedColumn("ocr_submissions", "match_draft_id")}, ocr_hints_json::text, status,
-      admission_deadline, created_at, finished_at FROM ocr_submissions WHERE id = ${ids.lookup(
-        Entity.OcrSubmissions,
-        id
-      )}"""
+  def read(id: String): ConnectionIO[Option[OcrSubmission]] =
+    sql"""SELECT id, owner_account_id, match_draft_id, ocr_hints_json::text, status,
+      admission_deadline, created_at, finished_at FROM ocr_submissions WHERE id = $id"""
       .query[Header].option.flatMap(_.traverse { header =>
         for
           hints <- decode[OcrJobHints](header.hints).left.map(_ =>
@@ -204,14 +159,8 @@ private[api] object PostgresOcrSubmissions:
             )
           ).liftTo[ConnectionIO]
           members <- sql"""SELECT screen_type, upload_idempotency_key_hash, image_sha256_hex,
-            image_byte_length, status, ${ids.wireReference(
-              Entity.OcrJobs,
-              fr"ocr_submission_members.job_id"
-            )}, failure_code FROM ocr_submission_members
-            WHERE submission_id = ${ids.lookup(
-              Entity.OcrSubmissions,
-              id
-            )} ORDER BY screen_type""".query[OcrSubmissionMember].to[List]
+            image_byte_length, status, job_id, failure_code FROM ocr_submission_members
+            WHERE submission_id = $id ORDER BY screen_type""".query[OcrSubmissionMember].to[List]
         yield OcrSubmission(
           header.id,
           header.owner,
@@ -225,62 +174,39 @@ private[api] object PostgresOcrSubmissions:
         )
       })
 
-  def lockDraft(id: MatchDraftId)(using ids: PostgresIdentities): ConnectionIO[Unit] =
-    sql"SELECT ${ids.wireId("match_drafts")} FROM match_drafts WHERE id = ${ids.lookup(Entity.MatchDrafts, id.value)} FOR UPDATE".query[
-      String
-    ].option.void
+  def lockDraft(id: MatchDraftId): ConnectionIO[Unit] =
+    sql"SELECT id FROM match_drafts WHERE id = $id FOR UPDATE".query[String].option.void
 
-  def lock(id: String)(using ids: PostgresIdentities): ConnectionIO[Unit] =
-    sql"SELECT ${ids.wireId("ocr_submissions")} FROM ocr_submissions WHERE id = ${ids.lookup(Entity.OcrSubmissions, id)} FOR UPDATE".query[
-      String
-    ].option.void
+  def lock(id: String): ConnectionIO[Unit] =
+    sql"SELECT id FROM ocr_submissions WHERE id = $id FOR UPDATE".query[String].option.void
 
-  def insert(submission: OcrSubmission)(using
-      ids: PostgresIdentities): ConnectionIO[OcrSubmission] =
+  def insert(submission: OcrSubmission): ConnectionIO[OcrSubmission] =
     val hints = OcrHintsCodec.encode(submission.ocrHints)
-    for
-      newId <- ids.newId(submission.id)
-      owner <- ids.requireReference(Entity.Accounts, submission.ownerAccountId.value)
-      draft <- ids.requireReference(Entity.MatchDrafts, submission.matchDraftId.value)
-      legacyDraft <-
-        sql"SELECT ${ids.wireReference(Entity.MatchDrafts, draft)}".query[MatchDraftId].unique
-      timestamps <- sql"""INSERT INTO ocr_submissions
-        (${ids.idColumns}, owner_account_id, match_draft_id ${ids.legacyColumn(
-          "match_draft_id"
-        )}, ocr_hints_json, status, admission_deadline, created_at)
-        VALUES ($newId, $owner, $draft ${ids.legacyValue(legacyDraft.value)},
-          $hints::jsonb, 'open', ${submission.admissionDeadline}, ${submission.createdAt})
-        RETURNING admission_deadline, created_at""".query[(Instant, Instant)].unique
-      _ <- submission.members.traverse_ { member =>
+    sql"""INSERT INTO ocr_submissions
+      (id, owner_account_id, match_draft_id, ocr_hints_json, status, admission_deadline, created_at)
+      VALUES (${submission.id}, ${submission.ownerAccountId}, ${submission.matchDraftId},
+        $hints::jsonb, 'open', ${submission.admissionDeadline}, ${submission.createdAt})
+      RETURNING admission_deadline, created_at""".query[(Instant, Instant)].unique.flatTap { _ =>
+      submission.members.traverse_ { member =>
         sql"""INSERT INTO ocr_submission_members
           (submission_id, screen_type, upload_idempotency_key_hash, image_sha256_hex, image_byte_length, status)
-          VALUES (${ids.lookup(
-            Entity.OcrSubmissions,
-            submission.id
-          )}, ${member.screenType}, ${member.uploadIdempotencyKeyHash},
+          VALUES (${submission.id}, ${member.screenType}, ${member.uploadIdempotencyKeyHash},
             ${member.imageSha256}, ${member.imageByteLength}, 'pending')""".update.run.void
       }
-    yield submission.copy(
-      matchDraftId = legacyDraft,
-      admissionDeadline = timestamps._1,
-      createdAt = timestamps._2
-    )
+    }.map { case (deadline, createdAt) =>
+      submission.copy(admissionDeadline = deadline, createdAt = createdAt)
+    }
 
   /** The caller already owns every source draft lock; this must precede the notification gate. */
-  def abortForDrafts(draftIds: List[MatchDraftId], now: Instant)(using
-      ids: PostgresIdentities): ConnectionIO[Unit] =
-    if draftIds.isEmpty then ().pure[ConnectionIO]
+  def abortForDrafts(ids: List[MatchDraftId], now: Instant): ConnectionIO[Unit] =
+    if ids.isEmpty then ().pure[ConnectionIO]
     else
-      val condition =
-        ids.retainedIn("ocr_submissions", "match_draft_id", draftIds.map(_.value).distinct.sorted)
-      sql"""SELECT ${ids.wireId("ocr_submissions")} FROM ocr_submissions
-        WHERE $condition AND status = 'open' ORDER BY ${ids.wireId("ocr_submissions")} FOR UPDATE"""
+      val raw = ids.map(_.value).distinct.sorted.toArray
+      sql"""SELECT id FROM ocr_submissions
+        WHERE match_draft_id = ANY($raw) AND status = 'open' ORDER BY id FOR UPDATE"""
         .query[String].to[List].flatMap { submissions =>
           if submissions.isEmpty then ().pure[ConnectionIO]
           else
             sql"""UPDATE ocr_submissions SET status = 'aborted', finished_at = GREATEST($now, clock_timestamp(), created_at)
-            WHERE id = ANY(${ids.lookupArray(
-                Entity.OcrSubmissions,
-                submissions
-              )}) AND status = 'open'""".update.run.void
+            WHERE id = ANY(${submissions.toArray}) AND status = 'open'""".update.run.void
         }

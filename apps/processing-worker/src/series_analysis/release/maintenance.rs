@@ -415,13 +415,12 @@ async fn progress_query(
     // must not prevent this release's accepted snapshot from completing.
     let row = transaction.query_one(
         "WITH campaigns AS (SELECT * FROM series_analysis_campaigns c \
-           WHERE ($1::text IS NULL OR c.legacy_id = $1) \
+           WHERE ($1::text IS NULL OR c.id = $1) \
              AND c.trigger IN ('algorithm_update','artifact_schema_update','validation_contract_update','initial_backfill') \
              AND c.algorithm_version = $2 AND c.artifact_schema_version = $3 \
              AND c.validation_contract_id IS NOT DISTINCT FROM $4), \
          targets AS (SELECT t.status, EXISTS (SELECT 1 FROM series_analysis_title_states s \
-             JOIN series_analysis_artifact_identities anchor ON anchor.id=s.current_artifact_id \
-             JOIN series_analysis_artifacts a ON a.id = anchor.legacy_id \
+             JOIN series_analysis_artifacts a ON a.id = s.current_artifact_id \
              WHERE s.game_title_id = t.game_title_id AND a.status = 'published' \
                AND a.algorithm_version = t.algorithm_version \
                AND a.artifact_schema_version = t.artifact_schema_version \
@@ -524,7 +523,7 @@ mod tests {
     async fn real_postgres_reconcile_preserves_preview_and_replays_an_applied_operation()
     -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let database_url = std::env::var("ANALYSIS_CONTROL_SMOKE_DATABASE_URL")?;
-        let mut client = crate::identity::fixtures::connect(&database_url).await?;
+        let mut client = connect(&database_url).await?;
         let release_id = "d".repeat(40);
         let operation = MaintenanceOperation::Auto;
         let target = ReleaseVersion::target()?;
@@ -532,28 +531,11 @@ mod tests {
         // This ignored test has the same explicit disposable-database requirement
         // as the existing release smoke. Restore all durable fixture changes below.
         setup.batch_execute(
-            r"
-                CREATE TEMPORARY TABLE maintenance_titles
-                  AS SELECT *
-                     FROM series_analysis_title_states;
-                CREATE TEMPORARY TABLE maintenance_readers
-                  AS SELECT reader_id, draining
-                     FROM series_analysis_reader_capabilities;
-                CREATE TEMPORARY TABLE maintenance_workers
-                  AS SELECT worker_id, draining
-                     FROM series_analysis_worker_capabilities;
-                WITH fixture_titles AS (
-                       INSERT INTO game_titles (id, legacy_id, name, layout_family, display_order)
-                       VALUES (pg_temp.fixture_uuid('game_titles', 'maintenance-title'), 'maintenance-title', 'maintenance test',
-                               'momotetsu_2', 9998)
-                       RETURNING id
-                     )
-                  INSERT INTO series_analysis_title_states (game_title_id, algorithm_version, artifact_schema_version, validation_contract_id)
-                  SELECT fixture_titles.id, release.algorithm_version, release.artifact_schema_version, release.validation_contract_id
-                  FROM fixture_titles CROSS JOIN series_analysis_release_state AS release
-                  WHERE release.singleton_key = 'current'
-                  ON CONFLICT (game_title_id) DO NOTHING;
-                "
+            "CREATE TEMP TABLE maintenance_titles AS SELECT * FROM series_analysis_title_states; \
+             CREATE TEMP TABLE maintenance_readers AS SELECT reader_id, draining FROM series_analysis_reader_capabilities; \
+             CREATE TEMP TABLE maintenance_workers AS SELECT worker_id, draining FROM series_analysis_worker_capabilities; \
+             INSERT INTO game_titles (id, name, layout_family, display_order) \
+               VALUES ('maintenance-title', 'maintenance test', 'momotetsu2', 9998);"
         ).await?;
         setup
             .batch_execute(
@@ -594,13 +576,7 @@ mod tests {
         assert!(plan.target_count > 0);
         let unchanged: String = client.query_one("SELECT algorithm_version FROM series_analysis_release_state WHERE singleton_key = 'current'", &[]).await?.try_get(0)?;
         assert_eq!(unchanged, "maintenance-before");
-        client.execute(r"
-            UPDATE series_analysis_title_states
-            SET input_revision = input_revision + 1
-            WHERE (SELECT fixture_parent.legacy_id
-                   FROM game_titles AS fixture_parent
-                   WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = 'maintenance-title'
-            ", &[]).await?;
+        client.execute("UPDATE series_analysis_title_states SET input_revision = input_revision + 1 WHERE game_title_id = 'maintenance-title'", &[]).await?;
         let stale_tx = begin_promotion_transaction(&mut client).await?;
         let stale = reconcile_transaction(
             stale_tx,
@@ -639,31 +615,9 @@ mod tests {
         assert_eq!(replay.target_count, plan.target_count);
         let key_hash = canonical::sha256_prefixed(operation_key(&release_id, operation).as_bytes());
         let operation_id = stable_id("analysis-release-operation", &key_hash, "all");
-        let count: i64 = client
-            .query_one(
-                r"
-            SELECT CAST(count(*) AS bigint)
-            FROM series_analysis_campaigns
-            WHERE (SELECT fixture_parent.legacy_id
-                   FROM series_analysis_operation_requests AS fixture_parent
-                   WHERE fixture_parent.id = series_analysis_campaigns.operation_request_id) = $1
-            ",
-                &[&operation_id],
-            )
-            .await?
-            .try_get(0)?;
+        let count: i64 = client.query_one("SELECT COUNT(*)::bigint FROM series_analysis_campaigns WHERE operation_request_id = $1", &[&operation_id]).await?.try_get(0)?;
         assert_eq!(count, 1);
-        client.execute(r"
-            UPDATE series_analysis_campaign_targets
-            SET status = 'failed'
-            WHERE (SELECT fixture_parent.legacy_id
-                   FROM series_analysis_campaigns AS fixture_parent
-                   WHERE fixture_parent.id = series_analysis_campaign_targets.campaign_id) IN (SELECT series_analysis_campaigns.legacy_id AS id
-                                                                                               FROM series_analysis_campaigns
-                                                                                               WHERE (SELECT fixture_parent.legacy_id
-                                                                                                      FROM series_analysis_operation_requests AS fixture_parent
-                                                                                                      WHERE fixture_parent.id = series_analysis_campaigns.operation_request_id) = $1)
-            ", &[&operation_id]).await?;
+        client.execute("UPDATE series_analysis_campaign_targets SET status = 'failed' WHERE campaign_id IN (SELECT id FROM series_analysis_campaigns WHERE operation_request_id = $1)", &[&operation_id]).await?;
         let failed_tx = begin_promotion_transaction(&mut client).await?;
         let failed = reconcile_transaction(failed_tx, operation, &release_id, false, None).await?;
         assert_eq!(failed.status, "attention_required");
@@ -671,39 +625,18 @@ mod tests {
 
         client
             .execute(
-                r"
-                    DELETE FROM series_analysis_operation_requests
-                    WHERE series_analysis_operation_requests.legacy_id = $1
-                    ",
+                "DELETE FROM series_analysis_operation_requests WHERE id = $1",
                 &[&operation_id],
             )
             .await?;
         client.execute("UPDATE series_analysis_release_state SET algorithm_version = $1, artifact_schema_version = $2, validation_contract_id = $3 WHERE singleton_key = 'current'", &[&snapshot.algorithm_version, &snapshot.artifact_schema_version, &snapshot.validation_contract_id]).await?;
-        client
-            .batch_execute(
-                r"
-            DELETE FROM game_titles
-            WHERE game_titles.legacy_id = 'maintenance-title';
-            UPDATE series_analysis_title_states AS s
-            SET algorithm_version = m.algorithm_version, artifact_schema_version = m.artifact_schema_version,
-                validation_contract_id = m.validation_contract_id, pending_work = m.pending_work, updated_at = m.updated_at
-            FROM maintenance_titles AS m
-            WHERE s.game_title_id = m.game_title_id;
-            UPDATE series_analysis_reader_capabilities AS s
-            SET draining = m.draining
-            FROM maintenance_readers AS m
-            WHERE s.reader_id = m.reader_id;
-            UPDATE series_analysis_worker_capabilities AS s
-            SET draining = m.draining
-            FROM maintenance_workers AS m
-            WHERE s.worker_id = m.worker_id;
-            DELETE FROM series_analysis_reader_capabilities
-            WHERE reader_id = 'maintenance-reader';
-            DELETE FROM series_analysis_worker_capabilities
-            WHERE worker_id = 'maintenance-worker';
-            ",
-            )
-            .await?;
+        client.batch_execute("DELETE FROM game_titles WHERE id = 'maintenance-title'; \
+          UPDATE series_analysis_title_states s SET algorithm_version = m.algorithm_version, \
+            artifact_schema_version = m.artifact_schema_version, validation_contract_id = m.validation_contract_id, \
+            pending_work = m.pending_work, updated_at = m.updated_at FROM maintenance_titles m WHERE s.game_title_id = m.game_title_id; \
+          UPDATE series_analysis_reader_capabilities s SET draining = m.draining FROM maintenance_readers m WHERE s.reader_id = m.reader_id; \
+          UPDATE series_analysis_worker_capabilities s SET draining = m.draining FROM maintenance_workers m WHERE s.worker_id = m.worker_id; \
+          DELETE FROM series_analysis_reader_capabilities WHERE reader_id = 'maintenance-reader'; DELETE FROM series_analysis_worker_capabilities WHERE worker_id = 'maintenance-worker';").await?;
         Ok(())
     }
 }

@@ -87,7 +87,7 @@ export function toMatchListItemView(item: MatchListSourceItem): MatchListItemVie
     statusLabel: matchListStatusLabel(status),
     updatedAt: item.updatedAt,
     ...compact({
-      detailHref: matchListDetailHref(item.matchId, item.publicId),
+      detailHref: matchListDetailHref(item.matchId),
       exportHref: matchListExportHref(item.matchId),
       gameTitleId: item.gameTitleId || undefined,
       gameTitleName: item.gameTitleName || undefined,

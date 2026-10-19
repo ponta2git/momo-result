@@ -48,8 +48,8 @@ async fn real_postgres_preserves_submission_finalization_and_recovery() -> TestR
         return Err("isolated database authorization is required".into());
     }
     let url = std::env::var("OCR_CONTROL_SMOKE_DATABASE_URL")?;
-    let mut primary = crate::identity::fixtures::connect(&url).await?;
-    let mut peer = crate::identity::fixtures::connect(&url).await?;
+    let mut primary = postgres::connect(&url).await?;
+    let mut peer = postgres::connect(&url).await?;
     let old = primary.query_one("SELECT enabled, generation::text FROM discord_notification_settings WHERE kind = 'ocr_completed'", &[]).await?;
     let enabled: bool = old.get(0);
     let generation: String = old.get(1);
@@ -96,10 +96,6 @@ async fn verify(
     Ok(())
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "keep canonical fixture setup and persisted behavior assertions in one scenario"
-)]
 async fn verify_outcomes(primary: &mut Client, sink: &NotificationSink) -> TestResult {
     let [mixed, zero, off, cancelled, _, _, _, _] = IDS;
     create(primary, mixed, 600).await?;
@@ -113,16 +109,7 @@ async fn verify_outcomes(primary: &mut Client, sink: &NotificationSink) -> TestR
         ),
         "pending final member must prevent notification",
     )?;
-    primary
-        .execute(
-            r"
-        UPDATE ocr_submissions
-        SET admission_deadline = clock_timestamp() - CAST('1 second' AS interval)
-        WHERE ocr_submissions.legacy_id = $1
-        ",
-            &[&mixed],
-        )
-        .await?;
+    primary.execute("UPDATE ocr_submissions SET admission_deadline = clock_timestamp() - interval '1 second' WHERE id = $1", &[&mixed]).await?;
     let notification = prepared(control::settle(primary, mixed, TIMEOUT, sink).await?)?;
     let payload = notification.payload()?;
     ensure(
@@ -158,14 +145,7 @@ async fn verify_outcomes(primary: &mut Client, sink: &NotificationSink) -> TestR
         "job zero must notify",
     )?;
     let status: String = primary
-        .query_one(
-            r"
-            SELECT status
-            FROM match_drafts
-            WHERE match_drafts.legacy_id = $1
-            ",
-            &[&zero],
-        )
+        .query_one("SELECT status FROM match_drafts WHERE id = $1", &[&zero])
         .await?
         .get(0);
     ensure(
@@ -206,13 +186,7 @@ async fn verify_outcomes(primary: &mut Client, sink: &NotificationSink) -> TestR
     create(primary, cancelled, -1).await?;
     member(primary, cancelled, "total_assets", None).await?;
     primary
-        .execute(
-            r"
-            DELETE FROM match_drafts
-            WHERE match_drafts.legacy_id = $1
-            ",
-            &[&cancelled],
-        )
+        .execute("DELETE FROM match_drafts WHERE id = $1", &[&cancelled])
         .await?;
     ensure(
         matches!(
@@ -254,12 +228,7 @@ async fn verify_concurrency(
     member(primary, later, "total_assets", None).await?;
     let lock = peer.transaction().await?;
     lock.query_one(
-        r"
-            SELECT match_drafts.legacy_id AS id
-            FROM match_drafts
-            WHERE match_drafts.legacy_id = $1
-            FOR UPDATE
-            ",
+        "SELECT id FROM match_drafts WHERE id = $1 FOR UPDATE",
         &[&held],
     )
     .await?;
@@ -281,11 +250,7 @@ async fn verify_concurrency(
     .await?;
     let status: String = primary
         .query_one(
-            r"
-                SELECT status
-                FROM ocr_submissions
-                WHERE ocr_submissions.legacy_id = $1
-                ",
+            "SELECT status FROM ocr_submissions WHERE id = $1",
             &[&later],
         )
         .await?
@@ -356,24 +321,8 @@ async fn verify_listener(publisher: &Client, url: &str) -> TestResult {
 }
 
 async fn create(client: &Client, id: &str, deadline_seconds: i64) -> TestResult {
-    client.execute(r"
-        INSERT INTO match_drafts (id, legacy_id, created_by_account_id, created_by_member_id, status)
-        VALUES (pg_temp.fixture_uuid('match_drafts', $1), $1, pg_temp.fixture_uuid('momo_login_accounts', 'account_ponta'),
-                pg_temp.fixture_uuid('members', 'member_ponta'), 'ocr_running')
-        ", &[&id]).await?;
-    client
-        .execute(
-            r"
-        INSERT INTO ocr_submissions (id, legacy_id, owner_account_id, match_draft_id, legacy_match_draft_id, ocr_hints_json,
-                                     status, admission_deadline, created_at)
-        VALUES (pg_temp.fixture_uuid('ocr_submissions', $1), $1,
-                pg_temp.fixture_uuid('momo_login_accounts', 'account_ponta'), pg_temp.fixture_uuid('match_drafts', $1), $1,
-                CAST('{}' AS jsonb), 'open', clock_timestamp() + CAST($2 AS bigint) * CAST('1 second' AS interval),
-                clock_timestamp() - CAST('2 seconds' AS interval))
-        ",
-            &[&id, &deadline_seconds],
-        )
-        .await?;
+    client.execute("INSERT INTO match_drafts (id, created_by_account_id, created_by_member_id, status) VALUES ($1, 'account_ponta', 'member_ponta', 'ocr_running')", &[&id]).await?;
+    client.execute("INSERT INTO ocr_submissions (id, owner_account_id, match_draft_id, ocr_hints_json, status, admission_deadline, created_at) VALUES ($1, 'account_ponta', $1, '{}'::jsonb, 'open', clock_timestamp() + $2::bigint * interval '1 second', clock_timestamp() - interval '2 seconds')", &[&id, &deadline_seconds]).await?;
     Ok(())
 }
 
@@ -381,33 +330,8 @@ async fn member(client: &Client, id: &str, screen: &str, job_status: Option<&str
     let job_id = format!("mom24-worker-{id}-{screen}");
     let digest = hex::encode(Sha256::digest(job_id.as_bytes()));
     if let Some(status) = job_status {
-        client
-            .execute(
-                r"
-            INSERT INTO source_images (id, legacy_id, owner_account_id, object_key, idempotency_key_hash, status, media_type,
-                                       byte_length, sha256_hex, width, height, storage_etag, available_at)
-            VALUES (pg_temp.fixture_uuid('source_images', $1), $1, pg_temp.fixture_uuid('momo_login_accounts', 'account_ponta'),
-                    $1, $2, 'AVAILABLE', 'image/png', 68, $2, 1, 1, 'test', clock_timestamp())
-            ",
-                &[&job_id, &digest],
-            )
-            .await?;
-        client
-            .execute(
-                r"
-            INSERT INTO ocr_jobs (id, legacy_id, draft_id, legacy_draft_id, image_id, source_image_id, requested_screen_type,
-                                  status, input_snapshot, failure_code, finished_at)
-            VALUES (pg_temp.fixture_uuid('ocr_jobs', $1), $1, pg_temp.fixture_uuid('ocr_drafts', $1), $1, $1,
-                    pg_temp.fixture_uuid('source_images', $1), $2, $3, jsonb_build_object('schemaVersion', '2', 'jobId',
-                                       CAST($1 AS text), 'draftId', CAST($1 AS text), 'sourceImageId', CAST($1 AS text), 'imageObjectKey',
-                                       CAST($1 AS text), 'sha256', CAST($4 AS text), 'byteLength', '68', 'mediaType', 'image/png', 'requestedScreenType',
-                                       CAST($2 AS text)), CASE
-                      WHEN $3 = 'failed' THEN 'OCR_TIMEOUT'
-                    END, clock_timestamp())
-            ",
-                &[&job_id, &screen, &status, &digest],
-            )
-            .await?;
+        client.execute("INSERT INTO source_images (id, owner_account_id, object_key, idempotency_key_hash, status, media_type, byte_length, sha256_hex, width, height, storage_etag, available_at) VALUES ($1, 'account_ponta', $1, $2, 'AVAILABLE', 'image/png', 68, $2, 1, 1, 'test', clock_timestamp())", &[&job_id, &digest]).await?;
+        client.execute("INSERT INTO ocr_jobs (id, draft_id, image_id, source_image_id, requested_screen_type, status, input_snapshot, failure_code, finished_at) VALUES ($1, $1, $1, $1, $2, $3, jsonb_build_object('schemaVersion','2','jobId',$1::text,'draftId',$1::text,'sourceImageId',$1::text,'imageObjectKey',$1::text,'sha256',$4::text,'byteLength','68','mediaType','image/png','requestedScreenType',$2::text), CASE WHEN $3 = 'failed' THEN 'OCR_TIMEOUT' END, clock_timestamp())", &[&job_id, &screen, &status,&digest]).await?;
     }
     let status = if job_status.is_some() {
         "registered"
@@ -415,11 +339,7 @@ async fn member(client: &Client, id: &str, screen: &str, job_status: Option<&str
         "pending"
     };
     let job = job_status.map(|_status| job_id.as_str());
-    client.execute(r"
-        INSERT INTO ocr_submission_members (submission_id, screen_type, upload_idempotency_key_hash, image_sha256_hex,
-                                            image_byte_length, status, job_id)
-        VALUES (pg_temp.fixture_uuid('ocr_submissions', $1), $2, $3, $3, 68, $4, pg_temp.fixture_uuid('ocr_jobs', $5))
-        ", &[&id, &screen, &digest, &status, &job]).await?;
+    client.execute("INSERT INTO ocr_submission_members (submission_id, screen_type, upload_idempotency_key_hash, image_sha256_hex, image_byte_length, status, job_id) VALUES ($1, $2, $3, $3, 68, $4, $5)", &[&id, &screen, &digest, &status, &job]).await?;
     Ok(())
 }
 
@@ -443,50 +363,21 @@ async fn cleanup(client: &Client) -> TestResult {
         .collect();
     client
         .execute(
-            r"
-                DELETE FROM ocr_submission_members
-                WHERE (SELECT fixture_parent.legacy_id
-                       FROM ocr_submissions AS fixture_parent
-                       WHERE fixture_parent.id = ocr_submission_members.submission_id) = ANY($1)
-                ",
+            "DELETE FROM ocr_submission_members WHERE submission_id = ANY($1)",
             &[&ids],
         )
         .await?;
     client
-        .execute(
-            r"
-            DELETE FROM ocr_submissions
-            WHERE ocr_submissions.legacy_id = ANY($1)
-            ",
-            &[&ids],
-        )
+        .execute("DELETE FROM ocr_submissions WHERE id = ANY($1)", &[&ids])
         .await?;
     client
-        .execute(
-            r"
-            DELETE FROM ocr_jobs
-            WHERE ocr_jobs.legacy_id = ANY($1)
-            ",
-            &[&jobs],
-        )
+        .execute("DELETE FROM ocr_jobs WHERE id = ANY($1)", &[&jobs])
         .await?;
     client
-        .execute(
-            r"
-            DELETE FROM source_images
-            WHERE source_images.legacy_id = ANY($1)
-            ",
-            &[&jobs],
-        )
+        .execute("DELETE FROM source_images WHERE id = ANY($1)", &[&jobs])
         .await?;
     client
-        .execute(
-            r"
-            DELETE FROM match_drafts
-            WHERE match_drafts.legacy_id = ANY($1)
-            ",
-            &[&ids],
-        )
+        .execute("DELETE FROM match_drafts WHERE id = ANY($1)", &[&ids])
         .await?;
     Ok(())
 }
@@ -507,10 +398,6 @@ fn ensure(condition: bool, message: &'static str) -> TestResult {
     }
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "keep canonical fixture setup and persisted behavior assertions in one scenario"
-)]
 async fn verify_recovery_boundaries(
     primary: &mut Client,
     peer: &mut Client,
@@ -541,11 +428,7 @@ async fn verify_recovery_boundaries(
     )?;
     let state: String = primary
         .query_one(
-            r"
-                SELECT status
-                FROM ocr_submissions
-                WHERE ocr_submissions.legacy_id = $1
-                ",
+            "SELECT status FROM ocr_submissions WHERE id = $1",
             &[&invalid],
         )
         .await?
@@ -554,13 +437,7 @@ async fn verify_recovery_boundaries(
     member(primary, invalid, "total_assets", Some("succeeded")).await?;
     primary
         .execute(
-            r"
-                UPDATE ocr_submission_members
-                SET screen_type = 'revenue'
-                WHERE (SELECT fixture_parent.legacy_id
-                       FROM ocr_submissions AS fixture_parent
-                       WHERE fixture_parent.id = ocr_submission_members.submission_id) = $1
-                ",
+            "UPDATE ocr_submission_members SET screen_type = 'revenue' WHERE submission_id = $1",
             &[&invalid],
         )
         .await?;
@@ -571,16 +448,7 @@ async fn verify_recovery_boundaries(
         ),
         "cross-screen job reference cannot count as success",
     )?;
-    primary
-        .execute(
-            r"
-        UPDATE ocr_submissions
-        SET status = 'aborted', finished_at = clock_timestamp()
-        WHERE ocr_submissions.legacy_id = $1
-        ",
-            &[&invalid],
-        )
-        .await?;
+    primary.execute("UPDATE ocr_submissions SET status = 'aborted', finished_at = clock_timestamp() WHERE id = $1", &[&invalid]).await?;
 
     create(primary, success, -1).await?;
     member(primary, success, "total_assets", Some("succeeded")).await?;
@@ -597,17 +465,7 @@ async fn verify_recovery_boundaries(
     {
         create(primary, retained, -1).await?;
         member(primary, retained, "total_assets", None).await?;
-        primary
-            .execute(
-                r"
-            UPDATE match_drafts
-            SET total_assets_draft_id = pg_temp.fixture_uuid('ocr_drafts', 'retained-result'),
-                legacy_total_assets_draft_id = 'retained-result', status = $2
-            WHERE match_drafts.legacy_id = $1
-            ",
-                &[&retained, &status],
-            )
-            .await?;
+        primary.execute("UPDATE match_drafts SET total_assets_draft_id = 'retained-result', status = $2 WHERE id = $1", &[&retained, &status]).await?;
         let notification = prepared(control::settle(primary, retained, TIMEOUT, sink).await?)?;
         ensure(
             notification.payload()?.pointer("/data/failures/0/reason")
@@ -617,11 +475,7 @@ async fn verify_recovery_boundaries(
         drop(notification);
         let projection = primary
             .query_one(
-                r"
-                    SELECT status, match_drafts.legacy_total_assets_draft_id AS total_assets_draft_id
-                    FROM match_drafts
-                    WHERE match_drafts.legacy_id = $1
-                    ",
+                "SELECT status, total_assets_draft_id FROM match_drafts WHERE id = $1",
                 &[&retained],
             )
             .await?;
@@ -644,7 +498,7 @@ async fn verify_idle_recovery(primary: &Client, url: &str, cold: &str) -> TestRe
         observed: Some(observed),
         rechecked: None,
     };
-    let database = crate::identity::fixtures::connect(url).await?;
+    let database = postgres::connect(url).await?;
     let mut recovery = Recovery::default();
     let runner = coordinate(
         database,
@@ -664,11 +518,7 @@ async fn verify_idle_recovery(primary: &Client, url: &str, cold: &str) -> TestRe
                 progress.changed().await?;
                 let settled: bool = primary
                     .query_one(
-                        r"
-                            SELECT status = 'settled'
-                            FROM ocr_submissions
-                            WHERE ocr_submissions.legacy_id = $1
-                            ",
+                        "SELECT status = 'settled' FROM ocr_submissions WHERE id = $1",
                         &[&cold],
                     )
                     .await?
@@ -714,16 +564,7 @@ async fn verify_listener_reconnect(primary: &Client, url: &str) -> TestResult {
     let runtime = run_observed(config, NotificationSink::default(), stop, observed);
     let check = async {
         time::timeout(Duration::from_secs(2), progress.changed()).await??;
-        primary
-            .execute(
-                r"
-            UPDATE ocr_submissions
-            SET admission_deadline = clock_timestamp() - CAST('1 second' AS interval)
-            WHERE ocr_submissions.legacy_id = $1
-            ",
-                &[&id],
-            )
-            .await?;
+        primary.execute("UPDATE ocr_submissions SET admission_deadline = clock_timestamp() - interval '1 second' WHERE id = $1", &[&id]).await?;
         let terminated = primary.query("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE application_name = 'mom24-listener-reconnect'", &[]).await?;
         ensure(
             terminated.len() == 1,
@@ -734,11 +575,7 @@ async fn verify_listener_reconnect(primary: &Client, url: &str) -> TestResult {
                 progress.changed().await?;
                 let settled: bool = primary
                     .query_one(
-                        r"
-                            SELECT status = 'settled'
-                            FROM ocr_submissions
-                            WHERE ocr_submissions.legacy_id = $1
-                            ",
+                        "SELECT status = 'settled' FROM ocr_submissions WHERE id = $1",
                         &[&id],
                     )
                     .await?
@@ -812,22 +649,14 @@ async fn verify_deadline_reconnect(primary: &Client, peer: &mut Client, url: &st
         time::timeout(Duration::from_secs(2), progress.changed()).await??;
         let later_settled: bool = primary
             .query_one(
-                r"
-                    SELECT status = 'settled'
-                    FROM ocr_submissions
-                    WHERE ocr_submissions.legacy_id = $1
-                    ",
+                "SELECT status = 'settled' FROM ocr_submissions WHERE id = $1",
                 &[&later],
             )
             .await?
             .get(0);
         let delayed_open: bool = primary
             .query_one(
-                r"
-                    SELECT status = 'open'
-                    FROM ocr_submissions
-                    WHERE ocr_submissions.legacy_id = $1
-                    ",
+                "SELECT status = 'open' FROM ocr_submissions WHERE id = $1",
                 &[&delayed],
             )
             .await?
@@ -846,7 +675,7 @@ async fn verify_deadline_reconnect(primary: &Client, peer: &mut Client, url: &st
     let (result, assertion) = tokio::join!(runtime, stopped);
     result?;
     assertion?;
-    let mut recovered = crate::identity::fixtures::connect(url).await?;
+    let mut recovered = postgres::connect(url).await?;
     ensure(
         matches!(
             control::settle(
@@ -886,11 +715,7 @@ async fn verify_finite_bootstrap_and_continuation(
     let count = |state: &'static str| async move {
         let row = primary
             .query_one(
-                r"
-                    SELECT count(*)
-                    FROM ocr_submissions
-                    WHERE ocr_submissions.legacy_id = ANY($1) AND status = $2
-                    ",
+                "SELECT count(*) FROM ocr_submissions WHERE id = ANY($1) AND status = $2",
                 &[&initial, &state],
             )
             .await?;
@@ -929,23 +754,10 @@ async fn verify_finite_bootstrap_and_continuation(
         loop {
             time::sleep_until(reconciler.next_at()).await;
             reconciler.step(&stopped).await?;
-            let settled: i64 = primary
-                .query_one(
-                    r"
-                SELECT count(*)
-                FROM ocr_submissions
-                WHERE ocr_submissions.legacy_id = ANY($1) AND status = 'settled'
-                ",
-                    &[&ids],
-                )
-                .await?
-                .get(0);
-            if settled == 41 {
-                return Ok::<(), Box<dyn Error + Send + Sync>>(());
-            }
+            let settled: i64 = primary.query_one("SELECT count(*) FROM ocr_submissions WHERE id = ANY($1) AND status = 'settled'", &[&ids]).await?.get(0);
+            if settled == 41 { return Ok::<(), Box<dyn Error + Send + Sync>>(()); }
         }
-    })
-    .await??;
+    }).await??;
     drop(reconciler);
     Ok(())
 }

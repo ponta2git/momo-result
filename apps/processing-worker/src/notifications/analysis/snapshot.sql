@@ -3,7 +3,7 @@
 WITH notification_intent AS MATERIALIZED (
   SELECT EXISTS (
     SELECT 1 FROM series_analysis_job_requests
-    WHERE legacy_assigned_attempt_id = $11 AND assigned_job_id = (SELECT id FROM series_analysis_jobs WHERE legacy_id=$3) AND game_title_id = (SELECT id FROM game_titles WHERE legacy_id=$1)
+    WHERE assigned_attempt_id = $11 AND assigned_job_id = $3 AND game_title_id = $1
       AND input_revision <= $5 AND status = 'fulfilled' AND trigger = 'match_mutation'
   ) AS has_match_mutation
 )
@@ -12,17 +12,17 @@ SELECT setting.enabled, setting.generation::text AS generation, intent.has_match
   CASE WHEN octet_length(frozen.body::text) <= $7 THEN frozen.body END AS body
 FROM discord_notification_settings setting
 CROSS JOIN notification_intent intent
-LEFT JOIN series_analysis_jobs job ON job.legacy_id = $3 AND job.status = 'succeeded'
-LEFT JOIN series_analysis_title_states state ON state.game_title_id = (SELECT id FROM game_titles WHERE legacy_id=$1)
-LEFT JOIN game_titles title ON title.legacy_id = $1
+LEFT JOIN series_analysis_jobs job ON job.id = $3 AND job.status = 'succeeded'
+LEFT JOIN series_analysis_title_states state ON state.game_title_id = $1
+LEFT JOIN game_titles title ON title.id = $1
 LEFT JOIN LATERAL (
   WITH member_names AS (
-    SELECT left(legacy_id, 201) AS id,
+    SELECT left(id, 201) AS id,
       CASE WHEN char_length(display_name) <= $9 THEN display_name END AS display_name
-    FROM members ORDER BY legacy_id LIMIT 5
+    FROM members ORDER BY id LIMIT 5
   ), selected_matches AS (
-    SELECT m.id AS canonical_match_id, m.legacy_id AS id, m.analysis_revision, m.legacy_held_event_id AS held_event_id, m.match_no_in_event, m.played_at,
-      season.legacy_id AS season_master_id, map.legacy_id AS map_master_id, he.held_date_iso,
+    SELECT m.id, m.analysis_revision, m.held_event_id, m.match_no_in_event, m.played_at,
+      m.season_master_id, m.map_master_id, he.held_date_iso,
       CASE WHEN char_length(m.note_body) <= $10 THEN m.note_body END AS note,
       (m.note_body IS NULL OR char_length(m.note_body) <= $10) AS note_valid,
       CASE WHEN char_length(map.name) <= $8 THEN map.name END AS map_name,
@@ -33,14 +33,14 @@ LEFT JOIN LATERAL (
     JOIN map_masters map ON map.id = m.map_master_id
     JOIN season_masters season ON season.id = m.season_master_id
     JOIN members owner ON owner.id = m.owner_member_id
-    WHERE m.legacy_id = ANY($2::text[]) AND m.game_title_id = title.id
-      AND octet_length(m.legacy_held_event_id) <= 200
+    WHERE m.id = ANY($2::text[]) AND m.game_title_id = $1
+      AND octet_length(m.held_event_id) <= 200
   ), match_data AS (
     SELECT m.*, players.items, players.ginji_total
     FROM selected_matches m
     CROSS JOIN LATERAL (
       SELECT jsonb_agg(jsonb_build_object(
-        'memberId', left(member.legacy_id, 201),
+        'memberId', left(mp.member_id, 201),
         'displayName', CASE WHEN char_length(member.display_name) <= $9 THEN member.display_name END,
         'rank', mp.rank, 'ginjiCount', COALESCE(mi.count, 0)
       ) ORDER BY mp.rank) AS items,
@@ -48,10 +48,8 @@ LEFT JOIN LATERAL (
       FROM match_players mp
       JOIN members member ON member.id = mp.member_id
       LEFT JOIN match_incidents mi ON mi.match_id = mp.match_id AND mi.member_id = mp.member_id
-        AND mi.incident_master_id = (
-          SELECT id FROM incident_masters WHERE key = 'suri_no_ginji'
-        )
-      WHERE mp.match_id = m.canonical_match_id
+        AND mi.incident_master_id = 'incident_suri_no_ginji'
+      WHERE mp.match_id = m.id
     ) players
   )
   SELECT jsonb_build_object(
@@ -61,7 +59,7 @@ LEFT JOIN LATERAL (
         CASE WHEN season.id IS NULL THEN '削除済みシーズン'
           WHEN char_length(season.name) <= $8 THEN season.name END)
       FROM unnest($6::text[]) requested(id)
-      LEFT JOIN season_masters season ON season.legacy_id = requested.id AND season.game_title_id = title.id), '{}'::jsonb),
+      LEFT JOIN season_masters season ON season.id = requested.id AND season.game_title_id = $1), '{}'::jsonb),
     'matches', COALESCE((SELECT jsonb_agg(jsonb_build_object(
       'matchId', id, 'sourceRevision', analysis_revision::text,
       'heldEventId', held_event_id, 'heldDateIso', to_char(held_date_iso, 'YYYY-MM-DD'),
@@ -73,6 +71,6 @@ LEFT JOIN LATERAL (
     ) ORDER BY played_at, held_event_id, match_no_in_event, id) FROM match_data WHERE note_valid), '[]'::jsonb)
   ) AS body
   WHERE intent.has_match_mutation AND setting.enabled AND job.finished_at IS NOT NULL
-    AND state.current_artifact_id = (SELECT id FROM series_analysis_artifact_identities WHERE legacy_id=$4) AND state.input_revision = $5
+    AND state.current_artifact_id = $4 AND state.input_revision = $5
 ) frozen ON true
 WHERE setting.kind = 'analysis_completed'

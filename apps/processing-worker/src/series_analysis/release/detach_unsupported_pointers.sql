@@ -7,11 +7,9 @@ WITH supported AS (
       AND previous.artifact_schema_version = $1 AND previous.validation_contract_id = $2
       THEN s.previous_artifact_id END AS previous_artifact_id
   FROM series_analysis_title_states s
-  LEFT JOIN series_analysis_artifact_identities current_identity ON current_identity.id=s.current_artifact_id
-  LEFT JOIN series_analysis_artifacts current ON current.id=current_identity.legacy_id
-  LEFT JOIN series_analysis_artifact_identities previous_identity ON previous_identity.id=s.previous_artifact_id
-  LEFT JOIN series_analysis_artifacts previous ON previous.id=previous_identity.legacy_id
-  WHERE s.game_title_id IN (SELECT id FROM game_titles WHERE legacy_id=ANY($3::text[]))
+  LEFT JOIN series_analysis_artifacts current ON current.id = s.current_artifact_id
+  LEFT JOIN series_analysis_artifacts previous ON previous.id = s.previous_artifact_id
+  WHERE s.game_title_id = ANY($3)
 )
 UPDATE series_analysis_title_states s
 SET current_artifact_id = supported.current_artifact_id,

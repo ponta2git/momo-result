@@ -24,12 +24,13 @@ mod integration_tests;
 pub(crate) use capability::{
     CAPABILITY_FRESH_SECONDS, IdleRefreshSchedule, mark_draining, register_capability,
 };
-pub(crate) use claim::{claim_job, claim_scoped_job};
+pub(crate) use claim::claim_job;
 pub(crate) use completion::publish;
 pub(crate) use history::{HISTORY_CLEANUP_INTERVAL, cleanup_history};
 pub(crate) use lifecycle::{
     finish_failure, heartbeat, requeue_interrupted, retry_transient_failure, supersede,
 };
+pub(crate) use recovery::recover_expired_analysis_holder;
 pub(crate) use transaction::artifact_id_for_attempt;
 pub(crate) use vocabulary::{AttemptFailure, RequeueCause, SafeFailureCode};
 
@@ -54,6 +55,10 @@ impl TransactionEffects {
 
     pub(super) const fn record_series_analysis(&mut self) {
         self.series_analysis_wake = true;
+    }
+
+    pub(super) const fn merge(&mut self, other: Self) {
+        self.series_analysis_wake = self.series_analysis_wake || other.series_analysis_wake;
     }
 
     pub(crate) const fn committed<T>(self, value: T) -> ControlOutcome<T> {
@@ -103,6 +108,7 @@ pub(crate) struct UnsupportedJobVersion {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum HeartbeatResult {
     Continue,
+    PreemptRequested,
     OwnerLost,
 }
 
@@ -207,12 +213,12 @@ fn signed_milliseconds(duration: Duration) -> i64 {
 
 #[derive(Debug, Error)]
 pub(crate) enum ControlError {
-    #[error(transparent)]
-    MaintenanceScope(#[from] crate::maintenance::analysis::ScopeError),
     #[error("analysis PostgreSQL state transition failed")]
     Postgres(#[from] tokio_postgres::Error),
     #[error("analysis PostgreSQL connection failed")]
     PostgresConnection(#[from] crate::postgres::PostgresError),
+    #[error("analysis shared execution-slot transition failed: {0}")]
+    ExecutionSlot(#[source] crate::execution_slot::ExecutionSlotError),
     #[error("analysis worker lost its fencing ownership")]
     OwnerLost,
     #[error("analysis artifact file is invalid")]
@@ -242,9 +248,12 @@ pub(crate) enum ControlError {
 impl ControlError {
     pub(crate) fn is_contention(&self) -> bool {
         match self {
-            Self::Postgres(error) => crate::postgres::is_lock_contention(error),
-            Self::MaintenanceScope(_)
-            | Self::PostgresConnection(_)
+            Self::Postgres(error)
+            | Self::ExecutionSlot(crate::execution_slot::ExecutionSlotError::Postgres(error)) => {
+                crate::postgres::is_lock_contention(error)
+            }
+            Self::PostgresConnection(_)
+            | Self::ExecutionSlot(_)
             | Self::OwnerLost
             | Self::Artifact(_)
             | Self::Io(_)
@@ -262,9 +271,9 @@ impl ControlError {
     #[must_use]
     pub(crate) const fn kind(&self) -> &'static str {
         match self {
-            Self::MaintenanceScope(_) => "maintenance_scope",
             Self::Postgres(_) => "postgres_state_transition",
             Self::PostgresConnection(error) => error.kind(),
+            Self::ExecutionSlot(error) => error.kind(),
             Self::OwnerLost => "fencing_owner_lost",
             Self::Artifact(_) => "artifact_validation",
             Self::Io(_) => "artifact_io",
@@ -314,5 +323,11 @@ impl ControlError {
                 | Self::AuthoritativeInputContract
                 | Self::UnsupportedValidationContract
         )
+    }
+}
+
+impl From<crate::execution_slot::ExecutionSlotError> for ControlError {
+    fn from(error: crate::execution_slot::ExecutionSlotError) -> Self {
+        Self::ExecutionSlot(error)
     }
 }

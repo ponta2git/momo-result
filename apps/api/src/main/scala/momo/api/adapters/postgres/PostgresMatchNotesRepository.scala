@@ -8,7 +8,6 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
-import momo.api.adapters.postgres.CanonicalIdentity.Entity
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.ids.{AccountId, MatchId}
 import momo.api.domain.{MatchNote, MatchNoteBody, MatchNoteVersion}
@@ -28,14 +27,11 @@ object PostgresMatchNotes:
       body: Option[MatchNoteBody],
       updatedBy: AccountId,
       updatedAt: Instant,
-  )(using ids: PostgresIdentities): ConnectionIO[ReplaceMatchNoteResult] =
+  ): ConnectionIO[ReplaceMatchNoteResult] =
     val load = sql"""
-      SELECT note_body, note_version, ${ids.wireReference(
-        Entity.Accounts,
-        fr"matches.note_updated_by_account_id"
-      )}, note_updated_at
+      SELECT note_body, note_version, note_updated_by_account_id, note_updated_at
       FROM matches
-      WHERE id = ${ids.lookup(Entity.Matches, matchId.value)}
+      WHERE id = $matchId
       FOR UPDATE
     """.query[StoredNote].option
 
@@ -49,16 +45,14 @@ object PostgresMatchNotes:
             ReplaceMatchNoteResult.Unchanged(current).pure[ConnectionIO]
           else
             val next = MatchNote(body, expectedVersion.next, Some(updatedBy), Some(updatedAt))
-            ids.requireReference(Entity.Accounts, updatedBy.value).flatMap { accountId =>
-              sql"""
+            sql"""
               UPDATE matches
               SET note_body = ${body.map(_.value)},
                   note_version = ${next.version.value},
-                  note_updated_by_account_id = $accountId,
+                  note_updated_by_account_id = $updatedBy,
                   note_updated_at = $updatedAt
-              WHERE id = ${ids.lookup(Entity.Matches, matchId.value)}
+              WHERE id = $matchId
             """.update.run.as(ReplaceMatchNoteResult.Updated(next))
-            }
         }
     }
 
@@ -74,11 +68,8 @@ object PostgresMatchNotes:
         .inconsistentRow("matches", "note", message)
     ).liftTo[ConnectionIO]
 
-final class PostgresMatchNotesRepository[F[_]: MonadCancelThrow](
-    transactor: Transactor[F],
-    identities: PostgresIdentities = PostgresIdentities.Legacy
-) extends MatchNotesRepository[F]:
-  private given PostgresIdentities = identities
+final class PostgresMatchNotesRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
+    extends MatchNotesRepository[F]:
   def replace(
       matchId: MatchId,
       expectedVersion: MatchNoteVersion,

@@ -4,7 +4,6 @@ import java.time.format.DateTimeFormatter
 
 import sttp.tapir.server.ServerEndpoint
 
-import momo.api.domain.PublicId
 import momo.api.domain.ids.MatchId
 import momo.api.endpoints.codec.{BoundaryId, MatchCodec, MatchListCodec}
 import momo.api.endpoints.{
@@ -20,7 +19,6 @@ import momo.api.endpoints.{
   ReplaceMatchNoteResponse,
   UpdateMatchResponse
 }
-import momo.api.errors.AppError
 import momo.api.http.{HttpOperation, HttpRouteContext, SecuredEndpoint}
 import momo.api.usecases.matches.{
   ConfirmMatch,
@@ -117,13 +115,6 @@ object MatchModule:
         )(id => getMatch.identity(id))(
           MatchIdentityResponse.from
         )
-      },
-      SecuredEndpoint.readLogic(security, MatchesEndpoints.getByPublicId) { _ => publicId =>
-        execution.execute(
-          PublicId.fromString(publicId).left.map(_ =>
-            AppError.ValidationFailed("publicId is invalid.")
-          )
-        )(getMatch.byPublicId)(MatchDetailResponse.from)
       },
       SecuredEndpoint.mutationLogic(security, MatchesEndpoints.update) { member =>
         {

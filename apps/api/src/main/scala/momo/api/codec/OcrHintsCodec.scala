@@ -6,7 +6,7 @@ import io.circe.syntax.*
 import io.circe.{Codec, Decoder, DecodingFailure, Encoder, HCursor, Json, JsonObject, Printer}
 
 import momo.api.domain.ids.MemberId
-import momo.api.domain.{OcrJobHints, OcrLayoutFamily, PlayerAliasHint}
+import momo.api.domain.{OcrJobHints, PlayerAliasHint}
 
 /** Shared hint JSON boundary for HTTP acceptance and durable queue encoding. */
 object OcrHintsCodec:
@@ -16,16 +16,6 @@ object OcrHintsCodec:
   def encode(hints: OcrJobHints): String = printer.print(hints.asJson.deepDropNullValues)
 
   def validate(hints: OcrJobHints): Either[String, Unit] =
-    validateShape(hints).flatMap { _ =>
-      Either.cond(
-        hints.layoutFamily.forall(value => OcrLayoutFamily.fromLegacy(value).nonEmpty),
-        (),
-        "ocrHints.layoutFamily must be momotetsu_2, world, or reiwa (known legacy aliases are accepted).",
-      )
-    }
-
-  /** Shape checking alone permits an exact replay of an already retained request. */
-  def validateShape(hints: OcrJobHints): Either[String, Unit] =
     val errors = OcrJobHints.validationErrors(hints)
     if errors.nonEmpty then Left(errors.mkString(" "))
     else if encode(hints).getBytes(StandardCharsets.UTF_8).length > MaxUtf8Bytes then

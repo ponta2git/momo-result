@@ -7,18 +7,7 @@ mod release;
 const SECOND_MATCH: &str = "analysis-notification-second-match";
 
 pub(super) async fn mark_initial(client: &Client) -> SmokeResult {
-    client
-        .execute(
-            r"
-        UPDATE series_analysis_title_states
-        SET notification_baseline_state = 'initial', notification_baseline_artifact_id = NULL
-        WHERE (SELECT fixture_parent.legacy_id
-               FROM game_titles AS fixture_parent
-               WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = $1
-        ",
-            &[&TITLE_ID],
-        )
-        .await?;
+    client.execute("UPDATE series_analysis_title_states SET notification_baseline_state='initial', notification_baseline_artifact_id=NULL WHERE game_title_id=$1", &[&TITLE_ID]).await?;
     Ok(())
 }
 
@@ -29,38 +18,12 @@ pub(super) async fn requests(
 ) -> SmokeResult {
     for (index, trigger) in triggers.iter().enumerate() {
         let id = format!("{}-request-{index}", claim.job_id);
-        client
-            .execute(
-                r"
-            INSERT INTO series_analysis_job_requests (id, legacy_id, game_title_id, legacy_game_title_id, input_revision,
-                                                      algorithm_version, artifact_schema_version, validation_contract_id, trigger, status, assigned_job_id,
-                                                      assigned_attempt_id, legacy_assigned_attempt_id)
-            VALUES (pg_temp.fixture_uuid('series_analysis_job_requests', $1), $1, pg_temp.fixture_uuid('game_titles', $2), $2,
-                    $3, $4, $5, $6, $7, 'assigned', pg_temp.fixture_uuid('series_analysis_jobs', $8),
-                    pg_temp.fixture_uuid('series_analysis_job_attempts', $9), $9)
-            ",
-                &[
-                    &id,
-                    &claim.game_title_id,
-                    &claim.input_revision,
-                    &claim.algorithm_version,
-                    &claim.artifact_schema_version,
-                    &claim.validation_contract_id,
-                    trigger,
-                    &claim.job_id,
-                    &claim.attempt_id,
-                ],
-            )
-            .await?;
+        client.execute("INSERT INTO series_analysis_job_requests (id, game_title_id, input_revision, algorithm_version, artifact_schema_version, validation_contract_id, trigger, status, assigned_job_id, assigned_attempt_id) VALUES ($1,$2,$3,$4,$5,$6,$7,'assigned',$8,$9)", &[&id,&claim.game_title_id,&claim.input_revision,&claim.algorithm_version,&claim.artifact_schema_version,&claim.validation_contract_id,trigger,&claim.job_id,&claim.attempt_id]).await?;
     }
     if let Some(trigger) = triggers.first() {
         client
             .execute(
-                r"
-                    UPDATE series_analysis_jobs
-                    SET trigger = $2
-                    WHERE series_analysis_jobs.legacy_id = $1
-                    ",
+                "UPDATE series_analysis_jobs SET trigger=$2 WHERE id=$1",
                 &[&claim.job_id, trigger],
             )
             .await?;
@@ -69,29 +32,12 @@ pub(super) async fn requests(
 }
 
 pub(super) async fn fulfill(transaction: &Transaction<'_>, claim: &ClaimedJob) -> SmokeResult {
-    transaction
-        .execute(
-            r"
-        UPDATE series_analysis_job_requests
-        SET status = 'fulfilled', fulfilled_at = clock_timestamp()
-        WHERE series_analysis_job_requests.legacy_assigned_attempt_id = $1
-        ",
-            &[&claim.attempt_id],
-        )
-        .await?;
+    transaction.execute("UPDATE series_analysis_job_requests SET status='fulfilled', fulfilled_at=clock_timestamp() WHERE assigned_attempt_id=$1", &[&claim.attempt_id]).await?;
     Ok(())
 }
 
 pub(super) async fn assert_baseline(client: &Client, artifact_id: &str) -> SmokeResult {
-    let row = client.query_one(r"
-        SELECT notification_baseline_state, (SELECT fixture_parent.legacy_id
-                FROM series_analysis_artifact_identities AS fixture_parent
-                WHERE fixture_parent.id = series_analysis_title_states.notification_baseline_artifact_id) AS notification_baseline_artifact_id
-        FROM series_analysis_title_states
-        WHERE (SELECT fixture_parent.legacy_id
-               FROM game_titles AS fixture_parent
-               WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = $1
-        ", &[&TITLE_ID]).await?;
+    let row = client.query_one("SELECT notification_baseline_state, notification_baseline_artifact_id FROM series_analysis_title_states WHERE game_title_id=$1", &[&TITLE_ID]).await?;
     assert_eq!(row.try_get::<_, String>(0)?, "artifact");
     assert_eq!(
         row.try_get::<_, Option<String>>(1)?.as_deref(),
@@ -101,49 +47,23 @@ pub(super) async fn assert_baseline(client: &Client, artifact_id: &str) -> Smoke
 }
 
 pub(super) async fn cleanup(client: &Client) -> SmokeResult {
+    client.execute("UPDATE worker_execution_slots SET owner=NULL, task_kind=NULL, job_id=NULL, attempt_id=NULL, holder_preemptible=NULL, lease_expires_at=NULL WHERE job_id IN (SELECT id FROM series_analysis_jobs WHERE game_title_id=$1)", &[&TITLE_ID]).await?;
     client
         .execute(
-            r"
-                DELETE FROM series_analysis_job_requests
-                WHERE series_analysis_job_requests.legacy_game_title_id = $1
-                ",
+            "DELETE FROM series_analysis_job_requests WHERE game_title_id=$1",
             &[&TITLE_ID],
         )
         .await?;
     client
-        .execute(
-            r"
-            DELETE FROM matches
-            WHERE (SELECT fixture_parent.legacy_id
-                   FROM game_titles AS fixture_parent
-                   WHERE fixture_parent.id = matches.game_title_id) = $1
-            ",
-            &[&TITLE_ID],
-        )
+        .execute("DELETE FROM matches WHERE game_title_id=$1", &[&TITLE_ID])
         .await?;
     client
         .execute(
-            r"
-                DELETE FROM season_masters
-                WHERE (SELECT fixture_parent.legacy_id
-                       FROM game_titles AS fixture_parent
-                       WHERE fixture_parent.id = season_masters.game_title_id) = $1
-                ",
+            "DELETE FROM season_masters WHERE game_title_id=$1",
             &[&TITLE_ID],
         )
         .await?;
-    client
-        .execute(
-            r"
-        UPDATE series_analysis_title_states
-        SET notification_baseline_state = 'unknown', notification_baseline_artifact_id = NULL
-        WHERE (SELECT fixture_parent.legacy_id
-               FROM game_titles AS fixture_parent
-               WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = $1
-        ",
-            &[&TITLE_ID],
-        )
-        .await?;
+    client.execute("UPDATE series_analysis_title_states SET notification_baseline_state='unknown', notification_baseline_artifact_id=NULL WHERE game_title_id=$1", &[&TITLE_ID]).await?;
     cleanup_database(client).await
 }
 
@@ -159,7 +79,7 @@ struct Harness {
 impl Harness {
     async fn start() -> SmokeResult<Self> {
         let database_url = std::env::var("ANALYSIS_CONTROL_SMOKE_DATABASE_URL")?;
-        let client = crate::identity::fixtures::connect(&database_url).await?;
+        let client = crate::postgres::connect(&database_url).await?;
         cleanup(&client).await?;
         prepare_owned_attempt(&client).await?;
         mark_initial(&client).await?;
@@ -191,15 +111,7 @@ impl Harness {
     async fn publish(&mut self, claim: &ClaimedJob, triggers: &[&str]) -> SmokeResult {
         requests(&self.client, claim, triggers).await?;
         publish(&mut self.client, &self.config, claim).await?;
-        let row = self.client.query_one(r"
-            SELECT (SELECT fixture_parent.legacy_id
-                    FROM series_analysis_artifact_identities AS fixture_parent
-                    WHERE fixture_parent.id = series_analysis_title_states.current_artifact_id) AS current_artifact_id
-            FROM series_analysis_title_states
-            WHERE (SELECT fixture_parent.legacy_id
-                   FROM game_titles AS fixture_parent
-                   WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = $1
-            ", &[&TITLE_ID]).await?;
+        let row = self.client.query_one("SELECT current_artifact_id FROM series_analysis_title_states WHERE game_title_id=$1", &[&TITLE_ID]).await?;
         assert_baseline(&self.client, &row.try_get::<_, String>(0)?).await
     }
 
@@ -249,31 +161,8 @@ impl Harness {
 }
 
 async fn add_second(client: &Client) -> SmokeResult {
-    client
-        .execute(
-            r"
-        INSERT INTO matches (id, legacy_id, held_event_id, legacy_held_event_id, match_no_in_event, game_title_id,
-                             layout_family, season_master_id, owner_member_id, map_master_id, played_at, created_by_account_id,
-                             created_by_member_id, analysis_revision)
-        SELECT pg_temp.fixture_uuid('matches', $2), $2, pg_temp.fixture_uuid('held_events', matches.legacy_held_event_id),
-               matches.legacy_held_event_id, 2, matches.game_title_id, layout_family, matches.season_master_id,
-               matches.owner_member_id, matches.map_master_id, played_at + CAST('1 day' AS interval),
-               matches.created_by_account_id, matches.created_by_member_id, 1
-        FROM matches
-        WHERE matches.legacy_id = $1
-        ",
-            &[&MATCH_ID, &SECOND_MATCH],
-        )
-        .await?;
-    client.execute(r"
-        INSERT INTO match_players (match_id, member_id, play_order, rank, total_assets_man_yen, revenue_man_yen)
-        SELECT pg_temp.fixture_uuid('matches', $2), match_players.member_id, play_order, rank, total_assets_man_yen,
-               revenue_man_yen
-        FROM match_players
-        WHERE (SELECT fixture_parent.legacy_id
-               FROM matches AS fixture_parent
-               WHERE fixture_parent.id = match_players.match_id) = $1
-        ", &[&MATCH_ID,&SECOND_MATCH]).await?;
+    client.execute("INSERT INTO matches (id, held_event_id, match_no_in_event, game_title_id, layout_family, season_master_id, owner_member_id, map_master_id, played_at, created_by_account_id, created_by_member_id, analysis_revision) SELECT $2,held_event_id,2,game_title_id,layout_family,season_master_id,owner_member_id,map_master_id,played_at + interval '1 day',created_by_account_id,created_by_member_id,1 FROM matches WHERE id=$1", &[&MATCH_ID,&SECOND_MATCH]).await?;
+    client.execute("INSERT INTO match_players (match_id,member_id,play_order,rank,total_assets_man_yen,revenue_man_yen) SELECT $2,member_id,play_order,rank,total_assets_man_yen,revenue_man_yen FROM match_players WHERE match_id=$1", &[&MATCH_ID,&SECOND_MATCH]).await?;
     Ok(())
 }
 
@@ -282,19 +171,7 @@ async fn next_revision(
     previous: &ClaimedJob,
     label: &str,
 ) -> SmokeResult<ClaimedJob> {
-    let row = client
-        .query_one(
-            r"
-        UPDATE series_analysis_title_states
-        SET input_revision = input_revision + 1, pending_work = TRUE
-        WHERE (SELECT fixture_parent.legacy_id
-               FROM game_titles AS fixture_parent
-               WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = $1
-        RETURNING input_revision
-        ",
-            &[&TITLE_ID],
-        )
-        .await?;
+    let row = client.query_one("UPDATE series_analysis_title_states SET input_revision=input_revision+1, pending_work=true WHERE game_title_id=$1 RETURNING input_revision", &[&TITLE_ID]).await?;
     let advanced = ClaimedJob {
         input_revision: row.try_get(0)?,
         ..previous.clone()
@@ -305,23 +182,13 @@ async fn next_revision(
 async fn edit_match(client: &Client, match_id: &str) -> SmokeResult {
     client
         .execute(
-            r"
-                UPDATE matches
-                SET analysis_revision = analysis_revision + 1
-                WHERE matches.legacy_id = $1
-                ",
+            "UPDATE matches SET analysis_revision=analysis_revision+1 WHERE id=$1",
             &[&match_id],
         )
         .await?;
     client
         .execute(
-            r"
-                UPDATE match_players
-                SET revenue_man_yen = revenue_man_yen + 10
-                WHERE (SELECT fixture_parent.legacy_id
-                       FROM matches AS fixture_parent
-                       WHERE fixture_parent.id = match_players.match_id) = $1
-                ",
+            "UPDATE match_players SET revenue_man_yen=revenue_man_yen+10 WHERE match_id=$1",
             &[&match_id],
         )
         .await?;
@@ -369,13 +236,7 @@ async fn real_postgres_coalesced_requests_notify_only_actual_match_changes() -> 
     harness.publish(&noop, &["match_mutation"]).await?;
     harness
         .client
-        .execute(
-            r"
-            DELETE FROM matches
-            WHERE matches.legacy_id = $1
-            ",
-            &[&SECOND_MATCH],
-        )
+        .execute("DELETE FROM matches WHERE id=$1", &[&SECOND_MATCH])
         .await?;
     let deleted = next_revision(&harness.client, &noop, "deleted").await?;
     harness.publish(&deleted, &["match_mutation"]).await?;
@@ -401,13 +262,7 @@ async fn real_postgres_coalesced_requests_notify_only_actual_match_changes() -> 
     }
     harness
         .client
-        .execute(
-            r"
-            DELETE FROM matches
-            WHERE matches.legacy_id = $1
-            ",
-            &[&MATCH_ID],
-        )
+        .execute("DELETE FROM matches WHERE id=$1", &[&MATCH_ID])
         .await?;
     let empty = next_revision(&harness.client, &previous, "empty").await?;
     harness.publish(&empty, &["match_mutation"]).await?;
@@ -439,19 +294,7 @@ async fn real_postgres_notification_baseline_advances_only_with_success() -> Smo
     harness.publish(&changed, &["match_mutation"]).await?;
     harness.expect_matches(&changed, &[MATCH_ID]).await?;
 
-    harness
-        .client
-        .execute(
-            r"
-        UPDATE series_analysis_title_states
-        SET notification_baseline_state = 'unknown', notification_baseline_artifact_id = NULL
-        WHERE (SELECT fixture_parent.legacy_id
-               FROM game_titles AS fixture_parent
-               WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = $1
-        ",
-            &[&TITLE_ID],
-        )
-        .await?;
+    harness.client.execute("UPDATE series_analysis_title_states SET notification_baseline_state='unknown', notification_baseline_artifact_id=NULL WHERE game_title_id=$1", &[&TITLE_ID]).await?;
     edit_match(&harness.client, SECOND_MATCH).await?;
     let unknown = next_revision(&harness.client, &changed, "unknown").await?;
     harness.publish(&unknown, &["match_mutation"]).await?;
@@ -464,14 +307,7 @@ async fn real_postgres_notification_baseline_advances_only_with_success() -> Smo
     edit_match(&harness.client, SECOND_MATCH).await?;
     let manual = next_revision(&harness.client, &known, "manual-changed").await?;
     requests(&harness.client, &manual, &["match_mutation"]).await?;
-    harness.client.execute(r"
-        UPDATE series_analysis_job_requests
-        SET assigned_attempt_id = pg_temp.fixture_uuid('series_analysis_job_attempts', 'unrelated-attempt'),
-            legacy_assigned_attempt_id = 'unrelated-attempt'
-        WHERE (SELECT fixture_parent.legacy_id
-               FROM series_analysis_jobs AS fixture_parent
-               WHERE fixture_parent.id = series_analysis_job_requests.assigned_job_id) = $1
-        ", &[&manual.job_id]).await?;
+    harness.client.execute("UPDATE series_analysis_job_requests SET assigned_attempt_id='unrelated-attempt' WHERE assigned_job_id=$1", &[&manual.job_id]).await?;
     // A mutation attached to another attempt cannot authorize the manual publication.
     publish(&mut harness.client, &harness.config, &manual).await?;
     assert_baseline(

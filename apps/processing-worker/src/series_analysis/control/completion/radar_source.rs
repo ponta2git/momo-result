@@ -9,7 +9,7 @@ use crate::series_analysis::{
     radar_prepare,
 };
 
-/// The caller already owns the job lease, title revision and desired-generation locks.
+/// The caller already owns the execution slot, title revision and desired-generation locks.
 /// Returning false keeps invalidation in the same commit as the existing terminal-failure rollback.
 pub(super) async fn validate(
     transaction: &Transaction<'_>,
@@ -17,11 +17,11 @@ pub(super) async fn validate(
 ) -> Result<bool, ControlError> {
     let active = transaction
         .query_opt(
-            "SELECT c.legacy_id,(SELECT legacy_id FROM series_radar_previews WHERE id=o.preview_id) FROM series_radar_title_states s \
+            "SELECT c.id,o.preview_id FROM series_radar_title_states s \
              JOIN series_radar_operations o ON o.id=s.active_operation_id \
              JOIN series_radar_candidates c ON c.id=o.candidate_id AND c.game_title_id=s.game_title_id \
-             WHERE s.game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$1) AND s.generation=$2 \
-               AND s.desired_basis_id IS NOT DISTINCT FROM (SELECT id FROM series_radar_basis_identities WHERE legacy_id=$3) \
+             WHERE s.game_title_id=$1 AND s.generation=$2 \
+               AND s.desired_basis_id IS NOT DISTINCT FROM $3 \
                AND s.current_basis_id IS DISTINCT FROM s.desired_basis_id \
                AND o.kind='apply' AND o.status IN ('pending','running')",
             &[&claim.game_title_id, &claim.radar_generation, &claim.radar_basis_id],
@@ -43,7 +43,7 @@ pub(super) async fn validate(
     let source = if manual {
         let preview_id: Option<String> = active.try_get(1)?;
         let row = transaction.query_opt(
-            "SELECT evaluation_snapshot,input_checksum FROM series_radar_previews WHERE legacy_id=$1 AND candidate_id=(SELECT id FROM series_radar_candidates WHERE legacy_id=$2) AND game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$3) AND octet_length(evaluation_snapshot::text)<=33554432",
+            "SELECT evaluation_snapshot,input_checksum FROM series_radar_previews WHERE id=$1 AND candidate_id=$2 AND game_title_id=$3 AND octet_length(evaluation_snapshot::text)<=33554432",
             &[&preview_id,&candidate_id,&claim.game_title_id],
         ).await?.ok_or(ControlError::InvalidMetadata)?;
         let value: serde_json::Value = row.try_get(0)?;
@@ -84,13 +84,13 @@ pub(super) async fn validate(
         };
         transaction.execute(
             "UPDATE series_radar_candidates SET status=$3,safe_failure_code=$4,updated_at=clock_timestamp() \
-             WHERE legacy_id=$1 AND game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$2)",
+             WHERE id=$1 AND game_title_id=$2",
             &[&candidate_id, &claim.game_title_id,&status,&reason],
         ).await?;
         transaction
             .execute(
                 "UPDATE series_radar_previews SET status='stale',updated_at=clock_timestamp() \
-             WHERE candidate_id=(SELECT id FROM series_radar_candidates WHERE legacy_id=$1) AND status IN ('pending','ready')",
+             WHERE candidate_id=$1 AND status IN ('pending','ready')",
                 &[&candidate_id],
             )
             .await?;

@@ -15,7 +15,6 @@ use crate::{
     series_analysis::config::{AnalysisConsumerConfig, AnalysisExecutionLimits},
 };
 
-mod incidents;
 mod policy;
 
 #[tokio::test]
@@ -23,11 +22,10 @@ mod policy;
 async fn real_postgres_analysis_notifications_follow_committed_publications() -> SmokeResult {
     let _logging = tracing_subscriber::fmt().with_test_writer().try_init();
     let database_url = std::env::var("ANALYSIS_CONTROL_SMOKE_DATABASE_URL")?;
-    let mut primary = crate::identity::fixtures::connect(&database_url).await?;
-    let mut peer = crate::identity::fixtures::connect(&database_url).await?;
+    let mut primary = crate::postgres::connect(&database_url).await?;
+    let mut peer = crate::postgres::connect(&database_url).await?;
     policy::cleanup(&primary).await?;
     prepare_owned_attempt(&primary).await?;
-    let incident_catalog = incidents::prepare(&mut primary).await?;
     policy::mark_initial(&primary).await?;
     primary
         .batch_execute("UPDATE discord_notification_settings SET enabled = true, generation = 0")
@@ -52,19 +50,14 @@ async fn real_postgres_analysis_notifications_follow_committed_publications() ->
     let gate = peer.transaction().await?;
     gate.query_one("SELECT pg_advisory_xact_lock(19790514, 1)", &[])
         .await?;
-    let metadata = crate::identity::fixtures::connect(&database_url).await?;
+    let metadata = crate::postgres::connect(&database_url).await?;
     let (published, edited) = tokio::join!(publish(&mut primary, &config, &first), async {
         wait_for_gate(&gate).await?;
         // A finite settings transaction can outlast a few local round trips. Publication and
         // its notification must both survive that wait within the parent's remaining budget.
         tokio::time::sleep(Duration::from_millis(600)).await;
-        metadata.execute(r"
-            UPDATE matches
-            SET note_body = $2, note_version = 1,
-                note_updated_by_account_id = pg_temp.fixture_uuid('momo_login_accounts', 'account_ponta'),
-                note_updated_at = clock_timestamp()
-            WHERE matches.legacy_id = $1
-            ", &[&MATCH_ID, &"保存済みメモ。\n改行と @everyone を保持。"] ).await?;
+        metadata.execute("UPDATE matches SET note_body = $2, note_version = 1, note_updated_by_account_id = 'account_ponta', \
+                note_updated_at = clock_timestamp() WHERE id = $1", &[&MATCH_ID, &"保存済みメモ。\n改行と @everyone を保持。"] ).await?;
         gate.batch_execute("UPDATE discord_notification_settings SET generation = 9007199254740993 WHERE kind = 'analysis_completed'").await?;
         gate.commit().await?;
         Ok::<(), Box<dyn Error + Send + Sync>>(())
@@ -86,7 +79,7 @@ async fn real_postgres_analysis_notifications_follow_committed_publications() ->
     );
     assert_eq!(
         first_body.pointer("/data/matches/0/ginjiTotal"),
-        Some(&json!(124))
+        Some(&json!(0))
     );
     assert_eq!(
         first_body.pointer("/data/currentAnalysis/artifactId"),
@@ -98,35 +91,16 @@ async fn real_postgres_analysis_notifications_follow_committed_publications() ->
 
     // Recreate the initial comparison inputs for rollback/deadline checks without dispatch.
     policy::mark_initial(&primary).await?;
-    primary
-        .execute(
-            r"
-        UPDATE series_analysis_job_requests
-        SET status = 'assigned', fulfilled_at = NULL
-        WHERE series_analysis_job_requests.legacy_assigned_attempt_id = $1
-        ",
-            &[&first.attempt_id],
-        )
-        .await?;
+    primary.execute("UPDATE series_analysis_job_requests SET status='assigned', fulfilled_at=NULL WHERE assigned_attempt_id=$1", &[&first.attempt_id]).await?;
     verify_preparation_boundaries(&mut primary, &peer, &config, &first).await?;
     verify_delayed_database(&database_url, &config, &first).await?;
-    primary.execute(r"
-        UPDATE series_analysis_title_states
-        SET notification_baseline_state = 'artifact',
-            notification_baseline_artifact_id = pg_temp.fixture_uuid('series_analysis_artifacts', $2)
-        WHERE (SELECT fixture_parent.legacy_id
-               FROM game_titles AS fixture_parent
-               WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = $1
-        ", &[&TITLE_ID, &artifact_id_for_attempt(OLD_ATTEMPT_ID)]).await?;
+    primary.execute("UPDATE series_analysis_title_states SET notification_baseline_state='artifact', notification_baseline_artifact_id=$2 WHERE game_title_id=$1", &[&TITLE_ID, &artifact_id_for_attempt(OLD_ATTEMPT_ID)]).await?;
 
     // This is the same terminal-job deletion boundary used by history maintenance. The artifact
     // survives with a null attempt reference, so the next logical job can still compare/reuse it.
     primary
         .execute(
-            r"
-                DELETE FROM series_analysis_jobs
-                WHERE series_analysis_jobs.legacy_id = $1 AND status = 'succeeded'
-                ",
+            "DELETE FROM series_analysis_jobs WHERE id = $1 AND status = 'succeeded'",
             &[&first.job_id],
         )
         .await?;
@@ -172,8 +146,9 @@ async fn real_postgres_analysis_notifications_follow_committed_publications() ->
     primary
         .batch_execute("UPDATE discord_notification_settings SET enabled = true, generation = 0")
         .await?;
+    primary.execute("UPDATE worker_execution_slots SET owner = NULL, task_kind = NULL, job_id = NULL, attempt_id = NULL, \
+        holder_preemptible = NULL, lease_expires_at = NULL WHERE job_id = $1", &[&stale.job_id]).await?;
     policy::cleanup(&primary).await?;
-    incidents::restore(&primary, &incident_catalog).await?;
     Ok(())
 }
 
@@ -242,16 +217,7 @@ async fn verify_preparation_boundaries(
         let transaction = primary.transaction().await?;
         policy::fulfill(&transaction, claim).await?;
         if scenario == "intent" {
-            transaction
-                .execute(
-                    r"
-                UPDATE series_analysis_job_requests
-                SET trigger = 'manual'
-                WHERE series_analysis_job_requests.legacy_assigned_attempt_id = $1
-                ",
-                    &[&claim.attempt_id],
-                )
-                .await?;
+            transaction.execute("UPDATE series_analysis_job_requests SET trigger='manual' WHERE assigned_attempt_id=$1", &[&claim.attempt_id]).await?;
         }
         if scenario == "invalid" {
             transaction
@@ -283,32 +249,20 @@ async fn verify_preparation_boundaries(
             let member_id = MEMBER_IDS.first().ok_or("member")?;
             let old_name: String = peer
                 .query_one(
-                    r"
-                        SELECT display_name
-                        FROM members
-                        WHERE members.legacy_id = $1
-                        ",
+                    "SELECT display_name FROM members WHERE id = $1",
                     &[member_id],
                 )
                 .await?
                 .try_get(0)?;
             peer.execute(
-                r"
-                    UPDATE members
-                    SET display_name = 'Edited after snapshot'
-                    WHERE members.legacy_id = $1
-                    ",
+                "UPDATE members SET display_name = 'Edited after snapshot' WHERE id = $1",
                 &[member_id],
             )
             .await?;
             assert_eq!(prepared.payload()?, frozen);
             drop(prepared);
             peer.execute(
-                r"
-                    UPDATE members
-                    SET display_name = $2
-                    WHERE members.legacy_id = $1
-                    ",
+                "UPDATE members SET display_name = $2 WHERE id = $1",
                 &[member_id, &old_name],
             )
             .await?;
@@ -390,51 +344,16 @@ async fn next_job(client: &Client, previous: &ClaimedJob, label: &str) -> SmokeR
         fencing_token: previous.fencing_token + 1,
         ..previous.clone()
     };
-    client
-        .execute(
-            r"
-        INSERT INTO series_analysis_jobs (id, legacy_id, game_title_id, input_revision, algorithm_version,
-                                          artifact_schema_version, validation_contract_id, status, trigger, started_at, lease_owner, lease_attempt_id,
-                                          legacy_lease_attempt_id, lease_fencing_token, lease_expires_at, lease_validation_contract_id, attempt_count,
-                                          fencing_counter)
-        VALUES (pg_temp.fixture_uuid('series_analysis_jobs', $1), $1, pg_temp.fixture_uuid('game_titles', $2), $3, $4, $5,
-                $6, 'running', 'manual', clock_timestamp(), $7, pg_temp.fixture_uuid('series_analysis_job_attempts', $8), $8, $9,
-                clock_timestamp() + CAST('10 minutes' AS interval), $6, 1, $9)
-        ",
-            &[
-                &next.job_id,
-                &next.game_title_id,
-                &next.input_revision,
-                &next.algorithm_version,
-                &next.artifact_schema_version,
-                &next.validation_contract_id,
-                &OLD_WORKER_ID,
-                &next.attempt_id,
-                &next.fencing_token,
-            ],
-        )
-        .await?;
-    client
-        .execute(
-            r"
-        INSERT INTO series_analysis_job_attempts (id, legacy_id, job_id, attempt_no, owner, fencing_token, input_revision,
-                                                  algorithm_version, artifact_schema_version, validation_contract_id, status, effective_config_version,
-                                                  calculation_timeout_milliseconds)
-        VALUES (pg_temp.fixture_uuid('series_analysis_job_attempts', $1), $1,
-                pg_temp.fixture_uuid('series_analysis_jobs', $2), 1, $3, $4, $5, $6, $7, $8, 'running', 'notification-test', 60000)
-        ",
-            &[
-                &next.attempt_id,
-                &next.job_id,
-                &OLD_WORKER_ID,
-                &next.fencing_token,
-                &next.input_revision,
-                &next.algorithm_version,
-                &next.artifact_schema_version,
-                &next.validation_contract_id,
-            ],
-        )
-        .await?;
+    client.execute("INSERT INTO series_analysis_jobs (id, game_title_id, input_revision, algorithm_version, artifact_schema_version, \
+        validation_contract_id, status, trigger, started_at, lease_owner, lease_attempt_id, lease_fencing_token, lease_expires_at, \
+        lease_validation_contract_id, attempt_count) VALUES ($1,$2,$3,$4,$5,$6,'running','manual',clock_timestamp(),$7,$8,$9,clock_timestamp()+interval '10 minutes',$6,1)",
+        &[&next.job_id, &next.game_title_id, &next.input_revision, &next.algorithm_version, &next.artifact_schema_version, &next.validation_contract_id, &OLD_WORKER_ID, &next.attempt_id, &next.fencing_token]).await?;
+    client.execute("INSERT INTO series_analysis_job_attempts (id,job_id,attempt_no,owner,fencing_token,input_revision,algorithm_version,artifact_schema_version,validation_contract_id,status,effective_config_version,calculation_timeout_milliseconds) \
+        VALUES ($1,$2,1,$3,$4,$5,$6,$7,$8,'running','notification-test',60000)",
+        &[&next.attempt_id,&next.job_id,&OLD_WORKER_ID,&next.fencing_token,&next.input_revision,&next.algorithm_version,&next.artifact_schema_version,&next.validation_contract_id]).await?;
+    client.execute("UPDATE worker_execution_slots SET task_kind='analysis', owner=$1, job_id=$2, attempt_id=$3, fencing_token=$4, \
+        holder_preemptible=true, lease_expires_at=clock_timestamp()+interval '10 minutes' WHERE slot_key='shared-heavy-work'",
+        &[&OLD_WORKER_ID,&next.job_id,&next.attempt_id,&next.fencing_token]).await?;
     Ok(next)
 }
 
@@ -460,7 +379,7 @@ async fn capture(
     sent: mpsc::Sender<Value>,
     database_url: String,
 ) -> SmokeResult {
-    let client = crate::identity::fixtures::connect(&database_url).await?;
+    let client = crate::postgres::connect(&database_url).await?;
     loop {
         let (mut stream, _) = listener.accept().await?;
         let mut request = Vec::new();
@@ -499,16 +418,8 @@ async fn capture(
             .get("sourceJobId")
             .and_then(Value::as_str)
             .ok_or("source ID")?;
-        let row = client
-            .query_one(
-                r"
-                    SELECT j.status, j.lease_owner
-                    FROM series_analysis_jobs AS j
-                    WHERE j.legacy_id = $1
-                    ",
-                &[&id],
-            )
-            .await?;
+        let row = client.query_one("SELECT j.status, s.owner FROM series_analysis_jobs j CROSS JOIN worker_execution_slots s \
+            WHERE j.id=$1 AND s.slot_key='shared-heavy-work'", &[&id]).await?;
         assert_eq!(row.try_get::<_, String>(0)?, "succeeded");
         assert_eq!(row.try_get::<_, Option<String>>(1)?, None);
         sent.send(payload).await?;
@@ -528,7 +439,6 @@ pub(super) fn config(
         ("memory.events", "max 0\noom_kill 0\n"),
         ("cgroup.procs", ""),
         ("cgroup.kill", ""),
-        ("cpu.max", "100000 100000"),
     ] {
         fs::write(directory.join(name), content)?;
     }
@@ -553,11 +463,9 @@ pub(super) fn config(
             134_217_728,
         )?,
         execution_limits: AnalysisExecutionLimits {
-            memory: crate::resource_budget::MemoryBudget::new(
-                268_435_456,
-                134_217_728,
-                134_217_728,
-            )?,
+            runtime_memory_limit: bound(268_435_456)?,
+            child_memory_limit: bound(134_217_728)?,
+            parent_headroom: bound(134_217_728)?,
             calculation_timeout: Duration::from_mins(1),
             finalization_timeout: Duration::from_secs(5),
             temporary_bytes_limit: bound(67_108_864)?,

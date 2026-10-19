@@ -11,7 +11,6 @@ import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { deleteMatch } from "@/shared/api/matches";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
-import { heldEventDetailHref } from "@/shared/navigation/publicIdentifiers";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 type MatchDeletionCommand = {
@@ -21,7 +20,6 @@ type MatchDeletionCommand = {
 
 type MatchDeletionOptions = {
   heldEventId: string | undefined;
-  heldEventPublicId?: string | undefined;
   matchId: string;
 };
 
@@ -67,7 +65,7 @@ export function useMatchDeletion(options: MatchDeletionOptions): MatchDeletionCo
   const [open, setOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const destination = options.heldEventId
-    ? heldEventDetailHref(options.heldEventId, options.heldEventPublicId)
+    ? `/held-events/${encodeURIComponent(options.heldEventId)}`
     : "/matches";
 
   useEffect(() => {

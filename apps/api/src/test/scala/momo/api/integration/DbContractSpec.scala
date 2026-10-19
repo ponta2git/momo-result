@@ -52,6 +52,38 @@ final class DbContractSpec extends IntegrationSuite:
         )
       }
 
+  test("game-title creation initializes analysis state with an empty caller search path"):
+    val program =
+      for
+        _ <- sql"SELECT set_config('search_path', '', true)".query[String].unique
+        release <- sql"""
+        SELECT algorithm_version, artifact_schema_version, validation_contract_id
+        FROM public.series_analysis_release_state
+        WHERE singleton_key = 'current'
+      """.query[(String, Int, Option[String])].unique
+        _ <- sql"""
+        INSERT INTO public.game_titles (id, name, layout_family, display_order)
+        VALUES ('title_contract', 'Contract title', 'contract', 1)
+      """.update.run
+        state <- sql"""
+        SELECT input_revision, algorithm_version, artifact_schema_version,
+               validation_contract_id
+        FROM public.series_analysis_title_states
+        WHERE game_title_id = 'title_contract'
+      """.query[(Long, String, Int, Option[String])].unique
+      yield (release, state)
+
+    program.transact(transactor).map { case (release, state) =>
+      assertEquals(state, (0L, release._1, release._2, release._3))
+    }
+
+  test("the shared heavy-work slot starts available with its initial fence"):
+    sql"""
+      SELECT slot_key, task_kind, owner, fencing_token
+      FROM worker_execution_slots
+    """.query[(String, Option[String], Option[String], Long)].unique.transact(transactor).map:
+      row => assertEquals(row, ("shared-heavy-work", None, None, 0L))
+
   test("published analysis artifact headers and payloads are immutable until parent cleanup"):
     val artifactId = "artifact-contract-immutable"
     val unattestedArtifactId = "artifact-contract-unattested"
@@ -64,7 +96,7 @@ final class DbContractSpec extends IntegrationSuite:
       for
         _ <- sql"""
         INSERT INTO game_titles (id, name, layout_family, display_order)
-        VALUES ($titleId, 'Immutable contract title', 'world', 2)
+        VALUES ($titleId, 'Immutable contract title', 'contract', 2)
       """.update.run
         _ <- sql"""
         INSERT INTO series_analysis_jobs (

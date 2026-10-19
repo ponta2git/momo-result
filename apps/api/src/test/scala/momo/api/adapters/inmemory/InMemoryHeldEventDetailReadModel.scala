@@ -4,13 +4,7 @@ import cats.Monad
 import cats.syntax.all.*
 
 import momo.api.domain.ids.HeldEventId
-import momo.api.domain.{
-  HeldEventDetail,
-  HeldEventSummary,
-  PublicId,
-  RecordNavigation,
-  RecordNavigationOrder
-}
+import momo.api.domain.{HeldEventDetail, HeldEventSummary, RecordNavigation, RecordNavigationOrder}
 import momo.api.repositories.{HeldEventDetailReadModel, MatchListReadModel}
 
 final class InMemoryHeldEventDetailReadModel[F[_]: Monad](
@@ -19,10 +13,6 @@ final class InMemoryHeldEventDetailReadModel[F[_]: Monad](
     matchList: MatchListReadModel[F],
     metadata: InMemoryMatchMetadata[F],
 ) extends HeldEventDetailReadModel[F]:
-  override def findByPublicId(publicId: PublicId): F[Option[HeldEventDetail]] =
-    events.snapshot.flatMap(_.find(_.publicId.contains(publicId)).traverse(event => find(event.id)))
-      .map(_.flatten)
-
   override def find(id: HeldEventId): F[Option[HeldEventDetail]] =
     events.snapshot.map(records =>
       RecordNavigation.select(records.sorted(using RecordNavigationOrder.heldEvents))(_.id == id)

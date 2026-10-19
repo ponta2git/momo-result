@@ -24,33 +24,15 @@ final class CreateMasterSpec extends MomoCatsEffectSuite:
       create = CreateGameTitle[IO](titles, now)
       update = UpdateGameTitle[IO](titles)
       invalidCreate <- create
-        .run(CreateGameTitleCommand(
-          GameTitleId.unsafeFromString("title_invalid"),
-          "Invalid",
-          "auto"
-        ))
+        .run(CreateGameTitleCommand(GameTitleId.unsafeFromString("title_invalid"), "Invalid", "2"))
       _ <- create
         .run(CreateGameTitleCommand(GameTitleId.unsafeFromString("title_world"), "World", "world"))
       invalidUpdate <- update.run(
         UpdateGameTitleCommand(GameTitleId.unsafeFromString("title_world"), "World", "World DX")
       )
     yield
-      assertAppError(invalidCreate, "VALIDATION_FAILED", "layoutFamily must be")
-      assertAppError(invalidUpdate, "VALIDATION_FAILED", "layoutFamily must be")
-
-  test("game title writes canonicalize known old-client layout spellings"):
-    val titleId = GameTitleId.unsafeFromString("title_legacy")
-    for
-      titles <- InMemoryGameTitlesRepository.create[IO]
-      created <- CreateGameTitle[IO](titles, now)
-        .run(CreateGameTitleCommand(titleId, "Title", " MoMoTeTsU2\t"))
-      updated <- UpdateGameTitle[IO](titles)
-        .run(UpdateGameTitleCommand(titleId, "Title", " MOMOTETSU_REIWA "))
-      saved <- titles.find(titleId)
-    yield
-      assertEquals(created.map(_.layoutFamily), Right("momotetsu_2"))
-      assertEquals(updated.map(_.layoutFamily), Right("reiwa"))
-      assertEquals(saved.map(_.layoutFamily), Some("reiwa"))
+      assertAppError(invalidCreate, "VALIDATION_FAILED", "layoutFamily must match")
+      assertAppError(invalidUpdate, "VALIDATION_FAILED", "layoutFamily must match")
 
   test("map creation requires an existing game title"):
     for

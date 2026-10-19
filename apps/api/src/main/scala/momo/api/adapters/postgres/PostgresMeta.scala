@@ -12,7 +12,6 @@ import momo.api.domain.{
   MatchNoInEvent,
   OcrJobStatus,
   PlayOrder,
-  PublicId,
   Rank,
   ScreenType,
   StoredImageLocation
@@ -59,7 +58,6 @@ object PostgresMeta:
   given Meta[Rank] = Meta[Int].imap(Rank.unsafeFromInt)(_.value)
   given Meta[ManYen] = Meta[Int].imap(ManYen.unsafeFromInt)(_.value)
   given Meta[IncidentCount] = Meta[Int].imap(IncidentCount.unsafeFromInt)(_.value)
-  given Meta[PublicId] = Meta[Long].tiemap(PublicId.fromLong)(_.value)
 
   given Meta[ScreenType] = Meta[String]
     .tiemap(s => ScreenType.fromWire(s).toRight(s"unknown screen_type=$s"))(_.wire)

@@ -97,7 +97,6 @@ pub(crate) async fn run_cgroup_hard_limit_probe(
         outcome,
         status,
         child_limit,
-        cgroup.verified_cpu_limit_millis()?,
         memory_after.peak_bytes,
         limit_hit_count_delta,
         oom_kill_count_delta,
@@ -136,7 +135,6 @@ fn probe_result(outcome: ProbeOutcome, status: ExitStatus) -> HardLimitProbeResu
         child_exit_code: status.code(),
         child_signal: status.signal(),
         cgroup_limit_bytes: None,
-        cgroup_cpu_limit_millis: None,
         cgroup_peak_bytes: None,
         cgroup_limit_hit_count_delta: None,
         cgroup_oom_kill_count_delta: None,
@@ -148,14 +146,12 @@ fn cgroup_probe_result(
     outcome: ProbeOutcome,
     status: ExitStatus,
     limit_bytes: u64,
-    cpu_limit_millis: u32,
     peak_bytes: u64,
     limit_hit_count_delta: u64,
     oom_kill_count_delta: u64,
 ) -> HardLimitProbeResult {
     let mut result = probe_result(outcome, status);
     result.cgroup_limit_bytes = Some(limit_bytes);
-    result.cgroup_cpu_limit_millis = Some(cpu_limit_millis);
     result.cgroup_peak_bytes = Some(peak_bytes);
     result.cgroup_limit_hit_count_delta = Some(limit_hit_count_delta);
     result.cgroup_oom_kill_count_delta = Some(oom_kill_count_delta);

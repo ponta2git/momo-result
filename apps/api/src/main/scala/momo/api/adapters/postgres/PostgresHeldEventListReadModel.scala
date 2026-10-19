@@ -6,7 +6,6 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
-import momo.api.adapters.postgres.CanonicalIdentity.Entity
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.ids.HeldEventId
 import momo.api.domain.{
@@ -29,21 +28,13 @@ object PostgresHeldEventList:
       scope: HeldEventScopeSummary,
   )
 
-  private def matchingEvents(query: Option[String])(using ids: PostgresIdentities): Fragment =
+  private def matchingEvents(query: Option[String]): Fragment =
     query.map(_.trim).filter(_.nonEmpty).fold(Fragment.empty) { value =>
       val pattern = s"%$value%"
-      fr"WHERE ${ids.wireId("he")} ILIKE $pattern"
+      fr"WHERE he.id ILIKE $pattern"
     }
 
-  def list(query: Option[String], page: PageRequest)(using
-      identities: PostgresIdentities): ConnectionIO[HeldEventListPage] =
-    list(query, page, PostgresPublicIds.Legacy)
-
-  def list(
-      query: Option[String],
-      page: PageRequest,
-      publicIds: PostgresPublicIds
-  )(using ids: PostgresIdentities): ConnectionIO[HeldEventListPage] =
+  def list(query: Option[String], page: PageRequest): ConnectionIO[HeldEventListPage] =
     val where = matchingEvents(query)
     val matchFilter = query.map(_.trim).filter(_.nonEmpty).fold(Fragment.empty)(_ =>
       fr"JOIN held_events he ON he.id = m.held_event_id" ++ where
@@ -54,11 +45,8 @@ object PostgresHeldEventList:
       _ <- sql"SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY".update.run
       counts <- totals.query[(Int, Int)].unique
       events <-
-      (fr"SELECT ${ids.wireId("he")}, he.start_at," ++ publicIds.column(fr"he.public_id") ++
-        fr"FROM held_events he" ++ where ++
-        fr"""ORDER BY he.start_at DESC, ${ids.wireId(
-            "he"
-          )} COLLATE "C" DESC LIMIT ${page.pageSize} OFFSET ${page.offset}""")
+      (fr"SELECT he.id, he.start_at FROM held_events he" ++ where ++
+        fr"""ORDER BY he.start_at DESC, he.id COLLATE "C" DESC LIMIT ${page.pageSize} OFFSET ${page.offset}""")
         .query[HeldEvent].to[List]
       stats <- scopeStats(events.map(_.id))
       byEvent = stats.groupMap(_.heldEventId)(identity)
@@ -74,21 +62,16 @@ object PostgresHeldEventList:
       }
     yield HeldEventListPage(PagedResult(items, page, counts._1), counts._2)
 
-  private def scopeStats(eventIds: List[HeldEventId])(using
-      ids: PostgresIdentities): ConnectionIO[List[ScopeStats]] =
-    if eventIds.isEmpty then List.empty[ScopeStats].pure[ConnectionIO]
+  private def scopeStats(ids: List[HeldEventId]): ConnectionIO[List[ScopeStats]] =
+    if ids.isEmpty then List.empty[ScopeStats].pure[ConnectionIO]
     else
-      val values = ids.lookupArray(Entity.HeldEvents, eventIds.map(_.value))
+      val values = ids.map(_.value).toArray
       val nameLimit = PostgresReadBudget.NameCodePoints
       PostgresReadBudget.guardedRows[ScopeStats](
         sql"""
         SELECT COALESCE(char_length(gt.name) <= $nameLimit, true)
                  AND COALESCE(char_length(season.name) <= $nameLimit, true),
-               ${ids.wireReference(Entity.HeldEvents, fr"scoped.held_event_id")},
-               scoped.confirmed, scoped.count, scoped.max_no,
-               ${ids.wireReference(Entity.GameTitles, fr"scoped.game_title_id")},
-               ${ids.wireReference(Entity.SeasonMasters, fr"scoped.season_master_id")},
-               LEFT(gt.name, $nameLimit), LEFT(season.name, $nameLimit)
+               scoped.*, LEFT(gt.name, $nameLimit), LEFT(season.name, $nameLimit)
         FROM (
           SELECT held_event_id, true AS confirmed, COUNT(*)::int AS count,
                  MAX(match_no_in_event)::int AS max_no, game_title_id, season_master_id
@@ -108,11 +91,7 @@ object PostgresHeldEventList:
         "Held-event scopes"
       )
 
-final class PostgresHeldEventListReadModel[F[_]: MonadCancelThrow](
-    transactor: Transactor[F],
-    publicIds: PostgresPublicIds = PostgresPublicIds.Legacy,
-    identities: PostgresIdentities = PostgresIdentities.Legacy,
-) extends HeldEventListReadModel[F]:
-  private given PostgresIdentities = identities
+final class PostgresHeldEventListReadModel[F[_]: MonadCancelThrow](transactor: Transactor[F])
+    extends HeldEventListReadModel[F]:
   override def list(query: Option[String], page: PageRequest): F[HeldEventListPage] =
-    PostgresHeldEventList.list(query, page, publicIds).transact(transactor)
+    PostgresHeldEventList.list(query, page).transact(transactor)

@@ -32,10 +32,8 @@ import { PageHeader } from "@/shared/ui/layout/PageHeader";
 import { contentText } from "@/shared/ui/typography";
 
 export function MatchDetailPage() {
-  const { matchId = "", publicId } = useParams<{ matchId: string; publicId: string }>();
-  return (
-    <MatchDetailScreen key={publicId === undefined ? `legacy:${matchId}` : `public:${publicId}`} />
-  );
+  const { matchId = "" } = useParams<{ matchId: string }>();
+  return <MatchDetailScreen key={matchId} />;
 }
 
 function MatchDetailScreen() {

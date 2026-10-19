@@ -1,12 +1,7 @@
 import { keepPreviousData, queryOptions } from "@tanstack/react-query";
 
 import { listLoginAccounts } from "@/shared/api/adminAccounts";
-import {
-  loadHeldEventByPublicId,
-  loadHeldEventDetail,
-  loadMatchByPublicId,
-  loadMatchDetail,
-} from "@/shared/api/detailReadResult";
+import { loadHeldEventDetail, loadMatchDetail } from "@/shared/api/detailReadResult";
 import { getHeldEventSummary, listHeldEvents } from "@/shared/api/heldEvents";
 import type { ListHeldEventsQuery } from "@/shared/api/heldEvents";
 import {
@@ -65,25 +60,15 @@ function normalizeHeldEventsQuery(query: ListHeldEventsQuery): ListHeldEventsQue
 }
 
 export function heldEventDetailQueryOptions(heldEventId: string | undefined, enabled = true) {
-  return heldEventRouteDetailQueryOptions(heldEventId, undefined, enabled);
-}
-
-export function heldEventRouteDetailQueryOptions(
-  heldEventId: string | undefined,
-  publicId: string | undefined,
-  enabled = true,
-) {
   return queryOptions({
-    queryKey:
-      publicId === undefined
-        ? heldEventKeys.detail(heldEventId)
-        : heldEventKeys.publicDetail(publicId),
+    queryKey: heldEventKeys.detail(heldEventId),
     queryFn: ({ signal }) => {
-      if (publicId !== undefined) return loadHeldEventByPublicId(publicId, { signal });
-      if (!heldEventId) throw new Error("held event detail query is not ready");
+      if (!heldEventId) {
+        throw new Error("held event detail query is not ready");
+      }
       return loadHeldEventDetail(heldEventId, { signal });
     },
-    enabled: enabled && Boolean(publicId ?? heldEventId),
+    enabled: enabled && Boolean(heldEventId),
   });
 }
 
@@ -162,21 +147,14 @@ export function matchDetailPrefetchQueryOptions(matchId: string | undefined) {
 }
 
 function matchDetailQueryDefinition(matchId: string | undefined) {
-  return matchRouteDetailQueryOptions(matchId, undefined);
-}
-
-export function matchRouteDetailQueryOptions(
-  matchId: string | undefined,
-  publicId: string | undefined,
-) {
   return queryOptions({
-    queryKey: publicId === undefined ? matchKeys.detail(matchId) : matchKeys.publicDetail(publicId),
+    queryKey: matchKeys.detail(matchId),
     queryFn: ({ signal }) => {
-      if (publicId !== undefined) return loadMatchByPublicId(publicId, { signal });
-      if (!matchId) throw new Error("match detail query is not ready");
+      if (!matchId) {
+        throw new Error("match detail query is not ready");
+      }
       return loadMatchDetail(matchId, { signal });
     },
-    enabled: Boolean(publicId ?? matchId),
   });
 }
 

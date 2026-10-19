@@ -8,7 +8,6 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
-import momo.api.adapters.postgres.CanonicalIdentity.Entity
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.*
 import momo.api.domain.ids.*
@@ -24,12 +23,6 @@ object PostgresGameTitles:
       createdAt: Instant,
   )
 
-  private final case class AnalysisRelease(
-      algorithmVersion: String,
-      artifactSchemaVersion: Int,
-      validationContractId: Option[String],
-  )
-
   private def fromRow(row: GameTitleRow): GameTitle = GameTitle(
     id = row.id,
     name = row.name,
@@ -38,142 +31,109 @@ object PostgresGameTitles:
     createdAt = row.createdAt,
   )
 
-  def alg(using ids: PostgresIdentities): GameTitlesAlg[ConnectionIO] =
-    new GameTitlesAlg[ConnectionIO]:
-      override def list: ConnectionIO[List[GameTitle]] =
-        val nameLimit = PostgresReadBudget.NameCodePoints
-        val keyLimit = PostgresReadBudget.KeyCodePoints
-        PostgresReadBudget.guardedRows[GameTitleRow](
-          sql"""
+  val alg: GameTitlesAlg[ConnectionIO] = new GameTitlesAlg[ConnectionIO]:
+    override def list: ConnectionIO[List[GameTitle]] =
+      val nameLimit = PostgresReadBudget.NameCodePoints
+      val keyLimit = PostgresReadBudget.KeyCodePoints
+      PostgresReadBudget.guardedRows[GameTitleRow](
+        sql"""
         SELECT char_length(name) <= $nameLimit AND char_length(layout_family) <= $keyLimit,
-               ${ids.wireId(
-              "game_titles"
-            )}, LEFT(name, $nameLimit), LEFT(layout_family, $keyLimit), display_order, created_at
-        FROM game_titles ORDER BY display_order, created_at, ${ids.wireId("game_titles")}
+               id, LEFT(name, $nameLimit), LEFT(layout_family, $keyLimit), display_order, created_at
+        FROM game_titles ORDER BY display_order, created_at, id
       """,
-          PostgresReadBudget.CatalogRows,
-          "Game-title catalog"
-        ).map(_.map(fromRow))
+        PostgresReadBudget.CatalogRows,
+        "Game-title catalog"
+      ).map(_.map(fromRow))
 
-      override def find(id: GameTitleId): ConnectionIO[Option[GameTitle]] =
-        val nameLimit = PostgresReadBudget.NameCodePoints
-        val keyLimit = PostgresReadBudget.KeyCodePoints
-        PostgresReadBudget.guardedRows[GameTitleRow](
-          fr"""SELECT char_length(name) <= $nameLimit AND char_length(layout_family) <= $keyLimit,
-          ${ids.wireId("game_titles")}, LEFT(name, $nameLimit), LEFT(layout_family, $keyLimit), display_order, created_at FROM game_titles WHERE id = ${ids.lookup(
-              Entity.GameTitles,
-              id.value
-            )}""",
-          1,
-          "Game-title detail",
-        ).map(_.headOption.map(fromRow))
+    override def find(id: GameTitleId): ConnectionIO[Option[GameTitle]] =
+      val nameLimit = PostgresReadBudget.NameCodePoints
+      val keyLimit = PostgresReadBudget.KeyCodePoints
+      PostgresReadBudget.guardedRows[GameTitleRow](
+        fr"""SELECT char_length(name) <= $nameLimit AND char_length(layout_family) <= $keyLimit,
+          id, LEFT(name, $nameLimit), LEFT(layout_family, $keyLimit), display_order, created_at FROM game_titles WHERE id = $id""",
+        1,
+        "Game-title detail",
+      ).map(_.headOption.map(fromRow))
 
-      override def createWithNextDisplayOrder(title: GameTitle): ConnectionIO[GameTitle] =
-        val lockKey = "momo:game_titles:display_order"
-        // The allocation needs a new READ COMMITTED snapshot after any lock wait.
-        (for
-          newId <- ids.newId(title.id.value)
-          _ <- sql"SELECT pg_advisory_xact_lock(hashtext($lockKey)::bigint)".query[Unit].unique
-          // Serialize creation with release promotion before either the title or its state exists.
-          release <- sql"""
-          SELECT algorithm_version, artifact_schema_version, validation_contract_id
-          FROM series_analysis_release_state WHERE singleton_key = 'current' FOR SHARE
-        """.query[AnalysisRelease].unique
-          row <- sql"""
-        INSERT INTO game_titles (${ids.idColumns}, name, layout_family, display_order, created_at)
-        SELECT $newId, ${title.name}, ${title.layoutFamily}, COALESCE(MAX(display_order), 0) + 1, ${title
-              .createdAt}
+    override def createWithNextDisplayOrder(title: GameTitle): ConnectionIO[GameTitle] =
+      val lockKey = "momo:game_titles:display_order"
+      // The allocation needs a new READ COMMITTED snapshot after any lock wait.
+      sql"SELECT pg_advisory_xact_lock(hashtext($lockKey)::bigint)".query[Unit].unique *> sql"""
+        INSERT INTO game_titles (id, name, layout_family, display_order, created_at)
+        SELECT ${title.id}, ${title.name}, ${title.layoutFamily}, COALESCE(MAX(display_order), 0) + 1, ${title
+          .createdAt}
         FROM game_titles
-        RETURNING ${ids.wireId("game_titles")}, name, layout_family, display_order, created_at
-      """.query[GameTitleRow].unique
-          // Only this creation transaction can prove there was no earlier analysis input.
-          // The conflict branch supports the old creation trigger without changing its tuple.
-          _ <- sql"""
-          INSERT INTO series_analysis_title_states
-            (game_title_id, algorithm_version, artifact_schema_version,
-             validation_contract_id, notification_baseline_state)
-          VALUES (${ids.lookup(
-              Entity.GameTitles,
-              row.id.value
-            )}, ${release.algorithmVersion}, ${release.artifactSchemaVersion},
-            ${release.validationContractId}, 'initial')
-          ON CONFLICT (game_title_id) DO UPDATE SET notification_baseline_state = 'initial'
-          WHERE series_analysis_title_states.algorithm_version = EXCLUDED.algorithm_version
-            AND series_analysis_title_states.artifact_schema_version = EXCLUDED.artifact_schema_version
-            AND series_analysis_title_states.validation_contract_id
-              IS NOT DISTINCT FROM EXCLUDED.validation_contract_id
+        RETURNING id, name, layout_family, display_order, created_at
+      """.query[GameTitleRow].unique.flatTap { row =>
+        // Only this creation transaction can prove there was no earlier analysis input.
+        sql"""
+          UPDATE series_analysis_title_states
+          SET notification_baseline_state = 'initial'
+          WHERE game_title_id = ${row.id}
         """.update.run.flatMap {
-            case 1 => ().pure[ConnectionIO]
-            case _ =>
-              new IllegalStateException("new game title analysis state does not match release")
-                .raiseError[ConnectionIO, Unit]
-          }
-        yield fromRow(row)).exceptSomeSqlState {
-          case state if isUniqueViolation(state) =>
-            conflict(s"game_title already exists: ${title.id.value} or ${title.name}")
+          case 1 => ().pure[ConnectionIO]
+          case _ => new IllegalStateException("new game title analysis state is missing")
+              .raiseError[ConnectionIO, Unit]
         }
-
-      override def update(title: GameTitle): ConnectionIO[Unit] = sql"""
-        UPDATE game_titles
-        SET name = ${title.name}, layout_family = ${title.layoutFamily}
-        WHERE id = ${ids.lookup(Entity.GameTitles, title.id.value)}
-      """.update.run.flatMap {
-        case 1 => ().pure[ConnectionIO]
-        case _ => notFound("game title", title.id.value)
-      }.exceptSomeSqlState {
+      }.map(fromRow).exceptSomeSqlState {
         case state if isUniqueViolation(state) =>
           conflict(s"game_title already exists: ${title.id.value} or ${title.name}")
       }
 
-      override def delete(id: GameTitleId): ConnectionIO[Unit] = (for
-        _ <- prepareAnalysisDeletion(id)
-        deletedDrafts <-
-          deleteDiscardedDrafts(fr"game_title_id = ${ids.lookup(Entity.GameTitles, id.value)}")
-        deleted <-
-          sql"DELETE FROM game_titles WHERE id = ${ids.lookup(Entity.GameTitles, id.value)}".update.run
-        _ <- deleted match
-          case 1 => ().pure[ConnectionIO]
-          case _ => notFound("game title", id.value)
-        _ <- PostgresResultNotificationCancellation.afterDeletion(deletedDrafts, Nil)
-      yield ()).exceptSomeSqlState {
-        case state if isForeignKeyViolation(state) => conflict("game title is still referenced.")
-      }
+    override def update(title: GameTitle): ConnectionIO[Unit] = sql"""
+        UPDATE game_titles
+        SET name = ${title.name}, layout_family = ${title.layoutFamily}
+        WHERE id = ${title.id}
+      """.update.run.flatMap {
+      case 1 => ().pure[ConnectionIO]
+      case _ => notFound("game title", title.id.value)
+    }.exceptSomeSqlState {
+      case state if isUniqueViolation(state) =>
+        conflict(s"game_title already exists: ${title.id.value} or ${title.name}")
+    }
 
-  private def prepareAnalysisDeletion(id: GameTitleId)(using
-      ids: PostgresIdentities): ConnectionIO[Unit] =
+    override def delete(id: GameTitleId): ConnectionIO[Unit] = (for
+      _ <- prepareAnalysisDeletion(id)
+      deletedDrafts <- deleteDiscardedDrafts(fr"game_title_id = $id")
+      deleted <- sql"DELETE FROM game_titles WHERE id = $id".update.run
+      _ <- deleted match
+        case 1 => ().pure[ConnectionIO]
+        case _ => notFound("game title", id.value)
+      _ <- PostgresResultNotificationCancellation.afterDeletion(deletedDrafts, Nil)
+    yield ()).exceptSomeSqlState {
+      case state if isForeignKeyViolation(state) => conflict("game title is still referenced.")
+    }
+
+  private def prepareAnalysisDeletion(id: GameTitleId): ConnectionIO[Unit] =
     for
       now <- sql"SELECT now()".query[Instant].unique
       _ <- sql"""
-        SELECT ${ids.wireReference(Entity.GameTitles, fr"game_title_id")}
+        SELECT game_title_id
         FROM series_analysis_title_states
-        WHERE game_title_id = ${ids.lookup(Entity.GameTitles, id.value)}
+        WHERE game_title_id = $id
         FOR UPDATE
       """.query[GameTitleId].option
       // A match writer can already own the title's FK KEY SHARE while waiting for the
       // analysis state above. Never wait for that writer while holding its next lock.
-      _ <-
-        sql"SELECT ${ids.wireId("game_titles")} FROM game_titles WHERE id = ${ids.lookup(Entity.GameTitles, id.value)} FOR UPDATE NOWAIT"
-          .query[GameTitleId].option
+      _ <- sql"SELECT id FROM game_titles WHERE id = $id FOR UPDATE NOWAIT"
+        .query[GameTitleId].option
       _ <- sql"""
-        SELECT ${ids.wireId("series_analysis_jobs")}
+        SELECT id
         FROM series_analysis_jobs
-        WHERE game_title_id = ${ids.lookup(
-          Entity.GameTitles,
-          id.value
-        )} AND status IN ('queued', 'running')
+        WHERE game_title_id = $id AND status IN ('queued', 'running')
         FOR UPDATE
       """.query[String].to[List]
       _ <- sql"""
         UPDATE series_analysis_job_requests
         SET status = 'fulfilled', fulfilled_at = COALESCE(fulfilled_at, $now)
-        WHERE game_title_id = ${ids.lookup(Entity.GameTitles, id.value)} AND status <> 'fulfilled'
+        WHERE game_title_id = $id AND status <> 'fulfilled'
       """.update.run
       affectedCampaigns <- sql"""
         UPDATE series_analysis_campaign_targets
         SET status = 'skipped_title_deleted', updated_at = $now
-        WHERE game_title_id = ${ids.lookup(Entity.GameTitles, id.value)}
+        WHERE game_title_id = $id
           AND status NOT IN ('succeeded', 'failed', 'skipped_title_deleted')
-        RETURNING ${ids.wireReference(Entity.AnalysisCampaigns, fr"campaign_id")}
+        RETURNING campaign_id
       """.query[String].to[List]
       _ <- affectedCampaigns.distinct.sorted.traverse_(campaignId =>
         PostgresSeriesAnalysisCampaignStatusOps.refresh(campaignId, now)
@@ -182,7 +142,7 @@ object PostgresGameTitles:
         UPDATE series_analysis_operation_requests o
         SET status = 'terminal', finished_at = COALESCE(o.finished_at, $now)
         WHERE o.scope = 'title'
-          AND o.game_title_id = ${ids.lookup(Entity.GameTitles, id.value)}
+          AND o.game_title_id = $id
           AND o.status <> 'terminal'
           AND NOT EXISTS (
             SELECT 1 FROM series_analysis_job_requests r
@@ -198,17 +158,14 @@ object PostgresGameTitles:
             pending_work = false,
             pending_forced_run_count = 0,
             updated_at = $now
-        WHERE game_title_id = ${ids.lookup(Entity.GameTitles, id.value)}
+        WHERE game_title_id = $id
       """.update.run
     yield ()
 
 end PostgresGameTitles
 
-final class PostgresGameTitlesRepository[F[_]: MonadCancelThrow](
-    transactor: Transactor[F],
-    identities: PostgresIdentities = PostgresIdentities.Legacy,
-) extends GameTitlesRepository[F]:
-  private given PostgresIdentities = identities
+final class PostgresGameTitlesRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
+    extends GameTitlesRepository[F]:
   private val delegate: GameTitlesRepository[F] = GameTitlesRepository
     .fromAlg(PostgresGameTitles.alg, transactor.trans)
 

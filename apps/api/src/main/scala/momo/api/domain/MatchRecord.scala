@@ -76,7 +76,7 @@ final case class IncidentCounts(
 ):
   /**
    * Pairs each count with its [[IncidentKind]] in the canonical order. The repository layer is
-   * responsible for resolving each semantic kind to its current incident master row.
+   * responsible for translating each kind to the corresponding `incident_masters.id`.
    */
   def entriesByKind: List[(IncidentKind, IncidentCount)] = List(
     IncidentKind.Destination -> destination,

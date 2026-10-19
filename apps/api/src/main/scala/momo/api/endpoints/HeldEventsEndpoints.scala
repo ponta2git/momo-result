@@ -37,16 +37,6 @@ object HeldEventsEndpoints:
     .out(jsonBody[HeldEventDetailResponse])
     .tag("held-events")
 
-  val getByPublicId: CommonEndpoint.SecuredRead[String, HeldEventDetailResponse] = endpoint
-    .get
-    .in("api" / "public" / "held-events" / path[String]("publicId").description(
-      "Canonical positive decimal string, from 1 through 9223372036854775807."
-    ))
-    .securityIn(CommonEndpoint.accountHeader)
-    .errorOut(CommonEndpoint.errorOut)
-    .out(jsonBody[HeldEventDetailResponse])
-    .tag("held-events")
-
   val summary: CommonEndpoint.SecuredRead[GetInput, HeldEventSummaryResponse] = endpoint
     .get
     .in("api" / "held-events" / path[String]("heldEventId") / "summary")

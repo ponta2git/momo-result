@@ -45,17 +45,13 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
     for
       fixture <- Fixture.create
       _ <- fixture.seedPrereqs()
-      _ <- fixture.gameTitles.update(GameTitle(titleId, "World", "default", 1, createdAt))
       initialNote = MatchNote(
         body = MatchNoteBody.fromRequiredString("保存済みメモ").toOption,
         version = MatchNoteVersion.Initial.next,
         updatedByAccountId = Some(AccountId.unsafeFromString("account_ponta")),
         updatedAt = Some(createdAt),
       )
-      _ <- fixture.matches.create(sampleMatch(
-        matchId,
-        matchNoInEvent = 1
-      ).copy(note = initialNote, layoutFamily = "momotetsu_world"))
+      _ <- fixture.matches.create(sampleMatch(matchId, matchNoInEvent = 1).copy(note = initialNote))
       result <- fixture.usecase.run(
         matchId,
         command(

@@ -34,10 +34,6 @@ const noManagementItems: readonly GlobalNavItem[] = [];
 export function AppGlobalNav() {
   const auth = useAuthSession();
   const reviewingMatch = useMatch("/review/:matchSessionId") !== null;
-  const publicMatch = useMatch("/m/:publicId") !== null;
-  const publicHeldEvent = useMatch("/e/:publicId") !== null;
-  const currentArea =
-    reviewingMatch || publicMatch ? "/matches" : publicHeldEvent ? "/held-events" : undefined;
   const canLogout = import.meta.env.DEV && auth.isAuthenticated && Boolean(auth.logout);
   const logoutFailed = Boolean(auth.logoutError);
   const sessionLabel =
@@ -90,8 +86,8 @@ export function AppGlobalNav() {
       }
       environmentLabel={import.meta.env.DEV ? "DEV" : undefined}
       items={
-        currentArea
-          ? primaryItems.map((item) => ({ ...item, current: item.to === currentArea }))
+        reviewingMatch
+          ? primaryItems.map((item) => ({ ...item, current: item.to === "/matches" }))
           : primaryItems
       }
       managementItems={

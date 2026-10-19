@@ -21,16 +21,16 @@ final class CreateMatchDraftSpec extends MomoCatsEffectSuite:
   private val accountId = AccountId.unsafeFromString("account_ponta")
   private val memberId = Some(MemberId.unsafeFromString("member_ponta"))
 
-  test("stores a canonical layout for known old-client spelling"):
+  test("trims and stores layout family stable keys"):
     for
       fixture <- Fixture.create
       result <- fixture.usecase
-        .run(blankCommand.copy(layoutFamily = Some(" MoMoTeTsU2 ")), accountId, memberId)
+        .run(blankCommand.copy(layoutFamily = Some(" world ")), accountId, memberId)
       found <- fixture.matchDrafts.find(draftId)
     yield
       val draft = assertRight(result)
-      assertEquals(draft.layoutFamily, Some("momotetsu_2"))
-      assertEquals(found.flatMap(_.layoutFamily), Some("momotetsu_2"))
+      assertEquals(draft.layoutFamily, Some("world"))
+      assertEquals(found.flatMap(_.layoutFamily), Some("world"))
 
   test("rejects invalid layout family keys"):
     for
@@ -39,7 +39,7 @@ final class CreateMatchDraftSpec extends MomoCatsEffectSuite:
         .run(blankCommand.copy(layoutFamily = Some("World DX")), accountId, memberId)
       found <- fixture.matchDrafts.find(draftId)
     yield
-      assertAppError(result, "VALIDATION_FAILED", "layoutFamily must be")
+      assertAppError(result, "VALIDATION_FAILED", "layoutFamily must match")
       assertEquals(found, None)
 
   private def blankCommand: CreateMatchDraftCommand = CreateMatchDraftCommand(

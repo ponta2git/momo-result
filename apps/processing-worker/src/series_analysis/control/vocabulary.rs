@@ -4,6 +4,7 @@ pub(super) enum AttemptOutcome {
     Failed,
     TimedOut,
     Superseded,
+    Preempted,
     GracefulStop,
     OwnerLost,
 }
@@ -15,6 +16,7 @@ impl AttemptOutcome {
             Self::Failed => "failed",
             Self::TimedOut => "timed_out",
             Self::Superseded => "superseded",
+            Self::Preempted => "preempted",
             Self::GracefulStop => "graceful_stop",
             Self::OwnerLost => "owner_lost",
         }
@@ -53,18 +55,21 @@ impl ResultDisposition {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum RequeueCause {
+    Preempted,
     GracefulStop,
 }
 
 impl RequeueCause {
     pub(super) const fn attempt_outcome(self) -> AttemptOutcome {
         match self {
+            Self::Preempted => AttemptOutcome::Preempted,
             Self::GracefulStop => AttemptOutcome::GracefulStop,
         }
     }
 
     pub(crate) const fn wire(self) -> &'static str {
         match self {
+            Self::Preempted => "preempted",
             Self::GracefulStop => "graceful_stop",
         }
     }
@@ -160,6 +165,7 @@ mod tests {
             (AttemptOutcome::Failed, "failed"),
             (AttemptOutcome::TimedOut, "timed_out"),
             (AttemptOutcome::Superseded, "superseded"),
+            (AttemptOutcome::Preempted, "preempted"),
             (AttemptOutcome::GracefulStop, "graceful_stop"),
             (AttemptOutcome::OwnerLost, "owner_lost"),
         ];

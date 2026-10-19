@@ -6,20 +6,12 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
-import momo.api.adapters.postgres.CanonicalIdentity.Entity
-
 private[postgres] object PostgresSeriesAnalysisCampaignStatusOps:
-  def refresh(campaignId: String, now: Instant)(using
-      identities: PostgresIdentities): ConnectionIO[Unit] =
+  def refresh(campaignId: String, now: Instant): ConnectionIO[Unit] =
     for
       // A waiting aggregate UPDATE keeps its old snapshot. Lock first, then count committed targets.
       _ <- sql"""
-        SELECT ${identities.wireId(
-          "c"
-        )} FROM series_analysis_campaigns c WHERE id = ${identities.lookup(
-          Entity.AnalysisCampaigns,
-          campaignId
-        )} FOR NO KEY UPDATE
+        SELECT id FROM series_analysis_campaigns WHERE id = $campaignId FOR NO KEY UPDATE
       """.query[String].option
       _ <- sql"""
         WITH counts AS (
@@ -31,7 +23,7 @@ private[postgres] object PostgresSeriesAnalysisCampaignStatusOps:
             COUNT(*) FILTER (WHERE status = 'failed')::int AS failed_count,
             COUNT(*) FILTER (WHERE status = 'skipped_title_deleted')::int AS skipped_count
           FROM series_analysis_campaign_targets
-          WHERE campaign_id = ${identities.lookup(Entity.AnalysisCampaigns, campaignId)}
+          WHERE campaign_id = $campaignId
         )
         UPDATE series_analysis_campaigns c
         SET expanded_count = counts.expanded_count,
@@ -48,7 +40,7 @@ private[postgres] object PostgresSeriesAnalysisCampaignStatusOps:
               ELSE NULL
             END
         FROM counts
-        WHERE c.id = ${identities.lookup(Entity.AnalysisCampaigns, campaignId)}
+        WHERE c.id = $campaignId
       """.update.run
       _ <- sql"""
         UPDATE series_analysis_operation_requests o
@@ -58,7 +50,7 @@ private[postgres] object PostgresSeriesAnalysisCampaignStatusOps:
               ELSE NULL
             END
         FROM series_analysis_campaigns c
-        WHERE c.id = ${identities.lookup(Entity.AnalysisCampaigns, campaignId)}
+        WHERE c.id = $campaignId
           AND o.id = c.operation_request_id
       """.update.run
     yield ()

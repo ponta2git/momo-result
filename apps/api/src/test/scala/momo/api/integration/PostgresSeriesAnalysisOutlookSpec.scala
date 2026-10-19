@@ -181,7 +181,7 @@ final class PostgresSeriesAnalysisOutlookSpec extends IntegrationSuite with Json
         sql"""UPDATE series_analysis_title_states SET current_artifact_id = $artifactId,
       pending_work = false WHERE game_title_id = $title""".update.run.void
     new PostgresGameTitlesRepository[IO](transactor).createWithNextDisplayOrder(
-      GameTitle(title, "見通し読取", "momotetsu_2", 1, Instant.parse("2026-01-01T00:00:00Z"))
+      GameTitle(title, "見通し読取", "momotetsu2", 1, Instant.parse("2026-01-01T00:00:00Z"))
     ) *>
       (header *> aggregate *> summaries *> references *> publish).transact(transactor)
 

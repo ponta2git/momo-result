@@ -12,9 +12,7 @@
     "layoutFamily": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 64,
-      "description": "Code-owned layout momotetsu_2, world or reiwa. Known legacy aliases are read without rewriting persisted hints. An omitted hint allows automatic selection; auto is not a layout value.",
-      "pattern": "^[ \\t\\r\\n\\f\\u000b]*(?:[mM][oO][mM][oO][tT][eE][tT][sS][uU]_2|[mM][oO][mM][oO][tT][eE][tT][sS][uU]2|2|[wW][oO][rR][lL][dD]|[mM][oO][mM][oO][tT][eE][tT][sS][uU]_[wW][oO][rR][lL][dD]|[dD][eE][fF][aA][uU][lL][tT]|[rR][eE][iI][wW][aA]|[mM][oO][mM][oO][tT][eE][tT][sS][uU]_[rR][eE][iI][wW][aA])[ \\t\\r\\n\\f\\u000b]*(?![\\s\\S])"
+      "maxLength": 64
     },
     "knownPlayerAliases": {
       "type": "array",

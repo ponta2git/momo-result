@@ -5,7 +5,6 @@ import scala.concurrent.duration.*
 import cats.effect.std.SecureRandom
 import cats.effect.{Async, Clock, Deferred, Resource}
 import cats.syntax.all.*
-import doobie.implicits.*
 import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 
@@ -26,7 +25,6 @@ import momo.api.auth.DiscordOAuthClient
 import momo.api.config.{AppConfig, DatabaseConfig, SourceImageStorageConfig}
 import momo.api.db.Database
 import momo.api.domain.ids.ImageId
-import momo.api.maintenance.MaintenanceDrain
 import momo.api.ports.storage.{
   ImageDiskUsage,
   ImageOrphanCleaner,
@@ -43,70 +41,49 @@ private[bootstrap] object PostgresApiRuntime:
       config: AppConfig,
       db: DatabaseConfig,
       oauthClient: DiscordOAuthClient[F],
-      maintenance: MaintenanceDrain[F],
   ): Resource[F, ApiApp.WiredRuntime[F]] = (
     Database.transactor[F](db),
     RuntimeInfrastructure.resource[F](config, Clock[F].realTimeInstant),
-  ).tupled.evalMap { (transactor, infrastructure) =>
-    (for
-      identities <- PostgresIdentities.discover
-      publicIds <- PostgresPublicIds.discover
-    yield (transactor, infrastructure, publicIds, identities)).transact(transactor)
-  }.flatMap { (transactor, infrastructure, publicIds, identities) =>
+  ).tupled.flatMap { (transactor, infrastructure) =>
     given LoggerFactory[F] = Slf4jFactory.create[F]
     val oauthStateReplayGuard = new PostgresOAuthStateReplayGuard[F](transactor)
-    val jobsBase: OcrJobsRepository[F] =
-      PostgresOcrJobsRepository[F](transactor, identities = identities)
-    val drafts: OcrDraftsRepository[F] =
-      PostgresOcrDraftsRepository[F](transactor, identities = identities)
+    val jobsBase: OcrJobsRepository[F] = PostgresOcrJobsRepository[F](transactor)
+    val drafts: OcrDraftsRepository[F] = PostgresOcrDraftsRepository[F](transactor)
     val ocrJobCreationStoreBase: OcrJobCreationStore[F] =
-      PostgresOcrJobCreationStore[F](transactor, identities = identities)
+      PostgresOcrJobCreationStore[F](transactor)
     val jobNotifier =
       PostgresWorkerNotifier[F](transactor, PostgresWorkerNotifier.Channel.ProcessingJobs)
     val submissionNotifier =
       PostgresWorkerNotifier[F](transactor, PostgresWorkerNotifier.Channel.OcrSubmissions)
-    val heldEvents: HeldEventsRepository[F] =
-      PostgresHeldEventsRepository[F](transactor, publicIds, identities)
+    val heldEvents: HeldEventsRepository[F] = PostgresHeldEventsRepository[F](transactor)
     val heldEventDeletion: HeldEventDeletionRepository[F] =
-      PostgresHeldEventDeletionRepository[F](transactor, identities = identities)
-    val matchesBase: MatchesRepository[F] =
-      PostgresMatchesRepository[F](transactor, identities = identities)
-    val matchNotes: MatchNotesRepository[F] =
-      PostgresMatchNotesRepository[F](transactor, identities = identities)
-    val matchExports: MatchExportsRepository[F] =
-      PostgresMatchExportsRepository[F](transactor, identities = identities)
-    val matchDrafts: MatchDraftsRepository[F] =
-      PostgresMatchDraftsRepository[F](transactor, identities = identities)
+      PostgresHeldEventDeletionRepository[F](transactor)
+    val matchesBase: MatchesRepository[F] = PostgresMatchesRepository[F](transactor)
+    val matchNotes: MatchNotesRepository[F] = PostgresMatchNotesRepository[F](transactor)
+    val matchExports: MatchExportsRepository[F] = PostgresMatchExportsRepository[F](transactor)
+    val matchDrafts: MatchDraftsRepository[F] = PostgresMatchDraftsRepository[F](transactor)
     val matchDraftCancellation: MatchDraftCancellationRepository[F] =
-      PostgresMatchDraftCancellationRepository[F](transactor, identities = identities)
-    val matchList: MatchListReadModel[F] =
-      PostgresMatchListReadModel[F](transactor, publicIds, identities)
+      PostgresMatchDraftCancellationRepository[F](transactor)
+    val matchList: MatchListReadModel[F] = PostgresMatchListReadModel[F](transactor)
     val matchConfirmationBase: MatchConfirmationRepository[F] =
-      PostgresMatchConfirmationRepository[F](transactor, identities = identities)
-    val appSessions: AppSessionsRepository[F] =
-      PostgresAppSessionsRepository[F](transactor, identities = identities)
-    val sessionAccounts: SessionAccountLookup[F] =
-      PostgresSessionAccountLookup[F](transactor, identities = identities)
-    val members: MembersRepository[F] =
-      PostgresMembersRepository[F](transactor, identities = identities)
+      PostgresMatchConfirmationRepository[F](transactor)
+    val appSessions: AppSessionsRepository[F] = PostgresAppSessionsRepository[F](transactor)
+    val sessionAccounts: SessionAccountLookup[F] = PostgresSessionAccountLookup[F](transactor)
+    val members: MembersRepository[F] = PostgresMembersRepository[F](transactor)
     val loginAccounts: LoginAccountsRepository[F] =
-      PostgresLoginAccountsRepository[F](transactor, identities = identities)
+      PostgresLoginAccountsRepository[F](transactor)
     val loginAccountAdministration =
-      PostgresLoginAccountAdministrationRepository[F](transactor, identities = identities)
-    val gameTitles: GameTitlesRepository[F] =
-      PostgresGameTitlesRepository[F](transactor, identities = identities)
-    val mapMasters: MapMastersRepository[F] =
-      PostgresMapMastersRepository[F](transactor, identities = identities)
+      PostgresLoginAccountAdministrationRepository[F](transactor)
+    val gameTitles: GameTitlesRepository[F] = PostgresGameTitlesRepository[F](transactor)
+    val mapMasters: MapMastersRepository[F] = PostgresMapMastersRepository[F](transactor)
     val seasonMasters: SeasonMastersRepository[F] =
-      PostgresSeasonMastersRepository[F](transactor, identities = identities)
+      PostgresSeasonMastersRepository[F](transactor)
     val incidentMasters: IncidentMastersRepository[F] =
-      PostgresIncidentMastersRepository[F](transactor, identities = identities)
+      PostgresIncidentMastersRepository[F](transactor)
     val memberAliases: MemberAliasesRepository[F] =
-      PostgresMemberAliasesRepository[F](transactor, identities = identities)
-    val idempotency: IdempotencyRepository[F] =
-      PostgresIdempotencyRepository[F](transactor, identities = identities)
-    val sourceImages: SourceImagesRepository[F] =
-      PostgresSourceImagesRepository[F](transactor, identities = identities)
+      PostgresMemberAliasesRepository[F](transactor)
+    val idempotency: IdempotencyRepository[F] = PostgresIdempotencyRepository[F](transactor)
+    val sourceImages: SourceImagesRepository[F] = PostgresSourceImagesRepository[F](transactor)
     val ocrAdmissionGuard = OcrAdmissionGuard.from[F](
       jobsBase.backlogSnapshot,
       ApiApp.ocrAdmissionGuardConfig(config.resourceLimits),
@@ -147,10 +124,7 @@ private[bootstrap] object PostgresApiRuntime:
           signalBackgroundFailure,
         )
         val ocrSubmissions = WorkerWakingRepositories.ocrSubmissions(
-          DrainingRepositories.submissions(
-            PostgresOcrSubmissionsRepository[F](transactor, identities = identities),
-            maintenance
-          ),
+          PostgresOcrSubmissionsRepository[F](transactor),
           workerWakeup,
           signalBackgroundFailure,
         )
@@ -181,7 +155,6 @@ private[bootstrap] object PostgresApiRuntime:
             seriesAnalysis <- PostgresSeriesAnalysisRepository.create[F](
               transactor,
               config.seriesAnalysisRead,
-              identities,
             )
             wakingSeriesAnalysis = WorkerWakingRepositories.seriesAnalysis(
               seriesAnalysis,
@@ -189,11 +162,7 @@ private[bootstrap] object PostgresApiRuntime:
               signalBackgroundFailure,
             )
             seriesPlayerRadar <-
-              PostgresSeriesPlayerRadarRepository.create[F](
-                transactor,
-                config.seriesAnalysisRead,
-                identities
-              )
+              PostgresSeriesPlayerRadarRepository.create[F](transactor, config.seriesAnalysisRead)
             wakingSeriesPlayerRadar = WorkerWakingRepositories.seriesPlayerRadar(
               seriesPlayerRadar,
               workerWakeup,
@@ -208,13 +177,7 @@ private[bootstrap] object PostgresApiRuntime:
             runtime <- UseCaseWiring.assemble(
               config = config,
               storage = UseCaseWiring.RuntimeStorage(
-                imageStorage =
-                  DrainingRepositories.images(
-                    imageStorage.store,
-                    maintenance,
-                    transactor,
-                    identities
-                  ),
+                imageStorage = imageStorage.store,
                 imageStorageAdmission = imageStorage.admission,
               ),
               repositories = UseCaseWiring.RuntimeRepositories(
@@ -223,18 +186,15 @@ private[bootstrap] object PostgresApiRuntime:
                 jobs = jobs,
                 drafts = drafts,
                 heldEvents = heldEvents,
-                heldEventDetails =
-                  PostgresHeldEventDetailReadModel[F](transactor, publicIds, identities),
-                heldEventList =
-                  PostgresHeldEventListReadModel[F](transactor, publicIds, identities),
+                heldEventDetails = PostgresHeldEventDetailReadModel[F](transactor),
+                heldEventList = PostgresHeldEventListReadModel[F](transactor),
                 heldEventDeletion = heldEventDeletion,
                 matches = matches,
-                matchDetails = PostgresMatchDetailReadModel[F](transactor, publicIds, identities),
+                matchDetails = PostgresMatchDetailReadModel[F](transactor),
                 matchNotes = matchNotes,
                 matchExports = matchExports,
                 matchDrafts = matchDrafts,
-                matchDraftReviews =
-                  PostgresMatchDraftReviewReadModel[F](transactor, identities = identities),
+                matchDraftReviews = PostgresMatchDraftReviewReadModel[F](transactor),
                 matchDraftCancellation = matchDraftCancellation,
                 matchList = matchList,
                 seriesAnalysis = wakingSeriesAnalysis,
@@ -253,8 +213,6 @@ private[bootstrap] object PostgresApiRuntime:
                 incidentMasters = cachedIncidentMasters,
                 memberAliases = cachedMemberAliases,
                 idempotency = idempotency,
-                identityReferences =
-                  Some(PostgresEntityReferenceResolver[F](transactor, identities)),
               ),
               services = UseCaseWiring.RuntimeServices(
                 healthDetails = health,

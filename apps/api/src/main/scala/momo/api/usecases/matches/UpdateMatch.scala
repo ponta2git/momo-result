@@ -4,20 +4,18 @@ import java.time.Instant
 
 import cats.Monad
 import cats.data.EitherT
-import cats.syntax.all.*
 
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchPolicy, MatchRecord, MatchUpdate, PlayerResult}
 import momo.api.errors.AppError
 import momo.api.repositories.{
-  EntityReferenceResolver,
   GameTitlesRepository,
   HeldEventsRepository,
   MapMastersRepository,
   MatchesRepository,
   SeasonMastersRepository
 }
-import momo.api.usecases.common.{MatchReferenceValidation, ReferenceNormalization}
+import momo.api.usecases.common.MatchReferenceValidation
 
 final case class UpdateMatchCommand(
     heldEventId: HeldEventId,
@@ -39,23 +37,12 @@ final class UpdateMatch[F[_]: Monad](
     seasonMasters: SeasonMastersRepository[F],
     now: F[Instant],
     allowedMemberIds: F[Set[MemberId]],
-    references: Option[EntityReferenceResolver[F]] = None,
 ):
   private val inputValidation = MatchInputValidation(
     MatchReferenceValidation(heldEvents, gameTitles, mapMasters, seasonMasters)
   )
 
-  def run(matchId: MatchId, command: UpdateMatchCommand): F[Either[AppError, MatchRecord]] =
-    ReferenceNormalization.update(
-      command,
-      references.getOrElse(EntityReferenceResolver.preserve[F])
-    )
-      .flatMap(normalized => runResolved(matchId, normalized))
-
-  private def runResolved(
-      matchId: MatchId,
-      command: UpdateMatchCommand
-  ): F[Either[AppError, MatchRecord]] = (for
+  def run(matchId: MatchId, command: UpdateMatchCommand): F[Either[AppError, MatchRecord]] = (for
     allowed <- EitherT.liftF(allowedMemberIds)
     validation <- inputValidation.validate(
       MatchPolicy.Input(

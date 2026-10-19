@@ -1,12 +1,6 @@
 name: Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      receipt_json:
-        description: Reviewed publication receipt for the resumed cutover and exact deployed provenance
-        required: true
-        type: string
   workflow_run:
     workflows:
       - deploy
@@ -19,36 +13,16 @@ permissions:
   contents: read
 
 jobs:
-  normal-permission:
+  publish:
+    name: Publish release notes
     if: >-
-      github.event_name == 'workflow_run' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'master' &&
       github.event.workflow_run.repository.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 3
-    outputs:
-      allowed: ${{ steps.control.outputs.allowed }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-maintenance-control
-      - name: Check whether ordinary publication is held
-        id: control
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: scripts/ci/maintenance-control.sh normal-status >> "${GITHUB_OUTPUT}"
-
-  publish:
-    name: Publish release notes
-    needs: normal-permission
-    if: needs.normal-permission.outputs.allowed == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     permissions:
-      actions: read
       contents: write
       pull-requests: read
     env:
@@ -61,130 +35,76 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: ./.github/actions/setup-maintenance-control
-      - uses: ./.github/actions/setup-ci-tool
-
-      - name: Download the actual normal deployment completion
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: normal-deployment-completion-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
-          path: normal-deployment-completion
-          github-token: ${{ github.token }}
-          run-id: ${{ github.event.workflow_run.id }}
-
-      - name: Reject a candidate-only or stale completion
-        env:
-          DEPLOY_RUN_ID: ${{ github.event.workflow_run.id }}
-          DEPLOY_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
-        run: |
-          scripts/ci/ci-tool.sh normal-deployment-completion "${DEPLOY_RUN_ID}" "${DEPLOY_RUN_ATTEMPT}" "${RELEASE_SHA}" \
-            < normal-deployment-completion/normal-deployment-completion.json
-
-      - name: Publish the completed normal deployment
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: scripts/ci/publish-runtime-release.sh normal
-
-  prepare-maintenance:
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      actions: read
-      contents: read
-    outputs:
-      receipt_artifact_id: ${{ steps.receipt.outputs.artifact-id }}
-      deployment_run_id: ${{ steps.scope.outputs.deployment_run_id }}
-      deployment_run_attempt: ${{ steps.scope.outputs.deployment_run_attempt }}
-      provenance_artifact_id: ${{ steps.scope.outputs.provenance_artifact_id }}
-      release_sha: ${{ steps.scope.outputs.release_sha }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-ci-tool
-      - uses: ./.github/actions/setup-maintenance-control
-      - name: Bind publication to this run and the deployed provenance
-        id: scope
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RECEIPT_INPUT: ${{ inputs.receipt_json }}
-        run: |
-          umask 077
-          printf '%s\n' "${RECEIPT_INPUT}" > receipt-input.json
-          scripts/ci/maintenance-control.sh bind-receipt publish receipt-input.json receipt.json
-          scripts/ci/ci-tool.sh maintenance-operation-scope receipt.json publish >> "${GITHUB_OUTPUT}"
-      - name: Upload the immutable receipt for approval
-        id: receipt
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: publication-receipt-${{ github.run_id }}-${{ github.run_attempt }}
-          path: receipt.json
-          if-no-files-found: error
-          retention-days: 30
-
-  publish-maintenance:
-    name: Publish the resumed release
-    needs: prepare-maintenance
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    concurrency:
-      group: fly-deploy-production
-      cancel-in-progress: false
-    environment:
-      name: production
-      url: https://momo-result.ponta.me
-    permissions:
-      actions: read
-      contents: write
-      pull-requests: read
-    env:
-      DEPLOY_RUN_ID: ${{ needs.prepare-maintenance.outputs.deployment_run_id }}
-      DEPLOY_RUN_ATTEMPT: ${{ needs.prepare-maintenance.outputs.deployment_run_attempt }}
-      PROVENANCE_ARTIFACT_ID: ${{ needs.prepare-maintenance.outputs.provenance_artifact_id }}
-      RELEASE_SHA: ${{ needs.prepare-maintenance.outputs.release_sha }}
-      MAINTENANCE_RECEIPT: maintenance-receipt/receipt.json
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-ci-tool
-      - uses: ./.github/actions/setup-maintenance-control
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          artifact-ids: ${{ needs.prepare-maintenance.outputs.receipt_artifact_id }}
-          path: maintenance-receipt
-      - name: Recheck permission and the actual deployment attempt
+      - name: Prepare notes from the merged release PR
+        id: release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          scripts/ci/maintenance-control.sh maintenance-guard publish "${MAINTENANCE_RECEIPT}"
-          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEPLOY_RUN_ID}/attempts/${DEPLOY_RUN_ATTEMPT}" |
-            scripts/ci/ci-tool.sh maintenance-publish-evidence "${MAINTENANCE_RECEIPT}" run
-          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${PROVENANCE_ARTIFACT_ID}" |
-            scripts/ci/ci-tool.sh maintenance-publish-evidence "${MAINTENANCE_RECEIPT}" artifact
-      - name: Download the exact deployed provenance
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          artifact-ids: ${{ needs.prepare-maintenance.outputs.provenance_artifact_id }}
-          path: deployed-provenance
-          github-token: ${{ github.token }}
-          run-id: ${{ needs.prepare-maintenance.outputs.deployment_run_id }}
-      - name: Download the completed frozen deployment evidence
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: frozen-consumers-completion-${{ needs.prepare-maintenance.outputs.deployment_run_id }}-${{ needs.prepare-maintenance.outputs.deployment_run_attempt }}
-          path: frozen-completion
-          github-token: ${{ github.token }}
-          run-id: ${{ needs.prepare-maintenance.outputs.deployment_run_id }}
-      - name: Verify deployment, cutover, epoch, and original producer binding
-        run: |
-          scripts/ci/ci-tool.sh maintenance-publish-evidence "${MAINTENANCE_RECEIPT}" completion \
-            < frozen-completion/frozen-consumers-completion.json
-          scripts/ci/ci-tool.sh maintenance-publish-evidence "${MAINTENANCE_RECEIPT}" provenance \
-            < deployed-provenance/deployment.json
-      - name: Publish the resumed deployment
+          [[ "${RELEASE_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "Invalid release commit." >&2
+            exit 1
+          }
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_SHA}/pulls" \
+            > associated-pull-requests.json
+          scripts/ci/runtime-release-notes.sh \
+            associated-pull-requests.json "${GITHUB_REPOSITORY}" "${RELEASE_SHA}" \
+            "${RUN_URL}" runtime-release-notes.md >> "${GITHUB_OUTPUT}"
+
+          commit_date="$(
+            gh api "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_SHA}" \
+              --jq '.commit.committer.date'
+          )"
+          [[ "${commit_date}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T ]] || {
+            echo "Invalid release commit timestamp." >&2
+            exit 1
+          }
+          release_date="${commit_date:0:10}"
+          release_date="${release_date//-/}"
+          short_sha="${RELEASE_SHA:0:12}"
+          printf 'tag=runtime-%s-%s\n' "${release_date}" "${short_sha}" >> "${GITHUB_OUTPUT}"
+          printf 'title=Runtime %s (%s)\n' "${release_date}" "${short_sha}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create an idempotent release for the deployed commit
         env:
           GH_TOKEN: ${{ github.token }}
-          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ needs.prepare-maintenance.outputs.deployment_run_id }}
-        run: scripts/ci/publish-runtime-release.sh maintenance "${MAINTENANCE_RECEIPT}"
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_TITLE: ${{ steps.release.outputs.title }}
+        run: |
+          ref_exists=false
+          if ref_json="$(
+            gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" 2>/dev/null
+          )"; then
+            ref_exists=true
+            ref_type="$(jq -r '.object.type' <<< "${ref_json}")"
+            ref_sha="$(jq -r '.object.sha' <<< "${ref_json}")"
+            [[ "${ref_type}" == "commit" && "${ref_sha}" == "${RELEASE_SHA}" ]] || {
+              echo "Release tag already exists for a different or indirect object." >&2
+              exit 1
+            }
+          fi
+
+          if gh release view "${RELEASE_TAG}" \
+            --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            [[ "${ref_exists}" == true ]] || {
+              echo "Release exists without its expected tag ref." >&2
+              exit 1
+            }
+            echo "Release ${RELEASE_TAG} already exists for ${RELEASE_SHA}."
+            exit 0
+          fi
+
+          if [[ "${ref_exists}" == true ]]; then
+            gh release create "${RELEASE_TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --verify-tag \
+              --title "${RELEASE_TITLE}" \
+              --notes-file runtime-release-notes.md
+          else
+            gh release create "${RELEASE_TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --target "${RELEASE_SHA}" \
+              --title "${RELEASE_TITLE}" \
+              --notes-file runtime-release-notes.md
+          fi

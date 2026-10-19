@@ -55,27 +55,19 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Only release snapshot validation walks commit ancestry.
-          fetch-depth: ${{ github.event.pull_request.base.ref == 'master' && '0' || '1' }}
+          fetch-depth: 1
           persist-credentials: false
-      - name: Validate pull request destination and release snapshot
+      - name: Validate pull request destination and release notes
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
           HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           REPOSITORY: ${{ github.repository }}
         run: |
-          develop_sha=""
-          if [[ "${BASE_REF}" == "master" ]]; then
-            GIT_TERMINAL_PROMPT=0 git fetch --no-tags origin refs/heads/develop
-            develop_sha="$(git rev-parse FETCH_HEAD)"
-          fi
           jq -r '.pull_request.body // ""' "${GITHUB_EVENT_PATH}" > pull-request-body.md
           scripts/ci/check-pr-branch-policy.sh \
             "${BASE_REF}" "${HEAD_REF}" "${HEAD_REPOSITORY}" "${REPOSITORY}" \
-            "${BASE_SHA}" "${HEAD_SHA}" "${develop_sha}" pull-request-body.md
+            pull-request-body.md
 
   public-safety:
     name: Public repository safety
@@ -119,9 +111,6 @@ jobs:
     name: Runtime smoke
     needs: classify
     if: github.event.pull_request.base.ref != 'master' && needs.classify.outputs.runtime == 'true'
-    permissions:
-      actions: read
-      contents: read
     uses: ./.github/workflows/deploy.yml
     with:
       package_image: ${{ needs.classify.outputs.system_e2e == 'true' }}

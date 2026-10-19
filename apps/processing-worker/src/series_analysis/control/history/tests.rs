@@ -11,8 +11,8 @@ use super::cleanup_history;
 async fn real_postgres_retention_preserves_active_jobs_and_readable_artifacts()
 -> Result<(), Box<dyn Error + Send + Sync>> {
     let database_url = std::env::var("ANALYSIS_CONTROL_SMOKE_DATABASE_URL")?;
-    let mut primary = crate::identity::fixtures::connect(&database_url).await?;
-    let mut secondary = crate::identity::fixtures::connect(&database_url).await?;
+    let mut primary = crate::postgres::connect(&database_url).await?;
+    let mut secondary = crate::postgres::connect(&database_url).await?;
     primary.batch_execute(include_str!("seed.sql")).await?;
     let now: SystemTime = primary
         .query_one("SELECT '2099-08-09T12:00:00Z'::timestamptz", &[])
@@ -26,14 +26,7 @@ async fn real_postgres_retention_preserves_active_jobs_and_readable_artifacts()
     assert_radar_retention(&primary).await?;
     let remaining = primary
         .query(
-            r"
-                SELECT series_analysis_jobs.legacy_id AS id
-                FROM series_analysis_jobs
-                WHERE (SELECT fixture_parent.legacy_id
-                       FROM game_titles AS fixture_parent
-                       WHERE fixture_parent.id = series_analysis_jobs.game_title_id) = $1
-                ORDER BY series_analysis_jobs.legacy_id
-                ",
+            "SELECT id FROM series_analysis_jobs WHERE game_title_id = $1 ORDER BY id",
             &[&"analysis-history-test-title"],
         )
         .await?
@@ -63,12 +56,7 @@ async fn real_postgres_retention_preserves_active_jobs_and_readable_artifacts()
 
     let held = secondary.transaction().await?;
     held.query_one(
-        r"
-            SELECT series_analysis_jobs.legacy_id AS id
-            FROM series_analysis_jobs
-            WHERE series_analysis_jobs.legacy_id = 'analysis-history-test-old-b'
-            FOR UPDATE
-            ",
+        "SELECT id FROM series_analysis_jobs WHERE id = 'analysis-history-test-old-b' FOR UPDATE",
         &[],
     )
     .await?;
@@ -80,13 +68,9 @@ async fn real_postgres_retention_preserves_active_jobs_and_readable_artifacts()
     );
     primary
         .execute(
-            r"
-                UPDATE series_analysis_title_states
-                SET notification_baseline_artifact_id = series_analysis_title_states.current_artifact_id
-                WHERE (SELECT fixture_parent.legacy_id
-                       FROM game_titles AS fixture_parent
-                       WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = 'analysis-history-test-title'
-                ",
+            "UPDATE series_analysis_title_states \
+             SET notification_baseline_artifact_id = current_artifact_id \
+             WHERE game_title_id = 'analysis-history-test-title'",
             &[],
         )
         .await?;
@@ -97,10 +81,7 @@ async fn real_postgres_retention_preserves_active_jobs_and_readable_artifacts()
     );
     primary
         .execute(
-            r"
-                DELETE FROM game_titles
-                WHERE game_titles.legacy_id = 'analysis-history-test-title'
-                ",
+            "DELETE FROM game_titles WHERE id = 'analysis-history-test-title'",
             &[],
         )
         .await?;
@@ -129,18 +110,10 @@ async fn assert_radar_retention(
     );
     let previews = client
         .query(
-            r"
-                SELECT p.legacy_id AS id, p.status, p.evaluation_snapshot IS NOT NULL, cardinality(p.scope_keys), count(s.scope_key)
-                FROM series_radar_previews AS p
-                     LEFT JOIN series_radar_preview_scopes AS s ON (SELECT fixture_parent.legacy_id
-                                                                    FROM series_radar_previews AS fixture_parent
-                                                                    WHERE fixture_parent.id = s.preview_id) = p.legacy_id
-                WHERE (SELECT fixture_parent.legacy_id
-                       FROM game_titles AS fixture_parent
-                       WHERE fixture_parent.id = p.game_title_id) = 'analysis-history-test-title'
-                GROUP BY p.id
-                ORDER BY p.legacy_id
-                ",
+            "SELECT p.id, p.status, p.evaluation_snapshot IS NOT NULL, \
+                    cardinality(p.scope_keys), count(s.scope_key) \
+             FROM series_radar_previews p LEFT JOIN series_radar_preview_scopes s ON s.preview_id=p.id \
+             WHERE p.game_title_id = 'analysis-history-test-title' GROUP BY p.id ORDER BY p.id",
             &[],
         )
         .await?

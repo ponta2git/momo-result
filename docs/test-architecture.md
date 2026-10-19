@@ -9,7 +9,7 @@
 | S | process 内、外部 I/O なし | pure function、domain、parser、codec、ViewModel |
 | M | process 内の組み合わせ、制御した double | HTTP app、usecase、component、MSW、in-memory adapter |
 | L | 実 service、native dependency、別 process | PostgreSQL、object storage、OCR、worker process |
-| XL | runtime image、browser、複数 process、resource 計測 | runtime smoke、Playwright、queued priority、release resource gate |
+| XL | runtime image、browser、複数 process、resource 計測 | runtime smoke、Playwright、preemption、release resource gate |
 
 size は実行時間ではなく、失敗時に疑う境界と依存範囲で決める。速い L test を M、遅い S test を L と呼ばない。下位 size は利用者価値に関係する分岐を詳しく、上位 size は接続、複合的な失敗、代表経路へ絞り、近い test の成功を変更経路の証拠にしない。
 
@@ -38,7 +38,7 @@ coverage は未確認の経路を探す補助であり、品質を一つの数�
 | --- | --- | --- |
 | Web | pure logic、request transform、API wrapper、ViewModel、component state | 主要 flow、URL、cache lifecycle、download / save を component / Playwright で確認 |
 | API | domain、usecase、codec、HTTP mapping | PostgreSQL / object storage と migration 前提を実 service で確認 |
-| Processing Worker | pure calculation、parser、codec、state machine、decision table | DB、native OCR、parent / child process、cgroup、queued priority、resource を専用 smoke で確認 |
+| Processing Worker | pure calculation、parser、codec、state machine、decision table | DB、native OCR、parent / child process、cgroup、preemption、resource を専用 smoke で確認 |
 
 - UI は line coverage や全表示状態の網羅より、入力保持・正しい送信先・保存・復旧・操作続行に関わる独立した scenario を優先する。採否は `docs/test-rule.md` の「UI の検証を選ぶ基準」に従う。
 - DB adapter は coverage 対象へ含めること自体を品質目標にせず、production と同じ wire / transaction を通す。
@@ -61,7 +61,6 @@ coverage は未確認の経路を探す補助であり、品質を一つの数�
 ### API / Workerの実行境界
 
 - APIのservice suiteは通常testとコンパイル結果を共有しても、tag選択、fork、直列化を独立した設定scopeに置く。外部gateを実行した順序で後続の通常testの対象・隔離が変わらないようにする。
-- `apiDbQuality` は同じ pinned migration source から legacy / canonical の境界までを別 process・別 DB に適用する。canonical suite は通常の runtime composition を通し、旧 URL・principal・replay・順序・immutable payload と、UUID 参照を使う次の更新を確認する。起動 probe の派生契約は `node apps/api/scripts/generate-identity-schema-contract.mjs /path/to/momo-db/drizzle` で DB 所有 snapshot から生成し、CI は `--check` で freshness を検証する。
 - 軽量 HTTP test は test source の `HttpTestRuntime` を明示して使う。InMemory adapter は test source に閉じ、production runtime の選択肢にしない。分析・Radar の状態再現は持たず、その保存状態を使う HTTP test は `PostgresHttpAppTestFixtures` で通常の `ApiApp` を組み立てる。
 - 実 DB の HTTP fixture は既存 `IntegrationSuite` の隔離 DB と直列化を共有し、各 test の保存状態と変更した account を回収する。DB 固有の transaction、lock、rollback、job は実 DB suite が所有する。
 - 存続する double と production adapter に共通する consumer 契約は必要な代表例だけ共有できる。全 adapter の対になる suite を作らず、非永続 adapter との共通化のために oracle を弱めない。

@@ -1,6 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import { heldEventDetailCacheFilter } from "@/shared/api/detailCache";
 import type { HeldEventResponse, HeldEventSummaryResponse } from "@/shared/api/heldEvents";
 import { heldEventKeys } from "@/shared/api/queryKeys";
 
@@ -35,9 +34,9 @@ export async function syncHeldEventDeletedCache(
   queryClient: QueryClient,
   heldEventId: string,
 ): Promise<void> {
-  const filter = heldEventDetailCacheFilter(heldEventId);
-  await queryClient.cancelQueries(filter);
-  queryClient.removeQueries(filter);
+  const queryKey = heldEventKeys.resource(heldEventId);
+  await queryClient.cancelQueries({ queryKey });
+  queryClient.removeQueries({ queryKey });
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: heldEventKeys.listRoot() }),
     queryClient.invalidateQueries({

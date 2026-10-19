@@ -60,8 +60,6 @@ fn cgroup_fixture() -> tempfile::TempDir {
     std::fs::create_dir(&directory).expect("fixture cgroup directory");
     for (name, value) in [
         ("cgroup.procs", ""),
-        ("cpu.cfs_quota_us", "100000"),
-        ("cpu.cfs_period_us", "100000"),
         ("memory.limit_in_bytes", "134217728\n"),
         ("memory.usage_in_bytes", "0\n"),
         ("memory.max_usage_in_bytes", "0\n"),
@@ -157,8 +155,11 @@ fn publication_bounds_memory_and_manifest_space_without_overflow() {
     let config = activation(&environment).expect("complete bounded configuration");
     let limits = config.execution_limits.expect("enabled execution limits");
     assert_eq!(config.publication_mode, AnalysisPublicationMode::Enabled);
-    assert_eq!(limits.memory.runtime_bytes(), 268_435_456);
-    assert_eq!(limits.memory.child_bytes(), 134_217_728);
+    assert_eq!(limits.runtime_memory_limit.get(), 268_435_456);
+    assert_eq!(
+        limits.child_memory_limit.get() + limits.parent_headroom.get(),
+        268_435_456
+    );
     assert_eq!(limits.calculation_timeout, Duration::from_secs(60));
     assert_eq!(limits.finalization_timeout, Duration::from_secs(10));
     assert_eq!(

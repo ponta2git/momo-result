@@ -101,7 +101,6 @@ write_valid_metadata_v2
 actual="$("${validator[@]}" "${test_dir}/deployment.json" "${run_id}" "${run_attempt}" "${commit}")"
 expected="$(cat <<EOF
 candidate_sha=${commit}
-source_run_id=${run_id}
 source_run_attempt=${source_run_attempt}
 config_sha256=${digest}
 image_ref=registry.fly.io/momo-result:${commit}-${run_id}-${source_run_attempt}

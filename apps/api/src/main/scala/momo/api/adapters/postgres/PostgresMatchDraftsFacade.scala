@@ -10,11 +10,8 @@ import doobie.implicits.*
 import momo.api.domain.MatchDraft
 import momo.api.repositories.{MatchDraftUpdateResult, MatchDraftsRepository}
 
-final class PostgresMatchDraftsRepository[F[_]: MonadCancelThrow](
-    transactor: Transactor[F],
-    identities: PostgresIdentities = PostgresIdentities.Legacy
-) extends MatchDraftsRepository[F]:
-  private given PostgresIdentities = identities
+final class PostgresMatchDraftsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
+    extends MatchDraftsRepository[F]:
   private val delegate: MatchDraftsRepository[F] = MatchDraftsRepository
     .fromAlg(PostgresMatchDrafts.alg, transactor.trans)
 

@@ -301,56 +301,6 @@ mod tests {
     }
 
     #[test]
-    fn retained_legacy_layouts_decode_without_rewriting_immutable_hints()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let layouts: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../docs/schemas/fixtures/ocr-worker/layout-families-v1.json"
-        ))?;
-        for entry in layouts
-            .get("accepted")
-            .and_then(serde_json::Value::as_array)
-            .ok_or("accepted cases")?
-        {
-            let layout = entry
-                .get("input")
-                .and_then(serde_json::Value::as_str)
-                .ok_or("input layout")?;
-            let mut input = fixture()?;
-            let original_hints = serde_json::json!({"layoutFamily": layout}).to_string();
-            input
-                .as_object_mut()
-                .ok_or("input object")?
-                .insert("ocrHintsJson".to_owned(), serde_json::json!(original_hints));
-            let before = input.clone();
-            let parsed = parse_persisted_payload(&input)?;
-            let hints = serde_json::to_value(parsed.payload().hints())?;
-            assert_eq!(
-                hints
-                    .get("layoutFamily")
-                    .and_then(serde_json::Value::as_str),
-                Some(layout)
-            );
-            assert_eq!(input, before, "retained input snapshots are immutable");
-        }
-        for entry in layouts
-            .get("rejected")
-            .and_then(serde_json::Value::as_array)
-            .ok_or("rejected cases")?
-        {
-            let mut input = fixture()?;
-            input.as_object_mut().ok_or("input object")?.insert(
-                "ocrHintsJson".to_owned(),
-                serde_json::json!(serde_json::json!({"layoutFamily": entry}).to_string()),
-            );
-            assert_eq!(
-                parse_persisted_payload(&input),
-                Err(OcrInputError::InvalidHints)
-            );
-        }
-        Ok(())
-    }
-
-    #[test]
     fn persisted_input_preserves_enriched_hints_and_image_identity()
     -> Result<(), Box<dyn std::error::Error>> {
         let mut input = fixture()?;

@@ -19,10 +19,7 @@ final class PostgresSeriesPlayerRadarRepository[F[_]: Async] private (
     transactor: Transactor[F],
     config: SeriesAnalysisReadConfig,
     readPermits: Semaphore[F],
-    identities: PostgresIdentities,
 ) extends SeriesPlayerRadarRepository[F]:
-  private given PostgresIdentities = identities
-
   override def radarState(title: GameTitleId): F[Either[AppError, SeriesPlayerRadarDocument]] =
     read(PostgresSeriesPlayerRadarReadOps.state(title))
 
@@ -76,18 +73,8 @@ final class PostgresSeriesPlayerRadarRepository[F[_]: Async] private (
     }
 
 object PostgresSeriesPlayerRadarRepository:
-  def create[F[_]: Async](
-      transactor: Transactor[F],
-      config: SeriesAnalysisReadConfig,
-  ): F[PostgresSeriesPlayerRadarRepository[F]] =
-    create(transactor, config, PostgresIdentities.Legacy)
-
-  def create[F[_]: Async](
-      transactor: Transactor[F],
-      config: SeriesAnalysisReadConfig,
-      identities: PostgresIdentities
-  )
+  def create[F[_]: Async](transactor: Transactor[F], config: SeriesAnalysisReadConfig)
       : F[PostgresSeriesPlayerRadarRepository[F]] =
     Async[F].delay(SeriesPlayerRadarPayloadValidator.ensureReady()) *>
       Semaphore[F](config.decodeConcurrency.toLong)
-        .map(new PostgresSeriesPlayerRadarRepository(transactor, config, _, identities))
+        .map(new PostgresSeriesPlayerRadarRepository(transactor, config, _))

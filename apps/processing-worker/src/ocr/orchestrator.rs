@@ -3,7 +3,7 @@
 use super::{consumer, control::ClaimedOcrJob};
 use tokio::sync::watch;
 
-/// Only a claimed job with the worker's process resources reserved may reach the image runner.
+/// Only a claim obtained through the worker's shared slot may reach the image runner.
 /// Keeping this resource separate from the reconciler lets receipt deadlines advance while
 /// an OCR image or analysis attempt is running, without another connection or a shared lock.
 pub(crate) struct ImageRunner {

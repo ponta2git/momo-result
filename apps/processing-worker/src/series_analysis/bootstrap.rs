@@ -73,33 +73,6 @@ pub(crate) async fn initialize(
     Ok(module)
 }
 
-/// Acquires only the resources needed by an explicitly scoped attempt. It never performs idle
-/// recovery, history cleanup, capability registration, or notification configuration.
-pub(crate) async fn initialize_maintenance(
-    config: AnalysisConsumerConfig,
-    post_commit_sink: PostCommitSink,
-) -> Result<Module, ConsumerError> {
-    validate_temporary_root(&config).await?;
-    let control_client = postgres::connect(&config.database_url).await?;
-    let heartbeat_client = HeartbeatConnection::connect(&config.database_url).await?;
-    let read_client = postgres::connect(&config.read_database_url).await?;
-    drop(read_client);
-    Ok(Module {
-        config: config.clone(),
-        maintenance: MaintenanceSchedules {
-            capability_refresh: IdleRefreshSchedule::after_success(Instant::now()),
-            stale_attempt_cleanup_due: None,
-            history_cleanup_due: Instant::now(),
-        },
-        runner: Some(Runner {
-            control_client,
-            heartbeat_client,
-            config,
-            post_commit_sink,
-        }),
-    })
-}
-
 fn startup_result<T, E>(result: Result<T, E>, phase: &'static str) -> Result<T, ConsumerError>
 where
     E: Into<ConsumerError>,

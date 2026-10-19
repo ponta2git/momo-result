@@ -42,11 +42,7 @@ func machines(command string, value any, args []string, out io.Writer) error {
 			return invalid
 		}
 		previous := ""
-		mode := any(nil)
-		if len(list) == 1 {
-			mode = field(list[0], "config", "env", "MOMO_MAINTENANCE_MODE")
-		}
-		if len(list) == 1 && (mode == nil || mode == "normal") && enabled(list[0]) && guest(list[0]) && field(list[0], "config", "image") == args[0] {
+		if len(list) == 1 && enabled(list[0]) && guest(list[0]) && field(list[0], "config", "image") == args[0] {
 			previous = release(list[0])
 		}
 		_, err := fmt.Fprintln(out, previous)

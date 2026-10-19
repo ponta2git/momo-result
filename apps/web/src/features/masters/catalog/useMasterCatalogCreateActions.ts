@@ -80,6 +80,7 @@ export function useMasterCatalogCreateActions(input: {
       const gameTitleId = parsed.request.gameTitleId;
       const attempt = input.idempotencyKeys.begin("masters.createMapMaster", parsed.request);
       const { request, optimistic } = prepareScopedMasterCreation(
+        "map",
         parsed.request,
         attempt.key,
         input.readNowIso(),
@@ -119,6 +120,7 @@ export function useMasterCatalogCreateActions(input: {
       const gameTitleId = parsed.request.gameTitleId;
       const attempt = input.idempotencyKeys.begin("masters.createSeasonMaster", parsed.request);
       const { request, optimistic } = prepareScopedMasterCreation(
+        "season",
         parsed.request,
         attempt.key,
         input.readNowIso(),

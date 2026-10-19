@@ -13,24 +13,13 @@ fn entered_values() -> SmokeResult<serde_json::Value> {
 async fn manual_candidate(client: &Client, candidate: &str, source_basis: &str) -> SmokeResult {
     // The API replaces the one active shared candidate when a manual save is accepted.
     client.execute(
-        r"
-            UPDATE series_radar_candidates
-            SET status = 'withdrawn'
-            WHERE series_radar_candidates.legacy_game_title_id = $1 AND status IN ('pending', 'ready', 'unavailable', 'failed')
-            ",
+        "UPDATE series_radar_candidates SET status='withdrawn' WHERE game_title_id=$1 AND status IN ('pending','ready','unavailable','failed')",
         &[&TITLE_ID],
     ).await?;
-    client
-        .execute(
-            r"
-            INSERT INTO series_radar_candidates (id, legacy_id, game_title_id, legacy_game_title_id, status, origin_kind,
-                                                 manual_input, source_basis_id, source_candidate_id, saved_by, saved_by_display_name)
-            VALUES (pg_temp.fixture_uuid('series_radar_candidates', $1), $1, pg_temp.fixture_uuid('game_titles', $2), $2,
-                    'pending', 'manual', $3, $4, $4, 'account_ponta', 'Saved Operator')
-            ",
-            &[&candidate, &TITLE_ID, &entered_values()?, &source_basis],
-        )
-        .await?;
+    client.execute(
+        "INSERT INTO series_radar_candidates (id,game_title_id,status,origin_kind,manual_input,source_basis_id,source_candidate_id,saved_by,saved_by_display_name) VALUES ($1,$2,'pending','manual',$3,$4,$4,'account_ponta','Saved Operator')",
+        &[&candidate,&TITLE_ID,&entered_values()?,&source_basis],
+    ).await?;
     operation(
         client,
         &format!("{candidate}-save"),
@@ -43,22 +32,10 @@ async fn manual_candidate(client: &Client, candidate: &str, source_basis: &str) 
 }
 
 async fn latest_preview(client: &Client, candidate: &str) -> SmokeResult<String> {
-    client
-        .query_one(
-            r"
-            SELECT series_radar_previews.legacy_id AS id
-            FROM series_radar_previews
-            WHERE (SELECT fixture_parent.legacy_id
-                   FROM series_radar_candidates AS fixture_parent
-                   WHERE fixture_parent.id = series_radar_previews.candidate_id) = $1
-            ORDER BY created_at DESC, series_radar_previews.legacy_id DESC
-            LIMIT 1
-            ",
-            &[&candidate],
-        )
-        .await?
-        .try_get(0)
-        .map_err(Into::into)
+    client.query_one(
+        "SELECT id FROM series_radar_previews WHERE candidate_id=$1 ORDER BY created_at DESC,id DESC LIMIT 1",
+        &[&candidate],
+    ).await?.try_get(0).map_err(Into::into)
 }
 
 async fn recompare(
@@ -83,18 +60,14 @@ async fn recompare(
 async fn real_postgres_manual_radar_recomparison_publication_restore_and_history_are_coherent()
 -> SmokeResult {
     let database_url = std::env::var("ANALYSIS_CONTROL_SMOKE_DATABASE_URL")?;
-    let mut client = crate::identity::fixtures::connect(&database_url).await?;
+    let mut client = crate::postgres::connect(&database_url).await?;
     seed(&client).await?;
     let runtime = TempDir::new()?;
     let config = notifications::config(&database_url, NotificationSink::default(), runtime.path())?;
     prepare_candidate(&mut client, &config, "radar-manual-origin").await?;
     client
         .execute(
-            r"
-                UPDATE series_radar_candidates
-                SET status = 'withdrawn'
-                WHERE series_radar_candidates.legacy_id = 'radar-manual-origin'
-                ",
+            "UPDATE series_radar_candidates SET status='withdrawn' WHERE id='radar-manual-origin'",
             &[],
         )
         .await?;
@@ -174,25 +147,10 @@ async fn real_postgres_manual_radar_recomparison_publication_restore_and_history
     .await?;
     // This record was absent from the first snapshot and from the generated origin. Only the
     // confirmed comparison can detect the correction after acceptance.
-    client.execute(r"
-        UPDATE match_players
-        SET revenue_man_yen = revenue_man_yen + 17
-        WHERE (SELECT fixture_parent.legacy_id
-               FROM matches AS fixture_parent
-               WHERE fixture_parent.id = match_players.match_id) = 'analysis-radar-smoke-match-added'
-          AND (SELECT fixture_parent.legacy_id
-               FROM members AS fixture_parent
-               WHERE fixture_parent.id = match_players.member_id) = 'member_ponta'
-        ", &[]).await?;
+    client.execute("UPDATE match_players SET revenue_man_yen=revenue_man_yen+17 WHERE match_id='analysis-radar-smoke-match-added' AND member_id='member_ponta'", &[]).await?;
     client
         .execute(
-            r"
-                UPDATE series_analysis_title_states
-                SET input_revision = 3
-                WHERE (SELECT fixture_parent.legacy_id
-                       FROM game_titles AS fixture_parent
-                       WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = $1
-                ",
+            "UPDATE series_analysis_title_states SET input_revision=3 WHERE game_title_id=$1",
             &[&TITLE_ID],
         )
         .await?;
@@ -282,16 +240,10 @@ async fn real_postgres_manual_radar_recomparison_publication_restore_and_history
     let next_apply = claim_next(&mut client, &config).await?;
     publish(&mut client, &next_apply, &config).await?;
     restore(&mut client, &config, "radar-manual-restore", "radar-manual").await?;
-    client
-        .execute(
-            r"
-            UPDATE series_radar_candidates
-            SET safe_failure_code = 'evaluation_changed'
-            WHERE series_radar_candidates.legacy_id = 'radar-manual-restore'
-            ",
-            &[],
-        )
-        .await?;
+    client.execute(
+        "UPDATE series_radar_candidates SET safe_failure_code='evaluation_changed' WHERE id='radar-manual-restore'",
+        &[],
+    ).await?;
     let restored = recompare(
         &mut client,
         &config,
@@ -299,21 +251,10 @@ async fn real_postgres_manual_radar_recomparison_publication_restore_and_history
         "radar-manual-restore-recompare",
     )
     .await?;
-    assert!(
-        client
-            .query_one(
-                r"
-            SELECT safe_failure_code
-            FROM series_radar_candidates
-            WHERE series_radar_candidates.legacy_id = 'radar-manual-restore'
-            ",
-                &[],
-            )
-            .await?
-            .try_get::<_, Option<String>>(0)?
-            .is_none(),
-        "successful restored-manual comparison clears an earlier evaluation failure"
-    );
+    assert!(client.query_one(
+        "SELECT safe_failure_code FROM series_radar_candidates WHERE id='radar-manual-restore'",
+        &[],
+    ).await?.try_get::<_, Option<String>>(0)?.is_none(), "successful restored-manual comparison clears an earlier evaluation failure");
     reserve_apply(
         &client,
         "radar-manual-reapply",
@@ -335,22 +276,10 @@ async fn real_postgres_manual_radar_recomparison_publication_restore_and_history
         100,
     )
     .await?;
-    let retained = client
-        .query_one(
-            r"
-            SELECT (SELECT count(*)
-                    FROM series_radar_revisions
-                    WHERE game_title_id = $1)
-                 , (SELECT evaluation_snapshot IS NULL
-                    FROM series_radar_previews
-                    WHERE series_radar_previews.legacy_id = $2)
-                 , (SELECT payload
-                    FROM series_radar_bases
-                    WHERE id = 'radar-manual')
-            ",
-            &[&TITLE_ID, &reviewed],
-        )
-        .await?;
+    let retained = client.query_one(
+        "SELECT (SELECT count(*) FROM series_radar_revisions WHERE game_title_id=$1),(SELECT evaluation_snapshot IS NULL FROM series_radar_previews WHERE id=$2),(SELECT payload FROM series_radar_bases WHERE id='radar-manual')",
+        &[&TITLE_ID,&reviewed],
+    ).await?;
     assert_eq!(
         retained.try_get::<_, i64>(0)?,
         3,
@@ -374,7 +303,7 @@ async fn real_postgres_manual_radar_recomparison_publication_restore_and_history
 async fn real_postgres_manual_radar_empty_first_comparison_and_withdrawal_never_fix_a_basis()
 -> SmokeResult {
     let database_url = std::env::var("ANALYSIS_CONTROL_SMOKE_DATABASE_URL")?;
-    let mut client = crate::identity::fixtures::connect(&database_url).await?;
+    let mut client = crate::postgres::connect(&database_url).await?;
     seed(&client).await?;
     let runtime = TempDir::new()?;
     let config = notifications::config(&database_url, NotificationSink::default(), runtime.path())?;
@@ -382,25 +311,11 @@ async fn real_postgres_manual_radar_empty_first_comparison_and_withdrawal_never_
     manual_candidate(&client, "radar-empty-manual", "radar-empty-origin").await?;
     client.batch_execute("CREATE TEMP TABLE radar_manual_matches AS SELECT * FROM matches; CREATE TEMP TABLE radar_manual_players AS SELECT * FROM match_players").await?;
     client
-        .execute(
-            r"
-            DELETE FROM matches
-            WHERE (SELECT fixture_parent.legacy_id
-                   FROM game_titles AS fixture_parent
-                   WHERE fixture_parent.id = matches.game_title_id) = $1
-            ",
-            &[&TITLE_ID],
-        )
+        .execute("DELETE FROM matches WHERE game_title_id=$1", &[&TITLE_ID])
         .await?;
     client
         .execute(
-            r"
-                UPDATE series_analysis_title_states
-                SET input_revision = 2
-                WHERE (SELECT fixture_parent.legacy_id
-                       FROM game_titles AS fixture_parent
-                       WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = $1
-                ",
+            "UPDATE series_analysis_title_states SET input_revision=2 WHERE game_title_id=$1",
             &[&TITLE_ID],
         )
         .await?;
@@ -408,20 +323,7 @@ async fn real_postgres_manual_radar_empty_first_comparison_and_withdrawal_never_
     let (directory, prepared) = prepare(&mut client, &empty).await?;
     assert!(prepared.manual_basis.is_none());
     finish_preparation(&mut client, &empty, &config, &directory).await?;
-    let saved = client
-        .query_one(
-            r"
-        SELECT c.manual_input IS NOT NULL, (SELECT fixture_parent.legacy_id
-                FROM series_radar_basis_identities AS fixture_parent
-                WHERE fixture_parent.id = c.basis_id) AS basis_id, c.status, c.safe_failure_code, (SELECT count(*)
-                FROM series_radar_bases AS b
-                WHERE b.id = c.legacy_id)
-        FROM series_radar_candidates AS c
-        WHERE c.legacy_id = 'radar-empty-manual'
-        ",
-            &[],
-        )
-        .await?;
+    let saved = client.query_one("SELECT c.manual_input IS NOT NULL,c.basis_id,c.status,c.safe_failure_code,(SELECT count(*) FROM series_radar_bases b WHERE b.id=c.id) FROM series_radar_candidates c WHERE c.id='radar-empty-manual'", &[]).await?;
     assert!(
         saved.try_get::<_, bool>(0)?,
         "the shared entered values survive zero records"
@@ -433,20 +335,14 @@ async fn real_postgres_manual_radar_empty_first_comparison_and_withdrawal_never_
 
     client
         .execute(
-            "INSERT INTO matches OVERRIDING SYSTEM VALUE SELECT * FROM radar_manual_matches WHERE game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$1)",
+            "INSERT INTO matches SELECT * FROM radar_manual_matches WHERE game_title_id=$1",
             &[&TITLE_ID],
         )
         .await?;
-    client.execute("INSERT INTO match_players SELECT p.* FROM radar_manual_players p JOIN radar_manual_matches m ON m.id=p.match_id WHERE m.game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$1)", &[&TITLE_ID]).await?;
+    client.execute("INSERT INTO match_players SELECT p.* FROM radar_manual_players p JOIN radar_manual_matches m ON m.id=p.match_id WHERE m.game_title_id=$1", &[&TITLE_ID]).await?;
     client
         .execute(
-            r"
-                UPDATE series_analysis_title_states
-                SET input_revision = 3
-                WHERE (SELECT fixture_parent.legacy_id
-                       FROM game_titles AS fixture_parent
-                       WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = $1
-                ",
+            "UPDATE series_analysis_title_states SET input_revision=3 WHERE game_title_id=$1",
             &[&TITLE_ID],
         )
         .await?;
@@ -472,26 +368,8 @@ async fn real_postgres_manual_radar_empty_first_comparison_and_withdrawal_never_
     manual_candidate(&client, "radar-withdrawn-manual", "radar-empty-origin").await?;
     let withdrawn = claim_next(&mut client, &config).await?;
     let (directory, _) = prepare(&mut client, &withdrawn).await?;
-    client
-        .execute(
-            r"
-        UPDATE series_radar_candidates
-        SET status = 'withdrawn'
-        WHERE series_radar_candidates.legacy_id = 'radar-withdrawn-manual'
-        ",
-            &[],
-        )
-        .await?;
-    client
-        .execute(
-            r"
-        UPDATE series_radar_operations
-        SET status = 'withdrawn'
-        WHERE series_radar_operations.legacy_id = 'radar-withdrawn-manual-save'
-        ",
-            &[],
-        )
-        .await?;
+    client.execute("UPDATE series_radar_candidates SET status='withdrawn' WHERE id='radar-withdrawn-manual'", &[]).await?;
+    client.execute("UPDATE series_radar_operations SET status='withdrawn' WHERE id='radar-withdrawn-manual-save'", &[]).await?;
     finish_preparation(&mut client, &withdrawn, &config, &directory).await?;
     assert_eq!(
         client

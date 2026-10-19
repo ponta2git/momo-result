@@ -9,7 +9,6 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 import io.circe.Json
 
-import momo.api.adapters.postgres.CanonicalIdentity.Entity
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.*
 import momo.api.domain.ids.{AccountId, GameTitleId}
@@ -42,53 +41,12 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       keyHash: String,
       fingerprint: String,
       ids: FreshIds,
-  )(using
-      identities: PostgresIdentities): ConnectionIO[Either[AppError, SeriesPlayerRadarOperation]] =
-    (
-      identities.normalize(Entity.GameTitles, command.gameTitleId.value),
-      identities.normalize(Entity.RadarCandidates, command.candidateId),
-      identities.normalize(Entity.RadarPreviews, command.previewId),
-      identities.normalize(Entity.RadarBases, command.expectedCurrentBasisId),
-      identities.normalize(Entity.RadarOperations, command.originOperationId),
-      identities.normalize(Entity.RadarCandidates, command.expectedCandidateId),
-      identities.normalize(Entity.RadarBases, command.sourceBasisId),
-      identities.normalize(Entity.RadarCandidates, command.sourceCandidateId)
-    ).tupled.flatMap(
-      (title, candidate, preview, current, origin, expected, source, sourceCandidate) =>
-        requestNormalized(
-          command.copy(
-            gameTitleId = GameTitleId.unsafeFromString(title),
-            candidateId = candidate,
-            previewId = preview,
-            expectedCurrentBasisId = current,
-            originOperationId = origin,
-            expectedCandidateId = expected,
-            sourceBasisId = source,
-            sourceCandidateId = sourceCandidate
-          ),
-          requestedBy,
-          keyHash,
-          fingerprint,
-          ids
-        )
-    )
-
-  private def requestNormalized(
-      command: SeriesPlayerRadarCommand,
-      requestedBy: AccountId,
-      keyHash: String,
-      fingerprint: String,
-      ids: FreshIds
-  )(using
-      identities: PostgresIdentities): ConnectionIO[Either[AppError, SeriesPlayerRadarOperation]] =
+  ): ConnectionIO[Either[AppError, SeriesPlayerRadarOperation]] =
     // This lock precedes title locks and protects keys reused across different titles as well.
     sql"SELECT pg_advisory_xact_lock(hashtext(${requestedBy.value}), 29)".query[Unit].unique *>
       (fr"SELECT request_fingerprint," ++ PostgresSeriesPlayerRadarReadOps.operationColumns ++ fr"""
-        FROM series_radar_operations o
-        WHERE requested_by = ${identities.lookup(
-          Entity.Accounts,
-          requestedBy.value
-        )} AND idempotency_key_hash = $keyHash
+        FROM series_radar_operations
+        WHERE requested_by = $requestedBy AND idempotency_key_hash = $keyHash
       """).query[(String, SeriesPlayerRadarOperation)].option.flatMap {
         case Some((saved, operation)) if saved == fingerprint =>
           operation.asRight.pure[ConnectionIO]
@@ -103,29 +61,20 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
           yield operation).value
       }
 
-  private def lockTitle(title: GameTitleId)(using
-      identities: PostgresIdentities): Result[TitleState] =
+  private def lockTitle(title: GameTitleId): Result[TitleState] =
     for
       revision <- EitherT.fromOptionF(
-        sql"SELECT input_revision FROM series_analysis_title_states WHERE game_title_id = ${identities.lookup(Entity.GameTitles, title.value)} FOR UPDATE"
+        sql"SELECT input_revision FROM series_analysis_title_states WHERE game_title_id = $title FOR UPDATE"
           .query[Long].option,
         AppError.NotFound("game title", title.value),
       )
       _ <- EitherT.liftF(sql"""
       INSERT INTO series_radar_title_states (game_title_id)
-      VALUES (${identities.lookup(
-          Entity.GameTitles,
-          title.value
-        )}) ON CONFLICT (game_title_id) DO NOTHING
+      VALUES ($title) ON CONFLICT (game_title_id) DO NOTHING
     """.update.run)
       state <- EitherT.liftF(sql"""
-      SELECT generation, ${identities.wireReference(Entity.RadarBases, fr"r.current_basis_id")},
-        ${identities.wireReference(Entity.RadarBases, fr"r.previous_basis_id")},
-        ${identities.wireReference(Entity.RadarOperations, fr"r.active_operation_id")}
-      FROM series_radar_title_states r WHERE game_title_id = ${identities.lookup(
-          Entity.GameTitles,
-          title.value
-        )} FOR UPDATE
+      SELECT generation, current_basis_id, previous_basis_id, active_operation_id
+      FROM series_radar_title_states WHERE game_title_id = $title FOR UPDATE
     """.query[(Long, Option[String], Option[String], Option[String])].unique)
     yield TitleState(revision, state._1, state._2, state._3, state._4)
 
@@ -138,7 +87,7 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       ids: FreshIds,
       at: Instant,
       origin: Option[String],
-  )(using identities: PostgresIdentities): Result[SeriesPlayerRadarOperation] =
+  ): Result[SeriesPlayerRadarOperation] =
     command.kind match
       case SeriesPlayerRadarOperationKind.Candidate =>
         createCandidate(command, state, account, keyHash, fingerprint, ids, at, origin)
@@ -157,15 +106,11 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       case SeriesPlayerRadarOperationKind.Retry =>
         retry(command, state, account, keyHash, fingerprint, ids, at)
 
-  private def noActivePreparation(title: GameTitleId)(using
-      identities: PostgresIdentities): Result[Unit] =
+  private def noActivePreparation(title: GameTitleId): Result[Unit] =
     for
       active <- EitherT.liftF(sql"""
-      SELECT EXISTS(SELECT 1 FROM series_radar_operations o
-        WHERE game_title_id = ${identities.lookup(
-          Entity.GameTitles,
-          title.value
-        )} AND status IN ('pending', 'running'))
+      SELECT EXISTS(SELECT 1 FROM series_radar_operations
+        WHERE game_title_id = $title AND status IN ('pending', 'running'))
     """.query[Boolean].unique)
       _ <- require(!active, "Another radar operation is already in progress. Refresh its state.")
     yield ()
@@ -179,17 +124,14 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       ids: FreshIds,
       at: Instant,
       origin: Option[String],
-  )(using identities: PostgresIdentities): Result[SeriesPlayerRadarOperation] =
+  ): Result[SeriesPlayerRadarOperation] =
     for
       _ <- noActivePreparation(command.gameTitleId)
       unresolved <- EitherT.liftF(sql"""
       SELECT EXISTS(SELECT 1 FROM series_radar_candidates
-        WHERE game_title_id = ${identities.lookup(Entity.GameTitles, command.gameTitleId.value)}
+        WHERE game_title_id = ${command.gameTitleId}
           AND status IN ('pending', 'ready', 'unavailable', 'failed')
-          AND id IS DISTINCT FROM ${identities.lookup(
-          Entity.RadarCandidates,
-          Option.when(origin.nonEmpty)(command.candidateId).flatten
-        )})
+          AND id IS DISTINCT FROM ${Option.when(origin.nonEmpty)(command.candidateId).flatten})
     """.query[Boolean].unique)
       _ <- require(!unresolved, "A radar candidate already exists. Review or withdraw it first.")
       _ <- require(state.activeOperationId.isEmpty, "A radar application is already in progress.")
@@ -218,7 +160,7 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       fingerprint: String,
       ids: FreshIds,
       at: Instant,
-  )(using identities: PostgresIdentities): Result[SeriesPlayerRadarOperation] =
+  ): Result[SeriesPlayerRadarOperation] =
     for
       _ <- noActivePreparation(command.gameTitleId)
       _ <- require(state.activeOperationId.isEmpty, "A radar application is already in progress.")
@@ -227,8 +169,8 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
         "The current radar basis changed. Refresh before saving."
       )
       existing <- EitherT.liftF(sql"""
-        SELECT ${identities.wireId("c")} FROM series_radar_candidates c
-        WHERE game_title_id = ${identities.lookup(Entity.GameTitles, command.gameTitleId.value)}
+        SELECT id FROM series_radar_candidates
+        WHERE game_title_id = ${command.gameTitleId}
           AND status IN ('pending', 'ready', 'unavailable', 'failed') FOR UPDATE
       """.query[String].option)
       _ <- require(
@@ -245,22 +187,13 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       )
       sourceValid <- EitherT.liftF(sql"""
         SELECT EXISTS(SELECT 1 FROM series_radar_bases b
-          WHERE b.id = $source AND b.game_title_id = ${command.gameTitleId.value}
+          WHERE b.id = $source AND b.game_title_id = ${command.gameTitleId}
             AND b.payload->>'definitionVersion' = 'player-radar-six-axes-v1'
             AND b.payload->>'methodVersion' = 'player-radar-spread-v1'
             AND ((b.id = ${state.currentBasisId} AND ${command.sourceCandidateId}::text IS NULL)
               OR EXISTS(SELECT 1 FROM series_radar_candidates c
-                WHERE ${identities.retainedColumn(
-          "c",
-          "game_title_id"
-        )} = b.game_title_id AND c.id = ${identities.lookup(Entity.RadarCandidates, existing)}
-                  AND ((c.id = ${identities.lookup(
-          Entity.RadarCandidates,
-          command.sourceCandidateId
-        )} AND ${identities.wireReference(
-          Entity.RadarBases,
-          fr"c.basis_id"
-        )} = b.id AND c.status = 'ready')
+                WHERE c.game_title_id = b.game_title_id AND c.id = $existing
+                  AND ((c.id = ${command.sourceCandidateId} AND c.basis_id = b.id AND c.status = 'ready')
                     OR (c.origin_kind = 'manual' AND c.source_basis_id = b.id
                       AND c.source_candidate_id IS NOT DISTINCT FROM ${command.sourceCandidateId}))))
         )
@@ -270,7 +203,7 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       payload = manualJson(input).noSpaces
       unchanged <- EitherT.liftF(sql"""
         SELECT EXISTS(SELECT 1 FROM series_radar_bases b
-          WHERE b.id = ${state.currentBasisId} AND b.game_title_id = ${command.gameTitleId.value}
+          WHERE b.id = ${state.currentBasisId} AND b.game_title_id = ${command.gameTitleId}
             AND (SELECT jsonb_agg(jsonb_build_object('axisId', axis->'axisId', 'thresholds', axis->'thresholds') ORDER BY position)
               FROM jsonb_array_elements(b.payload->'axes') WITH ORDINALITY items(axis, position))
                 = $payload::jsonb->'axes')
@@ -278,33 +211,18 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       _ <- require(!unchanged, "The manual radar boundaries are unchanged from the current basis.")
       _ <- EitherT.liftF(sql"""
         UPDATE series_radar_candidates SET status = 'withdrawn', updated_at = $at
-        WHERE id = ${identities.lookup(
-          Entity.RadarCandidates,
-          existing
-        )} AND game_title_id = ${identities.lookup(Entity.GameTitles, command.gameTitleId.value)}
+        WHERE id = $existing AND game_title_id = ${command.gameTitleId}
       """.update.run *> sql"""
         UPDATE series_radar_previews SET status = 'stale', updated_at = $at
-        WHERE candidate_id = ${identities.lookup(
-          Entity.RadarCandidates,
-          existing
-        )} AND status IN ('pending','ready')
+        WHERE candidate_id = $existing AND status IN ('pending','ready')
       """.update.run)
-      allocatedCandidate <- EitherT.liftF(identities.newId(ids.candidate))
       _ <- EitherT.liftF(sql"""
         INSERT INTO series_radar_candidates
-          (${identities.idColumns}, game_title_id ${identities.legacyColumn(
-          "game_title_id"
-        )}, origin_kind, manual_input, source_basis_id, source_candidate_id,
+          (id, game_title_id, origin_kind, manual_input, source_basis_id, source_candidate_id,
            saved_by, saved_by_display_name, status, created_at, updated_at)
-        VALUES ($allocatedCandidate, ${identities.lookup(
-          Entity.GameTitles,
-          command.gameTitleId.value
-        )} ${identities.legacyValue(command.gameTitleId.value)}, 'manual', $payload::jsonb, $source,
+        VALUES (${ids.candidate}, ${command.gameTitleId}, 'manual', $payload::jsonb, $source,
           ${command.sourceCandidateId}, $account,
-          (SELECT display_name FROM momo_login_accounts WHERE id = ${identities.lookup(
-          Entity.Accounts,
-          account.value
-        )}), 'pending', $at, $at)
+          (SELECT display_name FROM momo_login_accounts WHERE id = $account), 'pending', $at, $at)
       """.update.run)
       operation <- insertOperation(
         command,
@@ -339,7 +257,7 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       ids: FreshIds,
       at: Instant,
       origin: Option[String],
-  )(using identities: PostgresIdentities): Result[SeriesPlayerRadarOperation] =
+  ): Result[SeriesPlayerRadarOperation] =
     for
       _ <- noActivePreparation(command.gameTitleId)
       candidate <- previewCandidate(command.gameTitleId, command.candidateId)
@@ -368,26 +286,16 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       ids: FreshIds,
       at: Instant,
       origin: Option[String],
-  )(using identities: PostgresIdentities): Result[SeriesPlayerRadarOperation] =
+  ): Result[SeriesPlayerRadarOperation] =
     for
       _ <- noActivePreparation(command.gameTitleId)
       candidate <- readyCandidate(command.gameTitleId, command.candidateId)
       preview <- EitherT.fromOptionF(
         sql"""
-      SELECT ${identities.wireId("p")}, ${identities.wireReference(
-            Entity.RadarCandidates,
-            fr"p.candidate_id"
-          )},
-        ${identities.wireReference(
-            Entity.RadarBases,
-            fr"p.before_basis_id"
-          )}, input_revision, status,
+      SELECT id, candidate_id, before_basis_id, input_revision, status,
         COALESCE(jsonb_array_length(evaluation_snapshot->'matches'), 0) > 0
-      FROM series_radar_previews p
-      WHERE id = ${identities.lookup(
-            Entity.RadarPreviews,
-            command.previewId
-          )} AND game_title_id = ${identities.lookup(Entity.GameTitles, command.gameTitleId.value)}
+      FROM series_radar_previews
+      WHERE id = ${command.previewId} AND game_title_id = ${command.gameTitleId}
       FOR UPDATE
     """.query[Preview].option,
         AppError.Conflict("The radar comparison is no longer available.")
@@ -420,18 +328,9 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       )
       _ <- EitherT.liftF(sql"""
       UPDATE series_radar_title_states
-      SET desired_basis_id = ${identities.lookup(
-          Entity.RadarBases,
-          candidate.basisId
-        )}, generation = generation + 1,
-          active_operation_id = ${identities.lookup(
-          Entity.RadarOperations,
-          ids.operation
-        )}, updated_at = $at
-      WHERE game_title_id = ${identities.lookup(
-          Entity.GameTitles,
-          command.gameTitleId.value
-        )} AND generation = ${state.generation}
+      SET desired_basis_id = ${candidate.basisId}, generation = generation + 1,
+          active_operation_id = ${ids.operation}, updated_at = $at
+      WHERE game_title_id = ${command.gameTitleId} AND generation = ${state.generation}
     """.update.run)
       _ <- markPending(command.gameTitleId)
     yield operation
@@ -444,7 +343,7 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       fingerprint: String,
       ids: FreshIds,
       at: Instant,
-  )(using identities: PostgresIdentities): Result[SeriesPlayerRadarOperation] =
+  ): Result[SeriesPlayerRadarOperation] =
     for
       candidate <- candidateById(command.gameTitleId, command.candidateId)
       _ <- require(
@@ -454,30 +353,15 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       _ <- command.originOperationId.traverse_ { origin =>
         for
           owned <- EitherT.liftF(sql"""
-            SELECT EXISTS(SELECT 1 FROM series_radar_operations o
-              WHERE id = ${identities.lookup(
-              Entity.RadarOperations,
-              origin
-            )} AND game_title_id = ${identities.lookup(
-              Entity.GameTitles,
-              command.gameTitleId.value
-            )}
-                AND candidate_id = ${identities.lookup(
-              Entity.RadarCandidates,
-              candidate.id
-            )} AND kind = 'manual' AND requested_by = ${identities.lookup(
-              Entity.Accounts,
-              account.value
-            )})
+            SELECT EXISTS(SELECT 1 FROM series_radar_operations
+              WHERE id = $origin AND game_title_id = ${command.gameTitleId}
+                AND candidate_id = ${candidate.id} AND kind = 'manual' AND requested_by = $account)
           """.query[Boolean].unique)
           _ <-
             require(owned, "The manual creation operation does not belong to this editing session.")
           applied <- EitherT.liftF(sql"""
-            SELECT EXISTS(SELECT 1 FROM series_radar_operations o
-              WHERE game_title_id = ${identities.lookup(
-              Entity.GameTitles,
-              command.gameTitleId.value
-            )} AND candidate_id = ${identities.lookup(Entity.RadarCandidates, candidate.id)}
+            SELECT EXISTS(SELECT 1 FROM series_radar_operations
+              WHERE game_title_id = ${command.gameTitleId} AND candidate_id = ${candidate.id}
                 AND kind = 'apply')
           """.query[Boolean].unique)
           _ <- require(
@@ -488,35 +372,23 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       }
       _ <- EitherT.liftF(sql"""
       UPDATE series_radar_candidates SET status = 'withdrawn', updated_at = $at
-      WHERE id = ${identities.lookup(
-          Entity.RadarCandidates,
-          candidate.id
-        )} AND game_title_id = ${identities.lookup(Entity.GameTitles, command.gameTitleId.value)}
+      WHERE id = ${candidate.id} AND game_title_id = ${command.gameTitleId}
     """.update.run)
       affected <- EitherT.liftF(sql"""
-      UPDATE series_radar_operations o SET status = 'withdrawn', finished_at = $at, updated_at = $at
-      WHERE candidate_id = ${identities.lookup(
-          Entity.RadarCandidates,
-          candidate.id
-        )} AND game_title_id = ${identities.lookup(Entity.GameTitles, command.gameTitleId.value)}
-        AND status IN ('pending', 'running') RETURNING ${identities.wireId("o")}
+      UPDATE series_radar_operations SET status = 'withdrawn', finished_at = $at, updated_at = $at
+      WHERE candidate_id = ${candidate.id} AND game_title_id = ${command.gameTitleId}
+        AND status IN ('pending', 'running') RETURNING id
     """.query[String].to[List])
       _ <- EitherT.liftF(sql"""
       UPDATE series_radar_previews SET status = 'stale', updated_at = $at
-      WHERE candidate_id = ${identities.lookup(
-          Entity.RadarCandidates,
-          candidate.id
-        )} AND status IN ('pending', 'ready')
+      WHERE candidate_id = ${candidate.id} AND status IN ('pending', 'ready')
     """.update.run)
       _ <- if state.activeOperationId.exists(affected.contains) then
         EitherT.liftF(sql"""
         UPDATE series_radar_title_states
         SET desired_basis_id = current_basis_id, generation = generation + 1,
             active_operation_id = NULL, updated_at = $at
-        WHERE game_title_id = ${identities.lookup(
-            Entity.GameTitles,
-            command.gameTitleId.value
-          )} AND generation = ${state.generation}
+        WHERE game_title_id = ${command.gameTitleId} AND generation = ${state.generation}
       """.update.run) *> reserveRecovery(command.gameTitleId, ids.operation) *>
           markPending(command.gameTitleId)
       else EitherT.rightT[ConnectionIO, AppError](())
@@ -544,7 +416,7 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       ids: FreshIds,
       at: Instant,
       origin: Option[String],
-  )(using identities: PostgresIdentities): Result[SeriesPlayerRadarOperation] =
+  ): Result[SeriesPlayerRadarOperation] =
     for
       _ <- noActivePreparation(command.gameTitleId)
       _ <- require(
@@ -557,12 +429,9 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       )
       unresolved <- EitherT.liftF(sql"""
       SELECT EXISTS(SELECT 1 FROM series_radar_candidates
-        WHERE game_title_id = ${identities.lookup(Entity.GameTitles, command.gameTitleId.value)}
+        WHERE game_title_id = ${command.gameTitleId}
           AND status IN ('pending', 'ready', 'unavailable', 'failed')
-          AND id IS DISTINCT FROM ${identities.lookup(
-          Entity.RadarCandidates,
-          Option.when(origin.nonEmpty)(command.candidateId).flatten
-        )})
+          AND id IS DISTINCT FROM ${Option.when(origin.nonEmpty)(command.candidateId).flatten})
     """.query[Boolean].unique)
       _ <- require(!unresolved, "Review or withdraw the existing radar candidate first.")
       candidateId = command.candidateId.filter(_ => origin.nonEmpty).getOrElse(ids.candidate)
@@ -596,7 +465,7 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       fingerprint: String,
       ids: FreshIds,
       at: Instant,
-  )(using identities: PostgresIdentities): Result[SeriesPlayerRadarOperation] =
+  ): Result[SeriesPlayerRadarOperation] =
     for
       evidence <- EitherT.fromOption[ConnectionIO](
         command.evidenceKey,
@@ -605,22 +474,13 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       visible <- EitherT.liftF(sql"""
       SELECT EXISTS(SELECT 1 FROM series_radar_title_states r,
         LATERAL jsonb_array_elements(COALESCE(r.monitor->'reasons', '[]'::jsonb)) e
-        WHERE r.game_title_id = ${identities.lookup(
-          Entity.GameTitles,
-          command.gameTitleId.value
-        )} AND e->>'evidenceChecksum' = $evidence)
+        WHERE r.game_title_id = ${command.gameTitleId} AND e->>'evidenceChecksum' = $evidence)
     """.query[Boolean].unique)
       _ <- require(visible, "The review evidence changed. Refresh the radar state.")
-      retainedAccount <- EitherT.liftF(identities.retainedValue(Entity.Accounts, account.value))
       _ <- EitherT.liftF(sql"""
       INSERT INTO series_radar_acknowledgements
-        (game_title_id, evidence_key, requested_by ${identities.legacyColumn(
-          "requested_by"
-        )}, acknowledged_at)
-      VALUES (${identities.lookup(
-          Entity.GameTitles,
-          command.gameTitleId.value
-        )}, $evidence, $retainedAccount ${identities.legacyValue(account.value)}, $at)
+        (game_title_id, evidence_key, requested_by, acknowledged_at)
+      VALUES (${command.gameTitleId}, $evidence, $account, $at)
       ON CONFLICT (game_title_id, evidence_key) DO NOTHING
     """.update.run)
       operation <- insertOperation(
@@ -646,15 +506,12 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       fingerprint: String,
       ids: FreshIds,
       at: Instant,
-  )(using identities: PostgresIdentities): Result[SeriesPlayerRadarOperation] =
+  ): Result[SeriesPlayerRadarOperation] =
     for
       original <- EitherT.fromOptionF(
         (fr"SELECT" ++ PostgresSeriesPlayerRadarReadOps.operationColumns ++ fr"""
-      FROM series_radar_operations o
-      WHERE id = ${identities.lookup(
-            Entity.RadarOperations,
-            command.originOperationId
-          )} AND game_title_id = ${identities.lookup(Entity.GameTitles, command.gameTitleId.value)}
+      FROM series_radar_operations
+      WHERE id = ${command.originOperationId} AND game_title_id = ${command.gameTitleId}
       FOR UPDATE
     """).query[SeriesPlayerRadarOperation].option,
         AppError.Conflict("The original radar operation is no longer available.")
@@ -672,14 +529,9 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
         original.kind != "restore" || original.basisId == state.previousBasisId,
         "The previous radar basis changed. Refresh its comparison before retrying."
       )
-      before <- original.previewId.traverse(id =>
-        EitherT.liftF(sql"""
-      SELECT ${identities.wireReference(
-            Entity.RadarBases,
-            fr"p.before_basis_id"
-          )} FROM series_radar_previews p WHERE id = ${identities.lookup(Entity.RadarPreviews, id)}
-    """.query[Option[String]].option)
-      ).map(_.flatten.flatten)
+      before <- original.previewId.traverse(id => EitherT.liftF(sql"""
+      SELECT before_basis_id FROM series_radar_previews WHERE id = $id
+    """.query[Option[String]].option)).map(_.flatten.flatten)
       retryCommand = command.copy(
         kind = if kind == SeriesPlayerRadarOperationKind.Manual then
           SeriesPlayerRadarOperationKind.Preview
@@ -702,24 +554,16 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       )
     yield result
 
-  private def candidateById(title: GameTitleId, id: Option[String])(using
-      identities: PostgresIdentities): Result[Candidate] =
+  private def candidateById(title: GameTitleId, id: Option[String]): Result[Candidate] =
     EitherT.fromOptionF(
       sql"""
-      SELECT ${identities.wireId("c")}, ${identities.wireReference(
-          Entity.RadarBases,
-          fr"c.basis_id"
-        )}, status FROM series_radar_candidates c
-      WHERE game_title_id = ${identities.lookup(
-          Entity.GameTitles,
-          title.value
-        )} AND id = ${identities.lookup(Entity.RadarCandidates, id)} FOR UPDATE
+      SELECT id, basis_id, status FROM series_radar_candidates
+      WHERE game_title_id = $title AND id = $id FOR UPDATE
     """.query[Candidate].option,
       AppError.Conflict("The radar candidate is no longer available.")
     )
 
-  private def readyCandidate(title: GameTitleId, id: Option[String])(using
-      identities: PostgresIdentities): Result[Candidate] =
+  private def readyCandidate(title: GameTitleId, id: Option[String]): Result[Candidate] =
     for
       candidate <- candidateById(title, id)
       _ <- require(
@@ -728,30 +572,23 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       )
       compatible <- EitherT.liftF(sql"""
       SELECT EXISTS(SELECT 1 FROM series_radar_bases
-        WHERE id = ${candidate.basisId} AND game_title_id = ${title.value}
+        WHERE id = ${candidate.basisId} AND game_title_id = $title
           AND payload->>'definitionVersion' = 'player-radar-six-axes-v1'
           AND payload->>'methodVersion' = 'player-radar-spread-v1')
     """.query[Boolean].unique)
       _ <- require(compatible, "The radar definition changed. Create a new candidate.")
     yield candidate
 
-  private def previewCandidate(title: GameTitleId, id: Option[String])(using
-      identities: PostgresIdentities): Result[Candidate] =
+  private def previewCandidate(title: GameTitleId, id: Option[String]): Result[Candidate] =
     for
       manual <- EitherT.liftF(sql"""
-        SELECT EXISTS(SELECT 1 FROM series_radar_candidates WHERE id = ${identities.lookup(
-          Entity.RadarCandidates,
-          id
-        )} AND game_title_id = ${identities.lookup(Entity.GameTitles, title.value)}
+        SELECT EXISTS(SELECT 1 FROM series_radar_candidates WHERE id = $id AND game_title_id = $title
           AND origin_kind = 'manual' AND status IN ('ready','unavailable','failed'))
       """.query[Boolean].unique)
       candidate <- if manual then candidateById(title, id) else readyCandidate(title, id)
       _ <- EitherT.liftF(sql"""
         UPDATE series_radar_candidates SET status = CASE WHEN basis_id IS NULL THEN 'pending' ELSE 'ready' END,
-          safe_failure_code = NULL, updated_at = now() WHERE id = ${identities.lookup(
-          Entity.RadarCandidates,
-          id
-        )} AND game_title_id = ${identities.lookup(Entity.GameTitles, title.value)}
+          safe_failure_code = NULL, updated_at = now() WHERE id = $id AND game_title_id = $title
       """.update.run).void
     yield candidate
 
@@ -761,23 +598,13 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       basis: Option[String],
       account: AccountId,
       at: Instant
-  )(using identities: PostgresIdentities)
-      : Result[Unit] = EitherT.liftF(for
-    allocated <- identities.newId(id)
-    titleRef <- identities.requireReference(Entity.GameTitles, title.value)
-    basisRef <- identities.requireReference(Entity.RadarBases, basis)
-    _ <- sql"""
+  )
+      : Result[Unit] = EitherT.liftF(sql"""
     INSERT INTO series_radar_candidates
-      (${identities.idColumns}, game_title_id ${identities.legacyColumn("game_title_id")}, basis_id,
-       origin_kind, saved_by, saved_by_display_name, status, created_at, updated_at)
-    VALUES ($allocated, $titleRef ${identities.legacyValue(title.value)}, $basisRef,
-      ${if basis.nonEmpty then "restore" else "generated"}, $account,
-      (SELECT display_name FROM momo_login_accounts WHERE id = ${identities.lookup(
-        Entity.Accounts,
-        account.value
-      )}), 'pending', $at, $at)
-  """.update.run.void
-  yield ())
+      (id, game_title_id, basis_id, origin_kind, saved_by, saved_by_display_name, status, created_at, updated_at)
+    VALUES ($id, $title, $basis, ${if basis.nonEmpty then "restore" else "generated"}, $account,
+      (SELECT display_name FROM momo_login_accounts WHERE id = $account), 'pending', $at, $at)
+  """.update.run.void)
 
   private def prepareCandidate(
       id: String,
@@ -786,7 +613,7 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       account: AccountId,
       at: Instant,
       retrying: Boolean
-  )(using identities: PostgresIdentities): Result[Unit] =
+  ): Result[Unit] =
     if !retrying then insertCandidate(id, title, basis, account, at)
     else
       for
@@ -794,15 +621,9 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
         _ <- require(candidate.status == "failed", "Only a failed candidate can be retried.")
         _ <- EitherT.liftF(sql"""
         UPDATE series_radar_candidates
-        SET status = 'pending', basis_id = ${identities.lookup(
-            Entity.RadarBases,
-            basis
-          )}, result = NULL,
+        SET status = 'pending', basis_id = $basis, result = NULL,
             safe_failure_code = NULL, updated_at = $at
-        WHERE id = ${identities.lookup(
-            Entity.RadarCandidates,
-            id
-          )} AND game_title_id = ${identities.lookup(Entity.GameTitles, title.value)}
+        WHERE id = $id AND game_title_id = $title
       """.update.run)
       yield ()
 
@@ -812,18 +633,12 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       candidate: String,
       state: TitleState,
       at: Instant
-  )(using identities: PostgresIdentities)
-      : Result[Unit] = EitherT.liftF(for
-    allocated <- identities.newId(id)
-    titleRef <- identities.requireReference(Entity.GameTitles, title.value)
-    candidateRef <- identities.requireReference(Entity.RadarCandidates, candidate)
-    basisRef <- identities.requireReference(Entity.RadarBases, state.currentBasisId)
-    _ <- sql"""
+  )
+      : Result[Unit] = EitherT.liftF(sql"""
     INSERT INTO series_radar_previews
-      (${identities.idColumns}, game_title_id, candidate_id, before_basis_id, input_revision, status, created_at, updated_at)
-    VALUES ($allocated, $titleRef, $candidateRef, $basisRef, ${state.inputRevision}, 'pending', $at, $at)
-  """.update.run.void
-  yield ())
+      (id, game_title_id, candidate_id, before_basis_id, input_revision, status, created_at, updated_at)
+    VALUES ($id, $title, $candidate, ${state.currentBasisId}, ${state.inputRevision}, 'pending', $at, $at)
+  """.update.run.void)
 
   private def insertOperation(
       command: SeriesPlayerRadarCommand,
@@ -837,40 +652,18 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       basisId: Option[String],
       origin: Option[String],
       status: String,
-  )(using identities: PostgresIdentities): Result[SeriesPlayerRadarOperation] =
+  ): Result[SeriesPlayerRadarOperation] =
     val finished = Option.when(status == "succeeded")(at)
-    EitherT.liftF(for
-      allocated <- identities.newId(id)
-      titleRef <- identities.requireReference(Entity.GameTitles, command.gameTitleId.value)
-      candidateRef <- identities.requireReference(Entity.RadarCandidates, candidateId)
-      previewRef <- identities.requireReference(Entity.RadarPreviews, previewId)
-      basisRef <- identities.requireReference(Entity.RadarBases, basisId)
-      originRef <- identities.retainedValue(Entity.RadarOperations, origin)
-      accountRef <- identities.retainedValue(Entity.Accounts, account.value)
-      _ <- sql"""
+    EitherT.liftF(sql"""
       INSERT INTO series_radar_operations
-        (${identities.idColumns}, game_title_id ${identities.legacyColumn(
-          "game_title_id"
-        )}, kind, status, candidate_id, preview_id, basis_id,
-         origin_operation_id ${identities.legacyColumn(
-          "origin_operation_id"
-        )}, requested_by ${identities.legacyColumn(
-          "requested_by"
-        )}, requested_by_display_name, idempotency_key_hash, request_fingerprint,
+        (id, game_title_id, kind, status, candidate_id, preview_id, basis_id,
+         origin_operation_id, requested_by, requested_by_display_name, idempotency_key_hash, request_fingerprint,
          requested_at, finished_at, updated_at)
-      VALUES ($allocated, $titleRef ${identities.legacyValue(
-          command.gameTitleId.value
-        )}, ${command.kind.wire}, $status,
-        $candidateRef, $previewRef, $basisRef, $originRef ${identities.legacyValue(
-          origin
-        )}, $accountRef ${identities.legacyValue(account.value)},
-        (SELECT display_name FROM momo_login_accounts WHERE id = ${identities.lookup(
-          Entity.Accounts,
-          account.value
-        )}), $keyHash, $fingerprint,
+      VALUES ($id, ${command.gameTitleId}, ${command.kind.wire}, $status,
+        $candidateId, $previewId, $basisId, $origin, $account,
+        (SELECT display_name FROM momo_login_accounts WHERE id = $account), $keyHash, $fingerprint,
         $at, $finished, $at)
-    """.update.run
-    yield ()).as(SeriesPlayerRadarOperation(
+    """.update.run).as(SeriesPlayerRadarOperation(
       id,
       command.gameTitleId,
       command.kind.wire,
@@ -884,35 +677,26 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       finished
     ))
 
-  private def markPending(title: GameTitleId)(using identities: PostgresIdentities): Result[Unit] =
-    EitherT.liftF(sql"""
+  private def markPending(title: GameTitleId): Result[Unit] = EitherT.liftF(sql"""
     UPDATE series_analysis_title_states SET pending_work = true, updated_at = now()
-    WHERE game_title_id = ${identities.lookup(Entity.GameTitles, title.value)}
-  """.update.run *> PostgresSeriesAnalysisJobTransitions.bindQueuedRadar(title))
+    WHERE game_title_id = $title
+  """.update.run *> sql"""
+    UPDATE series_analysis_jobs SET updated_at = now()
+    WHERE game_title_id = $title AND status = 'queued' AND work_kind = 'analysis'
+  """.update.run.void)
 
   /** A cancellation can precede job materialization, so the intent must outlive its radar operation. */
-  private def reserveRecovery(title: GameTitleId, operationId: String)(using
-      identities: PostgresIdentities): Result[Unit] =
+  private def reserveRecovery(title: GameTitleId, operationId: String): Result[Unit] =
     val requestId = s"radar-recovery:$operationId"
-    EitherT.liftF(for
-      allocated <- identities.structuredId(Entity.AnalysisRequests, requestId)
-      _ <- sql"""
+    EitherT.liftF(sql"""
       INSERT INTO series_analysis_job_requests
-        (${identities.idColumns}, game_title_id ${identities.legacyColumn(
-          "game_title_id"
-        )}, input_revision, algorithm_version, artifact_schema_version,
+        (id, game_title_id, input_revision, algorithm_version, artifact_schema_version,
          validation_contract_id, trigger, force_run, status)
-      SELECT $allocated, game_title_id ${identities.legacyValue(
-          title.value
-        )}, input_revision, algorithm_version,
+      SELECT $requestId, game_title_id, input_revision, algorithm_version,
         artifact_schema_version, validation_contract_id, 'manual', false, 'pending'
-      FROM series_analysis_title_states WHERE game_title_id = ${identities.lookup(
-          Entity.GameTitles,
-          title.value
-        )}
+      FROM series_analysis_title_states WHERE game_title_id = $title
       ON CONFLICT (id) DO NOTHING
-    """.update.run.void
-    yield ())
+    """.update.run.void)
 
   private def require(condition: Boolean, detail: String): Result[Unit] =
     EitherT.cond[ConnectionIO](condition, (), AppError.Conflict(detail))

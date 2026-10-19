@@ -9,7 +9,6 @@ import type {
 import { useHeldEventWrites } from "@/features/heldEvents/list/useHeldEventWrites";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { formatApiError } from "@/shared/api/problemDetails";
-import { heldEventDetailHref } from "@/shared/navigation/publicIdentifiers";
 import type { UnsavedChangesGuardModel } from "@/shared/navigation/UnsavedChangesGuard";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
@@ -62,7 +61,7 @@ export function useHeldEventActions(): {
       setCreateOpen(false);
       showToast({ title: "開催を作成しました。", tone: "success" });
       navigationAllowedRef.current = true;
-      navigate(heldEventDetailHref(event.id, event.publicId));
+      navigate(`/held-events/${encodeURIComponent(event.id)}`);
       return { version: previous.version + 1 };
     } catch (error) {
       if (mountedRef.current) setErrorMessage(formatApiError(error, "開催の作成に失敗しました"));

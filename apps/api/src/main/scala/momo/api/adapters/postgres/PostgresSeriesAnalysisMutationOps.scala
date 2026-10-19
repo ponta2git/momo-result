@@ -5,7 +5,7 @@ import cats.syntax.all.*
 import doobie.ConnectionIO
 import doobie.implicits.*
 
-import momo.api.adapters.postgres.CanonicalIdentity.Entity
+import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.contracts.seriesanalysis.SeriesAnalysisArtifactContract
 import momo.api.domain.ids.GameTitleId
 import momo.api.errors.{AppError, AppException}
@@ -26,22 +26,17 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
 
   private final case class ActiveJob(id: String, status: String, workKind: String)
 
-  def enqueueMatchMutation(gameTitleIds: List[GameTitleId])(using
-      identities: PostgresIdentities): ConnectionIO[Unit] = gameTitleIds
-    .traverse(id =>
-      identities.normalize(Entity.GameTitles, id.value).map(GameTitleId.unsafeFromString)
-    )
-    .flatMap(_.distinct.sortBy(_.value).traverse_(enqueueTitle))
+  def enqueueMatchMutation(gameTitleIds: List[GameTitleId]): ConnectionIO[Unit] = gameTitleIds
+    .distinct.sortBy(_.value).traverse_(enqueueTitle)
 
-  private def enqueueTitle(gameTitleId: GameTitleId)(using
-      identities: PostgresIdentities): ConnectionIO[Unit] =
+  private def enqueueTitle(gameTitleId: GameTitleId): ConnectionIO[Unit] =
     for
       desired <- sql"""
         UPDATE series_analysis_title_states
         SET input_revision = input_revision + 1,
             pending_work = true,
             updated_at = now()
-        WHERE game_title_id = ${identities.lookup(Entity.GameTitles, gameTitleId.value)}
+        WHERE game_title_id = $gameTitleId
         RETURNING input_revision, algorithm_version, artifact_schema_version,
                   validation_contract_id
       """.query[DesiredVersion].option.flatMap {
@@ -63,9 +58,9 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
         else
           MonadThrow[ConnectionIO].raiseError(new AppException(AppError.AnalysisStateUnavailable()))
       active <- sql"""
-        SELECT ${identities.wireId("j")}, status, work_kind
-        FROM series_analysis_jobs j
-        WHERE game_title_id = ${identities.lookup(Entity.GameTitles, gameTitleId.value)}
+        SELECT id, status, work_kind
+        FROM series_analysis_jobs
+        WHERE game_title_id = $gameTitleId
           AND status IN ('queued', 'running')
         FOR UPDATE
       """.query[ActiveJob].option
@@ -89,13 +84,10 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
         desired.artifactSchemaVersion.toString,
         SeriesAnalysisArtifactContract.ValidationContractId,
       )
-      allocatedJob <- identities.structuredId(Entity.AnalysisJobs, derivedJobId)
-      allocatedRequest <- identities.structuredId(Entity.AnalysisRequests, requestId)
-      title <- identities.requireReference(Entity.GameTitles, gameTitleId.value)
       _ <- active match
         case None => sql"""
             INSERT INTO series_analysis_jobs (
-              ${identities.idColumns},
+              id,
               game_title_id,
               input_revision,
               algorithm_version,
@@ -104,8 +96,8 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
               status,
               trigger
             ) VALUES (
-              $allocatedJob,
-              $title,
+              $derivedJobId,
+              $gameTitleId,
               ${desired.inputRevision},
               ${desired.algorithmVersion},
               ${desired.artifactSchemaVersion},
@@ -122,15 +114,14 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
                 artifact_schema_version = ${desired.artifactSchemaVersion},
                 validation_contract_id = ${desired.validationContractId},
                 updated_at = now()
-            WHERE id = ${identities.lookup(Entity.AnalysisJobs, job.id)}
+            WHERE id = ${job.id}
               AND status = 'queued'
           """.update.run.flatMap(requireOne("series_analysis_jobs", job.id, "coalesce queued job"))
         case Some(_) => ().pure[ConnectionIO]
-      _ <- PostgresSeriesAnalysisJobTransitions.bindQueuedRadar(gameTitleId)
       _ <- sql"""
         INSERT INTO series_analysis_job_requests (
-          ${identities.idColumns},
-          game_title_id ${identities.legacyColumn("game_title_id")},
+          id,
+          game_title_id,
           input_revision,
           algorithm_version,
           artifact_schema_version,
@@ -140,8 +131,8 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
           status,
           assigned_job_id
         ) VALUES (
-          $allocatedRequest,
-          $title ${identities.legacyValue(gameTitleId.value)},
+          $requestId,
+          $gameTitleId,
           ${desired.inputRevision},
           ${desired.algorithmVersion},
           ${desired.artifactSchemaVersion},
@@ -149,7 +140,7 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
           'match_mutation',
           false,
           'pending',
-          ${identities.lookup(Entity.AnalysisJobs, jobId)}
+          $jobId
         )
         ON CONFLICT (id) DO NOTHING
       """.update.run.void

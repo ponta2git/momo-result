@@ -16,15 +16,12 @@ addCommandAlias("apiFullCheck", "apiCheck; apiDbQuality")
 // sbt 2's `test` is incremental/cached; CI and coverage need each test's actual execution.
 addCommandAlias("apiCoverage", "coverage; clean; testFull; coverageReport; coverageOff")
 addCommandAlias("apiR2Quality", "R2Test / testFull")
-addCommandAlias("apiDbQuality", "DbTest / testFull; CanonicalDbTest / testFull")
-addCommandAlias("apiLegacyDbQuality", "DbTest / testFull")
-addCommandAlias("apiCanonicalDbQuality", "CanonicalDbTest / testFull")
+addCommandAlias("apiDbQuality", "DbTest / testFull")
 
 lazy val apiOpenApi = taskKey[File]("Generate OpenAPI from Tapir endpoint definitions")
 lazy val apiOpenApiCheck = taskKey[Unit]("Check that openapi.yaml matches generated Tapir output")
 lazy val OpenApi = config("openapi").hide.extend(Compile)
 lazy val DbTest = config("dbTest").hide.extend(Test)
-lazy val CanonicalDbTest = config("canonicalDbTest").hide.extend(Test)
 lazy val R2Test = config("r2Test").hide.extend(Test)
 
 // Reuse the compiled suite while isolating runner settings. Command aliases using `set Test / ...`
@@ -98,7 +95,7 @@ lazy val sharedScalacOptions = Seq(
 )
 
 lazy val root = (project in file("."))
-  .configs(OpenApi, DbTest, CanonicalDbTest, R2Test)
+  .configs(OpenApi, DbTest, R2Test)
   .enablePlugins(JavaAppPackaging)
   .settings(
     inConfig(OpenApi)(Defaults.compileSettings),
@@ -106,14 +103,10 @@ lazy val root = (project in file("."))
     org.scalafmt.sbt.ScalafmtPlugin.scalafmtConfigSettings(OpenApi),
     scalafixConfigSettings(OpenApi),
     inConfig(DbTest)(serviceTestSettings("DbIntegration")),
-    inConfig(CanonicalDbTest)(serviceTestSettings("CanonicalDbIntegration")),
     inConfig(R2Test)(serviceTestSettings("R2Integration")),
     // These suites share one migrated database and truncate app tables before each case.
     // Serialize only the DB configuration; R2 object keys are test-owned.
     DbTest / parallelExecution := false,
-    CanonicalDbTest / parallelExecution := false,
-    DbTest / envVars += "MOMO_API_IDENTITY_SCHEMA" -> "legacy",
-    CanonicalDbTest / envVars += "MOMO_API_IDENTITY_SCHEMA" -> "canonical",
     OpenApi / compile := Def.uncached((OpenApi / compile).dependsOn(Compile / compile).value),
     name := "momo-result-api",
     organization := "momo",
@@ -176,7 +169,7 @@ lazy val root = (project in file("."))
         (if (isMacOs) Seq("--enable-native-access=ALL-UNNAMED") else Seq.empty),
     Test / testOptions += Tests.Argument(
       TestFrameworks.MUnit,
-      "--exclude-tags=DbIntegration,CanonicalDbIntegration,R2Integration",
+      "--exclude-tags=DbIntegration,R2Integration",
     ),
     Test / parallelExecution := true,
     // Scoverage retains open measurement writers; isolate them from earlier runs in the sbt JVM.

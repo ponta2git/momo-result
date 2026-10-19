@@ -13,9 +13,7 @@ mod busy_retry;
 mod cgroup;
 mod cli;
 mod execution;
-mod identity;
-mod job_lease;
-mod maintenance;
+mod execution_slot;
 mod notifications;
 mod ocr;
 mod postgres;
@@ -24,7 +22,6 @@ mod postgres;
     reason = "all operating-system FFI is isolated here behind checked safe APIs and documented blocks"
 )]
 mod process;
-mod resource_budget;
 mod runtime_identifier;
 mod series_analysis;
 mod worker;

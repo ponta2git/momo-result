@@ -100,7 +100,7 @@ pub(super) async fn load_context(
     if job_id.is_empty() {
         let basis_id: Option<String> = tx
             .query_opt(
-                "SELECT (SELECT legacy_id FROM series_radar_basis_identities WHERE id=current_basis_id) FROM series_radar_title_states WHERE game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$1)",
+                "SELECT current_basis_id FROM series_radar_title_states WHERE game_title_id=$1",
                 &[&title],
             )
             .await?
@@ -123,12 +123,12 @@ pub(super) async fn load_context(
         });
     }
     let row = tx.query_opt(
-        "SELECT j.work_kind,j.legacy_radar_operation_id,(SELECT legacy_id FROM series_radar_basis_identities WHERE id=j.radar_basis_id),o.kind,c.legacy_id,p.legacy_id,(SELECT legacy_id FROM series_radar_basis_identities WHERE id=c.basis_id),(SELECT legacy_id FROM series_radar_basis_identities WHERE id=p.before_basis_id), \
+        "SELECT j.work_kind,j.radar_operation_id,j.radar_basis_id,o.kind,o.candidate_id,o.preview_id,c.basis_id,p.before_basis_id, \
          c.origin_kind,CASE WHEN octet_length(c.manual_input::text)<=65536 THEN c.manual_input END,c.source_basis_id,c.source_candidate_id \
          FROM series_analysis_jobs j LEFT JOIN series_radar_operations o ON o.id=j.radar_operation_id \
          LEFT JOIN series_radar_candidates c ON c.id=o.candidate_id \
          LEFT JOIN series_radar_previews p ON p.id=o.preview_id \
-         WHERE j.legacy_id=$1 AND j.game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$2) AND j.status='running'", &[&job_id,&title]).await?.ok_or(InputRepositoryError::Superseded)?;
+         WHERE j.id=$1 AND j.game_title_id=$2 AND j.status='running'", &[&job_id,&title]).await?.ok_or(InputRepositoryError::Superseded)?;
     let work_kind: String = row.try_get(0)?;
     let basis_id: Option<String> = if work_kind == "radar_prepare" {
         row.try_get(6)?
@@ -137,7 +137,7 @@ pub(super) async fn load_context(
     };
     let before_basis_id = if work_kind == "radar_prepare" {
         tx.query_opt(
-            "SELECT (SELECT legacy_id FROM series_radar_basis_identities WHERE id=current_basis_id) FROM series_radar_title_states WHERE game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$1)",
+            "SELECT current_basis_id FROM series_radar_title_states WHERE game_title_id=$1",
             &[&title],
         )
         .await?

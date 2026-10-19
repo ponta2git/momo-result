@@ -8,14 +8,16 @@ import doobie.{ConnectionIO, Transactor}
 
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.config.SeriesAnalysisReadConfig
-import momo.api.domain.GameTitle
 import momo.api.domain.ids.{AccountId, GameTitleId}
+import momo.api.domain.{GameTitle, SeriesAnalysisRecalculationAccepted}
+import momo.api.errors.AppError
 import momo.api.integration.IntegrationSuite
 
 final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
   private val accountId = AccountId.unsafeFromString("account_ponta")
   private val titleId = GameTitleId.unsafeFromString("title-request-concurrency")
   private val now = Instant.parse("2026-09-26T00:00:00Z")
+  private type Accepted = Either[AppError, SeriesAnalysisRecalculationAccepted]
 
   private def seedTitle(id: GameTitleId): IO[Unit] =
     sql"""
@@ -25,7 +27,7 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
       WHERE singleton_key = 'current'
     """.update.run.transact(transactor) *>
       new PostgresGameTitlesRepository[IO](transactor)
-        .createWithNextDisplayOrder(GameTitle(id, "要求整合性作品", "momotetsu_2", 1, now)).void
+        .createWithNextDisplayOrder(GameTitle(id, "要求整合性作品", "momotetsu2", 1, now)).void
 
   test("concurrent title retries replay the committed operation without adding work"):
     for
@@ -98,92 +100,12 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
       assertEquals(replay.map(_.requestId), first.map(_.requestId))
       assertEquals(titles, List(titleId))
 
-  test("creation and queued mutation or manual coalescing explicitly inherit each desired tuple"):
+  private def concurrentWithUncommittedFirst(
+      first: ConnectionIO[Accepted],
+      second: IO[Accepted],
+  ): IO[(Accepted, Accepted)] =
     for
-      _ <- seedTitle(titleId)
-      initial <- sql"""
-        SELECT input_revision, algorithm_version, artifact_schema_version,
-          validation_contract_id, notification_baseline_state
-        FROM series_analysis_title_states WHERE game_title_id = $titleId
-      """.query[(Long, String, Int, Option[String], String)].unique.transact(transactor)
-      _ <-
-        sql"INSERT INTO series_radar_title_states(game_title_id, generation) VALUES ($titleId, 3)"
-          .update.run.transact(transactor)
-      _ <-
-        PostgresSeriesAnalysisMutationOps.enqueueMatchMutation(List(titleId)).transact(transactor)
-      created <- queuedVersion
-      _ <- sql"UPDATE series_radar_title_states SET generation = 4 WHERE game_title_id = $titleId"
-        .update.run.transact(transactor)
-      _ <-
-        PostgresSeriesAnalysisMutationOps.enqueueMatchMutation(List(titleId)).transact(transactor)
-      coalesced <- queuedVersion
-      _ <- sql"UPDATE series_radar_title_states SET generation = 5 WHERE game_title_id = $titleId"
-        .update.run.transact(transactor)
-      repository <-
-        PostgresSeriesAnalysisRepository.create[IO](transactor, SeriesAnalysisReadConfig.defaults)
-      manual <- repository.requestTitleRecalculation(titleId, accountId, "explicit-binding")
-      requested <- queuedVersion
-      before <- sql"SELECT ctid::text FROM series_analysis_jobs WHERE game_title_id = $titleId"
-        .query[String].unique.transact(transactor)
-      _ <- PostgresSeriesAnalysisJobTransitions.bindQueuedRadar(titleId).transact(transactor)
-      after <- sql"SELECT ctid::text FROM series_analysis_jobs WHERE game_title_id = $titleId"
-        .query[String].unique.transact(transactor)
-    yield
-      assertEquals(
-        initial,
-        (
-          0L,
-          "series-analysis-v7",
-          6,
-          Some("series-analysis-artifact-v6-full-validation-v2"),
-          "initial"
-        )
-      )
-      assertEquals(created._2, 1L)
-      assertEquals(created._3, 3L)
-      assertEquals(coalesced, (created._1, 2L, 4L))
-      assertEquals(manual.map(_.target.flatMap(_.jobId)), Right(Some(created._1)))
-      assertEquals(requested, (created._1, 2L, 5L))
-      assertEquals(after, before, "repeating an already-bound assignment must not write the row")
-
-  test("creation waits for release promotion and inherits its committed tuple"):
-    val createdTitle = GameTitle(titleId, "昇格後の作品", "momotetsu_2", 1, now)
-    for
-      results <- concurrentWithUncommittedFirst(
-        sql"""
-          UPDATE series_analysis_release_state SET algorithm_version = 'promoted-analysis',
-            artifact_schema_version = 6,
-            validation_contract_id = 'series-analysis-artifact-v6-full-validation-v2'
-          WHERE singleton_key = 'current'
-        """.update.run,
-        new PostgresGameTitlesRepository[IO](transactor).createWithNextDisplayOrder(createdTitle),
-      )
-      state <- sql"""
-        SELECT algorithm_version, artifact_schema_version, validation_contract_id
-        FROM series_analysis_title_states WHERE game_title_id = $titleId
-      """.query[(String, Int, Option[String])].unique.transact(transactor)
-    yield
-      assert(results._2.isRight)
-      assertEquals(
-        state,
-        (
-          "promoted-analysis",
-          6,
-          Some("series-analysis-artifact-v6-full-validation-v2")
-        )
-      )
-
-  private def queuedVersion: IO[(String, Long, Long)] = sql"""
-    SELECT id, input_revision, radar_generation FROM series_analysis_jobs
-    WHERE game_title_id = $titleId AND status = 'queued' AND work_kind = 'analysis'
-  """.query[(String, Long, Long)].unique.transact(transactor)
-
-  private def concurrentWithUncommittedFirst[A, B](
-      first: ConnectionIO[A],
-      second: IO[B],
-  ): IO[(A, B)] =
-    for
-      ready <- Deferred[IO, (Int, A)]
+      ready <- Deferred[IO, (Int, Accepted)]
       release <- Deferred[IO, Unit]
       result <- Resource.make(
         Resource.fromAutoCloseable(IO.blocking(dataSource.getConnection)).use { connection =>

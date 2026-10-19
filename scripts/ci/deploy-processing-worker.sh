@@ -7,8 +7,6 @@ set -euo pipefail
 : "${GITHUB_RUN_ID:?required}"
 : "${GITHUB_RUN_ATTEMPT:?required}"
 : "${RUNNER_TEMP:?required}"
-: "${DEPLOYMENT_MODE:=normal}"
-[[ "${DEPLOYMENT_MODE}" == normal || "${DEPLOYMENT_MODE}" == frozen ]] || exit 2
 [[ "${ANALYSIS_RELEASE_SHA}" =~ ^[0-9a-f]{40}$ ]] || exit 2
 ANALYSIS_WORKER_ID="worker-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
 OCR_WORKER_ID="ocr-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
@@ -18,7 +16,6 @@ flyctl config validate --strict --config fly.analysis.toml
 secret_state="$(flyctl secrets list --app "${ANALYSIS_APP}" --json)"
 scripts/ci/ci-tool.sh analysis-secrets ready <<< "${secret_state}"
 flyctl auth docker
-scripts/ci/deployment-permission.sh "${DEPLOYMENT_MODE}" "${MAINTENANCE_RECEIPT:-}"
 docker push "${ANALYSIS_IMAGE_REF}"
 ANALYSIS_IMAGE_REF="$(scripts/ci/resolve-pushed-runtime-image.sh "${ANALYSIS_IMAGE_REF}")"
 docker manifest inspect "${ANALYSIS_IMAGE_REF}" > analysis-production-artifact/registry-manifest.json
@@ -27,7 +24,7 @@ docker manifest inspect "${ANALYSIS_IMAGE_REF}" > analysis-production-artifact/r
 # and no staged secrets waiting for activation.
 current_state="$(flyctl machine list --app "${ANALYSIS_APP}" --json)"
 previous_sha="$(scripts/ci/ci-tool.sh analysis-reusable-release "${ANALYSIS_IMAGE_REF}" <<< "${current_state}")"
-if [[ "${DEPLOYMENT_MODE}" == normal && -n "${previous_sha}" ]] &&
+if [[ -n "${previous_sha}" ]] &&
   git merge-base --is-ancestor "${previous_sha}" "${ANALYSIS_RELEASE_SHA}" &&
   scripts/ci/ci-tool.sh analysis-secrets unstaged <<< "${secret_state}"; then
   scope="$(scripts/ci/classify-git-range.sh "${previous_sha}" "${ANALYSIS_RELEASE_SHA}")"
@@ -38,27 +35,13 @@ if [[ "${DEPLOYMENT_MODE}" == normal && -n "${previous_sha}" ]] &&
     exit 0
   fi
 fi
-scripts/ci/deployment-permission.sh "${DEPLOYMENT_MODE}" "${MAINTENANCE_RECEIPT:-}"
 flyctl deploy --app "${ANALYSIS_APP}" --config fly.analysis.toml --image "${ANALYSIS_IMAGE_REF}" \
-  --env MOMO_MAINTENANCE_MODE="${DEPLOYMENT_MODE}" \
   --env MOMO_ANALYSIS_PUBLICATION_MODE=enabled \
   --env MOMO_ANALYSIS_CONFIG_VERSION="series-analysis-v1-${ANALYSIS_RELEASE_SHA}" \
   --env MOMO_ANALYSIS_WORKER_ID="${ANALYSIS_WORKER_ID}" \
   --env MOMO_OCR_V2_CONSUMER_MODE=enabled \
   --env MOMO_OCR_V2_WORKER_ID="${OCR_WORKER_ID}" --ha=false --yes
 
-if [[ "${DEPLOYMENT_MODE}" == frozen ]]; then
-  scripts/ci/deployment-permission.sh "${DEPLOYMENT_MODE}" "${MAINTENANCE_RECEIPT:-}"
-  scripts/ci/start-deployed-machine.sh frozen-analysis "${ANALYSIS_APP}" "${ANALYSIS_IMAGE_REF}"
-  flyctl machine list --app "${ANALYSIS_APP}" --json |
-    scripts/ci/ci-tool.sh analysis-machine-evidence \
-      "${ANALYSIS_IMAGE_REF}" "${ANALYSIS_RELEASE_SHA}" "${ANALYSIS_WORKER_ID}" "${OCR_WORKER_ID}" \
-      > "${RUNNER_TEMP}/analysis-frozen-deployment.json"
-  scripts/ci/frozen-readiness.sh analysis "${ANALYSIS_IMAGE_REF}" analysis-production-artifact/frozen-readiness.json
-  exit 0
-fi
-
-scripts/ci/deployment-permission.sh "${DEPLOYMENT_MODE}" "${MAINTENANCE_RECEIPT:-}"
 scripts/ci/start-deployed-machine.sh analysis "${ANALYSIS_APP}" \
   "${ANALYSIS_IMAGE_REF}" "${ANALYSIS_RELEASE_SHA}" "${ANALYSIS_WORKER_ID}" "${OCR_WORKER_ID}"
 

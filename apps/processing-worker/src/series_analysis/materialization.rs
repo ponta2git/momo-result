@@ -78,37 +78,6 @@ async fn expand_campaign_target(
     Ok(true)
 }
 
-/// A frozen operation may materialize only its approved target, without joining foreign jobs.
-pub(crate) async fn expand_scoped_campaign_target(
-    database: &mut tokio_postgres::Client,
-    scope: &crate::maintenance::analysis::BoundScope,
-    game_title_id: &str,
-) -> Result<(), MaterializationError> {
-    let key = CampaignTargetKey {
-        campaign_id: scope.request.campaign_id.clone(),
-        game_title_id: String::from(game_title_id),
-    };
-    let transaction = database.transaction().await?;
-    configure_campaign_transaction(&transaction).await?;
-    let desired = lock_desired_analysis(&transaction, game_title_id).await?;
-    let active = lock_active_analysis_job(&transaction, game_title_id).await?;
-    let target = lock_pending_campaign_target(&transaction, &key).await?;
-    crate::maintenance::analysis::scope::validate(&transaction, scope).await?;
-    if active.is_some() {
-        return Err(crate::maintenance::analysis::ScopeError::Scope.into());
-    }
-    if let Some(target) = target {
-        match desired {
-            Some(desired) => {
-                materialize_campaign_target(&transaction, &target, &desired, None).await?;
-            }
-            None => skip_deleted_campaign_title(&transaction, &target).await?,
-        }
-    }
-    transaction.commit().await?;
-    Ok(())
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct CampaignTargetKey {
     campaign_id: String,
@@ -602,8 +571,6 @@ fn campaign_stable_id(prefix: &str, target: &CampaignTarget) -> String {
 
 #[derive(Debug, Error)]
 pub(crate) enum MaterializationError {
-    #[error(transparent)]
-    MaintenanceScope(#[from] crate::maintenance::analysis::ScopeError),
     #[error("analysis materialization PostgreSQL operation failed")]
     Postgres(#[from] tokio_postgres::Error),
     #[error("analysis materialization row violates its database contract")]

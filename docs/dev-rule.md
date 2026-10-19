@@ -52,15 +52,6 @@ Runtime と Worker の production image、回復・通知契約用の Worker `e2
 | Workflow / policy scripts | `pnpm actionlint`、`pnpm test:policy` |
 | Public docs / config | `pnpm public:safety:check` |
 
-`test:policy` の receipt 結合検証は、共有制御の固定 revision を `_deps/momo-maintenance-control` に必要とする。CI は `setup-maintenance-control` action で取得する。local の初回準備は次のとおり。pin 更新時は後半の fetch / checkout を実行する。
-
-```sh
-git clone --filter=blob:none --no-checkout https://github.com/ponta2git/momo-db.git _deps/momo-maintenance-control
-git -C _deps/momo-maintenance-control sparse-checkout set scripts/maintenance
-git -C _deps/momo-maintenance-control fetch --depth=1 origin "$(cat scripts/ci/maintenance-control-ref.txt)"
-git -C _deps/momo-maintenance-control checkout --detach "$(cat scripts/ci/maintenance-control-ref.txt)"
-```
-
 OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、coverage の運用は `docs/test-architecture.md` を正本とする。実行 command、lint 設定、smoke の引数は生成 script、build 設定、`scripts/ci/`、`scripts/e2e/` を実行上の正本とする。文書中の command が実装とずれた場合は実装を直すか、この表を更新し、別名 command を増やさない。
 
 ## 4. Change Gates
@@ -120,11 +111,9 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 - チケット完了前には最終差分が影響する基本操作・回復経路を同じ suite で確認する。PR を経由しない `develop` マージ前は、最新 `develop` とのマージ予定結果を隔離 checkout で作り、そのコードから build した候補で基本操作一式と関連する回復・契約を通す。検証後に対象コードや候補が変わった場合は、無効になった範囲を再実行する。
 - 手動結果にも対象 commit（未commit差分があればその範囲）、Runtime / Worker image ID、suite・ケース、成否と未確認事項を残す。結果のためだけの恒久的な記録帳は増やさず、チケット・PR・作業報告へ記載する。
 - PR では compile / lint / generation などの pipeline integrity、選択した S / M evidence、変更境界に応じた DB contract、影響する主要 user flow を優先する。endurance、resource limit、live provider は、PR でしか検出できない変更を除き release evidence へ分離する。
-- release PR は snapshot、branch policy、公開情報を検証する。アプリ・image の gate は通常 PR と exact `master` commit の本番候補で実行し、release PR で重複させない。最終 gate の失敗は merge 後に判明するが、必要な候補の検証がすべて成功するまで本番変更を開始しない。
+- release PR は branch policy と公開情報を検証する。アプリ・image の gate は通常 PR と exact `master` commit の本番候補で実行し、release PR で重複させない。最終 gate の失敗は merge 後に判明するが、必要な候補の検証がすべて成功するまで本番変更を開始しない。
 - retry の結果分類と report artifact は `docs/test-architecture.md` の CI Artifacts に従う。
 - release 候補は一度だけ build し、commit、設定、immutable artifact identity、digest、producer attempt を記録する。後続 smoke / deploy / rollback は同じ候補を使う。
-- 永続 maintenance 制御が有効な間も候補作成と品質検証は進め、通常 deploy・分析操作・rollback・Release 発行を保留する。制御記録を読めない場合は変更を許可しない。候補作成だけの成功を配備完了として公開せず、通常の発行には exact deployment run / attempt の完了証拠を必要とする。
-- maintenance の継続は公開可能な identity と digest だけの receipt を実行 run / attempt へ束縛し、承認後も各変更前に許可を再確認する。consumer は検証済み候補を frozen のまま順に配備し、専用 readiness で確認する。限定分析は明示した初期化・継続 phase と、それぞれ別の plan digest を照合する。初期化は consumer の配備確認後に限り、全作品・入力 revision・保存 pointer を固定した新規 campaign を原子的に作る。継続は承認した既存 operation / campaign だけを処理し、初期化後に得た continuation digest には別 receipt を必要とする。通常の promotion / backfill は frozen 中に呼ばない。再開後の発行は producer と実際の deployment を区別し、その配備完了と provenance を照合する。
 - 外部 action / provider の値は境界で検証・正規化し、consumer 用の表現を推測しない。workflow 再実行時も current attempt から候補 identity を再計算しない。
 - mutable tag や cache hit を provenance / 検証成功の根拠にしない。
 - 通常 release は runtime と Processing Worker の検証済み候補を揃え、同じ承認・排他の中で適用する。分析成果物の非互換変更では、公開を止めて単一世代へ切り替え、再計算と監査を終えてから再開する。独立した worker candidate workflow は重ねない。Worker の image・設定・稼働状態が一致し、未適用の設定がない場合は再配備を省く。
@@ -144,11 +133,11 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 
 `develop` を default branch とし、通常の変更は `<type>/<short-description>` から `develop` への PR にする。commit は `<type>: <概要>` とし、type は `feat`、`fix`、`refactor`、`test`、`docs`、`chore` から選ぶ。通常 PR は変更理由と gate が一つの単位で確認できる大きさに保ち、squash merge する。
 
-本番へ出す commit を選んだら、その `develop` commit を指す短命な `release/YYYYMMDD-N` branch を作り、`master` への release PRを作る。release branch に release 専用の内容変更を追加しない。`master` の required status check が最新baseへの追従を要求する場合だけ、選択した `develop` commitを第1親、現在の `master` を第2親とし、treeを第1親から変えない同期mergeを1件許可する。release PR は merge commit で取り込み、`master` へ直接 push しない。これにより、release PR 作成後に `develop` へ入った変更は次回 release まで含まれず、base更新も候補内容を変えない。
+本番へ出す変更を短命な `release/YYYYMMDD-N` branch にまとめ、`master` への release PR を作る。通常は選択した `develop` commit から作り、必要に応じて `master` からの revert や release 専用の修正を含めてよい。release branch が `develop` の履歴に含まれることや、前回 release 以降の snapshot であることは要求しない。release PR は merge commit で取り込み、`master` へ直接 push しない。
 
 一人開発のため、`develop` と `master` の required approval 数は 0 とする。これは人間のレビューがないという意味ではなく、確認の時期・深さを固定しない。PR は変更の必要性と結果を先に述べ、検証の範囲・重要な判断・未確認事項から必要な差分や正本へ辿れるようにする。
 
-両 branch とも PR、`pr-ready`、会話解決を必須にし、merge 実行者は repository の write 権限を持つ owner に限定する。`develop` は squash merge のみ、`master` は merge commit のみを許可する。release PR は同一 repository の `release/*` からだけ受け付け、選択したsnapshotが前回 release 以降かつ `develop` 履歴上の commitであることを CI で検証する。同期mergeがある場合は、親の順序、現在の `master` との一致、選択したsnapshotとのtree一致も検証する。
+両 branch とも PR、`pr-ready`、会話解決を必須にし、merge 実行者は repository の write 権限を持つ owner に限定する。`develop` は squash merge のみ、`master` は merge commit のみを許可する。release PR は同一 repository の `release/*` からだけ受け付け、branch の条件と Release notes を CI で検証する。
 
 Linear issue を完了させる通常 PR は本文で `Fixes MOM-<番号>` を使う。`develop` merge は started status `Ready for release`、release PR の `master` merge は `Done` の境界として扱うため、release PR に対象 issue の `Fixes MOM-<番号>` をもう一度列挙する。commit message の magic word に issue lifecycle を依存させない。release PR を開いた時点で既存 status を後退させず、複数 PR に紐づく issue は最後の対象 PR が merge されるまで完了扱いにしない。
 

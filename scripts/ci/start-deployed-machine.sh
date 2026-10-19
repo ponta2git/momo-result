@@ -1,21 +1,16 @@
 #!/usr/bin/env bash
 # fly deploy can preserve a stopped machine. Start only the verified candidate.
 set -euo pipefail
-[[ "$#" -ge 3 ]] || { echo 'Usage: start-deployed-machine.sh runtime|analysis|frozen-runtime|frozen-analysis APP IMAGE_REF [RELEASE_SHA ANALYSIS_WORKER_ID OCR_WORKER_ID]' >&2; exit 2; }
+[[ "$#" -ge 3 ]] || { echo 'Usage: start-deployed-machine.sh runtime|analysis APP IMAGE_REF [RELEASE_SHA ANALYSIS_WORKER_ID OCR_WORKER_ID]' >&2; exit 2; }
 kind="$1" app="$2"
 shift 2
 case "${kind}" in
-  runtime) evidence=runtime-machine-id; selector=runtime-machine-start-id ;;
-  analysis) evidence=analysis-machine-evidence; selector=analysis-machine-start-id ;;
-  frozen-runtime|frozen-analysis)
-    evidence=frozen-machine-id
-    selector=frozen-machine-start-id
-    set -- "${kind#frozen-}" "$@"
-    ;;
+  runtime) evidence=runtime-machine-id ;;
+  analysis) evidence=analysis-machine-evidence ;;
   *) exit 2 ;;
 esac
 machine_id="$(flyctl machine list --app "${app}" --json |
-  scripts/ci/ci-tool.sh "${selector}" "$@")"
+  scripts/ci/ci-tool.sh "${kind}-machine-start-id" "$@")"
 [[ -n "${machine_id}" ]] || exit 0
 flyctl machine start "${machine_id}" --app "${app}"
 deadline=$((SECONDS + 120))

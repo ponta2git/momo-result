@@ -14,7 +14,7 @@ async fn real_postgres_requires_complete_canonical_columns_and_relationships()
     let url = std::env::var("ANALYSIS_CONTROL_SMOKE_DATABASE_URL")?;
     let client = crate::identity::fixtures::connect(&url).await?;
     require(&client).await?;
-    let blocker = crate::postgres::connect_frozen(&url).await?;
+    let blocker = crate::postgres::connect_unchecked(&url).await?;
     blocker
         .batch_execute("BEGIN; LOCK TABLE matches IN ACCESS EXCLUSIVE MODE")
         .await?;

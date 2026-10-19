@@ -108,7 +108,6 @@ func TestProvenanceRejectsMissingTypesStreamsAndUnknownFields(t *testing.T) {
 		{"runtime-deployment-v1.json", runIdentity{"123456", "3", fixtureCommit}, checkRuntimeDeployment},
 		{"runtime-deployment-v2.json", runIdentity{"123456", "3", fixtureCommit}, checkRuntimeDeployment},
 		{"runtime-deployment-v3.json", runIdentity{"123456", "3", fixtureCommit}, checkRuntimeDeployment},
-		{"runtime-deployment-v4.json", runIdentity{"654321", "3", fixtureCommit}, checkRuntimeDeployment},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -165,7 +164,7 @@ func TestRuntimeDeploymentPreservesProducerAttemptAndHistoricalPatch(t *testing.
 		if version == "1" {
 			attempt = "3"
 		}
-		expected := "candidate_sha=" + fixtureCommit + "\nsource_run_id=123456\nsource_run_attempt=" + attempt + "\nconfig_sha256=" + fixtureConfigSHA +
+		expected := "candidate_sha=" + fixtureCommit + "\nsource_run_attempt=" + attempt + "\nconfig_sha256=" + fixtureConfigSHA +
 			"\nimage_ref=registry.fly.io/momo-result:" + fixtureCommit + "-123456-" + attempt +
 			"\nmanifest_artifact_digest=sha256:" + fixtureSHA + "\nmanifest_artifact_id=222\nmanifest_artifact_name=runtime-image-registry-manifest-123456-3\nmanifest_sha256=" +
 			fixtureSHA + "\nregistry_digest=sha256:" + fixtureSHA + "\nregistry_ref=registry.fly.io/momo-result@sha256:" + fixtureSHA + "\n"
@@ -191,30 +190,6 @@ func TestRuntimeDeploymentPreservesProducerAttemptAndHistoricalPatch(t *testing.
 	} {
 		writeFile(t, path, mutated(t, data, change))
 		rejected(t, "runtime-deployment", args[:4], "")
-	}
-}
-
-func TestRuntimeDeploymentPreservesSourceRunForLaterDispatch(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "deployment.json")
-	data := fixture(t, "runtime-deployment-v4.json")
-	writeFile(t, path, data)
-	args := []string{path, "654321", "3", fixtureCommit}
-	code, out, diagnostics := run(t, "runtime-deployment", args, "")
-	if code != 0 || !strings.Contains(out, "source_run_id=123456\nsource_run_attempt=2\n") ||
-		!strings.Contains(out, "manifest_artifact_name=runtime-image-registry-manifest-654321-3\n") {
-		t.Fatal(code, out, diagnostics)
-	}
-	for _, change := range []func(object){
-		func(o object) { o["sourceRunId"] = "654321" },
-		func(o object) { o["manifestArtifactName"] = "runtime-image-registry-manifest-123456-3" },
-		func(o object) { o["imageRef"] = "registry.fly.io/momo-result:" + fixtureCommit + "-654321-2" },
-	} {
-		writeFile(t, path, mutated(t, data, change))
-		rejected(t, "runtime-deployment", args, "")
-	}
-	// Historical records remain valid with the original same-run interpretation.
-	if err := checkRuntimeDeployment(fixture(t, "produced-runtime-deployment-v3.json"), runIdentity{"123", "3", fixtureCommit}); err != nil {
-		t.Fatal(err)
 	}
 }
 

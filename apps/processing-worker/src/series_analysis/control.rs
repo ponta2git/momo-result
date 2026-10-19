@@ -24,7 +24,7 @@ mod integration_tests;
 pub(crate) use capability::{
     CAPABILITY_FRESH_SECONDS, IdleRefreshSchedule, mark_draining, register_capability,
 };
-pub(crate) use claim::{claim_job, claim_scoped_job};
+pub(crate) use claim::claim_job;
 pub(crate) use completion::publish;
 pub(crate) use history::{HISTORY_CLEANUP_INTERVAL, cleanup_history};
 pub(crate) use lifecycle::{
@@ -207,8 +207,6 @@ fn signed_milliseconds(duration: Duration) -> i64 {
 
 #[derive(Debug, Error)]
 pub(crate) enum ControlError {
-    #[error(transparent)]
-    MaintenanceScope(#[from] crate::maintenance::analysis::ScopeError),
     #[error("analysis PostgreSQL state transition failed")]
     Postgres(#[from] tokio_postgres::Error),
     #[error("analysis PostgreSQL connection failed")]
@@ -243,8 +241,7 @@ impl ControlError {
     pub(crate) fn is_contention(&self) -> bool {
         match self {
             Self::Postgres(error) => crate::postgres::is_lock_contention(error),
-            Self::MaintenanceScope(_)
-            | Self::PostgresConnection(_)
+            Self::PostgresConnection(_)
             | Self::OwnerLost
             | Self::Artifact(_)
             | Self::Io(_)
@@ -262,7 +259,6 @@ impl ControlError {
     #[must_use]
     pub(crate) const fn kind(&self) -> &'static str {
         match self {
-            Self::MaintenanceScope(_) => "maintenance_scope",
             Self::Postgres(_) => "postgres_state_transition",
             Self::PostgresConnection(error) => error.kind(),
             Self::OwnerLost => "fencing_owner_lost",

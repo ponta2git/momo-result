@@ -20,7 +20,6 @@ if [[ "${DATABASE_URL:-}" != "${ANALYSIS_CONTROL_SMOKE_DATABASE_URL}" ]]; then
   echo "DATABASE_URL must select the same explicitly isolated control-plane database." >&2
   exit 1
 fi
-export MAINTENANCE_ANALYSIS_SMOKE_DATABASE_URL="${ANALYSIS_CONTROL_SMOKE_DATABASE_URL}"
 
 tests=(
   "identity::schema::tests::real_postgres_requires_complete_canonical_columns_and_relationships"
@@ -51,9 +50,6 @@ tests=(
   "series_analysis::release::tests::real_postgres_zero_title_backfill_is_terminal_and_updates_the_release_generation"
   "series_analysis::release::tests::real_postgres_audit_reports_a_release_state_mismatch"
   "series_analysis::release::maintenance::tests::real_postgres_reconcile_preserves_preview_and_replays_an_applied_operation"
-  "series_analysis::release::frozen::tests::real_postgres_frozen_initialization_is_atomic_full_and_replay_bound"
-  "series_analysis::release::frozen::tests::real_postgres_empty_frozen_campaign_retains_the_normal_capability_guard"
-  "maintenance::analysis::scope::tests::real_postgres_scoped_plan_preserves_binding_and_refuses_unrelated_work"
   "worker::tests::subscribed_postgres_listener_delivers_the_next_commit_hint"
   "worker::listener::tests::both_enabled_routes_are_verified_and_protocol_errors_are_fatal"
   "worker::selection::selection_tests::real_postgres_selects_due_work_and_recovers_orphans"

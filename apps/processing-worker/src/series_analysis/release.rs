@@ -16,11 +16,9 @@ use crate::worker::listener::CHANNEL;
 
 use super::control::{ALGORITHM_VERSION, CAPABILITY_FRESH_SECONDS};
 
-mod frozen;
 mod maintenance;
 #[cfg(test)]
 mod promotion_tests;
-pub(crate) use frozen::initialize as initialize_frozen;
 pub(crate) use maintenance::{MaintenanceOperation, reconcile};
 
 const RELEASE_TRANSACTION_LIMITS: &str = "SET LOCAL lock_timeout = '5s'; SET LOCAL statement_timeout = '30s'; \
@@ -371,49 +369,6 @@ where
 {
     let readers = reader_capabilities(client).await?;
     let workers = worker_capabilities(client).await?;
-    let mut report =
-        inspect_storage_completeness(client, require_current, require_quiescent).await?;
-    report.compatible_reader_count = readers.compatible;
-    report.compatible_worker_count = workers.compatible;
-    if readers.compatible == 0 {
-        report.violations.push(global_violation("reader_not_ready"));
-    }
-    if readers.incompatible > 0 {
-        report
-            .violations
-            .push(global_violation("reader_incompatible"));
-    }
-    if workers.compatible == 0 {
-        report.violations.push(global_violation("worker_not_ready"));
-    }
-    if workers.incompatible > 0 {
-        report
-            .violations
-            .push(global_violation("worker_incompatible"));
-    }
-    report.passed = report.violations.is_empty();
-    Ok(report)
-}
-
-/// Structural acceptance for the frozen workflow. Its live permit and fixed consumer
-/// readiness are checked by that workflow; this does not attest GitHub authorization.
-pub(crate) async fn audit_frozen_completion<C>(client: &C) -> Result<bool, ReleaseError>
-where
-    C: tokio_postgres::GenericClient + Sync,
-{
-    Ok(inspect_storage_completeness(client, true, true)
-        .await?
-        .passed)
-}
-
-async fn inspect_storage_completeness<C>(
-    client: &C,
-    require_current: bool,
-    require_quiescent: bool,
-) -> Result<CompletenessReport, ReleaseError>
-where
-    C: tokio_postgres::GenericClient + Sync,
-{
     let release_state_matches = release_state_matches(client).await?;
     let rows = title_audit_rows(client).await?;
     let active_job_count = client
@@ -426,6 +381,18 @@ where
     let mut violations = Vec::new();
     if !release_state_matches {
         violations.push(global_violation("release_state_mismatch"));
+    }
+    if readers.compatible == 0 {
+        violations.push(global_violation("reader_not_ready"));
+    }
+    if readers.incompatible > 0 {
+        violations.push(global_violation("reader_incompatible"));
+    }
+    if workers.compatible == 0 {
+        violations.push(global_violation("worker_not_ready"));
+    }
+    if workers.incompatible > 0 {
+        violations.push(global_violation("worker_incompatible"));
     }
     if require_quiescent && active_job_count > 0 {
         violations.push(global_violation("active_jobs"));
@@ -443,8 +410,8 @@ where
             .filter(|row| row.current_artifact_id.is_some())
             .count(),
         active_job_count,
-        compatible_reader_count: 0,
-        compatible_worker_count: 0,
+        compatible_reader_count: readers.compatible,
+        compatible_worker_count: workers.compatible,
         violations,
     };
     Ok(report)

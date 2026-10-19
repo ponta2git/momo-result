@@ -15,7 +15,6 @@ mod cli;
 mod execution;
 mod identity;
 mod job_lease;
-mod maintenance;
 mod notifications;
 mod ocr;
 mod postgres;

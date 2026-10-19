@@ -18,25 +18,7 @@ permissions:
   contents: read
 
 jobs:
-  normal-permission:
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
-    outputs:
-      allowed: ${{ steps.control.outputs.allowed }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-maintenance-control
-      - name: Check whether ordinary analysis is held
-        id: control
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: scripts/ci/maintenance-control.sh normal-status >> "${GITHUB_OUTPUT}"
-
   operate:
-    needs: normal-permission
-    if: needs.normal-permission.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     concurrency:
@@ -60,20 +42,15 @@ jobs:
       - name: Build structured CI tool
         uses: ./.github/actions/setup-ci-tool
 
-      - uses: ./.github/actions/setup-maintenance-control
-
       - name: Setup flyctl
         uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
         with:
           version: 0.4.79
       - name: Reconcile deployed analysis generation
         env:
-          GH_TOKEN: ${{ github.token }}
           FLY_API_TOKEN: ${{ secrets.ANALYSIS_FLY_API_TOKEN }}
           OPERATION: ${{ inputs.operation }}
-        run: |
-          scripts/ci/maintenance-control.sh normal-guard
-          scripts/ops/analysis-maintain.sh "${OPERATION}"
+        run: scripts/ops/analysis-maintain.sh "${OPERATION}"
       - name: Summarize maintenance and required follow-up
         if: always()
         env:

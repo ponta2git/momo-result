@@ -8,16 +8,15 @@ import (
 const resultSchemaVersion = 1
 
 type commandResult struct {
-	Event            string                   `json:"event"`
-	SchemaVersion    int                      `json:"schemaVersion,omitempty"`
-	Status           string                   `json:"status"`
-	ErrorClass       string                   `json:"errorClass,omitempty"`
-	Checks           []string                 `json:"checks,omitempty"`
-	ContractChecks   int                      `json:"contractChecks,omitempty"`
-	MissingCounts    map[string]int           `json:"missingCounts,omitempty"`
-	MissingProcesses []string                 `json:"missingProcesses,omitempty"`
-	Component        string                   `json:"component,omitempty"`
-	Database         *databaseConnectionProof `json:"database,omitempty"`
+	Event            string         `json:"event"`
+	SchemaVersion    int            `json:"schemaVersion,omitempty"`
+	Status           string         `json:"status"`
+	ErrorClass       string         `json:"errorClass,omitempty"`
+	Checks           []string       `json:"checks,omitempty"`
+	ContractChecks   int            `json:"contractChecks,omitempty"`
+	MissingCounts    map[string]int `json:"missingCounts,omitempty"`
+	MissingProcesses []string       `json:"missingProcesses,omitempty"`
+	Component        string         `json:"component,omitempty"`
 }
 
 func writeResult(destination io.Writer, result commandResult) {

@@ -9,11 +9,6 @@ export TEST_STATE="${task_tmp}" PATH="${task_tmp}/bin:${PATH}" RUNNER_TEMP="${ta
 export ANALYSIS_RELEASE_SHA=0123456789abcdef0123456789abcdef01234567
 export ANALYSIS_IMAGE_REF="registry.fly.io/momo-result-analysis:${ANALYSIS_RELEASE_SHA}-101-2"
 export GITHUB_RUN_ID=101 GITHUB_RUN_ATTEMPT=2 ANALYSIS_APP=fixture-worker-app
-cat > "${task_tmp}/scripts/ci/deployment-permission.sh" <<'MOCK'
-#!/usr/bin/env bash
-[[ "$1" == normal || "$1" == frozen ]]
-MOCK
-chmod +x "${task_tmp}/scripts/ci/deployment-permission.sh"
 cat > "${task_tmp}/bin/docker" <<'MOCK'
 #!/usr/bin/env bash
 case "$1 $2" in
@@ -71,11 +66,6 @@ for condition in staged changed different missing-version invalid-version unpref
   test "${status}" = 42
   grep -qF -- '--app fixture-worker-app' deploy
   grep -qF -- '--image registry.fly.io/momo-result-analysis@sha256:' deploy
-  grep -qF -- '--env MOMO_MAINTENANCE_MODE=normal' deploy
   rm "${condition}" deploy
 done
-status=0
-DEPLOYMENT_MODE=frozen scripts/ci/deploy-processing-worker.sh > output 2>&1 || status=$?
-test "${status}" = 42
-grep -qF -- '--env MOMO_MAINTENANCE_MODE=frozen' deploy
 printf 'Worker deployment reuse and immutable rollout tests passed.\n'

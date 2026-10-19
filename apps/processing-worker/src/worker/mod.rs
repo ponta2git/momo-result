@@ -7,7 +7,6 @@ mod plan;
 mod runtime;
 pub(crate) use plan::WorkerRuntimePlan;
 mod selection;
-pub(crate) use runtime::maintenance::run as run_maintenance_analysis;
 #[cfg(test)]
 pub(crate) use runtime::run_ocr_only;
 pub(crate) use runtime::{WorkerError, run};

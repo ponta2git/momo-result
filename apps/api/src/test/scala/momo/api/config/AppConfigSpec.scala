@@ -33,48 +33,6 @@ class AppConfigSpec extends CatsEffectSuite:
       .toJdbcUrl(raw)
       .fold(error => fail(s"expected valid DATABASE_URL: ${error.getMessage}"), identity)
 
-  test("maintenance mode defaults only when absent and accepts explicit modes") {
-    for
-      unset <- load(Map.empty)
-      normal <- load(Map("MOMO_MAINTENANCE_MODE" -> "normal"))
-      frozen <- load(prodEnv + ("MOMO_MAINTENANCE_MODE" -> "frozen"))
-    yield
-      assertEquals(unset.map(_.maintenanceMode), Right(MaintenanceMode.Normal))
-      assertEquals(normal.map(_.maintenanceMode), Right(MaintenanceMode.Normal))
-      assertEquals(frozen.map(_.maintenanceMode), Right(MaintenanceMode.Frozen))
-  }
-
-  test("unknown maintenance modes fail before other configuration and do not echo input") {
-    List("", "NORMAL", " frozen", "frozen ", "drain", "invalid-secret").traverse_ { value =>
-      load(Map("APP_ENV" -> "prod", "MOMO_MAINTENANCE_MODE" -> value)).map { result =>
-        assertEquals(
-          result.left.map(_.getMessage),
-          Left(
-            "MOMO_MAINTENANCE_MODE must be normal or frozen."
-          )
-        )
-      }
-    }
-  }
-
-  test("maintenance operations tokens are validated without exposing their value") {
-    val token = "maintenance-config-fixture-0000000000"
-    for
-      valid <- load(Map("MOMO_MAINTENANCE_OPERATIONS_TOKEN" -> token))
-      invalid <- List("", "short-secret", "a" * 513, "a" * 32 + " ").traverse(value =>
-        load(Map("APP_ENV" -> "prod", "MOMO_MAINTENANCE_OPERATIONS_TOKEN" -> value))
-      )
-    yield
-      assertEquals(valid.map(_.maintenanceOperationsToken), Right(Some(token)))
-      assert(valid.exists(config => !config.toString.contains(token)))
-      invalid.foreach(result =>
-        assertEquals(
-          result.left.map(_.getMessage),
-          Left("Invalid maintenance operations token.")
-        )
-      )
-  }
-
   test("toJdbcUrl: converts postgres:// URL and extracts credentials") {
     val (url, user, pass) = parsedDatabaseUrl("postgres://summit:summit@localhost:5433/summit")
     assertEquals(url, "jdbc:postgresql://localhost:5433/summit")

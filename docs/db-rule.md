@@ -77,7 +77,7 @@ test の採用・維持・削除は `docs/test-rule.md` に従う。DB contract 
 
 後方互換な変更は migration 適用後に consumer を deploy する。
 
-canonical identity への切替では、全 writer を停止し、旧 schema 用の固定 consumer と停止前 DB を対として保持する。P3 migration の完了後に canonical Worker の通常処理を起動する。Worker は通常接続時に UUID / legacy 列、identity の一意性、FK と保持値の NULL 対応を検査し、旧 schema や部分適用状態を write 前に拒否する。`MOMO_MAINTENANCE_MODE=frozen` の readiness は旧・新 schema の両方で read-only の target / ledger proof だけを返すため、停止状態で先に配備できる。P3 前の通常処理には旧 schema 用 baseline を使い、切戻しもその DB と consumer の組へ戻す。再開後の write は新 schema 上で保全する。
+canonical identity への切替では、全 writer を停止し、旧 schema 用の固定 consumer と停止前 DB を対として保持する。P3 migration の完了後に canonical Worker の通常処理を起動する。Worker は通常接続時に UUID / legacy 列、identity の一意性、FK と保持値の NULL 対応を検査し、旧 schema や部分適用状態を write 前に拒否する。P3 前の通常処理には旧 schema 用 baseline を使い、切戻しもその DB と consumer の組へ戻す。再開後の write は新 schema 上で保全する。
 
 通知用入力基準の導入では、旧writerを停止してから既存成果物を基準へ初期化し、対応するAPI・Workerへ切り替えて再開する。初期化後に基準を更新しない旧Workerが公開すると、古い基準との差分を後続処理で再通知するため、この間の混在稼働を許容しない。切戻しも基準の整合性を保つ組合せで行う。
 

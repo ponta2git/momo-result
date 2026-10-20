@@ -28,11 +28,6 @@ jobs:
       name: production
       url: https://momo-result.ponta.me
     steps:
-      - name: Reject operations during the DB-job cutover
-        env:
-          JOBS_CUTOVER_COMPLETE: ${{ vars.JOBS_CUTOVER_COMPLETE }}
-        run: test "${JOBS_CUTOVER_COMPLETE}" = true
-
       - name: Require master
         run: test "${GITHUB_REF}" = refs/heads/master
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

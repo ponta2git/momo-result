@@ -122,11 +122,6 @@ jobs:
       REGISTRY_REF: ${{ needs.resolve-target.outputs.registry_ref }}
       TARGET_SHA: ${{ needs.resolve-target.outputs.candidate_sha }}
     steps:
-      - name: Reject operations during the DB-job cutover
-        env:
-          JOBS_CUTOVER_COMPLETE: ${{ vars.JOBS_CUTOVER_COMPLETE }}
-        run: test "${JOBS_CUTOVER_COMPLETE}" = true
-
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0

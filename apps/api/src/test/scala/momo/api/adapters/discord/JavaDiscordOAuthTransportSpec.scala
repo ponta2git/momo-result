@@ -31,10 +31,13 @@ final class JavaDiscordOAuthTransportSpec extends MomoCatsEffectSuite:
       client.fetchUser("fixture code+with&symbols").map { result =>
         assertEquals(result, Right(DiscordUser("123456789012345678")))
         val requests = received.iterator().asScala.toList
-        assertEquals(requests.map(r => r.method -> r.path), List(
-          "POST" -> "/api/oauth2/token",
-          "GET" -> "/api/users/@me",
-        ))
+        assertEquals(
+          requests.map(r => r.method -> r.path),
+          List(
+            "POST" -> "/api/oauth2/token",
+            "GET" -> "/api/users/@me",
+          )
+        )
         val token = requests.headOption.getOrElse(fail("missing token request"))
         assertEquals(token.contentType, "application/x-www-form-urlencoded")
         val fields = token.body.split("&").toList.map { field =>
@@ -44,13 +47,16 @@ final class JavaDiscordOAuthTransportSpec extends MomoCatsEffectSuite:
                 URLDecoder.decode(value, StandardCharsets.UTF_8)
             case _ => fail("invalid token form")
         }.toMap
-        assertEquals(fields, Map(
-          "client_id" -> "fixture-client",
-          "client_secret" -> "fixture-secret",
-          "grant_type" -> "authorization_code",
-          "code" -> "fixture code+with&symbols",
-          "redirect_uri" -> "http://127.0.0.1/callback",
-        ))
+        assertEquals(
+          fields,
+          Map(
+            "client_id" -> "fixture-client",
+            "client_secret" -> "fixture-secret",
+            "grant_type" -> "authorization_code",
+            "code" -> "fixture code+with&symbols",
+            "redirect_uri" -> "http://127.0.0.1/callback",
+          )
+        )
         assertEquals(requests.map(_.authorization), List("", "Bearer fixture-access-token"))
       }
     }
@@ -59,7 +65,10 @@ final class JavaDiscordOAuthTransportSpec extends MomoCatsEffectSuite:
   test("OAuth provider failure over real HTTP does not attempt user lookup") {
     provider(503).use { case (client, received) =>
       client.fetchUser("fixture-code").map { result =>
-        assertEquals(result, Left(AppError.DependencyFailed("Discord OAuth provider request failed.")))
+        assertEquals(
+          result,
+          Left(AppError.DependencyFailed("Discord OAuth provider request failed."))
+        )
         assertEquals(received.iterator().asScala.toList.map(_.path), List("/api/oauth2/token"))
       }
     }
@@ -71,25 +80,28 @@ final class JavaDiscordOAuthTransportSpec extends MomoCatsEffectSuite:
     for
       server <- Resource.make(IO.blocking {
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
-        val _ = server.createContext("/", exchange => {
-          val path = exchange.getRequestURI.getPath
-          val _ = received.add(Received(
-            exchange.getRequestMethod,
-            path,
-            Option(exchange.getRequestHeaders.getFirst("Content-Type")).getOrElse(""),
-            Option(exchange.getRequestHeaders.getFirst("Authorization")).getOrElse(""),
-            String(exchange.getRequestBody.readNBytes(4096), StandardCharsets.UTF_8),
-          ))
-          val (code, text) = path match
-            case "/api/oauth2/token" => status -> """{"access_token":"fixture-access-token"}"""
-            case "/api/users/@me" => 200 -> """{"id":"123456789012345678"}"""
-            case _ => 404 -> "{}"
-          val bytes = text.getBytes(StandardCharsets.UTF_8)
-          exchange.getResponseHeaders.add("Content-Type", "application/json")
-          exchange.sendResponseHeaders(code, bytes.length.toLong)
-          exchange.getResponseBody.write(bytes)
-          exchange.close()
-        })
+        val _ = server.createContext(
+          "/",
+          exchange => {
+            val path = exchange.getRequestURI.getPath
+            val _ = received.add(Received(
+              exchange.getRequestMethod,
+              path,
+              Option(exchange.getRequestHeaders.getFirst("Content-Type")).getOrElse(""),
+              Option(exchange.getRequestHeaders.getFirst("Authorization")).getOrElse(""),
+              String(exchange.getRequestBody.readNBytes(4096), StandardCharsets.UTF_8),
+            ))
+            val (code, text) = path match
+              case "/api/oauth2/token" => status -> """{"access_token":"fixture-access-token"}"""
+              case "/api/users/@me" => 200 -> """{"id":"123456789012345678"}"""
+              case _ => 404 -> "{}"
+            val bytes = text.getBytes(StandardCharsets.UTF_8)
+            exchange.getResponseHeaders.add("Content-Type", "application/json")
+            exchange.sendResponseHeaders(code, bytes.length.toLong)
+            exchange.getResponseBody.write(bytes)
+            exchange.close()
+          }
+        )
         server.start()
         server
       })(server => IO.blocking(server.stop(0)))
@@ -97,7 +109,10 @@ final class JavaDiscordOAuthTransportSpec extends MomoCatsEffectSuite:
     yield
       val base = URI.create(s"http://127.0.0.1:${server.getAddress.getPort.toString}")
       val config = JavaDiscordOAuthClient.Config(
-        "fixture-client", "fixture-secret", "http://127.0.0.1/callback", "identify",
+        "fixture-client",
+        "fixture-secret",
+        "http://127.0.0.1/callback",
+        "identify",
       )
       (JavaDiscordOAuthClient[IO](config, LoopbackTransport(transport, base)), received)
 
@@ -116,7 +131,10 @@ final class JavaDiscordOAuthTransportSpec extends MomoCatsEffectSuite:
     override def authenticator(): Optional[Authenticator] = delegate.authenticator()
     override def version(): HttpClient.Version = delegate.version()
     override def executor(): Optional[Executor] = delegate.executor()
-    override def send[T](request: HttpRequest, handler: HttpResponse.BodyHandler[T]): HttpResponse[T] =
+    override def send[T](
+        request: HttpRequest,
+        handler: HttpResponse.BodyHandler[T]
+    ): HttpResponse[T] =
       delegate.send(local(request), handler)
     override def sendAsync[T](request: HttpRequest, handler: HttpResponse.BodyHandler[T])
         : CompletableFuture[HttpResponse[T]] = delegate.sendAsync(local(request), handler)

@@ -7,7 +7,7 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
-import momo.api.adapters.postgres.PostgresMeta.given
+import momo.api.adapters.postgres.CanonicalIdentity.Entity
 import momo.api.adapters.postgres.PostgresSeriesAnalysisRequestSupport.*
 import momo.api.contracts.seriesanalysis.SeriesAnalysisArtifactContract
 import momo.api.domain.ids.{AccountId, GameTitleId}
@@ -22,7 +22,8 @@ private[postgres] object PostgresSeriesAnalysisTitleRequestOps:
       operationId: String,
       requestId: String,
       jobId: String,
-  ): ConnectionIO[Either[AppError, SeriesAnalysisRecalculationAccepted]] =
+  )(using identities: PostgresIdentities)
+      : ConnectionIO[Either[AppError, SeriesAnalysisRecalculationAccepted]] =
     lockAndFindOperation(requestedBy, "title", idempotencyKeyHash).flatMap {
       case Some(value) if !value.gameTitleId.contains(gameTitleId) =>
         AppError.IdempotencyPayloadMismatch(
@@ -42,12 +43,13 @@ private[postgres] object PostgresSeriesAnalysisTitleRequestOps:
   private def acceptedForExisting(
       operation: OperationRow,
       gameTitleId: GameTitleId,
-  ): ConnectionIO[Either[AppError, SeriesAnalysisRecalculationAccepted]] = sql"""
-    SELECT assigned_job_id
-    FROM series_analysis_job_requests
-    WHERE operation_request_id = ${operation.id}
-      AND game_title_id = $gameTitleId
-    ORDER BY accepted_at, id
+  )(using identities: PostgresIdentities)
+      : ConnectionIO[Either[AppError, SeriesAnalysisRecalculationAccepted]] = sql"""
+    SELECT ${identities.wireReference(Entity.AnalysisJobs, fr"jr.assigned_job_id")}
+    FROM series_analysis_job_requests jr
+    WHERE operation_request_id = ${identities.lookup(Entity.AnalysisOperations, operation.id)}
+      AND ${identities.retainedMatches("jr", "game_title_id", gameTitleId.value)}
+    ORDER BY accepted_at, ${identities.wireId("jr")}
     LIMIT 1
   """.query[Option[String]].option.map { nestedJob =>
     SeriesAnalysisRecalculationAccepted(
@@ -70,19 +72,20 @@ private[postgres] object PostgresSeriesAnalysisTitleRequestOps:
       operationId: String,
       requestId: String,
       newJobId: String,
-  ): ConnectionIO[Either[AppError, SeriesAnalysisRecalculationAccepted]] =
+  )(using identities: PostgresIdentities)
+      : ConnectionIO[Either[AppError, SeriesAnalysisRecalculationAccepted]] =
     for
       desired <- sql"""
         SELECT input_revision, algorithm_version, artifact_schema_version,
                validation_contract_id
         FROM series_analysis_title_states
-        WHERE game_title_id = $gameTitleId
+        WHERE game_title_id = ${identities.lookup(Entity.GameTitles, gameTitleId.value)}
         FOR UPDATE
       """.query[DesiredRow].option
       active <- sql"""
-        SELECT id, status, work_kind
-        FROM series_analysis_jobs
-        WHERE game_title_id = $gameTitleId
+        SELECT ${identities.wireId("j")}, status, work_kind
+        FROM series_analysis_jobs j
+        WHERE game_title_id = ${identities.lookup(Entity.GameTitles, gameTitleId.value)}
           AND status IN ('queued', 'running')
         FOR UPDATE
       """.query[ActiveJobRow].option
@@ -118,20 +121,29 @@ private[postgres] object PostgresSeriesAnalysisTitleRequestOps:
       newJobId: String,
       version: DesiredRow,
       active: Option[ActiveJobRow],
-  ): ConnectionIO[Either[AppError, SeriesAnalysisRecalculationAccepted]] =
+  )(using identities: PostgresIdentities)
+      : ConnectionIO[Either[AppError, SeriesAnalysisRecalculationAccepted]] =
     val accepted = active match
       case None => (Some(newJobId), "created_job")
       case Some(job) if job.status == "queued" && job.workKind == "analysis" =>
         (Some(job.id), "coalesced_into_queued_job")
       case Some(_) => (None, "forced_run_reserved")
     for
+      allocatedOperation <- identities.newId(operationId)
+      allocatedRequest <- identities.newId(requestId)
+      title <- identities.requireReference(Entity.GameTitles, gameTitleId.value)
+      account <- identities.requireReference(Entity.Accounts, requestedBy.value)
       acceptedAt <- sql"SELECT now()".query[Instant].unique
       _ <- sql"""
         INSERT INTO series_analysis_operation_requests (
-          id, scope, game_title_id, requested_by_account_id,
+          ${identities.idColumns}, scope, game_title_id ${identities.legacyColumn(
+          "game_title_id"
+        )}, requested_by_account_id,
           idempotency_key_hash, endpoint, status, target_count, accepted_at
         ) VALUES (
-          $operationId, 'title', $gameTitleId, $requestedBy,
+          $allocatedOperation, 'title', $title ${identities.legacyValue(
+          gameTitleId.value
+        )}, $account,
           $idempotencyKeyHash, 'title', 'pending', 1, $acceptedAt
         )
       """.update.run.void
@@ -145,25 +157,30 @@ private[postgres] object PostgresSeriesAnalysisTitleRequestOps:
                 artifact_schema_version = ${version.artifactSchemaVersion},
                 validation_contract_id = ${version.validationContractId},
                 updated_at = now()
-            WHERE id = ${job.id} AND status = 'queued'
+            WHERE id = ${identities.lookup(Entity.AnalysisJobs, job.id)} AND status = 'queued'
           """.update.run.void
         case Some(_) => sql"""
             UPDATE series_analysis_title_states
             SET pending_work = true,
                 pending_forced_run_count = pending_forced_run_count + 1,
                 updated_at = now()
-            WHERE game_title_id = $gameTitleId
+            WHERE game_title_id = ${identities.lookup(Entity.GameTitles, gameTitleId.value)}
           """.update.run.void
+      _ <- PostgresSeriesAnalysisJobTransitions.bindQueuedRadar(gameTitleId)
       _ <- sql"""
         INSERT INTO series_analysis_job_requests (
-          id, game_title_id, operation_request_id, input_revision,
+          ${identities.idColumns}, game_title_id ${identities.legacyColumn(
+          "game_title_id"
+        )}, operation_request_id, input_revision,
           algorithm_version, artifact_schema_version, validation_contract_id, trigger,
           force_run, status, assigned_job_id, accepted_at
         ) VALUES (
-          $requestId, $gameTitleId, $operationId, ${version.inputRevision},
+          $allocatedRequest, $title ${identities.legacyValue(
+          gameTitleId.value
+        )}, ${identities.lookup(Entity.AnalysisOperations, operationId)}, ${version.inputRevision},
           ${version.algorithmVersion}, ${version.artifactSchemaVersion},
           ${version.validationContractId}, 'manual',
-          true, 'pending', ${accepted._1}, $acceptedAt
+          true, 'pending', ${identities.lookup(Entity.AnalysisJobs, accepted._1)}, $acceptedAt
         )
       """.update.run.void
     yield SeriesAnalysisRecalculationAccepted(

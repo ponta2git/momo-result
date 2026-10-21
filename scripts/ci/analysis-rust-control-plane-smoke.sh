@@ -22,13 +22,16 @@ if [[ "${DATABASE_URL:-}" != "${ANALYSIS_CONTROL_SMOKE_DATABASE_URL}" ]]; then
 fi
 
 tests=(
+  "identity::schema::tests::real_postgres_requires_complete_canonical_columns_and_relationships"
   "notifications::bounds_tests::real_postgres_preparation_enforces_complete_jsonb_limits"
   "series_analysis::control::integration_tests::heartbeat::real_postgres_heartbeat_owns_deadline_and_connection"
+  "series_analysis::control::integration_tests::transitions::real_postgres_requeues_bind_current_radar_and_every_exit_clears_the_lease"
   "series_analysis::release::promotion_tests::real_postgres_promotion_detaches_obsolete_empty_title_pointers_without_deleting_artifacts"
   "series_analysis::campaign::tests::real_postgres_campaign_refresh_counts_concurrent_target_commits"
   "series_analysis::control::history::tests::real_postgres_retention_preserves_active_jobs_and_readable_artifacts"
   "series_analysis::control::capability::tests::real_postgres_registration_replaces_the_generation_capability_set"
-  "series_analysis::control::claim::tests::real_postgres_keeps_exact_jobs_queued_when_an_old_binary_omits_the_lease_contract"
+  "series_analysis::control::claim::tests::real_postgres_requires_explicit_lease_contract_on_claim_and_recovery"
+  "series_analysis::control::integration_tests::fencing::real_postgres_job_fences_survive_cleanup_recovery_and_independent_workers"
   "series_analysis::control::integration_tests::claim_wait::real_postgres_claims_preserve_busy_deadlines_and_uncertain_commits"
   "series_analysis::control::integration_tests::real_postgres_keeps_staging_separate_from_fenced_publication"
   "series_analysis::control::integration_tests::radar::freshness::real_postgres_radar_preparation_checks_current_source_and_preserves_pending_analysis"
@@ -46,7 +49,6 @@ tests=(
   "series_analysis::release::tests::real_postgres_promotion_freezes_capability_registration_after_inspection"
   "series_analysis::release::tests::real_postgres_zero_title_backfill_is_terminal_and_updates_the_release_generation"
   "series_analysis::release::tests::real_postgres_audit_reports_a_release_state_mismatch"
-  "series_analysis::release::tests::real_postgres_release_lock_serializes_new_title_state_inheritance"
   "series_analysis::release::maintenance::tests::real_postgres_reconcile_preserves_preview_and_replays_an_applied_operation"
   "worker::tests::subscribed_postgres_listener_delivers_the_next_commit_hint"
   "worker::listener::tests::both_enabled_routes_are_verified_and_protocol_errors_are_fatal"
@@ -65,7 +67,7 @@ ignored_test_catalog="$(
     --list
 )"
 
-# These suites mutate shared DB control state, including release and execution-slot
+# These suites mutate shared DB control state, including release and job-lease
 # fixtures. Keep this service scope sequential; the ordinary Rust suite stays parallel.
 for test_name in "${tests[@]}"; do
   if ! grep -Fqx "${test_name}: test" <<<"${ignored_test_catalog}"; then

@@ -42,7 +42,10 @@ await runSmoke("Series-analysis control-plane smoke", async (signal) => {
     });
   const makeReady = async (job: string) => {
     await smoke.sql(
-      `UPDATE series_analysis_jobs SET available_at = clock_timestamp() WHERE id = '${job}'; SELECT pg_notify('processing_jobs', '');`,
+      `UPDATE series_analysis_jobs
+SET available_at = clock_timestamp()
+WHERE series_analysis_jobs.legacy_id = '${job}';
+SELECT pg_notify('processing_jobs', '');`,
     );
   };
   const pair = async (prefix: string) => {
@@ -76,9 +79,9 @@ await runSmoke("Series-analysis control-plane smoke", async (signal) => {
       );
       await waitSQL(
         `0`,
-        `
-  SELECT COUNT(*)::int FROM series_analysis_jobs WHERE id = 'ci-analysis-expired-history';
-`,
+        `SELECT CAST(count(*) AS integer)
+FROM series_analysis_jobs
+WHERE series_analysis_jobs.legacy_id = 'ci-analysis-expired-history';`,
         "worker-owned terminal history retention",
       );
       await waitSQL(
@@ -92,37 +95,53 @@ await runSmoke("Series-analysis control-plane smoke", async (signal) => {
         "worker-owned campaign expansion and publication",
       );
       check(
-        (await smoke.sql(`
-  SELECT
-    COUNT(*)::int,
-    COUNT(*) FILTER (
-      WHERE campaign.validation_contract_id IS DISTINCT FROM '${validation_contract_id}'
-         OR target.validation_contract_id IS DISTINCT FROM '${validation_contract_id}'
-         OR request.validation_contract_id IS DISTINCT FROM target.validation_contract_id
-         OR job.validation_contract_id IS DISTINCT FROM '${validation_contract_id}'
-    )::int
-  FROM series_analysis_campaign_targets target
-  JOIN series_analysis_campaigns campaign ON campaign.id = target.campaign_id
-  JOIN series_analysis_job_requests request ON request.id = target.job_request_id
-  JOIN series_analysis_jobs job ON job.id = request.assigned_job_id;
-`)) === "2|0",
+        (await smoke.sql(`SELECT CAST(count(*) AS integer)
+     , CAST(count(*) FILTER (WHERE campaign.validation_contract_id IS DISTINCT FROM '${validation_contract_id}'
+                                OR target.validation_contract_id IS DISTINCT FROM '${validation_contract_id}'
+                                OR request.validation_contract_id IS DISTINCT FROM target.validation_contract_id
+                                OR job.validation_contract_id IS DISTINCT FROM '${validation_contract_id}') AS integer)
+FROM series_analysis_campaign_targets AS target
+     INNER JOIN series_analysis_campaigns AS campaign ON campaign.legacy_id = (SELECT fixture_parent.legacy_id
+                                                                               FROM series_analysis_campaigns AS fixture_parent
+                                                                               WHERE fixture_parent.id = target.campaign_id)
+     INNER JOIN series_analysis_job_requests AS request ON request.legacy_id = target.legacy_job_request_id
+     INNER JOIN series_analysis_jobs AS job ON job.legacy_id = (SELECT fixture_parent.legacy_id
+                                                                FROM series_analysis_jobs AS fixture_parent
+                                                                WHERE fixture_parent.id = request.assigned_job_id);`)) ===
+          "2|0",
         "Worker expansion lost the campaign contract.",
       );
       check(
-        (await smoke.sql(`
-  SELECT
-    (SELECT COUNT(*) FROM series_analysis_title_states WHERE current_artifact_id IS NOT NULL),
-    (SELECT COUNT(*) FROM series_analysis_artifacts WHERE status = 'published'),
-    (SELECT COUNT(*) FROM series_analysis_scope_aggregate_artifacts c JOIN series_analysis_artifacts a ON a.id = c.artifact_id WHERE a.game_title_id = 'title-release-smoke-a'),
-    (SELECT COUNT(*) FROM series_analysis_scope_review_artifacts c JOIN series_analysis_artifacts a ON a.id = c.artifact_id WHERE a.game_title_id = 'title-release-smoke-a'),
-    (SELECT COUNT(*) FROM series_analysis_drilldown_artifacts c JOIN series_analysis_artifacts a ON a.id = c.artifact_id WHERE a.game_title_id = 'title-release-smoke-a'),
-    (SELECT COUNT(*) FROM series_analysis_match_context_artifacts c JOIN series_analysis_artifacts a ON a.id = c.artifact_id WHERE a.game_title_id = 'title-release-smoke-a'),
-    (SELECT COUNT(*) FROM series_analysis_scope_aggregate_artifacts c JOIN series_analysis_artifacts a ON a.id = c.artifact_id WHERE a.game_title_id = 'title-release-smoke-b'),
-    (SELECT COUNT(*) FROM series_analysis_scope_review_artifacts c JOIN series_analysis_artifacts a ON a.id = c.artifact_id WHERE a.game_title_id = 'title-release-smoke-b'),
-    (SELECT COUNT(*) FROM series_analysis_artifacts
-      WHERE status = 'published'
-        AND validation_contract_id = '${validation_contract_id}');
-`)) === "2|2|4|4|64|4|1|1|2",
+        (await smoke.sql(`SELECT (SELECT count(*)
+        FROM series_analysis_title_states
+        WHERE (SELECT fixture_parent.legacy_id
+               FROM series_analysis_artifact_identities AS fixture_parent
+               WHERE fixture_parent.id = series_analysis_title_states.current_artifact_id) IS NOT NULL)
+     , (SELECT count(*)
+        FROM series_analysis_artifacts
+        WHERE status = 'published')
+     , (SELECT count(*)
+        FROM series_analysis_scope_aggregate_artifacts AS c INNER JOIN series_analysis_artifacts AS a ON a.id = c.artifact_id
+        WHERE a.game_title_id = 'title-release-smoke-a')
+     , (SELECT count(*)
+        FROM series_analysis_scope_review_artifacts AS c INNER JOIN series_analysis_artifacts AS a ON a.id = c.artifact_id
+        WHERE a.game_title_id = 'title-release-smoke-a')
+     , (SELECT count(*)
+        FROM series_analysis_drilldown_artifacts AS c INNER JOIN series_analysis_artifacts AS a ON a.id = c.artifact_id
+        WHERE a.game_title_id = 'title-release-smoke-a')
+     , (SELECT count(*)
+        FROM series_analysis_match_context_artifacts AS c INNER JOIN series_analysis_artifacts AS a ON a.id = c.artifact_id
+        WHERE a.game_title_id = 'title-release-smoke-a')
+     , (SELECT count(*)
+        FROM series_analysis_scope_aggregate_artifacts AS c INNER JOIN series_analysis_artifacts AS a ON a.id = c.artifact_id
+        WHERE a.game_title_id = 'title-release-smoke-b')
+     , (SELECT count(*)
+        FROM series_analysis_scope_review_artifacts AS c INNER JOIN series_analysis_artifacts AS a ON a.id = c.artifact_id
+        WHERE a.game_title_id = 'title-release-smoke-b')
+     , (SELECT count(*)
+        FROM series_analysis_artifacts
+        WHERE status = 'published' AND validation_contract_id = '${validation_contract_id}');`)) ===
+          "2|2|4|4|64|4|1|1|2",
         "Unexpected published artifact shape.",
       );
       const firstComplete = report(
@@ -136,10 +155,15 @@ await runSmoke("Series-analysis control-plane smoke", async (signal) => {
         "Unexpected maintenance completion.",
       );
       const first_job = await smoke.sql(
-        `SELECT id FROM series_analysis_jobs ORDER BY requested_at, id LIMIT 1;`,
+        `SELECT series_analysis_jobs.legacy_id AS id
+FROM series_analysis_jobs
+ORDER BY requested_at, series_analysis_jobs.legacy_id
+LIMIT 1;`,
       );
       const attempts_before = await smoke.sql(
-        `SELECT attempt_count FROM series_analysis_jobs WHERE id = '${first_job}';`,
+        `SELECT attempt_count
+FROM series_analysis_jobs
+WHERE series_analysis_jobs.legacy_id = '${first_job}';`,
       );
       await makeReady(first_job);
       await release([
@@ -172,67 +196,84 @@ await runSmoke("Series-analysis control-plane smoke", async (signal) => {
       );
       check(
         (await smoke.sql(
-          `SELECT attempt_count FROM series_analysis_jobs WHERE id = '${first_job}';`,
+          `SELECT attempt_count
+FROM series_analysis_jobs
+WHERE series_analysis_jobs.legacy_id = '${first_job}';`,
         )) === attempts_before,
         "A wake for a terminal job changed its attempt count.",
       );
       await pair("ci-analysis-lease-recovery");
-      const lease_job = await smoke.sql(`
-  SELECT id FROM series_analysis_jobs
-  WHERE game_title_id = 'title-release-smoke-a' AND status = 'queued';
-`);
-      await smoke.sql(`
-  UPDATE worker_execution_slots
-  SET task_kind = 'analysis', owner = 'ci-expired-worker', job_id = '${lease_job}',
-      attempt_id = 'ci-expired-attempt', holder_preemptible = true,
-      lease_expires_at = clock_timestamp() - interval '1 second',
-      fencing_token = fencing_token + 1,
-      preempt_requested_by = NULL, preempt_requested_at = NULL,
-      updated_at = clock_timestamp()
-  WHERE slot_key = 'shared-heavy-work';
-  UPDATE series_analysis_jobs
-  SET status = 'running', started_at = clock_timestamp() - interval '2 seconds',
-      lease_owner = 'ci-expired-worker', lease_attempt_id = 'ci-expired-attempt',
-      lease_fencing_token = (
-        SELECT fencing_token FROM worker_execution_slots WHERE slot_key = 'shared-heavy-work'
-      ),
-      lease_expires_at = clock_timestamp() - interval '1 second',
-      lease_validation_contract_id = validation_contract_id,
-      attempt_count = 1, updated_at = clock_timestamp()
-  WHERE id = '${lease_job}';
-  INSERT INTO series_analysis_job_attempts (
-    id, job_id, attempt_no, owner, fencing_token, input_revision,
-    algorithm_version, artifact_schema_version, validation_contract_id, status,
-    effective_config_version, calculation_timeout_milliseconds, started_at
-  )
-  SELECT
-    'ci-expired-attempt', id, 1, 'ci-expired-worker', lease_fencing_token,
-    input_revision, algorithm_version, artifact_schema_version, validation_contract_id, 'running',
-    'ci-expired-config', 120000, clock_timestamp() - interval '2 seconds'
-  FROM series_analysis_jobs WHERE id = '${lease_job}';
-`);
+      const lease_job = await smoke.sql(`SELECT series_analysis_jobs.legacy_id AS id
+FROM series_analysis_jobs
+WHERE (SELECT fixture_parent.legacy_id
+       FROM game_titles AS fixture_parent
+       WHERE fixture_parent.id = series_analysis_jobs.game_title_id) = 'title-release-smoke-a'
+  AND status = 'queued';`);
+      await smoke.sql(`UPDATE series_analysis_jobs
+SET status = 'running'
+  , started_at = clock_timestamp() - CAST('2 seconds' AS interval)
+  , lease_owner = 'ci-expired-worker'
+  , lease_attempt_id = pg_temp.fixture_uuid('series_analysis_job_attempts', 'ci-expired-attempt')
+  , legacy_lease_attempt_id = 'ci-expired-attempt'
+  , lease_fencing_token = fencing_counter + 1
+  , fencing_counter = fencing_counter + 1
+  , lease_expires_at = clock_timestamp() - CAST('1 second' AS interval)
+  , lease_validation_contract_id = validation_contract_id
+  , attempt_count = 1
+  , updated_at = clock_timestamp()
+WHERE series_analysis_jobs.legacy_id = '${lease_job}';
+INSERT INTO series_analysis_job_attempts (id
+                                        , legacy_id
+                                        , job_id
+                                        , attempt_no
+                                        , owner
+                                        , fencing_token
+                                        , input_revision
+                                        , algorithm_version
+                                        , artifact_schema_version
+                                        , validation_contract_id
+                                        , status
+                                        , effective_config_version
+                                        , calculation_timeout_milliseconds
+                                        , started_at)
+SELECT pg_temp.fixture_uuid('series_analysis_job_attempts', 'ci-expired-attempt')
+     , 'ci-expired-attempt'
+     , pg_temp.fixture_uuid('series_analysis_jobs', series_analysis_jobs.legacy_id)
+     , 1
+     , 'ci-expired-worker'
+     , lease_fencing_token
+     , input_revision
+     , algorithm_version
+     , artifact_schema_version
+     , validation_contract_id
+     , 'running'
+     , 'ci-expired-config'
+     , 120000
+     , clock_timestamp() - CAST('2 seconds' AS interval)
+FROM series_analysis_jobs
+WHERE series_analysis_jobs.legacy_id = '${lease_job}';`);
       check(
-        (await smoke.sql(`
-  SELECT
-    job.validation_contract_id,
-    job.lease_validation_contract_id,
-    attempt.validation_contract_id
-  FROM series_analysis_jobs job
-  JOIN series_analysis_job_attempts attempt ON attempt.id = job.lease_attempt_id
-  WHERE job.id = '${lease_job}';
-`)) === [validation_contract_id, validation_contract_id, validation_contract_id].join("|"),
+        (await smoke.sql(`SELECT job.validation_contract_id, job.lease_validation_contract_id, attempt.validation_contract_id
+FROM series_analysis_jobs AS job
+     INNER JOIN series_analysis_job_attempts AS attempt ON attempt.legacy_id = job.legacy_lease_attempt_id
+WHERE job.legacy_id = '${lease_job}';`)) ===
+          [validation_contract_id, validation_contract_id, validation_contract_id].join("|"),
         "Expired lease fixture lost validation contract provenance.",
       );
       await smoke.sql("SELECT pg_notify('processing_jobs', '');");
       await waitSQL(
         "succeeded",
-        `SELECT status FROM series_analysis_jobs WHERE id = '${lease_job}';`,
+        `SELECT status
+FROM series_analysis_jobs
+WHERE series_analysis_jobs.legacy_id = '${lease_job}';`,
         "expired running recovery without an eligible queued job",
       );
-      const queued_peer = await smoke.sql(`
-  SELECT id FROM series_analysis_jobs
-  WHERE game_title_id = 'title-release-smoke-b' AND status = 'queued';
-`);
+      const queued_peer = await smoke.sql(`SELECT series_analysis_jobs.legacy_id AS id
+FROM series_analysis_jobs
+WHERE (SELECT fixture_parent.legacy_id
+       FROM game_titles AS fixture_parent
+       WHERE fixture_parent.id = series_analysis_jobs.game_title_id) = 'title-release-smoke-b'
+  AND status = 'queued';`);
       await makeReady(queued_peer);
       await waitSQL(
         `6|0`,
@@ -245,29 +286,35 @@ await runSmoke("Series-analysis control-plane smoke", async (signal) => {
         "expired lease recovery jobs",
       );
       check(
-        (await smoke.sql(`
-  SELECT
-    (SELECT COUNT(*) FROM series_analysis_job_attempts WHERE outcome = 'owner_lost'),
-    (SELECT lease_recovery_count FROM series_analysis_jobs WHERE id = '${lease_job}'),
-    (SELECT attempt_count FROM series_analysis_jobs WHERE id = '${lease_job}');
-`)) === "1|1|2",
+        (await smoke.sql(`SELECT (SELECT count(*)
+        FROM series_analysis_job_attempts
+        WHERE outcome = 'owner_lost')
+     , (SELECT lease_recovery_count
+        FROM series_analysis_jobs
+        WHERE series_analysis_jobs.legacy_id = '${lease_job}')
+     , (SELECT attempt_count
+        FROM series_analysis_jobs
+        WHERE series_analysis_jobs.legacy_id = '${lease_job}');`)) === "1|1|2",
         "Expired lease recovery did not preserve the fencing state machine.",
       );
       await pair("ci-analysis-supersede");
-      const stale_job = await smoke.sql(`
-  SELECT id FROM series_analysis_jobs
-  WHERE game_title_id = 'title-release-smoke-a' AND status = 'queued';
-`);
-      const peer_job = await smoke.sql(`
-  SELECT id FROM series_analysis_jobs
-  WHERE game_title_id = 'title-release-smoke-b' AND status = 'queued';
-`);
-      await smoke.sql(`
-  UPDATE series_analysis_title_states
-  SET input_revision = input_revision + 1, pending_work = true,
-      updated_at = clock_timestamp()
-  WHERE game_title_id = 'title-release-smoke-a';
-`);
+      const stale_job = await smoke.sql(`SELECT series_analysis_jobs.legacy_id AS id
+FROM series_analysis_jobs
+WHERE (SELECT fixture_parent.legacy_id
+       FROM game_titles AS fixture_parent
+       WHERE fixture_parent.id = series_analysis_jobs.game_title_id) = 'title-release-smoke-a'
+  AND status = 'queued';`);
+      const peer_job = await smoke.sql(`SELECT series_analysis_jobs.legacy_id AS id
+FROM series_analysis_jobs
+WHERE (SELECT fixture_parent.legacy_id
+       FROM game_titles AS fixture_parent
+       WHERE fixture_parent.id = series_analysis_jobs.game_title_id) = 'title-release-smoke-b'
+  AND status = 'queued';`);
+      await smoke.sql(`UPDATE series_analysis_title_states
+SET input_revision = input_revision + 1, pending_work = TRUE, updated_at = clock_timestamp()
+WHERE (SELECT fixture_parent.legacy_id
+       FROM game_titles AS fixture_parent
+       WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = 'title-release-smoke-a';`);
       await makeReady(stale_job);
       // The committed superseding job is discovered directly from the DB.
       await makeReady(peer_job);
@@ -282,23 +329,36 @@ await runSmoke("Series-analysis control-plane smoke", async (signal) => {
         "superseded revision jobs",
       );
       check(
-        (await smoke.sql(`
-  SELECT
-    (SELECT COUNT(*) FROM series_analysis_job_attempts WHERE outcome = 'superseded'),
-    (SELECT COUNT(*) FROM series_analysis_jobs WHERE result_disposition = 'published'),
-    (SELECT COUNT(*) FROM series_analysis_jobs WHERE result_disposition = 'reused'),
-    (SELECT COUNT(*) FROM series_analysis_artifacts WHERE status = 'published'),
-    (SELECT a.input_revision FROM series_analysis_artifacts a JOIN series_analysis_title_states s ON s.current_artifact_id = a.id WHERE s.game_title_id = 'title-release-smoke-a');
-`)) === "1|3|5|3|1",
+        (await smoke.sql(`SELECT (SELECT count(*)
+        FROM series_analysis_job_attempts
+        WHERE outcome = 'superseded')
+     , (SELECT count(*)
+        FROM series_analysis_jobs
+        WHERE result_disposition = 'published')
+     , (SELECT count(*)
+        FROM series_analysis_jobs
+        WHERE result_disposition = 'reused')
+     , (SELECT count(*)
+        FROM series_analysis_artifacts
+        WHERE status = 'published')
+     , (SELECT a.input_revision
+        FROM series_analysis_artifacts AS a
+             INNER JOIN series_analysis_title_states AS s ON (SELECT fixture_parent.legacy_id
+                                                              FROM series_analysis_artifact_identities AS fixture_parent
+                                                              WHERE fixture_parent.id = s.current_artifact_id) = a.id
+        WHERE (SELECT fixture_parent.legacy_id
+               FROM game_titles AS fixture_parent
+               WHERE fixture_parent.id = s.game_title_id) = 'title-release-smoke-a');`)) ===
+          "1|3|5|3|1",
         "Unexpected supersede/publication state.",
       );
       check(
-        (await smoke.sql(`
-  SELECT COUNT(*)::int
-  FROM series_analysis_job_attempts attempt
-  JOIN series_analysis_jobs job ON job.id = attempt.job_id
-  WHERE attempt.validation_contract_id IS DISTINCT FROM job.validation_contract_id;
-`)) === "0",
+        (await smoke.sql(`SELECT CAST(count(*) AS integer)
+FROM series_analysis_job_attempts AS attempt
+     INNER JOIN series_analysis_jobs AS job ON job.legacy_id = (SELECT fixture_parent.legacy_id
+                                                                FROM series_analysis_jobs AS fixture_parent
+                                                                WHERE fixture_parent.id = attempt.job_id)
+WHERE attempt.validation_contract_id IS DISTINCT FROM job.validation_contract_id;`)) === "0",
         "Attempt contracts diverged from their claimed jobs.",
       );
       check(
@@ -386,36 +446,38 @@ await runSmoke("Series-analysis control-plane smoke", async (signal) => {
       const unsupported_job_id = "ci-analysis-job-unsupported-version";
       await smoke.sql(`
   INSERT INTO series_analysis_jobs (
-    id, game_title_id, input_revision, algorithm_version,
+    id, legacy_id, game_title_id, input_revision, algorithm_version,
     artifact_schema_version, validation_contract_id,
     status, trigger, requested_at, available_at
   )
   SELECT
-    '${unsupported_job_id}', game_title_id, input_revision, 'series-analysis-v999999',
+    pg_temp.fixture_uuid('series_analysis_jobs', '${unsupported_job_id}'), '${unsupported_job_id}',
+    game_title_id, input_revision, 'series-analysis-v999999',
     artifact_schema_version, validation_contract_id,
     'queued', 'algorithm_update', clock_timestamp(), clock_timestamp()
   FROM series_analysis_title_states
-  WHERE game_title_id = 'title-release-smoke-a';
+  WHERE game_title_id = pg_temp.fixture_uuid('game_titles', 'title-release-smoke-a');
 `);
       await makeReady(unsupported_job_id);
       // A later compatible candidate must progress past the unsupported oldest job.
       await smoke.sql(`
-        INSERT INTO series_analysis_jobs (id, game_title_id, input_revision, algorithm_version,
+        INSERT INTO series_analysis_jobs (id, legacy_id, game_title_id, input_revision, algorithm_version,
           artifact_schema_version, validation_contract_id, status, trigger, requested_at, available_at)
-        SELECT 'ci-analysis-compatible-later', game_title_id, input_revision, algorithm_version,
+        SELECT pg_temp.fixture_uuid('series_analysis_jobs', 'ci-analysis-compatible-later'),
+          'ci-analysis-compatible-later', game_title_id, input_revision, algorithm_version,
           artifact_schema_version, validation_contract_id, 'queued', 'manual', clock_timestamp(), clock_timestamp()
-        FROM series_analysis_title_states WHERE game_title_id = 'title-release-smoke-b';
+        FROM series_analysis_title_states WHERE game_title_id = pg_temp.fixture_uuid('game_titles', 'title-release-smoke-b');
         SELECT pg_notify('processing_jobs', '');
       `);
       await waitSQL(
         "succeeded",
-        "SELECT status FROM series_analysis_jobs WHERE id = 'ci-analysis-compatible-later';",
+        "SELECT status FROM series_analysis_jobs WHERE legacy_id = 'ci-analysis-compatible-later';",
         "compatible job behind an unsupported job",
       );
       check(
         (await smoke.sql(`
   SELECT status, attempt_count, lease_owner IS NULL
-  FROM series_analysis_jobs WHERE id = '${unsupported_job_id}';
+  FROM series_analysis_jobs WHERE legacy_id = '${unsupported_job_id}';
 `)) === "queued|0|t",
         "Unsupported-version job was claimed.",
       );

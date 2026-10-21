@@ -30,6 +30,8 @@ pub(crate) enum PostgresError {
     ConnectionTimeout,
     #[error("PostgreSQL operation failed")]
     Postgres(#[from] tokio_postgres::Error),
+    #[error("normal worker execution requires the complete canonical identity schema")]
+    IncompatibleIdentitySchema,
 }
 
 impl PostgresError {
@@ -40,6 +42,7 @@ impl PostgresError {
             Self::TlsConfiguration(_) => "postgres_tls_configuration",
             Self::ConnectionTimeout => "postgres_connection_timeout",
             Self::Postgres(_) => "postgres_operation",
+            Self::IncompatibleIdentitySchema => "postgres_identity_schema",
         }
     }
 }
@@ -54,6 +57,15 @@ pub(crate) fn is_lock_contention(error: &tokio_postgres::Error) -> bool {
 ///
 /// Returns a safe error when configuration, trust roots, or the connection are invalid.
 pub(crate) async fn connect(database_url: &str) -> Result<ConnectedClient, PostgresError> {
+    let client = connect_unchecked(database_url).await?;
+    crate::identity::schema::require(&client).await?;
+    Ok(client)
+}
+
+/// Opens a connection without the identity schema check; normal worker callers use `connect`.
+pub(crate) async fn connect_unchecked(
+    database_url: &str,
+) -> Result<ConnectedClient, PostgresError> {
     let (client, connection) = open(database_url).await?;
     let driver = tokio::spawn(async move {
         if let Err(_connection_error) = connection.await {
@@ -258,7 +270,7 @@ mod tests {
             Ok::<_, TestError>(())
         };
         let session = async {
-            let client = super::connect(&configuration).await?;
+            let client = super::connect_unchecked(&configuration).await?;
             let query = async move { client.batch_execute("SELECT 1").await };
             if tokio::time::timeout(Duration::from_millis(250), query)
                 .await

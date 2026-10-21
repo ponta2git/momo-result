@@ -12,6 +12,7 @@ import type { WorkspaceNoticeTone } from "@/features/matches/workspace/matchWork
 import { useConfirmedDraftRedirect } from "@/features/matches/workspace/useConfirmedDraftRedirect";
 import { useMatchWorkspaceWrites } from "@/features/matches/workspace/useMatchWorkspaceWrites";
 import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import { heldEventDetailHref, matchDetailHref } from "@/shared/navigation/publicIdentifiers";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 function isConflict(error: unknown): boolean {
@@ -22,6 +23,8 @@ function isConflict(error: unknown): boolean {
 /** Owns confirmation, conflict recovery and navigation after Writes reconciles a saved result. */
 export function useMatchWorkspaceSubmitFlow({
   matchId,
+  matchPublicId,
+  heldEventPublicId,
   notify,
   onPersistedSuccess,
   setConfirmOpen,
@@ -31,6 +34,8 @@ export function useMatchWorkspaceSubmitFlow({
   readLatestValues,
 }: {
   matchId: string | undefined;
+  matchPublicId?: string | undefined;
+  heldEventPublicId?: string | undefined;
   notify: (message: string, tone?: WorkspaceNoticeTone) => void;
   onPersistedSuccess: () => void;
   setConfirmOpen: (open: boolean) => void;
@@ -66,7 +71,7 @@ export function useMatchWorkspaceSubmitFlow({
         onPersistedSuccess();
         navigateAfterSuccess(
           values.heldEventId
-            ? `/held-events/${encodeURIComponent(values.heldEventId)}`
+            ? heldEventDetailHref(values.heldEventId, heldEventPublicId)
             : "/matches",
           { replace: true },
         );
@@ -78,7 +83,9 @@ export function useMatchWorkspaceSubmitFlow({
       });
       if (result.kind === "confirm") setConfirmOpen(false);
       onPersistedSuccess();
-      navigateAfterSuccess(`/matches/${encodeURIComponent(result.matchId)}`);
+      navigateAfterSuccess(
+        matchDetailHref(result.matchId, result.kind === "update" ? matchPublicId : undefined),
+      );
     },
     failed: async (failure) => {
       if (!activeRef.current) return;

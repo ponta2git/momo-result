@@ -311,12 +311,7 @@ pub fn entrypoint() -> ExitCode {
 async fn execute_cli(shutdown_deadline: &mut Option<tokio::time::Instant>) -> ExitCode {
     let cli = Cli::parse();
     match &cli.command {
-        Command::Bootstrap { arguments } => {
-            return match crate::process::bootstrap_and_exec(arguments) {
-                Ok(()) => ExitCode::SUCCESS,
-                Err(_error) => ExitCode::FAILURE,
-            };
-        }
+        Command::Bootstrap { arguments } => return bootstrap_command(arguments),
         Command::ChildCgroupAllocate { allocation_bytes } => {
             if crate::process::wait_for_child_start_barrier().is_err() {
                 return exit_code(crate::process::CHILD_START_BARRIER_FAILED_EXIT_CODE);
@@ -409,7 +404,33 @@ async fn execute_cli(shutdown_deadline: &mut Option<tokio::time::Instant>) -> Ex
     }
 }
 
+fn bootstrap_command(arguments: &[OsString]) -> ExitCode {
+    match crate::process::bootstrap_and_exec(arguments) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(_error) => {
+            let _result = writeln!(
+                io::stderr().lock(),
+                "processing worker bootstrap isolation failed"
+            );
+            ExitCode::FAILURE
+        }
+    }
+}
+
 async fn run(
+    command: Command,
+    shutdown_deadline: &mut Option<tokio::time::Instant>,
+) -> Result<(), String> {
+    if crate::cutover::enabled()? {
+        if !matches!(command, Command::Worker) {
+            return Err("maintenance mode only permits worker observation".to_owned());
+        }
+        return crate::cutover::run().await;
+    }
+    run_active(command, shutdown_deadline).await
+}
+
+async fn run_active(
     command: Command,
     shutdown_deadline: &mut Option<tokio::time::Instant>,
 ) -> Result<(), String> {

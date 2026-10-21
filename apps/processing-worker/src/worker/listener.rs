@@ -324,7 +324,7 @@ mod tests {
     async fn both_enabled_routes_are_verified_and_protocol_errors_are_fatal()
     -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let url = std::env::var("PROCESSING_SCHEDULER_SMOKE_DATABASE_URL")?;
-        let publisher = postgres::connect(&url).await?;
+        let publisher = crate::identity::fixtures::connect(&url).await?;
         for channel in [CHANNEL, SUBMISSIONS_CHANNEL] {
             let (sink, mut wake) = PostCommitSink::channel();
             let mut listener = subscribe_routes(&url, sink, true).await?;

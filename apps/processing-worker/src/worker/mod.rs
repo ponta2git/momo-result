@@ -129,7 +129,7 @@ mod tests {
         let database_url = std::env::var("PROCESSING_SCHEDULER_SMOKE_DATABASE_URL")?;
         let (sink, mut wake) = PostCommitSink::channel();
         let mut listener = listener::subscribe(&database_url, sink).await?;
-        let publisher = crate::postgres::connect(&database_url).await?;
+        let publisher = crate::identity::fixtures::connect(&database_url).await?;
         listener.verify_notification_round_trip(&publisher).await?;
         let verified = tokio::time::timeout(Duration::from_secs(2), wake.recv()).await?;
         assert_eq!(

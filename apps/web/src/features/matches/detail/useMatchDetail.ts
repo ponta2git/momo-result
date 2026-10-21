@@ -8,12 +8,16 @@ import { useMatchDetailResource } from "@/features/matches/detail/useMatchDetail
 
 /** Composes route data and feature controls into the detail view. */
 export function useMatchDetail(): MatchDetailView {
-  const { matchId = "" } = useParams<{ matchId: string }>();
-  const resource = useMatchDetailResource(matchId);
+  const { matchId = "", publicId } = useParams<{ matchId: string; publicId: string }>();
+  const resource = useMatchDetailResource(matchId, publicId);
   const analysis = useMatchAnalysis(resource.detail);
-  const deletion = useMatchDeletion({ heldEventId: resource.detail?.heldEventId, matchId });
+  const deletion = useMatchDeletion({
+    heldEventId: resource.detail?.heldEventId,
+    heldEventPublicId: resource.detail?.heldEventPublicId,
+    matchId: resource.detail?.matchId ?? matchId,
+  });
   return buildMatchDetailView({
-    matchId,
+    matchId: publicId ?? matchId,
     ...resource,
     analysis,
     deletion,

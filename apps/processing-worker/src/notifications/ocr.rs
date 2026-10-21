@@ -80,14 +80,14 @@ pub(crate) async fn prepare(
 }
 
 const SNAPSHOT_SQL: &str = "SELECT settings.enabled, settings.generation::text AS generation, \
-    s.match_draft_id, to_char(s.finished_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS occurred_at, \
+    s.legacy_match_draft_id AS match_draft_id, to_char(s.finished_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS occurred_at, \
     CASE WHEN length(gt.name) > 200 THEN left(gt.name, 200) || '…' ELSE gt.name END AS game_title_name, \
     to_char(he.held_date_iso, 'YYYY-MM-DD') AS held_date_iso, md.match_no_in_event \
     FROM ocr_submissions s JOIN match_drafts md ON md.id = s.match_draft_id \
     JOIN discord_notification_settings settings ON settings.kind = 'ocr_completed' \
     LEFT JOIN game_titles gt ON gt.id = md.game_title_id \
     LEFT JOIN held_events he ON he.id = md.held_event_id \
-    WHERE s.id = $1 AND s.status = 'settled' AND md.status NOT IN ('confirmed', 'cancelled')";
+    WHERE s.legacy_id = $1 AND s.status = 'settled' AND md.status NOT IN ('confirmed', 'cancelled')";
 
 #[cfg(test)]
 mod tests {

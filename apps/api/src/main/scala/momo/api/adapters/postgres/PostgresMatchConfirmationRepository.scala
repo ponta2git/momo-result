@@ -14,6 +14,7 @@ import doobie.postgres.implicits.*
 import doobie.postgres.sqlstate
 import doobie.util.fragments
 
+import momo.api.adapters.postgres.CanonicalIdentity.Entity
 import momo.api.adapters.postgres.PostgresMatchInsertOps.insertMatchCascade
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.adapters.postgres.PostgresSeriesAnalysisMutationOps.enqueueMatchMutation
@@ -27,8 +28,11 @@ import momo.api.repositories.{
   RepositoryResult
 }
 
-final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
-    extends MatchConfirmationRepository[F]:
+final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](
+    transactor: Transactor[F],
+    identities: PostgresIdentities = PostgresIdentities.Legacy
+) extends MatchConfirmationRepository[F]:
+  private given ids: PostgresIdentities = identities
   private final case class ConfirmedDraftSourceImagesRow(
       totalAssetsImageId: Option[ImageId],
       revenueImageId: Option[ImageId],
@@ -59,11 +63,20 @@ final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transact
               source_images_retained_until = $updatedAt,
               source_images_deleted_at = $updatedAt,
               updated_at = $updatedAt
-            WHERE id = ${expected.draftId}
+            WHERE id = ${ids.lookup(Entity.MatchDrafts, expected.draftId.value)}
               AND updated_at = ${expected.updatedAt}
-              AND total_assets_draft_id IS NOT DISTINCT FROM ${expected.totalAssetsDraftId}
-              AND revenue_draft_id IS NOT DISTINCT FROM ${expected.revenueDraftId}
-              AND incident_log_draft_id IS NOT DISTINCT FROM ${expected.incidentLogDraftId}
+              AND ${ids.retainedColumn(
+              "match_drafts",
+              "total_assets_draft_id"
+            )} IS NOT DISTINCT FROM ${expected.totalAssetsDraftId}
+              AND ${ids.retainedColumn(
+              "match_drafts",
+              "revenue_draft_id"
+            )} IS NOT DISTINCT FROM ${expected.revenueDraftId}
+              AND ${ids.retainedColumn(
+              "match_drafts",
+              "incident_log_draft_id"
+            )} IS NOT DISTINCT FROM ${expected.incidentLogDraftId}
               AND """ ++ fragments.in(fr"status", MatchDraftConfirmability.statuses) ++ fr"""
             RETURNING total_assets_image_id, revenue_image_id, incident_log_image_id
           """).query[ConfirmedDraftSourceImagesRow].option
@@ -97,8 +110,8 @@ final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transact
       expected: MatchDraftConfirmation,
       record: MatchRecord,
   ): ConnectionIO[Unit] = sql"""
-      UPDATE match_drafts SET confirmed_match_id = ${record.id}
-      WHERE id = ${expected.draftId}
+      UPDATE match_drafts SET confirmed_match_id = ${ids.lookup(Entity.Matches, record.id.value)}
+      WHERE id = ${ids.lookup(Entity.MatchDrafts, expected.draftId.value)}
     """.update.run.flatMap {
     case 1 => ().pure[ConnectionIO]
     case affected => MonadThrow[ConnectionIO]

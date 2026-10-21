@@ -2,6 +2,7 @@ package momo.api.http.modules
 
 import sttp.tapir.server.ServerEndpoint
 
+import momo.api.domain.PublicId
 import momo.api.domain.ids.HeldEventId
 import momo.api.endpoints.codec.{BoundaryId, HeldEventCodec}
 import momo.api.endpoints.{
@@ -13,6 +14,7 @@ import momo.api.endpoints.{
   HeldEventsEndpoints,
   PaginationResponse
 }
+import momo.api.errors.AppError
 import momo.api.http.{HttpOperation, HttpRouteContext, SecuredEndpoint}
 import momo.api.usecases.heldevents.{
   CreateHeldEvent,
@@ -75,6 +77,13 @@ object HeldEventModule:
         )(id => getHeldEventDetail.summary(id))(
           HeldEventSummaryResponse.from
         )
+      },
+      SecuredEndpoint.readLogic(security, HeldEventsEndpoints.getByPublicId) { _ => publicId =>
+        execution.execute(
+          PublicId.fromString(publicId).left.map(_ =>
+            AppError.ValidationFailed("publicId is invalid.")
+          )
+        )(getHeldEventDetail.byPublicId)(HeldEventDetailResponse.from)
       },
       SecuredEndpoint.mutationLogic(security, HeldEventsEndpoints.create) { member =>
         {

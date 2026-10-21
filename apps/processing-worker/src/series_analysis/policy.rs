@@ -49,10 +49,6 @@ pub(super) const fn child_action(outcome: AnalysisChildOutcome) -> ChildAction {
 pub(super) const fn interruption_action(interruption: AttemptInterruption) -> InterruptionAction {
     match interruption {
         AttemptInterruption::TimedOut => InterruptionAction::Fail(AttemptFailure::timed_out()),
-        AttemptInterruption::Preempted => InterruptionAction::Requeue {
-            cause: RequeueCause::Preempted,
-            stop_consumer: false,
-        },
         AttemptInterruption::Shutdown => InterruptionAction::Requeue {
             cause: RequeueCause::GracefulStop,
             stop_consumer: true,
@@ -118,13 +114,6 @@ mod tests {
             (
                 AttemptInterruption::TimedOut,
                 InterruptionAction::Fail(AttemptFailure::timed_out()),
-            ),
-            (
-                AttemptInterruption::Preempted,
-                InterruptionAction::Requeue {
-                    cause: RequeueCause::Preempted,
-                    stop_consumer: false,
-                },
             ),
             (
                 AttemptInterruption::Shutdown,

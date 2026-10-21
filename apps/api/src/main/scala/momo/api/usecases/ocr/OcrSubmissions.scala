@@ -11,7 +11,8 @@ import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
 import momo.api.ports.storage.SourceImageObjectStorage
-import momo.api.repositories.OcrSubmissionsRepository
+import momo.api.repositories.{EntityReferenceResolver, OcrSubmissionsRepository}
+import momo.api.usecases.common.ReferenceNormalization
 
 final case class PutOcrSubmissionCommand(
     id: String,
@@ -20,11 +21,25 @@ final case class PutOcrSubmissionCommand(
     members: List[OcrSubmissionMember],
 )
 
-final class OcrSubmissions[F[_]: Monad](repository: OcrSubmissionsRepository[F], now: F[Instant]):
+final class OcrSubmissions[F[_]: Monad](
+    repository: OcrSubmissionsRepository[F],
+    now: F[Instant],
+    references: Option[EntityReferenceResolver[F]] = None
+):
   def put(
       command: PutOcrSubmissionCommand,
       owner: AccountId,
       admitNew: F[Either[AppError, Unit]],
+  ): F[Either[AppError, OcrSubmission]] = ReferenceNormalization.submission(
+    command,
+    references.getOrElse(EntityReferenceResolver.preserve[F])
+  )
+    .flatMap(normalized => putResolved(normalized, owner, admitNew))
+
+  private def putResolved(
+      command: PutOcrSubmissionCommand,
+      owner: AccountId,
+      admitNew: F[Either[AppError, Unit]]
   ): F[Either[AppError, OcrSubmission]] =
     OcrSubmissions.validate(command) match
       case Left(error) => error.asLeft[OcrSubmission].pure[F]
@@ -49,11 +64,13 @@ final class OcrSubmissions[F[_]: Monad](repository: OcrSubmissionsRepository[F],
                 AppError.Conflict("This submissionId belongs to another request.")
               )
                 .pure[F]
-            case None => admitNew.flatMap {
-                case Left(error) => error.asLeft[OcrSubmission].pure[F]
-                // The atomic put still guards races and ownership after this lookup.
-                case Right(_) => repository.put(submission)
-              }
+            case None => OcrHintsCodec.validate(command.hints) match
+                case Left(error) => AppError.ValidationFailed(error).asLeft[OcrSubmission].pure[F]
+                case Right(_) => admitNew.flatMap {
+                    case Left(error) => error.asLeft[OcrSubmission].pure[F]
+                    // The atomic put still guards races and ownership after this lookup.
+                    case Right(_) => repository.put(submission)
+                  }
           }
         }
 
@@ -83,6 +100,6 @@ object OcrSubmissions:
           (),
           "Invalid OCR submission image fingerprint."
         )
-        _ <- OcrHintsCodec.validate(command.hints)
+        _ <- OcrHintsCodec.validateShape(command.hints)
       yield ()
     validation.left.map(AppError.ValidationFailed.apply)

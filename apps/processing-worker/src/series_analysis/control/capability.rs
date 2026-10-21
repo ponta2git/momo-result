@@ -179,7 +179,7 @@ mod tests {
         const WORKER_ID: &str = "analysis-capability-smoke-generation";
         let capability_id = capability_row_id(WORKER_ID);
         let database_url = std::env::var("ANALYSIS_CONTROL_SMOKE_DATABASE_URL")?;
-        let client = crate::postgres::connect(&database_url).await?;
+        let client = crate::identity::fixtures::connect(&database_url).await?;
         client
             .execute(
                 "DELETE FROM series_analysis_worker_capabilities WHERE worker_id IN ($1, $2)",

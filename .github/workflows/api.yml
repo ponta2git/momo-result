@@ -246,4 +246,6 @@ jobs:
 
       - name: External-service quality gates
         timeout-minutes: 15
-        run: sbt --server --batch apiDbQuality
+        run: |
+          node scripts/generate-identity-schema-contract.mjs ../../_deps/momo-db/drizzle --check
+          sbt --server --batch apiDbQuality

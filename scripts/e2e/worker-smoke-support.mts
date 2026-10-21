@@ -289,7 +289,13 @@ export class Smoke {
     signal: AbortSignal | null = this.signal,
   ) {
     return requireSuccess(
-      await containerCommand(this.sqlArgs(variables), { input, signal: signal ?? undefined }),
+      await containerCommand(this.sqlArgs(variables), {
+        input: `\\set QUIET 1
+${readFileSync(new URL("../../apps/processing-worker/testdata/canonical-fixture.sql", import.meta.url), "utf8")}
+\\set QUIET 0
+${input}`,
+        signal: signal ?? undefined,
+      }),
       "PostgreSQL command",
     );
   }

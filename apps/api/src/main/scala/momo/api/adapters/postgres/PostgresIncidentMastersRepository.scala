@@ -29,24 +29,30 @@ object PostgresIncidentMasters:
     createdAt = row.createdAt,
   )
 
-  val alg: IncidentMastersAlg[ConnectionIO] = new IncidentMastersAlg[ConnectionIO]:
-    override def list: ConnectionIO[List[IncidentMaster]] =
-      val nameLimit = PostgresReadBudget.NameCodePoints
-      val keyLimit = PostgresReadBudget.KeyCodePoints
-      PostgresReadBudget.guardedRows[IncidentMasterRow](
-        sql"""
+  def alg(using ids: PostgresIdentities): IncidentMastersAlg[ConnectionIO] =
+    new IncidentMastersAlg[ConnectionIO]:
+      override def list: ConnectionIO[List[IncidentMaster]] =
+        val nameLimit = PostgresReadBudget.NameCodePoints
+        val keyLimit = PostgresReadBudget.KeyCodePoints
+        PostgresReadBudget.guardedRows[IncidentMasterRow](
+          sql"""
         SELECT char_length(key) <= $keyLimit AND char_length(display_name) <= $nameLimit,
-               id, LEFT(key, $keyLimit), LEFT(display_name, $nameLimit), display_order, created_at
+               ${ids.wireId(
+              "incident_masters"
+            )}, LEFT(key, $keyLimit), LEFT(display_name, $nameLimit), display_order, created_at
         FROM incident_masters
-        ORDER BY display_order, id
+        ORDER BY display_order, ${ids.wireId("incident_masters")}
       """,
-        PostgresReadBudget.CatalogRows,
-        "Incident catalog"
-      ).map(_.map(fromRow))
+          PostgresReadBudget.CatalogRows,
+          "Incident catalog"
+        ).map(_.map(fromRow))
 end PostgresIncidentMasters
 
-final class PostgresIncidentMastersRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
-    extends IncidentMastersRepository[F]:
+final class PostgresIncidentMastersRepository[F[_]: MonadCancelThrow](
+    transactor: Transactor[F],
+    identities: PostgresIdentities = PostgresIdentities.Legacy
+) extends IncidentMastersRepository[F]:
+  private given PostgresIdentities = identities
   private val delegate: IncidentMastersRepository[F] = IncidentMastersRepository
     .fromAlg(PostgresIncidentMasters.alg, transactor.trans)
 

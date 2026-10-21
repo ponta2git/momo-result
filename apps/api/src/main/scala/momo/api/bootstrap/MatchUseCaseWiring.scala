@@ -40,11 +40,14 @@ private[bootstrap] object MatchUseCaseWiring:
       archiveMaxBytes: Long,
       now: F[Instant],
       nextId: F[MatchDraftId],
+      references: EntityReferenceResolver[F],
   ): MatchDraftModule.UseCases[F] = MatchDraftModule.UseCases(
-    createMatchDraft = CreateMatchDraft[F](events, gameTitles, maps, seasons, drafts, now, nextId),
+    createMatchDraft =
+      CreateMatchDraft[F](events, gameTitles, maps, seasons, drafts, now, nextId, Some(references)),
     getMatchDraft = GetMatchDraft[F](drafts),
     getMatchDraftReview = GetMatchDraftReview[F](reviews),
-    updateMatchDraft = UpdateMatchDraft[F](events, gameTitles, maps, seasons, drafts, now),
+    updateMatchDraft =
+      UpdateMatchDraft[F](events, gameTitles, maps, seasons, drafts, now, Some(references)),
     cancelMatchDraft = CancelMatchDraft[F](cancellation, now),
     getMatchDraftSourceImages = GetMatchDraftSourceImages[F](drafts, images, archiveMaxBytes),
   )
@@ -64,6 +67,7 @@ private[bootstrap] object MatchUseCaseWiring:
       members: MembersRepository[F],
       now: F[Instant],
       nextId: F[MatchId],
+      references: EntityReferenceResolver[F],
   ): MatchModule.UseCases[F] =
     val allowedMemberIds = members.list.map(_.map(_.id).toSet)
     MatchModule.UseCases(
@@ -79,11 +83,21 @@ private[bootstrap] object MatchUseCaseWiring:
         now = now,
         nextId = nextId,
         allowedMemberIds = allowedMemberIds,
+        references = Some(references),
       ),
       listMatches = ListMatches[F](list),
       getMatch = GetMatch[F](details),
       updateMatch =
-        UpdateMatch[F](events, matches, gameTitles, maps, seasons, now, allowedMemberIds),
+        UpdateMatch[F](
+          events,
+          matches,
+          gameTitles,
+          maps,
+          seasons,
+          now,
+          allowedMemberIds,
+          Some(references)
+        ),
       replaceMatchNote = ReplaceMatchNote[F](notes, now),
       deleteMatch = DeleteMatch[F](matches),
     )

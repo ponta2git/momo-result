@@ -5,7 +5,7 @@ use super::*;
 async fn real_postgres_radar_application_restore_and_failure_keep_artifact_and_basis_atomic()
 -> SmokeResult {
     let database_url = std::env::var("ANALYSIS_CONTROL_SMOKE_DATABASE_URL")?;
-    let mut client = crate::postgres::connect(&database_url).await?;
+    let mut client = crate::identity::fixtures::connect(&database_url).await?;
     seed(&client).await?;
     let runtime = TempDir::new()?;
     let config = notifications::config(&database_url, NotificationSink::default(), runtime.path())?;
@@ -95,7 +95,18 @@ async fn real_postgres_radar_application_restore_and_failure_keep_artifact_and_b
     .await?;
     assert_eq!(failed.value, ());
     assert_eq!(current(&client, "radar-basis-a").await?, restored_artifact);
-    let state = client.query_one("SELECT desired_basis_id,generation,active_operation_id FROM series_radar_title_states WHERE game_title_id=$1", &[&TITLE_ID]).await?;
+    let state = client.query_one(r"
+        SELECT (SELECT fixture_parent.legacy_id
+                FROM series_radar_basis_identities AS fixture_parent
+                WHERE fixture_parent.id = series_radar_title_states.desired_basis_id) AS desired_basis_id, generation,
+               (SELECT fixture_parent.legacy_id
+                FROM series_radar_operations AS fixture_parent
+                WHERE fixture_parent.id = series_radar_title_states.active_operation_id) AS active_operation_id
+        FROM series_radar_title_states
+        WHERE (SELECT fixture_parent.legacy_id
+               FROM game_titles AS fixture_parent
+               WHERE fixture_parent.id = series_radar_title_states.game_title_id) = $1
+        ", &[&TITLE_ID]).await?;
     assert_eq!(state.try_get::<_, String>(0)?, "radar-basis-a");
     assert_eq!(
         state.try_get::<_, i64>(1)?,
@@ -110,7 +121,11 @@ async fn real_postgres_radar_application_restore_and_failure_keep_artifact_and_b
     // The administrator dismisses the failed application candidate before requesting another.
     client
         .execute(
-            "UPDATE series_radar_candidates SET status='withdrawn' WHERE id='radar-restore-b'",
+            r"
+                UPDATE series_radar_candidates
+                SET status = 'withdrawn'
+                WHERE series_radar_candidates.legacy_id = 'radar-restore-b'
+                ",
             &[],
         )
         .await?;
@@ -134,10 +149,30 @@ async fn assert_changed_source_cannot_be_newly_applied(
     .await?;
     // Revision and child records both include the correction: only the saved candidate-source
     // check can prevent this from silently applying thresholds based on superseded source facts.
-    client.execute("UPDATE match_players SET revenue_man_yen=revenue_man_yen+17 WHERE match_id='analysis-radar-smoke-match-0' AND member_id='member_ponta'", &[]).await?;
     client
         .execute(
-            "UPDATE series_analysis_title_states SET input_revision=2 WHERE game_title_id=$1",
+            r"
+        UPDATE match_players
+        SET revenue_man_yen = revenue_man_yen + 17
+        WHERE (SELECT fixture_parent.legacy_id
+               FROM matches AS fixture_parent
+               WHERE fixture_parent.id = match_players.match_id) = 'analysis-radar-smoke-match-0'
+          AND (SELECT fixture_parent.legacy_id
+               FROM members AS fixture_parent
+               WHERE fixture_parent.id = match_players.member_id) = 'member_ponta'
+        ",
+            &[],
+        )
+        .await?;
+    client
+        .execute(
+            r"
+                UPDATE series_analysis_title_states
+                SET input_revision = 2
+                WHERE (SELECT fixture_parent.legacy_id
+                       FROM game_titles AS fixture_parent
+                       WHERE fixture_parent.id = series_analysis_title_states.game_title_id) = $1
+                ",
             &[&TITLE_ID],
         )
         .await?;
@@ -166,7 +201,13 @@ async fn assert_changed_source_cannot_be_newly_applied(
     assert_eq!(recovery.radar_basis_id.as_deref(), Some("radar-basis-a"));
     publish(client, &recovery, config).await?;
     current(client, "radar-basis-a").await?;
-    let reason: bool = client.query_one("SELECT EXISTS(SELECT 1 FROM jsonb_array_elements(monitor->'reasons') r WHERE r->>'kind'='source_changed') FROM series_radar_title_states WHERE game_title_id=$1", &[&TITLE_ID]).await?.try_get(0)?;
+    let reason: bool = client.query_one(r"
+        SELECT EXISTS (SELECT 1 FROM jsonb_array_elements(monitor -> 'reasons') AS r WHERE r ->> 'kind' = 'source_changed')
+        FROM series_radar_title_states
+        WHERE (SELECT fixture_parent.legacy_id
+               FROM game_titles AS fixture_parent
+               WHERE fixture_parent.id = series_radar_title_states.game_title_id) = $1
+        ", &[&TITLE_ID]).await?.try_get(0)?;
     assert!(
         reason,
         "the normal publication keeps scores and reports corrected source facts"
@@ -182,7 +223,19 @@ pub(super) async fn reserve_apply(
     preview: &str,
 ) -> SmokeResult {
     operation(client, id, "apply", candidate, Some(basis), Some(preview)).await?;
-    client.execute("UPDATE series_radar_title_states SET desired_basis_id=$2,generation=generation+1,active_operation_id=$3 WHERE game_title_id=$1", &[&TITLE_ID,&basis,&id]).await?;
+    client
+        .execute(
+            r"
+        UPDATE series_radar_title_states
+        SET desired_basis_id = pg_temp.fixture_uuid('series_radar_bases', $2), generation = generation + 1,
+            active_operation_id = pg_temp.fixture_uuid('series_radar_operations', $3)
+        WHERE (SELECT fixture_parent.legacy_id
+               FROM game_titles AS fixture_parent
+               WHERE fixture_parent.id = series_radar_title_states.game_title_id) = $1
+        ",
+            &[&TITLE_ID, &basis, &id],
+        )
+        .await?;
     Ok(())
 }
 
@@ -212,7 +265,20 @@ pub(super) async fn restore(
         candidate_state(client, candidate).await?,
         ("ready".to_owned(), "ready".to_owned())
     );
-    let row = client.query_one("SELECT c.basis_id,c.source_input_revision,c.result->'basis'=b.payload,p.id FROM series_radar_candidates c JOIN series_radar_bases b ON b.id=c.basis_id JOIN series_radar_previews p ON p.candidate_id=c.id WHERE c.id=$1", &[&candidate]).await?;
+    let row = client.query_one(r"
+        SELECT (SELECT fixture_parent.legacy_id
+                FROM series_radar_basis_identities AS fixture_parent
+                WHERE fixture_parent.id = c.basis_id) AS basis_id, c.source_input_revision, c.result -> 'basis' = b.payload,
+               p.legacy_id AS id
+        FROM series_radar_candidates AS c
+             INNER JOIN series_radar_bases AS b ON b.id = (SELECT fixture_parent.legacy_id
+                                                           FROM series_radar_basis_identities AS fixture_parent
+                                                           WHERE fixture_parent.id = c.basis_id)
+             INNER JOIN series_radar_previews AS p ON (SELECT fixture_parent.legacy_id
+                                                       FROM series_radar_candidates AS fixture_parent
+                                                       WHERE fixture_parent.id = p.candidate_id) = c.legacy_id
+        WHERE c.legacy_id = $1
+        ", &[&candidate]).await?;
     assert_eq!(row.try_get::<_, String>(0)?, basis);
     assert_eq!(row.try_get::<_, i64>(1)?, 1);
     assert!(
@@ -280,7 +346,26 @@ pub(super) async fn publish(
 }
 
 pub(super) async fn current(client: &Client, basis: &str) -> SmokeResult<String> {
-    let row = client.query_one("SELECT s.current_artifact_id,r.current_basis_id,a.radar_basis_id,a.radar_applied_at=r.current_applied_at,(convert_from(c.payload,'UTF8')::jsonb #>> '{playerRadar,basis,basisId}'),r.monitor=(convert_from(c.payload,'UTF8')::jsonb #> '{playerRadar,monitoring}'),a.radar_generation=r.generation FROM series_analysis_title_states s JOIN series_radar_title_states r USING(game_title_id) JOIN series_analysis_artifacts a ON a.id=s.current_artifact_id JOIN series_analysis_scope_aggregate_artifacts c ON c.artifact_id=a.id AND c.scope_key='overall' WHERE s.game_title_id=$1", &[&TITLE_ID]).await?;
+    let row = client.query_one(r"
+        SELECT (SELECT fixture_parent.legacy_id
+                FROM series_analysis_artifact_identities AS fixture_parent
+                WHERE fixture_parent.id = s.current_artifact_id) AS current_artifact_id, (SELECT fixture_parent.legacy_id
+                FROM series_radar_basis_identities AS fixture_parent
+                WHERE fixture_parent.id = r.current_basis_id) AS current_basis_id, a.radar_basis_id,
+               a.radar_applied_at = r.current_applied_at,
+               CAST(convert_from(c.payload, 'UTF8') AS jsonb) #>> '{playerRadar,basis,basisId}',
+               r.monitor = CAST(convert_from(c.payload, 'UTF8') AS jsonb) #> '{playerRadar,monitoring}',
+               a.radar_generation = r.generation
+        FROM series_analysis_title_states AS s
+             INNER JOIN series_radar_title_states AS r USING (game_title_id)
+             INNER JOIN series_analysis_artifacts AS a ON a.id = (SELECT fixture_parent.legacy_id
+                                                                  FROM series_analysis_artifact_identities AS fixture_parent
+                                                                  WHERE fixture_parent.id = s.current_artifact_id)
+             INNER JOIN series_analysis_scope_aggregate_artifacts AS c ON c.artifact_id = a.id AND c.scope_key = 'overall'
+        WHERE (SELECT fixture_parent.legacy_id
+               FROM game_titles AS fixture_parent
+               WHERE fixture_parent.id = s.game_title_id) = $1
+        ", &[&TITLE_ID]).await?;
     assert_eq!(row.try_get::<_, String>(1)?, basis);
     assert_eq!(row.try_get::<_, String>(2)?, basis);
     assert!(

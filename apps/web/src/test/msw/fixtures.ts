@@ -74,11 +74,21 @@ const loginAccountsSeed: readonly LoginAccountRecord[] = [
 
 export const incidentMastersSeed: readonly IncidentRecord[] = [
   { displayName: "目的地", displayOrder: 1, id: "incident_destination", key: "destination" },
-  { displayName: "プラス駅", displayOrder: 2, id: "incident_plus_station", key: "plusStation" },
-  { displayName: "マイナス駅", displayOrder: 3, id: "incident_minus_station", key: "minusStation" },
-  { displayName: "カード駅", displayOrder: 4, id: "incident_card_station", key: "cardStation" },
-  { displayName: "カード売り場", displayOrder: 5, id: "incident_card_shop", key: "cardShop" },
-  { displayName: "スリの銀次", displayOrder: 6, id: "incident_suri_no_ginji", key: "suriNoGinji" },
+  { displayName: "プラス駅", displayOrder: 2, id: "incident_plus_station", key: "plus_station" },
+  {
+    displayName: "マイナス駅",
+    displayOrder: 3,
+    id: "incident_minus_station",
+    key: "minus_station",
+  },
+  { displayName: "カード駅", displayOrder: 4, id: "incident_card_station", key: "card_station" },
+  { displayName: "カード売り場", displayOrder: 5, id: "incident_card_shop", key: "card_shop" },
+  {
+    displayName: "スリの銀次",
+    displayOrder: 6,
+    id: "incident_suri_no_ginji",
+    key: "suri_no_ginji",
+  },
 ];
 
 const playerField = (value: unknown, confidence = 0.96) => ({

@@ -42,6 +42,7 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl \
   && rm -rf /var/lib/apt/lists/*
 COPY apps/api/project/build.properties project/build.properties
+COPY apps/api/.jvmopts .jvmopts
 RUN SBT_VERSION="$(sed -n 's/^sbt.version=//p' project/build.properties)" \
   && test -n "${SBT_VERSION}" \
   && curl -fsSL -o /tmp/sbt.tgz "https://github.com/sbt/sbt/releases/download/v${SBT_VERSION}/sbt-${SBT_VERSION}.tgz" \

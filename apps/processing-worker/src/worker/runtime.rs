@@ -8,6 +8,7 @@ use crate::{
     notifications::{NotificationDriver, NotificationHandle},
     ocr::{self, OcrConsumerRuntimeConfig},
     postgres,
+    resource_budget::{ResourceBudget, ResourceBudgetError, ResourceLimits},
     series_analysis::{self, config::AnalysisConsumerConfig},
 };
 use futures_util::FutureExt;
@@ -17,6 +18,8 @@ use tokio::{sync::watch, time};
 
 #[derive(Debug, Error)]
 pub(crate) enum WorkerError {
+    #[error(transparent)]
+    Resources(#[from] ResourceBudgetError),
     #[error("processing worker database dependency failed")]
     Database(#[from] postgres::PostgresError),
     #[error("processing worker database transition failed")]
@@ -31,8 +34,6 @@ pub(crate) enum WorkerError {
     Ocr(#[from] ocr::consumer::OcrConsumerError),
     #[error("processing worker OCR control failed")]
     OcrControl(#[from] ocr::control::OcrControlError),
-    #[error("processing worker slot state failed")]
-    Slot(#[from] crate::execution_slot::ExecutionSlotError),
     #[error("processing worker campaign materialization failed")]
     Materialization(#[from] series_analysis::materialization::MaterializationError),
     #[error("processing worker wake route closed")]
@@ -70,6 +71,7 @@ pub(crate) enum WorkerError {
 }
 
 struct Settings {
+    resource_limits: ResourceLimits,
     database_url: String,
     listener_database_url: String,
     worker_id: String,
@@ -81,6 +83,10 @@ struct Settings {
 impl From<&AnalysisConsumerConfig> for Settings {
     fn from(config: &AnalysisConsumerConfig) -> Self {
         Self {
+            resource_limits: ResourceLimits {
+                cpu: config.child_cgroup.cpu_budget(),
+                memory: config.execution_limits.memory,
+            },
             database_url: config.database_url.clone(),
             listener_database_url: config.listener_database_url.clone(),
             worker_id: config.worker_id.clone(),
@@ -112,7 +118,7 @@ struct WorkState {
     analysis: Option<series_analysis::Module>,
     ocr: Option<ocr::orchestrator::ImageRunner>,
     ocr_config: Option<ocr::control::OcrControlConfig>,
-    active: bool,
+    resources: ResourceBudget,
     pending: Option<PendingExecution>,
     ocr_cursor: Option<selection::Cursor>,
     analysis_cursor: Option<selection::Cursor>,
@@ -129,6 +135,7 @@ impl WorkState {
         database: postgres::ConnectedClient,
         sink: PostCommitSink,
     ) -> Self {
+        let resources = ResourceBudget::new(settings.resource_limits);
         Self {
             config,
             settings,
@@ -136,7 +143,7 @@ impl WorkState {
             analysis: None,
             ocr: None,
             ocr_config: None,
-            active: false,
+            resources,
             pending: None,
             ocr_cursor: None,
             analysis_cursor: None,
@@ -147,7 +154,7 @@ impl WorkState {
         }
     }
     fn restore(&mut self, runner: FinishedRunner) {
-        self.active = false;
+        self.resources.release();
         self.retry_after = None;
         match runner {
             FinishedRunner::Analysis(runner) => {
@@ -338,17 +345,16 @@ impl WorkerError {
     pub(super) fn is_contention(&self) -> bool {
         match self {
             Self::Postgres(error)
-            | Self::Slot(crate::execution_slot::ExecutionSlotError::Postgres(error))
             | Self::Materialization(
                 series_analysis::materialization::MaterializationError::Postgres(error),
             ) => postgres::is_lock_contention(error),
             Self::OcrControl(error) => error.is_contention(),
             Self::AnalysisControl(error) => error.is_contention(),
-            Self::Database(_)
+            Self::Resources(_)
+            | Self::Database(_)
             | Self::Listener(_)
             | Self::Analysis(_)
             | Self::Ocr(_)
-            | Self::Slot(_)
             | Self::Materialization(_)
             | Self::Sink(_)
             | Self::Task(_)
@@ -497,7 +503,10 @@ impl Runtime {
                     let clean = self.active.as_ref().is_none_or(|handle| matches!(handle.cleanup_state(), crate::execution::CleanupState::Clean));
                     self.active = None;
                     match result {
-                        Ok((runner, result)) => { self.returned=Some(runner); if let Err(error)=result { self.fail(error); } }
+                        Ok((runner, result)) => {
+                            if clean { self.returned=Some(runner); }
+                            if let Err(error)=result { self.fail(error); }
+                        }
                         Err(error) => self.fail(error.into()),
                     }
                     if !clean { self.fail(WorkerError::CleanupFailed); }
@@ -888,6 +897,7 @@ pub(crate) async fn run_ocr_only(
 ) -> Result<(), WorkerError> {
     let bound = config.shutdown_finalization_bound();
     let settings = Settings {
+        resource_limits: ResourceLimits::fixture(),
         database_url: config.database_url.clone(),
         listener_database_url: config.database_url.clone(),
         worker_id: config.control.worker_id().to_owned(),
@@ -929,6 +939,7 @@ pub(crate) async fn run_ocr_only(
     ));
     let ocr_config = Some(config.control.clone());
     let ocr = Some(ocr::orchestrator::ImageRunner::new(config, launcher).await?);
+    let resources = ResourceBudget::new(settings.resource_limits);
     let mut state = Some(WorkState {
         config: None,
         settings,
@@ -936,7 +947,7 @@ pub(crate) async fn run_ocr_only(
         analysis: None,
         ocr,
         ocr_config,
-        active: false,
+        resources,
         pending: None,
         ocr_cursor: None,
         analysis_cursor: None,
@@ -980,6 +991,12 @@ fn preflight(config: &AnalysisConsumerConfig) -> Result<(), WorkerError> {
     config
         .child_cgroup
         .ensure_empty()
+        .map_err(crate::process::ProcessError::from)
+        .map_err(series_analysis::ConsumerError::from)?;
+    #[cfg(target_os = "linux")]
+    config
+        .child_cgroup
+        .validate_resource_budget(config.execution_limits.memory)
         .map_err(crate::process::ProcessError::from)
         .map_err(series_analysis::ConsumerError::from)?;
     Ok(())

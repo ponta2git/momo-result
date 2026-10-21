@@ -127,6 +127,7 @@ private[bootstrap] object UseCaseWiring:
       incidentMasters: IncidentMastersRepository[F],
       memberAliases: MemberAliasesRepository[F],
       idempotency: IdempotencyRepository[F],
+      identityReferences: Option[EntityReferenceResolver[F]] = None,
   )
 
   final case class RuntimeServices[F[_]](

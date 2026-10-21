@@ -10,6 +10,7 @@ import momo.api.domain.ids.*
 import momo.api.domain.{MatchDraft, MatchDraftStatus}
 import momo.api.errors.AppError
 import momo.api.repositories.{
+  EntityReferenceResolver,
   GameTitlesRepository,
   HeldEventsRepository,
   MapMastersRepository,
@@ -17,7 +18,7 @@ import momo.api.repositories.{
   MatchDraftsRepository,
   SeasonMastersRepository
 }
-import momo.api.usecases.common.{MatchReferenceValidation, UseCaseField}
+import momo.api.usecases.common.{MatchReferenceValidation, ReferenceNormalization, UseCaseField}
 import momo.api.usecases.syntax.UseCaseSyntax.*
 
 final case class UpdateMatchDraftCommand(
@@ -39,6 +40,7 @@ final class UpdateMatchDraft[F[_]: Monad](
     seasonMasters: SeasonMastersRepository[F],
     matchDrafts: MatchDraftsRepository[F],
     now: F[Instant],
+    references: Option[EntityReferenceResolver[F]] = None,
 ):
   private val referenceValidation =
     MatchReferenceValidation(heldEvents, gameTitles, mapMasters, seasonMasters)
@@ -47,6 +49,16 @@ final class UpdateMatchDraft[F[_]: Monad](
       draftId: MatchDraftId,
       command: UpdateMatchDraftCommand,
       actorAccountId: AccountId,
+  ): F[Either[AppError, MatchDraft]] = ReferenceNormalization.updateDraft(
+    command,
+    references.getOrElse(EntityReferenceResolver.preserve[F])
+  )
+    .flatMap(normalized => runResolved(draftId, normalized, actorAccountId))
+
+  private def runResolved(
+      draftId: MatchDraftId,
+      command: UpdateMatchDraftCommand,
+      actorAccountId: AccountId
   ): F[Either[AppError, MatchDraft]] = (for
     existing <- matchDrafts.find(draftId).orNotFound("match draft", draftId.value)
     _ <- EitherT.cond[F](
@@ -58,7 +70,9 @@ final class UpdateMatchDraft[F[_]: Monad](
     matchNoInEvent <-
       EitherT.fromEither[F](UseCaseField.optionalMatchNoInEvent(command.matchNoInEvent))
     layoutFamily <- EitherT
-      .fromEither[F](UseCaseField.optionalStableKey("layoutFamily", command.layoutFamily))
+      .fromEither[F](
+        UseCaseField.optionalLayoutFamily(command.layoutFamily.orElse(existing.layoutFamily))
+      )
     _ <- validateForeignKeys(nextReferences(command, existing))
     status <- EitherT.fromEither[F](resolveStatus(command.status, existing.status))
     at <- EitherT.liftF(now)
@@ -69,7 +83,7 @@ final class UpdateMatchDraft[F[_]: Monad](
               heldEventId = command.heldEventId.orElse(e.heldEventId),
               matchNoInEvent = matchNoInEvent.orElse(e.matchNoInEvent),
               gameTitleId = command.gameTitleId.orElse(e.gameTitleId),
-              layoutFamily = layoutFamily.orElse(e.layoutFamily),
+              layoutFamily = layoutFamily,
               seasonMasterId = command.seasonMasterId.orElse(e.seasonMasterId),
               ownerMemberId = command.ownerMemberId.orElse(e.ownerMemberId),
               mapMasterId = command.mapMasterId.orElse(e.mapMasterId),

@@ -199,9 +199,14 @@ async fn load_input_snapshot(
         .await
         .map_err(|error| map_postgres_failure(&error))?;
     tokio::select! {
-        result = load_job_input(&mut client, identity) => {
-            result.map_err(|error| map_input_repository_failure(&error))
-        }
+        result = async {
+            crate::identity::schema::require(&client)
+                .await
+                .map_err(|error| map_postgres_failure(&error))?;
+            load_job_input(&mut client, identity)
+                .await
+                .map_err(|error| map_input_repository_failure(&error))
+        } => result,
         _result = &mut connection => Err(ChildFailure::DependencyFailed),
     }
 }
@@ -212,9 +217,9 @@ fn milliseconds(duration: Duration) -> u64 {
 
 const fn map_postgres_failure(error: &PostgresError) -> ChildFailure {
     match error {
-        PostgresError::InvalidConfiguration(_) | PostgresError::TlsConfiguration(_) => {
-            ChildFailure::CalculationFailed
-        }
+        PostgresError::InvalidConfiguration(_)
+        | PostgresError::TlsConfiguration(_)
+        | PostgresError::IncompatibleIdentitySchema => ChildFailure::CalculationFailed,
         PostgresError::Postgres(_) | PostgresError::ConnectionTimeout => {
             ChildFailure::DependencyFailed
         }

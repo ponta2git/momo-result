@@ -30,7 +30,7 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
   private def repo =
     PostgresSeriesPlayerRadarRepository.create[IO](transactor, SeriesAnalysisReadConfig.defaults)
   private def seedTitle: IO[Unit] = new PostgresGameTitlesRepository[IO](transactor)
-    .createWithNextDisplayOrder(GameTitle(title, "レーダー契約作品", "momotetsu2", 1, now)).void
+    .createWithNextDisplayOrder(GameTitle(title, "レーダー契約作品", "momotetsu_2", 1, now)).void
 
   private def fixture(kind: String): Json = parser.parse(Files.readString(repositoryFile(
     s"docs/schemas/fixtures/series-analysis/radar-$kind-v1.json"
@@ -149,6 +149,32 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
       assertEquals(recovery, List(("pending", None, false)))
       assert(pending)
 
+  test("application and withdrawal explicitly rebind an already queued ordinary job"):
+    for
+      _ <- seedTitle *> seedReady
+      analysis <-
+        PostgresSeriesAnalysisRepository.create[IO](transactor, SeriesAnalysisReadConfig.defaults)
+      queued <- analysis.requestTitleRecalculation(title, account, "queued-before-apply")
+      repository <- repo
+      useCase = RequestSeriesPlayerRadarOperation[IO](repository)
+      accepted <- useCase.run(
+        command(SeriesPlayerRadarOperationKind.Apply, Some(candidateId), Some(previewId)),
+        account,
+        "apply-queued"
+      )
+      applied <- queuedRadar
+      _ <- useCase.run(
+        command(SeriesPlayerRadarOperationKind.Withdraw, Some(candidateId), None),
+        account,
+        "withdraw-queued"
+      )
+      withdrawn <- queuedRadar
+    yield
+      assert(queued.isRight)
+      assert(accepted.isRight)
+      assertEquals(applied, (Some(basisId), 1L))
+      assertEquals(withdrawn, (None, 2L))
+
   test(
     "a stale comparison cannot be applied and a missing nonempty preview is not reported as empty"
   ):
@@ -211,12 +237,14 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
         .query[String].unique.transact(transactor)
       application <- accepted.traverse(value => repository.radarOperation(title, value.operationId))
       restored <- titleState
+      rebound <- queuedRadar
     yield
       assertEquals(retained, ("ready", "ready"))
       assert(accepted.isRight, accepted.toString)
       assertEquals(candidate, "invalid")
       assertEquals(application.toOption.flatMap(_.toOption).map(_.status), Some("failed"))
       assertEquals(restored, (None, None, 2L, None))
+      assertEquals(rebound, (None, 2L))
 
   test("a queued preparation never absorbs a normal manual or match-mutation request"):
     for
@@ -735,6 +763,11 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
     FROM series_radar_title_states WHERE game_title_id = $title
   """.query[(Option[String], Option[String], Long, Option[String])].unique.transact(transactor)
 
+  private def queuedRadar: IO[(Option[String], Long)] = sql"""
+    SELECT radar_basis_id, radar_generation FROM series_analysis_jobs
+    WHERE game_title_id = $title AND status = 'queued' AND work_kind = 'analysis'
+  """.query[(Option[String], Long)].unique.transact(transactor)
+
   private def seedMatchPrerequisites: IO[Unit] =
     (sql"INSERT INTO map_masters(id, game_title_id, name, display_order) VALUES ('east', $title, '東', 1)".update.run *>
       sql"INSERT INTO season_masters(id, game_title_id, name, display_order) VALUES ('winter', $title, '冬', 1)".update.run *>
@@ -755,7 +788,7 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
       HeldEventId.unsafeFromString("event-0000"),
       MatchNoInEvent.unsafeFromInt(1),
       title,
-      "momotetsu2",
+      "momotetsu_2",
       SeasonMasterId.unsafeFromString("winter"),
       MemberId.unsafeFromString("member_ponta"),
       MapMasterId.unsafeFromString("east"),

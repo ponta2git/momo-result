@@ -31,15 +31,17 @@ final class OcrSubmissionsSpec extends MomoCatsEffectSuite:
     command.members.map(_.copy(status = "failed"))
   )
 
-  private val repository = new OcrSubmissionsRepository[IO]:
-    def find(id: String, account: AccountId): IO[Option[OcrSubmission]] =
-      IO.pure(Option.when(id == saved.id && account == owner)(saved))
-    def put(submission: OcrSubmission): IO[Either[AppError, OcrSubmission]] =
-      IO.raiseError(new IllegalStateException("a replay must not write"))
-    def failAdmission(account: AccountId, key: String, sha: String, length: Int): IO[Unit] =
-      IO.unit
+  private def repositoryWith(retained: OcrSubmission): OcrSubmissionsRepository[IO] =
+    new OcrSubmissionsRepository[IO]:
+      def find(id: String, account: AccountId): IO[Option[OcrSubmission]] =
+        IO.pure(Option.when(id == retained.id && account == owner)(retained))
+      def put(submission: OcrSubmission): IO[Either[AppError, OcrSubmission]] =
+        IO.raiseError(new IllegalStateException("a replay must not write"))
+      def failAdmission(account: AccountId, key: String, sha: String, length: Int): IO[Unit] =
+        IO.unit
 
-  private val service = OcrSubmissions(repository, IO.pure(saved.admissionDeadline.plusSeconds(1)))
+  private val service =
+    OcrSubmissions(repositoryWith(saved), IO.pure(saved.admissionDeadline.plusSeconds(1)))
   private val mustNotAdmit: IO[Either[AppError, Unit]] =
     IO.raiseError(new IllegalStateException("existing requests must not consume admission quota"))
 
@@ -57,6 +59,36 @@ final class OcrSubmissionsSpec extends MomoCatsEffectSuite:
         case _ => false
       })
     )
+  }
+
+  List(" MoMoTeTsU2 ", "retained-unknown").foreach { layout =>
+    test(s"exact replay preserves retained layout '$layout' before fresh validation") {
+      val hints = OcrJobHints.empty.copy(layoutFamily = Some(layout))
+      val retained = saved.copy(ocrHints = hints)
+      val replayService = OcrSubmissions(repositoryWith(retained), IO.pure(createdAt))
+      replayService.put(command.copy(hints = hints), owner, mustNotAdmit)
+        .map(result => assertEquals(result, Right(retained)))
+    }
+  }
+
+  test("unknown layout on a new submission fails before consuming admission quota") {
+    val fresh = command.copy(
+      id = "00000000-0000-0000-0000-000000000002",
+      hints = OcrJobHints.empty.copy(layoutFamily = Some("retained-unknown")),
+    )
+    service.put(fresh, owner, mustNotAdmit).map(result =>
+      assertEquals(result.left.toOption.map(_.code), Some("VALIDATION_FAILED"))
+    )
+  }
+
+  test("a canonical equivalent cannot change the hints of an existing submission") {
+    val retained = saved.copy(ocrHints = OcrJobHints.empty.copy(layoutFamily = Some("default")))
+    val replayService = OcrSubmissions(repositoryWith(retained), IO.pure(createdAt))
+    replayService.put(
+      command.copy(hints = OcrJobHints.empty.copy(layoutFamily = Some("world"))),
+      owner,
+      mustNotAdmit,
+    ).map(result => assertEquals(result.left.toOption.map(_.code), Some("CONFLICT")))
   }
 
   test("another account cannot reuse the owner's replay exemption") {

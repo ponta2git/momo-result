@@ -115,8 +115,28 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
         fixture.usecase.run(draftId, blankCommand.copy(layoutFamily = Some("World DX")), owner)
       found <- fixture.matchDrafts.find(draftId)
     yield
-      assertAppError(result, "VALIDATION_FAILED", "layoutFamily must match")
+      assertAppError(result, "VALIDATION_FAILED", "layoutFamily must be")
       assertEquals(found.flatMap(_.layoutFamily), Some("world"))
+
+  test("editing a retained draft normalizes its layout while preserving automatic selection"):
+    def edited(layout: Option[String]): IO[Option[String]] =
+      for
+        fixture <- Fixture.create
+        _ <- fixture.matchDrafts.create(
+          editingDraft(draftId, MatchDraftStatus.DraftReady)
+            .withCommon(_.copy(layoutFamily = layout))
+        )
+        result <- fixture.usecase.run(draftId, blankCommand, owner)
+        found <- fixture.matchDrafts.find(draftId)
+      yield
+        assert(result.isRight)
+        found.flatMap(_.layoutFamily)
+    for
+      legacy <- edited(Some("default"))
+      automatic <- edited(None)
+    yield
+      assertEquals(legacy, Some("world"))
+      assertEquals(automatic, None)
 
   test("rejects map and season masters that do not belong to the supplied game title"):
     for

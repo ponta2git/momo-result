@@ -28,17 +28,19 @@ jobs:
       name: production
       url: https://momo-result.ponta.me
     steps:
-      - name: Reject operations during the DB-job cutover
-        env:
-          JOBS_CUTOVER_COMPLETE: ${{ vars.JOBS_CUTOVER_COMPLETE }}
-        run: test "${JOBS_CUTOVER_COMPLETE}" = true
-
       - name: Require master
         run: test "${GITHUB_REF}" = refs/heads/master
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Reject ordinary production operation during cutover
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          control="$(gh api "repos/${GITHUB_REPOSITORY}/contents/deploy/production-mode.json?ref=master" --jq .content | base64 --decode | jq -er .mode)"
+          test "${control}" = active || { echo 'Ordinary production operation is disabled during cutover.' >&2; exit 1; }
+
       - name: Build structured CI tool
         uses: ./.github/actions/setup-ci-tool
 

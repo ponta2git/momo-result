@@ -20,12 +20,13 @@ pub(crate) async fn expand_pending_campaign_targets(
     let rows = transaction
         .query(
             r"
-                SELECT campaign_id, game_title_id
-                FROM series_analysis_campaign_targets
-                WHERE status = 'pending'
-                  AND (NOT EXISTS (SELECT 1 FROM series_analysis_title_states s WHERE s.game_title_id=series_analysis_campaign_targets.game_title_id)
-                    OR EXISTS (SELECT 1 FROM series_analysis_title_states s WHERE s.game_title_id=series_analysis_campaign_targets.game_title_id FOR UPDATE SKIP LOCKED))
-                ORDER BY accepted_at, campaign_id, game_title_id
+                SELECT c.legacy_id AS campaign_id, t.legacy_game_title_id AS game_title_id
+                FROM series_analysis_campaign_targets t
+                JOIN series_analysis_campaigns c ON c.id=t.campaign_id
+                WHERE t.status = 'pending'
+                  AND (NOT EXISTS (SELECT 1 FROM series_analysis_title_states s WHERE s.game_title_id=t.game_title_id)
+                    OR EXISTS (SELECT 1 FROM series_analysis_title_states s WHERE s.game_title_id=t.game_title_id FOR UPDATE SKIP LOCKED))
+                ORDER BY t.accepted_at, c.legacy_id, t.legacy_game_title_id
                 LIMIT $1
                 ",
             &[&limit],
@@ -171,7 +172,7 @@ async fn lock_desired_analysis(
             SELECT input_revision, algorithm_version, artifact_schema_version,
                    validation_contract_id
             FROM series_analysis_title_states
-            WHERE game_title_id = $1
+            WHERE game_title_id = (SELECT id FROM game_titles WHERE legacy_id=$1)
             FOR UPDATE
             ",
             &[&game_title_id],
@@ -203,10 +204,10 @@ async fn lock_active_analysis_job(
     transaction
         .query_opt(
             r"
-            SELECT id, status, algorithm_version, artifact_schema_version,
-                   validation_contract_id, started_at, lease_attempt_id, work_kind
+            SELECT legacy_id AS id, status, algorithm_version, artifact_schema_version,
+                   validation_contract_id, started_at, legacy_lease_attempt_id AS lease_attempt_id, work_kind
             FROM series_analysis_jobs
-            WHERE game_title_id = $1
+            WHERE game_title_id = (SELECT id FROM game_titles WHERE legacy_id=$1)
               AND status IN ('queued', 'running')
             FOR UPDATE
             ",
@@ -251,17 +252,18 @@ async fn lock_pending_campaign_target(
     transaction
         .query_opt(
             r"
-            SELECT t.campaign_id, t.game_title_id, t.input_revision,
+            SELECT c.legacy_id AS campaign_id, t.legacy_game_title_id AS game_title_id, t.input_revision,
                    t.algorithm_version, t.artifact_schema_version,
                    t.validation_contract_id, t.accepted_at,
-                   c.operation_request_id, c.trigger,
+                   o.legacy_id AS operation_request_id, c.trigger,
                    c.algorithm_version AS campaign_algorithm_version,
                    c.artifact_schema_version AS campaign_artifact_schema_version,
                    c.validation_contract_id AS campaign_validation_contract_id
             FROM series_analysis_campaign_targets t
             JOIN series_analysis_campaigns c ON c.id = t.campaign_id
-            WHERE t.campaign_id = $1
-              AND t.game_title_id = $2
+            JOIN series_analysis_operation_requests o ON o.id=c.operation_request_id
+            WHERE t.campaign_id = (SELECT id FROM series_analysis_campaigns WHERE legacy_id=$1)
+              AND t.legacy_game_title_id = $2
               AND t.status = 'pending'
             FOR UPDATE OF t
             ",
@@ -372,20 +374,28 @@ async fn materialize_campaign_target(
     active: Option<&ActiveAnalysisJob>,
 ) -> Result<(), MaterializationError> {
     let request_id = campaign_stable_id("analysis-request", target);
+    let request_identity =
+        crate::identity::allocate(crate::identity::Entity::AnalysisRequests, &request_id)
+            .map_err(|_error| MaterializationError::InvalidRecordValue)?;
     let new_job_id = campaign_stable_id("analysis-job", target);
     let assignment =
         assign_campaign_target(transaction, target, desired, active, &new_job_id).await?;
+    super::job_transitions::bind_queued_radar(transaction, &[&target.game_title_id]).await?;
     transaction
         .execute(
             r"
             INSERT INTO series_analysis_job_requests (
-              id, game_title_id, operation_request_id, campaign_id,
+              id, legacy_id, game_title_id, legacy_game_title_id, operation_request_id, campaign_id,
               input_revision, algorithm_version, artifact_schema_version,
               validation_contract_id,
-              trigger, force_run, status, assigned_job_id, assigned_attempt_id, accepted_at
+              trigger, force_run, status, assigned_job_id, assigned_attempt_id, legacy_assigned_attempt_id, accepted_at
             ) VALUES (
-              $1, $2, $3, $4, $5, $6, $7,
-              $8, $9, true, $10, $11, $12, $13
+              $14, $1, (SELECT id FROM game_titles WHERE legacy_id=$2), $2,
+              (SELECT id FROM series_analysis_operation_requests WHERE legacy_id=$3),
+              (SELECT id FROM series_analysis_campaigns WHERE legacy_id=$4), $5, $6, $7,
+              $8, $9, true, $10,
+              (SELECT id FROM series_analysis_jobs WHERE legacy_id=$11),
+              (SELECT lease_attempt_id FROM series_analysis_jobs WHERE legacy_id=$11 AND legacy_lease_attempt_id=$12), $12, $13
             )
             ",
             &[
@@ -402,6 +412,7 @@ async fn materialize_campaign_target(
                 &assignment.job_id,
                 &assignment.attempt_id,
                 &target.accepted_at,
+                &request_identity,
             ],
         )
         .await?;
@@ -410,10 +421,11 @@ async fn materialize_campaign_target(
             r"
             UPDATE series_analysis_campaign_targets
             SET status = $3,
-                job_request_id = $4,
+                job_request_id = (SELECT id FROM series_analysis_job_requests WHERE legacy_id=$4),
+                legacy_job_request_id = $4,
                 updated_at = clock_timestamp()
-            WHERE campaign_id = $1
-              AND game_title_id = $2
+            WHERE campaign_id = (SELECT id FROM series_analysis_campaigns WHERE legacy_id=$1)
+              AND legacy_game_title_id = $2
               AND status = 'pending'
             ",
             &[
@@ -438,15 +450,18 @@ async fn assign_campaign_target(
 ) -> Result<CampaignAssignment, MaterializationError> {
     match campaign_assignment_decision(active, target)? {
         CampaignAssignmentDecision::Create => {
+            let canonical =
+                crate::identity::allocate(crate::identity::Entity::AnalysisJobs, new_job_id)
+                    .map_err(|_error| MaterializationError::InvalidRecordValue)?;
             transaction
                 .execute(
                     r"
                     INSERT INTO series_analysis_jobs (
-                      id, game_title_id, input_revision, algorithm_version,
+                      id, legacy_id, game_title_id, input_revision, algorithm_version,
                       artifact_schema_version, validation_contract_id, status, trigger,
                       requested_at, available_at
                     ) VALUES (
-                      $1, $2, $3, $4, $5, $6, 'queued', $7, $8, $8
+                      $9, $1, (SELECT id FROM game_titles WHERE legacy_id=$2), $3, $4, $5, $6, 'queued', $7, $8, $8
                     )
                     ",
                     &[
@@ -458,6 +473,7 @@ async fn assign_campaign_target(
                         &desired.validation_contract_id,
                         &target.trigger,
                         &target.accepted_at,
+                        &canonical,
                     ],
                 )
                 .await?;
@@ -478,7 +494,7 @@ async fn assign_campaign_target(
                         artifact_schema_version = $4,
                         validation_contract_id = $5,
                         updated_at = clock_timestamp()
-                    WHERE id = $1 AND status = 'queued'
+                    WHERE legacy_id = $1 AND status = 'queued'
                     ",
                     &[
                         &job_id,
@@ -510,7 +526,7 @@ async fn assign_campaign_target(
                     SET pending_work = true,
                         pending_forced_run_count = pending_forced_run_count + 1,
                         updated_at = clock_timestamp()
-                    WHERE game_title_id = $1
+                    WHERE game_title_id = (SELECT id FROM game_titles WHERE legacy_id=$1)
                     ",
                     &[&target.game_title_id],
                 )
@@ -534,8 +550,8 @@ async fn skip_deleted_campaign_title(
             r"
             UPDATE series_analysis_campaign_targets
             SET status = 'skipped_title_deleted', updated_at = clock_timestamp()
-            WHERE campaign_id = $1
-              AND game_title_id = $2
+            WHERE campaign_id = (SELECT id FROM series_analysis_campaigns WHERE legacy_id=$1)
+              AND legacy_game_title_id = $2
               AND status = 'pending'
             ",
             &[&target.campaign_id, &target.game_title_id],

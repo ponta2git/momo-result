@@ -41,6 +41,12 @@ func runCLI(ctx context.Context, args []string, stdout io.Writer, stderr io.Writ
 			return 2
 		}
 		switch args[1] {
+		case "maintenance":
+			if len(args) != 2 {
+				writeResult(stderr, failureResult(maintenanceSmokeEvent, "InvalidArguments"))
+				return 2
+			}
+			return runMaintenanceSmoke(ctx, stdout, stderr)
 		case "local":
 			if len(args) != 2 {
 				writeResult(stderr, failureResult(localSmokeEvent, "InvalidArguments"))

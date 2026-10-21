@@ -12,6 +12,7 @@ mod blocking;
 mod busy_retry;
 mod cgroup;
 mod cli;
+mod cutover;
 mod execution;
 mod identity;
 mod job_lease;

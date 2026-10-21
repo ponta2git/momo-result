@@ -1,0 +1,2 @@
+# Scala classfile parsing must not mix the base and Java 11 variants of pgJDBC inner classes.
+-Djdk.util.jar.enableMultiRelease=false

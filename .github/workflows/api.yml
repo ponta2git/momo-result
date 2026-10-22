@@ -100,6 +100,7 @@ jobs:
           check-latest: true
           cache: sbt
       - name: Update Java certificate blocklist
+        working-directory: ${{ github.workspace }}
         run: bash scripts/ci/update-java-trust.sh deploy/java-blocked.certs
 
       - name: Setup sbt
@@ -143,6 +144,7 @@ jobs:
           check-latest: true
           cache: sbt
       - name: Update Java certificate blocklist
+        working-directory: ${{ github.workspace }}
         run: bash scripts/ci/update-java-trust.sh deploy/java-blocked.certs
 
       - name: Setup sbt
@@ -239,6 +241,7 @@ jobs:
           check-latest: true
           cache: sbt
       - name: Update Java certificate blocklist
+        working-directory: ${{ github.workspace }}
         run: bash scripts/ci/update-java-trust.sh deploy/java-blocked.certs
 
       - name: Setup sbt

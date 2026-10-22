@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.25.0@sha256:0adf442eae370b6087e08edc7c50b552d80ddf261576f4ebd6421006b2461f12
 
-ARG NODE_IMAGE=node:24-bookworm-slim@sha256:c2d5ade763cacfb03fe9cb8e8af5d1be5041ff331921fa26a9b231ca3a4f780a
+ARG NODE_IMAGE=node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205
 ARG JAVA_JDK_IMAGE=eclipse-temurin:25-jdk-noble@sha256:5b14970485a676b41faa08f4a7bc8716cc20915daa1d581d7a75f37a8ebaf9a8
 ARG JAVA_JRE_IMAGE=eclipse-temurin:25-jre-noble@sha256:30772b161c319f9a10c82e30fd77b7b6702c6b051e44e0e9f3d7ab5dd389a5ab
 ARG GO_IMAGE=golang:1.27.3-bookworm@sha256:21ade014faf952365b9ecbd8dbdb87176fbacb82fac9fb132d9f2a7b8cc3f132
@@ -10,7 +10,7 @@ ARG CADDY_X_CRYPTO_VERSION=v0.57.0
 ARG CADDY_X_NET_VERSION=v0.60.0
 ARG CADDY_X_TEXT_VERSION=v0.42.0
 ARG CADDY_GRPC_VERSION=v1.83.2
-ARG DEBIAN_RUNTIME_IMAGE=debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
+ARG DEBIAN_RUNTIME_IMAGE=debian:bookworm-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8
 
 FROM ${NODE_IMAGE} AS web-deps
 WORKDIR /workspace
@@ -35,6 +35,11 @@ RUN pnpm --filter web build
 
 # Compile portable JVM artifacts natively, including when building an amd64 runtime on ARM.
 FROM --platform=$BUILDPLATFORM ${JAVA_JDK_IMAGE} AS api-deps
+COPY deploy/java-blocked.certs /tmp/java-blocked.certs
+RUN grep -qx 'Algorithm=SHA-256' "${JAVA_HOME}/lib/security/blocked.certs" \
+  && printf '\n' >> "${JAVA_HOME}/lib/security/blocked.certs" \
+  && cat /tmp/java-blocked.certs >> "${JAVA_HOME}/lib/security/blocked.certs" \
+  && rm /tmp/java-blocked.certs
 WORKDIR /workspace/apps/api
 ENV SBT_OPTS="--enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow"
 ARG SBT_SHA256=351087fb5ad0d8b271f21b4c6f8e4912c8f6dbf81e1d06fe215bb165f14668b3
@@ -133,6 +138,11 @@ RUN --mount=type=cache,id=caddy-go-mod,target=/go/pkg/mod,sharing=locked \
     '$1 == "dep" && $2 == module && $3 == version { found = 1 } END { exit !found }'
 
 FROM ${JAVA_JRE_IMAGE} AS java-runtime
+COPY deploy/java-blocked.certs /tmp/java-blocked.certs
+RUN grep -qx 'Algorithm=SHA-256' "${JAVA_HOME}/lib/security/blocked.certs" \
+  && printf '\n' >> "${JAVA_HOME}/lib/security/blocked.certs" \
+  && cat /tmp/java-blocked.certs >> "${JAVA_HOME}/lib/security/blocked.certs" \
+  && rm /tmp/java-blocked.certs
 
 FROM ${DEBIAN_RUNTIME_IMAGE} AS runtime
 ENV APP_ENV=prod

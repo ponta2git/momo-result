@@ -69,6 +69,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
+          check-latest: true
           cache: pnpm
           cache-dependency-path: |
             _deps/momo-db/pnpm-lock.yaml
@@ -85,6 +86,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
+          check-latest: true
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
@@ -93,7 +95,10 @@ jobs:
         with:
           distribution: temurin
           java-version: "25"
+          check-latest: true
           cache: sbt
+      - name: Update Java certificate blocklist
+        run: bash scripts/ci/update-java-trust.sh deploy/java-blocked.certs
       - uses: sbt/setup-sbt@6158cb0903b8ceeae04f830055f3155e1b6a5ad7 # v1.5.11
       - name: Build structured CI tool
         if: github.event_name != 'workflow_dispatch'

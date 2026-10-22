@@ -29,8 +29,8 @@ ENV LD_LIBRARY_PATH="/opt/tesseract/lib"
 ENV PATH="/opt/tesseract/bin:${PATH}"
 ENV PKG_CONFIG_PATH="/opt/tesseract/lib/pkgconfig"
 RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates \
   && apt-get install -y --no-install-recommends \
-    ca-certificates \
     clang \
     cmake \
     curl \
@@ -133,6 +133,8 @@ RUN --mount=type=cache,id=analysis-cargo-registry,target=/usr/local/cargo/regist
 ENTRYPOINT ["/usr/local/bin/mom24-worker-test"]
 
 FROM ${RUNTIME_IMAGE} AS runtime
+# Distroless's bundled roots can lag the Debian security update used by the builder.
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 ENV PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/momo-toolbox"
 ENV LD_LIBRARY_PATH="/opt/tesseract/lib"
 ENV TESSDATA_PREFIX="/usr/share/tesseract-ocr/5/tessdata"

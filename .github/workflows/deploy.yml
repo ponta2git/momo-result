@@ -392,7 +392,7 @@ jobs:
       - release-ready
       - runtime-image
       - analysis-candidate
-    if: github.event_name != 'pull_request' && vars.MOMO_CUTOVER_ACTIVE != 'true'
+    if: github.event_name != 'pull_request'
     concurrency:
       group: fly-deploy-production
       cancel-in-progress: false
@@ -408,13 +408,6 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-
-      - name: Reject ordinary deployment during cutover
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          control="$(gh api "repos/${GITHUB_REPOSITORY}/contents/deploy/production-mode.json?ref=master" --jq .content | base64 --decode | jq -er .mode)"
-          test "${control}" = active || { echo 'Ordinary deployment is disabled during cutover.' >&2; exit 1; }
 
       - name: Build structured CI tool
         uses: ./.github/actions/setup-ci-tool
@@ -517,7 +510,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/contents/deploy/production-mode.json?ref=master" --jq .content | base64 --decode | jq -er .mode)" = active
           GIT_TERMINAL_PROMPT=0 git fetch --no-tags origin refs/heads/master
           test "${GITHUB_SHA}" = "$(git rev-parse FETCH_HEAD)" || {
             echo "A newer release superseded this candidate; use its deploy run." >&2

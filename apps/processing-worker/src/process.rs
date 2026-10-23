@@ -225,14 +225,10 @@ pub(crate) fn bootstrap_and_exec(arguments: &[OsString]) -> Result<(), ProcessEr
             "bootstrap requires effective root",
         )));
     }
-    let maintenance = crate::cutover::enabled().map_err(|_error| ProcessError::BootstrapCommand)?;
-    if maintenance && arguments != [OsString::from("worker")] {
-        return Err(ProcessError::BootstrapCommand);
-    }
     let executable = std::env::current_exe().map_err(ProcessError::CurrentExecutable)?;
     let mut command = Command::new(executable);
     command.args(arguments);
-    if !maintenance && bootstrap_config::requires_child_cgroup(arguments) {
+    if bootstrap_config::requires_child_cgroup(arguments) {
         let child_limit = bootstrap_config::child_memory_limit()?;
         let prepared =
             crate::cgroup::prepare_production_child_cgroup(child_limit, WORKER_UID, WORKER_GID)?;

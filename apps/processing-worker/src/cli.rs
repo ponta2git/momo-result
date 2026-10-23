@@ -421,19 +421,6 @@ async fn run(
     command: Command,
     shutdown_deadline: &mut Option<tokio::time::Instant>,
 ) -> Result<(), String> {
-    if crate::cutover::enabled()? {
-        if !matches!(command, Command::Worker) {
-            return Err("maintenance mode only permits worker observation".to_owned());
-        }
-        return crate::cutover::run().await;
-    }
-    run_active(command, shutdown_deadline).await
-}
-
-async fn run_active(
-    command: Command,
-    shutdown_deadline: &mut Option<tokio::time::Instant>,
-) -> Result<(), String> {
     match command {
         Command::Worker => Box::pin(run_worker(shutdown_deadline)).await,
         Command::ReleaseAudit {

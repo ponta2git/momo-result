@@ -6,7 +6,7 @@ import com.comcast.ip4s.*
 import org.http4s.ember.server.EmberServerBuilder
 import org.slf4j.LoggerFactory
 
-import momo.api.bootstrap.CutoverMaintenance
+import momo.api.bootstrap.ApiApp
 import momo.api.config.AppConfig
 import momo.api.http.RuntimeHttp2ProbeMiddleware
 import momo.api.logging.SafeLog
@@ -16,7 +16,7 @@ object Main extends IOApp:
 
   override def run(_args: List[String]): IO[ExitCode] = AppConfig.load[IO].flatMap { config =>
     bindAddress(config).flatMap { case (host, port) =>
-      CutoverMaintenance.runtime(config, sys.env).flatMap(runtime =>
+      ApiApp.wired[IO](config).flatMap(runtime =>
         EmberServerBuilder.default[IO].withHost(host).withPort(port).withHttp2
           .withHttpApp(RuntimeHttp2ProbeMiddleware[IO](runtime.app)).build
           .as(runtime.backgroundFailure)

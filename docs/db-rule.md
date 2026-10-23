@@ -34,7 +34,7 @@
 
 - 大容量 staging は長い control lock から分離し、短い fenced transaction で完全性を再検証してから公開する。
 - 分析 claim / publication の lock 順は title state、job、request / artifact とし、複数 title state は作品ID順に取得する。実行資源の予約は各 Worker process が所有し、DB の共有 slot を取得しない。
-- `series_analysis_jobs.fencing_counter` は claim と同じ transaction でのみ増やす。旧 global slot / active lease / retained attempt の最大値を移行時に seed した後は旧 claim writer を再開しない。旧 worker への復帰は停止前 DB との組み合わせで行い、新 counter と旧 slot writer を混在させない。DB の slot 撤去は全 consumer の実経路と保全 gate が通ってから決める。
+- `series_analysis_jobs.fencing_counter` は claim と同じ transaction でのみ増やす。旧 global slot / active lease / retained attempt の最大値を移行時に seed した後は旧 claim writer を再開しない。旧 worker への復帰は停止前 DB との組み合わせで行い、新 counter と旧 slot writer を混在させない。共有 slot は撤去済みであり、再導入しない。
 - campaign集計はtarget更新と同じREAD COMMITTED transactionに置き、campaign行をID順の `FOR NO KEY UPDATE` で取得してから別statementで再集計する。lock待ちを含む集計UPDATE単独では待機前のsnapshotを使うため、別作品のcommitを取りこぼす。FK挿入のKEY SHAREとは競合させない。
 - 分析release promotionはrelease advisory lock、reader capability registry、worker capability registry、release singleton、作品ID順のtitle stateの順でlockする。capability registryは判定後の登録・heartbeat割込みをcommitまで遮断し、singleton更新と既存title更新を同じtransactionで確定する。
 - queuedな通常分析jobのradar basis / generationは、title state lockを保持したtransaction内で`PostgresSeriesAnalysisJobTransitions.bindQueuedRadar`またはRustの`series_analysis::job_transitions::bind_queued_radar`が明示代入する。APIの試合mutation・手動要求・radar apply/withdraw/入力無効化、Workerのcampaign・follow-up・release promotion・supersede・retry・中断・lease回収が対象。runningとradar preparationのsnapshotは変更しない。同じ組への代入はUPDATEを省き、旧binding triggerとの共存や再実行で世代・attempt数を増やさない。

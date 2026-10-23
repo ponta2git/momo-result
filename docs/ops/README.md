@@ -11,7 +11,6 @@
 - DB schema / migration の所有権と事前手順は `AGENTS.md` と `docs/db-rule.md` に従う。
 - deploy や runtime に必要な非 secret 設定は `fly.toml` と CI 設定を正とする。
 - production deploy / rollbackは同じ承認境界を通し、CIに記録したcommit・設定・artifact identityを照合できない候補を適用しない。
-- 旧候補の停止状態での復元は、旧アプリの通常起動や readiness の確認とは分ける。旧候補に新しい maintenance 観測機能がない場合も、その起動を検証の代わりにしない。通常再開には、承認済みの rollback 手順で DB と consumer の互換性・復旧状態を確認する。
 - 共有 DB の非互換切替と切戻しは [DB 利用規約](../db-rule.md#5-migration--deployment) に従い、全 writer 停止と対応する DB・consumer の組を承認時に確認する。CI の使い捨て DB に対する検証は、本番への migration 適用の証拠にしない。
 - release の候補選択、branch、merge 方法、公開履歴は `docs/dev-rule.md` の CI Gates / Release と Git を正本とする。`master` への release PR merge は deploy を開始する本番操作として扱う。
 - exactなworkflow入力、action、timeout、artifact名はCI設定を正とし、private runbookは人間の判断順序、承認条件、成功証拠、失敗後の状態確認を定める。

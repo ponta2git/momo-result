@@ -133,13 +133,6 @@ jobs:
           cache: false
           go-version-file: apps/runtime/go.mod
 
-      - name: Reject ordinary production operation during cutover
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          control="$(gh api "repos/${GITHUB_REPOSITORY}/contents/deploy/production-mode.json?ref=master" --jq .content | base64 --decode | jq -er .mode)"
-          test "${control}" = active || { echo 'Ordinary production operation is disabled during cutover.' >&2; exit 1; }
-
       - name: Build structured CI tool
         run: |
           scripts/ci/build-ci-tool.sh "${RUNNER_TEMP}/ci-tool"

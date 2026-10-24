@@ -21,7 +21,21 @@ object SeriesPlayerRadarOperationKind:
   def fromWire(value: String): Option[SeriesPlayerRadarOperationKind] = values.find(_.wire == value)
 
 final case class SeriesPlayerRadarManualAxis(axisId: String, thresholds: List[Double])
-final case class SeriesPlayerRadarManualInput(axes: List[SeriesPlayerRadarManualAxis]):
+final case class SeriesPlayerRadarAchievementCurve(thresholds: List[Double]):
+  def valid: Boolean = thresholds.size == 5 &&
+    thresholds.forall(value => value.isFinite && value >= 0 && value <= 100) &&
+    thresholds.sliding(2).forall {
+      case List(left, right) => left < right
+      case _ => true
+    }
+
+object SeriesPlayerRadarAchievementCurve:
+  val Default = SeriesPlayerRadarAchievementCurve(List(0.0, 10.0, 25.0, 50.0, 80.0))
+
+final case class SeriesPlayerRadarManualInput(
+    axes: List[SeriesPlayerRadarManualAxis],
+    achievementCurve: Option[SeriesPlayerRadarAchievementCurve] = None,
+):
   def validated: Either[AppError, SeriesPlayerRadarManualInput] =
     SeriesPlayerRadarCommand.validateManual(this)
 
@@ -94,24 +108,29 @@ object SeriesPlayerRadarCommand:
 
   private[domain] def validateManual(value: SeriesPlayerRadarManualInput)
       : Either[AppError, SeriesPlayerRadarManualInput] =
-    val valid = value.axes.map(_.axisId) == axisIds && value.axes.forall { axis =>
-      val bounds = axis.thresholds
-      bounds.size == 9 && bounds.forall(_.isFinite) &&
-      bounds.sliding(2).forall {
-        case List(left, right) =>
-          if axis.axisId == "averageRank" then left > right else left < right
-        case _ => true
-      } && (axis.axisId != "averageRank" || bounds.lastOption.exists(_ >= 1))
-    }
+    val valid = value.achievementCurve.forall(_.valid) && value.axes.map(_.axisId) == axisIds &&
+      value.axes.forall { axis =>
+        val bounds = axis.thresholds
+        bounds.size == 9 && bounds.forall(_.isFinite) &&
+        bounds.sliding(2).forall {
+          case List(left, right) =>
+            if axis.axisId == "averageRank" then left > right else left < right
+          case _ => true
+        } && (axis.axisId != "averageRank" || bounds.lastOption.exists(_ >= 1))
+      }
     Either.cond(
       valid,
-      value.copy(axes =
-        value.axes.map(axis =>
-          axis.copy(thresholds = axis.thresholds.map(bound => if bound == 0 then 0.0 else bound))
-        )
+      value.copy(
+        achievementCurve = value.achievementCurve.map(curve =>
+          curve.copy(thresholds = curve.thresholds.map(bound => if bound == 0 then 0.0 else bound))
+        ),
+        axes =
+          value.axes.map(axis =>
+            axis.copy(thresholds = axis.thresholds.map(bound => if bound == 0 then 0.0 else bound))
+          )
       ),
       AppError.ValidationFailed(
-        "Manual radar boundaries require the six axes in order, nine finite strictly ordered values per axis, and an average-rank 10-point boundary of at least 1."
+        "Manual radar boundaries require the six axes in order, nine finite strictly ordered values per axis, and an average-rank 10-point boundary of at least 1. Achievement percentages require five finite, strictly increasing values between 0 and 100."
       )
     )
 

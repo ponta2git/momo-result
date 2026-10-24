@@ -63,9 +63,13 @@ final class RequestSeriesPlayerRadarOperation[F[_]: Monad](
            command.expectedCandidateId,
            command.sourceBasisId,
            command.sourceCandidateId,
-           command.manualInput.map(_.axes.map(axis =>
-             axis.axisId + ":" + axis.thresholds.map(java.lang.Double.toHexString).mkString(",")
-           ).mkString("|")),
+           command.manualInput.map(input =>
+             input.axes.map(axis =>
+               axis.axisId + ":" + axis.thresholds.map(java.lang.Double.toHexString).mkString(",")
+             ).mkString("|") + input.achievementCurve.fold("")(curve =>
+               "|achievement:" + curve.thresholds.map(java.lang.Double.toHexString).mkString(",")
+             )
+           ),
          )
        else Nil)
     Sha256.hexUtf8(fields.map(_.fold("-")(value => s"${value.length}:$value")).mkString("|"))

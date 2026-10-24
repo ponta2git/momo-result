@@ -52,7 +52,10 @@ private[postgres] object PostgresSeriesPlayerRadarHistoryOps:
   def detail(id: String)(using
       identities: PostgresIdentities): ConnectionIO[Either[AppError, SeriesPlayerRadarDocument]] =
     val query = fr"SELECT jsonb_build_object('schemaVersion', 1, 'revision'," ++ summary ++
-      fr""", 'beforeBasis', bb.payload, 'afterBasis', ab.payload) AS document """ ++ joins ++
+      fr""", 'beforeBasis', bb.payload, 'afterBasis', ab.payload,
+        'beforeAchievementCurve', CASE WHEN bb.id IS NULL THEN NULL ELSE COALESCE(bb.payload->'achievementCurve', ${PostgresSeriesPlayerRadarReadOps.DefaultAchievementCurve.noSpaces}::jsonb) END,
+        'afterAchievementCurve', COALESCE(ab.payload->'achievementCurve', ${PostgresSeriesPlayerRadarReadOps.DefaultAchievementCurve.noSpaces}::jsonb)) AS document """ ++
+      joins ++
       fr""" LEFT JOIN series_radar_bases bb ON bb.id = r.before_basis_id AND bb.game_title_id = r.game_title_id
       JOIN series_radar_bases ab ON ab.id = r.after_basis_id AND ab.game_title_id = r.game_title_id
       WHERE r.operation_id = ${identities.wireReference(

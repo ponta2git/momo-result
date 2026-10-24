@@ -41,13 +41,18 @@ private[api] object SeriesPlayerRadarResponseSchemas:
     "required" -> Json.fromValues(fields.map(value => Json.fromString(value._1)))
   )
 
+  private val achievementCurve = owner("achievements").hcursor.downField("properties")
+    .downField("achievementCurve").focus.getOrElse(sys.error(
+      "Achievement curve schema is missing."
+    ))
   private val basis = record(
     "basisId" -> text,
     "checksum" -> text,
     "createdAt" -> text,
     "appliedAt" -> nullable(text),
     "sourceInputRevision" -> revision,
-    "basis" -> owner("basis")
+    "basis" -> owner("basis"),
+    "achievementCurve" -> achievementCurve,
   )
   private val previewMetadata = record(
     "previewId" -> text,
@@ -70,7 +75,13 @@ private[api] object SeriesPlayerRadarResponseSchemas:
       "thresholds" -> list(Json.obj("type" -> Json.fromString("number")), 9)
     ),
     6
-  ))
+  )).mapObject(fields =>
+    fields.add(
+      "properties",
+      fields("properties").getOrElse(Json.obj())
+        .mapObject(_.add("achievementCurve", achievementCurve))
+    )
+  )
   val revisionSummary: Json = record(
     "revisionId" -> text,
     "gameTitleId" -> text,
@@ -95,7 +106,9 @@ private[api] object SeriesPlayerRadarResponseSchemas:
     "schemaVersion" -> version,
     "revision" -> revisionRef,
     "beforeBasis" -> nullable(owner("basis")),
-    "afterBasis" -> owner("basis")
+    "afterBasis" -> owner("basis"),
+    "beforeAchievementCurve" -> nullable(achievementCurve),
+    "afterAchievementCurve" -> achievementCurve,
   )
 
   private val candidate = record(
@@ -111,6 +124,7 @@ private[api] object SeriesPlayerRadarResponseSchemas:
     "latestPreview" -> nullable(previewMetadata),
     "originKind" -> values("generated", "manual", "restore"),
     "manualInput" -> nullable(manualInput),
+    "achievementCurve" -> achievementCurve,
     "sourceBasisId" -> nullable(text),
     "sourceCandidateId" -> nullable(text),
     "sourceBasis" -> nullable(basis),
@@ -151,7 +165,9 @@ private[api] object SeriesPlayerRadarResponseSchemas:
       "state" -> values("available", "empty", "awaiting_analysis")
     ),
     "before" -> nullable(owner("evaluation")),
-    "after" -> nullable(owner("evaluation"))
+    "after" -> nullable(owner("evaluation")),
+    "beforeAchievements" -> nullable(owner("achievements")),
+    "afterAchievements" -> nullable(owner("achievements")),
   )
 
   private def owner(kind: String): Json =

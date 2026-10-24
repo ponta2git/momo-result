@@ -15,6 +15,11 @@ import momo.api.errors.AppError
 
 private[postgres] object PostgresSeriesPlayerRadarReadOps:
   val MaximumDocumentBytes = 262144
+  val DefaultAchievementCurve: Json = Json.obj(
+    "thresholds" -> Json.fromValues(
+      SeriesPlayerRadarAchievementCurve.Default.thresholds.map(Json.fromDoubleOrNull)
+    )
+  )
 
   def operationColumns(using identities: PostgresIdentities): Fragment = fr"""
     ${identities.wireId("o")}, ${identities.retainedColumn("o", "game_title_id")}, o.kind, o.status,
@@ -52,11 +57,11 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
         'currentBasis', CASE WHEN cb.id IS NULL THEN NULL ELSE jsonb_build_object(
           'basisId', cb.id, 'checksum', cb.checksum, 'createdAt', cb.created_at,
           'appliedAt', r.current_applied_at, 'sourceInputRevision', cb.source_input_revision::text,
-          'basis', cb.payload) END,
+          'basis', cb.payload, 'achievementCurve', COALESCE(cb.payload->'achievementCurve', ${DefaultAchievementCurve.noSpaces}::jsonb)) END,
         'previousBasis', CASE WHEN pb.id IS NULL THEN NULL ELSE jsonb_build_object(
           'basisId', pb.id, 'checksum', pb.checksum, 'createdAt', pb.created_at,
           'appliedAt', r.previous_applied_at, 'sourceInputRevision', pb.source_input_revision::text,
-          'basis', pb.payload) END,
+          'basis', pb.payload, 'achievementCurve', COALESCE(pb.payload->'achievementCurve', ${DefaultAchievementCurve.noSpaces}::jsonb)) END,
         'candidate', CASE WHEN c.id IS NULL THEN NULL ELSE jsonb_build_object(
           'candidateId', ${identities.wireId(
         "c"
@@ -68,13 +73,14 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
           'safeFailureCode', c.safe_failure_code, 'createdAt', c.created_at,
           'updatedAt', c.updated_at, 'result', c.result,
           'originKind', c.origin_kind, 'manualInput', c.manual_input,
+          'achievementCurve', COALESCE(c.manual_input->'achievementCurve', c.result->'basis'->'achievementCurve', sb.payload->'achievementCurve', ${DefaultAchievementCurve.noSpaces}::jsonb),
           'sourceBasisId', c.source_basis_id, 'sourceCandidateId', c.source_candidate_id,
           'savedBy', CASE WHEN c.saved_by IS NULL THEN NULL ELSE jsonb_build_object(
             'accountId', c.saved_by, 'displayName', c.saved_by_display_name) END,
           'sourceBasis', CASE WHEN sb.id IS NULL THEN NULL ELSE jsonb_build_object(
             'basisId', sb.id, 'checksum', sb.checksum, 'createdAt', sb.created_at,
             'appliedAt', NULL, 'sourceInputRevision', sb.source_input_revision::text,
-            'basis', sb.payload) END,
+            'basis', sb.payload, 'achievementCurve', COALESCE(sb.payload->'achievementCurve', ${DefaultAchievementCurve.noSpaces}::jsonb)) END,
           'latestPreview', CASE WHEN p.id IS NULL THEN NULL ELSE jsonb_build_object(
             'previewId', ${identities.wireId("p")}, 'beforeBasisId', ${identities.wireReference(
         Entity.RadarBases,
@@ -82,7 +88,7 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
       )},
             'inputRevision', p.input_revision::text,
             'status', CASE WHEN p.status = 'ready' AND (
-              p.before_basis_id IS DISTINCT FROM r.current_basis_id
+              p.before_basis_id IS DISTINCT FROM r.current_basis_id OR p.evaluation_snapshot->'achievements' IS NULL
             ) THEN 'stale' ELSE p.status END,
             'createdAt', p.created_at) END) END,
         'operations', COALESCE(ops.items, '[]'::jsonb),
@@ -183,7 +189,7 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
         )}, 'candidateBasisId', ${identities.wireReference(Entity.RadarBases, fr"c.basis_id")},
         'status', CASE WHEN c.status = 'invalid' THEN 'invalid'
           WHEN p.status = 'ready' AND
-            p.before_basis_id IS DISTINCT FROM r.current_basis_id THEN 'stale'
+            (p.before_basis_id IS DISTINCT FROM r.current_basis_id OR p.evaluation_snapshot->'achievements' IS NULL) THEN 'stale'
           ELSE p.status END,
         'createdAt', p.created_at,
         'scope', jsonb_build_object(
@@ -197,7 +203,8 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
           WHEN p.status <> 'ready' THEN 'awaiting_analysis'
           WHEN ${scope.key} = ANY(p.scope_keys) AND s.payload IS NULL THEN 'unavailable'
           WHEN ${scope.key} = ANY(p.scope_keys) THEN 'available' ELSE 'empty' END),
-        'before', s.payload->'before', 'after', s.payload->'after'
+        'before', s.payload->'before', 'after', s.payload->'after',
+        'beforeAchievements', s.payload->'beforeAchievements', 'afterAchievements', s.payload->'afterAchievements'
       ) AS document
       FROM series_radar_previews p
       JOIN series_analysis_title_states a ON a.game_title_id = p.game_title_id

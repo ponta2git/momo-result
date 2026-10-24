@@ -33,6 +33,7 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       inputRevision: Long,
       status: String,
       hasMatches: Boolean,
+      hasAchievements: Boolean,
   )
   final case class FreshIds(operation: String, candidate: String, preview: String)
 
@@ -268,12 +269,17 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       _ <-
         require(sourceValid, "The radar editing source is no longer available. Refresh its state.")
       payload = manualJson(input).noSpaces
+      defaultAchievementCurve = PostgresSeriesPlayerRadarReadOps.DefaultAchievementCurve.noSpaces
       unchanged <- EitherT.liftF(sql"""
         SELECT EXISTS(SELECT 1 FROM series_radar_bases b
           WHERE b.id = ${state.currentBasisId} AND b.game_title_id = ${command.gameTitleId.value}
             AND (SELECT jsonb_agg(jsonb_build_object('axisId', axis->'axisId', 'thresholds', axis->'thresholds') ORDER BY position)
               FROM jsonb_array_elements(b.payload->'axes') WITH ORDINALITY items(axis, position))
-                = $payload::jsonb->'axes')
+                = $payload::jsonb->'axes'
+            AND COALESCE(b.payload->'achievementCurve', $defaultAchievementCurve::jsonb) =
+                COALESCE($payload::jsonb->'achievementCurve',
+                  (SELECT source.payload->'achievementCurve' FROM series_radar_bases source WHERE source.id=$source),
+                  $defaultAchievementCurve::jsonb))
       """.query[Boolean].unique)
       _ <- require(!unchanged, "The manual radar boundaries are unchanged from the current basis.")
       _ <- EitherT.liftF(sql"""
@@ -328,7 +334,12 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
         "thresholds" -> Json.fromValues(axis.thresholds.map(Json.fromDoubleOrNull)),
       )
     ))
-  )
+  ).deepMerge(input.achievementCurve.fold(Json.obj())(curve =>
+    Json.obj(
+      "achievementCurve" ->
+        Json.obj("thresholds" -> Json.fromValues(curve.thresholds.map(Json.fromDoubleOrNull)))
+    )
+  ))
 
   private def createPreview(
       command: SeriesPlayerRadarCommand,
@@ -382,7 +393,8 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
             Entity.RadarBases,
             fr"p.before_basis_id"
           )}, input_revision, status,
-        COALESCE(jsonb_array_length(evaluation_snapshot->'matches'), 0) > 0
+        COALESCE(jsonb_array_length(evaluation_snapshot->'matches'), 0) > 0,
+        evaluation_snapshot->'achievements' IS NOT NULL
       FROM series_radar_previews p
       WHERE id = ${identities.lookup(
             Entity.RadarPreviews,
@@ -394,6 +406,7 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       )
       _ <- require(
         preview.candidateId == candidate.id && preview.status == "ready" &&
+          preview.hasAchievements &&
           preview.beforeBasisId == state.currentBasisId &&
           command.expectedCurrentBasisId == state.currentBasisId,
         "The radar comparison changed. Calculate and review the latest comparison before applying."

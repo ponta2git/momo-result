@@ -9,8 +9,12 @@ import momo.api.domain.{SeriesPlayerRadarOperation, SeriesPlayerRadarOperationKi
 
 final case class SeriesPlayerRadarManualAxisRequest(axisId: String, thresholds: List[Double])
     derives Codec.AsObject
-final case class SeriesPlayerRadarManualInputRequest(axes: List[SeriesPlayerRadarManualAxisRequest])
+final case class SeriesPlayerRadarAchievementCurveRequest(thresholds: List[Double])
     derives Codec.AsObject
+final case class SeriesPlayerRadarManualInputRequest(
+    axes: List[SeriesPlayerRadarManualAxisRequest],
+    achievementCurve: Option[SeriesPlayerRadarAchievementCurveRequest] = None,
+) derives Codec.AsObject
 
 final case class SeriesPlayerRadarOperationRequest(
     gameTitleId: String,
@@ -104,6 +108,14 @@ object SeriesPlayerRadarApiSchemas:
         ),
         value => Some(value)
       )))
+  given Schema[SeriesPlayerRadarAchievementCurveRequest] =
+    Schema.derived[SeriesPlayerRadarAchievementCurveRequest]
+      .modify(_.thresholds)(_.copy(isOptional =
+        false
+      ).validate(Validator.minSize(5)).validate(Validator.maxSize(5)))
+      .modify(_.thresholds)(_.modifyUnsafe[Double](Schema.ModifyCollectionElements)(
+        _.validate(Validator.min(0.0)).validate(Validator.max(100.0))
+      ))
   given Schema[SeriesPlayerRadarManualInputRequest] = Schema.derived
   given Schema[SeriesPlayerRadarOperationRequest] = Schema
     .derived[SeriesPlayerRadarOperationRequest].modify(_.kind)(_.validate(kinds))

@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 2,
+  "scope": {
+    "kind": "overall"
+  },
+  "gameTitleId": "title",
+  "achievementCurve": {
+    "thresholds": [
+      0.0,
+      10.0,
+      25.0,
+      50.0,
+      80.0
+    ]
+  },
+  "items": [],
+  "summaries": [
+    {
+      "mapMasterId": null,
+      "totalPoints": 0,
+      "players": [
+        {
+          "memberId": "a",
+          "earnedPoints": 0,
+          "score": null
+        },
+        {
+          "memberId": "b",
+          "earnedPoints": 0,
+          "score": null
+        },
+        {
+          "memberId": "c",
+          "earnedPoints": 0,
+          "score": null
+        },
+        {
+          "memberId": "d",
+          "earnedPoints": 0,
+          "score": null
+        }
+      ]
+    },
+    {
+      "mapMasterId": "east",
+      "totalPoints": 0,
+      "players": [
+        {
+          "memberId": "a",
+          "earnedPoints": 0,
+          "score": null
+        },
+        {
+          "memberId": "b",
+          "earnedPoints": 0,
+          "score": null
+        },
+        {
+          "memberId": "c",
+          "earnedPoints": 0,
+          "score": null
+        },
+        {
+          "memberId": "d",
+          "earnedPoints": 0,
+          "score": null
+        }
+      ]
+    },
+    {
+      "mapMasterId": "west",
+      "totalPoints": 0,
+      "players": [
+        {
+          "memberId": "a",
+          "earnedPoints": 0,
+          "score": null
+        },
+        {
+          "memberId": "b",
+          "earnedPoints": 0,
+          "score": null
+        },
+        {
+          "memberId": "c",
+          "earnedPoints": 0,
+          "score": null
+        },
+        {
+          "memberId": "d",
+          "earnedPoints": 0,
+          "score": null
+        }
+      ]
+    }
+  ]
+}

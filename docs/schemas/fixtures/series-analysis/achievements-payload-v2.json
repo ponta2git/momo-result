@@ -1,0 +1,233 @@
+{
+  "schemaVersion": 2,
+  "scope": {
+    "kind": "overall"
+  },
+  "gameTitleId": "title",
+  "achievementCurve": {
+    "thresholds": [
+      0.0,
+      10.0,
+      25.0,
+      50.0,
+      80.0
+    ]
+  },
+  "items": [
+    {
+      "achievementId": "destination",
+      "stars": 2,
+      "ruleKind": "destination",
+      "threshold": "6",
+      "common": true,
+      "mapMasterIds": [],
+      "appliesFrom": null,
+      "retired": false,
+      "players": [
+        {
+          "memberId": "a",
+          "status": "achieved",
+          "firstAchievedAt": "2026-01-01T00:00:00.000000Z",
+          "dateUnknown": false,
+          "proofs": [
+            {
+              "kind": "automatic",
+              "state": "achieved",
+              "claimId": null,
+              "generationId": null,
+              "sourceAchievementId": null,
+              "matchId": "match-1",
+              "heldEventId": null,
+              "achievedAt": "2026-01-01T00:00:00.000000Z"
+            }
+          ]
+        },
+        {
+          "memberId": "b",
+          "status": "achieved",
+          "firstAchievedAt": "2026-01-01T00:00:00.000000Z",
+          "dateUnknown": false,
+          "proofs": [
+            {
+              "kind": "automatic",
+              "state": "achieved",
+              "claimId": null,
+              "generationId": null,
+              "sourceAchievementId": null,
+              "matchId": "match-1",
+              "heldEventId": null,
+              "achievedAt": "2026-01-01T00:00:00.000000Z"
+            }
+          ]
+        },
+        {
+          "memberId": "c",
+          "status": "achieved",
+          "firstAchievedAt": "2026-01-01T00:00:00.000000Z",
+          "dateUnknown": false,
+          "proofs": [
+            {
+              "kind": "automatic",
+              "state": "achieved",
+              "claimId": null,
+              "generationId": null,
+              "sourceAchievementId": null,
+              "matchId": "match-1",
+              "heldEventId": null,
+              "achievedAt": "2026-01-01T00:00:00.000000Z"
+            }
+          ]
+        },
+        {
+          "memberId": "d",
+          "status": "achieved",
+          "firstAchievedAt": "2026-01-01T00:00:00.000000Z",
+          "dateUnknown": false,
+          "proofs": [
+            {
+              "kind": "automatic",
+              "state": "achieved",
+              "claimId": null,
+              "generationId": null,
+              "sourceAchievementId": null,
+              "matchId": "match-1",
+              "heldEventId": null,
+              "achievedAt": "2026-01-01T00:00:00.000000Z"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "achievementId": "manual",
+      "stars": 2,
+      "ruleKind": "manual",
+      "threshold": null,
+      "common": true,
+      "mapMasterIds": [],
+      "appliesFrom": null,
+      "retired": false,
+      "players": [
+        {
+          "memberId": "a",
+          "status": "achieved",
+          "firstAchievedAt": null,
+          "dateUnknown": true,
+          "proofs": [
+            {
+              "kind": "import",
+              "state": "achieved",
+              "claimId": "claim-manual",
+              "generationId": "generation-first",
+              "sourceAchievementId": null,
+              "matchId": null,
+              "heldEventId": null,
+              "achievedAt": null
+            }
+          ]
+        },
+        {
+          "memberId": "b",
+          "status": "not_recorded",
+          "firstAchievedAt": null,
+          "dateUnknown": false,
+          "proofs": []
+        },
+        {
+          "memberId": "c",
+          "status": "not_recorded",
+          "firstAchievedAt": null,
+          "dateUnknown": false,
+          "proofs": []
+        },
+        {
+          "memberId": "d",
+          "status": "not_recorded",
+          "firstAchievedAt": null,
+          "dateUnknown": false,
+          "proofs": []
+        }
+      ]
+    }
+  ],
+  "summaries": [
+    {
+      "mapMasterId": null,
+      "totalPoints": 8,
+      "players": [
+        {
+          "memberId": "a",
+          "earnedPoints": 8,
+          "score": 10.0
+        },
+        {
+          "memberId": "b",
+          "earnedPoints": 4,
+          "score": 7.0
+        },
+        {
+          "memberId": "c",
+          "earnedPoints": 4,
+          "score": 7.0
+        },
+        {
+          "memberId": "d",
+          "earnedPoints": 4,
+          "score": 7.0
+        }
+      ]
+    },
+    {
+      "mapMasterId": "east",
+      "totalPoints": 8,
+      "players": [
+        {
+          "memberId": "a",
+          "earnedPoints": 8,
+          "score": 10.0
+        },
+        {
+          "memberId": "b",
+          "earnedPoints": 4,
+          "score": 7.0
+        },
+        {
+          "memberId": "c",
+          "earnedPoints": 4,
+          "score": 7.0
+        },
+        {
+          "memberId": "d",
+          "earnedPoints": 4,
+          "score": 7.0
+        }
+      ]
+    },
+    {
+      "mapMasterId": "west",
+      "totalPoints": 8,
+      "players": [
+        {
+          "memberId": "a",
+          "earnedPoints": 8,
+          "score": 10.0
+        },
+        {
+          "memberId": "b",
+          "earnedPoints": 4,
+          "score": 7.0
+        },
+        {
+          "memberId": "c",
+          "earnedPoints": 4,
+          "score": 7.0
+        },
+        {
+          "memberId": "d",
+          "earnedPoints": 4,
+          "score": 7.0
+        }
+      ]
+    }
+  ]
+}

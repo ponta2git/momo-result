@@ -91,6 +91,7 @@ fn calculated(
         normalized.game_title_id(),
         normalized.achievements(),
         normalized.player_matches(),
+        AchievementCurve::default(),
     ))
 }
 
@@ -200,7 +201,7 @@ fn corrected_manual_history_can_have_an_unknown_date_only_after_unlinking() -> T
 }
 
 #[test]
-fn addition_uses_japanese_calendar_day_without_truncating_first_attainment() -> TestResult {
+fn additions_evaluate_all_history_without_truncating_first_attainment() -> TestResult {
     let mut item = definition("assets", RuleKind::TotalAssets, Some("400000"));
     item.applies_from = Some("2026-01-01".into());
     let payload = calculated(
@@ -215,7 +216,11 @@ fn addition_uses_japanese_calendar_day_without_truncating_first_attainment() -> 
         player(&payload, "assets", "a")?
             .first_achieved_at
             .as_deref(),
-        Some("2025-12-31T15:00:00.000001Z")
+        Some("2025-12-31T14:59:59.999999Z")
+    );
+    assert_eq!(
+        payload.items.first().ok_or("item missing")?.applies_from,
+        None
     );
     assert!(valid_payload(&payload));
     Ok(())
@@ -223,11 +228,9 @@ fn addition_uses_japanese_calendar_day_without_truncating_first_attainment() -> 
 
 #[test]
 fn event_average_requires_the_whole_event_to_have_four_same_title_matches() -> TestResult {
-    let mut source = input(vec![definition(
-        "average",
-        RuleKind::EventAverageRank,
-        Some("1.5"),
-    )]);
+    let mut item = definition("average", RuleKind::EventAverageRank, Some("1.5"));
+    item.applies_from = Some("2026-10-24".into());
+    let mut source = input(vec![item]);
     source.event_compositions.push(EventComposition {
         held_event_id: "event".into(),
         match_count: 4,
@@ -300,6 +303,28 @@ fn imported_and_automatic_roots_deduplicate_points_without_losing_unknown_histor
         1
     );
     assert!(!player(&cancelled_import, "destination", "a")?.date_unknown);
+    Ok(())
+}
+
+#[test]
+fn migration_inference_uses_initial_identity_instead_of_the_retained_start_date() -> TestResult {
+    let mut upper = definition("upper", RuleKind::Destination, Some("6"));
+    upper.fixed_key = Some("initial-six".into());
+    let mut lower = definition("lower", RuleKind::Destination, Some("4"));
+    lower.fixed_key = Some("initial-four".into());
+    lower.applies_from = Some("2026-10-24".into());
+    let added = definition("added", RuleKind::Destination, Some("5"));
+    let mut source = input(vec![upper, lower, added]);
+    source.claims.push(claim("upper", ClaimKind::Import));
+    let payload = calculated(source, vec![])?;
+    assert_eq!(
+        player(&payload, "lower", "a")?.status,
+        AchievementStatus::Achieved
+    );
+    assert_eq!(
+        player(&payload, "added", "a")?.status,
+        AchievementStatus::NotRecorded
+    );
     Ok(())
 }
 
@@ -504,11 +529,15 @@ fn retired_automatic_history_does_not_supply_an_active_lower_condition() -> Test
 }
 
 #[test]
-fn migration_inference_preserves_independent_lower_claims_and_fractional_scores() -> TestResult {
+fn migration_inference_preserves_independent_lower_claims_and_rescores_after_cancellation()
+-> TestResult {
     let mut source = input(vec![
         definition("lower", RuleKind::Destination, Some("4")),
         definition("upper", RuleKind::Destination, Some("6")),
     ]);
+    for definition in &mut source.definitions {
+        definition.fixed_key = Some(format!("initial-{}", definition.achievement_id));
+    }
     source.claims.push(claim("upper", ClaimKind::Import));
     source.claims.push(claim("lower", ClaimKind::Import));
     let payload = calculated(source.clone(), vec![])?;
@@ -530,7 +559,7 @@ fn migration_inference_preserves_independent_lower_claims_and_fractional_scores(
             .first()
             .ok_or("points missing")?
             .score,
-        Some(5.5)
+        Some(7.0)
     );
     Ok(())
 }
@@ -544,11 +573,11 @@ fn checked_in_achievement_payload_fixtures_match_owner() -> TestResult {
     source.claims.push(claim("manual", ClaimKind::Import));
     let fixtures = [
         (
-            "achievements-payload-v1.json",
+            "achievements-payload-v2.json",
             calculated(source, rows(&["2026-01-01T00:00:00.000000Z"]))?,
         ),
         (
-            "achievements-empty-payload-v1.json",
+            "achievements-empty-payload-v2.json",
             calculated(input(vec![]), vec![])?,
         ),
     ];
